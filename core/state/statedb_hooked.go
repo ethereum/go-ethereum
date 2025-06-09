@@ -17,7 +17,9 @@
 package state
 
 import (
+	"fmt"
 	"math/big"
+	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -257,6 +259,7 @@ func (s *hookedStateDB) SelfDestruct6780(address common.Address) (uint256.Int, b
 	prev, changed := s.inner.SelfDestruct6780(address)
 
 	if s.hooks.OnBalanceChange != nil && changed && !prev.IsZero() {
+		fmt.Fprintf(os.Stderr, "[Firehose] SelfDestruct6780 (hooked): previous balance withdraw (addr=%s, prev_balance=%s)\n", address, &prev)
 		s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
 	}
 

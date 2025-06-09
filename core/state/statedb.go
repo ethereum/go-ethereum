@@ -887,8 +887,6 @@ func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common
 // The account's state object is still available until the state is committed,
 // getStateObject will return a non-nil account after SelfDestruct.
 func (s *StateDB) SelfDestruct(addr common.Address) uint256.Int {
-	fmt.Fprintf(os.Stderr, "[Firehose] SelfDestruct called (addr=%s)\n", addr)
-
 	stateObject := s.getStateObject(addr)
 	var prevBalance uint256.Int
 	if stateObject == nil {
@@ -918,8 +916,6 @@ func (s *StateDB) SelfDestruct(addr common.Address) uint256.Int {
 }
 
 func (s *StateDB) SelfDestruct6780(addr common.Address) (uint256.Int, bool) {
-	fmt.Fprintf(os.Stderr, "[Firehose] SelfDestruct6780 called (addr=%s)\n", addr)
-
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
 		fmt.Fprintf(os.Stderr, "[Firehose] SelfDestruct6780: stateObject is nil (addr=%s)\n", addr)
