@@ -881,7 +881,7 @@ func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, 
 
 	// Extract the underlying state to access methods like `IntermediateRoot` and `Copy`
 	// required for bor consensus operations
-	state := wrappedState.(*state.StateDB)
+	// state := wrappedState.(*state.StateDB)
 
 	var (
 		stateSyncData []*types.StateSyncData
@@ -892,24 +892,24 @@ func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, 
 		start := time.Now()
 		cx := statefull.ChainContext{Chain: chain, Bor: c}
 		// check and commit span
-		if err := c.checkAndCommitSpan(state, header, cx, tracer); err != nil {
+		if err := c.checkAndCommitSpan(wrappedState, header, cx, tracer); err != nil {
 			log.Error("Error while committing span", "error", err)
 			return
 		}
 
 		if c.HeimdallClient != nil {
 			// commit states
-			stateSyncData, err = c.CommitStates(state, header, cx, tracer)
+			stateSyncData, err = c.CommitStates(wrappedState, header, cx, tracer)
 			if err != nil {
 				log.Error("Error while committing states", "error", err)
 				return
 			}
 		}
 
-		state.BorConsensusTime = time.Since(start)
+		wrappedState.SetBorConsensusTime(time.Since(start))
 	}
 
-	if err = c.changeContractCodeIfNeeded(headerNumber, state); err != nil {
+	if err = c.changeContractCodeIfNeeded(headerNumber, wrappedState); err != nil {
 		log.Error("Error changing contract code", "error", err)
 		return
 	}
@@ -934,7 +934,7 @@ func decodeGenesisAlloc(i interface{}) (types.GenesisAlloc, error) {
 	return alloc, nil
 }
 
-func (c *Bor) changeContractCodeIfNeeded(headerNumber uint64, state *state.StateDB) error {
+func (c *Bor) changeContractCodeIfNeeded(headerNumber uint64, state vm.StateDB) error {
 	for blockNumber, genesisAlloc := range c.config.BlockAlloc {
 		if blockNumber == strconv.FormatUint(headerNumber, 10) {
 			allocs, err := decodeGenesisAlloc(genesisAlloc)
@@ -977,7 +977,7 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *typ
 		cx := statefull.ChainContext{Chain: chain, Bor: c}
 
 		// check and commit span
-		if err = c.checkAndCommitSpan(state, header, cx, tracer); err != nil {
+		if err = c.checkAndCommitSpan(vm.StateDB(state), header, cx, tracer); err != nil {
 			log.Error("Error while committing span", "error", err)
 			return nil, err
 		}
@@ -1168,7 +1168,7 @@ func (c *Bor) Close() error {
 }
 
 func (c *Bor) checkAndCommitSpan(
-	state *state.StateDB,
+	state vm.StateDB,
 	header *types.Header,
 	chain core.ChainContext,
 	tracer *tracing.Hooks,
@@ -1217,7 +1217,7 @@ func (c *Bor) needToCommitSpan(currentSpan *span.Span, headerNumber uint64) bool
 func (c *Bor) FetchAndCommitSpan(
 	ctx context.Context,
 	newSpanID uint64,
-	state *state.StateDB,
+	state vm.StateDB,
 	header *types.Header,
 	chain core.ChainContext,
 	tracer *tracing.Hooks,
@@ -1255,7 +1255,7 @@ func (c *Bor) FetchAndCommitSpan(
 
 // CommitStates commit states
 func (c *Bor) CommitStates(
-	state *state.StateDB,
+	state vm.StateDB,
 	header *types.Header,
 	chain statefull.ChainContext,
 	tracer *tracing.Hooks,
@@ -1272,7 +1272,7 @@ func (c *Bor) CommitStates(
 
 	if c.config.IsIndore(header.Number) {
 		// Fetch the LastStateId from contract via current state instance
-		lastStateIDBig, err = c.GenesisContractsClient.LastStateId(state.Copy(), number-1, header.ParentHash)
+		lastStateIDBig, err = c.GenesisContractsClient.LastStateId(state.Clone().(vm.StateDB), number-1, header.ParentHash)
 		if err != nil {
 			return nil, err
 		}

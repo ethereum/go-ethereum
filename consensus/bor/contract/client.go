@@ -2,10 +2,11 @@ package contract
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/core/tracing"
 	"math"
 	"math/big"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/core/tracing"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -15,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/bor/statefull"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -67,7 +69,7 @@ func NewGenesisContractsClient(
 
 func (gc *GenesisContractsClient) CommitState(
 	event *clerk.EventRecordWithTime,
-	state *state.StateDB,
+	state vm.StateDB,
 	header *types.Header,
 	chCtx statefull.ChainContext,
 	tracer *tracing.Hooks,
@@ -105,7 +107,7 @@ func (gc *GenesisContractsClient) CommitState(
 	return gasUsed, nil
 }
 
-func (gc *GenesisContractsClient) LastStateId(state *state.StateDB, number uint64, hash common.Hash) (*big.Int, error) {
+func (gc *GenesisContractsClient) LastStateId(stateDB vm.StateDB, number uint64, hash common.Hash) (*big.Int, error) {
 	blockNr := rpc.BlockNumber(number)
 
 	const method = "lastStateId"
@@ -121,13 +123,16 @@ func (gc *GenesisContractsClient) LastStateId(state *state.StateDB, number uint6
 	toAddress := common.HexToAddress(gc.StateReceiverContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
 
+	// The unhooked version always return the *state.StateDB inner object
+	original := stateDB.Unhooked().(*state.StateDB)
+
 	// BOR: Do a 'CallWithState' so that we can fetch the last state ID from a given (incoming)
 	// state instead of local(canonical) chain's state.
 	result, err := gc.ethAPI.CallWithState(context.Background(), ethapi.TransactionArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
-	}, &rpc.BlockNumberOrHash{BlockNumber: &blockNr, BlockHash: &hash}, state, nil, nil)
+	}, &rpc.BlockNumberOrHash{BlockNumber: &blockNr, BlockHash: &hash}, original, nil, nil)
 	if err != nil {
 		return nil, err
 	}
