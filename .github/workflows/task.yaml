@@ -6,50 +6,42 @@ on:
     types: [ closed ]
     branches: [ master ]
 
+permissions:
+  contents: write
 
 jobs:
-  lint:
+  build-push:
     if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build')
-    name: Lint
-    runs-on: ubuntu-24.04
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: master
-
-      # Cache build tools to avoid downloading them each time
-      - uses: actions/cache@v4
-        with:
-          path: build/cache
-          key: ${{ runner.os }}-build-tools-cache-${{ hashFiles('build/checksums.txt') }}
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.23.0
-          cache: false
-
-      - name: Run linters
-        run: |
-          go run build/ci.go lint
-          go run build/ci.go check_generate
-          go run build/ci.go check_baddeps
-
-  build:
     name: Build
     runs-on: ubuntu-24.04
+    env:
+      ENVIRONMENT: dev
+      REPO_NAME: ${{ github.event.repository.name }}
+
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: master
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.24.0
-          cache: false
-      - name: Run tests
-        run: go test -short ./...
+      - name: Autotag
+        id: autotag
+        uses: anothrNick/github-tag-action@v1
         env:
-          GOOS: linux
-          GOARCH: 386
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WITH_V: false
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}
+
+      - name: Build and push to Docker Hub
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}:${{ env.ENVIRONMENT }}-latest,${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}:${{ env.ENVIRONMENT }}-${{ steps.autotag.outputs.tag }}
+          labels: ${{ steps.metadata.outputs.labels }}
