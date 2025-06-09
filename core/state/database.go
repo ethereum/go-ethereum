@@ -209,13 +209,15 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	return newReader(newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache), combined), nil
 }
 
-// ReaderWithCache creates a state reader with internal local cache.
-func (db *CachingDB) ReaderWithCache(stateRoot common.Hash) (Reader, error) {
+// ReaderWithCacheStats creates a pair of state readers with internal local cache
+// and statistics.
+func (db *CachingDB) ReaderWithCacheStats(stateRoot common.Hash) (ReaderWithStats, ReaderWithStats, error) {
 	reader, err := db.Reader(stateRoot)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return newReaderWithCache(reader), nil
+	shared := newReaderWithCache(reader)
+	return newReaderWithCacheStats(shared), newReaderWithCacheStats(shared), nil
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
