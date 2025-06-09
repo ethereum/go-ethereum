@@ -49,7 +49,7 @@ func checkHistoricState(env *tester, root common.Hash, hr *historyReader) error 
 	)
 	for addrHash, accountData := range accounts {
 		latest, _ := dl.account(addrHash, 0)
-		blob, err := hr.read(newAccountIdentQuery(env.accountPreimage(addrHash)), *stateID, dl.stateID(), latest)
+		blob, err := hr.read(newAccountIdentQuery(env.accountPreimage(addrHash), addrHash), *stateID, dl.stateID(), latest)
 		if err != nil {
 			return err
 		}
@@ -65,7 +65,7 @@ func checkHistoricState(env *tester, root common.Hash, hr *historyReader) error 
 		for addrHash := range env.snapAccounts[env.roots[i]] {
 			if _, ok := accounts[addrHash]; !ok {
 				latest, _ := dl.account(addrHash, 0)
-				blob, err := hr.read(newAccountIdentQuery(env.accountPreimage(addrHash)), *stateID, dl.stateID(), latest)
+				blob, err := hr.read(newAccountIdentQuery(env.accountPreimage(addrHash), addrHash), *stateID, dl.stateID(), latest)
 				if err != nil {
 					return err
 				}
@@ -78,7 +78,7 @@ func checkHistoricState(env *tester, root common.Hash, hr *historyReader) error 
 	for addrHash, slots := range storages {
 		for slotHash, slotData := range slots {
 			latest, _ := dl.storage(addrHash, slotHash, 0)
-			blob, err := hr.read(newStorageIdentQuery(env.accountPreimage(addrHash), env.hashPreimage(slotHash), slotHash), *stateID, dl.stateID(), latest)
+			blob, err := hr.read(newStorageIdentQuery(env.accountPreimage(addrHash), addrHash, env.hashPreimage(slotHash), slotHash), *stateID, dl.stateID(), latest)
 			if err != nil {
 				return err
 			}
@@ -100,7 +100,7 @@ func checkHistoricState(env *tester, root common.Hash, hr *historyReader) error 
 				}
 				if !ok {
 					latest, _ := dl.storage(addrHash, slotHash, 0)
-					blob, err := hr.read(newStorageIdentQuery(env.accountPreimage(addrHash), env.hashPreimage(slotHash), slotHash), *stateID, dl.stateID(), latest)
+					blob, err := hr.read(newStorageIdentQuery(env.accountPreimage(addrHash), addrHash, env.hashPreimage(slotHash), slotHash), *stateID, dl.stateID(), latest)
 					if err != nil {
 						return err
 					}

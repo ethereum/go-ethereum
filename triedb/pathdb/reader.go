@@ -256,11 +256,12 @@ func (r *HistoricalStateReader) AccountRLP(address common.Address) ([]byte, erro
 	// and try to define a low granularity lock if the current approach doesn't
 	// work later.
 	dl := r.db.tree.bottom()
-	latest, err := dl.account(crypto.Keccak256Hash(address.Bytes()), 0)
+	hash := crypto.Keccak256Hash(address.Bytes())
+	latest, err := dl.account(hash, 0)
 	if err != nil {
 		return nil, err
 	}
-	return r.reader.read(newAccountIdentQuery(address), r.id, dl.stateID(), latest)
+	return r.reader.read(newAccountIdentQuery(address, hash), r.id, dl.stateID(), latest)
 }
 
 // Account directly retrieves the account associated with a particular address in
@@ -305,10 +306,11 @@ func (r *HistoricalStateReader) Storage(address common.Address, key common.Hash)
 	// and try to define a low granularity lock if the current approach doesn't
 	// work later.
 	dl := r.db.tree.bottom()
+	addrHash := crypto.Keccak256Hash(address.Bytes())
 	keyHash := crypto.Keccak256Hash(key.Bytes())
-	latest, err := dl.storage(crypto.Keccak256Hash(address.Bytes()), keyHash, 0)
+	latest, err := dl.storage(addrHash, keyHash, 0)
 	if err != nil {
 		return nil, err
 	}
-	return r.reader.read(newStorageIdentQuery(address, key, keyHash), r.id, dl.stateID(), latest)
+	return r.reader.read(newStorageIdentQuery(address, addrHash, key, keyHash), r.id, dl.stateID(), latest)
 }

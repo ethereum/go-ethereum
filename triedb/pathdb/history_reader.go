@@ -33,12 +33,18 @@ import (
 // either an account or a storage slot.
 type stateIdent struct {
 	account bool
-	address common.Address
+
+	// The hash of the account address. This is used instead of the raw account
+	// address is to align the traversal order with the Merkle-Patricia-Trie.
+	addressHash common.Hash
 
 	// The hash of the storage slot key. This is used instead of the raw slot key
 	// because, in legacy state histories (prior to the Cancun fork), the slot
 	// identifier is the hash of the key, and the original key (preimage) cannot
 	// be recovered. To maintain backward compatibility, the key hash is used.
+	//
+	// Meanwhile, using the storage key hash also preserve the traversal order
+	// with Merkle-Patricia-Trie.
 	//
 	// This field is null if the identifier refers to account data.
 	storageHash common.Hash
@@ -47,25 +53,25 @@ type stateIdent struct {
 // String returns the string format state identifier.
 func (ident stateIdent) String() string {
 	if ident.account {
-		return ident.address.Hex()
+		return ident.addressHash.Hex()
 	}
-	return ident.address.Hex() + ident.storageHash.Hex()
+	return ident.addressHash.Hex() + ident.storageHash.Hex()
 }
 
 // newAccountIdent constructs a state identifier for an account.
-func newAccountIdent(address common.Address) stateIdent {
+func newAccountIdent(addressHash common.Hash) stateIdent {
 	return stateIdent{
-		account: true,
-		address: address,
+		account:     true,
+		addressHash: addressHash,
 	}
 }
 
 // newStorageIdent constructs a state identifier for a storage slot.
 // The address denotes the address of the associated account;
 // the storageHash denotes the hash of the raw storage slot key;
-func newStorageIdent(address common.Address, storageHash common.Hash) stateIdent {
+func newStorageIdent(addressHash common.Hash, storageHash common.Hash) stateIdent {
 	return stateIdent{
-		address:     address,
+		addressHash: addressHash,
 		storageHash: storageHash,
 	}
 }
@@ -73,29 +79,34 @@ func newStorageIdent(address common.Address, storageHash common.Hash) stateIdent
 // stateIdentQuery is the extension of stateIdent by adding the raw storage key.
 type stateIdentQuery struct {
 	stateIdent
+
+	address    common.Address
 	storageKey common.Hash
 }
 
 // newAccountIdentQuery constructs a state identifier for an account.
-func newAccountIdentQuery(address common.Address) stateIdentQuery {
+func newAccountIdentQuery(address common.Address, addressHash common.Hash) stateIdentQuery {
 	return stateIdentQuery{
 		stateIdent: stateIdent{
-			account: true,
-			address: address,
+			account:     true,
+			addressHash: addressHash,
 		},
+		address: address,
 	}
 }
 
 // newStorageIdentQuery constructs a state identifier for a storage slot.
-// The address denotes the address of the associated account;
+// the address denotes the address of the associated account;
+// the addressHash denotes the address hash of the associated account;
 // the storageKey denotes the raw storage slot key;
 // the storageHash denotes the hash of the raw storage slot key;
-func newStorageIdentQuery(address common.Address, storageKey common.Hash, storageHash common.Hash) stateIdentQuery {
+func newStorageIdentQuery(address common.Address, addressHash common.Hash, storageKey common.Hash, storageHash common.Hash) stateIdentQuery {
 	return stateIdentQuery{
 		stateIdent: stateIdent{
-			address:     address,
+			addressHash: addressHash,
 			storageHash: storageHash,
 		},
+		address:    address,
 		storageKey: storageKey,
 	}
 }
