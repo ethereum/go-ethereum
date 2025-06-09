@@ -195,7 +195,7 @@ func fakeExponential(factor, numerator, denominator *big.Int) *big.Int {
 	return output.Div(output, denominator)
 }
 
-// calcBlobPrice calculates the blob price based for a block.
+// calcBlobPrice calculates the blob price for a block.
 func calcBlobPrice(config *params.ChainConfig, header *types.Header) *big.Int {
 	blobBaseFee := CalcBlobFee(config, header)
 	return new(big.Int).Mul(blobBaseFee, big.NewInt(params.BlobTxBlobGasPerBlob))
