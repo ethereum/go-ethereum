@@ -137,17 +137,11 @@ func TestCalcExcessBlobGasEIP7918(t *testing.T) {
 	cfg.BlobScheduleConfig.Osaka = &pragueSchedule
 
 	var (
-		targetBlobs    = targetBlobsPerBlock(cfg, *cfg.CancunTime)
-		blobGasPerBlob = uint64(params.BlobTxBlobGasPerBlob)
-		blobGasTarget  = uint64(targetBlobs) * blobGasPerBlob
+		targetBlobs   = targetBlobsPerBlock(cfg, *cfg.CancunTime)
+		blobGasTarget = uint64(targetBlobs) * params.BlobTxBlobGasPerBlob
 	)
-
-	makeHeader := func(
-		parentExcess uint64,
-		parentBaseFee uint64,
-		blobsUsed int,
-	) *types.Header {
-		blobGasUsed := uint64(blobsUsed) * blobGasPerBlob
+	makeHeader := func(parentExcess, parentBaseFee uint64, blobsUsed int) *types.Header {
+		blobGasUsed := uint64(blobsUsed) * params.BlobTxBlobGasPerBlob
 		return &types.Header{
 			BaseFee:       big.NewInt(int64(parentBaseFee)),
 			ExcessBlobGas: &parentExcess,
@@ -171,7 +165,6 @@ func TestCalcExcessBlobGasEIP7918(t *testing.T) {
 			wantExcessGas: 0,
 		},
 	}
-
 	for _, tc := range tests {
 		got := CalcExcessBlobGas(cfg, tc.header, *cfg.CancunTime)
 		if got != tc.wantExcessGas {
