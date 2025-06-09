@@ -49,6 +49,9 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain) *Bloc
 // header's transaction and uncle roots. The headers are assumed to be already
 // validated at this point.
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
+	if v.config.IsOsaka(block.Number(), block.Time()) && block.Size() > params.BlockRLPSizeCap {
+		return ErrBlockOversized
+	}
 	// Check whether the block is already imported.
 	if v.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
 		return ErrKnownBlock
