@@ -150,15 +150,12 @@ type ConsensusAPI struct {
 
 	forkchoiceLock sync.Mutex // Lock for the forkChoiceUpdated method
 	newPayloadLock sync.Mutex // Lock for the NewPayload method
-
-	isProposer atomic.Bool // Tracks if the node is currently identified as a proposer
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.
 // The underlying blockchain needs to have a valid terminal total difficulty set.
 func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 	api := newConsensusAPIWithoutHeartbeat(eth)
-	api.isProposer.Store(false)
 	go api.heartbeat()
 	return api
 }
@@ -175,7 +172,6 @@ func newConsensusAPIWithoutHeartbeat(eth *eth.Ethereum) *ConsensusAPI {
 		invalidBlocksHits: make(map[common.Hash]int),
 		invalidTipsets:    make(map[common.Hash]*types.Header),
 	}
-	api.isProposer.Store(false)
 	eth.Downloader().SetBadBlockCallback(api.setInvalidAncestor)
 	return api
 }
@@ -202,9 +198,6 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update engine.ForkchoiceStateV1, pa
 		case !api.checkFork(payloadAttributes.Timestamp, forks.Paris, forks.Shanghai):
 			return engine.STATUS_INVALID, paramsErr("fcuV1 called post-shanghai")
 		}
-		api.isProposer.Store(true)
-	} else {
-		api.isProposer.Store(false)
 	}
 	return api.forkchoiceUpdated(update, payloadAttributes, engine.PayloadV1, false)
 }
@@ -223,9 +216,6 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV2(update engine.ForkchoiceStateV1, pa
 		case !api.checkFork(params.Timestamp, forks.Paris, forks.Shanghai):
 			return engine.STATUS_INVALID, unsupportedForkErr("fcuV2 must only be called with paris or shanghai payloads")
 		}
-		api.isProposer.Store(true)
-	} else {
-		api.isProposer.Store(false)
 	}
 	return api.forkchoiceUpdated(update, params, engine.PayloadV2, false)
 }
@@ -242,19 +232,12 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(update engine.ForkchoiceStateV1, pa
 		case !api.checkFork(params.Timestamp, forks.Cancun, forks.Prague):
 			return engine.STATUS_INVALID, unsupportedForkErr("fcuV3 must only be called for cancun or prague payloads")
 		}
-		api.isProposer.Store(true)
-	} else {
-		api.isProposer.Store(false)
 	}
 	// TODO(matt): the spec requires that fcu is applied when called on a valid
 	// hash, even if params are wrong. To do this we need to split up
 	// forkchoiceUpdate into a function that only updates the head and then a
 	// function that kicks off block construction.
 	return api.forkchoiceUpdated(update, params, engine.PayloadV3, false)
-}
-
-func (api *ConsensusAPI) IsProposer() bool {
-	return api.isProposer.Load()
 }
 
 func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes, payloadVersion engine.PayloadVersion, payloadWitness bool) (engine.ForkChoiceResponse, error) {
