@@ -398,7 +398,7 @@ func importChain(ctx *cli.Context) error {
 	fmt.Printf("GC pause:      %v\n\n", time.Duration(mem.PauseTotalNs))
 
 	if ctx.Bool(utils.NoCompactionFlag.Name) {
-		return nil
+		return importErr
 	}
 
 	// Compact the entire database to more accurately measure disk io and print the stats
@@ -425,26 +425,25 @@ func exportChain(ctx *cli.Context) error {
 	defer db.Close()
 	start := time.Now()
 
-	var err error
-	fp := ctx.Args().First()
+	filepath := ctx.Args().First()
 	if ctx.Args().Len() < 3 {
-		err = utils.ExportChain(chain, fp)
-	} else {
-		// This can be improved to allow for numbers larger than 9223372036854775807
-		first, ferr := strconv.ParseInt(ctx.Args().Get(1), 10, 64)
-		last, lerr := strconv.ParseInt(ctx.Args().Get(2), 10, 64)
-		if ferr != nil || lerr != nil {
-			utils.Fatalf("Export error in parsing parameters: block number not an integer\n")
+		if err := utils.ExportChain(chain, filepath); err != nil {
+			utils.Fatalf("Export error: %v\n", err)
 		}
-		if first < 0 || last < 0 {
-			utils.Fatalf("Export error: block number must be greater than 0\n")
-		}
-		if head := chain.CurrentSnapBlock(); uint64(last) > head.Number.Uint64() {
-			utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.Number.Uint64())
-		}
-		err = utils.ExportAppendChain(chain, fp, uint64(first), uint64(last))
+		return nil
 	}
-	if err != nil {
+
+	first, ferr := strconv.ParseUint(ctx.Args().Get(1), 10, 64)
+	last, lerr := strconv.ParseUint(ctx.Args().Get(2), 10, 64)
+	if ferr != nil || lerr != nil {
+		utils.Fatalf("Export error in parsing parameters: block number not an integer\n")
+	}
+
+	if head := chain.CurrentSnapBlock(); last > head.Number.Uint64() {
+		utils.Fatalf("Export error: block number %d larger than head block %d\n", last, head.Number.Uint64())
+	}
+
+	if err := utils.ExportAppendChain(chain, filepath, first, last); err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}
 	fmt.Printf("Export done in %v\n", time.Since(start))
