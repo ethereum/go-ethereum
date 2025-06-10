@@ -43,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
@@ -4405,5 +4406,78 @@ func testInsertChainWithCutoff(t *testing.T, cutoff uint64, ancientLimit uint64,
 				t.Fatalf("Missed block receipts: %d, cutoff: %d", num, cutoffBlock.NumberU64())
 			}
 		}
+	}
+}
+
+func TestEIP7907(t *testing.T) {
+	glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, false))
+	glogger.Verbosity(3)
+	log.SetDefault(log.NewLogger(glogger))
+
+	junk := make([]byte, 1024*250) // 250kb
+	for i := range junk {
+		junk[i] = byte(i)
+	}
+	code := program.New().Op(vm.ADDRESS).Op(vm.POP).ReturnViaCodeCopy(junk).Bytes()
+	var (
+		config  = *params.MergedTestChainConfig
+		signer  = types.LatestSigner(&config)
+		engine  = beacon.New(ethash.NewFaker())
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
+		aa      = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+		bb      = common.HexToAddress("0x000000000000000000000000000000000000bbbb")
+		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+	)
+	gspec := &Genesis{
+		Config:   &config,
+		GasLimit: 70000000,
+		Alloc: types.GenesisAlloc{
+			addr1: {Balance: funds},
+			addr2: {Balance: funds},
+			aa: { // The address 0xAAAA calls into addr2
+				Code:    code,
+				Nonce:   0,
+				Balance: big.NewInt(0),
+			},
+			bb: { // The address 0xBBBB copies and deploys the contract.
+				Code:    program.New().ExtcodeCopy(aa, 0, 0, len(code)).Push0().Push(len(code)).Push0().Push0().Op(vm.CREATE).Op(vm.EXTCODESIZE).Bytes(),
+				Nonce:   0,
+				Balance: big.NewInt(0),
+			},
+		},
+	}
+
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
+		b.SetCoinbase(aa)
+		txdata := &types.DynamicFeeTx{
+			ChainID:   gspec.Config.ChainID,
+			Nonce:     0,
+			To:        &bb,
+			Gas:       70000000,
+			GasFeeCap: newGwei(5),
+			GasTipCap: big.NewInt(2),
+		}
+		tx := types.MustSignNewTx(key1, signer, txdata)
+		b.AddTx(tx)
+	})
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{Tracer: logger.NewMarkdownLogger(&logger.Config{}, os.Stderr).Hooks()}, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	defer chain.Stop()
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	// Verify delegation designations were deployed.
+	created := crypto.CreateAddress(bb, 0)
+	fmt.Println(created.Hex())
+	state, _ := chain.State()
+	code, want := state.GetCode(created), junk
+	if !bytes.Equal(code, want) {
+		t.Fatalf("created code incorrect: got %d, want %d", len(code), len(want))
 	}
 }
