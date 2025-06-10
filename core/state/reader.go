@@ -91,7 +91,7 @@ type ReaderStats struct {
 	StorageMiss int64
 }
 
-// ReaderWithStats wraps the additional methods to retrieve the reader statistics from.
+// ReaderWithStats wraps the additional method to retrieve the reader statistics from.
 type ReaderWithStats interface {
 	Reader
 	GetStats() ReaderStats
@@ -530,11 +530,11 @@ func newReaderWithCacheStats(reader *readerWithCache) *readerWithCacheStats {
 //
 // An error will be returned if the state is corrupted in the underlying reader.
 func (r *readerWithCacheStats) Account(addr common.Address) (*types.StateAccount, error) {
-	account, found, err := r.readerWithCache.account(addr)
+	account, incache, err := r.readerWithCache.account(addr)
 	if err != nil {
 		return nil, err
 	}
-	if found {
+	if incache {
 		r.accountHit.Add(1)
 	} else {
 		r.accountMiss.Add(1)
@@ -548,11 +548,11 @@ func (r *readerWithCacheStats) Account(addr common.Address) (*types.StateAccount
 //
 // An error will be returned if the state is corrupted in the underlying reader.
 func (r *readerWithCacheStats) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
-	value, found, err := r.readerWithCache.storage(addr, slot)
+	value, incache, err := r.readerWithCache.storage(addr, slot)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	if found {
+	if incache {
 		r.storageHit.Add(1)
 	} else {
 		r.storageMiss.Add(1)
@@ -560,7 +560,7 @@ func (r *readerWithCacheStats) Storage(addr common.Address, slot common.Hash) (c
 	return value, nil
 }
 
-// GetStats implements ReaderWithStats, returns the statistics of state reader.
+// GetStats implements ReaderWithStats, returning the statistics of state reader.
 func (r *readerWithCacheStats) GetStats() ReaderStats {
 	return ReaderStats{
 		AccountHit:  r.accountHit.Load(),
