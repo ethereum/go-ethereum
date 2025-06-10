@@ -24,3 +24,13 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
+
+    steps:
+      - name: Wait for Geth devnet to be ready
+        run: |
+          for i in {1..20}; do
+            curl --silent http://localhost:8545 && break
+            echo "Waiting for geth..."
+            sleep 3
+          done
+
