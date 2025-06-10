@@ -106,6 +106,30 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
+	var includedWithdrawals types.Withdrawals
+
+	// If we are post-osaka, incorporate the requested withdrawals into the
+	// block size up-front to ensure that all requested withdrawals can be
+	// included even if we hit the size cap when filling the block with txs.
+	//
+	// Also, ensure that including all requested withdrawals wouldn't bring us
+	// over the block size cap limit.  The withdrawal cap ensures that this can't
+	// actually happen right now, but it doesn't hurt to make this code
+	// future-proof for a situation where the withdrawal cap is lifted.
+	if miner.chainConfig.IsOsaka(work.header.Number, work.header.Time) {
+		maxBlockSize := params.BlockRLPSizeCap - blockRLPSizeCapBuffer
+
+		for _, withdrawal := range genParam.withdrawals {
+			if int(work.size)+params.WithdrawalSize > maxBlockSize {
+				break
+			}
+			work.size += params.WithdrawalSize
+			includedWithdrawals = append(includedWithdrawals, withdrawal)
+		}
+	} else {
+		includedWithdrawals = genParam.withdrawals
+	}
+
 	if !genParam.noTxs {
 		interrupt := new(atomic.Int32)
 		timer := time.AfterFunc(miner.config.Recommit, func() {
@@ -118,24 +142,7 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 			log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(miner.config.Recommit))
 		}
 	}
-
-	body := types.Body{Transactions: work.txs}
-
-	var includedWithdrawals types.Withdrawals
-	if miner.chainConfig.IsOsaka(work.header.Number, work.header.Time) {
-		maxBlockSize := params.BlockRLPSizeCap - blockRLPSizeCapBuffer
-
-		for _, withdrawal := range genParam.withdrawals {
-			if int(work.size)+params.WithdrawalSize > maxBlockSize {
-				break
-			}
-			includedWithdrawals = append(includedWithdrawals, withdrawal)
-			work.size += params.WithdrawalSize
-		}
-	} else {
-		includedWithdrawals = genParam.withdrawals
-	}
-	body.Withdrawals = includedWithdrawals
+	body := types.Body{Transactions: work.txs, Withdrawals: includedWithdrawals}
 
 	allLogs := make([]*types.Log, 0)
 	for _, r := range work.receipts {
