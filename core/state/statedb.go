@@ -275,7 +275,11 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 
 func (s *StateDB) PreComputePostState(blockNumber uint64) {
 	s.blockNumber = blockNumber
-	postBal := AllBlockTxPostValues[blockNumber]
+	postBal := map[int]types.TxPostValues{}
+	for k, v := range AllBlockTxPostValues[blockNumber] {
+		// Clone the map to avoid race with MergePostBalStates
+		postBal[k] = maps.Clone(v)
+	}
 
 	for i := 0; i < len(postBal)-1; i++ {
 		prevVals := postBal[i]
@@ -664,6 +668,52 @@ func (s *StateDB) MergeState(entries []JournalEntry) {
 			// s.setRefund(v.prev)
 		default:
 
+		}
+	}
+}
+
+func (s *StateDB) MergePostBalStates() {
+	if balType != BalPreblockKeysPostValues {
+		panic("MergePostBal is only supported with BalPreblockKeysPostValues")
+	}
+	var (
+		postBal = AllBlockTxPostValues[s.blockNumber]
+	)
+
+	for txIndex := range len(postBal) {
+		postVals := postBal[txIndex]
+
+		for addr, acct := range postVals {
+			account := s.getStateObject(addr)
+
+			// Contract creation
+			if account == nil {
+				newAcct := types.NewEmptyStateAccount()
+				s.setStateObject(newObject(s, addr, newAcct))
+				account = s.getStateObject(addr)
+			}
+
+			if acct.Destruct {
+				s.SelfDestruct(addr)
+				continue
+			}
+
+			// When acct.Nonce is 0, it's possible nonce is just not changed.
+			// So we should only update nonce when it's larger than original nonce.
+			if account.Nonce() < acct.Nonce {
+				account.SetNonce(acct.Nonce)
+			}
+
+			if acct.Balance != nil {
+				account.SetBalance(acct.Balance)
+			}
+
+			if acct.Code != nil {
+				account.SetCode(crypto.Keccak256Hash(acct.Code), acct.Code)
+			}
+			for k, v := range acct.StorageKV {
+				account.SetState(k, v)
+			}
 		}
 	}
 }

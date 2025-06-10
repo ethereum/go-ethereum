@@ -60,7 +60,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		initialdb = statedb.Copy()
 
 		start = time.Now()
-		// Must prefetch bal before syscall to avoid overring syscall's state, thus merkle root might mismatch
+		// Must prefetch bal before syscall to avoid overriding syscall's state, thus merkle root might mismatch
 		statedb.PrefetchStateBAL(block.NumberU64())
 		PrefetchBALTime += time.Since(start)
 	} else {
@@ -95,9 +95,12 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 
 		preStateProvider PreStateProvider
 		workers          errgroup.Group
+		postState        = statedb.Copy()
 		// statedbbal       = statedb.Copy()
+		// wg sync.WaitGroup
 	)
-	workers.SetLimit(runtime.NumCPU() - 4)
+	// leave some cpus for prefetching
+	workers.SetLimit(runtime.NumCPU() / 2)
 
 	// Fetch prestate for each tx
 
@@ -128,6 +131,16 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 	// Parallel executing the transaction
 	exeStart := time.Now()
 	postEntries := make([][]state.JournalEntry, len(block.Transactions()))
+
+	workers.Go(func() error {
+		start := time.Now()
+		postState.MergePostBalStates()
+		// prewarm the updating trie
+		postState.IntermediateRoot(true)
+		PostMergeTime += time.Since(start)
+
+		return nil
+	})
 
 	for i, tx := range block.Transactions() {
 		i := i
@@ -177,6 +190,7 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 	if err != nil {
 		return nil, err
 	}
+
 	ParallelExeTime += time.Since(exeStart)
 	// Merge state changes
 	// - Append receipts
@@ -188,17 +202,16 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 	// set it to avoid read bal post state, -2 is a magic tx number
 	statedb.SetTxContext(common.Hash{}, -2)
 
-	start := time.Now()
-	for i, receipt := range receipts {
+	for i := range receipts {
+		receipt := receipts[i]
 		if receipt == nil {
 			continue // Skip nil receipts
 		}
 		receipt.CumulativeGasUsed = usedGas + receipt.GasUsed
 		usedGas += receipt.GasUsed
 		allLogs = append(allLogs, receipt.Logs...)
-		statedb.MergeState(postEntries[i])
+		// statedb.MergeState(postEntries[i])
 	}
-	PostMergeTime += time.Since(start)
 
 	// Read requests if Prague is enabled.
 	evm := vm.NewEVM(context, statedb, p.config, cfg)
@@ -221,6 +234,10 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.chain.engine.Finalize(p.chain, header, statedb, block.Body())
+
+	// Last tx alreadly includes the state change in requests after all txs
+	// wg.Wait()
+	*statedb = *postState
 
 	return &ProcessResult{
 		Receipts: receipts,
