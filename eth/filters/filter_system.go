@@ -98,7 +98,7 @@ type logCacheElem struct {
 }
 
 // cachedLogElem loads block logs from the backend and caches the result.
-func (sys *FilterSystem) cachedLogElem(ctx context.Context, blockHash common.Hash, number uint64) (*logCacheElem, error) {
+func (sys *FilterSystem) cachedLogElem(ctx context.Context, blockHash common.Hash, number, time uint64) (*logCacheElem, error) {
 	cached, ok := sys.logsCache.Get(blockHash)
 	if ok {
 		return cached, nil
@@ -119,6 +119,7 @@ func (sys *FilterSystem) cachedLogElem(ctx context.Context, blockHash common.Has
 		for _, log := range txLogs {
 			log.BlockHash = blockHash
 			log.BlockNumber = number
+			log.BlockTimestamp = time
 			log.TxIndex = uint(i)
 			log.Index = logIdx
 			logIdx++
