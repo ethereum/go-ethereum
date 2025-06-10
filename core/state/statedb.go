@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"os"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -896,15 +895,10 @@ func (s *StateDB) SelfDestruct(addr common.Address) uint256.Int {
 
 	prevBalance = *(stateObject.Balance())
 
-	fmt.Fprintf(os.Stderr, "[Firehose] SelfDestruct (statedb): Firehose 2.3 would have called RecordSuicide here (addr=%s, prevBalance=%s, sign=%d)\n", addr, &prevBalance, prevBalance.ToBig().Sign())
-
 	// Regardless of whether it is already destructed or not, we do have to
 	// journal the balance-change, if we set it to zero here.
 	if !stateObject.Balance().IsZero() {
-		fmt.Fprintf(os.Stderr, "[Firehose] SelfDestruct (statedb): previous balance is non-zero (addr=%s)\n", addr)
 		stateObject.SetBalance(new(uint256.Int))
-	} else {
-		fmt.Fprintf(os.Stderr, "[Firehose] SelfDestruct (statedb): previous balance is zero! (addr=%s)\n", addr)
 	}
 	// If it is already marked as self-destructed, we do not need to add it
 	// for journalling a second time.
@@ -920,13 +914,10 @@ func (s *StateDB) SelfDestruct(addr common.Address) uint256.Int {
 func (s *StateDB) SelfDestruct6780(addr common.Address) (uint256.Int, bool) {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
-		fmt.Fprintf(os.Stderr, "[Firehose] SelfDestruct6780: stateObject is nil (addr=%s)\n", addr)
 		return uint256.Int{}, false
 	}
 	if stateObject.newContract {
 		return s.SelfDestruct(addr), true
-	} else {
-		fmt.Fprintf(os.Stderr, "[Firehose] SelfDestruct6780: stateObject is not a new contract (addr=%s)\n", addr)
 	}
 	return *(stateObject.Balance()), false
 }

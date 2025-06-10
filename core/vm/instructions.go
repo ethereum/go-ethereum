@@ -17,9 +17,7 @@
 package vm
 
 import (
-	"fmt"
 	"math"
-	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -1011,9 +1009,7 @@ func opSelfdestruct6780(pc *uint64, interpreter *EVMInterpreter, scope *ScopeCon
 	}
 	beneficiary := scope.Stack.pop()
 	balance := interpreter.evm.StateDB.GetBalance(scope.Contract.Address())
-	fmt.Fprintf(os.Stderr, "[Firehose] SelfDestruct6780 (instructions): previous balance withdraw (addr=%s, prev_balance=%s)\n", scope.Contract.Address(), balance)
 	interpreter.evm.StateDB.SubBalance(scope.Contract.Address(), balance, tracing.BalanceDecreaseSelfdestruct)
-	fmt.Fprintf(os.Stderr, "[Firehose] SelfDestruct6780 (instructions): previous balance refund (addr=%s, refund=%s)\n", common.Address(beneficiary.Bytes20()), balance)
 	interpreter.evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
 	interpreter.evm.StateDB.SelfDestruct6780(scope.Contract.Address())
 	if tracer := interpreter.evm.Config.Tracer; tracer != nil {
