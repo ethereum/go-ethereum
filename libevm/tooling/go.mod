@@ -7,7 +7,6 @@ replace github.com/ava-labs/libevm => ../../
 require (
 	github.com/ava-labs/libevm v0.0.0-00010101000000-000000000000
 	github.com/go-git/go-git/v5 v5.14.0
-	github.com/google/go-cmp v0.7.0
 	github.com/stretchr/testify v1.10.0
 )
 
