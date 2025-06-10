@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
@@ -180,8 +181,10 @@ func Transaction(ctx *cli.Context) error {
 			r.Error = errors.New("gas * maxFeePerGas exceeds 256 bits")
 		}
 		// Check whether the init code size has been exceeded.
-		if chainConfig.IsShanghai(new(big.Int), 0) && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
-			r.Error = errors.New("max initcode size exceeded")
+		if tx.To() == nil {
+			if err := vm.CheckInitCodeSize(&rules, uint64(len(tx.Data()))); err != nil {
+				r.Error = err
+			}
 		}
 		results = append(results, r)
 	}
