@@ -547,4 +547,6 @@ func enable7907(jt *JumpTable) {
 	jt[STATICCALL].dynamicGas = gasStaticCallEIP7907
 	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP7907
 	jt[EXTCODECOPY].dynamicGas = gasExtCodeCopyEIP7907
+	jt[CREATE].dynamicGas = gasCreateEip7907
+	jt[CREATE2].dynamicGas = gasCreate2Eip7907
 }

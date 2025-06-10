@@ -530,10 +530,10 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 	}
 
 	// Check whether the max code size has been exceeded, assign err if the case.
-	if evm.chainRules.IsEIP158 && len(ret) > params.MaxCodeSizeEIP170 {
+	if evm.chainRules.IsOsaka && len(ret) > params.MaxCodeSizeEIP7907 {
 		return ret, ErrMaxCodeSizeExceeded
 	}
-	if evm.chainRules.IsOsaka && len(ret) > params.MaxCodeSizeEIP7907 {
+	if !evm.chainRules.IsOsaka && evm.chainRules.IsEIP158 && len(ret) > params.MaxCodeSizeEIP170 {
 		return ret, ErrMaxCodeSizeExceeded
 	}
 
