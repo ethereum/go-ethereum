@@ -26,13 +26,20 @@ import (
 )
 
 type accessList struct {
-	addresses map[common.Address]int
-	slots     []map[common.Hash]struct{}
+	addresses    map[common.Address]int
+	slots        []map[common.Hash]struct{}
+	addressCodes map[common.Address]struct{}
 }
 
 // ContainsAddress returns true if the address is in the access list.
 func (al *accessList) ContainsAddress(address common.Address) bool {
 	_, ok := al.addresses[address]
+	return ok
+}
+
+// ContainsAddress returns true if the address is in the access list.
+func (al *accessList) ContainsAddressCode(address common.Address) bool {
+	_, ok := al.addressCodes[address]
 	return ok
 }
 
@@ -67,6 +74,10 @@ func (al *accessList) Copy() *accessList {
 	for i, slotMap := range al.slots {
 		cp.slots[i] = maps.Clone(slotMap)
 	}
+	cp.addressCodes = make(map[common.Address]struct{}, len(al.addressCodes))
+	for addr := range al.addressCodes {
+		cp.addressCodes[addr] = struct{}{}
+	}
 	return cp
 }
 
@@ -77,6 +88,16 @@ func (al *accessList) AddAddress(address common.Address) bool {
 		return false
 	}
 	al.addresses[address] = -1
+	return true
+}
+
+// AddAddressCode adds an address code to the access list, and returns 'true' if
+// the operation caused a change (addr was not previously in the list).
+func (al *accessList) AddAddressCode(address common.Address) bool {
+	if _, present := al.addressCodes[address]; present {
+		return false
+	}
+	al.addressCodes[address] = struct{}{}
 	return true
 }
 
@@ -140,6 +161,11 @@ func (al *accessList) Equal(other *accessList) bool {
 		return false
 	}
 	return slices.EqualFunc(al.slots, other.slots, maps.Equal)
+}
+
+// DeleteAddressCode removes an address code from the access list.
+func (al *accessList) DeleteAddressCode(address common.Address) {
+	delete(al.addresses, address)
 }
 
 // PrettyPrint prints the contents of the access list in a human-readable form

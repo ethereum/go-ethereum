@@ -496,6 +496,10 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 		}
 		gas = gas - consumed
 	}
+	// The contract code is added to the access list _after_ the contract code is successfully deployed.
+	if evm.chainRules.IsOsaka {
+		evm.StateDB.AddAddressCodeToAccessList(address)
+	}
 	evm.Context.Transfer(evm.StateDB, caller, address, value)
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
@@ -526,7 +530,10 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 	}
 
 	// Check whether the max code size has been exceeded, assign err if the case.
-	if evm.chainRules.IsEIP158 && len(ret) > params.MaxCodeSize {
+	if evm.chainRules.IsEIP158 && len(ret) > params.MaxCodeSizeEIP170 {
+		return ret, ErrMaxCodeSizeExceeded
+	}
+	if evm.chainRules.IsOsaka && len(ret) > params.MaxCodeSizeEIP7907 {
 		return ret, ErrMaxCodeSizeExceeded
 	}
 
