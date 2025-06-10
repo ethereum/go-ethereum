@@ -140,7 +140,11 @@ func (r *cachingCodeReader) CodeSize(addr common.Address, codeHash common.Hash) 
 	if cached, ok := r.codeSizeCache.Get(codeHash); ok {
 		return cached, nil
 	}
-
+	codeSize := rawdb.ReadCodeSizeWithPrefix(r.db, codeHash)
+	if codeSize != -1 {
+		r.codeSizeCache.Add(codeHash, codeSize)
+		return codeSize, nil
+	}
 	code, err := r.Code(addr, codeHash)
 	if err != nil {
 		return 0, err
