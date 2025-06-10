@@ -109,8 +109,9 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 	var includedWithdrawals types.Withdrawals
 
 	// If we are post-osaka, incorporate the requested withdrawals into the
-	// block size up-front to ensure that all requested withdrawals can be
-	// included even if we hit the size cap when filling the block with txs.
+	// block size calculation up-front to ensure that all requested withdrawals
+	// can be included even if we hit the size cap when filling the block with
+	// txs.
 	//
 	// Also, ensure that including all requested withdrawals wouldn't bring us
 	// over the block size cap limit.  The withdrawal cap ensures that this can't
