@@ -473,56 +473,6 @@ func (s *StateDB) MergePostBal() {
 	}
 }
 
-func (s *StateDB) MergePostBalBuggy() {
-	if balType != BalPreblockKeysPostValues {
-		panic("MergePostBal is only supported with BalPreblockKeysPostValues")
-	}
-	start := time.Now()
-	var (
-		postBal = AllBlockTxPostValues[s.blockNumber]
-	)
-	StateLoadTime += time.Since(start)
-
-	postState := s.Copy()
-	postState.prefetcher = nil
-	for txIndex := range len(postBal) {
-		postVals := postBal[txIndex]
-		start := time.Now()
-		for addr, acct := range postVals {
-			account := postState.getStateObject(addr)
-			if account == nil {
-				return
-			}
-
-			if acct.Destruct {
-				account.markSelfdestructed()
-				continue
-			}
-
-			account.SetNonce(acct.Nonce)
-			if acct.Balance != nil {
-				account.SetBalance(acct.Balance)
-			}
-			if acct.Code != nil {
-				account.SetCode(crypto.Keccak256Hash(acct.Code), acct.Code)
-			}
-			// Will cause failure if postState.Finalise is not called.
-			for k, v := range acct.StorageKV {
-				account.SetState(k, v)
-			}
-		}
-		StateSetTime += time.Since(start)
-
-		start = time.Now()
-		// postState.Finalise(true)
-		StateFinalizeTime += time.Since(start)
-
-		start = time.Now()
-		s.postStates[txIndex] = postState.Copy()
-		StateCopyTime += time.Since(start)
-	}
-}
-
 func (s *StateDB) PrestateAtIndex(txIndex int) (*StateDB, error) {
 	if balType != BalPreblockKeysPostValues {
 		return nil, fmt.Errorf("PreStateAtTxIndex is only supported with BalPreblockKeysPostValues")

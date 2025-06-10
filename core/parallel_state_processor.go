@@ -96,21 +96,13 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 		preStateProvider PreStateProvider
 		workers          errgroup.Group
 		postState        = statedb.Copy()
-		// statedbbal       = statedb.Copy()
-		// wg sync.WaitGroup
 	)
 	// leave some cpus for prefetching
 	workers.SetLimit(runtime.NumCPU() / 2)
 
-	// Fetch prestate for each tx
-
-	// todo: handle gp with RW lock
 	switch preStateType {
 	case BALPreState:
 		{
-			// start := time.Now()
-			// statedb.PrefetchStateBAL(block.NumberU64())
-			// PrefetchBALTime += time.Since(start)
 		}
 
 	case SeqPreState:
@@ -195,8 +187,7 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 	// Merge state changes
 	// - Append receipts
 	// - Sum usedGas
-	// - Collect state state changes: simple overwrite
-	// - Ommit preimages for now
+	// - TODO: validate state changes are the same with bal
 	usedGas := uint64(0)
 
 	// set it to avoid read bal post state, -2 is a magic tx number
