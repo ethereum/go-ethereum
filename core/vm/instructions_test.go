@@ -989,9 +989,7 @@ func TestOpCLZ(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc // capture range variable
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 
 			// prepare a fresh stack and PC
 			stack := newstack()
