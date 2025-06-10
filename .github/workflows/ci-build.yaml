@@ -24,13 +24,27 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
+        command: >
+          --dev
+          --http --http.addr 0.0.0.0
+          --http.api eth,net,web3
+          --http.corsdomain="*"
+          --http.vhosts="*"
 
     steps:
-      - name: Wait for Geth devnet to be ready
-        run: |
-          for i in {1..20}; do
-            curl --silent http://localhost:8545 && break
-            echo "Waiting for geth..."
-            sleep 3
-          done
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: hardhat/package-lock.json
+
+      - name: Install Hardhat dependencies
+        working-directory: ./hardhat
+        run: npm ci
 
