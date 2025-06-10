@@ -41,6 +41,7 @@ var activators = map[int]func(*JumpTable){
 	1153: enable1153,
 	4762: enable4762,
 	7702: enable7702,
+	7907: enable7907,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -537,4 +538,13 @@ func enable7702(jt *JumpTable) {
 	jt[CALLCODE].dynamicGas = gasCallCodeEIP7702
 	jt[STATICCALL].dynamicGas = gasStaticCallEIP7702
 	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP7702
+}
+
+// enable7907 the EIP-7907 changes to support large contracts.
+func enable7907(jt *JumpTable) {
+	jt[CALL].dynamicGas = gasCallEIP7907
+	jt[CALLCODE].dynamicGas = gasCallCodeEIP7907
+	jt[STATICCALL].dynamicGas = gasStaticCallEIP7907
+	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP7907
+	jt[EXTCODECOPY].dynamicGas = gasExtCodeCopyEIP7907
 }

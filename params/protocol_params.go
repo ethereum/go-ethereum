@@ -132,8 +132,10 @@ const (
 	DefaultElasticityMultiplier     = 2          // Bounds the maximum gas limit an EIP-1559 block may have.
 	InitialBaseFee                  = 1000000000 // Initial base fee for EIP-1559 blocks.
 
-	MaxCodeSize     = 24576           // Maximum bytecode to permit for a contract
-	MaxInitCodeSize = 2 * MaxCodeSize // Maximum initcode to permit in a creation transaction and create instructions
+	MaxCodeSizeEIP170      = 24576                 // Maximum bytecode to permit for a contract
+	MaxCodeSizeEIP7907     = 268435456             // Maximum bytecode permitted per contract after EIP-7907
+	MaxInitCodeSizeEIP3860 = 2 * MaxCodeSizeEIP170 // Maximum initcode to permit in a creation transaction and create instructions
+	MaxInitCodeSizeEIP7903 = 2 * MaxCodeSizeEIP170 // Maximum initcode to permit in a creation transaction and create instructions
 
 	// Precompiled contract gas prices
 

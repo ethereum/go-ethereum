@@ -1402,9 +1402,21 @@ func (s *StateDB) AddSlotToAccessList(addr common.Address, slot common.Hash) {
 	}
 }
 
+// AddAddressCodeToAccessList adds the given address to the access list
+func (s *StateDB) AddAddressCodeToAccessList(addr common.Address) {
+	if s.accessList.AddAddressCode(addr) {
+		s.journal.accessListAddAccountCode(addr)
+	}
+}
+
 // AddressInAccessList returns true if the given address is in the access list.
 func (s *StateDB) AddressInAccessList(addr common.Address) bool {
 	return s.accessList.ContainsAddress(addr)
+}
+
+// AddressCodeInAccessList returns true if the given address code is in the access list.
+func (s *StateDB) AddressCodeInAccessList(addr common.Address) bool {
+	return s.accessList.ContainsAddressCode(addr)
 }
 
 // SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
