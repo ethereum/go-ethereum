@@ -255,6 +255,7 @@ func TestFastIteratorBasics(t *testing.T) {
 func TestAccountIteratorTraversal(t *testing.T) {
 	config := &Config{
 		WriteBufferSize: 0,
+		NoAsyncFlush:    true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
 	db.waitGeneration()
@@ -299,6 +300,7 @@ func TestAccountIteratorTraversal(t *testing.T) {
 func TestStorageIteratorTraversal(t *testing.T) {
 	config := &Config{
 		WriteBufferSize: 0,
+		NoAsyncFlush:    true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
 	db.waitGeneration()
@@ -343,6 +345,7 @@ func TestStorageIteratorTraversal(t *testing.T) {
 func TestAccountIteratorTraversalValues(t *testing.T) {
 	config := &Config{
 		WriteBufferSize: 0,
+		NoAsyncFlush:    true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
 	db.waitGeneration()
@@ -459,6 +462,7 @@ func TestAccountIteratorTraversalValues(t *testing.T) {
 func TestStorageIteratorTraversalValues(t *testing.T) {
 	config := &Config{
 		WriteBufferSize: 0,
+		NoAsyncFlush:    true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
 	db.waitGeneration()
@@ -592,6 +596,7 @@ func TestAccountIteratorLargeTraversal(t *testing.T) {
 	// Build up a large stack of snapshots
 	config := &Config{
 		WriteBufferSize: 0,
+		NoAsyncFlush:    true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
 	db.waitGeneration()
@@ -664,6 +669,7 @@ func TestAccountIteratorFlattening(t *testing.T) {
 func TestAccountIteratorSeek(t *testing.T) {
 	config := &Config{
 		WriteBufferSize: 0,
+		NoAsyncFlush:    true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
 	db.waitGeneration()
@@ -736,6 +742,7 @@ func TestStorageIteratorSeek(t *testing.T) {
 func testStorageIteratorSeek(t *testing.T, newIterator func(db *Database, root, account, seek common.Hash) StorageIterator) {
 	config := &Config{
 		WriteBufferSize: 0,
+		NoAsyncFlush:    true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
 	db.waitGeneration()
@@ -808,6 +815,7 @@ func TestAccountIteratorDeletions(t *testing.T) {
 func testAccountIteratorDeletions(t *testing.T, newIterator func(db *Database, root, seek common.Hash) AccountIterator) {
 	config := &Config{
 		WriteBufferSize: 0,
+		NoAsyncFlush:    true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
 	db.waitGeneration()
@@ -848,6 +856,7 @@ func testAccountIteratorDeletions(t *testing.T, newIterator func(db *Database, r
 func TestStorageIteratorDeletions(t *testing.T) {
 	config := &Config{
 		WriteBufferSize: 0,
+		NoAsyncFlush:    true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
 	db.waitGeneration()
@@ -916,6 +925,7 @@ func TestStaleIterator(t *testing.T) {
 func testStaleIterator(t *testing.T, newIter func(db *Database, hash common.Hash) Iterator) {
 	config := &Config{
 		WriteBufferSize: 16 * 1024 * 1024,
+		NoAsyncFlush:    true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
 	db.waitGeneration()
@@ -971,6 +981,7 @@ func BenchmarkAccountIteratorTraversal(b *testing.B) {
 	}
 	config := &Config{
 		WriteBufferSize: 0,
+		NoAsyncFlush:    true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
 	db.waitGeneration()
@@ -1066,6 +1077,7 @@ func BenchmarkAccountIteratorLargeBaselayer(b *testing.B) {
 	}
 	config := &Config{
 		WriteBufferSize: 0,
+		NoAsyncFlush:    true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
 	db.waitGeneration()

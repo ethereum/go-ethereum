@@ -129,6 +129,7 @@ func newTester(t *testing.T, historyLimit uint64, isVerkle bool, layers int) *te
 			TrieCleanSize:   256 * 1024,
 			StateCleanSize:  256 * 1024,
 			WriteBufferSize: 256 * 1024,
+			NoAsyncFlush:    true,
 		}, isVerkle)
 
 		obj = &tester{
