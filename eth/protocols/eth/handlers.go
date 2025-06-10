@@ -514,16 +514,36 @@ func handlePooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(&txs); err != nil {
 		return err
 	}
+	peerID := peer.ID()
+	peerIDLast4 := peerID[len(peerID)-1] & 0x0F
+
+	var filteredTxs []*types.Transaction
+
 	for i, tx := range txs.PooledTransactionsResponse {
 		// Validate and mark the remote transaction
 		if tx == nil {
 			return fmt.Errorf("PooledTransactions: transaction %d is nil", i)
 		}
+		txHash := tx.Hash()
+		txHashLast4 := txHash[len(txHash)-1] & 0x0F
+
+		if txHashLast4 != peerIDLast4 && tx.Type() == types.BlobTxType {
+			continue
+		}
+
 		peer.markTransaction(tx.Hash())
+		filteredTxs = append(filteredTxs, tx)
 	}
 	requestTracker.Fulfil(peer.id, peer.version, PooledTransactionsMsg, txs.RequestId)
 
-	return backend.Handle(peer, &txs.PooledTransactionsResponse)
+	if len(filteredTxs) == 0 {
+		return nil
+	}
+	
+	return backend.Handle(peer, &PooledTransactionsPacket{
+		PooledTransactionsResponse: filteredTxs,
+		RequestId:                  txs.RequestId,
+	})
 }
 
 func handleBlockRangeUpdate(backend Backend, msg Decoder, peer *Peer) error {
