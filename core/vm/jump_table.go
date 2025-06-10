@@ -62,6 +62,7 @@ var (
 	cancunInstructionSet           = newCancunInstructionSet()
 	verkleInstructionSet           = newVerkleInstructionSet()
 	pragueInstructionSet           = newPragueInstructionSet()
+	osakaInstructionSet            = newOsakaInstructionSet()
 	eofInstructionSet              = newEOFInstructionSetForTesting()
 )
 
@@ -99,6 +100,12 @@ func NewEOFInstructionSetForTesting() JumpTable {
 func newEOFInstructionSetForTesting() JumpTable {
 	instructionSet := newPragueInstructionSet()
 	enableEOF(&instructionSet)
+	return validate(instructionSet)
+}
+
+func newOsakaInstructionSet() JumpTable {
+	instructionSet := newPragueInstructionSet()
+	enable7907(&instructionSet)
 	return validate(instructionSet)
 }
 
