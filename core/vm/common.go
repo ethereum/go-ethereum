@@ -27,14 +27,16 @@ import (
 
 // CheckInitCodeSize checks the size of contract initcode against the protocol-defined limit.
 func CheckInitCodeSize(rules *params.Rules, size uint64) error {
-	switch {
-	case rules.IsOsaka && size > params.MaxInitCodeSizeOsaka:
-		return fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, size, params.MaxInitCodeSizeOsaka)
-	case rules.IsShanghai && size > params.MaxInitCodeSize:
-		return fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, size, params.MaxInitCodeSize)
-	default:
-		return nil
+	if rules.IsOsaka {
+		if size > params.MaxInitCodeSizeOsaka {
+			return fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, size, params.MaxInitCodeSizeOsaka)
+		}
+	} else if rules.IsShanghai {
+		if size > params.MaxInitCodeSize {
+			return fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, size, params.MaxInitCodeSize)
+		}
 	}
+	return nil
 }
 
 // calcMemSize64 calculates the required memory size, and returns
