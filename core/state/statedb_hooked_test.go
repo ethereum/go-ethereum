@@ -80,7 +80,6 @@ func TestBurn(t *testing.T) {
 // TestHooks is a basic sanity-check of all hooks
 func TestHooks(t *testing.T) {
 	inner, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
-	inner.SetTxContext(common.Hash{0x11}, 100) // For the log
 	var result []string
 	var wants = []string{
 		"0xaa00000000000000000000000000000000000000.balance: 0->100 (Unspecified)",
@@ -89,7 +88,7 @@ func TestHooks(t *testing.T) {
 		"0xaa00000000000000000000000000000000000000.code:  (0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470) ->0x1325 (0xa12ae05590de0c93a00bc7ac773c2fdb621e44f814985e72194f921c0050f728)",
 		"0xaa00000000000000000000000000000000000000.storage slot 0x0000000000000000000000000000000000000000000000000000000000000001: 0x0000000000000000000000000000000000000000000000000000000000000000 ->0x0000000000000000000000000000000000000000000000000000000000000011",
 		"0xaa00000000000000000000000000000000000000.storage slot 0x0000000000000000000000000000000000000000000000000000000000000001: 0x0000000000000000000000000000000000000000000000000000000000000011 ->0x0000000000000000000000000000000000000000000000000000000000000022",
-		"log 100",
+		"log 0xbb00000000000000000000000000000000000000",
 	}
 	emitF := func(format string, a ...any) {
 		result = append(result, fmt.Sprintf(format, a...))
@@ -108,7 +107,7 @@ func TestHooks(t *testing.T) {
 			emitF("%v.storage slot %v: %v ->%v", addr, slot, prev, new)
 		},
 		OnLog: func(log *types.Log) {
-			emitF("log %v", log.TxIndex)
+			emitF("log %v", log.Address)
 		},
 	})
 	sdb.AddBalance(common.Address{0xaa}, uint256.NewInt(100), tracing.BalanceChangeUnspecified)

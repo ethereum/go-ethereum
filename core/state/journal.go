@@ -449,7 +449,6 @@ func (ch addLogChange) revert(s *StateDB) {
 	} else {
 		s.logs[ch.txhash] = logs[:len(logs)-1]
 	}
-	s.logSize--
 }
 
 func (ch addLogChange) dirtied() *common.Address {
