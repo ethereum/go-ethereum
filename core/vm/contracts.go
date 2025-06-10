@@ -228,8 +228,8 @@ func RunPrecompiledContract(addr common.Address, p PrecompiledContract, input []
 	}
 	suppliedGas -= gasCost
 	// Check the cache
-	if ouput, ok := getCache(addr, input); ok {
-		return ouput, suppliedGas, nil
+	if output, ok := getCache(addr, input); ok {
+		return output, suppliedGas, nil
 	}
 	output, err := p.Run(input)
 	if err == nil {
