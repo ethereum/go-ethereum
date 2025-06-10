@@ -38,6 +38,7 @@ const (
 	TxDataZeroGas         uint64 = 4     // Per byte of data attached to a transaction that equals zero. NOTE: Not payable on data of calls between transactions.
 	QuadCoeffDiv          uint64 = 512   // Divisor for the quadratic particle of the memory cost equation.
 	LogDataGas            uint64 = 8     // Per byte in a LOG* operation's data.
+	LogDataGasOsaka       uint64 = 32    // Per byte in a LOG* operation's data in Osaka.
 	CallStipend           uint64 = 2300  // Free gas given at beginning of call.
 
 	Keccak256Gas     uint64 = 30 // Once per KECCAK256 operation.
@@ -80,10 +81,12 @@ const (
 	CallCreateDepth       uint64 = 1024  // Maximum depth of call/create stack.
 	ExpGas                uint64 = 10    // Once per EXP instruction
 	LogGas                uint64 = 375   // Per LOG* operation.
+	LogGasOsaka           uint64 = 1095  // Per LOG* operation in Osaka.
 	CopyGas               uint64 = 3     //
 	StackLimit            uint64 = 1024  // Maximum size of VM stack allowed.
 	TierStepGas           uint64 = 0     // Once per operation, for a selection of them.
 	LogTopicGas           uint64 = 375   // Multiplied by the * of the LOG*, per LOG transaction. e.g. LOG0 incurs 0 * c_txLogTopicGas, LOG4 incurs 4 * c_txLogTopicGas.
+	LogTopicGasOsaka      uint64 = 1095  // Multiplied by the * of the LOG*, per LOG transaction in Osaka. e.g. LOG0 incurs 0 * c_txLogTopicGas, LOG4 incurs 4 * c_txLogTopicGas.
 	CreateGas             uint64 = 32000 // Once per CREATE operation & contract-creation transaction.
 	Create2Gas            uint64 = 32000 // Once per CREATE2 operation
 	CreateNGasEip4762     uint64 = 1000  // Once per CREATEn operations post-verkle

@@ -230,20 +230,32 @@ func makeGasLog(n uint64) gasFunc {
 			return 0, ErrGasUintOverflow
 		}
 
+		var (
+			logGas      = params.LogGas
+			logTopicGas = params.LogTopicGas
+			logDataGas  = params.LogDataGas
+		)
+
+		if evm.chainRules.IsOsaka {
+			logGas = params.LogGasOsaka
+			logTopicGas = params.LogTopicGasOsaka
+			logDataGas = params.LogDataGasOsaka
+		}
+
 		gas, err := memoryGasCost(mem, memorySize)
 		if err != nil {
 			return 0, err
 		}
 
-		if gas, overflow = math.SafeAdd(gas, params.LogGas); overflow {
+		if gas, overflow = math.SafeAdd(gas, logGas); overflow {
 			return 0, ErrGasUintOverflow
 		}
-		if gas, overflow = math.SafeAdd(gas, n*params.LogTopicGas); overflow {
+		if gas, overflow = math.SafeAdd(gas, n*logTopicGas); overflow {
 			return 0, ErrGasUintOverflow
 		}
 
 		var memorySizeGas uint64
-		if memorySizeGas, overflow = math.SafeMul(requestedSize, params.LogDataGas); overflow {
+		if memorySizeGas, overflow = math.SafeMul(requestedSize, logDataGas); overflow {
 			return 0, ErrGasUintOverflow
 		}
 		if gas, overflow = math.SafeAdd(gas, memorySizeGas); overflow {
