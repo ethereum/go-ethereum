@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -139,15 +140,41 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 	if blockHash == (common.Hash{}) {
 		return nil, common.Hash{}, 0, 0
 	}
-	body := ReadBody(db, blockHash, *blockNumber)
-	if body == nil {
+	bodyRLP := ReadBodyRLP(db, blockHash, *blockNumber)
+	if bodyRLP == nil {
 		log.Error("Transaction referenced missing", "number", *blockNumber, "hash", blockHash)
 		return nil, common.Hash{}, 0, 0
 	}
-	for txIndex, tx := range body.Transactions {
-		if tx.Hash() == hash {
-			return tx, blockHash, *blockNumber, uint64(txIndex)
+	txnListRLP, _, err := rlp.SplitList(bodyRLP)
+	if err != nil {
+		return nil, common.Hash{}, 0, 0
+	}
+	txnIterator, err := rlp.NewListIterator(txnListRLP)
+	if err != nil {
+		return nil, common.Hash{}, 0, 0
+	}
+
+	txIndex := 0
+	for txnIterator.Next() && txnIterator.Err() == nil {
+		txnRLP := txnIterator.Value()
+
+		// Figure out if this a legacy transaction or not
+		rlpKind, hashPreimage, _, err := rlp.Split(txnRLP)
+		if err != nil {
+			return nil, common.Hash{}, 0, 0
 		}
+		if rlpKind == rlp.List {
+			hashPreimage = txnRLP
+		}
+
+		if crypto.Keccak256Hash(hashPreimage) == hash {
+			var tx types.Transaction
+			if err := rlp.DecodeBytes(txnRLP, &tx); err != nil {
+				return nil, common.Hash{}, 0, 0
+			}
+			return &tx, blockHash, *blockNumber, uint64(txIndex)
+		}
+		txIndex++
 	}
 	log.Error("Transaction not found", "number", *blockNumber, "hash", blockHash, "txhash", hash)
 	return nil, common.Hash{}, 0, 0
