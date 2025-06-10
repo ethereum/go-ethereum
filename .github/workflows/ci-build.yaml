@@ -1,0 +1,27 @@
+name: CI-Build
+
+
+on:
+  pull_request:
+    types: [ closed ]
+    branches: [ master ]
+
+permissions:
+  contents: write
+
+jobs:
+  devnet:
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build')
+    runs-on: ubuntu-24.04
+
+    services:
+      geth:
+        image: dmanov/go-ethereum:dev-latest
+        ports:
+          - 8545:8545
+          - 30303:30303
+        options: >-
+          --health-cmd="curl --fail http://localhost:8545 || exit 1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10

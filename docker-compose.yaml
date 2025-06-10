@@ -1,0 +1,13 @@
+version: "3.8"
+services:
+  geth:
+    container_name: geth
+    image: dmanov/go-ethereum:dev-latest
+    volumes:
+      - ./devnet:/root/.ethereum
+    ports:
+      - "8545:8545" # HTTP based JSON RPC API
+      - "30303:30303" # P2P
+    command: >
+      --http --http.addr 0.0.0.0 --http.api eth,net,web3
+      --dev
