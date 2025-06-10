@@ -440,6 +440,7 @@ func showMetrics() {
 	blockWriteTimer := metrics.GetOrRegisterResettingTimer("chain/write", nil)
 
 	blockPrefetchExecuteTimer := metrics.GetOrRegisterResettingTimer("chain/prefetch/executes", nil)
+	mgaspsHist := metrics.GetOrRegisterHistogram("chain/execution/mgasps", nil, metrics.NewUniformSample(2000))
 
 	// not important
 	fmt.Println("accountReadSingleTimer", accountReadSingleTimer.Total())
@@ -478,6 +479,9 @@ func showMetrics() {
 
 	// total
 	fmt.Println("blockInsertTimer", blockInsertTimer.Total())
+
+	mgasps := mgaspsHist.Snapshot()
+	fmt.Println("mgasps,mean,max,min:", mgasps.Mean(), mgasps.Max(), mgasps.Min())
 }
 
 func exportChain(ctx *cli.Context) error {
