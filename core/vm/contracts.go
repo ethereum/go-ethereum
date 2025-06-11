@@ -80,7 +80,7 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: false},
 	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{limitInputLength: false},
 	common.BytesToAddress([]byte{9}): &blake2F{},
 }
 
@@ -94,7 +94,7 @@ var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
 	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{limitInputLength: false},
 	common.BytesToAddress([]byte{9}): &blake2F{},
 }
 
@@ -108,7 +108,7 @@ var PrecompiledContractsArchimedes = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
 	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{limitInputLength: true},
 	common.BytesToAddress([]byte{9}): &blake2FDisabled{},
 }
 
@@ -122,7 +122,7 @@ var PrecompiledContractsBernoulli = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
 	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{limitInputLength: true},
 	common.BytesToAddress([]byte{9}): &blake2FDisabled{},
 }
 
@@ -136,7 +136,22 @@ var PrecompiledContractsEuclidV2 = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{5}):          &bigModExp{eip2565: true},
 	common.BytesToAddress([]byte{6}):          &bn256AddIstanbul{},
 	common.BytesToAddress([]byte{7}):          &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}):          &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{8}):          &bn256PairingIstanbul{limitInputLength: true},
+	common.BytesToAddress([]byte{9}):          &blake2FDisabled{},
+	common.BytesToAddress([]byte{0x01, 0x00}): &p256Verify{},
+}
+
+// PrecompiledContractsFeynman contains the default set of pre-compiled Ethereum
+// contracts used in the Feynman release.
+var PrecompiledContractsFeynman = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{1}):          &ecrecover{},
+	common.BytesToAddress([]byte{2}):          &sha256hash{},
+	common.BytesToAddress([]byte{3}):          &ripemd160hashDisabled{},
+	common.BytesToAddress([]byte{4}):          &dataCopy{},
+	common.BytesToAddress([]byte{5}):          &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{6}):          &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}):          &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}):          &bn256PairingIstanbul{limitInputLength: false},
 	common.BytesToAddress([]byte{9}):          &blake2FDisabled{},
 	common.BytesToAddress([]byte{0x01, 0x00}): &p256Verify{},
 }
@@ -156,6 +171,7 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
 }
 
 var (
+	PrecompiledAddressesFeynman    []common.Address
 	PrecompiledAddressesEuclidV2   []common.Address
 	PrecompiledAddressesBernoulli  []common.Address
 	PrecompiledAddressesArchimedes []common.Address
@@ -187,11 +203,16 @@ func init() {
 	for k := range PrecompiledContractsEuclidV2 {
 		PrecompiledAddressesEuclidV2 = append(PrecompiledAddressesEuclidV2, k)
 	}
+	for k := range PrecompiledContractsFeynman {
+		PrecompiledAddressesFeynman = append(PrecompiledAddressesFeynman, k)
+	}
 }
 
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
+	case rules.IsFeynman:
+		return PrecompiledAddressesFeynman
 	case rules.IsEuclidV2:
 		return PrecompiledAddressesEuclidV2
 	case rules.IsBernoulli:
@@ -600,10 +621,6 @@ var (
 // runBn256Pairing implements the Bn256Pairing precompile, referenced by both
 // Byzantium and Istanbul operations.
 func runBn256Pairing(input []byte) ([]byte, error) {
-	// Allow at most 4 inputs
-	if len(input) > 4*192 {
-		return nil, errBadPairingInput
-	}
 	// Handle some corner cases cheaply
 	if len(input)%192 > 0 {
 		return nil, errBadPairingInput
@@ -634,7 +651,9 @@ func runBn256Pairing(input []byte) ([]byte, error) {
 
 // bn256PairingIstanbul implements a pairing pre-compile for the bn256 curve
 // conforming to Istanbul consensus rules.
-type bn256PairingIstanbul struct{}
+type bn256PairingIstanbul struct {
+	limitInputLength bool
+}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bn256PairingIstanbul) RequiredGas(input []byte) uint64 {
@@ -642,6 +661,13 @@ func (c *bn256PairingIstanbul) RequiredGas(input []byte) uint64 {
 }
 
 func (c *bn256PairingIstanbul) Run(input []byte) ([]byte, error) {
+	if c.limitInputLength {
+		// Allow at most 4 inputs
+		if len(input) > 4*192 {
+			return nil, errBadPairingInput
+		}
+	}
+
 	return runBn256Pairing(input)
 }
 

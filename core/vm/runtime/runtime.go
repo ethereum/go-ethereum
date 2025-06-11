@@ -74,6 +74,8 @@ func setDefaults(cfg *Config) {
 			CurieBlock:          new(big.Int),
 			DarwinTime:          new(uint64),
 			DarwinV2Time:        new(uint64),
+			EuclidV2Time:        new(uint64),
+			FeynmanTime:         new(uint64),
 		}
 	}
 

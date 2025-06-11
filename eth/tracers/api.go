@@ -277,6 +277,11 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 			for task := range tasks {
 				signer := types.MakeSigner(api.backend.ChainConfig(), task.block.Number(), task.block.Time())
 				blockCtx := core.NewEVMBlockContext(task.block.Header(), api.chainContext(localctx), api.backend.ChainConfig(), nil)
+				// EIP-2935: Insert parent hash in history contract.
+				if api.backend.ChainConfig().IsFeynman(task.block.Time()) {
+					evm := vm.NewEVM(blockCtx, vm.TxContext{}, task.statedb, api.backend.ChainConfig(), vm.Config{})
+					core.ProcessParentBlockHash(task.block.ParentHash(), evm, task.statedb)
+				}
 				// Trace all the transactions contained within
 				for i, tx := range task.block.Transactions() {
 					msg, _ := tx.AsMessage(signer, task.block.BaseFee())
@@ -539,6 +544,11 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		vmctx              = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), api.backend.ChainConfig(), nil)
 		deleteEmptyObjects = chainConfig.IsEIP158(block.Number())
 	)
+	// EIP-2935: Insert parent hash in history contract.
+	if api.backend.ChainConfig().IsFeynman(block.Time()) {
+		vmenv := vm.NewEVM(vmctx, vm.TxContext{}, statedb, chainConfig, vm.Config{})
+		core.ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
+	}
 	for i, tx := range block.Transactions() {
 		var (
 			msg, _    = tx.AsMessage(signer, block.BaseFee())
@@ -614,6 +624,11 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		threads = len(txs)
 	}
 	blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), api.backend.ChainConfig(), nil)
+	// EIP-2935: Insert parent hash in history contract.
+	if api.backend.ChainConfig().IsFeynman(block.Time()) {
+		evm := vm.NewEVM(blockCtx, vm.TxContext{}, statedb, api.backend.ChainConfig(), vm.Config{})
+		core.ProcessParentBlockHash(block.ParentHash(), evm, statedb)
+	}
 	blockHash := block.Hash()
 	blockNumber := block.NumberU64()
 	for th := 0; th < threads; th++ {
@@ -748,6 +763,13 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			canon = false
 		}
 	}
+
+	// EIP-2935: Insert parent hash in history contract.
+	if api.backend.ChainConfig().IsFeynman(block.Time()) {
+		evm := vm.NewEVM(vmctx, vm.TxContext{}, statedb, api.backend.ChainConfig(), vm.Config{})
+		core.ProcessParentBlockHash(block.ParentHash(), evm, statedb)
+	}
+
 	for i, tx := range block.Transactions() {
 		// Prepare the trasaction for un-traced execution
 		var (

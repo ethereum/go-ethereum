@@ -330,6 +330,7 @@ var (
 		DarwinV2Time:        newUint64(1724832000),
 		EuclidTime:          newUint64(1741680000),
 		EuclidV2Time:        newUint64(1741852800),
+		FeynmanTime:         nil,
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
@@ -381,6 +382,7 @@ var (
 		DarwinV2Time:        newUint64(1725264000),
 		EuclidTime:          newUint64(1744815600),
 		EuclidV2Time:        newUint64(1745305200),
+		FeynmanTime:         nil,
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
@@ -521,6 +523,7 @@ var (
 		DarwinV2Time:            new(uint64),
 		EuclidTime:              new(uint64),
 		EuclidV2Time:            new(uint64),
+		FeynmanTime:             new(uint64),
 		TerminalTotalDifficulty: nil,
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
@@ -662,6 +665,7 @@ type ChainConfig struct {
 	DarwinV2Time        *uint64  `json:"darwinv2Time,omitempty"`        // DarwinV2 switch time (nil = no fork, 0 = already on darwinv2)
 	EuclidTime          *uint64  `json:"euclidTime,omitempty"`          // Euclid switch time (nil = no fork, 0 = already on euclid)
 	EuclidV2Time        *uint64  `json:"euclidv2Time,omitempty"`        // EuclidV2 switch time (nil = no fork, 0 = already on euclidv2)
+	FeynmanTime         *uint64  `json:"feynmanTime,omitempty"`         // Feynman switch time (nil = no fork, 0 = already on feynman)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -852,7 +856,11 @@ func (c *ChainConfig) String() string {
 	if c.EuclidV2Time != nil {
 		euclidV2Time = fmt.Sprintf("@%v", *c.EuclidV2Time)
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Arrow Glacier: %v, Archimedes: %v, Shanghai: %v, Bernoulli: %v, Curie: %v, Darwin: %v, DarwinV2: %v, Euclid: %v, EuclidV2: %v, Engine: %v, Scroll config: %v}",
+	feynmanTime := "<nil>"
+	if c.FeynmanTime != nil {
+		feynmanTime = fmt.Sprintf("@%v", *c.FeynmanTime)
+	}
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Arrow Glacier: %v, Archimedes: %v, Shanghai: %v, Bernoulli: %v, Curie: %v, Darwin: %v, DarwinV2: %v, Euclid: %v, EuclidV2: %v, Feynman: %v, Engine: %v, Scroll config: %v}",
 		c.ChainID,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -876,6 +884,7 @@ func (c *ChainConfig) String() string {
 		darwinV2Time,
 		euclidTime,
 		euclidV2Time,
+		feynmanTime,
 		engine,
 		c.Scroll,
 	)
@@ -986,6 +995,11 @@ func (c *ChainConfig) IsEuclid(now uint64) bool {
 // IsEuclidV2 returns whether time is either equal to the EuclidV2 fork time or greater.
 func (c *ChainConfig) IsEuclidV2(now uint64) bool {
 	return isForkedTime(now, c.EuclidV2Time)
+}
+
+// IsFeynman returns whether time is either equal to the Feynman fork time or greater.
+func (c *ChainConfig) IsFeynman(now uint64) bool {
+	return isForkedTime(now, c.FeynmanTime)
 }
 
 // IsTerminalPoWBlock returns whether the given block is the last block of PoW stage.
@@ -1201,6 +1215,7 @@ type Rules struct {
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon, IsArchimedes, IsShanghai            bool
 	IsBernoulli, IsCurie, IsDarwin, IsEuclid, IsEuclidV2    bool
+	IsFeynman                                               bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -1228,5 +1243,6 @@ func (c *ChainConfig) Rules(num *big.Int, time uint64) Rules {
 		IsDarwin:         c.IsDarwin(time),
 		IsEuclid:         c.IsEuclid(time),
 		IsEuclidV2:       c.IsEuclidV2(time),
+		IsFeynman:        c.IsFeynman(time),
 	}
 }

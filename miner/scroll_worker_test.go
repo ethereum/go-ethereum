@@ -1404,6 +1404,7 @@ func TestEuclidV2TransitionVerification(t *testing.T) {
 	chainConfig := params.AllCliqueProtocolChanges.Clone()
 	chainConfig.EuclidTime = newUint64(0)
 	chainConfig.EuclidV2Time = newUint64(10000)
+	chainConfig.FeynmanTime = nil
 	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
 	chainConfig.SystemContract = &params.SystemContractConfig{Period: 1}
 

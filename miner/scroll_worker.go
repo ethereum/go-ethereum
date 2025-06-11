@@ -627,15 +627,25 @@ func (w *worker) tryCommitNewWork(now time.Time, parent common.Hash, reorging bo
 
 // handleForks
 func (w *worker) handleForks() (bool, error) {
+	// Apply Curie predeployed contract update
 	if w.chainConfig.CurieBlock != nil && w.chainConfig.CurieBlock.Cmp(w.current.header.Number) == 0 {
 		misc.ApplyCurieHardFork(w.current.state)
 		return true, nil
 	}
 
+	// Stop/start miner at Euclid fork boundary on zktrie/mpt nodes
 	if w.chainConfig.IsEuclid(w.current.header.Time) {
 		parent := w.chain.GetBlockByHash(w.current.header.ParentHash)
 		return parent != nil && !w.chainConfig.IsEuclid(parent.Time()), nil
 	}
+
+	// Apply EIP-2935
+	if w.chainConfig.IsFeynman(w.current.header.Time) {
+		context := core.NewEVMBlockContext(w.current.header, w.chain, w.chainConfig, nil)
+		vmenv := vm.NewEVM(context, vm.TxContext{}, w.current.state, w.chainConfig, vm.Config{})
+		core.ProcessParentBlockHash(w.current.header.ParentHash, vmenv, w.current.state)
+	}
+
 	return false, nil
 }
 

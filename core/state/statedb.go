@@ -167,6 +167,11 @@ func (s *StateDB) WithWitness(witness *stateless.Witness) {
 	s.witness = witness
 }
 
+// Witness returns the current witness for the state database.
+func (s *StateDB) Witness() *stateless.Witness {
+	return s.witness
+}
+
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.

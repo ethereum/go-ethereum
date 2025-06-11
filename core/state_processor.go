@@ -94,6 +94,10 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	blockContext := NewEVMBlockContext(header, p.bc, p.config, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 	processorBlockTransactionGauge.Update(int64(block.Transactions().Len()))
+	// Apply EIP-2935
+	if p.config.IsFeynman(block.Time()) {
+		ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
+	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number, header.Time), header.BaseFee)
@@ -198,4 +202,31 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	blockContext := NewEVMBlockContext(header, bc, config, author)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
 	return applyTransaction(msg, config, bc, author, gp, statedb, header.Number, header.Hash(), tx, usedGas, vmenv)
+}
+
+// ProcessParentBlockHash stores the parent block hash in the history storage contract
+// as per EIP-2935.
+func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM, statedb *state.StateDB) {
+	msg := types.NewMessage(
+		params.SystemAddress,          // from
+		&params.HistoryStorageAddress, // to
+		0,                             // nonce
+		common.Big0,                   // amount
+		30_000_000,                    // gasLimit
+		common.Big0,                   // gasPrice
+		common.Big0,                   // gasFeeCap
+		common.Big0,                   // gasTipCap
+		prevHash.Bytes(),              // data
+		nil,                           // accessList
+		false,                         // isFake
+		nil,                           // setCodeAuthorizations
+	)
+
+	evm.Reset(NewEVMTxContext(msg), statedb)
+	statedb.AddAddressToAccessList(params.HistoryStorageAddress)
+	_, _, err := evm.Call(vm.AccountRef(msg.From()), *msg.To(), msg.Data(), 30_000_000, common.Big0, nil)
+	if err != nil {
+		panic(err)
+	}
+	statedb.Finalise(true)
 }
