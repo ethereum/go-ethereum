@@ -5,10 +5,17 @@ on:
     types: [closed]
     branches: [master]
 
+permissions:
+  contents: write
+
 jobs:
   deploy-contracts:
     if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Deploy')
     runs-on: ubuntu-latest
+    environment: dev
+    env:
+      ENVIRONMENT: dev
+      REPO_NAME: ${{ github.event.repository.name }}
 
     steps:
       - name: Checkout Repo
