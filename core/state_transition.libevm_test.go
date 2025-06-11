@@ -65,11 +65,11 @@ func TestMinimumGasConsumption(t *testing.T) {
 	// All transactions will be basic transfers so consume [params.TxGas] by
 	// default.
 	tests := []struct {
-		name             string
-		gasLimit uint64
-		refund   uint64
-		minConsumption   uint64
-		wantUsed         uint64
+		name           string
+		gasLimit       uint64
+		refund         uint64
+		minConsumption uint64
+		wantUsed       uint64
 	}{
 		{
 			name:           "consume_extra",
