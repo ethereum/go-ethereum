@@ -18,22 +18,44 @@ package core
 
 import (
 	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/params"
 )
+
+func (st *StateTransition) rulesHooks() params.RulesHooks {
+	bCtx := st.evm.Context
+	rules := st.evm.ChainConfig().Rules(bCtx.BlockNumber, bCtx.Random != nil, bCtx.Time)
+	return rules.Hooks()
+}
 
 // canExecuteTransaction is a convenience wrapper for calling the
 // [params.RulesHooks.CanExecuteTransaction] hook.
 func (st *StateTransition) canExecuteTransaction() error {
-	bCtx := st.evm.Context
-	rules := st.evm.ChainConfig().Rules(bCtx.BlockNumber, bCtx.Random != nil, bCtx.Time)
-	if err := rules.Hooks().CanExecuteTransaction(st.msg.From, st.msg.To, st.state); err != nil {
+	hooks := st.rulesHooks()
+	if err := hooks.CanExecuteTransaction(st.msg.From, st.msg.To, st.state); err != nil {
 		log.Debug(
 			"Transaction execution blocked by libevm hook",
 			"from", st.msg.From,
 			"to", st.msg.To,
-			"hooks", log.TypeOf(rules.Hooks()),
+			"hooks", log.TypeOf(hooks),
 			"reason", err,
 		)
 		return err
 	}
 	return nil
+}
+
+// consumeMinimumGas updates the gas remaining to reflect the value returned by
+// [params.RulesHooks.MinimumGasConsumption]. It MUST be called after all code
+// that modifies gas consumption but before the balance is returned for
+// remaining gas.
+func (st *StateTransition) consumeMinimumGas() {
+	limit := st.msg.GasLimit
+	minConsume := min(
+		limit, // as documented in [params.RulesHooks]
+		st.rulesHooks().MinimumGasConsumption(limit),
+	)
+	st.gasRemaining = min(
+		st.gasRemaining,
+		limit-minConsume,
+	)
 }

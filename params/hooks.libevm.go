@@ -55,6 +55,12 @@ type RulesHooks interface {
 	// received slice. The value it returns MUST be consistent with the
 	// behaviour of the PrecompileOverride hook.
 	ActivePrecompiles([]common.Address) []common.Address
+	// MinimumGasConsumption receives a transaction's gas limit and returns the
+	// minimum quantity of gas units to be charged for said transaction. If the
+	// returned value is greater than the transaction's limit, the minimum spend
+	// will be capped at the limit. The minimum spend will be applied _after_
+	// refunds, if any.
+	MinimumGasConsumption(txGasLimit uint64) (gas uint64)
 }
 
 // RulesAllowlistHooks are a subset of [RulesHooks] that gate actions, signalled
@@ -131,4 +137,9 @@ func (NOOPHooks) PrecompileOverride(common.Address) (libevm.PrecompiledContract,
 // ActivePrecompiles echoes the active addresses unchanged.
 func (NOOPHooks) ActivePrecompiles(active []common.Address) []common.Address {
 	return active
+}
+
+// MinimumGasConsumption always returns 0.
+func (NOOPHooks) MinimumGasConsumption(uint64) uint64 {
+	return 0
 }

@@ -48,6 +48,7 @@ type Stub struct {
 	ActivePrecompilesFn     func([]common.Address) []common.Address
 	CanExecuteTransactionFn func(common.Address, *common.Address, libevm.StateReader) error
 	CanCreateContractFn     func(*libevm.AddressContext, uint64, libevm.StateReader) (uint64, error)
+	MinimumGasConsumptionFn func(txGasLimit uint64) uint64
 }
 
 // Register is a convenience wrapper for registering s as both the
@@ -120,6 +121,15 @@ func (s Stub) CanCreateContract(cc *libevm.AddressContext, gas uint64, sr libevm
 		return f(cc, gas, sr)
 	}
 	return gas, nil
+}
+
+// MinimumGasConsumption proxies arguments to the s.MinimumGasConsumptionFn
+// function if non-nil, otherwise it acts as a noop.
+func (s Stub) MinimumGasConsumption(limit uint64) uint64 {
+	if f := s.MinimumGasConsumptionFn; f != nil {
+		return f(limit)
+	}
+	return 0
 }
 
 var _ interface {
