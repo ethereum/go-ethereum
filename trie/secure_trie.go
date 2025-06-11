@@ -159,7 +159,9 @@ func (t *StateTrie) GetNode(path []byte) ([]byte, int, error) {
 func (t *StateTrie) MustUpdate(key, value []byte) {
 	hk := crypto.Keccak256(key)
 	t.trie.MustUpdate(hk, value)
-	t.getSecKeyCache()[common.Hash(hk)] = common.CopyBytes(key)
+	if t.preimages != nil {
+		t.getSecKeyCache()[common.Hash(hk)] = common.CopyBytes(key)
+	}
 }
 
 // UpdateStorage associates key with value in the trie. Subsequent calls to
@@ -177,7 +179,9 @@ func (t *StateTrie) UpdateStorage(_ common.Address, key, value []byte) error {
 	if err != nil {
 		return err
 	}
-	t.getSecKeyCache()[common.Hash(hk)] = common.CopyBytes(key)
+	if t.preimages != nil {
+		t.getSecKeyCache()[common.Hash(hk)] = common.CopyBytes(key)
+	}
 	return nil
 }
 
@@ -191,7 +195,9 @@ func (t *StateTrie) UpdateAccount(address common.Address, acc *types.StateAccoun
 	if err := t.trie.Update(hk, data); err != nil {
 		return err
 	}
-	t.getSecKeyCache()[common.Hash(hk)] = address.Bytes()
+	if t.preimages != nil {
+		t.getSecKeyCache()[common.Hash(hk)] = address.Bytes()
+	}
 	return nil
 }
 
@@ -203,7 +209,9 @@ func (t *StateTrie) UpdateContractCode(_ common.Address, _ common.Hash, _ []byte
 // will omit any encountered error but just print out an error message.
 func (t *StateTrie) MustDelete(key []byte) {
 	hk := crypto.Keccak256(key)
-	delete(t.getSecKeyCache(), common.Hash(hk))
+	if t.preimages != nil {
+		delete(t.getSecKeyCache(), common.Hash(hk))
+	}
 	t.trie.MustDelete(hk)
 }
 
@@ -212,14 +220,18 @@ func (t *StateTrie) MustDelete(key []byte) {
 // If a node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) DeleteStorage(_ common.Address, key []byte) error {
 	hk := crypto.Keccak256(key)
-	delete(t.getSecKeyCache(), common.Hash(hk))
+	if t.preimages != nil {
+		delete(t.getSecKeyCache(), common.Hash(hk))
+	}
 	return t.trie.Delete(hk)
 }
 
 // DeleteAccount abstracts an account deletion from the trie.
 func (t *StateTrie) DeleteAccount(address common.Address) error {
 	hk := crypto.Keccak256(address.Bytes())
-	delete(t.getSecKeyCache(), common.Hash(hk))
+	if t.preimages != nil {
+		delete(t.getSecKeyCache(), common.Hash(hk))
+	}
 	return t.trie.Delete(hk)
 }
 
