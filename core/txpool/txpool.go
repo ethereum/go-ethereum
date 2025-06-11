@@ -76,9 +76,6 @@ type TxPool struct {
 	term chan struct{}           // Termination channel to detect a closed pool
 
 	sync chan chan error // Testing / simulator channel to block until internal reset is done
-
-	headLock sync.RWMutex
-	head     *types.Header // this reflects the state from the latest pool reset
 }
 
 // New creates a new transaction pool to gather, sort and filter inbound
@@ -107,7 +104,6 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 		quit:     make(chan chan error),
 		term:     make(chan struct{}),
 		sync:     make(chan chan error),
-		head:     head,
 	}
 	reserver := NewReservationTracker()
 	for i, subpool := range subpools {
@@ -207,9 +203,6 @@ func (p *TxPool) loop(head *types.Header) {
 					}
 					select {
 					case resetDone <- newHead:
-						p.headLock.Lock()
-						p.head = newHead
-						p.headLock.Unlock()
 					case <-p.term:
 					}
 				}(oldHead, newHead)
@@ -262,14 +255,6 @@ func (p *TxPool) loop(head *types.Header) {
 	}
 	// Notify the closer of termination (no error possible for now)
 	errc <- nil
-}
-
-// Head returns the header which corresponds to the most recent successful pool
-// reset.
-func (p *TxPool) Head() *types.Header {
-	p.headLock.RLock()
-	defer p.headLock.RUnlock()
-	return types.CopyHeader(p.head)
 }
 
 // SetGasTip updates the minimum gas tip required by the transaction pool for a
