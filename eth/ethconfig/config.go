@@ -69,6 +69,10 @@ var Defaults = Config{
 	RPCEVMTimeout:      5 * time.Second,
 	GPO:                FullNodeGPO,
 	RPCTxFeeCap:        1, // 1 ether
+	OverrideDelegationActivation: func() *uint64 {
+		var i uint64 = 1_749_902_400 // 2025-06-14 12:00:00 UTC
+		return &i
+	}(),
 }
 
 //go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
