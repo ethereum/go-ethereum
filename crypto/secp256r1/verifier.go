@@ -23,21 +23,11 @@ import (
 	"math/big"
 )
 
-func newPublicKey(x, y *big.Int) *ecdsa.PublicKey {
-	if x == nil || y == nil || !elliptic.P256().IsOnCurve(x, y) {
-		return nil
-	}
-	if x.Sign() == 0 && y.Sign() == 0 {
-		return nil
-	}
-	return &ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}
-}
-
 // Verify checks the given signature (r, s) for the given hash and public key (x, y).
 func Verify(hash []byte, r, s, x, y *big.Int) bool {
-	publicKey := newPublicKey(x, y)
-	if publicKey == nil {
+	if x == nil || y == nil || !elliptic.P256().IsOnCurve(x, y) {
 		return false
 	}
-	return ecdsa.Verify(publicKey, hash, r, s)
+	pk := &ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}
+	return ecdsa.Verify(pk, hash, r, s)
 }
