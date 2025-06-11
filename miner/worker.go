@@ -305,7 +305,7 @@ func (miner *Miner) commitTransaction(env *environment, tx *types.Transaction) e
 	}
 	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
-	env.size += tx.Size()
+	env.size += tx.WithoutBlobTxSidecar().Size()
 	env.tcount++
 	return nil
 }
