@@ -19,6 +19,7 @@ package pathdb
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -125,36 +127,17 @@ func (b *batchIndexer) finish(force bool) error {
 	if !force && b.counter < historyIndexBatch {
 		return nil
 	}
-	batch := b.db.NewBatch()
+	var (
+		batch   = b.db.NewBatch()
+		batchMu sync.RWMutex
+		eg      errgroup.Group
+	)
+	eg.SetLimit(runtime.NumCPU())
+
 	for addrHash, idList := range b.accounts {
-		if !b.delete {
-			iw, err := newIndexWriter(b.db, newAccountIdent(addrHash))
-			if err != nil {
-				return err
-			}
-			for _, n := range idList {
-				if err := iw.append(n); err != nil {
-					return err
-				}
-			}
-			iw.finish(batch)
-		} else {
-			id, err := newIndexDeleter(b.db, newAccountIdent(addrHash))
-			if err != nil {
-				return err
-			}
-			for _, n := range idList {
-				if err := id.pop(n); err != nil {
-					return err
-				}
-			}
-			id.finish(batch)
-		}
-	}
-	for addrHash, slots := range b.storages {
-		for storageHash, idList := range slots {
+		eg.Go(func() error {
 			if !b.delete {
-				iw, err := newIndexWriter(b.db, newStorageIdent(addrHash, storageHash))
+				iw, err := newIndexWriter(b.db, newAccountIdent(addrHash))
 				if err != nil {
 					return err
 				}
@@ -163,9 +146,11 @@ func (b *batchIndexer) finish(force bool) error {
 						return err
 					}
 				}
+				batchMu.Lock()
 				iw.finish(batch)
+				batchMu.Unlock()
 			} else {
-				id, err := newIndexDeleter(b.db, newStorageIdent(addrHash, storageHash))
+				id, err := newIndexDeleter(b.db, newAccountIdent(addrHash))
 				if err != nil {
 					return err
 				}
@@ -174,9 +159,49 @@ func (b *batchIndexer) finish(force bool) error {
 						return err
 					}
 				}
+				batchMu.Lock()
 				id.finish(batch)
+				batchMu.Unlock()
 			}
+			return nil
+		})
+	}
+	for addrHash, slots := range b.storages {
+		for storageHash, idList := range slots {
+			eg.Go(func() error {
+				if !b.delete {
+					iw, err := newIndexWriter(b.db, newStorageIdent(addrHash, storageHash))
+					if err != nil {
+						return err
+					}
+					for _, n := range idList {
+						if err := iw.append(n); err != nil {
+							return err
+						}
+					}
+					batchMu.Lock()
+					iw.finish(batch)
+					batchMu.Unlock()
+				} else {
+					id, err := newIndexDeleter(b.db, newStorageIdent(addrHash, storageHash))
+					if err != nil {
+						return err
+					}
+					for _, n := range idList {
+						if err := id.pop(n); err != nil {
+							return err
+						}
+					}
+					batchMu.Lock()
+					id.finish(batch)
+					batchMu.Unlock()
+				}
+				return nil
+			})
 		}
+	}
+	if err := eg.Wait(); err != nil {
+		return err
 	}
 	// Update the position of last indexed state history
 	if !b.delete {
