@@ -39,11 +39,7 @@ jobs:
 
       - name: Deploy Contracts
         working-directory: ./hardhat
-        run: npx hardhat ignition deploy ./ignition/modules/Lock.ts --network localhost
-
-      - name: Test Contracts
-        working-directory: ./hardhat
-        run: npx hardhat test test/Lock.ts --network localhost
+        run: npx hardhat ignition deploy ./ignition/modules/Lock.ts --network local
 
       - name: Autotag
         id: autotag
@@ -78,3 +74,19 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}:${{ env.ENVIRONMENT }}-contracts-latest,${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}:${{ env.ENVIRONMENT }}-contracts-${{ steps.autotag.outputs.tag }}
           labels: ${{ steps.metadata.outputs.labels }}
 
+      - name: Start Geth Devnet
+        run: |
+          docker run -it --rm                                                                                                
+          -p 8546:8545
+          -p 30303:30303
+          ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}:${{ env.ENVIRONMENT }}-contracts-latest
+          --dev \
+          --http --http.addr 0.0.0.0
+          --http.api eth,net,web3,personal
+          --allow-insecure-unlock
+          echo "Waiting for Geth JSON-RPC..."
+          until curl -s http://localhost:8546; do sleep 1; done
+
+      - name: Test Contracts
+        working-directory: ./hardhat
+        run: npx hardhat test test/Lock.ts --network localcontracts
