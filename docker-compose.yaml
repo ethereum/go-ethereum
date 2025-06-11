@@ -1,4 +1,5 @@
 version: "3.8"
+
 services:
   geth:
     container_name: geth
@@ -6,8 +7,12 @@ services:
     volumes:
       - ./devnet:/root/.ethereum
     ports:
-      - "8545:8545" # HTTP based JSON RPC API
-      - "30303:30303" # P2P
+      - "8545:8545"
+      - "30303:30303"
     command: >
-      --http --http.addr 0.0.0.0 --http.api eth,net,web3
       --dev
+      --http
+      --http.addr 0.0.0.0
+      --http.corsdomain="*"
+      --allow-insecure-unlock
+      --verbosity 3

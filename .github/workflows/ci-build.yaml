@@ -4,47 +4,50 @@ name: CI-Build
 on:
   pull_request:
     types: [ closed ]
+    branches: [ master ]
 
 permissions:
   contents: write
 
 jobs:
-  devnet:
-    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Deploy')
+  build-push:
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build  ')
+    name: Build
     runs-on: ubuntu-24.04
-
-    services:
-      geth:
-        image: dmanov/go-ethereum:dev-latest
-        ports:
-          - 8545:8545
-          - 30303:30303
-        options: >-
-          --health-cmd="curl --fail http://localhost:8545 || exit 1"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
-        command: >
-          --dev
-          --http --http.addr 0.0.0.0
-          --http.api eth,net,web3
-          --http.corsdomain="*"
-          --http.vhosts="*"
+    environment: dev
+    env:
+      ENVIRONMENT: dev
+      REPO_NAME: ${{ github.event.repository.name }}
 
     steps:
-      - name: Checkout code
+      - name: Checkout the repo
         uses: actions/checkout@v4
         with:
           ref: master
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Autotag
+        id: autotag
+        uses: anothrNick/github-tag-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WITH_V: false
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
         with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: hardhat/package-lock.json
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Install Hardhat dependencies
-        working-directory: ./hardhat
-        run: npm ci
+      - name: Docker metadata
+        id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}
 
+      - name: Build and push to Docker Hub
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}:${{ env.ENVIRONMENT }}-latest,${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}:${{ env.ENVIRONMENT }}-${{ steps.autotag.outputs.tag }}
+          labels: ${{ steps.metadata.outputs.labels }}
