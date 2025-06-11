@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build-push:
-    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build  ')
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build')
     name: Build
     runs-on: ubuntu-24.04
     environment: dev
