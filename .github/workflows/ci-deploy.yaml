@@ -79,13 +79,13 @@ jobs:
 
       - name: Start Contracts Geth Devnet
         run: |
-          docker run -d 
-            -p 8546:8545 
-            -p 30303:30303 
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}:${{ env.ENVIRONMENT }}-contracts-latest 
-            --dev 
-            --http --http.addr 0.0.0.0 
-            --http.api eth,net,web3
+          docker run -d \
+            -p 8546:8545 \
+            -p 30303:30303 \
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}:${{ env.ENVIRONMENT }}-contracts-latest \
+            --dev \
+            --http --http.addr 0.0.0.0 \
+            --http.api eth,net,web3 \
             --allow-insecure-unlock
 
       - name: Wait for Contracts Geth JSON-RPC
