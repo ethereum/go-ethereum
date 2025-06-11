@@ -123,8 +123,11 @@ func (gc *GenesisContractsClient) LastStateId(stateDB vm.StateDB, number uint64,
 	toAddress := common.HexToAddress(gc.StateReceiverContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
 
-	// The unhooked version always return the *state.StateDB inner object
-	original := stateDB.Unhooked().(*state.StateDB)
+	var original *state.StateDB
+	if stateDB != nil {
+		// The unhooked version always return the *state.StateDB inner object
+		original = stateDB.Unhooked().(*state.StateDB)
+	}
 
 	// BOR: Do a 'CallWithState' so that we can fetch the last state ID from a given (incoming)
 	// state instead of local(canonical) chain's state.
