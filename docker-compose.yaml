@@ -5,12 +5,13 @@ services:
     container_name: geth
     image: dmanov/go-ethereum:dev-latest
     volumes:
-      - ./devnet:/root/.ethereum
+      - ./devnet:/root/dev-chain
     ports:
       - "8545:8545"
       - "30303:30303"
     command: >
       --dev
+      --datadir /root/dev-chain
       --http
       --http.addr 0.0.0.0
       --http.corsdomain="*"

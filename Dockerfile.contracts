@@ -1,7 +1,7 @@
 FROM dmanov/go-ethereum:dev-latest
 
-COPY devnet /root/.ethereum
+COPY devnet /root/dev-chain
 
 ENTRYPOINT ["geth"]
 
-CMD ["--dev", "--http", "--http.addr", "0.0.0.0", "--http.api", "eth,net,web3", "--allow-insecure-unlock"]
+CMD ["--dev", "--datadir", "/root/dev-chain", "--http", "--http.addr", "0.0.0.0", "--http.api", "eth,net,web3", "--allow-insecure-unlock"]
