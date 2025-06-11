@@ -77,10 +77,14 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}:${{ env.ENVIRONMENT }}-contracts-latest,${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}:${{ env.ENVIRONMENT }}-contracts-${{ steps.autotag.outputs.tag }}
           labels: ${{ steps.metadata.outputs.labels }}
 
+      - name: Stop Geth Devnet
+        run: |
+          docker compose down 
+
       - name: Start Contracts Geth Devnet
         run: |
           docker run -d \
-            -p 8546:8545 \
+            -p 8545:8545 \
             -p 30303:30303 \
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}:${{ env.ENVIRONMENT }}-contracts-latest \
             --dev \
@@ -91,8 +95,8 @@ jobs:
       - name: Wait for Contracts Geth JSON-RPC
         run: |
           echo "Waiting for Contracts Geth to be ready..."
-          until curl -s http://localhost:8546; do sleep 1; done
+          until curl -s http://localhost:8545; do sleep 1; done
 
       - name: Test Contracts
         working-directory: ./hardhat
-        run: npx hardhat test test/Lock.ts --network localcontracts
+        run: npx hardhat test test/Lock.ts --network local

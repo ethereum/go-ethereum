@@ -8,10 +8,6 @@ const config: HardhatUserConfig = {
       url: "http://127.0.0.1:8545",
       chainId: 1337
     },
-    localcontracts: {
-      url: "http://127.0.0.1:8546",
-      chainId: 1337
-    },
     node: {
       url: "http:127.0.0.1:8545",
       chainId: 31337
