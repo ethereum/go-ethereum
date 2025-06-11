@@ -48,6 +48,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: Dockerfile
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}:${{ env.ENVIRONMENT }}-latest,${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}:${{ env.ENVIRONMENT }}-${{ steps.autotag.outputs.tag }}
           labels: ${{ steps.metadata.outputs.labels }}
