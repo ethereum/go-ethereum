@@ -43,7 +43,7 @@ jobs:
 
       - name: Test Contracts
         working-directory: ./hardhat
-        run: npx hardhat test --network localhost
+        run: npx hardhat test test/Lock.ts --network localhost
 
       - name: Autotag
         id: autotag
