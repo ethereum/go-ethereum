@@ -1253,25 +1253,19 @@ func (c *p256Verify) RequiredGas(input []byte) uint64 {
 
 // Run executes the precompiled contract with given 160 bytes of param, returning the output and the used gas
 func (c *p256Verify) Run(input []byte) ([]byte, error) {
-	// Required input length is 160 bytes
 	const p256VerifyInputLength = 160
-	// Check the input length
 	if len(input) != p256VerifyInputLength {
-		// Input length is invalid
 		return nil, nil
 	}
 
-	// Extract the hash, r, s, x, y from the input
+	// Extract hash, r, s, x, y from the input.
 	hash := input[0:32]
 	r, s := new(big.Int).SetBytes(input[32:64]), new(big.Int).SetBytes(input[64:96])
 	x, y := new(big.Int).SetBytes(input[96:128]), new(big.Int).SetBytes(input[128:160])
 
-	// Verify the secp256r1 signature
+	// Verify the signature.
 	if secp256r1.Verify(hash, r, s, x, y) {
-		// Signature is valid
-		return common.LeftPadBytes(common.Big1.Bytes(), 32), nil
-	} else {
-		// Signature is invalid
-		return nil, nil
+		return true32Byte, nil
 	}
+	return nil, nil
 }
