@@ -26,7 +26,10 @@ jobs:
       - name: Start Geth Devnet
         run: |
           docker compose up -d
-          echo "Waiting for Geth JSON-RPC..."
+
+      - name: Wait for Geth JSON-RPC
+        run: |
+          echo "Waiting for Geth to be ready..."
           until curl -s http://localhost:8545; do sleep 1; done
 
       - name: Install Node Modules
@@ -74,17 +77,20 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}:${{ env.ENVIRONMENT }}-contracts-latest,${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}:${{ env.ENVIRONMENT }}-contracts-${{ steps.autotag.outputs.tag }}
           labels: ${{ steps.metadata.outputs.labels }}
 
-      - name: Start Geth Devnet
+      - name: Start Contracts Geth Devnet
         run: |
-          docker run -it --rm                                                                                                
-          -p 8546:8545
-          -p 30303:30303
-          ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}:${{ env.ENVIRONMENT }}-contracts-latest
-          --dev \
-          --http --http.addr 0.0.0.0
-          --http.api eth,net,web3,personal
-          --allow-insecure-unlock
-          echo "Waiting for Geth JSON-RPC..."
+          docker run -d 
+            -p 8546:8545 
+            -p 30303:30303 
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}:${{ env.ENVIRONMENT }}-contracts-latest 
+            --dev 
+            --http --http.addr 0.0.0.0 
+            --http.api eth,net,web3
+            --allow-insecure-unlock
+
+      - name: Wait for Contracts Geth JSON-RPC
+        run: |
+          echo "Waiting for Contracts Geth to be ready..."
           until curl -s http://localhost:8546; do sleep 1; done
 
       - name: Test Contracts
