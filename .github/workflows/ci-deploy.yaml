@@ -60,6 +60,11 @@ jobs:
         with:
           images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.REPO_NAME }}
 
+      - name: Fix devnet folder permissions
+        run: |
+          sudo chown -R $(id -u):$(id -g) devnet
+          sudo chmod -R u+rwX devnet
+
       - name: Build and push to Docker Hub
         uses: docker/build-push-action@v6
         with:
