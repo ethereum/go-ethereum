@@ -448,7 +448,6 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 		filter.GasLimitCap = params.MaxTxGas
 	}
 	filter.OnlyPlainTxs, filter.OnlyBlobTxs = true, false
-
 	pendingPlainTxs := miner.txpool.Pending(filter)
 
 	filter.OnlyPlainTxs, filter.OnlyBlobTxs = false, true
