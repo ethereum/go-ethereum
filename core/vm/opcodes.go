@@ -62,7 +62,7 @@ const (
 	SHL    OpCode = 0x1b
 	SHR    OpCode = 0x1c
 	SAR    OpCode = 0x1d
-	CLZ    OpCode = 0x1E
+	CLZ    OpCode = 0x1e
 )
 
 // 0x20 range - crypto.
