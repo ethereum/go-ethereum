@@ -351,7 +351,11 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 }
 
 func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32) error {
-	gasLimit := env.header.GasLimit
+	var (
+		isOsaka  = miner.chainConfig.IsOsaka(env.header.Number, env.header.Time)
+		isCancun = miner.chainConfig.IsCancun(env.header.Number, env.header.Time)
+		gasLimit = env.header.GasLimit
+	)
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
 	}
@@ -407,7 +411,7 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 		// Most of the blob gas logic here is agnostic as to if the chain supports
 		// blobs or not, however the max check panics when called on a chain without
 		// a defined schedule, so we need to verify it's safe to call.
-		if miner.chainConfig.IsCancun(env.header.Number, env.header.Time) {
+		if isCancun {
 			left := eip4844.MaxBlobsPerBlock(miner.chainConfig, env.header.Time) - env.blobs
 			if left < int(ltx.BlobGas/params.BlobTxBlobGasPerBlob) {
 				log.Trace("Not enough blob space left for transaction", "hash", ltx.Hash, "left", left, "needed", ltx.BlobGas/params.BlobTxBlobGasPerBlob)
@@ -426,12 +430,12 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 
 		// if inclusion of the transaction would put the block size over the
 		// maximum we allow, don't add any more txs to the payload.
-		if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) && env.size+tx.Size() > params.BlockRLPSizeCap-blockRLPSizeCapBuffer {
+		if isOsaka && env.size+tx.Size() > params.BlockRLPSizeCap-blockRLPSizeCapBuffer {
 			break
 		}
 
 		// Make sure all transactions after osaka have cell proofs
-		if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) {
+		if isOsaka {
 			if sidecar := tx.BlobTxSidecar(); sidecar != nil {
 				if sidecar.Version == 0 {
 					log.Info("Including blob tx with v0 sidecar, recomputing proofs", "hash", ltx.Hash)
