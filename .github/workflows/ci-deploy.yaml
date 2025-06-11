@@ -33,3 +33,4 @@ jobs:
       - name: Deploy Contracts
         working-directory: ./hardhat
         run: npx hardhat run scripts/deploy.ts --network localhost
+
