@@ -39,7 +39,11 @@ jobs:
 
       - name: Deploy Contracts
         working-directory: ./hardhat
-        run: npx hardhat run scripts/deploy.ts --network localhost
+        run: npx hardhat ignition deploy ./ignition/modules/Lock.ts --network localhost
+
+      - name: Test Contracts
+        working-directory: ./hardhat
+        run: npx hardhat test --network localhost
 
       - name: Autotag
         id: autotag

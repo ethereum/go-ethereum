@@ -14,5 +14,5 @@ services:
       --datadir /root/.ethereum
       --http
       --http.addr 0.0.0.0
-      --http.api eth,net,web3,personal
+      --http.api eth,net,web3
       --allow-insecure-unlock
