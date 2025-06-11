@@ -14,6 +14,5 @@ services:
       --datadir /root/.ethereum
       --http
       --http.addr 0.0.0.0
-      --http.corsdomain="*"
+      --http.api eth,net,web3,personal
       --allow-insecure-unlock
-      --verbosity 3
