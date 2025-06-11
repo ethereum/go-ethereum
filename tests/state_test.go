@@ -301,8 +301,8 @@ func runBenchmark(b *testing.B, t *StateTest) {
 			evm.SetTxContext(txContext)
 
 			// Create "contract" for sender to cache code analysis.
-			sender := vm.NewContract(msg.From, msg.From, nil, 0, nil)
-
+			sender := vm.GetContract(msg.From, msg.From, nil, 0, nil)
+			defer vm.ReturnContract(sender)
 			var (
 				gasUsed uint64
 				elapsed uint64
