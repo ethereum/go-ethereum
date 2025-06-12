@@ -46,6 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/assert"
 )
 
 // So we can deterministically seed different blockchains
@@ -4404,6 +4405,11 @@ func testInsertChainWithCutoff(t *testing.T, cutoff uint64, ancientLimit uint64,
 			receipts := chain.GetReceiptsByHash(hash)
 			if receipts == nil || len(receipts) != 1 {
 				t.Fatalf("Missed block receipts: %d, cutoff: %d", num, cutoffBlock.NumberU64())
+			}
+			for indx, receipt := range receipts {
+				receiptByLookup := chain.GetReceiptByLookupResult(body.Transactions[indx], receipt.BlockHash,
+					receipt.BlockNumber.Uint64(), uint64(indx))
+				assert.Equal(t, receiptByLookup, receipt)
 			}
 		}
 	}
