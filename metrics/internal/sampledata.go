@@ -53,12 +53,12 @@ func ExampleMetrics() metrics.Registry {
 	registry.Register("test/meter", metrics.NewInactiveMeter())
 	{
 		timer := metrics.NewRegisteredResettingTimer("test/resetting_timer", registry)
-		timer.Update(10 * time.Millisecond)
-		timer.Update(11 * time.Millisecond)
-		timer.Update(12 * time.Millisecond)
-		timer.Update(120 * time.Millisecond)
-		timer.Update(13 * time.Millisecond)
-		timer.Update(14 * time.Millisecond)
+		timer.Update(int64(10 * time.Millisecond))
+		timer.Update(int64(11 * time.Millisecond))
+		timer.Update(int64(12 * time.Millisecond))
+		timer.Update(int64(120 * time.Millisecond))
+		timer.Update(int64(13 * time.Millisecond))
+		timer.Update(int64(14 * time.Millisecond))
 	}
 	{
 		timer := metrics.NewRegisteredTimer("test/timer", registry)

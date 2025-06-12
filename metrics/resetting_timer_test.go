@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"testing"
-	"time"
 )
 
 func TestResettingTimer(t *testing.T) {
@@ -68,7 +67,7 @@ func TestResettingTimer(t *testing.T) {
 		}
 
 		for _, v := range tt.values {
-			timer.Update(time.Duration(v))
+			timer.Update(v)
 		}
 		snap := timer.Snapshot()
 
@@ -160,7 +159,7 @@ func TestResettingTimerWithFivePercentiles(t *testing.T) {
 		}
 
 		for _, v := range tt.values {
-			timer.Update(time.Duration(v))
+			timer.Update(v)
 		}
 
 		snap := timer.Snapshot()
