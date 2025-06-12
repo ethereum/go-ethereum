@@ -266,7 +266,7 @@ func BenchmarkRJUMPI(b *testing.B) {
 		byte(RJUMPI), 0xFF, 0xFC,
 	}
 	code := []byte{}
-	for i := 0; i < params.MaxCodeSize/len(snippet)-1; i++ {
+	for i := 0; i < params.MaxCodeSizeEIP170/len(snippet)-1; i++ {
 		code = append(code, snippet...)
 	}
 	code = append(code, byte(STOP))
@@ -480,7 +480,7 @@ func BenchmarkRJUMPI_2(b *testing.B) {
 		byte(PUSH0),
 		byte(RJUMPI), 0xFF, 0xFC,
 	}
-	for i := 0; i < params.MaxCodeSize/4-1; i++ {
+	for i := 0; i < params.MaxCodeSizeEIP170/4-1; i++ {
 		code = append(code, byte(PUSH0))
 		x := -4 * i
 		code = append(code, byte(RJUMPI))
