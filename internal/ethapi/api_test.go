@@ -595,6 +595,9 @@ func (b testBackend) GetTransaction(txHash common.Hash) (bool, *types.Transactio
 	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.db, txHash)
 	return true, tx, blockHash, blockNumber, index
 }
+func (b testBackend) GetReceiptByLookupResult(tx *types.Transaction, blockHash common.Hash, blockNumber, blockIndex uint64) *types.Receipt {
+	panic("implement me")
+}
 func (b testBackend) TxIndexDone() bool {
 	return true
 }
