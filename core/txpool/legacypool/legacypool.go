@@ -1309,7 +1309,7 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 	// because of another transaction (e.g. higher gas price).
 	if reset != nil {
 		pool.demoteUnexecutables()
-		if reset.newHead != reset.oldHead {
+		if reset.newHead != nil {
 			if pool.chainconfig.IsLondon(new(big.Int).Add(reset.newHead.Number, big.NewInt(1))) {
 				pendingBaseFee := eip1559.CalcBaseFee(pool.chainconfig, reset.newHead)
 				pool.priced.SetBaseFee(pendingBaseFee)
