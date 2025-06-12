@@ -36,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -61,6 +60,12 @@ const (
 	// no critical limit that should be enforced. Still, capping it to some sane
 	// limit can never hurt.
 	txMaxSize = 1024 * 1024
+
+	// maxBlobsPerTx is the maximum number of blobs that a single transaction can
+	// carry. We choose a smaller limit than the protocol-permitted MaxBlobsPerBlock
+	// in order to ensure network and txpool stability.
+	// Note: if you increase this, validation will fail on txMaxSize.
+	maxBlobsPerTx = 7
 
 	// maxTxsPerAccount is the maximum number of blob transactions admitted from
 	// a single account. The limit is enforced to minimize the DoS potential of
@@ -1095,10 +1100,11 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 // and does not require the pool mutex to be held.
 func (p *BlobPool) ValidateTxBasics(tx *types.Transaction) error {
 	opts := &txpool.ValidationOptions{
-		Config:  p.chain.Config(),
-		Accept:  1 << types.BlobTxType,
-		MaxSize: txMaxSize,
-		MinTip:  p.gasTip.ToBig(),
+		Config:       p.chain.Config(),
+		Accept:       1 << types.BlobTxType,
+		MaxSize:      txMaxSize,
+		MinTip:       p.gasTip.ToBig(),
+		MaxBlobCount: maxBlobsPerTx,
 	}
 	return txpool.ValidateTransaction(tx, p.head, p.signer, opts)
 }
@@ -1295,27 +1301,13 @@ func (p *BlobPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 	}
 }
 
-// GetBlobs returns a number of blobs are proofs for the given versioned hashes.
+// GetBlobs returns a number of blobs and proofs for the given versioned hashes.
 // This is a utility method for the engine API, enabling consensus clients to
 // retrieve blobs from the pools directly instead of the network.
-func (p *BlobPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof) {
-	// Create a map of the blob hash to indices for faster fills
-	var (
-		blobs  = make([]*kzg4844.Blob, len(vhashes))
-		proofs = make([]*kzg4844.Proof, len(vhashes))
-	)
-	index := make(map[common.Hash]int)
-	for i, vhash := range vhashes {
-		index[vhash] = i
-	}
-	// Iterate over the blob hashes, pulling transactions that fill it. Take care
-	// to also fill anything else the transaction might include (probably will).
-	for i, vhash := range vhashes {
-		// If already filled by a previous fetch, skip
-		if blobs[i] != nil {
-			continue
-		}
-		// Unfilled, retrieve the datastore item (in a short lock)
+func (p *BlobPool) GetBlobs(vhashes []common.Hash) []*types.BlobTxSidecar {
+	sidecars := make([]*types.BlobTxSidecar, len(vhashes))
+	for idx, vhash := range vhashes {
+		// Retrieve the datastore item (in a short lock)
 		p.lock.RLock()
 		id, exists := p.lookup.storeidOfBlob(vhash)
 		if !exists {
@@ -1335,16 +1327,24 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.
 			log.Error("Blobs corrupted for traced transaction", "id", id, "err", err)
 			continue
 		}
-		// Fill anything requested, not just the current versioned hash
-		sidecar := item.BlobTxSidecar()
-		for j, blobhash := range item.BlobHashes() {
-			if idx, ok := index[blobhash]; ok {
-				blobs[idx] = &sidecar.Blobs[j]
-				proofs[idx] = &sidecar.Proofs[j]
-			}
+		sidecars[idx] = item.BlobTxSidecar()
+	}
+	return sidecars
+}
+
+// AvailableBlobs returns the number of blobs that are available in the subpool.
+func (p *BlobPool) AvailableBlobs(vhashes []common.Hash) int {
+	available := 0
+	for _, vhash := range vhashes {
+		// Retrieve the datastore item (in a short lock)
+		p.lock.RLock()
+		_, exists := p.lookup.storeidOfBlob(vhash)
+		p.lock.RUnlock()
+		if exists {
+			available++
 		}
 	}
-	return blobs, proofs
+	return available
 }
 
 // Add inserts a set of blob transactions into the pool if they pass validation (both
