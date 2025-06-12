@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  geth-node:
+    image: yohands/my_first_container
+    container_name: geth-devnet
+    ports:
+      - "8545:8545"
+      - "8546:8546"
+      - "30303:30303"
+    volumes:
+      - geth-data:/root/.ethereum
+    command:
+      --dev
+      --http
+      --http.addr 0.0.0.0
+      --http.api personal,eth,net,web3,miner
+      --http.corsdomain "*"
+      --ws
+      --ws.addr 0.0.0.0
+      --ws.api personal,eth,net,web3,miner
+      --allow-insecure-unlock
+      --mine
+      --nodiscover
+    restart: unless-stopped
+
+volumes:
+  geth-data:
