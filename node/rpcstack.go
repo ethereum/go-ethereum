@@ -70,11 +70,12 @@ type httpServer struct {
 	timeouts rpc.HTTPTimeouts
 	mux      http.ServeMux // registered handlers go here
 
-	mu         sync.Mutex
-	server     *http.Server
-	listener   net.Listener // non-nil when server is running
-	ready      bool
-	shutdownWG sync.WaitGroup // WG to wait for shutdown
+	mu            sync.Mutex
+	server        *http.Server
+	listener      net.Listener // non-nil when server is running
+	ready         bool
+	shutdownWG    sync.WaitGroup // WG to wait for shutdown
+	shutdownDelay time.Duration
 
 	// HTTP RPC handler things.
 	httpConfig  httpConfig
@@ -94,13 +95,10 @@ type httpServer struct {
 
 const (
 	shutdownTimeout = 5 * time.Second
-	// give pending requests stopPendingRequestTimeout the time to finish when the server is stopped
-	// if readiness probe period is 5 seconds, this is enough time for health check to be triggered
-	stopPendingRequestTimeout = 7 * time.Second
 )
 
-func newHTTPServer(log log.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
-	h := &httpServer{log: log, timeouts: timeouts, handlerNames: make(map[string]string)}
+func newHTTPServer(log log.Logger, timeouts rpc.HTTPTimeouts, shutdownDelay time.Duration) *httpServer {
+	h := &httpServer{log: log, timeouts: timeouts, handlerNames: make(map[string]string), shutdownDelay: shutdownDelay}
 
 	h.httpHandler.Store((*rpcHandler)(nil))
 	h.wsHandler.Store((*rpcHandler)(nil))
@@ -282,7 +280,7 @@ func (h *httpServer) stop() {
 	h.shutdownWG = sync.WaitGroup{}
 	h.shutdownWG.Add(1)
 	h.ready = false
-	time.AfterFunc(stopPendingRequestTimeout, func() {
+	time.AfterFunc(h.shutdownDelay, func() {
 		defer h.mu.Unlock()
 		h.doStop()
 		h.shutdownWG.Done()
