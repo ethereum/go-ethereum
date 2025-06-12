@@ -1,0 +1,30 @@
+name: Build Docker Image on CI:Build Label Merge
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - master  # or your default branch
+
+jobs:
+  build:
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: |
+          docker build -t my_first_container .
+
+      # Optional: Push to Docker Hub or GitHub Container Registry
+      # - name: Log in to Docker Hub
+      #   run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      # - name: Push image
+      #   run: docker push geth-custom
