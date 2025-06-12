@@ -240,11 +240,11 @@ func (t *StateTrie) DeleteAccount(address common.Address) error {
 // GetKey returns the sha3 preimage of a hashed key that was
 // previously used to store a value.
 func (t *StateTrie) GetKey(shaKey []byte) []byte {
-	if key, ok := t.getSecKeyCache()[common.BytesToHash(shaKey)]; ok {
-		return key
-	}
 	if t.preimages == nil {
 		return nil
+	}
+	if key, ok := t.getSecKeyCache()[common.BytesToHash(shaKey)]; ok {
+		return key
 	}
 	return t.preimages.Preimage(common.BytesToHash(shaKey))
 }
