@@ -33,6 +33,9 @@ type preimageStore interface {
 
 	// InsertPreimage commits a set of preimages along with their hashes.
 	InsertPreimage(preimages map[common.Hash][]byte)
+
+	// PreimageEnabled returns true if the preimage store is enabled.
+	PreimageEnabled() bool
 }
 
 // SecureTrie is the old name of StateTrie.
@@ -84,8 +87,7 @@ func NewStateTrie(id *ID, db database.NodeDatabase) (*StateTrie, error) {
 	tr := &StateTrie{trie: *trie, db: db}
 
 	// link the preimage store if it's supported
-	preimages, ok := db.(preimageStore)
-	if ok {
+	if preimages, ok := db.(preimageStore); ok && preimages.PreimageEnabled() {
 		tr.preimages = preimages
 	}
 	return tr, nil
