@@ -266,7 +266,7 @@ func (db *Database) Dereference(root common.Hash) {
 	db.gcsize += storage - db.dirtiesSize
 	db.gctime += time.Since(start)
 
-	memcacheGCTimeTimer.Update(time.Since(start))
+	memcacheGCTimeTimer.UpdateSince(start)
 	memcacheGCBytesMeter.Mark(int64(storage - db.dirtiesSize))
 	memcacheGCNodesMeter.Mark(int64(nodes - len(db.dirties)))
 
@@ -384,7 +384,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	db.flushsize += storage - db.dirtiesSize
 	db.flushtime += time.Since(start)
 
-	memcacheFlushTimeTimer.Update(time.Since(start))
+	memcacheFlushTimeTimer.UpdateSince(start)
 	memcacheFlushBytesMeter.Mark(int64(storage - db.dirtiesSize))
 	memcacheFlushNodesMeter.Mark(int64(nodes - len(db.dirties)))
 
@@ -428,7 +428,7 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	batch.Reset()
 
 	// Reset the storage counters and bumped metrics
-	memcacheCommitTimeTimer.Update(time.Since(start))
+	memcacheCommitTimeTimer.UpdateSince(start)
 	memcacheCommitBytesMeter.Mark(int64(storage - db.dirtiesSize))
 	memcacheCommitNodesMeter.Mark(int64(nodes - len(db.dirties)))
 

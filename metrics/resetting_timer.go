@@ -53,27 +53,20 @@ func (t *ResettingTimer) Snapshot() *ResettingTimerSnapshot {
 	return snapshot
 }
 
-// Time records the duration of the execution of the given function.
-func (t *ResettingTimer) Time(f func()) {
-	ts := time.Now()
-	f()
-	t.Update(time.Since(ts))
-}
-
 // Update records the duration of an event.
-func (t *ResettingTimer) Update(d time.Duration) {
+func (t *ResettingTimer) Update(d int64) {
 	if !metricsEnabled {
 		return
 	}
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-	t.values = append(t.values, int64(d))
-	t.sum += int64(d)
+	t.values = append(t.values, d)
+	t.sum += d
 }
 
 // UpdateSince records the duration of an event that started at a time and ends now.
 func (t *ResettingTimer) UpdateSince(ts time.Time) {
-	t.Update(time.Since(ts))
+	t.Update(int64(time.Since(ts)))
 }
 
 // ResettingTimerSnapshot is a point-in-time copy of another ResettingTimer.
@@ -104,7 +97,6 @@ func (t *ResettingTimerSnapshot) Mean() float64 {
 	if !t.calculated {
 		t.calc(nil)
 	}
-
 	return t.mean
 }
 
@@ -134,4 +126,5 @@ func (t *ResettingTimerSnapshot) calc(percentiles []float64) {
 	}
 	t.min = t.values[0]
 	t.max = t.values[len(t.values)-1]
+	t.calculated = true
 }
