@@ -91,6 +91,12 @@ func newVerkleInstructionSet() JumpTable {
 	return validate(instructionSet)
 }
 
+func newOsakaInstructionSet() JumpTable {
+	instructionSet := newPragueInstructionSet()
+	enable7939(&instructionSet) // EIP-7939 (CLZ opcode)
+	return validate(instructionSet)
+}
+
 func newPragueInstructionSet() JumpTable {
 	instructionSet := newCancunInstructionSet()
 	enable7702(&instructionSet) // EIP-7702 Setcode transaction type
