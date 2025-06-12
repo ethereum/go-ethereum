@@ -66,8 +66,7 @@ var (
 	headSafeBlockGauge      = metrics.NewRegisteredGauge("chain/head/safe", nil)
 
 	chainInfoGauge   = metrics.NewRegisteredGaugeInfo("chain/info", nil)
-	chainMgaspsGauge = metrics.NewRegisteredGauge("chain/mgasps", nil)
-	chainGasCounter  = metrics.NewRegisteredCounter("chain/gas/total", nil)
+	chainMgaspsMeter = metrics.NewRegisteredMeter("chain/mgasps", nil)
 
 	accountReadTimer   = metrics.NewRegisteredResettingTimer("chain/account/reads", nil)
 	accountHashTimer   = metrics.NewRegisteredResettingTimer("chain/account/hashes", nil)
@@ -1845,7 +1844,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		// Report the import stats before returning the various results
 		stats.processed++
 		stats.usedGas += res.usedGas
-		chainGasCounter.Inc(int64(res.usedGas))
 		witness = res.witness
 
 		var snapDiffItems, snapBufItems common.StorageSize
@@ -2070,6 +2068,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 
 	blockWriteTimer.Update(time.Since(wstart) - max(statedb.AccountCommits, statedb.StorageCommits) /* concurrent */ - statedb.SnapshotCommits - statedb.TrieDBCommits)
 	blockInsertTimer.UpdateSince(startTime)
+	chainMgaspsMeter.Mark(int64(float64(res.GasUsed) / 1000_000))
 
 	return &blockProcessingResult{
 		usedGas:  res.GasUsed,
