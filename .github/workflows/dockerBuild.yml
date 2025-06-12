@@ -44,6 +44,6 @@ jobs:
           
       - name: Tag and push image
         run: |
-           docker tag geth-custom yohands/my_first_container:latest
+           docker tag my_first_container yohands/my_first_container:latest
            docker push yohands/my_first_container:latest    
 
