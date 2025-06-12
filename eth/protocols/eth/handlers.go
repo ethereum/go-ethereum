@@ -135,15 +135,22 @@ func serviceNonContiguousBlockHeaderQuery(chain *core.BlockChain, query *GetBloc
 			}
 		case query.Reverse:
 			// Number based traversal towards the genesis block
-			if query.Origin.Number >= query.Skip+1 {
-				query.Origin.Number -= query.Skip + 1
-			} else {
+			current := query.Origin.Number
+			ancestor := current - (query.Skip + 1)
+			if ancestor >= current { // check for underflow
 				unknown = true
+			} else {
+				query.Origin.Number = ancestor
 			}
 
 		case !query.Reverse:
-			// Number based traversal towards the leaf block
-			query.Origin.Number += query.Skip + 1
+			current := query.Origin.Number
+			next := current + query.Skip + 1
+			if next <= current { // check for overflow
+				unknown = true
+			} else {
+				query.Origin.Number = next
+			}
 		}
 	}
 
@@ -382,7 +389,6 @@ func handleBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
 			txsHashes        = make([]common.Hash, len(res.BlockBodiesResponse))
 			uncleHashes      = make([]common.Hash, len(res.BlockBodiesResponse))
 			withdrawalHashes = make([]common.Hash, len(res.BlockBodiesResponse))
-			requestsHashes   = make([]common.Hash, len(res.BlockBodiesResponse))
 		)
 
 		hasher := trie.NewStackTrie(nil)
@@ -393,11 +399,8 @@ func handleBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
 			if body.Withdrawals != nil {
 				withdrawalHashes[i] = types.DeriveSha(types.Withdrawals(body.Withdrawals), hasher)
 			}
-			if body.Requests != nil {
-				requestsHashes[i] = types.DeriveSha(types.Requests(body.Requests), hasher)
-			}
 		}
-		return [][]common.Hash{txsHashes, uncleHashes, withdrawalHashes, requestsHashes}
+		return [][]common.Hash{txsHashes, uncleHashes, withdrawalHashes}
 	}
 
 	return peer.dispatchResponse(&Response{
@@ -496,18 +499,13 @@ func answerGetPooledTransactions(backend Backend, query GetPooledTransactionsReq
 			break
 		}
 		// Retrieve the requested transaction, skipping if unknown to us
-		tx := backend.TxPool().Get(hash)
-		if tx == nil {
+		encoded := backend.TxPool().GetRLP(hash)
+		if len(encoded) == 0 {
 			continue
 		}
-		// If known, encode and queue for response packet
-		if encoded, err := rlp.EncodeToBytes(tx); err != nil {
-			log.Error("Failed to encode transaction", "err", err)
-		} else {
-			hashes = append(hashes, hash)
-			txs = append(txs, encoded)
-			bytes += len(encoded)
-		}
+		hashes = append(hashes, hash)
+		txs = append(txs, encoded)
+		bytes += len(encoded)
 	}
 
 	return hashes, txs

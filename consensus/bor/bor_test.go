@@ -80,11 +80,11 @@ func TestGenesisContractChange(t *testing.T) {
 		b.Finalize(chain, h, statedb, &types.Body{Withdrawals: nil, Transactions: nil, Uncles: nil})
 
 		// write state to database
-		root, err := statedb.Commit(0, false)
+		root, err := statedb.Commit(0, false, true)
 		require.NoError(t, err)
 		require.NoError(t, statedb.Database().TrieDB().Commit(root, true))
 
-		statedb, err := state.New(h.Root, state.NewDatabase(triedb.NewDatabase(db, triedb.HashDefaults), nil))
+		statedb, err := state.New(root, state.NewDatabase(triedb.NewDatabase(db, triedb.HashDefaults), nil))
 		require.NoError(t, err)
 
 		return root, statedb

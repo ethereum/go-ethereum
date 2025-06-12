@@ -476,7 +476,6 @@ func (tt *cliqueTest) run(t *testing.T) {
 	for j := 0; j < len(batches)-1; j++ {
 		if k, err := chain.InsertChain(batches[j]); err != nil {
 			t.Fatalf("failed to import batch %d, block %d: %v", j, k, err)
-			break
 		}
 	}
 

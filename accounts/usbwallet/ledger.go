@@ -353,8 +353,22 @@ func (w *ledgerDriver) ledgerSign(derivationPath []uint32, tx *types.Transaction
 			return common.Address{}, nil, err
 		}
 	} else {
-		if txrlp, err = rlp.EncodeToBytes([]interface{}{tx.Nonce(), tx.GasPrice(), tx.Gas(), tx.To(), tx.Value(), tx.Data(), chainID, big.NewInt(0), big.NewInt(0)}); err != nil {
-			return common.Address{}, nil, err
+		if tx.Type() == types.DynamicFeeTxType {
+			if txrlp, err = rlp.EncodeToBytes([]interface{}{chainID, tx.Nonce(), tx.GasTipCap(), tx.GasFeeCap(), tx.Gas(), tx.To(), tx.Value(), tx.Data(), tx.AccessList()}); err != nil {
+				return common.Address{}, nil, err
+			}
+			// append type to transaction
+			txrlp = append([]byte{tx.Type()}, txrlp...)
+		} else if tx.Type() == types.AccessListTxType {
+			if txrlp, err = rlp.EncodeToBytes([]interface{}{chainID, tx.Nonce(), tx.GasPrice(), tx.Gas(), tx.To(), tx.Value(), tx.Data(), tx.AccessList()}); err != nil {
+				return common.Address{}, nil, err
+			}
+			// append type to transaction
+			txrlp = append([]byte{tx.Type()}, txrlp...)
+		} else if tx.Type() == types.LegacyTxType {
+			if txrlp, err = rlp.EncodeToBytes([]interface{}{tx.Nonce(), tx.GasPrice(), tx.Gas(), tx.To(), tx.Value(), tx.Data(), chainID, big.NewInt(0), big.NewInt(0)}); err != nil {
+				return common.Address{}, nil, err
+			}
 		}
 	}
 
@@ -369,7 +383,9 @@ func (w *ledgerDriver) ledgerSign(derivationPath []uint32, tx *types.Transaction
 	// Chunk size selection to mitigate an underlying RLP deserialization issue on the ledger app.
 	// https://github.com/LedgerHQ/app-ethereum/issues/409
 	chunk := 255
-	for ; len(payload)%chunk <= ledgerEip155Size; chunk-- {
+	if tx.Type() == types.LegacyTxType {
+		for ; len(payload)%chunk <= ledgerEip155Size; chunk-- {
+		}
 	}
 
 	for len(payload) > 0 {
@@ -398,8 +414,11 @@ func (w *ledgerDriver) ledgerSign(derivationPath []uint32, tx *types.Transaction
 	if chainID == nil {
 		signer = new(types.HomesteadSigner)
 	} else {
-		signer = types.NewEIP155Signer(chainID)
-		signature[64] -= byte(chainID.Uint64()*2 + 35)
+		signer = types.LatestSignerForChainID(chainID)
+		// For non-legacy transactions, V is 0 or 1, no need to subtract here.
+		if tx.Type() == types.LegacyTxType {
+			signature[64] -= byte(chainID.Uint64()*2 + 35)
+		}
 	}
 
 	signed, err := tx.WithSignature(signer, signature)
@@ -512,6 +531,12 @@ func (w *ledgerDriver) ledgerSignTypedMessage(derivationPath []uint32, domainHas
 //	APDU length              | 1 byte
 //	Optional APDU data       | arbitrary
 func (w *ledgerDriver) ledgerExchange(opcode ledgerOpcode, p1 ledgerParam1, p2 ledgerParam2, data []byte) ([]byte, error) {
+	// max safe length check
+	const maxDataLength = 128 * 1024 * 1024 // 128 MB
+	if len(data) > maxDataLength {
+		return nil, errors.New("data too large")
+	}
+
 	// Construct the message payload, possibly split into multiple chunks
 	apdu := make([]byte, 2, 7+len(data))
 

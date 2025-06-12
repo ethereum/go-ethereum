@@ -12,7 +12,7 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package pathdb
 
@@ -30,11 +30,12 @@ import (
 
 // context wraps all fields for executing state diffs.
 type context struct {
-	prevRoot common.Hash
-	postRoot common.Hash
-	accounts map[common.Address][]byte
-	storages map[common.Address]map[common.Hash][]byte
-	nodes    *trienode.MergedNodeSet
+	prevRoot      common.Hash
+	postRoot      common.Hash
+	accounts      map[common.Address][]byte
+	storages      map[common.Address]map[common.Hash][]byte
+	nodes         *trienode.MergedNodeSet
+	rawStorageKey bool
 
 	// TODO (rjl493456442) abstract out the state hasher
 	// for supporting verkle tree.
@@ -43,18 +44,19 @@ type context struct {
 
 // apply processes the given state diffs, updates the corresponding post-state
 // and returns the trie nodes that have been modified.
-func apply(db database.Database, prevRoot common.Hash, postRoot common.Hash, accounts map[common.Address][]byte, storages map[common.Address]map[common.Hash][]byte) (map[common.Hash]map[string]*trienode.Node, error) {
+func apply(db database.NodeDatabase, prevRoot common.Hash, postRoot common.Hash, rawStorageKey bool, accounts map[common.Address][]byte, storages map[common.Address]map[common.Hash][]byte) (map[common.Hash]map[string]*trienode.Node, error) {
 	tr, err := trie.New(trie.TrieID(postRoot), db)
 	if err != nil {
 		return nil, err
 	}
 	ctx := &context{
-		prevRoot:    prevRoot,
-		postRoot:    postRoot,
-		accounts:    accounts,
-		storages:    storages,
-		accountTrie: tr,
-		nodes:       trienode.NewMergedNodeSet(),
+		prevRoot:      prevRoot,
+		postRoot:      postRoot,
+		accounts:      accounts,
+		storages:      storages,
+		accountTrie:   tr,
+		rawStorageKey: rawStorageKey,
+		nodes:         trienode.NewMergedNodeSet(),
 	}
 	for addr, account := range accounts {
 		var err error
@@ -80,7 +82,7 @@ func apply(db database.Database, prevRoot common.Hash, postRoot common.Hash, acc
 // updateAccount the account was present in prev-state, and may or may not
 // existent in post-state. Apply the reverse diff and verify if the storage
 // root matches the one in prev-state account.
-func updateAccount(ctx *context, db database.Database, addr common.Address) error {
+func updateAccount(ctx *context, db database.NodeDatabase, addr common.Address) error {
 	// The account was present in prev-state, decode it from the
 	// 'slim-rlp' format bytes.
 	h := newHasher()
@@ -109,11 +111,15 @@ func updateAccount(ctx *context, db database.Database, addr common.Address) erro
 		return err
 	}
 	for key, val := range ctx.storages[addr] {
+		tkey := key
+		if ctx.rawStorageKey {
+			tkey = h.hash(key.Bytes())
+		}
 		var err error
 		if len(val) == 0 {
-			err = st.Delete(key.Bytes())
+			err = st.Delete(tkey.Bytes())
 		} else {
-			err = st.Update(key.Bytes(), val)
+			err = st.Update(tkey.Bytes(), val)
 		}
 		if err != nil {
 			return err
@@ -141,7 +147,7 @@ func updateAccount(ctx *context, db database.Database, addr common.Address) erro
 // deleteAccount the account was not present in prev-state, and is expected
 // to be existent in post-state. Apply the reverse diff and verify if the
 // account and storage is wiped out correctly.
-func deleteAccount(ctx *context, db database.Database, addr common.Address) error {
+func deleteAccount(ctx *context, db database.NodeDatabase, addr common.Address) error {
 	// The account must be existent in post-state, load the account.
 	h := newHasher()
 	defer h.release()
@@ -166,7 +172,11 @@ func deleteAccount(ctx *context, db database.Database, addr common.Address) erro
 		if len(val) != 0 {
 			return errors.New("expect storage deletion")
 		}
-		if err := st.Delete(key.Bytes()); err != nil {
+		tkey := key
+		if ctx.rawStorageKey {
+			tkey = h.hash(key.Bytes())
+		}
+		if err := st.Delete(tkey.Bytes()); err != nil {
 			return err
 		}
 	}

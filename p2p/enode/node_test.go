@@ -78,6 +78,7 @@ func TestNodeEndpoints(t *testing.T) {
 		wantUDP  int
 		wantTCP  int
 		wantQUIC int
+		wantDNS  string
 	}
 	tests := []endpointTest{
 		{
@@ -94,6 +95,7 @@ func TestNodeEndpoints(t *testing.T) {
 				r.Set(enr.UDP(9000))
 				return SignNull(&r, id)
 			}(),
+			wantUDP: 9000,
 		},
 		{
 			name: "tcp-only",
@@ -102,6 +104,7 @@ func TestNodeEndpoints(t *testing.T) {
 				r.Set(enr.TCP(9000))
 				return SignNull(&r, id)
 			}(),
+			wantTCP: 9000,
 		},
 		{
 			name: "quic-only",
@@ -272,6 +275,19 @@ func TestNodeEndpoints(t *testing.T) {
 			wantIP:   netip.MustParseAddr("2001::ff00:0042:8329"),
 			wantQUIC: 9001,
 		},
+		{
+			name: "dns-only",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.UDP(30303))
+				r.Set(enr.TCP(30303))
+				n := SignNull(&r, id).WithHostname("example.com")
+				return n
+			}(),
+			wantTCP: 30303,
+			wantUDP: 30303,
+			wantDNS: "example.com",
+		},
 	}
 
 	for _, test := range tests {
@@ -287,6 +303,9 @@ func TestNodeEndpoints(t *testing.T) {
 			}
 			if quic, _ := test.node.QUICEndpoint(); test.wantQUIC != int(quic.Port()) {
 				t.Errorf("node has wrong QUIC port %d, want %d", quic.Port(), test.wantQUIC)
+			}
+			if test.wantDNS != test.node.Hostname() {
+				t.Errorf("node has wrong DNS name %s, want %s", test.node.Hostname(), test.wantDNS)
 			}
 		})
 	}

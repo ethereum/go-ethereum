@@ -12,7 +12,7 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package pathdb
 
@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -109,12 +110,17 @@ func accountHistory(freezer ethdb.AncientReader, address common.Address, start, 
 
 // storageHistory inspects the storage history within the range.
 func storageHistory(freezer ethdb.AncientReader, address common.Address, slot common.Hash, start uint64, end uint64) (*HistoryStats, error) {
+	slotHash := crypto.Keccak256Hash(slot.Bytes())
 	return inspectHistory(freezer, start, end, func(h *history, stats *HistoryStats) {
 		slots, exists := h.storages[address]
 		if !exists {
 			return
 		}
-		blob, exists := slots[slot]
+		key := slotHash
+		if h.meta.version != stateHistoryV0 {
+			key = slot
+		}
+		blob, exists := slots[key]
 		if !exists {
 			return
 		}

@@ -34,9 +34,9 @@ protoc:
 	protoc --go_out=. --go-grpc_out=. ./internal/cli/server/proto/*.proto
 
 generate-mocks:
-	go generate mockgen -destination=./tests/bor/mocks/IHeimdallClient.go -package=mocks ./consensus/bor IHeimdallClient
-	go generate mockgen -destination=./eth/filters/IBackend.go -package=filters ./eth/filters Backend
-	go generate mockgen -destination=./eth/filters/IDatabase.go -package=filters ./ethdb Database
+	go generate ./consensus/bor
+	go generate ./eth/filters
+	go generate ./ethdb
 
 #? geth: Build geth.
 geth:
@@ -83,7 +83,7 @@ lint:
 
 lintci-deps:
 	rm -f ./build/bin/golangci-lint
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ./build/bin v1.63.4
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ./build/bin v2.1.5
 
 .PHONY: vulncheck
 

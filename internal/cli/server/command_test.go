@@ -55,7 +55,7 @@ func TestFlagsWithoutConfig(t *testing.T) {
 	require.Equal(t, c.config.Gpo.MaxPrice, big.NewInt(5000000000000))
 }
 
-// TestFlagsWithoutConfig tests all types of flags passed only
+// TestFlagsWithConfig tests all types of flags passed only
 // via config file.
 func TestFlagsWithConfig(t *testing.T) {
 	t.Parallel()

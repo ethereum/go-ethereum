@@ -203,7 +203,7 @@ func (s *Server) Status(ctx context.Context, in *proto.StatusRequest) (*proto.St
 	}
 
 	apiBackend := s.backend.APIBackend
-	syncProgress := apiBackend.SyncProgress()
+	syncProgress := apiBackend.SyncProgress(ctx)
 
 	resp := &proto.StatusResponse{
 		CurrentHeader: headerToProtoHeader(apiBackend.CurrentHeader()),
@@ -311,13 +311,13 @@ func gatherForks(configList ...interface{}) []*proto.StatusResponse_Fork {
 	return forks
 }
 
-func convertBlockToBlockStub(blocks []*types.Block) []*proto.BlockStub {
+func convertHeaderToBlockStub(headers []*types.Header) []*proto.BlockStub {
 	var blockStubs []*proto.BlockStub
 
-	for _, block := range blocks {
+	for _, header := range headers {
 		blockStub := &proto.BlockStub{
-			Hash:   block.Hash().String(),
-			Number: block.NumberU64(),
+			Hash:   header.Hash().String(),
+			Number: header.Number.Uint64(),
 		}
 		blockStubs = append(blockStubs, blockStub)
 	}
@@ -337,8 +337,8 @@ func (s *Server) ChainWatch(req *proto.ChainWatchRequest, reply proto.Bor_ChainW
 		msg := <-chain2HeadCh
 
 		err := reply.Send(&proto.ChainWatchResponse{Type: msg.Type,
-			Newchain: convertBlockToBlockStub(msg.NewChain),
-			Oldchain: convertBlockToBlockStub(msg.OldChain),
+			Newchain: convertHeaderToBlockStub(msg.NewChain),
+			Oldchain: convertHeaderToBlockStub(msg.OldChain),
 		})
 		if err != nil {
 			return err

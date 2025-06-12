@@ -44,7 +44,6 @@ func verifyUnbrokenCanonchain(hc *HeaderChain) error {
 		if td := rawdb.ReadTd(hc.chainDb, canonHash, h.Number.Uint64()); td == nil {
 			return fmt.Errorf("Canon TD missing at block %d", h.Number)
 		}
-
 		if h.Number.Uint64() == 0 {
 			break
 		}

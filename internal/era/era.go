@@ -1,18 +1,18 @@
-// Copyright 2023 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2024 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package era
 
@@ -70,7 +70,7 @@ func ReadDir(dir, network string) ([]string, error) {
 		}
 		parts := strings.Split(entry.Name(), "-")
 		if len(parts) != 3 || parts[0] != network {
-			// invalid era1 filename, skip
+			// Invalid era1 filename, skip.
 			continue
 		}
 		if epoch, err := strconv.ParseUint(parts[1], 10, 64); err != nil {
@@ -126,6 +126,29 @@ func (e *Era) Close() error {
 	return e.f.Close()
 }
 
+// GetHeaderByNumber returns the header for the given block number.
+func (e *Era) GetHeaderByNumber(num uint64) (*types.Header, error) {
+	if e.m.start > num || e.m.start+e.m.count <= num {
+		return nil, errors.New("out-of-bounds")
+	}
+	off, err := e.readOffset(num)
+	if err != nil {
+		return nil, err
+	}
+
+	// Read and decompress header.
+	r, _, err := newSnappyReader(e.s, TypeCompressedHeader, off)
+	if err != nil {
+		return nil, err
+	}
+	var header types.Header
+	if err := rlp.Decode(r, &header); err != nil {
+		return nil, err
+	}
+	return &header, nil
+}
+
+// GetBlockByNumber returns the block for the given block number.
 func (e *Era) GetBlockByNumber(num uint64) (*types.Block, error) {
 	if e.m.start > num || e.m.start+e.m.count <= num {
 		return nil, errors.New("out-of-bounds")
@@ -152,6 +175,34 @@ func (e *Era) GetBlockByNumber(num uint64) (*types.Block, error) {
 		return nil, err
 	}
 	return types.NewBlockWithHeader(&header).WithBody(body), nil
+}
+
+// GetReceiptsByNumber returns the receipts for the given block number.
+func (e *Era) GetReceiptsByNumber(num uint64) (types.Receipts, error) {
+	if e.m.start > num || e.m.start+e.m.count <= num {
+		return nil, errors.New("out-of-bounds")
+	}
+	off, err := e.readOffset(num)
+	if err != nil {
+		return nil, err
+	}
+
+	// Skip over header and body.
+	off, err = e.s.SkipN(off, 2)
+	if err != nil {
+		return nil, err
+	}
+
+	// Read and decompress receipts.
+	r, _, err := newSnappyReader(e.s, TypeCompressedReceipts, off)
+	if err != nil {
+		return nil, err
+	}
+	var receipts types.Receipts
+	if err := rlp.Decode(r, &receipts); err != nil {
+		return nil, err
+	}
+	return receipts, nil
 }
 
 // Accumulator reads the accumulator entry in the Era1 file.
@@ -187,13 +238,10 @@ func (e *Era) InitialTD() (*big.Int, error) {
 	}
 	off += n
 
-	// Skip over next two records.
-	for i := 0; i < 2; i++ {
-		length, err := e.s.LengthAt(off)
-		if err != nil {
-			return nil, err
-		}
-		off += length
+	// Skip over header and body.
+	off, err = e.s.SkipN(off, 2)
+	if err != nil {
+		return nil, err
 	}
 
 	// Read total difficulty after first block.

@@ -81,7 +81,6 @@ func newFetchResult(header *types.Header, fastSync bool) *fetchResult {
 	} else if header.WithdrawalsHash != nil {
 		item.Withdrawals = make(types.Withdrawals, 0)
 	}
-
 	if fastSync && !header.EmptyReceipts() {
 		item.pending.Store(item.pending.Load() | (1 << receiptType))
 	}
@@ -311,7 +310,6 @@ func (q *queue) Schedule(headers []*types.Header, hashes []common.Hash, from uin
 
 	// Insert all the headers prioritised by the contained block number
 	inserts := make([]*types.Header, 0, len(headers))
-
 	for i, header := range headers {
 		// Make sure chain order is honoured and preserved throughout
 		hash := hashes[i]
@@ -342,7 +340,6 @@ func (q *queue) Schedule(headers []*types.Header, hashes []common.Hash, from uin
 				q.receiptTaskQueue.Push(header, -int64(header.Number.Uint64()))
 			}
 		}
-
 		inserts = append(inserts, header)
 		q.headerHead = hash
 		from++
@@ -627,7 +624,6 @@ func (q *queue) Revoke(peerID string) {
 		q.headerTaskQueue.Push(request.From, -int64(request.From))
 		delete(q.headerPendPool, peerID)
 	}
-
 	if request, ok := q.blockPendPool[peerID]; ok {
 		for _, header := range request.Headers {
 			q.blockTaskQueue.Push(header, -int64(header.Number.Uint64()))
@@ -839,7 +835,7 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, hashes []comm
 func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListHashes []common.Hash,
 	uncleLists [][]*types.Header, uncleListHashes []common.Hash,
 	withdrawalLists [][]*types.Withdrawal, withdrawalListHashes []common.Hash,
-	requestsLists [][]*types.Request, requestsListHashes []common.Hash) (int, error) {
+) (int, error) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -863,19 +859,6 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 			}
 
 			if withdrawalListHashes[index] != *header.WithdrawalsHash {
-				return errInvalidBody
-			}
-		}
-		if header.RequestsHash == nil {
-			// nil hash means that requests should not be present in body
-			if requestsLists[index] != nil {
-				return errInvalidBody
-			}
-		} else { // non-nil hash: body must have requests
-			if requestsLists[index] == nil {
-				return errInvalidBody
-			}
-			if requestsListHashes[index] != *header.RequestsHash {
 				return errInvalidBody
 			}
 		}
@@ -954,7 +937,7 @@ func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt, recei
 // to access the queue, so they already need a lock anyway.
 func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	taskQueue *prque.Prque[int64, *types.Header], pendPool map[string]*fetchRequest,
-	reqTimer metrics.Timer, resInMeter metrics.Meter, resDropMeter metrics.Meter,
+	reqTimer *metrics.Timer, resInMeter, resDropMeter *metrics.Meter,
 	results int, validate func(index int, header *types.Header) error,
 	reconstruct func(index int, result *fetchResult)) (int, error) {
 	// Short circuit if the data was never requested

@@ -77,7 +77,6 @@ func TestForkChoice(t *testing.T) {
 
 	// nolint: paralleltest
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			res, err := mockForker.ReorgNeeded(tc.current, tc.incoming)
 			require.Equal(t, tc.want, res, tc.name)

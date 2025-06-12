@@ -44,7 +44,7 @@ func NewExecutionPool(initialSize int, timeout time.Duration, service string, re
 
 	sp.executionPool.Store(workerpool.New(initialSize))
 
-	if metrics.Enabled && report {
+	if metrics.Enabled() && report {
 		go sp.reportMetrics(3 * time.Second)
 	}
 
@@ -117,8 +117,8 @@ func (s *SafePool) Stop() {
 // regarding the execution pool.
 func (s *SafePool) reportMetrics(refresh time.Duration) {
 	var (
-		epWorkerCountGuage           metrics.Gauge
-		epWaitingQueueGuage          metrics.Gauge
+		epWorkerCountGuage           *metrics.Gauge
+		epWaitingQueueGuage          *metrics.Gauge
 		epProcessedRequestsHistogram metrics.Histogram
 	)
 

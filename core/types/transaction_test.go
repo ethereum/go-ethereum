@@ -579,9 +579,7 @@ func TestYParityJSONUnmarshalling(t *testing.T) {
 		DynamicFeeTxType,
 		BlobTxType,
 	} {
-		txType := txType
 		for _, test := range tests {
-			test := test
 			t.Run(fmt.Sprintf("txType=%d: %s", txType, test.name), func(t *testing.T) {
 				// Copy the base json
 				testJson := maps.Clone(baseJson)
@@ -609,5 +607,22 @@ func TestYParityJSONUnmarshalling(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func BenchmarkHash(b *testing.B) {
+	signer := NewLondonSigner(big.NewInt(1))
+	to := common.Address{}
+	tx := NewTx(&DynamicFeeTx{
+		ChainID:   big.NewInt(123),
+		Nonce:     1,
+		Gas:       1000000,
+		To:        &to,
+		Value:     big.NewInt(1),
+		GasTipCap: big.NewInt(500),
+		GasFeeCap: big.NewInt(500),
+	})
+	for i := 0; i < b.N; i++ {
+		signer.Hash(tx)
 	}
 }

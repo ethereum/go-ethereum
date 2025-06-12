@@ -55,7 +55,7 @@ type Processor interface {
 // ProcessResult contains the values computed by Process.
 type ProcessResult struct {
 	Receipts types.Receipts
-	Requests types.Requests
+	Requests [][]byte
 	Logs     []*types.Log
 	GasUsed  uint64
 }
