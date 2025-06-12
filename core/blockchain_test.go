@@ -1018,8 +1018,17 @@ func testChainTxReorgs(t *testing.T, scheme string) {
 		if txn, _, _, _ := rawdb.ReadTransaction(db, tx.Hash()); txn == nil {
 			t.Errorf("add %d: expected tx to be found", i)
 		}
-		if rcpt, _, _, _ := rawdb.ReadReceipt(db, tx.Hash(), blockchain.Config()); rcpt == nil {
+		if rcpt, _, _, index := rawdb.ReadReceipt(db, tx.Hash(), blockchain.Config()); rcpt == nil {
 			t.Errorf("add %d: expected receipt to be found", i)
+		} else if rawRcpt, gasUsedSoFar, startingLogIndex := rawdb.ReadRawReceipt(db, rcpt.BlockHash, rcpt.BlockNumber.Uint64(), index); rawRcpt == nil {
+			t.Errorf("add %d: expected raw receipt to be found", i)
+		} else {
+			if rcpt.GasUsed != rawRcpt.CumulativeGasUsed-gasUsedSoFar {
+				t.Errorf("add %d, raw gasUsedSoFar doesn't make sense", i)
+			}
+			if len(rcpt.Logs) > 0 && rcpt.Logs[0].Index != startingLogIndex {
+				t.Errorf("add %d, raw startingLogIndex doesn't make sense", i)
+			}
 		}
 	}
 	// shared tx
@@ -1027,8 +1036,17 @@ func testChainTxReorgs(t *testing.T, scheme string) {
 		if txn, _, _, _ := rawdb.ReadTransaction(db, tx.Hash()); txn == nil {
 			t.Errorf("share %d: expected tx to be found", i)
 		}
-		if rcpt, _, _, _ := rawdb.ReadReceipt(db, tx.Hash(), blockchain.Config()); rcpt == nil {
+		if rcpt, _, _, index := rawdb.ReadReceipt(db, tx.Hash(), blockchain.Config()); rcpt == nil {
 			t.Errorf("share %d: expected receipt to be found", i)
+		} else if rawRcpt, gasUsedSoFar, startingLogIndex := rawdb.ReadRawReceipt(db, rcpt.BlockHash, rcpt.BlockNumber.Uint64(), index); rawRcpt == nil {
+			t.Errorf("add %d: expected raw receipt to be found", i)
+		} else {
+			if rcpt.GasUsed != rawRcpt.CumulativeGasUsed-gasUsedSoFar {
+				t.Errorf("add %d, raw gasUsedSoFar doesn't make sense", i)
+			}
+			if len(rcpt.Logs) > 0 && rcpt.Logs[0].Index != startingLogIndex {
+				t.Errorf("add %d, raw startingLogIndex doesn't make sense", i)
+			}
 		}
 	}
 }

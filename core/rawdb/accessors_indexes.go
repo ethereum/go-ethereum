@@ -207,6 +207,62 @@ func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) 
 	return nil, common.Hash{}, 0, 0
 }
 
+// ReadRawReceipt allows reading a raw receipt and a given position. Returns the necessary data to derive a complete
+// receipt as well.
+func ReadRawReceipt(db ethdb.Reader, blockHash common.Hash, blockNumber, blockIndex uint64) (*types.Receipt, uint64, uint) {
+	receiptIt, err := rlp.NewListIterator(ReadReceiptsRLP(db, blockHash, blockNumber))
+	if err != nil {
+		return nil, 0, 0
+	}
+
+	extractGasUsedAndLogCount := func(receiptRLP rlp.RawValue) (uint64, uint, error) {
+		listContents, _, err := rlp.SplitList(receiptRLP)
+		if err != nil {
+			return 0, 0, err
+		}
+		_, rest, err := rlp.SplitString(listContents)
+		if err != nil {
+			return 0, 0, err
+		}
+
+		gasUsed, logs, err := rlp.SplitUint64(rest)
+		if err != nil {
+			return 0, 0, err
+		}
+
+		logCount, err := rlp.CountValues(logs)
+		return gasUsed, uint(logCount), err
+	}
+
+	gasUsedSoFar := uint64(0)
+	startingLogIndex := uint(0)
+	for i := uint64(0); i <= blockIndex; i++ {
+		// unexpected end of receipts
+		if !receiptIt.Next() || receiptIt.Err() != nil {
+			return nil, 0, 0
+		}
+
+		gasUsed, logsCount, err := extractGasUsedAndLogCount(receiptIt.Value())
+		if err != nil {
+			return nil, 0, 0
+		}
+
+		if i == blockIndex {
+			var storageReceipt types.ReceiptForStorage
+			if err := rlp.DecodeBytes(receiptIt.Value(), &storageReceipt); err != nil {
+				return nil, 0, 0
+			}
+
+			return (*types.Receipt)(&storageReceipt), gasUsedSoFar, startingLogIndex
+		}
+
+		gasUsedSoFar = gasUsed
+		startingLogIndex += logsCount
+	}
+
+	return nil, 0, 0
+}
+
 // ReadFilterMapRow retrieves a filter map row at the given mapRowIndex
 // (see filtermaps.mapRowIndex for the storage index encoding).
 // Note that zero length rows are not stored in the database and therefore all
