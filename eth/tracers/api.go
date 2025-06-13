@@ -1035,7 +1035,7 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 		}
 	}
 	txCtx := core.NewEVMTxContext(message)
-	vmenv := vm.NewEVM(vmctx, txCtx, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer.Hooks}, api.backend.GetCustomPrecompiles(vmctx.BlockNumber.Int64()))
+	vmenv := vm.NewEVM(vmctx, txCtx, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer.Hooks, NoBaseFee: true}, api.backend.GetCustomPrecompiles(vmctx.BlockNumber.Int64()))
 	statedb.SetLogger(tracer.Hooks)
 
 	// Define a meaningful timeout of a single transaction trace
