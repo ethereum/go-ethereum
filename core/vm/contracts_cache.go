@@ -17,23 +17,29 @@ func init() {
 }
 
 func addCache(precompile common.Address, input, output []byte) {
-	mu.Lock()
-	defer mu.Unlock()
-	cache, ok := caches[precompile]
-	if !ok {
-		cache = lru.NewCache[string, []byte](128)
-		caches[precompile] = cache
-	}
-	cache.Add(string(input), output)
+	/*
+		mu.Lock()
+		defer mu.Unlock()
+		cache, ok := caches[precompile]
+		if !ok {
+			cache = lru.NewCache[string, []byte](128)
+			caches[precompile] = cache
+		}
+		cache.Add(string(input), output)
+	*/
+
 }
 
 func getCache(precompile common.Address, input []byte) ([]byte, bool) {
-	mu.RLock()
-	defer mu.RUnlock()
-	cache, ok := caches[precompile]
-	if !ok {
-		caches[precompile] = lru.NewCache[string, []byte](128)
-		return nil, false
-	}
-	return cache.Get(string(input))
+	/*
+		mu.RLock()
+		defer mu.RUnlock()
+		cache, ok := caches[precompile]
+		if !ok {
+			caches[precompile] = lru.NewCache[string, []byte](128)
+			return nil, false
+		}
+		return cache.Get(string(input))
+	*/
+	return nil, false
 }

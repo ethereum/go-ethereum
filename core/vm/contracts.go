@@ -29,6 +29,7 @@ import (
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
+	"github.com/consensys/gnark-crypto/ecc/bn254"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -506,17 +507,18 @@ func newTwistPoint(blob []byte) (*bn256.G2, error) {
 // runBn256Add implements the Bn256Add precompile, referenced by both
 // Byzantium and Istanbul operations.
 func runBn256Add(input []byte) ([]byte, error) {
-	x, err := newCurvePoint(getData(input, 0, 64))
+	x := &bn254.G1Affine{}
+	_, err := x.SetBytes(getData(input, 0, 64))
 	if err != nil {
 		return nil, err
 	}
-	y, err := newCurvePoint(getData(input, 64, 64))
+	y := &bn254.G1Affine{}
+	_, err = y.SetBytes(getData(input, 64, 64))
 	if err != nil {
 		return nil, err
 	}
-	res := new(bn256.G1)
-	res.Add(x, y)
-	return res.Marshal(), nil
+	x = x.Add(x, y)
+	return x.Marshal(), nil
 }
 
 // bn256AddIstanbul implements a native elliptic curve point addition conforming to
