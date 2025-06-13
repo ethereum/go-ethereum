@@ -10,10 +10,7 @@ import (
 // Be sure to unregister the meter from the registry once it is of no use to
 // allow for garbage collection.
 func GetOrRegisterTimer(name string, r Registry) *Timer {
-	if nil == r {
-		r = DefaultRegistry
-	}
-	return r.GetOrRegister(name, NewTimer).(*Timer)
+	return getOrRegister(name, NewTimer, r)
 }
 
 // NewCustomTimer constructs a new Timer from a Histogram and a Meter.
