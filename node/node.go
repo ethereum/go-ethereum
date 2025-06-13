@@ -150,10 +150,10 @@ func New(conf *Config) (*Node, error) {
 	}
 
 	// Configure RPC servers.
-	node.http = newHTTPServer(node.log, conf.HTTPTimeouts)
-	node.httpAuth = newHTTPServer(node.log, conf.HTTPTimeouts)
-	node.ws = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
-	node.wsAuth = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
+	node.http = newHTTPServer(node.log, conf.HTTPTimeouts, conf.ShutdownDelay)
+	node.httpAuth = newHTTPServer(node.log, conf.HTTPTimeouts, conf.ShutdownDelay)
+	node.ws = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts, conf.ShutdownDelay)
+	node.wsAuth = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts, conf.ShutdownDelay)
 	node.ipc = newIPCServer(node.log, conf.IPCEndpoint())
 
 	return node, nil
@@ -519,6 +519,12 @@ func (n *Node) stopRPC() {
 	n.ws.stop()
 	n.httpAuth.stop()
 	n.wsAuth.stop()
+
+	n.http.wait()
+	n.ws.wait()
+	n.httpAuth.wait()
+	n.wsAuth.wait()
+
 	n.ipc.stop()
 	n.stopInProc()
 }
