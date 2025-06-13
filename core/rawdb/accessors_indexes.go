@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -139,15 +140,41 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 	if blockHash == (common.Hash{}) {
 		return nil, common.Hash{}, 0, 0
 	}
-	body := ReadBody(db, blockHash, *blockNumber)
-	if body == nil {
+	bodyRLP := ReadBodyRLP(db, blockHash, *blockNumber)
+	if bodyRLP == nil {
 		log.Error("Transaction referenced missing", "number", *blockNumber, "hash", blockHash)
 		return nil, common.Hash{}, 0, 0
 	}
-	for txIndex, tx := range body.Transactions {
-		if tx.Hash() == hash {
-			return tx, blockHash, *blockNumber, uint64(txIndex)
+	txnListRLP, _, err := rlp.SplitList(bodyRLP)
+	if err != nil {
+		return nil, common.Hash{}, 0, 0
+	}
+	txnIterator, err := rlp.NewListIterator(txnListRLP)
+	if err != nil {
+		return nil, common.Hash{}, 0, 0
+	}
+
+	txIndex := 0
+	for txnIterator.Next() && txnIterator.Err() == nil {
+		txnRLP := txnIterator.Value()
+
+		// Figure out if this a legacy transaction or not
+		rlpKind, hashPreimage, _, err := rlp.Split(txnRLP)
+		if err != nil {
+			return nil, common.Hash{}, 0, 0
 		}
+		if rlpKind == rlp.List {
+			hashPreimage = txnRLP
+		}
+
+		if crypto.Keccak256Hash(hashPreimage) == hash {
+			var tx types.Transaction
+			if err := rlp.DecodeBytes(txnRLP, &tx); err != nil {
+				return nil, common.Hash{}, 0, 0
+			}
+			return &tx, blockHash, *blockNumber, uint64(txIndex)
+		}
+		txIndex++
 	}
 	log.Error("Transaction not found", "number", *blockNumber, "hash", blockHash, "txhash", hash)
 	return nil, common.Hash{}, 0, 0
@@ -178,6 +205,62 @@ func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) 
 	}
 	log.Error("Receipt not found", "number", *blockNumber, "hash", blockHash, "txhash", hash)
 	return nil, common.Hash{}, 0, 0
+}
+
+// ReadRawReceipt allows reading a raw receipt and a given position. Returns the necessary data to derive a complete
+// receipt as well.
+func ReadRawReceipt(db ethdb.Reader, blockHash common.Hash, blockNumber, blockIndex uint64) (*types.Receipt, uint64, uint) {
+	receiptIt, err := rlp.NewListIterator(ReadReceiptsRLP(db, blockHash, blockNumber))
+	if err != nil {
+		return nil, 0, 0
+	}
+
+	extractGasUsedAndLogCount := func(receiptRLP rlp.RawValue) (uint64, uint, error) {
+		listContents, _, err := rlp.SplitList(receiptRLP)
+		if err != nil {
+			return 0, 0, err
+		}
+		_, rest, err := rlp.SplitString(listContents)
+		if err != nil {
+			return 0, 0, err
+		}
+
+		gasUsed, logs, err := rlp.SplitUint64(rest)
+		if err != nil {
+			return 0, 0, err
+		}
+
+		logCount, err := rlp.CountValues(logs)
+		return gasUsed, uint(logCount), err
+	}
+
+	gasUsedSoFar := uint64(0)
+	startingLogIndex := uint(0)
+	for i := uint64(0); i <= blockIndex; i++ {
+		// unexpected end of receipts
+		if !receiptIt.Next() || receiptIt.Err() != nil {
+			return nil, 0, 0
+		}
+
+		gasUsed, logsCount, err := extractGasUsedAndLogCount(receiptIt.Value())
+		if err != nil {
+			return nil, 0, 0
+		}
+
+		if i == blockIndex {
+			var storageReceipt types.ReceiptForStorage
+			if err := rlp.DecodeBytes(receiptIt.Value(), &storageReceipt); err != nil {
+				return nil, 0, 0
+			}
+
+			return (*types.Receipt)(&storageReceipt), gasUsedSoFar, startingLogIndex
+		}
+
+		gasUsedSoFar = gasUsed
+		startingLogIndex += logsCount
+	}
+
+	return nil, 0, 0
 }
 
 // ReadFilterMapRow retrieves a filter map row at the given mapRowIndex

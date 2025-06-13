@@ -1543,6 +1543,21 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if err != nil {
 		return err
 	}
+
+	bc.receiptsCache.Add(block.Hash(), receipts)
+	bc.blockCache.Add(block.Hash(), block)
+	bc.bodyCache.Add(block.Hash(), block.Body())
+	for txIdx, tx := range block.Transactions() {
+		bc.txLookupCache.Add(tx.Hash(), txLookup{
+			lookup: &rawdb.LegacyTxLookupEntry{
+				BlockHash:  block.Hash(),
+				BlockIndex: block.NumberU64(),
+				Index:      uint64(txIdx),
+			},
+			transaction: tx,
+		})
+	}
+
 	// If node is running in path mode, skip explicit gc operation
 	// which is unnecessary in this mode.
 	if bc.triedb.Scheme() == rawdb.PathScheme {

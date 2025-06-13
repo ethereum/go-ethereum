@@ -1386,18 +1386,15 @@ func (api *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash commo
 	if err != nil {
 		return nil, err
 	}
-	receipts, err := api.b.GetReceipts(ctx, blockHash)
-	if err != nil {
-		return nil, err
+	receipt := api.b.GetReceiptByLookupResult(tx, blockHash, blockNumber, index)
+	if receipt == nil {
+		return nil, errors.New("not found")
 	}
-	if uint64(len(receipts)) <= index {
-		return nil, nil
-	}
-	receipt := receipts[index]
 
 	// Derive the sender.
 	signer := types.MakeSigner(api.b.ChainConfig(), header.Number, header.Time)
-	return marshalReceipt(receipt, blockHash, blockNumber, signer, tx, int(index)), nil
+	encoded, err := marshalReceipt(receipt, blockHash, blockNumber, signer, tx, int(index)), nil
+	return encoded, err
 }
 
 // marshalReceipt marshals a transaction receipt into a JSON object.

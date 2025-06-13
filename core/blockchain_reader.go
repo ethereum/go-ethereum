@@ -18,9 +18,11 @@ package core
 
 import (
 	"errors"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -211,6 +213,25 @@ func (bc *BlockChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*type
 		*number--
 	}
 	return
+}
+
+// GetReceiptByLookupResult allows fetching a receipt for a transaction that was already looked up on the index.
+func (bc *BlockChain) GetReceiptByLookupResult(tx *types.Transaction, blockHash common.Hash, blockNumber, blockIndex uint64) *types.Receipt {
+	if receipts, ok := bc.receiptsCache.Get(blockHash); ok {
+		return receipts[blockIndex]
+	}
+
+	header := bc.GetHeader(blockHash, blockNumber)
+	var blobGasPrice *big.Int
+	if header != nil && header.ExcessBlobGas != nil {
+		blobGasPrice = eip4844.CalcBlobFee(bc.chainConfig, header)
+	}
+
+	receipt, gasUsedSoFar, startingLogIndex := rawdb.ReadRawReceipt(bc.db, blockHash, blockNumber, blockIndex)
+	signer := types.MakeSigner(bc.chainConfig, new(big.Int).SetUint64(blockNumber), header.Time)
+	receipt.DeriveFields(signer, blockHash, blockNumber, header.Time,
+		header.BaseFee, blobGasPrice, gasUsedSoFar, startingLogIndex, tx, uint(blockIndex))
+	return receipt
 }
 
 // GetReceiptsByHash retrieves the receipts for all transactions in a given block.
