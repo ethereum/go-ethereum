@@ -213,6 +213,11 @@ func (db *Database) InsertPreimage(preimages map[common.Hash][]byte) {
 	db.preimages.insertPreimage(preimages)
 }
 
+// PreimageEnabled returns the indicator if the pre-image store is enabled.
+func (db *Database) PreimageEnabled() bool {
+	return db.preimages != nil
+}
+
 // Cap iteratively flushes old but still referenced trie nodes until the total
 // memory usage goes below the given threshold. The held pre-images accumulated
 // up to this point will be flushed in case the size exceeds the threshold.
