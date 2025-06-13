@@ -158,11 +158,14 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 	for txnIterator.Next() && txnIterator.Err() == nil {
 		txnRLP := txnIterator.Value()
 
-		// Figure out if this a legacy transaction or not
+		// Preimage for hash calculation of legacy transactions
+		// are just their RLP encoding, but for EIP-2728 transactions
+		// the prefix needs to be trimmed before hashing.
 		rlpKind, hashPreimage, _, err := rlp.Split(txnRLP)
 		if err != nil {
 			return nil, common.Hash{}, 0, 0
 		}
+		// Legacy transactions are encoded as rlp lists.
 		if rlpKind == rlp.List {
 			hashPreimage = txnRLP
 		}
