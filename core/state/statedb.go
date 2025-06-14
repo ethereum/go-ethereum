@@ -18,6 +18,7 @@
 package state
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"maps"
@@ -138,6 +139,9 @@ type StateDB struct {
 	// State witness if cross validation is needed
 	witness *stateless.Witness
 
+	// block access list, if bal construction is specified
+	b *bal
+
 	// Measurements gathered during execution for debugging purposes
 	AccountReads    time.Duration
 	AccountHashes   time.Duration
@@ -157,6 +161,15 @@ type StateDB struct {
 	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
 }
 
+func (s *StateDB) EnableBALConstruction() {
+	s.b = &bal{
+		make(map[common.Address]*accountAccess),
+		make(map[common.Address]codeDiff),
+		make(map[common.Address]nonceDiff),
+		make(map[common.Address]balanceDiff),
+	}
+}
+
 // New creates a new state from a given trie.
 func New(root common.Hash, db Database) (*StateDB, error) {
 	reader, err := db.Reader(root)
@@ -164,6 +177,221 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 		return nil, err
 	}
 	return NewWithReader(root, db, reader)
+}
+
+type slotAccess struct {
+	writes map[uint64]common.Hash // map of tx index to post-tx slot value
+}
+
+type accountAccess struct {
+	address  common.Address
+	accesses map[common.Hash]slotAccess // map of slot key to all post-tx values where that slot was read/written
+	code     []byte
+}
+
+func (a *accountAccess) MarkRead(key common.Hash) {
+	if _, ok := a.accesses[key]; !ok {
+		a.accesses[key] = slotAccess{
+			make(map[uint64]common.Hash),
+		}
+	}
+}
+
+func (a *accountAccess) MarkWrite(txIdx uint64, key, value common.Hash) {
+	if _, ok := a.accesses[key]; !ok {
+		a.accesses[key] = slotAccess{
+			make(map[uint64]common.Hash),
+		}
+	}
+
+	a.accesses[key].writes[txIdx] = value
+}
+
+// map of transaction idx to the new code
+type codeDiff struct {
+	txIdx uint64
+	code  []byte
+}
+
+type balanceDiff map[uint64]*uint256.Int
+
+// map of tx-idx to pre-state nonce
+type nonceDiff map[uint64]uint64
+
+type bal struct {
+	accountAccesses map[common.Address]*accountAccess
+	codeChanges     map[common.Address]codeDiff
+	prestateNonces  map[common.Address]nonceDiff
+	balanceChanges  map[common.Address]balanceDiff
+}
+
+func (b *bal) eq(other *bal) bool {
+
+	// check that the account accesses are equal (consider moving this into its own function)
+
+	if len(b.accountAccesses) != len(other.accountAccesses) {
+		return false
+	}
+	for address, aa := range b.accountAccesses {
+		otherAA, ok := other.accountAccesses[address]
+		if !ok {
+			return false
+		}
+		if len(aa.accesses) != len(otherAA.accesses) {
+			return false
+		}
+		for key, vals := range aa.accesses {
+			otherAccesses, ok := otherAA.accesses[key]
+			if !ok {
+				return false
+			}
+			if len(vals.writes) != len(otherAccesses.writes) {
+				return false
+			}
+
+			for i, writeVal := range vals.writes {
+				otherWriteVal, ok := otherAccesses.writes[i]
+				if !ok {
+					return false
+				}
+				if writeVal != otherWriteVal {
+					return false
+				}
+			}
+		}
+	}
+
+	// check that the code changes are equal
+
+	if len(b.codeChanges) != len(other.codeChanges) {
+		return false
+	}
+	for addr, codeCh := range b.codeChanges {
+		otherCodeCh, ok := other.codeChanges[addr]
+		if !ok {
+			return false
+		}
+		if codeCh.txIdx != otherCodeCh.txIdx {
+			return false
+		}
+		if bytes.Compare(codeCh.code, otherCodeCh.code) != 0 {
+			return false
+		}
+	}
+
+	if len(b.prestateNonces) != len(other.prestateNonces) {
+		return false
+	}
+	for addr, nonces := range b.prestateNonces {
+		otherNonces, ok := other.prestateNonces[addr]
+		if !ok {
+			return false
+		}
+
+		if len(nonces) != len(otherNonces) {
+			return false
+		}
+
+		for txIdx, nonce := range nonces {
+			otherNonce, ok := otherNonces[txIdx]
+			if !ok {
+				return false
+			}
+			if nonce != otherNonce {
+				return false
+			}
+		}
+	}
+
+	if len(b.balanceChanges) != len(other.balanceChanges) {
+		return false
+	}
+
+	for addr, balanceChanges := range b.balanceChanges {
+		otherBalanceChanges, ok := other.balanceChanges[addr]
+		if !ok {
+			return false
+		}
+
+		if len(balanceChanges) != len(otherBalanceChanges) {
+			return false
+		}
+
+		for txIdx, balanceCh := range balanceChanges {
+			otherBalanceCh, ok := otherBalanceChanges[txIdx]
+			if !ok {
+				return false
+			}
+
+			if balanceCh != otherBalanceCh {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// called during tx finalisation for each dirty account with changed nonce (whether by being the sender of a tx or calling CREATE)
+func (b *bal) NonceDiff(account *stateObject, txIdx uint64) {
+	if _, ok := b.prestateNonces[account.address]; !ok {
+		b.prestateNonces[account.address] = make(nonceDiff)
+	}
+	var prestateNonce uint64
+	if account.origin != nil {
+		prestateNonce = account.origin.Nonce
+	}
+	b.prestateNonces[account.address][txIdx] = prestateNonce
+}
+
+// called during tx finalisation for each
+func (b *bal) BalanceChange(txIdx uint64, account *stateObject) {
+	if _, ok := b.balanceChanges[account.address]; !ok {
+		b.balanceChanges[account.address] = make(balanceDiff)
+	}
+	b.balanceChanges[account.address][txIdx] = account.Balance().Clone()
+}
+
+// TODO for eip:  specify that storage slots which are read/modified for accounts that are created/selfdestructed
+// in same transaction aren't included in teh BAL (?)
+
+// TODO for eip:  specify that storage slots of newly-created accounts which are only read are not included in the BAL (?)
+
+// called during tx execution every time a storage slot is read
+func (b *bal) StorageRead(account *stateObject, key common.Hash) {
+	if _, ok := b.accountAccesses[account.address]; !ok {
+		b.accountAccesses[account.address] = &accountAccess{
+			account.address,
+			make(map[common.Hash]slotAccess),
+			bytes.Clone(account.code),
+		}
+	}
+	b.accountAccesses[account.address].MarkRead(key)
+}
+
+// called every time a mutated storage value is committed upon transaction finalization
+func (b *bal) StorageWrite(account *stateObject, txIdx uint64, key, value common.Hash) {
+	if _, ok := b.accountAccesses[account.address]; !ok {
+		b.accountAccesses[account.address] = &accountAccess{
+			account.address,
+			make(map[common.Hash]slotAccess),
+			bytes.Clone(account.code),
+		}
+	}
+	b.accountAccesses[account.address].MarkWrite(txIdx, key, value)
+}
+
+// TODO: eip doesn't explicitly mention delegation changes being included in code changes, but they should be imo
+// will assume that this was implicit for the implementation here.
+
+// called during tx finalisation for each dirty account with mutated code
+func (b *bal) CodeChange(txIdx uint64, account *stateObject) {
+	if _, ok := b.codeChanges[account.address]; !ok {
+		b.codeChanges[account.address] = codeDiff{}
+	}
+	b.codeChanges[account.address] = codeDiff{
+		txIdx,
+		bytes.Clone(account.Code()),
+	}
 }
 
 // NewWithReader creates a new state for the specified state root. Unlike New,
@@ -189,6 +417,12 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 	}
 	if db.TrieDB().IsVerkle() {
 		sdb.accessEvents = NewAccessEvents(db.PointCache())
+	}
+	sdb.b = &bal{
+		make(map[common.Address]*accountAccess),
+		make(map[common.Address]codeDiff),
+		make(map[common.Address]nonceDiff),
+		make(map[common.Address]balanceDiff),
 	}
 	return sdb, nil
 }
@@ -379,6 +613,9 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
+		if s.b != nil {
+			s.b.StorageRead(stateObject, hash)
+		}
 		return stateObject.GetState(hash)
 	}
 	return common.Hash{}
@@ -759,6 +996,21 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 				s.stateObjectsDestruct[obj.address] = obj
 			}
 		} else {
+			if s.b != nil {
+				for key, val := range obj.dirtyStorage {
+					s.b.StorageWrite(obj, uint64(s.txIndex), key, val)
+				}
+				if obj.origin == nil || obj.origin.Balance.Cmp(obj.Balance()) != 0 {
+					s.b.BalanceChange(uint64(s.txIndex), obj)
+				}
+				if obj.origin == nil || obj.origin.Nonce != obj.Nonce() {
+					s.b.NonceDiff(obj, uint64(s.txIndex))
+				}
+				if obj.origin == nil || bytes.Compare(obj.origin.CodeHash, obj.CodeHash()) != 0 {
+					s.b.CodeChange(uint64(s.txIndex), obj)
+				}
+			}
+
 			obj.finalise()
 			s.markUpdate(addr)
 		}
