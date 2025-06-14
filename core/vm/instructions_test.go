@@ -24,6 +24,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -97,7 +98,7 @@ func init() {
 func testTwoOperandOp(t *testing.T, tests []TwoOperandTestcase, opFn executionFunc, name string) {
 	var (
 		evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
-		stack = newstack()
+		stack = newStackForTesting()
 		pc    = uint64(0)
 	)
 
@@ -108,8 +109,8 @@ func testTwoOperandOp(t *testing.T, tests []TwoOperandTestcase, opFn executionFu
 		stack.push(x)
 		stack.push(y)
 		opFn(&pc, evm.interpreter, &ScopeContext{nil, stack, nil})
-		if len(stack.data) != 1 {
-			t.Errorf("Expected one item on stack after %v, got %d: ", name, len(stack.data))
+		if stack.len() != 1 {
+			t.Errorf("Expected one item on stack after %v, got %d: ", name, stack.len())
 		}
 		actual := stack.pop()
 
@@ -195,7 +196,7 @@ func TestSAR(t *testing.T) {
 func TestAddMod(t *testing.T) {
 	var (
 		evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
-		stack = newstack()
+		stack = newStackForTesting()
 		pc    = uint64(0)
 	)
 	tests := []struct {
@@ -238,7 +239,7 @@ func TestWriteExpectedValues(t *testing.T) {
 	getResult := func(args []*twoOperandParams, opFn executionFunc) []TwoOperandTestcase {
 		var (
 			evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
-			stack = newstack()
+			stack = newStackForTesting()
 			pc    = uint64(0)
 		)
 		result := make([]TwoOperandTestcase, len(args))
@@ -281,25 +282,40 @@ func TestJsonTestcases(t *testing.T) {
 
 func opBenchmark(bench *testing.B, op executionFunc, args ...string) {
 	var (
-		evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
-		stack = newstack()
-		scope = &ScopeContext{nil, stack, nil}
+		evm      = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
+		stack    = newStackForTesting()
+		code     = []byte{}
+		opPush32 = makePush(32, 32)
 	)
 	// convert args
 	intArgs := make([]*uint256.Int, len(args))
 	for i, arg := range args {
+		code = append(code, common.LeftPadBytes(common.Hex2Bytes(arg), 32)...)
 		intArgs[i] = new(uint256.Int).SetBytes(common.Hex2Bytes(arg))
 	}
 	pc := uint64(0)
+	scope := &ScopeContext{nil, stack, &Contract{Code: code}}
+	start := time.Now()
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
-		for _, arg := range intArgs {
-			stack.push(arg)
+		for range len(args) {
+			opPush32(&pc, evm.interpreter, scope)
+			pc += 32
 		}
 		op(&pc, evm.interpreter, scope)
-		stack.pop()
+		opPop(&pc, evm.interpreter, scope)
 	}
 	bench.StopTimer()
+	elapsed := uint64(time.Since(start))
+	if elapsed < 1 {
+		elapsed = 1
+	}
+	reqGas := uint64(len(args))*GasFastestStep + GasFastestStep + GasQuickStep
+	gasUsed := reqGas * uint64(bench.N)
+	bench.ReportMetric(float64(reqGas), "gas/op")
+	// Keep it as uint64, multiply 100 to get two digit float later
+	mgasps := (100 * 1000 * gasUsed) / elapsed
+	bench.ReportMetric(float64(mgasps)/100, "mgas/s")
 
 	for i, arg := range args {
 		want := new(uint256.Int).SetBytes(common.Hex2Bytes(arg))
@@ -520,7 +536,7 @@ func BenchmarkOpIsZero(b *testing.B) {
 func TestOpMstore(t *testing.T) {
 	var (
 		evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
-		stack = newstack()
+		stack = newStackForTesting()
 		mem   = NewMemory()
 	)
 	mem.Resize(64)
@@ -543,7 +559,7 @@ func TestOpMstore(t *testing.T) {
 func BenchmarkOpMstore(bench *testing.B) {
 	var (
 		evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
-		stack = newstack()
+		stack = newStackForTesting()
 		mem   = NewMemory()
 	)
 	mem.Resize(64)
@@ -563,7 +579,7 @@ func TestOpTstore(t *testing.T) {
 	var (
 		statedb, _   = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		evm          = NewEVM(BlockContext{}, statedb, params.TestChainConfig, Config{})
-		stack        = newstack()
+		stack        = newStackForTesting()
 		mem          = NewMemory()
 		caller       = common.Address{}
 		to           = common.Address{1}
@@ -602,7 +618,7 @@ func TestOpTstore(t *testing.T) {
 func BenchmarkOpKeccak256(bench *testing.B) {
 	var (
 		evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
-		stack = newstack()
+		stack = newStackForTesting()
 		mem   = NewMemory()
 	)
 	mem.Resize(32)
@@ -675,7 +691,7 @@ func TestCreate2Addresses(t *testing.T) {
 		codeHash := crypto.Keccak256(code)
 		address := crypto.CreateAddress2(origin, salt, codeHash)
 		/*
-			stack          := newstack()
+			stack          := newStackForTesting()
 			// salt, but we don't need that for this test
 			stack.push(big.NewInt(int64(len(code)))) //size
 			stack.push(big.NewInt(0)) // memstart
@@ -704,12 +720,12 @@ func TestRandom(t *testing.T) {
 	} {
 		var (
 			evm   = NewEVM(BlockContext{Random: &tt.random}, nil, params.TestChainConfig, Config{})
-			stack = newstack()
+			stack = newStackForTesting()
 			pc    = uint64(0)
 		)
 		opRandom(&pc, evm.interpreter, &ScopeContext{nil, stack, nil})
-		if len(stack.data) != 1 {
-			t.Errorf("Expected one item on stack after %v, got %d: ", tt.name, len(stack.data))
+		if have, want := stack.len(), 1; have != want {
+			t.Errorf("test '%v': want %d item(s) on stack, have %d: ", tt.name, have, want)
 		}
 		actual := stack.pop()
 		expected, overflow := uint256.FromBig(new(big.Int).SetBytes(tt.random.Bytes()))
@@ -744,14 +760,14 @@ func TestBlobHash(t *testing.T) {
 	} {
 		var (
 			evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
-			stack = newstack()
+			stack = newStackForTesting()
 			pc    = uint64(0)
 		)
 		evm.SetTxContext(TxContext{BlobHashes: tt.hashes})
 		stack.push(uint256.NewInt(tt.idx))
 		opBlobHash(&pc, evm.interpreter, &ScopeContext{nil, stack, nil})
-		if len(stack.data) != 1 {
-			t.Errorf("Expected one item on stack after %v, got %d: ", tt.name, len(stack.data))
+		if have, want := stack.len(), 1; have != want {
+			t.Errorf("test '%v': want %d item(s) on stack, have %d: ", tt.name, have, want)
 		}
 		actual := stack.pop()
 		expected, overflow := uint256.FromBig(new(big.Int).SetBytes(tt.expect.Bytes()))
@@ -847,7 +863,7 @@ func TestOpMCopy(t *testing.T) {
 	} {
 		var (
 			evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
-			stack = newstack()
+			stack = newStackForTesting()
 			pc    = uint64(0)
 		)
 		data := common.FromHex(strings.ReplaceAll(tc.pre, " ", ""))
@@ -910,7 +926,7 @@ func TestPush(t *testing.T) {
 
 	scope := &ScopeContext{
 		Memory: nil,
-		Stack:  newstack(),
+		Stack:  newStackForTesting(),
 		Contract: &Contract{
 			Code: code,
 		},
