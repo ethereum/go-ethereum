@@ -70,7 +70,7 @@ type httpServer struct {
 	timeouts rpc.HTTPTimeouts
 	mux      http.ServeMux // registered handlers go here
 
-	mu       sync.Mutex
+	mu       sync.RWMutex
 	server   *http.Server
 	listener net.Listener // non-nil when server is running
 
@@ -207,7 +207,9 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// if http-rpc is enabled, try to serve request
+	h.mu.RLock()
 	rpc := h.httpHandler.Load().(*rpcHandler)
+	h.mu.RUnlock()
 	if rpc != nil {
 		// First try to route in the mux.
 		// Requests to a path below root are handled by the mux,
@@ -219,7 +221,11 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if checkPath(r, h.httpConfig.prefix) {
+		h.mu.RLock()
+		prefix := h.httpConfig.prefix
+		h.mu.RUnlock()
+
+		if checkPath(r, prefix) {
 			rpc.ServeHTTP(w, r)
 			return
 		}
