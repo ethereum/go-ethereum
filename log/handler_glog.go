@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"maps"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -42,10 +41,10 @@ type GlogHandler struct {
 	level    atomic.Int32 // Current log level, atomically accessible
 	override atomic.Bool  // Flag whether overrides are used, atomically accessible
 
-	patterns  []pattern              // Current list of patterns to override with
-	siteCache map[uintptr]slog.Level // Cache of callsite pattern evaluations
-	location  string                 // file:line location where to do a stackdump at
-	lock      sync.RWMutex           // Lock protecting the override pattern list
+	patterns  []pattern    // Current list of patterns to override with
+	siteCache sync.Map     // Cache of callsite pattern evaluations, maps uintptr -> slog.Level
+	location  string       // file:line location where to do a stackdump at
+	lock      sync.RWMutex // Lock protecting the override pattern list
 }
 
 // NewGlogHandler creates a new log handler with filtering functionality similar
@@ -67,6 +66,8 @@ type pattern struct {
 // and source files can be raised using Vmodule.
 func (h *GlogHandler) Verbosity(level slog.Level) {
 	h.level.Store(int32(level))
+	// clear the cache to make sure the verbosity is applied correctly.
+	h.siteCache.Clear()
 }
 
 // Vmodule sets the glog verbosity pattern.
@@ -130,10 +131,9 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 	}
 	// Swap out the vmodule pattern for the new filter system
 	h.lock.Lock()
-	defer h.lock.Unlock()
-
 	h.patterns = filter
-	h.siteCache = make(map[uintptr]slog.Level)
+	h.lock.Unlock()
+	h.siteCache.Clear()
 	h.override.Store(len(filter) != 0)
 
 	return nil
@@ -149,18 +149,15 @@ func (h *GlogHandler) Enabled(ctx context.Context, lvl slog.Level) bool {
 // WithAttrs implements slog.Handler, returning a new Handler whose attributes
 // consist of both the receiver's attributes and the arguments.
 func (h *GlogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	patterns := []pattern{}
 	h.lock.RLock()
-	siteCache := maps.Clone(h.siteCache)
+	patterns = append(patterns, h.patterns...)
 	h.lock.RUnlock()
 
-	patterns := []pattern{}
-	patterns = append(patterns, h.patterns...)
-
 	res := GlogHandler{
-		origin:    h.origin.WithAttrs(attrs),
-		patterns:  patterns,
-		siteCache: siteCache,
-		location:  h.location,
+		origin:   h.origin.WithAttrs(attrs),
+		patterns: patterns,
+		location: h.location,
 	}
 
 	res.level.Store(h.level.Load())
@@ -179,35 +176,29 @@ func (h *GlogHandler) WithGroup(name string) slog.Handler {
 // Handle implements slog.Handler, filtering a log record through the global,
 // local and backtrace filters, finally emitting it if either allow it through.
 func (h *GlogHandler) Handle(_ context.Context, r slog.Record) error {
-	// If the global log level allows, fast track logging
-	if slog.Level(h.level.Load()) <= r.Level {
-		return h.origin.Handle(context.Background(), r)
-	}
-
 	// Check callsite cache for previously calculated log levels
-	h.lock.RLock()
-	lvl, ok := h.siteCache[r.PC]
-	h.lock.RUnlock()
+	lvl, ok := h.siteCache.Load(r.PC)
 
 	// If we didn't cache the callsite yet, calculate it
 	if !ok {
-		h.lock.Lock()
-
 		fs := runtime.CallersFrames([]uintptr{r.PC})
 		frame, _ := fs.Next()
 
+		h.lock.RLock()
 		for _, rule := range h.patterns {
 			if rule.pattern.MatchString(fmt.Sprintf("+%s", frame.File)) {
-				h.siteCache[r.PC], lvl, ok = rule.level, rule.level, true
+				h.siteCache.Store(r.PC, rule.level)
+				lvl, ok = rule.level, true
 			}
 		}
-		// If no rule matched, remember to drop log the next time
+		h.lock.RUnlock()
+		// If no rule matched, use the default log lvl
 		if !ok {
-			h.siteCache[r.PC] = 0
+			lvl = slog.Level(h.level.Load())
+			h.siteCache.Store(r.PC, lvl)
 		}
-		h.lock.Unlock()
 	}
-	if lvl <= r.Level {
+	if lvl.(slog.Level) <= r.Level {
 		return h.origin.Handle(context.Background(), r)
 	}
 	return nil
