@@ -20,6 +20,7 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 var (
@@ -60,7 +61,7 @@ var (
 
 	// ErrMaxInitCodeSizeExceeded is returned if creation transaction provides the init code bigger
 	// than init code size limit.
-	ErrMaxInitCodeSizeExceeded = errors.New("max initcode size exceeded")
+	ErrMaxInitCodeSizeExceeded = vm.ErrMaxInitCodeSizeExceeded
 
 	// ErrInsufficientBalanceWitness is returned if the transaction sender has enough
 	// funds to cover the transfer, but not enough to pay for witness access/modification

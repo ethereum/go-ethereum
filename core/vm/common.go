@@ -17,11 +17,27 @@
 package vm
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
+
+// CheckInitCodeSize checks the size of contract initcode against the protocol-defined limit.
+func CheckInitCodeSize(rules *params.Rules, size uint64) error {
+	if rules.IsOsaka {
+		if size > params.MaxInitCodeSizeOsaka {
+			return fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, size, params.MaxInitCodeSizeOsaka)
+		}
+	} else if rules.IsShanghai {
+		if size > params.MaxInitCodeSize {
+			return fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, size, params.MaxInitCodeSize)
+		}
+	}
+	return nil
+}
 
 // calcMemSize64 calculates the required memory size, and returns
 // the size and whether the result overflowed uint64
