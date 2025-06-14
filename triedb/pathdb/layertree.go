@@ -195,6 +195,10 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 		}
 		tree.base = base
 
+		// Block until the frozen buffer is fully flushed
+		if err := base.waitFlush(); err != nil {
+			return err
+		}
 		// Reset the layer tree with the single new disk layer
 		tree.layers = map[common.Hash]layer{
 			base.rootHash(): base,

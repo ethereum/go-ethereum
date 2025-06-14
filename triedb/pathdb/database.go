@@ -119,7 +119,10 @@ type Config struct {
 	StateCleanSize  int    // Maximum memory allowance (in bytes) for caching clean state data
 	WriteBufferSize int    // Maximum memory allowance (in bytes) for write buffer
 	ReadOnly        bool   // Flag whether the database is opened in read only mode
-	SnapshotNoBuild bool   // Flag Whether the background generation is allowed
+
+	// Testing configurations
+	SnapshotNoBuild bool // Flag Whether the background generation is allowed
+	NoAsyncFlush    bool // Flag whether the background generation is allowed
 }
 
 // sanitize checks the provided user configurations and changes anything that's
@@ -434,6 +437,9 @@ func (db *Database) Disable() error {
 	// Terminate the state generator if it's active and mark the disk layer
 	// as stale to prevent access to persistent state.
 	disk := db.tree.bottom()
+	if err := disk.waitFlush(); err != nil {
+		return err
+	}
 	if disk.generator != nil {
 		disk.generator.stop()
 	}
@@ -592,12 +598,18 @@ func (db *Database) Close() error {
 	// following mutations.
 	db.readOnly = true
 
-	// Terminate the background generation if it's active
-	disk := db.tree.bottom()
-	if disk.generator != nil {
-		disk.generator.stop()
+	// Block until the background flushing is finished. It must
+	// be done before terminating the potential background snapshot
+	// generator.
+	dl := db.tree.bottom()
+	if err := dl.waitFlush(); err != nil {
+		return err
 	}
-	disk.resetCache() // release the memory held by clean cache
+	// Terminate the background generation if it's active
+	if dl.generator != nil {
+		dl.generator.stop()
+	}
+	dl.resetCache() // release the memory held by clean cache
 
 	// Close the attached state history freezer.
 	if db.freezer == nil {
