@@ -554,7 +554,9 @@ func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockG
 		return nil, nil, fmt.Errorf("failed to create call tracer: %v", err)
 	}
 
-	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), core.DefaultCacheConfigWithScheme(rawdb.PathScheme), genesis, nil, engine, vm.Config{Tracer: tracer}, nil)
+	options := core.BlockchainOptionsWithScheme(rawdb.PathScheme)
+	options.VmConfig = vm.Config{Tracer: tracer}
+	chain, err := core.NewBlockChain(options, rawdb.NewMemoryDatabase(), genesis, engine)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create tester chain: %v", err)
 	}
