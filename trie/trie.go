@@ -157,10 +157,6 @@ func (t *Trie) Get(key []byte) ([]byte, error) {
 }
 
 func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
-	// When concurrent executing, sometime the following switch will throw error
-	if origNode == nil {
-		return nil, nil, false, nil
-	}
 	switch n := (origNode).(type) {
 	case nil:
 		return nil, nil, false, nil

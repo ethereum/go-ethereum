@@ -1,19 +1,21 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+// All states must has been cachae to statedb.
 func (s *StateDB) Account(addr common.Address) (*types.StateAccount, error) {
 	// s.getStateObject() shouldn't be used, cause when acct is nil, it'll load account from DB and result concurrent map writes for accts
 	obj := s.stateObjects[addr]
-	return &obj.data, nil
-}
-
-func (s *StateDB) AccountBAL(addr common.Address) (*types.StateAccount, error) {
-	panic("AccountBAL not implemented for statedb")
+	if obj != nil {
+		return &obj.data, nil
+	}
+	return nil, fmt.Errorf("readerWithBal account %v, not exist", addr)
 }
 
 func (s *StateDB) Code(addr common.Address, codeHash common.Hash) ([]byte, error) {
@@ -27,9 +29,15 @@ func (s *StateDB) CodeSize(addr common.Address, codeHash common.Hash) (int, erro
 func (s *StateDB) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
 	stateObject := s.stateObjects[addr]
 	if stateObject != nil {
-		return stateObject.GetState(slot), nil
+		if value, cached := stateObject.originStorage[slot]; cached {
+			return value, nil
+		}
 	}
 	return common.Hash{}, nil
+}
+
+func (s *StateDB) AccountBAL(addr common.Address) (*types.StateAccount, error) {
+	panic("AccountBAL not implemented for statedb")
 }
 
 func (s *StateDB) StorageBAL(addr common.Address, slot common.Hash, tr *trie.StateTrie) (common.Hash, error) {

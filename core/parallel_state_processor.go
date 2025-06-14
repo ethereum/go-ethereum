@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -37,34 +38,30 @@ func NewParallelStateProcessor(config *params.ChainConfig, chain *HeaderChain) *
 func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (*ProcessResult, error) {
 	fmt.Println("ParallelStateProcessor.Process called:", block.NumberU64())
 	var (
-		header = block.Header()
-		gp     = new(GasPool).AddGas(block.GasLimit())
+		header    = block.Header()
+		context   vm.BlockContext
+		gp        = new(GasPool).AddGas(block.GasLimit())
+		signer    = types.MakeSigner(p.config, header.Number, header.Time)
+		initialdb = statedb.Copy()
+		postState *state.StateDB
+
+		wg     sync.WaitGroup
+		result *ProcessResult
+		err    error
 	)
 
 	// Mutate the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
-	var (
-		context   vm.BlockContext
-		signer    = types.MakeSigner(p.config, header.Number, header.Time)
-		initialdb *state.StateDB
-	)
 
 	if preStateType == BALPreState {
-		start := time.Now()
-		statedb.PreComputePostState(block.NumberU64())
-		PrefetchMergeBALTime += time.Since(start)
-
 		// copy initialdb before PrefetchStateBAL to avoid redundant copy
-		initialdb = statedb.Copy()
-
-		start = time.Now()
+		start := time.Now()
 		// Must prefetch bal before syscall to avoid overriding syscall's state, thus merkle root might mismatch
 		statedb.PrefetchStateBAL(block.NumberU64())
+		// statedb.SetBlocknumber(block.NumberU64())
 		PrefetchBALTime += time.Since(start)
-	} else {
-		initialdb = statedb.Copy()
 	}
 
 	// Apply pre-execution system calls.
@@ -82,7 +79,38 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
-	return p.executeParallel(block, statedb, cfg, gp, signer, context, initialdb)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+
+		start := time.Now()
+		postState = statedb.Copy()
+		postState.MergePostBalStates()
+		// prewarm the updating trie
+		postState.IntermediateRoot(true)
+		PostMergeTime += time.Since(start)
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		start := time.Now()
+		statedb.PreComputePostState(block.NumberU64())
+		PrefetchMergeBALTime += time.Since(start)
+
+		exeStart := time.Now()
+		result, err = p.executeParallel(block, statedb, cfg, gp, signer, context, initialdb)
+		ParallelExeTime += time.Since(exeStart)
+
+	}()
+
+	wg.Wait()
+
+	// Last tx alreadly includes the state change in requests after all txs
+	if preStateType == BALPreState {
+		*statedb = *postState
+	}
+	return result, err
 }
 
 func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *state.StateDB, cfg vm.Config, gp *GasPool, signer types.Signer, context vm.BlockContext, initialdb *state.StateDB) (*ProcessResult, error) {
@@ -95,17 +123,21 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 
 		preStateProvider PreStateProvider
 		workers          errgroup.Group
-		postState        = statedb.Copy()
 	)
+
 	// leave some cpus for prefetching
 	workers.SetLimit(runtime.NumCPU() / 2)
 
 	switch preStateType {
 	case BALPreState:
 		{
+			err := initialdb.SetPostBAL(statedb.PostBAL(), blockNumber.Uint64())
+			if err != nil {
+				return nil, err
+			}
 		}
 
-	case SeqPreState:
+	case SeqPreState: // must set workers limit = 1
 		{
 			preStatedb := statedb.Copy()
 			gpcp := *gp
@@ -121,18 +153,7 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 	}
 
 	// Parallel executing the transaction
-	exeStart := time.Now()
 	postEntries := make([][]state.JournalEntry, len(block.Transactions()))
-
-	workers.Go(func() error {
-		start := time.Now()
-		postState.MergePostBalStates()
-		// prewarm the updating trie
-		postState.IntermediateRoot(true)
-		PostMergeTime += time.Since(start)
-
-		return nil
-	})
 
 	for i, tx := range block.Transactions() {
 		i := i
@@ -147,15 +168,18 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 					cleanStatedb = initialdb.Copy()
 					cleanStatedb.SetTxContext(tx.Hash(), i)
 					err = cleanStatedb.SetTxBALReader(statedb)
+					if err != nil {
+						return err
+					}
 				}
 			case SeqPreState:
 				{
 					cleanStatedb, err = preStateProvider.PrestateAtIndex(i)
+					if err != nil {
+						return err
+					}
 					cleanStatedb.SetTxContext(tx.Hash(), i)
 				}
-			}
-			if err != nil {
-				return err
 			}
 
 			evm := vm.NewEVM(context, cleanStatedb, p.config, cfg)
@@ -183,7 +207,6 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 		return nil, err
 	}
 
-	ParallelExeTime += time.Since(exeStart)
 	// Merge state changes
 	// - Append receipts
 	// - Sum usedGas
@@ -205,7 +228,8 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 	}
 
 	// Read requests if Prague is enabled.
-	evm := vm.NewEVM(context, statedb, p.config, cfg)
+	// commented out EIP-7002, EIP-7251 and p.chain.engine.Finalize for now, since statedb might cause concurrent map writes (journal.go:211) when postState = statedb.Copy()
+	// evm := vm.NewEVM(context, statedb, p.config, cfg)
 	var requests [][]byte
 	if p.config.IsPrague(block.Number(), block.Time()) {
 		requests = [][]byte{}
@@ -213,22 +237,18 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 		if err := ParseDepositLogs(&requests, allLogs, p.config); err != nil {
 			return nil, err
 		}
-		// EIP-7002
-		if err := ProcessWithdrawalQueue(&requests, evm); err != nil {
-			return nil, err
-		}
-		// EIP-7251
-		if err := ProcessConsolidationQueue(&requests, evm); err != nil {
-			return nil, err
-		}
+		// // EIP-7002
+		// if err := ProcessWithdrawalQueue(&requests, evm); err != nil {
+		// 	return nil, err
+		// }
+		// // EIP-7251
+		// if err := ProcessConsolidationQueue(&requests, evm); err != nil {
+		// 	return nil, err
+		// }
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	p.chain.engine.Finalize(p.chain, header, statedb, block.Body())
-
-	// Last tx alreadly includes the state change in requests after all txs
-	// wg.Wait()
-	*statedb = *postState
+	// p.chain.engine.Finalize(p.chain, header, statedb, block.Body())
 
 	return &ProcessResult{
 		Receipts: receipts,

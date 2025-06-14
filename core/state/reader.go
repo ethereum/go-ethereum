@@ -339,7 +339,9 @@ func (r *trieReader) StorageBAL(addr common.Address, key common.Hash, tr *trie.S
 		return common.Hash{}, err
 	}
 
-	return common.BytesToHash(ret), nil
+	var value common.Hash
+	value.SetBytes(ret)
+	return value, nil
 }
 
 // multiStateReader is the aggregation of a list of StateReader interface,
@@ -547,23 +549,7 @@ func (r *readerWithBAL) Account(addr common.Address) (*types.StateAccount, error
 	if ok {
 		acctVal, ok := postVals[addr]
 		if ok {
-			// Cache codeHash
-			if acctVal.Code != nil {
-				if acctVal.CodeHash == nil {
-					acctVal.CodeHash = crypto.Keccak256(acctVal.Code)
-				}
-			}
-			if acctVal.Cached {
-				return &types.StateAccount{
-					Nonce:    acctVal.Nonce,
-					Balance:  acctVal.Balance,
-					Root:     acctVal.Root,
-					CodeHash: acctVal.CodeHash,
-				}, nil
-			}
-
 			acct, err := r.Reader.Account(addr)
-			acctVal.Cached = true
 			if acct == nil || err != nil {
 				// acct is nil, just return the postAcct
 				return &types.StateAccount{
@@ -574,23 +560,27 @@ func (r *readerWithBAL) Account(addr common.Address) (*types.StateAccount, error
 			}
 
 			// acct mustn't be modified, or it'll change the cached pre-block values in readerwithcache
+			nonce := acctVal.Nonce
+			balance := acctVal.Balance
+			codeHash := acct.CodeHash
+
 			if acct.Nonce > acctVal.Nonce {
-				acctVal.Nonce = acct.Nonce
+				nonce = acct.Nonce
 			}
 			if acctVal.Balance == nil {
-				acctVal.Balance = acct.Balance
+				balance = acct.Balance
 			}
-			if acctVal.CodeHash == nil {
-				acctVal.CodeHash = acct.CodeHash
+
+			// codeHash
+			if acctVal.Code != nil {
+				codeHash = crypto.Keccak256(acctVal.Code)
 			}
-			if acctVal.Root == (common.Hash{}) {
-				acctVal.Root = acct.Root
-			}
+
 			return &types.StateAccount{
-				Nonce:    acctVal.Nonce,
-				Balance:  acctVal.Balance,
-				Root:     acctVal.Root,
-				CodeHash: acctVal.CodeHash,
+				Nonce:    nonce,
+				Balance:  balance,
+				Root:     acct.Root,
+				CodeHash: codeHash,
 			}, nil
 		}
 	}
@@ -598,17 +588,6 @@ func (r *readerWithBAL) Account(addr common.Address) (*types.StateAccount, error
 	acct, err := r.Reader.Account(addr)
 	if err != nil {
 		return nil, err
-	}
-	// cache account and codeHash except the first transaction
-	if postVals != nil && acct != nil {
-		postVals[addr] = &types.AcctPostValues{
-			Nonce:    acct.Nonce,
-			Balance:  acct.Balance,
-			Destruct: false,
-			CodeHash: acct.CodeHash,
-			Root:     acct.Root,
-			Cached:   true,
-		}
 	}
 	return acct, nil
 }
@@ -626,16 +605,6 @@ func (r *readerWithBAL) Storage(addr common.Address, slot common.Hash) (common.H
 	}
 
 	val, err := r.Reader.Storage(addr, slot)
-	// Don't Cache storage due to concurrent map writes because postVals might share the same map.
-	// if postVals != nil && postVals[addr] != nil {
-	// 	if postVals[addr].StorageKV != nil {
-	// 		postVals[addr].StorageKV[slot] = val
-	// 	} else {
-	// 		postVals[addr].StorageKV = map[common.Hash]common.Hash{
-	// 			slot: val,
-	// 		}
-	// 	}
-	// }
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -654,8 +623,6 @@ func (r *readerWithBAL) Code(addr common.Address, codeHash common.Hash) ([]byte,
 			}
 			if acctVal.CodeHash != nil {
 				code, err := r.Reader.Code(addr, common.Hash(acctVal.CodeHash))
-				// Cache code
-				acctVal.Code = code
 				if err != nil {
 					return nil, fmt.Errorf("cannot get code from code for addr:%x, err:%v", addr, err)
 				}
@@ -668,22 +635,6 @@ func (r *readerWithBAL) Code(addr common.Address, codeHash common.Hash) ([]byte,
 		return nil, fmt.Errorf("cannot get code from acct for addr:%x, err:%v", addr, err)
 	}
 	code, err := r.Reader.Code(addr, common.Hash(acct.CodeHash))
-	// Cache account, codeHash and code except the first transaction
-	// if postVals != nil {
-	// 	if postVals[addr] != nil {
-	// 		postVals[addr].Code = code
-	// 		postVals[addr].CodeHash = codeHash[:]
-	// 	} else {
-	// 		postVals[addr] = &types.AcctPostValues{
-	// 			Nonce:    acct.Nonce,
-	// 			Balance:  acct.Balance,
-	// 			Code:     code,
-	// 			Destruct: false,
-	// 			CodeHash: acct.CodeHash,
-	// 		}
-	// 	}
-	// }
-
 	if err != nil {
 		return nil, fmt.Errorf("cannot get code from codeHash for addr:%x, err:%v", addr, err)
 	}

@@ -216,7 +216,7 @@ func init() {
 	case BalPreblockKeysPostValues:
 		{
 			println("bal preblock keys post values")
-			fileName = "access_lists_kpostv.100.json"
+			fileName = "access_lists_kpostv.2000.json"
 			data, err := os.ReadFile(fileName)
 			if err != nil {
 				log.Error("Failed to load access lists", "err", err)
@@ -274,14 +274,19 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 }
 
 func (s *StateDB) PreComputePostState(blockNumber uint64) {
+
 	s.blockNumber = blockNumber
 	postBal := map[int]types.TxPostValues{}
 	for k, v := range AllBlockTxPostValues[blockNumber] {
 		// Clone the map to avoid race with MergePostBalStates
-		postBal[k] = maps.Clone(v)
+		postBal[k] = types.TxPostValues{}
+		for key, val := range v {
+			postBal[k][key] = val.Clone()
+		}
 	}
 
-	for i := 0; i < len(postBal)-1; i++ {
+	// -1 and len(postBal)-1 are syscalls pre and post all txs.
+	for i := -1; i < len(postBal)-2; i++ {
 		prevVals := postBal[i]
 		postVals := postBal[i+1]
 		for addr, prevAcct := range prevVals {
@@ -309,11 +314,29 @@ func (s *StateDB) PreComputePostState(blockNumber uint64) {
 	s.postBAL = postBal
 }
 
+func (s *StateDB) PostBAL() map[int]types.TxPostValues {
+	return s.postBAL
+}
+
 func (s *StateDB) SetTxBALReader(preblockReader Reader) error {
 	if s.postBAL == nil {
 		return errors.New("cannot set bal reader without postBAL")
 	}
 	s.reader = newReaderWithBAL(preblockReader, s.txIndex, s.postBAL)
+	return nil
+}
+
+func (s *StateDB) SetBlocknumber(bn uint64) error {
+	s.blockNumber = bn
+	return nil
+}
+
+func (s *StateDB) SetPostBAL(postBal map[int]types.TxPostValues, bn uint64) error {
+	if postBal == nil {
+		return errors.New("cannot set postBAL without postBAL")
+	}
+	s.blockNumber = bn
+	s.postBAL = postBal
 	return nil
 }
 
@@ -353,13 +376,19 @@ func (s *StateDB) prefetchBalPreblockKeys() {
 		lenMaxSlots += len(acl.StorageKeys)
 
 		workers.Go(func() error {
-			acct, err := s.reader.AccountBAL(addr)
-			obj := newObject(s, addr, acct)
-			accounts <- obj
+			acctBal, err := s.reader.AccountBAL(addr)
+			var obj *stateObject
 			if err != nil {
 				log.Error("fail to fetch account from BALs:", addr)
-				return err
+				acct, err := s.reader.Account(addr)
+				if err != nil {
+					panic("fail to fetch account from BALs")
+				}
+				obj = newObject(s, addr, acct)
+			} else {
+				obj = newObject(s, addr, acctBal)
 			}
+			accounts <- obj
 			return nil
 		})
 	}
@@ -389,19 +418,26 @@ func (s *StateDB) prefetchBalPreblockKeys() {
 
 		tr, err := trie.NewStateTrie(trie.StorageTrieID(s.originalRoot, obj.addrHash, obj.origin.Root), s.db.TrieDB())
 		if err != nil {
-			log.Error("fail to create trie for:", addr)
-			panic("fail to create trie for:")
+			fmt.Println(s.originalRoot, obj.addrHash, obj.origin.Root)
+			log.Error("fail to create trie for", "addr:", addr, "error:", err)
+			panic("fail to create trie")
 		}
 
 		for _, key := range keys {
 			workers.Go(func() error {
 				val, err := s.reader.StorageBAL(addr, key, tr)
 				kv := &StorageKV{&addr, &key, &val}
-				storages <- kv
 				if err != nil {
 					log.Error("fail to fetch storage from BALs:", addr, key)
-					return err
+					// It's not safe to concurrent read from trie with StorageBAL, so we use the locked version Storage as fallback
+					val, err := s.reader.Storage(addr, key)
+					if err != nil {
+						panic("fail to fetch storage from BALs")
+					}
+					kv.val = &val
 				}
+				storages <- kv
+
 				return nil
 			})
 		}
@@ -418,6 +454,39 @@ func (s *StateDB) prefetchBalPreblockKeys() {
 	}
 
 	close(storages)
+}
+
+// Unused for now since readWithCache involves lots of locks which degrades performance
+func (s *StateDB) prefetchBalPreblockKeysWithCachereader() {
+	log.Info("PrefetchBalPreblockKeys...")
+	var (
+		preBal  = AllBlockAccessLists[s.blockNumber]
+		workers errgroup.Group
+	)
+
+	workers.SetLimit(runtime.NumCPU() - 2)
+	// Fetch pre-block acccount state
+	for _, acl := range preBal {
+		addr := acl.Address
+
+		workers.Go(func() error {
+			s.reader.Account(addr)
+			return nil
+		})
+	}
+
+	// Fetch pre-block storage state
+	for _, acl := range preBal {
+		addr := acl.Address
+		keys := acl.StorageKeys
+		for _, key := range keys {
+			workers.Go(func() error {
+				s.reader.Storage(addr, key)
+				return nil
+			})
+		}
+	}
+	workers.Wait()
 }
 
 var (
@@ -630,7 +699,8 @@ func (s *StateDB) MergePostBalStates() {
 		postBal = AllBlockTxPostValues[s.blockNumber]
 	)
 
-	for txIndex := range len(postBal) {
+	// -1 and len(postBal)-1 (not used) are syscalls pre and post all txs.
+	for txIndex := -1; txIndex < len(postBal)-1; txIndex++ {
 		postVals := postBal[txIndex]
 
 		for addr, acct := range postVals {
