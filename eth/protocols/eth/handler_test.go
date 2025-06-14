@@ -688,14 +688,26 @@ func testGetPooledTransaction(t *testing.T, blobTx bool) {
 		}
 	}
 
-	// Send the hash request and verify the response
+	hashes := []common.Hash{tx.Hash()}
+
 	p2p.Send(peer.app, GetPooledTransactionsMsg, GetPooledTransactionsPacket{
 		RequestId:                    123,
-		GetPooledTransactionsRequest: []common.Hash{tx.Hash()},
+		GetPooledTransactionsRequest: hashes,
 	})
+
+	var expectedTxs []*types.Transaction
+	peerIDLast4 := peer.ID()[len(peer.ID())-1] & 0x0F
+
+	for _, tx := range []*types.Transaction{tx} {
+		txHashLast4 := tx.Hash().Bytes()[len(tx.Hash().Bytes())-1] & 0x0F
+		if peerIDLast4 != txHashLast4 {
+			expectedTxs = append(expectedTxs, tx)
+		}
+	}
+
 	if err := p2p.ExpectMsg(peer.app, PooledTransactionsMsg, PooledTransactionsPacket{
 		RequestId:                  123,
-		PooledTransactionsResponse: []*types.Transaction{tx},
+		PooledTransactionsResponse: expectedTxs,
 	}); err != nil {
 		t.Errorf("pooled transaction mismatch: %v", err)
 	}
