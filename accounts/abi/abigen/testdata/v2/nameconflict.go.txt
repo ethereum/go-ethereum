@@ -58,7 +58,8 @@ func (c *NameConflict) Instance(backend bind.ContractBackend, addr common.Addres
 }
 
 // PackAddRequest is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0xcce7b048.
+// the contract method with ID 0xcce7b048.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function addRequest((bytes,bytes) req) pure returns()
 func (nameConflict *NameConflict) PackAddRequest(req Oraclerequest) []byte {
@@ -69,8 +70,18 @@ func (nameConflict *NameConflict) PackAddRequest(req Oraclerequest) []byte {
 	return enc
 }
 
+// TryPackAddRequest is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xcce7b048.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function addRequest((bytes,bytes) req) pure returns()
+func (nameConflict *NameConflict) TryPackAddRequest(req Oraclerequest) ([]byte, error) {
+	return nameConflict.abi.Pack("addRequest", req)
+}
+
 // PackGetRequest is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0xc2bb515f.
+// the contract method with ID 0xc2bb515f.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function getRequest() pure returns((bytes,bytes))
 func (nameConflict *NameConflict) PackGetRequest() []byte {
@@ -79,6 +90,15 @@ func (nameConflict *NameConflict) PackGetRequest() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackGetRequest is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xc2bb515f.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function getRequest() pure returns((bytes,bytes))
+func (nameConflict *NameConflict) TryPackGetRequest() ([]byte, error) {
+	return nameConflict.abi.Pack("getRequest")
 }
 
 // UnpackGetRequest is the Go binding that unpacks the parameters returned
@@ -91,7 +111,7 @@ func (nameConflict *NameConflict) UnpackGetRequest(data []byte) (Oraclerequest, 
 		return *new(Oraclerequest), err
 	}
 	out0 := *abi.ConvertType(out[0], new(Oraclerequest)).(*Oraclerequest)
-	return out0, err
+	return out0, nil
 }
 
 // NameConflictLog represents a log event raised by the NameConflict contract.
