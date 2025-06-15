@@ -16,10 +16,7 @@ func (val GaugeInfoValue) String() string {
 // GetOrRegisterGaugeInfo returns an existing GaugeInfo or constructs and registers a
 // new GaugeInfo.
 func GetOrRegisterGaugeInfo(name string, r Registry) *GaugeInfo {
-	if nil == r {
-		r = DefaultRegistry
-	}
-	return r.GetOrRegister(name, NewGaugeInfo()).(*GaugeInfo)
+	return getOrRegister(name, NewGaugeInfo, r)
 }
 
 // NewGaugeInfo constructs a new GaugeInfo.
