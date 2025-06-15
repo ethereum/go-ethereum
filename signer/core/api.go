@@ -444,7 +444,6 @@ func (api *SignerAPI) derivationLoop(events chan accounts.WalletEvent) {
 // List returns the set of wallet this signer manages. Each wallet can contain
 // multiple accounts.
 func (api *SignerAPI) List(ctx context.Context) ([]common.Address, error) {
-	fmt.Println("listing break point")
 	var accs = make([]accounts.Account, 0)
 	// accs is initialized as empty list, not nil. We use 'nil' to signal
 	// rejection, as opposed to an empty list.
