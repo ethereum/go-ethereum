@@ -1,7 +1,7 @@
 ## Go Ethereum
 
 Golang execution layer implementation of the Ethereum protocol.
-
+Romeo Rosete
 [![API Reference](
 https://pkg.go.dev/badge/github.com/ethereum/go-ethereum
 )](https://pkg.go.dev/github.com/ethereum/go-ethereum?tab=doc)
