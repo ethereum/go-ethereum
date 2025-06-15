@@ -26,8 +26,6 @@ import (
 	"net/url"
 	"os"
 	"reflect"
-	//"strings"
-	//"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -41,7 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/ethereum/go-ethereum/signer/storage"
-	//"github.com/influxdata/influxdb-client-go/v2/domain"
 	"github.com/spruceid/siwe-go"
 )
 
