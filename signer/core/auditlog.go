@@ -114,6 +114,13 @@ func (l *AuditLogger) Version(ctx context.Context) (string, error) {
 	return data, err
 }
 
+func (l *AuditLogger) ApproveSIWE(ctx context.Context, req SIWERequest, signature string) (bool, error) {
+	l.log.Info("Version", "type", "request", "metadata", MetadataFromContext(ctx).String())
+	data, err := l.api.ApproveSIWE(ctx, req, signature)
+	l.log.Info("Version", "type", "response", "data", data, "error", err)
+	return data, err
+}
+
 func NewAuditLogger(path string, api ExternalAPI) (*AuditLogger, error) {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {

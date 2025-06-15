@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/url"
 	"os"
 	"reflect"
 
@@ -38,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/ethereum/go-ethereum/signer/storage"
+	"github.com/spruceid/siwe-go"
 )
 
 const (
@@ -67,6 +69,7 @@ type ExternalAPI interface {
 	Version(ctx context.Context) (string, error)
 	// SignGnosisSafeTx signs/confirms a gnosis-safe multisig transaction
 	SignGnosisSafeTx(ctx context.Context, signerAddress common.MixedcaseAddress, gnosisTx GnosisSafeTx, methodSelector *string) (*GnosisSafeTx, error)
+	ApproveSIWE(ctx context.Context, req SIWERequest, signature string) (bool, error)
 }
 
 // UIClientAPI specifies what method a UI needs to implement to be able to be used as a
@@ -272,7 +275,60 @@ type (
 	UserInputResponse struct {
 		Text string `json:"text"`
 	}
+	SIWERequest struct {
+		Domain  string `json:"Domain"`
+		Address string `json:"Address"`
+		Uri     string `json:"Uri"`
+		Version string  `json:"Version"`
+
+		Statement *string `json:"Statement"`
+		Nonce     string `json:"Nonce"`
+		ChainID   int `json:"ChainID"`
+
+		IssuedAt       string `json:"IssuedAt"`
+		ExpirationTime *string `json:"ExpirationTime"`
+		NotBefore      *string `json:"NotBefore"`
+
+		RequestID *string `json:"RequestID"`
+		Resources []url.URL `json:"Resources"`
+	}
 )
+
+func (r *SIWERequest) Verify(signature string) (bool, error) {
+	additionalParameters := make(map[string]interface{})
+	additionalParameters["domain"] = r.Domain
+	additionalParameters["address"] = r.Address
+	additionalParameters["uri"] = r.Uri
+
+	additionalParameters["version"] = r.Version
+	if r.Statement != nil {
+		additionalParameters["statement"] = *r.Statement
+	}
+
+	additionalParameters["requestId"] = r.RequestID
+	additionalParameters["resources"] = r.Resources
+	additionalParameters["chainId"] = r.ChainID
+
+	if r.ExpirationTime != nil {
+		additionalParameters["expirationTime"] = *r.ExpirationTime
+	}
+
+	additionalParameters["signature"] = signature
+	additionalParameters["issuedAt"] = r.IssuedAt
+	if r.NotBefore != nil {
+		additionalParameters["notBefore"] = *r.NotBefore
+	}
+	msg, err := siwe.InitMessage(r.Domain, r.Address, r.Uri, r.Nonce, additionalParameters)
+	if err != nil {
+		return false, err
+	}
+
+	key, err := msg.Verify(signature, nil, nil, nil)
+	if err != nil {
+		return false, nil
+	}
+	return key != nil, nil
+}
 
 var ErrRequestDenied = errors.New("request denied")
 
@@ -668,4 +724,8 @@ func (api *SignerAPI) SignGnosisSafeTx(ctx context.Context, signerAddress common
 // available via enumeration anyway, and this info does not contain user-specific data
 func (api *SignerAPI) Version(ctx context.Context) (string, error) {
 	return ExternalAPIVersion, nil
+}
+
+func (api *SignerAPI) ApproveSIWE(ctx context.Context, req SIWERequest, signature string) (bool, error) {
+	return req.Verify(signature)
 }
