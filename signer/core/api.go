@@ -295,7 +295,6 @@ type (
 )
 
 func (r *SIWERequest) Verify(signature string) (bool, error) {
-	fmt.Println("address ", r.Address)
 	additionalParameters := make(map[string]interface{})
 	additionalParameters["domain"] = r.Domain
 	additionalParameters["address"] = r.Address
@@ -728,7 +727,5 @@ func (api *SignerAPI) Version(ctx context.Context) (string, error) {
 }
 
 func (api *SignerAPI) ApproveSIWE(ctx context.Context, req SIWERequest, signature string) (bool, error) {
-	fmt.Println("signature ", signature)
-	fmt.Println("req addr", req.Address)
 	return req.Verify(signature)
 }
