@@ -320,3 +320,89 @@ func TestSignTx(t *testing.T) {
 		t.Error("Expected tx to be modified by UI")
 	}
 }
+
+func ptr(s string) *string {
+	return &s
+}
+
+func TestSIWE(t *testing.T) {
+	tests := []struct {
+		name      string
+		request   core.SIWERequest
+		signature string
+		wantValid bool
+	}{ 		
+		{
+			name: "example message",
+			request: core.SIWERequest{
+				Domain:         "login.xyz",
+				Address:        "0x9D85ca56217D2bb651b00f15e694EB7E713637D4",
+				Statement:      ptr("Sign-In With Ethereum Example Statement"),
+				Uri:            "https://login.xyz",
+				Version:        "1",
+				Nonce:          "bTyXgcQxn2htgkjJn",
+				IssuedAt:       "2022-01-27T17:09:38.578Z",
+				ChainID:        1,
+				ExpirationTime: ptr("2100-01-07T14:31:43.952Z"),
+			},
+			signature: "0xdc35c7f8ba2720df052e0092556456127f00f7707eaa8e3bbff7e56774e7f2e05a093cfc9e02964c33d86e8e066e221b7d153d27e5a2e97ccd5ca7d3f2ce06cb1b",
+			wantValid: true,
+		},
+		{
+			name: "recovery byte starting at 0",
+			request: core.SIWERequest{
+				Domain:    "www.tally.xyz",
+				Address:   "0xc95EB884FE852e241D409234bfC7045CB9E31BD7",
+				Statement: ptr("Sign in with Ethereum to Tally"),
+				Uri:       "https://tally.xyz",
+				Version:   "1",
+				Nonce:     "15050747",
+				IssuedAt:  "2022-06-30T14:08:51.382Z",
+				ChainID:   1,
+			},
+			signature: "0x8c46b6eb8505939892d8e9b075f89f8277321b17b993151f37810cdda38cce6f4a85909d2b53e6a14629c74c0ac38bf4becde78ee5b2529812bf6cceaf7b2a2501",
+			wantValid: true,
+		},
+		{
+			name: "expired message",
+			request: core.SIWERequest{
+				Domain:    "login.xyz",
+				Address:   "0x2ecA0068307e706741445764A3D6A4402aC2A5a9",
+				Statement: ptr("Sign-In With Ethereum Example Statement"),
+				Uri:       "https://login.xyz",
+				Version:   "1",
+				Nonce:     "lx2nx4so",
+				IssuedAt:  "2022-01-05T14:27:30.883Z",
+				ChainID:   1,
+				ExpirationTime: ptr("2021-01-05T00:00:00Z"),
+			},
+			signature: "0x7337bc2826c7678cd6bc84f5b3b236efc969b0451f9feca2328b1d3401b030c113f19bdba359ba3f52762c66e9147311fa95fe598a1a4ec9bb383a7b4e3874241b",
+			wantValid: false,
+		},
+		{
+			name: "wrong signature",
+			request: core.SIWERequest{
+				Domain:    "login.xyz",
+				Address:   "0x6Da01670d8fc844e736095918bbE11fE8D564163",
+				Statement: ptr("Sign-In With Ethereum Example Statement"),
+				Uri:       "https://login.xyz",
+				Version:   "1",
+				Nonce:     "rmplqh1gf",
+				IssuedAt:  "2022-01-05T14:31:43.954Z",
+				ChainID:   1,
+				ExpirationTime: ptr("2100-01-07T14:31:43.952Z"),
+			},
+			signature: "0x31df81dc02344c9156e6f71da46e2db624b38f8f806290d670d46492b834b2e7575cbce9f48169356cfb577b910d8e30732fcf23c1ac0021d08b945ed7ee118e1b",
+			wantValid: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			valid, err := tt.request.Verify(tt.signature)
+			if valid != tt.wantValid {
+				t.Errorf("expected valid=%v, got %v, err=%v", tt.wantValid, valid, err)
+			}
+		})
+	}
+}
