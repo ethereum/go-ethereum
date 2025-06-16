@@ -45,11 +45,11 @@ func newFilterTestSuite(cfg testConfig) *filterTestSuite {
 	return s
 }
 
-func (s *filterTestSuite) allTests() []utesting.Test {
-	return []utesting.Test{
-		{Name: "Filter/ShortRange", Fn: s.filterShortRange},
-		{Name: "Filter/LongRange", Fn: s.filterLongRange, Slow: true},
-		{Name: "Filter/FullRange", Fn: s.filterFullRange, Slow: true},
+func (s *filterTestSuite) allTests() []workloadTest {
+	return []workloadTest{
+		newWorkLoadTest("Filter/ShortRange", s.filterShortRange),
+		newSlowWorkloadTest("Filter/LongRange", s.filterLongRange),
+		newSlowWorkloadTest("Filter/FullRange", s.filterFullRange),
 	}
 }
 
@@ -109,6 +109,9 @@ func (s *filterTestSuite) filterFullRange(t *utesting.T) {
 
 func (s *filterTestSuite) queryAndCheck(t *utesting.T, query *filterQuery) {
 	query.run(s.cfg.client, s.cfg.historyPruneBlock)
+	if query.Err == errPrunedHistory {
+		return
+	}
 	if query.Err != nil {
 		t.Errorf("Filter query failed (fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v)", query.FromBlock, query.ToBlock, query.Address, query.Topics, query.Err)
 		return
@@ -126,6 +129,9 @@ func (s *filterTestSuite) fullRangeQueryAndCheck(t *utesting.T, query *filterQue
 		Topics:    query.Topics,
 	}
 	frQuery.run(s.cfg.client, s.cfg.historyPruneBlock)
+	if frQuery.Err == errPrunedHistory {
+		return
+	}
 	if frQuery.Err != nil {
 		t.Errorf("Full range filter query failed (addresses: %v topics: %v error: %v)", frQuery.Address, frQuery.Topics, frQuery.Err)
 		return
@@ -206,14 +212,11 @@ func (fq *filterQuery) run(client *client, historyPruneBlock *uint64) {
 		Addresses: fq.Address,
 		Topics:    fq.Topics,
 	})
-	if err != nil {
-		if err = validateHistoryPruneErr(fq.Err, uint64(fq.FromBlock), historyPruneBlock); err == errPrunedHistory {
-			return
-		} else if err != nil {
-			fmt.Printf("Filter query failed: fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v\n",
-				fq.FromBlock, fq.ToBlock, fq.Address, fq.Topics, err)
-		}
-		fq.Err = err
-	}
 	fq.results = logs
+	fq.Err = validateHistoryPruneErr(err, uint64(fq.FromBlock), historyPruneBlock)
+}
+
+func (fq *filterQuery) printError() {
+	fmt.Printf("Filter query failed: fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v\n",
+		fq.FromBlock, fq.ToBlock, fq.Address, fq.Topics, fq.Err)
 }

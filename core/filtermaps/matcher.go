@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -45,7 +44,7 @@ var ErrMatchAll = errors.New("match all patterns not supported")
 type MatcherBackend interface {
 	GetParams() *Params
 	GetBlockLvPointer(ctx context.Context, blockNumber uint64) (uint64, error)
-	GetFilterMapRow(ctx context.Context, mapIndex, rowIndex uint32, baseLayerOnly bool) (FilterRow, error)
+	GetFilterMapRows(ctx context.Context, mapIndices []uint32, rowIndex uint32, baseLayerOnly bool) ([]FilterRow, error)
 	GetLogByLvIndex(ctx context.Context, lvIndex uint64) (*types.Log, error)
 	SyncLogIndex(ctx context.Context) (SyncRange, error)
 	Close()
@@ -57,7 +56,7 @@ type MatcherBackend interface {
 // all states of the chain since the previous SyncLogIndex or the creation of
 // the matcher backend.
 type SyncRange struct {
-	HeadNumber uint64
+	IndexedView *ChainView
 	// block range where the index has not changed since the last matcher sync
 	// and therefore the set of matches found in this region is guaranteed to
 	// be valid and complete.
@@ -125,6 +124,7 @@ func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 
 	start := time.Now()
 	res, err := m.process()
+	matchRequestTimer.Update(time.Since(start))
 
 	if doRuntimeStats {
 		log.Info("Log search finished", "elapsed", time.Since(start))
@@ -202,6 +202,7 @@ func (m *matcherEnv) process() ([]*types.Log, error) {
 			logs = append(logs, tasks[waitEpoch].logs...)
 			if err := tasks[waitEpoch].err; err != nil {
 				if err == ErrMatchAll {
+					matchAllMeter.Mark(1)
 					return logs, err
 				}
 				return logs, fmt.Errorf("failed to process log index epoch %d: %v", waitEpoch, err)
@@ -220,6 +221,7 @@ func (m *matcherEnv) process() ([]*types.Log, error) {
 
 // processEpoch returns the potentially matching logs from the given epoch.
 func (m *matcherEnv) processEpoch(epochIndex uint32) ([]*types.Log, error) {
+	start := time.Now()
 	var logs []*types.Log
 	// create a list of map indices to process
 	fm, lm := epochIndex<<m.params.logMapsPerEpoch, (epochIndex+1)<<m.params.logMapsPerEpoch-1
@@ -254,6 +256,7 @@ func (m *matcherEnv) processEpoch(epochIndex uint32) ([]*types.Log, error) {
 		logs = append(logs, mlogs...)
 	}
 	m.getLogStats.addAmount(st, int64(len(logs)))
+	matchEpochTimer.Update(time.Since(start))
 	return logs, nil
 }
 
@@ -273,6 +276,7 @@ func (m *matcherEnv) getLogsFromMatches(matches potentialMatches) ([]*types.Log,
 		if log != nil {
 			logs = append(logs, log)
 		}
+		matchLogLookup.Mark(1)
 	}
 	return logs, nil
 }
@@ -360,43 +364,57 @@ func (m *singleMatcherInstance) getMatchesForLayer(ctx context.Context, layerInd
 	var st int
 	m.stats.setState(&st, stOther)
 	params := m.backend.GetParams()
-	maskedMapIndex, rowIndex := uint32(math.MaxUint32), uint32(0)
-	for _, mapIndex := range m.mapIndices {
-		filterRows, ok := m.filterRows[mapIndex]
-		if !ok {
-			continue
-		}
-		if mm := params.maskedMapIndex(mapIndex, layerIndex); mm != maskedMapIndex {
-			// only recalculate rowIndex when necessary
-			maskedMapIndex = mm
-			rowIndex = params.rowIndex(mapIndex, layerIndex, m.value)
+	var ptr int
+	for len(m.mapIndices) > ptr {
+		// find next group of map indices mapped onto the same row
+		maskedMapIndex := params.maskedMapIndex(m.mapIndices[ptr], layerIndex)
+		rowIndex := params.rowIndex(m.mapIndices[ptr], layerIndex, m.value)
+		groupLength := 1
+		for ptr+groupLength < len(m.mapIndices) && params.maskedMapIndex(m.mapIndices[ptr+groupLength], layerIndex) == maskedMapIndex {
+			groupLength++
 		}
 		if layerIndex == 0 {
 			m.stats.setState(&st, stFetchFirst)
 		} else {
 			m.stats.setState(&st, stFetchMore)
 		}
-		filterRow, err := m.backend.GetFilterMapRow(ctx, mapIndex, rowIndex, layerIndex == 0)
+		groupRows, err := m.backend.GetFilterMapRows(ctx, m.mapIndices[ptr:ptr+groupLength], rowIndex, layerIndex == 0)
 		if err != nil {
 			m.stats.setState(&st, stNone)
-			return nil, fmt.Errorf("failed to retrieve filter map %d row %d: %v", mapIndex, rowIndex, err)
+			return nil, fmt.Errorf("failed to retrieve filter map %d row %d: %v", m.mapIndices[ptr], rowIndex, err)
 		}
-		m.stats.addAmount(st, int64(len(filterRow)))
 		m.stats.setState(&st, stOther)
-		filterRows = append(filterRows, filterRow)
-		if uint32(len(filterRow)) < params.maxRowLength(layerIndex) {
-			m.stats.setState(&st, stProcess)
-			matches := params.potentialMatches(filterRows, mapIndex, m.value)
-			m.stats.addAmount(st, int64(len(matches)))
-			results = append(results, matcherResult{
-				mapIndex: mapIndex,
-				matches:  matches,
-			})
-			m.stats.setState(&st, stOther)
-			delete(m.filterRows, mapIndex)
-		} else {
-			m.filterRows[mapIndex] = filterRows
+		for i := range groupLength {
+			mapIndex := m.mapIndices[ptr+i]
+			filterRow := groupRows[i]
+			filterRows, ok := m.filterRows[mapIndex]
+			if !ok {
+				panic("dropped map in mapIndices")
+			}
+			if layerIndex == 0 {
+				matchBaseRowAccessMeter.Mark(1)
+				matchBaseRowSizeMeter.Mark(int64(len(filterRow)))
+			} else {
+				matchExtRowAccessMeter.Mark(1)
+				matchExtRowSizeMeter.Mark(int64(len(filterRow)))
+			}
+			m.stats.addAmount(st, int64(len(filterRow)))
+			filterRows = append(filterRows, filterRow)
+			if uint32(len(filterRow)) < params.maxRowLength(layerIndex) {
+				m.stats.setState(&st, stProcess)
+				matches := params.potentialMatches(filterRows, mapIndex, m.value)
+				m.stats.addAmount(st, int64(len(matches)))
+				results = append(results, matcherResult{
+					mapIndex: mapIndex,
+					matches:  matches,
+				})
+				m.stats.setState(&st, stOther)
+				delete(m.filterRows, mapIndex)
+			} else {
+				m.filterRows[mapIndex] = filterRows
+			}
 		}
+		ptr += groupLength
 	}
 	m.cleanMapIndices()
 	m.stats.setState(&st, stNone)

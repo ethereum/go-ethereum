@@ -317,26 +317,26 @@ func testFilters(t *testing.T, history uint64, noHistory bool) {
 	}{
 		{
 			f:    sys.NewBlockFilter(chain[2].Hash(), []common.Address{contract}, nil),
-			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696332","0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x3","transactionHash":"0xdefe471992a07a02acdfbe33edaae22fbb86d7d3cec3f1b8e4e77702fb3acc1d","transactionIndex":"0x0","blockHash":"0x7a7556792ca7d37882882e2b001fe14833eaf81c2c7f865c9c771ec37a024f6b","logIndex":"0x0","removed":false}]`,
+			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696332","0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x3","transactionHash":"0xdefe471992a07a02acdfbe33edaae22fbb86d7d3cec3f1b8e4e77702fb3acc1d","transactionIndex":"0x0","blockHash":"0x7a7556792ca7d37882882e2b001fe14833eaf81c2c7f865c9c771ec37a024f6b","blockTimestamp":30,"logIndex":"0x0","removed":false}]`,
 		},
 		{
 			f:    sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), []common.Address{contract}, [][]common.Hash{{hash1, hash2, hash3, hash4}}),
-			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x2","transactionHash":"0xa8028c655b6423204c8edfbc339f57b042d6bec2b6a61145d76b7c08b4cccd42","transactionIndex":"0x0","blockHash":"0x24417bb49ce44cfad65da68f33b510bf2a129c0d89ccf06acb6958b8585ccf34","logIndex":"0x0","removed":false},{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696332","0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x3","transactionHash":"0xdefe471992a07a02acdfbe33edaae22fbb86d7d3cec3f1b8e4e77702fb3acc1d","transactionIndex":"0x0","blockHash":"0x7a7556792ca7d37882882e2b001fe14833eaf81c2c7f865c9c771ec37a024f6b","logIndex":"0x0","removed":false},{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696334"],"data":"0x","blockNumber":"0x3e8","transactionHash":"0x9a87842100a638dfa5da8842b4beda691d2fd77b0c84b57f24ecfa9fb208f747","transactionIndex":"0x0","blockHash":"0xb360bad5265261c075ece02d3bf0e39498a6a76310482cdfd90588748e6c5ee0","logIndex":"0x0","removed":false}]`,
+			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x2","transactionHash":"0xa8028c655b6423204c8edfbc339f57b042d6bec2b6a61145d76b7c08b4cccd42","transactionIndex":"0x0","blockHash":"0x24417bb49ce44cfad65da68f33b510bf2a129c0d89ccf06acb6958b8585ccf34","blockTimestamp":20,"logIndex":"0x0","removed":false},{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696332","0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x3","transactionHash":"0xdefe471992a07a02acdfbe33edaae22fbb86d7d3cec3f1b8e4e77702fb3acc1d","transactionIndex":"0x0","blockHash":"0x7a7556792ca7d37882882e2b001fe14833eaf81c2c7f865c9c771ec37a024f6b","blockTimestamp":30,"logIndex":"0x0","removed":false},{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696334"],"data":"0x","blockNumber":"0x3e8","transactionHash":"0x9a87842100a638dfa5da8842b4beda691d2fd77b0c84b57f24ecfa9fb208f747","transactionIndex":"0x0","blockHash":"0xb360bad5265261c075ece02d3bf0e39498a6a76310482cdfd90588748e6c5ee0","blockTimestamp":10000,"logIndex":"0x0","removed":false}]`,
 		},
 		{
 			f: sys.NewRangeFilter(900, 999, []common.Address{contract}, [][]common.Hash{{hash3}}),
 		},
 		{
 			f:    sys.NewRangeFilter(990, int64(rpc.LatestBlockNumber), []common.Address{contract2}, [][]common.Hash{{hash3}}),
-			want: `[{"address":"0xff00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696333"],"data":"0x","blockNumber":"0x3e7","transactionHash":"0x53e3675800c6908424b61b35a44e51ca4c73ca603e58a65b32c67968b4f42200","transactionIndex":"0x0","blockHash":"0x2e4620a2b426b0612ec6cad9603f466723edaed87f98c9137405dd4f7a2409ff","logIndex":"0x0","removed":false}]`,
+			want: `[{"address":"0xff00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696333"],"data":"0x","blockNumber":"0x3e7","transactionHash":"0x53e3675800c6908424b61b35a44e51ca4c73ca603e58a65b32c67968b4f42200","transactionIndex":"0x0","blockHash":"0x2e4620a2b426b0612ec6cad9603f466723edaed87f98c9137405dd4f7a2409ff","blockTimestamp":9990,"logIndex":"0x0","removed":false}]`,
 		},
 		{
 			f:    sys.NewRangeFilter(1, 10, []common.Address{contract}, [][]common.Hash{{hash2}, {hash1}}),
-			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696332","0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x3","transactionHash":"0xdefe471992a07a02acdfbe33edaae22fbb86d7d3cec3f1b8e4e77702fb3acc1d","transactionIndex":"0x0","blockHash":"0x7a7556792ca7d37882882e2b001fe14833eaf81c2c7f865c9c771ec37a024f6b","logIndex":"0x0","removed":false}]`,
+			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696332","0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x3","transactionHash":"0xdefe471992a07a02acdfbe33edaae22fbb86d7d3cec3f1b8e4e77702fb3acc1d","transactionIndex":"0x0","blockHash":"0x7a7556792ca7d37882882e2b001fe14833eaf81c2c7f865c9c771ec37a024f6b","blockTimestamp":30,"logIndex":"0x0","removed":false}]`,
 		},
 		{
 			f:    sys.NewRangeFilter(1, 10, nil, [][]common.Hash{{hash1, hash2}}),
-			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x2","transactionHash":"0xa8028c655b6423204c8edfbc339f57b042d6bec2b6a61145d76b7c08b4cccd42","transactionIndex":"0x0","blockHash":"0x24417bb49ce44cfad65da68f33b510bf2a129c0d89ccf06acb6958b8585ccf34","logIndex":"0x0","removed":false},{"address":"0xff00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x2","transactionHash":"0xdba3e2ea9a7d690b722d70ee605fd67ba4c00d1d3aecd5cf187a7b92ad8eb3df","transactionIndex":"0x1","blockHash":"0x24417bb49ce44cfad65da68f33b510bf2a129c0d89ccf06acb6958b8585ccf34","logIndex":"0x1","removed":false},{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696332","0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x3","transactionHash":"0xdefe471992a07a02acdfbe33edaae22fbb86d7d3cec3f1b8e4e77702fb3acc1d","transactionIndex":"0x0","blockHash":"0x7a7556792ca7d37882882e2b001fe14833eaf81c2c7f865c9c771ec37a024f6b","logIndex":"0x0","removed":false}]`,
+			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x2","transactionHash":"0xa8028c655b6423204c8edfbc339f57b042d6bec2b6a61145d76b7c08b4cccd42","transactionIndex":"0x0","blockHash":"0x24417bb49ce44cfad65da68f33b510bf2a129c0d89ccf06acb6958b8585ccf34","blockTimestamp":20,"logIndex":"0x0","removed":false},{"address":"0xff00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x2","transactionHash":"0xdba3e2ea9a7d690b722d70ee605fd67ba4c00d1d3aecd5cf187a7b92ad8eb3df","transactionIndex":"0x1","blockHash":"0x24417bb49ce44cfad65da68f33b510bf2a129c0d89ccf06acb6958b8585ccf34","blockTimestamp":20,"logIndex":"0x1","removed":false},{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696332","0x0000000000000000000000000000000000000000000000000000746f70696331"],"data":"0x","blockNumber":"0x3","transactionHash":"0xdefe471992a07a02acdfbe33edaae22fbb86d7d3cec3f1b8e4e77702fb3acc1d","transactionIndex":"0x0","blockHash":"0x7a7556792ca7d37882882e2b001fe14833eaf81c2c7f865c9c771ec37a024f6b","blockTimestamp":30,"logIndex":"0x0","removed":false}]`,
 		},
 		{
 			f: sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), nil, [][]common.Hash{{common.BytesToHash([]byte("fail"))}}),
@@ -349,15 +349,15 @@ func testFilters(t *testing.T, history uint64, noHistory bool) {
 		},
 		{
 			f:    sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.LatestBlockNumber), nil, nil),
-			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696334"],"data":"0x","blockNumber":"0x3e8","transactionHash":"0x9a87842100a638dfa5da8842b4beda691d2fd77b0c84b57f24ecfa9fb208f747","transactionIndex":"0x0","blockHash":"0xb360bad5265261c075ece02d3bf0e39498a6a76310482cdfd90588748e6c5ee0","logIndex":"0x0","removed":false}]`,
+			want: `[{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696334"],"data":"0x","blockNumber":"0x3e8","transactionHash":"0x9a87842100a638dfa5da8842b4beda691d2fd77b0c84b57f24ecfa9fb208f747","transactionIndex":"0x0","blockHash":"0xb360bad5265261c075ece02d3bf0e39498a6a76310482cdfd90588748e6c5ee0","blockTimestamp":10000,"logIndex":"0x0","removed":false}]`,
 		},
 		{
 			f:    sys.NewRangeFilter(int64(rpc.FinalizedBlockNumber), int64(rpc.LatestBlockNumber), nil, nil),
-			want: `[{"address":"0xff00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696333"],"data":"0x","blockNumber":"0x3e7","transactionHash":"0x53e3675800c6908424b61b35a44e51ca4c73ca603e58a65b32c67968b4f42200","transactionIndex":"0x0","blockHash":"0x2e4620a2b426b0612ec6cad9603f466723edaed87f98c9137405dd4f7a2409ff","logIndex":"0x0","removed":false},{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696334"],"data":"0x","blockNumber":"0x3e8","transactionHash":"0x9a87842100a638dfa5da8842b4beda691d2fd77b0c84b57f24ecfa9fb208f747","transactionIndex":"0x0","blockHash":"0xb360bad5265261c075ece02d3bf0e39498a6a76310482cdfd90588748e6c5ee0","logIndex":"0x0","removed":false}]`,
+			want: `[{"address":"0xff00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696333"],"data":"0x","blockNumber":"0x3e7","transactionHash":"0x53e3675800c6908424b61b35a44e51ca4c73ca603e58a65b32c67968b4f42200","transactionIndex":"0x0","blockHash":"0x2e4620a2b426b0612ec6cad9603f466723edaed87f98c9137405dd4f7a2409ff","blockTimestamp":9990,"logIndex":"0x0","removed":false},{"address":"0xfe00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696334"],"data":"0x","blockNumber":"0x3e8","transactionHash":"0x9a87842100a638dfa5da8842b4beda691d2fd77b0c84b57f24ecfa9fb208f747","transactionIndex":"0x0","blockHash":"0xb360bad5265261c075ece02d3bf0e39498a6a76310482cdfd90588748e6c5ee0","blockTimestamp":10000,"logIndex":"0x0","removed":false}]`,
 		},
 		{
 			f:    sys.NewRangeFilter(int64(rpc.FinalizedBlockNumber), int64(rpc.FinalizedBlockNumber), nil, nil),
-			want: `[{"address":"0xff00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696333"],"data":"0x","blockNumber":"0x3e7","transactionHash":"0x53e3675800c6908424b61b35a44e51ca4c73ca603e58a65b32c67968b4f42200","transactionIndex":"0x0","blockHash":"0x2e4620a2b426b0612ec6cad9603f466723edaed87f98c9137405dd4f7a2409ff","logIndex":"0x0","removed":false}]`,
+			want: `[{"address":"0xff00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696333"],"data":"0x","blockNumber":"0x3e7","transactionHash":"0x53e3675800c6908424b61b35a44e51ca4c73ca603e58a65b32c67968b4f42200","transactionIndex":"0x0","blockHash":"0x2e4620a2b426b0612ec6cad9603f466723edaed87f98c9137405dd4f7a2409ff","blockTimestamp":9990,"logIndex":"0x0","removed":false}]`,
 		},
 		{
 			f: sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.FinalizedBlockNumber), nil, nil),
@@ -453,7 +453,8 @@ func TestRangeLogs(t *testing.T) {
 		addresses       = []common.Address{{}}
 	)
 
-	expEvent := func(exp rangeLogsTestEvent) {
+	expEvent := func(expEvent int, expFirst, expAfterLast uint64) {
+		exp := rangeLogsTestEvent{expEvent, common.NewRange[uint64](expFirst, expAfterLast-expFirst)}
 		event++
 		ev := <-filter.rangeLogsTestHook
 		if ev != exp {
@@ -472,7 +473,6 @@ func TestRangeLogs(t *testing.T) {
 			for range filter.rangeLogsTestHook {
 			}
 		}(filter)
-		expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 0, 0})
 	}
 
 	updateHead := func() {
@@ -483,81 +483,122 @@ func TestRangeLogs(t *testing.T) {
 
 	// test case #1
 	newFilter(300, 500)
-	expEvent(rangeLogsTestEvent{rangeLogsTestIndexed, 401, 500})
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 401, 500})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 401, 500})
-	expEvent(rangeLogsTestEvent{rangeLogsTestUnindexed, 300, 400})
+	expEvent(rangeLogsTestIndexed, 401, 501)
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 401, 601)
+	expEvent(rangeLogsTestResults, 401, 501)
+	expEvent(rangeLogsTestUnindexed, 300, 401)
 	if _, err := bc.InsertChain(chain[600:700]); err != nil {
 		t.Fatal(err)
 	}
 	updateHead()
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 300, 500})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 300, 500}) // unindexed search is not affected by trimmed tail
-	expEvent(rangeLogsTestEvent{rangeLogsTestDone, 0, 0})
+	expEvent(rangeLogsTestResults, 300, 501)
+	expEvent(rangeLogsTestDone, 0, 0)
 
 	// test case #2
 	newFilter(400, int64(rpc.LatestBlockNumber))
-	expEvent(rangeLogsTestEvent{rangeLogsTestIndexed, 501, 700})
+	expEvent(rangeLogsTestIndexed, 501, 701)
 	if _, err := bc.InsertChain(chain[700:800]); err != nil {
 		t.Fatal(err)
 	}
 	updateHead()
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 501, 700})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 601, 698})
-	expEvent(rangeLogsTestEvent{rangeLogsTestUnindexed, 400, 600})
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 400, 698})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 400, 698})
-	expEvent(rangeLogsTestEvent{rangeLogsTestIndexed, 699, 800})
-	if err := bc.SetHead(750); err != nil {
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 601, 699)
+	expEvent(rangeLogsTestResults, 601, 699)
+	expEvent(rangeLogsTestUnindexed, 400, 601)
+	expEvent(rangeLogsTestResults, 400, 699)
+	expEvent(rangeLogsTestIndexed, 699, 801)
+	if _, err := bc.SetCanonical(chain[749]); err != nil { // set head to block 750
 		t.Fatal(err)
 	}
 	updateHead()
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 400, 800})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 400, 748})
-	expEvent(rangeLogsTestEvent{rangeLogsTestIndexed, 749, 750})
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 400, 750})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 400, 750})
-	expEvent(rangeLogsTestEvent{rangeLogsTestDone, 0, 0})
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 601, 749)
+	expEvent(rangeLogsTestResults, 400, 749)
+	expEvent(rangeLogsTestIndexed, 749, 751)
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 551, 751)
+	expEvent(rangeLogsTestResults, 400, 751)
+	expEvent(rangeLogsTestDone, 0, 0)
 
 	// test case #3
 	newFilter(int64(rpc.LatestBlockNumber), int64(rpc.LatestBlockNumber))
-	expEvent(rangeLogsTestEvent{rangeLogsTestIndexed, 750, 750})
-	if err := bc.SetHead(740); err != nil {
+	expEvent(rangeLogsTestIndexed, 750, 751)
+	if _, err := bc.SetCanonical(chain[739]); err != nil {
 		t.Fatal(err)
 	}
 	updateHead()
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 750, 750})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 0, 0})
-	expEvent(rangeLogsTestEvent{rangeLogsTestIndexed, 740, 740})
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 551, 739)
+	expEvent(rangeLogsTestResults, 0, 0)
+	expEvent(rangeLogsTestIndexed, 740, 741)
 	if _, err := bc.InsertChain(chain[740:750]); err != nil {
 		t.Fatal(err)
 	}
 	updateHead()
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 740, 740})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 0, 0})
-	expEvent(rangeLogsTestEvent{rangeLogsTestIndexed, 750, 750})
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 750, 750})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 750, 750})
-	expEvent(rangeLogsTestEvent{rangeLogsTestDone, 0, 0})
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 551, 739)
+	expEvent(rangeLogsTestResults, 0, 0)
+	expEvent(rangeLogsTestIndexed, 750, 751)
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 551, 751)
+	expEvent(rangeLogsTestResults, 750, 751)
+	expEvent(rangeLogsTestDone, 0, 0)
 
 	// test case #4
+	if _, err := bc.SetCanonical(chain[499]); err != nil {
+		t.Fatal(err)
+	}
+	updateHead()
 	newFilter(400, int64(rpc.LatestBlockNumber))
-	expEvent(rangeLogsTestEvent{rangeLogsTestIndexed, 551, 750})
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 551, 750})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 551, 750})
-	expEvent(rangeLogsTestEvent{rangeLogsTestUnindexed, 400, 550})
+	expEvent(rangeLogsTestIndexed, 400, 501)
+	if _, err := bc.InsertChain(chain[500:650]); err != nil {
+		t.Fatal(err)
+	}
+	updateHead()
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 451, 499)
+	expEvent(rangeLogsTestResults, 451, 499)
+	expEvent(rangeLogsTestUnindexed, 400, 451)
+	expEvent(rangeLogsTestResults, 400, 499)
+	// indexed head extension seems possible
+	expEvent(rangeLogsTestIndexed, 499, 651)
+	// further head extension causes tail unindexing in searched range
+	if _, err := bc.InsertChain(chain[650:750]); err != nil {
+		t.Fatal(err)
+	}
+	updateHead()
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 551, 649)
+	// tail trimmed to 551; cannot merge with existing results
+	expEvent(rangeLogsTestResults, 551, 649)
+	expEvent(rangeLogsTestUnindexed, 400, 551)
+	expEvent(rangeLogsTestResults, 400, 649)
+	expEvent(rangeLogsTestIndexed, 649, 751)
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 551, 751)
+	expEvent(rangeLogsTestResults, 400, 751)
+	expEvent(rangeLogsTestDone, 0, 0)
+
+	// test case #5
+	newFilter(400, int64(rpc.LatestBlockNumber))
+	expEvent(rangeLogsTestIndexed, 551, 751)
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 551, 751)
+	expEvent(rangeLogsTestResults, 551, 751)
+	expEvent(rangeLogsTestUnindexed, 400, 551)
 	if _, err := bc.InsertChain(chain[750:1000]); err != nil {
 		t.Fatal(err)
 	}
 	updateHead()
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 400, 750})
-	// indexed range affected by tail pruning so we have to discard the entire
-	// match set
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 0, 0})
-	expEvent(rangeLogsTestEvent{rangeLogsTestIndexed, 801, 1000})
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 801, 1000})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 801, 1000})
-	expEvent(rangeLogsTestEvent{rangeLogsTestUnindexed, 400, 800})
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 400, 1000})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 400, 1000})
+	expEvent(rangeLogsTestResults, 400, 751)
+	// indexed tail already beyond results head; revert to unindexed head search
+	expEvent(rangeLogsTestUnindexed, 751, 1001)
+	if _, err := bc.SetCanonical(chain[899]); err != nil {
+		t.Fatal(err)
+	}
+	updateHead()
+	expEvent(rangeLogsTestResults, 400, 1001)
+	expEvent(rangeLogsTestReorg, 400, 901)
+	expEvent(rangeLogsTestDone, 0, 0)
 }

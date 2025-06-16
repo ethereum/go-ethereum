@@ -19,6 +19,7 @@ package native
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"sync/atomic"
 
@@ -75,12 +76,18 @@ type prestateTracerConfig struct {
 	DiffMode       bool `json:"diffMode"`       // If true, this tracer will return state modifications
 	DisableCode    bool `json:"disableCode"`    // If true, this tracer will not return the contract code
 	DisableStorage bool `json:"disableStorage"` // If true, this tracer will not return the contract storage
+	IncludeEmpty   bool `json:"includeEmpty"`   // If true, this tracer will return empty state objects
 }
 
 func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*tracers.Tracer, error) {
 	var config prestateTracerConfig
 	if err := json.Unmarshal(cfg, &config); err != nil {
 		return nil, err
+	}
+	// Diff mode has special semantics around account creating and deletion which
+	// requires it to include empty accounts and storage.
+	if config.DiffMode && config.IncludeEmpty {
+		return nil, errors.New("cannot use diffMode with includeEmpty")
 	}
 	t := &prestateTracer{
 		pre:     stateMap{},
@@ -178,7 +185,7 @@ func (t *prestateTracer) OnTxEnd(receipt *types.Receipt, err error) {
 		t.processDiffState()
 	}
 	for addr, s := range t.pre {
-		if s.empty {
+		if s.empty && !t.config.IncludeEmpty {
 			delete(t.pre, addr)
 		}
 	}

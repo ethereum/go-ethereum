@@ -213,6 +213,11 @@ func (db *Database) InsertPreimage(preimages map[common.Hash][]byte) {
 	db.preimages.insertPreimage(preimages)
 }
 
+// PreimageEnabled returns the indicator if the pre-image store is enabled.
+func (db *Database) PreimageEnabled() bool {
+	return db.preimages != nil
+}
+
 // Cap iteratively flushes old but still referenced trie nodes until the total
 // memory usage goes below the given threshold. The held pre-images accumulated
 // up to this point will be flushed in case the size exceeds the threshold.
@@ -310,6 +315,26 @@ func (db *Database) Journal(root common.Hash) error {
 		return errors.New("not supported")
 	}
 	return pdb.Journal(root)
+}
+
+// AccountIterator creates a new account iterator for the specified root hash and
+// seeks to a starting account hash.
+func (db *Database) AccountIterator(root common.Hash, seek common.Hash) (pathdb.AccountIterator, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return nil, errors.New("not supported")
+	}
+	return pdb.AccountIterator(root, seek)
+}
+
+// StorageIterator creates a new storage iterator for the specified root hash and
+// account. The iterator will be move to the specific start position.
+func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek common.Hash) (pathdb.StorageIterator, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return nil, errors.New("not supported")
+	}
+	return pdb.StorageIterator(root, account, seek)
 }
 
 // IsVerkle returns the indicator if the database is holding a verkle tree.

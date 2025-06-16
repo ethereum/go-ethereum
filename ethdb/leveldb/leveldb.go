@@ -207,8 +207,6 @@ func (db *Database) Delete(key []byte) error {
 	return db.db.Delete(key, nil)
 }
 
-var ErrTooManyKeys = errors.New("too many keys in deleted range")
-
 // DeleteRange deletes all of the keys (and values) in the range [start,end)
 // (inclusive on start, exclusive on end).
 // Note that this is a fallback implementation as leveldb does not natively
@@ -228,7 +226,7 @@ func (db *Database) DeleteRange(start, end []byte) error {
 			if err := batch.Write(); err != nil {
 				return err
 			}
-			return ErrTooManyKeys
+			return ethdb.ErrTooManyKeys
 		}
 		if err := batch.Delete(it.Key()); err != nil {
 			return err
@@ -324,6 +322,22 @@ func (db *Database) Compact(start []byte, limit []byte) error {
 // Path returns the path to the database directory.
 func (db *Database) Path() string {
 	return db.fn
+}
+
+// SyncKeyValue flushes all pending writes in the write-ahead-log to disk,
+// ensuring data durability up to that point.
+func (db *Database) SyncKeyValue() error {
+	// In theory, the WAL (Write-Ahead Log) can be explicitly synchronized using
+	// a write operation with SYNC=true. However, there is no dedicated key reserved
+	// for this purpose, and even a nil key (key=nil) is considered a valid
+	// database entry.
+	//
+	// In LevelDB, writes are blocked until the data is written to the WAL, meaning
+	// recent writes won't be lost unless a power failure or system crash occurs.
+	// Additionally, LevelDB is no longer the default database engine and is likely
+	// only used by hash-mode archive nodes. Given this, the durability guarantees
+	// without explicit sync are acceptable in the context of LevelDB.
+	return nil
 }
 
 // meter periodically retrieves internal leveldb counters and reports them to

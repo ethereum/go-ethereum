@@ -1,0 +1,147 @@
+on:
+  push:
+    branches:
+      - "master"
+    tags:
+      - "v*"
+
+jobs:
+  linux-intel:
+    name: Linux Build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.24
+        cache: false
+
+    - name: Install cross toolchain
+      run: |
+        apt-get update
+        apt-get -yq --no-install-suggests --no-install-recommends install gcc-multilib
+
+    - name: Build (amd64)
+      run: |
+        go run build/ci.go install -arch amd64 -dlgo
+
+    - name: Create/upload archive (amd64)
+      run: |
+        go run build/ci.go archive -arch amd64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        rm -f build/bin/*
+      env:
+        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
+        AZURE_BLOBSTORE_TOKEN: ${{ secrets.AZURE_BLOBSTORE_TOKEN }}
+
+    - name: Build (386)
+      run: |
+        go run build/ci.go install -arch 386 -dlgo
+
+    - name: Create/upload archive (386)
+      run: |
+        go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        rm -f build/bin/*
+      env:
+        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
+        AZURE_BLOBSTORE_TOKEN: ${{ secrets.AZURE_BLOBSTORE_TOKEN }}
+
+  linux-arm:
+    name: Linux Build (arm)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.24
+        cache: false
+
+    - name: Install cross toolchain
+      run: |
+        apt-get update
+        apt-get -yq --no-install-suggests --no-install-recommends install gcc-arm-linux-gnueabi libc6-dev-armel-cross gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+        ln -s /usr/include/asm-generic /usr/include/asm
+
+    - name: Build (arm64)
+      run: |
+        go run build/ci.go install -dlgo -arch arm64 -cc aarch64-linux-gnu-gcc
+
+    - name: Create/upload archive (arm64)
+      run: |
+        go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        rm -fr build/bin/*
+      env:
+        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
+        AZURE_BLOBSTORE_TOKEN: ${{ secrets.AZURE_BLOBSTORE_TOKEN }}
+
+    - name: Run build (arm5)
+      run: |
+        go run build/ci.go install -dlgo -arch arm -cc arm-linux-gnueabi-gcc
+      env:
+        GOARM: "5"
+
+    - name: Create/upload archive (arm5)
+      run: |
+        go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+      env:
+        GOARM: "5"
+        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
+        AZURE_BLOBSTORE_TOKEN: ${{ secrets.AZURE_BLOBSTORE_TOKEN }}
+
+    - name: Run build (arm6)
+      run: |
+        go run build/ci.go install -dlgo -arch arm -cc arm-linux-gnueabi-gcc
+      env:
+        GOARM: "6"
+
+    - name: Create/upload archive (arm6)
+      run: |
+        go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        rm -fr build/bin/*
+      env:
+        GOARM: "6"
+        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
+        AZURE_BLOBSTORE_TOKEN: ${{ secrets.AZURE_BLOBSTORE_TOKEN }}
+
+    - name: Run build (arm7)
+      run: |
+        go run build/ci.go install -dlgo -arch arm -cc arm-linux-gnueabi-gcc
+      env:
+        GOARM: "7"
+
+    - name: Create/upload archive (arm7)
+      run: |
+        go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        rm -fr build/bin/*
+      env:
+        GOARM: "7"
+        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
+        AZURE_BLOBSTORE_TOKEN: ${{ secrets.AZURE_BLOBSTORE_TOKEN }}
+
+  docker:
+    name: Docker Image
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.24
+        cache: false
+
+    - name: Run docker build
+      env:
+        DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+        DOCKER_HUB_PASSWORD: ${{ secrets.DOCKER_HUB_PASSWORD }}
+      run: |
+        go run build/ci.go dockerx -platform linux/amd64,linux/arm64,linux/riscv64 -upload

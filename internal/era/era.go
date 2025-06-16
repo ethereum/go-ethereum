@@ -18,7 +18,6 @@ package era
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -70,7 +69,7 @@ func ReadDir(dir, network string) ([]string, error) {
 		}
 		parts := strings.Split(entry.Name(), "-")
 		if len(parts) != 3 || parts[0] != network {
-			// invalid era1 filename, skip
+			// Invalid era1 filename, skip.
 			continue
 		}
 		if epoch, err := strconv.ParseUint(parts[1], 10, 64); err != nil {
@@ -126,9 +125,10 @@ func (e *Era) Close() error {
 	return e.f.Close()
 }
 
+// GetBlockByNumber returns the block for the given block number.
 func (e *Era) GetBlockByNumber(num uint64) (*types.Block, error) {
 	if e.m.start > num || e.m.start+e.m.count <= num {
-		return nil, errors.New("out-of-bounds")
+		return nil, fmt.Errorf("out-of-bounds: %d not in [%d, %d)", num, e.m.start, e.m.start+e.m.count)
 	}
 	off, err := e.readOffset(num)
 	if err != nil {
@@ -152,6 +152,49 @@ func (e *Era) GetBlockByNumber(num uint64) (*types.Block, error) {
 		return nil, err
 	}
 	return types.NewBlockWithHeader(&header).WithBody(body), nil
+}
+
+// GetRawBodyByNumber returns the RLP-encoded body for the given block number.
+func (e *Era) GetRawBodyByNumber(num uint64) ([]byte, error) {
+	if e.m.start > num || e.m.start+e.m.count <= num {
+		return nil, fmt.Errorf("out-of-bounds: %d not in [%d, %d)", num, e.m.start, e.m.start+e.m.count)
+	}
+	off, err := e.readOffset(num)
+	if err != nil {
+		return nil, err
+	}
+	off, err = e.s.SkipN(off, 1)
+	if err != nil {
+		return nil, err
+	}
+	r, _, err := newSnappyReader(e.s, TypeCompressedBody, off)
+	if err != nil {
+		return nil, err
+	}
+	return io.ReadAll(r)
+}
+
+// GetRawReceiptsByNumber returns the RLP-encoded receipts for the given block number.
+func (e *Era) GetRawReceiptsByNumber(num uint64) ([]byte, error) {
+	if e.m.start > num || e.m.start+e.m.count <= num {
+		return nil, fmt.Errorf("out-of-bounds: %d not in [%d, %d)", num, e.m.start, e.m.start+e.m.count)
+	}
+	off, err := e.readOffset(num)
+	if err != nil {
+		return nil, err
+	}
+
+	// Skip over header and body.
+	off, err = e.s.SkipN(off, 2)
+	if err != nil {
+		return nil, err
+	}
+
+	r, _, err := newSnappyReader(e.s, TypeCompressedReceipts, off)
+	if err != nil {
+		return nil, err
+	}
+	return io.ReadAll(r)
 }
 
 // Accumulator reads the accumulator entry in the Era1 file.
@@ -187,13 +230,10 @@ func (e *Era) InitialTD() (*big.Int, error) {
 	}
 	off += n
 
-	// Skip over next two records.
-	for i := 0; i < 2; i++ {
-		length, err := e.s.LengthAt(off)
-		if err != nil {
-			return nil, err
-		}
-		off += length
+	// Skip over header and body.
+	off, err = e.s.SkipN(off, 2)
+	if err != nil {
+		return nil, err
 	}
 
 	// Read total difficulty after first block.

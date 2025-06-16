@@ -12,10 +12,7 @@ import (
 // Be sure to unregister the meter from the registry once it is of no use to
 // allow for garbage collection.
 func GetOrRegisterMeter(name string, r Registry) *Meter {
-	if r == nil {
-		r = DefaultRegistry
-	}
-	return r.GetOrRegister(name, NewMeter).(*Meter)
+	return getOrRegister(name, NewMeter, r)
 }
 
 // NewMeter constructs a new Meter and launches a goroutine.

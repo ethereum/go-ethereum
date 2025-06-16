@@ -21,7 +21,7 @@ import (
 	"testing"
 
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
-	gokzg4844 "github.com/crate-crypto/go-kzg-4844"
+	gokzg4844 "github.com/crate-crypto/go-eth-kzg"
 )
 
 func randFieldElement() [32]byte {
@@ -191,5 +191,42 @@ func benchmarkVerifyBlobProof(b *testing.B, ckzg bool) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		VerifyBlobProof(blob, commitment, proof)
+	}
+}
+
+func TestCKZGCells(t *testing.T)  { testKZGCells(t, true) }
+func TestGoKZGCells(t *testing.T) { testKZGCells(t, false) }
+func testKZGCells(t *testing.T, ckzg bool) {
+	if ckzg && !ckzgAvailable {
+		t.Skip("CKZG unavailable in this test build")
+	}
+	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
+	useCKZG.Store(ckzg)
+
+	blob1 := randBlob()
+	blob2 := randBlob()
+
+	commitment1, err := BlobToCommitment(blob1)
+	if err != nil {
+		t.Fatalf("failed to create KZG commitment from blob: %v", err)
+	}
+	commitment2, err := BlobToCommitment(blob2)
+	if err != nil {
+		t.Fatalf("failed to create KZG commitment from blob: %v", err)
+	}
+
+	proofs1, err := ComputeCellProofs(blob1)
+	if err != nil {
+		t.Fatalf("failed to create KZG proof at point: %v", err)
+	}
+
+	proofs2, err := ComputeCellProofs(blob2)
+	if err != nil {
+		t.Fatalf("failed to create KZG proof at point: %v", err)
+	}
+	proofs := append(proofs1, proofs2...)
+	blobs := []Blob{*blob1, *blob2}
+	if err := VerifyCellProofs(blobs, []Commitment{commitment1, commitment2}, proofs); err != nil {
+		t.Fatalf("failed to verify KZG proof at point: %v", err)
 	}
 }
