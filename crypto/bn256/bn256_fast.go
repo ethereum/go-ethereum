@@ -9,18 +9,18 @@
 package bn256
 
 import (
-	gnark "github.com/ethereum/go-ethereum/crypto/bn256/gnark"
+	bn256cf "github.com/ethereum/go-ethereum/crypto/bn256/cloudflare"
 )
 
 // G1 is an abstract cyclic group. The zero value is suitable for use as the
 // output of an operation, but cannot be used as an input.
-type G1 = gnark.G1
+type G1 = bn256cf.G1
 
 // G2 is an abstract cyclic group. The zero value is suitable for use as the
 // output of an operation, but cannot be used as an input.
-type G2 = gnark.G2
+type G2 = bn256cf.G2
 
 // PairingCheck calculates the Optimal Ate pairing for a set of points.
 func PairingCheck(a []*G1, b []*G2) bool {
-	return gnark.PairingCheck(a, b)
+	return bn256cf.PairingCheck(a, b)
 }
