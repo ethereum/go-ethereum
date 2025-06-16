@@ -154,28 +154,26 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 		return nil, common.Hash{}, 0, 0
 	}
 
-	txIndex := 0
+	txIndex := uint64(0)
 	for txnIterator.Next() && txnIterator.Err() == nil {
-		txnRLP := txnIterator.Value()
-
-		// Preimage for hash calculation of legacy transactions
-		// are just their RLP encoding, but for EIP-2728 transactions
-		// the prefix needs to be trimmed before hashing.
-		rlpKind, hashPreimage, _, err := rlp.Split(txnRLP)
+		// The preimage for the hash calculation of legacy transactions
+		// is just their RLP encoding. For typed (EIP-2718) transactions,
+		// which are encoded as byte arrays, the preimage is the content of
+		// the byte array, so trim their prefix here.
+		txRLP := txnIterator.Value()
+		rlpKind, txHashPayload, _, err := rlp.Split(txRLP)
 		if err != nil {
 			return nil, common.Hash{}, 0, 0
 		}
-		// Legacy transactions are encoded as rlp lists.
 		if rlpKind == rlp.List {
-			hashPreimage = txnRLP
+			txHashPayload = txRLP
 		}
-
-		if crypto.Keccak256Hash(hashPreimage) == hash {
+		if crypto.Keccak256Hash(txHashPayload) == hash {
 			var tx types.Transaction
-			if err := rlp.DecodeBytes(txnRLP, &tx); err != nil {
+			if err := rlp.DecodeBytes(txRLP, &tx); err != nil {
 				return nil, common.Hash{}, 0, 0
 			}
-			return &tx, blockHash, *blockNumber, uint64(txIndex)
+			return &tx, blockHash, *blockNumber, txIndex
 		}
 		txIndex++
 	}
