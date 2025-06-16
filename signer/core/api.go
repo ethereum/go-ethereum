@@ -320,12 +320,12 @@ func (r *SIWERequest) Verify(signature string) (bool, error) {
 	}
 	msg, err := siwe.InitMessage(r.Domain, r.Address, r.Uri, r.Nonce, additionalParameters)
 	if err != nil {
-		return false, err
+		return false, ErrRequestDenied
 	}
 
 	key, err := msg.Verify(signature, nil, nil, nil)
 	if err != nil {
-		return false, nil
+		return false, ErrRequestDenied
 	}
 	return key != nil, nil
 }
