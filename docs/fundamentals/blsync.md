@@ -9,7 +9,26 @@ description: Running geth with integrated beacon light client
 
 ## Usage
 
-### Integrated mode
+### Using Dynamic Checkpoint Fetch
+
+This will automatically fetch the latest finalized checkpoint and launch Geth in snap sync mode with light client support (blsync).
+
+Replace `<domain>` with your select beacon api provider from the provided list of [lightsync endpoints](https://s1na.github.io/light-sync-endpoints/). Replace `<checkpoint>` with a url from the list of maintained [checkpoint sync endpoints](https://eth-clients.github.io/checkpoint-sync-endpoints/). The following command can be used to run geth client with blsync directly.
+
+```terminal
+export BEACON=<beacon> && \
+export CHECKPOINT=<checkpoint> && \
+geth --beacon.api=$BEACON --beacon.checkpoint=$(curl -s $CHECKPOINT/checkpointz/v1/status | jq -r '.data.finality.finalized.root')
+```
+
+#### Example
+```terminal
+export BEACON=https://lodestar-sepolia.chainsafe.io && \
+export CHECKPOINT=https://sepolia.beaconstate.info && \
+geth --sepolia --beacon.api=$BEACON --beacon.checkpoint=$(curl -s $CHECKPOINT/checkpointz/v1/status | jq -r '.data.finality.finalized.root')
+```
+
+### Running with Manual Checkpoint Fetch
 
 To run blsync as part of Geth, you need to specify a public HTTP endpoint and a checkpoint:
 
@@ -28,6 +47,7 @@ A checkpoint is the block root of the first proposed slot of a finalized beacon 
 ![Finding the first slot](/images/docs/blsync2.png)
 - Copy the block root field.
 ![Copy the block root](/images/docs/blsync3.png)
+
 
 ## Testing a Beacon API Endpoint
 
