@@ -184,8 +184,13 @@ func (t *prestateTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	if t.config.DiffMode {
 		t.processDiffState()
 	}
+	// Remove accounts that were empty prior to execution. Unless
+	// user requested to include empty accounts.
+	if t.config.IncludeEmpty {
+		return
+	}
 	for addr, s := range t.pre {
-		if s.empty && !t.config.IncludeEmpty {
+		if s.empty {
 			delete(t.pre, addr)
 		}
 	}
