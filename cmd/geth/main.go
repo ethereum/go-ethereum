@@ -29,6 +29,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/accounts/keystore"
 	"github.com/scroll-tech/go-ethereum/cmd/utils"
 	"github.com/scroll-tech/go-ethereum/common"
+	"github.com/scroll-tech/go-ethereum/consensus/misc"
 	"github.com/scroll-tech/go-ethereum/console/prompt"
 	"github.com/scroll-tech/go-ethereum/eth"
 	"github.com/scroll-tech/go-ethereum/eth/downloader"
@@ -133,6 +134,7 @@ var (
 		utils.MinerNoVerifyFlag,
 		utils.MinerStoreSkippedTxTracesFlag,
 		utils.MinerMaxAccountsNumFlag,
+		utils.MinerAllowEmptyFlag,
 		utils.NATFlag,
 		utils.NoDiscoverFlag,
 		utils.DiscoveryV5Flag,
@@ -452,8 +454,9 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend) {
 			utils.Fatalf("Ethereum service not running")
 		}
 		// Set the gas price to the limits from the CLI and start mining
-		gasprice := utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
-		ethBackend.TxPool().SetGasPrice(gasprice)
+		// gasprice := utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
+		// ethBackend.TxPool().SetGasPrice(gasprice)
+		ethBackend.TxPool().SetGasPrice(misc.MinBaseFee()) // override configured min gas price
 		ethBackend.TxPool().SetIsMiner(true)
 		// start mining
 		threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name)

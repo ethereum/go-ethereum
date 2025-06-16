@@ -20,7 +20,14 @@ var (
 	// to be non-zero.
 	// - tx length prefix: 4 bytes
 	txExtraDataBytes = uint64(4)
+
+	// L1 data fee cap.
+	l1DataFeeCap = new(big.Int).SetUint64(math.MaxUint64)
 )
+
+func MaxL1DataFee() *big.Int {
+	return new(big.Int).Set(l1DataFeeCap)
+}
 
 // Message represents the interface of a message.
 // It should be a subset of the methods found on
@@ -248,8 +255,8 @@ func CalculateL1DataFee(tx *types.Transaction, state StateDB, config *params.Cha
 
 	// ensure l1DataFee fits into uint64 for circuit compatibility
 	// (note: in practice this value should never be this big)
-	if !l1DataFee.IsUint64() {
-		l1DataFee.SetUint64(math.MaxUint64)
+	if l1DataFee.Cmp(l1DataFeeCap) > 0 {
+		l1DataFee = new(big.Int).Set(l1DataFeeCap)
 	}
 
 	return l1DataFee, nil

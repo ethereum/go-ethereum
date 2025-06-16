@@ -62,10 +62,23 @@ var (
 	curieInstructionSet            = newCurieInstructionSet()
 	darwinInstructionSet           = newDarwinInstructionSet()
 	euclidV2InstructionSet         = newEuclidV2InstructionSet()
+	feynmanInstructionSet          = newFeynmanInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]*operation
+
+// newFeynmanInstructionSet returns the frontier, homestead, byzantium,
+// contantinople, istanbul, petersburg, berlin, london, shanghai, curie, darwin, euclidV2,
+// and feynman instructions.
+func newFeynmanInstructionSet() JumpTable {
+	instructionSet := newEuclidV2InstructionSet()
+
+	// change block hash opcode implementation
+	instructionSet[BLOCKHASH].execute = opBlockhashPostFeynman
+
+	return instructionSet
+}
 
 // newEuclidV2InstructionSet returns the frontier, homestead, byzantium,
 // contantinople, istanbul, petersburg, berlin, london, shanghai, curie, darwin and euclidV2 instructions.

@@ -2,7 +2,6 @@ package wrapper
 
 import (
 	"math/big"
-	"time"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/consensus"
@@ -61,7 +60,7 @@ func (ue *UpgradableEngine) VerifyHeader(chain consensus.ChainHeaderReader, head
 
 // VerifyHeaders verifies a batch of headers concurrently. In our use-case,
 // headers can only be all system, all clique, or start with clique and then switch once to system.
-func (ue *UpgradableEngine) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
+func (ue *UpgradableEngine) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool, parent *types.Header) (chan<- struct{}, <-chan error) {
 	abort := make(chan struct{})
 	results := make(chan error, len(headers))
 
@@ -77,12 +76,12 @@ func (ue *UpgradableEngine) VerifyHeaders(chain consensus.ChainHeaderReader, hea
 
 	// If the first header is system, then all headers must be system.
 	if firstEngine == ue.system {
-		return firstEngine.VerifyHeaders(chain, headers, seals)
+		return firstEngine.VerifyHeaders(chain, headers, seals, nil)
 	}
 
 	// If first and last headers are both clique, then all headers are clique.
 	if firstEngine == lastEngine {
-		return firstEngine.VerifyHeaders(chain, headers, seals)
+		return firstEngine.VerifyHeaders(chain, headers, seals, nil)
 	}
 
 	// Otherwise, headers start as clique then switch to system.  Since we assume
@@ -110,7 +109,7 @@ func (ue *UpgradableEngine) VerifyHeaders(chain consensus.ChainHeaderReader, hea
 
 		// Verify clique headers.
 		log.Info("Start EuclidV2 transition verification in Clique section", "startBlockNumber", cliqueHeaders[0].Number, "endBlockNumber", cliqueHeaders[len(cliqueHeaders)-1].Number)
-		abortClique, cliqueResults := ue.clique.VerifyHeaders(chain, cliqueHeaders, cliqueSeals)
+		abortClique, cliqueResults := ue.clique.VerifyHeaders(chain, cliqueHeaders, cliqueSeals, nil)
 
 		// Note: cliqueResults is not closed so we cannot directly iterate over it
 		for i := 0; i < len(cliqueHeaders); i++ {
@@ -124,14 +123,13 @@ func (ue *UpgradableEngine) VerifyHeaders(chain consensus.ChainHeaderReader, hea
 			}
 		}
 
-		// Not sure why we need this here, but without this we get err="unknown ancestor"
-		// at the 1st Euclid block. It seems that `VerifyHeaders` start processing the next
-		// header before the previous one was written into `chain`.
-		time.Sleep(2 * time.Second)
+		// Since the Clique part of the header chain might not yet be stored in the local chain,
+		// provide a hint to the SystemContract consensus engine.
+		lastCliqueHeader := cliqueHeaders[len(cliqueHeaders)-1]
 
 		// Verify system contract headers.
 		log.Info("Start EuclidV2 transition verification in SystemContract section", "startBlockNumber", systemHeaders[0].Number, "endBlockNumber", systemHeaders[len(systemHeaders)-1].Number)
-		abortSystem, systemResults := ue.system.VerifyHeaders(chain, systemHeaders, systemSeals)
+		abortSystem, systemResults := ue.system.VerifyHeaders(chain, systemHeaders, systemSeals, lastCliqueHeader)
 
 		// Note: systemResults is not closed so we cannot directly iterate over it
 		for i := 0; i < len(systemHeaders); i++ {

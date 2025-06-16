@@ -65,6 +65,7 @@ var allPrecompiles = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{16}):   &bls12381Pairing{},
 	common.BytesToAddress([]byte{17}):   &bls12381MapG1{},
 	common.BytesToAddress([]byte{18}):   &bls12381MapG2{},
+	common.BytesToAddress([]byte{0xf8}): &bn256PairingIstanbul{limitInputLength: true},
 
 	common.BytesToAddress([]byte{0x01, 0x00}): &p256Verify{},
 }
@@ -264,7 +265,7 @@ func BenchmarkPrecompiledBn256ScalarMul(b *testing.B) { benchJson("bn256ScalarMu
 
 // Tests the sample inputs from the elliptic curve pairing check EIP 197.
 func TestPrecompiledBn256Pairing(t *testing.T)      { testJson("bn256Pairing", "08", t) }
-func TestPrecompiledBn256PairingFail(t *testing.T)  { testJsonFail("bn256Pairing", "08", t) }
+func TestPrecompiledBn256PairingFail(t *testing.T)  { testJsonFail("bn256Pairing", "f8", t) }
 func BenchmarkPrecompiledBn256Pairing(b *testing.B) { benchJson("bn256Pairing", "08", b) }
 
 func TestPrecompiledBlake2F(t *testing.T)      { testJson("blake2F", "09", t) }

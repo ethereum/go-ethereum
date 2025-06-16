@@ -86,13 +86,18 @@ func (s *SystemContract) VerifyHeader(chain consensus.ChainHeaderReader, header 
 // concurrently. The method returns a quit channel to abort the operations and
 // a results channel to retrieve the async verifications (the order is that of
 // the input slice).
-func (s *SystemContract) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
+func (s *SystemContract) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool, parent *types.Header) (chan<- struct{}, <-chan error) {
 	abort := make(chan struct{})
 	results := make(chan error, len(headers))
 
 	go func() {
 		for i, header := range headers {
-			err := s.verifyHeader(chain, header, headers[:i])
+			parents := headers[:i]
+			if len(parents) == 0 && parent != nil {
+				parents = []*types.Header{parent}
+			}
+
+			err := s.verifyHeader(chain, header, parents)
 			if err != nil {
 				log.Error("Error verifying headers", "err", err)
 			}
@@ -130,7 +135,7 @@ func (s *SystemContract) verifyHeader(chain consensus.ChainHeaderReader, header 
 		return errInvalidNonce
 	}
 	// Check that the BlockSignature contains signature if block is not requested
-	if !header.Requested && header.Number.Cmp(big.NewInt(0)) != 0 && len(header.BlockSignature) != extraSeal {
+	if header.Number.Cmp(big.NewInt(0)) != 0 && len(header.BlockSignature) != extraSeal {
 		return errMissingSignature
 	}
 	// Ensure that the mix digest is zero
@@ -197,20 +202,17 @@ func (s *SystemContract) verifyCascadingFields(chain consensus.ChainHeaderReader
 		return err
 	}
 
-	// only if block header has NOT been requested, then verify the signature against the current signer
-	if !header.Requested {
-		signer, err := ecrecover(header)
-		if err != nil {
-			return err
-		}
+	signer, err := ecrecover(header)
+	if err != nil {
+		return err
+	}
 
-		s.lock.RLock()
-		defer s.lock.RUnlock()
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 
-		if signer != s.signerAddressL1 {
-			log.Error("Unauthorized signer", "Got", signer, "Expected:", s.signerAddressL1)
-			return ErrUnauthorizedSigner
-		}
+	if signer != s.signerAddressL1 {
+		log.Error("Unauthorized signer", "Got", signer, "Expected:", s.signerAddressL1)
+		return ErrUnauthorizedSigner
 	}
 
 	return nil

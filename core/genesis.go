@@ -500,6 +500,8 @@ func DeveloperGenesisBlock(period uint64, gasLimit uint64, faucet common.Address
 			common.BytesToAddress([]byte{7}): {Balance: big.NewInt(1)}, // ECScalarMul
 			common.BytesToAddress([]byte{8}): {Balance: big.NewInt(1)}, // ECPairing
 			common.BytesToAddress([]byte{9}): {Balance: big.NewInt(1)}, // BLAKE2b
+			// Pre-deploy EIP-2935 history contract.
+			params.HistoryStorageAddress: {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
 			// LSH 250 due to finite field limitation
 			faucet: {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 250), big.NewInt(9))},
 		},

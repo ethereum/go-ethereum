@@ -27,10 +27,6 @@ import (
 
 func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-		// If we fail the minimum gas availability invariant, fail (0)
-		if contract.Gas <= params.SstoreSentryGasEIP2200 {
-			return 0, errors.New("not enough gas for reentrancy sentry")
-		}
 		// Gas sentry honoured, do the actual gas calculation based on the stored value
 		var (
 			y, x    = stack.Back(1), stack.peek()
@@ -38,6 +34,15 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 			current = evm.StateDB.GetState(contract.Address(), slot)
 			cost    = uint64(0)
 		)
+
+		// Try updating the witness of SSTORE at first to align with reth's witness implementation.
+		original := evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
+
+		// If we fail the minimum gas availability invariant, fail (0)
+		if contract.Gas <= params.SstoreSentryGasEIP2200 {
+			return 0, errors.New("not enough gas for reentrancy sentry")
+		}
+
 		// Check slot presence in the access list
 		if addrPresent, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
 			cost = params.ColdSloadCostEIP2929
@@ -57,7 +62,6 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 			//		return params.SloadGasEIP2200, nil
 			return cost + params.WarmStorageReadCostEIP2929, nil // SLOAD_GAS
 		}
-		original := evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
 		if original == current {
 			if original == (common.Hash{}) { // create slot (2.1.1)
 				return cost + params.SstoreSetGasEIP2200, nil
@@ -109,6 +113,14 @@ func gasSLoadEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 		// If the caller cannot afford the cost, this change will be rolled back
 		// If he does afford it, we can skip checking the same thing later on, during execution
 		evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
+
+		// Try updating the witness of SLOAD to align with reth's witness implementation.
+		// Another place that needs to change is when calculating the gas cost after Frontier and before EIP-2929.
+		// Frontier gas cost simply uses params.SloadGasFrontier (i.e., 50 gas), so changing the gas cost there
+		// might affect code cleanliness. Usually, this won't be a problem because EIP-2929 is enabled by default.
+		// Thus, adding the SLOAD witness before EIP-2929 is left as a TODO here.
+		evm.StateDB.GetCommittedState(contract.Address(), loc.Bytes32())
+
 		return params.ColdSloadCostEIP2929, nil
 	}
 	return params.WarmStorageReadCostEIP2929, nil

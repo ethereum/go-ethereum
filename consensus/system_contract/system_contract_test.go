@@ -3,13 +3,11 @@ package system_contract
 import (
 	"context"
 	"math/big"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/scroll-tech/go-ethereum"
 	"github.com/scroll-tech/go-ethereum/accounts"
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
@@ -19,14 +17,14 @@ import (
 	"github.com/scroll-tech/go-ethereum/trie"
 )
 
-var _ sync_service.EthClient = &fakeEthClient{}
+var _ sync_service.EthClient = &FakeEthClient{}
 
 func TestSystemContract_FetchSigner(t *testing.T) {
 	log.Root().SetHandler(log.DiscardHandler())
 
 	expectedSigner := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
 
-	fakeClient := &fakeEthClient{value: expectedSigner}
+	fakeClient := &FakeEthClient{Value: expectedSigner}
 
 	config := &params.SystemContractConfig{
 		SystemContractAddress: common.HexToAddress("0xFAKE"),
@@ -55,7 +53,7 @@ func TestSystemContract_AuthorizeCheck(t *testing.T) {
 
 	expectedSigner := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
 
-	fakeClient := &fakeEthClient{value: expectedSigner}
+	fakeClient := &FakeEthClient{Value: expectedSigner}
 	config := &params.SystemContractConfig{
 		SystemContractAddress: common.HexToAddress("0xFAKE"),
 		Period:                10,
@@ -106,8 +104,8 @@ func TestSystemContract_SignsAfterUpdate(t *testing.T) {
 	updatedSigner := common.HexToAddress("0x2222222222222222222222222222222222222222")
 
 	// Create a fake client that starts by returning the wrong signer.
-	fakeClient := &fakeEthClient{
-		value: oldSigner,
+	fakeClient := &FakeEthClient{
+		Value: oldSigner,
 	}
 
 	config := &params.SystemContractConfig{
@@ -130,7 +128,7 @@ func TestSystemContract_SignsAfterUpdate(t *testing.T) {
 
 	// Now, simulate an update: change the fake client's returned value to updatedSigner.
 	fakeClient.mu.Lock()
-	fakeClient.value = updatedSigner
+	fakeClient.Value = updatedSigner
 	fakeClient.mu.Unlock()
 
 	// fetch new value from L1 (simulating a background poll)
@@ -170,54 +168,4 @@ func TestSystemContract_SignsAfterUpdate(t *testing.T) {
 	case <-time.After(15 * time.Second):
 		t.Fatal("Timed out waiting for Seal to return a sealed block")
 	}
-}
-
-// fakeEthClient implements a minimal version of sync_service.EthClient for testing purposes.
-type fakeEthClient struct {
-	mu sync.Mutex
-	// value is the fixed value to return from StorageAt.
-	// We'll assume StorageAt returns a 32-byte value representing an Ethereum address.
-	value common.Address
-}
-
-// BlockNumber returns 0.
-func (f *fakeEthClient) BlockNumber(ctx context.Context) (uint64, error) {
-	return 0, nil
-}
-
-// ChainID returns a zero-value chain ID.
-func (f *fakeEthClient) ChainID(ctx context.Context) (*big.Int, error) {
-	return big.NewInt(0), nil
-}
-
-// FilterLogs returns an empty slice of logs.
-func (f *fakeEthClient) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]types.Log, error) {
-	return []types.Log{}, nil
-}
-
-// HeaderByNumber returns nil.
-func (f *fakeEthClient) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
-	return nil, nil
-}
-
-// SubscribeFilterLogs returns a nil subscription.
-func (f *fakeEthClient) SubscribeFilterLogs(ctx context.Context, query ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error) {
-	return nil, nil
-}
-
-// TransactionByHash returns (nil, false, nil).
-func (f *fakeEthClient) TransactionByHash(ctx context.Context, txHash common.Hash) (*types.Transaction, bool, error) {
-	return nil, false, nil
-}
-
-// BlockByHash returns nil.
-func (f *fakeEthClient) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return nil, nil
-}
-
-// StorageAt returns the byte representation of f.value.
-func (f *fakeEthClient) StorageAt(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.value.Bytes(), nil
 }

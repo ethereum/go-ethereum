@@ -32,6 +32,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/consensus"
 	"github.com/scroll-tech/go-ethereum/consensus/clique"
+	"github.com/scroll-tech/go-ethereum/consensus/misc"
 	"github.com/scroll-tech/go-ethereum/consensus/system_contract"
 	"github.com/scroll-tech/go-ethereum/consensus/wrapper"
 	"github.com/scroll-tech/go-ethereum/core"
@@ -213,6 +214,12 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client l1.Client) (*Ether
 		eth.blockchain.Validator().WithAsyncValidator(eth.asyncChecker.Check)
 	}
 
+	state, err := eth.blockchain.State()
+	if err != nil {
+		return nil, err
+	}
+	misc.InitializeL2BaseFeeCoefficients(chainConfig, state)
+
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
@@ -225,6 +232,7 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client l1.Client) (*Ether
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
 	}
 	eth.txPool = core.NewTxPool(config.TxPool, chainConfig, eth.blockchain)
+	eth.txPool.SetGasPrice(misc.MinBaseFee())
 
 	// Initialize and start DA syncing pipeline before SyncService as SyncService is blocking until all L1 messages are loaded.
 	// We need SyncService to load the L1 messages for DA syncing, but since both sync from last known L1 state, we can
@@ -353,6 +361,9 @@ func (s *Ethereum) APIs() []rpc.API {
 
 	// Append any APIs exposed explicitly by the consensus engine
 	apis = append(apis, s.engine.APIs(s.BlockChain())...)
+
+	// Append L2 base fee APIs.
+	apis = append(apis, misc.APIs()...)
 
 	if !s.config.EnableDASyncing {
 		apis = append(apis, rpc.API{
@@ -520,10 +531,11 @@ func (s *Ethereum) StartMining(threads int) error {
 	// If the miner was not running, initialize it
 	if !s.IsMining() {
 		// Propagate the initial price point to the transaction pool
-		s.lock.RLock()
-		price := s.gasPrice
-		s.lock.RUnlock()
-		s.txPool.SetGasPrice(price)
+		// Disabled, we now update min gas price automatically via L2 base fee.
+		// s.lock.RLock()
+		// price := s.gasPrice
+		// s.lock.RUnlock()
+		// s.txPool.SetGasPrice(price)
 
 		// Configure the local mining address
 		eb, err := s.Etherbase()

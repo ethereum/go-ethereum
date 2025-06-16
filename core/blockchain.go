@@ -34,6 +34,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/common/mclock"
 	"github.com/scroll-tech/go-ethereum/common/prque"
 	"github.com/scroll-tech/go-ethereum/consensus"
+	"github.com/scroll-tech/go-ethereum/consensus/misc"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/state"
 	"github.com/scroll-tech/go-ethereum/core/state/snapshot"
@@ -45,6 +46,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/scroll-tech/go-ethereum/params"
+	"github.com/scroll-tech/go-ethereum/rollup/l2_system_config"
 	"github.com/scroll-tech/go-ethereum/trie"
 )
 
@@ -53,8 +55,10 @@ var (
 	headHeaderGauge    = metrics.NewRegisteredGauge("chain/head/header", nil)
 	headFastBlockGauge = metrics.NewRegisteredGauge("chain/head/receipt", nil)
 	headTimeGapGauge   = metrics.NewRegisteredGauge("chain/head/timegap", nil)
+	headL1MessageGauge = metrics.NewRegisteredGauge("chain/head/l1msg", nil)
 
-	l2BaseFeeGauge = metrics.NewRegisteredGauge("chain/fees/l2basefee", nil)
+	l2BaseFeeGauge       = metrics.NewRegisteredGauge("chain/fees/l2basefee", nil)
+	l2BaseFeeUpdateTimer = metrics.NewRegisteredTimer("chain/fees/updates", nil)
 
 	accountReadTimer   = metrics.NewRegisteredTimer("chain/account/reads", nil)
 	accountHashTimer   = metrics.NewRegisteredTimer("chain/account/hashes", nil)
@@ -146,6 +150,51 @@ var defaultCacheConfig = &CacheConfig{
 	TrieTimeLimit:  5 * time.Minute,
 	SnapshotLimit:  256,
 	SnapshotWait:   true,
+}
+
+func updateHeadL1msgGauge(block *types.Block) {
+	for _, tx := range block.Transactions() {
+		if msg := tx.AsL1MessageTx(); msg != nil {
+			// Queue index is guaranteed to fit into int64.
+			headL1MessageGauge.Update(int64(msg.QueueIndex))
+		} else {
+			// No more L1 messages in this block.
+			break
+		}
+	}
+}
+
+// updateL2BaseFeeCoefficients updates the global L2 base fee coefficients.
+// Coefficient updates are written into L2 state and emit an event.
+// We could use either here; we read from the event to avoid state reads.
+// In the future, if the base fee setting becomes part of block validation,
+// reading from state will be more appropriate.
+func updateL2BaseFeeCoefficients(l2SystemConfigAddress common.Address, logs []*types.Log) {
+	defer func(start time.Time) { l2BaseFeeUpdateTimer.Update(time.Since(start)) }(time.Now())
+
+	for _, l := range logs {
+		if l.Address != l2SystemConfigAddress {
+			continue
+		}
+		switch l.Topics[0] {
+		case l2_system_config.BaseFeeOverheadUpdatedTopic:
+			event, err := l2_system_config.UnpackBaseFeeOverheadUpdatedEvent(*l)
+			if err != nil {
+				log.Error("failed to unpack base fee overhead updated event log", "err", err, "log", *l)
+				break // break from switch, continue loop
+			}
+			misc.UpdateL2BaseFeeOverhead(event.NewBaseFeeOverhead)
+			log.Info("Updated L2 base fee overhead", "blockNumber", l.BlockNumber, "blockHash", l.BlockHash.Hex(), "old", event.OldBaseFeeOverhead, "new", event.NewBaseFeeOverhead)
+		case l2_system_config.BaseFeeScalarUpdatedTopic:
+			event, err := l2_system_config.UnpackBaseFeeScalarUpdatedEvent(*l)
+			if err != nil {
+				log.Error("failed to unpack base fee scalar updated event log", "err", err, "log", *l)
+				break // break from switch, continue loop
+			}
+			misc.UpdateL2BaseFeeScalar(event.NewBaseFeeScalar)
+			log.Info("Updated L2 base fee scalar", "blockNumber", l.BlockNumber, "blockHash", l.BlockHash.Hex(), "old", event.OldBaseFeeScalar, "new", event.NewBaseFeeScalar)
+		}
+	}
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -422,6 +471,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			triedb.SaveCachePeriodically(bc.cacheConfig.TrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit)
 		}()
 	}
+
+	updateHeadL1msgGauge(bc.CurrentBlock())
+
 	return bc, nil
 }
 
@@ -1253,6 +1305,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		l2BaseFeeGauge.Update(0)
 	}
 
+	// Note the latest relayed L1 message queue index (if any)
+	updateHeadL1msgGauge(block)
+
+	// Execute L2 base fee coefficient updates (if any)
+	updateL2BaseFeeCoefficients(bc.Config().Scroll.L2SystemConfigAddress(), logs)
+
 	parent := bc.GetHeaderByHash(block.ParentHash())
 	// block.Time is guaranteed to be larger than parent.Time,
 	// and the time gap should fit into int64.
@@ -1283,7 +1341,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if queueIndex == nil {
 		// We expect that we only insert contiguous chain segments,
 		// so the parent will always be inserted first.
-		log.Crit("Queue index in DB is nil", "parent", block.ParentHash(), "hash", block.Hash())
+		log.Crit("Queue index in DB is nil", "parent", block.ParentHash().Hex(), "hash", block.Hash().Hex())
 	}
 	numProcessed := uint64(block.NumL1MessagesProcessed(*queueIndex))
 	// do not overwrite the index written by the miner worker
@@ -1527,7 +1585,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		headers[i] = block.Header()
 		seals[i] = verifySeals
 	}
-	abort, results := bc.engine.VerifyHeaders(bc, headers, seals)
+	abort, results := bc.engine.VerifyHeaders(bc, headers, seals, nil)
 	defer close(abort)
 
 	// Peek the error for the first block to decide the directing import logic
@@ -1680,7 +1738,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		}
 
 		// Enable prefetching to pull in trie node paths while processing transactions
-		statedb.StartPrefetcher("chain", nil)
+		statedb.StartPrefetcher("chain")
 		activeState = statedb
 
 		// If we have a followup block, run that against the current state to pre-cache
@@ -1817,7 +1875,7 @@ func (bc *BlockChain) BuildAndWriteBlock(parentBlock *types.Block, header *types
 		return nil, NonStatTy, err
 	}
 
-	statedb.StartPrefetcher("l1sync", nil)
+	statedb.StartPrefetcher("l1sync")
 	defer statedb.StopPrefetcher()
 
 	header.ParentHash = parentBlock.Hash()

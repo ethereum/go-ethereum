@@ -18,6 +18,7 @@ package core
 
 import (
 	"crypto/ecdsa"
+	"encoding/binary"
 	"math/big"
 	"testing"
 
@@ -31,9 +32,11 @@ import (
 	"github.com/scroll-tech/go-ethereum/consensus/ethash"
 	"github.com/scroll-tech/go-ethereum/consensus/misc"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
+	"github.com/scroll-tech/go-ethereum/core/state"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/core/vm"
 	"github.com/scroll-tech/go-ethereum/crypto"
+	"github.com/scroll-tech/go-ethereum/ethdb/memorydb"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/trie"
 )
@@ -64,6 +67,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			DarwinV2Time:        new(uint64),
 			EuclidTime:          new(uint64),
 			EuclidV2Time:        new(uint64),
+			FeynmanTime:         new(uint64),
 			Ethash:              new(params.EthashConfig),
 		}
 		signer  = types.LatestSigner(config)
@@ -387,15 +391,15 @@ func TestStateProcessorErrors(t *testing.T) {
 		}{
 			{ // ErrMaxInitCodeSizeExceeded
 				txs: []*types.Transaction{
-					mkDynamicCreationTx(0, 500000, common.Big0, misc.CalcBaseFee(config, genesis.Header(), parentL1BaseFee), tooBigInitCode[:]),
+					mkDynamicCreationTx(0, 520000, common.Big0, misc.CalcBaseFee(config, genesis.Header(), parentL1BaseFee), tooBigInitCode[:]),
 				},
-				want: "could not apply tx 0 [0xa31de6e26bd5ffba0ca91a2bc29fc2eaad6a6cfc5ad9ab6ffb69cac121e0125c]: max initcode size exceeded: code size 49153 limit 49152",
+				want: "could not apply tx 0 [0xe0d03426cecc04467410064cb4de02012fc069d2462282735d7dfcb9dea9f63b]: max initcode size exceeded: code size 49153 limit 49152",
 			},
 			{ // ErrIntrinsicGas: Not enough gas to cover init code
 				txs: []*types.Transaction{
 					mkDynamicCreationTx(0, 54299, common.Big0, misc.CalcBaseFee(config, genesis.Header(), parentL1BaseFee), smallInitCode[:]),
 				},
-				want: "could not apply tx 0 [0xf36b7d68cf239f956f7c36be26688a97aaa317ea5f5230d109bb30dbc8598ccb]: intrinsic gas too low: have 54299, want 54300",
+				want: "could not apply tx 0 [0x98e54c5ecfa7986a66480d65ba32f2c6a2a6aedc3a67abb91b1e118b0717ed2d]: intrinsic gas too low: have 54299, want 54300",
 			},
 		} {
 			block := GenerateBadBlock(genesis, ethash.NewFaker(), tt.txs, gspec.Config)
@@ -452,4 +456,69 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	header.Root = common.BytesToHash(hasher.Sum(nil))
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
+}
+
+func TestProcessParentBlockHash(t *testing.T) {
+	var (
+		chainConfig = &params.ChainConfig{
+			ChainID:             big.NewInt(1),
+			HomesteadBlock:      big.NewInt(0),
+			EIP150Block:         big.NewInt(0),
+			EIP155Block:         big.NewInt(0),
+			EIP158Block:         big.NewInt(0),
+			ByzantiumBlock:      big.NewInt(0),
+			ConstantinopleBlock: big.NewInt(0),
+			PetersburgBlock:     big.NewInt(0),
+			IstanbulBlock:       big.NewInt(0),
+			MuirGlacierBlock:    big.NewInt(0),
+			BerlinBlock:         big.NewInt(0),
+			LondonBlock:         big.NewInt(0),
+			ShanghaiBlock:       big.NewInt(0),
+			BernoulliBlock:      big.NewInt(0),
+			CurieBlock:          big.NewInt(0),
+			DarwinTime:          new(uint64),
+			DarwinV2Time:        new(uint64),
+			EuclidTime:          new(uint64),
+			EuclidV2Time:        new(uint64),
+			FeynmanTime:         new(uint64),
+			Ethash:              new(params.EthashConfig),
+		}
+		hashA    = common.Hash{0x01}
+		hashB    = common.Hash{0x02}
+		header   = &types.Header{ParentHash: hashA, Number: big.NewInt(2), Difficulty: big.NewInt(0)}
+		parent   = &types.Header{ParentHash: hashB, Number: big.NewInt(1), Difficulty: big.NewInt(0)}
+		coinbase = common.Address{}
+	)
+	test := func(statedb *state.StateDB) {
+		statedb.SetNonce(params.HistoryStorageAddress, 1)
+		statedb.SetCode(params.HistoryStorageAddress, params.HistoryStorageCode)
+		statedb.IntermediateRoot(true)
+
+		vmContext := NewEVMBlockContext(header, nil, chainConfig, &coinbase)
+		evm := vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vm.Config{})
+		ProcessParentBlockHash(header.ParentHash, evm, statedb)
+
+		vmContext = NewEVMBlockContext(parent, nil, chainConfig, &coinbase)
+		evm = vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vm.Config{})
+		ProcessParentBlockHash(parent.ParentHash, evm, statedb)
+
+		// make sure that the state is correct
+		if have := getParentBlockHash(statedb, 1); have != hashA {
+			t.Errorf("want parent hash %v, have %v", hashA, have)
+		}
+		if have := getParentBlockHash(statedb, 0); have != hashB {
+			t.Errorf("want parent hash %v, have %v", hashB, have)
+		}
+	}
+	t.Run("MPT", func(t *testing.T) {
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
+		test(statedb)
+	})
+}
+
+func getParentBlockHash(statedb *state.StateDB, number uint64) common.Hash {
+	ringIndex := number % params.HistoryServeWindow
+	var key common.Hash
+	binary.BigEndian.PutUint64(key[24:], ringIndex)
+	return statedb.GetState(params.HistoryStorageAddress, key)
 }

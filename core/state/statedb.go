@@ -18,9 +18,11 @@
 package state
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"sort"
 	"time"
 
@@ -160,17 +162,24 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	return sdb, nil
 }
 
+// WithWitness sets the witness for the state database.
+func (s *StateDB) WithWitness(witness *stateless.Witness) {
+	s.witness = witness
+}
+
+// Witness returns the current witness for the state database.
+func (s *StateDB) Witness() *stateless.Witness {
+	return s.witness
+}
+
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
-func (s *StateDB) StartPrefetcher(namespace string, witness *stateless.Witness) {
+func (s *StateDB) StartPrefetcher(namespace string) {
 	if s.prefetcher != nil {
 		s.prefetcher.close()
 		s.prefetcher = nil
 	}
-
-	// Enable witness collection if requested
-	s.witness = witness
 
 	if s.snap != nil {
 		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace)
@@ -967,8 +976,17 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			s.trie = trie
 		}
 	}
-	usedAddrs := make([][]byte, 0, len(s.stateObjectsPending))
+
+	sortedPendingAddrs := make([]common.Address, 0, len(s.stateObjectsPending))
 	for addr := range s.stateObjectsPending {
+		sortedPendingAddrs = append(sortedPendingAddrs, addr)
+	}
+	slices.SortFunc(sortedPendingAddrs, func(a, b common.Address) int {
+		return bytes.Compare(a[:], b[:])
+	})
+
+	usedAddrs := make([][]byte, 0, len(s.stateObjectsPending))
+	for _, addr := range sortedPendingAddrs {
 		if obj := s.stateObjects[addr]; obj.deleted {
 			s.deleteStateObject(obj)
 			s.AccountDeleted += 1

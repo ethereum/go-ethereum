@@ -328,9 +328,17 @@ var (
 		CurieBlock:          big.NewInt(4740239),
 		DarwinTime:          newUint64(1723622400),
 		DarwinV2Time:        newUint64(1724832000),
+		EuclidTime:          newUint64(1741680000),
+		EuclidV2Time:        newUint64(1741852800),
+		FeynmanTime:         nil,
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
+		},
+		SystemContract: &SystemContractConfig{
+			Period:                3,
+			SystemContractAddress: common.HexToAddress("0xC706Ba9fa4fedF4507CB7A898b4766c1bbf9be57"),
+			SystemContractSlot:    common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000067"),
 		},
 		Scroll: ScrollConfig{
 			UseZktrie:                 true,
@@ -338,10 +346,13 @@ var (
 			MaxTxPayloadBytesPerBlock: &ScrollMaxTxPayloadBytesPerBlock,
 			FeeVaultAddress:           &rcfg.ScrollFeeVaultAddress,
 			L1Config: &L1Config{
-				L1ChainId:             11155111,
-				L1MessageQueueAddress: common.HexToAddress("0xF0B2293F5D834eAe920c6974D50957A1732de763"),
-				NumL1MessagesPerBlock: 10,
-				ScrollChainAddress:    common.HexToAddress("0x2D567EcE699Eabe5afCd141eDB7A4f2D0D6ce8a0"),
+				L1ChainId:                       11155111,
+				L1MessageQueueAddress:           common.HexToAddress("0xF0B2293F5D834eAe920c6974D50957A1732de763"),
+				L1MessageQueueV2Address:         common.HexToAddress("0xA0673eC0A48aa924f067F1274EcD281A10c5f19F"),
+				L1MessageQueueV2DeploymentBlock: 7773746,
+				NumL1MessagesPerBlock:           10,
+				ScrollChainAddress:              common.HexToAddress("0x2D567EcE699Eabe5afCd141eDB7A4f2D0D6ce8a0"),
+				L2SystemConfigAddress:           common.HexToAddress("0xF444cF06A3E3724e20B35c2989d3942ea8b59124"),
 			},
 			GenesisStateRoot: &ScrollSepoliaGenesisState,
 		},
@@ -369,9 +380,17 @@ var (
 		CurieBlock:          big.NewInt(7096836),
 		DarwinTime:          newUint64(1724227200),
 		DarwinV2Time:        newUint64(1725264000),
+		EuclidTime:          newUint64(1744815600),
+		EuclidV2Time:        newUint64(1745305200),
+		FeynmanTime:         nil,
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
+		},
+		SystemContract: &SystemContractConfig{
+			Period:                3,
+			SystemContractAddress: common.HexToAddress("0x8432728A257646449245558B8b7Dbe51A16c7a4D"),
+			SystemContractSlot:    common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000067"),
 		},
 		Scroll: ScrollConfig{
 			UseZktrie:                 true,
@@ -379,10 +398,13 @@ var (
 			MaxTxPayloadBytesPerBlock: &ScrollMaxTxPayloadBytesPerBlock,
 			FeeVaultAddress:           &rcfg.ScrollFeeVaultAddress,
 			L1Config: &L1Config{
-				L1ChainId:             1,
-				L1MessageQueueAddress: common.HexToAddress("0x0d7E906BD9cAFa154b048cFa766Cc1E54E39AF9B"),
-				NumL1MessagesPerBlock: 10,
-				ScrollChainAddress:    common.HexToAddress("0xa13BAF47339d63B743e7Da8741db5456DAc1E556"),
+				L1ChainId:                       1,
+				L1MessageQueueAddress:           common.HexToAddress("0x0d7E906BD9cAFa154b048cFa766Cc1E54E39AF9B"),
+				L1MessageQueueV2Address:         common.HexToAddress("0x56971da63A3C0205184FEF096E9ddFc7A8C2D18a"),
+				L1MessageQueueV2DeploymentBlock: 22088276,
+				NumL1MessagesPerBlock:           10,
+				ScrollChainAddress:              common.HexToAddress("0xa13BAF47339d63B743e7Da8741db5456DAc1E556"),
+				L2SystemConfigAddress:           common.HexToAddress("0x331A873a2a85219863d80d248F9e2978fE88D0Ea"),
 			},
 			GenesisStateRoot: &ScrollMainnetGenesisState,
 		},
@@ -501,6 +523,7 @@ var (
 		DarwinV2Time:            new(uint64),
 		EuclidTime:              new(uint64),
 		EuclidV2Time:            new(uint64),
+		FeynmanTime:             new(uint64),
 		TerminalTotalDifficulty: nil,
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
@@ -642,6 +665,7 @@ type ChainConfig struct {
 	DarwinV2Time        *uint64  `json:"darwinv2Time,omitempty"`        // DarwinV2 switch time (nil = no fork, 0 = already on darwinv2)
 	EuclidTime          *uint64  `json:"euclidTime,omitempty"`          // Euclid switch time (nil = no fork, 0 = already on euclid)
 	EuclidV2Time        *uint64  `json:"euclidv2Time,omitempty"`        // EuclidV2 switch time (nil = no fork, 0 = already on euclidv2)
+	FeynmanTime         *uint64  `json:"feynmanTime,omitempty"`         // Feynman switch time (nil = no fork, 0 = already on feynman)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -692,10 +716,11 @@ type ScrollConfig struct {
 type L1Config struct {
 	L1ChainId                       uint64         `json:"l1ChainId,string,omitempty"`
 	L1MessageQueueAddress           common.Address `json:"l1MessageQueueAddress,omitempty"`
-	L1MessageQueueV2Address         common.Address `json:"l1MessageQueueV2Address,omitempty"`         // TODO: set address once known
-	L1MessageQueueV2DeploymentBlock uint64         `json:"l1MessageQueueV2DeploymentBlock,omitempty"` // TODO: set block number once known
+	L1MessageQueueV2Address         common.Address `json:"l1MessageQueueV2Address,omitempty"`
+	L1MessageQueueV2DeploymentBlock uint64         `json:"l1MessageQueueV2DeploymentBlock,omitempty"`
 	NumL1MessagesPerBlock           uint64         `json:"numL1MessagesPerBlock,string,omitempty"`
 	ScrollChainAddress              common.Address `json:"scrollChainAddress,omitempty"`
+	L2SystemConfigAddress           common.Address `json:"l2SystemConfigAddress,omitempty"`
 }
 
 func (c *L1Config) String() string {
@@ -703,8 +728,8 @@ func (c *L1Config) String() string {
 		return "<nil>"
 	}
 
-	return fmt.Sprintf("{l1ChainId: %v, l1MessageQueueAddress: %v, numL1MessagesPerBlock: %v, ScrollChainAddress: %v}",
-		c.L1ChainId, c.L1MessageQueueAddress.Hex(), c.NumL1MessagesPerBlock, c.ScrollChainAddress.Hex())
+	return fmt.Sprintf("{l1ChainId: %v, l1MessageQueueAddress: %v, l1MessageQueueV2Address: %v, l1MessageQueueV2DeploymentBlock: %v, numL1MessagesPerBlock: %v, ScrollChainAddress: %v, L2SystemConfigAddress: %v}",
+		c.L1ChainId, c.L1MessageQueueAddress.Hex(), c.L1MessageQueueV2Address.Hex(), c.L1MessageQueueV2DeploymentBlock, c.NumL1MessagesPerBlock, c.ScrollChainAddress.Hex(), c.L2SystemConfigAddress.Hex())
 }
 
 func (s ScrollConfig) FeeVaultEnabled() bool {
@@ -730,8 +755,13 @@ func (s ScrollConfig) String() string {
 		maxTxPayloadBytesPerBlock = fmt.Sprintf("%v", *s.MaxTxPayloadBytesPerBlock)
 	}
 
-	return fmt.Sprintf("{useZktrie: %v, maxTxPerBlock: %v, MaxTxPayloadBytesPerBlock: %v, feeVaultAddress: %v, l1Config: %v}",
-		s.UseZktrie, maxTxPerBlock, maxTxPayloadBytesPerBlock, s.FeeVaultAddress, s.L1Config.String())
+	genesisStateRoot := "<nil>"
+	if s.GenesisStateRoot != nil {
+		genesisStateRoot = fmt.Sprintf("%v", *s.GenesisStateRoot)
+	}
+
+	return fmt.Sprintf("{useZktrie: %v, maxTxPerBlock: %v, MaxTxPayloadBytesPerBlock: %v, feeVaultAddress: %v, l1Config: %v, genesisStateRoot: %v}",
+		s.UseZktrie, maxTxPerBlock, maxTxPayloadBytesPerBlock, s.FeeVaultAddress, s.L1Config.String(), genesisStateRoot)
 }
 
 // IsValidTxCount returns whether the given block's transaction count is below the limit.
@@ -748,6 +778,14 @@ func (s ScrollConfig) IsValidBlockSize(size common.StorageSize) bool {
 // IsValidBlockSizeForMining is similar to IsValidBlockSize, but it accounts for the confidence factor in Rust CCC
 func (s ScrollConfig) IsValidBlockSizeForMining(size common.StorageSize) bool {
 	return s.IsValidBlockSize(size * (1.0 / 0.95))
+}
+
+// L2SystemConfigAddress returns the configured l2 system config address, or the zero address if it is not configured.
+func (s ScrollConfig) L2SystemConfigAddress() common.Address {
+	if s.L1Config == nil {
+		return common.Address{} // only in tests
+	}
+	return s.L1Config.L2SystemConfigAddress
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -818,7 +856,11 @@ func (c *ChainConfig) String() string {
 	if c.EuclidV2Time != nil {
 		euclidV2Time = fmt.Sprintf("@%v", *c.EuclidV2Time)
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Arrow Glacier: %v, Archimedes: %v, Shanghai: %v, Bernoulli: %v, Curie: %v, Darwin: %v, DarwinV2: %v, Euclid: %v, EuclidV2: %v, Engine: %v, Scroll config: %v}",
+	feynmanTime := "<nil>"
+	if c.FeynmanTime != nil {
+		feynmanTime = fmt.Sprintf("@%v", *c.FeynmanTime)
+	}
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Arrow Glacier: %v, Archimedes: %v, Shanghai: %v, Bernoulli: %v, Curie: %v, Darwin: %v, DarwinV2: %v, Euclid: %v, EuclidV2: %v, Feynman: %v, Engine: %v, Scroll config: %v}",
 		c.ChainID,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -842,6 +884,7 @@ func (c *ChainConfig) String() string {
 		darwinV2Time,
 		euclidTime,
 		euclidV2Time,
+		feynmanTime,
 		engine,
 		c.Scroll,
 	)
@@ -952,6 +995,11 @@ func (c *ChainConfig) IsEuclid(now uint64) bool {
 // IsEuclidV2 returns whether time is either equal to the EuclidV2 fork time or greater.
 func (c *ChainConfig) IsEuclidV2(now uint64) bool {
 	return isForkedTime(now, c.EuclidV2Time)
+}
+
+// IsFeynman returns whether time is either equal to the Feynman fork time or greater.
+func (c *ChainConfig) IsFeynman(now uint64) bool {
+	return isForkedTime(now, c.FeynmanTime)
 }
 
 // IsTerminalPoWBlock returns whether the given block is the last block of PoW stage.
@@ -1167,6 +1215,7 @@ type Rules struct {
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon, IsArchimedes, IsShanghai            bool
 	IsBernoulli, IsCurie, IsDarwin, IsEuclid, IsEuclidV2    bool
+	IsFeynman                                               bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -1194,5 +1243,6 @@ func (c *ChainConfig) Rules(num *big.Int, time uint64) Rules {
 		IsDarwin:         c.IsDarwin(time),
 		IsEuclid:         c.IsEuclid(time),
 		IsEuclidV2:       c.IsEuclidV2(time),
+		IsFeynman:        c.IsFeynman(time),
 	}
 }

@@ -8,18 +8,25 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/crypto/kzg4844"
 )
 
+const (
+	BlockNativeDefaultTimeout = 15 * time.Second
+)
+
 type BlockNativeClient struct {
+	client      *http.Client
 	apiEndpoint string
 }
 
 func NewBlockNativeClient(apiEndpoint string) *BlockNativeClient {
 	return &BlockNativeClient{
+		client:      &http.Client{Timeout: BlockNativeDefaultTimeout},
 		apiEndpoint: apiEndpoint,
 	}
 }
@@ -34,7 +41,7 @@ func (c *BlockNativeClient) GetBlobByVersionedHashAndBlockTime(ctx context.Conte
 	if err != nil {
 		return nil, fmt.Errorf("cannot create request, err: %w", err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("cannot do request, err: %w", err)
 	}
@@ -52,6 +59,12 @@ func (c *BlockNativeClient) GetBlobByVersionedHashAndBlockTime(ctx context.Conte
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode result into struct, err: %w", err)
 	}
+
+	// check that blob data is not empty
+	if len(result.Blob.Data) < 2 {
+		return nil, fmt.Errorf("blob data is too short to be valid, expected at least 2 characters, got: %s, versioned hash: %s", result.Blob.Data, versionedHash.String())
+	}
+
 	blobBytes, err := hex.DecodeString(result.Blob.Data[2:])
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode data to bytes, err: %w", err)

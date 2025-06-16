@@ -29,6 +29,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/syndtr/goleveldb/leveldb"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/core"
@@ -131,6 +133,8 @@ func (api *PrivateMinerAPI) SetGasPrice(gasPrice hexutil.Big) bool {
 	api.e.gasPrice = (*big.Int)(&gasPrice)
 	api.e.lock.Unlock()
 
+	// This will override the min base fee configuration.
+	// That is fine, it only happens if we explicitly set gas price via the console.
 	api.e.txPool.SetGasPrice((*big.Int)(&gasPrice))
 	return true
 }
@@ -353,12 +357,10 @@ func generateWitness(blockchain *core.BlockChain, block *types.Block) (*stateles
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve parent state: %w", err)
 	}
+	statedb.WithWitness(witness)
 
 	// Collect storage locations that prover needs but sequencer might not touch necessarily
 	statedb.GetState(rcfg.L2MessageQueueAddress, rcfg.WithdrawTrieRootSlot)
-
-	statedb.StartPrefetcher("debug_execution_witness", witness)
-	defer statedb.StopPrefetcher()
 
 	receipts, _, usedGas, err := blockchain.Processor().Process(block, statedb, *blockchain.GetVMConfig())
 	if err != nil {
@@ -368,36 +370,57 @@ func generateWitness(blockchain *core.BlockChain, block *types.Block) (*stateles
 	if err := blockchain.Validator().ValidateState(block, statedb, receipts, usedGas); err != nil {
 		return nil, fmt.Errorf("failed to validate block %d: %w", block.Number(), err)
 	}
-	return witness, testWitness(blockchain, block, witness)
+
+	if err = testWitness(blockchain, block, witness); err != nil {
+		return nil, err
+	}
+	return witness, nil
 }
 
 func testWitness(blockchain *core.BlockChain, block *types.Block, witness *stateless.Witness) error {
 	stateRoot := witness.Root()
-	if diskRoot, _ := rawdb.ReadDiskStateRoot(blockchain.Database(), stateRoot); diskRoot != (common.Hash{}) {
+	diskRoot, err := rawdb.ReadDiskStateRoot(blockchain.Database(), stateRoot)
+	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
+		return fmt.Errorf("failed to read disk state root for stateRoot %s: %w", stateRoot.Hex(), err)
+	}
+	if diskRoot != (common.Hash{}) {
+		log.Debug("Using disk root for state root", "stateRoot", stateRoot.Hex(), "diskRoot", diskRoot.Hex())
 		stateRoot = diskRoot
 	}
 
 	// Create and populate the state database to serve as the stateless backend
 	statedb, err := state.New(stateRoot, state.NewDatabase(witness.MakeHashDB()), nil)
 	if err != nil {
-		return fmt.Errorf("failed to create state database: %w", err)
+		return fmt.Errorf("failed to create state database with stateRoot %s: %w", stateRoot.Hex(), err)
 	}
 
 	receipts, _, usedGas, err := blockchain.Processor().Process(block, statedb, *blockchain.GetVMConfig())
 	if err != nil {
-		return fmt.Errorf("failed to process block %d: %w", block.Number(), err)
+		return fmt.Errorf("failed to process block %d (hash: %s): %w", block.Number(), block.Hash().Hex(), err)
 	}
 
 	if err := blockchain.Validator().ValidateState(block, statedb, receipts, usedGas); err != nil {
-		return fmt.Errorf("failed to validate block %d: %w", block.Number(), err)
+		return fmt.Errorf("failed to validate block %d (hash: %s): %w", block.Number(), block.Hash().Hex(), err)
 	}
 
 	postStateRoot := block.Root()
-	if diskRoot, _ := rawdb.ReadDiskStateRoot(blockchain.Database(), postStateRoot); diskRoot != (common.Hash{}) {
+	diskRoot, err = rawdb.ReadDiskStateRoot(blockchain.Database(), postStateRoot)
+	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
+		return fmt.Errorf("failed to read disk state root for postStateRoot %s: %w", postStateRoot.Hex(), err)
+	}
+	if diskRoot != (common.Hash{}) {
+		log.Debug("Using disk root for post state root", "postStateRoot", postStateRoot.Hex(), "diskRoot", diskRoot.Hex())
 		postStateRoot = diskRoot
 	}
-	if statedb.GetRootHash() != postStateRoot {
-		return fmt.Errorf("failed to commit statelessly %d: %w", block.Number(), err)
+	computedRoot := statedb.GetRootHash()
+	if computedRoot != postStateRoot {
+		log.Debug("State root mismatch", "block", block.Number(), "expected", postStateRoot.Hex(), "got", computedRoot)
+		executionWitness := ToExecutionWitness(witness)
+		jsonStr, err := json.Marshal(executionWitness)
+		if err != nil {
+			return fmt.Errorf("state root mismatch after processing block %d (hash: %s): expected %s, got %s, but failed to marshal witness: %w", block.Number(), block.Hash().Hex(), postStateRoot.Hex(), computedRoot, err)
+		}
+		return fmt.Errorf("state root mismatch after processing block %d (hash: %s): expected %s, got %s, witness: %s", block.Number(), block.Hash().Hex(), postStateRoot.Hex(), computedRoot, string(jsonStr))
 	}
 	return nil
 }

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/scroll-tech/da-codec/encoding"
+
 	"github.com/scroll-tech/go-ethereum"
 	"github.com/scroll-tech/go-ethereum/accounts/abi"
 	"github.com/scroll-tech/go-ethereum/common"
@@ -21,6 +23,7 @@ const (
 	finalizeBatchEventName    = "FinalizeBatch"
 	nextUnfinalizedQueueIndex = "nextUnfinalizedQueueIndex"
 	lastFinalizedBatchIndex   = "lastFinalizedBatchIndex"
+	finalizedStateRoots       = "finalizedStateRoots"
 
 	defaultRollupEventsFetchBlockRange = 100
 )
@@ -70,7 +73,7 @@ func NewReader(ctx context.Context, config Config, l1Client Client) (*Reader, er
 	return &reader, nil
 }
 
-func (r *Reader) FinalizedL1MessageQueueIndex(blockNumber uint64) (uint64, error) {
+func (r *Reader) NextUnfinalizedL1MessageQueueIndex(blockNumber uint64) (uint64, error) {
 	data, err := r.l1MessageQueueABI.Pack(nextUnfinalizedQueueIndex)
 	if err != nil {
 		return 0, fmt.Errorf("failed to pack %s: %w", nextUnfinalizedQueueIndex, err)
@@ -90,14 +93,10 @@ func (r *Reader) FinalizedL1MessageQueueIndex(blockNumber uint64) (uint64, error
 	}
 
 	next := parsedResult.Uint64()
-	if next == 0 {
-		return 0, nil
-	}
-
-	return next - 1, nil
+	return next, nil
 }
 
-func (r *Reader) LatestFinalizedBatch(blockNumber uint64) (uint64, error) {
+func (r *Reader) LatestFinalizedBatchIndex(blockNumber uint64) (uint64, error) {
 	data, err := r.scrollChainABI.Pack(lastFinalizedBatchIndex)
 	if err != nil {
 		return 0, fmt.Errorf("failed to pack %s: %w", lastFinalizedBatchIndex, err)
@@ -117,6 +116,28 @@ func (r *Reader) LatestFinalizedBatch(blockNumber uint64) (uint64, error) {
 	}
 
 	return parsedResult.Uint64(), nil
+}
+
+func (r *Reader) GetFinalizedStateRootByBatchIndex(blockNumber uint64, batchIndex uint64) (common.Hash, error) {
+	data, err := r.scrollChainABI.Pack(finalizedStateRoots, big.NewInt(int64(batchIndex)))
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to pack %s: %w", finalizedStateRoots, err)
+	}
+
+	result, err := r.client.CallContract(r.ctx, ethereum.CallMsg{
+		To:   &r.config.ScrollChainAddress,
+		Data: data,
+	}, new(big.Int).SetUint64(blockNumber))
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to call %s: %w", finalizedStateRoots, err)
+	}
+
+	var parsedResult common.Hash
+	if err = r.scrollChainABI.UnpackIntoInterface(&parsedResult, finalizedStateRoots, result); err != nil {
+		return common.Hash{}, fmt.Errorf("failed to unpack result: %w", err)
+	}
+
+	return parsedResult, nil
 }
 
 // GetLatestFinalizedBlockNumber fetches the block number of the latest finalized block from the L1 chain.
@@ -397,6 +418,28 @@ func (r *Reader) FetchCommitTxData(commitEvent *CommitBatchEvent) (*CommitBatchA
 		args, err = newCommitBatchArgsFromCommitBatchesV7(method, values)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode calldata into commitBatch args %s, values: %+v, err: %w", commitBatchesV7MethodName, values, err)
+		}
+	} else if method.Name == commitAndFinalizeBatch {
+		commitAndFinalizeArgs, err := newCommitAndFinalizeBatchArgs(method, values)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode calldata into commitAndFinalizeBatch args %s, values: %+v, err: %w", commitAndFinalizeBatch, values, err)
+		}
+
+		// in commitAndFinalizeBatch, the last batch hash is encoded in the finalize struct as this is the only batch we're
+		// committing when calling this function.
+		codec, err := encoding.CodecFromVersion(encoding.CodecVersion(commitAndFinalizeArgs.Version))
+		if err != nil {
+			return nil, fmt.Errorf("failed to get codec from version %d, err: %w", commitAndFinalizeArgs.Version, err)
+		}
+		daBatch, err := codec.NewDABatchFromBytes(commitAndFinalizeArgs.FinalizeStruct.BatchHeader)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode daBatch from bytes, err: %w", err)
+		}
+
+		args = &CommitBatchArgs{
+			Version:         commitAndFinalizeArgs.Version,
+			ParentBatchHash: commitAndFinalizeArgs.ParentBatchHash,
+			LastBatchHash:   daBatch.Hash(),
 		}
 	} else {
 		return nil, fmt.Errorf("unknown method name for commit transaction: %s", method.Name)
