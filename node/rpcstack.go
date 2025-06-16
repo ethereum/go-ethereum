@@ -62,6 +62,7 @@ type rpcEndpointConfig struct {
 
 type rpcHandler struct {
 	http.Handler
+	prefix string
 	server *rpc.Server
 }
 
@@ -197,7 +198,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// check if ws request and serve if ws enabled
 	ws := h.wsHandler.Load()
 	if ws != nil && isWebsocket(r) {
-		if checkPath(r, h.wsConfig.prefix) {
+		if checkPath(r, ws.prefix) {
 			ws.ServeHTTP(w, r)
 		}
 		return
@@ -216,7 +217,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if checkPath(r, h.httpConfig.prefix) {
+		if checkPath(r, rpc.prefix) {
 			rpc.ServeHTTP(w, r)
 			return
 		}
@@ -312,6 +313,7 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 	h.httpConfig = config
 	h.httpHandler.Store(&rpcHandler{
 		Handler: NewHTTPHandlerStack(srv, config.CorsAllowedOrigins, config.Vhosts, config.jwtSecret),
+		prefix:  config.prefix,
 		server:  srv,
 	})
 	return nil
@@ -347,6 +349,7 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 	h.wsConfig = config
 	h.wsHandler.Store(&rpcHandler{
 		Handler: NewWSHandlerStack(srv.WebsocketHandler(config.Origins), config.jwtSecret),
+		prefix:  config.prefix,
 		server:  srv,
 	})
 	return nil
