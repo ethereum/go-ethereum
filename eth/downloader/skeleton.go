@@ -384,7 +384,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 			defer close(done)
 			filled := s.filler.suspend()
 			if filled == nil {
-				log.Error("Latest filled block is not available")
+				log.Warn("Latest filled block is not available")
 				return
 			}
 			// If something was filled, try to delete stale sync helpers. If
