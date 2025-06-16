@@ -46,3 +46,23 @@ func (inclusionList *InclusionList) UnmarshalJSON(input []byte) error {
 
 	return nil
 }
+
+func InclusionListToTransactions(inclusionList InclusionList) []*Transaction {
+	var txs []*Transaction
+	for _, encTx := range inclusionList {
+		var tx Transaction
+		if err := tx.UnmarshalBinary(encTx); err != nil {
+			continue // Skip invalid transactions
+		}
+		txs = append(txs, &tx)
+	}
+	return txs
+}
+
+func TransactionsToInclusionList(txs []*Transaction) InclusionList {
+	var enc = make([][]byte, len(txs))
+	for i, tx := range txs {
+		enc[i], _ = tx.MarshalBinary()
+	}
+	return enc
+}
