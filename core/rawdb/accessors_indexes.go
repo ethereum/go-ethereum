@@ -161,11 +161,11 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 		// which are encoded as byte arrays, the preimage is the content of
 		// the byte array, so trim their prefix here.
 		txRLP := txnIterator.Value()
-		rlpKind, txHashPayload, _, err := rlp.Split(txRLP)
+		kind, txHashPayload, _, err := rlp.Split(txRLP)
 		if err != nil {
 			return nil, common.Hash{}, 0, 0
 		}
-		if rlpKind == rlp.List {
+		if kind == rlp.List {
 			txHashPayload = txRLP
 		}
 		if crypto.Keccak256Hash(txHashPayload) == hash {
