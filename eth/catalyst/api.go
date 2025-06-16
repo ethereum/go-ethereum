@@ -81,6 +81,42 @@ const (
 	beaconUpdateWarnFrequency = 5 * time.Minute
 )
 
+// All methods provided over the engine endpoint.
+var caps = []string{
+	"engine_forkchoiceUpdatedV1",
+	"engine_forkchoiceUpdatedV2",
+	"engine_forkchoiceUpdatedV3",
+	"engine_forkchoiceUpdatedWithWitnessV1",
+	"engine_forkchoiceUpdatedWithWitnessV2",
+	"engine_forkchoiceUpdatedWithWitnessV3",
+	"engine_exchangeTransitionConfigurationV1",
+	"engine_getPayloadV1",
+	"engine_getPayloadV2",
+	"engine_getPayloadV3",
+	"engine_getPayloadV4",
+	"engine_getPayloadV5",
+	"engine_getBlobsV1",
+	"engine_getBlobsV2",
+	"engine_getInclusionListV1",
+	"engine_newPayloadV1",
+	"engine_newPayloadV2",
+	"engine_newPayloadV3",
+	"engine_newPayloadV4",
+	"engine_newPayloadWithWitnessV1",
+	"engine_newPayloadWithWitnessV2",
+	"engine_newPayloadWithWitnessV3",
+	"engine_newPayloadWithWitnessV4",
+	"engine_executeStatelessPayloadV1",
+	"engine_executeStatelessPayloadV2",
+	"engine_executeStatelessPayloadV3",
+	"engine_executeStatelessPayloadV4",
+	"engine_getPayloadBodiesByHashV1",
+	"engine_getPayloadBodiesByHashV2",
+	"engine_getPayloadBodiesByRangeV1",
+	"engine_getPayloadBodiesByRangeV2",
+	"engine_getClientVersionV1",
+}
+
 var (
 	// Number of blobs requested via getBlobsV2
 	getBlobsRequestedCounter = metrics.NewRegisteredCounter("engine/getblobs/requested", nil)
@@ -98,8 +134,9 @@ var (
 type ConsensusAPI struct {
 	eth *eth.Ethereum
 
-	remoteBlocks *headerQueue  // Cache of remote payloads received
-	localBlocks  *payloadQueue // Cache of local payloads generated
+	remoteBlocks        *headerQueue        // Cache of remote payloads received
+	localBlocks         *payloadQueue       // Cache of local payloads generated
+	localInclusionLists *inclusionListQueue // Cache of inclusion list generated
 
 	// The forkchoice update and new payload method require us to return the
 	// latest valid hash in an invalid chain. To support that return, we need
@@ -149,11 +186,12 @@ func newConsensusAPIWithoutHeartbeat(eth *eth.Ethereum) *ConsensusAPI {
 		log.Warn("Engine API started but chain not configured for merge yet")
 	}
 	api := &ConsensusAPI{
-		eth:               eth,
-		remoteBlocks:      newHeaderQueue(),
-		localBlocks:       newPayloadQueue(),
-		invalidBlocksHits: make(map[common.Hash]int),
-		invalidTipsets:    make(map[common.Hash]*types.Header),
+		eth:                 eth,
+		remoteBlocks:        newHeaderQueue(),
+		localBlocks:         newPayloadQueue(),
+		localInclusionLists: newInclusionListQueue(),
+		invalidBlocksHits:   make(map[common.Hash]int),
+		invalidTipsets:      make(map[common.Hash]*types.Header),
 	}
 	eth.Downloader().SetBadBlockCallback(api.setInvalidAncestor)
 	return api
@@ -587,6 +625,25 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 		}
 	}
 	return res, nil
+}
+
+func (api *ConsensusAPI) GetInclusionListV1(parentHash common.Hash) (types.InclusionList, error) {
+	if inclusionList := api.localInclusionLists.get(parentHash); inclusionList != nil {
+		return inclusionList, nil
+	}
+
+	args := &miner.BuildInclusionListArgs{
+		Parent: parentHash,
+	}
+	inclusionList, err := api.eth.Miner().BuildInclusionList(args)
+	if err != nil {
+		log.Error("Failed to build inclusion list", "err", err)
+		return nil, err
+	}
+
+	api.localInclusionLists.put(parentHash, inclusionList)
+
+	return inclusionList, nil
 }
 
 // Helper for NewPayload* methods.
