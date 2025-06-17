@@ -73,7 +73,7 @@ func (g *G2) Unmarshal(buf []byte) (int, error) {
 //
 // The output is in EVM format: 128 bytes total.
 // [32-byte x.real][32-byte x.imag][32-byte y.real][32-byte y.imag]
-// where each value is a big-endian integer padded to 32 bytes.
+// where each value is a big-endian integer.
 func (g *G2) Marshal() []byte {
 	output := make([]byte, 128)
 
