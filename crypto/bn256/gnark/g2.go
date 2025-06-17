@@ -77,12 +77,6 @@ func (g *G2) Unmarshal(buf []byte) (int, error) {
 func (g *G2) Marshal() []byte {
 	output := make([]byte, 128)
 
-	// Handle point at infinity
-	if g.inner.X.A0.IsZero() && g.inner.X.A1.IsZero() &&
-		g.inner.Y.A0.IsZero() && g.inner.Y.A1.IsZero() {
-		return output
-	}
-
 	xA0Bytes := g.inner.X.A0.Bytes()
 	copy(output[:32], xA0Bytes[:])
 
