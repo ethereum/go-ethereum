@@ -76,7 +76,15 @@ func TestPruneTransactionIndex(t *testing.T) {
 	pruneBlock := lastBlock - 3
 
 	for i := uint64(0); i <= lastBlock; i++ {
-		WriteTxLookupEntriesByBlock(chainDB, blocks[i])
+		var (
+			txHashes []common.Hash
+			indexes  []TxIndex
+		)
+		for txIndex, tx := range blocks[i].Transactions() {
+			txHashes = append(txHashes, tx.Hash())
+			indexes = append(indexes, TxIndex{BlockNumber: blocks[i].NumberU64(), TxIndex: uint32(txIndex)})
+		}
+		WriteTxLookupEntries(chainDB, txHashes, indexes)
 	}
 	WriteTxIndexTail(chainDB, 0)
 

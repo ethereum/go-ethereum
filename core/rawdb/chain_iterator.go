@@ -17,7 +17,6 @@
 package rawdb
 
 import (
-	"encoding/binary"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -94,22 +93,12 @@ func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
 		if count%10000000 == 0 {
 			log.Info("Pruning tx index", "count", count, "removed", removed)
 		}
-		if len(v) > 8 {
-			log.Error("Skipping legacy tx index entry", "hash", txhash)
-			return false
-		}
-		bn := decodeNumber(v)
-		if bn < pruneBlock {
+		bn := DecodeTxLookupEntry(v, db)
+		if *bn < pruneBlock {
 			removed++
 			return true
 		}
 		return false
 	})
 	WriteTxIndexTail(db, pruneBlock)
-}
-
-func decodeNumber(b []byte) uint64 {
-	var numBuffer [8]byte
-	copy(numBuffer[8-len(b):], b)
-	return binary.BigEndian.Uint64(numBuffer[:])
 }

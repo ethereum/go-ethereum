@@ -146,7 +146,11 @@ const (
 	//  The following incompatible database changes were added:
 	//  * Total difficulty has been removed from both the key-value store and the ancient store.
 	//  * The metadata structure of freezer is changed by adding 'flushOffset'
-	BlockChainVersion uint64 = 9
+	//
+	// - Version 10
+	//  The following incompatible database changes were added:
+	//    * todo(omer)
+	BlockChainVersion uint64 = 10
 )
 
 // BlockChainConfig contains the configuration of the BlockChain object.
@@ -1127,7 +1131,7 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write genesis block", "err", err)
 	}
-	bc.writeHeadBlock(genesis)
+	bc.writeHeadBlock(genesis, types.Receipts{})
 
 	// Last update all in-memory chain markers
 	bc.genesisBlock = genesis
@@ -1185,13 +1189,15 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 // or if they are on a different side chain.
 //
 // Note, this function assumes that the `mu` mutex is held!
-func (bc *BlockChain) writeHeadBlock(block *types.Block) {
+func (bc *BlockChain) writeHeadBlock(block *types.Block, receipts types.Receipts) {
 	// Add the block to the canonical chain number scheme and mark as the head
 	batch := bc.db.NewBatch()
 	rawdb.WriteHeadHeaderHash(batch, block.Hash())
 	rawdb.WriteHeadFastBlockHash(batch, block.Hash())
 	rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
-	rawdb.WriteTxLookupEntriesByBlock(batch, block)
+	if bc.txIndexer != nil {
+		bc.txIndexer.indexHead(batch, block, receipts)
+	}
 	rawdb.WriteHeadBlockHash(batch, block.Hash())
 
 	// Flush the whole batch into the disk, exit the node if failed
@@ -1536,7 +1542,7 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 			return err
 		}
 	}
-	bc.writeHeadBlock(block)
+	bc.writeHeadBlock(block, bc.GetReceiptsByHash(block.Hash()))
 	return nil
 }
 
@@ -1638,7 +1644,7 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	}
 
 	// Set new head.
-	bc.writeHeadBlock(block)
+	bc.writeHeadBlock(block, receipts)
 
 	bc.chainFeed.Send(ChainEvent{Header: block.Header()})
 	if len(logs) > 0 {
@@ -2430,7 +2436,7 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 			rebirthLogs = nil
 		}
 		// Update the head block
-		bc.writeHeadBlock(block)
+		bc.writeHeadBlock(block, bc.GetReceiptsByHash(block.Hash()))
 	}
 	if len(rebirthLogs) > 0 {
 		bc.logsFeed.Send(rebirthLogs)
@@ -2505,7 +2511,7 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 			return common.Hash{}, err
 		}
 	}
-	bc.writeHeadBlock(head)
+	bc.writeHeadBlock(head, bc.GetReceiptsByHash(head.Hash()))
 
 	// Emit events
 	logs := bc.collectLogs(head, false)

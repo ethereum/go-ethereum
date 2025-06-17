@@ -34,6 +34,10 @@ import (
 
 // DecodeTxLookupEntry decodes the supplied tx lookup data.
 func DecodeTxLookupEntry(data []byte, db ethdb.Reader) *uint64 {
+	var index TxIndex
+	if err := rlp.DecodeBytes(data, &index); err == nil {
+		return &index.BlockNumber
+	}
 	// Database v6 tx lookup just stores the block number
 	if len(data) < common.HashLength {
 		number := new(big.Int).SetBytes(data).Uint64()
@@ -62,29 +66,53 @@ func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
 	return DecodeTxLookupEntry(data, db)
 }
 
+// ReadTxIndex retrieves the full index data if exists
+func ReadTxIndex(db ethdb.Reader, hash common.Hash) *TxIndex {
+	data, _ := db.Get(txLookupKey(hash))
+	var index TxIndex
+	if err := rlp.DecodeBytes(data, &index); err != nil {
+		return nil
+	}
+	return &index
+}
+
 // writeTxLookupEntry stores a positional metadata for a transaction,
 // enabling hash based transaction and receipt lookups.
-func writeTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash, numberBytes []byte) {
-	if err := db.Put(txLookupKey(hash), numberBytes); err != nil {
+func writeTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash, bytes []byte) {
+	if err := db.Put(txLookupKey(hash), bytes); err != nil {
 		log.Crit("Failed to store transaction lookup entry", "err", err)
 	}
 }
 
-// WriteTxLookupEntries is identical to WriteTxLookupEntry, but it works on
-// a list of hashes
-func WriteTxLookupEntries(db ethdb.KeyValueWriter, number uint64, hashes []common.Hash) {
-	numberBytes := new(big.Int).SetUint64(number).Bytes()
-	for _, hash := range hashes {
-		writeTxLookupEntry(db, hash, numberBytes)
-	}
+// TxIndex is the collection of data that is stored per transaction for
+// speeding up hashed based lookups
+type TxIndex struct {
+	Type              uint8  // Transaction Type
+	Nonce             uint64 // Transaction Nonce
+	BlockNumber       uint64
+	BlockHash         common.Hash
+	BlockTime         uint64
+	BaseFee           *big.Int
+	TxIndex           uint32
+	Sender            common.Address
+	EffectiveGasPrice *big.Int
+	GasUsed           uint64
+	LogIndex          uint32
+	To                *common.Address `rlp:"optional"`
+	BlobGas           uint64          `rlp:"optional"`
+	BlobGasPrice      *big.Int        `rlp:"optional"`
 }
 
-// WriteTxLookupEntriesByBlock stores a positional metadata for every transaction from
-// a block, enabling hash based transaction and receipt lookups.
-func WriteTxLookupEntriesByBlock(db ethdb.KeyValueWriter, block *types.Block) {
-	numberBytes := block.Number().Bytes()
-	for _, tx := range block.Transactions() {
-		writeTxLookupEntry(db, tx.Hash(), numberBytes)
+// WriteTxLookupEntries stores a positional metadata for a set of transactions
+// enabling hash based transaction and receipt lookups.
+func WriteTxLookupEntries(db ethdb.KeyValueWriter, hashes []common.Hash, indexes []TxIndex) {
+	for index, hash := range hashes {
+		indexBytes, err := rlp.EncodeToBytes(indexes[index])
+		if err != nil {
+			log.Error("Failed to encode tx index", "error", err)
+			return
+		}
+		writeTxLookupEntry(db, hash, indexBytes)
 	}
 }
 

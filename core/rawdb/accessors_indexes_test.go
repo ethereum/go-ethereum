@@ -39,9 +39,25 @@ func TestLookupStorage(t *testing.T) {
 		writeTxLookupEntriesByBlock func(ethdb.KeyValueWriter, *types.Block)
 	}{
 		{
+			"DatabaseV10",
+			func(db ethdb.KeyValueWriter, block *types.Block) {
+				var (
+					txHashes []common.Hash
+					indexes  []TxIndex
+				)
+				for txIndex, tx := range block.Transactions() {
+					txHashes = append(txHashes, tx.Hash())
+					indexes = append(indexes, TxIndex{BlockNumber: block.NumberU64(), TxIndex: uint32(txIndex)})
+				}
+				WriteTxLookupEntries(db, txHashes, indexes)
+			},
+		},
+		{
 			"DatabaseV6",
 			func(db ethdb.KeyValueWriter, block *types.Block) {
-				WriteTxLookupEntriesByBlock(db, block)
+				for _, tx := range block.Transactions() {
+					db.Put(txLookupKey(tx.Hash()), block.Number().Bytes())
+				}
 			},
 		},
 		{

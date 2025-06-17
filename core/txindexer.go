@@ -18,16 +18,19 @@ package core
 
 import (
 	"fmt"
+	"math/big"
 	"runtime"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -67,6 +70,7 @@ type txIndexer struct {
 	// be pruned and not available locally.
 	cutoff uint64
 	db     ethdb.Database
+	config *params.ChainConfig
 	term   chan chan struct{}
 	closed chan struct{}
 }
@@ -78,6 +82,7 @@ func newTxIndexer(limit uint64, chain *BlockChain) *txIndexer {
 		limit:  limit,
 		cutoff: cutoff,
 		db:     chain.db,
+		config: chain.chainConfig,
 		term:   make(chan chan struct{}),
 		closed: make(chan struct{}),
 	}
@@ -337,20 +342,62 @@ func (indexer *txIndexer) close() {
 	}
 }
 
-type blockTxHashes struct {
-	number uint64
-	hashes []common.Hash
+// generateTxIndex generates the data that will be stored alongside the transaction index
+func (indexer *txIndexer) generateTxIndex(txs types.Transactions, header *types.Header, receipts types.Receipts) []rawdb.TxIndex {
+	var (
+		logIndex              = 0
+		prevCumulativeGasUsed = uint64(0)
+		signer                = types.MakeSigner(indexer.config, header.Number, header.Time)
+		indexes               = make([]rawdb.TxIndex, len(txs))
+	)
+
+	var blobGasPrice *big.Int
+	if header.ExcessBlobGas != nil {
+		blobGasPrice = eip4844.CalcBlobFee(indexer.config, header)
+	}
+
+	for blockIndex, tx := range txs {
+		from, _ := signer.Sender(tx)
+		indexes[blockIndex] = rawdb.TxIndex{
+			Type:  tx.Type(),
+			Nonce: tx.Nonce(),
+			To:    tx.To(),
+
+			BlockNumber:       header.Number.Uint64(),
+			BlockHash:         header.Hash(),
+			BlockTime:         header.Time,
+			BaseFee:           header.BaseFee,
+			TxIndex:           uint32(blockIndex),
+			Sender:            from,
+			EffectiveGasPrice: tx.EffectiveGasPrice(header.BaseFee),
+			GasUsed:           receipts[blockIndex].CumulativeGasUsed - prevCumulativeGasUsed,
+			LogIndex:          uint32(logIndex),
+			BlobGas:           tx.BlobGas(),
+			BlobGasPrice:      blobGasPrice,
+		}
+		prevCumulativeGasUsed = receipts[blockIndex].CumulativeGasUsed
+		logIndex += len(receipts[blockIndex].Logs)
+	}
+	return indexes
+}
+
+type blockIndexingContext struct {
+	number   uint64
+	txHashes []common.Hash
+	indexes  []rawdb.TxIndex
 }
 
 // iterate iterates over all transactions in the (canon) block
 // number(s) given, and yields the hashes on a channel. If there is a signal
 // received from interrupt channel, the iteration will be aborted and result
 // channel will be closed.
-func (indexer *txIndexer) iterate(from uint64, to uint64, reverse bool, interrupt chan struct{}) chan *blockTxHashes {
+func (indexer *txIndexer) iterate(from uint64, to uint64, reverse, indexing bool, interrupt chan struct{}) chan *blockIndexingContext {
 	// One thread sequentially reads data from db
 	type numberRlp struct {
-		number uint64
-		rlp    rlp.RawValue
+		number      uint64
+		headerRLP   rlp.RawValue
+		bodyRLP     rlp.RawValue
+		receiptsRLP rlp.RawValue
 	}
 	if to == from {
 		return nil
@@ -360,8 +407,8 @@ func (indexer *txIndexer) iterate(from uint64, to uint64, reverse bool, interrup
 		threads = uint64(cpus)
 	}
 	var (
-		rlpCh    = make(chan *numberRlp, threads*2)     // we send raw rlp over this channel
-		hashesCh = make(chan *blockTxHashes, threads*2) // send hashes over hashesCh
+		rlpCh      = make(chan *numberRlp, threads*2)            // we send raw rlp over this channel
+		contextsCh = make(chan *blockIndexingContext, threads*2) // send indexing context over contextsCh
 	)
 	// lookup runs in one instance
 	lookup := func() {
@@ -371,10 +418,20 @@ func (indexer *txIndexer) iterate(from uint64, to uint64, reverse bool, interrup
 		}
 		defer close(rlpCh)
 		for n != end {
-			data := rawdb.ReadCanonicalBodyRLP(indexer.db, n)
+			blockHash := rawdb.ReadCanonicalHash(indexer.db, n)
+			rlps := &numberRlp{
+				number:  n,
+				bodyRLP: rawdb.ReadBodyRLP(indexer.db, blockHash, n),
+			}
+
+			if indexing {
+				// We are indexing, read more to build the index
+				rlps.headerRLP = rawdb.ReadHeaderRLP(indexer.db, blockHash, n)
+				rlps.receiptsRLP = rawdb.ReadReceiptsRLP(indexer.db, blockHash, n)
+			}
 			// Feed the block to the aggregator, or abort on interrupt
 			select {
-			case rlpCh <- &numberRlp{n, data}:
+			case rlpCh <- rlps:
 			case <-interrupt:
 				return
 			}
@@ -392,26 +449,47 @@ func (indexer *txIndexer) iterate(from uint64, to uint64, reverse bool, interrup
 		defer func() {
 			// Last processor closes the result channel
 			if nThreadsAlive.Add(-1) == 0 {
-				close(hashesCh)
+				close(contextsCh)
 			}
 		}()
 		for data := range rlpCh {
 			var body types.Body
-			if err := rlp.DecodeBytes(data.rlp, &body); err != nil {
-				log.Warn("Failed to decode block body", "block", data.number, "error", err)
+			if err := rlp.DecodeBytes(data.bodyRLP, &body); err != nil {
+				log.Error("Failed to decode block body", "block", data.number, "error", err)
 				return
 			}
-			var hashes []common.Hash
+			txHashes := make([]common.Hash, 0, len(body.Transactions))
 			for _, tx := range body.Transactions {
-				hashes = append(hashes, tx.Hash())
+				txHashes = append(txHashes, tx.Hash())
 			}
-			result := &blockTxHashes{
-				hashes: hashes,
-				number: data.number,
+
+			result := &blockIndexingContext{
+				number:   data.number,
+				txHashes: txHashes,
+			}
+
+			if indexing {
+				var header types.Header
+				if err := rlp.DecodeBytes(data.headerRLP, &header); err != nil {
+					log.Error("failed to decode header", "block", data.number, "err", err)
+					return
+				}
+
+				var storageReceipts []*types.ReceiptForStorage
+				if err := rlp.DecodeBytes(data.receiptsRLP, &storageReceipts); err != nil {
+					log.Error("failed to decode receipts", "block", data.number, "err", err)
+					return
+				}
+
+				receipts := make([]*types.Receipt, len(storageReceipts))
+				for i, receipt := range storageReceipts {
+					receipts[i] = (*types.Receipt)(receipt)
+				}
+				result.indexes = indexer.generateTxIndex(body.Transactions, &header, receipts)
 			}
 			// Feed the block to the aggregator, or abort on interrupt
 			select {
-			case hashesCh <- result:
+			case contextsCh <- result:
 			case <-interrupt:
 				return
 			}
@@ -421,7 +499,7 @@ func (indexer *txIndexer) iterate(from uint64, to uint64, reverse bool, interrup
 	for i := 0; i < int(threads); i++ {
 		go process()
 	}
-	return hashesCh
+	return contextsCh
 }
 
 // index creates txlookup indices of the specified block range.
@@ -438,19 +516,19 @@ func (indexer *txIndexer) index(from uint64, to uint64, interrupt chan struct{},
 		return
 	}
 	var (
-		hashesCh = indexer.iterate(from, to, true, interrupt)
-		batch    = indexer.db.NewBatch()
-		start    = time.Now()
-		logged   = start.Add(-7 * time.Second)
+		contextsCh = indexer.iterate(from, to, true, true, interrupt)
+		batch      = indexer.db.NewBatch()
+		start      = time.Now()
+		logged     = start.Add(-7 * time.Second)
 
 		// Since we iterate in reverse, we expect the first number to come
 		// in to be [to-1]. Therefore, setting lastNum to means that the
 		// queue gap-evaluation will work correctly
 		lastNum     = to
-		queue       = prque.New[int64, *blockTxHashes](nil)
+		queue       = prque.New[int64, *blockIndexingContext](nil)
 		blocks, txs = 0, 0 // for stats reporting
 	)
-	for chanDelivery := range hashesCh {
+	for chanDelivery := range contextsCh {
 		// Push the delivery into the queue and process contiguous ranges.
 		// Since we iterate in reverse, so lower numbers have lower prio, and
 		// we can use the number directly as prio marker
@@ -467,9 +545,9 @@ func (indexer *txIndexer) index(from uint64, to uint64, interrupt chan struct{},
 			// Next block available, pop it off and index it
 			delivery := queue.PopItem()
 			lastNum = delivery.number
-			rawdb.WriteTxLookupEntries(batch, delivery.number, delivery.hashes)
+			rawdb.WriteTxLookupEntries(batch, delivery.txHashes, delivery.indexes)
 			blocks++
-			txs += len(delivery.hashes)
+			txs += len(delivery.txHashes)
 			// If enough data was accumulated in memory or we're at the last block, dump to disk
 			if batch.ValueSize() > ethdb.IdealBatchSize {
 				rawdb.WriteTxIndexTail(batch, lastNum) // Also write the tail here
@@ -516,19 +594,19 @@ func (indexer *txIndexer) unindex(from uint64, to uint64, interrupt chan struct{
 		return
 	}
 	var (
-		hashesCh = indexer.iterate(from, to, false, interrupt)
-		batch    = indexer.db.NewBatch()
-		start    = time.Now()
-		logged   = start.Add(-7 * time.Second)
+		contextsCh = indexer.iterate(from, to, false, false, interrupt)
+		batch      = indexer.db.NewBatch()
+		start      = time.Now()
+		logged     = start.Add(-7 * time.Second)
 
 		// we expect the first number to come in to be [from]. Therefore, setting
 		// nextNum to from means that the queue gap-evaluation will work correctly
 		nextNum     = from
-		queue       = prque.New[int64, *blockTxHashes](nil)
+		queue       = prque.New[int64, *blockIndexingContext](nil)
 		blocks, txs = 0, 0 // for stats reporting
 	)
 	// Otherwise spin up the concurrent iterator and unindexer
-	for delivery := range hashesCh {
+	for delivery := range contextsCh {
 		// Push the delivery into the queue and process contiguous ranges.
 		queue.Push(delivery, -int64(delivery.number))
 		for !queue.Empty() {
@@ -542,8 +620,8 @@ func (indexer *txIndexer) unindex(from uint64, to uint64, interrupt chan struct{
 			}
 			delivery := queue.PopItem()
 			nextNum = delivery.number + 1
-			rawdb.DeleteTxLookupEntries(batch, delivery.hashes)
-			txs += len(delivery.hashes)
+			rawdb.DeleteTxLookupEntries(batch, delivery.txHashes)
+			txs += len(delivery.txHashes)
 			blocks++
 
 			// If enough data was accumulated in memory or we're at the last block, dump to disk
@@ -582,4 +660,14 @@ func (indexer *txIndexer) unindex(from uint64, to uint64, interrupt chan struct{
 	default:
 		logger("Unindexed transactions", "blocks", blocks, "txs", txs, "tail", to, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
+}
+
+// indexHead indexes given head block synchronously
+func (indexer *txIndexer) indexHead(db ethdb.KeyValueWriter, block *types.Block, receipts types.Receipts) {
+	indexes := indexer.generateTxIndex(block.Transactions(), block.Header(), receipts)
+	hashes := make([]common.Hash, len(block.Transactions()))
+	for i, tx := range block.Transactions() {
+		hashes[i] = tx.Hash()
+	}
+	rawdb.WriteTxLookupEntries(db, hashes, indexes)
 }
