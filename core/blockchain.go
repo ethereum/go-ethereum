@@ -183,9 +183,10 @@ func (c *CacheConfig) triedbConfig(isVerkle bool) *triedb.Config {
 	}
 	if c.StateScheme == rawdb.PathScheme {
 		config.PathDB = &pathdb.Config{
-			StateHistory:   c.StateHistory,
-			TrieCleanSize:  c.TrieCleanLimit * 1024 * 1024,
-			StateCleanSize: c.SnapshotLimit * 1024 * 1024,
+			StateHistory:        c.StateHistory,
+			EnableStateIndexing: c.TrieDirtyDisabled,
+			TrieCleanSize:       c.TrieCleanLimit * 1024 * 1024,
+			StateCleanSize:      c.SnapshotLimit * 1024 * 1024,
 
 			// TODO(rjl493456442): The write buffer represents the memory limit used
 			// for flushing both trie data and state data to disk. The config name
