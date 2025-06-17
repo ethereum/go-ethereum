@@ -90,7 +90,7 @@ func (h *TerminalHandler) formatAttributes(buf *bytes.Buffer, r slog.Record, col
 			buf.Write(appendEscapeString(buf.AvailableBuffer(), attr.Key))
 			buf.WriteByte('=')
 		}
-		val := FormatSlogValue(attr.Value, buf.AvailableBuffer())
+		val := FormatSlogValue(r.Level, attr.Value, buf.AvailableBuffer())
 
 		padding := h.fieldPadding[attr.Key]
 
@@ -119,7 +119,7 @@ func (h *TerminalHandler) formatAttributes(buf *bytes.Buffer, r slog.Record, col
 }
 
 // FormatSlogValue formats a slog.Value for serialization to terminal.
-func FormatSlogValue(v slog.Value, tmp []byte) (result []byte) {
+func FormatSlogValue(lvl slog.Level, v slog.Value, tmp []byte) (result []byte) {
 	var value any
 	defer func() {
 		if err := recover(); err != nil {
@@ -163,6 +163,12 @@ func FormatSlogValue(v slog.Value, tmp []byte) (result []byte) {
 	case error:
 		return appendEscapeString(tmp, v.Error())
 	case TerminalStringer:
+		// For DEBUG and TRACE levels, use String() instead of TerminalString()
+		if lvl <= slog.LevelDebug {
+			if str, ok := v.(fmt.Stringer); ok {
+				return appendEscapeString(tmp, str.String())
+			}
+		}
 		return appendEscapeString(tmp, v.TerminalString())
 	case fmt.Stringer:
 		return appendEscapeString(tmp, v.String())
