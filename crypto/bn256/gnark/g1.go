@@ -43,9 +43,8 @@ func (g *G1) Unmarshal(buf []byte) (int, error) {
 		return 0, errors.New("invalid G1 point size")
 	}
 
-	// Check if both coordinates are zero (point at infinity)
-	isZero := allZeroes(buf[0:64])
-	if isZero {
+	if allZeroes(buf[:64]) {
+		// point at infinity
 		g.inner.X.SetZero()
 		g.inner.Y.SetZero()
 		return 64, nil
