@@ -1405,7 +1405,7 @@ var SolidityType = function (config) {
  * @return {Bool} true if type match this SolidityType, otherwise false
  */
 SolidityType.prototype.isType = function (name) {
-    throw "this method should be overrwritten for type " + name;
+    throw "this method should be overwritten for type " + name;
 };
 
 /**
@@ -3143,7 +3143,7 @@ module.exports = {
         return new Error(message);
     },
     ConnectionTimeout: function (ms){
-        return new Error('CONNECTION TIMEOUT: timeout of ' + ms + ' ms achived');
+        return new Error('CONNECTION TIMEOUT: timeout of ' + ms + ' ms achieved');
     }
 };
 
