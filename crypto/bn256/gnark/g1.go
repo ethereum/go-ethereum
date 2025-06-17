@@ -51,12 +51,10 @@ func (g *G1) Unmarshal(buf []byte) (int, error) {
 		return 64, nil
 	}
 
-	err := g.inner.X.SetBytesCanonical(buf[:32])
-	if err != nil {
+	if err := g.inner.X.SetBytesCanonical(buf[:32]); err != nil {
 		return 0, err
 	}
-	err = g.inner.Y.SetBytesCanonical(buf[32:64])
-	if err != nil {
+	if err := g.inner.Y.SetBytesCanonical(buf[32:64]); err != nil {
 		return 0, err
 	}
 
@@ -66,7 +64,6 @@ func (g *G1) Unmarshal(buf []byte) (int, error) {
 	if !g.inner.IsInSubGroup() {
 		return 0, errors.New("point is not in correct subgroup")
 	}
-
 	return 64, nil
 }
 
@@ -88,12 +85,10 @@ func (p *G1) Marshal() []byte {
 }
 
 func allZeroes(buf []byte) bool {
-	isZero := true
-	for i := 0; i < len(buf); i++ {
+	for i := range buf {
 		if buf[i] != 0 {
-			isZero = false
-			break
+			return false
 		}
 	}
-	return isZero
+	return true
 }

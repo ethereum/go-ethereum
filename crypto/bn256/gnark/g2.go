@@ -31,41 +31,34 @@ func (g *G2) Unmarshal(buf []byte) (int, error) {
 		return 0, errors.New("invalid G2 point size")
 	}
 
-	// Check if all coordinates are zero (point at infinity)
 	isZero := allZeroes(buf[0:128])
 	if isZero {
+		// point at infinity
 		g.inner.X.A0.SetZero()
 		g.inner.X.A1.SetZero()
 		g.inner.Y.A0.SetZero()
 		g.inner.Y.A1.SetZero()
 		return 128, nil
 	}
-
-	err := g.inner.X.A0.SetBytesCanonical(buf[0:32])
-	if err != nil {
+	if err := g.inner.X.A0.SetBytesCanonical(buf[0:32]); err != nil {
 		return 0, err
 	}
-	err = g.inner.X.A1.SetBytesCanonical(buf[32:64])
-	if err != nil {
+	if err := g.inner.X.A1.SetBytesCanonical(buf[32:64]); err != nil {
 		return 0, err
 	}
-	err = g.inner.Y.A0.SetBytesCanonical(buf[64:96])
-	if err != nil {
+	if err := g.inner.Y.A0.SetBytesCanonical(buf[64:96]); err != nil {
 		return 0, err
 	}
-	err = g.inner.Y.A1.SetBytesCanonical(buf[96:128])
-	if err != nil {
+	if err := g.inner.Y.A1.SetBytesCanonical(buf[96:128]); err != nil {
 		return 0, err
 	}
 
 	if !g.inner.IsOnCurve() {
 		return 0, errors.New("point is not on curve")
 	}
-
 	if !g.inner.IsInSubGroup() {
 		return 0, errors.New("point is not in correct subgroup")
 	}
-
 	return 128, nil
 }
 
