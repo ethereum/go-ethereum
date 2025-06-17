@@ -443,3 +443,17 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 	}
 	return api.eth.blockchain.GetTrieFlushInterval().String(), nil
 }
+
+func (api *DebugAPI) GetBlockAccessList(number rpc.BlockNumberOrHash) *types.BlockAccessList {
+	var block *types.Block
+	if num := number.BlockNumber; num != nil {
+		block = api.eth.blockchain.GetBlockByNumber(uint64(num.Int64()))
+	} else if hash := number.BlockHash; hash != nil {
+		block = api.eth.blockchain.GetBlockByHash(*hash)
+	}
+
+	if block == nil {
+		return nil
+	}
+	return block.Body().AccessList
+}

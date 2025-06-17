@@ -106,6 +106,8 @@ type Header struct {
 
 	// RequestsHash was added by EIP-7685 and is ignored in legacy headers.
 	RequestsHash *common.Hash `json:"requestsHash" rlp:"optional"`
+
+	BALHash *common.Hash `json:"balHash" rlp:"-"`
 }
 
 // field type overrides for gencodec
@@ -183,7 +185,8 @@ func (h *Header) EmptyReceipts() bool {
 type Body struct {
 	Transactions []*Transaction
 	Uncles       []*Header
-	Withdrawals  []*Withdrawal `rlp:"optional"`
+	Withdrawals  []*Withdrawal    `rlp:"optional"`
+	AccessList   *BlockAccessList `rlp:"optional"`
 }
 
 // Block represents an Ethereum block.
@@ -213,6 +216,8 @@ type Block struct {
 	// It is held in Block in order for easy relaying to the places
 	// that process it.
 	witness *ExecutionWitness
+
+	accessList *BlockAccessList
 
 	// caches
 	hash atomic.Pointer[common.Hash]
@@ -290,6 +295,11 @@ func NewBlock(header *Header, body *Body, receipts []*Receipt, hasher TrieHasher
 		b.withdrawals = slices.Clone(withdrawals)
 	}
 
+	if b.accessList != nil {
+		balHash := b.accessList.Hash()
+		b.header.BALHash = &balHash
+	}
+
 	return b
 }
 
@@ -357,7 +367,7 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 // Body returns the non-header content of the block.
 // Note the returned data is not an independent copy.
 func (b *Block) Body() *Body {
-	return &Body{b.transactions, b.uncles, b.withdrawals}
+	return &Body{b.transactions, b.uncles, b.withdrawals, b.accessList}
 }
 
 // Accessors for body data. These do not return a copy because the content

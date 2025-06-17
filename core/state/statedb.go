@@ -18,6 +18,7 @@
 package state
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"maps"
@@ -138,6 +139,9 @@ type StateDB struct {
 	// State witness if cross validation is needed
 	witness *stateless.Witness
 
+	// block access list, if bal construction is specified
+	b *types.BlockAccessList
+
 	// Measurements gathered during execution for debugging purposes
 	AccountReads    time.Duration
 	AccountHashes   time.Duration
@@ -155,6 +159,14 @@ type StateDB struct {
 	StorageLoaded  int          // Number of storage slots retrieved from the database during the state transition
 	StorageUpdated atomic.Int64 // Number of storage slots updated during the state transition
 	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
+}
+
+func (s *StateDB) EnableBALConstruction() {
+	s.b = types.NewBlockAccessList()
+}
+
+func (s *StateDB) BlockAccessList() *types.BlockAccessList {
+	return s.b
 }
 
 // New creates a new state from a given trie.
@@ -379,6 +391,9 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
+		if s.b != nil {
+			s.b.StorageRead(addr, hash)
+		}
 		return stateObject.GetState(hash)
 	}
 	return common.Hash{}
@@ -759,6 +774,24 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 				s.stateObjectsDestruct[obj.address] = obj
 			}
 		} else {
+			if s.b != nil {
+				for key, val := range obj.dirtyStorage {
+					s.b.StorageWrite(uint64(s.txIndex), obj.address, key, val)
+				}
+				if obj.origin == nil || obj.origin.Balance.Cmp(obj.Balance()) != 0 {
+					s.b.BalanceChange(uint64(s.txIndex), obj.address, obj.Balance())
+				}
+				// add any prestate nonces for contracts that created others
+				if obj.origin == nil && obj.Nonce() != 0 {
+					s.b.NonceDiff(obj.Address(), 0)
+				} else if obj.origin != nil && obj.Nonce() != obj.origin.Nonce {
+					s.b.NonceDiff(obj.Address(), obj.origin.Nonce)
+				}
+				if obj.origin == nil || bytes.Compare(obj.origin.CodeHash, obj.CodeHash()) != 0 {
+					s.b.CodeChange(uint64(s.txIndex), obj.address, obj.code)
+				}
+			}
+
 			obj.finalise()
 			s.markUpdate(addr)
 		}

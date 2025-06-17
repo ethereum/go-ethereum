@@ -122,6 +122,10 @@ var (
 	// Message validation errors:
 	ErrEmptyAuthList   = errors.New("EIP-7702 transaction with empty auth list")
 	ErrSetCodeTxCreate = errors.New("EIP-7702 transaction cannot be used to create contract")
+
+	// -- EIP 7928 errors --
+
+	ErrBlockAccessListMismatch = errors.New("mismatch between local and remote block access list")
 )
 
 // EIP-7702 state transition errors.
