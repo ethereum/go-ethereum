@@ -44,13 +44,7 @@ func (g *G1) Unmarshal(buf []byte) (int, error) {
 	}
 
 	// Check if both coordinates are zero (point at infinity)
-	isZero := true
-	for i := 0; i < 64; i++ {
-		if buf[i] != 0 {
-			isZero = false
-			break
-		}
-	}
+	isZero := allZeroes(buf[0:64])
 	if isZero {
 		g.inner.X.SetZero()
 		g.inner.Y.SetZero()
@@ -96,4 +90,15 @@ func (p *G1) Marshal() []byte {
 	copy(output[32:64], yBytes[:])
 
 	return output
+}
+
+func allZeroes(buf []byte) bool {
+	isZero := true
+	for i := 0; i < len(buf); i++ {
+		if buf[i] != 0 {
+			isZero = false
+			break
+		}
+	}
+	return isZero
 }

@@ -32,13 +32,7 @@ func (g *G2) Unmarshal(buf []byte) (int, error) {
 	}
 
 	// Check if all coordinates are zero (point at infinity)
-	isZero := true
-	for i := 0; i < 128; i++ {
-		if buf[i] != 0 {
-			isZero = false
-			break
-		}
-	}
+	isZero := allZeroes(buf[0:128])
 	if isZero {
 		g.inner.X.A0.SetZero()
 		g.inner.X.A1.SetZero()

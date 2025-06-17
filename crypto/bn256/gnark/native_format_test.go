@@ -21,14 +21,10 @@ func TestNativeGnarkFormatIncompatibility(t *testing.T) {
 func TestSerRoundTrip(t *testing.T) {
 	_, _, g1Gen, g2Gen := bn254.Generators()
 
-	expectedG1 := G1{
-		inner: g1Gen,
-	}
+	expectedG1 := G1{inner: g1Gen}
 	bytesG1 := expectedG1.Marshal()
 
-	expectedG2 := G2{
-		inner: g2Gen,
-	}
+	expectedG2 := G2{inner: g2Gen}
 	bytesG2 := expectedG2.Marshal()
 
 	var gotG1 G1
