@@ -1031,6 +1031,15 @@ func testExternalUI(api *core.SignerAPI) {
 		api.List(context.WithValue(ctx, "Origin", "origin.com"))
 		expectResponse("metadata - origin", "Did you see origin (origin.com)? [yes/no] ", "yes")
 	}
+	{ // SIWE
+		api.UI.ShowInfo("Please reject SIWE request")
+		time.Sleep(delay)
+		req := core.SIWERequest{
+			Domain: "foo",
+		}
+		_, err := api.ApproveSIWE(ctx, req, "some_inc_signature")
+		expectDeny("siwe", err)
+	}
 
 	for _, e := range errs {
 		log.Error(e)
