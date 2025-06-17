@@ -18,12 +18,17 @@ package core
 
 import (
 	"fmt"
+	"runtime"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // TxIndexProgress is the struct describing the progress for transaction indexing.
@@ -122,7 +127,7 @@ func (indexer *txIndexer) run(head uint64, stop chan struct{}, done chan struct{
 			from = head - indexer.limit + 1
 		}
 		from = max(from, indexer.cutoff)
-		rawdb.IndexTransactions(indexer.db, from, head+1, stop, true)
+		indexer.index(from, head+1, stop, nil, true)
 		return
 	}
 	// The tail flag is existent (which means indexes in [tail, head] should be
@@ -130,7 +135,7 @@ func (indexer *txIndexer) run(head uint64, stop chan struct{}, done chan struct{
 	if indexer.limit == 0 || head < indexer.limit {
 		if *tail > 0 {
 			from := max(uint64(0), indexer.cutoff)
-			rawdb.IndexTransactions(indexer.db, from, *tail, stop, true)
+			indexer.index(from, *tail, stop, nil, true)
 		}
 		return
 	}
@@ -140,10 +145,10 @@ func (indexer *txIndexer) run(head uint64, stop chan struct{}, done chan struct{
 	from = max(from, indexer.cutoff)
 	if from < *tail {
 		// Reindex a part of missing indices and rewind index tail to HEAD-limit
-		rawdb.IndexTransactions(indexer.db, from, *tail, stop, true)
+		indexer.index(from, *tail, stop, nil, true)
 	} else {
 		// Unindex a part of stale indices and forward index tail to HEAD-limit
-		rawdb.UnindexTransactions(indexer.db, *tail, from, stop, false)
+		indexer.unindex(*tail, from, stop, nil, false)
 	}
 }
 
@@ -329,5 +334,252 @@ func (indexer *txIndexer) close() {
 	case indexer.term <- ch:
 		<-ch
 	case <-indexer.closed:
+	}
+}
+
+type blockTxHashes struct {
+	number uint64
+	hashes []common.Hash
+}
+
+// iterate iterates over all transactions in the (canon) block
+// number(s) given, and yields the hashes on a channel. If there is a signal
+// received from interrupt channel, the iteration will be aborted and result
+// channel will be closed.
+func (indexer *txIndexer) iterate(from uint64, to uint64, reverse bool, interrupt chan struct{}) chan *blockTxHashes {
+	// One thread sequentially reads data from db
+	type numberRlp struct {
+		number uint64
+		rlp    rlp.RawValue
+	}
+	if to == from {
+		return nil
+	}
+	threads := to - from
+	if cpus := runtime.NumCPU(); threads > uint64(cpus) {
+		threads = uint64(cpus)
+	}
+	var (
+		rlpCh    = make(chan *numberRlp, threads*2)     // we send raw rlp over this channel
+		hashesCh = make(chan *blockTxHashes, threads*2) // send hashes over hashesCh
+	)
+	// lookup runs in one instance
+	lookup := func() {
+		n, end := from, to
+		if reverse {
+			n, end = to-1, from-1
+		}
+		defer close(rlpCh)
+		for n != end {
+			data := rawdb.ReadCanonicalBodyRLP(indexer.db, n)
+			// Feed the block to the aggregator, or abort on interrupt
+			select {
+			case rlpCh <- &numberRlp{n, data}:
+			case <-interrupt:
+				return
+			}
+			if reverse {
+				n--
+			} else {
+				n++
+			}
+		}
+	}
+	// process runs in parallel
+	var nThreadsAlive atomic.Int32
+	nThreadsAlive.Store(int32(threads))
+	process := func() {
+		defer func() {
+			// Last processor closes the result channel
+			if nThreadsAlive.Add(-1) == 0 {
+				close(hashesCh)
+			}
+		}()
+		for data := range rlpCh {
+			var body types.Body
+			if err := rlp.DecodeBytes(data.rlp, &body); err != nil {
+				log.Warn("Failed to decode block body", "block", data.number, "error", err)
+				return
+			}
+			var hashes []common.Hash
+			for _, tx := range body.Transactions {
+				hashes = append(hashes, tx.Hash())
+			}
+			result := &blockTxHashes{
+				hashes: hashes,
+				number: data.number,
+			}
+			// Feed the block to the aggregator, or abort on interrupt
+			select {
+			case hashesCh <- result:
+			case <-interrupt:
+				return
+			}
+		}
+	}
+	go lookup() // start the sequential db accessor
+	for i := 0; i < int(threads); i++ {
+		go process()
+	}
+	return hashesCh
+}
+
+// index creates txlookup indices of the specified block range.
+//
+// This function iterates canonical chain in reverse order, it has one main advantage:
+// We can write tx index tail flag periodically even without the whole indexing
+// procedure is finished. So that we can resume indexing procedure next time quickly.
+//
+// There is a passed channel, the whole procedure will be interrupted if any
+// signal received.
+func (indexer *txIndexer) index(from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool, report bool) {
+	// short circuit for invalid range
+	if from >= to {
+		return
+	}
+	var (
+		hashesCh = indexer.iterate(from, to, true, interrupt)
+		batch    = indexer.db.NewBatch()
+		start    = time.Now()
+		logged   = start.Add(-7 * time.Second)
+
+		// Since we iterate in reverse, we expect the first number to come
+		// in to be [to-1]. Therefore, setting lastNum to means that the
+		// queue gap-evaluation will work correctly
+		lastNum     = to
+		queue       = prque.New[int64, *blockTxHashes](nil)
+		blocks, txs = 0, 0 // for stats reporting
+	)
+	for chanDelivery := range hashesCh {
+		// Push the delivery into the queue and process contiguous ranges.
+		// Since we iterate in reverse, so lower numbers have lower prio, and
+		// we can use the number directly as prio marker
+		queue.Push(chanDelivery, int64(chanDelivery.number))
+		for !queue.Empty() {
+			// If the next available item is gapped, return
+			if _, priority := queue.Peek(); priority != int64(lastNum-1) {
+				break
+			}
+			// For testing
+			if hook != nil && !hook(lastNum-1) {
+				break
+			}
+			// Next block available, pop it off and index it
+			delivery := queue.PopItem()
+			lastNum = delivery.number
+			rawdb.WriteTxLookupEntries(batch, delivery.number, delivery.hashes)
+			blocks++
+			txs += len(delivery.hashes)
+			// If enough data was accumulated in memory or we're at the last block, dump to disk
+			if batch.ValueSize() > ethdb.IdealBatchSize {
+				rawdb.WriteTxIndexTail(batch, lastNum) // Also write the tail here
+				if err := batch.Write(); err != nil {
+					log.Crit("Failed writing batch to db", "error", err)
+					return
+				}
+				batch.Reset()
+			}
+			// If we've spent too much time already, notify the user of what we're doing
+			if time.Since(logged) > 8*time.Second {
+				log.Info("Indexing transactions", "blocks", blocks, "txs", txs, "tail", lastNum, "total", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
+				logged = time.Now()
+			}
+		}
+	}
+	// Flush the new indexing tail and the last committed data. It can also happen
+	// that the last batch is empty because nothing to index, but the tail has to
+	// be flushed anyway.
+	rawdb.WriteTxIndexTail(batch, lastNum)
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed writing batch to db", "error", err)
+		return
+	}
+	logger := log.Debug
+	if report {
+		logger = log.Info
+	}
+	select {
+	case <-interrupt:
+		logger("Transaction indexing interrupted", "blocks", blocks, "txs", txs, "tail", lastNum, "elapsed", common.PrettyDuration(time.Since(start)))
+	default:
+		logger("Indexed transactions", "blocks", blocks, "txs", txs, "tail", lastNum, "elapsed", common.PrettyDuration(time.Since(start)))
+	}
+}
+
+// unindex removes txlookup indices of the specified block range.
+//
+// There is a passed channel, the whole procedure will be interrupted if any
+// signal received.
+func (indexer *txIndexer) unindex(from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool, report bool) {
+	// short circuit for invalid range
+	if from >= to {
+		return
+	}
+	var (
+		hashesCh = indexer.iterate(from, to, false, interrupt)
+		batch    = indexer.db.NewBatch()
+		start    = time.Now()
+		logged   = start.Add(-7 * time.Second)
+
+		// we expect the first number to come in to be [from]. Therefore, setting
+		// nextNum to from means that the queue gap-evaluation will work correctly
+		nextNum     = from
+		queue       = prque.New[int64, *blockTxHashes](nil)
+		blocks, txs = 0, 0 // for stats reporting
+	)
+	// Otherwise spin up the concurrent iterator and unindexer
+	for delivery := range hashesCh {
+		// Push the delivery into the queue and process contiguous ranges.
+		queue.Push(delivery, -int64(delivery.number))
+		for !queue.Empty() {
+			// If the next available item is gapped, return
+			if _, priority := queue.Peek(); -priority != int64(nextNum) {
+				break
+			}
+			// For testing
+			if hook != nil && !hook(nextNum) {
+				break
+			}
+			delivery := queue.PopItem()
+			nextNum = delivery.number + 1
+			rawdb.DeleteTxLookupEntries(batch, delivery.hashes)
+			txs += len(delivery.hashes)
+			blocks++
+
+			// If enough data was accumulated in memory or we're at the last block, dump to disk
+			// A batch counts the size of deletion as '1', so we need to flush more
+			// often than that.
+			if blocks%1000 == 0 {
+				rawdb.WriteTxIndexTail(batch, nextNum)
+				if err := batch.Write(); err != nil {
+					log.Crit("Failed writing batch to db", "error", err)
+					return
+				}
+				batch.Reset()
+			}
+			// If we've spent too much time already, notify the user of what we're doing
+			if time.Since(logged) > 8*time.Second {
+				log.Info("Unindexing transactions", "blocks", blocks, "txs", txs, "total", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
+				logged = time.Now()
+			}
+		}
+	}
+	// Flush the new indexing tail and the last committed data. It can also happen
+	// that the last batch is empty because nothing to unindex, but the tail has to
+	// be flushed anyway.
+	rawdb.WriteTxIndexTail(batch, nextNum)
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed writing batch to db", "error", err)
+		return
+	}
+	logger := log.Debug
+	if report {
+		logger = log.Info
+	}
+	select {
+	case <-interrupt:
+		logger("Transaction unindexing interrupted", "blocks", blocks, "txs", txs, "tail", to, "elapsed", common.PrettyDuration(time.Since(start)))
+	default:
+		logger("Unindexed transactions", "blocks", blocks, "txs", txs, "tail", to, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
 }
