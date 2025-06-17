@@ -1,6 +1,7 @@
 package bn256
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/consensys/gnark-crypto/ecc/bn254"
@@ -31,21 +32,68 @@ func (g *G1) ScalarMult(a *G1, scalar *big.Int) {
 
 // Unmarshal deserializes `buf` into `g`
 //
-// Note: whether the deserialization is of a compressed
-// or an uncompressed point, is encoded in the bytes.
-//
-// For our purpose, the point will always be serialized
-// as uncompressed, ie 64 bytes.
+// The input is expected to be in the EVM format:
+// 64 bytes: [32-byte x coordinate][32-byte y coordinate]
+// where each coordinate is in big-endian format.
 //
 // This method also checks whether the point is on the
 // curve and in the prime order subgroup.
 func (g *G1) Unmarshal(buf []byte) (int, error) {
-	return g.inner.SetBytes(buf)
+	if len(buf) < 64 {
+		return 0, errors.New("invalid G1 point size")
+	}
+
+	// Check if both coordinates are zero (point at infinity)
+	isZero := true
+	for i := 0; i < 64; i++ {
+		if buf[i] != 0 {
+			isZero = false
+			break
+		}
+	}
+	if isZero {
+		g.inner.X.SetZero()
+		g.inner.Y.SetZero()
+		return 64, nil
+	}
+
+	err := g.inner.X.SetBytesCanonical(buf[:32])
+	if err != nil {
+		return 0, err
+	}
+	err = g.inner.Y.SetBytesCanonical(buf[32:64])
+	if err != nil {
+		return 0, err
+	}
+
+	if !g.inner.IsOnCurve() {
+		return 0, errors.New("point is not on curve")
+	}
+	if !g.inner.IsInSubGroup() {
+		return 0, errors.New("point is not in correct subgroup")
+	}
+
+	return 64, nil
 }
 
 // Marshal serializes the point into a byte slice.
 //
-// Note: The point is serialized as uncompressed.
+// The output is in EVM format: 64 bytes total.
+// [32-byte x coordinate][32-byte y coordinate]
+// where each coordinate is a big-endian integer padded to 32 bytes.
 func (p *G1) Marshal() []byte {
-	return p.inner.Marshal()
+	output := make([]byte, 64)
+
+	// Handle point at infinity
+	if p.inner.X.IsZero() && p.inner.Y.IsZero() {
+		return output
+	}
+
+	xBytes := p.inner.X.Bytes()
+	copy(output[:32], xBytes[:])
+
+	yBytes := p.inner.Y.Bytes()
+	copy(output[32:64], yBytes[:])
+
+	return output
 }

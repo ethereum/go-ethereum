@@ -1,6 +1,8 @@
 package bn256
 
 import (
+	"errors"
+
 	"github.com/consensys/gnark-crypto/ecc/bn254"
 )
 
@@ -18,21 +20,86 @@ type G2 struct {
 
 // Unmarshal deserializes `buf` into `g`
 //
-// Note: whether the deserialization is of a compressed
-// or an uncompressed point, is encoded in the bytes.
-//
-// For our purpose, the point will always be serialized
-// as uncompressed, ie 128 bytes.
+// The input is expected to be in the EVM format:
+// 128 bytes: [32-byte x.real][32-byte x.imag][32-byte y.real][32-byte y.imag]
+// where each value is a big-endian integer.
 //
 // This method also checks whether the point is on the
 // curve and in the prime order subgroup.
 func (g *G2) Unmarshal(buf []byte) (int, error) {
-	return g.inner.SetBytes(buf)
+	if len(buf) < 128 {
+		return 0, errors.New("invalid G2 point size")
+	}
+
+	// Check if all coordinates are zero (point at infinity)
+	isZero := true
+	for i := 0; i < 128; i++ {
+		if buf[i] != 0 {
+			isZero = false
+			break
+		}
+	}
+	if isZero {
+		g.inner.X.A0.SetZero()
+		g.inner.X.A1.SetZero()
+		g.inner.Y.A0.SetZero()
+		g.inner.Y.A1.SetZero()
+		return 128, nil
+	}
+
+	err := g.inner.X.A0.SetBytesCanonical(buf[0:32])
+	if err != nil {
+		return 0, err
+	}
+	err = g.inner.X.A1.SetBytesCanonical(buf[32:64])
+	if err != nil {
+		return 0, err
+	}
+	err = g.inner.Y.A0.SetBytesCanonical(buf[64:96])
+	if err != nil {
+		return 0, err
+	}
+	err = g.inner.Y.A1.SetBytesCanonical(buf[96:128])
+	if err != nil {
+		return 0, err
+	}
+
+	if !g.inner.IsOnCurve() {
+		return 0, errors.New("point is not on curve")
+	}
+
+	if !g.inner.IsInSubGroup() {
+		return 0, errors.New("point is not in correct subgroup")
+	}
+
+	return 128, nil
 }
 
 // Marshal serializes the point into a byte slice.
 //
-// Note: The point is serialized as uncompressed.
+// The output is in EVM format: 128 bytes total.
+// [32-byte x.real][32-byte x.imag][32-byte y.real][32-byte y.imag]
+// where each value is a big-endian integer padded to 32 bytes.
 func (g *G2) Marshal() []byte {
-	return g.inner.Marshal()
+	output := make([]byte, 128)
+
+	// Handle point at infinity
+	if g.inner.X.A0.IsZero() && g.inner.X.A1.IsZero() &&
+		g.inner.Y.A0.IsZero() && g.inner.Y.A1.IsZero() {
+		return output
+	}
+
+	xA0Bytes := g.inner.X.A0.Bytes()
+	copy(output[:32], xA0Bytes[:])
+
+	xA1Bytes := g.inner.X.A1.Bytes()
+	copy(output[32:64], xA1Bytes[:])
+
+	yA0Bytes := g.inner.Y.A0.Bytes()
+	copy(output[64:96], yA0Bytes[:])
+
+	yA1Bytes := g.inner.Y.A1.Bytes()
+	copy(output[96:128], yA1Bytes[:])
+
+	return output
 }
