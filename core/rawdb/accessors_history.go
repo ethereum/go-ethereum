@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"bytes"
+	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -162,7 +163,17 @@ func increaseKey(key []byte) []byte {
 func DeleteStateHistoryIndex(db ethdb.KeyValueRangeDeleter) {
 	start := StateHistoryIndexPrefix
 	limit := increaseKey(bytes.Clone(StateHistoryIndexPrefix))
-	if err := db.DeleteRange(start, limit); err != nil {
+
+	// Try to remove the data in the range by a loop, as the leveldb
+	// doesn't support the native range deletion.
+	for {
+		err := db.DeleteRange(start, limit)
+		if err == nil {
+			return
+		}
+		if errors.Is(err, ethdb.ErrTooManyKeys) {
+			continue
+		}
 		log.Crit("Failed to delete history index range", "err", err)
 	}
 }
