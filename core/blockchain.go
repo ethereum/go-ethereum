@@ -186,32 +186,6 @@ type BlockChainConfig struct {
 	TxLookupLimit *uint64
 }
 
-// triedbConfig derives the configures for trie database.
-func (o *BlockChainConfig) triedbConfig(isVerkle bool) *triedb.Config {
-	config := &triedb.Config{
-		Preimages: o.Preimages,
-		IsVerkle:  isVerkle,
-	}
-	if o.StateScheme == rawdb.HashScheme {
-		config.HashDB = &hashdb.Config{
-			CleanCacheSize: o.TrieCleanLimit * 1024 * 1024,
-		}
-	}
-	if o.StateScheme == rawdb.PathScheme {
-		config.PathDB = &pathdb.Config{
-			StateHistory:   o.StateHistory,
-			TrieCleanSize:  o.TrieCleanLimit * 1024 * 1024,
-			StateCleanSize: o.SnapshotLimit * 1024 * 1024,
-
-			// TODO(rjl493456442): The write buffer represents the memory limit used
-			// for flushing both trie data and state data to disk. The config name
-			// should be updated to eliminate the confusion.
-			WriteBufferSize: o.TrieDirtyLimit * 1024 * 1024,
-		}
-	}
-	return config
-}
-
 // DefaultConfig returns the default config.
 // Note the returned object is safe to modify!
 func DefaultConfig() *BlockChainConfig {
@@ -236,6 +210,32 @@ func (cfg BlockChainConfig) WithArchive(on bool) *BlockChainConfig {
 func (cfg BlockChainConfig) WithStateScheme(scheme string) *BlockChainConfig {
 	cfg.StateScheme = scheme
 	return &cfg
+}
+
+// triedbConfig derives the configures for trie database.
+func (cfg *BlockChainConfig) triedbConfig(isVerkle bool) *triedb.Config {
+	config := &triedb.Config{
+		Preimages: cfg.Preimages,
+		IsVerkle:  isVerkle,
+	}
+	if cfg.StateScheme == rawdb.HashScheme {
+		config.HashDB = &hashdb.Config{
+			CleanCacheSize: cfg.TrieCleanLimit * 1024 * 1024,
+		}
+	}
+	if cfg.StateScheme == rawdb.PathScheme {
+		config.PathDB = &pathdb.Config{
+			StateHistory:   cfg.StateHistory,
+			TrieCleanSize:  cfg.TrieCleanLimit * 1024 * 1024,
+			StateCleanSize: cfg.SnapshotLimit * 1024 * 1024,
+
+			// TODO(rjl493456442): The write buffer represents the memory limit used
+			// for flushing both trie data and state data to disk. The config name
+			// should be updated to eliminate the confusion.
+			WriteBufferSize: cfg.TrieDirtyLimit * 1024 * 1024,
+		}
+	}
+	return config
 }
 
 // txLookup is wrapper over transaction lookup along with the corresponding
