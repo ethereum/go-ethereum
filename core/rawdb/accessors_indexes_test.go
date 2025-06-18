@@ -17,6 +17,8 @@
 package rawdb
 
 import (
+	"github.com/davecgh/go-spew/spew"
+	"github.com/holiman/uint256"
 	"math/big"
 	"testing"
 
@@ -115,5 +117,105 @@ func TestLookupStorage(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestTraverseBlockBody(t *testing.T) {
+	tx1 := types.NewTx(&types.LegacyTx{
+		Nonce:    1,
+		GasPrice: big.NewInt(1),
+		Gas:      1,
+		To:       new(common.Address),
+		Value:    big.NewInt(5),
+		Data:     []byte{0x11, 0x11, 0x11},
+	})
+	tx2 := types.NewTx(&types.AccessListTx{
+		Nonce:    1,
+		GasPrice: big.NewInt(1),
+		Gas:      1,
+		To:       new(common.Address),
+		Value:    big.NewInt(5),
+		Data:     []byte{0x11, 0x11, 0x11},
+		AccessList: []types.AccessTuple{
+			{
+				Address:     common.Address{0x1},
+				StorageKeys: []common.Hash{{0x1}, {0x2}},
+			},
+		},
+	})
+	tx3 := types.NewTx(&types.DynamicFeeTx{
+		Nonce:     1,
+		Gas:       1,
+		To:        new(common.Address),
+		Value:     big.NewInt(5),
+		Data:      []byte{0x11, 0x11, 0x11},
+		GasTipCap: big.NewInt(55),
+		GasFeeCap: big.NewInt(1055),
+		AccessList: []types.AccessTuple{
+			{
+				Address:     common.Address{0x1},
+				StorageKeys: []common.Hash{{0x1}, {0x2}},
+			},
+		},
+	})
+	tx4 := types.NewTx(&types.BlobTx{
+		Nonce:     1,
+		Gas:       1,
+		To:        common.Address{0x1},
+		Value:     uint256.NewInt(5),
+		Data:      []byte{0x11, 0x11, 0x11},
+		GasTipCap: uint256.NewInt(55),
+		GasFeeCap: uint256.NewInt(1055),
+		AccessList: []types.AccessTuple{
+			{
+				Address:     common.Address{0x1},
+				StorageKeys: []common.Hash{{0x1}, {0x2}},
+			},
+		},
+		BlobFeeCap: uint256.NewInt(1),
+		BlobHashes: []common.Hash{{0x1}, {0x2}},
+	})
+	tx5 := types.NewTx(&types.SetCodeTx{
+		Nonce:     1,
+		Gas:       1,
+		To:        common.Address{0x1},
+		Value:     uint256.NewInt(5),
+		Data:      []byte{0x11, 0x11, 0x11},
+		GasTipCap: uint256.NewInt(55),
+		GasFeeCap: uint256.NewInt(1055),
+		AccessList: []types.AccessTuple{
+			{
+				Address:     common.Address{0x1},
+				StorageKeys: []common.Hash{{0x1}, {0x2}},
+			},
+		},
+		AuthList: []types.SetCodeAuthorization{
+			{
+				ChainID: uint256.Int{1},
+				Address: common.Address{0x1},
+			},
+		},
+	})
+
+	txs := []*types.Transaction{tx1, tx2, tx3, tx4, tx5}
+
+	block := types.NewBlock(&types.Header{Number: big.NewInt(314)}, &types.Body{Transactions: txs}, nil, newTestHasher())
+	db := NewMemoryDatabase()
+	WriteBlock(db, block)
+
+	rlp := ReadBodyRLP(db, block.Hash(), block.NumberU64())
+	for i := 0; i < len(txs); i++ {
+		tx, txIndex, err := traverseBlockBody(rlp, txs[i].Hash())
+		if err != nil {
+			t.Fatalf("Failed to retrieve tx, err: %v", err)
+		}
+		if txIndex != uint64(i) {
+			t.Fatalf("Unexpected transaction index, want: %d, got: %d", i, txIndex)
+		}
+		if tx.Hash() != txs[i].Hash() {
+			want := spew.Sdump(txs[i])
+			got := spew.Sdump(tx)
+			t.Fatalf("Unexpected transaction, want: %s, got: %s", want, got)
+		}
 	}
 }
