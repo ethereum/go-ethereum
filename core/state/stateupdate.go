@@ -223,11 +223,11 @@ func (sc *StateUpdate) IntoChangeset() *StateChangeset {
 		}
 		if len(newValue) == 0 {
 			accounts -= 1
-			accountSize -= common.AddressLength
+			accountSize -= common.HashLength
 		}
 		if len(oldValue) == 0 {
 			accounts += 1
-			accountSize += common.AddressLength
+			accountSize += common.HashLength
 		}
 		accountSize += len(newValue) - len(oldValue)
 	}
