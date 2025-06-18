@@ -332,13 +332,22 @@ func (db *Database) Journal(root common.Hash) error {
 	}
 
 	var journal io.Writer
+	var file *os.File
 	// Store the journal into the database and return
 	if db.config.Journal != "" {
-		file, err := os.OpenFile(db.config.Journal, os.O_WRONLY|os.O_CREATE, 0644)
+		// Write into a temp file first
+		var err error
+		file, err = os.OpenFile(db.config.Journal+".new", os.O_WRONLY|os.O_CREATE, 0644)
 		if err != nil {
 			return fmt.Errorf("failed to open journal file %s: %w", db.config.Journal, err)
 		}
-		defer file.Close()
+		defer func() {
+			if file != nil {
+				file.Close()
+				// Clean up temp file if we didn't successfully rename it
+				os.Remove(db.config.Journal + ".new")
+			}
+		}()
 		journal = file
 	} else {
 		journal = new(bytes.Buffer)
@@ -369,8 +378,17 @@ func (db *Database) Journal(root common.Hash) error {
 		size = data.Len()
 		rawdb.WriteTrieJournal(db.diskdb, data.Bytes())
 	} else {
+		// Close the temporary file and atomically rename it
+		if err := file.Close(); err != nil {
+			return fmt.Errorf("failed to close temporary journal file: %w", err)
+		}
+		// Replace the live journal with the newly generated one
+		if err := os.Rename(db.config.Journal+".new", db.config.Journal); err != nil {
+			return fmt.Errorf("failed to rename temporary journal file: %w", err)
+		}
 		stat, _ := journal.(*os.File).Stat()
 		size = int(stat.Size())
+		file = nil
 	}
 
 	// Set the db in read only mode to reject all following mutations
