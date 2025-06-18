@@ -465,6 +465,12 @@ var (
 		Value:    15,
 		Category: flags.PerfCategory,
 	}
+	CacheTrieJournalFlag = &cli.StringFlag{
+		Name:     "cache.trie.journal",
+		Usage:    "Disk journal directory for trie cache to survive node restarts",
+		Value:    "trie-journal.rlp",
+		Category: flags.PerfCategory,
+	}
 	CacheGCFlag = &cli.IntFlag{
 		Name:     "cache.gc",
 		Usage:    "Percentage of cache memory allowance to use for trie pruning (default = 25% full mode, 0% archive mode)",
