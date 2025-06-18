@@ -129,10 +129,10 @@ func DeleteAllTxLookupEntries(db ethdb.KeyValueStore, condition func(common.Hash
 	}
 }
 
-// traverseBlockBody traverses the given RLP-encoded block body, searching for
+// findTxInBlockBody traverses the given RLP-encoded block body, searching for
 // the transaction specified by its hash.
-func traverseBlockBody(data rlp.RawValue, target common.Hash) (*types.Transaction, uint64, error) {
-	txnListRLP, _, err := rlp.SplitList(data)
+func findTxInBlockBody(blockbody rlp.RawValue, target common.Hash) (*types.Transaction, uint64, error) {
+	txnListRLP, _, err := rlp.SplitList(blockbody)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -185,7 +185,7 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 		log.Error("Transaction referenced missing", "number", *blockNumber, "hash", blockHash)
 		return nil, common.Hash{}, 0, 0
 	}
-	tx, txIndex, err := traverseBlockBody(bodyRLP, hash)
+	tx, txIndex, err := findTxInBlockBody(bodyRLP, hash)
 	if err != nil {
 		log.Error("Transaction not found", "number", *blockNumber, "hash", blockHash, "txhash", hash, "err", err)
 		return nil, common.Hash{}, 0, 0
