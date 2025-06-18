@@ -64,20 +64,21 @@ func (d *Downloader) GetHeader(hash common.Hash) (*types.Header, error) {
 	// available due to fresh startup
 	d.peers.lock.RLock()
 	defer d.peers.lock.RUnlock()
+
 	for _, peer := range d.peers.peers {
 		if peer == nil {
 			return nil, errors.New("could not find peer")
 		}
 		// Found a peer, attempt to retrieve the header whilst blocking and
 		// retry if it fails for whatever reason
-		log.Debug("Attempting to retrieve sync target", "peer", peer.id)
+		log.Debug("Attempting to retrieve sync target", "peer", peer.id, "hash", hash)
 		headers, metas, err := d.fetchHeadersByHash(peer, hash, 1, 0, false)
 		if err != nil || len(headers) != 1 {
 			continue
 		}
 		// Head header retrieved, if the hash matches, start the actual sync
 		if metas[0] != hash {
-			log.Warn("Received invalid sync target", "want", hash, "have", metas[0])
+			log.Warn("Received invalid sync target", "peer", peer.id, "want", hash, "have", metas[0])
 			continue
 		}
 		return headers[0], nil

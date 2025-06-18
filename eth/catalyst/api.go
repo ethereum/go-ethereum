@@ -283,7 +283,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		// that should be fixed, not papered over.
 		header := api.remoteBlocks.get(update.HeadBlockHash)
 		if header == nil {
-			log.Warn("Forkchoice requested unknown head, trying to retrieve it from a random peer", "hash", update.HeadBlockHash)
+			log.Warn("Forkchoice requested unknown head, trying to retrieve from network", "hash", update.HeadBlockHash)
 			retrievedHead, err := api.eth.Downloader().GetHeader(update.HeadBlockHash)
 			if err != nil {
 				log.Warn("Could not retrieve unknown head from peers")
