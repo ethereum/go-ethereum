@@ -194,7 +194,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		vmConfig = vm.Config{
 			EnablePreimageRecording: config.EnablePreimageRecording,
 		}
-		options = &core.BlockchainOptions{
+		options = &core.BlockChainOptions{
 			TrieCleanLimit:   config.TrieCleanCache,
 			NoPrefetch:       config.NoPrefetch,
 			TrieDirtyLimit:   config.TrieDirtyCache,

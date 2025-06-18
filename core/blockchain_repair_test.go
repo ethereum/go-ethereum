@@ -1781,7 +1781,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 			Config:  params.AllEthashProtocolChanges,
 		}
 		engine = ethash.NewFullFaker()
-		option = &BlockchainOptions{
+		option = &BlockChainOptions{
 			TrieCleanLimit: 256,
 			TrieDirtyLimit: 256,
 			TrieTimeLimit:  5 * time.Minute,

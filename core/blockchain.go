@@ -149,8 +149,8 @@ const (
 	BlockChainVersion uint64 = 9
 )
 
-// BlockchainOptions contains the configuration fields for setting up blockchain.
-type BlockchainOptions struct {
+// BlockChainOptions contains the configuration fields for setting up blockchain.
+type BlockChainOptions struct {
 	// Trie database related options
 	TrieCleanLimit int           // Memory allowance (MB) to use for caching trie nodes in memory
 	TrieDirtyLimit int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
@@ -187,7 +187,7 @@ type BlockchainOptions struct {
 }
 
 // triedbConfig derives the configures for trie database.
-func (o *BlockchainOptions) triedbConfig(isVerkle bool) *triedb.Config {
+func (o *BlockChainOptions) triedbConfig(isVerkle bool) *triedb.Config {
 	config := &triedb.Config{
 		Preimages: o.Preimages,
 		IsVerkle:  isVerkle,
@@ -214,7 +214,7 @@ func (o *BlockchainOptions) triedbConfig(isVerkle bool) *triedb.Config {
 
 // defaultOptions are the default blockchain options if none are specified by the
 // user (also used during testing).
-var defaultOptions = &BlockchainOptions{
+var defaultOptions = &BlockChainOptions{
 	TrieCleanLimit:   256,
 	TrieDirtyLimit:   256,
 	TrieTimeLimit:    5 * time.Minute,
@@ -226,7 +226,7 @@ var defaultOptions = &BlockchainOptions{
 
 // BlockchainOptionsWithScheme returns a deep copied default chain config with
 // a provided state scheme.
-func BlockchainOptionsWithScheme(scheme string) *BlockchainOptions {
+func BlockchainOptionsWithScheme(scheme string) *BlockChainOptions {
 	config := *defaultOptions
 	config.StateScheme = scheme
 	return &config
@@ -255,7 +255,7 @@ type txLookup struct {
 // canonical chain.
 type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
-	options     *BlockchainOptions  // Blockchain configuration
+	options     *BlockChainOptions  // Blockchain configuration
 
 	db            ethdb.Database                   // Low level persistent database to store final content in
 	snaps         *snapshot.Tree                   // Snapshot tree for fast trie leaf access
@@ -311,7 +311,7 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
-func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine, options *BlockchainOptions) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine, options *BlockChainOptions) (*BlockChain, error) {
 	if options == nil {
 		options = defaultOptions
 	}

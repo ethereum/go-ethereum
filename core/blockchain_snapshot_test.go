@@ -310,7 +310,7 @@ func (snaptest *gappedSnapshotTest) test(t *testing.T) {
 	gappedBlocks, _ := GenerateChain(snaptest.gspec.Config, blocks[len(blocks)-1], snaptest.engine, snaptest.genDb, snaptest.gapped, func(i int, b *BlockGen) {})
 
 	// Insert a few more blocks without enabling snapshot
-	var options = &BlockchainOptions{
+	var options = &BlockChainOptions{
 		TrieCleanLimit: 256,
 		TrieDirtyLimit: 256,
 		TrieTimeLimit:  5 * time.Minute,
@@ -383,7 +383,7 @@ func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
 	// and state committed.
 	chain.Stop()
 
-	config := &BlockchainOptions{
+	config := &BlockChainOptions{
 		TrieCleanLimit: 256,
 		TrieDirtyLimit: 256,
 		TrieTimeLimit:  5 * time.Minute,
@@ -399,7 +399,7 @@ func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
 	newchain.Stop()
 
 	// Restart the chain, the wiper should start working
-	config = &BlockchainOptions{
+	config = &BlockChainOptions{
 		TrieCleanLimit: 256,
 		TrieDirtyLimit: 256,
 		TrieTimeLimit:  5 * time.Minute,

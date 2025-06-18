@@ -117,7 +117,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	default:
 		t.Fatalf("unexpected consensus engine type: %T", engine)
 	}
-	chain, err := core.NewBlockChain(db, gspec, engine, &core.BlockchainOptions{ArchiveMode: true})
+	chain, err := core.NewBlockChain(db, gspec, engine, &core.BlockChainOptions{ArchiveMode: true})
 	if err != nil {
 		t.Fatalf("core.NewBlockChain failed: %v", err)
 	}

@@ -67,7 +67,7 @@ func newTestBlockChain(t *testing.T, n int, gspec *core.Genesis, generator func(
 	_, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, generator)
 
 	// Import the canonical chain
-	options := &core.BlockchainOptions{
+	options := &core.BlockChainOptions{
 		TrieCleanLimit: 256,
 		TrieDirtyLimit: 256,
 		TrieTimeLimit:  5 * time.Minute,
