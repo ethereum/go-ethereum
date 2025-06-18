@@ -432,6 +432,12 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
 	nonce := evm.StateDB.GetNonce(caller)
+	bal := evm.StateDB.BlockAccessList()
+	if bal != nil && evm.StateDB.GetCodeHash(caller) != (types.EmptyCodeHash) {
+		// TODO: do we need to include the txidx as well? the caller can create multiple accounts in the block.
+		// TODO: how do we handle the occurance where account is created-selfdestructed in one tx and create permanently in another
+		bal.NonceDiff(caller, nonce)
+	}
 	if nonce+1 < nonce {
 		return nil, common.Address{}, gas, ErrNonceUintOverflow
 	}
@@ -461,12 +467,19 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 	// - the storage is non-empty
 	contractHash := evm.StateDB.GetCodeHash(address)
 	storageRoot := evm.StateDB.GetStorageRoot(address)
-	if evm.StateDB.GetNonce(address) != 0 ||
+	targetNonce := evm.StateDB.GetNonce(address)
+
+	// record target prestate nonce in BAL regardless of whether it is preexisting
+	if bal := evm.StateDB.BlockAccessList(); bal != nil {
+		bal.NonceDiff(address, targetNonce)
+	}
+	if targetNonce != 0 ||
 		(contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) || // non-empty code
 		(storageRoot != (common.Hash{}) && storageRoot != types.EmptyRootHash) { // non-empty storage
 		if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 			evm.Config.Tracer.OnGasChange(gas, 0, tracing.GasChangeCallFailedExecution)
 		}
+		// add a nonce access to the BAL here
 		return nil, common.Address{}, 0, ErrContractAddressCollision
 	}
 	// Create a new account on the state only if the object was not present.
@@ -480,7 +493,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 	// in the state trie or not, it _now_ becomes created as a _contract_ account.
 	// This is performed _prior_ to executing the initcode,  since the initcode
 	// acts inside that account.
-	evm.StateDB.CreateContract(caller, address)
+	evm.StateDB.CreateContract(address)
 
 	if evm.chainRules.IsEIP158 {
 		evm.StateDB.SetNonce(address, 1, tracing.NonceChangeNewContract)

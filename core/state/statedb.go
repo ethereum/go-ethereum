@@ -663,16 +663,11 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 // state due to funds sent beforehand.
 // This operation sets the 'newContract'-flag, which is required in order to
 // correctly handle EIP-6780 'delete-in-same-transaction' logic.
-func (s *StateDB) CreateContract(creator, addr common.Address) {
+func (s *StateDB) CreateContract(addr common.Address) {
 	obj := s.getStateObject(addr)
 	if !obj.newContract {
 		obj.newContract = true
 		s.journal.createContract(addr)
-
-		creator := s.getStateObject(creator)
-		if common.BytesToHash(creator.CodeHash()) != types.EmptyCodeHash {
-			obj.creatorContract = creator.address
-		}
 	}
 }
 
@@ -788,23 +783,6 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 					(obj.origin != nil && obj.origin.Balance.Cmp(obj.Balance()) != 0)
 				if hadBalanceChange {
 					s.b.BalanceChange(uint64(s.txIndex), obj.address, obj.Balance())
-				}
-
-				// add block prestate nonces of contracts that created other contracts
-				isCreatedByContract := obj.newContract &&
-					obj.creatorContract != (common.Address{})
-
-				if isCreatedByContract {
-					var creatorNonce uint64
-					creatorObj, exists := s.stateObjects[obj.creatorContract]
-
-					if !exists {
-						log.Info("creator was self-destructed or created in the current tx")
-						creatorNonce = 0
-					} else {
-						creatorNonce = creatorObj.origin.Nonce
-					}
-					s.b.NonceDiff(obj.creatorContract, creatorNonce)
 				}
 
 				// include code of created contracts

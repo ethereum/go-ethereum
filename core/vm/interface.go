@@ -30,7 +30,7 @@ import (
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
 	CreateAccount(common.Address)
-	CreateContract(common.Address, common.Address)
+	CreateContract(common.Address)
 
 	SubBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason) uint256.Int
 	AddBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason) uint256.Int
@@ -96,6 +96,8 @@ type StateDB interface {
 	AddPreimage(common.Hash, []byte)
 
 	Witness() *stateless.Witness
+
+	BlockAccessList() *types.BlockAccessList
 
 	AccessEvents() *state.AccessEvents
 

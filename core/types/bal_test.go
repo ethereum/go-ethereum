@@ -36,6 +36,7 @@ func TestBALBlockEncoding(t *testing.T) {
 
 func TestBALCreation(t *testing.T) {
 	// test ideas (we will want these as unit tests first, and then state tests later on):
-	// contract creates another contract.  the creator was itself created in the same transaction
-	// contract is created in the current transaction, creates another contract, and then self-destructs
+	// * contract creates another contract.  the creator was itself created in the same transaction
+	// * contract is created in the current transaction, creates another contract, and then self-destructs
+	// * create/create2 deployment reverts.  Ensure the creator and the target nonces are included
 }

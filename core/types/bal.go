@@ -514,9 +514,12 @@ func (b *BlockAccessList) Eq(other *BlockAccessList) bool {
 	return true
 }
 
-// TODO: this should be called once per account per block for every account that sent txs in that block.
-// the value is the prestate nonce before the start of the first tx execution from that account in the block.
+// Add the prestate nonce of the caller and target of a CREATE/CREATE2 invocation.
+// Called whether the creation reverts or not.
 func (b *BlockAccessList) NonceDiff(address common.Address, originNonce uint64) {
+	if _, ok := b.PrestateNonces[address]; ok {
+		return
+	}
 	b.PrestateNonces[address] = originNonce
 }
 
