@@ -479,7 +479,6 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 		if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 			evm.Config.Tracer.OnGasChange(gas, 0, tracing.GasChangeCallFailedExecution)
 		}
-		// add a nonce access to the BAL here
 		return nil, common.Address{}, 0, ErrContractAddressCollision
 	}
 	// Create a new account on the state only if the object was not present.
