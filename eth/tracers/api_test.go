@@ -84,7 +84,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 		SnapshotLimit:  0,
 		ArchiveMode:    true, // Archive mode
 	}
-	chain, err := core.NewBlockChain(options, backend.chaindb, gspec, backend.engine)
+	chain, err := core.NewBlockChain(backend.chaindb, gspec, backend.engine, options)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -1151,7 +1151,7 @@ func newTestMergedBackend(t *testing.T, n int, gspec *core.Genesis, generator fu
 		SnapshotLimit:  0,
 		ArchiveMode:    true, // Archive mode
 	}
-	chain, err := core.NewBlockChain(options, backend.chaindb, gspec, backend.engine)
+	chain, err := core.NewBlockChain(backend.chaindb, gspec, backend.engine, options)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}

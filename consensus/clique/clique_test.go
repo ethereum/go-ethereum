@@ -54,7 +54,7 @@ func TestReimportMirroredState(t *testing.T) {
 	copy(genspec.ExtraData[extraVanity:], addr[:])
 
 	// Generate a batch of blocks, each properly signed
-	chain, _ := core.NewBlockChain(nil, rawdb.NewMemoryDatabase(), genspec, engine)
+	chain, _ := core.NewBlockChain(rawdb.NewMemoryDatabase(), genspec, engine, nil)
 	defer chain.Stop()
 
 	_, blocks, _ := core.GenerateChainWithGenesis(genspec, engine, 3, func(i int, block *core.BlockGen) {
@@ -86,7 +86,7 @@ func TestReimportMirroredState(t *testing.T) {
 	}
 	// Insert the first two blocks and make sure the chain is valid
 	db = rawdb.NewMemoryDatabase()
-	chain, _ = core.NewBlockChain(nil, db, genspec, engine)
+	chain, _ = core.NewBlockChain(db, genspec, engine, nil)
 	defer chain.Stop()
 
 	if _, err := chain.InsertChain(blocks[:2]); err != nil {
@@ -99,7 +99,7 @@ func TestReimportMirroredState(t *testing.T) {
 	// Simulate a crash by creating a new chain on top of the database, without
 	// flushing the dirty states out. Insert the last block, triggering a sidechain
 	// reimport.
-	chain, _ = core.NewBlockChain(nil, db, genspec, engine)
+	chain, _ = core.NewBlockChain(db, genspec, engine, nil)
 	defer chain.Stop()
 
 	if _, err := chain.InsertChain(blocks[2:]); err != nil {

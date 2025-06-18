@@ -75,7 +75,7 @@ func newTestBlockChain(t *testing.T, n int, gspec *core.Genesis, generator func(
 		Preimages:      true,
 		ArchiveMode:    true, // Archive mode
 	}
-	chain, err := core.NewBlockChain(options, rawdb.NewMemoryDatabase(), gspec, engine)
+	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), gspec, engine, options)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}

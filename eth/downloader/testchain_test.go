@@ -216,7 +216,7 @@ func newTestBlockchain(blocks []*types.Block) *core.BlockChain {
 		if pregenerated {
 			panic("Requested chain generation outside of init")
 		}
-		chain, err := core.NewBlockChain(nil, rawdb.NewMemoryDatabase(), testGspec, ethash.NewFaker())
+		chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), testGspec, ethash.NewFaker(), nil)
 		if err != nil {
 			panic(err)
 		}

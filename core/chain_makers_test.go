@@ -118,7 +118,7 @@ func TestGeneratePOSChain(t *testing.T) {
 	})
 
 	// Import the chain. This runs all block validation rules.
-	blockchain, _ := NewBlockChain(nil, db, gspec, engine)
+	blockchain, _ := NewBlockChain(db, gspec, engine, nil)
 	defer blockchain.Stop()
 
 	if i, err := blockchain.InsertChain(genchain); err != nil {
@@ -233,7 +233,7 @@ func ExampleGenerateChain() {
 	})
 
 	// Import the chain. This runs all block validation rules.
-	blockchain, _ := NewBlockChain(BlockchainOptionsWithScheme(rawdb.HashScheme), db, gspec, ethash.NewFaker())
+	blockchain, _ := NewBlockChain(db, gspec, ethash.NewFaker(), BlockchainOptionsWithScheme(rawdb.HashScheme))
 	defer blockchain.Stop()
 
 	if i, err := blockchain.InsertChain(chain); err != nil {

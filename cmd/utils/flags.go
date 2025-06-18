@@ -2211,7 +2211,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	options.VmConfig = vmcfg
 
 	// Disable transaction indexing/unindexing by default.
-	chain, err := core.NewBlockChain(options, chainDb, gspec, engine)
+	chain, err := core.NewBlockChain(chainDb, gspec, engine, options)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}

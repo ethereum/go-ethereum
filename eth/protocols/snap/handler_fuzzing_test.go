@@ -125,7 +125,7 @@ func getChain() *core.BlockChain {
 		SnapshotWait:   true,
 	}
 	trieRoot = blocks[len(blocks)-1].Root()
-	bc, _ := core.NewBlockChain(options, rawdb.NewMemoryDatabase(), gspec, ethash.NewFaker())
+	bc, _ := core.NewBlockChain(rawdb.NewMemoryDatabase(), gspec, ethash.NewFaker(), options)
 	if _, err := bc.InsertChain(blocks); err != nil {
 		panic(err)
 	}

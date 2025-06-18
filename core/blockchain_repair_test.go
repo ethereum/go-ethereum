@@ -1794,7 +1794,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 		option.SnapshotLimit = 256
 		option.SnapshotWait = true
 	}
-	chain, err := NewBlockChain(option, db, gspec, engine)
+	chain, err := NewBlockChain(db, gspec, engine, option)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
@@ -1859,7 +1859,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	}
 	defer db.Close()
 
-	newChain, err := NewBlockChain(option, db, gspec, engine)
+	newChain, err := NewBlockChain(db, gspec, engine, option)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
@@ -1930,9 +1930,10 @@ func testIssue23496(t *testing.T, scheme string) {
 			Config:  params.TestChainConfig,
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
-		engine = ethash.NewFullFaker()
+		engine  = ethash.NewFullFaker()
+		options = BlockchainOptionsWithScheme(scheme)
 	)
-	chain, err := NewBlockChain(BlockchainOptionsWithScheme(scheme), db, gspec, engine)
+	chain, err := NewBlockChain(db, gspec, engine, options)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
@@ -1984,7 +1985,7 @@ func testIssue23496(t *testing.T, scheme string) {
 	}
 	defer db.Close()
 
-	chain, err = NewBlockChain(BlockchainOptionsWithScheme(scheme), db, gspec, engine)
+	chain, err = NewBlockChain(db, gspec, engine, BlockchainOptionsWithScheme(scheme))
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}

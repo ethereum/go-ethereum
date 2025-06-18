@@ -124,7 +124,7 @@ func TestStateProcessorErrors(t *testing.T) {
 					},
 				},
 			}
-			blockchain, _  = NewBlockChain(nil, db, gspec, beacon.New(ethash.NewFaker()))
+			blockchain, _  = NewBlockChain(db, gspec, beacon.New(ethash.NewFaker()), nil)
 			tooBigInitCode = [params.MaxInitCodeSize + 1]byte{}
 		)
 
@@ -292,7 +292,7 @@ func TestStateProcessorErrors(t *testing.T) {
 					},
 				},
 			}
-			blockchain, _ = NewBlockChain(nil, db, gspec, ethash.NewFaker())
+			blockchain, _ = NewBlockChain(db, gspec, ethash.NewFaker(), nil)
 		)
 		defer blockchain.Stop()
 		for i, tt := range []struct {
@@ -331,7 +331,7 @@ func TestStateProcessorErrors(t *testing.T) {
 					},
 				},
 			}
-			blockchain, _ = NewBlockChain(nil, db, gspec, beacon.New(ethash.NewFaker()))
+			blockchain, _ = NewBlockChain(db, gspec, beacon.New(ethash.NewFaker()), nil)
 		)
 		defer blockchain.Stop()
 		for i, tt := range []struct {

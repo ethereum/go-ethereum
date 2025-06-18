@@ -279,7 +279,7 @@ func testFilters(t *testing.T, history uint64, noHistory bool) {
 	var l uint64
 	options := core.BlockchainOptionsWithScheme(rawdb.HashScheme)
 	options.TxLookupLimit = &l
-	bc, err := core.NewBlockChain(options, db, gspec, ethash.NewFaker())
+	bc, err := core.NewBlockChain(db, gspec, ethash.NewFaker(), options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -439,7 +439,7 @@ func TestRangeLogs(t *testing.T) {
 	var l uint64
 	options := core.BlockchainOptionsWithScheme(rawdb.HashScheme)
 	options.TxLookupLimit = &l
-	bc, err := core.NewBlockChain(options, db, gspec, ethash.NewFaker())
+	bc, err := core.NewBlockChain(db, gspec, ethash.NewFaker(), options)
 	if err != nil {
 		t.Fatal(err)
 	}

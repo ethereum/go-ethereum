@@ -1997,7 +1997,7 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 		options.SnapshotLimit = 256
 		options.SnapshotWait = true
 	}
-	chain, err := NewBlockChain(options, db, gspec, engine)
+	chain, err := NewBlockChain(db, gspec, engine, options)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
