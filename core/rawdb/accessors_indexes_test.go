@@ -120,7 +120,7 @@ func TestLookupStorage(t *testing.T) {
 	}
 }
 
-func TestTraverseBlockBody(t *testing.T) {
+func TestFindTxInBlockBody(t *testing.T) {
 	tx1 := types.NewTx(&types.LegacyTx{
 		Nonce:    1,
 		GasPrice: big.NewInt(1),
@@ -205,7 +205,7 @@ func TestTraverseBlockBody(t *testing.T) {
 
 	rlp := ReadBodyRLP(db, block.Hash(), block.NumberU64())
 	for i := 0; i < len(txs); i++ {
-		tx, txIndex, err := traverseBlockBody(rlp, txs[i].Hash())
+		tx, txIndex, err := findTxInBlockBody(rlp, txs[i].Hash())
 		if err != nil {
 			t.Fatalf("Failed to retrieve tx, err: %v", err)
 		}
