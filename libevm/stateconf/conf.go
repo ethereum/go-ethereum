@@ -17,7 +17,48 @@
 // Package stateconf configures state management.
 package stateconf
 
-import "github.com/ava-labs/libevm/libevm/options"
+import (
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/libevm/options"
+)
+
+// A StateDBCommitOption configures the behaviour of state.StateDB.Commit()
+type StateDBCommitOption = options.Option[stateDBCommitConfig]
+
+type stateDBCommitConfig struct {
+	snapshotOpts []SnapshotUpdateOption
+	triedbOpts   []TrieDBUpdateOption
+}
+
+// WithSnapshotUpdateOpts returns a StateDBCommitOption carrying a list of
+// SnapshotUpdateOptions.
+// If multiple such options are used, only the last will be applied as they overwrite each other.
+func WithSnapshotUpdateOpts(opts ...SnapshotUpdateOption) StateDBCommitOption {
+	return options.Func[stateDBCommitConfig](func(c *stateDBCommitConfig) {
+		c.snapshotOpts = opts
+	})
+}
+
+// ExtractSnapshotUpdateOpts returns the list of SnapshotUpdateOptions carried
+// by the provided slice of StateDBCommitOption.
+func ExtractSnapshotUpdateOpts(opts ...StateDBCommitOption) []SnapshotUpdateOption {
+	return options.As(opts...).snapshotOpts
+}
+
+// WithTrieDBUpdateOpts returns a StateDBCommitOption carrying a list of
+// TrieDBUpdateOptions. If multiple such options are used, only the last will be
+// applied as they overwrite each other.
+func WithTrieDBUpdateOpts(opts ...TrieDBUpdateOption) StateDBCommitOption {
+	return options.Func[stateDBCommitConfig](func(c *stateDBCommitConfig) {
+		c.triedbOpts = opts
+	})
+}
+
+// ExtractTrieDBUpdateOpts returns the list of TrieDBUpdateOptions carried by
+// the provided slice of StateDBCommitOption.
+func ExtractTrieDBUpdateOpts(opts ...StateDBCommitOption) []TrieDBUpdateOption {
+	return options.As(opts...).triedbOpts
+}
 
 // A SnapshotUpdateOption configures the behaviour of
 // state.SnapshotTree.Update() implementations. This will be removed along with
@@ -28,18 +69,47 @@ type snapshotUpdateConfig struct {
 	payload any
 }
 
-// WithUpdatePayload returns a SnapshotUpdateOption carrying an arbitrary
+// WithSnapshotUpdatePayload returns a SnapshotUpdateOption carrying an arbitrary
 // payload. It acts only as a carrier to exploit existing function plumbing and
 // the effect on behaviour is left to the implementation receiving it.
-func WithUpdatePayload(p any) SnapshotUpdateOption {
+func WithSnapshotUpdatePayload(p any) SnapshotUpdateOption {
 	return options.Func[snapshotUpdateConfig](func(c *snapshotUpdateConfig) {
 		c.payload = p
 	})
 }
 
-// ExtractUpdatePayload returns the payload carried by a [WithUpdatePayload]
+// ExtractSnapshotUpdatePayload returns the payload carried by a [WithSnapshotUpdatePayload]
 // option. Only one such option can be used at once; behaviour is otherwise
 // undefined.
-func ExtractUpdatePayload(opts ...SnapshotUpdateOption) any {
+func ExtractSnapshotUpdatePayload(opts ...SnapshotUpdateOption) any {
 	return options.As(opts...).payload
+}
+
+// A TrieDBUpdateOption configures the behaviour of triedb.Database.Update() implementations.
+type TrieDBUpdateOption = options.Option[triedbUpdateConfig]
+
+type triedbUpdateConfig struct {
+	parentBlockHash  *common.Hash
+	currentBlockHash *common.Hash
+}
+
+// WithTrieDBUpdatePayload returns a TrieDBUpdateOption carrying two block hashes.
+// It acts only as a carrier to exploit existing function plumbing and
+// the effect on behaviour is left to the implementation receiving it.
+func WithTrieDBUpdatePayload(parent common.Hash, current common.Hash) TrieDBUpdateOption {
+	return options.Func[triedbUpdateConfig](func(c *triedbUpdateConfig) {
+		c.parentBlockHash = &parent
+		c.currentBlockHash = &current
+	})
+}
+
+// ExtractTrieDBUpdatePayload returns the payload carried by a [WithTrieDBUpdatePayload]
+// option. Only one such option can be used at once; behaviour is otherwise
+// undefined.
+func ExtractTrieDBUpdatePayload(opts ...TrieDBUpdateOption) (common.Hash, common.Hash, bool) {
+	conf := options.As(opts...)
+	if conf.parentBlockHash == nil && conf.currentBlockHash == nil {
+		return common.Hash{}, common.Hash{}, false
+	}
+	return *conf.parentBlockHash, *conf.currentBlockHash, true
 }

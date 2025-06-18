@@ -26,23 +26,48 @@ import (
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/state/snapshot"
 	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/libevm/stateconf"
+	"github.com/ava-labs/libevm/trie"
+	"github.com/ava-labs/libevm/trie/trienode"
+	"github.com/ava-labs/libevm/trie/triestate"
+	"github.com/ava-labs/libevm/triedb"
+	"github.com/ava-labs/libevm/triedb/database"
+	"github.com/ava-labs/libevm/triedb/hashdb"
 )
 
 func TestStateDBCommitPropagatesOptions(t *testing.T) {
-	var rec snapTreeRecorder
-	sdb, err := New(types.EmptyRootHash, NewDatabase(rawdb.NewMemoryDatabase()), &rec)
+	memdb := rawdb.NewMemoryDatabase()
+	trieRec := &triedbRecorder{Database: hashdb.New(memdb, nil, &trie.MerkleResolver{})}
+	triedb := triedb.NewDatabase(
+		memdb,
+		&triedb.Config{
+			DBOverride: func(_ ethdb.Database) triedb.DBOverride {
+				return trieRec
+			},
+		},
+	)
+	var snapRec snapTreeRecorder
+	sdb, err := New(types.EmptyRootHash, NewDatabaseWithNodeDB(memdb, triedb), &snapRec)
 	require.NoError(t, err, "New()")
 
 	// Ensures that rec.Update() will be called.
 	sdb.SetNonce(common.Address{}, 42)
 
-	const payload = "hello world"
-	opt := stateconf.WithUpdatePayload(payload)
-	_, err = sdb.Commit(0, false, opt)
-	require.NoErrorf(t, err, "%T.Commit(..., %T)", sdb, opt)
+	const snapshotPayload = "hello world"
+	var (
+		parentHash  = common.HexToHash("0x0102030405060708090a0b0c0d0e0f1011121314151617181920212223242526")
+		currentHash = common.HexToHash("0x1234567890123456789012345678901234567890123456789012345678901234")
+	)
+	snapshotOpt := stateconf.WithSnapshotUpdatePayload(snapshotPayload)
+	triedbOpt := stateconf.WithTrieDBUpdatePayload(parentHash, currentHash)
+	_, err = sdb.Commit(0, false, stateconf.WithSnapshotUpdateOpts(snapshotOpt), stateconf.WithTrieDBUpdateOpts(triedbOpt))
 
-	assert.Equalf(t, payload, rec.gotPayload, "%T payload propagated via %T.Commit() to %T.Update()", opt, sdb, rec)
+	require.NoErrorf(t, err, "%T.Commit(..., %T, %T)", sdb, snapshotOpt, triedbOpt)
+	assert.Equalf(t, snapshotPayload, snapRec.gotPayload, "%T payload propagated via %T.Commit() to %T.Update()", snapshotOpt, sdb, snapRec)
+	assert.Truef(t, trieRec.exists, "%T exists propagated via %T.Commit() to %T.Update()", triedbOpt, sdb, trieRec)
+	assert.Equalf(t, parentHash, trieRec.parentBlockHash, "%T parentHash propagated via %T.Commit() to %T.Update()", triedbOpt, sdb, trieRec)
+	assert.Equalf(t, currentHash, trieRec.currentBlockHash, "%T currentHash propagated via %T.Commit() to %T.Update()", triedbOpt, sdb, trieRec)
 }
 
 type snapTreeRecorder struct {
@@ -59,7 +84,7 @@ func (r *snapTreeRecorder) Update(
 	_ map[common.Hash]struct{}, _ map[common.Hash][]byte, _ map[common.Hash]map[common.Hash][]byte,
 	opts ...stateconf.SnapshotUpdateOption,
 ) error {
-	r.gotPayload = stateconf.ExtractUpdatePayload(opts...)
+	r.gotPayload = stateconf.ExtractSnapshotUpdatePayload(opts...)
 	return nil
 }
 
@@ -77,4 +102,27 @@ func (snapshotStub) Account(common.Hash) (*types.SlimAccount, error) {
 
 func (snapshotStub) Root() common.Hash {
 	return common.Hash{}
+}
+
+type triedbRecorder struct {
+	*hashdb.Database
+	parentBlockHash  common.Hash
+	currentBlockHash common.Hash
+	exists           bool
+}
+
+func (r *triedbRecorder) Update(
+	root common.Hash,
+	parent common.Hash,
+	block uint64,
+	nodes *trienode.MergedNodeSet,
+	states *triestate.Set,
+	opts ...stateconf.TrieDBUpdateOption,
+) error {
+	r.parentBlockHash, r.currentBlockHash, r.exists = stateconf.ExtractTrieDBUpdatePayload(opts...)
+	return r.Database.Update(root, parent, block, nodes, states)
+}
+
+func (r *triedbRecorder) Reader(_ common.Hash) (database.Reader, error) {
+	return r.Database.Reader(common.Hash{})
 }

@@ -1152,7 +1152,7 @@ func (s *StateDB) handleDestruction(nodes *trienode.MergedNodeSet) (map[common.A
 //
 // The associated block number of the state transition is also provided
 // for more chain context.
-func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, opts ...stateconf.SnapshotUpdateOption) (common.Hash, error) {
+func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, opts ...stateconf.StateDBCommitOption) (common.Hash, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
@@ -1242,7 +1242,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, opts ...statecon
 		start := time.Now()
 		// Only update if there's a state transition (skip empty Clique blocks)
 		if parent := s.snap.Root(); parent != root {
-			if err := s.snaps.Update(root, parent, s.convertAccountSet(s.stateObjectsDestruct), s.accounts, s.storages, opts...); err != nil {
+			if err := s.snaps.Update(root, parent, s.convertAccountSet(s.stateObjectsDestruct), s.accounts, s.storages, stateconf.ExtractSnapshotUpdateOpts(opts...)...); err != nil {
 				log.Warn("Failed to update snapshot tree", "from", parent, "to", root, "err", err)
 			}
 			// Keep 128 diff layers in the memory, persistent layer is 129th.
@@ -1268,7 +1268,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, opts ...statecon
 	if root != origin {
 		start := time.Now()
 		set := triestate.New(s.accountsOrigin, s.storagesOrigin, incomplete)
-		if err := s.db.TrieDB().Update(root, origin, block, nodes, set); err != nil {
+		if err := s.db.TrieDB().Update(root, origin, block, nodes, set, stateconf.ExtractTrieDBUpdateOpts(opts...)...); err != nil {
 			return common.Hash{}, err
 		}
 		s.originalRoot = root
