@@ -168,6 +168,7 @@ func newHelper(scheme string) *testHelper {
 	if scheme == rawdb.PathScheme {
 		config.PathDB = &pathdb.Config{
 			SnapshotNoBuild: true,
+			NoAsyncFlush:    true,
 		} // disable caching
 	} else {
 		config.HashDB = &hashdb.Config{} // disable caching
@@ -242,18 +243,6 @@ func (t *testHelper) Commit() common.Hash {
 	}
 	t.triedb.Update(root, types.EmptyRootHash, 0, t.nodes, t.states)
 	t.triedb.Commit(root, false)
-
-	// re-open the trie database to ensure the frozen buffer
-	// is not referenced
-	//config := &triedb.Config{}
-	//if t.triedb.Scheme() == rawdb.PathScheme {
-	//	config.PathDB = &pathdb.Config{
-	//		SnapshotNoBuild: true,
-	//	} // disable caching
-	//} else {
-	//	config.HashDB = &hashdb.Config{} // disable caching
-	//}
-	//t.triedb = triedb.NewDatabase(t.triedb.Disk(), config)
 	return root
 }
 

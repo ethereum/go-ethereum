@@ -49,6 +49,7 @@ type diskLayer struct {
 
 	// The generator is set if the state snapshot was not fully completed,
 	// regardless of whether the background generation is running or not.
+	// It should only be unset if the generation completes.
 	generator *generator
 }
 
@@ -121,7 +122,7 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 	// (both the live one and the frozen one). Note the buffer is lock free since
 	// it's impossible to mutate the buffer before tagging the layer as stale.
 	for _, buffer := range []*buffer{dl.buffer, dl.frozen} {
-		if buffer != nil && !buffer.empty() {
+		if buffer != nil {
 			n, found := buffer.node(owner, path)
 			if found {
 				dirtyNodeHitMeter.Mark(1)
@@ -177,7 +178,7 @@ func (dl *diskLayer) account(hash common.Hash, depth int) ([]byte, error) {
 	// (both the live one and the frozen one). Note the buffer is lock free since
 	// it's impossible to mutate the buffer before tagging the layer as stale.
 	for _, buffer := range []*buffer{dl.buffer, dl.frozen} {
-		if buffer != nil && !buffer.empty() {
+		if buffer != nil {
 			blob, found := buffer.account(hash)
 			if found {
 				dirtyStateHitMeter.Mark(1)
@@ -255,7 +256,7 @@ func (dl *diskLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 	// (both the live one and the frozen one). Note the buffer is lock free since
 	// it's impossible to mutate the buffer before tagging the layer as stale.
 	for _, buffer := range []*buffer{dl.buffer, dl.frozen} {
-		if buffer != nil && !buffer.empty() {
+		if buffer != nil {
 			if blob, found := buffer.storage(accountHash, storageHash); found {
 				dirtyStateHitMeter.Mark(1)
 				dirtyStateReadMeter.Mark(int64(len(blob)))
@@ -403,7 +404,6 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 
 			// If the snapshot has been fully generated, unset the generator
 			if progress == nil {
-				gen = nil
 				dl.setGenerator(nil)
 			} else {
 				log.Info("Paused snapshot generation")
@@ -425,18 +425,12 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 			}
 		})
 		// Block until the frozen buffer is fully flushed out if the async flushing
-		// is not allowed.
-		if dl.db.config.NoAsyncFlush {
+		// is not allowed, or if the oldest history surpasses the persisted state ID.
+		if dl.db.config.NoAsyncFlush || persistedID < oldest {
 			if err := dl.frozen.waitFlush(); err != nil {
 				return nil, err
 			}
-		}
-		// Block until the frozen buffer is fully flushed out if the oldest history
-		// surpasses the persisted state ID.
-		if persistedID < oldest {
-			if err := dl.frozen.waitFlush(); err != nil {
-				return nil, err
-			}
+			dl.frozen = nil
 		}
 		combined = newBuffer(dl.db.config.WriteBufferSize, nil, nil, 0)
 	}
@@ -512,7 +506,9 @@ func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 		dl.frozen = nil
 	}
 
-	// Terminate the generation before writing any data into database
+	// Terminate the generator before writing any data to the database.
+	// This must be done after flushing the frozen buffer, as the generator
+	// may be restarted at the end of the flush process.
 	var progress []byte
 	if dl.generator != nil {
 		dl.generator.stop()
@@ -576,11 +572,29 @@ func (dl *diskLayer) genMarker() []byte {
 	return dl.generator.progressMarker()
 }
 
-// waitFlush blocks until the buffer has been fully flushed and returns any
-// stored errors that occurred during the process.
-func (dl *diskLayer) waitFlush() error {
-	if dl.frozen == nil {
-		return nil
+// genComplete returns a flag indicating whether the state snapshot has been
+// fully generated.
+func (dl *diskLayer) genComplete() bool {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	return dl.genMarker() == nil
+}
+
+// terminate releases the frozen buffer if it's not nil and terminates the
+// background state generator.
+func (dl *diskLayer) terminate() error {
+	dl.lock.Lock()
+	defer dl.lock.Unlock()
+
+	if dl.frozen != nil {
+		if err := dl.frozen.waitFlush(); err != nil {
+			return err
+		}
+		dl.frozen = nil
 	}
-	return dl.frozen.waitFlush()
+	if dl.generator != nil {
+		dl.generator.stop()
+	}
+	return nil
 }

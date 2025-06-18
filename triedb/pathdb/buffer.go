@@ -39,8 +39,12 @@ type buffer struct {
 	nodes  *nodeSet  // Aggregated trie node set
 	states *stateSet // Aggregated state set
 
-	done     chan struct{} // notifier whether the content in buffer has been flushed or not
-	flushErr error         // error if any exception occurs during flushing
+	// done is the notifier whether the content in buffer has been flushed or not.
+	// This channel is nil if the buffer is not frozen.
+	done chan struct{}
+
+	// flushErr memorizes the error if any exception occurs during flushing
+	flushErr error
 }
 
 // newBuffer initializes the buffer with the provided states and trie nodes.
@@ -65,7 +69,7 @@ func (b *buffer) account(hash common.Hash) ([]byte, bool) {
 	return b.states.account(hash)
 }
 
-// storage retrieves the storage slot with account address hash and slot key.
+// storage retrieves the storage slot with account address hash and slot key hash.
 func (b *buffer) storage(addrHash common.Hash, storageHash common.Hash) ([]byte, bool) {
 	return b.states.storage(addrHash, storageHash)
 }
@@ -134,6 +138,8 @@ func (b *buffer) flush(root common.Hash, db ethdb.KeyValueStore, freezer ethdb.A
 	}
 	b.done = make(chan struct{}) // allocate the channel for notification
 
+	// Schedule the background thread to construct the batch, which usually
+	// take a few seconds.
 	go func() {
 		defer func() {
 			if postFlush != nil {
@@ -185,7 +191,9 @@ func (b *buffer) flush(root common.Hash, db ethdb.KeyValueStore, freezer ethdb.A
 		// The content in the frozen buffer is kept for consequent state access,
 		// TODO (rjl493456442) measure the gc overhead for holding this struct.
 		// TODO (rjl493456442) can we somehow get rid of it after flushing??
-		b.reset()
+		// TODO (rjl493456442) buffer itself is not thread-safe, add the lock
+		// protection if try to reset the buffer here.
+		// b.reset()
 		log.Debug("Persisted buffer content", "nodes", nodes, "accounts", accounts, "slots", slots, "bytes", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
 	}()
 }

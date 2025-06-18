@@ -304,12 +304,8 @@ func (db *Database) Journal(root common.Hash) error {
 	// Block until the background flushing is finished. It must
 	// be done before terminating the potential background snapshot
 	// generator.
-	if err := disk.waitFlush(); err != nil {
+	if err := disk.terminate(); err != nil {
 		return err
-	}
-	// Terminate the background state generation if it's active
-	if disk.generator != nil {
-		disk.generator.stop()
 	}
 	start := time.Now()
 
