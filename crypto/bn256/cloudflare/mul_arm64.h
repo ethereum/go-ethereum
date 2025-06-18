@@ -1,3 +1,7 @@
+// mul multiplies two 256-bit numbers in little-endian order.
+// The inputs are (R1,R2,R3,R4) times (R5,R6,R7,R8)
+// and the product is stored in (c0,c1,c2,c3,c4,c5,c6,c7).
+// Note that the input registers (R1,R2,R3) are overwritten.
 #define mul(c0,c1,c2,c3,c4,c5,c6,c7) \
 	MUL R1, R5, c0 \
 	UMULH R1, R5, c1 \
@@ -16,54 +20,54 @@
 	UMULH R2, R5, R26 \
 	MUL R2, R6, R0 \
 	ADDS R0, R26 \
-	UMULH R2, R6, R27 \
+	UMULH R2, R6, c6 \
 	MUL R2, R7, R0 \
-	ADCS R0, R27 \
-	UMULH R2, R7, R29 \
+	ADCS R0, c6 \
+	UMULH R2, R7, c7 \
 	MUL R2, R8, R0 \
-	ADCS R0, R29 \
+	ADCS R0, c7 \
 	UMULH R2, R8, c5 \
 	ADCS ZR, c5 \
 	ADDS R1, c1 \
 	ADCS R26, c2 \
-	ADCS R27, c3 \
-	ADCS R29, c4 \
+	ADCS c6, c3 \
+	ADCS c7, c4 \
 	ADCS  ZR, c5 \
 	\
 	MUL R3, R5, R1 \
 	UMULH R3, R5, R26 \
 	MUL R3, R6, R0 \
 	ADDS R0, R26 \
-	UMULH R3, R6, R27 \
+	UMULH R3, R6, R2 \
 	MUL R3, R7, R0 \
-	ADCS R0, R27 \
-	UMULH R3, R7, R29 \
+	ADCS R0, R2 \
+	UMULH R3, R7, c7 \
 	MUL R3, R8, R0 \
-	ADCS R0, R29 \
+	ADCS R0, c7 \
 	UMULH R3, R8, c6 \
 	ADCS ZR, c6 \
 	ADDS R1, c2 \
 	ADCS R26, c3 \
-	ADCS R27, c4 \
-	ADCS R29, c5 \
+	ADCS R2, c4 \
+	ADCS c7, c5 \
 	ADCS  ZR, c6 \
 	\
 	MUL R4, R5, R1 \
 	UMULH R4, R5, R26 \
 	MUL R4, R6, R0 \
 	ADDS R0, R26 \
-	UMULH R4, R6, R27 \
+	UMULH R4, R6, R2 \
 	MUL R4, R7, R0 \
-	ADCS R0, R27 \
-	UMULH R4, R7, R29 \
+	ADCS R0, R2 \
+	UMULH R4, R7, R3 \
 	MUL R4, R8, R0 \
-	ADCS R0, R29 \
+	ADCS R0, R3 \
 	UMULH R4, R8, c7 \
 	ADCS ZR, c7 \
 	ADDS R1, c3 \
 	ADCS R26, c4 \
-	ADCS R27, c5 \
-	ADCS R29, c6 \
+	ADCS R2, c5 \
+	ADCS R3, c6 \
 	ADCS  ZR, c7
 
 #define gfpReduce() \

@@ -128,7 +128,7 @@ func (e *G1) Marshal() []byte {
 func (e *G1) Unmarshal(m []byte) ([]byte, error) {
 	// Each value is a 256-bit number.
 	const numBytes = 256 / 8
-	if len(m) != 2*numBytes {
+	if len(m) < 2*numBytes {
 		return nil, errors.New("bn256: not enough data")
 	}
 	// Unmarshal the points and check their caps
@@ -253,7 +253,7 @@ func (n *G2) Marshal() []byte {
 func (e *G2) Unmarshal(m []byte) ([]byte, error) {
 	// Each value is a 256-bit number.
 	const numBytes = 256 / 8
-	if len(m) != 4*numBytes {
+	if len(m) < 4*numBytes {
 		return nil, errors.New("bn256: not enough data")
 	}
 	// Unmarshal the points and check their caps
