@@ -149,8 +149,8 @@ const (
 	BlockChainVersion uint64 = 9
 )
 
-// BlockChainOptions contains the configuration fields for setting up blockchain.
-type BlockChainOptions struct {
+// BlockChainConfig contains the configuration of the BlockChain object.
+type BlockChainConfig struct {
 	// Trie database related options
 	TrieCleanLimit int           // Memory allowance (MB) to use for caching trie nodes in memory
 	TrieDirtyLimit int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
@@ -187,7 +187,7 @@ type BlockChainOptions struct {
 }
 
 // triedbConfig derives the configures for trie database.
-func (o *BlockChainOptions) triedbConfig(isVerkle bool) *triedb.Config {
+func (o *BlockChainConfig) triedbConfig(isVerkle bool) *triedb.Config {
 	config := &triedb.Config{
 		Preimages: o.Preimages,
 		IsVerkle:  isVerkle,
@@ -212,9 +212,9 @@ func (o *BlockChainOptions) triedbConfig(isVerkle bool) *triedb.Config {
 	return config
 }
 
-// defaultOptions are the default blockchain options if none are specified by the
+// defaultConfig are the default blockchain options if none are specified by the
 // user (also used during testing).
-var defaultOptions = &BlockChainOptions{
+var defaultConfig = &BlockChainConfig{
 	TrieCleanLimit:   256,
 	TrieDirtyLimit:   256,
 	TrieTimeLimit:    5 * time.Minute,
@@ -224,10 +224,9 @@ var defaultOptions = &BlockChainOptions{
 	ChainHistoryMode: history.KeepAll,
 }
 
-// BlockchainOptionsWithScheme returns a deep copied default chain config with
-// a provided state scheme.
-func BlockchainOptionsWithScheme(scheme string) *BlockChainOptions {
-	config := *defaultOptions
+// DefaultBlockChainConfig returns the default config with a provided state scheme.
+func DefaultBlockChainConfig(scheme string) *BlockChainConfig {
+	config := *defaultConfig
 	config.StateScheme = scheme
 	return &config
 }
@@ -255,7 +254,7 @@ type txLookup struct {
 // canonical chain.
 type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
-	options     *BlockChainOptions  // Blockchain configuration
+	cfg         *BlockChainConfig   // Blockchain configuration
 
 	db            ethdb.Database                   // Low level persistent database to store final content in
 	snaps         *snapshot.Tree                   // Snapshot tree for fast trie leaf access
@@ -311,22 +310,23 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
-func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine, options *BlockChainOptions) (*BlockChain, error) {
-	if options == nil {
-		options = defaultOptions
+func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine, cfg *BlockChainConfig) (*BlockChain, error) {
+	if cfg == nil {
+		cfg = DefaultBlockChainConfig(rawdb.HashScheme)
 	}
+
 	// Open trie database with provided config
 	enableVerkle, err := EnableVerkleAtGenesis(db, genesis)
 	if err != nil {
 		return nil, err
 	}
-	triedb := triedb.NewDatabase(db, options.triedbConfig(enableVerkle))
+	triedb := triedb.NewDatabase(db, cfg.triedbConfig(enableVerkle))
 
 	// Write the supplied genesis to the database if it has not been initialized
 	// yet. The corresponding chain config will be returned, either from the
 	// provided genesis or from the locally stored configuration if the genesis
 	// has already been initialized.
-	chainConfig, genesisHash, compatErr, err := SetupGenesisBlockWithOverride(db, triedb, genesis, options.Overrides)
+	chainConfig, genesisHash, compatErr, err := SetupGenesisBlockWithOverride(db, triedb, genesis, cfg.Overrides)
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +340,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 
 	bc := &BlockChain{
 		chainConfig:   chainConfig,
-		options:       options,
+		cfg:           cfg,
 		db:            db,
 		triedb:        triedb,
 		triegc:        prque.New[int64, common.Hash](nil),
@@ -352,13 +352,13 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		blockCache:    lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
 		txLookupCache: lru.NewCache[common.Hash, txLookup](txLookupCacheLimit),
 		engine:        engine,
-		logger:        options.VmConfig.Tracer,
+		logger:        cfg.VmConfig.Tracer,
 	}
 	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.insertStopped)
 	if err != nil {
 		return nil, err
 	}
-	bc.flushInterval.Store(int64(options.TrieTimeLimit))
+	bc.flushInterval.Store(int64(cfg.TrieTimeLimit))
 	bc.statedb = state.NewDatabase(bc.triedb, nil)
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
@@ -407,7 +407,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 			// Note it's unnecessary in path mode which always keep trie data and
 			// state data consistent.
 			var diskRoot common.Hash
-			if bc.options.SnapshotLimit > 0 && bc.options.StateScheme == rawdb.HashScheme {
+			if bc.cfg.SnapshotLimit > 0 && bc.cfg.StateScheme == rawdb.HashScheme {
 				diskRoot = rawdb.ReadSnapshotRoot(bc.db)
 			}
 			if diskRoot != (common.Hash{}) {
@@ -494,8 +494,8 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	}
 
 	// Start tx indexer if it's enabled.
-	if bc.options.TxLookupLimit != nil {
-		bc.txIndexer = newTxIndexer(*bc.options.TxLookupLimit, bc)
+	if bc.cfg.TxLookupLimit != nil {
+		bc.txIndexer = newTxIndexer(*bc.cfg.TxLookupLimit, bc)
 	}
 	return bc, nil
 }
@@ -503,11 +503,11 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 func (bc *BlockChain) setupSnapshot() {
 	// Short circuit if the chain is established with path scheme, as the
 	// state snapshot has been integrated into path database natively.
-	if bc.options.StateScheme == rawdb.PathScheme {
+	if bc.cfg.StateScheme == rawdb.PathScheme {
 		return
 	}
 	// Load any existing snapshot, regenerating it if loading failed
-	if bc.options.SnapshotLimit > 0 {
+	if bc.cfg.SnapshotLimit > 0 {
 		// If the chain was rewound past the snapshot persistent layer (causing
 		// a recovery block number to be persisted to disk), check if we're still
 		// in recovery mode and in that case, don't invalidate the snapshot on a
@@ -519,10 +519,10 @@ func (bc *BlockChain) setupSnapshot() {
 			recover = true
 		}
 		snapconfig := snapshot.Config{
-			CacheSize:  bc.options.SnapshotLimit,
+			CacheSize:  bc.cfg.SnapshotLimit,
 			Recovery:   recover,
-			NoBuild:    bc.options.SnapshotNoBuild,
-			AsyncBuild: !bc.options.SnapshotWait,
+			NoBuild:    bc.cfg.SnapshotNoBuild,
+			AsyncBuild: !bc.cfg.SnapshotWait,
 		}
 		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.triedb, head.Root)
 
@@ -646,7 +646,7 @@ func (bc *BlockChain) loadLastState() error {
 func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 	freezerTail, _ := bc.db.Tail()
 
-	switch bc.options.ChainHistoryMode {
+	switch bc.cfg.ChainHistoryMode {
 	case history.KeepAll:
 		if freezerTail == 0 {
 			return nil
@@ -667,7 +667,7 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 			// postmerge directly on an existing DB. We could just trigger the pruning
 			// here, but it'd be a bit dangerous since they may not have intended this
 			// action to happen. So just tell them how to do it.
-			log.Error(fmt.Sprintf("Chain history mode is configured as %q, but database is not pruned.", bc.options.ChainHistoryMode.String()))
+			log.Error(fmt.Sprintf("Chain history mode is configured as %q, but database is not pruned.", bc.cfg.ChainHistoryMode.String()))
 			log.Error(fmt.Sprintf("Run 'geth prune-history' to prune pre-merge history."))
 			return fmt.Errorf("history pruning requested via configuration")
 		}
@@ -683,7 +683,7 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 		return nil
 
 	default:
-		return fmt.Errorf("invalid history mode: %d", bc.options.ChainHistoryMode)
+		return fmt.Errorf("invalid history mode: %d", bc.cfg.ChainHistoryMode)
 	}
 }
 
@@ -1258,7 +1258,7 @@ func (bc *BlockChain) Stop() {
 		//  - HEAD:     So we don't need to reprocess any blocks in the general case
 		//  - HEAD-1:   So we don't do large reorgs if our HEAD becomes an uncle
 		//  - HEAD-127: So we have a hard limit on the number of blocks reexecuted
-		if !bc.options.ArchiveMode {
+		if !bc.cfg.ArchiveMode {
 			triedb := bc.triedb
 
 			for _, offset := range []uint64{0, 1, state.TriesInMemory - 1} {
@@ -1564,7 +1564,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		return nil
 	}
 	// If we're running an archive node, always flush
-	if bc.options.ArchiveMode {
+	if bc.cfg.ArchiveMode {
 		return bc.triedb.Commit(root, false)
 	}
 	// Full but not archive node, do proper garbage collection
@@ -1579,7 +1579,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// If we exceeded our memory allowance, flush matured singleton nodes to disk
 	var (
 		_, nodes, imgs = bc.triedb.Size() // all memory is contained within the nodes return for hashdb
-		limit          = common.StorageSize(bc.options.TrieDirtyLimit) * 1024 * 1024
+		limit          = common.StorageSize(bc.cfg.TrieDirtyLimit) * 1024 * 1024
 	)
 	if nodes > limit || imgs > 4*1024*1024 {
 		bc.triedb.Cap(limit - ethdb.IdealBatchSize)
@@ -1929,7 +1929,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	)
 	defer interrupt.Store(true) // terminate the prefetch at the end
 
-	if bc.options.NoPrefetch {
+	if bc.cfg.NoPrefetch {
 		statedb, err = state.New(parentRoot, bc.statedb)
 		if err != nil {
 			return nil, err
@@ -1954,7 +1954,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		}
 		go func(start time.Time, throwaway *state.StateDB, block *types.Block) {
 			// Disable tracing for prefetcher executions.
-			vmCfg := bc.options.VmConfig
+			vmCfg := bc.cfg.VmConfig
 			vmCfg.Tracer = nil
 			bc.prefetcher.Prefetch(block, throwaway, vmCfg, &interrupt)
 
@@ -1973,7 +1973,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		// Generate witnesses either if we're self-testing, or if it's the
 		// only block being inserted. A bit crude, but witnesses are huge,
 		// so we refuse to make an entire chain of them.
-		if bc.options.VmConfig.StatelessSelfValidation || makeWitness {
+		if bc.cfg.VmConfig.StatelessSelfValidation || makeWitness {
 			witness, err = stateless.NewWitness(block.Header(), bc)
 			if err != nil {
 				return nil, err
@@ -1998,7 +1998,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 
 	// Process block using the parent state as reference point
 	pstart := time.Now()
-	res, err := bc.processor.Process(block, statedb, bc.options.VmConfig)
+	res, err := bc.processor.Process(block, statedb, bc.cfg.VmConfig)
 	if err != nil {
 		bc.reportBlock(block, res, err)
 		return nil, err
@@ -2018,7 +2018,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	// witness builder/runner, which would otherwise be impossible due to the
 	// various invalid chain states/behaviors being contained in those tests.
 	xvstart := time.Now()
-	if witness := statedb.Witness(); witness != nil && bc.options.VmConfig.StatelessSelfValidation {
+	if witness := statedb.Witness(); witness != nil && bc.cfg.VmConfig.StatelessSelfValidation {
 		log.Warn("Running stateless self-validation", "block", block.Number(), "hash", block.Hash())
 
 		// Remove critical computed fields from the block to force true recalculation
@@ -2029,7 +2029,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		task := types.NewBlockWithHeader(context).WithBody(*block.Body())
 
 		// Run the stateless self-cross-validation
-		crossStateRoot, crossReceiptRoot, err := ExecuteStateless(bc.chainConfig, bc.options.VmConfig, task, witness)
+		crossStateRoot, crossReceiptRoot, err := ExecuteStateless(bc.chainConfig, bc.cfg.VmConfig, task, witness)
 		if err != nil {
 			return nil, fmt.Errorf("stateless self-validation failed: %v", err)
 		}

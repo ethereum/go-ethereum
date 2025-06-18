@@ -77,7 +77,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 	_, blocks, _ := core.GenerateChainWithGenesis(gspec, backend.engine, n, generator)
 
 	// Import the canonical chain
-	options := &core.BlockChainOptions{
+	options := &core.BlockChainConfig{
 		TrieCleanLimit: 256,
 		TrieDirtyLimit: 256,
 		TrieTimeLimit:  5 * time.Minute,
@@ -1144,7 +1144,7 @@ func newTestMergedBackend(t *testing.T, n int, gspec *core.Genesis, generator fu
 	_, blocks, _ := core.GenerateChainWithGenesis(gspec, backend.engine, n, generator)
 
 	// Import the canonical chain
-	options := &core.BlockChainOptions{
+	options := &core.BlockChainConfig{
 		TrieCleanLimit: 256,
 		TrieDirtyLimit: 256,
 		TrieTimeLimit:  5 * time.Minute,

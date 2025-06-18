@@ -116,7 +116,7 @@ func getChain() *core.BlockChain {
 		Alloc:  ga,
 	}
 	_, blocks, _ := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), 2, func(i int, gen *core.BlockGen) {})
-	options := &core.BlockChainOptions{
+	options := &core.BlockChainConfig{
 		TrieCleanLimit: 0,
 		TrieDirtyLimit: 0,
 		TrieTimeLimit:  5 * time.Minute,

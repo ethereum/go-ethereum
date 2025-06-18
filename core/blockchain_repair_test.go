@@ -1781,7 +1781,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 			Config:  params.AllEthashProtocolChanges,
 		}
 		engine = ethash.NewFullFaker()
-		option = &BlockChainOptions{
+		option = &BlockChainConfig{
 			TrieCleanLimit: 256,
 			TrieDirtyLimit: 256,
 			TrieTimeLimit:  5 * time.Minute,
@@ -1931,7 +1931,7 @@ func testIssue23496(t *testing.T, scheme string) {
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 		engine  = ethash.NewFullFaker()
-		options = BlockchainOptionsWithScheme(scheme)
+		options = DefaultBlockChainConfig(scheme)
 	)
 	chain, err := NewBlockChain(db, gspec, engine, options)
 	if err != nil {
@@ -1985,7 +1985,7 @@ func testIssue23496(t *testing.T, scheme string) {
 	}
 	defer db.Close()
 
-	chain, err = NewBlockChain(db, gspec, engine, BlockchainOptionsWithScheme(scheme))
+	chain, err = NewBlockChain(db, gspec, engine, DefaultBlockChainConfig(scheme))
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}

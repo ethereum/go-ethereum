@@ -151,7 +151,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 	// Wrap the original engine within the beacon-engine
 	engine := beacon.New(ethash.NewFaker())
 
-	options := &core.BlockChainOptions{
+	options := &core.BlockChainConfig{
 		TrieCleanLimit: 0,
 		StateScheme:    scheme,
 		Preimages:      true,

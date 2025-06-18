@@ -1985,7 +1985,7 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 			Config:  params.AllEthashProtocolChanges,
 		}
 		engine  = ethash.NewFullFaker()
-		options = &BlockChainOptions{
+		options = &BlockChainConfig{
 			TrieCleanLimit: 256,
 			TrieDirtyLimit: 256,
 			TrieTimeLimit:  5 * time.Minute,

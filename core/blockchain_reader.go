@@ -408,7 +408,7 @@ func (bc *BlockChain) Genesis() *types.Block {
 
 // GetVMConfig returns the block chain VM config.
 func (bc *BlockChain) GetVMConfig() *vm.Config {
-	return &bc.options.VmConfig
+	return &bc.cfg.VmConfig
 }
 
 // TxIndexProgress returns the transaction indexing progress.

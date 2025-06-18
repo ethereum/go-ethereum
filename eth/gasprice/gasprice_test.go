@@ -211,7 +211,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, cancunBlock *big.Int, pe
 	})
 
 	// Construct testing chain
-	chain, err := core.NewBlockChain(db, gspec, engine, &core.BlockChainOptions{NoPrefetch: true})
+	chain, err := core.NewBlockChain(db, gspec, engine, &core.BlockChainConfig{NoPrefetch: true})
 	if err != nil {
 		t.Fatalf("Failed to create local chain, %v", err)
 	}
