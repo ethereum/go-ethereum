@@ -37,7 +37,7 @@ type encodingAccountAccessList []encodingAccountAccess
 
 // TODO: this is 12 bytes in the spec
 // TODO: verify that Geth encodes the endianess according to the spec
-type encodingBalanceDelta [32]byte
+type encodingBalanceDelta [12]byte
 
 type encodingBalanceChange struct {
 	TxIdx uint64 `ssz-size:"2"`
@@ -313,14 +313,12 @@ func (a *accountAccess) MarkWrite(txIdx uint64, key, value common.Hash) {
 	a.Accesses[key].Writes[txIdx] = value
 }
 
-const maxValBytes = 32 // TODO: change this...
-
 func (b *encodingBalanceDelta) Set(val *uint256.Int) *encodingBalanceDelta {
 	valBytes := val.Bytes()
-	if len(valBytes) > maxValBytes {
+	if len(valBytes) > 12 {
 		panic("can't encode value that is greater than 12 bytes in size")
 	}
-	copy(b[maxValBytes-len(valBytes):], valBytes[:])
+	copy(b[12-len(valBytes):], valBytes[:])
 	return b
 }
 
