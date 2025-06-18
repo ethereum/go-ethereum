@@ -20,6 +20,7 @@ package eth
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"runtime"
 	"sync"
@@ -205,10 +206,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			StateHistory:     config.StateHistory,
 			StateScheme:      scheme,
 			ChainHistoryMode: config.HistoryMode,
+			TxLookupLimit:    int64(min(config.TransactionHistory, math.MaxInt64)),
 			VmConfig:         vmConfig,
-			TxLookupLimit:    &config.TransactionHistory,
 		}
 	)
+
 	if config.VMTrace != "" {
 		traceConfig := json.RawMessage("{}")
 		if config.VMTraceJsonConfig != "" {

@@ -175,15 +175,12 @@ type BlockChainConfig struct {
 	Overrides  *ChainOverrides // Optional chain config overrides
 	VmConfig   vm.Config       // Config options for the EVM Interpreter
 
-	// TxLookupLimit specifies the maximum number of blocks from head whose tx
-	// indices are reserved.
+	// TxLookupLimit specifies the maximum number of blocks from head for which
+	// transaction hashes will be indexed.
 	//
-	// If the value is zero, then the transaction indexes of the entire chain
-	// should be reserved.
-	//
-	// If the value is nil, it means the transaction indexing is disabled.
-	// For instance, the chain is opened in read-only mode.
-	TxLookupLimit *uint64
+	// If the value is zero, all transactions of the entire chain will be indexed.
+	// If the value is -1, indexing is disabled. This is the default setting.
+	TxLookupLimit int64
 }
 
 // DefaultConfig returns the default config.
@@ -197,6 +194,9 @@ func DefaultConfig() *BlockChainConfig {
 		SnapshotLimit:    256,
 		SnapshotWait:     true,
 		ChainHistoryMode: history.KeepAll,
+		// Transaction indexing is disabled by default.
+		// This is appropriate for most unit tests.
+		TxLookupLimit: -1,
 	}
 }
 
@@ -501,8 +501,8 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	}
 
 	// Start tx indexer if it's enabled.
-	if bc.cfg.TxLookupLimit != nil {
-		bc.txIndexer = newTxIndexer(*bc.cfg.TxLookupLimit, bc)
+	if bc.cfg.TxLookupLimit >= 0 {
+		bc.txIndexer = newTxIndexer(uint64(bc.cfg.TxLookupLimit), bc)
 	}
 	return bc, nil
 }

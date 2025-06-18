@@ -276,9 +276,8 @@ func testFilters(t *testing.T, history uint64, noHistory bool) {
 			gen.AddTx(tx)
 		}
 	})
-	var l uint64
 	options := core.DefaultConfig().WithStateScheme(rawdb.HashScheme)
-	options.TxLookupLimit = &l
+	options.TxLookupLimit = 0 // index all txs
 	bc, err := core.NewBlockChain(db, gspec, ethash.NewFaker(), options)
 	if err != nil {
 		t.Fatal(err)
@@ -436,9 +435,8 @@ func TestRangeLogs(t *testing.T) {
 	}
 	chain, _ := core.GenerateChain(gspec.Config, gspec.ToBlock(), ethash.NewFaker(), db, 1000, func(i int, gen *core.BlockGen) {})
 
-	var l uint64
 	options := core.DefaultConfig().WithStateScheme(rawdb.HashScheme)
-	options.TxLookupLimit = &l
+	options.TxLookupLimit = 0 // index all txs
 	bc, err := core.NewBlockChain(db, gspec, ethash.NewFaker(), options)
 	if err != nil {
 		t.Fatal(err)

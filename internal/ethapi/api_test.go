@@ -442,19 +442,12 @@ type testBackend struct {
 }
 
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.Engine, generator func(i int, b *core.BlockGen)) *testBackend {
-	var (
-		txLookupLimit = uint64(0)
-		options       = &core.BlockChainConfig{
-			TrieCleanLimit: 256,
-			TrieDirtyLimit: 256,
-			TrieTimeLimit:  5 * time.Minute,
-			SnapshotLimit:  0,
-			ArchiveMode:    true, // Archive mode
-			TxLookupLimit:  &txLookupLimit,
-		}
-	)
+	options := core.DefaultConfig().WithArchive(true)
+	options.TxLookupLimit = 0 // index all txs
+
 	accman, acc := newTestAccountManager(t)
 	gspec.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Ether)}
+
 	// Generate blocks for testing
 	db, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, generator)
 
