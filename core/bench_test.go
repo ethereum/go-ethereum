@@ -324,9 +324,7 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 	genesis := &Genesis{Config: params.AllEthashProtocolChanges}
 	makeChainForBench(db, genesis, full, count)
 	db.Close()
-	options := *defaultConfig
-	options.ArchiveMode = true
-
+	options := DefaultConfig().WithArchive(true)
 	b.ReportAllocs()
 	b.ResetTimer()
 
@@ -337,7 +335,7 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 		}
 		db = rawdb.NewDatabase(pdb)
 
-		chain, err := NewBlockChain(db, genesis, ethash.NewFaker(), &options)
+		chain, err := NewBlockChain(db, genesis, ethash.NewFaker(), options)
 		if err != nil {
 			b.Fatalf("error creating chain: %v", err)
 		}

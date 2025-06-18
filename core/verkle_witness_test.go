@@ -119,7 +119,7 @@ func TestProcessVerkle(t *testing.T) {
 	// Verkle trees use the snapshot, which must be enabled before the
 	// data is saved into the tree+database.
 	// genesis := gspec.MustCommit(bcdb, triedb)
-	options := DefaultBlockChainConfig(rawdb.PathScheme)
+	options := DefaultConfig().WithStateScheme(rawdb.PathScheme)
 	options.SnapshotLimit = 0
 	blockchain, _ := NewBlockChain(bcdb, gspec, beacon.New(ethash.NewFaker()), options)
 	defer blockchain.Stop()
@@ -255,7 +255,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 	})
 	t.Run("Verkle", func(t *testing.T) {
 		db := rawdb.NewMemoryDatabase()
-		cacheConfig := DefaultBlockChainConfig(rawdb.PathScheme)
+		cacheConfig := DefaultConfig().WithStateScheme(rawdb.PathScheme)
 		cacheConfig.SnapshotLimit = 0
 		triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(true))
 		statedb, _ := state.New(types.EmptyVerkleHash, state.NewDatabase(triedb, nil))

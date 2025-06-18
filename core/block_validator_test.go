@@ -49,7 +49,7 @@ func testHeaderVerification(t *testing.T, scheme string) {
 		headers[i] = block.Header()
 	}
 	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
-	options := DefaultBlockChainConfig(scheme)
+	options := DefaultConfig().WithStateScheme(scheme)
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), gspec, ethash.NewFaker(), options)
 	defer chain.Stop()
 	if err != nil {

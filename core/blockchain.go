@@ -212,23 +212,30 @@ func (o *BlockChainConfig) triedbConfig(isVerkle bool) *triedb.Config {
 	return config
 }
 
-// defaultConfig are the default blockchain options if none are specified by the
-// user (also used during testing).
-var defaultConfig = &BlockChainConfig{
-	TrieCleanLimit:   256,
-	TrieDirtyLimit:   256,
-	TrieTimeLimit:    5 * time.Minute,
-	StateScheme:      rawdb.HashScheme,
-	SnapshotLimit:    256,
-	SnapshotWait:     true,
-	ChainHistoryMode: history.KeepAll,
+// DefaultConfig returns the default config.
+// Note the returned object is safe to modify!
+func DefaultConfig() *BlockChainConfig {
+	return &BlockChainConfig{
+		TrieCleanLimit:   256,
+		TrieDirtyLimit:   256,
+		TrieTimeLimit:    5 * time.Minute,
+		StateScheme:      rawdb.HashScheme,
+		SnapshotLimit:    256,
+		SnapshotWait:     true,
+		ChainHistoryMode: history.KeepAll,
+	}
 }
 
-// DefaultBlockChainConfig returns the default config with a provided state scheme.
-func DefaultBlockChainConfig(scheme string) *BlockChainConfig {
-	config := *defaultConfig
-	config.StateScheme = scheme
-	return &config
+// WithArchive enabled/disables archive mode on the config.
+func (cfg BlockChainConfig) WithArchive(on bool) *BlockChainConfig {
+	cfg.ArchiveMode = on
+	return &cfg
+}
+
+// WithStateScheme sets the state storage scheme on the config.
+func (cfg BlockChainConfig) WithStateScheme(scheme string) *BlockChainConfig {
+	cfg.StateScheme = scheme
+	return &cfg
 }
 
 // txLookup is wrapper over transaction lookup along with the corresponding
@@ -312,7 +319,7 @@ type BlockChain struct {
 // and Processor.
 func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine, cfg *BlockChainConfig) (*BlockChain, error) {
 	if cfg == nil {
-		cfg = DefaultBlockChainConfig(rawdb.HashScheme)
+		cfg = DefaultConfig()
 	}
 
 	// Open trie database with provided config

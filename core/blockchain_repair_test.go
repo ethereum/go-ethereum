@@ -1931,7 +1931,7 @@ func testIssue23496(t *testing.T, scheme string) {
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 		engine  = ethash.NewFullFaker()
-		options = DefaultBlockChainConfig(scheme)
+		options = DefaultConfig().WithStateScheme(scheme)
 	)
 	chain, err := NewBlockChain(db, gspec, engine, options)
 	if err != nil {
@@ -1985,7 +1985,7 @@ func testIssue23496(t *testing.T, scheme string) {
 	}
 	defer db.Close()
 
-	chain, err = NewBlockChain(db, gspec, engine, DefaultBlockChainConfig(scheme))
+	chain, err = NewBlockChain(db, gspec, engine, DefaultConfig().WithStateScheme(scheme))
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
