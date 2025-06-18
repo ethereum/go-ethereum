@@ -111,6 +111,11 @@ var (
 		Usage:    "Root directory for ancient data (default = inside chaindata)",
 		Category: flags.EthCategory,
 	}
+	EraFlag = &flags.DirectoryFlag{
+		Name:     "datadir.era",
+		Usage:    "Root directory for era1 history (default = inside ancient/chain)",
+		Category: flags.EthCategory,
+	}
 	MinFreeDiskSpaceFlag = &flags.DirectoryFlag{
 		Name:     "datadir.minfreedisk",
 		Usage:    "Minimum free disk space in MB, once reached triggers auto shut down (default = --cache.gc converted to MB, 0 = disabled)",
@@ -145,7 +150,7 @@ var (
 	}
 	SepoliaFlag = &cli.BoolFlag{
 		Name:     "sepolia",
-		Usage:    "Sepolia network: pre-configured proof-of-work test network",
+		Usage:    "Sepolia network: pre-configured proof-of-stake test network",
 		Category: flags.EthCategory,
 	}
 	HoleskyFlag = &cli.BoolFlag{
@@ -977,11 +982,18 @@ var (
 	DatabaseFlags = []cli.Flag{
 		DataDirFlag,
 		AncientFlag,
+		EraFlag,
 		RemoteDBFlag,
 		DBEngineFlag,
 		StateSchemeFlag,
 		HttpHeaderFlag,
 	}
+)
+
+// default account to prefund when running Geth in dev mode
+var (
+	DeveloperKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	DeveloperAddr   = crypto.PubkeyToAddress(DeveloperKey.PublicKey)
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1607,6 +1619,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(AncientFlag.Name) {
 		cfg.DatabaseFreezer = ctx.String(AncientFlag.Name)
 	}
+	if ctx.IsSet(EraFlag.Name) {
+		cfg.DatabaseEra = ctx.String(EraFlag.Name)
+	}
 
 	if gcmode := ctx.String(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
@@ -1769,9 +1784,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		} else if accs := ks.Accounts(); len(accs) > 0 {
 			developer = ks.Accounts()[0]
 		} else {
-			developer, err = ks.NewAccount(passphrase)
+			developer, err = ks.ImportECDSA(DeveloperKey, passphrase)
 			if err != nil {
-				Fatalf("Failed to create developer account: %v", err)
+				Fatalf("Failed to import developer account: %v", err)
 			}
 		}
 		// Make sure the address is configured as fee recipient, otherwise
@@ -1786,14 +1801,18 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		log.Info("Using developer account", "address", developer.Address)
 
-		// Create a new developer genesis block or reuse existing one
+		// configure default developer genesis which will be used unless a
+		// datadir is specified and a chain is preexisting at that location.
 		cfg.Genesis = core.DeveloperGenesisBlock(ctx.Uint64(DeveloperGasLimitFlag.Name), &developer.Address)
+
+		// If a datadir is specified, ensure that any preexisting chain in that location
+		// has a configuration that is compatible with dev mode: it must be merged at genesis.
 		if ctx.IsSet(DataDirFlag.Name) {
 			chaindb := tryMakeReadOnlyDatabase(ctx, stack)
 			if rawdb.ReadCanonicalHash(chaindb, 0) != (common.Hash{}) {
-				cfg.Genesis = nil // fallback to db content
+				// signal fallback to preexisting chain on disk
+				cfg.Genesis = nil
 
-				//validate genesis has PoS enabled in block 0
 				genesis, err := core.ReadGenesis(chaindb)
 				if err != nil {
 					Fatalf("Could not read genesis from database: %v", err)
@@ -2072,7 +2091,15 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 		}
 		chainDb = remotedb.New(client)
 	default:
-		chainDb, err = stack.OpenDatabaseWithFreezer("chaindata", cache, handles, ctx.String(AncientFlag.Name), "eth/db/chaindata/", readonly)
+		options := node.DatabaseOptions{
+			ReadOnly:          readonly,
+			Cache:             cache,
+			Handles:           handles,
+			AncientsDirectory: ctx.String(AncientFlag.Name),
+			MetricsNamespace:  "eth/db/chaindata/",
+			EraDirectory:      ctx.String(EraFlag.Name),
+		}
+		chainDb, err = stack.OpenDatabaseWithOptions("chaindata", options)
 	}
 	if err != nil {
 		Fatalf("Could not open database: %v", err)

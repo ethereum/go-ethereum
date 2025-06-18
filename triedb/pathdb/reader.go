@@ -17,6 +17,7 @@
 package pathdb
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -50,8 +51,10 @@ func (loc *nodeLoc) string() string {
 // reader implements the database.NodeReader interface, providing the functionalities to
 // retrieve trie nodes by wrapping the internal state layer.
 type reader struct {
-	layer       layer
+	db          *Database
+	state       common.Hash
 	noHashCheck bool
+	layer       layer
 }
 
 // Node implements database.NodeReader interface, retrieving the node with specified
@@ -94,7 +97,23 @@ func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte,
 // - the returned account data is not a copy, please don't modify it
 // - no error will be returned if the requested account is not found in database
 func (r *reader) AccountRLP(hash common.Hash) ([]byte, error) {
-	return r.layer.account(hash, 0)
+	l, err := r.db.tree.lookupAccount(hash, r.state)
+	if err != nil {
+		return nil, err
+	}
+	// If the located layer is stale, fall back to the slow path to retrieve
+	// the account data. This is an edge case where the located layer is the
+	// disk layer (e.g., the requested account was not changed in all the diff
+	// layers), and it becomes stale within a very short time window.
+	//
+	// This fallback mechanism is essential, because the traversal starts from
+	// the entry point layer and goes down, the staleness of the disk layer does
+	// not affect the result unless the entry point layer is also stale.
+	blob, err := l.account(hash, 0)
+	if errors.Is(err, errSnapshotStale) {
+		return r.layer.account(hash, 0)
+	}
+	return blob, err
 }
 
 // Account directly retrieves the account associated with a particular hash in
@@ -105,7 +124,7 @@ func (r *reader) AccountRLP(hash common.Hash) ([]byte, error) {
 // - the returned account object is safe to modify
 // - no error will be returned if the requested account is not found in database
 func (r *reader) Account(hash common.Hash) (*types.SlimAccount, error) {
-	blob, err := r.layer.account(hash, 0)
+	blob, err := r.AccountRLP(hash)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +146,23 @@ func (r *reader) Account(hash common.Hash) (*types.SlimAccount, error) {
 // - the returned storage data is not a copy, please don't modify it
 // - no error will be returned if the requested slot is not found in database
 func (r *reader) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
-	return r.layer.storage(accountHash, storageHash, 0)
+	l, err := r.db.tree.lookupStorage(accountHash, storageHash, r.state)
+	if err != nil {
+		return nil, err
+	}
+	// If the located layer is stale, fall back to the slow path to retrieve
+	// the storage data. This is an edge case where the located layer is the
+	// disk layer (e.g., the requested account was not changed in all the diff
+	// layers), and it becomes stale within a very short time window.
+	//
+	// This fallback mechanism is essential, because the traversal starts from
+	// the entry point layer and goes down, the staleness of the disk layer does
+	// not affect the result unless the entry point layer is also stale.
+	blob, err := l.storage(accountHash, storageHash, 0)
+	if errors.Is(err, errSnapshotStale) {
+		return r.layer.storage(accountHash, storageHash, 0)
+	}
+	return blob, err
 }
 
 // NodeReader retrieves a layer belonging to the given state root.
@@ -136,7 +171,12 @@ func (db *Database) NodeReader(root common.Hash) (database.NodeReader, error) {
 	if layer == nil {
 		return nil, fmt.Errorf("state %#x is not available", root)
 	}
-	return &reader{layer: layer, noHashCheck: db.isVerkle}, nil
+	return &reader{
+		db:          db,
+		state:       root,
+		noHashCheck: db.isVerkle,
+		layer:       layer,
+	}, nil
 }
 
 // StateReader returns a reader that allows access to the state data associated
@@ -146,5 +186,9 @@ func (db *Database) StateReader(root common.Hash) (database.StateReader, error) 
 	if layer == nil {
 		return nil, fmt.Errorf("state %#x is not available", root)
 	}
-	return &reader{layer: layer}, nil
+	return &reader{
+		db:    db,
+		state: root,
+		layer: layer,
+	}, nil
 }

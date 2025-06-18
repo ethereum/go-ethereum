@@ -17,6 +17,7 @@
 package enode
 
 import (
+	"context"
 	"sync"
 	"time"
 )
@@ -57,6 +58,11 @@ type sourceIter struct {
 // NodeSource implements IteratorSource.
 func (it sourceIter) NodeSource() string {
 	return it.name
+}
+
+type iteratorItem struct {
+	n      *Node
+	source string
 }
 
 // ReadNodes reads at most n nodes from the given iterator. The return value contains no
@@ -152,6 +158,149 @@ func (f *filterIter) Next() bool {
 	return false
 }
 
+// asyncFilterIter wraps an iterator such that Next only returns nodes for which
+// the 'check' function returns a (possibly modified) node.
+type asyncFilterIter struct {
+	it        SourceIterator    // the iterator to filter
+	slots     chan struct{}     // the slots for parallel checking
+	passed    chan iteratorItem // channel to collect passed nodes
+	cur       iteratorItem      // buffer to serve the Node call
+	cancel    context.CancelFunc
+	closeOnce sync.Once
+}
+
+type AsyncFilterFunc func(context.Context, *Node) *Node
+
+// AsyncFilter creates an iterator which checks nodes in parallel.
+// The 'check' function is called on multiple goroutines to filter each node
+// from the upstream iterator. When check returns nil, the node will be skipped.
+// It can also return a new node to be returned by the iterator instead of the .
+func AsyncFilter(it Iterator, check AsyncFilterFunc, workers int) Iterator {
+	f := &asyncFilterIter{
+		it:     ensureSourceIter(it),
+		slots:  make(chan struct{}, workers+1),
+		passed: make(chan iteratorItem),
+	}
+	for range cap(f.slots) {
+		f.slots <- struct{}{}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	f.cancel = cancel
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case <-f.slots:
+		}
+		// read from the iterator and start checking nodes in parallel
+		// when a node is checked, it will be sent to the passed channel
+		// and the slot will be released
+		for f.it.Next() {
+			node := f.it.Node()
+			nodeSource := f.it.NodeSource()
+
+			// check the node async, in a separate goroutine
+			<-f.slots
+			go func() {
+				if nn := check(ctx, node); nn != nil {
+					item := iteratorItem{nn, nodeSource}
+					select {
+					case f.passed <- item:
+					case <-ctx.Done(): // bale out if downstream is already closed and not calling Next
+					}
+				}
+				f.slots <- struct{}{}
+			}()
+		}
+		// the iterator has ended
+		f.slots <- struct{}{}
+	}()
+
+	return f
+}
+
+// Next blocks until a node is available or the iterator is closed.
+func (f *asyncFilterIter) Next() bool {
+	var ok bool
+	f.cur, ok = <-f.passed
+	return ok
+}
+
+// Node returns the current node.
+func (f *asyncFilterIter) Node() *Node {
+	return f.cur.n
+}
+
+// NodeSource implements IteratorSource.
+func (f *asyncFilterIter) NodeSource() string {
+	return f.cur.source
+}
+
+// Close ends the iterator, also closing the wrapped iterator.
+func (f *asyncFilterIter) Close() {
+	f.closeOnce.Do(func() {
+		f.it.Close()
+		f.cancel()
+		for range cap(f.slots) {
+			<-f.slots
+		}
+		close(f.slots)
+		close(f.passed)
+	})
+}
+
+// bufferIter wraps an iterator and buffers the nodes it returns.
+// The buffer is pre-filled with the given size from the wrapped iterator.
+type bufferIter struct {
+	it        SourceIterator
+	buffer    chan iteratorItem
+	head      iteratorItem
+	closeOnce sync.Once
+}
+
+// NewBufferIter creates a new pre-fetch buffer of a given size.
+func NewBufferIter(it Iterator, size int) Iterator {
+	b := bufferIter{
+		it:     ensureSourceIter(it),
+		buffer: make(chan iteratorItem, size),
+	}
+
+	go func() {
+		// if the wrapped iterator ends, the buffer content will still be served.
+		defer close(b.buffer)
+		// If instead the bufferIterator is closed, we bail out of the loop.
+		for b.it.Next() {
+			item := iteratorItem{b.it.Node(), b.it.NodeSource()}
+			b.buffer <- item
+		}
+	}()
+	return &b
+}
+
+func (b *bufferIter) Next() bool {
+	var ok bool
+	b.head, ok = <-b.buffer
+	return ok
+}
+
+func (b *bufferIter) Node() *Node {
+	return b.head.n
+}
+
+func (b *bufferIter) NodeSource() string {
+	return b.head.source
+}
+
+func (b *bufferIter) Close() {
+	b.closeOnce.Do(func() {
+		b.it.Close()
+		// Drain buffer and wait for the goroutine to end.
+		for range b.buffer {
+		}
+	})
+}
+
 // FairMix aggregates multiple node iterators. The mixer itself is an iterator which ends
 // only when Close is called. Source iterators added via AddSource are removed from the
 // mix when they end.
@@ -164,9 +313,9 @@ func (f *filterIter) Next() bool {
 // It's safe to call AddSource and Close concurrently with Next.
 type FairMix struct {
 	wg      sync.WaitGroup
-	fromAny chan mixItem
+	fromAny chan iteratorItem
 	timeout time.Duration
-	cur     mixItem
+	cur     iteratorItem
 
 	mu      sync.Mutex
 	closed  chan struct{}
@@ -176,13 +325,8 @@ type FairMix struct {
 
 type mixSource struct {
 	it      SourceIterator
-	next    chan mixItem
+	next    chan iteratorItem
 	timeout time.Duration
-}
-
-type mixItem struct {
-	n      *Node
-	source string
 }
 
 // NewFairMix creates a mixer.
@@ -193,7 +337,7 @@ type mixItem struct {
 // timeout makes the mixer completely fair.
 func NewFairMix(timeout time.Duration) *FairMix {
 	m := &FairMix{
-		fromAny: make(chan mixItem),
+		fromAny: make(chan iteratorItem),
 		closed:  make(chan struct{}),
 		timeout: timeout,
 	}
@@ -211,7 +355,7 @@ func (m *FairMix) AddSource(it Iterator) {
 	m.wg.Add(1)
 	source := &mixSource{
 		it:      ensureSourceIter(it),
-		next:    make(chan mixItem),
+		next:    make(chan iteratorItem),
 		timeout: m.timeout,
 	}
 	m.sources = append(m.sources, source)
@@ -239,7 +383,7 @@ func (m *FairMix) Close() {
 
 // Next returns a node from a random source.
 func (m *FairMix) Next() bool {
-	m.cur = mixItem{}
+	m.cur = iteratorItem{}
 
 	for {
 		source := m.pickSource()
@@ -327,7 +471,7 @@ func (m *FairMix) runSource(closed chan struct{}, s *mixSource) {
 	defer m.wg.Done()
 	defer close(s.next)
 	for s.it.Next() {
-		item := mixItem{s.it.Node(), s.it.NodeSource()}
+		item := iteratorItem{s.it.Node(), s.it.NodeSource()}
 		select {
 		case s.next <- item:
 		case m.fromAny <- item:

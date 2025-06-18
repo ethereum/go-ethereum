@@ -27,10 +27,10 @@ import (
 
 // insertStats tracks and reports on block insertion.
 type insertStats struct {
-	queued, processed, ignored int
-	usedGas                    uint64
-	lastIndex                  int
-	startTime                  mclock.AbsTime
+	processed, ignored int
+	usedGas            uint64
+	lastIndex          int
+	startTime          mclock.AbsTime
 }
 
 // statsReportLimit is the time limit during import and export after which we
@@ -46,9 +46,6 @@ func (st *insertStats) report(chain []*types.Block, index int, snapDiffItems, sn
 		elapsed = now.Sub(st.startTime) + 1 // prevent zero division
 		mgasps  = float64(st.usedGas) * 1000 / float64(elapsed)
 	)
-	// Update the Mgas per second gauge
-	chainMgaspsGauge.Update(int64(mgasps))
-
 	// If we're at the last block of the batch or report period reached, log
 	if index == len(chain)-1 || elapsed >= statsReportLimit {
 		// Count the number of transactions in this segment
@@ -78,9 +75,6 @@ func (st *insertStats) report(chain []*types.Block, index int, snapDiffItems, sn
 		}
 		context = append(context, []interface{}{"triedirty", triebufNodes}...)
 
-		if st.queued > 0 {
-			context = append(context, []interface{}{"queued", st.queued}...)
-		}
 		if st.ignored > 0 {
 			context = append(context, []interface{}{"ignored", st.ignored}...)
 		}

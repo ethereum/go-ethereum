@@ -86,11 +86,6 @@ type nofreezedb struct {
 	ethdb.KeyValueStore
 }
 
-// HasAncient returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) HasAncient(kind string, number uint64) (bool, error) {
-	return false, errNotSupported
-}
-
 // Ancient returns an error as we don't have a backing chain freezer.
 func (db *nofreezedb) Ancient(kind string, number uint64) ([]byte, error) {
 	return nil, errNotSupported
@@ -186,19 +181,49 @@ func resolveChainFreezerDir(ancient string) string {
 	return freezer
 }
 
-// NewDatabaseWithFreezer creates a high level database on top of a given key-
-// value data store with a freezer moving immutable chain segments into cold
-// storage. The passed ancient indicates the path of root ancient directory
-// where the chain freezer can be opened.
+// resolveChainEraDir is a helper function which resolves the absolute path of era database.
+func resolveChainEraDir(chainFreezerDir string, era string) string {
+	switch {
+	case era == "":
+		return filepath.Join(chainFreezerDir, "era")
+	case !filepath.IsAbs(era):
+		return filepath.Join(chainFreezerDir, era)
+	default:
+		return era
+	}
+}
+
+// NewDatabaseWithFreezer creates a high level database on top of a given key-value store.
+// The passed ancient indicates the path of root ancient directory where the chain freezer
+// can be opened.
+//
+// Deprecated: use Open.
 func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
+	return Open(db, OpenOptions{
+		Ancient:          ancient,
+		MetricsNamespace: namespace,
+		ReadOnly:         readonly,
+	})
+}
+
+// OpenOptions specifies options for opening the database.
+type OpenOptions struct {
+	Ancient          string // ancients directory
+	Era              string // era files directory
+	MetricsNamespace string // prefix added to freezer metric names
+	ReadOnly         bool
+}
+
+// Open creates a high-level database wrapper for the given key-value store.
+func Open(db ethdb.KeyValueStore, opts OpenOptions) (ethdb.Database, error) {
 	// Create the idle freezer instance. If the given ancient directory is empty,
 	// in-memory chain freezer is used (e.g. dev mode); otherwise the regular
 	// file-based freezer is created.
-	chainFreezerDir := ancient
+	chainFreezerDir := opts.Ancient
 	if chainFreezerDir != "" {
 		chainFreezerDir = resolveChainFreezerDir(chainFreezerDir)
 	}
-	frdb, err := newChainFreezer(chainFreezerDir, namespace, readonly)
+	frdb, err := newChainFreezer(chainFreezerDir, opts.Era, opts.MetricsNamespace, opts.ReadOnly)
 	if err != nil {
 		printChainMetadata(db)
 		return nil, err
@@ -282,7 +307,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 		}
 	}
 	// Freezer is consistent with the key-value database, permit combining the two
-	if !readonly {
+	if !opts.ReadOnly {
 		frdb.wg.Add(1)
 		go func() {
 			frdb.freeze(db)
@@ -290,7 +315,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 		}()
 	}
 	return &freezerdb{
-		ancientRoot:   ancient,
+		ancientRoot:   opts.Ancient,
 		KeyValueStore: db,
 		chainFreezer:  frdb,
 	}, nil
@@ -642,7 +667,6 @@ func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashScheme bool,
 
 	var (
 		count, deleted, skipped int
-		buff                    = crypto.NewKeccakState()
 		startTime               = time.Now()
 	)
 
@@ -655,7 +679,7 @@ func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashScheme bool,
 
 	for it.Next() && bytes.Compare(end, it.Key()) > 0 {
 		// Prevent deletion for trie nodes in hash mode
-		if len(it.Key()) != 32 || crypto.HashData(buff, it.Value()) != common.BytesToHash(it.Key()) {
+		if len(it.Key()) != 32 || crypto.Keccak256Hash(it.Value()) != common.BytesToHash(it.Key()) {
 			if err := batch.Delete(it.Key()); err != nil {
 				return err
 			}

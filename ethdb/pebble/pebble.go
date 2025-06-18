@@ -199,9 +199,12 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	// Taken from https://github.com/cockroachdb/pebble/blob/master/internal/constants/constants.go
 	maxMemTableSize := (1<<31)<<(^uint(0)>>63) - 1
 
-	// Two memory tables is configured which is identical to leveldb,
-	// including a frozen memory table and another live one.
-	memTableLimit := 2
+	// Four memory tables are configured, each with a default size of 256 MB.
+	// Having multiple smaller memory tables while keeping the total memory
+	// limit unchanged allows writes to be flushed more smoothly. This helps
+	// avoid compaction spikes and mitigates write stalls caused by heavy
+	// compaction workloads.
+	memTableLimit := 4
 	memTableSize := cache * 1024 * 1024 / 2 / memTableLimit
 
 	// The memory table size is currently capped at maxMemTableSize-1 due to a
@@ -277,6 +280,17 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		// By setting the WALBytesPerSync, the cached WAL writes will be periodically
 		// flushed at the background if the accumulated size exceeds this threshold.
 		WALBytesPerSync: 5 * ethdb.IdealBatchSize,
+
+		// L0CompactionThreshold specifies the number of L0 read-amplification
+		// necessary to trigger an L0 compaction. It essentially refers to the
+		// number of sub-levels at the L0. For each sub-level, it contains several
+		// L0 files which are non-overlapping with each other, typically produced
+		// by a single memory-table flush.
+		//
+		// The default value in Pebble is 4, which is a bit too large to have
+		// the compaction debt as around 10GB. By reducing it to 2, the compaction
+		// debt will be less than 1GB, but with more frequent compactions scheduled.
+		L0CompactionThreshold: 2,
 	}
 	// Disable seek compaction explicitly. Check https://github.com/ethereum/go-ethereum/pull/20130
 	// for more details.
