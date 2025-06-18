@@ -48,7 +48,8 @@ func SignV4(r *enr.Record, privkey *ecdsa.PrivateKey) error {
 	cpy.Set(enr.ID("v4"))
 	cpy.Set(Secp256k1(privkey.PublicKey))
 
-	digestHash := crypto.Keccak256RLP(cpy.AppendElements(nil))
+	bytes, _ := rlp.EncodeToBytes(cpy.AppendElements(nil))
+	digestHash := crypto.Keccak256(bytes)
 	sig, err := crypto.Sign(digestHash, privkey)
 	if err != nil {
 		return err
@@ -68,7 +69,8 @@ func (V4ID) Verify(r *enr.Record, sig []byte) error {
 		return errors.New("invalid public key")
 	}
 
-	digestHash := crypto.Keccak256RLP(r.AppendElements(nil))
+	bytes, _ := rlp.EncodeToBytes(r.AppendElements(nil))
+	digestHash := crypto.Keccak256(bytes)
 	if !crypto.VerifySignature(entry, digestHash, sig) {
 		return enr.ErrInvalidSig
 	}

@@ -436,7 +436,8 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc) *state.StateDB
 }
 
 func rlpHash(x interface{}) (h common.Hash) {
-	return crypto.Keccak256RLPHash(x)
+	bytes, _ := rlp.EncodeToBytes(x)
+	return crypto.Keccak256Hash(bytes)
 }
 
 // calcDifficulty is based on ethash.CalcDifficulty. This method is used in case

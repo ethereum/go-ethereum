@@ -19,6 +19,7 @@ package ethash
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/rlp"
 	"math/big"
 	"time"
 
@@ -556,7 +557,8 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 	if header.ParentBeaconRoot != nil {
 		panic("parent beacon root set on ethash")
 	}
-	return crypto.Keccak256RLPHash(enc)
+	bytes, _ := rlp.EncodeToBytes(enc)
+	return crypto.Keccak256Hash(bytes)
 }
 
 // accumulateRewards credits the coinbase of the given block with the mining
