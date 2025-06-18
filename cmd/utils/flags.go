@@ -467,8 +467,7 @@ var (
 	}
 	CacheTrieJournalFlag = &cli.StringFlag{
 		Name:     "cache.trie.journal",
-		Usage:    "Disk journal directory for trie cache to survive node restarts",
-		Value:    "trie-journal.rlp",
+		Usage:    "Disk journal directory for trie cache to survive node restarts (experimental, default is disabled)",
 		Category: flags.PerfCategory,
 	}
 	CacheGCFlag = &cli.IntFlag{
