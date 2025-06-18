@@ -403,8 +403,15 @@ func (d *Database) Delete(key []byte) error {
 func (d *Database) DeleteRange(start, end []byte) error {
 	d.quitLock.RLock()
 	defer d.quitLock.RUnlock()
+
 	if d.closed {
 		return pebble.ErrClosed
+	}
+	// There is no special flag to represent the end of key range
+	// in pebble(nil in leveldb). Use an ugly hack to construct a
+	// large key to represent it.
+	if end == nil {
+		end = bytes.Repeat([]byte{0xff}, 32)
 	}
 	return d.db.DeleteRange(start, end, d.writeOptions)
 }
@@ -619,8 +626,15 @@ func (b *batch) Delete(key []byte) error {
 	return nil
 }
 
-// DeleteRange removes all keys in the range [start, end) from the batch for later committing.
+// DeleteRange removes all keys in the range [start, end) from the batch for
+// later committing, inclusive on start, exclusive on end.
 func (b *batch) DeleteRange(start, end []byte) error {
+	// There is no special flag to represent the end of key range
+	// in pebble(nil in leveldb). Use an ugly hack to construct a
+	// large key to represent it.
+	if end == nil {
+		end = bytes.Repeat([]byte{0xff}, 32)
+	}
 	if err := b.b.DeleteRange(start, end, nil); err != nil {
 		return err
 	}

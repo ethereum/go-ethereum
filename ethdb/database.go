@@ -46,9 +46,14 @@ var ErrTooManyKeys = errors.New("too many keys in deleted range")
 type KeyValueRangeDeleter interface {
 	// DeleteRange deletes all of the keys (and values) in the range [start,end)
 	// (inclusive on start, exclusive on end).
+	//
+	// A nil start is treated as a key before all keys in the data store; a nil
+	// end is treated as a key after all keys in the data store. If both is nil
+	// then the entire data store will be purged.
+	//
 	// Some implementations of DeleteRange may return ErrTooManyKeys after
 	// partially deleting entries in the given range.
-	DeleteRange(start, end []byte) error	
+	DeleteRange(start, end []byte) error
 }
 
 // KeyValueStater wraps the Stat method of a backing data store.

@@ -220,7 +220,7 @@ func (db *Database) DeleteRange(start, end []byte) error {
 	defer it.Release()
 
 	var count int
-	for it.Next() && bytes.Compare(end, it.Key()) > 0 {
+	for it.Next() && (end == nil || bytes.Compare(end, it.Key()) > 0) {
 		count++
 		if count > 10000 { // should not block for more than a second
 			if err := batch.Write(); err != nil {
@@ -461,48 +461,19 @@ func (b *batch) Delete(key []byte) error {
 	return nil
 }
 
-// DeleteRange removes all keys in the range [start, end) from the batch for later committing.
+// DeleteRange removes all keys in the range [start, end) from the batch for
+// later committing, inclusive on start, exclusive on end.
+//
 // Note that this is a fallback implementation as leveldb does not natively
 // support range deletion in batches. It iterates through the database to find
 // keys in the range and adds them to the batch for deletion.
 func (b *batch) DeleteRange(start, end []byte) error {
-	// Special case: empty range
-	if len(start) == 0 && len(end) == 0 || bytes.Equal(start, end) {
-		return nil
-	}
-
-	// Special case: delete all keys less than end
-	if len(start) == 0 {
-		it := b.db.NewIterator(nil, nil)
-		defer it.Release()
-		
-		for it.Next() {
-			key := it.Key()
-			if bytes.Compare(key, end) < 0 {
-				b.b.Delete(key)
-				b.size += len(key)
-			}
-		}
-		return it.Error()
-	}
-	
-	// Special case: delete all keys greater than or equal to start
-	if len(end) == 0 {
-		it := b.db.NewIterator(nil, nil)
-		defer it.Release()
-		
-		for it.Next() {
-			key := it.Key()
-			if bytes.Compare(key, start) >= 0 {
-				b.b.Delete(key)
-				b.size += len(key)
-			}
-		}
-		return it.Error()
-	}
-
 	// Create an iterator to scan through the keys in the range
-	it := b.db.NewIterator(&util.Range{Start: start, Limit: end}, nil)
+	slice := &util.Range{
+		Start: start, // If nil, it represents the key before all keys
+		Limit: end,   // If nil, it represents the key after all keys
+	}
+	it := b.db.NewIterator(slice, nil)
 	defer it.Release()
 
 	var count int
@@ -516,7 +487,6 @@ func (b *batch) DeleteRange(start, end []byte) error {
 		b.b.Delete(key)
 		b.size += len(key)
 	}
-
 	if err := it.Error(); err != nil {
 		return err
 	}

@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -124,46 +123,24 @@ func (db *Database) Delete(key []byte) error {
 }
 
 // DeleteRange deletes all of the keys (and values) in the range [start,end)
-// (inclusive on start, exclusive on end).
+// (inclusive on start, exclusive on end). If the start is nil, it represents
+// the key before all keys; if the end is nil, it represents the key after
+// all keys.
 func (db *Database) DeleteRange(start, end []byte) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
+
 	if db.db == nil {
 		return errMemorydbClosed
 	}
-
-	startStr := string(start)
-	endStr := string(end)
-	
-	if startStr == "" && endStr == "" {
-		return nil // Empty range, do nothing
-	}
-	
-	if startStr == "" {
-		// Delete all keys less than end
-		for key := range db.db {
-			if key < endStr {
-				delete(db.db, key)
-			}
-		}
-		return nil
-	}
-	
-	if endStr == "" || endStr > string([]byte{255, 255, 255, 255, 255}) {
-		// Delete all keys greater than or equal to start
-		for key := range db.db {
-			if key >= startStr {
-				delete(db.db, key)
-			}
-		}
-		return nil
-	}
-
-	// Normal case: delete keys in range [start, end)
 	for key := range db.db {
-		if key >= startStr && key < endStr {
-			delete(db.db, key)
+		if start != nil && key < string(start) {
+			continue
 		}
+		if end != nil && key >= string(end) {
+			continue
+		}
+		delete(db.db, key)
 	}
 	return nil
 }
@@ -249,11 +226,12 @@ func (db *Database) Len() int {
 // keyvalue is a key-value tuple tagged with a deletion field to allow creating
 // memory-database write batches.
 type keyvalue struct {
-	key       string
-	value     []byte
-	delete    bool
-	rangeFrom string
-	rangeTo   string
+	key    string
+	value  []byte
+	delete bool
+
+	rangeFrom []byte
+	rangeTo   []byte
 }
 
 // batch is a write-only memory batch that commits changes to its host
@@ -281,8 +259,8 @@ func (b *batch) Delete(key []byte) error {
 // DeleteRange removes all keys in the range [start, end) from the batch for later committing.
 func (b *batch) DeleteRange(start, end []byte) error {
 	b.writes = append(b.writes, keyvalue{
-		rangeFrom: string(start),
-		rangeTo:   string(end),
+		rangeFrom: start,
+		rangeTo:   end,
 		delete:    true,
 	})
 	b.size += len(start) + len(end)
@@ -302,46 +280,26 @@ func (b *batch) Write() error {
 	if b.db.db == nil {
 		return errMemorydbClosed
 	}
-	for _, keyvalue := range b.writes {
-		if keyvalue.delete {
-			if keyvalue.key != "" {
+	for _, entry := range b.writes {
+		if entry.delete {
+			if entry.key != "" {
 				// Single key deletion
-				delete(b.db.db, keyvalue.key)
-			} else if keyvalue.rangeFrom != "" || keyvalue.rangeTo != "" {
+				delete(b.db.db, entry.key)
+			} else {
 				// Range deletion (inclusive of start, exclusive of end)
-				// Handle special cases for empty ranges
-				if keyvalue.rangeFrom == keyvalue.rangeTo {
-					// Empty range, do nothing
-					continue
-				}
-				
-				// Check if both are numeric strings for consistent comparison
-				startNum, startErr := strconv.Atoi(keyvalue.rangeFrom)
-				endNum, endErr := strconv.Atoi(keyvalue.rangeTo)
-				
-				// If both are valid integers, use numeric comparison
-				if startErr == nil && endErr == nil {
-					for key := range b.db.db {
-						if keyNum, err := strconv.Atoi(key); err == nil {
-							if keyNum >= startNum && (keyvalue.rangeTo == "" || keyNum < endNum) {
-								delete(b.db.db, key)
-							}
-						}
+				for key := range b.db.db {
+					if entry.rangeFrom != nil && key < string(entry.rangeFrom) {
+						continue
 					}
-				} else {
-					// Use string comparison
-					for key := range b.db.db {
-						// Handle open ranges
-						if (keyvalue.rangeFrom == "" || key >= keyvalue.rangeFrom) && 
-						   (keyvalue.rangeTo == "" || key < keyvalue.rangeTo) {
-							delete(b.db.db, key)
-						}
+					if entry.rangeTo != nil && key >= string(entry.rangeTo) {
+						continue
 					}
+					delete(b.db.db, key)
 				}
 			}
 			continue
 		}
-		b.db.db[keyvalue.key] = keyvalue.value
+		b.db.db[entry.key] = entry.value
 	}
 	return nil
 }
@@ -354,17 +312,17 @@ func (b *batch) Reset() {
 
 // Replay replays the batch contents.
 func (b *batch) Replay(w ethdb.KeyValueWriter) error {
-	for _, keyvalue := range b.writes {
-		if keyvalue.delete {
-			if keyvalue.key != "" {
+	for _, entry := range b.writes {
+		if entry.delete {
+			if entry.key != "" {
 				// Single key deletion
-				if err := w.Delete([]byte(keyvalue.key)); err != nil {
+				if err := w.Delete([]byte(entry.key)); err != nil {
 					return err
 				}
-			} else if keyvalue.rangeFrom != "" || keyvalue.rangeTo != "" {
+			} else {
 				// Range deletion
 				if rangeDeleter, ok := w.(ethdb.KeyValueRangeDeleter); ok {
-					if err := rangeDeleter.DeleteRange([]byte(keyvalue.rangeFrom), []byte(keyvalue.rangeTo)); err != nil {
+					if err := rangeDeleter.DeleteRange(entry.rangeFrom, entry.rangeTo); err != nil {
 						return err
 					}
 				} else {
@@ -373,7 +331,7 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 			}
 			continue
 		}
-		if err := w.Put([]byte(keyvalue.key), keyvalue.value); err != nil {
+		if err := w.Put([]byte(entry.key), entry.value); err != nil {
 			return err
 		}
 	}
