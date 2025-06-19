@@ -121,8 +121,9 @@ type Config struct {
 	ReadOnly        bool   // Flag whether the database is opened in read only mode
 
 	// Testing configurations
-	SnapshotNoBuild bool // Flag Whether the background generation is allowed
-	NoAsyncFlush    bool // Flag whether the background generation is allowed
+	SnapshotNoBuild   bool // Flag Whether the state generation is allowed
+	NoAsyncFlush      bool // Flag whether the background buffer flushing is allowed
+	NoAsyncGeneration bool // Flag whether the background generation is allowed
 }
 
 // sanitize checks the provided user configurations and changes anything that's
@@ -369,6 +370,12 @@ func (db *Database) setStateGenerator() error {
 	}
 	stats.log("Starting snapshot generation", root, generator.Marker)
 	dl.generator.run(root)
+
+	// Block until the generation completes. It's the feature used in
+	// unit tests.
+	if db.config.NoAsyncGeneration {
+		<-dl.generator.done
+	}
 	return nil
 }
 
@@ -665,19 +672,6 @@ func (db *Database) StorageHistory(address common.Address, slot common.Hash, sta
 // state history in the local store.
 func (db *Database) HistoryRange() (uint64, uint64, error) {
 	return historyRange(db.freezer)
-}
-
-// waitGeneration waits until the background generation is finished. It assumes
-// that the generation is permitted; otherwise, it will block indefinitely.
-func (db *Database) waitGeneration() {
-	db.lock.RLock()
-	defer db.lock.RUnlock()
-
-	gen := db.tree.bottom().generator
-	if gen == nil || gen.completed() {
-		return
-	}
-	<-gen.done
 }
 
 // AccountIterator creates a new account iterator for the specified root hash and

@@ -581,6 +581,17 @@ func (dl *diskLayer) genComplete() bool {
 	return dl.genMarker() == nil
 }
 
+// waitFlush blocks until the background buffer flush is completed.
+func (dl *diskLayer) waitFlush() error {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	if dl.frozen == nil {
+		return nil
+	}
+	return dl.frozen.waitFlush()
+}
+
 // terminate releases the frozen buffer if it's not nil and terminates the
 // background state generator.
 func (dl *diskLayer) terminate() error {
