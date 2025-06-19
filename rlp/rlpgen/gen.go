@@ -139,16 +139,16 @@ func (ctx *genContext) addImport(pkg *types.Package) string {
 	if p, exists := ctx.imports[pkg.Path()]; exists {
 		return p.alias
 	}
-	baseName := pkg.Name()
-	alias := baseName
-	counter := 1
-
-	// If the base name conflicts with any existing import, add a numeric suffix
+	var (
+		baseName = pkg.Name()
+		alias    = baseName
+		counter  = 1
+	)
+	// If the base name conflicts with an existing import, add a numeric suffix.
 	for ctx.hasAlias(alias) {
 		alias = fmt.Sprintf("%s%d", baseName, counter)
 		counter++
 	}
-
 	ctx.imports[pkg.Path()] = genImportPackage{alias, pkg}
 	return alias
 }
