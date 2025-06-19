@@ -1785,7 +1785,8 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 			TrieCleanLimit: 256,
 			TrieDirtyLimit: 256,
 			TrieTimeLimit:  5 * time.Minute,
-			SnapshotLimit:  0, // Disable snapshot by default
+			SnapshotLimit:  0,  // disable snapshot by default
+			TxLookupLimit:  -1, // disable tx indexing
 			StateScheme:    scheme,
 		}
 	)

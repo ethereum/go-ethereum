@@ -316,6 +316,7 @@ func (snaptest *gappedSnapshotTest) test(t *testing.T) {
 		TrieTimeLimit:  5 * time.Minute,
 		SnapshotLimit:  0,
 		StateScheme:    snaptest.scheme,
+		TxLookupLimit:  -1,
 	}
 	newchain, err := NewBlockChain(snaptest.db, snaptest.gspec, snaptest.engine, options)
 	if err != nil {
@@ -389,6 +390,7 @@ func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
 		TrieTimeLimit:  5 * time.Minute,
 		SnapshotLimit:  0,
 		StateScheme:    snaptest.scheme,
+		TxLookupLimit:  -1,
 	}
 	newchain, err := NewBlockChain(snaptest.db, snaptest.gspec, snaptest.engine, config)
 	if err != nil {
@@ -406,6 +408,7 @@ func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
 		SnapshotLimit:  256,
 		SnapshotWait:   false, // Don't wait rebuild
 		StateScheme:    snaptest.scheme,
+		TxLookupLimit:  -1,
 	}
 	tmp, err := NewBlockChain(snaptest.db, snaptest.gspec, snaptest.engine, config)
 	if err != nil {
