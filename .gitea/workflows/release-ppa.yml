@@ -13,6 +13,10 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Show environment
+      run: |
+        env
+
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
