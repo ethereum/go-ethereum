@@ -51,7 +51,7 @@ require (
 	github.com/prometheus/tsdb v0.7.1
 	github.com/rjeczalik/notify v0.9.1
 	github.com/rs/cors v1.7.0
-	github.com/scroll-tech/da-codec v0.1.3-0.20250313120912-344f2d5e33e1
+	github.com/scroll-tech/da-codec v0.1.3-0.20250519114140-bfa7133d4ad1
 	github.com/scroll-tech/zktrie v0.8.4
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/sourcegraph/conc v0.3.0
