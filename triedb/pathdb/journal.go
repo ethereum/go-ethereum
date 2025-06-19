@@ -301,9 +301,8 @@ func (db *Database) Journal(root common.Hash) error {
 	} else { // disk layer only on noop runs (likely) or deep reorgs (unlikely)
 		log.Info("Persisting dirty state to disk", "root", root, "layers", disk.buffer.layers)
 	}
-	// Block until the background flushing is finished. It must
-	// be done before terminating the potential background snapshot
-	// generator.
+	// Block until the background flushing is finished and terminate
+	// the potential active state generator.
 	if err := disk.terminate(); err != nil {
 		return err
 	}
