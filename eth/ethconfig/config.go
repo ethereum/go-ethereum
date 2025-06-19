@@ -60,7 +60,7 @@ var Defaults = Config{
 	TrieCleanCache:     154,
 	TrieDirtyCache:     256,
 	TrieTimeout:        60 * time.Minute,
-	TrieDBJournal:      "triedb.journal",
+	TrieDBJournal:      "triedb.journal.rlp",
 	SnapshotCache:      102,
 	FilterLogCacheSize: 32,
 	Miner:              miner.DefaultConfig,

@@ -344,7 +344,7 @@ func (db *Database) Journal(root common.Hash) error {
 		var err error
 		file, err = os.OpenFile(tmpName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 		if err != nil {
-			return fmt.Errorf("failed to open journal file %s: %w", db.config.JournalPath, err)
+			return fmt.Errorf("failed to open journal file %s: %w", tmpName, err)
 		}
 		defer func() {
 			if file != nil {
