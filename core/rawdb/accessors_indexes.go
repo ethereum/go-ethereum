@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -128,6 +129,46 @@ func DeleteAllTxLookupEntries(db ethdb.KeyValueStore, condition func(common.Hash
 	}
 }
 
+// findTxInBlockBody traverses the given RLP-encoded block body, searching for
+// the transaction specified by its hash.
+func findTxInBlockBody(blockbody rlp.RawValue, target common.Hash) (*types.Transaction, uint64, error) {
+	txnListRLP, _, err := rlp.SplitList(blockbody)
+	if err != nil {
+		return nil, 0, err
+	}
+	iter, err := rlp.NewListIterator(txnListRLP)
+	if err != nil {
+		return nil, 0, err
+	}
+	txIndex := uint64(0)
+	for iter.Next() {
+		if iter.Err() != nil {
+			return nil, 0, err
+		}
+		// The preimage for the hash calculation of legacy transactions
+		// is just their RLP encoding. For typed (EIP-2718) transactions,
+		// which are encoded as byte arrays, the preimage is the content of
+		// the byte array, so trim their prefix here.
+		txRLP := iter.Value()
+		kind, txHashPayload, _, err := rlp.Split(txRLP)
+		if err != nil {
+			return nil, 0, err
+		}
+		if kind == rlp.List { // Legacy transaction
+			txHashPayload = txRLP
+		}
+		if crypto.Keccak256Hash(txHashPayload) == target {
+			var tx types.Transaction
+			if err := rlp.DecodeBytes(txRLP, &tx); err != nil {
+				return nil, 0, err
+			}
+			return &tx, txIndex, nil
+		}
+		txIndex++
+	}
+	return nil, 0, errors.New("transaction not found")
+}
+
 // ReadTransaction retrieves a specific transaction from the database, along with
 // its added positional metadata.
 func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64) {
@@ -139,18 +180,17 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 	if blockHash == (common.Hash{}) {
 		return nil, common.Hash{}, 0, 0
 	}
-	body := ReadBody(db, blockHash, *blockNumber)
-	if body == nil {
+	bodyRLP := ReadBodyRLP(db, blockHash, *blockNumber)
+	if bodyRLP == nil {
 		log.Error("Transaction referenced missing", "number", *blockNumber, "hash", blockHash)
 		return nil, common.Hash{}, 0, 0
 	}
-	for txIndex, tx := range body.Transactions {
-		if tx.Hash() == hash {
-			return tx, blockHash, *blockNumber, uint64(txIndex)
-		}
+	tx, txIndex, err := findTxInBlockBody(bodyRLP, hash)
+	if err != nil {
+		log.Error("Transaction not found", "number", *blockNumber, "hash", blockHash, "txhash", hash, "err", err)
+		return nil, common.Hash{}, 0, 0
 	}
-	log.Error("Transaction not found", "number", *blockNumber, "hash", blockHash, "txhash", hash)
-	return nil, common.Hash{}, 0, 0
+	return tx, blockHash, *blockNumber, txIndex
 }
 
 // ReadReceipt retrieves a specific transaction receipt from the database, along with
