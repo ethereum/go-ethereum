@@ -155,6 +155,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 		TrieCleanLimit: 0,
 		StateScheme:    scheme,
 		Preimages:      true,
+		TxLookupLimit:  -1, // disable tx indexing
 		VmConfig: vm.Config{
 			Tracer:                  tracer,
 			StatelessSelfValidation: witness,
