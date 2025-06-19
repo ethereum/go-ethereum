@@ -597,11 +597,13 @@ func (w *worker) mainLoop() {
 		}
 	}()
 
+	bor, isBor := w.engine.(*bor.Bor)
+	devFakeAuthor := isBor && bor != nil && bor.DevFakeAuthor
 	for {
 		select {
 		case req := <-w.newWorkCh:
 			if w.chainConfig.ChainID.Cmp(params.BorMainnetChainConfig.ChainID) == 0 || w.chainConfig.ChainID.Cmp(params.MumbaiChainConfig.ChainID) == 0 || w.chainConfig.ChainID.Cmp(params.AmoyChainConfig.ChainID) == 0 {
-				if w.eth.PeerCount() > 0 {
+				if w.eth.PeerCount() > 0 || devFakeAuthor {
 					//nolint:contextcheck
 					w.commitWork(req.interrupt, req.noempty, req.timestamp)
 				}
