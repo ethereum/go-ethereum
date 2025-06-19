@@ -246,7 +246,7 @@ func (t *StateTrie) GetKey(shaKey []byte) []byte {
 	if t.preimages == nil {
 		return nil
 	}
-	if key, ok := t.getSecKeyCache()[common.BytesToHash(shaKey)]; ok {
+	if key, ok := t.secKeyCache[common.BytesToHash(shaKey)]; ok {
 		return key
 	}
 	return t.preimages.Preimage(common.BytesToHash(shaKey))
