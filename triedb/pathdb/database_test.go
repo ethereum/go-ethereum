@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -615,7 +616,7 @@ func TestCommit(t *testing.T) {
 
 func TestJournal(t *testing.T) {
 	testJournal(t, "")
-	testJournal(t, t.TempDir())
+	testJournal(t, filepath.Join(t.TempDir(), strconv.Itoa(rand.Intn(10000))))
 }
 
 func testJournal(t *testing.T, journal string) {
@@ -632,7 +633,7 @@ func testJournal(t *testing.T, journal string) {
 		t.Errorf("Failed to journal, err: %v", err)
 	}
 	tester.db.Close()
-	tester.db = New(tester.db.diskdb, nil, false)
+	tester.db = New(tester.db.diskdb, tester.db.config, false)
 
 	// Verify states including disk layer and all diff on top.
 	for i := 0; i < len(tester.roots); i++ {
@@ -656,7 +657,7 @@ func TestCorruptedJournal(t *testing.T) {
 		rawdb.WriteTrieJournal(db, blob)
 	})
 
-	path := filepath.Join(t.TempDir(), "journal")
+	path := filepath.Join(t.TempDir(), strconv.Itoa(rand.Intn(10000)))
 	testCorruptedJournal(t, path, func(_ ethdb.Database) {
 		f, _ := os.OpenFile(path, os.O_WRONLY, 0644)
 		f.WriteAt([]byte{0xa}, 0)
