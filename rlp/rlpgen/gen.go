@@ -189,10 +189,8 @@ func (ctx *genContext) importsList() []string {
 	imp := make([]string, 0, len(ctx.imports))
 	for path, p := range ctx.imports {
 		if p.alias == p.pkg.Name() {
-			// If the alias matches the package name, use standard import
 			imp = append(imp, fmt.Sprintf("%q", path))
 		} else {
-			// If we have a custom alias, use aliased import
 			imp = append(imp, fmt.Sprintf("%s %q", p.alias, path))
 		}
 	}
