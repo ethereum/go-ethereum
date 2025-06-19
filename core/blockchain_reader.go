@@ -238,17 +238,7 @@ func (bc *BlockChain) GetReceiptByIndex(tx *types.Transaction, blockHash common.
 		return nil, err
 	}
 	signer := types.MakeSigner(bc.chainConfig, new(big.Int).SetUint64(blockNumber), header.Time)
-	receipt.DeriveFields(signer, types.DeriveReceiptContext{
-		BlockHash:    blockHash,
-		BlockNumber:  blockNumber,
-		BlockTime:    header.Time,
-		BaseFee:      header.BaseFee,
-		BlobGasPrice: blobGasPrice,
-		GasUsed:      ctx.GasUsed,
-		LogIndex:     ctx.LogIndex,
-		Tx:           tx,
-		TxIndex:      uint(txIndex),
-	})
+	receipt.DeriveFields(types.MakeDeriveReceiptContext(signer, header, blobGasPrice, tx, ctx.GasUsed, uint(txIndex), ctx.LogIndex))
 	return receipt, nil
 }
 

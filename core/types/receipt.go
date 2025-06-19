@@ -265,37 +265,74 @@ type DeriveReceiptContext struct {
 	BlockTime    uint64
 	BaseFee      *big.Int
 	BlobGasPrice *big.Int
-	GasUsed      uint64
-	LogIndex     uint // Number of logs in the block until this receipt
-	Tx           *Transaction
-	TxIndex      uint
+
+	// Receipt fields
+	GasUsed  uint64
+	LogIndex uint // Number of logs in the block until this receipt
+
+	// Tx fields
+	Hash              common.Hash
+	Nonce             uint64
+	Index             uint
+	Type              uint8
+	From              common.Address
+	To                *common.Address
+	EffectiveGasPrice *big.Int
+	BlobGas           uint64
+}
+
+// MakeDeriveReceiptContext builds the context needed to derive a receipt
+func MakeDeriveReceiptContext(
+	signer Signer, header *Header, blobGasPrice *big.Int,
+	tx *Transaction, gasUsed uint64, txIndex, logIndex uint,
+) DeriveReceiptContext {
+	from, _ := signer.Sender(tx)
+	return DeriveReceiptContext{
+		BlockHash:    header.Hash(),
+		BlockNumber:  header.Number.Uint64(),
+		BlockTime:    header.Time,
+		BaseFee:      header.BaseFee,
+		BlobGasPrice: blobGasPrice,
+
+		// Receipt fields
+		GasUsed:  gasUsed,
+		LogIndex: logIndex, // Number of logs in the block until this receipt
+
+		// Tx fields
+		Hash:              tx.Hash(),
+		Nonce:             tx.Nonce(),
+		Index:             txIndex,
+		Type:              tx.Type(),
+		From:              from,
+		To:                tx.To(),
+		EffectiveGasPrice: tx.EffectiveGasPrice(header.BaseFee),
+		BlobGas:           tx.BlobGas(),
+	}
 }
 
 // DeriveFields fills the receipt with computed fields based on consensus
 // data and contextual infos like containing block and transactions.
-func (r *Receipt) DeriveFields(signer Signer, context DeriveReceiptContext) {
+func (r *Receipt) DeriveFields(context DeriveReceiptContext) {
 	// The transaction type and hash can be retrieved from the transaction itself
-	r.Type = context.Tx.Type()
-	r.TxHash = context.Tx.Hash()
+	r.Type = context.Type
+	r.TxHash = context.Hash
 	r.GasUsed = context.GasUsed
-	r.EffectiveGasPrice = context.Tx.inner.effectiveGasPrice(new(big.Int), context.BaseFee)
+	r.EffectiveGasPrice = context.EffectiveGasPrice
 
 	// EIP-4844 blob transaction fields
-	if context.Tx.Type() == BlobTxType {
-		r.BlobGasUsed = context.Tx.BlobGas()
+	if context.Type == BlobTxType {
+		r.BlobGasUsed = context.BlobGas
 		r.BlobGasPrice = context.BlobGasPrice
 	}
 
 	// Block location fields
 	r.BlockHash = context.BlockHash
 	r.BlockNumber = new(big.Int).SetUint64(context.BlockNumber)
-	r.TransactionIndex = context.TxIndex
+	r.TransactionIndex = context.Index
 
 	// The contract address can be derived from the transaction itself
-	if context.Tx.To() == nil {
-		// Deriving the signer is expensive, only do if it's actually needed
-		from, _ := Sender(signer, context.Tx)
-		r.ContractAddress = crypto.CreateAddress(from, context.Tx.Nonce())
+	if context.To == nil {
+		r.ContractAddress = crypto.CreateAddress(context.From, context.Nonce)
 	} else {
 		r.ContractAddress = common.Address{}
 	}
@@ -306,7 +343,7 @@ func (r *Receipt) DeriveFields(signer Signer, context DeriveReceiptContext) {
 		r.Logs[j].BlockHash = context.BlockHash
 		r.Logs[j].BlockTimestamp = context.BlockTime
 		r.Logs[j].TxHash = r.TxHash
-		r.Logs[j].TxIndex = context.TxIndex
+		r.Logs[j].TxIndex = context.Index
 		r.Logs[j].Index = logIndex
 		logIndex++
 	}
@@ -379,10 +416,12 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 
 // DeriveFields fills the receipts with their computed fields based on consensus
 // data and contextual infos like containing block and transactions.
-func (rs Receipts) DeriveFields(config *params.ChainConfig, blockHash common.Hash, blockNumber uint64, blockTime uint64, baseFee *big.Int, blobGasPrice *big.Int, txs []*Transaction) error {
-	signer := MakeSigner(config, new(big.Int).SetUint64(blockNumber), blockTime)
+func (rs Receipts) DeriveFields(config *params.ChainConfig, header *Header, blobGasPrice *big.Int, txs []*Transaction) error {
+	var (
+		signer   = MakeSigner(config, header.Number, header.Time)
+		logIndex = uint(0)
+	)
 
-	logIndex := uint(0)
 	if len(txs) != len(rs) {
 		return errors.New("transaction and receipt count mismatch")
 	}
@@ -391,17 +430,7 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, blockHash common.Has
 		if i > 0 {
 			cumulativeGasUsed = rs[i-1].CumulativeGasUsed
 		}
-		rs[i].DeriveFields(signer, DeriveReceiptContext{
-			BlockHash:    blockHash,
-			BlockNumber:  blockNumber,
-			BlockTime:    blockTime,
-			BaseFee:      baseFee,
-			BlobGasPrice: blobGasPrice,
-			GasUsed:      rs[i].CumulativeGasUsed - cumulativeGasUsed,
-			LogIndex:     logIndex,
-			Tx:           txs[i],
-			TxIndex:      uint(i),
-		})
+		rs[i].DeriveFields(MakeDeriveReceiptContext(signer, header, blobGasPrice, txs[i], rs[i].CumulativeGasUsed-cumulativeGasUsed, uint(i), logIndex))
 		logIndex += uint(len(rs[i].Logs))
 	}
 	return nil

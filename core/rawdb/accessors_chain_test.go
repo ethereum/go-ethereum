@@ -354,11 +354,13 @@ func TestBlockReceiptStorage(t *testing.T) {
 	receipt2.Bloom = types.CreateBloom(receipt2)
 	receipts := []*types.Receipt{receipt1, receipt2}
 
+	header := types.Header{Number: big.NewInt(0), Difficulty: big.NewInt(0)}
 	// Check that no receipt entries are in a pristine database
-	hash := common.BytesToHash([]byte{0x03, 0x14})
+	hash := header.Hash()
 	if rs := ReadReceipts(db, hash, 0, 0, params.TestChainConfig); len(rs) != 0 {
 		t.Fatalf("non existent receipts returned: %v", rs)
 	}
+	WriteHeader(db, &header)
 	// Insert the body that corresponds to the receipts
 	WriteBody(db, hash, 0, body)
 
@@ -834,19 +836,21 @@ func TestDeriveLogFields(t *testing.T) {
 	}
 
 	// Derive log metadata fields
-	number := big.NewInt(1)
-	hash := common.BytesToHash([]byte{0x03, 0x14})
-	types.Receipts(receipts).DeriveFields(params.TestChainConfig, hash, number.Uint64(), 12, big.NewInt(0), big.NewInt(0), txs)
+	header := types.Header{
+		Number: big.NewInt(1),
+		Time:   12,
+	}
+	types.Receipts(receipts).DeriveFields(params.TestChainConfig, &header, big.NewInt(0), txs)
 
 	// Iterate over all the computed fields and check that they're correct
 	logIndex := uint(0)
 	for i := range receipts {
 		for j := range receipts[i].Logs {
-			if receipts[i].Logs[j].BlockNumber != number.Uint64() {
-				t.Errorf("receipts[%d].Logs[%d].BlockNumber = %d, want %d", i, j, receipts[i].Logs[j].BlockNumber, number.Uint64())
+			if receipts[i].Logs[j].BlockNumber != header.Number.Uint64() {
+				t.Errorf("receipts[%d].Logs[%d].BlockNumber = %d, want %d", i, j, receipts[i].Logs[j].BlockNumber, header.Number.Uint64())
 			}
-			if receipts[i].Logs[j].BlockHash != hash {
-				t.Errorf("receipts[%d].Logs[%d].BlockHash = %s, want %s", i, j, receipts[i].Logs[j].BlockHash.String(), hash.String())
+			if receipts[i].Logs[j].BlockHash != header.Hash() {
+				t.Errorf("receipts[%d].Logs[%d].BlockHash = %s, want %s", i, j, receipts[i].Logs[j].BlockHash.String(), header.Hash().String())
 			}
 			if receipts[i].Logs[j].BlockTimestamp != 12 {
 				t.Errorf("receipts[%d].Logs[%d].BlockTimestamp = %d, want %d", i, j, receipts[i].Logs[j].BlockTimestamp, 12)
