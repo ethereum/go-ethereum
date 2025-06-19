@@ -1,6 +1,6 @@
 on:
   schedule:
-    - cron: '0 15 * * *'
+    - cron: '0 16 * * *'
   push:
     branches:
       - "release/*"
