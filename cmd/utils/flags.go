@@ -2174,6 +2174,8 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		Preimages:      ctx.Bool(CachePreimagesFlag.Name),
 		StateScheme:    scheme,
 		StateHistory:   ctx.Uint64(StateHistoryFlag.Name),
+		// Disable transaction indexing/unindexing.
+		TxLookupLimit: -1,
 	}
 	if options.ArchiveMode && !options.Preimages {
 		options.Preimages = true
@@ -2210,7 +2212,6 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	}
 	options.VmConfig = vmcfg
 
-	// Disable transaction indexing/unindexing by default.
 	chain, err := core.NewBlockChain(chainDb, gspec, engine, options)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
