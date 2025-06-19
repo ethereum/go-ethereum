@@ -18,9 +18,12 @@ package core
 
 import (
 	"errors"
+	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -211,6 +214,42 @@ func (bc *BlockChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*type
 		*number--
 	}
 	return
+}
+
+// GetReceiptByIndex allows fetching a receipt for a transaction that was already
+// looked up on the index.
+func (bc *BlockChain) GetReceiptByIndex(tx *types.Transaction, blockHash common.Hash, blockNumber, txIndex uint64) (*types.Receipt, error) {
+	if receipts, ok := bc.receiptsCache.Get(blockHash); ok {
+		if int(txIndex) >= len(receipts) {
+			return nil, fmt.Errorf("receipt out of index, length: %d, index: %d", len(receipts), txIndex)
+		}
+		return receipts[int(txIndex)], nil
+	}
+	header := bc.GetHeader(blockHash, blockNumber)
+	if header == nil {
+		return nil, fmt.Errorf("block header is not found, %d, %x", blockNumber, blockHash)
+	}
+	var blobGasPrice *big.Int
+	if header.ExcessBlobGas != nil {
+		blobGasPrice = eip4844.CalcBlobFee(bc.chainConfig, header)
+	}
+	receipt, ctx, err := rawdb.ReadRawReceipt(bc.db, blockHash, blockNumber, txIndex)
+	if err != nil {
+		return nil, err
+	}
+	signer := types.MakeSigner(bc.chainConfig, new(big.Int).SetUint64(blockNumber), header.Time)
+	receipt.DeriveFields(signer, types.DeriveReceiptContext{
+		BlockHash:    blockHash,
+		BlockNumber:  blockNumber,
+		BlockTime:    header.Time,
+		BaseFee:      header.BaseFee,
+		BlobGasPrice: blobGasPrice,
+		GasUsed:      ctx.GasUsed,
+		LogIndex:     ctx.LogIndex,
+		Tx:           tx,
+		TxIndex:      uint(txIndex),
+	})
+	return receipt, nil
 }
 
 // GetReceiptsByHash retrieves the receipts for all transactions in a given block.
