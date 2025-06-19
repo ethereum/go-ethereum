@@ -289,10 +289,10 @@ type RawReceiptContext struct {
 	LogIndex uint   // Starting index of the logs within the block
 }
 
-// ReadRawReceipt reads a raw receipt at the specified position. It also returns
+// ReadRawReceiptWithContext reads a raw receipt at the specified position. It also returns
 // the gas used by the associated transaction and the starting index of the logs
 // within the block.
-func ReadRawReceipt(db ethdb.Reader, blockHash common.Hash, blockNumber, txIndex uint64) (*types.Receipt, RawReceiptContext, error) {
+func ReadRawReceiptWithContext(db ethdb.Reader, blockHash common.Hash, blockNumber, txIndex uint64) (*types.Receipt, RawReceiptContext, error) {
 	receiptIt, err := rlp.NewListIterator(ReadReceiptsRLP(db, blockHash, blockNumber))
 	if err != nil {
 		return nil, RawReceiptContext{}, err

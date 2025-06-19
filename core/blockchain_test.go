@@ -1021,7 +1021,7 @@ func testChainTxReorgs(t *testing.T, scheme string) {
 		}
 		if rcpt, _, _, index := rawdb.ReadReceipt(db, tx.Hash(), blockchain.Config()); rcpt == nil {
 			t.Errorf("add %d: expected receipt to be found", i)
-		} else if rawRcpt, ctx, _ := rawdb.ReadRawReceipt(db, rcpt.BlockHash, rcpt.BlockNumber.Uint64(), index); rawRcpt == nil {
+		} else if rawRcpt, ctx, _ := rawdb.ReadRawReceiptWithContext(db, rcpt.BlockHash, rcpt.BlockNumber.Uint64(), index); rawRcpt == nil {
 			t.Errorf("add %d: expected raw receipt to be found", i)
 		} else {
 			if rcpt.GasUsed != ctx.GasUsed {
@@ -1039,7 +1039,7 @@ func testChainTxReorgs(t *testing.T, scheme string) {
 		}
 		if rcpt, _, _, index := rawdb.ReadReceipt(db, tx.Hash(), blockchain.Config()); rcpt == nil {
 			t.Errorf("share %d: expected receipt to be found", i)
-		} else if rawRcpt, ctx, _ := rawdb.ReadRawReceipt(db, rcpt.BlockHash, rcpt.BlockNumber.Uint64(), index); rawRcpt == nil {
+		} else if rawRcpt, ctx, _ := rawdb.ReadRawReceiptWithContext(db, rcpt.BlockHash, rcpt.BlockNumber.Uint64(), index); rawRcpt == nil {
 			t.Errorf("add %d: expected raw receipt to be found", i)
 		} else {
 			if rcpt.GasUsed != ctx.GasUsed {

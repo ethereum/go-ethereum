@@ -233,7 +233,7 @@ func (bc *BlockChain) GetReceiptByIndex(tx *types.Transaction, blockHash common.
 	if header.ExcessBlobGas != nil {
 		blobGasPrice = eip4844.CalcBlobFee(bc.chainConfig, header)
 	}
-	receipt, ctx, err := rawdb.ReadRawReceipt(bc.db, blockHash, blockNumber, txIndex)
+	receipt, ctx, err := rawdb.ReadRawReceiptWithContext(bc.db, blockHash, blockNumber, txIndex)
 	if err != nil {
 		return nil, err
 	}
