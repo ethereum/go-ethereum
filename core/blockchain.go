@@ -278,9 +278,8 @@ type BlockChain struct {
 	txLookupLock  sync.RWMutex
 	txLookupCache *lru.Cache[common.Hash, txLookup]
 
-	quit          chan struct{} // shutdown signal, closed in Stop.
-	stopping      atomic.Bool   // false if chain is running, true when stopped
-	procInterrupt atomic.Bool   // interrupt signaler for block processing
+	stopping      atomic.Bool // false if chain is running, true when stopped
+	procInterrupt atomic.Bool // interrupt signaler for block processing
 
 	engine     consensus.Engine
 	validator  Validator // Block and state validator interface
@@ -328,7 +327,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		db:            db,
 		triedb:        triedb,
 		triegc:        prque.New[int64, common.Hash](nil),
-		quit:          make(chan struct{}),
 		chainmu:       syncx.NewClosableMutex(),
 		bodyCache:     lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
 		bodyRLPCache:  lru.NewCache[common.Hash, rlp.RawValue](bodyCacheLimit),
@@ -1206,7 +1204,6 @@ func (bc *BlockChain) stopWithoutSaving() {
 	bc.scope.Close()
 
 	// Signal shutdown to all goroutines.
-	close(bc.quit)
 	bc.StopInsert()
 
 	// Now wait for all chain modifications to end and persistent goroutines to exit.
@@ -1914,11 +1911,6 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	)
 	defer interrupt.Store(true) // terminate the prefetch at the end
 
-	// Check for termination before starting block processing
-	if bc.insertStopped() {
-		return nil, errInsertionInterrupted
-	}
-
 	if bc.cacheConfig.TrieCleanNoPrefetch {
 		statedb, err = state.New(parentRoot, bc.statedb)
 		if err != nil {
@@ -1986,11 +1978,6 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		}()
 	}
 
-	// Check for termination before starting transaction processing
-	if bc.insertStopped() {
-		return nil, errInsertionInterrupted
-	}
-
 	// Process block using the parent state as reference point
 	pstart := time.Now()
 	res, err := bc.processor.Process(block, statedb, bc.vmConfig)
@@ -1999,11 +1986,6 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		return nil, err
 	}
 	ptime := time.Since(pstart)
-
-	// Check for termination before validation
-	if bc.insertStopped() {
-		return nil, errInsertionInterrupted
-	}
 
 	vstart := time.Now()
 	if err := bc.validator.ValidateState(block, statedb, res, false); err != nil {
@@ -2060,11 +2042,6 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	blockExecutionTimer.Update(ptime - (statedb.AccountReads + statedb.StorageReads)) // The time spent on EVM processing
 	blockValidationTimer.Update(vtime - (triehash + trieUpdate))                      // The time spent on block validation
 	blockCrossValidationTimer.Update(xvtime)                                          // The time spent on stateless cross validation
-
-	// Check for termination before writing to database
-	if bc.insertStopped() {
-		return nil, errInsertionInterrupted
-	}
 
 	// Write the block to the chain and get the status.
 	var (
