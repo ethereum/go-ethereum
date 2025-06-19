@@ -1691,7 +1691,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.SnapshotCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheSnapshotFlag.Name) / 100
 	}
 	if ctx.IsSet(TrieDBJournalFlag.Name) {
-		cfg.TrieDBJournal = stack.ResolvePath(ctx.String(TrieDBJournalFlag.Name))
+		cfg.TrieDBJournal = ctx.String(TrieDBJournalFlag.Name)
 	}
 	if ctx.IsSet(CacheLogSizeFlag.Name) {
 		cfg.FilterLogCacheSize = ctx.Int(CacheLogSizeFlag.Name)
@@ -2215,6 +2215,13 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	if options.ArchiveMode && !options.Preimages {
 		options.Preimages = true
 		log.Info("Enabling recording of key preimages since archive mode is used")
+	}
+	journal := ethconfig.Defaults.TrieDBJournal
+	if ctx.IsSet(TrieDBJournalFlag.Name) {
+		journal = ctx.String(TrieDBJournalFlag.Name)
+	}
+	if journal != "" {
+		options.TrieDBJournal = stack.ResolvePath(journal)
 	}
 	if ctx.IsSet(TrieDBJournalFlag.Name) {
 		options.TrieDBJournal = stack.ResolvePath(ctx.String(TrieDBJournalFlag.Name))
