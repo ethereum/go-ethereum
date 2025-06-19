@@ -194,13 +194,6 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		})
 	}
 
-	// Configure log filter RPC API.
-	filterSystem := utils.RegisterFilterAPI(stack, backend, &cfg.Eth)
-
-	// Configure GraphQL if requested.
-	if ctx.IsSet(utils.GraphQLEnabledFlag.Name) {
-		utils.RegisterGraphQLService(stack, backend, filterSystem, &cfg.Node)
-	}
 	// Add the Ethereum Stats daemon if requested.
 	if cfg.Ethstats.URL != "" {
 		utils.RegisterEthStatsService(stack, backend, cfg.Ethstats.URL)

@@ -302,27 +302,28 @@ func TestTraceCall(t *testing.T) {
 			expect: `{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}`,
 		},
 		// Before the first transaction, should be failed
-		{
-			blockNumber: rpc.BlockNumber(genBlocks - 1),
-			call: ethapi.TransactionArgs{
-				From:  &accounts[2].addr,
-				To:    &accounts[0].addr,
-				Value: (*hexutil.Big)(new(big.Int).Add(big.NewInt(params.Ether), big.NewInt(100))),
-			},
-			config:    &TraceCallConfig{TxIndex: uintPtr(0)},
-			expectErr: fmt.Errorf("tracing failed: insufficient funds for gas * price + value: address %s have 1000000000000000000 want 1000000000000000100", accounts[2].addr),
-		},
-		// Before the target transaction, should be failed
-		{
-			blockNumber: rpc.BlockNumber(genBlocks - 1),
-			call: ethapi.TransactionArgs{
-				From:  &accounts[2].addr,
-				To:    &accounts[0].addr,
-				Value: (*hexutil.Big)(new(big.Int).Add(big.NewInt(params.Ether), big.NewInt(100))),
-			},
-			config:    &TraceCallConfig{TxIndex: uintPtr(1)},
-			expectErr: fmt.Errorf("tracing failed: insufficient funds for gas * price + value: address %s have 1000000000000000000 want 1000000000000000100", accounts[2].addr),
-		},
+		// UPDATE: we purposely decided to silence such errors from tracing.
+		// {
+		// 	blockNumber: rpc.BlockNumber(genBlocks - 1),
+		// 	call: ethapi.TransactionArgs{
+		// 		From:  &accounts[2].addr,
+		// 		To:    &accounts[0].addr,
+		// 		Value: (*hexutil.Big)(new(big.Int).Add(big.NewInt(params.Ether), big.NewInt(100))),
+		// 	},
+		// 	config:    &TraceCallConfig{TxIndex: uintPtr(0)},
+		// 	expectErr: fmt.Errorf("tracing failed: insufficient funds for gas * price + value: address %s have 1000000000000000000 want 1000000000000000100", accounts[2].addr),
+		// },
+		// // Before the target transaction, should be failed
+		// {
+		// 	blockNumber: rpc.BlockNumber(genBlocks - 1),
+		// 	call: ethapi.TransactionArgs{
+		// 		From:  &accounts[2].addr,
+		// 		To:    &accounts[0].addr,
+		// 		Value: (*hexutil.Big)(new(big.Int).Add(big.NewInt(params.Ether), big.NewInt(100))),
+		// 	},
+		// 	config:    &TraceCallConfig{TxIndex: uintPtr(1)},
+		// 	expectErr: fmt.Errorf("tracing failed: insufficient funds for gas * price + value: address %s have 1000000000000000000 want 1000000000000000100", accounts[2].addr),
+		// },
 		// After the target transaction, should be succeed
 		{
 			blockNumber: rpc.BlockNumber(genBlocks - 1),
@@ -696,16 +697,17 @@ func TestTracingWithOverrides(t *testing.T) {
 			want: `{"gas":21000,"failed":false,"returnValue":""}`,
 		},
 		// Invalid call without state overriding
-		{
-			blockNumber: rpc.LatestBlockNumber,
-			call: ethapi.TransactionArgs{
-				From:  &randomAccounts[0].addr,
-				To:    &randomAccounts[1].addr,
-				Value: (*hexutil.Big)(big.NewInt(1000)),
-			},
-			config:    &TraceCallConfig{},
-			expectErr: core.ErrInsufficientFunds,
-		},
+		// UPDATE: we purposely decided to silence such errors from tracing.
+		// {
+		// 	blockNumber: rpc.LatestBlockNumber,
+		// 	call: ethapi.TransactionArgs{
+		// 		From:  &randomAccounts[0].addr,
+		// 		To:    &randomAccounts[1].addr,
+		// 		Value: (*hexutil.Big)(big.NewInt(1000)),
+		// 	},
+		// 	config:    &TraceCallConfig{},
+		// 	expectErr: core.ErrInsufficientFunds,
+		// },
 		// Successful simple contract call
 		//
 		// // SPDX-License-Identifier: GPL-3.0

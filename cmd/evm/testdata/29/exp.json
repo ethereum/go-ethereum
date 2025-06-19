@@ -8,13 +8,16 @@
       },
       "balance": "0x1"
     },
+    "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+      "balance": "0x2e248"
+    },
     "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
       "balance": "0x16345785d871db8",
       "nonce": "0x1"
     }
   },
   "result": {
-    "stateRoot": "0x19a4f821a7c0a6f4c934f9acb0fe9ce5417b68086e12513ecbc3e3f57e01573c",
+    "stateRoot": "0xbad33754200872b417eb005c29ab6d8df97f9814044a24020fccb0e4946c2c73",
     "txRoot": "0x248074fabe112f7d93917f292b64932394f835bb98da91f21501574d58ec92ab",
     "receiptsRoot": "0xf78dfb743fbd92ade140711c8bbc542b5e307f0ab7984eff35d751969fe57efa",
     "logsHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",

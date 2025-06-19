@@ -461,7 +461,11 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 		fee := new(big.Int).SetUint64(st.gasUsed())
 		// Sei doesn't don't burn the base fee and instead funds the Coinbase address with the base fee
-		totalFeePerGas := new(big.Int).Add(st.evm.Context.BaseFee, effectiveTip)
+		baseFee := st.evm.Context.BaseFee
+		if baseFee == nil || baseFee.Sign() == 0 {
+			baseFee = common.Big0
+		}
+		totalFeePerGas := new(big.Int).Add(baseFee, effectiveTip)
 		fee.Mul(fee, totalFeePerGas)
 		st.state.AddBalance(st.evm.Context.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
 	}

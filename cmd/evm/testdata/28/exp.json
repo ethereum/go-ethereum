@@ -1,7 +1,7 @@
 {
   "alloc": {
     "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
-      "balance": "0x150ca"
+      "balance": "0x73c57"
     },
     "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
       "balance": "0x16345785d80c3a9",
@@ -16,7 +16,7 @@
     }
   },
   "result": {
-    "stateRoot": "0xa40cb3fab01848e922a48bd24191815df9f721ad4b60376edac75161517663e8",
+    "stateRoot": "0xabcbb1d3be8aee044a219dd181fe6f2c2482749b9da95d15358ba7af9b43c372",
     "txRoot": "0x4409cc4b699384ba5f8248d92b784713610c5ff9c1de51e9239da0dac76de9ce",
     "receiptsRoot": "0xbff643da765981266133094092d98c81d2ac8e9a83a7bbda46c3d736f1f874ac",
     "logsHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
