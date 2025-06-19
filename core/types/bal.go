@@ -62,12 +62,17 @@ type encodingAccountCodeDiff struct {
 type encodingCodeDiffs []encodingAccountCodeDiff
 
 type encodingAccountNonce struct {
-	Address     [20]byte
-	NonceBefore uint64
+	TxIdx uint64 `ssz-size:"2"`
+	Nonce uint64 `ssz-size:"8"`
+}
+
+type encodingAccountNonces struct {
+	Address [20]byte
+	Diffs   []encodingAccountNonce `ssz-max:"300000"`
 }
 
 // TODO: implement encoder/decoder manually on this, as we can't specify tags for a type declaration
-type encodingNonceDiffs []encodingAccountNonce
+type encodingNonceDiffs []encodingAccountNonces
 
 type encodingBlockAccessList struct {
 	AccountAccesses encodingAccountAccessList `ssz-max:"300000"`
@@ -188,16 +193,37 @@ func encodingAccountAccessListToMap(al encodingAccountAccessList) (map[common.Ad
 	return res, nil
 }
 
-func (n encodingNonceDiffs) toMap() (map[common.Address]uint64, error) {
+// TODO: assert that there were no duplicate keys (tx indices / addresses) in any entries
+
+func (n encodingAccountNonces) toMap() (accountNonceDiffs, error) {
+	var prevIdx *uint64
+	res := make(accountNonceDiffs)
+	for _, diff := range n.Diffs {
+		if prevIdx != nil {
+			if *prevIdx > diff.TxIdx {
+				return nil, fmt.Errorf("not in lexicographic ordering")
+			}
+		}
+		res[diff.TxIdx] = diff.Nonce
+		prevIdx = &diff.TxIdx
+	}
+	return res, nil
+}
+
+func (n encodingNonceDiffs) toMap() (map[common.Address]accountNonceDiffs, error) {
 	var prevAddr *common.Address
-	res := make(map[common.Address]uint64)
+	res := make(map[common.Address]accountNonceDiffs)
 	for _, diff := range n {
 		if prevAddr != nil {
 			if bytes.Compare(diff.Address[:], (*prevAddr)[:]) < 0 {
 				return nil, fmt.Errorf("nonce diff accounts not in lexicographic order")
 			}
 		}
-		res[diff.Address] = diff.NonceBefore
+		addrDiff, err := diff.toMap()
+		if err != nil {
+			return nil, err
+		}
+		res[diff.Address] = addrDiff
 		var p common.Address = diff.Address
 		prevAddr = &p
 	}
@@ -233,7 +259,7 @@ func (b *encodingBlockAccessList) ToBlockAccessList() (*BlockAccessList, error) 
 
 // non-encoder objects
 
-func nonceDiffsToEncoderObj(nonceDiffs map[common.Address]uint64) (res encodingNonceDiffs) {
+func nonceDiffsToEncoderObj(nonceDiffs map[common.Address]accountNonceDiffs) (res encodingNonceDiffs) {
 	var addrs []common.Address
 	for addr, _ := range nonceDiffs {
 		addrs = append(addrs, addr)
@@ -244,10 +270,7 @@ func nonceDiffsToEncoderObj(nonceDiffs map[common.Address]uint64) (res encodingN
 	})
 
 	for _, addr := range addrs {
-		res = append(res, encodingAccountNonce{
-			Address:     addr,
-			NonceBefore: nonceDiffs[addr],
-		})
+		res = append(res, nonceDiffs[addr].toEncoderObj(addr))
 	}
 	return res
 }
@@ -363,12 +386,38 @@ func (c *codeDiff) Copy() codeDiff {
 	}
 }
 
+// map of tx index to the prestate nonce
+type accountNonceDiffs map[uint64]uint64
+
+func (a accountNonceDiffs) toEncoderObj(addr common.Address) encodingAccountNonces {
+	res := encodingAccountNonces{
+		Address: addr,
+	}
+	var (
+		diffIdxs []uint64
+	)
+	for sIdx, _ := range a {
+		diffIdxs = append(diffIdxs, sIdx)
+	}
+	sort.Slice(diffIdxs, func(i, j int) bool {
+		return diffIdxs[i] < diffIdxs[j]
+	})
+
+	for _, txIdx := range a {
+		res.Diffs = append(res.Diffs, encodingAccountNonce{
+			TxIdx: txIdx,
+			Nonce: a[txIdx],
+		})
+	}
+	return res
+}
+
 type BlockAccessList struct {
-	AccountAccesses map[common.Address]*accountAccess `json:"accountAccesses"`
-	BalanceChanges  map[common.Address]balanceDiff    `json:"balanceChanges"`
-	CodeChanges     map[common.Address]codeDiff       `json:"codeChanges"`
-	PrestateNonces  map[common.Address]uint64         `json:"prestateNonces"`
-	hash            common.Hash                       `json:"hash"`
+	AccountAccesses map[common.Address]*accountAccess    `json:"accountAccesses"`
+	BalanceChanges  map[common.Address]balanceDiff       `json:"balanceChanges"`
+	CodeChanges     map[common.Address]codeDiff          `json:"codeChanges"`
+	PrestateNonces  map[common.Address]accountNonceDiffs `json:"prestateNonces"`
+	hash            common.Hash                          `json:"hash"`
 }
 
 // Copy deep-copies the access list
@@ -421,7 +470,7 @@ func NewBlockAccessList() *BlockAccessList {
 		make(map[common.Address]*accountAccess),
 		make(map[common.Address]balanceDiff),
 		make(map[common.Address]codeDiff),
-		make(map[common.Address]uint64),
+		make(map[common.Address]accountNonceDiffs),
 		common.Hash{},
 	}
 }
@@ -480,8 +529,17 @@ func (b *BlockAccessList) Eq(other *BlockAccessList) bool {
 		}
 	}
 
-	if !maps.Equal(b.PrestateNonces, other.PrestateNonces) {
+	if len(b.PrestateNonces) != len(other.PrestateNonces) {
 		return false
+	}
+	for addr, prestateNonces := range b.PrestateNonces {
+		otherPrestateNonces, ok := other.PrestateNonces[addr]
+		if !ok {
+			return false
+		}
+		if !maps.Equal(prestateNonces, otherPrestateNonces) {
+			return false
+		}
 	}
 
 	if len(b.BalanceChanges) != len(other.BalanceChanges) {
@@ -514,11 +572,14 @@ func (b *BlockAccessList) Eq(other *BlockAccessList) bool {
 
 // Add the prestate nonce of the caller and target of a CREATE/CREATE2 invocation.
 // Called whether the creation reverts or not.
-func (b *BlockAccessList) NonceDiff(address common.Address, originNonce uint64) {
+func (b *BlockAccessList) NonceDiff(address common.Address, txIdx, originNonce uint64) {
 	if _, ok := b.PrestateNonces[address]; ok {
 		return
 	}
-	b.PrestateNonces[address] = originNonce
+	if _, ok := b.PrestateNonces[address]; !ok {
+		b.PrestateNonces[address] = make(accountNonceDiffs)
+	}
+	b.PrestateNonces[address][txIdx] = originNonce
 }
 
 // called during tx finalisation for each
@@ -677,8 +738,11 @@ func (e *encodingBlockAccessList) PrettyPrint() string {
 
 	printWithIndent(0, "nonces:")
 	for _, n := range e.NonceDiffs {
-		printWithIndent(1, fmt.Sprintf("address: %x", n.Address))
-		printWithIndent(1, fmt.Sprintf("nonce: %d", n.NonceBefore))
+		printWithIndent(1, fmt.Sprintf("%x:", n.Address))
+		for _, nonceDiff := range n.Diffs {
+			printWithIndent(2, fmt.Sprintf("index: %d", nonceDiff.TxIdx))
+			printWithIndent(2, fmt.Sprintf("nonce: %d", nonceDiff.Nonce))
+		}
 	}
 
 	return res.String()

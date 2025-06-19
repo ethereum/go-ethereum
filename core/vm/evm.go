@@ -76,6 +76,7 @@ type TxContext struct {
 	BlobHashes   []common.Hash       // Provides information for BLOBHASH
 	BlobFeeCap   *big.Int            // Is used to zero the blobbasefee if NoBaseFee is set
 	AccessEvents *state.AccessEvents // Capture all state accesses for this tx
+	Index        uint64              // the index of the transaction within the block being executed (0 if executing a standalone call)
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -436,7 +437,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 	if bal != nil && evm.StateDB.GetCodeHash(caller) != (types.EmptyCodeHash) {
 		// TODO: do we need to include the txidx as well? the caller can create multiple accounts in the block.
 		// TODO: how do we handle the occurance where account is created-selfdestructed in one tx and create permanently in another
-		bal.NonceDiff(caller, nonce)
+		bal.NonceDiff(caller, uint64(evm.StateDB.TxIndex()), nonce)
 	}
 	if nonce+1 < nonce {
 		return nil, common.Address{}, gas, ErrNonceUintOverflow
@@ -471,7 +472,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 
 	// record target prestate nonce in BAL regardless of whether it is preexisting
 	if bal := evm.StateDB.BlockAccessList(); bal != nil {
-		bal.NonceDiff(address, targetNonce)
+		bal.NonceDiff(address, uint64(evm.StateDB.TxIndex()), targetNonce)
 	}
 	if targetNonce != 0 ||
 		(contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) || // non-empty code

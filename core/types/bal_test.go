@@ -2,8 +2,11 @@ package types
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum/rlp"
+	"io/ioutil"
+	"log"
 	"testing"
 )
 
@@ -17,6 +20,26 @@ func TestBALEncoding(t *testing.T) {
 	}
 	if err := b.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 10000000)); err != nil {
 		t.Fatalf("decoding failed: %v\n", err)
+	}
+}
+
+func TestBALEncodingPython(t *testing.T) {
+	var encObj encodingBlockAccessList
+	filename := "testdata/22400032_block_access_list.txt"
+
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		log.Fatalf("Failed to read file: %v", err)
+	}
+
+	bytes, err := hex.DecodeString(string(data))
+	if err != nil {
+		log.Fatalf("Failed to decode hex string: %v", err)
+	}
+
+	fmt.Printf("Decoded bytes: %x\n", bytes)
+	if err := encObj.UnmarshalSSZ(bytes); err != nil {
+		t.Fatalf("error unmarshalling ssz: %v", err)
 	}
 }
 
