@@ -22,7 +22,6 @@ import (
 	"go/format"
 	"go/types"
 	"sort"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/rlp/internal/rlpstruct"
 	"golang.org/x/tools/go/packages"
@@ -98,14 +97,19 @@ func (bctx *buildContext) typeToStructType(typ types.Type) *rlpstruct.Type {
 // file and assigns unique names of temporary variables.
 type genContext struct {
 	inPackage   *types.Package
-	imports     map[string]string // Changed from map[string]struct{} to map[string]string to store package aliases
+	imports     map[string]genImportPackage
 	tempCounter int
+}
+
+type genImportPackage struct {
+	alias string
+	pkg   *types.Package
 }
 
 func newGenContext(inPackage *types.Package) *genContext {
 	return &genContext{
 		inPackage:   inPackage,
-		imports:     make(map[string]string),
+		imports:     make(map[string]genImportPackage),
 		tempCounter: 0,
 	}
 }
@@ -120,42 +124,39 @@ func (ctx *genContext) resetTemp() {
 	ctx.tempCounter = 0
 }
 
-func (ctx *genContext) addImport(path string) string {
-	if path == ctx.inPackage.Path() {
-		return "" // avoid importing the package that we're generating in
-	}
-	
-	// Check if we already have an alias for this package
-	if alias, exists := ctx.imports[path]; exists {
-		return alias
-	}
-
-	// Get the package name and check for conflicts
+func (ctx *genContext) addImportPath(path string) {
 	pkg, err := ctx.loadPackage(path)
 	if err != nil {
-		// If we can't load the package, use the last component of the path
-		parts := strings.Split(path, "/")
-		pkg = types.NewPackage(path, parts[len(parts)-1])
+		panic(fmt.Sprintf("can't load package %q: %v", path, err))
 	}
+	ctx.addImport(pkg)
+}
 
+func (ctx *genContext) addImport(pkg *types.Package) string {
+	if pkg.Path() == ctx.inPackage.Path() {
+		return "" // avoid importing the package that we're generating in
+	}
+	if p, exists := ctx.imports[pkg.Path()]; exists {
+		return p.alias
+	}
 	baseName := pkg.Name()
 	alias := baseName
 	counter := 1
-	
+
 	// If the base name conflicts with any existing import, add a numeric suffix
 	for ctx.hasAlias(alias) {
 		alias = fmt.Sprintf("%s%d", baseName, counter)
 		counter++
 	}
-	
-	ctx.imports[path] = alias
+
+	ctx.imports[pkg.Path()] = genImportPackage{alias, pkg}
 	return alias
 }
 
 // hasAlias checks if an alias is already in use
 func (ctx *genContext) hasAlias(alias string) bool {
-	for _, existingAlias := range ctx.imports {
-		if existingAlias == alias {
+	for _, p := range ctx.imports {
+		if p.alias == alias {
 			return true
 		}
 	}
@@ -180,19 +181,19 @@ func (ctx *genContext) qualify(pkg *types.Package) string {
 	if pkg.Path() == ctx.inPackage.Path() {
 		return ""
 	}
-	return ctx.addImport(pkg.Path())
+	return ctx.addImport(pkg)
 }
 
 // importsList returns all packages that need to be imported
 func (ctx *genContext) importsList() []string {
 	imp := make([]string, 0, len(ctx.imports))
-	for path, alias := range ctx.imports {
-		if alias == pkg.Name() {
+	for path, p := range ctx.imports {
+		if p.alias == p.pkg.Name() {
 			// If the alias matches the package name, use standard import
 			imp = append(imp, fmt.Sprintf("%q", path))
 		} else {
 			// If we have a custom alias, use aliased import
-			imp = append(imp, fmt.Sprintf("%s %q", alias, path))
+			imp = append(imp, fmt.Sprintf("%s %q", p.alias, path))
 		}
 	}
 	sort.Strings(imp)
@@ -413,7 +414,7 @@ func (op uint256Op) genWrite(ctx *genContext, v string) string {
 }
 
 func (op uint256Op) genDecode(ctx *genContext) (string, string) {
-	ctx.addImport("github.com/holiman/uint256")
+	ctx.addImportPath("github.com/holiman/uint256")
 
 	var b bytes.Buffer
 	resultV := ctx.temp()
@@ -786,7 +787,7 @@ func (bctx *buildContext) makeOp(name *types.Named, typ types.Type, tags rlpstru
 // generateDecoder generates the DecodeRLP method on 'typ'.
 func generateDecoder(ctx *genContext, typ string, op op) []byte {
 	ctx.resetTemp()
-	ctx.addImport(pathOfPackageRLP)
+	ctx.addImportPath(pathOfPackageRLP)
 
 	result, code := op.genDecode(ctx)
 	var b bytes.Buffer
@@ -801,8 +802,8 @@ func generateDecoder(ctx *genContext, typ string, op op) []byte {
 // generateEncoder generates the EncodeRLP method on 'typ'.
 func generateEncoder(ctx *genContext, typ string, op op) []byte {
 	ctx.resetTemp()
-	ctx.addImport("io")
-	ctx.addImport(pathOfPackageRLP)
+	ctx.addImportPath("io")
+	ctx.addImportPath(pathOfPackageRLP)
 
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "func (obj *%s) EncodeRLP(_w io.Writer) error {\n", typ)
@@ -837,7 +838,7 @@ func (bctx *buildContext) generate(typ *types.Named, encoder, decoder bool) ([]b
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "package %s\n\n", pkg.Name())
 	for _, imp := range ctx.importsList() {
-		fmt.Fprintf(&b, "import %q\n", imp)
+		fmt.Fprintf(&b, "import %s\n", imp)
 	}
 	if encoder {
 		fmt.Fprintln(&b)
