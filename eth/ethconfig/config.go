@@ -47,7 +47,7 @@ var FullNodeGPO = gasprice.Config{
 	IgnorePrice:      gasprice.DefaultIgnorePrice,
 }
 
-// Defaults contains default settings for use on the Ethereum main net.
+// Defaults contains default settings for use on the Ethereum and Berachain main net.
 var Defaults = Config{
 	HistoryMode:        history.KeepAll,
 	SyncMode:           SnapSync,

@@ -656,11 +656,11 @@ func maybeSkipArchive(env build.Environment) {
 	}
 }
 
-// Builds the docker images and optionally uploads them to Docker Hub.
+// Builds the docker images and optionally uploads them to GHCR.
 func doDockerBuildx(cmdline []string) {
 	var (
 		platform = flag.String("platform", "", `Push a multi-arch docker image for the specified architectures (usually "linux/amd64,linux/arm64")`)
-		hubImage = flag.String("hub", "ethereum/client-go", `Where to upload the docker image`)
+		hubImage = flag.String("hub", "ghcr.io/berachain/bera-geth", `Where to upload the docker image`)
 		upload   = flag.Bool("upload", false, `Whether to trigger upload`)
 	)
 	flag.CommandLine.Parse(cmdline)
