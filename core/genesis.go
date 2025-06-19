@@ -681,7 +681,7 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 		},
 	}
 	if faucet != nil {
-		genesis.Alloc[*faucet] = types.Account{Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))}
+		genesis.Alloc[*faucet] = types.Account{Balance: new(big.Int).Lsh(big.NewInt(1), 95)}
 	}
 	return genesis
 }
