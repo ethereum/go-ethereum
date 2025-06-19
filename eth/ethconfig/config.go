@@ -60,6 +60,7 @@ var Defaults = Config{
 	TrieCleanCache:     154,
 	TrieDirtyCache:     256,
 	TrieTimeout:        60 * time.Minute,
+	TrieDBJournal:      "triedb.journal",
 	SnapshotCache:      102,
 	FilterLogCacheSize: 32,
 	Miner:              miner.DefaultConfig,
@@ -103,12 +104,6 @@ type Config struct {
 	LogHistory           uint64 `toml:",omitempty"` // The maximum number of blocks from head where a log search index is maintained.
 	LogNoHistory         bool   `toml:",omitempty"` // No log search index is maintained.
 	LogExportCheckpoints string // export log index checkpoints to file
-	StateHistory         uint64 `toml:",omitempty"` // The maximum number of blocks from head whose state histories are reserved.
-
-	// State scheme represents the scheme used to store ethereum states and trie
-	// nodes on top. It can be 'hash', 'path', or none which means use the scheme
-	// consistent with persistent state.
-	StateScheme string `toml:",omitempty"`
 
 	// RequiredBlocks is a set of block number -> hash mappings which must be in the
 	// canonical chain of all remote peers. Setting the option makes geth verify the
@@ -122,12 +117,20 @@ type Config struct {
 	DatabaseFreezer    string
 	DatabaseEra        string
 
+	// Trie database options. TODO(rjl493456442) move all trie database options
+	// into a separate config structure.
 	TrieCleanCache int
 	TrieDirtyCache int
 	TrieTimeout    time.Duration
 	SnapshotCache  int
 	Preimages      bool
-	TrieJournal    string
+	StateHistory   uint64 `toml:",omitempty"` // The maximum number of blocks from head whose state histories are reserved.
+	TrieDBJournal  string // Path to the journal used for persisting trie data across node restarts
+
+	// State scheme represents the scheme used to store ethereum states and trie
+	// nodes on top. It can be 'hash', 'path', or none which means use the scheme
+	// consistent with persistent state.
+	StateScheme string `toml:",omitempty"`
 
 	// This is the number of blocks for which logs will be cached in the filter system.
 	FilterLogCacheSize int

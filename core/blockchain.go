@@ -166,7 +166,7 @@ type BlockChainConfig struct {
 	TrieDirtyLimit   int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
 	TrieTimeLimit    time.Duration // Time limit after which to flush the current in-memory trie to disk
 	TrieNoAsyncFlush bool          // Whether the asynchronous buffer flushing is disallowed
-	TrieJournal      string        // Path used to store the trie pathdb journal
+	TrieDBJournal    string        // Path to the journal used for persisting trie data across node restarts
 
 	Preimages    bool   // Whether to store preimage of trie key to the disk
 	StateHistory uint64 // Number of blocks from head whose state histories are reserved.
@@ -247,6 +247,7 @@ func (cfg *BlockChainConfig) triedbConfig(isVerkle bool) *triedb.Config {
 			EnableStateIndexing: cfg.ArchiveMode,
 			TrieCleanSize:       cfg.TrieCleanLimit * 1024 * 1024,
 			StateCleanSize:      cfg.SnapshotLimit * 1024 * 1024,
+			JournalPath:         cfg.TrieDBJournal,
 
 			// TODO(rjl493456442): The write buffer represents the memory limit used
 			// for flushing both trie data and state data to disk. The config name
