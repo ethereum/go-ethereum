@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
@@ -152,7 +151,7 @@ func createMiner(t *testing.T) *Miner {
 	// Create consensus engine
 	engine := clique.New(chainConfig.Clique, chainDB)
 	// Create Ethereum backend
-	bc, err := core.NewBlockChain(chainDB, nil, genesis, nil, engine, vm.Config{}, nil)
+	bc, err := core.NewBlockChain(chainDB, genesis, engine, nil)
 	if err != nil {
 		t.Fatalf("can't create new chain %v", err)
 	}

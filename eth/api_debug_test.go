@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -68,15 +67,15 @@ func newTestBlockChain(t *testing.T, n int, gspec *core.Genesis, generator func(
 	_, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, generator)
 
 	// Import the canonical chain
-	cacheConfig := &core.CacheConfig{
-		TrieCleanLimit:    256,
-		TrieDirtyLimit:    256,
-		TrieTimeLimit:     5 * time.Minute,
-		SnapshotLimit:     0,
-		Preimages:         true,
-		TrieDirtyDisabled: true, // Archive mode
+	options := &core.BlockChainConfig{
+		TrieCleanLimit: 256,
+		TrieDirtyLimit: 256,
+		TrieTimeLimit:  5 * time.Minute,
+		SnapshotLimit:  0,
+		Preimages:      true,
+		ArchiveMode:    true, // Archive mode
 	}
-	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), cacheConfig, gspec, nil, engine, vm.Config{}, nil)
+	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), gspec, engine, options)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
