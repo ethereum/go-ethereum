@@ -120,6 +120,7 @@ type Config struct {
 	StateCleanSize      int    // Maximum memory allowance (in bytes) for caching clean state data
 	WriteBufferSize     int    // Maximum memory allowance (in bytes) for write buffer
 	ReadOnly            bool   // Flag whether the database is opened in read only mode
+	JournalPath         string // Absolute path of journal file (null means the journal data is persisted in key-value store)
 
 	// Testing configurations
 	SnapshotNoBuild   bool // Flag Whether the state generation is allowed
@@ -155,6 +156,9 @@ func (c *Config) fields() []interface{} {
 		list = append(list, "history", "entire chain")
 	} else {
 		list = append(list, "history", fmt.Sprintf("last %d blocks", c.StateHistory))
+	}
+	if c.JournalPath != "" {
+		list = append(list, "journal", c.JournalPath)
 	}
 	return list
 }

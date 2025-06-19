@@ -446,6 +446,15 @@ var (
 		Value:    ethconfig.Defaults.BlobPool.PriceBump,
 		Category: flags.BlobPoolCategory,
 	}
+
+	// Trie database settings
+	TrieDBJournalFlag = &cli.StringFlag{
+		Name:     "triedb.journal",
+		Usage:    "Path to the journal used for persisting trie data across node restarts",
+		Value:    ethconfig.Defaults.TrieDBJournal,
+		Category: flags.TrieDatabaseCategory,
+	}
+
 	// Performance tuning settings
 	CacheFlag = &cli.IntFlag{
 		Name:     "cache",
@@ -463,11 +472,6 @@ var (
 		Name:     "cache.trie",
 		Usage:    "Percentage of cache memory allowance to use for trie caching (default = 15% full mode, 30% archive mode)",
 		Value:    15,
-		Category: flags.PerfCategory,
-	}
-	CacheTrieJournalFlag = &cli.StringFlag{
-		Name:     "cache.trie.journal",
-		Usage:    "Disk journal directory for trie cache to survive node restarts (experimental, default is disabled)",
 		Category: flags.PerfCategory,
 	}
 	CacheGCFlag = &cli.IntFlag{
@@ -988,6 +992,7 @@ var (
 		DataDirFlag,
 		AncientFlag,
 		EraFlag,
+		TrieDBJournalFlag,
 		RemoteDBFlag,
 		DBEngineFlag,
 		StateSchemeFlag,
@@ -1685,8 +1690,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheSnapshotFlag.Name) {
 		cfg.SnapshotCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheSnapshotFlag.Name) / 100
 	}
-	if journal := ctx.String(CacheTrieJournalFlag.Name); journal != "" {
-		cfg.TrieJournal = stack.ResolvePath(journal)
+	if ctx.IsSet(TrieDBJournalFlag.Name) {
+		cfg.TrieDBJournal = stack.ResolvePath(ctx.String(TrieDBJournalFlag.Name))
 	}
 	if ctx.IsSet(CacheLogSizeFlag.Name) {
 		cfg.FilterLogCacheSize = ctx.Int(CacheLogSizeFlag.Name)
@@ -2211,8 +2216,8 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		options.Preimages = true
 		log.Info("Enabling recording of key preimages since archive mode is used")
 	}
-	if journal := ctx.String(CacheTrieJournalFlag.Name); journal != "" {
-		options.TrieJournal = stack.ResolvePath(journal)
+	if ctx.IsSet(TrieDBJournalFlag.Name) {
+		options.TrieDBJournal = stack.ResolvePath(ctx.String(TrieDBJournalFlag.Name))
 	}
 	if !ctx.Bool(SnapshotFlag.Name) {
 		options.SnapshotLimit = 0 // Disabled
