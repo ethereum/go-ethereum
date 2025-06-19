@@ -2223,9 +2223,6 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	if journal != "" {
 		options.TrieDBJournal = stack.ResolvePath(journal)
 	}
-	if ctx.IsSet(TrieDBJournalFlag.Name) {
-		options.TrieDBJournal = stack.ResolvePath(ctx.String(TrieDBJournalFlag.Name))
-	}
 	if !ctx.Bool(SnapshotFlag.Name) {
 		options.SnapshotLimit = 0 // Disabled
 	} else if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheSnapshotFlag.Name) {
