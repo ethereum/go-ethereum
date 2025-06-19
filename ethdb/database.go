@@ -18,8 +18,21 @@
 package ethdb
 
 import (
+	"bytes"
 	"errors"
 	"io"
+)
+
+var (
+	// MaximumKey is a special marker representing the largest possible key
+	// in the database.
+	//
+	// All prefixed database entries will be smaller than this marker.
+	// For trie nodes in hash mode, we use a 32-byte slice filled with 0xFF
+	// because there may be shared prefixes starting with multiple 0xFF bytes.
+	// Using 32 bytes ensures that only a hash collision could potentially
+	// match or exceed it.
+	MaximumKey = bytes.Repeat([]byte{0xff}, 32)
 )
 
 // KeyValueReader wraps the Has and Get method of a backing data store.

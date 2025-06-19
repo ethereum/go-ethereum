@@ -17,8 +17,6 @@
 package rawdb
 
 import (
-	"bytes"
-
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
@@ -137,7 +135,7 @@ func (t *table) DeleteRange(start, end []byte) error {
 	// The nilness will be lost by adding the prefix, explicitly converting it
 	// to a special flag representing the end of key range.
 	if end == nil {
-		end = bytes.Repeat([]byte{0xff}, 32)
+		end = ethdb.MaximumKey
 	}
 	return t.db.DeleteRange(append([]byte(t.prefix), start...), append([]byte(t.prefix), end...))
 }
@@ -235,7 +233,7 @@ func (b *tableBatch) DeleteRange(start, end []byte) error {
 	// The nilness will be lost by adding the prefix, explicitly converting it
 	// to a special flag representing the end of key range.
 	if end == nil {
-		end = bytes.Repeat([]byte{0xff}, 32)
+		end = ethdb.MaximumKey
 	}
 	return b.batch.DeleteRange(append([]byte(b.prefix), start...), append([]byte(b.prefix), end...))
 }

@@ -18,7 +18,6 @@
 package pebble
 
 import (
-	"bytes"
 	"fmt"
 	"runtime"
 	"strings"
@@ -411,7 +410,7 @@ func (d *Database) DeleteRange(start, end []byte) error {
 	// in pebble(nil in leveldb). Use an ugly hack to construct a
 	// large key to represent it.
 	if end == nil {
-		end = bytes.Repeat([]byte{0xff}, 32)
+		end = ethdb.MaximumKey
 	}
 	return d.db.DeleteRange(start, end, d.writeOptions)
 }
@@ -471,7 +470,7 @@ func (d *Database) Compact(start []byte, limit []byte) error {
 	// 0xff-s, so 32 ensures than only a hash collision could touch it.
 	// https://github.com/cockroachdb/pebble/issues/2359#issuecomment-1443995833
 	if limit == nil {
-		limit = bytes.Repeat([]byte{0xff}, 32)
+		limit = ethdb.MaximumKey
 	}
 	return d.db.Compact(start, limit, true) // Parallelization is preferred
 }
@@ -633,7 +632,7 @@ func (b *batch) DeleteRange(start, end []byte) error {
 	// in pebble(nil in leveldb). Use an ugly hack to construct a
 	// large key to represent it.
 	if end == nil {
-		end = bytes.Repeat([]byte{0xff}, 32)
+		end = ethdb.MaximumKey
 	}
 	if err := b.b.DeleteRange(start, end, nil); err != nil {
 		return err
