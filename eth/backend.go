@@ -230,7 +230,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			TrieDirtyLimit:   config.TrieDirtyCache,
 			ArchiveMode:      config.NoPruning,
 			TrieTimeLimit:    config.TrieTimeout,
-			TrieJournal:      config.TrieJournal,
 			SnapshotLimit:    config.SnapshotCache,
 			Preimages:        config.Preimages,
 			StateHistory:     config.StateHistory,
@@ -240,6 +239,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			VmConfig:         vmConfig,
 		}
 	)
+	if config.TrieDBJournal != "" {
+		options.TrieDBJournal = stack.ResolvePath(config.TrieDBJournal)
+	} else {
+		log.Warn("Trie database journal is persisted within the database")
+	}
 
 	if config.VMTrace != "" {
 		traceConfig := json.RawMessage("{}")

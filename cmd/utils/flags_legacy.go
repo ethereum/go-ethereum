@@ -35,6 +35,7 @@ var ShowDeprecated = &cli.Command{
 var DeprecatedFlags = []cli.Flag{
 	NoUSBFlag,
 	LegacyWhitelistFlag,
+	CacheTrieJournalFlag,
 	CacheTrieRejournalFlag,
 	LegacyDiscoveryV5Flag,
 	TxLookupLimitFlag,
@@ -59,6 +60,11 @@ var (
 		Category: flags.DeprecatedCategory,
 	}
 	// Deprecated July 2023
+	CacheTrieJournalFlag = &cli.StringFlag{
+		Name:     "cache.trie.journal",
+		Usage:    "Disk journal directory for trie cache to survive node restarts",
+		Category: flags.DeprecatedCategory,
+	}
 	CacheTrieRejournalFlag = &cli.DurationFlag{
 		Name:     "cache.trie.rejournal",
 		Usage:    "Time interval to regenerate the trie cache journal",
