@@ -1020,7 +1020,12 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 }
 
 // BaseFeeChangeDenominator bounds the amount the base fee can change between blocks.
-func (c *ChainConfig) BaseFeeChangeDenominator() uint64 {
+func (c *ChainConfig) BaseFeeChangeDenominator(num *big.Int, time uint64) uint64 {
+	// Starting at the Prague1 fork, we use the Berachain base fee change denominator.
+	if c.IsPrague1(num, time) {
+		return c.Berachain.Prague1.BaseFeeChangeDenominator
+	}
+
 	return DefaultBaseFeeChangeDenominator
 }
 
