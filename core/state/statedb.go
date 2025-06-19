@@ -779,15 +779,13 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 				}
 
 				// for addresses that changed balance, add the post-change value
-				hadBalanceChange := (obj.origin == nil && !obj.Balance().IsZero()) ||
-					(obj.origin != nil && obj.origin.Balance.Cmp(obj.Balance()) != 0)
-				if hadBalanceChange {
+				if obj.Balance().Cmp(obj.txPreBalance) != 0 {
 					s.b.BalanceChange(uint64(s.txIndex), obj.address, obj.Balance())
 				}
 
 				// include code of created contracts
 				// TODO: validate that this doesn't trigger on delegated EOAs
-				if obj.origin == nil && common.BytesToHash(obj.CodeHash()) != types.EmptyCodeHash {
+				if obj.newContract {
 					s.b.CodeChange(uint64(s.txIndex), obj.address, obj.code)
 				}
 			}

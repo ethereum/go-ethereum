@@ -51,6 +51,9 @@ type stateObject struct {
 	origin   *types.StateAccount // Account original data without any change applied, nil means it was not existent
 	data     types.StateAccount  // Account data with all mutations applied in the scope of block
 
+	// TODO: check that setting this in createObject occurs before system contract execution (withdrawals crediting accounts)
+	txPreBalance *uint256.Int // the account balance at the start of the current transaction
+
 	// Write caches.
 	trie Trie   // storage trie, which becomes non-nil on first access
 	code []byte // contract bytecode, which gets set when code is loaded
@@ -102,6 +105,7 @@ func newObject(db *StateDB, address common.Address, acct *types.StateAccount) *s
 		addrHash:           crypto.Keccak256Hash(address[:]),
 		origin:             origin,
 		data:               *acct,
+		txPreBalance:       acct.Balance.Clone(),
 		originStorage:      make(Storage),
 		dirtyStorage:       make(Storage),
 		pendingStorage:     make(Storage),
@@ -271,6 +275,8 @@ func (s *stateObject) finalise() {
 	// of the newly-created object as it's no longer eligible for self-destruct
 	// by EIP-6780. For non-newly-created objects, it's a no-op.
 	s.newContract = false
+
+	s.txPreBalance = s.data.Balance.Clone()
 }
 
 // updateTrie is responsible for persisting cached storage changes into the
