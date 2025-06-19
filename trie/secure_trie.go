@@ -270,7 +270,7 @@ func (t *StateTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 		if t.preimages != nil {
 			t.preimages.InsertPreimage(t.secKeyCache)
 		}
-		t.secKeyCache = make(map[common.Hash][]byte)
+		clear(t.secKeyCache)
 	}
 	// Commit the trie and return its modified nodeset.
 	return t.trie.Commit(collectLeaf)
