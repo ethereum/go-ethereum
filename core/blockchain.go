@@ -179,7 +179,7 @@ type BlockChainConfig struct {
 	// transaction hashes will be indexed.
 	//
 	// If the value is zero, all transactions of the entire chain will be indexed.
-	// If the value is -1, indexing is disabled. This is the default setting.
+	// If the value is -1, indexing is disabled.
 	TxLookupLimit int64
 }
 
