@@ -34,6 +34,8 @@ var (
 	blobT       = reflect.TypeOf(Blob{})
 	commitmentT = reflect.TypeOf(Commitment{})
 	proofT      = reflect.TypeOf(Proof{})
+
+	CellProofsPerBlob = 128
 )
 
 // Blob represents a 4844 data blob.
@@ -45,7 +47,7 @@ func (b *Blob) UnmarshalJSON(input []byte) error {
 }
 
 // MarshalText returns the hex representation of b.
-func (b Blob) MarshalText() ([]byte, error) {
+func (b *Blob) MarshalText() ([]byte, error) {
 	return hexutil.Bytes(b[:]).MarshalText()
 }
 
@@ -147,6 +149,16 @@ func VerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error {
 		return ckzgVerifyBlobProof(blob, commitment, proof)
 	}
 	return gokzgVerifyBlobProof(blob, commitment, proof)
+}
+
+// VerifyCellProofs verifies a batch of proofs corresponding to the blobs and commitments.
+// Expects length of blobs and commitments to be equal.
+// Expects length of proofs be 128 * length of blobs.
+func VerifyCellProofs(blobs []Blob, commitments []Commitment, proofs []Proof) error {
+	if useCKZG.Load() {
+		return ckzgVerifyCellProofBatch(blobs, commitments, proofs)
+	}
+	return gokzgVerifyCellProofBatch(blobs, commitments, proofs)
 }
 
 // ComputeCellProofs returns the KZG cell proofs that are used to verify the blob against

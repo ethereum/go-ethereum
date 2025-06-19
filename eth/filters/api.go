@@ -359,7 +359,7 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 		if begin > 0 && end > 0 && begin > end {
 			return nil, errInvalidBlockRange
 		}
-		if begin > 0 && begin < int64(api.events.backend.HistoryPruningCutoff()) {
+		if begin >= 0 && begin < int64(api.events.backend.HistoryPruningCutoff()) {
 			return nil, &history.PrunedHistoryError{}
 		}
 		// Construct the range filter
