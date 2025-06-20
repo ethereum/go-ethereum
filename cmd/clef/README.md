@@ -150,7 +150,7 @@ All hex encoded values must be prefixed with `0x`.
 
 #### Create new password protected account
 
-The signer will generate a new private key, encrypt it according to [web3 keystore spec](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition) and store it in the keystore directory.  
+The signer will generate a new private key, encrypt it according to [web3 keystore spec](https://ethereum.org/en/developers/docs/data-structures-and-encoding/web3-secret-storage/) and store it in the keystore directory.  
 The client is responsible for creating a backup of the keystore. If the keystore is lost there is no method of retrieving lost accounts.
 
 #### Arguments
