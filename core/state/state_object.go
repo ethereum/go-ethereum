@@ -51,7 +51,7 @@ type stateObject struct {
 	origin   *types.StateAccount // Account original data without any change applied, nil means it was not existent
 	data     types.StateAccount  // Account data with all mutations applied in the scope of block
 
-	// TODO: check that setting this in createObject occurs before system contract execution (withdrawals crediting accounts)
+	// TODO: figure out whether or not this is first set after system contracts (withdrawals) are applied
 	txPreBalance *uint256.Int // the account balance at the start of the current transaction
 
 	// Write caches.

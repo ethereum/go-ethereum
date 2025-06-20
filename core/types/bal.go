@@ -35,7 +35,6 @@ type encodingAccountAccess struct {
 
 type encodingAccountAccessList []encodingAccountAccess
 
-// TODO: this is 12 bytes in the spec
 // TODO: verify that Geth encodes the endianess according to the spec
 type encodingBalanceDelta [12]byte
 
@@ -50,7 +49,8 @@ type encodingAccountBalanceDiff struct {
 }
 
 // TODO: implement encoder/decoder manually on this, as we can't specify tags for a type declaration
-type encodingBalanceDiffs = []encodingAccountBalanceDiff
+// TODO what's the difference between `type encodingBalanceDiffs = []encodingAccountBalanceDiff` and the below?
+type encodingBalanceDiffs []encodingAccountBalanceDiff
 
 type encodingAccountCodeDiff struct {
 	Address [20]byte
@@ -81,6 +81,7 @@ type encodingBlockAccessList struct {
 	NonceDiffs      encodingNonceDiffs        `ssz-max:"30000"`
 }
 
+// toMap returns a copy of the code diffs in the working format
 func (c encodingCodeDiffs) toMap() (map[common.Address]codeDiff, error) {
 	var prevAddr *common.Address
 	res := make(map[common.Address]codeDiff)
@@ -100,6 +101,7 @@ func (c encodingCodeDiffs) toMap() (map[common.Address]codeDiff, error) {
 	return res, nil
 }
 
+// toMap returns a copy of an account's tx balance diffs in their working form.
 func (c *encodingAccountBalanceDiff) toMap() (balanceDiff, error) {
 	var prevIdx *uint64
 	res := make(balanceDiff)
@@ -115,7 +117,7 @@ func (c *encodingAccountBalanceDiff) toMap() (balanceDiff, error) {
 }
 
 // TODO: make this a function on the parameter tpye
-func encodingBalanceDiffsToMap(c encodingBalanceDiffs) (map[common.Address]balanceDiff, error) {
+func (c encodingBalanceDiffs) toMap() (map[common.Address]balanceDiff, error) {
 	var prevAddr *common.Address
 	res := make(map[common.Address]balanceDiff)
 	for _, diff := range c {
@@ -236,7 +238,7 @@ func (b *encodingBlockAccessList) ToBlockAccessList() (*BlockAccessList, error) 
 	if err != nil {
 		return nil, err
 	}
-	balanceChanges, err := encodingBalanceDiffsToMap(b.BalanceDiffs)
+	balanceChanges, err := b.BalanceDiffs.toMap()
 	if err != nil {
 		return nil, err
 	}
