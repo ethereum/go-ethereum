@@ -126,6 +126,11 @@ func (t *table) Delete(key []byte) error {
 // DeleteRange deletes all of the keys (and values) in the range [start,end)
 // (inclusive on start, exclusive on end).
 func (t *table) DeleteRange(start, end []byte) error {
+	// The nilness will be lost by adding the prefix, explicitly converting it
+	// to a special flag representing the end of key range.
+	if end == nil {
+		end = ethdb.MaximumKey
+	}
 	return t.db.DeleteRange(append([]byte(t.prefix), start...), append([]byte(t.prefix), end...))
 }
 
@@ -215,6 +220,16 @@ func (b *tableBatch) Put(key, value []byte) error {
 // Delete inserts a key removal into the batch for later committing.
 func (b *tableBatch) Delete(key []byte) error {
 	return b.batch.Delete(append([]byte(b.prefix), key...))
+}
+
+// DeleteRange removes all keys in the range [start, end) from the batch for later committing.
+func (b *tableBatch) DeleteRange(start, end []byte) error {
+	// The nilness will be lost by adding the prefix, explicitly converting it
+	// to a special flag representing the end of key range.
+	if end == nil {
+		end = ethdb.MaximumKey
+	}
+	return b.batch.DeleteRange(append([]byte(b.prefix), start...), append([]byte(b.prefix), end...))
 }
 
 // ValueSize retrieves the amount of data queued up for writing.
