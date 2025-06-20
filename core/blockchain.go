@@ -77,10 +77,10 @@ var (
 	storageUpdateTimer = metrics.NewRegisteredResettingTimer("chain/storage/updates", nil)
 	storageCommitTimer = metrics.NewRegisteredResettingTimer("chain/storage/commits", nil)
 
-	accountCacheHitMeter  = metrics.NewRegisteredMeter("chain/account/reads/cache/hit", nil)
-	accountCacheMissMeter = metrics.NewRegisteredMeter("chain/account/reads/cache/miss", nil)
-	storageCacheHitMeter  = metrics.NewRegisteredMeter("chain/storage/reads/cache/hit", nil)
-	storageCacheMissMeter = metrics.NewRegisteredMeter("chain/storage/reads/cache/miss", nil)
+	accountCacheHitMeter  = metrics.NewRegisteredMeter("chain/account/reads/cache/process/hit", nil)
+	accountCacheMissMeter = metrics.NewRegisteredMeter("chain/account/reads/cache/process/miss", nil)
+	storageCacheHitMeter  = metrics.NewRegisteredMeter("chain/storage/reads/cache/process/hit", nil)
+	storageCacheMissMeter = metrics.NewRegisteredMeter("chain/storage/reads/cache/process/miss", nil)
 
 	accountCacheHitPrefetchMeter  = metrics.NewRegisteredMeter("chain/account/reads/cache/prefetch/hit", nil)
 	accountCacheMissPrefetchMeter = metrics.NewRegisteredMeter("chain/account/reads/cache/prefetch/miss", nil)
@@ -1949,16 +1949,16 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		}
 		// Upload the statistics of reader at the end
 		defer func() {
-			stats := process.GetStats()
-			accountCacheHitMeter.Mark(stats.AccountHit)
-			accountCacheMissMeter.Mark(stats.AccountMiss)
-			storageCacheHitMeter.Mark(stats.StorageHit)
-			storageCacheMissMeter.Mark(stats.StorageMiss)
-			stats = prefetch.GetStats()
+			stats := prefetch.GetStats()
 			accountCacheHitPrefetchMeter.Mark(stats.AccountHit)
 			accountCacheMissPrefetchMeter.Mark(stats.AccountMiss)
 			storageCacheHitPrefetchMeter.Mark(stats.StorageHit)
 			storageCacheMissPrefetchMeter.Mark(stats.StorageMiss)
+			stats = process.GetStats()
+			accountCacheHitMeter.Mark(stats.AccountHit)
+			accountCacheMissMeter.Mark(stats.AccountMiss)
+			storageCacheHitMeter.Mark(stats.StorageHit)
+			storageCacheMissMeter.Mark(stats.StorageMiss)
 		}()
 
 		go func(start time.Time, throwaway *state.StateDB, block *types.Block) {
