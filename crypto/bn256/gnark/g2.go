@@ -21,7 +21,7 @@ type G2 struct {
 // Unmarshal deserializes `buf` into `g`
 //
 // The input is expected to be in the EVM format:
-// 128 bytes: [32-byte x.0][32-byte x.1][32-byte y.0][32-byte y.1]
+// 128 bytes: [32-byte x.1][32-byte x.0][32-byte y.1][32-byte y.0]
 // where each value is a big-endian integer.
 //
 // This method also checks whether the point is on the
