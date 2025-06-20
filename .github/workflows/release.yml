@@ -2,7 +2,7 @@ on:
   # TODO: fix release workflow and enable this.
   # push:
   #   branches:
-  #     - "master"
+  #     - "main"
   #   tags:
   #     - "v*"
 
