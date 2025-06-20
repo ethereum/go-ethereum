@@ -280,6 +280,17 @@ func (db *Database) Recover(target common.Hash) error {
 	return pdb.Recover(target)
 }
 
+// TruncateHead truncates all state histories in the freezer above the bottom state layer.
+// This operation is only supported by path-based database It's typically used during
+// state recovery to align the state histories with the current state.
+func (db *Database) TruncateHead() error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.TruncateHead()
+}
+
 // Recoverable returns the indicator if the specified state is enabled to be
 // recovered. It's only supported by path-based database and will return an
 // error for others.
