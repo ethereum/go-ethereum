@@ -57,7 +57,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 		workers errgroup.Group
 		reader  = statedb.Reader()
 	)
-	workers.SetLimit(4 * runtime.NumCPU() / 5) // Aggressively run the prefetching
+	workers.SetLimit(runtime.NumCPU() / 2)
 
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
