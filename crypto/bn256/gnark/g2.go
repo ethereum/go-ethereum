@@ -39,16 +39,16 @@ func (g *G2) Unmarshal(buf []byte) (int, error) {
 		g.inner.Y.A1.SetZero()
 		return 128, nil
 	}
-	if err := g.inner.X.A0.SetBytesCanonical(buf[0:32]); err != nil {
+	if err := g.inner.X.A1.SetBytesCanonical(buf[0:32]); err != nil {
 		return 0, err
 	}
-	if err := g.inner.X.A1.SetBytesCanonical(buf[32:64]); err != nil {
+	if err := g.inner.X.A0.SetBytesCanonical(buf[32:64]); err != nil {
 		return 0, err
 	}
-	if err := g.inner.Y.A0.SetBytesCanonical(buf[64:96]); err != nil {
+	if err := g.inner.Y.A1.SetBytesCanonical(buf[64:96]); err != nil {
 		return 0, err
 	}
-	if err := g.inner.Y.A1.SetBytesCanonical(buf[96:128]); err != nil {
+	if err := g.inner.Y.A0.SetBytesCanonical(buf[96:128]); err != nil {
 		return 0, err
 	}
 
@@ -69,17 +69,17 @@ func (g *G2) Unmarshal(buf []byte) (int, error) {
 func (g *G2) Marshal() []byte {
 	output := make([]byte, 128)
 
-	xA0Bytes := g.inner.X.A0.Bytes()
-	copy(output[:32], xA0Bytes[:])
-
 	xA1Bytes := g.inner.X.A1.Bytes()
-	copy(output[32:64], xA1Bytes[:])
+	copy(output[:32], xA1Bytes[:])
 
-	yA0Bytes := g.inner.Y.A0.Bytes()
-	copy(output[64:96], yA0Bytes[:])
+	xA0Bytes := g.inner.X.A0.Bytes()
+	copy(output[32:64], xA0Bytes[:])
 
 	yA1Bytes := g.inner.Y.A1.Bytes()
-	copy(output[96:128], yA1Bytes[:])
+	copy(output[64:96], yA1Bytes[:])
+
+	yA0Bytes := g.inner.Y.A0.Bytes()
+	copy(output[96:128], yA0Bytes[:])
 
 	return output
 }
