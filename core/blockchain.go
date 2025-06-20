@@ -82,6 +82,11 @@ var (
 	storageCacheHitMeter  = metrics.NewRegisteredMeter("chain/storage/reads/cache/hit", nil)
 	storageCacheMissMeter = metrics.NewRegisteredMeter("chain/storage/reads/cache/miss", nil)
 
+	accountCacheHitPrefetchMeter  = metrics.NewRegisteredMeter("chain/account/reads/cache/prefetch/hit", nil)
+	accountCacheMissPrefetchMeter = metrics.NewRegisteredMeter("chain/account/reads/cache/prefetch/miss", nil)
+	storageCacheHitPrefetchMeter  = metrics.NewRegisteredMeter("chain/storage/reads/cache/prefetch/hit", nil)
+	storageCacheMissPrefetchMeter = metrics.NewRegisteredMeter("chain/storage/reads/cache/prefetch/miss", nil)
+
 	accountReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/account/single/reads", nil)
 	storageReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/storage/single/reads", nil)
 
@@ -1949,6 +1954,11 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 			accountCacheMissMeter.Mark(stats.AccountMiss)
 			storageCacheHitMeter.Mark(stats.StorageHit)
 			storageCacheMissMeter.Mark(stats.StorageMiss)
+			stats = prefetch.GetStats()
+			accountCacheHitPrefetchMeter.Mark(stats.AccountHit)
+			accountCacheMissPrefetchMeter.Mark(stats.AccountMiss)
+			storageCacheHitPrefetchMeter.Mark(stats.StorageHit)
+			storageCacheMissPrefetchMeter.Mark(stats.StorageMiss)
 		}()
 
 		go func(start time.Time, throwaway *state.StateDB, block *types.Block) {
