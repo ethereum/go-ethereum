@@ -281,7 +281,7 @@ func (db *Database) Recover(target common.Hash) error {
 }
 
 // TruncateHead truncates all state histories in the freezer above the bottom state layer.
-// This operation is only supported by path-based database It's typically used during
+// This operation is only supported by path-based database. It's typically used during
 // state recovery to align the state histories with the current state.
 func (db *Database) TruncateHead() error {
 	pdb, ok := db.backend.(*pathdb.Database)
