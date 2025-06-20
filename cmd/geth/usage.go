@@ -248,6 +248,8 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.DARecoveryProduceBlocksFlag,
 			utils.CircuitCapacityCheckEnabledFlag,
 			utils.CircuitCapacityCheckWorkersFlag,
+			utils.TxGossipBroadcastDisabledFlag,
+			utils.TxGossipReceivingDisabledFlag,
 		},
 	},
 	{

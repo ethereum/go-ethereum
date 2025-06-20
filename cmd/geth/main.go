@@ -176,6 +176,8 @@ var (
 		utils.CircuitCapacityCheckWorkersFlag,
 		utils.RollupVerifyEnabledFlag,
 		utils.ShadowforkPeersFlag,
+		utils.TxGossipBroadcastDisabledFlag,
+		utils.TxGossipReceivingDisabledFlag,
 		utils.DASyncEnabledFlag,
 		utils.DABlockNativeAPIEndpointFlag,
 		utils.DABlobScanAPIEndpointFlag,

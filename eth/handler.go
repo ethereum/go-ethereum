@@ -93,6 +93,9 @@ type handlerConfig struct {
 	Checkpoint        *params.TrustedCheckpoint // Hard coded checkpoint for sync challenges
 	Whitelist         map[uint64]common.Hash    // Hard coded whitelist for sync challenged
 	ShadowForkPeerIDs []string                  // List of peer ids that take part in the shadow-fork
+
+	DisableTxBroadcast bool
+	DisableTxReceiving bool
 }
 
 type handler struct {
@@ -131,7 +134,9 @@ type handler struct {
 	wg        sync.WaitGroup
 	peerWG    sync.WaitGroup
 
-	shadowForkPeerIDs []string
+	shadowForkPeerIDs  []string
+	disableTxBroadcast bool
+	disableTxReceiving bool
 }
 
 // newHandler returns a handler for all Ethereum chain management protocol.
@@ -141,16 +146,18 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		config.EventMux = new(event.TypeMux) // Nicety initialization for tests
 	}
 	h := &handler{
-		networkID:         config.Network,
-		forkFilter:        forkid.NewFilter(config.Chain),
-		eventMux:          config.EventMux,
-		database:          config.Database,
-		txpool:            config.TxPool,
-		chain:             config.Chain,
-		peers:             newPeerSet(),
-		whitelist:         config.Whitelist,
-		quitSync:          make(chan struct{}),
-		shadowForkPeerIDs: config.ShadowForkPeerIDs,
+		networkID:          config.Network,
+		forkFilter:         forkid.NewFilter(config.Chain),
+		eventMux:           config.EventMux,
+		database:           config.Database,
+		txpool:             config.TxPool,
+		chain:              config.Chain,
+		peers:              newPeerSet(),
+		whitelist:          config.Whitelist,
+		quitSync:           make(chan struct{}),
+		shadowForkPeerIDs:  config.ShadowForkPeerIDs,
+		disableTxBroadcast: config.DisableTxBroadcast,
+		disableTxReceiving: config.DisableTxReceiving,
 	}
 	if config.Sync == downloader.FullSync {
 		// The database seems empty as the current block is the genesis. Yet the fast
@@ -415,10 +422,12 @@ func (h *handler) Start(maxPeers int) {
 	h.maxPeers = maxPeers
 
 	// broadcast transactions
-	h.wg.Add(1)
-	h.txsCh = make(chan core.NewTxsEvent, txChanSize)
-	h.txsSub = h.txpool.SubscribeNewTxsEvent(h.txsCh)
-	go h.txBroadcastLoop()
+	if !h.disableTxBroadcast {
+		h.wg.Add(1)
+		h.txsCh = make(chan core.NewTxsEvent, txChanSize)
+		h.txsSub = h.txpool.SubscribeNewTxsEvent(h.txsCh)
+		go h.txBroadcastLoop()
+	}
 
 	// broadcast mined blocks
 	h.wg.Add(1)
