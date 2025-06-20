@@ -18,6 +18,7 @@
 package memorydb
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"sort"
@@ -259,8 +260,8 @@ func (b *batch) Delete(key []byte) error {
 // DeleteRange removes all keys in the range [start, end) from the batch for later committing.
 func (b *batch) DeleteRange(start, end []byte) error {
 	b.writes = append(b.writes, keyvalue{
-		rangeFrom: start,
-		rangeTo:   end,
+		rangeFrom: bytes.Clone(start),
+		rangeTo:   bytes.Clone(end),
 		delete:    true,
 	})
 	b.size += len(start) + len(end)
