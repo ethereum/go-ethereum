@@ -1307,6 +1307,11 @@ func (bc *BlockChain) StopInsert() {
 	bc.procInterrupt.Store(true)
 }
 
+// ResumeInsert re-enables the blockchain insertion, which is used to rewinding the chain to
+func (bc *BlockChain) ResumeInsert() {
+	bc.procInterrupt.Store(false)
+}
+
 // insertStopped returns true after StopInsert has been called.
 func (bc *BlockChain) insertStopped() bool {
 	return bc.procInterrupt.Load()
