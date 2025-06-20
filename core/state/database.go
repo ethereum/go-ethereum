@@ -209,9 +209,10 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	return newReader(newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache), combined), nil
 }
 
-// ReaderWithCacheStats creates a pair of state readers with internal local cache
+// ReadersWithCacheStats creates a pair of state readers sharing the same internal cache and
+// same backing Reader, but exposing separate statistics.
 // and statistics.
-func (db *CachingDB) ReaderWithCacheStats(stateRoot common.Hash) (ReaderWithStats, ReaderWithStats, error) {
+func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (ReaderWithStats, ReaderWithStats, error) {
 	reader, err := db.Reader(stateRoot)
 	if err != nil {
 		return nil, nil, err

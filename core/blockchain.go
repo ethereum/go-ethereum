@@ -1935,7 +1935,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		//
 		// Note: the main processor and prefetcher share the same reader with a local
 		// cache for mitigating the overhead of state access.
-		prefetch, process, err := bc.statedb.ReaderWithCacheStats(parentRoot)
+		prefetch, process, err := bc.statedb.ReadersWithCacheStats(parentRoot)
 		if err != nil {
 			return nil, err
 		}
