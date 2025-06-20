@@ -242,6 +242,11 @@ func (bc *BlockChain) GetReceiptByIndex(tx *types.Transaction, blockHash common.
 	return receipt, nil
 }
 
+// GetRawReceipt
+func (bc *BlockChain) GetRawReceipt(blockHash common.Hash, blockNumber, txIndex uint64) (*types.Receipt, error) {
+	return rawdb.ReadRawReceipt(bc.db, blockHash, blockNumber, txIndex)
+}
+
 // GetReceiptsByHash retrieves the receipts for all transactions in a given block.
 func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	if receipts, ok := bc.receiptsCache.Get(hash); ok {
@@ -334,6 +339,36 @@ func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLoo
 		transaction: tx,
 	})
 	return lookup, tx
+}
+
+// GetTxIndex
+func (bc *BlockChain) GetTxIndex(txHash common.Hash) *rawdb.TxIndex {
+	return rawdb.ReadTxIndex(bc.db, txHash)
+}
+
+// MakeDeriveReceiptContextFromIndex
+func MakeDeriveReceiptContextFromIndex(txHash common.Hash, txIndex *rawdb.TxIndex) types.DeriveReceiptContext {
+	return types.DeriveReceiptContext{
+		BlockHash:    txIndex.BlockHash,
+		BlockNumber:  txIndex.BlockNumber,
+		BlockTime:    txIndex.BlockTime,
+		BaseFee:      txIndex.BaseFee,
+		BlobGasPrice: txIndex.BlobGasPrice, // todo
+
+		// Receipt fields
+		GasUsed:  txIndex.GasUsed,
+		LogIndex: uint(txIndex.LogIndex), // Number of logs in the block until this receipt
+
+		// Tx fields
+		Hash:              txHash,
+		Nonce:             txIndex.Nonce,
+		Index:             uint(txIndex.TxIndex),
+		Type:              txIndex.Type,
+		From:              txIndex.Sender,
+		To:                txIndex.To,
+		EffectiveGasPrice: txIndex.EffectiveGasPrice,
+		BlobGas:           txIndex.BlobGas,
+	}
 }
 
 // TxIndexDone returns true if the transaction indexer has finished indexing.

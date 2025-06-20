@@ -331,6 +331,33 @@ func ReadRawReceiptWithContext(db ethdb.Reader, blockHash common.Hash, blockNumb
 	return nil, RawReceiptContext{}, fmt.Errorf("receipt not found, %d, %x, %d", blockNumber, blockHash, txIndex)
 }
 
+// ReadRawReceipt
+func ReadRawReceipt(db ethdb.Reader, blockHash common.Hash, blockNumber, txIndex uint64) (*types.Receipt, error) {
+	receiptIt, err := rlp.NewListIterator(ReadReceiptsRLP(db, blockHash, blockNumber))
+	if err != nil {
+		return nil, err
+	}
+
+	for i := uint64(0); i <= txIndex; i++ {
+		// Unexpected iteration error
+		if receiptIt.Err() != nil {
+			return nil, receiptIt.Err()
+		}
+		// Unexpected end of iteration
+		if !receiptIt.Next() {
+			return nil, fmt.Errorf("receipt not found, %d, %x, %d", blockNumber, blockHash, txIndex)
+		}
+		if i == txIndex {
+			var stored types.ReceiptForStorage
+			if err := rlp.DecodeBytes(receiptIt.Value(), &stored); err != nil {
+				return nil, err
+			}
+			return (*types.Receipt)(&stored), nil
+		}
+	}
+	return nil, fmt.Errorf("receipt not found, %d, %x, %d", blockNumber, blockHash, txIndex)
+}
+
 // ReadFilterMapExtRow retrieves a filter map row at the given mapRowIndex
 // (see filtermaps.mapRowIndex for the storage index encoding).
 // Note that zero length rows are not stored in the database and therefore all

@@ -614,7 +614,8 @@ func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rp
 
 	result := make([]map[string]interface{}, len(receipts))
 	for i, receipt := range receipts {
-		result[i] = marshalReceipt(receipt, block.Hash(), block.NumberU64(), signer, txs[i], i)
+		sender, _ := signer.Sender(txs[i])
+		result[i] = marshalReceipt(receipt, &sender, txs[i].To())
 	}
 
 	return result, nil
@@ -1373,6 +1374,18 @@ func (api *TransactionAPI) GetRawTransactionByHash(ctx context.Context, hash com
 
 // GetTransactionReceipt returns the transaction receipt for the given transaction hash.
 func (api *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
+	// Check the new tx index first
+	txIndex := api.b.GetTxIndex(hash)
+	if txIndex != nil {
+		receipt, err := api.b.GetRawReceipt(txIndex.BlockHash, txIndex.BlockNumber, uint64(txIndex.TxIndex))
+		if err != nil {
+			return nil, err
+		}
+		receipt.DeriveFields(core.MakeDeriveReceiptContextFromIndex(hash, txIndex))
+		return marshalReceipt(receipt, &txIndex.Sender, txIndex.To), nil
+	}
+
+	// Slow path where the new tx index doesn't exist
 	found, tx, blockHash, blockNumber, index := api.b.GetTransaction(hash)
 	if !found {
 		// Make sure indexer is done.
@@ -1390,28 +1403,26 @@ func (api *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash commo
 	if err != nil {
 		return nil, err
 	}
-	// Derive the sender.
 	signer := types.MakeSigner(api.b.ChainConfig(), header.Number, header.Time)
-	return marshalReceipt(receipt, blockHash, blockNumber, signer, tx, int(index)), nil
+	from, _ := signer.Sender(tx)
+	return marshalReceipt(receipt, &from, tx.To()), nil
 }
 
 // marshalReceipt marshals a transaction receipt into a JSON object.
-func marshalReceipt(receipt *types.Receipt, blockHash common.Hash, blockNumber uint64, signer types.Signer, tx *types.Transaction, txIndex int) map[string]interface{} {
-	from, _ := types.Sender(signer, tx)
-
+func marshalReceipt(receipt *types.Receipt, from, to *common.Address) map[string]interface{} {
 	fields := map[string]interface{}{
-		"blockHash":         blockHash,
-		"blockNumber":       hexutil.Uint64(blockNumber),
-		"transactionHash":   tx.Hash(),
-		"transactionIndex":  hexutil.Uint64(txIndex),
+		"blockHash":         receipt.BlockHash,
+		"blockNumber":       hexutil.Uint64(receipt.BlockNumber.Uint64()),
+		"transactionHash":   receipt.TxHash,
+		"transactionIndex":  hexutil.Uint64(receipt.TransactionIndex),
 		"from":              from,
-		"to":                tx.To(),
+		"to":                to,
 		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
 		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
 		"contractAddress":   nil,
 		"logs":              receipt.Logs,
 		"logsBloom":         receipt.Bloom,
-		"type":              hexutil.Uint(tx.Type()),
+		"type":              hexutil.Uint(receipt.Type),
 		"effectiveGasPrice": (*hexutil.Big)(receipt.EffectiveGasPrice),
 	}
 
@@ -1425,7 +1436,7 @@ func marshalReceipt(receipt *types.Receipt, blockHash common.Hash, blockNumber u
 		fields["logs"] = []*types.Log{}
 	}
 
-	if tx.Type() == types.BlobTxType {
+	if receipt.Type == types.BlobTxType {
 		fields["blobGasUsed"] = hexutil.Uint64(receipt.BlobGasUsed)
 		fields["blobGasPrice"] = (*hexutil.Big)(receipt.BlobGasPrice)
 	}

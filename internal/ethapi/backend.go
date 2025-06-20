@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -68,10 +69,12 @@ type Backend interface {
 	StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error)
 	Pending() (*types.Block, types.Receipts, *state.StateDB)
 	GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error)
+	GetRawReceipt(blockHash common.Hash, blockNumber, blockIndex uint64) (*types.Receipt, error)
 	GetReceiptByIndex(tx *types.Transaction, blockHash common.Hash, blockNumber, blockIndex uint64) (*types.Receipt, error)
 	GetEVM(ctx context.Context, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
+	GetTxIndex(txHash common.Hash) *rawdb.TxIndex
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
