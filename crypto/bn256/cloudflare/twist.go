@@ -57,7 +57,6 @@ func (c *twistPoint) IsOnCurve() bool {
 	if *y2 != *x3 {
 		return false
 	}
-	
 	// Subgroup check: multiply the point by the group order and
 	// verify that it becomes the point at infinity.
 	cneg := &twistPoint{}
