@@ -1,0 +1,29 @@
+coverage:
+  precision: 2
+  round: down
+  status:
+    project:
+      default:
+        target: 60%
+        threshold: 1% # allow this much decrease on project
+    patch:
+      default:
+        target: 70%
+
+comment:
+  layout: "reach,diff,flags,tree,betaprofiling"
+  behavior: default # update if exists else create new
+  require_changes: true
+
+ignore:
+  - "docs"
+  - "cmd"
+  - "tests"
+  - "swarm"
+  - "**/testdata"
+  - "lib/blocktest"
+  - "lib/cmdtest"
+  - "lib/testlog"
+  - "**/*pb*.go"
+  - "**/gen_*.go"
+  - "**/*.md"

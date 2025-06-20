@@ -21,7 +21,6 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
@@ -63,14 +62,15 @@ func TestBlockchain(t *testing.T) {
 
 // TestExecutionSpec runs the test fixtures from execution-spec-tests.
 func TestExecutionSpec(t *testing.T) {
-	if !common.FileExist(executionSpecDir) {
-		t.Skipf("directory %s does not exist", executionSpecDir)
-	}
-	bt := new(testMatcher)
+	t.Skip("state root will be different from what official geth calculates because we don't burn")
+	// if !common.FileExist(executionSpecDir) {
+	// 	t.Skipf("directory %s does not exist", executionSpecDir)
+	// }
+	// bt := new(testMatcher)
 
-	bt.walk(t, executionSpecDir, func(t *testing.T, name string, test *BlockTest) {
-		execBlockTest(t, bt, test)
-	})
+	// bt.walk(t, executionSpecDir, func(t *testing.T, name string, test *BlockTest) {
+	// 	execBlockTest(t, bt, test)
+	// })
 }
 
 func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest) {

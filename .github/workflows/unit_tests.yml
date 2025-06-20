@@ -1,0 +1,70 @@
+name: Unit Tests
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  unit_tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Run unit tests
+        run: go run build/ci.go test -coverage
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+
+  upload-coverage:
+    runs-on: ubuntu-latest
+    needs: unit_tests
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+        with:
+          go-version: 1.21
+
+      # Download all coverage reports from the 'tests' job
+      - name: Download coverage reports
+        uses: actions/download-artifact@v4
+
+      - name: Set GOPATH
+        run: echo "GOPATH=$(go env GOPATH)" >> $GITHUB_ENV
+
+      - name: Add GOPATH/bin to PATH
+        run: echo "GOBIN=$(go env GOPATH)/bin" >> $GITHUB_ENV
+
+      - name: Install gocovmerge
+        run: go get github.com/wadey/gocovmerge && go install github.com/wadey/gocovmerge
+
+      - name: Merge coverage reports
+        run: gocovmerge $(find . -type f -name '*coverage.out') > coverage.txt
+
+      - name: Check coverage report lines
+        run: wc -l coverage.txt
+        continue-on-error: true
+
+      - name: Check coverage report files
+        run: ls **/*coverage.out
+        continue-on-error: true
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.txt
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true

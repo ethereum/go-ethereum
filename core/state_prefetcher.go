@@ -19,6 +19,7 @@ package core
 import (
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -52,7 +53,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 		header       = block.Header()
 		gaspool      = new(GasPool).AddGas(block.GasLimit())
 		blockContext = NewEVMBlockContext(header, p.bc, nil)
-		evm          = vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg, nil)
+		evm          = vm.NewEVM(blockContext, vm.TxContext{GasPrice: common.Big0}, statedb, p.config, cfg, nil)
 		signer       = types.MakeSigner(p.config, header.Number, header.Time)
 	)
 	// Iterate over and process the individual transactions

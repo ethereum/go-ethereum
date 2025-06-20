@@ -12,11 +12,11 @@
       "nonce": "0xae"
     },
     "0xc94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
-      "balance": "0x1030600"
+      "balance": "0x6122400"
     }
   },
   "result": {
-    "stateRoot": "0x9e4224c6bba343d5b0fdbe9200cc66a7ef2068240d901ae516e634c45a043c15",
+    "stateRoot": "0xba04fd7f80a33bfb4b0bc5c8dc1178b05b67b3e95aeca01f516db3c93e6838e2",
     "txRoot": "0x16cd3a7daa6686ceebadf53b7af2bc6919eccb730907f0e74a95a4423c209593",
     "receiptsRoot": "0x22b85cda738345a9880260b2a71e144aab1ca9485f5db4fd251008350fc124c8",
     "logsHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",

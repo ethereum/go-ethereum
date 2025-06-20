@@ -73,7 +73,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb vm.StateDB, cfg vm.
 	}
 	var (
 		context = NewEVMBlockContext(header, p.bc, nil)
-		vmenv   = vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg, nil)
+		vmenv   = vm.NewEVM(context, vm.TxContext{GasPrice: common.Big0}, statedb, p.config, cfg, nil)
 		signer  = types.MakeSigner(p.config, header.Number, header.Time)
 	)
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {

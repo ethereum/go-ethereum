@@ -1,6 +1,6 @@
 {
   "result": {
-    "stateRoot": "0xe4b924a6adb5959fccf769d5b7bb2f6359e26d1e76a2443c5a91a36d826aef61",
+    "stateRoot": "0x17228ad68f0ed80a362f0fe66b9307b96b115d57641f699931a0b7c3a04d1636",
     "txRoot": "0x013509c8563d41c0ae4bf38f2d6d19fc6512a1d0d6be045079c8c9f68bf45f9d",
     "receiptsRoot": "0xa532a08aa9f62431d6fe5d924951b8efb86ed3c54d06fee77788c3767dd13420",
     "logsHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
