@@ -600,6 +600,9 @@ func TestDatabaseRollback(t *testing.T) {
 		if err := tester.db.Recover(parent); err != nil {
 			t.Fatalf("Failed to revert db, err: %v", err)
 		}
+		if err := tester.db.TruncateHead(); err != nil {
+			t.Fatalf("Failed to truncate head, err: %v", err)
+		}
 		if i > 0 {
 			if err := tester.verifyState(parent); err != nil {
 				t.Fatalf("Failed to verify state, err: %v", err)
