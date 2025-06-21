@@ -90,15 +90,8 @@ func HashData(kh KeccakState, data []byte) (h common.Hash) {
 
 // Keccak256 calculates and returns the Keccak256 hash of the input data.
 func Keccak256(data ...[]byte) []byte {
-	b := make([]byte, 32)
-	d := hasherPool.Get().(KeccakState)
-	d.Reset()
-	for _, b := range data {
-		d.Write(b)
-	}
-	d.Read(b)
-	hasherPool.Put(d)
-	return b
+	b := Keccak256Hash(data...)
+	return b[:]
 }
 
 // Keccak256Hash calculates and returns the Keccak256 hash of the input data,
