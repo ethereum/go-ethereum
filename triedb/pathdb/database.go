@@ -119,7 +119,11 @@ type Config struct {
 	StateCleanSize  int    // Maximum memory allowance (in bytes) for caching clean state data
 	WriteBufferSize int    // Maximum memory allowance (in bytes) for write buffer
 	ReadOnly        bool   // Flag whether the database is opened in read only mode
-	SnapshotNoBuild bool   // Flag Whether the background generation is allowed
+
+	// Testing configurations
+	SnapshotNoBuild   bool // Flag Whether the state generation is allowed
+	NoAsyncFlush      bool // Flag whether the background buffer flushing is allowed
+	NoAsyncGeneration bool // Flag whether the background generation is allowed
 }
 
 // sanitize checks the provided user configurations and changes anything that's
@@ -366,6 +370,12 @@ func (db *Database) setStateGenerator() error {
 	}
 	stats.log("Starting snapshot generation", root, generator.Marker)
 	dl.generator.run(root)
+
+	// Block until the generation completes. It's the feature used in
+	// unit tests.
+	if db.config.NoAsyncGeneration {
+		<-dl.generator.done
+	}
 	return nil
 }
 
@@ -434,8 +444,8 @@ func (db *Database) Disable() error {
 	// Terminate the state generator if it's active and mark the disk layer
 	// as stale to prevent access to persistent state.
 	disk := db.tree.bottom()
-	if disk.generator != nil {
-		disk.generator.stop()
+	if err := disk.terminate(); err != nil {
+		return err
 	}
 	disk.markStale()
 
@@ -592,12 +602,14 @@ func (db *Database) Close() error {
 	// following mutations.
 	db.readOnly = true
 
-	// Terminate the background generation if it's active
-	disk := db.tree.bottom()
-	if disk.generator != nil {
-		disk.generator.stop()
+	// Block until the background flushing is finished. It must
+	// be done before terminating the potential background snapshot
+	// generator.
+	dl := db.tree.bottom()
+	if err := dl.terminate(); err != nil {
+		return err
 	}
-	disk.resetCache() // release the memory held by clean cache
+	dl.resetCache() // release the memory held by clean cache
 
 	// Close the attached state history freezer.
 	if db.freezer == nil {
@@ -662,16 +674,6 @@ func (db *Database) HistoryRange() (uint64, uint64, error) {
 	return historyRange(db.freezer)
 }
 
-// waitGeneration waits until the background generation is finished. It assumes
-// that the generation is permitted; otherwise, it will block indefinitely.
-func (db *Database) waitGeneration() {
-	gen := db.tree.bottom().generator
-	if gen == nil || gen.completed() {
-		return
-	}
-	<-gen.done
-}
-
 // AccountIterator creates a new account iterator for the specified root hash and
 // seeks to a starting account hash.
 func (db *Database) AccountIterator(root common.Hash, seek common.Hash) (AccountIterator, error) {
@@ -681,7 +683,7 @@ func (db *Database) AccountIterator(root common.Hash, seek common.Hash) (Account
 	if wait {
 		return nil, errDatabaseWaitSync
 	}
-	if gen := db.tree.bottom().generator; gen != nil && !gen.completed() {
+	if !db.tree.bottom().genComplete() {
 		return nil, errNotConstructed
 	}
 	return newFastAccountIterator(db, root, seek)
@@ -696,7 +698,7 @@ func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek 
 	if wait {
 		return nil, errDatabaseWaitSync
 	}
-	if gen := db.tree.bottom().generator; gen != nil && !gen.completed() {
+	if !db.tree.bottom().genComplete() {
 		return nil, errNotConstructed
 	}
 	return newFastStorageIterator(db, root, account, seek)

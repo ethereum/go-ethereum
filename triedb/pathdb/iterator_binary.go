@@ -45,6 +45,10 @@ type binaryIterator struct {
 // accounts in a slow, but easily verifiable way. Note this function is used
 // for initialization, use `newBinaryAccountIterator` as the API.
 func (dl *diskLayer) initBinaryAccountIterator(seek common.Hash) *binaryIterator {
+	// Block until the frozen buffer flushing is completed.
+	if err := dl.waitFlush(); err != nil {
+		panic(err)
+	}
 	// The state set in the disk layer is mutable, hold the lock before obtaining
 	// the account list to prevent concurrent map iteration and write.
 	dl.lock.RLock()
@@ -113,6 +117,10 @@ func (dl *diffLayer) initBinaryAccountIterator(seek common.Hash) *binaryIterator
 // storage slots in a slow, but easily verifiable way. Note this function is used
 // for initialization, use `newBinaryStorageIterator` as the API.
 func (dl *diskLayer) initBinaryStorageIterator(account common.Hash, seek common.Hash) *binaryIterator {
+	// Block until the frozen buffer flushing is completed.
+	if err := dl.waitFlush(); err != nil {
+		panic(err)
+	}
 	// The state set in the disk layer is mutable, hold the lock before obtaining
 	// the storage list to prevent concurrent map iteration and write.
 	dl.lock.RLock()
