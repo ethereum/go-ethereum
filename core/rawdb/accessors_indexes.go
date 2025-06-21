@@ -181,7 +181,7 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 	if blockHash == (common.Hash{}) {
 		return nil, common.Hash{}, 0, 0
 	}
-	bodyRLP := ReadBodyRLP(db, blockHash, *blockNumber)
+	bodyRLP := ReadCanonicalBodyRLP(db, *blockNumber, &blockHash)
 	if bodyRLP == nil {
 		log.Error("Transaction referenced missing", "number", *blockNumber, "hash", blockHash)
 		return nil, common.Hash{}, 0, 0
@@ -265,7 +265,7 @@ type RawReceiptContext struct {
 // the gas used by the associated transaction and the starting index of the logs
 // within the block.
 func ReadRawReceipt(db ethdb.Reader, blockHash common.Hash, blockNumber, txIndex uint64) (*types.Receipt, RawReceiptContext, error) {
-	receiptIt, err := rlp.NewListIterator(ReadReceiptsRLP(db, blockHash, blockNumber))
+	receiptIt, err := rlp.NewListIterator(ReadCanonicalReceiptsRLP(db, blockNumber, &blockHash))
 	if err != nil {
 		return nil, RawReceiptContext{}, err
 	}
