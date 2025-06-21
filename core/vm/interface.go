@@ -97,7 +97,7 @@ type StateDB interface {
 
 	Witness() *stateless.Witness
 
-	BlockAccessList() *types.BlockAccessList
+	//BlockAccessList() *types.BlockAccessList
 
 	AccessEvents() *state.AccessEvents
 

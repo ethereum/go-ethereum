@@ -433,10 +433,6 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
 	nonce := evm.StateDB.GetNonce(caller)
-	bal := evm.StateDB.BlockAccessList()
-	if bal != nil && evm.StateDB.GetCodeHash(caller) != (types.EmptyCodeHash) {
-		bal.NonceDiff(caller, uint64(evm.StateDB.TxIndex()), nonce)
-	}
 	if nonce+1 < nonce {
 		return nil, common.Address{}, gas, ErrNonceUintOverflow
 	}

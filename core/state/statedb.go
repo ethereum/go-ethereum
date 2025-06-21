@@ -783,6 +783,11 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 					s.b.BalanceChange(uint64(s.txIndex), obj.address, obj.Balance())
 				}
 
+				// include nonces for any contract-like accounts which incremented them
+				if common.BytesToHash(obj.CodeHash()) != types.EmptyCodeHash && obj.Nonce() != obj.txPreNonce {
+					s.b.NonceDiff(obj.address, uint64(s.txIndex), obj.Nonce())
+				}
+
 				// include code of created contracts
 				// TODO: validate that this doesn't trigger on delegated EOAs
 				if obj.newContract {

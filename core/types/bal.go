@@ -577,7 +577,7 @@ func (b *BlockAccessList) Eq(other *BlockAccessList) bool {
 	return true
 }
 
-// NonceDiff records tx prestate nonce of a contract account that created another contract or was itself created
+// NonceDiff records tx post-state nonce of any contract-like accounts whose nonce was incremented
 func (b *BlockAccessList) NonceDiff(address common.Address, txIdx, originNonce uint64) {
 	if _, ok := b.NonceDiffs[address]; ok {
 		return
