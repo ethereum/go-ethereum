@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/require"
 )
 
 var loopInterruptTests = []string{
@@ -73,4 +74,21 @@ func TestLoopInterrupt(t *testing.T) {
 			}
 		}
 	}
+}
+
+func BenchmarkLoop(b *testing.B) {
+	address := common.BytesToAddress([]byte("contract"))
+	vmctx := BlockContext{
+		Transfer: func(StateDB, common.Address, common.Address, *uint256.Int) {},
+	}
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.CreateAccount(address)
+	statedb.SetCode(address, common.Hex2Bytes(loopInterruptTests[0]))
+	statedb.Finalise(true)
+
+	evm := NewEVM(vmctx, statedb, params.AllEthashProtocolChanges, Config{})
+	b.ResetTimer()
+	_, _, err := evm.Call(common.Address{}, address, nil, uint64(b.N*100), new(uint256.Int))
+	require.EqualError(b, err, ErrOutOfGas.Error())
 }
