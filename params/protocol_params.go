@@ -135,6 +135,8 @@ const (
 	MaxCodeSize     = 24576           // Maximum bytecode to permit for a contract
 	MaxInitCodeSize = 2 * MaxCodeSize // Maximum initcode to permit in a creation transaction and create instructions
 
+	MaxBytesPerInclusionList uint64 = 8192 // Maximum size in bytes allowed for each inclusion list.
+
 	// Precompiled contract gas prices
 
 	EcrecoverGas        uint64 = 3000 // Elliptic curve sender recovery gas price
