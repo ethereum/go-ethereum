@@ -77,6 +77,16 @@ var (
 	storageUpdateTimer = metrics.NewRegisteredResettingTimer("chain/storage/updates", nil)
 	storageCommitTimer = metrics.NewRegisteredResettingTimer("chain/storage/commits", nil)
 
+	accountCacheHitMeter  = metrics.NewRegisteredMeter("chain/account/reads/cache/process/hit", nil)
+	accountCacheMissMeter = metrics.NewRegisteredMeter("chain/account/reads/cache/process/miss", nil)
+	storageCacheHitMeter  = metrics.NewRegisteredMeter("chain/storage/reads/cache/process/hit", nil)
+	storageCacheMissMeter = metrics.NewRegisteredMeter("chain/storage/reads/cache/process/miss", nil)
+
+	accountCacheHitPrefetchMeter  = metrics.NewRegisteredMeter("chain/account/reads/cache/prefetch/hit", nil)
+	accountCacheMissPrefetchMeter = metrics.NewRegisteredMeter("chain/account/reads/cache/prefetch/miss", nil)
+	storageCacheHitPrefetchMeter  = metrics.NewRegisteredMeter("chain/storage/reads/cache/prefetch/hit", nil)
+	storageCacheMissPrefetchMeter = metrics.NewRegisteredMeter("chain/storage/reads/cache/prefetch/miss", nil)
+
 	accountReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/account/single/reads", nil)
 	storageReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/storage/single/reads", nil)
 
@@ -1944,18 +1954,32 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		//
 		// Note: the main processor and prefetcher share the same reader with a local
 		// cache for mitigating the overhead of state access.
-		reader, err := bc.statedb.ReaderWithCache(parentRoot)
+		prefetch, process, err := bc.statedb.ReadersWithCacheStats(parentRoot)
 		if err != nil {
 			return nil, err
 		}
-		throwaway, err := state.NewWithReader(parentRoot, bc.statedb, reader)
+		throwaway, err := state.NewWithReader(parentRoot, bc.statedb, prefetch)
 		if err != nil {
 			return nil, err
 		}
-		statedb, err = state.NewWithReader(parentRoot, bc.statedb, reader)
+		statedb, err = state.NewWithReader(parentRoot, bc.statedb, process)
 		if err != nil {
 			return nil, err
 		}
+		// Upload the statistics of reader at the end
+		defer func() {
+			stats := prefetch.GetStats()
+			accountCacheHitPrefetchMeter.Mark(stats.AccountHit)
+			accountCacheMissPrefetchMeter.Mark(stats.AccountMiss)
+			storageCacheHitPrefetchMeter.Mark(stats.StorageHit)
+			storageCacheMissPrefetchMeter.Mark(stats.StorageMiss)
+			stats = process.GetStats()
+			accountCacheHitMeter.Mark(stats.AccountHit)
+			accountCacheMissMeter.Mark(stats.AccountMiss)
+			storageCacheHitMeter.Mark(stats.StorageHit)
+			storageCacheMissMeter.Mark(stats.StorageMiss)
+		}()
+
 		go func(start time.Time, throwaway *state.StateDB, block *types.Block) {
 			// Disable tracing for prefetcher executions.
 			vmCfg := bc.cfg.VmConfig
