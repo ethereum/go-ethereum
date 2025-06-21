@@ -405,10 +405,10 @@ func (a accountNonceDiffs) toEncoderObj(addr common.Address) encodingAccountNonc
 		return diffIdxs[i] < diffIdxs[j]
 	})
 
-	for _, txIdx := range a {
+	for txIdx, postNonce := range a {
 		res.Diffs = append(res.Diffs, encodingAccountNonce{
 			TxIdx: txIdx,
-			Nonce: a[txIdx],
+			Nonce: postNonce,
 		})
 	}
 	return res
@@ -578,14 +578,14 @@ func (b *BlockAccessList) Eq(other *BlockAccessList) bool {
 }
 
 // NonceDiff records tx post-state nonce of any contract-like accounts whose nonce was incremented
-func (b *BlockAccessList) NonceDiff(address common.Address, txIdx, originNonce uint64) {
+func (b *BlockAccessList) NonceDiff(address common.Address, txIdx, postNonce uint64) {
 	if _, ok := b.NonceDiffs[address]; ok {
 		return
 	}
 	if _, ok := b.NonceDiffs[address]; !ok {
 		b.NonceDiffs[address] = make(accountNonceDiffs)
 	}
-	b.NonceDiffs[address][txIdx] = originNonce
+	b.NonceDiffs[address][txIdx] = postNonce
 }
 
 // BalanceChange records the transaction post-state balance of an account that changed its balance
