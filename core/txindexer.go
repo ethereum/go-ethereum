@@ -18,12 +18,20 @@ package core
 
 import (
 	"fmt"
+	"math/big"
+	"runtime"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/prque"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // TxIndexProgress is the struct describing the progress for transaction indexing.
@@ -62,6 +70,7 @@ type txIndexer struct {
 	// be pruned and not available locally.
 	cutoff uint64
 	db     ethdb.Database
+	config *params.ChainConfig
 	term   chan chan struct{}
 	closed chan struct{}
 }
@@ -73,6 +82,7 @@ func newTxIndexer(limit uint64, chain *BlockChain) *txIndexer {
 		limit:  limit,
 		cutoff: cutoff,
 		db:     chain.db,
+		config: chain.chainConfig,
 		term:   make(chan chan struct{}),
 		closed: make(chan struct{}),
 	}
@@ -122,7 +132,7 @@ func (indexer *txIndexer) run(head uint64, stop chan struct{}, done chan struct{
 			from = head - indexer.limit + 1
 		}
 		from = max(from, indexer.cutoff)
-		rawdb.IndexTransactions(indexer.db, from, head+1, stop, true)
+		indexer.index(from, head+1, stop, nil, true)
 		return
 	}
 	// The tail flag is existent (which means indexes in [tail, head] should be
@@ -130,7 +140,7 @@ func (indexer *txIndexer) run(head uint64, stop chan struct{}, done chan struct{
 	if indexer.limit == 0 || head < indexer.limit {
 		if *tail > 0 {
 			from := max(uint64(0), indexer.cutoff)
-			rawdb.IndexTransactions(indexer.db, from, *tail, stop, true)
+			indexer.index(from, *tail, stop, nil, true)
 		}
 		return
 	}
@@ -140,10 +150,10 @@ func (indexer *txIndexer) run(head uint64, stop chan struct{}, done chan struct{
 	from = max(from, indexer.cutoff)
 	if from < *tail {
 		// Reindex a part of missing indices and rewind index tail to HEAD-limit
-		rawdb.IndexTransactions(indexer.db, from, *tail, stop, true)
+		indexer.index(from, *tail, stop, nil, true)
 	} else {
 		// Unindex a part of stale indices and forward index tail to HEAD-limit
-		rawdb.UnindexTransactions(indexer.db, *tail, from, stop, false)
+		indexer.unindex(*tail, from, stop, nil, false)
 	}
 }
 
@@ -330,4 +340,334 @@ func (indexer *txIndexer) close() {
 		<-ch
 	case <-indexer.closed:
 	}
+}
+
+// generateTxIndex generates the data that will be stored alongside the transaction index
+func (indexer *txIndexer) generateTxIndex(txs types.Transactions, header *types.Header, receipts types.Receipts) []rawdb.TxIndex {
+	var (
+		logIndex              = 0
+		prevCumulativeGasUsed = uint64(0)
+		signer                = types.MakeSigner(indexer.config, header.Number, header.Time)
+		indexes               = make([]rawdb.TxIndex, len(txs))
+	)
+
+	var blobGasPrice *big.Int
+	if header.ExcessBlobGas != nil {
+		blobGasPrice = eip4844.CalcBlobFee(indexer.config, header)
+	}
+
+	for blockIndex, tx := range txs {
+		from, _ := signer.Sender(tx)
+		indexes[blockIndex] = rawdb.TxIndex{
+			Type:  tx.Type(),
+			Nonce: tx.Nonce(),
+			To:    tx.To(),
+
+			BlockNumber:       header.Number.Uint64(),
+			BlockHash:         header.Hash(),
+			BlockTime:         header.Time,
+			BaseFee:           header.BaseFee,
+			TxIndex:           uint32(blockIndex),
+			Sender:            from,
+			EffectiveGasPrice: tx.EffectiveGasPrice(header.BaseFee),
+			GasUsed:           receipts[blockIndex].CumulativeGasUsed - prevCumulativeGasUsed,
+			LogIndex:          uint32(logIndex),
+			BlobGas:           tx.BlobGas(),
+			BlobGasPrice:      blobGasPrice,
+		}
+		prevCumulativeGasUsed = receipts[blockIndex].CumulativeGasUsed
+		logIndex += len(receipts[blockIndex].Logs)
+	}
+	return indexes
+}
+
+type blockIndexingContext struct {
+	number   uint64
+	txHashes []common.Hash
+	indexes  []rawdb.TxIndex
+}
+
+// iterate iterates over all transactions in the (canon) block
+// number(s) given, and yields the hashes on a channel. If there is a signal
+// received from interrupt channel, the iteration will be aborted and result
+// channel will be closed.
+func (indexer *txIndexer) iterate(from uint64, to uint64, reverse, indexing bool, interrupt chan struct{}) chan *blockIndexingContext {
+	// One thread sequentially reads data from db
+	type numberRlp struct {
+		number      uint64
+		headerRLP   rlp.RawValue
+		bodyRLP     rlp.RawValue
+		receiptsRLP rlp.RawValue
+	}
+	if to == from {
+		return nil
+	}
+	threads := to - from
+	if cpus := runtime.NumCPU(); threads > uint64(cpus) {
+		threads = uint64(cpus)
+	}
+	var (
+		rlpCh      = make(chan *numberRlp, threads*2)            // we send raw rlp over this channel
+		contextsCh = make(chan *blockIndexingContext, threads*2) // send indexing context over contextsCh
+	)
+	// lookup runs in one instance
+	lookup := func() {
+		n, end := from, to
+		if reverse {
+			n, end = to-1, from-1
+		}
+		defer close(rlpCh)
+		for n != end {
+			blockHash := rawdb.ReadCanonicalHash(indexer.db, n)
+			rlps := &numberRlp{
+				number:  n,
+				bodyRLP: rawdb.ReadBodyRLP(indexer.db, blockHash, n),
+			}
+
+			if indexing {
+				// We are indexing, read more to build the index
+				rlps.headerRLP = rawdb.ReadHeaderRLP(indexer.db, blockHash, n)
+				rlps.receiptsRLP = rawdb.ReadReceiptsRLP(indexer.db, blockHash, n)
+			}
+			// Feed the block to the aggregator, or abort on interrupt
+			select {
+			case rlpCh <- rlps:
+			case <-interrupt:
+				return
+			}
+			if reverse {
+				n--
+			} else {
+				n++
+			}
+		}
+	}
+	// process runs in parallel
+	var nThreadsAlive atomic.Int32
+	nThreadsAlive.Store(int32(threads))
+	process := func() {
+		defer func() {
+			// Last processor closes the result channel
+			if nThreadsAlive.Add(-1) == 0 {
+				close(contextsCh)
+			}
+		}()
+		for data := range rlpCh {
+			var body types.Body
+			if err := rlp.DecodeBytes(data.bodyRLP, &body); err != nil {
+				log.Error("Failed to decode block body", "block", data.number, "error", err)
+				return
+			}
+			txHashes := make([]common.Hash, 0, len(body.Transactions))
+			for _, tx := range body.Transactions {
+				txHashes = append(txHashes, tx.Hash())
+			}
+
+			result := &blockIndexingContext{
+				number:   data.number,
+				txHashes: txHashes,
+			}
+
+			if indexing {
+				var header types.Header
+				if err := rlp.DecodeBytes(data.headerRLP, &header); err != nil {
+					log.Error("failed to decode header", "block", data.number, "err", err)
+					return
+				}
+
+				var storageReceipts []*types.ReceiptForStorage
+				if err := rlp.DecodeBytes(data.receiptsRLP, &storageReceipts); err != nil {
+					log.Error("failed to decode receipts", "block", data.number, "err", err)
+					return
+				}
+
+				receipts := make([]*types.Receipt, len(storageReceipts))
+				for i, receipt := range storageReceipts {
+					receipts[i] = (*types.Receipt)(receipt)
+				}
+				result.indexes = indexer.generateTxIndex(body.Transactions, &header, receipts)
+			}
+			// Feed the block to the aggregator, or abort on interrupt
+			select {
+			case contextsCh <- result:
+			case <-interrupt:
+				return
+			}
+		}
+	}
+	go lookup() // start the sequential db accessor
+	for i := 0; i < int(threads); i++ {
+		go process()
+	}
+	return contextsCh
+}
+
+// index creates txlookup indices of the specified block range.
+//
+// This function iterates canonical chain in reverse order, it has one main advantage:
+// We can write tx index tail flag periodically even without the whole indexing
+// procedure is finished. So that we can resume indexing procedure next time quickly.
+//
+// There is a passed channel, the whole procedure will be interrupted if any
+// signal received.
+func (indexer *txIndexer) index(from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool, report bool) {
+	// short circuit for invalid range
+	if from >= to {
+		return
+	}
+	var (
+		contextsCh = indexer.iterate(from, to, true, true, interrupt)
+		batch      = indexer.db.NewBatch()
+		start      = time.Now()
+		logged     = start.Add(-7 * time.Second)
+
+		// Since we iterate in reverse, we expect the first number to come
+		// in to be [to-1]. Therefore, setting lastNum to means that the
+		// queue gap-evaluation will work correctly
+		lastNum     = to
+		queue       = prque.New[int64, *blockIndexingContext](nil)
+		blocks, txs = 0, 0 // for stats reporting
+	)
+	for chanDelivery := range contextsCh {
+		// Push the delivery into the queue and process contiguous ranges.
+		// Since we iterate in reverse, so lower numbers have lower prio, and
+		// we can use the number directly as prio marker
+		queue.Push(chanDelivery, int64(chanDelivery.number))
+		for !queue.Empty() {
+			// If the next available item is gapped, return
+			if _, priority := queue.Peek(); priority != int64(lastNum-1) {
+				break
+			}
+			// For testing
+			if hook != nil && !hook(lastNum-1) {
+				break
+			}
+			// Next block available, pop it off and index it
+			delivery := queue.PopItem()
+			lastNum = delivery.number
+			rawdb.WriteTxLookupEntries(batch, delivery.txHashes, delivery.indexes)
+			blocks++
+			txs += len(delivery.txHashes)
+			// If enough data was accumulated in memory or we're at the last block, dump to disk
+			if batch.ValueSize() > ethdb.IdealBatchSize {
+				rawdb.WriteTxIndexTail(batch, lastNum) // Also write the tail here
+				if err := batch.Write(); err != nil {
+					log.Crit("Failed writing batch to db", "error", err)
+					return
+				}
+				batch.Reset()
+			}
+			// If we've spent too much time already, notify the user of what we're doing
+			if time.Since(logged) > 8*time.Second {
+				log.Info("Indexing transactions", "blocks", blocks, "txs", txs, "tail", lastNum, "total", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
+				logged = time.Now()
+			}
+		}
+	}
+	// Flush the new indexing tail and the last committed data. It can also happen
+	// that the last batch is empty because nothing to index, but the tail has to
+	// be flushed anyway.
+	rawdb.WriteTxIndexTail(batch, lastNum)
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed writing batch to db", "error", err)
+		return
+	}
+	logger := log.Debug
+	if report {
+		logger = log.Info
+	}
+	select {
+	case <-interrupt:
+		logger("Transaction indexing interrupted", "blocks", blocks, "txs", txs, "tail", lastNum, "elapsed", common.PrettyDuration(time.Since(start)))
+	default:
+		logger("Indexed transactions", "blocks", blocks, "txs", txs, "tail", lastNum, "elapsed", common.PrettyDuration(time.Since(start)))
+	}
+}
+
+// unindex removes txlookup indices of the specified block range.
+//
+// There is a passed channel, the whole procedure will be interrupted if any
+// signal received.
+func (indexer *txIndexer) unindex(from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool, report bool) {
+	// short circuit for invalid range
+	if from >= to {
+		return
+	}
+	var (
+		contextsCh = indexer.iterate(from, to, false, false, interrupt)
+		batch      = indexer.db.NewBatch()
+		start      = time.Now()
+		logged     = start.Add(-7 * time.Second)
+
+		// we expect the first number to come in to be [from]. Therefore, setting
+		// nextNum to from means that the queue gap-evaluation will work correctly
+		nextNum     = from
+		queue       = prque.New[int64, *blockIndexingContext](nil)
+		blocks, txs = 0, 0 // for stats reporting
+	)
+	// Otherwise spin up the concurrent iterator and unindexer
+	for delivery := range contextsCh {
+		// Push the delivery into the queue and process contiguous ranges.
+		queue.Push(delivery, -int64(delivery.number))
+		for !queue.Empty() {
+			// If the next available item is gapped, return
+			if _, priority := queue.Peek(); -priority != int64(nextNum) {
+				break
+			}
+			// For testing
+			if hook != nil && !hook(nextNum) {
+				break
+			}
+			delivery := queue.PopItem()
+			nextNum = delivery.number + 1
+			rawdb.DeleteTxLookupEntries(batch, delivery.txHashes)
+			txs += len(delivery.txHashes)
+			blocks++
+
+			// If enough data was accumulated in memory or we're at the last block, dump to disk
+			// A batch counts the size of deletion as '1', so we need to flush more
+			// often than that.
+			if blocks%1000 == 0 {
+				rawdb.WriteTxIndexTail(batch, nextNum)
+				if err := batch.Write(); err != nil {
+					log.Crit("Failed writing batch to db", "error", err)
+					return
+				}
+				batch.Reset()
+			}
+			// If we've spent too much time already, notify the user of what we're doing
+			if time.Since(logged) > 8*time.Second {
+				log.Info("Unindexing transactions", "blocks", blocks, "txs", txs, "total", to-from, "elapsed", common.PrettyDuration(time.Since(start)))
+				logged = time.Now()
+			}
+		}
+	}
+	// Flush the new indexing tail and the last committed data. It can also happen
+	// that the last batch is empty because nothing to unindex, but the tail has to
+	// be flushed anyway.
+	rawdb.WriteTxIndexTail(batch, nextNum)
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed writing batch to db", "error", err)
+		return
+	}
+	logger := log.Debug
+	if report {
+		logger = log.Info
+	}
+	select {
+	case <-interrupt:
+		logger("Transaction unindexing interrupted", "blocks", blocks, "txs", txs, "tail", to, "elapsed", common.PrettyDuration(time.Since(start)))
+	default:
+		logger("Unindexed transactions", "blocks", blocks, "txs", txs, "tail", to, "elapsed", common.PrettyDuration(time.Since(start)))
+	}
+}
+
+// indexHead indexes given head block synchronously
+func (indexer *txIndexer) indexHead(db ethdb.KeyValueWriter, block *types.Block, receipts types.Receipts) {
+	indexes := indexer.generateTxIndex(block.Transactions(), block.Header(), receipts)
+	hashes := make([]common.Hash, len(block.Transactions()))
+	for i, tx := range block.Transactions() {
+		hashes[i] = tx.Hash()
+	}
+	rawdb.WriteTxLookupEntries(db, hashes, indexes)
 }

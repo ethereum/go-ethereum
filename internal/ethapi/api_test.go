@@ -588,7 +588,10 @@ func (b testBackend) SendTx(ctx context.Context, signedTx *types.Transaction) er
 }
 func (b testBackend) GetTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64) {
 	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.db, txHash)
-	return true, tx, blockHash, blockNumber, index
+	return tx != nil, tx, blockHash, blockNumber, index
+}
+func (b testBackend) GetReceiptByIndex(tx *types.Transaction, blockHash common.Hash, blockNumber, blockIndex uint64) (*types.Receipt, error) {
+	return b.chain.GetReceiptByIndex(tx, blockHash, blockNumber, blockIndex)
 }
 func (b testBackend) TxIndexDone() bool {
 	return true

@@ -276,6 +276,10 @@ func (b *EthAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (type
 	return b.eth.blockchain.GetReceiptsByHash(hash), nil
 }
 
+func (b *EthAPIBackend) GetReceiptByIndex(tx *types.Transaction, blockHash common.Hash, blockNumber, blockIndex uint64) (*types.Receipt, error) {
+	return b.eth.blockchain.GetReceiptByIndex(tx, blockHash, blockNumber, blockIndex)
+}
+
 func (b *EthAPIBackend) GetLogs(ctx context.Context, hash common.Hash, number uint64) ([][]*types.Log, error) {
 	return rawdb.ReadLogs(b.eth.chainDb, hash, number), nil
 }

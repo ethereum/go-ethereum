@@ -27,10 +27,14 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func verifyIndexes(t *testing.T, db ethdb.Database, block *types.Block, exist bool) {
-	for _, tx := range block.Transactions() {
+func verifyIndexes(t *testing.T, db ethdb.Database, block *types.Block, receipts types.Receipts, exist bool) {
+	signer := types.MakeSigner(params.TestChainConfig, block.Number(), block.Time())
+
+	for blockIndex, tx := range block.Transactions() {
 		lookup := rawdb.ReadTxLookupEntry(db, tx.Hash())
 		if exist && lookup == nil {
 			t.Fatalf("missing %d %x", block.NumberU64(), tx.Hash().Hex())
@@ -38,10 +42,35 @@ func verifyIndexes(t *testing.T, db ethdb.Database, block *types.Block, exist bo
 		if !exist && lookup != nil {
 			t.Fatalf("unexpected %d %x", block.NumberU64(), tx.Hash().Hex())
 		}
+
+		if exist {
+			txIndex := rawdb.ReadTxIndex(db, tx.Hash())
+			require.NotNil(t, txIndex)
+			assert.Equal(t, tx.Type(), txIndex.Type)
+			assert.Equal(t, tx.Nonce(), txIndex.Nonce)
+			assert.Equal(t, block.NumberU64(), txIndex.BlockNumber)
+			assert.Equal(t, block.Hash(), txIndex.BlockHash)
+			assert.Equal(t, block.Time(), txIndex.BlockTime)
+			assert.Equal(t, block.BaseFee(), txIndex.BaseFee)
+			assert.Equal(t, uint32(blockIndex), txIndex.TxIndex)
+
+			sender, _ := signer.Sender(tx)
+			assert.Equal(t, txIndex.Sender, sender)
+
+			receipt := receipts[blockIndex]
+			assert.Equal(t, receipt.EffectiveGasPrice, txIndex.EffectiveGasPrice)
+			assert.Equal(t, receipt.GasUsed, txIndex.GasUsed)
+			if len(receipt.Logs) > 0 {
+				assert.Equal(t, receipt.Logs[0].Index, txIndex.LogIndex)
+			}
+			assert.Equal(t, tx.To(), txIndex.To)
+			assert.Equal(t, tx.BlobGas(), txIndex.BlobGas)
+			assert.Equal(t, receipt.BlobGasPrice, txIndex.BlobGasPrice)
+		}
 	}
 }
 
-func verify(t *testing.T, db ethdb.Database, blocks []*types.Block, expTail uint64) {
+func verify(t *testing.T, db ethdb.Database, blocks []*types.Block, receipts []types.Receipts, expTail uint64) {
 	tail := rawdb.ReadTxIndexTail(db)
 	if tail == nil {
 		t.Fatal("Failed to write tx index tail")
@@ -50,11 +79,11 @@ func verify(t *testing.T, db ethdb.Database, blocks []*types.Block, expTail uint
 	if *tail != expTail {
 		t.Fatalf("Unexpected tx index tail, want %v, got %d", expTail, *tail)
 	}
-	for _, b := range blocks {
+	for i, b := range blocks {
 		if b.Number().Uint64() < *tail {
-			verifyIndexes(t, db, b, false)
+			verifyIndexes(t, db, b, receipts[i], false)
 		} else {
-			verifyIndexes(t, db, b, true)
+			verifyIndexes(t, db, b, receipts[i], true)
 		}
 	}
 }
@@ -65,7 +94,7 @@ func verifyNoIndex(t *testing.T, db ethdb.Database, blocks []*types.Block) {
 		t.Fatalf("Unexpected tx index tail %d", *tail)
 	}
 	for _, b := range blocks {
-		verifyIndexes(t, db, b, false)
+		verifyIndexes(t, db, b, nil, false)
 	}
 }
 
@@ -121,13 +150,14 @@ func TestTxIndexer(t *testing.T) {
 
 		// Index the initial blocks from ancient store
 		indexer := &txIndexer{
-			limit: 0,
-			db:    db,
+			limit:  0,
+			db:     db,
+			config: gspec.Config,
 		}
 		for i, limit := range c.limits {
 			indexer.limit = limit
 			indexer.run(chainHead, make(chan struct{}), make(chan struct{}))
-			verify(t, db, blocks, c.tails[i])
+			verify(t, db, blocks, receipts, c.tails[i])
 		}
 		db.Close()
 	}
@@ -241,8 +271,9 @@ func TestTxIndexerRepair(t *testing.T) {
 
 		// Index the initial blocks from ancient store
 		indexer := &txIndexer{
-			limit: c.limit,
-			db:    db,
+			limit:  c.limit,
+			db:     db,
+			config: gspec.Config,
 		}
 		indexer.run(chainHead, make(chan struct{}), make(chan struct{}))
 
@@ -252,7 +283,7 @@ func TestTxIndexerRepair(t *testing.T) {
 		if c.expTail == nil {
 			verifyNoIndex(t, db, blocks)
 		} else {
-			verify(t, db, blocks, *c.expTail)
+			verify(t, db, blocks, receipts, *c.expTail)
 		}
 		db.Close()
 	}
