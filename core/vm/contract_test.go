@@ -75,7 +75,6 @@ func TestIsCode(t *testing.T) {
 	}
 
 	destField = [4]uint64{1, 0, 0, 0}
-	//aField := []byte{0,0,0,0,0}
 	jd := make(map[common.Hash]bitvec)
 	c = Contract{CodeHash: common.Hash{}, jumpdests: jd}
 	c.CodeHash[0] = 1
