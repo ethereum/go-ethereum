@@ -665,11 +665,6 @@ func (b *BlockAccessList) toEncoderObj() *encodingBlockAccessList {
 		return bytes.Compare(accountAccessesAddrs[i][:], accountAccessesAddrs[j][:]) < 0
 	})
 	for _, addr := range accountAccessesAddrs {
-		encoderAccountAccesses = append(encoderAccountAccesses, encodingAccountAccess{
-			Address:  addr,
-			Accesses: nil,
-			Code:     b.AccountDiffs[addr].Code,
-		})
 		// sort the accesses lexicographically by key, and the occurance of each key ascending by tx idx
 		// then encode them
 		var storageAccessKeys []common.Hash
