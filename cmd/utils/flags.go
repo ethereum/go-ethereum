@@ -446,6 +446,15 @@ var (
 		Value:    ethconfig.Defaults.BlobPool.PriceBump,
 		Category: flags.BlobPoolCategory,
 	}
+
+	// Trie database settings
+	TrieDBJournalFlag = &cli.StringFlag{
+		Name:     "triedb.journal",
+		Usage:    "Path to the journal used for persisting trie data across node restarts",
+		Value:    ethconfig.Defaults.TrieDBJournal,
+		Category: flags.TrieDatabaseCategory,
+	}
+
 	// Performance tuning settings
 	CacheFlag = &cli.IntFlag{
 		Name:     "cache",
@@ -983,6 +992,7 @@ var (
 		DataDirFlag,
 		AncientFlag,
 		EraFlag,
+		TrieDBJournalFlag,
 		RemoteDBFlag,
 		DBEngineFlag,
 		StateSchemeFlag,
@@ -1685,6 +1695,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheSnapshotFlag.Name) {
 		cfg.SnapshotCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheSnapshotFlag.Name) / 100
 	}
+	if ctx.IsSet(TrieDBJournalFlag.Name) {
+		cfg.TrieDBJournal = ctx.String(TrieDBJournalFlag.Name)
+	}
 	if ctx.IsSet(CacheLogSizeFlag.Name) {
 		cfg.FilterLogCacheSize = ctx.Int(CacheLogSizeFlag.Name)
 	}
@@ -2207,6 +2220,13 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	if options.ArchiveMode && !options.Preimages {
 		options.Preimages = true
 		log.Info("Enabling recording of key preimages since archive mode is used")
+	}
+	journal := ethconfig.Defaults.TrieDBJournal
+	if ctx.IsSet(TrieDBJournalFlag.Name) {
+		journal = ctx.String(TrieDBJournalFlag.Name)
+	}
+	if journal != "" {
+		options.TrieDBJournal = stack.ResolvePath(journal)
 	}
 	if !ctx.Bool(SnapshotFlag.Name) {
 		options.SnapshotLimit = 0 // Disabled

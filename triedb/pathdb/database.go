@@ -120,6 +120,7 @@ type Config struct {
 	WriteBufferSize int    // Maximum memory allowance (in bytes) for write buffer
 	ReadOnly        bool   // Flag whether the database is opened in read only mode
 	SnapshotNoBuild bool   // Flag Whether the background generation is allowed
+	JournalPath     string // Absolute path of journal file (null means the journal data is persisted in key-value store)
 }
 
 // sanitize checks the provided user configurations and changes anything that's
@@ -146,6 +147,9 @@ func (c *Config) fields() []interface{} {
 	list = append(list, "statecache", common.StorageSize(c.StateCleanSize))
 	list = append(list, "buffer", common.StorageSize(c.WriteBufferSize))
 	list = append(list, "history", c.StateHistory)
+	if c.JournalPath != "" {
+		list = append(list, "journal", c.JournalPath)
+	}
 	return list
 }
 
