@@ -1831,8 +1831,16 @@ func (api *DebugAPI) ChaindbCompact() error {
 }
 
 // SetHead rewinds the head of the blockchain to a previous block.
-func (api *DebugAPI) SetHead(number hexutil.Uint64) {
+func (api *DebugAPI) SetHead(number hexutil.Uint64) error {
+	header := api.b.CurrentHeader()
+	if header == nil {
+		return errors.New("current header is not available")
+	}
+	if header.Number.Uint64() <= uint64(number) {
+		return errors.New("not allowed to rewind to a later block")
+	}
 	api.b.SetHead(uint64(number))
+	return nil
 }
 
 // NetAPI offers network related RPC methods
