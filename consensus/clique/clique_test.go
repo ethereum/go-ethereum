@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
+
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -120,5 +122,86 @@ func TestSealHash(t *testing.T) {
 	want := common.HexToHash("0xbd3d1fa43fbc4c5bfcc91b179ec92e2861df3654de60468beb908ff805359e8f")
 	if have != want {
 		t.Errorf("have %x, want %x", have, want)
+	}
+}
+
+type testChainReader struct {
+}
+
+func (t testChainReader) GetBlock(hash common.Hash, number uint64) *types.Block {
+	return &types.Block{}
+}
+func (t testChainReader) Config() *params.ChainConfig {
+	return &params.ChainConfig{}
+}
+func (t testChainReader) CurrentHeader() *types.Header {
+	return &types.Header{}
+}
+func (t testChainReader) GetHeader(hash common.Hash, number uint64) *types.Header {
+	var rueck *types.Header = nil
+	if number == 22431048 {
+		rueck = &types.Header{}
+		rueck.Number = new(big.Int).SetUint64(number)
+		rueck.Time = 99
+		rueck.Difficulty = big.NewInt(1)
+		rueck.GasLimit = 5000
+	}
+	return rueck
+}
+func (t testChainReader) GetHeaderByHash(hash common.Hash) *types.Header {
+	return &types.Header{}
+}
+func (t testChainReader) GetHeaderByNumber(number uint64) *types.Header {
+	return &types.Header{}
+}
+
+func TestVerifyUncles(t *testing.T) {
+	clique := Clique{}
+	chain := testChainReader{}
+	block := types.Block{}
+	ret := clique.VerifyUncles(chain, &block)
+	if ret != nil {
+		t.Errorf("VerifyUncles not successful")
+	}
+}
+
+func TestPrepare(t *testing.T) {
+	clique := Clique{}
+	cc := params.CliqueConfig{}
+	cc.Epoch = 364032
+	clique.config = &cc
+	cache := lru.NewCache[common.Hash, *Snapshot](0)
+	s := Snapshot{}
+	s.Signers = make(map[common.Address]struct{})
+	s.Signers[common.Address{}] = struct{}{}
+	cache.Add(common.Hash{}, &s)
+	clique.recents = cache
+	chain := testChainReader{}
+	header := types.Header{}
+	header.Number = big.NewInt(22431049)
+	header.Time = 100
+	header.Difficulty = big.NewInt(131072)
+	header.GasLimit = 5000
+	ret := clique.Prepare(chain, &header)
+	if ret != nil {
+		t.Errorf("Prepare not successful")
+	}
+}
+
+func TestAuthorize(t *testing.T) {
+	clique := Clique{}
+	signer := common.Address{}
+	clique.Authorize(signer)
+	if clique.signer != signer {
+		t.Errorf("Authorize not successful")
+	}
+}
+
+func TestCliqueRLP(t *testing.T) {
+	header := types.Header{}
+	header.Extra = make([]uint8, 65)
+	ret := CliqueRLP(&header)
+	if len(ret) != 496 {
+		t.Errorf("CliqueRLP not successful")
 	}
 }
