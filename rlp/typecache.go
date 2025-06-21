@@ -199,8 +199,8 @@ func rtypeToStructType(typ reflect.Type, rec map[reflect.Type]*rlpstruct.Type) *
 	t := &rlpstruct.Type{
 		Name:      typ.String(),
 		Kind:      k,
-		IsEncoder: typ.Implements(encoderInterface),
-		IsDecoder: typ.Implements(decoderInterface),
+		IsEncoder: implementsInterface(typ, encoderInterface),
+		IsDecoder: implementsInterface(typ, decoderInterface),
 	}
 	rec[typ] = t
 	if k == reflect.Array || k == reflect.Slice || k == reflect.Ptr {
@@ -234,5 +234,5 @@ func isUint(k reflect.Kind) bool {
 }
 
 func isByte(typ reflect.Type) bool {
-	return typ.Kind() == reflect.Uint8 && !typ.Implements(encoderInterface)
+	return typ.Kind() == reflect.Uint8 && !implementsInterface(typ, encoderInterface)
 }
