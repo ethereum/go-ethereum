@@ -52,7 +52,8 @@ func (c *CallbackParam) Instance(backend bind.ContractBackend, addr common.Addre
 }
 
 // PackTest is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0xd7a5aba2.
+// the contract method with ID 0xd7a5aba2.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function test(function callback) returns()
 func (callbackParam *CallbackParam) PackTest(callback [24]byte) []byte {
@@ -61,4 +62,13 @@ func (callbackParam *CallbackParam) PackTest(callback [24]byte) []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackTest is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xd7a5aba2.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function test(function callback) returns()
+func (callbackParam *CallbackParam) TryPackTest(callback [24]byte) ([]byte, error) {
+	return callbackParam.abi.Pack("test", callback)
 }

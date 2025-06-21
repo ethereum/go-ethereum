@@ -52,7 +52,8 @@ func (c *RangeKeyword) Instance(backend bind.ContractBackend, addr common.Addres
 }
 
 // PackFunctionWithKeywordParameter is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x527a119f.
+// the contract method with ID 0x527a119f.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function functionWithKeywordParameter(uint256 range) pure returns()
 func (rangeKeyword *RangeKeyword) PackFunctionWithKeywordParameter(arg0 *big.Int) []byte {
@@ -61,4 +62,13 @@ func (rangeKeyword *RangeKeyword) PackFunctionWithKeywordParameter(arg0 *big.Int
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackFunctionWithKeywordParameter is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x527a119f.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function functionWithKeywordParameter(uint256 range) pure returns()
+func (rangeKeyword *RangeKeyword) TryPackFunctionWithKeywordParameter(arg0 *big.Int) ([]byte, error) {
+	return rangeKeyword.abi.Pack("functionWithKeywordParameter", arg0)
 }

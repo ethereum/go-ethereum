@@ -52,7 +52,8 @@ func (c *C) Instance(backend bind.ContractBackend, addr common.Address) *bind.Bo
 }
 
 // PackBar is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0xb0a378b0.
+// the contract method with ID 0xb0a378b0.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function Bar() pure returns()
 func (c *C) PackBar() []byte {
@@ -63,8 +64,18 @@ func (c *C) PackBar() []byte {
 	return enc
 }
 
+// TryPackBar is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xb0a378b0.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function Bar() pure returns()
+func (c *C) TryPackBar() ([]byte, error) {
+	return c.abi.Pack("Bar")
+}
+
 // PackFoo is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0xbfb4ebcf.
+// the contract method with ID 0xbfb4ebcf.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function Foo() pure returns()
 func (c *C) PackFoo() []byte {
@@ -73,6 +84,15 @@ func (c *C) PackFoo() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackFoo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xbfb4ebcf.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function Foo() pure returns()
+func (c *C) TryPackFoo() ([]byte, error) {
+	return c.abi.Pack("Foo")
 }
 
 // UnpackError attempts to decode the provided error data using user-defined
@@ -169,7 +189,8 @@ func (c *C2) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 }
 
 // PackFoo is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0xbfb4ebcf.
+// the contract method with ID 0xbfb4ebcf.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function Foo() pure returns()
 func (c2 *C2) PackFoo() []byte {
@@ -178,6 +199,15 @@ func (c2 *C2) PackFoo() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackFoo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xbfb4ebcf.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function Foo() pure returns()
+func (c2 *C2) TryPackFoo() ([]byte, error) {
+	return c2.abi.Pack("Foo")
 }
 
 // UnpackError attempts to decode the provided error data using user-defined
