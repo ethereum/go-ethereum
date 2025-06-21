@@ -82,16 +82,16 @@ type encodingBlockAccessList struct {
 }
 
 // toMap returns a copy of the code diffs in the working format
-func (c encodingCodeDiffs) toMap() (map[common.Address]codeDiff, error) {
+func (c encodingCodeDiffs) toMap() (map[common.Address]accountCodeDiff, error) {
 	var prevAddr *common.Address
-	res := make(map[common.Address]codeDiff)
+	res := make(map[common.Address]accountCodeDiff)
 	for _, diff := range c {
 		if prevAddr != nil {
 			if bytes.Compare(diff.Address[:], (*prevAddr)[:]) <= 0 {
 				return nil, fmt.Errorf("code diffs not in lexicographic order")
 			}
 		}
-		res[diff.Address] = codeDiff{
+		res[diff.Address] = accountCodeDiff{
 			diff.TxIdx,
 			bytes.Clone(diff.NewCode),
 		}
@@ -107,7 +107,7 @@ func (c *encodingAccountBalanceDiff) toMap() (balanceDiff, error) {
 	res := make(balanceDiff)
 	for _, diff := range c.Changes {
 		if prevIdx != nil {
-			if *prevIdx > diff.TxIdx {
+			if *prevIdx >= diff.TxIdx {
 				return nil, fmt.Errorf("not in lexicographic ordering")
 			}
 		}
@@ -142,7 +142,7 @@ func (a *encodingSlotAccess) toSlotAccess() (*slotAccess, error) {
 	res := slotAccess{make(map[uint64]common.Hash)}
 	for _, diff := range a.Accesses {
 		if prevIdx != nil {
-			if *prevIdx > diff.TxIdx {
+			if *prevIdx >= diff.TxIdx {
 				return nil, fmt.Errorf("not in lexicographic ordering")
 			}
 		}
@@ -175,12 +175,12 @@ func (a *encodingAccountAccess) toAccountAccess() (*accountAccess, error) {
 	return &res, nil
 }
 
-func encodingAccountAccessListToMap(al encodingAccountAccessList) (map[common.Address]*accountAccess, error) {
+func (al encodingAccountAccessList) toMap() (map[common.Address]*accountAccess, error) {
 	var prevAddr *common.Address
 	res := make(map[common.Address]*accountAccess)
 	for _, diff := range al {
 		if prevAddr != nil {
-			if bytes.Compare(diff.Address[:], (*prevAddr)[:]) < 0 {
+			if bytes.Compare(diff.Address[:], (*prevAddr)[:]) <= 0 {
 				return nil, fmt.Errorf("accounts not in lexicographic order")
 			}
 		}
@@ -202,7 +202,7 @@ func (n encodingAccountNonces) toMap() (accountNonceDiffs, error) {
 	res := make(accountNonceDiffs)
 	for _, diff := range n.Diffs {
 		if prevIdx != nil {
-			if *prevIdx > diff.TxIdx {
+			if *prevIdx >= diff.TxIdx {
 				return nil, fmt.Errorf("not in lexicographic ordering")
 			}
 		}
@@ -217,7 +217,7 @@ func (n encodingNonceDiffs) toMap() (map[common.Address]accountNonceDiffs, error
 	res := make(map[common.Address]accountNonceDiffs)
 	for _, diff := range n {
 		if prevAddr != nil {
-			if bytes.Compare(diff.Address[:], (*prevAddr)[:]) < 0 {
+			if bytes.Compare(diff.Address[:], (*prevAddr)[:]) <= 0 {
 				return nil, fmt.Errorf("nonce diff accounts not in lexicographic order")
 			}
 		}
@@ -234,7 +234,7 @@ func (n encodingNonceDiffs) toMap() (map[common.Address]accountNonceDiffs, error
 
 func (b *encodingBlockAccessList) ToBlockAccessList() (*BlockAccessList, error) {
 	// TODO: ensure that there are no duplicate indexes where appropriate (for tx-idx and addressed keyed maps)
-	accountAccesses, err := encodingAccountAccessListToMap(b.AccountAccesses)
+	accountAccesses, err := b.AccountAccesses.toMap()
 	if err != nil {
 		return nil, err
 	}
@@ -376,13 +376,13 @@ func (b balanceDiff) toEncoderObj(addr common.Address) (res encodingAccountBalan
 	return res
 }
 
-type codeDiff struct {
+type accountCodeDiff struct {
 	TxIdx uint64 `json:"txIdx"`
 	Code  []byte `json:"Code"`
 }
 
-func (c *codeDiff) Copy() codeDiff {
-	return codeDiff{
+func (c *accountCodeDiff) Copy() accountCodeDiff {
+	return accountCodeDiff{
 		c.TxIdx,
 		bytes.Clone(c.Code),
 	}
@@ -414,27 +414,32 @@ func (a accountNonceDiffs) toEncoderObj(addr common.Address) encodingAccountNonc
 	return res
 }
 
+type accountDiffs map[common.Address]*accountAccess
+type balanceDiffs map[common.Address]balanceDiff
+type codeDiffs map[common.Address]accountCodeDiff
+type nonceDiffs map[common.Address]accountNonceDiffs
+
 type BlockAccessList struct {
-	AccountAccesses map[common.Address]*accountAccess    `json:"accountAccesses"`
-	BalanceChanges  map[common.Address]balanceDiff       `json:"balanceChanges"`
-	CodeChanges     map[common.Address]codeDiff          `json:"codeChanges"`
-	PrestateNonces  map[common.Address]accountNonceDiffs `json:"prestateNonces"`
-	hash            common.Hash                          `json:"hash"`
+	AccountDiffs accountDiffs `json:"accountDiffs"`
+	BalanceDiffs balanceDiffs `json:"balanceDiffs"`
+	CodeDiffs    codeDiffs    `json:"codeDiffs"`
+	NonceDiffs   nonceDiffs   `json:"nonceDiffs"`
+	hash         common.Hash  `json:"hash"`
 }
 
 // Copy deep-copies the access list
 func (b *BlockAccessList) Copy() *BlockAccessList {
 	accountAccesses := make(map[common.Address]*accountAccess)
 	balanceChanges := make(map[common.Address]balanceDiff)
-	codeChanges := make(map[common.Address]codeDiff)
+	codeChanges := make(map[common.Address]accountCodeDiff)
 
-	for addr, aa := range b.AccountAccesses {
+	for addr, aa := range b.AccountDiffs {
 		accountAccesses[addr] = aa.Copy()
 	}
-	for addr, bd := range b.BalanceChanges {
+	for addr, bd := range b.BalanceDiffs {
 		balanceChanges[addr] = bd.Copy()
 	}
-	for addr, cd := range b.CodeChanges {
+	for addr, cd := range b.CodeDiffs {
 		codeChanges[addr] = cd.Copy()
 	}
 
@@ -442,15 +447,15 @@ func (b *BlockAccessList) Copy() *BlockAccessList {
 		accountAccesses,
 		balanceChanges,
 		codeChanges,
-		maps.Clone(b.PrestateNonces),
+		maps.Clone(b.NonceDiffs),
 		b.hash,
 	}
 }
 
-func codeDiffsToEncoderObj(codeChanges map[common.Address]codeDiff) (res encodingCodeDiffs) {
+func (c codeDiffs) toEncoderObj() (res encodingCodeDiffs) {
 	var codeChangeAddrs []common.Address
 
-	for addr, _ := range codeChanges {
+	for addr, _ := range c {
 		codeChangeAddrs = append(codeChangeAddrs, addr)
 	}
 	sort.Slice(codeChangeAddrs, func(i, j int) bool {
@@ -460,8 +465,8 @@ func codeDiffsToEncoderObj(codeChanges map[common.Address]codeDiff) (res encodin
 	for _, addr := range codeChangeAddrs {
 		res = append(res, encodingAccountCodeDiff{
 			addr,
-			codeChanges[addr].TxIdx,
-			bytes.Clone(codeChanges[addr].Code),
+			c[addr].TxIdx,
+			bytes.Clone(c[addr].Code),
 		})
 	}
 	return
@@ -469,10 +474,10 @@ func codeDiffsToEncoderObj(codeChanges map[common.Address]codeDiff) (res encodin
 
 func NewBlockAccessList() *BlockAccessList {
 	return &BlockAccessList{
-		make(map[common.Address]*accountAccess),
-		make(map[common.Address]balanceDiff),
-		make(map[common.Address]codeDiff),
-		make(map[common.Address]accountNonceDiffs),
+		make(accountDiffs),
+		make(balanceDiffs),
+		make(codeDiffs),
+		make(nonceDiffs),
 		common.Hash{},
 	}
 }
@@ -481,11 +486,11 @@ func (b *BlockAccessList) Eq(other *BlockAccessList) bool {
 
 	// check that the account accesses are equal (consider moving this into its own function)
 
-	if len(b.AccountAccesses) != len(other.AccountAccesses) {
+	if len(b.AccountDiffs) != len(other.AccountDiffs) {
 		return false
 	}
-	for address, aa := range b.AccountAccesses {
-		otherAA, ok := other.AccountAccesses[address]
+	for address, aa := range b.AccountDiffs {
+		otherAA, ok := other.AccountDiffs[address]
 		if !ok {
 			return false
 		}
@@ -515,11 +520,11 @@ func (b *BlockAccessList) Eq(other *BlockAccessList) bool {
 
 	// check that the code changes are equal
 
-	if len(b.CodeChanges) != len(other.CodeChanges) {
+	if len(b.CodeDiffs) != len(other.CodeDiffs) {
 		return false
 	}
-	for addr, codeCh := range b.CodeChanges {
-		otherCodeCh, ok := other.CodeChanges[addr]
+	for addr, codeCh := range b.CodeDiffs {
+		otherCodeCh, ok := other.CodeDiffs[addr]
 		if !ok {
 			return false
 		}
@@ -531,11 +536,11 @@ func (b *BlockAccessList) Eq(other *BlockAccessList) bool {
 		}
 	}
 
-	if len(b.PrestateNonces) != len(other.PrestateNonces) {
+	if len(b.NonceDiffs) != len(other.NonceDiffs) {
 		return false
 	}
-	for addr, prestateNonces := range b.PrestateNonces {
-		otherPrestateNonces, ok := other.PrestateNonces[addr]
+	for addr, prestateNonces := range b.NonceDiffs {
+		otherPrestateNonces, ok := other.NonceDiffs[addr]
 		if !ok {
 			return false
 		}
@@ -544,12 +549,12 @@ func (b *BlockAccessList) Eq(other *BlockAccessList) bool {
 		}
 	}
 
-	if len(b.BalanceChanges) != len(other.BalanceChanges) {
+	if len(b.BalanceDiffs) != len(other.BalanceDiffs) {
 		return false
 	}
 
-	for addr, balanceChanges := range b.BalanceChanges {
-		otherBalanceChanges, ok := other.BalanceChanges[addr]
+	for addr, balanceChanges := range b.BalanceDiffs {
+		otherBalanceChanges, ok := other.BalanceDiffs[addr]
 		if !ok {
 			return false
 		}
@@ -572,24 +577,26 @@ func (b *BlockAccessList) Eq(other *BlockAccessList) bool {
 	return true
 }
 
-// Add the prestate nonce of the caller and target of a CREATE/CREATE2 invocation.
-// Called whether the creation reverts or not.
+// NonceDiff records tx prestate nonce of a contract account that created another contract or was itself created
 func (b *BlockAccessList) NonceDiff(address common.Address, txIdx, originNonce uint64) {
-	if _, ok := b.PrestateNonces[address]; ok {
+	if _, ok := b.NonceDiffs[address]; ok {
 		return
 	}
-	if _, ok := b.PrestateNonces[address]; !ok {
-		b.PrestateNonces[address] = make(accountNonceDiffs)
+	if _, ok := b.NonceDiffs[address]; !ok {
+		b.NonceDiffs[address] = make(accountNonceDiffs)
 	}
-	b.PrestateNonces[address][txIdx] = originNonce
+	b.NonceDiffs[address][txIdx] = originNonce
 }
 
-// called during tx finalisation for each
+// BalanceChange records the transaction post-state balance of an account that changed its balance
+// TODO: for the first transaction in the block, should this consider balances before any system contracts
+// were executed?
+// TODO: for the final transaction in the block, should this consider the balance change from block reward?
 func (b *BlockAccessList) BalanceChange(txIdx uint64, address common.Address, balance *uint256.Int) {
-	if _, ok := b.BalanceChanges[address]; !ok {
-		b.BalanceChanges[address] = make(balanceDiff)
+	if _, ok := b.BalanceDiffs[address]; !ok {
+		b.BalanceDiffs[address] = make(balanceDiff)
 	}
-	b.BalanceChanges[address][txIdx] = balance.Clone()
+	b.BalanceDiffs[address][txIdx] = balance.Clone()
 }
 
 // TODO for eip:  specify that storage slots which are read/modified for accounts that are created/selfdestructed
@@ -599,34 +606,44 @@ func (b *BlockAccessList) BalanceChange(txIdx uint64, address common.Address, ba
 
 // called during tx execution every time a storage slot is read
 func (b *BlockAccessList) StorageRead(address common.Address, key common.Hash) {
-	if _, ok := b.AccountAccesses[address]; !ok {
-		b.AccountAccesses[address] = &accountAccess{
+	if _, ok := b.AccountDiffs[address]; !ok {
+		b.AccountDiffs[address] = &accountAccess{
 			address,
 			make(map[common.Hash]slotAccess),
 			nil,
 		}
 	}
-	b.AccountAccesses[address].MarkRead(key)
+	b.AccountDiffs[address].MarkRead(key)
 }
 
 // called every time a mutated storage value is committed upon transaction finalization
 func (b *BlockAccessList) StorageWrite(txIdx uint64, address common.Address, key, value common.Hash) {
-	if _, ok := b.AccountAccesses[address]; !ok {
-		b.AccountAccesses[address] = &accountAccess{
+	if _, ok := b.AccountDiffs[address]; !ok {
+		b.AccountDiffs[address] = &accountAccess{
 			address,
 			make(map[common.Hash]slotAccess),
 			nil,
 		}
 	}
-	b.AccountAccesses[address].MarkWrite(txIdx, key, value)
+	b.AccountDiffs[address].MarkWrite(txIdx, key, value)
 }
+
+// TODO: is there a way to bump the EOA nonce more than 1 in a transaction?
+// ^ delegated EOA can execute code which calls CREATE multiple times
+
+// TODO: include these in the PR to the EIP
+// arguments for post-transaction nonces, which include nonces from tx senders:
+// * we can parallelize block execution and state root computation:
+//     - pre state + post-diffs gives us everything we need to update the tree
+// * delegated EOAs can call code that does multiple creations, bumping the delegated acct nonce by more than 1 per tx
+// * simpler implementation current spec: just accumulate modified nonces at transaction finalisation.
 
 // called during tx finalisation for each dirty account with mutated code
 func (b *BlockAccessList) CodeChange(txIdx uint64, address common.Address, code []byte) {
-	if _, ok := b.CodeChanges[address]; !ok {
-		b.CodeChanges[address] = codeDiff{}
+	if _, ok := b.CodeDiffs[address]; !ok {
+		b.CodeDiffs[address] = accountCodeDiff{}
 	}
-	b.CodeChanges[address] = codeDiff{
+	b.CodeDiffs[address] = accountCodeDiff{
 		txIdx,
 		bytes.Clone(code),
 	}
@@ -641,7 +658,7 @@ func (b *BlockAccessList) toEncoderObj() *encodingBlockAccessList {
 		encoderBalanceDiffs encodingBalanceDiffs
 	)
 
-	for addr, _ := range b.AccountAccesses {
+	for addr, _ := range b.AccountDiffs {
 		accountAccessesAddrs = append(accountAccessesAddrs, addr)
 	}
 	sort.Slice(accountAccessesAddrs, func(i, j int) bool {
@@ -651,12 +668,12 @@ func (b *BlockAccessList) toEncoderObj() *encodingBlockAccessList {
 		encoderAccountAccesses = append(encoderAccountAccesses, encodingAccountAccess{
 			Address:  addr,
 			Accesses: nil,
-			Code:     b.AccountAccesses[addr].Code,
+			Code:     b.AccountDiffs[addr].Code,
 		})
 		// sort the accesses lexicographically by key, and the occurance of each key ascending by tx idx
 		// then encode them
 		var storageAccessKeys []common.Hash
-		for key, _ := range b.AccountAccesses[addr].Accesses {
+		for key, _ := range b.AccountDiffs[addr].Accesses {
 			storageAccessKeys = append(storageAccessKeys, key)
 		}
 		sort.Slice(storageAccessKeys, func(i, j int) bool {
@@ -664,17 +681,17 @@ func (b *BlockAccessList) toEncoderObj() *encodingBlockAccessList {
 		})
 		var accesses []encodingSlotAccess
 		for _, accessSlot := range storageAccessKeys {
-			accesses = append(accesses, b.AccountAccesses[addr].Accesses[accessSlot].toEncoderObj(accessSlot))
+			accesses = append(accesses, b.AccountDiffs[addr].Accesses[accessSlot].toEncoderObj(accessSlot))
 		}
 		encoderAccountAccesses = append(encoderAccountAccesses, encodingAccountAccess{
 			Address:  addr,
 			Accesses: accesses,
-			Code:     b.AccountAccesses[addr].Code,
+			Code:     b.AccountDiffs[addr].Code,
 		})
 	}
 
 	// encode balance diffs
-	for addr, _ := range b.BalanceChanges {
+	for addr, _ := range b.BalanceDiffs {
 		balanceDiffsAddrs = append(balanceDiffsAddrs, addr)
 	}
 	sort.Slice(balanceDiffsAddrs, func(i, j int) bool {
@@ -682,14 +699,14 @@ func (b *BlockAccessList) toEncoderObj() *encodingBlockAccessList {
 	})
 
 	for _, addr := range balanceDiffsAddrs {
-		encoderBalanceDiffs = append(encoderBalanceDiffs, b.BalanceChanges[addr].toEncoderObj(addr))
+		encoderBalanceDiffs = append(encoderBalanceDiffs, b.BalanceDiffs[addr].toEncoderObj(addr))
 	}
 
 	encoderObj := encodingBlockAccessList{
 		AccountAccesses: encoderAccountAccesses,
 		BalanceDiffs:    encoderBalanceDiffs,
-		CodeDiffs:       codeDiffsToEncoderObj(b.CodeChanges),
-		NonceDiffs:      nonceDiffsToEncoderObj(b.PrestateNonces),
+		CodeDiffs:       b.CodeDiffs.toEncoderObj(),
+		NonceDiffs:      nonceDiffsToEncoderObj(b.NonceDiffs),
 	}
 	return &encoderObj
 }

@@ -435,8 +435,6 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 	nonce := evm.StateDB.GetNonce(caller)
 	bal := evm.StateDB.BlockAccessList()
 	if bal != nil && evm.StateDB.GetCodeHash(caller) != (types.EmptyCodeHash) {
-		// TODO: do we need to include the txidx as well? the caller can create multiple accounts in the block.
-		// TODO: how do we handle the occurance where account is created-selfdestructed in one tx and create permanently in another
 		bal.NonceDiff(caller, uint64(evm.StateDB.TxIndex()), nonce)
 	}
 	if nonce+1 < nonce {
@@ -470,10 +468,6 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 	storageRoot := evm.StateDB.GetStorageRoot(address)
 	targetNonce := evm.StateDB.GetNonce(address)
 
-	// record target prestate nonce in BAL regardless of whether it is preexisting
-	if bal := evm.StateDB.BlockAccessList(); bal != nil {
-		bal.NonceDiff(address, uint64(evm.StateDB.TxIndex()), targetNonce)
-	}
 	if targetNonce != 0 ||
 		(contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) || // non-empty code
 		(storageRoot != (common.Hash{}) && storageRoot != types.EmptyRootHash) { // non-empty storage
