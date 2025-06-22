@@ -81,7 +81,7 @@ func enable1884(jt *JumpTable) {
 	jt[EXTCODEHASH].constantGas = params.ExtcodeHashGasEIP1884
 
 	// New opcode
-	jt[SELFBALANCE] = &operation{
+	jt[SELFBALANCE] = operation{
 		execute:     opSelfBalance,
 		constantGas: GasFastStep,
 	}
@@ -96,7 +96,7 @@ func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 // - Adds an opcode that returns the current chain’s EIP-155 unique identifier
 func enable1344(jt *JumpTable) {
 	// New opcode
-	jt[CHAINID] = &operation{
+	jt[CHAINID] = operation{
 		execute:     opChainID,
 		constantGas: GasQuickStep,
 	}
@@ -165,7 +165,7 @@ func enable3529(jt *JumpTable) {
 // - Adds an opcode that returns the current block's base fee.
 func enable3198(jt *JumpTable) {
 	// New opcode
-	jt[BASEFEE] = &operation{
+	jt[BASEFEE] = operation{
 		execute:     opBaseFee,
 		constantGas: GasQuickStep,
 	}
@@ -175,12 +175,12 @@ func enable3198(jt *JumpTable) {
 // - Adds TLOAD that reads from transient storage
 // - Adds TSTORE that writes to transient storage
 func enable1153(jt *JumpTable) {
-	jt[TLOAD] = &operation{
+	jt[TLOAD] = operation{
 		execute:     opTload,
 		constantGas: params.WarmStorageReadCostEIP2929,
 	}
 
-	jt[TSTORE] = &operation{
+	jt[TSTORE] = operation{
 		execute:     opTstore,
 		constantGas: params.WarmStorageReadCostEIP2929,
 	}
@@ -222,7 +222,7 @@ func opBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 // enable3855 applies EIP-3855 (PUSH0 opcode)
 func enable3855(jt *JumpTable) {
 	// New opcode
-	jt[PUSH0] = &operation{
+	jt[PUSH0] = operation{
 		execute:     opPush0,
 		constantGas: GasQuickStep,
 	}
@@ -243,7 +243,7 @@ func enable3860(jt *JumpTable) {
 // enable5656 enables EIP-5656 (MCOPY opcode)
 // https://eips.ethereum.org/EIPS/eip-5656
 func enable5656(jt *JumpTable) {
-	jt[MCOPY] = &operation{
+	jt[MCOPY] = operation{
 		execute:     opMcopy,
 		constantGas: GasFastestStep,
 	}
@@ -314,7 +314,7 @@ func opCLZ(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 
 // enable4844 applies EIP-4844 (BLOBHASH opcode)
 func enable4844(jt *JumpTable) {
-	jt[BLOBHASH] = &operation{
+	jt[BLOBHASH] = operation{
 		execute:     opBlobHash,
 		constantGas: GasFastestStep,
 	}
@@ -322,7 +322,7 @@ func enable4844(jt *JumpTable) {
 
 // enable7939 enables EIP-7939 (CLZ opcode)
 func enable7939(jt *JumpTable) {
-	jt[CLZ] = &operation{
+	jt[CLZ] = operation{
 		execute:     opCLZ,
 		constantGas: GasFastStep,
 	}
@@ -330,7 +330,7 @@ func enable7939(jt *JumpTable) {
 
 // enable7516 applies EIP-7516 (BLOBBASEFEE opcode)
 func enable7516(jt *JumpTable) {
-	jt[BLOBBASEFEE] = &operation{
+	jt[BLOBBASEFEE] = operation{
 		execute:     opBlobBaseFee,
 		constantGas: GasQuickStep,
 	}
@@ -338,7 +338,7 @@ func enable7516(jt *JumpTable) {
 
 // enable6780 applies EIP-6780 (deactivate SELFDESTRUCT)
 func enable6780(jt *JumpTable) {
-	jt[SELFDESTRUCT] = &operation{
+	jt[SELFDESTRUCT] = operation{
 		execute:     opSelfdestructEIP6780,
 		constantGas: params.SelfdestructGasEIP150,
 	}
@@ -440,71 +440,71 @@ func makePushEIP4762(size uint64, pushByteSize int) executionFunc {
 }
 
 func enable4762(jt *JumpTable) {
-	jt[SSTORE] = &operation{
+	jt[SSTORE] = operation{
 		execute: opSstoreEIP4762,
 	}
-	jt[SLOAD] = &operation{
+	jt[SLOAD] = operation{
 		execute: opSLoadEIP4762,
 	}
 
-	jt[BALANCE] = &operation{
+	jt[BALANCE] = operation{
 		execute: opBalanceEIP4762,
 	}
 
-	jt[EXTCODESIZE] = &operation{
+	jt[EXTCODESIZE] = operation{
 		execute: opExtCodeSizeEIP4762,
 	}
 
-	jt[EXTCODEHASH] = &operation{
+	jt[EXTCODEHASH] = operation{
 		execute: opExtCodeHashEIP4762,
 	}
 
-	jt[EXTCODECOPY] = &operation{
+	jt[EXTCODECOPY] = operation{
 		execute: opExtCodeCopyEIP4762,
 	}
 
-	jt[CODECOPY] = &operation{
+	jt[CODECOPY] = operation{
 		execute:     opCodeCopyEIP4762,
 		constantGas: GasFastestStep,
 	}
 
-	jt[SELFDESTRUCT] = &operation{
+	jt[SELFDESTRUCT] = operation{
 		execute:     opSelfdestructEIP4762,
 		constantGas: params.SelfdestructGasEIP150,
 	}
 
-	jt[CREATE] = &operation{
+	jt[CREATE] = operation{
 		execute:     opCreateEIP3860,
 		constantGas: params.CreateNGasEip4762,
 	}
 
-	jt[CREATE2] = &operation{
+	jt[CREATE2] = operation{
 		execute:     opCreate2EIP3860,
 		constantGas: params.CreateNGasEip4762,
 	}
 
-	jt[CALL] = &operation{
+	jt[CALL] = operation{
 		execute: opCallEIP4762,
 	}
 
-	jt[CALLCODE] = &operation{
+	jt[CALLCODE] = operation{
 		execute: opCallCodeEIP4762,
 	}
 
-	jt[STATICCALL] = &operation{
+	jt[STATICCALL] = operation{
 		execute: opStaticCallEIP4762,
 	}
 
-	jt[DELEGATECALL] = &operation{
+	jt[DELEGATECALL] = operation{
 		execute: opDelegateCallEIP4762,
 	}
 
-	jt[PUSH1] = &operation{
+	jt[PUSH1] = operation{
 		execute:     opPush1EIP4762,
 		constantGas: GasFastestStep,
 	}
 	for i := 1; i < 32; i++ {
-		jt[PUSH1+OpCode(i)] = &operation{
+		jt[PUSH1+OpCode(i)] = operation{
 			execute:     makePushEIP4762(uint64(i+1), i+1),
 			constantGas: GasFastestStep,
 		}

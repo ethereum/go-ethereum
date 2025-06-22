@@ -149,8 +149,8 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 		}
 	}
 	if evm.Config.Tracer.HooksVM() {
-		for _, op := range table {
-			op.execute = executeWithTracer(&evm.Config.Tracer, op.execute)
+		for i := range table {
+			table[i].execute = executeWithTracer(&evm.Config.Tracer, table[i].execute)
 		}
 	}
 
@@ -163,7 +163,7 @@ func executeWithTracer(tracer *tracing.Hooks, execF executionFunc) executionFunc
 	return func(pc *uint64, interpreter *EVMInterpreter, callContext *ScopeContext) ([]byte, error) {
 		pcCopy := *pc
 		op := callContext.Contract.GetOp(pcCopy)
-		operation := interpreter.table[op]
+		operation := &interpreter.table[op]
 		cost := operation.constantGas
 		gasCopy := callContext.Contract.Gas + cost
 
@@ -263,7 +263,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 		// Get the operation from the jump table
 		op = contract.GetOp(pc)
-		operation := jumpTable[op]
+		operation := &jumpTable[op]
 		cost = operation.constantGas // For tracing
 		// for tracing: this gas consumption event is emitted in the executeWithTracer wrapper.
 		if contract.Gas < cost {

@@ -17,8 +17,6 @@
 package vm
 
 import (
-	"fmt"
-
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -28,8 +26,6 @@ type operation struct {
 	// execute is the operation function
 	execute     executionFunc
 	constantGas uint64
-	// undefined denotes if the instruction is not officially defined in the jump table
-	undefined bool
 }
 
 var (
@@ -51,33 +47,24 @@ var (
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
-type JumpTable [256]*operation
-
-func validate(jt JumpTable) JumpTable {
-	for i, op := range jt {
-		if op == nil {
-			panic(fmt.Sprintf("op %#x is not set", i))
-		}
-	}
-	return jt
-}
+type JumpTable [256]operation
 
 func newVerkleInstructionSet() JumpTable {
 	instructionSet := newShanghaiInstructionSet()
 	enable4762(&instructionSet)
-	return validate(instructionSet)
+	return instructionSet
 }
 
 func newOsakaInstructionSet() JumpTable {
 	instructionSet := newPragueInstructionSet()
 	enable7939(&instructionSet) // EIP-7939 (CLZ opcode)
-	return validate(instructionSet)
+	return instructionSet
 }
 
 func newPragueInstructionSet() JumpTable {
 	instructionSet := newCancunInstructionSet()
 	enable7702(&instructionSet) // EIP-7702 Setcode transaction type
-	return validate(instructionSet)
+	return instructionSet
 }
 
 func newCancunInstructionSet() JumpTable {
@@ -87,7 +74,7 @@ func newCancunInstructionSet() JumpTable {
 	enable1153(&instructionSet) // EIP-1153 "Transient Storage"
 	enable5656(&instructionSet) // EIP-5656 (MCOPY opcode)
 	enable6780(&instructionSet) // EIP-6780 SELFDESTRUCT only in same transaction
-	return validate(instructionSet)
+	return instructionSet
 }
 
 func newShanghaiInstructionSet() JumpTable {
@@ -95,16 +82,16 @@ func newShanghaiInstructionSet() JumpTable {
 	enable3855(&instructionSet) // PUSH0 instruction
 	enable3860(&instructionSet) // Limit and meter initcode
 
-	return validate(instructionSet)
+	return instructionSet
 }
 
 func newMergeInstructionSet() JumpTable {
 	instructionSet := newLondonInstructionSet()
-	instructionSet[PREVRANDAO] = &operation{
+	instructionSet[PREVRANDAO] = operation{
 		execute:     opRandom,
 		constantGas: GasQuickStep,
 	}
-	return validate(instructionSet)
+	return instructionSet
 }
 
 // newLondonInstructionSet returns the frontier, homestead, byzantium,
@@ -113,7 +100,7 @@ func newLondonInstructionSet() JumpTable {
 	instructionSet := newBerlinInstructionSet()
 	enable3529(&instructionSet) // EIP-3529: Reduction in refunds https://eips.ethereum.org/EIPS/eip-3529
 	enable3198(&instructionSet) // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
-	return validate(instructionSet)
+	return instructionSet
 }
 
 // newBerlinInstructionSet returns the frontier, homestead, byzantium,
@@ -121,7 +108,7 @@ func newLondonInstructionSet() JumpTable {
 func newBerlinInstructionSet() JumpTable {
 	instructionSet := newIstanbulInstructionSet()
 	enable2929(&instructionSet) // Gas cost increases for state access opcodes https://eips.ethereum.org/EIPS/eip-2929
-	return validate(instructionSet)
+	return instructionSet
 }
 
 // newIstanbulInstructionSet returns the frontier, homestead, byzantium,
@@ -133,63 +120,63 @@ func newIstanbulInstructionSet() JumpTable {
 	enable1884(&instructionSet) // Reprice reader opcodes - https://eips.ethereum.org/EIPS/eip-1884
 	enable2200(&instructionSet) // Net metered SSTORE - https://eips.ethereum.org/EIPS/eip-2200
 
-	return validate(instructionSet)
+	return instructionSet
 }
 
 // newConstantinopleInstructionSet returns the frontier, homestead,
 // byzantium and constantinople instructions.
 func newConstantinopleInstructionSet() JumpTable {
 	instructionSet := newByzantiumInstructionSet()
-	instructionSet[SHL] = &operation{
+	instructionSet[SHL] = operation{
 		execute:     opSHL,
 		constantGas: GasFastestStep,
 	}
-	instructionSet[SHR] = &operation{
+	instructionSet[SHR] = operation{
 		execute:     opSHR,
 		constantGas: GasFastestStep,
 	}
-	instructionSet[SAR] = &operation{
+	instructionSet[SAR] = operation{
 		execute:     opSAR,
 		constantGas: GasFastestStep,
 	}
-	instructionSet[EXTCODEHASH] = &operation{
+	instructionSet[EXTCODEHASH] = operation{
 		execute:     opExtCodeHashConstantinople,
 		constantGas: params.ExtcodeHashGasConstantinople,
 	}
-	instructionSet[CREATE2] = &operation{
+	instructionSet[CREATE2] = operation{
 		execute:     opCreate2Constantinople,
 		constantGas: params.Create2Gas,
 	}
-	return validate(instructionSet)
+	return instructionSet
 }
 
 // newByzantiumInstructionSet returns the frontier, homestead and
 // byzantium instructions.
 func newByzantiumInstructionSet() JumpTable {
 	instructionSet := newSpuriousDragonInstructionSet()
-	instructionSet[STATICCALL] = &operation{
+	instructionSet[STATICCALL] = operation{
 		execute:     opStaticCallByzantium,
 		constantGas: params.CallGasEIP150,
 	}
-	instructionSet[RETURNDATASIZE] = &operation{
+	instructionSet[RETURNDATASIZE] = operation{
 		execute:     opReturnDataSize,
 		constantGas: GasQuickStep,
 	}
-	instructionSet[RETURNDATACOPY] = &operation{
+	instructionSet[RETURNDATACOPY] = operation{
 		execute:     opReturnDataCopy,
 		constantGas: GasFastestStep,
 	}
-	instructionSet[REVERT] = &operation{
+	instructionSet[REVERT] = operation{
 		execute: opRevert,
 	}
-	return validate(instructionSet)
+	return instructionSet
 }
 
 // EIP 158 a.k.a Spurious Dragon
 func newSpuriousDragonInstructionSet() JumpTable {
 	instructionSet := newTangerineWhistleInstructionSet()
 	instructionSet[EXP].execute = opExpEIP158
-	return validate(instructionSet)
+	return instructionSet
 }
 
 // EIP 150 a.k.a Tangerine Whistle
@@ -202,18 +189,18 @@ func newTangerineWhistleInstructionSet() JumpTable {
 	instructionSet[CALL].constantGas = params.CallGasEIP150
 	instructionSet[CALLCODE].constantGas = params.CallGasEIP150
 	instructionSet[DELEGATECALL].constantGas = params.CallGasEIP150
-	return validate(instructionSet)
+	return instructionSet
 }
 
 // newHomesteadInstructionSet returns the frontier and homestead
 // instructions that can be executed during the homestead phase.
 func newHomesteadInstructionSet() JumpTable {
 	instructionSet := newFrontierInstructionSet()
-	instructionSet[DELEGATECALL] = &operation{
+	instructionSet[DELEGATECALL] = operation{
 		execute:     opDelegateCallHomestead,
 		constantGas: params.CallGasFrontier,
 	}
-	return validate(instructionSet)
+	return instructionSet
 }
 
 // newFrontierInstructionSet returns the frontier instructions
@@ -733,22 +720,16 @@ func newFrontierInstructionSet() JumpTable {
 	}
 
 	// Fill all unassigned slots with opUndefined.
-	for i, entry := range tbl {
-		if entry == nil {
-			tbl[i] = &operation{execute: opUndefined, undefined: true}
+	for i := range tbl {
+		if tbl[i].execute == nil {
+			tbl[i] = operation{execute: opUndefined}
 		}
 	}
 
-	return validate(tbl)
+	return tbl
 }
 
 func copyJumpTable(source *JumpTable) *JumpTable {
 	dest := *source
-	for i, op := range source {
-		if op != nil {
-			opCopy := *op
-			dest[i] = &opCopy
-		}
-	}
 	return &dest
 }
