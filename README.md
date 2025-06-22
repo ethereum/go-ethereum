@@ -4,7 +4,7 @@
 - ./Dockerfile.contracts - builds docker image with contracts
 - ./.github/workflows:
   - ``ci-build.yaml - CI:Build tag trigger``
-  - ``cd-deploy.yaml - CI:Deploy tag trigger``
+  - ``ci-deploy.yaml - CI:Deploy tag trigger``
 - ./hardhat - hardhat application
 - ./infra - GCP K8s cluster and manifests
 - ./blockscout - resources for blocksout stack deployment
