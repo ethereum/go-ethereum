@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lime-app
+  namespace: default
+  labels:
+    app: lime-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: lime-app
+  template:
+    metadata:
+      labels:
+        app: lime-app
+    spec:
+      containers:
+        - name: lime-app
+          image: dmanov/go-ethereum:dev-contracts-latest
+          ports:
+            - containerPort: 80

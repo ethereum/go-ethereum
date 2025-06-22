@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   geth:
     container_name: geth
@@ -9,10 +7,97 @@ services:
     ports:
       - "8545:8545"
       - "30303:30303"
-    command: >
-      --dev
-      --datadir /root/.ethereum
-      --http
-      --http.addr 0.0.0.0
-      --http.api eth,net,web3
-      --allow-insecure-unlock
+    command:
+      - --dev
+      - --datadir=/root/.ethereum
+      - --http
+      - --http.addr=0.0.0.0
+      - --http.api=eth,net,web3,personal
+      - --allow-insecure-unlock
+      - --http.corsdomain=*
+
+  redis-db:
+    extends:
+      file: ./blockscout/docker-compose/services/redis.yml
+      service: redis-db
+
+  db-init:
+    extends:
+      file: ./blockscout/docker-compose/services/db.yml
+      service: db-init
+
+  db:
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    extends:
+      file: ./blockscout/docker-compose/services/db.yml
+      service: db
+
+  backend:
+    depends_on:
+      - db
+      - redis-db
+    extends:
+      file: ./blockscout/docker-compose/services/backend.yml
+      service: backend
+    links:
+      - db:database
+    environment:
+        ETHEREUM_JSONRPC_VARIANT: 'geth'
+        ETHEREUM_JSONRPC_HTTP_URL: http://geth:8545
+
+  visualizer:
+    extends:
+      file: ./blockscout/docker-compose/services/visualizer.yml
+      service: visualizer
+
+  sig-provider:
+    extends:
+      file: ./blockscout/docker-compose/services/sig-provider.yml
+      service: sig-provider
+
+  frontend:
+    depends_on:
+      - backend
+    extends:
+      file: ./blockscout/docker-compose/services/frontend.yml
+      service: frontend
+
+  stats-db-init:
+    extends:
+      file: ./blockscout/docker-compose/services/stats.yml
+      service: stats-db-init
+
+  stats-db:
+    depends_on:
+      stats-db-init:
+        condition: service_completed_successfully
+    extends:
+      file: ./blockscout/docker-compose/services/stats.yml
+      service: stats-db
+
+  stats:
+    depends_on:
+      - stats-db
+      - backend
+    extends:
+      file: ./blockscout/docker-compose/services/stats.yml
+      service: stats
+
+  user-ops-indexer:
+    depends_on:
+      - db
+      - backend
+    extends:
+      file: ./blockscout/docker-compose/services/user-ops-indexer.yml
+      service: user-ops-indexer
+
+  proxy:
+    depends_on:
+      - backend
+      - frontend
+      - stats
+    extends:
+      file: ./blockscout/docker-compose/services/nginx.yml
+      service: proxy
