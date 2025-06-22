@@ -1,0 +1,20 @@
+=============== Jun 22, 2025 (UTC) ===============
+08:59:11.241660 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+08:59:11.275695 db@open opening
+08:59:11.281304 version@stat F·[] S·0B[] Sc·[]
+08:59:11.283855 db@janitor F·2 G·0
+08:59:11.284233 db@open done T·8.402417ms
+09:01:14.540781 db@close closing
+09:01:14.543913 db@close done T·3.124417ms
+=============== Jun 22, 2025 (UTC) ===============
+09:02:05.258216 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+09:02:05.268407 version@stat F·[] S·0B[] Sc·[]
+09:02:05.270868 db@open opening
+09:02:05.273043 journal@recovery F·1
+09:02:05.274177 journal@recovery recovering @1
+09:02:05.282284 memdb@flush created L0@2 N·2 S·181B "loc..seq,v2":"version,v1"
+09:02:05.292286 version@stat F·[1] S·181B[181B] Sc·[0.25]
+09:02:05.336903 db@janitor F·3 G·0
+09:02:05.337095 db@open done T·65.72775ms
+09:04:15.417215 db@close closing
+09:04:15.420610 db@close done T·3.374958ms
