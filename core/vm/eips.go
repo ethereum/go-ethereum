@@ -81,7 +81,7 @@ func enable1884(jt *JumpTable) {
 	jt[EXTCODEHASH].constantGas = params.ExtcodeHashGasEIP1884
 
 	// New opcode
-	jt[SELFBALANCE] = &operation{
+	jt[SELFBALANCE] = operation{
 		execute:     opSelfBalance,
 		constantGas: GasFastStep,
 		minStack:    minStack(0, 1),
@@ -99,7 +99,7 @@ func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 // - Adds an opcode that returns the current chain’s EIP-155 unique identifier
 func enable1344(jt *JumpTable) {
 	// New opcode
-	jt[CHAINID] = &operation{
+	jt[CHAINID] = operation{
 		execute:     opChainID,
 		constantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
@@ -171,7 +171,7 @@ func enable3529(jt *JumpTable) {
 // - Adds an opcode that returns the current block's base fee.
 func enable3198(jt *JumpTable) {
 	// New opcode
-	jt[BASEFEE] = &operation{
+	jt[BASEFEE] = operation{
 		execute:     opBaseFee,
 		constantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
@@ -183,14 +183,14 @@ func enable3198(jt *JumpTable) {
 // - Adds TLOAD that reads from transient storage
 // - Adds TSTORE that writes to transient storage
 func enable1153(jt *JumpTable) {
-	jt[TLOAD] = &operation{
+	jt[TLOAD] = operation{
 		execute:     opTload,
 		constantGas: params.WarmStorageReadCostEIP2929,
 		minStack:    minStack(1, 1),
 		maxStack:    maxStack(1, 1),
 	}
 
-	jt[TSTORE] = &operation{
+	jt[TSTORE] = operation{
 		execute:     opTstore,
 		constantGas: params.WarmStorageReadCostEIP2929,
 		minStack:    minStack(2, 0),
@@ -228,7 +228,7 @@ func opBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 // enable3855 applies EIP-3855 (PUSH0 opcode)
 func enable3855(jt *JumpTable) {
 	// New opcode
-	jt[PUSH0] = &operation{
+	jt[PUSH0] = operation{
 		execute:     opPush0,
 		constantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
@@ -252,7 +252,7 @@ func enable3860(jt *JumpTable) {
 // enable5656 enables EIP-5656 (MCOPY opcode)
 // https://eips.ethereum.org/EIPS/eip-5656
 func enable5656(jt *JumpTable) {
-	jt[MCOPY] = &operation{
+	jt[MCOPY] = operation{
 		execute:     opMcopy,
 		constantGas: GasFastestStep,
 		dynamicGas:  gasMcopy,
@@ -303,7 +303,7 @@ func opCLZ(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 
 // enable4844 applies EIP-4844 (BLOBHASH opcode)
 func enable4844(jt *JumpTable) {
-	jt[BLOBHASH] = &operation{
+	jt[BLOBHASH] = operation{
 		execute:     opBlobHash,
 		constantGas: GasFastestStep,
 		minStack:    minStack(1, 1),
@@ -313,7 +313,7 @@ func enable4844(jt *JumpTable) {
 
 // enable7939 enables EIP-7939 (CLZ opcode)
 func enable7939(jt *JumpTable) {
-	jt[CLZ] = &operation{
+	jt[CLZ] = operation{
 		execute:     opCLZ,
 		constantGas: GasFastStep,
 		minStack:    minStack(1, 1),
@@ -323,7 +323,7 @@ func enable7939(jt *JumpTable) {
 
 // enable7516 applies EIP-7516 (BLOBBASEFEE opcode)
 func enable7516(jt *JumpTable) {
-	jt[BLOBBASEFEE] = &operation{
+	jt[BLOBBASEFEE] = operation{
 		execute:     opBlobBaseFee,
 		constantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
@@ -333,7 +333,7 @@ func enable7516(jt *JumpTable) {
 
 // enable6780 applies EIP-6780 (deactivate SELFDESTRUCT)
 func enable6780(jt *JumpTable) {
-	jt[SELFDESTRUCT] = &operation{
+	jt[SELFDESTRUCT] = operation{
 		execute:     opSelfdestruct6780,
 		dynamicGas:  gasSelfdestructEIP3529,
 		constantGas: params.SelfdestructGasEIP150,
@@ -424,41 +424,41 @@ func makePushEIP4762(size uint64, pushByteSize int) executionFunc {
 }
 
 func enable4762(jt *JumpTable) {
-	jt[SSTORE] = &operation{
+	jt[SSTORE] = operation{
 		dynamicGas: gasSStore4762,
 		execute:    opSstore,
 		minStack:   minStack(2, 0),
 		maxStack:   maxStack(2, 0),
 	}
-	jt[SLOAD] = &operation{
+	jt[SLOAD] = operation{
 		dynamicGas: gasSLoad4762,
 		execute:    opSload,
 		minStack:   minStack(1, 1),
 		maxStack:   maxStack(1, 1),
 	}
 
-	jt[BALANCE] = &operation{
+	jt[BALANCE] = operation{
 		execute:    opBalance,
 		dynamicGas: gasBalance4762,
 		minStack:   minStack(1, 1),
 		maxStack:   maxStack(1, 1),
 	}
 
-	jt[EXTCODESIZE] = &operation{
+	jt[EXTCODESIZE] = operation{
 		execute:    opExtCodeSize,
 		dynamicGas: gasExtCodeSize4762,
 		minStack:   minStack(1, 1),
 		maxStack:   maxStack(1, 1),
 	}
 
-	jt[EXTCODEHASH] = &operation{
+	jt[EXTCODEHASH] = operation{
 		execute:    opExtCodeHash,
 		dynamicGas: gasExtCodeHash4762,
 		minStack:   minStack(1, 1),
 		maxStack:   maxStack(1, 1),
 	}
 
-	jt[EXTCODECOPY] = &operation{
+	jt[EXTCODECOPY] = operation{
 		execute:    opExtCodeCopyEIP4762,
 		dynamicGas: gasExtCodeCopyEIP4762,
 		minStack:   minStack(4, 0),
@@ -466,7 +466,7 @@ func enable4762(jt *JumpTable) {
 		memorySize: memoryExtCodeCopy,
 	}
 
-	jt[CODECOPY] = &operation{
+	jt[CODECOPY] = operation{
 		execute:     opCodeCopy,
 		constantGas: GasFastestStep,
 		dynamicGas:  gasCodeCopyEip4762,
@@ -475,7 +475,7 @@ func enable4762(jt *JumpTable) {
 		memorySize:  memoryCodeCopy,
 	}
 
-	jt[SELFDESTRUCT] = &operation{
+	jt[SELFDESTRUCT] = operation{
 		execute:     opSelfdestruct6780,
 		dynamicGas:  gasSelfdestructEIP4762,
 		constantGas: params.SelfdestructGasEIP150,
@@ -483,7 +483,7 @@ func enable4762(jt *JumpTable) {
 		maxStack:    maxStack(1, 0),
 	}
 
-	jt[CREATE] = &operation{
+	jt[CREATE] = operation{
 		execute:     opCreate,
 		constantGas: params.CreateNGasEip4762,
 		dynamicGas:  gasCreateEip3860,
@@ -492,7 +492,7 @@ func enable4762(jt *JumpTable) {
 		memorySize:  memoryCreate,
 	}
 
-	jt[CREATE2] = &operation{
+	jt[CREATE2] = operation{
 		execute:     opCreate2,
 		constantGas: params.CreateNGasEip4762,
 		dynamicGas:  gasCreate2Eip3860,
@@ -501,7 +501,7 @@ func enable4762(jt *JumpTable) {
 		memorySize:  memoryCreate2,
 	}
 
-	jt[CALL] = &operation{
+	jt[CALL] = operation{
 		execute:    opCall,
 		dynamicGas: gasCallEIP4762,
 		minStack:   minStack(7, 1),
@@ -509,7 +509,7 @@ func enable4762(jt *JumpTable) {
 		memorySize: memoryCall,
 	}
 
-	jt[CALLCODE] = &operation{
+	jt[CALLCODE] = operation{
 		execute:    opCallCode,
 		dynamicGas: gasCallCodeEIP4762,
 		minStack:   minStack(7, 1),
@@ -517,7 +517,7 @@ func enable4762(jt *JumpTable) {
 		memorySize: memoryCall,
 	}
 
-	jt[STATICCALL] = &operation{
+	jt[STATICCALL] = operation{
 		execute:    opStaticCall,
 		dynamicGas: gasStaticCallEIP4762,
 		minStack:   minStack(6, 1),
@@ -525,7 +525,7 @@ func enable4762(jt *JumpTable) {
 		memorySize: memoryStaticCall,
 	}
 
-	jt[DELEGATECALL] = &operation{
+	jt[DELEGATECALL] = operation{
 		execute:    opDelegateCall,
 		dynamicGas: gasDelegateCallEIP4762,
 		minStack:   minStack(6, 1),
@@ -533,14 +533,14 @@ func enable4762(jt *JumpTable) {
 		memorySize: memoryDelegateCall,
 	}
 
-	jt[PUSH1] = &operation{
+	jt[PUSH1] = operation{
 		execute:     opPush1EIP4762,
 		constantGas: GasFastestStep,
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
 	}
 	for i := 1; i < 32; i++ {
-		jt[PUSH1+OpCode(i)] = &operation{
+		jt[PUSH1+OpCode(i)] = operation{
 			execute:     makePushEIP4762(uint64(i+1), i+1),
 			constantGas: GasFastestStep,
 			minStack:    minStack(0, 1),
