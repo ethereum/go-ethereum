@@ -220,7 +220,7 @@ func (db *Database) DeleteRange(start, end []byte) error {
 	defer it.Release()
 
 	var count int
-	for it.Next() && bytes.Compare(end, it.Key()) > 0 {
+	for it.Next() && (end == nil || bytes.Compare(end, it.Key()) > 0) {
 		count++
 		if count > 10000 { // should not block for more than a second
 			if err := batch.Write(); err != nil {
@@ -461,6 +461,38 @@ func (b *batch) Delete(key []byte) error {
 	return nil
 }
 
+// DeleteRange removes all keys in the range [start, end) from the batch for
+// later committing, inclusive on start, exclusive on end.
+//
+// Note that this is a fallback implementation as leveldb does not natively
+// support range deletion in batches. It iterates through the database to find
+// keys in the range and adds them to the batch for deletion.
+func (b *batch) DeleteRange(start, end []byte) error {
+	// Create an iterator to scan through the keys in the range
+	slice := &util.Range{
+		Start: start, // If nil, it represents the key before all keys
+		Limit: end,   // If nil, it represents the key after all keys
+	}
+	it := b.db.NewIterator(slice, nil)
+	defer it.Release()
+
+	var count int
+	for it.Next() {
+		count++
+		key := it.Key()
+		if count > 10000 { // should not block for more than a second
+			return ethdb.ErrTooManyKeys
+		}
+		// Add this key to the batch for deletion
+		b.b.Delete(key)
+		b.size += len(key)
+	}
+	if err := it.Error(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // ValueSize retrieves the amount of data queued up for writing.
 func (b *batch) ValueSize() int {
 	return b.size
@@ -504,6 +536,20 @@ func (r *replayer) Delete(key []byte) {
 		return
 	}
 	r.failure = r.writer.Delete(key)
+}
+
+// DeleteRange removes all keys in the range [start, end) from the key-value data store.
+func (r *replayer) DeleteRange(start, end []byte) {
+	// If the replay already failed, stop executing ops
+	if r.failure != nil {
+		return
+	}
+	// Check if the writer also supports range deletion
+	if rangeDeleter, ok := r.writer.(ethdb.KeyValueRangeDeleter); ok {
+		r.failure = rangeDeleter.DeleteRange(start, end)
+	} else {
+		r.failure = fmt.Errorf("ethdb.KeyValueWriter does not implement DeleteRange")
+	}
 }
 
 // bytesPrefixRange returns key range that satisfy

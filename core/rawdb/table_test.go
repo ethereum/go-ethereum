@@ -125,4 +125,28 @@ func testTableDatabase(t *testing.T, prefix string) {
 	// Test iterators with prefix and start point
 	check(db.NewIterator([]byte{0xee}, nil), 0, 0)
 	check(db.NewIterator(nil, []byte{0x00}), 6, 0)
+
+	// Test range deletion
+	db.DeleteRange(nil, nil)
+	for _, entry := range entries {
+		_, err := db.Get(entry.key)
+		if err == nil {
+			t.Fatal("Unexpected item after deletion")
+		}
+	}
+	// Test range deletion by batch
+	batch = db.NewBatch()
+	for _, entry := range entries {
+		batch.Put(entry.key, entry.value)
+	}
+	batch.Write()
+	batch.Reset()
+	batch.DeleteRange(nil, nil)
+	batch.Write()
+	for _, entry := range entries {
+		_, err := db.Get(entry.key)
+		if err == nil {
+			t.Fatal("Unexpected item after deletion")
+		}
+	}
 }

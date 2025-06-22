@@ -579,7 +579,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 
 func GenerateVerkleChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, gen func(int, *BlockGen)) (common.Hash, ethdb.Database, []*types.Block, []types.Receipts, []*verkle.VerkleProof, []verkle.StateDiff) {
 	db := rawdb.NewMemoryDatabase()
-	cacheConfig := DefaultCacheConfigWithScheme(rawdb.PathScheme)
+	cacheConfig := DefaultConfig().WithStateScheme(rawdb.PathScheme)
 	cacheConfig.SnapshotLimit = 0
 	triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(true))
 	defer triedb.Close()
