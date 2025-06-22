@@ -42,9 +42,6 @@ type operation struct {
 
 	// memorySize returns the memory size required for the operation
 	memorySize memorySizeFunc
-
-	// undefined denotes if the instruction is not officially defined in the jump table
-	undefined bool
 }
 
 var (
@@ -65,13 +62,10 @@ var (
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
-type JumpTable [256]*operation
+type JumpTable [256]operation
 
 func validate(jt JumpTable) JumpTable {
 	for i, op := range jt {
-		if op == nil {
-			panic(fmt.Sprintf("op %#x is not set", i))
-		}
 		// The interpreter has an assumption that if the memorySize function is
 		// set, then the dynamicGas function is also set. This is a somewhat
 		// arbitrary assumption, and can be removed if we need to -- but it
@@ -117,7 +111,7 @@ func newShanghaiInstructionSet() JumpTable {
 
 func newMergeInstructionSet() JumpTable {
 	instructionSet := newLondonInstructionSet()
-	instructionSet[PREVRANDAO] = &operation{
+	instructionSet[PREVRANDAO] = operation{
 		execute:     opRandom,
 		constantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
@@ -159,31 +153,31 @@ func newIstanbulInstructionSet() JumpTable {
 // byzantium and constantinople instructions.
 func newConstantinopleInstructionSet() JumpTable {
 	instructionSet := newByzantiumInstructionSet()
-	instructionSet[SHL] = &operation{
+	instructionSet[SHL] = operation{
 		execute:     opSHL,
 		constantGas: GasFastestStep,
 		minStack:    minStack(2, 1),
 		maxStack:    maxStack(2, 1),
 	}
-	instructionSet[SHR] = &operation{
+	instructionSet[SHR] = operation{
 		execute:     opSHR,
 		constantGas: GasFastestStep,
 		minStack:    minStack(2, 1),
 		maxStack:    maxStack(2, 1),
 	}
-	instructionSet[SAR] = &operation{
+	instructionSet[SAR] = operation{
 		execute:     opSAR,
 		constantGas: GasFastestStep,
 		minStack:    minStack(2, 1),
 		maxStack:    maxStack(2, 1),
 	}
-	instructionSet[EXTCODEHASH] = &operation{
+	instructionSet[EXTCODEHASH] = operation{
 		execute:     opExtCodeHash,
 		constantGas: params.ExtcodeHashGasConstantinople,
 		minStack:    minStack(1, 1),
 		maxStack:    maxStack(1, 1),
 	}
-	instructionSet[CREATE2] = &operation{
+	instructionSet[CREATE2] = operation{
 		execute:     opCreate2,
 		constantGas: params.Create2Gas,
 		dynamicGas:  gasCreate2,
@@ -198,7 +192,7 @@ func newConstantinopleInstructionSet() JumpTable {
 // byzantium instructions.
 func newByzantiumInstructionSet() JumpTable {
 	instructionSet := newSpuriousDragonInstructionSet()
-	instructionSet[STATICCALL] = &operation{
+	instructionSet[STATICCALL] = operation{
 		execute:     opStaticCall,
 		constantGas: params.CallGasEIP150,
 		dynamicGas:  gasStaticCall,
@@ -206,13 +200,13 @@ func newByzantiumInstructionSet() JumpTable {
 		maxStack:    maxStack(6, 1),
 		memorySize:  memoryStaticCall,
 	}
-	instructionSet[RETURNDATASIZE] = &operation{
+	instructionSet[RETURNDATASIZE] = operation{
 		execute:     opReturnDataSize,
 		constantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
 	}
-	instructionSet[RETURNDATACOPY] = &operation{
+	instructionSet[RETURNDATACOPY] = operation{
 		execute:     opReturnDataCopy,
 		constantGas: GasFastestStep,
 		dynamicGas:  gasReturnDataCopy,
@@ -220,7 +214,7 @@ func newByzantiumInstructionSet() JumpTable {
 		maxStack:    maxStack(3, 0),
 		memorySize:  memoryReturnDataCopy,
 	}
-	instructionSet[REVERT] = &operation{
+	instructionSet[REVERT] = operation{
 		execute:    opRevert,
 		dynamicGas: gasRevert,
 		minStack:   minStack(2, 0),
@@ -254,7 +248,7 @@ func newTangerineWhistleInstructionSet() JumpTable {
 // instructions that can be executed during the homestead phase.
 func newHomesteadInstructionSet() JumpTable {
 	instructionSet := newFrontierInstructionSet()
-	instructionSet[DELEGATECALL] = &operation{
+	instructionSet[DELEGATECALL] = operation{
 		execute:     opDelegateCall,
 		dynamicGas:  gasDelegateCall,
 		constantGas: params.CallGasFrontier,
@@ -1077,9 +1071,9 @@ func newFrontierInstructionSet() JumpTable {
 	}
 
 	// Fill all unassigned slots with opUndefined.
-	for i, entry := range tbl {
-		if entry == nil {
-			tbl[i] = &operation{execute: opUndefined, maxStack: maxStack(0, 0), undefined: true}
+	for i := range tbl {
+		if tbl[i].execute == nil {
+			tbl[i] = operation{execute: opUndefined, maxStack: maxStack(0, 0)}
 		}
 	}
 
@@ -1088,11 +1082,5 @@ func newFrontierInstructionSet() JumpTable {
 
 func copyJumpTable(source *JumpTable) *JumpTable {
 	dest := *source
-	for i, op := range source {
-		if op != nil {
-			opCopy := *op
-			dest[i] = &opCopy
-		}
-	}
 	return &dest
 }
