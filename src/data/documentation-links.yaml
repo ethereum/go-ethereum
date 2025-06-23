@@ -32,8 +32,10 @@
       to: /docs/fundamentals/logs
     - id: Connecting to peers
       to: /docs/fundamentals/peer-to-peer
-    - id: Pruning
-      to: /docs/fundamentals/pruning
+    - id: History Pruning
+      to: /docs/fundamentals/historypruning
+    - id: Database Pruning
+      to: /docs/fundamentals/dbpruning
     - id: Private networks via Kurtosis
       to: /docs/fundamentals/kurtosis
     - id: Private networks
