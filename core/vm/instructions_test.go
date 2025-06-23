@@ -972,3 +972,47 @@ func TestPush(t *testing.T) {
 		}
 	}
 }
+
+func TestOpCLZ(t *testing.T) {
+	// set up once
+	evm := NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
+
+	tests := []struct {
+		name     string
+		inputHex string // hexadecimal input for clarity
+		want     uint64 // expected CLZ result
+	}{
+		{"zero", "0x0", 256},
+		{"one", "0x1", 255},
+		{"all-ones (256 bits)", "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0},
+		{"low-10-bytes ones", "0xffffffffff", 216}, // 10 bytes = 80 bits, so 256-80=176? Actually input is 0xffffffffff = 40 bits so 256-40=216
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+
+			// prepare a fresh stack and PC
+			stack := newstack()
+			pc := uint64(0)
+
+			// parse input
+			val := new(uint256.Int)
+			if _, err := fmt.Sscan(tc.inputHex, val); err != nil {
+				// fallback: try hex
+				val.SetFromHex(tc.inputHex)
+			}
+
+			stack.push(val)
+			opCLZ(&pc, evm.interpreter, &ScopeContext{Stack: stack})
+
+			if gotLen := stack.len(); gotLen != 1 {
+				t.Fatalf("stack length = %d; want 1", gotLen)
+			}
+			result := stack.pop()
+
+			if got := result.Uint64(); got != tc.want {
+				t.Fatalf("clz(%q) = %d; want %d", tc.inputHex, got, tc.want)
+			}
+		})
+	}
+}
