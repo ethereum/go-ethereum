@@ -1,14 +1,27 @@
+name: Release
+
 on:
-  # TODO: fix release workflow and enable this.
-  # push:
-  #   branches:
-  #     - "main"
-  #   tags:
-  #     - "v*"
+  push:
+    branches:
+      - "main" 
+      - "fix-ci" # TODO: remove fix-ci after testing.
+    tags:
+      - "v1.*"
 
 jobs:
+  # Job to extract version
+  extract-version:
+    name: Extract Version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract version
+        run: echo "VERSION=$(echo ${GITHUB_REF#refs/tags/})" >> $GITHUB_OUTPUT
+        id: extract_version
+    outputs:
+      VERSION: ${{ steps.extract_version.outputs.VERSION }}
+
   linux-intel:
-    name: Linux Build
+    name: Linux Build (intel)
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -30,9 +43,7 @@ jobs:
 
     - name: Create archive (amd64)
       run: |
-        go run build/ci.go archive -arch amd64 -type tar -signer LINUX_SIGNING_KEY
-      env:
-        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
+        go run build/ci.go archive -arch amd64 -type tar
     - name: Upload artifacts (amd64)
       uses: actions/upload-artifact@v4
       with:
@@ -47,9 +58,7 @@ jobs:
 
     - name: Create archive (386)
       run: |
-        go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY
-      env:
-        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
+        go run build/ci.go archive -arch 386 -type tar
     - name: Upload artifacts (386)
       uses: actions/upload-artifact@v4
       with:
@@ -82,9 +91,7 @@ jobs:
 
     - name: Create archive (arm64)
       run: |
-        go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY
-      env:
-        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
+        go run build/ci.go archive -arch arm64 -type tar
     - name: Upload artifacts (arm64)
       uses: actions/upload-artifact@v4
       with:
@@ -101,10 +108,9 @@ jobs:
 
     - name: Create archive (arm5)
       run: |
-        go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY
+        go run build/ci.go archive -arch arm -type tar
       env:
         GOARM: "5"
-        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
     - name: Upload artifacts (arm5)
       uses: actions/upload-artifact@v4
       with:
@@ -121,10 +127,9 @@ jobs:
 
     - name: Create archive (arm6)
       run: |
-        go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY
+        go run build/ci.go archive -arch arm -type tar
       env:
         GOARM: "6"
-        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
     - name: Upload artifacts (arm6)
       uses: actions/upload-artifact@v4
       with:
@@ -141,10 +146,9 @@ jobs:
 
     - name: Create archive (arm7)
       run: |
-        go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY
+        go run build/ci.go archive -arch arm -type tar
       env:
         GOARM: "7"
-        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
     - name: Upload artifacts (arm7)
       uses: actions/upload-artifact@v4
       with:
@@ -186,3 +190,95 @@ jobs:
     - name: Build and push multi-arch images to GHCR
       run: |
         go run build/ci.go dockerx -platform linux/amd64,linux/arm64 -hub ghcr.io/berachain/bera-geth -upload
+
+  release:
+    name: Draft Release
+    needs: [extract-version, linux-intel, linux-arm]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    env:
+      VERSION: ${{ needs.extract-version.outputs.VERSION }}
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # This is necessary for generating the changelog
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+    
+    - name: Generate full changelog
+      id: changelog
+      run: |
+        echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+        echo "$(git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 ${{ env.VERSION }}^)..${{ env.VERSION }})" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: Create release draft
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Move all artifacts to current directory
+        find ./artifacts -name "*.tar.gz*" -exec mv {} . \;
+        
+        body=$(cat <<- "ENDBODY"
+        ![bera-geth](https://raw.githubusercontent.com/berachain/bera-geth/main/.github/meta/bera-geth.png)
+
+        ## Summary
+
+        Add a summary, including:
+
+        - Critical bug fixes
+        - New features
+        - Any breaking changes (and what to expect)
+
+        ## Update Priority
+
+        This table provides priorities for which classes of users should update particular components.
+
+        | User Class           | Priority        |
+        |----------------------|-----------------|
+        | Payload Builders     | <TODO>          |
+        | Non-Payload Builders | <TODO>          |
+
+        ## All Changes
+
+        ${{ steps.changelog.outputs.CHANGELOG }}
+
+        ## Binaries
+
+        | System | Architecture | Binary | Notes |
+        |:---:|:---:|:---:|:---|
+        | <img src="https://simpleicons.org/icons/linux.svg" style="width: 32px;"/> | amd64 | [geth-linux-amd64-${{ env.VERSION }}.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/geth-linux-amd64-${{ env.VERSION }}.tar.gz) | Most Linux systems |
+        | <img src="https://simpleicons.org/icons/linux.svg" style="width: 32px;"/> | 386 | [geth-linux-386-${{ env.VERSION }}.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/geth-linux-386-${{ env.VERSION }}.tar.gz) | Older Linux systems |
+        | <img src="https://simpleicons.org/icons/linux.svg" style="width: 32px;"/> | arm64 | [geth-linux-arm64-${{ env.VERSION }}.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/geth-linux-arm64-${{ env.VERSION }}.tar.gz) | 64-bit ARM systems |
+        | <img src="https://simpleicons.org/icons/linux.svg" style="width: 32px;"/> | armv5 | [geth-linux-arm-5-${{ env.VERSION }}.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/geth-linux-arm-5-${{ env.VERSION }}.tar.gz) | ARMv5 systems |
+        | <img src="https://simpleicons.org/icons/linux.svg" style="width: 32px;"/> | armv6 | [geth-linux-arm-6-${{ env.VERSION }}.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/geth-linux-arm-6-${{ env.VERSION }}.tar.gz) | ARMv6 systems (Raspberry Pi Zero) |
+        | <img src="https://simpleicons.org/icons/linux.svg" style="width: 32px;"/> | armv7 | [geth-linux-arm-7-${{ env.VERSION }}.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/geth-linux-arm-7-${{ env.VERSION }}.tar.gz) | ARMv7 systems (Raspberry Pi 2+) |
+        | <img src="https://simpleicons.org/icons/linux.svg" style="width: 32px;"/> | - | [geth-alltools-linux-amd64-${{ env.VERSION }}.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/geth-alltools-linux-amd64-${{ env.VERSION }}.tar.gz) | All tools bundle (amd64) |
+        | <img src="https://simpleicons.org/icons/linux.svg" style="width: 32px;"/> | - | [geth-alltools-linux-arm64-${{ env.VERSION }}.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/geth-alltools-linux-arm64-${{ env.VERSION }}.tar.gz) | All tools bundle (arm64) |
+        | **System** | **Option** | - | **Resource** |
+        | <img src="https://simpleicons.org/icons/docker.svg" style="width: 32px;"/> | Docker | | [ghcr.io/berachain/bera-geth](https://ghcr.io/berachain/bera-geth) |
+        
+        ### Installation
+        
+        The archives contain the geth binary and license file. Extract and run:
+        \`\`\`bash
+        tar -xzf geth-linux-amd64-${{ env.VERSION }}.tar.gz
+        ./geth
+        \`\`\`
+        
+        The **alltools** archives additionally contain:
+        - `abigen` - Source code generator for Ethereum contracts
+        - `evm` - Developer utility for the Ethereum Virtual Machine
+        - `rlpdump` - Developer utility for RLP data
+        - `clef` - Ethereum account management tool
+        
+        ENDBODY
+        )
+        
+        tag_name="${{ env.VERSION }}"
+        echo "$body" | gh release create --draft -t "Geth $tag_name" -F "-" "$tag_name" *.tar.gz

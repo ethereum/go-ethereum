@@ -650,7 +650,8 @@ func maybeSkipArchive(env build.Environment) {
 		log.Printf("skipping archive creation because this is a PR build")
 		os.Exit(0)
 	}
-	if env.Branch != "master" && !strings.HasPrefix(env.Tag, "v1.") {
+	// TODO: remove fix-ci after testing.
+	if env.Branch != "main" && env.Branch != "fix-ci" && !strings.HasPrefix(env.Tag, "v1.") {
 		log.Printf("skipping archive creation because branch %q, tag %q is not on the inclusion list", env.Branch, env.Tag)
 		os.Exit(0)
 	}
@@ -679,21 +680,17 @@ func doDockerBuildx(cmdline []string) {
 		build.MustRun(auther)
 	}
 	// Retrieve the version infos to build and push to the following paths:
-	//  - ethereum/client-go:latest                            - Pushes to the master branch, Geth only
-	//  - ethereum/client-go:stable                            - Version tag publish on GitHub, Geth only
-	//  - ethereum/client-go:alltools-latest                   - Pushes to the master branch, Geth & tools
-	//  - ethereum/client-go:alltools-stable                   - Version tag publish on GitHub, Geth & tools
-	//  - ethereum/client-go:release-<major>.<minor>           - Version tag publish on GitHub, Geth only
-	//  - ethereum/client-go:alltools-release-<major>.<minor>  - Version tag publish on GitHub, Geth & tools
+	//  - ethereum/client-go:latest                            - Pushes to the main branch, Geth only
+	//  - ethereum/client-go:alltools-latest                   - Pushes to the main branch, Geth & tools
 	//  - ethereum/client-go:v<major>.<minor>.<patch>          - Version tag publish on GitHub, Geth only
 	//  - ethereum/client-go:alltools-v<major>.<minor>.<patch> - Version tag publish on GitHub, Geth & tools
 	var tags []string
 
 	switch {
-	case env.Branch == "master":
+	case env.Branch == "main":
 		tags = []string{"latest"}
 	case strings.HasPrefix(env.Tag, "v1."):
-		tags = []string{"stable", fmt.Sprintf("release-%v", version.Family), "v" + version.Semantic}
+		tags = []string{env.Tag}
 	}
 	// Need to create a mult-arch builder
 	check := exec.Command("docker", "buildx", "inspect", "multi-arch-builder")
