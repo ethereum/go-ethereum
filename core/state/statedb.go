@@ -1361,6 +1361,10 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 		al.AddAddress(sender)
 		if dst != nil {
 			al.AddAddress(*dst)
+			// TODO: add for devnet-3
+			// if rules.IsOsaka {
+			// 	al.AddAddressCode(*dst)
+			// }
 			// If it's a create-tx, the destination will be added inside evm.create
 		}
 		for _, addr := range precompiles {

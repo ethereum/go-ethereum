@@ -18,6 +18,7 @@ package vm
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -318,12 +319,25 @@ var (
 	gasCallCodeEIP7907     = makeCallVariantGasCallEIP7907(gasCallCode)
 )
 
-func getColdCodeAccessGasCost(evm *EVM, addr common.Address) uint64 {
-	codeSize := evm.StateDB.GetCodeSize(addr)
-	if codeSize <= params.MaxCodeSizeEIP7907 {
+// Rounds n up to the nearest multiple of 32.
+func ceil32(n int) uint64 {
+	r := n % 32
+	if r == 0 {
+		return uint64(n)
+	} else {
+		return uint64(n + 32 - r)
+	}
+}
+
+func calcColdCodeAccessGasCost(evm *EVM, addr common.Address) uint64 {
+	size := evm.StateDB.GetCodeSize(addr)
+	// Only charge additional access cost for contracts larger than old limit.
+	if size <= params.MaxCodeSizeEIP170 {
 		return 0
 	}
-	return (uint64(codeSize) - params.MaxCodeSizeEIP7907) * 2 / 32
+	excess := ceil32(size - params.MaxCodeSizeEIP170)
+	fmt.Println("excess", excess, "cost", (excess*params.CodeReadPerWordGasEIP7907)/32)
+	return (excess * params.CodeReadPerWordGasEIP7907) / 32
 }
 
 func makeCallVariantGasCallEIP7907(oldCalculator gasFunc) gasFunc {
@@ -346,15 +360,19 @@ func makeCallVariantGasCallEIP7907(oldCalculator gasFunc) gasFunc {
 			}
 			total += coldCost
 		}
+
 		// Check code presence in the access list
 		if !evm.StateDB.AddressCodeInAccessList(addr) {
-			cost := getColdCodeAccessGasCost(evm, addr)
+			cost := calcColdCodeAccessGasCost(evm, addr)
 			evm.StateDB.AddAddressCodeToAccessList(addr)
 			if !contract.UseGas(cost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
 				return 0, ErrOutOfGas
 			}
 			total += cost
 		}
+
+		// TODO: reading code here would defeat the purpose of separate charging, so
+		// we should first see if the code size is 23 bytes before parsing.
 
 		// Check if code is a delegation and if so, charge for resolution.
 		if target, ok := types.ParseDelegation(evm.StateDB.GetCode(addr)); ok {
@@ -370,7 +388,7 @@ func makeCallVariantGasCallEIP7907(oldCalculator gasFunc) gasFunc {
 			}
 			total += cost
 			if !evm.StateDB.AddressCodeInAccessList(target) {
-				cost = getColdCodeAccessGasCost(evm, target)
+				cost = calcColdCodeAccessGasCost(evm, target)
 				evm.StateDB.AddAddressCodeToAccessList(target)
 				if !contract.UseGas(cost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
 					return 0, ErrOutOfGas
@@ -410,27 +428,25 @@ func gasExtCodeCopyEIP7907(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 		return 0, err
 	}
 	addr := common.Address(stack.peek().Bytes20())
-	var total uint64
 	// Check slot presence in the access list
 	if !evm.StateDB.AddressInAccessList(addr) {
 		evm.StateDB.AddAddressToAccessList(addr)
+		var overflow bool
 		// We charge (cold-warm), since 'warm' is already charged as constantGas
-
-		if !contract.UseGas(gas, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
-			return 0, ErrOutOfGas
+		if gas, overflow = math.SafeAdd(gas, params.ColdAccountAccessCostEIP2929-params.WarmStorageReadCostEIP2929); overflow {
+			return 0, ErrGasUintOverflow
 		}
-		total += gas
 	}
 
 	// Check address code presence in the access list
 	if !evm.StateDB.AddressCodeInAccessList(addr) {
-		cost := getColdCodeAccessGasCost(evm, addr)
+		cost := calcColdCodeAccessGasCost(evm, addr)
 		evm.StateDB.AddAddressCodeToAccessList(addr)
-		if !contract.UseGas(cost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
-			return 0, ErrOutOfGas
+		var overflow bool
+		// We charge (cold-warm), since 'warm' is already charged as constantGas
+		if gas, overflow = math.SafeAdd(gas, cost); overflow {
+			return 0, ErrGasUintOverflow
 		}
-		total += cost
 	}
-
-	return total, nil
+	return gas, nil
 }
