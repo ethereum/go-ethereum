@@ -314,7 +314,7 @@ func gasCreateEip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	if overflow {
 		return 0, ErrGasUintOverflow
 	}
-	if size > params.MaxInitCodeSize {
+	if size > params.MaxInitCodeSizeEIP3860 {
 		return 0, fmt.Errorf("%w: size %d", ErrMaxInitCodeSizeExceeded, size)
 	}
 	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
@@ -333,7 +333,46 @@ func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, 
 	if overflow {
 		return 0, ErrGasUintOverflow
 	}
-	if size > params.MaxInitCodeSize {
+	if size > params.MaxInitCodeSizeEIP3860 {
+		return 0, fmt.Errorf("%w: size %d", ErrMaxInitCodeSizeExceeded, size)
+	}
+	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
+	moreGas := (params.InitCodeWordGas + params.Keccak256WordGas) * ((size + 31) / 32)
+	if gas, overflow = math.SafeAdd(gas, moreGas); overflow {
+		return 0, ErrGasUintOverflow
+	}
+	return gas, nil
+}
+
+func gasCreateEip7907(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	size, overflow := stack.Back(2).Uint64WithOverflow()
+	if overflow {
+		return 0, ErrGasUintOverflow
+	}
+	if size > params.MaxInitCodeSizeEIP7907 {
+		return 0, fmt.Errorf("%w: size %d", ErrMaxInitCodeSizeExceeded, size)
+	}
+	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
+	moreGas := params.InitCodeWordGas * ((size + 31) / 32)
+	if gas, overflow = math.SafeAdd(gas, moreGas); overflow {
+		return 0, ErrGasUintOverflow
+	}
+	return gas, nil
+}
+func gasCreate2Eip7907(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	size, overflow := stack.Back(2).Uint64WithOverflow()
+	if overflow {
+		return 0, ErrGasUintOverflow
+	}
+	if size > params.MaxInitCodeSizeEIP7907 {
 		return 0, fmt.Errorf("%w: size %d", ErrMaxInitCodeSizeExceeded, size)
 	}
 	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
@@ -484,21 +523,4 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 		evm.StateDB.AddRefund(params.SelfdestructRefundGas)
 	}
 	return gas, nil
-}
-
-func gasExtCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	panic("not implemented")
-}
-
-func gasExtDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	panic("not implemented")
-}
-func gasExtStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	panic("not implemented")
-}
-
-// gasEOFCreate returns the gas-cost for EOF-Create. Hashing charge needs to be
-// deducted in the opcode itself, since it depends on the immediate
-func gasEOFCreate(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	panic("not implemented")
 }

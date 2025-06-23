@@ -86,6 +86,10 @@ func (db *testDb) InsertPreimage(preimages map[common.Hash][]byte) {
 	rawdb.WritePreimages(db.disk, preimages)
 }
 
+func (db *testDb) PreimageEnabled() bool {
+	return true
+}
+
 func (db *testDb) Scheme() string { return db.scheme }
 
 func (db *testDb) Update(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet) error {

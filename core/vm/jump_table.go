@@ -62,7 +62,7 @@ var (
 	cancunInstructionSet           = newCancunInstructionSet()
 	verkleInstructionSet           = newVerkleInstructionSet()
 	pragueInstructionSet           = newPragueInstructionSet()
-	eofInstructionSet              = newEOFInstructionSetForTesting()
+	osakaInstructionSet            = newOsakaInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -92,13 +92,9 @@ func newVerkleInstructionSet() JumpTable {
 	return validate(instructionSet)
 }
 
-func NewEOFInstructionSetForTesting() JumpTable {
-	return newEOFInstructionSetForTesting()
-}
-
-func newEOFInstructionSetForTesting() JumpTable {
+func newOsakaInstructionSet() JumpTable {
 	instructionSet := newPragueInstructionSet()
-	enableEOF(&instructionSet)
+	enable7907(&instructionSet)
 	return validate(instructionSet)
 }
 

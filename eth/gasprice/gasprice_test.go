@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
@@ -212,7 +211,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, cancunBlock *big.Int, pe
 	})
 
 	// Construct testing chain
-	chain, err := core.NewBlockChain(db, &core.CacheConfig{TrieCleanNoPrefetch: true}, gspec, nil, engine, vm.Config{}, nil)
+	chain, err := core.NewBlockChain(db, gspec, engine, &core.BlockChainConfig{NoPrefetch: true})
 	if err != nil {
 		t.Fatalf("Failed to create local chain, %v", err)
 	}

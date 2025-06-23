@@ -367,6 +367,7 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 		for j := 0; j < len(rs[i].Logs); j++ {
 			rs[i].Logs[j].BlockNumber = number
 			rs[i].Logs[j].BlockHash = hash
+			rs[i].Logs[j].BlockTimestamp = time
 			rs[i].Logs[j].TxHash = rs[i].TxHash
 			rs[i].Logs[j].TxIndex = uint(i)
 			rs[i].Logs[j].Index = logIndex

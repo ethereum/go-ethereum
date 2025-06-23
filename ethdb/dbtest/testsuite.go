@@ -401,6 +401,308 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 
 		db.DeleteRange([]byte(""), []byte("a"))
 		checkRange(1, 999, false)
+
+		addRange(1, 999)
+		db.DeleteRange(nil, nil)
+		checkRange(1, 999, false)
+	})
+
+	t.Run("BatchDeleteRange", func(t *testing.T) {
+		db := New()
+		defer db.Close()
+
+		// Helper to add keys
+		addKeys := func(start, stop int) {
+			for i := start; i <= stop; i++ {
+				if err := db.Put([]byte(strconv.Itoa(i)), []byte("val-"+strconv.Itoa(i))); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+
+		// Helper to check if keys exist
+		checkKeys := func(start, stop int, shouldExist bool) {
+			for i := start; i <= stop; i++ {
+				key := []byte(strconv.Itoa(i))
+				has, err := db.Has(key)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if has != shouldExist {
+					if shouldExist {
+						t.Fatalf("key %s should exist but doesn't", key)
+					} else {
+						t.Fatalf("key %s shouldn't exist but does", key)
+					}
+				}
+			}
+		}
+
+		// Test 1: Basic range deletion in batch
+		addKeys(1, 10)
+		checkKeys(1, 10, true)
+
+		batch := db.NewBatch()
+		if err := batch.DeleteRange([]byte("3"), []byte("8")); err != nil {
+			t.Fatal(err)
+		}
+		// Keys shouldn't be deleted until Write is called
+		checkKeys(1, 10, true)
+
+		if err := batch.Write(); err != nil {
+			t.Fatal(err)
+		}
+		// After Write, keys in range should be deleted
+		// Range is [start, end) - inclusive of start, exclusive of end
+		checkKeys(1, 2, true)  // These should still exist
+		checkKeys(3, 7, false) // These should be deleted (3 to 7 inclusive)
+		checkKeys(8, 10, true) // These should still exist (8 is the end boundary, exclusive)
+
+		// Test 2: Delete range with special markers
+		addKeys(3, 7)
+		batch = db.NewBatch()
+		if err := batch.DeleteRange(nil, nil); err != nil {
+			t.Fatal(err)
+		}
+		if err := batch.Write(); err != nil {
+			t.Fatal(err)
+		}
+		checkKeys(1, 10, false)
+
+		// Test 3: Mix Put, Delete, and DeleteRange in a batch
+		// Reset database for next test by adding back deleted keys
+		addKeys(1, 10)
+		checkKeys(1, 10, true)
+
+		// Create a new batch with multiple operations
+		batch = db.NewBatch()
+		if err := batch.Put([]byte("5"), []byte("new-val-5")); err != nil {
+			t.Fatal(err)
+		}
+		if err := batch.Delete([]byte("9")); err != nil {
+			t.Fatal(err)
+		}
+		if err := batch.DeleteRange([]byte("1"), []byte("3")); err != nil {
+			t.Fatal(err)
+		}
+		if err := batch.Write(); err != nil {
+			t.Fatal(err)
+		}
+		// Check results after batch operations
+		// Keys 1-2 should be deleted by DeleteRange
+		checkKeys(1, 2, false)
+
+		// Key 3 should exist (exclusive of end)
+		has, err := db.Has([]byte("3"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !has {
+			t.Fatalf("key 3 should exist after DeleteRange(1,3)")
+		}
+
+		// Key 5 should have a new value
+		val, err := db.Get([]byte("5"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(val, []byte("new-val-5")) {
+			t.Fatalf("key 5 has wrong value: got %s, want %s", val, "new-val-5")
+		}
+
+		// Key 9 should be deleted
+		has, err = db.Has([]byte("9"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if has {
+			t.Fatalf("key 9 should be deleted")
+		}
+
+		// Test 4: Reset batch
+		batch.Reset()
+		// Individual deletes work better with both string and numeric comparisons
+		if err := batch.Delete([]byte("8")); err != nil {
+			t.Fatal(err)
+		}
+		if err := batch.Delete([]byte("10")); err != nil {
+			t.Fatal(err)
+		}
+		if err := batch.Delete([]byte("11")); err != nil {
+			t.Fatal(err)
+		}
+		if err := batch.Write(); err != nil {
+			t.Fatal(err)
+		}
+
+		// Key 8 should be deleted
+		has, err = db.Has([]byte("8"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if has {
+			t.Fatalf("key 8 should be deleted")
+		}
+
+		// Keys 3-7 should still exist
+		checkKeys(3, 7, true)
+
+		// Key 10 should be deleted
+		has, err = db.Has([]byte("10"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if has {
+			t.Fatalf("key 10 should be deleted")
+		}
+
+		// Test 5: Empty range
+		batch = db.NewBatch()
+		if err := batch.DeleteRange([]byte("100"), []byte("100")); err != nil {
+			t.Fatal(err)
+		}
+		if err := batch.Write(); err != nil {
+			t.Fatal(err)
+		}
+		// No existing keys should be affected
+		checkKeys(3, 7, true)
+
+		// Test 6: Test entire keyspace deletion
+		// First clear any existing keys
+		for i := 1; i <= 100; i++ {
+			db.Delete([]byte(strconv.Itoa(i)))
+		}
+
+		// Then add some fresh test keys
+		addKeys(50, 60)
+
+		// Verify keys exist before deletion
+		checkKeys(50, 60, true)
+
+		batch = db.NewBatch()
+		if err := batch.DeleteRange([]byte(""), []byte("z")); err != nil {
+			t.Fatal(err)
+		}
+		if err := batch.Write(); err != nil {
+			t.Fatal(err)
+		}
+		// All keys should be deleted
+		checkKeys(50, 60, false)
+
+		// Test 7: overlapping range deletion
+		addKeys(50, 60)
+		batch = db.NewBatch()
+		if err := batch.DeleteRange([]byte("50"), []byte("55")); err != nil {
+			t.Fatal(err)
+		}
+		if err := batch.DeleteRange([]byte("52"), []byte("58")); err != nil {
+			t.Fatal(err)
+		}
+		if err := batch.Write(); err != nil {
+			t.Fatal(err)
+		}
+		checkKeys(50, 57, false)
+		checkKeys(58, 60, true)
+	})
+
+	t.Run("BatchReplayWithDeleteRange", func(t *testing.T) {
+		db := New()
+		defer db.Close()
+
+		// Setup some initial data
+		for i := 1; i <= 10; i++ {
+			if err := db.Put([]byte(strconv.Itoa(i)), []byte("val-"+strconv.Itoa(i))); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		// Create batch with multiple operations including DeleteRange
+		batch1 := db.NewBatch()
+		batch1.Put([]byte("new-key-1"), []byte("new-val-1"))
+		batch1.DeleteRange([]byte("3"), []byte("7")) // Should delete keys 3-6 but not 7
+		batch1.Delete([]byte("8"))
+		batch1.Put([]byte("new-key-2"), []byte("new-val-2"))
+
+		// Create a second batch to replay into
+		batch2 := db.NewBatch()
+		if err := batch1.Replay(batch2); err != nil {
+			t.Fatal(err)
+		}
+
+		// Write the second batch
+		if err := batch2.Write(); err != nil {
+			t.Fatal(err)
+		}
+
+		// Verify results
+		// Original keys 3-6 should be deleted (inclusive of start, exclusive of end)
+		for i := 3; i <= 6; i++ {
+			has, err := db.Has([]byte(strconv.Itoa(i)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if has {
+				t.Fatalf("key %d should be deleted", i)
+			}
+		}
+
+		// Key 7 should NOT be deleted (exclusive of end)
+		has, err := db.Has([]byte("7"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !has {
+			t.Fatalf("key 7 should NOT be deleted (exclusive of end)")
+		}
+
+		// Key 8 should be deleted
+		has, err = db.Has([]byte("8"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if has {
+			t.Fatalf("key 8 should be deleted")
+		}
+
+		// New keys should be added
+		for _, key := range []string{"new-key-1", "new-key-2"} {
+			has, err := db.Has([]byte(key))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !has {
+				t.Fatalf("key %s should exist", key)
+			}
+		}
+
+		// Create a third batch for direct replay to database
+		batch3 := db.NewBatch()
+		batch3.DeleteRange([]byte("1"), []byte("3")) // Should delete keys 1-2 but not 3
+
+		// Replay directly to the database
+		if err := batch3.Replay(db); err != nil {
+			t.Fatal(err)
+		}
+
+		// Verify keys 1-2 are now deleted
+		for i := 1; i <= 2; i++ {
+			has, err := db.Has([]byte(strconv.Itoa(i)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if has {
+				t.Fatalf("key %d should be deleted after direct replay", i)
+			}
+		}
+
+		// Verify key 3 is NOT deleted (since it's exclusive of end)
+		has, err = db.Has([]byte("3"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if has {
+			t.Fatalf("key 3 should still be deleted from previous operation")
+		}
 	})
 }
 
@@ -518,6 +820,81 @@ func BenchDatabaseSuite(b *testing.B, New func() ethdb.KeyValueStore) {
 		})
 		b.Run("DeleteRange10k", func(b *testing.B) {
 			benchDeleteRange(b, 10000)
+		})
+	})
+	b.Run("BatchDeleteRange", func(b *testing.B) {
+		benchBatchDeleteRange := func(b *testing.B, count int) {
+			db := New()
+			defer db.Close()
+
+			// Prepare data
+			for i := 0; i < count; i++ {
+				db.Put([]byte(strconv.Itoa(i)), nil)
+			}
+
+			b.ResetTimer()
+			b.ReportAllocs()
+
+			// Create batch and delete range
+			batch := db.NewBatch()
+			batch.DeleteRange([]byte("0"), []byte("999999999"))
+			batch.Write()
+		}
+
+		b.Run("BatchDeleteRange100", func(b *testing.B) {
+			benchBatchDeleteRange(b, 100)
+		})
+		b.Run("BatchDeleteRange1k", func(b *testing.B) {
+			benchBatchDeleteRange(b, 1000)
+		})
+		b.Run("BatchDeleteRange10k", func(b *testing.B) {
+			benchBatchDeleteRange(b, 10000)
+		})
+	})
+
+	b.Run("BatchMixedOps", func(b *testing.B) {
+		benchBatchMixedOps := func(b *testing.B, count int) {
+			db := New()
+			defer db.Close()
+
+			// Prepare initial data
+			for i := 0; i < count; i++ {
+				db.Put([]byte(strconv.Itoa(i)), []byte("val"))
+			}
+
+			b.ResetTimer()
+			b.ReportAllocs()
+
+			// Create batch with mixed operations
+			batch := db.NewBatch()
+
+			// Add some new keys
+			for i := 0; i < count/10; i++ {
+				batch.Put([]byte(strconv.Itoa(count+i)), []byte("new-val"))
+			}
+
+			// Delete some individual keys
+			for i := 0; i < count/20; i++ {
+				batch.Delete([]byte(strconv.Itoa(i * 2)))
+			}
+
+			// Delete range of keys
+			rangeStart := count / 2
+			rangeEnd := count * 3 / 4
+			batch.DeleteRange([]byte(strconv.Itoa(rangeStart)), []byte(strconv.Itoa(rangeEnd)))
+
+			// Write the batch
+			batch.Write()
+		}
+
+		b.Run("BatchMixedOps100", func(b *testing.B) {
+			benchBatchMixedOps(b, 100)
+		})
+		b.Run("BatchMixedOps1k", func(b *testing.B) {
+			benchBatchMixedOps(b, 1000)
+		})
+		b.Run("BatchMixedOps10k", func(b *testing.B) {
+			benchBatchMixedOps(b, 10000)
 		})
 	})
 }

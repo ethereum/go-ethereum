@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
@@ -200,7 +199,7 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 
 	// Time the insertion of the new chain.
 	// State and blocks are stored in the same DB.
-	chainman, _ := NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
+	chainman, _ := NewBlockChain(db, gspec, ethash.NewFaker(), nil)
 	defer chainman.Stop()
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -325,9 +324,7 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 	genesis := &Genesis{Config: params.AllEthashProtocolChanges}
 	makeChainForBench(db, genesis, full, count)
 	db.Close()
-	cacheConfig := *defaultCacheConfig
-	cacheConfig.TrieDirtyDisabled = true
-
+	options := DefaultConfig().WithArchive(true)
 	b.ReportAllocs()
 	b.ResetTimer()
 
@@ -338,7 +335,7 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 		}
 		db = rawdb.NewDatabase(pdb)
 
-		chain, err := NewBlockChain(db, &cacheConfig, genesis, nil, ethash.NewFaker(), vm.Config{}, nil)
+		chain, err := NewBlockChain(db, genesis, ethash.NewFaker(), options)
 		if err != nil {
 			b.Fatalf("error creating chain: %v", err)
 		}

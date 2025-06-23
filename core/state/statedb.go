@@ -252,11 +252,12 @@ func (s *StateDB) AddLog(log *types.Log) {
 
 // GetLogs returns the logs matching the specified transaction hash, and annotates
 // them with the given blockNumber and blockHash.
-func (s *StateDB) GetLogs(hash common.Hash, blockNumber uint64, blockHash common.Hash) []*types.Log {
+func (s *StateDB) GetLogs(hash common.Hash, blockNumber uint64, blockHash common.Hash, blockTime uint64) []*types.Log {
 	logs := s.logs[hash]
 	for _, l := range logs {
 		l.BlockNumber = blockNumber
 		l.BlockHash = blockHash
+		l.BlockTimestamp = blockTime
 	}
 	return logs
 }
@@ -1063,7 +1064,6 @@ func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root 
 func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*accountDelete, []*trienode.NodeSet, error) {
 	var (
 		nodes   []*trienode.NodeSet
-		buf     = crypto.NewKeccakState()
 		deletes = make(map[common.Hash]*accountDelete)
 	)
 	for addr, prevObj := range s.stateObjectsDestruct {
@@ -1078,7 +1078,7 @@ func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*acco
 			continue
 		}
 		// The account was existent, it can be either case (c) or (d).
-		addrHash := crypto.HashData(buf, addr.Bytes())
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
 		op := &accountDelete{
 			address: addr,
 			origin:  types.SlimAccountRLP(*prev),
@@ -1361,6 +1361,10 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 		al.AddAddress(sender)
 		if dst != nil {
 			al.AddAddress(*dst)
+			// TODO: add for devnet-3
+			// if rules.IsOsaka {
+			// 	al.AddAddressCode(*dst)
+			// }
 			// If it's a create-tx, the destination will be added inside evm.create
 		}
 		for _, addr := range precompiles {
@@ -1402,9 +1406,21 @@ func (s *StateDB) AddSlotToAccessList(addr common.Address, slot common.Hash) {
 	}
 }
 
+// AddAddressCodeToAccessList adds the given address to the access list
+func (s *StateDB) AddAddressCodeToAccessList(addr common.Address) {
+	if s.accessList.AddAddressCode(addr) {
+		s.journal.accessListAddAccountCode(addr)
+	}
+}
+
 // AddressInAccessList returns true if the given address is in the access list.
 func (s *StateDB) AddressInAccessList(addr common.Address) bool {
 	return s.accessList.ContainsAddress(addr)
+}
+
+// AddressCodeInAccessList returns true if the given address code is in the access list.
+func (s *StateDB) AddressCodeInAccessList(addr common.Address) bool {
+	return s.accessList.ContainsAddressCode(addr)
 }
 
 // SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.

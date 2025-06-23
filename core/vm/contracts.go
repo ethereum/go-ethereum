@@ -468,6 +468,8 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 			minPrice = 500
 			if maxLenOver32 {
 				gas.Add(gas, gas)
+			} else {
+				gas = big.NewInt(16)
 			}
 		}
 

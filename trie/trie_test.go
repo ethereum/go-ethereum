@@ -876,6 +876,7 @@ func (b *spongeBatch) Put(key, value []byte) error {
 	return nil
 }
 func (b *spongeBatch) Delete(key []byte) error             { panic("implement me") }
+func (b *spongeBatch) DeleteRange(start, end []byte) error { panic("implement me") }
 func (b *spongeBatch) ValueSize() int                      { return 100 }
 func (b *spongeBatch) Write() error                        { return nil }
 func (b *spongeBatch) Reset()                              {}

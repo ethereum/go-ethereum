@@ -8,10 +8,7 @@ import (
 // GetOrRegisterCounterFloat64 returns an existing *CounterFloat64 or constructs and registers
 // a new CounterFloat64.
 func GetOrRegisterCounterFloat64(name string, r Registry) *CounterFloat64 {
-	if nil == r {
-		r = DefaultRegistry
-	}
-	return r.GetOrRegister(name, NewCounterFloat64).(*CounterFloat64)
+	return getOrRegister(name, NewCounterFloat64, r)
 }
 
 // NewCounterFloat64 constructs a new CounterFloat64.

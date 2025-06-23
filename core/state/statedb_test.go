@@ -669,9 +669,9 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		return fmt.Errorf("got GetRefund() == %d, want GetRefund() == %d",
 			state.GetRefund(), checkstate.GetRefund())
 	}
-	if !reflect.DeepEqual(state.GetLogs(common.Hash{}, 0, common.Hash{}), checkstate.GetLogs(common.Hash{}, 0, common.Hash{})) {
+	if !reflect.DeepEqual(state.GetLogs(common.Hash{}, 0, common.Hash{}, 0), checkstate.GetLogs(common.Hash{}, 0, common.Hash{}, 0)) {
 		return fmt.Errorf("got GetLogs(common.Hash{}) == %v, want GetLogs(common.Hash{}) == %v",
-			state.GetLogs(common.Hash{}, 0, common.Hash{}), checkstate.GetLogs(common.Hash{}, 0, common.Hash{}))
+			state.GetLogs(common.Hash{}, 0, common.Hash{}, 0), checkstate.GetLogs(common.Hash{}, 0, common.Hash{}, 0))
 	}
 	if !maps.Equal(state.journal.dirties, checkstate.journal.dirties) {
 		getKeys := func(dirty map[common.Address]int) string {
@@ -982,6 +982,7 @@ func testMissingTrieNodes(t *testing.T, scheme string) {
 			TrieCleanSize:   0,
 			StateCleanSize:  0,
 			WriteBufferSize: 0,
+			NoAsyncFlush:    true,
 		}}) // disable caching
 	} else {
 		tdb = triedb.NewDatabase(memDb, &triedb.Config{HashDB: &hashdb.Config{
@@ -1004,18 +1005,25 @@ func testMissingTrieNodes(t *testing.T, scheme string) {
 		// force-flush
 		tdb.Commit(root, false)
 	}
-	// Create a new state on the old root
-	state, _ = New(root, db)
 	// Now we clear out the memdb
 	it := memDb.NewIterator(nil, nil)
 	for it.Next() {
 		k := it.Key()
-		// Leave the root intact
-		if !bytes.Equal(k, root[:]) {
-			t.Logf("key: %x", k)
-			memDb.Delete(k)
+		if scheme == rawdb.HashScheme {
+			if !bytes.Equal(k, root[:]) {
+				t.Logf("key: %x", k)
+				memDb.Delete(k)
+			}
+		}
+		if scheme == rawdb.PathScheme {
+			rk := k[len(rawdb.TrieNodeAccountPrefix):]
+			if len(rk) != 0 {
+				t.Logf("key: %x", k)
+				memDb.Delete(k)
+			}
 		}
 	}
+	state, _ = New(root, db)
 	balance := state.GetBalance(addr)
 	// The removed elem should lead to it returning zero balance
 	if exp, got := uint64(0), balance.Uint64(); got != exp {

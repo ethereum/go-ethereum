@@ -35,3 +35,15 @@ func FuzzPair(f *testing.F) {
 		fuzzPair(data)
 	})
 }
+
+func FuzzUnmarshalG1(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		fuzzUnmarshalG1(data)
+	})
+}
+
+func FuzzUnmarshalG2(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		fuzzUnmarshalG2(data)
+	})
+}
