@@ -1226,7 +1226,7 @@ func (bc *BlockChain) stopWithoutSaving() {
 	bc.scope.Close()
 
 	// Signal shutdown to all goroutines.
-	bc.StopInsert()
+	bc.InterruptInsert(true)
 
 	// Now wait for all chain modifications to end and persistent goroutines to exit.
 	//
@@ -1300,16 +1300,15 @@ func (bc *BlockChain) Stop() {
 	log.Info("Blockchain stopped")
 }
 
-// StopInsert interrupts all insertion methods, causing them to return
-// errInsertionInterrupted as soon as possible. Insertion is permanently disabled after
-// calling this method.
-func (bc *BlockChain) StopInsert() {
-	bc.procInterrupt.Store(true)
-}
-
-// ResumeInsert re-enables the blockchain insertion, which is used to rewinding the chain to
-func (bc *BlockChain) ResumeInsert() {
-	bc.procInterrupt.Store(false)
+// InterruptInsert interrupts all insertion methods, causing them to return
+// errInsertionInterrupted as soon as possible, or resume the chain insertion
+// if required.
+func (bc *BlockChain) InterruptInsert(on bool) {
+	if on {
+		bc.procInterrupt.Store(true)
+	} else {
+		bc.procInterrupt.Store(false)
+	}
 }
 
 // insertStopped returns true after StopInsert has been called.

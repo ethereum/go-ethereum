@@ -62,10 +62,8 @@ func (b *EthAPIBackend) CurrentBlock() *types.Header {
 }
 
 func (b *EthAPIBackend) SetHead(number uint64) {
-	b.eth.blockchain.StopInsert()
 	b.eth.handler.downloader.Cancel()
 	b.eth.blockchain.SetHead(number)
-	b.eth.blockchain.ResumeInsert()
 }
 
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {

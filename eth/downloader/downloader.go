@@ -199,8 +199,8 @@ type BlockChain interface {
 	// InsertChain inserts a batch of blocks into the local chain.
 	InsertChain(types.Blocks) (int, error)
 
-	// StopInsert interrupts the inserting process.
-	StopInsert()
+	// InterruptInsert whether disables the chain insertion.
+	InterruptInsert(on bool)
 
 	// InsertReceiptChain inserts a batch of blocks along with their receipts
 	// into the local chain. Blocks older than the specified `ancientLimit`
@@ -630,16 +630,15 @@ func (d *Downloader) cancel() {
 // Cancel aborts all of the operations and waits for all download goroutines to
 // finish before returning.
 func (d *Downloader) Cancel() {
+	d.blockchain.InterruptInsert(true)
 	d.cancel()
 	d.cancelWg.Wait()
+	d.blockchain.InterruptInsert(false)
 }
 
 // Terminate interrupts the downloader, canceling all pending operations.
 // The downloader cannot be reused after calling Terminate.
 func (d *Downloader) Terminate() {
-	// Signal to stop inserting in-flight blocks
-	d.blockchain.StopInsert()
-
 	// Close the termination channel (make sure double close is allowed)
 	d.quitLock.Lock()
 	select {
