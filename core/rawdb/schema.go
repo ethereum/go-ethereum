@@ -122,7 +122,11 @@ var (
 	stateIDPrefix         = []byte("L") // stateIDPrefix + state root -> state id
 
 	// State history indexing within path-based storage scheme
-	StateHistoryIndexPrefix = []byte("m") // StateHistoryIndexPrefix + account address hash or (account address hash + slotHash) -> index
+	StateHistoryIndexPrefix           = []byte("m")   // StateHistoryIndexPrefix + account address hash or (account address hash + slotHash) -> index
+	StateHistoryAccountMetadataPrefix = []byte("ma")  // StateHistoryAccountMetadataPrefix + account address hash => account metadata
+	StateHistoryStorageMetadataPrefix = []byte("ms")  // StateHistoryStorageMetadataPrefix + account address hash + storage slot hash => slot metadata
+	StateHistoryAccountBlockPrefix    = []byte("mba") // StateHistoryAccountBlockPrefix + account address hash + block_number => account block
+	StateHistoryStorageBlockPrefix    = []byte("mbs") // StateHistoryStorageBlockPrefix + account address hash + storage slot hash + block_number => slot block
 
 	// VerklePrefix is the database prefix for Verkle trie data, which includes:
 	// (a) Trie nodes
@@ -372,24 +376,24 @@ func filterMapBlockLVKey(number uint64) []byte {
 
 // accountHistoryIndexKey = StateHistoryIndexPrefix + addressHash
 func accountHistoryIndexKey(addressHash common.Hash) []byte {
-	return append(StateHistoryIndexPrefix, addressHash.Bytes()...)
+	return append(StateHistoryAccountMetadataPrefix, addressHash.Bytes()...)
 }
 
 // storageHistoryIndexKey = StateHistoryIndexPrefix + addressHash + storageHash
 func storageHistoryIndexKey(addressHash common.Hash, storageHash common.Hash) []byte {
-	return append(append(StateHistoryIndexPrefix, addressHash.Bytes()...), storageHash.Bytes()...)
+	return append(append(StateHistoryStorageMetadataPrefix, addressHash.Bytes()...), storageHash.Bytes()...)
 }
 
 // accountHistoryIndexBlockKey = StateHistoryIndexPrefix + addressHash + blockID
 func accountHistoryIndexBlockKey(addressHash common.Hash, blockID uint32) []byte {
 	var buf [4]byte
 	binary.BigEndian.PutUint32(buf[:], blockID)
-	return append(append(StateHistoryIndexPrefix, addressHash.Bytes()...), buf[:]...)
+	return append(append(StateHistoryAccountBlockPrefix, addressHash.Bytes()...), buf[:]...)
 }
 
 // storageHistoryIndexBlockKey = StateHistoryIndexPrefix + addressHash + storageHash + blockID
 func storageHistoryIndexBlockKey(addressHash common.Hash, storageHash common.Hash, blockID uint32) []byte {
 	var buf [4]byte
 	binary.BigEndian.PutUint32(buf[:], blockID)
-	return append(append(append(StateHistoryIndexPrefix, addressHash.Bytes()...), storageHash.Bytes()...), buf[:]...)
+	return append(append(append(StateHistoryStorageBlockPrefix, addressHash.Bytes()...), storageHash.Bytes()...), buf[:]...)
 }
