@@ -61,15 +61,16 @@ type accountMarshaling struct {
 }
 
 type prestateTracer struct {
-	env       *tracing.VMContext
-	pre       stateMap
-	post      stateMap
-	to        common.Address
-	config    prestateTracerConfig
-	interrupt atomic.Bool // Atomic flag to signal execution interruption
-	reason    error       // Textual reason for the interruption
-	created   map[common.Address]bool
-	deleted   map[common.Address]bool
+	env         *tracing.VMContext
+	pre         stateMap
+	post        stateMap
+	to          common.Address
+	config      prestateTracerConfig
+	chainConfig *params.ChainConfig
+	interrupt   atomic.Bool // Atomic flag to signal execution interruption
+	reason      error       // Textual reason for the interruption
+	created     map[common.Address]bool
+	deleted     map[common.Address]bool
 }
 
 type prestateTracerConfig struct {
@@ -90,11 +91,12 @@ func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *p
 		return nil, errors.New("cannot use diffMode with includeEmpty")
 	}
 	t := &prestateTracer{
-		pre:     stateMap{},
-		post:    stateMap{},
-		config:  config,
-		created: make(map[common.Address]bool),
-		deleted: make(map[common.Address]bool),
+		pre:         stateMap{},
+		post:        stateMap{},
+		config:      config,
+		chainConfig: chainConfig,
+		created:     make(map[common.Address]bool),
+		deleted:     make(map[common.Address]bool),
 	}
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
@@ -133,6 +135,13 @@ func (t *prestateTracer) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scop
 	case stackLen >= 5 && (op == vm.DELEGATECALL || op == vm.CALL || op == vm.STATICCALL || op == vm.CALLCODE):
 		addr := common.Address(stackData[stackLen-2].Bytes20())
 		t.lookupAccount(addr)
+		// Lookup a delegation target
+		if t.chainConfig.IsPrague(t.env.BlockNumber, t.env.Time) {
+			code := t.env.StateDB.GetCode(addr)
+			if target, ok := types.ParseDelegation(code); ok {
+				t.lookupAccount(target)
+			}
+		}
 	case op == vm.CREATE:
 		nonce := t.env.StateDB.GetNonce(caller)
 		addr := crypto.CreateAddress(caller, nonce)
