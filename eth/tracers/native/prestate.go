@@ -135,7 +135,7 @@ func (t *prestateTracer) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scop
 	case stackLen >= 5 && (op == vm.DELEGATECALL || op == vm.CALL || op == vm.STATICCALL || op == vm.CALLCODE):
 		addr := common.Address(stackData[stackLen-2].Bytes20())
 		t.lookupAccount(addr)
-		// Lookup a delegation target
+		// Lookup the delegation target
 		if t.chainConfig.IsPrague(t.env.BlockNumber, t.env.Time) {
 			code := t.env.StateDB.GetCode(addr)
 			if target, ok := types.ParseDelegation(code); ok {
@@ -170,6 +170,13 @@ func (t *prestateTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction
 		t.created[t.to] = true
 	} else {
 		t.to = *tx.To()
+		// Lookup the delegation target
+		if t.chainConfig.IsPrague(t.env.BlockNumber, t.env.Time) {
+			code := t.env.StateDB.GetCode(t.to)
+			if target, ok := types.ParseDelegation(code); ok {
+				t.lookupAccount(target)
+			}
+		}
 	}
 
 	t.lookupAccount(from)
