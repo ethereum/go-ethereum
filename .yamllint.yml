@@ -10,4 +10,4 @@ rules:
 ignore:
   # Upstream geth files that we don't want to modify unnecessarily.
   - .travis.yml
-  - crypto/secp256k1/libsecp256k1/.travis.yml
+  - crypto/secp256k1/libsecp256k1/*
