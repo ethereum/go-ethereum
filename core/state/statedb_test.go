@@ -982,6 +982,7 @@ func testMissingTrieNodes(t *testing.T, scheme string) {
 			TrieCleanSize:   0,
 			StateCleanSize:  0,
 			WriteBufferSize: 0,
+			NoAsyncFlush:    true,
 		}}) // disable caching
 	} else {
 		tdb = triedb.NewDatabase(memDb, &triedb.Config{HashDB: &hashdb.Config{
@@ -1004,18 +1005,25 @@ func testMissingTrieNodes(t *testing.T, scheme string) {
 		// force-flush
 		tdb.Commit(root, false)
 	}
-	// Create a new state on the old root
-	state, _ = New(root, db)
 	// Now we clear out the memdb
 	it := memDb.NewIterator(nil, nil)
 	for it.Next() {
 		k := it.Key()
-		// Leave the root intact
-		if !bytes.Equal(k, root[:]) {
-			t.Logf("key: %x", k)
-			memDb.Delete(k)
+		if scheme == rawdb.HashScheme {
+			if !bytes.Equal(k, root[:]) {
+				t.Logf("key: %x", k)
+				memDb.Delete(k)
+			}
+		}
+		if scheme == rawdb.PathScheme {
+			rk := k[len(rawdb.TrieNodeAccountPrefix):]
+			if len(rk) != 0 {
+				t.Logf("key: %x", k)
+				memDb.Delete(k)
+			}
 		}
 	}
+	state, _ = New(root, db)
 	balance := state.GetBalance(addr)
 	// The removed elem should lead to it returning zero balance
 	if exp, got := uint64(0), balance.Uint64(); got != exp {

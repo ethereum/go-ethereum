@@ -81,7 +81,7 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 		}
 		engine = ethash.NewFullFaker()
 	)
-	chain, err := NewBlockChain(db, gspec, engine, DefaultConfig().WithStateScheme(basic.scheme))
+	chain, err := NewBlockChain(db, gspec, engine, DefaultConfig().WithStateScheme(basic.scheme).WithNoAsyncFlush(true))
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
@@ -572,7 +572,7 @@ func TestHighCommitCrashWithNewSnapshot(t *testing.T) {
 	//
 	// Expected head header    : C8
 	// Expected head fast block: C8
-	// Expected head block     : G (Hash mode), C6 (Hash mode)
+	// Expected head block     : G (Hash mode), C6 (Path mode)
 	// Expected snapshot disk  : C4 (Hash mode)
 	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
 		expHead := uint64(0)
