@@ -1382,17 +1382,12 @@ func (api *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash commo
 		// No such tx.
 		return nil, nil
 	}
-	header, err := api.b.HeaderByHash(ctx, blockHash)
-	if err != nil {
-		return nil, err
-	}
 	receipt, err := api.b.GetCanonicalReceipt(tx, blockHash, blockNumber, index)
 	if err != nil {
 		return nil, err
 	}
 	// Derive the sender.
-	signer := types.MakeSigner(api.b.ChainConfig(), header.Number, header.Time)
-	return marshalReceipt(receipt, blockHash, blockNumber, signer, tx, int(index)), nil
+	return marshalReceipt(receipt, blockHash, blockNumber, api.signer, tx, int(index)), nil
 }
 
 // marshalReceipt marshals a transaction receipt into a JSON object.
