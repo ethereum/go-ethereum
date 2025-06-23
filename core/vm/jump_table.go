@@ -95,6 +95,7 @@ func newVerkleInstructionSet() JumpTable {
 func newOsakaInstructionSet() JumpTable {
 	instructionSet := newPragueInstructionSet()
 	enable7907(&instructionSet)
+	enable7939(&instructionSet) // EIP-7939 (CLZ opcode)
 	return validate(instructionSet)
 }
 

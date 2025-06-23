@@ -42,6 +42,7 @@ var activators = map[int]func(*JumpTable){
 	4762: enable4762,
 	7702: enable7702,
 	7907: enable7907,
+	7939: enable7939,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -294,10 +295,26 @@ func opBlobBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	return nil, nil
 }
 
+func opCLZ(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	x := scope.Stack.pop()
+	// count leading zero bits in x
+	scope.Stack.push(new(uint256.Int).SetUint64(256 - uint64(x.BitLen())))
+	return nil, nil
+}
+
 // enable4844 applies EIP-4844 (BLOBHASH opcode)
 func enable4844(jt *JumpTable) {
 	jt[BLOBHASH] = &operation{
 		execute:     opBlobHash,
+		constantGas: GasFastestStep,
+		minStack:    minStack(1, 1),
+		maxStack:    maxStack(1, 1),
+	}
+}
+
+func enable7939(jt *JumpTable) {
+	jt[CLZ] = &operation{
+		execute:     opCLZ,
 		constantGas: GasFastestStep,
 		minStack:    minStack(1, 1),
 		maxStack:    maxStack(1, 1),
