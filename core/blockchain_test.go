@@ -1007,21 +1007,21 @@ func testChainTxReorgs(t *testing.T, scheme string) {
 
 	// removed tx
 	for i, tx := range (types.Transactions{pastDrop, freshDrop}) {
-		if txn, _, _, _ := rawdb.ReadTransaction(db, tx.Hash()); txn != nil {
+		if txn, _, _, _ := rawdb.ReadCanonicalTransaction(db, tx.Hash()); txn != nil {
 			t.Errorf("drop %d: tx %v found while shouldn't have been", i, txn)
 		}
-		if rcpt, _, _, _ := rawdb.ReadReceipt(db, tx.Hash(), blockchain.Config()); rcpt != nil {
+		if rcpt, _, _, _ := rawdb.ReadCanonicalReceipt(db, tx.Hash(), blockchain.Config()); rcpt != nil {
 			t.Errorf("drop %d: receipt %v found while shouldn't have been", i, rcpt)
 		}
 	}
 	// added tx
 	for i, tx := range (types.Transactions{pastAdd, freshAdd, futureAdd}) {
-		if txn, _, _, _ := rawdb.ReadTransaction(db, tx.Hash()); txn == nil {
+		if txn, _, _, _ := rawdb.ReadCanonicalTransaction(db, tx.Hash()); txn == nil {
 			t.Errorf("add %d: expected tx to be found", i)
 		}
-		if rcpt, _, _, index := rawdb.ReadReceipt(db, tx.Hash(), blockchain.Config()); rcpt == nil {
+		if rcpt, _, _, index := rawdb.ReadCanonicalReceipt(db, tx.Hash(), blockchain.Config()); rcpt == nil {
 			t.Errorf("add %d: expected receipt to be found", i)
-		} else if rawRcpt, ctx, _ := rawdb.ReadRawReceipt(db, rcpt.BlockHash, rcpt.BlockNumber.Uint64(), index); rawRcpt == nil {
+		} else if rawRcpt, ctx, _ := rawdb.ReadCanonicalRawReceipt(db, rcpt.BlockHash, rcpt.BlockNumber.Uint64(), index); rawRcpt == nil {
 			t.Errorf("add %d: expected raw receipt to be found", i)
 		} else {
 			if rcpt.GasUsed != ctx.GasUsed {
@@ -1034,12 +1034,12 @@ func testChainTxReorgs(t *testing.T, scheme string) {
 	}
 	// shared tx
 	for i, tx := range (types.Transactions{postponed, swapped}) {
-		if txn, _, _, _ := rawdb.ReadTransaction(db, tx.Hash()); txn == nil {
+		if txn, _, _, _ := rawdb.ReadCanonicalTransaction(db, tx.Hash()); txn == nil {
 			t.Errorf("share %d: expected tx to be found", i)
 		}
-		if rcpt, _, _, index := rawdb.ReadReceipt(db, tx.Hash(), blockchain.Config()); rcpt == nil {
+		if rcpt, _, _, index := rawdb.ReadCanonicalReceipt(db, tx.Hash(), blockchain.Config()); rcpt == nil {
 			t.Errorf("share %d: expected receipt to be found", i)
-		} else if rawRcpt, ctx, _ := rawdb.ReadRawReceipt(db, rcpt.BlockHash, rcpt.BlockNumber.Uint64(), index); rawRcpt == nil {
+		} else if rawRcpt, ctx, _ := rawdb.ReadCanonicalRawReceipt(db, rcpt.BlockHash, rcpt.BlockNumber.Uint64(), index); rawRcpt == nil {
 			t.Errorf("add %d: expected raw receipt to be found", i)
 		} else {
 			if rcpt.GasUsed != ctx.GasUsed {
@@ -4426,7 +4426,7 @@ func testInsertChainWithCutoff(t *testing.T, cutoff uint64, ancientLimit uint64,
 				t.Fatalf("Missed block receipts: %d, cutoff: %d", num, cutoffBlock.NumberU64())
 			}
 			for indx, receipt := range receipts {
-				receiptByLookup, err := chain.GetReceiptByIndex(body.Transactions[indx], receipt.BlockHash,
+				receiptByLookup, err := chain.GetCanonicalReceipt(body.Transactions[indx], receipt.BlockHash,
 					receipt.BlockNumber.Uint64(), uint64(indx))
 				assert.NoError(t, err)
 				assert.Equal(t, receipt, receiptByLookup)
@@ -4435,7 +4435,7 @@ func testInsertChainWithCutoff(t *testing.T, cutoff uint64, ancientLimit uint64,
 	}
 }
 
-func TestGetReceiptByIndex(t *testing.T) {
+func TestGetCanonicalReceipt(t *testing.T) {
 	const chainLength = 64
 
 	// Configure and generate a sample block chain
@@ -4498,7 +4498,7 @@ func TestGetReceiptByIndex(t *testing.T) {
 		blockReceipts := chain.GetReceiptsByHash(block.Hash())
 		chain.receiptsCache.Purge() // ugly hack
 		for txIndex, tx := range block.Body().Transactions {
-			receipt, err := chain.GetReceiptByIndex(tx, block.Hash(), block.NumberU64(), uint64(txIndex))
+			receipt, err := chain.GetCanonicalReceipt(tx, block.Hash(), block.NumberU64(), uint64(txIndex))
 			if err != nil {
 				t.Fatalf("Unexpected error %v", err)
 			}

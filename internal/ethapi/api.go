@@ -1333,7 +1333,7 @@ func (api *TransactionAPI) GetTransactionCount(ctx context.Context, address comm
 // GetTransactionByHash returns the transaction for the given hash
 func (api *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common.Hash) (*RPCTransaction, error) {
 	// Try to return an already finalized transaction
-	found, tx, blockHash, blockNumber, index := api.b.GetTransaction(hash)
+	found, tx, blockHash, blockNumber, index := api.b.GetCanonicalTransaction(hash)
 	if !found {
 		// No finalized transaction, try to retrieve it from the pool
 		if tx := api.b.GetPoolTransaction(hash); tx != nil {
@@ -1356,7 +1356,7 @@ func (api *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common
 // GetRawTransactionByHash returns the bytes of the transaction for the given hash.
 func (api *TransactionAPI) GetRawTransactionByHash(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
 	// Retrieve a finalized transaction, or a pooled otherwise
-	found, tx, _, _, _ := api.b.GetTransaction(hash)
+	found, tx, _, _, _ := api.b.GetCanonicalTransaction(hash)
 	if !found {
 		if tx = api.b.GetPoolTransaction(hash); tx != nil {
 			return tx.MarshalBinary()
@@ -1373,7 +1373,7 @@ func (api *TransactionAPI) GetRawTransactionByHash(ctx context.Context, hash com
 
 // GetTransactionReceipt returns the transaction receipt for the given transaction hash.
 func (api *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
-	found, tx, blockHash, blockNumber, index := api.b.GetTransaction(hash)
+	found, tx, blockHash, blockNumber, index := api.b.GetCanonicalTransaction(hash)
 	if !found {
 		// Make sure indexer is done.
 		if !api.b.TxIndexDone() {
@@ -1386,7 +1386,7 @@ func (api *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash commo
 	if err != nil {
 		return nil, err
 	}
-	receipt, err := api.b.GetReceiptByIndex(tx, blockHash, blockNumber, index)
+	receipt, err := api.b.GetCanonicalReceipt(tx, blockHash, blockNumber, index)
 	if err != nil {
 		return nil, err
 	}
@@ -1775,7 +1775,7 @@ func (api *DebugAPI) GetRawReceipts(ctx context.Context, blockNrOrHash rpc.Block
 // GetRawTransaction returns the bytes of the transaction for the given hash.
 func (api *DebugAPI) GetRawTransaction(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
 	// Retrieve a finalized transaction, or a pooled otherwise
-	found, tx, _, _, _ := api.b.GetTransaction(hash)
+	found, tx, _, _, _ := api.b.GetCanonicalTransaction(hash)
 	if !found {
 		if tx = api.b.GetPoolTransaction(hash); tx != nil {
 			return tx.MarshalBinary()

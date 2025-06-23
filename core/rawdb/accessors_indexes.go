@@ -170,9 +170,10 @@ func findTxInBlockBody(blockbody rlp.RawValue, target common.Hash) (*types.Trans
 	return nil, 0, errors.New("transaction not found")
 }
 
-// ReadTransaction retrieves a specific transaction from the database, along with
-// its added positional metadata.
-func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64) {
+// ReadCanonicalTransaction retrieves a specific transaction from the database, along
+// with its added positional metadata. Notably, only the transaction in the canonical
+// chain is visible.
+func ReadCanonicalTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64) {
 	blockNumber := ReadTxLookupEntry(db, hash)
 	if blockNumber == nil {
 		return nil, common.Hash{}, 0, 0
@@ -194,9 +195,10 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 	return tx, blockHash, *blockNumber, txIndex
 }
 
-// ReadReceipt retrieves a specific transaction receipt from the database, along with
-// its added positional metadata.
-func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) (*types.Receipt, common.Hash, uint64, uint64) {
+// ReadCanonicalReceipt retrieves a specific transaction receipt from the database,
+// along with its added positional metadata. Notably, only the receipt in the canonical
+// chain is visible.
+func ReadCanonicalReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) (*types.Receipt, common.Hash, uint64, uint64) {
 	// Retrieve the context of the receipt based on the transaction hash
 	blockNumber := ReadTxLookupEntry(db, hash)
 	if blockNumber == nil {
@@ -261,10 +263,12 @@ type RawReceiptContext struct {
 	LogIndex uint   // Starting index of the logs within the block
 }
 
-// ReadRawReceipt reads a raw receipt at the specified position. It also returns
-// the gas used by the associated transaction and the starting index of the logs
-// within the block.
-func ReadRawReceipt(db ethdb.Reader, blockHash common.Hash, blockNumber, txIndex uint64) (*types.Receipt, RawReceiptContext, error) {
+// ReadCanonicalRawReceipt reads a raw receipt at the specified position. It also
+// returns the gas used by the associated transaction and the starting index of
+// the logs within the block. The main difference with ReadCanonicalReceipt is
+// that the additional positional fields are not directly included in the receipt.
+// Notably, only receipts from the canonical chain are visible.
+func ReadCanonicalRawReceipt(db ethdb.Reader, blockHash common.Hash, blockNumber, txIndex uint64) (*types.Receipt, RawReceiptContext, error) {
 	receiptIt, err := rlp.NewListIterator(ReadCanonicalReceiptsRLP(db, blockNumber, &blockHash))
 	if err != nil {
 		return nil, RawReceiptContext{}, err

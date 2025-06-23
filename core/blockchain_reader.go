@@ -216,9 +216,11 @@ func (bc *BlockChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*type
 	return
 }
 
-// GetReceiptByIndex allows fetching a receipt for a transaction that was already
-// looked up on the index.
-func (bc *BlockChain) GetReceiptByIndex(tx *types.Transaction, blockHash common.Hash, blockNumber, txIndex uint64) (*types.Receipt, error) {
+// GetCanonicalReceipt allows fetching a receipt for a transaction that was
+// already looked up on the index. Notably, only receipt in canonical chain
+// is visible.
+func (bc *BlockChain) GetCanonicalReceipt(tx *types.Transaction, blockHash common.Hash, blockNumber, txIndex uint64) (*types.Receipt, error) {
+	// The receipt retrieved from the cache contains all previously derived fields
 	if receipts, ok := bc.receiptsCache.Get(blockHash); ok {
 		if int(txIndex) >= len(receipts) {
 			return nil, fmt.Errorf("receipt out of index, length: %d, index: %d", len(receipts), txIndex)
@@ -233,7 +235,7 @@ func (bc *BlockChain) GetReceiptByIndex(tx *types.Transaction, blockHash common.
 	if header.ExcessBlobGas != nil {
 		blobGasPrice = eip4844.CalcBlobFee(bc.chainConfig, header)
 	}
-	receipt, ctx, err := rawdb.ReadRawReceipt(bc.db, blockHash, blockNumber, txIndex)
+	receipt, ctx, err := rawdb.ReadCanonicalRawReceipt(bc.db, blockHash, blockNumber, txIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -316,13 +318,15 @@ func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, max
 	return bc.hc.GetAncestor(hash, number, ancestor, maxNonCanonical)
 }
 
-// GetTransactionLookup retrieves the lookup along with the transaction
+// GetCanonicalTransaction retrieves the lookup along with the transaction
 // itself associate with the given transaction hash.
 //
 // A null will be returned if the transaction is not found. This can be due to
 // the transaction indexer not being finished. The caller must explicitly check
 // the indexer progress.
-func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLookupEntry, *types.Transaction) {
+//
+// Notably, only the transaction in the canonical chain is visible.
+func (bc *BlockChain) GetCanonicalTransaction(hash common.Hash) (*rawdb.LegacyTxLookupEntry, *types.Transaction) {
 	bc.txLookupLock.RLock()
 	defer bc.txLookupLock.RUnlock()
 
@@ -330,7 +334,7 @@ func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLoo
 	if item, exist := bc.txLookupCache.Get(hash); exist {
 		return item.lookup, item.transaction
 	}
-	tx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(bc.db, hash)
+	tx, blockHash, blockNumber, txIndex := rawdb.ReadCanonicalTransaction(bc.db, hash)
 	if tx == nil {
 		return nil, nil
 	}
