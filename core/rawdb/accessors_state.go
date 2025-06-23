@@ -65,6 +65,16 @@ func ReadCodeWithPrefix(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	return data
 }
 
+// ReadCodeWithPrefix retrieves the contract code of the provided code hash.
+// Return -1 if not found for legacy db.
+func ReadCodeSizeWithPrefix(db ethdb.KeyValueReader, hash common.Hash) int {
+	data, _ := db.Get(codeSizeKey(hash))
+	if len(data) != 4 {
+		return -1
+	}
+	return int(binary.BigEndian.Uint32(data))
+}
+
 // HasCode checks if the contract code corresponding to the
 // provided code hash is present in the db.
 func HasCode(db ethdb.KeyValueReader, hash common.Hash) bool {
@@ -90,12 +100,19 @@ func WriteCode(db ethdb.KeyValueWriter, hash common.Hash, code []byte) {
 	if err := db.Put(codeKey(hash), code); err != nil {
 		log.Crit("Failed to store contract code", "err", err)
 	}
+	var sizeData [4]byte
+	binary.BigEndian.PutUint32(sizeData[:], uint32(len(code)))
+	if err := db.Put(codeSizeKey(hash), sizeData[:]); err != nil {
+		log.Crit("Failed to store contract code size", "err", err)
+	}
 }
 
 // DeleteCode deletes the specified contract code from the database.
 func DeleteCode(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(codeKey(hash)); err != nil {
 		log.Crit("Failed to delete contract code", "err", err)
+		// Ignore error since the legacy db may not contain the size.
+		db.Delete(codeSizeKey(hash))
 	}
 }
 

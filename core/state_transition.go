@@ -475,8 +475,11 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	}
 
 	// Check whether the init code size has been exceeded.
-	if rules.IsShanghai && contractCreation && len(msg.Data) > params.MaxInitCodeSize {
-		return nil, fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSize)
+	if rules.IsOsaka && contractCreation && len(msg.Data) > params.MaxInitCodeSizeEIP7907 {
+		return nil, fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSizeEIP7907)
+	}
+	if !rules.IsOsaka && rules.IsShanghai && contractCreation && len(msg.Data) > params.MaxInitCodeSizeEIP3860 {
+		return nil, fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSizeEIP3860)
 	}
 
 	// Execute the preparatory steps for state transition which includes:
