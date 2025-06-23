@@ -221,6 +221,10 @@ func (j *journal) accessListAddAccount(addr common.Address) {
 	j.append(accessListAddAccountChange{addr})
 }
 
+func (j *journal) accessListAddAccountCode(addr common.Address) {
+	j.append(accessListAddAccountCodeChange{addr})
+}
+
 func (j *journal) accessListAddSlot(addr common.Address, slot common.Hash) {
 	j.append(accessListAddSlotChange{
 		address: addr,
@@ -281,6 +285,9 @@ type (
 	accessListAddSlotChange struct {
 		address common.Address
 		slot    common.Hash
+	}
+	accessListAddAccountCodeChange struct {
+		address common.Address
 	}
 
 	// Changes to transient storage
@@ -481,6 +488,20 @@ func (ch accessListAddAccountChange) dirtied() *common.Address {
 
 func (ch accessListAddAccountChange) copy() journalEntry {
 	return accessListAddAccountChange{
+		address: ch.address,
+	}
+}
+
+func (ch accessListAddAccountCodeChange) revert(s *StateDB) {
+	s.accessList.DeleteAddressCode(ch.address)
+}
+
+func (ch accessListAddAccountCodeChange) dirtied() *common.Address {
+	return nil
+}
+
+func (ch accessListAddAccountCodeChange) copy() journalEntry {
+	return accessListAddAccountCodeChange{
 		address: ch.address,
 	}
 }
