@@ -148,7 +148,7 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 				log.Warn("Failed to decode block body", "block", data.number, "error", err)
 				return
 			}
-			var hashes []common.Hash
+			var hashes []common.Hash = make([]common.Hash, 0, len(body.Transactions))
 			for _, tx := range body.Transactions {
 				hashes = append(hashes, tx.Hash())
 			}

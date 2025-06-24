@@ -53,6 +53,7 @@ func (info *freezerInfo) size() common.StorageSize {
 
 func inspect(name string, order map[string]freezerTableConfig, reader ethdb.AncientReader) (freezerInfo, error) {
 	info := freezerInfo{name: name}
+	info.sizes = make([]tableSize, 0, len(order))
 	for t := range order {
 		size, err := reader.AncientSize(t)
 		if err != nil {
@@ -78,7 +79,7 @@ func inspect(name string, order map[string]freezerTableConfig, reader ethdb.Anci
 
 // inspectFreezers inspects all freezers registered in the system.
 func inspectFreezers(db ethdb.Database) ([]freezerInfo, error) {
-	var infos []freezerInfo
+	var infos []freezerInfo = make([]freezerInfo, 0, len(freezers))
 	for _, freezer := range freezers {
 		switch freezer {
 		case ChainFreezerName:
