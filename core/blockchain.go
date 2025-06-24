@@ -242,9 +242,10 @@ func (cfg *BlockChainConfig) triedbConfig(isVerkle bool) *triedb.Config {
 	}
 	if cfg.StateScheme == rawdb.PathScheme {
 		config.PathDB = &pathdb.Config{
-			StateHistory:   cfg.StateHistory,
-			TrieCleanSize:  cfg.TrieCleanLimit * 1024 * 1024,
-			StateCleanSize: cfg.SnapshotLimit * 1024 * 1024,
+			StateHistory:        cfg.StateHistory,
+			EnableStateIndexing: cfg.ArchiveMode,
+			TrieCleanSize:       cfg.TrieCleanLimit * 1024 * 1024,
+			StateCleanSize:      cfg.SnapshotLimit * 1024 * 1024,
 
 			// TODO(rjl493456442): The write buffer represents the memory limit used
 			// for flushing both trie data and state data to disk. The config name

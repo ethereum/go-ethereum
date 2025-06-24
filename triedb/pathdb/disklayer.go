@@ -355,6 +355,12 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 			overflow = true
 			oldest = bottom.stateID() - limit + 1 // track the id of history **after truncation**
 		}
+		// Notify the state history indexer for newly created history
+		if dl.db.indexer != nil {
+			if err := dl.db.indexer.extend(bottom.stateID()); err != nil {
+				return nil, err
+			}
+		}
 	}
 	// Mark the diskLayer as stale before applying any mutations on top.
 	dl.stale = true
@@ -477,6 +483,12 @@ func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 
 	dl.stale = true
 
+	// Unindex the corresponding state history
+	if dl.db.indexer != nil {
+		if err := dl.db.indexer.shorten(dl.id); err != nil {
+			return nil, err
+		}
+	}
 	// State change may be applied to node buffer, or the persistent
 	// state, depends on if node buffer is empty or not. If the node
 	// buffer is not empty, it means that the state transition that
