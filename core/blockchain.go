@@ -1352,7 +1352,7 @@ const (
 // will be directly stored in the ancient, getting rid of the chain migration.
 func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain []rlp.RawValue, ancientLimit uint64) (int, error) {
 	// Verify the supplied headers before insertion without lock
-	var headers []*types.Header
+	headers := make([]*types.Header, 0, len(blockChain))
 	for _, block := range blockChain {
 		headers = append(headers, block.Header())
 		// Here we also validate that blob transactions in the block do not
@@ -2210,7 +2210,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator, ma
 	}
 	// Import all the pruned blocks to make the state available
 	var (
-		blocks []*types.Block
+		blocks = make([]*types.Block, 0, len(hashes))
 		memory uint64
 	)
 	for i := len(hashes) - 1; i >= 0; i-- {
