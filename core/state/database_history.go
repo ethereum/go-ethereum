@@ -32,6 +32,10 @@ import (
 
 // historicReader wraps a historical state reader defined in path database,
 // providing historic state serving over the path scheme.
+//
+// TODO(rjl493456442): historicReader is not thread-safe and does not fully
+// comply with the StateReader interface requirements, needs to be fixed.
+// Currently, it is only used in a non-concurrent context, so it is safe for now.
 type historicReader struct {
 	reader *pathdb.HistoricalStateReader
 }
