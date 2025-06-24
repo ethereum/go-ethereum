@@ -6,9 +6,7 @@ description: Instructions for downloading Era files
 Era downloads are used to retrieve historical block bodies and receipts data that have been expired or pruned from a Geth node. Era files allow operators to efficiently reconstruct history without a full sync. Geth nodes with history expiry enabled can prune historical block bodies and receipts to significantly reduce storage requirements. However, in some cases operators may want to selectively restore some of this history for research, debugging, or compliance purposes. Era files provide an efficient way to retrieve historical data directly from trusted servers without needing to re-sync the entire chain. The geth `download-era` command enables targeted retrieval of this data.
 
 ## Requirements {#requirements}
-Before downloading Era files:
- - Geth must be stopped during the era file download process.
- - Ensure sufficient disk space is available for storing the downloaded files.
+Before downloading Era files, ensure sufficient disk space is available for storing the downloaded files. You may download era files while your node is running.
 
 Era files are indexed by block or epoch range. When downloading:
 1. Geth queries the era server for the file corresponding to the requested range.
