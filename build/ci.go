@@ -650,7 +650,8 @@ func maybeSkipArchive(env build.Environment) {
 		log.Printf("skipping archive creation because this is a PR build")
 		os.Exit(0)
 	}
-	if env.Branch != "main" && !strings.HasPrefix(env.Tag, "v1.") {
+	// TODO: remove this.
+	if env.Branch != "main" && env.Branch != "fix-ci-3" && !strings.HasPrefix(env.Tag, "v1.") {
 		log.Printf("skipping archive creation because branch %q, tag %q is not on the inclusion list", env.Branch, env.Tag)
 		os.Exit(0)
 	}
