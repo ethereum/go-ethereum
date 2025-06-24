@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -765,25 +764,25 @@ func downloadEra(ctx *cli.Context) error {
 }
 
 func parseRange(s string) (start uint64, end uint64, ok bool) {
-	if m, _ := regexp.MatchString("[0-9]+", s); m {
-		start, err := strconv.ParseUint(s, 10, 64)
-		if err != nil {
-			return 0, 0, false
-		}
-		end = start
-		return start, end, true
-	}
-	if m, _ := regexp.MatchString("[0-9]+-[0-9]+", s); m {
+	if strings.Contains(s, "-") {
 		s1, s2, _ := strings.Cut(s, "-")
 		start, err := strconv.ParseUint(s1, 10, 64)
 		if err != nil {
 			return 0, 0, false
 		}
-		end, err = strconv.ParseUint(s2, 10, 64)
+		end, err := strconv.ParseUint(s2, 10, 64)
 		if err != nil {
+			return 0, 0, false
+		}
+		if start > end {
 			return 0, 0, false
 		}
 		return start, end, true
 	}
-	return 0, 0, false
+	start, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return 0, 0, false
+	}
+	end = start
+	return start, end, true
 }
