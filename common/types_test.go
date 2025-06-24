@@ -21,6 +21,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"reflect"
 	"strings"
@@ -594,4 +595,30 @@ func BenchmarkPrettyDuration(b *testing.B) {
 		a = x.String()
 	}
 	b.Logf("Post %s", a)
+}
+
+func TestDecimalUnmarshalJSON(t *testing.T) {
+	// These should error
+	for _, tc := range []string{``, `"`, `""`, `"-1"`} {
+		if err := new(Decimal).UnmarshalJSON([]byte(tc)); err == nil {
+			t.Errorf("input %s should cause error", tc)
+		}
+	}
+	// These should succeed
+	for _, tc := range []struct {
+		input string
+		want  uint64
+	}{
+		{`"0"`, 0},
+		{`"9223372036854775807"`, math.MaxInt64},
+		{`"18446744073709551615"`, math.MaxUint64},
+	} {
+		have := new(Decimal)
+		if err := have.UnmarshalJSON([]byte(tc.input)); err != nil {
+			t.Errorf("input %q triggered error: %v", tc.input, err)
+		}
+		if uint64(*have) != tc.want {
+			t.Errorf("input %q, have %d want %d", tc.input, *have, tc.want)
+		}
+	}
 }

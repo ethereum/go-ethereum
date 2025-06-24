@@ -24,7 +24,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
+	"github.com/ethereum/go-ethereum/p2p/pipes"
 )
 
 func TestProtocolHandshake(t *testing.T) {
@@ -97,7 +97,7 @@ func TestProtocolHandshake(t *testing.T) {
 			return
 		}
 
-		if err := ExpectMsg(rlpx, discMsg, []DiscReason{DiscQuitting}); err != nil {
+		if err := ExpectMsg(rlpx, discMsg, []any{DiscQuitting}); err != nil {
 			t.Errorf("error receiving disconnect: %v", err)
 		}
 	}()
@@ -112,7 +112,13 @@ func TestProtocolHandshakeErrors(t *testing.T) {
 	}{
 		{
 			code: discMsg,
-			msg:  []DiscReason{DiscQuitting},
+			msg:  []any{DiscQuitting},
+			err:  DiscQuitting,
+		},
+		{
+			// legacy disconnect encoding as byte array
+			code: discMsg,
+			msg:  []byte{byte(DiscQuitting)},
 			err:  DiscQuitting,
 		},
 		{

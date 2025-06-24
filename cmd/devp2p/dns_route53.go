@@ -17,9 +17,11 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -32,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/urfave/cli/v2"
-	"golang.org/x/exp/slices"
 )
 
 const (
@@ -292,13 +293,7 @@ func sortChanges(changes []types.Change) {
 		if a.Action == b.Action {
 			return strings.Compare(*a.ResourceRecordSet.Name, *b.ResourceRecordSet.Name)
 		}
-		if score[string(a.Action)] < score[string(b.Action)] {
-			return -1
-		}
-		if score[string(a.Action)] > score[string(b.Action)] {
-			return 1
-		}
-		return 0
+		return cmp.Compare(score[string(a.Action)], score[string(b.Action)])
 	})
 }
 

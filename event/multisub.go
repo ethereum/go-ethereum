@@ -17,7 +17,7 @@
 package event
 
 // JoinSubscriptions joins multiple subscriptions to be able to track them as
-// one entity and collectively cancel them of consume any errors from them.
+// one entity and collectively cancel them or consume any errors from them.
 func JoinSubscriptions(subs ...Subscription) Subscription {
 	return NewSubscription(func(unsubbed <-chan struct{}) error {
 		// Unsubscribe all subscriptions before returning

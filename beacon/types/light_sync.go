@@ -23,12 +23,20 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/common"
+	ctypes "github.com/ethereum/go-ethereum/core/types"
 )
+
+// HeadInfo represents an unvalidated new head announcement.
+type HeadInfo struct {
+	Slot      uint64
+	BlockRoot common.Hash
+}
 
 // BootstrapData contains a sync committee where light sync can be started,
 // together with a proof through a beacon header and corresponding state.
 // Note: BootstrapData is fetched from a server based on a known checkpoint hash.
 type BootstrapData struct {
+	Version         string
 	Header          Header
 	CommitteeRoot   common.Hash
 	Committee       *SerializedSyncCommittee `rlp:"-"`
@@ -40,7 +48,7 @@ func (c *BootstrapData) Validate() error {
 	if c.CommitteeRoot != c.Committee.Root() {
 		return errors.New("wrong committee root")
 	}
-	return merkle.VerifyProof(c.Header.StateRoot, params.StateIndexSyncCommittee, c.CommitteeBranch, merkle.Value(c.CommitteeRoot))
+	return merkle.VerifyProof(c.Header.StateRoot, params.StateIndexSyncCommittee(c.Version), c.CommitteeBranch, merkle.Value(c.CommitteeRoot))
 }
 
 // LightClientUpdate is a proof of the next sync committee root based on a header
@@ -52,6 +60,7 @@ func (c *BootstrapData) Validate() error {
 // See data structure definition here:
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientupdate
 type LightClientUpdate struct {
+	Version                 string
 	AttestedHeader          SignedHeader  // Arbitrary header out of the period signed by the sync committee
 	NextSyncCommitteeRoot   common.Hash   // Sync committee of the next period advertised in the current one
 	NextSyncCommitteeBranch merkle.Values // Proof for the next period's sync committee
@@ -72,11 +81,11 @@ func (update *LightClientUpdate) Validate() error {
 		if update.FinalizedHeader.SyncPeriod() != period {
 			return errors.New("finalized header is from different period")
 		}
-		if err := merkle.VerifyProof(update.AttestedHeader.Header.StateRoot, params.StateIndexFinalBlock, update.FinalityBranch, merkle.Value(update.FinalizedHeader.Hash())); err != nil {
+		if err := merkle.VerifyProof(update.AttestedHeader.Header.StateRoot, params.StateIndexFinalBlock(update.Version), update.FinalityBranch, merkle.Value(update.FinalizedHeader.Hash())); err != nil {
 			return fmt.Errorf("invalid finalized header proof: %w", err)
 		}
 	}
-	if err := merkle.VerifyProof(update.AttestedHeader.Header.StateRoot, params.StateIndexNextSyncCommittee, update.NextSyncCommitteeBranch, merkle.Value(update.NextSyncCommitteeRoot)); err != nil {
+	if err := merkle.VerifyProof(update.AttestedHeader.Header.StateRoot, params.StateIndexNextSyncCommittee(update.Version), update.NextSyncCommitteeBranch, merkle.Value(update.NextSyncCommitteeRoot)); err != nil {
 		return fmt.Errorf("invalid next sync committee proof: %w", err)
 	}
 	return nil
@@ -133,4 +142,99 @@ func (u UpdateScore) BetterThan(w UpdateScore) bool {
 		return uFinalized
 	}
 	return u.SignerCount > w.SignerCount
+}
+
+// HeaderWithExecProof contains a beacon header and proves the belonging execution
+// payload header with a Merkle proof.
+type HeaderWithExecProof struct {
+	Header
+	PayloadHeader *ExecutionHeader
+	PayloadBranch merkle.Values
+}
+
+// Validate verifies the Merkle proof of the execution payload header.
+func (h *HeaderWithExecProof) Validate() error {
+	return merkle.VerifyProof(h.BodyRoot, params.BodyIndexExecPayload, h.PayloadBranch, h.PayloadHeader.PayloadRoot())
+}
+
+// OptimisticUpdate proves sync committee commitment on the attested beacon header.
+// It also proves the belonging execution payload header with a Merkle proof.
+//
+// See data structure definition here:
+// https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientoptimisticupdate
+type OptimisticUpdate struct {
+	Attested HeaderWithExecProof
+	// Sync committee BLS signature aggregate
+	Signature SyncAggregate
+	// Slot in which the signature has been created (newer than Header.Slot,
+	// determines the signing sync committee)
+	SignatureSlot uint64
+}
+
+// SignedHeader returns the signed attested header of the update.
+func (u *OptimisticUpdate) SignedHeader() SignedHeader {
+	return SignedHeader{
+		Header:        u.Attested.Header,
+		Signature:     u.Signature,
+		SignatureSlot: u.SignatureSlot,
+	}
+}
+
+// Validate verifies the Merkle proof proving the execution payload header.
+// Note that the sync committee signature of the attested header should be
+// verified separately by a synced committee chain.
+func (u *OptimisticUpdate) Validate() error {
+	return u.Attested.Validate()
+}
+
+// FinalityUpdate proves a finalized beacon header by a sync committee commitment
+// on an attested beacon header, referring to the latest finalized header with a
+// Merkle proof.
+// It also proves the execution payload header belonging to both the attested and
+// the finalized beacon header with Merkle proofs.
+//
+// See data structure definition here:
+// https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientfinalityupdate
+type FinalityUpdate struct {
+	Version             string
+	Attested, Finalized HeaderWithExecProof
+	FinalityBranch      merkle.Values
+	// Sync committee BLS signature aggregate
+	Signature SyncAggregate
+	// Slot in which the signature has been created (newer than Header.Slot,
+	// determines the signing sync committee)
+	SignatureSlot uint64
+}
+
+// SignedHeader returns the signed attested header of the update.
+func (u *FinalityUpdate) SignedHeader() SignedHeader {
+	return SignedHeader{
+		Header:        u.Attested.Header,
+		Signature:     u.Signature,
+		SignatureSlot: u.SignatureSlot,
+	}
+}
+
+// Validate verifies the Merkle proofs proving the finalized beacon header and
+// the execution payload headers belonging to the attested and finalized headers.
+// Note that the sync committee signature of the attested header should be
+// verified separately by a synced committee chain.
+func (u *FinalityUpdate) Validate() error {
+	if err := u.Attested.Validate(); err != nil {
+		return err
+	}
+	if err := u.Finalized.Validate(); err != nil {
+		return err
+	}
+	return merkle.VerifyProof(u.Attested.StateRoot, params.StateIndexFinalBlock(u.Version), u.FinalityBranch, merkle.Value(u.Finalized.Hash()))
+}
+
+// ChainHeadEvent returns an authenticated execution payload associated with the
+// latest accepted head of the beacon chain, along with the hash of the latest
+// finalized execution block.
+type ChainHeadEvent struct {
+	BeaconHead   Header
+	Block        *ctypes.Block
+	ExecRequests [][]byte    // execution layer requests (added in Electra)
+	Finalized    common.Hash // latest finalized block hash
 }

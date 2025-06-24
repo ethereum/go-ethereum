@@ -28,8 +28,10 @@ func LookupInstructionSet(rules params.Rules) (JumpTable, error) {
 	switch {
 	case rules.IsVerkle:
 		return newCancunInstructionSet(), errors.New("verkle-fork not defined yet")
+	case rules.IsOsaka:
+		return newPragueInstructionSet(), errors.New("osaka-fork not defined yet")
 	case rules.IsPrague:
-		return newCancunInstructionSet(), errors.New("prague-fork not defined yet")
+		return newPragueInstructionSet(), nil
 	case rules.IsCancun:
 		return newCancunInstructionSet(), nil
 	case rules.IsShanghai:
@@ -72,5 +74,5 @@ func (op *operation) HasCost() bool {
 	// However, go-lang does now allow that. So we'll just check some other
 	// 'indicators' that this is an invalid op. Alas, STOP is impossible to
 	// filter out
-	return op.dynamicGas != nil || op.ConstantGas != 0
+	return op.dynamicGas != nil || op.constantGas != 0
 }

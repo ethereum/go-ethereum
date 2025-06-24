@@ -3,80 +3,34 @@
 // <https://github.com/rcrowley/go-metrics>
 //
 // Coda Hale's original work: <https://github.com/codahale/metrics>
+
 package metrics
 
 import (
-	"os"
 	"runtime/metrics"
 	"runtime/pprof"
-	"strconv"
-	"strings"
-	"syscall"
 	"time"
-
-	"github.com/ethereum/go-ethereum/log"
 )
 
-// Enabled is checked by the constructor functions for all of the
-// standard metrics. If it is true, the metric returned is a stub.
+var (
+	metricsEnabled = false
+)
+
+// Enabled is checked by functions that are deemed 'expensive', e.g. if a
+// meter-type does locking and/or non-trivial math operations during update.
+func Enabled() bool {
+	return metricsEnabled
+}
+
+// Enable enables the metrics system.
+// The Enabled-flag is expected to be set, once, during startup, but toggling off and on
+// is not supported.
 //
-// This global kill-switch helps quantify the observer effect and makes
-// for less cluttered pprof profiles.
-var Enabled = false
-
-// EnabledExpensive is a soft-flag meant for external packages to check if costly
-// metrics gathering is allowed or not. The goal is to separate standard metrics
-// for health monitoring and debug metrics that might impact runtime performance.
-var EnabledExpensive = false
-
-// enablerFlags is the CLI flag names to use to enable metrics collections.
-var enablerFlags = []string{"metrics"}
-
-// enablerEnvVars is the env var names to use to enable metrics collections.
-var enablerEnvVars = []string{"GETH_METRICS"}
-
-// expensiveEnablerFlags is the CLI flag names to use to enable metrics collections.
-var expensiveEnablerFlags = []string{"metrics.expensive"}
-
-// expensiveEnablerEnvVars is the env var names to use to enable metrics collections.
-var expensiveEnablerEnvVars = []string{"GETH_METRICS_EXPENSIVE"}
-
-// Init enables or disables the metrics system. Since we need this to run before
-// any other code gets to create meters and timers, we'll actually do an ugly hack
-// and peek into the command line args for the metrics flag.
-func init() {
-	for _, enabler := range enablerEnvVars {
-		if val, found := syscall.Getenv(enabler); found && !Enabled {
-			if enable, _ := strconv.ParseBool(val); enable { // ignore error, flag parser will choke on it later
-				log.Info("Enabling metrics collection")
-				Enabled = true
-			}
-		}
-	}
-	for _, enabler := range expensiveEnablerEnvVars {
-		if val, found := syscall.Getenv(enabler); found && !EnabledExpensive {
-			if enable, _ := strconv.ParseBool(val); enable { // ignore error, flag parser will choke on it later
-				log.Info("Enabling expensive metrics collection")
-				EnabledExpensive = true
-			}
-		}
-	}
-	for _, arg := range os.Args {
-		flag := strings.TrimLeft(arg, "-")
-
-		for _, enabler := range enablerFlags {
-			if !Enabled && flag == enabler {
-				log.Info("Enabling metrics collection")
-				Enabled = true
-			}
-		}
-		for _, enabler := range expensiveEnablerFlags {
-			if !EnabledExpensive && flag == enabler {
-				log.Info("Enabling expensive metrics collection")
-				EnabledExpensive = true
-			}
-		}
-	}
+// Enable is not safe to call concurrently. You need to call this as early as possible in
+// the program, before any metrics collection will happen.
+func Enable() {
+	metricsEnabled = true
+	startMeterTickerLoop()
 }
 
 var threadCreateProfile = pprof.Lookup("threadcreate")
@@ -153,7 +107,7 @@ func readRuntimeStats(v *runtimeStats) {
 // CollectProcessMetrics periodically collects various metrics about the running process.
 func CollectProcessMetrics(refresh time.Duration) {
 	// Short circuit if the metrics system is disabled
-	if !Enabled {
+	if !metricsEnabled {
 		return
 	}
 

@@ -18,6 +18,7 @@ package trie
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -42,12 +43,12 @@ func newCommitter(nodeset *trienode.NodeSet, tracer *tracer, collectLeaf bool) *
 }
 
 // Commit collapses a node down into a hash node.
-func (c *committer) Commit(n node) hashNode {
-	return c.commit(nil, n).(hashNode)
+func (c *committer) Commit(n node, parallel bool) hashNode {
+	return c.commit(nil, n, parallel).(hashNode)
 }
 
 // commit collapses a node down into a hash node and returns it.
-func (c *committer) commit(path []byte, n node) node {
+func (c *committer) commit(path []byte, n node, parallel bool) node {
 	// if this path is clean, use available cached data
 	hash, dirty := n.cache()
 	if hash != nil && !dirty {
@@ -56,32 +57,26 @@ func (c *committer) commit(path []byte, n node) node {
 	// Commit children, then parent, and remove the dirty flag.
 	switch cn := n.(type) {
 	case *shortNode:
-		// Commit child
-		collapsed := cn.copy()
-
 		// If the child is fullNode, recursively commit,
 		// otherwise it can only be hashNode or valueNode.
 		if _, ok := cn.Val.(*fullNode); ok {
-			collapsed.Val = c.commit(append(path, cn.Key...), cn.Val)
+			cn.Val = c.commit(append(path, cn.Key...), cn.Val, false)
 		}
 		// The key needs to be copied, since we're adding it to the
 		// modified nodeset.
-		collapsed.Key = hexToCompact(cn.Key)
-		hashedNode := c.store(path, collapsed)
+		cn.Key = hexToCompact(cn.Key)
+		hashedNode := c.store(path, cn)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn
 		}
-		return collapsed
+		return cn
 	case *fullNode:
-		hashedKids := c.commitChildren(path, cn)
-		collapsed := cn.copy()
-		collapsed.Children = hashedKids
-
-		hashedNode := c.store(path, collapsed)
+		c.commitChildren(path, cn, parallel)
+		hashedNode := c.store(path, cn)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn
 		}
-		return collapsed
+		return cn
 	case hashNode:
 		return cn
 	default:
@@ -91,8 +86,11 @@ func (c *committer) commit(path []byte, n node) node {
 }
 
 // commitChildren commits the children of the given fullnode
-func (c *committer) commitChildren(path []byte, n *fullNode) [17]node {
-	var children [17]node
+func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) {
+	var (
+		wg      sync.WaitGroup
+		nodesMu sync.Mutex
+	)
 	for i := 0; i < 16; i++ {
 		child := n.Children[i]
 		if child == nil {
@@ -101,20 +99,31 @@ func (c *committer) commitChildren(path []byte, n *fullNode) [17]node {
 		// If it's the hashed child, save the hash value directly.
 		// Note: it's impossible that the child in range [0, 15]
 		// is a valueNode.
-		if hn, ok := child.(hashNode); ok {
-			children[i] = hn
+		if _, ok := child.(hashNode); ok {
 			continue
 		}
 		// Commit the child recursively and store the "hashed" value.
 		// Note the returned node can be some embedded nodes, so it's
 		// possible the type is not hashNode.
-		children[i] = c.commit(append(path, byte(i)), child)
+		if !parallel {
+			n.Children[i] = c.commit(append(path, byte(i)), child, false)
+		} else {
+			wg.Add(1)
+			go func(index int) {
+				p := append(path, byte(index))
+				childSet := trienode.NewNodeSet(c.nodes.Owner)
+				childCommitter := newCommitter(childSet, c.tracer, c.collectLeaf)
+				n.Children[index] = childCommitter.commit(p, child, false)
+				nodesMu.Lock()
+				c.nodes.MergeSet(childSet)
+				nodesMu.Unlock()
+				wg.Done()
+			}(i)
+		}
 	}
-	// For the 17th child, it's possible the type is valuenode.
-	if n.Children[16] != nil {
-		children[16] = n.Children[16]
+	if parallel {
+		wg.Wait()
 	}
-	return children
 }
 
 // store hashes the node n and adds it to the modified nodeset. If leaf collection
@@ -154,12 +163,8 @@ func (c *committer) store(path []byte, n node) node {
 	return hash
 }
 
-// mptResolver the children resolver in merkle-patricia-tree.
-type mptResolver struct{}
-
-// ForEach implements childResolver, decodes the provided node and
-// traverses the children inside.
-func (resolver mptResolver) ForEach(node []byte, onChild func(common.Hash)) {
+// ForGatherChildren decodes the provided node and traverses the children inside.
+func ForGatherChildren(node []byte, onChild func(common.Hash)) {
 	forGatherChildren(mustDecodeNodeUnsafe(nil, node), onChild)
 }
 

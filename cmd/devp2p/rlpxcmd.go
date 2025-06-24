@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/ethtest"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/urfave/cli/v2"
@@ -46,29 +47,41 @@ var (
 	}
 	rlpxEthTestCommand = &cli.Command{
 		Name:      "eth-test",
-		Usage:     "Runs tests against a node",
-		ArgsUsage: "<node> <chain.rlp> <genesis.json>",
+		Usage:     "Runs eth protocol tests against a node",
+		ArgsUsage: "<node>",
 		Action:    rlpxEthTest,
 		Flags: []cli.Flag{
 			testPatternFlag,
 			testTAPFlag,
+			testChainDirFlag,
+			testNodeFlag,
+			testNodeJWTFlag,
+			testNodeEngineFlag,
 		},
 	}
 	rlpxSnapTestCommand = &cli.Command{
 		Name:      "snap-test",
-		Usage:     "Runs tests against a node",
-		ArgsUsage: "<node> <chain.rlp> <genesis.json>",
+		Usage:     "Runs snap protocol tests against a node",
+		ArgsUsage: "",
 		Action:    rlpxSnapTest,
 		Flags: []cli.Flag{
 			testPatternFlag,
 			testTAPFlag,
+			testChainDirFlag,
+			testNodeFlag,
+			testNodeJWTFlag,
+			testNodeEngineFlag,
 		},
 	}
 )
 
 func rlpxPing(ctx *cli.Context) error {
 	n := getNodeArg(ctx)
-	fd, err := net.Dial("tcp", fmt.Sprintf("%v:%d", n.IP(), n.TCP()))
+	tcpEndpoint, ok := n.TCPEndpoint()
+	if !ok {
+		return errors.New("node has no TCP endpoint")
+	}
+	fd, err := net.Dial("tcp", tcpEndpoint.String())
 	if err != nil {
 		return err
 	}
@@ -96,17 +109,15 @@ func rlpxPing(ctx *cli.Context) error {
 		}
 		return fmt.Errorf("received disconnect message: %v", msg[0])
 	default:
-		return fmt.Errorf("invalid message code %d, expected handshake (code zero)", code)
+		return fmt.Errorf("invalid message code %d, expected handshake (code zero) or disconnect (code one)", code)
 	}
 	return nil
 }
 
 // rlpxEthTest runs the eth protocol test suite.
 func rlpxEthTest(ctx *cli.Context) error {
-	if ctx.NArg() < 3 {
-		exit("missing path to chain.rlp as command-line argument")
-	}
-	suite, err := ethtest.NewSuite(getNodeArg(ctx), ctx.Args().Get(1), ctx.Args().Get(2))
+	p := cliTestParams(ctx)
+	suite, err := ethtest.NewSuite(p.node, p.chainDir, p.engineAPI, p.jwt)
 	if err != nil {
 		exit(err)
 	}
@@ -115,12 +126,44 @@ func rlpxEthTest(ctx *cli.Context) error {
 
 // rlpxSnapTest runs the snap protocol test suite.
 func rlpxSnapTest(ctx *cli.Context) error {
-	if ctx.NArg() < 3 {
-		exit("missing path to chain.rlp as command-line argument")
-	}
-	suite, err := ethtest.NewSuite(getNodeArg(ctx), ctx.Args().Get(1), ctx.Args().Get(2))
+	p := cliTestParams(ctx)
+	suite, err := ethtest.NewSuite(p.node, p.chainDir, p.engineAPI, p.jwt)
 	if err != nil {
 		exit(err)
 	}
 	return runTests(ctx, suite.SnapTests())
+}
+
+type testParams struct {
+	node      *enode.Node
+	engineAPI string
+	jwt       string
+	chainDir  string
+}
+
+func cliTestParams(ctx *cli.Context) *testParams {
+	nodeStr := ctx.String(testNodeFlag.Name)
+	if nodeStr == "" {
+		exit(fmt.Errorf("missing -%s", testNodeFlag.Name))
+	}
+	node, err := parseNode(nodeStr)
+	if err != nil {
+		exit(err)
+	}
+	p := testParams{
+		node:      node,
+		engineAPI: ctx.String(testNodeEngineFlag.Name),
+		jwt:       ctx.String(testNodeJWTFlag.Name),
+		chainDir:  ctx.String(testChainDirFlag.Name),
+	}
+	if p.engineAPI == "" {
+		exit(fmt.Errorf("missing -%s", testNodeEngineFlag.Name))
+	}
+	if p.jwt == "" {
+		exit(fmt.Errorf("missing -%s", testNodeJWTFlag.Name))
+	}
+	if p.chainDir == "" {
+		exit(fmt.Errorf("missing -%s", testChainDirFlag.Name))
+	}
+	return &p
 }

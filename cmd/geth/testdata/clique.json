@@ -8,6 +8,7 @@
     "byzantiumBlock": 0,
     "constantinopleBlock": 0,
     "petersburgBlock": 0,
+    "terminalTotalDifficulty": 0,
     "clique": {
       "period": 5,
       "epoch": 30000

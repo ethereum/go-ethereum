@@ -245,6 +245,13 @@ func (b *U256) UnmarshalJSON(input []byte) error {
 	if !isString(input) {
 		return errNonString(u256T)
 	}
+	// strip leading zeros
+	for firstNonZeroIdx := 3; firstNonZeroIdx < len(input); firstNonZeroIdx++ {
+		if input[firstNonZeroIdx] != '0' {
+			input = append(input[:3], input[firstNonZeroIdx:]...)
+			break
+		}
+	}
 	// The hex decoder needs to accept empty string ("") as '0', which uint256.Int
 	// would reject.
 	if len(input) == 2 {

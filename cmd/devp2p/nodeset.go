@@ -18,14 +18,15 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"golang.org/x/exp/slices"
 )
 
 const jsonIndent = "    "
@@ -104,13 +105,7 @@ func (ns nodeSet) topN(n int) nodeSet {
 		byscore = append(byscore, v)
 	}
 	slices.SortFunc(byscore, func(a, b nodeJSON) int {
-		if a.Score > b.Score {
-			return -1
-		}
-		if a.Score < b.Score {
-			return 1
-		}
-		return 0
+		return cmp.Compare(b.Score, a.Score)
 	})
 	result := make(nodeSet, n)
 	for _, v := range byscore[:n] {

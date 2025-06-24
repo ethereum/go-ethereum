@@ -14,6 +14,14 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Package tracing defines hooks for 'live tracing' of block processing and transaction
+// execution. Here we define the low-level [Hooks] object that carries hooks which are
+// invoked by the go-ethereum core at various points in the state transition.
+//
+// To create a tracer that can be invoked with Geth, you need to register it using
+// [github.com/ethereum/go-ethereum/eth/tracers.LiveDirectory.Register].
+//
+// See https://geth.ethereum.org/docs/developers/evm-tracing/live-tracing for a tutorial.
 package tracing
 
 import (
@@ -32,16 +40,19 @@ type OpContext interface {
 	StackData() []uint256.Int
 	Caller() common.Address
 	Address() common.Address
-	CallValue() *big.Int
+	CallValue() *uint256.Int
 	CallInput() []byte
+	ContractCode() []byte
 }
 
 // StateDB gives tracers access to the whole state.
 type StateDB interface {
-	GetBalance(common.Address) *big.Int
+	GetBalance(common.Address) *uint256.Int
 	GetNonce(common.Address) uint64
 	GetCode(common.Address) []byte
+	GetCodeHash(common.Address) common.Hash
 	GetState(common.Address, common.Hash) common.Hash
+	GetTransientState(common.Address, common.Hash) common.Hash
 	Exist(common.Address) bool
 	GetRefund() uint64
 }
@@ -52,17 +63,15 @@ type VMContext struct {
 	BlockNumber *big.Int
 	Time        uint64
 	Random      *common.Hash
-	// Effective tx gas price
-	GasPrice    *big.Int
-	ChainConfig *params.ChainConfig
+	BaseFee     *big.Int
 	StateDB     StateDB
+	Precompiles []common.Address
 }
 
 // BlockEvent is emitted upon tracing an incoming block.
 // It contains the block as well as consensus related information.
 type BlockEvent struct {
 	Block     *types.Block
-	TD        *big.Int
 	Finalized *types.Header
 	Safe      *types.Header
 }
@@ -81,6 +90,10 @@ type (
 	TxEndHook = func(receipt *types.Receipt, err error)
 
 	// EnterHook is invoked when the processing of a message starts.
+	//
+	// Take note that EnterHook, when in the context of a live tracer, can be invoked
+	// outside of the `OnTxStart` and `OnTxEnd` hooks when dealing with system calls,
+	// see [OnSystemCallStartHook] and [OnSystemCallEndHook] for more information.
 	EnterHook = func(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
 
 	// ExitHook is invoked when the processing of a message ends.
@@ -89,6 +102,10 @@ type (
 	// ran out of gas when attempting to persist the code to database did not
 	// count as a call failure and did not cause a revert of the call. This will
 	// be indicated by `reverted == false` and `err == ErrCodeStoreOutOfGas`.
+	//
+	// Take note that ExitHook, when in the context of a live tracer, can be invoked
+	// outside of the `OnTxStart` and `OnTxEnd` hooks when dealing with system calls,
+	// see [OnSystemCallStartHook] and [OnSystemCallEndHook] for more information.
 	ExitHook = func(depth int, output []byte, gasUsed uint64, err error, reverted bool)
 
 	// OpcodeHook is invoked just prior to the execution of an opcode.
@@ -107,6 +124,9 @@ type (
 	// BlockchainInitHook is called when the blockchain is initialized.
 	BlockchainInitHook = func(chainConfig *params.ChainConfig)
 
+	// CloseHook is called when the blockchain closes.
+	CloseHook = func()
+
 	// BlockStartHook is called before executing `block`.
 	// `td` is the total difficulty prior to `block`.
 	BlockStartHook = func(event BlockEvent)
@@ -122,6 +142,26 @@ type (
 	// GenesisBlockHook is called when the genesis block is being processed.
 	GenesisBlockHook = func(genesis *types.Block, alloc types.GenesisAlloc)
 
+	// OnSystemCallStartHook is called when a system call is about to be executed. Today,
+	// this hook is invoked when the EIP-4788 system call is about to be executed to set the
+	// beacon block root.
+	//
+	// After this hook, the EVM call tracing will happened as usual so you will receive a `OnEnter/OnExit`
+	// as well as state hooks between this hook and the `OnSystemCallEndHook`.
+	//
+	// Note that system call happens outside normal transaction execution, so the `OnTxStart/OnTxEnd` hooks
+	// will not be invoked.
+	OnSystemCallStartHook = func()
+
+	// OnSystemCallStartHookV2 is called when a system call is about to be executed. Refer
+	// to `OnSystemCallStartHook` for more information.
+	OnSystemCallStartHookV2 = func(vm *VMContext)
+
+	// OnSystemCallEndHook is called when a system call has finished executing. Today,
+	// this hook is invoked when the EIP-4788 system call is about to be executed to set the
+	// beacon block root.
+	OnSystemCallEndHook = func()
+
 	/*
 		- State events -
 	*/
@@ -132,6 +172,9 @@ type (
 	// NonceChangeHook is called when the nonce of an account changes.
 	NonceChangeHook = func(addr common.Address, prev, new uint64)
 
+	// NonceChangeHookV2 is called when the nonce of an account changes.
+	NonceChangeHookV2 = func(addr common.Address, prev, new uint64, reason NonceChangeReason)
+
 	// CodeChangeHook is called when the code of an account changes.
 	CodeChangeHook = func(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte)
 
@@ -140,6 +183,9 @@ type (
 
 	// LogHook is called when a log is emitted.
 	LogHook = func(log *types.Log)
+
+	// BlockHashReadHook is called when EVM reads the blockhash of a block.
+	BlockHashReadHook = func(blockNumber uint64, hash common.Hash)
 )
 
 type Hooks struct {
@@ -152,22 +198,31 @@ type Hooks struct {
 	OnFault     FaultHook
 	OnGasChange GasChangeHook
 	// Chain events
-	OnBlockchainInit BlockchainInitHook
-	OnBlockStart     BlockStartHook
-	OnBlockEnd       BlockEndHook
-	OnSkippedBlock   SkippedBlockHook
-	OnGenesisBlock   GenesisBlockHook
+	OnBlockchainInit    BlockchainInitHook
+	OnClose             CloseHook
+	OnBlockStart        BlockStartHook
+	OnBlockEnd          BlockEndHook
+	OnSkippedBlock      SkippedBlockHook
+	OnGenesisBlock      GenesisBlockHook
+	OnSystemCallStart   OnSystemCallStartHook
+	OnSystemCallStartV2 OnSystemCallStartHookV2
+	OnSystemCallEnd     OnSystemCallEndHook
 	// State events
 	OnBalanceChange BalanceChangeHook
 	OnNonceChange   NonceChangeHook
+	OnNonceChangeV2 NonceChangeHookV2
 	OnCodeChange    CodeChangeHook
 	OnStorageChange StorageChangeHook
 	OnLog           LogHook
+	// Block hash read
+	OnBlockHashRead BlockHashReadHook
 }
 
 // BalanceChangeReason is used to indicate the reason for a balance change, useful
 // for tracing and reporting.
 type BalanceChangeReason byte
+
+//go:generate go run golang.org/x/tools/cmd/stringer -type=BalanceChangeReason -trimprefix=BalanceChange -output gen_balance_change_reason_stringer.go
 
 const (
 	BalanceChangeUnspecified BalanceChangeReason = 0
@@ -212,6 +267,10 @@ const (
 	// account within the same tx (captured at end of tx).
 	// Note it doesn't account for a self-destruct which appoints itself as recipient.
 	BalanceDecreaseSelfdestructBurn BalanceChangeReason = 14
+
+	// BalanceChangeRevert is emitted when the balance is reverted back to a previous value due to call failure.
+	// It is only emitted when the tracer has opted in to use the journaling wrapper (WrapWithJournal).
+	BalanceChangeRevert BalanceChangeReason = 15
 )
 
 // GasChangeReason is used to indicate the reason for a gas change, useful
@@ -223,6 +282,8 @@ const (
 // They can be recognized easily by their name, those that start with `GasChangeTx` are emitted
 // once per transaction, while those that start with `GasChangeCall` are emitted on a call basis.
 type GasChangeReason byte
+
+//go:generate go run golang.org/x/tools/cmd/stringer -type=GasChangeReason -trimprefix=GasChange -output gen_gas_change_reason_stringer.go
 
 const (
 	GasChangeUnspecified GasChangeReason = 0
@@ -255,7 +316,7 @@ const (
 	GasChangeCallLeftOverRefunded GasChangeReason = 7
 	// GasChangeCallContractCreation is the amount of gas that will be burned for a CREATE.
 	GasChangeCallContractCreation GasChangeReason = 8
-	// GasChangeContractCreation is the amount of gas that will be burned for a CREATE2.
+	// GasChangeCallContractCreation2 is the amount of gas that will be burned for a CREATE2.
 	GasChangeCallContractCreation2 GasChangeReason = 9
 	// GasChangeCallCodeStorage is the amount of gas that will be charged for code storage.
 	GasChangeCallCodeStorage GasChangeReason = 10
@@ -268,8 +329,47 @@ const (
 	GasChangeCallStorageColdAccess GasChangeReason = 13
 	// GasChangeCallFailedExecution is the burning of the remaining gas when the execution failed without a revert.
 	GasChangeCallFailedExecution GasChangeReason = 14
+	// GasChangeWitnessContractInit flags the event of adding to the witness during the contract creation initialization step.
+	GasChangeWitnessContractInit GasChangeReason = 15
+	// GasChangeWitnessContractCreation flags the event of adding to the witness during the contract creation finalization step.
+	GasChangeWitnessContractCreation GasChangeReason = 16
+	// GasChangeWitnessCodeChunk flags the event of adding one or more contract code chunks to the witness.
+	GasChangeWitnessCodeChunk GasChangeReason = 17
+	// GasChangeWitnessContractCollisionCheck flags the event of adding to the witness when checking for contract address collision.
+	GasChangeWitnessContractCollisionCheck GasChangeReason = 18
+	// GasChangeTxDataFloor is the amount of extra gas the transaction has to pay to reach the minimum gas requirement for the
+	// transaction data. This change will always be a negative change.
+	GasChangeTxDataFloor GasChangeReason = 19
 
 	// GasChangeIgnored is a special value that can be used to indicate that the gas change should be ignored as
 	// it will be "manually" tracked by a direct emit of the gas change event.
 	GasChangeIgnored GasChangeReason = 0xFF
+)
+
+// NonceChangeReason is used to indicate the reason for a nonce change.
+type NonceChangeReason byte
+
+//go:generate go run golang.org/x/tools/cmd/stringer -type=NonceChangeReason -trimprefix NonceChange -output gen_nonce_change_reason_stringer.go
+
+const (
+	NonceChangeUnspecified NonceChangeReason = 0
+
+	// NonceChangeGenesis is the nonce allocated to accounts at genesis.
+	NonceChangeGenesis NonceChangeReason = 1
+
+	// NonceChangeEoACall is the nonce change due to an EoA call.
+	NonceChangeEoACall NonceChangeReason = 2
+
+	// NonceChangeContractCreator is the nonce change of an account creating a contract.
+	NonceChangeContractCreator NonceChangeReason = 3
+
+	// NonceChangeNewContract is the nonce change of a newly created contract.
+	NonceChangeNewContract NonceChangeReason = 4
+
+	// NonceChangeTransaction is the nonce change due to a EIP-7702 authorization.
+	NonceChangeAuthorization NonceChangeReason = 5
+
+	// NonceChangeRevert is emitted when the nonce is reverted back to a previous value due to call failure.
+	// It is only emitted when the tracer has opted in to use the journaling wrapper (WrapWithJournal).
+	NonceChangeRevert NonceChangeReason = 6
 )

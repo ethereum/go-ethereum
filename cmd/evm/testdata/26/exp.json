@@ -15,6 +15,7 @@
     "currentDifficulty": null,
     "gasUsed": "0x0",
     "currentBaseFee": "0x500",
-    "withdrawalsRoot": "0x4921c0162c359755b2ae714a0978a1dad2eb8edce7ff9b38b9b6fc4cbc547eb5"
+    "withdrawalsRoot": "0x4921c0162c359755b2ae714a0978a1dad2eb8edce7ff9b38b9b6fc4cbc547eb5",
+    "requests": null
   }
 }

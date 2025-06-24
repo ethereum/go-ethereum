@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2024 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // Context contains some contextual infos for a transaction execution that is not
@@ -33,7 +34,7 @@ type Context struct {
 	TxHash      common.Hash // Hash of the transaction being traced (zero if dangling call)
 }
 
-// The set of methods that must be exposed by a tracer
+// Tracer represents the set of methods that must be exposed by a tracer
 // for it to be available through the RPC interface.
 // This involves a method to retrieve results and one to
 // stop tracing.
@@ -44,8 +45,8 @@ type Tracer struct {
 	Stop func(err error)
 }
 
-type ctorFn func(*Context, json.RawMessage) (*Tracer, error)
-type jsCtorFn func(string, *Context, json.RawMessage) (*Tracer, error)
+type ctorFn func(*Context, json.RawMessage, *params.ChainConfig) (*Tracer, error)
+type jsCtorFn func(string, *Context, json.RawMessage, *params.ChainConfig) (*Tracer, error)
 
 type elem struct {
 	ctor ctorFn
@@ -78,12 +79,15 @@ func (d *directory) RegisterJSEval(f jsCtorFn) {
 // New returns a new instance of a tracer, by iterating through the
 // registered lookups. Name is either name of an existing tracer
 // or an arbitrary JS code.
-func (d *directory) New(name string, ctx *Context, cfg json.RawMessage) (*Tracer, error) {
+func (d *directory) New(name string, ctx *Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*Tracer, error) {
+	if len(cfg) == 0 {
+		cfg = json.RawMessage("{}")
+	}
 	if elem, ok := d.elems[name]; ok {
-		return elem.ctor(ctx, cfg)
+		return elem.ctor(ctx, cfg, chainConfig)
 	}
 	// Assume JS code
-	return d.jsEval(name, ctx, cfg)
+	return d.jsEval(name, ctx, cfg, chainConfig)
 }
 
 // IsJS will return true if the given tracer will evaluate

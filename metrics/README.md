@@ -100,24 +100,6 @@ go influxdb.InfluxDB(metrics.DefaultRegistry,
 )
 ```
 
-Periodically upload every metric to Librato using the [Librato client](https://github.com/mihasya/go-metrics-librato):
-
-**Note**: the client included with this repository under the `librato` package
-has been deprecated and moved to the repository linked above.
-
-```go
-import "github.com/mihasya/go-metrics-librato"
-
-go librato.Librato(metrics.DefaultRegistry,
-    10e9,                  // interval
-    "example@example.com", // account owner email address
-    "token",               // Librato API token
-    "hostname",            // source
-    []float64{0.95},       // percentiles to send
-    time.Millisecond,      // time unit
-)
-```
-
 Periodically emit every metric to StatHat:
 
 ```go
@@ -157,7 +139,6 @@ Publishing Metrics
 
 Clients are available for the following destinations:
 
-* Librato - https://github.com/mihasya/go-metrics-librato
 * Graphite - https://github.com/cyberdelia/go-metrics-graphite
 * InfluxDB - https://github.com/vrischmann/go-metrics-influxdb
 * Ganglia - https://github.com/appscode/metlia

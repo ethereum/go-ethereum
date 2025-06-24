@@ -5,6 +5,8 @@
 syntax = "proto2";
 package hw.trezor.messages.ethereum;
 
+option go_package  = "github.com/ethereum/go-ethereum/accounts/usbwallet/trezor";
+
 // Sugar for easier handling in Java
 option java_package = "com.satoshilabs.trezor.lib.protobuf";
 option java_outer_classname = "TrezorMessageEthereum";

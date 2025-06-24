@@ -31,29 +31,51 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/bls12381"
 	blst "github.com/supranational/blst/bindings/go"
 )
+
+func fuzzG1SubgroupChecks(data []byte) int {
+	input := bytes.NewReader(data)
+	cpG1, blG1, err := getG1Points(input)
+	if err != nil {
+		return 0
+	}
+	inSubGroupGnark := cpG1.IsInSubGroup()
+	inSubGroupBLST := blG1.InG1()
+	if inSubGroupGnark != inSubGroupBLST {
+		panic(fmt.Sprintf("differing subgroup check, gnark %v, blst %v", inSubGroupGnark, inSubGroupBLST))
+	}
+	return 1
+}
+
+func fuzzG2SubgroupChecks(data []byte) int {
+	input := bytes.NewReader(data)
+	gpG2, blG2, err := getG2Points(input)
+	if err != nil {
+		return 0
+	}
+	inSubGroupGnark := gpG2.IsInSubGroup()
+	inSubGroupBLST := blG2.InG2()
+	if inSubGroupGnark != inSubGroupBLST {
+		panic(fmt.Sprintf("differing subgroup check, gnark %v, blst %v", inSubGroupGnark, inSubGroupBLST))
+	}
+	return 1
+}
 
 func fuzzCrossPairing(data []byte) int {
 	input := bytes.NewReader(data)
 
 	// get random G1 points
-	kpG1, cpG1, blG1, err := getG1Points(input)
+	cpG1, blG1, err := getG1Points(input)
 	if err != nil {
 		return 0
 	}
 
 	// get random G2 points
-	kpG2, cpG2, blG2, err := getG2Points(input)
+	cpG2, blG2, err := getG2Points(input)
 	if err != nil {
 		return 0
 	}
-
-	// compute pairing using geth
-	engine := bls12381.NewPairingEngine()
-	engine.AddPair(kpG1, kpG2)
-	kResult := engine.Result()
 
 	// compute pairing using gnark
 	cResult, err := gnark.Pair([]gnark.G1Affine{*cpG1}, []gnark.G2Affine{*cpG2})
@@ -61,16 +83,11 @@ func fuzzCrossPairing(data []byte) int {
 		panic(fmt.Sprintf("gnark/bls12381 encountered error: %v", err))
 	}
 
-	// compare result
-	if !(bytes.Equal(cResult.Marshal(), bls12381.NewGT().ToBytes(kResult))) {
-		panic("pairing mismatch gnark / geth ")
-	}
-
 	// compute pairing using blst
 	blstResult := blst.Fp12MillerLoop(blG2, blG1)
 	blstResult.FinalExp()
 	res := massageBLST(blstResult.ToBendian())
-	if !(bytes.Equal(res, bls12381.NewGT().ToBytes(kResult))) {
+	if !(bytes.Equal(res, cResult.Marshal())) {
 		panic("pairing mismatch blst / geth")
 	}
 
@@ -105,31 +122,21 @@ func fuzzCrossG1Add(data []byte) int {
 	input := bytes.NewReader(data)
 
 	// get random G1 points
-	kp1, cp1, bl1, err := getG1Points(input)
+	cp1, bl1, err := getG1Points(input)
 	if err != nil {
 		return 0
 	}
 
 	// get random G1 points
-	kp2, cp2, bl2, err := getG1Points(input)
+	cp2, bl2, err := getG1Points(input)
 	if err != nil {
 		return 0
 	}
-
-	// compute kp = kp1 + kp2
-	g1 := bls12381.NewG1()
-	kp := bls12381.PointG1{}
-	g1.Add(&kp, kp1, kp2)
 
 	// compute cp = cp1 + cp2
 	_cp1 := new(gnark.G1Jac).FromAffine(cp1)
 	_cp2 := new(gnark.G1Jac).FromAffine(cp2)
 	cp := new(gnark.G1Affine).FromJacobian(_cp1.AddAssign(_cp2))
-
-	// compare result
-	if !(bytes.Equal(cp.Marshal(), g1.ToBytes(&kp))) {
-		panic("G1 point addition mismatch gnark / geth ")
-	}
 
 	bl3 := blst.P1AffinesAdd([]*blst.P1Affine{bl1, bl2})
 	if !(bytes.Equal(cp.Marshal(), bl3.Serialize())) {
@@ -143,35 +150,25 @@ func fuzzCrossG2Add(data []byte) int {
 	input := bytes.NewReader(data)
 
 	// get random G2 points
-	kp1, cp1, bl1, err := getG2Points(input)
+	gp1, bl1, err := getG2Points(input)
 	if err != nil {
 		return 0
 	}
 
 	// get random G2 points
-	kp2, cp2, bl2, err := getG2Points(input)
+	gp2, bl2, err := getG2Points(input)
 	if err != nil {
 		return 0
 	}
 
-	// compute kp = kp1 + kp2
-	g2 := bls12381.NewG2()
-	kp := bls12381.PointG2{}
-	g2.Add(&kp, kp1, kp2)
-
 	// compute cp = cp1 + cp2
-	_cp1 := new(gnark.G2Jac).FromAffine(cp1)
-	_cp2 := new(gnark.G2Jac).FromAffine(cp2)
-	cp := new(gnark.G2Affine).FromJacobian(_cp1.AddAssign(_cp2))
-
-	// compare result
-	if !(bytes.Equal(cp.Marshal(), g2.ToBytes(&kp))) {
-		panic("G2 point addition mismatch gnark / geth ")
-	}
+	_gp1 := new(gnark.G2Jac).FromAffine(gp1)
+	_gp2 := new(gnark.G2Jac).FromAffine(gp2)
+	gp := new(gnark.G2Affine).FromJacobian(_gp1.AddAssign(_gp2))
 
 	bl3 := blst.P2AffinesAdd([]*blst.P2Affine{bl1, bl2})
-	if !(bytes.Equal(cp.Marshal(), bl3.Serialize())) {
-		panic("G1 point addition mismatch blst / geth ")
+	if !(bytes.Equal(gp.Marshal(), bl3.Serialize())) {
+		panic("G2 point addition mismatch blst / geth ")
 	}
 
 	return 1
@@ -180,10 +177,10 @@ func fuzzCrossG2Add(data []byte) int {
 func fuzzCrossG1MultiExp(data []byte) int {
 	var (
 		input        = bytes.NewReader(data)
-		gethScalars  []*big.Int
 		gnarkScalars []fr.Element
-		gethPoints   []*bls12381.PointG1
 		gnarkPoints  []gnark.G1Affine
+		blstScalars  []*blst.Scalar
+		blstPoints   []*blst.P1Affine
 	)
 	// n random scalars (max 17)
 	for i := 0; i < 17; i++ {
@@ -193,46 +190,97 @@ func fuzzCrossG1MultiExp(data []byte) int {
 			break
 		}
 		// get a random G1 point as basis
-		kp1, cp1, _, err := getG1Points(input)
+		cp1, bl1, err := getG1Points(input)
 		if err != nil {
 			break
 		}
-		gethScalars = append(gethScalars, s)
-		var gnarkScalar = &fr.Element{}
-		gnarkScalar = gnarkScalar.SetBigInt(s)
-		gnarkScalars = append(gnarkScalars, *gnarkScalar)
 
-		gethPoints = append(gethPoints, new(bls12381.PointG1).Set(kp1))
+		gnarkScalar := new(fr.Element).SetBigInt(s)
+		gnarkScalars = append(gnarkScalars, *gnarkScalar)
 		gnarkPoints = append(gnarkPoints, *cp1)
+
+		blstScalar := new(blst.Scalar).FromBEndian(common.LeftPadBytes(s.Bytes(), 32))
+		blstScalars = append(blstScalars, blstScalar)
+		blstPoints = append(blstPoints, bl1)
 	}
-	if len(gethScalars) == 0 {
+
+	if len(gnarkScalars) == 0 || len(gnarkScalars) != len(gnarkPoints) {
 		return 0
 	}
-	// compute multi exponentiation
-	g1 := bls12381.NewG1()
-	kp := bls12381.PointG1{}
-	if _, err := g1.MultiExp(&kp, gethPoints, gethScalars); err != nil {
-		panic(fmt.Sprintf("G1 multi exponentiation errored (geth): %v", err))
-	}
-	// note that geth/crypto/bls12381.MultiExp mutates the scalars slice (and sets all the scalars to zero)
 
 	// gnark multi exp
 	cp := new(gnark.G1Affine)
 	cp.MultiExp(gnarkPoints, gnarkScalars, ecc.MultiExpConfig{})
 
-	// compare result
-	if !(bytes.Equal(cp.Marshal(), g1.ToBytes(&kp))) {
-		panic("G1 multi exponentiation mismatch gnark / geth ")
+	expectedGnark := multiExpG1Gnark(gnarkPoints, gnarkScalars)
+	if !bytes.Equal(cp.Marshal(), expectedGnark.Marshal()) {
+		panic("g1 multi exponentiation mismatch")
 	}
 
+	// blst multi exp
+	expectedBlst := blst.P1AffinesMult(blstPoints, blstScalars, 256).ToAffine()
+	if !bytes.Equal(cp.Marshal(), expectedBlst.Serialize()) {
+		panic("g1 multi exponentiation mismatch, gnark/blst")
+	}
 	return 1
 }
 
-func getG1Points(input io.Reader) (*bls12381.PointG1, *gnark.G1Affine, *blst.P1Affine, error) {
+func fuzzCrossG2MultiExp(data []byte) int {
+	var (
+		input        = bytes.NewReader(data)
+		gnarkScalars []fr.Element
+		gnarkPoints  []gnark.G2Affine
+		blstScalars  []*blst.Scalar
+		blstPoints   []*blst.P2Affine
+	)
+	// n random scalars (max 17)
+	for i := 0; i < 17; i++ {
+		// note that geth/crypto/bls12381 works only with scalars <= 32bytes
+		s, err := randomScalar(input, fr.Modulus())
+		if err != nil {
+			break
+		}
+		// get a random G1 point as basis
+		cp1, bl1, err := getG2Points(input)
+		if err != nil {
+			break
+		}
+
+		gnarkScalar := new(fr.Element).SetBigInt(s)
+		gnarkScalars = append(gnarkScalars, *gnarkScalar)
+		gnarkPoints = append(gnarkPoints, *cp1)
+
+		blstScalar := new(blst.Scalar).FromBEndian(common.LeftPadBytes(s.Bytes(), 32))
+		blstScalars = append(blstScalars, blstScalar)
+		blstPoints = append(blstPoints, bl1)
+	}
+
+	if len(gnarkScalars) == 0 || len(gnarkScalars) != len(gnarkPoints) {
+		return 0
+	}
+
+	// gnark multi exp
+	cp := new(gnark.G2Affine)
+	cp.MultiExp(gnarkPoints, gnarkScalars, ecc.MultiExpConfig{})
+
+	expectedGnark := multiExpG2Gnark(gnarkPoints, gnarkScalars)
+	if !bytes.Equal(cp.Marshal(), expectedGnark.Marshal()) {
+		panic("g1 multi exponentiation mismatch")
+	}
+
+	// blst multi exp
+	expectedBlst := blst.P2AffinesMult(blstPoints, blstScalars, 256).ToAffine()
+	if !bytes.Equal(cp.Marshal(), expectedBlst.Serialize()) {
+		panic("g1 multi exponentiation mismatch, gnark/blst")
+	}
+	return 1
+}
+
+func getG1Points(input io.Reader) (*gnark.G1Affine, *blst.P1Affine, error) {
 	// sample a random scalar
 	s, err := randomScalar(input, fp.Modulus())
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	// compute a random point
@@ -241,58 +289,39 @@ func getG1Points(input io.Reader) (*bls12381.PointG1, *gnark.G1Affine, *blst.P1A
 	cp.ScalarMultiplication(&g1Gen, s)
 	cpBytes := cp.Marshal()
 
-	// marshal gnark point -> geth point
-	g1 := bls12381.NewG1()
-	kp, err := g1.FromBytes(cpBytes)
-	if err != nil {
-		panic(fmt.Sprintf("Could not marshal gnark.G1 -> geth.G1: %v", err))
-	}
-	if !bytes.Equal(g1.ToBytes(kp), cpBytes) {
-		panic("bytes(gnark.G1) != bytes(geth.G1)")
-	}
-
 	// marshal gnark point -> blst point
 	scalar := new(blst.Scalar).FromBEndian(common.LeftPadBytes(s.Bytes(), 32))
 	p1 := new(blst.P1Affine).From(scalar)
-	if !bytes.Equal(p1.Serialize(), cpBytes) {
-		panic("bytes(blst.G1) != bytes(geth.G1)")
+	blstRes := p1.Serialize()
+	if !bytes.Equal(blstRes, cpBytes) {
+		panic(fmt.Sprintf("bytes(blst.G1) != bytes(geth.G1)\nblst.G1: %x\ngeth.G1: %x\n", blstRes, cpBytes))
 	}
 
-	return kp, cp, p1, nil
+	return cp, p1, nil
 }
 
-func getG2Points(input io.Reader) (*bls12381.PointG2, *gnark.G2Affine, *blst.P2Affine, error) {
+func getG2Points(input io.Reader) (*gnark.G2Affine, *blst.P2Affine, error) {
 	// sample a random scalar
 	s, err := randomScalar(input, fp.Modulus())
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	// compute a random point
-	cp := new(gnark.G2Affine)
+	gp := new(gnark.G2Affine)
 	_, _, _, g2Gen := gnark.Generators()
-	cp.ScalarMultiplication(&g2Gen, s)
-	cpBytes := cp.Marshal()
-
-	// marshal gnark point -> geth point
-	g2 := bls12381.NewG2()
-	kp, err := g2.FromBytes(cpBytes)
-	if err != nil {
-		panic(fmt.Sprintf("Could not marshal gnark.G2 -> geth.G2: %v", err))
-	}
-	if !bytes.Equal(g2.ToBytes(kp), cpBytes) {
-		panic("bytes(gnark.G2) != bytes(geth.G2)")
-	}
+	gp.ScalarMultiplication(&g2Gen, s)
+	cpBytes := gp.Marshal()
 
 	// marshal gnark point -> blst point
 	// Left pad the scalar to 32 bytes
 	scalar := new(blst.Scalar).FromBEndian(common.LeftPadBytes(s.Bytes(), 32))
 	p2 := new(blst.P2Affine).From(scalar)
 	if !bytes.Equal(p2.Serialize(), cpBytes) {
-		panic("bytes(blst.G2) != bytes(geth.G2)")
+		panic("bytes(blst.G2) != bytes(bls12381.G2)")
 	}
 
-	return kp, cp, p2, nil
+	return gp, p2, nil
 }
 
 func randomScalar(r io.Reader, max *big.Int) (k *big.Int, err error) {
@@ -302,4 +331,30 @@ func randomScalar(r io.Reader, max *big.Int) (k *big.Int, err error) {
 			return
 		}
 	}
+}
+
+// multiExpG1Gnark is a naive implementation of G1 multi-exponentiation
+func multiExpG1Gnark(gs []gnark.G1Affine, scalars []fr.Element) gnark.G1Affine {
+	res := gnark.G1Affine{}
+	for i := 0; i < len(gs); i++ {
+		tmp := new(gnark.G1Affine)
+		sb := scalars[i].Bytes()
+		scalarBytes := new(big.Int).SetBytes(sb[:])
+		tmp.ScalarMultiplication(&gs[i], scalarBytes)
+		res.Add(&res, tmp)
+	}
+	return res
+}
+
+// multiExpG2Gnark is a naive implementation of G2 multi-exponentiation
+func multiExpG2Gnark(gs []gnark.G2Affine, scalars []fr.Element) gnark.G2Affine {
+	res := gnark.G2Affine{}
+	for i := 0; i < len(gs); i++ {
+		tmp := new(gnark.G2Affine)
+		sb := scalars[i].Bytes()
+		scalarBytes := new(big.Int).SetBytes(sb[:])
+		tmp.ScalarMultiplication(&gs[i], scalarBytes)
+		res.Add(&res, tmp)
+	}
+	return res
 }

@@ -30,7 +30,7 @@ var stackPool = sync.Pool{
 
 // Stack is an object for basic stack operations. Items popped to the stack are
 // expected to be changed and modified. stack does not take care of adding newly
-// initialised objects.
+// initialized objects.
 type Stack struct {
 	data []uint256.Int
 }
@@ -49,58 +49,79 @@ func (st *Stack) Data() []uint256.Int {
 	return st.data
 }
 
-func (st *Stack) push(d *uint256.Int) {
+func (st *Stack) Push(d *uint256.Int) {
 	// NOTE push limit (1024) is checked in baseCheck
 	st.data = append(st.data, *d)
 }
 
-func (st *Stack) pop() (ret uint256.Int) {
+func (st *Stack) Pop() (ret uint256.Int) {
 	ret = st.data[len(st.data)-1]
 	st.data = st.data[:len(st.data)-1]
 	return
 }
 
-func (st *Stack) len() int {
+func (st *Stack) Len() int {
 	return len(st.data)
 }
 
-func (st *Stack) swap(n int) {
-	st.data[st.len()-n], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-n]
+func (st *Stack) swap1() {
+	st.data[st.Len()-2], st.data[st.Len()-1] = st.data[st.Len()-1], st.data[st.Len()-2]
+}
+func (st *Stack) swap2() {
+	st.data[st.Len()-3], st.data[st.Len()-1] = st.data[st.Len()-1], st.data[st.Len()-3]
+}
+func (st *Stack) swap3() {
+	st.data[st.Len()-4], st.data[st.Len()-1] = st.data[st.Len()-1], st.data[st.Len()-4]
+}
+func (st *Stack) swap4() {
+	st.data[st.Len()-5], st.data[st.Len()-1] = st.data[st.Len()-1], st.data[st.Len()-5]
+}
+func (st *Stack) swap5() {
+	st.data[st.Len()-6], st.data[st.Len()-1] = st.data[st.Len()-1], st.data[st.Len()-6]
+}
+func (st *Stack) swap6() {
+	st.data[st.Len()-7], st.data[st.Len()-1] = st.data[st.Len()-1], st.data[st.Len()-7]
+}
+func (st *Stack) swap7() {
+	st.data[st.Len()-8], st.data[st.Len()-1] = st.data[st.Len()-1], st.data[st.Len()-8]
+}
+func (st *Stack) swap8() {
+	st.data[st.Len()-9], st.data[st.Len()-1] = st.data[st.Len()-1], st.data[st.Len()-9]
+}
+func (st *Stack) swap9() {
+	st.data[st.Len()-10], st.data[st.Len()-1] = st.data[st.Len()-1], st.data[st.Len()-10]
+}
+func (st *Stack) swap10() {
+	st.data[st.Len()-11], st.data[st.Len()-1] = st.data[st.Len()-1], st.data[st.Len()-11]
+}
+func (st *Stack) swap11() {
+	st.data[st.Len()-12], st.data[st.Len()-1] = st.data[st.Len()-1], st.data[st.Len()-12]
+}
+func (st *Stack) swap12() {
+	st.data[st.Len()-13], st.data[st.Len()-1] = st.data[st.Len()-1], st.data[st.Len()-13]
+}
+func (st *Stack) swap13() {
+	st.data[st.Len()-14], st.data[st.Len()-1] = st.data[st.Len()-1], st.data[st.Len()-14]
+}
+func (st *Stack) swap14() {
+	st.data[st.Len()-15], st.data[st.Len()-1] = st.data[st.Len()-1], st.data[st.Len()-15]
+}
+func (st *Stack) swap15() {
+	st.data[st.Len()-16], st.data[st.Len()-1] = st.data[st.Len()-1], st.data[st.Len()-16]
+}
+func (st *Stack) swap16() {
+	st.data[st.Len()-17], st.data[st.Len()-1] = st.data[st.Len()-1], st.data[st.Len()-17]
 }
 
 func (st *Stack) dup(n int) {
-	st.push(&st.data[st.len()-n])
+	st.Push(&st.data[st.Len()-n])
 }
 
-func (st *Stack) peek() *uint256.Int {
-	return &st.data[st.len()-1]
+func (st *Stack) Peek() *uint256.Int {
+	return &st.data[st.Len()-1]
 }
 
 // Back returns the n'th item in stack
 func (st *Stack) Back(n int) *uint256.Int {
-	return &st.data[st.len()-n-1]
-}
-
-func (st *Stack) Push(d *uint256.Int) {
-	st.push(d)
-}
-
-func (st *Stack) Pop() (ret uint256.Int) {
-	return st.pop()
-}
-
-func (st *Stack) Len() int {
-	return st.len()
-}
-
-func (st *Stack) Swap(n int) {
-	st.swap(n)
-}
-
-func (st *Stack) Dup(n int) {
-	st.dup(n)
-}
-
-func (st *Stack) Peek() *uint256.Int {
-	return st.peek()
+	return &st.data[st.Len()-n-1]
 }

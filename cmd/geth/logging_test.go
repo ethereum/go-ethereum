@@ -1,5 +1,3 @@
-//go:build integrationtests
-
 // Copyright 2023 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
@@ -16,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build integrationtests
+
 package main
 
 import (
@@ -30,7 +30,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/lib/reexec"
+	"github.com/ethereum/go-ethereum/internal/reexec"
 )
 
 func runSelf(args ...string) ([]byte, error) {
@@ -73,6 +73,7 @@ func testConsoleLogging(t *testing.T, format string, tStart, tEnd int) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer readFile.Close()
 	wantLines := split(readFile)
 	haveLines := split(bytes.NewBuffer(haveB))
 	for i, want := range wantLines {
@@ -109,6 +110,7 @@ func TestJsonLogging(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer readFile.Close()
 	wantLines := split(readFile)
 	haveLines := split(bytes.NewBuffer(haveB))
 	for i, wantLine := range wantLines {
@@ -199,9 +201,8 @@ func TestFileOut(t *testing.T) {
 	var (
 		have, want []byte
 		err        error
-		path       = fmt.Sprintf("%s/test_file_out-%d", os.TempDir(), rand.Int63())
+		path       = fmt.Sprintf("%s/test_file_out-%d", t.TempDir(), rand.Int63())
 	)
-	t.Cleanup(func() { os.Remove(path) })
 	if want, err = runSelf(fmt.Sprintf("--log.file=%s", path), "logtest"); err != nil {
 		t.Fatal(err)
 	}
@@ -220,9 +221,8 @@ func TestRotatingFileOut(t *testing.T) {
 	var (
 		have, want []byte
 		err        error
-		path       = fmt.Sprintf("%s/test_file_out-%d", os.TempDir(), rand.Int63())
+		path       = fmt.Sprintf("%s/test_file_out-%d", t.TempDir(), rand.Int63())
 	)
-	t.Cleanup(func() { os.Remove(path) })
 	if want, err = runSelf(fmt.Sprintf("--log.file=%s", path), "--log.rotate", "logtest"); err != nil {
 		t.Fatal(err)
 	}

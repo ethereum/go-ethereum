@@ -29,7 +29,7 @@ import (
 )
 
 // The ABI holds information about a contract's context and available
-// invokable methods. It will allow you to type check function calls and
+// invocable methods. It will allow you to type check function calls and
 // packs data accordingly.
 type ABI struct {
 	Constructor Method
@@ -84,7 +84,7 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 
 func (abi ABI) getArguments(name string, data []byte) (Arguments, error) {
 	// since there can't be naming collisions with contracts and events,
-	// we need to decide whether we're calling a method or an event
+	// we need to decide whether we're calling a method, event or an error
 	var args Arguments
 	if method, ok := abi.Methods[name]; ok {
 		if len(data)%32 != 0 {
@@ -95,8 +95,11 @@ func (abi ABI) getArguments(name string, data []byte) (Arguments, error) {
 	if event, ok := abi.Events[name]; ok {
 		args = event.Inputs
 	}
+	if err, ok := abi.Errors[name]; ok {
+		args = err.Inputs
+	}
 	if args == nil {
-		return nil, fmt.Errorf("abi: could not locate named method or event: %s", name)
+		return nil, fmt.Errorf("abi: could not locate named method, event or error: %s", name)
 	}
 	return args, nil
 }
@@ -251,7 +254,7 @@ var revertSelector = crypto.Keccak256([]byte("Error(string)"))[:4]
 var panicSelector = crypto.Keccak256([]byte("Panic(uint256)"))[:4]
 
 // panicReasons map is for readable panic codes
-// see this linkage for the deails
+// see this linkage for the details
 // https://docs.soliditylang.org/en/v0.8.21/control-structures.html#panic-via-assert-and-error-via-require
 // the reason string list is copied from ether.js
 // https://github.com/ethers-io/ethers.js/blob/fa3a883ff7c88611ce766f58bdd4b8ac90814470/src.ts/abi/interface.ts#L207-L218

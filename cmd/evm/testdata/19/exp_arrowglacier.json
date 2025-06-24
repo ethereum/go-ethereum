@@ -8,6 +8,7 @@
     "currentDifficulty": "0x2000000200000",
     "receipts": [],
     "gasUsed": "0x0",
-    "currentBaseFee": "0x500"
+    "currentBaseFee": "0x500",
+    "requests": null
   }
 }

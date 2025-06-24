@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -75,6 +76,16 @@ func (v UDP) ENRKey() string { return "udp" }
 type UDP6 uint16
 
 func (v UDP6) ENRKey() string { return "udp6" }
+
+// QUIC is the "quic" key, which holds the QUIC port of the node.
+type QUIC uint16
+
+func (v QUIC) ENRKey() string { return "quic" }
+
+// QUIC6 is the "quic6" key, which holds the IPv6-specific quic6 port of the node.
+type QUIC6 uint16
+
+func (v QUIC6) ENRKey() string { return "quic6" }
 
 // ID is the "id" key, which holds the name of the identity scheme.
 type ID string
@@ -164,6 +175,60 @@ func (v *IPv6) DecodeRLP(s *rlp.Stream) error {
 	if len(*v) != 16 {
 		return fmt.Errorf("invalid IPv6 address, want 16 bytes: %v", *v)
 	}
+	return nil
+}
+
+// IPv4Addr is the "ip" key, which holds the IP address of the node.
+type IPv4Addr netip.Addr
+
+func (v IPv4Addr) ENRKey() string { return "ip" }
+
+// EncodeRLP implements rlp.Encoder.
+func (v IPv4Addr) EncodeRLP(w io.Writer) error {
+	addr := netip.Addr(v)
+	if !addr.Is4() {
+		return errors.New("address is not IPv4")
+	}
+	enc := rlp.NewEncoderBuffer(w)
+	bytes := addr.As4()
+	enc.WriteBytes(bytes[:])
+	return enc.Flush()
+}
+
+// DecodeRLP implements rlp.Decoder.
+func (v *IPv4Addr) DecodeRLP(s *rlp.Stream) error {
+	var bytes [4]byte
+	if err := s.ReadBytes(bytes[:]); err != nil {
+		return err
+	}
+	*v = IPv4Addr(netip.AddrFrom4(bytes))
+	return nil
+}
+
+// IPv6Addr is the "ip6" key, which holds the IP address of the node.
+type IPv6Addr netip.Addr
+
+func (v IPv6Addr) ENRKey() string { return "ip6" }
+
+// EncodeRLP implements rlp.Encoder.
+func (v IPv6Addr) EncodeRLP(w io.Writer) error {
+	addr := netip.Addr(v)
+	if !addr.Is6() {
+		return errors.New("address is not IPv6")
+	}
+	enc := rlp.NewEncoderBuffer(w)
+	bytes := addr.As16()
+	enc.WriteBytes(bytes[:])
+	return enc.Flush()
+}
+
+// DecodeRLP implements rlp.Decoder.
+func (v *IPv6Addr) DecodeRLP(s *rlp.Stream) error {
+	var bytes [16]byte
+	if err := s.ReadBytes(bytes[:]); err != nil {
+		return err
+	}
+	*v = IPv6Addr(netip.AddrFrom16(bytes))
 	return nil
 }
 

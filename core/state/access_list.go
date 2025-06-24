@@ -17,6 +17,11 @@
 package state
 
 import (
+	"fmt"
+	"maps"
+	"slices"
+	"strings"
+
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -55,18 +60,12 @@ func newAccessList() *accessList {
 }
 
 // Copy creates an independent copy of an accessList.
-func (a *accessList) Copy() *accessList {
+func (al *accessList) Copy() *accessList {
 	cp := newAccessList()
-	for k, v := range a.addresses {
-		cp.addresses[k] = v
-	}
-	cp.slots = make([]map[common.Hash]struct{}, len(a.slots))
-	for i, slotMap := range a.slots {
-		newSlotmap := make(map[common.Hash]struct{}, len(slotMap))
-		for k := range slotMap {
-			newSlotmap[k] = struct{}{}
-		}
-		cp.slots[i] = newSlotmap
+	cp.addresses = maps.Clone(al.addresses)
+	cp.slots = make([]map[common.Hash]struct{}, len(al.slots))
+	for i, slotMap := range al.slots {
+		cp.slots[i] = maps.Clone(slotMap)
 	}
 	return cp
 }
@@ -133,4 +132,33 @@ func (al *accessList) DeleteSlot(address common.Address, slot common.Hash) {
 // operations.
 func (al *accessList) DeleteAddress(address common.Address) {
 	delete(al.addresses, address)
+}
+
+// Equal returns true if the two access lists are identical
+func (al *accessList) Equal(other *accessList) bool {
+	if !maps.Equal(al.addresses, other.addresses) {
+		return false
+	}
+	return slices.EqualFunc(al.slots, other.slots, maps.Equal)
+}
+
+// PrettyPrint prints the contents of the access list in a human-readable form
+func (al *accessList) PrettyPrint() string {
+	out := new(strings.Builder)
+	var sortedAddrs []common.Address
+	for addr := range al.addresses {
+		sortedAddrs = append(sortedAddrs, addr)
+	}
+	slices.SortFunc(sortedAddrs, common.Address.Cmp)
+	for _, addr := range sortedAddrs {
+		idx := al.addresses[addr]
+		fmt.Fprintf(out, "%#x : (idx %d)\n", addr, idx)
+		if idx >= 0 {
+			slotmap := al.slots[idx]
+			for h := range slotmap {
+				fmt.Fprintf(out, "    %#x\n", h)
+			}
+		}
+	}
+	return out.String()
 }

@@ -57,7 +57,6 @@ type DumpAccount struct {
 	Storage     map[common.Hash]string `json:"storage,omitempty"`
 	Address     *common.Address        `json:"address,omitempty"` // Address only present in iterative (line-by-line) mode
 	AddressHash hexutil.Bytes          `json:"key,omitempty"`     // If we don't have address, we can output the key
-
 }
 
 // Dump represents the full dump in a collected format, as one large map.

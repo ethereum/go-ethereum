@@ -23,7 +23,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/holiman/uint256"
 )
 
 // LazyTransaction contains a small subset of the transaction properties that is
@@ -34,9 +36,9 @@ type LazyTransaction struct {
 	Hash common.Hash        // Transaction hash to pull up if needed
 	Tx   *types.Transaction // Transaction if already resolved
 
-	Time      time.Time // Time when the transaction was first seen
-	GasFeeCap *big.Int  // Maximum fee per gas the transaction may consume
-	GasTipCap *big.Int  // Maximum miner tip per gas the transaction can pay
+	Time      time.Time    // Time when the transaction was first seen
+	GasFeeCap *uint256.Int // Maximum fee per gas the transaction may consume
+	GasTipCap *uint256.Int // Maximum miner tip per gas the transaction can pay
 
 	Gas     uint64 // Amount of gas required by the transaction
 	BlobGas uint64 // Amount of blob gas required by the transaction
@@ -44,11 +46,17 @@ type LazyTransaction struct {
 
 // Resolve retrieves the full transaction belonging to a lazy handle if it is still
 // maintained by the transaction pool.
+//
+// Note, the method will *not* cache the retrieved transaction if the original
+// pool has not cached it. The idea being, that if the tx was too big to insert
+// originally, silently saving it will cause more trouble down the line (and
+// indeed seems to have caused a memory bloat in the original implementation
+// which did just that).
 func (ltx *LazyTransaction) Resolve() *types.Transaction {
-	if ltx.Tx == nil {
-		ltx.Tx = ltx.Pool.Get(ltx.Hash)
+	if ltx.Tx != nil {
+		return ltx.Tx
 	}
-	return ltx.Tx
+	return ltx.Pool.Get(ltx.Hash)
 }
 
 // LazyResolver is a minimal interface needed for a transaction pool to satisfy
@@ -63,13 +71,28 @@ type LazyResolver interface {
 // may request (and relinquish) exclusive access to certain addresses.
 type AddressReserver func(addr common.Address, reserve bool) error
 
+// PendingFilter is a collection of filter rules to allow retrieving a subset
+// of transactions for announcement or mining.
+//
+// Note, the entries here are not arbitrary useful filters, rather each one has
+// a very specific call site in mind and each one can be evaluated very cheaply
+// by the pool implementations. Only add new ones that satisfy those constraints.
+type PendingFilter struct {
+	MinTip  *uint256.Int // Minimum miner tip required to include a transaction
+	BaseFee *uint256.Int // Minimum 1559 basefee needed to include a transaction
+	BlobFee *uint256.Int // Minimum 4844 blobfee needed to include a blob transaction
+
+	OnlyPlainTxs bool // Return only plain EVM transactions (peer-join announces, block space filling)
+	OnlyBlobTxs  bool // Return only blob transactions (block blob-space filling)
+}
+
 // SubPool represents a specialized transaction pool that lives on its own (e.g.
 // blob pool). Since independent of how many specialized pools we have, they do
 // need to be updated in lockstep and assemble into one coherent view for block
 // production, this interface defines the common methods that allow the primary
 // transaction pool to manage the subpools.
 type SubPool interface {
-	// Filter is a selector used to decide whether a transaction whould be added
+	// Filter is a selector used to decide whether a transaction would be added
 	// to this particular subpool.
 	Filter(tx *types.Transaction) bool
 
@@ -80,7 +103,7 @@ type SubPool interface {
 	// These should not be passed as a constructor argument - nor should the pools
 	// start by themselves - in order to keep multiple subpools in lockstep with
 	// one another.
-	Init(gasTip *big.Int, head *types.Header, reserve AddressReserver) error
+	Init(gasTip uint64, head *types.Header, reserve AddressReserver) error
 
 	// Close terminates any background processing threads and releases any held
 	// resources.
@@ -101,14 +124,31 @@ type SubPool interface {
 	// Get returns a transaction if it is contained in the pool, or nil otherwise.
 	Get(hash common.Hash) *types.Transaction
 
+	// GetRLP returns a RLP-encoded transaction if it is contained in the pool.
+	GetRLP(hash common.Hash) []byte
+
+	// GetBlobs returns a number of blobs are proofs for the given versioned hashes.
+	// This is a utility method for the engine API, enabling consensus clients to
+	// retrieve blobs from the pools directly instead of the network.
+	GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof)
+
+	// ValidateTxBasics checks whether a transaction is valid according to the consensus
+	// rules, but does not check state-dependent validation such as sufficient balance.
+	// This check is meant as a static check which can be performed without holding the
+	// pool mutex.
+	ValidateTxBasics(tx *types.Transaction) error
+
 	// Add enqueues a batch of transactions into the pool if they are valid. Due
 	// to the large transaction churn, add may postpone fully integrating the tx
 	// to a later point to batch multiple ones together.
-	Add(txs []*types.Transaction, local bool, sync bool) []error
+	Add(txs []*types.Transaction, sync bool) []error
 
 	// Pending retrieves all currently processable transactions, grouped by origin
 	// account and sorted by nonce.
-	Pending(enforceTips bool) map[common.Address][]*LazyTransaction
+	//
+	// The transactions can also be pre-filtered by the dynamic fee components to
+	// reduce allocations and load on downstream subsystems.
+	Pending(filter PendingFilter) map[common.Address][]*LazyTransaction
 
 	// SubscribeTransactions subscribes to new transaction events. The subscriber
 	// can decide whether to receive notifications only for newly seen transactions
@@ -131,10 +171,10 @@ type SubPool interface {
 	// pending as well as queued transactions of this address, grouped by nonce.
 	ContentFrom(addr common.Address) ([]*types.Transaction, []*types.Transaction)
 
-	// Locals retrieves the accounts currently considered local by the pool.
-	Locals() []common.Address
-
 	// Status returns the known status (unknown/pending/queued) of a transaction
 	// identified by their hashes.
 	Status(hash common.Hash) TxStatus
+
+	// Clear removes all tracked transactions from the pool
+	Clear()
 }

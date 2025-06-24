@@ -2,16 +2,16 @@ package log
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/big"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/holiman/uint256"
-	"golang.org/x/exp/slog"
 )
 
 // TestLoggingWithVmodule checks that vmodule works.
@@ -25,7 +25,7 @@ func TestLoggingWithVmodule(t *testing.T) {
 	logger.Trace("a message", "foo", "bar")
 	have := out.String()
 	// The timestamp is locale-dependent, so we want to trim that off
-	// "INFO [01-01|00:00:00.000] a messag ..." -> "a messag..."
+	// "INFO [01-01|00:00:00.000] a message ..." -> "a message..."
 	have = strings.Split(have, "]")[1]
 	want := " a message                                foo=bar\n"
 	if have != want {
@@ -41,7 +41,7 @@ func TestTerminalHandlerWithAttrs(t *testing.T) {
 	logger.Trace("a message", "foo", "bar")
 	have := out.String()
 	// The timestamp is locale-dependent, so we want to trim that off
-	// "INFO [01-01|00:00:00.000] a messag ..." -> "a messag..."
+	// "INFO [01-01|00:00:00.000] a message ..." -> "a message..."
 	have = strings.Split(have, "]")[1]
 	want := " a message                                baz=bat foo=bar\n"
 	if have != want {
@@ -49,8 +49,27 @@ func TestTerminalHandlerWithAttrs(t *testing.T) {
 	}
 }
 
+// Make sure the default json handler outputs debug log lines
+func TestJSONHandler(t *testing.T) {
+	out := new(bytes.Buffer)
+	handler := JSONHandler(out)
+	logger := slog.New(handler)
+	logger.Debug("hi there")
+	if len(out.String()) == 0 {
+		t.Error("expected non-empty debug log output from default JSON Handler")
+	}
+
+	out.Reset()
+	handler = JSONHandlerWithLevel(out, slog.LevelInfo)
+	logger = slog.New(handler)
+	logger.Debug("hi there")
+	if len(out.String()) != 0 {
+		t.Errorf("expected empty debug log output, but got: %v", out.String())
+	}
+}
+
 func BenchmarkTraceLogging(b *testing.B) {
-	SetDefault(NewLogger(NewTerminalHandler(os.Stderr, true)))
+	SetDefault(NewLogger(NewTerminalHandler(io.Discard, true)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		Trace("a message", "v", i)
@@ -77,7 +96,7 @@ func benchmarkLogger(b *testing.B, l Logger) {
 		tt     = time.Now()
 		bigint = big.NewInt(100)
 		nilbig *big.Int
-		err    = fmt.Errorf("Oh nooes it's crap")
+		err    = errors.New("oh nooes it's crap")
 	)
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -106,7 +125,7 @@ func TestLoggerOutput(t *testing.T) {
 		tt        = time.Time{}
 		bigint    = big.NewInt(100)
 		nilbig    *big.Int
-		err       = fmt.Errorf("Oh nooes it's crap")
+		err       = errors.New("oh nooes it's crap")
 		smallUint = uint256.NewInt(500_000)
 		bigUint   = &uint256.Int{0xff, 0xff, 0xff, 0xff}
 	)
@@ -130,7 +149,7 @@ func TestLoggerOutput(t *testing.T) {
 
 	have := out.String()
 	t.Logf("output %v", out.String())
-	want := `INFO [11-07|19:14:33.821] This is a message                        foo=123 bytes="[0 0 0 0 0 0 0 0 0 0]" bonk="a string with text" time=0001-01-01T00:00:00+0000 bigint=100 nilbig=<nil> err="Oh nooes it's crap" struct="{A:Foo B:12}" struct="{A:Foo\nLinebreak B:122}" ptrstruct="&{A:Foo B:12}" smalluint=500,000 bigUint=1,600,660,942,523,603,594,864,898,306,482,794,244,293,965,082,972,225,630,372,095
+	want := `INFO [11-07|19:14:33.821] This is a message                        foo=123 bytes="[0 0 0 0 0 0 0 0 0 0]" bonk="a string with text" time=0001-01-01T00:00:00+0000 bigint=100 nilbig=<nil> err="oh nooes it's crap" struct="{A:Foo B:12}" struct="{A:Foo\nLinebreak B:122}" ptrstruct="&{A:Foo B:12}" smalluint=500,000 bigUint=1,600,660,942,523,603,594,864,898,306,482,794,244,293,965,082,972,225,630,372,095
 `
 	if !bytes.Equal([]byte(have)[25:], []byte(want)[25:]) {
 		t.Errorf("Error\nhave: %q\nwant: %q", have, want)

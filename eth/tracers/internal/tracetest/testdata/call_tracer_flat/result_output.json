@@ -10,7 +10,6 @@
     "number": "553415",
     "stateRoot": "0x8f89e79109c19fa00e72b400502448540dc4773ad92dddd341dbba20c710a3b5",
     "timestamp": "1577396195",
-    "totalDifficulty": "458361299240",
     "alloc": {
       "0x531f76bad925f6a925474996c7d738c1008045f6": {
         "balance": "0x0",
@@ -81,8 +80,7 @@
       "transactionPosition": 5,
       "transactionHash": "0x04d2029a5cbbed30969cdc0a2ca9e9fc6b719e323af0802b52466f07ee0ecada",
       "blockNumber": 553416,
-      "blockHash": "0x8df024322173d225a09681d35edeaa528aca60743a11a70f854c158862bf5282",
-      "time": "617.42µs"
+      "blockHash": "0x8df024322173d225a09681d35edeaa528aca60743a11a70f854c158862bf5282"
     },
     {
       "type": "call",
@@ -98,9 +96,7 @@
         "gasUsed": "0x0",
         "output": "0x"
       },
-      "traceAddress": [
-        0
-      ],
+      "traceAddress": [0],
       "subtraces": 0,
       "transactionPosition": 5,
       "transactionHash": "0x04d2029a5cbbed30969cdc0a2ca9e9fc6b719e323af0802b52466f07ee0ecada",

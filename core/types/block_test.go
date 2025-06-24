@@ -18,6 +18,7 @@ package types
 
 import (
 	"bytes"
+	gomath "math"
 	"math/big"
 	"reflect"
 	"testing"
@@ -25,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/lib/blocktest"
+	"github.com/ethereum/go-ethereum/internal/blocktest"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -196,7 +197,7 @@ func TestEIP2718BlockEncoding(t *testing.T) {
 func TestUncleHash(t *testing.T) {
 	uncles := make([]*Header, 0)
 	h := CalcUncleHash(uncles)
-	exp := common.HexToHash("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347")
+	exp := EmptyUncleHash
 	if h != exp {
 		t.Fatalf("empty uncle hash is wrong, got %x != %x", h, exp)
 	}
@@ -254,7 +255,7 @@ func makeBenchBlock() *Block {
 			Extra:      []byte("benchmark uncle"),
 		}
 	}
-	return NewBlock(header, txs, uncles, receipts, blocktest.NewHasher())
+	return NewBlock(header, &Body{Transactions: txs, Uncles: uncles}, receipts, blocktest.NewHasher())
 }
 
 func TestRlpDecodeParentHash(t *testing.T) {
@@ -277,9 +278,9 @@ func TestRlpDecodeParentHash(t *testing.T) {
 	if rlpData, err := rlp.EncodeToBytes(&Header{
 		ParentHash: want,
 		Difficulty: mainnetTd,
-		Number:     new(big.Int).SetUint64(math.MaxUint64),
+		Number:     new(big.Int).SetUint64(gomath.MaxUint64),
 		Extra:      make([]byte, 65+32),
-		BaseFee:    new(big.Int).SetUint64(math.MaxUint64),
+		BaseFee:    new(big.Int).SetUint64(gomath.MaxUint64),
 	}); err != nil {
 		t.Fatal(err)
 	} else {

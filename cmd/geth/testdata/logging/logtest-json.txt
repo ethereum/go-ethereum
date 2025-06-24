@@ -29,7 +29,7 @@
 {"t":"2023-11-22T15:42:00.408237+08:00","lvl":"info","msg":"repeated-key 2","xx":"short","xx":"longer"}
 {"t":"2023-11-22T15:42:00.408241+08:00","lvl":"info","msg":"log at level info"}
 {"t":"2023-11-22T15:42:00.408244+08:00","lvl":"warn","msg":"log at level warn"}
-{"t":"2023-11-22T15:42:00.408247+08:00","lvl":"eror","msg":"log at level error"}
+{"t":"2023-11-22T15:42:00.408247+08:00","lvl":"error","msg":"log at level error"}
 {"t":"2023-11-22T15:42:00.408251+08:00","lvl":"info","msg":"test","bar":"short","a":"aligned left"}
 {"t":"2023-11-22T15:42:00.408254+08:00","lvl":"info","msg":"test","bar":"a long message","a":1}
 {"t":"2023-11-22T15:42:00.408258+08:00","lvl":"info","msg":"test","bar":"short","a":"aligned right"}

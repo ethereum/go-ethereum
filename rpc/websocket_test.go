@@ -27,6 +27,7 @@ import (
 
 func TestWebsocketClientHeaders(t *testing.T) {
 	t.Skip()
+	// t.Parallel()
 
 	// endpoint, header, err := wsClientHeaders("wss://testuser:test-PASS_01@example.com:1234", "https://example.com")
 	// if err != nil {
@@ -46,6 +47,7 @@ func TestWebsocketClientHeaders(t *testing.T) {
 // This test checks that the server rejects connections from disallowed origins.
 func TestWebsocketOriginCheck(t *testing.T) {
 	t.Skip()
+	// t.Parallel()
 
 	// var (
 	// 	srv     = newTestServer()
@@ -76,6 +78,7 @@ func TestWebsocketOriginCheck(t *testing.T) {
 // This test checks whether calls exceeding the request size limit are rejected.
 func TestWebsocketLargeCall(t *testing.T) {
 	t.Skip()
+	// t.Parallel()
 
 	// var (
 	// 	srv     = newTestServer()
@@ -93,7 +96,7 @@ func TestWebsocketLargeCall(t *testing.T) {
 
 	// // This call sends slightly less than the limit and should work.
 	// var result echoResult
-	// arg := strings.Repeat("x", maxRequestContentLength-200)
+	// arg := strings.Repeat("x", defaultBodyLimit-200)
 	// if err := client.Call(&result, "test_echo", arg, 1); err != nil {
 	// 	t.Fatalf("valid call didn't work: %v", err)
 	// }
@@ -102,7 +105,7 @@ func TestWebsocketLargeCall(t *testing.T) {
 	// }
 
 	// // This call sends twice the allowed size and shouldn't work.
-	// arg = strings.Repeat("x", maxRequestContentLength*2)
+	// arg = strings.Repeat("x", defaultBodyLimit*2)
 	// err = client.Call(&result, "test_echo", arg)
 	// if err == nil {
 	// 	t.Fatal("no error for too large call")
@@ -112,6 +115,7 @@ func TestWebsocketLargeCall(t *testing.T) {
 // This test checks whether the wsMessageSizeLimit option is obeyed.
 func TestWebsocketLargeRead(t *testing.T) {
 	t.Skip()
+	// t.Parallel()
 
 	// var (
 	// 	srv     = newTestServer()
@@ -171,6 +175,8 @@ func TestWebsocketLargeRead(t *testing.T) {
 
 func TestWebsocketPeerInfo(t *testing.T) {
 	t.Skip()
+	// t.Parallel()
+
 	// var (
 	// 	s     = newTestServer()
 	// 	ts    = httptest.NewServer(s.WebsocketHandler([]string{"origin.example.com"}))
@@ -184,6 +190,7 @@ func TestWebsocketPeerInfo(t *testing.T) {
 	// if err != nil {
 	// 	t.Fatal(err)
 	// }
+	// defer c.Close()
 
 	// // Request peer information.
 	// var connInfo PeerInfo
@@ -208,6 +215,7 @@ func TestWebsocketPeerInfo(t *testing.T) {
 // This test checks that client handles WebSocket ping frames correctly.
 func TestClientWebsocketPing(t *testing.T) {
 	t.Skip()
+	// t.Parallel()
 
 	// var (
 	// 	sendPing    = make(chan struct{})
@@ -256,6 +264,8 @@ func TestClientWebsocketPing(t *testing.T) {
 // This checks that the websocket transport can deal with large messages.
 func TestClientWebsocketLargeMessage(t *testing.T) {
 	t.Skip()
+	// t.Parallel()
+
 	// var (
 	// 	srv     = NewServer()
 	// 	httpsrv = httptest.NewServer(srv.WebsocketHandler(nil))
@@ -271,6 +281,7 @@ func TestClientWebsocketLargeMessage(t *testing.T) {
 	// if err != nil {
 	// 	t.Fatal(err)
 	// }
+	// defer c.Close()
 
 	// var r string
 	// if err := c.Call(&r, "test_largeResp"); err != nil {

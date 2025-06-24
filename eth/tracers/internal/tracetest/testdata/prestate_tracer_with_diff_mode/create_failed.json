@@ -1,6 +1,6 @@
 {
   "genesis": {
-    "baseFeePerGas": "51088069741",
+    "baseFeePerGas": "4573728117",
     "difficulty": "14315558652874667",
     "extraData": "0xd883010a10846765746888676f312e31362e35856c696e7578",
     "gasLimit": "30058590",
@@ -55,7 +55,6 @@
       "londonBlock": 12965000,
       "arrowGlacierBlock": 13773000,
       "grayGlacierBlock": 15050000,
-      "terminalTotalDifficultyPassed": true,
       "ethash": {}
     }
   },
@@ -64,7 +63,8 @@
     "difficulty": "14322823549655084",
     "timestamp": "1651623279",
     "gasLimit": "30029237",
-    "miner": "0x8f03f1a3f10c05e7cccf75c1fd10168e06659be7"
+    "miner": "0x8f03f1a3f10c05e7cccf75c1fd10168e06659be7",
+    "baseFeePerGas": "4002012103"
   },
   "input": "0x02f8b4018312acfc8459682f00851a46bcf47a8302b1a194ffa397285ce46fb78c588a9e993286aac68c37cd80b844fb90b3200000000000000000000000002a549b4af9ec39b03142da6dc32221fc390b553300000000000000000000000000000000000000000000000000000000000cb3d5c001a03002079d2873f7963c4278200c43aa71efad262b2150bc8524480acfc38b5faaa077d44aa09d56b9cf99443c7f55aaad1bbae9cfb5bbb9de31eaf7a8f9e623e980",
   "tracerConfig": {
@@ -83,7 +83,7 @@
     },
     "post": {
       "0x808b4da0be6c9512e948521452227efc619bea52": {
-        "balance": "0x2cd987071ba2346b6",
+        "balance": "0x2cdb5f8e62cc9ad1c",
         "nonce": 1223933
       },
       "0x8f03f1a3f10c05e7cccf75c1fd10168e06659be7": {

@@ -18,14 +18,16 @@ package rpc
 
 import (
 	"encoding/json"
+	"math"
 	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 )
 
 func TestBlockNumberJSONUnmarshal(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		input    string
 		mustFail bool
@@ -45,9 +47,11 @@ func TestBlockNumberJSONUnmarshal(t *testing.T) {
 		11: {`"pending"`, false, PendingBlockNumber},
 		12: {`"latest"`, false, LatestBlockNumber},
 		13: {`"earliest"`, false, EarliestBlockNumber},
-		14: {`someString`, true, BlockNumber(0)},
-		15: {`""`, true, BlockNumber(0)},
-		16: {``, true, BlockNumber(0)},
+		14: {`"safe"`, false, SafeBlockNumber},
+		15: {`"finalized"`, false, FinalizedBlockNumber},
+		16: {`someString`, true, BlockNumber(0)},
+		17: {`""`, true, BlockNumber(0)},
+		18: {``, true, BlockNumber(0)},
 	}
 
 	for i, test := range tests {
@@ -68,6 +72,8 @@ func TestBlockNumberJSONUnmarshal(t *testing.T) {
 }
 
 func TestBlockNumberOrHash_UnmarshalJSON(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		input    string
 		mustFail bool
@@ -87,18 +93,22 @@ func TestBlockNumberOrHash_UnmarshalJSON(t *testing.T) {
 		11: {`"pending"`, false, BlockNumberOrHashWithNumber(PendingBlockNumber)},
 		12: {`"latest"`, false, BlockNumberOrHashWithNumber(LatestBlockNumber)},
 		13: {`"earliest"`, false, BlockNumberOrHashWithNumber(EarliestBlockNumber)},
-		14: {`someString`, true, BlockNumberOrHash{}},
-		15: {`""`, true, BlockNumberOrHash{}},
-		16: {``, true, BlockNumberOrHash{}},
-		17: {`"0x0000000000000000000000000000000000000000000000000000000000000000"`, false, BlockNumberOrHashWithHash(common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"), false)},
-		18: {`{"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000"}`, false, BlockNumberOrHashWithHash(common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"), false)},
-		19: {`{"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000","requireCanonical":false}`, false, BlockNumberOrHashWithHash(common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"), false)},
-		20: {`{"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000","requireCanonical":true}`, false, BlockNumberOrHashWithHash(common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"), true)},
-		21: {`{"blockNumber":"0x1"}`, false, BlockNumberOrHashWithNumber(1)},
-		22: {`{"blockNumber":"pending"}`, false, BlockNumberOrHashWithNumber(PendingBlockNumber)},
-		23: {`{"blockNumber":"latest"}`, false, BlockNumberOrHashWithNumber(LatestBlockNumber)},
-		24: {`{"blockNumber":"earliest"}`, false, BlockNumberOrHashWithNumber(EarliestBlockNumber)},
-		25: {`{"blockNumber":"0x1", "blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000"}`, true, BlockNumberOrHash{}},
+		14: {`"safe"`, false, BlockNumberOrHashWithNumber(SafeBlockNumber)},
+		15: {`"finalized"`, false, BlockNumberOrHashWithNumber(FinalizedBlockNumber)},
+		16: {`someString`, true, BlockNumberOrHash{}},
+		17: {`""`, true, BlockNumberOrHash{}},
+		18: {``, true, BlockNumberOrHash{}},
+		19: {`"0x0000000000000000000000000000000000000000000000000000000000000000"`, false, BlockNumberOrHashWithHash(common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"), false)},
+		20: {`{"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000"}`, false, BlockNumberOrHashWithHash(common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"), false)},
+		21: {`{"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000","requireCanonical":false}`, false, BlockNumberOrHashWithHash(common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"), false)},
+		22: {`{"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000","requireCanonical":true}`, false, BlockNumberOrHashWithHash(common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"), true)},
+		23: {`{"blockNumber":"0x1"}`, false, BlockNumberOrHashWithNumber(1)},
+		24: {`{"blockNumber":"pending"}`, false, BlockNumberOrHashWithNumber(PendingBlockNumber)},
+		25: {`{"blockNumber":"latest"}`, false, BlockNumberOrHashWithNumber(LatestBlockNumber)},
+		26: {`{"blockNumber":"earliest"}`, false, BlockNumberOrHashWithNumber(EarliestBlockNumber)},
+		27: {`{"blockNumber":"safe"}`, false, BlockNumberOrHashWithNumber(SafeBlockNumber)},
+		28: {`{"blockNumber":"finalized"}`, false, BlockNumberOrHashWithNumber(FinalizedBlockNumber)},
+		29: {`{"blockNumber":"0x1", "blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000"}`, true, BlockNumberOrHash{}},
 	}
 
 	for i, test := range tests {
@@ -125,6 +135,8 @@ func TestBlockNumberOrHash_UnmarshalJSON(t *testing.T) {
 }
 
 func TestBlockNumberOrHash_WithNumber_MarshalAndUnmarshal(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name   string
 		number int64
@@ -133,10 +145,13 @@ func TestBlockNumberOrHash_WithNumber_MarshalAndUnmarshal(t *testing.T) {
 		{"pending", int64(PendingBlockNumber)},
 		{"latest", int64(LatestBlockNumber)},
 		{"earliest", int64(EarliestBlockNumber)},
+		{"safe", int64(SafeBlockNumber)},
+		{"finalized", int64(FinalizedBlockNumber)},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
 			bnh := BlockNumberOrHashWithNumber(BlockNumber(test.number))
 			marshalled, err := json.Marshal(bnh)
 			if err != nil {
@@ -155,11 +170,15 @@ func TestBlockNumberOrHash_WithNumber_MarshalAndUnmarshal(t *testing.T) {
 }
 
 func TestBlockNumberOrHash_StringAndUnmarshal(t *testing.T) {
+	t.Parallel()
+
 	tests := []BlockNumberOrHash{
 		BlockNumberOrHashWithNumber(math.MaxInt64),
 		BlockNumberOrHashWithNumber(PendingBlockNumber),
 		BlockNumberOrHashWithNumber(LatestBlockNumber),
 		BlockNumberOrHashWithNumber(EarliestBlockNumber),
+		BlockNumberOrHashWithNumber(SafeBlockNumber),
+		BlockNumberOrHashWithNumber(FinalizedBlockNumber),
 		BlockNumberOrHashWithNumber(32),
 		BlockNumberOrHashWithHash(common.Hash{0xaa}, false),
 	}

@@ -1,0 +1,4 @@
+EVM gas used:    \d+
+execution time:  \d+\.\d+.s
+allocations:     \d+
+allocated bytes: \d+

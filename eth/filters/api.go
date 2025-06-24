@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package filters
 
 import (
@@ -13,8 +29,15 @@ import (
 )
 
 var (
-	errInvalidTopic = errors.New("invalid topic(s)")
+	errInvalidTopic    = errors.New("invalid topic(s)")
+	errExceedMaxTopics = errors.New("exceed max topics")
 )
+
+// The maximum number of topic criteria allowed, vm.LOG4 - vm.LOG0
+const maxTopics = 4
+
+// The maximum number of allowed topics within a topic criteria
+const maxSubTopics = 1000
 
 // FilterCriteria represents a request to create a new filter.
 // Same as ethereum.FilterQuery but with UnmarshalJSON() method.
@@ -78,6 +101,9 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 			return errors.New("invalid addresses in query")
 		}
 	}
+	if len(raw.Topics) > maxTopics {
+		return errExceedMaxTopics
+	}
 
 	// topics is an array consisting of strings and/or arrays of strings.
 	// JSON null values are converted to common.Hash{} and ignored by the filter manager.
@@ -98,6 +124,9 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 
 			case []interface{}:
 				// or case e.g. [null, "topic0", "topic1"]
+				if len(topic) > maxSubTopics {
+					return errExceedMaxTopics
+				}
 				for _, rawTopic := range topic {
 					if rawTopic == nil {
 						// null component, match all
