@@ -108,6 +108,17 @@ func (t *VerkleTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	return acc, nil
 }
 
+// PrefetchAccount attempts to resolve specific accounts from the database
+// to accelerate subsequent trie operations.
+func (t *VerkleTrie) PrefetchAccount(addresses []common.Address) error {
+	for _, addr := range addresses {
+		if _, err := t.GetAccount(addr); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // GetStorage implements state.Trie, retrieving the storage slot with the specified
 // account address and storage key. If the specified slot is not in the verkle tree,
 // nil will be returned. If the tree is corrupted, an error will be returned.
@@ -118,6 +129,17 @@ func (t *VerkleTrie) GetStorage(addr common.Address, key []byte) ([]byte, error)
 		return nil, err
 	}
 	return common.TrimLeftZeroes(val), nil
+}
+
+// PrefetchStorage attempts to resolve specific storage slots from the database
+// to accelerate subsequent trie operations.
+func (t *VerkleTrie) PrefetchStorage(addr common.Address, keys [][]byte) error {
+	for _, key := range keys {
+		if _, err := t.GetStorage(addr, key); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // UpdateAccount implements state.Trie, writing the provided account into the tree.
