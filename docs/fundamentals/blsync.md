@@ -9,7 +9,26 @@ description: Running geth with integrated beacon light client
 
 ## Usage
 
-### Integrated mode
+### Using Dynamic Checkpoint Fetch
+
+This will automatically fetch the latest finalized checkpoint and launch Geth in snap sync mode with light client support (blsync).
+
+Replace `<domain>` with your select beacon api provider from the provided list of [lightsync endpoints](https://s1na.github.io/light-sync-endpoints/). Replace `<checkpoint>` with a url from the list of maintained [checkpoint sync endpoints](https://eth-clients.github.io/checkpoint-sync-endpoints/). The following command can be used to run geth client with blsync directly.
+
+```terminal
+export BEACON=<beacon> && \
+export CHECKPOINT=<checkpoint> && \
+geth --beacon.api=$BEACON --beacon.checkpoint=$(curl -s $CHECKPOINT/checkpointz/v1/status | jq -r '.data.finality.finalized.root')
+```
+
+#### Example
+```terminal
+export BEACON=https://lodestar-sepolia.chainsafe.io && \
+export CHECKPOINT=https://sepolia.beaconstate.info && \
+geth --sepolia --beacon.api=$BEACON --beacon.checkpoint=$(curl -s $CHECKPOINT/checkpointz/v1/status | jq -r '.data.finality.finalized.root')
+```
+
+### Running with Manual Checkpoint Fetch
 
 To run blsync as part of Geth, you need to specify a public HTTP endpoint and a checkpoint:
 
@@ -29,9 +48,25 @@ A checkpoint is the block root of the first proposed slot of a finalized beacon 
 - Copy the block root field.
 ![Copy the block root](/images/docs/blsync3.png)
 
+
+## Testing a Beacon API Endpoint
+
+To verify that your Beacon API is reachable and returning valid data, you can use a simple `curl` command to request the light client bootstrap header for a given block root.
+
+Replace `<domain>` with your Beacon API domain, and `<block_hash>` with the hex-encoded block root you want to test.
+
+```terminal
+curl -H "Accept: application/json" http://<domain>/eth/v1/beacon/light_client/bootstrap/<block_root>
+```
+
 #### Example
+```terminal
+curl -H "Accept: application/json" http://testing.holesky.beacon-api.nimbus.team/eth/v1/beacon/light_client/bootstrap/0x82e6ba0e288db5eb79c328fc6cb03a6aec921b00af6888bd51d6b000e68e75ac
+```
 
 The following command can be used to start Geth with blsync on the Sepolia network. Note that the checkpoint root will be outdated two weeks after the writing of this page and a recent one will have to be picked according to the guide above:
+
+#### Example
 
 ```terminal
 ./build/bin/geth --sepolia --beacon.api https://sepolia.lightclient.xyz --beacon.checkpoint 0x0014732c89a02315d2ada0ed2f63b32ecb8d08751c01bea39011b31ad9ecee36

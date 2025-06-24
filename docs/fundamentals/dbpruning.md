@@ -1,5 +1,5 @@
 ---
-title: Pruning
+title: Database Pruning
 description: Instructions for pruning a Geth node
 ---
 
