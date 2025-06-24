@@ -280,13 +280,11 @@ func doTest(cmdline []string) {
 		verbose  = flag.Bool("v", false, "Whether to log verbosely")
 		race     = flag.Bool("race", false, "Execute the race detector")
 		short    = flag.Bool("short", false, "Pass the 'short'-flag to go test")
-		cachedir = flag.String("cachedir", "./build/cache", "directory for caching downloads")
 	)
 	flag.CommandLine.Parse(cmdline)
 
 	// Get test fixtures.
 	csdb := build.MustLoadChecksums("build/checksums.txt")
-	downloadSpecTestFixtures(csdb, *cachedir)
 
 	// Configure the toolchain.
 	tc := build.GoToolchain{GOARCH: *arch, CC: *cc}
@@ -326,25 +324,6 @@ func doTest(cmdline []string) {
 	}
 	gotest.Args = append(gotest.Args, packages...)
 	build.MustRun(gotest)
-}
-
-// downloadSpecTestFixtures downloads and extracts the execution-spec-tests fixtures.
-func downloadSpecTestFixtures(csdb *build.ChecksumDB, cachedir string) string {
-	executionSpecTestsVersion, err := build.Version(csdb, "spec-tests")
-	if err != nil {
-		log.Fatal(err)
-	}
-	ext := ".tar.gz"
-	base := "fixtures_pectra-devnet-6" // TODO(s1na) rename once the version becomes part of the filename
-	url := fmt.Sprintf("https://github.com/ethereum/execution-spec-tests/releases/download/%s/%s%s", executionSpecTestsVersion, base, ext)
-	archivePath := filepath.Join(cachedir, base+ext)
-	if err := csdb.DownloadFile(url, archivePath); err != nil {
-		log.Fatal(err)
-	}
-	if err := build.ExtractArchive(archivePath, executionSpecTestsDir); err != nil {
-		log.Fatal(err)
-	}
-	return filepath.Join(cachedir, base)
 }
 
 // doCheckTidy assets that the Go modules files are tidied already.

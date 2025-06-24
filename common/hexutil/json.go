@@ -245,6 +245,10 @@ func (b *U256) UnmarshalJSON(input []byte) error {
 	if !isString(input) {
 		return errNonString(u256T)
 	}
+	if string(input) == `"0x0"` {
+		_ = (*uint256.Int)(b).SetBytes([]byte{})
+		return nil
+	}
 	// strip leading zeros
 	for firstNonZeroIdx := 3; firstNonZeroIdx < len(input); firstNonZeroIdx++ {
 		if input[firstNonZeroIdx] != '0' {

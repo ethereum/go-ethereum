@@ -185,7 +185,6 @@ var unmarshalU256Tests = []unmarshalTest{
 	{input: "10", wantErr: errNonString(u256T)},
 	{input: `"0"`, wantErr: wrapTypeError(ErrMissingPrefix, u256T)},
 	{input: `"0x"`, wantErr: wrapTypeError(ErrEmptyNumber, u256T)},
-	{input: `"0x01"`, wantErr: wrapTypeError(ErrLeadingZero, u256T)},
 	{input: `"0xx"`, wantErr: wrapTypeError(ErrSyntax, u256T)},
 	{input: `"0x1zz01"`, wantErr: wrapTypeError(ErrSyntax, u256T)},
 	{
@@ -196,6 +195,7 @@ var unmarshalU256Tests = []unmarshalTest{
 	// valid encoding
 	{input: `""`, want: big.NewInt(0)},
 	{input: `"0x0"`, want: big.NewInt(0)},
+	{input: `"0x01"`, want: big.NewInt(1)},
 	{input: `"0x2"`, want: big.NewInt(0x2)},
 	{input: `"0x2F2"`, want: big.NewInt(0x2f2)},
 	{input: `"0X2F2"`, want: big.NewInt(0x2f2)},
