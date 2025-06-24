@@ -70,7 +70,6 @@ func testTrieOpTracer(t *testing.T, vals []struct{ k, v string }) {
 	}
 	insertSet := copySet(trie.opTracer.inserts) // copy before commit
 	deleteSet := copySet(trie.opTracer.deletes) // copy before commit
-
 	root, nodes := trie.Commit(false)
 	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 
