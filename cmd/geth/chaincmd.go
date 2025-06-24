@@ -776,6 +776,9 @@ func parseRange(s string) (start uint64, end uint64, ok bool) {
 		if err != nil {
 			return 0, 0, false
 		}
+		if start > end {
+			return 0, 0, false
+		}
 		log.Info("Parsing block range", "start", start, "end", end)
 		return start, end, true
 	}
@@ -788,6 +791,5 @@ func parseRange(s string) (start uint64, end uint64, ok bool) {
 		log.Info("Parsing single block range", "block", start)
 		return start, end, true
 	}
-
 	return 0, 0, false
 }
