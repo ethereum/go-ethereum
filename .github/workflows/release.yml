@@ -4,24 +4,16 @@ on:
   push:
     branches:
       - "main" 
-      - "fix-ci-3" # TODO: remove this
     tags:
       - "v1.*"
 
 jobs:
-  # Job to extract version
   extract-version:
     name: Extract Version
     runs-on: ubuntu-latest
     steps:
       - name: Extract version
-        run: |
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            echo "VERSION=$(echo ${GITHUB_REF#refs/tags/})" >> $GITHUB_OUTPUT
-          else
-            # For branch builds, use a test version
-            echo "VERSION=v1.test-branch" >> $GITHUB_OUTPUT
-          fi
+        run: echo "VERSION=$(echo ${GITHUB_REF#refs/tags/})" >> $GITHUB_OUTPUT
         id: extract_version
     outputs:
       VERSION: ${{ steps.extract_version.outputs.VERSION }}
@@ -133,6 +125,7 @@ jobs:
     name: Draft Release
     needs: [extract-version, linux-intel, linux-arm]
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
     env:
       VERSION: ${{ needs.extract-version.outputs.VERSION }}
     permissions:
@@ -141,6 +134,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0 # This is necessary for generating the changelog
+        fetch-tags: true # Ensure tags are fetched
     
     - name: Download all artifacts
       uses: actions/download-artifact@v4
@@ -185,18 +179,14 @@ jobs:
         echo "  Alltools AMD64: ${GETH_ALLTOOLS_AMD64:-NOT FOUND}"
         echo "  Alltools ARM64: ${GETH_ALLTOOLS_ARM64:-NOT FOUND}"
         
-        # Determine the release tag
-        if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-          # For tags, use the actual tag
-          RELEASE_TAG="${{ env.VERSION }}"
-          IS_PRERELEASE=""
-        else
-          # For branches, create a specific tag based on commit
-          RELEASE_TAG="test-${GITHUB_SHA::8}"
-          IS_PRERELEASE="--prerelease"
-        fi
-        
+        # For tag builds, use the actual tag
+        RELEASE_TAG="${{ env.VERSION }}"
         echo "Release tag: $RELEASE_TAG"
+        echo "GitHub ref: ${{ github.ref }}"
+        echo "GitHub SHA: ${{ github.sha }}"
+        
+        # The tag should already exist since it triggered this workflow
+        # We just need to ensure gh release uses it correctly
         
         body=$(cat <<- 'ENDBODY'
         ![bera-geth](https://raw.githubusercontent.com/berachain/bera-geth/main/.github/meta/bera-geth.png)
@@ -265,5 +255,11 @@ jobs:
             fi
         done
         
-        # Create the release with the determined tag
-        echo "$body" | gh release create $IS_PRERELEASE --draft -t "Bera Geth $RELEASE_TAG" -F "-" "$RELEASE_TAG" "${assets[@]}"
+        # Create the release with the actual tag
+        # Using --target with GITHUB_SHA ensures we create the release at the right commit
+        echo "$body" | gh release create "$RELEASE_TAG" \
+          --draft \
+          --target "${{ github.sha }}" \
+          --title "Bera-Geth $RELEASE_TAG" \
+          -F - \
+          "${assets[@]}"
