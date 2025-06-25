@@ -19,50 +19,80 @@ package downloader
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// DownloaderAPI provides an API which gives information about the current synchronisation status.
-// It offers only methods that operates on data that can be available to anyone without security risks.
+// DownloaderAPI provides an API which gives information about the current
+// synchronisation status. It offers only methods that operates on data that
+// can be available to anyone without security risks.
 type DownloaderAPI struct {
 	d                         *Downloader
+	chain                     *core.BlockChain
 	mux                       *event.TypeMux
 	installSyncSubscription   chan chan interface{}
 	uninstallSyncSubscription chan *uninstallSyncSubscriptionRequest
 }
 
-// NewDownloaderAPI create a new DownloaderAPI. The API has an internal event loop that
+// NewDownloaderAPI creates a new DownloaderAPI. The API has an internal event loop that
 // listens for events from the downloader through the global event mux. In case it receives one of
 // these events it broadcasts it to all syncing subscriptions that are installed through the
 // installSyncSubscription channel.
-func NewDownloaderAPI(d *Downloader, m *event.TypeMux) *DownloaderAPI {
+func NewDownloaderAPI(d *Downloader, chain *core.BlockChain, m *event.TypeMux) *DownloaderAPI {
 	api := &DownloaderAPI{
 		d:                         d,
+		chain:                     chain,
 		mux:                       m,
 		installSyncSubscription:   make(chan chan interface{}),
 		uninstallSyncSubscription: make(chan *uninstallSyncSubscriptionRequest),
 	}
-
 	go api.eventLoop()
-
 	return api
 }
 
-// eventLoop runs a loop until the event mux closes. It will install and uninstall new
-// sync subscriptions and broadcasts sync status updates to the installed sync subscriptions.
+// eventLoop runs a loop until the event mux closes. It will install and uninstall
+// new sync subscriptions and broadcasts sync status updates to the installed sync
+// subscriptions.
+//
+// The sync status pushed to subscriptions can be a stream like:
+// >>> {Syncing: true, Progress: {...}}
+// >>> {false}
+//
+// If the node is already synced up, then only a single event subscribers will
+// receive is {false}.
 func (api *DownloaderAPI) eventLoop() {
 	var (
-		sub               = api.mux.Subscribe(StartEvent{}, DoneEvent{}, FailedEvent{})
+		sub               = api.mux.Subscribe(StartEvent{})
 		syncSubscriptions = make(map[chan interface{}]struct{})
+		checkInterval     = time.Second * 60
+		checkTimer        = time.NewTimer(checkInterval)
+
+		// status flags
+		started bool
+		done    bool
+
+		getProgress = func() ethereum.SyncProgress {
+			prog := api.d.Progress()
+			if txProg, err := api.chain.TxIndexProgress(); err == nil {
+				prog.TxIndexFinishedBlocks = txProg.Indexed
+				prog.TxIndexRemainingBlocks = txProg.Remaining
+			}
+			return prog
+		}
 	)
+	defer checkTimer.Stop()
 
 	for {
 		select {
 		case i := <-api.installSyncSubscription:
 			syncSubscriptions[i] = struct{}{}
+			if done {
+				i <- false
+			}
 		case u := <-api.uninstallSyncSubscription:
 			delete(syncSubscriptions, u.c)
 			close(u.uninstalled)
@@ -70,26 +100,36 @@ func (api *DownloaderAPI) eventLoop() {
 			if event == nil {
 				return
 			}
-
-			var notification interface{}
 			switch event.Data.(type) {
 			case StartEvent:
-				notification = &SyncingResult{
+				started = true
+			}
+		case <-checkTimer.C:
+			if !started {
+				checkTimer.Reset(checkInterval)
+				continue
+			}
+			prog := getProgress()
+			if !prog.Done() {
+				notification := &SyncingResult{
 					Syncing: true,
-					Status:  api.d.Progress(),
+					Status:  prog,
 				}
-			case DoneEvent, FailedEvent:
-				notification = false
+				for c := range syncSubscriptions {
+					c <- notification
+				}
+				checkTimer.Reset(checkInterval)
+				continue
 			}
-			// broadcast
 			for c := range syncSubscriptions {
-				c <- notification
+				c <- false
 			}
+			done = true
 		}
 	}
 }
 
-// Syncing provides information when this nodes starts synchronising with the Ethereum network and when it's finished.
+// Syncing provides information when this node starts synchronising with the Ethereum network and when it's finished.
 func (api *DownloaderAPI) Syncing(ctx context.Context) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
@@ -101,16 +141,13 @@ func (api *DownloaderAPI) Syncing(ctx context.Context) (*rpc.Subscription, error
 	go func() {
 		statuses := make(chan interface{})
 		sub := api.SubscribeSyncStatus(statuses)
+		defer sub.Unsubscribe()
 
 		for {
 			select {
 			case status := <-statuses:
 				notifier.Notify(rpcSub.ID, status)
 			case <-rpcSub.Err():
-				sub.Unsubscribe()
-				return
-			case <-notifier.Closed():
-				sub.Unsubscribe()
 				return
 			}
 		}

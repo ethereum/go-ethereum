@@ -16,7 +16,11 @@
 
 package rawdb
 
-import "path/filepath"
+import (
+	"path/filepath"
+
+	"github.com/ethereum/go-ethereum/ethdb"
+)
 
 // The list of table names of chain freezer.
 const (
@@ -31,19 +35,23 @@ const (
 
 	// ChainFreezerReceiptTable indicates the name of the freezer receipts table.
 	ChainFreezerReceiptTable = "receipts"
-
-	// ChainFreezerDifficultyTable indicates the name of the freezer total difficulty table.
-	ChainFreezerDifficultyTable = "diffs"
 )
 
-// chainFreezerNoSnappy configures whether compression is disabled for the ancient-tables.
-// Hashes and difficulties don't compress well.
-var chainFreezerNoSnappy = map[string]bool{
-	ChainFreezerHeaderTable:     false,
-	ChainFreezerHashTable:       true,
-	ChainFreezerBodiesTable:     false,
-	ChainFreezerReceiptTable:    false,
-	ChainFreezerDifficultyTable: true,
+// chainFreezerTableConfigs configures the settings for tables in the chain freezer.
+// Compression is disabled for hashes as they don't compress well. Additionally,
+// tail truncation is disabled for the header and hash tables, as these are intended
+// to be retained long-term.
+var chainFreezerTableConfigs = map[string]freezerTableConfig{
+	ChainFreezerHeaderTable:  {noSnappy: false, prunable: false},
+	ChainFreezerHashTable:    {noSnappy: true, prunable: false},
+	ChainFreezerBodiesTable:  {noSnappy: false, prunable: true},
+	ChainFreezerReceiptTable: {noSnappy: false, prunable: true},
+}
+
+// freezerTableConfig contains the settings for a freezer table.
+type freezerTableConfig struct {
+	noSnappy bool // disables item compression
+	prunable bool // true for tables that can be pruned by TruncateTail
 }
 
 const (
@@ -58,24 +66,40 @@ const (
 	stateHistoryStorageData  = "storage.data"
 )
 
-var stateFreezerNoSnappy = map[string]bool{
-	stateHistoryMeta:         true,
-	stateHistoryAccountIndex: false,
-	stateHistoryStorageIndex: false,
-	stateHistoryAccountData:  false,
-	stateHistoryStorageData:  false,
+// stateFreezerTableConfigs configures the settings for tables in the state freezer.
+var stateFreezerTableConfigs = map[string]freezerTableConfig{
+	stateHistoryMeta:         {noSnappy: true, prunable: true},
+	stateHistoryAccountIndex: {noSnappy: false, prunable: true},
+	stateHistoryStorageIndex: {noSnappy: false, prunable: true},
+	stateHistoryAccountData:  {noSnappy: false, prunable: true},
+	stateHistoryStorageData:  {noSnappy: false, prunable: true},
 }
 
 // The list of identifiers of ancient stores.
 var (
-	chainFreezerName = "chain" // the folder name of chain segment ancient store.
-	stateFreezerName = "state" // the folder name of reverse diff ancient store.
+	ChainFreezerName       = "chain"        // the folder name of chain segment ancient store.
+	MerkleStateFreezerName = "state"        // the folder name of state history ancient store.
+	VerkleStateFreezerName = "state_verkle" // the folder name of state history ancient store.
 )
 
 // freezers the collections of all builtin freezers.
-var freezers = []string{chainFreezerName, stateFreezerName}
+var freezers = []string{ChainFreezerName, MerkleStateFreezerName, VerkleStateFreezerName}
 
-// NewStateFreezer initializes the freezer for state history.
-func NewStateFreezer(ancientDir string, readOnly bool) (*ResettableFreezer, error) {
-	return NewResettableFreezer(filepath.Join(ancientDir, stateFreezerName), "eth/db/state", readOnly, stateHistoryTableSize, stateFreezerNoSnappy)
+// NewStateFreezer initializes the ancient store for state history.
+//
+//   - if the empty directory is given, initializes the pure in-memory
+//     state freezer (e.g. dev mode).
+//   - if non-empty directory is given, initializes the regular file-based
+//     state freezer.
+func NewStateFreezer(ancientDir string, verkle bool, readOnly bool) (ethdb.ResettableAncientStore, error) {
+	if ancientDir == "" {
+		return NewMemoryFreezer(readOnly, stateFreezerTableConfigs), nil
+	}
+	var name string
+	if verkle {
+		name = filepath.Join(ancientDir, VerkleStateFreezerName)
+	} else {
+		name = filepath.Join(ancientDir, MerkleStateFreezerName)
+	}
+	return newResettableFreezer(name, "eth/db/state", readOnly, stateHistoryTableSize, stateFreezerTableConfigs)
 }

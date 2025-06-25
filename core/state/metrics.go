@@ -19,6 +19,8 @@ package state
 import "github.com/ethereum/go-ethereum/metrics"
 
 var (
+	accountReadMeters        = metrics.NewRegisteredMeter("state/read/account", nil)
+	storageReadMeters        = metrics.NewRegisteredMeter("state/read/storage", nil)
 	accountUpdatedMeter      = metrics.NewRegisteredMeter("state/update/account", nil)
 	storageUpdatedMeter      = metrics.NewRegisteredMeter("state/update/storage", nil)
 	accountDeletedMeter      = metrics.NewRegisteredMeter("state/delete/account", nil)
@@ -27,11 +29,4 @@ var (
 	storageTriesUpdatedMeter = metrics.NewRegisteredMeter("state/update/storagenodes", nil)
 	accountTrieDeletedMeter  = metrics.NewRegisteredMeter("state/delete/accountnodes", nil)
 	storageTriesDeletedMeter = metrics.NewRegisteredMeter("state/delete/storagenodes", nil)
-
-	slotDeletionMaxCount = metrics.NewRegisteredGauge("state/delete/storage/max/slot", nil)
-	slotDeletionMaxSize  = metrics.NewRegisteredGauge("state/delete/storage/max/size", nil)
-	slotDeletionTimer    = metrics.NewRegisteredResettingTimer("state/delete/storage/timer", nil)
-	slotDeletionCount    = metrics.NewRegisteredMeter("state/delete/storage/slot", nil)
-	slotDeletionSize     = metrics.NewRegisteredMeter("state/delete/storage/size", nil)
-	slotDeletionSkip     = metrics.NewRegisteredGauge("state/delete/storage/skip", nil)
 )

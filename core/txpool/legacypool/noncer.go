@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
@@ -33,9 +34,9 @@ type noncer struct {
 }
 
 // newNoncer creates a new virtual state database to track the pool nonces.
-func newNoncer(statedb vm.StateDB) *noncer {
+func newNoncer(statedb *state.StateDB) *noncer {
 	return &noncer{
-		fallback: statedb.Copy().(vm.StateDB),
+		fallback: statedb.Copy(),
 		nonces:   make(map[common.Address]uint64),
 	}
 }

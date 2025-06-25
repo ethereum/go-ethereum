@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -369,7 +369,7 @@ func sign(typedData apitypes.TypedData) ([]byte, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	rawData := []byte(fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash)))
+	rawData := fmt.Appendf(nil, "\x19\x01%s%s", string(domainSeparator), string(typedDataHash))
 	sighash := crypto.Keccak256(rawData)
 	return typedDataHash, sighash, nil
 }
@@ -385,7 +385,7 @@ func TestJsonFiles(t *testing.T) {
 			continue
 		}
 		expectedFailure := strings.HasPrefix(fInfo.Name(), "expfail")
-		data, err := os.ReadFile(path.Join("testdata", fInfo.Name()))
+		data, err := os.ReadFile(filepath.Join("testdata", fInfo.Name()))
 		if err != nil {
 			t.Errorf("Failed to read file %v: %v", fInfo.Name(), err)
 			continue
@@ -411,14 +411,14 @@ func TestJsonFiles(t *testing.T) {
 // crashes or hangs.
 func TestFuzzerFiles(t *testing.T) {
 	t.Parallel()
-	corpusdir := path.Join("testdata", "fuzzing")
+	corpusdir := filepath.Join("testdata", "fuzzing")
 	testfiles, err := os.ReadDir(corpusdir)
 	if err != nil {
 		t.Fatalf("failed reading files: %v", err)
 	}
 	verbose := false
 	for i, fInfo := range testfiles {
-		data, err := os.ReadFile(path.Join(corpusdir, fInfo.Name()))
+		data, err := os.ReadFile(filepath.Join(corpusdir, fInfo.Name()))
 		if err != nil {
 			t.Errorf("Failed to read file %v: %v", fInfo.Name(), err)
 			continue
@@ -671,7 +671,7 @@ func TestGnosisTypedDataWithChainId(t *testing.T) {
 	}
 }
 
-// TestGnosisCustomData tests the scenario where a user submits only the gnosis-safe
+// TestGnosisCustomDataWithChainId tests the scenario where a user submits only the gnosis-safe
 // specific data, and we fill the TypedData struct on our side
 func TestGnosisCustomDataWithChainId(t *testing.T) {
 	t.Parallel()
@@ -1012,5 +1012,51 @@ func TestComplexTypedDataWithLowercaseReftype(t *testing.T) {
 	expSigHash := common.FromHex("0x49191f910874f0148597204d9076af128d4694a7c4b714f1ccff330b87207bff")
 	if !bytes.Equal(expSigHash, sighash) {
 		t.Fatalf("Error, got %x, wanted %x", sighash, expSigHash)
+	}
+}
+
+var recursiveBytesTypesStandard = apitypes.Types{
+	"EIP712Domain": {
+		{
+			Name: "name",
+			Type: "string",
+		},
+		{
+			Name: "version",
+			Type: "string",
+		},
+		{
+			Name: "chainId",
+			Type: "uint256",
+		},
+		{
+			Name: "verifyingContract",
+			Type: "address",
+		},
+	},
+	"Val": {
+		{
+			Name: "field",
+			Type: "bytes[][]",
+		},
+	},
+}
+
+var recursiveBytesMessageStandard = map[string]interface{}{
+	"field": [][][]byte{{{1}, {2}}, {{3}, {4}}},
+}
+
+var recursiveBytesTypedData = apitypes.TypedData{
+	Types:       recursiveBytesTypesStandard,
+	PrimaryType: "Val",
+	Domain:      domainStandard,
+	Message:     recursiveBytesMessageStandard,
+}
+
+func TestEncodeDataRecursiveBytes(t *testing.T) {
+	typedData := recursiveBytesTypedData
+	_, err := typedData.EncodeData(typedData.PrimaryType, typedData.Message, 0)
+	if err != nil {
+		t.Fatalf("got err %v", err)
 	}
 }

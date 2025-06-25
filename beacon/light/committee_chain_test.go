@@ -31,15 +31,15 @@ var (
 	testGenesis  = newTestGenesis()
 	testGenesis2 = newTestGenesis()
 
-	tfBase = newTestForks(testGenesis, types.Forks{
-		&types.Fork{Epoch: 0, Version: []byte{0}},
+	tfBase = newTestForks(testGenesis, params.Forks{
+		&params.Fork{Epoch: 0, Version: []byte{0}},
 	})
-	tfAlternative = newTestForks(testGenesis, types.Forks{
-		&types.Fork{Epoch: 0, Version: []byte{0}},
-		&types.Fork{Epoch: 0x700, Version: []byte{1}},
+	tfAlternative = newTestForks(testGenesis, params.Forks{
+		&params.Fork{Epoch: 0, Version: []byte{0}},
+		&params.Fork{Epoch: 0x700, Version: []byte{1}},
 	})
-	tfAnotherGenesis = newTestForks(testGenesis2, types.Forks{
-		&types.Fork{Epoch: 0, Version: []byte{0}},
+	tfAnotherGenesis = newTestForks(testGenesis2, params.Forks{
+		&params.Fork{Epoch: 0, Version: []byte{0}},
 	})
 
 	tcBase                      = newTestCommitteeChain(nil, tfBase, true, 0, 10, 400, false)
@@ -226,13 +226,13 @@ type committeeChainTest struct {
 	t               *testing.T
 	db              *memorydb.Database
 	clock           *mclock.Simulated
-	config          types.ChainConfig
+	config          params.ChainConfig
 	signerThreshold int
 	enforceTime     bool
 	chain           *CommitteeChain
 }
 
-func newCommitteeChainTest(t *testing.T, config types.ChainConfig, signerThreshold int, enforceTime bool) *committeeChainTest {
+func newCommitteeChainTest(t *testing.T, config params.ChainConfig, signerThreshold int, enforceTime bool) *committeeChainTest {
 	c := &committeeChainTest{
 		t:               t,
 		db:              memorydb.New(),
@@ -241,12 +241,12 @@ func newCommitteeChainTest(t *testing.T, config types.ChainConfig, signerThresho
 		signerThreshold: signerThreshold,
 		enforceTime:     enforceTime,
 	}
-	c.chain = newCommitteeChain(c.db, &config, signerThreshold, enforceTime, dummyVerifier{}, c.clock, func() int64 { return int64(c.clock.Now()) })
+	c.chain = NewTestCommitteeChain(c.db, &config, signerThreshold, enforceTime, c.clock)
 	return c
 }
 
 func (c *committeeChainTest) reloadChain() {
-	c.chain = newCommitteeChain(c.db, &c.config, c.signerThreshold, c.enforceTime, dummyVerifier{}, c.clock, func() int64 { return int64(c.clock.Now()) })
+	c.chain = NewTestCommitteeChain(c.db, &c.config, c.signerThreshold, c.enforceTime, c.clock)
 }
 
 func (c *committeeChainTest) setClockPeriod(period float64) {
@@ -298,20 +298,20 @@ func (c *committeeChainTest) verifyRange(tc *testCommitteeChain, begin, end uint
 	c.verifySignedHeader(tc, float64(end)+1.5, false)
 }
 
-func newTestGenesis() types.ChainConfig {
-	var config types.ChainConfig
+func newTestGenesis() params.ChainConfig {
+	var config params.ChainConfig
 	rand.Read(config.GenesisValidatorsRoot[:])
 	return config
 }
 
-func newTestForks(config types.ChainConfig, forks types.Forks) types.ChainConfig {
+func newTestForks(config params.ChainConfig, forks params.Forks) params.ChainConfig {
 	for _, fork := range forks {
 		config.AddFork(fork.Name, fork.Epoch, fork.Version)
 	}
 	return config
 }
 
-func newTestCommitteeChain(parent *testCommitteeChain, config types.ChainConfig, newCommittees bool, begin, end int, signerCount int, finalizedHeader bool) *testCommitteeChain {
+func newTestCommitteeChain(parent *testCommitteeChain, config params.ChainConfig, newCommittees bool, begin, end int, signerCount int, finalizedHeader bool) *testCommitteeChain {
 	tc := &testCommitteeChain{
 		config: config,
 	}
@@ -337,7 +337,7 @@ type testPeriod struct {
 
 type testCommitteeChain struct {
 	periods []testPeriod
-	config  types.ChainConfig
+	config  params.ChainConfig
 }
 
 func (tc *testCommitteeChain) fillCommittees(begin, end int) {

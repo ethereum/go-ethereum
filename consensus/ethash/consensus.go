@@ -24,7 +24,6 @@ import (
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
@@ -34,16 +33,17 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 )
 
 // Ethash proof-of-work protocol constants.
 var (
-	FrontierBlockReward           = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
-	ByzantiumBlockReward          = big.NewInt(3e+18) // Block reward in wei for successfully mining a block upward from Byzantium
-	ConstantinopleBlockReward     = big.NewInt(2e+18) // Block reward in wei for successfully mining a block upward from Constantinople
-	maxUncles                     = 2                 // Maximum number of uncles allowed in a single block
-	allowedFutureBlockTimeSeconds = int64(15)         // Max seconds from current time allowed for blocks, before they're considered future blocks
+	FrontierBlockReward           = uint256.NewInt(5e+18) // Block reward in wei for successfully mining a block
+	ByzantiumBlockReward          = uint256.NewInt(3e+18) // Block reward in wei for successfully mining a block upward from Byzantium
+	ConstantinopleBlockReward     = uint256.NewInt(2e+18) // Block reward in wei for successfully mining a block upward from Constantinople
+	maxUncles                     = 2                     // Maximum number of uncles allowed in a single block
+	allowedFutureBlockTimeSeconds = int64(15)             // Max seconds from current time allowed for blocks, before they're considered future blocks
 
 	// calcDifficultyEip5133 is the difficulty adjustment algorithm as specified by EIP 5133.
 	// It offsets the bomb a total of 11.4M blocks.
@@ -479,7 +479,9 @@ func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
 		expDiff := periodCount.Sub(periodCount, big2)
 		expDiff.Exp(big2, expDiff, nil)
 		diff.Add(diff, expDiff)
-		diff = math.BigMax(diff, params.MinimumDifficulty)
+		if diff.Cmp(params.MinimumDifficulty) < 0 {
+			diff = params.MinimumDifficulty
+		}
 	}
 	return diff
 }
@@ -501,25 +503,25 @@ func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.H
 }
 
 // Finalize implements consensus.Engine, accumulating the block and uncle rewards.
-func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, txs []*types.Transaction, uncles []*types.Header, withdrawals []*types.Withdrawal) {
+func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body) {
 	// Accumulate any block and uncle rewards
-	accumulateRewards(chain.Config(), state, header, uncles)
+	accumulateRewards(chain.Config(), state, header, body.Uncles)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
 // uncle rewards, setting the final state and assembling the block.
-func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt, withdrawals []*types.Withdrawal) (*types.Block, error) {
-	if len(withdrawals) > 0 {
+func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body, receipts []*types.Receipt) (*types.Block, error) {
+	if len(body.Withdrawals) > 0 {
 		return nil, errors.New("ethash does not support withdrawals")
 	}
 	// Finalize block
-	ethash.Finalize(chain, header, state, txs, uncles, nil)
+	ethash.Finalize(chain, header, state, body)
 
 	// Assign the final state root to header.
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
 	// Header seems complete, assemble into a block and return
-	return types.NewBlock(header, txs, uncles, receipts, trie.NewStackTrie(nil)), nil
+	return types.NewBlock(header, &types.Body{Transactions: body.Transactions, Uncles: body.Uncles}, receipts, trie.NewStackTrie(nil)), nil
 }
 
 // SealHash returns the hash of a block prior to it being sealed.
@@ -561,13 +563,7 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 	return hash
 }
 
-// Some weird constants to avoid constant memory allocs for them.
-var (
-	big8  = big.NewInt(8)
-	big32 = big.NewInt(32)
-)
-
-// AccumulateRewards credits the coinbase of the given block with the mining
+// accumulateRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
 func accumulateRewards(config *params.ChainConfig, stateDB vm.StateDB, header *types.Header, uncles []*types.Header) {
@@ -580,16 +576,18 @@ func accumulateRewards(config *params.ChainConfig, stateDB vm.StateDB, header *t
 		blockReward = ConstantinopleBlockReward
 	}
 	// Accumulate the rewards for the miner and any included uncles
-	reward := new(big.Int).Set(blockReward)
-	r := new(big.Int)
+	reward := new(uint256.Int).Set(blockReward)
+	r := new(uint256.Int)
+	hNum, _ := uint256.FromBig(header.Number)
 	for _, uncle := range uncles {
-		r.Add(uncle.Number, big8)
-		r.Sub(r, header.Number)
+		uNum, _ := uint256.FromBig(uncle.Number)
+		r.AddUint64(uNum, 8)
+		r.Sub(r, hNum)
 		r.Mul(r, blockReward)
-		r.Div(r, big8)
+		r.Rsh(r, 3)
 		stateDB.AddBalance(uncle.Coinbase, r, tracing.BalanceIncreaseRewardMineUncle)
 
-		r.Div(blockReward, big32)
+		r.Rsh(blockReward, 5)
 		reward.Add(reward, r)
 	}
 	stateDB.AddBalance(header.Coinbase, reward, tracing.BalanceIncreaseRewardMineBlock)

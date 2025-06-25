@@ -24,9 +24,11 @@ for:
         - image: Ubuntu
     build_script:
       - go run build/ci.go lint
+      - go run build/ci.go check_generate
+      - go run build/ci.go check_baddeps
       - go run build/ci.go install -dlgo
     test_script:
-      - go run build/ci.go test -dlgo
+      - go run build/ci.go test -dlgo -short
 
   # linux/386 is disabled.
   - matrix:

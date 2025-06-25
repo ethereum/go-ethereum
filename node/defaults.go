@@ -41,6 +41,7 @@ const (
 	// needs of all CLs.
 	engineAPIBatchItemLimit         = 2000
 	engineAPIBatchResponseSizeLimit = 250 * 1000 * 1000
+	engineAPIBodyLimit              = 128 * 1024 * 1024
 )
 
 var (

@@ -14,30 +14,26 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// geth is the official command-line client for Ethereum.
+// geth is a command-line client for Ethereum.
 package main
 
 import (
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/lib/debug"
-	"github.com/ethereum/go-ethereum/lib/ethapi"
-	"github.com/ethereum/go-ethereum/lib/flags"
+	"github.com/ethereum/go-ethereum/internal/debug"
+	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"go.uber.org/automaxprocs/maxprocs"
 
@@ -55,7 +51,7 @@ const (
 
 var (
 	// flags that configure the node
-	nodeFlags = flags.Merge([]cli.Flag{
+	nodeFlags = slices.Concat([]cli.Flag{
 		utils.IdentityFlag,
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,
@@ -66,9 +62,9 @@ var (
 		utils.NoUSBFlag, // deprecated
 		utils.USBFlag,
 		utils.SmartCardDaemonPathFlag,
-		utils.OverrideCancun,
+		utils.OverridePrague,
 		utils.OverrideVerkle,
-		utils.EnablePersonal,
+		utils.EnablePersonal, // deprecated
 		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,
@@ -90,6 +86,10 @@ var (
 		utils.SnapshotFlag,
 		utils.TxLookupLimitFlag, // deprecated
 		utils.TransactionHistoryFlag,
+		utils.ChainHistoryFlag,
+		utils.LogHistoryFlag,
+		utils.LogNoHistoryFlag,
+		utils.LogExportCheckpointsFlag,
 		utils.StateHistoryFlag,
 		utils.LightServeFlag,    // deprecated
 		utils.LightIngressFlag,  // deprecated
@@ -117,13 +117,14 @@ var (
 		utils.DiscoveryPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
-		utils.MiningEnabledFlag,
+		utils.MiningEnabledFlag, // deprecated
 		utils.MinerGasLimitFlag,
 		utils.MinerGasPriceFlag,
-		utils.MinerEtherbaseFlag,
+		utils.MinerEtherbaseFlag, // deprecated
 		utils.MinerExtraDataFlag,
 		utils.MinerRecommitIntervalFlag,
-		utils.MinerNewPayloadTimeout,
+		utils.MinerPendingFeeRecipientFlag,
+		utils.MinerNewPayloadTimeoutFlag, // deprecated
 		utils.NATFlag,
 		utils.NoDiscoverFlag,
 		utils.DiscoveryV4Flag,
@@ -138,10 +139,9 @@ var (
 		utils.DeveloperPeriodFlag,
 		utils.VMEnableDebugFlag,
 		utils.VMTraceFlag,
-		utils.VMTraceConfigFlag,
+		utils.VMTraceJsonConfigFlag,
 		utils.NetworkIdFlag,
 		utils.EthStatsURLFlag,
-		utils.NoCompactionFlag,
 		utils.GpoBlocksFlag,
 		utils.GpoPercentileFlag,
 		utils.GpoMaxGasPriceFlag,
@@ -149,6 +149,14 @@ var (
 		configFileFlag,
 		utils.LogDebugFlag,
 		utils.LogBacktraceAtFlag,
+		utils.BeaconApiFlag,
+		utils.BeaconApiHeaderFlag,
+		utils.BeaconThresholdFlag,
+		utils.BeaconNoFilterFlag,
+		utils.BeaconConfigFlag,
+		utils.BeaconGenesisRootFlag,
+		utils.BeaconGenesisTimeFlag,
+		utils.BeaconCheckpointFlag,
 	}, utils.NetworkFlags, utils.DatabaseFlags)
 
 	rpcFlags = []cli.Flag{
@@ -206,16 +214,18 @@ var app = flags.NewApp("the go-ethereum command line interface")
 func init() {
 	// Initialize the CLI app and start Geth
 	app.Action = geth
-	app.Copyright = "Copyright 2013-2023 The go-ethereum Authors"
 	app.Commands = []*cli.Command{
 		// See chaincmd.go:
 		initCommand,
 		importCommand,
 		exportCommand,
+		importHistoryCommand,
+		exportHistoryCommand,
 		importPreimagesCommand,
 		removedbCommand,
 		dumpCommand,
 		dumpGenesisCommand,
+		pruneCommand,
 		// See accountcmd.go:
 		accountCommand,
 		walletCommand,
@@ -243,7 +253,7 @@ func init() {
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 
-	app.Flags = flags.Merge(
+	app.Flags = slices.Concat(
 		nodeFlags,
 		rpcFlags,
 		consoleFlags,
@@ -280,14 +290,14 @@ func main() {
 func prepare(ctx *cli.Context) {
 	// If we're running a known preset, log it for convenience.
 	switch {
-	case ctx.IsSet(utils.GoerliFlag.Name):
-		log.Info("Starting Geth on Görli testnet...")
-
 	case ctx.IsSet(utils.SepoliaFlag.Name):
 		log.Info("Starting Geth on Sepolia testnet...")
 
 	case ctx.IsSet(utils.HoleskyFlag.Name):
 		log.Info("Starting Geth on Holesky testnet...")
+
+	case ctx.IsSet(utils.HoodiFlag.Name):
+		log.Info("Starting Geth on Hoodi testnet...")
 
 	case ctx.IsSet(utils.DeveloperFlag.Name):
 		log.Info("Starting Geth in ephemeral dev mode...")
@@ -315,19 +325,13 @@ func prepare(ctx *cli.Context) {
 		// Make sure we're not on any supported preconfigured testnet either
 		if !ctx.IsSet(utils.HoleskyFlag.Name) &&
 			!ctx.IsSet(utils.SepoliaFlag.Name) &&
-			!ctx.IsSet(utils.GoerliFlag.Name) &&
+			!ctx.IsSet(utils.HoodiFlag.Name) &&
 			!ctx.IsSet(utils.DeveloperFlag.Name) {
 			// Nope, we're really on mainnet. Bump that cache up!
 			log.Info("Bumping default cache on mainnet", "provided", ctx.Int(utils.CacheFlag.Name), "updated", 4096)
 			ctx.Set(utils.CacheFlag.Name, strconv.Itoa(4096))
 		}
 	}
-
-	// Start metrics export if enabled
-	utils.SetupMetrics(ctx)
-
-	// Start system runtime metrics collection
-	go metrics.CollectProcessMetrics(3 * time.Second)
 }
 
 // geth is the main entry point into the system if no special subcommand is run.
@@ -339,25 +343,23 @@ func geth(ctx *cli.Context) error {
 	}
 
 	prepare(ctx)
-	stack, backend := makeFullNode(ctx)
+	stack := makeFullNode(ctx)
 	defer stack.Close()
 
-	startNode(ctx, stack, backend, false)
+	startNode(ctx, stack, false)
 	stack.Wait()
 	return nil
 }
 
 // startNode boots up the system node and all registered protocols, after which
-// it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
-// miner.
-func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend, isConsole bool) {
-	debug.Memsize.Add("node", stack)
-
+// it starts the RPC/IPC interfaces and the miner.
+func startNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 	// Start up the node itself
 	utils.StartNode(ctx, stack, isConsole)
 
-	// Unlock any account specifically requested
-	unlockAccounts(ctx, stack)
+	if ctx.IsSet(utils.UnlockedAccountFlag.Name) {
+		log.Warn(`The "unlock" flag has been deprecated and has no effect`)
+	}
 
 	// Register wallet event handlers to open and auto-derive wallets
 	events := make(chan accounts.WalletEvent, 16)
@@ -422,53 +424,5 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend, isCon
 				}
 			}
 		}()
-	}
-
-	// Start auxiliary services if enabled
-	if ctx.Bool(utils.MiningEnabledFlag.Name) {
-		// Mining only makes sense if a full Ethereum node is running
-		if ctx.String(utils.SyncModeFlag.Name) == "light" {
-			utils.Fatalf("Light clients do not support mining")
-		}
-		ethBackend, ok := backend.(*eth.EthAPIBackend)
-		if !ok {
-			utils.Fatalf("Ethereum service not running")
-		}
-		// Set the gas price to the limits from the CLI and start mining
-		gasprice := flags.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
-		ethBackend.TxPool().SetGasTip(gasprice)
-		if err := ethBackend.StartMining(); err != nil {
-			utils.Fatalf("Failed to start mining: %v", err)
-		}
-	}
-}
-
-// unlockAccounts unlocks any account specifically requested.
-func unlockAccounts(ctx *cli.Context, stack *node.Node) {
-	var unlocks []string
-	inputs := strings.Split(ctx.String(utils.UnlockedAccountFlag.Name), ",")
-	for _, input := range inputs {
-		if trimmed := strings.TrimSpace(input); trimmed != "" {
-			unlocks = append(unlocks, trimmed)
-		}
-	}
-	// Short circuit if there is no account to unlock.
-	if len(unlocks) == 0 {
-		return
-	}
-	// If insecure account unlocking is not allowed if node's APIs are exposed to external.
-	// Print warning log to user and skip unlocking.
-	if !stack.Config().InsecureUnlockAllowed && stack.Config().ExtRPCEnabled() {
-		utils.Fatalf("Account unlock with HTTP access is forbidden!")
-	}
-	backends := stack.AccountManager().Backends(keystore.KeyStoreType)
-	if len(backends) == 0 {
-		log.Warn("Failed to unlock accounts, keystore is not available")
-		return
-	}
-	ks := backends[0].(*keystore.KeyStore)
-	passwords := utils.MakePasswordList(ctx)
-	for i, account := range unlocks {
-		unlockAccount(ks, account, i, passwords)
 	}
 }

@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -72,11 +71,11 @@ func NewSecureChannelSession(card *pcsc.Card, keyData []byte) (*SecureChannelSes
 	if err != nil {
 		return nil, fmt.Errorf("could not unmarshal public key from card: %v", err)
 	}
-	secret, _ := key.Curve.ScalarMult(cardPublic.X, cardPublic.Y, key.D.Bytes())
+	secret, _ := crypto.S256().ScalarMult(cardPublic.X, cardPublic.Y, key.D.Bytes())
 	return &SecureChannelSession{
 		card:      card,
 		secret:    secret.Bytes(),
-		publicKey: elliptic.Marshal(crypto.S256(), key.PublicKey.X, key.PublicKey.Y),
+		publicKey: crypto.FromECDSAPub(&key.PublicKey),
 	}, nil
 }
 

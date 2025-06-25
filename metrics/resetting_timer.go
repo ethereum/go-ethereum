@@ -5,36 +5,17 @@ import (
 	"time"
 )
 
-// Initial slice capacity for the values stored in a ResettingTimer
-const InitialResettingTimerSliceCap = 10
-
-type ResettingTimerSnapshot interface {
-	Count() int
-	Mean() float64
-	Max() int64
-	Min() int64
-	Percentiles([]float64) []float64
-}
-
-// ResettingTimer is used for storing aggregated values for timers, which are reset on every flush interval.
-type ResettingTimer interface {
-	Snapshot() ResettingTimerSnapshot
-	Time(func())
-	Update(time.Duration)
-	UpdateSince(time.Time)
-}
-
 // GetOrRegisterResettingTimer returns an existing ResettingTimer or constructs and registers a
-// new StandardResettingTimer.
-func GetOrRegisterResettingTimer(name string, r Registry) ResettingTimer {
+// new ResettingTimer.
+func GetOrRegisterResettingTimer(name string, r Registry) *ResettingTimer {
 	if nil == r {
 		r = DefaultRegistry
 	}
-	return r.GetOrRegister(name, NewResettingTimer).(ResettingTimer)
+	return r.GetOrRegister(name, NewResettingTimer).(*ResettingTimer)
 }
 
-// NewRegisteredResettingTimer constructs and registers a new StandardResettingTimer.
-func NewRegisteredResettingTimer(name string, r Registry) ResettingTimer {
+// NewRegisteredResettingTimer constructs and registers a new ResettingTimer.
+func NewRegisteredResettingTimer(name string, r Registry) *ResettingTimer {
 	c := NewResettingTimer()
 	if nil == r {
 		r = DefaultRegistry
@@ -43,33 +24,15 @@ func NewRegisteredResettingTimer(name string, r Registry) ResettingTimer {
 	return c
 }
 
-// NewResettingTimer constructs a new StandardResettingTimer
-func NewResettingTimer() ResettingTimer {
-	if !Enabled {
-		return NilResettingTimer{}
-	}
-	return &StandardResettingTimer{
-		values: make([]int64, 0, InitialResettingTimerSliceCap),
+// NewResettingTimer constructs a new ResettingTimer
+func NewResettingTimer() *ResettingTimer {
+	return &ResettingTimer{
+		values: make([]int64, 0, 10),
 	}
 }
 
-// NilResettingTimer is a no-op ResettingTimer.
-type NilResettingTimer struct{}
-
-func (NilResettingTimer) Values() []int64                    { return nil }
-func (n NilResettingTimer) Snapshot() ResettingTimerSnapshot { return n }
-func (NilResettingTimer) Time(f func())                      { f() }
-func (NilResettingTimer) Update(time.Duration)               {}
-func (NilResettingTimer) Percentiles([]float64) []float64    { return nil }
-func (NilResettingTimer) Mean() float64                      { return 0.0 }
-func (NilResettingTimer) Max() int64                         { return 0 }
-func (NilResettingTimer) Min() int64                         { return 0 }
-func (NilResettingTimer) UpdateSince(time.Time)              {}
-func (NilResettingTimer) Count() int                         { return 0 }
-
-// StandardResettingTimer is the standard implementation of a ResettingTimer.
-// and Meter.
-type StandardResettingTimer struct {
+// ResettingTimer is used for storing aggregated values for timers, which are reset on every flush interval.
+type ResettingTimer struct {
 	values []int64
 	sum    int64 // sum is a running count of the total sum, used later to calculate mean
 
@@ -77,41 +40,44 @@ type StandardResettingTimer struct {
 }
 
 // Snapshot resets the timer and returns a read-only copy of its contents.
-func (t *StandardResettingTimer) Snapshot() ResettingTimerSnapshot {
+func (t *ResettingTimer) Snapshot() *ResettingTimerSnapshot {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-	snapshot := &resettingTimerSnapshot{}
+	snapshot := &ResettingTimerSnapshot{}
 	if len(t.values) > 0 {
 		snapshot.mean = float64(t.sum) / float64(len(t.values))
 		snapshot.values = t.values
-		t.values = make([]int64, 0, InitialResettingTimerSliceCap)
+		t.values = make([]int64, 0, 10)
 	}
 	t.sum = 0
 	return snapshot
 }
 
-// Record the duration of the execution of the given function.
-func (t *StandardResettingTimer) Time(f func()) {
+// Time records the duration of the execution of the given function.
+func (t *ResettingTimer) Time(f func()) {
 	ts := time.Now()
 	f()
 	t.Update(time.Since(ts))
 }
 
-// Record the duration of an event.
-func (t *StandardResettingTimer) Update(d time.Duration) {
+// Update records the duration of an event.
+func (t *ResettingTimer) Update(d time.Duration) {
+	if !metricsEnabled {
+		return
+	}
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	t.values = append(t.values, int64(d))
 	t.sum += int64(d)
 }
 
-// Record the duration of an event that started at a time and ends now.
-func (t *StandardResettingTimer) UpdateSince(ts time.Time) {
+// UpdateSince records the duration of an event that started at a time and ends now.
+func (t *ResettingTimer) UpdateSince(ts time.Time) {
 	t.Update(time.Since(ts))
 }
 
-// resettingTimerSnapshot is a point-in-time copy of another ResettingTimer.
-type resettingTimerSnapshot struct {
+// ResettingTimerSnapshot is a point-in-time copy of another ResettingTimer.
+type ResettingTimerSnapshot struct {
 	values              []int64
 	mean                float64
 	max                 int64
@@ -121,20 +87,20 @@ type resettingTimerSnapshot struct {
 }
 
 // Count return the length of the values from snapshot.
-func (t *resettingTimerSnapshot) Count() int {
+func (t *ResettingTimerSnapshot) Count() int {
 	return len(t.values)
 }
 
 // Percentiles returns the boundaries for the input percentiles.
 // note: this method is not thread safe
-func (t *resettingTimerSnapshot) Percentiles(percentiles []float64) []float64 {
+func (t *ResettingTimerSnapshot) Percentiles(percentiles []float64) []float64 {
 	t.calc(percentiles)
 	return t.thresholdBoundaries
 }
 
 // Mean returns the mean of the snapshotted values
 // note: this method is not thread safe
-func (t *resettingTimerSnapshot) Mean() float64 {
+func (t *ResettingTimerSnapshot) Mean() float64 {
 	if !t.calculated {
 		t.calc(nil)
 	}
@@ -144,7 +110,7 @@ func (t *resettingTimerSnapshot) Mean() float64 {
 
 // Max returns the max of the snapshotted values
 // note: this method is not thread safe
-func (t *resettingTimerSnapshot) Max() int64 {
+func (t *ResettingTimerSnapshot) Max() int64 {
 	if !t.calculated {
 		t.calc(nil)
 	}
@@ -153,14 +119,14 @@ func (t *resettingTimerSnapshot) Max() int64 {
 
 // Min returns the min of the snapshotted values
 // note: this method is not thread safe
-func (t *resettingTimerSnapshot) Min() int64 {
+func (t *ResettingTimerSnapshot) Min() int64 {
 	if !t.calculated {
 		t.calc(nil)
 	}
 	return t.min
 }
 
-func (t *resettingTimerSnapshot) calc(percentiles []float64) {
+func (t *ResettingTimerSnapshot) calc(percentiles []float64) {
 	scores := CalculatePercentiles(t.values, percentiles)
 	t.thresholdBoundaries = scores
 	if len(t.values) == 0 {

@@ -23,16 +23,13 @@ import (
 	"io"
 	"math/big"
 	"os"
-	"path"
 	"path/filepath"
-
-	"golang.org/x/exp/slog"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
@@ -78,80 +75,16 @@ var (
 )
 
 type input struct {
-	Alloc core.GenesisAlloc `json:"alloc,omitempty"`
-	Env   *stEnv            `json:"env,omitempty"`
-	Txs   []*txWithKey      `json:"txs,omitempty"`
-	TxRlp string            `json:"txsRlp,omitempty"`
+	Alloc types.GenesisAlloc `json:"alloc,omitempty"`
+	Env   *stEnv             `json:"env,omitempty"`
+	Txs   []*txWithKey       `json:"txs,omitempty"`
+	TxRlp string             `json:"txsRlp,omitempty"`
 }
 
 func Transition(ctx *cli.Context) error {
-	// Configure the go-ethereum logger
-	glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, false))
-	glogger.Verbosity(slog.Level(ctx.Int(VerbosityFlag.Name)))
-	log.SetDefault(log.NewLogger(glogger))
-
-	var getTracer = func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) { return nil, nil, nil }
 	baseDir, err := createBasedir(ctx)
 	if err != nil {
 		return NewError(ErrorIO, fmt.Errorf("failed creating output basedir: %v", err))
-	}
-	if ctx.Bool(TraceFlag.Name) {
-		if ctx.IsSet(TraceDisableMemoryFlag.Name) && ctx.IsSet(TraceEnableMemoryFlag.Name) {
-			return NewError(ErrorConfig, fmt.Errorf("can't use both flags --%s and --%s", TraceDisableMemoryFlag.Name, TraceEnableMemoryFlag.Name))
-		}
-		if ctx.IsSet(TraceDisableReturnDataFlag.Name) && ctx.IsSet(TraceEnableReturnDataFlag.Name) {
-			return NewError(ErrorConfig, fmt.Errorf("can't use both flags --%s and --%s", TraceDisableReturnDataFlag.Name, TraceEnableReturnDataFlag.Name))
-		}
-		if ctx.IsSet(TraceDisableMemoryFlag.Name) {
-			log.Warn(fmt.Sprintf("--%s has been deprecated in favour of --%s", TraceDisableMemoryFlag.Name, TraceEnableMemoryFlag.Name))
-		}
-		if ctx.IsSet(TraceDisableReturnDataFlag.Name) {
-			log.Warn(fmt.Sprintf("--%s has been deprecated in favour of --%s", TraceDisableReturnDataFlag.Name, TraceEnableReturnDataFlag.Name))
-		}
-		// Configure the EVM logger
-		logConfig := &logger.Config{
-			DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
-			EnableMemory:     !ctx.Bool(TraceDisableMemoryFlag.Name) || ctx.Bool(TraceEnableMemoryFlag.Name),
-			EnableReturnData: !ctx.Bool(TraceDisableReturnDataFlag.Name) || ctx.Bool(TraceEnableReturnDataFlag.Name),
-			Debug:            true,
-		}
-		var prevFile *os.File
-		// This one closes the last file
-		defer func() {
-			if prevFile != nil {
-				prevFile.Close()
-			}
-		}()
-		getTracer = func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) {
-			traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
-			if err != nil {
-				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
-			}
-			logger := logger.NewJSONLogger(logConfig, traceFile)
-			tracer := &tracers.Tracer{
-				Hooks: logger,
-				// jsonLogger streams out result to file.
-				GetResult: func() (json.RawMessage, error) { return nil, nil },
-				Stop:      func(err error) {},
-			}
-			return tracer, traceFile, nil
-		}
-	} else if ctx.IsSet(TraceTracerFlag.Name) {
-		var config json.RawMessage
-		if ctx.IsSet(TraceTracerConfigFlag.Name) {
-			config = []byte(ctx.String(TraceTracerConfigFlag.Name))
-		}
-		getTracer = func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) {
-			traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
-			if err != nil {
-				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
-			}
-			tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config)
-			if err != nil {
-				return nil, nil, NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %w", err))
-			}
-			return tracer, traceFile, nil
-		}
 	}
 	// We need to load three things: alloc, env and transactions. May be either in
 	// stdin input or in files.
@@ -169,7 +102,7 @@ func Transition(ctx *cli.Context) error {
 	if allocStr == stdinSelector || envStr == stdinSelector || txStr == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
 		if err := decoder.Decode(inputData); err != nil {
-			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling stdin: %v", err))
+			return NewError(ErrorJson, fmt.Errorf("failed unmarshalling stdin: %v", err))
 		}
 	}
 	if allocStr != stdinSelector {
@@ -198,10 +131,11 @@ func Transition(ctx *cli.Context) error {
 		chainConfig = cConf
 		vmConfig.ExtraEips = extraEips
 	}
+
 	// Set the chain id
 	chainConfig.ChainID = big.NewInt(ctx.Int64(ChainIDFlag.Name))
 
-	if txIt, err = loadTransactions(txStr, inputData, prestate.Env, chainConfig); err != nil {
+	if txIt, err = loadTransactions(txStr, inputData, chainConfig); err != nil {
 		return err
 	}
 	if err := applyLondonChecks(&prestate.Env, chainConfig); err != nil {
@@ -216,12 +150,38 @@ func Transition(ctx *cli.Context) error {
 	if err := applyCancunChecks(&prestate.Env, chainConfig); err != nil {
 		return err
 	}
+
+	// Configure tracer
+	if ctx.IsSet(TraceTracerFlag.Name) { // Custom tracing
+		config := json.RawMessage(ctx.String(TraceTracerConfigFlag.Name))
+		tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name),
+			nil, config, chainConfig)
+		if err != nil {
+			return NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %v", err))
+		}
+		vmConfig.Tracer = newResultWriter(baseDir, tracer)
+	} else if ctx.Bool(TraceFlag.Name) { // JSON opcode tracing
+		logConfig := &logger.Config{
+			DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
+			EnableMemory:     ctx.Bool(TraceEnableMemoryFlag.Name),
+			EnableReturnData: ctx.Bool(TraceEnableReturnDataFlag.Name),
+		}
+		if ctx.Bool(TraceEnableCallFramesFlag.Name) {
+			vmConfig.Tracer = newFileWriter(baseDir, func(out io.Writer) *tracing.Hooks {
+				return logger.NewJSONLoggerWithCallFrames(logConfig, out)
+			})
+		} else {
+			vmConfig.Tracer = newFileWriter(baseDir, func(out io.Writer) *tracing.Hooks {
+				return logger.NewJSONLogger(logConfig, out)
+			})
+		}
+	}
 	// Run the test and aggregate the result
-	s, result, body, err := prestate.Apply(vmConfig, chainConfig, txIt, ctx.Int64(RewardFlag.Name), getTracer)
+	s, result, body, err := prestate.Apply(vmConfig, chainConfig, txIt, ctx.Int64(RewardFlag.Name))
 	if err != nil {
 		return err
 	}
-	// Dump the excution result
+	// Dump the execution result
 	collector := make(Alloc)
 	s.DumpToCollector(collector, nil)
 	return dispatchOutput(ctx, baseDir, result, collector, body)
@@ -237,7 +197,7 @@ func applyLondonChecks(env *stEnv, chainConfig *params.ChainConfig) error {
 		return nil
 	}
 	if env.ParentBaseFee == nil || env.Number == 0 {
-		return NewError(ErrorConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
+		return NewError(ErrorConfig, errors.New("EIP-1559 config but missing 'parentBaseFee' in env section"))
 	}
 	env.BaseFee = eip1559.CalcBaseFee(chainConfig, &types.Header{
 		Number:   new(big.Int).SetUint64(env.Number - 1),
@@ -305,7 +265,7 @@ func applyCancunChecks(env *stEnv, chainConfig *params.ChainConfig) error {
 	return nil
 }
 
-type Alloc map[common.Address]core.GenesisAccount
+type Alloc map[common.Address]types.Account
 
 func (g Alloc) OnRoot(common.Hash) {}
 
@@ -313,15 +273,15 @@ func (g Alloc) OnAccount(addr *common.Address, dumpAccount state.DumpAccount) {
 	if addr == nil {
 		return
 	}
-	balance, _ := new(big.Int).SetString(dumpAccount.Balance, 10)
+	balance, _ := new(big.Int).SetString(dumpAccount.Balance, 0)
 	var storage map[common.Hash]common.Hash
 	if dumpAccount.Storage != nil {
-		storage = make(map[common.Hash]common.Hash)
+		storage = make(map[common.Hash]common.Hash, len(dumpAccount.Storage))
 		for k, v := range dumpAccount.Storage {
 			storage[k] = common.HexToHash(v)
 		}
 	}
-	genesisAccount := core.GenesisAccount{
+	genesisAccount := types.Account{
 		Code:    dumpAccount.Code,
 		Storage: storage,
 		Balance: balance,
@@ -336,7 +296,7 @@ func saveFile(baseDir, filename string, data interface{}) error {
 	if err != nil {
 		return NewError(ErrorJson, fmt.Errorf("failed marshalling output: %v", err))
 	}
-	location := path.Join(baseDir, filename)
+	location := filepath.Join(baseDir, filename)
 	if err = os.WriteFile(location, b, 0644); err != nil {
 		return NewError(ErrorIO, fmt.Errorf("failed writing output: %v", err))
 	}

@@ -170,17 +170,7 @@ func (it *insertIterator) current() *types.Header {
 	return it.chain[it.index].Header()
 }
 
-// first returns the first block in the it.
-func (it *insertIterator) first() *types.Block {
-	return it.chain[0]
-}
-
 // remaining returns the number of remaining blocks.
 func (it *insertIterator) remaining() int {
 	return len(it.chain) - it.index
-}
-
-// processed returns the number of processed blocks.
-func (it *insertIterator) processed() int {
-	return it.index + 1
 }

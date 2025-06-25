@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
+	"slices"
 	"sync"
 	"time"
 
@@ -40,8 +42,6 @@ const (
 	lookupRequestLimit      = 3  // max requests against a single node during lookup
 	findnodeResultLimit     = 16 // applies in FINDNODE handler
 	totalNodesResponseLimit = 5  // applies in waitForNodes
-
-	respTimeoutV5 = 700 * time.Millisecond
 )
 
 // codecV5 is implemented by v5wire.Codec (and testCodec).
@@ -50,11 +50,20 @@ const (
 // encoding/decoding and with the handshake; the UDPv5 object handles higher-level concerns.
 type codecV5 interface {
 	// Encode encodes a packet.
-	Encode(enode.ID, string, v5wire.Packet, *v5wire.Whoareyou) ([]byte, v5wire.Nonce, error)
+	//
+	// If the underlying type of 'p' is *v5wire.Whoareyou, a Whoareyou challenge packet is
+	// encoded. If the 'challenge' parameter is non-nil, the packet is encoded as a
+	// handshake message packet. Otherwise, the packet will be encoded as an ordinary
+	// message packet.
+	Encode(id enode.ID, addr string, p v5wire.Packet, challenge *v5wire.Whoareyou) ([]byte, v5wire.Nonce, error)
 
 	// Decode decodes a packet. It returns a *v5wire.Unknown packet if decryption fails.
 	// The *enode.Node return value is non-nil when the input contains a handshake response.
-	Decode([]byte, string) (enode.ID, *enode.Node, v5wire.Packet, error)
+	Decode(b []byte, addr string) (enode.ID, *enode.Node, v5wire.Packet, error)
+
+	// CurrentChallenge returns the most recent WHOAREYOU challenge that was encoded to given node.
+	// This will return a non-nil value if there is an active handshake attempt with the node, and nil otherwise.
+	CurrentChallenge(id enode.ID, addr string) *v5wire.Whoareyou
 }
 
 // UDPv5 is the implementation of protocol version 5.
@@ -69,6 +78,7 @@ type UDPv5 struct {
 	log          log.Logger
 	clock        mclock.Clock
 	validSchemes enr.IdentityScheme
+	respTimeout  time.Duration
 
 	// misc buffers used during message handling
 	logcontext []interface{}
@@ -100,14 +110,14 @@ type UDPv5 struct {
 
 type sendRequest struct {
 	destID   enode.ID
-	destAddr *net.UDPAddr
+	destAddr netip.AddrPort
 	msg      v5wire.Packet
 }
 
 // callV5 represents a remote procedure call against another node.
 type callV5 struct {
 	id   enode.ID
-	addr *net.UDPAddr
+	addr netip.AddrPort
 	node *enode.Node // This is required to perform handshakes.
 
 	packet       v5wire.Packet
@@ -156,6 +166,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		log:          cfg.Log,
 		validSchemes: cfg.ValidSchemes,
 		clock:        cfg.Clock,
+		respTimeout:  cfg.V5RespTimeout,
 		// channels into dispatch
 		packetInCh:    make(chan ReadPacket, 1),
 		readNextCh:    make(chan struct{}, 1),
@@ -174,7 +185,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		cancelCloseCtx: cancelCloseCtx,
 	}
 	t.talk = newTalkSystem(t)
-	tab, err := newMeteredTable(t, t.db, cfg)
+	tab, err := newTable(t, t.db, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -198,12 +209,6 @@ func (t *UDPv5) Close() {
 	})
 }
 
-// Ping sends a ping message to the given node.
-func (t *UDPv5) Ping(n *enode.Node) error {
-	_, err := t.ping(n)
-	return err
-}
-
 // Resolve searches for a specific node with the given ID and tries to get the most recent
 // version of the node record for it. It returns n if the node could not be resolved.
 func (t *UDPv5) Resolve(n *enode.Node) *enode.Node {
@@ -224,6 +229,36 @@ func (t *UDPv5) Resolve(n *enode.Node) *enode.Node {
 	return n
 }
 
+// ResolveNodeId searches for a specific Node with the given ID.
+// It returns nil if the nodeId could not be resolved.
+func (t *UDPv5) ResolveNodeId(id enode.ID) *enode.Node {
+	if id == t.Self().ID() {
+		return t.Self()
+	}
+
+	n := t.tab.getNode(id)
+	if n != nil {
+		// Try asking directly. This works if the Node is still responding on the endpoint we have.
+		if resp, err := t.RequestENR(n); err == nil {
+			return resp
+		}
+	}
+
+	// Otherwise do a network lookup.
+	result := t.Lookup(id)
+	for _, rn := range result {
+		if rn.ID() == id {
+			if n != nil && rn.Seq() <= n.Seq() {
+				return n
+			} else {
+				return rn
+			}
+		}
+	}
+
+	return n
+}
+
 // AllNodes returns all the nodes stored in the local table.
 func (t *UDPv5) AllNodes() []*enode.Node {
 	t.tab.mutex.Lock()
@@ -232,13 +267,24 @@ func (t *UDPv5) AllNodes() []*enode.Node {
 
 	for _, b := range &t.tab.buckets {
 		for _, n := range b.entries {
-			nodes = append(nodes, unwrapNode(n))
+			nodes = append(nodes, n.Node)
 		}
 	}
 	return nodes
 }
 
-// LocalNode returns the current local node running the
+// AddKnownNode adds a node to the routing table.
+// The function should be used for testing only.
+func (t *UDPv5) AddKnownNode(n *enode.Node) bool {
+	return t.tab.addFoundNode(n, true)
+}
+
+// DeleteNode removes a node from the routing table. Used for Portal discv5 DeleteEnr API.
+func (t *UDPv5) DeleteNode(n *enode.Node) {
+	t.tab.deleteNode(n)
+}
+
+// LocalNode returns the current local Node running the
 // protocol.
 func (t *UDPv5) LocalNode() *enode.LocalNode {
 	return t.localNode
@@ -265,7 +311,7 @@ func (t *UDPv5) TalkRequest(n *enode.Node, protocol string, request []byte) ([]b
 }
 
 // TalkRequestToID sends a talk request to a node and waits for a response.
-func (t *UDPv5) TalkRequestToID(id enode.ID, addr *net.UDPAddr, protocol string, request []byte) ([]byte, error) {
+func (t *UDPv5) TalkRequestToID(id enode.ID, addr netip.AddrPort, protocol string, request []byte) ([]byte, error) {
 	req := &v5wire.TalkRequest{Protocol: protocol, Message: request}
 	resp := t.callToID(id, addr, v5wire.TalkResponseMsg, req)
 	defer t.callDone(resp)
@@ -313,26 +359,26 @@ func (t *UDPv5) newRandomLookup(ctx context.Context) *lookup {
 }
 
 func (t *UDPv5) newLookup(ctx context.Context, target enode.ID) *lookup {
-	return newLookup(ctx, t.tab, target, func(n *node) ([]*node, error) {
+	return newLookup(ctx, t.tab, target, func(n *enode.Node) ([]*enode.Node, error) {
 		return t.lookupWorker(n, target)
 	})
 }
 
 // lookupWorker performs FINDNODE calls against a single node during lookup.
-func (t *UDPv5) lookupWorker(destNode *node, target enode.ID) ([]*node, error) {
+func (t *UDPv5) lookupWorker(destNode *enode.Node, target enode.ID) ([]*enode.Node, error) {
 	var (
 		dists = lookupDistances(target, destNode.ID())
 		nodes = nodesByDistance{target: target}
 		err   error
 	)
 	var r []*enode.Node
-	r, err = t.findnode(unwrapNode(destNode), dists)
+	r, err = t.Findnode(destNode, dists)
 	if errors.Is(err, errClosed) {
 		return nil, err
 	}
 	for _, n := range r {
 		if n.ID() != t.Self().ID() {
-			nodes.push(wrapNode(n), findnodeResultLimit)
+			nodes.push(n, findnodeResultLimit)
 		}
 	}
 	return nodes.entries, err
@@ -357,21 +403,31 @@ func lookupDistances(target, dest enode.ID) (dists []uint) {
 
 // ping calls PING on a node and waits for a PONG response.
 func (t *UDPv5) ping(n *enode.Node) (uint64, error) {
+	pong, err := t.Ping(n)
+	if err != nil {
+		return 0, err
+	}
+
+	return pong.ENRSeq, nil
+}
+
+// Ping calls PING on a node and waits for a PONG response.
+func (t *UDPv5) Ping(n *enode.Node) (*v5wire.Pong, error) {
 	req := &v5wire.Ping{ENRSeq: t.localNode.Node().Seq()}
 	resp := t.callToNode(n, v5wire.PongMsg, req)
 	defer t.callDone(resp)
 
 	select {
 	case pong := <-resp.ch:
-		return pong.(*v5wire.Pong).ENRSeq, nil
+		return pong.(*v5wire.Pong), nil
 	case err := <-resp.err:
-		return 0, err
+		return nil, err
 	}
 }
 
 // RequestENR requests n's record.
 func (t *UDPv5) RequestENR(n *enode.Node) (*enode.Node, error) {
-	nodes, err := t.findnode(n, []uint{0})
+	nodes, err := t.Findnode(n, []uint{0})
 	if err != nil {
 		return nil, err
 	}
@@ -381,8 +437,8 @@ func (t *UDPv5) RequestENR(n *enode.Node) (*enode.Node, error) {
 	return nodes[0], nil
 }
 
-// findnode calls FINDNODE on a node and waits for responses.
-func (t *UDPv5) findnode(n *enode.Node, distances []uint) ([]*enode.Node, error) {
+// Findnode calls FINDNODE on a node and waits for responses.
+func (t *UDPv5) Findnode(n *enode.Node, distances []uint) ([]*enode.Node, error) {
 	resp := t.callToNode(n, v5wire.NodesMsg, &v5wire.Findnode{Distances: distances})
 	return t.waitForNodes(resp, distances)
 }
@@ -426,10 +482,10 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distances []uint, s
 	if err != nil {
 		return nil, err
 	}
-	if err := netutil.CheckRelayIP(c.addr.IP, node.IP()); err != nil {
+	if err := netutil.CheckRelayAddr(c.addr.Addr(), node.IPAddr()); err != nil {
 		return nil, err
 	}
-	if t.netrestrict != nil && !t.netrestrict.Contains(node.IP()) {
+	if t.netrestrict != nil && !t.netrestrict.ContainsAddr(node.IPAddr()) {
 		return nil, errors.New("not contained in netrestrict list")
 	}
 	if node.UDP() <= 1024 {
@@ -437,37 +493,28 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distances []uint, s
 	}
 	if distances != nil {
 		nd := enode.LogDist(c.id, node.ID())
-		if !containsUint(uint(nd), distances) {
+		if !slices.Contains(distances, uint(nd)) {
 			return nil, errors.New("does not match any requested distance")
 		}
 	}
 	if _, ok := seen[node.ID()]; ok {
-		return nil, fmt.Errorf("duplicate record")
+		return nil, errors.New("duplicate record")
 	}
 	seen[node.ID()] = struct{}{}
 	return node, nil
 }
 
-func containsUint(x uint, xs []uint) bool {
-	for _, v := range xs {
-		if x == v {
-			return true
-		}
-	}
-	return false
-}
-
 // callToNode sends the given call and sets up a handler for response packets (of message
 // type responseType). Responses are dispatched to the call's response channel.
 func (t *UDPv5) callToNode(n *enode.Node, responseType byte, req v5wire.Packet) *callV5 {
-	addr := &net.UDPAddr{IP: n.IP(), Port: n.UDP()}
+	addr, _ := n.UDPEndpoint()
 	c := &callV5{id: n.ID(), addr: addr, node: n}
 	t.initCall(c, responseType, req)
 	return c
 }
 
 // callToID is like callToNode, but for cases where the node record is not available.
-func (t *UDPv5) callToID(id enode.ID, addr *net.UDPAddr, responseType byte, req v5wire.Packet) *callV5 {
+func (t *UDPv5) callToID(id enode.ID, addr netip.AddrPort, responseType byte, req v5wire.Packet) *callV5 {
 	c := &callV5{id: id, addr: addr}
 	t.initCall(c, responseType, req)
 	return c
@@ -583,7 +630,7 @@ func (t *UDPv5) startResponseTimeout(c *callV5) {
 		timer mclock.Timer
 		done  = make(chan struct{})
 	)
-	timer = t.clock.AfterFunc(respTimeoutV5, func() {
+	timer = t.clock.AfterFunc(t.respTimeout, func() {
 		<-done
 		select {
 		case t.respTimeoutCh <- &callTimeout{c, timer}:
@@ -627,12 +674,12 @@ func (t *UDPv5) sendCall(c *callV5) {
 
 // sendResponse sends a response packet to the given node.
 // This doesn't trigger a handshake even if no keys are available.
-func (t *UDPv5) sendResponse(toID enode.ID, toAddr *net.UDPAddr, packet v5wire.Packet) error {
+func (t *UDPv5) sendResponse(toID enode.ID, toAddr netip.AddrPort, packet v5wire.Packet) error {
 	_, err := t.send(toID, toAddr, packet, nil)
 	return err
 }
 
-func (t *UDPv5) sendFromAnotherThread(toID enode.ID, toAddr *net.UDPAddr, packet v5wire.Packet) {
+func (t *UDPv5) sendFromAnotherThread(toID enode.ID, toAddr netip.AddrPort, packet v5wire.Packet) {
 	select {
 	case t.sendCh <- sendRequest{toID, toAddr, packet}:
 	case <-t.closeCtx.Done():
@@ -640,7 +687,7 @@ func (t *UDPv5) sendFromAnotherThread(toID enode.ID, toAddr *net.UDPAddr, packet
 }
 
 // send sends a packet to the given node.
-func (t *UDPv5) send(toID enode.ID, toAddr *net.UDPAddr, packet v5wire.Packet, c *v5wire.Whoareyou) (v5wire.Nonce, error) {
+func (t *UDPv5) send(toID enode.ID, toAddr netip.AddrPort, packet v5wire.Packet, c *v5wire.Whoareyou) (v5wire.Nonce, error) {
 	addr := toAddr.String()
 	t.logcontext = append(t.logcontext[:0], "id", toID, "addr", addr)
 	t.logcontext = packet.AppendLogInfo(t.logcontext)
@@ -652,7 +699,7 @@ func (t *UDPv5) send(toID enode.ID, toAddr *net.UDPAddr, packet v5wire.Packet, c
 		return nonce, err
 	}
 
-	_, err = t.conn.WriteToUDP(enc, toAddr)
+	_, err = t.conn.WriteToUDPAddrPort(enc, toAddr)
 	t.log.Trace(">> "+packet.Name(), t.logcontext...)
 	return nonce, err
 }
@@ -663,7 +710,7 @@ func (t *UDPv5) readLoop() {
 
 	buf := make([]byte, maxPacketSize)
 	for range t.readNextCh {
-		nbytes, from, err := t.conn.ReadFromUDP(buf)
+		nbytes, from, err := t.conn.ReadFromUDPAddrPort(buf)
 		if netutil.IsTemporaryError(err) {
 			// Ignore temporary read errors.
 			t.log.Debug("Temporary UDP read error", "err", err)
@@ -680,7 +727,11 @@ func (t *UDPv5) readLoop() {
 }
 
 // dispatchReadPacket sends a packet into the dispatch loop.
-func (t *UDPv5) dispatchReadPacket(from *net.UDPAddr, content []byte) bool {
+func (t *UDPv5) dispatchReadPacket(from netip.AddrPort, content []byte) bool {
+	// Unwrap IPv4-in-6 source address.
+	if from.Addr().Is4In6() {
+		from = netip.AddrPortFrom(netip.AddrFrom4(from.Addr().As4()), from.Port())
+	}
 	select {
 	case t.packetInCh <- ReadPacket{content, from}:
 		return true
@@ -690,7 +741,7 @@ func (t *UDPv5) dispatchReadPacket(from *net.UDPAddr, content []byte) bool {
 }
 
 // handlePacket decodes and processes an incoming packet from the network.
-func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
+func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr netip.AddrPort) error {
 	addr := fromAddr.String()
 	fromID, fromNode, packet, err := t.codec.Decode(rawpacket, addr)
 	if err != nil {
@@ -707,7 +758,7 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
 	}
 	if fromNode != nil {
 		// Handshake succeeded, add to table.
-		t.tab.addSeenNode(wrapNode(fromNode))
+		t.tab.addInboundNode(fromNode)
 	}
 	if packet.Kind() != v5wire.WhoareyouPacket {
 		// WHOAREYOU logged separately to report errors.
@@ -720,13 +771,13 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
 }
 
 // handleCallResponse dispatches a response packet to the call waiting for it.
-func (t *UDPv5) handleCallResponse(fromID enode.ID, fromAddr *net.UDPAddr, p v5wire.Packet) bool {
+func (t *UDPv5) handleCallResponse(fromID enode.ID, fromAddr netip.AddrPort, p v5wire.Packet) bool {
 	ac := t.activeCallByNode[fromID]
 	if ac == nil || !bytes.Equal(p.RequestID(), ac.reqid) {
 		t.log.Debug(fmt.Sprintf("Unsolicited/late %s response", p.Name()), "id", fromID, "addr", fromAddr)
 		return false
 	}
-	if !fromAddr.IP.Equal(ac.addr.IP) || fromAddr.Port != ac.addr.Port {
+	if fromAddr != ac.addr {
 		t.log.Debug(fmt.Sprintf("%s from wrong endpoint", p.Name()), "id", fromID, "addr", fromAddr)
 		return false
 	}
@@ -739,8 +790,8 @@ func (t *UDPv5) handleCallResponse(fromID enode.ID, fromAddr *net.UDPAddr, p v5w
 	return true
 }
 
-// getNode looks for a node record in table and database.
-func (t *UDPv5) getNode(id enode.ID) *enode.Node {
+// GetNode looks for a node record in table and database.
+func (t *UDPv5) GetNode(id enode.ID) *enode.Node {
 	if n := t.tab.getNode(id); n != nil {
 		return n
 	}
@@ -750,8 +801,13 @@ func (t *UDPv5) getNode(id enode.ID) *enode.Node {
 	return nil
 }
 
+// Nodes returns the nodes in the routing table.
+func (t *UDPv5) Nodes() [][]BucketNode {
+	return t.tab.Nodes()
+}
+
 // handle processes incoming packets according to their message type.
-func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr *net.UDPAddr) {
+func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr netip.AddrPort) {
 	switch p := p.(type) {
 	case *v5wire.Unknown:
 		t.handleUnknown(p, fromID, fromAddr)
@@ -761,7 +817,8 @@ func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr *net.UDPAddr) 
 		t.handlePing(p, fromID, fromAddr)
 	case *v5wire.Pong:
 		if t.handleCallResponse(fromID, fromAddr, p) {
-			t.localNode.UDPEndpointStatement(fromAddr, &net.UDPAddr{IP: p.ToIP, Port: int(p.ToPort)})
+			toAddr := netip.AddrPortFrom(netutil.IPToAddr(p.ToIP), p.ToPort)
+			t.localNode.UDPEndpointStatement(fromAddr, toAddr)
 		}
 	case *v5wire.Findnode:
 		t.handleFindnode(p, fromID, fromAddr)
@@ -775,10 +832,23 @@ func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr *net.UDPAddr) 
 }
 
 // handleUnknown initiates a handshake by responding with WHOAREYOU.
-func (t *UDPv5) handleUnknown(p *v5wire.Unknown, fromID enode.ID, fromAddr *net.UDPAddr) {
+func (t *UDPv5) handleUnknown(p *v5wire.Unknown, fromID enode.ID, fromAddr netip.AddrPort) {
+	currentChallenge := t.codec.CurrentChallenge(fromID, fromAddr.String())
+	if currentChallenge != nil {
+		// This case happens when the sender issues multiple concurrent requests.
+		// Since we only support one in-progress handshake at a time, we need to tell
+		// them which handshake attempt they need to complete. We tell them to use the
+		// existing handshake attempt since the response to that one might still be in
+		// transit.
+		t.log.Debug("Repeating discv5 handshake challenge", "id", fromID, "addr", fromAddr)
+		t.sendResponse(fromID, fromAddr, currentChallenge)
+		return
+	}
+
+	// Send a fresh challenge.
 	challenge := &v5wire.Whoareyou{Nonce: p.Nonce}
 	crand.Read(challenge.IDNonce[:])
-	if n := t.getNode(fromID); n != nil {
+	if n := t.GetNode(fromID); n != nil {
 		challenge.Node = n
 		challenge.RecordSeq = n.Seq()
 	}
@@ -791,7 +861,7 @@ var (
 )
 
 // handleWhoareyou resends the active call as a handshake packet.
-func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromID enode.ID, fromAddr *net.UDPAddr) {
+func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromID enode.ID, fromAddr netip.AddrPort) {
 	c, err := t.matchWithCall(fromID, p.Nonce)
 	if err != nil {
 		t.log.Debug("Invalid "+p.Name(), "addr", fromAddr, "err", err)
@@ -825,32 +895,35 @@ func (t *UDPv5) matchWithCall(fromID enode.ID, nonce v5wire.Nonce) (*callV5, err
 }
 
 // handlePing sends a PONG response.
-func (t *UDPv5) handlePing(p *v5wire.Ping, fromID enode.ID, fromAddr *net.UDPAddr) {
-	remoteIP := fromAddr.IP
-	// Handle IPv4 mapped IPv6 addresses in the
-	// event the local node is binded to an
-	// ipv6 interface.
-	if remoteIP.To4() != nil {
-		remoteIP = remoteIP.To4()
+func (t *UDPv5) handlePing(p *v5wire.Ping, fromID enode.ID, fromAddr netip.AddrPort) {
+	var remoteIP net.IP
+	// Handle IPv4 mapped IPv6 addresses in the event the local node is binded
+	// to an ipv6 interface.
+	if fromAddr.Addr().Is4() || fromAddr.Addr().Is4In6() {
+		ip4 := fromAddr.Addr().As4()
+		remoteIP = ip4[:]
+	} else {
+		remoteIP = fromAddr.Addr().AsSlice()
 	}
 	t.sendResponse(fromID, fromAddr, &v5wire.Pong{
 		ReqID:  p.ReqID,
 		ToIP:   remoteIP,
-		ToPort: uint16(fromAddr.Port),
+		ToPort: fromAddr.Port(),
 		ENRSeq: t.localNode.Node().Seq(),
 	})
 }
 
 // handleFindnode returns nodes to the requester.
-func (t *UDPv5) handleFindnode(p *v5wire.Findnode, fromID enode.ID, fromAddr *net.UDPAddr) {
-	nodes := t.collectTableNodes(fromAddr.IP, p.Distances, findnodeResultLimit)
+func (t *UDPv5) handleFindnode(p *v5wire.Findnode, fromID enode.ID, fromAddr netip.AddrPort) {
+	nodes := t.collectTableNodes(fromAddr.Addr(), p.Distances, findnodeResultLimit)
 	for _, resp := range packNodes(p.ReqID, nodes) {
 		t.sendResponse(fromID, fromAddr, resp)
 	}
 }
 
 // collectTableNodes creates a FINDNODE result set for the given distances.
-func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint, limit int) []*enode.Node {
+func (t *UDPv5) collectTableNodes(rip netip.Addr, distances []uint, limit int) []*enode.Node {
+	var bn []*enode.Node
 	var nodes []*enode.Node
 	var processed = make(map[uint]struct{})
 	for _, dist := range distances {
@@ -859,22 +932,13 @@ func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint, limit int) []*en
 		if seen || dist > 256 {
 			continue
 		}
-
-		// Get the nodes.
-		var bn []*enode.Node
-		if dist == 0 {
-			bn = []*enode.Node{t.Self()}
-		} else if dist <= 256 {
-			t.tab.mutex.Lock()
-			bn = unwrapNodes(t.tab.bucketAtDistance(int(dist)).entries)
-			t.tab.mutex.Unlock()
-		}
 		processed[dist] = struct{}{}
 
-		// Apply some pre-checks to avoid sending invalid nodes.
-		for _, n := range bn {
-			// TODO livenessChecks > 1
-			if netutil.CheckRelayIP(rip, n.IP()) != nil {
+		checkLive := !t.tab.cfg.NoFindnodeLivenessCheck
+		for _, n := range t.tab.appendBucketNodes(dist, bn[:0], checkLive) {
+			// Apply some pre-checks to avoid sending invalid nodes.
+			// Note liveness is checked by appendLiveNodes.
+			if netutil.CheckRelayAddr(rip, n.IPAddr()) != nil {
 				continue
 			}
 			nodes = append(nodes, n)

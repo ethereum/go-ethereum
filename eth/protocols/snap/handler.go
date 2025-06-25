@@ -82,17 +82,9 @@ type Backend interface {
 }
 
 // MakeProtocols constructs the P2P protocol definitions for `snap`.
-func MakeProtocols(backend Backend, dnsdisc enode.Iterator) []p2p.Protocol {
-	// Filter the discovery iterator for nodes advertising snap support.
-	dnsdisc = enode.Filter(dnsdisc, func(n *enode.Node) bool {
-		var snap enrEntry
-		return n.Load(&snap) == nil
-	})
-
+func MakeProtocols(backend Backend) []p2p.Protocol {
 	protocols := make([]p2p.Protocol, len(ProtocolVersions))
 	for i, version := range ProtocolVersions {
-		version := version // Closure
-
 		protocols[i] = p2p.Protocol{
 			Name:    ProtocolName,
 			Version: version,
@@ -108,8 +100,7 @@ func MakeProtocols(backend Backend, dnsdisc enode.Iterator) []p2p.Protocol {
 			PeerInfo: func(id enode.ID) interface{} {
 				return backend.PeerInfo(id)
 			},
-			Attributes:     []enr.Entry{&enrEntry{}},
-			DialCandidates: dnsdisc,
+			Attributes: []enr.Entry{&enrEntry{}},
 		}
 	}
 	return protocols
@@ -141,7 +132,7 @@ func HandleMessage(backend Backend, peer *Peer) error {
 	defer msg.Discard()
 	start := time.Now()
 	// Track the amount of time it takes to serve the request and run the handler
-	if metrics.Enabled {
+	if metrics.Enabled() {
 		h := fmt.Sprintf("%s/%s/%d/%#02x", p2p.HandleHistName, ProtocolName, peer.Version(), msg.Code)
 		defer func(start time.Time) {
 			sampler := func() metrics.Sample {
@@ -332,11 +323,7 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 			return nil, nil
 		}
 	}
-	var proofs [][]byte
-	for _, blob := range proof.List() {
-		proofs = append(proofs, blob)
-	}
-	return accounts, proofs
+	return accounts, proof.List()
 }
 
 func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesPacket) ([][]*StorageData, [][]byte) {
@@ -438,9 +425,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 					return nil, nil
 				}
 			}
-			for _, blob := range proof.List() {
-				proofs = append(proofs, blob)
-			}
+			proofs = append(proofs, proof.List()...)
 			// Proof terminates the reply as proofs are only added if a node
 			// refuses to serve more data (exception when a contract fetch is
 			// finishing, but that's that).
@@ -469,7 +454,7 @@ func ServiceGetByteCodesQuery(chain *core.BlockChain, req *GetByteCodesPacket) [
 			// Peers should not request the empty code, but if they do, at
 			// least sent them back a correct response without db lookups
 			codes = append(codes, []byte{})
-		} else if blob, err := chain.ContractCodeWithPrefix(hash); err == nil {
+		} else if blob := chain.ContractCodeWithPrefix(hash); len(blob) > 0 {
 			codes = append(codes, blob)
 			bytes += uint64(len(blob))
 		}

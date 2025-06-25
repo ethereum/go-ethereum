@@ -1,3 +1,4 @@
+
 name: Unit Tests
 
 on:
@@ -52,19 +53,12 @@ jobs:
         run: go get github.com/wadey/gocovmerge && go install github.com/wadey/gocovmerge
 
       - name: Merge coverage reports
-        run: gocovmerge $(find . -type f -name '*coverage.out') > coverage.txt
+        run: gocovmerge $(find . -type f -name '*profile.out') > coverage.txt
 
       - name: Check coverage report lines
         run: wc -l coverage.txt
         continue-on-error: true
 
       - name: Check coverage report files
-        run: ls **/*coverage.out
+        run: ls **/*profile.out
         continue-on-error: true
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./coverage.txt
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true

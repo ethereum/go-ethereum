@@ -30,8 +30,8 @@ var (
 	ErrInsufficientBalance      = errors.New("insufficient balance for transfer")
 	ErrContractAddressCollision = errors.New("contract address collision")
 	ErrExecutionReverted        = errors.New("execution reverted")
-	ErrMaxInitCodeSizeExceeded  = errors.New("max initcode size exceeded")
 	ErrMaxCodeSizeExceeded      = errors.New("max code size exceeded")
+	ErrMaxInitCodeSizeExceeded  = errors.New("max initcode size exceeded")
 	ErrInvalidJump              = errors.New("invalid jump destination")
 	ErrWriteProtection          = errors.New("write protection")
 	ErrReturnDataOutOfBounds    = errors.New("return data out of bounds")
@@ -47,12 +47,16 @@ var (
 // ErrStackUnderflow wraps an evm error when the items on the stack less
 // than the minimal requirement.
 type ErrStackUnderflow struct {
-	stackLen int
-	required int
+	StackLen int
+	Required int
 }
 
-func (e *ErrStackUnderflow) Error() string {
-	return fmt.Sprintf("stack underflow (%d <=> %d)", e.stackLen, e.required)
+func (e ErrStackUnderflow) Error() string {
+	return fmt.Sprintf("stack underflow (%d <=> %d)", e.StackLen, e.Required)
+}
+
+func (e ErrStackUnderflow) Unwrap() error {
+	return errors.New("stack underflow")
 }
 
 // ErrStackOverflow wraps an evm error when the items on the stack exceeds
@@ -62,8 +66,12 @@ type ErrStackOverflow struct {
 	limit    int
 }
 
-func (e *ErrStackOverflow) Error() string {
+func (e ErrStackOverflow) Error() string {
 	return fmt.Sprintf("stack limit reached %d (%d)", e.stackLen, e.limit)
+}
+
+func (e ErrStackOverflow) Unwrap() error {
+	return errors.New("stack overflow")
 }
 
 // ErrInvalidOpCode wraps an evm error when an invalid opcode is encountered.
@@ -129,7 +137,6 @@ const (
 	VMErrorCodeInsufficientBalance
 	VMErrorCodeContractAddressCollision
 	VMErrorCodeExecutionReverted
-	VMErrorCodeMaxInitCodeSizeExceeded
 	VMErrorCodeMaxCodeSizeExceeded
 	VMErrorCodeInvalidJump
 	VMErrorCodeWriteProtection
@@ -160,8 +167,6 @@ func vmErrorCodeFromErr(err error) int {
 		return VMErrorCodeContractAddressCollision
 	case errors.Is(err, ErrExecutionReverted):
 		return VMErrorCodeExecutionReverted
-	case errors.Is(err, ErrMaxInitCodeSizeExceeded):
-		return VMErrorCodeMaxInitCodeSizeExceeded
 	case errors.Is(err, ErrMaxCodeSizeExceeded):
 		return VMErrorCodeMaxCodeSizeExceeded
 	case errors.Is(err, ErrInvalidJump):

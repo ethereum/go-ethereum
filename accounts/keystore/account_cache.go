@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -31,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"golang.org/x/exp/slices"
 )
 
 // Minimum amount of time between cache reloads. This limit applies if the platform does
@@ -44,8 +44,7 @@ func byURL(a, b accounts.Account) int {
 	return a.URL.Cmp(b.URL)
 }
 
-// AmbiguousAddrError is returned when attempting to unlock
-// an address for which more than one file exists.
+// AmbiguousAddrError is returned when an address matches multiple files.
 type AmbiguousAddrError struct {
 	Addr    common.Address
 	Matches []accounts.Account

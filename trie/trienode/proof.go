@@ -69,6 +69,10 @@ func (db *ProofSet) Delete(key []byte) error {
 	return nil
 }
 
+func (db *ProofSet) DeleteRange(start, end []byte) error {
+	panic("not supported")
+}
+
 // Get returns a stored node
 func (db *ProofSet) Get(key []byte) ([]byte, error) {
 	db.lock.RLock()
@@ -102,14 +106,14 @@ func (db *ProofSet) DataSize() int {
 	return db.dataSize
 }
 
-// List converts the node set to a ProofList
-func (db *ProofSet) List() ProofList {
+// List converts the node set to a slice of bytes.
+func (db *ProofSet) List() [][]byte {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
-	var values ProofList
-	for _, key := range db.order {
-		values = append(values, db.nodes[key])
+	values := make([][]byte, len(db.order))
+	for i, key := range db.order {
+		values[i] = db.nodes[key]
 	}
 	return values
 }

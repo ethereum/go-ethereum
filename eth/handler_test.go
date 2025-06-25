@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -30,10 +29,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
 )
 
 var (
@@ -78,9 +79,23 @@ func (p *testTxPool) Get(hash common.Hash) *types.Transaction {
 	return p.pool[hash]
 }
 
+// Get retrieves the transaction from local txpool with given
+// tx hash.
+func (p *testTxPool) GetRLP(hash common.Hash) []byte {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	tx := p.pool[hash]
+	if tx != nil {
+		blob, _ := rlp.EncodeToBytes(tx)
+		return blob
+	}
+	return nil
+}
+
 // Add appends a batch of transactions to the pool, and notifies any
 // listeners if the addition channel is non nil
-func (p *testTxPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
+func (p *testTxPool) Add(txs []*types.Transaction, sync bool) []error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -92,7 +107,7 @@ func (p *testTxPool) Add(txs []*types.Transaction, local bool, sync bool) []erro
 }
 
 // Pending returns all the transactions known to the pool
-func (p *testTxPool) Pending(enforceTips bool) map[common.Address][]*txpool.LazyTransaction {
+func (p *testTxPool) Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
@@ -111,8 +126,8 @@ func (p *testTxPool) Pending(enforceTips bool) map[common.Address][]*txpool.Lazy
 				Hash:      tx.Hash(),
 				Tx:        tx,
 				Time:      tx.Time(),
-				GasFeeCap: tx.GasFeeCap(),
-				GasTipCap: tx.GasTipCap(),
+				GasFeeCap: uint256.MustFromBig(tx.GasFeeCap()),
+				GasTipCap: uint256.MustFromBig(tx.GasTipCap()),
 				Gas:       tx.Gas(),
 				BlobGas:   tx.BlobGas(),
 			})
@@ -149,9 +164,9 @@ func newTestHandlerWithBlocks(blocks int) *testHandler {
 	db := rawdb.NewMemoryDatabase()
 	gspec := &core.Genesis{
 		Config: params.TestChainConfig,
-		Alloc:  core.GenesisAlloc{testAddr: {Balance: big.NewInt(1000000)}},
+		Alloc:  types.GenesisAlloc{testAddr: {Balance: big.NewInt(1000000)}},
 	}
-	chain, _ := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	chain, _ := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
 
 	_, bs, _ := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), blocks, nil)
 	if _, err := chain.InsertChain(bs); err != nil {
@@ -163,9 +178,8 @@ func newTestHandlerWithBlocks(blocks int) *testHandler {
 		Database:   db,
 		Chain:      chain,
 		TxPool:     txpool,
-		Merger:     consensus.NewMerger(rawdb.NewMemoryDatabase()),
 		Network:    1,
-		Sync:       downloader.SnapSync,
+		Sync:       ethconfig.SnapSync,
 		BloomCache: 1,
 	})
 	handler.Start(1000)

@@ -19,40 +19,23 @@ package trie
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie/triestate"
+	"github.com/ethereum/go-ethereum/triedb/database"
 )
-
-// Reader wraps the Node method of a backing trie store.
-type Reader interface {
-	// Node retrieves the trie node blob with the provided trie identifier, node path and
-	// the corresponding node hash. No error will be returned if the node is not found.
-	//
-	// When looking up nodes in the account trie, 'owner' is the zero hash. For contract
-	// storage trie nodes, 'owner' is the hash of the account address that containing the
-	// storage.
-	//
-	// TODO(rjl493456442): remove the 'hash' parameter, it's redundant in PBSS.
-	Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error)
-}
 
 // trieReader is a wrapper of the underlying node reader. It's not safe
 // for concurrent usage.
 type trieReader struct {
 	owner  common.Hash
-	reader Reader
+	reader database.NodeReader
 	banned map[string]struct{} // Marker to prevent node from being accessed, for tests
 }
 
 // newTrieReader initializes the trie reader with the given node reader.
-func newTrieReader(stateRoot, owner common.Hash, db *Database) (*trieReader, error) {
+func newTrieReader(stateRoot, owner common.Hash, db database.NodeDatabase) (*trieReader, error) {
 	if stateRoot == (common.Hash{}) || stateRoot == types.EmptyRootHash {
-		if stateRoot == (common.Hash{}) {
-			log.Error("Zero state root hash!")
-		}
 		return &trieReader{owner: owner}, nil
 	}
-	reader, err := db.Reader(stateRoot)
+	reader, err := db.NodeReader(stateRoot)
 	if err != nil {
 		return nil, &MissingNodeError{Owner: owner, NodeHash: stateRoot, err: err}
 	}
@@ -68,6 +51,9 @@ func newEmptyReader() *trieReader {
 // node retrieves the rlp-encoded trie node with the provided trie node
 // information. An MissingNodeError will be returned in case the node is
 // not found or any error is encountered.
+//
+// Don't modify the returned byte slice since it's not deep-copied and
+// still be referenced by database.
 func (r *trieReader) node(path []byte, hash common.Hash) ([]byte, error) {
 	// Perform the logics in tests for preventing trie node access.
 	if r.banned != nil {
@@ -83,19 +69,4 @@ func (r *trieReader) node(path []byte, hash common.Hash) ([]byte, error) {
 		return nil, &MissingNodeError{Owner: r.owner, NodeHash: hash, Path: path, err: err}
 	}
 	return blob, nil
-}
-
-// trieLoader implements triestate.TrieLoader for constructing tries.
-type trieLoader struct {
-	db *Database
-}
-
-// OpenTrie opens the main account trie.
-func (l *trieLoader) OpenTrie(root common.Hash) (triestate.Trie, error) {
-	return New(TrieID(root), l.db)
-}
-
-// OpenStorageTrie opens the storage trie of an account.
-func (l *trieLoader) OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (triestate.Trie, error) {
-	return New(StorageTrieID(stateRoot, addrHash, root), l.db)
 }

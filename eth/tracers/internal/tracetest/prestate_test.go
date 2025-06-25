@@ -1,4 +1,4 @@
-// Copyright 2021 The go-ethereum Authors
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -25,7 +25,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -44,28 +43,25 @@ type account struct {
 	Storage map[common.Hash]common.Hash `json:"storage"`
 }
 
-// testcase defines a single test to check the stateDiff tracer against.
-type testcase struct {
-	Genesis      *core.Genesis   `json:"genesis"`
-	Context      *callContext    `json:"context"`
-	Input        string          `json:"input"`
-	TracerConfig json.RawMessage `json:"tracerConfig"`
-	Result       interface{}     `json:"result"`
+// prestateTracerTest defines a single test to check the stateDiff tracer against.
+type prestateTracerTest struct {
+	tracerTestEnv
+	Result interface{} `json:"result"`
 }
 
 func TestPrestateTracerLegacy(t *testing.T) {
-	testPrestateDiffTracer("prestateTracerLegacy", "prestate_tracer_legacy", t)
+	testPrestateTracer("prestateTracerLegacy", "prestate_tracer_legacy", t)
 }
 
 func TestPrestateTracer(t *testing.T) {
-	testPrestateDiffTracer("prestateTracer", "prestate_tracer", t)
+	testPrestateTracer("prestateTracer", "prestate_tracer", t)
 }
 
 func TestPrestateWithDiffModeTracer(t *testing.T) {
-	testPrestateDiffTracer("prestateTracer", "prestate_tracer_with_diff_mode", t)
+	testPrestateTracer("prestateTracer", "prestate_tracer_with_diff_mode", t)
 }
 
-func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
+func testPrestateTracer(tracerName string, dirPath string, t *testing.T) {
 	files, err := os.ReadDir(filepath.Join("testdata", dirPath))
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
@@ -74,12 +70,11 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 		if !strings.HasSuffix(file.Name(), ".json") {
 			continue
 		}
-		file := file // capture range variable
 		t.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(t *testing.T) {
 			t.Parallel()
 
 			var (
-				test = new(testcase)
+				test = new(prestateTracerTest)
 				tx   = new(types.Transaction)
 			)
 			// Call tracer test found, read if from disk
@@ -94,36 +89,21 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			// Configure a blockchain with the given prestate
 			var (
 				signer  = types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
-				context = vm.BlockContext{
-					CanTransfer: core.CanTransfer,
-					Transfer:    core.Transfer,
-					Coinbase:    test.Context.Miner,
-					BlockNumber: new(big.Int).SetUint64(uint64(test.Context.Number)),
-					Time:        uint64(test.Context.Time),
-					Difficulty:  (*big.Int)(test.Context.Difficulty),
-					GasLimit:    uint64(test.Context.GasLimit),
-					BaseFee:     test.Genesis.BaseFee,
-				}
-				triedb, _, statedb = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
+				context = test.Context.toBlockContext(test.Genesis)
+				state   = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
 			)
-			defer triedb.Close()
+			defer state.Close()
 
-			if test.Genesis.ExcessBlobGas != nil && test.Genesis.BlobGasUsed != nil {
-				excessBlobGas := eip4844.CalcExcessBlobGas(*test.Genesis.ExcessBlobGas, *test.Genesis.BlobGasUsed)
-				context.BlobBaseFee = eip4844.CalcBlobFee(excessBlobGas)
-			}
-
-			tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig)
+			tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig, test.Genesis.Config)
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
 
-			statedb.SetLogger(tracer.Hooks)
 			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
-			evm := vm.NewEVM(context, core.NewEVMTxContext(msg), statedb, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks}, nil)
+			evm := vm.NewEVM(context, state.StateDB, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks}, nil)
 			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 			if err != nil {

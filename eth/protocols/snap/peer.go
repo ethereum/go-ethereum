@@ -33,7 +33,7 @@ type Peer struct {
 	logger log.Logger // Contextual logger with the peer id injected
 }
 
-// NewPeer create a wrapper for a network connection and negotiated  protocol
+// NewPeer creates a wrapper for a network connection and negotiated  protocol
 // version.
 func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 	id := p.ID().String()
@@ -46,7 +46,7 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 	}
 }
 
-// NewFakePeer create a fake snap peer without a backing p2p peer, for testing purposes.
+// NewFakePeer creates a fake snap peer without a backing p2p peer, for testing purposes.
 func NewFakePeer(version uint, id string, rw p2p.MsgReadWriter) *Peer {
 	return &Peer{
 		id:      id,

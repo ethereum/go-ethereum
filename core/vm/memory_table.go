@@ -78,6 +78,7 @@ func memoryCall(stack *Stack) (uint64, bool) {
 	}
 	return y, false
 }
+
 func memoryDelegateCall(stack *Stack) (uint64, bool) {
 	x, overflow := calcMemSize64(stack.Back(4), stack.Back(5))
 	if overflow {
@@ -117,5 +118,21 @@ func memoryRevert(stack *Stack) (uint64, bool) {
 }
 
 func memoryLog(stack *Stack) (uint64, bool) {
+	return calcMemSize64(stack.Back(0), stack.Back(1))
+}
+
+func memoryExtCall(stack *Stack) (uint64, bool) {
+	return calcMemSize64(stack.Back(1), stack.Back(2))
+}
+
+func memoryDataCopy(stack *Stack) (uint64, bool) {
+	return calcMemSize64(stack.Back(0), stack.Back(2))
+}
+
+func memoryEOFCreate(stack *Stack) (uint64, bool) {
+	return calcMemSize64(stack.Back(2), stack.Back(3))
+}
+
+func memoryReturnContract(stack *Stack) (uint64, bool) {
 	return calcMemSize64(stack.Back(0), stack.Back(1))
 }

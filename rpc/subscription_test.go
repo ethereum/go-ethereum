@@ -33,6 +33,8 @@ import (
 )
 
 func TestNewID(t *testing.T) {
+	t.Parallel()
+
 	hexchars := "0123456789ABCDEFabcdef"
 	for i := 0; i < 100; i++ {
 		id := string(NewID())
@@ -54,6 +56,8 @@ func TestNewID(t *testing.T) {
 }
 
 func TestSubscriptions(t *testing.T) {
+	t.Parallel()
+
 	var (
 		namespaces        = []string{"eth", "bzz"}
 		service           = &notificationTestService{}
@@ -132,6 +136,8 @@ func TestSubscriptions(t *testing.T) {
 
 // This test checks that unsubscribing works.
 func TestServerUnsubscribe(t *testing.T) {
+	t.Parallel()
+
 	p1, p2 := net.Pipe()
 	defer p2.Close()
 
@@ -235,10 +241,10 @@ func (c *mockConn) writeJSON(ctx context.Context, msg interface{}, isError bool)
 	return c.enc.Encode(msg)
 }
 
-// Closed returns a channel which is closed when the connection is closed.
+// closed returns a channel which is closed when the connection is closed.
 func (c *mockConn) closed() <-chan interface{} { return nil }
 
-// RemoteAddr returns the peer address of the connection.
+// remoteAddr returns the peer address of the connection.
 func (c *mockConn) remoteAddr() string { return "" }
 
 // BenchmarkNotify benchmarks the performance of notifying a subscription.
@@ -260,6 +266,8 @@ func BenchmarkNotify(b *testing.B) {
 }
 
 func TestNotify(t *testing.T) {
+	t.Parallel()
+
 	out := new(bytes.Buffer)
 	id := ID("test")
 	notifier := &Notifier{
@@ -267,13 +275,9 @@ func TestNotify(t *testing.T) {
 		sub:       &Subscription{ID: id},
 		activated: true,
 	}
-	msg := &types.Header{
-		ParentHash: common.HexToHash("0x01"),
-		Number:     big.NewInt(100),
-	}
-	notifier.Notify(id, msg)
+	notifier.Notify(id, "hello")
 	have := strings.TrimSpace(out.String())
-	want := `{"jsonrpc":"2.0","method":"_subscription","params":{"subscription":"test","result":{"parentHash":"0x0000000000000000000000000000000000000000000000000000000000000001","sha3Uncles":"0x0000000000000000000000000000000000000000000000000000000000000000","miner":"0x0000000000000000000000000000000000000000","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","difficulty":null,"number":"0x64","gasLimit":"0x0","gasUsed":"0x0","timestamp":"0x0","extraData":"0x","mixHash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0000000000000000","baseFeePerGas":null,"withdrawalsRoot":null,"blobGasUsed":null,"excessBlobGas":null,"parentBeaconBlockRoot":null,"hash":"0xe5fb877dde471b45b9742bb4bb4b3d74a761e2fb7cb849a3d2b687eed90fb604"}}}`
+	want := `{"jsonrpc":"2.0","method":"_subscription","params":{"subscription":"test","result":"hello"}}`
 	if have != want {
 		t.Errorf("have:\n%v\nwant:\n%v\n", have, want)
 	}

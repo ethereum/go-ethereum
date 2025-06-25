@@ -1,0 +1,2336 @@
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: unexpected EOF
+ERR: invalid version: have 0, want 1
+ERR: invalid version: have 0, want 1
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: invalid type section size: type section size must be divisible by 4, have 0
+ERR: invalid type section size: type section size must be divisible by 4, have 0
+ERR: invalid type section size: type section size must be divisible by 4, have 0
+ERR: invalid type section size: type section size must be divisible by 4, have 1
+ERR: invalid type section size: type section size must be divisible by 4, have 2
+ERR: invalid type section size: type section size must be divisible by 4, have 2
+ERR: invalid type section size: type section size must be divisible by 4, have 3
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: missing code header: found section kind 1 instead
+ERR: missing code header: found section kind 1 instead
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: invalid code size: mismatch of code sections found and type signatures, types 1, code 0
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: invalid container size: have 90, want 77
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 0
+ERR: invalid code size for section 0: size must not be 0
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 0
+ERR: invalid code size for section 0: size must not be 0
+ERR: unexpected EOF
+ERR: missing data header: found section 0 instead
+ERR: missing data header: found section 0 instead
+ERR: missing data header: found section 2 instead
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: invalid container section size: total container count must not be zero
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: invalid container section size for section 0: size must not be 0
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: invalid container size: have 26, want 49177
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: invalid container size: have 29, want 49180
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: invalid container size: have 15, want 20
+ERR: invalid container size: have 16, want 20
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 0
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 0
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 0
+ERR: invalid container size: have 23, want 20
+ERR: invalid container size: have 17, want 20
+ERR: invalid container size: have 18, want 20
+ERR: invalid container size: have 19, want 20
+OK
+ERR: truncated immediate: op RJUMP, pos 0
+ERR: invalid non-returning flag, bad RETF: at pos 0
+ERR: invalid container size: have 23, want 20
+ERR: invalid container size: have 19, want 20
+ERR: invalid type content, too many inputs for section 0: have 128
+ERR: missing header terminator: have 4
+ERR: missing header terminator: have 4
+ERR: missing header terminator: have 5
+ERR: missing header terminator: have 6
+ERR: missing header terminator: have 30
+ERR: missing header terminator: have ff
+ERR: truncated top level container
+OK
+ERR: missing header terminator: have 4
+ERR: unexpected EOF
+ERR: invalid container size: have 15, want 22
+ERR: invalid container size: have 16, want 22
+ERR: invalid container size: have 17, want 22
+ERR: invalid container size: have 18, want 22
+ERR: invalid container size: have 19, want 22
+ERR: invalid container size: have 24, want 22
+ERR: truncated top level container
+ERR: truncated top level container
+OK
+ERR: invalid container size: have 24, want 22
+ERR: missing header terminator: have 4
+ERR: truncated top level container
+ERR: invalid type content, too many inputs for section 0: have 128
+OK
+ERR: invalid code termination: end with JUMPDEST, pos 1
+OK
+ERR: invalid code termination: end with ADDRESS, pos 1
+ERR: invalid code termination: end with ORIGIN, pos 1
+ERR: invalid code termination: end with CALLER, pos 1
+ERR: invalid code termination: end with CALLVALUE, pos 1
+ERR: invalid code termination: end with CALLDATASIZE, pos 1
+ERR: invalid code termination: end with GASPRICE, pos 1
+ERR: invalid code termination: end with RETURNDATASIZE, pos 1
+ERR: invalid code termination: end with COINBASE, pos 1
+ERR: invalid code termination: end with TIMESTAMP, pos 1
+ERR: invalid code termination: end with NUMBER, pos 1
+ERR: invalid code termination: end with DIFFICULTY, pos 1
+ERR: invalid code termination: end with GASLIMIT, pos 1
+ERR: invalid code termination: end with CHAINID, pos 1
+ERR: invalid code termination: end with SELFBALANCE, pos 1
+ERR: invalid code termination: end with BASEFEE, pos 1
+ERR: invalid code termination: end with BLOBBASEFEE, pos 1
+ERR: invalid code termination: end with MSIZE, pos 1
+ERR: invalid code termination: end with PUSH0, pos 1
+ERR: invalid code termination: end with DATASIZE, pos 1
+OK
+ERR: max initcode size exceeded
+ERR: missing data header: found section 5 instead
+ERR: missing data header: found section 6 instead
+ERR: missing data header: found section ff instead
+ERR: invalid container size: have 90, want 79
+ERR: invalid container size: have 15, want 21
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 0
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 1
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 127
+ERR: invalid container size: have 18, want 21
+ERR: invalid container size: have 20, want 21
+ERR: unreachable code
+ERR: truncated immediate: op RJUMP, pos 0
+ERR: invalid container size: have 20, want 21
+ERR: unreachable code
+ERR: stack underflow (0 <=> 1): at pos 0
+ERR: stack underflow (0 <=> 1): at pos 0
+ERR: stack underflow (0 <=> 1): at pos 0
+ERR: stack underflow (0 <=> 1): at pos 0
+ERR: stack underflow (0 <=> 1): at pos 0
+ERR: stack underflow (0 <=> 1): at pos 0
+ERR: stack underflow (0 <=> 1): at pos 0
+ERR: stack underflow (0 <=> 1): at pos 0
+ERR: stack underflow (0 <=> 1): at pos 0
+ERR: stack underflow (0 <=> 1): at pos 0
+ERR: invalid non-returning flag, bad RETF: at pos 1
+ERR: stack underflow (0 <=> 1): at pos 0
+ERR: stack underflow (0 <=> 1): at pos 0
+ERR: stack underflow (0 <=> 1): at pos 0
+ERR: invalid type content, too many outputs for section 0: have 129
+ERR: invalid type content, too many outputs for section 0: have 255
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 1, 128
+ERR: invalid container size: have 19, want 21
+ERR: invalid type content, too many inputs for section 0: have 128
+ERR: invalid type content, too many inputs for section 0: have 128
+ERR: invalid type content, too many inputs for section 0: have 255
+ERR: missing header terminator: have 30
+ERR: invalid code termination: end with PUSH1, pos 2
+ERR: invalid code termination: end with PUSH1, pos 2
+ERR: undefined instruction: op opcode 0xc not defined, pos 0
+ERR: undefined instruction: op opcode 0xd not defined, pos 0
+ERR: undefined instruction: op opcode 0xe not defined, pos 0
+ERR: undefined instruction: op opcode 0xf not defined, pos 0
+ERR: undefined instruction: op opcode 0x1e not defined, pos 0
+ERR: undefined instruction: op opcode 0x1f not defined, pos 0
+ERR: undefined instruction: op opcode 0x21 not defined, pos 0
+ERR: undefined instruction: op opcode 0x22 not defined, pos 0
+ERR: undefined instruction: op opcode 0x23 not defined, pos 0
+ERR: undefined instruction: op opcode 0x24 not defined, pos 0
+ERR: undefined instruction: op opcode 0x25 not defined, pos 0
+ERR: undefined instruction: op opcode 0x26 not defined, pos 0
+ERR: undefined instruction: op opcode 0x27 not defined, pos 0
+ERR: undefined instruction: op opcode 0x28 not defined, pos 0
+ERR: undefined instruction: op opcode 0x29 not defined, pos 0
+ERR: undefined instruction: op opcode 0x2a not defined, pos 0
+ERR: undefined instruction: op opcode 0x2b not defined, pos 0
+ERR: undefined instruction: op opcode 0x2c not defined, pos 0
+ERR: undefined instruction: op opcode 0x2d not defined, pos 0
+ERR: undefined instruction: op opcode 0x2e not defined, pos 0
+ERR: undefined instruction: op opcode 0x2f not defined, pos 0
+ERR: undefined instruction: op opcode 0x4b not defined, pos 0
+ERR: undefined instruction: op opcode 0x4c not defined, pos 0
+ERR: undefined instruction: op opcode 0x4d not defined, pos 0
+ERR: undefined instruction: op opcode 0x4e not defined, pos 0
+ERR: undefined instruction: op opcode 0x4f not defined, pos 0
+OK
+ERR: undefined instruction: op opcode 0xa5 not defined, pos 0
+ERR: undefined instruction: op opcode 0xa6 not defined, pos 0
+ERR: undefined instruction: op opcode 0xa7 not defined, pos 0
+ERR: undefined instruction: op opcode 0xa8 not defined, pos 0
+ERR: undefined instruction: op opcode 0xa9 not defined, pos 0
+ERR: undefined instruction: op opcode 0xaa not defined, pos 0
+ERR: undefined instruction: op opcode 0xab not defined, pos 0
+ERR: undefined instruction: op opcode 0xac not defined, pos 0
+ERR: undefined instruction: op opcode 0xad not defined, pos 0
+ERR: undefined instruction: op opcode 0xae not defined, pos 0
+ERR: undefined instruction: op opcode 0xaf not defined, pos 0
+ERR: undefined instruction: op opcode 0xb0 not defined, pos 0
+ERR: undefined instruction: op opcode 0xb1 not defined, pos 0
+ERR: undefined instruction: op opcode 0xb2 not defined, pos 0
+ERR: undefined instruction: op opcode 0xb3 not defined, pos 0
+ERR: undefined instruction: op opcode 0xb4 not defined, pos 0
+ERR: undefined instruction: op opcode 0xb5 not defined, pos 0
+ERR: undefined instruction: op opcode 0xb6 not defined, pos 0
+ERR: undefined instruction: op opcode 0xb7 not defined, pos 0
+ERR: undefined instruction: op opcode 0xb8 not defined, pos 0
+ERR: undefined instruction: op opcode 0xb9 not defined, pos 0
+ERR: undefined instruction: op opcode 0xba not defined, pos 0
+ERR: undefined instruction: op opcode 0xbb not defined, pos 0
+ERR: undefined instruction: op opcode 0xbc not defined, pos 0
+ERR: undefined instruction: op opcode 0xbd not defined, pos 0
+ERR: undefined instruction: op opcode 0xbe not defined, pos 0
+ERR: undefined instruction: op opcode 0xbf not defined, pos 0
+ERR: undefined instruction: op opcode 0xc0 not defined, pos 0
+ERR: undefined instruction: op opcode 0xc1 not defined, pos 0
+ERR: undefined instruction: op opcode 0xc2 not defined, pos 0
+ERR: undefined instruction: op opcode 0xc3 not defined, pos 0
+ERR: undefined instruction: op opcode 0xc4 not defined, pos 0
+ERR: undefined instruction: op opcode 0xc5 not defined, pos 0
+ERR: undefined instruction: op opcode 0xc6 not defined, pos 0
+ERR: undefined instruction: op opcode 0xc7 not defined, pos 0
+ERR: undefined instruction: op opcode 0xc8 not defined, pos 0
+ERR: undefined instruction: op opcode 0xc9 not defined, pos 0
+ERR: undefined instruction: op opcode 0xca not defined, pos 0
+ERR: undefined instruction: op opcode 0xcb not defined, pos 0
+ERR: undefined instruction: op opcode 0xcc not defined, pos 0
+ERR: undefined instruction: op opcode 0xcd not defined, pos 0
+ERR: undefined instruction: op opcode 0xce not defined, pos 0
+ERR: undefined instruction: op opcode 0xcf not defined, pos 0
+ERR: undefined instruction: op opcode 0xd4 not defined, pos 0
+ERR: undefined instruction: op opcode 0xd5 not defined, pos 0
+ERR: undefined instruction: op opcode 0xd6 not defined, pos 0
+ERR: undefined instruction: op opcode 0xd7 not defined, pos 0
+ERR: undefined instruction: op opcode 0xd8 not defined, pos 0
+ERR: undefined instruction: op opcode 0xd9 not defined, pos 0
+ERR: undefined instruction: op opcode 0xda not defined, pos 0
+ERR: undefined instruction: op opcode 0xdb not defined, pos 0
+ERR: undefined instruction: op opcode 0xdc not defined, pos 0
+ERR: undefined instruction: op opcode 0xdd not defined, pos 0
+ERR: undefined instruction: op opcode 0xde not defined, pos 0
+ERR: undefined instruction: op opcode 0xdf not defined, pos 0
+ERR: undefined instruction: op opcode 0xe9 not defined, pos 0
+ERR: undefined instruction: op opcode 0xea not defined, pos 0
+ERR: undefined instruction: op opcode 0xeb not defined, pos 0
+ERR: undefined instruction: op opcode 0xed not defined, pos 0
+ERR: undefined instruction: op opcode 0xef not defined, pos 0
+ERR: undefined instruction: op opcode 0xf6 not defined, pos 0
+ERR: undefined instruction: op opcode 0xfc not defined, pos 0
+OK
+OK
+OK
+OK
+OK
+ERR: undefined instruction: op CODESIZE, pos 0
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+ERR: undefined instruction: op PC, pos 0
+OK
+ERR: undefined instruction: op GAS, pos 0
+OK
+ERR: invalid code termination: end with ISZERO, pos 2
+ERR: invalid code termination: end with NOT, pos 2
+ERR: invalid code termination: end with BALANCE, pos 2
+ERR: invalid code termination: end with CALLDATALOAD, pos 2
+ERR: invalid code termination: end with BLOCKHASH, pos 2
+ERR: invalid code termination: end with BLOBHASH, pos 2
+ERR: invalid code termination: end with POP, pos 2
+ERR: invalid code termination: end with MLOAD, pos 2
+ERR: invalid code termination: end with SLOAD, pos 2
+ERR: invalid code termination: end with TLOAD, pos 2
+ERR: invalid code termination: end with DATALOAD, pos 2
+ERR: invalid code termination: end with RETURNDATALOAD, pos 2
+ERR: invalid code termination: end with PUSH1, pos 2
+OK
+ERR: invalid code termination: end with DUP1, pos 2
+ERR: missing data header: found section 0 instead
+ERR: missing data header: found section 0 instead
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 0
+ERR: invalid jump destination: out-of-bounds offset: offset 2, dest 5, pos 1
+ERR: invalid jump destination: out-of-bounds offset: offset -23, dest -20, pos 1
+ERR: invalid jump destination: out-of-bounds offset: offset -5, dest -2, pos 1
+OK
+ERR: invalid section argument: arg 5, last 1, pos 0
+ERR: invalid section argument: arg 1025, last 1, pos 0
+ERR: invalid section argument: arg 65535, last 1, pos 0
+ERR: stack underflow (0 <=> 1): at pos 0
+ERR: stack underflow (0 <=> 2): at pos 0
+ERR: stack underflow (0 <=> 3): at pos 0
+OK
+ERR: invalid container size: have 26, want 22
+ERR: truncated immediate: op RJUMPI, pos 2
+ERR: truncated immediate: op RJUMPV, pos 2
+ERR: stack underflow (0 <=> 1): at pos 0
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: truncated immediate: op RETURNCONTRACT, pos 2
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (0 <=> 1): at pos 0
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: invalid container size: have 18, want 22
+ERR: invalid container size: have 21, want 22
+ERR: invalid container size: have 21, want 22
+ERR: missing header terminator: have 30
+ERR: missing header terminator: have 30
+ERR: missing header terminator: have 66
+ERR: truncated top level container
+OK
+OK
+OK
+ERR: invalid container size: have 20, want 23
+ERR: undefined instruction: op opcode 0xef not defined, pos 0
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 48, 80
+ERR: invalid container size: have 19, want 23
+ERR: invalid type content, too many inputs for section 0: have 239
+ERR: invalid jump destination: out-of-bounds offset: offset 2, dest 5, pos 1
+ERR: missing header terminator: have 4
+OK
+ERR: invalid container size: have 27, want 26
+OK
+OK
+OK
+OK
+OK
+OK
+ERR: undefined instruction: op EXTCODESIZE, pos 1
+ERR: undefined instruction: op EXTCODEHASH, pos 1
+OK
+OK
+OK
+OK
+OK
+ERR: undefined instruction: op JUMP, pos 1
+OK
+OK
+OK
+ERR: undefined instruction: op SELFDESTRUCT, pos 1
+OK
+ERR: invalid code termination: end with PUSH2, pos 3
+ERR: invalid code termination: end with DATALOADN, pos 3
+ERR: invalid code termination: end with ADD, pos 3
+ERR: invalid code termination: end with MUL, pos 3
+ERR: invalid code termination: end with SUB, pos 3
+ERR: invalid code termination: end with DIV, pos 3
+ERR: invalid code termination: end with SDIV, pos 3
+ERR: invalid code termination: end with MOD, pos 3
+ERR: invalid code termination: end with SMOD, pos 3
+ERR: invalid code termination: end with EXP, pos 3
+ERR: invalid code termination: end with SIGNEXTEND, pos 3
+ERR: invalid code termination: end with LT, pos 3
+ERR: invalid code termination: end with GT, pos 3
+ERR: invalid code termination: end with SLT, pos 3
+ERR: invalid code termination: end with SGT, pos 3
+ERR: invalid code termination: end with EQ, pos 3
+ERR: invalid code termination: end with AND, pos 3
+ERR: invalid code termination: end with OR, pos 3
+ERR: invalid code termination: end with XOR, pos 3
+ERR: invalid code termination: end with BYTE, pos 3
+ERR: invalid code termination: end with SHL, pos 3
+ERR: invalid code termination: end with SHR, pos 3
+ERR: invalid code termination: end with SAR, pos 3
+ERR: invalid code termination: end with KECCAK256, pos 3
+ERR: invalid code termination: end with MSTORE, pos 3
+ERR: invalid code termination: end with MSTORE8, pos 3
+ERR: invalid code termination: end with SSTORE, pos 3
+ERR: invalid code termination: end with TSTORE, pos 3
+ERR: invalid code termination: end with SWAP1, pos 3
+ERR: invalid code termination: end with LOG0, pos 3
+OK
+OK
+OK
+ERR: invalid code termination: end with DUPN, pos 3
+ERR: invalid code termination: end with DUP2, pos 3
+OK
+ERR: incompatible container kind
+ERR: invalid jump destination: out-of-bounds offset: offset 1, dest 4, pos 1
+ERR: unreachable code
+ERR: invalid jump destination: offset into immediate: offset -2, dest 1, pos 1
+ERR: invalid jump destination: offset into immediate: offset -1, dest 2, pos 1
+OK
+ERR: truncated immediate: op RJUMPI, pos 2
+ERR: truncated immediate: op RJUMPV, pos 2
+ERR: stack underflow (0 <=> 1): at pos 0
+ERR: unreachable code
+ERR: unreachable code
+ERR: unreachable code
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: stack underflow (2 <=> 3): at pos 2
+ERR: stack underflow (2 <=> 3): at pos 2
+ERR: stack underflow (2 <=> 3): at pos 2
+ERR: stack underflow (2 <=> 3): at pos 2
+ERR: stack underflow (2 <=> 3): at pos 2
+ERR: stack underflow (2 <=> 3): at pos 2
+ERR: stack underflow (2 <=> 3): at pos 2
+ERR: stack underflow (2 <=> 3): at pos 2
+ERR: stack underflow (2 <=> 3): at pos 2
+ERR: stack underflow (2 <=> 3): at pos 2
+ERR: stack underflow (2 <=> 3): at pos 2
+OK
+OK
+OK
+ERR: invalid code termination: end with PUSH3, pos 4
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+ERR: undefined instruction: op JUMPI, pos 2
+OK
+OK
+OK
+ERR: invalid code termination: end with SWAPN, pos 4
+OK
+ERR: invalid code termination: end with ADDMOD, pos 4
+ERR: invalid code termination: end with MULMOD, pos 4
+ERR: invalid code termination: end with CALLDATACOPY, pos 4
+ERR: invalid code termination: end with RETURNDATACOPY, pos 4
+ERR: invalid code termination: end with MCOPY, pos 4
+ERR: invalid code termination: end with SWAP2, pos 4
+ERR: invalid code termination: end with LOG1, pos 4
+ERR: invalid code termination: end with DATACOPY, pos 4
+ERR: invalid code termination: end with EXTDELEGATECALL, pos 4
+ERR: invalid code termination: end with EXTSTATICCALL, pos 4
+OK
+ERR: invalid code termination: end with DUP3, pos 4
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 0
+ERR: unreachable code
+ERR: invalid max stack height
+OK
+ERR: truncated immediate: op RJUMPV, pos 2
+ERR: invalid dataloadN argument: arg 65503, last 0, pos 0
+ERR: stack underflow (0 <=> 1): at pos 0
+ERR: stack underflow (2 <=> 3): at pos 2
+ERR: stack underflow (3 <=> 4): at pos 3
+ERR: stack underflow (3 <=> 4): at pos 3
+ERR: stack underflow (3 <=> 4): at pos 3
+ERR: stack underflow (3 <=> 4): at pos 3
+OK
+OK
+ERR: invalid code termination: end with PUSH4, pos 5
+OK
+OK
+OK
+OK
+ERR: undefined instruction: op CODECOPY, pos 3
+OK
+OK
+OK
+OK
+OK
+ERR: invalid code termination: end with EXCHANGE, pos 5
+ERR: undefined instruction: op CREATE, pos 3
+OK
+OK
+ERR: invalid code termination: end with SWAP3, pos 5
+ERR: invalid code termination: end with LOG2, pos 5
+ERR: invalid code termination: end with EXTCALL, pos 5
+OK
+ERR: invalid code termination: end with DUP4, pos 5
+OK
+OK
+OK
+ERR: invalid dataloadN argument: arg 65503, last 128, pos 0
+ERR: invalid dataloadN argument: arg 65503, last 32767, pos 0
+ERR: invalid container size: have 50, want 49
+ERR: subcontainer not referenced at all
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: truncated top level container
+ERR: subcontainer not referenced at all
+ERR: invalid container size: have 50, want 51
+ERR: stack underflow (3 <=> 4): at pos 3
+ERR: invalid code termination: end with EOFCREATE, pos 6
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: subcontainer not referenced at all
+ERR: subcontainer not referenced at all
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid max stack height
+ERR: invalid jump destination: offset into immediate: offset -4, dest 1, pos 3
+ERR: invalid jump destination: out-of-bounds offset: offset 1, dest 6, pos 3
+ERR: invalid jump destination: out-of-bounds offset: offset 2, dest 7, pos 3
+ERR: invalid jump destination: out-of-bounds offset: offset -25, dest -20, pos 3
+ERR: invalid jump destination: out-of-bounds offset: offset -7, dest -2, pos 3
+ERR: invalid jump destination: offset into immediate: offset -4, dest 1, pos 3
+ERR: invalid backward jump want 0 as current max got 1 at pos 2,
+ERR: invalid jump destination: offset into immediate: offset -2, dest 3, pos 3
+ERR: invalid jump destination: offset into immediate: offset -1, dest 4, pos 3
+ERR: invalid jump destination: out-of-bounds offset: offset 0, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset -5, dest 1, pos 4
+ERR: invalid jump destination: offset into immediate: offset -4, dest 2, pos 4
+ERR: stack underflow (1 <=> 2): at pos 3
+ERR: stack underflow (1 <=> 3): at pos 3
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: stack underflow (0 <=> 1): at pos 4
+OK
+ERR: incompatible container kind
+ERR: unreachable code
+ERR: unreachable code
+ERR: unreachable code
+ERR: stack underflow (1 <=> 2): at pos 3
+ERR: stack underflow (4 <=> 5): at pos 4
+ERR: stack underflow (4 <=> 5): at pos 4
+ERR: stack underflow (4 <=> 5): at pos 4
+ERR: invalid jump destination: out-of-bounds offset: offset 2, dest 7, pos 3
+OK
+OK
+ERR: invalid code termination: end with PUSH5, pos 6
+OK
+ERR: undefined instruction: op EXTCODECOPY, pos 4
+OK
+OK
+ERR: undefined instruction: op CREATE2, pos 4
+OK
+ERR: invalid code termination: end with SWAP4, pos 6
+ERR: invalid code termination: end with LOG3, pos 6
+OK
+ERR: invalid code termination: end with DUP5, pos 6
+OK
+OK
+ERR: invalid code termination: end with PUSH0, pos 1
+ERR: invalid magic: want ef00 in sub container 0
+ERR: invalid jump destination: out-of-bounds offset: offset 1, dest 7, pos 4
+ERR: invalid jump destination: out-of-bounds offset: offset 2, dest 8, pos 4
+ERR: invalid jump destination: out-of-bounds offset: offset -15, dest -9, pos 4
+ERR: invalid jump destination: out-of-bounds offset: offset -7, dest -1, pos 4
+ERR: invalid jump destination: offset into immediate: offset -5, dest 1, pos 4
+ERR: invalid backward jump want 0 as current max got 1 at pos 2,
+ERR: invalid jump destination: offset into immediate: offset -3, dest 3, pos 4
+ERR: invalid jump destination: offset into immediate: offset -1, dest 5, pos 4
+ERR: invalid jump destination: out-of-bounds offset: offset 0, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset -5, dest 1, pos 4
+ERR: invalid jump destination: offset into immediate: offset -4, dest 2, pos 4
+ERR: stack underflow (1 <=> 3): at pos 3
+ERR: invalid jump destination: offset into immediate: offset -6, dest 1, pos 5
+ERR: invalid jump destination: offset into immediate: offset -4, dest 3, pos 5
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 5, pos 1
+ERR: stack underflow (0 <=> 1): at pos 5
+ERR: stack underflow (0 <=> 1): at pos 5
+OK
+ERR: stack underflow (5 <=> 6): at pos 5
+ERR: stack underflow (5 <=> 6): at pos 5
+ERR: stack underflow (5 <=> 6): at pos 5
+ERR: invalid jump destination: out-of-bounds offset: offset 2, dest 8, pos 4
+OK
+ERR: invalid code termination: end with PUSH6, pos 7
+OK
+OK
+ERR: invalid code termination: end with SWAP5, pos 7
+ERR: invalid code termination: end with LOG4, pos 7
+OK
+ERR: invalid code termination: end with DUP6, pos 7
+OK
+ERR: invalid jump destination: offset into immediate: offset -6, dest 1, pos 5
+ERR: invalid jump destination: offset into immediate: offset -5, dest 2, pos 5
+ERR: invalid jump destination: offset into immediate: offset -6, dest 1, pos 5
+ERR: invalid jump destination: offset into immediate: offset -4, dest 3, pos 5
+ERR: invalid jump destination: offset into immediate: offset -7, dest 1, pos 6
+ERR: invalid jump destination: offset into immediate: offset -4, dest 4, pos 6
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 3, dest 6, pos 1
+ERR: stack underflow (0 <=> 1): at pos 6
+ERR: invalid backward jump want 1 as current max got 0 at pos 4,
+ERR: stack underflow (6 <=> 7): at pos 6
+ERR: stack underflow (6 <=> 7): at pos 6
+OK
+ERR: invalid code termination: end with PUSH7, pos 8
+OK
+OK
+ERR: undefined instruction: op DELEGATECALL, pos 6
+ERR: undefined instruction: op STATICCALL, pos 6
+ERR: invalid code termination: end with SWAP6, pos 8
+OK
+ERR: invalid code termination: end with DUP7, pos 8
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 2, dest 7, pos 3
+ERR: invalid jump destination: offset into immediate: offset 3, dest 8, pos 3
+ERR: invalid jump destination: offset into immediate: offset -7, dest 1, pos 6
+ERR: invalid jump destination: offset into immediate: offset -5, dest 3, pos 6
+ERR: invalid jump destination: offset into immediate: offset -7, dest 1, pos 6
+ERR: invalid jump destination: offset into immediate: offset -4, dest 4, pos 6
+ERR: invalid jump destination: offset into immediate: offset -8, dest 1, pos 7
+ERR: invalid jump destination: offset into immediate: offset -4, dest 5, pos 7
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 4, dest 7, pos 1
+ERR: invalid backward jump want 1 as current max got 0 at pos 4,
+ERR: stack underflow (7 <=> 8): at pos 7
+ERR: stack underflow (7 <=> 8): at pos 7
+OK
+ERR: invalid code termination: end with PUSH8, pos 9
+OK
+ERR: undefined instruction: op CALL, pos 7
+ERR: undefined instruction: op CALLCODE, pos 7
+ERR: invalid code termination: end with SWAP7, pos 9
+OK
+ERR: invalid code termination: end with DUP8, pos 9
+ERR: unreachable code
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 3, dest 8, pos 3
+ERR: invalid jump destination: offset into immediate: offset -8, dest 1, pos 7
+ERR: invalid jump destination: offset into immediate: offset -5, dest 4, pos 7
+ERR: invalid jump destination: offset into immediate: offset -8, dest 1, pos 7
+ERR: invalid jump destination: offset into immediate: offset -4, dest 5, pos 7
+ERR: invalid jump destination: offset into immediate: offset -9, dest 1, pos 8
+ERR: invalid jump destination: offset into immediate: offset -4, dest 6, pos 8
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 5, dest 8, pos 1
+ERR: invalid jump destination: offset into immediate: offset 5, dest 8, pos 1
+ERR: stack underflow (0 <=> 1): at pos 8
+OK
+ERR: stack underflow (8 <=> 9): at pos 8
+ERR: stack underflow (8 <=> 9): at pos 8
+OK
+ERR: invalid code termination: end with PUSH9, pos 10
+OK
+ERR: invalid code termination: end with SWAP8, pos 10
+OK
+ERR: invalid code termination: end with DUP9, pos 10
+ERR: invalid magic: want ef00 in sub container 0
+ERR: invalid container size: have 55, want 54
+ERR: missing data header: found section 3 instead
+ERR: incompatible container kind
+OK
+ERR: invalid container size: have 35, want 55
+ERR: invalid version: have 0, want 1 in sub container 0
+OK
+ERR: invalid version: have 255, want 1 in sub container 0
+ERR: unreachable code: arg 1, last 1, pos 8
+ERR: unreachable code: arg 255, last 1, pos 8
+OK
+ERR: invalid magic: want ef00 in sub container 0
+ERR: invalid container size: have 55, want 56
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid jump destination: offset into immediate: offset 5, dest 8, pos 1
+ERR: invalid jump destination: offset into immediate: offset 5, dest 9, pos 2
+ERR: invalid jump destination: offset into immediate: offset 5, dest 11, pos 4
+ERR: invalid jump destination: offset into immediate: offset 5, dest 521, pos 514
+ERR: invalid jump destination: offset into immediate: offset 5, dest 521, pos 4
+ERR: subcontainer not referenced at all
+ERR: subcontainer not referenced at all
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 3, dest 9, pos 4
+ERR: invalid jump destination: offset into immediate: offset -9, dest 1, pos 8
+ERR: invalid jump destination: offset into immediate: offset -5, dest 5, pos 8
+ERR: invalid jump destination: offset into immediate: offset -9, dest 1, pos 8
+ERR: invalid jump destination: offset into immediate: offset -4, dest 6, pos 8
+ERR: invalid jump destination: offset into immediate: offset -10, dest 1, pos 9
+ERR: invalid jump destination: offset into immediate: offset -4, dest 7, pos 9
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: unreachable code
+ERR: invalid jump destination: offset into immediate: offset 4, dest 7, pos 1
+ERR: invalid jump destination: offset into immediate: offset 6, dest 9, pos 1
+ERR: invalid jump destination: offset into immediate: offset 6, dest 9, pos 1
+ERR: invalid code termination: end with RJUMPI, pos 11
+ERR: stack underflow (2 <=> 3): at pos 6
+ERR: stack underflow (1 <=> 2): at pos 10
+ERR: invalid jump destination: offset into immediate: offset 1, dest 8, pos 5
+ERR: invalid jump destination: offset into immediate: offset 1, dest 8, pos 5
+ERR: stack underflow (9 <=> 10): at pos 9
+ERR: stack underflow (9 <=> 10): at pos 9
+OK
+ERR: invalid code termination: end with PUSH10, pos 11
+OK
+ERR: invalid code termination: end with SWAP9, pos 11
+OK
+ERR: invalid code termination: end with DUP10, pos 11
+ERR: incompatible container kind
+ERR: invalid container size: have 21, want 20 in sub container 0
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 5, dest 10, pos 3
+ERR: invalid jump destination: offset into immediate: offset 5, dest 10, pos 3
+ERR: invalid jump destination: offset into immediate: offset -10, dest 1, pos 9
+ERR: invalid jump destination: offset into immediate: offset -5, dest 6, pos 9
+ERR: invalid jump destination: offset into immediate: offset -10, dest 1, pos 9
+ERR: invalid jump destination: offset into immediate: offset -4, dest 7, pos 9
+ERR: invalid jump destination: offset into immediate: offset -11, dest 1, pos 10
+ERR: invalid jump destination: offset into immediate: offset -4, dest 8, pos 10
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: unreachable code
+ERR: invalid jump destination: offset into immediate: offset 7, dest 10, pos 1
+OK
+ERR: stack underflow (10 <=> 11): at pos 10
+ERR: stack underflow (10 <=> 11): at pos 10
+OK
+ERR: invalid code termination: end with PUSH11, pos 12
+OK
+ERR: invalid code termination: end with SWAP10, pos 12
+OK
+ERR: invalid code termination: end with DUP11, pos 12
+ERR: invalid container size: have 90, want 40
+ERR: invalid container size: have 90, want 42
+ERR: invalid container size: have 90, want 87
+ERR: invalid container size: have 90, want 89
+OK
+ERR: truncated top level container
+ERR: truncated top level container
+ERR: truncated top level container
+ERR: invalid container size: have 90, want 140
+ERR: invalid container size: have 90, want 32808
+ERR: invalid container size: have 90, want 65575
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 6, dest 11, pos 3
+ERR: invalid jump destination: offset into immediate: offset 6, dest 11, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 10, pos 4
+ERR: invalid jump destination: offset into immediate: offset 5, dest 11, pos 4
+ERR: invalid jump destination: offset into immediate: offset -11, dest 1, pos 10
+ERR: invalid jump destination: offset into immediate: offset -5, dest 7, pos 10
+ERR: invalid jump destination: offset into immediate: offset -11, dest 1, pos 10
+ERR: invalid jump destination: offset into immediate: offset -4, dest 8, pos 10
+ERR: invalid jump destination: offset into immediate: offset -12, dest 1, pos 11
+ERR: invalid jump destination: offset into immediate: offset -4, dest 9, pos 11
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 8, dest 11, pos 1
+OK
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: stack underflow (1 <=> 2): at pos 12
+ERR: invalid backward jump want 1 as current min got 2 at pos 9,
+ERR: invalid jump destination: offset into immediate: offset 1, dest 10, pos 7
+ERR: invalid jump destination: offset into immediate: offset 1, dest 10, pos 7
+ERR: invalid jump destination: offset into immediate: offset 1, dest 10, pos 7
+ERR: stack underflow (11 <=> 12): at pos 11
+ERR: stack underflow (11 <=> 12): at pos 11
+OK
+ERR: invalid code termination: end with PUSH12, pos 13
+OK
+ERR: invalid code termination: end with SWAP11, pos 13
+OK
+ERR: invalid code termination: end with DUP12, pos 13
+ERR: invalid magic: want ef00 in sub container 0
+ERR: invalid magic: want ef00 in sub container 0
+ERR: invalid type content, too many inputs for section 0: have 239
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 7, dest 12, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 10, pos 4
+ERR: invalid jump destination: offset into immediate: offset 6, dest 12, pos 4
+ERR: invalid jump destination: offset into immediate: offset -12, dest 1, pos 11
+ERR: invalid jump destination: offset into immediate: offset -5, dest 8, pos 11
+ERR: invalid jump destination: offset into immediate: offset -12, dest 1, pos 11
+ERR: invalid jump destination: offset into immediate: offset -4, dest 9, pos 11
+ERR: invalid jump destination: offset into immediate: offset -13, dest 1, pos 12
+ERR: invalid jump destination: offset into immediate: offset -4, dest 10, pos 12
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 9, dest 12, pos 1
+ERR: invalid code termination: end with RJUMPV, pos 14
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 3, dest 9, pos 4
+ERR: invalid backward jump want 1 as current min got 2 at pos 9,
+ERR: invalid backward jump want 1 as current min got 2 at pos 10,
+ERR: invalid jump destination: offset into immediate: offset 1, dest 11, pos 8
+ERR: invalid jump destination: offset into immediate: offset 1, dest 11, pos 8
+ERR: stack underflow (12 <=> 13): at pos 12
+ERR: stack underflow (12 <=> 13): at pos 12
+ERR: missing header terminator: have 3
+ERR: missing header terminator: have 3
+OK
+ERR: invalid code termination: end with PUSH13, pos 14
+OK
+ERR: invalid code termination: end with SWAP12, pos 14
+OK
+ERR: invalid code termination: end with DUP13, pos 14
+ERR: invalid jump destination: offset into immediate: offset 9, dest 13, pos 2
+ERR: incompatible container kind
+OK
+OK
+ERR: initcode contains a RETURN or STOP opcode
+OK
+OK
+ERR: initcode contains a RETURN or STOP opcode
+OK
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 8, dest 13, pos 3
+ERR: invalid jump destination: offset into immediate: offset -13, dest 1, pos 12
+ERR: invalid jump destination: offset into immediate: offset -5, dest 9, pos 12
+ERR: invalid jump destination: offset into immediate: offset -13, dest 1, pos 12
+ERR: invalid jump destination: offset into immediate: offset -4, dest 10, pos 12
+ERR: invalid jump destination: offset into immediate: offset -14, dest 1, pos 13
+ERR: invalid jump destination: offset into immediate: offset -4, dest 11, pos 13
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 10, dest 13, pos 1
+OK
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 4, dest 10, pos 4
+ERR: invalid backward jump want 1 as current min got 2 at pos 10,
+ERR: invalid jump destination: offset into immediate: offset 1, dest 12, pos 9
+ERR: stack underflow (13 <=> 14): at pos 13
+ERR: stack underflow (13 <=> 14): at pos 13
+OK
+ERR: invalid code termination: end with PUSH14, pos 15
+OK
+ERR: invalid code termination: end with SWAP13, pos 15
+OK
+ERR: invalid code termination: end with DUP14, pos 15
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 9, dest 14, pos 3
+ERR: invalid jump destination: offset into immediate: offset -14, dest 1, pos 13
+ERR: invalid jump destination: offset into immediate: offset -5, dest 10, pos 13
+ERR: invalid jump destination: offset into immediate: offset -14, dest 1, pos 13
+ERR: invalid jump destination: offset into immediate: offset -4, dest 11, pos 13
+ERR: invalid jump destination: offset into immediate: offset -15, dest 1, pos 14
+ERR: invalid jump destination: offset into immediate: offset -4, dest 12, pos 14
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 11, dest 14, pos 1
+OK
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 5, dest 11, pos 4
+ERR: invalid jump destination: offset into immediate: offset 1, dest 13, pos 10
+ERR: stack underflow (14 <=> 15): at pos 14
+ERR: stack underflow (14 <=> 15): at pos 14
+OK
+ERR: invalid code termination: end with PUSH15, pos 16
+OK
+ERR: invalid code termination: end with SWAP14, pos 16
+OK
+ERR: invalid code termination: end with DUP15, pos 16
+ERR: incompatible container kind
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+OK
+OK
+ERR: invalid jump destination: offset into immediate: offset 9, dest 15, pos 4
+ERR: invalid container size: have 51, want 50 in sub container 0
+ERR: incompatible container kind
+ERR: subcontainer not referenced at all
+ERR: subcontainer not referenced at all
+ERR: subcontainer not referenced at all
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 10, dest 15, pos 3
+ERR: invalid jump destination: offset into immediate: offset -15, dest 1, pos 14
+ERR: invalid jump destination: offset into immediate: offset -5, dest 11, pos 14
+ERR: invalid jump destination: offset into immediate: offset -15, dest 1, pos 14
+ERR: invalid jump destination: offset into immediate: offset -4, dest 12, pos 14
+ERR: invalid jump destination: offset into immediate: offset -16, dest 1, pos 15
+ERR: invalid jump destination: offset into immediate: offset -4, dest 13, pos 15
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 12, dest 15, pos 1
+OK
+OK
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 6, dest 12, pos 4
+ERR: stack underflow (15 <=> 16): at pos 15
+ERR: stack underflow (15 <=> 16): at pos 15
+ERR: invalid max stack height
+OK
+OK
+ERR: invalid code termination: end with PUSH16, pos 17
+OK
+ERR: invalid code termination: end with SWAP15, pos 17
+OK
+ERR: invalid code termination: end with DUP16, pos 17
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 11, dest 16, pos 3
+ERR: invalid jump destination: offset into immediate: offset -16, dest 1, pos 15
+ERR: invalid jump destination: offset into immediate: offset -5, dest 12, pos 15
+ERR: invalid jump destination: offset into immediate: offset -16, dest 1, pos 15
+ERR: invalid jump destination: offset into immediate: offset -4, dest 13, pos 15
+ERR: invalid jump destination: offset into immediate: offset -17, dest 1, pos 16
+ERR: invalid jump destination: offset into immediate: offset -4, dest 14, pos 16
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 13, dest 16, pos 1
+OK
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 7, dest 13, pos 4
+ERR: stack underflow (16 <=> 17): at pos 16
+OK
+ERR: invalid code termination: end with PUSH17, pos 18
+OK
+ERR: invalid code termination: end with SWAP16, pos 18
+OK
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 12, dest 17, pos 3
+ERR: invalid jump destination: offset into immediate: offset -17, dest 1, pos 16
+ERR: invalid jump destination: offset into immediate: offset -5, dest 13, pos 16
+ERR: invalid jump destination: offset into immediate: offset -17, dest 1, pos 16
+ERR: invalid jump destination: offset into immediate: offset -4, dest 14, pos 16
+ERR: invalid jump destination: offset into immediate: offset -18, dest 1, pos 17
+ERR: invalid jump destination: offset into immediate: offset -4, dest 15, pos 17
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 14, dest 17, pos 1
+ERR: stack underflow (1 <=> 2): at pos 17
+OK
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 8, dest 14, pos 4
+OK
+ERR: invalid code termination: end with PUSH18, pos 19
+OK
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 13, dest 18, pos 3
+ERR: invalid jump destination: offset into immediate: offset -18, dest 1, pos 17
+ERR: invalid jump destination: offset into immediate: offset -5, dest 14, pos 17
+ERR: invalid jump destination: offset into immediate: offset -18, dest 1, pos 17
+ERR: invalid jump destination: offset into immediate: offset -4, dest 15, pos 17
+ERR: invalid jump destination: offset into immediate: offset -19, dest 1, pos 18
+ERR: invalid jump destination: offset into immediate: offset -4, dest 16, pos 18
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 15, dest 18, pos 1
+OK
+OK
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 9, dest 15, pos 4
+OK
+ERR: invalid code termination: end with PUSH19, pos 20
+ERR: missing data header: found section 3 instead
+ERR: missing header terminator: have 3
+OK
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 14, dest 19, pos 3
+ERR: invalid jump destination: offset into immediate: offset -19, dest 1, pos 18
+ERR: invalid jump destination: offset into immediate: offset -5, dest 15, pos 18
+ERR: invalid jump destination: offset into immediate: offset -19, dest 1, pos 18
+ERR: invalid jump destination: offset into immediate: offset -4, dest 16, pos 18
+ERR: invalid jump destination: offset into immediate: offset -20, dest 1, pos 19
+ERR: invalid jump destination: offset into immediate: offset -4, dest 17, pos 19
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 16, dest 19, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 10, dest 16, pos 4
+OK
+ERR: invalid code termination: end with PUSH20, pos 21
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 15, dest 20, pos 3
+ERR: invalid jump destination: offset into immediate: offset -20, dest 1, pos 19
+ERR: invalid jump destination: offset into immediate: offset -5, dest 16, pos 19
+ERR: invalid jump destination: offset into immediate: offset -20, dest 1, pos 19
+ERR: invalid jump destination: offset into immediate: offset -4, dest 17, pos 19
+ERR: invalid jump destination: offset into immediate: offset -21, dest 1, pos 20
+ERR: invalid jump destination: offset into immediate: offset -4, dest 18, pos 20
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 17, dest 20, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 11, dest 17, pos 4
+OK
+ERR: invalid code termination: end with PUSH21, pos 22
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 16, dest 21, pos 3
+OK
+ERR: invalid jump destination: offset into immediate: offset -21, dest 1, pos 20
+ERR: invalid jump destination: offset into immediate: offset -5, dest 17, pos 20
+ERR: invalid jump destination: offset into immediate: offset -21, dest 1, pos 20
+ERR: invalid jump destination: offset into immediate: offset -4, dest 18, pos 20
+ERR: invalid jump destination: offset into immediate: offset -22, dest 1, pos 21
+ERR: invalid jump destination: offset into immediate: offset -4, dest 19, pos 21
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 18, dest 21, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 12, dest 18, pos 4
+OK
+ERR: invalid code termination: end with PUSH22, pos 23
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 17, dest 22, pos 3
+ERR: invalid jump destination: offset into immediate: offset -22, dest 1, pos 21
+ERR: invalid jump destination: offset into immediate: offset -5, dest 18, pos 21
+ERR: invalid jump destination: offset into immediate: offset -22, dest 1, pos 21
+ERR: invalid jump destination: offset into immediate: offset -4, dest 19, pos 21
+ERR: invalid jump destination: offset into immediate: offset -23, dest 1, pos 22
+ERR: invalid jump destination: offset into immediate: offset -4, dest 20, pos 22
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 19, dest 22, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 13, dest 19, pos 4
+OK
+ERR: invalid code termination: end with PUSH23, pos 24
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 18, dest 23, pos 3
+OK
+ERR: invalid jump destination: offset into immediate: offset -23, dest 1, pos 22
+ERR: invalid jump destination: offset into immediate: offset -5, dest 19, pos 22
+ERR: invalid jump destination: offset into immediate: offset -23, dest 1, pos 22
+ERR: invalid jump destination: offset into immediate: offset -4, dest 20, pos 22
+ERR: invalid jump destination: offset into immediate: offset -24, dest 1, pos 23
+ERR: invalid jump destination: offset into immediate: offset -4, dest 21, pos 23
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 20, dest 23, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 14, dest 20, pos 4
+OK
+ERR: invalid code termination: end with PUSH24, pos 25
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 19, dest 24, pos 3
+ERR: invalid jump destination: offset into immediate: offset -24, dest 1, pos 23
+ERR: invalid jump destination: offset into immediate: offset -5, dest 20, pos 23
+ERR: invalid jump destination: offset into immediate: offset -24, dest 1, pos 23
+ERR: invalid jump destination: offset into immediate: offset -4, dest 21, pos 23
+ERR: invalid jump destination: offset into immediate: offset -25, dest 1, pos 24
+ERR: invalid jump destination: offset into immediate: offset -4, dest 22, pos 24
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 21, dest 24, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 15, dest 21, pos 4
+OK
+ERR: invalid code termination: end with PUSH25, pos 26
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 20, dest 25, pos 3
+ERR: invalid jump destination: offset into immediate: offset -25, dest 1, pos 24
+ERR: invalid jump destination: offset into immediate: offset -5, dest 21, pos 24
+ERR: invalid jump destination: offset into immediate: offset -25, dest 1, pos 24
+ERR: invalid jump destination: offset into immediate: offset -4, dest 22, pos 24
+ERR: invalid jump destination: offset into immediate: offset -26, dest 1, pos 25
+ERR: invalid jump destination: offset into immediate: offset -4, dest 23, pos 25
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 22, dest 25, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 16, dest 22, pos 4
+OK
+ERR: invalid code termination: end with PUSH26, pos 27
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 21, dest 26, pos 3
+ERR: invalid jump destination: offset into immediate: offset -26, dest 1, pos 25
+ERR: invalid jump destination: offset into immediate: offset -5, dest 22, pos 25
+ERR: invalid jump destination: offset into immediate: offset -26, dest 1, pos 25
+ERR: invalid jump destination: offset into immediate: offset -4, dest 23, pos 25
+ERR: invalid jump destination: offset into immediate: offset -27, dest 1, pos 26
+ERR: invalid jump destination: offset into immediate: offset -4, dest 24, pos 26
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 23, dest 26, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 17, dest 23, pos 4
+OK
+ERR: invalid code termination: end with PUSH27, pos 28
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 22, dest 27, pos 3
+ERR: invalid jump destination: offset into immediate: offset -27, dest 1, pos 26
+ERR: invalid jump destination: offset into immediate: offset -5, dest 23, pos 26
+ERR: invalid jump destination: offset into immediate: offset -27, dest 1, pos 26
+ERR: invalid jump destination: offset into immediate: offset -4, dest 24, pos 26
+ERR: invalid jump destination: offset into immediate: offset -28, dest 1, pos 27
+ERR: invalid jump destination: offset into immediate: offset -4, dest 25, pos 27
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 24, dest 27, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 18, dest 24, pos 4
+OK
+ERR: invalid code termination: end with PUSH28, pos 29
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 23, dest 28, pos 3
+ERR: invalid jump destination: offset into immediate: offset -28, dest 1, pos 27
+ERR: invalid jump destination: offset into immediate: offset -5, dest 24, pos 27
+ERR: invalid jump destination: offset into immediate: offset -28, dest 1, pos 27
+ERR: invalid jump destination: offset into immediate: offset -4, dest 25, pos 27
+ERR: invalid jump destination: offset into immediate: offset -29, dest 1, pos 28
+ERR: invalid jump destination: offset into immediate: offset -4, dest 26, pos 28
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 25, dest 28, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 19, dest 25, pos 4
+OK
+ERR: invalid code termination: end with PUSH29, pos 30
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 24, dest 29, pos 3
+ERR: invalid jump destination: offset into immediate: offset -29, dest 1, pos 28
+ERR: invalid jump destination: offset into immediate: offset -5, dest 25, pos 28
+ERR: invalid jump destination: offset into immediate: offset -29, dest 1, pos 28
+ERR: invalid jump destination: offset into immediate: offset -4, dest 26, pos 28
+ERR: invalid jump destination: offset into immediate: offset -30, dest 1, pos 29
+ERR: invalid jump destination: offset into immediate: offset -4, dest 27, pos 29
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 26, dest 29, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 20, dest 26, pos 4
+OK
+ERR: invalid code termination: end with PUSH30, pos 31
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 25, dest 30, pos 3
+ERR: invalid jump destination: offset into immediate: offset -30, dest 1, pos 29
+ERR: invalid jump destination: offset into immediate: offset -5, dest 26, pos 29
+ERR: invalid jump destination: offset into immediate: offset -30, dest 1, pos 29
+ERR: invalid jump destination: offset into immediate: offset -4, dest 27, pos 29
+ERR: invalid jump destination: offset into immediate: offset -31, dest 1, pos 30
+ERR: invalid jump destination: offset into immediate: offset -4, dest 28, pos 30
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 27, dest 30, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 21, dest 27, pos 4
+OK
+ERR: invalid code termination: end with PUSH31, pos 32
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 26, dest 31, pos 3
+ERR: invalid jump destination: offset into immediate: offset -31, dest 1, pos 30
+ERR: invalid jump destination: offset into immediate: offset -5, dest 27, pos 30
+ERR: invalid jump destination: offset into immediate: offset -31, dest 1, pos 30
+ERR: invalid jump destination: offset into immediate: offset -4, dest 28, pos 30
+ERR: invalid jump destination: offset into immediate: offset -32, dest 1, pos 31
+ERR: invalid jump destination: offset into immediate: offset -4, dest 29, pos 31
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 28, dest 31, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 22, dest 28, pos 4
+OK
+ERR: invalid code termination: end with PUSH32, pos 33
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 27, dest 32, pos 3
+ERR: invalid jump destination: offset into immediate: offset -32, dest 1, pos 31
+ERR: invalid jump destination: offset into immediate: offset -5, dest 28, pos 31
+ERR: invalid jump destination: offset into immediate: offset -32, dest 1, pos 31
+ERR: invalid jump destination: offset into immediate: offset -4, dest 29, pos 31
+ERR: invalid jump destination: offset into immediate: offset -33, dest 1, pos 32
+ERR: invalid jump destination: offset into immediate: offset -4, dest 30, pos 32
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 29, dest 32, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 23, dest 29, pos 4
+OK
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 28, dest 33, pos 3
+ERR: invalid jump destination: offset into immediate: offset -33, dest 1, pos 32
+ERR: invalid jump destination: offset into immediate: offset -5, dest 29, pos 32
+ERR: invalid jump destination: offset into immediate: offset -33, dest 1, pos 32
+ERR: invalid jump destination: offset into immediate: offset -4, dest 30, pos 32
+ERR: invalid jump destination: offset into immediate: offset -34, dest 1, pos 33
+ERR: invalid jump destination: offset into immediate: offset -4, dest 31, pos 33
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 30, dest 33, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 24, dest 30, pos 4
+ERR: stack underflow (32 <=> 33): at pos 32
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 29, dest 34, pos 3
+ERR: invalid jump destination: offset into immediate: offset -34, dest 1, pos 33
+ERR: invalid jump destination: offset into immediate: offset -5, dest 30, pos 33
+ERR: invalid jump destination: offset into immediate: offset -34, dest 1, pos 33
+ERR: invalid jump destination: offset into immediate: offset -4, dest 31, pos 33
+ERR: invalid jump destination: offset into immediate: offset -35, dest 1, pos 34
+ERR: invalid jump destination: offset into immediate: offset -4, dest 32, pos 34
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 31, dest 34, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 25, dest 31, pos 4
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 30, dest 35, pos 3
+ERR: invalid jump destination: offset into immediate: offset -35, dest 1, pos 34
+ERR: invalid jump destination: offset into immediate: offset -5, dest 31, pos 34
+ERR: invalid jump destination: offset into immediate: offset -35, dest 1, pos 34
+ERR: invalid jump destination: offset into immediate: offset -4, dest 32, pos 34
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 32, dest 35, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 26, dest 32, pos 4
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 31, dest 36, pos 3
+ERR: invalid jump destination: offset into immediate: offset -36, dest 1, pos 35
+ERR: invalid jump destination: offset into immediate: offset -5, dest 32, pos 35
+OK
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 27, dest 33, pos 4
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 32, dest 37, pos 3
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 28, dest 34, pos 4
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 29, dest 35, pos 4
+ERR: invalid container size: have 20, want 60
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 30, dest 36, pos 4
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 31, dest 37, pos 4
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 32, dest 38, pos 4
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 33, dest 39, pos 4
+ERR: stack underflow (21 <=> 23): at pos 63
+ERR: stack underflow (17 <=> 18): at pos 51
+ERR: stack underflow (17 <=> 18): at pos 51
+ERR: invalid container size: have 90, want 177
+ERR: invalid non-returning flag, bad RETF: at pos 128
+ERR: stack underflow (32 <=> 33): at pos 96
+ERR: stack underflow (255 <=> 256): at pos 255
+ERR: stack underflow (256 <=> 257): at pos 256
+ERR: invalid jump destination: out-of-bounds offset: offset 0, dest 516, pos 4
+ERR: invalid jump destination: out-of-bounds offset: offset 0, dest 516, pos 4
+ERR: invalid jump destination: out-of-bounds offset: offset 1, dest 517, pos 514
+ERR: invalid jump destination: out-of-bounds offset: offset 2, dest 518, pos 514
+ERR: invalid jump destination: out-of-bounds offset: offset -525, dest -9, pos 514
+ERR: invalid jump destination: out-of-bounds offset: offset -517, dest -1, pos 514
+ERR: invalid jump destination: offset into immediate: offset -515, dest 1, pos 514
+ERR: invalid backward jump want 0 as current max got 1 at pos 2,
+ERR: invalid jump destination: offset into immediate: offset -513, dest 3, pos 514
+ERR: invalid jump destination: offset into immediate: offset -1, dest 515, pos 514
+ERR: invalid jump destination: out-of-bounds offset: offset 1, dest 517, pos 4
+ERR: invalid jump destination: out-of-bounds offset: offset 2, dest 518, pos 4
+ERR: invalid jump destination: out-of-bounds offset: offset -525, dest -9, pos 4
+ERR: invalid jump destination: out-of-bounds offset: offset -517, dest -1, pos 4
+ERR: invalid jump destination: offset into immediate: offset -515, dest 1, pos 4
+ERR: invalid backward jump want 0 as current max got 1 at pos 2,
+ERR: invalid jump destination: offset into immediate: offset -513, dest 3, pos 4
+ERR: invalid jump destination: offset into immediate: offset -1, dest 515, pos 4
+ERR: stack underflow (0 <=> 1): at pos 515
+ERR: invalid jump destination: out-of-bounds offset: offset 2, dest 518, pos 514
+ERR: invalid jump destination: out-of-bounds offset: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset -516, dest 1, pos 515
+ERR: invalid jump destination: offset into immediate: offset -515, dest 2, pos 515
+ERR: invalid jump destination: offset into immediate: offset -516, dest 1, pos 5
+ERR: invalid jump destination: offset into immediate: offset -515, dest 2, pos 5
+ERR: stack underflow (0 <=> 1): at pos 516
+ERR: stack underflow (0 <=> 1): at pos 516
+ERR: invalid jump destination: offset into immediate: offset -517, dest 1, pos 516
+ERR: invalid jump destination: offset into immediate: offset -515, dest 3, pos 516
+ERR: invalid jump destination: offset into immediate: offset -517, dest 1, pos 6
+ERR: invalid jump destination: offset into immediate: offset -515, dest 3, pos 6
+ERR: invalid backward jump want 1 as current max got 0 at pos 4,
+ERR: invalid backward jump want 1 as current max got 0 at pos 4,
+ERR: invalid jump destination: offset into immediate: offset -518, dest 1, pos 517
+ERR: invalid jump destination: offset into immediate: offset -515, dest 4, pos 517
+ERR: invalid jump destination: offset into immediate: offset -518, dest 1, pos 7
+ERR: invalid jump destination: offset into immediate: offset -515, dest 4, pos 7
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 3, dest 519, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 3, dest 519, pos 4
+ERR: invalid jump destination: offset into immediate: offset -519, dest 1, pos 518
+ERR: invalid jump destination: offset into immediate: offset -515, dest 5, pos 518
+ERR: invalid jump destination: offset into immediate: offset -519, dest 1, pos 8
+ERR: invalid jump destination: offset into immediate: offset -515, dest 5, pos 8
+ERR: invalid jump destination: offset into immediate: offset 4, dest 7, pos 1
+ERR: invalid jump destination: offset into immediate: offset 516, dest 519, pos 1
+ERR: invalid jump destination: offset into immediate: offset -520, dest 1, pos 519
+ERR: invalid jump destination: offset into immediate: offset -515, dest 6, pos 519
+ERR: invalid jump destination: offset into immediate: offset -520, dest 1, pos 9
+ERR: invalid jump destination: offset into immediate: offset -515, dest 6, pos 9
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 516, dest 521, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 520, pos 514
+ERR: invalid jump destination: offset into immediate: offset 5, dest 521, pos 514
+ERR: invalid jump destination: offset into immediate: offset 4, dest 520, pos 4
+ERR: invalid jump destination: offset into immediate: offset 5, dest 521, pos 4
+ERR: invalid jump destination: offset into immediate: offset -521, dest 1, pos 520
+ERR: invalid jump destination: offset into immediate: offset -515, dest 7, pos 520
+ERR: invalid jump destination: offset into immediate: offset -521, dest 1, pos 10
+ERR: invalid jump destination: offset into immediate: offset -515, dest 7, pos 10
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 4, dest 10, pos 4
+ERR: invalid jump destination: offset into immediate: offset 516, dest 522, pos 4
+ERR: invalid jump destination: offset into immediate: offset 4, dest 520, pos 514
+ERR: invalid jump destination: offset into immediate: offset 6, dest 522, pos 514
+ERR: invalid jump destination: offset into immediate: offset 4, dest 520, pos 4
+ERR: invalid jump destination: offset into immediate: offset 6, dest 522, pos 4
+ERR: invalid jump destination: offset into immediate: offset -522, dest 1, pos 521
+ERR: invalid jump destination: offset into immediate: offset -515, dest 8, pos 521
+ERR: invalid jump destination: offset into immediate: offset -522, dest 1, pos 11
+ERR: invalid jump destination: offset into immediate: offset -515, dest 8, pos 11
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 3, dest 519, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 3, dest 519, pos 4
+ERR: invalid jump destination: offset into immediate: offset 1, dest 521, pos 518
+ERR: invalid jump destination: offset into immediate: offset 1, dest 521, pos 8
+ERR: invalid jump destination: offset into immediate: offset 1, dest 521, pos 518
+ERR: invalid jump destination: offset into immediate: offset 1, dest 521, pos 8
+ERR: invalid jump destination: offset into immediate: offset -523, dest 1, pos 522
+ERR: invalid jump destination: offset into immediate: offset -515, dest 9, pos 522
+ERR: invalid jump destination: offset into immediate: offset -523, dest 1, pos 12
+ERR: invalid jump destination: offset into immediate: offset -515, dest 9, pos 12
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 4, dest 520, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 4, dest 520, pos 4
+ERR: invalid jump destination: offset into immediate: offset -524, dest 1, pos 523
+ERR: invalid jump destination: offset into immediate: offset -515, dest 10, pos 523
+ERR: invalid jump destination: offset into immediate: offset -524, dest 1, pos 13
+ERR: invalid jump destination: offset into immediate: offset -515, dest 10, pos 13
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 5, dest 521, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 5, dest 521, pos 4
+ERR: invalid jump destination: offset into immediate: offset 1, dest 523, pos 520
+ERR: invalid jump destination: offset into immediate: offset 1, dest 523, pos 10
+ERR: invalid jump destination: offset into immediate: offset 9, dest 525, pos 514
+ERR: invalid jump destination: offset into immediate: offset 9, dest 525, pos 4
+ERR: invalid jump destination: offset into immediate: offset -525, dest 1, pos 524
+ERR: invalid jump destination: offset into immediate: offset -515, dest 11, pos 524
+ERR: invalid jump destination: offset into immediate: offset -525, dest 1, pos 14
+ERR: invalid jump destination: offset into immediate: offset -515, dest 11, pos 14
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 6, dest 522, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 6, dest 522, pos 4
+ERR: invalid jump destination: offset into immediate: offset -526, dest 1, pos 525
+ERR: invalid jump destination: offset into immediate: offset -515, dest 12, pos 525
+ERR: invalid jump destination: offset into immediate: offset -526, dest 1, pos 15
+ERR: invalid jump destination: offset into immediate: offset -515, dest 12, pos 15
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 7, dest 523, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 7, dest 523, pos 4
+ERR: invalid jump destination: offset into immediate: offset -527, dest 1, pos 526
+ERR: invalid jump destination: offset into immediate: offset -515, dest 13, pos 526
+ERR: invalid jump destination: offset into immediate: offset -527, dest 1, pos 16
+ERR: invalid jump destination: offset into immediate: offset -515, dest 13, pos 16
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 8, dest 524, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 8, dest 524, pos 4
+ERR: invalid jump destination: offset into immediate: offset -528, dest 1, pos 527
+ERR: invalid jump destination: offset into immediate: offset -515, dest 14, pos 527
+ERR: invalid jump destination: offset into immediate: offset -528, dest 1, pos 17
+ERR: invalid jump destination: offset into immediate: offset -515, dest 14, pos 17
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 9, dest 525, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 9, dest 525, pos 4
+ERR: invalid jump destination: offset into immediate: offset -529, dest 1, pos 528
+ERR: invalid jump destination: offset into immediate: offset -515, dest 15, pos 528
+ERR: invalid jump destination: offset into immediate: offset -529, dest 1, pos 18
+ERR: invalid jump destination: offset into immediate: offset -515, dest 15, pos 18
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 10, dest 526, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 10, dest 526, pos 4
+ERR: invalid jump destination: offset into immediate: offset -530, dest 1, pos 529
+ERR: invalid jump destination: offset into immediate: offset -515, dest 16, pos 529
+ERR: invalid jump destination: offset into immediate: offset -530, dest 1, pos 19
+ERR: invalid jump destination: offset into immediate: offset -515, dest 16, pos 19
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 11, dest 527, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 11, dest 527, pos 4
+ERR: invalid jump destination: offset into immediate: offset -531, dest 1, pos 530
+ERR: invalid jump destination: offset into immediate: offset -515, dest 17, pos 530
+ERR: invalid jump destination: offset into immediate: offset -531, dest 1, pos 20
+ERR: invalid jump destination: offset into immediate: offset -515, dest 17, pos 20
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 12, dest 528, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 12, dest 528, pos 4
+ERR: invalid jump destination: offset into immediate: offset -532, dest 1, pos 531
+ERR: invalid jump destination: offset into immediate: offset -515, dest 18, pos 531
+ERR: invalid jump destination: offset into immediate: offset -532, dest 1, pos 21
+ERR: invalid jump destination: offset into immediate: offset -515, dest 18, pos 21
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 13, dest 529, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 13, dest 529, pos 4
+ERR: invalid jump destination: offset into immediate: offset -533, dest 1, pos 532
+ERR: invalid jump destination: offset into immediate: offset -515, dest 19, pos 532
+ERR: invalid jump destination: offset into immediate: offset -533, dest 1, pos 22
+ERR: invalid jump destination: offset into immediate: offset -515, dest 19, pos 22
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 14, dest 530, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 14, dest 530, pos 4
+ERR: invalid jump destination: offset into immediate: offset -534, dest 1, pos 533
+ERR: invalid jump destination: offset into immediate: offset -515, dest 20, pos 533
+ERR: invalid jump destination: offset into immediate: offset -534, dest 1, pos 23
+ERR: invalid jump destination: offset into immediate: offset -515, dest 20, pos 23
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 15, dest 531, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 15, dest 531, pos 4
+ERR: invalid jump destination: offset into immediate: offset -535, dest 1, pos 534
+ERR: invalid jump destination: offset into immediate: offset -515, dest 21, pos 534
+ERR: invalid jump destination: offset into immediate: offset -535, dest 1, pos 24
+ERR: invalid jump destination: offset into immediate: offset -515, dest 21, pos 24
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 16, dest 532, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 16, dest 532, pos 4
+ERR: invalid jump destination: offset into immediate: offset -536, dest 1, pos 535
+ERR: invalid jump destination: offset into immediate: offset -515, dest 22, pos 535
+ERR: invalid jump destination: offset into immediate: offset -536, dest 1, pos 25
+ERR: invalid jump destination: offset into immediate: offset -515, dest 22, pos 25
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 17, dest 533, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 17, dest 533, pos 4
+ERR: invalid jump destination: offset into immediate: offset -537, dest 1, pos 536
+ERR: invalid jump destination: offset into immediate: offset -515, dest 23, pos 536
+ERR: invalid jump destination: offset into immediate: offset -537, dest 1, pos 26
+ERR: invalid jump destination: offset into immediate: offset -515, dest 23, pos 26
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 18, dest 534, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 18, dest 534, pos 4
+ERR: invalid jump destination: offset into immediate: offset -538, dest 1, pos 537
+ERR: invalid jump destination: offset into immediate: offset -515, dest 24, pos 537
+ERR: invalid jump destination: offset into immediate: offset -538, dest 1, pos 27
+ERR: invalid jump destination: offset into immediate: offset -515, dest 24, pos 27
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 19, dest 535, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 19, dest 535, pos 4
+ERR: invalid jump destination: offset into immediate: offset -539, dest 1, pos 538
+ERR: invalid jump destination: offset into immediate: offset -515, dest 25, pos 538
+ERR: invalid jump destination: offset into immediate: offset -539, dest 1, pos 28
+ERR: invalid jump destination: offset into immediate: offset -515, dest 25, pos 28
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 20, dest 536, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 20, dest 536, pos 4
+ERR: invalid jump destination: offset into immediate: offset -540, dest 1, pos 539
+ERR: invalid jump destination: offset into immediate: offset -515, dest 26, pos 539
+ERR: invalid jump destination: offset into immediate: offset -540, dest 1, pos 29
+ERR: invalid jump destination: offset into immediate: offset -515, dest 26, pos 29
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 21, dest 537, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 21, dest 537, pos 4
+ERR: invalid jump destination: offset into immediate: offset -541, dest 1, pos 540
+ERR: invalid jump destination: offset into immediate: offset -515, dest 27, pos 540
+ERR: invalid jump destination: offset into immediate: offset -541, dest 1, pos 30
+ERR: invalid jump destination: offset into immediate: offset -515, dest 27, pos 30
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 22, dest 538, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 22, dest 538, pos 4
+ERR: invalid jump destination: offset into immediate: offset -542, dest 1, pos 541
+ERR: invalid jump destination: offset into immediate: offset -515, dest 28, pos 541
+ERR: invalid jump destination: offset into immediate: offset -542, dest 1, pos 31
+ERR: invalid jump destination: offset into immediate: offset -515, dest 28, pos 31
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 23, dest 539, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 23, dest 539, pos 4
+ERR: invalid jump destination: offset into immediate: offset -543, dest 1, pos 542
+ERR: invalid jump destination: offset into immediate: offset -515, dest 29, pos 542
+ERR: invalid jump destination: offset into immediate: offset -543, dest 1, pos 32
+ERR: invalid jump destination: offset into immediate: offset -515, dest 29, pos 32
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 24, dest 540, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 24, dest 540, pos 4
+ERR: invalid jump destination: offset into immediate: offset -544, dest 1, pos 543
+ERR: invalid jump destination: offset into immediate: offset -515, dest 30, pos 543
+ERR: invalid jump destination: offset into immediate: offset -544, dest 1, pos 33
+ERR: invalid jump destination: offset into immediate: offset -515, dest 30, pos 33
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 25, dest 541, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 25, dest 541, pos 4
+ERR: invalid jump destination: offset into immediate: offset -545, dest 1, pos 544
+ERR: invalid jump destination: offset into immediate: offset -515, dest 31, pos 544
+ERR: invalid jump destination: offset into immediate: offset -545, dest 1, pos 34
+ERR: invalid jump destination: offset into immediate: offset -515, dest 31, pos 34
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 26, dest 542, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 26, dest 542, pos 4
+ERR: invalid jump destination: offset into immediate: offset -546, dest 1, pos 545
+ERR: invalid jump destination: offset into immediate: offset -515, dest 32, pos 545
+ERR: invalid jump destination: offset into immediate: offset -546, dest 1, pos 35
+ERR: invalid jump destination: offset into immediate: offset -515, dest 32, pos 35
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 27, dest 543, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 27, dest 543, pos 4
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 28, dest 544, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 28, dest 544, pos 4
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 29, dest 545, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 29, dest 545, pos 4
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 30, dest 546, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 30, dest 546, pos 4
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 31, dest 547, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 31, dest 547, pos 4
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 32, dest 548, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 32, dest 548, pos 4
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 33, dest 549, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+ERR: invalid jump destination: offset into immediate: offset 33, dest 549, pos 4
+OK
+ERR: stack underflow (255 <=> 256): at pos 765
+ERR: stack underflow (255 <=> 257): at pos 765
+ERR: stack underflow (255 <=> 256): at pos 765
+OK
+OK
+OK
+OK
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid jump destination: offset into immediate: offset 4, dest 520, pos 514
+ERR: invalid jump destination: offset into immediate: offset 516, dest 1032, pos 514
+ERR: invalid jump destination: offset into immediate: offset 4, dest 520, pos 4
+ERR: invalid jump destination: offset into immediate: offset 516, dest 1032, pos 4
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+OK
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+OK
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+OK
+OK
+OK
+ERR: invalid container section size number of container section exceed: 256: have 257
+ERR: max initcode size exceeded
+ERR: max initcode size exceeded
+ERR: incompatible container kind
+ERR: stack limit reached 1024 (1024)
+ERR: stack limit reached 1024 (1024)
+OK
+OK
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+OK
+OK
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+ERR: unexpected EOF
+ERR: invalid container size: have 90, want 32845
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+OK
+OK
+OK
+OK
+ERR: stack limit reached 1024 (1024)
+ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
+OK
+ERR: max initcode size exceeded
+ERR: max initcode size exceeded
+ERR: invalid container size: have 20, want 49171
+ERR: max initcode size exceeded
+ERR: unexpected EOF
+ERR: invalid container size: have 90, want 65612
+ERR: unexpected EOF
+ERR: max initcode size exceeded
+ERR: unexpected EOF
+ERR: max initcode size exceeded
+ERR: missing code header: found section kind 3 instead
+ERR: missing code header: found section kind 3 instead
+ERR: missing code header: found section kind 4 instead
+ERR: missing code header: found section kind 4 instead
+ERR: missing code header: found section kind 4 instead
+ERR: missing code header: found section kind 4 instead
+ERR: missing code header: found section kind 4 instead
+ERR: missing code header: found section kind 4 instead
+ERR: missing code header: found section kind 4 instead
+ERR: missing code header: found section kind 4 instead
+ERR: missing code header: found section kind 4 instead
+ERR: missing code header: found section kind 5 instead
+ERR: missing code header: found section kind 6 instead
+ERR: unexpected EOF
+ERR: missing code header: found section kind ff instead
+ERR: invalid type section size: type section size must be divisible by 4, have 5
+ERR: invalid type section size: type section size must be divisible by 4, have 5
+ERR: invalid type section size: type section size must be divisible by 4, have 6
+ERR: invalid code size: mismatch of code sections found and type signatures, types 2, code 1
+ERR: invalid code size: mismatch of code sections found and type signatures, types 2, code 1
+ERR: invalid code size: mismatch of code sections found and type signatures, types 2, code 1
+ERR: invalid code size: mismatch of code sections found and type signatures, types 2, code 1
+ERR: invalid code size: mismatch of code sections found and type signatures, types 2, code 1
+ERR: invalid code size: mismatch of code sections found and type signatures, types 2, code 1
+ERR: invalid code size: mismatch of code sections found and type signatures, types 2, code 1
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 1
+ERR: missing header terminator: have 4
+ERR: invalid container size: have 27, want 49178
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 1, 128
+ERR: invalid code termination: end with CALLF, pos 3
+ERR: invalid number of outputs: at pos 0
+ERR: invalid non-returning flag, bad RETF: at pos 0
+ERR: missing header terminator: have 4
+ERR: invalid code termination: end with CALLF, pos 3
+ERR: invalid non-returning flag, bad RETF: at pos 1
+ERR: invalid jump destination: out-of-bounds offset: offset -6, dest -3, pos 1
+ERR: truncated top level container
+ERR: unreachable code
+OK
+ERR: invalid non-returning flag, bad RETF: at pos 128
+ERR: invalid non-returning flag, bad RETF no RETF or qualified JUMPF
+OK
+ERR: invalid non-returning flag, bad RETF no RETF or qualified JUMPF
+ERR: invalid section argument: arg 2, last 2, pos 0
+ERR: unreachable code
+ERR: unreachable code
+ERR: invalid number of outputs: at pos 1
+OK
+ERR: unreachable code
+ERR: unreachable code
+ERR: invalid number of outputs: have 0, want 1, at pos 1
+ERR: invalid max stack height in code section 0: have 2, want 0
+ERR: invalid non-returning flag, bad RETF no RETF or qualified JUMPF
+ERR: invalid non-returning flag, bad RETF no RETF or qualified JUMPF
+OK
+ERR: invalid type content, too many outputs for section 1: have 129
+ERR: stack underflow (0 <=> 1): at pos 1
+OK
+OK
+OK
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 5, pos 1
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 2, dest 7, pos 3
+ERR: invalid jump destination: offset into immediate: offset 1, dest 7, pos 4
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: incompatible container kind
+ERR: incompatible container kind
+OK
+ERR: invalid non-returning flag, bad RETF no RETF or qualified JUMPF
+OK
+ERR: invalid type content, too many inputs for section 1: have 128
+ERR: invalid type content, too many inputs for section 1: have 128
+ERR: invalid jump destination: offset into immediate: offset 1, dest 517, pos 514
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
+ERR: invalid jump destination: offset into immediate: offset 1, dest 517, pos 4
+ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
+OK
+OK
+OK
+OK
+ERR: invalid type section size: type section size must be divisible by 4, have 9
+ERR: invalid number of outputs: at pos 0
+OK
+ERR: stack underflow (0 <=> 2): at pos 0
+ERR: stack underflow (0 <=> 4): at pos 0
+ERR: invalid number of outputs: at pos 1
+OK
+OK
+ERR: stack underflow (2 <=> 4): at pos 2
+ERR: invalid jump destination: out-of-bounds offset: offset 3, dest 6, pos 1
+OK
+OK
+OK
+ERR: invalid non-returning flag, bad RETF no RETF or qualified JUMPF
+OK
+OK
+ERR: invalid number of outputs: arg 2, last 3, pos 1
+ERR: invalid number of outputs: at pos 1
+OK
+ERR: invalid number of outputs: arg 2, last 3, pos 3
+ERR: invalid number of outputs: max 1, min 0, at pos 5
+ERR: invalid number of outputs: max 1, min 0, at pos 5
+ERR: invalid number of outputs: arg 2, last 3, pos 5
+ERR: invalid number of outputs: max 1, min 0, at pos 5
+ERR: invalid number of outputs: max 2, min 1, at pos 6
+ERR: invalid number of outputs: max 2, min 1, at pos 6
+ERR: invalid number of outputs: arg 2, last 3, pos 6
+ERR: invalid number of outputs: max 2, min 1, at pos 6
+ERR: invalid number of outputs: max 2, min 1, at pos 6
+ERR: invalid number of outputs: max 3, min 2, at pos 7
+ERR: invalid number of outputs: arg 2, last 3, pos 7
+ERR: invalid number of outputs: arg 2, last 3, pos 8
+OK
+OK
+ERR: invalid number of outputs: at pos 0
+ERR: invalid number of outputs: at pos 0
+OK
+ERR: invalid number of outputs: at pos 0
+OK
+ERR: invalid number of outputs: at pos 1
+ERR: invalid number of outputs: at pos 1
+ERR: invalid number of outputs: at pos 1
+ERR: invalid number of outputs: at pos 1
+ERR: invalid number of outputs: at pos 1
+ERR: invalid number of outputs: at pos 1
+ERR: invalid number of outputs: at pos 1
+ERR: invalid number of outputs: at pos 1
+ERR: invalid number of outputs: at pos 1
+ERR: invalid number of outputs: at pos 1
+ERR: invalid number of outputs: at pos 1
+ERR: invalid number of outputs: at pos 1
+OK
+ERR: invalid number of outputs: at pos 2
+OK
+ERR: invalid number of outputs: at pos 2
+ERR: invalid number of outputs: at pos 2
+OK
+ERR: invalid number of outputs: at pos 3
+ERR: invalid number of outputs: at pos 3
+ERR: invalid number of outputs: at pos 3
+ERR: invalid number of outputs: at pos 3
+ERR: invalid number of outputs: at pos 3
+ERR: invalid number of outputs: at pos 3
+ERR: invalid number of outputs: at pos 3
+ERR: invalid number of outputs: at pos 3
+ERR: invalid number of outputs: at pos 3
+ERR: invalid number of outputs: at pos 3
+ERR: invalid number of outputs: at pos 3
+ERR: invalid number of outputs: at pos 3
+OK
+OK
+ERR: invalid number of outputs: at pos 4
+OK
+ERR: invalid number of outputs: at pos 4
+ERR: invalid number of outputs: at pos 4
+ERR: invalid number of outputs: at pos 5
+ERR: invalid number of outputs: at pos 5
+ERR: invalid number of outputs: at pos 5
+ERR: invalid number of outputs: at pos 5
+ERR: invalid number of outputs: at pos 5
+ERR: invalid number of outputs: at pos 5
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+ERR: invalid number of outputs: at pos 7
+ERR: invalid number of outputs: at pos 7
+ERR: invalid number of outputs: at pos 7
+ERR: invalid number of outputs: at pos 7
+OK
+OK
+OK
+OK
+ERR: invalid number of outputs: arg 2, last 4, pos 7
+ERR: invalid number of outputs: arg 2, last 4, pos 7
+ERR: invalid number of outputs: arg 2, last 4, pos 7
+OK
+ERR: invalid number of outputs: arg 2, last 4, pos 9
+ERR: invalid number of outputs: arg 2, last 4, pos 9
+OK
+OK
+OK
+ERR: invalid number of outputs: arg 2, last 4, pos 11
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+OK
+ERR: invalid code size: mismatch of code sections found and type signatures, types 25, code 1
+OK
+OK
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+OK
+OK
+OK
+OK
+ERR: invalid type section size: type section must not exceed 4*1024, have 4100
+ERR: invalid type section size: type section must not exceed 4*1024, have 4104
+ERR: invalid type section size: type section must not exceed 4*1024, have 32768
+ERR: invalid type section size: type section size must be divisible by 4, have 65535
+ERR: missing type header: found section kind 2 instead
+ERR: missing type header: found section kind 2 instead
+ERR: missing type header: found section kind 2 instead
+ERR: missing type header: found section kind 2 instead
+ERR: missing type header: found section kind 2 instead
+ERR: missing type header: found section kind 2 instead
+ERR: missing type header: found section kind 3 instead
+ERR: missing type header: found section kind 3 instead
+ERR: missing type header: found section kind 4 instead
+ERR: missing type header: found section kind 4 instead
+ERR: missing type header: found section kind 4 instead
+ERR: missing type header: found section kind 5 instead
+ERR: missing type header: found section kind 6 instead
+ERR: missing type header: found section kind ff instead
+ERR: invalid version: have 2, want 1
+ERR: invalid version: have 2, want 1
+ERR: invalid version: have 254, want 1
+ERR: invalid version: have 255, want 1
+ERR: invalid version: have 255, want 1
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid container size: have 24, want 23
+ERR: invalid container size: have 21, want 20
+ERR: invalid container size: have 22, want 21
+ERR: invalid max stack height in code section 0: have 0, want 48
+ERR: invalid max stack height in code section 0: have 0, want 48
+ERR: invalid container size: have 53, want 52
+ERR: truncated immediate: op PUSH2, pos 1
+ERR: invalid container size: have 38, want 37
+ERR: invalid container size: have 48, want 47
+ERR: invalid container size: have 48, want 47
+ERR: undefined instruction: op CODESIZE, pos 2
+ERR: undefined instruction: op opcode 0x21 not defined, pos 1
+ERR: stack underflow (1 <=> 2): at pos 2
+ERR: invalid container size: have 34, want 33
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12341, pos 3
+ERR: truncated immediate: jump table truncated, op RJUMPV, pos 0
+ERR: invalid code termination: end with ADDRESS, pos 5
+ERR: invalid magic: want ef00 in sub container 0
+ERR: invalid container size: have 95, want 94
+ERR: invalid container size: have 81, want 80
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: invalid section argument: arg 12336, last 1, pos 2
+ERR: unreachable code: arg 48, last 0, pos 2
+ERR: invalid code termination: end with ADDRESS, pos 7
+ERR: invalid magic: want ef00 in sub container 0
+ERR: undefined instruction: op opcode 0xea not defined, pos 4
+ERR: stack underflow (1 <=> 2): at pos 1
+ERR: invalid container section size: total container count must not be zero in sub container 0
+ERR: invalid max stack height in code section 0: have 4, want 260
+ERR: invalid container size: have 49114, want 49108
+ERR: invalid container size: have 49111, want 49108
+ERR: truncated immediate: op PUSH18, pos 1
+ERR: invalid code size: mismatch of code sections found and type signatures, types 1, code 1025 in sub container 0
+ERR: invalid container size: have 47487, want 32639 in sub container 0
+ERR: invalid type section size: type section must not exceed 4*1024, have 6148 in sub container 0
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12344, pos 4
+ERR: truncated immediate: jump table truncated, op RJUMPV, pos 3
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: invalid number of outputs: max 2, min 1, at pos 7
+ERR: unreachable code
+ERR: unreachable code
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12341, pos 3
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12345, pos 7
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12345, pos 7
+ERR: invalid container size: have 56, want 55
+ERR: invalid container size: have 56, want 55
+ERR: invalid container size: have 90, want 83
+ERR: invalid container size: have 92, want 83
+ERR: invalid magic: want ef00 in sub container 0
+ERR: eofcreate with truncated section: container 0, have 0, claimed 12336, pos 8
+ERR: invalid jump destination: out-of-bounds offset: offset 123, dest 639, pos 122
+ERR: invalid container size: have 78, want 77
+ERR: invalid magic: want ef00 in sub container 16
+ERR: invalid container size: have 5668, want 5665
+ERR: invalid container size: have 5667, want 5665
+ERR: invalid container size: have 5668, want 5665
+ERR: invalid container size: have 37, want 36
+ERR: invalid container section size for section 0: size must not be 0
+ERR: invalid container size: have 61, want 60
+ERR: invalid container size: have 87, want 84
+ERR: invalid container size: have 83, want 82
+ERR: invalid container size: have 109, want 106
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12348, pos 10
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12341, pos 3
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12349, pos 11
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12346, pos 4
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12346, pos 4
+ERR: invalid container size: have 89, want 86
+ERR: invalid jump destination: offset into immediate: offset -12, dest 1, pos 11
+ERR: unreachable code
+ERR: invalid non-returning flag, bad RETF: at pos 13
+ERR: unreachable code
+ERR: invalid max stack height in code section 0: have 12, want 48
+ERR: stack underflow (5 <=> 6): at pos 8
+ERR: invalid container size: have 90, want 87
+ERR: stack underflow (9 <=> 49): at pos 9
+ERR: invalid code termination: end with ADDRESS, pos 15
+ERR: invalid max stack height in code section 0: have 4, want 48
+ERR: invalid type content, max stack height exceeds limit for section 0: have 12336 in sub container 0
+ERR: invalid code termination: end with ADDRESS, pos 5
+ERR: unexpected EOF in sub container 0
+ERR: invalid magic: want ef00 in sub container 0
+ERR: invalid container size: have 24594, want 24590
+ERR: invalid container size: have 12188, want 21148 in sub container 0
+ERR: section already referenced, arg :0
+ERR: stack underflow (3 <=> 233): at pos 6
+ERR: unreachable code: arg 253, last 1, pos 13
+ERR: invalid container size: have 24594, want 24591
+ERR: missing data header: found section fe instead in sub container 0
+ERR: invalid type content, max stack height exceeds limit for section 0: have 65007 in sub container 0
+ERR: stack underflow (0 <=> 4): at pos 0
+ERR: subcontainer not referenced at all
+ERR: truncated immediate: op PUSH20, pos 6
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12342, pos 4
+ERR: invalid backward jump want 4 as current min got 5 at pos 12,
+ERR: invalid backward jump want 0 as current min got 1 at pos 12,
+ERR: unreachable code: arg 48, last 1, pos 13
+ERR: invalid code termination: end with ADDRESS, pos 17
+ERR: unreachable code: arg 48, last 2, pos 8
+ERR: invalid code termination: end with ADDRESS, pos 1
+ERR: invalid section argument: arg 12336, last 1, pos 14
+ERR: invalid max stack height
+ERR: invalid code termination: end with ADDRESS, pos 18
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12358, pos 6
+ERR: unreachable code
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12339, pos 1
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12342, pos 4
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12346, pos 8
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12342, pos 4
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12363, pos 25
+ERR: invalid section argument: arg 12336, last 1, pos 6
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12339, pos 1
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12342, pos 4
+ERR: invalid code termination: end with ADDRESS, pos 35
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12341, pos 3
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12355, pos 17
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12381, pos 43
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12381, pos 43
+ERR: invalid backward jump want 0 as current max got 1 at pos 2,
+ERR: invalid jump destination: out-of-bounds offset: offset 12, dest 528, pos 440
+ERR: invalid jump destination: out-of-bounds offset: offset 1, dest 517, pos 348
+ERR: invalid jump destination: out-of-bounds offset: offset 252, dest 768, pos 270
+ERR: stack underflow (0 <=> 1): at pos 515
+ERR: invalid jump destination: out-of-bounds offset: offset 244, dest 760, pos 282
+ERR: stack underflow (0 <=> 1): at pos 516
+ERR: stack underflow (0 <=> 2): at pos 515
+ERR: invalid backward jump want 0 as current max got 1 at pos 1,
+ERR: invalid backward jump want 0 as current max got 1 at pos 1,
+ERR: stack underflow (0 <=> 1): at pos 516
+ERR: stack underflow (0 <=> 1): at pos 516
+ERR: invalid jump destination: out-of-bounds offset: offset 31611, dest 31865, pos 6
+ERR: invalid jump destination: offset into immediate: offset 256, dest 330, pos 10
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: unreachable code
+ERR: unreachable code
+ERR: unreachable code
+ERR: invalid jump destination: offset into immediate: offset 7, dest 523, pos 514
+ERR: unreachable code
+ERR: undefined instruction: op SELFDESTRUCT, pos 276
+ERR: unreachable code
+ERR: undefined instruction: op opcode 0xc not defined, pos 118
+ERR: unreachable code
+ERR: undefined instruction: op SELFDESTRUCT, pos 144
+ERR: unreachable code
+ERR: undefined instruction: op opcode 0xdf not defined, pos 34
+ERR: undefined instruction: op opcode 0xdf not defined, pos 34
+ERR: undefined instruction: op opcode 0xdf not defined, pos 34
+ERR: undefined instruction: op opcode 0xdf not defined, pos 34
+ERR: undefined instruction: op opcode 0xdf not defined, pos 34
+ERR: undefined instruction: op opcode 0xdf not defined, pos 34
+ERR: undefined instruction: op opcode 0xdf not defined, pos 34
+ERR: undefined instruction: op opcode 0xdf not defined, pos 34
+ERR: undefined instruction: op opcode 0xdf not defined, pos 34
+ERR: unreachable code
+ERR: undefined instruction: op opcode 0xde not defined, pos 546
+ERR: unreachable code
+ERR: unreachable code
+ERR: unreachable code
+ERR: unreachable code
+ERR: unreachable code
+ERR: unreachable code
+ERR: stack underflow (32 <=> 33): at pos 612
+ERR: unreachable code
+ERR: invalid jump destination: out-of-bounds offset: offset 4693, dest 5364, pos 669
+ERR: invalid jump destination: out-of-bounds offset: offset 4693, dest 5364, pos 669
+ERR: invalid max stack height in code section 0: have 36, want 35
+ERR: invalid jump destination: out-of-bounds offset: offset 97, dest 1000, pos 397
+ERR: invalid jump destination: out-of-bounds offset: offset -8055, dest -7641, pos 412
+ERR: invalid jump destination: out-of-bounds offset: offset -8055, dest -7641, pos 412
+ERR: invalid jump destination: offset into immediate: offset -255, dest 39, pos 8
+ERR: invalid max stack height in code section 0: have 3, want 2
+ERR: stack underflow (0 <=> 1): at pos 530
+ERR: invalid jump destination: out-of-bounds offset: offset -256, dest -248, pos 6
+ERR: stack underflow (0 <=> 2): at pos 560
+ERR: stack underflow (0 <=> 10): at pos 609
+ERR: stack underflow (0 <=> 1): at pos 545
+ERR: stack underflow (0 <=> 10): at pos 609
+ERR: stack underflow (0 <=> 2): at pos 560
+ERR: stack underflow (0 <=> 2): at pos 605
+ERR: invalid max stack height in code section 0: have 11, want 2
+ERR: invalid max stack height in code section 0: have 4, want 2
+ERR: invalid max stack height in code section 0: have 3, want 2
+ERR: stack underflow (0 <=> 10): at pos 609
+ERR: invalid number of outputs: max 1, min 0, at pos 546
+ERR: stack underflow (0 <=> 2): at pos 630
+ERR: invalid max stack height in code section 0: have 140, want 2
+ERR: stack underflow (0 <=> 1): at pos 594
+ERR: invalid jump destination: offset into immediate: offset 1, dest 517, pos 6
+ERR: invalid jump destination: offset into immediate: offset 1, dest 517, pos 6
+ERR: stack underflow (0 <=> 2): at pos 670
+ERR: stack underflow (0 <=> 2): at pos 664
+ERR: invalid jump destination: out-of-bounds offset: offset -7968, dest -7531, pos 435
+ERR: invalid jump destination: out-of-bounds offset: offset -7968, dest -7531, pos 435
+ERR: invalid non-returning flag, bad RETF: at pos 899
+ERR: invalid jump destination: out-of-bounds offset: offset -6401, dest -5227, pos 662
+ERR: invalid jump destination: out-of-bounds offset: offset -6401, dest -5227, pos 662
+ERR: invalid jump destination: out-of-bounds offset: offset -6401, dest -5227, pos 662
+ERR: invalid jump destination: out-of-bounds offset: offset -6401, dest -5227, pos 662
+ERR: invalid jump destination: out-of-bounds offset: offset -6401, dest -4593, pos 1296
+ERR: unreachable code
+ERR: unreachable code
+ERR: stack underflow (60 <=> 129): at pos 119
+ERR: stack underflow (17 <=> 243): at pos 33
+ERR: unreachable code
+ERR: invalid max stack height in code section 0: have 260, want 258
+ERR: stack underflow (250 <=> 254): at pos 786
+ERR: unreachable code
+OK
+ERR: stack underflow (168 <=> 169): at pos 1211
+ERR: stack underflow (174 <=> 203): at pos 1041
+ERR: stack underflow (235 <=> 257): at pos 881
+ERR: stack underflow (243 <=> 247): at pos 821
+ERR: stack underflow (252 <=> 257): at pos 771
+ERR: invalid jump destination: offset into immediate: offset 7, dest 523, pos 4
+ERR: invalid jump destination: offset into immediate: offset 602, dest 1118, pos 174
+ERR: invalid container size: have 15404, want 15353
+ERR: incompatible container kind
+ERR: invalid code termination: end with BLOCKHASH, pos 1
+ERR: invalid max stack height in code section 0: have 2, want 10
+ERR: invalid container size: have 15384, want 15383
+ERR: invalid max stack height in code section 0: have 0, want 100
+ERR: invalid container size: have 15384, want 15383
+ERR: missing header terminator: have 4 in sub container 5
+ERR: invalid container size: have 15434, want 15433
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: missing code header: found section kind 4 instead in sub container 46
+ERR: unexpected EOF in sub container 146
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26281, pos 1446
+ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26281, pos 1446
+ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26281, pos 1446
+ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26281, pos 1446
+ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26281, pos 1446
+ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26278, pos 1443
+ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26278, pos 1443
+ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26278, pos 1443
+ERR: invalid jump destination: out-of-bounds offset: offset 24832, dest 25509, pos 675
+ERR: invalid jump destination: out-of-bounds offset: offset -21151, dest -20628, pos 521
+ERR: invalid dataloadN argument: arg 24833, last 0, pos 1397
+ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26278, pos 1443
+ERR: stack limit reached 1048 (1024): at pos 75
+ERR: undefined instruction: op opcode 0xc8 not defined, pos 1179
+ERR: invalid dataloadN argument: arg 5, last 32, pos 1728
+ERR: invalid dataloadN argument: arg 62719, last 32, pos 945
+ERR: invalid dataloadN argument: arg 16, last 32, pos 771
+ERR: invalid dataloadN argument: arg 1, last 32, pos 81
+ERR: unreachable code
+ERR: invalid jump destination: offset into immediate: offset 98, dest 2385, pos 2091
+ERR: invalid jump destination: offset into immediate: offset 98, dest 2385, pos 2091
+ERR: undefined instruction: op opcode 0x23 not defined, pos 3824
+ERR: invalid max stack height in code section 0: have 1022, want 1023
+ERR: unreachable code
+ERR: invalid max stack height in code section 0: have 1020, want 1023
+ERR: invalid max stack height in code section 0: have 1015, want 1023
+ERR: undefined instruction: op CALLCODE, pos 3487
+ERR: invalid jump destination: out-of-bounds offset: offset -7680, dest -7168, pos 58
+ERR: invalid jump destination: out-of-bounds offset: offset -7680, dest -7168, pos 58
+ERR: invalid jump destination: offset into immediate: offset 98, dest 2385, pos 2091
+ERR: invalid jump destination: offset into immediate: offset 98, dest 2385, pos 2091
+ERR: invalid jump destination: offset into immediate: offset 98, dest 2385, pos 2091
+ERR: invalid jump destination: offset into immediate: offset 98, dest 2380, pos 2086
+ERR: invalid jump destination: offset into immediate: offset 98, dest 2385, pos 2091
+ERR: invalid jump destination: out-of-bounds offset: offset 25600, dest 25650, pos 48
+ERR: invalid jump destination: out-of-bounds offset: offset -7711, dest -2524, pos 5185
+ERR: invalid jump destination: out-of-bounds offset: offset -7711, dest -2524, pos 5185
+ERR: invalid jump destination: out-of-bounds offset: offset -7711, dest -2524, pos 5185
+ERR: invalid jump destination: out-of-bounds offset: offset -7680, dest -6420, pos 806
+ERR: invalid jump destination: out-of-bounds offset: offset -7680, dest -6420, pos 806
+ERR: invalid jump destination: out-of-bounds offset: offset -7680, dest -6420, pos 806
+ERR: invalid jump destination: out-of-bounds offset: offset -7680, dest -6420, pos 806
+ERR: invalid jump destination: out-of-bounds offset: offset -7680, dest -6420, pos 806
+ERR: invalid jump destination: offset into immediate: offset 102, dest 1277, pos 975
+ERR: invalid jump destination: offset into immediate: offset 102, dest 1277, pos 975
+ERR: invalid jump destination: offset into immediate: offset 102, dest 1282, pos 980
+ERR: unexpected EOF
+ERR: invalid jump destination: out-of-bounds offset: offset 30988, dest 38761, pos 7771
+ERR: invalid jump destination: out-of-bounds offset: offset 30988, dest 38761, pos 7771
+ERR: invalid jump destination: out-of-bounds offset: offset 30988, dest 38761, pos 7771
+ERR: invalid jump destination: out-of-bounds offset: offset 30988, dest 38761, pos 7771
+ERR: invalid jump destination: out-of-bounds offset: offset 30988, dest 38761, pos 7771
+ERR: invalid jump destination: out-of-bounds offset: offset 30988, dest 38761, pos 7771
+ERR: invalid jump destination: out-of-bounds offset: offset 29440, dest 32042, pos 2500
+ERR: invalid jump destination: offset into immediate: offset -7454, dest 10684, pos 17684
+ERR: invalid jump destination: offset into immediate: offset -7454, dest 10684, pos 17684
+ERR: invalid jump destination: out-of-bounds offset: offset 29440, dest 47578, pos 17724
+ERR: invalid jump destination: out-of-bounds offset: offset 29440, dest 47578, pos 17724
+ERR: invalid jump destination: offset into immediate: offset -7454, dest 9550, pos 16550
+ERR: invalid jump destination: offset into immediate: offset 226, dest 2235, pos 1559
+ERR: invalid jump destination: offset into immediate: offset 226, dest 2235, pos 1559
+ERR: unreachable code
+ERR: invalid jump destination: offset into immediate: offset 127, dest 8866, pos 8315
+ERR: invalid jump destination: offset into immediate: offset 127, dest 8866, pos 8315
+ERR: invalid jump destination: offset into immediate: offset 127, dest 8866, pos 8315
+ERR: callf into non-returning section: section 0
+ERR: unreachable code
+ERR: stack underflow (0 <=> 48): at pos 0
+ERR: stack underflow (0 <=> 48): at pos 0
+ERR: invalid container size: have 24, want 20 in sub container 0
+ERR: stack limit reached 1087 (1024): at pos 1022
+ERR: invalid number of outputs: at pos 0
+ERR: invalid non-returning flag, bad RETF no RETF or qualified JUMPF
+ERR: invalid non-returning flag, bad RETF: at pos 9
+ERR: stack limit reached 1107 (1024): at pos 1106
+ERR: stack limit reached 1107 (1024): at pos 1106
+ERR: stack limit reached 1102 (1024)
+ERR: callf into non-returning section: section 3
+ERR: invalid number of outputs: max 1, min 0, at pos 7
+ERR: invalid max stack height in code section 2: have 0, want 48
+ERR: unreachable code
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12339, pos 1
+ERR: invalid non-returning flag, bad RETF no RETF or qualified JUMPF
+ERR: invalid number of outputs: have 0, want 4, at pos 6
+ERR: invalid number of outputs: at pos 3
+ERR: invalid number of outputs: arg 2, last 4, pos 7
+ERR: stack underflow (4 <=> 48): at pos 4
+ERR: invalid number of outputs: arg 2, last 4, pos 7
+ERR: invalid number of outputs: have 2, want 4, at pos 8
+ERR: invalid number of outputs: max 6, min 5, at pos 13
+ERR: missing code header: found section kind 30 instead
+ERR: missing code header: found section kind 30 instead
+ERR: missing code header: found section kind 30 instead
+ERR: unexpected EOF
+ERR: incompatible container kind
+ERR: undefined instruction: op opcode 0xd4 not defined, pos 0
+ERR: invalid section argument: arg 8201, last 1024, pos 0

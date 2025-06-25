@@ -46,13 +46,12 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"text/template"
 	"time"
-
-	"golang.org/x/exp/slices"
 )
 
 var (
@@ -293,14 +292,7 @@ func writeAuthors(files []string) {
 	}
 	// Write sorted list of authors back to the file.
 	slices.SortFunc(list, func(a, b string) int {
-		al := strings.ToLower(a)
-		bl := strings.ToLower(b)
-		if al < bl {
-			return -1
-		} else if al == bl {
-			return 0
-		}
-		return 1
+		return strings.Compare(strings.ToLower(a), strings.ToLower(b))
 	})
 	content := new(bytes.Buffer)
 	content.WriteString(authorsFileHeader)

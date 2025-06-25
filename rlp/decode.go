@@ -158,17 +158,17 @@ func makeDecoder(typ reflect.Type, tags rlpstruct.Tags) (dec decoder, err error)
 	switch {
 	case typ == rawValueType:
 		return decodeRawValue, nil
-	case typ.AssignableTo(reflect.PtrTo(bigInt)):
+	case typ.AssignableTo(reflect.PointerTo(bigInt)):
 		return decodeBigInt, nil
 	case typ.AssignableTo(bigInt):
 		return decodeBigIntNoPtr, nil
-	case typ == reflect.PtrTo(u256Int):
+	case typ == reflect.PointerTo(u256Int):
 		return decodeU256, nil
 	case typ == u256Int:
 		return decodeU256NoPtr, nil
 	case kind == reflect.Ptr:
 		return makePtrDecoder(typ, tags)
-	case reflect.PtrTo(typ).Implements(decoderInterface):
+	case reflect.PointerTo(typ).Implements(decoderInterface):
 		return decodeDecoder, nil
 	case isUint(kind):
 		return decodeUint, nil
@@ -262,7 +262,7 @@ func decodeU256(s *Stream, val reflect.Value) error {
 
 func makeListDecoder(typ reflect.Type, tag rlpstruct.Tags) (decoder, error) {
 	etype := typ.Elem()
-	if etype.Kind() == reflect.Uint8 && !reflect.PtrTo(etype).Implements(decoderInterface) {
+	if etype.Kind() == reflect.Uint8 && !reflect.PointerTo(etype).Implements(decoderInterface) {
 		if typ.Kind() == reflect.Array {
 			return decodeByteArray, nil
 		}
@@ -474,7 +474,7 @@ func makeSimplePtrDecoder(etype reflect.Type, etypeinfo *typeinfo) decoder {
 //
 // This decoder is used for pointer-typed struct fields with struct tag "nil".
 func makeNilPtrDecoder(etype reflect.Type, etypeinfo *typeinfo, ts rlpstruct.Tags) decoder {
-	typ := reflect.PtrTo(etype)
+	typ := reflect.PointerTo(etype)
 	nilPtr := reflect.Zero(typ)
 
 	// Determine the value kind that results in nil pointer.
@@ -1105,9 +1105,7 @@ func (s *Stream) readUint(size byte) (uint64, error) {
 		return uint64(b), err
 	default:
 		buffer := s.uintbuf[:8]
-		for i := range buffer {
-			buffer[i] = 0
-		}
+		clear(buffer)
 		start := int(8 - size)
 		if err := s.readFull(buffer[start:]); err != nil {
 			return 0, err

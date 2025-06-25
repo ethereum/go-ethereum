@@ -10,7 +10,6 @@
     "number": "1555274",
     "stateRoot": "0x795751f3f96a5de1fd3944ddd78cbfe4ef10491e1086be47609869a30929d0e5",
     "timestamp": "1590795228",
-    "totalDifficulty": "2242595605834",
     "alloc": {
       "0x0000000000000000000000000000000000000001": {
         "balance": "0x0",
@@ -52,6 +51,7 @@
     {
       "type": "create",
       "action": {
+        "creationMethod": "create",
         "from": "0x877bd459c9b7d8576b44e59e09d076c25946f443",
         "value": "0x0",
         "gas": "0x1a9c8",
@@ -67,8 +67,7 @@
       "transactionPosition": 18,
       "transactionHash": "0xc1c42a325856d513523aec464811923b2e2926f54015c7ba37877064cf889803",
       "blockNumber": 1555275,
-      "blockHash": "0x80945caaff2fc67253cbb0217d2e5a307afde943929e97d8b36e58b88cbb02fd",
-      "time": "453.925µs"
+      "blockHash": "0x80945caaff2fc67253cbb0217d2e5a307afde943929e97d8b36e58b88cbb02fd"
     },
     {
       "type": "call",

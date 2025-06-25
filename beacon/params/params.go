@@ -29,16 +29,46 @@ const (
 )
 
 const (
-	StateIndexGenesisTime       = 32
-	StateIndexGenesisValidators = 33
-	StateIndexForkVersion       = 141
-	StateIndexLatestHeader      = 36
-	StateIndexBlockRoots        = 37
-	StateIndexStateRoots        = 38
-	StateIndexHistoricRoots     = 39
-	StateIndexFinalBlock        = 105
-	StateIndexSyncCommittee     = 54
-	StateIndexNextSyncCommittee = 55
-	StateIndexExecPayload       = 56
-	StateIndexExecHead          = 908
+	StateIndexGenesisTime              = 32
+	StateIndexGenesisValidators        = 33
+	StateIndexForkVersion              = 141
+	StateIndexLatestHeader             = 36
+	StateIndexBlockRoots               = 37
+	StateIndexStateRoots               = 38
+	StateIndexHistoricRoots            = 39
+	StateIndexFinalBlockOld            = 105
+	StateIndexFinalBlockElectra        = 169
+	StateIndexSyncCommitteeOld         = 54
+	StateIndexSyncCommitteeElectra     = 86
+	StateIndexNextSyncCommitteeOld     = 55
+	StateIndexNextSyncCommitteeElectra = 87
+	StateIndexExecPayload              = 56
+	StateIndexExecHead                 = 908
+
+	BodyIndexExecPayload = 25
 )
+
+func StateIndexFinalBlock(forkName string) uint64 {
+	switch forkName {
+	case "bellatrix", "capella", "deneb":
+		return StateIndexFinalBlockOld
+	default:
+		return StateIndexFinalBlockElectra
+	}
+}
+func StateIndexSyncCommittee(forkName string) uint64 {
+	switch forkName {
+	case "bellatrix", "capella", "deneb":
+		return StateIndexSyncCommitteeOld
+	default:
+		return StateIndexSyncCommitteeElectra
+	}
+}
+func StateIndexNextSyncCommittee(forkName string) uint64 {
+	switch forkName {
+	case "bellatrix", "capella", "deneb":
+		return StateIndexNextSyncCommitteeOld
+	default:
+		return StateIndexNextSyncCommitteeElectra
+	}
+}

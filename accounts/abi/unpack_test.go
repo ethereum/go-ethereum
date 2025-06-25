@@ -31,6 +31,46 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func BenchmarkUnpack(b *testing.B) {
+	testCases := []struct {
+		def    string
+		packed string
+	}{
+		{
+			def:    `[{"type": "uint32"}]`,
+			packed: "0000000000000000000000000000000000000000000000000000000000000001",
+		},
+		{
+			def: `[{"type": "uint32[]"}]`,
+			packed: "0000000000000000000000000000000000000000000000000000000000000020" +
+				"0000000000000000000000000000000000000000000000000000000000000002" +
+				"0000000000000000000000000000000000000000000000000000000000000001" +
+				"0000000000000000000000000000000000000000000000000000000000000002",
+		},
+	}
+	for i, test := range testCases {
+		b.Run(strconv.Itoa(i), func(b *testing.B) {
+			def := fmt.Sprintf(`[{ "name" : "method", "type": "function", "outputs": %s}]`, test.def)
+			abi, err := JSON(strings.NewReader(def))
+			if err != nil {
+				b.Fatalf("invalid ABI definition %s: %v", def, err)
+			}
+			encb, err := hex.DecodeString(test.packed)
+			if err != nil {
+				b.Fatalf("invalid hex %s: %v", test.packed, err)
+			}
+
+			b.ResetTimer()
+
+			var result any
+			for range b.N {
+				result, _ = abi.Unpack("method", encb)
+			}
+			_ = result
+		})
+	}
+}
+
 // TestUnpack tests the general pack/unpack tests in packing_test.go
 func TestUnpack(t *testing.T) {
 	t.Parallel()
@@ -389,7 +429,6 @@ func TestMethodMultiReturn(t *testing.T) {
 		"Can not unpack into a slice with wrong types",
 	}}
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			require := require.New(t)
 			err := abi.UnpackIntoInterface(tc.dest, "multi", data)
@@ -947,7 +986,7 @@ func TestOOMMaliciousInput(t *testing.T) {
 		}
 		encb, err := hex.DecodeString(test.enc)
 		if err != nil {
-			t.Fatalf("invalid hex: %s" + test.enc)
+			t.Fatalf("invalid hex: %s", test.enc)
 		}
 		_, err = abi.Methods["method"].Outputs.UnpackValues(encb)
 		if err == nil {

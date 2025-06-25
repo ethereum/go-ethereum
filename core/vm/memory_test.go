@@ -1,4 +1,20 @@
-package vm_test
+// Copyright 2023 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+package vm
 
 import (
 	"bytes"
@@ -6,7 +22,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 func TestMemoryCopy(t *testing.T) {
@@ -54,7 +69,7 @@ func TestMemoryCopy(t *testing.T) {
 			"11",
 		},
 	} {
-		m := vm.NewMemory()
+		m := NewMemory()
 		// Clean spaces
 		data := common.FromHex(strings.ReplaceAll(tc.pre, " ", ""))
 		// Set pre
@@ -63,7 +78,7 @@ func TestMemoryCopy(t *testing.T) {
 		// Do the copy
 		m.Copy(tc.dst, tc.src, tc.len)
 		want := common.FromHex(strings.ReplaceAll(tc.want, " ", ""))
-		if have := m.GetStore(); !bytes.Equal(want, have) {
+		if have := m.store; !bytes.Equal(want, have) {
 			t.Errorf("case %d: want: %#x\nhave: %#x\n", i, want, have)
 		}
 	}

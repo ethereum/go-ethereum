@@ -60,36 +60,34 @@ var allPrecompiles = map[common.Address]vm.PrecompiledContract{
 	common.BytesToAddress([]byte{0x0a}): &vm.KzgPointEvaluation{},
 
 	common.BytesToAddress([]byte{0x0f, 0x0a}): &vm.Bls12381G1Add{},
-	common.BytesToAddress([]byte{0x0f, 0x0b}): &vm.Bls12381G1Mul{},
-	common.BytesToAddress([]byte{0x0f, 0x0c}): &vm.Bls12381G1MultiExp{},
-	common.BytesToAddress([]byte{0x0f, 0x0d}): &vm.Bls12381G2Add{},
-	common.BytesToAddress([]byte{0x0f, 0x0e}): &vm.Bls12381G2Mul{},
-	common.BytesToAddress([]byte{0x0f, 0x0f}): &vm.Bls12381G2MultiExp{},
-	common.BytesToAddress([]byte{0x0f, 0x10}): &vm.Bls12381Pairing{},
-	common.BytesToAddress([]byte{0x0f, 0x11}): &vm.Bls12381MapG1{},
-	common.BytesToAddress([]byte{0x0f, 0x12}): &vm.Bls12381MapG2{},
+	common.BytesToAddress([]byte{0x0f, 0x0b}): &vm.Bls12381G1MultiExp{},
+	common.BytesToAddress([]byte{0x0f, 0x0c}): &vm.Bls12381G2Add{},
+	common.BytesToAddress([]byte{0x0f, 0x0d}): &vm.Bls12381G2MultiExp{},
+	common.BytesToAddress([]byte{0x0f, 0x0e}): &vm.Bls12381Pairing{},
+	common.BytesToAddress([]byte{0x0f, 0x0f}): &vm.Bls12381MapG1{},
+	common.BytesToAddress([]byte{0x0f, 0x10}): &vm.Bls12381MapG2{},
 }
 
 // EIP-152 test vectors
-var Blake2FMalformedInputTests = []precompiledFailureTest{
+var blake2FMalformedInputTests = []precompiledFailureTest{
 	{
 		Input:         "",
-		ExpectedError: vm.ErrBlake2FInvalidInputLength.Error(),
+		ExpectedError: "invalid input length",
 		Name:          "vector 0: empty input",
 	},
 	{
 		Input:         "00000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001",
-		ExpectedError: vm.ErrBlake2FInvalidInputLength.Error(),
+		ExpectedError: "invalid input length",
 		Name:          "vector 1: less than 213 bytes input",
 	},
 	{
 		Input:         "000000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001",
-		ExpectedError: vm.ErrBlake2FInvalidInputLength.Error(),
+		ExpectedError: "invalid input length",
 		Name:          "vector 2: more than 213 bytes input",
 	},
 	{
 		Input:         "0000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000002",
-		ExpectedError: vm.ErrBlake2FInvalidFinalFlag.Error(),
+		ExpectedError: "invalid final flag",
 		Name:          "vector 3: malformed final block indicator flag",
 	},
 }
@@ -194,7 +192,7 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 	})
 }
 
-// Benchmarks the sample inputs from the ECRECOVER precompile.
+// Benchmarks the sample inputs from the vm.Ecrecover precompile.
 func BenchmarkPrecompiledEcrecover(bench *testing.B) {
 	t := precompiledTest{
 		Input:    "38d18acb67d25c8bb9942764b62f18e17054f66a817bd4295423adf9ed98873e000000000000000000000000000000000000000000000000000000000000001b38d18acb67d25c8bb9942764b62f18e17054f66a817bd4295423adf9ed98873e789d1dd423d25f0772d2748d60f7e4b81bb14d086eba8e8e8efb6dcff8a4ae02",
@@ -224,7 +222,7 @@ func BenchmarkPrecompiledRipeMD(bench *testing.B) {
 	benchmarkPrecompiled("03", t, bench)
 }
 
-// Benchmarks the sample inputs from the identiy precompile.
+// Benchmarks the sample inputs from the identity precompile.
 func BenchmarkPrecompiledIdentity(bench *testing.B) {
 	t := precompiledTest{
 		Input:    "38d18acb67d25c8bb9942764b62f18e17054f66a817bd4295423adf9ed98873e000000000000000000000000000000000000000000000000000000000000001b38d18acb67d25c8bb9942764b62f18e17054f66a817bd4295423adf9ed98873e789d1dd423d25f0772d2748d60f7e4b81bb14d086eba8e8e8efb6dcff8a4ae02",
@@ -268,7 +266,7 @@ func TestPrecompiledBlake2F(t *testing.T)      { testJson("blake2F", "09", t) }
 func BenchmarkPrecompiledBlake2F(b *testing.B) { benchJson("blake2F", "09", b) }
 
 func TestPrecompileBlake2FMalformedInput(t *testing.T) {
-	for _, test := range Blake2FMalformedInputTests {
+	for _, test := range blake2FMalformedInputTests {
 		testPrecompiledFailure("09", test, t)
 	}
 }
@@ -307,36 +305,36 @@ func benchJson(name, addr string, b *testing.B) {
 
 func TestPrecompiledBLS12381G1Add(t *testing.T)      { testJson("blsG1Add", "f0a", t) }
 func TestPrecompiledBLS12381G1Mul(t *testing.T)      { testJson("blsG1Mul", "f0b", t) }
-func TestPrecompiledBLS12381G1MultiExp(t *testing.T) { testJson("blsG1MultiExp", "f0c", t) }
-func TestPrecompiledBLS12381G2Add(t *testing.T)      { testJson("blsG2Add", "f0d", t) }
-func TestPrecompiledBLS12381G2Mul(t *testing.T)      { testJson("blsG2Mul", "f0e", t) }
-func TestPrecompiledBLS12381G2MultiExp(t *testing.T) { testJson("blsG2MultiExp", "f0f", t) }
-func TestPrecompiledBLS12381Pairing(t *testing.T)    { testJson("blsPairing", "f10", t) }
-func TestPrecompiledBLS12381MapG1(t *testing.T)      { testJson("blsMapG1", "f11", t) }
-func TestPrecompiledBLS12381MapG2(t *testing.T)      { testJson("blsMapG2", "f12", t) }
+func TestPrecompiledBLS12381G1MultiExp(t *testing.T) { testJson("blsG1MultiExp", "f0b", t) }
+func TestPrecompiledBLS12381G2Add(t *testing.T)      { testJson("blsG2Add", "f0c", t) }
+func TestPrecompiledBLS12381G2Mul(t *testing.T)      { testJson("blsG2Mul", "f0d", t) }
+func TestPrecompiledBLS12381G2MultiExp(t *testing.T) { testJson("blsG2MultiExp", "f0d", t) }
+func TestPrecompiledBLS12381Pairing(t *testing.T)    { testJson("blsPairing", "f0e", t) }
+func TestPrecompiledBLS12381MapG1(t *testing.T)      { testJson("blsMapG1", "f0f", t) }
+func TestPrecompiledBLS12381MapG2(t *testing.T)      { testJson("blsMapG2", "f10", t) }
 
 func TestPrecompiledPointEvaluation(t *testing.T) { testJson("pointEvaluation", "0a", t) }
 
+func BenchmarkPrecompiledPointEvaluation(b *testing.B) { benchJson("pointEvaluation", "0a", b) }
+
 func BenchmarkPrecompiledBLS12381G1Add(b *testing.B)      { benchJson("blsG1Add", "f0a", b) }
-func BenchmarkPrecompiledBLS12381G1Mul(b *testing.B)      { benchJson("blsG1Mul", "f0b", b) }
-func BenchmarkPrecompiledBLS12381G1MultiExp(b *testing.B) { benchJson("blsG1MultiExp", "f0c", b) }
-func BenchmarkPrecompiledBLS12381G2Add(b *testing.B)      { benchJson("blsG2Add", "f0d", b) }
-func BenchmarkPrecompiledBLS12381G2Mul(b *testing.B)      { benchJson("blsG2Mul", "f0e", b) }
-func BenchmarkPrecompiledBLS12381G2MultiExp(b *testing.B) { benchJson("blsG2MultiExp", "f0f", b) }
-func BenchmarkPrecompiledBLS12381Pairing(b *testing.B)    { benchJson("blsPairing", "f10", b) }
-func BenchmarkPrecompiledBLS12381MapG1(b *testing.B)      { benchJson("blsMapG1", "f11", b) }
-func BenchmarkPrecompiledBLS12381MapG2(b *testing.B)      { benchJson("blsMapG2", "f12", b) }
+func BenchmarkPrecompiledBLS12381G1MultiExp(b *testing.B) { benchJson("blsG1MultiExp", "f0b", b) }
+func BenchmarkPrecompiledBLS12381G2Add(b *testing.B)      { benchJson("blsG2Add", "f0c", b) }
+func BenchmarkPrecompiledBLS12381G2MultiExp(b *testing.B) { benchJson("blsG2MultiExp", "f0d", b) }
+func BenchmarkPrecompiledBLS12381Pairing(b *testing.B)    { benchJson("blsPairing", "f0e", b) }
+func BenchmarkPrecompiledBLS12381MapG1(b *testing.B)      { benchJson("blsMapG1", "f0f", b) }
+func BenchmarkPrecompiledBLS12381MapG2(b *testing.B)      { benchJson("blsMapG2", "f10", b) }
 
 // Failure tests
 func TestPrecompiledBLS12381G1AddFail(t *testing.T)      { testJsonFail("blsG1Add", "f0a", t) }
 func TestPrecompiledBLS12381G1MulFail(t *testing.T)      { testJsonFail("blsG1Mul", "f0b", t) }
-func TestPrecompiledBLS12381G1MultiExpFail(t *testing.T) { testJsonFail("blsG1MultiExp", "f0c", t) }
-func TestPrecompiledBLS12381G2AddFail(t *testing.T)      { testJsonFail("blsG2Add", "f0d", t) }
-func TestPrecompiledBLS12381G2MulFail(t *testing.T)      { testJsonFail("blsG2Mul", "f0e", t) }
-func TestPrecompiledBLS12381G2MultiExpFail(t *testing.T) { testJsonFail("blsG2MultiExp", "f0f", t) }
-func TestPrecompiledBLS12381PairingFail(t *testing.T)    { testJsonFail("blsPairing", "f10", t) }
-func TestPrecompiledBLS12381MapG1Fail(t *testing.T)      { testJsonFail("blsMapG1", "f11", t) }
-func TestPrecompiledBLS12381MapG2Fail(t *testing.T)      { testJsonFail("blsMapG2", "f12", t) }
+func TestPrecompiledBLS12381G1MultiExpFail(t *testing.T) { testJsonFail("blsG1MultiExp", "f0b", t) }
+func TestPrecompiledBLS12381G2AddFail(t *testing.T)      { testJsonFail("blsG2Add", "f0c", t) }
+func TestPrecompiledBLS12381G2MulFail(t *testing.T)      { testJsonFail("blsG2Mul", "f0d", t) }
+func TestPrecompiledBLS12381G2MultiExpFail(t *testing.T) { testJsonFail("blsG2MultiExp", "f0d", t) }
+func TestPrecompiledBLS12381PairingFail(t *testing.T)    { testJsonFail("blsPairing", "f0e", t) }
+func TestPrecompiledBLS12381MapG1Fail(t *testing.T)      { testJsonFail("blsMapG1", "f0f", t) }
+func TestPrecompiledBLS12381MapG2Fail(t *testing.T)      { testJsonFail("blsMapG2", "f10", t) }
 
 func loadJson(name string) ([]precompiledTest, error) {
 	data, err := os.ReadFile(fmt.Sprintf("testdata/precompiles/%v.json", name))
@@ -373,7 +371,7 @@ func BenchmarkPrecompiledBLS12381G1MultiExpWorstCase(b *testing.B) {
 		Name:        "WorstCaseG1",
 		NoBenchmark: false,
 	}
-	benchmarkPrecompiled("0c", testcase, b)
+	benchmarkPrecompiled("f0c", testcase, b)
 }
 
 // BenchmarkPrecompiledBLS12381G2MultiExpWorstCase benchmarks the worst case we could find that still fits a gaslimit of 10MGas.
@@ -394,5 +392,5 @@ func BenchmarkPrecompiledBLS12381G2MultiExpWorstCase(b *testing.B) {
 		Name:        "WorstCaseG2",
 		NoBenchmark: false,
 	}
-	benchmarkPrecompiled("0f", testcase, b)
+	benchmarkPrecompiled("f0f", testcase, b)
 }

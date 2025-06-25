@@ -14,15 +14,15 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !js
-// +build !js
+//go:build !js && !wasip1
+// +build !js,!wasip1
 
 // Package leveldb implements the key-value database layer based on LevelDB.
 package leveldb
 
 import (
+	"bytes"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -62,21 +62,21 @@ type Database struct {
 	fn string      // filename for reporting
 	db *leveldb.DB // LevelDB instance
 
-	compTimeMeter       metrics.Meter // Meter for measuring the total time spent in database compaction
-	compReadMeter       metrics.Meter // Meter for measuring the data read during compaction
-	compWriteMeter      metrics.Meter // Meter for measuring the data written during compaction
-	writeDelayNMeter    metrics.Meter // Meter for measuring the write delay number due to database compaction
-	writeDelayMeter     metrics.Meter // Meter for measuring the write delay duration due to database compaction
-	diskSizeGauge       metrics.Gauge // Gauge for tracking the size of all the levels in the database
-	diskReadMeter       metrics.Meter // Meter for measuring the effective amount of data read
-	diskWriteMeter      metrics.Meter // Meter for measuring the effective amount of data written
-	memCompGauge        metrics.Gauge // Gauge for tracking the number of memory compaction
-	level0CompGauge     metrics.Gauge // Gauge for tracking the number of table compaction in level0
-	nonlevel0CompGauge  metrics.Gauge // Gauge for tracking the number of table compaction in non0 level
-	seekCompGauge       metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
-	manualMemAllocGauge metrics.Gauge // Gauge to track the amount of memory that has been manually allocated (not a part of runtime/GC)
+	compTimeMeter       *metrics.Meter // Meter for measuring the total time spent in database compaction
+	compReadMeter       *metrics.Meter // Meter for measuring the data read during compaction
+	compWriteMeter      *metrics.Meter // Meter for measuring the data written during compaction
+	writeDelayNMeter    *metrics.Meter // Meter for measuring the write delay number due to database compaction
+	writeDelayMeter     *metrics.Meter // Meter for measuring the write delay duration due to database compaction
+	diskSizeGauge       *metrics.Gauge // Gauge for tracking the size of all the levels in the database
+	diskReadMeter       *metrics.Meter // Meter for measuring the effective amount of data read
+	diskWriteMeter      *metrics.Meter // Meter for measuring the effective amount of data written
+	memCompGauge        *metrics.Gauge // Gauge for tracking the number of memory compaction
+	level0CompGauge     *metrics.Gauge // Gauge for tracking the number of table compaction in level0
+	nonlevel0CompGauge  *metrics.Gauge // Gauge for tracking the number of table compaction in non0 level
+	seekCompGauge       *metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
+	manualMemAllocGauge *metrics.Gauge // Gauge to track the amount of memory that has been manually allocated (not a part of runtime/GC)
 
-	levelsGauge []metrics.Gauge // Gauge for tracking the number of tables in levels
+	levelsGauge []*metrics.Gauge // Gauge for tracking the number of tables in levels
 
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
@@ -207,6 +207,34 @@ func (db *Database) Delete(key []byte) error {
 	return db.db.Delete(key, nil)
 }
 
+// DeleteRange deletes all of the keys (and values) in the range [start,end)
+// (inclusive on start, exclusive on end).
+// Note that this is a fallback implementation as leveldb does not natively
+// support range deletion. It can be slow and therefore the number of deleted
+// keys is limited in order to avoid blocking for a very long time.
+// ErrTooManyKeys is returned if the range has only been partially deleted.
+// In this case the caller can repeat the call until it finally succeeds.
+func (db *Database) DeleteRange(start, end []byte) error {
+	batch := db.NewBatch()
+	it := db.NewIterator(nil, start)
+	defer it.Release()
+
+	var count int
+	for it.Next() && bytes.Compare(end, it.Key()) > 0 {
+		count++
+		if count > 10000 { // should not block for more than a second
+			if err := batch.Write(); err != nil {
+				return err
+			}
+			return ethdb.ErrTooManyKeys
+		}
+		if err := batch.Delete(it.Key()); err != nil {
+			return err
+		}
+	}
+	return batch.Write()
+}
+
 // NewBatch creates a write-only key-value store that buffers changes to its host
 // database until a final write is called.
 func (db *Database) NewBatch() ethdb.Batch {
@@ -231,27 +259,53 @@ func (db *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 	return db.db.NewIterator(bytesPrefixRange(prefix, start), nil)
 }
 
-// NewSnapshot creates a database snapshot based on the current state.
-// The created snapshot will not be affected by all following mutations
-// happened on the database.
-// Note don't forget to release the snapshot once it's used up, otherwise
-// the stale data will never be cleaned up by the underlying compactor.
-func (db *Database) NewSnapshot() (ethdb.Snapshot, error) {
-	snap, err := db.db.GetSnapshot()
-	if err != nil {
-		return nil, err
+// Stat returns the statistic data of the database.
+func (db *Database) Stat() (string, error) {
+	var stats leveldb.DBStats
+	if err := db.db.Stats(&stats); err != nil {
+		return "", err
 	}
-	return &snapshot{db: snap}, nil
-}
+	var (
+		message       string
+		totalRead     int64
+		totalWrite    int64
+		totalSize     int64
+		totalTables   int
+		totalDuration time.Duration
+	)
+	if len(stats.LevelSizes) > 0 {
+		message += " Level |   Tables   |    Size(MB)   |    Time(sec)  |    Read(MB)   |   Write(MB)\n" +
+			"-------+------------+---------------+---------------+---------------+---------------\n"
+		for level, size := range stats.LevelSizes {
+			read := stats.LevelRead[level]
+			write := stats.LevelWrite[level]
+			duration := stats.LevelDurations[level]
+			tables := stats.LevelTablesCounts[level]
 
-// Stat returns a particular internal stat of the database.
-func (db *Database) Stat(property string) (string, error) {
-	if property == "" {
-		property = "leveldb.stats"
-	} else if !strings.HasPrefix(property, "leveldb.") {
-		property = "leveldb." + property
+			if tables == 0 && duration == 0 {
+				continue
+			}
+			totalTables += tables
+			totalSize += size
+			totalRead += read
+			totalWrite += write
+			totalDuration += duration
+			message += fmt.Sprintf(" %3d   | %10d | %13.5f | %13.5f | %13.5f | %13.5f\n",
+				level, tables, float64(size)/1048576.0, duration.Seconds(),
+				float64(read)/1048576.0, float64(write)/1048576.0)
+		}
+		message += "-------+------------+---------------+---------------+---------------+---------------\n"
+		message += fmt.Sprintf(" Total | %10d | %13.5f | %13.5f | %13.5f | %13.5f\n",
+			totalTables, float64(totalSize)/1048576.0, totalDuration.Seconds(),
+			float64(totalRead)/1048576.0, float64(totalWrite)/1048576.0)
+		message += "-------+------------+---------------+---------------+---------------+---------------\n\n"
 	}
-	return db.db.GetProperty(property)
+	message += fmt.Sprintf("Read(MB):%.5f Write(MB):%.5f\n", float64(stats.IORead)/1048576.0, float64(stats.IOWrite)/1048576.0)
+	message += fmt.Sprintf("BlockCache(MB):%.5f FileCache:%d\n", float64(stats.BlockCacheSize)/1048576.0, stats.OpenedTablesCount)
+	message += fmt.Sprintf("MemoryCompaction:%d Level0Compaction:%d NonLevel0Compaction:%d SeekCompaction:%d\n", stats.MemComp, stats.Level0Comp, stats.NonLevel0Comp, stats.SeekComp)
+	message += fmt.Sprintf("WriteDelayCount:%d WriteDelayDuration:%s Paused:%t\n", stats.WriteDelayCount, common.PrettyDuration(stats.WriteDelayDuration), stats.WritePaused)
+	message += fmt.Sprintf("Snapshots:%d Iterators:%d\n", stats.AliveSnapshots, stats.AliveIterators)
+	return message, nil
 }
 
 // Compact flattens the underlying data store for the given key range. In essence,
@@ -312,29 +366,17 @@ func (db *Database) meter(refresh time.Duration, namespace string) {
 		compactions[i%2][2] = stats.LevelRead.Sum()
 		compactions[i%2][3] = stats.LevelWrite.Sum()
 		// Update all the requested meters
-		if db.diskSizeGauge != nil {
-			db.diskSizeGauge.Update(compactions[i%2][0])
-		}
-		if db.compTimeMeter != nil {
-			db.compTimeMeter.Mark(compactions[i%2][1] - compactions[(i-1)%2][1])
-		}
-		if db.compReadMeter != nil {
-			db.compReadMeter.Mark(compactions[i%2][2] - compactions[(i-1)%2][2])
-		}
-		if db.compWriteMeter != nil {
-			db.compWriteMeter.Mark(compactions[i%2][3] - compactions[(i-1)%2][3])
-		}
+		db.diskSizeGauge.Update(compactions[i%2][0])
+		db.compTimeMeter.Mark(compactions[i%2][1] - compactions[(i-1)%2][1])
+		db.compReadMeter.Mark(compactions[i%2][2] - compactions[(i-1)%2][2])
+		db.compWriteMeter.Mark(compactions[i%2][3] - compactions[(i-1)%2][3])
 		var (
 			delayN   = int64(stats.WriteDelayCount)
 			duration = stats.WriteDelayDuration
 			paused   = stats.WritePaused
 		)
-		if db.writeDelayNMeter != nil {
-			db.writeDelayNMeter.Mark(delayN - delaystats[0])
-		}
-		if db.writeDelayMeter != nil {
-			db.writeDelayMeter.Mark(duration.Nanoseconds() - delaystats[1])
-		}
+		db.writeDelayNMeter.Mark(delayN - delaystats[0])
+		db.writeDelayMeter.Mark(duration.Nanoseconds() - delaystats[1])
 		// If a warning that db is performing compaction has been displayed, any subsequent
 		// warnings will be withheld for one minute not to overwhelm the user.
 		if paused && delayN-delaystats[0] == 0 && duration.Nanoseconds()-delaystats[1] == 0 &&
@@ -348,12 +390,8 @@ func (db *Database) meter(refresh time.Duration, namespace string) {
 			nRead  = int64(stats.IORead)
 			nWrite = int64(stats.IOWrite)
 		)
-		if db.diskReadMeter != nil {
-			db.diskReadMeter.Mark(nRead - iostats[0])
-		}
-		if db.diskWriteMeter != nil {
-			db.diskWriteMeter.Mark(nWrite - iostats[1])
-		}
+		db.diskReadMeter.Mark(nRead - iostats[0])
+		db.diskWriteMeter.Mark(nWrite - iostats[1])
 		iostats[0], iostats[1] = nRead, nWrite
 
 		db.memCompGauge.Update(int64(stats.MemComp))
@@ -400,7 +438,7 @@ func (b *batch) Put(key, value []byte) error {
 	return nil
 }
 
-// Delete inserts the a key removal into the batch for later committing.
+// Delete inserts the key removal into the batch for later committing.
 func (b *batch) Delete(key []byte) error {
 	b.b.Delete(key)
 	b.size += len(key)
@@ -459,27 +497,4 @@ func bytesPrefixRange(prefix, start []byte) *util.Range {
 	r := util.BytesPrefix(prefix)
 	r.Start = append(r.Start, start...)
 	return r
-}
-
-// snapshot wraps a leveldb snapshot for implementing the Snapshot interface.
-type snapshot struct {
-	db *leveldb.Snapshot
-}
-
-// Has retrieves if a key is present in the snapshot backing by a key-value
-// data store.
-func (snap *snapshot) Has(key []byte) (bool, error) {
-	return snap.db.Has(key, nil)
-}
-
-// Get retrieves the given key if it's present in the snapshot backing by
-// key-value data store.
-func (snap *snapshot) Get(key []byte) ([]byte, error) {
-	return snap.db.Get(key, nil)
-}
-
-// Release releases associated resources. Release should always succeed and can
-// be called multiple times without causing error.
-func (snap *snapshot) Release() {
-	snap.db.Release()
 }

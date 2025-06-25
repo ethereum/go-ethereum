@@ -18,7 +18,6 @@ package tests
 
 import (
 	"math/rand"
-	"runtime"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -26,11 +25,11 @@ import (
 
 func TestBlockchain(t *testing.T) {
 	bt := new(testMatcher)
-	// General state tests are 'exported' as blockchain tests, but we can run them natively.
-	// For speedier CI-runs, the line below can be uncommented, so those are skipped.
-	// For now, in hardfork-times (Berlin), we run the tests both as StateTests and
-	// as blockchain tests, since the latter also covers things like receipt root
-	bt.skipLoad(`^GeneralStateTests/`)
+
+	// We are running most of GeneralStatetests to tests witness support, even
+	// though they are ran as state tests too. Still, the performance tests are
+	// less about state andmore about EVM number crunching, so skip those.
+	bt.skipLoad(`^GeneralStateTests/VMTests/vmPerformance`)
 
 	// Skip random failures due to selfish mining test
 	bt.skipLoad(`.*bcForgedTest/bcForkUncle\.json`)
@@ -49,10 +48,24 @@ func TestBlockchain(t *testing.T) {
 	// using 4.6 TGas
 	bt.skipLoad(`.*randomStatetest94.json.*`)
 
+	// After the merge we would accept side chains as canonical even if they have lower td
+	bt.skipLoad(`.*bcMultiChainTest/ChainAtoChainB_difficultyB.json`)
+	bt.skipLoad(`.*bcMultiChainTest/CallContractFromNotBestBlock.json`)
+	bt.skipLoad(`.*bcTotalDifficultyTest/uncleBlockAtBlock3afterBlock4.json`)
+	bt.skipLoad(`.*bcTotalDifficultyTest/lotsOfBranchesOverrideAtTheMiddle.json`)
+	bt.skipLoad(`.*bcTotalDifficultyTest/sideChainWithMoreTransactions.json`)
+	bt.skipLoad(`.*bcForkStressTest/ForkStressTest.json`)
+	bt.skipLoad(`.*bcMultiChainTest/lotsOfLeafs.json`)
+	bt.skipLoad(`.*bcFrontierToHomestead/blockChainFrontierWithLargerTDvsHomesteadBlockchain.json`)
+	bt.skipLoad(`.*bcFrontierToHomestead/blockChainFrontierWithLargerTDvsHomesteadBlockchain2.json`)
+
+	// With chain history removal, TDs become unavailable, this transition tests based on TTD are unrunnable
+	bt.skipLoad(`.*bcArrowGlacierToParis/powToPosBlockRejection.json`)
+
+	// This directory contains no test.
+	bt.skipLoad(`.*\.meta/.*`)
+
 	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
-		if runtime.GOARCH == "386" && runtime.GOOS == "windows" && rand.Int63()%2 == 0 {
-			t.Skip("test (randomly) skipped on 32-bit windows")
-		}
 		execBlockTest(t, bt, test)
 	})
 	// There is also a LegacyTests folder, containing blockchain tests generated
@@ -60,34 +73,39 @@ func TestBlockchain(t *testing.T) {
 	// which run natively, so there's no reason to run them here.
 }
 
-// TestExecutionSpec runs the test fixtures from execution-spec-tests.
-func TestExecutionSpec(t *testing.T) {
+// TestExecutionSpecBlocktests runs the test fixtures from execution-spec-tests.
+func TestExecutionSpecBlocktests(t *testing.T) {
 	t.Skip("state root will be different from what official geth calculates because we don't burn")
-	// if !common.FileExist(executionSpecDir) {
-	// 	t.Skipf("directory %s does not exist", executionSpecDir)
+	// if !common.FileExist(executionSpecBlockchainTestDir) {
+	// 	t.Skipf("directory %s does not exist", executionSpecBlockchainTestDir)
 	// }
 	// bt := new(testMatcher)
 
-	// bt.walk(t, executionSpecDir, func(t *testing.T, name string, test *BlockTest) {
+	// bt.walk(t, executionSpecBlockchainTestDir, func(t *testing.T, name string, test *BlockTest) {
 	// 	execBlockTest(t, bt, test)
 	// })
 }
 
 func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest) {
-	if err := bt.checkFailure(t, test.Run(false, rawdb.HashScheme, nil, nil)); err != nil {
-		t.Errorf("test in hash mode without snapshotter failed: %v", err)
-		return
+	// Define all the different flag combinations we should run the tests with,
+	// picking only one for short tests.
+	//
+	// Note, witness building and self-testing is always enabled as it's a very
+	// good test to ensure that we don't break it.
+	var (
+		snapshotConf = []bool{false, true}
+		dbschemeConf = []string{rawdb.HashScheme, rawdb.PathScheme}
+	)
+	if testing.Short() {
+		snapshotConf = []bool{snapshotConf[rand.Int()%2]}
+		dbschemeConf = []string{dbschemeConf[rand.Int()%2]}
 	}
-	if err := bt.checkFailure(t, test.Run(true, rawdb.HashScheme, nil, nil)); err != nil {
-		t.Errorf("test in hash mode with snapshotter failed: %v", err)
-		return
-	}
-	if err := bt.checkFailure(t, test.Run(false, rawdb.PathScheme, nil, nil)); err != nil {
-		t.Errorf("test in path mode without snapshotter failed: %v", err)
-		return
-	}
-	if err := bt.checkFailure(t, test.Run(true, rawdb.PathScheme, nil, nil)); err != nil {
-		t.Errorf("test in path mode with snapshotter failed: %v", err)
-		return
+	for _, snapshot := range snapshotConf {
+		for _, dbscheme := range dbschemeConf {
+			if err := bt.checkFailure(t, test.Run(snapshot, dbscheme, true, nil, nil)); err != nil {
+				t.Errorf("test with config {snapshotter:%v, scheme:%v} failed: %v", snapshot, dbscheme, err)
+				return
+			}
+		}
 	}
 }

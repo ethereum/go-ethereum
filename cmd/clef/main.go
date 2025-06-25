@@ -42,8 +42,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/lib/ethapi"
-	"github.com/ethereum/go-ethereum/lib/flags"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -57,7 +57,6 @@ import (
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
-	"golang.org/x/exp/slog"
 )
 
 const legalWarning = `
@@ -101,7 +100,7 @@ var (
 	chainIdFlag = &cli.Int64Flag{
 		Name:  "chainid",
 		Value: params.MainnetChainConfig.ChainID.Int64(),
-		Usage: "Chain id to use for signing (1=mainnet, 5=Goerli)",
+		Usage: "Chain id to use for signing (1=mainnet, 17000=Holesky)",
 	}
 	rpcPortFlag = &cli.IntFlag{
 		Name:     "http.port",
@@ -493,7 +492,8 @@ func initialize(c *cli.Context) error {
 	if usecolor {
 		output = colorable.NewColorable(logOutput)
 	}
-	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(output, slog.Level(c.Int(logLevelFlag.Name)), usecolor)))
+	verbosity := log.FromLegacyLevel(c.Int(logLevelFlag.Name))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(output, verbosity, usecolor)))
 
 	return nil
 }
@@ -552,7 +552,7 @@ func listWallets(c *cli.Context) error {
 // accountImport imports a raw hexadecimal private key via CLI.
 func accountImport(c *cli.Context) error {
 	if c.Args().Len() != 1 {
-		return errors.New("<keyfile> must be given as first argument.")
+		return errors.New("<keyfile> must be given as first argument")
 	}
 	internalApi, ui, err := initInternalApi(c)
 	if err != nil {
@@ -704,6 +704,7 @@ func signer(c *cli.Context) error {
 	log.Info("Starting signer", "chainid", chainId, "keystore", ksLoc,
 		"light-kdf", lightKdf, "advanced", advanced)
 	am := core.StartClefAccountManager(ksLoc, nousb, lightKdf, scpath)
+	defer am.Close()
 	apiImpl := core.NewSignerAPI(am, chainId, nousb, ui, db, advanced, pwStorage)
 
 	// Establish the bidirectional communication, by creating a new UI backend and registering

@@ -25,29 +25,23 @@ import (
 )
 
 const (
-	blsG1Add      = byte(10)
-	blsG1Mul      = byte(11)
+	blsG1Add      = byte(11)
 	blsG1MultiExp = byte(12)
 	blsG2Add      = byte(13)
-	blsG2Mul      = byte(14)
-	blsG2MultiExp = byte(15)
-	blsPairing    = byte(16)
-	blsMapG1      = byte(17)
-	blsMapG2      = byte(18)
+	blsG2MultiExp = byte(14)
+	blsPairing    = byte(15)
+	blsMapG1      = byte(16)
+	blsMapG2      = byte(17)
 )
 
 func checkInput(id byte, inputLen int) bool {
 	switch id {
 	case blsG1Add:
 		return inputLen == 256
-	case blsG1Mul:
-		return inputLen == 160
 	case blsG1MultiExp:
 		return inputLen%160 == 0
 	case blsG2Add:
 		return inputLen == 512
-	case blsG2Mul:
-		return inputLen == 288
 	case blsG2MultiExp:
 		return inputLen%288 == 0
 	case blsPairing:

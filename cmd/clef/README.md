@@ -2,7 +2,7 @@
 
 Clef can be used to sign transactions and data and is meant as a(n eventual) replacement for Geth's account management. This allows DApps to not depend on Geth's account management. When a DApp wants to sign data (or a transaction), it can send the content to Clef, which will then provide the user with context and asks for permission to sign the content. If the users grants the signing request, Clef will send the signature back to the DApp.
 
-This setup allows a DApp to connect to a remote Ethereum node and send transactions that are locally signed. This can help in situations when a DApp is connected to an untrusted remote Ethereum node, because a local one is not available, not synchronised with the chain, or is a node that has no built-in (or limited) account management.
+This setup allows a DApp to connect to a remote Ethereum node and send transactions that are locally signed. This can help in situations when a DApp is connected to an untrusted remote Ethereum node, because a local one is not available, not synchronized with the chain, or is a node that has no built-in (or limited) account management.
 
 Clef can run as a daemon on the same machine, off a usb-stick like [USB armory](https://inversepath.com/usbarmory), or even a separate VM in a [QubesOS](https://www.qubes-os.org/) type setup.
 
@@ -29,7 +29,7 @@ GLOBAL OPTIONS:
    --loglevel value        log level to emit to the screen (default: 4)
    --keystore value        Directory for the keystore (default: "$HOME/.ethereum/keystore")
    --configdir value       Directory for Clef configuration (default: "$HOME/.clef")
-   --chainid value         Chain id to use for signing (1=mainnet, 5=Goerli) (default: 1)
+   --chainid value         Chain id to use for signing (1=mainnet, 17000=Holesky) (default: 1)
    --lightkdf              Reduce key-derivation RAM & CPU usage at some expense of KDF strength
    --nousb                 Disables monitoring for and managing USB hardware wallets
    --pcscdpath value       Path to the smartcard daemon (pcscd) socket file (default: "/run/pcscd/pcscd.comm")
@@ -225,8 +225,8 @@ Response
      - `value` [number:optional]: amount of Wei to send with the transaction
      - `data` [data:optional]:  input data
      - `nonce` [number]: account nonce
-  1. method signature [string:optional]
-     - The method signature, if present, is to aid decoding the calldata. Should consist of `methodname(paramtype,...)`, e.g. `transfer(uint256,address)`. The signer may use this data to parse the supplied calldata, and show the user. The data, however, is considered totally untrusted, and reliability is not expected.
+  2. method signature [string:optional]
+       - The method signature, if present, is to aid decoding the calldata. Should consist of `methodname(paramtype,...)`, e.g. `transfer(uint256,address)`. The signer may use this data to parse the supplied calldata, and show the user. The data, however, is considered totally untrusted, and reliability is not expected.
 
 
 #### Result
@@ -916,7 +916,7 @@ There are a couple of implementation for a UI. We'll try to keep this list up to
 
 | Name | Repo | UI type| No external resources| Blocky support| Verifies permissions | Hash information | No secondary storage | Statically linked| Can modify parameters|
 | ---- | ---- | -------| ---- | ---- | ---- |---- | ---- | ---- | ---- |
-| QtSigner| https://github.com/holiman/qtsigner/| Python3/QT-based| :+1:| :+1:| :+1:| :+1:| :+1:| :x: |  :+1: (partially)|
-| GtkSigner| https://github.com/holiman/gtksigner| Python3/GTK-based| :+1:| :x:| :x:| :+1:| :+1:| :x: |  :x: |
-| Frame | https://github.com/floating/frame/commits/go-signer| Electron-based| :x:| :x:| :x:| :x:| ?| :x: |  :x: |
-| Clef UI| https://github.com/ethereum/clef-ui| Golang/QT-based| :+1:| :+1:| :x:| :+1:| :+1:| :x: |  :+1: (approve tx only)|
+| QtSigner| https://github.com/holiman/qtsigner/ | Python3/QT-based| :+1:| :+1:| :+1:| :+1:| :+1:| :x: |  :+1: (partially)|
+| GtkSigner| https://github.com/holiman/gtksigner | Python3/GTK-based| :+1:| :x:| :x:| :+1:| :+1:| :x: |  :x: |
+| Frame | https://github.com/floating/frame/commits/go-signer | Electron-based| :x:| :x:| :x:| :x:| ?| :x: |  :x: |
+| Clef UI| https://github.com/ethereum/clef-ui | Golang/QT-based| :+1:| :+1:| :x:| :+1:| :+1:| :x: |  :+1: (approve tx only)|

@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 func TestDeriveSha(t *testing.T) {
@@ -39,7 +40,7 @@ func TestDeriveSha(t *testing.T) {
 		t.Fatal(err)
 	}
 	for len(txs) < 1000 {
-		exp := types.DeriveSha(txs, trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase(), nil)))
+		exp := types.DeriveSha(txs, trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)))
 		got := types.DeriveSha(txs, trie.NewStackTrie(nil))
 		if !bytes.Equal(got[:], exp[:]) {
 			t.Fatalf("%d txs: got %x exp %x", len(txs), got, exp)
@@ -86,7 +87,7 @@ func BenchmarkDeriveSha200(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			exp = types.DeriveSha(txs, trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase(), nil)))
+			exp = types.DeriveSha(txs, trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)))
 		}
 	})
 
@@ -107,10 +108,10 @@ func TestFuzzDeriveSha(t *testing.T) {
 	rndSeed := mrand.Int()
 	for i := 0; i < 10; i++ {
 		seed := rndSeed + i
-		exp := types.DeriveSha(newDummy(i), trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase(), nil)))
+		exp := types.DeriveSha(newDummy(i), trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)))
 		got := types.DeriveSha(newDummy(i), trie.NewStackTrie(nil))
 		if !bytes.Equal(got[:], exp[:]) {
-			printList(newDummy(seed))
+			printList(t, newDummy(seed))
 			t.Fatalf("seed %d: got %x exp %x", seed, got, exp)
 		}
 	}
@@ -135,7 +136,7 @@ func TestDerivableList(t *testing.T) {
 		},
 	}
 	for i, tc := range tcs[1:] {
-		exp := types.DeriveSha(flatList(tc), trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase(), nil)))
+		exp := types.DeriveSha(flatList(tc), trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)))
 		got := types.DeriveSha(flatList(tc), trie.NewStackTrie(nil))
 		if !bytes.Equal(got[:], exp[:]) {
 			t.Fatalf("case %d: got %x exp %x", i, got, exp)
@@ -191,15 +192,21 @@ func (d *dummyDerivableList) EncodeIndex(i int, w *bytes.Buffer) {
 	io.CopyN(w, mrand.New(src), size)
 }
 
-func printList(l types.DerivableList) {
-	fmt.Printf("list length: %d\n", l.Len())
-	fmt.Printf("{\n")
+func printList(t *testing.T, l types.DerivableList) {
+	var buf bytes.Buffer
+	_, _ = fmt.Fprintf(&buf, "list length: %d, ", l.Len())
+	buf.WriteString("list: [")
 	for i := 0; i < l.Len(); i++ {
-		var buf bytes.Buffer
-		l.EncodeIndex(i, &buf)
-		fmt.Printf("\"%#x\",\n", buf.Bytes())
+		var itemBuf bytes.Buffer
+		l.EncodeIndex(i, &itemBuf)
+		if i == l.Len()-1 {
+			_, _ = fmt.Fprintf(&buf, "\"%#x\"", itemBuf.Bytes())
+		} else {
+			_, _ = fmt.Fprintf(&buf, "\"%#x\",", itemBuf.Bytes())
+		}
 	}
-	fmt.Printf("},\n")
+	buf.WriteString("]")
+	t.Log(buf.String())
 }
 
 type flatList []string

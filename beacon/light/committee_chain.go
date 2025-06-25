@@ -70,34 +70,38 @@ type CommitteeChain struct {
 	committees          *canonicalStore[*types.SerializedSyncCommittee]
 	fixedCommitteeRoots *canonicalStore[common.Hash]
 	committeeCache      *lru.Cache[uint64, syncCommittee] // cache deserialized committees
+	changeCounter       uint64
 
 	clock       mclock.Clock         // monotonic clock (simulated clock in tests)
 	unixNano    func() int64         // system clock (simulated clock in tests)
 	sigVerifier committeeSigVerifier // BLS sig verifier (dummy verifier in tests)
 
-	config             *types.ChainConfig
-	signerThreshold    int
+	config             *params.ChainConfig
 	minimumUpdateScore types.UpdateScore
 	enforceTime        bool // enforceTime specifies whether the age of a signed header should be checked
 }
 
 // NewCommitteeChain creates a new CommitteeChain.
-func NewCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signerThreshold int, enforceTime bool) *CommitteeChain {
+func NewCommitteeChain(db ethdb.KeyValueStore, config *params.ChainConfig, signerThreshold int, enforceTime bool) *CommitteeChain {
 	return newCommitteeChain(db, config, signerThreshold, enforceTime, blsVerifier{}, &mclock.System{}, func() int64 { return time.Now().UnixNano() })
+}
+
+// NewTestCommitteeChain creates a new CommitteeChain for testing.
+func NewTestCommitteeChain(db ethdb.KeyValueStore, config *params.ChainConfig, signerThreshold int, enforceTime bool, clock *mclock.Simulated) *CommitteeChain {
+	return newCommitteeChain(db, config, signerThreshold, enforceTime, dummyVerifier{}, clock, func() int64 { return int64(clock.Now()) })
 }
 
 // newCommitteeChain creates a new CommitteeChain with the option of replacing the
 // clock source and signature verification for testing purposes.
-func newCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signerThreshold int, enforceTime bool, sigVerifier committeeSigVerifier, clock mclock.Clock, unixNano func() int64) *CommitteeChain {
+func newCommitteeChain(db ethdb.KeyValueStore, config *params.ChainConfig, signerThreshold int, enforceTime bool, sigVerifier committeeSigVerifier, clock mclock.Clock, unixNano func() int64) *CommitteeChain {
 	s := &CommitteeChain{
-		committeeCache:  lru.NewCache[uint64, syncCommittee](10),
-		db:              db,
-		sigVerifier:     sigVerifier,
-		clock:           clock,
-		unixNano:        unixNano,
-		config:          config,
-		signerThreshold: signerThreshold,
-		enforceTime:     enforceTime,
+		committeeCache: lru.NewCache[uint64, syncCommittee](10),
+		db:             db,
+		sigVerifier:    sigVerifier,
+		clock:          clock,
+		unixNano:       unixNano,
+		config:         config,
+		enforceTime:    enforceTime,
 		minimumUpdateScore: types.UpdateScore{
 			SignerCount:    uint32(signerThreshold),
 			SubPeriodIndex: params.SyncPeriodLength / 16,
@@ -181,20 +185,20 @@ func (s *CommitteeChain) Reset() {
 	if err := s.rollback(0); err != nil {
 		log.Error("Error writing batch into chain database", "error", err)
 	}
+	s.changeCounter++
 }
 
-// CheckpointInit initializes a CommitteeChain based on the checkpoint.
+// CheckpointInit initializes a CommitteeChain based on a checkpoint.
 // Note: if the chain is already initialized and the committees proven by the
 // checkpoint do match the existing chain then the chain is retained and the
 // new checkpoint becomes fixed.
-func (s *CommitteeChain) CheckpointInit(bootstrap *types.BootstrapData) error {
+func (s *CommitteeChain) CheckpointInit(bootstrap types.BootstrapData) error {
 	s.chainmu.Lock()
 	defer s.chainmu.Unlock()
 
 	if err := bootstrap.Validate(); err != nil {
 		return err
 	}
-
 	period := bootstrap.Header.SyncPeriod()
 	if err := s.deleteFixedCommitteeRootsFrom(period + 2); err != nil {
 		s.Reset()
@@ -215,6 +219,7 @@ func (s *CommitteeChain) CheckpointInit(bootstrap *types.BootstrapData) error {
 		s.Reset()
 		return err
 	}
+	s.changeCounter++
 	return nil
 }
 
@@ -367,6 +372,7 @@ func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommi
 			return ErrWrongCommitteeRoot
 		}
 	}
+	s.changeCounter++
 	if reorg {
 		if err := s.rollback(period + 1); err != nil {
 			return err
@@ -403,6 +409,13 @@ func (s *CommitteeChain) NextSyncPeriod() (uint64, bool) {
 		return s.updates.periods.End, true
 	}
 	return s.committees.periods.End - 1, true
+}
+
+func (s *CommitteeChain) ChangeCounter() uint64 {
+	s.chainmu.RLock()
+	defer s.chainmu.RUnlock()
+
+	return s.changeCounter
 }
 
 // rollback removes all committees and fixed roots from the given period and updates
@@ -452,12 +465,12 @@ func (s *CommitteeChain) getSyncCommittee(period uint64) (syncCommittee, error) 
 	if sc, ok := s.committees.get(s.db, period); ok {
 		c, err := s.sigVerifier.deserializeSyncCommittee(sc)
 		if err != nil {
-			return nil, fmt.Errorf("Sync committee #%d deserialization error: %v", period, err)
+			return nil, fmt.Errorf("sync committee #%d deserialization error: %v", period, err)
 		}
 		s.committeeCache.Add(period, c)
 		return c, nil
 	}
-	return nil, fmt.Errorf("Missing serialized sync committee #%d", period)
+	return nil, fmt.Errorf("missing serialized sync committee #%d", period)
 }
 
 // VerifySignedHeader returns true if the given signed header has a valid signature
@@ -492,7 +505,7 @@ func (s *CommitteeChain) verifySignedHeader(head types.SignedHeader) (bool, time
 	if committee == nil {
 		return false, age, nil
 	}
-	if signingRoot, err := s.config.Forks.SigningRoot(head.Header); err == nil {
+	if signingRoot, err := s.config.Forks.SigningRoot(head.Header.Epoch(), head.Header.Hash()); err == nil {
 		return s.sigVerifier.verifySignature(committee, signingRoot, &head.Signature), age, nil
 	}
 	return false, age, nil

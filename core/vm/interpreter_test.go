@@ -17,17 +17,16 @@
 package vm_test
 
 import (
-	"math/big"
+	"math"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 var loopInterruptTests = []string{
@@ -40,22 +39,22 @@ var loopInterruptTests = []string{
 func TestLoopInterrupt(t *testing.T) {
 	address := common.BytesToAddress([]byte("contract"))
 	vmctx := vm.BlockContext{
-		Transfer: func(vm.StateDB, common.Address, common.Address, *big.Int) {},
+		Transfer: func(vm.StateDB, common.Address, common.Address, *uint256.Int) {},
 	}
 
 	for i, tt := range loopInterruptTests {
-		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		statedb.CreateAccount(address)
 		statedb.SetCode(address, common.Hex2Bytes(tt))
 		statedb.Finalise(true)
 
-		evm := vm.NewEVM(vmctx, vm.TxContext{}, statedb, params.AllEthashProtocolChanges, vm.Config{}, nil)
+		evm := vm.NewEVM(vmctx, statedb, params.AllEthashProtocolChanges, vm.Config{}, nil)
 
 		errChannel := make(chan error)
 		timeout := make(chan bool)
 
 		go func(evm *vm.EVM) {
-			_, _, err := evm.Call(vm.AccountRef(common.Address{}), address, nil, math.MaxUint64, new(big.Int))
+			_, _, err := evm.Call(common.Address{}, address, nil, math.MaxUint64, new(uint256.Int))
 			errChannel <- err
 		}(evm)
 

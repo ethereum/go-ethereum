@@ -88,7 +88,8 @@ func (c *cloudflareClient) checkZone(name string) error {
 	if !strings.HasSuffix(name, "."+zone.Name) {
 		return fmt.Errorf("CloudFlare zone name %q does not match name %q to be deployed", zone.Name, name)
 	}
-	needPerms := map[string]bool{"#zone:edit": false, "#zone:read": false}
+	// Necessary permissions for Cloudlare management - Zone:Read, DNS:Read, Zone:Edit, DNS:Edit
+	needPerms := map[string]bool{"#zone:edit": false, "#zone:read": false, "#dns_records:read": false, "#dns_records:edit": false}
 	for _, perm := range zone.Permissions {
 		if _, ok := needPerms[perm]; ok {
 			needPerms[perm] = true

@@ -40,6 +40,8 @@ import (
 	"hash"
 	"io"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 var (
@@ -58,12 +60,12 @@ type PublicKey struct {
 	Params *ECIESParams
 }
 
-// Export an ECIES public key as an ECDSA public key.
+// ExportECDSA exports an ECIES public key as an ECDSA public key.
 func (pub *PublicKey) ExportECDSA() *ecdsa.PublicKey {
 	return &ecdsa.PublicKey{Curve: pub.Curve, X: pub.X, Y: pub.Y}
 }
 
-// Import an ECDSA public key as an ECIES public key.
+// ImportECDSAPublic imports an ECDSA public key as an ECIES public key.
 func ImportECDSAPublic(pub *ecdsa.PublicKey) *PublicKey {
 	return &PublicKey{
 		X:      pub.X,
@@ -79,31 +81,31 @@ type PrivateKey struct {
 	D *big.Int
 }
 
-// Export an ECIES private key as an ECDSA private key.
+// ExportECDSA exports an ECIES private key as an ECDSA private key.
 func (prv *PrivateKey) ExportECDSA() *ecdsa.PrivateKey {
 	pub := &prv.PublicKey
 	pubECDSA := pub.ExportECDSA()
 	return &ecdsa.PrivateKey{PublicKey: *pubECDSA, D: prv.D}
 }
 
-// Import an ECDSA private key as an ECIES private key.
+// ImportECDSA imports an ECDSA private key as an ECIES private key.
 func ImportECDSA(prv *ecdsa.PrivateKey) *PrivateKey {
 	pub := ImportECDSAPublic(&prv.PublicKey)
 	return &PrivateKey{*pub, prv.D}
 }
 
-// Generate an elliptic curve public / private keypair. If params is nil,
+// GenerateKey generates an elliptic curve public / private keypair. If params is nil,
 // the recommended default parameters for the key will be chosen.
 func GenerateKey(rand io.Reader, curve elliptic.Curve, params *ECIESParams) (prv *PrivateKey, err error) {
-	pb, x, y, err := elliptic.GenerateKey(curve, rand)
+	sk, err := ecdsa.GenerateKey(curve, rand)
 	if err != nil {
 		return
 	}
 	prv = new(PrivateKey)
-	prv.PublicKey.X = x
-	prv.PublicKey.Y = y
+	prv.PublicKey.X = sk.X
+	prv.PublicKey.Y = sk.Y
 	prv.PublicKey.Curve = curve
-	prv.D = new(big.Int).SetBytes(pb)
+	prv.D = new(big.Int).Set(sk.D)
 	if params == nil {
 		params = ParamsFromCurve(curve)
 	}
@@ -117,7 +119,7 @@ func MaxSharedKeyLength(pub *PublicKey) int {
 	return (pub.Curve.Params().BitSize + 7) / 8
 }
 
-// ECDH key agreement method used to establish secret keys for encryption.
+// GenerateShared ECDH key agreement method used to establish secret keys for encryption.
 func (prv *PrivateKey) GenerateShared(pub *PublicKey, skLen, macLen int) (sk []byte, err error) {
 	if prv.PublicKey.Curve != pub.Curve {
 		return nil, ErrInvalidCurve
@@ -255,12 +257,15 @@ func Encrypt(rand io.Reader, pub *PublicKey, m, s1, s2 []byte) (ct []byte, err e
 
 	d := messageTag(params.Hash, Km, em, s2)
 
-	Rb := elliptic.Marshal(pub.Curve, R.PublicKey.X, R.PublicKey.Y)
-	ct = make([]byte, len(Rb)+len(em)+len(d))
-	copy(ct, Rb)
-	copy(ct[len(Rb):], em)
-	copy(ct[len(Rb)+len(em):], d)
-	return ct, nil
+	if curve, ok := pub.Curve.(crypto.EllipticCurve); ok {
+		Rb := curve.Marshal(R.PublicKey.X, R.PublicKey.Y)
+		ct = make([]byte, len(Rb)+len(em)+len(d))
+		copy(ct, Rb)
+		copy(ct[len(Rb):], em)
+		copy(ct[len(Rb)+len(em):], d)
+		return ct, nil
+	}
+	return nil, ErrInvalidCurve
 }
 
 // Decrypt decrypts an ECIES ciphertext.
@@ -297,21 +302,24 @@ func (prv *PrivateKey) Decrypt(c, s1, s2 []byte) (m []byte, err error) {
 
 	R := new(PublicKey)
 	R.Curve = prv.PublicKey.Curve
-	R.X, R.Y = elliptic.Unmarshal(R.Curve, c[:rLen])
-	if R.X == nil {
-		return nil, ErrInvalidPublicKey
-	}
 
-	z, err := prv.GenerateShared(R, params.KeyLen, params.KeyLen)
-	if err != nil {
-		return nil, err
-	}
-	Ke, Km := deriveKeys(hash, z, s1, params.KeyLen)
+	if curve, ok := R.Curve.(crypto.EllipticCurve); ok {
+		R.X, R.Y = curve.Unmarshal(c[:rLen])
+		if R.X == nil {
+			return nil, ErrInvalidPublicKey
+		}
 
-	d := messageTag(params.Hash, Km, c[mStart:mEnd], s2)
-	if subtle.ConstantTimeCompare(c[mEnd:], d) != 1 {
-		return nil, ErrInvalidMessage
-	}
+		z, err := prv.GenerateShared(R, params.KeyLen, params.KeyLen)
+		if err != nil {
+			return nil, err
+		}
+		Ke, Km := deriveKeys(hash, z, s1, params.KeyLen)
 
-	return symDecrypt(params, Ke, c[mStart:mEnd])
+		d := messageTag(params.Hash, Km, c[mStart:mEnd], s2)
+		if subtle.ConstantTimeCompare(c[mEnd:], d) != 1 {
+			return nil, ErrInvalidMessage
+		}
+		return symDecrypt(params, Ke, c[mStart:mEnd])
+	}
+	return nil, ErrInvalidCurve
 }

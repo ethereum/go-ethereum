@@ -10,7 +10,6 @@
     "number": "1725115",
     "stateRoot": "0xca08a341c1f95fcba0821c4a27662ef162d39e1f9f5722717531f510d54112b0",
     "timestamp": "1466232982",
-    "totalDifficulty": "28554024908214037524",
     "alloc": {
       "0x0000000000000000000000000000000000000004": {
         "balance": "0x0"
@@ -85,7 +84,6 @@
       "londonBlock": 12965000,
       "arrowGlacierBlock": 13773000,
       "grayGlacierBlock": 15050000,
-      "terminalTotalDifficultyPassed": true,
       "ethash": {}
     }
   },

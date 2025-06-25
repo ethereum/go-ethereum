@@ -122,6 +122,10 @@ func (e wsHandshakeError) Error() string {
 	return s
 }
 
+func (e wsHandshakeError) Unwrap() error {
+	return e.err
+}
+
 func originIsAllowed(allowedOrigins mapset.Set[string], browserOrigin string) bool {
 	it := allowedOrigins.Iterator()
 	for origin := range it.C {

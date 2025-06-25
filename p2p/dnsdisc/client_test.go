@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"errors"
+	"maps"
 	"reflect"
 	"testing"
 	"time"
@@ -28,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/lib/testlog"
+	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -214,7 +215,7 @@ func TestIteratorNodeUpdates(t *testing.T) {
 	// Ensure RandomNode returns the new nodes after the tree is updated.
 	updateSomeNodes(keys, nodes)
 	tree2, _ := makeTestTree("n", nodes, nil)
-	resolver.clear()
+	clear(resolver)
 	resolver.add(tree2.ToTXT("n"))
 	t.Log("tree updated")
 
@@ -255,7 +256,7 @@ func TestIteratorRootRecheckOnFail(t *testing.T) {
 	// Ensure RandomNode returns the new nodes after the tree is updated.
 	updateSomeNodes(keys, nodes)
 	tree2, _ := makeTestTree("n", nodes, nil)
-	resolver.clear()
+	clear(resolver)
 	resolver.add(tree2.ToTXT("n"))
 	t.Log("tree updated")
 
@@ -446,16 +447,8 @@ func newMapResolver(maps ...map[string]string) mapResolver {
 	return mr
 }
 
-func (mr mapResolver) clear() {
-	for k := range mr {
-		delete(mr, k)
-	}
-}
-
 func (mr mapResolver) add(m map[string]string) {
-	for k, v := range m {
-		mr[k] = v
-	}
+	maps.Copy(mr, m)
 }
 
 func (mr mapResolver) LookupTXT(ctx context.Context, name string) ([]string, error) {

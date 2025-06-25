@@ -12,7 +12,7 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package state
 
@@ -21,8 +21,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
-	"math/big"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -37,8 +37,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
-	"github.com/ethereum/go-ethereum/trie/triestate"
+	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/pathdb"
+	"github.com/holiman/uint256"
 )
 
 // A stateTest checks that the state changes are correctly captured. Instances
@@ -61,19 +62,19 @@ func newStateTestAction(addr common.Address, r *rand.Rand, index int) testAction
 		{
 			name: "SetBalance",
 			fn: func(a testAction, s *StateDB) {
-				s.SetBalance(addr, big.NewInt(a.args[0]), tracing.BalanceChangeUnspecified)
+				s.SetBalance(addr, uint256.NewInt(uint64(a.args[0])), tracing.BalanceChangeUnspecified)
 			},
 			args: make([]int64, 1),
 		},
 		{
 			name: "SetNonce",
 			fn: func(a testAction, s *StateDB) {
-				s.SetNonce(addr, uint64(a.args[0]))
+				s.SetNonce(addr, uint64(a.args[0]), tracing.NonceChangeUnspecified)
 			},
 			args: make([]int64, 1),
 		},
 		{
-			name: "SetState",
+			name: "SetStorage",
 			fn: func(a testAction, s *StateDB) {
 				var key, val common.Hash
 				binary.BigEndian.PutUint16(key[:], uint16(a.args[0]))
@@ -95,7 +96,9 @@ func newStateTestAction(addr common.Address, r *rand.Rand, index int) testAction
 		{
 			name: "CreateAccount",
 			fn: func(a testAction, s *StateDB) {
-				s.CreateAccount(addr)
+				if !s.Exist(addr) {
+					s.CreateAccount(addr)
+				}
 			},
 		},
 		{
@@ -174,16 +177,19 @@ func (test *stateTest) String() string {
 
 func (test *stateTest) run() bool {
 	var (
-		roots       []common.Hash
-		accountList []map[common.Address][]byte
-		storageList []map[common.Address]map[common.Hash][]byte
-		onCommit    = func(states *triestate.Set) {
-			accountList = append(accountList, copySet(states.Accounts))
-			storageList = append(storageList, copy2DSet(states.Storages))
+		roots         []common.Hash
+		accounts      []map[common.Hash][]byte
+		accountOrigin []map[common.Address][]byte
+		storages      []map[common.Hash]map[common.Hash][]byte
+		storageOrigin []map[common.Address]map[common.Hash][]byte
+		copyUpdate    = func(update *stateUpdate) {
+			accounts = append(accounts, maps.Clone(update.accounts))
+			accountOrigin = append(accountOrigin, maps.Clone(update.accountsOrigin))
+			storages = append(storages, maps.Clone(update.storages))
+			storageOrigin = append(storageOrigin, maps.Clone(update.storagesOrigin))
 		}
 		disk      = rawdb.NewMemoryDatabase()
-		tdb       = trie.NewDatabase(disk, &trie.Config{PathDB: pathdb.Defaults})
-		sdb       = NewDatabaseWithNodeDB(disk, tdb)
+		tdb       = triedb.NewDatabase(disk, &triedb.Config{PathDB: pathdb.Defaults})
 		byzantium = rand.Intn(2) == 0
 	)
 	defer disk.Close()
@@ -203,12 +209,10 @@ func (test *stateTest) run() bool {
 		if i != 0 {
 			root = roots[len(roots)-1]
 		}
-		state, err := New(root, sdb, snaps)
+		state, err := New(root, NewDatabase(tdb, snaps))
 		if err != nil {
 			panic(err)
 		}
-		state.onCommit = onCommit
-
 		for i, action := range actions {
 			if i%test.chunk == 0 && i != 0 {
 				if byzantium {
@@ -224,21 +228,22 @@ func (test *stateTest) run() bool {
 		} else {
 			state.IntermediateRoot(true) // call intermediateRoot at the transaction boundary
 		}
-		nroot, err := state.Commit(0, true) // call commit at the block boundary
+		ret, err := state.commitAndFlush(0, true, false) // call commit at the block boundary
 		if err != nil {
 			panic(err)
 		}
-		if nroot == root {
-			return true // filter out non-change state transition
+		if ret.empty() {
+			return true
 		}
-		roots = append(roots, nroot)
+		copyUpdate(ret)
+		roots = append(roots, ret.root)
 	}
 	for i := 0; i < len(test.actions); i++ {
 		root := types.EmptyRootHash
 		if i != 0 {
 			root = roots[i-1]
 		}
-		test.err = test.verify(root, roots[i], tdb, accountList[i], storageList[i])
+		test.err = test.verify(root, roots[i], tdb, accounts[i], accountOrigin[i], storages[i], storageOrigin[i])
 		if test.err != nil {
 			return false
 		}
@@ -253,7 +258,7 @@ func (test *stateTest) run() bool {
 // - the account was indeed not present in trie
 // - the account is present in new trie, nil->nil is regarded as invalid
 // - the slots transition is correct
-func (test *stateTest) verifyAccountCreation(next common.Hash, db *trie.Database, otr, ntr *trie.Trie, addr common.Address, slots map[common.Hash][]byte) error {
+func (test *stateTest) verifyAccountCreation(next common.Hash, db *triedb.Database, otr, ntr *trie.Trie, addr common.Address, account []byte, storages map[common.Hash][]byte, storagesOrigin map[common.Hash][]byte) error {
 	// Verify account change
 	addrHash := crypto.Keccak256Hash(addr.Bytes())
 	oBlob, err := otr.Get(addrHash.Bytes())
@@ -270,6 +275,13 @@ func (test *stateTest) verifyAccountCreation(next common.Hash, db *trie.Database
 	if len(nBlob) == 0 {
 		return fmt.Errorf("missing account in new trie, %x", addrHash)
 	}
+	full, err := types.FullAccountRLP(account)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(nBlob, full) {
+		return fmt.Errorf("unexpected account data, want: %v, got: %v", full, nBlob)
+	}
 
 	// Verify storage changes
 	var nAcct types.StateAccount
@@ -278,7 +290,10 @@ func (test *stateTest) verifyAccountCreation(next common.Hash, db *trie.Database
 	}
 	// Account has no slot, empty slot set is expected
 	if nAcct.Root == types.EmptyRootHash {
-		if len(slots) != 0 {
+		if len(storagesOrigin) != 0 {
+			return fmt.Errorf("unexpected slot changes %x", addrHash)
+		}
+		if len(storages) != 0 {
 			return fmt.Errorf("unexpected slot changes %x", addrHash)
 		}
 		return nil
@@ -288,8 +303,21 @@ func (test *stateTest) verifyAccountCreation(next common.Hash, db *trie.Database
 	if err != nil {
 		return err
 	}
-	for key, val := range slots {
+	for key, val := range storagesOrigin {
+		if _, exist := storages[key]; !exist {
+			return errors.New("storage data is not found")
+		}
+		got, err := st.Get(key.Bytes())
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(got, storages[key]) {
+			return fmt.Errorf("unexpected storage data, want: %v, got: %v", storages[key], got)
+		}
 		st.Update(key.Bytes(), val)
+	}
+	if len(storagesOrigin) != len(storages) {
+		return fmt.Errorf("extra storage found, want: %d, got: %d", len(storagesOrigin), len(storages))
 	}
 	if st.Hash() != types.EmptyRootHash {
 		return errors.New("invalid slot changes")
@@ -304,7 +332,7 @@ func (test *stateTest) verifyAccountCreation(next common.Hash, db *trie.Database
 // - the account was indeed present in trie
 // - the account in old trie matches the provided value
 // - the slots transition is correct
-func (test *stateTest) verifyAccountUpdate(next common.Hash, db *trie.Database, otr, ntr *trie.Trie, addr common.Address, origin []byte, slots map[common.Hash][]byte) error {
+func (test *stateTest) verifyAccountUpdate(next common.Hash, db *triedb.Database, otr, ntr *trie.Trie, addr common.Address, account []byte, accountOrigin []byte, storages map[common.Hash][]byte, storageOrigin map[common.Hash][]byte) error {
 	// Verify account change
 	addrHash := crypto.Keccak256Hash(addr.Bytes())
 	oBlob, err := otr.Get(addrHash.Bytes())
@@ -318,14 +346,23 @@ func (test *stateTest) verifyAccountUpdate(next common.Hash, db *trie.Database, 
 	if len(oBlob) == 0 {
 		return fmt.Errorf("missing account in old trie, %x", addrHash)
 	}
-	full, err := types.FullAccountRLP(origin)
+	full, err := types.FullAccountRLP(accountOrigin)
 	if err != nil {
 		return err
 	}
 	if !bytes.Equal(full, oBlob) {
 		return fmt.Errorf("account value is not matched, %x", addrHash)
 	}
-
+	if len(nBlob) == 0 {
+		if len(account) != 0 {
+			return errors.New("unexpected account data")
+		}
+	} else {
+		full, _ = types.FullAccountRLP(account)
+		if !bytes.Equal(full, nBlob) {
+			return fmt.Errorf("unexpected account data, %x, want %v, got: %v", addrHash, full, nBlob)
+		}
+	}
 	// Decode accounts
 	var (
 		oAcct types.StateAccount
@@ -349,8 +386,21 @@ func (test *stateTest) verifyAccountUpdate(next common.Hash, db *trie.Database, 
 	if err != nil {
 		return err
 	}
-	for key, val := range slots {
+	for key, val := range storageOrigin {
+		if _, exist := storages[key]; !exist {
+			return errors.New("storage data is not found")
+		}
+		got, err := st.Get(key.Bytes())
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(got, storages[key]) {
+			return fmt.Errorf("unexpected storage data, want: %v, got: %v", storages[key], got)
+		}
 		st.Update(key.Bytes(), val)
+	}
+	if len(storageOrigin) != len(storages) {
+		return fmt.Errorf("extra storage found, want: %d, got: %d", len(storageOrigin), len(storages))
 	}
 	if st.Hash() != oAcct.Root {
 		return errors.New("invalid slot changes")
@@ -358,7 +408,7 @@ func (test *stateTest) verifyAccountUpdate(next common.Hash, db *trie.Database, 
 	return nil
 }
 
-func (test *stateTest) verify(root common.Hash, next common.Hash, db *trie.Database, accountsOrigin map[common.Address][]byte, storagesOrigin map[common.Address]map[common.Hash][]byte) error {
+func (test *stateTest) verify(root common.Hash, next common.Hash, db *triedb.Database, accounts map[common.Hash][]byte, accountsOrigin map[common.Address][]byte, storages map[common.Hash]map[common.Hash][]byte, storagesOrigin map[common.Address]map[common.Hash][]byte) error {
 	otr, err := trie.New(trie.StateTrieID(root), db)
 	if err != nil {
 		return err
@@ -367,12 +417,15 @@ func (test *stateTest) verify(root common.Hash, next common.Hash, db *trie.Datab
 	if err != nil {
 		return err
 	}
-	for addr, account := range accountsOrigin {
-		var err error
-		if len(account) == 0 {
-			err = test.verifyAccountCreation(next, db, otr, ntr, addr, storagesOrigin[addr])
+	for addr, accountOrigin := range accountsOrigin {
+		var (
+			err      error
+			addrHash = crypto.Keccak256Hash(addr.Bytes())
+		)
+		if len(accountOrigin) == 0 {
+			err = test.verifyAccountCreation(next, db, otr, ntr, addr, accounts[addrHash], storages[addrHash], storagesOrigin[addr])
 		} else {
-			err = test.verifyAccountUpdate(next, db, otr, ntr, addr, accountsOrigin[addr], storagesOrigin[addr])
+			err = test.verifyAccountUpdate(next, db, otr, ntr, addr, accounts[addrHash], accountsOrigin[addr], storages[addrHash], storagesOrigin[addr])
 		}
 		if err != nil {
 			return err

@@ -18,16 +18,14 @@ package trie
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math/big"
-	"math/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/trie/testutil"
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/exp/slices"
 )
 
 func TestStackTrieInsertAndHash(t *testing.T) {
@@ -223,7 +221,7 @@ func TestStackTrieInsertAndHash(t *testing.T) {
 
 func TestSizeBug(t *testing.T) {
 	st := NewStackTrie(nil)
-	nt := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase(), nil))
+	nt := NewEmpty(newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme))
 
 	leaf := common.FromHex("290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563")
 	value := common.FromHex("94cf40d0d2b44f2b66e07cace1372ca42b73cf21a3")
@@ -238,7 +236,7 @@ func TestSizeBug(t *testing.T) {
 
 func TestEmptyBug(t *testing.T) {
 	st := NewStackTrie(nil)
-	nt := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase(), nil))
+	nt := NewEmpty(newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme))
 
 	//leaf := common.FromHex("290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563")
 	//value := common.FromHex("94cf40d0d2b44f2b66e07cace1372ca42b73cf21a3")
@@ -264,7 +262,7 @@ func TestEmptyBug(t *testing.T) {
 
 func TestValLength56(t *testing.T) {
 	st := NewStackTrie(nil)
-	nt := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase(), nil))
+	nt := NewEmpty(newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme))
 
 	//leaf := common.FromHex("290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563")
 	//value := common.FromHex("94cf40d0d2b44f2b66e07cace1372ca42b73cf21a3")
@@ -289,7 +287,7 @@ func TestValLength56(t *testing.T) {
 // which causes a lot of node-within-node. This case was found via fuzzing.
 func TestUpdateSmallNodes(t *testing.T) {
 	st := NewStackTrie(nil)
-	nt := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase(), nil))
+	nt := NewEmpty(newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme))
 	kvs := []struct {
 		K string
 		V string
@@ -317,7 +315,7 @@ func TestUpdateSmallNodes(t *testing.T) {
 func TestUpdateVariableKeys(t *testing.T) {
 	t.SkipNow()
 	st := NewStackTrie(nil)
-	nt := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase(), nil))
+	nt := NewEmpty(newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme))
 	kvs := []struct {
 		K string
 		V string
@@ -381,90 +379,6 @@ func TestStacktrieNotModifyValues(t *testing.T) {
 	}
 }
 
-func buildPartialTree(entries []*kv, t *testing.T) map[string]common.Hash {
-	var (
-		options = NewStackTrieOptions()
-		nodes   = make(map[string]common.Hash)
-	)
-	var (
-		first int
-		last  = len(entries) - 1
-
-		noLeft  bool
-		noRight bool
-	)
-	// Enter split mode if there are at least two elements
-	if rand.Intn(5) != 0 {
-		for {
-			first = rand.Intn(len(entries))
-			last = rand.Intn(len(entries))
-			if first <= last {
-				break
-			}
-		}
-		if first != 0 {
-			noLeft = true
-		}
-		if last != len(entries)-1 {
-			noRight = true
-		}
-	}
-	options = options.WithSkipBoundary(noLeft, noRight, nil)
-	options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
-		nodes[string(path)] = hash
-	})
-	tr := NewStackTrie(options)
-
-	for i := first; i <= last; i++ {
-		tr.MustUpdate(entries[i].k, entries[i].v)
-	}
-	tr.Commit()
-	return nodes
-}
-
-func TestPartialStackTrie(t *testing.T) {
-	for round := 0; round < 100; round++ {
-		var (
-			n       = rand.Intn(100) + 1
-			entries []*kv
-		)
-		for i := 0; i < n; i++ {
-			var val []byte
-			if rand.Intn(3) == 0 {
-				val = testutil.RandBytes(3)
-			} else {
-				val = testutil.RandBytes(32)
-			}
-			entries = append(entries, &kv{
-				k: testutil.RandBytes(32),
-				v: val,
-			})
-		}
-		slices.SortFunc(entries, (*kv).cmp)
-
-		var (
-			nodes   = make(map[string]common.Hash)
-			options = NewStackTrieOptions().WithWriter(func(path []byte, hash common.Hash, blob []byte) {
-				nodes[string(path)] = hash
-			})
-		)
-		tr := NewStackTrie(options)
-
-		for i := 0; i < len(entries); i++ {
-			tr.MustUpdate(entries[i].k, entries[i].v)
-		}
-		tr.Commit()
-
-		for j := 0; j < 100; j++ {
-			for path, hash := range buildPartialTree(entries, t) {
-				if nodes[path] != hash {
-					t.Errorf("%v, want %x, got %x", []byte(path), nodes[path], hash)
-				}
-			}
-		}
-	}
-}
-
 func TestStackTrieErrors(t *testing.T) {
 	s := NewStackTrie(nil)
 	// Deletion
@@ -484,4 +398,49 @@ func TestStackTrieErrors(t *testing.T) {
 	assert.Nil(t, s.Update([]byte{0xab}, []byte{0xa}))
 	assert.NotNil(t, s.Update([]byte{0x10}, []byte{0xb}), "out of order insert")
 	assert.NotNil(t, s.Update([]byte{0xaa}, []byte{0xb}), "repeat insert same key")
+}
+
+func BenchmarkInsert100K(b *testing.B) {
+	var num = 100_000
+	var key = make([]byte, 8)
+	var val = make([]byte, 20)
+	var hash common.Hash
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		s := NewStackTrie(nil)
+		var k uint64
+		for j := 0; j < num; j++ {
+			binary.BigEndian.PutUint64(key, k)
+			if err := s.Update(key, val); err != nil {
+				b.Fatal(err)
+			}
+			k += 1024
+		}
+		if hash == (common.Hash{}) {
+			hash = s.Hash()
+		} else {
+			if hash != s.Hash() && false {
+				b.Fatalf("hash wrong, have %x want %x", s.Hash(), hash)
+			}
+		}
+	}
+}
+
+func TestInsert100K(t *testing.T) {
+	var num = 100_000
+	var key = make([]byte, 8)
+	var val = make([]byte, 20)
+	s := NewStackTrie(nil)
+	var k uint64
+	for j := 0; j < num; j++ {
+		binary.BigEndian.PutUint64(key, k)
+		if err := s.Update(key, val); err != nil {
+			t.Fatal(err)
+		}
+		k += 1024
+	}
+	want := common.HexToHash("0xb0071bd257342925d9d8a9f002b9d2b646a35437aa8b089628ab56e428d29a1a")
+	if have := s.Hash(); have != want {
+		t.Fatalf("hash wrong, have %x want %x", have, want)
+	}
 }

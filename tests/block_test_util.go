@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	stdmath "math"
 	"math/big"
 	"os"
 	"reflect"
@@ -33,14 +34,16 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
-	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
+	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/hashdb"
+	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
 
 // A BlockTest checks handling of entire blocks.
@@ -56,8 +59,8 @@ func (t *BlockTest) UnmarshalJSON(in []byte) error {
 type BtJSON struct {
 	Blocks     []BtBlock             `json:"blocks"`
 	Genesis    BtHeader              `json:"genesisBlockHeader"`
-	Pre        core.GenesisAlloc     `json:"pre"`
-	Post       core.GenesisAlloc     `json:"postState"`
+	Pre        types.GenesisAlloc    `json:"pre"`
+	Post       types.GenesisAlloc    `json:"postState"`
 	BestBlock  common.UnprefixedHash `json:"lastblockhash"`
 	Network    string                `json:"network"`
 	SealEngine string                `json:"sealEngine"`
@@ -108,7 +111,7 @@ type BtHeaderMarshaling struct {
 	ExcessBlobGas *math.HexOrDecimal64
 }
 
-func (t *BlockTest) Run(snapshotter bool, scheme string, tracer *tracing.Hooks, postCheck func(error, *core.BlockChain)) (result error) {
+func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *tracing.Hooks, postCheck func(error, *core.BlockChain)) (result error) {
 	config, ok := Forks[t.Json.Network]
 	if !ok {
 		return UnsupportedForkError{t.Json.Network}
@@ -116,7 +119,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer *tracing.Hooks, 
 	// import pre accounts & construct test genesis block & state root
 	var (
 		db    = rawdb.NewMemoryDatabase()
-		tconf = &trie.Config{
+		tconf = &triedb.Config{
 			Preimages: true,
 		}
 	)
@@ -127,7 +130,12 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer *tracing.Hooks, 
 	}
 	// Commit genesis state
 	gspec := t.genesis(config)
-	triedb := trie.NewDatabase(db, tconf)
+
+	// if ttd is not specified, set an arbitrary huge value
+	if gspec.Config.TerminalTotalDifficulty == nil {
+		gspec.Config.TerminalTotalDifficulty = big.NewInt(stdmath.MaxInt64)
+	}
+	triedb := triedb.NewDatabase(db, tconf)
 	gblock, err := gspec.Commit(db, triedb)
 	if err != nil {
 		return err
@@ -149,8 +157,9 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer *tracing.Hooks, 
 		cache.SnapshotWait = true
 	}
 	chain, err := core.NewBlockChain(db, cache, gspec, nil, engine, vm.Config{
-		Tracer: tracer,
-	}, nil, nil)
+		Tracer:                  tracer,
+		StatelessSelfValidation: witness,
+	}, nil)
 	if err != nil {
 		return err
 	}
@@ -224,6 +233,7 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]BtBlock, error)
 		cb, err := b.Decode()
 		if err != nil {
 			if b.BlockHeader == nil {
+				log.Info("Block decoding failed", "index", bi, "err", err)
 				continue // OK - block is supposed to be invalid, continue with next block
 			} else {
 				return nil, fmt.Errorf("block RLP decoding failed when expected to succeed: %v", err)
@@ -321,12 +331,12 @@ func validateHeader(h *BtHeader, h2 *types.Header) error {
 	return nil
 }
 
-func (t *BlockTest) validatePostState(statedb vm.StateDB) error {
+func (t *BlockTest) validatePostState(statedb *state.StateDB) error {
 	// validate post state accounts in test file against what we have in state db
 	for addr, acct := range t.Json.Post {
 		// address is indirectly verified by the other fields, as it's the db key
 		code2 := statedb.GetCode(addr)
-		balance2 := statedb.GetBalance(addr)
+		balance2 := statedb.GetBalance(addr).ToBig()
 		nonce2 := statedb.GetNonce(addr)
 		if !bytes.Equal(code2, acct.Code) {
 			return fmt.Errorf("account code mismatch for addr: %s want: %v have: %s", addr, acct.Code, hex.EncodeToString(code2))

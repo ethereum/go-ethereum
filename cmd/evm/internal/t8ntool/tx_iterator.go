@@ -102,7 +102,7 @@ func signUnsignedTransactions(txs []*txWithKey, signer types.Signer) (types.Tran
 		if tx.protected {
 			signed, err = types.SignTx(tx.tx, signer, tx.key)
 		} else {
-			signed, err = types.SignTx(tx.tx, types.FrontierSigner{}, tx.key)
+			signed, err = types.SignTx(tx.tx, types.HomesteadSigner{}, tx.key)
 		}
 		if err != nil {
 			return nil, NewError(ErrorJson, fmt.Errorf("tx %d: failed to sign tx: %v", i, err))
@@ -112,7 +112,7 @@ func signUnsignedTransactions(txs []*txWithKey, signer types.Signer) (types.Tran
 	return signedTxs, nil
 }
 
-func loadTransactions(txStr string, inputData *input, env stEnv, chainConfig *params.ChainConfig) (txIterator, error) {
+func loadTransactions(txStr string, inputData *input, chainConfig *params.ChainConfig) (txIterator, error) {
 	var txsWithKeys []*txWithKey
 	if txStr != stdinSelector {
 		data, err := os.ReadFile(txStr)
@@ -127,7 +127,7 @@ func loadTransactions(txStr string, inputData *input, env stEnv, chainConfig *pa
 			return newRlpTxIterator(body), nil
 		}
 		if err := json.Unmarshal(data, &txsWithKeys); err != nil {
-			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshaling txs-file: %v", err))
+			return nil, NewError(ErrorJson, fmt.Errorf("failed unmarshalling txs-file: %v", err))
 		}
 	} else {
 		if len(inputData.TxRlp) > 0 {

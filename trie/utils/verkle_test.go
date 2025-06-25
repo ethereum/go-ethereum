@@ -1,4 +1,4 @@
-// Copyright 2023 go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -12,7 +12,7 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package utils
 
@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/gballet/go-verkle"
+	"github.com/ethereum/go-verkle"
 	"github.com/holiman/uint256"
 )
 
@@ -33,20 +33,11 @@ func TestTreeKey(t *testing.T) {
 		smallStorage = []byte{0x1}
 		largeStorage = bytes.Repeat([]byte{0xff}, 16)
 	)
-	if !bytes.Equal(VersionKey(address), VersionKeyWithEvaluatedAddress(addressEval)) {
-		t.Fatal("Unmatched version key")
+	if !bytes.Equal(BasicDataKey(address), BasicDataKeyWithEvaluatedAddress(addressEval)) {
+		t.Fatal("Unmatched basic data key")
 	}
-	if !bytes.Equal(BalanceKey(address), BalanceKeyWithEvaluatedAddress(addressEval)) {
-		t.Fatal("Unmatched balance key")
-	}
-	if !bytes.Equal(NonceKey(address), NonceKeyWithEvaluatedAddress(addressEval)) {
-		t.Fatal("Unmatched nonce key")
-	}
-	if !bytes.Equal(CodeKeccakKey(address), CodeKeccakKeyWithEvaluatedAddress(addressEval)) {
-		t.Fatal("Unmatched code keccak key")
-	}
-	if !bytes.Equal(CodeSizeKey(address), CodeSizeKeyWithEvaluatedAddress(addressEval)) {
-		t.Fatal("Unmatched code size key")
+	if !bytes.Equal(CodeHashKey(address), CodeHashKeyWithEvaluatedAddress(addressEval)) {
+		t.Fatal("Unmatched code hash key")
 	}
 	if !bytes.Equal(CodeChunkKey(address, smallIndex), CodeChunkKeyWithEvaluatedAddress(addressEval, smallIndex)) {
 		t.Fatal("Unmatched code chunk key")
@@ -76,7 +67,7 @@ func BenchmarkTreeKey(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		BalanceKey([]byte{0x01})
+		BasicDataKey([]byte{0x01})
 	}
 }
 
@@ -96,7 +87,7 @@ func BenchmarkTreeKeyWithEvaluation(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		BalanceKeyWithEvaluatedAddress(eval)
+		BasicDataKeyWithEvaluatedAddress(eval)
 	}
 }
 

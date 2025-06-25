@@ -134,6 +134,7 @@ func createKeyPair() (string, string) {
 	defer os.Remove(tmpKey.Name())
 	defer os.Remove(tmpKey.Name() + ".pub")
 	defer os.Remove(tmpKey.Name() + ".sec")
+	defer tmpKey.Close()
 	cmd := exec.Command("signify", "-G", "-n", "-p", tmpKey.Name()+".pub", "-s", tmpKey.Name()+".sec")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		panic(fmt.Sprintf("could not verify the file: %v, output: \n%s", err, output))
