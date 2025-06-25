@@ -224,9 +224,10 @@ func (b *batchIndexer) finish(force bool) error {
 
 // indexSingle processes the state history with the specified ID for indexing.
 func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.AncientReader) error {
-	defer func(start time.Time) {
+	start := time.Now()
+	defer func() {
 		indexHistoryTimer.UpdateSince(start)
-	}(time.Now())
+	}()
 
 	metadata := loadIndexMetadata(db)
 	if metadata == nil || metadata.Last+1 != historyID {
@@ -247,15 +248,16 @@ func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancient
 	if err := b.finish(true); err != nil {
 		return err
 	}
-	log.Debug("Indexed state history", "id", historyID)
+	log.Info("Indexed state history", "id", historyID, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
 // unindexSingle processes the state history with the specified ID for unindexing.
 func unindexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.AncientReader) error {
-	defer func(start time.Time) {
+	start := time.Now()
+	defer func() {
 		unindexHistoryTimer.UpdateSince(start)
-	}(time.Now())
+	}()
 
 	metadata := loadIndexMetadata(db)
 	if metadata == nil || metadata.Last != historyID {
@@ -276,7 +278,7 @@ func unindexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancie
 	if err := b.finish(true); err != nil {
 		return err
 	}
-	log.Debug("Unindexed state history", "id", historyID)
+	log.Debug("Unindexed state history", "id", historyID, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 

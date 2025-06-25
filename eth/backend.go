@@ -140,7 +140,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
 		config.Miner.GasPrice = new(big.Int).Set(ethconfig.Defaults.Miner.GasPrice)
 	}
-	if config.NoPruning && config.TrieDirtyCache > 0 {
+	if config.NoPruning && config.TrieDirtyCache > 0 && config.StateScheme == rawdb.HashScheme {
 		if config.SnapshotCache > 0 {
 			config.TrieCleanCache += config.TrieDirtyCache * 3 / 5
 			config.SnapshotCache += config.TrieDirtyCache * 2 / 5
