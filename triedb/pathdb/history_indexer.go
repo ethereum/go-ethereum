@@ -128,9 +128,11 @@ func (b *batchIndexer) finish(force bool) error {
 		return nil
 	}
 	var (
-		batch   = b.db.NewBatch()
-		batchMu sync.RWMutex
-		eg      errgroup.Group
+		batch    = b.db.NewBatch()
+		batchMu  sync.RWMutex
+		storages int
+		start    = time.Now()
+		eg       errgroup.Group
 	)
 	eg.SetLimit(runtime.NumCPU())
 
@@ -167,6 +169,7 @@ func (b *batchIndexer) finish(force bool) error {
 		})
 	}
 	for addrHash, slots := range b.storages {
+		storages += len(slots)
 		for storageHash, idList := range slots {
 			eg.Go(func() error {
 				if !b.delete {
@@ -216,6 +219,7 @@ func (b *batchIndexer) finish(force bool) error {
 	if err := batch.Write(); err != nil {
 		return err
 	}
+	log.Debug("Committed batch indexer", "accounts", len(b.accounts), "storages", storages, "records", b.counter, "elapsed", common.PrettyDuration(time.Since(start)))
 	b.counter = 0
 	b.accounts = make(map[common.Hash][]uint64)
 	b.storages = make(map[common.Hash]map[common.Hash][]uint64)
@@ -248,7 +252,7 @@ func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancient
 	if err := b.finish(true); err != nil {
 		return err
 	}
-	log.Info("Indexed state history", "id", historyID, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Debug("Indexed state history", "id", historyID, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
