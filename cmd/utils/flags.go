@@ -448,10 +448,10 @@ var (
 	}
 
 	// Trie database settings
-	TrieDBJournalFlag = &cli.StringFlag{
+	TrieDBJournalFlag = &cli.BoolFlag{
 		Name:     "triedb.journal",
-		Usage:    "Path to the journal used for persisting trie data across node restarts",
-		Value:    ethconfig.Defaults.TrieDBJournal,
+		Usage:    "Enable persisting the trie database journal to disk (only used with pbss state scheme, default path: <datadir>/triedb.journal.rlp)",
+		Value:    true,
 		Category: flags.TrieDatabaseCategory,
 	}
 
@@ -1654,6 +1654,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(StateSchemeFlag.Name) {
 		cfg.StateScheme = ctx.String(StateSchemeFlag.Name)
 	}
+	if !ctx.Bool(TrieDBJournalFlag.Name) {
+		cfg.TrieDBJournal = false
+	}
 	// Parse transaction history flag, if user is still using legacy config
 	// file with 'TxLookupLimit' configured, copy the value to 'TransactionHistory'.
 	if cfg.TransactionHistory == ethconfig.Defaults.TransactionHistory && cfg.TxLookupLimit != ethconfig.Defaults.TxLookupLimit {
@@ -1689,9 +1692,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheSnapshotFlag.Name) {
 		cfg.SnapshotCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheSnapshotFlag.Name) / 100
-	}
-	if ctx.IsSet(TrieDBJournalFlag.Name) {
-		cfg.TrieDBJournal = ctx.String(TrieDBJournalFlag.Name)
 	}
 	if ctx.IsSet(CacheLogSizeFlag.Name) {
 		cfg.FilterLogCacheSize = ctx.Int(CacheLogSizeFlag.Name)
@@ -2216,12 +2216,8 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		options.Preimages = true
 		log.Info("Enabling recording of key preimages since archive mode is used")
 	}
-	journal := ethconfig.Defaults.TrieDBJournal
-	if ctx.IsSet(TrieDBJournalFlag.Name) {
-		journal = ctx.String(TrieDBJournalFlag.Name)
-	}
-	if journal != "" {
-		options.TrieDBJournal = stack.ResolvePath(journal)
+	if !ctx.Bool(TrieDBJournalFlag.Name) {
+		options.TrieDBJournal = stack.ResolvePath("triedb.journal.rlp")
 	}
 	if !ctx.Bool(SnapshotFlag.Name) {
 		options.SnapshotLimit = 0 // Disabled
