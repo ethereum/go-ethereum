@@ -773,15 +773,8 @@ func downloadEra(ctx *cli.Context) error {
 }
 
 func parseRange(s string) (start uint64, end uint64, ok bool) {
-	if m, _ := regexp.MatchString("[0-9]+", s); m {
-		start, err := strconv.ParseUint(s, 10, 64)
-		if err != nil {
-			return 0, 0, false
-		}
-		end = start
-		return start, end, true
-	}
-	if m, _ := regexp.MatchString("[0-9]+-[0-9]+", s); m {
+	log.Info("Parsing block range", "input", s)
+	if m, _ := regexp.MatchString("^[0-9]+-[0-9]+$", s); m {
 		s1, s2, _ := strings.Cut(s, "-")
 		start, err := strconv.ParseUint(s1, 10, 64)
 		if err != nil {
@@ -791,6 +784,19 @@ func parseRange(s string) (start uint64, end uint64, ok bool) {
 		if err != nil {
 			return 0, 0, false
 		}
+		if start > end {
+			return 0, 0, false
+		}
+		log.Info("Parsing block range", "start", start, "end", end)
+		return start, end, true
+	}
+	if m, _ := regexp.MatchString("^[0-9]+$", s); m {
+		start, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			return 0, 0, false
+		}
+		end = start
+		log.Info("Parsing single block range", "block", start)
 		return start, end, true
 	}
 	return 0, 0, false

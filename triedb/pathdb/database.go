@@ -114,12 +114,17 @@ type layer interface {
 
 // Config contains the settings for database.
 type Config struct {
-	StateHistory    uint64 // Number of recent blocks to maintain state history for
-	TrieCleanSize   int    // Maximum memory allowance (in bytes) for caching clean trie nodes
-	StateCleanSize  int    // Maximum memory allowance (in bytes) for caching clean state data
-	WriteBufferSize int    // Maximum memory allowance (in bytes) for write buffer
-	ReadOnly        bool   // Flag whether the database is opened in read only mode
-	SnapshotNoBuild bool   // Flag Whether the background generation is allowed
+	StateHistory        uint64 // Number of recent blocks to maintain state history for
+	EnableStateIndexing bool   // Whether to enable state history indexing for external state access
+	TrieCleanSize       int    // Maximum memory allowance (in bytes) for caching clean trie nodes
+	StateCleanSize      int    // Maximum memory allowance (in bytes) for caching clean state data
+	WriteBufferSize     int    // Maximum memory allowance (in bytes) for write buffer
+	ReadOnly            bool   // Flag whether the database is opened in read only mode
+
+	// Testing configurations
+	SnapshotNoBuild   bool // Flag Whether the state generation is allowed
+	NoAsyncFlush      bool // Flag whether the background buffer flushing is allowed
+	NoAsyncGeneration bool // Flag whether the background generation is allowed
 }
 
 // sanitize checks the provided user configurations and changes anything that's
@@ -145,7 +150,12 @@ func (c *Config) fields() []interface{} {
 	list = append(list, "triecache", common.StorageSize(c.TrieCleanSize))
 	list = append(list, "statecache", common.StorageSize(c.StateCleanSize))
 	list = append(list, "buffer", common.StorageSize(c.WriteBufferSize))
-	list = append(list, "history", c.StateHistory)
+
+	if c.StateHistory == 0 {
+		list = append(list, "history", "entire chain")
+	} else {
+		list = append(list, "history", fmt.Sprintf("last %d blocks", c.StateHistory))
+	}
 	return list
 }
 
@@ -209,6 +219,7 @@ type Database struct {
 	tree    *layerTree                   // The group for all known layers
 	freezer ethdb.ResettableAncientStore // Freezer for storing trie histories, nil possible in tests
 	lock    sync.RWMutex                 // Lock to prevent mutations from happening at the same time
+	indexer *historyIndexer              // History indexer
 }
 
 // New attempts to load an already existing layer from a persistent key-value
@@ -258,6 +269,11 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 	if err := db.setStateGenerator(); err != nil {
 		log.Crit("Failed to setup the generator", "err", err)
 	}
+	// TODO (rjl493456442) disable the background indexing in read-only mode
+	if db.freezer != nil && db.config.EnableStateIndexing {
+		db.indexer = newHistoryIndexer(db.diskdb, db.freezer, db.tree.bottom().stateID())
+		log.Info("Enabled state history indexing")
+	}
 	fields := config.fields()
 	if db.isVerkle {
 		fields = append(fields, "verkle", true)
@@ -295,6 +311,11 @@ func (db *Database) repairHistory() error {
 			log.Crit("Failed to retrieve head of state history", "err", err)
 		}
 		if frozen != 0 {
+			// TODO(rjl493456442) would be better to group them into a batch.
+			//
+			// Purge all state history indexing data first
+			rawdb.DeleteStateHistoryIndexMetadata(db.diskdb)
+			rawdb.DeleteStateHistoryIndex(db.diskdb)
 			err := db.freezer.Reset()
 			if err != nil {
 				log.Crit("Failed to reset state histories", "err", err)
@@ -366,6 +387,12 @@ func (db *Database) setStateGenerator() error {
 	}
 	stats.log("Starting snapshot generation", root, generator.Marker)
 	dl.generator.run(root)
+
+	// Block until the generation completes. It's the feature used in
+	// unit tests.
+	if db.config.NoAsyncGeneration {
+		<-dl.generator.done
+	}
 	return nil
 }
 
@@ -434,8 +461,8 @@ func (db *Database) Disable() error {
 	// Terminate the state generator if it's active and mark the disk layer
 	// as stale to prevent access to persistent state.
 	disk := db.tree.bottom()
-	if disk.generator != nil {
-		disk.generator.stop()
+	if err := disk.terminate(); err != nil {
+		return err
 	}
 	disk.markStale()
 
@@ -477,6 +504,11 @@ func (db *Database) Enable(root common.Hash) error {
 	// mappings can be huge and might take a while to clear
 	// them, just leave them in disk and wait for overwriting.
 	if db.freezer != nil {
+		// TODO(rjl493456442) would be better to group them into a batch.
+		//
+		// Purge all state history indexing data first
+		rawdb.DeleteStateHistoryIndexMetadata(db.diskdb)
+		rawdb.DeleteStateHistoryIndex(db.diskdb)
 		if err := db.freezer.Reset(); err != nil {
 			return err
 		}
@@ -592,13 +624,19 @@ func (db *Database) Close() error {
 	// following mutations.
 	db.readOnly = true
 
-	// Terminate the background generation if it's active
-	disk := db.tree.bottom()
-	if disk.generator != nil {
-		disk.generator.stop()
+	// Block until the background flushing is finished. It must
+	// be done before terminating the potential background snapshot
+	// generator.
+	dl := db.tree.bottom()
+	if err := dl.terminate(); err != nil {
+		return err
 	}
-	disk.resetCache() // release the memory held by clean cache
+	dl.resetCache() // release the memory held by clean cache
 
+	// Terminate the background state history indexer
+	if db.indexer != nil {
+		db.indexer.close()
+	}
 	// Close the attached state history freezer.
 	if db.freezer == nil {
 		return nil
@@ -662,16 +700,6 @@ func (db *Database) HistoryRange() (uint64, uint64, error) {
 	return historyRange(db.freezer)
 }
 
-// waitGeneration waits until the background generation is finished. It assumes
-// that the generation is permitted; otherwise, it will block indefinitely.
-func (db *Database) waitGeneration() {
-	gen := db.tree.bottom().generator
-	if gen == nil || gen.completed() {
-		return
-	}
-	<-gen.done
-}
-
 // AccountIterator creates a new account iterator for the specified root hash and
 // seeks to a starting account hash.
 func (db *Database) AccountIterator(root common.Hash, seek common.Hash) (AccountIterator, error) {
@@ -681,7 +709,7 @@ func (db *Database) AccountIterator(root common.Hash, seek common.Hash) (Account
 	if wait {
 		return nil, errDatabaseWaitSync
 	}
-	if gen := db.tree.bottom().generator; gen != nil && !gen.completed() {
+	if !db.tree.bottom().genComplete() {
 		return nil, errNotConstructed
 	}
 	return newFastAccountIterator(db, root, seek)
@@ -696,7 +724,7 @@ func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek 
 	if wait {
 		return nil, errDatabaseWaitSync
 	}
-	if gen := db.tree.bottom().generator; gen != nil && !gen.completed() {
+	if !db.tree.bottom().genComplete() {
 		return nil, errNotConstructed
 	}
 	return newFastStorageIterator(db, root, account, seek)

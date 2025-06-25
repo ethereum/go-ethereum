@@ -220,22 +220,10 @@ func verifyState(ctx *cli.Context) error {
 	triedb := utils.MakeTrieDatabase(ctx, chaindb, false, true, false)
 	defer triedb.Close()
 
-	snapConfig := snapshot.Config{
-		CacheSize:  256,
-		Recovery:   false,
-		NoBuild:    true,
-		AsyncBuild: false,
-	}
-	snaptree, err := snapshot.New(snapConfig, chaindb, triedb, headBlock.Root())
-	if err != nil {
-		log.Error("Failed to open snapshot tree", "err", err)
-		return err
-	}
-	if ctx.NArg() > 1 {
-		log.Error("Too many arguments given")
-		return errors.New("too many arguments")
-	}
-	var root = headBlock.Root()
+	var (
+		err  error
+		root = headBlock.Root()
+	)
 	if ctx.NArg() == 1 {
 		root, err = parseRoot(ctx.Args().First())
 		if err != nil {
@@ -243,12 +231,34 @@ func verifyState(ctx *cli.Context) error {
 			return err
 		}
 	}
-	if err := snaptree.Verify(root); err != nil {
-		log.Error("Failed to verify state", "root", root, "err", err)
-		return err
+	if triedb.Scheme() == rawdb.PathScheme {
+		if err := triedb.VerifyState(root); err != nil {
+			log.Error("Failed to verify state", "root", root, "err", err)
+			return err
+		}
+		log.Info("Verified the state", "root", root)
+
+		// TODO(rjl493456442) implement dangling checks in pathdb.
+		return nil
+	} else {
+		snapConfig := snapshot.Config{
+			CacheSize:  256,
+			Recovery:   false,
+			NoBuild:    true,
+			AsyncBuild: false,
+		}
+		snaptree, err := snapshot.New(snapConfig, chaindb, triedb, headBlock.Root())
+		if err != nil {
+			log.Error("Failed to open snapshot tree", "err", err)
+			return err
+		}
+		if err := snaptree.Verify(root); err != nil {
+			log.Error("Failed to verify state", "root", root, "err", err)
+			return err
+		}
+		log.Info("Verified the state", "root", root)
+		return snapshot.CheckDanglingStorage(chaindb)
 	}
-	log.Info("Verified the state", "root", root)
-	return snapshot.CheckDanglingStorage(chaindb)
 }
 
 // checkDanglingStorage iterates the snap storage data, and verifies that all

@@ -171,7 +171,6 @@ func TestCopy(t *testing.T) {
 	for i := byte(0); i < 255; i++ {
 		obj := orig.getOrNewStateObject(common.BytesToAddress([]byte{i}))
 		obj.AddBalance(uint256.NewInt(uint64(i)))
-		orig.updateStateObject(obj)
 	}
 	orig.Finalise(false)
 
@@ -190,10 +189,6 @@ func TestCopy(t *testing.T) {
 		origObj.AddBalance(uint256.NewInt(2 * uint64(i)))
 		copyObj.AddBalance(uint256.NewInt(3 * uint64(i)))
 		ccopyObj.AddBalance(uint256.NewInt(4 * uint64(i)))
-
-		orig.updateStateObject(origObj)
-		copy.updateStateObject(copyObj)
-		ccopy.updateStateObject(copyObj)
 	}
 
 	// Finalise the changes on all concurrently
@@ -238,7 +233,6 @@ func TestCopyWithDirtyJournal(t *testing.T) {
 		obj := orig.getOrNewStateObject(common.BytesToAddress([]byte{i}))
 		obj.AddBalance(uint256.NewInt(uint64(i)))
 		obj.data.Root = common.HexToHash("0xdeadbeef")
-		orig.updateStateObject(obj)
 	}
 	root, _ := orig.Commit(0, true, false)
 	orig, _ = New(root, db)
@@ -248,8 +242,6 @@ func TestCopyWithDirtyJournal(t *testing.T) {
 		obj := orig.getOrNewStateObject(common.BytesToAddress([]byte{i}))
 		amount := uint256.NewInt(uint64(i))
 		obj.SetBalance(new(uint256.Int).Sub(obj.Balance(), amount))
-
-		orig.updateStateObject(obj)
 	}
 	cpy := orig.Copy()
 
@@ -284,7 +276,6 @@ func TestCopyObjectState(t *testing.T) {
 		obj := orig.getOrNewStateObject(common.BytesToAddress([]byte{i}))
 		obj.AddBalance(uint256.NewInt(uint64(i)))
 		obj.data.Root = common.HexToHash("0xdeadbeef")
-		orig.updateStateObject(obj)
 	}
 	orig.Finalise(true)
 	cpy := orig.Copy()
@@ -573,7 +564,7 @@ func forEachStorage(s *StateDB, addr common.Address, cb func(key, value common.H
 	)
 
 	for it.Next() {
-		key := common.BytesToHash(s.trie.GetKey(it.Key))
+		key := common.BytesToHash(tr.GetKey(it.Key))
 		visited[key] = true
 		if value, dirty := so.dirtyStorage[key]; dirty {
 			if !cb(key, value) {
@@ -982,6 +973,7 @@ func testMissingTrieNodes(t *testing.T, scheme string) {
 			TrieCleanSize:   0,
 			StateCleanSize:  0,
 			WriteBufferSize: 0,
+			NoAsyncFlush:    true,
 		}}) // disable caching
 	} else {
 		tdb = triedb.NewDatabase(memDb, &triedb.Config{HashDB: &hashdb.Config{
@@ -1004,18 +996,25 @@ func testMissingTrieNodes(t *testing.T, scheme string) {
 		// force-flush
 		tdb.Commit(root, false)
 	}
-	// Create a new state on the old root
-	state, _ = New(root, db)
 	// Now we clear out the memdb
 	it := memDb.NewIterator(nil, nil)
 	for it.Next() {
 		k := it.Key()
-		// Leave the root intact
-		if !bytes.Equal(k, root[:]) {
-			t.Logf("key: %x", k)
-			memDb.Delete(k)
+		if scheme == rawdb.HashScheme {
+			if !bytes.Equal(k, root[:]) {
+				t.Logf("key: %x", k)
+				memDb.Delete(k)
+			}
+		}
+		if scheme == rawdb.PathScheme {
+			rk := k[len(rawdb.TrieNodeAccountPrefix):]
+			if len(rk) != 0 {
+				t.Logf("key: %x", k)
+				memDb.Delete(k)
+			}
 		}
 	}
+	state, _ = New(root, db)
 	balance := state.GetBalance(addr)
 	// The removed elem should lead to it returning zero balance
 	if exp, got := uint64(0), balance.Uint64(); got != exp {

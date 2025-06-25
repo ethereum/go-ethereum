@@ -317,6 +317,16 @@ func (db *Database) Journal(root common.Hash) error {
 	return pdb.Journal(root)
 }
 
+// VerifyState traverses the flat states specified by the given state root and
+// ensures they are matched with each other.
+func (db *Database) VerifyState(root common.Hash) error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.VerifyState(root)
+}
+
 // AccountIterator creates a new account iterator for the specified root hash and
 // seeks to a starting account hash.
 func (db *Database) AccountIterator(root common.Hash, seek common.Hash) (pathdb.AccountIterator, error) {

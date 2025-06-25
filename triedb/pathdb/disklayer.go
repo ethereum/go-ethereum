@@ -41,17 +41,20 @@ type diskLayer struct {
 	nodes  *fastcache.Cache // GC friendly memory cache of clean nodes
 	states *fastcache.Cache // GC friendly memory cache of clean states
 
-	buffer *buffer      // Dirty buffer to aggregate writes of nodes and states
-	stale  bool         // Signals that the layer became stale (state progressed)
-	lock   sync.RWMutex // Lock used to protect stale flag and genMarker
+	buffer *buffer // Live buffer to aggregate writes
+	frozen *buffer // Frozen node buffer waiting for flushing
+
+	stale bool         // Signals that the layer became stale (state progressed)
+	lock  sync.RWMutex // Lock used to protect stale flag and genMarker
 
 	// The generator is set if the state snapshot was not fully completed,
 	// regardless of whether the background generation is running or not.
+	// It should only be unset if the generation completes.
 	generator *generator
 }
 
 // newDiskLayer creates a new disk layer based on the passing arguments.
-func newDiskLayer(root common.Hash, id uint64, db *Database, nodes *fastcache.Cache, states *fastcache.Cache, buffer *buffer) *diskLayer {
+func newDiskLayer(root common.Hash, id uint64, db *Database, nodes *fastcache.Cache, states *fastcache.Cache, buffer *buffer, frozen *buffer) *diskLayer {
 	// Initialize the clean caches if the memory allowance is not zero
 	// or reuse the provided caches if they are not nil (inherited from
 	// the original disk layer).
@@ -68,6 +71,7 @@ func newDiskLayer(root common.Hash, id uint64, db *Database, nodes *fastcache.Ca
 		nodes:  nodes,
 		states: states,
 		buffer: buffer,
+		frozen: frozen,
 	}
 }
 
@@ -114,16 +118,19 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 	if dl.stale {
 		return nil, common.Hash{}, nil, errSnapshotStale
 	}
-	// Try to retrieve the trie node from the not-yet-written
-	// node buffer first. Note the buffer is lock free since
-	// it's impossible to mutate the buffer before tagging the
-	// layer as stale.
-	n, found := dl.buffer.node(owner, path)
-	if found {
-		dirtyNodeHitMeter.Mark(1)
-		dirtyNodeReadMeter.Mark(int64(len(n.Blob)))
-		dirtyNodeHitDepthHist.Update(int64(depth))
-		return n.Blob, n.Hash, &nodeLoc{loc: locDirtyCache, depth: depth}, nil
+	// Try to retrieve the trie node from the not-yet-written node buffer first
+	// (both the live one and the frozen one). Note the buffer is lock free since
+	// it's impossible to mutate the buffer before tagging the layer as stale.
+	for _, buffer := range []*buffer{dl.buffer, dl.frozen} {
+		if buffer != nil {
+			n, found := buffer.node(owner, path)
+			if found {
+				dirtyNodeHitMeter.Mark(1)
+				dirtyNodeReadMeter.Mark(int64(len(n.Blob)))
+				dirtyNodeHitDepthHist.Update(int64(depth))
+				return n.Blob, n.Hash, &nodeLoc{loc: locDirtyCache, depth: depth}, nil
+			}
+		}
 	}
 	dirtyNodeMissMeter.Mark(1)
 
@@ -144,6 +151,11 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 	} else {
 		blob = rawdb.ReadStorageTrieNode(dl.db.diskdb, owner, path)
 	}
+	// Store the resolved data in the clean cache. The background buffer flusher
+	// may also write to the clean cache concurrently, but two writers cannot
+	// write the same item with different content. If the item already exists,
+	// it will be found in the frozen buffer, eliminating the need to check the
+	// database.
 	if dl.nodes != nil && len(blob) > 0 {
 		dl.nodes.Set(key, blob)
 		cleanNodeWriteMeter.Mark(int64(len(blob)))
@@ -162,22 +174,25 @@ func (dl *diskLayer) account(hash common.Hash, depth int) ([]byte, error) {
 	if dl.stale {
 		return nil, errSnapshotStale
 	}
-	// Try to retrieve the account from the not-yet-written
-	// node buffer first. Note the buffer is lock free since
-	// it's impossible to mutate the buffer before tagging the
-	// layer as stale.
-	blob, found := dl.buffer.account(hash)
-	if found {
-		dirtyStateHitMeter.Mark(1)
-		dirtyStateReadMeter.Mark(int64(len(blob)))
-		dirtyStateHitDepthHist.Update(int64(depth))
+	// Try to retrieve the trie node from the not-yet-written node buffer first
+	// (both the live one and the frozen one). Note the buffer is lock free since
+	// it's impossible to mutate the buffer before tagging the layer as stale.
+	for _, buffer := range []*buffer{dl.buffer, dl.frozen} {
+		if buffer != nil {
+			blob, found := buffer.account(hash)
+			if found {
+				dirtyStateHitMeter.Mark(1)
+				dirtyStateReadMeter.Mark(int64(len(blob)))
+				dirtyStateHitDepthHist.Update(int64(depth))
 
-		if len(blob) == 0 {
-			stateAccountInexMeter.Mark(1)
-		} else {
-			stateAccountExistMeter.Mark(1)
+				if len(blob) == 0 {
+					stateAccountInexMeter.Mark(1)
+				} else {
+					stateAccountExistMeter.Mark(1)
+				}
+				return blob, nil
+			}
 		}
-		return blob, nil
 	}
 	dirtyStateMissMeter.Mark(1)
 
@@ -203,7 +218,13 @@ func (dl *diskLayer) account(hash common.Hash, depth int) ([]byte, error) {
 		cleanStateMissMeter.Mark(1)
 	}
 	// Try to retrieve the account from the disk.
-	blob = rawdb.ReadAccountSnapshot(dl.db.diskdb, hash)
+	blob := rawdb.ReadAccountSnapshot(dl.db.diskdb, hash)
+
+	// Store the resolved data in the clean cache. The background buffer flusher
+	// may also write to the clean cache concurrently, but two writers cannot
+	// write the same item with different content. If the item already exists,
+	// it will be found in the frozen buffer, eliminating the need to check the
+	// database.
 	if dl.states != nil {
 		dl.states.Set(hash[:], blob)
 		cleanStateWriteMeter.Mark(int64(len(blob)))
@@ -231,21 +252,24 @@ func (dl *diskLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 	if dl.stale {
 		return nil, errSnapshotStale
 	}
-	// Try to retrieve the storage slot from the not-yet-written
-	// node buffer first. Note the buffer is lock free since
-	// it's impossible to mutate the buffer before tagging the
-	// layer as stale.
-	if blob, found := dl.buffer.storage(accountHash, storageHash); found {
-		dirtyStateHitMeter.Mark(1)
-		dirtyStateReadMeter.Mark(int64(len(blob)))
-		dirtyStateHitDepthHist.Update(int64(depth))
+	// Try to retrieve the trie node from the not-yet-written node buffer first
+	// (both the live one and the frozen one). Note the buffer is lock free since
+	// it's impossible to mutate the buffer before tagging the layer as stale.
+	for _, buffer := range []*buffer{dl.buffer, dl.frozen} {
+		if buffer != nil {
+			if blob, found := buffer.storage(accountHash, storageHash); found {
+				dirtyStateHitMeter.Mark(1)
+				dirtyStateReadMeter.Mark(int64(len(blob)))
+				dirtyStateHitDepthHist.Update(int64(depth))
 
-		if len(blob) == 0 {
-			stateStorageInexMeter.Mark(1)
-		} else {
-			stateStorageExistMeter.Mark(1)
+				if len(blob) == 0 {
+					stateStorageInexMeter.Mark(1)
+				} else {
+					stateStorageExistMeter.Mark(1)
+				}
+				return blob, nil
+			}
 		}
-		return blob, nil
 	}
 	dirtyStateMissMeter.Mark(1)
 
@@ -273,6 +297,12 @@ func (dl *diskLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 	}
 	// Try to retrieve the account from the disk
 	blob := rawdb.ReadStorageSnapshot(dl.db.diskdb, accountHash, storageHash)
+
+	// Store the resolved data in the clean cache. The background buffer flusher
+	// may also write to the clean cache concurrently, but two writers cannot
+	// write the same item with different content. If the item already exists,
+	// it will be found in the frozen buffer, eliminating the need to check the
+	// database.
 	if dl.states != nil {
 		dl.states.Set(key, blob)
 		cleanStateWriteMeter.Mark(int64(len(blob)))
@@ -325,6 +355,12 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 			overflow = true
 			oldest = bottom.stateID() - limit + 1 // track the id of history **after truncation**
 		}
+		// Notify the state history indexer for newly created history
+		if dl.db.indexer != nil {
+			if err := dl.db.indexer.extend(bottom.stateID()); err != nil {
+				return nil, err
+			}
+		}
 	}
 	// Mark the diskLayer as stale before applying any mutations on top.
 	dl.stale = true
@@ -341,7 +377,8 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	// truncation) surpasses the persisted state ID, we take the necessary action
 	// of forcibly committing the cached dirty states to ensure that the persisted
 	// state ID remains higher.
-	if !force && rawdb.ReadPersistentStateID(dl.db.diskdb) < oldest {
+	persistedID := rawdb.ReadPersistentStateID(dl.db.diskdb)
+	if !force && persistedID < oldest {
 		force = true
 	}
 	// Merge the trie nodes and flat states of the bottom-most diff layer into the
@@ -351,12 +388,25 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	// Terminate the background state snapshot generation before mutating the
 	// persistent state.
 	if combined.full() || force {
+		// Wait until the previous frozen buffer is fully flushed
+		if dl.frozen != nil {
+			if err := dl.frozen.waitFlush(); err != nil {
+				return nil, err
+			}
+		}
+		// Release the frozen buffer and the internally referenced maps will
+		// be reclaimed by GC.
+		dl.frozen = nil
+
 		// Terminate the background state snapshot generator before flushing
 		// to prevent data race.
-		var progress []byte
-		if dl.generator != nil {
-			dl.generator.stop()
-			progress = dl.generator.progressMarker()
+		var (
+			progress []byte
+			gen      = dl.generator
+		)
+		if gen != nil {
+			gen.stop()
+			progress = gen.progressMarker()
 
 			// If the snapshot has been fully generated, unset the generator
 			if progress == nil {
@@ -365,18 +415,33 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 				log.Info("Paused snapshot generation")
 			}
 		}
-		// Flush the content in combined buffer. Any state data after the progress
-		// marker will be ignored, as the generator will pick it up later.
-		if err := combined.flush(bottom.root, dl.db.diskdb, dl.db.freezer, progress, dl.nodes, dl.states, bottom.stateID()); err != nil {
-			return nil, err
+
+		// Freeze the live buffer and schedule background flushing
+		dl.frozen = combined
+		dl.frozen.flush(bottom.root, dl.db.diskdb, dl.db.freezer, progress, dl.nodes, dl.states, bottom.stateID(), func() {
+			// Resume the background generation if it's not completed yet.
+			// The generator is assumed to be available if the progress is
+			// not nil.
+			//
+			// Notably, the generator will be shared and linked by all the
+			// disk layer instances, regardless of the generation is terminated
+			// or not.
+			if progress != nil {
+				gen.run(bottom.root)
+			}
+		})
+		// Block until the frozen buffer is fully flushed out if the async flushing
+		// is not allowed, or if the oldest history surpasses the persisted state ID.
+		if dl.db.config.NoAsyncFlush || persistedID < oldest {
+			if err := dl.frozen.waitFlush(); err != nil {
+				return nil, err
+			}
+			dl.frozen = nil
 		}
-		// Resume the background generation if it's not completed yet
-		if progress != nil {
-			dl.generator.run(bottom.root)
-		}
+		combined = newBuffer(dl.db.config.WriteBufferSize, nil, nil, 0)
 	}
 	// Link the generator if snapshot is not yet completed
-	ndl := newDiskLayer(bottom.root, bottom.stateID(), dl.db, dl.nodes, dl.states, combined)
+	ndl := newDiskLayer(bottom.root, bottom.stateID(), dl.db, dl.nodes, dl.states, combined, dl.frozen)
 	if dl.generator != nil {
 		ndl.setGenerator(dl.generator)
 	}
@@ -418,6 +483,12 @@ func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 
 	dl.stale = true
 
+	// Unindex the corresponding state history
+	if dl.db.indexer != nil {
+		if err := dl.db.indexer.shorten(dl.id); err != nil {
+			return nil, err
+		}
+	}
 	// State change may be applied to node buffer, or the persistent
 	// state, depends on if node buffer is empty or not. If the node
 	// buffer is not empty, it means that the state transition that
@@ -428,7 +499,7 @@ func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 		if err != nil {
 			return nil, err
 		}
-		ndl := newDiskLayer(h.meta.parent, dl.id-1, dl.db, dl.nodes, dl.states, dl.buffer)
+		ndl := newDiskLayer(h.meta.parent, dl.id-1, dl.db, dl.nodes, dl.states, dl.buffer, dl.frozen)
 
 		// Link the generator if it exists
 		if dl.generator != nil {
@@ -437,7 +508,19 @@ func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 		log.Debug("Reverted data in write buffer", "oldroot", h.meta.root, "newroot", h.meta.parent, "elapsed", common.PrettyDuration(time.Since(start)))
 		return ndl, nil
 	}
-	// Terminate the generation before writing any data into database
+	// Block until the frozen buffer is fully flushed
+	if dl.frozen != nil {
+		if err := dl.frozen.waitFlush(); err != nil {
+			return nil, err
+		}
+		// Unset the frozen buffer if it exists, otherwise these "reverted"
+		// states will still be accessible after revert in frozen buffer.
+		dl.frozen = nil
+	}
+
+	// Terminate the generator before writing any data to the database.
+	// This must be done after flushing the frozen buffer, as the generator
+	// may be restarted at the end of the flush process.
 	var progress []byte
 	if dl.generator != nil {
 		dl.generator.stop()
@@ -455,7 +538,7 @@ func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 	}
 	// Link the generator and resume generation if the snapshot is not yet
 	// fully completed.
-	ndl := newDiskLayer(h.meta.parent, dl.id-1, dl.db, dl.nodes, dl.states, dl.buffer)
+	ndl := newDiskLayer(h.meta.parent, dl.id-1, dl.db, dl.nodes, dl.states, dl.buffer, dl.frozen)
 	if dl.generator != nil && !dl.generator.completed() {
 		ndl.generator = dl.generator
 		ndl.generator.run(h.meta.parent)
@@ -499,4 +582,42 @@ func (dl *diskLayer) genMarker() []byte {
 		return nil
 	}
 	return dl.generator.progressMarker()
+}
+
+// genComplete returns a flag indicating whether the state snapshot has been
+// fully generated.
+func (dl *diskLayer) genComplete() bool {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	return dl.genMarker() == nil
+}
+
+// waitFlush blocks until the background buffer flush is completed.
+func (dl *diskLayer) waitFlush() error {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	if dl.frozen == nil {
+		return nil
+	}
+	return dl.frozen.waitFlush()
+}
+
+// terminate releases the frozen buffer if it's not nil and terminates the
+// background state generator.
+func (dl *diskLayer) terminate() error {
+	dl.lock.Lock()
+	defer dl.lock.Unlock()
+
+	if dl.frozen != nil {
+		if err := dl.frozen.waitFlush(); err != nil {
+			return err
+		}
+		dl.frozen = nil
+	}
+	if dl.generator != nil {
+		dl.generator.stop()
+	}
+	return nil
 }
