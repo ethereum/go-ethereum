@@ -145,24 +145,15 @@ func generateTraceTests(clictx *cli.Context) error {
 }
 
 func randomTraceOption() (*tracers.TraceConfig, string) {
-	x := rand.Intn(11)
+	x := rand.Intn(10)
 	if x == 0 {
-		// struct-logger, with all fields enabled, very heavy
-		return &tracers.TraceConfig{
-			Config: &logger.Config{
-				EnableMemory:     true,
-				EnableReturnData: true,
-			},
-		}, "structAll"
-	}
-	if x == 1 {
 		// default options for struct-logger, with stack and storage capture
 		// enabled
 		return &tracers.TraceConfig{
 			Config: &logger.Config{},
 		}, "structDefault"
 	}
-	if x == 2 || x == 3 || x == 4 {
+	if x >= 1 && x <= 3 {
 		// struct-logger with storage capture enabled
 		return &tracers.TraceConfig{
 			Config: &logger.Config{
@@ -173,8 +164,8 @@ func randomTraceOption() (*tracers.TraceConfig, string) {
 	// Native tracer
 	loggers := []string{"callTracer", "4byteTracer", "flatCallTracer", "muxTracer", "noopTracer", "prestateTracer"}
 	return &tracers.TraceConfig{
-		Tracer: &loggers[x-5],
-	}, loggers[x-5]
+		Tracer: &loggers[x-4],
+	}, loggers[x-4]
 }
 
 func writeTraceResult(dir string, hash common.Hash, result any, configName string) {
