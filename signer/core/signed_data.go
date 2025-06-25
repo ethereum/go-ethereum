@@ -38,6 +38,17 @@ import (
 // Note, the produced signature conforms to the secp256k1 curve R, S and V values,
 // where the V value will be 27 or 28 for legacy reasons, if legacyV==true.
 func (api *SignerAPI) sign(req *SignDataRequest, legacyV bool) (hexutil.Bytes, error) {
+	if api.validateSIWEMode {
+		// perform SIWE validation
+		err := validateSIWE(req)
+		if err != nil {
+			if errors.Is(err, ErrMalformedSIWEMEssage) {
+				api.UI.ShowInfo(err.Error())
+			} else {
+				return nil, err
+			}
+		}
+	}
 	// We make the request prior to looking up if we actually have the account, to prevent
 	// account-enumeration via the API
 	res, err := api.UI.ApproveSignData(req)

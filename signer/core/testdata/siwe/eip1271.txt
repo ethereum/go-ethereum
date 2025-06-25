@@ -1,0 +1,1 @@
+localhost:4361 wants you to sign in with your Ethereum account:\n0xa5b3A53800cD49669F34DE80f2C569c6D4Ca3009\n\nSIWE Notepad Example\n\nURI: http://localhost:4361\nVersion: 1\nChain ID: 1\nNonce: FbYd6TNB4m0IUHDG7\nIssued At: 2022-04-19T18:55:04.444Z

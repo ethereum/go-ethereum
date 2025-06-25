@@ -115,16 +115,17 @@ func tmpDirName(t *testing.T) string {
 	return d
 }
 
-func setup(t *testing.T) (*core.SignerAPI, *headlessUi) {
+func setup(t *testing.T, enableSIWE bool) (*core.SignerAPI, *headlessUi) {
 	db, err := fourbyte.New()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 	ui := &headlessUi{make(chan string, 20), make(chan string, 20)}
 	am := core.StartClefAccountManager(tmpDirName(t), true, true, "")
-	api := core.NewSignerAPI(am, 1337, true, ui, db, true, &storage.NoStorage{})
+	api := core.NewSignerAPI(am, 1337, true, ui, db, true, &storage.NoStorage{}, enableSIWE)
 	return api, ui
 }
+
 func createAccount(ui *headlessUi, api *core.SignerAPI, t *testing.T) {
 	ui.approveCh <- "Y"
 	ui.inputCh <- "a_long_password"
@@ -170,7 +171,7 @@ func list(ui *headlessUi, api *core.SignerAPI, t *testing.T) ([]common.Address, 
 
 func TestNewAcc(t *testing.T) {
 	t.Parallel()
-	api, control := setup(t)
+	api, control := setup(t, false)
 	verifyNum := func(num int) {
 		list, err := list(control, api, t)
 		if err != nil {
@@ -243,7 +244,7 @@ func TestSignTx(t *testing.T) {
 		err       error
 	)
 
-	api, control := setup(t)
+	api, control := setup(t, false)
 	createAccount(control, api, t)
 	control.approveCh <- "A"
 	list, err = api.List(context.Background())

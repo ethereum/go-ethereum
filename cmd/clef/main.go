@@ -136,6 +136,11 @@ var (
 		Name:  "stdio-ui-test",
 		Usage: "Mechanism to test interface between Clef and UI. Requires 'stdio-ui'.",
 	}
+	validateSIWEFlag = &cli.BoolFlag{
+		Name:  "validate-siwe",
+		Usage: "Validate Sign-In with Etherium messages (ERC-4361)",
+		Value: true,
+	}
 	initCommand = &cli.Command{
 		Action:    initializeSecrets,
 		Name:      "init",
@@ -283,6 +288,7 @@ func init() {
 		ruleFlag,
 		stdiouiFlag,
 		testFlag,
+		validateSIWEFlag,
 		advancedMode,
 		acceptFlag,
 	}
@@ -409,7 +415,7 @@ func initInternalApi(c *cli.Context) (*core.UIServerAPI, core.UIClientAPI, error
 		lightKdf                  = c.Bool(utils.LightKDFFlag.Name)
 	)
 	am := core.StartClefAccountManager(ksLoc, true, lightKdf, "")
-	api := core.NewSignerAPI(am, 0, true, ui, nil, false, pwStorage)
+	api := core.NewSignerAPI(am, 0, true, ui, nil, false, pwStorage, false)
 	internalApi := core.NewUIServerAPI(api)
 	return internalApi, ui, nil
 }
@@ -694,18 +700,19 @@ func signer(c *cli.Context) error {
 		}
 	}
 	var (
-		chainId  = c.Int64(chainIdFlag.Name)
-		ksLoc    = c.String(keystoreFlag.Name)
-		lightKdf = c.Bool(utils.LightKDFFlag.Name)
-		advanced = c.Bool(advancedMode.Name)
-		nousb    = c.Bool(utils.NoUSBFlag.Name)
-		scpath   = c.String(utils.SmartCardDaemonPathFlag.Name)
+		chainId          = c.Int64(chainIdFlag.Name)
+		ksLoc            = c.String(keystoreFlag.Name)
+		lightKdf         = c.Bool(utils.LightKDFFlag.Name)
+		advanced         = c.Bool(advancedMode.Name)
+		nousb            = c.Bool(utils.NoUSBFlag.Name)
+		scpath           = c.String(utils.SmartCardDaemonPathFlag.Name)
+		validateSIWEFlag = c.Bool(validateSIWEFlag.Name)
 	)
 	log.Info("Starting signer", "chainid", chainId, "keystore", ksLoc,
 		"light-kdf", lightKdf, "advanced", advanced)
 	am := core.StartClefAccountManager(ksLoc, nousb, lightKdf, scpath)
 	defer am.Close()
-	apiImpl := core.NewSignerAPI(am, chainId, nousb, ui, db, advanced, pwStorage)
+	apiImpl := core.NewSignerAPI(am, chainId, nousb, ui, db, advanced, pwStorage, validateSIWEFlag)
 
 	// Establish the bidirectional communication, by creating a new UI backend and registering
 	// it with the UI.

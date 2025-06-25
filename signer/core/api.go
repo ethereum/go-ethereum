@@ -118,6 +118,7 @@ type SignerAPI struct {
 	UI          UIClientAPI
 	validator   Validator
 	rejectMode  bool
+	validateSIWEMode bool
 	credentials storage.Storage
 }
 
@@ -281,11 +282,11 @@ var ErrRequestDenied = errors.New("request denied")
 // key that is generated when a new Account is created.
 // noUSB disables USB support that is required to support hardware devices such as
 // ledger and trezor.
-func NewSignerAPI(am *accounts.Manager, chainID int64, noUSB bool, ui UIClientAPI, validator Validator, advancedMode bool, credentials storage.Storage) *SignerAPI {
+func NewSignerAPI(am *accounts.Manager, chainID int64, noUSB bool, ui UIClientAPI, validator Validator, advancedMode bool, credentials storage.Storage, validateSIWEMode bool) *SignerAPI {
 	if advancedMode {
 		log.Info("Clef is in advanced mode: will warn instead of reject")
 	}
-	signer := &SignerAPI{big.NewInt(chainID), am, ui, validator, !advancedMode, credentials}
+	signer := &SignerAPI{big.NewInt(chainID), am, ui, validator, !advancedMode, validateSIWEMode, credentials}
 	if !noUSB {
 		signer.startUSBListener()
 	}

@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/signer/core"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
+	"github.com/stretchr/testify/require"
 )
 
 var typesStandard = apitypes.Types{
@@ -184,7 +185,7 @@ var typedData = apitypes.TypedData{
 
 func TestSignData(t *testing.T) {
 	t.Parallel()
-	api, control := setup(t)
+	api, control := setup(t, false)
 	//Create two accounts
 	createAccount(control, api, t)
 	createAccount(control, api, t)
@@ -1058,5 +1059,50 @@ func TestEncodeDataRecursiveBytes(t *testing.T) {
 	_, err := typedData.EncodeData(typedData.PrimaryType, typedData.Message, 0)
 	if err != nil {
 		t.Fatalf("got err %v", err)
+	}
+}
+
+func TestSignInWithEtherium(t *testing.T) {
+	t.Parallel()
+
+	testFiles, err := os.ReadDir(filepath.Join("testdata", "siwe"))
+	require.NoError(t, err)
+
+	for _, fInfo := range testFiles {
+		if !strings.HasSuffix(fInfo.Name(), "txt") {
+			continue
+		}
+		t.Run(fInfo.Name(), func(t *testing.T) {
+			t.Parallel()
+			expectedFailure := strings.HasPrefix(fInfo.Name(), "expfail")
+			expectedWarning := strings.HasPrefix(fInfo.Name(), "expwarn")
+			message, err := os.ReadFile(filepath.Join("testdata", "siwe", fInfo.Name()))
+			require.NoError(t, err)
+
+			api, control := setup(t, true)
+			createAccount(control, api, t)
+			createAccount(control, api, t)
+			control.approveCh <- "1"
+			list, err := api.List(context.Background())
+			require.NoError(t, err)
+			a := common.NewMixedcaseAddress(list[0])
+
+			control.approveCh <- "Y"
+			control.inputCh <- "a_long_password"
+			signature, err := api.SignData(context.Background(), apitypes.TextPlain.Mime, a, hexutil.Encode([]byte(message)))
+
+			if expectedFailure {
+				require.Error(t, err)
+				return
+			} else {
+				require.NoError(t, err)
+			}
+			if expectedWarning {
+				// todo: monitor for warning
+			}
+			if signature == nil || len(signature) != 65 {
+				t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
+			}
+		})
 	}
 }
