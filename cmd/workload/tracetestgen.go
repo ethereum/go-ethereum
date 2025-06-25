@@ -89,6 +89,7 @@ func generateTraceTests(clictx *cli.Context) error {
 		ctx        = context.Background()
 		test       = new(traceTest)
 	)
+	fmt.Println("startBlock", startBlock, "endBlock", endBlock)
 	latest, err := client.Eth.BlockNumber(ctx)
 	if err != nil {
 		exit(err)
@@ -111,8 +112,7 @@ func generateTraceTests(clictx *cli.Context) error {
 	log.Info("Trace transactions around the chain tip", "head", latest, "start", startBlock, "end", endBlock)
 
 	for i := startBlock; i < endBlock; i++ {
-		number := latest - uint64(i)
-		header, err := client.Eth.HeaderByNumber(ctx, big.NewInt(int64(number)))
+		header, err := client.Eth.HeaderByNumber(ctx, big.NewInt(int64(i))
 		if err != nil {
 			exit(err)
 		}
