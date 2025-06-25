@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"os"
 	"path"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -4405,5 +4406,47 @@ func testInsertChainWithCutoff(t *testing.T, cutoff uint64, ancientLimit uint64,
 				t.Fatalf("Missed block receipts: %d, cutoff: %d", num, cutoffBlock.NumberU64())
 			}
 		}
+	}
+}
+
+// TestBlockProcessingInterrupt tests graceful shutdown during block processing
+func TestBlockProcessingInterrupt(t *testing.T) {
+	testBlockProcessingInterrupt(t, rawdb.HashScheme)
+	testBlockProcessingInterrupt(t, rawdb.PathScheme)
+}
+
+func testBlockProcessingInterrupt(t *testing.T, scheme string) {
+	var (
+		genesis = &Genesis{
+			BaseFee: big.NewInt(params.InitialBaseFee),
+			Config:  params.AllEthashProtocolChanges,
+		}
+		engine = ethash.NewFaker()
+	)
+
+	options := DefaultConfig().WithStateScheme(scheme)
+	blockchain, _ := NewBlockChain(rawdb.NewMemoryDatabase(), genesis, engine, options)
+	defer blockchain.Stop()
+
+	genDb, blocks := makeBlockChainWithGenesis(genesis, 1, engine, canonicalSeed)
+	defer genDb.Close()
+
+	// Test interrupt during block processing
+	blockchain.InterruptInsert(true)
+	parent := blockchain.genesisBlock.Header()
+	_, err := blockchain.processBlock(parent.Root, blocks[0], true, false)
+
+	if err == nil {
+		t.Error("Expected block processing to be interrupted, but it succeeded")
+	}
+	if !strings.Contains(fmt.Sprintf("%v", err), "block processing interrupted during shutdown") {
+		t.Errorf("Expected 'block processing interrupted during shutdown' error, got: %v", err)
+	}
+
+	// Test processing works after reset
+	blockchain.InterruptInsert(false)
+	_, err = blockchain.processBlock(parent.Root, blocks[0], true, false)
+	if err != nil {
+		t.Errorf("Failed to process block after reset: %v", err)
 	}
 }

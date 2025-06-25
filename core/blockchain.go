@@ -1956,6 +1956,11 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	)
 	defer interrupt.Store(true) // terminate the prefetch at the end
 
+	// Short circuit if shutting down
+	if bc.insertStopped() {
+		return nil, fmt.Errorf("block processing interrupted during shutdown")
+	}
+
 	if bc.cfg.NoPrefetch {
 		statedb, err = state.New(parentRoot, bc.statedb)
 		if err != nil {
@@ -2006,6 +2011,10 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		}(time.Now(), throwaway, block)
 	}
 
+	if bc.insertStopped() {
+		return nil, fmt.Errorf("block processing interrupted during shutdown")
+	}
+
 	// If we are past Byzantium, enable prefetching to pull in trie node paths
 	// while processing transactions. Before Byzantium the prefetcher is mostly
 	// useless due to the intermediate root hashing after each transaction.
@@ -2046,12 +2055,20 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	}
 	ptime := time.Since(pstart)
 
+	if bc.insertStopped() {
+		return nil, fmt.Errorf("block processing interrupted during shutdown")
+	}
+
 	vstart := time.Now()
 	if err := bc.validator.ValidateState(block, statedb, res, false); err != nil {
 		bc.reportBlock(block, res, err)
 		return nil, err
 	}
 	vtime := time.Since(vstart)
+
+	if bc.insertStopped() {
+		return nil, fmt.Errorf("block processing interrupted during shutdown")
+	}
 
 	// If witnesses was generated and stateless self-validation requested, do
 	// that now. Self validation should *never* run in production, it's more of
