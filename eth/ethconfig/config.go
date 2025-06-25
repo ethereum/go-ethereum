@@ -60,7 +60,6 @@ var Defaults = Config{
 	TrieCleanCache:     154,
 	TrieDirtyCache:     256,
 	TrieTimeout:        60 * time.Minute,
-	TrieDBJournal:      "triedb.journal.rlp",
 	SnapshotCache:      102,
 	FilterLogCacheSize: 32,
 	Miner:              miner.DefaultConfig,
@@ -125,7 +124,7 @@ type Config struct {
 	SnapshotCache  int
 	Preimages      bool
 	StateHistory   uint64 `toml:",omitempty"` // The maximum number of blocks from head whose state histories are reserved.
-	TrieDBJournal  string // Path to the journal used for persisting trie data across node restarts
+	TrieDBJournal  bool   // Enable persisting the trie database journal to disk.
 
 	// State scheme represents the scheme used to store ethereum states and trie
 	// nodes on top. It can be 'hash', 'path', or none which means use the scheme

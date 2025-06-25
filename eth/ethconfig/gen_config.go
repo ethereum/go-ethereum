@@ -42,7 +42,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		SnapshotCache           int
 		Preimages               bool
 		StateHistory            uint64 `toml:",omitempty"`
-		TrieDBJournal           string
+		TrieDBJournal           bool
 		StateScheme             string `toml:",omitempty"`
 		FilterLogCacheSize      int
 		Miner                   miner.Config
@@ -130,7 +130,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		SnapshotCache           *int
 		Preimages               *bool
 		StateHistory            *uint64 `toml:",omitempty"`
-		TrieDBJournal           *string
+		TrieDBJournal           *bool
 		StateScheme             *string `toml:",omitempty"`
 		FilterLogCacheSize      *int
 		Miner                   *miner.Config

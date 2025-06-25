@@ -238,8 +238,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			},
 		}
 	)
-	if config.TrieDBJournal != "" {
-		options.TrieDBJournal = stack.ResolvePath(config.TrieDBJournal)
+	if config.TrieDBJournal {
+		options.TrieDBJournal = stack.ResolvePath("triedb.journal.rlp")
 	} else {
 		log.Warn("Trie database journal is persisted within the database")
 	}
