@@ -1002,6 +1002,11 @@ func (c *ChainConfig) IsFeynman(now uint64) bool {
 	return isForkedTime(now, c.FeynmanTime)
 }
 
+// IsFeynmanTransitionBlock returns whether the given block timestamp corresponds to the first Feynman block.
+func (c *ChainConfig) IsFeynmanTransitionBlock(blockTimestamp uint64, parentTimestamp uint64) bool {
+	return isForkedTime(blockTimestamp, c.FeynmanTime) && !isForkedTime(parentTimestamp, c.FeynmanTime)
+}
+
 // IsTerminalPoWBlock returns whether the given block is the last block of PoW stage.
 func (c *ChainConfig) IsTerminalPoWBlock(parentTotalDiff *big.Int, totalDiff *big.Int) bool {
 	if c.TerminalTotalDifficulty == nil {

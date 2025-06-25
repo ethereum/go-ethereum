@@ -152,6 +152,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	if chainConfig.CurieBlock != nil && chainConfig.CurieBlock.Cmp(new(big.Int).SetUint64(pre.Env.Number)) == 0 {
 		misc.ApplyCurieHardFork(statedb)
 	}
+	// Apply Feynman hard fork
+	if chainConfig.IsFeynmanTransitionBlock(pre.Env.Timestamp, pre.Env.ParentTimestamp) {
+		misc.ApplyFeynmanHardFork(statedb)
+	}
 	// Apply EIP-2935
 	if pre.Env.BlockHashes != nil && chainConfig.IsFeynman(pre.Env.Timestamp) {
 		var (
