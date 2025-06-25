@@ -128,9 +128,11 @@ func (b *batchIndexer) finish(force bool) error {
 		return nil
 	}
 	var (
-		batch   = b.db.NewBatch()
-		batchMu sync.RWMutex
-		eg      errgroup.Group
+		batch    = b.db.NewBatch()
+		batchMu  sync.RWMutex
+		storages int
+		start    = time.Now()
+		eg       errgroup.Group
 	)
 	eg.SetLimit(runtime.NumCPU())
 
@@ -167,6 +169,7 @@ func (b *batchIndexer) finish(force bool) error {
 		})
 	}
 	for addrHash, slots := range b.storages {
+		storages += len(slots)
 		for storageHash, idList := range slots {
 			eg.Go(func() error {
 				if !b.delete {
@@ -216,6 +219,7 @@ func (b *batchIndexer) finish(force bool) error {
 	if err := batch.Write(); err != nil {
 		return err
 	}
+	log.Debug("Committed batch indexer", "accounts", len(b.accounts), "storages", storages, "records", b.counter, "elapsed", common.PrettyDuration(time.Since(start)))
 	b.counter = 0
 	b.accounts = make(map[common.Hash][]uint64)
 	b.storages = make(map[common.Hash]map[common.Hash][]uint64)
@@ -224,9 +228,10 @@ func (b *batchIndexer) finish(force bool) error {
 
 // indexSingle processes the state history with the specified ID for indexing.
 func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.AncientReader) error {
-	defer func(start time.Time) {
+	start := time.Now()
+	defer func() {
 		indexHistoryTimer.UpdateSince(start)
-	}(time.Now())
+	}()
 
 	metadata := loadIndexMetadata(db)
 	if metadata == nil || metadata.Last+1 != historyID {
@@ -247,15 +252,16 @@ func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancient
 	if err := b.finish(true); err != nil {
 		return err
 	}
-	log.Debug("Indexed state history", "id", historyID)
+	log.Debug("Indexed state history", "id", historyID, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
 // unindexSingle processes the state history with the specified ID for unindexing.
 func unindexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.AncientReader) error {
-	defer func(start time.Time) {
+	start := time.Now()
+	defer func() {
 		unindexHistoryTimer.UpdateSince(start)
-	}(time.Now())
+	}()
 
 	metadata := loadIndexMetadata(db)
 	if metadata == nil || metadata.Last != historyID {
@@ -276,7 +282,7 @@ func unindexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancie
 	if err := b.finish(true); err != nil {
 		return err
 	}
-	log.Debug("Unindexed state history", "id", historyID)
+	log.Debug("Unindexed state history", "id", historyID, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
