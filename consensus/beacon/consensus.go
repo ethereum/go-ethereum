@@ -391,8 +391,12 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 		if err != nil {
 			return nil, fmt.Errorf("error opening pre-state tree root: %w", err)
 		}
+		postTrie := state.GetTrie()
+		if postTrie == nil {
+			return nil, errors.New("post-state tree is not available")
+		}
 		vktPreTrie, okpre := preTrie.(*trie.VerkleTrie)
-		vktPostTrie, okpost := state.GetTrie().(*trie.VerkleTrie)
+		vktPostTrie, okpost := postTrie.(*trie.VerkleTrie)
 
 		// The witness is only attached iff both parent and current block are
 		// using verkle tree.
