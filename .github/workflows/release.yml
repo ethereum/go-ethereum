@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - "v1.*"
-    branches:
-      - "release/v1.*"
 
 jobs:
   extract-version:
@@ -86,40 +84,6 @@ jobs:
           bera-geth-alltools-linux-arm64-*.tar.gz
     - name: Cleanup bin
       run: rm -fr build/bin/*
-
-  docker:
-    name: Docker Image
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      attestations: write
-      id-token: write
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: 1.24
-        cache: false
-
-    - name: Login to GitHub Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Build and push multi-arch images to GHCR
-      run: |
-        go run build/ci.go dockerx -platform linux/amd64,linux/arm64 -hub ghcr.io/berachain/bera-geth -upload
 
   draft-release:
     name: Draft Release
@@ -257,6 +221,6 @@ jobs:
         # Using --target with GITHUB_SHA ensures we create the release at the right commit
         echo "$body" | gh release create "$RELEASE_TAG" \
           --draft \
-          --title "Bera-Geth $RELEASE_TAG" \
+          --title "Bera Geth $RELEASE_TAG" \
           -F - \
           "${assets[@]}"
