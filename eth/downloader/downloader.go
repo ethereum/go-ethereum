@@ -115,6 +115,7 @@ type Downloader struct {
 	// Callbacks
 	dropPeer peerDropFn // Drops a peer for misbehaving
 	badBlock badBlockFn // Reports a block as rejected by the chain
+	success  func()     // Callback to signal successful sync completion
 
 	// Status
 	synchronising atomic.Bool
@@ -232,6 +233,7 @@ func New(stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, dropPeer 
 		chainCutoffNumber: cutoffNumber,
 		chainCutoffHash:   cutoffHash,
 		dropPeer:          dropPeer,
+		success:           success,
 		headerProcCh:      make(chan *headerTask, 1),
 		quitCh:            make(chan struct{}),
 		SnapSyncer:        snap.NewSyncer(stateDb, chain.TrieDB().Scheme()),
@@ -640,7 +642,7 @@ func (d *Downloader) Cancel() {
 func (d *Downloader) ResetSkeleton() {
 	d.skeleton.Terminate()
 	rawdb.DeleteSkeletonSyncStatus(d.stateDB)
-	d.skeleton = newSkeleton(d.stateDB, d.peers, d.dropPeer, d.skeleton.filler)
+	d.skeleton = newSkeleton(d.stateDB, d.peers, d.dropPeer, newBeaconBackfiller(d, d.success))
 }
 
 // Terminate interrupts the downloader, canceling all pending operations.
