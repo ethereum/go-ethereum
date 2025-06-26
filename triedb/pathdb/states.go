@@ -387,13 +387,8 @@ func (s *stateSet) decode(r *rlp.Stream) error {
 	if err := r.Decode(&dec); err != nil {
 		return fmt.Errorf("load diff accounts: %v", err)
 	}
-	for i := 0; i < len(dec.AddrHashes); i++ {
-		if len(dec.Accounts[i]) > 0 {
-			accountSet[dec.AddrHashes[i]] = dec.Accounts[i]
-		} else {
-			// RLP loses nil-ness, but `[]byte{}` is not a valid item, so reinterpret that
-			accountSet[dec.AddrHashes[i]] = nil
-		}
+	for i := range dec.AddrHashes {
+		accountSet[dec.AddrHashes[i]] = empty2nil(dec.Accounts[i])
 	}
 	s.accountData = accountSet
 
@@ -412,13 +407,8 @@ func (s *stateSet) decode(r *rlp.Stream) error {
 	}
 	for _, entry := range storages {
 		storageSet[entry.AddrHash] = make(map[common.Hash][]byte, len(entry.Keys))
-		for i := 0; i < len(entry.Keys); i++ {
-			if len(entry.Vals[i]) > 0 {
-				storageSet[entry.AddrHash][entry.Keys[i]] = entry.Vals[i]
-			} else {
-				// RLP loses nil-ness, but `[]byte{}` is not a valid item, so reinterpret that
-				storageSet[entry.AddrHash][entry.Keys[i]] = nil
-			}
+		for i := range entry.Keys {
+			storageSet[entry.AddrHash][entry.Keys[i]] = empty2nil(entry.Vals[i])
 		}
 	}
 	s.storageData = storageSet
@@ -560,13 +550,8 @@ func (s *StateSetWithOrigin) decode(r *rlp.Stream) error {
 	if err := r.Decode(&accounts); err != nil {
 		return fmt.Errorf("load diff account origin set: %v", err)
 	}
-	for i := 0; i < len(accounts.Accounts); i++ {
-		if len(accounts.Accounts[i]) > 0 {
-			accountSet[accounts.Addresses[i]] = accounts.Accounts[i]
-		} else {
-			// RLP loses nil-ness, but `[]byte{}` is not a valid item, so reinterpret that
-			accountSet[accounts.Addresses[i]] = nil
-		}
+	for i := range accounts.Accounts {
+		accountSet[accounts.Addresses[i]] = empty2nil(accounts.Accounts[i])
 	}
 	s.accountOrigin = accountSet
 
@@ -585,15 +570,17 @@ func (s *StateSetWithOrigin) decode(r *rlp.Stream) error {
 	}
 	for _, storage := range storages {
 		storageSet[storage.Address] = make(map[common.Hash][]byte)
-		for i := 0; i < len(storage.Keys); i++ {
-			if len(storage.Vals[i]) > 0 {
-				storageSet[storage.Address][storage.Keys[i]] = storage.Vals[i]
-			} else {
-				// RLP loses nil-ness, but `[]byte{}` is not a valid item, so reinterpret that
-				storageSet[storage.Address][storage.Keys[i]] = nil
-			}
+		for i := range storage.Keys {
+			storageSet[storage.Address][storage.Keys[i]] = empty2nil(storage.Vals[i])
 		}
 	}
 	s.storageOrigin = storageSet
 	return nil
+}
+
+func empty2nil(b []byte) []byte {
+    if len(b) == 0 {
+	return nil
+    }
+    return b
 }
