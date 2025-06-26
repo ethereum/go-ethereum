@@ -74,6 +74,7 @@ type TxPool struct {
 	shanghai bool // Fork indicator whether we are in the shanghai stage.
 
 	currentHead *big.Int // Current blockchain head
+	currentTime uint64   // Current blockchain head time
 }
 
 // TxRelayBackend provides an interface to the mechanism that forwards transacions
@@ -326,6 +327,7 @@ func (pool *TxPool) setNewHead(head *types.Header) {
 	pool.shanghai = pool.config.IsShanghai(next)
 
 	pool.currentHead = next
+	pool.currentTime = head.Time
 }
 
 // Stop stops the light transaction pool
@@ -408,7 +410,7 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 	// 2. If FeeVault is enabled, perform an additional check for L1 data fees.
 	if pool.config.Scroll.FeeVaultEnabled() {
 		// Get L1 data fee in current state
-		l1DataFee, err := fees.CalculateL1DataFee(tx, currentState, pool.config, pool.currentHead)
+		l1DataFee, err := fees.CalculateL1DataFee(tx, currentState, pool.config, pool.currentHead, pool.currentTime)
 		if err != nil {
 			return fmt.Errorf("failed to calculate L1 data fee, err: %w", err)
 		}

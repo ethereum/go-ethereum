@@ -464,8 +464,7 @@ func (w *worker) collectPendingL1Messages(startIndex uint64) []types.L1MessageTx
 }
 
 // newWork
-func (w *worker) newWork(now time.Time, parentHash common.Hash, reorging bool, reorgReason error) error {
-	parent := w.chain.GetBlockByHash(parentHash)
+func (w *worker) newWork(now time.Time, parent *types.Block, reorging bool, reorgReason error) error {
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     new(big.Int).Add(parent.Number(), common.Big1),
@@ -586,13 +585,14 @@ func (w *worker) newWork(now time.Time, parentHash common.Hash, reorging bool, r
 }
 
 // tryCommitNewWork
-func (w *worker) tryCommitNewWork(now time.Time, parent common.Hash, reorging bool, reorgReason error) (common.Hash, error) {
+func (w *worker) tryCommitNewWork(now time.Time, parentHash common.Hash, reorging bool, reorgReason error) (common.Hash, error) {
+	parent := w.chain.GetBlockByHash(parentHash)
 	err := w.newWork(now, parent, reorging, reorgReason)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed creating new work: %w", err)
 	}
 
-	shouldCommit, err := w.handleForks()
+	shouldCommit, err := w.handleForks(parent)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed handling forks: %w", err)
 	}
@@ -626,17 +626,16 @@ func (w *worker) tryCommitNewWork(now time.Time, parent common.Hash, reorging bo
 }
 
 // handleForks
-func (w *worker) handleForks() (bool, error) {
+func (w *worker) handleForks(parent *types.Block) (bool, error) {
 	// Apply Curie predeployed contract update
 	if w.chainConfig.CurieBlock != nil && w.chainConfig.CurieBlock.Cmp(w.current.header.Number) == 0 {
 		misc.ApplyCurieHardFork(w.current.state)
 		return true, nil
 	}
 
-	// Stop/start miner at Euclid fork boundary on zktrie/mpt nodes
-	if w.chainConfig.IsEuclid(w.current.header.Time) {
-		parent := w.chain.GetBlockByHash(w.current.header.ParentHash)
-		return parent != nil && !w.chainConfig.IsEuclid(parent.Time()), nil
+	// Apply Feynman hard fork
+	if w.chainConfig.IsFeynmanTransitionBlock(w.current.header.Time, parent.Time()) {
+		misc.ApplyFeynmanHardFork(w.current.state)
 	}
 
 	// Apply EIP-2935
@@ -644,6 +643,12 @@ func (w *worker) handleForks() (bool, error) {
 		context := core.NewEVMBlockContext(w.current.header, w.chain, w.chainConfig, nil)
 		vmenv := vm.NewEVM(context, vm.TxContext{}, w.current.state, w.chainConfig, vm.Config{})
 		core.ProcessParentBlockHash(w.current.header.ParentHash, vmenv, w.current.state)
+	}
+
+	// Stop/start miner at Euclid fork boundary on zktrie/mpt nodes
+	if w.chainConfig.IsEuclid(w.current.header.Time) {
+		parent := w.chain.GetBlockByHash(w.current.header.ParentHash)
+		return parent != nil && !w.chainConfig.IsEuclid(parent.Time()), nil
 	}
 
 	return false, nil

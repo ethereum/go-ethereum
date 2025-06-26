@@ -893,6 +893,16 @@ var (
 		Usage: "peer ids of shadow fork peers",
 	}
 
+	// Tx gossip settings
+	TxGossipBroadcastDisabledFlag = cli.BoolFlag{
+		Name:  "txgossip.disablebroadcast",
+		Usage: "Disable gossip broadcast transactions to other peers",
+	}
+	TxGossipReceivingDisabledFlag = cli.BoolFlag{
+		Name:  "txgossip.disablereceiving",
+		Usage: "Disable gossip receiving transactions from other peers",
+	}
+
 	// DA syncing settings
 	DASyncEnabledFlag = cli.BoolFlag{
 		Name:  "da.sync",
@@ -1789,6 +1799,14 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.GlobalIsSet(ShadowforkPeersFlag.Name) {
 		cfg.ShadowForkPeerIDs = ctx.GlobalStringSlice(ShadowforkPeersFlag.Name)
 		log.Info("Shadow fork peers", "ids", cfg.ShadowForkPeerIDs)
+	}
+	if ctx.GlobalIsSet(TxGossipBroadcastDisabledFlag.Name) {
+		cfg.TxGossipBroadcastDisabled = ctx.GlobalBool(TxGossipBroadcastDisabledFlag.Name)
+		log.Info("Transaction gossip broadcast disabled", "disabled", cfg.TxGossipBroadcastDisabled)
+	}
+	if ctx.GlobalIsSet(TxGossipReceivingDisabledFlag.Name) {
+		cfg.TxGossipReceivingDisabled = ctx.GlobalBool(TxGossipReceivingDisabledFlag.Name)
+		log.Info("Transaction gossip receiving disabled", "disabled", cfg.TxGossipReceivingDisabled)
 	}
 
 	// Cap the cache allowance and tune the garbage collector

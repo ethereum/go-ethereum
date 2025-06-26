@@ -251,7 +251,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	gaspool := new(core.GasPool)
 	gaspool.AddGas(block.GasLimit())
 
-	l1DataFee, err := fees.CalculateL1DataFee(&ttx, statedb, config, block.Number())
+	l1DataFee, err := fees.CalculateL1DataFee(&ttx, statedb, config, block.Number(), block.Time())
 	if err != nil {
 		return nil, nil, common.Hash{}, err
 	}

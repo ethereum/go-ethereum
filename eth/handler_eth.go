@@ -56,6 +56,9 @@ func (h *ethHandler) PeerInfo(id enode.ID) interface{} {
 // AcceptTxs retrieves whether transaction processing is enabled on the node
 // or if inbound transactions should simply be dropped.
 func (h *ethHandler) AcceptTxs() bool {
+	if h.disableTxReceiving {
+		return false
+	}
 	return atomic.LoadUint32(&h.acceptTxs) == 1
 }
 
