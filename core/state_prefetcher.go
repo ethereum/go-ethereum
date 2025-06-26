@@ -71,7 +71,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 		}
 		statedb.SetTxContext(tx.Hash(), i)
 
-		l1DataFee, err := fees.CalculateL1DataFee(tx, statedb, p.config, block.Number())
+		l1DataFee, err := fees.CalculateL1DataFee(tx, statedb, p.config, block.Number(), block.Time())
 		if err != nil {
 			return
 		}
