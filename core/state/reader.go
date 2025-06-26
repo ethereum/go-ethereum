@@ -73,7 +73,7 @@ type StateReader interface {
 	Storage(addr common.Address, slot common.Hash) (common.Hash, error)
 
 	AccountBAL(addr common.Address) (*types.StateAccount, error)
-	StorageBAL(addr common.Address, slot common.Hash, tr *trie.StateTrie) (common.Hash, error)
+	StorageBAL(addr common.Address, slot common.Hash) (common.Hash, error)
 }
 
 // Reader defines the interface for accessing accounts, storage slots and contract
@@ -207,7 +207,7 @@ func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 	return value, nil
 }
 
-func (r *flatReader) StorageBAL(addr common.Address, key common.Hash, tr *trie.StateTrie) (common.Hash, error) {
+func (r *flatReader) StorageBAL(addr common.Address, key common.Hash) (common.Hash, error) {
 	return r.Storage(addr, key)
 }
 
@@ -333,15 +333,8 @@ func (r *trieReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 	return value, nil
 }
 
-func (r *trieReader) StorageBAL(addr common.Address, key common.Hash, tr *trie.StateTrie) (common.Hash, error) {
-	ret, err := tr.GetStorage(addr, key.Bytes())
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	var value common.Hash
-	value.SetBytes(ret)
-	return value, nil
+func (r *trieReader) StorageBAL(addr common.Address, key common.Hash) (common.Hash, error) {
+	return r.Storage(addr, key)
 }
 
 // multiStateReader is the aggregation of a list of StateReader interface,
@@ -387,12 +380,18 @@ func (r *multiStateReader) Account(addr common.Address) (*types.StateAccount, er
 func (r *multiStateReader) AccountBAL(addr common.Address) (*types.StateAccount, error) {
 	var errs []error
 	for _, reader := range r.readers {
-		acct, err := reader.AccountBAL(addr)
-		if err == nil {
-			return acct, nil
+		switch reader.(type) {
+		case *flatReader:
+			{
+				acct, err := reader.AccountBAL(addr)
+				if err == nil {
+					return acct, nil
+				}
+				errs = append(errs, err)
+			}
 		}
-		errs = append(errs, err)
 	}
+	errs = append(errs, errors.New("no flatReader"))
 	return nil, errors.Join(errs...)
 }
 
@@ -414,15 +413,21 @@ func (r *multiStateReader) Storage(addr common.Address, slot common.Hash) (commo
 	return common.Hash{}, errors.Join(errs...)
 }
 
-func (r *multiStateReader) StorageBAL(addr common.Address, slot common.Hash, tr *trie.StateTrie) (common.Hash, error) {
+func (r *multiStateReader) StorageBAL(addr common.Address, slot common.Hash) (common.Hash, error) {
 	var errs []error
 	for _, reader := range r.readers {
-		slot, err := reader.StorageBAL(addr, slot, tr)
-		if err == nil {
-			return slot, nil
+		switch reader.(type) {
+		case *flatReader:
+			{
+				slot, err := reader.Storage(addr, slot)
+				if err == nil {
+					return slot, nil
+				}
+				errs = append(errs, err)
+			}
 		}
-		errs = append(errs, err)
 	}
+	errs = append(errs, errors.New("no flatReader"))
 	return common.Hash{}, errors.Join(errs...)
 }
 

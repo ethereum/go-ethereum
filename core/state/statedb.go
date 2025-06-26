@@ -337,6 +337,7 @@ func (s *StateDB) SetPostBAL(postBal map[int]types.TxPostValues, bn uint64) erro
 	}
 	s.blockNumber = bn
 	s.postBAL = postBal
+	s.prefetcher = nil
 	return nil
 }
 
@@ -416,16 +417,9 @@ func (s *StateDB) prefetchBalPreblockKeys() {
 
 		lenSlots += len(acl.StorageKeys)
 
-		tr, err := trie.NewStateTrie(trie.StorageTrieID(s.originalRoot, obj.addrHash, obj.origin.Root), s.db.TrieDB())
-		if err != nil {
-			fmt.Println(s.originalRoot, obj.addrHash, obj.origin.Root)
-			log.Error("fail to create trie for", "addr:", addr, "error:", err)
-			panic("fail to create trie")
-		}
-
 		for _, key := range keys {
 			workers.Go(func() error {
-				val, err := s.reader.StorageBAL(addr, key, tr)
+				val, err := s.reader.StorageBAL(addr, key)
 				kv := &StorageKV{&addr, &key, &val}
 				if err != nil {
 					log.Error("fail to fetch storage from BALs:", addr, key)
