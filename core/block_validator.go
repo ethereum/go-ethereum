@@ -70,13 +70,6 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	if v.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
 		return ErrKnownBlock
 	}
-	if !v.config.Scroll.IsValidTxCount(len(block.Transactions())) {
-		return consensus.ErrInvalidTxCount
-	}
-	// Check if block payload size is smaller than the max size
-	if !v.config.Scroll.IsValidBlockSize(block.PayloadSize()) {
-		return ErrInvalidBlockPayloadSize
-	}
 	// Header validity is known at this point, check the uncles and transactions
 	header := block.Header()
 	if err := v.engine.VerifyUncles(v.bc, block); err != nil {
@@ -127,7 +120,6 @@ func (v *BlockValidator) ValidateL1Messages(block *types.Block) error {
 	blockHash := block.Hash()
 
 	if v.config.Scroll.L1Config == nil {
-		// TODO: should we allow follower nodes to skip L1 message verification?
 		panic("Running on L1Message-enabled network but no l1Config was provided")
 	}
 
@@ -204,7 +196,6 @@ func (v *BlockValidator) ValidateL1Messages(block *types.Block) error {
 		}
 
 		// skipped messages
-		// TODO: consider verifying that skipped messages overflow
 		for index := queueIndex; index < txQueueIndex; index++ {
 			if exists := it.Next(); !exists {
 				if err := it.Error(); err != nil {
