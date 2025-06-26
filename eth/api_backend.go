@@ -63,6 +63,7 @@ func (b *EthAPIBackend) CurrentBlock() *types.Header {
 
 func (b *EthAPIBackend) SetHead(number uint64) {
 	b.eth.handler.downloader.Cancel()
+	b.eth.handler.downloader.ResetSkeleton()
 	b.eth.blockchain.SetHead(number)
 }
 

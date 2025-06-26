@@ -662,6 +662,13 @@ func (d *Downloader) Cancel() {
 	d.blockchain.InterruptInsert(false)
 }
 
+// ResetSkeleton terminates the skeleton syncer and reinitializes it.
+func (d *Downloader) ResetSkeleton() {
+	d.skeleton.Terminate()
+	rawdb.DeleteSkeletonSyncStatus(d.stateDB)
+	d.skeleton = newSkeleton(d.stateDB, d.peers, d.dropPeer, d.skeleton.filler)
+}
+
 // Terminate interrupts the downloader, canceling all pending operations.
 // The downloader cannot be reused after calling Terminate.
 func (d *Downloader) Terminate() {
