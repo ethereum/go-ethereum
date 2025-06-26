@@ -579,8 +579,8 @@ func (s *StateSetWithOrigin) decode(r *rlp.Stream) error {
 }
 
 func empty2nil(b []byte) []byte {
-    if len(b) == 0 {
-	return nil
-    }
-    return b
+	if len(b) == 0 {
+		return nil
+	}
+	return b
 }
