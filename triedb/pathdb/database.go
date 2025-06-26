@@ -700,6 +700,15 @@ func (db *Database) HistoryRange() (uint64, uint64, error) {
 	return historyRange(db.freezer)
 }
 
+// IndexProgress returns the indexing progress made so far. It provides the
+// number of states that remain unindexed.
+func (db *Database) IndexProgress() (uint64, error) {
+	if db.indexer == nil {
+		return 0, nil
+	}
+	return db.indexer.progress()
+}
+
 // AccountIterator creates a new account iterator for the specified root hash and
 // seeks to a starting account hash.
 func (db *Database) AccountIterator(root common.Hash, seek common.Hash) (AccountIterator, error) {
