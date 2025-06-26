@@ -426,6 +426,11 @@ func (bc *BlockChain) TxIndexProgress() (TxIndexProgress, error) {
 	return bc.txIndexer.txIndexProgress(), nil
 }
 
+// StateIndexProgress returns the historical state indexing progress.
+func (bc *BlockChain) StateIndexProgress() (uint64, error) {
+	return bc.triedb.IndexProgress()
+}
+
 // HistoryPruningCutoff returns the configured history pruning point.
 // Blocks before this might not be available in the database.
 func (bc *BlockChain) HistoryPruningCutoff() (uint64, common.Hash) {

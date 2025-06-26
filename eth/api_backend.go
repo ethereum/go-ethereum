@@ -403,6 +403,10 @@ func (b *EthAPIBackend) SyncProgress(ctx context.Context) ethereum.SyncProgress 
 		prog.TxIndexFinishedBlocks = txProg.Indexed
 		prog.TxIndexRemainingBlocks = txProg.Remaining
 	}
+	remain, err := b.eth.blockchain.StateIndexProgress()
+	if err == nil {
+		prog.StateIndexRemaining = remain
+	}
 	return prog
 }
 
