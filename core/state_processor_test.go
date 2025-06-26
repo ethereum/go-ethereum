@@ -241,7 +241,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				txs: []*types.Transaction{
 					mkSetCodeTx(0, common.Address{}, params.TxGas, big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), nil),
 				},
-				want: "could not apply tx 0 [0xc18d10f4c809dbdfa1a074c3300de9bc4b7f16a20f0ec667f6f67312b71b956a]: EIP-7702 transaction with empty auth list (sender 0x71562b71999873DB5b286dF957af199Ec94617F7)",
+				want: "could not apply tx 0 [0xa230ea82ab24a8e60aca9edfe901bab53c92d0d8850f13c3f72513608229e2f3]: EIP-7702 transaction with empty auth list (sender 0x71562b71999873DB5b286dF957af199Ec94617F7)",
 			},
 			// ErrSetCodeTxCreate cannot be tested here: it is impossible to create a SetCode-tx with nil `to`.
 			// The EstimateGas API tests test this case.
@@ -391,13 +391,13 @@ func TestStateProcessorErrors(t *testing.T) {
 		}{
 			{ // ErrMaxInitCodeSizeExceeded
 				txs: []*types.Transaction{
-					mkDynamicCreationTx(0, 520000, common.Big0, misc.CalcBaseFee(config, genesis.Header(), parentL1BaseFee), tooBigInitCode[:]),
+					mkDynamicCreationTx(0, 520000, common.Big0, misc.CalcBaseFee(config, genesis.Header(), parentL1BaseFee, 0), tooBigInitCode[:]),
 				},
 				want: "could not apply tx 0 [0xe0d03426cecc04467410064cb4de02012fc069d2462282735d7dfcb9dea9f63b]: max initcode size exceeded: code size 49153 limit 49152",
 			},
 			{ // ErrIntrinsicGas: Not enough gas to cover init code
 				txs: []*types.Transaction{
-					mkDynamicCreationTx(0, 54299, common.Big0, misc.CalcBaseFee(config, genesis.Header(), parentL1BaseFee), smallInitCode[:]),
+					mkDynamicCreationTx(0, 54299, common.Big0, misc.CalcBaseFee(config, genesis.Header(), parentL1BaseFee, 0), smallInitCode[:]),
 				},
 				want: "could not apply tx 0 [0x98e54c5ecfa7986a66480d65ba32f2c6a2a6aedc3a67abb91b1e118b0717ed2d]: intrinsic gas too low: have 54299, want 54300",
 			},
@@ -436,7 +436,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 
 	if config.IsCurie(header.Number) {
 		parentL1BaseFee := big.NewInt(1000000000) // 1 gwei
-		header.BaseFee = misc.CalcBaseFee(config, parent.Header(), parentL1BaseFee)
+		header.BaseFee = misc.CalcBaseFee(config, parent.Header(), parentL1BaseFee, header.Time)
 	}
 	var receipts []*types.Receipt
 	// The post-state result doesn't need to be correct (this is a bad block), but we do need something there

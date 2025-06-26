@@ -1033,6 +1033,16 @@ func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64) *Confi
 	return lasterr
 }
 
+// BaseFeeChangeDenominator bounds the amount the base fee can change between blocks.
+func (c *ChainConfig) BaseFeeChangeDenominator() uint64 {
+	return DefaultBaseFeeChangeDenominator
+}
+
+// ElasticityMultiplier bounds the maximum gas limit an EIP-1559 block may have.
+func (c *ChainConfig) ElasticityMultiplier() uint64 {
+	return DefaultElasticityMultiplier
+}
+
 // CheckConfigForkOrder checks that we don't "skip" any forks, geth isn't pluggable enough
 // to guarantee that forks can be implemented in a different order than on official networks
 func (c *ChainConfig) CheckConfigForkOrder() error {

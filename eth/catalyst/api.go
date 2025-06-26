@@ -148,7 +148,7 @@ func (api *consensusAPI) AssembleBlock(params assembleBlockParams) (*executableD
 			return nil, err
 		}
 		parentL1BaseFee := fees.GetL1BaseFee(stateDb)
-		header.BaseFee = misc.CalcBaseFee(config, parent.Header(), parentL1BaseFee)
+		header.BaseFee = misc.CalcBaseFee(config, parent.Header(), parentL1BaseFee, header.Time)
 	}
 	err = api.eth.Engine().Prepare(bc, header, nil)
 	if err != nil {
@@ -274,7 +274,7 @@ func insertBlockParamsToBlock(config *chainParams.ChainConfig, parent *types.Hea
 		Time:        params.Timestamp,
 	}
 	if config.IsCurie(number) {
-		header.BaseFee = misc.CalcBaseFee(config, parent, parentL1BaseFee)
+		header.BaseFee = misc.CalcBaseFee(config, parent, parentL1BaseFee, header.Time)
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
 	return block, nil

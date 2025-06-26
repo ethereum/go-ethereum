@@ -20,6 +20,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/params"
 )
@@ -124,7 +125,33 @@ func TestCalcBaseFee(t *testing.T) {
 		config := config()
 		UpdateL2BaseFeeScalar(big.NewInt(10000000))
 		UpdateL2BaseFeeOverhead(big.NewInt(1))
-		if have, want := CalcBaseFee(config, nil, big.NewInt(test.parentL1BaseFee)), big.NewInt(test.expectedL2BaseFee); have.Cmp(want) != 0 {
+		if have, want := CalcBaseFee(config, nil, big.NewInt(test.parentL1BaseFee), 0), big.NewInt(test.expectedL2BaseFee); have.Cmp(want) != 0 {
+			t.Errorf("test %d: have %d  want %d, ", i, have, want)
+		}
+	}
+
+	tests1559 := []struct {
+		parentBaseFee   int64
+		parentGasLimit  uint64
+		parentGasUsed   uint64
+		expectedBaseFee int64
+	}{
+		{1000000000, 20000000, 10000000, 1000000000}, // usage == target
+		{1000000001, 20000000, 9000000, 987500001},   // usage below target
+		{1000000001, 20000000, 11000000, 1012500001}, // usage above target
+	}
+	for i, test := range tests1559 {
+		parent := &types.Header{
+			Number:   common.Big32,
+			GasLimit: test.parentGasLimit,
+			GasUsed:  test.parentGasUsed,
+			BaseFee:  big.NewInt(test.parentBaseFee),
+		}
+		config := config()
+		UpdateL2BaseFeeOverhead(big.NewInt(1))
+		var feynmanTime uint64
+		config.FeynmanTime = &feynmanTime
+		if have, want := CalcBaseFee(config, parent, big.NewInt(1), 1), big.NewInt(test.expectedBaseFee); have.Cmp(want) != 0 {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}
 	}
@@ -144,7 +171,7 @@ func TestCalcBaseFee(t *testing.T) {
 	for i, test := range testsWithDefaults {
 		UpdateL2BaseFeeScalar(big.NewInt(34000000000000))
 		UpdateL2BaseFeeOverhead(big.NewInt(15680000))
-		if have, want := CalcBaseFee(config(), nil, big.NewInt(test.parentL1BaseFee)), big.NewInt(test.expectedL2BaseFee); have.Cmp(want) != 0 {
+		if have, want := CalcBaseFee(config(), nil, big.NewInt(test.parentL1BaseFee), 0), big.NewInt(test.expectedL2BaseFee); have.Cmp(want) != 0 {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}
 	}

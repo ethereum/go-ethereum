@@ -102,13 +102,87 @@ func VerifyEip1559Header(config *params.ChainConfig, parent, header *types.Heade
 }
 
 // CalcBaseFee calculates the basefee of the header.
-func CalcBaseFee(config *params.ChainConfig, parent *types.Header, parentL1BaseFee *big.Int) *big.Int {
+func CalcBaseFee(config *params.ChainConfig, parent *types.Header, parentL1BaseFee *big.Int, currentHeaderTime uint64) *big.Int {
 	if config.Clique != nil && config.Clique.ShadowForkHeight != 0 && parent.Number.Uint64() >= config.Clique.ShadowForkHeight {
 		return big.NewInt(10000000) // 0.01 Gwei
 	}
 
 	scalar, overhead := ReadL2BaseFeeCoefficients()
-	return calcBaseFee(scalar, overhead, parentL1BaseFee)
+
+	if parent == nil || parent.Number == nil || !config.IsFeynman(currentHeaderTime) {
+		return calcBaseFee(scalar, overhead, parentL1BaseFee)
+	}
+	// In Feynman base fee calculation, we reuse the contract's baseFeeOverhead slot as the proving base fee.
+	return calcBaseFeeFeynman(config, parent, overhead)
+}
+
+// calcBaseFeeFeynman calculates the basefee of the header for Feynman fork.
+func calcBaseFeeFeynman(config *params.ChainConfig, parent *types.Header, overhead *big.Int) *big.Int {
+	baseFeeEIP1559 := calcBaseFeeEIP1559(config, parent)
+	baseFee := new(big.Int).Set(baseFeeEIP1559)
+	baseFee.Add(baseFee, overhead)
+
+	return baseFee
+}
+
+// CalcBaseFee calculates the basefee of the header.
+func calcBaseFeeEIP1559(config *params.ChainConfig, parent *types.Header) *big.Int {
+	// If the current block is the first EIP-1559 block, return the InitialBaseFee.
+	if !config.IsFeynman(parent.Time) {
+		// If the parent block is not nil, return its base fee to make fee transition smooth.
+		if parent.BaseFee != nil {
+			return new(big.Int).Set(parent.BaseFee)
+		}
+		return new(big.Int).SetUint64(params.InitialBaseFee)
+	}
+
+	parentBaseFeeEIP1559 := extractBaseFeeEIP1559(config, parent.BaseFee)
+	parentGasTarget := parent.GasLimit / config.ElasticityMultiplier()
+	// If the parent gasUsed is the same as the target, the baseFee remains unchanged.
+	if parent.GasUsed == parentGasTarget {
+		return new(big.Int).Set(parentBaseFeeEIP1559)
+	}
+
+	var (
+		num   = new(big.Int)
+		denom = new(big.Int)
+	)
+
+	if parent.GasUsed > parentGasTarget {
+		// If the parent block used more gas than its target, the baseFee should increase.
+		// max(1, parentBaseFee * gasUsedDelta / parentGasTarget / baseFeeChangeDenominator)
+		num.SetUint64(parent.GasUsed - parentGasTarget)
+		num.Mul(num, parentBaseFeeEIP1559)
+		num.Div(num, denom.SetUint64(parentGasTarget))
+		num.Div(num, denom.SetUint64(config.BaseFeeChangeDenominator()))
+		if num.Cmp(common.Big1) < 0 {
+			return num.Add(parentBaseFeeEIP1559, common.Big1)
+		}
+		baseFee := num.Add(parentBaseFeeEIP1559, num)
+		if baseFee.Cmp(big.NewInt(MaximumL2BaseFee)) > 0 {
+			baseFee = big.NewInt(MaximumL2BaseFee)
+		}
+		return baseFee
+	} else {
+		// Otherwise if the parent block used less gas than its target, the baseFee should decrease.
+		// max(0, parentBaseFee * gasUsedDelta / parentGasTarget / baseFeeChangeDenominator)
+		num.SetUint64(parentGasTarget - parent.GasUsed)
+		num.Mul(num, parentBaseFeeEIP1559)
+		num.Div(num, denom.SetUint64(parentGasTarget))
+		num.Div(num, denom.SetUint64(config.BaseFeeChangeDenominator()))
+
+		baseFee := num.Sub(parentBaseFeeEIP1559, num)
+		if baseFee.Cmp(common.Big0) < 0 {
+			baseFee = common.Big0
+		}
+		return baseFee
+	}
+}
+
+func extractBaseFeeEIP1559(config *params.ChainConfig, baseFee *big.Int) *big.Int {
+	_, overhead := ReadL2BaseFeeCoefficients()
+	// In Feynman base fee calculation, we reuse the contract's baseFeeOverhead slot as the proving base fee.
+	return new(big.Int).Sub(baseFee, overhead)
 }
 
 // MinBaseFee calculates the minimum L2 base fee based on the current coefficients.

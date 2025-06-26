@@ -488,7 +488,7 @@ func (w *worker) newWork(now time.Time, parent *types.Block, reorging bool, reor
 	// Set baseFee if we are on an EIP-1559 chain
 	if w.chainConfig.IsCurie(header.Number) {
 		parentL1BaseFee := fees.GetL1BaseFee(parentState)
-		header.BaseFee = misc.CalcBaseFee(w.chainConfig, parent.Header(), parentL1BaseFee)
+		header.BaseFee = misc.CalcBaseFee(w.chainConfig, parent.Header(), parentL1BaseFee, header.Time)
 	}
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
 	if w.isRunning() {

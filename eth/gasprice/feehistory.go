@@ -96,7 +96,8 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64, nonCong
 			return
 		}
 		l1BaseFee := fees.GetL1BaseFee(state)
-		bf.results.nextBaseFee = misc.CalcBaseFee(chainconfig, bf.header, l1BaseFee)
+		// Use bf.header.Time as the current block time to calculate the next base fee because there are cases to query historical block fees
+		bf.results.nextBaseFee = misc.CalcBaseFee(chainconfig, bf.header, l1BaseFee, bf.header.Time)
 	} else {
 		bf.results.nextBaseFee = new(big.Int)
 	}
