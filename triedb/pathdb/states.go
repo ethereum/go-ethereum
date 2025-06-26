@@ -388,7 +388,12 @@ func (s *stateSet) decode(r *rlp.Stream) error {
 		return fmt.Errorf("load diff accounts: %v", err)
 	}
 	for i := 0; i < len(dec.AddrHashes); i++ {
-		accountSet[dec.AddrHashes[i]] = dec.Accounts[i]
+		if len(dec.Accounts[i]) > 0 {
+			accountSet[dec.AddrHashes[i]] = dec.Accounts[i]
+		} else {
+			// RLP loses nil-ness, but `[]byte{}` is not a valid item, so reinterpret that
+			accountSet[dec.AddrHashes[i]] = nil
+		}
 	}
 	s.accountData = accountSet
 
@@ -408,7 +413,12 @@ func (s *stateSet) decode(r *rlp.Stream) error {
 	for _, entry := range storages {
 		storageSet[entry.AddrHash] = make(map[common.Hash][]byte, len(entry.Keys))
 		for i := 0; i < len(entry.Keys); i++ {
-			storageSet[entry.AddrHash][entry.Keys[i]] = entry.Vals[i]
+			if len(entry.Vals[i]) > 0 {
+				storageSet[entry.AddrHash][entry.Keys[i]] = entry.Vals[i]
+			} else {
+				// RLP loses nil-ness, but `[]byte{}` is not a valid item, so reinterpret that
+				storageSet[entry.AddrHash][entry.Keys[i]] = nil
+			}
 		}
 	}
 	s.storageData = storageSet
@@ -551,7 +561,12 @@ func (s *StateSetWithOrigin) decode(r *rlp.Stream) error {
 		return fmt.Errorf("load diff account origin set: %v", err)
 	}
 	for i := 0; i < len(accounts.Accounts); i++ {
-		accountSet[accounts.Addresses[i]] = accounts.Accounts[i]
+		if len(accounts.Accounts[i]) > 0 {
+			accountSet[accounts.Addresses[i]] = accounts.Accounts[i]
+		} else {
+			// RLP loses nil-ness, but `[]byte{}` is not a valid item, so reinterpret that
+			accountSet[accounts.Addresses[i]] = nil
+		}
 	}
 	s.accountOrigin = accountSet
 
@@ -571,7 +586,12 @@ func (s *StateSetWithOrigin) decode(r *rlp.Stream) error {
 	for _, storage := range storages {
 		storageSet[storage.Address] = make(map[common.Hash][]byte)
 		for i := 0; i < len(storage.Keys); i++ {
-			storageSet[storage.Address][storage.Keys[i]] = storage.Vals[i]
+			if len(storage.Vals[i]) > 0 {
+				storageSet[storage.Address][storage.Keys[i]] = storage.Vals[i]
+			} else {
+				// RLP loses nil-ness, but `[]byte{}` is not a valid item, so reinterpret that
+				storageSet[storage.Address][storage.Keys[i]] = nil
+			}
 		}
 	}
 	s.storageOrigin = storageSet
