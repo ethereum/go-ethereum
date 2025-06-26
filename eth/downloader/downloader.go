@@ -630,15 +630,18 @@ func (d *Downloader) cancel() {
 // Cancel aborts all of the operations and waits for all download goroutines to
 // finish before returning.
 func (d *Downloader) Cancel() {
-	d.blockchain.InterruptInsert(true)
 	d.cancel()
 	d.cancelWg.Wait()
-	d.blockchain.InterruptInsert(false)
 }
 
 // Terminate interrupts the downloader, canceling all pending operations.
 // The downloader cannot be reused after calling Terminate.
 func (d *Downloader) Terminate() {
+	// Terminates chain insertion, which may result in an "aborted" error in
+	// the blockchain and ultimately lead to the corresponding peer being
+	// disconnected. This is acceptable behavior during Geth shutdown.
+	d.blockchain.InterruptInsert(true)
+
 	// Close the termination channel (make sure double close is allowed)
 	d.quitLock.Lock()
 	select {
