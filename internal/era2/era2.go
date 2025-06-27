@@ -29,10 +29,3 @@ type BlockProofHistoricalSummariesDeneb struct {
 	ExecutionBlockProof [12]common.Hash // 384
 	Slot                uint64          // 8  => 840 bytes
 }
-
-type Proofs struct {
-	HistoricalHashesAccumulator BlockProofHistoricalHashesAccumulator
-	HistoricalRootsProof        *BlockProofHistoricalRoots
-	SummariesProofCapella       *BlockProofHistoricalSummariesCapella
-	SummariesProofDeneb         *BlockProofHistoricalSummariesDeneb
-}
