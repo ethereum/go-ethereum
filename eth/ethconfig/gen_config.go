@@ -30,6 +30,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		LogHistory              uint64 `toml:",omitempty"`
 		LogNoHistory            bool   `toml:",omitempty"`
 		LogExportCheckpoints    string
+		StateHistory            uint64                 `toml:",omitempty"`
+		StateScheme             string                 `toml:",omitempty"`
 		RequiredBlocks          map[uint64]common.Hash `toml:"-"`
 		SkipBcVersionCheck      bool                   `toml:"-"`
 		DatabaseHandles         int                    `toml:"-"`
@@ -41,9 +43,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		TrieTimeout             time.Duration
 		SnapshotCache           int
 		Preimages               bool
-		StateHistory            uint64 `toml:",omitempty"`
-		TrieDBJournal           bool
-		StateScheme             string `toml:",omitempty"`
 		FilterLogCacheSize      int
 		Miner                   miner.Config
 		TxPool                  legacypool.Config
@@ -72,6 +71,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.LogHistory = c.LogHistory
 	enc.LogNoHistory = c.LogNoHistory
 	enc.LogExportCheckpoints = c.LogExportCheckpoints
+	enc.StateHistory = c.StateHistory
+	enc.StateScheme = c.StateScheme
 	enc.RequiredBlocks = c.RequiredBlocks
 	enc.SkipBcVersionCheck = c.SkipBcVersionCheck
 	enc.DatabaseHandles = c.DatabaseHandles
@@ -83,9 +84,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.TrieTimeout = c.TrieTimeout
 	enc.SnapshotCache = c.SnapshotCache
 	enc.Preimages = c.Preimages
-	enc.StateHistory = c.StateHistory
-	enc.TrieDBJournal = c.TrieDBJournal
-	enc.StateScheme = c.StateScheme
 	enc.FilterLogCacheSize = c.FilterLogCacheSize
 	enc.Miner = c.Miner
 	enc.TxPool = c.TxPool
@@ -118,6 +116,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		LogHistory              *uint64 `toml:",omitempty"`
 		LogNoHistory            *bool   `toml:",omitempty"`
 		LogExportCheckpoints    *string
+		StateHistory            *uint64                `toml:",omitempty"`
+		StateScheme             *string                `toml:",omitempty"`
 		RequiredBlocks          map[uint64]common.Hash `toml:"-"`
 		SkipBcVersionCheck      *bool                  `toml:"-"`
 		DatabaseHandles         *int                   `toml:"-"`
@@ -129,9 +129,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		TrieTimeout             *time.Duration
 		SnapshotCache           *int
 		Preimages               *bool
-		StateHistory            *uint64 `toml:",omitempty"`
-		TrieDBJournal           *bool
-		StateScheme             *string `toml:",omitempty"`
 		FilterLogCacheSize      *int
 		Miner                   *miner.Config
 		TxPool                  *legacypool.Config
@@ -189,6 +186,12 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.LogExportCheckpoints != nil {
 		c.LogExportCheckpoints = *dec.LogExportCheckpoints
 	}
+	if dec.StateHistory != nil {
+		c.StateHistory = *dec.StateHistory
+	}
+	if dec.StateScheme != nil {
+		c.StateScheme = *dec.StateScheme
+	}
 	if dec.RequiredBlocks != nil {
 		c.RequiredBlocks = dec.RequiredBlocks
 	}
@@ -221,15 +224,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.Preimages != nil {
 		c.Preimages = *dec.Preimages
-	}
-	if dec.StateHistory != nil {
-		c.StateHistory = *dec.StateHistory
-	}
-	if dec.TrieDBJournal != nil {
-		c.TrieDBJournal = *dec.TrieDBJournal
-	}
-	if dec.StateScheme != nil {
-		c.StateScheme = *dec.StateScheme
 	}
 	if dec.FilterLogCacheSize != nil {
 		c.FilterLogCacheSize = *dec.FilterLogCacheSize

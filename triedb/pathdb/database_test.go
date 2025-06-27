@@ -125,7 +125,7 @@ type tester struct {
 	snapStorages map[common.Hash]map[common.Hash]map[common.Hash][]byte // Keyed by the hash of account address and the hash of storage key
 }
 
-func newTester(t *testing.T, historyLimit uint64, isVerkle bool, layers int, enableIndex bool, journal string) *tester {
+func newTester(t *testing.T, historyLimit uint64, isVerkle bool, layers int, enableIndex bool, journalDir string) *tester {
 	var (
 		disk, _ = rawdb.Open(rawdb.NewMemoryDatabase(), rawdb.OpenOptions{Ancient: t.TempDir()})
 		db      = New(disk, &Config{
@@ -135,7 +135,7 @@ func newTester(t *testing.T, historyLimit uint64, isVerkle bool, layers int, ena
 			StateCleanSize:      256 * 1024,
 			WriteBufferSize:     256 * 1024,
 			NoAsyncFlush:        true,
-			JournalPath:         journal,
+			JournalDirectory:    journalDir,
 		}, isVerkle)
 
 		obj = &tester{
@@ -619,14 +619,14 @@ func TestJournal(t *testing.T) {
 	testJournal(t, filepath.Join(t.TempDir(), strconv.Itoa(rand.Intn(10000))))
 }
 
-func testJournal(t *testing.T, journal string) {
+func testJournal(t *testing.T, journalDir string) {
 	// Redefine the diff layer depth allowance for faster testing.
 	maxDiffLayers = 4
 	defer func() {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0, false, 12, false, journal)
+	tester := newTester(t, 0, false, 12, false, journalDir)
 	defer tester.release()
 
 	if err := tester.db.Journal(tester.lastHash()); err != nil {
@@ -657,23 +657,23 @@ func TestCorruptedJournal(t *testing.T) {
 		rawdb.WriteTrieJournal(db, blob)
 	})
 
-	path := filepath.Join(t.TempDir(), strconv.Itoa(rand.Intn(10000)))
-	testCorruptedJournal(t, path, func(_ ethdb.Database) {
-		f, _ := os.OpenFile(path, os.O_WRONLY, 0644)
+	directory := filepath.Join(t.TempDir(), strconv.Itoa(rand.Intn(10000)))
+	testCorruptedJournal(t, directory, func(_ ethdb.Database) {
+		f, _ := os.OpenFile(filepath.Join(directory, "merkle.journal"), os.O_WRONLY, 0644)
 		f.WriteAt([]byte{0xa}, 0)
 		f.Sync()
 		f.Close()
 	})
 }
 
-func testCorruptedJournal(t *testing.T, journal string, modifyFn func(database ethdb.Database)) {
+func testCorruptedJournal(t *testing.T, journalDir string, modifyFn func(database ethdb.Database)) {
 	// Redefine the diff layer depth allowance for faster testing.
 	maxDiffLayers = 4
 	defer func() {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0, false, 12, false, journal)
+	tester := newTester(t, 0, false, 12, false, journalDir)
 	defer tester.release()
 
 	if err := tester.db.Journal(tester.lastHash()); err != nil {

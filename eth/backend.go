@@ -237,14 +237,14 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			ChainHistoryMode: config.HistoryMode,
 			TxLookupLimit:    int64(min(config.TransactionHistory, math.MaxInt64)),
 			VmConfig:         vmConfig,
+
+			// Enables file journaling for the trie database. The journal files will be stored
+			// within the data directory. The corresponding paths will be either:
+			// - DATADIR/merkle.journal
+			// - DATADIR/verkle.journal
+			TrieJournalDirectory: stack.ResolvePath(""),
 		}
 	)
-	if config.TrieDBJournal {
-		options.TrieDBJournal = stack.ResolvePath("triedb.journal.rlp")
-	} else {
-		log.Warn("Trie database journal is persisted within the database")
-	}
-
 	if config.VMTrace != "" {
 		traceConfig := json.RawMessage("{}")
 		if config.VMTraceJsonConfig != "" {
