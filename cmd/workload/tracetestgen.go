@@ -89,7 +89,6 @@ func generateTraceTests(clictx *cli.Context) error {
 		ctx        = context.Background()
 		test       = new(traceTest)
 	)
-	fmt.Println("startBlock", startBlock, "endBlock", endBlock)
 	latest, err := client.Eth.BlockNumber(ctx)
 	if err != nil {
 		exit(err)
