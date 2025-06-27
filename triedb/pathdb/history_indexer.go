@@ -49,10 +49,7 @@ type indexMetadata struct {
 func loadIndexMetadata(db ethdb.KeyValueReader) *indexMetadata {
 	blob := rawdb.ReadStateHistoryIndexMetadata(db)
 	if len(blob) == 0 {
-		return &indexMetadata{
-			Version: stateIndexVersion,
-			Last:    0,
-		}
+		return nil
 	}
 	var m indexMetadata
 	if err := rlp.DecodeBytes(blob, &m); err != nil {
