@@ -65,7 +65,7 @@ func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
 		defer f.Close()
 		reader = f
 	} else {
-		log.Info("Load database journal from database")
+		log.Info("Load database journal from disk")
 		journal := rawdb.ReadTrieJournal(db.diskdb)
 		if len(journal) == 0 {
 			return nil, errMissJournal
