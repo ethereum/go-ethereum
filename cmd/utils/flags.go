@@ -1634,9 +1634,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	// Read the value from the flag no matter if it's set or not.
 	cfg.Preimages = ctx.Bool(CachePreimagesFlag.Name)
-	if cfg.NoPruning && !cfg.Preimages {
+	// Only check the user's input for hash mode here; path is the default scheme,
+	// so we don't need to check the actual database scheme.
+	if cfg.NoPruning && !cfg.Preimages && ctx.String(StateSchemeFlag.Name) == rawdb.HashScheme {
 		cfg.Preimages = true
-		log.Info("Enabling recording of key preimages since archive mode is used")
+		log.Info("Enabling recording of key preimages: required for archive mode with hash state scheme")
 	}
 	if ctx.IsSet(StateHistoryFlag.Name) {
 		cfg.StateHistory = ctx.Uint64(StateHistoryFlag.Name)
