@@ -29,27 +29,30 @@ package era
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/era/e2store"
 	"github.com/golang/snappy"
 )
 
 const (
-	TypeVersion            uint16 = 0x3265
-	TypeCompressedHeader   uint16 = 0x08
-	TypeCompressedBody     uint16 = 0x09
-	TypeCompressedReceipts uint16 = 0x0a
-	TypeTotalDifficulty    uint16 = 0x0b
-	TypeProof              uint16 = 0x0c
-	TypeAccumulator        uint16 = 0x0d
-	TypeBlockIndex         uint16 = 0x3267
-
-	MaxEraESize = 8192
+	TypeVersion                          uint16 = 0x3265
+	TypeCompressedHeader                 uint16 = 0x08
+	TypeCompressedBody                   uint16 = 0x09
+	TypeCompressedReceipts               uint16 = 0x0a
+	TypeTotalDifficulty                  uint16 = 0x0b
+	TypeProofHistoricalHashesAccumulator uint16 = 0x0c
+	TypeProofHistoricalRoots             uint16 = 0x0d
+	TypeProofHistoricalSummariesCapella  uint16 = 0x0e
+	TypeProofHistoricalSummariesDeneb    uint16 = 0x0f
+	TypeAccumulatorRoot                  uint16 = 0x1a
+	TypeBlockIndex                       uint16 = 0x3267
+	MaxEraESize                          int    = 8192
+	headerSize                           uint64 = 8
 )
 
 type Builder2 struct {
@@ -70,6 +73,8 @@ type Builder2 struct {
 	proofoffsets   []uint64
 	startTd        *big.Int
 
+	prooftype uint16
+
 	startNum     *uint64
 	hashes       []common.Hash
 	writtenBytes uint64
@@ -85,52 +90,38 @@ func NewBuilder2(w io.Writer) *Builder2 {
 	}
 }
 
-func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, proofRLP []byte) error {
-	if len(b.headersRLP) >= MaxEraESize {
-		return fmt.Errorf("exceeds maximum batch size of %d", MaxEraESize)
-	}
+// func (b *Builder2) Add(block *types.Block, receipts types.Receipts, td *big.Int, proof[]byte) error {
+// 	if len(b.headersRLP) >= MaxEraESize {
+// 		return fmt.Errorf("exceeds maximum batch size of %d", MaxEraESize)
+// 	}
 
-	headerb, err := b.encodeHeader(block.Header())
-	if err != nil {
-		return fmt.Errorf("failed to encode header: %w", err)
-	}
-	bodyb, err := b.encodeBody(block.Body())
-	if err != nil {
-		return fmt.Errorf("failed to encode body: %w", err)
-	}
-	receiptsb, err := b.encodeReceipts(receipts)
-	if err != nil {
-		return fmt.Errorf("failed to encode receipts: %w", err)
-	}
+// 	tdbytes := uint256LE(td)
 
-	tdbytes := uint256LE(td)
+// 	if b.startNum == nil {
+// 		start := block.NumberU64()
+// 		b.startNum = &start
+// 		_, err := b.w.Write(TypeVersion, nil)
+// 		if err != nil {
+// 			return fmt.Errorf("failed to write version entry: %w", err)
+// 		}
+// 		b.writtenBytes += 8
+// 	}
 
-	if b.startNum == nil {
-		start := block.NumberU64()
-		b.startNum = &start
-		_, err := b.w.Write(TypeVersion, nil)
-		if err != nil {
-			return fmt.Errorf("failed to write version entry: %w", err)
-		}
-		b.writtenBytes += 8
-	}
+// 	b.headersRLP = append(b.headersRLP, headerb)
+// 	b.bodiesRLP = append(b.bodiesRLP, bodyb)
+// 	b.receiptsRLP = append(b.receiptsRLP, receiptsb)
+// 	b.tds = append(b.tds, tdbytes)
+// 	b.proofsRLP = append(b.proofsRLP, proofRLP)
+// 	b.hashes = append(b.hashes, block.Hash())
+// 	return nil
+// }
 
-	b.headersRLP = append(b.headersRLP, headerb)
-	b.bodiesRLP = append(b.bodiesRLP, bodyb)
-	b.receiptsRLP = append(b.receiptsRLP, receiptsb)
-	b.tds = append(b.tds, tdbytes)
-	b.proofsRLP = append(b.proofsRLP, proofRLP)
-	b.hashes = append(b.hashes, block.Hash())
-	return nil
-}
+// func (b *Builder2) Finalize(common.Hash, error) {
+// 	if b.startNum == nil {
+// 		return fmt.Errorf("no blocks added, cannot finalize")
+// 	}
 
-func (b *Builder2) Finalize(common.Hash, error) {
-	if b.startNum == nil {
-		return fmt.Errorf("no blocks added, cannot finalize")
-	}
-
-	offs := snappy.Encode(b.buf, b.headersRLP)
-}
+// }
 
 func uint256LE(v *big.Int) []byte {
 	b := v.FillBytes(make([]byte, 32))
@@ -150,4 +141,63 @@ func decodeBigs(raw [][]byte) []*big.Int {
 		out[i] = new(big.Int).SetBytes(be)
 	}
 	return out
+}
+
+// snappyWrite is a small helper to take care snappy encoding and writing an e2store entry.
+func (b *Builder2) snappyWrite(typ uint16, in []byte) error {
+	var (
+		buf = b.buf
+		s   = b.sn
+	)
+	buf.Reset()
+	s.Reset(buf)
+	if _, err := b.sn.Write(in); err != nil {
+		return fmt.Errorf("error snappy encoding: %w", err)
+	}
+	if err := s.Flush(); err != nil {
+		return fmt.Errorf("error flushing snappy encoding: %w", err)
+	}
+	n, err := b.w.Write(typ, b.buf.Bytes())
+	b.writtenBytes += uint64(n)
+	if err != nil {
+		return fmt.Errorf("error writing e2store entry: %w", err)
+	}
+	return nil
+}
+
+func (b *Builder2) writeSection(typ uint16, list [][]byte, useSnappy bool) ([]uint64, error) {
+	if len(list) == 0 {
+		return nil, errors.New("cannot write empty section")
+	}
+
+	buf := bytes.NewBuffer(nil)
+	offs := make([]uint64, len(list))
+	for i, data := range list {
+		offs[i] = b.writtenBytes + headerSize + uint64(buf.Len())
+		if useSnappy {
+			buf.Write(snappy.Encode(nil, data))
+		} else {
+			buf.Write(data)
+		}
+	}
+
+	if n, err := b.w.Write(typ, buf.Bytes()); err != nil {
+		return nil, fmt.Errorf("error writing section %d: %w", typ, err)
+	} else {
+		b.writtenBytes += uint64(n)
+	}
+
+	return offs, nil
+}
+
+func (b *Builder2) writeIndex() error {
+	count := uint64(len(b.headeroffsets))
+	compcount := uint64(3)
+	if len(b.tds) > 0 {
+		compcount++
+	}
+	if len(b.proofsRLP) > 0 {
+		compcount++
+	}
+
 }
