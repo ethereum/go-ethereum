@@ -1632,15 +1632,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(CacheNoPrefetchFlag.Name) {
 		cfg.NoPrefetch = ctx.Bool(CacheNoPrefetchFlag.Name)
 	}
-	if ctx.IsSet(DataDirFlag.Name) {
-		chaindb := tryMakeReadOnlyDatabase(ctx, stack)
-		scheme, err := rawdb.ParseStateScheme(ctx.String(StateSchemeFlag.Name), chaindb)
-		if err != nil {
-			Fatalf("%v", err)
-		}
-		cfg.StateScheme = scheme
-		chaindb.Close()
-	}
 	// Read the value from the flag no matter if it's set or not.
 	cfg.Preimages = ctx.Bool(CachePreimagesFlag.Name)
 	if cfg.NoPruning && !cfg.Preimages {
@@ -1649,6 +1640,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.IsSet(StateHistoryFlag.Name) {
 		cfg.StateHistory = ctx.Uint64(StateHistoryFlag.Name)
+	}
+	if ctx.IsSet(StateSchemeFlag.Name) {
+		cfg.StateScheme = ctx.String(StateSchemeFlag.Name)
 	}
 	// Parse transaction history flag, if user is still using legacy config
 	// file with 'TxLookupLimit' configured, copy the value to 'TransactionHistory'.
@@ -1663,9 +1657,17 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.TransactionHistory = ctx.Uint64(TxLookupLimitFlag.Name)
 	}
 
-	if ctx.String(GCModeFlag.Name) == "archive" && cfg.TransactionHistory != 0 && cfg.StateScheme == rawdb.HashScheme {
-		cfg.TransactionHistory = 0
-		log.Warn("Disabled transaction unindexing for archive node with hash state scheme")
+	if ctx.String(GCModeFlag.Name) == "archive" && cfg.TransactionHistory != 0 && ctx.IsSet(DataDirFlag.Name) {
+		chaindb := tryMakeReadOnlyDatabase(ctx, stack)
+		scheme, err := rawdb.ParseStateScheme(cfg.StateScheme, chaindb)
+		if err != nil {
+			Fatalf("%v", err)
+		}
+		if scheme == rawdb.HashScheme {
+			cfg.TransactionHistory = 0
+			log.Warn("Disabled transaction unindexing for archive node with hash state scheme")
+		}
+		chaindb.Close()
 	}
 	if ctx.IsSet(LogHistoryFlag.Name) {
 		cfg.LogHistory = ctx.Uint64(LogHistoryFlag.Name)
@@ -2204,9 +2206,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		// Disable transaction indexing/unindexing.
 		TxLookupLimit: -1,
 	}
-	if options.ArchiveMode && !options.Preimages && scheme == rawdb.HashScheme {
+	if options.ArchiveMode && !options.Preimages {
 		options.Preimages = true
-		log.Info("Enabling recording of key preimages since archive mode is used in hash state scheme")
+		log.Info("Enabling recording of key preimages since archive mode is used")
 	}
 	if !ctx.Bool(SnapshotFlag.Name) {
 		options.SnapshotLimit = 0 // Disabled
