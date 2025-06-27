@@ -28,17 +28,18 @@ const (
 	MaxGasLimit          uint64 = 0x7fffffffffffffff // Maximum the gas limit (2^63-1).
 	GenesisGasLimit      uint64 = 4712388            // Gas limit of the Genesis block.
 
-	MaximumExtraDataSize  uint64 = 32    // Maximum size extra data may be after Genesis.
-	ExpByteGas            uint64 = 10    // Times ceil(log256(exponent)) for the EXP instruction.
-	SloadGas              uint64 = 50    // Multiplied by the number of 32-byte words that are copied (round up) for any *COPY operation and added.
-	CallValueTransferGas  uint64 = 9000  // Paid for CALL when the value transfer is non-zero.
-	CallNewAccountGas     uint64 = 25000 // Paid for CALL when the destination address didn't exist prior.
-	TxGas                 uint64 = 21000 // Per transaction not creating a contract. NOTE: Not payable on data of calls between transactions.
-	TxGasContractCreation uint64 = 53000 // Per transaction that creates a contract. NOTE: Not payable on data of calls between transactions.
-	TxDataZeroGas         uint64 = 4     // Per byte of data attached to a transaction that equals zero. NOTE: Not payable on data of calls between transactions.
-	QuadCoeffDiv          uint64 = 512   // Divisor for the quadratic particle of the memory cost equation.
-	LogDataGas            uint64 = 8     // Per byte in a LOG* operation's data.
-	CallStipend           uint64 = 2300  // Free gas given at beginning of call.
+	MaximumExtraDataSize  uint64 = 32         // Maximum size extra data may be after Genesis.
+	ExpByteGas            uint64 = 10         // Times ceil(log256(exponent)) for the EXP instruction.
+	SloadGas              uint64 = 50         // Multiplied by the number of 32-byte words that are copied (round up) for any *COPY operation and added.
+	CallValueTransferGas  uint64 = 9000       // Paid for CALL when the value transfer is non-zero.
+	CallNewAccountGas     uint64 = 25000      // Paid for CALL when the destination address didn't exist prior.
+	TxGas                 uint64 = 21000      // Per transaction not creating a contract. NOTE: Not payable on data of calls between transactions.
+	MaxTxGas              uint64 = 30_000_000 // eip-7825 maximum transaction gas limit
+	TxGasContractCreation uint64 = 53000      // Per transaction that creates a contract. NOTE: Not payable on data of calls between transactions.
+	TxDataZeroGas         uint64 = 4          // Per byte of data attached to a transaction that equals zero. NOTE: Not payable on data of calls between transactions.
+	QuadCoeffDiv          uint64 = 512        // Divisor for the quadratic particle of the memory cost equation.
+	LogDataGas            uint64 = 8          // Per byte in a LOG* operation's data.
+	CallStipend           uint64 = 2300       // Free gas given at beginning of call.
 
 	Keccak256Gas     uint64 = 30 // Once per KECCAK256 operation.
 	Keccak256WordGas uint64 = 6  // Once per word of the KECCAK256 operation's data.
@@ -132,8 +133,12 @@ const (
 	DefaultElasticityMultiplier     = 2          // Bounds the maximum gas limit an EIP-1559 block may have.
 	InitialBaseFee                  = 1000000000 // Initial base fee for EIP-1559 blocks.
 
-	MaxCodeSize     = 24576           // Maximum bytecode to permit for a contract
-	MaxInitCodeSize = 2 * MaxCodeSize // Maximum initcode to permit in a creation transaction and create instructions
+	MaxCodeSizeEIP170      = 24576                 // Maximum bytecode to permit for a contract
+	MaxInitCodeSizeEIP3860 = 2 * MaxCodeSizeEIP170 // Maximum initcode to permit in a creation transaction and create instructions
+
+	MaxCodeSizeEIP7907        = 262144                 // Maximum bytecode permitted per contract after EIP-7907
+	MaxInitCodeSizeEIP7907    = 2 * MaxCodeSizeEIP7907 // Maximum initcode to permit in a creation transaction and create instructions
+	CodeReadPerWordGasEIP7907 = 2                      // Cost per word to read code from disk.
 
 	// Precompiled contract gas prices
 
@@ -163,6 +168,8 @@ const (
 	Bls12381MapG1Gas          uint64 = 5500  // Gas price for BLS12-381 mapping field element to G1 operation
 	Bls12381MapG2Gas          uint64 = 23800 // Gas price for BLS12-381 mapping field element to G2 operation
 
+	P256VerifyGas uint64 = 3450 // secp256r1 elliptic curve signature verifier gas price
+
 	// The Refund Quotient is the cap on how much of the used gas can be refunded. Before EIP-3529,
 	// up to half the consumed gas could be refunded. Redefined as 1/5th in EIP-3529
 	RefundQuotient        uint64 = 2
@@ -173,8 +180,12 @@ const (
 	BlobTxBlobGasPerBlob               = 1 << 17 // Gas consumption of a single data blob (== blob byte size)
 	BlobTxMinBlobGasprice              = 1       // Minimum gas price for data blobs
 	BlobTxPointEvaluationPrecompileGas = 50000   // Gas price for the point evaluation precompile.
+	BlobBaseCost                       = 1 << 14 // Base execution gas cost for a blob.
 
 	HistoryServeWindow = 8192 // Number of blocks to serve historical block hashes for, EIP-2935.
+
+	WithdrawalSize  = 23        // size of a withdrawal
+	BlockRLPSizeCap = 9_961_472 // maximum size of an RLP-encoded block
 )
 
 // Bls12381G1MultiExpDiscountTable is the gas discount table for BLS12-381 G1 multi exponentiation operation
