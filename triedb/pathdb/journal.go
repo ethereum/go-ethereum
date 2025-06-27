@@ -342,7 +342,7 @@ func (db *Database) Journal(root common.Hash) error {
 	)
 	if journalPath != "" {
 		// Write into a temp file first
-		err := os.Mkdir(db.config.JournalDirectory, 0755)
+		err := os.MkdirAll(db.config.JournalDirectory, 0755)
 		if err != nil {
 			return err
 		}
