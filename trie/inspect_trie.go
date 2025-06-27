@@ -14,13 +14,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/triedb/database"
 	"github.com/olekukonko/tablewriter"
 	"golang.org/x/sync/semaphore"
 )
 
 type Inspector struct {
 	trie           *Trie // traverse trie
-	db             *Database
+	db             database.NodeDatabase
 	stateRootHash  common.Hash
 	blocknum       uint64
 	root           node // root of triedb
@@ -95,7 +96,7 @@ func (trieStat *trieTreeStat) Display(ownerAddress string, treeType string) stri
 }
 
 // NewInspector return an inspector obj
-func NewInspector(tr *Trie, db *Database, stateRootHash common.Hash, blocknum uint64, jobnum uint64) (*Inspector, error) {
+func NewInspector(tr *Trie, db database.NodeDatabase, stateRootHash common.Hash, blocknum uint64, jobnum uint64) (*Inspector, error) {
 	if tr == nil {
 		return nil, errors.New("trie is nil")
 	}
