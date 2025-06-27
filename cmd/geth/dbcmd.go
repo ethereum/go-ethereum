@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -316,10 +317,6 @@ func confirmAndRemoveDB(paths []string, kind string, ctx *cli.Context, removeFla
 }
 
 func inspectTrie(ctx *cli.Context) error {
-	if ctx.NArg() < 1 {
-		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
-	}
-
 	if ctx.NArg() > 2 {
 		return fmt.Errorf("excessive number of arguments: %v", ctx.Command.ArgsUsage)
 	}
@@ -337,7 +334,7 @@ func inspectTrie(ctx *cli.Context) error {
 	defer db.Close()
 
 	var headerBlockHash common.Hash
-	if ctx.Args().Get(0) == "latest" {
+	if ctx.NArg() == 0 || ctx.Args().Get(0) == "latest" {
 		headerHash := rawdb.ReadHeadHeaderHash(db)
 		if num := rawdb.ReadHeaderNumber(db, headerHash); num != nil {
 			blockNumber = *num
@@ -353,13 +350,13 @@ func inspectTrie(ctx *cli.Context) error {
 		}
 	}
 
-	if ctx.NArg() == 1 {
-		jobnum = 1000
+	if ctx.NArg() <= 1 {
+		jobnum = uint64(runtime.NumCPU())
 	} else {
 		var err error
 		jobnum, err = strconv.ParseUint(ctx.Args().Get(1), 10, 64)
 		if err != nil {
-			return fmt.Errorf("failed to Parse jobnum, Args[1]: %v, err: %v", ctx.Args().Get(1), err)
+			return fmt.Errorf("failed to parse jobnum, Args[1]: %v, err: %v", ctx.Args().Get(1), err)
 		}
 	}
 
@@ -384,12 +381,12 @@ func inspectTrie(ctx *cli.Context) error {
 		fmt.Printf("fail to new trie tree, err: %v, rootHash: %v\n", err, trieRootHash.String())
 		return err
 	}
-	theInspect, err := trie.NewInspector(theTrie, triedb, trieRootHash, blockNumber, jobnum)
+	inspector, err := trie.NewInspector(theTrie, triedb, trieRootHash, blockNumber, jobnum)
 	if err != nil {
 		return err
 	}
-	theInspect.Run()
-	theInspect.DisplayResult()
+	inspector.Run()
+	inspector.DisplayResult()
 	return nil
 }
 
