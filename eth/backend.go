@@ -221,9 +221,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		}
 	}
 	var (
-		vmConfig = vm.Config{
-			EnablePreimageRecording: config.EnablePreimageRecording,
-		}
 		options = &core.BlockChainConfig{
 			TrieCleanLimit:   config.TrieCleanCache,
 			NoPrefetch:       config.NoPrefetch,
@@ -236,7 +233,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			StateScheme:      scheme,
 			ChainHistoryMode: config.HistoryMode,
 			TxLookupLimit:    int64(min(config.TransactionHistory, math.MaxInt64)),
-			VmConfig:         vmConfig,
+			VmConfig: vm.Config{
+				EnablePreimageRecording: config.EnablePreimageRecording,
+			},
 		}
 	)
 
@@ -249,7 +248,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create tracer %s: %v", config.VMTrace, err)
 		}
-		vmConfig.Tracer = t
+		options.VmConfig.Tracer = t
 	}
 	// Override the chain config with provided settings.
 	var overrides core.ChainOverrides
