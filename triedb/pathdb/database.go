@@ -512,8 +512,6 @@ func (db *Database) Enable(root common.Hash) error {
 		if err := db.freezer.Reset(); err != nil {
 			return err
 		}
-		// Reset the state history indexer
-		storeIndexMetadata(db.diskdb, 0)
 	}
 	// Re-enable the database as the final step.
 	db.waitSync = false
