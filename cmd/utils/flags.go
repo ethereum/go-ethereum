@@ -446,15 +446,6 @@ var (
 		Value:    ethconfig.Defaults.BlobPool.PriceBump,
 		Category: flags.BlobPoolCategory,
 	}
-
-	// Trie database settings
-	TrieDBJournalFlag = &cli.BoolFlag{
-		Name:     "triedb.journal",
-		Usage:    "Enable persisting the trie database journal to disk (only used with pbss state scheme, default path: <datadir>/triedb.journal.rlp)",
-		Value:    true,
-		Category: flags.TrieDatabaseCategory,
-	}
-
 	// Performance tuning settings
 	CacheFlag = &cli.IntFlag{
 		Name:     "cache",
@@ -992,7 +983,6 @@ var (
 		DataDirFlag,
 		AncientFlag,
 		EraFlag,
-		TrieDBJournalFlag,
 		RemoteDBFlag,
 		DBEngineFlag,
 		StateSchemeFlag,
@@ -1654,9 +1644,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(StateSchemeFlag.Name) {
 		cfg.StateScheme = ctx.String(StateSchemeFlag.Name)
 	}
-	if !ctx.Bool(TrieDBJournalFlag.Name) {
-		cfg.TrieDBJournal = false
-	}
 	// Parse transaction history flag, if user is still using legacy config
 	// file with 'TxLookupLimit' configured, copy the value to 'TransactionHistory'.
 	if cfg.TransactionHistory == ethconfig.Defaults.TransactionHistory && cfg.TxLookupLimit != ethconfig.Defaults.TxLookupLimit {
@@ -2215,9 +2202,6 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	if options.ArchiveMode && !options.Preimages {
 		options.Preimages = true
 		log.Info("Enabling recording of key preimages since archive mode is used")
-	}
-	if !ctx.Bool(TrieDBJournalFlag.Name) {
-		options.TrieDBJournal = stack.ResolvePath("triedb.journal.rlp")
 	}
 	if !ctx.Bool(SnapshotFlag.Name) {
 		options.SnapshotLimit = 0 // Disabled
