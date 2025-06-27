@@ -305,7 +305,12 @@ type indexIniter struct {
 	interrupt chan *interruptSignal
 	done      chan struct{}
 	closed    chan struct{}
-	wg        sync.WaitGroup
+
+	// indexing progress
+	indexed atomic.Uint64 // the id of latest indexed state
+	last    atomic.Uint64 // the id of the target state to be indexed
+
+	wg sync.WaitGroup
 }
 
 func newIndexIniter(disk ethdb.KeyValueStore, freezer ethdb.AncientStore, lastID uint64) *indexIniter {
@@ -316,6 +321,14 @@ func newIndexIniter(disk ethdb.KeyValueStore, freezer ethdb.AncientStore, lastID
 		done:      make(chan struct{}),
 		closed:    make(chan struct{}),
 	}
+	// Load indexing progress
+	initer.last.Store(lastID)
+	metadata := loadIndexMetadata(disk)
+	if metadata != nil {
+		initer.indexed.Store(metadata.Last)
+	}
+
+	// Launch background indexer
 	initer.wg.Add(1)
 	go initer.run(lastID)
 	return initer
@@ -339,6 +352,22 @@ func (i *indexIniter) inited() bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func (i *indexIniter) remain() uint64 {
+	select {
+	case <-i.closed:
+		return 0
+	case <-i.done:
+		return 0
+	default:
+		last, indexed := i.last.Load(), i.indexed.Load()
+		if last < indexed {
+			log.Error("Invalid state indexing range", "last", last, "indexed", indexed)
+			return 0
+		}
+		return last - indexed
 	}
 }
 
@@ -367,6 +396,8 @@ func (i *indexIniter) run(lastID uint64) {
 				signal.result <- fmt.Errorf("invalid history id, last: %d, got: %d", lastID, signal.newLastID)
 				continue
 			}
+			i.last.Store(signal.newLastID) // update indexing range
+
 			// The index limit is extended by one, update the limit without
 			// interrupting the current background process.
 			if signal.newLastID == lastID+1 {
@@ -507,6 +538,8 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 				log.Info("Indexing state history", "processed", done, "left", left, "elapsed", common.PrettyDuration(time.Since(start)), "eta", common.PrettyDuration(eta))
 			}
 		}
+		i.indexed.Store(current - 1) // update indexing progress
+
 		// Check interruption signal and abort process if it's fired
 		if interrupt != nil {
 			if signal := interrupt.Load(); signal != 0 {
@@ -615,5 +648,16 @@ func (i *historyIndexer) shorten(historyID uint64) error {
 		return unindexSingle(historyID, i.disk, i.freezer)
 	case i.initer.interrupt <- signal:
 		return <-signal.result
+	}
+}
+
+// progress returns the indexing progress made so far. It provides the number
+// of states that remain unindexed.
+func (i *historyIndexer) progress() (uint64, error) {
+	select {
+	case <-i.initer.closed:
+		return 0, errors.New("indexer is closed")
+	default:
+		return i.initer.remain(), nil
 	}
 }

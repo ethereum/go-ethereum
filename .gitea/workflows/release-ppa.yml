@@ -2,8 +2,8 @@ on:
   schedule:
     - cron: '0 16 * * *'
   push:
-    branches:
-      - "release/*"
+    tags:
+      - "v*"
   workflow_dispatch:
 
 jobs:

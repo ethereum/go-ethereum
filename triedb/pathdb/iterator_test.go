@@ -816,7 +816,8 @@ func testAccountIteratorDeletions(t *testing.T, newIterator func(db *Database, r
 	config := &Config{
 		NoAsyncGeneration: true,
 	}
-	db := New(rawdb.NewMemoryDatabase(), config, false)
+	memoryDB := rawdb.NewMemoryDatabase()
+	db := New(memoryDB, config, false)
 
 	// Stack three diff layers on top with various overlaps
 	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 1, trienode.NewMergedNodeSet(),
@@ -831,31 +832,55 @@ func testAccountIteratorDeletions(t *testing.T, newIterator func(db *Database, r
 	db.Update(common.HexToHash("0x04"), common.HexToHash("0x03"), 3, trienode.NewMergedNodeSet(),
 		NewStateSetWithOrigin(randomAccountSet("0x33", "0x44", "0x55"), nil, nil, nil, false))
 
-	// The output should be 11,33,44,55
-	it := newIterator(db, common.HexToHash("0x04"), common.Hash{})
-	// Do a quick check
-	verifyIterator(t, 4, it, verifyAccount)
-	it.Release()
+	verify := func() {
+		// The output should be 11,33,44,55
+		it := newIterator(db, common.HexToHash("0x04"), common.Hash{})
+		// Do a quick check
+		verifyIterator(t, 4, it, verifyAccount)
+		it.Release()
 
-	// And a more detailed verification that we indeed do not see '0x22'
-	it = newIterator(db, common.HexToHash("0x04"), common.Hash{})
-	defer it.Release()
-	for it.Next() {
-		hash := it.Hash()
-		if it.Account() == nil {
-			t.Errorf("iterator returned nil-value for hash %x", hash)
-		}
-		if hash == deleted {
-			t.Errorf("expected deleted elem %x to not be returned by iterator", deleted)
+		// And a more detailed verification that we indeed do not see '0x22'
+		it = newIterator(db, common.HexToHash("0x04"), common.Hash{})
+		defer it.Release()
+		for it.Next() {
+			hash := it.Hash()
+			if it.Account() == nil {
+				t.Errorf("iterator returned nil-value for hash %x", hash)
+			}
+			if hash == deleted {
+				t.Errorf("expected deleted elem %x to not be returned by iterator", deleted)
+			}
 		}
 	}
+	verify()
+
+	if err := db.Journal(common.HexToHash("0x04")); err != nil {
+		t.Fatalf("Failed to journal the database, %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("Failed to close the database, %v", err)
+	}
+	db = New(memoryDB, config, false)
+
+	verify()
 }
 
 func TestStorageIteratorDeletions(t *testing.T) {
 	config := &Config{
 		NoAsyncGeneration: true,
 	}
-	db := New(rawdb.NewMemoryDatabase(), config, false)
+	memoryDB := rawdb.NewMemoryDatabase()
+	db := New(memoryDB, config, false)
+
+	restart := func(head common.Hash) {
+		if err := db.Journal(head); err != nil {
+			t.Fatalf("Failed to journal the database, %v", err)
+		}
+		if err := db.Close(); err != nil {
+			t.Fatalf("Failed to close the database, %v", err)
+		}
+		db = New(memoryDB, config, false)
+	}
 
 	// Stack three diff layers on top with various overlaps
 	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 1, trienode.NewMergedNodeSet(),
@@ -866,6 +891,19 @@ func TestStorageIteratorDeletions(t *testing.T) {
 
 	// The output should be 02,04,05,06
 	it, _ := db.StorageIterator(common.HexToHash("0x03"), common.HexToHash("0xaa"), common.Hash{})
+	verifyIterator(t, 4, it, verifyStorage)
+	it.Release()
+
+	// The output should be 04,05,06
+	it, _ = db.StorageIterator(common.HexToHash("0x03"), common.HexToHash("0xaa"), common.HexToHash("0x03"))
+	verifyIterator(t, 3, it, verifyStorage)
+	it.Release()
+
+	// Ensure the iteration result aligns after the database restart
+	restart(common.HexToHash("0x03"))
+
+	// The output should be 02,04,05,06
+	it, _ = db.StorageIterator(common.HexToHash("0x03"), common.HexToHash("0xaa"), common.Hash{})
 	verifyIterator(t, 4, it, verifyStorage)
 	it.Release()
 
@@ -885,9 +923,23 @@ func TestStorageIteratorDeletions(t *testing.T) {
 	verifyIterator(t, 0, it, verifyStorage)
 	it.Release()
 
+	// Ensure the iteration result aligns after the database restart
+	restart(common.HexToHash("0x04"))
+	it, _ = db.StorageIterator(common.HexToHash("0x04"), common.HexToHash("0xaa"), common.Hash{})
+	verifyIterator(t, 0, it, verifyStorage)
+	it.Release()
+
 	// Re-insert the slots of the same account
 	db.Update(common.HexToHash("0x05"), common.HexToHash("0x04"), 4, trienode.NewMergedNodeSet(),
 		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x07", "0x08", "0x09"}}, nil), nil, nil, false))
+
+	// The output should be 07,08,09
+	it, _ = db.StorageIterator(common.HexToHash("0x05"), common.HexToHash("0xaa"), common.Hash{})
+	verifyIterator(t, 3, it, verifyStorage)
+	it.Release()
+
+	// Ensure the iteration result aligns after the database restart
+	restart(common.HexToHash("0x05"))
 
 	// The output should be 07,08,09
 	it, _ = db.StorageIterator(common.HexToHash("0x05"), common.HexToHash("0xaa"), common.Hash{})
@@ -902,6 +954,13 @@ func TestStorageIteratorDeletions(t *testing.T) {
 	verifyIterator(t, 2, it, verifyStorage) // The output should be 11,12
 	it.Release()
 
+	verifyIterator(t, 2, db.tree.get(common.HexToHash("0x06")).(*diffLayer).newBinaryStorageIterator(common.HexToHash("0xaa"), common.Hash{}), verifyStorage)
+
+	// Ensure the iteration result aligns after the database restart
+	restart(common.HexToHash("0x06"))
+	it, _ = db.StorageIterator(common.HexToHash("0x06"), common.HexToHash("0xaa"), common.Hash{})
+	verifyIterator(t, 2, it, verifyStorage) // The output should be 11,12
+	it.Release()
 	verifyIterator(t, 2, db.tree.get(common.HexToHash("0x06")).(*diffLayer).newBinaryStorageIterator(common.HexToHash("0xaa"), common.Hash{}), verifyStorage)
 }
 
