@@ -1068,41 +1068,51 @@ func TestSignInWithEtherium(t *testing.T) {
 	testFiles, err := os.ReadDir(filepath.Join("testdata", "siwe"))
 	require.NoError(t, err)
 
+	var messages map[string]string
+
 	for _, fInfo := range testFiles {
-		if !strings.HasSuffix(fInfo.Name(), "txt") {
+		if !strings.HasSuffix(fInfo.Name(), "json") {
 			continue
 		}
-		t.Run(fInfo.Name(), func(t *testing.T) {
-			t.Parallel()
-			expectedFailure := strings.HasPrefix(fInfo.Name(), "expfail")
-			expectedWarning := strings.HasPrefix(fInfo.Name(), "expwarn")
-			message, err := os.ReadFile(filepath.Join("testdata", "siwe", fInfo.Name()))
-			require.NoError(t, err)
+		if !strings.HasPrefix(fInfo.Name(), "valid") {
+			continue
+		}
+		jsonFile, err := os.ReadFile(filepath.Join("testdata", "siwe", fInfo.Name()))
+		require.NoError(t, err)
 
-			api, control := setup(t, true)
-			createAccount(control, api, t)
-			createAccount(control, api, t)
-			control.approveCh <- "1"
-			list, err := api.List(context.Background())
-			require.NoError(t, err)
-			a := common.NewMixedcaseAddress(list[0])
+		err = json.Unmarshal(jsonFile, &messages)
+		require.NoError(t, err)
 
-			control.approveCh <- "Y"
-			control.inputCh <- "a_long_password"
-			signature, err := api.SignData(context.Background(), apitypes.TextPlain.Mime, a, hexutil.Encode([]byte(message)))
+		for testName, message := range messages {
+			t.Run(testName, func(t *testing.T) {
+				t.Parallel()
 
-			if expectedFailure {
-				require.Error(t, err)
-				return
-			} else {
+				api, control := setup(t, true)
+				createAccount(control, api, t)
+				createAccount(control, api, t)
+				control.approveCh <- "1"
+				list, err := api.List(context.Background())
 				require.NoError(t, err)
-			}
-			if expectedWarning {
-				// todo: monitor for warning
-			}
-			if signature == nil || len(signature) != 65 {
-				t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
-			}
-		})
+				a := common.NewMixedcaseAddress(list[0])
+
+				control.approveCh <- "Y"
+				control.inputCh <- "a_long_password"
+				signature, err := api.SignData(context.Background(), apitypes.TextPlain.Mime, a, hexutil.Encode([]byte(message)))
+
+				require.NoError(t, err)
+				// if expectedFailure {
+				// 	require.Error(t, err)
+				// 	return
+				// } else {
+				// 	require.NoError(t, err)
+				// }
+				// if expectedWarning {
+				// 	// todo: monitor for warning
+				// }
+				if signature == nil || len(signature) != 65 {
+					t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
+				}
+			})
+		}
 	}
 }
