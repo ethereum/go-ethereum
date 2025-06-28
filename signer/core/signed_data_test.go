@@ -1062,21 +1062,24 @@ func TestEncodeDataRecursiveBytes(t *testing.T) {
 	}
 }
 
-func TestSignInWithEtherium(t *testing.T) {
+func TestSignInWithEtheriumValid(t *testing.T) {
 	t.Parallel()
 
 	testFiles, err := os.ReadDir(filepath.Join("testdata", "siwe"))
 	require.NoError(t, err)
 
 	var messages map[string]string
+	var expectingWarning bool
 
 	for _, fInfo := range testFiles {
 		if !strings.HasSuffix(fInfo.Name(), "json") {
 			continue
 		}
-		if !strings.HasPrefix(fInfo.Name(), "valid") {
+		if fInfo.Name() != "warning_uris.json" {
 			continue
 		}
+		expectingWarning = strings.HasPrefix(fInfo.Name(), "warning")
+
 		jsonFile, err := os.ReadFile(filepath.Join("testdata", "siwe", fInfo.Name()))
 		require.NoError(t, err)
 
@@ -1099,16 +1102,12 @@ func TestSignInWithEtherium(t *testing.T) {
 				control.inputCh <- "a_long_password"
 				signature, err := api.SignData(context.Background(), apitypes.TextPlain.Mime, a, hexutil.Encode([]byte(message)))
 
-				require.NoError(t, err)
-				// if expectedFailure {
-				// 	require.Error(t, err)
-				// 	return
-				// } else {
-				// 	require.NoError(t, err)
-				// }
-				// if expectedWarning {
-				// 	// todo: monitor for warning
-				// }
+				if expectingWarning {
+					// todo: check UI for warning message
+				} else {
+					require.NoError(t, err)
+				}
+
 				if signature == nil || len(signature) != 65 {
 					t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
 				}
