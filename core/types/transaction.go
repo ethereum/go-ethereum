@@ -404,6 +404,13 @@ func (tx *Transaction) EffectiveGasTipIntCmp(other *big.Int, baseFee *big.Int) i
 	return txTip.Cmp(other)
 }
 
+// EffectiveGasPrice computes the gas price paid by the transaction, given
+// the inclusion block baseFee
+func (tx *Transaction) EffectiveGasPrice(baseFee *big.Int) *big.Int {
+	var dst big.Int
+	return tx.inner.effectiveGasPrice(&dst, baseFee)
+}
+
 // BlobGas returns the blob gas limit of the transaction for blob transactions, 0 otherwise.
 func (tx *Transaction) BlobGas() uint64 {
 	if blobtx, ok := tx.inner.(*BlobTx); ok {

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -33,6 +34,10 @@ import (
 
 // DecodeTxLookupEntry decodes the supplied tx lookup data.
 func DecodeTxLookupEntry(data []byte, db ethdb.Reader) *uint64 {
+	var index TxIndex
+	if err := rlp.DecodeBytes(data, &index); err == nil {
+		return &index.BlockNumber
+	}
 	// Database v6 tx lookup just stores the block number
 	if len(data) < common.HashLength {
 		number := new(big.Int).SetBytes(data).Uint64()
@@ -61,29 +66,53 @@ func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
 	return DecodeTxLookupEntry(data, db)
 }
 
+// ReadTxIndex retrieves the full index data if exists
+func ReadTxIndex(db ethdb.Reader, hash common.Hash) *TxIndex {
+	data, _ := db.Get(txLookupKey(hash))
+	var index TxIndex
+	if err := rlp.DecodeBytes(data, &index); err != nil {
+		return nil
+	}
+	return &index
+}
+
 // writeTxLookupEntry stores a positional metadata for a transaction,
 // enabling hash based transaction and receipt lookups.
-func writeTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash, numberBytes []byte) {
-	if err := db.Put(txLookupKey(hash), numberBytes); err != nil {
+func writeTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash, bytes []byte) {
+	if err := db.Put(txLookupKey(hash), bytes); err != nil {
 		log.Crit("Failed to store transaction lookup entry", "err", err)
 	}
 }
 
-// WriteTxLookupEntries is identical to WriteTxLookupEntry, but it works on
-// a list of hashes
-func WriteTxLookupEntries(db ethdb.KeyValueWriter, number uint64, hashes []common.Hash) {
-	numberBytes := new(big.Int).SetUint64(number).Bytes()
-	for _, hash := range hashes {
-		writeTxLookupEntry(db, hash, numberBytes)
-	}
+// TxIndex is the collection of data that is stored per transaction for
+// speeding up hashed based lookups
+type TxIndex struct {
+	Type              uint8  // Transaction Type
+	Nonce             uint64 // Transaction Nonce
+	BlockNumber       uint64
+	BlockHash         common.Hash
+	BlockTime         uint64
+	BaseFee           *big.Int
+	TxIndex           uint32
+	Sender            common.Address
+	EffectiveGasPrice *big.Int
+	GasUsed           uint64
+	LogIndex          uint32
+	To                *common.Address `rlp:"optional"`
+	BlobGas           uint64          `rlp:"optional"`
+	BlobGasPrice      *big.Int        `rlp:"optional"`
 }
 
-// WriteTxLookupEntriesByBlock stores a positional metadata for every transaction from
-// a block, enabling hash based transaction and receipt lookups.
-func WriteTxLookupEntriesByBlock(db ethdb.KeyValueWriter, block *types.Block) {
-	numberBytes := block.Number().Bytes()
-	for _, tx := range block.Transactions() {
-		writeTxLookupEntry(db, tx.Hash(), numberBytes)
+// WriteTxLookupEntries stores a positional metadata for a set of transactions
+// enabling hash based transaction and receipt lookups.
+func WriteTxLookupEntries(db ethdb.KeyValueWriter, hashes []common.Hash, indexes []TxIndex) {
+	for index, hash := range hashes {
+		indexBytes, err := rlp.EncodeToBytes(indexes[index])
+		if err != nil {
+			log.Error("Failed to encode tx index", "error", err)
+			return
+		}
+		writeTxLookupEntry(db, hash, indexBytes)
 	}
 }
 
@@ -220,7 +249,116 @@ func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) 
 	return nil, common.Hash{}, 0, 0
 }
 
-// ReadFilterMapRow retrieves a filter map row at the given mapRowIndex
+// extractReceiptFields takes a raw RLP-encoded receipt blob and extracts
+// specific fields from it.
+func extractReceiptFields(receiptRLP rlp.RawValue) (uint64, uint, error) {
+	receiptList, _, err := rlp.SplitList(receiptRLP)
+	if err != nil {
+		return 0, 0, err
+	}
+	// Decode the field: receipt status
+	// for receipt before the byzantium fork:
+	// - bytes: post state root
+	// for receipt after the byzantium fork:
+	// - bytes: receipt status flag
+	_, _, rest, err := rlp.Split(receiptList)
+	if err != nil {
+		return 0, 0, err
+	}
+	// Decode the field: cumulative gas used (type: uint64)
+	gasUsed, rest, err := rlp.SplitUint64(rest)
+	if err != nil {
+		return 0, 0, err
+	}
+	// Decode the field: logs (type: rlp list)
+	logList, _, err := rlp.SplitList(rest)
+	if err != nil {
+		return 0, 0, err
+	}
+	logCount, err := rlp.CountValues(logList)
+	if err != nil {
+		return 0, 0, err
+	}
+	return gasUsed, uint(logCount), nil
+}
+
+// RawReceiptContext carries the contextual information that is needed to derive
+// a complete receipt from a raw one.
+type RawReceiptContext struct {
+	GasUsed  uint64 // Amount of gas used by the associated transaction
+	LogIndex uint   // Starting index of the logs within the block
+}
+
+// ReadRawReceiptWithContext reads a raw receipt at the specified position. It also returns
+// the gas used by the associated transaction and the starting index of the logs
+// within the block.
+func ReadRawReceiptWithContext(db ethdb.Reader, blockHash common.Hash, blockNumber, txIndex uint64) (*types.Receipt, RawReceiptContext, error) {
+	receiptIt, err := rlp.NewListIterator(ReadReceiptsRLP(db, blockHash, blockNumber))
+	if err != nil {
+		return nil, RawReceiptContext{}, err
+	}
+	var (
+		cumulativeGasUsed uint64
+		logIndex          uint
+	)
+	for i := uint64(0); i <= txIndex; i++ {
+		// Unexpected iteration error
+		if receiptIt.Err() != nil {
+			return nil, RawReceiptContext{}, receiptIt.Err()
+		}
+		// Unexpected end of iteration
+		if !receiptIt.Next() {
+			return nil, RawReceiptContext{}, fmt.Errorf("receipt not found, %d, %x, %d", blockNumber, blockHash, txIndex)
+		}
+		if i == txIndex {
+			var stored types.ReceiptForStorage
+			if err := rlp.DecodeBytes(receiptIt.Value(), &stored); err != nil {
+				return nil, RawReceiptContext{}, err
+			}
+			return (*types.Receipt)(&stored), RawReceiptContext{
+				GasUsed:  stored.CumulativeGasUsed - cumulativeGasUsed,
+				LogIndex: logIndex,
+			}, nil
+		} else {
+			gas, logs, err := extractReceiptFields(receiptIt.Value())
+			if err != nil {
+				return nil, RawReceiptContext{}, err
+			}
+			cumulativeGasUsed = gas
+			logIndex += logs
+		}
+	}
+	return nil, RawReceiptContext{}, fmt.Errorf("receipt not found, %d, %x, %d", blockNumber, blockHash, txIndex)
+}
+
+// ReadRawReceipt
+func ReadRawReceipt(db ethdb.Reader, blockHash common.Hash, blockNumber, txIndex uint64) (*types.Receipt, error) {
+	receiptIt, err := rlp.NewListIterator(ReadReceiptsRLP(db, blockHash, blockNumber))
+	if err != nil {
+		return nil, err
+	}
+
+	for i := uint64(0); i <= txIndex; i++ {
+		// Unexpected iteration error
+		if receiptIt.Err() != nil {
+			return nil, receiptIt.Err()
+		}
+		// Unexpected end of iteration
+		if !receiptIt.Next() {
+			return nil, fmt.Errorf("receipt not found, %d, %x, %d", blockNumber, blockHash, txIndex)
+		}
+		if i == txIndex {
+			var stored types.ReceiptForStorage
+			if err := rlp.DecodeBytes(receiptIt.Value(), &stored); err != nil {
+				return nil, err
+			}
+			return (*types.Receipt)(&stored), nil
+		}
+	}
+	return nil, fmt.Errorf("receipt not found, %d, %x, %d", blockNumber, blockHash, txIndex)
+}
+
+// ReadFilterMapExtRow retrieves a filter map row at the given mapRowIndex
 // (see filtermaps.mapRowIndex for the storage index encoding).
 // Note that zero length rows are not stored in the database and therefore all
 // non-existent entries are interpreted as empty rows and return no error.
@@ -247,7 +385,7 @@ func ReadFilterMapExtRow(db ethdb.KeyValueReader, mapRowIndex uint64, bitLength 
 		return nil, err
 	}
 	if len(encRow)%byteLength != 0 {
-		return nil, errors.New("Invalid encoded extended filter row length")
+		return nil, errors.New("invalid encoded extended filter row length")
 	}
 	row := make([]uint32, len(encRow)/byteLength)
 	var b [4]byte
@@ -318,7 +456,7 @@ func ReadFilterMapBaseRows(db ethdb.KeyValueReader, mapRowIndex uint64, rowCount
 	return rows, nil
 }
 
-// WriteFilterMapRow stores a filter map row at the given mapRowIndex or deletes
+// WriteFilterMapExtRow stores a filter map row at the given mapRowIndex or deletes
 // any existing entry if the row is empty.
 func WriteFilterMapExtRow(db ethdb.KeyValueWriter, mapRowIndex uint64, row []uint32, bitLength uint) {
 	byteLength := int(bitLength) / 8
