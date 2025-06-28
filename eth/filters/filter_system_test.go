@@ -92,18 +92,18 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 	switch blockNr {
 	case rpc.LatestBlockNumber:
 		hash = rawdb.ReadHeadBlockHash(b.db)
-		number := rawdb.ReadHeaderNumber(b.db, hash)
-		if number == nil {
+		number, ok := rawdb.ReadHeaderNumber(b.db, hash)
+		if !ok {
 			return nil, nil
 		}
-		num = *number
+		num = number
 	case rpc.FinalizedBlockNumber:
 		hash = rawdb.ReadFinalizedBlockHash(b.db)
-		number := rawdb.ReadHeaderNumber(b.db, hash)
-		if number == nil {
+		number, ok := rawdb.ReadHeaderNumber(b.db, hash)
+		if !ok {
 			return nil, nil
 		}
-		num = *number
+		num = number
 	case rpc.SafeBlockNumber:
 		return nil, errors.New("safe block not found")
 	default:
@@ -114,11 +114,11 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 }
 
 func (b *testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
-	number := rawdb.ReadHeaderNumber(b.db, hash)
-	if number == nil {
+	number, ok := rawdb.ReadHeaderNumber(b.db, hash)
+	if !ok {
 		return nil, nil
 	}
-	return rawdb.ReadHeader(b.db, hash, *number), nil
+	return rawdb.ReadHeader(b.db, hash, number), nil
 }
 
 func (b *testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
@@ -129,9 +129,9 @@ func (b *testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.
 }
 
 func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	if number := rawdb.ReadHeaderNumber(b.db, hash); number != nil {
-		if header := rawdb.ReadHeader(b.db, hash, *number); header != nil {
-			return rawdb.ReadReceipts(b.db, hash, *number, header.Time, params.TestChainConfig), nil
+	if number, ok := rawdb.ReadHeaderNumber(b.db, hash); ok {
+		if header := rawdb.ReadHeader(b.db, hash, number); header != nil {
+			return rawdb.ReadReceipts(b.db, hash, number, header.Time, params.TestChainConfig), nil
 		}
 	}
 	return nil, nil
