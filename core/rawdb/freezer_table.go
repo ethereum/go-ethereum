@@ -826,12 +826,17 @@ func (t *freezerTable) truncateTail(items uint64) error {
 			return err
 		}
 	}
+
 	// Retrieve the new size and update the total size counter
 	newSize, err := t.sizeNolock()
 	if err != nil {
 		return err
 	}
-	t.sizeGauge.Dec(int64(oldSize - newSize))
+	// Calculate how much data has been removed
+	delta := oldSize - newSize
+	t.sizeGauge.Dec(int64(delta))
+	//log how much data has been removed
+	log.Info("Pruned disk usage", "bytesFreed", delta)
 	return nil
 }
 
