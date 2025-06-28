@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/params"
@@ -2033,15 +2032,14 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 		t.Fatalf("Failed to import canonical chain tail: %v", err)
 	}
 	// Reopen the trie database without persisting in-memory dirty nodes.
-	chain.triedb.Close()
+	chain.stateDB.close()
 	dbconfig := &triedb.Config{}
 	if scheme == rawdb.PathScheme {
 		dbconfig.PathDB = pathdb.Defaults
 	} else {
 		dbconfig.HashDB = hashdb.Defaults
 	}
-	chain.triedb = triedb.NewDatabase(chain.db, dbconfig)
-	chain.statedb = state.NewDatabase(chain.triedb, chain.snaps)
+	chain.stateDB = newStateDatabase(chain.db, chain.cfg)
 
 	// Force run a freeze cycle
 	type freezer interface {

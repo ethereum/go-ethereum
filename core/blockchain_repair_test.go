@@ -1845,7 +1845,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 		rawdb.WriteLastPivotNumber(db, *tt.pivotBlock)
 	}
 	// Pull the plug on the database, simulating a hard crash
-	chain.triedb.Close()
+	chain.stateDB.close()
 	db.Close()
 	chain.stopWithoutSaving()
 
@@ -1971,7 +1971,7 @@ func testIssue23496(t *testing.T, scheme string) {
 	}
 
 	// Pull the plug on the database, simulating a hard crash
-	chain.triedb.Close()
+	chain.stateDB.close()
 	db.Close()
 	chain.stopWithoutSaving()
 
