@@ -291,6 +291,9 @@ func (es *EventSystem) SubscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 	if len(crit.Topics) > maxTopics {
 		return nil, errExceedMaxTopics
 	}
+	if len(crit.Addresses) > maxAddresses {
+		return nil, errExceedMaxAddresses
+	}
 	var from, to rpc.BlockNumber
 	if crit.FromBlock == nil {
 		from = rpc.LatestBlockNumber
