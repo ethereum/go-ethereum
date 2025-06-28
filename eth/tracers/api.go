@@ -82,7 +82,7 @@ type Backend interface {
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
 	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
-	GetTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64)
+	GetCanonicalTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64)
 	TxIndexDone() bool
 	RPCGasCap() uint64
 	ChainConfig() *params.ChainConfig
@@ -863,7 +863,7 @@ func containsTx(block *types.Block, hash common.Hash) bool {
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
 func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *TraceConfig) (interface{}, error) {
-	found, _, blockHash, blockNumber, index := api.backend.GetTransaction(hash)
+	found, _, blockHash, blockNumber, index := api.backend.GetCanonicalTransaction(hash)
 	if !found {
 		// Warn in case tx indexer is not done.
 		if !api.backend.TxIndexDone() {
