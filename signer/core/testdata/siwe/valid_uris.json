@@ -1,0 +1,308 @@
+{
+  "uri-js scheme: uri:": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "scheme": "uri",
+              "userinfo": null,
+              "host": null,
+              "port": null,
+              "path": "",
+              "query": null,
+              "fragment": null
+            }
+  },
+  "uri-js userinfo: uri://@": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://@\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "scheme": "uri",
+              "userinfo": "",
+              "host": "",
+              "port": null,
+              "path": "",
+              "query": null,
+              "fragment": null
+            }
+  },
+  "uri-js empty host: uri://@:": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://@:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "scheme": "uri",
+              "userinfo": "",
+              "host": "",
+              "port": "",
+              "path": "",
+              "query": null,
+              "fragment": null
+            }
+  },
+  "uri-js host: uri://": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "scheme": "uri",
+              "userinfo": null,
+              "host": "",
+              "port": null,
+              "path": "",
+              "query": null,
+              "fragment": null
+            }
+  },
+  "uri-js port: uri://:": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "scheme": "uri",
+              "userinfo": null,
+              "host": "",
+              "port": "",
+              "path": "",
+              "query": null,
+              "fragment": null
+            }
+  },
+  "uri-js query: uri:?": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri:?\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "scheme": "uri",
+              "userinfo": null,
+              "host": null,
+              "port": null,
+              "path": "",
+              "query": "",
+              "fragment": null
+            }
+  },
+  "uri-js fragment: uri:#": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri:#\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "scheme": "uri",
+              "userinfo": null,
+              "host": null,
+              "port": null,
+              "path": "",
+              "query": null,
+              "fragment": ""
+            }
+  },
+  "uri-js all: uri://user:pass@example.com:123/one/two.three?q1=a1&q2=a2#body": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://user:pass@example.com:123/one/two.three?q1=a1&q2=a2#body\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "scheme": "uri",
+              "userinfo": "user:pass",
+              "host": "example.com",
+              "port": 123,
+              "path": "/one/two.three",
+              "query": "q1=a1&q2=a2",
+              "fragment": "body"
+            }
+  },
+  "uri-js IPv4address: uri://10.10.10.10": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://10.10.10.10\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "scheme": "uri",
+              "userinfo": null,
+              "host": "10.10.10.10",
+              "port": null,
+              "path": "",
+              "query": null,
+              "fragment": null
+            }
+  },
+  "uri-js IPv6address: uri://[2001:db8::7]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[2001:db8::7]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "scheme": "uri",
+              "userinfo": null,
+              "host": "2001:db8::7",
+              "port": null,
+              "path": "",
+              "query": null,
+              "fragment": null
+            }
+  },
+  "uri-js mixed IPv6address & IPv4address: uri://[::ffff:129.144.52.38]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[::ffff:129.144.52.38]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "scheme": "uri",
+              "userinfo": null,
+              "host": "::ffff:129.144.52.38",
+              "port": null,
+              "path": "",
+              "query": null,
+              "fragment": null
+            }
+  },
+  "uri-js mixed IPv4address & reg-name: uri://10.10.10.10.example.com/en/process": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://10.10.10.10.example.com/en/process\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "scheme": "uri",
+              "userinfo": null,
+              "host": "10.10.10.10.example.com",
+              "port": null,
+              "path": "/en/process",
+              "query": null,
+              "fragment": null
+            }
+  },
+  "uri-js IPv6address, example from bkw: uri://[2606:2800:220:1:248:1893:25c8:1946]/test": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[2606:2800:220:1:248:1893:25c8:1946]/test\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "scheme": "uri",
+              "userinfo": null,
+              "host": "2606:2800:220:1:248:1893:25c8:1946",
+              "port": null,
+              "path": "/test",
+              "query": null,
+              "fragment": null
+            }
+  },
+  "uri-js IPv6address, example from RFC 5952: uri://[2001:db8::1]:80": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[2001:db8::1]:80\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "scheme": "uri",
+              "userinfo": null,
+              "host": "2001:db8::1",
+              "port": 80,
+              "path": "",
+              "query": null,
+              "fragment": null
+            }
+  },
+  "uri-js end test: uri:": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "scheme": "uri",
+              "userinfo": null,
+              "host": null,
+              "port": null,
+              "path": "",
+              "query": null,
+              "fragment": null
+            }
+  },
+  "IPv4address: uri://[::10.10.10.10]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[::10.10.10.10]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "::10.10.10.10"
+            }
+  },
+  "IPv4address leading zeros: uri://[::000.000.010.001]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[::000.000.010.001]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "::000.000.010.001"
+            }
+  },
+  "IPv4address max value: uri://[::001.099.200.255]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[::001.099.200.255]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "::001.099.200.255"
+            }
+  },
+  "IPv6address no ::  : uri://[ffff:abcd:0:10:200:3000:f8a:1]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[ffff:abcd:0:10:200:3000:f8a:1]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "ffff:abcd:0:10:200:3000:f8a:1"
+            }
+  },
+  "IPv6address no :: & IPv4: uri://[ffff:abcd:0:10:200:3000:255.255.255.255]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[ffff:abcd:0:10:200:3000:255.255.255.255]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "ffff:abcd:0:10:200:3000:255.255.255.255"
+            }
+  },
+  "IPv6address leading :: no IPv4: uri://[::]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[::]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "::"
+            }
+  },
+  "IPv6address leading :: no IPv4: uri://[::ffff]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[::ffff]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "::ffff"
+            }
+  },
+  "IPv6address leading :: no IPv4: uri://[::1:2:3:4:5:6:7]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[::1:2:3:4:5:6:7]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "::1:2:3:4:5:6:7"
+            }
+  },
+  "IPv6address leading :: with IPv4: uri://[::198.162.10.255]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[::198.162.10.255]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "::198.162.10.255"
+            }
+  },
+  "IPv6address leading :: with IPv4: uri://[::ffff:198.162.10.255]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[::ffff:198.162.10.255]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "::ffff:198.162.10.255"
+            }
+  },
+  "IPv6address leading :: with IPv4: uri://[::1:2:3:4:5:198.162.10.255]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[::1:2:3:4:5:198.162.10.255]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "::1:2:3:4:5:198.162.10.255"
+            }
+  },
+  "IPv6address trailing :: no IPv4: uri://[1::]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[1::]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "1::"
+            }
+  },
+  "IPv6address trailing :: no IPv4: uri://[1:2:3:4:5:6:7::]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[1:2:3:4:5:6:7::]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "1:2:3:4:5:6:7::"
+            }
+  },
+  "IPv6address trailing :: with IPv4: uri://[1::198.162.10.255]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[1::198.162.10.255]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "1::198.162.10.255"
+            }
+  },
+  "IPv6address trailing :: with IPv4: uri://[1:2:3:4:5::198.162.10.255]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[1:2:3:4:5::198.162.10.255]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "1:2:3:4:5::198.162.10.255"
+            }
+  },
+  "IPv6address leading & trailing :: no IPv4: uri://[1::2]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[1::2]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "1::2"
+            }
+  },
+  "IPv6address leading & trailing :: no IPv4: uri://[1:2:3:4:5:6::7]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[1:2:3:4:5:6::7]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "1:2:3:4:5:6::7"
+            }
+  },
+  "IPv6address leading & trailing :: no IPv4: uri://[ffff:aaaa:bbbb::cccc:dddd:eeee:9999]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[ffff:aaaa:bbbb::cccc:dddd:eeee:9999]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "ffff:aaaa:bbbb::cccc:dddd:eeee:9999"
+            }
+  },
+  "IPv6address leading & trailing :: with IPv4: uri://[1::2:198.162.10.255]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[1::2:198.162.10.255]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "1::2:198.162.10.255"
+            }
+  },
+  "IPv6address leading & trailing :: with IPv4: uri://[1:2:3:4::7:198.162.10.255]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[1:2:3:4::7:198.162.10.255]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "1:2:3:4::7:198.162.10.255"
+            }
+  },
+  "IPv6address leading & trailing :: with IPv4: uri://[ffff:aaaa:bbbb::cccc:dddd:198.162.10.255]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri://[ffff:aaaa:bbbb::cccc:dddd:198.162.10.255]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "uri": {
+              "host": "ffff:aaaa:bbbb::cccc:dddd:198.162.10.255"
+            }
+  }
+}

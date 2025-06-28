@@ -1,0 +1,34 @@
+{
+  "Resources: [uri:, uri://@]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z\nResources:\n- uri:\n- uri://@",
+    "resources": ["uri:", "uri://@"]
+  },
+  "Resources: [uri://@:, uri://]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z\nResources:\n- uri://@:\n- uri://",
+    "resources": ["uri://@:", "uri://"]
+  },
+  "Resources: [uri://:, uri:?]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z\nResources:\n- uri://:\n- uri:?",
+    "resources": ["uri://:", "uri:?"]
+  },
+  "Resources: [uri:#, uri://user:pass@example.com:123/one/two.three?q1=a1&q2=a2#body]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z\nResources:\n- uri:#\n- uri://user:pass@example.com:123/one/two.three?q1=a1&q2=a2#body",
+    "resources": ["uri:#", "uri://user:pass@example.com:123/one/two.three?q1=a1&q2=a2#body"]
+  },
+  "Resources IPv4: [uri://10.10.10.10, uri://010.0.00.000]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z\nResources:\n- uri://10.10.10.10\n- uri://010.0.00.000",
+    "resources": ["uri://10.10.10.10", "uri://010.0.00.000"]
+  },
+  "Resources IP-literal: [uri://[2001:db8::7], uri://[::ffff:129.144.52.38]]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z\nResources:\n- uri://[2001:db8::7]\n- uri://[::ffff:129.144.52.38]",
+    "resources": ["uri://[2001:db8::7]", "uri://[::ffff:129.144.52.38]"]
+  },
+  "Resources IP-literal: [uri://10.10.10.10.example.com/en/process, uri://[2606:2800:220:1:248:1893:25c8:1946]/test]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z\nResources:\n- uri://10.10.10.10.example.com/en/process\n- uri://[2606:2800:220:1:248:1893:25c8:1946]/test",
+    "resources": ["uri://10.10.10.10.example.com/en/process", "uri://[2606:2800:220:1:248:1893:25c8:1946]/test"]
+  },
+  "Resources IP-literal: [uri://[2001:db8::1]:80, uri://[2001:db8::1:ffff]:5128]": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z\nResources:\n- uri://[2001:db8::1]:80\n- uri://[2001:db8::1:ffff]:5128",
+    "resources": ["uri://[2001:db8::1]:80", "uri://[2001:db8::1:ffff]:5128"]
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "resources present": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z\nResources:\n- uri:",
+    "items": {
+              "statement": null,
+              "requestId": null,
+              "resources": ["uri:"]
+            }
+  },
+  "resources empty": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z\nResources:",
+    "items": {
+              "statement": null,
+              "requestId": null,
+              "resources": []
+            }
+  },
+  "resources missing": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "items": {
+              "statement": null,
+              "requestId": null,
+              "resources": null
+            }
+  },
+  "request-id present": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z\nRequest ID: request123",
+    "items": {
+              "statement": null,
+              "requestId": "request123",
+              "resources": null
+            }
+  },
+  "request-id empty": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z\nRequest ID: ",
+    "items": {
+              "statement": null,
+              "requestId": "",
+              "resources": null
+            }
+  },
+  "request-id missing": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "items": {
+              "statement": null,
+              "requestId": null,
+              "resources": null
+            }
+  },
+  "statement present": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\nhave statement\n\nURI: uri:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "items": {
+              "statement": "have statement",
+              "requestId": null,
+              "resources": null
+            }
+  },
+  "statement empty": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\n\nURI: uri:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "items": {
+              "statement": "",
+              "requestId": null,
+              "resources": null
+            }
+  },
+  "statement missing": {
+    "msg": "service.org wants you to sign in with your Ethereum account:\n0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\n\n\nURI: uri:\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
+    "items": {
+              "statement": null,
+              "requestId": null,
+              "resources": null
+            }
+  }
+}

@@ -1,0 +1,10 @@
+{
+    "argent": {
+        "message": "localhost:4361 wants you to sign in with your Ethereum account:\n0xa5b3A53800cD49669F34DE80f2C569c6D4Ca3009\n\nSIWE Notepad Example\n\nURI: http://localhost:4361\nVersion: 1\nChain ID: 1\nNonce: FbYd6TNB4m0IUHDG7\nIssued At: 2022-04-19T18:55:04.444Z",
+        "signature": "0x00193f8bb87a8bd4a8367a47ee477c62aec984830ec59e730b28d1ec54669eab450b9f3108a5c435648691c5766b35e2f13b8fb29f46298bb378ac34597d7e271c"
+    },
+    "loopring": {
+        "message": "localhost:4361 wants you to sign in with your Ethereum account:\n0x0e565A6dFc43DE21455a67bbF196f7F7b15447A7\n\nSIWE Notepad Example\n\nURI: http://localhost:4361\nVersion: 1\nChain ID: 1\nNonce: b19JyMHnM0Jdm20as\nIssued At: 2022-04-19T18:57:09.490Z",
+        "signature": "0x2f280385ebd550309197c4c892c5a8eb1a6e743d5c90c8036dea6f05c3e8cb321f90210a567ee88461733731a9c4e177140a969784c0421c09897e161f17bf331c02"
+    }
+}
