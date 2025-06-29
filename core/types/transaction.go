@@ -31,15 +31,16 @@ import (
 )
 
 var (
-	ErrInvalidSig           = errors.New("invalid transaction v, r, s values")
-	ErrUnexpectedProtection = errors.New("transaction type does not supported EIP-155 protected signatures")
-	ErrInvalidTxType        = errors.New("transaction type not valid in this context")
-	ErrTxTypeNotSupported   = errors.New("transaction type not supported")
-	ErrGasFeeCapTooLow      = errors.New("fee cap less than base fee")
-	errShortTypedTx         = errors.New("typed transaction too short")
-	errInvalidYParity       = errors.New("'yParity' field must be 0 or 1")
-	errVYParityMismatch     = errors.New("'v' and 'yParity' fields do not match")
-	errVYParityMissing      = errors.New("missing 'yParity' or 'v' field in transaction")
+	ErrInvalidSig                  = errors.New("invalid transaction v, r, s values")
+	ErrUnexpectedProtection        = errors.New("transaction type does not supported EIP-155 protected signatures")
+	ErrInvalidTxType               = errors.New("transaction type not valid in this context")
+	ErrTxTypeNotSupported          = errors.New("transaction type not supported")
+	ErrL1MessageTxTypeNotSupported = errors.New("l1 message transaction type not supported")
+	ErrGasFeeCapTooLow             = errors.New("fee cap less than base fee")
+	errShortTypedTx                = errors.New("typed transaction too short")
+	errInvalidYParity              = errors.New("'yParity' field must be 0 or 1")
+	errVYParityMismatch            = errors.New("'v' and 'yParity' fields do not match")
+	errVYParityMissing             = errors.New("missing 'yParity' or 'v' field in transaction")
 )
 
 // Transaction types.
