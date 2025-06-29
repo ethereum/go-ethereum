@@ -507,6 +507,9 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			}
 		}
 
+	case L1MessageTxType:
+		return nil
+
 	default:
 		return ErrTxTypeNotSupported
 	}
