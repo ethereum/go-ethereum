@@ -132,7 +132,7 @@ func (ec *Client) BlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumb
 
 type rpcBlock struct {
 	Hash         *common.Hash        `json:"hash"`
-	Transactions []rpcTransaction    `json:"transactions"`
+	Transactions rpcTransactions     `json:"transactions"`
 	UncleHashes  []common.Hash       `json:"uncles"`
 	Withdrawals  []*types.Withdrawal `json:"withdrawals,omitempty"`
 }
@@ -268,6 +268,29 @@ func (tx *rpcTransaction) UnmarshalJSON(msg []byte) error {
 		return err
 	}
 	return json.Unmarshal(msg, &tx.txExtraInfo)
+}
+
+type rpcTransactions []rpcTransaction
+
+func (txs *rpcTransactions) UnmarshalJSON(msg []byte) error {
+	var rawTxs []json.RawMessage
+	if err := json.Unmarshal(msg, &rawTxs); err != nil {
+		return err
+	}
+
+	var parsedTxs []rpcTransaction
+	for _, tx := range rawTxs {
+		var parsedTx rpcTransaction
+		if err := json.Unmarshal(tx, &parsedTx); err != nil {
+			if err == types.ErrL1MessageTxTypeNotSupported {
+				continue
+			}
+			return err
+		}
+		parsedTxs = append(parsedTxs, parsedTx)
+	}
+	*txs = parsedTxs
+	return nil
 }
 
 // TransactionByHash returns the transaction with the given hash.
