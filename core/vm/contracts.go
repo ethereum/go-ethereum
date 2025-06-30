@@ -645,9 +645,10 @@ func runBn256Pairing(input []byte) ([]byte, error) {
 		return nil, errBadPairingInput
 	}
 	// Convert the input into a set of coordinates
+	howMuch := len(input) / 192
 	var (
-		cs []*bn256.G1
-		ts []*bn256.G2
+		cs []*bn256.G1 = make([]*bn256.G1, 0, howMuch)
+		ts []*bn256.G2 = make([]*bn256.G2, 0, howMuch)
 	)
 	for i := 0; i < len(input); i += 192 {
 		c, err := newCurvePoint(input[i : i+64])
@@ -976,8 +977,8 @@ func (c *bls12381Pairing) Run(input []byte) ([]byte, error) {
 	}
 
 	var (
-		p []bls12381.G1Affine
-		q []bls12381.G2Affine
+		p []bls12381.G1Affine = make([]bls12381.G1Affine, 0, k)
+		q []bls12381.G2Affine = make([]bls12381.G2Affine, 0, k)
 	)
 
 	// Decode pairs

@@ -521,7 +521,7 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 }
 
 // recheck verifies the pool's content for a specific account and drops anything
-// that does not fit anymore (dangling or filled nonce, overdraft).
+// that does not fit anymore (dangling or filled nonce, overdraft).  // TODO split long method in smaller parts
 func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint64) {
 	// Sort the transactions belonging to the account so reinjects can be simpler
 	txs := p.index[addr]
@@ -541,8 +541,8 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 	)
 	if gapped || filled {
 		var (
-			ids    []uint64
-			nonces []uint64
+			ids    []uint64 = make([]uint64, 0, len(txs))
+			nonces []uint64 = make([]uint64, 0, len(txs))
 		)
 		for i := 0; i < len(txs); i++ {
 			ids = append(ids, txs[i].id)
@@ -659,8 +659,8 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 		}
 		// Otherwise if there's a nonce gap evict all later transactions
 		var (
-			ids    []uint64
-			nonces []uint64
+			ids    []uint64 = make([]uint64, 0, len(txs))
+			nonces []uint64 = make([]uint64, 0, len(txs))
 		)
 		for j := i; j < len(txs); j++ {
 			ids = append(ids, txs[j].id)
