@@ -41,7 +41,7 @@ jobs:
 
     - name: Create/upload archive (386)
       run: |
-        go run build/ci.go archive -static -arch 386 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
         rm -f build/bin/*
       env:
         LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
