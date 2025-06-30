@@ -79,8 +79,8 @@ type SetCodeAuthorization struct {
 	S       uint256.Int    `json:"s" gencodec:"required"`
 
 	// caches
-	hash atomic.Pointer[common.Hash]
-	from atomic.Pointer[common.Address]
+	hash      atomic.Pointer[common.Hash]
+	authority atomic.Pointer[common.Address]
 }
 
 // field type overrides for gencodec
@@ -125,7 +125,7 @@ func (a *SetCodeAuthorization) sigHash() common.Hash {
 
 // Authority recovers the authorizing account of an authorization.
 func (a *SetCodeAuthorization) Authority() (common.Address, error) {
-	if addr := a.from.Load(); addr != nil {
+	if addr := a.authority.Load(); addr != nil {
 		return *addr, nil
 	}
 	sighash := a.sigHash()
@@ -147,7 +147,7 @@ func (a *SetCodeAuthorization) Authority() (common.Address, error) {
 	}
 	var addr common.Address
 	copy(addr[:], crypto.Keccak256(pub[1:])[12:])
-	a.from.Store(&addr)
+	a.authority.Store(&addr)
 	return addr, nil
 }
 
