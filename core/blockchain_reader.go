@@ -370,6 +370,13 @@ func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
 	return state.New(root, bc.statedb)
 }
 
+// HistoricState returns a historic state specified by the given root.
+// Live states are not available and won't be served, please use `State`
+// or `StateAt` instead.
+func (bc *BlockChain) HistoricState(root common.Hash) (*state.StateDB, error) {
+	return state.New(root, state.NewHistoricDatabase(bc.db, bc.triedb))
+}
+
 // Config retrieves the chain's fork configuration.
 func (bc *BlockChain) Config() *params.ChainConfig { return bc.chainConfig }
 
@@ -417,6 +424,11 @@ func (bc *BlockChain) TxIndexProgress() (TxIndexProgress, error) {
 		return TxIndexProgress{}, errors.New("tx indexer is not enabled")
 	}
 	return bc.txIndexer.txIndexProgress(), nil
+}
+
+// StateIndexProgress returns the historical state indexing progress.
+func (bc *BlockChain) StateIndexProgress() (uint64, error) {
+	return bc.triedb.IndexProgress()
 }
 
 // HistoryPruningCutoff returns the configured history pruning point.

@@ -35,7 +35,7 @@ jobs:
 
     - name: Build (amd64)
       run: |
-        go run build/ci.go install -arch amd64 -dlgo
+        go run build/ci.go install -static -arch amd64 -dlgo
 
     - name: Create archive (amd64)
       run: |
@@ -70,7 +70,7 @@ jobs:
 
     - name: Build (arm64)
       run: |
-        go run build/ci.go install -dlgo -arch arm64 -cc aarch64-linux-gnu-gcc
+        go run build/ci.go install -static -dlgo -arch arm64 -cc aarch64-linux-gnu-gcc
 
     - name: Create archive (arm64)
       run: |

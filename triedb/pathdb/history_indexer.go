@@ -128,9 +128,11 @@ func (b *batchIndexer) finish(force bool) error {
 		return nil
 	}
 	var (
-		batch   = b.db.NewBatch()
-		batchMu sync.RWMutex
-		eg      errgroup.Group
+		batch    = b.db.NewBatch()
+		batchMu  sync.RWMutex
+		storages int
+		start    = time.Now()
+		eg       errgroup.Group
 	)
 	eg.SetLimit(runtime.NumCPU())
 
@@ -167,6 +169,7 @@ func (b *batchIndexer) finish(force bool) error {
 		})
 	}
 	for addrHash, slots := range b.storages {
+		storages += len(slots)
 		for storageHash, idList := range slots {
 			eg.Go(func() error {
 				if !b.delete {
@@ -216,6 +219,7 @@ func (b *batchIndexer) finish(force bool) error {
 	if err := batch.Write(); err != nil {
 		return err
 	}
+	log.Debug("Committed batch indexer", "accounts", len(b.accounts), "storages", storages, "records", b.counter, "elapsed", common.PrettyDuration(time.Since(start)))
 	b.counter = 0
 	b.accounts = make(map[common.Hash][]uint64)
 	b.storages = make(map[common.Hash]map[common.Hash][]uint64)
@@ -224,9 +228,10 @@ func (b *batchIndexer) finish(force bool) error {
 
 // indexSingle processes the state history with the specified ID for indexing.
 func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.AncientReader) error {
-	defer func(start time.Time) {
+	start := time.Now()
+	defer func() {
 		indexHistoryTimer.UpdateSince(start)
-	}(time.Now())
+	}()
 
 	metadata := loadIndexMetadata(db)
 	if metadata == nil || metadata.Last+1 != historyID {
@@ -247,15 +252,16 @@ func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancient
 	if err := b.finish(true); err != nil {
 		return err
 	}
-	log.Debug("Indexed state history", "id", historyID)
+	log.Debug("Indexed state history", "id", historyID, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
 // unindexSingle processes the state history with the specified ID for unindexing.
 func unindexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.AncientReader) error {
-	defer func(start time.Time) {
+	start := time.Now()
+	defer func() {
 		unindexHistoryTimer.UpdateSince(start)
-	}(time.Now())
+	}()
 
 	metadata := loadIndexMetadata(db)
 	if metadata == nil || metadata.Last != historyID {
@@ -276,7 +282,7 @@ func unindexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancie
 	if err := b.finish(true); err != nil {
 		return err
 	}
-	log.Debug("Unindexed state history", "id", historyID)
+	log.Debug("Unindexed state history", "id", historyID, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
@@ -299,7 +305,12 @@ type indexIniter struct {
 	interrupt chan *interruptSignal
 	done      chan struct{}
 	closed    chan struct{}
-	wg        sync.WaitGroup
+
+	// indexing progress
+	indexed atomic.Uint64 // the id of latest indexed state
+	last    atomic.Uint64 // the id of the target state to be indexed
+
+	wg sync.WaitGroup
 }
 
 func newIndexIniter(disk ethdb.KeyValueStore, freezer ethdb.AncientStore, lastID uint64) *indexIniter {
@@ -310,6 +321,14 @@ func newIndexIniter(disk ethdb.KeyValueStore, freezer ethdb.AncientStore, lastID
 		done:      make(chan struct{}),
 		closed:    make(chan struct{}),
 	}
+	// Load indexing progress
+	initer.last.Store(lastID)
+	metadata := loadIndexMetadata(disk)
+	if metadata != nil {
+		initer.indexed.Store(metadata.Last)
+	}
+
+	// Launch background indexer
 	initer.wg.Add(1)
 	go initer.run(lastID)
 	return initer
@@ -333,6 +352,22 @@ func (i *indexIniter) inited() bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func (i *indexIniter) remain() uint64 {
+	select {
+	case <-i.closed:
+		return 0
+	case <-i.done:
+		return 0
+	default:
+		last, indexed := i.last.Load(), i.indexed.Load()
+		if last < indexed {
+			log.Error("Invalid state indexing range", "last", last, "indexed", indexed)
+			return 0
+		}
+		return last - indexed
 	}
 }
 
@@ -361,6 +396,8 @@ func (i *indexIniter) run(lastID uint64) {
 				signal.result <- fmt.Errorf("invalid history id, last: %d, got: %d", lastID, signal.newLastID)
 				continue
 			}
+			i.last.Store(signal.newLastID) // update indexing range
+
 			// The index limit is extended by one, update the limit without
 			// interrupting the current background process.
 			if signal.newLastID == lastID+1 {
@@ -498,9 +535,11 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 				)
 				// Override the ETA if larger than the largest until now
 				eta := time.Duration(left/speed) * time.Millisecond
-				log.Info("Indexing state history", "processed", done, "left", left, "eta", common.PrettyDuration(eta))
+				log.Info("Indexing state history", "processed", done, "left", left, "elapsed", common.PrettyDuration(time.Since(start)), "eta", common.PrettyDuration(eta))
 			}
 		}
+		i.indexed.Store(current - 1) // update indexing progress
+
 		// Check interruption signal and abort process if it's fired
 		if interrupt != nil {
 			if signal := interrupt.Load(); signal != 0 {
@@ -609,5 +648,16 @@ func (i *historyIndexer) shorten(historyID uint64) error {
 		return unindexSingle(historyID, i.disk, i.freezer)
 	case i.initer.interrupt <- signal:
 		return <-signal.result
+	}
+}
+
+// progress returns the indexing progress made so far. It provides the number
+// of states that remain unindexed.
+func (i *historyIndexer) progress() (uint64, error) {
+	select {
+	case <-i.initer.closed:
+		return 0, errors.New("indexer is closed")
+	default:
+		return i.initer.remain(), nil
 	}
 }

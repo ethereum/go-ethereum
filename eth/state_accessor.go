@@ -182,10 +182,11 @@ func (eth *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), erro
 	if err == nil {
 		return statedb, noopReleaser, nil
 	}
-	// TODO historic state is not supported in path-based scheme.
-	// Fully archive node in pbss will be implemented by relying
-	// on state history, but needs more work on top.
-	return nil, nil, errors.New("historical state not available in path scheme yet")
+	statedb, err = eth.blockchain.HistoricState(block.Root())
+	if err == nil {
+		return statedb, noopReleaser, nil
+	}
+	return nil, nil, errors.New("historical state is not available")
 }
 
 // stateAtBlock retrieves the state database associated with a certain block.
