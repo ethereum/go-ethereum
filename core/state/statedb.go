@@ -164,8 +164,9 @@ type StateDB struct {
 	// The block number context for BALs
 	blockNumber uint64
 	// postState after appling tx
-	postStates map[int]*StateDB
-	postBAL    map[int]types.TxPostValues
+	postStates   map[int]*StateDB
+	postSnapshot map[int]types.TxPostValues
+	postVals     map[int]types.TxPostValues
 }
 
 type BALType int
@@ -273,71 +274,70 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 	return sdb, nil
 }
 
-func (s *StateDB) PreComputePostState(blockNumber uint64) {
-
+func (s *StateDB) PreComputePostState(blockNumber uint64, maxLayer int) {
 	s.blockNumber = blockNumber
-	postBal := map[int]types.TxPostValues{}
-	for k, v := range AllBlockTxPostValues[blockNumber] {
-		// Clone the map to avoid race with MergePostBalStates
-		postBal[k] = types.TxPostValues{}
-		for key, val := range v {
-			postBal[k][key] = val.Clone()
-		}
+	postVals := AllBlockTxPostValues[blockNumber]
+
+	postSnapshot := make(map[int]types.TxPostValues)
+	lenTxWithPreSys := len(postVals) - 1
+	step := lenTxWithPreSys/maxLayer + 1
+	if step == 1 {
+		maxLayer = lenTxWithPreSys
 	}
 
-	// -1 and len(postBal)-1 are syscalls pre and post all txs.
-	for i := -1; i < len(postBal)-2; i++ {
-		prevVals := postBal[i]
-		postVals := postBal[i+1]
-		for addr, prevAcct := range prevVals {
-			if postAcct, ok := postVals[addr]; ok {
-				for k, v := range prevAcct.StorageKV {
-					if _, exists := postAcct.StorageKV[k]; !exists {
-						postAcct.StorageKV[k] = v
+	postSnapshot[0] = postVals[-1]
+	for layer := 1; layer < maxLayer; layer++ {
+		prev := postSnapshot[layer-1]
+		curr := make(types.TxPostValues, len(prev))
+		for key, val := range prev {
+			curr[key] = val.Clone()
+		}
+
+		for i := (layer - 1) * step; i < layer*step && i < lenTxWithPreSys-1; i++ {
+			postTxVal := postVals[i]
+			for addr, acct := range postTxVal {
+				if curr[addr] == nil {
+					curr[addr] = &types.AcctPostValues{
+						StorageKV: map[common.Hash]common.Hash{},
 					}
 				}
-				if postAcct.Balance == nil {
-					postAcct.Balance = prevAcct.Balance
+				if acct.Destruct {
+					delete(curr, addr)
+					continue
 				}
-				if postAcct.Code == nil {
-					postAcct.Code = prevAcct.Code
+				if acct.Balance != nil {
+					curr[addr].Balance = acct.Balance
 				}
-				// Storage changes but nonce didn't change
-				if postAcct.Nonce == 0 {
-					postAcct.Nonce = prevAcct.Nonce
+				if acct.Code != nil {
+					curr[addr].Code = acct.Code
 				}
-			} else {
-				postVals[addr] = prevAcct
+				if acct.Nonce > curr[addr].Nonce {
+					curr[addr].Nonce = acct.Nonce
+				}
+				maps.Copy(curr[addr].StorageKV, acct.StorageKV)
 			}
 		}
+		postSnapshot[layer] = curr
 	}
-	s.postBAL = postBal
+	s.postSnapshot = postSnapshot
+	s.postVals = postVals
 }
 
-func (s *StateDB) PostBAL() map[int]types.TxPostValues {
-	return s.postBAL
+func (s *StateDB) PostBAL() (postSnapshot, postVals map[int]types.TxPostValues) {
+	postSnapshot = s.postSnapshot
+	postVals = s.postVals
+	return
 }
 
-func (s *StateDB) SetTxBALReader(preblockReader Reader) error {
-	if s.postBAL == nil {
+func (s *StateDB) SetTxBALReader(preblockReader Reader, blockNumber uint64, maxLayer int, lenTx int, postSnapshot, postVals map[int]types.TxPostValues) error {
+	if postSnapshot == nil || postVals == nil {
 		return errors.New("cannot set bal reader without postBAL")
 	}
-	s.reader = newReaderWithBAL(preblockReader, s.txIndex, s.postBAL)
-	return nil
-}
-
-func (s *StateDB) SetBlocknumber(bn uint64) error {
-	s.blockNumber = bn
-	return nil
-}
-
-func (s *StateDB) SetPostBAL(postBal map[int]types.TxPostValues, bn uint64) error {
-	if postBal == nil {
-		return errors.New("cannot set postBAL without postBAL")
-	}
-	s.blockNumber = bn
-	s.postBAL = postBal
-	s.prefetcher = nil
+	step := (lenTx+1)/maxLayer + 1
+	s.postVals = postVals
+	s.postSnapshot = postSnapshot
+	s.blockNumber = blockNumber
+	s.reader = newReaderWithBAL(preblockReader, s.txIndex, maxLayer, step, s.postSnapshot, s.postVals)
 	return nil
 }
 
@@ -1144,7 +1144,8 @@ func (s *StateDB) Copy() *StateDB {
 		// The update journal is not copies to avoid duplicated updates in later transactions.
 		blockNumber:   s.blockNumber,
 		updateJournal: newJournal(),
-		postBAL:       s.postBAL,
+		postSnapshot:  s.postSnapshot,
+		postVals:      s.postVals,
 	}
 	if s.witness != nil {
 		state.witness = s.witness.Copy()

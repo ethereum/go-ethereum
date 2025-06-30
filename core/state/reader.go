@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/database"
+	"github.com/holiman/uint256"
 )
 
 // ContractCodeReader defines the interface for accessing contract code.
@@ -538,75 +539,134 @@ func (r *readerWithCache) Storage(addr common.Address, slot common.Hash) (common
 }
 
 type readerWithBAL struct {
-	Reader  // Reader with cache
-	txIndex int
-	postBal map[int]types.TxPostValues // Shared accoss txs and mustn't be changed
+	Reader       // Reader with cache
+	txIndex      int
+	maxLayer     int
+	step         int                        // Must be larger than 1
+	postSnapshot map[int]types.TxPostValues // Shared accoss txs and mustn't be changed
+	postVals     map[int]types.TxPostValues
 }
 
-func newReaderWithBAL(reader Reader, txIndex int, postBal map[int]types.TxPostValues) *readerWithBAL {
+func newReaderWithBAL(reader Reader, txIndex int, maxLayer int, step int, postSnapshot, postVals map[int]types.TxPostValues) *readerWithBAL {
 	return &readerWithBAL{
-		reader, txIndex, postBal,
+		reader, txIndex, maxLayer, step, postSnapshot, postVals,
+	}
+}
+
+func (r *readerWithBAL) overlayAccount(addr common.Address) *types.AcctPostValues {
+	layer := r.txIndex / r.step
+
+	var (
+		nonce   uint64
+		balance *uint256.Int
+		code    []byte
+	)
+
+	for i := r.txIndex - 1; i > layer*r.step-1; i-- {
+		postState, ok := r.postVals[i]
+		if ok && postState[addr] != nil {
+			if nonce == 0 && postState[addr].Nonce > 0 {
+				nonce = postState[addr].Nonce
+			}
+
+			if balance == nil && postState[addr].Balance != nil {
+				balance = postState[addr].Balance
+			}
+
+			if code == nil && postState[addr].Code != nil {
+				code = postState[addr].Code
+			}
+
+			if nonce > 0 && balance != nil && code != nil {
+				break
+			}
+		}
+	}
+
+	snapShot := r.postSnapshot[layer]
+	if snapShot[addr] != nil {
+		if nonce == 0 {
+			nonce = snapShot[addr].Nonce
+		}
+		if balance == nil {
+			balance = snapShot[addr].Balance
+		}
+		if code == nil {
+			code = snapShot[addr].Code
+		}
+	}
+
+	return &types.AcctPostValues{
+		Nonce:   nonce,
+		Balance: balance,
+		Code:    code,
 	}
 }
 
 func (r *readerWithBAL) Account(addr common.Address) (*types.StateAccount, error) {
-	postVals, ok := r.postBal[r.txIndex-1]
-	if ok {
-		acctVal, ok := postVals[addr]
-		if ok {
-			acct, err := r.Reader.Account(addr)
-			if acct == nil || err != nil {
-				// acct is nil, just return the postAcct
-				return &types.StateAccount{
-					Nonce:    acctVal.Nonce,
-					Balance:  acctVal.Balance,
-					CodeHash: acctVal.CodeHash,
-				}, nil
-			}
+	acctVal := r.overlayAccount(addr)
 
-			// acct mustn't be modified, or it'll change the cached pre-block values in readerwithcache
-			nonce := acctVal.Nonce
-			balance := acctVal.Balance
-			codeHash := acct.CodeHash
+	acct, err := r.Reader.Account(addr)
+	if acct == nil || err != nil {
+		// acct is nil, just return the postAcct
+		return &types.StateAccount{
+			Nonce:    acctVal.Nonce,
+			Balance:  acctVal.Balance,
+			CodeHash: acctVal.CodeHash,
+		}, nil
+	}
 
-			if acct.Nonce > acctVal.Nonce {
-				nonce = acct.Nonce
-			}
-			if acctVal.Balance == nil {
-				balance = acct.Balance
-			}
+	// acct mustn't be modified, or it'll change the cached pre-block values in readerwithcache
+	nonce := acctVal.Nonce
+	balance := acctVal.Balance
+	codeHash := acct.CodeHash
 
-			// codeHash
-			if acctVal.Code != nil {
-				codeHash = crypto.Keccak256(acctVal.Code)
-			}
+	if acct.Nonce > nonce {
+		nonce = acct.Nonce
+	}
+	if balance == nil {
+		balance = acct.Balance
+	}
 
-			return &types.StateAccount{
-				Nonce:    nonce,
-				Balance:  balance,
-				Root:     acct.Root,
-				CodeHash: codeHash,
-			}, nil
+	// codeHash
+	if acctVal.Code != nil {
+		codeHash = crypto.Keccak256(acctVal.Code)
+	}
+
+	return &types.StateAccount{
+		Nonce:    nonce,
+		Balance:  balance,
+		Root:     acct.Root,
+		CodeHash: codeHash,
+	}, nil
+}
+
+func (r *readerWithBAL) overlayStorage(addr common.Address, slot common.Hash) (common.Hash, bool) {
+	layer := r.txIndex / r.step
+
+	for i := r.txIndex - 1; i > layer*r.step-1; i-- {
+		postState, ok := r.postVals[i]
+		if ok && postState[addr] != nil {
+			// Shouldn't use common.Hash{} to judge where slot exist, because it might just be common.Hash{}
+			if val, ok := postState[addr].StorageKV[slot]; ok {
+				return val, true
+			}
 		}
 	}
 
-	acct, err := r.Reader.Account(addr)
-	if err != nil {
-		return nil, err
+	snapShot := r.postSnapshot[layer]
+	if snapShot[addr] != nil {
+		if val, ok := snapShot[addr].StorageKV[slot]; ok {
+			return val, true
+		}
 	}
-	return acct, nil
+	return common.Hash{}, false
 }
 
 func (r *readerWithBAL) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
-	postVals, ok := r.postBal[r.txIndex-1]
+	val, ok := r.overlayStorage(addr, slot)
 	if ok {
-		acct, ok := postVals[addr]
-		if ok {
-			val, ok := acct.StorageKV[slot]
-			if ok {
-				return val, nil
-			}
-		}
+		return val, nil
 	}
 
 	val, err := r.Reader.Storage(addr, slot)
@@ -618,23 +678,11 @@ func (r *readerWithBAL) Storage(addr common.Address, slot common.Hash) (common.H
 }
 
 func (r *readerWithBAL) Code(addr common.Address, codeHash common.Hash) ([]byte, error) {
-	postVals, ok := r.postBal[r.txIndex-1]
-	if ok {
-		acctVal, ok := postVals[addr]
-		if ok {
-			code := acctVal.Code
-			if code != nil {
-				return code, nil
-			}
-			if acctVal.CodeHash != nil {
-				code, err := r.Reader.Code(addr, common.Hash(acctVal.CodeHash))
-				if err != nil {
-					return nil, fmt.Errorf("cannot get code from code for addr:%x, err:%v", addr, err)
-				}
-				return code, nil
-			}
-		}
+	acctVal := r.overlayAccount(addr)
+	if acctVal.Code != nil {
+		return acctVal.Code, nil
 	}
+
 	acct, err := r.Reader.Account(addr)
 	if err != nil || acct == nil {
 		return nil, fmt.Errorf("cannot get code from acct for addr:%x, err:%v", addr, err)

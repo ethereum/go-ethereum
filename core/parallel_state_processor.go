@@ -95,7 +95,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		defer wg.Done()
 
 		start := time.Now()
-		statedb.PreComputePostState(block.NumberU64())
+		statedb.PreComputePostState(block.NumberU64(), runtime.NumCPU()/2)
 		PrefetchMergeBALTime += time.Since(start)
 
 		exeStart := time.Now()
@@ -120,6 +120,8 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 		blockHash   = block.Hash()
 		blockNumber = block.Number()
 		allLogs     []*types.Log
+		maxLayer    = runtime.NumCPU() / 2
+		lenTx       = len(block.Transactions())
 
 		preStateProvider PreStateProvider
 		workers          errgroup.Group
@@ -131,10 +133,6 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 	switch preStateType {
 	case BALPreState:
 		{
-			err := initialdb.SetPostBAL(statedb.PostBAL(), blockNumber.Uint64())
-			if err != nil {
-				return nil, err
-			}
 		}
 
 	case SeqPreState: // must set workers limit = 1
@@ -167,7 +165,8 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 				{
 					cleanStatedb = initialdb.Copy()
 					cleanStatedb.SetTxContext(tx.Hash(), i)
-					err = cleanStatedb.SetTxBALReader(statedb)
+					postSnapshot, postBals := statedb.PostBAL()
+					err = cleanStatedb.SetTxBALReader(statedb, blockNumber.Uint64(), maxLayer, lenTx, postSnapshot, postBals)
 					if err != nil {
 						return err
 					}

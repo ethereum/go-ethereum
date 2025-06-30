@@ -36,6 +36,6 @@ func (v *AcctPostValues) Clone() *AcctPostValues {
 		Destruct:  false,
 		CodeHash:  v.CodeHash,
 		Root:      v.Root,
-		Cached: false,
+		Cached:    false,
 	}
 }
