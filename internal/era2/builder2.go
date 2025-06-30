@@ -29,13 +29,16 @@ package era
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/era/e2store"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/golang/snappy"
 )
 
@@ -55,6 +58,8 @@ const (
 	headerSize                           uint64 = 8
 )
 
+type proofvar uint16
+
 type Builder2 struct {
 	w   *e2store.Writer
 	buf *bytes.Buffer
@@ -65,18 +70,20 @@ type Builder2 struct {
 	bodiesRLP   [][]byte
 	receiptsRLP [][]byte
 	proofsRLP   [][]byte
-	tds         []*big.Int
+	tds         [][]byte
+	tdsint      []*big.Int
+	hashes      []common.Hash
 
 	headeroffsets  []uint64
 	bodyoffsets    []uint64
 	receiptoffsets []uint64
 	proofoffsets   []uint64
+	tdoff          []uint64
 	startTd        *big.Int
 
-	prooftype uint16
+	prooftype proofvar
 
 	startNum     *uint64
-	hashes       []common.Hash
 	writtenBytes uint64
 }
 
@@ -90,38 +97,102 @@ func NewBuilder2(w io.Writer) *Builder2 {
 	}
 }
 
-// func (b *Builder2) Add(block *types.Block, receipts types.Receipts, td *big.Int, proof[]byte) error {
-// 	if len(b.headersRLP) >= MaxEraESize {
-// 		return fmt.Errorf("exceeds maximum batch size of %d", MaxEraESize)
-// 	}
+func (b *Builder2) Add(block *types.Block, receipts types.Receipts, td *big.Int, proofBytes []byte, proofty proofvar) error {
+	if len(b.headersRLP) >= MaxEraESize {
+		return fmt.Errorf("exceeds MaxEraESize %d", MaxEraESize)
+	}
 
-// 	tdbytes := uint256LE(td)
+	if proofty != 0 && len(proofBytes) == 0 {
+		return fmt.Errorf("proof type %d requires proof bytes", proofty)
+	}
 
-// 	if b.startNum == nil {
-// 		start := block.NumberU64()
-// 		b.startNum = &start
-// 		_, err := b.w.Write(TypeVersion, nil)
-// 		if err != nil {
-// 			return fmt.Errorf("failed to write version entry: %w", err)
-// 		}
-// 		b.writtenBytes += 8
-// 	}
+	if len(b.headersRLP) != 0 && proofty != b.prooftype {
+		return fmt.Errorf("cannot mix proof types, expected %d, got %d", b.prooftype, proofty)
+	}
 
-// 	b.headersRLP = append(b.headersRLP, headerb)
-// 	b.bodiesRLP = append(b.bodiesRLP, bodyb)
-// 	b.receiptsRLP = append(b.receiptsRLP, receiptsb)
-// 	b.tds = append(b.tds, tdbytes)
-// 	b.proofsRLP = append(b.proofsRLP, proofRLP)
-// 	b.hashes = append(b.hashes, block.Hash())
-// 	return nil
-// }
+	hdr, err := rlp.EncodeToBytes(block.Header())
+	if err != nil {
+		return fmt.Errorf("error encoding block header: %w", err)
+	}
+	bod, err := rlp.EncodeToBytes(block.Body())
+	if err != nil {
+		return fmt.Errorf("error encoding block header: %w", err)
+	}
+	rct, err := rlp.EncodeToBytes(receipts)
+	if err != nil {
+		return fmt.Errorf("error encoding block header: %w", err)
+	}
 
-// func (b *Builder2) Finalize(common.Hash, error) {
-// 	if b.startNum == nil {
-// 		return fmt.Errorf("no blocks added, cannot finalize")
-// 	}
+	b.headersRLP = append(b.headersRLP, hdr)
+	b.bodiesRLP = append(b.bodiesRLP, bod)
+	b.receiptsRLP = append(b.receiptsRLP, rct)
+	b.tds = append(b.tds, uint256LE(td))
+	b.tdsint = append(b.tdsint, new(big.Int).Set(td))
+	b.hashes = append(b.hashes, block.Hash())
 
-// }
+	if b.prooftype != 0 {
+		b.proofsRLP = append(b.proofsRLP, proofBytes)
+	}
+
+	if b.startNum == nil {
+		sn := block.NumberU64()
+		b.startNum = &sn
+		if n, err := b.w.Write(TypeVersion, nil); err != nil {
+			return fmt.Errorf("error writing version entry: %w", err)
+		} else {
+			b.writtenBytes += uint64(n)
+		}
+	}
+	return nil
+}
+
+func (b *Builder2) Finalize() error {
+	if b.startNum == nil {
+		return errors.New("no blocks added, cannot finalize")
+	}
+	var err error
+	b.headeroffsets, err = b.writeSection(TypeCompressedHeader, b.headersRLP, true)
+	if err != nil {
+		return fmt.Errorf("error writing compressed headers: %w", err)
+	}
+	b.bodyoffsets, err = b.writeSection(TypeCompressedBody, b.bodiesRLP, true)
+	if err != nil {
+		return fmt.Errorf("error writing compressed bodies: %w", err)
+	}
+	b.receiptoffsets, err = b.writeSection(TypeCompressedReceipts, b.receiptsRLP, true)
+	if err != nil {
+		return fmt.Errorf("error writing compressed receipts: %w", err)
+	}
+
+	if len(b.tds) > 0 {
+		b.tdoff, err = b.writeSection(TypeTotalDifficulty, b.tds, false)
+		if err != nil {
+			return fmt.Errorf("error writing total difficulties: %w", err)
+		}
+	}
+
+	if b.prooftype != 0 {
+		b.proofoffsets, err = b.writeSection(uint16(b.prooftype), b.proofsRLP, true)
+		if err != nil {
+			return fmt.Errorf("error writing proofs: %w", err)
+		}
+	}
+
+	if len(b.hashes) > 0 {
+		accRoot, err := ComputeAccumulator(b.hashes, b.tdsint)
+		if err != nil {
+			return fmt.Errorf("error calculating accumulator root: %w", err)
+		}
+		if n, err := b.w.Write(TypeAccumulatorRoot, accRoot[:]); err != nil {
+			return fmt.Errorf("error writing accumulator root: %w", err)
+		} else {
+			b.writtenBytes += uint64(n)
+		}
+	}
+
+	return b.writeIndex()
+
+}
 
 func uint256LE(v *big.Int) []byte {
 	b := v.FillBytes(make([]byte, 32))
@@ -200,4 +271,35 @@ func (b *Builder2) writeIndex() error {
 		compcount++
 	}
 
+	idx := make([]byte, 8+count*8*compcount+16) //8 for start block, 8 per property per block, 16 for the number of properties and the number of blocks
+	binary.LittleEndian.PutUint64(idx, *b.startNum)
+	base := int64(b.writtenBytes)
+	pos := 8
+	rel := func(abs uint64) uint64 { return uint64(int64(abs) - base) }
+	for i := uint64(0); i < count; i++ {
+		binary.LittleEndian.PutUint64(idx[pos:], rel(b.headeroffsets[i]))
+		pos += 8
+		binary.LittleEndian.PutUint64(idx[pos:], rel(b.bodyoffsets[i]))
+		pos += 8
+		binary.LittleEndian.PutUint64(idx[pos:], rel(b.receiptoffsets[i]))
+		pos += 8
+		if len(b.tds) > 0 {
+			binary.LittleEndian.PutUint64(idx[pos+24:], rel(b.tdoff[i]))
+			pos += 8
+		}
+		if len(b.proofsRLP) > 0 {
+			binary.LittleEndian.PutUint64(idx[pos:], rel(b.proofoffsets[i]))
+			pos += 8
+		}
+	}
+
+	binary.LittleEndian.PutUint64(idx[pos:], compcount)
+	pos += 8
+	binary.LittleEndian.PutUint64(idx[pos:], count)
+	if n, err := b.w.Write(TypeBlockIndex, idx); err != nil {
+		return err
+	} else {
+		b.writtenBytes += uint64(n)
+	}
+	return nil
 }
