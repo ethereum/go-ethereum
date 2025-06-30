@@ -2210,7 +2210,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator, ma
 	}
 	// Import all the pruned blocks to make the state available
 	var (
-		blocks = make([]*types.Block, 0, len(hashes))
+		blocks []*types.Block
 		memory uint64
 	)
 	for i := len(hashes) - 1; i >= 0; i-- {
