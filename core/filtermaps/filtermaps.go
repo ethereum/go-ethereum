@@ -268,9 +268,9 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, historyCutoff, f
 
 	if f.indexedRange.hasIndexedBlocks() {
 		log.Info("Initialized log indexer",
-			"first block", f.indexedRange.blocks.First(), "last block", f.indexedRange.blocks.Last(),
-			"first map", f.indexedRange.maps.First(), "last map", f.indexedRange.maps.Last(),
-			"head indexed", f.indexedRange.headIndexed)
+			"firstblock", f.indexedRange.blocks.First(), "lastblock", f.indexedRange.blocks.Last(),
+			"firstmap", f.indexedRange.maps.First(), "lastmap", f.indexedRange.maps.Last(),
+			"headindexed", f.indexedRange.headIndexed)
 	}
 	return f
 }

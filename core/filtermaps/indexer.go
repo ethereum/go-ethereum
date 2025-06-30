@@ -380,9 +380,9 @@ func (f *FilterMaps) tryUnindexTail() (bool, error) {
 	}
 	if f.startedTailUnindex && f.indexedRange.hasIndexedBlocks() {
 		log.Info("Log index tail unindexing finished",
-			"first block", f.indexedRange.blocks.First(), "last block", f.indexedRange.blocks.Last(),
-			"removed maps", f.indexedRange.maps.First()-f.ptrTailUnindexMap,
-			"removed blocks", f.indexedRange.blocks.First()-f.tailPartialBlocks()-f.ptrTailUnindexBlock,
+			"firstblock", f.indexedRange.blocks.First(), "lastblock", f.indexedRange.blocks.Last(),
+			"removedmaps", f.indexedRange.maps.First()-f.ptrTailUnindexMap,
+			"removedblocks", f.indexedRange.blocks.First()-f.tailPartialBlocks()-f.ptrTailUnindexBlock,
 			"elapsed", common.PrettyDuration(time.Since(f.startedTailUnindexAt)))
 		f.startedTailUnindex = false
 	}
