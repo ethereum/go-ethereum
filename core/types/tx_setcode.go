@@ -21,6 +21,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"math/big"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -76,6 +77,10 @@ type SetCodeAuthorization struct {
 	V       uint8          `json:"yParity" gencodec:"required"`
 	R       uint256.Int    `json:"r" gencodec:"required"`
 	S       uint256.Int    `json:"s" gencodec:"required"`
+
+	// caches
+	hash atomic.Pointer[common.Hash]
+	from atomic.Pointer[common.Address]
 }
 
 // field type overrides for gencodec
@@ -106,15 +111,23 @@ func SignSetCode(prv *ecdsa.PrivateKey, auth SetCodeAuthorization) (SetCodeAutho
 }
 
 func (a *SetCodeAuthorization) sigHash() common.Hash {
-	return prefixedRlpHash(0x05, []any{
+	if hash := a.hash.Load(); hash != nil {
+		return *hash
+	}
+	hash := prefixedRlpHash(0x05, []any{
 		a.ChainID,
 		a.Address,
 		a.Nonce,
 	})
+	a.hash.Store(&hash)
+	return hash
 }
 
-// Authority recovers the the authorizing account of an authorization.
+// Authority recovers the authorizing account of an authorization.
 func (a *SetCodeAuthorization) Authority() (common.Address, error) {
+	if addr := a.from.Load(); addr != nil {
+		return *addr, nil
+	}
 	sighash := a.sigHash()
 	if !crypto.ValidateSignatureValues(a.V, a.R.ToBig(), a.S.ToBig(), true) {
 		return common.Address{}, ErrInvalidSig
@@ -134,6 +147,7 @@ func (a *SetCodeAuthorization) Authority() (common.Address, error) {
 	}
 	var addr common.Address
 	copy(addr[:], crypto.Keccak256(pub[1:])[12:])
+	a.from.Store(&addr)
 	return addr, nil
 }
 
