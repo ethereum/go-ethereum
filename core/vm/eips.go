@@ -60,7 +60,7 @@ func ValidEip(eipNum int) bool {
 	return ok
 }
 func ActivateableEips() []string {
-	nums []string
+	var nums []string
 	for k := range activators {
 		nums = append(nums, fmt.Sprintf("%d", k))
 	}
