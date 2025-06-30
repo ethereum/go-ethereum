@@ -54,6 +54,21 @@ func VerifyEIP1559Header(config *params.ChainConfig, parent, header *types.Heade
 
 // CalcBaseFee calculates the basefee of the header.
 func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
+	calculatedBaseFee := calcBaseFee(config, parent)
+
+	// Starting at the Prague1 fork, the base fee must be at least the minimum base fee.
+	if config.IsPrague1(parent.Number, parent.Time) {
+		minBaseFee := new(big.Int).SetUint64(config.Berachain.Prague1.MinimumBaseFeeWei)
+		if calculatedBaseFee.Cmp(minBaseFee) < 0 {
+			calculatedBaseFee = minBaseFee
+		}
+	}
+
+	return calculatedBaseFee
+}
+
+// calcBaseFee calculates the basefee of the header in wei.
+func calcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 	// If the current block is the first EIP-1559 block, return the InitialBaseFee.
 	if !config.IsLondon(parent.Number) {
 		return new(big.Int).SetUint64(params.InitialBaseFee)
@@ -76,7 +91,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 		num.SetUint64(parent.GasUsed - parentGasTarget)
 		num.Mul(num, parent.BaseFee)
 		num.Div(num, denom.SetUint64(parentGasTarget))
-		num.Div(num, denom.SetUint64(config.BaseFeeChangeDenominator()))
+		num.Div(num, denom.SetUint64(config.BaseFeeChangeDenominator(parent.Number, parent.Time)))
 		if num.Cmp(common.Big1) < 0 {
 			return num.Add(parent.BaseFee, common.Big1)
 		}
@@ -87,7 +102,7 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 		num.SetUint64(parentGasTarget - parent.GasUsed)
 		num.Mul(num, parent.BaseFee)
 		num.Div(num, denom.SetUint64(parentGasTarget))
-		num.Div(num, denom.SetUint64(config.BaseFeeChangeDenominator()))
+		num.Div(num, denom.SetUint64(config.BaseFeeChangeDenominator(parent.Number, parent.Time)))
 
 		baseFee := num.Sub(parent.BaseFee, num)
 		if baseFee.Cmp(common.Big0) < 0 {
