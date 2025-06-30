@@ -79,8 +79,8 @@ type SetCodeAuthorization struct {
 	S       uint256.Int    `json:"s" gencodec:"required"`
 
 	// caches
-	hash      atomic.Pointer[common.Hash]
-	authority atomic.Pointer[common.Address]
+	hash atomic.Value // common.Hash
+	addr atomic.Value // common.Address
 }
 
 // field type overrides for gencodec
@@ -112,21 +112,21 @@ func SignSetCode(prv *ecdsa.PrivateKey, auth SetCodeAuthorization) (SetCodeAutho
 
 func (a *SetCodeAuthorization) sigHash() common.Hash {
 	if hash := a.hash.Load(); hash != nil {
-		return *hash
+		return hash.(common.Hash)
 	}
 	hash := prefixedRlpHash(0x05, []any{
 		a.ChainID,
 		a.Address,
 		a.Nonce,
 	})
-	a.hash.Store(&hash)
+	a.hash.Store(hash)
 	return hash
 }
 
 // Authority recovers the authorizing account of an authorization.
 func (a *SetCodeAuthorization) Authority() (common.Address, error) {
-	if addr := a.authority.Load(); addr != nil {
-		return *addr, nil
+	if addr := a.addr.Load(); addr != nil {
+		return addr.(common.Address), nil
 	}
 	sighash := a.sigHash()
 	if !crypto.ValidateSignatureValues(a.V, a.R.ToBig(), a.S.ToBig(), true) {
@@ -147,7 +147,7 @@ func (a *SetCodeAuthorization) Authority() (common.Address, error) {
 	}
 	var addr common.Address
 	copy(addr[:], crypto.Keccak256(pub[1:])[12:])
-	a.authority.Store(&addr)
+	a.addr.Store(addr)
 	return addr, nil
 }
 
