@@ -173,8 +173,6 @@ const (
 	BlobTxBlobGasPerBlob               = 1 << 17 // Gas consumption of a single data blob (== blob byte size)
 	BlobTxMinBlobGasprice              = 1       // Minimum gas price for data blobs
 	BlobTxPointEvaluationPrecompileGas = 50000   // Gas price for the point evaluation precompile.
-
-	HistoryServeWindow = 8191 // Number of blocks to serve historical block hashes for, EIP-2935.
 )
 
 // Bls12381G1MultiExpDiscountTable is the gas discount table for BLS12-381 G1 multi exponentiation operation
