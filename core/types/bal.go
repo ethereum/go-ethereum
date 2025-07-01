@@ -4,11 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 	"io"
-	"maps"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -176,9 +175,11 @@ type encodingAccountNonce struct {
 type BlockAccessList map[common.Address]accountAccess
 
 func (a *accountAccess) MarkRead(key common.Hash) {
+	panic("not implemented")
 }
 
 func (a *accountAccess) MarkWrite(txIdx uint64, key, value common.Hash) {
+	panic("not implemented")
 }
 
 type balanceDiff map[uint64]*uint256.Int
@@ -194,30 +195,30 @@ func (b balanceDiff) Copy() balanceDiff {
 // map of tx index to the prestate nonce
 type accountNonceDiffs map[uint64]uint64
 
-func (a accountNonceDiffs) toEncoderObj(addr common.Address) encodingAccountNonces {
-	res := encodingAccountNonces{
-		Address: addr,
+type storageWrites map[uint64]common.Hash
+
+func (s storageWrites) toEncoderObj(slot common.Hash) encodingStorageWrites {
+	res := encodingStorageWrites{
+		Slot: slot,
 	}
-	var (
-		diffIdxs []uint64
-	)
-	for sIdx, _ := range a {
-		diffIdxs = append(diffIdxs, sIdx)
+
+	var storageWriteIdxs []uint64
+	for idx := range s {
+		storageWriteIdxs = append(storageWriteIdxs, idx)
 	}
-	sort.Slice(diffIdxs, func(i, j int) bool {
-		return diffIdxs[i] < diffIdxs[j]
+	sort.Slice(storageWriteIdxs, func(i, j int) bool {
+		return storageWriteIdxs[i] < storageWriteIdxs[j]
 	})
 
-	for txIdx, postNonce := range a {
-		res.Diffs = append(res.Diffs, encodingAccountNonce{
-			TxIdx: txIdx,
-			Nonce: postNonce,
+	for _, idx := range storageWriteIdxs {
+		res.Accesses = append(res.Accesses, encodingStorageWrite{
+			TxIdx:      idx,
+			ValueAfter: s[idx],
 		})
 	}
+
 	return res
 }
-
-type storageWrites map[uint64]common.Hash
 
 type accountAccess struct {
 	storageWrites  map[common.Hash]storageWrites
@@ -236,167 +237,97 @@ func (a *accountAccess) toEncodingObj(addr common.Address) encodingAccountAccess
 		NonceChanges:   make([]encodingAccountNonce, 0),
 		Code:           nil,
 	}
-}
 
-// Copy deep-copies the access list
-func (b *BlockAccessList) Copy() *BlockAccessList {
-	accountAccesses := make(map[common.Address]*accountAccess)
-	balanceChanges := make(map[common.Address]balanceDiff)
-	codeChanges := make(map[common.Address]accountCodeDiff)
+	{
+		var writeSlots []common.Hash
 
-	for addr, aa := range b.AccountDiffs {
-		accountAccesses[addr] = aa.Copy()
-	}
-	for addr, bd := range b.BalanceDiffs {
-		balanceChanges[addr] = bd.Copy()
-	}
-	for addr, cd := range b.CodeDiffs {
-		codeChanges[addr] = cd.Copy()
-	}
-
-	return &BlockAccessList{
-		accountAccesses,
-		balanceChanges,
-		codeChanges,
-		maps.Clone(b.NonceDiffs),
-		b.hash,
-	}
-}
-
-func (c codeDiffs) toEncoderObj() (res encodingCodeDiffs) {
-	var codeChangeAddrs []common.Address
-
-	for addr, _ := range c {
-		codeChangeAddrs = append(codeChangeAddrs, addr)
-	}
-	sort.Slice(codeChangeAddrs, func(i, j int) bool {
-		return bytes.Compare(codeChangeAddrs[i][:], codeChangeAddrs[j][:]) < 0
-	})
-
-	for _, addr := range codeChangeAddrs {
-		res = append(res, encodingAccountCodeDiff{
-			addr,
-			c[addr].TxIdx,
-			bytes.Clone(c[addr].Code),
+		for slot := range a.storageWrites {
+			writeSlots = append(writeSlots, slot)
+		}
+		sort.Slice(writeSlots, func(i, j int) bool {
+			return bytes.Compare(writeSlots[i][:], writeSlots[j][:]) < 0
 		})
+
+		for _, slot := range writeSlots {
+			res.StorageWrites = append(res.StorageWrites, a.storageWrites[slot].toEncoderObj(slot))
+		}
 	}
-	return
+
+	{
+		var readSlots []common.Hash
+		for slot := range a.storageReads {
+			readSlots = append(readSlots, slot)
+		}
+		sort.Slice(readSlots, func(i, j int) bool {
+			return bytes.Compare(readSlots[i][:], readSlots[j][:]) < 0
+		})
+		for _, slot := range readSlots {
+			res.StorageReads = append(res.StorageReads, slot)
+		}
+	}
+
+	{
+		var balanceChangeIdxs []uint64
+		for idx := range a.balanceChanges {
+			balanceChangeIdxs = append(balanceChangeIdxs, idx)
+		}
+
+		sort.Slice(balanceChangeIdxs, func(i, j int) bool {
+			return balanceChangeIdxs[i] < balanceChangeIdxs[j]
+		})
+
+		for _, idx := range balanceChangeIdxs {
+			res.BalanceChanges = append(res.BalanceChanges, encodingBalanceChange{
+				TxIdx: idx,
+				Delta: *new(encodingBalanceDelta).Set(a.balanceChanges[idx]),
+			})
+		}
+	}
+
+	{
+		var nonceChangeIdxs []uint64
+		for idx := range a.nonceChanges {
+			nonceChangeIdxs = append(nonceChangeIdxs, idx)
+		}
+		sort.Slice(nonceChangeIdxs, func(i, j int) bool {
+			return nonceChangeIdxs[i] < nonceChangeIdxs[j]
+		})
+
+		for _, idx := range nonceChangeIdxs {
+			res.NonceChanges = append(res.NonceChanges, encodingAccountNonce{
+				TxIdx: idx,
+				Nonce: a.nonceChanges[idx],
+			})
+		}
+	}
+
+	if a.codeChange != nil {
+		res.Code = []encodingCodeChange{
+			slices.Clone(*a.codeChange),
+		}
+	}
+
+	return res
 }
 
-func NewBlockAccessList() *BlockAccessList {
-	return &BlockAccessList{
-		make(accountDiffs),
-		make(balanceDiffs),
-		make(codeDiffs),
-		make(nonceDiffs),
-		common.Hash{},
+func (b BlockAccessList) toEncodingObj() (res encodingBlockAccessList) {
+	for addr, acct := range b {
+		res = append(res, acct.toEncodingObj(addr))
 	}
+	return res
+}
+
+func (b BlockAccessList) Copy() BlockAccessList {
+	panic("not implemented")
 }
 
 func (b *BlockAccessList) Eq(other *BlockAccessList) bool {
-
-	// check that the account accesses are equal (consider moving this into its own function)
-
-	if len(b.AccountDiffs) != len(other.AccountDiffs) {
-		return false
-	}
-	for address, aa := range b.AccountDiffs {
-		otherAA, ok := other.AccountDiffs[address]
-		if !ok {
-			return false
-		}
-		if len(aa.Accesses) != len(otherAA.Accesses) {
-			return false
-		}
-		for key, vals := range aa.Accesses {
-			otherAccesses, ok := otherAA.Accesses[key]
-			if !ok {
-				return false
-			}
-			if len(vals.Writes) != len(otherAccesses.Writes) {
-				return false
-			}
-
-			for i, writeVal := range vals.Writes {
-				otherWriteVal, ok := otherAccesses.Writes[i]
-				if !ok {
-					return false
-				}
-				if writeVal != otherWriteVal {
-					return false
-				}
-			}
-		}
-	}
-
-	// check that the code changes are equal
-
-	if len(b.CodeDiffs) != len(other.CodeDiffs) {
-		return false
-	}
-	for addr, codeCh := range b.CodeDiffs {
-		otherCodeCh, ok := other.CodeDiffs[addr]
-		if !ok {
-			return false
-		}
-		if bytes.Compare(codeCh.Code, otherCodeCh.Code) != 0 {
-			return false
-		}
-		if codeCh.TxIdx != otherCodeCh.TxIdx {
-			return false
-		}
-	}
-
-	if len(b.NonceDiffs) != len(other.NonceDiffs) {
-		return false
-	}
-	for addr, prestateNonces := range b.NonceDiffs {
-		otherPrestateNonces, ok := other.NonceDiffs[addr]
-		if !ok {
-			return false
-		}
-		if !maps.Equal(prestateNonces, otherPrestateNonces) {
-			return false
-		}
-	}
-
-	if len(b.BalanceDiffs) != len(other.BalanceDiffs) {
-		return false
-	}
-
-	for addr, balanceChanges := range b.BalanceDiffs {
-		otherBalanceChanges, ok := other.BalanceDiffs[addr]
-		if !ok {
-			return false
-		}
-
-		if len(balanceChanges) != len(otherBalanceChanges) {
-			return false
-		}
-
-		for txIdx, balanceCh := range balanceChanges {
-			otherBalanceCh, ok := otherBalanceChanges[txIdx]
-			if !ok {
-				return false
-			}
-
-			if balanceCh != otherBalanceCh {
-				return false
-			}
-		}
-	}
-	return true
+	panic("not implemented")
 }
 
 // NonceDiff records tx post-state nonce of any contract-like accounts whose nonce was incremented
 func (b *BlockAccessList) NonceDiff(address common.Address, txIdx, postNonce uint64) {
-	if _, ok := b.NonceDiffs[address]; ok {
-		return
-	}
-	if _, ok := b.NonceDiffs[address]; !ok {
-		b.NonceDiffs[address] = make(accountNonceDiffs)
-	}
-	b.NonceDiffs[address][txIdx] = postNonce
+	panic("not implemented")
 }
 
 // BalanceChange records the transaction post-state balance of an account that changed its balance
@@ -404,10 +335,7 @@ func (b *BlockAccessList) NonceDiff(address common.Address, txIdx, postNonce uin
 // were executed?
 // TODO: for the final transaction in the block, should this consider the balance change from block reward?
 func (b *BlockAccessList) BalanceChange(txIdx uint64, address common.Address, balance *uint256.Int) {
-	if _, ok := b.BalanceDiffs[address]; !ok {
-		b.BalanceDiffs[address] = make(balanceDiff)
-	}
-	b.BalanceDiffs[address][txIdx] = balance.Clone()
+	panic("not implemented")
 }
 
 // TODO for eip:  specify that storage slots which are read/modified for accounts that are created/selfdestructed
@@ -417,26 +345,12 @@ func (b *BlockAccessList) BalanceChange(txIdx uint64, address common.Address, ba
 
 // called during tx execution every time a storage slot is read
 func (b *BlockAccessList) StorageRead(address common.Address, key common.Hash) {
-	if _, ok := b.AccountDiffs[address]; !ok {
-		b.AccountDiffs[address] = &accountAccess{
-			address,
-			make(map[common.Hash]slotAccess),
-			nil,
-		}
-	}
-	b.AccountDiffs[address].MarkRead(key)
+	panic("not implemented")
 }
 
 // called every time a mutated storage value is committed upon transaction finalization
 func (b *BlockAccessList) StorageWrite(txIdx uint64, address common.Address, key, value common.Hash) {
-	if _, ok := b.AccountDiffs[address]; !ok {
-		b.AccountDiffs[address] = &accountAccess{
-			address,
-			make(map[common.Hash]slotAccess),
-			nil,
-		}
-	}
-	b.AccountDiffs[address].MarkWrite(txIdx, key, value)
+	panic("not implemented")
 }
 
 // TODO: is there a way to bump the EOA nonce more than 1 in a transaction?
@@ -451,74 +365,11 @@ func (b *BlockAccessList) StorageWrite(txIdx uint64, address common.Address, key
 
 // called during tx finalisation for each dirty account with mutated code
 func (b *BlockAccessList) CodeChange(txIdx uint64, address common.Address, code []byte) {
-	if _, ok := b.CodeDiffs[address]; !ok {
-		b.CodeDiffs[address] = accountCodeDiff{}
-	}
-	b.CodeDiffs[address] = accountCodeDiff{
-		txIdx,
-		bytes.Clone(code),
-	}
-}
-
-func (b *BlockAccessList) toEncoderObj() *encodingBlockAccessList {
-	var (
-		accountAccessesAddrs   []common.Address
-		encoderAccountAccesses encodingAccountAccessList
-
-		balanceDiffsAddrs   []common.Address
-		encoderBalanceDiffs encodingBalanceDiffs
-	)
-
-	for addr, _ := range b.AccountDiffs {
-		accountAccessesAddrs = append(accountAccessesAddrs, addr)
-	}
-	sort.Slice(accountAccessesAddrs, func(i, j int) bool {
-		return bytes.Compare(accountAccessesAddrs[i][:], accountAccessesAddrs[j][:]) < 0
-	})
-	for _, addr := range accountAccessesAddrs {
-		// sort the accesses lexicographically by key, and the occurance of each key ascending by tx idx
-		// then encode them
-		var storageAccessKeys []common.Hash
-		for key, _ := range b.AccountDiffs[addr].Accesses {
-			storageAccessKeys = append(storageAccessKeys, key)
-		}
-		sort.Slice(storageAccessKeys, func(i, j int) bool {
-			return bytes.Compare(storageAccessKeys[i][:], storageAccessKeys[j][:]) < 0
-		})
-		var accesses []encodingStorageWrites
-		for _, accessSlot := range storageAccessKeys {
-			accesses = append(accesses, b.AccountDiffs[addr].Accesses[accessSlot].toEncoderObj(accessSlot))
-		}
-		encoderAccountAccesses = append(encoderAccountAccesses, encodingAccountAccess{
-			Address:       addr,
-			StorageWrites: accesses,
-			Code:          b.AccountDiffs[addr].Code,
-		})
-	}
-
-	// encode balance diffs
-	for addr, _ := range b.BalanceDiffs {
-		balanceDiffsAddrs = append(balanceDiffsAddrs, addr)
-	}
-	sort.Slice(balanceDiffsAddrs, func(i, j int) bool {
-		return bytes.Compare(balanceDiffsAddrs[i][:], balanceDiffsAddrs[j][:]) < 0
-	})
-
-	for _, addr := range balanceDiffsAddrs {
-		encoderBalanceDiffs = append(encoderBalanceDiffs, b.BalanceDiffs[addr].toEncoderObj(addr))
-	}
-
-	encoderObj := encodingBlockAccessList{
-		AccountAccesses: encoderAccountAccesses,
-		BalanceDiffs:    encoderBalanceDiffs,
-		CodeDiffs:       b.CodeDiffs.toEncoderObj(),
-		NonceDiffs:      nonceDiffsToEncoderObj(b.NonceDiffs),
-	}
-	return &encoderObj
+	panic("not implemented")
 }
 
 func (b *BlockAccessList) encodeSSZ() ([]byte, error) {
-	encoderObj := b.toEncoderObj()
+	encoderObj := b.toEncodingObj()
 	dst, err := encoderObj.MarshalSSZTo(nil)
 	if err != nil {
 		return nil, err
@@ -580,15 +431,7 @@ func (b *BlockAccessList) PrettyPrint() string {
 }
 
 func (b *BlockAccessList) Hash() common.Hash {
-	if b.hash == (common.Hash{}) {
-		// TODO: cache the encoded bal
-		encoded, err := b.encodeSSZ()
-		if err != nil {
-			panic(err)
-		}
-		b.hash = common.BytesToHash(crypto.Keccak256(encoded))
-	}
-	return b.hash
+	panic("not implemented")
 }
 
 func (b *BlockAccessList) EncodeRLP(wr io.Writer) error {
@@ -610,11 +453,11 @@ func (b *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
 	if err := enc.UnmarshalSSZ(encBytes); err != nil {
 		return err
 	}
-	res, err := enc.ToBlockAccessList()
+	res, err := enc.toBlockAccessList()
 	if err != nil {
 		return err
 	}
-	*b = *res
+	*b = res
 	return nil
 }
 
