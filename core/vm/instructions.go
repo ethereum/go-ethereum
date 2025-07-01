@@ -490,6 +490,13 @@ func opBlockhashPostFeynman(pc *uint64, interpreter *EVMInterpreter, scope *Scop
 			witness.AddBlockHash(num64)
 		}
 		num.SetBytes(res[:])
+
+		// for provability, revm loads block hash from the history storage system contract,
+		// so we need to ensure that the corresponding slot is present in the execution witness.
+		ringIndex := num64 % params.HistoryServeWindow
+		var key common.Hash
+		binary.BigEndian.PutUint64(key[24:], ringIndex)
+		interpreter.evm.StateDB.GetState(params.HistoryStorageAddress, key)
 	} else {
 		num.Clear()
 	}
