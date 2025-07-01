@@ -161,7 +161,8 @@ type StateDB struct {
 }
 
 func (s *StateDB) EnableBALConstruction() {
-	s.b = new(types.BlockAccessList)
+	bal := make(types.BlockAccessList)
+	s.b = &bal
 }
 
 func (s *StateDB) BlockAccessList() *types.BlockAccessList {
@@ -643,6 +644,8 @@ func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
 	}
 
 	if s.b != nil {
+		// note: when sending a transfer with no value, the target account is loaded here
+		// we probably want to specify whether this is proper behavior in the EIP
 		s.b.AccountRead(addr)
 	}
 	return obj

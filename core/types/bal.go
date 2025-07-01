@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 	"io"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -59,11 +60,11 @@ type encodingAccountAccess struct {
 
 func (e *encodingAccountAccess) toAccountAccess() (*accountAccess, error) {
 	res := accountAccess{
-		storageWrites:  make(map[common.Hash]storageWrites),
-		storageReads:   make(map[common.Hash]struct{}),
-		balanceChanges: make(balanceDiff),
-		nonceChanges:   make(accountNonceDiffs),
-		codeChange:     nil,
+		StorageWrites:  make(map[common.Hash]slotWrites),
+		StorageReads:   make(map[common.Hash]struct{}),
+		BalanceChanges: make(balanceDiff),
+		NonceChanges:   make(accountNonceDiffs),
+		CodeChange:     nil,
 	}
 
 	{
@@ -79,7 +80,7 @@ func (e *encodingAccountAccess) toAccountAccess() (*accountAccess, error) {
 				return nil, err
 			}
 
-			res.storageWrites[write.Slot] = wr
+			res.StorageWrites[write.Slot] = wr
 		}
 	}
 
@@ -91,7 +92,7 @@ func (e *encodingAccountAccess) toAccountAccess() (*accountAccess, error) {
 					return nil, fmt.Errorf("storage read slots not in lexicographic order")
 				}
 			}
-			res.storageReads[read] = struct{}{}
+			res.StorageReads[read] = struct{}{}
 		}
 	}
 
@@ -103,7 +104,7 @@ func (e *encodingAccountAccess) toAccountAccess() (*accountAccess, error) {
 					return nil, fmt.Errorf("balance change tx indices not in ascending order")
 				}
 			}
-			res.balanceChanges[balanceChange.TxIdx] = new(uint256.Int).SetBytes(balanceChange.Delta[:])
+			res.BalanceChanges[balanceChange.TxIdx] = new(uint256.Int).SetBytes(balanceChange.Delta[:])
 		}
 	}
 
@@ -115,14 +116,14 @@ func (e *encodingAccountAccess) toAccountAccess() (*accountAccess, error) {
 					return nil, fmt.Errorf("nonce diffs not in ascending order by tx index")
 				}
 			}
-			res.nonceChanges[nonceDiff.TxIdx] = nonceDiff.Nonce
+			res.NonceChanges[nonceDiff.TxIdx] = nonceDiff.Nonce
 		}
 	}
 
 	{
 		if len(e.Code) == 1 {
 			codeChange := codeChange{e.Code[0].TxIndex, bytes.Clone(e.Code[0].Code)}
-			res.codeChange = &codeChange
+			res.CodeChange = &codeChange
 		}
 	}
 	return &res, nil
@@ -181,23 +182,23 @@ func (b BlockAccessList) AccountRead(addr common.Address) {
 }
 
 func (a *accountAccess) MarkRead(key common.Hash) {
-	if _, ok := a.storageWrites[key]; !ok {
-		a.storageReads[key] = struct{}{}
+	if _, ok := a.StorageWrites[key]; !ok {
+		a.StorageReads[key] = struct{}{}
 	}
 }
 
 func (a *accountAccess) MarkWrite(txIdx uint64, key, value common.Hash) {
-	if _, ok := a.storageWrites[key]; !ok {
-		a.storageWrites[key] = make(storageWrites)
+	if _, ok := a.StorageWrites[key]; !ok {
+		a.StorageWrites[key] = make(slotWrites)
 	}
 
-	a.storageWrites[key][txIdx] = value
+	a.StorageWrites[key][txIdx] = value
 }
 
 type balanceDiff map[uint64]*uint256.Int
 
 func (b balanceDiff) Copy() balanceDiff {
-	res := make(map[uint64]*uint256.Int)
+	res := make(balanceDiff)
 	for idx, balance := range b {
 		res[idx] = balance.Clone()
 	}
@@ -207,9 +208,9 @@ func (b balanceDiff) Copy() balanceDiff {
 // map of tx index to the prestate nonce
 type accountNonceDiffs map[uint64]uint64
 
-type storageWrites map[uint64]common.Hash
+type slotWrites map[uint64]common.Hash
 
-func (s storageWrites) toEncoderObj(slot common.Hash) encodingStorageWrites {
+func (s slotWrites) toEncoderObj(slot common.Hash) encodingStorageWrites {
 	res := encodingStorageWrites{
 		Slot: slot,
 	}
@@ -233,24 +234,34 @@ func (s storageWrites) toEncoderObj(slot common.Hash) encodingStorageWrites {
 }
 
 type codeChange struct {
-	txIndex uint64
-	code    []byte
+	TxIndex uint64 `json:"txIndex,omitempty"`
+	Code    []byte `json:"code,omitempty"`
+}
+
+type storageWrites map[common.Hash]slotWrites
+
+func (s storageWrites) Copy() storageWrites {
+	res := make(storageWrites)
+	for slot, writes := range s {
+		res[slot] = maps.Clone(writes)
+	}
+	return res
 }
 
 type accountAccess struct {
-	storageWrites  map[common.Hash]storageWrites
-	storageReads   map[common.Hash]struct{}
-	balanceChanges balanceDiff
-	nonceChanges   accountNonceDiffs
-	codeChange     *codeChange
+	StorageWrites  storageWrites            `json:"storageWrites,omitempty"`
+	StorageReads   map[common.Hash]struct{} `json:"storageReads,omitempty"`
+	BalanceChanges balanceDiff              `json:"balanceChanges,omitempty"`
+	NonceChanges   accountNonceDiffs        `json:"nonceChanges,omitempty"`
+	CodeChange     *codeChange              `json:"codeChange,omitempty"`
 }
 
 func newAccountAccess() *accountAccess {
 	return &accountAccess{
-		storageWrites:  make(map[common.Hash]storageWrites),
-		storageReads:   make(map[common.Hash]struct{}),
-		balanceChanges: make(balanceDiff),
-		nonceChanges:   make(accountNonceDiffs),
+		StorageWrites:  make(map[common.Hash]slotWrites),
+		StorageReads:   make(map[common.Hash]struct{}),
+		BalanceChanges: make(balanceDiff),
+		NonceChanges:   make(accountNonceDiffs),
 	}
 }
 
@@ -267,7 +278,7 @@ func (a *accountAccess) toEncodingObj(addr common.Address) encodingAccountAccess
 	{
 		var writeSlots []common.Hash
 
-		for slot := range a.storageWrites {
+		for slot := range a.StorageWrites {
 			writeSlots = append(writeSlots, slot)
 		}
 		sort.Slice(writeSlots, func(i, j int) bool {
@@ -275,13 +286,13 @@ func (a *accountAccess) toEncodingObj(addr common.Address) encodingAccountAccess
 		})
 
 		for _, slot := range writeSlots {
-			res.StorageWrites = append(res.StorageWrites, a.storageWrites[slot].toEncoderObj(slot))
+			res.StorageWrites = append(res.StorageWrites, a.StorageWrites[slot].toEncoderObj(slot))
 		}
 	}
 
 	{
 		var readSlots []common.Hash
-		for slot := range a.storageReads {
+		for slot := range a.StorageReads {
 			readSlots = append(readSlots, slot)
 		}
 		sort.Slice(readSlots, func(i, j int) bool {
@@ -294,7 +305,7 @@ func (a *accountAccess) toEncodingObj(addr common.Address) encodingAccountAccess
 
 	{
 		var balanceChangeIdxs []uint64
-		for idx := range a.balanceChanges {
+		for idx := range a.BalanceChanges {
 			balanceChangeIdxs = append(balanceChangeIdxs, idx)
 		}
 
@@ -305,14 +316,14 @@ func (a *accountAccess) toEncodingObj(addr common.Address) encodingAccountAccess
 		for _, idx := range balanceChangeIdxs {
 			res.BalanceChanges = append(res.BalanceChanges, encodingBalanceChange{
 				TxIdx: idx,
-				Delta: *new(encodingBalanceDelta).Set(a.balanceChanges[idx]),
+				Delta: *new(encodingBalanceDelta).Set(a.BalanceChanges[idx]),
 			})
 		}
 	}
 
 	{
 		var nonceChangeIdxs []uint64
-		for idx := range a.nonceChanges {
+		for idx := range a.NonceChanges {
 			nonceChangeIdxs = append(nonceChangeIdxs, idx)
 		}
 		sort.Slice(nonceChangeIdxs, func(i, j int) bool {
@@ -322,16 +333,16 @@ func (a *accountAccess) toEncodingObj(addr common.Address) encodingAccountAccess
 		for _, idx := range nonceChangeIdxs {
 			res.NonceChanges = append(res.NonceChanges, encodingAccountNonce{
 				TxIdx: idx,
-				Nonce: a.nonceChanges[idx],
+				Nonce: a.NonceChanges[idx],
 			})
 		}
 	}
 
-	if a.codeChange != nil {
+	if a.CodeChange != nil {
 		res.Code = []encodingCodeChange{
 			{
-				a.codeChange.txIndex,
-				slices.Clone(a.codeChange.code),
+				a.CodeChange.TxIndex,
+				slices.Clone(a.CodeChange.Code),
 			},
 		}
 	}
@@ -347,7 +358,22 @@ func (b BlockAccessList) toEncodingObj() (res encodingBlockAccessList) {
 }
 
 func (b BlockAccessList) Copy() *BlockAccessList {
-	panic("not implemented")
+	res := make(BlockAccessList)
+	for addr, aa := range b {
+		var aaCopy accountAccess
+		aaCopy.StorageReads = maps.Clone(aa.StorageReads)
+		aaCopy.StorageWrites = aa.StorageWrites.Copy()
+		aaCopy.NonceChanges = maps.Clone(aa.NonceChanges)
+		aaCopy.BalanceChanges = aa.BalanceChanges.Copy()
+		if aa.CodeChange != nil {
+			aaCopy.CodeChange = &codeChange{
+				TxIndex: aa.CodeChange.TxIndex,
+				Code:    slices.Clone(aa.CodeChange.Code),
+			}
+		}
+		res[addr] = &aaCopy
+	}
+	return &res
 }
 
 func (b *BlockAccessList) Eq(other *BlockAccessList) bool {
@@ -360,7 +386,7 @@ func (b BlockAccessList) NonceDiff(address common.Address, txIdx, postNonce uint
 		b[address] = newAccountAccess()
 	}
 
-	b[address].nonceChanges[txIdx] = postNonce
+	b[address].NonceChanges[txIdx] = postNonce
 }
 
 // BalanceChange records the transaction post-state balance of an account that changed its balance
@@ -372,7 +398,7 @@ func (b BlockAccessList) BalanceChange(txIdx uint64, address common.Address, bal
 		b[address] = newAccountAccess()
 	}
 
-	b[address].balanceChanges[txIdx] = balance
+	b[address].BalanceChanges[txIdx] = balance
 }
 
 // TODO for eip:  specify that storage slots which are read/modified for accounts that are created/selfdestructed
@@ -386,11 +412,11 @@ func (b BlockAccessList) StorageRead(address common.Address, key common.Hash) {
 		b[address] = newAccountAccess()
 	}
 
-	if _, ok := b[address].storageWrites[key]; ok {
+	if _, ok := b[address].StorageWrites[key]; ok {
 		return
 	}
 
-	b[address].storageReads[key] = struct{}{}
+	b[address].StorageReads[key] = struct{}{}
 }
 
 // called every time a mutated storage value is committed upon transaction finalization
@@ -399,11 +425,11 @@ func (b BlockAccessList) StorageWrite(txIdx uint64, address common.Address, key,
 		b[address] = newAccountAccess()
 	}
 
-	if _, ok := b[address].storageWrites[key]; !ok {
-		b[address].storageWrites[key] = make(storageWrites)
+	if _, ok := b[address].StorageWrites[key]; !ok {
+		b[address].StorageWrites[key] = make(slotWrites)
 	}
-	b[address].storageWrites[key][txIdx] = value
-	delete(b[address].storageReads, key)
+	b[address].StorageWrites[key][txIdx] = value
+	delete(b[address].StorageReads, key)
 }
 
 // TODO: include these in the PR to the EIP
@@ -419,21 +445,19 @@ func (b BlockAccessList) CodeChange(address common.Address, txIndex uint64, code
 		b[address] = newAccountAccess()
 	}
 
-	b[address].codeChange = &codeChange{
-		txIndex: txIndex,
-		code:    slices.Clone(code),
+	b[address].CodeChange = &codeChange{
+		TxIndex: txIndex,
+		Code:    slices.Clone(code),
 	}
 }
 
 func (b *BlockAccessList) encodeSSZ() ([]byte, error) {
-	/*
-		encoderObj := b.toEncodingObj()
-		dst, err := encoderObj.MarshalSSZTo(nil)
-		if err != nil {
-			return nil, err
-		}
-	*/
-	return nil, nil
+	encoderObj := b.toEncodingObj()
+	dst, err := encoderObj.MarshalSSZTo(nil)
+	if err != nil {
+		return nil, err
+	}
+	return dst, nil
 }
 
 func (e encodingBlockAccessList) PrettyPrint() string {
@@ -496,21 +520,19 @@ func (b *BlockAccessList) EncodeRLP(wr io.Writer) error {
 }
 
 func (b *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
-	/*
-		var enc encodingBlockAccessList
-		encBytes, err := s.Bytes()
-		if err != nil {
-			return err
-		}
-		if err := enc.UnmarshalSSZ(encBytes); err != nil {
-			return err
-		}
-		res, err := enc.toBlockAccessList()
-		if err != nil {
-			return err
-		}
-		*b = res
-	*/
+	var enc encodingBlockAccessList
+	encBytes, err := s.Bytes()
+	if err != nil {
+		return err
+	}
+	if err := enc.UnmarshalSSZ(encBytes); err != nil {
+		return err
+	}
+	res, err := enc.toBlockAccessList()
+	if err != nil {
+		return err
+	}
+	*b = *res
 	return nil
 }
 
