@@ -403,7 +403,7 @@ func (f *FilterMaps) init() error {
 	batch := f.db.NewBatch()
 	for epoch := range bestLen {
 		cp := checkpoints[bestIdx][epoch]
-		f.storeLastBlockOfMap(batch, f.Params.lastEpochMap(uint32(epoch)), cp.BlockNumber, cp.BlockId)
+		f.storeLastBlockOfMap(batch, f.lastEpochMap(uint32(epoch)), cp.BlockNumber, cp.BlockId)
 		f.storeBlockLvPointer(batch, cp.BlockNumber, cp.FirstIndex)
 	}
 	fmr := filterMapsRange{
@@ -412,7 +412,7 @@ func (f *FilterMaps) init() error {
 	if bestLen > 0 {
 		cp := checkpoints[bestIdx][bestLen-1]
 		fmr.blocks = common.NewRange(cp.BlockNumber+1, 0)
-		fmr.maps = common.NewRange(f.Params.firstEpochMap(uint32(bestLen)), 0)
+		fmr.maps = common.NewRange(f.firstEpochMap(uint32(bestLen)), 0)
 	}
 	f.setRange(batch, f.targetView, fmr, false)
 	return batch.Write()
@@ -583,10 +583,10 @@ func (f *FilterMaps) getFilterMapRows(mapIndices []uint32, rowIndex uint32, base
 	var ptr int
 	for len(mapIndices) > ptr {
 		var (
-			groupIndex  = f.Params.mapGroupIndex(mapIndices[ptr])
+			groupIndex  = f.mapGroupIndex(mapIndices[ptr])
 			groupLength = 1
 		)
-		for ptr+groupLength < len(mapIndices) && f.Params.mapGroupIndex(mapIndices[ptr+groupLength]) == groupIndex {
+		for ptr+groupLength < len(mapIndices) && f.mapGroupIndex(mapIndices[ptr+groupLength]) == groupIndex {
 			groupLength++
 		}
 		if err := f.getFilterMapRowsOfGroup(rows[ptr:ptr+groupLength], mapIndices[ptr:ptr+groupLength], rowIndex, baseLayerOnly); err != nil {
@@ -601,7 +601,7 @@ func (f *FilterMaps) getFilterMapRows(mapIndices []uint32, rowIndex uint32, base
 // belonging to the same base row group.
 func (f *FilterMaps) getFilterMapRowsOfGroup(target []FilterRow, mapIndices []uint32, rowIndex uint32, baseLayerOnly bool) error {
 	var (
-		groupIndex  = f.Params.mapGroupIndex(mapIndices[0])
+		groupIndex  = f.mapGroupIndex(mapIndices[0])
 		mapRowIndex = f.mapRowIndex(groupIndex, rowIndex)
 	)
 	baseRows, err := rawdb.ReadFilterMapBaseRows(f.db, mapRowIndex, f.baseRowGroupSize, f.logMapWidth)
@@ -609,10 +609,10 @@ func (f *FilterMaps) getFilterMapRowsOfGroup(target []FilterRow, mapIndices []ui
 		return fmt.Errorf("failed to retrieve base row group %d of row %d: %v", groupIndex, rowIndex, err)
 	}
 	for i, mapIndex := range mapIndices {
-		if f.Params.mapGroupIndex(mapIndex) != groupIndex {
+		if f.mapGroupIndex(mapIndex) != groupIndex {
 			return fmt.Errorf("maps are not in the same base row group, index: %d, group: %d", mapIndex, groupIndex)
 		}
-		row := baseRows[f.Params.mapGroupOffset(mapIndex)]
+		row := baseRows[f.mapGroupOffset(mapIndex)]
 		if !baseLayerOnly {
 			extRow, err := rawdb.ReadFilterMapExtRow(f.db, f.mapRowIndex(mapIndex, rowIndex), f.logMapWidth)
 			if err != nil {
@@ -631,9 +631,9 @@ func (f *FilterMaps) storeFilterMapRows(batch ethdb.Batch, mapIndices []uint32, 
 	for len(mapIndices) > 0 {
 		var (
 			pos        = 1
-			groupIndex = f.Params.mapGroupIndex(mapIndices[0])
+			groupIndex = f.mapGroupIndex(mapIndices[0])
 		)
-		for pos < len(mapIndices) && f.Params.mapGroupIndex(mapIndices[pos]) == groupIndex {
+		for pos < len(mapIndices) && f.mapGroupIndex(mapIndices[pos]) == groupIndex {
 			pos++
 		}
 		if err := f.storeFilterMapRowsOfGroup(batch, mapIndices[:pos], rowIndex, rows[:pos]); err != nil {
@@ -649,7 +649,7 @@ func (f *FilterMaps) storeFilterMapRows(batch ethdb.Batch, mapIndices []uint32, 
 func (f *FilterMaps) storeFilterMapRowsOfGroup(batch ethdb.Batch, mapIndices []uint32, rowIndex uint32, rows []FilterRow) error {
 	var (
 		baseRows    [][]uint32
-		groupIndex  = f.Params.mapGroupIndex(mapIndices[0])
+		groupIndex  = f.mapGroupIndex(mapIndices[0])
 		mapRowIndex = f.mapRowIndex(groupIndex, rowIndex)
 	)
 	if uint32(len(mapIndices)) != f.baseRowGroupSize { // skip base rows read if all rows are replaced
@@ -662,7 +662,7 @@ func (f *FilterMaps) storeFilterMapRowsOfGroup(batch ethdb.Batch, mapIndices []u
 		baseRows = make([][]uint32, f.baseRowGroupSize)
 	}
 	for i, mapIndex := range mapIndices {
-		if f.Params.mapGroupIndex(mapIndex) != groupIndex {
+		if f.mapGroupIndex(mapIndex) != groupIndex {
 			return fmt.Errorf("maps are not in the same base row group, index: %d, group: %d", mapIndex, groupIndex)
 		}
 		baseRow := []uint32(rows[i])
@@ -759,12 +759,12 @@ func (f *FilterMaps) deleteTailEpoch(epoch uint32) (bool, error) {
 	defer f.indexLock.Unlock()
 
 	// determine epoch boundaries
-	lastBlock, _, err := f.getLastBlockOfMap(f.Params.lastEpochMap(epoch))
+	lastBlock, _, err := f.getLastBlockOfMap(f.lastEpochMap(epoch))
 	if err != nil {
 		return false, fmt.Errorf("failed to retrieve last block of deleted epoch %d: %v", epoch, err)
 	}
 	var firstBlock uint64
-	firstMap := f.Params.firstEpochMap(epoch)
+	firstMap := f.firstEpochMap(epoch)
 	if epoch > 0 {
 		firstBlock, _, err = f.getLastBlockOfMap(firstMap - 1)
 		if err != nil {
@@ -775,8 +775,8 @@ func (f *FilterMaps) deleteTailEpoch(epoch uint32) (bool, error) {
 	// update rendered range if necessary
 	var (
 		fmr            = f.indexedRange
-		firstEpoch     = f.Params.mapEpoch(f.indexedRange.maps.First())
-		afterLastEpoch = f.Params.mapEpoch(f.indexedRange.maps.AfterLast() + f.mapsPerEpoch - 1)
+		firstEpoch     = f.mapEpoch(f.indexedRange.maps.First())
+		afterLastEpoch = f.mapEpoch(f.indexedRange.maps.AfterLast() + f.mapsPerEpoch - 1)
 	)
 	if f.indexedRange.tailPartialEpoch != 0 && firstEpoch > 0 {
 		firstEpoch--
@@ -788,7 +788,7 @@ func (f *FilterMaps) deleteTailEpoch(epoch uint32) (bool, error) {
 		// first fully or partially rendered epoch and there is at least one
 		// rendered map in the next epoch; remove from indexed range
 		fmr.tailPartialEpoch = 0
-		fmr.maps.SetFirst(f.Params.firstEpochMap(epoch + 1))
+		fmr.maps.SetFirst(f.firstEpochMap(epoch + 1))
 		fmr.blocks.SetFirst(lastBlock + 1)
 		f.setRange(f.db, f.indexedView, fmr, false)
 	default:
@@ -869,7 +869,7 @@ func (f *FilterMaps) exportCheckpoints() {
 	w.WriteString("[\n")
 	comma := ","
 	for epoch := uint32(0); epoch < epochCount; epoch++ {
-		lastBlock, lastBlockId, err := f.getLastBlockOfMap(f.Params.lastEpochMap(epoch))
+		lastBlock, lastBlockId, err := f.getLastBlockOfMap(f.lastEpochMap(epoch))
 		if err != nil {
 			log.Error("Error fetching last block of epoch", "epoch", epoch, "error", err)
 			return
