@@ -127,7 +127,7 @@ func (f *resettableFreezer) AncientRange(kind string, start, count, maxBytes uin
 }
 
 // RetrieveBytes retrieves a byte range [offset:offset+length] from the specified ancient item.
-func (f *resettableFreezer) AncientBytes(kind string, number uint64, offset, length uint64) ([]byte, error) {
+func (f *resettableFreezer) AncientBytes(kind string, number, offset, length uint64) ([]byte, error) {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 	return f.freezer.AncientBytes(kind, number, offset, length)
