@@ -152,9 +152,11 @@ var (
 		}),
 	}
 
-	blockNumber = big.NewInt(1)
-	blockTime   = uint64(2)
-	blockHash   = common.BytesToHash([]byte{0x03, 0x14})
+	header = Header{
+		Number:     big.NewInt(1),
+		Difficulty: big.NewInt(0),
+		Time:       2,
+	}
 )
 
 var receiptsOnce sync.Once
@@ -173,22 +175,22 @@ func getTestReceipts() Receipts {
 						Address: common.BytesToAddress([]byte{0x11}),
 						Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
 						// derived fields:
-						BlockNumber:    blockNumber.Uint64(),
+						BlockNumber:    header.Number.Uint64(),
 						TxHash:         txs[0].Hash(),
 						TxIndex:        0,
-						BlockHash:      blockHash,
-						BlockTimestamp: blockTime,
+						BlockHash:      header.Hash(),
+						BlockTimestamp: header.Time,
 						Index:          0,
 					},
 					{
 						Address: common.BytesToAddress([]byte{0x01, 0x11}),
 						Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
 						// derived fields:
-						BlockNumber:    blockNumber.Uint64(),
+						BlockNumber:    header.Number.Uint64(),
 						TxHash:         txs[0].Hash(),
 						TxIndex:        0,
-						BlockHash:      blockHash,
-						BlockTimestamp: blockTime,
+						BlockHash:      header.Hash(),
+						BlockTimestamp: header.Time,
 						Index:          1,
 					},
 				},
@@ -197,8 +199,8 @@ func getTestReceipts() Receipts {
 				ContractAddress:   common.HexToAddress("0x5a443704dd4b594b382c22a083e2bd3090a6fef3"),
 				GasUsed:           1,
 				EffectiveGasPrice: big.NewInt(11),
-				BlockHash:         blockHash,
-				BlockNumber:       blockNumber,
+				BlockHash:         header.Hash(),
+				BlockNumber:       header.Number,
 				TransactionIndex:  0,
 			},
 			&Receipt{
@@ -209,22 +211,22 @@ func getTestReceipts() Receipts {
 						Address: common.BytesToAddress([]byte{0x22}),
 						Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
 						// derived fields:
-						BlockNumber:    blockNumber.Uint64(),
+						BlockNumber:    header.Number.Uint64(),
 						TxHash:         txs[1].Hash(),
 						TxIndex:        1,
-						BlockHash:      blockHash,
-						BlockTimestamp: blockTime,
+						BlockHash:      header.Hash(),
+						BlockTimestamp: header.Time,
 						Index:          2,
 					},
 					{
 						Address: common.BytesToAddress([]byte{0x02, 0x22}),
 						Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
 						// derived fields:
-						BlockNumber:    blockNumber.Uint64(),
+						BlockNumber:    header.Number.Uint64(),
 						TxHash:         txs[1].Hash(),
 						TxIndex:        1,
-						BlockHash:      blockHash,
-						BlockTimestamp: blockTime,
+						BlockHash:      header.Hash(),
+						BlockTimestamp: header.Time,
 						Index:          3,
 					},
 				},
@@ -232,8 +234,8 @@ func getTestReceipts() Receipts {
 				TxHash:            txs[1].Hash(),
 				GasUsed:           2,
 				EffectiveGasPrice: big.NewInt(22),
-				BlockHash:         blockHash,
-				BlockNumber:       blockNumber,
+				BlockHash:         header.Hash(),
+				BlockNumber:       header.Number,
 				TransactionIndex:  1,
 			},
 			&Receipt{
@@ -245,8 +247,8 @@ func getTestReceipts() Receipts {
 				TxHash:            txs[2].Hash(),
 				GasUsed:           3,
 				EffectiveGasPrice: big.NewInt(33),
-				BlockHash:         blockHash,
-				BlockNumber:       blockNumber,
+				BlockHash:         header.Hash(),
+				BlockNumber:       header.Number,
 				TransactionIndex:  2,
 			},
 			&Receipt{
@@ -258,8 +260,8 @@ func getTestReceipts() Receipts {
 				TxHash:            txs[3].Hash(),
 				GasUsed:           4,
 				EffectiveGasPrice: big.NewInt(1044),
-				BlockHash:         blockHash,
-				BlockNumber:       blockNumber,
+				BlockHash:         header.Hash(),
+				BlockNumber:       header.Number,
 				TransactionIndex:  3,
 			},
 			&Receipt{
@@ -271,8 +273,8 @@ func getTestReceipts() Receipts {
 				TxHash:            txs[4].Hash(),
 				GasUsed:           5,
 				EffectiveGasPrice: big.NewInt(1055),
-				BlockHash:         blockHash,
-				BlockNumber:       blockNumber,
+				BlockHash:         header.Hash(),
+				BlockNumber:       header.Number,
 				TransactionIndex:  4,
 			},
 			&Receipt{
@@ -286,8 +288,8 @@ func getTestReceipts() Receipts {
 				EffectiveGasPrice: big.NewInt(1066),
 				BlobGasUsed:       params.BlobTxBlobGasPerBlob,
 				BlobGasPrice:      big.NewInt(920),
-				BlockHash:         blockHash,
-				BlockNumber:       blockNumber,
+				BlockHash:         header.Hash(),
+				BlockNumber:       header.Number,
 				TransactionIndex:  5,
 			},
 			&Receipt{
@@ -301,8 +303,8 @@ func getTestReceipts() Receipts {
 				EffectiveGasPrice: big.NewInt(1077),
 				BlobGasUsed:       3 * params.BlobTxBlobGasPerBlob,
 				BlobGasPrice:      big.NewInt(920),
-				BlockHash:         blockHash,
-				BlockNumber:       blockNumber,
+				BlockHash:         header.Hash(),
+				BlockNumber:       header.Number,
 				TransactionIndex:  6,
 			},
 		}
@@ -326,11 +328,10 @@ func TestDecodeEmptyTypedReceipt(t *testing.T) {
 // Tests that receipt data can be correctly derived from the contextual infos
 func TestDeriveFields(t *testing.T) {
 	// Re-derive receipts.
-	basefee := big.NewInt(1000)
 	blobGasPrice := big.NewInt(920)
 	receipts := getTestReceipts()
 	derivedReceipts := clearComputedFieldsOnReceipts(receipts)
-	err := Receipts(derivedReceipts).DeriveFields(params.TestChainConfig, blockHash, blockNumber.Uint64(), blockTime, basefee, blobGasPrice, txs)
+	err := Receipts(derivedReceipts).DeriveFields(params.TestChainConfig, &header, blobGasPrice, txs)
 	if err != nil {
 		t.Fatalf("DeriveFields(...) = %v, want <nil>", err)
 	}

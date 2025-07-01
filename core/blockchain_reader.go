@@ -18,9 +18,12 @@ package core
 
 import (
 	"errors"
+	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -213,6 +216,37 @@ func (bc *BlockChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*type
 	return
 }
 
+// GetReceiptByIndex allows fetching a receipt for a transaction that was already
+// looked up on the index.
+func (bc *BlockChain) GetReceiptByIndex(tx *types.Transaction, blockHash common.Hash, blockNumber, txIndex uint64) (*types.Receipt, error) {
+	if receipts, ok := bc.receiptsCache.Get(blockHash); ok {
+		if int(txIndex) >= len(receipts) {
+			return nil, fmt.Errorf("receipt out of index, length: %d, index: %d", len(receipts), txIndex)
+		}
+		return receipts[int(txIndex)], nil
+	}
+	header := bc.GetHeader(blockHash, blockNumber)
+	if header == nil {
+		return nil, fmt.Errorf("block header is not found, %d, %x", blockNumber, blockHash)
+	}
+	var blobGasPrice *big.Int
+	if header.ExcessBlobGas != nil {
+		blobGasPrice = eip4844.CalcBlobFee(bc.chainConfig, header)
+	}
+	receipt, ctx, err := rawdb.ReadRawReceiptWithContext(bc.db, blockHash, blockNumber, txIndex)
+	if err != nil {
+		return nil, err
+	}
+	signer := types.MakeSigner(bc.chainConfig, new(big.Int).SetUint64(blockNumber), header.Time)
+	receipt.DeriveFields(types.MakeDeriveReceiptContext(signer, header, blobGasPrice, tx, ctx.GasUsed, uint(txIndex), ctx.LogIndex))
+	return receipt, nil
+}
+
+// GetRawReceipt
+func (bc *BlockChain) GetRawReceipt(blockHash common.Hash, blockNumber, txIndex uint64) (*types.Receipt, error) {
+	return rawdb.ReadRawReceipt(bc.db, blockHash, blockNumber, txIndex)
+}
+
 // GetReceiptsByHash retrieves the receipts for all transactions in a given block.
 func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	if receipts, ok := bc.receiptsCache.Get(hash); ok {
@@ -305,6 +339,36 @@ func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLoo
 		transaction: tx,
 	})
 	return lookup, tx
+}
+
+// GetTxIndex
+func (bc *BlockChain) GetTxIndex(txHash common.Hash) *rawdb.TxIndex {
+	return rawdb.ReadTxIndex(bc.db, txHash)
+}
+
+// MakeDeriveReceiptContextFromIndex
+func MakeDeriveReceiptContextFromIndex(txHash common.Hash, txIndex *rawdb.TxIndex) types.DeriveReceiptContext {
+	return types.DeriveReceiptContext{
+		BlockHash:    txIndex.BlockHash,
+		BlockNumber:  txIndex.BlockNumber,
+		BlockTime:    txIndex.BlockTime,
+		BaseFee:      txIndex.BaseFee,
+		BlobGasPrice: txIndex.BlobGasPrice, // todo
+
+		// Receipt fields
+		GasUsed:  txIndex.GasUsed,
+		LogIndex: uint(txIndex.LogIndex), // Number of logs in the block until this receipt
+
+		// Tx fields
+		Hash:              txHash,
+		Nonce:             txIndex.Nonce,
+		Index:             uint(txIndex.TxIndex),
+		Type:              txIndex.Type,
+		From:              txIndex.Sender,
+		To:                txIndex.To,
+		EffectiveGasPrice: txIndex.EffectiveGasPrice,
+		BlobGas:           txIndex.BlobGas,
+	}
 }
 
 // TxIndexDone returns true if the transaction indexer has finished indexing.
