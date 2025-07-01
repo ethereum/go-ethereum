@@ -145,7 +145,7 @@ func (r *historyReader) readAccountMetadata(address common.Address, historyID ui
 // state history.
 func (r *historyReader) readStorageMetadata(storageKey common.Hash, storageHash common.Hash, historyID uint64, slotOffset, slotNumber int) ([]byte, error) {
 	data, err := rawdb.ReadStateStorageIndex(r.freezer, historyID, slotIndexSize*slotOffset, slotIndexSize*slotNumber)
-	if err != nil {
+	if err != nil || len(data) != slotIndexSize*slotNumber {
 		return nil, fmt.Errorf("storage indices is truncated, historyID: %d, size: %d, offset: %d, length: %d", historyID, len(data), slotOffset, slotNumber)
 	}
 
@@ -187,7 +187,7 @@ func (r *historyReader) readAccount(address common.Address, historyID uint64) ([
 	offset := int(binary.BigEndian.Uint32(metadata[common.AddressLength+1 : common.AddressLength+5])) // four bytes for the account data offset
 
 	data, err := rawdb.ReadStateAccountHistory(r.freezer, historyID, offset, length)
-	if err != nil {
+	if err != nil || len(data) != length {
 		return nil, fmt.Errorf("account data is truncated, address: %#x, historyID: %d, size: %d, offset: %d, len: %d", address, historyID, len(data), offset, length)
 	}
 	return data, nil
@@ -214,7 +214,7 @@ func (r *historyReader) readStorage(address common.Address, storageKey common.Ha
 	offset := int(binary.BigEndian.Uint32(slotMetadata[common.HashLength+1 : common.HashLength+5])) // four bytes for slot data offset
 
 	data, err := rawdb.ReadStateStorageHistory(r.freezer, historyID, offset, length)
-	if err != nil {
+	if err != nil || len(data) != length {
 		return nil, fmt.Errorf("storage data is truncated, address: %#x, key: %#x, historyID: %d, size: %d, offset: %d, len: %d", address, storageKey, historyID, len(data), offset, length)
 	}
 	return data, nil
