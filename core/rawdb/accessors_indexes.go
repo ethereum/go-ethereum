@@ -318,6 +318,9 @@ func ReadCanonicalRawReceipt(db ethdb.Reader, blockHash common.Hash, blockNumber
 // https://eips.ethereum.org/EIPS/eip-7745#hash-tree-structure
 func ReadFilterMapExtRow(db ethdb.KeyValueReader, mapRowIndex uint64, bitLength uint) ([]uint32, error) {
 	byteLength := int(bitLength) / 8
+	if int(bitLength) != byteLength*8 {
+		panic("invalid bit length")
+	}
 	key := filterMapRowKey(mapRowIndex, false)
 	has, err := db.Has(key)
 	if err != nil {
@@ -344,6 +347,9 @@ func ReadFilterMapExtRow(db ethdb.KeyValueReader, mapRowIndex uint64, bitLength 
 
 func ReadFilterMapBaseRows(db ethdb.KeyValueReader, mapRowIndex uint64, rowCount uint32, bitLength uint) ([][]uint32, error) {
 	byteLength := int(bitLength) / 8
+	if int(bitLength) != byteLength*8 {
+		panic("invalid bit length")
+	}
 	key := filterMapRowKey(mapRowIndex, true)
 	has, err := db.Has(key)
 	if err != nil {
@@ -403,6 +409,9 @@ func ReadFilterMapBaseRows(db ethdb.KeyValueReader, mapRowIndex uint64, rowCount
 // or deletes any existing entry if the row is empty.
 func WriteFilterMapExtRow(db ethdb.KeyValueWriter, mapRowIndex uint64, row []uint32, bitLength uint) {
 	byteLength := int(bitLength) / 8
+	if int(bitLength) != byteLength*8 {
+		panic("invalid bit length")
+	}
 	var err error
 	if len(row) > 0 {
 		encRow := make([]byte, len(row)*byteLength)
@@ -422,6 +431,9 @@ func WriteFilterMapExtRow(db ethdb.KeyValueWriter, mapRowIndex uint64, row []uin
 
 func WriteFilterMapBaseRows(db ethdb.KeyValueWriter, mapRowIndex uint64, rows [][]uint32, bitLength uint) {
 	byteLength := int(bitLength) / 8
+	if int(bitLength) != byteLength*8 {
+		panic("invalid bit length")
+	}
 	var entryCount, zeroBits int
 	for i, row := range rows {
 		if len(row) > 0 {
