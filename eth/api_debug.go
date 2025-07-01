@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -442,4 +443,26 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 		return "", errors.New("trie flush interval is undefined for path-based scheme")
 	}
 	return api.eth.blockchain.GetTrieFlushInterval().String(), nil
+}
+
+// SyncTarget sets the sync target for the downloader to a specific block hash.
+func (api *DebugAPI) SyncTarget(target common.Hash) error {
+	if header := api.eth.BlockChain().GetHeaderByHash(target); header != nil {
+		return errors.New("sync target is already known in the chain")
+	}
+
+	dl := api.eth.Downloader()
+	header, err := dl.GetHeader(target)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve header for target %s: %w", target, err)
+	}
+
+	// Trigger beacon sync with the new target
+	err = dl.BeaconSync(ethconfig.FullSync, header, header)
+	if err != nil {
+		return fmt.Errorf("failed to start beacon sync to target %s: %w", target, err)
+	}
+
+	log.Info("BeaconSync set target to", "target", target, "number", header.Number)
+	return nil
 }
