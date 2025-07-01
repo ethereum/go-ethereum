@@ -43,7 +43,10 @@ func (e *encodingStorageWrites) toMap() (map[uint64]common.Hash, error) {
 }
 
 // TODO: implement encoder/decoder manually on this to enforce code size limit
-type encodingCodeChange []byte
+type encodingCodeChange struct {
+	TxIndex uint64 `ssz-size:"2"`
+	Code    []byte `ssz-max:"24576"`
+}
 
 type encodingAccountAccess struct {
 	Address        [20]byte                `ssz-size:"20"`
@@ -118,7 +121,7 @@ func (e *encodingAccountAccess) toAccountAccess() (*accountAccess, error) {
 
 	{
 		if len(e.Code) == 1 {
-			codeChange := bytes.Clone(e.Code[0])
+			codeChange := codeChange{e.Code[0].TxIndex, bytes.Clone(e.Code[0].Code)}
 			res.codeChange = &codeChange
 		}
 	}
@@ -168,6 +171,12 @@ type encodingAccountNonce struct {
 }
 
 type BlockAccessList map[common.Address]*accountAccess
+
+func (b BlockAccessList) AccountRead(addr common.Address) {
+	if _, ok := b[addr]; !ok {
+		b[addr] = newAccountAccess()
+	}
+}
 
 func (a *accountAccess) MarkRead(key common.Hash) {
 	if _, ok := a.storageWrites[key]; !ok {
@@ -221,12 +230,17 @@ func (s storageWrites) toEncoderObj(slot common.Hash) encodingStorageWrites {
 	return res
 }
 
+type codeChange struct {
+	txIndex uint64
+	code    []byte
+}
+
 type accountAccess struct {
 	storageWrites  map[common.Hash]storageWrites
 	storageReads   map[common.Hash]struct{}
 	balanceChanges balanceDiff
 	nonceChanges   accountNonceDiffs
-	codeChange     *[]byte
+	codeChange     *codeChange
 }
 
 func newAccountAccess() *accountAccess {
@@ -313,7 +327,10 @@ func (a *accountAccess) toEncodingObj(addr common.Address) encodingAccountAccess
 
 	if a.codeChange != nil {
 		res.Code = []encodingCodeChange{
-			slices.Clone(*a.codeChange),
+			{
+				a.codeChange.txIndex,
+				slices.Clone(a.codeChange.code),
+			},
 		}
 	}
 
@@ -395,13 +412,15 @@ func (b BlockAccessList) StorageWrite(txIdx uint64, address common.Address, key,
 // * simpler implementation current spec: just accumulate modified nonces at transaction finalisation.
 
 // called during tx finalisation for each dirty account with mutated code
-func (b BlockAccessList) CodeChange(address common.Address, code []byte) {
+func (b BlockAccessList) CodeChange(address common.Address, txIndex uint64, code []byte) {
 	if _, ok := b[address]; !ok {
 		b[address] = newAccountAccess()
 	}
 
-	cc := slices.Clone(code)
-	b[address].codeChange = &cc
+	b[address].codeChange = &codeChange{
+		txIndex: txIndex,
+		code:    slices.Clone(code),
+	}
 }
 
 func (b *BlockAccessList) encodeSSZ() ([]byte, error) {

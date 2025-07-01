@@ -161,7 +161,7 @@ type StateDB struct {
 }
 
 func (s *StateDB) EnableBALConstruction() {
-	s.b = types.NewBlockAccessList()
+	s.b = new(types.BlockAccessList)
 }
 
 func (s *StateDB) BlockAccessList() *types.BlockAccessList {
@@ -388,6 +388,9 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 // GetState retrieves the value associated with the specific key.
 func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
+	if s.b != nil {
+		s.b.StorageRead(addr, hash)
+	}
 	if stateObject != nil {
 		if s.b != nil {
 			s.b.StorageRead(addr, hash)
@@ -638,6 +641,10 @@ func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
 	if obj == nil {
 		obj = s.createObject(addr)
 	}
+
+	if s.b != nil {
+		s.b.AccountRead(addr)
+	}
 	return obj
 }
 
@@ -791,7 +798,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 				// include code of created contracts
 				// TODO: validate that this doesn't trigger on delegated EOAs
 				if obj.newContract {
-					s.b.CodeChange(uint64(s.txIndex), obj.address, obj.code)
+					s.b.CodeChange(obj.address, uint64(s.txIndex), obj.code)
 				}
 			}
 
