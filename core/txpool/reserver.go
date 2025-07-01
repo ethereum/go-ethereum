@@ -39,14 +39,14 @@ var (
 // the account and ensure that one address cannot initiate transactions, authorizations,
 // and other state-changing behaviors in different pools at the same time.
 type ReservationTracker struct {
-	accounts map[common.Address]int
+	accounts map[common.Address]struct{}
 	lock     sync.RWMutex
 }
 
 // NewReservationTracker initializes the account reservation tracker.
 func NewReservationTracker() *ReservationTracker {
 	return &ReservationTracker{
-		accounts: make(map[common.Address]int),
+		accounts: make(map[common.Address]struct{}),
 	}
 }
 
@@ -88,15 +88,11 @@ func (h *ReservationHandle) Hold(addr common.Address) error {
 
 	// Double reservations are forbidden even from the same pool to
 	// avoid subtle bugs in the long term.
-	owner, exists := h.tracker.accounts[addr]
+	_, exists := h.tracker.accounts[addr]
 	if exists {
-		if owner == h.id {
-			log.Error("pool attempted to reserve already-owned address", "address", addr)
-			return nil // Ignore fault to give the pool a chance to recover while the bug gets fixed
-		}
 		return ErrAlreadyReserved
 	}
-	h.tracker.accounts[addr] = h.id
+	h.tracker.accounts[addr] = struct{}{}
 	if metrics.Enabled() {
 		m := fmt.Sprintf("%s/%d", reservationsGaugeName, h.id)
 		metrics.GetOrRegisterGauge(m, nil).Inc(1)
@@ -111,14 +107,10 @@ func (h *ReservationHandle) Release(addr common.Address) error {
 
 	// Ensure subpools only attempt to unreserve their own owned addresses,
 	// otherwise flag as a programming error.
-	owner, exists := h.tracker.accounts[addr]
+	_, exists := h.tracker.accounts[addr]
 	if !exists {
 		log.Error("pool attempted to unreserve non-reserved address", "address", addr)
 		return errors.New("address not reserved")
-	}
-	if owner != h.id {
-		log.Error("pool attempted to unreserve non-owned address", "address", addr)
-		return errors.New("address not owned")
 	}
 	delete(h.tracker.accounts, addr)
 	if metrics.Enabled() {
@@ -133,6 +125,6 @@ func (h *ReservationHandle) Has(address common.Address) bool {
 	h.tracker.lock.RLock()
 	defer h.tracker.lock.RUnlock()
 
-	id, exists := h.tracker.accounts[address]
-	return exists && id != h.id
+	_, exists := h.tracker.accounts[address]
+	return exists
 }
