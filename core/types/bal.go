@@ -17,326 +17,142 @@ import (
 
 // encoder types
 
-type encodingPerTxAccess struct {
+type encodingStorageWrite struct {
 	TxIdx      uint64   `ssz-size:"2"`
 	ValueAfter [32]byte `ssz-size:"32"`
 }
 
-type encodingSlotAccess struct {
-	Slot     [32]byte              `ssz-size:"32"`
-	Accesses []encodingPerTxAccess `ssz-max:"300000"`
+type encodingStorageRead struct {
+	TxIdx uint64   `ssz-size:"2"`
+	Key   [32]byte `ssz-size:"32"`
 }
+
+type encodingStorageWrites struct {
+	Slot     [32]byte               `ssz-size:"32"`
+	Accesses []encodingStorageWrite `ssz-max:"300000"`
+}
+
+func (e *encodingStorageWrites) toMap() (map[uint64]common.Hash, error) {
+	var prev *uint64
+
+	res := make(map[uint64]common.Hash)
+
+	for _, write := range e.Accesses {
+		if prev != nil {
+			if *prev >= write.TxIdx {
+				return nil, fmt.Errorf("storage write tx indices not in order")
+			}
+			res[write.TxIdx] = write.ValueAfter
+		}
+	}
+	return res, nil
+}
+
+// TODO: implement encoder/decoder manually on this to enforce code size limit
+type encodingCodeChange []byte
 
 type encodingAccountAccess struct {
-	Address  [20]byte             `ssz-size:"20"`
-	Accesses []encodingSlotAccess `ssz-max:"300000"`
-	Code     []byte               `ssz-max:"24576"`
+	Address        [20]byte                `ssz-size:"20"`
+	StorageWrites  []encodingStorageWrites `ssz-max:"300000"`
+	StorageReads   [][32]byte              `ssz-max:"300000"`
+	BalanceChanges []encodingBalanceChange `ssz-max:"300000"`
+	NonceChanges   []encodingAccountNonce  `ssz-max:"300000"`
+	Code           []encodingCodeChange    `ssz-max:"1"`
 }
 
-type encodingAccountAccessList []encodingAccountAccess
+func (e *encodingAccountAccess) toAccountAccess() (*accountAccess, error) {
+	res := accountAccess{
+		storageWrites:  make(map[common.Hash]storageWrites),
+		storageReads:   make(map[common.Hash]struct{}),
+		balanceChanges: make(balanceDiff),
+		nonceChanges:   make(accountNonceDiffs),
+		codeChange:     nil,
+	}
+
+	{
+		var prevWriteSlot *common.Hash
+		for _, write := range e.StorageWrites {
+			if prevWriteSlot != nil {
+				if bytes.Compare(write.Slot[:], (*prevWriteSlot)[:]) <= 0 {
+					return nil, fmt.Errorf("storage writes slots lexicographic order")
+				}
+			}
+			wr, err := write.toMap()
+			if err != nil {
+				return nil, err
+			}
+
+			res.storageWrites[write.Slot] = wr
+		}
+	}
+
+	{
+		var prevReadSlot *common.Hash
+		for _, read := range e.StorageReads {
+			if prevReadSlot != nil {
+				if bytes.Compare(read[:], (*prevReadSlot)[:]) <= 0 {
+					return nil, fmt.Errorf("storage read slots not in lexicographic order")
+				}
+			}
+			res.storageReads[read] = struct{}{}
+		}
+	}
+
+	{
+		var prevBalanceChangeIdx *uint64
+		for _, balanceChange := range e.BalanceChanges {
+			if prevBalanceChangeIdx != nil {
+				if *prevBalanceChangeIdx >= balanceChange.TxIdx {
+					return nil, fmt.Errorf("balance change tx indices not in ascending order")
+				}
+			}
+			res.balanceChanges[balanceChange.TxIdx] = new(uint256.Int).SetBytes(balanceChange.Delta[:])
+		}
+	}
+
+	{
+		var prevNonceDiffIdx *uint64
+		for _, nonceDiff := range e.NonceChanges {
+			if prevNonceDiffIdx != nil {
+				if *prevNonceDiffIdx >= nonceDiff.TxIdx {
+					return nil, fmt.Errorf("nonce diffs not in ascending order by tx index")
+				}
+			}
+			res.nonceChanges[nonceDiff.TxIdx] = nonceDiff.Nonce
+		}
+	}
+
+	{
+		if len(e.Code) == 1 {
+			codeChange := bytes.Clone(e.Code[0])
+			res.codeChange = &codeChange
+		}
+	}
+	return &res, nil
+}
+
+type encodingBlockAccessList []encodingAccountAccess
+
+func (e *encodingBlockAccessList) toBlockAccessList() (BlockAccessList, error) {
+	res := make(BlockAccessList)
+	var prevAccount *common.Address
+	for _, encAccountAccess := range *e {
+		if prevAccount != nil {
+			if bytes.Compare(encAccountAccess.Address[:], (*prevAccount)[:]) <= 0 {
+				return nil, fmt.Errorf("block access list accounts not in lexicographic order")
+			}
+		}
+		aa, err := encAccountAccess.toAccountAccess()
+		if err != nil {
+			return nil, err
+		}
+		res[encAccountAccess.Address] = *aa
+	}
+	return res, nil
+}
 
 // TODO: verify that Geth encodes the endianess according to the spec
 type encodingBalanceDelta [12]byte
-
-type encodingBalanceChange struct {
-	TxIdx uint64 `ssz-size:"2"`
-	Delta encodingBalanceDelta
-}
-
-type encodingAccountBalanceDiff struct {
-	Address [20]byte
-	Changes []encodingBalanceChange `ssz-max:"300000"`
-}
-
-// TODO: implement encoder/decoder manually on this, as we can't specify tags for a type declaration
-// TODO what's the difference between `type encodingBalanceDiffs = []encodingAccountBalanceDiff` and the below?
-type encodingBalanceDiffs []encodingAccountBalanceDiff
-
-type encodingAccountCodeDiff struct {
-	Address [20]byte
-	TxIdx   uint64 `ssz-size:"2"`
-	NewCode []byte `ssz-max:"24576"`
-}
-
-// TODO: implement encoder/decoder manually on this, as we can't specify tags for a type declaration
-type encodingCodeDiffs []encodingAccountCodeDiff
-
-type encodingAccountNonce struct {
-	TxIdx uint64 `ssz-size:"2"`
-	Nonce uint64 `ssz-size:"8"`
-}
-
-type encodingAccountNonces struct {
-	Address [20]byte
-	Diffs   []encodingAccountNonce `ssz-max:"300000"`
-}
-
-// TODO: implement encoder/decoder manually on this, as we can't specify tags for a type declaration
-type encodingNonceDiffs []encodingAccountNonces
-
-type encodingBlockAccessList struct {
-	AccountAccesses encodingAccountAccessList `ssz-max:"300000"`
-	BalanceDiffs    encodingBalanceDiffs      `ssz-max:"300000"`
-	CodeDiffs       encodingCodeDiffs         `ssz-max:"300000"`
-	NonceDiffs      encodingNonceDiffs        `ssz-max:"30000"`
-}
-
-// toMap returns a copy of the code diffs in the working format
-func (c encodingCodeDiffs) toMap() (map[common.Address]accountCodeDiff, error) {
-	var prevAddr *common.Address
-	res := make(map[common.Address]accountCodeDiff)
-	for _, diff := range c {
-		if prevAddr != nil {
-			if bytes.Compare(diff.Address[:], (*prevAddr)[:]) <= 0 {
-				return nil, fmt.Errorf("code diffs not in lexicographic order")
-			}
-		}
-		res[diff.Address] = accountCodeDiff{
-			diff.TxIdx,
-			bytes.Clone(diff.NewCode),
-		}
-		var p common.Address = diff.Address
-		prevAddr = &p
-	}
-	return res, nil
-}
-
-// toMap returns a copy of an account's tx balance diffs in their working form.
-func (c *encodingAccountBalanceDiff) toMap() (balanceDiff, error) {
-	var prevIdx *uint64
-	res := make(balanceDiff)
-	for _, diff := range c.Changes {
-		if prevIdx != nil {
-			if *prevIdx >= diff.TxIdx {
-				return nil, fmt.Errorf("not in lexicographic ordering")
-			}
-		}
-		res[diff.TxIdx] = new(uint256.Int).SetBytes(diff.Delta[:])
-	}
-	return res, nil
-}
-
-// TODO: make this a function on the parameter tpye
-func (c encodingBalanceDiffs) toMap() (map[common.Address]balanceDiff, error) {
-	var prevAddr *common.Address
-	res := make(map[common.Address]balanceDiff)
-	for _, diff := range c {
-		if prevAddr != nil {
-			if bytes.Compare(diff.Address[:], (*prevAddr)[:]) <= 0 {
-				return nil, fmt.Errorf("balance diffs not in lexicographic order")
-			}
-		}
-		mp, err := diff.toMap()
-		if err != nil {
-			return nil, err
-		}
-		res[diff.Address] = mp
-		var p common.Address = diff.Address
-		prevAddr = &p
-	}
-	return res, nil
-}
-
-func (a *encodingSlotAccess) toSlotAccess() (*slotAccess, error) {
-	var prevIdx *uint64
-	res := slotAccess{make(map[uint64]common.Hash)}
-	for _, diff := range a.Accesses {
-		if prevIdx != nil {
-			if *prevIdx >= diff.TxIdx {
-				return nil, fmt.Errorf("not in lexicographic ordering")
-			}
-		}
-		res.Writes[diff.TxIdx] = diff.ValueAfter
-		prevIdx = &diff.TxIdx
-	}
-	return &res, nil
-}
-
-func (a *encodingAccountAccess) toAccountAccess() (*accountAccess, error) {
-	res := accountAccess{
-		a.Address,
-		make(map[common.Hash]slotAccess),
-		bytes.Clone(a.Code),
-	}
-	var prevSlot *[32]byte
-	for _, diff := range a.Accesses {
-		if prevSlot != nil {
-			if bytes.Compare(diff.Slot[:], (*prevSlot)[:]) <= 0 {
-				return nil, fmt.Errorf("storage slots not in lexicographic order")
-			}
-		}
-		mp, err := diff.toSlotAccess()
-		if err != nil {
-			return nil, err
-		}
-		res.Accesses[diff.Slot] = *mp
-		prevSlot = &diff.Slot
-	}
-	return &res, nil
-}
-
-func (al encodingAccountAccessList) toMap() (map[common.Address]*accountAccess, error) {
-	var prevAddr *common.Address
-	res := make(map[common.Address]*accountAccess)
-	for _, diff := range al {
-		if prevAddr != nil {
-			if bytes.Compare(diff.Address[:], (*prevAddr)[:]) <= 0 {
-				return nil, fmt.Errorf("accounts not in lexicographic order")
-			}
-		}
-		mp, err := diff.toAccountAccess()
-		if err != nil {
-			return nil, err
-		}
-		res[diff.Address] = mp
-		var p common.Address = diff.Address
-		prevAddr = &p
-	}
-	return res, nil
-}
-
-// TODO: assert that there were no duplicate keys (tx indices / addresses) in any entries
-
-func (n encodingAccountNonces) toMap() (accountNonceDiffs, error) {
-	var prevIdx *uint64
-	res := make(accountNonceDiffs)
-	for _, diff := range n.Diffs {
-		if prevIdx != nil {
-			if *prevIdx >= diff.TxIdx {
-				return nil, fmt.Errorf("not in lexicographic ordering")
-			}
-		}
-		res[diff.TxIdx] = diff.Nonce
-		prevIdx = &diff.TxIdx
-	}
-	return res, nil
-}
-
-func (n encodingNonceDiffs) toMap() (map[common.Address]accountNonceDiffs, error) {
-	var prevAddr *common.Address
-	res := make(map[common.Address]accountNonceDiffs)
-	for _, diff := range n {
-		if prevAddr != nil {
-			if bytes.Compare(diff.Address[:], (*prevAddr)[:]) <= 0 {
-				return nil, fmt.Errorf("nonce diff accounts not in lexicographic order")
-			}
-		}
-		addrDiff, err := diff.toMap()
-		if err != nil {
-			return nil, err
-		}
-		res[diff.Address] = addrDiff
-		var p common.Address = diff.Address
-		prevAddr = &p
-	}
-	return res, nil
-}
-
-func (b *encodingBlockAccessList) ToBlockAccessList() (*BlockAccessList, error) {
-	// TODO: ensure that there are no duplicate indexes where appropriate (for tx-idx and addressed keyed maps)
-	accountAccesses, err := b.AccountAccesses.toMap()
-	if err != nil {
-		return nil, err
-	}
-	balanceChanges, err := b.BalanceDiffs.toMap()
-	if err != nil {
-		return nil, err
-	}
-	codeChanges, err := b.CodeDiffs.toMap()
-	if err != nil {
-		return nil, err
-	}
-	nonceDiffs, err := b.NonceDiffs.toMap()
-	if err != nil {
-		return nil, err
-	}
-	return &BlockAccessList{
-		accountAccesses,
-		balanceChanges,
-		codeChanges,
-		nonceDiffs,
-		common.Hash{},
-	}, nil
-}
-
-// non-encoder objects
-
-func nonceDiffsToEncoderObj(nonceDiffs map[common.Address]accountNonceDiffs) (res encodingNonceDiffs) {
-	var addrs []common.Address
-	for addr, _ := range nonceDiffs {
-		addrs = append(addrs, addr)
-	}
-
-	sort.Slice(addrs, func(i, j int) bool {
-		return bytes.Compare(addrs[i][:], addrs[j][:]) < 0
-	})
-
-	for _, addr := range addrs {
-		res = append(res, nonceDiffs[addr].toEncoderObj(addr))
-	}
-	return res
-}
-
-type slotAccess struct {
-	Writes map[uint64]common.Hash `json:"writes"` // map of tx index to post-tx slot value
-}
-
-func (s slotAccess) toEncoderObj(key common.Hash) (res encodingSlotAccess) {
-	var (
-		slotIdxs []uint64
-	)
-	res.Slot = key
-	for sIdx, _ := range s.Writes {
-		slotIdxs = append(slotIdxs, sIdx)
-	}
-	sort.Slice(slotIdxs, func(i, j int) bool {
-		return slotIdxs[i] < slotIdxs[j]
-	})
-	for _, slotIdx := range slotIdxs {
-		res.Accesses = append(res.Accesses, encodingPerTxAccess{
-			slotIdx,
-			s.Writes[slotIdx],
-		})
-	}
-	return
-}
-
-type accountAccess struct {
-	Address  common.Address             `json:"address"`
-	Accesses map[common.Hash]slotAccess `json:"accesses"` // map of slot key to all post-tx values where that slot was read/written
-	Code     []byte                     `json:"code"`
-}
-
-func (a *accountAccess) Copy() *accountAccess {
-	accesses := make(map[common.Hash]slotAccess)
-	for key, access := range a.Accesses {
-		accesses[key] = slotAccess{maps.Clone(access.Writes)}
-	}
-
-	return &accountAccess{
-		a.Address,
-		accesses,
-		bytes.Clone(a.Code),
-	}
-}
-
-func (a *accountAccess) MarkRead(key common.Hash) {
-	if _, ok := a.Accesses[key]; !ok {
-		a.Accesses[key] = slotAccess{
-			make(map[uint64]common.Hash),
-		}
-	}
-}
-
-func (a *accountAccess) MarkWrite(txIdx uint64, key, value common.Hash) {
-	if _, ok := a.Accesses[key]; !ok {
-		a.Accesses[key] = slotAccess{
-			make(map[uint64]common.Hash),
-		}
-	}
-
-	a.Accesses[key].Writes[txIdx] = value
-}
 
 func (b *encodingBalanceDelta) Set(val *uint256.Int) *encodingBalanceDelta {
 	valBytes := val.Bytes()
@@ -347,6 +163,24 @@ func (b *encodingBalanceDelta) Set(val *uint256.Int) *encodingBalanceDelta {
 	return b
 }
 
+type encodingBalanceChange struct {
+	TxIdx uint64 `ssz-size:"2"`
+	Delta encodingBalanceDelta
+}
+
+type encodingAccountNonce struct {
+	TxIdx uint64 `ssz-size:"2"`
+	Nonce uint64 `ssz-size:"8"`
+}
+
+type BlockAccessList map[common.Address]accountAccess
+
+func (a *accountAccess) MarkRead(key common.Hash) {
+}
+
+func (a *accountAccess) MarkWrite(txIdx uint64, key, value common.Hash) {
+}
+
 type balanceDiff map[uint64]*uint256.Int
 
 func (b balanceDiff) Copy() balanceDiff {
@@ -355,37 +189,6 @@ func (b balanceDiff) Copy() balanceDiff {
 		res[idx] = balance.Clone()
 	}
 	return res
-}
-
-func (b balanceDiff) toEncoderObj(addr common.Address) (res encodingAccountBalanceDiff) {
-	res.Address = addr
-	var diffIdxs []uint64
-	for txIdx, _ := range b {
-		diffIdxs = append(diffIdxs, txIdx)
-	}
-	sort.Slice(diffIdxs, func(i, j int) bool {
-		return diffIdxs[i] < diffIdxs[j]
-	})
-
-	for _, idx := range diffIdxs {
-		res.Changes = append(res.Changes, encodingBalanceChange{
-			TxIdx: idx,
-			Delta: *new(encodingBalanceDelta).Set(b[idx]),
-		})
-	}
-	return res
-}
-
-type accountCodeDiff struct {
-	TxIdx uint64 `json:"txIdx"`
-	Code  []byte `json:"Code"`
-}
-
-func (c *accountCodeDiff) Copy() accountCodeDiff {
-	return accountCodeDiff{
-		c.TxIdx,
-		bytes.Clone(c.Code),
-	}
 }
 
 // map of tx index to the prestate nonce
@@ -414,17 +217,25 @@ func (a accountNonceDiffs) toEncoderObj(addr common.Address) encodingAccountNonc
 	return res
 }
 
-type accountDiffs map[common.Address]*accountAccess
-type balanceDiffs map[common.Address]balanceDiff
-type codeDiffs map[common.Address]accountCodeDiff
-type nonceDiffs map[common.Address]accountNonceDiffs
+type storageWrites map[uint64]common.Hash
 
-type BlockAccessList struct {
-	AccountDiffs accountDiffs `json:"accountDiffs"`
-	BalanceDiffs balanceDiffs `json:"balanceDiffs"`
-	CodeDiffs    codeDiffs    `json:"codeDiffs"`
-	NonceDiffs   nonceDiffs   `json:"nonceDiffs"`
-	hash         common.Hash  `json:"hash"`
+type accountAccess struct {
+	storageWrites  map[common.Hash]storageWrites
+	storageReads   map[common.Hash]struct{}
+	balanceChanges balanceDiff
+	nonceChanges   accountNonceDiffs
+	codeChange     *[]byte
+}
+
+func (a *accountAccess) toEncodingObj(addr common.Address) encodingAccountAccess {
+	res := encodingAccountAccess{
+		Address:        addr,
+		StorageWrites:  make([]encodingStorageWrites, 0),
+		StorageReads:   make([][32]byte, 0),
+		BalanceChanges: make([]encodingBalanceChange, 0),
+		NonceChanges:   make([]encodingAccountNonce, 0),
+		Code:           nil,
+	}
 }
 
 // Copy deep-copies the access list
@@ -674,14 +485,14 @@ func (b *BlockAccessList) toEncoderObj() *encodingBlockAccessList {
 		sort.Slice(storageAccessKeys, func(i, j int) bool {
 			return bytes.Compare(storageAccessKeys[i][:], storageAccessKeys[j][:]) < 0
 		})
-		var accesses []encodingSlotAccess
+		var accesses []encodingStorageWrites
 		for _, accessSlot := range storageAccessKeys {
 			accesses = append(accesses, b.AccountDiffs[addr].Accesses[accessSlot].toEncoderObj(accessSlot))
 		}
 		encoderAccountAccesses = append(encoderAccountAccesses, encodingAccountAccess{
-			Address:  addr,
-			Accesses: accesses,
-			Code:     b.AccountDiffs[addr].Code,
+			Address:       addr,
+			StorageWrites: accesses,
+			Code:          b.AccountDiffs[addr].Code,
 		})
 	}
 
@@ -726,7 +537,7 @@ func (e *encodingBlockAccessList) PrettyPrint() string {
 		printWithIndent(1, fmt.Sprintf("code:    %x", accountDiff.Code)) // TODO: code shouldn't be in account accesses (?)
 
 		printWithIndent(1, "slots:")
-		for _, slot := range accountDiff.Accesses {
+		for _, slot := range accountDiff.StorageWrites {
 			printWithIndent(2, fmt.Sprintf("%x", slot))
 			printWithIndent(2, "accesses:")
 			for _, access := range slot.Accesses {

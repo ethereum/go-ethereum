@@ -7,13 +7,13 @@ import (
 	ssz "github.com/ferranbt/fastssz"
 )
 
-// MarshalSSZ ssz marshals the encodingPerTxAccess object
-func (e *encodingPerTxAccess) MarshalSSZ() ([]byte, error) {
+// MarshalSSZ ssz marshals the encodingStorageWrite object
+func (e *encodingStorageWrite) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(e)
 }
 
-// MarshalSSZTo ssz marshals the encodingPerTxAccess object to a target array
-func (e *encodingPerTxAccess) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+// MarshalSSZTo ssz marshals the encodingStorageWrite object to a target array
+func (e *encodingStorageWrite) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 
 	// Field (0) 'TxIdx'
@@ -25,8 +25,8 @@ func (e *encodingPerTxAccess) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	return
 }
 
-// UnmarshalSSZ ssz unmarshals the encodingPerTxAccess object
-func (e *encodingPerTxAccess) UnmarshalSSZ(buf []byte) error {
+// UnmarshalSSZ ssz unmarshals the encodingStorageWrite object
+func (e *encodingStorageWrite) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
 	if size != 40 {
@@ -42,19 +42,19 @@ func (e *encodingPerTxAccess) UnmarshalSSZ(buf []byte) error {
 	return err
 }
 
-// SizeSSZ returns the ssz encoded size in bytes for the encodingPerTxAccess object
-func (e *encodingPerTxAccess) SizeSSZ() (size int) {
+// SizeSSZ returns the ssz encoded size in bytes for the encodingStorageWrite object
+func (e *encodingStorageWrite) SizeSSZ() (size int) {
 	size = 40
 	return
 }
 
-// HashTreeRoot ssz hashes the encodingPerTxAccess object
-func (e *encodingPerTxAccess) HashTreeRoot() ([32]byte, error) {
+// HashTreeRoot ssz hashes the encodingStorageWrite object
+func (e *encodingStorageWrite) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(e)
 }
 
-// HashTreeRootWith ssz hashes the encodingPerTxAccess object with a hasher
-func (e *encodingPerTxAccess) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+// HashTreeRootWith ssz hashes the encodingStorageWrite object with a hasher
+func (e *encodingStorageWrite) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'TxIdx'
@@ -67,18 +67,18 @@ func (e *encodingPerTxAccess) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 	return
 }
 
-// GetTree ssz hashes the encodingPerTxAccess object
-func (e *encodingPerTxAccess) GetTree() (*ssz.Node, error) {
+// GetTree ssz hashes the encodingStorageWrite object
+func (e *encodingStorageWrite) GetTree() (*ssz.Node, error) {
 	return ssz.ProofTree(e)
 }
 
-// MarshalSSZ ssz marshals the encodingSlotAccess object
-func (e *encodingSlotAccess) MarshalSSZ() ([]byte, error) {
+// MarshalSSZ ssz marshals the encodingStorageWrites object
+func (e *encodingStorageWrites) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(e)
 }
 
-// MarshalSSZTo ssz marshals the encodingSlotAccess object to a target array
-func (e *encodingSlotAccess) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+// MarshalSSZTo ssz marshals the encodingStorageWrites object to a target array
+func (e *encodingStorageWrites) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 	offset := int(36)
 
@@ -90,7 +90,7 @@ func (e *encodingSlotAccess) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 
 	// Field (1) 'Accesses'
 	if size := len(e.Accesses); size > 300000 {
-		err = ssz.ErrListTooBigFn("encodingSlotAccess.Accesses", size, 300000)
+		err = ssz.ErrListTooBigFn("encodingStorageWrites.Accesses", size, 300000)
 		return
 	}
 	for ii := 0; ii < len(e.Accesses); ii++ {
@@ -102,8 +102,8 @@ func (e *encodingSlotAccess) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	return
 }
 
-// UnmarshalSSZ ssz unmarshals the encodingSlotAccess object
-func (e *encodingSlotAccess) UnmarshalSSZ(buf []byte) error {
+// UnmarshalSSZ ssz unmarshals the encodingStorageWrites object
+func (e *encodingStorageWrites) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
 	if size < 36 {
@@ -132,7 +132,7 @@ func (e *encodingSlotAccess) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		e.Accesses = make([]encodingPerTxAccess, num)
+		e.Accesses = make([]encodingStorageWrite, num)
 		for ii := 0; ii < num; ii++ {
 			if err = e.Accesses[ii].UnmarshalSSZ(buf[ii*40 : (ii+1)*40]); err != nil {
 				return err
@@ -142,8 +142,8 @@ func (e *encodingSlotAccess) UnmarshalSSZ(buf []byte) error {
 	return err
 }
 
-// SizeSSZ returns the ssz encoded size in bytes for the encodingSlotAccess object
-func (e *encodingSlotAccess) SizeSSZ() (size int) {
+// SizeSSZ returns the ssz encoded size in bytes for the encodingStorageWrites object
+func (e *encodingStorageWrites) SizeSSZ() (size int) {
 	size = 36
 
 	// Field (1) 'Accesses'
@@ -152,13 +152,13 @@ func (e *encodingSlotAccess) SizeSSZ() (size int) {
 	return
 }
 
-// HashTreeRoot ssz hashes the encodingSlotAccess object
-func (e *encodingSlotAccess) HashTreeRoot() ([32]byte, error) {
+// HashTreeRoot ssz hashes the encodingStorageWrites object
+func (e *encodingStorageWrites) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(e)
 }
 
-// HashTreeRootWith ssz hashes the encodingSlotAccess object with a hasher
-func (e *encodingSlotAccess) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+// HashTreeRootWith ssz hashes the encodingStorageWrites object with a hasher
+func (e *encodingStorageWrites) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'Slot'
@@ -184,8 +184,8 @@ func (e *encodingSlotAccess) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 	return
 }
 
-// GetTree ssz hashes the encodingSlotAccess object
-func (e *encodingSlotAccess) GetTree() (*ssz.Node, error) {
+// GetTree ssz hashes the encodingStorageWrites object
+func (e *encodingStorageWrites) GetTree() (*ssz.Node, error) {
 	return ssz.ProofTree(e)
 }
 
@@ -204,28 +204,28 @@ func (e *encodingAccountAccess) MarshalSSZTo(buf []byte) (dst []byte, err error)
 
 	// Offset (1) 'Accesses'
 	dst = ssz.WriteOffset(dst, offset)
-	for ii := 0; ii < len(e.Accesses); ii++ {
+	for ii := 0; ii < len(e.StorageWrites); ii++ {
 		offset += 4
-		offset += e.Accesses[ii].SizeSSZ()
+		offset += e.StorageWrites[ii].SizeSSZ()
 	}
 
 	// Offset (2) 'Code'
 	dst = ssz.WriteOffset(dst, offset)
 
 	// Field (1) 'Accesses'
-	if size := len(e.Accesses); size > 300000 {
+	if size := len(e.StorageWrites); size > 300000 {
 		err = ssz.ErrListTooBigFn("encodingAccountAccess.Accesses", size, 300000)
 		return
 	}
 	{
-		offset = 4 * len(e.Accesses)
-		for ii := 0; ii < len(e.Accesses); ii++ {
+		offset = 4 * len(e.StorageWrites)
+		for ii := 0; ii < len(e.StorageWrites); ii++ {
 			dst = ssz.WriteOffset(dst, offset)
-			offset += e.Accesses[ii].SizeSSZ()
+			offset += e.StorageWrites[ii].SizeSSZ()
 		}
 	}
-	for ii := 0; ii < len(e.Accesses); ii++ {
-		if dst, err = e.Accesses[ii].MarshalSSZTo(dst); err != nil {
+	for ii := 0; ii < len(e.StorageWrites); ii++ {
+		if dst, err = e.StorageWrites[ii].MarshalSSZTo(dst); err != nil {
 			return
 		}
 	}
@@ -275,9 +275,9 @@ func (e *encodingAccountAccess) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		e.Accesses = make([]encodingSlotAccess, num)
+		e.StorageWrites = make([]encodingStorageWrites, num)
 		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
-			if err = e.Accesses[indx].UnmarshalSSZ(buf); err != nil {
+			if err = e.StorageWrites[indx].UnmarshalSSZ(buf); err != nil {
 				return err
 			}
 			return nil
@@ -306,9 +306,9 @@ func (e *encodingAccountAccess) SizeSSZ() (size int) {
 	size = 28
 
 	// Field (1) 'Accesses'
-	for ii := 0; ii < len(e.Accesses); ii++ {
+	for ii := 0; ii < len(e.StorageWrites); ii++ {
 		size += 4
-		size += e.Accesses[ii].SizeSSZ()
+		size += e.StorageWrites[ii].SizeSSZ()
 	}
 
 	// Field (2) 'Code'
@@ -332,12 +332,12 @@ func (e *encodingAccountAccess) HashTreeRootWith(hh ssz.HashWalker) (err error) 
 	// Field (1) 'Accesses'
 	{
 		subIndx := hh.Index()
-		num := uint64(len(e.Accesses))
+		num := uint64(len(e.StorageWrites))
 		if num > 300000 {
 			err = ssz.ErrIncorrectListSize
 			return
 		}
-		for _, elem := range e.Accesses {
+		for _, elem := range e.StorageWrites {
 			if err = elem.HashTreeRootWith(hh); err != nil {
 				return
 			}
