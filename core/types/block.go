@@ -360,7 +360,7 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 		if err := bal.UnmarshalSSZ(eb.BAL); err != nil {
 			return err
 		}
-		b.accessList, err = bal.ToBlockAccessList()
+		b.accessList, err = bal.toBlockAccessList()
 		if err != nil {
 			return err
 		}

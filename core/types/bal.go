@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-//go:generate go run github.com/ferranbt/fastssz/sszgen --path . --objs encodingPerTxAccess,encodingSlotAccess,encodingAccountAccess,encodingAccountAccessList,encodingBlockAccessList,encodingBalanceDelta,encodingBalanceChange,encodingAccountBalanceDiff,encodingCodeChange,encodingAccountNonce,encodingNonceDiffs,encodingAccountNonce,encodingBlockAccessList --output bal_encoding_generated.go
+//go:generate go run github.com/ferranbt/fastssz/sszgen  --output bal_encoding_generated.go --path . --objs encodingStorageWrite,encodingStorageWrites,encodingCodeChange,encodingBalanceChange,encodingAccountNonce,encodingCodeChange,encodingAccountAccess,encodingBlockAccessList
 
 // encoder types
 
@@ -128,12 +128,14 @@ func (e *encodingAccountAccess) toAccountAccess() (*accountAccess, error) {
 	return &res, nil
 }
 
-type encodingBlockAccessList []encodingAccountAccess
+type encodingBlockAccessList struct {
+	Inner []encodingAccountAccess `ssz-max:"300000"`
+}
 
-func (e *encodingBlockAccessList) toBlockAccessList() (BlockAccessList, error) {
+func (e *encodingBlockAccessList) toBlockAccessList() (*BlockAccessList, error) {
 	res := make(BlockAccessList)
 	var prevAccount *common.Address
-	for _, encAccountAccess := range *e {
+	for _, encAccountAccess := range e.Inner {
 		if prevAccount != nil {
 			if bytes.Compare(encAccountAccess.Address[:], (*prevAccount)[:]) <= 0 {
 				return nil, fmt.Errorf("block access list accounts not in lexicographic order")
@@ -145,7 +147,7 @@ func (e *encodingBlockAccessList) toBlockAccessList() (BlockAccessList, error) {
 		}
 		res[encAccountAccess.Address] = aa
 	}
-	return res, nil
+	return &res, nil
 }
 
 // TODO: verify that Geth encodes the endianess according to the spec
@@ -339,12 +341,12 @@ func (a *accountAccess) toEncodingObj(addr common.Address) encodingAccountAccess
 
 func (b BlockAccessList) toEncodingObj() (res encodingBlockAccessList) {
 	for addr, acct := range b {
-		res = append(res, acct.toEncodingObj(addr))
+		res.Inner = append(res.Inner, acct.toEncodingObj(addr))
 	}
 	return res
 }
 
-func (b BlockAccessList) Copy() BlockAccessList {
+func (b BlockAccessList) Copy() *BlockAccessList {
 	panic("not implemented")
 }
 
@@ -424,12 +426,14 @@ func (b BlockAccessList) CodeChange(address common.Address, txIndex uint64, code
 }
 
 func (b *BlockAccessList) encodeSSZ() ([]byte, error) {
-	encoderObj := b.toEncodingObj()
-	dst, err := encoderObj.MarshalSSZTo(nil)
-	if err != nil {
-		return nil, err
-	}
-	return dst, nil
+	/*
+		encoderObj := b.toEncodingObj()
+		dst, err := encoderObj.MarshalSSZTo(nil)
+		if err != nil {
+			return nil, err
+		}
+	*/
+	return nil, nil
 }
 
 func (e encodingBlockAccessList) PrettyPrint() string {
@@ -437,7 +441,7 @@ func (e encodingBlockAccessList) PrettyPrint() string {
 	printWithIndent := func(indent int, text string) {
 		fmt.Fprintf(&res, "%s%s\n", strings.Repeat("    ", indent), text)
 	}
-	for _, accountDiff := range e {
+	for _, accountDiff := range e.Inner {
 		printWithIndent(0, fmt.Sprintf("%x:", accountDiff.Address))
 		printWithIndent(1, fmt.Sprintf("code:    %x", accountDiff.Code)) // TODO: code shouldn't be in account accesses (?)
 
@@ -492,19 +496,21 @@ func (b *BlockAccessList) EncodeRLP(wr io.Writer) error {
 }
 
 func (b *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
-	var enc encodingBlockAccessList
-	encBytes, err := s.Bytes()
-	if err != nil {
-		return err
-	}
-	if err := enc.UnmarshalSSZ(encBytes); err != nil {
-		return err
-	}
-	res, err := enc.toBlockAccessList()
-	if err != nil {
-		return err
-	}
-	*b = res
+	/*
+		var enc encodingBlockAccessList
+		encBytes, err := s.Bytes()
+		if err != nil {
+			return err
+		}
+		if err := enc.UnmarshalSSZ(encBytes); err != nil {
+			return err
+		}
+		res, err := enc.toBlockAccessList()
+		if err != nil {
+			return err
+		}
+		*b = res
+	*/
 	return nil
 }
 
