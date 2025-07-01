@@ -21,11 +21,6 @@ type encodingStorageWrite struct {
 	ValueAfter [32]byte `ssz-size:"32"`
 }
 
-type encodingStorageRead struct {
-	TxIdx uint64   `ssz-size:"2"`
-	Key   [32]byte `ssz-size:"32"`
-}
-
 type encodingStorageWrites struct {
 	Slot     [32]byte               `ssz-size:"32"`
 	Accesses []encodingStorageWrite `ssz-max:"300000"`
@@ -145,7 +140,7 @@ func (e *encodingBlockAccessList) toBlockAccessList() (BlockAccessList, error) {
 		if err != nil {
 			return nil, err
 		}
-		res[encAccountAccess.Address] = *aa
+		res[encAccountAccess.Address] = aa
 	}
 	return res, nil
 }
@@ -172,14 +167,20 @@ type encodingAccountNonce struct {
 	Nonce uint64 `ssz-size:"8"`
 }
 
-type BlockAccessList map[common.Address]accountAccess
+type BlockAccessList map[common.Address]*accountAccess
 
 func (a *accountAccess) MarkRead(key common.Hash) {
-	panic("not implemented")
+	if _, ok := a.storageWrites[key]; !ok {
+		a.storageReads[key] = struct{}{}
+	}
 }
 
 func (a *accountAccess) MarkWrite(txIdx uint64, key, value common.Hash) {
-	panic("not implemented")
+	if _, ok := a.storageWrites[key]; !ok {
+		a.storageWrites[key] = make(storageWrites)
+	}
+
+	a.storageWrites[key][txIdx] = value
 }
 
 type balanceDiff map[uint64]*uint256.Int
@@ -226,6 +227,15 @@ type accountAccess struct {
 	balanceChanges balanceDiff
 	nonceChanges   accountNonceDiffs
 	codeChange     *[]byte
+}
+
+func newAccountAccess() *accountAccess {
+	return &accountAccess{
+		storageWrites:  make(map[common.Hash]storageWrites),
+		storageReads:   make(map[common.Hash]struct{}),
+		balanceChanges: make(balanceDiff),
+		nonceChanges:   make(accountNonceDiffs),
+	}
 }
 
 func (a *accountAccess) toEncodingObj(addr common.Address) encodingAccountAccess {
@@ -326,16 +336,24 @@ func (b *BlockAccessList) Eq(other *BlockAccessList) bool {
 }
 
 // NonceDiff records tx post-state nonce of any contract-like accounts whose nonce was incremented
-func (b *BlockAccessList) NonceDiff(address common.Address, txIdx, postNonce uint64) {
-	panic("not implemented")
+func (b BlockAccessList) NonceDiff(address common.Address, txIdx, postNonce uint64) {
+	if _, ok := b[address]; !ok {
+		b[address] = newAccountAccess()
+	}
+
+	b[address].nonceChanges[txIdx] = postNonce
 }
 
 // BalanceChange records the transaction post-state balance of an account that changed its balance
 // TODO: for the first transaction in the block, should this consider balances before any system contracts
 // were executed?
 // TODO: for the final transaction in the block, should this consider the balance change from block reward?
-func (b *BlockAccessList) BalanceChange(txIdx uint64, address common.Address, balance *uint256.Int) {
-	panic("not implemented")
+func (b BlockAccessList) BalanceChange(txIdx uint64, address common.Address, balance *uint256.Int) {
+	if _, ok := b[address]; !ok {
+		b[address] = newAccountAccess()
+	}
+
+	b[address].balanceChanges[txIdx] = balance
 }
 
 // TODO for eip:  specify that storage slots which are read/modified for accounts that are created/selfdestructed
@@ -344,17 +362,30 @@ func (b *BlockAccessList) BalanceChange(txIdx uint64, address common.Address, ba
 // TODO for eip:  specify that storage slots of newly-created accounts which are only read are not included in the BAL (?)
 
 // called during tx execution every time a storage slot is read
-func (b *BlockAccessList) StorageRead(address common.Address, key common.Hash) {
-	panic("not implemented")
+func (b BlockAccessList) StorageRead(address common.Address, key common.Hash) {
+	if _, ok := b[address]; !ok {
+		b[address] = newAccountAccess()
+	}
+
+	if _, ok := b[address].storageWrites[key]; ok {
+		return
+	}
+
+	b[address].storageReads[key] = struct{}{}
 }
 
 // called every time a mutated storage value is committed upon transaction finalization
-func (b *BlockAccessList) StorageWrite(txIdx uint64, address common.Address, key, value common.Hash) {
-	panic("not implemented")
-}
+func (b BlockAccessList) StorageWrite(txIdx uint64, address common.Address, key, value common.Hash) {
+	if _, ok := b[address]; !ok {
+		b[address] = newAccountAccess()
+	}
 
-// TODO: is there a way to bump the EOA nonce more than 1 in a transaction?
-// ^ delegated EOA can execute code which calls CREATE multiple times
+	if _, ok := b[address].storageWrites[key]; !ok {
+		b[address].storageWrites[key] = make(storageWrites)
+	}
+	b[address].storageWrites[key][txIdx] = value
+	delete(b[address].storageReads, key)
+}
 
 // TODO: include these in the PR to the EIP
 // arguments for post-transaction nonces, which include nonces from tx senders:
@@ -364,8 +395,13 @@ func (b *BlockAccessList) StorageWrite(txIdx uint64, address common.Address, key
 // * simpler implementation current spec: just accumulate modified nonces at transaction finalisation.
 
 // called during tx finalisation for each dirty account with mutated code
-func (b *BlockAccessList) CodeChange(txIdx uint64, address common.Address, code []byte) {
-	panic("not implemented")
+func (b BlockAccessList) CodeChange(address common.Address, code []byte) {
+	if _, ok := b[address]; !ok {
+		b[address] = newAccountAccess()
+	}
+
+	cc := slices.Clone(code)
+	b[address].codeChange = &cc
 }
 
 func (b *BlockAccessList) encodeSSZ() ([]byte, error) {
@@ -377,47 +413,39 @@ func (b *BlockAccessList) encodeSSZ() ([]byte, error) {
 	return dst, nil
 }
 
-func (e *encodingBlockAccessList) PrettyPrint() string {
+func (e encodingBlockAccessList) PrettyPrint() string {
 	var res bytes.Buffer
 	printWithIndent := func(indent int, text string) {
 		fmt.Fprintf(&res, "%s%s\n", strings.Repeat("    ", indent), text)
 	}
-	fmt.Fprintf(&res, "accounts:\n")
-	for _, accountDiff := range e.AccountAccesses {
-		printWithIndent(1, fmt.Sprintf("address: %x", accountDiff.Address))
+	for _, accountDiff := range e {
+		printWithIndent(0, fmt.Sprintf("%x:", accountDiff.Address))
 		printWithIndent(1, fmt.Sprintf("code:    %x", accountDiff.Code)) // TODO: code shouldn't be in account accesses (?)
 
-		printWithIndent(1, "slots:")
+		printWithIndent(1, "storage writes:")
 		for _, slot := range accountDiff.StorageWrites {
-			printWithIndent(2, fmt.Sprintf("%x", slot))
-			printWithIndent(2, "accesses:")
+			printWithIndent(2, fmt.Sprintf("%x:", slot))
 			for _, access := range slot.Accesses {
 				printWithIndent(3, fmt.Sprintf("idx: %d", access.TxIdx))
 				printWithIndent(3, fmt.Sprintf("post: %x", access.ValueAfter))
 			}
 		}
-	}
-	printWithIndent(0, "code:")
-	for _, codeDiff := range e.CodeDiffs {
-		printWithIndent(1, fmt.Sprintf("address: %x", codeDiff.Address))
-		printWithIndent(1, fmt.Sprintf("index:   %x", codeDiff.TxIdx))
-		printWithIndent(1, fmt.Sprintf("code:    %x", codeDiff.NewCode))
-	}
-	printWithIndent(0, "balances:")
-	for _, b := range e.BalanceDiffs {
-		printWithIndent(1, fmt.Sprintf("%x:", b.Address))
-		for _, change := range b.Changes {
+
+		printWithIndent(1, "storage reads:")
+		for _, slot := range accountDiff.StorageReads {
+			printWithIndent(2, fmt.Sprintf("%x", slot))
+		}
+
+		printWithIndent(1, "balance changes:")
+		for _, change := range accountDiff.BalanceChanges {
 			printWithIndent(2, fmt.Sprintf("index: %d", change.TxIdx))
 			printWithIndent(2, fmt.Sprintf("balance: %s", new(uint256.Int).SetBytes(change.Delta[:]).String()))
 		}
-	}
 
-	printWithIndent(0, "nonces:")
-	for _, n := range e.NonceDiffs {
-		printWithIndent(1, fmt.Sprintf("%x:", n.Address))
-		for _, nonceDiff := range n.Diffs {
-			printWithIndent(2, fmt.Sprintf("index: %d", nonceDiff.TxIdx))
-			printWithIndent(2, fmt.Sprintf("nonce: %d", nonceDiff.Nonce))
+		printWithIndent(1, "nonce changes:")
+		for _, change := range accountDiff.NonceChanges {
+			printWithIndent(2, fmt.Sprintf("index: %d", change.TxIdx))
+			printWithIndent(2, fmt.Sprintf("nonce: %d", change.Nonce))
 		}
 	}
 
@@ -425,8 +453,8 @@ func (e *encodingBlockAccessList) PrettyPrint() string {
 }
 
 // human-readable representation
-func (b *BlockAccessList) PrettyPrint() string {
-	enc := b.toEncoderObj()
+func (b BlockAccessList) PrettyPrint() string {
+	enc := b.toEncodingObj()
 	return enc.PrettyPrint()
 }
 
