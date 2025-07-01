@@ -200,42 +200,21 @@ func ReadStateAccountIndex(db ethdb.AncientReaderOp, id uint64) []byte {
 // state history. Compute the position of state history in freezer by minus one
 // since the id of first state history starts from one(zero for initial state).
 func ReadStateStorageIndex(db ethdb.AncientReaderOp, id uint64, offset, length int) ([]byte, error) {
-	blob, err := db.AncientBytes(stateHistoryStorageIndex, id-1, uint64(offset), uint64(length))
-	if err != nil {
-		return nil, err
-	}
-	if len(blob) != length {
-		return blob, errors.New("state storage index data length mismatch")
-	}
-	return blob, nil
+	return db.AncientBytes(stateHistoryStorageIndex, id-1, uint64(offset), uint64(length))
 }
 
 // ReadStateAccountHistory retrieves the state root corresponding to the specified
 // state history. Compute the position of state history in freezer by minus one
 // since the id of first state history starts from one(zero for initial state).
 func ReadStateAccountHistory(db ethdb.AncientReaderOp, id uint64, offset, length int) ([]byte, error) {
-	blob, err := db.AncientBytes(stateHistoryAccountData, id-1, uint64(offset), uint64(length))
-	if err != nil {
-		return nil, err
-	}
-	if len(blob) != length {
-		return blob, errors.New("state account history data length mismatch")
-	}
-	return blob, nil
+	return db.AncientBytes(stateHistoryAccountData, id-1, uint64(offset), uint64(length))
 }
 
 // ReadStateStorageHistory retrieves the state root corresponding to the specified
 // state history. Compute the position of state history in freezer by minus one
 // since the id of first state history starts from one(zero for initial state).
 func ReadStateStorageHistory(db ethdb.AncientReaderOp, id uint64, offset, length int) ([]byte, error) {
-	blob, err := db.AncientBytes(stateHistoryStorageData, id-1, uint64(offset), uint64(length))
-	if err != nil {
-		return nil, err
-	}
-	if len(blob) != length {
-		return blob, errors.New("state storage history data length mismatch")
-	}
-	return blob, nil
+	return db.AncientBytes(stateHistoryStorageData, id-1, uint64(offset), uint64(length))
 }
 
 // ReadStateHistory retrieves the state history from database with provided id.
