@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -449,18 +450,30 @@ func TestInvalidGetLogsRequest(t *testing.T) {
 	t.Parallel()
 
 	var (
-		db        = rawdb.NewMemoryDatabase()
-		_, sys    = newTestFilterSystem(db, Config{})
-		api       = NewFilterAPI(sys)
-		blockHash = common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
+		genesis = &core.Genesis{
+			Config:  params.TestChainConfig,
+			BaseFee: big.NewInt(params.InitialBaseFee),
+		}
+		db, blocks, _    = core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 10, func(i int, gen *core.BlockGen) {})
+		_, sys           = newTestFilterSystem(db, Config{})
+		api              = NewFilterAPI(sys)
+		blockHash        = blocks[0].Hash()
+		unknownBlockHash = common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
 	)
+
+	// Insert the blocks into the chain so filter can look them up
+	blockchain, err := core.NewBlockChain(db, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := blockchain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
 
 	// Reason: Cannot specify both BlockHash and FromBlock/ToBlock)
 	testCases := []FilterCriteria{
-		0: {BlockHash: &blockHash, FromBlock: big.NewInt(100)},
-		1: {BlockHash: &blockHash, ToBlock: big.NewInt(500)},
-		2: {BlockHash: &blockHash, FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64())},
-		3: {BlockHash: &blockHash, Topics: [][]common.Hash{{}, {}, {}, {}, {}}},
+		0: {BlockHash: &unknownBlockHash}, // unknown block hash
+		1: {BlockHash: &blockHash, Topics: [][]common.Hash{{}, {}, {}, {}, {}}},
 	}
 
 	for i, test := range testCases {
