@@ -528,9 +528,8 @@ func (db *Database) Enable(root common.Hash) error {
 	if db.indexer != nil && db.freezer != nil && db.config.EnableStateIndexing {
 		db.indexer.close()
 		db.indexer = newHistoryIndexer(db.diskdb, db.freezer, db.tree.bottom().stateID())
-		log.Info("Enabled state history indexing (after snap sync)")
+		log.Info("Re-enabled state history indexing")
 	}
-
 	log.Info("Rebuilt trie database", "root", root)
 	return nil
 }
