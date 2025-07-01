@@ -199,34 +199,43 @@ func ReadStateAccountIndex(db ethdb.AncientReaderOp, id uint64) []byte {
 // ReadStateStorageIndex retrieves the state root corresponding to the specified
 // state history. Compute the position of state history in freezer by minus one
 // since the id of first state history starts from one(zero for initial state).
-func ReadStateStorageIndex(db ethdb.AncientReaderOp, id uint64) []byte {
-	blob, err := db.Ancient(stateHistoryStorageIndex, id-1)
+func ReadStateStorageIndex(db ethdb.AncientReaderOp, id uint64, offset, length int) ([]byte, error) {
+	blob, err := db.AncientBytes(stateHistoryStorageIndex, id-1, uint64(offset), uint64(length))
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return blob
+	if len(blob) != length {
+		return blob, errors.New("state storage index data length mismatch")
+	}
+	return blob, nil
 }
 
 // ReadStateAccountHistory retrieves the state root corresponding to the specified
 // state history. Compute the position of state history in freezer by minus one
 // since the id of first state history starts from one(zero for initial state).
-func ReadStateAccountHistory(db ethdb.AncientReaderOp, id uint64) []byte {
-	blob, err := db.Ancient(stateHistoryAccountData, id-1)
+func ReadStateAccountHistory(db ethdb.AncientReaderOp, id uint64, offset, length int) ([]byte, error) {
+	blob, err := db.AncientBytes(stateHistoryAccountData, id-1, uint64(offset), uint64(length))
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return blob
+	if len(blob) != length {
+		return blob, errors.New("state account history data length mismatch")
+	}
+	return blob, nil
 }
 
 // ReadStateStorageHistory retrieves the state root corresponding to the specified
 // state history. Compute the position of state history in freezer by minus one
 // since the id of first state history starts from one(zero for initial state).
-func ReadStateStorageHistory(db ethdb.AncientReaderOp, id uint64) []byte {
-	blob, err := db.Ancient(stateHistoryStorageData, id-1)
+func ReadStateStorageHistory(db ethdb.AncientReaderOp, id uint64, offset, length int) ([]byte, error) {
+	blob, err := db.AncientBytes(stateHistoryStorageData, id-1, uint64(offset), uint64(length))
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return blob
+	if len(blob) != length {
+		return blob, errors.New("state storage history data length mismatch")
+	}
+	return blob, nil
 }
 
 // ReadStateHistory retrieves the state history from database with provided id.
