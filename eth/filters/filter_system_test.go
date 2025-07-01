@@ -435,6 +435,7 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 		1: {FromBlock: big.NewInt(rpc.PendingBlockNumber.Int64()), ToBlock: big.NewInt(100)},
 		2: {FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64()), ToBlock: big.NewInt(100)},
 		3: {Topics: [][]common.Hash{{}, {}, {}, {}, {}}},
+		4: {Addresses: make([]common.Address, maxAddresses+1)},
 	}
 
 	for i, test := range testCases {
@@ -461,6 +462,7 @@ func TestInvalidGetLogsRequest(t *testing.T) {
 		1: {BlockHash: &blockHash, ToBlock: big.NewInt(500)},
 		2: {BlockHash: &blockHash, FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64())},
 		3: {BlockHash: &blockHash, Topics: [][]common.Hash{{}, {}, {}, {}, {}}},
+		4: {BlockHash: &blockHash, Addresses: make([]common.Address, maxAddresses+1)},
 	}
 
 	for i, test := range testCases {
