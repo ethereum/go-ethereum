@@ -2,7 +2,7 @@
 
 # version:spec-tests v4.5.0
 # https://github.com/ethereum/execution-spec-tests/releases
-# https://github.com/ethereum/execution-spec-tests/releases/download/v4.5.0/
+# https://github.com/ethereum/execution-spec-tests/releases/tag/v4.5.0
 58afb92a0075a2cb7c4dec1281f7cb88b21b02afbedad096b580f3f8cc14c54c  fixtures_develop.tar.gz
 
 # version:golang 1.24.4
@@ -56,7 +56,7 @@ d17da51bc85bd010754a4063215d15d2c033cc289d67ca9201a03c9041b2969d  go1.24.4.windo
 
 # version:golangci 2.0.2
 # https://github.com/golangci/golangci-lint/releases/
-# https://github.com/golangci/golangci-lint/releases/download/v2.0.2/
+# https://github.com/golangci/golangci-lint/releases/tag/v2.0.2/
 a88cbdc86b483fe44e90bf2dcc3fec2af8c754116e6edf0aa6592cac5baa7a0e  golangci-lint-2.0.2-darwin-amd64.tar.gz
 664550e7954f5f4451aae99b4f7382c1a47039c66f39ca605f5d9af1a0d32b49  golangci-lint-2.0.2-darwin-arm64.tar.gz
 bda0f0f27d300502faceda8428834a76ca25986f6d9fc2bd41d201c3ed73f08e  golangci-lint-2.0.2-freebsd-386.tar.gz
@@ -128,7 +128,7 @@ d7f0013f82e6d7f862cc6cb5c8cdb48eef5f2e239b35baa97e2f1a7466043767  go1.19.6.src.t
 
 # version:protoc 27.1
 # https://github.com/protocolbuffers/protobuf/releases/
-# https://github.com/protocolbuffers/protobuf/releases/download/v27.1/
+# https://github.com/protocolbuffers/protobuf/releases/tag/v27.1/
 8809c2ec85368c6b6e9af161b6771a153aa92670a24adbe46dd34fa02a04df2f  protoc-27.1-linux-aarch_64.zip
 5d21979a6d27475e810b76b88863d1e784fa01ffb15e511a3ec5bd1924d89426  protoc-27.1-linux-ppcle_64.zip
 84d8852750ed186dc4a057a1a86bcac409be5362d6af04770f42367fee6b7bc1  protoc-27.1-linux-s390_64.zip
@@ -142,7 +142,7 @@ da531c51ccd1290d8d34821f0ce4e219c7fbaa6f9825f5a3fb092a9d03fe6206  protoc-27.1-wi
 
 # version:protoc-gen-go 1.34.2
 # https://github.com/protocolbuffers/protobuf-go/releases/
-# https://github.com/protocolbuffers/protobuf-go/releases/download/v1.34.2/
+# https://github.com/protocolbuffers/protobuf-go/releases/tag/v1.34.2/
 9b48d8f90add02e8e94e14962fed74e7ce2b2d6bda4dd42f1f4fbccf0f766f1a  protoc-gen-go.v1.34.2.darwin.amd64.tar.gz
 17aca7f948dbb624049030cf841e35895cf34183ba006e721247fdeb95ff2780  protoc-gen-go.v1.34.2.darwin.arm64.tar.gz
 a191849433fd489f1d44f37788d762658f3f5fb225f3a85d4ce6ba32666703ed  protoc-gen-go.v1.34.2.linux.386.tar.gz
