@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // Regular expression to match SIWE messages
@@ -34,7 +36,7 @@ var domain = `(?:[^ ]+)`
 var wantsMsg = ` wants you to sign in with your Ethereum account:\n`
 
 // Ethereum address (with basic 0x prefix + 40 hex digits)
-var address = `0x[a-fA-F0-9]{40}\n`
+var address = `(?:0x[a-fA-F0-9]{40})\n`
 
 // Optional statement (any line not containing "\n\n")
 var statement = `(?:[^\n]+\n)?`
@@ -84,7 +86,7 @@ func validateSIWE(req *SignDataRequest) error {
 			continue
 		}
 		patterns := siweMessageRegex.FindStringSubmatch(s)
-		if len(patterns) != 14 {
+		if len(patterns) != 15 {
 			return ErrMalformedSIWEMEssage
 		}
 		scheme := "https"
@@ -92,6 +94,9 @@ func validateSIWE(req *SignDataRequest) error {
 			scheme = patterns[0]
 		}
 		if err := validateDomain(req, scheme, patterns[1]); err != nil {
+			return err
+		}
+		if err := validateAddress(req, patterns[2]); err != nil {
 			return err
 		}
 	}
@@ -102,6 +107,16 @@ func validateDomain(request *SignDataRequest, scheme, domain string) error {
 	siweOrigin := fmt.Sprintf("%s://%s", scheme, domain)
 	if siweOrigin != request.Meta.Origin {
 		return fmt.Errorf("sign in request domain (%s) does not match source: %s", siweOrigin, request.Meta.Origin)
+	}
+	return nil
+}
+
+func validateAddress(request *SignDataRequest, address string) error {
+	checksumAddr := common.HexToAddress(address).Hex()
+	requestAddr := request.Address.Address().Hex()
+
+	if checksumAddr != requestAddr {
+		return fmt.Errorf("sign in request address (%s) does not match source: %s", checksumAddr, requestAddr)
 	}
 	return nil
 }
