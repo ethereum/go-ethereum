@@ -385,7 +385,7 @@ func (db *Database) SnapshotCompleted() bool {
 	return pdb.SnapshotCompleted()
 }
 
-// FirstStateBlock
+// FirstStateBlock returns the first available state block number that is stored in the database.
 func (db *Database) FirstStateBlock() (uint64, error) {
 	pdb, ok := db.backend.(*pathdb.Database)
 	if !ok {
