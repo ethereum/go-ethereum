@@ -158,6 +158,33 @@ func TestDecode(t *testing.T) {
 	}
 }
 
+func TestDecodeErrorDetection(t *testing.T) {
+	invalidStrings := []struct {
+		input string
+		want  error
+	}{
+		{"", ErrEmptyString},
+		{"0", ErrMissingPrefix},
+		{"0x", nil}, // Empty string is a valid case
+		{"0x0", ErrOddLength},
+		{"0xgg", ErrSyntax},
+		{"0xG", ErrSyntax},
+		{"0x01zz01", ErrSyntax},
+		{"0x01ZZ01", ErrSyntax},
+		{"0x01 01", ErrSyntax},
+		{"0xÄÖÜ", ErrSyntax},
+	}
+	
+	for _, test := range invalidStrings {
+		_, err := Decode(test.input)
+		if test.want == nil && err != nil {
+			t.Errorf("input %s: unexpected error: %v", test.input, err)
+		} else if test.want != nil && (err == nil || err.Error() != test.want.Error()) {
+			t.Errorf("input %s: error mismatch: got %v, want %v", test.input, err, test.want)
+		}
+	}
+}
+
 func TestEncodeBig(t *testing.T) {
 	for _, test := range encodeBigTests {
 		enc := EncodeBig(test.input.(*big.Int))
