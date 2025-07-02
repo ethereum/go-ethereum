@@ -45,6 +45,14 @@ func NewTransitionTrie(base *SecureTrie, overlay *VerkleTrie, st bool) *Transiti
 	}
 }
 
+func (t *TransitionTrie) UpdateAccountBatch(addresses []common.Address, accounts []*types.StateAccount, _ []int) error {
+	panic("not implemented")
+}
+
+func (t *TransitionTrie) UpdateStorageBatch(_ common.Address, keys [][]byte, values [][]byte) error {
+	panic("not implemented")
+}
+
 // Base returns the base trie.
 func (t *TransitionTrie) Base() *SecureTrie {
 	return t.base

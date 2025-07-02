@@ -70,7 +70,7 @@ func ExecuteStateless(config *params.ChainConfig, vmconfig vm.Config, block *typ
 	if err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}
-	if err = validator.ValidateState(block, db, res, true); err != nil {
+	if err = validator.ValidateState(block, db, res, true, true); err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}
 	// Almost everything validated, but receipt and state root needs to be returned
