@@ -375,3 +375,13 @@ func (db *Database) IsVerkle() bool {
 func (db *Database) Disk() ethdb.Database {
 	return db.disk
 }
+
+// FirstStateBlock
+func (db *Database) FirstStateBlock() (uint64, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		// Ignore in hash scheme
+		return 0, nil
+	}
+	return pdb.FirstStateBlock()
+}

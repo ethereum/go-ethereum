@@ -748,3 +748,25 @@ func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek 
 	}
 	return newFastStorageIterator(db, root, account, seek)
 }
+
+// FirstStateBlock returns the block number of the oldest state snapshot in the freezer or disk layer.
+func (db *Database) FirstStateBlock() (uint64, error) {
+	var (
+		m      meta
+		err    error
+		tailID = db.tree.bottom().stateID()
+	)
+
+	if db.freezer != nil {
+		tailID, err = db.freezer.Tail()
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	blob := rawdb.ReadStateHistoryMeta(db.diskdb, tailID)
+	if err := m.decode(blob); err != nil {
+		return 0, err
+	}
+	return m.block, nil
+}
