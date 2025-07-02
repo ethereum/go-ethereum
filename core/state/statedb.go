@@ -163,7 +163,7 @@ type StateDB struct {
 // EnableBALConstruction configures the StateDB instance to construct block
 // access lists from state reads/writes recorded during block execution
 func (s *StateDB) EnableBALConstruction() {
-	bal := make(types.BlockAccessList)
+	bal := types.NewBlockAccessList()
 	s.b = &bal
 }
 
