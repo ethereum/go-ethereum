@@ -340,7 +340,7 @@ func startNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 	}
 
 	if ctx.IsSet(utils.BuildBALFlag.Name) {
-		log.Warn(`block-access-list construction enabled.  This is an experimental feature that shouldn't be enabled outside of a development context.'`)
+		log.Warn(`block-access-list construction enabled.  This is an experimental feature that shouldn't be enabled outside of a Geth development context.'`)
 	}
 
 	// Register wallet event handlers to open and auto-derive wallets

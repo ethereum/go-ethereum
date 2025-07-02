@@ -1667,7 +1667,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	}
 	defer bc.chainmu.Unlock()
 
-	_, n, err := bc.insertChain(chain, true, false, false) // No witness collection for mass inserts (would get super large)
+	_, n, err := bc.insertChain(chain, true, false, true) // No witness collection for mass inserts (would get super large)
 	return n, err
 }
 
@@ -1950,7 +1950,8 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		}(time.Now(), throwaway, block)
 	}
 
-	if block.Body().AccessList != nil || (makeBAL && bc.vmConfig.BALConstruction) {
+	constructBAL := bc.chainConfig.IsByzantium(block.Number()) && makeBAL && bc.vmConfig.BALConstruction
+	if constructBAL {
 		statedb.EnableBALConstruction()
 	}
 
@@ -2001,8 +2002,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	}
 	vtime := time.Since(vstart)
 
-	// TODO: rename BALConstruction to something that indicates it's for testing purposes only
-	if bc.vmConfig.BALConstruction && makeBAL {
+	if constructBAL {
 		// very ugly... deep-copy the block body before setting the block access
 		// list on it to prevent mutating the block instance passed by the caller.
 		existingBody := block.Body()
