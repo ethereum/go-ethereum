@@ -57,9 +57,7 @@ func newTraceTestSuite(cfg testConfig, ctx *cli.Context) *traceTestSuite {
 
 func (s *traceTestSuite) loadTests() error {
 	file, err := s.cfg.fsys.Open(s.cfg.traceTestFile)
-	if err == nil {
-		defer file.Close()
-	} else {
+	if err != nil {
 		// If not found in embedded FS, try to load it from disk
 		if !os.IsNotExist(err) {
 			return err
@@ -68,8 +66,8 @@ func (s *traceTestSuite) loadTests() error {
 		if err != nil {
 			return fmt.Errorf("can't open traceTestFile: %v", err)
 		}
-		defer file.Close()
 	}
+	defer file.Close()
 	if err := json.NewDecoder(file).Decode(&s.tests); err != nil {
 		return fmt.Errorf("invalid JSON in %s: %v", s.cfg.traceTestFile, err)
 	}

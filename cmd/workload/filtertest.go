@@ -162,7 +162,6 @@ func (s *filterTestSuite) loadQueries() error {
 		if err != nil {
 			return fmt.Errorf("can't open filterQueryFile: %v", err)
 		}
-		defer file.Close()
 	}
 	defer file.Close()
 

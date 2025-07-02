@@ -61,7 +61,6 @@ func (s *historyTestSuite) loadTests() error {
 		if err != nil {
 			return fmt.Errorf("can't open historyTestFile: %v", err)
 		}
-		defer file.Close()
 	}
 	defer file.Close()
 	if err := json.NewDecoder(file).Decode(&s.tests); err != nil {
