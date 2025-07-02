@@ -130,18 +130,42 @@ func testConfigFromCLI(ctx *cli.Context) (cfg testConfig) {
 	switch {
 	case ctx.Bool(testMainnetFlag.Name):
 		cfg.fsys = builtinTestFiles
-		cfg.filterQueryFile = "queries/filter_queries_mainnet.json"
-		cfg.historyTestFile = "queries/history_mainnet.json"
+		if ctx.IsSet(filterQueryFileFlag.Name) {
+			cfg.filterQueryFile = ctx.String(filterQueryFileFlag.Name)
+		} else {
+			cfg.filterQueryFile = "queries/filter_queries_mainnet.json"
+		}
+		if ctx.IsSet(historyTestFileFlag.Name) {
+			cfg.historyTestFile = ctx.String(historyTestFileFlag.Name)
+		} else {
+			cfg.historyTestFile = "queries/history_mainnet.json"
+		}
+		if ctx.IsSet(traceTestFileFlag.Name) {
+			cfg.traceTestFile = ctx.String(traceTestFileFlag.Name)
+		} else {
+			cfg.traceTestFile = "queries/trace_mainnet.json"
+		}
 		cfg.historyPruneBlock = new(uint64)
 		*cfg.historyPruneBlock = history.PrunePoints[params.MainnetGenesisHash].BlockNumber
-		cfg.traceTestFile = "queries/trace_mainnet.json"
 	case ctx.Bool(testSepoliaFlag.Name):
 		cfg.fsys = builtinTestFiles
-		cfg.filterQueryFile = "queries/filter_queries_sepolia.json"
-		cfg.historyTestFile = "queries/history_sepolia.json"
+		if ctx.IsSet(filterQueryFileFlag.Name) {
+			cfg.filterQueryFile = ctx.String(filterQueryFileFlag.Name)
+		} else {
+			cfg.filterQueryFile = "queries/filter_queries_sepolia.json"
+		}
+		if ctx.IsSet(historyTestFileFlag.Name) {
+			cfg.historyTestFile = ctx.String(historyTestFileFlag.Name)
+		} else {
+			cfg.historyTestFile = "queries/history_sepolia.json"
+		}
+		if ctx.IsSet(traceTestFileFlag.Name) {
+			cfg.traceTestFile = ctx.String(traceTestFileFlag.Name)
+		} else {
+			cfg.traceTestFile = "queries/trace_sepolia.json"
+		}
 		cfg.historyPruneBlock = new(uint64)
 		*cfg.historyPruneBlock = history.PrunePoints[params.SepoliaGenesisHash].BlockNumber
-		cfg.traceTestFile = "queries/trace_sepolia.json"
 	default:
 		cfg.fsys = os.DirFS(".")
 		cfg.filterQueryFile = ctx.String(filterQueryFileFlag.Name)
