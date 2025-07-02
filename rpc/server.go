@@ -263,14 +263,14 @@ func ContextWithMockPeerInfo(ctx context.Context, transport, source string) cont
 	peerInfo := PeerInfo{
 		Transport: transport,
 		HTTP: struct {
-			Version    string
-			UserAgent  string
-			Origin     string
-			Host       string
+			Version   string
+			UserAgent string
+			Origin    string
+			Host      string
 		}{
-			Version:    "1.1",
-			UserAgent:  "test", 
-			Origin:     source,
+			Version:   "1.1",
+			UserAgent: "test",
+			Origin:    source,
 			Host:      "test",
 		},
 	}
