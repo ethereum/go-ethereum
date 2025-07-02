@@ -384,3 +384,13 @@ func (db *Database) SnapshotCompleted() bool {
 	}
 	return pdb.SnapshotCompleted()
 }
+
+// FirstStateBlock
+func (db *Database) FirstStateBlock() (uint64, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		// Ignore in hash scheme
+		return 0, nil
+	}
+	return pdb.FirstStateBlock()
+}

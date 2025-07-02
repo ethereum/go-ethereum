@@ -692,3 +692,25 @@ func (db *Database) SnapshotCompleted() bool {
 	}
 	return db.tree.bottom().genComplete()
 }
+
+// FirstStateBlock returns the block number of the oldest state snapshot in the freezer or disk layer.
+func (db *Database) FirstStateBlock() (uint64, error) {
+	var (
+		m      meta
+		err    error
+		tailID = db.tree.bottom().stateID()
+	)
+
+	if db.stateFreezer != nil {
+		tailID, err = db.stateFreezer.Tail()
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	blob := rawdb.ReadStateHistoryMeta(db.diskdb, tailID)
+	if err := m.decode(blob); err != nil {
+		return 0, err
+	}
+	return m.block, nil
+}
