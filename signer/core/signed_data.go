@@ -42,7 +42,7 @@ func (api *SignerAPI) sign(req *SignDataRequest, legacyV bool) (hexutil.Bytes, e
 		// perform SIWE validation
 		err := validateSIWE(req)
 		if err != nil {
-			if errors.Is(err, ErrMalformedSIWEMEssage) {
+			if errors.Is(err, ErrMalformedSIWEMessage) {
 				api.UI.ShowInfo(err.Error())
 			} else {
 				return nil, err

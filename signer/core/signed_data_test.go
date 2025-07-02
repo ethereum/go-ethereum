@@ -1196,7 +1196,8 @@ func TestSignInWithEtheriumWarning(t *testing.T) {
 			control.inputCh <- "a_long_password"
 			signature, err := api.SignData(ctx, apitypes.TextPlain.Mime, a, hexutil.Encode([]byte(message)))
 			require.NoError(t, err)
-			// todo: check UI for warning message
+			require.Equal(t, 1, len(control.infoMessages))
+			require.Equal(t, core.ErrMalformedSIWEMessage.Error(), control.infoMessages[0])
 
 			if signature == nil || len(signature) != 65 {
 				t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))

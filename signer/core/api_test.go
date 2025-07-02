@@ -41,8 +41,9 @@ import (
 
 // Used for testing
 type headlessUi struct {
-	approveCh chan string // to send approve/deny
-	inputCh   chan string // to send password
+	approveCh    chan string // to send approve/deny
+	inputCh      chan string // to send password
+	infoMessages []string
 }
 
 func (ui *headlessUi) OnInputRequired(info core.UserInputRequest) (core.UserInputResponse, error) {
@@ -104,6 +105,7 @@ func (ui *headlessUi) ShowError(message string) {
 func (ui *headlessUi) ShowInfo(message string) {
 	//stdout is used by communication
 	fmt.Fprintln(os.Stderr, message)
+	ui.infoMessages = append(ui.infoMessages, message)
 }
 
 func tmpDirName(t *testing.T) string {
@@ -120,7 +122,7 @@ func setup(t *testing.T, enableSIWE bool) (*core.SignerAPI, *headlessUi) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	ui := &headlessUi{make(chan string, 20), make(chan string, 20)}
+	ui := &headlessUi{make(chan string, 20), make(chan string, 20), []string{}}
 	am := core.StartClefAccountManager(tmpDirName(t), true, true, "")
 	api := core.NewSignerAPI(am, 1337, true, ui, db, true, &storage.NoStorage{}, enableSIWE)
 	return api, ui

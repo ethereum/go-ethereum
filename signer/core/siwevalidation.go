@@ -77,7 +77,7 @@ var siweMessageRegex = regexp.MustCompile(`(?m)^` + messageSize + scheme + domai
 	uri + version + chainID + nonce + issuedAt +
 	expiration + notBefore + requestID + resources + `$`)
 
-var ErrMalformedSIWEMEssage = errors.New("the message is asking to sign in with Ethereum but does not conform to EIP-4361")
+var ErrMalformedSIWEMessage = errors.New("the message is asking to sign in with Ethereum but does not conform to EIP-4361")
 
 func validateSIWE(req *SignDataRequest) error {
 	for _, message := range req.Messages {
@@ -91,7 +91,7 @@ func validateSIWE(req *SignDataRequest) error {
 
 		patterns := siweMessageRegex.FindStringSubmatch(s)
 		if patterns == nil {
-			return ErrMalformedSIWEMEssage
+			return ErrMalformedSIWEMessage
 		}
 		scheme := "https"
 		if patterns[1] != "" {
