@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
+	ssz "github.com/ferranbt/fastssz"
 	"github.com/holiman/uint256"
 	"io"
 	"maps"
@@ -13,7 +14,7 @@ import (
 	"strings"
 )
 
-//go:generate go run github.com/ferranbt/fastssz/sszgen  --output bal_encoding_generated.go --path . --objs encodingStorageWrite,encodingStorageWrites,encodingCodeChange,encodingBalanceChange,encodingAccountNonce,encodingCodeChange,encodingAccountAccess,encodingBlockAccessList
+//go:generate go run github.com/ferranbt/fastssz/sszgen  --output bal_encoding_generated.go --path . --objs encodingStorageWrite,encodingStorageWrites,encodingCodeChange,encodingBalanceChange,encodingAccountNonce,encodingCodeChange,encodingAccountAccess
 
 // encoder types
 
@@ -129,14 +130,12 @@ func (e *encodingAccountAccess) toAccountAccess() (*accountAccess, error) {
 	return &res, nil
 }
 
-type encodingBlockAccessList struct {
-	Inner []encodingAccountAccess `ssz-max:"300000"`
-}
+type encodingBlockAccessList []encodingAccountAccess
 
 func (e *encodingBlockAccessList) toBlockAccessList() (*BlockAccessList, error) {
 	res := make(BlockAccessList)
 	var prevAccount *common.Address
-	for _, encAccountAccess := range e.Inner {
+	for _, encAccountAccess := range *e {
 		if prevAccount != nil {
 			if bytes.Compare(encAccountAccess.Address[:], (*prevAccount)[:]) <= 0 {
 				return nil, fmt.Errorf("block access list accounts not in lexicographic order")
@@ -150,6 +149,68 @@ func (e *encodingBlockAccessList) toBlockAccessList() (*BlockAccessList, error) 
 	}
 	return &res, nil
 }
+
+// encoding/decoding methods implemented manually because defined types cannot
+// have tags
+
+func (e *encodingBlockAccessList) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	if len(*e) > 300000 {
+		return nil, fmt.Errorf("oversized")
+	}
+
+	offset := 4 * len(*e)
+	for ii := 0; ii < len(*e); ii++ {
+		dst = ssz.WriteOffset(dst, offset)
+		sz := (*e)[ii].SizeSSZ()
+		offset += sz
+	}
+	for ii := 0; ii < len(*e); ii++ {
+		if dst, err = (*e)[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+func (e *encodingBlockAccessList) UnmarshalSSZ(buf []byte) error {
+	num, err := ssz.DecodeDynamicLength(buf, 300000)
+	if err != nil {
+		return err
+	}
+	res := make([]encodingAccountAccess, num)
+	err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
+		if err = res[indx].UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	*e = res
+	return nil
+}
+
+// MarshalSSZ ssz marshals the encodingBalanceChange object
+func (e *encodingBlockAccessList) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(e)
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the encodingBlockAccessList object
+func (e *encodingBlockAccessList) SizeSSZ() (size int) {
+
+	// Field (0) 'Inner'
+	for ii := 0; ii < len(*e); ii++ {
+		size += 4
+		size += (*e)[ii].SizeSSZ()
+	}
+
+	return
+}
+
+var _ ssz.Marshaler = &encodingBlockAccessList{}
+var _ ssz.Unmarshaler = (*encodingBlockAccessList)(nil)
 
 // TODO: verify that Geth encodes the endianess according to the spec
 type encodingBalanceDelta [12]byte
@@ -351,8 +412,16 @@ func (a *accountAccess) toEncodingObj(addr common.Address) encodingAccountAccess
 }
 
 func (b BlockAccessList) toEncodingObj() (res encodingBlockAccessList) {
-	for addr, acct := range b {
-		res.Inner = append(res.Inner, acct.toEncodingObj(addr))
+	var addrs []common.Address
+	for addr, _ := range b {
+		addrs = append(addrs, addr)
+	}
+	sort.Slice(addrs, func(i, j int) bool {
+		return bytes.Compare(addrs[i][:], addrs[j][:]) < 0
+	})
+
+	for _, addr := range addrs {
+		res = append(res, b[addr].toEncodingObj(addr))
 	}
 	return res
 }
@@ -465,7 +534,7 @@ func (e encodingBlockAccessList) PrettyPrint() string {
 	printWithIndent := func(indent int, text string) {
 		fmt.Fprintf(&res, "%s%s\n", strings.Repeat("    ", indent), text)
 	}
-	for _, accountDiff := range e.Inner {
+	for _, accountDiff := range e {
 		printWithIndent(0, fmt.Sprintf("%x:", accountDiff.Address))
 		printWithIndent(1, fmt.Sprintf("code:    %x", accountDiff.Code)) // TODO: code shouldn't be in account accesses (?)
 

@@ -160,11 +160,15 @@ type StateDB struct {
 	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
 }
 
+// EnableBALConstruction configures the StateDB instance to construct block
+// access lists from state reads/writes recorded during block execution
 func (s *StateDB) EnableBALConstruction() {
 	bal := make(types.BlockAccessList)
 	s.b = &bal
 }
 
+// BlockAccessList retrieves the access list that has been constructed
+// by the StateDB instance, or nil if BAL construction was not enabled.
 func (s *StateDB) BlockAccessList() *types.BlockAccessList {
 	return s.b
 }
