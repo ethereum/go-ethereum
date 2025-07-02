@@ -266,11 +266,47 @@ func (c *ConstructionBlockAccessList) ApplyDiff(i uint, diff *StateDiff) {
 	}
 }
 
+// ApplyAccesses records the given account/storage accesses in the BAL.
+func (c *ConstructionBlockAccessList) ApplyAccesses(accesses StateAccesses) {
+	for addr, acctAccesses := range accesses {
+		if c.Accounts[addr] == nil {
+			c.Accounts[addr] = &ConstructionAccountAccess{}
+		}
+		if len(acctAccesses) > 0 {
+
+			if c.Accounts[addr].StorageReads == nil {
+				c.Accounts[addr].StorageReads = make(map[common.Hash]struct{})
+			}
+			for key, _ := range acctAccesses {
+				// if any of the accessed keys were previously written, they
+				// appear in the written set only and not also in accesses.
+				if len(c.Accounts[addr].StorageWrites) > 0 {
+					if _, ok := c.Accounts[addr].StorageWrites[key]; ok {
+						continue
+					}
+				}
+				c.Accounts[addr].StorageReads[key] = struct{}{}
+			}
+		}
+	}
+}
+
 type StateDiff struct {
 	Mutations map[common.Address]*AccountState `json:"Mutations,omitempty"`
 }
 
 type StateAccesses map[common.Address]map[common.Hash]struct{}
+
+func (s *StateAccesses) Merge(other StateAccesses) {
+	for addr, accesses := range other {
+		if _, ok := (*s)[addr]; !ok {
+			(*s)[addr] = make(map[common.Hash]struct{})
+		}
+		for slot := range accesses {
+			(*s)[addr][slot] = struct{}{}
+		}
+	}
+}
 
 type AccountState struct {
 	Balance       *uint256.Int                `json:"Balance,omitempty"`

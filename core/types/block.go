@@ -349,9 +349,12 @@ func CopyHeader(h *Header) *Header {
 
 // DecodeRLP decodes a block from RLP.
 func (b *Block) DecodeRLP(s *rlp.Stream) error {
-	var eb extblock
+	var (
+		eb extblock
+	)
 	_, size, _ := s.Kind()
 	if err := s.Decode(&eb); err != nil {
+		fmt.Println("error here")
 		return err
 	}
 	b.header, b.uncles, b.transactions, b.withdrawals, b.accessList = eb.Header, eb.Uncles, eb.Txs, eb.Withdrawals, eb.AccessList
@@ -366,6 +369,7 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 		Txs:         b.transactions,
 		Uncles:      b.uncles,
 		Withdrawals: b.withdrawals,
+		AccessList:  b.accessList,
 	})
 }
 
@@ -539,6 +543,7 @@ func (b *Block) WithWitness(witness *ExecutionWitness) *Block {
 		transactions: b.transactions,
 		uncles:       b.uncles,
 		withdrawals:  b.withdrawals,
+		accessList:   b.accessList,
 		witness:      witness,
 	}
 }

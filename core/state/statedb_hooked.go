@@ -19,6 +19,8 @@ package state
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/core/types/bal"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -32,12 +34,12 @@ import (
 // hookedStateDB represents a statedb which emits calls to tracing-hooks
 // on state operations.
 type hookedStateDB struct {
-	inner *StateDB
+	inner BlockProcessingDB
 	hooks *tracing.Hooks
 }
 
 // NewHookedState wraps the given stateDb with the given hooks
-func NewHookedState(stateDb *StateDB, hooks *tracing.Hooks) *hookedStateDB {
+func NewHookedState(stateDb BlockProcessingDB, hooks *tracing.Hooks) *hookedStateDB {
 	s := &hookedStateDB{stateDb, hooks}
 	if s.hooks == nil {
 		s.hooks = new(tracing.Hooks)
@@ -275,18 +277,42 @@ func (s *hookedStateDB) AddLog(log *types.Log) {
 	}
 }
 
-func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
-	defer s.inner.Finalise(deleteEmptyObjects)
-	if s.hooks.OnBalanceChange == nil {
-		return
-	}
-	for addr := range s.inner.journal.dirties {
-		obj := s.inner.stateObjects[addr]
-		if obj != nil && obj.selfDestructed {
-			// If ether was sent to account post-selfdestruct it is burnt.
-			if bal := obj.Balance(); bal.Sign() != 0 {
-				s.hooks.OnBalanceChange(addr, bal.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestructBurn)
+func (s *hookedStateDB) TxIndex() int {
+	return s.inner.TxIndex()
+}
+
+func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) (*bal.StateDiff, *bal.StateAccesses) {
+	/*
+		// TODO: implement this code without peering into statedb internals!!!
+			if s.hooks.OnBalanceChange != nil {
+				for addr := range s.inner.journal.dirties {
+					obj := s.inner.stateObjects[addr]
+					if obj != nil && obj.selfDestructed {
+						// If ether was sent to account post-selfdestruct it is burnt.
+						if bal := obj.Balance(); bal.Sign() != 0 {
+							s.hooks.OnBalanceChange(addr, bal.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestructBurn)
+						}
+					}
+				}
 			}
-		}
-	}
+	*/
+	return s.inner.Finalise(deleteEmptyObjects)
+}
+
+func (s *hookedStateDB) GetLogs(hash common.Hash, blockNumber uint64, blockHash common.Hash, blockTime uint64) []*types.Log {
+	return s.inner.GetLogs(hash, blockNumber, blockHash, blockTime)
+}
+
+func (s *hookedStateDB) IntermediateRoot(deleteEmpty bool) common.Hash {
+	return s.inner.IntermediateRoot(deleteEmpty)
+}
+func (a *hookedStateDB) Database() Database {
+	return a.inner.Database()
+}
+func (a *hookedStateDB) GetTrie() Trie {
+	return a.inner.GetTrie()
+}
+
+func (a *hookedStateDB) SetTxContext(thash common.Hash, ti int) {
+	a.inner.SetTxContext(thash, ti)
 }
