@@ -751,20 +751,22 @@ func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek 
 
 // FirstStateBlock returns the block number of the oldest state snapshot in the freezer or disk layer.
 func (db *Database) FirstStateBlock() (uint64, error) {
-	var (
-		m      meta
-		err    error
-		tailID = db.tree.bottom().stateID()
-	)
-
-	if db.freezer != nil {
-		tailID, err = db.freezer.Tail()
-		if err != nil {
-			return 0, err
-		}
+	if db.freezer == nil {
+		return 0, errors.New("freezer is not available")
 	}
 
-	blob := rawdb.ReadStateHistoryMeta(db.diskdb, tailID)
+	tailID, err := db.freezer.Tail()
+	if err != nil {
+		return 0, err
+	}
+
+	// No state has been persistent
+	if tailID == 0 {
+		return 0, nil
+	}
+
+	blob := rawdb.ReadStateHistoryMeta(db.freezer, tailID+1)
+	var m meta
 	if err := m.decode(blob); err != nil {
 		return 0, err
 	}

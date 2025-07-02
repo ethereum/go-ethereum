@@ -19,6 +19,7 @@ package eth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -61,9 +62,16 @@ func (b *EthAPIBackend) CurrentBlock() *types.Header {
 	return b.eth.blockchain.CurrentBlock()
 }
 
-func (b *EthAPIBackend) SetHead(number uint64) {
+func (b *EthAPIBackend) SetHead(number uint64) error {
+	firstStateBlock, err := b.eth.blockchain.FirstStateBlock()
+	if err != nil {
+		return err
+	}
+	if number < firstStateBlock {
+		return fmt.Errorf("cannot rewind to block %d, oldest available state is at block %d", number, firstStateBlock)
+	}
 	b.eth.handler.downloader.Cancel()
-	b.eth.blockchain.SetHead(number)
+	return b.eth.blockchain.SetHead(number)
 }
 
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
