@@ -85,10 +85,6 @@ func (s *hookedStateDB) GetRefund() uint64 {
 	return s.inner.GetRefund()
 }
 
-func (s *hookedStateDB) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
-	return s.inner.GetCommittedState(addr, hash)
-}
-
 func (s *hookedStateDB) GetStateAndCommittedState(addr common.Address, hash common.Hash) (common.Hash, common.Hash) {
 	return s.inner.GetStateAndCommittedState(addr, hash)
 }
