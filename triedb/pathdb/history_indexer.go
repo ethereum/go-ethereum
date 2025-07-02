@@ -73,8 +73,8 @@ func storeIndexMetadata(db ethdb.KeyValueWriter, last uint64) {
 // batchIndexer is a structure designed to perform batch indexing or unindexing
 // of state histories atomically.
 type batchIndexer struct {
-	accounts map[common.Hash][]uint64                 // History ID list, Keyed by account address
-	storages map[common.Hash]map[common.Hash][]uint64 // History ID list, Keyed by account address and the hash of raw storage key
+	accounts map[common.Hash][]uint64                 // History ID list, Keyed by the hash of account address
+	storages map[common.Hash]map[common.Hash][]uint64 // History ID list, Keyed by the hash of account address and the hash of raw storage key
 	counter  int                                      // The counter of processed states
 	delete   bool                                     // Index or unindex mode
 	lastID   uint64                                   // The ID of latest processed history
