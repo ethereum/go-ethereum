@@ -2001,14 +2001,6 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	}
 	vtime := time.Since(vstart)
 
-	if bc.chainConfig.IsGlamsterdam(block.Number(), block.Time()) && block.Body().AccessList != nil {
-		// if the block al is set, the statedb will build its own bal and we will verify
-		// by asserting that the block header bal and the one we just computed are the same
-		// at the end.
-		if !block.Body().AccessList.Eq(statedb.BlockAccessList()) {
-			bc.reportBlock(block, res, ErrBlockAccessListMismatch)
-		}
-	}
 	// TODO: rename BALConstruction to something that indicates it's for testing purposes only
 	if bc.vmConfig.BALConstruction && makeBAL {
 		// very ugly... deep-copy the block body before setting the block access
