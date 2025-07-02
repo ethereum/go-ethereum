@@ -64,6 +64,14 @@ func Decode(input string) ([]byte, error) {
 	if !has0xPrefix(input) {
 		return nil, ErrMissingPrefix
 	}
+	
+	// Check for invalid characters before passing to hex.DecodeString
+	for i := 2; i < len(input); i++ {
+		if !isHexCharacter(input[i]) {
+			return nil, ErrSyntax
+		}
+	}
+	
 	b, err := hex.DecodeString(input[2:])
 	if err != nil {
 		err = mapError(err)
@@ -238,4 +246,9 @@ func mapError(err error) error {
 		return ErrOddLength
 	}
 	return err
+}
+
+// isHexCharacter returns true if c is a valid hexadecimal character.
+func isHexCharacter(c byte) bool {
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
 }
