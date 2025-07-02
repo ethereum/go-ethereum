@@ -161,11 +161,6 @@ func GetAPIs(apiBackend Backend, chainReader consensus.ChainReader) []rpc.API {
 			Version:   "1.0",
 			Service:   NewPublicAccountAPI(apiBackend.AccountManager()),
 			Public:    true,
-		}, {
-			Namespace: "personal",
-			Version:   "1.0",
-			Service:   NewPrivateAccountAPI(apiBackend, nonceLock),
-			Public:    false,
 		},
 	}
 }

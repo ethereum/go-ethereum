@@ -26,7 +26,6 @@ var Modules = map[string]string{
 	"eth":         Eth_JS,
 	"miner":       Miner_JS,
 	"net":         Net_JS,
-	"personal":    Personal_JS,
 	"rpc":         RPC_JS,
 	"shh":         Shh_JS,
 	"XDCx":        XDCX_JS,
@@ -633,52 +632,6 @@ web3._extend({
 		}),
 	]
 });
-`
-
-const Personal_JS = `
-web3._extend({
-	property: 'personal',
-	methods: [
-		new web3._extend.Method({
-			name: 'importRawKey',
-			call: 'personal_importRawKey',
-			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'sign',
-			call: 'personal_sign',
-			params: 3,
-			inputFormatter: [null, web3._extend.formatters.inputAddressFormatter, null]
-		}),
-		new web3._extend.Method({
-			name: 'ecRecover',
-			call: 'personal_ecRecover',
-			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'openWallet',
-			call: 'personal_openWallet',
-			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'deriveAccount',
-			call: 'personal_deriveAccount',
-			params: 3
-		}),
-		new web3._extend.Method({
-			name: 'signTransaction',
-			call: 'personal_signTransaction',
-			params: 2,
-			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, null]
-		}),
-	],
-	properties: [
-		new web3._extend.Property({
-			name: 'listWallets',
-			getter: 'personal_listWallets'
-		}),
-	]
-})
 `
 
 const RPC_JS = `
