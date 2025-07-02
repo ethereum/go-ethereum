@@ -30,7 +30,7 @@ var messageSize = `(?:\d+)`
 
 // Regular expression to match SIWE messages
 // Scheme (optional)
-var scheme = `([a-zA-Z][a-zA-Z0-9+\-.]*://)?`
+var scheme = `(?:([a-zA-Z][a-zA-Z0-9+\-.]*)://)?`
 
 // Domain
 var domain = `([^ ]+)`

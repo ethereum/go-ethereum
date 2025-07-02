@@ -1,0 +1,24 @@
+{
+    "incorrect_transport": {
+        "msg": "https://localhost:4361 wants you to sign in with your Ethereum account:\n{{Account}}\n\nSIWE Notepad Example\n\nURI: https://localhost:4361\nVersion: 1\nChain ID: 1\nNonce: FbYd6TNB4m0IUHDG7\nIssued At: 2022-04-19T18:55:04.444Z",
+        "request_context": {
+            "transport": "http",
+            "source": "localhost:4361"
+        }
+    },
+    "spoofed_source": {
+        "msg": "https://important-website.com wants you to sign in with your Ethereum account:\n{{Account}}\n\nSIWE Notepad Example\n\nURI: https://important-website.com\nVersion: 1\nChain ID: 1\nNonce: b19JyMHnM0Jdm20as\nIssued At: 2022-04-19T18:57:09.490Z",
+        "request_context": {
+            "transport": "https",
+            "source": "bad-website.com"
+        }
+    },
+    "spoofed_account": {
+        "msg": "localhost:4361 wants you to sign in with your Ethereum account:\n{{Account}}\n\nSIWE Notepad Example\n\nURI: https://localhost:4361\nVersion: 1\nChain ID: 1\nNonce: b19JyMHnM0Jdm20as\nIssued At: 2022-04-19T18:57:09.490Z",
+        "request_context": {
+            "transport": "https",
+            "source": "localhost:4361",
+            "account": "0x1234567890123456789012345678901234567890"
+        }
+    }
+}

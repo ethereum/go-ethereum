@@ -17,8 +17,8 @@
 package core_test
 
 import (
-	"cmp"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -1064,69 +1064,136 @@ func TestEncodeDataRecursiveBytes(t *testing.T) {
 	}
 }
 
-func TestSignInWithEtheriumValid(t *testing.T) {
-	t.Parallel()
+func TestSignInWithEtheriumValidLocalhost(t *testing.T) {
+	tests := map[string]string{
+		"argent":   "http://localhost:4361 wants you to sign in with your Ethereum account:\n{{Account}}\n\nSIWE Notepad Example\n\nURI: http://localhost:4361\nVersion: 1\nChain ID: 1\nNonce: FbYd6TNB4m0IUHDG7\nIssued At: 2022-04-19T18:55:04.444Z",
+		"loopring": "http://localhost:4361 wants you to sign in with your Ethereum account:\n{{Account}}\n\nSIWE Notepad Example\n\nURI: http://localhost:4361\nVersion: 1\nChain ID: 1\nNonce: b19JyMHnM0Jdm20as\nIssued At: 2022-04-19T18:57:09.490Z",
+	}
 
-	testFiles, err := os.ReadDir(filepath.Join("testdata", "siwe"))
+	for testName, msg := range tests {
+		t.Run(testName, func(t *testing.T) {
+			t.Parallel()
+			api, control := setup(t, true)
+			createAccount(control, api, t)
+			createAccount(control, api, t)
+			control.approveCh <- "1"
+			list, err := api.List(context.Background())
+			require.NoError(t, err)
+			a := common.NewMixedcaseAddress(list[0])
+
+			ctx := rpc.ContextWithMockPeerInfo(context.Background(), "http", "localhost:4361")
+			message := strings.ReplaceAll(msg, "{{Account}}", a.Address().Hex())
+
+			control.approveCh <- "Y"
+			control.inputCh <- "a_long_password"
+			signature, err := api.SignData(ctx, apitypes.TextPlain.Mime, a, hexutil.Encode([]byte(message)))
+			require.NoError(t, err)
+
+			if signature == nil || len(signature) != 65 {
+				t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
+			}
+		})
+	}
+}
+
+func TestSignInWithEtheriumValidMessages(t *testing.T) {
+	jsonFile, err := os.ReadFile(filepath.Join("testdata", "siwe", "valid_messages.json"))
 	require.NoError(t, err)
+	tests := make(map[string]string)
+	require.NoError(t, json.Unmarshal(jsonFile, &tests))
 
-	type TestData struct {
-		Msg string `json:"msg"`
-		Account string `json:"account"`
+	for testName, msg := range tests {
+		t.Run(testName, func(t *testing.T) {
+			t.Parallel()
+			api, control := setup(t, true)
+			createAccount(control, api, t)
+			createAccount(control, api, t)
+			control.approveCh <- "1"
+			list, err := api.List(context.Background())
+			require.NoError(t, err)
+			a := common.NewMixedcaseAddress(list[0])
+
+			ctx := rpc.ContextWithMockPeerInfo(context.Background(), "https", "service.org")
+			message := strings.ReplaceAll(msg, "{{Account}}", a.Address().Hex())
+
+			control.approveCh <- "Y"
+			control.inputCh <- "a_long_password"
+			signature, err := api.SignData(ctx, apitypes.TextPlain.Mime, a, hexutil.Encode([]byte(message)))
+			require.NoError(t, err)
+			// todo: check UI for warning message
+
+			if signature == nil || len(signature) != 65 {
+				t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
+			}
+		})
+	}
+}
+
+func TestSignInWithEtheriumInvlid(t *testing.T) {
+	var tests map[string]struct {
+		Msg            string `json:"msg"`
 		RequestContext struct {
 			Transport string `json:"transport"`
-			Source string `json:"source"`
-			Account string `json:"account"`
+			Source    string `json:"source"`
+			Account   string `json:"account"`
 		} `json:"request_context"`
 	}
-	var messages map[string]TestData
-	var expectingWarning bool
+	jsonFile, err := os.ReadFile(filepath.Join("testdata", "siwe", "error_spoofing.json"))
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(jsonFile, &tests))
 
-	for _, fInfo := range testFiles {
-		if !strings.HasSuffix(fInfo.Name(), "json") {
-			continue
-		}
-		if fInfo.Name() != "valid_eip1271.json" {
-			continue
-		}
-		expectingWarning = strings.HasPrefix(fInfo.Name(), "warning")
+	for testName, testData := range tests {
+		t.Run(testName, func(t *testing.T) {
+			t.Parallel()
+			api, control := setup(t, true)
+			createAccount(control, api, t)
+			createAccount(control, api, t)
+			control.approveCh <- "1"
+			list, err := api.List(context.Background())
+			require.NoError(t, err)
+			a := common.NewMixedcaseAddress(list[0])
 
-		jsonFile, err := os.ReadFile(filepath.Join("testdata", "siwe", fInfo.Name()))
-		require.NoError(t, err)
+			ctx := rpc.ContextWithMockPeerInfo(context.Background(), testData.RequestContext.Transport, testData.RequestContext.Source)
+			account := cmp.Or(testData.RequestContext.Account, a.Address().Hex())
+			message := strings.ReplaceAll(testData.Msg, "{{Account}}", account)
 
-		err = json.Unmarshal(jsonFile, &messages)
-		require.NoError(t, err)
+			control.approveCh <- "Y"
+			control.inputCh <- "a_long_password"
+			_, err = api.SignData(ctx, apitypes.TextPlain.Mime, a, hexutil.Encode([]byte(message)))
+			require.Error(t, err)
+		})
+	}
+}
 
-		for testName, testData := range messages {
-			t.Run(testName, func(t *testing.T) {
-				t.Parallel()
+func TestSignInWithEtheriumWarning(t *testing.T) {
+	jsonFile, err := os.ReadFile(filepath.Join("testdata", "siwe", "warnings.json"))
+	require.NoError(t, err)
+	tests := make(map[string]string)
+	require.NoError(t, json.Unmarshal(jsonFile, &tests))
 
-				api, control := setup(t, true)
-				createAccount(control, api, t)
-				createAccount(control, api, t)
-				control.approveCh <- "1"
-				list, err := api.List(context.Background())
-				require.NoError(t, err)
-				a := common.NewMixedcaseAddress(list[0])
+	for testName, msg := range tests {
+		t.Run(testName, func(t *testing.T) {
+			t.Parallel()
+			api, control := setup(t, true)
+			createAccount(control, api, t)
+			createAccount(control, api, t)
+			control.approveCh <- "1"
+			list, err := api.List(context.Background())
+			require.NoError(t, err)
+			a := common.NewMixedcaseAddress(list[0])
 
-				ctx := rpc.ContextWithMockPeerInfo(context.Background(), testData.RequestContext.Transport, testData.RequestContext.Source, testData.Account)
-				account := cmp.Or(testData.Account, a.Address().Hex())
-				message := strings.ReplaceAll(testData.Msg, "{{Account}}", account)
+			ctx := rpc.ContextWithMockPeerInfo(context.Background(), "https", "service.org")
+			message := strings.ReplaceAll(msg, "{{Account}}", a.Address().Hex())
 
-				control.approveCh <- "Y"
-				control.inputCh <- "a_long_password"
-				signature, err := api.SignData(ctx, apitypes.TextPlain.Mime, a, hexutil.Encode([]byte(message)))
+			control.approveCh <- "Y"
+			control.inputCh <- "a_long_password"
+			signature, err := api.SignData(ctx, apitypes.TextPlain.Mime, a, hexutil.Encode([]byte(message)))
+			require.NoError(t, err)
+			// todo: check UI for warning message
 
-				if expectingWarning {
-					// todo: check UI for warning message
-				} else {
-					require.NoError(t, err)
-				}
-
-				if signature == nil || len(signature) != 65 {
-					t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
-				}
-			})
-		}
+			if signature == nil || len(signature) != 65 {
+				t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
+			}
+		})
 	}
 }
