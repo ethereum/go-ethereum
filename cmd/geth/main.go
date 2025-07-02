@@ -151,6 +151,7 @@ var (
 		utils.BeaconGenesisTimeFlag,
 		utils.BeaconCheckpointFlag,
 		utils.BeaconCheckpointFileFlag,
+		utils.ExperimentalBALFlag,
 	}, utils.NetworkFlags, utils.DatabaseFlags)
 
 	rpcFlags = []cli.Flag{
@@ -336,6 +337,10 @@ func startNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 
 	if ctx.IsSet(utils.UnlockedAccountFlag.Name) {
 		log.Warn(`The "unlock" flag has been deprecated and has no effect`)
+	}
+
+	if ctx.IsSet(utils.ExperimentalBALFlag.Name) {
+		log.Warn(`block-access-list construction enabled.  This is an experimental feature that shouldn't be enabled outside of a Geth development context.'`)
 	}
 
 	// Register wallet event handlers to open and auto-derive wallets

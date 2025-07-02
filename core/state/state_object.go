@@ -19,6 +19,7 @@ package state
 import (
 	"bytes"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"maps"
 	"slices"
 	"time"
@@ -51,6 +52,9 @@ type stateObject struct {
 	origin   *types.StateAccount // Account original data without any change applied, nil means it was not existent
 	data     types.StateAccount  // Account data with all mutations applied in the scope of block
 
+	txPreBalance *uint256.Int // the account balance after the last call to finalise
+	txPreNonce   uint64       // the account nonce after the last call to finalise
+
 	// Write caches.
 	trie Trie   // storage trie, which becomes non-nil on first access
 	code []byte // contract bytecode, which gets set when code is loaded
@@ -73,6 +77,8 @@ type stateObject struct {
 	// Cache flags.
 	dirtyCode bool // true if the code was updated
 
+	nonFinalizedCode bool // true if the code was updated since the last call to finalise
+
 	// Flag whether the account was marked as self-destructed. The self-destructed
 	// account is still accessible in the scope of same transaction.
 	selfDestructed bool
@@ -82,6 +88,8 @@ type stateObject struct {
 	// the contract is just created within the current transaction, or when the
 	// object was previously existent and is being deployed as a contract within
 	// the current transaction.
+	//
+	// the flag is set upon beginning of contract initcode execution, not when the code is actually deployed to the address.
 	newContract bool
 }
 
@@ -102,6 +110,8 @@ func newObject(db *StateDB, address common.Address, acct *types.StateAccount) *s
 		addrHash:           crypto.Keccak256Hash(address[:]),
 		origin:             origin,
 		data:               *acct,
+		txPreBalance:       acct.Balance.Clone(),
+		txPreNonce:         acct.Nonce,
 		originStorage:      make(Storage),
 		dirtyStorage:       make(Storage),
 		pendingStorage:     make(Storage),
@@ -234,23 +244,92 @@ func (s *stateObject) setState(key common.Hash, value common.Hash, origin common
 	s.dirtyStorage[key] = value
 }
 
+func (s *stateObject) PrettyPrint() {
+	fmt.Printf("balance: %d\n", s.Balance().Uint64())
+	fmt.Printf("nonce: %d\n", s.Nonce())
+	fmt.Printf("code: %x\n", s.code)
+	fmt.Printf("dirty storage:\n")
+	for slot, val := range s.pendingStorage {
+		fmt.Printf("    %x: %x\n", slot, val)
+	}
+	fmt.Println()
+}
+
 // finalise moves all dirty storage slots into the pending area to be hashed or
 // committed later. It is invoked at the end of every transaction.
-func (s *stateObject) finalise() {
+func (s *stateObject) finalise() *bal.AccountState {
+	var accountPost bal.AccountState
+	if s.db.diff != nil {
+		if s.Balance().Cmp(s.txPreBalance) != 0 {
+			if s.db.constructionBAL != nil {
+				s.db.constructionBAL.BalanceChange(uint16(s.db.balIndex), s.address, s.Balance())
+			}
+			var postBalance bal.Balance
+			postBalanceBytes := s.Balance().Bytes()
+			copy(postBalance[16-len(postBalanceBytes):], postBalanceBytes[:])
+			accountPost.Balance = &postBalance
+		}
+
+		if s.Nonce() != s.txPreNonce {
+			if s.db.constructionBAL != nil {
+				s.db.constructionBAL.NonceChange(s.address, uint16(s.db.balIndex), s.Nonce())
+			}
+			accountPost.Nonce = new(uint64)
+			*accountPost.Nonce = s.Nonce()
+		}
+
+		// include account code changes: created contracts and 7702 delegation authority code changes
+		if s.nonFinalizedCode {
+			if s.db.constructionBAL != nil {
+				s.db.constructionBAL.CodeChange(s.address, uint16(s.db.balIndex), s.code)
+			}
+			accountPost.Code = s.code
+		}
+	}
+
 	slotsToPrefetch := make([]common.Hash, 0, len(s.dirtyStorage))
 	for key, value := range s.dirtyStorage {
 		if origin, exist := s.uncommittedStorage[key]; exist && origin == value {
 			// The slot is reverted to its original value, delete the entry
 			// to avoid thrashing the data structures.
 			delete(s.uncommittedStorage, key)
+
+			// TODO: ensure that we should record the diff here: i.e. this storage slot had a different val at the start of the transaction
+			if s.db.diff != nil {
+				if s.db.constructionBAL != nil {
+					s.db.BlockAccessList().StorageWrite(uint16(s.db.balIndex), s.address, key, value)
+				}
+				if accountPost.StorageWrites == nil {
+					accountPost.StorageWrites = make(map[common.Hash]common.Hash)
+				}
+				accountPost.StorageWrites[key] = value
+			}
 		} else if exist {
 			// The slot is modified to another value and the slot has been
-			// tracked for commit, do nothing here.
+			// tracked for commit in uncommittedStorage.
+			if s.db.diff != nil {
+				if s.db.constructionBAL != nil {
+					s.db.BlockAccessList().StorageWrite(uint16(s.db.balIndex), s.address, key, value)
+				}
+				if accountPost.StorageWrites == nil {
+					accountPost.StorageWrites = make(map[common.Hash]common.Hash)
+				}
+				accountPost.StorageWrites[key] = value
+			}
 		} else {
 			// The slot is different from its original value and hasn't been
 			// tracked for commit yet.
 			s.uncommittedStorage[key] = s.GetCommittedState(key)
 			slotsToPrefetch = append(slotsToPrefetch, key) // Copy needed for closure
+			if s.db.diff != nil {
+				if s.db.constructionBAL != nil {
+					s.db.BlockAccessList().StorageWrite(uint16(s.db.balIndex), s.address, key, value)
+				}
+				if accountPost.StorageWrites == nil {
+					accountPost.StorageWrites = make(map[common.Hash]common.Hash)
+				}
+				accountPost.StorageWrites[key] = value
+			}
 		}
 		// Aggregate the dirty storage slots into the pending area. It might
 		// be possible that the value of tracked slot here is same with the
@@ -272,6 +351,12 @@ func (s *stateObject) finalise() {
 	// of the newly-created object as it's no longer eligible for self-destruct
 	// by EIP-6780. For non-newly-created objects, it's a no-op.
 	s.newContract = false
+
+	s.nonFinalizedCode = false
+
+	s.txPreBalance = s.data.Balance.Clone()
+	s.txPreNonce = s.data.Nonce
+	return &accountPost
 }
 
 // updateTrie is responsible for persisting cached storage changes into the
@@ -493,6 +578,8 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 		dirtyCode:          s.dirtyCode,
 		selfDestructed:     s.selfDestructed,
 		newContract:        s.newContract,
+		txPreNonce:         s.txPreNonce,
+		txPreBalance:       s.txPreBalance.Clone(),
 	}
 	if s.trie != nil {
 		obj.trie = mustCopyTrie(s.trie)
@@ -559,6 +646,7 @@ func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
 	s.code = code
 	s.data.CodeHash = codeHash[:]
 	s.dirtyCode = true
+	s.nonFinalizedCode = true
 }
 
 func (s *stateObject) SetNonce(nonce uint64) {
@@ -584,4 +672,11 @@ func (s *stateObject) Nonce() uint64 {
 
 func (s *stateObject) Root() common.Hash {
 	return s.data.Root
+}
+
+func (s *stateObject) isDelegated() bool {
+	return len(s.Code()) == common.AddressLength+3 && bytes.HasPrefix(s.Code(), common.Hex2Bytes("ef0100"))
+}
+func (s *stateObject) isNewlyDelegated() bool {
+	return s.dirtyCode && s.isDelegated()
 }

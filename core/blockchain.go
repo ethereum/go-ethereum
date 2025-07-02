@@ -193,6 +193,9 @@ type BlockChainConfig struct {
 	// If the value is zero, all transactions of the entire chain will be indexed.
 	// If the value is -1, indexing is disabled.
 	TxLookupLimit int64
+
+	// EnableBAL enables block access list creation and verification (TODO better wording here)
+	EnableBAL bool
 }
 
 // DefaultConfig returns the default config.
@@ -325,11 +328,12 @@ type BlockChain struct {
 	stopping      atomic.Bool // false if chain is running, true when stopped
 	procInterrupt atomic.Bool // interrupt signaler for block processing
 
-	engine     consensus.Engine
-	validator  Validator // Block and state validator interface
-	prefetcher Prefetcher
-	processor  Processor // Block transaction processor interface
-	logger     *tracing.Hooks
+	engine        consensus.Engine
+	validator     Validator // Block and state validator interface
+	prefetcher    Prefetcher
+	balPrefetcher balPrefetcher
+	processor     Processor // Block transaction processor interface
+	logger        *tracing.Hooks
 
 	lastForkReadyAlert time.Time // Last time there was a fork readiness print out
 }
@@ -388,6 +392,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	bc.statedb = state.NewDatabase(bc.triedb, nil)
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
+	bc.balPrefetcher = balPrefetcher{}
 	bc.processor = NewStateProcessor(chainConfig, bc.hc)
 
 	genesisHeader := bc.GetHeaderByNumber(0)
@@ -1881,12 +1886,18 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		}
 		// The traced section of block import.
 		start := time.Now()
-		res, err := bc.processBlock(parent.Root, block, setHead, makeWitness && len(chain) == 1)
+
+		blockHasAccessList := block.Body().AccessList != nil
+		// BAL generation/verification not enabled pre-selfdestruct removal
+		forkSupportsBAL := bc.chainConfig.IsCancun(block.Number(), block.Time())
+		makeBAL := forkSupportsBAL && !blockHasAccessList
+		validateBAL := forkSupportsBAL && blockHasAccessList
+
+		res, err := bc.processBlock(parent.Root, block, setHead, makeWitness && len(chain) == 1, makeBAL, validateBAL)
 		if err != nil {
 			return nil, it.index, err
 		}
 		// Report the import stats before returning the various results
-		stats.processed++
 		stats.usedGas += res.usedGas
 		witness = res.witness
 
@@ -1949,7 +1960,7 @@ type blockProcessingResult struct {
 
 // processBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
-func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, setHead bool, makeWitness bool) (_ *blockProcessingResult, blockEndErr error) {
+func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, setHead bool, makeWitness bool, constructBAL bool, validateBALTesting bool) (bpr *blockProcessingResult, blockEndErr error) {
 	var (
 		err       error
 		startTime = time.Now()
@@ -1960,6 +1971,9 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 
 	if bc.cfg.NoPrefetch {
 		statedb, err = state.New(parentRoot, bc.statedb)
+		if constructBAL || validateBALTesting {
+			statedb.EnableStateDiffRecording()
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -1981,6 +1995,9 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		if err != nil {
 			return nil, err
 		}
+		if constructBAL || validateBALTesting {
+			statedb.EnableStateDiffRecording()
+		}
 		// Upload the statistics of reader at the end
 		defer func() {
 			stats := prefetch.GetStats()
@@ -1999,13 +2016,21 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 			// Disable tracing for prefetcher executions.
 			vmCfg := bc.cfg.VmConfig
 			vmCfg.Tracer = nil
-			bc.prefetcher.Prefetch(block, throwaway, vmCfg, &interrupt)
+			if block.Body().AccessList != nil {
+				bc.balPrefetcher.Prefetch(block, throwaway, &interrupt)
+			} else {
+				bc.prefetcher.Prefetch(block, throwaway, vmCfg, &interrupt)
+			}
 
 			blockPrefetchExecuteTimer.Update(time.Since(start))
 			if interrupt.Load() {
 				blockPrefetchInterruptMeter.Mark(1)
 			}
 		}(time.Now(), throwaway, block)
+	}
+
+	if constructBAL {
+		statedb.EnableBALConstruction()
 	}
 
 	// If we are past Byzantium, enable prefetching to pull in trie node paths
@@ -2022,8 +2047,15 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 				return nil, err
 			}
 		}
-		statedb.StartPrefetcher("chain", witness)
-		defer statedb.StopPrefetcher()
+
+		// access-list containing blocks don't use the prefetcher because
+		// state root computation proceeds concurrently with transaction
+		// execution, meaning the prefetcher doesn't have any time to run
+		// before the trie nodes are needed for state root computation.
+		if block.Body().AccessList == nil {
+			statedb.StartPrefetcher("chain", witness)
+			defer statedb.StopPrefetcher()
+		}
 	}
 
 	if bc.logger != nil && bc.logger.OnBlockStart != nil {
@@ -2039,21 +2071,65 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		}()
 	}
 
-	// Process block using the parent state as reference point
-	pstart := time.Now()
-	res, err := bc.processor.Process(block, statedb, bc.cfg.VmConfig)
-	if err != nil {
-		bc.reportBlock(block, res, err)
-		return nil, err
-	}
-	ptime := time.Since(pstart)
+	var res *ProcessResult
+	var ptime, vtime time.Duration
+	if block.Body().AccessList != nil {
+		if block.NumberU64() == 0 {
+			return nil, fmt.Errorf("genesis block cannot have a block access list")
+		}
+		if !validateBALTesting && !bc.chainConfig.IsGlamsterdam(block.Number(), block.Time()) {
+			bc.reportBlock(block, res, fmt.Errorf("received block containing access list before glamsterdam activated"))
+			return nil, err
+		}
+		// Process block using the parent state as reference point
+		pstart := time.Now()
+		var resCh chan *ProcessResult
+		resCh, err = bc.processor.ProcessWithAccessList(block, statedb, bc.cfg.VmConfig)
+		if err != nil {
+			// TODO: okay to pass nil here as execution result?
+			bc.reportBlock(block, nil, err)
+			return nil, err
+		}
+		ptime = time.Since(pstart)
 
-	vstart := time.Now()
-	if err := bc.validator.ValidateState(block, statedb, res, false); err != nil {
-		bc.reportBlock(block, res, err)
-		return nil, err
+		vstart := time.Now()
+		var err error
+		res, err = bc.validator.ValidateProcessResult(block, resCh, false)
+		if err != nil {
+			// TODO: okay to pass nil here as execution result?
+			bc.reportBlock(block, nil, err)
+			return nil, err
+		}
+		vtime = time.Since(vstart)
+
+	} else {
+		// Process block using the parent state as reference point
+		pstart := time.Now()
+		res, err = bc.processor.Process(block, statedb, bc.cfg.VmConfig)
+		if err != nil {
+			bc.reportBlock(block, res, err)
+			return nil, err
+		}
+		ptime = time.Since(pstart)
+
+		vstart := time.Now()
+		if err := bc.validator.ValidateState(block, statedb, res, false); err != nil {
+			bc.reportBlock(block, res, err)
+			return nil, err
+		}
+		vtime = time.Since(vstart)
+
 	}
-	vtime := time.Since(vstart)
+
+	if constructBAL {
+		// very ugly... deep-copy the block body before setting the block access
+		// list on it to prevent mutating the block instance passed by the caller.
+		existingBody := block.Body()
+		block = block.WithBody(*existingBody)
+		existingBody = block.Body()
+		existingBody.AccessList = statedb.BlockAccessList().ToEncodingObj()
+		block = block.WithBody(*existingBody)
+	}
 
 	// If witnesses was generated and stateless self-validation requested, do
 	// that now. Self validation should *never* run in production, it's more of

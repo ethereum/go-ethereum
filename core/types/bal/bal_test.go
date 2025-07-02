@@ -19,6 +19,8 @@ package bal
 import (
 	"bytes"
 	"cmp"
+	"encoding/json"
+	"fmt"
 	"reflect"
 	"slices"
 	"testing"
@@ -87,6 +89,7 @@ func makeTestConstructionBAL() *ConstructionBlockAccessList {
 				},
 			},
 		},
+		true,
 	}
 }
 
@@ -102,10 +105,10 @@ func TestBALEncoding(t *testing.T) {
 	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 10000000)); err != nil {
 		t.Fatalf("decoding failed: %v\n", err)
 	}
-	if dec.Hash() != bal.toEncodingObj().Hash() {
+	if dec.Hash() != bal.ToEncodingObj().Hash() {
 		t.Fatalf("encoded block hash doesn't match decoded")
 	}
-	if !equalBALs(bal.toEncodingObj(), &dec) {
+	if !equalBALs(bal.ToEncodingObj(), &dec) {
 		t.Fatal("decoded BAL doesn't match")
 	}
 }
@@ -113,7 +116,7 @@ func TestBALEncoding(t *testing.T) {
 func makeTestAccountAccess(sort bool) AccountAccess {
 	var (
 		storageWrites []encodingSlotWrites
-		storageReads  [][32]byte
+		storageReads  []common.Hash
 		balances      []encodingBalanceChange
 		nonces        []encodingAccountNonce
 	)
@@ -144,7 +147,7 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 		storageReads = append(storageReads, testrand.Hash())
 	}
 	if sort {
-		slices.SortFunc(storageReads, func(a, b [32]byte) int {
+		slices.SortFunc(storageReads, func(a, b common.Hash) int {
 			return bytes.Compare(a[:], b[:])
 		})
 	}
@@ -179,7 +182,7 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 		StorageReads:   storageReads,
 		BalanceChanges: balances,
 		NonceChanges:   nonces,
-		Code: []CodeChange{
+		CodeChanges: []CodeChange{
 			{
 				TxIndex: 100,
 				Code:    testrand.Bytes(256),
@@ -245,8 +248,68 @@ func TestBlockAccessListValidation(t *testing.T) {
 
 	// Validate the derived block access list
 	cBAL := makeTestConstructionBAL()
-	listB := cBAL.toEncodingObj()
+	listB := cBAL.ToEncodingObj()
 	if err := listB.Validate(); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
+}
+
+func TestBALIteration(t *testing.T) {
+	cBAL := makeTestConstructionBAL()
+	bal := cBAL.ToEncodingObj()
+
+	var receivedRes string
+	it := NewIterator(bal, 22)
+	for i := 0; i < 22; i++ {
+		mut := it.Next()
+		var res bytes.Buffer
+		encoder := json.NewEncoder(&res)
+		encoder.Encode(&mut)
+		receivedRes += res.String()
+	}
+
+	expectedRes := `{"Mutations":{"0x000000000000000000000000000000000000ffff":{"Code":"deadbeef"}}}
+{"Mutations":{"0x000000000000000000000000000000000000ffff":{"Balance":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,100],"Nonce":2,"StorageWrites":{"0x0000000000000000000000000000000000000000000000000000000000000001":"0x0000000000000000000000000000000000000000000000000000000001020304"}},"0x0000000000000000000000000000000000ffffff":{"Nonce":2}}}
+{"Mutations":{"0x000000000000000000000000000000000000ffff":{"Balance":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,244],"Nonce":6,"StorageWrites":{"0x0000000000000000000000000000000000000000000000000000000000000001":"0x0000000000000000000000000000000000000000000000000000010203040506"}},"0x0000000000000000000000000000000000ffffff":{"Balance":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,100],"StorageWrites":{"0x0000000000000000000000000000000000000000000000000000000000000001":"0x0000000000000000000000000000000000000000000000000000010203040506"}}}}
+{"Mutations":{"0x0000000000000000000000000000000000ffffff":{"Balance":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,244],"StorageWrites":{"0x0000000000000000000000000000000000000000000000000000000000000001":"0x0000000000000000000000000000000000000000000000000102030405060708"}}}}
+{}
+{}
+{}
+{}
+{}
+{}
+{}
+{}
+{}
+{}
+{}
+{}
+{}
+{}
+{}
+{}
+{"Mutations":{"0x000000000000000000000000000000000000ffff":{"StorageWrites":{"0x0000000000000000000000000000000000000000000000000000000000000010":"0x0000000000000000000000000000000000000000000000000000000001020304"}}}}
+{}
+`
+	if receivedRes != expectedRes {
+		t.Fatalf("bal iteration didn't produce expected output")
+	}
+}
+
+func TestBALStateDiffAccumulation(t *testing.T) {
+
+	cBAL := makeTestConstructionBAL()
+	bal := cBAL.ToEncodingObj()
+
+	it := NewIterator(bal, 22)
+	diff, err := it.BuildStateDiff(22, func(txIndex uint16, accumDiff, txDiff *StateDiff) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("received error when trying to get bal state diff: %v\n", err)
+	}
+	var res bytes.Buffer
+	encoder := json.NewEncoder(&res)
+	encoder.Encode(diff)
+	fmt.Println(res.String())
 }

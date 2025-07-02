@@ -25,6 +25,8 @@ import (
 	"regexp"
 	"slices"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
+
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/tests"
@@ -89,7 +91,7 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 			continue
 		}
 		result := &testResult{Name: name, Pass: true}
-		if err := tests[name].Run(false, rawdb.PathScheme, ctx.Bool(WitnessCrossCheckFlag.Name), tracer, func(res error, chain *core.BlockChain) {
+		if err := tests[name].Run(false, rawdb.PathScheme, ctx.Bool(WitnessCrossCheckFlag.Name), ctx.Bool(utils.ExperimentalBALFlag.Name), tracer, func(res error, chain *core.BlockChain) {
 			if ctx.Bool(DumpFlag.Name) {
 				if s, _ := chain.State(); s != nil {
 					result.State = dump(s)

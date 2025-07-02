@@ -473,6 +473,11 @@ web3._extend({
 			call: 'debug_sync',
 			params: 1
 		}),
+		new web3._extend.Method({
+			name: 'getBlockAccessList',
+			call: 'debug_getBlockAccessList',
+			params: 1
+		}),
 	],
 	properties: []
 });
