@@ -966,6 +966,13 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+	// Block Access List flags
+	BuildBALFlag = &cli.BoolFlag{
+		Name:     "buildbal",
+		Usage:    "Enable block-access-list building when executing blocks (experimental)",
+		Category: flags.MiscCategory,
+	}
 )
 
 var (
@@ -1851,6 +1858,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.VMTrace = name
 			cfg.VMTraceJsonConfig = ctx.String(VMTraceJsonConfigFlag.Name)
 		}
+	}
+
+	if ctx.IsSet(BuildBALFlag.Name) {
+		enabled := ctx.Bool(BuildBALFlag.Name)
+		cfg.BuildBAL = &enabled
 	}
 }
 

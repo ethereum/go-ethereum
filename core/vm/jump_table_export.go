@@ -28,6 +28,8 @@ func LookupInstructionSet(rules params.Rules) (JumpTable, error) {
 	switch {
 	case rules.IsVerkle:
 		return newCancunInstructionSet(), errors.New("verkle-fork not defined yet")
+	case rules.IsGlamsterdam:
+		return newPragueInstructionSet(), errors.New("glamsterdam-fork not defined yet")
 	case rules.IsOsaka:
 		return newOsakaInstructionSet(), nil
 	case rules.IsPrague:

@@ -17,9 +17,11 @@
 package eth
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -442,4 +444,30 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 		return "", errors.New("trie flush interval is undefined for path-based scheme")
 	}
 	return api.eth.blockchain.GetTrieFlushInterval().String(), nil
+}
+
+func (api *DebugAPI) GetBlockAccessList(number rpc.BlockNumberOrHash) (*bal.BlockAccessList, error) {
+	var block *types.Block
+	if num := number.BlockNumber; num != nil {
+		block = api.eth.blockchain.GetBlockByNumber(uint64(num.Int64()))
+	} else if hash := number.BlockHash; hash != nil {
+		block = api.eth.blockchain.GetBlockByHash(*hash)
+	}
+
+	if block == nil {
+		return nil, fmt.Errorf("block not found")
+	}
+	return block.Body().AccessList, nil
+}
+
+func (api *DebugAPI) GetEncodedAccessList(number rpc.BlockNumberOrHash) ([]byte, error) {
+	bal, err := api.GetBlockAccessList(number)
+	if err != nil {
+		return nil, err
+	}
+	var enc bytes.Buffer
+	if err = bal.EncodeRLP(&enc); err != nil {
+		return nil, err
+	}
+	return enc.Bytes(), nil
 }
