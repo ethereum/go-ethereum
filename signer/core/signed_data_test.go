@@ -1065,6 +1065,7 @@ func TestEncodeDataRecursiveBytes(t *testing.T) {
 }
 
 func TestSignInWithEtheriumValidLocalhost(t *testing.T) {
+	t.Parallel()
 	tests := map[string]string{
 		"argent":   "http://localhost:4361 wants you to sign in with your Ethereum account:\n{{Account}}\n\nSIWE Notepad Example\n\nURI: http://localhost:4361\nVersion: 1\nChain ID: 1\nNonce: FbYd6TNB4m0IUHDG7\nIssued At: 2022-04-19T18:55:04.444Z",
 		"loopring": "http://localhost:4361 wants you to sign in with your Ethereum account:\n{{Account}}\n\nSIWE Notepad Example\n\nURI: http://localhost:4361\nVersion: 1\nChain ID: 1\nNonce: b19JyMHnM0Jdm20as\nIssued At: 2022-04-19T18:57:09.490Z",
@@ -1072,7 +1073,6 @@ func TestSignInWithEtheriumValidLocalhost(t *testing.T) {
 
 	for testName, msg := range tests {
 		t.Run(testName, func(t *testing.T) {
-			t.Parallel()
 			api, control := setup(t, true)
 			createAccount(control, api, t)
 			createAccount(control, api, t)
@@ -1097,6 +1097,7 @@ func TestSignInWithEtheriumValidLocalhost(t *testing.T) {
 }
 
 func TestSignInWithEtheriumValidMessages(t *testing.T) {
+	t.Parallel()
 	jsonFile, err := os.ReadFile(filepath.Join("testdata", "siwe", "valid_messages.json"))
 	require.NoError(t, err)
 	tests := make(map[string]string)
@@ -1104,7 +1105,6 @@ func TestSignInWithEtheriumValidMessages(t *testing.T) {
 
 	for testName, msg := range tests {
 		t.Run(testName, func(t *testing.T) {
-			t.Parallel()
 			api, control := setup(t, true)
 			createAccount(control, api, t)
 			createAccount(control, api, t)
@@ -1130,6 +1130,7 @@ func TestSignInWithEtheriumValidMessages(t *testing.T) {
 }
 
 func TestSignInWithEtheriumInvlid(t *testing.T) {
+	t.Parallel()
 	var tests map[string]struct {
 		Msg            string `json:"msg"`
 		RequestContext struct {
@@ -1143,29 +1144,36 @@ func TestSignInWithEtheriumInvlid(t *testing.T) {
 	require.NoError(t, json.Unmarshal(jsonFile, &tests))
 
 	for testName, testData := range tests {
-		t.Run(testName, func(t *testing.T) {
-			t.Parallel()
-			api, control := setup(t, true)
-			createAccount(control, api, t)
-			createAccount(control, api, t)
-			control.approveCh <- "1"
-			list, err := api.List(context.Background())
-			require.NoError(t, err)
-			a := common.NewMixedcaseAddress(list[0])
+		for _, enabled := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s-%t", testName, enabled), func(t *testing.T) {
+				// t.Parallel()
+				api, control := setup(t, enabled)
+				createAccount(control, api, t)
+				createAccount(control, api, t)
+				control.approveCh <- "1"
+				list, err := api.List(context.Background())
+				require.NoError(t, err)
+				a := common.NewMixedcaseAddress(list[0])
 
-			ctx := rpc.ContextWithMockPeerInfo(context.Background(), testData.RequestContext.Transport, testData.RequestContext.Source)
-			account := cmp.Or(testData.RequestContext.Account, a.Address().Hex())
-			message := strings.ReplaceAll(testData.Msg, "{{Account}}", account)
+				ctx := rpc.ContextWithMockPeerInfo(context.Background(), testData.RequestContext.Transport, testData.RequestContext.Source)
+				account := cmp.Or(testData.RequestContext.Account, a.Address().Hex())
+				message := strings.ReplaceAll(testData.Msg, "{{Account}}", account)
 
-			control.approveCh <- "Y"
-			control.inputCh <- "a_long_password"
-			_, err = api.SignData(ctx, apitypes.TextPlain.Mime, a, hexutil.Encode([]byte(message)))
-			require.Error(t, err)
-		})
+				control.approveCh <- "Y"
+				control.inputCh <- "a_long_password"
+				_, err = api.SignData(ctx, apitypes.TextPlain.Mime, a, hexutil.Encode([]byte(message)))
+				if enabled {
+					require.Error(t, err)
+				} else {
+					require.NoError(t, err)
+				}
+			})
+		}
 	}
 }
 
 func TestSignInWithEtheriumWarning(t *testing.T) {
+	t.Parallel()
 	jsonFile, err := os.ReadFile(filepath.Join("testdata", "siwe", "warnings.json"))
 	require.NoError(t, err)
 	tests := make(map[string]string)
@@ -1173,7 +1181,6 @@ func TestSignInWithEtheriumWarning(t *testing.T) {
 
 	for testName, msg := range tests {
 		t.Run(testName, func(t *testing.T) {
-			t.Parallel()
 			api, control := setup(t, true)
 			createAccount(control, api, t)
 			createAccount(control, api, t)
