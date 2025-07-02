@@ -40,7 +40,7 @@ import (
 
 // BlockAccessList is the encoding format of ConstructionBlockAccessList.
 type BlockAccessList struct {
-	Accesses []AccountAccess `ssz-max:"300000"`
+	Accesses []AccountAccess `ssz-max:"300000" json:"accesses"`
 }
 
 // Validate returns an error if the contents of the access list are not ordered
@@ -86,26 +86,26 @@ func encodeBalance(val *uint256.Int) [16]byte {
 
 // encodingBalanceChange is the encoding format of BalanceChange.
 type encodingBalanceChange struct {
-	TxIdx   uint16   `ssz-size:"2"`
-	Balance [16]byte `ssz-size:"16"`
+	TxIdx   uint16   `ssz-size:"2" json:"txIndex"`
+	Balance [16]byte `ssz-size:"16" json:"balance"`
 }
 
 // encodingAccountNonce is the encoding format of NonceChange.
 type encodingAccountNonce struct {
-	TxIdx uint16 `ssz-size:"2"`
-	Nonce uint64 `ssz-size:"8"`
+	TxIdx uint16 `ssz-size:"2" json:"txIndex"`
+	Nonce uint64 `ssz-size:"8" json:"nonce"`
 }
 
 // encodingStorageWrite is the encoding format of StorageWrites.
 type encodingStorageWrite struct {
-	TxIdx      uint16
-	ValueAfter [32]byte `ssz-size:"32"`
+	TxIdx      uint16      `json:"txIndex"`
+	ValueAfter common.Hash `ssz-size:"32" json:"valueAfter"`
 }
 
 // encodingStorageWrite is the encoding format of SlotWrites.
 type encodingSlotWrites struct {
-	Slot     [32]byte               `ssz-size:"32"`
-	Accesses []encodingStorageWrite `ssz-max:"300000"`
+	Slot     common.Hash            `ssz-size:"32" json:"slot"`
+	Accesses []encodingStorageWrite `ssz-max:"300000" json:"accesses"`
 }
 
 // validate returns an instance of the encoding-representation slot writes in
@@ -121,12 +121,12 @@ func (e *encodingSlotWrites) validate() error {
 
 // AccountAccess is the encoding format of ConstructionAccountAccess.
 type AccountAccess struct {
-	Address        [20]byte                `ssz-size:"20"`    // 20-byte Ethereum address
-	StorageWrites  []encodingSlotWrites    `ssz-max:"300000"` // Storage changes (slot -> [tx_index -> new_value])
-	StorageReads   [][32]byte              `ssz-max:"300000"` // Read-only storage keys
-	BalanceChanges []encodingBalanceChange `ssz-max:"300000"` // Balance changes ([tx_index -> post_balance])
-	NonceChanges   []encodingAccountNonce  `ssz-max:"300000"` // Nonce changes ([tx_index -> new_nonce])
-	Code           []CodeChange            `ssz-max:"1"`      // Code changes ([tx_index -> new_code])
+	Address        common.Address          `ssz-size:"20" json:"address,omitempty"`           // 20-byte Ethereum address
+	StorageWrites  []encodingSlotWrites    `ssz-max:"300000" json:"storageWrites,omitempty"`  // Storage changes (slot -> [tx_index -> new_value])
+	StorageReads   []common.Hash           `ssz-max:"300000" json:"storageReads,omitempty"`   // Read-only storage keys
+	BalanceChanges []encodingBalanceChange `ssz-max:"300000" json:"balanceChanges,omitempty"` // Balance changes ([tx_index -> post_balance])
+	NonceChanges   []encodingAccountNonce  `ssz-max:"300000" json:"nonceChanges,omitempty"`   // Nonce changes ([tx_index -> new_nonce])
+	Code           []CodeChange            `ssz-max:"1" json:"code,omitempty"`                // Code changes ([tx_index -> new_code])
 }
 
 // validate converts the account accesses out of encoding format.
@@ -146,7 +146,7 @@ func (e *AccountAccess) validate() error {
 	}
 
 	// Check the storage read slots are sorted in order
-	if !slices.IsSortedFunc(e.StorageReads, func(a, b [32]byte) int {
+	if !slices.IsSortedFunc(e.StorageReads, func(a, b common.Hash) int {
 		return bytes.Compare(a[:], b[:])
 	}) {
 		return errors.New("storage read slots not in lexicographic order")
@@ -201,8 +201,8 @@ func (e *AccountAccess) Copy() AccountAccess {
 }
 
 // EncodeRLP returns the RLP-encoded access list
-func (b *ConstructionBlockAccessList) EncodeRLP(wr io.Writer) error {
-	return b.toEncodingObj().EncodeRLP(wr)
+func (c *ConstructionBlockAccessList) EncodeRLP(wr io.Writer) error {
+	return c.ToEncodingObj().EncodeRLP(wr)
 }
 
 var _ rlp.Encoder = &ConstructionBlockAccessList{}
@@ -213,7 +213,7 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 	res := AccountAccess{
 		Address:        addr,
 		StorageWrites:  make([]encodingSlotWrites, 0),
-		StorageReads:   make([][32]byte, 0),
+		StorageReads:   make([]common.Hash, 0),
 		BalanceChanges: make([]encodingBalanceChange, 0),
 		NonceChanges:   make([]encodingAccountNonce, 0),
 		Code:           nil,
@@ -279,18 +279,18 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 	return res
 }
 
-// toEncodingObj returns an instance of the access list expressed as the type
+// ToEncodingObj returns an instance of the access list expressed as the type
 // which is used as input for the encoding/decoding.
-func (b *ConstructionBlockAccessList) toEncodingObj() *BlockAccessList {
+func (c *ConstructionBlockAccessList) ToEncodingObj() *BlockAccessList {
 	var addresses []common.Address
-	for addr := range b.Accounts {
+	for addr := range c.Accounts {
 		addresses = append(addresses, addr)
 	}
 	slices.SortFunc(addresses, common.Address.Cmp)
 
 	var res BlockAccessList
 	for _, addr := range addresses {
-		res.Accesses = append(res.Accesses, b.Accounts[addr].toEncodingObj(addr))
+		res.Accesses = append(res.Accesses, c.Accounts[addr].toEncodingObj(addr))
 	}
 	return &res
 }

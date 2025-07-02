@@ -669,7 +669,7 @@ func TestColdAccountAccessCost(t *testing.T) {
 				Tracer: &tracing.Hooks{
 					OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 						// Uncomment to investigate failures:
-						//t.Logf("%d: %v %d", step, vm.OpCode(op).String(), cost)
+						//t.Logf("%d: %v %d", step, vm.OpCode(op).PrettyPrint(), cost)
 						if step == tc.step {
 							have = cost
 						}

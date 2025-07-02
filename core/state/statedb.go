@@ -26,6 +26,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/core/types/bal"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -138,6 +140,9 @@ type StateDB struct {
 	// State witness if cross validation is needed
 	witness *stateless.Witness
 
+	// block access list, if bal construction is specified
+	b *bal.ConstructionBlockAccessList
+
 	// Measurements gathered during execution for debugging purposes
 	AccountReads    time.Duration
 	AccountHashes   time.Duration
@@ -155,6 +160,19 @@ type StateDB struct {
 	StorageLoaded  int          // Number of storage slots retrieved from the database during the state transition
 	StorageUpdated atomic.Int64 // Number of storage slots updated during the state transition
 	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
+}
+
+// EnableBALConstruction configures the StateDB instance to construct block
+// access lists from state reads/writes recorded during block execution
+func (s *StateDB) EnableBALConstruction() {
+	bal := bal.NewConstructionBlockAccessList()
+	s.b = &bal
+}
+
+// BlockAccessList retrieves the access list that has been constructed
+// by the StateDB instance, or nil if BAL construction was not enabled.
+func (s *StateDB) BlockAccessList() *bal.ConstructionBlockAccessList {
+	return s.b
 }
 
 // New creates a new state from a given trie.
@@ -373,6 +391,9 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 // GetState retrieves the value associated with the specific key.
 func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
+	if s.b != nil {
+		s.b.StorageRead(addr, hash)
+	}
 	if stateObject != nil {
 		return stateObject.GetState(hash)
 	}
@@ -629,6 +650,12 @@ func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
 	if obj == nil {
 		obj = s.createObject(addr)
 	}
+
+	if s.b != nil {
+		// note: when sending a transfer with no value, the target account is loaded here
+		// we probably want to specify whether this is proper behavior in the EIP
+		s.b.AccountRead(addr)
+	}
 	return obj
 }
 
@@ -765,6 +792,29 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 				s.stateObjectsDestruct[obj.address] = obj
 			}
 		} else {
+			if s.b != nil {
+				// add written storage keys/values
+				for key, val := range obj.dirtyStorage {
+					s.b.StorageWrite(uint16(s.txIndex), obj.address, key, val)
+				}
+
+				// for addresses that changed balance, add the post-change value
+				if obj.Balance().Cmp(obj.txPreBalance) != 0 {
+					s.b.BalanceChange(uint16(s.txIndex), obj.address, obj.Balance())
+				}
+
+				// include nonces for any contract-like accounts which incremented them
+				if common.BytesToHash(obj.CodeHash()) != types.EmptyCodeHash && obj.Nonce() != obj.txPreNonce {
+					s.b.NonceChange(obj.address, uint16(s.txIndex), obj.Nonce())
+				}
+
+				// include code of created contracts
+				// TODO: validate that this doesn't trigger on delegated EOAs
+				if obj.newContract {
+					s.b.CodeChange(obj.address, uint16(s.txIndex), obj.code)
+				}
+			}
+
 			obj.finalise()
 			s.markUpdate(addr)
 		}

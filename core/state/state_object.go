@@ -51,6 +51,10 @@ type stateObject struct {
 	origin   *types.StateAccount // Account original data without any change applied, nil means it was not existent
 	data     types.StateAccount  // Account data with all mutations applied in the scope of block
 
+	// TODO: figure out whether or not this is first set after system contracts (withdrawals) are applied
+	txPreBalance *uint256.Int // the account balance at the start of the current transaction
+	txPreNonce   uint64
+
 	// Write caches.
 	trie Trie   // storage trie, which becomes non-nil on first access
 	code []byte // contract bytecode, which gets set when code is loaded
@@ -102,6 +106,8 @@ func newObject(db *StateDB, address common.Address, acct *types.StateAccount) *s
 		addrHash:           crypto.Keccak256Hash(address[:]),
 		origin:             origin,
 		data:               *acct,
+		txPreBalance:       acct.Balance.Clone(),
+		txPreNonce:         acct.Nonce,
 		originStorage:      make(Storage),
 		dirtyStorage:       make(Storage),
 		pendingStorage:     make(Storage),
@@ -272,6 +278,9 @@ func (s *stateObject) finalise() {
 	// of the newly-created object as it's no longer eligible for self-destruct
 	// by EIP-6780. For non-newly-created objects, it's a no-op.
 	s.newContract = false
+
+	s.txPreBalance = s.data.Balance.Clone()
+	s.txPreNonce = s.data.Nonce
 }
 
 // updateTrie is responsible for persisting cached storage changes into the
@@ -493,6 +502,8 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 		dirtyCode:          s.dirtyCode,
 		selfDestructed:     s.selfDestructed,
 		newContract:        s.newContract,
+		txPreNonce:         s.txPreNonce,
+		txPreBalance:       s.txPreBalance.Clone(),
 	}
 	if s.trie != nil {
 		obj.trie = mustCopyTrie(s.trie)

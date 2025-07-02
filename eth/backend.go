@@ -220,6 +220,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			rawdb.WriteDatabaseVersion(chainDb, core.BlockChainVersion)
 		}
 	}
+	var buildBAL bool
+	if config.BuildBAL != nil {
+		buildBAL = *config.BuildBAL
+	}
 	var (
 		options = &core.BlockChainConfig{
 			TrieCleanLimit:   config.TrieCleanCache,
@@ -235,6 +239,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			TxLookupLimit:    int64(min(config.TransactionHistory, math.MaxInt64)),
 			VmConfig: vm.Config{
 				EnablePreimageRecording: config.EnablePreimageRecording,
+				BALConstruction:         buildBAL,
 			},
 		}
 	)
