@@ -256,3 +256,23 @@ func PeerInfoFromContext(ctx context.Context) PeerInfo {
 	info, _ := ctx.Value(peerInfoContextKey{}).(PeerInfo)
 	return info
 }
+
+// ContextWithMockPeerInfo is a helper function to create a context with a mock peer info.
+// It is used in tests to simulate a peer info.
+func ContextWithMockPeerInfo(ctx context.Context, transport, source, account string) context.Context {
+	peerInfo := PeerInfo{
+		Transport: transport,
+		HTTP: struct {
+			Version    string
+			UserAgent  string
+			Origin     string
+			Host       string
+		}{
+			Version:    "1.1",
+			UserAgent:  "test", 
+			Origin:     source,
+			Host:      "test",
+		},
+	}
+	return context.WithValue(ctx, peerInfoContextKey{}, peerInfo)
+}

@@ -17,6 +17,7 @@
 package core_test
 
 import (
+	"cmp"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -32,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/signer/core"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/stretchr/testify/require"
@@ -1068,14 +1070,23 @@ func TestSignInWithEtheriumValid(t *testing.T) {
 	testFiles, err := os.ReadDir(filepath.Join("testdata", "siwe"))
 	require.NoError(t, err)
 
-	var messages map[string]string
+	type TestData struct {
+		Msg string `json:"msg"`
+		Account string `json:"account"`
+		RequestContext struct {
+			Transport string `json:"transport"`
+			Source string `json:"source"`
+			Account string `json:"account"`
+		} `json:"request_context"`
+	}
+	var messages map[string]TestData
 	var expectingWarning bool
 
 	for _, fInfo := range testFiles {
 		if !strings.HasSuffix(fInfo.Name(), "json") {
 			continue
 		}
-		if fInfo.Name() != "warning_uris.json" {
+		if fInfo.Name() != "valid_eip1271.json" {
 			continue
 		}
 		expectingWarning = strings.HasPrefix(fInfo.Name(), "warning")
@@ -1086,7 +1097,7 @@ func TestSignInWithEtheriumValid(t *testing.T) {
 		err = json.Unmarshal(jsonFile, &messages)
 		require.NoError(t, err)
 
-		for testName, message := range messages {
+		for testName, testData := range messages {
 			t.Run(testName, func(t *testing.T) {
 				t.Parallel()
 
@@ -1098,9 +1109,13 @@ func TestSignInWithEtheriumValid(t *testing.T) {
 				require.NoError(t, err)
 				a := common.NewMixedcaseAddress(list[0])
 
+				ctx := rpc.ContextWithMockPeerInfo(context.Background(), testData.RequestContext.Transport, testData.RequestContext.Source, testData.Account)
+				account := cmp.Or(testData.Account, a.Address().Hex())
+				message := strings.ReplaceAll(testData.Msg, "{{Account}}", account)
+
 				control.approveCh <- "Y"
 				control.inputCh <- "a_long_password"
-				signature, err := api.SignData(context.Background(), apitypes.TextPlain.Mime, a, hexutil.Encode([]byte(message)))
+				signature, err := api.SignData(ctx, apitypes.TextPlain.Mime, a, hexutil.Encode([]byte(message)))
 
 				if expectingWarning {
 					// todo: check UI for warning message

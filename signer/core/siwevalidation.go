@@ -25,24 +25,27 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// Message size
+var messageSize = `(?:\d+)`
+
 // Regular expression to match SIWE messages
 // Scheme (optional)
-var scheme = `(?:[a-zA-Z][a-zA-Z0-9+\-.]*://)?`
+var scheme = `([a-zA-Z][a-zA-Z0-9+\-.]*://)?`
 
 // Domain
-var domain = `(?:[^ ]+)`
+var domain = `([^ ]+)`
 
 // Static message
 var wantsMsg = ` wants you to sign in with your Ethereum account:\n`
 
 // Ethereum address (with basic 0x prefix + 40 hex digits)
-var address = `(?:0x[a-fA-F0-9]{40})\n`
+var address = `(0x[a-fA-F0-9]{40})\n`
 
 // Optional statement (any line not containing "\n\n")
 var statement = `(?:[^\n]+\n)?`
 
 // URI
-var uri = `URI: (.+)\n`
+var uri = `URI: (?:.+)\n`
 
 // Version
 var version = `Version: 1\n`
@@ -51,25 +54,25 @@ var version = `Version: 1\n`
 var chainID = `Chain ID: (\d+)\n`
 
 // Nonce (min 8 alphanumeric characters)
-var nonce = `Nonce: [a-zA-Z0-9]{8,}\n`
+var nonce = `Nonce: (?:[a-zA-Z0-9]{8,})\n`
 
 // Issued At (RFC 3339 date-time)
-var issuedAt = `Issued At: ([0-9T:\-+.Z]+)`
+var issuedAt = `Issued At: (?:[0-9T:\-+.Z]+)`
 
 // Optional Expiration Time
-var expiration = `(?:\nExpiration Time: ([0-9T:\-+.Z]+))?`
+var expiration = `(?:\nExpiration Time: (?:[0-9T:\-+.Z]+))?`
 
 // Optional Not Before
-var notBefore = `(?:\nNot Before: ([0-9T:\-+.Z]+))?`
+var notBefore = `(?:\nNot Before: (?:[0-9T:\-+.Z]+))?`
 
 // Optional Request ID
-var requestID = `(?:\nRequest ID: ([^\n]+))?`
+var requestID = `(?:\nRequest ID: (?:[^\n]+))?`
 
 // Optional Resources
 var resources = `(?:\nResources:(?:\n- .+)+)?`
 
 // SIWE Message Regex
-var siweMessageRegex = regexp.MustCompile(`(?m)^` + scheme + domain + wantsMsg +
+var siweMessageRegex = regexp.MustCompile(`(?m)^` + messageSize + scheme + domain + wantsMsg +
 	address + `\n` + statement + `\n` +
 	uri + version + chainID + nonce + issuedAt +
 	expiration + notBefore + requestID + resources + `$`)
@@ -85,18 +88,19 @@ func validateSIWE(req *SignDataRequest) error {
 		if !strings.Contains(s, "wants you to sign in with your Ethereum account") {
 			continue
 		}
+
 		patterns := siweMessageRegex.FindStringSubmatch(s)
-		if len(patterns) != 15 {
+		if patterns == nil {
 			return ErrMalformedSIWEMEssage
 		}
 		scheme := "https"
-		if patterns[0] != "" {
-			scheme = patterns[0]
+		if patterns[1] != "" {
+			scheme = patterns[1]
 		}
-		if err := validateDomain(req, scheme, patterns[1]); err != nil {
+		if err := validateDomain(req, scheme, patterns[2]); err != nil {
 			return err
 		}
-		if err := validateAddress(req, patterns[2]); err != nil {
+		if err := validateAddress(req, patterns[3]); err != nil {
 			return err
 		}
 	}
@@ -105,8 +109,9 @@ func validateSIWE(req *SignDataRequest) error {
 
 func validateDomain(request *SignDataRequest, scheme, domain string) error {
 	siweOrigin := fmt.Sprintf("%s://%s", scheme, domain)
-	if siweOrigin != request.Meta.Origin {
-		return fmt.Errorf("sign in request domain (%s) does not match source: %s", siweOrigin, request.Meta.Origin)
+	requestOrigin := fmt.Sprintf("%s://%s", request.Meta.Scheme, request.Meta.Origin)
+	if siweOrigin != requestOrigin {
+		return fmt.Errorf("sign in request domain (%s) does not match source: %s", siweOrigin, requestOrigin)
 	}
 	return nil
 }
