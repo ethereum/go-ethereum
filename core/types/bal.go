@@ -3,16 +3,17 @@ package types
 import (
 	"bytes"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
-	ssz "github.com/ferranbt/fastssz"
-	"github.com/holiman/uint256"
 	"io"
 	"maps"
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
+	ssz "github.com/ferranbt/fastssz"
+	"github.com/holiman/uint256"
 )
 
 //go:generate go run github.com/ferranbt/fastssz/sszgen  --output bal_encoding_generated.go --path . --objs encodingStorageWrite,encodingStorageWrites,encodingCodeChange,encodingBalanceChange,encodingAccountNonce,encodingCodeChange,encodingAccountAccess
@@ -323,7 +324,7 @@ func (a *accountAccess) toEncodingObj(addr common.Address) encodingAccountAccess
 // which is used as input for the decoding.
 func (b *BlockAccessList) toEncodingObj() (res encodingBlockAccessList) {
 	var addrs []common.Address
-	for addr, _ := range b.accounts {
+	for addr := range b.accounts {
 		addrs = append(addrs, addr)
 	}
 	sort.Slice(addrs, func(i, j int) bool {
