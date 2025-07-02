@@ -735,6 +735,14 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 // was snap synced or full synced and in which state, the method will try to
 // delete minimal data from disk whilst retaining chain consistency.
 func (bc *BlockChain) SetHead(head uint64) error {
+	// Only allowed to rewind to a block that is later than the oldest state block.
+	firstStateBlock, err := bc.triedb.FirstStateBlock()
+	if err != nil {
+		return err
+	}
+	if head < firstStateBlock {
+		return fmt.Errorf("cannot rewind to block %d, oldest available state is at block %d", head, firstStateBlock)
+	}
 	if _, err := bc.setHeadBeyondRoot(head, 0, common.Hash{}, false); err != nil {
 		return err
 	}
