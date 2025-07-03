@@ -484,7 +484,7 @@ func (e *encodingBalanceChange) MarshalSSZTo(buf []byte) (dst []byte, err error)
 	dst = ssz.MarshalUint64(dst, e.TxIdx)
 
 	// Field (1) 'Delta'
-	dst = append(dst, e.Delta[:]...)
+	dst = append(dst, e.Balance[:]...)
 
 	return
 }
@@ -501,7 +501,7 @@ func (e *encodingBalanceChange) UnmarshalSSZ(buf []byte) error {
 	e.TxIdx = ssz.UnmarshallUint64(buf[0:8])
 
 	// Field (1) 'Delta'
-	copy(e.Delta[:], buf[8:24])
+	copy(e.Balance[:], buf[8:24])
 
 	return err
 }
@@ -525,7 +525,7 @@ func (e *encodingBalanceChange) HashTreeRootWith(hh ssz.HashWalker) (err error) 
 	hh.PutUint64(e.TxIdx)
 
 	// Field (1) 'Delta'
-	hh.PutBytes(e.Delta[:])
+	hh.PutBytes(e.Balance[:])
 
 	hh.Merkleize(indx)
 	return

@@ -161,7 +161,7 @@ func (e *encodingAccountAccess) toAccountAccess() (*accountAccess, error) {
 					return nil, fmt.Errorf("balance change tx indices not in ascending order")
 				}
 			}
-			res.BalanceChanges[balanceChange.TxIdx] = new(uint256.Int).SetBytes(balanceChange.Delta[:])
+			res.BalanceChanges[balanceChange.TxIdx] = new(uint256.Int).SetBytes(balanceChange.Balance[:])
 			prevBalanceChangeIdx = &balanceChange.TxIdx
 		}
 	}
@@ -188,10 +188,9 @@ func (e *encodingAccountAccess) toAccountAccess() (*accountAccess, error) {
 	return &res, nil
 }
 
-// TODO: verify that Geth encodes the endianess according to the spec
-type encodingBalanceDelta [16]byte
+type encodingBalance [16]byte
 
-func (b *encodingBalanceDelta) set(val *uint256.Int) *encodingBalanceDelta {
+func (b *encodingBalance) set(val *uint256.Int) *encodingBalance {
 	valBytes := val.Bytes()
 	if len(valBytes) > 16 {
 		panic("can't encode value that is greater than 12 bytes in size")
@@ -201,8 +200,8 @@ func (b *encodingBalanceDelta) set(val *uint256.Int) *encodingBalanceDelta {
 }
 
 type encodingBalanceChange struct {
-	TxIdx uint64 `ssz-size:"2"`
-	Delta encodingBalanceDelta
+	TxIdx   uint64 `ssz-size:"2"`
+	Balance encodingBalance
 }
 
 type encodingAccountNonce struct {
@@ -310,8 +309,8 @@ func (a *accountAccess) toEncodingObj(addr common.Address) encodingAccountAccess
 
 		for _, idx := range balanceChangeIdxs {
 			res.BalanceChanges = append(res.BalanceChanges, encodingBalanceChange{
-				TxIdx: idx,
-				Delta: *new(encodingBalanceDelta).set(a.BalanceChanges[idx]),
+				TxIdx:   idx,
+				Balance: *new(encodingBalance).set(a.BalanceChanges[idx]),
 			})
 		}
 	}

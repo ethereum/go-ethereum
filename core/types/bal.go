@@ -208,7 +208,7 @@ func (e *encodingBlockAccessList) prettyPrint() string {
 
 		printWithIndent(1, "balance changes:")
 		for _, change := range accountDiff.BalanceChanges {
-			balance := new(uint256.Int).SetBytes(change.Delta[:]).String()
+			balance := new(uint256.Int).SetBytes(change.Balance[:]).String()
 			printWithIndent(2, fmt.Sprintf("%d: %s", change.TxIdx, balance))
 		}
 
