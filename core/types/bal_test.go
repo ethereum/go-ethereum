@@ -2,7 +2,6 @@ package types
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/holiman/uint256"
 	"os"
 	"testing"
@@ -64,7 +63,6 @@ func TestBALEncoding(t *testing.T) {
 			},
 		},
 	}
-	fmt.Println(b.PrettyPrint())
 	var buf bytes.Buffer
 	err := b.EncodeRLP(&buf)
 	if err != nil {
@@ -85,7 +83,7 @@ func TestBALDecoding(t *testing.T) {
 		t.Fatal(err)
 	}
 	var b BlockAccessList
-	if err := b.DecodeSSZ(data); err != nil {
+	if err := b.decodeSSZ(data); err != nil {
 		t.Fatal(err)
 	}
 }
