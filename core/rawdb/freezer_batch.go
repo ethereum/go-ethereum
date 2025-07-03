@@ -25,9 +25,16 @@ import (
 	"github.com/golang/snappy"
 )
 
-// This is the maximum amount of data that will be buffered in memory
-// for a single freezer table batch.
-const freezerBatchBufferLimit = 2 * 1024 * 1024
+const (
+	// This is the maximum amount of data that will be buffered in memory
+	// for a single freezer table batch.
+	freezerBatchBufferLimit = 2 * 1024 * 1024
+
+	// freezerTableFlushThreshold defines the threshold for triggering a freezer
+	// table sync operation. If the number of accumulated uncommitted items exceeds
+	// this value, a sync will be scheduled.
+	freezerTableFlushThreshold = 512
+)
 
 // freezerBatch is a write operation of multiple items on a freezer.
 type freezerBatch struct {
@@ -210,7 +217,7 @@ func (batch *freezerTableBatch) commit() error {
 
 	// Periodically sync the table, todo (rjl493456442) make it configurable?
 	batch.t.uncommit += items
-	if batch.t.uncommit > 256 && time.Since(batch.t.lastSync) > 30*time.Second {
+	if batch.t.uncommit > freezerTableFlushThreshold && time.Since(batch.t.lastSync) > 30*time.Second {
 		batch.t.uncommit = 0
 		batch.t.lastSync = time.Now()
 		return batch.t.Sync()
