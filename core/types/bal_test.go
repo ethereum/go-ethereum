@@ -78,8 +78,10 @@ func TestBALEncoding(t *testing.T) {
 	}
 }
 
+// test that a mainnet BAL produced by https://github.com/nerolation/eth-bal-analysis
+// can be decoded.
 func TestBALDecoding(t *testing.T) {
-	data, err := os.ReadFile("sample_bal.ssz")
+	data, err := os.ReadFile("testdata/22615532_block_access_list_with_reads_eip7928.ssz")
 	if err != nil {
 		t.Fatal(err)
 	}
