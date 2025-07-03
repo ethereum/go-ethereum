@@ -139,11 +139,11 @@ func (l *limbo) push(tx *types.Transaction, block uint64) error {
 	// If the blobs are already tracked by the limbo, consider it a programming
 	// error. There's not much to do against it, but be loud.
 	if _, ok := l.index[tx.Hash()]; ok {
-		log.Error("Limbo cannot push already tracked blobs", "hash", tx.Hash())
+		log.Error("Limbo cannot push already tracked blobs", "tx", tx.Hash())
 		return errors.New("already tracked blob transaction")
 	}
 	if err := l.setAndIndex(tx, block); err != nil {
-		log.Error("Failed to set and index limboed blobs", "hash", tx.Hash(), "err", err)
+		log.Error("Failed to set and index limboed blobs", "tx", tx.Hash(), "err", err)
 		return err
 	}
 	return nil
@@ -158,12 +158,12 @@ func (l *limbo) pull(tx common.Hash) (*types.Transaction, error) {
 	// into the network first.
 	id, ok := l.index[tx]
 	if !ok {
-		log.Trace("Limbo cannot pull non-tracked blobs", "hash", tx)
+		log.Trace("Limbo cannot pull non-tracked blobs", "tx", tx)
 		return nil, errors.New("unseen blob transaction")
 	}
 	item, err := l.getAndDrop(id)
 	if err != nil {
-		log.Error("Failed to get and drop limboed blobs", "hash", tx, "id", id, "err", err)
+		log.Error("Failed to get and drop limboed blobs", "tx", tx, "id", id, "err", err)
 		return nil, err
 	}
 	return item.Tx, nil
