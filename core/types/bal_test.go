@@ -2,7 +2,9 @@ package types
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/holiman/uint256"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -62,6 +64,7 @@ func TestBALEncoding(t *testing.T) {
 			},
 		},
 	}
+	fmt.Println(b.PrettyPrint())
 	var buf bytes.Buffer
 	err := b.EncodeRLP(&buf)
 	if err != nil {
@@ -73,5 +76,16 @@ func TestBALEncoding(t *testing.T) {
 	}
 	if dec.Hash() != b.Hash() {
 		t.Fatalf("encoded block hash doesn't match decoded")
+	}
+}
+
+func TestBALDecoding(t *testing.T) {
+	data, err := os.ReadFile("22615532_block_access_list_with_reads.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var b BlockAccessList
+	if err := b.DecodeSSZ(data); err != nil {
+		t.Fatal(err)
 	}
 }

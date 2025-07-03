@@ -141,14 +141,9 @@ func (b *BlockAccessList) EncodeRLP(wr io.Writer) error {
 	return w.Flush()
 }
 
-// DecodeRLP decodes the access list
-func (b *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
+func (b *BlockAccessList) DecodeSSZ(buf []byte) error {
 	var enc encodingBlockAccessList
-	encBytes, err := s.Bytes()
-	if err != nil {
-		return err
-	}
-	if err := enc.UnmarshalSSZ(encBytes); err != nil {
+	if err := enc.UnmarshalSSZ(buf); err != nil {
 		return err
 	}
 	res, err := enc.toBlockAccessList()
@@ -157,6 +152,15 @@ func (b *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
 	}
 	*b = *res
 	return nil
+}
+
+// DecodeRLP decodes the access list
+func (b *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
+	encBytes, err := s.Bytes()
+	if err != nil {
+		return err
+	}
+	return b.DecodeSSZ(encBytes)
 }
 
 var _ rlp.Encoder = &BlockAccessList{}
@@ -366,16 +370,14 @@ func (e *encodingBlockAccessList) prettyPrint() string {
 		printWithIndent(0, fmt.Sprintf("%x:", accountDiff.Address))
 		if len(accountDiff.Code) > 0 {
 			printWithIndent(1, "code:")
-			printWithIndent(2, fmt.Sprintf("index: %d", accountDiff.Code[0].TxIndex))
-			printWithIndent(2, fmt.Sprintf("bytecode: %x", accountDiff.Code[0].Code))
+			printWithIndent(2, fmt.Sprintf("%d: %x", accountDiff.Code[0].TxIndex, accountDiff.Code[0].Code))
 		}
 
 		printWithIndent(1, "storage writes:")
 		for _, sWrite := range accountDiff.StorageWrites {
 			printWithIndent(2, fmt.Sprintf("%x:", sWrite.Slot))
 			for _, access := range sWrite.Accesses {
-				printWithIndent(3, fmt.Sprintf("idx: %d", access.TxIdx))
-				printWithIndent(3, fmt.Sprintf("post: %x", access.ValueAfter))
+				printWithIndent(3, fmt.Sprintf("%d: %x", access.TxIdx, access.ValueAfter))
 			}
 		}
 
@@ -386,14 +388,13 @@ func (e *encodingBlockAccessList) prettyPrint() string {
 
 		printWithIndent(1, "balance changes:")
 		for _, change := range accountDiff.BalanceChanges {
-			printWithIndent(2, fmt.Sprintf("index: %d", change.TxIdx))
-			printWithIndent(2, fmt.Sprintf("balance: %s", new(uint256.Int).SetBytes(change.Delta[:]).String()))
+			balance := new(uint256.Int).SetBytes(change.Delta[:]).String()
+			printWithIndent(2, fmt.Sprintf("%d: %s", change.TxIdx, balance))
 		}
 
 		printWithIndent(1, "nonce changes:")
 		for _, change := range accountDiff.NonceChanges {
-			printWithIndent(2, fmt.Sprintf("index: %d", change.TxIdx))
-			printWithIndent(2, fmt.Sprintf("nonce: %d", change.Nonce))
+			printWithIndent(2, fmt.Sprintf("%d: %d", change.TxIdx, change.Nonce))
 		}
 	}
 
