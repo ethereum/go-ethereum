@@ -188,10 +188,6 @@ func (e *encodingBlockAccessList) prettyPrint() string {
 	}
 	for _, accountDiff := range *e {
 		printWithIndent(0, fmt.Sprintf("%x:", accountDiff.Address))
-		if len(accountDiff.Code) > 0 {
-			printWithIndent(1, "code:")
-			printWithIndent(2, fmt.Sprintf("%d: %x", accountDiff.Code[0].TxIndex, accountDiff.Code[0].Code))
-		}
 
 		printWithIndent(1, "storage writes:")
 		for _, sWrite := range accountDiff.StorageWrites {
@@ -215,6 +211,11 @@ func (e *encodingBlockAccessList) prettyPrint() string {
 		printWithIndent(1, "nonce changes:")
 		for _, change := range accountDiff.NonceChanges {
 			printWithIndent(2, fmt.Sprintf("%d: %d", change.TxIdx, change.Nonce))
+		}
+
+		if len(accountDiff.Code) > 0 {
+			printWithIndent(1, "code:")
+			printWithIndent(2, fmt.Sprintf("%d: %x", accountDiff.Code[0].TxIndex, accountDiff.Code[0].Code))
 		}
 	}
 

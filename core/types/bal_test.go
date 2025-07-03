@@ -15,7 +15,7 @@ import (
 func TestBALEncoding(t *testing.T) {
 	b := BlockAccessList{
 		map[common.Address]*accountAccess{
-			common.BytesToAddress([]byte{0x01}): {
+			common.BytesToAddress([]byte{0xff, 0xff}): {
 				StorageWrites: map[common.Hash]slotWrites{
 					common.BytesToHash([]byte{0x01}): map[uint64]common.Hash{
 						1: common.BytesToHash([]byte{1, 2, 3, 4}),
@@ -41,7 +41,7 @@ func TestBALEncoding(t *testing.T) {
 					Code:    common.Hex2Bytes("deadbeef"),
 				},
 			},
-			common.BytesToAddress([]byte{0x02}): {
+			common.BytesToAddress([]byte{0xff, 0xff, 0xff}): {
 				StorageWrites: map[common.Hash]slotWrites{
 					common.BytesToHash([]byte{0x01}): map[uint64]common.Hash{
 						2: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6}),
