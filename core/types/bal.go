@@ -312,7 +312,7 @@ func (a *accountAccess) toEncodingObj(addr common.Address) encodingAccountAccess
 		res.Code = []encodingCodeChange{
 			{
 				a.CodeChange.TxIndex,
-				slices.Clone(a.CodeChange.Code),
+				bytes.Clone(a.CodeChange.Code),
 			},
 		}
 	}
@@ -364,12 +364,16 @@ func (e *encodingBlockAccessList) prettyPrint() string {
 	}
 	for _, accountDiff := range *e {
 		printWithIndent(0, fmt.Sprintf("%x:", accountDiff.Address))
-		printWithIndent(1, fmt.Sprintf("code:    %x", accountDiff.Code)) // TODO: code shouldn't be in account accesses (?)
+		if len(accountDiff.Code) > 0 {
+			printWithIndent(1, "code:")
+			printWithIndent(2, fmt.Sprintf("index: %d", accountDiff.Code[0].TxIndex))
+			printWithIndent(2, fmt.Sprintf("bytecode: %x", accountDiff.Code[0].Code))
+		}
 
 		printWithIndent(1, "storage writes:")
-		for _, slot := range accountDiff.StorageWrites {
-			printWithIndent(2, fmt.Sprintf("%x:", slot))
-			for _, access := range slot.Accesses {
+		for _, sWrite := range accountDiff.StorageWrites {
+			printWithIndent(2, fmt.Sprintf("%x:", sWrite.Slot))
+			for _, access := range sWrite.Accesses {
 				printWithIndent(3, fmt.Sprintf("idx: %d", access.TxIdx))
 				printWithIndent(3, fmt.Sprintf("post: %x", access.ValueAfter))
 			}
@@ -421,8 +425,9 @@ func (e *encodingSlotWrites) toMap() (slotWrites, error) {
 			if *prev >= write.TxIdx {
 				return nil, fmt.Errorf("storage write tx indices not in order")
 			}
-			res[write.TxIdx] = write.ValueAfter
 		}
+		res[write.TxIdx] = write.ValueAfter
+		prev = &write.TxIdx
 	}
 	return res, nil
 }
