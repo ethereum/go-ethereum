@@ -463,10 +463,10 @@ func (e *encodingAccountAccess) toAccountAccess() (*accountAccess, error) {
 	}
 
 	{
-		var prevWriteSlot *common.Hash
+		var prevWriteSlot *[32]byte
 		for _, write := range e.StorageWrites {
 			if prevWriteSlot != nil {
-				if bytes.Compare(write.Slot[:], (*prevWriteSlot)[:]) <= 0 {
+				if bytes.Compare((*prevWriteSlot)[:], write.Slot[:]) >= 0 {
 					return nil, fmt.Errorf("storage writes slots lexicographic order")
 				}
 			}
@@ -476,18 +476,20 @@ func (e *encodingAccountAccess) toAccountAccess() (*accountAccess, error) {
 			}
 
 			res.StorageWrites[write.Slot] = wr
+			prevWriteSlot = &write.Slot
 		}
 	}
 
 	{
-		var prevReadSlot *common.Hash
+		var prevReadSlot *[32]byte
 		for _, read := range e.StorageReads {
 			if prevReadSlot != nil {
-				if bytes.Compare(read[:], (*prevReadSlot)[:]) <= 0 {
+				if bytes.Compare((*prevReadSlot)[:], read[:]) >= 0 {
 					return nil, fmt.Errorf("storage read slots not in lexicographic order")
 				}
 			}
 			res.StorageReads[read] = struct{}{}
+			prevReadSlot = &read
 		}
 	}
 
@@ -500,6 +502,7 @@ func (e *encodingAccountAccess) toAccountAccess() (*accountAccess, error) {
 				}
 			}
 			res.BalanceChanges[balanceChange.TxIdx] = new(uint256.Int).SetBytes(balanceChange.Delta[:])
+			prevBalanceChangeIdx = &balanceChange.TxIdx
 		}
 	}
 
@@ -512,6 +515,7 @@ func (e *encodingAccountAccess) toAccountAccess() (*accountAccess, error) {
 				}
 			}
 			res.NonceChanges[nonceDiff.TxIdx] = nonceDiff.Nonce
+			prevNonceDiffIdx = &nonceDiff.TxIdx
 		}
 	}
 
