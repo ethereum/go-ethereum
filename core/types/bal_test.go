@@ -2,9 +2,10 @@ package types
 
 import (
 	"bytes"
-	"github.com/holiman/uint256"
 	"os"
 	"testing"
+
+	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
