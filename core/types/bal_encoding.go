@@ -8,23 +8,24 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
-	ssz "github.com/ferranbt/fastssz"
 	"github.com/holiman/uint256"
 )
 
-//go:generate go run github.com/ferranbt/fastssz/sszgen  --output bal_encoding_generated.go --path . --objs encodingStorageWrite,encodingStorageWrites,encodingCodeChange,encodingBalanceChange,encodingAccountNonce,encodingCodeChange,encodingAccountAccess
+//go:generate go run github.com/ferranbt/fastssz/sszgen  --output bal_encoding_generated.go --path . --objs encodingStorageWrite,encodingStorageWrites,encodingCodeChange,encodingBalanceChange,encodingAccountNonce,encodingCodeChange,encodingAccountAccess,encodingBlockAccessList
 
 // These are objects used as input for the access list encoding. They mirror
 // the spec format.
 
-type encodingBlockAccessList []encodingAccountAccess
+type encodingBlockAccessList struct {
+	Accesses []encodingAccountAccess `ssz-max:"300000"`
+}
 
 // toBlockAccessList converts out of the encoding format, returning an error if
 // values in the encoder object are not properly ordered according to the spec.
 func (e *encodingBlockAccessList) toBlockAccessList() (*BlockAccessList, error) {
 	res := NewBlockAccessList()
 	var prevAccount *common.Address
-	for _, encAccountAccess := range *e {
+	for _, encAccountAccess := range e.Accesses {
 		if prevAccount != nil {
 			if bytes.Compare(encAccountAccess.Address[:], (*prevAccount)[:]) <= 0 {
 				return nil, fmt.Errorf("block access list accounts not in lexicographic order")
@@ -39,66 +40,8 @@ func (e *encodingBlockAccessList) toBlockAccessList() (*BlockAccessList, error) 
 	return &res, nil
 }
 
-// SSZ encoding/decoding methods implemented manually for encodingBlockAccessList
-// because defined types cannot have tags, so fastssz isn't able to generate
-// methods on them.
-
-func (e *encodingBlockAccessList) MarshalSSZTo(buf []byte) (dst []byte, err error) {
-	if len(*e) > 300000 {
-		return nil, fmt.Errorf("oversized")
-	}
-
-	offset := 4 * len(*e)
-	for ii := 0; ii < len(*e); ii++ {
-		dst = ssz.WriteOffset(dst, offset)
-		sz := (*e)[ii].SizeSSZ()
-		offset += sz
-	}
-	for ii := 0; ii < len(*e); ii++ {
-		if dst, err = (*e)[ii].MarshalSSZTo(dst); err != nil {
-			return
-		}
-	}
-
-	return
-}
-
-func (e *encodingBlockAccessList) UnmarshalSSZ(buf []byte) error {
-	num, err := ssz.DecodeDynamicLength(buf, 300000)
-	if err != nil {
-		return err
-	}
-	res := make([]encodingAccountAccess, num)
-	err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
-		if err = res[indx].UnmarshalSSZ(buf); err != nil {
-			return err
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	*e = res
-	return nil
-}
-
-func (e *encodingBlockAccessList) MarshalSSZ() ([]byte, error) {
-	return ssz.MarshalSSZ(e)
-}
-
-func (e *encodingBlockAccessList) SizeSSZ() (size int) {
-	for i := 0; i < len(*e); i++ {
-		size += 4
-		size += (*e)[i].SizeSSZ()
-	}
-	return
-}
-
-var _ ssz.Marshaler = &encodingBlockAccessList{}
-var _ ssz.Unmarshaler = &encodingBlockAccessList{}
-
 type encodingCodeChange struct {
-	TxIndex uint64 `ssz-size:"2"`
+	TxIndex uint16
 	Code    []byte `ssz-max:"24576"`
 }
 
@@ -155,7 +98,7 @@ func (e *encodingAccountAccess) toAccountAccess() (*accountAccess, error) {
 	}
 
 	{
-		var prevBalanceChangeIdx *uint64
+		var prevBalanceChangeIdx *uint16
 		for _, balanceChange := range e.BalanceChanges {
 			if prevBalanceChangeIdx != nil {
 				if *prevBalanceChangeIdx >= balanceChange.TxIdx {
@@ -168,7 +111,7 @@ func (e *encodingAccountAccess) toAccountAccess() (*accountAccess, error) {
 	}
 
 	{
-		var prevNonceDiffIdx *uint64
+		var prevNonceDiffIdx *uint16
 		for _, nonceDiff := range e.NonceChanges {
 			if prevNonceDiffIdx != nil {
 				if *prevNonceDiffIdx >= nonceDiff.TxIdx {
@@ -201,12 +144,12 @@ func (b *encodingBalance) set(val *uint256.Int) *encodingBalance {
 }
 
 type encodingBalanceChange struct {
-	TxIdx   uint64 `ssz-size:"2"`
+	TxIdx   uint16 `ssz-size:"2"`
 	Balance encodingBalance
 }
 
 type encodingAccountNonce struct {
-	TxIdx uint64 `ssz-size:"2"`
+	TxIdx uint16 `ssz-size:"2"`
 	Nonce uint64 `ssz-size:"8"`
 }
 
@@ -240,7 +183,7 @@ func (s slotWrites) toEncoderObj(slot common.Hash) encodingSlotWrites {
 		Slot: slot,
 	}
 
-	var storageWriteIdxs []uint64
+	var storageWriteIdxs []uint16
 	for idx := range s {
 		storageWriteIdxs = append(storageWriteIdxs, idx)
 	}
@@ -299,7 +242,7 @@ func (a *accountAccess) toEncodingObj(addr common.Address) encodingAccountAccess
 	}
 
 	{
-		var balanceChangeIdxs []uint64
+		var balanceChangeIdxs []uint16
 		for idx := range a.BalanceChanges {
 			balanceChangeIdxs = append(balanceChangeIdxs, idx)
 		}
@@ -317,7 +260,7 @@ func (a *accountAccess) toEncodingObj(addr common.Address) encodingAccountAccess
 	}
 
 	{
-		var nonceChangeIdxs []uint64
+		var nonceChangeIdxs []uint16
 		for idx := range a.NonceChanges {
 			nonceChangeIdxs = append(nonceChangeIdxs, idx)
 		}
@@ -357,7 +300,7 @@ func (b *BlockAccessList) toEncodingObj() (res encodingBlockAccessList) {
 	})
 
 	for _, addr := range addrs {
-		res = append(res, b.accounts[addr].toEncodingObj(addr))
+		res.Accesses = append(res.Accesses, b.accounts[addr].toEncodingObj(addr))
 	}
 	return res
 }
@@ -386,7 +329,7 @@ func (b *BlockAccessList) decodeSSZ(buf []byte) error {
 
 // used as input for encoding.
 type encodingStorageWrite struct {
-	TxIdx      uint64   `ssz-size:"2"`
+	TxIdx      uint16
 	ValueAfter [32]byte `ssz-size:"32"`
 }
 
@@ -400,7 +343,7 @@ type encodingSlotWrites struct {
 // toSlotWrites returns an instance of the encoding-representation slot writes in
 // working representation.
 func (e *encodingSlotWrites) toSlotWrites() (slotWrites, error) {
-	var prev *uint64
+	var prev *uint16
 
 	res := make(slotWrites)
 

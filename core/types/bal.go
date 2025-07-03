@@ -47,7 +47,7 @@ func (b *BlockAccessList) StorageRead(address common.Address, key common.Hash) {
 
 // StorageWrite records the post-transaction value of a mutated storage slot.
 // The storage slot is removed from the list of read slots.
-func (b *BlockAccessList) StorageWrite(txIdx uint64, address common.Address, key, value common.Hash) {
+func (b *BlockAccessList) StorageWrite(txIdx uint16, address common.Address, key, value common.Hash) {
 	if _, ok := b.accounts[address]; !ok {
 		b.accounts[address] = newAccountAccess()
 	}
@@ -60,7 +60,7 @@ func (b *BlockAccessList) StorageWrite(txIdx uint64, address common.Address, key
 }
 
 // CodeChange records the code of a newly-created contract.
-func (b *BlockAccessList) CodeChange(address common.Address, txIndex uint64, code []byte) {
+func (b *BlockAccessList) CodeChange(address common.Address, txIndex uint16, code []byte) {
 	if _, ok := b.accounts[address]; !ok {
 		b.accounts[address] = newAccountAccess()
 	}
@@ -72,7 +72,7 @@ func (b *BlockAccessList) CodeChange(address common.Address, txIndex uint64, cod
 }
 
 // NonceDiff records tx post-state nonce of any contract-like accounts whose nonce was incremented
-func (b *BlockAccessList) NonceDiff(address common.Address, txIdx, postNonce uint64) {
+func (b *BlockAccessList) NonceDiff(address common.Address, txIdx uint16, postNonce uint64) {
 	if _, ok := b.accounts[address]; !ok {
 		b.accounts[address] = newAccountAccess()
 	}
@@ -82,7 +82,7 @@ func (b *BlockAccessList) NonceDiff(address common.Address, txIdx, postNonce uin
 
 // BalanceChange records the post-transaction balance of an account whose
 // balance changed.
-func (b *BlockAccessList) BalanceChange(txIdx uint64, address common.Address, balance *uint256.Int) {
+func (b *BlockAccessList) BalanceChange(txIdx uint16, address common.Address, balance *uint256.Int) {
 	if _, ok := b.accounts[address]; !ok {
 		b.accounts[address] = newAccountAccess()
 	}
@@ -92,7 +92,7 @@ func (b *BlockAccessList) BalanceChange(txIdx uint64, address common.Address, ba
 
 // contains the post-transaction balances of an account, keyed by transaction indices
 // where it was changed.
-type balanceDiff map[uint64]*uint256.Int
+type balanceDiff map[uint16]*uint256.Int
 
 // copy returns a deep copy of the object
 func (b balanceDiff) copy() balanceDiff {
@@ -118,7 +118,7 @@ func (b *BlockAccessList) Hash() common.Hash {
 // codeChange contains the code deployed at an address and the transaction
 // index where the deployment took place.
 type codeChange struct {
-	TxIndex uint64 `json:"txIndex,omitempty"`
+	TxIndex uint16
 	Code    []byte `json:"code,omitempty"`
 }
 
@@ -156,10 +156,10 @@ func newAccountAccess() *accountAccess {
 }
 
 // the post-state nonce values of a contract account keyed by tx index
-type accountNonceDiffs map[uint64]uint64
+type accountNonceDiffs map[uint16]uint64
 
 // the post-state values of a storage slot, keyed by tx index
-type slotWrites map[uint64]common.Hash
+type slotWrites map[uint16]common.Hash
 
 // Copy returns a deep copy of the access list.
 func (b *BlockAccessList) Copy() *BlockAccessList {
@@ -186,7 +186,7 @@ func (e *encodingBlockAccessList) prettyPrint() string {
 	printWithIndent := func(indent int, text string) {
 		fmt.Fprintf(&res, "%s%s\n", strings.Repeat("    ", indent), text)
 	}
-	for _, accountDiff := range *e {
+	for _, accountDiff := range e.Accesses {
 		printWithIndent(0, fmt.Sprintf("%x:", accountDiff.Address))
 
 		printWithIndent(1, "storage writes:")

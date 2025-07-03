@@ -17,11 +17,11 @@ func TestBALEncoding(t *testing.T) {
 		map[common.Address]*accountAccess{
 			common.BytesToAddress([]byte{0xff, 0xff}): {
 				StorageWrites: map[common.Hash]slotWrites{
-					common.BytesToHash([]byte{0x01}): map[uint64]common.Hash{
+					common.BytesToHash([]byte{0x01}): map[uint16]common.Hash{
 						1: common.BytesToHash([]byte{1, 2, 3, 4}),
 						2: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6}),
 					},
-					common.BytesToHash([]byte{0x10}): map[uint64]common.Hash{
+					common.BytesToHash([]byte{0x10}): map[uint16]common.Hash{
 						20: common.BytesToHash([]byte{1, 2, 3, 4}),
 					},
 				},
@@ -43,11 +43,11 @@ func TestBALEncoding(t *testing.T) {
 			},
 			common.BytesToAddress([]byte{0xff, 0xff, 0xff}): {
 				StorageWrites: map[common.Hash]slotWrites{
-					common.BytesToHash([]byte{0x01}): map[uint64]common.Hash{
+					common.BytesToHash([]byte{0x01}): map[uint16]common.Hash{
 						2: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6}),
 						3: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7, 8}),
 					},
-					common.BytesToHash([]byte{0x10}): map[uint64]common.Hash{
+					common.BytesToHash([]byte{0x10}): map[uint16]common.Hash{
 						21: common.BytesToHash([]byte{1, 2, 3, 4, 5}),
 					},
 				},
@@ -79,7 +79,7 @@ func TestBALEncoding(t *testing.T) {
 }
 
 func TestBALDecoding(t *testing.T) {
-	data, err := os.ReadFile("22615532_block_access_list_with_reads.txt")
+	data, err := os.ReadFile("sample_bal.ssz")
 	if err != nil {
 		t.Fatal(err)
 	}
