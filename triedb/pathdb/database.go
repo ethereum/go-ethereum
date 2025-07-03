@@ -693,7 +693,7 @@ func (db *Database) SnapshotCompleted() bool {
 	return db.tree.bottom().genComplete()
 }
 
-// FirstStateBlock returns the block number of the oldest state snapshot in the freezer or disk layer.
+// FirstStateBlock returns the block number of the oldest state in the freezer.
 func (db *Database) FirstStateBlock() (uint64, error) {
 	freezer := db.stateFreezer
 	if freezer == nil {
@@ -705,7 +705,7 @@ func (db *Database) FirstStateBlock() (uint64, error) {
 		return 0, err
 	}
 
-	// No state has been persistent
+	// No state has been persistent, return the genesis block number.
 	if tailID == 0 {
 		return 0, nil
 	}
