@@ -122,9 +122,8 @@ type EVM struct {
 	// precompiles holds the precompiled contracts for the current epoch
 	precompiles map[common.Address]PrecompiledContract
 
-	// jumpDests is the aggregated result of JUMPDEST analysis made through
-	// the life cycle of EVM.
-	jumpDests map[common.Hash]bitvec
+	// jumpDests stores results of JUMPDEST analysis.
+	jumpDests JumpDests
 }
 
 // NewEVM constructs an EVM instance with the supplied block context, state
@@ -138,7 +137,7 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 		Config:      config,
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time),
-		jumpDests:   make(map[common.Hash]bitvec),
+		jumpDests:   nil,
 	}
 	evm.precompiles = activePrecompiledContracts(evm.chainRules)
 	evm.interpreter = NewEVMInterpreter(evm)
@@ -150,6 +149,13 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 // It is not thread-safe.
 func (evm *EVM) SetPrecompiles(precompiles PrecompiledContracts) {
 	evm.precompiles = precompiles
+}
+
+// SetJumpDests sets a custom JumpDests implementation for the EVM.
+// This allows for flexible caching strategies, including global caches
+// that can be shared across multiple EVM instances.
+func (evm *EVM) SetJumpDests(jumpDests JumpDests) {
+	evm.jumpDests = jumpDests
 }
 
 // SetTxContext resets the EVM with a new transaction context.
@@ -238,6 +244,9 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			ret, err = nil, nil // gas is unchanged
 		} else {
 			// The contract is a scoped environment for this execution context only.
+			if evm.jumpDests == nil {
+				evm.jumpDests = newMapJumpDests()
+			}
 			contract := NewContract(caller, addr, value, gas, evm.jumpDests)
 			contract.IsSystemCall = isSystemCall(caller)
 			contract.SetCallCode(evm.resolveCodeHash(addr), code)
@@ -298,6 +307,9 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
+		if evm.jumpDests == nil {
+			evm.jumpDests = newMapJumpDests()
+		}
 		contract := NewContract(caller, caller, value, gas, evm.jumpDests)
 		contract.SetCallCode(evm.resolveCodeHash(addr), evm.resolveCode(addr))
 		ret, err = evm.interpreter.Run(contract, input, false)
@@ -342,6 +354,9 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 		// Initialise a new contract and make initialise the delegate values
 		//
 		// Note: The value refers to the original value from the parent call.
+		if evm.jumpDests == nil {
+			evm.jumpDests = newMapJumpDests()
+		}
 		contract := NewContract(originCaller, caller, value, gas, evm.jumpDests)
 		contract.SetCallCode(evm.resolveCodeHash(addr), evm.resolveCode(addr))
 		ret, err = evm.interpreter.Run(contract, input, false)
@@ -393,6 +408,9 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
+		if evm.jumpDests == nil {
+			evm.jumpDests = newMapJumpDests()
+		}
 		contract := NewContract(caller, addr, new(uint256.Int), gas, evm.jumpDests)
 		contract.SetCallCode(evm.resolveCodeHash(addr), evm.resolveCode(addr))
 
@@ -500,6 +518,9 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
+	if evm.jumpDests == nil {
+		evm.jumpDests = newMapJumpDests()
+	}
 	contract := NewContract(caller, address, value, gas, evm.jumpDests)
 
 	// Explicitly set the code to a null hash to prevent caching of jump analysis
