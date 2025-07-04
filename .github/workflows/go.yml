@@ -1,5 +1,3 @@
-name: i386 linux tests
-
 on:
   push:
     branches: [ master ]
@@ -10,7 +8,7 @@ on:
 jobs:
   lint:
     name: Lint
-    runs-on: self-hosted
+    runs-on: self-hosted-ghr
     steps:
     - uses: actions/checkout@v4
 
@@ -23,8 +21,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.23.0
-        cache: false
+        go-version: 1.24
 
     - name: Run linters
       run: |
@@ -32,17 +29,30 @@ jobs:
         go run build/ci.go check_generate
         go run build/ci.go check_baddeps
 
-  build:
-    runs-on: self-hosted
+  test-latest:
+    name: Tests (Go 1.24)
+    runs-on: self-hosted-ghr
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.24.0
-          cache: false
+          go-version: 1.24
+
       - name: Run tests
-        run: go test -short ./...
-        env:
-          GOOS: linux
-          GOARCH: 386
+        run: go test ./...
+
+  test-prev:
+    name: Tests (Go 1.23)
+    runs-on: self-hosted-ghr
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.23
+
+      - name: Run tests
+        run: go test ./...
