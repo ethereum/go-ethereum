@@ -81,6 +81,7 @@ func (tester *FullSyncTester) Start() error {
 
 					if tester.exitWhenSynced {
 						go tester.stack.Close() // async since we need to close ourselves
+						log.Info("Terminating the node")
 					}
 					return
 				}
