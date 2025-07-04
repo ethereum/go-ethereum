@@ -139,16 +139,16 @@ jobs:
 
     - name: "Build (amd64)"
       run: |
+        $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
         go run build/ci.go install -dlgo -arch amd64 -cc $env:GETH_CC
       env:
-        PATH: 'C:\msys64\mingw64\bin;C:\Program Files (x86)\NSIS\;$env:PATH'
         GETH_CC: 'C:\msys64\mingw64\bin\gcc.exe'
 
     - name: "Build (386)"
       run: |
+        $env:PATH = "C:\msys64\mingw32\bin;$env:PATH"
         go run build/ci.go install -dlgo -arch 386 -cc $env:GETH_CC
       env:
-        PATH: 'C:\msys64\mingw32\bin;C:\Program Files (x86)\NSIS\;$env:PATH'
         GETH_CC: 'C:\msys64\mingw32\bin\gcc.exe'
 
   docker:
