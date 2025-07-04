@@ -52,6 +52,20 @@ geth \
 
 Notably, `--gcmode archive` does not need to be enabled during the initial full sync. In fact, enabling it from the start may slow down synchronization. For better efficiency, we recommend completing the full sync first, and then enabling `--gcmode archive` afterward for historical state indexing.
 
+One final note: make sure that historical states have been fully indexed by checking the `eth_syncing` endpoint.
+
+```sh
+Welcome to the Geth JavaScript console!
+
+instance: Geth/v1.15.12-unstable-4c47b22f-20250626/linux-amd64/go1.24.2
+at block: 22788923 (Thu Jun 26 2025 21:29:47 GMT+0800 (CST))
+datadir: /home/gary/mount/geth
+modules: admin:1.0 debug:1.0 engine:1.0 eth:1.0 miner:1.0 net:1.0 rpc:1.0 txpool:1.0 web3:1.0
+
+To exit, press ctrl-d or type exit
+> eth.syncing
+false
+```
 
 ### How it works
 
