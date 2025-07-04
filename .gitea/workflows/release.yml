@@ -134,8 +134,10 @@ jobs:
         go-version: 1.24
         cache: false
 
-    # Note: gcc.exe only works properly if the corresponding bin/ directory is
-    # contained in PATH.
+    - name: "Show environment"
+      shell: cmd
+      run: |
+        set
 
     - name: "Show cgo source"
       shell: cmd
@@ -143,6 +145,10 @@ jobs:
         for /f "delims=" %%i in ('go env GOROOT') do set ROOT=%%i
         echo %ROOT%
         dir %ROOT%\src\runtime\cgo
+
+    # Note: gcc.exe only works properly if the corresponding bin/ directory is
+    # contained in PATH.
+
 
     # - name: "Build (amd64)"
     #   shell: cmd
@@ -155,7 +161,7 @@ jobs:
     - name: "Build (386)"
       shell: cmd
       run: |
-        set PATH=%GETH_MINGW%\bin;%PATH%
+        set PATH=C:\msys64\mingw32\bin;C:\Windows\system32\config\systemprofile\go\bin;C:\Windows\system32\config\systemprofile\.cache\act\tool_cache\go\1.24.4\x64\bin;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;C:\Program Files\Git\cmd;c:\teleport;C:\Program Files\nodejs\;C:\Program Files (x86)\NSIS\;C:\Windows\system32\config\systemprofile\AppData\Local\Microsoft\WindowsApps
         echo %PATH%
         go run build/ci.go install -dlgo -arch 386 -cc %GETH_MINGW%\bin\gcc.exe
       env:
