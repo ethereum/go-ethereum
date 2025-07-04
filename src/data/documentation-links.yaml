@@ -38,6 +38,8 @@
       to: /docs/fundamentals/dbpruning
     - id: Download Eras
       to: /docs/fundamentals/downloadera
+    - id: Archive mode
+      to: /docs/fundamentals/archive
     - id: Private networks via Kurtosis
       to: /docs/fundamentals/kurtosis
     - id: Private networks
