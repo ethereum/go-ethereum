@@ -140,18 +140,18 @@ jobs:
     - name: "Build (amd64)"
       shell: cmd
       run: |
-        go run build/ci.go install -dlgo -arch amd64 -cc %GETH_CC%
+        set PATH=%GETH_MINGW%\bin;%PATH%
+        go run build/ci.go install -dlgo -arch am64 -cc %GETH_MINGW%\bin\gcc.exe
       env:
-        PATH: 'C:\msys64\mingw64\bin;%PATH%'
-        GETH_CC: 'C:\msys64\mingw64\bin\gcc.exe'
+        GETH_MINGW: 'C:\msys64\mingw64'
 
     - name: "Build (386)"
       shell: cmd
       run: |
-        go run build/ci.go install -dlgo -arch 386 -cc %GETH_CC%
+        set PATH=%GETH_MINGW%\bin;%PATH%
+        go run build/ci.go install -dlgo -arch 386 -cc %GETH_MINGW%\bin\gcc.exe
       env:
-        PATH: 'C:\msys64\mingw32\bin;%PATH%'
-        GETH_CC: 'C:\msys64\mingw32\bin\gcc.exe'
+        GETH_MINGW: 'C:\msys64\mingw32'
 
   docker:
     name: Docker Image
