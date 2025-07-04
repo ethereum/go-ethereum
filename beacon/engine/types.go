@@ -128,6 +128,14 @@ type BlobAndProofV2 struct {
 	CellProofs []hexutil.Bytes `json:"proofs"`
 }
 
+type BlobPredictionToStage struct {
+	TxHash        common.Hash     `json:"txHash"`    //32
+	BlobIndex     uint            `json:"blobIndex"` //4
+	Blob          hexutil.Bytes   `json:"blob"`      //
+	KzgCommitment hexutil.Bytes   `json:"kzgCommitment"`
+	CellProofs    []hexutil.Bytes `json:"cellProofs"`
+}
+
 // JSON type overrides for ExecutionPayloadEnvelope.
 type executionPayloadEnvelopeMarshaling struct {
 	BlockValue *hexutil.Big
@@ -176,9 +184,32 @@ func (b *PayloadID) UnmarshalText(input []byte) error {
 	return nil
 }
 
+// PayloadID is an identifier of the blob prediction process
+type PredictionID [8]byte
+
+func (b PredictionID) String() string {
+	return hexutil.Encode(b[:])
+}
+
+func (b PredictionID) MarshalText() ([]byte, error) {
+	return hexutil.Bytes(b[:]).MarshalText()
+}
+
+func (b *PredictionID) UnmarshalText(input []byte) error {
+	err := hexutil.UnmarshalFixedText("PredictionID", input, b[:])
+	if err != nil {
+		return fmt.Errorf("invalid prediction id %q: %w", input, err)
+	}
+	return nil
+}
+
 type ForkChoiceResponse struct {
 	PayloadStatus PayloadStatusV1 `json:"payloadStatus"`
 	PayloadID     *PayloadID      `json:"payloadId"`
+}
+
+type PredictionResponse struct {
+	PredictionID *PredictionID `json:"predictionId"`
 }
 
 type ForkchoiceStateV1 struct {

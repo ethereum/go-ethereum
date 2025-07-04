@@ -156,3 +156,66 @@ func (q *headerQueue) get(hash common.Hash) *types.Header {
 	}
 	return nil
 }
+
+const maxTrackedPredictions = 10
+
+// This is basically same with payloadQueue but to track prediction
+type predictionQueueItem struct {
+	id         engine.PredictionID
+	prediction *miner.BlobPrediction
+}
+
+type predictionQueue struct {
+	predictions []*predictionQueueItem
+	lock        sync.RWMutex
+}
+
+func newPredictionQueue() *predictionQueue {
+	return &predictionQueue{
+		predictions: make([]*predictionQueueItem, maxTrackedPredictions),
+	}
+}
+
+// put inserts a new payload into the queue at the given id.
+func (q *predictionQueue) put(id engine.PredictionID, prediction *miner.BlobPrediction) {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	copy(q.predictions[1:], q.predictions)
+	q.predictions[0] = &predictionQueueItem{
+		id:         id,
+		prediction: prediction,
+	}
+}
+
+// get retrieves a previously stored payload item or nil if it does not exist.
+func (q *predictionQueue) get(id engine.PredictionID) *miner.BlobPrediction {
+	q.lock.RLock()
+	defer q.lock.RUnlock()
+
+	for _, item := range q.predictions {
+		if item == nil {
+			return nil // no more items
+		}
+		if item.id == id {
+			return item.prediction
+		}
+	}
+	return nil
+}
+
+// has checks if a particular payload is already tracked.
+func (q *predictionQueue) has(id engine.PredictionID) bool {
+	q.lock.RLock()
+	defer q.lock.RUnlock()
+
+	for _, item := range q.predictions {
+		if item == nil {
+			return false
+		}
+		if item.id == id {
+			return true
+		}
+	}
+	return false
+}

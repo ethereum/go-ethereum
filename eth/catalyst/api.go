@@ -19,8 +19,10 @@ package catalyst
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/rand"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -98,6 +100,8 @@ var caps = []string{
 	"engine_getPayloadV5",
 	"engine_getBlobsV1",
 	"engine_getBlobsV2",
+	"engine_getBlobsToStage",
+	"engine_notifyPrediction",
 	"engine_newPayloadV1",
 	"engine_newPayloadV2",
 	"engine_newPayloadV3",
@@ -133,6 +137,7 @@ type ConsensusAPI struct {
 
 	remoteBlocks *headerQueue  // Cache of remote payloads received
 	localBlocks  *payloadQueue // Cache of local payloads generated
+	predictions  *predictionQueue
 
 	// The forkchoice update and new payload method require us to return the
 	// latest valid hash in an invalid chain. To support that return, we need
@@ -185,6 +190,7 @@ func newConsensusAPIWithoutHeartbeat(eth *eth.Ethereum) *ConsensusAPI {
 		eth:               eth,
 		remoteBlocks:      newHeaderQueue(),
 		localBlocks:       newPayloadQueue(),
+		predictions:       newPredictionQueue(),
 		invalidBlocksHits: make(map[common.Hash]int),
 		invalidTipsets:    make(map[common.Hash]*types.Header),
 	}
@@ -402,6 +408,34 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	return valid(nil), nil
 }
 
+// todo(healthykim) window / max value configuration
+// todo(healthykim) blob ID calculation logic
+func (api *ConsensusAPI) NotifyPrediction(headBlockRoot common.Hash) (engine.PredictionResponse, error) {
+	max := uint(10)
+	window := uint(2)
+	timestamp := uint64(time.Now().Unix())
+	random := rand.Int()
+	buf := make([]byte, 8)
+	binary.LittleEndian.PutUint64(buf, uint64(random))
+
+	var predictionID engine.PredictionID
+	hasher := sha256.New()
+	hasher.Write(buf)
+	hasher.Write(headBlockRoot[:])
+	binary.Write(hasher, binary.BigEndian, timestamp)
+	copy(predictionID[:], hasher.Sum(nil)[:8])
+
+	// Timestamp setting logic - refer to prepareWork
+	prediction, _ := api.eth.Miner().PredictBlobTxs(predictionID, max, window, timestamp)
+	api.predictions.put(predictionID, prediction)
+
+	log.Debug("Prediction started for ", "predictionId", predictionID, "slot", headBlockRoot.String())
+
+	return engine.PredictionResponse{
+		PredictionID: &predictionID,
+	}, nil
+}
+
 // ExchangeTransitionConfigurationV1 checks the given configuration against
 // the configuration of the node.
 func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config engine.TransitionConfigurationV1) (*engine.TransitionConfigurationV1, error) {
@@ -573,6 +607,19 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 		}
 	}
 	return res, nil
+}
+
+func (api *ConsensusAPI) GetBlobsToStage(id engine.PredictionID) ([]*engine.BlobPredictionToStage, error) {
+
+	prediction := api.predictions.get(id)
+	log.Info("Finding prediction result for ", "id=", id)
+
+	if prediction == nil {
+		log.Error("There is no prediction with given id", "prediction id", id)
+		return nil, engine.UnknownPrediction
+	}
+
+	return prediction.Convert(), nil
 }
 
 // Helper for NewPayload* methods.

@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -136,6 +137,11 @@ func (miner *Miner) SetGasTip(tip *big.Int) error {
 // BuildPayload builds the payload according to the provided parameters.
 func (miner *Miner) BuildPayload(args *BuildPayloadArgs, witness bool) (*Payload, error) {
 	return miner.buildPayload(args, witness)
+}
+
+// BuildPayload builds the payload according to the provided parameters.
+func (miner *Miner) PredictBlobTxs(blobId engine.PredictionID, max uint, window uint, timestamp uint64) (*BlobPrediction, error) {
+	return miner.predictBlobs(blobId, max, window, timestamp)
 }
 
 // getPending retrieves the pending block based on the current head block.
