@@ -29,32 +29,25 @@ jobs:
         go run build/ci.go check_generate
         go run build/ci.go check_baddeps
 
-  test-latest:
-    name: Tests (Go 1.24)
+  test:
+    name: Test
     needs: lint
     runs-on: self-hosted-ghr
+    strategy:
+      matrix:
+        go:
+          - '1.24'
+          - '1.23'
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.24
-
-      - name: Run tests
-        run: go test ./...
-
-  test-prev:
-    name: Tests (Go 1.23)
-    needs: lint
-    runs-on: self-hosted-ghr
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.23
+          go-version: ${{ matrix.go }}
+        cache-dependency-path: |
+          go.sum
+          build/checksums.txt
 
       - name: Run tests
         run: go test ./...
