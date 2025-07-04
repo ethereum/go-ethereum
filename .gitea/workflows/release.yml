@@ -137,6 +137,11 @@ jobs:
     # Note: gcc.exe only works properly if the corresponding bin/ directory is
     # contained in PATH.
 
+    - name: "Find gcc"
+      shell: cmd
+      run: |
+        where gcc
+    
     - name: "Build (amd64)"
       shell: cmd
       run: |
