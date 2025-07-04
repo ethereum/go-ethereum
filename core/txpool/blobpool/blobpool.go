@@ -89,12 +89,12 @@ const (
 // bare minimum needed fields to keep the size down (and thus number of entries
 // larger with the same memory consumption).
 type blobTxMeta struct {
-	TxHash  common.Hash   // Transaction TxHash to maintain the lookup table
+	TxHash  common.Hash   // Transaction hash to maintain the lookup table
 	VHashes []common.Hash // Blob versioned hashes to maintain the lookup table
 
 	Id          uint64 // Storage ID in the pool's persistent store
 	StorageSize uint32 // Byte size in the pool's persistent store
-	Size        uint64 // RLP-encoded Size of transaction including the attached blob
+	Size        uint64 // RLP-encoded size of transaction including the attached blob
 
 	Nonce      uint64       // Needed to prioritize inclusion order within an account
 	CostCap    *uint256.Int // Needed to validate cumulative balance sufficiency
@@ -1754,7 +1754,7 @@ func (p *BlobPool) Stats() (int, int) {
 }
 
 // Content retrieves the data content of the transaction pool, returning all the
-// pending as well as queued transactions, grouped by account and sorted by Nonce.
+// pending as well as queued transactions, grouped by account and sorted by nonce.
 //
 // For the blob pool, this method will return nothing for now.
 // TODO(karalabe): Abstract out the returned metadata.
