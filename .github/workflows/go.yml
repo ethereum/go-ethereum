@@ -45,9 +45,9 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
-          cache-dependency-path: |
-            go.sum
-            build/checksums.txt
+        cache-dependency-path: |
+          go.sum
+          build/checksums.txt
 
       - name: Run tests
         run: go test ./...
