@@ -142,13 +142,13 @@ jobs:
       run: |
         where gcc
     
-    - name: "Build (amd64)"
-      shell: cmd
-      run: |
-        set PATH=%GETH_MINGW%\bin;%PATH%
-        go run build/ci.go install -dlgo -arch amd64 -cc %GETH_MINGW%\bin\gcc.exe
-      env:
-        GETH_MINGW: 'C:\msys64\mingw64'
+    # - name: "Build (amd64)"
+    #   shell: cmd
+    #   run: |
+    #     set PATH=%GETH_MINGW%\bin;%PATH%
+    #     go run build/ci.go install -dlgo -arch amd64 -cc %GETH_MINGW%\bin\gcc.exe
+    #   env:
+    #     GETH_MINGW: 'C:\msys64\mingw64'
 
     - name: "Build (386)"
       shell: cmd
