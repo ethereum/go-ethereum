@@ -268,7 +268,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		if len(hex) != common.HashLength {
 			utils.Fatalf("invalid sync target length: have %d, want %d", len(hex), common.HashLength)
 		}
-		utils.RegisterFullSyncTester(stack, eth, common.BytesToHash(hex))
+		utils.RegisterFullSyncTester(stack, eth, common.BytesToHash(hex), ctx.Bool(utils.ExitWhenSyncedFlag.Name))
 	}
 
 	if ctx.IsSet(utils.DeveloperFlag.Name) {

@@ -1998,9 +1998,9 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 }
 
 // RegisterFullSyncTester adds the full-sync tester service into node.
-func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, target common.Hash) {
-	catalyst.RegisterFullSyncTester(stack, eth, target)
-	log.Info("Registered full-sync tester", "hash", target)
+func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, target common.Hash, exitWhenSynced bool) {
+	catalyst.RegisterFullSyncTester(stack, eth, target, exitWhenSynced)
+	log.Info("Registered full-sync tester", "hash", target, "exitWhenSynced", exitWhenSynced)
 }
 
 // SetupMetrics configures the metrics system.
