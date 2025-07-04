@@ -17,7 +17,6 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version: 1.24
-        cache: false
 
     - name: Install cross toolchain
       run: |
@@ -58,7 +57,6 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version: 1.24
-        cache: false
 
     - name: Install cross toolchain
       run: |
@@ -132,7 +130,6 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version: 1.24
-        cache: false
 
     # Note: gcc.exe only works properly if the corresponding bin/ directory is
     # contained in PATH.
@@ -169,7 +166,6 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version: 1.24
-        cache: false
 
     - name: Run docker build
       env:
