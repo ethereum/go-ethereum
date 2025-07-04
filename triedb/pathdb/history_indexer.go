@@ -73,8 +73,8 @@ func storeIndexMetadata(db ethdb.KeyValueWriter, last uint64) {
 // batchIndexer is a structure designed to perform batch indexing or unindexing
 // of state histories atomically.
 type batchIndexer struct {
-	accounts map[common.Hash][]uint64                 // History ID list, Keyed by account address
-	storages map[common.Hash]map[common.Hash][]uint64 // History ID list, Keyed by account address and the hash of raw storage key
+	accounts map[common.Hash][]uint64                 // History ID list, Keyed by the hash of account address
+	storages map[common.Hash]map[common.Hash][]uint64 // History ID list, Keyed by the hash of account address and the hash of raw storage key
 	counter  int                                      // The counter of processed states
 	delete   bool                                     // Index or unindex mode
 	lastID   uint64                                   // The ID of latest processed history
@@ -494,7 +494,18 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 	// when the state is reverted manually (chain.SetHead) or the deep reorg is
 	// encountered. In such cases, no indexing should be scheduled.
 	if beginID > lastID {
-		log.Debug("State history is fully indexed", "last", lastID)
+		if lastID == 0 && beginID == 1 {
+			// Initialize the indexing flag if the state history is empty by
+			// using zero as the disk layer ID. This is a common case that
+			// can occur after snap sync.
+			//
+			// This step is essential to avoid spinning up indexing thread
+			// endlessly until a history object is produced.
+			storeIndexMetadata(i.disk, 0)
+			log.Info("Initialized history indexing flag")
+		} else {
+			log.Debug("State history is fully indexed", "last", lastID)
+		}
 		return
 	}
 	log.Info("Start history indexing", "beginID", beginID, "lastID", lastID)

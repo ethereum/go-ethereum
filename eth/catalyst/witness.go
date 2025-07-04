@@ -152,7 +152,7 @@ func (api *ConsensusAPI) NewPayloadWithWitnessV4(params engine.ExecutableData, v
 	case executionRequests == nil:
 		return invalidStatus, paramsErr("nil executionRequests post-prague")
 	case !api.checkFork(params.Timestamp, forks.Prague):
-		return invalidStatus, unsupportedForkErr("newPayloadV3 must only be called for cancun payloads")
+		return invalidStatus, unsupportedForkErr("newPayloadV4 must only be called for prague payloads")
 	}
 	requests := convertRequests(executionRequests)
 	if err := validateRequests(requests); err != nil {

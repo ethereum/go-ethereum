@@ -844,7 +844,7 @@ func (m *matchSequenceInstance) dropNext(mapIndex uint32) bool {
 // results at mapIndex and mapIndex+1. Note that acquiring nextNextRes may be
 // skipped and it can be substituted with an empty list if baseRes has no potential
 // matches that could be sequence matched with anything that could be in nextNextRes.
-func (params *Params) matchResults(mapIndex uint32, offset uint64, baseRes, nextRes potentialMatches) potentialMatches {
+func (p *Params) matchResults(mapIndex uint32, offset uint64, baseRes, nextRes potentialMatches) potentialMatches {
 	if nextRes == nil || (baseRes != nil && len(baseRes) == 0) {
 		// if nextRes is a wild card or baseRes is empty then the sequence matcher
 		// result equals baseRes.
@@ -854,7 +854,7 @@ func (params *Params) matchResults(mapIndex uint32, offset uint64, baseRes, next
 		// if baseRes is a wild card or nextRes is empty then the sequence matcher
 		// result is the items of nextRes with a negative offset applied.
 		result := make(potentialMatches, 0, len(nextRes))
-		min := (uint64(mapIndex) << params.logValuesPerMap) + offset
+		min := (uint64(mapIndex) << p.logValuesPerMap) + offset
 		for _, v := range nextRes {
 			if v >= min {
 				result = append(result, v-offset)

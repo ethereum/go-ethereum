@@ -648,7 +648,7 @@ func (api *ConsensusAPI) NewPayloadV4(params engine.ExecutableData, versionedHas
 	case executionRequests == nil:
 		return invalidStatus, paramsErr("nil executionRequests post-prague")
 	case !api.checkFork(params.Timestamp, forks.Prague, forks.Osaka):
-		return invalidStatus, unsupportedForkErr("newPayloadV3 must only be called for cancun payloads")
+		return invalidStatus, unsupportedForkErr("newPayloadV4 must only be called for prague payloads")
 	}
 	requests := convertRequests(executionRequests)
 	if err := validateRequests(requests); err != nil {

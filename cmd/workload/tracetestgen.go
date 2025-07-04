@@ -36,8 +36,6 @@ import (
 )
 
 var (
-	defaultBlocksToTrace = 64 // the number of states assumed to be available
-
 	traceGenerateCommand = &cli.Command{
 		Name:      "tracegen",
 		Usage:     "Generates tests for state tracing",
@@ -46,7 +44,8 @@ var (
 		Flags: []cli.Flag{
 			traceTestFileFlag,
 			traceTestResultOutputFlag,
-			traceTestBlockFlag,
+			traceTestStartBlockFlag,
+			traceTestEndBlockFlag,
 		},
 	}
 
@@ -58,14 +57,18 @@ var (
 	}
 	traceTestResultOutputFlag = &cli.StringFlag{
 		Name:     "trace-output",
-		Usage:    "Folder containing the trace output files",
+		Usage:    "Folder containing detailed trace output files",
 		Value:    "",
 		Category: flags.TestingCategory,
 	}
-	traceTestBlockFlag = &cli.IntFlag{
-		Name:     "trace-blocks",
-		Usage:    "The number of blocks for tracing",
-		Value:    defaultBlocksToTrace,
+	traceTestStartBlockFlag = &cli.IntFlag{
+		Name:     "trace-start",
+		Usage:    "The number of starting block for tracing (included)",
+		Category: flags.TestingCategory,
+	}
+	traceTestEndBlockFlag = &cli.IntFlag{
+		Name:     "trace-end",
+		Usage:    "The number of ending block for tracing (excluded)",
 		Category: flags.TestingCategory,
 	}
 	traceTestInvalidOutputFlag = &cli.StringFlag{
@@ -81,21 +84,22 @@ func generateTraceTests(clictx *cli.Context) error {
 		client     = makeClient(clictx)
 		outputFile = clictx.String(traceTestFileFlag.Name)
 		outputDir  = clictx.String(traceTestResultOutputFlag.Name)
-		blocks     = clictx.Int(traceTestBlockFlag.Name)
+		startBlock = clictx.Int(traceTestStartBlockFlag.Name)
+		endBlock   = clictx.Int(traceTestEndBlockFlag.Name)
 		ctx        = context.Background()
 		test       = new(traceTest)
 	)
-	if outputDir != "" {
-		err := os.MkdirAll(outputDir, os.ModePerm)
-		if err != nil {
-			return err
-		}
-	}
 	latest, err := client.Eth.BlockNumber(ctx)
 	if err != nil {
 		exit(err)
 	}
-	if latest < uint64(blocks) {
+	if startBlock > endBlock {
+		exit(fmt.Errorf("invalid block range for tracing, start: %d, end: %d", startBlock, endBlock))
+	}
+	if endBlock-startBlock == 0 {
+		exit(fmt.Errorf("invalid block range for tracing, start: %d, end: %d", startBlock, endBlock))
+	}
+	if latest < uint64(startBlock) || latest < uint64(endBlock) {
 		exit(fmt.Errorf("node seems not synced, latest block is %d", latest))
 	}
 	// Get blocks and assign block info into the test
@@ -104,37 +108,35 @@ func generateTraceTests(clictx *cli.Context) error {
 		logged = time.Now()
 		failed int
 	)
-	log.Info("Trace transactions around the chain tip", "head", latest, "blocks", blocks)
+	log.Info("Trace transactions around the chain tip", "head", latest, "start", startBlock, "end", endBlock)
 
-	for i := 0; i < blocks; i++ {
-		number := latest - uint64(i)
-		block, err := client.Eth.BlockByNumber(ctx, big.NewInt(int64(number)))
+	for i := startBlock; i < endBlock; i++ {
+		header, err := client.Eth.HeaderByNumber(ctx, big.NewInt(int64(i)))
 		if err != nil {
 			exit(err)
 		}
-		for _, tx := range block.Transactions() {
-			config, configName := randomTraceOption()
-			result, err := client.Geth.TraceTransaction(ctx, tx.Hash(), config)
-			if err != nil {
-				failed += 1
-				break
-			}
-			blob, err := json.Marshal(result)
-			if err != nil {
-				failed += 1
-				break
-			}
-			test.TxHashes = append(test.TxHashes, tx.Hash())
-			test.TraceConfigs = append(test.TraceConfigs, *config)
-			test.ResultHashes = append(test.ResultHashes, crypto.Keccak256Hash(blob))
-			writeTraceResult(outputDir, tx.Hash(), result, configName)
+		config, configName := randomTraceOption()
+		result, err := client.Geth.TraceBlock(ctx, header.Hash(), config)
+		if err != nil {
+			failed += 1
+			continue
 		}
+		blob, err := json.Marshal(result)
+		if err != nil {
+			failed += 1
+			continue
+		}
+		test.BlockHashes = append(test.BlockHashes, header.Hash())
+		test.TraceConfigs = append(test.TraceConfigs, *config)
+		test.ResultHashes = append(test.ResultHashes, crypto.Keccak256Hash(blob))
+		writeTraceResult(outputDir, header.Hash(), result, configName)
+
 		if time.Since(logged) > time.Second*8 {
 			logged = time.Now()
-			log.Info("Tracing transactions", "executed", len(test.TxHashes), "failed", failed, "elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info("Tracing blocks", "executed", len(test.BlockHashes), "failed", failed, "elapsed", common.PrettyDuration(time.Since(start)))
 		}
 	}
-	log.Info("Traced transactions", "executed", len(test.TxHashes), "failed", failed, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Traced blocks", "executed", len(test.BlockHashes), "failed", failed, "elapsed", common.PrettyDuration(time.Since(start)))
 
 	// Write output file.
 	writeJSON(outputFile, test)
@@ -142,24 +144,15 @@ func generateTraceTests(clictx *cli.Context) error {
 }
 
 func randomTraceOption() (*tracers.TraceConfig, string) {
-	x := rand.Intn(11)
+	x := rand.Intn(10)
 	if x == 0 {
-		// struct-logger, with all fields enabled, very heavy
-		return &tracers.TraceConfig{
-			Config: &logger.Config{
-				EnableMemory:     true,
-				EnableReturnData: true,
-			},
-		}, "structAll"
-	}
-	if x == 1 {
 		// default options for struct-logger, with stack and storage capture
 		// enabled
 		return &tracers.TraceConfig{
 			Config: &logger.Config{},
 		}, "structDefault"
 	}
-	if x == 2 || x == 3 || x == 4 {
+	if x >= 1 && x <= 3 {
 		// struct-logger with storage capture enabled
 		return &tracers.TraceConfig{
 			Config: &logger.Config{
@@ -170,13 +163,17 @@ func randomTraceOption() (*tracers.TraceConfig, string) {
 	// Native tracer
 	loggers := []string{"callTracer", "4byteTracer", "flatCallTracer", "muxTracer", "noopTracer", "prestateTracer"}
 	return &tracers.TraceConfig{
-		Tracer: &loggers[x-5],
-	}, loggers[x-5]
+		Tracer: &loggers[x-4],
+	}, loggers[x-4]
 }
 
 func writeTraceResult(dir string, hash common.Hash, result any, configName string) {
 	if dir == "" {
 		return
+	}
+	// Ensure the directory exists
+	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		exit(fmt.Errorf("failed to create directories: %w", err))
 	}
 	name := filepath.Join(dir, configName+"_"+hash.String())
 	file, err := os.Create(name)

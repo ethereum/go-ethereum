@@ -33,7 +33,7 @@ import (
 
 // traceTest is the content of a history test.
 type traceTest struct {
-	TxHashes     []common.Hash         `json:"txHashes"`
+	BlockHashes  []common.Hash         `json:"blockHashes"`
 	TraceConfigs []tracers.TraceConfig `json:"traceConfigs"`
 	ResultHashes []common.Hash         `json:"resultHashes"`
 }
@@ -58,14 +58,20 @@ func newTraceTestSuite(cfg testConfig, ctx *cli.Context) *traceTestSuite {
 func (s *traceTestSuite) loadTests() error {
 	file, err := s.cfg.fsys.Open(s.cfg.traceTestFile)
 	if err != nil {
-		return fmt.Errorf("can't open traceTestFile: %v", err)
+		// If not found in embedded FS, try to load it from disk
+		if !os.IsNotExist(err) {
+			return err
+		}
+		file, err = os.OpenFile(s.cfg.traceTestFile, os.O_RDONLY, 0666)
+		if err != nil {
+			return fmt.Errorf("can't open traceTestFile: %v", err)
+		}
 	}
 	defer file.Close()
-
 	if err := json.NewDecoder(file).Decode(&s.tests); err != nil {
 		return fmt.Errorf("invalid JSON in %s: %v", s.cfg.traceTestFile, err)
 	}
-	if len(s.tests.TxHashes) == 0 {
+	if len(s.tests.BlockHashes) == 0 {
 		return fmt.Errorf("traceTestFile %s has no test data", s.cfg.traceTestFile)
 	}
 	return nil
@@ -73,17 +79,17 @@ func (s *traceTestSuite) loadTests() error {
 
 func (s *traceTestSuite) allTests() []workloadTest {
 	return []workloadTest{
-		newArchiveWorkloadTest("Trace/Transaction", s.traceTransaction),
+		newArchiveWorkloadTest("Trace/Block", s.traceBlock),
 	}
 }
 
-// traceTransaction runs all transaction tracing tests
-func (s *traceTestSuite) traceTransaction(t *utesting.T) {
+// traceBlock runs all block tracing tests
+func (s *traceTestSuite) traceBlock(t *utesting.T) {
 	ctx := context.Background()
 
-	for i, hash := range s.tests.TxHashes {
+	for i, hash := range s.tests.BlockHashes {
 		config := s.tests.TraceConfigs[i]
-		result, err := s.cfg.client.Geth.TraceTransaction(ctx, hash, &config)
+		result, err := s.cfg.client.Geth.TraceBlock(ctx, hash, &config)
 		if err != nil {
 			t.Fatalf("Transaction %d (hash %v): error %v", i, hash, err)
 		}

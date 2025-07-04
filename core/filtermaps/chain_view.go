@@ -55,7 +55,9 @@ func NewChainView(chain blockchain, number uint64, hash common.Hash) *ChainView 
 		headNumber: number,
 		hashes:     []common.Hash{hash},
 	}
-	cv.extendNonCanonical()
+	if !cv.extendNonCanonical() {
+		return nil
+	}
 	return cv
 }
 
@@ -129,7 +131,11 @@ func (cv *ChainView) SharedRange(cv2 *ChainView) common.Range[uint64] {
 		return common.Range[uint64]{}
 	}
 	var sharedLen uint64
-	for n := min(cv.headNumber+1-uint64(len(cv.hashes)), cv2.headNumber+1-uint64(len(cv2.hashes))); n <= cv.headNumber && n <= cv2.headNumber && cv.blockHash(n) == cv2.blockHash(n); n++ {
+	for n := min(cv.headNumber+1-uint64(len(cv.hashes)), cv2.headNumber+1-uint64(len(cv2.hashes))); n <= cv.headNumber && n <= cv2.headNumber; n++ {
+		h1, h2 := cv.blockHash(n), cv2.blockHash(n)
+		if h1 != h2 || h1 == (common.Hash{}) {
+			break
+		}
 		sharedLen = n + 1
 	}
 	return common.NewRange(0, sharedLen)
@@ -153,10 +159,13 @@ func matchViews(cv1, cv2 *ChainView, number uint64) bool {
 	if cv1.headNumber < number || cv2.headNumber < number {
 		return false
 	}
+	var h1, h2 common.Hash
 	if number == cv1.headNumber || number == cv2.headNumber {
-		return cv1.BlockId(number) == cv2.BlockId(number)
+		h1, h2 = cv1.BlockId(number), cv2.BlockId(number)
+	} else {
+		h1, h2 = cv1.BlockHash(number), cv2.BlockHash(number)
 	}
-	return cv1.BlockHash(number) == cv2.BlockHash(number)
+	return h1 == h2 && h1 != common.Hash{}
 }
 
 // extendNonCanonical checks whether the previously known reverse list of head
@@ -175,7 +184,10 @@ func (cv *ChainView) extendNonCanonical() bool {
 		}
 		header := cv.chain.GetHeader(hash, number)
 		if header == nil {
-			log.Error("Header not found", "number", number, "hash", hash)
+			// Header not found - this can happen after debug_setHead operations
+			// where blocks have been deleted. Return false to indicate the chain view
+			// is no longer valid rather than logging repeated errors.
+			log.Debug("Header not found during chain view extension", "number", number, "hash", hash)
 			return false
 		}
 		cv.hashes = append(cv.hashes, header.ParentHash)
