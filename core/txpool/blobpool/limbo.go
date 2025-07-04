@@ -116,7 +116,7 @@ func (l *limbo) finalize(final *types.Header) {
 	// Just in case there's no final block yet (network not yet merged, weird
 	// restart, sethead, etc), fail gracefully.
 	if final == nil {
-		log.Error("Nil finalized block cannot evict old blobs")
+		log.Warn("Nil finalized block cannot evict old blobs")
 		return
 	}
 	for block, ids := range l.groups {
@@ -139,11 +139,11 @@ func (l *limbo) push(tx *types.Transaction, block uint64) error {
 	// If the blobs are already tracked by the limbo, consider it a programming
 	// error. There's not much to do against it, but be loud.
 	if _, ok := l.index[tx.Hash()]; ok {
-		log.Error("Limbo cannot push already tracked blobs", "tx", tx)
+		log.Error("Limbo cannot push already tracked blobs", "tx", tx.Hash())
 		return errors.New("already tracked blob transaction")
 	}
 	if err := l.setAndIndex(tx, block); err != nil {
-		log.Error("Failed to set and index limboed blobs", "tx", tx, "err", err)
+		log.Error("Failed to set and index limboed blobs", "tx", tx.Hash(), "err", err)
 		return err
 	}
 	return nil
