@@ -140,8 +140,9 @@ jobs:
     - name: "Show cgo source"
       shell: cmd
       run: |
-        for /f %%i in ('go env GOROOT') do set ROOT=%%i
-        dir ROOT\src\runtime\cgo
+        for /f "delims=" %%i in ('go env GOROOT') do set ROOT=%%i
+        echo %ROOT%
+        dir %ROOT%\src\runtime\cgo
 
     # - name: "Build (amd64)"
     #   shell: cmd
