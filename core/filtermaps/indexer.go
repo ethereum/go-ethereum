@@ -281,7 +281,7 @@ func (f *FilterMaps) tryIndexHead() error {
 // is changed.
 func (f *FilterMaps) tryIndexTail() (bool, error) {
 	for {
-		firstEpoch := f.indexedRange.maps.First() >> f.logMapsPerEpoch
+		firstEpoch := f.mapEpoch(f.indexedRange.maps.First())
 		if firstEpoch == 0 || !f.needTailEpoch(firstEpoch-1) {
 			break
 		}
@@ -359,7 +359,7 @@ func (f *FilterMaps) tryIndexTail() (bool, error) {
 // Note that unindexing is very quick as it only removes continuous ranges of
 // data from the database and is also called while running head indexing.
 func (f *FilterMaps) tryUnindexTail() (bool, error) {
-	firstEpoch := f.indexedRange.maps.First() >> f.logMapsPerEpoch
+	firstEpoch := f.mapEpoch(f.indexedRange.maps.First())
 	if f.indexedRange.tailPartialEpoch > 0 && firstEpoch > 0 {
 		firstEpoch--
 	}
@@ -380,9 +380,9 @@ func (f *FilterMaps) tryUnindexTail() (bool, error) {
 	}
 	if f.startedTailUnindex && f.indexedRange.hasIndexedBlocks() {
 		log.Info("Log index tail unindexing finished",
-			"first block", f.indexedRange.blocks.First(), "last block", f.indexedRange.blocks.Last(),
-			"removed maps", f.indexedRange.maps.First()-f.ptrTailUnindexMap,
-			"removed blocks", f.indexedRange.blocks.First()-f.tailPartialBlocks()-f.ptrTailUnindexBlock,
+			"firstblock", f.indexedRange.blocks.First(), "lastblock", f.indexedRange.blocks.Last(),
+			"removedmaps", f.indexedRange.maps.First()-f.ptrTailUnindexMap,
+			"removedblocks", f.indexedRange.blocks.First()-f.tailPartialBlocks()-f.ptrTailUnindexBlock,
 			"elapsed", common.PrettyDuration(time.Since(f.startedTailUnindexAt)))
 		f.startedTailUnindex = false
 	}
@@ -392,11 +392,11 @@ func (f *FilterMaps) tryUnindexTail() (bool, error) {
 // needTailEpoch returns true if the given tail epoch needs to be kept
 // according to the current tail target, false if it can be removed.
 func (f *FilterMaps) needTailEpoch(epoch uint32) bool {
-	firstEpoch := f.indexedRange.maps.First() >> f.logMapsPerEpoch
+	firstEpoch := f.mapEpoch(f.indexedRange.maps.First())
 	if epoch > firstEpoch {
 		return true
 	}
-	if (epoch+1)<<f.logMapsPerEpoch >= f.indexedRange.maps.AfterLast() {
+	if f.firstEpochMap(epoch+1) >= f.indexedRange.maps.AfterLast() {
 		return true
 	}
 	if epoch+1 < firstEpoch {
@@ -405,7 +405,7 @@ func (f *FilterMaps) needTailEpoch(epoch uint32) bool {
 	var lastBlockOfPrevEpoch uint64
 	if epoch > 0 {
 		var err error
-		lastBlockOfPrevEpoch, _, err = f.getLastBlockOfMap(epoch<<f.logMapsPerEpoch - 1)
+		lastBlockOfPrevEpoch, _, err = f.getLastBlockOfMap(f.lastEpochMap(epoch - 1))
 		if err != nil {
 			log.Error("Could not get last block of previous epoch", "epoch", epoch-1, "error", err)
 			return epoch >= firstEpoch
@@ -414,7 +414,7 @@ func (f *FilterMaps) needTailEpoch(epoch uint32) bool {
 	if f.historyCutoff > lastBlockOfPrevEpoch {
 		return false
 	}
-	lastBlockOfEpoch, _, err := f.getLastBlockOfMap((epoch+1)<<f.logMapsPerEpoch - 1)
+	lastBlockOfEpoch, _, err := f.getLastBlockOfMap(f.lastEpochMap(epoch))
 	if err != nil {
 		log.Error("Could not get last block of epoch", "epoch", epoch, "error", err)
 		return epoch >= firstEpoch
