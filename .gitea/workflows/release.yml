@@ -156,6 +156,7 @@ jobs:
       shell: cmd
       run: |
         set PATH=%GETH_MINGW%\bin;%PATH%
+        echo %PATH%
         go run build/ci.go install -dlgo -arch 386 -cc %GETH_MINGW%\bin\gcc.exe
       env:
         GETH_MINGW: 'C:\msys64\mingw32'
