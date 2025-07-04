@@ -936,7 +936,7 @@ func (t *freezerTable) getIndices(from, count uint64) ([]*indexEntry, error) {
 		return nil, err
 	}
 	var (
-		indices []*indexEntry
+		indices = make([]*indexEntry, 0, count+1)
 		offset  int
 	)
 	for i := from; i <= from+count; i++ {
