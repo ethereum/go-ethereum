@@ -37,7 +37,6 @@ type limboBlob struct {
 // limbo is a light, indexed database to temporarily store recently included
 // blobs until they are finalized. The purpose is to support small reorgs, which
 // would require pulling back up old blobs (which aren't part of the chain).
-//
 type limbo struct {
 	store billy.Database // Persistent data store for limboed blobs
 
