@@ -1,8 +1,10 @@
 on:
   push:
-    branches: [ master ]
+    branches:
+      - master
   pull_request:
-    branches: [ master ]
+    branches:
+      - master
   workflow_dispatch:
 
 jobs:
@@ -11,6 +13,8 @@ jobs:
     runs-on: self-hosted-ghr
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: false
 
     # Cache build tools to avoid downloading them each time
     - uses: actions/cache@v4
@@ -41,14 +45,14 @@ jobs:
           - '1.23'
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
-          cache-dependency-path: |
-            go.sum
-            build/checksums.txt
+          cache: false
 
       - name: Run tests
         run: go test ./...
