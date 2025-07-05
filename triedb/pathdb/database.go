@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -120,6 +121,7 @@ type Config struct {
 	StateCleanSize      int    // Maximum memory allowance (in bytes) for caching clean state data
 	WriteBufferSize     int    // Maximum memory allowance (in bytes) for write buffer
 	ReadOnly            bool   // Flag whether the database is opened in read only mode
+	JournalDirectory    string // Absolute path of journal directory (null means the journal data is persisted in key-value store)
 
 	// Testing configurations
 	SnapshotNoBuild   bool // Flag Whether the state generation is allowed
@@ -155,6 +157,9 @@ func (c *Config) fields() []interface{} {
 		list = append(list, "history", "entire chain")
 	} else {
 		list = append(list, "history", fmt.Sprintf("last %d blocks", c.StateHistory))
+	}
+	if c.JournalDirectory != "" {
+		list = append(list, "journal-dir", c.JournalDirectory)
 	}
 	return list
 }
@@ -678,6 +683,20 @@ func (db *Database) modifyAllowed() error {
 		return errDatabaseWaitSync
 	}
 	return nil
+}
+
+// journalPath returns the absolute path of journal for persisting state data.
+func (db *Database) journalPath() string {
+	if db.config.JournalDirectory == "" {
+		return ""
+	}
+	var fname string
+	if db.isVerkle {
+		fname = fmt.Sprintf("verkle.journal")
+	} else {
+		fname = fmt.Sprintf("merkle.journal")
+	}
+	return filepath.Join(db.config.JournalDirectory, fname)
 }
 
 // AccountHistory inspects the account history within the specified range.

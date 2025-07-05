@@ -2198,6 +2198,12 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		StateHistory:   ctx.Uint64(StateHistoryFlag.Name),
 		// Disable transaction indexing/unindexing.
 		TxLookupLimit: -1,
+
+		// Enables file journaling for the trie database. The journal files will be stored
+		// within the data directory. The corresponding paths will be either:
+		// - DATADIR/triedb/merkle.journal
+		// - DATADIR/triedb/verkle.journal
+		TrieJournalDirectory: stack.ResolvePath("triedb"),
 	}
 	if options.ArchiveMode && !options.Preimages {
 		options.Preimages = true

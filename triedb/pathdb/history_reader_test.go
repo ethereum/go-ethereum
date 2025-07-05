@@ -126,7 +126,7 @@ func testHistoryReader(t *testing.T, historyLimit uint64) {
 	}()
 	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
 
-	env := newTester(t, historyLimit, false, 64, true)
+	env := newTester(t, historyLimit, false, 64, true, "")
 	defer env.release()
 	waitIndexing(env.db)
 
