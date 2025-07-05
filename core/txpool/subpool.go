@@ -73,9 +73,10 @@ type LazyResolver interface {
 // a very specific call site in mind and each one can be evaluated very cheaply
 // by the pool implementations. Only add new ones that satisfy those constraints.
 type PendingFilter struct {
-	MinTip  *uint256.Int // Minimum miner tip required to include a transaction
-	BaseFee *uint256.Int // Minimum 1559 basefee needed to include a transaction
-	BlobFee *uint256.Int // Minimum 4844 blobfee needed to include a blob transaction
+	MinTip      *uint256.Int // Minimum miner tip required to include a transaction
+	BaseFee     *uint256.Int // Minimum 1559 basefee needed to include a transaction
+	BlobFee     *uint256.Int // Minimum 4844 blobfee needed to include a blob transaction
+	GasLimitCap uint64       // Maximum gas can be used for a single transaction execution (0 means no limit)
 
 	OnlyPlainTxs bool // Return only plain EVM transactions (peer-join announces, block space filling)
 	OnlyBlobTxs  bool // Return only blob transactions (block blob-space filling)
