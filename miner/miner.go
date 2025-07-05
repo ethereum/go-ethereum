@@ -140,7 +140,7 @@ func (miner *Miner) BuildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 }
 
 // BuildPayload builds the payload according to the provided parameters.
-func (miner *Miner) PredictBlobTxs(blobId engine.PredictionID, max uint, window uint, timestamp uint64) (*BlobPrediction, error) {
+func (miner *Miner) PredictBlobTxs(blobId engine.PredictionID, max uint8, window uint8, timestamp uint64) (*BlobPrediction, error) {
 	return miner.predictBlobs(blobId, max, window, timestamp)
 }
 

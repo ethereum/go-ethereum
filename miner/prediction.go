@@ -67,7 +67,7 @@ func (prediction *BlobPrediction) Convert() []*engine.BlobPredictionToStage {
 // header: For gas fee calculation
 // [Main Difference from fillTransactions]
 // - No prio/normal transaction
-func (miner *Miner) fillBlobs(blobId engine.PredictionID, max uint, W uint, timestamp uint64) ([]*types.Transaction, error) {
+func (miner *Miner) fillBlobs(blobId engine.PredictionID, max uint8, W uint8, timestamp uint64) ([]*types.Transaction, error) {
 	miner.confMu.RLock()
 	tip := miner.config.GasPrice
 	miner.confMu.RUnlock()
@@ -117,7 +117,6 @@ func (miner *Miner) fillBlobs(blobId engine.PredictionID, max uint, W uint, time
 
 	if len(pendingBlobTxs) > 0 {
 		// Refer to newTransactionsByPriceAndNonce
-		// signer는 사용하지 않음 / 원래는 commitTransaction 넘겨주는용이지만 여기서는 무시
 		signer := types.MakeSigner(miner.chainConfig, parent.Number, parent.Time)
 		blobTxs := newTransactionsByPriceAndNonce(signer, pendingBlobTxs, predictedBaseFee)
 		for {
@@ -140,7 +139,7 @@ func (miner *Miner) fillBlobs(blobId engine.PredictionID, max uint, W uint, time
 	return res, nil
 }
 
-func (miner *Miner) predictBlobs(blobId engine.PredictionID, max uint, W uint, timestamp uint64) (*BlobPrediction, error) {
+func (miner *Miner) predictBlobs(blobId engine.PredictionID, max uint8, W uint8, timestamp uint64) (*BlobPrediction, error) {
 	prediction := &BlobPrediction{
 		id:          blobId,
 		transaction: make([]*types.Transaction, 0, max),
@@ -163,12 +162,11 @@ func (miner *Miner) predictBlobs(blobId engine.PredictionID, max uint, W uint, t
 					prediction.lock.Lock()
 					prediction.transaction = res
 					prediction.lock.Unlock()
-					log.Info("Prediction result", "res", prediction)
 				} else {
-					log.Info("Error while generating prediction", "id", prediction.id, "err", err)
+					log.Error("Error while generating prediction", "id", prediction.id, "err", err)
 				}
 				timer.Reset(miner.config.Recommit)
-			case <-prediction.stop:
+			case <-prediction.stop: //todo(healthykim) where
 				log.Info("Stopping work on prediction", "id", prediction.id, "reason", "delivery")
 				return
 			case <-endTimer.C:

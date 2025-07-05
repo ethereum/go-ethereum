@@ -410,9 +410,15 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 
 // todo(healthykim) window / max value configuration
 // todo(healthykim) blob ID calculation logic
-func (api *ConsensusAPI) NotifyPrediction(headBlockRoot common.Hash) (engine.PredictionResponse, error) {
-	max := uint(10)
-	window := uint(2)
+func (api *ConsensusAPI) NotifyPrediction(headBlockRoot common.Hash, clMaxPredictionSize uint8) (engine.PredictionResponse, error) {
+	max := clMaxPredictionSize
+	if api.config().MaxPredictionSize != nil && max > *api.config().MaxPredictionSize {
+		max = *api.config().MaxPredictionSize
+	}
+	window := uint8(2)
+	if api.config().PredictionWindow != nil {
+		window = *api.config().PredictionWindow
+	}
 	timestamp := uint64(time.Now().Unix())
 	random := rand.Int()
 	buf := make([]byte, 8)
@@ -612,7 +618,6 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 func (api *ConsensusAPI) GetBlobsToStage(id engine.PredictionID) ([]*engine.BlobPredictionToStage, error) {
 
 	prediction := api.predictions.get(id)
-	log.Info("Finding prediction result for ", "id=", id)
 
 	if prediction == nil {
 		log.Error("There is no prediction with given id", "prediction id", id)
