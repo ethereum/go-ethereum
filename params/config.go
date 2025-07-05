@@ -435,6 +435,10 @@ type ChainConfig struct {
 	// those cases.
 	EnableVerkleAtGenesis bool `json:"enableVerkleAtGenesis,omitempty"`
 
+	// Cell staging params
+	PredictionWindow  *uint8 `json:"predictionWindow,omitempty"`
+	MaxPredictionSize *uint8 `json:"maxPredictionSize,omitempty"`
+
 	// Various consensus engines
 	Ethash             *EthashConfig       `json:"ethash,omitempty"`
 	Clique             *CliqueConfig       `json:"clique,omitempty"`

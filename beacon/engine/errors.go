@@ -76,6 +76,7 @@ var (
 
 	GenericServerError       = &EngineAPIError{code: -32000, msg: "Server error"}
 	UnknownPayload           = &EngineAPIError{code: -38001, msg: "Unknown payload"}
+	UnknownPrediction        = &EngineAPIError{code: -38001, msg: "Unknown prediction"}
 	InvalidForkChoiceState   = &EngineAPIError{code: -38002, msg: "Invalid forkchoice state"}
 	InvalidPayloadAttributes = &EngineAPIError{code: -38003, msg: "Invalid payload attributes"}
 	TooLargeRequest          = &EngineAPIError{code: -38004, msg: "Too large request"}
