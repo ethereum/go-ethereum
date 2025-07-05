@@ -782,13 +782,13 @@ func testFastVsFullChains(t *testing.T, scheme string) {
 		}
 
 		// Check that hash-to-number mappings are present in all databases.
-		if m := rawdb.ReadHeaderNumber(fastDb, hash); m == nil || *m != num {
+		if m, ok := rawdb.ReadHeaderNumber(fastDb, hash); !ok || m != num {
 			t.Errorf("block #%d [%x]: wrong hash-to-number mapping in fastdb: %v", num, hash, m)
 		}
-		if m := rawdb.ReadHeaderNumber(ancientDb, hash); m == nil || *m != num {
+		if m, ok := rawdb.ReadHeaderNumber(ancientDb, hash); !ok || m != num {
 			t.Errorf("block #%d [%x]: wrong hash-to-number mapping in ancientdb: %v", num, hash, m)
 		}
-		if m := rawdb.ReadHeaderNumber(archiveDb, hash); m == nil || *m != num {
+		if m, ok := rawdb.ReadHeaderNumber(archiveDb, hash); !ok || m != num {
 			t.Errorf("block #%d [%x]: wrong hash-to-number mapping in archivedb: %v", num, hash, m)
 		}
 	}

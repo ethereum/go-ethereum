@@ -41,7 +41,11 @@ func DecodeTxLookupEntry(data []byte, db ethdb.Reader) *uint64 {
 	}
 	// Database v4-v5 tx lookup format just stores the hash
 	if len(data) == common.HashLength {
-		return ReadHeaderNumber(db, common.BytesToHash(data))
+		number, ok := ReadHeaderNumber(db, common.BytesToHash(data))
+		if !ok {
+			return nil
+		}
+		return &number
 	}
 	// Finally try database v3 tx lookup format
 	var entry LegacyTxLookupEntry
