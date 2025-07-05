@@ -168,7 +168,7 @@ func makeDecoder(typ reflect.Type, tags rlpstruct.Tags) (dec decoder, err error)
 		return decodeU256NoPtr, nil
 	case kind == reflect.Ptr:
 		return makePtrDecoder(typ, tags)
-	case reflect.PointerTo(typ).Implements(decoderInterface):
+	case implementsInterface(reflect.PointerTo(typ), decoderInterface):
 		return decodeDecoder, nil
 	case isUint(kind):
 		return decodeUint, nil
@@ -262,7 +262,7 @@ func decodeU256(s *Stream, val reflect.Value) error {
 
 func makeListDecoder(typ reflect.Type, tag rlpstruct.Tags) (decoder, error) {
 	etype := typ.Elem()
-	if etype.Kind() == reflect.Uint8 && !reflect.PointerTo(etype).Implements(decoderInterface) {
+	if etype.Kind() == reflect.Uint8 && !implementsInterface(reflect.PointerTo(etype), decoderInterface) {
 		if typ.Kind() == reflect.Array {
 			return decodeByteArray, nil
 		}
