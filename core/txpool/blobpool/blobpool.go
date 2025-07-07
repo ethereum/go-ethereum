@@ -400,7 +400,6 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 			if err := billy.Migrate(billy.Options{Path: queuedir, Repair: true}, slotter, newSlotter); err != nil {
 				return err
 			}
-
 		}
 		slotter = newSlotterEIP7594(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
 	}
