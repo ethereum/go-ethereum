@@ -1,7 +1,7 @@
 ---
 title: Archive mode
 description: Running an Archive Node in Geth
---
+---
 
 Geth supports two types of archive nodes that allow querying historical Ethereum state: hash-based and path-based. This document outlines both approaches.
 
