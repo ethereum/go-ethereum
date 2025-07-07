@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -275,50 +276,74 @@ func (l *lookup) addLayer(diff *diffLayer) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		l.addStorageNodes(state, diff.nodes.storageNodes)
+	}()
 
-		// Use concurrent workers for storage nodes updates, one per shard
-		var storageWg sync.WaitGroup
-		storageWg.Add(storageNodesShardCount)
+	wg.Wait()
+}
 
-		workChannels := make([]chan string, storageNodesShardCount)
-		for i := 0; i < storageNodesShardCount; i++ {
-			workChannels[i] = make(chan string, 10) // Buffer to avoid blocking
-		}
+func (l *lookup) addStorageNodes(state common.Hash, nodes map[common.Hash]map[string]*trienode.Node) {
+	count := 0
+	for _, slots := range nodes {
+		count += len(slots)
+	}
 
-		// Start all workers, each handling its own shard
-		for shardIndex := 0; shardIndex < storageNodesShardCount; shardIndex++ {
-			go func(shardIdx int) {
-				defer storageWg.Done()
-
-				shard := l.storageNodes[shardIdx]
-				for key := range workChannels[shardIdx] {
-					list, exists := shard[key]
-					if !exists {
-						list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
-					}
-					list = append(list, state)
-					shard[key] = list
-				}
-			}(shardIndex)
-		}
-
-		// Distribute work to workers based on shard index
-		for accountHash, slots := range diff.nodes.storageNodes {
+	// If the number of storage nodes is small, use a single-threaded approach
+	if count <= 1000 {
+		for accountHash, slots := range nodes {
 			accountHex := accountHash.Hex()
 			for path := range slots {
+				key := accountHex + path
 				shardIndex := getStorageShardIndex(path)
-				workChannels[shardIndex] <- accountHex + path
+				list, exists := l.storageNodes[shardIndex][key]
+				if !exists {
+					list = make([]common.Hash, 0, 16)
+				}
+				list = append(list, state)
+				l.storageNodes[shardIndex][key] = list
 			}
 		}
+		return
+	}
 
-		// Close all channels to signal workers to finish
-		for i := 0; i < storageNodesShardCount; i++ {
-			close(workChannels[i])
+	// Use concurrent workers for storage nodes updates, one per shard
+	var wg sync.WaitGroup
+	wg.Add(storageNodesShardCount)
+
+	workChannels := make([]chan string, storageNodesShardCount)
+	for i := 0; i < storageNodesShardCount; i++ {
+		workChannels[i] = make(chan string, 10) // Buffer to avoid blocking
+	}
+
+	// Start all workers, each handling its own shard
+	for shardIndex := 0; shardIndex < storageNodesShardCount; shardIndex++ {
+		go func(shardIdx int) {
+			defer wg.Done()
+
+			shard := l.storageNodes[shardIdx]
+			for key := range workChannels[shardIdx] {
+				list, exists := shard[key]
+				if !exists {
+					list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
+				}
+				list = append(list, state)
+				shard[key] = list
+			}
+		}(shardIndex)
+	}
+
+	for accountHash, slots := range nodes {
+		accountHex := accountHash.Hex()
+		for path := range slots {
+			shardIndex := getStorageShardIndex(path)
+			workChannels[shardIndex] <- accountHex + path
 		}
+	}
 
-		// Wait for all storage workers to complete
-		storageWg.Wait()
-	}()
+	// Close all channels to signal workers to finish
+	for i := 0; i < storageNodesShardCount; i++ {
+		close(workChannels[i])
+	}
 
 	wg.Wait()
 }
@@ -408,7 +433,19 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 	})
 
 	eg.Go(func() error {
-		for accountHash, slots := range diff.nodes.storageNodes {
+		return l.removeStorageNodes(state, diff.nodes.storageNodes)
+	})
+	return eg.Wait()
+}
+
+func (l *lookup) removeStorageNodes(state common.Hash, nodes map[common.Hash]map[string]*trienode.Node) error {
+	count := 0
+	for _, slots := range nodes {
+		count += len(slots)
+	}
+
+	if count <= 1000 {
+		for accountHash, slots := range nodes {
 			accountHex := accountHash.Hex()
 			for path := range slots {
 				// Construct the combined key and find the correct shard
@@ -426,6 +463,50 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 			}
 		}
 		return nil
-	})
+	}
+
+	// Use concurrent workers for storage nodes removal, one per shard
+	var eg errgroup.Group
+
+	// Create work channels for each shard
+	workChannels := make([]chan string, storageNodesShardCount)
+
+	for i := 0; i < storageNodesShardCount; i++ {
+		workChannels[i] = make(chan string, 10) // Buffer to avoid blocking
+	}
+
+	// Start all workers, each handling its own shard
+	for shardIndex := 0; shardIndex < storageNodesShardCount; shardIndex++ {
+		shardIdx := shardIndex // Capture the variable
+		eg.Go(func() error {
+			shard := l.storageNodes[shardIdx]
+			for key := range workChannels[shardIdx] {
+				found, list := removeFromList(shard[key], state)
+				if !found {
+					return fmt.Errorf("storage lookup is not found, key: %s, state: %x", key, state)
+				}
+				if len(list) != 0 {
+					shard[key] = list
+				} else {
+					delete(shard, key)
+				}
+			}
+			return nil
+		})
+	}
+
+	for accountHash, slots := range nodes {
+		accountHex := accountHash.Hex()
+		for path := range slots {
+			key := accountHex + path
+			shardIndex := getStorageShardIndex(path)
+			workChannels[shardIndex] <- key
+		}
+	}
+
+	for i := 0; i < storageNodesShardCount; i++ {
+		close(workChannels[i])
+	}
+
 	return eg.Wait()
 }
