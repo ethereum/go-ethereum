@@ -74,7 +74,7 @@ func getStorageShardIndex(path string) int {
 	hash := 0
 	for i, r := range path {
 		hash = hash*31 + int(r)
-		if i >= 4 { // Use first 4 characters for good distribution
+		if i >= 8 { // Use first 8 characters for better distribution
 			break
 		}
 	}
@@ -292,55 +292,79 @@ func (l *lookup) addLayer(diff *diffLayer) {
 		st2 = time.Since(st)
 	}()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		st := time.Now()
+	// Use concurrent workers for storage nodes updates, one per shard
+	var storageWg sync.WaitGroup
+	storageWg.Add(16)
 
-		count := 0
-		var stHash, stKey, stMapGet, stMapNew, stMapApp, stMapSet time.Duration
+	// Create channels to distribute work to workers
+	type storageWork struct {
+		accountHash common.Hash
+		accountHex  string
+		path        string
+	}
 
-		for accountHash, slots := range diff.nodes.storageNodes {
-			st00 := time.Now()
-			accountHex := accountHash.Hex()
-			st01 := time.Now()
-			stHash += st01.Sub(st00)
+	workChannels := make([]chan storageWork, 16)
+	for i := 0; i < 16; i++ {
+		workChannels[i] = make(chan storageWork, 1000) // Buffer to avoid blocking
+	}
 
-			for path := range slots {
-				count += 1
+	// Start 16 workers, each handling its own shard
+	for shardIndex := 0; shardIndex < 16; shardIndex++ {
+		go func(shardIdx int) {
+			defer storageWg.Done()
+			st := time.Now()
+			count := 0
 
-				st00 := time.Now()
-				// Construct the combined key and find the correct shard
-				key := accountHex + path
-				shardIndex := getStorageShardIndex(path)
-				st01 := time.Now()
+			for work := range workChannels[shardIdx] {
+				// Construct the combined key
+				key := work.accountHex + work.path
 
-				// Access the specific shard map
-				shardMap := l.storageNodes[shardIndex]
+				// Access the specific shard map (no lock needed as each worker owns its shard)
+				shardMap := l.storageNodes[shardIdx]
 				list, exists := shardMap[key]
-				st02 := time.Now()
 				if !exists {
 					list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
 				}
-				st03 := time.Now()
 				list = append(list, state)
-				st04 := time.Now()
 				shardMap[key] = list
-				st05 := time.Now()
-
-				stKey += st01.Sub(st00)
-				stMapGet += st02.Sub(st01)
-				stMapNew += st03.Sub(st02)
-				stMapApp += st04.Sub(st03)
-				stMapSet += st05.Sub(st04)
+				count++
 			}
-		}
 
-		st3 = time.Since(st)
-		if st3 > time.Millisecond {
-			log.Info("PathDB lookup add storage nodes", "count", count, "accounts", len(diff.nodes.storageNodes), "stHash", stHash, "stKey", stKey, "stMapGet", stMapGet, "stMapNew", stMapNew, "stMapApp", stMapApp, "stMapSet", stMapSet)
+			st3 := time.Since(st)
+			if st3 > time.Millisecond {
+				log.Info("PathDB lookup add storage nodes worker", "shard", shardIdx, "count", count, "elapsed", st3)
+			}
+		}(shardIndex)
+	}
+
+	// Distribute work to workers based on shard index
+	distributeStart := time.Now()
+	totalCount := 0
+	for accountHash, slots := range diff.nodes.storageNodes {
+		accountHex := accountHash.Hex()
+		for path := range slots {
+			shardIndex := getStorageShardIndex(path)
+			workChannels[shardIndex] <- storageWork{
+				accountHash: accountHash,
+				accountHex:  accountHex,
+				path:        path,
+			}
+			totalCount++
 		}
-	}()
+	}
+
+	// Close all channels to signal workers to finish
+	for i := 0; i < 16; i++ {
+		close(workChannels[i])
+	}
+
+	// Wait for all storage workers to complete
+	storageWg.Wait()
+	st3 = time.Since(distributeStart)
+
+	if st3 > time.Millisecond {
+		log.Info("PathDB lookup add storage nodes", "total_count", totalCount, "accounts", len(diff.nodes.storageNodes), "elapsed", st3)
+	}
 
 	wg.Wait()
 	if elapsed := time.Since(st00); elapsed > time.Millisecond {
