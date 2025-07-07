@@ -50,11 +50,34 @@ type lookup struct {
 	storages map[[64]byte][]common.Hash
 
 	accountNodes map[string][]common.Hash
-	storageNodes map[string][]common.Hash
+
+	// Optimized: Use sharded storage with fixed array to reduce map size
+	// Each account uses 16 smaller maps to distribute storage keys
+	// This reduces map lookup time from O(log n) with large n to O(log n) with small n
+	storageNodes map[common.Hash][16]map[string][]common.Hash
 
 	// descendant is the callback indicating whether the layer with
 	// given root is a descendant of the one specified by `ancestor`.
 	descendant func(state common.Hash, ancestor common.Hash) bool
+}
+
+// getStorageShardIndex returns the shard index for a given path
+func getStorageShardIndex(path string) int {
+	if len(path) == 0 {
+		return 0
+	}
+	// Use simple hash of the first few characters to distribute evenly
+	hash := 0
+	for i, r := range path {
+		hash = hash*31 + int(r)
+		if i >= 4 { // Only use first 4 characters to avoid expensive computation
+			break
+		}
+	}
+	if hash < 0 {
+		hash = -hash
+	}
+	return hash % 16
 }
 
 // newLookup initializes the lookup structure.
@@ -71,7 +94,7 @@ func newLookup(head layer, descendant func(state common.Hash, ancestor common.Ha
 		accounts:     make(map[common.Hash][]common.Hash),
 		storages:     make(map[[64]byte][]common.Hash),
 		accountNodes: make(map[string][]common.Hash),
-		storageNodes: make(map[string][]common.Hash),
+		storageNodes: make(map[common.Hash][16]map[string][]common.Hash),
 		descendant:   descendant,
 	}
 	// Apply the diff layers from bottom to top
@@ -172,7 +195,10 @@ func (l *lookup) nodeTip(accountHash common.Hash, path string, stateID common.Ha
 	if accountHash == (common.Hash{}) {
 		list = l.accountNodes[path]
 	} else {
-		list = l.storageNodes[accountHash.Hex()+path]
+		if accountShards, exists := l.storageNodes[accountHash]; exists {
+			shardIndex := getStorageShardIndex(path)
+			list = accountShards[shardIndex][path]
+		}
 	}
 	for i := len(list) - 1; i >= 0; i-- {
 		// If the current state matches the stateID, or the requested state is a
@@ -262,22 +288,64 @@ func (l *lookup) addLayer(diff *diffLayer) {
 	go func() {
 		defer wg.Done()
 		st := time.Now()
+
+		count := 0
+		var stHash, stKey, stMapGet, stMapNew, stMapApp, stMapSet time.Duration
+
 		for accountHash, slots := range diff.nodes.storageNodes {
+			st00 := time.Now()
+			st01 := time.Now()
+			stHash += st01.Sub(st00)
+
+			// Get or create the account-level shard array
+			accountShards, exists := l.storageNodes[accountHash]
+			if !exists {
+				// Initialize all 16 shards for this account
+				for i := 0; i < 16; i++ {
+					accountShards[i] = make(map[string][]common.Hash)
+				}
+				l.storageNodes[accountHash] = accountShards
+			}
+
 			for path := range slots {
-				key := accountHash.Hex() + path
-				list, exists := l.storageNodes[key]
+				count += 1
+
+				st00 := time.Now()
+				// Calculate shard index
+				shardIndex := getStorageShardIndex(path)
+				st01 := time.Now()
+
+				// Access the specific shard map
+				shardMap := accountShards[shardIndex]
+				list, exists := shardMap[path]
+				st02 := time.Now()
 				if !exists {
 					list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
 				}
+				st03 := time.Now()
 				list = append(list, state)
-				l.storageNodes[key] = list
+				st04 := time.Now()
+				shardMap[path] = list
+				st05 := time.Now()
+
+				stKey += st01.Sub(st00)
+				stMapGet += st02.Sub(st01)
+				stMapNew += st03.Sub(st02)
+				stMapApp += st04.Sub(st03)
+				stMapSet += st05.Sub(st04)
 			}
 		}
+
 		st3 = time.Since(st)
+		if st3 > time.Millisecond {
+			log.Info("PathDB lookup add storage nodes", "count", count, "accounts", len(diff.nodes.storageNodes), "stHash", stHash, "stKey", stKey, "stMapGet", stMapGet, "stMapNew", stMapNew, "stMapApp", stMapApp, "stMapSet", stMapSet)
+		}
 	}()
 
 	wg.Wait()
-	log.Info("PathDB lookup", "id", diff.id, "block", diff.block, "st0", st0, "st1", st1, "st2", st2, "st3", st3, "elapsed", time.Since(st00))
+	if elapsed := time.Since(st00); elapsed > time.Millisecond {
+		log.Info("PathDB lookup", "id", diff.id, "block", diff.block, "st0", st0, "st1", st1, "st2", st2, "st3", st3, "elapsed", elapsed)
+	}
 }
 
 // removeFromList removes the specified element from the provided list.
@@ -365,16 +433,17 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 
 	eg.Go(func() error {
 		for accountHash, slots := range diff.nodes.storageNodes {
+			accountShards := l.storageNodes[accountHash]
 			for path := range slots {
-				key := accountHash.Hex() + path
-				found, list := removeFromList(l.storageNodes[key], state)
+				shardIndex := getStorageShardIndex(path)
+				found, list := removeFromList(accountShards[shardIndex][path], state)
 				if !found {
 					return fmt.Errorf("storage lookup is not found, %x %x, state: %x", accountHash, path, state)
 				}
 				if len(list) != 0 {
-					l.storageNodes[key] = list
+					accountShards[shardIndex][path] = list
 				} else {
-					delete(l.storageNodes, key)
+					delete(accountShards[shardIndex], path)
 				}
 			}
 		}
