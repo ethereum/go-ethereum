@@ -2,6 +2,7 @@ package pathdb
 
 import (
 	"crypto/rand"
+	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -131,5 +132,125 @@ func BenchmarkAddNodes(b *testing.B) {
 				lookup.addNodes(stateHash, accountNodes, storageNodes)
 			}
 		})
+	}
+}
+
+func TestConcurrentStorageNodesUpdate(b *testing.T) {
+	// Create a lookup instance
+	lookup := &lookup{
+		accountNodes: make(map[string][]common.Hash),
+	}
+	// Initialize all 16 storage node shards
+	for i := 0; i < 16; i++ {
+		lookup.storageNodes[i] = make(map[string][]common.Hash)
+	}
+
+	// Create test data with known shard distribution
+	testData := map[common.Hash]map[string]*trienode.Node{}
+
+	// Create accounts that will distribute across different shards
+	for i := 0; i < 100; i++ {
+		var accountHash common.Hash
+		accountHash[0] = byte(i)
+
+		testData[accountHash] = make(map[string]*trienode.Node)
+
+		// Create paths that will hash to different shards
+		for j := 0; j < 10; j++ {
+			path := fmt.Sprintf("path_%d_%d", i, j)
+			var nodeHash common.Hash
+			nodeHash[0] = byte(j)
+
+			testData[accountHash][path] = &trienode.Node{Hash: nodeHash}
+		}
+	}
+
+	// Add nodes using the concurrent method
+	var stateHash common.Hash
+	stateHash[0] = 0x42
+	lookup.addNodes(stateHash, nil, testData)
+
+	// Verify that all nodes were added correctly
+	totalNodes := 0
+	for accountHash, slots := range testData {
+		accountHex := accountHash.Hex()
+		for path := range slots {
+			key := accountHex + path
+			shardIndex := getStorageShardIndex(path)
+
+			list, exists := lookup.storageNodes[shardIndex][key]
+			if !exists {
+				b.Errorf("Node not found: account=%x, path=%s, shard=%d", accountHash, path, shardIndex)
+				continue
+			}
+
+			if len(list) != 1 {
+				b.Errorf("Expected 1 state hash, got %d: account=%x, path=%s", len(list), accountHash, path)
+				continue
+			}
+
+			if list[0] != stateHash {
+				b.Errorf("Expected state hash %x, got %x: account=%x, path=%s", stateHash, list[0], accountHash, path)
+				continue
+			}
+
+			totalNodes++
+		}
+	}
+
+	expectedTotal := 100 * 10 // 100 accounts * 10 nodes each
+	if totalNodes != expectedTotal {
+		b.Errorf("Expected %d total nodes, got %d", expectedTotal, totalNodes)
+	}
+
+	// Verify shard distribution
+	for i := 0; i < 16; i++ {
+		shardSize := len(lookup.storageNodes[i])
+		if shardSize == 0 {
+			b.Logf("Shard %d is empty", i)
+		} else {
+			b.Logf("Shard %d has %d entries", i, shardSize)
+		}
+	}
+}
+
+func TestShardDistribution(b *testing.T) {
+	// Test shard distribution with different path patterns
+	paths := []string{
+		"path_0_0", "path_0_1", "path_0_2", "path_0_3",
+		"path_1_0", "path_1_1", "path_1_2", "path_1_3",
+		"path_2_0", "path_2_1", "path_2_2", "path_2_3",
+		"path_3_0", "path_3_1", "path_3_2", "path_3_3",
+		"path_4_0", "path_4_1", "path_4_2", "path_4_3",
+		"path_5_0", "path_5_1", "path_5_2", "path_5_3",
+		"path_6_0", "path_6_1", "path_6_2", "path_6_3",
+		"path_7_0", "path_7_1", "path_7_2", "path_7_3",
+		"path_8_0", "path_8_1", "path_8_2", "path_8_3",
+		"path_9_0", "path_9_1", "path_9_2", "path_9_3",
+	}
+
+	shardCounts := make(map[int]int)
+	for _, path := range paths {
+		shardIndex := getStorageShardIndex(path)
+		shardCounts[shardIndex]++
+		b.Logf("Path: %s -> Shard: %d", path, shardIndex)
+	}
+
+	b.Logf("Shard distribution:")
+	for i := 0; i < 16; i++ {
+		count := shardCounts[i]
+		b.Logf("  Shard %d: %d paths", i, count)
+	}
+
+	// Check if we have a reasonable distribution
+	usedShards := 0
+	for _, count := range shardCounts {
+		if count > 0 {
+			usedShards++
+		}
+	}
+
+	if usedShards < 4 {
+		b.Logf("Warning: Only %d shards are being used out of 16", usedShards)
 	}
 }
