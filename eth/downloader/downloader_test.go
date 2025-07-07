@@ -544,7 +544,7 @@ func testMultiProtoSync(t *testing.T, protocol uint, mode SyncMode) {
 	tester.newPeer("peer 68", eth.ETH68, chain.blocks[1:])
 
 	if err := tester.downloader.BeaconSync(mode, chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
-		t.Fatalf("failed to start beacon sync: #{err}")
+		t.Fatalf("failed to start beacon sync: %v", err)
 	}
 	select {
 	case <-complete:
