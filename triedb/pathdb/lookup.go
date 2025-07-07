@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -48,6 +49,9 @@ type lookup struct {
 	// where the slot was modified, with the order from oldest to newest.
 	storages map[[64]byte][]common.Hash
 
+	accountNodes map[string][]common.Hash
+	storageNodes map[string][]common.Hash
+
 	// descendant is the callback indicating whether the layer with
 	// given root is a descendant of the one specified by `ancestor`.
 	descendant func(state common.Hash, ancestor common.Hash) bool
@@ -64,9 +68,11 @@ func newLookup(head layer, descendant func(state common.Hash, ancestor common.Ha
 		current = current.parentLayer()
 	}
 	l := &lookup{
-		accounts:   make(map[common.Hash][]common.Hash),
-		storages:   make(map[[64]byte][]common.Hash),
-		descendant: descendant,
+		accounts:     make(map[common.Hash][]common.Hash),
+		storages:     make(map[[64]byte][]common.Hash),
+		accountNodes: make(map[string][]common.Hash),
+		storageNodes: make(map[string][]common.Hash),
+		descendant:   descendant,
 	}
 	// Apply the diff layers from bottom to top
 	for i := len(layers) - 1; i >= 0; i-- {
@@ -161,6 +167,32 @@ func (l *lookup) storageTip(accountHash common.Hash, slotHash common.Hash, state
 	return common.Hash{}
 }
 
+func (l *lookup) nodeTip(accountHash common.Hash, path string, stateID common.Hash, base common.Hash) common.Hash {
+	var list []common.Hash
+	if accountHash == (common.Hash{}) {
+		list = l.accountNodes[path]
+	} else {
+		list = l.storageNodes[accountHash.Hex()+path]
+	}
+	for i := len(list) - 1; i >= 0; i-- {
+		// If the current state matches the stateID, or the requested state is a
+		// descendant of it, return the current state as the most recent one
+		// containing the modified data. Otherwise, the current state may be ahead
+		// of the requested one or belong to a different branch.
+		if list[i] == stateID || l.descendant(stateID, list[i]) {
+			return list[i]
+		}
+	}
+	// No layer matching the stateID or its descendants was found. Use the
+	// current disk layer as a fallback.
+	if base == stateID || l.descendant(stateID, base) {
+		return base
+	}
+	// The layer associated with 'stateID' is not the descendant of the current
+	// disk layer, it's already stale, return nothing.
+	return common.Hash{}
+}
+
 // addLayer traverses the state data retained in the specified diff layer and
 // integrates it into the lookup set.
 //
@@ -176,9 +208,12 @@ func (l *lookup) addLayer(diff *diffLayer) {
 		wg    sync.WaitGroup
 		state = diff.rootHash()
 	)
+	st00 := time.Now()
+	var st0, st1, st2, st3 time.Duration
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		st := time.Now()
 		for accountHash := range diff.states.accountData {
 			list, exists := l.accounts[accountHash]
 			if !exists {
@@ -187,11 +222,13 @@ func (l *lookup) addLayer(diff *diffLayer) {
 			list = append(list, state)
 			l.accounts[accountHash] = list
 		}
+		st0 = time.Since(st)
 	}()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		st := time.Now()
 		for accountHash, slots := range diff.states.storageData {
 			for slotHash := range slots {
 				key := storageKey(accountHash, slotHash)
@@ -203,8 +240,44 @@ func (l *lookup) addLayer(diff *diffLayer) {
 				l.storages[key] = list
 			}
 		}
+		st1 = time.Since(st)
 	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		st := time.Now()
+		for path := range diff.nodes.accountNodes {
+			list, exists := l.accountNodes[path]
+			if !exists {
+				list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
+			}
+			list = append(list, state)
+			l.accountNodes[path] = list
+		}
+		st2 = time.Since(st)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		st := time.Now()
+		for accountHash, slots := range diff.nodes.storageNodes {
+			for path := range slots {
+				key := accountHash.Hex() + path
+				list, exists := l.storageNodes[key]
+				if !exists {
+					list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
+				}
+				list = append(list, state)
+				l.storageNodes[key] = list
+			}
+		}
+		st3 = time.Since(st)
+	}()
+
 	wg.Wait()
+	log.Info("PathDB lookup", "id", diff.id, "block", diff.block, "st0", st0, "st1", st1, "st2", st2, "st3", st3, "elapsed", time.Since(st00))
 }
 
 // removeFromList removes the specified element from the provided list.
@@ -269,6 +342,39 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 					l.storages[key] = list
 				} else {
 					delete(l.storages, key)
+				}
+			}
+		}
+		return nil
+	})
+
+	eg.Go(func() error {
+		for path := range diff.nodes.accountNodes {
+			found, list := removeFromList(l.accountNodes[path], state)
+			if !found {
+				return fmt.Errorf("account lookup is not found, %x, state: %x", path, state)
+			}
+			if len(list) != 0 {
+				l.accountNodes[path] = list
+			} else {
+				delete(l.accountNodes, path)
+			}
+		}
+		return nil
+	})
+
+	eg.Go(func() error {
+		for accountHash, slots := range diff.nodes.storageNodes {
+			for path := range slots {
+				key := accountHash.Hex() + path
+				found, list := removeFromList(l.storageNodes[key], state)
+				if !found {
+					return fmt.Errorf("storage lookup is not found, %x %x, state: %x", accountHash, path, state)
+				}
+				if len(list) != 0 {
+					l.storageNodes[key] = list
+				} else {
+					delete(l.storageNodes, key)
 				}
 			}
 		}
