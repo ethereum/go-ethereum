@@ -305,7 +305,6 @@ func (e *Era2) loadIndex() error {
 		off += 8 + int64(length) // headersize plus length to jump to next TLV header
 	}
 	return nil
-
 }
 
 func (e *Era2) BatchRange(first, count uint64, wantHeaders, wantBodies, wantReceipts, wantProofs bool) (hdrs []*types.Header, bods []*types.Body, recs []types.Receipts, prfs [][]byte, err error) {

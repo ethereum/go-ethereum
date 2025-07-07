@@ -58,7 +58,22 @@ const (
 	headerSize                           uint64 = 8
 )
 
+// ProofVariant is an idiomatic “enum”.
 type proofvar uint16
+
+const (
+	ProofNone    proofvar = 0
+	ProofHHA     proofvar = proofvar(TypeProofHistoricalHashesAccumulator)
+	ProofRoots   proofvar = proofvar(TypeProofHistoricalRoots)
+	ProofCapella proofvar = proofvar(TypeProofHistoricalSummariesCapella)
+	ProofDeneb   proofvar = proofvar(TypeProofHistoricalSummariesDeneb)
+)
+
+// Proof bundles variant + compressed bytes.
+type Proof struct {
+	Variant proofvar
+	Data    []byte
+}
 
 type Builder struct {
 	w   *e2store.Writer
@@ -97,17 +112,21 @@ func NewBuilder(w io.Writer) *Builder {
 	}
 }
 
-func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, proofBytes []byte, proofty proofvar) error {
+func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, proof *Proof) error {
 	if len(b.headersRLP) >= MaxEraESize {
 		return fmt.Errorf("exceeds MaxEraESize %d", MaxEraESize)
 	}
 
-	if proofty != 0 && len(proofBytes) == 0 {
-		return fmt.Errorf("proof type %d requires proof bytes", proofty)
+	if proof != nil {
+		if proof.Variant == ProofNone || len(proof.Data) == 0 {
+			return fmt.Errorf("invalid proof: variant=%d len=%d", proof.Variant, len(proof.Data))
+		}
 	}
 
-	if len(b.headersRLP) != 0 && proofty != b.prooftype {
-		return fmt.Errorf("cannot mix proof types, expected %d, got %d", b.prooftype, proofty)
+	if len(b.headersRLP) == 0 {
+		b.prooftype = proof.Variant
+	} else if proof.Variant != b.prooftype {
+		return fmt.Errorf("cannot mix proof variants: have %d want %d", b.prooftype, proof.Variant)
 	}
 
 	hdr, err := rlp.EncodeToBytes(block.Header())
@@ -130,8 +149,8 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, 
 	b.tdsint = append(b.tdsint, new(big.Int).Set(td))
 	b.hashes = append(b.hashes, block.Hash())
 
-	if b.prooftype != 0 {
-		b.proofsRLP = append(b.proofsRLP, proofBytes)
+	if proof.Variant != ProofNone {
+		b.proofsRLP = append(b.proofsRLP, proof.Data)
 	}
 
 	if b.startNum == nil {
@@ -189,9 +208,7 @@ func (b *Builder) Finalize() error {
 			b.writtenBytes += uint64(n)
 		}
 	}
-
 	return b.writeIndex()
-
 }
 
 func uint256LE(v *big.Int) []byte {
