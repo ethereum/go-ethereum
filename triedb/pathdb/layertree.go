@@ -339,6 +339,8 @@ func (tree *layerTree) lookupStorage(accountHash common.Hash, slotHash common.Ha
 	return l, nil
 }
 
+// lookupNode returns the layer that is guaranteed to contain the trie node
+// data corresponding to the specified state root being queried.
 func (tree *layerTree) lookupNode(accountHash common.Hash, path string, state common.Hash) (layer, error) {
 	// Hold the read lock to prevent the unexpected layer changes
 	tree.lock.RLock()
