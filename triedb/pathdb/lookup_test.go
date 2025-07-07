@@ -54,16 +54,27 @@ func (l *lookup) addNodes(stateHash common.Hash, accountNodes map[string]*trieno
 		l.accountNodes[path] = list
 	}
 
-	// Add storage nodes
+	// Add storage nodes using sharded structure
 	for accountHash, slots := range storageNodes {
+		// Get or create the account-level shard array
+		accountShards, exists := l.storageNodes[accountHash]
+		if !exists {
+			// Initialize all 16 shards for this account
+			for i := 0; i < 16; i++ {
+				accountShards[i] = make(map[string][]common.Hash)
+			}
+			l.storageNodes[accountHash] = accountShards
+		}
+
 		for path := range slots {
-			key := accountHash.Hex() + path
-			list, exists := l.storageNodes[key]
+			shardIndex := getStorageShardIndex(path)
+			shardMap := accountShards[shardIndex]
+			list, exists := shardMap[path]
 			if !exists {
 				list = make([]common.Hash, 0, 16)
 			}
 			list = append(list, stateHash)
-			l.storageNodes[key] = list
+			shardMap[path] = list
 		}
 	}
 }
@@ -102,7 +113,7 @@ func BenchmarkAddNodes(b *testing.B) {
 
 			lookup := &lookup{
 				accountNodes: make(map[string][]common.Hash),
-				storageNodes: make(map[string][]common.Hash),
+				storageNodes: make(map[common.Hash][16]map[string][]common.Hash),
 			}
 
 			var stateHash common.Hash
@@ -114,7 +125,7 @@ func BenchmarkAddNodes(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				// Clear the nodes maps for each iteration
 				lookup.accountNodes = make(map[string][]common.Hash)
-				lookup.storageNodes = make(map[string][]common.Hash)
+				lookup.storageNodes = make(map[common.Hash][16]map[string][]common.Hash)
 
 				lookup.addNodes(stateHash, accountNodes, storageNodes)
 			}
