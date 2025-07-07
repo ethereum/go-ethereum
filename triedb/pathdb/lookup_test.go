@@ -54,27 +54,22 @@ func (l *lookup) addNodes(stateHash common.Hash, accountNodes map[string]*trieno
 		l.accountNodes[path] = list
 	}
 
-	// Add storage nodes using sharded structure
+	// Add storage nodes using single-level sharded structure
 	for accountHash, slots := range storageNodes {
-		// Get or create the account-level shard array
-		accountShards, exists := l.storageNodes[accountHash]
-		if !exists {
-			// Initialize all 16 shards for this account
-			for i := 0; i < 16; i++ {
-				accountShards[i] = make(map[string][]common.Hash)
-			}
-			l.storageNodes[accountHash] = accountShards
-		}
+		accountHex := accountHash.Hex()
 
 		for path := range slots {
-			shardIndex := getStorageShardIndex(path)
-			shardMap := accountShards[shardIndex]
-			list, exists := shardMap[path]
+			// Construct the combined key but use only path for shard calculation
+			key := accountHex + path
+			shardIndex := getStorageShardIndex(path) // Use only path for sharding
+			shardMap := l.storageNodes[shardIndex]
+
+			list, exists := shardMap[key]
 			if !exists {
 				list = make([]common.Hash, 0, 16)
 			}
 			list = append(list, stateHash)
-			shardMap[path] = list
+			shardMap[key] = list
 		}
 	}
 }
@@ -113,7 +108,10 @@ func BenchmarkAddNodes(b *testing.B) {
 
 			lookup := &lookup{
 				accountNodes: make(map[string][]common.Hash),
-				storageNodes: make(map[common.Hash][16]map[string][]common.Hash),
+			}
+			// Initialize all 16 storage node shards
+			for i := 0; i < 16; i++ {
+				lookup.storageNodes[i] = make(map[string][]common.Hash)
 			}
 
 			var stateHash common.Hash
@@ -125,7 +123,10 @@ func BenchmarkAddNodes(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				// Clear the nodes maps for each iteration
 				lookup.accountNodes = make(map[string][]common.Hash)
-				lookup.storageNodes = make(map[common.Hash][16]map[string][]common.Hash)
+				// Reinitialize all 16 storage node shards
+				for j := 0; j < 16; j++ {
+					lookup.storageNodes[j] = make(map[string][]common.Hash)
+				}
 
 				lookup.addNodes(stateHash, accountNodes, storageNodes)
 			}
