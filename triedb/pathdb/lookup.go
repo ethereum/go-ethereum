@@ -223,18 +223,16 @@ func (l *lookup) nodeTip(accountHash common.Hash, path string, stateID common.Ha
 func (l *lookup) addLayer(diff *diffLayer) {
 	defer func(now time.Time) {
 		lookupAddLayerTimer.UpdateSince(now)
+		log.Debug("PathDB lookup add layer", "id", diff.id, "block", diff.block, "elapsed", time.Since(now))
 	}(time.Now())
 
 	var (
 		wg    sync.WaitGroup
 		state = diff.rootHash()
 	)
-	st00 := time.Now()
-	var st0, st1, st2, st3 time.Duration
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		st := time.Now()
 		for accountHash := range diff.states.accountData {
 			list, exists := l.accounts[accountHash]
 			if !exists {
@@ -243,13 +241,11 @@ func (l *lookup) addLayer(diff *diffLayer) {
 			list = append(list, state)
 			l.accounts[accountHash] = list
 		}
-		st0 = time.Since(st)
 	}()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		st := time.Now()
 		for accountHash, slots := range diff.states.storageData {
 			for slotHash := range slots {
 				key := storageKey(accountHash, slotHash)
@@ -261,13 +257,11 @@ func (l *lookup) addLayer(diff *diffLayer) {
 				l.storages[key] = list
 			}
 		}
-		st1 = time.Since(st)
 	}()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		st := time.Now()
 		for path := range diff.nodes.accountNodes {
 			list, exists := l.accountNodes[path]
 			if !exists {
@@ -276,7 +270,6 @@ func (l *lookup) addLayer(diff *diffLayer) {
 			list = append(list, state)
 			l.accountNodes[path] = list
 		}
-		st2 = time.Since(st)
 	}()
 
 	wg.Add(1)
@@ -292,41 +285,29 @@ func (l *lookup) addLayer(diff *diffLayer) {
 			workChannels[i] = make(chan string, 10) // Buffer to avoid blocking
 		}
 
-		// Start 16 workers, each handling its own shard
+		// Start all workers, each handling its own shard
 		for shardIndex := 0; shardIndex < storageNodesShardCount; shardIndex++ {
 			go func(shardIdx int) {
 				defer storageWg.Done()
-				st := time.Now()
-				count := 0
 
 				shard := l.storageNodes[shardIdx]
 				for key := range workChannels[shardIdx] {
-					// Access the specific shard map (no lock needed as each worker owns its shard)
 					list, exists := shard[key]
 					if !exists {
 						list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
 					}
 					list = append(list, state)
 					shard[key] = list
-					count++
-				}
-
-				st3 := time.Since(st)
-				if st3 > time.Millisecond {
-					log.Info("PathDB lookup add storage nodes worker", "shard", shardIdx, "count", count, "elapsed", st3)
 				}
 			}(shardIndex)
 		}
 
 		// Distribute work to workers based on shard index
-		distributeStart := time.Now()
-		totalCount := 0
 		for accountHash, slots := range diff.nodes.storageNodes {
 			accountHex := accountHash.Hex()
 			for path := range slots {
 				shardIndex := getStorageShardIndex(path)
 				workChannels[shardIndex] <- accountHex + path
-				totalCount++
 			}
 		}
 
@@ -337,13 +318,9 @@ func (l *lookup) addLayer(diff *diffLayer) {
 
 		// Wait for all storage workers to complete
 		storageWg.Wait()
-		st3 = time.Since(distributeStart)
-
-		log.Info("PathDB lookup add storage nodes", "total_count", totalCount, "accounts", len(diff.nodes.storageNodes), "elapsed", st3)
 	}()
 
 	wg.Wait()
-	log.Info("PathDB lookup", "id", diff.id, "block", diff.block, "st0", st0, "st1", st1, "st2", st2, "st3", st3, "elapsed", time.Since(st00))
 }
 
 // removeFromList removes the specified element from the provided list.
@@ -375,6 +352,7 @@ func removeFromList(list []common.Hash, element common.Hash) (bool, []common.Has
 func (l *lookup) removeLayer(diff *diffLayer) error {
 	defer func(now time.Time) {
 		lookupRemoveLayerTimer.UpdateSince(now)
+		log.Debug("PathDB lookup remove layer", "id", diff.id, "block", diff.block, "elapsed", time.Since(now))
 	}(time.Now())
 
 	var (
