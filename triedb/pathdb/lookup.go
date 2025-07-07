@@ -51,10 +51,10 @@ type lookup struct {
 
 	accountNodes map[string][]common.Hash
 
-	// Optimized: Use sharded storage with fixed array to reduce map size
-	// Each account uses 16 smaller maps to distribute storage keys
-	// This reduces map lookup time from O(log n) with large n to O(log n) with small n
-	storageNodes map[common.Hash][16]map[string][]common.Hash
+	// Optimized: Use sharded storage with single-level map
+	// Key is accountHash.Hex() + path, distributed across 16 shards
+	// This eliminates the need for two-level map lookups
+	storageNodes [16]map[string][]common.Hash
 
 	// descendant is the callback indicating whether the layer with
 	// given root is a descendant of the one specified by `ancestor`.
@@ -62,15 +62,19 @@ type lookup struct {
 }
 
 // getStorageShardIndex returns the shard index for a given path
+// Uses only the path (not the full key) for sharding to achieve better locality:
+// - Same paths across different accounts will be in the same shard
+// - Avoids expensive string concatenation for shard calculation
+// - Provides better cache locality for similar storage operations
 func getStorageShardIndex(path string) int {
 	if len(path) == 0 {
 		return 0
 	}
-	// Use simple hash of the first few characters to distribute evenly
+	// Use simple hash of the path to distribute evenly
 	hash := 0
 	for i, r := range path {
 		hash = hash*31 + int(r)
-		if i >= 4 { // Only use first 4 characters to avoid expensive computation
+		if i >= 4 { // Use first 4 characters for good distribution
 			break
 		}
 	}
@@ -94,9 +98,13 @@ func newLookup(head layer, descendant func(state common.Hash, ancestor common.Ha
 		accounts:     make(map[common.Hash][]common.Hash),
 		storages:     make(map[[64]byte][]common.Hash),
 		accountNodes: make(map[string][]common.Hash),
-		storageNodes: make(map[common.Hash][16]map[string][]common.Hash),
 		descendant:   descendant,
 	}
+	// Initialize all 16 storage node shards
+	for i := 0; i < 16; i++ {
+		l.storageNodes[i] = make(map[string][]common.Hash)
+	}
+
 	// Apply the diff layers from bottom to top
 	for i := len(layers) - 1; i >= 0; i-- {
 		switch diff := layers[i].(type) {
@@ -195,10 +203,10 @@ func (l *lookup) nodeTip(accountHash common.Hash, path string, stateID common.Ha
 	if accountHash == (common.Hash{}) {
 		list = l.accountNodes[path]
 	} else {
-		if accountShards, exists := l.storageNodes[accountHash]; exists {
-			shardIndex := getStorageShardIndex(path)
-			list = accountShards[shardIndex][path]
-		}
+		// Construct the combined key but use only path for shard calculation
+		key := accountHash.Hex() + path
+		shardIndex := getStorageShardIndex(path) // Use only path for sharding
+		list = l.storageNodes[shardIndex][key]
 	}
 	for i := len(list) - 1; i >= 0; i-- {
 		// If the current state matches the stateID, or the requested state is a
@@ -294,30 +302,22 @@ func (l *lookup) addLayer(diff *diffLayer) {
 
 		for accountHash, slots := range diff.nodes.storageNodes {
 			st00 := time.Now()
+			accountHex := accountHash.Hex()
 			st01 := time.Now()
 			stHash += st01.Sub(st00)
-
-			// Get or create the account-level shard array
-			accountShards, exists := l.storageNodes[accountHash]
-			if !exists {
-				// Initialize all 16 shards for this account
-				for i := 0; i < 16; i++ {
-					accountShards[i] = make(map[string][]common.Hash)
-				}
-				l.storageNodes[accountHash] = accountShards
-			}
 
 			for path := range slots {
 				count += 1
 
 				st00 := time.Now()
-				// Calculate shard index
+				// Construct the combined key and find the correct shard
+				key := accountHex + path
 				shardIndex := getStorageShardIndex(path)
 				st01 := time.Now()
 
 				// Access the specific shard map
-				shardMap := accountShards[shardIndex]
-				list, exists := shardMap[path]
+				shardMap := l.storageNodes[shardIndex]
+				list, exists := shardMap[key]
 				st02 := time.Now()
 				if !exists {
 					list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
@@ -325,7 +325,7 @@ func (l *lookup) addLayer(diff *diffLayer) {
 				st03 := time.Now()
 				list = append(list, state)
 				st04 := time.Now()
-				shardMap[path] = list
+				shardMap[key] = list
 				st05 := time.Now()
 
 				stKey += st01.Sub(st00)
@@ -433,17 +433,19 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 
 	eg.Go(func() error {
 		for accountHash, slots := range diff.nodes.storageNodes {
-			accountShards := l.storageNodes[accountHash]
+			accountHex := accountHash.Hex()
 			for path := range slots {
+				// Construct the combined key and find the correct shard
+				key := accountHex + path
 				shardIndex := getStorageShardIndex(path)
-				found, list := removeFromList(accountShards[shardIndex][path], state)
+				found, list := removeFromList(l.storageNodes[shardIndex][key], state)
 				if !found {
 					return fmt.Errorf("storage lookup is not found, %x %x, state: %x", accountHash, path, state)
 				}
 				if len(list) != 0 {
-					accountShards[shardIndex][path] = list
+					l.storageNodes[shardIndex][key] = list
 				} else {
-					delete(accountShards[shardIndex], path)
+					delete(l.storageNodes[shardIndex], key)
 				}
 			}
 		}
