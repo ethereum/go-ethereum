@@ -26,6 +26,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+const storageNodesShardCount = 16
+
 // storageKey returns a key for uniquely identifying the storage slot.
 func storageKey(accountHash common.Hash, slotHash common.Hash) [64]byte {
 	var key [64]byte
@@ -51,10 +53,9 @@ type lookup struct {
 
 	accountNodes map[string][]common.Hash
 
-	// Optimized: Use sharded storage with single-level map
 	// Key is accountHash.Hex() + path, distributed across 16 shards
 	// This eliminates the need for two-level map lookups
-	storageNodes [16]map[string][]common.Hash
+	storageNodes [storageNodesShardCount]map[string][]common.Hash
 
 	// descendant is the callback indicating whether the layer with
 	// given root is a descendant of the one specified by `ancestor`.
@@ -62,26 +63,12 @@ type lookup struct {
 }
 
 // getStorageShardIndex returns the shard index for a given path
-// Uses only the path (not the full key) for sharding to achieve better locality:
-// - Same paths across different accounts will be in the same shard
-// - Avoids expensive string concatenation for shard calculation
-// - Provides better cache locality for similar storage operations
 func getStorageShardIndex(path string) int {
 	if len(path) == 0 {
 		return 0
 	}
-	// Use simple hash of the path to distribute evenly
-	hash := 0
-	for i, r := range path {
-		hash = hash*31 + int(r)
-		if i >= 8 { // Use first 8 characters for better distribution
-			break
-		}
-	}
-	if hash < 0 {
-		hash = -hash
-	}
-	return hash % 16
+	// use the first char of the path to determine the shard index
+	return int(path[0]) % storageNodesShardCount
 }
 
 // newLookup initializes the lookup structure.
@@ -101,7 +88,7 @@ func newLookup(head layer, descendant func(state common.Hash, ancestor common.Ha
 		descendant:   descendant,
 	}
 	// Initialize all 16 storage node shards
-	for i := 0; i < 16; i++ {
+	for i := 0; i < storageNodesShardCount; i++ {
 		l.storageNodes[i] = make(map[string][]common.Hash)
 	}
 
@@ -292,84 +279,71 @@ func (l *lookup) addLayer(diff *diffLayer) {
 		st2 = time.Since(st)
 	}()
 
-	// Use concurrent workers for storage nodes updates, one per shard
-	var storageWg sync.WaitGroup
-	storageWg.Add(16)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
 
-	// Create channels to distribute work to workers
-	type storageWork struct {
-		accountHash common.Hash
-		accountHex  string
-		path        string
-	}
+		// Use concurrent workers for storage nodes updates, one per shard
+		var storageWg sync.WaitGroup
+		storageWg.Add(storageNodesShardCount)
 
-	workChannels := make([]chan storageWork, 16)
-	for i := 0; i < 16; i++ {
-		workChannels[i] = make(chan storageWork, 1000) // Buffer to avoid blocking
-	}
-
-	// Start 16 workers, each handling its own shard
-	for shardIndex := 0; shardIndex < 16; shardIndex++ {
-		go func(shardIdx int) {
-			defer storageWg.Done()
-			st := time.Now()
-			count := 0
-
-			for work := range workChannels[shardIdx] {
-				// Construct the combined key
-				key := work.accountHex + work.path
-
-				// Access the specific shard map (no lock needed as each worker owns its shard)
-				shardMap := l.storageNodes[shardIdx]
-				list, exists := shardMap[key]
-				if !exists {
-					list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
-				}
-				list = append(list, state)
-				shardMap[key] = list
-				count++
-			}
-
-			st3 := time.Since(st)
-			if st3 > time.Millisecond {
-				log.Info("PathDB lookup add storage nodes worker", "shard", shardIdx, "count", count, "elapsed", st3)
-			}
-		}(shardIndex)
-	}
-
-	// Distribute work to workers based on shard index
-	distributeStart := time.Now()
-	totalCount := 0
-	for accountHash, slots := range diff.nodes.storageNodes {
-		accountHex := accountHash.Hex()
-		for path := range slots {
-			shardIndex := getStorageShardIndex(path)
-			workChannels[shardIndex] <- storageWork{
-				accountHash: accountHash,
-				accountHex:  accountHex,
-				path:        path,
-			}
-			totalCount++
+		workChannels := make([]chan string, storageNodesShardCount)
+		for i := 0; i < storageNodesShardCount; i++ {
+			workChannels[i] = make(chan string, 10) // Buffer to avoid blocking
 		}
-	}
 
-	// Close all channels to signal workers to finish
-	for i := 0; i < 16; i++ {
-		close(workChannels[i])
-	}
+		// Start 16 workers, each handling its own shard
+		for shardIndex := 0; shardIndex < storageNodesShardCount; shardIndex++ {
+			go func(shardIdx int) {
+				defer storageWg.Done()
+				st := time.Now()
+				count := 0
 
-	// Wait for all storage workers to complete
-	storageWg.Wait()
-	st3 = time.Since(distributeStart)
+				shard := l.storageNodes[shardIdx]
+				for key := range workChannels[shardIdx] {
+					// Access the specific shard map (no lock needed as each worker owns its shard)
+					list, exists := shard[key]
+					if !exists {
+						list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
+					}
+					list = append(list, state)
+					shard[key] = list
+					count++
+				}
 
-	if st3 > time.Millisecond {
+				st3 := time.Since(st)
+				if st3 > time.Millisecond {
+					log.Info("PathDB lookup add storage nodes worker", "shard", shardIdx, "count", count, "elapsed", st3)
+				}
+			}(shardIndex)
+		}
+
+		// Distribute work to workers based on shard index
+		distributeStart := time.Now()
+		totalCount := 0
+		for accountHash, slots := range diff.nodes.storageNodes {
+			accountHex := accountHash.Hex()
+			for path := range slots {
+				shardIndex := getStorageShardIndex(path)
+				workChannels[shardIndex] <- accountHex + path
+				totalCount++
+			}
+		}
+
+		// Close all channels to signal workers to finish
+		for i := 0; i < storageNodesShardCount; i++ {
+			close(workChannels[i])
+		}
+
+		// Wait for all storage workers to complete
+		storageWg.Wait()
+		st3 = time.Since(distributeStart)
+
 		log.Info("PathDB lookup add storage nodes", "total_count", totalCount, "accounts", len(diff.nodes.storageNodes), "elapsed", st3)
-	}
+	}()
 
 	wg.Wait()
-	if elapsed := time.Since(st00); elapsed > time.Millisecond {
-		log.Info("PathDB lookup", "id", diff.id, "block", diff.block, "st0", st0, "st1", st1, "st2", st2, "st3", st3, "elapsed", elapsed)
-	}
+	log.Info("PathDB lookup", "id", diff.id, "block", diff.block, "st0", st0, "st1", st1, "st2", st2, "st3", st3, "elapsed", time.Since(st00))
 }
 
 // removeFromList removes the specified element from the provided list.
