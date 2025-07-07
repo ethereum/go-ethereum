@@ -1,4 +1,4 @@
-package era
+package era2
 
 // The format can be summarized with the following expression:
 
@@ -60,7 +60,7 @@ const (
 
 type proofvar uint16
 
-type Builder2 struct {
+type Builder struct {
 	w   *e2store.Writer
 	buf *bytes.Buffer
 	sn  *snappy.Writer
@@ -88,16 +88,16 @@ type Builder2 struct {
 }
 
 // NewBuilder returns a new EraE Builder writing into the given io.Writer.
-func NewBuilder2(w io.Writer) *Builder2 {
+func NewBuilder(w io.Writer) *Builder {
 	buf := bytes.NewBuffer(nil)
-	return &Builder2{
+	return &Builder{
 		w:   e2store.NewWriter(w),
 		buf: buf,
 		sn:  snappy.NewBufferedWriter(buf),
 	}
 }
 
-func (b *Builder2) Add(block *types.Block, receipts types.Receipts, td *big.Int, proofBytes []byte, proofty proofvar) error {
+func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, proofBytes []byte, proofty proofvar) error {
 	if len(b.headersRLP) >= MaxEraESize {
 		return fmt.Errorf("exceeds MaxEraESize %d", MaxEraESize)
 	}
@@ -146,7 +146,7 @@ func (b *Builder2) Add(block *types.Block, receipts types.Receipts, td *big.Int,
 	return nil
 }
 
-func (b *Builder2) Finalize() error {
+func (b *Builder) Finalize() error {
 	if b.startNum == nil {
 		return errors.New("no blocks added, cannot finalize")
 	}
@@ -215,7 +215,7 @@ func decodeBigs(raw [][]byte) []*big.Int {
 }
 
 // snappyWrite is a small helper to take care snappy encoding and writing an e2store entry.
-func (b *Builder2) snappyWrite(typ uint16, in []byte) error {
+func (b *Builder) snappyWrite(typ uint16, in []byte) error {
 	var (
 		buf = b.buf
 		s   = b.sn
@@ -236,7 +236,7 @@ func (b *Builder2) snappyWrite(typ uint16, in []byte) error {
 	return nil
 }
 
-func (b *Builder2) writeSection(typ uint16, list [][]byte, useSnappy bool) ([]uint64, error) {
+func (b *Builder) writeSection(typ uint16, list [][]byte, useSnappy bool) ([]uint64, error) {
 	if len(list) == 0 {
 		return nil, errors.New("cannot write empty section")
 	}
@@ -261,7 +261,7 @@ func (b *Builder2) writeSection(typ uint16, list [][]byte, useSnappy bool) ([]ui
 	return offs, nil
 }
 
-func (b *Builder2) writeIndex() error {
+func (b *Builder) writeIndex() error {
 	count := uint64(len(b.headeroffsets))
 	compcount := uint64(3)
 	if len(b.tds) > 0 {
