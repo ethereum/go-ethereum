@@ -80,12 +80,14 @@ func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header, headTim
 		return 0
 	}
 	if !config.IsOsaka(config.LondonBlock, headTimestamp) {
+		// Pre-Osaka, we use the formula defined by EIP-4844.
 		return excessBlobGas - targetGas
 	}
 
-	// EIP-7918 (post-Osaka).
+	// EIP-7918 (post-Osaka) introduces a different formula for computing excess.
 	var (
-		reservePrice = new(big.Int).Mul(parent.BaseFee, big.NewInt(params.BlobBaseCost))
+		baseCost     = big.NewInt(params.BlobBaseCost)
+		reservePrice = baseCost.Mul(baseCost, parent.BaseFee)
 		blobPrice    = calcBlobPrice(config, parent)
 	)
 	if reservePrice.Cmp(blobPrice) > 0 {
