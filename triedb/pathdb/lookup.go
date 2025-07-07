@@ -27,6 +27,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// storageNodesShardCount is the number of shards used for storage nodes.
 const storageNodesShardCount = 16
 
 // storageKey returns a key for uniquely identifying the storage slot.
@@ -52,10 +53,17 @@ type lookup struct {
 	// where the slot was modified, with the order from oldest to newest.
 	storages map[[64]byte][]common.Hash
 
+	// accountNodes represents the mutation history for specific account
+	// trie nodes. The key is the trie path of the node, and the value is a slice
+	// of **diff layer** IDs indicating where the account was modified,
+	// with the order from oldest to newest.
 	accountNodes map[string][]common.Hash
 
-	// Key is accountHash.Hex() + path, distributed across 16 shards
-	// This eliminates the need for two-level map lookups
+	// storageNodes represents the mutation history for specific storage
+	// slot trie nodes, distributed across 16 shards for efficiency.
+	// The key is the account address hash and the trie path of the node,
+	// the value is a slice of **diff layer** IDs indicating where the
+	// slot was modified, with the order from oldest to newest.
 	storageNodes [storageNodesShardCount]map[string][]common.Hash
 
 	// descendant is the callback indicating whether the layer with
@@ -186,6 +194,17 @@ func (l *lookup) storageTip(accountHash common.Hash, slotHash common.Hash, state
 	return common.Hash{}
 }
 
+// nodeTip traverses the layer list associated with the given account and path
+// in reverse order to locate the first entry that either matches
+// the specified stateID or is a descendant of it.
+//
+// If found, the trie node data corresponding to the supplied stateID resides
+// in that layer. Otherwise, two scenarios are possible:
+//
+// (a) the trie node remains unmodified from the current disk layer up to
+// the state layer specified by the stateID: fallback to the disk layer for
+// data retrieval, (b) or the layer specified by the stateID is stale: reject
+// the data retrieval.
 func (l *lookup) nodeTip(accountHash common.Hash, path string, stateID common.Hash, base common.Hash) common.Hash {
 	var list []common.Hash
 	if accountHash == (common.Hash{}) {
@@ -448,17 +467,16 @@ func (l *lookup) removeStorageNodes(state common.Hash, nodes map[common.Hash]map
 		for accountHash, slots := range nodes {
 			accountHex := accountHash.Hex()
 			for path := range slots {
-				// Construct the combined key and find the correct shard
+				shard := l.storageNodes[getStorageShardIndex(path)]
 				key := accountHex + path
-				shardIndex := getStorageShardIndex(path)
-				found, list := removeFromList(l.storageNodes[shardIndex][key], state)
+				found, list := removeFromList(shard[key], state)
 				if !found {
 					return fmt.Errorf("storage lookup is not found, %x %x, state: %x", accountHash, path, state)
 				}
 				if len(list) != 0 {
-					l.storageNodes[shardIndex][key] = list
+					shard[key] = list
 				} else {
-					delete(l.storageNodes[shardIndex], key)
+					delete(shard, key)
 				}
 			}
 		}
