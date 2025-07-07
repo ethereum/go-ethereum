@@ -990,7 +990,6 @@ func TestOpCLZ(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-
 			// prepare a fresh stack and PC
 			stack := newstack()
 			pc := uint64(0)
