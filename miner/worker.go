@@ -66,7 +66,7 @@ type environment struct {
 
 // txFits reports whether the transaction fits into the block size limit.
 func (env *environment) txFitsSize(tx *types.Transaction) bool {
-	return env.size+tx.Size() < params.BlockRLPSizeCap-blockRLPSizeCapBuffer
+	return env.size+tx.Size() < params.MaxBlockSize-maxBlockSizeBufferZone
 }
 
 const (
@@ -74,12 +74,12 @@ const (
 	commitInterruptNewHead
 	commitInterruptResubmit
 	commitInterruptTimeout
-
-	// cap the size of blocks we will produce below the max allowed by
-	// EIP-7934.  This gives us buffer room if the estimated size of the
-	// block we are building is off from the actual encoded size.
-	blockRLPSizeCapBuffer = 1_000_000
 )
+
+// Block size is capped by the protocol at params.MaxBlockSize. When producing blocks, we
+// try to say below the size including a buffer zone, this is to avoid going over the
+// maximum size with auxilary data added into the block.
+const maxBlockSizeBufferZone = 1_000_000
 
 // newPayloadResult is the result of payload generation.
 type newPayloadResult struct {
@@ -115,7 +115,7 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 	// Check withdrawals fit max block size.
 	// Due to the cap on withdrawal count, this can actually never happen, but we still need to
 	// check to ensure the CL notices there's a problem if the withdrawal cap is ever lifted.
-	maxBlockSize := params.BlockRLPSizeCap - blockRLPSizeCapBuffer
+	maxBlockSize := params.MaxBlockSize - maxBlockSizeBufferZone
 	if genParam.withdrawals.Size() > maxBlockSize {
 		return &newPayloadResult{err: errors.New("withdrawals exceed max block size")}
 	}
