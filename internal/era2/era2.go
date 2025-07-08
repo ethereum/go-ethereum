@@ -68,7 +68,7 @@ type Era2 struct {
 	indstart                                          int64
 }
 
-func OpenEra(filename string) (*Era2, error) {
+func Open(filename string) (*Era2, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
