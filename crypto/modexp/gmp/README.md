@@ -17,7 +17,7 @@ You need to have GMP development libraries installed on your system:
 
 This package provides a GMP-backed implementation for modular exponentiation. The API can be expanded, however right now, the main usage is for the modexp precompile.
 
-There are currently two APIs. This is because its unclear if a direct API is better or using a syncPool with a more flexible API is better.
+There are currently two implementations: generic (using Go wrapper types) and cwrapper (direct C calls).
 
 ### Byte Array Interface (Recommended)
 
@@ -55,18 +55,6 @@ result.ExpMod(base, exp, mod)
 fmt.Printf("Result: %s\n", result)
 ```
 
-### Pooled Interface (High Performance)
-
-```go
-// Create a pool once
-pool := gmp.NewIntPool()
-
-// Use it for many operations
-for i := 0; i < 1000000; i++ {
-    result := gmp.ExpModPooled(pool, base, exp, mod)
-    // Process result...
-}
-```
 
 ## Testing
 
