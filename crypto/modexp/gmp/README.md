@@ -15,9 +15,9 @@ You need to have GMP development libraries installed on your system:
 
 ## Usage
 
-This package provides a GMP-backed implementation for modular exponentiation using direct C calls for maximum performance. The API can be expanded, however right now, the main usage is for the modexp precompile.
+This package provides a GMP-backed implementation for modular exponentiation using a direct C call to avoid multiple calls to cgo. The main usage is for the modexp precompile.
 
-### Byte Array Interface (Recommended)
+### Byte Array Interface
 
 ```go
 import "github.com/ethereum/go-ethereum/crypto/modexp/gmp"
@@ -32,8 +32,6 @@ if err != nil {
 }
 // result = 24 (2^10 mod 1000)
 ```
-
-
 
 ## Testing
 
