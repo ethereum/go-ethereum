@@ -77,7 +77,10 @@ var (
 			return common.Address{}, nil, nil, errors.New("GetABI returned nil")
 		  }
 		  {{range $pattern, $name := .Libraries}}
-			{{decapitalise $name}}Addr, _, _, _ := Deploy{{capitalise $name}}(auth, backend)
+			{{decapitalise $name}}Addr, tx, _, _ := Deploy{{capitalise $name}}(auth, backend)
+			if err := bind.WaitAccepted(context.Background(), backend, tx.Hash()); err != nil {
+			    return common.Address{}, nil, nil err
+			}
 			{{$contract.Type}}Bin = strings.ReplaceAll({{$contract.Type}}Bin, "__${{$pattern}}$__", {{decapitalise $name}}Addr.String()[2:])
 		  {{end}}
 		  address, tx, contract, err := bind.DeployContract(auth, *parsed, common.FromHex({{.Type}}Bin), backend {{range .Constructor.Inputs}}, {{.Name}}{{end}})
