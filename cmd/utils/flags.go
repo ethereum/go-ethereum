@@ -920,6 +920,10 @@ var (
 		Name:  "da.blob.beaconnode",
 		Usage: "Beacon node API endpoint",
 	}
+	DAAwsS3BlobAPIEndpointFlag = cli.StringFlag{
+		Name:  "da.blob.awss3",
+		Usage: "AWS S3 blob API endpoint",
+	}
 	DARecoveryModeFlag = cli.BoolFlag{
 		Name:  "da.recovery",
 		Usage: "Enable recovery mode for DA syncing",
@@ -1698,6 +1702,9 @@ func setDA(ctx *cli.Context, cfg *ethconfig.Config) {
 	}
 	if ctx.IsSet(DABeaconNodeAPIEndpointFlag.Name) {
 		cfg.DA.BeaconNodeAPIEndpoint = ctx.String(DABeaconNodeAPIEndpointFlag.Name)
+	}
+	if ctx.IsSet(DAAwsS3BlobAPIEndpointFlag.Name) {
+		cfg.DA.AwsS3BlobAPIEndpoint = ctx.String(DAAwsS3BlobAPIEndpointFlag.Name)
 	}
 	if ctx.IsSet(DARecoveryModeFlag.Name) {
 		cfg.DA.RecoveryMode = ctx.Bool(DARecoveryModeFlag.Name)

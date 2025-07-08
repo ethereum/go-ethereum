@@ -23,6 +23,7 @@ type Config struct {
 	BlobScanAPIEndpoint    string // BlobScan blob api endpoint
 	BlockNativeAPIEndpoint string // BlockNative blob api endpoint
 	BeaconNodeAPIEndpoint  string // Beacon node api endpoint
+	AwsS3BlobAPIEndpoint   string // AWS S3 blob data api endpoint
 
 	RecoveryMode   bool   // Recovery mode is used to override existing blocks with the blocks read from the pipeline and start from a specific L1 block and batch
 	InitialL1Block uint64 // L1 block in which the InitialBatch was committed (or any earlier L1 block but requires more RPC requests)
@@ -73,6 +74,9 @@ func NewSyncingPipeline(ctx context.Context, blockchain *core.BlockChain, genesi
 	}
 	if config.BlockNativeAPIEndpoint != "" {
 		blobClientList.AddBlobClient(blob_client.NewBlockNativeClient(config.BlockNativeAPIEndpoint))
+	}
+	if config.AwsS3BlobAPIEndpoint != "" {
+		blobClientList.AddBlobClient(blob_client.NewAwsS3Client(config.AwsS3BlobAPIEndpoint))
 	}
 	if blobClientList.Size() == 0 {
 		return nil, errors.New("DA syncing is enabled but no blob client is configured. Please provide at least one blob client via command line flag")

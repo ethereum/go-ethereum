@@ -114,6 +114,9 @@ func NewRollupSyncService(ctx context.Context, genesisConfig *params.ChainConfig
 	if config.BlockNativeAPIEndpoint != "" {
 		blobClientList.AddBlobClient(blob_client.NewBlockNativeClient(config.BlockNativeAPIEndpoint))
 	}
+	if config.AwsS3BlobAPIEndpoint != "" {
+		blobClientList.AddBlobClient(blob_client.NewAwsS3Client(config.AwsS3BlobAPIEndpoint))
+	}
 	if blobClientList.Size() == 0 {
 		return nil, errors.New("no blob client is configured for rollup verifier. Please provide at least one blob client via command line flag")
 	}
