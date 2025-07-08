@@ -64,6 +64,11 @@ type environment struct {
 	witness *stateless.Witness
 }
 
+// txFits reports whether the transaction fits into the block size limit.
+func (env *environment) txFitsSize(tx *types.Transaction) bool {
+	return env.size+tx.Size() < params.BlockRLPSizeCap-blockRLPSizeCapBuffer
+}
+
 const (
 	commitInterruptNone int32 = iota
 	commitInterruptNewHead
@@ -417,7 +422,7 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 
 		// if inclusion of the transaction would put the block size over the
 		// maximum we allow, don't add any more txs to the payload.
-		if isOsaka && env.size+tx.Size() > params.BlockRLPSizeCap-blockRLPSizeCapBuffer {
+		if !env.txFitsSize(tx) {
 			break
 		}
 
