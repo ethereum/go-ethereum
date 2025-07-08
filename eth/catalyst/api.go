@@ -517,7 +517,18 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 }
 
 // GetBlobsV2 returns a blob from the transaction pool.
+// Will return empty responses if blobs are missing.
 func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProofV2, error) {
+	return api.getBlobs(hashes, true)
+}
+
+// GetBlobsV3 returns a blob from the transaction pool.
+// Will return a best effort response for all the blobs that it can find.
+func (api *ConsensusAPI) GetBlobsV3(hashes []common.Hash) ([]*engine.BlobAndProofV2, error) {
+	return api.getBlobs(hashes, false)
+}
+
+func (api *ConsensusAPI) getBlobs(hashes []common.Hash, allowEmptyResponse bool) ([]*engine.BlobAndProofV2, error) {
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
@@ -528,10 +539,12 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 	// Optimization: check first if all blobs are available, if not, return empty response
 	if available != len(hashes) {
 		getBlobsV2RequestMiss.Inc(1)
-		return nil, nil
+		if allowEmptyResponse {
+			return nil, nil
+		}
+	} else {
+		getBlobsV2RequestHit.Inc(1)
 	}
-	getBlobsV2RequestHit.Inc(1)
-
 	// pull up the blob hashes
 	var (
 		res      = make([]*engine.BlobAndProofV2, len(hashes))
@@ -548,8 +561,11 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 			continue
 		}
 		if sidecar == nil {
-			// not found, return empty response
-			return nil, nil
+			// not found
+			if allowEmptyResponse {
+				return nil, nil
+			}
+			continue
 		}
 		if sidecar.Version != 1 {
 			log.Info("GetBlobs queried V0 transaction: index %v, blobhashes %v", index, sidecar.BlobHashes())
