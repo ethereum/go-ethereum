@@ -498,13 +498,19 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 }
 
 func (c *bigModExp) Run(input []byte) ([]byte, error) {
-
-	// Note: This can be done more efficiently
-	var (
-		baseLen = new(big.Int).SetBytes(getData(input, 0, 32)).Uint64()
-		expLen  = new(big.Int).SetBytes(getData(input, 32, 32)).Uint64()
-		modLen  = new(big.Int).SetBytes(getData(input, 64, 32)).Uint64()
-	)
+	// Extract lengths - they're 32-byte big-endian integers
+	// with the actual uint64 value in the last 8 bytes
+	var baseLen, expLen, modLen uint64
+	if len(input) >= 32 {
+		baseLen = binary.BigEndian.Uint64(input[24:32])
+	}
+	if len(input) >= 64 {
+		expLen = binary.BigEndian.Uint64(input[56:64])
+	}
+	if len(input) >= 96 {
+		modLen = binary.BigEndian.Uint64(input[88:96])
+	}
+	// TODO: We could combine this if second if statement with the one above
 	if len(input) > 96 {
 		input = input[96:]
 	} else {
@@ -520,9 +526,9 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 	}
 	// Retrieve the operands and execute the exponentiation
 	var (
-		base = getData(input, 0, baseLen)
-		exp  = getData(input, baseLen, expLen)
-		mod  = getData(input, baseLen+expLen, modLen)
+		base = getDataNoPadding(input, 0, baseLen)
+		exp  = getDataNoPadding(input, baseLen, expLen)
+		mod  = getDataNoPadding(input, baseLen+expLen, modLen)
 	)
 	
 	// Use the modexp implementation

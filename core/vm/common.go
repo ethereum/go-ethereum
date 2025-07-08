@@ -53,6 +53,10 @@ func calcMemSize64WithUint(off *uint256.Int, length64 uint64) (uint64, bool) {
 // getData returns a slice from the data based on the start and size and pads
 // up to size with zero's. This function is overflow safe.
 func getData(data []byte, start uint64, size uint64) []byte {
+	unpaddedData := getDataNoPadding(data, start, size)
+	return common.RightPadBytes(unpaddedData, int(size))
+}
+func getDataNoPadding(data []byte, start uint64, size uint64) []byte {
 	length := uint64(len(data))
 	if start > length {
 		start = length
@@ -61,7 +65,7 @@ func getData(data []byte, start uint64, size uint64) []byte {
 	if end > length {
 		end = length
 	}
-	return common.RightPadBytes(data[start:end], int(size))
+	return data[start:end]
 }
 
 func getDataAndAdjustedBounds(data []byte, start uint64, size uint64) (codeCopyPadded []byte, actualStart uint64, sizeNonPadded uint64) {
