@@ -126,7 +126,7 @@ func latestBlobConfig(cfg *params.ChainConfig, time uint64) *params.BlobConfig {
 	}
 }
 
-// MaxBlobsPerBlock returns the maximum blob gas that can be spent in a block at the given timestamp.
+// MaxBlobGasPerBlock returns the maximum blob gas that can be spent in a block at the given timestamp.
 func MaxBlobGasPerBlock(cfg *params.ChainConfig, time uint64) uint64 {
 	return uint64(MaxBlobsPerBlock(cfg, time)) * params.BlobTxBlobGasPerBlob
 }
