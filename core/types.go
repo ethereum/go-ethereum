@@ -18,6 +18,7 @@ package core
 
 import (
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -57,4 +58,7 @@ type ProcessResult struct {
 	Requests [][]byte
 	Logs     []*types.Log
 	GasUsed  uint64
+
+	// Time measurements
+	dynamicGasCalculation time.Duration
 }
