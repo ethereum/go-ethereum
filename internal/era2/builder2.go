@@ -112,7 +112,7 @@ func NewBuilder(w io.Writer) *Builder {
 	}
 }
 
-func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, proof *Proof) error {
+func (b *Builder) Add(header types.Header, body types.Body, receipts types.Receipts, blockhash common.Hash, blocknum uint64, td *big.Int, proof *Proof) error {
 	if len(b.headersRLP) >= MaxEraESize {
 		return fmt.Errorf("exceeds MaxEraESize %d", MaxEraESize)
 	}
@@ -124,16 +124,20 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, 
 	}
 
 	if len(b.headersRLP) == 0 {
-		b.prooftype = proof.Variant
+		if proof == nil {
+			b.prooftype = ProofNone
+		} else {
+			b.prooftype = proof.Variant
+		}
 	} else if proof.Variant != b.prooftype {
 		return fmt.Errorf("cannot mix proof variants: have %d want %d", b.prooftype, proof.Variant)
 	}
 
-	hdr, err := rlp.EncodeToBytes(block.Header())
+	hdr, err := rlp.EncodeToBytes(header)
 	if err != nil {
 		return fmt.Errorf("error encoding block header: %w", err)
 	}
-	bod, err := rlp.EncodeToBytes(block.Body())
+	bod, err := rlp.EncodeToBytes(body)
 	if err != nil {
 		return fmt.Errorf("error encoding block header: %w", err)
 	}
@@ -147,14 +151,14 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, 
 	b.receiptsRLP = append(b.receiptsRLP, rct)
 	b.tds = append(b.tds, uint256LE(td))
 	b.tdsint = append(b.tdsint, new(big.Int).Set(td))
-	b.hashes = append(b.hashes, block.Hash())
+	b.hashes = append(b.hashes, blockhash)
 
-	if proof.Variant != ProofNone {
+	if b.prooftype != ProofNone {
 		b.proofsRLP = append(b.proofsRLP, proof.Data)
 	}
 
 	if b.startNum == nil {
-		sn := block.NumberU64()
+		sn := blocknum
 		b.startNum = &sn
 		if n, err := b.w.Write(TypeVersion, nil); err != nil {
 			return fmt.Errorf("error writing version entry: %w", err)
@@ -165,50 +169,51 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, 
 	return nil
 }
 
-func (b *Builder) Finalize() error {
+func (b *Builder) Finalize() (common.Hash, error) {
 	if b.startNum == nil {
-		return errors.New("no blocks added, cannot finalize")
+		return common.Hash{}, errors.New("no blocks added, cannot finalize")
 	}
 	var err error
 	b.headeroffsets, err = b.writeSection(TypeCompressedHeader, b.headersRLP, true)
 	if err != nil {
-		return fmt.Errorf("error writing compressed headers: %w", err)
+		return common.Hash{}, fmt.Errorf("error writing compressed headers: %w", err)
 	}
 	b.bodyoffsets, err = b.writeSection(TypeCompressedBody, b.bodiesRLP, true)
 	if err != nil {
-		return fmt.Errorf("error writing compressed bodies: %w", err)
+		return common.Hash{}, fmt.Errorf("error writing compressed bodies: %w", err)
 	}
 	b.receiptoffsets, err = b.writeSection(TypeCompressedReceipts, b.receiptsRLP, true)
 	if err != nil {
-		return fmt.Errorf("error writing compressed receipts: %w", err)
+		return common.Hash{}, fmt.Errorf("error writing compressed receipts: %w", err)
 	}
 
 	if len(b.tds) > 0 {
 		b.tdoff, err = b.writeSection(TypeTotalDifficulty, b.tds, false)
 		if err != nil {
-			return fmt.Errorf("error writing total difficulties: %w", err)
+			return common.Hash{}, fmt.Errorf("error writing total difficulties: %w", err)
 		}
 	}
 
 	if b.prooftype != 0 {
 		b.proofoffsets, err = b.writeSection(uint16(b.prooftype), b.proofsRLP, true)
 		if err != nil {
-			return fmt.Errorf("error writing proofs: %w", err)
+			return common.Hash{}, fmt.Errorf("error writing proofs: %w", err)
 		}
 	}
 
+	var accRoot common.Hash
 	if len(b.hashes) > 0 {
-		accRoot, err := ComputeAccumulator(b.hashes, b.tdsint)
+		accRoot, err = ComputeAccumulator(b.hashes, b.tdsint)
 		if err != nil {
-			return fmt.Errorf("error calculating accumulator root: %w", err)
+			return common.Hash{}, fmt.Errorf("error calculating accumulator root: %w", err)
 		}
 		if n, err := b.w.Write(TypeAccumulatorRoot, accRoot[:]); err != nil {
-			return fmt.Errorf("error writing accumulator root: %w", err)
+			return common.Hash{}, fmt.Errorf("error writing accumulator root: %w", err)
 		} else {
 			b.writtenBytes += uint64(n)
 		}
 	}
-	return b.writeIndex()
+	return accRoot, b.writeIndex()
 }
 
 func uint256LE(v *big.Int) []byte {
