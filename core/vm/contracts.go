@@ -498,6 +498,8 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 }
 
 func (c *bigModExp) Run(input []byte) ([]byte, error) {
+
+	// Note: This can be done more efficiently
 	var (
 		baseLen = new(big.Int).SetBytes(getData(input, 0, 32)).Uint64()
 		expLen  = new(big.Int).SetBytes(getData(input, 32, 32)).Uint64()
