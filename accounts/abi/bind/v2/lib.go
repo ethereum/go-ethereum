@@ -29,6 +29,8 @@ package bind
 import (
 	"context"
 	"errors"
+	"time"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -36,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-	"time"
 )
 
 // ContractEvent is a type constraint for ABI event types.
@@ -268,7 +269,8 @@ func DefaultDeployer(opts *TransactOpts, backend ContractBackend) DeployFn {
 		if err != nil {
 			return common.Address{}, nil, err
 		}
-		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 		if err := waitAccepted(ctx, backend, tx.Hash()); err != nil {
 			return common.Address{}, nil, err
 		}
