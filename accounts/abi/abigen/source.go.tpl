@@ -4,7 +4,7 @@
 package {{.Package}}
 
 import (
-    "context"
+	"context"
 	"math/big"
 	"strings"
 	"time"
