@@ -261,17 +261,10 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			}
 		}
 
-		// Get the operation from the jump table and validate the stack to ensure there are
-		// enough stack items available to perform the operation.
+		// Get the operation from the jump table
 		op = contract.GetOp(pc)
 		operation := jumpTable[op]
 		cost = operation.constantGas // For tracing
-		// Validate stack
-		if sLen := stack.len(); sLen < operation.minStack {
-			return nil, traceAndReturnError(&ErrStackUnderflow{stackLen: sLen, required: operation.minStack})
-		} else if sLen > operation.maxStack {
-			return nil, traceAndReturnError(&ErrStackOverflow{stackLen: sLen, limit: operation.maxStack})
-		}
 		// for tracing: this gas consumption event is emitted in the executeWithTracer wrapper.
 		if contract.Gas < cost {
 			return nil, traceAndReturnError(ErrOutOfGas)

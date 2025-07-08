@@ -286,7 +286,7 @@ func TestInternals(t *testing.T) {
 			name:   "Stack depletion in LOG0",
 			code:   []byte{byte(vm.LOG3)},
 			tracer: mkTracer("callTracer", json.RawMessage(`{ "withLog": true }`)),
-			want:   fmt.Sprintf(`{"from":"%s","gas":"0x13880","gasUsed":"0x13880","to":"0x00000000000000000000000000000000deadbeef","input":"0x","error":"stack underflow (0 \u003c=\u003e 5)","value":"0x0","type":"CALL"}`, originHex),
+			want:   fmt.Sprintf(`{"from":"%s","gas":"0x13880","gasUsed":"0x13880","to":"0x00000000000000000000000000000000deadbeef","input":"0x","error":"stack underflow (0 \u003c=\u003e 2)","value":"0x0","type":"CALL"}`, originHex),
 		},
 		{
 			name: "Mem expansion in LOG0",

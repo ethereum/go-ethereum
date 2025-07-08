@@ -20,13 +20,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -77,7 +77,7 @@ func init() {
 		"sdiv":    opSdiv,
 		"mod":     opMod,
 		"smod":    opSmod,
-		"exp":     opExp,
+		"exp":     opExpFrontier,
 		"signext": opSignExtend,
 		"lt":      opLt,
 		"gt":      opGt,
@@ -107,11 +107,11 @@ func testTwoOperandOp(t *testing.T, tests []TwoOperandTestcase, opFn executionFu
 		expected := new(uint256.Int).SetBytes(common.Hex2Bytes(test.Expected))
 		stack.push(x)
 		stack.push(y)
-		opFn(&pc, evm.interpreter, &ScopeContext{nil, stack, nil})
+		opFn(&pc, evm.interpreter, &ScopeContext{nil, stack, &Contract{Gas: math.MaxUint64}})
 		if len(stack.data) != 1 {
 			t.Errorf("Expected one item on stack after %v, got %d: ", name, len(stack.data))
 		}
-		actual := stack.pop()
+		actual, _ := stack.pop(0)
 
 		if actual.Cmp(expected) != 0 {
 			t.Errorf("Testcase %v %d, %v(%x, %x): expected  %x, got %x", name, i, name, x, y, expected, actual)
@@ -222,7 +222,7 @@ func TestAddMod(t *testing.T) {
 		stack.push(y)
 		stack.push(x)
 		opAddmod(&pc, evm.interpreter, &ScopeContext{nil, stack, nil})
-		actual := stack.pop()
+		actual, _ := stack.pop(0)
 		if actual.Cmp(expected) != 0 {
 			t.Errorf("Testcase %d, expected  %x, got %x", i, expected, actual)
 		}
@@ -248,7 +248,7 @@ func TestWriteExpectedValues(t *testing.T) {
 			stack.push(x)
 			stack.push(y)
 			opFn(&pc, evm.interpreter, &ScopeContext{nil, stack, nil})
-			actual := stack.pop()
+			actual, _ := stack.pop(0)
 			result[i] = TwoOperandTestcase{param.x, param.y, fmt.Sprintf("%064x", actual)}
 		}
 		return result
@@ -283,7 +283,7 @@ func opBenchmark(bench *testing.B, op executionFunc, args ...string) {
 	var (
 		evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
 		stack = newstack()
-		scope = &ScopeContext{nil, stack, nil}
+		scope = &ScopeContext{nil, stack, &Contract{Gas: math.MaxUint64}}
 	)
 	// convert args
 	intArgs := make([]*uint256.Int, len(args))
@@ -297,7 +297,7 @@ func opBenchmark(bench *testing.B, op executionFunc, args ...string) {
 			stack.push(arg)
 		}
 		op(&pc, evm.interpreter, scope)
-		stack.pop()
+		stack.pop(0)
 	}
 	bench.StopTimer()
 
@@ -401,7 +401,7 @@ func BenchmarkOpExp(b *testing.B) {
 	x := alphabetSoup
 	y := alphabetSoup
 
-	opBenchmark(b, opExp, x, y)
+	opBenchmark(b, opExpFrontier, x, y)
 }
 
 func BenchmarkOpSignExtend(b *testing.B) {
@@ -595,7 +595,7 @@ func TestOpTstore(t *testing.T) {
 	if stack.len() != 1 {
 		t.Fatal("stack wrong size")
 	}
-	val := stack.peek()
+	val, _ := stack.pop(1)
 	if !bytes.Equal(val.Bytes(), value) {
 		t.Fatal("incorrect element read from transient storage")
 	}
@@ -676,15 +676,6 @@ func TestCreate2Addresses(t *testing.T) {
 		code := common.FromHex(tt.code)
 		codeHash := crypto.Keccak256(code)
 		address := crypto.CreateAddress2(origin, salt, codeHash)
-		/*
-			stack          := newstack()
-			// salt, but we don't need that for this test
-			stack.push(big.NewInt(int64(len(code)))) //size
-			stack.push(big.NewInt(0)) // memstart
-			stack.push(big.NewInt(0)) // value
-			gas, _ := gasCreate2(params.GasTable{}, nil, nil, stack, nil, 0)
-			fmt.Printf("Example %d\n* address `0x%x`\n* salt `0x%x`\n* init_code `0x%x`\n* gas (assuming no mem expansion): `%v`\n* result: `%s`\n\n", i,origin, salt, code, gas, address.String())
-		*/
 		expected := common.BytesToAddress(common.FromHex(tt.expected))
 		if !bytes.Equal(expected.Bytes(), address.Bytes()) {
 			t.Errorf("test %d: expected %s, got %s", i, expected.String(), address.String())
@@ -713,7 +704,7 @@ func TestRandom(t *testing.T) {
 		if len(stack.data) != 1 {
 			t.Errorf("Expected one item on stack after %v, got %d: ", tt.name, len(stack.data))
 		}
-		actual := stack.pop()
+		actual, _ := stack.pop(0)
 		expected, overflow := uint256.FromBig(new(big.Int).SetBytes(tt.random.Bytes()))
 		if overflow {
 			t.Errorf("Testcase %v: invalid overflow", tt.name)
@@ -755,7 +746,7 @@ func TestBlobHash(t *testing.T) {
 		if len(stack.data) != 1 {
 			t.Errorf("Expected one item on stack after %v, got %d: ", tt.name, len(stack.data))
 		}
-		actual := stack.pop()
+		actual, _ := stack.pop(0)
 		expected, overflow := uint256.FromBig(new(big.Int).SetBytes(tt.expect.Bytes()))
 		if overflow {
 			t.Errorf("Testcase %v: invalid overflow", tt.name)
@@ -868,37 +859,20 @@ func TestOpMCopy(t *testing.T) {
 		stack.push(src)
 		stack.push(dst)
 		wantErr := (tc.wantGas == 0)
-		// Calc mem expansion
-		var memorySize uint64
-		if memSize, overflow := memoryMcopy(stack); overflow {
-			if wantErr {
-				continue
-			}
-			t.Errorf("overflow")
-		} else {
-			var overflow bool
-			if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
-				t.Error(ErrGasUintOverflow)
-			}
-		}
-		// and the dynamic cost
-		var haveGas uint64
-		if dynamicCost, err := gasMcopy(evm, nil, stack, mem, memorySize); err != nil {
-			t.Error(err)
-		} else {
-			haveGas = GasFastestStep + dynamicCost
-		}
-		// Expand mem
-		if memorySize > 0 {
-			mem.Resize(memorySize)
-		}
 		// Do the copy
-		opMcopy(&pc, evm.interpreter, &ScopeContext{mem, stack, contract})
+		_, err := opMcopy(&pc, evm.interpreter, &ScopeContext{mem, stack, contract})
+		if wantErr {
+			if err == nil {
+				t.Error("wanted error")
+			}
+			continue
+		}
 		want := common.FromHex(strings.ReplaceAll(tc.want, " ", ""))
 		if have := mem.store; !bytes.Equal(want, have) {
 			t.Errorf("case %d: \nwant: %#x\nhave: %#x\n", i, want, have)
 		}
 		wantGas := tc.wantGas
+		haveGas := 30_000_000 - contract.Gas + GasFastestStep
 		if haveGas != wantGas {
 			t.Errorf("case %d: gas wrong, want %d have %d\n", i, wantGas, haveGas)
 		}
@@ -970,7 +944,7 @@ func TestPush(t *testing.T) {
 		pc := new(uint64)
 		*pc = uint64(i)
 		push32(pc, nil, scope)
-		res := scope.Stack.pop()
+		res, _ := scope.Stack.pop(0)
 		if have := res.Hex(); have != want {
 			t.Fatalf("case %d, have %v want %v", i, have, want)
 		}
@@ -1010,7 +984,7 @@ func TestOpCLZ(t *testing.T) {
 		if gotLen := stack.len(); gotLen != 1 {
 			t.Fatalf("stack length = %d; want 1", gotLen)
 		}
-		result := stack.pop()
+		result, _ := stack.pop(0)
 		if got := result.Uint64(); got != tc.want {
 			t.Fatalf("clz(%q) = %d; want %d", tc.inputHex, got, tc.want)
 		}
