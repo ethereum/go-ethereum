@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/crypto/modexp"
 	"github.com/ethereum/go-ethereum/crypto/secp256r1"
 	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/crypto/ripemd160"
@@ -517,21 +518,17 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 	}
 	// Retrieve the operands and execute the exponentiation
 	var (
-		base = new(big.Int).SetBytes(getData(input, 0, baseLen))
-		exp  = new(big.Int).SetBytes(getData(input, baseLen, expLen))
-		mod  = new(big.Int).SetBytes(getData(input, baseLen+expLen, modLen))
-		v    []byte
+		base = getData(input, 0, baseLen)
+		exp  = getData(input, baseLen, expLen)
+		mod  = getData(input, baseLen+expLen, modLen)
 	)
-	switch {
-	case mod.BitLen() == 0:
-		// Modulo 0 is undefined, return zero
-		return common.LeftPadBytes([]byte{}, int(modLen)), nil
-	case base.BitLen() == 1: // a bit length of 1 means it's 1 (or -1).
-		//If base == 1, then we can just return base % mod (if mod >= 1, which it is)
-		v = base.Mod(base, mod).Bytes()
-	default:
-		v = base.Exp(base, exp, mod).Bytes()
+	
+	// Use the modexp implementation
+	v, err := modexp.ModExp(base, exp, mod)
+	if err != nil {
+		return nil, err
 	}
+	
 	return common.LeftPadBytes(v, int(modLen)), nil
 }
 
