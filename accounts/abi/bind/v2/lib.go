@@ -242,7 +242,7 @@ func waitAccepted(ctx context.Context, d ContractBackend, txHash common.Hash) er
 			return nil
 		}
 
-		if errors.Is(err, ethereum.NotFound) { // TODO: check this is emitted
+		if errors.Is(err, ethereum.NotFound) {
 			logger.Trace("Transaction not yet accepted")
 		} else {
 			logger.Trace("Transaction submission failed", "err", err)
