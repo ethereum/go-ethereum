@@ -4,8 +4,10 @@
 package {{.Package}}
 
 import (
+    "context"
 	"math/big"
 	"strings"
+	"time"
 	"errors"
 
 	ethereum "github.com/ethereum/go-ethereum"
@@ -27,6 +29,8 @@ var (
 	_ = types.BloomLookup
 	_ = event.NewSubscription
 	_ = abi.ConvertType
+	_ = time.Tick
+	_ = context.Background
 )
 
 {{$structs := .Structs}}
@@ -78,8 +82,9 @@ var (
 		  }
 		  {{range $pattern, $name := .Libraries}}
 			{{decapitalise $name}}Addr, tx, _, _ := Deploy{{capitalise $name}}(auth, backend)
-			if err := bind.WaitAccepted(context.Background(), backend, tx.Hash()); err != nil {
-			    return common.Address{}, nil, nil err
+			ctx, _ := context.WithTimeout(context.Background(), 5 * time.Second)
+			if err := bind.WaitAccepted(ctx, backend, tx); err != nil {
+			    return common.Address{}, nil, nil, err
 			}
 			{{$contract.Type}}Bin = strings.ReplaceAll({{$contract.Type}}Bin, "__${{$pattern}}$__", {{decapitalise $name}}Addr.String()[2:])
 		  {{end}}

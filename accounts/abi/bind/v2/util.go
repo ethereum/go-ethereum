@@ -76,7 +76,7 @@ func WaitDeployed(ctx context.Context, b DeployBackend, hash common.Hash) (commo
 	return receipt.ContractAddress, err
 }
 
-func WaitAccepted(ctx context.Context, d DeployBackend, txHash common.Hash) error {
+func WaitAccepted(ctx context.Context, d ContractBackend, txHash common.Hash) error {
 	queryTicker := time.NewTicker(time.Second)
 	defer queryTicker.Stop()
 	logger := log.New("hash", txHash)
