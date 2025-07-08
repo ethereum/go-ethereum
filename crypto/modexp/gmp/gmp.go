@@ -97,6 +97,8 @@ import (
 
 // ModExp performs modular exponentiation using the C implementation directly
 // This is a lower-level function that bypasses the Go wrapper types
+//
+// This is thread safe.
 func ModExp(base, exp, mod []byte) ([]byte, error) {
     // Handle empty modulus - return empty result (EVM behavior)
     if len(mod) == 0 {
@@ -108,6 +110,7 @@ func ModExp(base, exp, mod []byte) ([]byte, error) {
     resultLen := C.size_t(len(result))
     
     // Handle empty slices - pass a dummy non-nil pointer with length 0
+    // This avoids UB when the length is zero
     dummy := C.uint8_t(0)
     var basePtr, expPtr, modPtr *C.uint8_t = &dummy, &dummy, &dummy
     

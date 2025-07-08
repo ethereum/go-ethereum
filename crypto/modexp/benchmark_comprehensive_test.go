@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto/modexp/bigint"
-	gmpcwrapper "github.com/ethereum/go-ethereum/crypto/modexp/gmp/cwrapper"
+	"github.com/ethereum/go-ethereum/crypto/modexp/gmp"
 )
 
 // generateWorstCase generates a byte array with all bits set to 1
@@ -43,7 +43,7 @@ func BenchmarkComprehensive(b *testing.B) {
 		fn   func([]byte, []byte, []byte) ([]byte, error)
 	}{
 		{"BigInt", bigint.ModExp},
-		{"GMPCWrapper", gmpcwrapper.ModExp},
+		{"GMP", gmp.ModExp},
 	}
 
 	for _, tc := range testCases {
@@ -94,7 +94,7 @@ func BenchmarkWorstCaseOnly(b *testing.B) {
 		fn   func([]byte, []byte, []byte) ([]byte, error)
 	}{
 		{"BigInt", bigint.ModExp},
-		{"GMPCWrapper", gmpcwrapper.ModExp},
+		{"GMP", gmp.ModExp},
 	}
 
 	b.Run("AllFF", func(b *testing.B) {
@@ -139,7 +139,7 @@ func BenchmarkMemoryProfile(b *testing.B) {
 		fn   func([]byte, []byte, []byte) ([]byte, error)
 	}{
 		{"BigInt", bigint.ModExp},
-		{"GMPCWrapper", gmpcwrapper.ModExp},
+		{"GMP", gmp.ModExp},
 	}
 
 	for _, size := range sizes {
@@ -213,7 +213,7 @@ func BenchmarkComparison(b *testing.B) {
 			
 			b.Run("GMPCWrapper", func(b *testing.B) {
 				for i := 0; i < b.N; i++ {
-					_, _ = gmpcwrapper.ModExp(data.base, data.exp, data.mod)
+					_, _ = gmp.ModExp(data.base, data.exp, data.mod)
 				}
 			})
 		})
