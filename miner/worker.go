@@ -78,7 +78,7 @@ const (
 
 // Block size is capped by the protocol at params.MaxBlockSize. When producing blocks, we
 // try to say below the size including a buffer zone, this is to avoid going over the
-// maximum size with auxilary data added into the block.
+// maximum size with auxiliary data added into the block.
 const maxBlockSizeBufferZone = 1_000_000
 
 // newPayloadResult is the result of payload generation.
