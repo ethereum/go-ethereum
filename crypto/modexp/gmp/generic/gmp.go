@@ -91,18 +91,6 @@ func (z *Int) Bytes() []byte {
     return buf
 }
 
-// String returns the decimal representation of z
-func (z *Int) String() string {
-    if z == nil {
-        return "<nil>"
-    }
-    
-    // Get string from GMP
-    cs := C.mpz_get_str(nil, 10, &z.mpz[0])
-    defer C.free(unsafe.Pointer(cs))
-    
-    return C.GoString(cs)
-}
 
 // BitLen returns the number of bits required to represent z
 func (z *Int) BitLen() int {
