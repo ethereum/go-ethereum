@@ -6,8 +6,8 @@ import (
     "testing"
 )
 
-// TestWrapperVsExisting compares the wrapper with existing GMP bindings
-func TestWrapperVsExisting(t *testing.T) {
+// TestWrapperVsBigInt compares the wrapper with Go's math/big
+func TestWrapperVsBigInt(t *testing.T) {
     tests := []struct {
         name string
         base string
@@ -60,22 +60,16 @@ func TestWrapperVsExisting(t *testing.T) {
                 t.Fatalf("Wrapper error: %v", err)
             }
             
-            // Test with existing GMP bindings
-            gmpBase := NewInt()
-            gmpBase.SetString(tt.base, 10)
-            gmpExp := NewInt()
-            gmpExp.SetString(tt.exp, 10)
-            gmpMod := NewInt()
-            gmpMod.SetString(tt.mod, 10)
-            gmpResult := NewInt()
-            gmpResult.ExpMod(gmpBase, gmpExp, gmpMod)
+            // Test with math/big
+            bigResult := new(big.Int)
+            bigResult.Exp(baseBig, expBig, modBig)
             
-            existingResult := gmpResult.Bytes()
+            expectedResult := bigResult.Bytes()
             
             // Compare results
-            if !bytes.Equal(wrapperResult, existingResult) {
-                t.Errorf("Results differ:\nWrapper:  %x\nExisting: %x", 
-                    wrapperResult, existingResult)
+            if !bytes.Equal(wrapperResult, expectedResult) {
+                t.Errorf("Results differ:\nWrapper:  %x\nExpected: %x", 
+                    wrapperResult, expectedResult)
             }
         })
     }
@@ -100,7 +94,7 @@ func BenchmarkModExp(b *testing.B) {
     }
 }
 
-func BenchmarkModExpExisting(b *testing.B) {
+func BenchmarkModExpBigInt(b *testing.B) {
     baseBytes := make([]byte, 60)
     expBytes := make([]byte, 60)
     modBytes := make([]byte, 60)
@@ -112,17 +106,17 @@ func BenchmarkModExpExisting(b *testing.B) {
     }
     modBytes[59] |= 0x01
     
-    base := NewInt()
+    base := new(big.Int)
     base.SetBytes(baseBytes)
-    exp := NewInt()
+    exp := new(big.Int)
     exp.SetBytes(expBytes)
-    mod := NewInt()
+    mod := new(big.Int)
     mod.SetBytes(modBytes)
-    result := NewInt()
+    result := new(big.Int)
     
     b.ResetTimer()
     for i := 0; i < b.N; i++ {
-        result.ExpMod(base, exp, mod)
+        result.Exp(base, exp, mod)
         _ = result.Bytes()
     }
 }
