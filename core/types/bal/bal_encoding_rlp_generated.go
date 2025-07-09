@@ -180,7 +180,7 @@ func (obj *encodingBlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 						}
 						_tmp14.TxIdx = _tmp15
 						// Balance:
-						var _tmp16 encodingBalance
+						var _tmp16 [16]byte
 						if err := dec.ReadBytes(_tmp16[:]); err != nil {
 							return err
 						}
