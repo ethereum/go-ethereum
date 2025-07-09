@@ -258,17 +258,35 @@ var (
 		Usage:    `Blockchain sync mode ("snap" or "full")`,
 		Value:    ethconfig.Defaults.SyncMode.String(),
 		Category: flags.StateCategory,
+		Action: func(c *cli.Context, s string) error {
+			if s != "snap" && s != "full" {
+				Fatalf("--syncmode must be either 'snap' or 'full'")
+			}
+			return nil
+		},
 	}
 	GCModeFlag = &cli.StringFlag{
 		Name:     "gcmode",
 		Usage:    `Blockchain garbage collection mode ("full", "archive")`,
 		Value:    "full",
 		Category: flags.StateCategory,
+		Action: func(c *cli.Context, s string) error {
+			if s != "full" && s != "archive" {
+				Fatalf("--gcmode must be either 'full' or 'archive'")
+			}
+			return nil
+		},
 	}
 	StateSchemeFlag = &cli.StringFlag{
 		Name:     "state.scheme",
 		Usage:    "Scheme to use for storing ethereum state ('hash' or 'path')",
 		Category: flags.StateCategory,
+		Action: func(c *cli.Context, s string) error {
+			if s != "hash" && s != "path" {
+				Fatalf("--state.scheme must be either 'hash' or 'path'")
+			}
+			return nil
+		},
 	}
 	StateHistoryFlag = &cli.Uint64Flag{
 		Name:     "history.state",
@@ -287,6 +305,12 @@ var (
 		Usage:    `Blockchain history retention ("all" or "postmerge")`,
 		Value:    ethconfig.Defaults.HistoryMode.String(),
 		Category: flags.StateCategory,
+		Action: func(c *cli.Context, s string) error {
+			if s != "all" && s != "postmerge" {
+				Fatalf("--history.chain must be either 'all' or 'postmerge'")
+			}
+			return nil
+		},
 	}
 	LogHistoryFlag = &cli.Uint64Flag{
 		Name:     "history.logs",
@@ -1622,10 +1646,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(EraFlag.Name) {
 		cfg.DatabaseEra = ctx.String(EraFlag.Name)
 	}
-
-	if gcmode := ctx.String(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
-		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
-	}
 	if ctx.IsSet(GCModeFlag.Name) {
 		cfg.NoPruning = ctx.String(GCModeFlag.Name) == "archive"
 	}
@@ -2178,9 +2198,6 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	engine, err := ethconfig.CreateConsensusEngine(config, chainDb)
 	if err != nil {
 		Fatalf("%v", err)
-	}
-	if gcmode := ctx.String(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
-		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
 	scheme, err := rawdb.ParseStateScheme(ctx.String(StateSchemeFlag.Name), chainDb)
 	if err != nil {
