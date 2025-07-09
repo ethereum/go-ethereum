@@ -13,6 +13,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/rollup/da_syncer/blob_client"
 	"github.com/scroll-tech/go-ethereum/rollup/da_syncer/serrors"
 	"github.com/scroll-tech/go-ethereum/rollup/l1"
+	"github.com/scroll-tech/go-ethereum/rollup/missing_header_fields"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/crypto/kzg4844"
@@ -113,7 +114,7 @@ func (c *CommitBatchDAV7) Event() l1.RollupEvent {
 	return c.event
 }
 
-func (c *CommitBatchDAV7) Blocks() ([]*PartialBlock, error) {
+func (c *CommitBatchDAV7) Blocks(_ *missing_header_fields.Manager) ([]*PartialBlock, error) {
 	initialL1MessageIndex := c.parentTotalL1MessagePopped
 
 	l1Txs, err := getL1MessagesV7(c.db, c.blobPayload.Blocks(), initialL1MessageIndex)

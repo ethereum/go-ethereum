@@ -13,6 +13,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/rollup/da_syncer/serrors"
 	"github.com/scroll-tech/go-ethereum/rollup/l1"
+	"github.com/scroll-tech/go-ethereum/rollup/missing_header_fields"
 )
 
 type CommitBatchDAV0 struct {
@@ -109,7 +110,7 @@ func (c *CommitBatchDAV0) CompareTo(other Entry) int {
 	return 0
 }
 
-func (c *CommitBatchDAV0) Blocks() ([]*PartialBlock, error) {
+func (c *CommitBatchDAV0) Blocks(manager *missing_header_fields.Manager) ([]*PartialBlock, error) {
 	l1Txs, err := getL1Messages(c.db, c.parentTotalL1MessagePopped, c.skippedL1MessageBitmap, c.l1MessagesPopped)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get L1 messages for v0 batch %d: %w", c.batchIndex, err)
@@ -120,7 +121,7 @@ func (c *CommitBatchDAV0) Blocks() ([]*PartialBlock, error) {
 
 	curL1TxIndex := c.parentTotalL1MessagePopped
 	for _, chunk := range c.chunks {
-		for blockId, daBlock := range chunk.Blocks {
+		for blockIndex, daBlock := range chunk.Blocks {
 			// create txs
 			txs := make(types.Transactions, 0, daBlock.NumTransactions())
 			// insert l1 msgs
@@ -132,7 +133,12 @@ func (c *CommitBatchDAV0) Blocks() ([]*PartialBlock, error) {
 			curL1TxIndex += uint64(daBlock.NumL1Messages())
 
 			// insert l2 txs
-			txs = append(txs, chunk.Transactions[blockId]...)
+			txs = append(txs, chunk.Transactions[blockIndex]...)
+
+			difficulty, stateRoot, coinbase, nonce, extraData, err := manager.GetMissingHeaderFields(daBlock.Number())
+			if err != nil {
+				return nil, fmt.Errorf("failed to get missing header fields for block %d: %w", daBlock.Number(), err)
+			}
 
 			block := NewPartialBlock(
 				&PartialHeader{
@@ -140,8 +146,11 @@ func (c *CommitBatchDAV0) Blocks() ([]*PartialBlock, error) {
 					Time:       daBlock.Timestamp(),
 					BaseFee:    daBlock.BaseFee(),
 					GasLimit:   daBlock.GasLimit(),
-					Difficulty: 10,                             // TODO: replace with real difficulty
-					ExtraData:  []byte{1, 2, 3, 4, 5, 6, 7, 8}, // TODO: replace with real extra data
+					Difficulty: difficulty,
+					ExtraData:  extraData,
+					StateRoot:  stateRoot,
+					Coinbase:   coinbase,
+					Nonce:      nonce,
 				},
 				txs)
 			blocks = append(blocks, block)

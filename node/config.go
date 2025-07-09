@@ -201,6 +201,8 @@ type Config struct {
 	L1DisableMessageQueueV2 bool `toml:",omitempty"`
 	// Is daSyncingEnabled
 	DaSyncingEnabled bool `toml:",omitempty"`
+	// Base URL for missing header fields file
+	DAMissingHeaderFieldsBaseURL string `toml:",omitempty"`
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into

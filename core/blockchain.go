@@ -1880,14 +1880,17 @@ func (bc *BlockChain) BuildAndWriteBlock(parentBlock *types.Block, header *types
 
 	header.ParentHash = parentBlock.Hash()
 
+	// sanitize base fee
+	// Note: setting the base fee to 0 will cause problems as nil != 0 when serializing the header and thus block hash will be different.
+	if header.BaseFee != nil && header.BaseFee.Cmp(common.Big0) == 0 {
+		header.BaseFee = nil
+	}
+
 	tempBlock := types.NewBlockWithHeader(header).WithBody(txs, nil)
 	receipts, logs, gasUsed, err := bc.processor.Process(tempBlock, statedb, bc.vmConfig)
 	if err != nil {
 		return nil, NonStatTy, fmt.Errorf("error processing block: %w", err)
 	}
-
-	// TODO: once we have the extra and difficulty we need to verify the signature of the block with Clique
-	//  This should be done with https://github.com/scroll-tech/go-ethereum/pull/913.
 
 	if sign {
 		// Prevent Engine from overriding timestamp.
@@ -1901,7 +1904,11 @@ func (bc *BlockChain) BuildAndWriteBlock(parentBlock *types.Block, header *types
 
 	// finalize and assemble block as fullBlock: replicates consensus.FinalizeAndAssemble()
 	header.GasUsed = gasUsed
-	header.Root = statedb.IntermediateRoot(bc.chainConfig.IsEIP158(header.Number))
+
+	// state root might be set from partial header. If it is not set, we calculate it.
+	if header.Root == (common.Hash{}) {
+		header.Root = statedb.IntermediateRoot(bc.chainConfig.IsEIP158(header.Number))
+	}
 
 	fullBlock := types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
 

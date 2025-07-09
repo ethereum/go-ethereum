@@ -237,6 +237,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.L1DisableMessageQueueV2Flag,
 			utils.RollupVerifyEnabledFlag,
 			utils.DASyncEnabledFlag,
+			utils.DAMissingHeaderFieldsBaseURLFlag,
 			utils.DABlobScanAPIEndpointFlag,
 			utils.DABlockNativeAPIEndpointFlag,
 			utils.DABeaconNodeAPIEndpointFlag,

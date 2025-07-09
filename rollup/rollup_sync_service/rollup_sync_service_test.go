@@ -21,6 +21,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/rollup/da_syncer"
 	"github.com/scroll-tech/go-ethereum/rollup/da_syncer/da"
 	"github.com/scroll-tech/go-ethereum/rollup/l1"
+	"github.com/scroll-tech/go-ethereum/rollup/missing_header_fields"
 )
 
 func TestGetCommittedBatchMetaCodecV0(t *testing.T) {
@@ -185,7 +186,7 @@ func (m mockEntryWithBlocks) Event() l1.RollupEvent {
 	panic("implement me")
 }
 
-func (m mockEntryWithBlocks) Blocks() ([]*da.PartialBlock, error) {
+func (m mockEntryWithBlocks) Blocks(_ *missing_header_fields.Manager) ([]*da.PartialBlock, error) {
 	panic("implement me")
 }
 

@@ -22,6 +22,9 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/url"
+	"path"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -61,6 +64,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/rollup/ccc"
 	"github.com/scroll-tech/go-ethereum/rollup/da_syncer"
 	"github.com/scroll-tech/go-ethereum/rollup/l1"
+	"github.com/scroll-tech/go-ethereum/rollup/missing_header_fields"
 	"github.com/scroll-tech/go-ethereum/rollup/rollup_sync_service"
 	"github.com/scroll-tech/go-ethereum/rollup/sync_service"
 	"github.com/scroll-tech/go-ethereum/rpc"
@@ -241,7 +245,12 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client l1.Client) (*Ether
 	if config.EnableDASyncing {
 		// Do not start syncing pipeline if we are producing blocks for permissionless batches.
 		if !config.DA.ProduceBlocks {
-			eth.syncingPipeline, err = da_syncer.NewSyncingPipeline(context.Background(), eth.blockchain, chainConfig, eth.chainDb, l1Client, stack.Config().L1DeploymentBlock, config.DA)
+			missingHeaderFieldsManager, err := createMissingHeaderFieldsManager(stack, chainConfig)
+			if err != nil {
+				return nil, fmt.Errorf("cannot create missing header fields manager: %w", err)
+			}
+
+			eth.syncingPipeline, err = da_syncer.NewSyncingPipeline(context.Background(), eth.blockchain, chainConfig, eth.chainDb, l1Client, stack.Config().L1DeploymentBlock, config.DA, missingHeaderFieldsManager)
 			if err != nil {
 				return nil, fmt.Errorf("cannot initialize da syncer: %w", err)
 			}
@@ -337,6 +346,22 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client l1.Client) (*Ether
 		}
 	}
 	return eth, nil
+}
+
+func createMissingHeaderFieldsManager(stack *node.Node, chainConfig *params.ChainConfig) (*missing_header_fields.Manager, error) {
+	downloadURL, err := url.Parse(stack.Config().DAMissingHeaderFieldsBaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid DAMissingHeaderFieldsBaseURL: %w", err)
+	}
+	downloadURL.Path = path.Join(downloadURL.Path, chainConfig.ChainID.String()+".bin")
+
+	expectedSHA256Checksum := chainConfig.Scroll.MissingHeaderFieldsSHA256
+	if expectedSHA256Checksum == nil {
+		return nil, fmt.Errorf("missing expected SHA256 checksum for missing header fields file in chain config")
+	}
+
+	filePath := filepath.Join(stack.Config().DataDir, fmt.Sprintf("missing-header-fields-%s-%s", chainConfig.ChainID, expectedSHA256Checksum.Hex()))
+	return missing_header_fields.NewManager(context.Background(), filePath, downloadURL.String(), *expectedSHA256Checksum), nil
 }
 
 func makeExtraData(extra []byte) []byte {

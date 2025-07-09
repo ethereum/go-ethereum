@@ -16,6 +16,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/rollup/da_syncer/blob_client"
 	"github.com/scroll-tech/go-ethereum/rollup/da_syncer/serrors"
 	"github.com/scroll-tech/go-ethereum/rollup/l1"
+	"github.com/scroll-tech/go-ethereum/rollup/missing_header_fields"
 )
 
 // Config is the configuration parameters of data availability syncing.
@@ -51,7 +52,7 @@ type SyncingPipeline struct {
 	daQueue    *DAQueue
 }
 
-func NewSyncingPipeline(ctx context.Context, blockchain *core.BlockChain, genesisConfig *params.ChainConfig, db ethdb.Database, ethClient l1.Client, l1DeploymentBlock uint64, config Config) (*SyncingPipeline, error) {
+func NewSyncingPipeline(ctx context.Context, blockchain *core.BlockChain, genesisConfig *params.ChainConfig, db ethdb.Database, ethClient l1.Client, l1DeploymentBlock uint64, config Config, missingHeaderFieldsManager *missing_header_fields.Manager) (*SyncingPipeline, error) {
 	l1Reader, err := l1.NewReader(ctx, l1.Config{
 		ScrollChainAddress:    genesisConfig.Scroll.L1Config.ScrollChainAddress,
 		L1MessageQueueAddress: genesisConfig.Scroll.L1Config.L1MessageQueueAddress,
@@ -128,7 +129,7 @@ func NewSyncingPipeline(ctx context.Context, blockchain *core.BlockChain, genesi
 
 	daQueue := NewDAQueue(lastProcessedBatchMeta.L1BlockNumber, dataSourceFactory)
 	batchQueue := NewBatchQueue(daQueue, db, lastProcessedBatchMeta)
-	blockQueue := NewBlockQueue(batchQueue)
+	blockQueue := NewBlockQueue(batchQueue, missingHeaderFieldsManager)
 	daSyncer := NewDASyncer(blockchain, config.L2EndBlock)
 
 	ctx, cancel := context.WithCancel(ctx)
