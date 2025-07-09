@@ -36,6 +36,9 @@ func TestVerification(t *testing.T) {
 		t.Parallel()
 		// For this test, the pubkey is in testdata/vcheck/minisign.pub
 		// (the privkey is `minisign.sec`, if we want to expand this test. Password 'test' )
+		//	1. `minisign -S -l -s ./minisign.sec -m data.json -x ./minisig-sigs/vulnerabilities.json.minisig.1 -c "signature from minisign secret key"`
+		//	2. `minisign -S -l -s ./minisign.sec -m vulnerabilities.json -x ./minisig-sigs/vulnerabilities.json.minisig.2 -c "Here's a comment" -t "Here's a trusted comment"`
+		//	3.	minisign -S -l -s ./minisign.sec -m vulnerabilities.json -x ./minisig-sigs/vulnerabilities.json.minisig.3 -c "One more (untrusted™) comment" -t "Here's a trusted comment"
 		pub := "RWQkliYstQBOKOdtClfgC3IypIPX6TAmoEi7beZ4gyR3wsaezvqOMWsp"
 		testVerification(t, pub, "./testdata/vcheck/minisig-sigs/")
 	})
