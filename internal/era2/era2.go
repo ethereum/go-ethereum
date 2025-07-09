@@ -57,23 +57,22 @@ type ReadAtSeekCloser interface {
 }
 
 type Era2 struct {
-	f   ReadAtSeekCloser
-	s   *e2store.Reader
-	m   meta // metadata for the era2 file
-	mu  *sync.Mutex
-	buf [8]byte // buffer reading entry offset
-
+	f                                                 ReadAtSeekCloser
+	s                                                 *e2store.Reader
+	m                                                 meta // metadata for the era2 file
+	mu                                                *sync.Mutex
 	headeroff, bodyoff, receiptsoff, tdoff, proofsoff []uint64 // offsets for each entry type
-	rootheader                                        uint64   // offset of the root header in the file if present
 	indstart                                          int64
+	rootheader                                        uint64 // offset of the root header in the file if present
+	prooftype                                         uint16
 }
 
-func Open(filename string) (*Era2, error) {
-	f, err := os.Open(filename)
+func Open(path string) (*Era2, error) {
+	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	e := &Era2{f: f, s: e2store.NewReader(f), mu: new(sync.Mutex)}
+	e := &Era2{f: f, s: e2store.NewReader(f)}
 	if err := e.loadIndex(); err != nil {
 		f.Close()
 		return nil, err
@@ -82,8 +81,6 @@ func Open(filename string) (*Era2, error) {
 }
 
 func (e *Era2) Close() error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
 	if e.f == nil {
 		return nil
 	}
@@ -93,14 +90,10 @@ func (e *Era2) Close() error {
 }
 
 func (e *Era2) Start() uint64 {
-	e.mu.Lock()
-	defer e.mu.Unlock()
 	return e.m.start
 }
 
 func (e *Era2) Count() uint64 {
-	e.mu.Lock()
-	defer e.mu.Unlock()
 	return e.m.count
 }
 
@@ -117,29 +110,29 @@ func (e *Era2) GetBlockByNumber(blockNum uint64) (*types.Block, error) {
 }
 
 func (e *Era2) getHeader(blockNum uint64) (*types.Header, error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
 	if blockNum < e.m.start || blockNum >= e.m.start+e.m.count {
 		return nil, fmt.Errorf("block number %d out of range [%d, %d)", blockNum, e.m.start, e.m.start+e.m.count)
 	}
-	r, err := e.snappyPayload(e.headeroff[blockNum-e.m.start])
+	r, _, err := e.s.ReaderAt(TypeCompressedHeader, int64(e.headeroff[blockNum-e.m.start]))
 	if err != nil {
-		return nil, fmt.Errorf("error reading header for block %d: %w", blockNum, err)
+		return nil, err
 	}
+	r = snappy.NewReader(r)
+
 	var h types.Header
 	return &h, rlp.Decode(r, &h)
 }
 
 func (e *Era2) getBody(blockNum uint64) (*types.Body, error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
 	if blockNum < e.m.start || blockNum >= e.m.start+e.m.count {
 		return nil, fmt.Errorf("block number %d out of range [%d, %d)", blockNum, e.m.start, e.m.start+e.m.count)
 	}
-	r, err := e.snappyPayload(e.bodyoff[blockNum-e.m.start])
+	r, _, err := e.s.ReaderAt(TypeCompressedBody, int64(e.bodyoff[blockNum-e.m.start]))
 	if err != nil {
-		return nil, fmt.Errorf("error reading body for block %d: %w", blockNum, err)
+		return nil, err
 	}
+	r = snappy.NewReader(r)
+
 	var b types.Body
 	return &b, rlp.Decode(r, &b)
 }
@@ -153,57 +146,49 @@ func (e *Era2) getTD(blockNum uint64) (*big.Int, error) {
 		return nil, fmt.Errorf("total-difficulty section not present")
 	}
 
-	start := e.tdoff[blockNum-e.m.start]
-	buf := make([]byte, 32)
-
-	if _, err := e.f.ReadAt(buf, int64(start)); err != nil {
-		return nil, fmt.Errorf("error reading total difficulty for block %d: %w",
-			blockNum, err)
+	r, _, err := e.s.ReaderAt(TypeTotalDifficulty, int64(e.tdoff[blockNum-e.m.start]))
+	if err != nil {
+		return nil, err
 	}
+	buf, _ := io.ReadAll(r)
 	td := new(big.Int).SetBytes(reverseOrder(buf))
 	return td, nil
 }
 
-func (e *Era2) GetRawBodyFrameByNumber(n uint64) ([]byte, error) {
-	if n < e.m.start || n >= e.m.start+e.m.count {
-		return nil, fmt.Errorf("block number %d out of range [%d, %d)", n, e.m.start, e.m.start+e.m.count)
+func (e *Era2) GetRawBodyFrameByNumber(blockNum uint64) ([]byte, error) {
+	if blockNum < e.m.start || blockNum >= e.m.start+e.m.count {
+		return nil, fmt.Errorf("block number %d out of range [%d, %d)", blockNum, e.m.start, e.m.start+e.m.count)
 	}
-	start := e.bodyoff[n-e.m.start]
-	end := e.nextBoundary(n, e.bodyoff, e.receiptsoff) // receipts section is the next safest fallback
-	length := end - start
-	sr := io.NewSectionReader(e.f, int64(start), int64(length))
-	return io.ReadAll(sr)
+	r, _, err := e.s.ReaderAt(TypeCompressedBody, int64(e.bodyoff[blockNum-e.m.start]))
+	if err != nil {
+		return nil, err
+	}
+	return io.ReadAll(r)
 }
 
-func (e *Era2) GetRawReceiptsFrameByNumber(n uint64) ([]byte, error) {
-	if n < e.m.start || n >= e.m.start+e.m.count {
-		return nil, fmt.Errorf("block number %d out of range [%d, %d)", n, e.m.start, e.m.start+e.m.count)
+func (e *Era2) GetRawReceiptsFrameByNumber(blockNum uint64) ([]byte, error) {
+	if blockNum < e.m.start || blockNum >= e.m.start+e.m.count {
+		return nil, fmt.Errorf("block number %d out of range [%d, %d)", blockNum, e.m.start, e.m.start+e.m.count)
 	}
-	start := e.receiptsoff[n-e.m.start]
-	end := e.nextBoundary(n, e.receiptsoff, e.tdoff) // TD sec. is next fallback
-	length := end - start
-	sr := io.NewSectionReader(e.f, int64(start), int64(length))
-	return io.ReadAll(sr)
+	r, _, err := e.s.ReaderAt(TypeCompressedReceipts, int64(e.receiptsoff[blockNum-e.m.start]))
+	if err != nil {
+		return nil, err
+	}
+	return io.ReadAll(r)
 }
 
-func (e *Era2) GetRawProofFrameByNumber(n uint64) ([]byte, error) {
+func (e *Era2) GetRawProofFrameByNumber(blockNum uint64) ([]byte, error) {
 	if len(e.proofsoff) == 0 {
 		return nil, fmt.Errorf("proofs section not present")
 	}
-	if n < e.m.start || n >= e.m.start+e.m.count {
-		return nil, fmt.Errorf("block number %d out of range [%d, %d)", n, e.m.start, e.m.start+e.m.count)
+	if blockNum < e.m.start || blockNum >= e.m.start+e.m.count {
+		return nil, fmt.Errorf("block number %d out of range [%d, %d)", blockNum, e.m.start, e.m.start+e.m.count)
 	}
-	start := e.proofsoff[n-e.m.start]
-
-	// fallback next proof frame → AccRoot header → BlockIndex
-	var nextSec []uint64
-	if e.rootheader != 0 {
-		nextSec = []uint64{e.rootheader}
+	r, _, err := e.s.ReaderAt(e.prooftype, int64(e.proofsoff[blockNum-e.m.start]))
+	if err != nil {
+		return nil, err
 	}
-	end := e.nextBoundary(n, e.proofsoff, nextSec)
-	length := end - start
-	sr := io.NewSectionReader(e.f, int64(start), int64(length))
-	return io.ReadAll(sr)
+	return io.ReadAll(r)
 }
 
 func (e *Era2) rawPayload(abs uint64) ([]byte, error) {
@@ -214,20 +199,6 @@ func (e *Era2) rawPayload(abs uint64) ([]byte, error) {
 func (e *Era2) snappyPayload(abs uint64) (io.Reader, error) {
 	sr := io.NewSectionReader(e.f, int64(abs), e.indstart-int64(abs))
 	return snappy.NewReader(sr), nil
-}
-
-func (e *Era2) nextBoundary(idx uint64, sameSec []uint64, nextSec []uint64) uint64 {
-	local := idx - e.m.start
-	// next frame in the same section
-	if local+1 < uint64(len(sameSec)) {
-		return sameSec[local+1]
-	}
-	// first frame of the NEXT section (if present)
-	if len(nextSec) > 0 {
-		return nextSec[0]
-	}
-	// otherwise clamp to start of BlockIndex
-	return uint64(e.indstart)
 }
 
 func (e *Era2) loadIndex() error {
@@ -291,6 +262,14 @@ func (e *Era2) loadIndex() error {
 		}
 	}
 
+	if len(e.proofsoff) > 0 {
+		typ, _, perr := e.s.ReadMetadataAt(int64(e.proofsoff[0]))
+		if perr != nil {
+			return fmt.Errorf("read proof header: %w", perr)
+		}
+		e.prooftype = typ
+	}
+
 	var off int64 = 0 // start at byte-0 of file
 
 	for off < e.indstart { // never enter the Block-Index TLV
@@ -307,116 +286,79 @@ func (e *Era2) loadIndex() error {
 	return nil
 }
 
-func (e *Era2) BatchRange(first, count uint64, wantHeaders, wantBodies, wantReceipts, wantProofs bool) (hdrs []*types.Header, bods []*types.Body, recs []types.Receipts, prfs [][]byte, err error) {
+func (e *Era2) BatchRange(first, count uint64, wantHdr, wantBody, wantRec, wantPrf bool) (hdrs []*types.Header, bods []*types.Body, recs []types.Receipts, prfs [][]byte, err error) {
 	if count == 0 {
-		err = fmt.Errorf("count must be greater than 0")
+		err = fmt.Errorf("count must be > 0")
 		return
 	}
-
 	if first < e.m.start || first+count > e.m.start+e.m.count {
-		err = fmt.Errorf("range [%d,%d) out of bounds [%d,%d)", first, first+count, e.m.start, e.m.start+e.m.count)
+		err = fmt.Errorf("range [%d,%d) out of bounds", first, first+count)
 		return
 	}
 
-	id0 := first - e.m.start
-	if wantHeaders {
+	idx := first - e.m.start
+	if wantHdr {
 		hdrs = make([]*types.Header, count)
 	}
-	if wantBodies {
+	if wantBody {
 		bods = make([]*types.Body, count)
 	}
-	if wantReceipts {
+	if wantRec {
 		recs = make([]types.Receipts, count)
 	}
-	if wantProofs {
+	if wantPrf {
 		prfs = make([][]byte, count)
 	}
 
-	stream := func(startOff uint64, endOff uint64, decode func(io.Reader, uint64) error) error {
-		length := int64(endOff) - int64(startOff)
-		r := snappy.NewReader(io.NewSectionReader(e.f, int64(startOff), length))
-		for i := uint64(0); i < count; i++ {
-			if err := decode(r, i); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
+	for i := uint64(0); i < count; i++ {
+		id := idx + i
 
-	if wantHeaders {
-		err = stream(e.headeroff[id0], e.bodyoff[0], func(r io.Reader, i uint64) error {
-			var hdr types.Header
-			if err := rlp.Decode(r, &hdr); err != nil {
-				return fmt.Errorf("error decoding header for block %d: %w", first+i, err)
-			}
-			hdrs[i] = &hdr
-			return nil
-		})
-		if err != nil {
-			return
-		}
-	}
-
-	if wantBodies {
-		err = stream(e.bodyoff[id0], e.receiptsoff[0], func(r io.Reader, i uint64) error {
-			var body types.Body
-			if err := rlp.Decode(r, &body); err != nil {
-				return fmt.Errorf("error decoding body for block %d: %w", first+i, err)
-			}
-			bods[i] = &body
-			return nil
-		})
-		if err != nil {
-			return
-		}
-	}
-
-	if wantReceipts {
-		var receiptsEnd uint64
-		if len(e.tdoff) > 0 {
-			receiptsEnd = e.tdoff[0]
-		} else {
-			receiptsEnd = uint64(e.indstart)
-		}
-		err = stream(e.receiptsoff[id0], receiptsEnd, func(r io.Reader, i uint64) error {
-			var rct types.Receipts
-			if err := rlp.Decode(r, &rct); err != nil {
-				return fmt.Errorf("error decoding receipts for block %d: %w", first+i, err)
-			}
-			recs[i] = rct
-			return nil
-		})
-		if err != nil {
-			return
-		}
-	}
-
-	if wantProofs {
-		if len(prfs) == 0 {
-			err = fmt.Errorf("proofs section is not present")
-			return
-		}
-
-		for i := uint64(0); i < count; i++ {
-			start := e.proofsoff[id0+i]
-			var end uint64
-			if id0+i+1 < uint64(len(e.proofsoff)) {
-				end = e.proofsoff[id0+i+1] // next proof frame
-			} else if e.rootheader != 0 {
-				end = e.rootheader // AccRoot header
-			} else {
-				end = uint64(e.indstart) // BlockIndex header
-			}
-			length := int64(end - start)
-			frame, readErr := io.ReadAll(io.NewSectionReader(e.f, int64(start), length))
-			if readErr != nil {
-				err = fmt.Errorf("proof read %d: %w", first+i, readErr)
+		if wantHdr {
+			r, _, er := e.s.ReaderAt(TypeCompressedHeader, int64(e.headeroff[id]))
+			if er != nil {
+				err = er
 				return
 			}
-			prfs[i] = frame
+			if er = rlp.Decode(snappy.NewReader(r), &hdrs[i]); er != nil {
+				err = er
+				return
+			}
+		}
+		if wantBody {
+			r, _, er := e.s.ReaderAt(TypeCompressedBody, int64(e.bodyoff[id]))
+			if er != nil {
+				err = er
+				return
+			}
+			if er = rlp.Decode(snappy.NewReader(r), &bods[i]); er != nil {
+				err = er
+				return
+			}
+		}
+		if wantRec {
+			r, _, er := e.s.ReaderAt(TypeCompressedReceipts, int64(e.receiptsoff[id]))
+			if er != nil {
+				err = er
+				return
+			}
+			if er = rlp.Decode(snappy.NewReader(r), &recs[i]); er != nil {
+				err = er
+				return
+			}
+		}
+		if wantPrf {
+			if len(e.proofsoff) == 0 {
+				err = fmt.Errorf("proofs section not present")
+				return
+			}
+			r, _, er := e.s.ReaderAt(e.prooftype, int64(e.proofsoff[id])) // type already checked when writing
+			if er != nil {
+				err = er
+				return
+			}
+			prfs[i], _ = io.ReadAll(r)
 		}
 	}
-
 	return
 }
 
