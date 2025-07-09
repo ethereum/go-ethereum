@@ -41,14 +41,14 @@ type ContractCodeReader interface {
 	// - Returns nil code along with nil error if the requested contract code
 	//   doesn't exist
 	// - Returns an error only if an unexpected issue occurs
-	Code(addr common.Address, codeHash common.Hash) ([]byte, error)
+	Code(codeHash common.Hash) ([]byte, error)
 
 	// CodeSize retrieves a particular contracts code's size.
 	//
 	// - Returns zero code size along with nil error if the requested contract code
 	//   doesn't exist
 	// - Returns an error only if an unexpected issue occurs
-	CodeSize(addr common.Address, codeHash common.Hash) (int, error)
+	CodeSize(codeHash common.Hash) (int, error)
 }
 
 // StateReader defines the interface for accessing accounts and storage slots
@@ -121,7 +121,7 @@ func newCachingCodeReader(db ethdb.KeyValueReader, codeCache *lru.SizeConstraine
 
 // Code implements ContractCodeReader, retrieving a particular contract's code.
 // If the contract code doesn't exist, no error will be returned.
-func (r *cachingCodeReader) Code(addr common.Address, codeHash common.Hash) ([]byte, error) {
+func (r *cachingCodeReader) Code(codeHash common.Hash) ([]byte, error) {
 	code, _ := r.codeCache.Get(codeHash)
 	if len(code) > 0 {
 		return code, nil
@@ -136,11 +136,11 @@ func (r *cachingCodeReader) Code(addr common.Address, codeHash common.Hash) ([]b
 
 // CodeSize implements ContractCodeReader, retrieving a particular contracts code's size.
 // If the contract code doesn't exist, no error will be returned.
-func (r *cachingCodeReader) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
+func (r *cachingCodeReader) CodeSize(codeHash common.Hash) (int, error) {
 	if cached, ok := r.codeSizeCache.Get(codeHash); ok {
 		return cached, nil
 	}
-	code, err := r.Code(addr, codeHash)
+	code, err := r.Code(codeHash)
 	if err != nil {
 		return 0, err
 	}

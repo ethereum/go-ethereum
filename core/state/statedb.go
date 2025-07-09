@@ -423,19 +423,12 @@ func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
 
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) uint256.Int {
-	stateObject := s.getOrNewStateObject(addr)
-	if stateObject == nil {
-		return uint256.Int{}
-	}
-	return stateObject.AddBalance(amount)
+	return s.getOrNewStateObject(addr).AddBalance(amount)
 }
 
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) uint256.Int {
 	stateObject := s.getOrNewStateObject(addr)
-	if stateObject == nil {
-		return uint256.Int{}
-	}
 	if amount.IsZero() {
 		return *(stateObject.Balance())
 	}
@@ -443,32 +436,19 @@ func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, reason tr
 }
 
 func (s *StateDB) SetBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) {
-	stateObject := s.getOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.SetBalance(amount)
-	}
+	s.getOrNewStateObject(addr).SetBalance(amount)
 }
 
 func (s *StateDB) SetNonce(addr common.Address, nonce uint64, reason tracing.NonceChangeReason) {
-	stateObject := s.getOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.SetNonce(nonce)
-	}
+	s.getOrNewStateObject(addr).SetNonce(nonce)
 }
 
 func (s *StateDB) SetCode(addr common.Address, code []byte) (prev []byte) {
-	stateObject := s.getOrNewStateObject(addr)
-	if stateObject != nil {
-		return stateObject.SetCode(crypto.Keccak256Hash(code), code)
-	}
-	return nil
+	return s.getOrNewStateObject(addr).SetCode(crypto.Keccak256Hash(code), code)
 }
 
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) common.Hash {
-	if stateObject := s.getOrNewStateObject(addr); stateObject != nil {
-		return stateObject.SetState(key, value)
-	}
-	return common.Hash{}
+	return s.getOrNewStateObject(addr).SetState(key, value)
 }
 
 // SetStorage replaces the entire storage for the specified account with given
