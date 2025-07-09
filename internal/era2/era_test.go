@@ -63,10 +63,9 @@ func TestEra2Builder(t *testing.T) {
 			header   = chain.headers[i]
 			body     = chain.bodies[i]
 			receipts = chain.receipts[i]
-			hash     = common.Hash{byte(i)}
 			td       = chain.tds[i]
 		)
-		if err = builder.Add(header, body, receipts, hash, uint64(i), td, nil); err != nil {
+		if err = builder.Add(header, body, receipts, td, nil); err != nil {
 			t.Fatalf("error adding entry: %v", err)
 		}
 	}
@@ -123,6 +122,14 @@ func TestEra2Builder(t *testing.T) {
 		}
 		if !bytes.Equal(decRcpt, mustEncode(chain.receipts[i])) {
 			t.Fatalf("receipts frame %d mismatch", i)
+		}
+
+		td, err := era.getTD(bn)
+		if err != nil {
+			t.Fatalf("getTD %d: %v", i, err)
+		}
+		if td.Cmp(chain.tds[i]) != 0 {
+			t.Fatalf("td %d mismatch: want %v got %v", i, chain.tds[i], td)
 		}
 	}
 }
