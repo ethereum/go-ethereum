@@ -58,7 +58,6 @@ const (
 	headerSize                           uint64 = 8
 )
 
-// ProofVariant is an idiomatic “enum”.
 type proofvar uint16
 
 const (
@@ -102,7 +101,6 @@ type Builder struct {
 	writtenBytes uint64
 }
 
-// NewBuilder returns a new EraE Builder writing into the given io.Writer.
 func NewBuilder(w io.Writer) *Builder {
 	buf := bytes.NewBuffer(nil)
 	return &Builder{
@@ -117,27 +115,27 @@ func (b *Builder) Add(header types.Header, body types.Body, receipts types.Recei
 		return fmt.Errorf("exceeds MaxEraESize %d", MaxEraESize)
 	}
 
+	var pv proofvar = ProofNone
+	var pData []byte
 	if proof != nil {
-		if proof.Variant == ProofNone || len(proof.Data) == 0 {
-			return fmt.Errorf("invalid proof: variant=%d len=%d", proof.Variant, len(proof.Data))
+		pv = proof.Variant
+		pData = proof.Data
+		if pv == ProofNone || len(pData) == 0 {
+			return fmt.Errorf("invalid proof: variant=%d len=%d", pv, len(pData))
 		}
 	}
 
 	if len(b.headersRLP) == 0 {
-		if proof == nil {
-			b.prooftype = ProofNone
-		} else {
-			b.prooftype = proof.Variant
-		}
-	} else if proof.Variant != b.prooftype {
-		return fmt.Errorf("cannot mix proof variants: have %d want %d", b.prooftype, proof.Variant)
+		b.prooftype = pv
+	} else if pv != b.prooftype {
+		return fmt.Errorf("cannot mix proof variants: have %d want %d", b.prooftype, pv)
 	}
 
-	hdr, err := rlp.EncodeToBytes(header)
+	hdr, err := rlp.EncodeToBytes(&header)
 	if err != nil {
 		return fmt.Errorf("error encoding block header: %w", err)
 	}
-	bod, err := rlp.EncodeToBytes(body)
+	bod, err := rlp.EncodeToBytes(&body)
 	if err != nil {
 		return fmt.Errorf("error encoding block header: %w", err)
 	}
@@ -174,30 +172,24 @@ func (b *Builder) Finalize() (common.Hash, error) {
 		return common.Hash{}, errors.New("no blocks added, cannot finalize")
 	}
 	var err error
-	b.headeroffsets, err = b.writeSection(TypeCompressedHeader, b.headersRLP, true)
-	if err != nil {
-		return common.Hash{}, fmt.Errorf("error writing compressed headers: %w", err)
+	if err := b.flushKind(TypeCompressedHeader, b.headersRLP, true, &b.headeroffsets); err != nil {
+		return common.Hash{}, err
 	}
-	b.bodyoffsets, err = b.writeSection(TypeCompressedBody, b.bodiesRLP, true)
-	if err != nil {
-		return common.Hash{}, fmt.Errorf("error writing compressed bodies: %w", err)
+	if err := b.flushKind(TypeCompressedBody, b.bodiesRLP, true, &b.bodyoffsets); err != nil {
+		return common.Hash{}, err
 	}
-	b.receiptoffsets, err = b.writeSection(TypeCompressedReceipts, b.receiptsRLP, true)
-	if err != nil {
-		return common.Hash{}, fmt.Errorf("error writing compressed receipts: %w", err)
+	if err := b.flushKind(TypeCompressedReceipts, b.receiptsRLP, true, &b.receiptoffsets); err != nil {
+		return common.Hash{}, err
 	}
 
 	if len(b.tds) > 0 {
-		b.tdoff, err = b.writeSection(TypeTotalDifficulty, b.tds, false)
-		if err != nil {
-			return common.Hash{}, fmt.Errorf("error writing total difficulties: %w", err)
+		if err := b.flushKind(TypeTotalDifficulty, b.tds, false, &b.tdoff); err != nil {
+			return common.Hash{}, err
 		}
 	}
-
-	if b.prooftype != 0 {
-		b.proofoffsets, err = b.writeSection(uint16(b.prooftype), b.proofsRLP, true)
-		if err != nil {
-			return common.Hash{}, fmt.Errorf("error writing proofs: %w", err)
+	if b.prooftype != ProofNone {
+		if err := b.flushKind(uint16(b.prooftype), b.proofsRLP, true, &b.proofoffsets); err != nil {
+			return common.Hash{}, err
 		}
 	}
 
@@ -236,7 +228,6 @@ func decodeBigs(raw [][]byte) []*big.Int {
 	return out
 }
 
-// snappyWrite is a small helper to take care snappy encoding and writing an e2store entry.
 func (b *Builder) snappyWrite(typ uint16, in []byte) error {
 	var (
 		buf = b.buf
@@ -258,29 +249,32 @@ func (b *Builder) snappyWrite(typ uint16, in []byte) error {
 	return nil
 }
 
-func (b *Builder) writeSection(typ uint16, list [][]byte, useSnappy bool) ([]uint64, error) {
-	if len(list) == 0 {
-		return nil, errors.New("cannot write empty section")
-	}
-
-	buf := bytes.NewBuffer(nil)
-	offs := make([]uint64, len(list))
-	for i, data := range list {
-		offs[i] = b.writtenBytes + headerSize + uint64(buf.Len())
-		if useSnappy {
-			buf.Write(snappy.Encode(nil, data))
-		} else {
-			buf.Write(data)
+func (b *Builder) addEntry(typ uint16, payload []byte, snappyIt bool) (uint64, error) {
+	offset := b.writtenBytes
+	var err error
+	if snappyIt {
+		if err = b.snappyWrite(typ, payload); err != nil {
+			return 0, err
 		}
-	}
-
-	if n, err := b.w.Write(typ, buf.Bytes()); err != nil {
-		return nil, fmt.Errorf("error writing section %d: %w", typ, err)
 	} else {
+		var n int
+		if n, err = b.w.Write(typ, payload); err != nil {
+			return 0, err
+		}
 		b.writtenBytes += uint64(n)
 	}
+	return offset, nil
+}
 
-	return offs, nil
+func (b *Builder) flushKind(typ uint16, list [][]byte, useSnappy bool, dst *[]uint64) error {
+	for _, data := range list {
+		off, err := b.addEntry(typ, data, useSnappy)
+		if err != nil {
+			return fmt.Errorf("entry type %d: %w", typ, err)
+		}
+		*dst = append(*dst, off)
+	}
+	return nil
 }
 
 func (b *Builder) writeIndex() error {
@@ -306,7 +300,7 @@ func (b *Builder) writeIndex() error {
 		binary.LittleEndian.PutUint64(idx[pos:], rel(b.receiptoffsets[i]))
 		pos += 8
 		if len(b.tds) > 0 {
-			binary.LittleEndian.PutUint64(idx[pos+24:], rel(b.tdoff[i]))
+			binary.LittleEndian.PutUint64(idx[pos:], rel(b.tdoff[i]))
 			pos += 8
 		}
 		if len(b.proofsRLP) > 0 {
