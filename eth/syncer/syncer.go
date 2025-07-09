@@ -145,6 +145,7 @@ func (s *Syncer) run() {
 
 // Start launches the synchronization service.
 func (s *Syncer) Start() error {
+	s.wg.Add(1)
 	go s.run()
 	if s.target == (common.Hash{}) {
 		return nil
