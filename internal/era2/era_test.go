@@ -19,6 +19,7 @@ package era2
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"testing"
@@ -26,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/klauspost/compress/snappy"
 )
 
 type testchain struct {
@@ -37,7 +39,6 @@ type testchain struct {
 
 func TestEra2Builder(t *testing.T) {
 	t.Parallel()
-
 	// Get temp directory.
 	f, err := os.CreateTemp(t.TempDir(), "era2-test")
 	if err != nil {
@@ -76,22 +77,19 @@ func TestEra2Builder(t *testing.T) {
 	}
 
 	// 3. open reader
+	t.Logf("filename: %s", f.Name())
 	era, err := Open(f.Name())
 	if err != nil {
 		t.Fatalf("open era: %v", err)
 	}
 	defer era.Close()
 
-	// 4. verify every block
 	for i := 0; i < 128; i++ {
 		bn := uint64(i)
-
-		// -- header + body via GetBlockByNumber ------------------------------
 		gotBlock, err := era.GetBlockByNumber(bn)
 		if err != nil {
 			t.Fatalf("get block %d: %v", i, err)
 		}
-
 		if chain.headers[i].Hash() != gotBlock.Header().Hash() {
 			t.Fatalf("header %d mismatch", i)
 		}
@@ -99,23 +97,31 @@ func TestEra2Builder(t *testing.T) {
 			t.Fatalf("body %d mismatch", i)
 		}
 
-		// -- raw body frame --------------------------------------------------
 		rawBody, err := era.GetRawBodyFrameByNumber(bn)
 		if err != nil {
 			t.Fatalf("raw body %d: %v", i, err)
 		}
-		expectBody := mustEncode(chain.bodies[i])
-		if !bytes.Contains(rawBody, expectBody) { // frame may include next
+		decBody, err := io.ReadAll(
+			snappy.NewReader(bytes.NewReader(rawBody)),
+		)
+		if err != nil {
+			t.Fatalf("snappy decode body %d: %v", i, err)
+		}
+		if !bytes.Equal(decBody, mustEncode(chain.bodies[i])) {
 			t.Fatalf("body frame %d mismatch", i)
 		}
 
-		// -- raw receipts frame ---------------------------------------------
 		rawRcpt, err := era.GetRawReceiptsFrameByNumber(bn)
 		if err != nil {
 			t.Fatalf("raw receipts %d: %v", i, err)
 		}
-		expectRcpt := mustEncode(chain.receipts[i])
-		if !bytes.Contains(rawRcpt, expectRcpt) {
+		decRcpt, err := io.ReadAll(
+			snappy.NewReader(bytes.NewReader(rawRcpt)),
+		)
+		if err != nil {
+			t.Fatalf("snappy decode receipts %d: %v", i, err)
+		}
+		if !bytes.Equal(decRcpt, mustEncode(chain.receipts[i])) {
 			t.Fatalf("receipts frame %d mismatch", i)
 		}
 	}
