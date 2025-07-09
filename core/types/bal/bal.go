@@ -167,7 +167,7 @@ type slotWrites map[uint16]common.Hash
 
 // Copy returns a deep copy of the access list.
 func (b *BlockAccessList) Copy() *BlockAccessList {
-	res := new(BlockAccessList)
+	res := NewBlockAccessList()
 	for addr, aa := range b.accounts {
 		var aaCopy accountAccess
 		aaCopy.StorageWrites = aa.StorageWrites.copy()
@@ -182,7 +182,7 @@ func (b *BlockAccessList) Copy() *BlockAccessList {
 		}
 		res.accounts[addr] = &aaCopy
 	}
-	return res
+	return &res
 }
 
 func (e *encodingBlockAccessList) prettyPrint() string {
