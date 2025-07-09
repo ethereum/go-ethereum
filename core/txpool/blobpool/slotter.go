@@ -38,7 +38,7 @@ func newSlotter(maxBlobsPerTransaction int) func() (uint32, bool) {
 }
 
 // newSlotterEIP7594 creates a different slotter for EIP-7594 transactions.
-// EIP-7594 (PeerDAS) changes the median transaction size which means the current
+// EIP-7594 (PeerDAS) changes the average transaction size which means the current
 // static 4KB average size is not enough anymore.
 // This slotter adds a dynamic overhead component to the slotter, which also
 // captures the notion that blob transactions with more blobs are also more likely to
