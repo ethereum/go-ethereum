@@ -95,9 +95,8 @@ func (s *Syncer) run() {
 			var (
 				resync  bool
 				retries int
+				logged  bool
 			)
-			log.Info("Waiting for peers to retrieve sync target", "hash", req.hash)
-
 			for {
 				if retries >= 10 {
 					req.errc <- fmt.Errorf("sync target is not avaibale, %x", req.hash)
@@ -112,6 +111,10 @@ func (s *Syncer) run() {
 
 				header, err := s.backend.Downloader().GetHeader(req.hash)
 				if err != nil {
+					if !logged {
+						logged = true
+						log.Info("Waiting for peers to retrieve sync target", "hash", req.hash)
+					}
 					time.Sleep(time.Second * time.Duration(retries+1))
 					retries++
 					continue
@@ -122,6 +125,7 @@ func (s *Syncer) run() {
 				}
 				target = header
 				resync = true
+				break
 			}
 			if resync {
 				req.errc <- s.backend.Downloader().BeaconDevSync(ethconfig.FullSync, target)
