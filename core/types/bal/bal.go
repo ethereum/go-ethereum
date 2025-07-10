@@ -77,7 +77,7 @@ type ConstructionBlockAccessList struct {
 }
 
 // NewBlockAccessList instantiates an empty access list.
-func NewBlockAccessList() ConstructionBlockAccessList {
+func NewConstructionBlockAccessList() ConstructionBlockAccessList {
 	return ConstructionBlockAccessList{
 		Accounts: make(map[common.Address]*ConstructionAccountAccess),
 	}
@@ -152,7 +152,7 @@ func (b *ConstructionBlockAccessList) PrettyPrint() string {
 
 // Copy returns a deep copy of the access list.
 func (b *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
-	res := NewBlockAccessList()
+	res := NewConstructionBlockAccessList()
 	for addr, aa := range b.Accounts {
 		var aaCopy ConstructionAccountAccess
 
