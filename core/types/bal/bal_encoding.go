@@ -263,6 +263,7 @@ func (a *AccountAccess) toEncodingObj(addr common.Address) encodingAccountAccess
 				ValueAfter: slotWrites[index],
 			})
 		}
+		res.StorageWrites = append(res.StorageWrites, obj)
 	}
 
 	// Convert read slots
