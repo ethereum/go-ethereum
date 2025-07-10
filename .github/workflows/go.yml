@@ -28,6 +28,11 @@ jobs:
         go-version: 1.24
         cache: false
 
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgmp-dev
+
     - name: Run linters
       run: |
         go run build/ci.go lint
@@ -53,6 +58,11 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
           cache: false
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgmp-dev
 
       - name: Run tests
         run: go test ./...
