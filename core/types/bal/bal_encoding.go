@@ -63,6 +63,7 @@ func (e *BlockAccessList) Validate() error {
 	return nil
 }
 
+// Hash computes the keccak256 hash of the access list
 func (e *BlockAccessList) Hash() common.Hash {
 	var enc bytes.Buffer
 	err := e.EncodeRLP(&enc)

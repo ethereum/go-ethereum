@@ -18,9 +18,6 @@ package bal
 
 import (
 	"bytes"
-	"io/fs"
-	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -29,30 +26,9 @@ import (
 	"github.com/holiman/uint256"
 )
 
-func equalBALs(a *ConstructionBlockAccessList, b *ConstructionBlockAccessList) bool {
-	if len(a.Accounts) != len(b.Accounts) {
+func equalBALs(a *BlockAccessList, b *BlockAccessList) bool {
+	if !reflect.DeepEqual(a, b) {
 		return false
-	}
-	for addr, aaA := range a.Accounts {
-		aaB, ok := b.Accounts[addr]
-		if !ok {
-			return false
-		}
-		if !reflect.DeepEqual(aaA.StorageWrites, aaB.StorageWrites) {
-			return false
-		}
-		if !reflect.DeepEqual(aaA.StorageReads, aaB.StorageReads) {
-			return false
-		}
-		if !reflect.DeepEqual(aaA.BalanceChanges, aaB.BalanceChanges) {
-			return false
-		}
-		if !reflect.DeepEqual(aaA.NonceChanges, aaB.NonceChanges) {
-			return false
-		}
-		if !reflect.DeepEqual(aaA.CodeChange, aaB.CodeChange) {
-			return false
-		}
 	}
 	return true
 }
@@ -119,14 +95,14 @@ func TestBALEncoding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encoding failed: %v\n", err)
 	}
-	var dec ConstructionBlockAccessList
+	var dec BlockAccessList
 	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 10000000)); err != nil {
 		t.Fatalf("decoding failed: %v\n", err)
 	}
-	if dec.Hash() != bal.Hash() {
+	if dec.Hash() != bal.toEncodingObj().Hash() {
 		t.Fatalf("encoded block hash doesn't match decoded")
 	}
-	if !equalBALs(bal, &dec) {
+	if !equalBALs(bal.toEncodingObj(), &dec) {
 		t.Fatal("decoded BAL doesn't match")
 	}
 }
@@ -135,65 +111,18 @@ func TestBALEncoding(t *testing.T) {
 func TestBALFullRLPEncoding(t *testing.T) {
 	var buf bytes.Buffer
 	bal := makeTestBAL()
-	err := bal.EncodeFullRLP(&buf)
+	err := bal.EncodeRLP(&buf)
 	if err != nil {
 		t.Fatalf("encoding failed: %v\n", err)
 	}
-	var dec ConstructionBlockAccessList
-	if err := dec.DecodeFullRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 10000000)); err != nil {
+	var dec BlockAccessList
+	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 10000000)); err != nil {
 		t.Fatalf("decoding failed: %v\n", err)
 	}
-	if dec.Hash() != bal.Hash() {
+	if dec.Hash() != bal.toEncodingObj().Hash() {
 		t.Fatalf("encoded block hash doesn't match decoded")
 	}
-	if !equalBALs(bal, &dec) {
+	if !equalBALs(bal.toEncodingObj(), &dec) {
 		t.Fatal("decoded BAL doesn't match")
 	}
-}
-
-// TestBALDecoding tests that a mainnet BAL produced by https://github.com/nerolation/eth-bal-analysis
-// can be decoded.
-func TestBALDecoding(t *testing.T) {
-	filepath.WalkDir("testdata/ssz", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var b ConstructionBlockAccessList
-		if err := b.decodeSSZ(data); err != nil {
-			t.Fatal(err)
-		}
-		return nil
-	})
-}
-
-func TestBALEncodeSizeDifference(t *testing.T) {
-	filepath.WalkDir("testdata/ssz", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var b ConstructionBlockAccessList
-		if err := b.decodeSSZ(data); err != nil {
-			t.Fatal(err)
-		}
-		var buf bytes.Buffer
-		if err := b.EncodeFullRLP(&buf); err != nil {
-			t.Fatal(err)
-		}
-		t.Logf("SSZ: %v, RLP: %v\n", common.StorageSize(len(data)), common.StorageSize(buf.Len()))
-		return nil
-	})
 }
