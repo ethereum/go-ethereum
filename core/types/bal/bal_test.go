@@ -29,7 +29,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
-func equalBALs(a *BlockAccessList, b *BlockAccessList) bool {
+func equalBALs(a *ConstructionBlockAccessList, b *ConstructionBlockAccessList) bool {
 	if len(a.Accounts) != len(b.Accounts) {
 		return false
 	}
@@ -57,9 +57,9 @@ func equalBALs(a *BlockAccessList, b *BlockAccessList) bool {
 	return true
 }
 
-func makeTestBAL() *BlockAccessList {
-	return &BlockAccessList{
-		map[common.Address]*AccountAccess{
+func makeTestBAL() *ConstructionBlockAccessList {
+	return &ConstructionBlockAccessList{
+		map[common.Address]*ConstructionAccountAccess{
 			common.BytesToAddress([]byte{0xff, 0xff}): {
 				StorageWrites: map[common.Hash]map[uint16]common.Hash{
 					common.BytesToHash([]byte{0x01}): {
@@ -119,7 +119,7 @@ func TestBALEncoding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encoding failed: %v\n", err)
 	}
-	var dec BlockAccessList
+	var dec ConstructionBlockAccessList
 	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 10000000)); err != nil {
 		t.Fatalf("decoding failed: %v\n", err)
 	}
@@ -139,7 +139,7 @@ func TestBALFullRLPEncoding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encoding failed: %v\n", err)
 	}
-	var dec BlockAccessList
+	var dec ConstructionBlockAccessList
 	if err := dec.DecodeFullRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 10000000)); err != nil {
 		t.Fatalf("decoding failed: %v\n", err)
 	}
@@ -165,7 +165,7 @@ func TestBALDecoding(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		var b BlockAccessList
+		var b ConstructionBlockAccessList
 		if err := b.decodeSSZ(data); err != nil {
 			t.Fatal(err)
 		}
@@ -185,7 +185,7 @@ func TestBALEncodeSizeDifference(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		var b BlockAccessList
+		var b ConstructionBlockAccessList
 		if err := b.decodeSSZ(data); err != nil {
 			t.Fatal(err)
 		}

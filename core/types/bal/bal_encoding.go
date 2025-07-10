@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"cmp"
 	"fmt"
+	"github.com/ethereum/go-ethereum/params"
 	"io"
 	"maps"
 	"slices"
@@ -36,39 +37,30 @@ import (
 // These are objects used as input for the access list encoding. They mirror
 // the spec format.
 
-// encodingBlockAccessList is the encoding format of BlockAccessList.
-type encodingBlockAccessList struct {
-	Accesses []encodingAccountAccess `ssz-max:"300000"`
+// BlockAccessList is the encoding format of ConstructionBlockAccessList.
+type BlockAccessList struct {
+	Accesses []AccountAccess `ssz-max:"300000"`
 }
 
-// toBlockAccessList converts out of the encoding format, returning an error if
-// values in the encoder object are not properly ordered according to the spec.
-func (e *encodingBlockAccessList) toBlockAccessList() (*BlockAccessList, error) {
+// validate returns an error if the contents of the access list are not ordered
+// according to the spec or any code changes are contained which exceed protocol
+// max code size.
+func (e *BlockAccessList) validate() error {
 	var (
-		obj  = NewBlockAccessList()
 		prev *[20]byte
 	)
 	for _, entry := range e.Accesses {
 		if prev != nil {
 			if bytes.Compare(entry.Address[:], (*prev)[:]) <= 0 {
-				return nil, fmt.Errorf("block access list accounts not in lexicographic order")
+				return fmt.Errorf("block access list accounts not in lexicographic order")
 			}
 		}
-		prev = &entry.Address
-
-		aa, err := entry.toAccountAccess()
-		if err != nil {
-			return nil, err
+		if err := entry.validate(); err != nil {
+			return err
 		}
-		obj.Accounts[entry.Address] = aa
+		prev = &entry.Address
 	}
-	return &obj, nil
-}
-
-// encodingCodeChange is the encoding format of CodeChange.
-type encodingCodeChange struct {
-	TxIndex uint16
-	Code    []byte `ssz-max:"24576"`
+	return nil
 }
 
 // encodeBalance encodes the provided balance into 16-bytes.
@@ -106,62 +98,48 @@ type encodingSlotWrites struct {
 	Accesses []encodingStorageWrite `ssz-max:"300000"`
 }
 
-// toSlotWrites returns an instance of the encoding-representation slot writes in
+// validate returns an instance of the encoding-representation slot writes in
 // working representation.
-func (e *encodingSlotWrites) toSlotWrites() (map[uint16]common.Hash, error) {
-	var (
-		prev *uint16
-		obj  = make(map[uint16]common.Hash)
-	)
+func (e *encodingSlotWrites) validate() error {
+	var prev *uint16
 	for _, write := range e.Accesses {
 		if prev != nil {
 			if *prev >= write.TxIdx {
-				return nil, fmt.Errorf("storage write tx indices not in order")
+				return fmt.Errorf("storage write tx indices not in order")
 			}
 		}
 		prev = &write.TxIdx
-		obj[write.TxIdx] = write.ValueAfter
 	}
-	return obj, nil
+	return nil
 }
 
-// encodingAccountAccess is the encoding format of AccountAccess.
-type encodingAccountAccess struct {
+// AccountAccess is the encoding format of ConstructionAccountAccess.
+type AccountAccess struct {
 	Address        [20]byte                `ssz-size:"20"`    // 20-byte Ethereum address
 	StorageWrites  []encodingSlotWrites    `ssz-max:"300000"` // Storage changes (slot -> [tx_index -> new_value])
 	StorageReads   [][32]byte              `ssz-max:"300000"` // Read-only storage keys
 	BalanceChanges []encodingBalanceChange `ssz-max:"300000"` // Balance changes ([tx_index -> post_balance])
 	NonceChanges   []encodingAccountNonce  `ssz-max:"300000"` // Nonce changes ([tx_index -> new_nonce])
-	Code           []encodingCodeChange    `ssz-max:"1"`      // Code changes ([tx_index -> new_code])
+	Code           []CodeChange            `ssz-max:"1"`      // Code changes ([tx_index -> new_code])
 }
 
-// toAccountAccess converts the account accesses out of encoding format.
+// validate converts the account accesses out of encoding format.
 // If any of the keys in the encoding object are not ordered according to the
 // spec, an error is returned.
-func (e *encodingAccountAccess) toAccountAccess() (*AccountAccess, error) {
-	res := AccountAccess{
-		StorageWrites:  make(map[common.Hash]map[uint16]common.Hash),
-		StorageReads:   make(map[common.Hash]struct{}),
-		BalanceChanges: make(map[uint16]*uint256.Int),
-		NonceChanges:   make(map[uint16]uint64),
-		CodeChange:     nil,
-	}
-
+func (e *AccountAccess) validate() error {
 	// Convert slot writes
 	var prevSlotWrite *[32]byte
 	for _, write := range e.StorageWrites {
 		if prevSlotWrite != nil {
 			if bytes.Compare((*prevSlotWrite)[:], write.Slot[:]) >= 0 {
-				return nil, fmt.Errorf("storage writes slots not in lexicographic order")
+				return fmt.Errorf("storage writes slots not in lexicographic order")
 			}
 		}
 		prevSlotWrite = &write.Slot
 
-		wr, err := write.toSlotWrites()
-		if err != nil {
-			return nil, err
+		if err := write.validate(); err != nil {
+			return err
 		}
-		res.StorageWrites[write.Slot] = wr
 	}
 
 	// Convert slot reads
@@ -169,11 +147,10 @@ func (e *encodingAccountAccess) toAccountAccess() (*AccountAccess, error) {
 	for _, read := range e.StorageReads {
 		if prevSlotRead != nil {
 			if bytes.Compare((*prevSlotRead)[:], read[:]) >= 0 {
-				return nil, fmt.Errorf("storage read slots not in lexicographic order")
+				return fmt.Errorf("storage read slots not in lexicographic order")
 			}
 		}
 		prevSlotRead = &read
-		res.StorageReads[read] = struct{}{}
 	}
 
 	// Convert balance changes
@@ -181,11 +158,10 @@ func (e *encodingAccountAccess) toAccountAccess() (*AccountAccess, error) {
 	for _, balanceChange := range e.BalanceChanges {
 		if prevBalanceIndex != nil {
 			if *prevBalanceIndex >= balanceChange.TxIdx {
-				return nil, fmt.Errorf("balance changes not in ascending order by tx index")
+				return fmt.Errorf("balance changes not in ascending order by tx index")
 			}
 		}
 		prevBalanceIndex = &balanceChange.TxIdx
-		res.BalanceChanges[balanceChange.TxIdx] = new(uint256.Int).SetBytes(balanceChange.Balance[:])
 	}
 
 	// Convert nonce changes
@@ -193,25 +169,23 @@ func (e *encodingAccountAccess) toAccountAccess() (*AccountAccess, error) {
 	for _, nonceChange := range e.NonceChanges {
 		if prevNonceIndex != nil {
 			if *prevNonceIndex >= nonceChange.TxIdx {
-				return nil, fmt.Errorf("nonce diffs not in ascending order by tx index")
+				return fmt.Errorf("nonce diffs not in ascending order by tx index")
 			}
 		}
 		prevNonceIndex = &nonceChange.TxIdx
-		res.NonceChanges[nonceChange.TxIdx] = nonceChange.Nonce
 	}
 
 	// Convert code change
 	if len(e.Code) == 1 {
-		res.CodeChange = &CodeChange{
-			TxIndex: e.Code[0].TxIndex,
-			Code:    bytes.Clone(e.Code[0].Code),
+		if len(e.Code[0].Code) > params.MaxCodeSize {
+			return fmt.Errorf("code change contained oversized code")
 		}
 	}
-	return &res, nil
+	return nil
 }
 
 // EncodeRLP returns the SSZ-encoded access list wrapped into RLP bytes.
-func (b *BlockAccessList) EncodeRLP(wr io.Writer) error {
+func (b *ConstructionBlockAccessList) EncodeRLP(wr io.Writer) error {
 	w := rlp.NewEncoderBuffer(wr)
 	buf, err := b.encodeSSZ()
 	if err != nil {
@@ -222,7 +196,7 @@ func (b *BlockAccessList) EncodeRLP(wr io.Writer) error {
 }
 
 // DecodeRLP decodes the bloc accessList.
-func (b *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
+func (b *BlockAccessList) DecodeSSZRLP(s *rlp.Stream) error {
 	encBytes, err := s.Bytes()
 	if err != nil {
 		return err
@@ -231,31 +205,29 @@ func (b *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
 }
 
 // EncodeFullRLP returns the RLP-encoded access list wrapped into RLP bytes.
-func (b *BlockAccessList) EncodeFullRLP(wr io.Writer) error {
+func (b *ConstructionBlockAccessList) EncodeFullRLP(wr io.Writer) error {
 	return b.toEncodingObj().EncodeRLP(wr)
 }
 
 // DecodeFullRLP decodes the block accessList with full RLP format.
 func (b *BlockAccessList) DecodeFullRLP(s *rlp.Stream) error {
-	var obj encodingBlockAccessList
+	var obj BlockAccessList
 	if err := obj.DecodeRLP(s); err != nil {
 		return err
 	}
-	al, err := obj.toBlockAccessList()
-	if err != nil {
+	if err := obj.validate(); err != nil {
 		return err
 	}
-	*b = *al
+	*b = obj
 	return nil
 }
 
-var _ rlp.Encoder = &BlockAccessList{}
-var _ rlp.Decoder = &BlockAccessList{}
+var _ rlp.Encoder = &ConstructionBlockAccessList{}
 
-// toEncodingObj creates an instance of the AccountAccess of the type that is
+// toEncodingObj creates an instance of the ConstructionAccountAccess of the type that is
 // used as input for the encoding.
-func (a *AccountAccess) toEncodingObj(addr common.Address) encodingAccountAccess {
-	res := encodingAccountAccess{
+func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAccess {
+	res := AccountAccess{
 		Address:        addr,
 		StorageWrites:  make([]encodingSlotWrites, 0),
 		StorageReads:   make([][32]byte, 0),
@@ -314,7 +286,7 @@ func (a *AccountAccess) toEncodingObj(addr common.Address) encodingAccountAccess
 
 	// Convert code change
 	if a.CodeChange != nil {
-		res.Code = []encodingCodeChange{
+		res.Code = []CodeChange{
 			{
 				a.CodeChange.TxIndex,
 				bytes.Clone(a.CodeChange.Code),
@@ -326,21 +298,21 @@ func (a *AccountAccess) toEncodingObj(addr common.Address) encodingAccountAccess
 
 // toEncodingObj returns an instance of the access list expressed as the type
 // which is used as input for the encoding/decoding.
-func (b *BlockAccessList) toEncodingObj() *encodingBlockAccessList {
+func (b *ConstructionBlockAccessList) toEncodingObj() *BlockAccessList {
 	var addresses []common.Address
 	for addr := range b.Accounts {
 		addresses = append(addresses, addr)
 	}
 	slices.SortFunc(addresses, common.Address.Cmp)
 
-	var res encodingBlockAccessList
+	var res BlockAccessList
 	for _, addr := range addresses {
 		res.Accesses = append(res.Accesses, b.Accounts[addr].toEncodingObj(addr))
 	}
 	return &res
 }
 
-func (b *BlockAccessList) encodeSSZ() ([]byte, error) {
+func (b *ConstructionBlockAccessList) encodeSSZ() ([]byte, error) {
 	encoderObj := b.toEncodingObj()
 	dst, err := encoderObj.MarshalSSZTo(nil)
 	if err != nil {
@@ -350,19 +322,16 @@ func (b *BlockAccessList) encodeSSZ() ([]byte, error) {
 }
 
 func (b *BlockAccessList) decodeSSZ(buf []byte) error {
-	var enc encodingBlockAccessList
-	if err := enc.UnmarshalSSZ(buf); err != nil {
+	if err := b.UnmarshalSSZ(buf); err != nil {
 		return err
 	}
-	res, err := enc.toBlockAccessList()
-	if err != nil {
+	if err := b.validate(); err != nil {
 		return err
 	}
-	*b = *res
 	return nil
 }
 
-func (e *encodingBlockAccessList) prettyPrint() string {
+func (e *BlockAccessList) PrettyPrint() string {
 	var res bytes.Buffer
 	printWithIndent := func(indent int, text string) {
 		fmt.Fprintf(&res, "%s%s\n", strings.Repeat("    ", indent), text)

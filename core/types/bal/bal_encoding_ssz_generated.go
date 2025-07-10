@@ -7,13 +7,13 @@ import (
 	ssz "github.com/ferranbt/fastssz"
 )
 
-// MarshalSSZ ssz marshals the encodingBlockAccessList object
-func (e *encodingBlockAccessList) MarshalSSZ() ([]byte, error) {
+// MarshalSSZ ssz marshals the BlockAccessList object
+func (e *BlockAccessList) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(e)
 }
 
-// MarshalSSZTo ssz marshals the encodingBlockAccessList object to a target array
-func (e *encodingBlockAccessList) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+// MarshalSSZTo ssz marshals the BlockAccessList object to a target array
+func (e *BlockAccessList) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 	offset := int(4)
 
@@ -22,7 +22,7 @@ func (e *encodingBlockAccessList) MarshalSSZTo(buf []byte) (dst []byte, err erro
 
 	// Field (0) 'Accesses'
 	if size := len(e.Accesses); size > 300000 {
-		err = ssz.ErrListTooBigFn("encodingBlockAccessList.Accesses", size, 300000)
+		err = ssz.ErrListTooBigFn("BlockAccessList.Accesses", size, 300000)
 		return
 	}
 	{
@@ -41,8 +41,8 @@ func (e *encodingBlockAccessList) MarshalSSZTo(buf []byte) (dst []byte, err erro
 	return
 }
 
-// UnmarshalSSZ ssz unmarshals the encodingBlockAccessList object
-func (e *encodingBlockAccessList) UnmarshalSSZ(buf []byte) error {
+// UnmarshalSSZ ssz unmarshals the BlockAccessList object
+func (e *BlockAccessList) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
 	if size < 4 {
@@ -68,7 +68,7 @@ func (e *encodingBlockAccessList) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		e.Accesses = make([]encodingAccountAccess, num)
+		e.Accesses = make([]AccountAccess, num)
 		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
 			if err = e.Accesses[indx].UnmarshalSSZ(buf); err != nil {
 				return err
@@ -82,8 +82,8 @@ func (e *encodingBlockAccessList) UnmarshalSSZ(buf []byte) error {
 	return err
 }
 
-// SizeSSZ returns the ssz encoded size in bytes for the encodingBlockAccessList object
-func (e *encodingBlockAccessList) SizeSSZ() (size int) {
+// SizeSSZ returns the ssz encoded size in bytes for the BlockAccessList object
+func (e *BlockAccessList) SizeSSZ() (size int) {
 	size = 4
 
 	// Field (0) 'Accesses'
@@ -95,13 +95,13 @@ func (e *encodingBlockAccessList) SizeSSZ() (size int) {
 	return
 }
 
-// HashTreeRoot ssz hashes the encodingBlockAccessList object
-func (e *encodingBlockAccessList) HashTreeRoot() ([32]byte, error) {
+// HashTreeRoot ssz hashes the BlockAccessList object
+func (e *BlockAccessList) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(e)
 }
 
-// HashTreeRootWith ssz hashes the encodingBlockAccessList object with a hasher
-func (e *encodingBlockAccessList) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+// HashTreeRootWith ssz hashes the BlockAccessList object with a hasher
+func (e *BlockAccessList) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'Accesses'
@@ -124,8 +124,8 @@ func (e *encodingBlockAccessList) HashTreeRootWith(hh ssz.HashWalker) (err error
 	return
 }
 
-// GetTree ssz hashes the encodingBlockAccessList object
-func (e *encodingBlockAccessList) GetTree() (*ssz.Node, error) {
+// GetTree ssz hashes the BlockAccessList object
+func (e *BlockAccessList) GetTree() (*ssz.Node, error) {
 	return ssz.ProofTree(e)
 }
 
@@ -547,13 +547,13 @@ func (e *encodingSlotWrites) GetTree() (*ssz.Node, error) {
 	return ssz.ProofTree(e)
 }
 
-// MarshalSSZ ssz marshals the encodingAccountAccess object
-func (e *encodingAccountAccess) MarshalSSZ() ([]byte, error) {
+// MarshalSSZ ssz marshals the AccountAccess object
+func (e *AccountAccess) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(e)
 }
 
-// MarshalSSZTo ssz marshals the encodingAccountAccess object to a target array
-func (e *encodingAccountAccess) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+// MarshalSSZTo ssz marshals the AccountAccess object to a target array
+func (e *AccountAccess) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 	offset := int(40)
 
@@ -584,7 +584,7 @@ func (e *encodingAccountAccess) MarshalSSZTo(buf []byte) (dst []byte, err error)
 
 	// Field (1) 'StorageWrites'
 	if size := len(e.StorageWrites); size > 300000 {
-		err = ssz.ErrListTooBigFn("encodingAccountAccess.StorageWrites", size, 300000)
+		err = ssz.ErrListTooBigFn("AccountAccess.StorageWrites", size, 300000)
 		return
 	}
 	{
@@ -602,7 +602,7 @@ func (e *encodingAccountAccess) MarshalSSZTo(buf []byte) (dst []byte, err error)
 
 	// Field (2) 'StorageReads'
 	if size := len(e.StorageReads); size > 300000 {
-		err = ssz.ErrListTooBigFn("encodingAccountAccess.StorageReads", size, 300000)
+		err = ssz.ErrListTooBigFn("AccountAccess.StorageReads", size, 300000)
 		return
 	}
 	for ii := 0; ii < len(e.StorageReads); ii++ {
@@ -611,7 +611,7 @@ func (e *encodingAccountAccess) MarshalSSZTo(buf []byte) (dst []byte, err error)
 
 	// Field (3) 'BalanceChanges'
 	if size := len(e.BalanceChanges); size > 300000 {
-		err = ssz.ErrListTooBigFn("encodingAccountAccess.BalanceChanges", size, 300000)
+		err = ssz.ErrListTooBigFn("AccountAccess.BalanceChanges", size, 300000)
 		return
 	}
 	for ii := 0; ii < len(e.BalanceChanges); ii++ {
@@ -622,7 +622,7 @@ func (e *encodingAccountAccess) MarshalSSZTo(buf []byte) (dst []byte, err error)
 
 	// Field (4) 'NonceChanges'
 	if size := len(e.NonceChanges); size > 300000 {
-		err = ssz.ErrListTooBigFn("encodingAccountAccess.NonceChanges", size, 300000)
+		err = ssz.ErrListTooBigFn("AccountAccess.NonceChanges", size, 300000)
 		return
 	}
 	for ii := 0; ii < len(e.NonceChanges); ii++ {
@@ -633,7 +633,7 @@ func (e *encodingAccountAccess) MarshalSSZTo(buf []byte) (dst []byte, err error)
 
 	// Field (5) 'Code'
 	if size := len(e.Code); size > 1 {
-		err = ssz.ErrListTooBigFn("encodingAccountAccess.Code", size, 1)
+		err = ssz.ErrListTooBigFn("AccountAccess.Code", size, 1)
 		return
 	}
 	{
@@ -652,8 +652,8 @@ func (e *encodingAccountAccess) MarshalSSZTo(buf []byte) (dst []byte, err error)
 	return
 }
 
-// UnmarshalSSZ ssz unmarshals the encodingAccountAccess object
-func (e *encodingAccountAccess) UnmarshalSSZ(buf []byte) error {
+// UnmarshalSSZ ssz unmarshals the AccountAccess object
+func (e *AccountAccess) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
 	if size < 40 {
@@ -778,8 +778,8 @@ func (e *encodingAccountAccess) UnmarshalSSZ(buf []byte) error {
 	return err
 }
 
-// SizeSSZ returns the ssz encoded size in bytes for the encodingAccountAccess object
-func (e *encodingAccountAccess) SizeSSZ() (size int) {
+// SizeSSZ returns the ssz encoded size in bytes for the AccountAccess object
+func (e *AccountAccess) SizeSSZ() (size int) {
 	size = 40
 
 	// Field (1) 'StorageWrites'
@@ -806,13 +806,13 @@ func (e *encodingAccountAccess) SizeSSZ() (size int) {
 	return
 }
 
-// HashTreeRoot ssz hashes the encodingAccountAccess object
-func (e *encodingAccountAccess) HashTreeRoot() ([32]byte, error) {
+// HashTreeRoot ssz hashes the AccountAccess object
+func (e *AccountAccess) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(e)
 }
 
-// HashTreeRootWith ssz hashes the encodingAccountAccess object with a hasher
-func (e *encodingAccountAccess) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+// HashTreeRootWith ssz hashes the AccountAccess object with a hasher
+func (e *AccountAccess) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'Address'
@@ -837,7 +837,7 @@ func (e *encodingAccountAccess) HashTreeRootWith(hh ssz.HashWalker) (err error) 
 	// Field (2) 'StorageReads'
 	{
 		if size := len(e.StorageReads); size > 300000 {
-			err = ssz.ErrListTooBigFn("encodingAccountAccess.StorageReads", size, 300000)
+			err = ssz.ErrListTooBigFn("AccountAccess.StorageReads", size, 300000)
 			return
 		}
 		subIndx := hh.Index()
@@ -900,7 +900,7 @@ func (e *encodingAccountAccess) HashTreeRootWith(hh ssz.HashWalker) (err error) 
 	return
 }
 
-// GetTree ssz hashes the encodingAccountAccess object
-func (e *encodingAccountAccess) GetTree() (*ssz.Node, error) {
+// GetTree ssz hashes the AccountAccess object
+func (e *AccountAccess) GetTree() (*ssz.Node, error) {
 	return ssz.ProofTree(e)
 }

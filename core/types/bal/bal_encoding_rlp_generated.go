@@ -5,7 +5,7 @@ package bal
 import "github.com/ethereum/go-ethereum/rlp"
 import "io"
 
-func (obj *encodingBlockAccessList) EncodeRLP(_w io.Writer) error {
+func (obj *BlockAccessList) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
 	_tmp0 := w.List()
 	_tmp1 := w.List()
@@ -63,19 +63,19 @@ func (obj *encodingBlockAccessList) EncodeRLP(_w io.Writer) error {
 	return w.Flush()
 }
 
-func (obj *encodingBlockAccessList) DecodeRLP(dec *rlp.Stream) error {
-	var _tmp0 encodingBlockAccessList
+func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
+	var _tmp0 BlockAccessList
 	{
 		if _, err := dec.List(); err != nil {
 			return err
 		}
 		// Accesses:
-		var _tmp1 []encodingAccountAccess
+		var _tmp1 []AccountAccess
 		if _, err := dec.List(); err != nil {
 			return err
 		}
 		for dec.MoreDataInList() {
-			var _tmp2 encodingAccountAccess
+			var _tmp2 AccountAccess
 			{
 				if _, err := dec.List(); err != nil {
 					return err

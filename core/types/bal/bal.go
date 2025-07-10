@@ -31,9 +31,10 @@ type CodeChange struct {
 	Code    []byte `json:"code,omitempty"`
 }
 
-// AccountAccess contains post-block account state for mutations as well as
-// all storage keys that were read during execution.
-type AccountAccess struct {
+// ConstructionAccountAccess contains post-block account state for mutations as well as
+// all storage keys that were read during execution.  It is used when building block
+// access list during execution.
+type ConstructionAccountAccess struct {
 	// StorageWrites is the post-state values of an account's storage slots
 	// that were modified in a block, keyed by the slot key and the tx index
 	// where the modification occurred.
@@ -59,9 +60,9 @@ type AccountAccess struct {
 	CodeChange *CodeChange `json:"codeChange,omitempty"`
 }
 
-// NewAccountAccess initializes the account access object.
-func NewAccountAccess() *AccountAccess {
-	return &AccountAccess{
+// NewConstructionAccountAccess initializes the account access object.
+func NewConstructionAccountAccess() *ConstructionAccountAccess {
+	return &ConstructionAccountAccess{
 		StorageWrites:  make(map[common.Hash]map[uint16]common.Hash),
 		StorageReads:   make(map[common.Hash]struct{}),
 		BalanceChanges: make(map[uint16]*uint256.Int),
@@ -69,30 +70,30 @@ func NewAccountAccess() *AccountAccess {
 	}
 }
 
-// BlockAccessList contains post-block modified state and some state accessed
+// ConstructionBlockAccessList contains post-block modified state and some state accessed
 // in execution (account addresses and storage keys).
-type BlockAccessList struct {
-	Accounts map[common.Address]*AccountAccess
+type ConstructionBlockAccessList struct {
+	Accounts map[common.Address]*ConstructionAccountAccess
 }
 
 // NewBlockAccessList instantiates an empty access list.
-func NewBlockAccessList() BlockAccessList {
-	return BlockAccessList{
-		Accounts: make(map[common.Address]*AccountAccess),
+func NewBlockAccessList() ConstructionBlockAccessList {
+	return ConstructionBlockAccessList{
+		Accounts: make(map[common.Address]*ConstructionAccountAccess),
 	}
 }
 
 // AccountRead records the address of an account that has been read during execution.
-func (b *BlockAccessList) AccountRead(addr common.Address) {
+func (b *ConstructionBlockAccessList) AccountRead(addr common.Address) {
 	if _, ok := b.Accounts[addr]; !ok {
-		b.Accounts[addr] = NewAccountAccess()
+		b.Accounts[addr] = NewConstructionAccountAccess()
 	}
 }
 
 // StorageRead records a storage key read during execution.
-func (b *BlockAccessList) StorageRead(address common.Address, key common.Hash) {
+func (b *ConstructionBlockAccessList) StorageRead(address common.Address, key common.Hash) {
 	if _, ok := b.Accounts[address]; !ok {
-		b.Accounts[address] = NewAccountAccess()
+		b.Accounts[address] = NewConstructionAccountAccess()
 	}
 	if _, ok := b.Accounts[address].StorageWrites[key]; ok {
 		return
@@ -102,9 +103,9 @@ func (b *BlockAccessList) StorageRead(address common.Address, key common.Hash) {
 
 // StorageWrite records the post-transaction value of a mutated storage slot.
 // The storage slot is removed from the list of read slots.
-func (b *BlockAccessList) StorageWrite(txIdx uint16, address common.Address, key, value common.Hash) {
+func (b *ConstructionBlockAccessList) StorageWrite(txIdx uint16, address common.Address, key, value common.Hash) {
 	if _, ok := b.Accounts[address]; !ok {
-		b.Accounts[address] = NewAccountAccess()
+		b.Accounts[address] = NewConstructionAccountAccess()
 	}
 	if _, ok := b.Accounts[address].StorageWrites[key]; !ok {
 		b.Accounts[address].StorageWrites[key] = make(map[uint16]common.Hash)
@@ -115,9 +116,9 @@ func (b *BlockAccessList) StorageWrite(txIdx uint16, address common.Address, key
 }
 
 // CodeChange records the code of a newly-created contract.
-func (b *BlockAccessList) CodeChange(address common.Address, txIndex uint16, code []byte) {
+func (b *ConstructionBlockAccessList) CodeChange(address common.Address, txIndex uint16, code []byte) {
 	if _, ok := b.Accounts[address]; !ok {
-		b.Accounts[address] = NewAccountAccess()
+		b.Accounts[address] = NewConstructionAccountAccess()
 	}
 	b.Accounts[address].CodeChange = &CodeChange{
 		TxIndex: txIndex,
@@ -127,30 +128,30 @@ func (b *BlockAccessList) CodeChange(address common.Address, txIndex uint16, cod
 
 // NonceChange records tx post-state nonce of any contract-like accounts whose
 // nonce was incremented.
-func (b *BlockAccessList) NonceChange(address common.Address, txIdx uint16, postNonce uint64) {
+func (b *ConstructionBlockAccessList) NonceChange(address common.Address, txIdx uint16, postNonce uint64) {
 	if _, ok := b.Accounts[address]; !ok {
-		b.Accounts[address] = NewAccountAccess()
+		b.Accounts[address] = NewConstructionAccountAccess()
 	}
 	b.Accounts[address].NonceChanges[txIdx] = postNonce
 }
 
 // BalanceChange records the post-transaction balance of an account whose
 // balance changed.
-func (b *BlockAccessList) BalanceChange(txIdx uint16, address common.Address, balance *uint256.Int) {
+func (b *ConstructionBlockAccessList) BalanceChange(txIdx uint16, address common.Address, balance *uint256.Int) {
 	if _, ok := b.Accounts[address]; !ok {
-		b.Accounts[address] = NewAccountAccess()
+		b.Accounts[address] = NewConstructionAccountAccess()
 	}
 	b.Accounts[address].BalanceChanges[txIdx] = balance.Clone()
 }
 
 // PrettyPrint returns a human-readable representation of the access list
-func (b *BlockAccessList) PrettyPrint() string {
+func (b *ConstructionBlockAccessList) PrettyPrint() string {
 	enc := b.toEncodingObj()
-	return enc.prettyPrint()
+	return enc.PrettyPrint()
 }
 
 // Hash computes the SSZ hash of the access list
-func (b *BlockAccessList) Hash() common.Hash {
+func (b *ConstructionBlockAccessList) Hash() common.Hash {
 	hash, err := b.toEncodingObj().HashTreeRoot()
 	if err != nil {
 		// errors here are related to BAL values exceeding maximum size defined
@@ -162,10 +163,10 @@ func (b *BlockAccessList) Hash() common.Hash {
 }
 
 // Copy returns a deep copy of the access list.
-func (b *BlockAccessList) Copy() *BlockAccessList {
+func (b *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 	res := NewBlockAccessList()
 	for addr, aa := range b.Accounts {
-		var aaCopy AccountAccess
+		var aaCopy ConstructionAccountAccess
 
 		slotWrites := make(map[common.Hash]map[uint16]common.Hash, len(aa.StorageWrites))
 		for key, m := range aa.StorageWrites {
