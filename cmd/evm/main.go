@@ -229,7 +229,7 @@ func main() {
 }
 
 // tracerFromFlags parses the cli flags and returns the specified tracer.
-func tracerFromFlags(ctx *cli.Context) *tracing.Hooks {
+func tracerFromFlags(ctx *cli.Context) tracing.Hooks {
 	config := &logger.Config{
 		EnableMemory:     !ctx.Bool(TraceDisableMemoryFlag.Name),
 		DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
@@ -248,7 +248,7 @@ func tracerFromFlags(ctx *cli.Context) *tracing.Hooks {
 		default:
 			fmt.Fprintf(os.Stderr, "unknown trace format: %q\n", format)
 			os.Exit(1)
-			return nil
+			return tracing.Hooks{}
 		}
 	// Deprecated ways of configuring tracing.
 	case ctx.Bool(MachineFlag.Name):
@@ -256,7 +256,7 @@ func tracerFromFlags(ctx *cli.Context) *tracing.Hooks {
 	case ctx.Bool(DebugFlag.Name):
 		return logger.NewStreamingStructLogger(config, os.Stderr).Hooks()
 	default:
-		return nil
+		return tracing.Hooks{}
 	}
 }
 

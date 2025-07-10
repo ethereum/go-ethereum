@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/tracing"
 )
 
 func TestBlockchain(t *testing.T) {
@@ -105,7 +106,7 @@ func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest) {
 	}
 	for _, snapshot := range snapshotConf {
 		for _, dbscheme := range dbschemeConf {
-			if err := bt.checkFailure(t, test.Run(snapshot, dbscheme, true, nil, nil)); err != nil {
+			if err := bt.checkFailure(t, test.Run(snapshot, dbscheme, true, tracing.Hooks{}, nil)); err != nil {
 				t.Errorf("test with config {snapshotter:%v, scheme:%v} failed: %v", snapshot, dbscheme, err)
 				return
 			}

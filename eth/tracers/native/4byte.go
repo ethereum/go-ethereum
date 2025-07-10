@@ -64,7 +64,7 @@ func newFourByteTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *p
 		chainConfig: chainConfig,
 	}
 	return &tracers.Tracer{
-		Hooks: &tracing.Hooks{
+		Hooks: tracing.Hooks{
 			OnTxStart: t.OnTxStart,
 			OnEnter:   t.OnEnter,
 		},

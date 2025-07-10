@@ -92,13 +92,13 @@ type supplyTracerConfig struct {
 	MaxSize int    `json:"maxSize"` // MaxSize is the maximum size in megabytes of the tracer log file before it gets rotated. It defaults to 100 megabytes.
 }
 
-func newSupplyTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
+func newSupplyTracer(cfg json.RawMessage) (tracing.Hooks, error) {
 	var config supplyTracerConfig
 	if err := json.Unmarshal(cfg, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse config: %v", err)
+		return tracing.Hooks{}, fmt.Errorf("failed to parse config: %v", err)
 	}
 	if config.Path == "" {
-		return nil, errors.New("supply tracer output path is required")
+		return tracing.Hooks{}, errors.New("supply tracer output path is required")
 	}
 
 	// Store traces in a rotating file
@@ -113,7 +113,7 @@ func newSupplyTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
 		delta:  newSupplyInfo(),
 		logger: logger,
 	}
-	return &tracing.Hooks{
+	return tracing.Hooks{
 		OnBlockchainInit: t.onBlockchainInit,
 		OnBlockStart:     t.onBlockStart,
 		OnBlockEnd:       t.onBlockEnd,

@@ -119,8 +119,8 @@ func NewAccessListTracer(acl types.AccessList, addressesToExclude map[common.Add
 	}
 }
 
-func (a *AccessListTracer) Hooks() *tracing.Hooks {
-	return &tracing.Hooks{
+func (a *AccessListTracer) Hooks() tracing.Hooks {
+	return tracing.Hooks{
 		OnOpcode: a.OnOpcode,
 	}
 }

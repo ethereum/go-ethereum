@@ -217,6 +217,16 @@ type Hooks struct {
 	OnBlockHashRead BlockHashReadHook
 }
 
+// HooksState returns if any of the state events are being hooked
+func (h *Hooks) HooksState() bool {
+	return h.OnBalanceChange != nil ||
+		h.OnNonceChange != nil ||
+		h.OnNonceChangeV2 != nil ||
+		h.OnCodeChange != nil ||
+		h.OnStorageChange != nil ||
+		h.OnLog != nil
+}
+
 // BalanceChangeReason is used to indicate the reason for a balance change, useful
 // for tracing and reporting.
 type BalanceChangeReason byte
