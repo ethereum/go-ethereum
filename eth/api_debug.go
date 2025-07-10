@@ -448,15 +448,14 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 func (api *DebugAPI) ExecuteWitnessByHash(hash common.Hash) (*stateless.ExtWitness, error) {
 	bc := api.eth.blockchain
 	block := bc.GetBlockByHash(hash)
-	if block != nil {
+	if block == nil {
 		return &stateless.ExtWitness{}, fmt.Errorf("block hash %x not found", hash)
 	}
-	statedb, err := bc.StateAt(block.Header().Root)
-	if err != nil {
-		return &stateless.ExtWitness{}, err
-	}
 	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
-	bc.ProcessBlock(parent.Root, block, false, true)
+	result, err := bc.ProcessBlock(parent.Root, block, false, true)
+	if err != nil {
+		return nil, err
+	}
 
-	return statedb.Witness().ToExtWitness(), nil
+	return result.Witness().ToExtWitness(), nil
 }
