@@ -150,18 +150,6 @@ func (b *ConstructionBlockAccessList) PrettyPrint() string {
 	return enc.PrettyPrint()
 }
 
-// Hash computes the SSZ hash of the access list
-func (b *ConstructionBlockAccessList) Hash() common.Hash {
-	hash, err := b.toEncodingObj().HashTreeRoot()
-	if err != nil {
-		// errors here are related to BAL values exceeding maximum size defined
-		// by the spec. Hard-fail because these cases are not expected to be hit
-		// under reasonable conditions.
-		panic(err)
-	}
-	return hash
-}
-
 // Copy returns a deep copy of the access list.
 func (b *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 	res := NewBlockAccessList()

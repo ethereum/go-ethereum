@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"cmp"
 	"fmt"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"io"
 	"maps"
@@ -31,8 +32,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
-//go:generate go run github.com/ferranbt/fastssz/sszgen  --output bal_encoding_ssz_generated.go --path . --objs encodingStorageWrite,encodingCodeChange,encodingBalanceChange,encodingAccountNonce,encodingAccountAccess,encodingBlockAccessList
-//go:generate go run github.com/ethereum/go-ethereum/rlp/rlpgen -out bal_encoding_rlp_generated.go -type encodingBlockAccessList -decoder
+//go:generate go run github.com/ethereum/go-ethereum/rlp/rlpgen -out bal_encoding_rlp_generated.go -type BlockAccessList -decoder
 
 // These are objects used as input for the access list encoding. They mirror
 // the spec format.
@@ -42,10 +42,10 @@ type BlockAccessList struct {
 	Accesses []AccountAccess `ssz-max:"300000"`
 }
 
-// validate returns an error if the contents of the access list are not ordered
+// Validate returns an error if the contents of the access list are not ordered
 // according to the spec or any code changes are contained which exceed protocol
 // max code size.
-func (e *BlockAccessList) validate() error {
+func (e *BlockAccessList) Validate() error {
 	var (
 		prev *[20]byte
 	)
@@ -61,6 +61,18 @@ func (e *BlockAccessList) validate() error {
 		prev = &entry.Address
 	}
 	return nil
+}
+
+func (e *BlockAccessList) Hash() common.Hash {
+	var enc bytes.Buffer
+	err := e.EncodeRLP(&enc)
+	if err != nil {
+		// errors here are related to BAL values exceeding maximum size defined
+		// by the spec. Hard-fail because these cases are not expected to be hit
+		// under reasonable conditions.
+		panic(err)
+	}
+	return crypto.Keccak256Hash(enc.Bytes())
 }
 
 // encodeBalance encodes the provided balance into 16-bytes.
@@ -184,42 +196,9 @@ func (e *AccountAccess) validate() error {
 	return nil
 }
 
-// EncodeRLP returns the SSZ-encoded access list wrapped into RLP bytes.
+// EncodeRLP returns the RLP-encoded access list
 func (b *ConstructionBlockAccessList) EncodeRLP(wr io.Writer) error {
-	w := rlp.NewEncoderBuffer(wr)
-	buf, err := b.encodeSSZ()
-	if err != nil {
-		return err
-	}
-	w.WriteBytes(buf)
-	return w.Flush()
-}
-
-// DecodeRLP decodes the bloc accessList.
-func (b *BlockAccessList) DecodeSSZRLP(s *rlp.Stream) error {
-	encBytes, err := s.Bytes()
-	if err != nil {
-		return err
-	}
-	return b.decodeSSZ(encBytes)
-}
-
-// EncodeFullRLP returns the RLP-encoded access list wrapped into RLP bytes.
-func (b *ConstructionBlockAccessList) EncodeFullRLP(wr io.Writer) error {
 	return b.toEncodingObj().EncodeRLP(wr)
-}
-
-// DecodeFullRLP decodes the block accessList with full RLP format.
-func (b *BlockAccessList) DecodeFullRLP(s *rlp.Stream) error {
-	var obj BlockAccessList
-	if err := obj.DecodeRLP(s); err != nil {
-		return err
-	}
-	if err := obj.validate(); err != nil {
-		return err
-	}
-	*b = obj
-	return nil
 }
 
 var _ rlp.Encoder = &ConstructionBlockAccessList{}
@@ -310,25 +289,6 @@ func (b *ConstructionBlockAccessList) toEncodingObj() *BlockAccessList {
 		res.Accesses = append(res.Accesses, b.Accounts[addr].toEncodingObj(addr))
 	}
 	return &res
-}
-
-func (b *ConstructionBlockAccessList) encodeSSZ() ([]byte, error) {
-	encoderObj := b.toEncodingObj()
-	dst, err := encoderObj.MarshalSSZTo(nil)
-	if err != nil {
-		return nil, err
-	}
-	return dst, nil
-}
-
-func (b *BlockAccessList) decodeSSZ(buf []byte) error {
-	if err := b.UnmarshalSSZ(buf); err != nil {
-		return err
-	}
-	if err := b.validate(); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (e *BlockAccessList) PrettyPrint() string {
