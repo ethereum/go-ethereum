@@ -221,13 +221,32 @@ func (b *BlockAccessList) EncodeRLP(wr io.Writer) error {
 	return w.Flush()
 }
 
-// DecodeRLP decodes the access list
+// DecodeRLP decodes the bloc accessList.
 func (b *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
 	encBytes, err := s.Bytes()
 	if err != nil {
 		return err
 	}
 	return b.decodeSSZ(encBytes)
+}
+
+// EncodeFullRLP returns the RLP-encoded access list wrapped into RLP bytes.
+func (b *BlockAccessList) EncodeFullRLP(wr io.Writer) error {
+	return b.toEncodingObj().EncodeRLP(wr)
+}
+
+// DecodeFullRLP decodes the block accessList with full RLP format.
+func (b *BlockAccessList) DecodeFullRLP(s *rlp.Stream) error {
+	var obj encodingBlockAccessList
+	if err := obj.DecodeRLP(s); err != nil {
+		return err
+	}
+	al, err := obj.toBlockAccessList()
+	if err != nil {
+		return err
+	}
+	*b = *al
+	return nil
 }
 
 var _ rlp.Encoder = &BlockAccessList{}
