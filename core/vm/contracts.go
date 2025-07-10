@@ -605,9 +605,9 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 
 func (c *bigModExp) Run(input []byte) ([]byte, error) {
 	var (
-		baseLen = new(big.Int).SetBytes(getData(input, 0, 32)).Uint64()
-		expLen  = new(big.Int).SetBytes(getData(input, 32, 32)).Uint64()
-		modLen  = new(big.Int).SetBytes(getData(input, 64, 32)).Uint64()
+		baseLen = new(uint256.Int).SetBytes(getData(input, 0, 32)).Uint64()
+		expLen  = new(uint256.Int).SetBytes(getData(input, 32, 32)).Uint64()
+		modLen  = new(uint256.Int).SetBytes(getData(input, 64, 32)).Uint64()
 	)
 	if len(input) > 96 {
 		input = input[96:]
