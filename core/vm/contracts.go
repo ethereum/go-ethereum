@@ -380,7 +380,7 @@ var (
 	u256_16     = uint256.NewInt(16)
 	u256_480    = uint256.NewInt(480)
 	u256_199680 = uint256.NewInt(199680)
-	
+
 	// divisors as uint256
 	u256_byzantiumDivisor = uint256.NewInt(byzantiumDivisor)
 	u256_berlinDivisor    = uint256.NewInt(berlinDivisor)
@@ -407,19 +407,19 @@ func byzantiumMultComplexity(x uint64) *uint256.Int {
 		// For large x, use uint256 arithmetic to avoid overflow
 		// x^2 / 16 + 480*x - 199680
 		xUint := new(uint256.Int).SetUint64(x)
-		
+
 		// Calculate x^2
 		xSquared := new(uint256.Int).Mul(xUint, xUint)
-		
+
 		// Calculate x^2 / 16 (right shift by 4 bits)
 		xSquaredDiv16 := new(uint256.Int).Rsh(xSquared, 4)
-		
+
 		// Calculate 480 * x
 		x480 := new(uint256.Int).Mul(xUint, u256_480)
-		
+
 		// Calculate 480 * x - 199680
 		x480Minus199680 := new(uint256.Int).Sub(x480, u256_199680)
-		
+
 		// Add the two parts together
 		return new(uint256.Int).Add(xSquaredDiv16, x480Minus199680)
 	}
@@ -435,13 +435,14 @@ func byzantiumMultComplexity(x uint64) *uint256.Int {
 func berlinMultComplexity(x uint64) *uint256.Int {
 	// TODO: The preceding line is too smart.
 	// TODO: The issue is that (x+7) / 8 can overflow
-	// TODO: if x > 2^64 - 7 
+	// TODO: if x > 2^64 - 7
 	ceilDiv8 := (x >> 3) + ((x&7 + 7) >> 3) // safe ceil(x / 8)
 	z := new(uint256.Int).SetUint64(ceilDiv8)
-	return new(uint256.Int).Mul(z, z)           // square without overflow
+	return new(uint256.Int).Mul(z, z) // square without overflow
 }
+
 // Slow Bigint way (benchmark this)
-// func berlinMultComplexity(xInt uint64) *big.Int {	
+// func berlinMultComplexity(xInt uint64) *big.Int {
 // 	x := new(big.Int).SetUint64(xInt)
 // 	x = new(big.Int).Add(x, big.NewInt(7))       // x + 7
 // 	x = new(big.Int).Rsh(x, 3)          // (x + 7) / 8
@@ -465,17 +466,17 @@ func osakaMultComplexity(x uint64) *uint256.Int {
 // This is the adjusted exponent length used in gas calculation.
 func calculateIterationCount(expLen uint64, expHead *uint256.Int, multiplier uint64) uint64 {
 	var iterationCount uint64
-	
+
 	// For large exponents (expLen > 32), add (expLen - 32) * multiplier
 	if expLen > 32 {
 		iterationCount = (expLen - 32) * multiplier
 	}
-	
+
 	// Add the MSB position - 1 if expHead is non-zero
 	if bitLen := expHead.BitLen(); bitLen > 0 {
 		iterationCount += uint64(bitLen - 1)
 	}
-	
+
 	// Return at least 1
 	return max(iterationCount, 1)
 }
@@ -484,18 +485,18 @@ func calculateIterationCount(expLen uint64, expHead *uint256.Int, multiplier uin
 func byzantiumGasCalc(baseLen, expLen, modLen uint64, expHead *uint256.Int) uint64 {
 	// Calculate max(baseLen, modLen)
 	maxLen := max(baseLen, modLen)
-	
+
 	// Calculate multiplication complexity
 	multComplexity := byzantiumMultComplexity(maxLen)
-	
+
 	// Calculate iteration count
 	iterationCount := calculateIterationCount(expLen, expHead, byzantiumMultiplier)
-	
+
 	// Calculate gas: (multComplexity * iterationCount) / byzantiumDivisor
 	iterCount := new(uint256.Int).SetUint64(iterationCount)
 	gas := new(uint256.Int).Mul(multComplexity, iterCount)
 	gas.Div(gas, u256_byzantiumDivisor)
-	
+
 	if !gas.IsUint64() {
 		return math.MaxUint64
 	}
@@ -506,22 +507,22 @@ func byzantiumGasCalc(baseLen, expLen, modLen uint64, expHead *uint256.Int) uint
 func berlinGasCalc(baseLen, expLen, modLen uint64, expHead *uint256.Int) uint64 {
 	// Calculate max(baseLen, modLen)
 	maxLen := max(baseLen, modLen)
-	
+
 	// Calculate multiplication complexity
 	multComplexity := berlinMultComplexity(maxLen)
-	
+
 	// Calculate iteration count
 	iterationCount := calculateIterationCount(expLen, expHead, berlinMultiplier)
-	
+
 	// Calculate gas: (multComplexity * iterationCount) / berlinDivisor
 	iterCount := new(uint256.Int).SetUint64(iterationCount)
 	gas := new(uint256.Int).Mul(multComplexity, iterCount)
 	gas.Div(gas, u256_berlinDivisor)
-	
+
 	if !gas.IsUint64() {
 		return math.MaxUint64
 	}
-	
+
 	// Return at least berlinMinGas
 	return max(gas.Uint64(), berlinMinGas)
 }
@@ -530,22 +531,22 @@ func berlinGasCalc(baseLen, expLen, modLen uint64, expHead *uint256.Int) uint64 
 func osakaGasCalc(baseLen, expLen, modLen uint64, expHead *uint256.Int) uint64 {
 	// Calculate max(baseLen, modLen)
 	maxLen := max(baseLen, modLen)
-	
+
 	// Calculate multiplication complexity
 	multComplexity := osakaMultComplexity(maxLen)
-	
+
 	// Calculate iteration count
 	iterationCount := calculateIterationCount(expLen, expHead, osakaMultiplier)
-	
+
 	// Calculate gas: (multComplexity * iterationCount) / osakaDivisor
 	iterCount := new(uint256.Int).SetUint64(iterationCount)
 	gas := new(uint256.Int).Mul(multComplexity, iterCount)
 	gas.Div(gas, u256_osakaDivisor)
-	
+
 	if !gas.IsUint64() {
 		return math.MaxUint64
 	}
-	
+
 	// Return at least osakaMinGas
 	return max(gas.Uint64(), osakaMinGas)
 }
@@ -556,7 +557,7 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	baseLenBig := new(uint256.Int).SetBytes(getData(input, 0, 32))
 	expLenBig := new(uint256.Int).SetBytes(getData(input, 32, 32))
 	modLenBig := new(uint256.Int).SetBytes(getData(input, 64, 32))
-	
+
 	// Convert to uint64, capping at max value
 	baseLen := baseLenBig.Uint64()
 	if !baseLenBig.IsUint64() {
@@ -570,14 +571,14 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	if !modLenBig.IsUint64() {
 		modLen = math.MaxUint64
 	}
-	
+
 	// Skip the header
 	if len(input) > 96 {
 		input = input[96:]
 	} else {
 		input = input[:0]
 	}
-	
+
 	// Retrieve the head 32 bytes of exp for the adjusted exponent length
 	var expHead *uint256.Int
 	if uint64(len(input)) <= baseLen {
@@ -590,7 +591,7 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 			expHead = new(uint256.Int).SetBytes(getData(input, baseLen, expLen))
 		}
 	}
-	
+
 	// Choose the appropriate gas calculation based on the EIP flags
 	if c.eip7883 {
 		return osakaGasCalc(baseLen, expLen, modLen, expHead)
