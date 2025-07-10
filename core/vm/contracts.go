@@ -396,24 +396,34 @@ var (
 //		else: return x ** 2 // 16 + 480 * x - 199680
 //
 // where is x is max(length_of_MODULUS, length_of_BASE)
-func byzantiumMultComplexity(x *big.Int) *big.Int {
+func byzantiumMultComplexity(x uint64) *big.Int {
 	switch {
-	case x.Cmp(big64) <= 0:
-		x.Mul(x, x) // x ** 2
-	case x.Cmp(big1024) <= 0:
-		// (x ** 2 // 4 ) + ( 96 * x - 3072)
-		x = new(big.Int).Add(
-			new(big.Int).Rsh(new(big.Int).Mul(x, x), 2),
-			new(big.Int).Sub(new(big.Int).Mul(big96, x), big3072),
-		)
+	case x <= 64:
+		return new(big.Int).SetUint64(x * x)
+	case x <= 1024:
+		// x^2 / 4 + 96*x - 3072
+		result := x*x/4 + 96*x - 3072
+		return new(big.Int).SetUint64(result)
 	default:
-		// (x ** 2 // 16) + (480 * x - 199680)
-		x = new(big.Int).Add(
-			new(big.Int).Rsh(new(big.Int).Mul(x, x), 4),
-			new(big.Int).Sub(new(big.Int).Mul(big480, x), big199680),
-		)
+		// For large x, use big.Int arithmetic to avoid overflow
+		// x^2 / 16 + 480*x - 199680
+		xBig := new(big.Int).SetUint64(x)
+		
+		// Calculate x^2
+		xSquared := new(big.Int).Mul(xBig, xBig)
+		
+		// Calculate x^2 / 16 (right shift by 4 bits)
+		xSquaredDiv16 := new(big.Int).Rsh(xSquared, 4)
+		
+		// Calculate 480 * x
+		x480 := new(big.Int).Mul(big480, xBig)
+		
+		// Calculate 480 * x - 199680
+		x480Minus199680 := new(big.Int).Sub(x480, big199680)
+		
+		// Add the two parts together
+		return new(big.Int).Add(xSquaredDiv16, x480Minus199680)
 	}
-	return x
 }
 
 // berlinMultComplexity implements the multiplication complexity formula for Berlin.
@@ -423,18 +433,28 @@ func byzantiumMultComplexity(x *big.Int) *big.Int {
 //	ceiling(x/8)^2
 //
 // where is x is max(length_of_MODULUS, length_of_BASE)
-func berlinMultComplexity(x *big.Int) *big.Int {
-	x = new(big.Int).Add(x, big7)       // x + 7
-	x = new(big.Int).Rsh(x, 3)          // (x + 7) / 8
-	return new(big.Int).Mul(x, x)       // ((x + 7) / 8) ^ 2
+func berlinMultComplexity(x uint64) *big.Int {
+	// TODO: The preceding line is too smart.
+	// TODO: The issue is that (x+7) / 8 can overflow
+	// TODO: if x > 2^64 - 7 
+	ceilDiv8 := (x >> 3) + ((x&7 + 7) >> 3) // safe ceil(x / 8)
+	z := new(big.Int).SetUint64(ceilDiv8)
+	return new(big.Int).Mul(z, z)           // square without overflow
 }
+// Slow Bigint way (benchmark this)
+// func berlinMultComplexity(xInt uint64) *big.Int {	
+// 	x := new(big.Int).SetUint64(xInt)
+// 	x = new(big.Int).Add(x, big7)       // x + 7
+// 	x = new(big.Int).Rsh(x, 3)          // (x + 7) / 8
+// 	return new(big.Int).Mul(x, x)       // ((x + 7) / 8) ^ 2
+// }
 
 // osakaMultComplexity implements the multiplication complexity formula for Osaka.
 //
 // For x <= 32: returns 16
 // For x > 32: returns 2 * ceiling(x/8)^2
-func osakaMultComplexity(x *big.Int) *big.Int {
-	if x.Cmp(big32) <= 0 {
+func osakaMultComplexity(x uint64) *big.Int {
+	if x <= 32 {
 		return big.NewInt(16)
 	}
 	// For x > 32, return 2 * berlinMultComplexity(x)
@@ -478,8 +498,7 @@ func byzantiumGasCalc(baseLen, expLen, modLen uint64, expHead *big.Int) uint64 {
 	}
 	
 	// Calculate multiplication complexity
-	// Use SetUint64 to avoid int64 overflow
-	multComplexity := byzantiumMultComplexity(new(big.Int).SetUint64(maxLen))
+	multComplexity := byzantiumMultComplexity(maxLen)
 	
 	// Calculate iteration count
 	iterationCount := calculateIterationCount(expLen, expHead, byzantiumMultiplier)
@@ -503,8 +522,7 @@ func berlinGasCalc(baseLen, expLen, modLen uint64, expHead *big.Int) uint64 {
 	}
 	
 	// Calculate multiplication complexity
-	// Use SetUint64 to avoid int64 overflow
-	multComplexity := berlinMultComplexity(new(big.Int).SetUint64(maxLen))
+	multComplexity := berlinMultComplexity(maxLen)
 	
 	// Calculate iteration count
 	iterationCount := calculateIterationCount(expLen, expHead, berlinMultiplier)
@@ -534,8 +552,7 @@ func osakaGasCalc(baseLen, expLen, modLen uint64, expHead *big.Int) uint64 {
 	}
 	
 	// Calculate multiplication complexity
-	// Use SetUint64 to avoid int64 overflow
-	multComplexity := osakaMultComplexity(new(big.Int).SetUint64(maxLen))
+	multComplexity := osakaMultComplexity(maxLen)
 	
 	// Calculate iteration count
 	iterationCount := calculateIterationCount(expLen, expHead, osakaMultiplier)
