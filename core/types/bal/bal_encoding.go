@@ -1,10 +1,29 @@
+// Copyright 2025 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package bal
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"io"
-	"sort"
+	"maps"
+	"slices"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -12,17 +31,12 @@ import (
 )
 
 //go:generate go run github.com/ferranbt/fastssz/sszgen  --output bal_encoding_ssz_generated.go --path . --objs encodingStorageWrite,encodingCodeChange,encodingBalanceChange,encodingAccountNonce,encodingAccountAccess,encodingBlockAccessList
-
-//go:generate go run github.com/ethereum/go-ethereum/rlp/rlpgen -out bal_encoding_rlp_storagewrite_generated.go -type encodingStorageWrite -decoder
-//go:generate go run github.com/ethereum/go-ethereum/rlp/rlpgen -out bal_encoding_rlp_codechange_generated.go -type encodingCodeChange -decoder
-//go:generate go run github.com/ethereum/go-ethereum/rlp/rlpgen -out bal_encoding_rlp_balancechange_generated.go -type encodingBalanceChange -decoder
-//go:generate go run github.com/ethereum/go-ethereum/rlp/rlpgen -out bal_encoding_rlp_accountnonce_generated.go -type encodingAccountNonce -decoder
-//go:generate go run github.com/ethereum/go-ethereum/rlp/rlpgen -out bal_encoding_rlp_accountaccess_generated.go -type encodingAccountAccess -decoder
-//go:generate go run github.com/ethereum/go-ethereum/rlp/rlpgen -out bal_encoding_rlp_blockaccesslist_generated.go -type encodingBlockAccessList -decoder
+//go:generate go run github.com/ethereum/go-ethereum/rlp/rlpgen -out bal_encoding_rlp_generated.go -type encodingBlockAccessList -decoder
 
 // These are objects used as input for the access list encoding. They mirror
 // the spec format.
 
+// encodingBlockAccessList is the encoding format of BlockAccessList.
 type encodingBlockAccessList struct {
 	Accesses []encodingAccountAccess `ssz-max:"300000"`
 }
@@ -30,137 +44,173 @@ type encodingBlockAccessList struct {
 // toBlockAccessList converts out of the encoding format, returning an error if
 // values in the encoder object are not properly ordered according to the spec.
 func (e *encodingBlockAccessList) toBlockAccessList() (*BlockAccessList, error) {
-	res := NewBlockAccessList()
-	var prevAccount *common.Address
-	for _, encAccountAccess := range e.Accesses {
-		if prevAccount != nil {
-			if bytes.Compare(encAccountAccess.Address[:], (*prevAccount)[:]) <= 0 {
+	var (
+		obj  = NewBlockAccessList()
+		prev *[20]byte
+	)
+	for _, entry := range e.Accesses {
+		if prev != nil {
+			if bytes.Compare(entry.Address[:], (*prev)[:]) <= 0 {
 				return nil, fmt.Errorf("block access list accounts not in lexicographic order")
 			}
 		}
-		aa, err := encAccountAccess.toAccountAccess()
+		prev = &entry.Address
+
+		aa, err := entry.toAccountAccess()
 		if err != nil {
 			return nil, err
 		}
-		res.accounts[encAccountAccess.Address] = aa
+		obj.Accounts[entry.Address] = aa
 	}
-	return &res, nil
+	return &obj, nil
 }
 
+// encodingCodeChange is the encoding format of CodeChange.
 type encodingCodeChange struct {
 	TxIndex uint16
 	Code    []byte `ssz-max:"24576"`
 }
 
-type encodingAccountAccess struct {
-	Address        [20]byte                `ssz-size:"20"`
-	StorageWrites  []encodingSlotWrites    `ssz-max:"300000"`
-	StorageReads   [][32]byte              `ssz-max:"300000"`
-	BalanceChanges []encodingBalanceChange `ssz-max:"300000"`
-	NonceChanges   []encodingAccountNonce  `ssz-max:"300000"`
-	Code           []encodingCodeChange    `ssz-max:"1"`
-}
-
-// toAccountAccess converts the account accesses out of encoding format.
-// If any of the keys in the encoding object are not ordered according to the
-// spec, an error is returned.
-func (e *encodingAccountAccess) toAccountAccess() (*accountAccess, error) {
-	res := accountAccess{
-		StorageWrites:  make(map[common.Hash]slotWrites),
-		StorageReads:   make(map[common.Hash]struct{}),
-		BalanceChanges: make(balanceDiff),
-		NonceChanges:   make(accountNonceDiffs),
-		CodeChange:     nil,
-	}
-
-	{
-		var prevWriteSlot *[32]byte
-		for _, write := range e.StorageWrites {
-			if prevWriteSlot != nil {
-				if bytes.Compare((*prevWriteSlot)[:], write.Slot[:]) >= 0 {
-					return nil, fmt.Errorf("storage writes slots lexicographic order")
-				}
-			}
-			wr, err := write.toSlotWrites()
-			if err != nil {
-				return nil, err
-			}
-
-			res.StorageWrites[write.Slot] = wr
-			prevWriteSlot = &write.Slot
-		}
-	}
-
-	{
-		var prevReadSlot *[32]byte
-		for _, read := range e.StorageReads {
-			if prevReadSlot != nil {
-				if bytes.Compare((*prevReadSlot)[:], read[:]) >= 0 {
-					return nil, fmt.Errorf("storage read slots not in lexicographic order")
-				}
-			}
-			res.StorageReads[read] = struct{}{}
-			prevReadSlot = &read
-		}
-	}
-
-	{
-		var prevBalanceChangeIdx *uint16
-		for _, balanceChange := range e.BalanceChanges {
-			if prevBalanceChangeIdx != nil {
-				if *prevBalanceChangeIdx >= balanceChange.TxIdx {
-					return nil, fmt.Errorf("balance changes not in ascending order by tx index")
-				}
-			}
-			res.BalanceChanges[balanceChange.TxIdx] = new(uint256.Int).SetBytes(balanceChange.Balance[:])
-			prevBalanceChangeIdx = &balanceChange.TxIdx
-		}
-	}
-
-	{
-		var prevNonceDiffIdx *uint16
-		for _, nonceDiff := range e.NonceChanges {
-			if prevNonceDiffIdx != nil {
-				if *prevNonceDiffIdx >= nonceDiff.TxIdx {
-					return nil, fmt.Errorf("nonce diffs not in ascending order by tx index")
-				}
-			}
-			res.NonceChanges[nonceDiff.TxIdx] = nonceDiff.Nonce
-			prevNonceDiffIdx = &nonceDiff.TxIdx
-		}
-	}
-
-	{
-		if len(e.Code) == 1 {
-			codeChange := codeChange{e.Code[0].TxIndex, bytes.Clone(e.Code[0].Code)}
-			res.CodeChange = &codeChange
-		}
-	}
-	return &res, nil
-}
-
-type encodingBalance [16]byte
-
-func (b *encodingBalance) set(val *uint256.Int) *encodingBalance {
+// encodeBalance encodes the provided balance into 16-bytes.
+func encodeBalance(val *uint256.Int) [16]byte {
 	valBytes := val.Bytes()
 	if len(valBytes) > 16 {
 		panic("can't encode value that is greater than 16 bytes in size")
 	}
-	copy(b[16-len(valBytes):], valBytes[:])
-	return b
+	var enc [16]byte
+	copy(enc[16-len(valBytes):], valBytes[:])
+	return enc
 }
 
+// encodingBalanceChange is the encoding format of BalanceChange.
 type encodingBalanceChange struct {
-	TxIdx   uint16 `ssz-size:"2"`
-	Balance encodingBalance
+	TxIdx   uint16   `ssz-size:"2"`
+	Balance [16]byte `ssz-size:"16"`
 }
 
+// encodingAccountNonce is the encoding format of NonceChange.
 type encodingAccountNonce struct {
 	TxIdx uint16 `ssz-size:"2"`
 	Nonce uint64 `ssz-size:"8"`
 }
 
-// EncodeRLP returns the SSZ-encoded access list wrapped into RLP bytes
+// encodingStorageWrite is the encoding format of StorageWrites.
+type encodingStorageWrite struct {
+	TxIdx      uint16
+	ValueAfter [32]byte `ssz-size:"32"`
+}
+
+// encodingStorageWrite is the encoding format of SlotWrites.
+type encodingSlotWrites struct {
+	Slot     [32]byte               `ssz-size:"32"`
+	Accesses []encodingStorageWrite `ssz-max:"300000"`
+}
+
+// toSlotWrites returns an instance of the encoding-representation slot writes in
+// working representation.
+func (e *encodingSlotWrites) toSlotWrites() (map[uint16]common.Hash, error) {
+	var (
+		prev *uint16
+		obj  = make(map[uint16]common.Hash)
+	)
+	for _, write := range e.Accesses {
+		if prev != nil {
+			if *prev >= write.TxIdx {
+				return nil, fmt.Errorf("storage write tx indices not in order")
+			}
+		}
+		prev = &write.TxIdx
+		obj[write.TxIdx] = write.ValueAfter
+	}
+	return obj, nil
+}
+
+// encodingAccountAccess is the encoding format of AccountAccess.
+type encodingAccountAccess struct {
+	Address        [20]byte                `ssz-size:"20"`    // 20-byte Ethereum address
+	StorageWrites  []encodingSlotWrites    `ssz-max:"300000"` // Storage changes (slot -> [tx_index -> new_value])
+	StorageReads   [][32]byte              `ssz-max:"300000"` // Read-only storage keys
+	BalanceChanges []encodingBalanceChange `ssz-max:"300000"` // Balance changes ([tx_index -> post_balance])
+	NonceChanges   []encodingAccountNonce  `ssz-max:"300000"` // Nonce changes ([tx_index -> new_nonce])
+	Code           []encodingCodeChange    `ssz-max:"1"`      // Code changes ([tx_index -> new_code])
+}
+
+// toAccountAccess converts the account accesses out of encoding format.
+// If any of the keys in the encoding object are not ordered according to the
+// spec, an error is returned.
+func (e *encodingAccountAccess) toAccountAccess() (*AccountAccess, error) {
+	res := AccountAccess{
+		StorageWrites:  make(map[common.Hash]map[uint16]common.Hash),
+		StorageReads:   make(map[common.Hash]struct{}),
+		BalanceChanges: make(map[uint16]*uint256.Int),
+		NonceChanges:   make(map[uint16]uint64),
+		CodeChange:     nil,
+	}
+
+	// Convert slot writes
+	var prevSlotWrite *[32]byte
+	for _, write := range e.StorageWrites {
+		if prevSlotWrite != nil {
+			if bytes.Compare((*prevSlotWrite)[:], write.Slot[:]) >= 0 {
+				return nil, fmt.Errorf("storage writes slots not in lexicographic order")
+			}
+		}
+		prevSlotWrite = &write.Slot
+
+		wr, err := write.toSlotWrites()
+		if err != nil {
+			return nil, err
+		}
+		res.StorageWrites[write.Slot] = wr
+	}
+
+	// Convert slot reads
+	var prevSlotRead *[32]byte
+	for _, read := range e.StorageReads {
+		if prevSlotRead != nil {
+			if bytes.Compare((*prevSlotRead)[:], read[:]) >= 0 {
+				return nil, fmt.Errorf("storage read slots not in lexicographic order")
+			}
+		}
+		prevSlotRead = &read
+		res.StorageReads[read] = struct{}{}
+	}
+
+	// Convert balance changes
+	var prevBalanceIndex *uint16
+	for _, balanceChange := range e.BalanceChanges {
+		if prevBalanceIndex != nil {
+			if *prevBalanceIndex >= balanceChange.TxIdx {
+				return nil, fmt.Errorf("balance changes not in ascending order by tx index")
+			}
+		}
+		prevBalanceIndex = &balanceChange.TxIdx
+		res.BalanceChanges[balanceChange.TxIdx] = new(uint256.Int).SetBytes(balanceChange.Balance[:])
+	}
+
+	// Convert nonce changes
+	var prevNonceIndex *uint16
+	for _, nonceChange := range e.NonceChanges {
+		if prevNonceIndex != nil {
+			if *prevNonceIndex >= nonceChange.TxIdx {
+				return nil, fmt.Errorf("nonce diffs not in ascending order by tx index")
+			}
+		}
+		prevNonceIndex = &nonceChange.TxIdx
+		res.NonceChanges[nonceChange.TxIdx] = nonceChange.Nonce
+	}
+
+	// Convert code change
+	if len(e.Code) == 1 {
+		res.CodeChange = &CodeChange{
+			TxIndex: e.Code[0].TxIndex,
+			Code:    bytes.Clone(e.Code[0].Code),
+		}
+	}
+	return &res, nil
+}
+
+// EncodeRLP returns the SSZ-encoded access list wrapped into RLP bytes.
 func (b *BlockAccessList) EncodeRLP(wr io.Writer) error {
 	w := rlp.NewEncoderBuffer(wr)
 	buf, err := b.encodeSSZ()
@@ -183,34 +233,9 @@ func (b *BlockAccessList) DecodeRLP(s *rlp.Stream) error {
 var _ rlp.Encoder = &BlockAccessList{}
 var _ rlp.Decoder = &BlockAccessList{}
 
-// toEncoderObj returns an instance of the slot writes which will be used as
-// the input for encoding.
-func (s slotWrites) toEncoderObj(slot common.Hash) encodingSlotWrites {
-	res := encodingSlotWrites{
-		Slot: slot,
-	}
-
-	var storageWriteIdxs []uint16
-	for idx := range s {
-		storageWriteIdxs = append(storageWriteIdxs, idx)
-	}
-	sort.Slice(storageWriteIdxs, func(i, j int) bool {
-		return storageWriteIdxs[i] < storageWriteIdxs[j]
-	})
-
-	for _, idx := range storageWriteIdxs {
-		res.Accesses = append(res.Accesses, encodingStorageWrite{
-			TxIdx:      idx,
-			ValueAfter: s[idx],
-		})
-	}
-
-	return res
-}
-
-// toEncodingObj creates an instance of the accountAccess of the type that is
+// toEncodingObj creates an instance of the AccountAccess of the type that is
 // used as input for the encoding.
-func (a *accountAccess) toEncodingObj(addr common.Address) encodingAccountAccess {
+func (a *AccountAccess) toEncodingObj(addr common.Address) encodingAccountAccess {
 	res := encodingAccountAccess{
 		Address:        addr,
 		StorageWrites:  make([]encodingSlotWrites, 0),
@@ -220,69 +245,55 @@ func (a *accountAccess) toEncodingObj(addr common.Address) encodingAccountAccess
 		Code:           nil,
 	}
 
-	{
-		var writeSlots []common.Hash
+	// Convert write slots
+	writeSlots := slices.Collect(maps.Keys(a.StorageWrites))
+	slices.SortFunc(writeSlots, common.Hash.Cmp)
+	for _, slot := range writeSlots {
+		var obj encodingSlotWrites
+		obj.Slot = slot
 
-		for slot := range a.StorageWrites {
-			writeSlots = append(writeSlots, slot)
-		}
-		sort.Slice(writeSlots, func(i, j int) bool {
-			return bytes.Compare(writeSlots[i][:], writeSlots[j][:]) < 0
-		})
+		slotWrites := a.StorageWrites[slot]
+		obj.Accesses = make([]encodingStorageWrite, 0, len(slotWrites))
 
-		for _, slot := range writeSlots {
-			res.StorageWrites = append(res.StorageWrites, a.StorageWrites[slot].toEncoderObj(slot))
-		}
-	}
-
-	{
-		var readSlots []common.Hash
-		for slot := range a.StorageReads {
-			readSlots = append(readSlots, slot)
-		}
-		sort.Slice(readSlots, func(i, j int) bool {
-			return bytes.Compare(readSlots[i][:], readSlots[j][:]) < 0
-		})
-		for _, slot := range readSlots {
-			res.StorageReads = append(res.StorageReads, slot)
-		}
-	}
-
-	{
-		var balanceChangeIdxs []uint16
-		for idx := range a.BalanceChanges {
-			balanceChangeIdxs = append(balanceChangeIdxs, idx)
-		}
-
-		sort.Slice(balanceChangeIdxs, func(i, j int) bool {
-			return balanceChangeIdxs[i] < balanceChangeIdxs[j]
-		})
-
-		for _, idx := range balanceChangeIdxs {
-			res.BalanceChanges = append(res.BalanceChanges, encodingBalanceChange{
-				TxIdx:   idx,
-				Balance: *new(encodingBalance).set(a.BalanceChanges[idx]),
+		indices := slices.Collect(maps.Keys(slotWrites))
+		slices.SortFunc(indices, cmp.Compare[uint16])
+		for _, index := range indices {
+			obj.Accesses = append(obj.Accesses, encodingStorageWrite{
+				TxIdx:      index,
+				ValueAfter: slotWrites[index],
 			})
 		}
+		res.StorageWrites = append(res.StorageWrites, obj)
 	}
 
-	{
-		var nonceChangeIdxs []uint16
-		for idx := range a.NonceChanges {
-			nonceChangeIdxs = append(nonceChangeIdxs, idx)
-		}
-		sort.Slice(nonceChangeIdxs, func(i, j int) bool {
-			return nonceChangeIdxs[i] < nonceChangeIdxs[j]
+	// Convert read slots
+	readSlots := slices.Collect(maps.Keys(a.StorageReads))
+	slices.SortFunc(readSlots, common.Hash.Cmp)
+	for _, slot := range readSlots {
+		res.StorageReads = append(res.StorageReads, slot)
+	}
+
+	// Convert balance changes
+	balanceIndices := slices.Collect(maps.Keys(a.BalanceChanges))
+	slices.SortFunc(balanceIndices, cmp.Compare[uint16])
+	for _, idx := range balanceIndices {
+		res.BalanceChanges = append(res.BalanceChanges, encodingBalanceChange{
+			TxIdx:   idx,
+			Balance: encodeBalance(a.BalanceChanges[idx]),
 		})
-
-		for _, idx := range nonceChangeIdxs {
-			res.NonceChanges = append(res.NonceChanges, encodingAccountNonce{
-				TxIdx: idx,
-				Nonce: a.NonceChanges[idx],
-			})
-		}
 	}
 
+	// Convert nonce changes
+	nonceIndices := slices.Collect(maps.Keys(a.NonceChanges))
+	slices.SortFunc(nonceIndices, cmp.Compare[uint16])
+	for _, idx := range nonceIndices {
+		res.NonceChanges = append(res.NonceChanges, encodingAccountNonce{
+			TxIdx: idx,
+			Nonce: a.NonceChanges[idx],
+		})
+	}
+
+	// Convert code change
 	if a.CodeChange != nil {
 		res.Code = []encodingCodeChange{
 			{
@@ -291,24 +302,21 @@ func (a *accountAccess) toEncodingObj(addr common.Address) encodingAccountAccess
 			},
 		}
 	}
-
 	return res
 }
 
 // toEncodingObj returns an instance of the access list expressed as the type
-// which is used as input for the decoding.
+// which is used as input for the encoding/decoding.
 func (b *BlockAccessList) toEncodingObj() *encodingBlockAccessList {
-	var res encodingBlockAccessList
-	var addrs []common.Address
-	for addr := range b.accounts {
-		addrs = append(addrs, addr)
+	var addresses []common.Address
+	for addr := range b.Accounts {
+		addresses = append(addresses, addr)
 	}
-	sort.Slice(addrs, func(i, j int) bool {
-		return bytes.Compare(addrs[i][:], addrs[j][:]) < 0
-	})
+	slices.SortFunc(addresses, common.Address.Cmp)
 
-	for _, addr := range addrs {
-		res.Accesses = append(res.Accesses, b.accounts[addr].toEncodingObj(addr))
+	var res encodingBlockAccessList
+	for _, addr := range addresses {
+		res.Accesses = append(res.Accesses, b.Accounts[addr].toEncodingObj(addr))
 	}
 	return &res
 }
@@ -335,34 +343,42 @@ func (b *BlockAccessList) decodeSSZ(buf []byte) error {
 	return nil
 }
 
-// used as input for encoding.
-type encodingStorageWrite struct {
-	TxIdx      uint16
-	ValueAfter [32]byte `ssz-size:"32"`
-}
+func (e *encodingBlockAccessList) prettyPrint() string {
+	var res bytes.Buffer
+	printWithIndent := func(indent int, text string) {
+		fmt.Fprintf(&res, "%s%s\n", strings.Repeat("    ", indent), text)
+	}
+	for _, accountDiff := range e.Accesses {
+		printWithIndent(0, fmt.Sprintf("%x:", accountDiff.Address))
 
-// used as input for encoding.  Storage writes are expected to be sorted
-// lexicographically by their storage key.
-type encodingSlotWrites struct {
-	Slot     [32]byte               `ssz-size:"32"`
-	Accesses []encodingStorageWrite `ssz-max:"300000"`
-}
-
-// toSlotWrites returns an instance of the encoding-representation slot writes in
-// working representation.
-func (e *encodingSlotWrites) toSlotWrites() (slotWrites, error) {
-	var prev *uint16
-
-	res := make(slotWrites)
-
-	for _, write := range e.Accesses {
-		if prev != nil {
-			if *prev >= write.TxIdx {
-				return nil, fmt.Errorf("storage write tx indices not in order")
+		printWithIndent(1, "storage writes:")
+		for _, sWrite := range accountDiff.StorageWrites {
+			printWithIndent(2, fmt.Sprintf("%x:", sWrite.Slot))
+			for _, access := range sWrite.Accesses {
+				printWithIndent(3, fmt.Sprintf("%d: %x", access.TxIdx, access.ValueAfter))
 			}
 		}
-		res[write.TxIdx] = write.ValueAfter
-		prev = &write.TxIdx
+
+		printWithIndent(1, "storage reads:")
+		for _, slot := range accountDiff.StorageReads {
+			printWithIndent(2, fmt.Sprintf("%x", slot))
+		}
+
+		printWithIndent(1, "balance changes:")
+		for _, change := range accountDiff.BalanceChanges {
+			balance := new(uint256.Int).SetBytes(change.Balance[:]).String()
+			printWithIndent(2, fmt.Sprintf("%d: %s", change.TxIdx, balance))
+		}
+
+		printWithIndent(1, "nonce changes:")
+		for _, change := range accountDiff.NonceChanges {
+			printWithIndent(2, fmt.Sprintf("%d: %d", change.TxIdx, change.Nonce))
+		}
+
+		if len(accountDiff.Code) > 0 {
+			printWithIndent(1, "code:")
+			printWithIndent(2, fmt.Sprintf("%d: %x", accountDiff.Code[0].TxIndex, accountDiff.Code[0].Code))
+		}
 	}
-	return res, nil
+	return res.String()
 }
