@@ -255,7 +255,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 			snapshot = statedb.Snapshot()
 			prevGas  = gaspool.Gas()
 		)
-		if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxStart != nil {
+		if evm.Config.Tracer.OnTxStart != nil {
 			evm.Config.Tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}
 		// (ret []byte, usedGas uint64, failed bool, err error)
@@ -265,7 +265,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "from", msg.From, "error", err)
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
 			gaspool.SetGas(prevGas)
-			if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxEnd != nil {
+			if evm.Config.Tracer.OnTxEnd != nil {
 				evm.Config.Tracer.OnTxEnd(nil, err)
 			}
 			continue
@@ -311,7 +311,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 			//receipt.BlockNumber
 			receipt.TransactionIndex = uint(txIndex)
 			receipts = append(receipts, receipt)
-			if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxEnd != nil {
+			if evm.Config.Tracer.OnTxEnd != nil {
 				evm.Config.Tracer.OnTxEnd(receipt, nil)
 			}
 		}

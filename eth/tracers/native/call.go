@@ -132,7 +132,7 @@ func newCallTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *param
 		return nil, err
 	}
 	return &tracers.Tracer{
-		Hooks: &tracing.Hooks{
+		Hooks: tracing.Hooks{
 			OnTxStart: t.OnTxStart,
 			OnTxEnd:   t.OnTxEnd,
 			OnEnter:   t.OnEnter,

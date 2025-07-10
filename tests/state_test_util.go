@@ -323,8 +323,8 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 
 	evm := vm.NewEVM(context, st.StateDB, config, vmconfig)
 
-	if tracer := vmconfig.Tracer; tracer != nil && tracer.OnTxStart != nil {
-		tracer.OnTxStart(evm.GetVMContext(), nil, msg.From)
+	if evm.Config.Tracer.OnTxStart != nil {
+		evm.Config.Tracer.OnTxStart(evm.GetVMContext(), nil, msg.From)
 	}
 	// Execute the message.
 	snapshot := st.StateDB.Snapshot()
@@ -333,7 +333,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	vmRet, err := core.ApplyMessage(evm, msg, gaspool)
 	if err != nil {
 		st.StateDB.RevertToSnapshot(snapshot)
-		if tracer := evm.Config.Tracer; tracer != nil && tracer.OnTxEnd != nil {
+		if evm.Config.Tracer.OnTxEnd != nil {
 			evm.Config.Tracer.OnTxEnd(nil, err)
 		}
 		return st, common.Hash{}, 0, err
@@ -347,9 +347,9 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 
 	// Commit state mutations into database.
 	root, _ = st.StateDB.Commit(block.NumberU64(), config.IsEIP158(block.Number()), config.IsCancun(block.Number(), block.Time()))
-	if tracer := evm.Config.Tracer; tracer != nil && tracer.OnTxEnd != nil {
+	if evm.Config.Tracer.OnTxEnd != nil {
 		receipt := &types.Receipt{GasUsed: vmRet.UsedGas}
-		tracer.OnTxEnd(receipt, nil)
+		evm.Config.Tracer.OnTxEnd(receipt, nil)
 	}
 	return st, root, vmRet.UsedGas, nil
 }

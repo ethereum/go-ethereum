@@ -292,7 +292,7 @@ func (st *stateTransition) buyGas() error {
 		return err
 	}
 
-	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil {
+	if st.evm.Config.Tracer.OnGasChange != nil {
 		st.evm.Config.Tracer.OnGasChange(0, st.msg.GasLimit, tracing.GasChangeTxInitialBalance)
 	}
 	st.gasRemaining = st.msg.GasLimit
@@ -456,8 +456,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 			return nil, fmt.Errorf("%w: have %d, want %d", ErrFloorDataGas, msg.GasLimit, floorDataGas)
 		}
 	}
-	if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
-		t.OnGasChange(st.gasRemaining, st.gasRemaining-gas, tracing.GasChangeTxIntrinsicGas)
+	if st.evm.Config.Tracer.OnGasChange != nil {
+		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, st.gasRemaining-gas, tracing.GasChangeTxIntrinsicGas)
 	}
 	st.gasRemaining -= gas
 
@@ -530,8 +530,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		if st.gasUsed() < floorDataGas {
 			prev := st.gasRemaining
 			st.gasRemaining = st.initialGas - floorDataGas
-			if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
-				t.OnGasChange(prev, st.gasRemaining, tracing.GasChangeTxDataFloor)
+			if st.evm.Config.Tracer.OnGasChange != nil {
+				st.evm.Config.Tracer.OnGasChange(prev, st.gasRemaining, tracing.GasChangeTxDataFloor)
 			}
 		}
 		if peakGasUsed < floorDataGas {
@@ -640,7 +640,7 @@ func (st *stateTransition) calcRefund() uint64 {
 	if refund > st.state.GetRefund() {
 		refund = st.state.GetRefund()
 	}
-	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil && refund > 0 {
+	if st.evm.Config.Tracer.OnGasChange != nil && refund > 0 {
 		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, st.gasRemaining+refund, tracing.GasChangeTxRefunds)
 	}
 	return refund
@@ -653,7 +653,7 @@ func (st *stateTransition) returnGas() {
 	remaining.Mul(remaining, uint256.MustFromBig(st.msg.GasPrice))
 	st.state.AddBalance(st.msg.From, remaining, tracing.BalanceIncreaseGasReturn)
 
-	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil && st.gasRemaining > 0 {
+	if st.evm.Config.Tracer.OnGasChange != nil && st.gasRemaining > 0 {
 		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, 0, tracing.GasChangeTxLeftOverReturned)
 	}
 
