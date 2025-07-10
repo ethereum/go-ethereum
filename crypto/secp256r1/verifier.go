@@ -14,11 +14,20 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package version
+// Package secp256r1 implements signature verification for the P256VERIFY precompile.
+package secp256r1
 
-const (
-	Major = 1          // Major version component of the current release
-	Minor = 16         // Minor version component of the current release
-	Patch = 2          // Patch version component of the current release
-	Meta  = "unstable" // Version metadata to append to the version string
+import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"math/big"
 )
+
+// Verify checks the given signature (r, s) for the given hash and public key (x, y).
+func Verify(hash []byte, r, s, x, y *big.Int) bool {
+	if x == nil || y == nil || !elliptic.P256().IsOnCurve(x, y) {
+		return false
+	}
+	pk := &ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}
+	return ecdsa.Verify(pk, hash, r, s)
+}

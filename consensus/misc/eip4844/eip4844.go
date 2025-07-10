@@ -71,10 +71,29 @@ func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header, headTim
 		parentExcessBlobGas = *parent.ExcessBlobGas
 		parentBlobGasUsed = *parent.BlobGasUsed
 	}
-	excessBlobGas := parentExcessBlobGas + parentBlobGasUsed
-	targetGas := uint64(targetBlobsPerBlock(config, headTimestamp)) * params.BlobTxBlobGasPerBlob
+	var (
+		excessBlobGas = parentExcessBlobGas + parentBlobGasUsed
+		target        = targetBlobsPerBlock(config, headTimestamp)
+		targetGas     = uint64(target) * params.BlobTxBlobGasPerBlob
+	)
 	if excessBlobGas < targetGas {
 		return 0
+	}
+	if !config.IsOsaka(config.LondonBlock, headTimestamp) {
+		// Pre-Osaka, we use the formula defined by EIP-4844.
+		return excessBlobGas - targetGas
+	}
+
+	// EIP-7918 (post-Osaka) introduces a different formula for computing excess.
+	var (
+		baseCost     = big.NewInt(params.BlobBaseCost)
+		reservePrice = baseCost.Mul(baseCost, parent.BaseFee)
+		blobPrice    = calcBlobPrice(config, parent)
+	)
+	if reservePrice.Cmp(blobPrice) > 0 {
+		max := MaxBlobsPerBlock(config, headTimestamp)
+		scaledExcess := parentBlobGasUsed * uint64(max-target) / uint64(max)
+		return parentExcessBlobGas + scaledExcess
 	}
 	return excessBlobGas - targetGas
 }
@@ -176,4 +195,10 @@ func fakeExponential(factor, numerator, denominator *big.Int) *big.Int {
 		accum.Div(accum, big.NewInt(int64(i)))
 	}
 	return output.Div(output, denominator)
+}
+
+// calcBlobPrice calculates the blob price for a block.
+func calcBlobPrice(config *params.ChainConfig, header *types.Header) *big.Int {
+	blobBaseFee := CalcBlobFee(config, header)
+	return new(big.Int).Mul(blobBaseFee, big.NewInt(params.BlobTxBlobGasPerBlob))
 }

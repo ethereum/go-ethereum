@@ -261,7 +261,7 @@ var (
 	}
 	GCModeFlag = &cli.StringFlag{
 		Name:     "gcmode",
-		Usage:    `Blockchain garbage collection mode, only relevant in state.scheme=hash ("full", "archive")`,
+		Usage:    `Blockchain garbage collection mode ("full", "archive")`,
 		Value:    "full",
 		Category: flags.StateCategory,
 	}
@@ -1379,13 +1379,13 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 		cfg.UseLightweightKDF = ctx.Bool(LightKDFFlag.Name)
 	}
 	if ctx.IsSet(NoUSBFlag.Name) || cfg.NoUSB {
-		log.Warn("Option nousb is deprecated and USB is deactivated by default. Use --usb to enable")
+		log.Warn("Option --nousb is deprecated and USB is deactivated by default. Use --usb to enable")
 	}
 	if ctx.IsSet(USBFlag.Name) {
 		cfg.USB = ctx.Bool(USBFlag.Name)
 	}
 	if ctx.IsSet(InsecureUnlockAllowedFlag.Name) {
-		log.Warn(fmt.Sprintf("Option %q is deprecated and has no effect", InsecureUnlockAllowedFlag.Name))
+		log.Warn(fmt.Sprintf("Option --%s is deprecated and has no effect", InsecureUnlockAllowedFlag.Name))
 	}
 	if ctx.IsSet(DBEngineFlag.Name) {
 		dbEngine := ctx.String(DBEngineFlag.Name)
@@ -1397,10 +1397,10 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	}
 	// deprecation notice for log debug flags (TODO: find a more appropriate place to put these?)
 	if ctx.IsSet(LogBacktraceAtFlag.Name) {
-		log.Warn("log.backtrace flag is deprecated")
+		log.Warn("Option --log.backtrace flag is deprecated")
 	}
 	if ctx.IsSet(LogDebugFlag.Name) {
-		log.Warn("log.debug flag is deprecated")
+		log.Warn("Option --log.debug flag is deprecated")
 	}
 }
 
@@ -1859,7 +1859,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 func MakeBeaconLightConfig(ctx *cli.Context) bparams.ClientConfig {
 	var config bparams.ClientConfig
 	customConfig := ctx.IsSet(BeaconConfigFlag.Name)
-	flags.CheckExclusive(ctx, MainnetFlag, SepoliaFlag, HoleskyFlag, BeaconConfigFlag)
+	flags.CheckExclusive(ctx, MainnetFlag, SepoliaFlag, HoleskyFlag, HoodiFlag, BeaconConfigFlag)
 	switch {
 	case ctx.Bool(MainnetFlag.Name):
 		config.ChainConfig = *bparams.MainnetLightConfig
@@ -1998,9 +1998,9 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 }
 
 // RegisterFullSyncTester adds the full-sync tester service into node.
-func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, target common.Hash) {
-	catalyst.RegisterFullSyncTester(stack, eth, target)
-	log.Info("Registered full-sync tester", "hash", target)
+func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, target common.Hash, exitWhenSynced bool) {
+	catalyst.RegisterFullSyncTester(stack, eth, target, exitWhenSynced)
+	log.Info("Registered full-sync tester", "hash", target, "exitWhenSynced", exitWhenSynced)
 }
 
 // SetupMetrics configures the metrics system.

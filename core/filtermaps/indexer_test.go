@@ -41,7 +41,7 @@ var testParams = Params{
 	logMapWidth:        24,
 	logMapsPerEpoch:    4,
 	logValuesPerMap:    4,
-	baseRowGroupLength: 4,
+	baseRowGroupSize:   4,
 	baseRowLengthRatio: 2,
 	logLayerDiff:       2,
 }
@@ -370,7 +370,7 @@ func (ts *testSetup) setHistory(history uint64, noHistory bool) {
 		History:  history,
 		Disabled: noHistory,
 	}
-	ts.fm = NewFilterMaps(ts.db, view, 0, 0, ts.params, config)
+	ts.fm, _ = NewFilterMaps(ts.db, view, 0, 0, ts.params, config)
 	ts.fm.testDisableSnapshots = ts.testDisableSnapshots
 	ts.fm.Start()
 }

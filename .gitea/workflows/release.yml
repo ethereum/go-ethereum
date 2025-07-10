@@ -4,6 +4,7 @@ on:
       - "master"
     tags:
       - "v*"
+  workflow_dispatch:
 
 jobs:
   linux-intel:
@@ -120,6 +121,37 @@ jobs:
         GOARM: "7"
         LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
         AZURE_BLOBSTORE_TOKEN: ${{ secrets.AZURE_BLOBSTORE_TOKEN }}
+
+  windows:
+    name: Windows Build
+    runs-on: "win-11"
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.24
+        cache: false
+
+    # Note: gcc.exe only works properly if the corresponding bin/ directory is
+    # contained in PATH.
+
+    - name: "Build (amd64)"
+      shell: cmd
+      run: |
+        set PATH=%GETH_MINGW%\bin;%PATH%
+        go run build/ci.go install -dlgo -arch amd64 -cc %GETH_MINGW%\bin\gcc.exe
+      env:
+        GETH_MINGW: 'C:\msys64\mingw64'
+
+    - name: "Build (386)"
+      shell: cmd
+      run: |
+        set PATH=%GETH_MINGW%\bin;%PATH%
+        go run build/ci.go install -dlgo -arch 386 -cc %GETH_MINGW%\bin\gcc.exe
+      env:
+        GETH_MINGW: 'C:\msys64\mingw32'
 
   docker:
     name: Docker Image
