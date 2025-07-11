@@ -206,7 +206,8 @@ type Hooks struct {
 	OnSystemCallStart   OnSystemCallStartHook
 	OnSystemCallStartV2 OnSystemCallStartHookV2
 	OnSystemCallEnd     OnSystemCallEndHook
-	// State events
+	// State events, make sure to update HasStateHooks
+	// if you ever add a new hook here
 	OnBalanceChange BalanceChangeHook
 	OnNonceChange   NonceChangeHook
 	OnNonceChangeV2 NonceChangeHookV2
