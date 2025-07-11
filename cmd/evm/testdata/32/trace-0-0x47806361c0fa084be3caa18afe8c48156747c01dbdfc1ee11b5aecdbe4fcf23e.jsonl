@@ -44,8 +44,7 @@
 {"pc":38,"op":82,"gas":"0x65ee4","gasCost":"0x6","memSize":0,"stack":["0x10","0x0"],"depth":2,"refund":0,"opName":"MSTORE"}
 {"pc":39,"op":96,"gas":"0x65ede","gasCost":"0x3","memSize":32,"stack":[],"depth":2,"refund":0,"opName":"PUSH1"}
 {"pc":41,"op":96,"gas":"0x65edb","gasCost":"0x3","memSize":32,"stack":["0x20"],"depth":2,"refund":0,"opName":"PUSH1"}
-{"pc":43,"op":253,"gas":"0x65ed8","gasCost":"0x0","memSize":32,"stack":["0x20","0x0"],"depth":2,"refund":0,"opName":"REVERT"}
-{"pc":43,"op":253,"gas":"0x65ed8","gasCost":"0x0","memSize":32,"stack":[],"depth":2,"refund":0,"opName":"REVERT","error":"execution reverted"}
+{"pc":43,"op":253,"gas":"0x65ed8","gasCost":"0x0","memSize":32,"stack":["0x20","0x0"],"depth":2,"refund":0,"opName":"REVERT","error":"execution reverted"}
 {"output":"0000000000000000000000000000000000000000000000000000000000000010","gasUsed":"0x2e44","error":"execution reverted"}
 {"pc":69,"op":96,"gas":"0x67976","gasCost":"0x3","memSize":0,"stack":["0x0"],"depth":1,"refund":0,"opName":"PUSH1"}
 {"pc":71,"op":85,"gas":"0x67973","gasCost":"0x1388","memSize":0,"stack":["0x0","0x2"],"depth":1,"refund":4800,"opName":"SSTORE"}

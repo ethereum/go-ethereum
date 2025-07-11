@@ -339,6 +339,9 @@ const (
 	// GasChangeTxDataFloor is the amount of extra gas the transaction has to pay to reach the minimum gas requirement for the
 	// transaction data. This change will always be a negative change.
 	GasChangeTxDataFloor GasChangeReason = 19
+	// GasChangeCallOpCodeDynamic is the amount of dynamic gas that will be charged for an opcode executed by the EVM.
+	// It will be emitted after the `OnOpcode` callback. So the cost should be attributed to the last instance of `OnOpcode`.
+	GasChangeCallOpCodeDynamic GasChangeReason = 20
 
 	// GasChangeIgnored is a special value that can be used to indicate that the gas change should be ignored as
 	// it will be "manually" tracked by a direct emit of the gas change event.
