@@ -1328,7 +1328,7 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash) []*types.BlobTxSidecar {
 		}
 		sidecars[idx] = item.BlobTxSidecar()
 
-		// If multi blobs in one transaction, fill the other sidecars.
+		// If multi blobs in the same transaction, fill the other sidecars.
 		hashes := item.BlobHashes()
 		for i, vHash := range hashes {
 			if sidecars[idx] != nil {
