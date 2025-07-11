@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 
 	"github.com/ethereum/go-ethereum/beacon/blsync"
@@ -51,6 +52,7 @@ func main() {
 		utils.HoodiFlag,
 		utils.BlsyncApiFlag,
 		utils.BlsyncJWTSecretFlag,
+		utils.DataDirFlag,
 	},
 		debug.Flags,
 	)
@@ -87,11 +89,20 @@ func makeRPCClient(ctx *cli.Context) *rpc.Client {
 		log.Warn("No engine API target specified, performing a dry run")
 		return nil
 	}
-	if !ctx.IsSet(utils.BlsyncJWTSecretFlag.Name) {
-		utils.Fatalf("JWT secret parameter missing") //TODO use default if datadir is specified
+
+	engineApiUrl := ctx.String(utils.BlsyncApiFlag.Name)
+	var jwtFileName string
+
+	if ctx.IsSet(utils.BlsyncJWTSecretFlag.Name) {
+		jwtFileName = ctx.String(utils.BlsyncJWTSecretFlag.Name)
+	} else if ctx.IsSet(utils.DataDirFlag.Name) {
+		// Use default JWT secret path in the specified datadir
+		datadir := ctx.String(utils.DataDirFlag.Name)
+		jwtFileName = filepath.Join(datadir, "jwtsecret")
+	} else {
+		utils.Fatalf("JWT secret parameter missing and no datadir specified. Use --blsync.jwtsecret or --datadir")
 	}
 
-	engineApiUrl, jwtFileName := ctx.String(utils.BlsyncApiFlag.Name), ctx.String(utils.BlsyncJWTSecretFlag.Name)
 	var jwtSecret [32]byte
 	if jwt, err := node.ObtainJWTSecret(jwtFileName); err == nil {
 		copy(jwtSecret[:], jwt)
