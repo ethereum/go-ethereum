@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/crypto/secp256r1"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -360,21 +361,33 @@ type bigModExp struct {
 	eip7883 bool
 }
 
-var (
-	big1      = big.NewInt(1)
-	big3      = big.NewInt(3)
-	big7      = big.NewInt(7)
-	big20     = big.NewInt(20)
-	big32     = big.NewInt(32)
-	big64     = big.NewInt(64)
-	big96     = big.NewInt(96)
-	big480    = big.NewInt(480)
-	big1024   = big.NewInt(1024)
-	big3072   = big.NewInt(3072)
-	big199680 = big.NewInt(199680)
+// Constants for modexp gas calculation
+const (
+	byzantiumMultiplier = 8
+	berlinMultiplier    = 8
+	osakaMultiplier     = 16
+
+	byzantiumDivisor = 20
+	berlinDivisor    = 3
+	osakaDivisor     = 3
+
+	berlinMinGas = 200
+	osakaMinGas  = 500
 )
 
-// modexpMultComplexity implements bigModexp multComplexity formula, as defined in EIP-198
+var (
+	// uint256 constants for modexp calculations
+	u256_16     = uint256.NewInt(16)
+	u256_480    = uint256.NewInt(480)
+	u256_199680 = uint256.NewInt(199680)
+
+	// divisors as uint256
+	u256_byzantiumDivisor = uint256.NewInt(byzantiumDivisor)
+	u256_berlinDivisor    = uint256.NewInt(berlinDivisor)
+	u256_osakaDivisor     = uint256.NewInt(osakaDivisor)
+)
+
+// byzantiumMultComplexity implements bigModexp multComplexity formula, as defined in EIP-198
 //
 //	def mult_complexity(x):
 //		if x <= 64: return x ** 2
@@ -382,126 +395,222 @@ var (
 //		else: return x ** 2 // 16 + 480 * x - 199680
 //
 // where is x is max(length_of_MODULUS, length_of_BASE)
-func modexpMultComplexity(x *big.Int) *big.Int {
+func byzantiumMultComplexity(x uint64) uint256.Int {
 	switch {
-	case x.Cmp(big64) <= 0:
-		x.Mul(x, x) // x ** 2
-	case x.Cmp(big1024) <= 0:
-		// (x ** 2 // 4 ) + ( 96 * x - 3072)
-		x = new(big.Int).Add(
-			new(big.Int).Rsh(new(big.Int).Mul(x, x), 2),
-			new(big.Int).Sub(new(big.Int).Mul(big96, x), big3072),
-		)
+	case x <= 64:
+		var z uint256.Int
+		z.SetUint64(x * x)
+		return z
+	case x <= 1024:
+		// x^2 / 4 + 96*x - 3072
+		result := x*x/4 + 96*x - 3072
+		var z uint256.Int
+		z.SetUint64(result)
+		return z
 	default:
-		// (x ** 2 // 16) + (480 * x - 199680)
-		x = new(big.Int).Add(
-			new(big.Int).Rsh(new(big.Int).Mul(x, x), 4),
-			new(big.Int).Sub(new(big.Int).Mul(big480, x), big199680),
-		)
+		// For large x, use uint256 arithmetic to avoid overflow
+		// x^2 / 16 + 480*x - 199680
+		var xUint, xSquared, result uint256.Int
+		xUint.SetUint64(x)
+
+		// Calculate x^2
+		xSquared.Mul(&xUint, &xUint)
+
+		// Calculate x^2 / 16 (right shift by 4 bits)
+		result.Rsh(&xSquared, 4)
+
+		// Calculate 480 * x
+		var x480 uint256.Int
+		x480.Mul(&xUint, u256_480)
+
+		// Calculate 480 * x - 199680
+		x480.Sub(&x480, u256_199680)
+
+		// Add the two parts together
+		result.Add(&result, &x480)
+		return result
 	}
-	return x
 }
 
-// RequiredGas returns the gas required to execute the pre-compiled contract.
-func (c *bigModExp) RequiredGas(input []byte) uint64 {
-	var (
-		baseLen = new(big.Int).SetBytes(getData(input, 0, 32))
-		expLen  = new(big.Int).SetBytes(getData(input, 32, 32))
-		modLen  = new(big.Int).SetBytes(getData(input, 64, 32))
-	)
-	if len(input) > 96 {
-		input = input[96:]
-	} else {
-		input = input[:0]
+// berlinMultComplexity implements the multiplication complexity formula for Berlin.
+//
+// def mult_complexity(x):
+//
+//	ceiling(x/8)^2
+//
+// where is x is max(length_of_MODULUS, length_of_BASE)
+func berlinMultComplexity(x uint64) uint256.Int {
+	// TODO: The preceding line is too smart.
+	// TODO: The issue is that (x+7) / 8 can overflow
+	// TODO: if x > 2^64 - 7
+	// Safe ceiling division by 8 to avoid overflow
+	ceilDiv8 := (x >> 3) + ((x&7 + 7) >> 3) // safe ceil(x / 8)
+
+	var z uint256.Int
+	z.SetUint64(ceilDiv8)
+	z.Mul(&z, &z)
+	return z
+}
+
+// Slow Bigint way (benchmark this)
+// func berlinMultComplexity(xInt uint64) *big.Int {
+// 	x := new(big.Int).SetUint64(xInt)
+// 	x = new(big.Int).Add(x, big.NewInt(7))       // x + 7
+// 	x = new(big.Int).Rsh(x, 3)          // (x + 7) / 8
+// 	return new(big.Int).Mul(x, x)       // ((x + 7) / 8) ^ 2
+// }
+
+// osakaMultComplexity implements the multiplication complexity formula for Osaka.
+//
+// For x <= 32: returns 16
+// For x > 32: returns 2 * ceiling(x/8)^2
+func osakaMultComplexity(x uint64) uint256.Int {
+	if x <= 32 {
+		return *u256_16
 	}
-	// Retrieve the head 32 bytes of exp for the adjusted exponent length
-	var expHead *big.Int
-	if big.NewInt(int64(len(input))).Cmp(baseLen) <= 0 {
-		expHead = new(big.Int)
-	} else {
-		if expLen.Cmp(big32) > 0 {
-			expHead = new(big.Int).SetBytes(getData(input, baseLen.Uint64(), 32))
-		} else {
-			expHead = new(big.Int).SetBytes(getData(input, baseLen.Uint64(), expLen.Uint64()))
-		}
-	}
-	// Calculate the adjusted exponent length
-	var msb int
-	if bitlen := expHead.BitLen(); bitlen > 0 {
-		msb = bitlen - 1
-	}
-	adjExpLen := new(big.Int)
-	if expLen.Cmp(big32) > 0 {
-		adjExpLen.Sub(expLen, big32)
-		if c.eip7883 {
-			adjExpLen.Lsh(adjExpLen, 4)
-		} else {
-			adjExpLen.Lsh(adjExpLen, 3)
-		}
-	}
-	adjExpLen.Add(adjExpLen, big.NewInt(int64(msb)))
-	// Calculate the gas cost of the operation
-	gas := new(big.Int)
-	if modLen.Cmp(baseLen) < 0 {
-		gas.Set(baseLen)
-	} else {
-		gas.Set(modLen)
+	// For x > 32, return 2 * berlinMultComplexity(x)
+	result := berlinMultComplexity(x)
+	result.Lsh(&result, 1)
+	return result
+}
+
+// calculateIterationCount calculates the number of iterations for the modexp precompile.
+// This is the adjusted exponent length used in gas calculation.
+func calculateIterationCount(expLen uint64, expHead uint256.Int, multiplier uint64) uint64 {
+	var iterationCount uint64
+
+	// For large exponents (expLen > 32), add (expLen - 32) * multiplier
+	if expLen > 32 {
+		iterationCount = (expLen - 32) * multiplier
 	}
 
-	maxLenOver32 := gas.Cmp(big32) > 0
-	if c.eip2565 {
-		// EIP-2565 (Berlin fork) has three changes:
-		//
-		// 1. Different multComplexity (inlined here)
-		// in EIP-2565 (https://eips.ethereum.org/EIPS/eip-2565):
-		//
-		// def mult_complexity(x):
-		//    ceiling(x/8)^2
-		//
-		// where is x is max(length_of_MODULUS, length_of_BASE)
-		gas.Add(gas, big7)
-		gas.Rsh(gas, 3)
-		gas.Mul(gas, gas)
-
-		var minPrice uint64 = 200
-		if c.eip7883 {
-			minPrice = 500
-			if maxLenOver32 {
-				gas.Add(gas, gas)
-			} else {
-				gas = big.NewInt(16)
-			}
-		}
-
-		if adjExpLen.Cmp(big1) > 0 {
-			gas.Mul(gas, adjExpLen)
-		}
-		// 2. Different divisor (`GQUADDIVISOR`) (3)
-		gas.Div(gas, big3)
-		if gas.BitLen() > 64 {
-			return math.MaxUint64
-		}
-		return max(minPrice, gas.Uint64())
+	// Add the MSB position - 1 if expHead is non-zero
+	if bitLen := expHead.BitLen(); bitLen > 0 {
+		iterationCount += uint64(bitLen - 1)
 	}
 
-	// Pre-Berlin logic.
-	gas = modexpMultComplexity(gas)
-	if adjExpLen.Cmp(big1) > 0 {
-		gas.Mul(gas, adjExpLen)
-	}
-	gas.Div(gas, big20)
-	if gas.BitLen() > 64 {
+	return max(iterationCount, 1)
+}
+
+// byzantiumGasCalc calculates the gas cost for the modexp precompile using Byzantium rules.
+func byzantiumGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
+	maxLen := max(baseLen, modLen)
+	multComplexity := byzantiumMultComplexity(maxLen)
+	iterationCount := calculateIterationCount(expLen, expHead, byzantiumMultiplier)
+
+	// Calculate gas: (multComplexity * iterationCount) / byzantiumDivisor
+	var gas uint256.Int
+	gas.SetUint64(iterationCount)
+	gas.Mul(&multComplexity, &gas)
+	gas.Div(&gas, u256_byzantiumDivisor)
+
+	if !gas.IsUint64() {
 		return math.MaxUint64
 	}
 	return gas.Uint64()
 }
 
+// berlinGasCalc calculates the gas cost for the modexp precompile using Berlin rules.
+func berlinGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
+	maxLen := max(baseLen, modLen)
+	multComplexity := berlinMultComplexity(maxLen)
+	iterationCount := calculateIterationCount(expLen, expHead, berlinMultiplier)
+
+	// Calculate gas: (multComplexity * iterationCount) / berlinDivisor
+	var gas uint256.Int
+	gas.SetUint64(iterationCount)
+	gas.Mul(&multComplexity, &gas)
+	gas.Div(&gas, u256_berlinDivisor)
+
+	if !gas.IsUint64() {
+		return math.MaxUint64
+	}
+
+	return max(gas.Uint64(), berlinMinGas)
+}
+
+// osakaGasCalc calculates the gas cost for the modexp precompile using Osaka rules.
+func osakaGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
+	maxLen := max(baseLen, modLen)
+	multComplexity := osakaMultComplexity(maxLen)
+	iterationCount := calculateIterationCount(expLen, expHead, osakaMultiplier)
+
+	// Calculate gas: (multComplexity * iterationCount) / osakaDivisor
+	var gas uint256.Int
+	gas.SetUint64(iterationCount)
+	gas.Mul(&multComplexity, &gas)
+	gas.Div(&gas, u256_osakaDivisor)
+
+	if !gas.IsUint64() {
+		return math.MaxUint64
+	}
+
+	return max(gas.Uint64(), osakaMinGas)
+}
+
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+func (c *bigModExp) RequiredGas(input []byte) uint64 {
+	// Parse input lengths
+	baseLenBig := new(uint256.Int).SetBytes(getData(input, 0, 32))
+	expLenBig := new(uint256.Int).SetBytes(getData(input, 32, 32))
+	modLenBig := new(uint256.Int).SetBytes(getData(input, 64, 32))
+
+	// Convert to uint64, capping at max value
+	baseLen := baseLenBig.Uint64()
+	if !baseLenBig.IsUint64() {
+		baseLen = math.MaxUint64
+	}
+	expLen := expLenBig.Uint64()
+	if !expLenBig.IsUint64() {
+		expLen = math.MaxUint64
+	}
+	modLen := modLenBig.Uint64()
+	if !modLenBig.IsUint64() {
+		modLen = math.MaxUint64
+	}
+
+	// Skip the header
+	if len(input) > 96 {
+		input = input[96:]
+	} else {
+		input = input[:0]
+	}
+
+	// Retrieve the head 32 bytes of exp for the adjusted exponent length
+	var expHead uint256.Int
+	if uint64(len(input)) > baseLen {
+		if expLen > 32 {
+			expHead.SetBytes(getData(input, baseLen, 32))
+		} else {
+			// TODO: Check that if expLen < baseLen, then getData will return an empty slice
+			expHead.SetBytes(getData(input, baseLen, expLen))
+		}
+	}
+
+	// Choose the appropriate gas calculation based on the EIP flags
+	if c.eip7883 {
+		return osakaGasCalc(baseLen, expLen, modLen, expHead)
+	} else if c.eip2565 {
+		return berlinGasCalc(baseLen, expLen, modLen, expHead)
+	} else {
+		return byzantiumGasCalc(baseLen, expLen, modLen, expHead)
+	}
+}
+
 func (c *bigModExp) Run(input []byte) ([]byte, error) {
-	var (
-		baseLen = new(big.Int).SetBytes(getData(input, 0, 32)).Uint64()
-		expLen  = new(big.Int).SetBytes(getData(input, 32, 32)).Uint64()
-		modLen  = new(big.Int).SetBytes(getData(input, 64, 32)).Uint64()
-	)
+	// Extract lengths - they're 32-byte big-endian integers
+	// with the actual uint64 value in the last 8 bytes
+	var baseLen, expLen, modLen uint64
+	if len(input) >= 32 {
+		baseLen = binary.BigEndian.Uint64(input[24:32])
+	}
+	if len(input) >= 64 {
+		expLen = binary.BigEndian.Uint64(input[56:64])
+	}
+	if len(input) >= 96 {
+		modLen = binary.BigEndian.Uint64(input[88:96])
+	}
+
 	if len(input) > 96 {
 		input = input[96:]
 	} else {
