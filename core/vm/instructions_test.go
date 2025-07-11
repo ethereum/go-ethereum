@@ -519,22 +519,24 @@ func BenchmarkOpIsZero(b *testing.B) {
 
 func TestOpMstore(t *testing.T) {
 	var (
-		evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
-		stack = newstack()
-		mem   = NewMemory()
+		evm      = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
+		stack    = newstack()
+		mem      = NewMemory()
+		contract = &Contract{}
 	)
 	mem.Resize(64)
 	pc := uint64(0)
+	contract.Gas = 30_000_000
 	v := "abcdef00000000000000abba000000000deaf000000c0de00100000000133700"
 	stack.push(new(uint256.Int).SetBytes(common.Hex2Bytes(v)))
 	stack.push(new(uint256.Int))
-	opMstore(&pc, evm.interpreter, &ScopeContext{mem, stack, nil})
+	opMstore(&pc, evm.interpreter, &ScopeContext{mem, stack, contract})
 	if got := common.Bytes2Hex(mem.GetCopy(0, 32)); got != v {
 		t.Fatalf("Mstore fail, got %v, expected %v", got, v)
 	}
 	stack.push(new(uint256.Int).SetUint64(0x1))
 	stack.push(new(uint256.Int))
-	opMstore(&pc, evm.interpreter, &ScopeContext{mem, stack, nil})
+	opMstore(&pc, evm.interpreter, &ScopeContext{mem, stack, contract})
 	if common.Bytes2Hex(mem.GetCopy(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
 		t.Fatalf("Mstore failed to overwrite previous value")
 	}
@@ -846,10 +848,12 @@ func TestOpMCopy(t *testing.T) {
 		},
 	} {
 		var (
-			evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
-			stack = newstack()
-			pc    = uint64(0)
+			evm      = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
+			stack    = newstack()
+			pc       = uint64(0)
+			contract = &Contract{}
 		)
+		contract.Gas = 30_000_000
 		data := common.FromHex(strings.ReplaceAll(tc.pre, " ", ""))
 		// Set pre
 		mem := NewMemory()
@@ -889,7 +893,7 @@ func TestOpMCopy(t *testing.T) {
 			mem.Resize(memorySize)
 		}
 		// Do the copy
-		opMcopy(&pc, evm.interpreter, &ScopeContext{mem, stack, nil})
+		opMcopy(&pc, evm.interpreter, &ScopeContext{mem, stack, contract})
 		want := common.FromHex(strings.ReplaceAll(tc.want, " ", ""))
 		if have := mem.store; !bytes.Equal(want, have) {
 			t.Errorf("case %d: \nwant: %#x\nhave: %#x\n", i, want, have)

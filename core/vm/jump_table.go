@@ -33,15 +33,11 @@ type operation struct {
 	// execute is the operation function
 	execute     executionFunc
 	constantGas uint64
-	dynamicGas  gasFunc
 	// minStack tells how many stack items are required
 	minStack int
 	// maxStack specifies the max length the stack can have for this operation
 	// to not overflow the stack.
 	maxStack int
-
-	// memorySize returns the memory size required for the operation
-	memorySize memorySizeFunc
 
 	// undefined denotes if the instruction is not officially defined in the jump table
 	undefined bool
@@ -72,15 +68,6 @@ func validate(jt JumpTable) JumpTable {
 	for i, op := range jt {
 		if op == nil {
 			panic(fmt.Sprintf("op %#x is not set", i))
-		}
-		// The interpreter has an assumption that if the memorySize function is
-		// set, then the dynamicGas function is also set. This is a somewhat
-		// arbitrary assumption, and can be removed if we need to -- but it
-		// allows us to avoid a condition check. As long as we have that assumption
-		// in there, this little sanity check prevents us from merging in a
-		// change which violates it.
-		if op.memorySize != nil && op.dynamicGas == nil {
-			panic(fmt.Sprintf("op %v has dynamic memory but not dynamic gas", OpCode(i).String()))
 		}
 	}
 	return jt
@@ -191,12 +178,10 @@ func newConstantinopleInstructionSet() JumpTable {
 		maxStack:    maxStack(1, 1),
 	}
 	instructionSet[CREATE2] = &operation{
-		execute:     opCreate2,
+		execute:     opCreate2Constantinople,
 		constantGas: params.Create2Gas,
-		dynamicGas:  gasCreate2,
 		minStack:    minStack(4, 1),
 		maxStack:    maxStack(4, 1),
-		memorySize:  memoryCreate2,
 	}
 	return validate(instructionSet)
 }
@@ -206,12 +191,10 @@ func newConstantinopleInstructionSet() JumpTable {
 func newByzantiumInstructionSet() JumpTable {
 	instructionSet := newSpuriousDragonInstructionSet()
 	instructionSet[STATICCALL] = &operation{
-		execute:     opStaticCall,
+		execute:     opStaticCallByzantium,
 		constantGas: params.CallGasEIP150,
-		dynamicGas:  gasStaticCall,
 		minStack:    minStack(6, 1),
 		maxStack:    maxStack(6, 1),
-		memorySize:  memoryStaticCall,
 	}
 	instructionSet[RETURNDATASIZE] = &operation{
 		execute:     opReturnDataSize,
@@ -222,17 +205,13 @@ func newByzantiumInstructionSet() JumpTable {
 	instructionSet[RETURNDATACOPY] = &operation{
 		execute:     opReturnDataCopy,
 		constantGas: GasFastestStep,
-		dynamicGas:  gasReturnDataCopy,
 		minStack:    minStack(3, 0),
 		maxStack:    maxStack(3, 0),
-		memorySize:  memoryReturnDataCopy,
 	}
 	instructionSet[REVERT] = &operation{
-		execute:    opRevert,
-		dynamicGas: gasRevert,
-		minStack:   minStack(2, 0),
-		maxStack:   maxStack(2, 0),
-		memorySize: memoryRevert,
+		execute:  opRevert,
+		minStack: minStack(2, 0),
+		maxStack: maxStack(2, 0),
 	}
 	return validate(instructionSet)
 }
@@ -240,7 +219,7 @@ func newByzantiumInstructionSet() JumpTable {
 // EIP 158 a.k.a Spurious Dragon
 func newSpuriousDragonInstructionSet() JumpTable {
 	instructionSet := newTangerineWhistleInstructionSet()
-	instructionSet[EXP].dynamicGas = gasExpEIP158
+	instructionSet[EXP].execute = opExpEIP158
 	return validate(instructionSet)
 }
 
@@ -262,12 +241,10 @@ func newTangerineWhistleInstructionSet() JumpTable {
 func newHomesteadInstructionSet() JumpTable {
 	instructionSet := newFrontierInstructionSet()
 	instructionSet[DELEGATECALL] = &operation{
-		execute:     opDelegateCall,
-		dynamicGas:  gasDelegateCall,
+		execute:     opDelegateCallHomestead,
 		constantGas: params.CallGasFrontier,
 		minStack:    minStack(6, 1),
 		maxStack:    maxStack(6, 1),
-		memorySize:  memoryDelegateCall,
 	}
 	return validate(instructionSet)
 }
@@ -337,10 +314,9 @@ func newFrontierInstructionSet() JumpTable {
 			maxStack:    maxStack(3, 1),
 		},
 		EXP: {
-			execute:    opExp,
-			dynamicGas: gasExpFrontier,
-			minStack:   minStack(2, 1),
-			maxStack:   maxStack(2, 1),
+			execute:  opExpFrontier,
+			minStack: minStack(2, 1),
+			maxStack: maxStack(2, 1),
 		},
 		SIGNEXTEND: {
 			execute:     opSignExtend,
@@ -417,10 +393,8 @@ func newFrontierInstructionSet() JumpTable {
 		KECCAK256: {
 			execute:     opKeccak256,
 			constantGas: params.Keccak256Gas,
-			dynamicGas:  gasKeccak256,
 			minStack:    minStack(2, 1),
 			maxStack:    maxStack(2, 1),
-			memorySize:  memoryKeccak256,
 		},
 		ADDRESS: {
 			execute:     opAddress,
@@ -467,10 +441,8 @@ func newFrontierInstructionSet() JumpTable {
 		CALLDATACOPY: {
 			execute:     opCallDataCopy,
 			constantGas: GasFastestStep,
-			dynamicGas:  gasCallDataCopy,
 			minStack:    minStack(3, 0),
 			maxStack:    maxStack(3, 0),
-			memorySize:  memoryCallDataCopy,
 		},
 		CODESIZE: {
 			execute:     opCodeSize,
@@ -479,12 +451,10 @@ func newFrontierInstructionSet() JumpTable {
 			maxStack:    maxStack(0, 1),
 		},
 		CODECOPY: {
-			execute:     opCodeCopy,
+			execute:     opCodeCopyFrontier,
 			constantGas: GasFastestStep,
-			dynamicGas:  gasCodeCopy,
 			minStack:    minStack(3, 0),
 			maxStack:    maxStack(3, 0),
-			memorySize:  memoryCodeCopy,
 		},
 		GASPRICE: {
 			execute:     opGasprice,
@@ -499,12 +469,10 @@ func newFrontierInstructionSet() JumpTable {
 			maxStack:    maxStack(1, 1),
 		},
 		EXTCODECOPY: {
-			execute:     opExtCodeCopy,
+			execute:     opExtCodeCopyFrontier,
 			constantGas: params.ExtcodeCopyBaseFrontier,
-			dynamicGas:  gasExtCodeCopy,
 			minStack:    minStack(4, 0),
 			maxStack:    maxStack(4, 0),
-			memorySize:  memoryExtCodeCopy,
 		},
 		BLOCKHASH: {
 			execute:     opBlockhash,
@@ -551,24 +519,18 @@ func newFrontierInstructionSet() JumpTable {
 		MLOAD: {
 			execute:     opMload,
 			constantGas: GasFastestStep,
-			dynamicGas:  gasMLoad,
 			minStack:    minStack(1, 1),
 			maxStack:    maxStack(1, 1),
-			memorySize:  memoryMLoad,
 		},
 		MSTORE: {
 			execute:     opMstore,
 			constantGas: GasFastestStep,
-			dynamicGas:  gasMStore,
 			minStack:    minStack(2, 0),
 			maxStack:    maxStack(2, 0),
-			memorySize:  memoryMStore,
 		},
 		MSTORE8: {
 			execute:     opMstore8,
 			constantGas: GasFastestStep,
-			dynamicGas:  gasMStore8,
-			memorySize:  memoryMStore8,
 			minStack:    minStack(2, 0),
 			maxStack:    maxStack(2, 0),
 		},
@@ -579,10 +541,9 @@ func newFrontierInstructionSet() JumpTable {
 			maxStack:    maxStack(1, 1),
 		},
 		SSTORE: {
-			execute:    opSstore,
-			dynamicGas: gasSStore,
-			minStack:   minStack(2, 0),
-			maxStack:   maxStack(2, 0),
+			execute:  opSstoreFrontier,
+			minStack: minStack(2, 0),
+			maxStack: maxStack(2, 0),
 		},
 		JUMP: {
 			execute:     opJump,
@@ -1005,76 +966,57 @@ func newFrontierInstructionSet() JumpTable {
 			maxStack:    maxSwapStack(17),
 		},
 		LOG0: {
-			execute:    makeLog(0),
-			dynamicGas: makeGasLog(0),
-			minStack:   minStack(2, 0),
-			maxStack:   maxStack(2, 0),
-			memorySize: memoryLog,
+			execute:  makeLog(0),
+			minStack: minStack(2, 0),
+			maxStack: maxStack(2, 0),
 		},
 		LOG1: {
-			execute:    makeLog(1),
-			dynamicGas: makeGasLog(1),
-			minStack:   minStack(3, 0),
-			maxStack:   maxStack(3, 0),
-			memorySize: memoryLog,
+			execute:  makeLog(1),
+			minStack: minStack(3, 0),
+			maxStack: maxStack(3, 0),
 		},
 		LOG2: {
-			execute:    makeLog(2),
-			dynamicGas: makeGasLog(2),
-			minStack:   minStack(4, 0),
-			maxStack:   maxStack(4, 0),
-			memorySize: memoryLog,
+			execute:  makeLog(2),
+			minStack: minStack(4, 0),
+			maxStack: maxStack(4, 0),
 		},
 		LOG3: {
-			execute:    makeLog(3),
-			dynamicGas: makeGasLog(3),
-			minStack:   minStack(5, 0),
-			maxStack:   maxStack(5, 0),
-			memorySize: memoryLog,
+			execute:  makeLog(3),
+			minStack: minStack(5, 0),
+			maxStack: maxStack(5, 0),
 		},
 		LOG4: {
-			execute:    makeLog(4),
-			dynamicGas: makeGasLog(4),
-			minStack:   minStack(6, 0),
-			maxStack:   maxStack(6, 0),
-			memorySize: memoryLog,
+			execute:  makeLog(4),
+			minStack: minStack(6, 0),
+			maxStack: maxStack(6, 0),
 		},
 		CREATE: {
-			execute:     opCreate,
+			execute:     opCreateFrontier,
 			constantGas: params.CreateGas,
-			dynamicGas:  gasCreate,
 			minStack:    minStack(3, 1),
 			maxStack:    maxStack(3, 1),
-			memorySize:  memoryCreate,
 		},
 		CALL: {
-			execute:     opCall,
+			execute:     opCallFrontier,
 			constantGas: params.CallGasFrontier,
-			dynamicGas:  gasCall,
 			minStack:    minStack(7, 1),
 			maxStack:    maxStack(7, 1),
-			memorySize:  memoryCall,
 		},
 		CALLCODE: {
-			execute:     opCallCode,
+			execute:     opCallCodeFrontier,
 			constantGas: params.CallGasFrontier,
-			dynamicGas:  gasCallCode,
 			minStack:    minStack(7, 1),
 			maxStack:    maxStack(7, 1),
-			memorySize:  memoryCall,
 		},
 		RETURN: {
-			execute:    opReturn,
-			dynamicGas: gasReturn,
-			minStack:   minStack(2, 0),
-			maxStack:   maxStack(2, 0),
-			memorySize: memoryReturn,
+			execute:  opReturn,
+			minStack: minStack(2, 0),
+			maxStack: maxStack(2, 0),
 		},
 		SELFDESTRUCT: {
-			execute:    opSelfdestruct,
-			dynamicGas: gasSelfdestruct,
-			minStack:   minStack(1, 0),
-			maxStack:   maxStack(1, 0),
+			execute:  opSelfdestructFrontier,
+			minStack: minStack(1, 0),
+			maxStack: maxStack(1, 0),
 		},
 		INVALID: {
 			execute:  opUndefined,

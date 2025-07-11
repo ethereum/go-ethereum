@@ -62,17 +62,3 @@ func LookupInstructionSet(rules params.Rules) (JumpTable, error) {
 func (op *operation) Stack() (int, int) {
 	return op.minStack, op.maxStack
 }
-
-// HasCost returns true if the opcode has a cost. Opcodes which do _not_ have
-// a cost assigned are one of two things:
-// - undefined, a.k.a invalid opcodes,
-// - the STOP opcode.
-// This method can thus be used to check if an opcode is "Invalid (or STOP)".
-func (op *operation) HasCost() bool {
-	// Ideally, we'd check this:
-	//	return op.execute == opUndefined
-	// However, go-lang does now allow that. So we'll just check some other
-	// 'indicators' that this is an invalid op. Alas, STOP is impossible to
-	// filter out
-	return op.dynamicGas != nil || op.constantGas != 0
-}

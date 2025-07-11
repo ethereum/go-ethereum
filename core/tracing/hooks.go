@@ -217,6 +217,17 @@ type Hooks struct {
 	OnBlockHashRead BlockHashReadHook
 }
 
+// HooksVM returns if any of the VM events are being hooked
+func (h *Hooks) HooksVM() bool {
+	return h.OnTxStart != nil ||
+		h.OnTxEnd != nil ||
+		h.OnEnter != nil ||
+		h.OnExit != nil ||
+		h.OnOpcode != nil ||
+		h.OnFault != nil ||
+		h.OnGasChange != nil
+}
+
 // HooksState returns if any of the state events are being hooked
 func (h *Hooks) HooksState() bool {
 	return h.OnBalanceChange != nil ||
