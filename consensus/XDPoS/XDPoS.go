@@ -192,12 +192,12 @@ func (x *XDPoS) Author(header *types.Header) (common.Address, error) {
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules.
-func (x *XDPoS) VerifyHeader(chain consensus.ChainReader, header *types.Header, fullVerify bool) error {
+func (x *XDPoS) VerifyHeader(chain consensus.ChainReader, header *types.Header, fullVerify bool, verifyCheckpoint bool) error {
 	switch x.config.BlockConsensusVersion(header.Number, header.Extra, ExtraFieldCheck) {
 	case params.ConsensusEngineVersion2:
 		return x.EngineV2.VerifyHeader(chain, header, fullVerify)
 	default: // Default "v1"
-		return x.EngineV1.VerifyHeader(chain, header, fullVerify)
+		return x.EngineV1.VerifyHeader(chain, header, fullVerify, verifyCheckpoint)
 	}
 }
 

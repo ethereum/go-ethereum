@@ -112,8 +112,8 @@ func (x *XDPoS_v1) Author(header *types.Header) (common.Address, error) {
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules.
-func (x *XDPoS_v1) VerifyHeader(chain consensus.ChainReader, header *types.Header, fullVerify bool) error {
-	return x.verifyHeaderWithCache(chain, header, nil, fullVerify)
+func (x *XDPoS_v1) VerifyHeader(chain consensus.ChainReader, header *types.Header, fullVerify bool, verifyCheckpoint bool) error {
+	return x.verifyHeaderWithCache(chain, header, nil, fullVerify, verifyCheckpoint)
 }
 
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers. The
@@ -122,7 +122,7 @@ func (x *XDPoS_v1) VerifyHeader(chain consensus.ChainReader, header *types.Heade
 func (x *XDPoS_v1) VerifyHeaders(chain consensus.ChainReader, headers []*types.Header, fullVerifies []bool, abort <-chan struct{}, results chan<- error) {
 	go func() {
 		for i, header := range headers {
-			err := x.verifyHeaderWithCache(chain, header, headers[:i], fullVerifies[i])
+			err := x.verifyHeaderWithCache(chain, header, headers[:i], fullVerifies[i], true)
 
 			select {
 			case <-abort:
@@ -133,12 +133,12 @@ func (x *XDPoS_v1) VerifyHeaders(chain consensus.ChainReader, headers []*types.H
 	}()
 }
 
-func (x *XDPoS_v1) verifyHeaderWithCache(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool) error {
+func (x *XDPoS_v1) verifyHeaderWithCache(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool, verifyCheckpoint bool) error {
 	_, check := x.verifiedHeaders.Get(header.Hash())
 	if check {
 		return nil
 	}
-	err := x.verifyHeader(chain, header, parents, fullVerify)
+	err := x.verifyHeader(chain, header, parents, fullVerify, verifyCheckpoint)
 	if err == nil {
 		x.verifiedHeaders.Add(header.Hash(), struct{}{})
 	}
@@ -149,7 +149,7 @@ func (x *XDPoS_v1) verifyHeaderWithCache(chain consensus.ChainReader, header *ty
 // caller may optionally pass in a batch of parents (ascending order) to avoid
 // looking those up from the database. This is useful for concurrently verifying
 // a batch of new headers.
-func (x *XDPoS_v1) verifyHeader(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool) error {
+func (x *XDPoS_v1) verifyHeader(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool, verifyCheckpoint bool) error {
 	// If we're running a engine faking, accept any block as valid
 	if x.config.SkipV1Validation {
 		return nil
@@ -207,14 +207,14 @@ func (x *XDPoS_v1) verifyHeader(chain consensus.ChainReader, header *types.Heade
 		return utils.ErrInvalidUncleHash
 	}
 	// All basic checks passed, verify cascading fields
-	return x.verifyCascadingFields(chain, header, parents, fullVerify)
+	return x.verifyCascadingFields(chain, header, parents, fullVerify, verifyCheckpoint)
 }
 
 // verifyCascadingFields verifies all the header fields that are not standalone,
 // rather depend on a batch of previous headers. The caller may optionally pass
 // in a batch of parents (ascending order) to avoid looking those up from the
 // database. This is useful for concurrently verifying a batch of new headers.
-func (x *XDPoS_v1) verifyCascadingFields(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool) error {
+func (x *XDPoS_v1) verifyCascadingFields(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool, verifyCheckpoint bool) error {
 	// The genesis block is the always valid dead-end
 	number := header.Number.Uint64()
 	if number == 0 {
@@ -253,7 +253,7 @@ func (x *XDPoS_v1) verifyCascadingFields(chain consensus.ChainReader, header *ty
 	}
 
 	signers := snap.GetSigners()
-	err = x.checkSignersOnCheckpoint(chain, header, signers)
+	err = x.checkSignersOnCheckpoint(chain, header, signers, verifyCheckpoint)
 	if err == nil {
 		return x.verifySeal(chain, header, parents, fullVerify)
 	}
@@ -262,7 +262,7 @@ func (x *XDPoS_v1) verifyCascadingFields(chain consensus.ChainReader, header *ty
 	if err != nil {
 		return err
 	}
-	err = x.checkSignersOnCheckpoint(chain, header, signers)
+	err = x.checkSignersOnCheckpoint(chain, header, signers, verifyCheckpoint)
 	if err == nil {
 		return x.verifySeal(chain, header, parents, fullVerify)
 	}
@@ -270,7 +270,7 @@ func (x *XDPoS_v1) verifyCascadingFields(chain consensus.ChainReader, header *ty
 	return err
 }
 
-func (x *XDPoS_v1) checkSignersOnCheckpoint(chain consensus.ChainReader, header *types.Header, signers []common.Address) error {
+func (x *XDPoS_v1) checkSignersOnCheckpoint(chain consensus.ChainReader, header *types.Header, signers []common.Address, verifyCheckpoint bool) error {
 	number := header.Number.Uint64()
 	// ignore signerCheck at checkpoint block.
 	if common.IsIgnoreSignerCheckBlock(number) {
@@ -301,6 +301,12 @@ func (x *XDPoS_v1) checkSignersOnCheckpoint(chain consensus.ChainReader, header 
 			signers = removePenaltiesFromBlock(chain, signers, number-uint64(i)*x.config.Epoch)
 		}
 	}
+
+	// fix issue #1185
+	if !verifyCheckpoint {
+		return nil
+	}
+
 	extraSuffix := len(header.Extra) - utils.ExtraSeal
 	masternodesFromCheckpointHeader := common.ExtractAddressFromBytes(header.Extra[utils.ExtraVanity:extraSuffix])
 	validSigners := utils.CompareSignersLists(masternodesFromCheckpointHeader, signers)
@@ -490,7 +496,7 @@ func (x *XDPoS_v1) snapshot(chain consensus.ChainReader, number uint64, hash com
 		// If we're at block zero, make a snapshot
 		if number == 0 {
 			genesis := chain.GetHeaderByNumber(0)
-			if err := x.VerifyHeader(chain, genesis, true); err != nil {
+			if err := x.VerifyHeader(chain, genesis, true, true); err != nil {
 				return nil, err
 			}
 			signers := make([]common.Address, (len(genesis.Extra)-utils.ExtraVanity-utils.ExtraSeal)/common.AddressLength)

@@ -1937,7 +1937,7 @@ func (bc *BlockChain) PrepareBlock(block *types.Block) (err error) {
 		log.Debug("Stop prepare a block because inserting", "number", block.NumberU64(), "hash", block.Hash(), "validator", block.Header().Validator)
 		return nil
 	}
-	err = bc.engine.VerifyHeader(bc, block.Header(), false)
+	err = bc.engine.VerifyHeader(bc, block.Header(), false, true)
 	if err != nil {
 		return err
 	}
