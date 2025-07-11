@@ -54,6 +54,11 @@ const (
 	// tiny overflows causing all txs to move a shelf higher, wasting disk space.
 	txAvgSize = 4 * 1024
 
+	// txBlobOverhead is an approximation of the overhead that an additional blob
+	// has on transaction size. This is added to the slotter to avoid
+	// tiny overflows causing all txs to move a shelf higher, wasting disk space.
+	txBlobOverhead = 2048
+
 	// txMaxSize is the maximum size a single transaction can have, outside
 	// the included blobs. Since blob transactions are pulled instead of pushed,
 	// and only a small metadata is kept in ram, the rest is on disk, there is
@@ -389,6 +394,20 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	}
 	p.head, p.state = head, state
 
+	// Check if we need to migrate the blob database to a new format
+	slotter := newSlotter(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
+	if p.chain.Config().IsOsaka(head.Number, head.Time) {
+		// Check if we need to migrate our blob db to the new slotter
+		oldSlotSize := 135168
+		if _, err := os.Stat(filepath.Join(queuedir, fmt.Sprintf("bkt_%08d.bag", oldSlotSize))); err == nil {
+			newSlotter := newSlotterEIP7594(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
+			if err := billy.Migrate(billy.Options{Path: queuedir, Repair: true}, slotter, newSlotter); err != nil {
+				return err
+			}
+		}
+		slotter = newSlotterEIP7594(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
+	}
+
 	// Index all transactions on disk and delete anything unprocessable
 	var fails []uint64
 	index := func(id uint64, size uint32, blob []byte) {
@@ -396,7 +415,6 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 			fails = append(fails, id)
 		}
 	}
-	slotter := newSlotter(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
 	store, err := billy.Open(billy.Options{Path: queuedir, Repair: true}, slotter, index)
 	if err != nil {
 		return err
