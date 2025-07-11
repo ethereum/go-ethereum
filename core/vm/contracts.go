@@ -470,7 +470,7 @@ func osakaMultComplexity(x uint64) uint256.Int {
 	}
 	// For x > 32, return 2 * berlinMultComplexity(x)
 	result := berlinMultComplexity(x)
-	result.Lsh(&result, 1) // 2 * berlinComplexity
+	result.Lsh(&result, 1)
 	return result
 }
 
@@ -496,10 +496,8 @@ func calculateIterationCount(expLen uint64, expHead uint256.Int, multiplier uint
 func byzantiumGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
 	maxLen := max(baseLen, modLen)
 
-	// Calculate multiplication complexity
 	multComplexity := byzantiumMultComplexity(maxLen)
 
-	// Calculate iteration count
 	iterationCount := calculateIterationCount(expLen, expHead, byzantiumMultiplier)
 
 	// Calculate gas: (multComplexity * iterationCount) / byzantiumDivisor
@@ -518,10 +516,8 @@ func byzantiumGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint6
 func berlinGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
 	maxLen := max(baseLen, modLen)
 
-	// Calculate multiplication complexity
 	multComplexity := berlinMultComplexity(maxLen)
 
-	// Calculate iteration count
 	iterationCount := calculateIterationCount(expLen, expHead, berlinMultiplier)
 
 	// Calculate gas: (multComplexity * iterationCount) / berlinDivisor
@@ -534,7 +530,6 @@ func berlinGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
 		return math.MaxUint64
 	}
 
-	// Return at least berlinMinGas
 	return max(gas.Uint64(), berlinMinGas)
 }
 
@@ -542,10 +537,8 @@ func berlinGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
 func osakaGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
 	maxLen := max(baseLen, modLen)
 
-	// Calculate multiplication complexity
 	multComplexity := osakaMultComplexity(maxLen)
 
-	// Calculate iteration count
 	iterationCount := calculateIterationCount(expLen, expHead, osakaMultiplier)
 
 	// Calculate gas: (multComplexity * iterationCount) / osakaDivisor
@@ -558,7 +551,6 @@ func osakaGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
 		return math.MaxUint64
 	}
 
-	// Return at least osakaMinGas
 	return max(gas.Uint64(), osakaMinGas)
 }
 
