@@ -45,6 +45,17 @@ func ModExp(base, exp, mod []byte) ([]byte, error) {
 		return []byte{}, nil
 	}
 
+	// Special case: base == 1
+	// If base is 1, the result is always 1 (when mod > 1)
+	if len(base) == 1 && base[0] == 1 {
+		// For modulus > 1, 1^exp mod modulus = 1
+		// For modulus == 1, any number mod 1 = 0
+		if len(mod) == 1 && mod[0] == 1 {
+			return []byte{}, nil
+		}
+		return []byte{1}, nil
+	}
+
 	// Allocate result buffer (size of modulus is the max possible result)
 	result := make([]byte, len(mod))
 	resultLen := C.size_t(len(result))
