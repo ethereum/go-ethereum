@@ -21,6 +21,7 @@ import (
 	"container/heap"
 	"errors"
 	"fmt"
+	"golang.org/x/exp/slices"
 	"math"
 	"math/big"
 	"os"
@@ -1302,6 +1303,9 @@ func (p *BlobPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 func (p *BlobPool) GetBlobs(vhashes []common.Hash) []*types.BlobTxSidecar {
 	sidecars := make([]*types.BlobTxSidecar, len(vhashes))
 	for idx, vhash := range vhashes {
+		if sidecars[idx] != nil {
+			continue
+		}
 		// Retrieve the datastore item (in a short lock)
 		p.lock.RLock()
 		id, exists := p.lookup.storeidOfBlob(vhash)
@@ -1323,6 +1327,17 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash) []*types.BlobTxSidecar {
 			continue
 		}
 		sidecars[idx] = item.BlobTxSidecar()
+
+		// If multi blobs in one transaction, fill the other sidecars.
+		hashes := item.BlobHashes()
+		for i, vHash := range hashes {
+			if sidecars[idx] != nil {
+				continue
+			}
+			if index := slices.Index(hashes, vHash); index != -1 {
+				sidecars[i] = item.BlobTxSidecar()
+			}
+		}
 	}
 	return sidecars
 }
