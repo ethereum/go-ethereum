@@ -217,8 +217,8 @@ type Hooks struct {
 	OnBlockHashRead BlockHashReadHook
 }
 
-// HooksState returns if any of the state events are being hooked
-func (h *Hooks) HooksState() bool {
+// HasStateHooks returns if any of the state events are being hooked
+func (h *Hooks) HasStateHooks() bool {
 	return h.OnBalanceChange != nil ||
 		h.OnNonceChange != nil ||
 		h.OnNonceChangeV2 != nil ||
