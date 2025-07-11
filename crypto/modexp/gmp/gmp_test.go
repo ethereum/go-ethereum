@@ -134,6 +134,81 @@ func BenchmarkModExpBigInt(b *testing.B) {
 	}
 }
 
+// TestLeadingZeros tests that leading zeros are handled correctly
+func TestLeadingZeros(t *testing.T) {
+	tests := []struct {
+		name     string
+		base     []byte
+		exp      []byte
+		mod      []byte
+		expected []byte
+	}{
+		{
+			name:     "base_with_leading_zeros",
+			base:     []byte{0, 0, 0, 0, 2},
+			exp:      []byte{3},
+			mod:      []byte{7},
+			expected: []byte{1}, // 2^3 mod 7 = 8 mod 7 = 1
+		},
+		{
+			name:     "exp_with_leading_zeros",
+			base:     []byte{2},
+			exp:      []byte{0, 0, 0, 3},
+			mod:      []byte{7},
+			expected: []byte{1}, // 2^3 mod 7 = 8 mod 7 = 1
+		},
+		{
+			name:     "mod_with_leading_zeros",
+			base:     []byte{2},
+			exp:      []byte{3},
+			mod:      []byte{0, 0, 0, 0, 7},
+			expected: []byte{1}, // 2^3 mod 7 = 8 mod 7 = 1
+		},
+		{
+			name:     "all_with_leading_zeros",
+			base:     []byte{0, 0, 2},
+			exp:      []byte{0, 0, 3},
+			mod:      []byte{0, 0, 7},
+			expected: []byte{1}, // 2^3 mod 7 = 8 mod 7 = 1
+		},
+		{
+			name:     "base_all_zeros",
+			base:     []byte{0, 0, 0},
+			exp:      []byte{5},
+			mod:      []byte{7},
+			expected: []byte{}, // 0^5 mod 7 = 0
+		},
+		{
+			name:     "exp_all_zeros",
+			base:     []byte{5},
+			exp:      []byte{0, 0, 0},
+			mod:      []byte{7},
+			expected: []byte{1}, // 5^0 mod 7 = 1
+		},
+		{
+			name:     "base_and_exp_all_zeros",
+			base:     []byte{0, 0},
+			exp:      []byte{0, 0},
+			mod:      []byte{7},
+			expected: []byte{1}, // 0^0 mod 7 = 1 (by convention)
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ModExp(tt.base, tt.exp, tt.mod)
+			if err != nil {
+				t.Fatalf("ModExp error: %v", err)
+			}
+
+			if !bytes.Equal(result, tt.expected) {
+				t.Errorf("Results differ:\nGot:      %x\nExpected: %x",
+					result, tt.expected)
+			}
+		})
+	}
+}
+
 // TestSpecialCases tests the special case optimizations
 func TestSpecialCases(t *testing.T) {
 	tests := []struct {

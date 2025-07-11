@@ -25,6 +25,18 @@ import (
 	"unsafe"
 )
 
+// stripLeadingZeros removes leading zero bytes from a slice
+// Note: This has no effect for big-endian integers
+func stripLeadingZeros(data []byte) []byte {
+	for i, b := range data {
+		if b != 0 {
+			return data[i:]
+		}
+	}
+	// All zeros, return empty slice
+	return []byte{}
+}
+
 // ModExp performs modular exponentiation using GMP
 // This is thread safe.
 func ModExp(base, exp, mod []byte) ([]byte, error) {
@@ -56,8 +68,15 @@ func ModExp(base, exp, mod []byte) ([]byte, error) {
 		return []byte{1}, nil
 	}
 
-	// Allocate result buffer (size of modulus is the max possible result)
-	result := make([]byte, len(mod))
+	// Strip leading zeros for GMP performance
+	base = stripLeadingZeros(base)
+	exp = stripLeadingZeros(exp)
+	modStripped := stripLeadingZeros(mod)
+
+	// Allocate result buffer (size of stripped modulus is the max possible result)
+	// Note: We know that the modulus stripped is non-zero because
+	// we check for all zeroes.
+	result := make([]byte, len(modStripped))
 	resultLen := C.size_t(len(result))
 
 	// Handle empty slices - pass a dummy non-nil pointer with length 0
@@ -71,22 +90,22 @@ func ModExp(base, exp, mod []byte) ([]byte, error) {
 	if len(exp) > 0 {
 		expPtr = (*C.uint8_t)(unsafe.Pointer(&exp[0]))
 	}
-	if len(mod) > 0 {
-		modPtr = (*C.uint8_t)(unsafe.Pointer(&mod[0]))
+	if len(modStripped) > 0 {
+		modPtr = (*C.uint8_t)(unsafe.Pointer(&modStripped[0]))
 	}
 
 	// Call C function
 	ret := C.modexp_bytes(
 		basePtr, C.size_t(len(base)),
 		expPtr, C.size_t(len(exp)),
-		modPtr, C.size_t(len(mod)),
+		modPtr, C.size_t(len(modStripped)),
 		(*C.uint8_t)(unsafe.Pointer(&result[0])), &resultLen,
 	)
 
 	// Keep the slices alive until after the C call completes
 	runtime.KeepAlive(base)
 	runtime.KeepAlive(exp)
-	runtime.KeepAlive(mod)
+	runtime.KeepAlive(modStripped)
 	runtime.KeepAlive(result)
 
 	// Check for errors
