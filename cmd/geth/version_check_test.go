@@ -36,6 +36,9 @@ func TestVerification(t *testing.T) {
 		t.Parallel()
 		// For this test, the pubkey is in testdata/vcheck/minisign.pub
 		// (the privkey is `minisign.sec`, if we want to expand this test. Password 'test' )
+		//	1. `minisign -S -l -s ./minisign.sec -m data.json -x ./minisig-sigs/vulnerabilities.json.minisig.1 -c "signature from minisign secret key"`
+		//	2. `minisign -S -l -s ./minisign.sec -m vulnerabilities.json -x ./minisig-sigs/vulnerabilities.json.minisig.2 -c "Here's a comment" -t "Here's a trusted comment"`
+		//	3.	minisign -S -l -s ./minisign.sec -m vulnerabilities.json -x ./minisig-sigs/vulnerabilities.json.minisig.3 -c "One more (untrusted™) comment" -t "Here's a trusted comment"
 		pub := "RWQkliYstQBOKOdtClfgC3IypIPX6TAmoEi7beZ4gyR3wsaezvqOMWsp"
 		testVerification(t, pub, "./testdata/vcheck/minisig-sigs/")
 	})
@@ -43,7 +46,7 @@ func TestVerification(t *testing.T) {
 		t.Parallel()
 		// For this test, the pubkey is in testdata/vcheck/minisign.pub
 		// (the privkey is `minisign.sec`, if we want to expand this test. Password 'test' )
-		// `minisign -S -s ./minisign.sec  -m data.json  -x ./minisig-sigs-new/data.json.minisig`
+		// `minisign -S -s ./minisign.sec  -m data.json -x ./minisig-sigs-new/data.json.minisig`
 		pub := "RWQkliYstQBOKOdtClfgC3IypIPX6TAmoEi7beZ4gyR3wsaezvqOMWsp"
 		testVerification(t, pub, "./testdata/vcheck/minisig-sigs-new/")
 	})
@@ -53,6 +56,7 @@ func TestVerification(t *testing.T) {
 		t.Skip("This currently fails, minisign expects 4 lines of data, signify provides only 2")
 		// For this test, the pubkey is in testdata/vcheck/signifykey.pub
 		// (the privkey is `signifykey.sec`, if we want to expand this test. Password 'test' )
+		// `signify -S -s signifykey.sec -m data.json -x ./signify-sigs/data.json.sig`
 		pub := "RWSKLNhZb0KdATtRT7mZC/bybI3t3+Hv/O2i3ye04Dq9fnT9slpZ1a2/"
 		testVerification(t, pub, "./testdata/vcheck/signify-sigs/")
 	})
