@@ -489,7 +489,6 @@ func calculateIterationCount(expLen uint64, expHead uint256.Int, multiplier uint
 		iterationCount += uint64(bitLen - 1)
 	}
 
-	// Return at least 1
 	return max(iterationCount, 1)
 }
 
