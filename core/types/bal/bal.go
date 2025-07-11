@@ -76,7 +76,7 @@ type ConstructionBlockAccessList struct {
 	Accounts map[common.Address]*ConstructionAccountAccess
 }
 
-// NewBlockAccessList instantiates an empty access list.
+// NewConstructionBlockAccessList instantiates an empty access list.
 func NewConstructionBlockAccessList() ConstructionBlockAccessList {
 	return ConstructionBlockAccessList{
 		Accounts: make(map[common.Address]*ConstructionAccountAccess),

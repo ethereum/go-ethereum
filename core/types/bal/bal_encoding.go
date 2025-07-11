@@ -19,16 +19,16 @@ package bal
 import (
 	"bytes"
 	"cmp"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
 	"slices"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
@@ -47,19 +47,15 @@ type BlockAccessList struct {
 // according to the spec or any code changes are contained which exceed protocol
 // max code size.
 func (e *BlockAccessList) Validate() error {
-	var (
-		prev *[20]byte
-	)
+	if !slices.IsSortedFunc(e.Accesses, func(a, b AccountAccess) int {
+		return bytes.Compare(a.Address[:], b.Address[:])
+	}) {
+		return errors.New("block access list accounts not in lexicographic order")
+	}
 	for _, entry := range e.Accesses {
-		if prev != nil {
-			if bytes.Compare(entry.Address[:], (*prev)[:]) <= 0 {
-				return fmt.Errorf("block access list accounts not in lexicographic order")
-			}
-		}
 		if err := entry.validate(); err != nil {
 			return err
 		}
-		prev = &entry.Address
 	}
 	return nil
 }
@@ -115,16 +111,12 @@ type encodingSlotWrites struct {
 // validate returns an instance of the encoding-representation slot writes in
 // working representation.
 func (e *encodingSlotWrites) validate() error {
-	var prev *uint16
-	for _, write := range e.Accesses {
-		if prev != nil {
-			if *prev >= write.TxIdx {
-				return fmt.Errorf("storage write tx indices not in order")
-			}
-		}
-		prev = &write.TxIdx
+	if slices.IsSortedFunc(e.Accesses, func(a, b encodingStorageWrite) int {
+		return cmp.Compare[uint16](a.TxIdx, b.TxIdx)
+	}) {
+		return nil
 	}
-	return nil
+	return errors.New("storage write tx indices not in order")
 }
 
 // AccountAccess is the encoding format of ConstructionAccountAccess.
@@ -141,52 +133,37 @@ type AccountAccess struct {
 // If any of the keys in the encoding object are not ordered according to the
 // spec, an error is returned.
 func (e *AccountAccess) validate() error {
-	// Convert slot writes
-	var prevSlotWrite *[32]byte
+	// Check the storage write slots are sorted in order
+	if !slices.IsSortedFunc(e.StorageWrites, func(a, b encodingSlotWrites) int {
+		return bytes.Compare(a.Slot[:], b.Slot[:])
+	}) {
+		return errors.New("storage writes slots not in lexicographic order")
+	}
 	for _, write := range e.StorageWrites {
-		if prevSlotWrite != nil {
-			if bytes.Compare((*prevSlotWrite)[:], write.Slot[:]) >= 0 {
-				return fmt.Errorf("storage writes slots not in lexicographic order")
-			}
-		}
-		prevSlotWrite = &write.Slot
-
 		if err := write.validate(); err != nil {
 			return err
 		}
 	}
 
-	// Convert slot reads
-	var prevSlotRead *[32]byte
-	for _, read := range e.StorageReads {
-		if prevSlotRead != nil {
-			if bytes.Compare((*prevSlotRead)[:], read[:]) >= 0 {
-				return fmt.Errorf("storage read slots not in lexicographic order")
-			}
-		}
-		prevSlotRead = &read
+	// Check the storage read slots are sorted in order
+	if !slices.IsSortedFunc(e.StorageReads, func(a, b [32]byte) int {
+		return bytes.Compare(a[:], b[:])
+	}) {
+		return errors.New("storage read slots not in lexicographic order")
 	}
 
-	// Convert balance changes
-	var prevBalanceIndex *uint16
-	for _, balanceChange := range e.BalanceChanges {
-		if prevBalanceIndex != nil {
-			if *prevBalanceIndex >= balanceChange.TxIdx {
-				return fmt.Errorf("balance changes not in ascending order by tx index")
-			}
-		}
-		prevBalanceIndex = &balanceChange.TxIdx
+	// Check the balance changes are sorted in order
+	if !slices.IsSortedFunc(e.BalanceChanges, func(a, b encodingBalanceChange) int {
+		return cmp.Compare[uint16](a.TxIdx, b.TxIdx)
+	}) {
+		return errors.New("balance changes not in ascending order by tx index")
 	}
 
-	// Convert nonce changes
-	var prevNonceIndex *uint16
-	for _, nonceChange := range e.NonceChanges {
-		if prevNonceIndex != nil {
-			if *prevNonceIndex >= nonceChange.TxIdx {
-				return fmt.Errorf("nonce diffs not in ascending order by tx index")
-			}
-		}
-		prevNonceIndex = &nonceChange.TxIdx
+	// Check the nonce changes are sorted in order
+	if !slices.IsSortedFunc(e.NonceChanges, func(a, b encodingAccountNonce) int {
+		return cmp.Compare[uint16](a.TxIdx, b.TxIdx)
+	}) {
+		return errors.New("nonce changes not in ascending order by tx index")
 	}
 
 	// Convert code change
@@ -201,36 +178,15 @@ func (e *AccountAccess) validate() error {
 // Copy returns a deep copy of the account access
 func (e *AccountAccess) Copy() AccountAccess {
 	res := AccountAccess{
-		Address: e.Address,
+		Address:        e.Address,
+		StorageReads:   slices.Clone(e.StorageReads),
+		BalanceChanges: slices.Clone(e.BalanceChanges),
+		NonceChanges:   slices.Clone(e.NonceChanges),
 	}
-
 	for _, storageWrite := range e.StorageWrites {
-		cpy := encodingSlotWrites{
+		res.StorageWrites = append(res.StorageWrites, encodingSlotWrites{
 			Slot:     storageWrite.Slot,
 			Accesses: slices.Clone(storageWrite.Accesses),
-		}
-		for _, slotWrite := range storageWrite.Accesses {
-			cpy.Accesses = append(cpy.Accesses, encodingStorageWrite{
-				TxIdx:      slotWrite.TxIdx,
-				ValueAfter: slotWrite.ValueAfter,
-			})
-		}
-		res.StorageWrites = append(res.StorageWrites, cpy)
-	}
-
-	res.StorageReads = slices.Clone(e.StorageReads)
-
-	for _, balanceChange := range e.BalanceChanges {
-		res.BalanceChanges = append(res.BalanceChanges, encodingBalanceChange{
-			TxIdx:   balanceChange.TxIdx,
-			Balance: balanceChange.Balance,
-		})
-	}
-
-	for _, nonceChange := range e.NonceChanges {
-		res.NonceChanges = append(res.NonceChanges, encodingAccountNonce{
-			TxIdx: nonceChange.TxIdx,
-			Nonce: nonceChange.Nonce,
 		})
 	}
 	if len(e.Code) == 1 {
