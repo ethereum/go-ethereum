@@ -395,7 +395,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	if p.chain.Config().IsOsaka(head.Number, head.Time) {
 		// Check if we need to migrate our blob db to the new slotter
 		oldSlotSize := 135168
-		if os.Stat(filepath.Join(queuedir, fmt.Sprintf("bkt_%08d.bag", oldSlotSize))); err == nil {
+		if _, err := os.Stat(filepath.Join(queuedir, fmt.Sprintf("bkt_%08d.bag", oldSlotSize))); err == nil {
 			newSlotter := newSlotterEIP7594(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
 			if err := billy.Migrate(billy.Options{Path: queuedir, Repair: true}, slotter, newSlotter); err != nil {
 				return err
