@@ -198,6 +198,52 @@ func (e *AccountAccess) validate() error {
 	return nil
 }
 
+// Copy returns a deep copy of the account access
+func (e *AccountAccess) Copy() AccountAccess {
+	res := AccountAccess{
+		Address: e.Address,
+	}
+
+	for _, storageWrite := range e.StorageWrites {
+		cpy := encodingSlotWrites{
+			Slot:     storageWrite.Slot,
+			Accesses: slices.Clone(storageWrite.Accesses),
+		}
+		for _, slotWrite := range storageWrite.Accesses {
+			cpy.Accesses = append(cpy.Accesses, encodingStorageWrite{
+				TxIdx:      slotWrite.TxIdx,
+				ValueAfter: slotWrite.ValueAfter,
+			})
+		}
+		res.StorageWrites = append(res.StorageWrites, cpy)
+	}
+
+	res.StorageReads = slices.Clone(e.StorageReads)
+
+	for _, balanceChange := range e.BalanceChanges {
+		res.BalanceChanges = append(res.BalanceChanges, encodingBalanceChange{
+			TxIdx:   balanceChange.TxIdx,
+			Balance: balanceChange.Balance,
+		})
+	}
+
+	for _, nonceChange := range e.NonceChanges {
+		res.NonceChanges = append(res.NonceChanges, encodingAccountNonce{
+			TxIdx: nonceChange.TxIdx,
+			Nonce: nonceChange.Nonce,
+		})
+	}
+	if len(e.Code) == 1 {
+		res.Code = []CodeChange{
+			{
+				e.Code[0].TxIndex,
+				bytes.Clone(e.Code[0].Code),
+			},
+		}
+	}
+	return res
+}
+
 // EncodeRLP returns the RLP-encoded access list
 func (b *ConstructionBlockAccessList) EncodeRLP(wr io.Writer) error {
 	return b.toEncodingObj().EncodeRLP(wr)
@@ -331,4 +377,12 @@ func (e *BlockAccessList) PrettyPrint() string {
 		}
 	}
 	return res.String()
+}
+
+// Copy returns a deep copy of the access list
+func (e *BlockAccessList) Copy() (res BlockAccessList) {
+	for _, accountAccess := range e.Accesses {
+		res.Accesses = append(res.Accesses, accountAccess.Copy())
+	}
+	return
 }
