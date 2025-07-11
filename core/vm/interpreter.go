@@ -195,8 +195,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		// For optimisation reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC
 		// to be uint256. Practically much less so feasible.
-		pc   = uint64(0) // program counter
-		cost uint64
+		pc                = uint64(0) // program counter
+		cost, dynamicCost uint64
 		// copies used by tracer
 		pcCopy  uint64 // needed for the deferred EVMLogger
 		gasCopy uint64 // for EVMLogger to log gas remaining before execution
@@ -230,7 +230,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	_ = jumpTable[0] // nil-check the jumpTable out of the loop
 	for {
 		// Capture pre-execution values for tracing.
-		logged, pcCopy, gasCopy = false, pc, contract.Gas
+		logged, pcCopy, gasCopy, dynamicCost = false, pc, contract.Gas, 0
 
 		if in.evm.chainRules.IsEIP4762 && !contract.IsDeployment && !contract.IsSystemCall {
 			// if the PC ends up in a new "chunk" of verkleized code, charge the
@@ -281,7 +281,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			}
 			// Consume the gas and return an error if not enough gas is available.
 			// cost is explicitly set so that the capture state defer method can get the proper cost
-			var dynamicCost uint64
 			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
 			cost += dynamicCost // for tracing
 			if err != nil {
@@ -297,10 +296,15 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 		// Do tracing before potential memory expansion
 		if in.evm.Config.Tracer.OnGasChange != nil {
-			in.evm.Config.Tracer.OnGasChange(gasCopy, gasCopy-cost, tracing.GasChangeCallOpCode)
+			// Trace the constant cost only
+			in.evm.Config.Tracer.OnGasChange(gasCopy, gasCopy-operation.constantGas, tracing.GasChangeCallOpCode)
 		}
 		if in.evm.Config.Tracer.OnOpcode != nil {
-			in.evm.Config.Tracer.OnOpcode(pc, byte(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
+			in.evm.Config.Tracer.OnOpcode(pc, byte(op), gasCopy, operation.constantGas, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
+			// If any, trace the dynamic cost as well
+			if in.evm.Config.Tracer.OnGasChange != nil && dynamicCost > 0 {
+				in.evm.Config.Tracer.OnGasChange(gasCopy-operation.constantGas, gasCopy-cost, tracing.GasChangeCallOpCodeDynamic)
+			}
 			logged = true
 		}
 		if memorySize > 0 {

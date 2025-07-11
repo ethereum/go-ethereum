@@ -17,6 +17,7 @@
 package logger
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -96,12 +97,19 @@ func (s *StructLog) ErrorString() string {
 
 // WriteTo writes the human-readable log data into the supplied writer.
 func (s *StructLog) WriteTo(writer io.Writer) {
+	s.writeHeaderTo(writer)
+	s.writeVmStateTo(writer)
+}
+
+func (s *StructLog) writeHeaderTo(writer io.Writer) {
 	fmt.Fprintf(writer, "%-16spc=%08d gas=%v cost=%v", s.Op, s.Pc, s.Gas, s.GasCost)
 	if s.Err != nil {
 		fmt.Fprintf(writer, " ERROR: %v", s.Err)
 	}
 	fmt.Fprintln(writer)
+}
 
+func (s *StructLog) writeVmStateTo(writer io.Writer) {
 	if len(s.Stack) > 0 {
 		fmt.Fprintln(writer, "Stack:")
 		for i := len(s.Stack) - 1; i >= 0; i-- {
@@ -157,7 +165,7 @@ type structLogLegacy struct {
 }
 
 // toLegacyJSON converts the structLog to legacy json-encoded legacy form.
-func (s *StructLog) toLegacyJSON() json.RawMessage {
+func (s *StructLog) toLegacyJSON() structLogLegacy {
 	msg := structLogLegacy{
 		Pc:            s.Pc,
 		Op:            s.Op.String(),
@@ -195,8 +203,8 @@ func (s *StructLog) toLegacyJSON() json.RawMessage {
 		}
 		msg.Storage = &storage
 	}
-	element, _ := json.Marshal(msg)
-	return element
+
+	return msg
 }
 
 // StructLogger is an EVM state logger and implements EVMLogger.
@@ -223,6 +231,11 @@ type StructLogger struct {
 	interrupt atomic.Bool // Atomic flag to signal execution interruption
 	reason    error       // Textual reason for the interruption
 	skip      bool        // skip processing hooks.
+
+	// stitching context
+	stitchingBuffer   bytes.Buffer
+	inflightLog       StructLog
+	legacyInflightLog structLogLegacy
 }
 
 // NewStreamingStructLogger returns a new streaming logger.
@@ -252,6 +265,24 @@ func (l *StructLogger) Hooks() tracing.Hooks {
 		OnSystemCallEnd:     l.OnSystemCallEnd,
 		OnExit:              l.OnExit,
 		OnOpcode:            l.OnOpcode,
+		OnGasChange:         l.OnGasChange,
+	}
+}
+
+// OnFault logs failing opcodes
+func (l *StructLogger) OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
+	if l.skip {
+		return
+	}
+	l.inflightLog.Err = err
+	l.flushInflightLog()
+}
+
+// OnGasChange logs the dynamic and refunded gas amounts
+func (l *StructLogger) OnGasChange(old, new uint64, reason tracing.GasChangeReason) {
+	if reason == tracing.GasChangeCallOpCodeDynamic {
+		l.inflightLog.GasCost += old - new
+		l.inflightLog.RefundCounter = l.env.StateDB.GetRefund()
 	}
 }
 
@@ -263,6 +294,7 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 	if l.interrupt.Load() {
 		return
 	}
+	l.flushInflightLog()
 	// Processing a system call.
 	if l.skip {
 		return
@@ -279,6 +311,7 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 		stackLen     = len(stack)
 	)
 	log := StructLog{pc, op, gas, cost, nil, len(memory), nil, nil, nil, depth, l.env.StateDB.GetRefund(), err}
+	l.inflightLog = log
 	if l.cfg.EnableMemory {
 		log.Memory = memory
 	}
@@ -319,12 +352,31 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 
 	// create a log
 	if l.writer == nil {
-		entry := log.toLegacyJSON()
+		l.legacyInflightLog = log.toLegacyJSON()
+	} else {
+		log.writeVmStateTo(&l.stitchingBuffer)
+	}
+	if opcode == byte(vm.STOP) {
+		l.flushInflightLog()
+	}
+}
+
+func (l *StructLogger) flushInflightLog() {
+	// emptyLegacy is used as a sentinel value
+	var emptyLegacy structLogLegacy
+	if l.writer == nil && l.legacyInflightLog != emptyLegacy {
+		l.legacyInflightLog.GasCost = l.inflightLog.GasCost
+		l.legacyInflightLog.Error = l.inflightLog.ErrorString()
+		l.legacyInflightLog.RefundCounter = l.inflightLog.RefundCounter
+		entry, _ := json.Marshal(l.legacyInflightLog)
 		l.resultSize += len(entry)
 		l.logs = append(l.logs, entry)
-		return
+		l.legacyInflightLog = emptyLegacy
+	} else if l.stitchingBuffer.Len() > 0 {
+		l.inflightLog.writeHeaderTo(l.writer)
+		l.writer.Write(l.stitchingBuffer.Bytes())
 	}
-	log.WriteTo(l.writer)
+	l.stitchingBuffer.Reset()
 }
 
 // OnExit is called a call frame finishes processing.
@@ -414,6 +466,11 @@ type mdLogger struct {
 	cfg  *Config
 	env  *tracing.VMContext
 	skip bool
+
+	// stitching context
+	stitchingBuffer bytes.Buffer
+	cost            uint64
+	refund          uint64
 }
 
 // NewMarkdownLogger creates a logger which outputs information in a format adapted
@@ -435,6 +492,7 @@ func (t *mdLogger) Hooks() tracing.Hooks {
 		OnExit:              t.OnExit,
 		OnOpcode:            t.OnOpcode,
 		OnFault:             t.OnFault,
+		OnGasChange:         t.OnGasChange,
 	}
 }
 
@@ -493,14 +551,26 @@ func (t *mdLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, r
 	}
 }
 
+// OnGasChange tracks the dynamic gas and refund amounts
+func (t *mdLogger) OnGasChange(old, new uint64, reason tracing.GasChangeReason) {
+	if reason == tracing.GasChangeCallOpCodeDynamic {
+		t.cost += old - new
+		t.refund = t.env.StateDB.GetRefund()
+	}
+}
+
 // OnOpcode also tracks SLOAD/SSTORE ops to track storage change.
 func (t *mdLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+	t.flushInflightLog()
+
 	if t.skip {
 		return
 	}
 	stack := scope.StackData()
-	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |%10v |", pc, vm.OpCode(op).String(),
-		cost, t.env.StateDB.GetRefund())
+	t.cost = cost
+	t.refund = t.env.StateDB.GetRefund()
+	fmt.Fprintf(&t.stitchingBuffer, "| %4d  | %10v  |  %s |%s |", pc, vm.OpCode(op).String(),
+		/* placeholders */ "%3d", "%10v")
 
 	if !t.cfg.DisableStack {
 		// format stack
@@ -509,11 +579,14 @@ func (t *mdLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.
 			a = append(a, elem.Hex())
 		}
 		b := fmt.Sprintf("[%v]", strings.Join(a, ","))
-		fmt.Fprintf(t.out, "%10v |", b)
+		fmt.Fprintf(&t.stitchingBuffer, "%10v |", b)
 	}
-	fmt.Fprintln(t.out, "")
+	fmt.Fprintln(&t.stitchingBuffer, "")
 	if err != nil {
-		fmt.Fprintf(t.out, "Error: %v\n", err)
+		fmt.Fprintf(&t.stitchingBuffer, "Error: %v\n", err)
+	}
+	if op == byte(vm.STOP) {
+		t.flushInflightLog()
 	}
 }
 
@@ -521,7 +594,15 @@ func (t *mdLogger) OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.O
 	if t.skip {
 		return
 	}
-	fmt.Fprintf(t.out, "\nError: at pc=%d, op=%v: %v\n", pc, op, err)
+	t.flushInflightLog()
+	fmt.Fprintf(t.out, "Error: at pc=%d, op=%v: %v\n", pc, op, err)
+}
+
+func (t *mdLogger) flushInflightLog() {
+	if t.stitchingBuffer.Len() > 0 {
+		fmt.Fprintf(t.out, t.stitchingBuffer.String(), t.cost, t.refund)
+		t.stitchingBuffer.Reset()
+	}
 }
 
 // ExecutionResult groups all structured logs emitted by the EVM

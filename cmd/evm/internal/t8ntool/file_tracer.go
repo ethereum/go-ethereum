@@ -148,5 +148,10 @@ func (l *fileWritingTracer) hooks() tracing.Hooks {
 				l.inner.OnSystemCallEnd()
 			}
 		},
+		OnGasChange: func(old, new uint64, reason tracing.GasChangeReason) {
+			if l.inner.OnGasChange != nil {
+				l.inner.OnGasChange(old, new, reason)
+			}
+		},
 	}
 }

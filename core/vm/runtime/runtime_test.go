@@ -667,6 +667,11 @@ func TestColdAccountAccessCost(t *testing.T) {
 		Execute(tc.code, nil, &Config{
 			EVMConfig: vm.Config{
 				Tracer: tracing.Hooks{
+					OnGasChange: func(old, new uint64, reason tracing.GasChangeReason) {
+						if step-1 == tc.step && reason == tracing.GasChangeCallOpCodeDynamic {
+							have += old - new
+						}
+					},
 					OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 						// Uncomment to investigate failures:
 						//t.Logf("%d: %v %d", step, vm.OpCode(op).String(), cost)
@@ -700,10 +705,15 @@ func TestRuntimeJSTracer(t *testing.T) {
 		this.exits++;
 		this.gasUsed = res.getGasUsed();
 	}}`,
-		`{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, steps:0,
+		`{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, steps:0, dynamicGas:0,
 	fault: function() {},
 	result: function() {
-		return [this.enters, this.exits,this.enterGas,this.gasUsed, this.steps].join(",")
+		return [this.enters, this.exits,this.enterGas,this.gasUsed, this.steps, this.dynamicGas].join(",")
+	},
+	gas: function(change) {
+		if (change.getReason() == "CallOpCodeDynamic") {
+			this.dynamicGas += change.getOld() - change.getNew();
+		}
 	},
 	enter: function(frame) {
 		this.enters++;
@@ -726,7 +736,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 				Push(0).                  // value
 				Op(vm.CREATE).
 				Op(vm.POP).Bytes(),
-			results: []string{`"1,1,952853,6,12"`, `"1,1,952853,6,0"`},
+			results: []string{`"1,1,952853,6,12"`, `"1,1,952853,6,0,5"`},
 		},
 		{ // CREATE2
 			code: program.New().MstoreSmall(initcode, 0).
@@ -736,27 +746,27 @@ func TestRuntimeJSTracer(t *testing.T) {
 				Push(0).                  // value
 				Op(vm.CREATE2).
 				Op(vm.POP).Bytes(),
-			results: []string{`"1,1,952844,6,13"`, `"1,1,952844,6,0"`},
+			results: []string{`"1,1,952844,6,13"`, `"1,1,952844,6,0,11"`},
 		},
 		{ // CALL
 			code:    program.New().Call(nil, 0xbb, 0, 0, 0, 0, 0).Op(vm.POP).Bytes(),
-			results: []string{`"1,1,981796,6,13"`, `"1,1,981796,6,0"`},
+			results: []string{`"1,1,981796,6,13"`, `"1,1,981796,6,0,984296"`},
 		},
 		{ // CALLCODE
 			code:    program.New().CallCode(nil, 0xcc, 0, 0, 0, 0, 0).Op(vm.POP).Bytes(),
-			results: []string{`"1,1,981796,6,13"`, `"1,1,981796,6,0"`},
+			results: []string{`"1,1,981796,6,13"`, `"1,1,981796,6,0,984296"`},
 		},
 		{ // STATICCALL
 			code:    program.New().StaticCall(nil, 0xdd, 0, 0, 0, 0).Op(vm.POP).Bytes(),
-			results: []string{`"1,1,981799,6,12"`, `"1,1,981799,6,0"`},
+			results: []string{`"1,1,981799,6,12"`, `"1,1,981799,6,0,984299"`},
 		},
 		{ // DELEGATECALL
 			code:    program.New().DelegateCall(nil, 0xee, 0, 0, 0, 0).Op(vm.POP).Bytes(),
-			results: []string{`"1,1,981799,6,12"`, `"1,1,981799,6,0"`},
+			results: []string{`"1,1,981799,6,12"`, `"1,1,981799,6,0,984299"`},
 		},
 		{ // CALL self-destructing contract
 			code:    program.New().Call(nil, 0xff, 0, 0, 0, 0, 0).Op(vm.POP).Bytes(),
-			results: []string{`"2,2,0,5003,12"`, `"2,2,0,5003,0"`},
+			results: []string{`"2,2,0,5003,12"`, `"2,2,0,5003,0,984296"`},
 		},
 	}
 	calleeCode := []byte{
@@ -921,6 +931,11 @@ func TestDelegatedAccountAccessCost(t *testing.T) {
 			State:       statedb,
 			EVMConfig: vm.Config{
 				Tracer: tracing.Hooks{
+					OnGasChange: func(old, new uint64, reason tracing.GasChangeReason) {
+						if step-1 == tc.step && reason == tracing.GasChangeCallOpCodeDynamic {
+							have += old - new
+						}
+					},
 					OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 						// Uncomment to investigate failures:
 						t.Logf("%d: %v %d", step, vm.OpCode(op).String(), cost)
