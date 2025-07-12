@@ -863,7 +863,6 @@ func (s *spongeDb) Flush() {
 		s.sponge.Write([]byte(key))
 		s.sponge.Write([]byte(s.values[key]))
 	}
-	fmt.Println(len(s.keys))
 }
 
 // spongeBatch is a dummy batch which immediately writes to the underlying spongedb
