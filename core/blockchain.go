@@ -97,6 +97,7 @@ var (
 	blockValidationTimer      = metrics.NewRegisteredResettingTimer("chain/validation", nil)
 	blockCrossValidationTimer = metrics.NewRegisteredResettingTimer("chain/crossvalidation", nil)
 	blockExecutionTimer       = metrics.NewRegisteredResettingTimer("chain/execution", nil)
+	dynamicGasTimer           = metrics.NewRegisteredResettingTimer("chain/execution/dynamicgas", nil)
 	blockWriteTimer           = metrics.NewRegisteredResettingTimer("chain/write", nil)
 
 	blockReorgMeter     = metrics.NewRegisteredMeter("chain/reorg/executes", nil)
@@ -2101,7 +2102,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	blockExecutionTimer.Update(ptime - (statedb.AccountReads + statedb.StorageReads)) // The time spent on EVM processing
 	blockValidationTimer.Update(vtime - (triehash + trieUpdate))                      // The time spent on block validation
 	blockCrossValidationTimer.Update(xvtime)                                          // The time spent on stateless cross validation
-
+	dynamicGasTimer.Update(res.dynamicGasCalculation)
 	// Write the block to the chain and get the status.
 	var (
 		wstart = time.Now()
