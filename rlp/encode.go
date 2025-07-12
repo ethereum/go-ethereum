@@ -151,7 +151,7 @@ func makeWriter(typ reflect.Type, ts rlpstruct.Tags) (writer, error) {
 		return writeU256IntNoPtr, nil
 	case kind == reflect.Ptr:
 		return makePtrWriter(typ, ts)
-	case reflect.PointerTo(typ).Implements(encoderInterface):
+	case implementsInterface(reflect.PointerTo(typ), encoderInterface):
 		return makeEncoderWriter(typ), nil
 	case isUint(kind):
 		return writeUint, nil
@@ -409,7 +409,7 @@ func makePtrWriter(typ reflect.Type, ts rlpstruct.Tags) (writer, error) {
 }
 
 func makeEncoderWriter(typ reflect.Type) writer {
-	if typ.Implements(encoderInterface) {
+	if implementsInterface(typ, encoderInterface) {
 		return func(val reflect.Value, w *encBuffer) error {
 			return val.Interface().(Encoder).EncodeRLP(w)
 		}
