@@ -91,7 +91,10 @@ func (bc *BlockChain) GetHeaderByNumber(number uint64) *types.Header {
 
 // GetBlockNumber retrieves the block number associated with a block hash.
 func (bc *BlockChain) GetBlockNumber(hash common.Hash) *uint64 {
-	return bc.hc.GetBlockNumber(hash)
+	if num, ok := bc.hc.GetBlockNumber(hash); ok {
+		return &num
+	}
+	return nil
 }
 
 // GetHeadersFrom returns a contiguous segment of headers, in rlp-form, going
@@ -107,11 +110,11 @@ func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
 	if cached, ok := bc.bodyCache.Get(hash); ok {
 		return cached
 	}
-	number := bc.hc.GetBlockNumber(hash)
-	if number == nil {
+	number, ok := bc.hc.GetBlockNumber(hash)
+	if !ok {
 		return nil
 	}
-	body := rawdb.ReadBody(bc.db, hash, *number)
+	body := rawdb.ReadBody(bc.db, hash, number)
 	if body == nil {
 		return nil
 	}
@@ -127,11 +130,11 @@ func (bc *BlockChain) GetBodyRLP(hash common.Hash) rlp.RawValue {
 	if cached, ok := bc.bodyRLPCache.Get(hash); ok {
 		return cached
 	}
-	number := bc.hc.GetBlockNumber(hash)
-	if number == nil {
+	number, ok := bc.hc.GetBlockNumber(hash)
+	if !ok {
 		return nil
 	}
-	body := rawdb.ReadBodyRLP(bc.db, hash, *number)
+	body := rawdb.ReadBodyRLP(bc.db, hash, number)
 	if len(body) == 0 {
 		return nil
 	}
@@ -180,11 +183,11 @@ func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 
 // GetBlockByHash retrieves a block from the database by hash, caching it if found.
 func (bc *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
-	number := bc.hc.GetBlockNumber(hash)
-	if number == nil {
+	number, ok := bc.hc.GetBlockNumber(hash)
+	if !ok {
 		return nil
 	}
-	return bc.GetBlock(hash, *number)
+	return bc.GetBlock(hash, number)
 }
 
 // GetBlockByNumber retrieves a block from the database by number, caching it
@@ -200,18 +203,18 @@ func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
 // GetBlocksFromHash returns the block corresponding to hash and up to n-1 ancestors.
 // [deprecated by eth/62]
 func (bc *BlockChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*types.Block) {
-	number := bc.hc.GetBlockNumber(hash)
-	if number == nil {
+	number, ok := bc.hc.GetBlockNumber(hash)
+	if !ok {
 		return nil
 	}
 	for i := 0; i < n; i++ {
-		block := bc.GetBlock(hash, *number)
+		block := bc.GetBlock(hash, number)
 		if block == nil {
 			break
 		}
 		blocks = append(blocks, block)
 		hash = block.ParentHash()
-		*number--
+		number--
 	}
 	return
 }
@@ -259,15 +262,15 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	if receipts, ok := bc.receiptsCache.Get(hash); ok {
 		return receipts
 	}
-	number := rawdb.ReadHeaderNumber(bc.db, hash)
-	if number == nil {
+	number, ok := rawdb.ReadHeaderNumber(bc.db, hash)
+	if !ok {
 		return nil
 	}
-	header := bc.GetHeader(hash, *number)
+	header := bc.GetHeader(hash, number)
 	if header == nil {
 		return nil
 	}
-	receipts := rawdb.ReadReceipts(bc.db, hash, *number, header.Time, bc.chainConfig)
+	receipts := rawdb.ReadReceipts(bc.db, hash, number, header.Time, bc.chainConfig)
 	if receipts == nil {
 		return nil
 	}
@@ -286,11 +289,11 @@ func (bc *BlockChain) GetRawReceipts(hash common.Hash, number uint64) types.Rece
 
 // GetReceiptsRLP retrieves the receipts of a block.
 func (bc *BlockChain) GetReceiptsRLP(hash common.Hash) rlp.RawValue {
-	number := rawdb.ReadHeaderNumber(bc.db, hash)
-	if number == nil {
+	number, ok := rawdb.ReadHeaderNumber(bc.db, hash)
+	if !ok {
 		return nil
 	}
-	return rawdb.ReadReceiptsRLP(bc.db, hash, *number)
+	return rawdb.ReadReceiptsRLP(bc.db, hash, number)
 }
 
 // GetUnclesInChain retrieves all the uncles from a given block backwards until
