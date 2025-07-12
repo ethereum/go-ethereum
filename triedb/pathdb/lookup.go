@@ -22,8 +22,13 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 	"golang.org/x/sync/errgroup"
 )
+
+// storageNodesShardCount is the number of shards used for storage nodes.
+const storageNodesShardCount = 16
 
 // storageKey returns a key for uniquely identifying the storage slot.
 func storageKey(accountHash common.Hash, slotHash common.Hash) [64]byte {
@@ -48,9 +53,31 @@ type lookup struct {
 	// where the slot was modified, with the order from oldest to newest.
 	storages map[[64]byte][]common.Hash
 
+	// accountNodes represents the mutation history for specific account
+	// trie nodes. The key is the trie path of the node, and the value is a slice
+	// of **diff layer** IDs indicating where the account was modified,
+	// with the order from oldest to newest.
+	accountNodes map[string][]common.Hash
+
+	// storageNodes represents the mutation history for specific storage
+	// slot trie nodes, distributed across 16 shards for efficiency.
+	// The key is the account address hash and the trie path of the node,
+	// the value is a slice of **diff layer** IDs indicating where the
+	// slot was modified, with the order from oldest to newest.
+	storageNodes [storageNodesShardCount]map[string][]common.Hash
+
 	// descendant is the callback indicating whether the layer with
 	// given root is a descendant of the one specified by `ancestor`.
 	descendant func(state common.Hash, ancestor common.Hash) bool
+}
+
+// getStorageShardIndex returns the shard index for a given path
+func getStorageShardIndex(path string) int {
+	if len(path) == 0 {
+		return 0
+	}
+	// use the first char of the path to determine the shard index
+	return int(path[0]) % storageNodesShardCount
 }
 
 // newLookup initializes the lookup structure.
@@ -64,10 +91,16 @@ func newLookup(head layer, descendant func(state common.Hash, ancestor common.Ha
 		current = current.parentLayer()
 	}
 	l := &lookup{
-		accounts:   make(map[common.Hash][]common.Hash),
-		storages:   make(map[[64]byte][]common.Hash),
-		descendant: descendant,
+		accounts:     make(map[common.Hash][]common.Hash),
+		storages:     make(map[[64]byte][]common.Hash),
+		accountNodes: make(map[string][]common.Hash),
+		descendant:   descendant,
 	}
+	// Initialize all 16 storage node shards
+	for i := 0; i < storageNodesShardCount; i++ {
+		l.storageNodes[i] = make(map[string][]common.Hash)
+	}
+
 	// Apply the diff layers from bottom to top
 	for i := len(layers) - 1; i >= 0; i-- {
 		switch diff := layers[i].(type) {
@@ -161,6 +194,46 @@ func (l *lookup) storageTip(accountHash common.Hash, slotHash common.Hash, state
 	return common.Hash{}
 }
 
+// nodeTip traverses the layer list associated with the given account and path
+// in reverse order to locate the first entry that either matches
+// the specified stateID or is a descendant of it.
+//
+// If found, the trie node data corresponding to the supplied stateID resides
+// in that layer. Otherwise, two scenarios are possible:
+//
+// (a) the trie node remains unmodified from the current disk layer up to
+// the state layer specified by the stateID: fallback to the disk layer for
+// data retrieval, (b) or the layer specified by the stateID is stale: reject
+// the data retrieval.
+func (l *lookup) nodeTip(accountHash common.Hash, path string, stateID common.Hash, base common.Hash) common.Hash {
+	var list []common.Hash
+	if accountHash == (common.Hash{}) {
+		list = l.accountNodes[path]
+	} else {
+		// Construct the combined key but use only path for shard calculation
+		key := accountHash.Hex() + path
+		shardIndex := getStorageShardIndex(path) // Use only path for sharding
+		list = l.storageNodes[shardIndex][key]
+	}
+	for i := len(list) - 1; i >= 0; i-- {
+		// If the current state matches the stateID, or the requested state is a
+		// descendant of it, return the current state as the most recent one
+		// containing the modified data. Otherwise, the current state may be ahead
+		// of the requested one or belong to a different branch.
+		if list[i] == stateID || l.descendant(stateID, list[i]) {
+			return list[i]
+		}
+	}
+	// No layer matching the stateID or its descendants was found. Use the
+	// current disk layer as a fallback.
+	if base == stateID || l.descendant(stateID, base) {
+		return base
+	}
+	// The layer associated with 'stateID' is not the descendant of the current
+	// disk layer, it's already stale, return nothing.
+	return common.Hash{}
+}
+
 // addLayer traverses the state data retained in the specified diff layer and
 // integrates it into the lookup set.
 //
@@ -170,6 +243,7 @@ func (l *lookup) storageTip(accountHash common.Hash, slotHash common.Hash, state
 func (l *lookup) addLayer(diff *diffLayer) {
 	defer func(now time.Time) {
 		lookupAddLayerTimer.UpdateSince(now)
+		log.Debug("PathDB lookup add layer", "id", diff.id, "block", diff.block, "elapsed", time.Since(now))
 	}(time.Now())
 
 	var (
@@ -204,6 +278,92 @@ func (l *lookup) addLayer(diff *diffLayer) {
 			}
 		}
 	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for path := range diff.nodes.accountNodes {
+			list, exists := l.accountNodes[path]
+			if !exists {
+				list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
+			}
+			list = append(list, state)
+			l.accountNodes[path] = list
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		l.addStorageNodes(state, diff.nodes.storageNodes)
+	}()
+
+	wg.Wait()
+}
+
+func (l *lookup) addStorageNodes(state common.Hash, nodes map[common.Hash]map[string]*trienode.Node) {
+	count := 0
+	for _, slots := range nodes {
+		count += len(slots)
+	}
+
+	// If the number of storage nodes is small, use a single-threaded approach
+	if count <= 1000 {
+		for accountHash, slots := range nodes {
+			accountHex := accountHash.Hex()
+			for path := range slots {
+				key := accountHex + path
+				shardIndex := getStorageShardIndex(path)
+				list, exists := l.storageNodes[shardIndex][key]
+				if !exists {
+					list = make([]common.Hash, 0, 16)
+				}
+				list = append(list, state)
+				l.storageNodes[shardIndex][key] = list
+			}
+		}
+		return
+	}
+
+	// Use concurrent workers for storage nodes updates, one per shard
+	var wg sync.WaitGroup
+	wg.Add(storageNodesShardCount)
+
+	workChannels := make([]chan string, storageNodesShardCount)
+	for i := 0; i < storageNodesShardCount; i++ {
+		workChannels[i] = make(chan string, 10) // Buffer to avoid blocking
+	}
+
+	// Start all workers, each handling its own shard
+	for shardIndex := 0; shardIndex < storageNodesShardCount; shardIndex++ {
+		go func(shardIdx int) {
+			defer wg.Done()
+
+			shard := l.storageNodes[shardIdx]
+			for key := range workChannels[shardIdx] {
+				list, exists := shard[key]
+				if !exists {
+					list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
+				}
+				list = append(list, state)
+				shard[key] = list
+			}
+		}(shardIndex)
+	}
+
+	for accountHash, slots := range nodes {
+		accountHex := accountHash.Hex()
+		for path := range slots {
+			shardIndex := getStorageShardIndex(path)
+			workChannels[shardIndex] <- accountHex + path
+		}
+	}
+
+	// Close all channels to signal workers to finish
+	for i := 0; i < storageNodesShardCount; i++ {
+		close(workChannels[i])
+	}
+
 	wg.Wait()
 }
 
@@ -236,6 +396,7 @@ func removeFromList(list []common.Hash, element common.Hash) (bool, []common.Has
 func (l *lookup) removeLayer(diff *diffLayer) error {
 	defer func(now time.Time) {
 		lookupRemoveLayerTimer.UpdateSince(now)
+		log.Debug("PathDB lookup remove layer", "id", diff.id, "block", diff.block, "elapsed", time.Since(now))
 	}(time.Now())
 
 	var (
@@ -274,5 +435,96 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 		}
 		return nil
 	})
+
+	eg.Go(func() error {
+		for path := range diff.nodes.accountNodes {
+			found, list := removeFromList(l.accountNodes[path], state)
+			if !found {
+				return fmt.Errorf("account lookup is not found, %x, state: %x", path, state)
+			}
+			if len(list) != 0 {
+				l.accountNodes[path] = list
+			} else {
+				delete(l.accountNodes, path)
+			}
+		}
+		return nil
+	})
+
+	eg.Go(func() error {
+		return l.removeStorageNodes(state, diff.nodes.storageNodes)
+	})
+	return eg.Wait()
+}
+
+func (l *lookup) removeStorageNodes(state common.Hash, nodes map[common.Hash]map[string]*trienode.Node) error {
+	count := 0
+	for _, slots := range nodes {
+		count += len(slots)
+	}
+
+	if count <= 1000 {
+		for accountHash, slots := range nodes {
+			accountHex := accountHash.Hex()
+			for path := range slots {
+				shard := l.storageNodes[getStorageShardIndex(path)]
+				key := accountHex + path
+				found, list := removeFromList(shard[key], state)
+				if !found {
+					return fmt.Errorf("storage lookup is not found, %x %x, state: %x", accountHash, path, state)
+				}
+				if len(list) != 0 {
+					shard[key] = list
+				} else {
+					delete(shard, key)
+				}
+			}
+		}
+		return nil
+	}
+
+	// Use concurrent workers for storage nodes removal, one per shard
+	var eg errgroup.Group
+
+	// Create work channels for each shard
+	workChannels := make([]chan string, storageNodesShardCount)
+
+	for i := 0; i < storageNodesShardCount; i++ {
+		workChannels[i] = make(chan string, 10) // Buffer to avoid blocking
+	}
+
+	// Start all workers, each handling its own shard
+	for shardIndex := 0; shardIndex < storageNodesShardCount; shardIndex++ {
+		shardIdx := shardIndex // Capture the variable
+		eg.Go(func() error {
+			shard := l.storageNodes[shardIdx]
+			for key := range workChannels[shardIdx] {
+				found, list := removeFromList(shard[key], state)
+				if !found {
+					return fmt.Errorf("storage lookup is not found, key: %s, state: %x", key, state)
+				}
+				if len(list) != 0 {
+					shard[key] = list
+				} else {
+					delete(shard, key)
+				}
+			}
+			return nil
+		})
+	}
+
+	for accountHash, slots := range nodes {
+		accountHex := accountHash.Hex()
+		for path := range slots {
+			key := accountHex + path
+			shardIndex := getStorageShardIndex(path)
+			workChannels[shardIndex] <- key
+		}
+	}
+
+	for i := 0; i < storageNodesShardCount; i++ {
+		close(workChannels[i])
+	}
+
 	return eg.Wait()
 }
