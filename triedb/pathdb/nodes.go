@@ -251,9 +251,9 @@ func (s *nodeSet) decode(r *rlp.Stream) error {
 			// Account nodes
 			for _, n := range entry.Nodes {
 				if len(n.Blob) > 0 {
-					s.accountNodes[string(n.Path)] = trienode.New(crypto.Keccak256Hash(n.Blob), n.Blob)
+					s.accountNodes[string(n.Path)] = trienode.New(crypto.Keccak256Hash(n.Blob), n.Blob, 0)
 				} else {
-					s.accountNodes[string(n.Path)] = trienode.NewDeleted()
+					s.accountNodes[string(n.Path)] = trienode.NewDeleted(0)
 				}
 			}
 		} else {
@@ -261,9 +261,9 @@ func (s *nodeSet) decode(r *rlp.Stream) error {
 			subset := make(map[string]*trienode.Node)
 			for _, n := range entry.Nodes {
 				if len(n.Blob) > 0 {
-					subset[string(n.Path)] = trienode.New(crypto.Keccak256Hash(n.Blob), n.Blob)
+					subset[string(n.Path)] = trienode.New(crypto.Keccak256Hash(n.Blob), n.Blob, 0)
 				} else {
-					subset[string(n.Path)] = trienode.NewDeleted()
+					subset[string(n.Path)] = trienode.NewDeleted(0)
 				}
 			}
 			s.storageNodes[entry.Owner] = subset
