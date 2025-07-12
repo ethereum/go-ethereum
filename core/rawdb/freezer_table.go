@@ -113,6 +113,7 @@ type freezerTable struct {
 	tailId uint32              // number of the earliest file
 
 	metadata *freezerTableMeta // metadata of the table
+	uncommit uint64            // Count of items written without flushing to file
 	lastSync time.Time         // Timestamp when the last sync was performed
 
 	headBytes  int64          // Number of bytes written to the head file
