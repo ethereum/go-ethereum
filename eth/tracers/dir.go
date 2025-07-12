@@ -45,6 +45,14 @@ type Tracer struct {
 	Stop func(err error)
 }
 
+func (t *Tracer) upgrade() (*Tracer, error) {
+	upgraded, err := tracing.Upgrade(t.Hooks)
+	if err != nil {
+		return nil, err
+	}
+	return &Tracer{Hooks: upgraded, GetResult: t.GetResult, Stop: t.Stop}, nil
+}
+
 type ctorFn func(*Context, json.RawMessage, *params.ChainConfig) (*Tracer, error)
 type jsCtorFn func(string, *Context, json.RawMessage, *params.ChainConfig) (*Tracer, error)
 
@@ -84,7 +92,11 @@ func (d *directory) New(name string, ctx *Context, cfg json.RawMessage, chainCon
 		cfg = json.RawMessage("{}")
 	}
 	if elem, ok := d.elems[name]; ok {
-		return elem.ctor(ctx, cfg, chainConfig)
+		t, err := elem.ctor(ctx, cfg, chainConfig)
+		if err != nil {
+			return nil, err
+		}
+		return t.upgrade()
 	}
 	// Assume JS code
 	return d.jsEval(name, ctx, cfg, chainConfig)
