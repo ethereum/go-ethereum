@@ -910,7 +910,7 @@ Pre-execution info:
 |   20  |      PUSH1  |    3 |     19900 |[0x0,0x0,0x0,0x0,0x0] |
 |   22  |        GAS  |    2 |     19900 |[0x0,0x0,0x0,0x0,0x0,0xf9] |
 |   23  |   CALLCODE  |  100 |     19900 |[0x0,0x0,0x0,0x0,0x0,0xf9,0x885] |
-Error: out of gas: out of gas
+Error: at pc=23, op=242: out of gas: out of gas
 | 1786  |        POP  |    2 |         0 |[0x94a843a7335fc63be036fbdecc40b1365f3c5f26,0x0] |
 | 1787  |        POP  |    2 |         0 |[0x94a843a7335fc63be036fbdecc40b1365f3c5f26] |
 | 1788  |       STOP  |    0 |         0 |        [] |
