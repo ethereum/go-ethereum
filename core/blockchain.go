@@ -1353,7 +1353,7 @@ const (
 // will be directly stored in the ancient, getting rid of the chain migration.
 func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain []rlp.RawValue, ancientLimit uint64) (int, error) {
 	// Verify the supplied headers before insertion without lock
-	var headers []*types.Header
+	headers := make([]*types.Header, 0, len(blockChain))
 	for _, block := range blockChain {
 		headers = append(headers, block.Header())
 		// Here we also validate that blob transactions in the block do not
