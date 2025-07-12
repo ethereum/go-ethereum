@@ -748,3 +748,27 @@ func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek 
 	}
 	return newFastStorageIterator(db, root, account, seek)
 }
+
+// FirstStateBlock returns the block number of the oldest state in the freezer.
+func (db *Database) FirstStateBlock() (uint64, error) {
+	if db.freezer == nil {
+		return 0, errors.New("freezer is not available")
+	}
+
+	tailID, err := db.freezer.Tail()
+	if err != nil {
+		return 0, err
+	}
+
+	// No state has been persistent, return the genesis block number.
+	if tailID == 0 {
+		return 0, nil
+	}
+
+	blob := rawdb.ReadStateHistoryMeta(db.freezer, tailID+1)
+	var m meta
+	if err := m.decode(blob); err != nil {
+		return 0, err
+	}
+	return m.block, nil
+}
