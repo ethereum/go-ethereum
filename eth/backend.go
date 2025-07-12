@@ -124,6 +124,8 @@ type Ethereum struct {
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 
 	shutdownTracker *shutdowncheck.ShutdownTracker // Tracks if and when the node has shutdown ungracefully
+
+	syncOverride SyncOverride // allows the sync target to be overridden
 }
 
 // New creates a new Ethereum object (including the initialisation of the common Ethereum object),
@@ -201,6 +203,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		p2pServer:       stack.Server(),
 		discmix:         enode.NewFairMix(discmixTimeout),
 		shutdownTracker: shutdowncheck.NewShutdownTracker(chainDb),
+	}
+	eth.syncOverride = SyncOverride{
+		stack:   stack,
+		backend: eth,
+		closed:  make(chan struct{}),
 	}
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
 	var dbVer = "<nil>"
@@ -576,6 +583,8 @@ func (s *Ethereum) Stop() error {
 	s.chainDb.Close()
 	s.eventMux.Stop()
 
+	s.syncOverride.Stop()
+
 	return nil
 }
 
@@ -603,4 +612,10 @@ func (s *Ethereum) SyncMode() ethconfig.SyncMode {
 	}
 	// Nope, we're really full syncing
 	return ethconfig.FullSync
+}
+
+// SyncOverride returns a SyncOverride instance which is used to force the node
+// to sync to a target block hash.
+func (s *Ethereum) SyncOverride() *SyncOverride {
+	return &s.syncOverride
 }

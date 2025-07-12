@@ -443,3 +443,8 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 	}
 	return api.eth.blockchain.GetTrieFlushInterval().String(), nil
 }
+
+// SetSyncTarget initiates a full-sync to the target block hash
+func (api *DebugAPI) SyncTarget(target common.Hash) {
+	api.eth.SyncOverride().SyncTarget(target, false)
+}
