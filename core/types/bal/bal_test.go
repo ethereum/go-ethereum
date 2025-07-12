@@ -102,10 +102,10 @@ func TestBALEncoding(t *testing.T) {
 	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 10000000)); err != nil {
 		t.Fatalf("decoding failed: %v\n", err)
 	}
-	if dec.Hash() != bal.toEncodingObj().Hash() {
+	if dec.Hash() != bal.ToEncodingObj().Hash() {
 		t.Fatalf("encoded block hash doesn't match decoded")
 	}
-	if !equalBALs(bal.toEncodingObj(), &dec) {
+	if !equalBALs(bal.ToEncodingObj(), &dec) {
 		t.Fatal("decoded BAL doesn't match")
 	}
 }
@@ -245,7 +245,7 @@ func TestBlockAccessListValidation(t *testing.T) {
 
 	// Validate the derived block access list
 	cBAL := makeTestConstructionBAL()
-	listB := cBAL.toEncodingObj()
+	listB := cBAL.ToEncodingObj()
 	if err := listB.Validate(); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}

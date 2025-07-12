@@ -146,7 +146,7 @@ func (b *ConstructionBlockAccessList) BalanceChange(txIdx uint16, address common
 
 // PrettyPrint returns a human-readable representation of the access list
 func (b *ConstructionBlockAccessList) PrettyPrint() string {
-	enc := b.toEncodingObj()
+	enc := b.ToEncodingObj()
 	return enc.PrettyPrint()
 }
 

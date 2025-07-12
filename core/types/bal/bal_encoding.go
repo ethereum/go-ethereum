@@ -202,7 +202,7 @@ func (e *AccountAccess) Copy() AccountAccess {
 
 // EncodeRLP returns the RLP-encoded access list
 func (b *ConstructionBlockAccessList) EncodeRLP(wr io.Writer) error {
-	return b.toEncodingObj().EncodeRLP(wr)
+	return b.ToEncodingObj().EncodeRLP(wr)
 }
 
 var _ rlp.Encoder = &ConstructionBlockAccessList{}
@@ -279,9 +279,9 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 	return res
 }
 
-// toEncodingObj returns an instance of the access list expressed as the type
+// ToEncodingObj returns an instance of the access list expressed as the type
 // which is used as input for the encoding/decoding.
-func (b *ConstructionBlockAccessList) toEncodingObj() *BlockAccessList {
+func (b *ConstructionBlockAccessList) ToEncodingObj() *BlockAccessList {
 	var addresses []common.Address
 	for addr := range b.Accounts {
 		addresses = append(addresses, addr)
