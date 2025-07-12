@@ -76,8 +76,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 	// Apply pre-execution system calls.
 	var tracingStateDB = vm.StateDB(statedb)
-	if hooks := cfg.Tracer; hooks != nil {
-		tracingStateDB = state.NewHookedState(statedb, hooks)
+	if cfg.Tracer.HasStateHooks() {
+		tracingStateDB = state.NewHookedState(statedb, cfg.Tracer)
 	}
 	context = NewEVMBlockContext(header, p.chain, nil)
 	evm := vm.NewEVM(context, tracingStateDB, p.config, cfg)
@@ -137,13 +137,11 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 // and uses the input parameters for its environment similar to ApplyTransaction. However,
 // this method takes an already created EVM instance as input.
 func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, blockTime uint64, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (receipt *types.Receipt, err error) {
-	if hooks := evm.Config.Tracer; hooks != nil {
-		if hooks.OnTxStart != nil {
-			hooks.OnTxStart(evm.GetVMContext(), tx, msg.From)
-		}
-		if hooks.OnTxEnd != nil {
-			defer func() { hooks.OnTxEnd(receipt, err) }()
-		}
+	if evm.Config.Tracer.OnTxStart != nil {
+		evm.Config.Tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
+	}
+	if evm.Config.Tracer.OnTxEnd != nil {
+		defer func() { evm.Config.Tracer.OnTxEnd(receipt, err) }()
 	}
 	// Apply the transaction to the current state (included in the env).
 	result, err := ApplyMessage(evm, msg, gp)
@@ -215,11 +213,9 @@ func ApplyTransaction(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *
 // ProcessBeaconBlockRoot applies the EIP-4788 system call to the beacon block root
 // contract. This method is exported to be used in tests.
 func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM) {
-	if tracer := evm.Config.Tracer; tracer != nil {
-		onSystemCallStart(tracer, evm.GetVMContext())
-		if tracer.OnSystemCallEnd != nil {
-			defer tracer.OnSystemCallEnd()
-		}
+	onSystemCallStart(&evm.Config.Tracer, evm.GetVMContext())
+	if evm.Config.Tracer.OnSystemCallEnd != nil {
+		defer evm.Config.Tracer.OnSystemCallEnd()
 	}
 	msg := &Message{
 		From:      params.SystemAddress,
@@ -239,11 +235,9 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM) {
 // ProcessParentBlockHash stores the parent block hash in the history storage contract
 // as per EIP-2935/7709.
 func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) {
-	if tracer := evm.Config.Tracer; tracer != nil {
-		onSystemCallStart(tracer, evm.GetVMContext())
-		if tracer.OnSystemCallEnd != nil {
-			defer tracer.OnSystemCallEnd()
-		}
+	onSystemCallStart(&evm.Config.Tracer, evm.GetVMContext())
+	if evm.Config.Tracer.OnSystemCallEnd != nil {
+		defer evm.Config.Tracer.OnSystemCallEnd()
 	}
 	msg := &Message{
 		From:      params.SystemAddress,
@@ -279,11 +273,9 @@ func ProcessConsolidationQueue(requests *[][]byte, evm *vm.EVM) error {
 }
 
 func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte, addr common.Address) error {
-	if tracer := evm.Config.Tracer; tracer != nil {
-		onSystemCallStart(tracer, evm.GetVMContext())
-		if tracer.OnSystemCallEnd != nil {
-			defer tracer.OnSystemCallEnd()
-		}
+	onSystemCallStart(&evm.Config.Tracer, evm.GetVMContext())
+	if evm.Config.Tracer.OnSystemCallEnd != nil {
+		defer evm.Config.Tracer.OnSystemCallEnd()
 	}
 	msg := &Message{
 		From:      params.SystemAddress,

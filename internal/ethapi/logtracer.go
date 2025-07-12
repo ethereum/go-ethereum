@@ -68,8 +68,8 @@ func newTracer(traceTransfers bool, blockNumber uint64, blockHash, txHash common
 	}
 }
 
-func (t *tracer) Hooks() *tracing.Hooks {
-	return &tracing.Hooks{
+func (t *tracer) Hooks() tracing.Hooks {
+	return tracing.Hooks{
 		OnEnter: t.onEnter,
 		OnExit:  t.onExit,
 		OnLog:   t.onLog,

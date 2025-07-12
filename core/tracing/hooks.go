@@ -206,7 +206,8 @@ type Hooks struct {
 	OnSystemCallStart   OnSystemCallStartHook
 	OnSystemCallStartV2 OnSystemCallStartHookV2
 	OnSystemCallEnd     OnSystemCallEndHook
-	// State events
+	// State events, make sure to update HasStateHooks
+	// if you ever add a new hook here
 	OnBalanceChange BalanceChangeHook
 	OnNonceChange   NonceChangeHook
 	OnNonceChangeV2 NonceChangeHookV2
@@ -215,6 +216,16 @@ type Hooks struct {
 	OnLog           LogHook
 	// Block hash read
 	OnBlockHashRead BlockHashReadHook
+}
+
+// HasStateHooks returns if any of the state events are being hooked
+func (h *Hooks) HasStateHooks() bool {
+	return h.OnBalanceChange != nil ||
+		h.OnNonceChange != nil ||
+		h.OnNonceChangeV2 != nil ||
+		h.OnCodeChange != nil ||
+		h.OnStorageChange != nil ||
+		h.OnLog != nil
 }
 
 // BalanceChangeReason is used to indicate the reason for a balance change, useful

@@ -666,7 +666,7 @@ func TestColdAccountAccessCost(t *testing.T) {
 		var have = uint64(0)
 		Execute(tc.code, nil, &Config{
 			EVMConfig: vm.Config{
-				Tracer: &tracing.Hooks{
+				Tracer: tracing.Hooks{
 					OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 						// Uncomment to investigate failures:
 						//t.Logf("%d: %v %d", step, vm.OpCode(op).String(), cost)
@@ -920,7 +920,7 @@ func TestDelegatedAccountAccessCost(t *testing.T) {
 			ChainConfig: params.MergedTestChainConfig,
 			State:       statedb,
 			EVMConfig: vm.Config{
-				Tracer: &tracing.Hooks{
+				Tracer: tracing.Hooks{
 					OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 						// Uncomment to investigate failures:
 						t.Logf("%d: %v %d", step, vm.OpCode(op).String(), cost)
