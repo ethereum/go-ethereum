@@ -953,7 +953,14 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	}
 	defer release()
 
-	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+	hdr := *block.Header()
+	if config != nil {
+		if err := config.BlockOverrides.ApplyHeader(&hdr); err != nil {
+			return nil, err
+		}
+	}
+
+	vmctx := core.NewEVMBlockContext(&hdr, api.chainContext(ctx), nil)
 	// Apply the customization rules if required.
 	if config != nil {
 		if overrideErr := config.BlockOverrides.Apply(&vmctx); overrideErr != nil {

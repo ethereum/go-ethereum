@@ -171,6 +171,29 @@ func (o *BlockOverrides) Apply(blockCtx *vm.BlockContext) error {
 	return nil
 }
 
+func (o *BlockOverrides) ApplyHeader(h *types.Header) error {
+	if o == nil {
+		return nil
+	}
+	if o.Number != nil {
+		h.Number = o.Number.ToInt()
+	}
+	if o.Time != nil {
+		h.Time = uint64(*o.Time)
+	}
+	if o.GasLimit != nil {
+		h.GasLimit = uint64(*o.GasLimit)
+	}
+	if o.Difficulty != nil {
+		h.Difficulty = o.Difficulty.ToInt()
+	}
+	if o.BaseFeePerGas != nil {
+		h.BaseFee = o.BaseFeePerGas.ToInt()
+	}
+
+	return nil
+}
+
 // MakeHeader returns a new header object with the overridden
 // fields.
 // Note: MakeHeader ignores BlobBaseFee if set. That's because
