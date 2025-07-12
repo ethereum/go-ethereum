@@ -18,7 +18,6 @@ package downloader
 
 import (
 	"errors"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -34,28 +33,14 @@ import (
 // Note, this must not be used in live code. If the forkchcoice endpoint where
 // to use this instead of giving us the payload first, then essentially nobody
 // in the network would have the block yet that we'd attempt to retrieve.
-func (d *Downloader) BeaconDevSync(mode SyncMode, hash common.Hash, stop chan struct{}) error {
+func (d *Downloader) BeaconDevSync(mode SyncMode, header *types.Header) error {
 	// Be very loud that this code should not be used in a live node
 	log.Warn("----------------------------------")
-	log.Warn("Beacon syncing with hash as target", "hash", hash)
+	log.Warn("Beacon syncing with hash as target", "number", header.Number, "hash", header.Hash())
 	log.Warn("This is unhealthy for a live node!")
+	log.Warn("This is incompatible with the consensus layer!")
 	log.Warn("----------------------------------")
-
-	log.Info("Waiting for peers to retrieve sync target")
-	for {
-		// If the node is going down, unblock
-		select {
-		case <-stop:
-			return errors.New("stop requested")
-		default:
-		}
-		header, err := d.GetHeader(hash)
-		if err != nil {
-			time.Sleep(time.Second)
-			continue
-		}
-		return d.BeaconSync(mode, header, header)
-	}
+	return d.BeaconSync(mode, header, header)
 }
 
 // GetHeader tries to retrieve the header with a given hash from a random peer.
