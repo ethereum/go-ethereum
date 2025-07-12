@@ -129,17 +129,20 @@ type jsTracer struct {
 	step   goja.Callable
 	enter  goja.Callable
 	exit   goja.Callable
+	gas    goja.Callable
 
 	// Underlying structs being passed into JS
 	log         *steplog
 	frame       *callframe
 	frameResult *callframeResult
+	gasChange   *gasChange
 
 	// Goja-wrapping of types prepared for JS consumption
 	logValue         goja.Value
 	dbValue          goja.Value
 	frameValue       goja.Value
 	frameResultValue goja.Value
+	gasChangeValue   goja.Value
 }
 
 // newJsTracer instantiates a new JS tracer instance. code is a
@@ -202,6 +205,7 @@ func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage, chainCo
 	if hasEnter != hasExit {
 		return nil, errors.New("trace object must expose either both or none of enter() and exit()")
 	}
+	t.gas, _ = goja.AssertFunction(obj.Get("gas"))
 	t.traceFrame = hasEnter
 	t.obj = obj
 	t.step = step
@@ -230,18 +234,21 @@ func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage, chainCo
 	}
 	t.frame = &callframe{vm: vm, toBig: t.toBig, toBuf: t.toBuf}
 	t.frameResult = &callframeResult{vm: vm, toBuf: t.toBuf}
+	t.gasChange = &gasChange{vm: vm}
 	t.frameValue = t.frame.setupObject()
 	t.frameResultValue = t.frameResult.setupObject()
 	t.logValue = t.log.setupObject()
+	t.gasChangeValue = t.gasChange.setupObject()
 
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart: t.OnTxStart,
-			OnTxEnd:   t.OnTxEnd,
-			OnEnter:   t.OnEnter,
-			OnExit:    t.OnExit,
-			OnOpcode:  t.OnOpcode,
-			OnFault:   t.OnFault,
+			OnTxStart:   t.OnTxStart,
+			OnTxEnd:     t.OnTxEnd,
+			OnEnter:     t.OnEnter,
+			OnExit:      t.OnExit,
+			OnOpcode:    t.OnOpcode,
+			OnFault:     t.OnFault,
+			OnGasChange: t.OnGasChange,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
@@ -327,6 +334,20 @@ func (t *jsTracer) onStart(from common.Address, to common.Address, create bool, 
 		return
 	}
 	t.ctx["value"] = valueBig
+}
+
+// OnGasChange keeps track of the changes in available gas
+func (t *jsTracer) OnGasChange(old, new uint64, reason tracing.GasChangeReason) {
+	if t.gas == nil {
+		return
+	}
+
+	t.gasChange.old = old
+	t.gasChange.new = new
+	t.gasChange.reason = reason
+	if _, err := t.gas(t.obj, t.gasChangeValue); err != nil {
+		t.onError("gas", err)
+	}
 }
 
 // OnOpcode implements the Tracer interface to trace a single step of VM execution.
@@ -1041,5 +1062,25 @@ func (l *steplog) setupObject() *goja.Object {
 	o.Set("stack", l.stack.setupObject())
 	o.Set("memory", l.memory.setupObject())
 	o.Set("contract", l.contract.setupObject())
+	return o
+}
+
+type gasChange struct {
+	vm *goja.Runtime
+
+	old, new uint64
+	reason   tracing.GasChangeReason
+}
+
+func (g *gasChange) GetOld() uint64    { return g.old }
+func (g *gasChange) GetNew() uint64    { return g.new }
+func (g *gasChange) GetReason() string { return g.reason.String() }
+
+func (g *gasChange) setupObject() *goja.Object {
+	o := g.vm.NewObject()
+	// Setup basic fields.
+	o.Set("getOld", g.vm.ToValue(g.GetOld))
+	o.Set("getNew", g.vm.ToValue(g.GetNew))
+	o.Set("getReason", g.vm.ToValue(g.GetReason))
 	return o
 }
