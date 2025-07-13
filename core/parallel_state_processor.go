@@ -21,6 +21,7 @@ var (
 	PrefetchMergeBALTime = time.Duration(0)
 	ParallelExeTime      = time.Duration(0)
 	PostMergeTime        = time.Duration(0)
+	PrefetchTrieTimer    = time.Duration(0)
 )
 
 type ParallelStateProcessor struct {
@@ -84,11 +85,17 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		defer wg.Done()
 
 		start := time.Now()
-		postState = statedb.Copy()
+		postState = statedb.CopyState()
+		// Stop prefetcher cause we'll directly fetch tries in parallel
+		postState.StopPrefetcher()
+
 		postState.MergePostBalStates()
-		// prewarm the updating trie
-		postState.IntermediateRoot(true)
 		PostMergeTime += time.Since(start)
+
+		// Prewarm the updating trie
+		start = time.Now()
+		postState.PrefetchTrie()
+		PrefetchTrieTimer += time.Since(start)
 	}()
 
 	go func() {

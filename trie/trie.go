@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -324,6 +325,8 @@ func (t *Trie) update(key, value []byte) error {
 	return nil
 }
 
+var ResolveTime = time.Duration(0)
+
 func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error) {
 	if len(key) == 0 {
 		if v, ok := n.(valueNode); ok {
@@ -387,7 +390,9 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		// We've hit a part of the trie that isn't loaded yet. Load
 		// the node and insert into it. This leaves all child nodes on
 		// the path to the value in the trie.
+		start := time.Now()
 		rn, err := t.resolveAndTrack(n, prefix)
+		ResolveTime += time.Since(start)
 		if err != nil {
 			return false, nil, err
 		}
@@ -517,7 +522,10 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 				// shortNode{..., shortNode{...}}.  Since the entry
 				// might not be loaded yet, resolve it just for this
 				// check.
+				start := time.Now()
 				cnode, err := t.resolve(n.Children[pos], append(prefix, byte(pos)))
+				ResolveTime += time.Since(start)
+
 				if err != nil {
 					return false, nil, err
 				}
@@ -548,7 +556,9 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		// We've hit a part of the trie that isn't loaded yet. Load
 		// the node and delete from it. This leaves all child nodes on
 		// the path to the value in the trie.
+		start := time.Now()
 		rn, err := t.resolveAndTrack(n, prefix)
+		ResolveTime += time.Since(start)
 		if err != nil {
 			return false, nil, err
 		}

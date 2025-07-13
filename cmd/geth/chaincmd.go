@@ -47,6 +47,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/urfave/cli/v2"
 )
 
@@ -450,6 +451,7 @@ func showMetrics() {
 	// execution
 	fmt.Println("prefetchTimer", blockPrefetchExecuteTimer.Total())
 	fmt.Println("accountReadTimer", accountReadTimer.Total())
+	fmt.Println("ResolveTimer", trie.ResolveTime)
 	fmt.Println("storageReadTimer", storageReadTimer.Total())
 	fmt.Println("blockExecutionTimer", blockExecutionTimer.Total())
 
@@ -476,6 +478,7 @@ func showMetrics() {
 	fmt.Println("PrefetchMergeTime:", core.PrefetchMergeBALTime)
 	fmt.Println("ParallelExeTime: ", core.ParallelExeTime)
 	fmt.Println("PostMergeTime:    ", core.PostMergeTime)
+	fmt.Println("PrefetchTrieTime: ", core.PrefetchTrieTimer)
 
 	// total
 	fmt.Println("blockInsertTimer", blockInsertTimer.Total())

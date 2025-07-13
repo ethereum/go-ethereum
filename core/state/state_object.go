@@ -144,6 +144,9 @@ func (s *stateObject) getTrie() (Trie, error) {
 func (s *stateObject) getPrefetchedTrie() Trie {
 	// If there's nothing to meaningfully return, let the user figure it out by
 	// pulling the trie from disk.
+	if s.trie != nil {
+		return s.trie
+	}
 	if (s.data.Root == types.EmptyRootHash && !s.db.db.TrieDB().IsVerkle()) || s.db.prefetcher == nil {
 		return nil
 	}
@@ -512,9 +515,9 @@ func (s *stateObject) simpleCopy(db *StateDB) *stateObject {
 		data:               s.data,
 		code:               s.code,
 		originStorage:      s.originStorage.Copy(),
-		pendingStorage:     make(Storage),
-		dirtyStorage:       make(Storage),
-		uncommittedStorage: make(Storage),
+		pendingStorage:     s.pendingStorage.Copy(),
+		dirtyStorage:       s.dirtyStorage.Copy(),
+		uncommittedStorage: s.uncommittedStorage.Copy(),
 		dirtyCode:          s.dirtyCode,
 		selfDestructed:     s.selfDestructed,
 		newContract:        s.newContract,

@@ -732,6 +732,54 @@ func (s *StateDB) MergePostBalStates() {
 	}
 }
 
+func (s *StateDB) PrefetchTrie() {
+	var workers errgroup.Group
+
+	for addr := range s.journal.dirties {
+		addr := addr
+		// s.trie.GetAccount(addr)
+		workers.Go(func() error {
+			_, err := s.trie.GetAccount(addr)
+			if err != nil {
+				fmt.Println("error fetching account:", err)
+			}
+			return err
+		})
+
+		workers.Go(func() error {
+			obj, exist := s.stateObjects[addr]
+			if exist {
+				tr, err := s.db.OpenStorageTrie(s.originalRoot, addr, obj.data.Root, nil)
+				if err != nil {
+					log.Warn("Trie prefetcher failed opening storage trie", "root", obj.data.Root, "err", err)
+					return err
+				}
+				obj.trie = tr
+
+				if tr == nil {
+					return nil
+				}
+				for slot := range obj.dirtyStorage {
+					slot := slot
+					// tr.GetStorage(addr, slot[:])
+					workers.Go(func() error {
+						_, err := tr.GetStorage(addr, slot[:])
+						return err
+					})
+				}
+			}
+			return nil
+		})
+	}
+	workers.Wait()
+
+	obj, exist := s.stateObjects[params.BeaconRootsAddress]
+	if exist {
+		tr, _ := s.db.OpenStorageTrie(s.originalRoot, params.BeaconRootsAddress, obj.data.Root, nil)
+		obj.trie = tr
+	}
+}
+
 func (s *StateDB) setRefund(gas uint64) {
 	s.refund = gas
 }
@@ -1179,31 +1227,45 @@ func (s *StateDB) Copy() *StateDB {
 
 func (s *StateDB) CopyState() *StateDB {
 	// Copy all the basic fields, initialize the memory ones
-	start := time.Now()
 	state := &StateDB{
 		db:                   s.db,
+		prefetcher:           s.prefetcher,
 		trie:                 s.trie,
 		reader:               s.reader,
 		originalRoot:         s.originalRoot,
 		stateObjects:         make(map[common.Address]*stateObject, len(s.stateObjects)),
 		stateObjectsDestruct: make(map[common.Address]*stateObject, len(s.stateObjectsDestruct)),
-		mutations:            make(map[common.Address]*mutation),
-		logs:                 make(map[common.Hash][]*types.Log),
-		preimages:            make(map[common.Hash][]byte),
-		journal:              newJournal(),
-		updateJournal:        newJournal(),
-		accessList:           newAccessList(),
-		transientStorage:     newTransientStorage(),
+		mutations:            make(map[common.Address]*mutation, len(s.mutations)),
+		dbErr:                s.dbErr,
+		refund:               s.refund,
+		thash:                s.thash,
+		txIndex:              s.txIndex,
+		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
+		logSize:              s.logSize,
+		preimages:            maps.Clone(s.preimages),
+
+		// Do we need to copy the access list and transient storage?
+		// In practice: No. At the start of a transaction, these two lists are empty.
+		// In practice, we only ever copy state _between_ transactions/blocks, never
+		// in the middle of a transaction. However, it doesn't cost us much to copy
+		// empty lists, so we do it anyway to not blow up if we ever decide copy them
+		// in the middle of a transaction.
+		accessList:       s.accessList.Copy(),
+		transientStorage: s.transientStorage.Copy(),
+		journal:          s.journal.copy(),
+		// The update journal is not copies to avoid duplicated updates in later transactions.
+		blockNumber:   s.blockNumber,
+		updateJournal: newJournal(),
+		postSnapshot:  s.postSnapshot,
+		postVals:      s.postVals,
 	}
-	StateNewTime += time.Since(start)
-	// if s.witness != nil {
-	// 	state.witness = s.witness.Copy()
-	// }
-	// if s.accessEvents != nil {
-	// 	state.accessEvents = s.accessEvents.Copy()
-	// }
+	if s.witness != nil {
+		state.witness = s.witness.Copy()
+	}
+	if s.accessEvents != nil {
+		state.accessEvents = s.accessEvents.Copy()
+	}
 	// Deep copy cached state objects.
-	start = time.Now()
 	for addr, obj := range s.stateObjects {
 		state.stateObjects[addr] = obj.simpleCopy(state)
 	}
@@ -1211,20 +1273,19 @@ func (s *StateDB) CopyState() *StateDB {
 	for addr, obj := range s.stateObjectsDestruct {
 		state.stateObjectsDestruct[addr] = obj.simpleCopy(state)
 	}
-	StateDeepCpTime += time.Since(start)
 	// Deep copy the object state markers.
-	// for addr, op := range s.mutations {
-	// 	state.mutations[addr] = op.copy()
-	// }
+	for addr, op := range s.mutations {
+		state.mutations[addr] = op.copy()
+	}
 	// Deep copy the logs occurred in the scope of block
-	// for hash, logs := range s.logs {
-	// 	cpy := make([]*types.Log, len(logs))
-	// 	for i, l := range logs {
-	// 		cpy[i] = new(types.Log)
-	// 		*cpy[i] = *l
-	// 	}
-	// 	state.logs[hash] = cpy
-	// }
+	for hash, logs := range s.logs {
+		cpy := make([]*types.Log, len(logs))
+		for i, l := range logs {
+			cpy[i] = new(types.Log)
+			*cpy[i] = *l
+		}
+		state.logs[hash] = cpy
+	}
 	return state
 }
 
