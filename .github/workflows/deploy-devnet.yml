@@ -1,0 +1,62 @@
+name: Deploy Hardhat Project to Devnet and Save Image
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - master
+
+jobs:
+  deploy-hardhat:
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Deploy')
+    runs-on: ubuntu-latest
+
+    env:
+      BASE_IMAGE: yohands/my_first_container:latest
+      FINAL_IMAGE: yohands/my_first_container:with-contracts
+      CONTAINER_NAME: devnet-node
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Start devnet with go-ethereum image
+        run: |
+          docker run -d \
+            --name $CONTAINER_NAME \
+            -p 8545:8545 \
+            $BASE_IMAGE \
+            --dev --http --http.api eth,net,web3,personal
+
+          # Give devnet time to start up
+          sleep 5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install Hardhat dependencies
+        working-directory: ./hardhat
+        run: npm install
+
+      - name: Deploy contracts to devnet
+        working-directory: ./hardhat
+        run: npx hardhat run scripts/deploy.js --network localhost
+
+      - name: Commit container with deployed contracts
+        run: |
+          docker commit $CONTAINER_NAME $FINAL_IMAGE
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Push image to Docker Hub
+        run: |
+          docker push $FINAL_IMAGE
