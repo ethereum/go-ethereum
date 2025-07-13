@@ -36,11 +36,14 @@ jobs:
             $BASE_IMAGE \
             --dev --http --http.api eth,net,web3,personal
 
+      - name: check if curl is installed
+        run: docker exec $CONTAINER_NAME which curl   
+            
       - name: Wait for Geth RPC to become available
         run: |
           echo "Waiting for Geth RPC to be ready..."
           for i in {1..30}; do
-            if docker exec $CONTAINER_NAME curl -s http://127.0.0.1:8545 > /dev/null; then
+            if docker exec $CONTAINER_NAME curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8545 > /dev/null; then
               echo "Geth RPC is up!"
               break
             fi
@@ -48,7 +51,7 @@ jobs:
             sleep 2
           done
 
-          if ! docker exec $CONTAINER_NAME curl -s http://127.0.0.1:8545 > /dev/null; then
+          if ! docker exec $CONTAINER_NAME curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8545 > /dev/null; then
             echo "❌ Geth RPC did not start within 60 seconds."
             echo "--- Container logs ---"
             docker logs $CONTAINER_NAME
