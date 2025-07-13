@@ -6,8 +6,7 @@ ARG BUILDNUM=""
 # Build Geth in a stock Go builder container
 FROM golang:1.24-alpine AS builder
 
-RUN apk add --no-cache gcc musl-dev linux-headers git
-RUN apk add --no-cache curl
+RUN apk add --no-cache gcc musl-dev linux-headers git curl
 
 # Get dependencies - will also be cached if we won't change go.mod/go.sum
 COPY go.mod /go-ethereum/
