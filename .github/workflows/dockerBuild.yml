@@ -18,6 +18,10 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Get short commit SHA
+        id: vars
+        run: echo "COMMIT_SHA=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_ENV
+
       - name: Build Docker image
         run: |
           docker build -t my_first_container .
@@ -25,17 +29,12 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-         username: ${{ secrets.DOCKER_USERNAME }}
-         password: ${{ secrets.DOCKER_PASSWORD }}
-      
-      - name: Tag and push image
-        uses: docker/login-action@v3
-        with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
           
-      - name: Tag and push image
+      - name: Tag and push Docker image
         run: |
-           docker tag my_first_container yohands/my_first_container:latest
-           docker push yohands/my_first_container:latest    
-
+          docker tag my_first_container yohands/my_first_container:latest
+          docker tag my_first_container yohands/my_first_container:${{ env.COMMIT_SHA }}
+          docker push yohands/my_first_container:latest
+          docker push yohands/my_first_container:${{ env.COMMIT_SHA }}   
