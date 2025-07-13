@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	maxBatchLength = 64
+	maxBatchLength = 1 //TODO does batch processing have any benefit in any potential use case?
 	busyDelay      = time.Second
 )
 
@@ -57,12 +57,11 @@ type Indexer interface {
 	SetFinalized(blockNumber uint64)
 	// Suspended signals to the indexer that historical block delivery has been
 	// temporarily suspended due to block processing priority. If the indexer
-	// is running non-essential asynchronous tasks then those should also be
-	// suspended.
+	// is running asynchronous tasks then those should also be suspended.
 	// The next AddBlockData call signals the end of the suspended state.
 	Suspended()
 	// Stop initiates indexer shutdown. No subsequent calls are made through this
-	// interface.
+	// interface after Stop.
 	Stop()
 }
 
@@ -99,7 +98,7 @@ func (f *indexServers) stop() {
 	f.servers = nil
 }
 
-func (f *indexServers) register(indexer Indexer) {
+func (f *indexServers) register(indexer Indexer, name string) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
@@ -108,6 +107,7 @@ func (f *indexServers) register(indexer Indexer) {
 		indexer:   indexer,
 		sendTimer: time.NewTimer(0),
 		lastHead:  f.lastHead,
+		name:      name,
 	}
 	f.servers = append(f.servers, server)
 	f.closeWg.Add(1)
@@ -175,12 +175,12 @@ func (f *indexServers) setHistoryCutoff(blockNumber uint64) {
 	}
 }
 
-func (f *indexServers) setSuspended(suspended bool) {
+func (f *indexServers) suspended() {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
 	for _, server := range f.servers {
-		server.setSuspended(suspended)
+		server.suspended()
 	}
 }
 
@@ -196,7 +196,12 @@ type indexServer struct {
 	needBlocks, historicBatchRange    common.Range[uint64]
 	sendTimer                         *time.Timer
 	historyCutoff, missingBlockCutoff uint64
-	lastHistoryErrorLog               time.Time
+
+	name                    string
+	processed               uint64
+	logged                  bool
+	startedAt, lastLoggedAt time.Time
+	lastHistoryErrorLog     time.Time
 }
 
 func (s *indexServer) eventLoop() {
@@ -217,6 +222,7 @@ loop:
 			)
 			s.lock.Lock()
 			s.historicBatchRange = s.nextHistoricBatchRange()
+			//fmt.Println("needBlocks", s.needBlocks, "historicBatchRange", s.historicBatchRange, "ready", s.ready)
 			if !s.historicBatchRange.IsEmpty() {
 				historicBatchRange := s.historicBatchRange
 				s.lock.Unlock() // do not hold lock that can block BlockChain while reading a historic batch
@@ -247,7 +253,15 @@ loop:
 				}
 			}
 			if len(headers) > 0 {
+				//fmt.Println("AddBlockData", headers[0].Number.Uint64(), len(headers))
 				s.ready, s.needBlocks = s.indexer.AddBlockData(headers, receipts)
+				//fmt.Println(" needBlocks", s.needBlocks, "ready", s.ready)
+				if s.needBlocks.IsEmpty() {
+					s.logDelivered(headers[len(headers)-1].Number.Uint64(), uint64(len(headers)))
+					s.logFinished()
+				} else if s.needBlocks.First() > headers[0].Number.Uint64() && s.needBlocks.First() <= headers[len(headers)-1].Number.Uint64()+1 {
+					s.logDelivered(s.needBlocks.First()-1, s.needBlocks.First()-headers[0].Number.Uint64())
+				}
 			} else {
 				s.ready, s.needBlocks = s.indexer.Status()
 			}
@@ -257,8 +271,34 @@ loop:
 	}
 }
 
+func (s *indexServer) logDelivered(position, amount uint64) {
+	if s.processed == 0 {
+		s.startedAt = time.Now()
+	}
+	s.processed += amount
+	if s.logged {
+		if time.Since(s.lastLoggedAt) < time.Second*10 {
+			return
+		}
+	} else {
+		if time.Since(s.startedAt) < time.Second {
+			return
+		}
+		s.logged = true
+	}
+	s.lastLoggedAt = time.Now()
+	log.Info("Generating "+s.name, "block", position, "processed", s.processed, "elapsed", time.Since(s.startedAt))
+}
+
+func (s *indexServer) logFinished() {
+	if s.logged {
+		log.Info("Finished "+s.name, "processed", s.processed, "elapsed", time.Since(s.startedAt))
+	}
+	s.processed = 0
+}
+
 func (s *indexServer) nextHistoricBatchRange() common.Range[uint64] {
-	if !s.ready {
+	if !s.ready || s.lastHead == nil {
 		return common.Range[uint64]{}
 	}
 	first := max(s.needBlocks.First(), s.historyCutoff, s.missingBlockCutoff)
@@ -274,7 +314,7 @@ func (s *indexServer) revert(header *types.Header) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	if s.stopped {
+	if s.stopped || s.lastHead == nil {
 		return
 	}
 	if header.Hash() == s.lastHead.Hash() {
@@ -316,25 +356,16 @@ func (s *indexServer) setHistoryCutoff(blockNumber uint64) {
 	s.indexer.SetHistoryCutoff(cutoff)
 }
 
-func (s *indexServer) setSuspended(suspended bool) {
+func (s *indexServer) suspended() {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	if s.stopped {
+	if s.stopped || s.suspendCh != nil ||
+		(s.lastHead != nil && s.needBlocks.AfterLast() > s.lastHead.Number.Uint64()) {
 		return
 	}
-	if s.lastHead != nil && s.needBlocks.AfterLast() > s.lastHead.Number.Uint64() {
-		suspended = false
-	}
-	if (s.suspendCh != nil) == suspended {
-		return
-	}
-	if suspended {
-		s.suspendCh = make(chan struct{})
-		s.indexer.Suspended()
-	} else {
-		s.suspendCh = nil
-	}
+	s.suspendCh = make(chan struct{})
+	s.indexer.Suspended()
 	s.setTimer()
 }
 
@@ -352,26 +383,37 @@ func (s *indexServer) sendHeadBlockData(headers []*types.Header, receipts []type
 	if len(headers) == 0 {
 		return
 	}
-	lastHash := s.lastHead.Hash()
+	/*lastHash := s.lastHead.Hash()
 	for _, header := range headers {
 		if header.ParentHash != lastHash {
 			panic("non-continuous head header chain sent to indexer")
 		}
 		lastHash = header.Hash()
-	}
+	}*/
 	s.ready, s.needBlocks = s.indexer.AddBlockData(headers, receipts)
-	s.suspendCh = nil
+	if s.suspendCh != nil {
+		//fmt.Println("setSuspended false (head)")
+		close(s.suspendCh)
+		s.suspendCh = nil
+	}
 	s.lastHead = headers[len(headers)-1]
+	if s.suspendCh != nil {
+		close(s.suspendCh)
+		s.suspendCh = nil
+	}
 	s.setTimer()
 }
 
 func (s *indexServer) setTimer() {
-	if s.needBlocks.IsEmpty() || s.suspendCh != nil {
+	if s.nextHistoricBatchRange().IsEmpty() || s.suspendCh != nil {
+		//fmt.Println("setTimer stop")
 		s.sendTimer.Stop()
 	} else {
 		if s.ready {
+			//fmt.Println("setTimer 0")
 			s.sendTimer.Reset(0)
 		} else {
+			//fmt.Println("setTimer busy")
 			s.sendTimer.Reset(busyDelay)
 		}
 	}
