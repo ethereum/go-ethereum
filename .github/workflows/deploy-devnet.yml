@@ -36,13 +36,27 @@ jobs:
             $BASE_IMAGE \
             --dev --http --http.api eth,net,web3,personal
 
-          # Wait until the devnet RPC is ready
-          until curl -s http://localhost:8545 > /dev/null; do
-            echo "Waiting for Geth RPC..."
+      - name: Wait for Geth RPC to become available
+        run: |
+          echo "Waiting for Geth RPC to be ready..."
+          for i in {1..30}; do
+            if curl -s http://localhost:8545 > /dev/null; then
+              echo "Geth RPC is up!"
+              break
+            fi
+            echo "Attempt $i: Not yet ready..."
             sleep 2
           done
-          echo "Geth RPC is up, proceeding with deployment"
 
+          if ! curl -s http://localhost:8545 > /dev/null; then
+            echo "❌ Geth RPC did not start within 60 seconds."
+            echo "--- Container logs ---"
+            docker logs $CONTAINER_NAME
+            echo "--- Container status ---"
+            docker ps -a
+            exit 1
+          fi
+          
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
