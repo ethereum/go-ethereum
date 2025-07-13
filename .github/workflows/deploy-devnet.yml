@@ -40,7 +40,7 @@ jobs:
         run: |
           echo "Waiting for Geth RPC to be ready..."
           for i in {1..30}; do
-            if curl -s http://localhost:8545 > /dev/null; then
+            if docker exec $CONTAINER_NAME curl -s http://localhost:8545 > /dev/null; then
               echo "Geth RPC is up!"
               break
             fi
@@ -48,7 +48,7 @@ jobs:
             sleep 2
           done
 
-          if ! curl -s http://localhost:8545 > /dev/null; then
+          if ! docker exec $CONTAINER_NAME curl -s http://localhost:8545 > /dev/null; then
             echo "❌ Geth RPC did not start within 60 seconds."
             echo "--- Container logs ---"
             docker logs $CONTAINER_NAME
@@ -56,7 +56,7 @@ jobs:
             docker ps -a
             exit 1
           fi
-          
+
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
