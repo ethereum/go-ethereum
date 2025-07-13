@@ -529,8 +529,8 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 }
 
 // RegisterIndexer registers a new indexer to the chain.
-func (bc *BlockChain) RegisterIndexer(indexer Indexer) {
-	bc.indexServers.register(indexer)
+func (bc *BlockChain) RegisterIndexer(indexer Indexer, name string) {
+	bc.indexServers.register(indexer, name)
 }
 
 func (bc *BlockChain) setupSnapshot() {
@@ -1596,7 +1596,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	blockHash := block.Hash()
 	bc.blockCache.Add(blockHash, block)
 	rawdb.WriteReceipts(blockBatch, blockHash, block.NumberU64(), receipts)
-	bc.receiptsCache.Add(blockHash, receipts)
+	if receipts != nil {
+		bc.receiptsCache.Add(blockHash, receipts)
+	} else {
+		bc.receiptsCache.Add(blockHash, []*types.Receipt{})
+	}
 	rawdb.WritePreimages(blockBatch, statedb.Preimages())
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
