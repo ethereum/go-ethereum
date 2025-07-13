@@ -22,11 +22,11 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
@@ -76,14 +76,15 @@ func (sc *BlobTxSidecar) BlobHashes() []common.Hash {
 
 // CellProofsAt returns the cell proofs for blob with index idx.
 func (sc *BlobTxSidecar) CellProofsAt(idx int) []kzg4844.Proof {
-	var cellProofs []kzg4844.Proof
-	for i := range kzg4844.CellProofsPerBlob {
-		index := idx*kzg4844.CellProofsPerBlob + i
-		if index > len(sc.Proofs) {
-			return nil
-		}
-		proof := sc.Proofs[index]
-		cellProofs = append(cellProofs, proof)
+	if len(sc.Proofs) == len(sc.Blobs)*kzg4844.CellProofsPerBlob {
+		index := idx * kzg4844.CellProofsPerBlob
+		return sc.Proofs[index : index+kzg4844.CellProofsPerBlob]
+	}
+
+	cellProofs, err := kzg4844.ComputeCellProofs(&sc.Blobs[idx])
+	if err != nil {
+		log.Error("Failed to compute cell proofs for blob", "index", idx, "error", err)
+		return nil
 	}
 	return cellProofs
 }
@@ -217,6 +218,7 @@ func (tx *BlobTx) copy() TxData {
 	}
 	if tx.Sidecar != nil {
 		cpy.Sidecar = &BlobTxSidecar{
+			Version:     tx.Sidecar.Version,
 			Blobs:       slices.Clone(tx.Sidecar.Blobs),
 			Commitments: slices.Clone(tx.Sidecar.Commitments),
 			Proofs:      slices.Clone(tx.Sidecar.Proofs),
