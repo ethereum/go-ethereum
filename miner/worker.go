@@ -440,6 +440,7 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 						}
 						sidecar.Proofs = append(sidecar.Proofs, cellProofs...)
 					}
+					sidecar.Version = 1
 				}
 			}
 		}
