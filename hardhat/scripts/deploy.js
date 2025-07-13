@@ -1,23 +1,11 @@
 const { ethers } = require("hardhat");
 
 async function main() {
-  // Connect to local devnet RPC explicitly
-  const provider = new ethers.providers.JsonRpcProvider("http://localhost:8545");
+  const [deployer] = await ethers.getSigners();
 
-  // Get signer from provider
-  const [deployer] = await provider.listAccounts().then(accounts => 
-    accounts.length > 0 ? [provider.getSigner(accounts[0])] : []
-  );
+  console.log("Deploying contracts with the account:", deployer.address);
 
-  if (!deployer) {
-    throw new Error("No accounts found on the devnet.");
-  }
-
-  console.log("Deploying contracts with the account:", await deployer.getAddress());
-
-  // Connect contract factory with the deployer signer
   const Lock = await ethers.getContractFactory("Lock", deployer);
-
   const lock = await Lock.deploy();
 
   await lock.deployed();
