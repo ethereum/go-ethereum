@@ -7,7 +7,7 @@ ARG BUILDNUM=""
 FROM golang:1.24-alpine AS builder
 
 RUN apk add --no-cache gcc musl-dev linux-headers git
-RUN apt-get update && apt-get install -y curl
+RUN apk add --no-cache curl
 
 # Get dependencies - will also be cached if we won't change go.mod/go.sum
 COPY go.mod /go-ethereum/
