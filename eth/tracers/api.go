@@ -955,9 +955,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 
 	hdr := *block.Header()
 	if config != nil {
-		if err := config.BlockOverrides.ApplyHeader(&hdr); err != nil {
-			return nil, err
-		}
+		hdr = *config.BlockOverrides.MakeHeader(block.Header())
 	}
 
 	vmctx := core.NewEVMBlockContext(&hdr, api.chainContext(ctx), nil)
