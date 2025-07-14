@@ -48,12 +48,11 @@ var (
 	testSlot     = common.HexToHash("0xdeadbeef")
 	testValue    = crypto.Keccak256Hash(testSlot[:])
 	testBalance  = big.NewInt(2e15)
-	testTxHashes []common.Hash
 )
 
-func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
+func newTestBackend(t *testing.T) (*node.Node, []*types.Block, []common.Hash) {
 	// Generate test chain.
-	genesis, blocks := generateTestChain()
+	genesis, blocks, txHashes := generateTestChain()
 	// Create node
 	n, err := node.New(&node.Config{
 		HTTPModules: []string{"debug", "eth", "admin"},
@@ -82,10 +81,10 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	if _, err := ethservice.BlockChain().InsertChain(blocks[1:]); err != nil {
 		t.Fatalf("can't import test blocks: %v", err)
 	}
-	return n, blocks
+	return n, blocks, txHashes
 }
 
-func generateTestChain() (*core.Genesis, []*types.Block) {
+func generateTestChain() (*core.Genesis, []*types.Block, []common.Hash) {
 	genesis := &core.Genesis{
 		Config: params.AllEthashProtocolChanges,
 		Alloc: types.GenesisAlloc{
@@ -96,6 +95,7 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 		ExtraData: []byte("test genesis"),
 		Timestamp: 9000,
 	}
+	txHashes := make([]common.Hash, 0)
 	generate := func(i int, g *core.BlockGen) {
 		g.OffsetTime(5)
 		g.SetExtra([]byte("test"))
@@ -111,15 +111,15 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 		})
 		tx, _ = types.SignTx(tx, types.LatestSignerForChainID(genesis.Config.ChainID), testKey)
 		g.AddTx(tx)
-		testTxHashes = append(testTxHashes, tx.Hash())
+		txHashes = append(txHashes, tx.Hash())
 	}
 	_, blocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 1, generate)
 	blocks = append([]*types.Block{genesis.ToBlock()}, blocks...)
-	return genesis, blocks
+	return genesis, blocks, txHashes
 }
 
 func TestGethClient(t *testing.T) {
-	backend, _ := newTestBackend(t)
+	backend, _, txHashes := newTestBackend(t)
 	client := backend.Attach()
 	defer backend.Close()
 	defer client.Close()
@@ -172,7 +172,7 @@ func TestGethClient(t *testing.T) {
 		},
 		{
 			"TestTraceTransaction",
-			func(t *testing.T) { testTraceTransactions(t, client) },
+			func(t *testing.T) { testTraceTransactions(t, client, txHashes) },
 		},
 		{
 			"TestSetHead",
@@ -480,9 +480,9 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testTraceTransactions(t *testing.T, client *rpc.Client) {
+func testTraceTransactions(t *testing.T, client *rpc.Client, txHashes []common.Hash) {
 	ec := New(client)
-	for _, txHash := range testTxHashes {
+	for _, txHash := range txHashes {
 		// Struct logger
 		_, err := ec.TraceTransaction(context.Background(), txHash, nil)
 		if err != nil {
