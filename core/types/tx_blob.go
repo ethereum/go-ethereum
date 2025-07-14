@@ -75,18 +75,14 @@ func (sc *BlobTxSidecar) BlobHashes() []common.Hash {
 }
 
 // CellProofsAt returns the cell proofs for blob with index idx.
+// This method is only valid for sidecars with version 1.
 func (sc *BlobTxSidecar) CellProofsAt(idx int) []kzg4844.Proof {
 	if sc.Version == 1 {
 		index := idx * kzg4844.CellProofsPerBlob
 		return sc.Proofs[index : index+kzg4844.CellProofsPerBlob]
 	}
-
-	cellProofs, err := kzg4844.ComputeCellProofs(&sc.Blobs[idx])
-	if err != nil {
-		log.Error("Failed to compute cell proofs for blob", "index", idx, "error", err)
-		return nil
-	}
-	return cellProofs
+	log.Error("cellProofsAt called with unsupported version", "version", sc.Version)
+	return nil
 }
 
 // encodedSize computes the RLP size of the sidecar elements. This does NOT return the
