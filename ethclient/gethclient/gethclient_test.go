@@ -86,7 +86,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 }
 
 func generateTestChain() (*core.Genesis, []*types.Block) {
-	testTxHashes = nil // reset before generating a new chain
+	testTxHashes = testTxHashes[:0] // reset previous test tx hashes before generating a new chain
 	genesis := &core.Genesis{
 		Config: params.AllEthashProtocolChanges,
 		Alloc: types.GenesisAlloc{
