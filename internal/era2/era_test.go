@@ -83,6 +83,49 @@ func TestEra2Builder(t *testing.T) {
 	}
 	defer era.Close()
 
+	hdrs, err := era.GetHeaders(0, 128)
+	if err != nil {
+		t.Fatalf("BatchHeaders full: %v", err)
+	}
+	bods, err := era.GetBodies(0, 128)
+	if err != nil {
+		t.Fatalf("BatchBodies full: %v", err)
+	}
+	recs, err := era.GetReceipts(0, 128)
+	if err != nil {
+		t.Fatalf("BatchReceipts full: %v", err)
+	}
+
+	for i := 0; i < 128; i++ {
+		if hdrs[i].Hash() != chain.headers[i].Hash() {
+			t.Fatalf("batch header %d mismatch", i)
+		}
+		if !bytes.Equal(
+			mustEncode(chain.bodies[i]),
+			mustEncode(bods[i]),
+		) {
+			t.Fatalf("batch body %d mismatch", i)
+		}
+		if !bytes.Equal(
+			mustEncode(chain.receipts[i]),
+			mustEncode(recs[i]),
+		) {
+			t.Fatalf("batch receipts %d mismatch", i)
+		}
+	}
+
+	const start, cnt = 50, 10
+	winHdrs, err := era.GetHeaders(start, cnt)
+	if err != nil {
+		t.Fatalf("BatchHeaders window: %v", err)
+	}
+	for j := 0; j < cnt; j++ {
+		idx := start + j
+		if winHdrs[j].Hash() != chain.headers[idx].Hash() {
+			t.Fatalf("window header %d mismatch", idx)
+		}
+	}
+
 	for i := 0; i < 128; i++ {
 		bn := uint64(i)
 		gotBlock, err := era.GetBlockByNumber(bn)
