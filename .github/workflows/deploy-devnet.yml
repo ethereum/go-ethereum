@@ -13,7 +13,7 @@ jobs:
 
     env:
       BASE_IMAGE: yohands/my_first_container:latest
-      FINAL_IMAGE: yohands/my_first_container:with-contracts
+      FINAL_IMAGE: yohands/my_first_with-contracts
       CONTAINER_NAME: devnet-node
 
     steps:
@@ -75,8 +75,8 @@ jobs:
 
       - name: Commit container with deployed contracts
         run: |
-          docker commit $CONTAINER_NAME $FINAL_IMAG
-          docker tag $FINAL_IMAGE $FINAL_IMAGE:${{ env.COMMIT_SHA }}
+          docker commit $CONTAINER_NAME $FINAL_IMAG:latest
+          docker tag $FINAL_IMAGE:latest $FINAL_IMAGE:${{ env.COMMIT_SHA }}
 
       - name: Stop and remove container
         run: docker rm -f $CONTAINER_NAME        
