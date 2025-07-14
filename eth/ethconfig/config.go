@@ -233,6 +233,7 @@ type Config struct {
 
 	TxGossipBroadcastDisabled bool
 	TxGossipReceivingDisabled bool
+	TxGossipSequencerHTTP     string
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

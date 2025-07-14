@@ -25,6 +25,7 @@ import (
 	"github.com/scroll-tech/go-ethereum"
 	"github.com/scroll-tech/go-ethereum/accounts"
 	"github.com/scroll-tech/go-ethereum/common"
+	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/consensus"
 	"github.com/scroll-tech/go-ethereum/core"
 	"github.com/scroll-tech/go-ethereum/core/bloombits"
@@ -35,6 +36,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/eth/gasprice"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/event"
+	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/miner"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rpc"
@@ -44,6 +46,7 @@ import (
 type EthAPIBackend struct {
 	extRPCEnabled       bool
 	allowUnprotectedTxs bool
+	disableTxPool       bool
 	eth                 *Ethereum
 	gpo                 *gasprice.Oracle
 }
@@ -262,6 +265,34 @@ func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscri
 }
 
 func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
+	if signedTx.Type() == types.BlobTxType {
+		return types.ErrTxTypeNotSupported
+	}
+
+	// Retain tx in local tx pool before forwarding to sequencer rpc, for local RPC usage.
+	err := b.sendTx(signedTx)
+	if err != nil {
+		return err
+	}
+
+	// Forward to remote sequencer RPC
+	if b.eth.sequencerRPCService != nil {
+		signedTxData, err := signedTx.MarshalBinary()
+		if err != nil {
+			return err
+		}
+		if err = b.eth.sequencerRPCService.CallContext(ctx, nil, "eth_sendRawTransaction", hexutil.Encode(signedTxData)); err != nil {
+			log.Warn("failed to forward tx to sequencer", "tx", signedTx.Hash(), "err", err)
+			if b.disableTxPool {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (b *EthAPIBackend) sendTx(signedTx *types.Transaction) error {
 	// will `VerifyFee` & `validateTx` in txPool.AddLocal
 	return b.eth.txPool.AddLocal(signedTx)
 }

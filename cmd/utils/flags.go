@@ -895,12 +895,16 @@ var (
 
 	// Tx gossip settings
 	TxGossipBroadcastDisabledFlag = cli.BoolFlag{
-		Name:  "txgossip.disablebroadcast",
+		Name:  "gossip.disablebroadcast",
 		Usage: "Disable gossip broadcast transactions to other peers",
 	}
 	TxGossipReceivingDisabledFlag = cli.BoolFlag{
-		Name:  "txgossip.disablereceiving",
+		Name:  "gossip.disablereceiving",
 		Usage: "Disable gossip receiving transactions from other peers",
+	}
+	TxGossipSequencerHTTPFlag = &cli.StringFlag{
+		Name:  "gossip.sequencerhttp",
+		Usage: "Sequencer mempool HTTP endpoint",
 	}
 
 	// DA syncing settings
@@ -1822,6 +1826,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.GlobalIsSet(TxGossipReceivingDisabledFlag.Name) {
 		cfg.TxGossipReceivingDisabled = ctx.GlobalBool(TxGossipReceivingDisabledFlag.Name)
 		log.Info("Transaction gossip receiving disabled", "disabled", cfg.TxGossipReceivingDisabled)
+	}
+	// Only configure sequencer http flag if we're running in verifier mode i.e. --mine is disabled.
+	if ctx.IsSet(TxGossipSequencerHTTPFlag.Name) && !ctx.IsSet(MiningEnabledFlag.Name) {
+		cfg.TxGossipSequencerHTTP = ctx.String(TxGossipSequencerHTTPFlag.Name)
 	}
 
 	// Cap the cache allowance and tune the garbage collector

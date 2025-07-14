@@ -178,6 +178,7 @@ var (
 		utils.ShadowforkPeersFlag,
 		utils.TxGossipBroadcastDisabledFlag,
 		utils.TxGossipReceivingDisabledFlag,
+		utils.TxGossipSequencerHTTPFlag,
 		utils.DASyncEnabledFlag,
 		utils.DAMissingHeaderFieldsBaseURLFlag,
 		utils.DABlockNativeAPIEndpointFlag,
