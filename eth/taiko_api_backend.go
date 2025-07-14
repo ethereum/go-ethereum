@@ -87,6 +87,18 @@ func (a *TaikoAuthAPIBackend) UpdateL1Origin(l1Origin *rawdb.L1Origin) *rawdb.L1
 	return l1Origin
 }
 
+func (a *TaikoAuthAPIBackend) SetL1OriginSignature(blockID *big.Int, signature [65]byte) (*rawdb.L1Origin, error) {
+	l1Origin, err := rawdb.ReadL1Origin(a.eth.ChainDb(), blockID)
+	if err != nil {
+		return nil, err
+	}
+
+	l1Origin.Signature = signature
+	rawdb.WriteL1Origin(a.eth.ChainDb(), blockID, l1Origin)
+
+	return l1Origin, nil
+}
+
 // TxPoolContent retrieves the transaction pool content with the given upper limits.
 func (a *TaikoAuthAPIBackend) TxPoolContent(
 	beneficiary common.Address,

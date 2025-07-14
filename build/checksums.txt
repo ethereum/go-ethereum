@@ -3,7 +3,7 @@
 # version:spec-tests pectra-devnet-6@v1.0.0
 # https://github.com/ethereum/execution-spec-tests/releases
 # https://github.com/ethereum/execution-spec-tests/releases/download/pectra-devnet-6%40v1.0.0/fixtures_pectra-devnet-6.tar.gz
-b69211752a3029083c020dc635fe12156ca1a6725a08559da540a0337586a77e  fixtures_pectra-devnet-6.tar.gz
+5ed3bec40a02776a4096c17b84b59fb20fd99fbabba8101fdac3d35a001cf82a  fixtures_pectra-devnet-6.tar.gz
 
 # version:golang 1.24.1
 # https://go.dev/dl/

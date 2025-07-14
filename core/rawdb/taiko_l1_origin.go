@@ -33,6 +33,17 @@ type L1Origin struct {
 	L2BlockHash        common.Hash `json:"l2BlockHash"`
 	L1BlockHeight      *big.Int    `json:"l1BlockHeight" rlp:"optional"`
 	L1BlockHash        common.Hash `json:"l1BlockHash" rlp:"optional"`
+	IsForcedInclusion  bool        `json:"isForcedInclusion" rlp:"optional"`
+	Signature          [65]byte    `json:"signature" rlp:"optional"` // signature of the envelope via p2p
+	BuildPayloadArgsID [8]byte     `json:"buildPayloadArgsID" rlp:"optional"`
+}
+
+// L1OriginLegacyTwo represents a second legacy L1Origin of a L2 block.
+type L1OriginLegacyTwo struct {
+	BlockID            *big.Int    `json:"blockID" gencodec:"required"`
+	L2BlockHash        common.Hash `json:"l2BlockHash"`
+	L1BlockHeight      *big.Int    `json:"l1BlockHeight" rlp:"optional"`
+	L1BlockHash        common.Hash `json:"l1BlockHash" rlp:"optional"`
 	BuildPayloadArgsID [8]byte     `json:"buildPayloadArgsID" rlp:"optional"`
 }
 
@@ -70,32 +81,49 @@ func WriteL1Origin(db ethdb.KeyValueWriter, blockID *big.Int, l1Origin *L1Origin
 // ReadL1Origin retrieves the given L2 block's L1Origin from database.
 func ReadL1Origin(db ethdb.KeyValueReader, blockID *big.Int) (*L1Origin, error) {
 	data, _ := db.Get(l1OriginKey(blockID))
+
 	if len(data) == 0 {
 		return nil, nil
 	}
 
-	// First try to decode the new version (with new fields).
-	l1Origin := new(L1Origin)
-	if err := rlp.Decode(bytes.NewReader(data), l1Origin); err != nil {
-		// If decoding the new version fails, try to decode the legacy version (without new fields).
-		l1OriginLegacy := new(L1OriginLegacy)
-		if err := rlp.Decode(bytes.NewReader(data), &l1OriginLegacy); err != nil {
-			return nil, fmt.Errorf("invalid legacy L1Origin RLP bytes: %w", err)
-		}
-
-		// If decoding legacy version succeeds, manually
-		// construct the new L1Origin with default values for the new fields.
-		l1Origin = &L1Origin{
-			BlockID:       l1OriginLegacy.BlockID,
-			L2BlockHash:   l1OriginLegacy.L2BlockHash,
-			L1BlockHeight: l1OriginLegacy.L1BlockHeight,
-			L1BlockHash:   l1OriginLegacy.L1BlockHash,
-			// Set BuildPayloadArgsID to an empty hash as the intended default for legacy L1Origin conversions.
-			BuildPayloadArgsID: [8]byte{},
-		}
+	// try to decode standard L1Origin first
+	var o L1Origin
+	if err := rlp.Decode(bytes.NewReader(data), &o); err == nil {
+		return &o, nil
 	}
 
-	return l1Origin, nil
+	// 3) try second legacy version, which includes BuildPayloadArgsID
+	var o2 L1OriginLegacyTwo
+	if err := rlp.Decode(bytes.NewReader(data), &o2); err == nil {
+		return &L1Origin{
+			BlockID:            o2.BlockID,
+			L2BlockHash:        o2.L2BlockHash,
+			L1BlockHeight:      o2.L1BlockHeight,
+			L1BlockHash:        o2.L1BlockHash,
+			BuildPayloadArgsID: o2.BuildPayloadArgsID,
+			// new fields default to zero/false:
+			IsForcedInclusion: false,
+			Signature:         [65]byte{},
+		}, nil
+	}
+
+	// 4) try original legacy version (no BuildPayloadArgsID, IsForcedInclusio nor Signature)
+	var o1 L1OriginLegacy
+	if err := rlp.Decode(bytes.NewReader(data), &o1); err == nil {
+		return &L1Origin{
+			BlockID:       o1.BlockID,
+			L2BlockHash:   o1.L2BlockHash,
+			L1BlockHeight: o1.L1BlockHeight,
+			L1BlockHash:   o1.L1BlockHash,
+			// new fields default to zero/false:
+			IsForcedInclusion:  false,
+			Signature:          [65]byte{},
+			BuildPayloadArgsID: [8]byte{},
+		}, nil
+	}
+
+	// 5) nothing worked
+	return nil, fmt.Errorf("invalid L1Origin RLP bytes: failed new, legacyTwo and legacyOne decodes")
 }
 
 // WriteHeadL1Origin stores the given L1Origin as the last L1Origin.
