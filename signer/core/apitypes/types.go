@@ -150,6 +150,9 @@ func (args *SendTxArgs) ToTransaction() (*types.Transaction, error) {
 		if args.AccessList != nil {
 			al = *args.AccessList
 		}
+		if to == nil {
+			return nil, fmt.Errorf("transaction recipient must be set for blob transactions")
+		}
 		data = &types.BlobTx{
 			To:         *to,
 			ChainID:    uint256.MustFromBig((*big.Int)(args.ChainID)),
