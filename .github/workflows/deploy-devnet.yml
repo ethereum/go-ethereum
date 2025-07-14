@@ -114,7 +114,7 @@ jobs:
 
       - name: Run Hardhat tests
         working-directory: ./hardhat
-        run: npx hardhat test --network localhost
+        run: npx hardhat test # --network localhost
 
       - name: Stop and remove test container
         run: docker rm -f test-node          
