@@ -19,6 +19,8 @@ package state
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/core/types/bal"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -157,6 +159,10 @@ func (s *hookedStateDB) Witness() *stateless.Witness {
 	return s.inner.Witness()
 }
 
+func (s *hookedStateDB) BlockAccessList() *bal.ConstructionBlockAccessList {
+	return s.inner.BlockAccessList()
+}
+
 func (s *hookedStateDB) AccessEvents() *AccessEvents {
 	return s.inner.AccessEvents()
 }
@@ -259,6 +265,10 @@ func (s *hookedStateDB) AddLog(log *types.Log) {
 	if s.hooks.OnLog != nil {
 		s.hooks.OnLog(log)
 	}
+}
+
+func (s *hookedStateDB) TxIndex() int {
+	return s.inner.TxIndex()
 }
 
 func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {

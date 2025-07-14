@@ -82,11 +82,22 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	context = NewEVMBlockContext(header, p.chain, nil)
 	evm := vm.NewEVM(context, tracingStateDB, p.config, cfg)
 
+	// process beacon-root and parent block system contracts.
+	// do not include the storage writes in the BAL:
+	// * beacon root will be provided as a standalone field in the BAL
+	// * parent block hash is already in the header field of the block
+	if statedb.BlockAccessList() != nil {
+		statedb.BlockAccessList().DisableMutations()
+	}
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
+	// TODO: set the beacon root on the BAL
 	if p.config.IsPrague(block.Number(), block.Time()) || p.config.IsVerkle(block.Number(), block.Time()) {
 		ProcessParentBlockHash(block.ParentHash(), evm)
+	}
+	if statedb.BlockAccessList() != nil {
+		statedb.BlockAccessList().EnableMutations()
 	}
 
 	// Iterate over and process the individual transactions
@@ -103,6 +114,12 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
+	}
+
+	// don't write post-block state mutations to the BAL to save on size.
+	// these can be easily computed in BAL verification.
+	if statedb.BlockAccessList() != nil {
+		statedb.BlockAccessList().DisableMutations()
 	}
 	// Read requests if Prague is enabled.
 	var requests [][]byte

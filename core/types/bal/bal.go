@@ -38,26 +38,26 @@ type ConstructionAccountAccess struct {
 	// StorageWrites is the post-state values of an account's storage slots
 	// that were modified in a block, keyed by the slot key and the tx index
 	// where the modification occurred.
-	StorageWrites map[common.Hash]map[uint16]common.Hash `json:"storageWrites,omitempty"`
+	StorageWrites map[common.Hash]map[uint16]common.Hash
 
 	// StorageReads is the set of slot keys that were accessed during block
 	// execution.
 	//
 	// Storage slots which are both read and written (with changed values)
 	// appear only in StorageWrites.
-	StorageReads map[common.Hash]struct{} `json:"storageReads,omitempty"`
+	StorageReads map[common.Hash]struct{}
 
 	// BalanceChanges contains the post-transaction balances of an account,
 	// keyed by transaction indices where it was changed.
-	BalanceChanges map[uint16]*uint256.Int `json:"balanceChanges,omitempty"`
+	BalanceChanges map[uint16]*uint256.Int
 
 	// NonceChanges contains the post-state nonce values of an account keyed
 	// by tx index.
-	NonceChanges map[uint16]uint64 `json:"nonceChanges,omitempty"`
+	NonceChanges map[uint16]uint64
 
 	// CodeChange is only set for contract accounts which were deployed in
 	// the block.
-	CodeChange *CodeChange `json:"codeChange,omitempty"`
+	CodeChange *CodeChange
 }
 
 // NewConstructionAccountAccess initializes the account access object.
@@ -74,6 +74,7 @@ func NewConstructionAccountAccess() *ConstructionAccountAccess {
 // in execution (account addresses and storage keys).
 type ConstructionBlockAccessList struct {
 	Accounts map[common.Address]*ConstructionAccountAccess
+	enabled  bool
 }
 
 // NewConstructionBlockAccessList instantiates an empty access list.
@@ -83,44 +84,69 @@ func NewConstructionBlockAccessList() ConstructionBlockAccessList {
 	}
 }
 
+// EnableMutations enables the modification of the access list via subsequent
+// calls to record access events.  BALs are mutable by default.
+func (c *ConstructionBlockAccessList) EnableMutations() {
+	c.enabled = true
+}
+
+// DisableMutations prevents the mutation of the access list by subsequent calls
+// to record access events.
+func (c *ConstructionBlockAccessList) DisableMutations() {
+	c.enabled = false
+}
+
 // AccountRead records the address of an account that has been read during execution.
-func (b *ConstructionBlockAccessList) AccountRead(addr common.Address) {
-	if _, ok := b.Accounts[addr]; !ok {
-		b.Accounts[addr] = NewConstructionAccountAccess()
+func (c *ConstructionBlockAccessList) AccountRead(addr common.Address) {
+	if !c.enabled {
+		return
+	}
+
+	if _, ok := c.Accounts[addr]; !ok {
+		c.Accounts[addr] = NewConstructionAccountAccess()
 	}
 }
 
 // StorageRead records a storage key read during execution.
-func (b *ConstructionBlockAccessList) StorageRead(address common.Address, key common.Hash) {
-	if _, ok := b.Accounts[address]; !ok {
-		b.Accounts[address] = NewConstructionAccountAccess()
-	}
-	if _, ok := b.Accounts[address].StorageWrites[key]; ok {
+func (c *ConstructionBlockAccessList) StorageRead(address common.Address, key common.Hash) {
+	if !c.enabled {
 		return
 	}
-	b.Accounts[address].StorageReads[key] = struct{}{}
+	if _, ok := c.Accounts[address]; !ok {
+		c.Accounts[address] = NewConstructionAccountAccess()
+	}
+	if _, ok := c.Accounts[address].StorageWrites[key]; ok {
+		return
+	}
+	c.Accounts[address].StorageReads[key] = struct{}{}
 }
 
 // StorageWrite records the post-transaction value of a mutated storage slot.
 // The storage slot is removed from the list of read slots.
-func (b *ConstructionBlockAccessList) StorageWrite(txIdx uint16, address common.Address, key, value common.Hash) {
-	if _, ok := b.Accounts[address]; !ok {
-		b.Accounts[address] = NewConstructionAccountAccess()
+func (c *ConstructionBlockAccessList) StorageWrite(txIdx uint16, address common.Address, key, value common.Hash) {
+	if !c.enabled {
+		return
 	}
-	if _, ok := b.Accounts[address].StorageWrites[key]; !ok {
-		b.Accounts[address].StorageWrites[key] = make(map[uint16]common.Hash)
+	if _, ok := c.Accounts[address]; !ok {
+		c.Accounts[address] = NewConstructionAccountAccess()
 	}
-	b.Accounts[address].StorageWrites[key][txIdx] = value
+	if _, ok := c.Accounts[address].StorageWrites[key]; !ok {
+		c.Accounts[address].StorageWrites[key] = make(map[uint16]common.Hash)
+	}
+	c.Accounts[address].StorageWrites[key][txIdx] = value
 
-	delete(b.Accounts[address].StorageReads, key)
+	delete(c.Accounts[address].StorageReads, key)
 }
 
 // CodeChange records the code of a newly-created contract.
-func (b *ConstructionBlockAccessList) CodeChange(address common.Address, txIndex uint16, code []byte) {
-	if _, ok := b.Accounts[address]; !ok {
-		b.Accounts[address] = NewConstructionAccountAccess()
+func (c *ConstructionBlockAccessList) CodeChange(address common.Address, txIndex uint16, code []byte) {
+	if !c.enabled {
+		return
 	}
-	b.Accounts[address].CodeChange = &CodeChange{
+	if _, ok := c.Accounts[address]; !ok {
+		c.Accounts[address] = NewConstructionAccountAccess()
+	}
+	c.Accounts[address].CodeChange = &CodeChange{
 		TxIndex: txIndex,
 		Code:    bytes.Clone(code),
 	}
@@ -128,32 +154,38 @@ func (b *ConstructionBlockAccessList) CodeChange(address common.Address, txIndex
 
 // NonceChange records tx post-state nonce of any contract-like accounts whose
 // nonce was incremented.
-func (b *ConstructionBlockAccessList) NonceChange(address common.Address, txIdx uint16, postNonce uint64) {
-	if _, ok := b.Accounts[address]; !ok {
-		b.Accounts[address] = NewConstructionAccountAccess()
+func (c *ConstructionBlockAccessList) NonceChange(address common.Address, txIdx uint16, postNonce uint64) {
+	if !c.enabled {
+		return
 	}
-	b.Accounts[address].NonceChanges[txIdx] = postNonce
+	if _, ok := c.Accounts[address]; !ok {
+		c.Accounts[address] = NewConstructionAccountAccess()
+	}
+	c.Accounts[address].NonceChanges[txIdx] = postNonce
 }
 
 // BalanceChange records the post-transaction balance of an account whose
 // balance changed.
-func (b *ConstructionBlockAccessList) BalanceChange(txIdx uint16, address common.Address, balance *uint256.Int) {
-	if _, ok := b.Accounts[address]; !ok {
-		b.Accounts[address] = NewConstructionAccountAccess()
+func (c *ConstructionBlockAccessList) BalanceChange(txIdx uint16, address common.Address, balance *uint256.Int) {
+	if !c.enabled {
+		return
 	}
-	b.Accounts[address].BalanceChanges[txIdx] = balance.Clone()
+	if _, ok := c.Accounts[address]; !ok {
+		c.Accounts[address] = NewConstructionAccountAccess()
+	}
+	c.Accounts[address].BalanceChanges[txIdx] = balance.Clone()
 }
 
 // PrettyPrint returns a human-readable representation of the access list
-func (b *ConstructionBlockAccessList) PrettyPrint() string {
-	enc := b.toEncodingObj()
+func (c *ConstructionBlockAccessList) PrettyPrint() string {
+	enc := c.ToEncodingObj()
 	return enc.PrettyPrint()
 }
 
 // Copy returns a deep copy of the access list.
-func (b *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
+func (c *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 	res := NewConstructionBlockAccessList()
-	for addr, aa := range b.Accounts {
+	for addr, aa := range c.Accounts {
 		var aaCopy ConstructionAccountAccess
 
 		slotWrites := make(map[common.Hash]map[uint16]common.Hash, len(aa.StorageWrites))
