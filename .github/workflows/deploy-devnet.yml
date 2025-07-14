@@ -91,3 +91,30 @@ jobs:
         run: |
           docker push $FINAL_IMAGE:latest
           docker push $FINAL_IMAGE:${{ env.COMMIT_SHA }}
+  
+      - name: Run container with predeployed contracts
+        run: |
+          docker run -d \
+            --name test-node \
+            -p 8545:8545 \
+            $FINAL_IMAGE:latest \
+            --dev --http --http.api eth,net,web3,personal
+            sleep 20
+
+      # - name: Wait for RPC to be ready
+      #   run: |
+      #     echo "Waiting for devnet to be ready..."
+      #     for i in {1..20}; do
+      #       if curl -s http://localhost:8545 > /dev/null; then
+      #         echo "RPC is ready."
+      #         break
+      #       fi
+      #       sleep 2
+      #     done
+
+      - name: Run Hardhat tests
+        working-directory: ./hardhat
+        run: npx hardhat test --network localhost
+
+      - name: Stop and remove test container
+        run: docker rm -f test-node          
