@@ -8,12 +8,12 @@ on:
 
 jobs:
   deploy-hardhat:
-    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Deploy')
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Deploy') || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
 
     env:
       BASE_IMAGE: yohands/my_first_container:latest
-      FINAL_IMAGE: yohands/my_first_container:with-contracts
+      FINAL_IMAGE: yohands/my_first-contracts
       CONTAINER_NAME: devnet-node
 
     steps:
@@ -75,8 +75,8 @@ jobs:
 
       - name: Commit container with deployed contracts
         run: |
-          docker commit $CONTAINER_NAME $FINAL_IMAGE
-          docker tag $FINAL_IMAGE my_first_container:${{ env.COMMIT_SHA }}
+          docker commit $CONTAINER_NAME $FINAL_IMAGE:latest
+          docker tag $FINAL_IMAGE:latest $FINAL_IMAGE:${{ env.COMMIT_SHA }}
 
       - name: Stop and remove container
         run: docker rm -f $CONTAINER_NAME        
