@@ -34,7 +34,7 @@ type revertError struct {
 }
 
 // ErrorCode returns the JSON error code for a revert.
-// See: https://github.com/ethereum/wiki/wiki/JSON-RPC-Error-Codes-Improvement-Proposal
+// See: https://ethereum.org/en/developers/docs/apis/json-rpc/#error-codes
 func (e *revertError) ErrorCode() int {
 	return 3
 }
@@ -71,7 +71,7 @@ func (e *TxIndexingError) Error() string {
 }
 
 // ErrorCode returns the JSON error code for a revert.
-// See: https://github.com/ethereum/wiki/wiki/JSON-RPC-Error-Codes-Improvement-Proposal
+// See: https://ethereum.org/en/developers/docs/apis/json-rpc/#error-codes
 func (e *TxIndexingError) ErrorCode() int {
 	return -32000 // to be decided
 }
