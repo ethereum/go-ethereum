@@ -16,6 +16,8 @@
 
 package blobpool
 
+import "github.com/holiman/billy"
+
 // newSlotter creates a helper method for the Billy datastore that returns the
 // individual shelf sizes used to store transactions in.
 //
@@ -53,4 +55,25 @@ func newSlotterEIP7594(maxBlobsPerTransaction int) func() (uint32, bool) {
 
 		return slotsize, finished
 	}
+}
+
+// newVersionSlotter creates a slotter with a single 8 byte shelf to store
+// version metadata in.
+func newVersionSlotter() func() (uint32, bool) {
+	return func() (size uint32, done bool) {
+		return 8, true
+	}
+}
+
+// parseSlotterVersion will parse the slotter's version from a given data blob.
+func parseSlotterVersion(blob []byte) int {
+	if len(blob) > 0 {
+		return int(blob[0])
+	}
+	return 0
+}
+
+// writeSlotterVersion writes the current slotter version into the store.
+func writeSlotterVersion(store billy.Database, version int) {
+	store.Put([]byte{byte(version)})
 }
