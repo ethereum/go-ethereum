@@ -76,7 +76,7 @@ jobs:
       - name: Commit container with deployed contracts
         run: |
           docker commit $CONTAINER_NAME $FINAL_IMAGE
-          docker tag $FINAL_IMAGE:latest $FINAL_IMAGE:${{ env.COMMIT_SHA }}
+          docker tag $FINAL_IMAGE $FINAL_IMAGE:${{ env.COMMIT_SHA }}
 
       - name: Stop and remove container
         run: docker rm -f $CONTAINER_NAME        
