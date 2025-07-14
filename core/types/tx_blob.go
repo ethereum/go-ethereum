@@ -77,6 +77,10 @@ func (sc *BlobTxSidecar) BlobHashes() []common.Hash {
 // CellProofsAt returns the cell proofs for blob with index idx.
 // This method is only valid for sidecars with version 1.
 func (sc *BlobTxSidecar) CellProofsAt(idx int) []kzg4844.Proof {
+	if idx < 0 || idx >= len(sc.Blobs) {
+		log.Error("cellProofsAt called with out of bounds index", "index", idx, "blobs", len(sc.Blobs))
+		return nil
+	}
 	if sc.Version == 1 {
 		index := idx * kzg4844.CellProofsPerBlob
 		return sc.Proofs[index : index+kzg4844.CellProofsPerBlob]
