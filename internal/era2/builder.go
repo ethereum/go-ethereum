@@ -57,18 +57,20 @@ const (
 
 type proofvar uint16
 
-const (
-	ProofNone proofvar = iota
-	ProofHHA
-	ProofRoots
-	ProofCapella
-	ProofDeneb
-)
+type buffer struct {
+	headers  [][]byte
+	bodies   [][]byte
+	receipts [][]byte
+	proofs   [][]byte
+	tds      [][]byte
+}
 
-// Proof bundles variant + compressed bytes.
-type Proof struct {
-	Variant proofvar
-	Data    []byte
+type offsets struct {
+	headers      []uint64
+	bodys        []uint64
+	receipts     []uint64
+	proofoffsets []uint64
+	tdoff        []uint64
 }
 
 type Builder struct {
@@ -76,22 +78,12 @@ type Builder struct {
 	buf *bytes.Buffer
 	sn  *snappy.Writer
 
-	headers  [][]byte
-	bodies   [][]byte
-	receipts [][]byte
-	proofs   [][]byte
-	tds      [][]byte
-	tdsint   []*big.Int
-	hashes   []common.Hash
+	buff buffer
+	off  offsets
 
-	headeroffsets  []uint64
-	bodyoffsets    []uint64
-	receiptoffsets []uint64
-	proofoffsets   []uint64
-	tdoff          []uint64
-
-	prooftype proofvar
-
+	prooftype    proofvar
+	tdsint       []*big.Int
+	hashes       []common.Hash
 	startNum     *uint64
 	writtenBytes uint64
 }
@@ -107,20 +99,23 @@ func NewBuilder(w io.Writer) *Builder {
 }
 
 // Add writes a block entry, its reciepts, and optionally its proofs as well into the e2store file.
-func (b *Builder) Add(header types.Header, body types.Body, receipts types.Receipts, td *big.Int, proof *Proof) error {
-	var pv proofvar = ProofNone
-	var pData []byte
+func (b *Builder) Add(header types.Header, body types.Body, receipts types.Receipts, td *big.Int, proof Proof) error {
+	pv := proofVariantOf(proof) // variant code (or proofNone)
+	var ep []byte               // encoded proof payload
+
 	if proof != nil {
-		pv, pData = proof.Variant, proof.Data
-		if pv == ProofNone || len(pData) == 0 {
-			return fmt.Errorf("invalid proof: variant=%d len=%d", pv, len(pData))
+		var buf bytes.Buffer
+		if err := proof.EncodeRLP(&buf); err != nil {
+			return fmt.Errorf("encode proof: %w", err)
 		}
+		ep = buf.Bytes()
 	}
 
-	if len(b.headers) == 0 {
+	if len(b.buff.headers) == 0 {
 		b.prooftype = pv
 	} else if pv != b.prooftype {
-		return fmt.Errorf("cannot mix proof variants: first=%d now=%d", b.prooftype, pv)
+		return fmt.Errorf("cannot mix proof variants: first=%d now=%d",
+			b.prooftype, pv)
 	}
 
 	eh, err := rlp.EncodeToBytes(&header)
@@ -136,31 +131,27 @@ func (b *Builder) Add(header types.Header, body types.Body, receipts types.Recei
 		return fmt.Errorf("encode receipts: %w", err)
 	}
 
-	var ep []byte
-	if pv != ProofNone {
-		ep, err = rlp.EncodeToBytes([]interface{}{uint16(pv), proof.Data})
-		if err != nil {
-			return fmt.Errorf("encode proof: %w", err)
-		}
-	}
-
-	return b.AddRLP(eh, eb, er, ep, header.Number.Uint64(), header.Hash(), td)
+	return b.AddRLP(
+		eh, eb, er, ep,
+		header.Number.Uint64(),
+		header.Hash(), td,
+	)
 }
 
 // AddRLP takes the RLP encoded block components and writes them to the underlying e2store file
 func (b *Builder) AddRLP(headerRLP []byte, bodyRLP []byte, receipts []byte, proof []byte, blockNum uint64, blockHash common.Hash, td *big.Int) error {
-	if len(b.headers) >= MaxEraESize {
+	if len(b.buff.headers) >= MaxEraESize {
 		return fmt.Errorf("exceeds MaxEraESize %d", MaxEraESize)
 	}
 
-	b.headers = append(b.headers, headerRLP)
-	b.bodies = append(b.bodies, bodyRLP)
-	b.receipts = append(b.receipts, receipts)
-	b.tds = append(b.tds, uint256LE(td))
+	b.buff.headers = append(b.buff.headers, headerRLP)
+	b.buff.bodies = append(b.buff.bodies, bodyRLP)
+	b.buff.receipts = append(b.buff.receipts, receipts)
+	b.buff.tds = append(b.buff.tds, uint256LE(td))
 	b.tdsint = append(b.tdsint, new(big.Int).Set(td))
 	b.hashes = append(b.hashes, blockHash)
 	if proof != nil {
-		b.proofs = append(b.proofs, proof)
+		b.buff.proofs = append(b.buff.proofs, proof)
 	}
 
 	//Write Era2 version before writing any blocks.
@@ -181,40 +172,64 @@ func (b *Builder) Finalize() (common.Hash, error) {
 	if b.startNum == nil {
 		return common.Hash{}, errors.New("no blocks added, cannot finalize")
 	}
-	var err error
-	if err := b.flushKind(TypeCompressedHeader, b.headers, true, &b.headeroffsets); err != nil {
-		return common.Hash{}, err
-	}
-	if err := b.flushKind(TypeCompressedBody, b.bodies, true, &b.bodyoffsets); err != nil {
-		return common.Hash{}, err
-	}
-	if err := b.flushKind(TypeCompressedReceipts, b.receipts, true, &b.receiptoffsets); err != nil {
-		return common.Hash{}, err
+	for _, data := range b.buff.headers {
+		off, err := b.addEntry(TypeCompressedHeader, data, true)
+		if err != nil {
+			return common.Hash{}, fmt.Errorf("headers: %w", err)
+		}
+		b.off.headers = append(b.off.headers, off)
 	}
 
-	if len(b.tds) > 0 {
-		if err := b.flushKind(TypeTotalDifficulty, b.tds, false, &b.tdoff); err != nil {
-			return common.Hash{}, err
+	for _, data := range b.buff.bodies {
+		off, err := b.addEntry(TypeCompressedBody, data, true)
+		if err != nil {
+			return common.Hash{}, fmt.Errorf("bodies: %w", err)
+		}
+		b.off.bodys = append(b.off.bodys, off)
+	}
+
+	for _, data := range b.buff.receipts {
+		off, err := b.addEntry(TypeCompressedReceipts, data, true)
+		if err != nil {
+			return common.Hash{}, fmt.Errorf("receipts: %w", err)
+		}
+		b.off.receipts = append(b.off.receipts, off)
+	}
+
+	if len(b.buff.tds) > 0 {
+		for _, data := range b.buff.tds {
+			off, err := b.addEntry(TypeTotalDifficulty, data, false)
+			if err != nil {
+				return common.Hash{}, fmt.Errorf("total-difficulty: %w", err)
+			}
+			b.off.tdoff = append(b.off.tdoff, off)
 		}
 	}
+
 	if b.prooftype != ProofNone {
-		if err := b.flushKind(TypeProof, b.proofs, true, &b.proofoffsets); err != nil {
-			return common.Hash{}, err
+		for _, data := range b.buff.proofs {
+			off, err := b.addEntry(TypeProof, data, true)
+			if err != nil {
+				return common.Hash{}, fmt.Errorf("proofs: %w", err)
+			}
+			b.off.proofoffsets = append(b.off.proofoffsets, off)
 		}
 	}
 
 	var accRoot common.Hash
 	if len(b.hashes) > 0 {
+		var err error
 		accRoot, err = ComputeAccumulator(b.hashes, b.tdsint)
 		if err != nil {
-			return common.Hash{}, fmt.Errorf("error calculating accumulator root: %w", err)
+			return common.Hash{}, fmt.Errorf("compute accumulator: %w", err)
 		}
 		if n, err := b.w.Write(TypeAccumulatorRoot, accRoot[:]); err != nil {
-			return common.Hash{}, fmt.Errorf("error writing accumulator root: %w", err)
+			return common.Hash{}, fmt.Errorf("write accumulator: %w", err)
 		} else {
 			b.writtenBytes += uint64(n)
 		}
 	}
+
 	return accRoot, b.writeIndex()
 }
 
@@ -282,41 +297,40 @@ func (b *Builder) flushKind(typ uint16, list [][]byte, useSnappy bool, dst *[]ui
 // write index takes all the offset table and writes it to the file
 // the index table contains all offsets to specific block entries
 func (b *Builder) writeIndex() error {
-	count := uint64(len(b.headeroffsets))
-	compcount := uint64(3)
-	if len(b.tds) > 0 {
-		compcount++
+	count := uint64(len(b.off.headers))
+	componentCount := uint64(3)
+	if len(b.buff.tds) > 0 {
+		componentCount++
 	}
-	if len(b.proofs) > 0 {
-		compcount++
+	if len(b.buff.proofs) > 0 {
+		componentCount++
 	}
 
-	idx := make([]byte, 8+count*8*compcount+16) //8 for start block, 8 per property per block, 16 for the number of properties and the number of blocks
-	binary.LittleEndian.PutUint64(idx, *b.startNum)
+	index := make([]byte, 8+count*8*componentCount+16) //8 for start block, 8 per property per block, 16 for the number of properties and the number of blocks
+	binary.LittleEndian.PutUint64(index, *b.startNum)
 	base := int64(b.writtenBytes)
-	pos := 8
 	rel := func(abs uint64) uint64 { return uint64(int64(abs) - base) }
 	for i := uint64(0); i < count; i++ {
-		binary.LittleEndian.PutUint64(idx[pos:], rel(b.headeroffsets[i]))
-		pos += 8
-		binary.LittleEndian.PutUint64(idx[pos:], rel(b.bodyoffsets[i]))
-		pos += 8
-		binary.LittleEndian.PutUint64(idx[pos:], rel(b.receiptoffsets[i]))
-		pos += 8
-		if len(b.tds) > 0 {
-			binary.LittleEndian.PutUint64(idx[pos:], rel(b.tdoff[i]))
+		basePosition := 8 + i*componentCount*8
+
+		binary.LittleEndian.PutUint64(index[basePosition:], rel(b.off.headers[i]))
+		binary.LittleEndian.PutUint64(index[basePosition+8:], rel(b.off.bodys[i]))
+		binary.LittleEndian.PutUint64(index[basePosition+16:], rel(b.off.receipts[i]))
+
+		pos := uint64(24)
+		if len(b.buff.tds) > 0 {
+			binary.LittleEndian.PutUint64(index[basePosition+pos:], rel(b.off.tdoff[i]))
 			pos += 8
 		}
-		if len(b.proofs) > 0 {
-			binary.LittleEndian.PutUint64(idx[pos:], rel(b.proofoffsets[i]))
-			pos += 8
+		if len(b.buff.proofs) > 0 {
+			binary.LittleEndian.PutUint64(index[basePosition+pos:], rel(b.off.proofoffsets[i]))
 		}
 	}
+	indexEnd := 8 + count*componentCount*8
 
-	binary.LittleEndian.PutUint64(idx[pos:], compcount)
-	pos += 8
-	binary.LittleEndian.PutUint64(idx[pos:], count)
-	if n, err := b.w.Write(TypeBlockIndex, idx); err != nil {
+	binary.LittleEndian.PutUint64(index[indexEnd+0:], componentCount)
+	binary.LittleEndian.PutUint64(index[indexEnd+8:], count)
+	if n, err := b.w.Write(TypeBlockIndex, index); err != nil {
 		return err
 	} else {
 		b.writtenBytes += uint64(n)
