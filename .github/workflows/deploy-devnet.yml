@@ -13,7 +13,7 @@ jobs:
 
     env:
       BASE_IMAGE: yohands/my_first_container:latest
-      FINAL_IMAGE: yohands/my_first_with-contracts
+      FINAL_IMAGE: yohands/my_first_container:with-contracts
       CONTAINER_NAME: devnet-node
 
     steps:
