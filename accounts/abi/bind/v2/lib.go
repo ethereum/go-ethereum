@@ -27,7 +27,10 @@
 package bind
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -224,7 +227,28 @@ func DeployContract(opts *TransactOpts, bytecode []byte, backend ContractBackend
 	if err != nil {
 		return common.Address{}, nil, err
 	}
-	return crypto.CreateAddress(opts.From, tx.Nonce()), tx, nil
+
+	addr := crypto.CreateAddress(opts.From, tx.Nonce())
+	ctx, cancel := context.WithTimeout(opts.Context, 5*time.Second)
+	defer cancel()
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return common.Address{}, nil, fmt.Errorf("contract deployment timeout at %s", addr.Hex())
+		case <-ticker.C:
+			code, err := c.transactor.PendingCodeAt(ensureContext(ctx), addr)
+			if err != nil {
+				return common.Address{}, nil, err
+			}
+			if len(code) != 0 {
+				return addr, tx, nil
+			}
+		}
+	}
 }
 
 // DefaultDeployer returns a DeployFn that signs and submits creation transactions
