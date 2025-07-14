@@ -151,7 +151,7 @@ func (args *SendTxArgs) ToTransaction() (*types.Transaction, error) {
 			al = *args.AccessList
 		}
 		if to == nil {
-			return nil, fmt.Errorf("the to address shouldn't be null in blob transaction")
+			return nil, fmt.Errorf("transaction recipient must be set for blob transactions")
 		}
 		data = &types.BlobTx{
 			To:         *to,
