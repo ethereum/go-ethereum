@@ -88,6 +88,10 @@ const (
 	// limboedTransactionStore is the subfolder containing the currently included
 	// but not yet finalized transaction blobs.
 	limboedTransactionStore = "limbo"
+
+	// storeVersion is the current slotter layout used for the billy.Database
+	// store.
+	storeVersion = 1
 )
 
 // blobTxMeta is the minimal subset of types.BlobTx necessary to validate and
@@ -390,23 +394,48 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	}
 	p.head, p.state = head, state
 
-	// Check if we need to migrate the blob database to a new format
+	// Create new slotter for pre-Osaka blob configuration.
 	slotter := newSlotter(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
+
+	// Check if we need to migrate our blob db to the new slotter.
 	if p.chain.Config().IsOsaka(head.Number, head.Time) {
-		// Check if we need to migrate our blob db to the new slotter
-		oldSlotSize := 135168
-		if _, err := os.Stat(filepath.Join(queuedir, fmt.Sprintf("bkt_%08d.bag", oldSlotSize))); err == nil {
+		// Open the store using the version slotter to see if any version has been
+		// written.
+		var version int
+		index := func(_ uint64, _ uint32, blob []byte) {
+			version = max(version, parseSlotterVersion(blob))
+		}
+		store, err := billy.Open(billy.Options{Path: queuedir}, newVersionSlotter(), index)
+		if err != nil {
+			return err
+		}
+		store.Close()
+
+		// If the version found is less than the currently configured store version,
+		// perform a migration then write the updated version of the store.
+		if version < storeVersion {
 			newSlotter := newSlotterEIP7594(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
 			if err := billy.Migrate(billy.Options{Path: queuedir, Repair: true}, slotter, newSlotter); err != nil {
 				return err
 			}
+			store, err = billy.Open(billy.Options{Path: queuedir}, newVersionSlotter(), nil)
+			if err != nil {
+				return err
+			}
+			writeSlotterVersion(store, storeVersion)
+			store.Close()
 		}
+		// Set the slotter to the format now that the Osaka is active.
 		slotter = newSlotterEIP7594(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
 	}
 
 	// Index all transactions on disk and delete anything unprocessable
 	var fails []uint64
 	index := func(id uint64, size uint32, blob []byte) {
+		if len(blob) == 1 {
+			// Skip version blob if found.
+			return
+		}
 		if p.parseTransaction(id, size, blob) != nil {
 			fails = append(fails, id)
 		}
