@@ -378,14 +378,16 @@ func (s *Ethereum) APIs() []rpc.API {
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{
 		{
-			Namespace: "miner",
-			Service:   NewMinerAPI(s),
+			Namespace:     "miner",
+			Service:       NewMinerAPI(s),
+			Authenticated: true,
 		}, {
 			Namespace: "eth",
 			Service:   downloader.NewDownloaderAPI(s.handler.downloader, s.blockchain, s.eventMux),
 		}, {
-			Namespace: "admin",
-			Service:   NewAdminAPI(s),
+			Namespace:     "admin",
+			Service:       NewAdminAPI(s),
+			Authenticated: true,
 		}, {
 			Namespace: "debug",
 			Service:   NewDebugAPI(s),
