@@ -21,6 +21,22 @@ type metadata struct {
 	length     int64  // length of the file in bytes
 }
 
+const (
+	ProofNone proofvar = iota
+	proofHHA
+	proofRoots
+	proofCapella
+	proofDeneb
+)
+
+const (
+	compHeader   = 0
+	compBody     = 1
+	compReceipts = 2
+	compTD       = 3
+	compProof    = 4
+)
+
 type BlockProofHistoricalHashesAccumulator [15]common.Hash // 15 * 32 = 480 bytes
 
 // BlockProofHistoricalRoots – Altair / Bellatrix historical_roots branch.
@@ -47,6 +63,55 @@ type BlockProofHistoricalSummariesDeneb struct {
 	Slot                uint64          // 8  => 840 bytes
 }
 
+type Proof interface {
+	EncodeRLP(w io.Writer) error
+	DecodeRlP(s *rlp.Stream) error
+	Variant() proofvar
+}
+
+type hhaAlias BlockProofHistoricalHashesAccumulator // alias ⇒ no EncodeRLP method
+
+func (p *BlockProofHistoricalHashesAccumulator) EncodeRLP(w io.Writer) error {
+	payload := []interface{}{uint16(proofHHA), hhaAlias(*p)}
+	return rlp.Encode(w, payload)
+}
+
+func (p *BlockProofHistoricalHashesAccumulator) Variant() proofvar { return proofHHA }
+
+type rootsAlias BlockProofHistoricalRoots
+
+func (p *BlockProofHistoricalRoots) EncodeRLP(w io.Writer) error {
+	payload := []interface{}{uint16(proofRoots), rootsAlias(*p)}
+	return rlp.Encode(w, payload)
+}
+
+func (*BlockProofHistoricalRoots) Variant() proofvar { return proofRoots }
+
+type capellaAlias BlockProofHistoricalSummariesCapella
+
+func (p *BlockProofHistoricalSummariesCapella) EncodeRLP(w io.Writer) error {
+	payload := []interface{}{uint16(proofCapella), capellaAlias(*p)}
+	return rlp.Encode(w, payload)
+}
+
+func (*BlockProofHistoricalSummariesCapella) Variant() proofvar { return proofCapella }
+
+type denebAlias BlockProofHistoricalSummariesDeneb
+
+func (p *BlockProofHistoricalSummariesDeneb) EncodeRLP(w io.Writer) error {
+	payload := []interface{}{uint16(proofDeneb), denebAlias(*p)}
+	return rlp.Encode(w, payload)
+}
+
+func (*BlockProofHistoricalSummariesDeneb) Variant() proofvar { return proofDeneb }
+
+func proofVariantOf(p Proof) proofvar {
+	if p == nil {
+		return ProofNone
+	}
+	return p.Variant()
+}
+
 type ReadAtSeekCloser interface {
 	io.ReaderAt
 	io.Seeker
@@ -54,12 +119,11 @@ type ReadAtSeekCloser interface {
 }
 
 type Era struct {
-	f                                                 ReadAtSeekCloser
-	s                                                 *e2store.Reader
-	m                                                 metadata // metadata for the Era file
-	headeroff, bodyoff, receiptsoff, tdoff, proofsoff []uint64 // offsets for each entry type
-	indstart                                          int64
-	rootheader                                        uint64 // offset of the root header in the file if present
+	f          ReadAtSeekCloser
+	s          *e2store.Reader
+	m          metadata // metadata for the Era file
+	indstart   int64
+	rootheader uint64 // offset of the root header in the file if present
 }
 
 // Opens era file
@@ -98,11 +162,11 @@ func (e *Era) Count() uint64 {
 
 // retrieves the block if present within the era file
 func (e *Era) GetBlockByNumber(blockNum uint64) (*types.Block, error) {
-	h, err := e.getHeader(blockNum)
+	h, err := e.GetHeader(blockNum)
 	if err != nil {
 		return nil, err
 	}
-	b, err := e.getBody(blockNum)
+	b, err := e.GetBody(blockNum)
 	if err != nil {
 		return nil, err
 	}
@@ -110,46 +174,46 @@ func (e *Era) GetBlockByNumber(blockNum uint64) (*types.Block, error) {
 }
 
 // retrieves header from era file through the cached offset table
-func (e *Era) getHeader(blockNum uint64) (*types.Header, error) {
-	if blockNum < e.m.start || blockNum >= e.m.start+e.m.count {
-		return nil, fmt.Errorf("block number %d out of range [%d, %d)", blockNum, e.m.start, e.m.start+e.m.count)
-	}
-	r, _, err := e.s.ReaderAt(TypeCompressedHeader, int64(e.headeroff[blockNum-e.m.start]))
+func (e *Era) GetHeader(num uint64) (*types.Header, error) {
+	off, err := e.headerOff(num)
 	if err != nil {
 		return nil, err
 	}
-	r = snappy.NewReader(r)
 
+	r, _, err := e.s.ReaderAt(TypeCompressedHeader, int64(off))
+	if err != nil {
+		return nil, err
+	}
+
+	r = snappy.NewReader(r)
 	var h types.Header
 	return &h, rlp.Decode(r, &h)
 }
 
 // retrieves body from era file through cached offset table
-func (e *Era) getBody(blockNum uint64) (*types.Body, error) {
-	if blockNum < e.m.start || blockNum >= e.m.start+e.m.count {
-		return nil, fmt.Errorf("block number %d out of range [%d, %d)", blockNum, e.m.start, e.m.start+e.m.count)
-	}
-	r, _, err := e.s.ReaderAt(TypeCompressedBody, int64(e.bodyoff[blockNum-e.m.start]))
+func (e *Era) GetBody(num uint64) (*types.Body, error) {
+	off, err := e.bodyOff(num)
 	if err != nil {
 		return nil, err
 	}
-	r = snappy.NewReader(r)
 
+	r, _, err := e.s.ReaderAt(TypeCompressedBody, int64(off))
+	if err != nil {
+		return nil, err
+	}
+
+	r = snappy.NewReader(r)
 	var b types.Body
 	return &b, rlp.Decode(r, &b)
 }
 
 // retrieves td from era file through cached offset table
 func (e *Era) getTD(blockNum uint64) (*big.Int, error) {
-	if blockNum < e.m.start || blockNum >= e.m.start+e.m.count {
-		return nil, fmt.Errorf("block number %d out of range [%d, %d)",
-			blockNum, e.m.start, e.m.start+e.m.count)
+	off, err := e.tdOff(blockNum)
+	if err != nil {
+		return nil, err
 	}
-	if len(e.tdoff) == 0 {
-		return nil, fmt.Errorf("total-difficulty section not present")
-	}
-
-	r, _, err := e.s.ReaderAt(TypeTotalDifficulty, int64(e.tdoff[blockNum-e.m.start]))
+	r, _, err := e.s.ReaderAt(TypeTotalDifficulty, int64(off))
 	if err != nil {
 		return nil, err
 	}
@@ -160,10 +224,11 @@ func (e *Era) getTD(blockNum uint64) (*big.Int, error) {
 
 // retrieves the raw body frame in bytes of a specific block
 func (e *Era) GetRawBodyFrameByNumber(blockNum uint64) ([]byte, error) {
-	if blockNum < e.m.start || blockNum >= e.m.start+e.m.count {
-		return nil, fmt.Errorf("block number %d out of range [%d, %d)", blockNum, e.m.start, e.m.start+e.m.count)
+	off, err := e.bodyOff(blockNum)
+	if err != nil {
+		return nil, err
 	}
-	r, _, err := e.s.ReaderAt(TypeCompressedBody, int64(e.bodyoff[blockNum-e.m.start]))
+	r, _, err := e.s.ReaderAt(TypeCompressedBody, int64(off))
 	if err != nil {
 		return nil, err
 	}
@@ -172,10 +237,11 @@ func (e *Era) GetRawBodyFrameByNumber(blockNum uint64) ([]byte, error) {
 
 // retrieves the raw receipts frame in bytes of a specific block
 func (e *Era) GetRawReceiptsFrameByNumber(blockNum uint64) ([]byte, error) {
-	if blockNum < e.m.start || blockNum >= e.m.start+e.m.count {
-		return nil, fmt.Errorf("block number %d out of range [%d, %d)", blockNum, e.m.start, e.m.start+e.m.count)
+	off, err := e.rcptOff(blockNum)
+	if err != nil {
+		return nil, err
 	}
-	r, _, err := e.s.ReaderAt(TypeCompressedReceipts, int64(e.receiptsoff[blockNum-e.m.start]))
+	r, _, err := e.s.ReaderAt(TypeCompressedReceipts, int64(off))
 	if err != nil {
 		return nil, err
 	}
@@ -184,13 +250,11 @@ func (e *Era) GetRawReceiptsFrameByNumber(blockNum uint64) ([]byte, error) {
 
 // retrieves the raw proof frame in bytes of a specific block proof
 func (e *Era) GetRawProofFrameByNumber(blockNum uint64) ([]byte, error) {
-	if len(e.proofsoff) == 0 {
-		return nil, fmt.Errorf("proofs section not present")
+	off, err := e.proofOff(blockNum)
+	if err != nil {
+		return nil, err
 	}
-	if blockNum < e.m.start || blockNum >= e.m.start+e.m.count {
-		return nil, fmt.Errorf("block number %d out of range [%d, %d)", blockNum, e.m.start, e.m.start+e.m.count)
-	}
-	r, _, err := e.s.ReaderAt(TypeProof, int64(e.proofsoff[blockNum-e.m.start]))
+	r, _, err := e.s.ReaderAt(TypeProof, int64(off))
 	if err != nil {
 		return nil, err
 	}
@@ -232,33 +296,6 @@ func (e *Era) loadIndex() error {
 		return err
 	}
 
-	toAbs := func(i int) uint64 {
-		rel := binary.LittleEndian.Uint64(offBytes[i*8 : i*8+8])
-		return uint64(int64(rel) + e.indstart)
-	}
-
-	e.headeroff = make([]uint64, e.m.count)
-	e.bodyoff = make([]uint64, e.m.count)
-	e.receiptsoff = make([]uint64, e.m.count)
-	if num > 3 {
-		e.tdoff = make([]uint64, e.m.count)
-	}
-	if num > 4 {
-		e.proofsoff = make([]uint64, e.m.count)
-	}
-	for i := uint64(0); i < e.m.count; i++ {
-		base := int(i * uint64(num))
-		e.headeroff[i] = toAbs(base)
-		e.bodyoff[i] = toAbs(base + 1)
-		e.receiptsoff[i] = toAbs(base + 2)
-		if num > 3 {
-			e.tdoff[i] = toAbs(base + 3)
-		}
-		if num > 4 {
-			e.proofsoff[i] = toAbs(base + 4)
-		}
-	}
-
 	var off int64 = 0 // start at byte-0 of file
 
 	for off < e.indstart { // never enter the Block-Index TLV
@@ -275,80 +312,116 @@ func (e *Era) loadIndex() error {
 	return nil
 }
 
-// retrieves a range of block from any start block to n number of blocks
-// the components retrieved can be customized depending on the properties wanted
-func (e *Era) BatchRange(first, count uint64, wantHdr, wantBody, wantRec, wantPrf bool) (hdrs []*types.Header, bods []*types.Body, recs []types.Receipts, prfs [][]byte, err error) {
+// Getter methods to calculate offset of a specific component in the file.
+func (e *Era) headerOff(num uint64) (uint64, error) { return e.indexOffset(num, compHeader) }
+func (e *Era) bodyOff(num uint64) (uint64, error)   { return e.indexOffset(num, compBody) }
+func (e *Era) rcptOff(num uint64) (uint64, error)   { return e.indexOffset(num, compReceipts) }
+func (e *Era) tdOff(num uint64) (uint64, error)     { return e.indexOffset(num, compTD) }
+func (e *Era) proofOff(num uint64) (uint64, error)  { return e.indexOffset(num, compProof) }
+
+// calculates offset to a certain component for a block number within a file.
+func (e *Era) indexOffset(n uint64, comp int) (uint64, error) {
+	if n < e.m.start || n >= e.m.start+e.m.count {
+		return 0, fmt.Errorf("block %d out of range [%d,%d)", n, e.m.start, e.m.start+e.m.count)
+	}
+	if comp >= int(e.m.components) {
+		return 0, fmt.Errorf("component %d not present", comp)
+	}
+
+	rec := (n-e.m.start)*e.m.components + uint64(comp)
+	pos := e.indstart + 8 + 8 + int64(rec*8)
+
+	var buf [8]byte
+	if _, err := e.f.ReadAt(buf[:], pos); err != nil {
+		return 0, err
+	}
+	rel := binary.LittleEndian.Uint64(buf[:])
+	return uint64(int64(rel) + e.indstart), nil
+}
+
+// GetHeaders returns RLP-decoded headers.
+func (e *Era) GetHeaders(first, count uint64) ([]*types.Header, error) {
 	if count == 0 {
-		err = fmt.Errorf("count must be > 0")
-		return
+		return nil, fmt.Errorf("count must be > 0")
 	}
 	if first < e.m.start || first+count > e.m.start+e.m.count {
-		err = fmt.Errorf("range [%d,%d) out of bounds", first, first+count)
-		return
+		return nil, fmt.Errorf("range [%d,%d) out of bounds", first, first+count)
 	}
 
-	idx := first - e.m.start
-	if wantHdr {
-		hdrs = make([]*types.Header, count)
-	}
-	if wantBody {
-		bods = make([]*types.Body, count)
-	}
-	if wantRec {
-		recs = make([]types.Receipts, count)
-	}
-	if wantPrf {
-		prfs = make([][]byte, count)
-	}
-
+	out := make([]*types.Header, count)
 	for i := uint64(0); i < count; i++ {
-		id := idx + i
-
-		if wantHdr {
-			r, _, er := e.s.ReaderAt(TypeCompressedHeader, int64(e.headeroff[id]))
-			if er != nil {
-				err = er
-				return
-			}
-			if er = rlp.Decode(snappy.NewReader(r), &hdrs[i]); er != nil {
-				err = er
-				return
-			}
+		n := first + i
+		off, err := e.headerOff(n)
+		if err != nil {
+			return nil, err
 		}
-		if wantBody {
-			r, _, er := e.s.ReaderAt(TypeCompressedBody, int64(e.bodyoff[id]))
-			if er != nil {
-				err = er
-				return
-			}
-			if er = rlp.Decode(snappy.NewReader(r), &bods[i]); er != nil {
-				err = er
-				return
-			}
+		r, _, err := e.s.ReaderAt(TypeCompressedHeader, int64(off))
+		if err != nil {
+			return nil, err
 		}
-		if wantRec {
-			r, _, er := e.s.ReaderAt(TypeCompressedReceipts, int64(e.receiptsoff[id]))
-			if er != nil {
-				err = er
-				return
-			}
-			if er = rlp.Decode(snappy.NewReader(r), &recs[i]); er != nil {
-				err = er
-				return
-			}
+		var h types.Header
+		if err := rlp.Decode(snappy.NewReader(r), &h); err != nil {
+			return nil, err
 		}
-		if wantPrf {
-			if len(e.proofsoff) == 0 {
-				err = fmt.Errorf("proofs section not present")
-				return
-			}
-			r, _, er := e.s.ReaderAt(TypeProof, int64(e.proofsoff[id]))
-			if er != nil {
-				err = er
-				return
-			}
-			prfs[i], _ = io.ReadAll(r)
-		}
+		out[i] = &h
 	}
-	return
+	return out, nil
+}
+
+// GetBodies returns RLP-decoded bodies.
+func (e *Era) GetBodies(first, count uint64) ([]*types.Body, error) {
+	if count == 0 {
+		return nil, fmt.Errorf("count must be > 0")
+	}
+	if first < e.m.start || first+count > e.m.start+e.m.count {
+		return nil, fmt.Errorf("range [%d,%d) out of bounds", first, first+count)
+	}
+
+	out := make([]*types.Body, count)
+	for i := uint64(0); i < count; i++ {
+		n := first + i
+		off, err := e.bodyOff(n)
+		if err != nil {
+			return nil, err
+		}
+		r, _, err := e.s.ReaderAt(TypeCompressedBody, int64(off))
+		if err != nil {
+			return nil, err
+		}
+		var b types.Body
+		if err := rlp.Decode(snappy.NewReader(r), &b); err != nil {
+			return nil, err
+		}
+		out[i] = &b
+	}
+	return out, nil
+}
+
+// GetReceipts returns RLP-decoded receipts.
+func (e *Era) GetReceipts(first, count uint64) ([]types.Receipts, error) {
+	if count == 0 {
+		return nil, fmt.Errorf("count must be > 0")
+	}
+	if first < e.m.start || first+count > e.m.start+e.m.count {
+		return nil, fmt.Errorf("range [%d,%d) out of bounds", first, first+count)
+	}
+
+	out := make([]types.Receipts, count)
+	for i := uint64(0); i < count; i++ {
+		n := first + i
+		off, err := e.rcptOff(n)
+		if err != nil {
+			return nil, err
+		}
+		r, _, err := e.s.ReaderAt(TypeCompressedReceipts, int64(off))
+		if err != nil {
+			return nil, err
+		}
+		var rc types.Receipts
+		if err := rlp.Decode(snappy.NewReader(r), &rc); err != nil {
+			return nil, err
+		}
+		out[i] = rc
+	}
+	return out, nil
 }
