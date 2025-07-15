@@ -27,10 +27,8 @@
 package bind
 
 import (
-	"context"
 	"errors"
-	"fmt"
-	"time"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -227,28 +225,7 @@ func DeployContract(opts *TransactOpts, bytecode []byte, backend ContractBackend
 	if err != nil {
 		return common.Address{}, nil, err
 	}
-
-	addr := crypto.CreateAddress(opts.From, tx.Nonce())
-	ctx, cancel := context.WithTimeout(opts.Context, 5*time.Second)
-	defer cancel()
-
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return common.Address{}, nil, fmt.Errorf("contract deployment timeout at %s", addr.Hex())
-		case <-ticker.C:
-			code, err := c.transactor.PendingCodeAt(ensureContext(ctx), addr)
-			if err != nil {
-				return common.Address{}, nil, err
-			}
-			if len(code) != 0 {
-				return addr, tx, nil
-			}
-		}
-	}
+	return crypto.CreateAddress(opts.From, tx.Nonce()), tx, nil
 }
 
 // DefaultDeployer returns a DeployFn that signs and submits creation transactions
@@ -262,6 +239,30 @@ func DefaultDeployer(opts *TransactOpts, backend ContractBackend) DeployFn {
 		if err != nil {
 			return common.Address{}, nil, err
 		}
+		return addr, tx, nil
+	}
+}
+
+// DeployerWithNonceAssignment is basically identical to DefaultDeployer,
+// but it additionally tracks the nonce to enable automatic assignment.
+//
+// This is especially useful when deploying multiple contracts
+// from the same address — whether they are independent contracts
+// or part of a dependency chain that must be deployed in order.
+func DeployerWithNonceAssignment(opts *TransactOpts, backend ContractBackend) DeployFn {
+	var pendingNonce int64
+	if opts.Nonce != nil {
+		pendingNonce = opts.Nonce.Int64()
+	}
+	return func(input []byte, deployer []byte) (common.Address, *types.Transaction, error) {
+		if pendingNonce != 0 {
+			opts.Nonce = big.NewInt(pendingNonce)
+		}
+		addr, tx, err := DeployContract(opts, deployer, backend, input)
+		if err != nil {
+			return common.Address{}, nil, err
+		}
+		pendingNonce = int64(tx.Nonce() + 1)
 		return addr, tx, nil
 	}
 }
