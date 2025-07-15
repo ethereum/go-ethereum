@@ -24,11 +24,13 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/blocktest"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
 )
 
 // from bcValidBlockTest.json, "SimpleTx"
@@ -184,6 +186,60 @@ func TestEIP2718BlockEncoding(t *testing.T) {
 	check("Transactions[0].Hash", block.Transactions()[0].Hash(), tx1.Hash())
 	check("Transactions[1].Hash", block.Transactions()[1].Hash(), tx2.Hash())
 	check("Transactions[1].Type()", block.Transactions()[1].Type(), uint8(AccessListTxType))
+
+	ourBlockEnc, err := rlp.EncodeToBytes(&block)
+	if err != nil {
+		t.Fatal("encode error: ", err)
+	}
+	if !bytes.Equal(ourBlockEnc, blockEnc) {
+		t.Errorf("encoded block mismatch:\ngot:  %x\nwant: %x", ourBlockEnc, blockEnc)
+	}
+}
+
+func TestEIP4844BlockEncoding(t *testing.T) {
+	// https://github.com/ethereum/tests/blob/develop/BlockchainTests/ValidBlocks/bcEIP4844-blobtransactions/blockWithAllTransactionTypes.json
+	blockEnc := common.FromHex("0xf90417f90244a05eb7f6da0f3e237c62bcae48b7fb5f4506d392616b62890429c8b76b4a1d4104a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d4934794ba5e000000000000000000000000000000000000a011639dcca0b44f2acb5b630a82c8a69cb82742b3711383ec4e111a554d27aea5a05cb644f722e31f9792a8ef6e2a762334e1a862e8b40c1612e1e9507fd7121ef9a00c82719448356ba6807d6edfcd8e5aea575a5e97f36038ffb3e395749b26d41cb9010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000800188016345785d8a00008301482082079e42a00000000000000000000000000000000000000000000000000000000000020000880000000000000000820314a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b4218302000080a00000000000000000000000000000000000000000000000000000000000000000f901cbf864808203e885e8d4a5100094100000000000000000000000000000000000000a01801ca09de4adda6288582a6700dbcd8eb70c0a4a7fc9487d965f7bf22424e0bd121095a01cdb078764cc3770d5db847e99e10333aa7c356247baaf09b03eae04d64e7926b86901f86601018203e885e8d4a5100094100000000000000000000000000000000000000a0380c080a025090740da12684493e4fb466a3979e365b194e8cf462edf3c2c3be2f130bb2ea034fa18fb4c1bff4d957d72e28535d27f1352517a942aeaca0ed944085f0cd8bbb86a02f8670102018203e885e8d4a5100094100000000000000000000000000000000000000a0580c080a0352a7be5002ce111bc5167f3addf97a75e2e0b810d826af71d2caae18aed284ea065d38f8a5c8948ce706842e8861fb21020b93a4d5e489162a0e6d419a457b735b88c03f8890103018203e885e8d4a5100094100000000000000000000000000000000000000a0780c00ae1a001a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8809f638144c46d5de7a9e630c0e7c5c63ae829ecfd8cc94715d9c29fe17c464de0a06c5fc54c3aa868ba35ef31a4e12431611631ab7bcdceb4214dd273d83f73b5e1c0c0")
+	var block Block
+	if err := rlp.DecodeBytes(blockEnc, &block); err != nil {
+		t.Fatal("decode error: ", err)
+	}
+
+	check := func(f string, got, want interface{}) {
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s mismatch: got %v, want %v", f, got, want)
+		}
+	}
+	check("Difficulty", block.Difficulty(), big.NewInt(0))
+	check("GasLimit", block.GasLimit(), hexutil.MustDecodeUint64("0x16345785d8a0000"))
+	check("GasUsed", block.GasUsed(), hexutil.MustDecodeUint64("0x14820"))
+	check("Coinbase", block.Coinbase(), common.HexToAddress("0xba5e000000000000000000000000000000000000"))
+	check("MixDigest", block.MixDigest(), common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000020000"))
+	check("Root", block.Root(), common.HexToHash("0x11639dcca0b44f2acb5b630a82c8a69cb82742b3711383ec4e111a554d27aea5"))
+	check("WithdrawalRoot", *block.Header().WithdrawalsHash, common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"))
+	check("Nonce", block.Nonce(), uint64(0))
+	check("Time", block.Time(), hexutil.MustDecodeUint64("0x79e"))
+	check("Size", block.Size(), uint64(len(blockEnc)))
+
+	// Create blob tx.
+	tx := NewTx(&BlobTx{
+		ChainID:    uint256.NewInt(1),
+		Nonce:      3,
+		To:         common.HexToAddress("0x100000000000000000000000000000000000000a"),
+		Gas:        hexutil.MustDecodeUint64("0xe8d4a51000"),
+		GasTipCap:  uint256.MustFromHex("0x1"),
+		GasFeeCap:  uint256.MustFromHex("0x3e8"),
+		BlobFeeCap: uint256.MustFromHex("0xa"),
+		BlobHashes: []common.Hash{
+			common.BytesToHash(hexutil.MustDecode("0x01a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8")),
+		},
+		Value: uint256.MustFromHex("0x7"),
+	})
+	sig := common.Hex2Bytes("00638144c46d5de7a9e630c0e7c5c63ae829ecfd8cc94715d9c29fe17c464de06c5fc54c3aa868ba35ef31a4e12431611631ab7bcdceb4214dd273d83f73b5e100")
+	tx, _ = tx.WithSignature(LatestSignerForChainID(big.NewInt(1)), sig)
+
+	check("len(Transactions)", len(block.Transactions()), 4)
+	check("Transactions[3].Hash", block.Transactions()[3].Hash(), tx.Hash())
+	check("Transactions[3].Type()", block.Transactions()[3].Type(), uint8(BlobTxType))
 
 	ourBlockEnc, err := rlp.EncodeToBytes(&block)
 	if err != nil {

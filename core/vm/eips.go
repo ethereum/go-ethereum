@@ -311,10 +311,11 @@ func enable4844(jt *JumpTable) {
 	}
 }
 
+// enable7939 enables EIP-7939 (CLZ opcode)
 func enable7939(jt *JumpTable) {
 	jt[CLZ] = &operation{
 		execute:     opCLZ,
-		constantGas: GasFastestStep,
+		constantGas: GasFastStep,
 		minStack:    minStack(1, 1),
 		maxStack:    maxStack(1, 1),
 	}
