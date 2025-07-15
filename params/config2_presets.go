@@ -1,0 +1,115 @@
+// Copyright 2025 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+package params
+
+import (
+	"math"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params/forks"
+)
+
+var (
+	MainnetConfig2            *Config2
+	AllEthashProtocolChanges2 *Config2
+	MergedTestChainConfig2    *Config2
+)
+
+func init() {
+	MainnetConfig2 = NewConfig2(
+		Activations{
+			forks.Homestead:        1_150_000,
+			forks.DAO:              1_920_000,
+			forks.TangerineWhistle: 2_463_000,
+			forks.SpuriousDragon:   2_675_000,
+			forks.Byzantium:        4_370_000,
+			forks.Constantinople:   7_280_000,
+			forks.Petersburg:       7_280_000,
+			forks.Istanbul:         9_069_000,
+			forks.MuirGlacier:      9_200_000,
+			forks.Berlin:           12_244_000,
+			forks.London:           12_965_000,
+			forks.ArrowGlacier:     13_773_000,
+			forks.GrayGlacier:      15_050_000,
+			// time-based forks
+			forks.Shanghai: 1681338455,
+			forks.Cancun:   1710338135,
+			forks.Prague:   1746612311,
+		},
+		(*ChainID)(big.NewInt(1)),
+		(*TerminalTotalDifficulty)(MainnetTerminalTotalDifficulty),
+		DepositContractAddress(common.HexToAddress("0x00000000219ab540356cbb839cbe05303d7705fa")),
+		DAOForkSupport(true),
+		BlobSchedule{
+			forks.Cancun: *DefaultCancunBlobConfig,
+			forks.Prague: *DefaultPragueBlobConfig,
+		},
+	)
+
+	// AllEthashProtocolChanges2 contains every protocol change (EIPs) introduced
+	// and accepted by the Ethereum core developers into the Ethash consensus.
+	AllEthashProtocolChanges2 = NewConfig2(
+		Activations{
+			forks.Homestead:        0,
+			forks.TangerineWhistle: 0,
+			forks.SpuriousDragon:   0,
+			forks.Byzantium:        0,
+			forks.Constantinople:   0,
+			forks.Petersburg:       0,
+			forks.Istanbul:         0,
+			forks.MuirGlacier:      0,
+			forks.Berlin:           0,
+			forks.London:           0,
+			forks.ArrowGlacier:     0,
+			forks.GrayGlacier:      0,
+		},
+		(*ChainID)(big.NewInt(1337)),
+		(*TerminalTotalDifficulty)(big.NewInt(math.MaxInt64)),
+	)
+
+	// MergedTestChainConfig2 contains every protocol change (EIPs) introduced
+	// and accepted by the Ethereum core developers for testing purposes.
+	MergedTestChainConfig2 = NewConfig2(
+		Activations{
+			forks.Homestead:        0,
+			forks.TangerineWhistle: 0,
+			forks.SpuriousDragon:   0,
+			forks.Byzantium:        0,
+			forks.Constantinople:   0,
+			forks.Petersburg:       0,
+			forks.Istanbul:         0,
+			forks.MuirGlacier:      0,
+			forks.Berlin:           0,
+			forks.London:           0,
+			forks.ArrowGlacier:     0,
+			forks.GrayGlacier:      0,
+			forks.Paris:            0,
+			forks.Shanghai:         0,
+			forks.Cancun:           0,
+			forks.Prague:           0,
+			forks.Osaka:            0,
+		},
+		(*ChainID)(big.NewInt(1)),
+		(*TerminalTotalDifficulty)(big.NewInt(0)),
+		BlobSchedule{
+			forks.Cancun: *DefaultCancunBlobConfig,
+			forks.Prague: *DefaultPragueBlobConfig,
+			forks.Osaka:  *DefaultOsakaBlobConfig,
+		},
+	)
+}
