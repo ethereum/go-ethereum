@@ -1179,6 +1179,24 @@ func TestTransactionFetcherDoSProtection(t *testing.T) {
 			size: 111,
 		})
 	}
+	var (
+		hashesC   []common.Hash
+		typesC    []byte
+		sizesC    []uint32
+		announceC []announce
+	)
+	for i := 0; i < maxTxAnnounces+2; i++ {
+		hash := common.Hash{0x03, byte(i / 256), byte(i % 256)}
+		hashesC = append(hashesC, hash)
+		typesC = append(typesC, types.LegacyTxType)
+		sizesC = append(sizesC, 111)
+
+		announceC = append(announceC, announce{
+			hash: hash,
+			kind: types.LegacyTxType,
+			size: 111,
+		})
+	}
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			return NewTxFetcher(
@@ -1192,43 +1210,52 @@ func TestTransactionFetcherDoSProtection(t *testing.T) {
 			// Announce half of the transaction and wait for them to be scheduled
 			doTxNotify{peer: "A", hashes: hashesA[:maxTxAnnounces/2], types: typesA[:maxTxAnnounces/2], sizes: sizesA[:maxTxAnnounces/2]},
 			doTxNotify{peer: "B", hashes: hashesB[:maxTxAnnounces/2-1], types: typesB[:maxTxAnnounces/2-1], sizes: sizesB[:maxTxAnnounces/2-1]},
+			doTxNotify{peer: "C", hashes: hashesC[:maxTxAnnounces/2-1], types: typesC[:maxTxAnnounces/2-1], sizes: sizesC[:maxTxAnnounces/2-1]},
 			doWait{time: txArriveTimeout, step: true},
 
 			// Announce the second half and keep them in the wait list
 			doTxNotify{peer: "A", hashes: hashesA[maxTxAnnounces/2 : maxTxAnnounces], types: typesA[maxTxAnnounces/2 : maxTxAnnounces], sizes: sizesA[maxTxAnnounces/2 : maxTxAnnounces]},
 			doTxNotify{peer: "B", hashes: hashesB[maxTxAnnounces/2-1 : maxTxAnnounces-1], types: typesB[maxTxAnnounces/2-1 : maxTxAnnounces-1], sizes: sizesB[maxTxAnnounces/2-1 : maxTxAnnounces-1]},
+			doTxNotify{peer: "C", hashes: hashesC[maxTxAnnounces/2-1 : maxTxAnnounces-1], types: typesC[maxTxAnnounces/2-1 : maxTxAnnounces-1], sizes: sizesC[maxTxAnnounces/2-1 : maxTxAnnounces-1]},
 
 			// Ensure the hashes are split half and half
 			isWaiting(map[string][]announce{
 				"A": announceA[maxTxAnnounces/2 : maxTxAnnounces],
 				"B": announceB[maxTxAnnounces/2-1 : maxTxAnnounces-1],
+				"C": announceC[maxTxAnnounces/2-1 : maxTxAnnounces-1],
 			}),
 			isScheduled{
 				tracking: map[string][]announce{
 					"A": announceA[:maxTxAnnounces/2],
 					"B": announceB[:maxTxAnnounces/2-1],
+					"C": announceC[:maxTxAnnounces/2-1],
 				},
 				fetching: map[string][]common.Hash{
 					"A": hashesA[:maxTxRetrievals],
 					"B": hashesB[:maxTxRetrievals],
+					"C": hashesC[:maxTxRetrievals],
 				},
 			},
 			// Ensure that adding even one more hash results in dropping the hash
 			doTxNotify{peer: "A", hashes: []common.Hash{hashesA[maxTxAnnounces]}, types: []byte{typesA[maxTxAnnounces]}, sizes: []uint32{sizesA[maxTxAnnounces]}},
 			doTxNotify{peer: "B", hashes: hashesB[maxTxAnnounces-1 : maxTxAnnounces+1], types: typesB[maxTxAnnounces-1 : maxTxAnnounces+1], sizes: sizesB[maxTxAnnounces-1 : maxTxAnnounces+1]},
+			doTxNotify{peer: "C", hashes: hashesC[maxTxAnnounces-1 : maxTxAnnounces+2], types: typesC[maxTxAnnounces-1 : maxTxAnnounces+2], sizes: sizesC[maxTxAnnounces-1 : maxTxAnnounces+2]},
 
 			isWaiting(map[string][]announce{
 				"A": announceA[maxTxAnnounces/2 : maxTxAnnounces],
 				"B": announceB[maxTxAnnounces/2-1 : maxTxAnnounces],
+				"C": announceC[maxTxAnnounces/2-1 : maxTxAnnounces],
 			}),
 			isScheduled{
 				tracking: map[string][]announce{
 					"A": announceA[:maxTxAnnounces/2],
 					"B": announceB[:maxTxAnnounces/2-1],
+					"C": announceC[:maxTxAnnounces/2-1],
 				},
 				fetching: map[string][]common.Hash{
 					"A": hashesA[:maxTxRetrievals],
 					"B": hashesB[:maxTxRetrievals],
+					"C": hashesC[:maxTxRetrievals],
 				},
 			},
 		},

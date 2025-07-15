@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -75,17 +74,19 @@ func (sc *BlobTxSidecar) BlobHashes() []common.Hash {
 }
 
 // CellProofsAt returns the cell proofs for blob with index idx.
-func (sc *BlobTxSidecar) CellProofsAt(idx int) []kzg4844.Proof {
-	var cellProofs []kzg4844.Proof
-	for i := range kzg4844.CellProofsPerBlob {
-		index := idx*kzg4844.CellProofsPerBlob + i
-		if index > len(sc.Proofs) {
-			return nil
-		}
-		proof := sc.Proofs[index]
-		cellProofs = append(cellProofs, proof)
+// This method is only valid for sidecars with version 1.
+func (sc *BlobTxSidecar) CellProofsAt(idx int) ([]kzg4844.Proof, error) {
+	if sc.Version != 1 {
+		return nil, fmt.Errorf("cell proof unsupported, version: %d", sc.Version)
 	}
-	return cellProofs
+	if idx < 0 || idx >= len(sc.Blobs) {
+		return nil, fmt.Errorf("cell proof out of bounds, index: %d, blobs: %d", idx, len(sc.Blobs))
+	}
+	index := idx * kzg4844.CellProofsPerBlob
+	if len(sc.Proofs) < index+kzg4844.CellProofsPerBlob {
+		return nil, fmt.Errorf("cell proof is corrupted, index: %d, proofs: %d", idx, len(sc.Proofs))
+	}
+	return sc.Proofs[index : index+kzg4844.CellProofsPerBlob], nil
 }
 
 // encodedSize computes the RLP size of the sidecar elements. This does NOT return the
@@ -217,6 +218,7 @@ func (tx *BlobTx) copy() TxData {
 	}
 	if tx.Sidecar != nil {
 		cpy.Sidecar = &BlobTxSidecar{
+			Version:     tx.Sidecar.Version,
 			Blobs:       slices.Clone(tx.Sidecar.Blobs),
 			Commitments: slices.Clone(tx.Sidecar.Commitments),
 			Proofs:      slices.Clone(tx.Sidecar.Proofs),

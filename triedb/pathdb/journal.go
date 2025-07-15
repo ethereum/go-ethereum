@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -30,6 +31,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+const tempJournalSuffix = ".tmp"
 
 var (
 	errMissJournal       = errors.New("journal not found")
@@ -51,11 +54,25 @@ const journalVersion uint64 = 3
 
 // loadJournal tries to parse the layer journal from the disk.
 func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
-	journal := rawdb.ReadTrieJournal(db.diskdb)
-	if len(journal) == 0 {
-		return nil, errMissJournal
+	var reader io.Reader
+	if path := db.journalPath(); path != "" && common.FileExist(path) {
+		// If a journal file is specified, read it from there
+		log.Info("Load database journal from file", "path", path)
+		f, err := os.OpenFile(path, os.O_RDONLY, 0644)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read journal file %s: %w", path, err)
+		}
+		defer f.Close()
+		reader = f
+	} else {
+		log.Info("Load database journal from disk")
+		journal := rawdb.ReadTrieJournal(db.diskdb)
+		if len(journal) == 0 {
+			return nil, errMissJournal
+		}
+		reader = bytes.NewReader(journal)
 	}
-	r := rlp.NewStream(bytes.NewReader(journal), 0)
+	r := rlp.NewStream(reader, 0)
 
 	// Firstly, resolve the first element as the journal version
 	version, err := r.Uint64()
@@ -297,9 +314,9 @@ func (db *Database) Journal(root common.Hash) error {
 	}
 	disk := db.tree.bottom()
 	if l, ok := l.(*diffLayer); ok {
-		log.Info("Persisting dirty state to disk", "head", l.block, "root", root, "layers", l.id-disk.id+disk.buffer.layers)
+		log.Info("Persisting dirty state", "head", l.block, "root", root, "layers", l.id-disk.id+disk.buffer.layers)
 	} else { // disk layer only on noop runs (likely) or deep reorgs (unlikely)
-		log.Info("Persisting dirty state to disk", "root", root, "layers", disk.buffer.layers)
+		log.Info("Persisting dirty state", "root", root, "layers", disk.buffer.layers)
 	}
 	// Block until the background flushing is finished and terminate
 	// the potential active state generator.
@@ -316,8 +333,37 @@ func (db *Database) Journal(root common.Hash) error {
 	if db.readOnly {
 		return errDatabaseReadOnly
 	}
+
+	// Store the journal into the database and return
+	var (
+		file        *os.File
+		journal     io.Writer
+		journalPath = db.journalPath()
+	)
+	if journalPath != "" {
+		// Write into a temp file first
+		err := os.MkdirAll(db.config.JournalDirectory, 0755)
+		if err != nil {
+			return err
+		}
+		tmp := journalPath + tempJournalSuffix
+		file, err = os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+		if err != nil {
+			return fmt.Errorf("failed to open journal file %s: %w", tmp, err)
+		}
+		defer func() {
+			if file != nil {
+				file.Close()
+				os.Remove(tmp) // Clean up temp file if we didn't successfully rename it
+				log.Warn("Removed leftover temporary journal file", "path", tmp)
+			}
+		}()
+		journal = file
+	} else {
+		journal = new(bytes.Buffer)
+	}
+
 	// Firstly write out the metadata of journal
-	journal := new(bytes.Buffer)
 	if err := rlp.Encode(journal, journalVersion); err != nil {
 		return err
 	}
@@ -334,11 +380,38 @@ func (db *Database) Journal(root common.Hash) error {
 	if err := l.journal(journal); err != nil {
 		return err
 	}
-	// Store the journal into the database and return
-	rawdb.WriteTrieJournal(db.diskdb, journal.Bytes())
 
+	// Store the journal into the database and return
+	if file == nil {
+		data := journal.(*bytes.Buffer)
+		size := data.Len()
+		rawdb.WriteTrieJournal(db.diskdb, data.Bytes())
+		log.Info("Persisted dirty state to disk", "size", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
+	} else {
+		stat, err := file.Stat()
+		if err != nil {
+			return err
+		}
+		size := int(stat.Size())
+
+		// Close the temporary file and atomically rename it
+		if err := file.Sync(); err != nil {
+			return fmt.Errorf("failed to fsync the journal, %v", err)
+		}
+		if err := file.Close(); err != nil {
+			return fmt.Errorf("failed to close the journal: %v", err)
+		}
+		// Replace the live journal with the newly generated one
+		if err := os.Rename(journalPath+tempJournalSuffix, journalPath); err != nil {
+			return fmt.Errorf("failed to rename the journal: %v", err)
+		}
+		if err := syncDir(db.config.JournalDirectory); err != nil {
+			return fmt.Errorf("failed to fsync the dir: %v", err)
+		}
+		file = nil
+		log.Info("Persisted dirty state to file", "path", journalPath, "size", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
+	}
 	// Set the db in read only mode to reject all following mutations
 	db.readOnly = true
-	log.Info("Persisted dirty state to disk", "size", common.StorageSize(journal.Len()), "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }

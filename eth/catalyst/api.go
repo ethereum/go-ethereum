@@ -564,7 +564,12 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 		blobHashes := sidecar.BlobHashes()
 		for bIdx, hash := range blobHashes {
 			if idxes, ok := index[hash]; ok {
-				proofs := sidecar.CellProofsAt(bIdx)
+				proofs, err := sidecar.CellProofsAt(bIdx)
+				if err != nil {
+					// TODO @rjl @marius we should return an error
+					log.Info("Failed to get cell proof", "err", err)
+					return nil, nil
+				}
 				var cellProofs []hexutil.Bytes
 				for _, proof := range proofs {
 					cellProofs = append(cellProofs, proof[:])
