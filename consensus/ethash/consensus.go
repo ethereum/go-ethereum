@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
@@ -249,7 +250,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
 	}
 	// Verify the block's gas usage and (if applicable) verify the base fee.
-	if !chain.Config().IsLondon(header.Number) {
+	if !chain.Config().ActiveAtBlock(forks.London, header.Number) {
 		// Verify BaseFee not present before EIP-1559 fork.
 		if header.BaseFee != nil {
 			return fmt.Errorf("invalid baseFee before fork: have %d, expected 'nil'", header.BaseFee)
@@ -265,14 +266,14 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
 		return consensus.ErrInvalidNumber
 	}
-	if chain.Config().IsShanghai(header.Number, header.Time) {
+	if chain.Config().Active(forks.Shanghai, header.Number.Uint64(), header.Time) {
 		return errors.New("ethash does not support shanghai fork")
 	}
 	// Verify the non-existence of withdrawalsHash.
 	if header.WithdrawalsHash != nil {
 		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
 	}
-	if chain.Config().IsCancun(header.Number, header.Time) {
+	if chain.Config().Active(forks.Cancun, header.Number.Uint64(), header.Time) {
 		return errors.New("ethash does not support cancun fork")
 	}
 	// Verify the non-existence of cancun-specific header fields
@@ -308,22 +309,22 @@ func (ethash *Ethash) CalcDifficulty(chain consensus.ChainHeaderReader, time uin
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
-func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header) *big.Int {
+func CalcDifficulty(config *params.Config2, time uint64, parent *types.Header) *big.Int {
 	next := new(big.Int).Add(parent.Number, big1)
 	switch {
-	case config.IsGrayGlacier(next):
+	case config.ActiveAtBlock(forks.GrayGlacier, next):
 		return calcDifficultyEip5133(time, parent)
-	case config.IsArrowGlacier(next):
+	case config.ActiveAtBlock(forks.ArrowGlacier, next):
 		return calcDifficultyEip4345(time, parent)
-	case config.IsLondon(next):
+	case config.ActiveAtBlock(forks.London, next):
 		return calcDifficultyEip3554(time, parent)
-	case config.IsMuirGlacier(next):
+	case config.ActiveAtBlock(forks.MuirGlacier, next):
 		return calcDifficultyEip2384(time, parent)
-	case config.IsConstantinople(next):
+	case config.ActiveAtBlock(forks.Constantinople, next):
 		return calcDifficultyConstantinople(time, parent)
-	case config.IsByzantium(next):
+	case config.ActiveAtBlock(forks.Byzantium, next):
 		return calcDifficultyByzantium(time, parent)
-	case config.IsHomestead(next):
+	case config.ActiveAtBlock(forks.Homestead, next):
 		return calcDifficultyHomestead(time, parent)
 	default:
 		return calcDifficultyFrontier(time, parent)
@@ -519,7 +520,7 @@ func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	ethash.Finalize(chain, header, state, body)
 
 	// Assign the final state root to header.
-	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	header.Root = state.IntermediateRoot(chain.Config().ActiveAtBlock(forks.SpuriousDragon, header.Number))
 
 	// Header seems complete, assemble into a block and return
 	return types.NewBlock(header, &types.Body{Transactions: body.Transactions, Uncles: body.Uncles}, receipts, trie.NewStackTrie(nil)), nil
@@ -567,13 +568,13 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 // accumulateRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
-func accumulateRewards(config *params.ChainConfig, stateDB vm.StateDB, header *types.Header, uncles []*types.Header) {
+func accumulateRewards(config *params.Config2, stateDB vm.StateDB, header *types.Header, uncles []*types.Header) {
 	// Select the correct block reward based on chain progression
 	blockReward := FrontierBlockReward
-	if config.IsByzantium(header.Number) {
+	if config.ActiveAtBlock(forks.Byzantium, header.Number) {
 		blockReward = ByzantiumBlockReward
 	}
-	if config.IsConstantinople(header.Number) {
+	if config.ActiveAtBlock(forks.Constantinople, header.Number) {
 		blockReward = ConstantinopleBlockReward
 	}
 	// Accumulate the rewards for the miner and any included uncles
