@@ -19,12 +19,12 @@ package misc
 import (
 	"bytes"
 	"errors"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/params/forks"
 )
 
 var (
@@ -46,18 +46,21 @@ var (
 //     with the fork specific extra-data set.
 //   - if the node is pro-fork, require blocks in the specific range to have the
 //     unique extra-data set.
-func VerifyDAOHeaderExtraData(config *params.ChainConfig, header *types.Header) error {
+func VerifyDAOHeaderExtraData(config *params.Config2, header *types.Header) error {
 	// Short circuit validation if the node doesn't care about the DAO fork
-	if config.DAOForkBlock == nil {
+	if !config.Scheduled(forks.DAO) {
 		return nil
 	}
+
 	// Make sure the block is within the fork's modified extra-data range
-	limit := new(big.Int).Add(config.DAOForkBlock, params.DAOForkExtraRange)
-	if header.Number.Cmp(config.DAOForkBlock) < 0 || header.Number.Cmp(limit) >= 0 {
+	activation, _ := config.Activation(forks.DAO)
+	limit := activation + uint64(params.DAOForkExtraRange)
+	if header.Number.Uint64() < activation || header.Number.Uint64() >= limit {
 		return nil
 	}
+
 	// Depending on whether we support or oppose the fork, validate the extra-data contents
-	if config.DAOForkSupport {
+	if params.Get[params.DAOForkSupport](config) {
 		if !bytes.Equal(header.Extra, params.DAOForkBlockExtra) {
 			return ErrBadProDAOExtra
 		}
