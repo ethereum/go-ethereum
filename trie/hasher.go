@@ -102,7 +102,7 @@ func (h *hasher) hashShortNodeChildren(n *shortNode) *shortNode {
 // hashFullNodeChildren returns a copy of the supplied fullNode, with its child
 // being replaced by either the hash or an embedded node if the child is small.
 func (h *hasher) hashFullNodeChildren(n *fullNode) *fullNode {
-	var children [17]node
+	fullNode := fullNode{flags: nodeFlag{}}
 	if h.parallel {
 		var wg sync.WaitGroup
 		wg.Add(16)
@@ -110,9 +110,9 @@ func (h *hasher) hashFullNodeChildren(n *fullNode) *fullNode {
 			go func(i int) {
 				hasher := newHasher(false)
 				if child := n.Children[i]; child != nil {
-					children[i] = hasher.hash(child, false)
+					fullNode.Children[i] = hasher.hash(child, false)
 				} else {
-					children[i] = nilValueNode
+					fullNode.Children[i] = nilValueNode
 				}
 				returnHasherToPool(hasher)
 				wg.Done()
@@ -122,16 +122,16 @@ func (h *hasher) hashFullNodeChildren(n *fullNode) *fullNode {
 	} else {
 		for i := 0; i < 16; i++ {
 			if child := n.Children[i]; child != nil {
-				children[i] = h.hash(child, false)
+				fullNode.Children[i] = h.hash(child, false)
 			} else {
-				children[i] = nilValueNode
+				fullNode.Children[i] = nilValueNode
 			}
 		}
 	}
 	if n.Children[16] != nil {
-		children[16] = n.Children[16]
+		fullNode.Children[16] = n.Children[16]
 	}
-	return &fullNode{flags: nodeFlag{}, Children: children}
+	return &fullNode
 }
 
 // shortNodeToHash computes the hash of the given shortNode. The shortNode must
