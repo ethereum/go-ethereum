@@ -22,7 +22,7 @@ type metadata struct {
 }
 
 const (
-	ProofNone proofvar = iota
+	ProofNone variant = iota
 	proofHHA
 	proofRoots
 	proofCapella
@@ -66,7 +66,7 @@ type BlockProofHistoricalSummariesDeneb struct {
 type Proof interface {
 	EncodeRLP(w io.Writer) error
 	DecodeRlP(s *rlp.Stream) error
-	Variant() proofvar
+	Variant() variant
 }
 
 type hhaAlias BlockProofHistoricalHashesAccumulator // alias ⇒ no EncodeRLP method
@@ -76,7 +76,7 @@ func (p *BlockProofHistoricalHashesAccumulator) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, payload)
 }
 
-func (p *BlockProofHistoricalHashesAccumulator) Variant() proofvar { return proofHHA }
+func (p *BlockProofHistoricalHashesAccumulator) Variant() variant { return proofHHA }
 
 type rootsAlias BlockProofHistoricalRoots
 
@@ -85,7 +85,7 @@ func (p *BlockProofHistoricalRoots) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, payload)
 }
 
-func (*BlockProofHistoricalRoots) Variant() proofvar { return proofRoots }
+func (*BlockProofHistoricalRoots) Variant() variant { return proofRoots }
 
 type capellaAlias BlockProofHistoricalSummariesCapella
 
@@ -94,7 +94,7 @@ func (p *BlockProofHistoricalSummariesCapella) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, payload)
 }
 
-func (*BlockProofHistoricalSummariesCapella) Variant() proofvar { return proofCapella }
+func (*BlockProofHistoricalSummariesCapella) Variant() variant { return proofCapella }
 
 type denebAlias BlockProofHistoricalSummariesDeneb
 
@@ -103,9 +103,9 @@ func (p *BlockProofHistoricalSummariesDeneb) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, payload)
 }
 
-func (*BlockProofHistoricalSummariesDeneb) Variant() proofvar { return proofDeneb }
+func (*BlockProofHistoricalSummariesDeneb) Variant() variant { return proofDeneb }
 
-func proofVariantOf(p Proof) proofvar {
+func variantOf(p Proof) variant {
 	if p == nil {
 		return ProofNone
 	}
