@@ -953,13 +953,15 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	}
 	defer release()
 
-	hdr := *block.Header()
+	// Apply block override to header to ensure GetHashFn works correctly with
+	// blocks in the future (#32175).
+	h := block.Header()
 	if config != nil {
-		hdr = *config.BlockOverrides.MakeHeader(block.Header())
+		h = config.BlockOverrides.MakeHeader(h)
 	}
 
-	vmctx := core.NewEVMBlockContext(&hdr, api.chainContext(ctx), nil)
-	// Apply the customization rules if required.
+	// Apply block overrides to block context, if applicable.
+	vmctx := core.NewEVMBlockContext(h, api.chainContext(ctx), nil)
 	if config != nil {
 		if overrideErr := config.BlockOverrides.Apply(&vmctx); overrideErr != nil {
 			return nil, overrideErr

@@ -689,8 +689,6 @@ func TestTracingWithOverrides(t *testing.T) {
 		Failed      bool
 		ReturnValue string
 	}
-	parentHashHex := backend.chain.GetHeaderByNumber(uint64(genBlocks - 1)).Hash().Hex()[2:]
-	return96 := fmt.Sprintf("0x%064s%s%064s", "", parentHashHex, "")
 
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
@@ -789,7 +787,7 @@ func TestTracingWithOverrides(t *testing.T) {
 			config: &TraceCallConfig{
 				BlockOverrides: &override.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(0x1337))},
 			},
-			want: fmt.Sprintf(`{"gas":72666,"failed":false,"returnValue":"%s"}`, return96),
+			want: `{"gas":72666,"failed":false,"returnValue":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}`,
 		},
 		/*
 			pragma solidity =0.8.12;
