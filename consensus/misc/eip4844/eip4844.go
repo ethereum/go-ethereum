@@ -20,9 +20,11 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/params/forks"
 )
 
 var (
@@ -32,7 +34,7 @@ var (
 // VerifyEIP4844Header verifies the presence of the excessBlobGas field and that
 // if the current block contains no transactions, the excessBlobGas is updated
 // accordingly.
-func VerifyEIP4844Header(config *params.ChainConfig, parent, header *types.Header) error {
+func VerifyEIP4844Header(config *params.Config2, parent, header *types.Header) error {
 	if header.Number.Uint64() != parent.Number.Uint64()+1 {
 		panic("bad header pair")
 	}
@@ -61,7 +63,7 @@ func VerifyEIP4844Header(config *params.ChainConfig, parent, header *types.Heade
 
 // CalcExcessBlobGas calculates the excess blob gas after applying the set of
 // blobs on top of the excess blob gas.
-func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header, headTimestamp uint64) uint64 {
+func CalcExcessBlobGas(config *params.Config2, parent *types.Header, headTimestamp uint64) uint64 {
 	var (
 		parentExcessBlobGas uint64
 		parentBlobGasUsed   uint64
@@ -78,7 +80,7 @@ func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header, headTim
 	if excessBlobGas < targetGas {
 		return 0
 	}
-	if !config.IsOsaka(config.LondonBlock, headTimestamp) {
+	if !config.Active(forks.Osaka, parent.Number.Uint64()+1, headTimestamp) {
 		// Pre-Osaka, we use the formula defined by EIP-4844.
 		return excessBlobGas - targetGas
 	}
@@ -98,94 +100,53 @@ func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header, headTim
 }
 
 // CalcBlobFee calculates the blobfee from the header's excess blob gas field.
-func CalcBlobFee(config *params.ChainConfig, header *types.Header) *big.Int {
-	blobConfig := latestBlobConfig(config, header.Time)
-	if blobConfig == nil {
-		panic("calculating blob fee on unsupported fork")
+func CalcBlobFee(config *params.Config2, header *types.Header) *big.Int {
+	schedule := params.Get[params.BlobSchedule](config)
+	if schedule == nil {
+		return new(big.Int)
 	}
-	return fakeExponential(minBlobGasPrice, new(big.Int).SetUint64(*header.ExcessBlobGas), new(big.Int).SetUint64(blobConfig.UpdateFraction))
+	f := config.LatestFork(header.Time)
+	frac := schedule[f].UpdateFraction
+	return fakeExponential(minBlobGasPrice, new(big.Int).SetUint64(*header.ExcessBlobGas), new(big.Int).SetUint64(frac))
 }
 
 // MaxBlobsPerBlock returns the max blobs per block for a block at the given timestamp.
-func MaxBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
-	blobConfig := latestBlobConfig(cfg, time)
-	if blobConfig == nil {
-		return 0
-	}
-	return blobConfig.Max
+func MaxBlobsPerBlock(cfg *params.Config2, time uint64) int {
+	return scheduleAtTime(cfg, time).Max
 }
 
-func latestBlobConfig(cfg *params.ChainConfig, time uint64) *params.BlobConfig {
-	if cfg.BlobScheduleConfig == nil {
-		return nil
-	}
-	var (
-		london = cfg.LondonBlock
-		s      = cfg.BlobScheduleConfig
-	)
-	switch {
-	case cfg.IsBPO5(london, time) && s.BPO5 != nil:
-		return s.BPO5
-	case cfg.IsBPO4(london, time) && s.BPO4 != nil:
-		return s.BPO4
-	case cfg.IsBPO3(london, time) && s.BPO3 != nil:
-		return s.BPO3
-	case cfg.IsBPO2(london, time) && s.BPO2 != nil:
-		return s.BPO2
-	case cfg.IsBPO1(london, time) && s.BPO1 != nil:
-		return s.BPO1
-	case cfg.IsOsaka(london, time) && s.Osaka != nil:
-		return s.Osaka
-	case cfg.IsPrague(london, time) && s.Prague != nil:
-		return s.Prague
-	case cfg.IsCancun(london, time) && s.Cancun != nil:
-		return s.Cancun
-	default:
-		return nil
-	}
-}
-
-// MaxBlobGasPerBlock returns the maximum blob gas that can be spent in a block at the given timestamp.
-func MaxBlobGasPerBlock(cfg *params.ChainConfig, time uint64) uint64 {
+// MaxBlobsPerBlock returns the maximum blob gas that can be spent in a block at the given timestamp.
+func MaxBlobGasPerBlock(cfg *params.Config2, time uint64) uint64 {
 	return uint64(MaxBlobsPerBlock(cfg, time)) * params.BlobTxBlobGasPerBlob
 }
 
 // LatestMaxBlobsPerBlock returns the latest max blobs per block defined by the
 // configuration, regardless of the currently active fork.
-func LatestMaxBlobsPerBlock(cfg *params.ChainConfig) int {
-	s := cfg.BlobScheduleConfig
-	if s == nil {
+func LatestMaxBlobsPerBlock(cfg *params.Config2) int {
+	schedule := params.Get[params.BlobSchedule](cfg)
+	if schedule == nil {
 		return 0
 	}
-	switch {
-	case s.BPO5 != nil:
-		return s.BPO5.Max
-	case s.BPO4 != nil:
-		return s.BPO4.Max
-	case s.BPO3 != nil:
-		return s.BPO3.Max
-	case s.BPO2 != nil:
-		return s.BPO2.Max
-	case s.BPO1 != nil:
-		return s.BPO1.Max
-	case s.Osaka != nil:
-		return s.Osaka.Max
-	case s.Prague != nil:
-		return s.Prague.Max
-	case s.Cancun != nil:
-		return s.Cancun.Max
-	default:
-		return 0
+	for _, f := range slices.Backward(forks.CanonOrder) {
+		if f.HasBlobs() && cfg.Scheduled(f) {
+			return schedule[f].Max
+		}
 	}
+	return 0
 }
 
 // targetBlobsPerBlock returns the target number of blobs in a block at the given timestamp.
-func targetBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
-	blobConfig := latestBlobConfig(cfg, time)
-	if blobConfig == nil {
-		return 0
+func targetBlobsPerBlock(cfg *params.Config2, time uint64) int {
+	return scheduleAtTime(cfg, time).Target
+}
+
+func scheduleAtTime(cfg *params.Config2, time uint64) params.BlobConfig {
+	schedule := params.Get[params.BlobSchedule](cfg)
+	if schedule == nil {
+		return params.BlobConfig{}
 	}
-	return blobConfig.Target
+	f := cfg.LatestFork(time)
+	return schedule[f]
 }
 
 // fakeExponential approximates factor * e ** (numerator / denominator) using
@@ -206,7 +167,7 @@ func fakeExponential(factor, numerator, denominator *big.Int) *big.Int {
 }
 
 // calcBlobPrice calculates the blob price for a block.
-func calcBlobPrice(config *params.ChainConfig, header *types.Header) *big.Int {
+func calcBlobPrice(config *params.Config2, header *types.Header) *big.Int {
 	blobBaseFee := CalcBlobFee(config, header)
 	return new(big.Int).Mul(blobBaseFee, big.NewInt(params.BlobTxBlobGasPerBlob))
 }
