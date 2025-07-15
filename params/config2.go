@@ -43,6 +43,7 @@ func NewConfig2(activations Activations, param ...ParameterType) *Config2 {
 		activation: maps.Clone(activations),
 		param:      make(map[reflect.Type]ParameterType, len(param)),
 	}
+	cfg.activation[forks.Frontier] = 0
 	for _, pv := range param {
 		info, ok := findParam(pv)
 		if !ok {
@@ -62,6 +63,16 @@ func (cfg *Config2) Active(f forks.Fork, block, timestamp uint64) bool {
 	return ok && timestamp >= activation
 }
 
+// ActiveAtBlock reports whether the given fork is active for a block number/time.
+func (cfg *Config2) ActiveAtBlock(f forks.Fork, block *big.Int) bool {
+	if !f.BlockBased() {
+		panic(fmt.Sprintf("fork %v has time-based scheduling", f))
+	}
+	activation, ok := cfg.activation[f]
+	return ok && block.Uint64() >= activation
+}
+
+// Activation returns the activation block/number of a fork.
 func (cfg *Config2) Activation(f forks.Fork) (uint64, bool) {
 	a, ok := cfg.activation[f]
 	return a, ok
@@ -78,11 +89,6 @@ func (cfg *Config2) SetActivations(forks Activations) *Config2 {
 	newA := maps.Clone(cfg.activation)
 	maps.Copy(newA, forks)
 	return &Config2{activation: newA, param: cfg.param}
-}
-
-// SetParam returns a new configuration with parameters modified.
-func (cfg *Config2) SetParam(p ParameterType) *Config2 {
-	return &Config2{activation: cfg.activation}
 }
 
 // LatestFork returns the latest time-based fork that would be active for the given time.
@@ -189,7 +195,7 @@ func (cfg *Config2) decodeParameter(key string, dec *json.Decoder) error {
 	if err := dec.Decode(v); err != nil {
 		return err
 	}
-	cfg.param[info.rtype] = v
+	cfg.param[info.rtype] = v.(ParameterType)
 	return nil
 }
 
@@ -198,6 +204,7 @@ func (cfg *Config2) decodeParameter(key string, dec *json.Decoder) error {
 func (cfg *Config2) Validate() error {
 	sanityCheckCanonOrder()
 
+	// Check forks.
 	lastFork := forks.CanonOrder[0]
 	for _, f := range forks.CanonOrder[1:] {
 		act := "timestamp"
@@ -225,21 +232,22 @@ func (cfg *Config2) Validate() error {
 		if !f.Optional() || cfg.Scheduled(f) {
 			lastFork = f
 		}
+	}
 
-		// Check that all forks with blobs explicitly define the blob schedule configuration.
-		if f.HasBlobs() {
-			schedule := Get[BlobSchedule](cfg)
-			bcfg, defined := schedule[f]
-			if cfg.Scheduled(f) && !defined {
-				return fmt.Errorf("invalid chain configuration: missing entry for fork %q in blobSchedule", f)
+	// Check parameters.
+	for rtype, info := range paramRegistry {
+		v, isSet := cfg.param[rtype]
+		if !isSet {
+			if !info.optional {
+				return fmt.Errorf("required chain parameter %s is not set", info.name)
 			}
-			if defined {
-				if err := bcfg.validate(); err != nil {
-					return fmt.Errorf("invalid chain configuration in blobSchedule for fork %q: %v", f, err)
-				}
-			}
+			v = info.defaultVal
+		}
+		if err := v.Validate(cfg); err != nil {
+			return fmt.Errorf("invalid %s: %w", info.name, err)
 		}
 	}
+
 	return nil
 }
 
@@ -286,16 +294,17 @@ func (cfg *Config2) checkCompatible(newcfg *Config2, num uint64, time uint64) *C
 			}
 			return newTimestampCompatError2("%v fork timestamp", f, cfg, newcfg)
 		}
-		// Specialty checks:
-		if cfg.Active(forks.DAO, num, time) && Get[DAOForkSupport](cfg) != Get[DAOForkSupport](newcfg) {
-			return newBlockCompatError2("DAO fork support flag", f, cfg, newcfg)
-		}
-		chainID := (*big.Int)(Get[*ChainID](cfg))
-		newChainID := (*big.Int)(Get[*ChainID](newcfg))
-		if cfg.Active(forks.TangerineWhistle, num, time) && !configBlockEqual(chainID, newChainID) {
-			return newBlockCompatError2("EIP158 chain ID", f, cfg, newcfg)
-		}
 	}
+
+	if cfg.Active(forks.DAO, num, time) && Get[DAOForkSupport](cfg) != Get[DAOForkSupport](newcfg) {
+		return newBlockCompatError2("DAO fork support flag", forks.DAO, cfg, newcfg)
+	}
+	chainID := (*big.Int)(Get[*ChainID](cfg))
+	newChainID := (*big.Int)(Get[*ChainID](newcfg))
+	if cfg.Active(forks.TangerineWhistle, num, time) && !configBlockEqual(chainID, newChainID) {
+		return newBlockCompatError2("EIP158 chain ID", forks.TangerineWhistle, cfg, newcfg)
+	}
+
 	return nil
 }
 
