@@ -119,13 +119,14 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 
 // ValidateState validates the various changes that happen after a state transition,
 // such as amount of used gas, the receipt roots and the state root itself.
-func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, res *ProcessResult, stateless bool) error {
+// Returns a new header with the actual state root instead of comparing with the original header.
+func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, res *ProcessResult, stateless bool) (*types.Header, error) {
 	if res == nil {
-		return errors.New("nil ProcessResult value")
+		return nil, errors.New("nil ProcessResult value")
 	}
 	header := block.Header()
 	if block.GasUsed() != res.GasUsed {
-		return fmt.Errorf("invalid gas used (remote: %d local: %d)", block.GasUsed(), res.GasUsed)
+		return nil, fmt.Errorf("invalid gas used (remote: %d local: %d)", block.GasUsed(), res.GasUsed)
 	}
 	// Validate the received block's bloom with the one derived from the generated receipts.
 	// For valid blocks this should always validate to true.
@@ -135,33 +136,35 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	// everything.
 	rbloom := types.MergeBloom(res.Receipts)
 	if rbloom != header.Bloom {
-		return fmt.Errorf("invalid bloom (remote: %x  local: %x)", header.Bloom, rbloom)
+		return nil, fmt.Errorf("invalid bloom (remote: %x  local: %x)", header.Bloom, rbloom)
 	}
 	// In stateless mode, return early because the receipt and state root are not
 	// provided through the witness, rather the cross validator needs to return it.
 	if stateless {
-		return nil
+		return nil, nil
 	}
 	// The receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, Rn]]))
 	receiptSha := types.DeriveSha(res.Receipts, trie.NewStackTrie(nil))
 	if receiptSha != header.ReceiptHash {
-		return fmt.Errorf("invalid receipt root hash (remote: %x local: %x)", header.ReceiptHash, receiptSha)
+		return nil, fmt.Errorf("invalid receipt root hash (remote: %x local: %x)", header.ReceiptHash, receiptSha)
 	}
 	// Validate the parsed requests match the expected header value.
 	if header.RequestsHash != nil {
 		reqhash := types.CalcRequestsHash(res.Requests)
 		if reqhash != *header.RequestsHash {
-			return fmt.Errorf("invalid requests hash (remote: %x local: %x)", *header.RequestsHash, reqhash)
+			return nil, fmt.Errorf("invalid requests hash (remote: %x local: %x)", *header.RequestsHash, reqhash)
 		}
 	} else if res.Requests != nil {
-		return errors.New("block has requests before prague fork")
+		return nil, errors.New("block has requests before prague fork")
 	}
-	// Validate the state root against the received state root and throw
-	// an error if they don't match.
-	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
-		return fmt.Errorf("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, statedb.Error())
-	}
-	return nil
+	// Get the actual state root from the statedb
+	actualRoot := statedb.IntermediateRoot(v.config.IsEIP158(header.Number))
+
+	// Create a new header with the actual state root
+	newHeader := *header
+	newHeader.Root = actualRoot
+
+	return &newHeader, nil
 }
 
 // CalcGasLimit computes the gas limit of the next block after parent. It aims

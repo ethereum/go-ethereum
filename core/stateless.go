@@ -70,11 +70,12 @@ func ExecuteStateless(config *params.ChainConfig, vmconfig vm.Config, block *typ
 	if err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}
-	if err = validator.ValidateState(block, db, res, true); err != nil {
+	newHeader, err := validator.ValidateState(block, db, res, true)
+	if err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}
 	// Almost everything validated, but receipt and state root needs to be returned
 	receiptRoot := types.DeriveSha(res.Receipts, trie.NewStackTrie(nil))
-	stateRoot := db.IntermediateRoot(config.IsEIP158(block.Number()))
+	stateRoot := newHeader.Root
 	return stateRoot, receiptRoot, nil
 }

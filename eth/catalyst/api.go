@@ -748,7 +748,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		return engine.PayloadStatusV1{Status: engine.ACCEPTED}, nil
 	}
 	log.Trace("Inserting block without sethead", "hash", block.Hash(), "number", block.Number())
-	proofs, err := api.eth.BlockChain().InsertBlockWithoutSetHead(block, witness)
+	newHeader, proofs, err := api.eth.BlockChain().InsertBlockWithoutSetHead(block, witness)
 	if err != nil {
 		log.Warn("NewPayload: inserting block failed", "error", err)
 
@@ -759,7 +759,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 
 		return api.invalid(err, parent.Header()), nil
 	}
-	hash := block.Hash()
+	hash := newHeader.Hash()
 
 	// If witness collection was requested, inject that into the result too
 	var ow *hexutil.Bytes

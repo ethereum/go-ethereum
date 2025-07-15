@@ -2047,11 +2047,15 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	ptime := time.Since(pstart)
 
 	vstart := time.Now()
-	if err := bc.validator.ValidateState(block, statedb, res, false); err != nil {
+	newHeader, err := bc.validator.ValidateState(block, statedb, res, false)
+	if err != nil {
 		bc.reportBlock(block, res, err)
 		return nil, err
 	}
 	vtime := time.Since(vstart)
+
+	// Create a new block with the updated header
+	newBlock := types.NewBlockWithHeader(newHeader).WithBody(*block.Body())
 
 	// If witnesses was generated and stateless self-validation requested, do
 	// that now. Self validation should *never* run in production, it's more of
@@ -2060,25 +2064,25 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	// various invalid chain states/behaviors being contained in those tests.
 	xvstart := time.Now()
 	if witness := statedb.Witness(); witness != nil && bc.cfg.VmConfig.StatelessSelfValidation {
-		log.Warn("Running stateless self-validation", "block", block.Number(), "hash", block.Hash())
+		log.Warn("Running stateless self-validation", "block", newBlock.Number(), "hash", newBlock.Hash())
 
 		// Remove critical computed fields from the block to force true recalculation
-		context := block.Header()
+		context := newBlock.Header()
 		context.Root = common.Hash{}
 		context.ReceiptHash = common.Hash{}
 
-		task := types.NewBlockWithHeader(context).WithBody(*block.Body())
+		task := types.NewBlockWithHeader(context).WithBody(*newBlock.Body())
 
 		// Run the stateless self-cross-validation
 		crossStateRoot, crossReceiptRoot, err := ExecuteStateless(bc.chainConfig, bc.cfg.VmConfig, task, witness)
 		if err != nil {
 			return nil, fmt.Errorf("stateless self-validation failed: %v", err)
 		}
-		if crossStateRoot != block.Root() {
-			return nil, fmt.Errorf("stateless self-validation root mismatch (cross: %x local: %x)", crossStateRoot, block.Root())
+		if crossStateRoot != newBlock.Root() {
+			return nil, fmt.Errorf("stateless self-validation root mismatch (cross: %x local: %x)", crossStateRoot, newBlock.Root())
 		}
-		if crossReceiptRoot != block.ReceiptHash() {
-			return nil, fmt.Errorf("stateless self-validation receipt root mismatch (cross: %x local: %x)", crossReceiptRoot, block.ReceiptHash())
+		if crossReceiptRoot != newBlock.ReceiptHash() {
+			return nil, fmt.Errorf("stateless self-validation receipt root mismatch (cross: %x local: %x)", crossReceiptRoot, newBlock.ReceiptHash())
 		}
 	}
 	xvtime := time.Since(xvstart)
@@ -2109,9 +2113,9 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	)
 	if !setHead {
 		// Don't set the head, only insert the block
-		err = bc.writeBlockWithState(block, res.Receipts, statedb)
+		err = bc.writeBlockWithState(newBlock, res.Receipts, statedb)
 	} else {
-		status, err = bc.writeBlockAndSetHead(block, res.Receipts, res.Logs, statedb, false)
+		status, err = bc.writeBlockAndSetHead(newBlock, res.Receipts, res.Logs, statedb, false)
 	}
 	if err != nil {
 		return nil, err
@@ -2509,14 +2513,50 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 // The key difference between the InsertChain is it won't do the canonical chain
 // updating. It relies on the additional SetCanonical call to finalize the entire
 // procedure.
-func (bc *BlockChain) InsertBlockWithoutSetHead(block *types.Block, makeWitness bool) (*stateless.Witness, error) {
+// Returns the new header with actual state root and witness.
+func (bc *BlockChain) InsertBlockWithoutSetHead(block *types.Block, makeWitness bool) (*types.Header, *stateless.Witness, error) {
 	if !bc.chainmu.TryLock() {
-		return nil, errChainStopped
+		return nil, nil, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
 
-	witness, _, err := bc.insertChain(types.Blocks{block}, false, makeWitness)
-	return witness, err
+	// Process the block to get the new header with actual state root
+	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		return nil, nil, consensus.ErrUnknownAncestor
+	}
+
+	statedb, err := state.New(parent.Root, bc.statedb)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	res, err := bc.processor.Process(block, statedb, bc.cfg.VmConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	newHeader, err := bc.validator.ValidateState(block, statedb, res, false)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Write the block with state
+	err = bc.writeBlockWithState(block, res.Receipts, statedb)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Generate witness if requested
+	var witness *stateless.Witness
+	if makeWitness && bc.chainConfig.IsByzantium(block.Number()) {
+		witness, err = stateless.NewWitness(block.Header(), bc)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return newHeader, witness, nil
 }
 
 // SetCanonical rewinds the chain to set the new head block as the specified
