@@ -125,6 +125,9 @@ type EVM struct {
 	// jumpDests is the aggregated result of JUMPDEST analysis made through
 	// the life cycle of EVM.
 	jumpDests map[common.Hash]bitvec
+
+	// tracingEnabled is used to shortcircuit some of the tracing calls
+	tracingEnabled bool
 }
 
 // NewEVM constructs an EVM instance with the supplied block context, state
@@ -133,12 +136,13 @@ type EVM struct {
 // needed by calling evm.SetTxContext.
 func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainConfig, config Config) *EVM {
 	evm := &EVM{
-		Context:     blockCtx,
-		StateDB:     statedb,
-		Config:      config,
-		chainConfig: chainConfig,
-		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time),
-		jumpDests:   make(map[common.Hash]bitvec),
+		Context:        blockCtx,
+		StateDB:        statedb,
+		Config:         config,
+		chainConfig:    chainConfig,
+		chainRules:     chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time),
+		jumpDests:      make(map[common.Hash]bitvec),
+		tracingEnabled: config.Tracer.HasVMHooks(),
 	}
 	evm.precompiles = activePrecompiledContracts(evm.chainRules)
 	evm.interpreter = NewEVMInterpreter(evm)
@@ -186,11 +190,13 @@ func isSystemCall(caller common.Address) bool {
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
 func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, gas uint64, value *uint256.Int) (ret []byte, leftOverGas uint64, err error) {
-	// Capture the tracer start/end events in debug mode
-	evm.captureBegin(evm.depth, CALL, caller, addr, input, gas, value.ToBig())
-	defer func(startGas uint64) {
-		evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
-	}(gas)
+	if evm.tracingEnabled {
+		// Capture the tracer start/end events in debug mode
+		evm.captureBegin(evm.depth, CALL, caller, addr, input, gas, value.ToBig())
+		defer func(startGas uint64) {
+			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
+		}(gas)
+	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -270,11 +276,13 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 // CallCode differs from Call in the sense that it executes the given address'
 // code with the caller as context.
 func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byte, gas uint64, value *uint256.Int) (ret []byte, leftOverGas uint64, err error) {
-	// Invoke tracer hooks that signal entering/exiting a call frame
-	evm.captureBegin(evm.depth, CALLCODE, caller, addr, input, gas, value.ToBig())
-	defer func(startGas uint64) {
-		evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
-	}(gas)
+	if evm.tracingEnabled {
+		// Invoke tracer hooks that signal entering/exiting a call frame
+		evm.captureBegin(evm.depth, CALLCODE, caller, addr, input, gas, value.ToBig())
+		defer func(startGas uint64) {
+			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
+		}(gas)
+	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -317,12 +325,14 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 // DelegateCall differs from CallCode in the sense that it executes the given address'
 // code with the caller as context and the caller is set to the caller of the caller.
 func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address, addr common.Address, input []byte, gas uint64, value *uint256.Int) (ret []byte, leftOverGas uint64, err error) {
-	// Invoke tracer hooks that signal entering/exiting a call frame
-	// DELEGATECALL inherits value from parent call
-	evm.captureBegin(evm.depth, DELEGATECALL, caller, addr, input, gas, value.ToBig())
-	defer func(startGas uint64) {
-		evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
-	}(gas)
+	if evm.tracingEnabled {
+		// Invoke tracer hooks that signal entering/exiting a call frame
+		// DELEGATECALL inherits value from parent call
+		evm.captureBegin(evm.depth, DELEGATECALL, caller, addr, input, gas, value.ToBig())
+		defer func(startGas uint64) {
+			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
+		}(gas)
+	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -358,11 +368,13 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 // Opcodes that attempt to perform such modifications will result in exceptions
 // instead of performing the modifications.
 func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
-	// Invoke tracer hooks that signal entering/exiting a call frame
-	evm.captureBegin(evm.depth, STATICCALL, caller, addr, input, gas, nil)
-	defer func(startGas uint64) {
-		evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
-	}(gas)
+	if evm.tracingEnabled {
+		// Invoke tracer hooks that signal entering/exiting a call frame
+		evm.captureBegin(evm.depth, STATICCALL, caller, addr, input, gas, nil)
+		defer func(startGas uint64) {
+			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
+		}(gas)
+	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -409,10 +421,12 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 
 // create creates a new contract using code as deployment code.
 func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *uint256.Int, address common.Address, typ OpCode) (ret []byte, createAddress common.Address, leftOverGas uint64, err error) {
-	evm.captureBegin(evm.depth, typ, caller, address, code, gas, value.ToBig())
-	defer func(startGas uint64) {
-		evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
-	}(gas)
+	if evm.tracingEnabled {
+		evm.captureBegin(evm.depth, typ, caller, address, code, gas, value.ToBig())
+		defer func(startGas uint64) {
+			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
+		}(gas)
+	}
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if evm.depth > int(params.CallCreateDepth) {
@@ -591,29 +605,21 @@ func (evm *EVM) resolveCodeHash(addr common.Address) common.Hash {
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
 func (evm *EVM) captureBegin(depth int, typ OpCode, from common.Address, to common.Address, input []byte, startGas uint64, value *big.Int) {
-	tracer := evm.Config.Tracer
-	if tracer.OnEnter != nil {
-		tracer.OnEnter(depth, byte(typ), from, to, input, startGas, value)
+	if evm.Config.Tracer.OnEnter != nil {
+		evm.Config.Tracer.OnEnter(depth, byte(typ), from, to, input, startGas, value)
 	}
-	if tracer.OnGasChange != nil {
-		tracer.OnGasChange(0, startGas, tracing.GasChangeCallInitialBalance)
+	if evm.Config.Tracer.OnGasChange != nil {
+		evm.Config.Tracer.OnGasChange(0, startGas, tracing.GasChangeCallInitialBalance)
 	}
 }
 
 func (evm *EVM) captureEnd(depth int, startGas uint64, leftOverGas uint64, ret []byte, err error) {
-	tracer := evm.Config.Tracer
-	if leftOverGas != 0 && tracer.OnGasChange != nil {
-		tracer.OnGasChange(leftOverGas, 0, tracing.GasChangeCallLeftOverReturned)
+	if evm.Config.Tracer.OnGasChange != nil && leftOverGas != 0 {
+		evm.Config.Tracer.OnGasChange(leftOverGas, 0, tracing.GasChangeCallLeftOverReturned)
 	}
-	var reverted bool
-	if err != nil {
-		reverted = true
-	}
-	if !evm.chainRules.IsHomestead && errors.Is(err, ErrCodeStoreOutOfGas) {
-		reverted = false
-	}
-	if tracer.OnExit != nil {
-		tracer.OnExit(depth, ret, startGas-leftOverGas, VMErrorFromErr(err), reverted)
+	if evm.Config.Tracer.OnExit != nil {
+		reverted := err != nil && (evm.chainRules.IsHomestead || !errors.Is(err, ErrCodeStoreOutOfGas))
+		evm.Config.Tracer.OnExit(depth, ret, startGas-leftOverGas, VMErrorFromErr(err), reverted)
 	}
 }
 

@@ -188,7 +188,8 @@ type (
 )
 
 type Hooks struct {
-	// VM events
+	// VM events, make sure to update HasVMHooks
+	// if you ever add a new hook here
 	OnTxStart   TxStartHook
 	OnTxEnd     TxEndHook
 	OnEnter     EnterHook
@@ -216,6 +217,17 @@ type Hooks struct {
 	OnLog           LogHook
 	// Block hash read
 	OnBlockHashRead BlockHashReadHook
+}
+
+// HasVMHooks returns if any of the VM events are being hooked
+func (h *Hooks) HasVMHooks() bool {
+	return h.OnTxStart != nil ||
+		h.OnTxEnd != nil ||
+		h.OnEnter != nil ||
+		h.OnExit != nil ||
+		h.OnOpcode != nil ||
+		h.OnFault != nil ||
+		h.OnGasChange != nil
 }
 
 // HasStateHooks returns if any of the state events are being hooked
