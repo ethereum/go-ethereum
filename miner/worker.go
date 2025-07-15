@@ -433,7 +433,7 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 					log.Info("Including blob tx with v0 sidecar, recomputing proofs", "hash", ltx.Hash)
 					if err := sidecar.ToV1(); err != nil {
 						txs.Pop()
-						log.Info("Failed to recompute cell proofs", "hash", ltx.Hash, "err", err)
+						log.Warn("Failed to recompute cell proofs", "hash", ltx.Hash, "err", err)
 						continue
 					}
 				}
