@@ -38,6 +38,11 @@ func storageKey(accountHash common.Hash, slotHash common.Hash) [64]byte {
 	return key
 }
 
+// trienodeKey returns a key for uniquely identifying the trie node.
+func trienodeKey(accountHash common.Hash, path string) string {
+	return accountHash.Hex() + path
+}
+
 // lookup is an internal structure used to efficiently determine the layer in
 // which a state entry resides.
 type lookup struct {
@@ -210,10 +215,8 @@ func (l *lookup) nodeTip(accountHash common.Hash, path string, stateID common.Ha
 	if accountHash == (common.Hash{}) {
 		list = l.accountNodes[path]
 	} else {
-		// Construct the combined key but use only path for shard calculation
-		key := accountHash.Hex() + path
 		shardIndex := getStorageShardIndex(path) // Use only path for sharding
-		list = l.storageNodes[shardIndex][key]
+		list = l.storageNodes[shardIndex][trienodeKey(accountHash, path)]
 	}
 	for i := len(list) - 1; i >= 0; i-- {
 		// If the current state matches the stateID, or the requested state is a
@@ -302,45 +305,25 @@ func (l *lookup) addLayer(diff *diffLayer) {
 }
 
 func (l *lookup) addStorageNodes(state common.Hash, nodes map[common.Hash]map[string]*trienode.Node) {
-	count := 0
-	for _, slots := range nodes {
-		count += len(slots)
-	}
+	defer func(start time.Time) {
+		lookupAddTrienodeLayerTimer.UpdateSince(start)
+	}(time.Now())
 
-	// If the number of storage nodes is small, use a single-threaded approach
-	if count <= 1000 {
-		for accountHash, slots := range nodes {
-			accountHex := accountHash.Hex()
-			for path := range slots {
-				key := accountHex + path
-				shardIndex := getStorageShardIndex(path)
-				list, exists := l.storageNodes[shardIndex][key]
-				if !exists {
-					list = make([]common.Hash, 0, 16)
-				}
-				list = append(list, state)
-				l.storageNodes[shardIndex][key] = list
-			}
-		}
-		return
-	}
-
-	// Use concurrent workers for storage nodes updates, one per shard
-	var wg sync.WaitGroup
+	var (
+		wg    sync.WaitGroup
+		tasks = make([]chan string, storageNodesShardCount)
+	)
 	wg.Add(storageNodesShardCount)
-
-	workChannels := make([]chan string, storageNodesShardCount)
 	for i := 0; i < storageNodesShardCount; i++ {
-		workChannels[i] = make(chan string, 10) // Buffer to avoid blocking
+		tasks[i] = make(chan string, 10) // Buffer to avoid blocking
 	}
-
 	// Start all workers, each handling its own shard
 	for shardIndex := 0; shardIndex < storageNodesShardCount; shardIndex++ {
 		go func(shardIdx int) {
 			defer wg.Done()
 
 			shard := l.storageNodes[shardIdx]
-			for key := range workChannels[shardIdx] {
+			for key := range tasks[shardIdx] {
 				list, exists := shard[key]
 				if !exists {
 					list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
@@ -352,18 +335,15 @@ func (l *lookup) addStorageNodes(state common.Hash, nodes map[common.Hash]map[st
 	}
 
 	for accountHash, slots := range nodes {
-		accountHex := accountHash.Hex()
 		for path := range slots {
 			shardIndex := getStorageShardIndex(path)
-			workChannels[shardIndex] <- accountHex + path
+			tasks[shardIndex] <- trienodeKey(accountHash, path)
 		}
 	}
-
 	// Close all channels to signal workers to finish
 	for i := 0; i < storageNodesShardCount; i++ {
-		close(workChannels[i])
+		close(tasks[i])
 	}
-
 	wg.Wait()
 }
 
@@ -458,47 +438,23 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 }
 
 func (l *lookup) removeStorageNodes(state common.Hash, nodes map[common.Hash]map[string]*trienode.Node) error {
-	count := 0
-	for _, slots := range nodes {
-		count += len(slots)
-	}
+	defer func(start time.Time) {
+		lookupRemoveTrienodeLayerTimer.UpdateSince(start)
+	}(time.Now())
 
-	if count <= 1000 {
-		for accountHash, slots := range nodes {
-			accountHex := accountHash.Hex()
-			for path := range slots {
-				shard := l.storageNodes[getStorageShardIndex(path)]
-				key := accountHex + path
-				found, list := removeFromList(shard[key], state)
-				if !found {
-					return fmt.Errorf("storage lookup is not found, %x %x, state: %x", accountHash, path, state)
-				}
-				if len(list) != 0 {
-					shard[key] = list
-				} else {
-					delete(shard, key)
-				}
-			}
-		}
-		return nil
-	}
-
-	// Use concurrent workers for storage nodes removal, one per shard
-	var eg errgroup.Group
-
-	// Create work channels for each shard
-	workChannels := make([]chan string, storageNodesShardCount)
-
+	var (
+		eg    errgroup.Group
+		tasks = make([]chan string, storageNodesShardCount)
+	)
 	for i := 0; i < storageNodesShardCount; i++ {
-		workChannels[i] = make(chan string, 10) // Buffer to avoid blocking
+		tasks[i] = make(chan string, 10) // Buffer to avoid blocking
 	}
-
 	// Start all workers, each handling its own shard
 	for shardIndex := 0; shardIndex < storageNodesShardCount; shardIndex++ {
 		shardIdx := shardIndex // Capture the variable
 		eg.Go(func() error {
 			shard := l.storageNodes[shardIdx]
-			for key := range workChannels[shardIdx] {
+			for key := range tasks[shardIdx] {
 				found, list := removeFromList(shard[key], state)
 				if !found {
 					return fmt.Errorf("storage lookup is not found, key: %s, state: %x", key, state)
@@ -514,17 +470,13 @@ func (l *lookup) removeStorageNodes(state common.Hash, nodes map[common.Hash]map
 	}
 
 	for accountHash, slots := range nodes {
-		accountHex := accountHash.Hex()
 		for path := range slots {
-			key := accountHex + path
 			shardIndex := getStorageShardIndex(path)
-			workChannels[shardIndex] <- key
+			tasks[shardIndex] <- trienodeKey(accountHash, path)
 		}
 	}
-
 	for i := 0; i < storageNodesShardCount; i++ {
-		close(workChannels[i])
+		close(tasks[i])
 	}
-
 	return eg.Wait()
 }
