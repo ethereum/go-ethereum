@@ -21,25 +21,21 @@ import (
 	"reflect"
 )
 
-type ParameterType any
+type ParameterType interface{
+	Validate(*Config2) error
+}
 
 type paramInfo struct {
 	rtype      reflect.Type
 	name       string
 	optional   bool
-	defaultVal any
+	defaultVal ParameterType
 }
 
 var (
 	paramRegistry = map[reflect.Type]*paramInfo{}
 	paramRegistryByName = map[string]*paramInfo{}
 )
-
-type Parameter[T ParameterType] struct {
-	Name     string
-	Optional bool
-	Default  T
-}
 
 // Get retrieves the value of a chain parameter.
 func Get[T ParameterType](cfg *Config2) T {
@@ -57,6 +53,14 @@ func Get[T ParameterType](cfg *Config2) T {
 	return info.defaultVal.(T)
 }
 
+// Parameter is the definition of a chain parameter.
+type Parameter[T ParameterType] struct {
+	Name     string
+	Optional bool
+	Default  T
+}
+
+// Define creates a chain parameter in the registry.
 func Define[T ParameterType](def Parameter[T]) {
 	var z T
 	info, defined := paramRegistryByName[def.Name]
