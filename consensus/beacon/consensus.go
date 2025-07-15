@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
 )
@@ -74,11 +75,12 @@ func New(ethone consensus.Engine) *Beacon {
 // isPostMerge reports whether the given block number is assumed to be post-merge.
 // Here we check the MergeNetsplitBlock to allow configuring networks with a PoW or
 // PoA chain for unit testing purposes.
-func isPostMerge(config *params.ChainConfig, blockNum uint64, timestamp uint64) bool {
-	mergedAtGenesis := config.TerminalTotalDifficulty != nil && config.TerminalTotalDifficulty.Sign() == 0
+func isPostMerge(config *params.Config2, blockNum uint64, timestamp uint64) bool {
+	ttd := params.Get[*params.TerminalTotalDifficulty](config).BigInt()
+	mergedAtGenesis := ttd != nil && ttd.Sign() == 0
 	return mergedAtGenesis ||
-		config.MergeNetsplitBlock != nil && blockNum >= config.MergeNetsplitBlock.Uint64() ||
-		config.ShanghaiTime != nil && timestamp >= *config.ShanghaiTime
+		config.Active(forks.Paris, blockNum, timestamp) ||
+		config.Active(forks.Shanghai, blockNum, timestamp)
 }
 
 // Author implements consensus.Engine, returning the verified author of the block.
@@ -256,7 +258,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return err
 	}
 	// Verify existence / non-existence of withdrawalsHash.
-	shanghai := chain.Config().IsShanghai(header.Number, header.Time)
+	shanghai := chain.Config().Active(forks.Shanghai, header.Number.Uint64(), header.Time)
 	if shanghai && header.WithdrawalsHash == nil {
 		return errors.New("missing withdrawalsHash")
 	}
@@ -264,7 +266,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
 	}
 	// Verify the existence / non-existence of cancun-specific header fields
-	cancun := chain.Config().IsCancun(header.Number, header.Time)
+	cancun := chain.Config().Active(forks.Cancun, header.Number.Uint64(), header.Time)
 	if !cancun {
 		switch {
 		case header.ExcessBlobGas != nil:
@@ -357,7 +359,7 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	if !beacon.IsPoSHeader(header) {
 		return beacon.ethone.FinalizeAndAssemble(chain, header, state, body, receipts)
 	}
-	shanghai := chain.Config().IsShanghai(header.Number, header.Time)
+	shanghai := chain.Config().Active(forks.Shanghai, header.Number.Uint64(), header.Time)
 	if shanghai {
 		// All blocks after Shanghai must include a withdrawals root.
 		if body.Withdrawals == nil {
@@ -379,7 +381,7 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 
 	// Create the block witness and attach to block.
 	// This step needs to happen as late as possible to catch all access events.
-	if chain.Config().IsVerkle(header.Number, header.Time) {
+	if chain.Config().Active(forks.Verkle, header.Number.Uint64(), header.Time) {
 		keys := state.AccessEvents().Keys()
 
 		// Open the pre-tree to prove the pre-state against
