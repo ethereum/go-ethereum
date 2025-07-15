@@ -26,7 +26,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
@@ -76,17 +75,18 @@ func (sc *BlobTxSidecar) BlobHashes() []common.Hash {
 
 // CellProofsAt returns the cell proofs for blob with index idx.
 // This method is only valid for sidecars with version 1.
-func (sc *BlobTxSidecar) CellProofsAt(idx int) []kzg4844.Proof {
+func (sc *BlobTxSidecar) CellProofsAt(idx int) ([]kzg4844.Proof, error) {
+	if sc.Version != 1 {
+		return nil, fmt.Errorf("cell proof unsupported, version: %d", sc.Version)
+	}
 	if idx < 0 || idx >= len(sc.Blobs) {
-		log.Error("cellProofsAt called with out of bounds index", "index", idx, "blobs", len(sc.Blobs))
-		return nil
+		return nil, fmt.Errorf("cell proof out of bounds, index: %d, blobs: %d", idx, len(sc.Blobs))
 	}
-	if sc.Version == 1 {
-		index := idx * kzg4844.CellProofsPerBlob
-		return sc.Proofs[index : index+kzg4844.CellProofsPerBlob]
+	index := idx * kzg4844.CellProofsPerBlob
+	if len(sc.Proofs) < index+kzg4844.CellProofsPerBlob {
+		return nil, fmt.Errorf("cell proof is corrupted, index: %d, proofs: %d", idx, len(sc.Proofs))
 	}
-	log.Error("cellProofsAt called with unsupported version", "version", sc.Version)
-	return nil
+	return sc.Proofs[index : index+kzg4844.CellProofsPerBlob], nil
 }
 
 // encodedSize computes the RLP size of the sidecar elements. This does NOT return the
