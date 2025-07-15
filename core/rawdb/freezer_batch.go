@@ -216,9 +216,9 @@ func (batch *freezerTableBatch) commit() error {
 	batch.t.writeMeter.Mark(dataSize + indexSize)
 
 	// Periodically sync the table, todo (rjl493456442) make it configurable?
-	batch.t.uncommit += items
-	if batch.t.uncommit > freezerTableFlushThreshold && time.Since(batch.t.lastSync) > 30*time.Second {
-		batch.t.uncommit = 0
+	batch.t.uncommitted += items
+	if batch.t.uncommitted > freezerTableFlushThreshold && time.Since(batch.t.lastSync) > 30*time.Second {
+		batch.t.uncommitted = 0
 		batch.t.lastSync = time.Now()
 		return batch.t.Sync()
 	}
