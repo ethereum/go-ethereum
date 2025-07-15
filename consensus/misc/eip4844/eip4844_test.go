@@ -23,12 +23,15 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/params/forks"
+	"github.com/ethereum/go-ethereum/params/presets"
 )
 
 func TestCalcExcessBlobGas(t *testing.T) {
 	var (
-		config        = params.MainnetChainConfig
-		targetBlobs   = targetBlobsPerBlock(config, *config.CancunTime)
+		config        = presets.Mainnet
+		cancunTime, _ = config.Activation(forks.Cancun)
+		targetBlobs   = targetBlobsPerBlock(config, cancunTime)
 		targetBlobGas = uint64(targetBlobs) * params.BlobTxBlobGasPerBlob
 	)
 	var tests = []struct {
@@ -58,10 +61,11 @@ func TestCalcExcessBlobGas(t *testing.T) {
 	for i, tt := range tests {
 		blobGasUsed := uint64(tt.blobs) * params.BlobTxBlobGasPerBlob
 		header := &types.Header{
+			Number:        big.NewInt(1),
 			ExcessBlobGas: &tt.excess,
 			BlobGasUsed:   &blobGasUsed,
 		}
-		result := CalcExcessBlobGas(config, header, *config.CancunTime)
+		result := CalcExcessBlobGas(config, header, cancunTime)
 		if result != tt.want {
 			t.Errorf("test %d: excess blob gas mismatch: have %v, want %v", i, result, tt.want)
 		}
@@ -69,8 +73,6 @@ func TestCalcExcessBlobGas(t *testing.T) {
 }
 
 func TestCalcBlobFee(t *testing.T) {
-	zero := uint64(0)
-
 	tests := []struct {
 		excessBlobGas uint64
 		blobfee       int64
@@ -81,7 +83,15 @@ func TestCalcBlobFee(t *testing.T) {
 		{10 * 1024 * 1024, 23},
 	}
 	for i, tt := range tests {
-		config := &params.ChainConfig{LondonBlock: big.NewInt(0), CancunTime: &zero, BlobScheduleConfig: params.DefaultBlobSchedule}
+		config := params.NewConfig2(
+			params.Activations{
+				forks.London: 0,
+				forks.Cancun: 0,
+			},
+			params.BlobSchedule{
+				forks.Cancun: *params.DefaultCancunBlobConfig,
+			},
+		)
 		header := &types.Header{ExcessBlobGas: &tt.excessBlobGas}
 		have := CalcBlobFee(config, header)
 		if have.Int64() != tt.blobfee {
@@ -130,13 +140,15 @@ func TestFakeExponential(t *testing.T) {
 
 func TestCalcExcessBlobGasEIP7918(t *testing.T) {
 	var (
-		cfg           = params.MergedTestChainConfig
-		targetBlobs   = targetBlobsPerBlock(cfg, *cfg.CancunTime)
+		cfg           = presets.MergedTestChainConfig
+		cancunTime, _ = cfg.Activation(forks.Cancun)
+		targetBlobs   = targetBlobsPerBlock(cfg, cancunTime)
 		blobGasTarget = uint64(targetBlobs) * params.BlobTxBlobGasPerBlob
 	)
 	makeHeader := func(parentExcess, parentBaseFee uint64, blobsUsed int) *types.Header {
 		blobGasUsed := uint64(blobsUsed) * params.BlobTxBlobGasPerBlob
 		return &types.Header{
+			Number:        big.NewInt(1),
 			BaseFee:       big.NewInt(int64(parentBaseFee)),
 			ExcessBlobGas: &parentExcess,
 			BlobGasUsed:   &blobGasUsed,
@@ -160,7 +172,7 @@ func TestCalcExcessBlobGasEIP7918(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		got := CalcExcessBlobGas(cfg, tc.header, *cfg.CancunTime)
+		got := CalcExcessBlobGas(cfg, tc.header, cancunTime)
 		if got != tc.wantExcessGas {
 			t.Fatalf("%s: excess-blob-gas mismatch – have %d, want %d",
 				tc.name, got, tc.wantExcessGas)
