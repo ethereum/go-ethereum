@@ -55,7 +55,7 @@ const (
 	headerSize             uint64 = 8
 )
 
-type proofvar uint16
+type variant uint16
 
 type buffer struct {
 	headers  [][]byte
@@ -81,7 +81,7 @@ type Builder struct {
 	buff buffer
 	off  offsets
 
-	prooftype    proofvar
+	prooftype    variant
 	tdsint       []*big.Int
 	hashes       []common.Hash
 	startNum     *uint64
@@ -100,8 +100,8 @@ func NewBuilder(w io.Writer) *Builder {
 
 // Add writes a block entry, its reciepts, and optionally its proofs as well into the e2store file.
 func (b *Builder) Add(header types.Header, body types.Body, receipts types.Receipts, td *big.Int, proof Proof) error {
-	pv := proofVariantOf(proof) // variant code (or proofNone)
-	var ep []byte               // encoded proof payload
+	pv := variantOf(proof) // variant code (or proofNone)
+	var ep []byte          // encoded proof payload
 
 	if proof != nil {
 		var buf bytes.Buffer
@@ -280,18 +280,6 @@ func (b *Builder) addEntry(typ uint16, payload []byte, snappyIt bool) (uint64, e
 		b.writtenBytes += uint64(n)
 	}
 	return offset, nil
-}
-
-// flush kind takes all entries of the cached component and flushes it to the file
-func (b *Builder) flushKind(typ uint16, list [][]byte, useSnappy bool, dst *[]uint64) error {
-	for _, data := range list {
-		off, err := b.addEntry(typ, data, useSnappy)
-		if err != nil {
-			return fmt.Errorf("entry type %d: %w", typ, err)
-		}
-		*dst = append(*dst, off)
-	}
-	return nil
 }
 
 // write index takes all the offset table and writes it to the file
