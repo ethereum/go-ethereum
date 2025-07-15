@@ -285,18 +285,20 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client l1.Client) (*Ether
 		checkpoint = params.TrustedCheckpoints[genesisHash]
 	}
 	if eth.handler, err = newHandler(&handlerConfig{
-		Database:           chainDb,
-		Chain:              eth.blockchain,
-		TxPool:             eth.txPool,
-		Network:            config.NetworkId,
-		Sync:               config.SyncMode,
-		BloomCache:         uint64(cacheLimit),
-		EventMux:           eth.eventMux,
-		Checkpoint:         checkpoint,
-		Whitelist:          config.Whitelist,
-		ShadowForkPeerIDs:  config.ShadowForkPeerIDs,
-		DisableTxBroadcast: config.TxGossipBroadcastDisabled,
-		DisableTxReceiving: config.TxGossipReceivingDisabled,
+		Database:             chainDb,
+		Chain:                eth.blockchain,
+		TxPool:               eth.txPool,
+		Network:              config.NetworkId,
+		Sync:                 config.SyncMode,
+		BloomCache:           uint64(cacheLimit),
+		EventMux:             eth.eventMux,
+		Checkpoint:           checkpoint,
+		Whitelist:            config.Whitelist,
+		ShadowForkPeerIDs:    config.ShadowForkPeerIDs,
+		DisableTxBroadcast:   config.GossipTxBroadcastDisabled,
+		DisableTxReceiving:   config.GossipTxReceivingDisabled,
+		EnableBroadcastToAll: config.GossipBroadcastToAllEnabled,
+		BroadcastToAllCap:    config.GossipBroadcastToAllCap,
 	}); err != nil {
 		return nil, err
 	}
@@ -306,7 +308,7 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client l1.Client) (*Ether
 	// Some of the extraData is used with Clique consensus (before EuclidV2). After EuclidV2 we use SystemContract consensus where this is overridden when creating a block.
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
-	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, config.TxGossipReceivingDisabled, eth, nil}
+	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, config.GossipTxReceivingDisabled, eth, nil}
 	if eth.APIBackend.allowUnprotectedTxs {
 		log.Info("Unprotected transactions allowed")
 	}
@@ -317,9 +319,9 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client l1.Client) (*Ether
 	gpoParams.DefaultBasePrice = new(big.Int).SetUint64(config.TxPool.PriceLimit)
 	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 
-	if config.TxGossipSequencerHTTP != "" {
+	if config.GossipSequencerHTTP != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		client, err := rpc.DialContext(ctx, config.TxGossipSequencerHTTP)
+		client, err := rpc.DialContext(ctx, config.GossipSequencerHTTP)
 		cancel()
 		if err != nil {
 			return nil, fmt.Errorf("cannot initialize rollup sequencer client: %w", err)
