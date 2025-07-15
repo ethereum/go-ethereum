@@ -661,11 +661,7 @@ func testGetPooledTransaction(t *testing.T, blobTx bool) {
 			To:         testAddr,
 			BlobHashes: []common.Hash{emptyBlobHash},
 			BlobFeeCap: uint256.MustFromBig(common.Big1),
-			Sidecar: &types.BlobTxSidecar{
-				Blobs:       emptyBlobs,
-				Commitments: []kzg4844.Commitment{emptyBlobCommit},
-				Proofs:      []kzg4844.Proof{emptyBlobProof},
-			},
+			Sidecar:    types.NewBlobTxSidecar(types.BlobSidecarVersion0, emptyBlobs, []kzg4844.Commitment{emptyBlobCommit}, []kzg4844.Proof{emptyBlobProof}),
 		})
 		if err != nil {
 			t.Fatal(err)

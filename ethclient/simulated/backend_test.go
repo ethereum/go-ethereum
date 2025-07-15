@@ -83,11 +83,7 @@ func newBlobTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) 
 		To:         addr,
 		AccessList: nil,
 		BlobHashes: []common.Hash{testBlobVHash},
-		Sidecar: &types.BlobTxSidecar{
-			Blobs:       []kzg4844.Blob{*testBlob},
-			Commitments: []kzg4844.Commitment{testBlobCommit},
-			Proofs:      []kzg4844.Proof{testBlobProof},
-		},
+		Sidecar:    types.NewBlobTxSidecar(types.BlobSidecarVersion0, []kzg4844.Blob{*testBlob}, []kzg4844.Commitment{testBlobCommit}, []kzg4844.Proof{testBlobProof}),
 	})
 	return types.SignTx(tx, types.LatestSignerForChainID(chainid), key)
 }

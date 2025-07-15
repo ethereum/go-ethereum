@@ -129,11 +129,7 @@ func TestBlobTxs(t *testing.T) {
 		BlobFeeCap: uint256.NewInt(700),
 		BlobHashes: []common.Hash{hash},
 		Value:      uint256.NewInt(100),
-		Sidecar: &types.BlobTxSidecar{
-			Blobs:       []kzg4844.Blob{blob},
-			Commitments: []kzg4844.Commitment{commitment},
-			Proofs:      []kzg4844.Proof{proof},
-		},
+		Sidecar:    types.NewBlobTxSidecar(types.BlobSidecarVersion0, []kzg4844.Blob{blob}, []kzg4844.Commitment{commitment}, []kzg4844.Proof{proof}),
 	}
 	tx := types.NewTx(b)
 	data, err := json.Marshal(tx)
