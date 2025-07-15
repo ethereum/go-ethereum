@@ -36,7 +36,6 @@ func (v *ChainID) Validate(cfg *Config2) error {
 	if b.Sign() <= 0 {
 		return fmt.Errorf("invalid chainID value %v", b)
 	}
-
 	return nil
 }
 
@@ -57,6 +56,10 @@ func (v *TerminalTotalDifficulty) MarshalText() ([]byte, error) {
 
 func (v *TerminalTotalDifficulty) UnmarshalText(input []byte) error {
 	return (*big.Int)(v).UnmarshalText(input)
+}
+
+func (v *TerminalTotalDifficulty) BigInt() *big.Int {
+	return (*big.Int)(v)
 }
 
 func (v *TerminalTotalDifficulty) Validate(cfg *Config2) error {
