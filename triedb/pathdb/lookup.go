@@ -301,6 +301,18 @@ func (l *lookup) addLayer(diff *diffLayer) {
 		l.addStorageNodes(state, diff.nodes.storageNodes)
 	}()
 
+	states := len(diff.states.accountData)
+	for _, slots := range diff.states.storageData {
+		states += len(slots)
+	}
+	lookupStateMeter.Mark(int64(states))
+
+	trienodes := len(diff.nodes.accountNodes)
+	for _, nodes := range diff.nodes.storageNodes {
+		trienodes += len(nodes)
+	}
+	lookupTrienodeMeter.Mark(int64(trienodes))
+
 	wg.Wait()
 }
 
