@@ -1056,6 +1056,7 @@ func newStates(keys []common.Hash, vals []common.Hash) map[common.Hash]common.Ha
 	return m
 }
 
+// TODO: modify tracechain so that each transaction in the chain prints out a different trace dependent on the current state
 func TestTraceChain(t *testing.T) {
 	// Initialize test accounts
 	accounts := newAccounts(3)
@@ -1124,7 +1125,7 @@ func TestTraceChain(t *testing.T) {
 			next += 1
 		}
 		if next != c.end+1 {
-			t.Error("Missing tracing block")
+			t.Fatal("Missing tracing block")
 		}
 
 		if nref, nrel := ref.Load(), rel.Load(); nref != nrel {
