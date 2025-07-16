@@ -20,15 +20,31 @@ import (
 	"bytes"
 	"errors"
 	"sync"
+	"unsafe"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
+var stNodeAllocationMeter = metrics.NewRegisteredMeter("stacktrie/allocation/node", nil)
+var byteAllocationMeter = metrics.NewRegisteredMeter("stacktrie/allocation/byte", nil)
+
 var (
-	stPool = sync.Pool{New: func() any { return new(stNode) }}
-	bPool  = newBytesPool(32, 100)
-	_      = types.TrieHasher((*StackTrie)(nil))
+	stPageSize = 1024
+	stPagePool = sync.Pool{
+		New: func() any {
+			stNodeAllocationMeter.Mark(int64(unsafe.Sizeof(stNode{})) * int64(stPageSize))
+			return make([]stNode, stPageSize)
+		},
+	}
+	bytePagePool = sync.Pool{
+		New: func() any {
+			byteAllocationMeter.Mark(int64(unsafe.Sizeof([32]byte{})) * int64(stPageSize))
+			return make([][32]byte, stPageSize)
+		},
+	}
+	_ = types.TrieHasher((*StackTrie)(nil))
 )
 
 // OnTrieNode is a callback method invoked when a trie node is committed
@@ -40,6 +56,14 @@ var (
 // it after the call ends.
 type OnTrieNode func(path []byte, hash common.Hash, blob []byte)
 
+// allocationFrame keeps track of the position of the allocators in StackTrie
+// at the time of a new branch/ext node being created. At the point where this
+// node is hashed, allocators can be reset to the positions stored in the allocation
+// frame
+type allocationFrame struct {
+	node, bytes uint32
+}
+
 // StackTrie is a trie implementation that expects keys to be inserted
 // in order. Once it determines that a subtree will no longer be inserted
 // into, it will hash it and free up the memory it uses.
@@ -48,20 +72,47 @@ type StackTrie struct {
 	h          *hasher
 	last       []byte
 	onTrieNode OnTrieNode
-	kBuf       []byte // buf space used for hex-key during insertions
-	pBuf       []byte // buf space used for path during insertions
+
+	nodeAllocator         common.Arena[stNode]
+	byteAllocator         common.Arena[[32]byte]
+	allocationStackFrames []allocationFrame
+
+	kBuf    []byte  // buf space used for hex-key during insertions
+	pBuf    []byte  // buf space used for path during insertions
+	tmpNode *stNode // used as a temporary ext node when needed
 }
 
 // NewStackTrie allocates and initializes an empty trie. The committed nodes
 // will be discarded immediately if no callback is configured.
 func NewStackTrie(onTrieNode OnTrieNode) *StackTrie {
-	return &StackTrie{
-		root:       stPool.Get().(*stNode),
-		h:          newHasher(false),
-		onTrieNode: onTrieNode,
-		kBuf:       make([]byte, 64),
-		pBuf:       make([]byte, 64),
+	t := StackTrie{
+		h:             newHasher(false),
+		onTrieNode:    onTrieNode,
+		kBuf:          make([]byte, 64),
+		pBuf:          make([]byte, 64),
+		nodeAllocator: common.Arena[stNode]{NewPage: stPagePool.Get, PageSize: uint32(stPageSize), ReleasePage: stPagePool.Put},
+		byteAllocator: common.Arena[[32]byte]{NewPage: bytePagePool.Get, PageSize: uint32(stPageSize), ReleasePage: bytePagePool.Put},
 	}
+	t.root = t.nodeAllocator.Alloc().reset()
+	t.tmpNode = t.nodeAllocator.Alloc().reset()
+	return &t
+}
+
+// creates a new allocation frame by saving positions of internal allocators
+func (t *StackTrie) pushAllocationFrame() {
+	t.allocationStackFrames = append(t.allocationStackFrames, allocationFrame{
+		node:  t.nodeAllocator.Used(),
+		bytes: t.byteAllocator.Used(),
+	})
+}
+
+// pops a saved allocation frame and rollsback allocators to the state they were
+// at the beginning of the frame
+func (t *StackTrie) popAllocationFrame() {
+	allocationFrame := t.allocationStackFrames[len(t.allocationStackFrames)-1]
+	t.nodeAllocator.Reset(allocationFrame.node)
+	t.byteAllocator.Reset(allocationFrame.bytes)
+	t.allocationStackFrames = t.allocationStackFrames[:len(t.allocationStackFrames)-1]
 }
 
 func (t *StackTrie) grow(key []byte) {
@@ -94,7 +145,10 @@ func (t *StackTrie) Update(key, value []byte) error {
 
 // Reset resets the stack trie object to empty state.
 func (t *StackTrie) Reset() {
-	t.root = stPool.Get().(*stNode)
+	t.nodeAllocator.Reset(0)
+	t.byteAllocator.Reset(0)
+	t.root = t.nodeAllocator.Alloc().reset()
+	t.tmpNode = t.nodeAllocator.Alloc().reset()
 	t.last = nil
 }
 
@@ -116,18 +170,17 @@ type stNode struct {
 // newLeaf constructs a leaf node with provided node key and value. The key
 // will be deep-copied in the function and safe to modify afterwards, but
 // value is not.
-func newLeaf(key, val []byte) *stNode {
-	st := stPool.Get().(*stNode)
+func (t *StackTrie) newLeaf(key, val []byte) *stNode {
+	st := t.nodeAllocator.Alloc().reset()
 	st.typ = leafNode
 	st.key = append(st.key, key...)
 	st.val = val
 	return st
 }
 
-// newExt constructs an extension node with provided node key and child. The
+// makeExt constructs an extension node with provided node key and child. The
 // key will be deep-copied in the function and safe to modify afterwards.
-func newExt(key []byte, child *stNode) *stNode {
-	st := stPool.Get().(*stNode)
+func makeExt(st *stNode, key []byte, child *stNode) *stNode {
 	st.typ = extNode
 	st.key = append(st.key, key...)
 	st.children[0] = child
@@ -144,12 +197,6 @@ const (
 )
 
 func (n *stNode) reset() *stNode {
-	if n.typ == hashedNode {
-		// On hashnodes, we 'own' the val: it is guaranteed to be not held
-		// by external caller. Hence, when we arrive here, we can put it back
-		// into the pool
-		bPool.Put(n.val)
-	}
 	n.key = n.key[:0]
 	n.val = nil
 	for i := range n.children {
@@ -194,7 +241,7 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 
 		// Add new child
 		if st.children[idx] == nil {
-			st.children[idx] = newLeaf(key[1:], value)
+			st.children[idx] = t.newLeaf(key[1:], value)
 		} else {
 			t.insert(st.children[idx], key[1:], value, append(path, key[0]))
 		}
@@ -223,8 +270,14 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 			// Break on the non-last byte, insert an intermediate
 			// extension. The path prefix of the newly-inserted
 			// extension should also contain the different byte.
-			n = newExt(st.key[diffidx+1:], st.children[0])
-			t.hash(n, append(path, st.key[:diffidx+1]...))
+			e := makeExt(t.tmpNode.reset(), st.key[diffidx+1:], st.children[0]) // build a temporary extension node to hash
+			t.hash(e, append(path, st.key[:diffidx+1]...))                      // frame belonging to st gets popped here
+
+			// allocate a new node to hold the hashed e
+			n = t.nodeAllocator.Alloc().reset()
+			n.typ = hashedNode
+			n.val = e.val
+			t.pushAllocationFrame() // for the "new" st that might end up being a branch or a ext
 		} else {
 			// Break on the last byte, no need to insert
 			// an extension node: reuse the current node.
@@ -245,12 +298,14 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 			// the common prefix is at least one byte
 			// long, insert a new intermediate branch
 			// node.
-			st.children[0] = stPool.Get().(*stNode)
+			st.children[0] = t.nodeAllocator.Alloc().reset()
 			st.children[0].typ = branchNode
+			t.pushAllocationFrame() // for the new branch child
 			p = st.children[0]
 		}
+
 		// Create a leaf for the inserted part
-		o := newLeaf(key[diffidx+1:], value)
+		o := t.newLeaf(key[diffidx+1:], value)
 
 		// Insert both child leaves where they belong:
 		origIdx := st.key[diffidx]
@@ -282,11 +337,14 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 			st.typ = branchNode
 			p = st
 			st.children[0] = nil
+			t.pushAllocationFrame() // leafnode turning into a branch node
 		} else {
 			// Convert current node into an ext,
 			// and insert a child branch node.
 			st.typ = extNode
-			st.children[0] = stPool.Get().(*stNode)
+			t.pushAllocationFrame() // leafnode turning into a ext node
+			st.children[0] = t.nodeAllocator.Alloc().reset()
+			t.pushAllocationFrame() // new branch node
 			st.children[0].typ = branchNode
 			p = st.children[0]
 		}
@@ -295,11 +353,11 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 		// value and another containing the new value. The child leaf
 		// is hashed directly in order to free up some memory.
 		origIdx := st.key[diffidx]
-		p.children[origIdx] = newLeaf(st.key[diffidx+1:], st.val)
+		p.children[origIdx] = t.newLeaf(st.key[diffidx+1:], st.val)
 		t.hash(p.children[origIdx], append(path, st.key[:diffidx+1]...))
 
 		newIdx := key[diffidx]
-		p.children[newIdx] = newLeaf(key[diffidx+1:], value)
+		p.children[newIdx] = t.newLeaf(key[diffidx+1:], value)
 
 		// Finally, cut off the key part that has been passed
 		// over to the children.
@@ -359,9 +417,8 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 				continue
 			}
 			st.children[i] = nil
-			stPool.Put(child.reset()) // Release child back to pool.
 		}
-
+		t.popAllocationFrame()
 	case extNode:
 		// recursively hash and commit child as the first step
 		t.hash(st.children[0], append(path, st.key...))
@@ -373,10 +430,8 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 		}
 		n.encode(t.h.encbuf)
 		blob = t.h.encodedBytes()
-
-		stPool.Put(st.children[0].reset()) // Release child back to pool.
 		st.children[0] = nil
-
+		t.popAllocationFrame()
 	case leafNode:
 		st.key = append(st.key, byte(16))
 		n := leafNodeEncoder{
@@ -398,13 +453,13 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 	// Skip committing the non-root node if the size is smaller than 32 bytes
 	// as tiny nodes are always embedded in their parent except root node.
 	if len(blob) < 32 && len(path) > 0 {
-		st.val = bPool.GetWithSize(len(blob))
+		st.val = t.byteAllocator.Alloc()[:len(blob)]
 		copy(st.val, blob)
 		return
 	}
 	// Write the hash to the 'val'. We allocate a new val here to not mutate
 	// input values.
-	st.val = bPool.GetWithSize(32)
+	st.val = t.byteAllocator.Alloc()[:32]
 	t.h.hashDataTo(st.val, blob)
 
 	// Invoke the callback it's provided. Notably, the path and blob slices are
@@ -422,5 +477,8 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 func (t *StackTrie) Hash() common.Hash {
 	n := t.root
 	t.hash(n, nil)
-	return common.BytesToHash(n.val)
+	hash := common.BytesToHash(n.val)
+	t.byteAllocator.Release()
+	t.nodeAllocator.Release()
+	return hash
 }
