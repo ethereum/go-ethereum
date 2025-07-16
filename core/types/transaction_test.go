@@ -29,7 +29,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/params/presets"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -596,7 +596,7 @@ func BenchmarkHash(b *testing.B) {
 }
 
 func BenchmarkEffectiveGasTip(b *testing.B) {
-	signer := LatestSigner(params.TestChainConfig)
+	signer := LatestSigner(presets.TestChainConfig)
 	key, _ := crypto.GenerateKey()
 	txdata := &DynamicFeeTx{
 		ChainID:   big.NewInt(1),
@@ -634,7 +634,7 @@ func BenchmarkEffectiveGasTip(b *testing.B) {
 }
 
 func TestEffectiveGasTipInto(t *testing.T) {
-	signer := LatestSigner(params.TestChainConfig)
+	signer := LatestSigner(presets.TestChainConfig)
 	key, _ := crypto.GenerateKey()
 
 	testCases := []struct {
