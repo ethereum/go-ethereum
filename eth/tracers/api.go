@@ -953,18 +953,16 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	}
 	defer release()
 
-	h := *block.Header()
+	h := block.Header()
 
 	if config != nil && config.BlockOverrides != nil {
-		h = *config.BlockOverrides.MakeHeader(block.Header())
-		if h.Number.Uint64() == block.NumberU64()+1 {
+		if config.BlockOverrides.Number.ToInt().Uint64() == h.Number.Uint64()+1 {
+			h = config.BlockOverrides.MakeHeader(block.Header())
 			h.ParentHash = block.Hash()
-		} else if h.Number.Uint64() > block.NumberU64()+1 {
-			h.ParentHash = common.Hash{}
 		}
 	}
 
-	vmctx := core.NewEVMBlockContext(&h, api.chainContext(ctx), nil)
+	vmctx := core.NewEVMBlockContext(h, api.chainContext(ctx), nil)
 	// Apply the customization rules if required.
 	if config != nil {
 		if overrideErr := config.BlockOverrides.Apply(&vmctx); overrideErr != nil {
