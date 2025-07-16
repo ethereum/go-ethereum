@@ -102,6 +102,27 @@ var AllEthashProtocolChanges = params.NewConfig2(
 	params.NewTerminalTotalDifficulty("0xffffffffffffff"),
 )
 
+// TestChainConfig contains every protocol change (EIPs) introduced
+// and accepted by the Ethereum core developers for testing purposes.
+var TestChainConfig = params.NewConfig2(
+	params.Activations{
+		forks.Homestead:        0,
+		forks.TangerineWhistle: 0,
+		forks.SpuriousDragon:   0,
+		forks.Byzantium:        0,
+		forks.Constantinople:   0,
+		forks.Petersburg:       0,
+		forks.Istanbul:         0,
+		forks.MuirGlacier:      0,
+		forks.Berlin:           0,
+		forks.London:           0,
+		forks.ArrowGlacier:     0,
+		forks.GrayGlacier:      0,
+	},
+	params.NewChainID("1"),
+	params.NewTerminalTotalDifficulty("0xffffffffffff"),
+)
+
 // MergedTestChainConfig2 contains every protocol change (EIPs) introduced
 // and accepted by the Ethereum core developers for testing purposes.
 var MergedTestChainConfig = params.NewConfig2(
