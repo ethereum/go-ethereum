@@ -202,7 +202,7 @@ func ReadCanonicalTransaction(db ethdb.Reader, hash common.Hash) (*types.Transac
 // ReadCanonicalReceipt retrieves a specific transaction receipt from the database,
 // along with its added positional metadata. Notably, only the receipt in the canonical
 // chain is visible.
-func ReadCanonicalReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) (*types.Receipt, common.Hash, uint64, uint64) {
+func ReadCanonicalReceipt(db ethdb.Reader, hash common.Hash, config *params.Config2) (*types.Receipt, common.Hash, uint64, uint64) {
 	// Retrieve the context of the receipt based on the transaction hash
 	blockNumber := ReadTxLookupEntry(db, hash)
 	if blockNumber == nil {

@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/params/presets"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
 )
@@ -356,7 +356,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 
 	// Check that no receipt entries are in a pristine database
 	hash := common.BytesToHash([]byte{0x03, 0x14})
-	if rs := ReadReceipts(db, hash, 0, 0, params.TestChainConfig); len(rs) != 0 {
+	if rs := ReadReceipts(db, hash, 0, 0, presets.TestChainConfig); len(rs) != 0 {
 		t.Fatalf("non existent receipts returned: %v", rs)
 	}
 	// Insert the body that corresponds to the receipts
@@ -364,7 +364,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 
 	// Insert the receipt slice into the database and check presence
 	WriteReceipts(db, hash, 0, receipts)
-	if rs := ReadReceipts(db, hash, 0, 0, params.TestChainConfig); len(rs) == 0 {
+	if rs := ReadReceipts(db, hash, 0, 0, presets.TestChainConfig); len(rs) == 0 {
 		t.Fatal("no receipts returned")
 	} else {
 		if err := checkReceiptsRLP(rs, receipts); err != nil {
@@ -373,7 +373,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 	}
 	// Delete the body and ensure that the receipts are no longer returned (metadata can't be recomputed)
 	DeleteBody(db, hash, 0)
-	if rs := ReadReceipts(db, hash, 0, 0, params.TestChainConfig); rs != nil {
+	if rs := ReadReceipts(db, hash, 0, 0, presets.TestChainConfig); rs != nil {
 		t.Fatalf("receipts returned when body was deleted: %v", rs)
 	}
 	// Ensure that receipts without metadata can be returned without the block body too
@@ -388,7 +388,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 	WriteBody(db, hash, 0, body)
 
 	DeleteReceipts(db, hash, 0)
-	if rs := ReadReceipts(db, hash, 0, 0, params.TestChainConfig); len(rs) != 0 {
+	if rs := ReadReceipts(db, hash, 0, 0, presets.TestChainConfig); len(rs) != 0 {
 		t.Fatalf("deleted receipts returned: %v", rs)
 	}
 }
@@ -751,7 +751,7 @@ func TestReadLogs(t *testing.T) {
 
 	hash := common.BytesToHash([]byte{0x03, 0x14})
 	// Check that no receipt entries are in a pristine database
-	if rs := ReadReceipts(db, hash, 0, 0, params.TestChainConfig); len(rs) != 0 {
+	if rs := ReadReceipts(db, hash, 0, 0, presets.TestChainConfig); len(rs) != 0 {
 		t.Fatalf("non existent receipts returned: %v", rs)
 	}
 	// Insert the body that corresponds to the receipts
@@ -842,7 +842,7 @@ func TestDeriveLogFields(t *testing.T) {
 	// Derive log metadata fields
 	number := big.NewInt(1)
 	hash := common.BytesToHash([]byte{0x03, 0x14})
-	types.Receipts(receipts).DeriveFields(params.TestChainConfig, hash, number.Uint64(), 12, big.NewInt(0), big.NewInt(0), txs)
+	types.Receipts(receipts).DeriveFields(presets.TestChainConfig, hash, number.Uint64(), 12, big.NewInt(0), big.NewInt(0), txs)
 
 	// Iterate over all the computed fields and check that they're correct
 	logIndex := uint(0)
