@@ -102,6 +102,10 @@ func (f Fork) HasBlobs() bool {
 	return f&hasBlobs != 0
 }
 
+func (f Fork) After(other Fork) bool {
+	return f&unconfigMask >= other&unconfigMask
+}
+
 // String implements fmt.Stringer.
 func (f Fork) String() string {
 	s, ok := forkToString[f]
