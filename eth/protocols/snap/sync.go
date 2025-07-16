@@ -3108,7 +3108,7 @@ func (s *Syncer) reportSyncProgress(force bool) {
 		accountFills,
 	).Uint64())
 	// Don't report anything until we have a meaningful progress
-	if estBytes < 1.0 {
+	if estBytes < 1.0 || float64(synced) > estBytes {
 		return
 	}
 	elapsed := time.Since(s.startTime)
