@@ -49,16 +49,15 @@ var (
 )
 
 type Config struct {
-	Blocks             int
-	Percentile         int
-	MaxHeaderHistory   int
-	MaxBlockHistory    int
-	Default            *big.Int `toml:",omitempty"`
-	MaxPrice           *big.Int `toml:",omitempty"`
-	IgnorePrice        *big.Int `toml:",omitempty"`
-	CongestedThreshold int      // Number of pending transactions to consider the network congested and suggest a minimum tip cap.
-	DefaultBasePrice   *big.Int `toml:",omitempty"` // Base price to set when CongestedThreshold is reached before Curie (EIP 1559).
-	DefaultGasTipCap   *big.Int `toml:",omitempty"` // Default minimum gas tip cap to use after Curie (EIP 1559).
+	Blocks           int
+	Percentile       int
+	MaxHeaderHistory int
+	MaxBlockHistory  int
+	Default          *big.Int `toml:",omitempty"`
+	MaxPrice         *big.Int `toml:",omitempty"`
+	IgnorePrice      *big.Int `toml:",omitempty"`
+	DefaultBasePrice *big.Int `toml:",omitempty"` // Base price to set when CongestedThreshold is reached before Curie (EIP 1559).
+	DefaultGasTipCap *big.Int `toml:",omitempty"` // Default minimum gas tip cap to use after Curie (EIP 1559).
 }
 
 // OracleBackend includes all necessary background APIs for oracle.
@@ -70,24 +69,22 @@ type OracleBackend interface {
 	ChainConfig() *params.ChainConfig
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	StateAt(root common.Hash) (*state.StateDB, error)
-	Stats() (pending int, queued int)
-	StatsWithMinBaseFee(minBaseFee *big.Int) (pending int, queued int)
 }
 
 // Oracle recommends gas prices based on the content of recent
 // blocks. Suitable for both light and full clients.
 type Oracle struct {
-	backend     OracleBackend
-	lastHead    common.Hash
-	lastPrice   *big.Int
-	maxPrice    *big.Int
-	ignorePrice *big.Int
-	cacheLock   sync.RWMutex
-	fetchLock   sync.Mutex
+	backend         OracleBackend
+	lastHead        common.Hash
+	lastPrice       *big.Int
+	lastIsCongested bool
+	maxPrice        *big.Int
+	ignorePrice     *big.Int
+	cacheLock       sync.RWMutex
+	fetchLock       sync.Mutex
 
 	checkBlocks, percentile           int
 	maxHeaderHistory, maxBlockHistory int
-	congestedThreshold                int      // Number of pending transactions to consider the network congested and suggest a minimum tip cap.
 	defaultBasePrice                  *big.Int // Base price to set when CongestedThreshold is reached before Curie (EIP 1559).
 	defaultGasTipCap                  *big.Int // Default gas tip cap to suggest after Curie (EIP 1559) when the network is not congested.
 	historyCache                      *lru.Cache
@@ -131,11 +128,6 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 		maxBlockHistory = 1
 		log.Warn("Sanitizing invalid gasprice oracle max block history", "provided", params.MaxBlockHistory, "updated", maxBlockHistory)
 	}
-	congestedThreshold := params.CongestedThreshold
-	if congestedThreshold < 0 {
-		congestedThreshold = 0
-		log.Warn("Sanitizing invalid gasprice oracle congested threshold", "provided", params.CongestedThreshold, "updated", congestedThreshold)
-	}
 	defaultBasePrice := params.DefaultBasePrice
 	if defaultBasePrice == nil || defaultBasePrice.Int64() < 0 {
 		defaultBasePrice = DefaultBasePrice
@@ -161,18 +153,17 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 	}()
 
 	return &Oracle{
-		backend:            backend,
-		lastPrice:          params.Default,
-		maxPrice:           maxPrice,
-		ignorePrice:        ignorePrice,
-		checkBlocks:        blocks,
-		percentile:         percent,
-		maxHeaderHistory:   maxHeaderHistory,
-		maxBlockHistory:    maxBlockHistory,
-		congestedThreshold: congestedThreshold,
-		defaultBasePrice:   defaultBasePrice,
-		defaultGasTipCap:   defaultGasTipCap,
-		historyCache:       cache,
+		backend:          backend,
+		lastPrice:        params.Default,
+		maxPrice:         maxPrice,
+		ignorePrice:      ignorePrice,
+		checkBlocks:      blocks,
+		percentile:       percent,
+		maxHeaderHistory: maxHeaderHistory,
+		maxBlockHistory:  maxBlockHistory,
+		defaultBasePrice: defaultBasePrice,
+		defaultGasTipCap: defaultGasTipCap,
+		historyCache:     cache,
 	}
 }
 
@@ -185,6 +176,10 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 	head, _ := oracle.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
 	headHash := head.Hash()
+
+	if oracle.backend.ChainConfig().IsScroll() {
+		return oracle.SuggestScrollPriorityFee(ctx, head), nil
+	}
 
 	// If the latest gasprice is still available, return it.
 	oracle.cacheLock.RLock()
@@ -202,26 +197,6 @@ func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 	oracle.cacheLock.RUnlock()
 	if headHash == lastHead {
 		return new(big.Int).Set(lastPrice), nil
-	}
-
-	// If pending txs are less than oracle.congestedThreshold, we consider the network to be non-congested and suggest
-	// a minimal tip cap. This is to prevent users from overpaying for gas when the network is not congested and a few
-	// high-priced txs are causing the suggested tip cap to be high.
-	pendingTxCount, _ := oracle.backend.StatsWithMinBaseFee(head.BaseFee)
-	if pendingTxCount < oracle.congestedThreshold {
-		// Before Curie (EIP-1559), we need to return the total suggested gas price. After Curie we return defaultGasTipCap wei as the tip cap,
-		// as the base fee is set separately or added manually for legacy transactions.
-		price := oracle.defaultGasTipCap
-		if !oracle.backend.ChainConfig().IsCurie(head.Number) {
-			price = oracle.defaultBasePrice
-		}
-
-		oracle.cacheLock.Lock()
-		oracle.lastHead = headHash
-		oracle.lastPrice = price
-		oracle.cacheLock.Unlock()
-
-		return new(big.Int).Set(price), nil
 	}
 
 	var (

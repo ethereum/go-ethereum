@@ -163,7 +163,6 @@ var (
 		utils.GpoPercentileFlag,
 		utils.GpoMaxGasPriceFlag,
 		utils.GpoIgnoreGasPriceFlag,
-		utils.GpoCongestionThresholdFlag,
 
 		utils.MinerNotifyFullFlag,
 		configFileFlag,

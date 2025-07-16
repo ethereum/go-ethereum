@@ -1019,6 +1019,11 @@ func (c *ChainConfig) IsFeynmanTransitionBlock(blockTimestamp uint64, parentTime
 	return isForkedTime(blockTimestamp, c.FeynmanTime) && !isForkedTime(parentTimestamp, c.FeynmanTime)
 }
 
+// IsScroll returns whether the node is an scroll node or not.
+func (c *ChainConfig) IsScroll() bool {
+	return c.Scroll.L1Config != nil
+}
+
 // IsTerminalPoWBlock returns whether the given block is the last block of PoW stage.
 func (c *ChainConfig) IsTerminalPoWBlock(parentTotalDiff *big.Int, totalDiff *big.Int) bool {
 	if c.TerminalTotalDifficulty == nil {
