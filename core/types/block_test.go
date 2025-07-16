@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/blocktest"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/params/presets"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
@@ -278,7 +279,7 @@ func makeBenchBlock() *Block {
 		key, _   = crypto.GenerateKey()
 		txs      = make([]*Transaction, 70)
 		receipts = make([]*Receipt, len(txs))
-		signer   = LatestSigner(params.TestChainConfig)
+		signer   = LatestSigner(presets.TestChainConfig)
 		uncles   = make([]*Header, 3)
 	)
 	header := &Header{
