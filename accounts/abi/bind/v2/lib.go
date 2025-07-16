@@ -27,7 +27,9 @@
 package bind
 
 import (
+	"context"
 	"errors"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -35,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // ContractEvent is a type constraint for ABI event types.
@@ -227,6 +230,34 @@ func DeployContract(opts *TransactOpts, bytecode []byte, backend ContractBackend
 	return crypto.CreateAddress(opts.From, tx.Nonce()), tx, nil
 }
 
+// waitAccepted polls the backend until the transaction is accepted or the
+// context is cancelled.  If the transaction was not accepted into the pool,
+// an error is returned.
+func waitAccepted(ctx context.Context, d ContractBackend, txHash common.Hash) error {
+	queryTicker := time.NewTicker(time.Second)
+	defer queryTicker.Stop()
+	logger := log.New("hash", txHash)
+	for {
+		_, _, err := d.TransactionByHash(ctx, txHash)
+		if err == nil {
+			return nil
+		}
+
+		if errors.Is(err, ethereum.NotFound) {
+			logger.Trace("Transaction not yet accepted")
+		} else {
+			logger.Trace("Transaction submission failed", "err", err)
+		}
+
+		// Wait for the next round.
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-queryTicker.C:
+		}
+	}
+}
+
 // DefaultDeployer returns a DeployFn that signs and submits creation transactions
 // using the given signer.
 //
@@ -236,6 +267,11 @@ func DefaultDeployer(opts *TransactOpts, backend ContractBackend) DeployFn {
 	return func(input []byte, deployer []byte) (common.Address, *types.Transaction, error) {
 		addr, tx, err := DeployContract(opts, deployer, backend, input)
 		if err != nil {
+			return common.Address{}, nil, err
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := waitAccepted(ctx, backend, tx.Hash()); err != nil {
 			return common.Address{}, nil, err
 		}
 		return addr, tx, nil
