@@ -801,12 +801,12 @@ func TestTracingWithOverrides(t *testing.T) {
 					byte(vm.PUSH1), 0x20,
 					byte(vm.PUSH1), 0x00,
 					byte(vm.RETURN),
-				}), // blocknumber
+				}),
 			},
 			config: &TraceCallConfig{
 				BlockOverrides: &override.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(int64(genBlocks + 1)))},
 			},
-			want: fmt.Sprintf(`{"gas":59590,"failed":false,"returnValue":"%s"}`, fmt.Sprintf("0x%064s", backend.chain.GetHeaderByNumber(uint64(genBlocks)).Hash().Hex()[2:])),
+			want: fmt.Sprintf(`{"gas":59590,"failed":false,"returnValue":"%s"}`, backend.chain.GetHeaderByNumber(uint64(genBlocks)).Hash().Hex()),
 		},
 		/*
 			pragma solidity =0.8.12;
