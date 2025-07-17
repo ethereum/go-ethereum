@@ -137,6 +137,7 @@ func TestBlockSync(t *testing.T) {
 type testHeadTracker struct {
 	prefetch  types.HeadInfo
 	validated types.SignedHeader
+	finalized types.HeaderWithExecProof
 }
 
 func (h *testHeadTracker) PrefetchHead() types.HeadInfo {
@@ -144,20 +145,128 @@ func (h *testHeadTracker) PrefetchHead() types.HeadInfo {
 }
 
 func (h *testHeadTracker) ValidatedOptimistic() (types.OptimisticUpdate, bool) {
+	if h.validated.Header == (types.Header{}) {
+		return types.OptimisticUpdate{}, false
+	}
+	
+	// Create execution header for the attested block
+	execHeader := types.NewExecutionHeader(&deneb.ExecutionPayloadHeader{
+		BlockNumber: 456,
+		BlockHash:   zrntcommon.Hash32(common.HexToHash("905ac721c4058d9ed40b27b6b9c1bdd10d4333e4f3d9769100bf9dfb80e5d1f6")),
+	})
+	
 	return types.OptimisticUpdate{
-		Attested:      types.HeaderWithExecProof{Header: h.validated.Header},
+		Attested:      types.HeaderWithExecProof{Header: h.validated.Header, PayloadHeader: execHeader},
 		Signature:     h.validated.Signature,
 		SignatureSlot: h.validated.SignatureSlot,
-	}, h.validated.Header != (types.Header{})
+	}, true
 }
 
-// TODO add test case for finality
 func (h *testHeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
-	finalized := types.NewExecutionHeader(new(deneb.ExecutionPayloadHeader))
+	if h.validated.Header == (types.Header{}) {
+		return types.FinalityUpdate{}, false
+	}
+	
+	// Use the finalized field if set, otherwise create a default one
+	finalized := h.finalized
+	if finalized.PayloadHeader == nil {
+		finalized = types.HeaderWithExecProof{PayloadHeader: types.NewExecutionHeader(new(deneb.ExecutionPayloadHeader))}
+		return types.FinalityUpdate{
+			Attested:      types.HeaderWithExecProof{Header: h.validated.Header},
+			Finalized:     finalized,
+			Signature:     h.validated.Signature,
+			SignatureSlot: h.validated.SignatureSlot,
+		}, false // Return false when no real finalized data
+	}
+	
+	// Create execution header for the attested block
+	execHeader := types.NewExecutionHeader(&deneb.ExecutionPayloadHeader{
+		BlockNumber: 456,
+		BlockHash:   zrntcommon.Hash32(common.HexToHash("905ac721c4058d9ed40b27b6b9c1bdd10d4333e4f3d9769100bf9dfb80e5d1f6")),
+	})
+	
 	return types.FinalityUpdate{
-		Attested:      types.HeaderWithExecProof{Header: h.validated.Header},
-		Finalized:     types.HeaderWithExecProof{PayloadHeader: finalized},
+		Attested:      types.HeaderWithExecProof{Header: h.validated.Header, PayloadHeader: execHeader},
+		Finalized:     finalized,
 		Signature:     h.validated.Signature,
 		SignatureSlot: h.validated.SignatureSlot,
-	}, h.validated.Header != (types.Header{})
+	}, true // Return true when finalized data is available
+}
+
+// TestBlockSyncFinality tests the finality update functionality in block sync
+func TestBlockSyncFinality(t *testing.T) {
+	ht := &testHeadTracker{}
+	blockSync := newBeaconBlockSync(ht)
+	headCh := make(chan types.ChainHeadEvent, 16)
+	blockSync.SubscribeChainHead(headCh)
+	ts := sync.NewTestScheduler(t, blockSync)
+	ts.AddServer(testServer1, 1)
+	ts.AddServer(testServer2, 1)
+
+	// Helper function to check chain head event
+	checkChainHeadEvent := func(expectedFinalizedHash common.Hash) {
+		t.Helper()
+		select {
+		case event := <-headCh:
+			if event.Finalized != expectedFinalizedHash {
+				t.Errorf("Wrong finalized hash, expected %v, got %v", expectedFinalizedHash, event.Finalized)
+			}
+			t.Logf("Chain head event received: block=%d, finalized=%v", event.Block.NumberU64(), event.Finalized)
+		default:
+			t.Error("Expected chain head event, but got none")
+		}
+	}
+
+	// Set block 1 as prefetch head
+	head1 := blockHeadInfo(testBlock1)
+	ht.prefetch = head1
+	ts.ServerEvent(sync.EvNewHead, testServer1, head1)
+
+	// Request and receive block 1
+	ts.Run(1, testServer1, sync.ReqBeaconBlock(head1.BlockRoot))
+	ts.RequestEvent(request.EvResponse, ts.Request(1, 1), testBlock1)
+	ts.AddAllowance(testServer1, 1)
+	ts.Run(2)
+
+	// Set as validated head - this should trigger a chain head event without finality
+	ht.validated.Header = testBlock1.Header()
+	ts.Run(3)
+
+	// Should get a chain head event without finalized hash
+	checkChainHeadEvent(common.Hash{})
+
+	// Now test finality update with block 2 to ensure different head info
+	head2 := blockHeadInfo(testBlock2)
+	ht.prefetch = head2
+	ts.ServerEvent(sync.EvNewHead, testServer2, head2)
+
+	// Request and receive block 2
+	ts.Run(4, testServer2, sync.ReqBeaconBlock(head2.BlockRoot))
+	ts.RequestEvent(request.EvResponse, ts.Request(4, 1), testBlock2)
+	ts.AddAllowance(testServer2, 1)
+	ts.Run(5)
+
+	// Create a finalized execution header
+	finalizedExecHeader := types.NewExecutionHeader(&deneb.ExecutionPayloadHeader{
+		BlockNumber: 400, // Earlier block number
+		BlockHash:   zrntcommon.Hash32(common.HexToHash("abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")),
+	})
+
+	// Create a finalized header with the same epoch as the attested header
+	finalizedHeader := types.Header{
+		Slot: testBlock2.Header().Slot, // Same epoch as block 2
+	}
+
+	// Update the testHeadTracker to return finality info and set block 2 as validated
+	ht.finalized = types.HeaderWithExecProof{
+		Header:        finalizedHeader,
+		PayloadHeader: finalizedExecHeader,
+	}
+	ht.validated.Header = testBlock2.Header()
+
+	// Trigger another update to check finality
+	ts.Run(6)
+
+	// Should now have a finalized hash in the chain head event
+	checkChainHeadEvent(finalizedExecHeader.BlockHash())
 }
