@@ -199,15 +199,18 @@ func TestBatchIndexerWrite(t *testing.T) {
 		storages = make(map[common.Hash]map[common.Hash][]uint64)
 	)
 	for i, h := range histories {
-		for _, addr := range h.accountList {
+		for addr := range h.accounts {
 			addrHash := crypto.Keccak256Hash(addr.Bytes())
 			accounts[addrHash] = append(accounts[addrHash], uint64(i+1))
 
 			if _, ok := storages[addrHash]; !ok {
 				storages[addrHash] = make(map[common.Hash][]uint64)
 			}
-			for _, slot := range h.storageList[addr] {
-				storages[addrHash][slot] = append(storages[addrHash][slot], uint64(i+1))
+			slots, ok := h.storages[addr]
+			if ok {
+				for slot := range slots {
+					storages[addrHash][slot] = append(storages[addrHash][slot], uint64(i+1))
+				}
 			}
 		}
 	}
