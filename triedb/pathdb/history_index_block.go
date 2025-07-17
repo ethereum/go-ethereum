@@ -116,34 +116,31 @@ func parseIndexBlock(blob []byte) ([]uint16, []byte, error) {
 	if len(blob) < 1 {
 		return nil, nil, fmt.Errorf("corrupted index block, len: %d", len(blob))
 	}
-	restartLen := blob[len(blob)-1]
+	restartLen := int(blob[len(blob)-1])
 	if restartLen == 0 {
 		return nil, nil, errors.New("corrupted index block, no restart")
 	}
-	tailLen := int(restartLen)*2 + 1
+	tailLen := restartLen*2 + 1
 	if len(blob) < tailLen {
 		return nil, nil, fmt.Errorf("truncated restarts, size: %d, restarts: %d", len(blob), restartLen)
 	}
-	restarts := make([]uint16, 0, restartLen)
-	for i := int(restartLen); i > 0; i-- {
-		restart := binary.BigEndian.Uint16(blob[len(blob)-1-2*i:])
-		restarts = append(restarts, restart)
-	}
-	// Validate that restart points are strictly ordered and within the valid
+	restarts := make([]uint16, restartLen)
+	dataEnd := len(blob) - tailLen
+
+	// Extract and validate that restart points are strictly ordered and within the valid
 	// data range.
-	var prev uint16
-	for i := 0; i < len(restarts); i++ {
-		if i != 0 {
-			if restarts[i] <= prev {
-				return nil, nil, fmt.Errorf("restart out of order, prev: %d, next: %d", prev, restarts[i])
-			}
+	for i := 0; i < restartLen; i++ {
+		off := dataEnd + 2*i
+		restarts[i] = binary.BigEndian.Uint16(blob[off : off+2])
+
+		if i > 0 && restarts[i] <= restarts[i-1] {
+			return nil, nil, fmt.Errorf("restart out of order, prev: %d, next: %d", restarts[i-1], restarts[i])
 		}
-		if int(restarts[i]) >= len(blob)-tailLen {
-			return nil, nil, fmt.Errorf("invalid restart position, restart: %d, size: %d", restarts[i], len(blob)-tailLen)
+		if int(restarts[i]) >= dataEnd {
+			return nil, nil, fmt.Errorf("invalid restart position, restart: %d, size: %d", restarts[i], dataEnd)
 		}
-		prev = restarts[i]
 	}
-	return restarts, blob[:len(blob)-tailLen], nil
+	return restarts, blob[:dataEnd], nil
 }
 
 // blockReader is the reader to access the element within a block.
