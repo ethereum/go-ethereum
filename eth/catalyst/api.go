@@ -527,10 +527,10 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
-
 	available := api.eth.BlobTxPool().AvailableBlobs(hashes)
 	getBlobsRequestedCounter.Inc(int64(len(hashes)))
 	getBlobsAvailableCounter.Inc(int64(available))
+
 	// Optimization: check first if all blobs are available, if not, return empty response
 	if available != len(hashes) {
 		getBlobsV2RequestMiss.Inc(1)
@@ -557,7 +557,7 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 			// not found, return empty response
 			return nil, nil
 		}
-		if sidecar.Version != 1 {
+		if sidecar.Version != types.BlobSidecarVersion1 {
 			log.Info("GetBlobs queried V0 transaction: index %v, blobhashes %v", index, sidecar.BlobHashes())
 			return nil, nil
 		}
@@ -566,9 +566,7 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 			if idxes, ok := index[hash]; ok {
 				proofs, err := sidecar.CellProofsAt(bIdx)
 				if err != nil {
-					// TODO @rjl @marius we should return an error
-					log.Info("Failed to get cell proof", "err", err)
-					return nil, nil
+					return nil, engine.InvalidParams.With(err)
 				}
 				var cellProofs []hexutil.Bytes
 				for _, proof := range proofs {

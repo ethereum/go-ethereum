@@ -1603,11 +1603,7 @@ func (api *TransactionAPI) SignTransaction(ctx context.Context, args Transaction
 	// no longer retains the blobs, only the blob hashes. In this step, we need
 	// to put back the blob(s).
 	if args.IsEIP4844() {
-		signed = signed.WithBlobTxSidecar(&types.BlobTxSidecar{
-			Blobs:       args.Blobs,
-			Commitments: args.Commitments,
-			Proofs:      args.Proofs,
-		})
+		signed = signed.WithBlobTxSidecar(types.NewBlobTxSidecar(types.BlobSidecarVersion0, args.Blobs, args.Commitments, args.Proofs))
 	}
 	data, err := signed.MarshalBinary()
 	if err != nil {
