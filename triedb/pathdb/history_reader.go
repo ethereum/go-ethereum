@@ -122,19 +122,14 @@ type indexReaderWithLimitTag struct {
 }
 
 // newIndexReaderWithLimitTag constructs a index reader with indexing position.
-func newIndexReaderWithLimitTag(db ethdb.KeyValueReader, state stateIdent) (*indexReaderWithLimitTag, error) {
-	// Read the last indexed ID before the index reader construction
-	metadata := loadIndexMetadata(db)
-	if metadata == nil {
-		return nil, errors.New("state history hasn't been indexed yet")
-	}
+func newIndexReaderWithLimitTag(db ethdb.KeyValueReader, state stateIdent, limit uint64) (*indexReaderWithLimitTag, error) {
 	r, err := newIndexReader(db, state)
 	if err != nil {
 		return nil, err
 	}
 	return &indexReaderWithLimitTag{
 		reader: r,
-		limit:  metadata.Last,
+		limit:  limit,
 		db:     db,
 	}, nil
 }
@@ -348,7 +343,7 @@ func (r *historyReader) read(state stateIdentQuery, stateID uint64, lastID uint6
 	// state retrieval
 	ir, ok := r.readers[state.String()]
 	if !ok {
-		ir, err = newIndexReaderWithLimitTag(r.disk, state.stateIdent)
+		ir, err = newIndexReaderWithLimitTag(r.disk, state.stateIdent, metadata.Last)
 		if err != nil {
 			return nil, err
 		}
