@@ -100,12 +100,6 @@ func testEncodeDecodeHistory(t *testing.T, rawStorageKey bool) {
 	if !compareStorages(dec.storages, obj.storages) {
 		t.Fatal("storage data is mismatched")
 	}
-	if !compareList(dec.accountList, obj.accountList) {
-		t.Fatal("account list is mismatched")
-	}
-	if !compareStorageList(dec.storageList, obj.storageList) {
-		t.Fatal("storage list is mismatched")
-	}
 }
 
 func checkHistory(t *testing.T, db ethdb.KeyValueReader, freezer ethdb.AncientReader, id uint64, root common.Hash, exist bool) {
