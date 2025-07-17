@@ -142,6 +142,11 @@ type Era struct {
 	rootheader uint64 // offset of the root header in the file if present
 }
 
+// Returns a recognizable filename for erae file
+func Filename(network string, epoch int, root common.Hash) string {
+	return fmt.Sprintf("%s-%05d-%s.erae", network, epoch, root.Hex()[2:10])
+}
+
 // Opens era file
 func Open(path string) (*Era, error) {
 	f, err := os.Open(path)
