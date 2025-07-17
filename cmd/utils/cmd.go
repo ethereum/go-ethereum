@@ -461,7 +461,7 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 				return fmt.Errorf("export failed to finalize %d: %w", step/i, err)
 			}
 			// Set correct filename with root.
-			os.Rename(filename, filepath.Join(dir, era2.Filename(network, int(i/step), root)))
+			os.Rename(filename, filepath.Join(dir, era.Filename(network, int(i/step), root)))
 
 			// Compute checksum of entire Era1.
 			if _, err := f.Seek(0, io.SeekStart); err != nil {
@@ -546,7 +546,7 @@ func ExportHistoryEraE(bc *core.BlockChain, dir string, first, last, step uint64
 			if err != nil {
 				return fmt.Errorf("export failed to finalize %d: %w", step/i, err)
 			}
-			os.Rename(filename, filepath.Join(dir, era.Filename(network, int(i/step), root)))
+			os.Rename(filename, filepath.Join(dir, era2.Filename(network, int(i/step), root)))
 			if _, err := f.Seek(0, io.SeekStart); err != nil {
 				return err
 			}
