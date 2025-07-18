@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"bytes"
 	"fmt"
 	"sync"
 
@@ -101,6 +102,9 @@ func (h *hasher) hash(n node, force bool) []byte {
 	}
 }
 
+// encodeShortNode encodes the provided shortNode into the bytes. Notably, the
+// return slice must be deep-copied explicitly, otherwise the underlying slice
+// will be reused later.
 func (h *hasher) encodeShortNode(n *shortNode) []byte {
 	// Encode leaf node
 	if hasTerm(n.Key) {
@@ -127,8 +131,9 @@ var fnEncoderPool = sync.Pool{
 	},
 }
 
-// encodeFullNode returns a copy of the supplied fullNode, with its child
-// being replaced by either the hash or an embedded node if the child is small.
+// encodeFullNode encodes the provided fullNode into the bytes. Notably, the
+// return slice must be deep-copied explicitly, otherwise the underlying slice
+// will be reused later.
 func (h *hasher) encodeFullNode(n *fullNode) []byte {
 	fn := fnEncoderPool.Get().(*fullnodeEncoder)
 	fn.reset()
@@ -181,7 +186,8 @@ func (h *hasher) encodedBytes() []byte {
 	return h.tmp
 }
 
-// hashData hashes the provided data
+// hashData hashes the provided data. It is safe to modify the returned slice after
+// the function returns.
 func (h *hasher) hashData(data []byte) []byte {
 	n := make([]byte, 32)
 	h.sha.Reset()
@@ -200,12 +206,14 @@ func (h *hasher) hashDataTo(dst, data []byte) {
 
 // proofHash is used to construct trie proofs, returning the rlp-encoded node blobs.
 // Note, only resolved node (shortNode or fullNode) is expected for proofing.
+//
+// It is safe to modify the returned slice after the function returns.
 func (h *hasher) proofHash(original node) []byte {
 	switch n := original.(type) {
 	case *shortNode:
-		return h.encodeShortNode(n)
+		return bytes.Clone(h.encodeShortNode(n))
 	case *fullNode:
-		return h.encodeFullNode(n)
+		return bytes.Clone(h.encodeFullNode(n))
 	default:
 		panic(fmt.Errorf("unexpected node type, %T", original))
 	}
