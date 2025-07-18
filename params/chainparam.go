@@ -10,13 +10,24 @@ import (
 
 // ChainID
 var ChainID = Define(T[*big.Int]{
-	Name: "chainId",
-	Validate: func(v *big.Int, cfg *Config2) error {
-		if v.Sign() <= 0 {
-			return fmt.Errorf("invalid chainID value %v", v)
-		}
-		return nil
-	},
+	Name:     "chainId",
+	Optional: false,
+	Validate: validateChainID,
+})
+
+func validateChainID(v *big.Int, cfg *Config2) error {
+	if v.Sign() <= 0 {
+		return fmt.Errorf("invalid chainID value %v", v)
+	}
+	return nil
+}
+
+// DAOForkSupport is the chain parameter that configures the DAO fork.
+// true=supports or false=opposes the fork.
+// The default value is true.
+var DAOForkSupport = Define(T[bool]{
+	Optional: true,
+	Default:  true,
 })
 
 // TerminalTotalDifficulty (TTD) is the total difficulty value where
@@ -56,11 +67,3 @@ func validateBlobSchedule(schedule map[forks.Fork]BlobConfig, cfg *Config2) erro
 	}
 	return nil
 }
-
-// DAOForkSupport is the chain parameter that configures the DAO fork.
-// true=supports or false=opposes the fork.
-// The default value is true.
-var DAOForkSupport = Define(T[bool]{
-	Optional: true,
-	Default:  true,
-})
