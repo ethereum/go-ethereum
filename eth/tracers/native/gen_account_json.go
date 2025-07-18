@@ -13,50 +13,50 @@ import (
 var _ = (*accountMarshaling)(nil)
 
 // MarshalJSON marshals as JSON.
-func (a account) MarshalJSON() ([]byte, error) {
-	type account struct {
+func (p PrestateAccount) MarshalJSON() ([]byte, error) {
+	type PrestateAccount struct {
 		Balance  *hexutil.Big                `json:"balance,omitempty"`
 		Code     hexutil.Bytes               `json:"code,omitempty"`
 		CodeHash *common.Hash                `json:"codeHash,omitempty"`
 		Nonce    uint64                      `json:"nonce,omitempty"`
 		Storage  map[common.Hash]common.Hash `json:"storage,omitempty"`
 	}
-	var enc account
-	enc.Balance = (*hexutil.Big)(a.Balance)
-	enc.Code = a.Code
-	enc.CodeHash = a.CodeHash
-	enc.Nonce = a.Nonce
-	enc.Storage = a.Storage
+	var enc PrestateAccount
+	enc.Balance = (*hexutil.Big)(p.Balance)
+	enc.Code = p.Code
+	enc.CodeHash = p.CodeHash
+	enc.Nonce = p.Nonce
+	enc.Storage = p.Storage
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
-func (a *account) UnmarshalJSON(input []byte) error {
-	type account struct {
+func (p *PrestateAccount) UnmarshalJSON(input []byte) error {
+	type PrestateAccount struct {
 		Balance  *hexutil.Big                `json:"balance,omitempty"`
 		Code     *hexutil.Bytes              `json:"code,omitempty"`
 		CodeHash *common.Hash                `json:"codeHash,omitempty"`
 		Nonce    *uint64                     `json:"nonce,omitempty"`
 		Storage  map[common.Hash]common.Hash `json:"storage,omitempty"`
 	}
-	var dec account
+	var dec PrestateAccount
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
 	if dec.Balance != nil {
-		a.Balance = (*big.Int)(dec.Balance)
+		p.Balance = (*big.Int)(dec.Balance)
 	}
 	if dec.Code != nil {
-		a.Code = *dec.Code
+		p.Code = *dec.Code
 	}
 	if dec.CodeHash != nil {
-		a.CodeHash = dec.CodeHash
+		p.CodeHash = dec.CodeHash
 	}
 	if dec.Nonce != nil {
-		a.Nonce = *dec.Nonce
+		p.Nonce = *dec.Nonce
 	}
 	if dec.Storage != nil {
-		a.Storage = dec.Storage
+		p.Storage = dec.Storage
 	}
 	return nil
 }

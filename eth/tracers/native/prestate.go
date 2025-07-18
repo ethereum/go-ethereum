@@ -35,15 +35,15 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-//go:generate go run github.com/fjl/gencodec -type account -field-override accountMarshaling -out gen_account_json.go
+//go:generate go run github.com/fjl/gencodec -type PrestateAccount -field-override accountMarshaling -out gen_account_json.go
 
 func init() {
 	tracers.DefaultDirectory.Register("prestateTracer", newPrestateTracer, false)
 }
 
-type stateMap = map[common.Address]*account
+type stateMap = map[common.Address]*PrestateAccount
 
-type account struct {
+type PrestateAccount struct {
 	Balance  *big.Int                    `json:"balance,omitempty"`
 	Code     []byte                      `json:"code,omitempty"`
 	CodeHash *common.Hash                `json:"codeHash,omitempty"`
@@ -52,7 +52,7 @@ type account struct {
 	empty    bool
 }
 
-func (a *account) exists() bool {
+func (a *PrestateAccount) exists() bool {
 	return a.Nonce > 0 || len(a.Code) > 0 || len(a.Storage) > 0 || (a.Balance != nil && a.Balance.Sign() != 0)
 }
 
@@ -66,7 +66,7 @@ type prestateTracer struct {
 	pre         stateMap
 	post        stateMap
 	to          common.Address
-	config      prestateTracerConfig
+	config      PrestateTracerConfig
 	chainConfig *params.ChainConfig
 	interrupt   atomic.Bool // Atomic flag to signal execution interruption
 	reason      error       // Textual reason for the interruption
@@ -74,7 +74,7 @@ type prestateTracer struct {
 	deleted     map[common.Address]bool
 }
 
-type prestateTracerConfig struct {
+type PrestateTracerConfig struct {
 	DiffMode       bool `json:"diffMode"`       // If true, this tracer will return state modifications
 	DisableCode    bool `json:"disableCode"`    // If true, this tracer will not return the contract code
 	DisableStorage bool `json:"disableStorage"` // If true, this tracer will not return the contract storage
@@ -82,7 +82,7 @@ type prestateTracerConfig struct {
 }
 
 func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*tracers.Tracer, error) {
-	var config prestateTracerConfig
+	var config PrestateTracerConfig
 	if err := json.Unmarshal(cfg, &config); err != nil {
 		return nil, err
 	}
@@ -253,7 +253,7 @@ func (t *prestateTracer) processDiffState() {
 			continue
 		}
 		modified := false
-		postAccount := &account{Storage: make(map[common.Hash]common.Hash)}
+		postAccount := &PrestateAccount{Storage: make(map[common.Hash]common.Hash)}
 		newBalance := t.env.StateDB.GetBalance(addr).ToBig()
 		newNonce := t.env.StateDB.GetNonce(addr)
 		newCodeHash := t.env.StateDB.GetCodeHash(addr)
@@ -323,7 +323,7 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 		return
 	}
 
-	acc := &account{
+	acc := &PrestateAccount{
 		Balance: t.env.StateDB.GetBalance(addr).ToBig(),
 		Nonce:   t.env.StateDB.GetNonce(addr),
 		Code:    t.env.StateDB.GetCode(addr),
