@@ -242,7 +242,7 @@ func (it *nodeIterator) LeafProof() [][]byte {
 				// Gather nodes that end up as hash nodes (or the root)
 				enc := hasher.proofHash(item.node)
 				if len(enc) >= 32 || i == 0 {
-					proofs = append(proofs, common.CopyBytes(enc))
+					proofs = append(proofs, enc)
 				}
 			}
 			return proofs
