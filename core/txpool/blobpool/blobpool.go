@@ -326,10 +326,6 @@ type BlobPool struct {
 	discoverFeed event.Feed // Event feed to send out new tx events on pool discovery (reorg excluded)
 	insertFeed   event.Feed // Event feed to send out new tx events on pool inclusion (reorg included)
 
-	// txValidationFn defaults to txpool.ValidateTransaction, but can be
-	// overridden for testing purposes.
-	txValidationFn txpool.ValidationFunction
-
 	lock sync.RWMutex // Mutex protecting the pool during reorg handling
 }
 
@@ -348,7 +344,6 @@ func New(config Config, chain BlockChain, hasPendingAuth func(common.Address) bo
 		lookup:         newLookup(),
 		index:          make(map[common.Address][]*blobTxMeta),
 		spent:          make(map[common.Address]*uint256.Int),
-		txValidationFn: txpool.ValidateTransaction,
 	}
 }
 
