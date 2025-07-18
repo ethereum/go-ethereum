@@ -51,6 +51,7 @@ var (
 			historyTestFileFlag,
 			traceTestFileFlag,
 			traceTestInvalidOutputFlag,
+			proofTestInvalidOutputFlag,
 		},
 	}
 	testPatternFlag = &cli.StringFlag{
@@ -95,6 +96,7 @@ type testConfig struct {
 	historyTestFile   string
 	historyPruneBlock *uint64
 	traceTestFile     string
+	proofTestFile     string
 }
 
 var errPrunedHistory = fmt.Errorf("attempt to access pruned history")
@@ -222,11 +224,13 @@ func runTestCmd(ctx *cli.Context) error {
 	filterSuite := newFilterTestSuite(cfg)
 	historySuite := newHistoryTestSuite(cfg)
 	traceSuite := newTraceTestSuite(cfg, ctx)
+	proofSuite := newProofTestSuite(cfg, ctx)
 
 	// Filter test cases.
 	tests := filterSuite.allTests()
 	tests = append(tests, historySuite.allTests()...)
 	tests = append(tests, traceSuite.allTests()...)
+	tests = append(tests, proofSuite.allTests()...)
 
 	utests := filterTests(tests, ctx.String(testPatternFlag.Name), func(t workloadTest) bool {
 		if t.Slow && !ctx.Bool(testSlowFlag.Name) {
