@@ -28,31 +28,25 @@ import (
 	"github.com/ethereum/go-ethereum/params/forks"
 )
 
+var FeeConfigParam = params.Define(params.T[FeeConfig]{
+	Name:     "eip1559Config",
+	Optional: true,
+	Default: FeeConfig{
+		ElasticityMultiplier:     params.DefaultElasticityMultiplier,
+		BaseFeeChangeDenominator: params.DefaultBaseFeeChangeDenominator,
+	},
+})
+
 type FeeConfig struct {
 	ElasticityMultiplier     uint64 `json:"elasticityMultiplier"`
 	BaseFeeChangeDenominator uint64 `json:"baseFeeChangeDenominator"`
-}
-
-func (fc FeeConfig) Validate(config *params.Config2) error {
-	return nil
-}
-
-func init() {
-	params.Define(params.Parameter[FeeConfig]{
-		Name:     "eip1559Config",
-		Optional: true,
-		Default: FeeConfig{
-			ElasticityMultiplier:     params.DefaultElasticityMultiplier,
-			BaseFeeChangeDenominator: params.DefaultBaseFeeChangeDenominator,
-		},
-	})
 }
 
 // VerifyEIP1559Header verifies some header attributes which were changed in EIP-1559,
 // - gas limit check
 // - basefee check
 func VerifyEIP1559Header(config *params.Config2, parent, header *types.Header) error {
-	feecfg := params.Get[FeeConfig](config)
+	feecfg := FeeConfigParam.Get(config)
 
 	// Verify that the gas limit remains within allowed bounds
 	parentGasLimit := parent.GasLimit
@@ -77,7 +71,7 @@ func VerifyEIP1559Header(config *params.Config2, parent, header *types.Header) e
 
 // CalcBaseFee calculates the basefee of the header.
 func CalcBaseFee(config *params.Config2, parent *types.Header) *big.Int {
-	feecfg := params.Get[FeeConfig](config)
+	feecfg := FeeConfigParam.Get(config)
 
 	// If the current block is the first EIP-1559 block, return the InitialBaseFee.
 	if !config.Active(forks.London, parent.Number.Uint64(), parent.Time) {
