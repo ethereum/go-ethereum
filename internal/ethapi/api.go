@@ -1135,6 +1135,34 @@ func (api *BlockChainAPI) CreateAccessList(ctx context.Context, args Transaction
 	return result, nil
 }
 
+type config struct {
+	ActivationTime  uint64                    `json:"activationTime"`
+	BlobSchedule    *params.BlobConfig        `json:"blobSchedule"`
+	ChainId         *hexutil.Big              `json:"chainId"`
+	Precompiles     map[common.Address]string `json:"precompiles"`
+	SystemContracts map[string]common.Address `json:"systemContracts"`
+}
+
+// Config implements the EIP-7910 eth_config method.
+func (api *BlockChainAPI) Config(ctx context.Context) config {
+	var (
+		c           = api.b.ChainConfig()
+		h           = api.b.CurrentBlock()
+		rules       = c.Rules(h.Number, true, h.Time)
+		precompiles = make(map[common.Address]string)
+	)
+	for addr, c := range vm.ActivePrecompiledContracts(rules) {
+		precompiles[addr] = c.Name()
+	}
+	return config{
+		ActivationTime:  c.NextForkTime(h.Time),
+		BlobSchedule:    c.BlobConfig(c.LatestFork(h.Time)),
+		ChainId:         (*hexutil.Big)(c.ChainID),
+		Precompiles:     precompiles,
+		SystemContracts: c.ActiveSystemContracts(h.Time),
+	}
+}
+
 // AccessList creates an access list for the given transaction.
 // If the accesslist creation fails an error is returned.
 // If the transaction itself fails, an vmErr is returned.
