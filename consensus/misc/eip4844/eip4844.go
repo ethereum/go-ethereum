@@ -101,7 +101,7 @@ func CalcExcessBlobGas(config *params.Config2, parent *types.Header, headTimesta
 
 // CalcBlobFee calculates the blobfee from the header's excess blob gas field.
 func CalcBlobFee(config *params.Config2, header *types.Header) *big.Int {
-	schedule := params.Get[params.BlobSchedule](config)
+	schedule := params.BlobSchedule.Get(config)
 	if schedule == nil {
 		return new(big.Int)
 	}
@@ -123,7 +123,7 @@ func MaxBlobGasPerBlock(cfg *params.Config2, time uint64) uint64 {
 // LatestMaxBlobsPerBlock returns the latest max blobs per block defined by the
 // configuration, regardless of the currently active fork.
 func LatestMaxBlobsPerBlock(cfg *params.Config2) int {
-	schedule := params.Get[params.BlobSchedule](cfg)
+	schedule := params.BlobSchedule.Get(cfg)
 	if schedule == nil {
 		return 0
 	}
@@ -141,7 +141,7 @@ func targetBlobsPerBlock(cfg *params.Config2, time uint64) int {
 }
 
 func scheduleAtTime(cfg *params.Config2, time uint64) params.BlobConfig {
-	schedule := params.Get[params.BlobSchedule](cfg)
+	schedule := params.BlobSchedule.Get(cfg)
 	if schedule == nil {
 		return params.BlobConfig{}
 	}
