@@ -22,7 +22,7 @@ jobs:
     - name: Install cross toolchain
       run: |
         apt-get update
-        apt-get -yq --no-install-suggests --no-install-recommends install gcc-multilib
+        apt-get -yq --no-install-suggests --no-install-recommends install gcc-multilib libgmp-dev
 
     - name: Build (amd64)
       run: |

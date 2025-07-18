@@ -22,6 +22,8 @@ for:
   - matrix:
       only:
         - image: Ubuntu
+    install:
+      - sudo apt-get update && sudo apt-get install -y libgmp-dev
     build_script:
       - go run build/ci.go lint
       - go run build/ci.go check_generate
