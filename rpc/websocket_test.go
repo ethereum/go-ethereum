@@ -142,8 +142,8 @@ func TestWebsocketLargeRead(t *testing.T) {
 		// Remove some bytes for json encoding overhead.
 		underLimit := int(expLimit - 128)
 		overLimit := expLimit + 1
-		if expLimit == wsDefaultReadLimit {
-			// No point trying the full 32MB in tests. Just sanity-check that
+		if expLimit >= wsDefaultReadLimit {
+			// No point trying the full 32MB or more in the tests. Just sanity-check that
 			// it's not obviously limited.
 			underLimit = 1024
 			overLimit = -1
@@ -170,6 +170,7 @@ func TestWebsocketLargeRead(t *testing.T) {
 	testLimit(ptr(0))  // Should be ignored (use default)
 	testLimit(nil)     // Should be ignored (use default)
 	testLimit(ptr(200))
+	testLimit(ptr(wsDefaultReadLimit))
 	testLimit(ptr(wsDefaultReadLimit * 2))
 }
 
