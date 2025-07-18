@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/golang/snappy"
 	"golang.org/x/crypto/sha3"
+	"github.com/ethereum/go-ethereum/common/bitutil"
 )
 
 // Conn is an RLPx network connection. It wraps a low-level network connection. The
@@ -676,8 +677,6 @@ func exportPubkey(pub *ecies.PublicKey) []byte {
 
 func xor(one, other []byte) (xor []byte) {
 	xor = make([]byte, len(one))
-	for i := 0; i < len(one); i++ {
-		xor[i] = one[i] ^ other[i]
-	}
+	bitutil.XORBytes(xor, one, other)
 	return xor
 }
