@@ -70,16 +70,16 @@ const (
 	headerSize             uint64 = 8
 )
 
-type variant uint16
-
+// temporary buffer for writing blocks until Finalize is called
 type buffer struct {
 	headers  [][]byte
 	bodies   [][]byte
 	receipts [][]byte
 	proofs   [][]byte
-	tds      [][]byte
+	tds      []*big.Int
 }
 
+// offsets holds the offsets of the different block components in the e2store file
 type offsets struct {
 	headers      []uint64
 	bodys        []uint64
@@ -89,50 +89,30 @@ type offsets struct {
 }
 
 type Builder struct {
-	w   *e2store.Writer
-	buf *bytes.Buffer
-	sn  *snappy.Writer
+	w      *e2store.Writer
+	buf    *bytes.Buffer
+	snappy *snappy.Writer
 
 	buff buffer
 	off  offsets
 
-	prooftype    variant
-	tdsint       []*big.Int
-	hashes       []common.Hash
-	startNum     *uint64
-	writtenBytes uint64
+	hashes   []common.Hash
+	startNum *uint64
+	written  uint64
 }
 
 // NewBuilder returns a new Builder instance.
 func NewBuilder(w io.Writer) *Builder {
 	buf := bytes.NewBuffer(nil)
 	return &Builder{
-		w:   e2store.NewWriter(w),
-		buf: buf,
-		sn:  snappy.NewBufferedWriter(buf),
+		w:      e2store.NewWriter(w),
+		buf:    buf,
+		snappy: snappy.NewBufferedWriter(buf),
 	}
 }
 
 // Add writes a block entry, its reciepts, and optionally its proofs as well into the e2store file.
 func (b *Builder) Add(header types.Header, body types.Body, receipts types.Receipts, td *big.Int, proof Proof) error {
-	pv := variantOf(proof) // variant code (or proofNone)
-	var ep []byte          // encoded proof payload
-
-	if proof != nil {
-		var buf bytes.Buffer
-		if err := proof.EncodeRLP(&buf); err != nil {
-			return fmt.Errorf("encode proof: %w", err)
-		}
-		ep = buf.Bytes()
-	}
-
-	if len(b.buff.headers) == 0 {
-		b.prooftype = pv
-	} else if pv != b.prooftype {
-		return fmt.Errorf("cannot mix proof variants: first=%d now=%d",
-			b.prooftype, pv)
-	}
-
 	eh, err := rlp.EncodeToBytes(&header)
 	if err != nil {
 		return fmt.Errorf("encode header: %w", err)
@@ -144,6 +124,22 @@ func (b *Builder) Add(header types.Header, body types.Body, receipts types.Recei
 	er, err := rlp.EncodeToBytes(receipts)
 	if err != nil {
 		return fmt.Errorf("encode receipts: %w", err)
+	}
+
+	var ep []byte
+	var buffer bytes.Buffer
+
+	if proof != nil {
+		if err := proof.EncodeRLP(&buffer); err != nil {
+			return fmt.Errorf("encode proof: %w", err)
+		}
+		ep = buffer.Bytes()
+	} else {
+		noProof := &NoProof{}
+		if err := noProof.EncodeRLP(&buffer); err != nil {
+			return fmt.Errorf("encode no proof: %w", err)
+		}
+		ep = buffer.Bytes()
 	}
 
 	return b.AddRLP(
@@ -162,27 +158,26 @@ func (b *Builder) AddRLP(headerRLP []byte, bodyRLP []byte, receipts []byte, proo
 	b.buff.headers = append(b.buff.headers, headerRLP)
 	b.buff.bodies = append(b.buff.bodies, bodyRLP)
 	b.buff.receipts = append(b.buff.receipts, receipts)
-	b.buff.tds = append(b.buff.tds, uint256LE(td))
-	b.tdsint = append(b.tdsint, new(big.Int).Set(td))
+	b.buff.tds = append(b.buff.tds, new(big.Int).Set(td))
 	b.hashes = append(b.hashes, blockHash)
 	if proof != nil {
 		b.buff.proofs = append(b.buff.proofs, proof)
 	}
 
-	//Write Era2 version before writing any blocks.
+	// Write Era2 version before writing any blocks.
 	if b.startNum == nil {
 		b.startNum = new(uint64)
 		*b.startNum = blockNum
 		if n, err := b.w.Write(TypeVersion, nil); err != nil {
 			return fmt.Errorf("write version entry: %w", err)
 		} else {
-			b.writtenBytes += uint64(n)
+			b.written += uint64(n)
 		}
 	}
 	return nil
 }
 
-// Finalize flushes all entries present in cache to the underlying e2store file.
+// Finalize writes all header entries, followed by all body entries, followed by all receipt entries.
 func (b *Builder) Finalize() (common.Hash, error) {
 	if b.startNum == nil {
 		return common.Hash{}, errors.New("no blocks added, cannot finalize")
@@ -213,7 +208,8 @@ func (b *Builder) Finalize() (common.Hash, error) {
 
 	if len(b.buff.tds) > 0 {
 		for _, data := range b.buff.tds {
-			off, err := b.addEntry(TypeTotalDifficulty, data, false)
+			littleEndian := uint256LE(data)
+			off, err := b.addEntry(TypeTotalDifficulty, littleEndian, false)
 			if err != nil {
 				return common.Hash{}, fmt.Errorf("total-difficulty: %w", err)
 			}
@@ -221,7 +217,7 @@ func (b *Builder) Finalize() (common.Hash, error) {
 		}
 	}
 
-	if b.prooftype != ProofNone {
+	if len(b.buff.proofs) > 0 {
 		for _, data := range b.buff.proofs {
 			off, err := b.addEntry(TypeProof, data, true)
 			if err != nil {
@@ -234,14 +230,14 @@ func (b *Builder) Finalize() (common.Hash, error) {
 	var accRoot common.Hash
 	if len(b.hashes) > 0 {
 		var err error
-		accRoot, err = ComputeAccumulator(b.hashes, b.tdsint)
+		accRoot, err = ComputeAccumulator(b.hashes, b.buff.tds)
 		if err != nil {
 			return common.Hash{}, fmt.Errorf("compute accumulator: %w", err)
 		}
 		if n, err := b.w.Write(TypeAccumulatorRoot, accRoot[:]); err != nil {
 			return common.Hash{}, fmt.Errorf("write accumulator: %w", err)
 		} else {
-			b.writtenBytes += uint64(n)
+			b.written += uint64(n)
 		}
 	}
 
@@ -261,18 +257,18 @@ func uint256LE(v *big.Int) []byte {
 func (b *Builder) snappyWrite(typ uint16, in []byte) error {
 	var (
 		buf = b.buf
-		s   = b.sn
+		s   = b.snappy
 	)
 	buf.Reset()
 	s.Reset(buf)
-	if _, err := b.sn.Write(in); err != nil {
+	if _, err := b.snappy.Write(in); err != nil {
 		return fmt.Errorf("error snappy encoding: %w", err)
 	}
 	if err := s.Flush(); err != nil {
 		return fmt.Errorf("error flushing snappy encoding: %w", err)
 	}
 	n, err := b.w.Write(typ, b.buf.Bytes())
-	b.writtenBytes += uint64(n)
+	b.written += uint64(n)
 	if err != nil {
 		return fmt.Errorf("error writing e2store entry: %w", err)
 	}
@@ -280,10 +276,10 @@ func (b *Builder) snappyWrite(typ uint16, in []byte) error {
 }
 
 // Add entry takes the e2store object and writes it into the file
-func (b *Builder) addEntry(typ uint16, payload []byte, snappyIt bool) (uint64, error) {
-	offset := b.writtenBytes
+func (b *Builder) addEntry(typ uint16, payload []byte, compressed bool) (uint64, error) {
+	offset := b.written
 	var err error
-	if snappyIt {
+	if compressed {
 		if err = b.snappyWrite(typ, payload); err != nil {
 			return 0, err
 		}
@@ -292,12 +288,12 @@ func (b *Builder) addEntry(typ uint16, payload []byte, snappyIt bool) (uint64, e
 		if n, err = b.w.Write(typ, payload); err != nil {
 			return 0, err
 		}
-		b.writtenBytes += uint64(n)
+		b.written += uint64(n)
 	}
 	return offset, nil
 }
 
-// write index takes all the offset table and writes it to the file
+// writeIndex takes all the offset table and writes it to the file
 // the index table contains all offsets to specific block entries
 func (b *Builder) writeIndex() error {
 	count := uint64(len(b.off.headers))
@@ -309,9 +305,9 @@ func (b *Builder) writeIndex() error {
 		componentCount++
 	}
 
-	index := make([]byte, 8+count*8*componentCount+16) //8 for start block, 8 per property per block, 16 for the number of properties and the number of blocks
+	index := make([]byte, 8+count*8*componentCount+16) // 8 for start block, 8 per property per block, 16 for the number of properties and the number of blocks
 	binary.LittleEndian.PutUint64(index, *b.startNum)
-	base := int64(b.writtenBytes)
+	base := int64(b.written)
 	rel := func(abs uint64) uint64 { return uint64(int64(abs) - base) }
 	for i := uint64(0); i < count; i++ {
 		basePosition := 8 + i*componentCount*8
@@ -329,14 +325,14 @@ func (b *Builder) writeIndex() error {
 			binary.LittleEndian.PutUint64(index[basePosition+pos:], rel(b.off.proofoffsets[i]))
 		}
 	}
-	indexEnd := 8 + count*componentCount*8
+	end := 8 + count*componentCount*8
 
-	binary.LittleEndian.PutUint64(index[indexEnd+0:], componentCount)
-	binary.LittleEndian.PutUint64(index[indexEnd+8:], count)
+	binary.LittleEndian.PutUint64(index[end+0:], componentCount)
+	binary.LittleEndian.PutUint64(index[end+8:], count)
 	if n, err := b.w.Write(TypeBlockIndex, index); err != nil {
 		return err
 	} else {
-		b.writtenBytes += uint64(n)
+		b.written += uint64(n)
 	}
 	return nil
 }
