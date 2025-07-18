@@ -18,72 +18,78 @@ package params
 
 import (
 	"fmt"
-	"reflect"
 )
 
-type ParameterType interface{
-	Validate(*Config2) error
+type Parameter[V any] struct{
+	info regInfo
 }
 
-type paramInfo struct {
-	rtype      reflect.Type
-	name       string
-	optional   bool
-	defaultVal ParameterType
+func (p Parameter[V]) Get(cfg *Config2) V {
+	v, ok := cfg.param[p.info.id]
+	if ok {
+		return v.(V)
+	}
+	return p.info.defaultValue.(V)
+}
+
+func (p Parameter[V]) V(v V) ParamValue {
+	return ParamValue{p.info.id, v}
+}
+
+type ParamValue struct{
+	id int
+	value any
 }
 
 var (
-	paramRegistry = map[reflect.Type]*paramInfo{}
-	paramRegistryByName = map[string]*paramInfo{}
+	paramCounter int
+	paramRegistry = map[int]regInfo{}
+	paramRegistryByName = map[string]int{}
 )
 
-// Get retrieves the value of a chain parameter.
-func Get[T ParameterType](cfg *Config2) T {
-	for _, p := range cfg.param {
-		if v, ok := p.(T); ok {
-			return v
-		}
-	}
-	// get default
-	var z T
-	info, ok := findParam(z)
-	if !ok {
-		panic(fmt.Sprintf("unknown parameter type %T", z))
-	}
-	return info.defaultVal.(T)
+type T[V any] struct{
+	Name string
+	Optional bool
+	Default V
+	Validate func(v V, cfg *Config2) error
 }
 
-// Parameter is the definition of a chain parameter.
-type Parameter[T ParameterType] struct {
-	Name     string
-	Optional bool
-	Default  T
+type regInfo struct{
+	id int
+	name string
+	optional bool
+	defaultValue any
+	new func() any
+	validate func(any, *Config2) error
 }
 
 // Define creates a chain parameter in the registry.
-func Define[T ParameterType](def Parameter[T]) {
-	var z T
-	info, defined := paramRegistryByName[def.Name]
-	if defined {
-		panic(fmt.Sprintf("chain parameter %q already registered with type %v", info.name, info.rtype))
+func Define[V any](def T[V]) Parameter[V] {
+	if id, defined := paramRegistryByName[def.Name]; defined {
+		info := paramRegistry[id]
+		panic(fmt.Sprintf("chain parameter %q already registered with type %T", def.Name, info.defaultValue))
 	}
-	rtype := reflect.TypeOf(z)
-	info, defined = paramRegistry[rtype]
-	if defined {
-		panic(fmt.Sprintf("chain parameter of type %v already registered with name %q", rtype, info.name))
-	}
-	info = &paramInfo{
-		rtype:      rtype,
-		name:       def.Name,
-		optional:   def.Optional,
-		defaultVal: def.Default,
-	}
-	paramRegistry[rtype] = info
-	paramRegistryByName[def.Name] = info
-}
 
-func findParam(v any) (*paramInfo, bool) {
-	rtype := reflect.TypeOf(v)
-	info, ok := paramRegistry[rtype]
-	return info, ok
+	id := paramCounter
+	paramCounter++
+
+	regInfo := regInfo{
+		id: id,
+		name: def.Name,
+		optional: def.Optional,
+		defaultValue: def.Default,
+		new: func() any {
+			var z V
+			return z
+		},
+		validate: func(v any, cfg *Config2) error {
+			if def.Validate == nil {
+				return nil
+			}
+			return def.Validate(v.(V), cfg)
+		},
+	}
+	paramRegistry[id] = regInfo
+	paramRegistryByName[def.Name] = id
+	return Parameter[V]{info: regInfo}
 }

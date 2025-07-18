@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"maps"
 	"math/big"
-	"reflect"
 	"slices"
 	"strings"
 
@@ -35,21 +34,17 @@ type Activations map[forks.Fork]uint64
 // Config2 represents the chain configuration.
 type Config2 struct {
 	activation Activations
-	param      map[reflect.Type]ParameterType
+	param      map[int]any
 }
 
-func NewConfig2(activations Activations, param ...ParameterType) *Config2 {
+func NewConfig2(activations Activations, param ...ParamValue) *Config2 {
 	cfg := &Config2{
 		activation: maps.Clone(activations),
-		param:      make(map[reflect.Type]ParameterType, len(param)),
+		param:      make(map[int]any, len(param)),
 	}
 	cfg.activation[forks.Frontier] = 0
 	for _, pv := range param {
-		info, ok := findParam(pv)
-		if !ok {
-			panic(fmt.Sprintf("undefined chain parameter type %T", pv))
-		}
-		cfg.param[info.rtype] = pv
+		cfg.param[pv.id] = pv.value
 	}
 	return cfg
 }
@@ -109,12 +104,12 @@ func (cfg *Config2) LatestFork(time uint64) forks.Fork {
 func (cfg *Config2) MarshalJSON() ([]byte, error) {
 	m := make(map[string]any)
 	// params
-	for _, p := range cfg.param {
-		info, ok := findParam(p)
+	for id, value := range cfg.param {
+		info, ok := paramRegistry[id]
 		if !ok {
-			panic(fmt.Sprintf("unknown chain parameter %T", p))
+			panic(fmt.Sprintf("unknown chain parameter id %v", id))
 		}
-		m[info.name] = p
+		m[info.name] = value
 	}
 	// forks
 	for f, act := range cfg.activation {
@@ -187,15 +182,15 @@ func (cfg *Config2) decodeActivation(key string, dec *json.Decoder) error {
 }
 
 func (cfg *Config2) decodeParameter(key string, dec *json.Decoder) error {
-	info, ok := paramRegistryByName[key]
+	id, ok := paramRegistryByName[key]
 	if !ok {
 		return fmt.Errorf("unknown chain parameter %q", key)
 	}
-	v := reflect.New(info.rtype).Interface()
+	v := paramRegistry[id].new()
 	if err := dec.Decode(v); err != nil {
 		return err
 	}
-	cfg.param[info.rtype] = v.(ParameterType)
+	cfg.param[id] = v
 	return nil
 }
 
@@ -235,15 +230,15 @@ func (cfg *Config2) Validate() error {
 	}
 
 	// Check parameters.
-	for rtype, info := range paramRegistry {
-		v, isSet := cfg.param[rtype]
+	for id, info := range paramRegistry {
+		v, isSet := cfg.param[id]
 		if !isSet {
 			if !info.optional {
 				return fmt.Errorf("required chain parameter %s is not set", info.name)
 			}
-			v = info.defaultVal
+			v = info.defaultValue
 		}
-		if err := v.Validate(cfg); err != nil {
+		if err := info.validate(v, cfg); err != nil {
 			return fmt.Errorf("invalid %s: %w", info.name, err)
 		}
 	}
@@ -296,12 +291,10 @@ func (cfg *Config2) checkCompatible(newcfg *Config2, num uint64, time uint64) *C
 		}
 	}
 
-	if cfg.Active(forks.DAO, num, time) && Get[DAOForkSupport](cfg) != Get[DAOForkSupport](newcfg) {
+	if cfg.Active(forks.DAO, num, time) && DAOForkSupport.Get(cfg) != DAOForkSupport.Get(newcfg) {
 		return newBlockCompatError2("DAO fork support flag", forks.DAO, cfg, newcfg)
 	}
-	chainID := (*big.Int)(Get[*ChainID](cfg))
-	newChainID := (*big.Int)(Get[*ChainID](newcfg))
-	if cfg.Active(forks.TangerineWhistle, num, time) && !configBlockEqual(chainID, newChainID) {
+	if cfg.Active(forks.TangerineWhistle, num, time) && !configBlockEqual(ChainID.Get(cfg), ChainID.Get(newcfg)) {
 		return newBlockCompatError2("EIP158 chain ID", forks.TangerineWhistle, cfg, newcfg)
 	}
 
