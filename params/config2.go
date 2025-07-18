@@ -86,6 +86,15 @@ func (cfg *Config2) SetActivations(forks Activations) *Config2 {
 	return &Config2{activation: newA, param: cfg.param}
 }
 
+// SetParam returns a new configuration with the given parameter values set.
+func (cfg *Config2) SetParam(param ...ParamValue) *Config2 {
+	cpy := &Config2{activation: cfg.activation, param: maps.Clone(cfg.param)}
+	for _, pv := range param {
+		cpy.param[pv.id] = pv.value
+	}
+	return cpy
+}
+
 // LatestFork returns the latest time-based fork that would be active for the given time.
 func (cfg *Config2) LatestFork(time uint64) forks.Fork {
 	londonBlock := cfg.activation[forks.London]
