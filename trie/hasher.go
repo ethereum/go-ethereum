@@ -149,8 +149,8 @@ func (h *hasher) encodeFullNode(n *fullNode) []byte {
 				defer wg.Done()
 
 				h := newHasher(false)
-				defer returnHasherToPool(h)
 				fn.Children[i] = h.hash(n.Children[i], false)
+				returnHasherToPool(h)
 			}(i)
 		}
 		wg.Wait()
