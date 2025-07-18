@@ -60,7 +60,7 @@ func VerifyDAOHeaderExtraData(config *params.Config2, header *types.Header) erro
 	}
 
 	// Depending on whether we support or oppose the fork, validate the extra-data contents
-	if params.Get[params.DAOForkSupport](config) {
+	if params.DAOForkSupport.Get(config) {
 		if !bytes.Equal(header.Extra, params.DAOForkBlockExtra) {
 			return ErrBadProDAOExtra
 		}
