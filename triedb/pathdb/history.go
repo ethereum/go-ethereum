@@ -240,22 +240,13 @@ func (m *meta) decode(blob []byte) error {
 // (8-bytes integer), the oldest state history object can be pruned on demand
 // in order to control the storage size.
 type history struct {
-	meta        *meta                                     // Meta data of history
-	accounts    map[common.Address][]byte                 // Account data keyed by its address hash
-	accountList []common.Address                          // Sorted account hash list
-	storages    map[common.Address]map[common.Hash][]byte // Storage data keyed by its address hash and slot hash
-	storageList map[common.Address][]common.Hash          // Sorted slot hash list
+	meta     *meta                                     // Meta data of history
+	accounts map[common.Address][]byte                 // Account data keyed by its address hash
+	storages map[common.Address]map[common.Hash][]byte // Storage data keyed by its address hash and slot hash
 }
 
 // newHistory constructs the state history object with provided state change set.
 func newHistory(root common.Hash, parent common.Hash, block uint64, accounts map[common.Address][]byte, storages map[common.Address]map[common.Hash][]byte, rawStorageKey bool) *history {
-	var (
-		accountList = slices.SortedFunc(maps.Keys(accounts), common.Address.Cmp)
-		storageList = make(map[common.Address][]common.Hash)
-	)
-	for addr, slots := range storages {
-		storageList[addr] = slices.SortedFunc(maps.Keys(slots), common.Hash.Cmp)
-	}
 	version := historyVersion
 	if !rawStorageKey {
 		version = stateHistoryV0
@@ -267,10 +258,8 @@ func newHistory(root common.Hash, parent common.Hash, block uint64, accounts map
 			root:    root,
 			block:   block,
 		},
-		accounts:    accounts,
-		accountList: accountList,
-		storages:    storages,
-		storageList: storageList,
+		accounts: accounts,
+		storages: storages,
 	}
 }
 
@@ -312,7 +301,8 @@ func (h *history) encode() ([]byte, []byte, []byte, []byte) {
 		accountIndexes []byte // the buffer for concatenated account index
 		storageIndexes []byte // the buffer for concatenated storage index
 	)
-	for _, addr := range h.accountList {
+	accountList := slices.SortedFunc(maps.Keys(h.accounts), common.Address.Cmp)
+	for _, addr := range accountList {
 		accIndex := accountIndex{
 			address: addr,
 			length:  uint8(len(h.accounts[addr])),
@@ -320,8 +310,9 @@ func (h *history) encode() ([]byte, []byte, []byte, []byte) {
 		}
 		slots, exist := h.storages[addr]
 		if exist {
+			storageList := slices.SortedFunc(maps.Keys(slots), common.Hash.Cmp)
 			// Encode storage slots in order
-			for _, slotHash := range h.storageList[addr] {
+			for _, slotHash := range storageList {
 				sIndex := slotIndex{
 					id:     slotHash,
 					length: uint8(len(slots[slotHash])),
@@ -461,11 +452,9 @@ func (r *decoder) readStorage(accIndex accountIndex) ([]common.Hash, map[common.
 // decode deserializes the account and storage data from the provided byte stream.
 func (h *history) decode(accountData, storageData, accountIndexes, storageIndexes []byte) error {
 	var (
-		count       = len(accountIndexes) / accountIndexSize
-		accounts    = make(map[common.Address][]byte, count)
-		storages    = make(map[common.Address]map[common.Hash][]byte)
-		accountList = make([]common.Address, 0, count)
-		storageList = make(map[common.Address][]common.Hash)
+		count    = len(accountIndexes) / accountIndexSize
+		accounts = make(map[common.Address][]byte, count)
+		storages = make(map[common.Address]map[common.Hash][]byte)
 
 		r = &decoder{
 			accountData:    accountData,
@@ -484,7 +473,6 @@ func (h *history) decode(accountData, storageData, accountIndexes, storageIndexe
 			return err
 		}
 		accounts[accIndex.address] = accData
-		accountList = append(accountList, accIndex.address)
 
 		// Resolve storage slots
 		slotList, slotData, err := r.readStorage(accIndex)
@@ -492,14 +480,11 @@ func (h *history) decode(accountData, storageData, accountIndexes, storageIndexe
 			return err
 		}
 		if len(slotList) > 0 {
-			storageList[accIndex.address] = slotList
 			storages[accIndex.address] = slotData
 		}
 	}
 	h.accounts = accounts
-	h.accountList = accountList
 	h.storages = storages
-	h.storageList = storageList
 	return nil
 }
 
