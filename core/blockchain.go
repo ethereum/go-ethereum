@@ -329,7 +329,7 @@ type BlockChain struct {
 	validator  Validator // Block and state validator interface
 	prefetcher Prefetcher
 	processor  Processor // Block transaction processor interface
-	logger     *tracing.Hooks
+	logger     tracing.Hooks
 
 	lastForkReadyAlert time.Time // Last time there was a fork readiness print out
 }
@@ -491,10 +491,10 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	// it in advance.
 	bc.engine.VerifyHeader(bc, bc.CurrentHeader())
 
-	if bc.logger != nil && bc.logger.OnBlockchainInit != nil {
+	if bc.logger.OnBlockchainInit != nil {
 		bc.logger.OnBlockchainInit(chainConfig)
 	}
-	if bc.logger != nil && bc.logger.OnGenesisBlock != nil {
+	if bc.logger.OnGenesisBlock != nil {
 		if block := bc.CurrentBlock(); block.Number.Uint64() == 0 {
 			alloc, err := getGenesisState(bc.db, block.Hash())
 			if err != nil {
@@ -1311,7 +1311,7 @@ func (bc *BlockChain) Stop() {
 		}
 	}
 	// Allow tracers to clean-up and release resources.
-	if bc.logger != nil && bc.logger.OnClose != nil {
+	if bc.logger.OnClose != nil {
 		bc.logger.OnClose()
 	}
 	// Close the trie database, release all the held resources as the last step.
@@ -1862,7 +1862,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 				return nil, it.index, err
 			}
 			stats.processed++
-			if bc.logger != nil && bc.logger.OnSkippedBlock != nil {
+			if bc.logger.OnSkippedBlock != nil {
 				bc.logger.OnSkippedBlock(tracing.BlockEvent{
 					Block:     block,
 					Finalized: bc.CurrentFinalBlock(),
@@ -1998,7 +1998,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		go func(start time.Time, throwaway *state.StateDB, block *types.Block) {
 			// Disable tracing for prefetcher executions.
 			vmCfg := bc.cfg.VmConfig
-			vmCfg.Tracer = nil
+			vmCfg.Tracer = tracing.Hooks{}
 			bc.prefetcher.Prefetch(block, throwaway, vmCfg, &interrupt)
 
 			blockPrefetchExecuteTimer.Update(time.Since(start))
@@ -2026,14 +2026,14 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		defer statedb.StopPrefetcher()
 	}
 
-	if bc.logger != nil && bc.logger.OnBlockStart != nil {
+	if bc.logger.OnBlockStart != nil {
 		bc.logger.OnBlockStart(tracing.BlockEvent{
 			Block:     block,
 			Finalized: bc.CurrentFinalBlock(),
 			Safe:      bc.CurrentSafeBlock(),
 		})
 	}
-	if bc.logger != nil && bc.logger.OnBlockEnd != nil {
+	if bc.logger.OnBlockEnd != nil {
 		defer func() {
 			bc.logger.OnBlockEnd(blockEndErr)
 		}()

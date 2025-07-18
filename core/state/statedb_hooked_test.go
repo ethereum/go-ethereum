@@ -39,7 +39,7 @@ func TestBurn(t *testing.T) {
 
 	var burned = new(uint256.Int)
 	s, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
-	hooked := NewHookedState(s, &tracing.Hooks{
+	hooked := NewHookedState(s, tracing.Hooks{
 		OnBalanceChange: func(addr common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
 			if reason == tracing.BalanceDecreaseSelfdestructBurn {
 				burned.Add(burned, uint256.MustFromBig(prev))
@@ -94,7 +94,7 @@ func TestHooks(t *testing.T) {
 	emitF := func(format string, a ...any) {
 		result = append(result, fmt.Sprintf(format, a...))
 	}
-	sdb := NewHookedState(inner, &tracing.Hooks{
+	sdb := NewHookedState(inner, tracing.Hooks{
 		OnBalanceChange: func(addr common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
 			emitF("%v.balance: %v->%v (%v)", addr, prev, new, reason)
 		},
