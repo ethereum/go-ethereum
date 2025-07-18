@@ -122,6 +122,11 @@ func calcBaseFeeFeynman(config *params.ChainConfig, parent *types.Header, overhe
 	baseFee := new(big.Int).Set(baseFeeEIP1559)
 	baseFee.Add(baseFee, overhead)
 
+	// Apply maximum base fee bound to the final result (including overhead)
+	if baseFee.Cmp(big.NewInt(MaximumL2BaseFee)) > 0 {
+		baseFee = big.NewInt(MaximumL2BaseFee)
+	}
+
 	return baseFee
 }
 
@@ -159,9 +164,6 @@ func calcBaseFeeEIP1559(config *params.ChainConfig, parent *types.Header) *big.I
 			return num.Add(parentBaseFeeEIP1559, common.Big1)
 		}
 		baseFee := num.Add(parentBaseFeeEIP1559, num)
-		if baseFee.Cmp(big.NewInt(MaximumL2BaseFee)) > 0 {
-			baseFee = big.NewInt(MaximumL2BaseFee)
-		}
 		return baseFee
 	} else {
 		// Otherwise if the parent block used less gas than its target, the baseFee should decrease.
@@ -179,10 +181,21 @@ func calcBaseFeeEIP1559(config *params.ChainConfig, parent *types.Header) *big.I
 	}
 }
 
-func extractBaseFeeEIP1559(config *params.ChainConfig, baseFee *big.Int) *big.Int {
+func extractBaseFeeEIP1559(_ *params.ChainConfig, baseFee *big.Int) *big.Int {
 	_, overhead := ReadL2BaseFeeCoefficients()
+
 	// In Feynman base fee calculation, we reuse the contract's baseFeeOverhead slot as the proving base fee.
-	return new(big.Int).Sub(baseFee, overhead)
+	result := new(big.Int).Sub(baseFee, overhead)
+
+	// Add underflow protection: return max(0, baseFee - overhead)
+	//
+	// Potential underflow scenarios:
+	// - Contract overhead updates: when overhead is updated via contract,
+	//   it might become larger than current base fee
+	if result.Sign() < 0 {
+		return big.NewInt(0)
+	}
+	return result
 }
 
 // MinBaseFee calculates the minimum L2 base fee based on the current coefficients.
