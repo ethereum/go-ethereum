@@ -794,9 +794,7 @@ func (p *BlobPool) offload(addr common.Address, nonce uint64, id uint64, inclusi
 // kept in sync with the main transaction pool's internal state.
 func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	waitStart := time.Now()
-	p.lock.Lock()
 	resetwaitHist.Update(time.Since(waitStart).Nanoseconds())
-	defer p.lock.Unlock()
 
 	defer func(start time.Time) {
 		resettimeHist.Update(time.Since(start).Nanoseconds())
@@ -1234,9 +1232,7 @@ func (p *BlobPool) getRLP(hash common.Hash) []byte {
 	// Track the amount of time waiting to retrieve a fully resolved blob tx from
 	// the pool and the amount of time actually spent on pulling the data from disk.
 	getStart := time.Now()
-	p.lock.RLock()
 	getwaitHist.Update(time.Since(getStart).Nanoseconds())
-	defer p.lock.RUnlock()
 
 	defer func(start time.Time) {
 		gettimeHist.Update(time.Since(start).Nanoseconds())
@@ -1372,9 +1368,7 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	// only even pulled from the network, so this method will act as the overload
 	// protection for fetches.
 	waitStart := time.Now()
-	p.lock.Lock()
 	addwaitHist.Update(time.Since(waitStart).Nanoseconds())
-	defer p.lock.Unlock()
 
 	defer func(start time.Time) {
 		addtimeHist.Update(time.Since(start).Nanoseconds())
@@ -1602,9 +1596,7 @@ func (p *BlobPool) Pending(filter txpool.PendingFilter) map[common.Address][]*tx
 	// The latter will be pretty much moot, but we've kept it to have symmetric
 	// across all user operations.
 	pendStart := time.Now()
-	p.lock.RLock()
 	pendwaitHist.Update(time.Since(pendStart).Nanoseconds())
-	defer p.lock.RUnlock()
 
 	execStart := time.Now()
 	defer func() {
