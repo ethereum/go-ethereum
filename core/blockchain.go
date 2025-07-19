@@ -2776,3 +2776,8 @@ func (bc *BlockChain) SetTrieFlushInterval(interval time.Duration) {
 func (bc *BlockChain) GetTrieFlushInterval() time.Duration {
 	return time.Duration(bc.flushInterval.Load())
 }
+
+// FirstStateBlock returns the first available state block number that is stored in the database.
+func (bc *BlockChain) FirstStateBlock() (uint64, error) {
+	return bc.triedb.FirstStateBlock()
+}
