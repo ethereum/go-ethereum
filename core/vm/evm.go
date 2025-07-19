@@ -20,6 +20,7 @@ import (
 	"errors"
 	"math/big"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -125,6 +126,9 @@ type EVM struct {
 	// jumpDests is the aggregated result of JUMPDEST analysis made through
 	// the life cycle of EVM.
 	jumpDests map[common.Hash]bitvec
+
+	// Time measurements
+	DynamicGasCalculation time.Duration
 }
 
 // NewEVM constructs an EVM instance with the supplied block context, state
