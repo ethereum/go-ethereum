@@ -47,7 +47,7 @@ func init() {
 	}
 }
 
-var tests = []string{"uints", "nil", "rawvalue", "optional", "bigint", "uint256"}
+var tests = []string{"uints", "nil", "rawvalue", "optional", "bigint", "uint256", "pkgclash"}
 
 func TestOutput(t *testing.T) {
 	for _, test := range tests {
