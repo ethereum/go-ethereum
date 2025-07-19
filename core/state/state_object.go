@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
 )
@@ -494,8 +495,15 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 		selfDestructed:     s.selfDestructed,
 		newContract:        s.newContract,
 	}
-	if s.trie != nil {
+
+	switch s.trie.(type) {
+	case *trie.VerkleTrie:
+		// In the Verkle case, the stateObject's trie shares the same reference as the StateDB's trie.
+		obj.trie = db.trie
+	case *trie.StateTrie:
 		obj.trie = mustCopyTrie(s.trie)
+	case nil:
+		// do nothing
 	}
 	return obj
 }
