@@ -49,7 +49,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
@@ -1995,12 +1994,6 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 		Service:   filters.NewFilterAPI(filterSystem),
 	}})
 	return filterSystem
-}
-
-// RegisterFullSyncTester adds the full-sync tester service into node.
-func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, target common.Hash, exitWhenSynced bool) {
-	catalyst.RegisterFullSyncTester(stack, eth, target, exitWhenSynced)
-	log.Info("Registered full-sync tester", "hash", target, "exitWhenSynced", exitWhenSynced)
 }
 
 // SetupMetrics configures the metrics system.
