@@ -1235,3 +1235,65 @@ func (t *freezerTable) dumpIndex(w io.Writer, start, stop int64) {
 	}
 	fmt.Fprintf(w, "|--------------------------|\n")
 }
+
+// RetrieveBytes retrieves a byte range [offset:offset+length] from the specified ancient item.
+func (t *freezerTable) RetrieveBytes(item, offset, length uint64) ([]byte, error) {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	if t.index == nil || t.head == nil || t.metadata.file == nil {
+		return nil, errClosed
+	}
+	items := t.items.Load()
+	hidden := t.itemHidden.Load()
+	if items <= item || hidden > item {
+		return nil, errOutOfBounds
+	}
+
+	// Read the index entries for the item and the next item,
+	// this method will return two indices or an error.
+	indices, err := t.getIndices(item, 1)
+	if err != nil {
+		return nil, err
+	}
+	index0 := indices[0]
+	index1 := indices[1]
+	startOffset, endOffset, fileId := index0.bounds(index1)
+	itemSize := endOffset - startOffset
+
+	dataFile, exist := t.files[fileId]
+	if !exist {
+		return nil, fmt.Errorf("missing data file %d", fileId)
+	}
+
+	readBytes := int(itemSize)
+	if t.config.noSnappy {
+		// Range check before reading
+		if offset > uint64(itemSize) || offset+length > uint64(itemSize) {
+			return nil, fmt.Errorf("requested range out of bounds: item size %d, offset %d, length %d", itemSize, offset, length)
+		}
+		startOffset += uint32(offset)
+		readBytes = int(length)
+	}
+
+	buf := make([]byte, readBytes)
+	_, err = dataFile.ReadAt(buf, int64(startOffset))
+	if err != nil {
+		return nil, err
+	}
+
+	// If not compressed, read only the requested bytes
+	if t.config.noSnappy {
+		return buf, nil
+	}
+
+	// If compressed, read the full item, decompress, then slice
+	data, err := snappy.Decode(nil, buf)
+	if err != nil {
+		return nil, err
+	}
+	if offset > uint64(len(data)) || offset+length > uint64(len(data)) {
+		return nil, fmt.Errorf("requested range out of bounds after decompression: item size %d, offset %d, length %d", len(data), offset, length)
+	}
+	return data[offset : offset+length], nil
+}
