@@ -19,20 +19,21 @@ package stateless
 import (
 	"io"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// toExtWitness converts our internal witness representation to the consensus one.
-func (w *Witness) toExtWitness() *extWitness {
-	ext := &extWitness{
+// ToExtWitness converts our internal witness representation to the consensus one.
+func (w *Witness) ToExtWitness() *ExtWitness {
+	ext := &ExtWitness{
 		Headers: w.Headers,
 	}
-	ext.Codes = make([][]byte, 0, len(w.Codes))
+	ext.Codes = make([]hexutil.Bytes, 0, len(w.Codes))
 	for code := range w.Codes {
 		ext.Codes = append(ext.Codes, []byte(code))
 	}
-	ext.State = make([][]byte, 0, len(w.State))
+	ext.State = make([]hexutil.Bytes, 0, len(w.State))
 	for node := range w.State {
 		ext.State = append(ext.State, []byte(node))
 	}
@@ -40,7 +41,7 @@ func (w *Witness) toExtWitness() *extWitness {
 }
 
 // fromExtWitness converts the consensus witness format into our internal one.
-func (w *Witness) fromExtWitness(ext *extWitness) error {
+func (w *Witness) fromExtWitness(ext *ExtWitness) error {
 	w.Headers = ext.Headers
 
 	w.Codes = make(map[string]struct{}, len(ext.Codes))
@@ -56,21 +57,22 @@ func (w *Witness) fromExtWitness(ext *extWitness) error {
 
 // EncodeRLP serializes a witness as RLP.
 func (w *Witness) EncodeRLP(wr io.Writer) error {
-	return rlp.Encode(wr, w.toExtWitness())
+	return rlp.Encode(wr, w.ToExtWitness())
 }
 
 // DecodeRLP decodes a witness from RLP.
 func (w *Witness) DecodeRLP(s *rlp.Stream) error {
-	var ext extWitness
+	var ext ExtWitness
 	if err := s.Decode(&ext); err != nil {
 		return err
 	}
 	return w.fromExtWitness(&ext)
 }
 
-// extWitness is a witness RLP encoding for transferring across clients.
-type extWitness struct {
-	Headers []*types.Header
-	Codes   [][]byte
-	State   [][]byte
+// ExtWitness is a witness RLP encoding for transferring across clients.
+type ExtWitness struct {
+	Headers []*types.Header `json:"headers"`
+	Codes   []hexutil.Bytes `json:"codes"`
+	State   []hexutil.Bytes `json:"state"`
+	Keys    []hexutil.Bytes `json:"keys"`
 }
