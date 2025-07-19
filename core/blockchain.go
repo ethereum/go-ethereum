@@ -291,7 +291,7 @@ type BlockChain struct {
 	lastWrite     uint64                           // Last block when the state was flushed
 	flushInterval atomic.Int64                     // Time interval (processing time) after which to flush a state
 	triedb        *triedb.Database                 // The database handler for maintaining trie nodes.
-	statedb       *state.CachingDB                 // State database to reuse between imports (contains state cache)
+	stateDB       *stateDatabase                   // State database to reuse between imports (contains state cache)
 	txIndexer     *txIndexer                       // Transaction indexer, might be nil if not enabled
 
 	hc               *HeaderChain
@@ -341,19 +341,18 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	if cfg == nil {
 		cfg = DefaultConfig()
 	}
-
-	// Open trie database with provided config
+	// Open state database with provided config
 	enableVerkle, err := EnableVerkleAtGenesis(db, genesis)
 	if err != nil {
 		return nil, err
 	}
-	triedb := triedb.NewDatabase(db, cfg.triedbConfig(enableVerkle))
+	stateDB := newStateDatabase(db, cfg)
 
 	// Write the supplied genesis to the database if it has not been initialized
 	// yet. The corresponding chain config will be returned, either from the
 	// provided genesis or from the locally stored configuration if the genesis
 	// has already been initialized.
-	chainConfig, genesisHash, compatErr, err := SetupGenesisBlockWithOverride(db, triedb, genesis, cfg.Overrides)
+	chainConfig, genesisHash, compatErr, err := SetupGenesisBlockWithOverride(db, stateDB.triedb(enableVerkle), genesis, cfg.Overrides)
 	if err != nil {
 		return nil, err
 	}
@@ -369,7 +368,8 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		chainConfig:   chainConfig,
 		cfg:           cfg,
 		db:            db,
-		triedb:        triedb,
+		stateDB:       stateDB,
+		triedb:        stateDB.triedb(false), // TODO(rjl493456442) support verkle
 		triegc:        prque.New[int64, common.Hash](nil),
 		chainmu:       syncx.NewClosableMutex(),
 		bodyCache:     lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
@@ -385,7 +385,6 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		return nil, err
 	}
 	bc.flushInterval.Store(int64(cfg.TrieTimeLimit))
-	bc.statedb = state.NewDatabase(bc.triedb, nil)
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
 	bc.processor = NewStateProcessor(chainConfig, bc.hc)
@@ -551,9 +550,7 @@ func (bc *BlockChain) setupSnapshot() {
 			AsyncBuild: !bc.cfg.SnapshotWait,
 		}
 		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.triedb, head.Root)
-
-		// Re-initialize the state database with snapshot
-		bc.statedb = state.NewDatabase(bc.triedb, bc.snaps)
+		bc.stateDB.setSnapshot(bc.snaps)
 	}
 }
 
@@ -944,7 +941,7 @@ func (bc *BlockChain) rewindPathHead(head *types.Header, root common.Hash) (*typ
 // then block number zero is returned, indicating that snapshot recovery is disabled
 // and the whole snapshot should be auto-generated in case of head mismatch.
 func (bc *BlockChain) rewindHead(head *types.Header, root common.Hash) (*types.Header, uint64) {
-	if bc.triedb.Scheme() == rawdb.PathScheme {
+	if bc.cfg.StateScheme == rawdb.PathScheme {
 		return bc.rewindPathHead(head, root)
 	}
 	return bc.rewindHashHead(head, root)
@@ -1100,7 +1097,7 @@ func (bc *BlockChain) SnapSyncCommitHead(hash common.Hash) error {
 	}
 	// Reset the trie database with the fresh snap synced state.
 	root := block.Root()
-	if bc.triedb.Scheme() == rawdb.PathScheme {
+	if bc.cfg.StateScheme == rawdb.PathScheme {
 		if err := bc.triedb.Enable(root); err != nil {
 			return err
 		}
@@ -1272,7 +1269,7 @@ func (bc *BlockChain) Stop() {
 		}
 		bc.snaps.Release()
 	}
-	if bc.triedb.Scheme() == rawdb.PathScheme {
+	if bc.cfg.StateScheme == rawdb.PathScheme {
 		// Ensure that the in-memory trie nodes are journaled to disk properly.
 		if err := bc.triedb.Journal(bc.CurrentBlock().Root); err != nil {
 			log.Info("Failed to journal in-memory trie nodes", "err", err)
@@ -1315,8 +1312,8 @@ func (bc *BlockChain) Stop() {
 		bc.logger.OnClose()
 	}
 	// Close the trie database, release all the held resources as the last step.
-	if err := bc.triedb.Close(); err != nil {
-		log.Error("Failed to close trie database", "err", err)
+	if err := bc.stateDB.close(); err != nil {
+		log.Error("Failed to close state database", "err", err)
 	}
 	log.Info("Blockchain stopped")
 }
@@ -1589,7 +1586,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 	// If node is running in path mode, skip explicit gc operation
 	// which is unnecessary in this mode.
-	if bc.triedb.Scheme() == rawdb.PathScheme {
+	if bc.cfg.StateScheme == rawdb.PathScheme {
 		return nil
 	}
 	// If we're running an archive node, always flush
@@ -1959,7 +1956,8 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	defer interrupt.Store(true) // terminate the prefetch at the end
 
 	if bc.cfg.NoPrefetch {
-		statedb, err = state.New(parentRoot, bc.statedb)
+		sdb := bc.stateDB.stateDB(bc.chainConfig.IsVerkle(block.Number(), block.Time()))
+		statedb, err = state.New(parentRoot, sdb)
 		if err != nil {
 			return nil, err
 		}
@@ -1969,15 +1967,16 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		//
 		// Note: the main processor and prefetcher share the same reader with a local
 		// cache for mitigating the overhead of state access.
-		prefetch, process, err := bc.statedb.ReadersWithCacheStats(parentRoot)
+		sdb := bc.stateDB.stateDB(bc.chainConfig.IsVerkle(block.Number(), block.Time()))
+		prefetch, process, err := sdb.ReadersWithCacheStats(parentRoot)
 		if err != nil {
 			return nil, err
 		}
-		throwaway, err := state.NewWithReader(parentRoot, bc.statedb, prefetch)
+		throwaway, err := state.NewWithReader(parentRoot, sdb, prefetch)
 		if err != nil {
 			return nil, err
 		}
-		statedb, err = state.NewWithReader(parentRoot, bc.statedb, process)
+		statedb, err = state.NewWithReader(parentRoot, sdb, process)
 		if err != nil {
 			return nil, err
 		}
