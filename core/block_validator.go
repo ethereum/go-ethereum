@@ -86,8 +86,13 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	}
 
 	// Blob transactions may be present after the Cancun fork.
+	isOsaka := v.config.IsOsaka(block.Number(), block.Time())
 	var blobs int
 	for i, tx := range block.Transactions() {
+		if isOsaka && len(tx.BlobHashes()) > params.BlobTxMaxBlobs {
+			return ErrTooManyBlobs
+		}
+
 		// Count the number of blobs to validate against the header's blobGasUsed
 		blobs += len(tx.BlobHashes())
 
