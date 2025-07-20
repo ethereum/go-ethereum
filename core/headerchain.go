@@ -99,9 +99,12 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 // from the cache or database
 func (hc *HeaderChain) GetBlockNumber(hash common.Hash) *uint64 {
 	if cached, ok := hc.numberCache.Get(hash); ok {
+		log.Info("GetBlockNumber", "hash", hash, "cached", cached)
 		return &cached
 	}
+	log.Info("GetBlockNumber", "hash", hash, "cached", "not cached")
 	number := rawdb.ReadHeaderNumber(hc.chainDb, hash)
+	log.Info("ReadHeaderNumber", "hash", hash, "number", number)
 	if number != nil {
 		hc.numberCache.Add(hash, *number)
 	}

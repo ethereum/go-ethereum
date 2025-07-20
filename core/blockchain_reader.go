@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -181,6 +182,7 @@ func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 // GetBlockByHash retrieves a block from the database by hash, caching it if found.
 func (bc *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
 	number := bc.hc.GetBlockNumber(hash)
+	log.Info("GetBlockByHash", "hash", hash, "number", number)
 	if number == nil {
 		return nil
 	}

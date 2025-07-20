@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
 )
 
@@ -100,6 +101,8 @@ func (miner *Miner) generateWork(params *generateParams, witness bool) *newPaylo
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
+
+	// Use gas limit for block creation instead of executing transactions
 	if !params.noTxs {
 		interrupt := new(atomic.Int32)
 		timer := time.AfterFunc(miner.config.Recommit, func() {
@@ -141,10 +144,9 @@ func (miner *Miner) generateWork(params *generateParams, witness bool) *newPaylo
 		work.header.RequestsHash = &reqHash
 	}
 
-	block, err := miner.engine.FinalizeAndAssemble(miner.chain, work.header, work.state, &body, work.receipts)
-	if err != nil {
-		return &newPayloadResult{err: err}
-	}
+	// Directly construct the block without calling FinalizeAndAssemble
+	// This returns a block with the current header, body, and receipts
+	block := types.NewBlock(work.header, &body, work.receipts, trie.NewStackTrie(nil))
 	return &newPayloadResult{
 		block:    block,
 		fees:     totalFees(block, work.receipts),
@@ -267,13 +269,36 @@ func (miner *Miner) commitTransaction(env *environment, tx *types.Transaction) e
 	if tx.Type() == types.BlobTxType {
 		return miner.commitBlobTransaction(env, tx)
 	}
-	receipt, err := miner.applyTransaction(env, tx)
-	if err != nil {
-		return err
+
+	// Set gas used to transaction's gas limit
+	gasUsed := tx.Gas()
+
+	// Create a mock receipt for the transaction without execution
+	receipt := &types.Receipt{
+		Type:              tx.Type(),
+		PostState:         nil, // No state changes
+		Status:            1,   // Success status
+		CumulativeGasUsed: env.header.GasUsed + gasUsed,
+		Logs:              []*types.Log{},
+		TxHash:            tx.Hash(),
+		ContractAddress:   common.Address{},
+		GasUsed:           gasUsed,
+		BlockHash:         env.header.Hash(),
+		BlockNumber:       env.header.Number,
+		TransactionIndex:  uint(env.tcount),
 	}
+
+	// Add transaction to block without execution
 	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
 	env.tcount++
+
+	// Accumulate gas used for this transaction
+	env.header.GasUsed += gasUsed
+
+	// Consume transaction's gas limit from pool
+	env.gasPool.SubGas(gasUsed)
+
 	return nil
 }
 
@@ -290,16 +315,41 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 	if env.blobs+len(sc.Blobs) > maxBlobs {
 		return errors.New("max data blobs reached")
 	}
-	receipt, err := miner.applyTransaction(env, tx)
-	if err != nil {
-		return err
+
+	// Set gas used to transaction's gas limit
+	gasUsed := tx.Gas()
+	blobGasUsed := uint64(len(sc.Blobs)) * params.BlobTxBlobGasPerBlob
+
+	// Create a mock receipt for the blob transaction without execution
+	receipt := &types.Receipt{
+		Type:              tx.Type(),
+		PostState:         nil, // No state changes
+		Status:            1,   // Success status
+		CumulativeGasUsed: env.header.GasUsed + gasUsed,
+		Logs:              []*types.Log{},
+		TxHash:            tx.Hash(),
+		ContractAddress:   common.Address{},
+		GasUsed:           gasUsed,
+		BlobGasUsed:       blobGasUsed,
+		BlockHash:         env.header.Hash(),
+		BlockNumber:       env.header.Number,
+		TransactionIndex:  uint(env.tcount),
 	}
+
+	// Add transaction to block without execution
 	env.txs = append(env.txs, tx.WithoutBlobTxSidecar())
 	env.receipts = append(env.receipts, receipt)
 	env.sidecars = append(env.sidecars, sc)
 	env.blobs += len(sc.Blobs)
 	*env.header.BlobGasUsed += receipt.BlobGasUsed
 	env.tcount++
+
+	// Accumulate gas used for this transaction
+	env.header.GasUsed += gasUsed
+
+	// Consume transaction's gas limit from pool
+	env.gasPool.SubGas(gasUsed)
+
 	return nil
 }
 
@@ -444,8 +494,8 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 }
 
 // fillTransactions retrieves the pending transactions from the txpool and fills them
-// into the given sealing block. The transaction selection and ordering strategy can
-// be customized with the plugin in the future.
+// into the given sealing block based on gas limit without executing them.
+// The transaction selection and ordering strategy can be customized with the plugin in the future.
 func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) error {
 	miner.confMu.RLock()
 	tip := miner.config.GasPrice
@@ -482,6 +532,7 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 			prioBlobTxs[account] = txs
 		}
 	}
+
 	// Fill the block with all available pending transactions.
 	if len(prioPlainTxs) > 0 || len(prioBlobTxs) > 0 {
 		plainTxs := newTransactionsByPriceAndNonce(env.signer, prioPlainTxs, env.header.BaseFee)

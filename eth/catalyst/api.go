@@ -260,7 +260,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	api.forkchoiceLock.Lock()
 	defer api.forkchoiceLock.Unlock()
 
-	log.Trace("Engine API request received", "method", "ForkchoiceUpdated", "head", update.HeadBlockHash, "finalized", update.FinalizedBlockHash, "safe", update.SafeBlockHash)
+	log.Info("Engine API request received", "method", "ForkchoiceUpdated", "head", update.HeadBlockHash, "finalized", update.FinalizedBlockHash, "safe", update.SafeBlockHash)
 	if update.HeadBlockHash == (common.Hash{}) {
 		log.Warn("Forkchoice requested update to zero hash")
 		return engine.STATUS_INVALID, nil // TODO(karalabe): Why does someone send us this?
@@ -674,7 +674,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	api.newPayloadLock.Lock()
 	defer api.newPayloadLock.Unlock()
 
-	log.Trace("Engine API request received", "method", "NewPayload", "number", params.Number, "hash", params.BlockHash)
+	log.Info("Engine API request received", "method", "NewPayload", "number", params.Number, "hash", params.BlockHash)
 	block, err := engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot, requests)
 	if err != nil {
 		bgu := "nil"
@@ -712,11 +712,11 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 
 	// If we already have the block locally, ignore the entire execution and just
 	// return a fake success.
-	if block := api.eth.BlockChain().GetBlockByHash(params.BlockHash); block != nil {
+	/*if block := api.eth.BlockChain().GetBlockByHash(params.BlockHash); block != nil {
 		log.Warn("Ignoring already known beacon payload", "number", params.Number, "hash", params.BlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)))
 		hash := block.Hash()
 		return engine.PayloadStatusV1{Status: engine.VALID, LatestValidHash: &hash}, nil
-	}
+	}*/
 	// If this block was rejected previously, keep rejecting it
 	if res := api.checkInvalidAncestor(block.Hash(), block.Hash()); res != nil {
 		return *res, nil
@@ -747,7 +747,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		log.Warn("State not available, ignoring new payload")
 		return engine.PayloadStatusV1{Status: engine.ACCEPTED}, nil
 	}
-	log.Trace("Inserting block without sethead", "hash", block.Hash(), "number", block.Number())
+	log.Info("Inserting block without sethead", "hash", block.Hash(), "number", block.Number())
 	newHeader, proofs, err := api.eth.BlockChain().InsertBlockWithoutSetHead(block, witness)
 	if err != nil {
 		log.Warn("NewPayload: inserting block failed", "error", err)
@@ -760,6 +760,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		return api.invalid(err, parent.Header()), nil
 	}
 	hash := newHeader.Hash()
+	log.Info("NewHeader", "hash", hash, "root", newHeader.Root)
 
 	// If witness collection was requested, inject that into the result too
 	var ow *hexutil.Bytes

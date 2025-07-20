@@ -2537,12 +2537,39 @@ func (bc *BlockChain) InsertBlockWithoutSetHead(block *types.Block, makeWitness 
 	}
 
 	newHeader, err := bc.validator.ValidateState(block, statedb, res, false)
+	log.Info("New Header", "stateroot", newHeader.Root)
 	if err != nil {
 		return nil, nil, err
 	}
 
+	// Create a new block with the updated header that contains the correct state root
+	log.Info("Block", "hash", block.Hash(), "number", block.Number())
+	updatedBlock := block.WithSeal(newHeader)
+	// Print the hash of the updated block for debugging purposes
+	log.Info("Updated Block Hash", "hash", updatedBlock.Hash())
+
+	// If the block hash has changed, we need to update the hash-to-number mapping
+	if updatedBlock.Hash() != block.Hash() {
+		log.Info("Block hash changed, updating hash-to-number mapping",
+			"old_hash", block.Hash(), "new_hash", updatedBlock.Hash(), "number", updatedBlock.Number())
+
+		// Write the updated hash-to-number mapping and remove the old one
+		batch := bc.db.NewBatch()
+		rawdb.WriteHeaderNumber(batch, updatedBlock.Hash(), updatedBlock.NumberU64())
+		rawdb.DeleteHeaderNumber(batch, block.Hash())
+
+		// Also clean up old receipts and body data if they exist
+		rawdb.DeleteReceipts(batch, block.Hash(), block.NumberU64())
+		rawdb.DeleteBody(batch, block.Hash(), block.NumberU64())
+		rawdb.DeleteHeader(batch, block.Hash(), block.NumberU64())
+
+		if err := batch.Write(); err != nil {
+			return nil, nil, fmt.Errorf("failed to update hash-to-number mapping: %w", err)
+		}
+	}
+
 	// Write the block with state
-	err = bc.writeBlockWithState(block, res.Receipts, statedb)
+	err = bc.writeBlockWithState(updatedBlock, res.Receipts, statedb)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -2550,7 +2577,7 @@ func (bc *BlockChain) InsertBlockWithoutSetHead(block *types.Block, makeWitness 
 	// Generate witness if requested
 	var witness *stateless.Witness
 	if makeWitness && bc.chainConfig.IsByzantium(block.Number()) {
-		witness, err = stateless.NewWitness(block.Header(), bc)
+		witness, err = stateless.NewWitness(updatedBlock.Header(), bc)
 		if err != nil {
 			return nil, nil, err
 		}
