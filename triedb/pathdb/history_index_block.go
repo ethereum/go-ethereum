@@ -272,11 +272,6 @@ func (b *blockWriter) append(id uint64) error {
 		b.data = binary.AppendUvarint(b.data, id-b.desc.max)
 	}
 	b.desc.entries++
-
-	// The state history ID must be greater than 0.
-	//if b.desc.min == 0 {
-	//	b.desc.min = id
-	//}
 	b.desc.max = id
 	return nil
 }
