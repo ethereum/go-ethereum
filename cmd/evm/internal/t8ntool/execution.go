@@ -347,6 +347,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	// Apply withdrawals
 	for _, w := range pre.Env.Withdrawals {
 		if chainConfig.IsDelegationActive(vmContext.BlockNumber, vmContext.Time) {
+			// will skip both native staking and restaking reward distribution withdrawals
 			if w.Validator == gomath.MaxUint64 {
 				continue
 			}
@@ -375,6 +376,17 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 					amount := new(big.Int).Mul(new(big.Int).SetUint64(firstWithdrawal.Amount), big.NewInt(params.GWei))
 					if err := core.ProcessStakingDistribution(evm, firstWithdrawal.Address, amount); err != nil {
 						log.Error("could not process staking distribution", "err", err)
+					}
+				}
+			}
+			if chainConfig.IsRestakingActive(vmContext.BlockNumber, vmContext.Time) {
+				if len(pre.Env.Withdrawals) > 1 {
+					secondWithdrawal := pre.Env.Withdrawals[1]
+					if secondWithdrawal.Validator == gomath.MaxUint64 {
+						amount := new(big.Int).Mul(new(big.Int).SetUint64(secondWithdrawal.Amount), big.NewInt(params.GWei))
+						if err := core.ProcessRestakingDistribution(evm, secondWithdrawal.Address, amount); err != nil {
+							log.Error("could not process restaking distribution", "err", err)
+						}
 					}
 				}
 			}

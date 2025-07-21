@@ -65,6 +65,7 @@ var (
 		utils.OverridePrague,
 		utils.OverrideVerkle,
 		utils.OverrideDelegationActivation,
+		utils.OverrideRestakingActivation,
 		utils.EnablePersonal, // deprecated
 		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,

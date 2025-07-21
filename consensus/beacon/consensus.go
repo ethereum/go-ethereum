@@ -346,6 +346,7 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 	// Withdrawals processing.
 	for _, w := range body.Withdrawals {
 		if chain.Config().IsDelegationActive(header.Number, header.Time) {
+			// will skip both native staking and restaking reward distribution withdrawals
 			if w.Validator == math.MaxUint64 {
 				continue
 			}

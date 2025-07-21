@@ -73,6 +73,10 @@ var Defaults = Config{
 		var i uint64 = 1_749_902_400 // 2025-06-14 12:00:00 UTC
 		return &i
 	}(),
+	OverrideRestakingActivation: func() *uint64 {
+		var i uint64 = 1_749_902_400 // TBD
+		return &i
+	}(),
 }
 
 //go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
@@ -169,6 +173,9 @@ type Config struct {
 
 	// OverrideDelegationActivation (TODO: remove after the fork)
 	OverrideDelegationActivation *uint64 `toml:",omitempty"`
+
+	// OverrideRestakingActivation (TODO: remove after the fork)
+	OverrideRestakingActivation *uint64 `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.

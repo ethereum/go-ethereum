@@ -65,6 +65,7 @@ var (
 		Ethash:                  new(EthashConfig),
 		// DelegationActivationTime is the activation time of Delegation logic
 		DelegationActivationTime: newUint64(1746612311),
+		RestakingActivationTime:  newUint64(1746612311),
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
@@ -97,6 +98,7 @@ var (
 		Ethash:                  new(EthashConfig),
 		// DelegationActivationTime is the activation time of Delegation logic
 		DelegationActivationTime: newUint64(1740434112),
+		RestakingActivationTime:  newUint64(1740434112),
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
@@ -129,6 +131,7 @@ var (
 		Ethash:                  new(EthashConfig),
 		// DelegationActivationTime is the activation time of Delegation logic
 		DelegationActivationTime: newUint64(1741159776),
+		RestakingActivationTime:  newUint64(1741159776),
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
@@ -161,6 +164,7 @@ var (
 		Ethash:                  new(EthashConfig),
 		// DelegationActivationTime is the activation time of Delegation logic
 		DelegationActivationTime: newUint64(1742999832),
+		RestakingActivationTime:  newUint64(1742999832),
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
@@ -196,6 +200,7 @@ var (
 		Clique:                  nil,
 		// DelegationActivationTime is the activation time of Delegation logic
 		DelegationActivationTime: nil,
+		RestakingActivationTime:  nil,
 	}
 
 	AllDevChainProtocolChanges = &ChainConfig{
@@ -219,6 +224,7 @@ var (
 		PragueTime:              newUint64(0),
 		// DelegationActivationTime is the activation time of Delegation logic
 		DelegationActivationTime: newUint64(0),
+		RestakingActivationTime:  newUint64(0),
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
@@ -255,6 +261,7 @@ var (
 		Clique:                  &CliqueConfig{Period: 0, Epoch: 30000},
 		// DelegationActivationTime is the activation time of Delegation logic
 		DelegationActivationTime: nil,
+		RestakingActivationTime:  nil,
 	}
 
 	// TestChainConfig contains every protocol change (EIPs) introduced
@@ -287,6 +294,7 @@ var (
 		Clique:                  nil,
 		// DelegationActivationTime is the activation time of Delegation logic
 		DelegationActivationTime: nil,
+		RestakingActivationTime:  nil,
 	}
 
 	// MergedTestChainConfig contains every protocol change (EIPs) introduced
@@ -319,6 +327,7 @@ var (
 		Clique:                  nil,
 		// DelegationActivationTime is the activation time of Delegation logic
 		DelegationActivationTime: newUint64(0),
+		RestakingActivationTime:  newUint64(0),
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
@@ -355,6 +364,7 @@ var (
 		Clique:                  nil,
 		// DelegationActivationTime is the activation time of Delegation logic
 		DelegationActivationTime: nil,
+		RestakingActivationTime:  nil,
 	}
 	TestRules = TestChainConfig.Rules(new(big.Int), false, 0)
 )
@@ -438,6 +448,8 @@ type ChainConfig struct {
 	DepositContractAddress common.Address `json:"depositContractAddress,omitempty"`
 	// DelegationActivationTime is the activation time of Delegation logic
 	DelegationActivationTime *uint64 `json:"DelegationActivationTime,omitempty"`
+	// RestakingActivationTime is the activation time of Delegation logic
+	RestakingActivationTime *uint64 `json:"RestakingActivationTime,omitempty"`
 
 	// EnableVerkleAtGenesis is a flag that specifies whether the network uses
 	// the Verkle tree starting from the genesis block. If set to true, the
@@ -555,6 +567,9 @@ func (c *ChainConfig) Description() string {
 	if c.DelegationActivationTime != nil {
 		banner += fmt.Sprintf(" - DelegationActivationTime:    @%-10v\n", *c.DelegationActivationTime)
 	}
+	if c.RestakingActivationTime != nil {
+		banner += fmt.Sprintf(" - RestakingActivationTime:    @%-10v\n", *c.RestakingActivationTime)
+	}
 	return banner
 }
 
@@ -670,6 +685,10 @@ func (c *ChainConfig) IsPrague(num *big.Int, time uint64) bool {
 
 func (c *ChainConfig) IsDelegationActive(num *big.Int, time uint64) bool {
 	return c.IsPrague(num, time) && (c.DelegationActivationTime != nil) && (time >= *c.DelegationActivationTime)
+}
+
+func (c *ChainConfig) IsRestakingActive(num *big.Int, time uint64) bool {
+	return c.IsPrague(num, time) && (c.RestakingActivationTime != nil) && (time >= *c.RestakingActivationTime)
 }
 
 // IsOsaka returns whether time is either equal to the Osaka fork time or greater.

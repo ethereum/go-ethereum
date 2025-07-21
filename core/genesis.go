@@ -261,6 +261,7 @@ type ChainOverrides struct {
 	OverridePrague               *uint64
 	OverrideVerkle               *uint64
 	OverrideDelegationActivation *uint64
+	OverrideRestakingActivation  *uint64
 }
 
 // apply applies the chain overrides on the supplied chain config.
@@ -276,6 +277,9 @@ func (o *ChainOverrides) apply(cfg *params.ChainConfig) error {
 	}
 	if o.OverrideDelegationActivation != nil {
 		cfg.DelegationActivationTime = o.OverrideDelegationActivation
+	}
+	if o.OverrideRestakingActivation != nil {
+		cfg.RestakingActivationTime = o.OverrideRestakingActivation
 	}
 	return cfg.CheckConfigForkOrder()
 }

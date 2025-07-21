@@ -138,6 +138,17 @@ func (miner *Miner) generateWork(params *generateParams, witness bool) *newPaylo
 					}
 				}
 			}
+			if miner.chainConfig.IsRestakingActive(work.header.Number, work.header.Time) {
+				if len(params.withdrawals) > 1 {
+					secondWithdrawal := params.withdrawals[1]
+					if secondWithdrawal.Validator == math.MaxUint64 {
+						amount := new(big.Int).Mul(new(big.Int).SetUint64(secondWithdrawal.Amount), big.NewInt(ethparams.GWei))
+						if err := core.ProcessRestakingDistribution(work.evm, secondWithdrawal.Address, amount); err != nil {
+							log.Error("could not process restaking distribution", "err", err)
+						}
+					}
+				}
+			}
 		}
 		// EIP-7002
 		if err := core.ProcessWithdrawalQueue(&requests, work.evm); err != nil {
