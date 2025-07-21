@@ -198,7 +198,7 @@ func genStorageProof(cli *client, head uint64, number int) ([]uint64, [][]common
 			if tx.To() == nil {
 				continue
 			}
-			blob, err := cli.Geth.TraceTransaction(context.Background(), tx.Hash(), &tracers.TraceConfig{
+			ret, err := cli.Geth.TraceTransaction(context.Background(), tx.Hash(), &tracers.TraceConfig{
 				Tracer:       &tracer,
 				TracerConfig: configBlob,
 			})
@@ -206,8 +206,13 @@ func genStorageProof(cli *client, head uint64, number int) ([]uint64, [][]common
 				log.Error("Failed to trace the transaction", "blockNumber", blockNumber, "hash", tx.Hash(), "err", err)
 				continue
 			}
+			blob, err := json.Marshal(ret)
+			if err != nil {
+				log.Error("Failed to marshal data", "err", err)
+				continue
+			}
 			var accounts map[common.Address]*native.PrestateAccount
-			if err := json.Unmarshal(blob.(json.RawMessage), &accounts); err != nil {
+			if err := json.Unmarshal(blob, &accounts); err != nil {
 				log.Error("Failed to decode trace result", "blockNumber", blockNumber, "hash", tx.Hash(), "err", err)
 				continue
 			}
