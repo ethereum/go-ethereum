@@ -210,7 +210,7 @@ func (r *historyReader) readAccountMetadata(address common.Address, historyID ui
 	n := len(blob) / accountIndexSize
 
 	pos := sort.Search(n, func(i int) bool {
-		h := blob[accountIndexSize*i : accountIndexSize*i+common.HashLength]
+		h := blob[accountIndexSize*i : accountIndexSize*i+common.AddressLength]
 		return bytes.Compare(h, address.Bytes()) >= 0
 	})
 	if pos == n {
