@@ -1191,8 +1191,8 @@ func TestBlobCountLimit(t *testing.T) {
 
 	// Attempt to add transactions.
 	var (
-		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 7, key1)
-		tx2 = makeMultiBlobTx(0, 1, 800, 70, 8, key2)
+		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 6, key1)
+		tx2 = makeMultiBlobTx(0, 1, 800, 70, 7, key2)
 	)
 	errs := pool.Add([]*types.Transaction{tx1, tx2}, true)
 
