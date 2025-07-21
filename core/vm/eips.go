@@ -18,7 +18,7 @@ package vm
 
 import (
 	"fmt"
-	"math"
+	stdmath "math"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -352,7 +352,7 @@ func opExtCodeCopyEIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeC
 	)
 	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
 	if overflow {
-		uint64CodeOffset = math.MaxUint64
+		uint64CodeOffset = stdmath.MaxUint64
 	}
 	addr := common.Address(a.Bytes20())
 	code := interpreter.evm.StateDB.GetCode(addr)

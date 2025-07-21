@@ -64,37 +64,43 @@ func memoryGasCost(mem *Memory, newMemSize uint64) (uint64, error) {
 // MCOPY (stack position 2)
 // EXTCODECOPY (stack position 3)
 // RETURNDATACOPY (stack position 2)
-func memoryCopierGas(stackpos int) gasFunc {
-	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-		// Gas for expanding the memory
-		gas, err := memoryGasCost(mem, memorySize)
-		if err != nil {
-			return 0, err
-		}
-		// And gas for copying data, charged per word at param.CopyGas
-		words, overflow := stack.Back(stackpos).Uint64WithOverflow()
-		if overflow {
-			return 0, ErrGasUintOverflow
-		}
-
-		if words, overflow = math.SafeMul(toWordSize(words), params.CopyGas); overflow {
-			return 0, ErrGasUintOverflow
-		}
-
-		if gas, overflow = math.SafeAdd(gas, words); overflow {
-			return 0, ErrGasUintOverflow
-		}
-		return gas, nil
+func memoryCopierGas(stackpos int, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	// Gas for expanding the memory
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
 	}
+	// And gas for copying data, charged per word at param.CopyGas
+	words, overflow := stack.Back(stackpos).Uint64WithOverflow()
+	if overflow {
+		return 0, ErrGasUintOverflow
+	}
+
+	if words, overflow = math.SafeMul(toWordSize(words), params.CopyGas); overflow {
+		return 0, ErrGasUintOverflow
+	}
+
+	if gas, overflow = math.SafeAdd(gas, words); overflow {
+		return 0, ErrGasUintOverflow
+	}
+	return gas, nil
 }
 
-var (
-	gasCallDataCopy   = memoryCopierGas(2)
-	gasCodeCopy       = memoryCopierGas(2)
-	gasMcopy          = memoryCopierGas(2)
-	gasExtCodeCopy    = memoryCopierGas(3)
-	gasReturnDataCopy = memoryCopierGas(2)
-)
+func gasCallDataCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return memoryCopierGas(2, evm, contract, stack, mem, memorySize)
+}
+func gasCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return memoryCopierGas(2, evm, contract, stack, mem, memorySize)
+}
+func gasMcopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return memoryCopierGas(2, evm, contract, stack, mem, memorySize)
+}
+func gasExtCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return memoryCopierGas(3, evm, contract, stack, mem, memorySize)
+}
+func gasReturnDataCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return memoryCopierGas(2, evm, contract, stack, mem, memorySize)
+}
 
 func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var (
@@ -221,34 +227,48 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	return params.SloadGasEIP2200, nil // dirty update (2.2)
 }
 
-func makeGasLog(n uint64) gasFunc {
-	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-		requestedSize, overflow := stack.Back(1).Uint64WithOverflow()
-		if overflow {
-			return 0, ErrGasUintOverflow
-		}
-
-		gas, err := memoryGasCost(mem, memorySize)
-		if err != nil {
-			return 0, err
-		}
-
-		if gas, overflow = math.SafeAdd(gas, params.LogGas); overflow {
-			return 0, ErrGasUintOverflow
-		}
-		if gas, overflow = math.SafeAdd(gas, n*params.LogTopicGas); overflow {
-			return 0, ErrGasUintOverflow
-		}
-
-		var memorySizeGas uint64
-		if memorySizeGas, overflow = math.SafeMul(requestedSize, params.LogDataGas); overflow {
-			return 0, ErrGasUintOverflow
-		}
-		if gas, overflow = math.SafeAdd(gas, memorySizeGas); overflow {
-			return 0, ErrGasUintOverflow
-		}
-		return gas, nil
+func makeGasLog(n uint64, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	requestedSize, overflow := stack.Back(1).Uint64WithOverflow()
+	if overflow {
+		return 0, ErrGasUintOverflow
 	}
+
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+
+	if gas, overflow = math.SafeAdd(gas, params.LogGas); overflow {
+		return 0, ErrGasUintOverflow
+	}
+	if gas, overflow = math.SafeAdd(gas, n*params.LogTopicGas); overflow {
+		return 0, ErrGasUintOverflow
+	}
+
+	var memorySizeGas uint64
+	if memorySizeGas, overflow = math.SafeMul(requestedSize, params.LogDataGas); overflow {
+		return 0, ErrGasUintOverflow
+	}
+	if gas, overflow = math.SafeAdd(gas, memorySizeGas); overflow {
+		return 0, ErrGasUintOverflow
+	}
+	return gas, nil
+}
+
+func gasLog0(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return makeGasLog(0, evm, contract, stack, mem, memorySize)
+}
+func gasLog1(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return makeGasLog(1, evm, contract, stack, mem, memorySize)
+}
+func gasLog2(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return makeGasLog(2, evm, contract, stack, mem, memorySize)
+}
+func gasLog3(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return makeGasLog(3, evm, contract, stack, mem, memorySize)
+}
+func gasLog4(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return makeGasLog(4, evm, contract, stack, mem, memorySize)
 }
 
 func gasKeccak256(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {

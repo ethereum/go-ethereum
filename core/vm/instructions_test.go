@@ -906,7 +906,7 @@ func TestOpMCopy(t *testing.T) {
 func TestPush(t *testing.T) {
 	code := common.FromHex("0011223344556677889900aabbccddeeff0102030405060708090a0b0c0d0e0ff1e1d1c1b1a19181716151413121")
 
-	push32 := makePush(32, 32)
+	push32 := opPush32
 
 	scope := &ScopeContext{
 		Memory: nil,

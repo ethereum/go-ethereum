@@ -17,7 +17,7 @@
 package vm
 
 import (
-	"math"
+	stdmath "math"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -296,7 +296,7 @@ func opCallDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	)
 	dataOffset64, overflow := dataOffset.Uint64WithOverflow()
 	if overflow {
-		dataOffset64 = math.MaxUint64
+		dataOffset64 = stdmath.MaxUint64
 	}
 	// These values are checked for overflow during gas cost calculation
 	memOffset64 := memOffset.Uint64()
@@ -352,7 +352,7 @@ func opCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	)
 	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
 	if overflow {
-		uint64CodeOffset = math.MaxUint64
+		uint64CodeOffset = stdmath.MaxUint64
 	}
 
 	codeCopy := getData(scope.Contract.Code, uint64CodeOffset, length.Uint64())
@@ -370,7 +370,7 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	)
 	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
 	if overflow {
-		uint64CodeOffset = math.MaxUint64
+		uint64CodeOffset = stdmath.MaxUint64
 	}
 	addr := common.Address(a.Bytes20())
 	code := interpreter.evm.StateDB.GetCode(addr)
@@ -924,31 +924,45 @@ func opSelfdestruct6780(pc *uint64, interpreter *EVMInterpreter, scope *ScopeCon
 // following functions are used by the instruction jump  table
 
 // make log instruction function
-func makeLog(size int) executionFunc {
-	return func(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-		if interpreter.readOnly {
-			return nil, ErrWriteProtection
-		}
-		topics := make([]common.Hash, size)
-		stack := scope.Stack
-		mStart, mSize := stack.pop(), stack.pop()
-		for i := 0; i < size; i++ {
-			addr := stack.pop()
-			topics[i] = addr.Bytes32()
-		}
-
-		d := scope.Memory.GetCopy(mStart.Uint64(), mSize.Uint64())
-		interpreter.evm.StateDB.AddLog(&types.Log{
-			Address: scope.Contract.Address(),
-			Topics:  topics,
-			Data:    d,
-			// This is a non-consensus field, but assigned here because
-			// core/state doesn't know the current block number.
-			BlockNumber: interpreter.evm.Context.BlockNumber.Uint64(),
-		})
-
-		return nil, nil
+func doLog(size int, pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	if interpreter.readOnly {
+		return nil, ErrWriteProtection
 	}
+	topics := make([]common.Hash, size)
+	stack := scope.Stack
+	mStart, mSize := stack.pop(), stack.pop()
+	for i := 0; i < size; i++ {
+		addr := stack.pop()
+		topics[i] = addr.Bytes32()
+	}
+
+	d := scope.Memory.GetCopy(mStart.Uint64(), mSize.Uint64())
+	interpreter.evm.StateDB.AddLog(&types.Log{
+		Address: scope.Contract.Address(),
+		Topics:  topics,
+		Data:    d,
+		// This is a non-consensus field, but assigned here because
+		// core/state doesn't know the current block number.
+		BlockNumber: interpreter.evm.Context.BlockNumber.Uint64(),
+	})
+
+	return nil, nil
+}
+
+func opLog0(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doLog(0, pc, interpreter, scope)
+}
+func opLog1(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doLog(1, pc, interpreter, scope)
+}
+func opLog2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doLog(2, pc, interpreter, scope)
+}
+func opLog3(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doLog(3, pc, interpreter, scope)
+}
+func opLog4(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doLog(4, pc, interpreter, scope)
 }
 
 // opPush1 is a specialized version of pushN
@@ -983,30 +997,176 @@ func opPush2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	return nil, nil
 }
 
-// make push instruction function
-func makePush(size uint64, pushByteSize int) executionFunc {
-	return func(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-		var (
-			codeLen = len(scope.Contract.Code)
-			start   = min(codeLen, int(*pc+1))
-			end     = min(codeLen, start+pushByteSize)
-		)
-		a := new(uint256.Int).SetBytes(scope.Contract.Code[start:end])
+func doPush(size uint64, pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		pushByteSize = int(size)
+		codeLen      = len(scope.Contract.Code)
+		start        = min(codeLen, int(*pc+1))
+		end          = min(codeLen, start+pushByteSize)
+	)
+	a := new(uint256.Int).SetBytes(scope.Contract.Code[start:end])
 
-		// Missing bytes: pushByteSize - len(pushData)
-		if missing := pushByteSize - (end - start); missing > 0 {
-			a.Lsh(a, uint(8*missing))
-		}
-		scope.Stack.push(a)
-		*pc += size
-		return nil, nil
+	// Missing bytes: pushByteSize - len(pushData)
+	if missing := pushByteSize - (end - start); missing > 0 {
+		a.Lsh(a, uint(8*missing))
 	}
+	scope.Stack.push(a)
+	*pc += size
+	return nil, nil
 }
 
-// make dup instruction function
-func makeDup(size int64) executionFunc {
-	return func(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-		scope.Stack.dup(int(size))
-		return nil, nil
-	}
+func opPush3(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(3, pc, interpreter, scope)
+}
+func opPush4(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(4, pc, interpreter, scope)
+}
+func opPush5(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(5, pc, interpreter, scope)
+}
+func opPush6(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(6, pc, interpreter, scope)
+}
+func opPush7(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(7, pc, interpreter, scope)
+}
+func opPush8(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(8, pc, interpreter, scope)
+}
+func opPush9(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(9, pc, interpreter, scope)
+}
+func opPush10(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(10, pc, interpreter, scope)
+}
+func opPush11(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(11, pc, interpreter, scope)
+}
+func opPush12(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(12, pc, interpreter, scope)
+}
+func opPush13(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(13, pc, interpreter, scope)
+}
+func opPush14(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(14, pc, interpreter, scope)
+}
+func opPush15(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(15, pc, interpreter, scope)
+}
+func opPush16(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(16, pc, interpreter, scope)
+}
+func opPush17(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(17, pc, interpreter, scope)
+}
+func opPush18(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(18, pc, interpreter, scope)
+}
+func opPush19(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(19, pc, interpreter, scope)
+}
+func opPush20(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(20, pc, interpreter, scope)
+}
+func opPush21(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(21, pc, interpreter, scope)
+}
+func opPush22(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(22, pc, interpreter, scope)
+}
+func opPush23(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(23, pc, interpreter, scope)
+}
+func opPush24(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(24, pc, interpreter, scope)
+}
+func opPush25(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(25, pc, interpreter, scope)
+}
+func opPush26(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(26, pc, interpreter, scope)
+}
+func opPush27(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(27, pc, interpreter, scope)
+}
+func opPush28(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(28, pc, interpreter, scope)
+}
+func opPush29(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(29, pc, interpreter, scope)
+}
+func opPush30(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(30, pc, interpreter, scope)
+}
+func opPush31(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(31, pc, interpreter, scope)
+}
+func opPush32(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return doPush(32, pc, interpreter, scope)
+}
+
+func opDup1(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(1)
+	return nil, nil
+}
+func opDup2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(2)
+	return nil, nil
+}
+func opDup3(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(3)
+	return nil, nil
+}
+func opDup4(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(4)
+	return nil, nil
+}
+func opDup5(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(5)
+	return nil, nil
+}
+func opDup6(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(6)
+	return nil, nil
+}
+func opDup7(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(7)
+	return nil, nil
+}
+func opDup8(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(8)
+	return nil, nil
+}
+func opDup9(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(9)
+	return nil, nil
+}
+func opDup10(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(10)
+	return nil, nil
+}
+func opDup11(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(11)
+	return nil, nil
+}
+func opDup12(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(12)
+	return nil, nil
+}
+func opDup13(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(13)
+	return nil, nil
+}
+func opDup14(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(14)
+	return nil, nil
+}
+func opDup15(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(15)
+	return nil, nil
+}
+func opDup16(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.dup(16)
+	return nil, nil
 }
