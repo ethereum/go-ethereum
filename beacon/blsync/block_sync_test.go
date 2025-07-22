@@ -148,13 +148,13 @@ func (h *testHeadTracker) ValidatedOptimistic() (types.OptimisticUpdate, bool) {
 	if h.validated.Header == (types.Header{}) {
 		return types.OptimisticUpdate{}, false
 	}
-	
+
 	// Create execution header for the attested block
 	execHeader := types.NewExecutionHeader(&deneb.ExecutionPayloadHeader{
 		BlockNumber: 456,
 		BlockHash:   zrntcommon.Hash32(common.HexToHash("905ac721c4058d9ed40b27b6b9c1bdd10d4333e4f3d9769100bf9dfb80e5d1f6")),
 	})
-	
+
 	return types.OptimisticUpdate{
 		Attested:      types.HeaderWithExecProof{Header: h.validated.Header, PayloadHeader: execHeader},
 		Signature:     h.validated.Signature,
@@ -166,7 +166,7 @@ func (h *testHeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
 	if h.validated.Header == (types.Header{}) {
 		return types.FinalityUpdate{}, false
 	}
-	
+
 	// Use the finalized field if set, otherwise create a default one
 	finalized := h.finalized
 	if finalized.PayloadHeader == nil {
@@ -178,13 +178,13 @@ func (h *testHeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
 			SignatureSlot: h.validated.SignatureSlot,
 		}, false // Return false when no real finalized data
 	}
-	
+
 	// Create execution header for the attested block
 	execHeader := types.NewExecutionHeader(&deneb.ExecutionPayloadHeader{
 		BlockNumber: 456,
 		BlockHash:   zrntcommon.Hash32(common.HexToHash("905ac721c4058d9ed40b27b6b9c1bdd10d4333e4f3d9769100bf9dfb80e5d1f6")),
 	})
-	
+
 	return types.FinalityUpdate{
 		Attested:      types.HeaderWithExecProof{Header: h.validated.Header, PayloadHeader: execHeader},
 		Finalized:     finalized,
