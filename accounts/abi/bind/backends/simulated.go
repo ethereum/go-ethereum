@@ -538,7 +538,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 		b.pendingState.RevertToSnapshot(snapshot)
 
 		if err != nil {
-			if errors.Is(err, core.ErrIntrinsicGas) {
+			if errors.Is(err, core.ErrIntrinsicGas) || errors.Is(err, core.ErrFloorDataGas) {
 				return true, nil, nil // Special case, raise gas limit
 			}
 			return true, nil, err // Bail out
