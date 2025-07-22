@@ -696,7 +696,7 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 	if err := args.CallDefaults(gp.Gas(), blockContext.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return nil, err
 	}
-	msg := args.ToMessage(header.BaseFee, skipChecks, skipChecks)
+	msg := args.ToMessage(header.BaseFee, skipChecks, skipChecks, b.ChainConfig().IsPrague1(header.Number, header.Time), b.ChainConfig().Berachain.Prague1.PoLDistributorAddress)
 	// Lower the basefee to 0 to avoid breaking EVM
 	// invariants (basefee < feecap).
 	if msg.GasPrice.Sign() == 0 {
@@ -839,7 +839,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	if err := args.CallDefaults(gasCap, header.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return 0, err
 	}
-	call := args.ToMessage(header.BaseFee, true, true)
+	call := args.ToMessage(header.BaseFee, true, true, b.ChainConfig().IsPrague1(header.Number, header.Time), b.ChainConfig().Berachain.Prague1.PoLDistributorAddress)
 
 	// Run the gas estimation and wrap any revertals into a custom return
 	estimate, revert, err := gasestimator.Estimate(ctx, call, opts, gasCap)
@@ -903,6 +903,9 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	}
 	if head.RequestsHash != nil {
 		result["requestsHash"] = head.RequestsHash
+	}
+	if head.ParentProposerPubkey != nil {
+		result["parentProposerPubkey"] = head.ParentProposerPubkey
 	}
 	return result
 }
@@ -1057,6 +1060,14 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 		}
 		result.AuthorizationList = tx.SetCodeAuthorizations()
+
+	case types.PoLTxType:
+		al := tx.AccessList()
+		result.Accesses = &al
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
+		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
+		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
+		result.MaxFeePerBlobGas = (*hexutil.Big)(tx.BlobGasFeeCap())
 	}
 	return result
 }
@@ -1217,7 +1228,9 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		statedb := db.Copy()
 		// Set the accesslist to the last al
 		args.AccessList = &accessList
-		msg := args.ToMessage(header.BaseFee, true, true)
+		isPrague1 := b.ChainConfig().IsPrague1(header.Number, header.Time)
+		distributorAddress := b.ChainConfig().Berachain.Prague1.PoLDistributorAddress
+		msg := args.ToMessage(header.BaseFee, true, true, isPrague1, distributorAddress)
 
 		// Apply the transaction with the access list tracer
 		tracer := logger.NewAccessListTracer(accessList, addressesToExclude)
@@ -1234,7 +1247,15 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		}
 		res, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
 		if err != nil {
-			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction(types.LegacyTxType).Hash(), err)
+			return nil, 0, nil, fmt.Errorf(
+				"failed to apply transaction: %v err: %v",
+				args.ToTransaction(
+					types.LegacyTxType,
+					b.ChainConfig().IsPrague1(header.Number, header.Time),
+					b.ChainConfig().Berachain.Prague1.PoLDistributorAddress,
+				).Hash(),
+				err,
+			)
 		}
 		if tracer.Equal(prevTracer) {
 			return accessList, res.UsedGas, res.Err, nil
@@ -1503,7 +1524,13 @@ func (api *TransactionAPI) SendTransaction(ctx context.Context, args Transaction
 		return common.Hash{}, err
 	}
 	// Assemble the transaction and sign with the wallet
-	tx := args.ToTransaction(types.LegacyTxType)
+	header := api.b.CurrentHeader()
+
+	tx := args.ToTransaction(
+		types.LegacyTxType,
+		api.b.ChainConfig().IsPrague1(header.Number, header.Time),
+		api.b.ChainConfig().Berachain.Prague1.PoLDistributorAddress,
+	)
 
 	signed, err := wallet.SignTx(account, tx, api.b.ChainConfig().ChainID)
 	if err != nil {
@@ -1523,7 +1550,12 @@ func (api *TransactionAPI) FillTransaction(ctx context.Context, args Transaction
 		return nil, err
 	}
 	// Assemble the transaction and obtain rlp
-	tx := args.ToTransaction(types.LegacyTxType)
+	header := api.b.CurrentHeader()
+	tx := args.ToTransaction(
+		types.LegacyTxType,
+		api.b.ChainConfig().IsPrague1(header.Number, header.Time),
+		api.b.ChainConfig().Berachain.Prague1.PoLDistributorAddress,
+	)
 	data, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, err
@@ -1591,7 +1623,12 @@ func (api *TransactionAPI) SignTransaction(ctx context.Context, args Transaction
 		return nil, err
 	}
 	// Before actually sign the transaction, ensure the transaction fee is reasonable.
-	tx := args.ToTransaction(types.LegacyTxType)
+	header := api.b.CurrentHeader()
+	tx := args.ToTransaction(
+		types.LegacyTxType,
+		api.b.ChainConfig().IsPrague1(header.Number, header.Time),
+		api.b.ChainConfig().Berachain.Prague1.PoLDistributorAddress,
+	)
 	if err := checkTxFee(tx.GasPrice(), tx.Gas(), api.b.RPCTxFeeCap()); err != nil {
 		return nil, err
 	}
@@ -1645,7 +1682,12 @@ func (api *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs,
 	if err := sendArgs.setDefaults(ctx, api.b, false); err != nil {
 		return common.Hash{}, err
 	}
-	matchTx := sendArgs.ToTransaction(types.LegacyTxType)
+	header := api.b.CurrentHeader()
+	matchTx := sendArgs.ToTransaction(
+		types.LegacyTxType,
+		api.b.ChainConfig().IsPrague1(header.Number, header.Time),
+		api.b.ChainConfig().Berachain.Prague1.PoLDistributorAddress,
+	)
 
 	// Before replacing the old transaction, ensure the _new_ transaction fee is reasonable.
 	price := matchTx.GasPrice()
@@ -1675,7 +1717,14 @@ func (api *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs,
 			if gasLimit != nil && *gasLimit != 0 {
 				sendArgs.Gas = gasLimit
 			}
-			signedTx, err := api.sign(sendArgs.from(), sendArgs.ToTransaction(types.LegacyTxType))
+			header := api.b.CurrentHeader()
+			signedTx, err := api.sign(
+				sendArgs.from(), sendArgs.ToTransaction(
+					types.LegacyTxType,
+					api.b.ChainConfig().IsPrague1(header.Number, header.Time),
+					api.b.ChainConfig().Berachain.Prague1.PoLDistributorAddress,
+				),
+			)
 			if err != nil {
 				return common.Hash{}, err
 			}

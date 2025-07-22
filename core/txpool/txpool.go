@@ -327,6 +327,11 @@ func (p *TxPool) Add(txs []*types.Transaction, sync bool) []error {
 		// Mark this transaction belonging to no-subpool
 		splits[i] = -1
 
+		// Berachain: PoL txs are rejected.
+		if tx.Type() == types.PoLTxType {
+			continue
+		}
+
 		// Try to find a subpool that accepts the transaction
 		for j, subpool := range p.subpools {
 			if subpool.Filter(tx) {

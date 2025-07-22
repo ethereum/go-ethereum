@@ -282,6 +282,17 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 			return err
 		}
 	}
+	// Berachain specific: verify the existence of the proposer pubkey.
+	prague1 := chain.Config().IsPrague1(header.Number, header.Time)
+	if !prague1 {
+		if header.ParentProposerPubkey != nil {
+			return fmt.Errorf("invalid proposer pubkey: have %#x, expected nil", header.ParentProposerPubkey)
+		}
+	} else {
+		if header.ParentProposerPubkey == nil {
+			return errors.New("header is missing proposer pubkey")
+		}
+	}
 	return nil
 }
 

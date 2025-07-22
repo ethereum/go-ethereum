@@ -150,6 +150,9 @@ func Transition(ctx *cli.Context) error {
 	if err := applyCancunChecks(&prestate.Env, chainConfig); err != nil {
 		return err
 	}
+	if err := applyPrague1Checks(&prestate.Env, chainConfig); err != nil {
+		return err
+	}
 
 	// Configure tracer
 	if ctx.IsSet(TraceTracerFlag.Name) { // Custom tracing
@@ -261,6 +264,19 @@ func applyCancunChecks(env *stEnv, chainConfig *params.ChainConfig) error {
 	// We require EIP-4788 beacon root to be set in the env
 	if env.ParentBeaconBlockRoot == nil {
 		return NewError(ErrorConfig, errors.New("post-cancun env requires parentBeaconBlockRoot to be set"))
+	}
+	return nil
+}
+
+func applyPrague1Checks(env *stEnv, chainConfig *params.ChainConfig) error {
+	if !chainConfig.IsPrague1(big.NewInt(int64(env.Number)), env.Timestamp) {
+		env.ParentProposerPubkey = nil // un-set it if it has been set too early
+		return nil
+	}
+	// Post-prague1
+	// We require BRIP-0004 proposer pubkey to be set in the env
+	if env.ParentProposerPubkey == nil {
+		return NewError(ErrorConfig, errors.New("post-prague1 env requires parentProposerPubkey to be set"))
 	}
 	return nil
 }

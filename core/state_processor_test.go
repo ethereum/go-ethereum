@@ -413,6 +413,10 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		nBlobs += len(tx.BlobHashes())
 	}
 	header.Root = common.BytesToHash(hasher.Sum(nil))
+	if config.IsPrague1(header.Number, header.Time) {
+		proposerPubkey := common.Pubkey{0x01, 0x02, 0x03}
+		header.ParentProposerPubkey = &proposerPubkey
+	}
 	if config.IsCancun(header.Number, header.Time) {
 		excess := eip4844.CalcExcessBlobGas(config, parent.Header(), header.Time)
 		used := uint64(nBlobs * params.BlobTxBlobGasPerBlob)

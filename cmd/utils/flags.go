@@ -139,7 +139,7 @@ var (
 	}
 	NetworkIdFlag = &cli.Uint64Flag{
 		Name:     "networkid",
-		Usage:    "Explicitly set network id (integer)(For testnets: use --sepolia, --holesky, --hoodi instead)",
+		Usage:    "Explicitly set network id (integer)(Testnet: use --bepolia)(For Ethereum: use --mainnet, --sepolia, etc.)",
 		Value:    ethconfig.Defaults.NetworkId,
 		Category: flags.EthCategory,
 	}
@@ -161,6 +161,17 @@ var (
 	HoodiFlag = &cli.BoolFlag{
 		Name:     "hoodi",
 		Usage:    "Hoodi network: pre-configured proof-of-stake test network",
+		Category: flags.EthCategory,
+	}
+	// Berachain
+	BerachainFlag = &cli.BoolFlag{
+		Name:     "berachain",
+		Usage:    "Berachain mainnet",
+		Category: flags.EthCategory,
+	}
+	BepoliaFlag = &cli.BoolFlag{
+		Name:     "bepolia",
+		Usage:    "Bepolia network: pre-configured proof-of-stake test network",
 		Category: flags.EthCategory,
 	}
 	// Dev mode
@@ -449,7 +460,7 @@ var (
 	// Performance tuning settings
 	CacheFlag = &cli.IntFlag{
 		Name:     "cache",
-		Usage:    "Megabytes of memory allocated to internal caching (default = 4096 mainnet full node, 128 light mode)",
+		Usage:    "Megabytes of memory allocated to internal caching (default = 4096 berachain mainnet full node, 128 light mode)",
 		Value:    1024,
 		Category: flags.PerfCategory,
 	}

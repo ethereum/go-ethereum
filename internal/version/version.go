@@ -57,8 +57,8 @@ func WithCommit(gitCommit, gitDate string) string {
 // Archive holds the textual version string used for Geth archives. e.g.
 // "1.8.11-dea1ce05" for stable releases, or "1.8.13-unstable-21c059b6" for unstable
 // releases.
-func Archive(gitCommit string) string {
-	vsn := Semantic
+func Archive(tag, gitCommit string) string {
+	vsn := tag
 	if version.Meta != "stable" {
 		vsn += "-" + version.Meta
 	}

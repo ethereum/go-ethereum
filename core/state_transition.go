@@ -166,6 +166,9 @@ type Message struct {
 
 	// When SkipFromEOACheck is true, the message sender is not checked to be an EOA.
 	SkipFromEOACheck bool
+
+	// Berachain:IsPoLTx is true if the message is a PoL tx.
+	IsPoLTx bool
 }
 
 // TransactionToMessage converts a transaction into a Message.
@@ -185,6 +188,7 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		SkipFromEOACheck:      false,
 		BlobHashes:            tx.BlobHashes(),
 		BlobGasFeeCap:         tx.BlobGasFeeCap(),
+		IsPoLTx:               tx.Type() == types.PoLTxType,
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -207,7 +211,28 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 // state and would never be accepted within a block.
 func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool) (*ExecutionResult, error) {
 	evm.SetTxContext(NewEVMTxContext(msg))
+
+	// Berachain: ApplyPoLMessage is used to apply the PoL tx to the EVM, skipping the
+	// normal state transition checks.
+	if msg.IsPoLTx {
+		return ApplyPoLMessage(msg, evm), nil
+	}
+
 	return newStateTransition(evm, msg, gp).execute()
+}
+
+// Berachain: ApplyPoLMessage applies the BRIP-0004 PoL tx to the EVM. No gas is consumed.
+func ApplyPoLMessage(msg *Message, evm *vm.EVM) *ExecutionResult {
+	evm.StateDB.AddAddressToAccessList(*msg.To)
+
+	result := &ExecutionResult{}
+	ret, leftOverGas, err := evm.Call(msg.From, *msg.To, msg.Data, msg.GasLimit, common.U2560)
+	if err != nil {
+		result.Err = fmt.Errorf("PoL tx failed to execute: %v", err)
+	}
+	result.ReturnData = ret
+	result.MaxUsedGas = msg.GasLimit - leftOverGas // To inform how much gas was needed to run the msg.
+	return result
 }
 
 // stateTransition represents a state transition.

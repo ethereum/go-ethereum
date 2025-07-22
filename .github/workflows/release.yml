@@ -1,0 +1,226 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v1.*"
+
+jobs:
+  extract-version:
+    name: Extract Version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract version
+        run: echo "VERSION=$(echo ${GITHUB_REF#refs/tags/})" >> $GITHUB_OUTPUT
+        id: extract_version
+    outputs:
+      VERSION: ${{ steps.extract_version.outputs.VERSION }}
+
+  linux-intel:
+    name: Linux Build (intel)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.24
+        cache: false
+
+    - name: Install cross toolchain
+      run: |
+        sudo apt-get update
+        sudo apt-get -yq --no-install-suggests --no-install-recommends install gcc-multilib
+
+    - name: Build (amd64)
+      run: |
+        go run build/ci.go install -static -arch amd64 -dlgo
+
+    - name: Create archive (amd64)
+      run: |
+        go run build/ci.go archive -arch amd64 -type tar
+    - name: Upload artifacts (amd64)
+      uses: actions/upload-artifact@v4
+      with:
+        name: bera-geth-linux-amd64-archives
+        path: |
+          bera-geth-linux-amd64-*.tar.gz
+          bera-geth-alltools-linux-amd64-*.tar.gz
+    - name: Cleanup bin
+      run: rm -f build/bin/*
+
+  linux-arm:
+    name: Linux Build (arm)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.24
+        cache: false
+
+    - name: Install cross toolchain
+      run: |
+        sudo apt-get update
+        sudo apt-get -yq --no-install-suggests --no-install-recommends install gcc-arm-linux-gnueabi libc6-dev-armel-cross gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+        sudo ln -s /usr/include/asm-generic /usr/include/asm
+
+    - name: Build (arm64)
+      run: |
+        go run build/ci.go install -static -dlgo -arch arm64 -cc aarch64-linux-gnu-gcc
+
+    - name: Create archive (arm64)
+      run: |
+        go run build/ci.go archive -arch arm64 -type tar
+    - name: Upload artifacts (arm64)
+      uses: actions/upload-artifact@v4
+      with:
+        name: bera-geth-linux-arm64-archives
+        path: |
+          bera-geth-linux-arm64-*.tar.gz
+          bera-geth-alltools-linux-arm64-*.tar.gz
+    - name: Cleanup bin
+      run: rm -fr build/bin/*
+
+  draft-release:
+    name: Draft Release
+    needs: [extract-version, linux-intel, linux-arm]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.extract-version.outputs.VERSION }}
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # This is necessary for generating the changelog
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+    
+    - name: Generate full changelog
+      id: changelog
+      run: |
+        echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+        echo "$(git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 ${{ env.VERSION }}^)..${{ env.VERSION }})" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: Create release draft
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Debug: Show what was downloaded
+        echo "Contents of artifacts directory:"
+        ls -la ./artifacts/ || echo "Artifacts directory not found"
+        
+        # Move all artifacts to current directory
+        if [ -d "./artifacts" ]; then
+          find ./artifacts -name "*.tar.gz" -exec mv {} . \;
+        else
+          echo "Warning: No artifacts directory found"
+        fi
+        
+        # List available files for debugging
+        echo "Available files:"
+        ls -la *.tar.gz || echo "No tar.gz files found"
+        
+        # Get actual archive names
+        GETH_AMD64=$(ls bera-geth-linux-amd64-*.tar.gz 2>/dev/null | grep -v alltools | head -1)
+        GETH_ARM64=$(ls bera-geth-linux-arm64-*.tar.gz 2>/dev/null | grep -v alltools | head -1)
+        GETH_ALLTOOLS_AMD64=$(ls bera-geth-alltools-linux-amd64-*.tar.gz 2>/dev/null | head -1)
+        GETH_ALLTOOLS_ARM64=$(ls bera-geth-alltools-linux-arm64-*.tar.gz 2>/dev/null | head -1)
+        
+        echo "Found archives:"
+        echo "  AMD64: ${GETH_AMD64:-NOT FOUND}"
+        echo "  ARM64: ${GETH_ARM64:-NOT FOUND}"
+        echo "  Alltools AMD64: ${GETH_ALLTOOLS_AMD64:-NOT FOUND}"
+        echo "  Alltools ARM64: ${GETH_ALLTOOLS_ARM64:-NOT FOUND}"
+        
+        # For tag builds, use the actual tag
+        RELEASE_TAG="${{ env.VERSION }}"
+        echo "Release tag: $RELEASE_TAG"
+        echo "GitHub ref: ${{ github.ref }}"
+        echo "GitHub SHA: ${{ github.sha }}"
+        
+        # The tag should already exist since it triggered this workflow
+        # We just need to ensure gh release uses it correctly
+        
+        body=$(cat <<- 'ENDBODY'
+        ![image](https://raw.githubusercontent.com/berachain/bera-geth/main/.github/meta/bera-geth.png)
+
+        ## Summary
+
+        Add a summary, including:
+
+        - Critical bug fixes
+        - New features
+        - Any breaking changes (and what to expect)
+
+        ## Update Priority
+
+        This table provides priorities for which classes of users should update particular components.
+
+        | User Class           | Priority        |
+        |----------------------|-----------------|
+        | Payload Builders     | <TODO>          |
+        | Non-Payload Builders | <TODO>          |
+
+        ## All Changes
+
+        ${{ steps.changelog.outputs.CHANGELOG }}
+
+        ## Binaries
+
+        | System | Architecture | Binary | Notes |
+        |:---:|:---:|:---:|:---|
+        | <img src="https://simpleicons.org/icons/linux.svg" style="width: 32px;"/> | amd64 | [GETH_AMD64_PLACEHOLDER](https://github.com/${{ github.repository }}/releases/download/RELEASE_TAG_PLACEHOLDER/GETH_AMD64_PLACEHOLDER) | Most Linux systems |
+        | <img src="https://simpleicons.org/icons/linux.svg" style="width: 32px;"/> | arm64 | [GETH_ARM64_PLACEHOLDER](https://github.com/${{ github.repository }}/releases/download/RELEASE_TAG_PLACEHOLDER/GETH_ARM64_PLACEHOLDER) | 64-bit ARM systems |
+        | <img src="https://simpleicons.org/icons/linux.svg" style="width: 32px;"/> | amd64 | [GETH_ALLTOOLS_AMD64_PLACEHOLDER](https://github.com/${{ github.repository }}/releases/download/RELEASE_TAG_PLACEHOLDER/GETH_ALLTOOLS_AMD64_PLACEHOLDER) | All tools bundle (amd64) |
+        | <img src="https://simpleicons.org/icons/linux.svg" style="width: 32px;"/> | arm64 | [GETH_ALLTOOLS_ARM64_PLACEHOLDER](https://github.com/${{ github.repository }}/releases/download/RELEASE_TAG_PLACEHOLDER/GETH_ALLTOOLS_ARM64_PLACEHOLDER) | All tools bundle (arm64) |
+        | **System** | **Option** | - | **Resource** |
+        | <img src="https://simpleicons.org/icons/docker.svg" style="width: 32px;"/> | Docker | | [ghcr.io/berachain/bera-geth](https://ghcr.io/berachain/bera-geth) |
+        
+        ### Installation
+        
+        The archives contain the geth binary and license file. Extract and run:
+        ```bash
+        tar -xzf GETH_AMD64_PLACEHOLDER
+        ./geth
+        ```
+        
+        The **alltools** archives additionally contain:
+        - `abigen` - Source code generator for Ethereum contracts
+        - `evm` - Developer utility for the Ethereum Virtual Machine
+        - `rlpdump` - Developer utility for RLP data
+        - `clef` - Ethereum account management tool
+        
+        ENDBODY
+        )
+        
+        # Replace placeholders with actual filenames and release tag
+        body="${body//GETH_AMD64_PLACEHOLDER/$GETH_AMD64}"
+        body="${body//GETH_ARM64_PLACEHOLDER/$GETH_ARM64}"
+        body="${body//GETH_ALLTOOLS_AMD64_PLACEHOLDER/$GETH_ALLTOOLS_AMD64}"
+        body="${body//GETH_ALLTOOLS_ARM64_PLACEHOLDER/$GETH_ALLTOOLS_ARM64}"
+        body="${body//RELEASE_TAG_PLACEHOLDER/$RELEASE_TAG}"
+        
+        # Create assets array for gh release
+        assets=()
+        for asset in bera-geth-*.tar.gz; do
+            if [ -f "$asset" ]; then
+                assets+=("$asset")
+            fi
+        done
+        
+        # Create the release with the actual tag
+        # Using --target with GITHUB_SHA ensures we create the release at the right commit
+        echo "$body" | gh release create "$RELEASE_TAG" \
+          --draft \
+          --title "Bera Geth $RELEASE_TAG" \
+          -F - \
+          "${assets[@]}"
