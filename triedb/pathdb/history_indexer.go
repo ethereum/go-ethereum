@@ -427,6 +427,7 @@ func (i *indexIniter) run(lastID uint64) {
 			}
 			// Adjust the indexing target and relaunch the process
 			lastID = newLastID
+			signal.result <- nil
 			done, interrupt = make(chan struct{}), new(atomic.Int32)
 			go i.index(done, interrupt, lastID)
 			log.Debug("Shortened state history range", "last", lastID)
