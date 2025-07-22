@@ -38,9 +38,10 @@ type metadata struct {
 	length     int64  // length of the file in bytes
 }
 
-// the types of components that can be present in the era file.
+// componentType represents the integer form of a specific type that can be present in the era file.
 type componentType int
 
+// TypeCompressedHeader, TypeCompressedBody, TypeCompressedReceipts, TypeTotalDifficulty, and TypeProof are the different types of components that can be present in the era file.
 const (
 	componentHeader componentType = iota
 	componentBody
@@ -55,18 +56,19 @@ type ReadAtSeekCloser interface {
 	io.Closer
 }
 
+// Era object represents an era file that contains blocks and their components.
 type Era struct {
 	f ReadAtSeekCloser
 	s *e2store.Reader
 	m metadata // metadata for the Era file
 }
 
-// Filename returns a recognizable filename for erae file
+// Filename returns a recognizable filename for era file.
 func Filename(network string, epoch int, root common.Hash) string {
 	return fmt.Sprintf("%s-%05d-%s.erae", network, epoch, root.Hex()[2:10])
 }
 
-// Open opens the era file
+// Open accesses the era file.
 func Open(path string) (*Era, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -80,7 +82,7 @@ func Open(path string) (*Era, error) {
 	return e, nil
 }
 
-// Close closes the era file
+// Close closes the era file safely.
 func (e *Era) Close() error {
 	if e.f == nil {
 		return nil
@@ -90,17 +92,17 @@ func (e *Era) Close() error {
 	return err
 }
 
-// Start retrieves the starting block number
+// Start retrieves the starting block number.
 func (e *Era) Start() uint64 {
 	return e.m.start
 }
 
-// Count retrieves the count of blocks present
+// Count retrieves the count of blocks present.
 func (e *Era) Count() uint64 {
 	return e.m.count
 }
 
-// GetBlockByNumber retrieves the block if present within the era file
+// GetBlockByNumber retrieves the block if present within the era file.
 func (e *Era) GetBlockByNumber(blockNum uint64) (*types.Block, error) {
 	h, err := e.GetHeader(blockNum)
 	if err != nil {
@@ -113,7 +115,7 @@ func (e *Era) GetBlockByNumber(blockNum uint64) (*types.Block, error) {
 	return types.NewBlockWithHeader(h).WithBody(*b), nil
 }
 
-// GetHeader retrieves the header from the era file through the cached offset table
+// GetHeader retrieves the header from the era file through the cached offset table.
 func (e *Era) GetHeader(num uint64) (*types.Header, error) {
 	off, err := e.headerOff(num)
 	if err != nil {
@@ -130,7 +132,7 @@ func (e *Era) GetHeader(num uint64) (*types.Header, error) {
 	return &h, rlp.Decode(r, &h)
 }
 
-// GetBody retrieves the body from the era file through cached offset table
+// GetBody retrieves the body from the era file through cached offset table.
 func (e *Era) GetBody(num uint64) (*types.Body, error) {
 	off, err := e.bodyOff(num)
 	if err != nil {
@@ -147,7 +149,7 @@ func (e *Era) GetBody(num uint64) (*types.Body, error) {
 	return &b, rlp.Decode(r, &b)
 }
 
-// getTD retrieves the td from the era file through cached offset table
+// getTD retrieves the td from the era file through cached offset table.
 func (e *Era) getTD(blockNum uint64) (*big.Int, error) {
 	off, err := e.tdOff(blockNum)
 	if err != nil {
@@ -162,7 +164,7 @@ func (e *Era) getTD(blockNum uint64) (*big.Int, error) {
 	return td, nil
 }
 
-// GetRawBodyFrameByNumber retrieves the raw body frame in bytes of a specific block
+// GetRawBodyFrameByNumber retrieves the raw body frame in bytes of a specific block.
 func (e *Era) GetRawBodyFrameByNumber(blockNum uint64) ([]byte, error) {
 	off, err := e.bodyOff(blockNum)
 	if err != nil {
@@ -188,7 +190,7 @@ func (e *Era) GetRawReceiptsFrameByNumber(blockNum uint64) ([]byte, error) {
 	return io.ReadAll(r)
 }
 
-// GetRawProofFrameByNumber retrieves the raw proof frame in bytes of a specific block proof
+// GetRawProofFrameByNumber retrieves the raw proof frame in bytes of a specific block proof.
 func (e *Era) GetRawProofFrameByNumber(blockNum uint64) ([]byte, error) {
 	off, err := e.proofOff(blockNum)
 	if err != nil {
@@ -201,7 +203,7 @@ func (e *Era) GetRawProofFrameByNumber(blockNum uint64) ([]byte, error) {
 	return io.ReadAll(r)
 }
 
-// loadIndex loads in the index table containing all offsets and caches it
+// loadIndex loads in the index table containing all offsets and caches it.
 func (e *Era) loadIndex() error {
 	var err error
 	e.m.length, err = e.f.Seek(0, io.SeekEnd)
@@ -227,7 +229,7 @@ func (e *Era) loadIndex() error {
 	return nil
 }
 
-// Getter methods to calculate offset of a specific component in the file.
+// headerOff, bodyOff, receiptOff, tdOff, and proofOff return the offsets of the respective components for a given block number.
 func (e *Era) headerOff(num uint64) (uint64, error)  { return e.indexOffset(num, componentHeader) }
 func (e *Era) bodyOff(num uint64) (uint64, error)    { return e.indexOffset(num, componentBody) }
 func (e *Era) receiptOff(num uint64) (uint64, error) { return e.indexOffset(num, componentReceipts) }
@@ -257,7 +259,7 @@ func (e *Era) indexOffset(n uint64, component componentType) (uint64, error) {
 	return uint64(int64(rel) + indstart), nil
 }
 
-// GetHeaders returns RLP-decoded headers.
+// GetHeaders returns RLP-decoded headers for a range of blocks.
 func (e *Era) GetHeaders(first, count uint64) ([]*types.Header, error) {
 	if count == 0 {
 		return nil, fmt.Errorf("count must be > 0")
@@ -286,7 +288,7 @@ func (e *Era) GetHeaders(first, count uint64) ([]*types.Header, error) {
 	return out, nil
 }
 
-// GetBodies returns RLP-decoded bodies.
+// GetHeaders returns RLP-decoded headers for a range of blocks.
 func (e *Era) GetBodies(first, count uint64) ([]*types.Body, error) {
 	if count == 0 {
 		return nil, fmt.Errorf("count must be > 0")
@@ -315,7 +317,7 @@ func (e *Era) GetBodies(first, count uint64) ([]*types.Body, error) {
 	return out, nil
 }
 
-// GetReceipts returns RLP-decoded receipts.
+// GetReceipts returns RLP-decoded receipts for a range of blocks.
 func (e *Era) GetReceipts(first, count uint64) ([]types.Receipts, error) {
 	if count == 0 {
 		return nil, fmt.Errorf("count must be > 0")
