@@ -57,6 +57,7 @@ import (
 	"github.com/golang/snappy"
 )
 
+// Type constants for the e2store entries in the Era2 format.
 const (
 	TypeVersion            uint16 = 0x3265
 	TypeCompressedHeader   uint16 = 0x08
@@ -70,7 +71,7 @@ const (
 	headerSize             uint64 = 8
 )
 
-// temporary buffer for writing blocks until Finalize is called
+// Temporary buffer for writing blocks until the Finalize method is called.
 type buffer struct {
 	headers  [][]byte
 	bodies   [][]byte
@@ -79,7 +80,7 @@ type buffer struct {
 	tds      []*big.Int
 }
 
-// offsets holds the offsets of the different block components in the e2store file
+// The offsets holds the offsets of the different block components in the e2store file. Eventually these offsets will be used to write the index table at the end of the file.
 type offsets struct {
 	headers      []uint64
 	bodys        []uint64
@@ -88,31 +89,39 @@ type offsets struct {
 	tdoff        []uint64
 }
 
+// Builder is used to build an Era2 e2store file. It collects block entries and writes them to the underlying e2store.Writer.
 type Builder struct {
-	w      *e2store.Writer
-	buf    *bytes.Buffer
-	snappy *snappy.Writer
+	w   *e2store.Writer
+	buf *bytes.Buffer
 
 	buff buffer
 	off  offsets
 
-	hashes   []common.Hash
-	startNum *uint64
-	written  uint64
+	hashes        []common.Hash
+	startNum      *uint64
+	written       uint64
+	expectsProofs bool
 }
 
 // NewBuilder returns a new Builder instance.
 func NewBuilder(w io.Writer) *Builder {
 	buf := bytes.NewBuffer(nil)
 	return &Builder{
-		w:      e2store.NewWriter(w),
-		buf:    buf,
-		snappy: snappy.NewBufferedWriter(buf),
+		w:   e2store.NewWriter(w),
+		buf: buf,
 	}
 }
 
 // Add writes a block entry, its reciepts, and optionally its proofs as well into the e2store file.
 func (b *Builder) Add(header types.Header, body types.Body, receipts types.Receipts, td *big.Int, proof Proof) error {
+	if len(b.buff.headers) == 0 { // first block determines wether proofs are expected
+		b.expectsProofs = proof != nil
+	} else if b.expectsProofs && proof == nil { // every later block must follow this policy
+		return fmt.Errorf("block %d missing proof: proofs required for every block", header.Number.Uint64())
+	} else if !b.expectsProofs && proof != nil {
+		return fmt.Errorf("unexpected proof for block %d: first block had none", header.Number.Uint64())
+	}
+
 	eh, err := rlp.EncodeToBytes(&header)
 	if err != nil {
 		return fmt.Errorf("encode header: %w", err)
@@ -134,12 +143,6 @@ func (b *Builder) Add(header types.Header, body types.Body, receipts types.Recei
 			return fmt.Errorf("encode proof: %w", err)
 		}
 		ep = buffer.Bytes()
-	} else {
-		noProof := &NoProof{}
-		if err := noProof.EncodeRLP(&buffer); err != nil {
-			return fmt.Errorf("encode no proof: %w", err)
-		}
-		ep = buffer.Bytes()
 	}
 
 	return b.AddRLP(
@@ -149,7 +152,7 @@ func (b *Builder) Add(header types.Header, body types.Body, receipts types.Recei
 	)
 }
 
-// AddRLP takes the RLP encoded block components and writes them to the underlying e2store file
+// AddRLP takes the RLP encoded block components and writes them to the underlying e2store file.
 func (b *Builder) AddRLP(headerRLP []byte, bodyRLP []byte, receipts []byte, proof []byte, blockNum uint64, blockHash common.Hash, td *big.Int) error {
 	if len(b.buff.headers) >= MaxEraESize {
 		return fmt.Errorf("exceeds MaxEraESize %d", MaxEraESize)
@@ -177,7 +180,8 @@ func (b *Builder) AddRLP(headerRLP []byte, bodyRLP []byte, receipts []byte, proo
 	return nil
 }
 
-// Finalize writes all header entries, followed by all body entries, followed by all receipt entries.
+// Finalize writes all collected block entries to the e2store file and returns the accumulator root hash.
+// It also writes the index table at the end of the file, which contains offsets to each block entry.
 func (b *Builder) Finalize() (common.Hash, error) {
 	if b.startNum == nil {
 		return common.Hash{}, errors.New("no blocks added, cannot finalize")
@@ -244,7 +248,7 @@ func (b *Builder) Finalize() (common.Hash, error) {
 	return accRoot, b.writeIndex()
 }
 
-// Writes 32 byte big integers to little endian
+// uin256LE writes 32 byte big integers to little endian.
 func uint256LE(v *big.Int) []byte {
 	b := v.FillBytes(make([]byte, 32))
 	for i := 0; i < 16; i++ {
@@ -253,18 +257,16 @@ func uint256LE(v *big.Int) []byte {
 	return b
 }
 
-// Compresses into snappy encoding
+// SnappyWrite compresses the input data using snappy and writes it to the e2store file.
 func (b *Builder) snappyWrite(typ uint16, in []byte) error {
-	var (
-		buf = b.buf
-		s   = b.snappy
-	)
+	var buf = b.buf
+	snappy := snappy.NewBufferedWriter(b.buf)
 	buf.Reset()
-	s.Reset(buf)
-	if _, err := b.snappy.Write(in); err != nil {
+	snappy.Reset(buf)
+	if _, err := snappy.Write(in); err != nil {
 		return fmt.Errorf("error snappy encoding: %w", err)
 	}
-	if err := s.Flush(); err != nil {
+	if err := snappy.Flush(); err != nil {
 		return fmt.Errorf("error flushing snappy encoding: %w", err)
 	}
 	n, err := b.w.Write(typ, b.buf.Bytes())
@@ -275,7 +277,7 @@ func (b *Builder) snappyWrite(typ uint16, in []byte) error {
 	return nil
 }
 
-// Add entry takes the e2store object and writes it into the file
+// addEntry takes the e2store object and writes it into the file.
 func (b *Builder) addEntry(typ uint16, payload []byte, compressed bool) (uint64, error) {
 	offset := b.written
 	var err error
@@ -293,8 +295,7 @@ func (b *Builder) addEntry(typ uint16, payload []byte, compressed bool) (uint64,
 	return offset, nil
 }
 
-// writeIndex takes all the offset table and writes it to the file
-// the index table contains all offsets to specific block entries
+// writeIndex takes all the offset table and writes it to the file. The index table contains all offsets to specific block entries
 func (b *Builder) writeIndex() error {
 	count := uint64(len(b.off.headers))
 	componentCount := uint64(3)
