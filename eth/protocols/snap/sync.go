@@ -679,12 +679,15 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		bytecodeHealReqFails = make(chan *bytecodeHealRequest)
 		trienodeHealResps    = make(chan *trienodeHealResponse)
 		bytecodeHealResps    = make(chan *bytecodeHealResponse)
+		syncTime             = time.Now()
 	)
 	for {
 		// Remove all completed tasks and terminate sync if everything's done
 		s.cleanStorageTasks()
 		s.cleanAccountTasks()
 		if len(s.tasks) == 0 && s.healer.scheduler.Pending() == 0 {
+			// healing done
+			healTimeGauge.Update(int64(time.Since(syncTime)))
 			return nil
 		}
 		// Assign all the data retrieval tasks to any free peers
@@ -693,7 +696,10 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		s.assignStorageTasks(storageResps, storageReqFails, cancel)
 
 		if len(s.tasks) == 0 {
-			// Sync phase done, run heal phase
+			// Sync phase done, push elapsed time to metrics
+			syncTimeGauge.Update(int64(time.Since(s.startTime)))
+			syncTime = time.Now()
+			// run heal phase
 			s.assignTrienodeHealTasks(trienodeHealResps, trienodeHealReqFails, cancel)
 			s.assignBytecodeHealTasks(bytecodeHealResps, bytecodeHealReqFails, cancel)
 		}
