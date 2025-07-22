@@ -297,7 +297,8 @@ func generateProofTests(clictx *cli.Context) error {
 				return err
 			}
 			hashes = append(hashes, crypto.Keccak256Hash(blob))
-			writeStateProof(outputDir, blockNumber, test.Addresses[i][j], blob)
+
+			writeStateProof(outputDir, blockNumber, test.Addresses[i][j], res)
 		}
 		test.Results = append(test.Results, hashes)
 	}
