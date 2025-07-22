@@ -157,12 +157,12 @@ type Message struct {
 	BlobHashes            []common.Hash
 	SetCodeAuthorizations []types.SetCodeAuthorization
 
-	// When SkipNonceChecks is true, the message nonce is not checked against the
-	// account nonce in state.
+	// When SkipFromNonceCheck is true, the message nonce is not checked
+	// against the account nonce in state.
 	//
 	// This field will be set to true for operations like RPC eth_call
 	// or the state prefetching.
-	SkipNonceChecks bool
+	SkipFromNonceCheck bool
 
 	// When SkipFromEOACheck is true, the message sender is not checked to be an EOA.
 	SkipFromEOACheck bool
@@ -181,7 +181,7 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		Data:                  tx.Data(),
 		AccessList:            tx.AccessList(),
 		SetCodeAuthorizations: tx.SetCodeAuthorizations(),
-		SkipNonceChecks:       false,
+		SkipFromNonceCheck:    false,
 		SkipFromEOACheck:      false,
 		BlobHashes:            tx.BlobHashes(),
 		BlobGasFeeCap:         tx.BlobGasFeeCap(),
@@ -306,7 +306,7 @@ func (st *stateTransition) buyGas() error {
 func (st *stateTransition) preCheck() error {
 	// Only check transactions that are not fake
 	msg := st.msg
-	if !msg.SkipNonceChecks {
+	if !msg.SkipFromNonceCheck {
 		// Make sure this transaction's nonce is correct.
 		stNonce := st.state.GetNonce(msg.From)
 		if msgNonce := msg.Nonce; stNonce < msgNonce {

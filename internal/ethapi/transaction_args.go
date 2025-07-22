@@ -461,7 +461,7 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck, skipEoA
 		BlobGasFeeCap:         (*big.Int)(args.BlobFeeCap),
 		BlobHashes:            args.BlobHashes,
 		SetCodeAuthorizations: args.AuthorizationList,
-		SkipNonceChecks:       skipNonceCheck,
+		SkipFromNonceCheck:    skipNonceCheck,
 		SkipFromEOACheck:      skipEoACheck,
 	}
 }
