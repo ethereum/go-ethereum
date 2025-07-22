@@ -20,6 +20,7 @@ import (
 	"github.com/holiman/uint256"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/libevm/stateconf"
 )
 
 // PrecompiledContract is an exact copy of vm.PrecompiledContract, mirrored here
@@ -43,8 +44,8 @@ type StateReader interface {
 
 	GetRefund() uint64
 
-	GetCommittedState(common.Address, common.Hash) common.Hash
-	GetState(common.Address, common.Hash) common.Hash
+	GetCommittedState(common.Address, common.Hash, ...stateconf.StateDBStateOption) common.Hash
+	GetState(common.Address, common.Hash, ...stateconf.StateDBStateOption) common.Hash
 
 	GetTransientState(addr common.Address, key common.Hash) common.Hash
 

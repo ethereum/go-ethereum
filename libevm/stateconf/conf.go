@@ -113,3 +113,27 @@ func ExtractTrieDBUpdatePayload(opts ...TrieDBUpdateOption) (common.Hash, common
 	}
 	return *conf.parentBlockHash, *conf.currentBlockHash, true
 }
+
+// A StateDBStateOption configures the behaviour of state.StateDB methods for
+// getting and setting state: GetState(), GetCommittedState(), and SetState().
+type StateDBStateOption = options.Option[stateDBStateConfig]
+
+type stateDBStateConfig struct {
+	skipKeyTransformation bool
+}
+
+// SkipStateKeyTransformation causes any registered state-key transformation
+// hook to be ignored. See state.RegisterExtras() for details.
+func SkipStateKeyTransformation() StateDBStateOption {
+	return options.Func[stateDBStateConfig](func(c *stateDBStateConfig) {
+		c.skipKeyTransformation = true
+	})
+}
+
+// ShouldTransformStateKey parses the options, returning whether or not any
+// registered state-key transformation hook should be used; i.e. it returns
+// `true` i.f.f. there are no [SkipStateKeyTransformation] options in the
+// arguments.
+func ShouldTransformStateKey(opts ...StateDBStateOption) bool {
+	return !options.As(opts...).skipKeyTransformation
+}

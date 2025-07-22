@@ -27,6 +27,9 @@ import (
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/params"
 	"github.com/holiman/uint256"
+
+	// libevm extra imports
+	"github.com/ava-labs/libevm/libevm/stateconf"
 )
 
 type dummyContractRef struct {
@@ -49,9 +52,12 @@ type dummyStatedb struct {
 	state.StateDB
 }
 
-func (*dummyStatedb) GetRefund() uint64                                       { return 1337 }
-func (*dummyStatedb) GetState(_ common.Address, _ common.Hash) common.Hash    { return common.Hash{} }
-func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash) {}
+func (*dummyStatedb) GetRefund() uint64 { return 1337 }
+func (*dummyStatedb) GetState(_ common.Address, _ common.Hash, _ ...stateconf.StateDBStateOption) common.Hash {
+	return common.Hash{}
+}
+func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash, _ ...stateconf.StateDBStateOption) {
+}
 
 func TestStoreCapture(t *testing.T) {
 	var (

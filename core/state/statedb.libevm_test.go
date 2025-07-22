@@ -138,3 +138,81 @@ func (r *triedbRecorder) Update(
 func (r *triedbRecorder) Reader(_ common.Hash) (database.Reader, error) {
 	return r.Database.Reader(common.Hash{})
 }
+
+type highByteFlipper struct{}
+
+func flipHighByte(h common.Hash) common.Hash {
+	h[0] = ^h[0]
+	return h
+}
+
+func (highByteFlipper) TransformStateKey(_ common.Address, key common.Hash) common.Hash {
+	return flipHighByte(key)
+}
+
+func TestTransformStateKey(t *testing.T) {
+	rawdb := rawdb.NewMemoryDatabase()
+	trie := triedb.NewDatabase(rawdb, nil)
+	db := NewDatabaseWithNodeDB(rawdb, trie)
+	sdb, err := New(types.EmptyRootHash, db, nil)
+	require.NoErrorf(t, err, "New()")
+
+	addr := common.Address{1}
+	regularKey := common.Hash{0, 'k', 'e', 'y'}
+	flippedKey := flipHighByte(regularKey)
+	regularVal := common.Hash{'r', 'e', 'g', 'u', 'l', 'a', 'r'}
+	flippedVal := common.Hash{'f', 'l', 'i', 'p', 'p', 'e', 'd'}
+
+	sdb.SetState(addr, regularKey, regularVal)
+	sdb.SetState(addr, flippedKey, flippedVal)
+
+	assertEq := func(t *testing.T, key, want common.Hash, opts ...stateconf.StateDBStateOption) {
+		t.Helper()
+		assert.Equal(t, want, sdb.GetState(addr, key, opts...))
+	}
+
+	assertEq(t, regularKey, regularVal)
+	assertEq(t, flippedKey, flippedVal)
+
+	root, err := sdb.Commit(0, false)
+	require.NoErrorf(t, err, "state.Commit()")
+
+	err = trie.Commit(root, false)
+	require.NoErrorf(t, err, "trie.Commit()")
+
+	sdb, err = New(root, db, nil)
+	require.NoErrorf(t, err, "New()")
+
+	assertCommittedEq := func(t *testing.T, key, want common.Hash, opts ...stateconf.StateDBStateOption) {
+		t.Helper()
+		assert.Equal(t, want, sdb.GetCommittedState(addr, key, opts...))
+	}
+
+	assertEq(t, regularKey, regularVal)
+	assertEq(t, flippedKey, flippedVal)
+	assertCommittedEq(t, regularKey, regularVal)
+	assertCommittedEq(t, flippedKey, flippedVal)
+
+	// Typically the hook would be registered before any state access or
+	// setting, but doing it here aids testing by showing the before-and-after
+	// effects.
+	RegisterExtras(highByteFlipper{})
+	t.Cleanup(TestOnlyClearRegisteredExtras)
+
+	noTransform := stateconf.SkipStateKeyTransformation()
+	assertEq(t, regularKey, flippedVal)
+	assertEq(t, regularKey, regularVal, noTransform)
+	assertEq(t, flippedKey, regularVal)
+	assertEq(t, flippedKey, flippedVal, noTransform)
+	assertCommittedEq(t, regularKey, flippedVal)
+	assertCommittedEq(t, regularKey, regularVal, noTransform)
+	assertCommittedEq(t, flippedKey, regularVal)
+	assertCommittedEq(t, flippedKey, flippedVal, noTransform)
+
+	updatedVal := common.Hash{'u', 'p', 'd', 'a', 't', 'e', 'd'}
+	sdb.SetState(addr, regularKey, updatedVal)
+	assertEq(t, regularKey, updatedVal)
+	assertEq(t, flippedKey, updatedVal, noTransform)
+	assertCommittedEq(t, regularKey, flippedVal)
+	assertCommittedEq(t, flippedKey, flippedVal, noTransform)
+}
