@@ -380,9 +380,12 @@ func (b *blockWriter) full() bool {
 //
 // This function is safe to be called multiple times.
 func (b *blockWriter) finish() []byte {
-	restartsLen := len(b.restarts)
-	extra := restartsLen*2 + 1
-	var buf []byte
+	var (
+		restartsLen = len(b.restarts)
+		restartsOff = len(b.data)
+		extra       = restartsLen*2 + 1
+		buf         []byte
+	)
 
 	if cap(b.data)-len(b.data) >= extra {
 		// Enough capacity, just reslice; data is already in place.
@@ -393,9 +396,8 @@ func (b *blockWriter) finish() []byte {
 		copy(buf, b.data)
 	}
 
-	restartsOffset := len(b.data)
 	for i, restart := range b.restarts {
-		binary.BigEndian.PutUint16(buf[restartsOffset+2*i:], restart)
+		binary.BigEndian.PutUint16(buf[restartsOff+2*i:], restart)
 	}
 	buf[len(buf)-1] = byte(restartsLen)
 	return buf
