@@ -36,6 +36,18 @@ import (
 	"github.com/ava-labs/libevm/triedb/hashdb"
 )
 
+func TestTxHash(t *testing.T) {
+	db := NewDatabase(rawdb.NewMemoryDatabase())
+	state, err := New(types.EmptyRootHash, db, nil)
+	require.NoError(t, err)
+
+	assert.Zero(t, state.TxHash(), "Tx hash should initially be uninitialized")
+
+	hash := common.Hash{1}
+	state.SetTxContext(hash, 3)
+	assert.Equal(t, hash, state.TxHash(), "Tx hash should have been updated")
+}
+
 func TestStateDBCommitPropagatesOptions(t *testing.T) {
 	memdb := rawdb.NewMemoryDatabase()
 	trieRec := &triedbRecorder{Database: hashdb.New(memdb, nil, &trie.MerkleResolver{})}
