@@ -58,6 +58,13 @@ const (
 	importBatchSize = 2500
 )
 
+type ExportFormat int
+
+const (
+	Era1 ExportFormat = iota
+	EraE
+)
+
 // ErrImportInterrupted is returned when the user interrupts the import process.
 var ErrImportInterrupted = errors.New("interrupted")
 
@@ -405,8 +412,8 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 
 // ExportHistory exports blockchain history into the specified directory,
 // following the Era format.
-func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) error {
-	log.Info("Exporting blockchain history", "dir", dir)
+func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64, f ExportFormat) error {
+	log.Info("Exporting blockchain history", "dir", dir, "format", f)
 	if head := bc.CurrentBlock().Number.Uint64(); head < last {
 		log.Warn("Last block beyond head, setting last = head", "head", head, "last", last)
 		last = head
@@ -418,6 +425,32 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
 		return fmt.Errorf("error creating output directory: %w", err)
 	}
+
+	var (
+		filename   func(string, int, common.Hash) string
+		newBuilder func(io.Writer) any
+		add        func(any, *types.Block, types.Receipts, *big.Int) error
+	)
+
+	if f == Era1 {
+		filename = era.Filename
+		newBuilder = func(w io.Writer) any { return era.NewBuilder(w) }
+		add = func(b any, blk *types.Block, rcpt types.Receipts, td *big.Int) error {
+			return b.(*era.Builder).Add(blk, rcpt, td)
+		}
+	} else {
+		filename = era2.Filename
+		newBuilder = func(w io.Writer) any { return era2.NewBuilder(w) }
+		add = func(b any, blk *types.Block, rcpt types.Receipts, td *big.Int) error {
+			return b.(*era2.Builder).Add(*blk.Header(), *blk.Body(), rcpt, td, nil)
+		}
+	}
+
+	td := new(big.Int)
+	for n := uint64(0); n < first; n++ {
+		td.Add(td, bc.GetHeaderByNumber(n).Difficulty)
+	}
+
 	var (
 		start     = time.Now()
 		reported  = time.Now()
@@ -425,154 +458,67 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 		buf       = bytes.NewBuffer(nil)
 		checksums []string
 	)
-	td := new(big.Int)
-	for i := uint64(0); i < first; i++ {
-		td.Add(td, bc.GetHeaderByNumber(i).Difficulty)
-	}
-	for i := first; i <= last; i += step {
-		err := func() error {
-			filename := filepath.Join(dir, era.Filename(network, int(i/step), common.Hash{}))
-			f, err := os.Create(filename)
+
+	for batch := first; batch <= last; batch += step {
+		idx := int(batch / step)
+		tmpPath := filepath.Join(dir, filename(network, idx, common.Hash{}))
+
+		if err := func() error {
+			f, err := os.Create(tmpPath)
 			if err != nil {
-				return fmt.Errorf("could not create era file: %w", err)
+				return err
 			}
 			defer f.Close()
 
-			w := era.NewBuilder(f)
-			for j := uint64(0); j < step && j <= last-i; j++ {
-				var (
-					n     = i + j
-					block = bc.GetBlockByNumber(n)
-				)
-				if block == nil {
-					return fmt.Errorf("export failed on #%d: not found", n)
+			bldr := newBuilder(f)
+
+			for j := uint64(0); j < step && batch+j <= last; j++ {
+				n := batch + j
+				blk := bc.GetBlockByNumber(n)
+				if blk == nil {
+					return fmt.Errorf("block #%d not found", n)
 				}
-				receipts := bc.GetReceiptsByHash(block.Hash())
-				if receipts == nil {
-					return fmt.Errorf("export failed on #%d: receipts not found", n)
+				rcpt := bc.GetReceiptsByHash(blk.Hash())
+				if rcpt == nil {
+					return fmt.Errorf("receipts for #%d missing", n)
 				}
-				td.Add(td, block.Difficulty())
-				if err := w.Add(block, receipts, new(big.Int).Set(td)); err != nil {
+				td.Add(td, blk.Difficulty())
+				if err := add(bldr, blk, rcpt, new(big.Int).Set(td)); err != nil {
 					return err
 				}
 			}
-			root, err := w.Finalize()
-			if err != nil {
-				return fmt.Errorf("export failed to finalize %d: %w", step/i, err)
-			}
-			// Set correct filename with root.
-			os.Rename(filename, filepath.Join(dir, era.Filename(network, int(i/step), root)))
 
-			// Compute checksum of entire Era1.
+			root, err := bldr.(interface{ Finalize() (common.Hash, error) }).Finalize()
+			if err != nil {
+				return err
+			}
+			final := filepath.Join(dir, filename(network, idx, root))
+			if err := os.Rename(tmpPath, final); err != nil {
+				return err
+			}
+
 			if _, err := f.Seek(0, io.SeekStart); err != nil {
 				return err
 			}
-			if _, err := io.Copy(h, f); err != nil {
-				return fmt.Errorf("unable to calculate checksum: %w", err)
-			}
-			checksums = append(checksums, common.BytesToHash(h.Sum(buf.Bytes()[:])).Hex())
 			h.Reset()
 			buf.Reset()
+			if _, err := io.Copy(h, f); err != nil {
+				return err
+			}
+			checksums = append(checksums, common.BytesToHash(h.Sum(buf.Bytes()[:])).Hex())
 			return nil
-		}()
-		if err != nil {
+		}(); err != nil {
 			return err
 		}
+
 		if time.Since(reported) >= 8*time.Second {
-			log.Info("Exporting blocks", "exported", i, "elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info("export progress", "exported", batch, "elapsed", common.PrettyDuration(time.Since(start)))
 			reported = time.Now()
 		}
 	}
 
-	os.WriteFile(filepath.Join(dir, "checksums.txt"), []byte(strings.Join(checksums, "\n")), os.ModePerm)
-
-	log.Info("Exported blockchain to", "dir", dir)
-
+	_ = os.WriteFile(filepath.Join(dir, "checksums.txt"), []byte(strings.Join(checksums, "\n")), os.ModePerm)
 	return nil
-}
-
-func ExportHistoryEraE(bc *core.BlockChain, dir string, first, last, step uint64) error {
-	log.Info("Exporting blockchain history", "dir", dir)
-	if head := bc.CurrentBlock().Number.Uint64(); head < last {
-		log.Warn("Last block beyond head, setting last = head", "head", head, "last", last)
-		last = head
-	}
-	network := "unknown"
-	if name, ok := params.NetworkNames[bc.Config().ChainID.String()]; ok {
-		network = name
-	}
-	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-		return fmt.Errorf("error creating output directory: %w", err)
-	}
-	var (
-		start     = time.Now()
-		reported  = time.Now()
-		h         = sha256.New()
-		buf       = bytes.NewBuffer(nil)
-		checksums []string
-	)
-	td := new(big.Int)
-	for i := uint64(0); i < first; i++ {
-		td.Add(td, bc.GetHeaderByNumber(i).Difficulty)
-	}
-	for i := first; i <= last; i += step {
-		err := func() error {
-			filename := filepath.Join(dir, era2.Filename(network, int(i/step), common.Hash{}))
-			f, err := os.Create(filename)
-			if err != nil {
-				return fmt.Errorf("could not create era file: %w", err)
-			}
-			defer f.Close()
-
-			w := era2.NewBuilder(f)
-			for j := uint64(0); j < step && j <= last-i; j++ {
-				var (
-					n     = i + j
-					block = bc.GetBlockByNumber(n)
-				)
-				if block == nil {
-					return fmt.Errorf("export failed on #%d: not found", n)
-				}
-				receipts := bc.GetReceiptsByHash(block.Hash())
-				if receipts == nil {
-					return fmt.Errorf("export failed on #%d: receipts not found", n)
-				}
-				td.Add(td, block.Difficulty())
-				if err := w.Add(*block.Header(), *block.Body(), receipts, new(big.Int).Set(td), nil); err != nil {
-					return err
-				}
-			}
-			root, err := w.Finalize()
-			if err != nil {
-				return fmt.Errorf("export failed to finalize %d: %w", step/i, err)
-			}
-			os.Rename(filename, filepath.Join(dir, era2.Filename(network, int(i/step), root)))
-			if _, err := f.Seek(0, io.SeekStart); err != nil {
-				return err
-			}
-			if _, err := io.Copy(h, f); err != nil {
-				return fmt.Errorf("unable to calculate checksum: %w", err)
-			}
-			checksums = append(checksums, common.BytesToHash(h.Sum(buf.Bytes()[:])).Hex())
-			h.Reset()
-			buf.Reset()
-			return nil
-		}()
-		if err != nil {
-			return err
-		}
-		if time.Since(reported) >= 8*time.Second {
-			log.Info("Exporting blocks", "exported", i, "elapsed", common.PrettyDuration(time.Since(start)))
-			reported = time.Now()
-		}
-	}
-
-	os.WriteFile(filepath.Join(dir, "checksums.txt"), []byte(strings.Join(checksums, "\n")), os.ModePerm)
-
-	log.Info("Exported blockchain to", "dir", dir)
-
-	return nil
-
 }
 
 // ImportPreimages imports a batch of exported hash preimages into the database.

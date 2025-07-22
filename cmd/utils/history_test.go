@@ -89,7 +89,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	dir := t.TempDir()
 
 	// Export history to temp directory.
-	if err := ExportHistory(chain, dir, 0, count, step); err != nil {
+	if err := ExportHistory(chain, dir, 0, count, step, EraE); err != nil {
 		t.Fatalf("error exporting history: %v", err)
 	}
 

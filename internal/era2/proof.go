@@ -58,59 +58,57 @@ type BlockProofHistoricalSummariesDeneb struct {
 	Slot                uint64          // 8  => 840 bytes
 }
 
-type NoProof struct{}
-
+// Proof is the interface for all block proof types in the era2 package.
 type Proof interface {
 	EncodeRLP(w io.Writer) error
 	DecodeRlP(s *rlp.Stream) error
 	Variant() variant
 }
 
-type hhaAlias BlockProofHistoricalHashesAccumulator // alias ⇒ no EncodeRLP method
+type hhaAlias BlockProofHistoricalHashesAccumulator
 
+// EncodeRLP encodes the BlockProofHistoricalHashesAccumulator into RLP format.
 func (p *BlockProofHistoricalHashesAccumulator) EncodeRLP(w io.Writer) error {
 	payload := []interface{}{uint16(proofHistoricalHashesAccumulator), hhaAlias(*p)}
 	return rlp.Encode(w, payload)
 }
 
+// Variant returns the variant type of the BlockProofHistoricalHashesAccumulator.
 func (p *BlockProofHistoricalHashesAccumulator) Variant() variant {
 	return proofHistoricalHashesAccumulator
 }
 
 type rootsAlias BlockProofHistoricalRoots
 
+// EncodeRLP encodes the BlockProofHistoricalRoots into RLP format.
 func (p *BlockProofHistoricalRoots) EncodeRLP(w io.Writer) error {
 	payload := []interface{}{uint16(proofHistoricalRoots), rootsAlias(*p)}
 	return rlp.Encode(w, payload)
 }
 
+// Variant returns the variant type of the BlockProofHistoricalRoots.
 func (*BlockProofHistoricalRoots) Variant() variant { return proofHistoricalRoots }
 
 type capellaAlias BlockProofHistoricalSummariesCapella
 
+// EncodeRLP encodes the BlockProofHistoricalSummariesCapella into RLP format.
 func (p *BlockProofHistoricalSummariesCapella) EncodeRLP(w io.Writer) error {
 	payload := []interface{}{uint16(proofCapella), capellaAlias(*p)}
 	return rlp.Encode(w, payload)
 }
 
+// Variant returns the variant type of the BlockProofHistoricalSummariesCapella.
 func (*BlockProofHistoricalSummariesCapella) Variant() variant { return proofCapella }
 
 type denebAlias BlockProofHistoricalSummariesDeneb
 
+// EncodeRLP encodes the BlockProofHistoricalSummariesDeneb into RLP format.
 func (p *BlockProofHistoricalSummariesDeneb) EncodeRLP(w io.Writer) error {
 	payload := []interface{}{uint16(proofDeneb), denebAlias(*p)}
 	return rlp.Encode(w, payload)
 }
 
-type NoProofAlias NoProof // alias ⇒ no EncodeRLP method
-
-func (p *NoProof) EncodeRLP(w io.Writer) error {
-	payload := []interface{}{uint16(proofNone), NoProofAlias(*p)}
-	return rlp.Encode(w, payload)
-}
-
-func (*NoProof) Variant() variant { return proofNone }
-
+// Variant returns the variant type of the BlockProofHistoricalSummariesDeneb.
 func (*BlockProofHistoricalSummariesDeneb) Variant() variant { return proofDeneb }
 
 func variantOf(p Proof) variant {
