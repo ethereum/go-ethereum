@@ -615,7 +615,7 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 	s.statelessPeers = make(map[string]struct{})
 	s.lock.Unlock()
 
-	if s.startTime == (time.Time{}) {
+	if s.startTime.IsZero() {
 		s.startTime = time.Now()
 	}
 	// Retrieve the previous sync status from LevelDB and abort if already synced
@@ -1987,9 +1987,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 func (s *Syncer) processBytecodeResponse(res *bytecodeResponse) {
 	batch := s.db.NewBatch()
 
-	var (
-		codes uint64
-	)
+	var codes uint64
 	for i, hash := range res.hashes {
 		code := res.codes[i]
 
@@ -3112,6 +3110,10 @@ func (s *Syncer) reportSyncProgress(force bool) {
 	// Don't report anything until we have a meaningful progress
 	if estBytes < 1.0 {
 		return
+	}
+	// Cap the estimated state size using the synced size to avoid negative values
+	if estBytes < float64(synced) {
+		estBytes = float64(synced)
 	}
 	elapsed := time.Since(s.startTime)
 	estTime := elapsed / time.Duration(synced) * time.Duration(estBytes)

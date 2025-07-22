@@ -1150,6 +1150,9 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 	if number < s.progress.Subchains[0].Head {
 		// The skeleton chain is partially consumed, set the new tail as filled+1.
 		tail := rawdb.ReadSkeletonHeader(s.db, number+1)
+		if tail == nil {
+			return fmt.Errorf("filled header is missing: %d", number+1)
+		}
 		if tail.ParentHash != filled.Hash() {
 			return fmt.Errorf("filled header is discontinuous with subchain: %d %s, please file an issue", number, filled.Hash())
 		}

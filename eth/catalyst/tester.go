@@ -34,21 +34,23 @@ import (
 // This tester can be applied to different networks, no matter it's pre-merge or
 // post-merge, but only for full-sync.
 type FullSyncTester struct {
-	stack   *node.Node
-	backend *eth.Ethereum
-	target  common.Hash
-	closed  chan struct{}
-	wg      sync.WaitGroup
+	stack          *node.Node
+	backend        *eth.Ethereum
+	target         common.Hash
+	closed         chan struct{}
+	wg             sync.WaitGroup
+	exitWhenSynced bool
 }
 
 // RegisterFullSyncTester registers the full-sync tester service into the node
 // stack for launching and stopping the service controlled by node.
-func RegisterFullSyncTester(stack *node.Node, backend *eth.Ethereum, target common.Hash) (*FullSyncTester, error) {
+func RegisterFullSyncTester(stack *node.Node, backend *eth.Ethereum, target common.Hash, exitWhenSynced bool) (*FullSyncTester, error) {
 	cl := &FullSyncTester{
-		stack:   stack,
-		backend: backend,
-		target:  target,
-		closed:  make(chan struct{}),
+		stack:          stack,
+		backend:        backend,
+		target:         target,
+		closed:         make(chan struct{}),
+		exitWhenSynced: exitWhenSynced,
 	}
 	stack.RegisterLifecycle(cl)
 	return cl, nil
@@ -76,7 +78,11 @@ func (tester *FullSyncTester) Start() error {
 				// Stop in case the target block is already stored locally.
 				if block := tester.backend.BlockChain().GetBlockByHash(tester.target); block != nil {
 					log.Info("Full-sync target reached", "number", block.NumberU64(), "hash", block.Hash())
-					go tester.stack.Close() // async since we need to close ourselves
+
+					if tester.exitWhenSynced {
+						go tester.stack.Close() // async since we need to close ourselves
+						log.Info("Terminating the node")
+					}
 					return
 				}
 

@@ -65,7 +65,7 @@ const (
 	// carry. We choose a smaller limit than the protocol-permitted MaxBlobsPerBlock
 	// in order to ensure network and txpool stability.
 	// Note: if you increase this, validation will fail on txMaxSize.
-	maxBlobsPerTx = 7
+	maxBlobsPerTx = params.BlobTxMaxBlobs
 
 	// maxTxsPerAccount is the maximum number of blob transactions admitted from
 	// a single account. The limit is enforced to minimize the DoS potential of
@@ -326,10 +326,6 @@ type BlobPool struct {
 	discoverFeed event.Feed // Event feed to send out new tx events on pool discovery (reorg excluded)
 	insertFeed   event.Feed // Event feed to send out new tx events on pool inclusion (reorg included)
 
-	// txValidationFn defaults to txpool.ValidateTransaction, but can be
-	// overridden for testing purposes.
-	txValidationFn txpool.ValidationFunction
-
 	lock sync.RWMutex // Mutex protecting the pool during reorg handling
 }
 
@@ -348,7 +344,6 @@ func New(config Config, chain BlockChain, hasPendingAuth func(common.Address) bo
 		lookup:         newLookup(),
 		index:          make(map[common.Address][]*blobTxMeta),
 		spent:          make(map[common.Address]*uint256.Int),
-		txValidationFn: txpool.ValidateTransaction,
 	}
 }
 
@@ -1636,6 +1631,11 @@ func (p *BlobPool) Pending(filter txpool.PendingFilter) map[common.Address][]*tx
 			if filter.BlobFee != nil {
 				if tx.blobFeeCap.Lt(filter.BlobFee) {
 					break // blobfee too low, cannot be included, discard rest of txs from the account
+				}
+			}
+			if filter.GasLimitCap != 0 {
+				if tx.execGas > filter.GasLimitCap {
+					break // execution gas limit is too high
 				}
 			}
 			// Transaction was accepted according to the filter, append to the pending list

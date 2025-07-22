@@ -1870,7 +1870,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 func MakeBeaconLightConfig(ctx *cli.Context) bparams.ClientConfig {
 	var config bparams.ClientConfig
 	customConfig := ctx.IsSet(BeaconConfigFlag.Name)
-	flags.CheckExclusive(ctx, MainnetFlag, SepoliaFlag, HoleskyFlag, BeaconConfigFlag)
+	flags.CheckExclusive(ctx, MainnetFlag, SepoliaFlag, HoleskyFlag, HoodiFlag, BeaconConfigFlag)
 	switch {
 	case ctx.Bool(MainnetFlag.Name):
 		config.ChainConfig = *bparams.MainnetLightConfig
@@ -2009,9 +2009,9 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 }
 
 // RegisterFullSyncTester adds the full-sync tester service into node.
-func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, target common.Hash) {
-	catalyst.RegisterFullSyncTester(stack, eth, target)
-	log.Info("Registered full-sync tester", "hash", target)
+func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, target common.Hash, exitWhenSynced bool) {
+	catalyst.RegisterFullSyncTester(stack, eth, target, exitWhenSynced)
+	log.Info("Registered full-sync tester", "hash", target, "exitWhenSynced", exitWhenSynced)
 }
 
 // SetupMetrics configures the metrics system.
@@ -2209,6 +2209,12 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		StateHistory:   ctx.Uint64(StateHistoryFlag.Name),
 		// Disable transaction indexing/unindexing.
 		TxLookupLimit: -1,
+
+		// Enables file journaling for the trie database. The journal files will be stored
+		// within the data directory. The corresponding paths will be either:
+		// - DATADIR/triedb/merkle.journal
+		// - DATADIR/triedb/verkle.journal
+		TrieJournalDirectory: stack.ResolvePath("triedb"),
 	}
 	if options.ArchiveMode && !options.Preimages {
 		options.Preimages = true

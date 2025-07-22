@@ -689,6 +689,7 @@ func TestTracingWithOverrides(t *testing.T) {
 		Failed      bool
 		ReturnValue string
 	}
+
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
 		call        ethapi.TransactionArgs
@@ -787,6 +788,25 @@ func TestTracingWithOverrides(t *testing.T) {
 				BlockOverrides: &override.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(0x1337))},
 			},
 			want: `{"gas":72666,"failed":false,"returnValue":"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}`,
+		},
+		{ // Override blocknumber with block n+1 and query a blockhash (resolves issue #32175)
+			blockNumber: rpc.LatestBlockNumber,
+			call: ethapi.TransactionArgs{
+				From: &accounts[0].addr,
+				Input: newRPCBytes([]byte{
+					byte(vm.PUSH1), byte(genBlocks),
+					byte(vm.BLOCKHASH),
+					byte(vm.PUSH1), 0x00,
+					byte(vm.MSTORE),
+					byte(vm.PUSH1), 0x20,
+					byte(vm.PUSH1), 0x00,
+					byte(vm.RETURN),
+				}),
+			},
+			config: &TraceCallConfig{
+				BlockOverrides: &override.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(int64(genBlocks + 1)))},
+			},
+			want: fmt.Sprintf(`{"gas":59590,"failed":false,"returnValue":"%s"}`, backend.chain.GetHeaderByNumber(uint64(genBlocks)).Hash().Hex()),
 		},
 		/*
 			pragma solidity =0.8.12;

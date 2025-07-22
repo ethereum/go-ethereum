@@ -214,3 +214,21 @@ func TestCorruptedIndexBlock(t *testing.T) {
 		t.Fatal("Corrupted index block data is not detected")
 	}
 }
+
+// BenchmarkParseIndexBlock benchmarks the performance of parseIndexBlock.
+func BenchmarkParseIndexBlock(b *testing.B) {
+	// Generate a realistic index block blob
+	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0))
+	for i := 0; i < 4096; i++ {
+		bw.append(uint64(i * 2))
+	}
+	blob := bw.finish()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, err := parseIndexBlock(blob)
+		if err != nil {
+			b.Fatalf("parseIndexBlock failed: %v", err)
+		}
+	}
+}

@@ -51,6 +51,10 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain) *Bloc
 // header's transaction and uncle roots. The headers are assumed to be already
 // validated at this point. Also it the Prague1 block according to BRIP-0004.
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
+	// check EIP 7934 RLP-encoded block size cap
+	if v.config.IsOsaka(block.Number(), block.Time()) && block.Size() > params.MaxBlockSize {
+		return ErrBlockOversized
+	}
 	// Check whether the block is already imported.
 	if v.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
 		return ErrKnownBlock

@@ -2767,12 +2767,8 @@ func TestFillBlobTransaction(t *testing.T) {
 				Proofs:      []kzg4844.Proof{emptyBlobProof},
 			},
 			want: &result{
-				Hashes: []common.Hash{emptyBlobHash},
-				Sidecar: &types.BlobTxSidecar{
-					Blobs:       emptyBlobs,
-					Commitments: []kzg4844.Commitment{emptyBlobCommit},
-					Proofs:      []kzg4844.Proof{emptyBlobProof},
-				},
+				Hashes:  []common.Hash{emptyBlobHash},
+				Sidecar: types.NewBlobTxSidecar(types.BlobSidecarVersion0, emptyBlobs, []kzg4844.Commitment{emptyBlobCommit}, []kzg4844.Proof{emptyBlobProof}),
 			},
 		},
 		{
@@ -2787,12 +2783,8 @@ func TestFillBlobTransaction(t *testing.T) {
 				Proofs:      []kzg4844.Proof{emptyBlobProof},
 			},
 			want: &result{
-				Hashes: []common.Hash{emptyBlobHash},
-				Sidecar: &types.BlobTxSidecar{
-					Blobs:       emptyBlobs,
-					Commitments: []kzg4844.Commitment{emptyBlobCommit},
-					Proofs:      []kzg4844.Proof{emptyBlobProof},
-				},
+				Hashes:  []common.Hash{emptyBlobHash},
+				Sidecar: types.NewBlobTxSidecar(types.BlobSidecarVersion0, emptyBlobs, []kzg4844.Commitment{emptyBlobCommit}, []kzg4844.Proof{emptyBlobProof}),
 			},
 		},
 		{
@@ -2817,12 +2809,8 @@ func TestFillBlobTransaction(t *testing.T) {
 				Blobs: emptyBlobs,
 			},
 			want: &result{
-				Hashes: []common.Hash{emptyBlobHash},
-				Sidecar: &types.BlobTxSidecar{
-					Blobs:       emptyBlobs,
-					Commitments: []kzg4844.Commitment{emptyBlobCommit},
-					Proofs:      []kzg4844.Proof{emptyBlobProof},
-				},
+				Hashes:  []common.Hash{emptyBlobHash},
+				Sidecar: types.NewBlobTxSidecar(types.BlobSidecarVersion0, emptyBlobs, []kzg4844.Commitment{emptyBlobCommit}, []kzg4844.Proof{emptyBlobProof}),
 			},
 		},
 	}

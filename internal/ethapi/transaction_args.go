@@ -544,11 +544,8 @@ func (args *TransactionArgs) ToTransaction(defaultType int, isPrague1 bool, dist
 			BlobFeeCap: uint256.MustFromBig((*big.Int)(args.BlobFeeCap)),
 		}
 		if args.Blobs != nil {
-			data.(*types.BlobTx).Sidecar = &types.BlobTxSidecar{
-				Blobs:       args.Blobs,
-				Commitments: args.Commitments,
-				Proofs:      args.Proofs,
-			}
+			// TODO(rjl493456442, marius) support V1
+			data.(*types.BlobTx).Sidecar = types.NewBlobTxSidecar(types.BlobSidecarVersion0, args.Blobs, args.Commitments, args.Proofs)
 		}
 
 	case types.DynamicFeeTxType:
