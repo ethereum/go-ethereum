@@ -252,8 +252,9 @@ func genProofRequests(cli *client, head uint64, states int) (*proofTest, error) 
 		accountAddresses [][]common.Address
 		storageKeys      [][][]string
 	)
-	for _, fn := range []proofGenerator{genAccountProof, genNonExistentAccountProof, genStorageProof} {
-		numbers, addresses, keys, err := fn(cli, head, states/3)
+	ratio := []float64{0.2, 0.1, 0.7}
+	for i, fn := range []proofGenerator{genAccountProof, genNonExistentAccountProof, genStorageProof} {
+		numbers, addresses, keys, err := fn(cli, head, int(float64(states)*ratio[i]))
 		if err != nil {
 			return nil, err
 		}

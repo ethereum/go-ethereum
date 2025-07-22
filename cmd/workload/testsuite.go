@@ -50,6 +50,7 @@ var (
 			filterQueryFileFlag,
 			historyTestFileFlag,
 			traceTestFileFlag,
+			proofTestFileFlag,
 			traceTestInvalidOutputFlag,
 			proofTestInvalidOutputFlag,
 		},
