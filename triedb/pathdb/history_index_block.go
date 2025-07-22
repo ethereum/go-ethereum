@@ -381,8 +381,17 @@ func (b *blockWriter) full() bool {
 // This function is safe to be called multiple times.
 func (b *blockWriter) finish() []byte {
 	restartsLen := len(b.restarts)
-	buf := make([]byte, len(b.data)+restartsLen*2+1)
-	copy(buf, b.data)
+	extra := restartsLen*2 + 1
+	var buf []byte
+
+	if cap(b.data)-len(b.data) >= extra {
+		// Enough capacity, just reslice; data is already in place.
+		buf = b.data[:len(b.data)+extra]
+	} else {
+		// Not enough capacity, allocate and copy.
+		buf = make([]byte, len(b.data)+extra)
+		copy(buf, b.data)
+	}
 
 	restartsOffset := len(b.data)
 	for i, restart := range b.restarts {
