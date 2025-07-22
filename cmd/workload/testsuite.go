@@ -148,6 +148,12 @@ func testConfigFromCLI(ctx *cli.Context) (cfg testConfig) {
 		} else {
 			cfg.traceTestFile = "queries/trace_mainnet.json"
 		}
+		if ctx.IsSet(proofTestFileFlag.Name) {
+			cfg.proofTestFile = ctx.String(proofTestFileFlag.Name)
+		} else {
+			cfg.proofTestFile = "queries/proof_mainnet.json"
+		}
+
 		cfg.historyPruneBlock = new(uint64)
 		*cfg.historyPruneBlock = history.PrunePoints[params.MainnetGenesisHash].BlockNumber
 	case ctx.Bool(testSepoliaFlag.Name):
@@ -167,6 +173,12 @@ func testConfigFromCLI(ctx *cli.Context) (cfg testConfig) {
 		} else {
 			cfg.traceTestFile = "queries/trace_sepolia.json"
 		}
+		if ctx.IsSet(proofTestFileFlag.Name) {
+			cfg.proofTestFile = ctx.String(proofTestFileFlag.Name)
+		} else {
+			cfg.proofTestFile = "queries/proof_sepolia.json"
+		}
+
 		cfg.historyPruneBlock = new(uint64)
 		*cfg.historyPruneBlock = history.PrunePoints[params.SepoliaGenesisHash].BlockNumber
 	default:
@@ -174,6 +186,7 @@ func testConfigFromCLI(ctx *cli.Context) (cfg testConfig) {
 		cfg.filterQueryFile = ctx.String(filterQueryFileFlag.Name)
 		cfg.historyTestFile = ctx.String(historyTestFileFlag.Name)
 		cfg.traceTestFile = ctx.String(traceTestFileFlag.Name)
+		cfg.proofTestFile = ctx.String(proofTestFileFlag.Name)
 	}
 	return cfg
 }
