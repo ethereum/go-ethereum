@@ -548,6 +548,8 @@ type Prague1Config struct {
 	BaseFeeChangeDenominator uint64 `json:"baseFeeChangeDenominator,omitempty"`
 	// MinimumBaseFeeWei is the minimum base fee in wei.
 	MinimumBaseFeeWei uint64 `json:"minimumBaseFeeWei,omitempty"`
+	// PoLDistributorAddress is the address of the PoL distributor.
+	PoLDistributorAddress common.Address `json:"polDistributorAddress,omitempty"`
 }
 
 // String implements the stringer interface.
@@ -555,8 +557,8 @@ func (c Prague1Config) String() string {
 	banner := "prague1"
 	if c.Time != nil {
 		banner += fmt.Sprintf(
-			"(time: %v, baseFeeChangeDenominator: %v, minimumBaseFeeWei: %v)",
-			*c.Time, c.BaseFeeChangeDenominator, c.MinimumBaseFeeWei,
+			"(time: %v, baseFeeChangeDenominator: %v, minimumBaseFeeWei: %v, polDistributorAddress: %v)",
+			*c.Time, c.BaseFeeChangeDenominator, c.MinimumBaseFeeWei, c.PoLDistributorAddress,
 		)
 	}
 	return banner
@@ -1042,6 +1044,8 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 	switch {
 	case c.IsOsaka(london, time):
 		return forks.Osaka
+	case c.IsPrague1(london, time):
+		return forks.Prague1
 	case c.IsPrague(london, time):
 		return forks.Prague
 	case c.IsCancun(london, time):
@@ -1059,6 +1063,8 @@ func (c *ChainConfig) Timestamp(fork forks.Fork) *uint64 {
 	switch {
 	case fork == forks.Osaka:
 		return c.OsakaTime
+	case fork == forks.Prague1:
+		return c.Berachain.Prague1.Time
 	case fork == forks.Prague:
 		return c.PragueTime
 	case fork == forks.Cancun:
@@ -1205,13 +1211,13 @@ func (err *ConfigCompatError) Error() string {
 // Rules is a one time interface meaning that it shouldn't be used in between transition
 // phases.
 type Rules struct {
-	ChainID                                                 *big.Int
-	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
-	IsEIP2929, IsEIP4762                                    bool
-	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
-	IsBerlin, IsLondon                                      bool
-	IsMerge, IsShanghai, IsCancun, IsPrague, IsOsaka        bool
-	IsVerkle                                                bool
+	ChainID                                                     *big.Int
+	IsHomestead, IsEIP150, IsEIP155, IsEIP158                   bool
+	IsEIP2929, IsEIP4762                                        bool
+	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul     bool
+	IsBerlin, IsLondon                                          bool
+	IsMerge, IsShanghai, IsCancun, IsPrague, IsPrague1, IsOsaka bool
+	IsVerkle                                                    bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -1240,6 +1246,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsShanghai:       isMerge && c.IsShanghai(num, timestamp),
 		IsCancun:         isMerge && c.IsCancun(num, timestamp),
 		IsPrague:         isMerge && c.IsPrague(num, timestamp),
+		IsPrague1:        isMerge && c.IsPrague1(num, timestamp),
 		IsOsaka:          isMerge && c.IsOsaka(num, timestamp),
 		IsVerkle:         isVerkle,
 		IsEIP4762:        isVerkle,

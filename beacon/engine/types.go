@@ -33,9 +33,10 @@ import (
 type PayloadVersion byte
 
 var (
-	PayloadV1 PayloadVersion = 0x1
-	PayloadV2 PayloadVersion = 0x2
-	PayloadV3 PayloadVersion = 0x3
+	PayloadV1    PayloadVersion = 0x1
+	PayloadV2    PayloadVersion = 0x2
+	PayloadV3    PayloadVersion = 0x3
+	PayloadV3P11 PayloadVersion = 0x31
 )
 
 //go:generate go run github.com/fjl/gencodec -type PayloadAttributes -field-override payloadAttributesMarshaling -out gen_blockparams.go
@@ -48,6 +49,7 @@ type PayloadAttributes struct {
 	SuggestedFeeRecipient common.Address      `json:"suggestedFeeRecipient" gencodec:"required"`
 	Withdrawals           []*types.Withdrawal `json:"withdrawals"`
 	BeaconRoot            *common.Hash        `json:"parentBeaconBlockRoot"`
+	ProposerPubkey        *common.Pubkey      `json:"parentProposerPubkey"` // Berachain: only used prague1 and onwards
 }
 
 // JSON type overrides for PayloadAttributes.
@@ -218,8 +220,8 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 // and that the blockhash of the constructed block matches the parameters. Nil
 // Withdrawals value will propagate through the returned block. Empty
 // Withdrawals value must be passed via non-nil, length 0 value in data.
-func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
-	block, err := ExecutableDataToBlockNoHash(data, versionedHashes, beaconRoot, requests)
+func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, proposerPubkey *common.Pubkey) (*types.Block, error) {
+	block, err := ExecutableDataToBlockNoHash(data, versionedHashes, beaconRoot, requests, proposerPubkey)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +234,7 @@ func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, b
 // ExecutableDataToBlockNoHash is analogous to ExecutableDataToBlock, but is used
 // for stateless execution, so it skips checking if the executable data hashes to
 // the requested hash (stateless has to *compute* the root hash, it's not given).
-func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
+func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, proposerPubkey *common.Pubkey) (*types.Block, error) {
 	txs, err := decodeTransactions(data.Transactions)
 	if err != nil {
 		return nil, err
@@ -275,26 +277,27 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 	}
 
 	header := &types.Header{
-		ParentHash:       data.ParentHash,
-		UncleHash:        types.EmptyUncleHash,
-		Coinbase:         data.FeeRecipient,
-		Root:             data.StateRoot,
-		TxHash:           types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash:      data.ReceiptsRoot,
-		Bloom:            types.BytesToBloom(data.LogsBloom),
-		Difficulty:       common.Big0,
-		Number:           new(big.Int).SetUint64(data.Number),
-		GasLimit:         data.GasLimit,
-		GasUsed:          data.GasUsed,
-		Time:             data.Timestamp,
-		BaseFee:          data.BaseFeePerGas,
-		Extra:            data.ExtraData,
-		MixDigest:        data.Random,
-		WithdrawalsHash:  withdrawalsRoot,
-		ExcessBlobGas:    data.ExcessBlobGas,
-		BlobGasUsed:      data.BlobGasUsed,
-		ParentBeaconRoot: beaconRoot,
-		RequestsHash:     requestsHash,
+		ParentHash:           data.ParentHash,
+		UncleHash:            types.EmptyUncleHash,
+		Coinbase:             data.FeeRecipient,
+		Root:                 data.StateRoot,
+		TxHash:               types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
+		ReceiptHash:          data.ReceiptsRoot,
+		Bloom:                types.BytesToBloom(data.LogsBloom),
+		Difficulty:           common.Big0,
+		Number:               new(big.Int).SetUint64(data.Number),
+		GasLimit:             data.GasLimit,
+		GasUsed:              data.GasUsed,
+		Time:                 data.Timestamp,
+		BaseFee:              data.BaseFeePerGas,
+		Extra:                data.ExtraData,
+		MixDigest:            data.Random,
+		WithdrawalsHash:      withdrawalsRoot,
+		ExcessBlobGas:        data.ExcessBlobGas,
+		BlobGasUsed:          data.BlobGasUsed,
+		ParentBeaconRoot:     beaconRoot,
+		RequestsHash:         requestsHash,
+		ParentProposerPubkey: proposerPubkey,
 	}
 	return types.NewBlockWithHeader(header).
 			WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals}).

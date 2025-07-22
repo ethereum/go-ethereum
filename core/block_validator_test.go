@@ -30,7 +30,126 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 )
+
+// -----------------------------------------------------------------------------
+// Berachain:Prague-1 PoL validation tests
+// -----------------------------------------------------------------------------
+
+// newPrague1Config returns a ChainConfig where Prague (and Prague-1) are active
+// from timestamp 0. The caller can specify the PoL distributor address.
+func newPrague1Config(distributor common.Address) *params.ChainConfig {
+	zero := uint64(0)
+	cfg := *params.AllDevChainProtocolChanges // copy
+	cfg.Berachain.Prague1 = params.Prague1Config{
+		Time:                  &zero,
+		PoLDistributorAddress: distributor,
+	}
+	return &cfg
+}
+
+// buildTestChain initialises an in-memory blockchain with the provided config
+// and returns the chain and its validator.
+func buildTestChain(t *testing.T, cfg *params.ChainConfig) (*BlockChain, Validator) {
+	t.Helper()
+	db := rawdb.NewMemoryDatabase()
+	genesis := &Genesis{Config: cfg}
+	chain, err := NewBlockChain(db, genesis, ethash.NewFaker(), nil)
+	if err != nil {
+		t.Fatalf("failed to create blockchain: %v", err)
+	}
+	return chain, chain.Validator()
+}
+
+// samplePubkey returns a deterministic 48-byte pubkey for tests.
+func samplePubkey() *common.Pubkey {
+	var pk common.Pubkey
+	for i := 0; i < common.PubkeyLength; i++ {
+		pk[i] = byte(i)
+	}
+	return &pk
+}
+
+// makeBlock builds a child block on top of parent with the supplied txs and timestamp.
+func makeBlock(parent *types.Header, txs types.Transactions, timestamp uint64) *types.Block {
+	header := &types.Header{
+		ParentHash:           parent.Hash(),
+		Number:               new(big.Int).Add(parent.Number, big.NewInt(1)),
+		Time:                 timestamp,
+		GasLimit:             params.GenesisGasLimit * 10,
+		Difficulty:           big.NewInt(1),
+		ParentProposerPubkey: samplePubkey(),
+		BaseFee:              big.NewInt(1000000000),
+	}
+	return types.NewBlock(header, &types.Body{Transactions: txs}, nil, trie.NewStackTrie(nil))
+}
+
+func TestValidateBody_Prague1_Valid(t *testing.T) {
+	distributor := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	cfg := newPrague1Config(distributor)
+	chain, validator := buildTestChain(t, cfg)
+
+	// Build PoL tx + dummy tx.
+	polTx, err := types.NewPoLTx(cfg.ChainID, distributor, big.NewInt(0), params.PoLTxGasLimit, big.NewInt(1000000000), samplePubkey())
+	if err != nil {
+		t.Fatalf("failed to create PoL tx: %v", err)
+	}
+	dummyTx := types.NewTx(&types.LegacyTx{Nonce: 1})
+
+	block := makeBlock(chain.CurrentHeader(), types.Transactions{polTx, dummyTx}, 1)
+
+	if err := validator.ValidateBody(block); err != nil {
+		t.Fatalf("ValidateBody returned error for valid Prague1 block: %v", err)
+	}
+}
+
+func TestValidateBody_Prague1_InvalidHash(t *testing.T) {
+	distributor := common.HexToAddress("0x2222222222222222222222222222222222222222")
+	cfg := newPrague1Config(distributor)
+	chain, validator := buildTestChain(t, cfg)
+
+	// PoL tx with WRONG pubkey (different from header.ParentProposerPubkey).
+	wrongPk := &common.Pubkey{}
+	polTx, _ := types.NewPoLTx(cfg.ChainID, distributor, big.NewInt(0), params.PoLTxGasLimit, big.NewInt(1000000000), wrongPk)
+	block := makeBlock(chain.CurrentHeader(), types.Transactions{polTx}, 1)
+
+	if err := validator.ValidateBody(block); err == nil {
+		t.Fatalf("expected error due to invalid PoL hash, got nil")
+	}
+}
+
+func TestValidateBody_Prague1_MisplacedPoL(t *testing.T) {
+	distributor := common.HexToAddress("0x3333333333333333333333333333333333333333")
+	cfg := newPrague1Config(distributor)
+	chain, validator := buildTestChain(t, cfg)
+
+	polTx, _ := types.NewPoLTx(cfg.ChainID, distributor, big.NewInt(0), params.PoLTxGasLimit, big.NewInt(1000000000), samplePubkey())
+	dummyTx := types.NewTx(&types.LegacyTx{Nonce: 1})
+	// PoL tx placed second.
+	block := makeBlock(chain.CurrentHeader(), types.Transactions{dummyTx, polTx}, 1)
+
+	if err := validator.ValidateBody(block); err == nil {
+		t.Fatalf("expected error for PoL tx at index >0, got nil")
+	}
+}
+
+func TestValidateBody_PrePrague1_PoLProhibited(t *testing.T) {
+	distributor := common.HexToAddress("0x4444444444444444444444444444444444444444")
+	// Prague time active, but Prague1 *future* at timestamp 1000.
+	future := uint64(1000)
+	cfg := *params.AllDevChainProtocolChanges
+	cfg.Berachain.Prague1.Time = &future
+	cfg.Berachain.Prague1.PoLDistributorAddress = distributor
+	chain, validator := buildTestChain(t, &cfg)
+
+	polTx, _ := types.NewPoLTx(cfg.ChainID, distributor, big.NewInt(0), params.PoLTxGasLimit, big.NewInt(1000000000), samplePubkey())
+	block := makeBlock(chain.CurrentHeader(), types.Transactions{polTx}, 1) // timestamp 1 < future
+
+	if err := validator.ValidateBody(block); err == nil {
+		t.Fatalf("expected error: PoL tx before Prague1 fork should be invalid")
+	}
+}
 
 // Tests that simple header verification works, for both good and bad blocks.
 func TestHeaderVerification(t *testing.T) {

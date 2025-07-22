@@ -19,7 +19,9 @@ package core
 import (
 	"errors"
 	"fmt"
+	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -47,7 +49,7 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain) *Bloc
 
 // ValidateBody validates the given block's uncles and verifies the block
 // header's transaction and uncle roots. The headers are assumed to be already
-// validated at this point.
+// validated at this point. Also it the Prague1 block according to BRIP-0004.
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	// Check whether the block is already imported.
 	if v.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
@@ -81,9 +83,37 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		return errors.New("withdrawals present in block body")
 	}
 
+	// Berachain: Pre-compute expected PoL tx hash when in Prague1.
+	isPrague1 := v.config.IsPrague1(block.Number(), block.Time())
+	var expectedPoLHash common.Hash
+	if isPrague1 {
+		polTx, err := types.NewPoLTx(
+			v.config.ChainID,
+			v.config.Berachain.Prague1.PoLDistributorAddress,
+			new(big.Int).Sub(block.Number(), big.NewInt(1)),
+			params.PoLTxGasLimit,
+			block.BaseFee(),
+			block.ProposerPubkey(),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create expected PoL tx: %w", err)
+		}
+		expectedPoLHash = polTx.Hash()
+	}
+
 	// Blob transactions may be present after the Cancun fork.
 	var blobs int
 	for i, tx := range block.Transactions() {
+		// Berachain: validate the PoL tx is only the first tx in the block.
+		switch {
+		case isPrague1 && i == 0:
+			if tx.Hash() != expectedPoLHash {
+				return fmt.Errorf("PoL tx hash mismatch: have %v, want %v", tx.Hash(), expectedPoLHash)
+			}
+		case tx.Type() == types.PoLTxType:
+			return fmt.Errorf("invalid block: tx at index %d is a PoL tx", i)
+		}
+
 		// Count the number of blobs to validate against the header's blobGasUsed
 		blobs += len(tx.BlobHashes())
 

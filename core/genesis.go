@@ -526,6 +526,12 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 		if conf.IsPrague(num, g.Timestamp) {
 			head.RequestsHash = &types.EmptyRequestsHash
 		}
+		if conf.IsPrague1(num, g.Timestamp) {
+			// BRIP-0004: The parentProposerPubkey of the genesis block is always
+			// the zero pubkey. This is because the genesis block does not have a parent
+			// by definition.
+			head.ParentProposerPubkey = new(common.Pubkey)
+		}
 	}
 	return types.NewBlock(head, &types.Body{Withdrawals: withdrawals}, nil, trie.NewStackTrie(nil))
 }

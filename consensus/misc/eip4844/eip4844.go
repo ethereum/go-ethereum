@@ -85,7 +85,7 @@ func CalcBlobFee(config *params.ChainConfig, header *types.Header) *big.Int {
 	switch config.LatestFork(header.Time) {
 	case forks.Osaka:
 		frac = config.BlobScheduleConfig.Osaka.UpdateFraction
-	case forks.Prague:
+	case forks.Prague, forks.Prague1:
 		frac = config.BlobScheduleConfig.Prague.UpdateFraction
 	case forks.Cancun:
 		frac = config.BlobScheduleConfig.Cancun.UpdateFraction
