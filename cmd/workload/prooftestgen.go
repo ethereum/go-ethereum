@@ -274,7 +274,7 @@ func generateProofTests(clictx *cli.Context) error {
 		ctx        = context.Background()
 		states     = clictx.Int(proofTestStatesFlag.Name)
 		outputFile = clictx.String(proofTestFileFlag.Name)
-		outputDir  = clictx.String(traceTestResultOutputFlag.Name)
+		outputDir  = clictx.String(proofTestResultOutputFlag.Name)
 	)
 	head, err := client.Eth.BlockNumber(ctx)
 	if err != nil {
