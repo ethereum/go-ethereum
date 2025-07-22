@@ -221,17 +221,14 @@ func (br *blockReader) readGreaterThan(id uint64) (uint64, error) {
 type blockWriter struct {
 	desc     *indexBlockDesc // Descriptor of the block
 	restarts []uint16        // Offsets into the data slice, marking the start of each section
-	scratch  []byte          // Buffer used for encoding full integers or value differences
 	data     []byte          // Aggregated encoded data slice
 }
 
 func newBlockWriter(blob []byte, desc *indexBlockDesc) (*blockWriter, error) {
-	scratch := make([]byte, binary.MaxVarintLen64)
 	if len(blob) == 0 {
 		return &blockWriter{
-			desc:    desc,
-			scratch: scratch,
-			data:    make([]byte, 0, 1024),
+			desc: desc,
+			data: make([]byte, 0, 1024),
 		}, nil
 	}
 	restarts, data, err := parseIndexBlock(blob)
@@ -241,7 +238,6 @@ func newBlockWriter(blob []byte, desc *indexBlockDesc) (*blockWriter, error) {
 	return &blockWriter{
 		desc:     desc,
 		restarts: restarts,
-		scratch:  scratch,
 		data:     data, // safe to own the slice
 	}, nil
 }
@@ -268,22 +264,14 @@ func (b *blockWriter) append(id uint64) error {
 		//
 		// The first element in a restart range is encoded using its
 		// full value.
-		n := binary.PutUvarint(b.scratch[0:], id)
-		b.data = append(b.data, b.scratch[:n]...)
+		b.data = binary.AppendUvarint(b.data, id)
 	} else {
-		// The current section is not full, append the element.
 		// The element which is not the first one in the section
 		// is encoded using the value difference from the preceding
 		// element.
-		n := binary.PutUvarint(b.scratch[0:], id-b.desc.max)
-		b.data = append(b.data, b.scratch[:n]...)
+		b.data = binary.AppendUvarint(b.data, id-b.desc.max)
 	}
 	b.desc.entries++
-
-	// The state history ID must be greater than 0.
-	//if b.desc.min == 0 {
-	//	b.desc.min = id
-	//}
 	b.desc.max = id
 	return nil
 }
@@ -392,11 +380,10 @@ func (b *blockWriter) full() bool {
 //
 // This function is safe to be called multiple times.
 func (b *blockWriter) finish() []byte {
-	var buf []byte
-	for _, number := range b.restarts {
-		binary.BigEndian.PutUint16(b.scratch[:2], number)
-		buf = append(buf, b.scratch[:2]...)
+	buf := make([]byte, len(b.restarts)*2+1)
+	for i, restart := range b.restarts {
+		binary.BigEndian.PutUint16(buf[2*i:], restart)
 	}
-	buf = append(buf, byte(len(b.restarts)))
+	buf[len(buf)-1] = byte(len(b.restarts))
 	return append(b.data, buf...)
 }
