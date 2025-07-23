@@ -41,7 +41,7 @@ type sigCache struct {
 // MakeSigner returns a Signer based on the given chain config and block number.
 func MakeSigner(config *params.Config2, blockNumber *big.Int, blockTime uint64) Signer {
 	number := blockNumber.Uint64()
-	chainID := params.Get[*params.ChainID](config).BigInt()
+	chainID := params.ChainID.Get(config)
 
 	var signer Signer
 	switch {
@@ -71,7 +71,7 @@ func MakeSigner(config *params.Config2, blockNumber *big.Int, blockTime uint64) 
 // Use this in transaction-handling code where the current block number is unknown. If you
 // have the current block number available, use MakeSigner instead.
 func LatestSigner(config *params.Config2) Signer {
-	chainID := params.Get[*params.ChainID](config).BigInt()
+	chainID := params.ChainID.Get(config)
 
 	var signer Signer
 	if chainID != nil {
@@ -212,7 +212,6 @@ func newModernSigner(chainID *big.Int, fork forks.Fork) Signer {
 	}
 	s.txtypes[LegacyTxType] = struct{}{}
 	// configure tx types
-	// TODO: fix this
 	if fork.After(forks.Berlin) {
 		s.txtypes[AccessListTxType] = struct{}{}
 	}
