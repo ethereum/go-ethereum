@@ -38,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/msgrate"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -107,9 +106,6 @@ var (
 	// storageConcurrency is the number of chunks to split a large contract
 	// storage trie into to allow concurrent retrievals.
 	storageConcurrency = 16
-
-	//
-	trieRebuildTimeGauge = metrics.NewRegisteredGauge("snap/sync/rebuild", nil)
 )
 
 // ErrCancelled is returned from snap syncing if the operation was prematurely
@@ -506,9 +502,8 @@ type Syncer struct {
 	storageHealed      uint64             // Number of storage slots downloaded during the healing stage
 	storageHealedBytes common.StorageSize // Number of raw storage bytes persisted to disk during the healing stage
 
-	startTime       time.Time     // Time instance when snapshot sync started
-	logTime         time.Time     // Time instance when status was last reported
-	trieRebuildTime time.Duration // Total duration it took to rebuild trie intermediate nodes
+	startTime time.Time // Time instance when snapshot sync started
+	logTime   time.Time // Time instance when status was last reported
 
 	pend sync.WaitGroup // Tracks network request goroutines for graceful shutdown
 	lock sync.RWMutex   // Protects fields that can change outside of sync (peers, reqs, root)
@@ -2207,37 +2202,28 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 				// Keep the left boundary as it's complete
 				tr = newPathTrie(account, false, s.db, batch)
 			}
-
-			start := time.Now()
 			for j := 0; j < len(res.hashes[i]); j++ {
 				tr.update(res.hashes[i][j][:], res.slots[i][j])
 			}
 			tr.commit(true)
-			s.trieRebuildTime += time.Since(start)
 		}
 		// Persist the received storage segments. These flat state maybe
 		// outdated during the sync, but it can be fixed later during the
 		// snapshot generation.
 		for j := 0; j < len(res.hashes[i]); j++ {
 			rawdb.WriteStorageSnapshot(batch, account, res.hashes[i][j], res.slots[i][j])
-		}
 
-		start := time.Now()
-		for j := 0; j < len(res.hashes[i]); j++ {
 			// If we're storing large contracts, generate the trie nodes
 			// on the fly to not trash the gluing points
 			if i == len(res.hashes)-1 && res.subTask != nil {
 				res.subTask.genTrie.update(res.hashes[i][j][:], res.slots[i][j])
 			}
 		}
-		s.trieRebuildTime += time.Since(start)
 	}
 	// Large contracts could have generated new trie nodes, flush them to disk
 	if res.subTask != nil {
 		if res.subTask.done {
-			start := time.Now()
 			root := res.subTask.genTrie.commit(res.subTask.Last == common.MaxHash)
-			s.trieRebuildTime += time.Since(start)
 			if err := res.subTask.genBatch.Write(); err != nil {
 				log.Error("Failed to persist stack slots", "err", err)
 			}
@@ -2255,9 +2241,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 				}
 			}
 		} else if res.subTask.genBatch.ValueSize() > batchSizeThreshold {
-			start := time.Now()
 			res.subTask.genTrie.commit(false)
-			s.trieRebuildTime += time.Since(start)
 			if err := res.subTask.genBatch.Write(); err != nil {
 				log.Error("Failed to persist stack slots", "err", err)
 			}
@@ -2433,7 +2417,6 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 		slim := types.SlimAccountRLP(*res.accounts[i])
 		rawdb.WriteAccountSnapshot(batch, hash, slim)
 
-		start := time.Now()
 		if !task.needHeal[i] {
 			// If the storage task is complete, drop it into the stack trie
 			// to generate account trie nodes for it
@@ -2450,7 +2433,6 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 				panic(err) // Really shouldn't ever happen
 			}
 		}
-		s.trieRebuildTime += time.Since(start)
 	}
 	// Flush anything written just now and update the stats
 	if err := batch.Write(); err != nil {
@@ -2482,23 +2464,18 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 	// flush after finalizing task.done. It's fine even if we crash and lose this
 	// write as it will only cause more data to be downloaded during heal.
 	if task.done {
-		start := time.Now()
 		task.genTrie.commit(task.Last == common.MaxHash)
-		s.trieRebuildTime += time.Since(start)
 		if err := task.genBatch.Write(); err != nil {
 			log.Error("Failed to persist stack account", "err", err)
 		}
 		task.genBatch.Reset()
 	} else if task.genBatch.ValueSize() > batchSizeThreshold {
-		start := time.Now()
 		task.genTrie.commit(false)
-		s.trieRebuildTime += time.Since(start)
 		if err := task.genBatch.Write(); err != nil {
 			log.Error("Failed to persist stack account", "err", err)
 		}
 		task.genBatch.Reset()
 	}
-	trieRebuildTimeGauge.Update(s.trieRebuildTime.Microseconds())
 	log.Debug("Persisted range of accounts", "accounts", len(res.accounts), "bytes", s.accountBytes-oldAccountBytes)
 }
 
