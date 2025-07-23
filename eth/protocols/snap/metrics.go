@@ -67,6 +67,6 @@ var (
 	largeStorageDiscardGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/chunk/discard", nil)
 	largeStorageResumedGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/storage/chunk/resume", nil)
 
-	syncTimeGauge = metrics.NewRegisteredGauge("eth/protocols/snap/sync/time", nil)
-	healTimeGauge = metrics.NewRegisteredGauge("eth/protocols/snap/heal/time", nil)
+	stateSyncTimeGauge          = metrics.NewRegisteredGauge("eth/protocols/snap/sync/time/statesync", nil)
+	stateHealTimeResettingTimer = metrics.NewRegisteredResettingTimer("eth/protocols/snap/sync/time/stateheal", nil)
 )
