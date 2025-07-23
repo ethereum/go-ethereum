@@ -26,9 +26,14 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+)
+
+var (
+	historyIndexCache = lru.NewCache[string, []byte](10000)
 )
 
 // stateIdent represents the identifier of a state element, which can be

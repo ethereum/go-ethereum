@@ -78,15 +78,27 @@ type indexReader struct {
 	timings  *readTimings
 }
 
-// loadIndexData loads the index data associated with the specified state.
-func loadIndexData(db ethdb.KeyValueReader, state stateIdent, timings *readTimings) ([]*indexBlockDesc, error) {
+func readHistoryIndexWithCache(db ethdb.KeyValueReader, state stateIdent) []byte {
+	key := state.String()
+	if val, ok := historyIndexCache.Get(key); ok {
+		return val
+	}
 	var blob []byte
-	start := time.Now()
 	if state.account {
 		blob = rawdb.ReadAccountHistoryIndex(db, state.addressHash)
 	} else {
 		blob = rawdb.ReadStorageHistoryIndex(db, state.addressHash, state.storageHash)
 	}
+	if len(blob) > 0 {
+		historyIndexCache.Add(key, blob)
+	}
+	return blob
+}
+
+// loadIndexData loads the index data associated with the specified state.
+func loadIndexData(db ethdb.KeyValueReader, state stateIdent, timings *readTimings) ([]*indexBlockDesc, error) {
+	start := time.Now()
+	blob := readHistoryIndexWithCache(db, state)
 	if timings != nil {
 		timings.kvdbIndex = time.Since(start)
 	}
