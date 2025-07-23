@@ -160,10 +160,18 @@ func (r *indexReader) readGreaterThan(id uint64) (uint64, error) {
 			blob []byte
 		)
 		start := time.Now()
-		if r.state.account {
-			blob = rawdb.ReadAccountHistoryIndexBlock(r.db, r.state.addressHash, desc.id)
+		key := fmt.Sprintf("%s:%d", r.state.String(), desc.id)
+		if val, ok := historyBlockCache.Get(key); ok {
+			blob = val
 		} else {
-			blob = rawdb.ReadStorageHistoryIndexBlock(r.db, r.state.addressHash, r.state.storageHash, desc.id)
+			if r.state.account {
+				blob = rawdb.ReadAccountHistoryIndexBlock(r.db, r.state.addressHash, desc.id)
+			} else {
+				blob = rawdb.ReadStorageHistoryIndexBlock(r.db, r.state.addressHash, r.state.storageHash, desc.id)
+			}
+			if len(blob) > 0 {
+				historyBlockCache.Add(key, blob)
+			}
 		}
 		if r.timings != nil {
 			r.timings.kvdbBlock = time.Since(start)
@@ -423,10 +431,11 @@ func (d *indexDeleter) pop(id uint64) error {
 //
 // This function is safe to be called multiple times.
 func (d *indexDeleter) finish(batch ethdb.Batch) {
-	if key := d.state.String(); historyIndexCache.Contains(key) {
-		historyIndexCache.Remove(key)
-	}
 	for _, id := range d.dropped {
+		key := fmt.Sprintf("%s:%d", d.state.String(), id)
+		if historyBlockCache.Contains(key) {
+			historyBlockCache.Remove(key)
+		}
 		if d.state.account {
 			rawdb.DeleteAccountHistoryIndexBlock(batch, d.state.addressHash, id)
 		} else {
@@ -437,14 +446,23 @@ func (d *indexDeleter) finish(batch ethdb.Batch) {
 
 	// Flush the content of last block writer, regardless it's dirty or not
 	if !d.bw.empty() {
+		buf := d.bw.finish()
+		key := fmt.Sprintf("%s:%d", d.state.String(), d.bw.desc.id)
+		if historyBlockCache.Contains(key) {
+			historyBlockCache.Add(key, buf)
+		}
+
 		if d.state.account {
-			rawdb.WriteAccountHistoryIndexBlock(batch, d.state.addressHash, d.bw.desc.id, d.bw.finish())
+			rawdb.WriteAccountHistoryIndexBlock(batch, d.state.addressHash, d.bw.desc.id, buf)
 		} else {
-			rawdb.WriteStorageHistoryIndexBlock(batch, d.state.addressHash, d.state.storageHash, d.bw.desc.id, d.bw.finish())
+			rawdb.WriteStorageHistoryIndexBlock(batch, d.state.addressHash, d.state.storageHash, d.bw.desc.id, buf)
 		}
 	}
 	// Flush the index metadata into the supplied batch
 	if d.empty() {
+		if key := d.state.String(); historyIndexCache.Contains(key) {
+			historyIndexCache.Remove(key)
+		}
 		if d.state.account {
 			rawdb.DeleteAccountHistoryIndex(batch, d.state.addressHash)
 		} else {
@@ -455,6 +473,10 @@ func (d *indexDeleter) finish(batch ethdb.Batch) {
 		for _, desc := range d.descList {
 			buf = append(buf, desc.encode()...)
 		}
+		if key := d.state.String(); historyIndexCache.Contains(key) {
+			historyIndexCache.Add(key, buf)
+		}
+
 		if d.state.account {
 			rawdb.WriteAccountHistoryIndex(batch, d.state.addressHash, buf)
 		} else {
