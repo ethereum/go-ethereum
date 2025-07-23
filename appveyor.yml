@@ -1,6 +1,16 @@
 clone_depth: 5
 version: "{branch}.{build}"
 
+cache:
+  # Windows
+  - 'C:\Users\appveyor\go\pkg\mod' -> go.mod, go.sum
+
+  # Linux
+  - ~/go/pkg/mod -> go.mod, go.sum
+
+  # Project
+  - build/cache -> build/checksums.txt
+
 image:
   - Ubuntu
   - Visual Studio 2019
@@ -57,3 +67,4 @@ for:
       - go run build/ci.go nsis -arch %GETH_ARCH% -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
     test_script:
       - go run build/ci.go test -dlgo -arch %GETH_ARCH% -cc %GETH_CC% -short
+
