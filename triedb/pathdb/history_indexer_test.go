@@ -21,29 +21,29 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 // TestHistoryIndexerShortenDeadlock tests that a call to shorten does not
 // deadlock when the indexer is active. This specifically targets the case where
 // signal.result must be sent to unblock the caller.
 func TestHistoryIndexerShortenDeadlock(t *testing.T) {
+	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 	db := rawdb.NewMemoryDatabase()
 	freezer, _ := rawdb.NewStateFreezer(t.TempDir(), false, false)
-	histories := makeHistories(1000)
-
-	// Assume we only have 100 histories indexed
-	for i, h := range histories[:100] {
-		accountData, storageData, accountIndex, storageIndex := h.encode()
-		rawdb.WriteStateHistory(freezer.(ethdb.AncientWriter), uint64(i+1), h.meta.encode(), accountIndex, storageIndex, accountData, storageData)
-	}
-	indexer := newHistoryIndexer(db, freezer, uint64(len(histories)))
-	defer indexer.close()
 	defer freezer.Close()
+
+	histories := makeHistories(100)
+	for i, h := range histories {
+		accountData, storageData, accountIndex, storageIndex := h.encode()
+		rawdb.WriteStateHistory(freezer, uint64(i+1), h.meta.encode(), accountIndex, storageIndex, accountData, storageData)
+	}
+	// As a workaround, assign a future block to keep the initer running indefinitely
+	indexer := newHistoryIndexer(db, freezer, 200)
+	defer indexer.close()
 
 	done := make(chan error, 1)
 	go func() {
-		done <- indexer.shorten(uint64(len(histories)))
+		done <- indexer.shorten(200)
 	}()
 
 	select {
