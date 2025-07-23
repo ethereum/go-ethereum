@@ -1319,7 +1319,7 @@ func (b *kzgPointEvaluation) Run(input []byte) ([]byte, error) {
 	return common.Hex2Bytes(blobPrecompileReturnValue), nil
 }
 
-func (c *kzgPointEvaluation) Name() string {
+func (b *kzgPointEvaluation) Name() string {
 	return "KZG_POINT_EVALUATION"
 }
 
