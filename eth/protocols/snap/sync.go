@@ -692,8 +692,8 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 			// pivot states (e.g., if chain sync takes longer). The initial healing
 			// phase is more important for us.
 			stateHealTimeResettingTimer.Update(time.Since(s.healStartTime))
-			s.healStartTime = time.Time{} // zero the start time
 			log.Info("State healing phase is completed", "elapsed", common.PrettyDuration(time.Since(s.healStartTime)))
+			s.healStartTime = time.Time{} // zero the start time
 			return nil
 		}
 		// Assign all the data retrieval tasks to any free peers
