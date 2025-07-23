@@ -689,11 +689,12 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		if len(s.tasks) == 0 && s.healer.scheduler.Pending() == 0 {
 			// State healing phase completed, record the elapsed time in metrics.
 			// Note: healing may be rerun in subsequent cycles to fill gaps between
-			// pivot states (e.g., if chain sync takes longer). The initial healing
-			// phase is more important for us.
-			stateHealTimeResettingTimer.Update(time.Since(s.healStartTime))
-			log.Info("State healing phase is completed", "elapsed", common.PrettyDuration(time.Since(s.healStartTime)))
-			s.healStartTime = time.Time{} // zero the start time
+			// pivot states (e.g., if chain sync takes longer).
+			if !s.healStartTime.IsZero() {
+				stateHealTimeResettingTimer.Update(time.Since(s.healStartTime))
+				log.Info("State healing phase is completed", "elapsed", common.PrettyDuration(time.Since(s.healStartTime)))
+				s.healStartTime = time.Time{}
+			}
 			return nil
 		}
 		// Assign all the data retrieval tasks to any free peers
