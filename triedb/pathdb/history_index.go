@@ -78,33 +78,27 @@ type indexReader struct {
 	timings  *readTimings
 }
 
-func readHistoryIndexWithCache(db ethdb.KeyValueReader, state stateIdent) []byte {
-	key := state.String()
-	if val, ok := historyIndexCache.Get(key); ok {
-		return val
-	}
-	var blob []byte
-	if state.account {
-		blob = rawdb.ReadAccountHistoryIndex(db, state.addressHash)
-	} else {
-		blob = rawdb.ReadStorageHistoryIndex(db, state.addressHash, state.storageHash)
-	}
-	if len(blob) > 0 {
-		historyIndexCache.Add(key, blob)
-	}
-	return blob
-}
-
 // loadIndexData loads the index data associated with the specified state.
-func loadIndexData(db ethdb.KeyValueReader, state stateIdent, timings *readTimings) ([]*indexBlockDesc, error) {
+func loadIndexData(db ethdb.KeyValueReader, state stateIdent, timings *readTimings, cacheRead bool) ([]*indexBlockDesc, error) {
 	start := time.Now()
-	blob := readHistoryIndexWithCache(db, state)
+	key := state.String()
+	var blob []byte
+	if cacheRead && historyIndexCache.Contains(key) {
+		blob, _ = historyIndexCache.Get(key)
+	} else {
+		if state.account {
+			blob = rawdb.ReadAccountHistoryIndex(db, state.addressHash)
+		} else {
+			blob = rawdb.ReadStorageHistoryIndex(db, state.addressHash, state.storageHash)
+		}
+	}
 	if timings != nil {
 		timings.kvdbIndex = time.Since(start)
 	}
 	if len(blob) == 0 {
 		return nil, nil
 	}
+	historyIndexCache.Add(key, blob)
 	return parseIndex(blob)
 }
 
@@ -116,7 +110,7 @@ func newIndexReader(db ethdb.KeyValueReader, state stateIdent) (*indexReader, er
 
 // Helper to allow passing timings
 func newIndexReaderWithTimings(db ethdb.KeyValueReader, state stateIdent, timings *readTimings) (*indexReader, error) {
-	descList, err := loadIndexData(db, state, timings)
+	descList, err := loadIndexData(db, state, timings, true)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +134,7 @@ func (r *indexReader) refresh() error {
 			delete(r.readers, last.id)
 		}
 	}
-	descList, err := loadIndexData(r.db, r.state, r.timings)
+	descList, err := loadIndexData(r.db, r.state, r.timings, false)
 	if err != nil {
 		return err
 	}
