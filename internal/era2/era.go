@@ -22,6 +22,9 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"path"
+	"strconv"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -90,6 +93,47 @@ func (e *Era) Close() error {
 	err := e.f.Close()
 	e.f = nil
 	return err
+}
+
+// From returns an Era backed by f.
+func From(f ReadAtSeekCloser) (*Era, error) {
+	e := &Era{f: f, s: e2store.NewReader(f)}
+	if err := e.loadIndex(); err != nil {
+		f.Close()
+		return nil, err
+	}
+	return e, nil
+}
+
+// ReadDir reads all the era1 files in a directory for a given network.
+// Format: <network>-<epoch>-<hexroot>.erae
+func ReadDir(dir, network string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("error reading directory %s: %w", dir, err)
+	}
+	var (
+		next = uint64(0)
+		eras []string
+	)
+	for _, entry := range entries {
+		if path.Ext(entry.Name()) != ".erae" {
+			continue
+		}
+		parts := strings.Split(entry.Name(), "-")
+		if len(parts) != 3 || parts[0] != network {
+			// Invalid era1 filename, skip.
+			continue
+		}
+		if epoch, err := strconv.ParseUint(parts[1], 10, 64); err != nil {
+			return nil, fmt.Errorf("malformed era1 filename: %s", entry.Name())
+		} else if epoch != next {
+			return nil, fmt.Errorf("missing epoch %d", next)
+		}
+		next += 1
+		eras = append(eras, entry.Name())
+	}
+	return eras, nil
 }
 
 // Start retrieves the starting block number.

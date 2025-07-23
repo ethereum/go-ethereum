@@ -92,7 +92,7 @@ type offsets struct {
 // Builder is used to build an Era2 e2store file. It collects block entries and writes them to the underlying e2store.Writer.
 type Builder struct {
 	w   *e2store.Writer
-	buf *bytes.Buffer
+	tmp *bytes.Buffer
 
 	buff buffer
 	off  offsets
@@ -105,10 +105,10 @@ type Builder struct {
 
 // NewBuilder returns a new Builder instance.
 func NewBuilder(w io.Writer) *Builder {
-	buf := bytes.NewBuffer(nil)
+	tmp := bytes.NewBuffer(nil)
 	return &Builder{
 		w:   e2store.NewWriter(w),
-		buf: buf,
+		tmp: tmp,
 	}
 }
 
@@ -259,17 +259,17 @@ func uint256LE(v *big.Int) []byte {
 
 // SnappyWrite compresses the input data using snappy and writes it to the e2store file.
 func (b *Builder) snappyWrite(typ uint16, in []byte) error {
-	var buf = b.buf
-	snappy := snappy.NewBufferedWriter(b.buf)
-	buf.Reset()
-	snappy.Reset(buf)
+	var tmp = b.tmp
+	snappy := snappy.NewBufferedWriter(b.tmp)
+	tmp.Reset()
+	snappy.Reset(tmp)
 	if _, err := snappy.Write(in); err != nil {
 		return fmt.Errorf("error snappy encoding: %w", err)
 	}
 	if err := snappy.Flush(); err != nil {
 		return fmt.Errorf("error flushing snappy encoding: %w", err)
 	}
-	n, err := b.w.Write(typ, b.buf.Bytes())
+	n, err := b.w.Write(typ, b.tmp.Bytes())
 	b.written += uint64(n)
 	if err != nil {
 		return fmt.Errorf("error writing e2store entry: %w", err)

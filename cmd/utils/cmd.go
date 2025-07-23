@@ -342,6 +342,105 @@ func ImportHistory(chain *core.BlockChain, dir string, network string) error {
 	return nil
 }
 
+// ImportHistoryEraE imports Era-E files containing historical block information,
+// starting from genesis. Currently this function follows the assumptions that the provided chain
+// segment in Era-E file should all be canonical and verified. In the future, this function will be
+// extended to support importing Era-E files with proof verification.
+func ImportHistoryEraE(chain *core.BlockChain, dir, network string) error {
+	if chain.CurrentSnapBlock().Number.Sign() != 0 {
+		return errors.New("history import only supported when starting from genesis")
+	}
+
+	entries, err := era2.ReadDir(dir, network)
+	if err != nil {
+		return fmt.Errorf("reading %q: %w", dir, err)
+	}
+	checksums, err := readList(filepath.Join(dir, "checksums.txt"))
+	if err != nil {
+		return fmt.Errorf("reading checksums.txt: %w", err)
+	}
+	if len(entries) != len(checksums) {
+		return fmt.Errorf("mismatch: %d erae files, %d checksums", len(entries), len(checksums))
+	}
+
+	var (
+		start    = time.Now()
+		reported = time.Now()
+		imported int
+		h        = sha256.New()
+		scratch  bytes.Buffer
+	)
+
+	for i, file := range entries {
+		path := filepath.Join(dir, file)
+
+		// validate against checksum file in directory
+		f, err := os.Open(path)
+		if err != nil {
+			return fmt.Errorf("open %s: %w", path, err)
+		}
+		if _, err := io.Copy(h, f); err != nil {
+			f.Close()
+			return fmt.Errorf("checksum %s: %w", path, err)
+		}
+		got := common.BytesToHash(h.Sum(scratch.Bytes()[:])).Hex()
+		want := checksums[i]
+		h.Reset()
+		scratch.Reset()
+		if got != want {
+			f.Close()
+			return fmt.Errorf("%s checksum mismatch: have %s want %s", file, got, want)
+		}
+		// rewind for reading
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			f.Close()
+			return fmt.Errorf("rewind %s: %w", file, err)
+		}
+		// import archive
+		e, err := era2.From(f)
+		if err != nil {
+			f.Close()
+			return fmt.Errorf("open erae %s: %w", file, err)
+		}
+		blockCount := e.Count()
+
+		for j := uint64(0); j < blockCount; j++ {
+			hdr, err := e.GetHeader(e.Start() + j)
+			if err != nil {
+				return fmt.Errorf("header #%d: %w", hdr.Number.Uint64(), err)
+			}
+			if hdr.Number.Sign() == 0 { // skip genesis
+				continue
+			}
+			body, err := e.GetBody(hdr.Number.Uint64())
+			if err != nil {
+				return fmt.Errorf("body #%d: %w", hdr.Number.Uint64(), err)
+			}
+			rcpts, err := e.GetReceipts(hdr.Number.Uint64(), 1)
+			if err != nil {
+				return fmt.Errorf("receipts #%d: %w", hdr.Number.Uint64(), err)
+			}
+			blk := types.NewBlockWithHeader(hdr).WithBody(*body)
+
+			enc := types.EncodeBlockReceiptLists(rcpts)
+			if _, err := chain.InsertReceiptChain([]*types.Block{blk}, enc, ^uint64(0)); err != nil {
+				return fmt.Errorf("insert #%d: %w", hdr.Number.Uint64(), err)
+			}
+
+			imported++
+			if time.Since(reported) >= 8*time.Second {
+				log.Info("Importing Era‑E", "head", hdr.Number, "imported", imported, "elapsed", common.PrettyDuration(time.Since(start)))
+				reported = time.Now()
+				imported = 0
+			}
+		}
+		f.Close()
+	}
+
+	log.Info("Era‑E import complete", "duration", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
 func missingBlocks(chain *core.BlockChain, blocks []*types.Block) []*types.Block {
 	head := chain.CurrentBlock()
 	for i, block := range blocks {

@@ -43,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/era/eradl"
+	"github.com/ethereum/go-ethereum/internal/era2"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -152,7 +153,7 @@ be gzipped.`,
 		Name:      "import-history",
 		Usage:     "Import an Era archive",
 		ArgsUsage: "<dir>",
-		Flags:     slices.Concat([]cli.Flag{utils.TxLookupLimitFlag, utils.TransactionHistoryFlag}, utils.DatabaseFlags, utils.NetworkFlags),
+		Flags:     slices.Concat([]cli.Flag{utils.TxLookupLimitFlag, utils.TransactionHistoryFlag, utils.EraFormatFlag}, utils.DatabaseFlags, utils.NetworkFlags),
 		Description: `
 The import-history command will import blocks and their corresponding receipts
 from Era archives.
@@ -163,7 +164,7 @@ from Era archives.
 		Name:      "export-history",
 		Usage:     "Export blockchain history to Era archives",
 		ArgsUsage: "<dir> <first> <last>",
-		Flags:     utils.DatabaseFlags,
+		Flags:     slices.Concat([]cli.Flag{utils.EraFormatFlag}, utils.DatabaseFlags),
 		Description: `
 The export-history command will export blocks and their corresponding receipts
 into Era archives. Eras are typically packaged in steps of 8192 blocks.
@@ -515,15 +516,25 @@ func importHistory(ctx *cli.Context) error {
 		network = networks[0]
 	}
 
-	if err := utils.ImportHistory(chain, dir, network); err != nil {
-		return err
+	format := ctx.String(utils.EraFormatFlag.Name)
+	switch format {
+	case "era1", "era":
+		if err := utils.ImportHistory(chain, dir, network); err != nil {
+			return err
+		}
+	case "erae":
+		if err := utils.ImportHistoryEraE(chain, dir, network); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unknown --era.format %q (expected 'era1' or 'erae')", format)
 	}
+
 	fmt.Printf("Import done in %v\n", time.Since(start))
 	return nil
 }
 
-// exportHistory exports chain history in Era archives at a specified
-// directory.
+// exportHistory exports chain history in Era archives at a specified directory.
 func exportHistory(ctx *cli.Context) error {
 	if ctx.Args().Len() != 3 {
 		utils.Fatalf("usage: %s", ctx.Command.ArgsUsage)
@@ -549,10 +560,21 @@ func exportHistory(ctx *cli.Context) error {
 	if head := chain.CurrentSnapBlock(); uint64(last) > head.Number.Uint64() {
 		utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.Number.Uint64())
 	}
-	err := utils.ExportHistory(chain, dir, uint64(first), uint64(last), uint64(era.MaxEra1Size), utils.EraE)
-	if err != nil {
-		utils.Fatalf("Export error: %v\n", err)
+
+	format := ctx.String(utils.EraFormatFlag.Name)
+	switch format {
+	case "era1", "era":
+		if err := utils.ExportHistory(chain, dir, uint64(first), uint64(last), uint64(era.MaxEra1Size), utils.Era1); err != nil {
+			utils.Fatalf("Export error: %v\n", err)
+		}
+	case "erae":
+		if err := utils.ExportHistory(chain, dir, uint64(first), uint64(last), uint64(era2.MaxEraESize), utils.EraE); err != nil {
+			utils.Fatalf("Export error: %v\n", err)
+		}
+	default:
+		return fmt.Errorf("unknown archive format %q (use 'era1' or 'erae')", format)
 	}
+
 	fmt.Printf("Export done in %v\n", time.Since(start))
 	return nil
 }
