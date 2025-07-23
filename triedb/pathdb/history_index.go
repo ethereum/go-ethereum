@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -74,15 +75,20 @@ type indexReader struct {
 	descList []*indexBlockDesc
 	readers  map[uint32]*blockReader
 	state    stateIdent
+	timings  *readTimings
 }
 
 // loadIndexData loads the index data associated with the specified state.
-func loadIndexData(db ethdb.KeyValueReader, state stateIdent) ([]*indexBlockDesc, error) {
+func loadIndexData(db ethdb.KeyValueReader, state stateIdent, timings *readTimings) ([]*indexBlockDesc, error) {
 	var blob []byte
+	start := time.Now()
 	if state.account {
 		blob = rawdb.ReadAccountHistoryIndex(db, state.addressHash)
 	} else {
 		blob = rawdb.ReadStorageHistoryIndex(db, state.addressHash, state.storageHash)
+	}
+	if timings != nil {
+		timings.kvdbIndex = time.Since(start)
 	}
 	if len(blob) == 0 {
 		return nil, nil
@@ -93,7 +99,12 @@ func loadIndexData(db ethdb.KeyValueReader, state stateIdent) ([]*indexBlockDesc
 // newIndexReader constructs a index reader for the specified state. Reader with
 // empty data is allowed.
 func newIndexReader(db ethdb.KeyValueReader, state stateIdent) (*indexReader, error) {
-	descList, err := loadIndexData(db, state)
+	return newIndexReaderWithTimings(db, state, nil)
+}
+
+// Helper to allow passing timings
+func newIndexReaderWithTimings(db ethdb.KeyValueReader, state stateIdent, timings *readTimings) (*indexReader, error) {
+	descList, err := loadIndexData(db, state, timings)
 	if err != nil {
 		return nil, err
 	}
@@ -102,6 +113,7 @@ func newIndexReader(db ethdb.KeyValueReader, state stateIdent) (*indexReader, er
 		readers:  make(map[uint32]*blockReader),
 		db:       db,
 		state:    state,
+		timings:  timings,
 	}, nil
 }
 
@@ -116,7 +128,7 @@ func (r *indexReader) refresh() error {
 			delete(r.readers, last.id)
 		}
 	}
-	descList, err := loadIndexData(r.db, r.state)
+	descList, err := loadIndexData(r.db, r.state, r.timings)
 	if err != nil {
 		return err
 	}
@@ -141,10 +153,14 @@ func (r *indexReader) readGreaterThan(id uint64) (uint64, error) {
 			err  error
 			blob []byte
 		)
+		start := time.Now()
 		if r.state.account {
 			blob = rawdb.ReadAccountHistoryIndexBlock(r.db, r.state.addressHash, desc.id)
 		} else {
 			blob = rawdb.ReadStorageHistoryIndexBlock(r.db, r.state.addressHash, r.state.storageHash, desc.id)
+		}
+		if r.timings != nil {
+			r.timings.kvdbBlock = time.Since(start)
 		}
 		br, err = newBlockReader(blob)
 		if err != nil {
