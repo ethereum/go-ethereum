@@ -3,7 +3,7 @@ version: "{branch}.{build}"
 
 cache:
   # Windows
-  - 'C:\Users\appveyor\go\pkg\mod' -> go.mod, go.sum
+  - C:\Users\appveyor\go\pkg\mod -> go.mod, go.sum
   # Linux
   - ~/go/pkg/mod -> go.mod, go.sum
   # Common
