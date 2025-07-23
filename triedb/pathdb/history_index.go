@@ -304,6 +304,9 @@ func (w *indexWriter) finish(batch ethdb.Batch) {
 	for _, desc := range descList {
 		buf = append(buf, desc.encode()...)
 	}
+	if key := w.state.String(); historyIndexCache.Contains(key) {
+		historyIndexCache.Add(key, buf)
+	}
 	if w.state.account {
 		rawdb.WriteAccountHistoryIndex(batch, w.state.addressHash, buf)
 	} else {
@@ -420,6 +423,9 @@ func (d *indexDeleter) pop(id uint64) error {
 //
 // This function is safe to be called multiple times.
 func (d *indexDeleter) finish(batch ethdb.Batch) {
+	if key := d.state.String(); historyIndexCache.Contains(key) {
+		historyIndexCache.Remove(key)
+	}
 	for _, id := range d.dropped {
 		if d.state.account {
 			rawdb.DeleteAccountHistoryIndexBlock(batch, d.state.addressHash, id)
