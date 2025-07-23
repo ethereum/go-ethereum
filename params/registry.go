@@ -18,13 +18,20 @@ package params
 
 import (
 	"fmt"
+	"strings"
 )
 
-type Parameter[V any] struct{
+// Parameter represents a chain parameter.
+// Parameters are globally registered using `Define`.
+type Parameter[V any] struct {
 	info regInfo
 }
 
+// Get retrieves the value of a parameter from a config.
 func (p Parameter[V]) Get(cfg *Config2) V {
+	if p.info.id == 0 {
+		panic("zero parameter")
+	}
 	v, ok := cfg.param[p.info.id]
 	if ok {
 		return v.(V)
@@ -32,51 +39,66 @@ func (p Parameter[V]) Get(cfg *Config2) V {
 	return p.info.defaultValue.(V)
 }
 
+// V creates a ParamValue with the given value. You need this to
+// specify parameter values when constructing a Config in code.
 func (p Parameter[V]) V(v V) ParamValue {
+	if p.info.id == 0 {
+		panic("zero parameter")
+	}
 	return ParamValue{p.info.id, v}
 }
 
-type ParamValue struct{
-	id int
+// ParamValue contains a chain parameter and its value.
+// This is created by calling `V` on the parameter.
+type ParamValue struct {
+	id    int
 	value any
 }
 
 var (
-	paramCounter int
-	paramRegistry = map[int]regInfo{}
+	paramCounter        = int(1)
+	paramRegistry       = map[int]regInfo{}
 	paramRegistryByName = map[string]int{}
 )
 
-type T[V any] struct{
-	Name string
-	Optional bool
-	Default V
+// T is the definition of a chain parameter type.
+type T[V any] struct {
+	Name     string // the parameter name
+	Optional bool   // optional says
+	Default  V
 	Validate func(v V, cfg *Config2) error
 }
 
-type regInfo struct{
-	id int
-	name string
-	optional bool
+type regInfo struct {
+	id           int
+	name         string
+	optional     bool
 	defaultValue any
-	new func() any
-	validate func(any, *Config2) error
+	new          func() any
+	validate     func(any, *Config2) error
 }
 
 // Define creates a chain parameter in the registry.
+// This is meant to be called at package initialization time.
 func Define[V any](def T[V]) Parameter[V] {
+	if def.Name == "" {
+		panic("blank parameter name")
+	}
 	if id, defined := paramRegistryByName[def.Name]; defined {
 		info := paramRegistry[id]
 		panic(fmt.Sprintf("chain parameter %q already registered with type %T", def.Name, info.defaultValue))
+	}
+	if strings.HasSuffix(def.Name, "Block") || strings.HasSuffix(def.Name, "Time") {
+		panic("chain parameter name cannot end in 'Block' or 'Time'")
 	}
 
 	id := paramCounter
 	paramCounter++
 
 	regInfo := regInfo{
-		id: id,
-		name: def.Name,
-		optional: def.Optional,
+		id:           id,
+		name:         def.Name,
+		optional:     def.Optional,
 		defaultValue: def.Default,
 		new: func() any {
 			var z V
