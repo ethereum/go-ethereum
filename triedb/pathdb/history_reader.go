@@ -23,10 +23,12 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // stateIdent represents the identifier of a state element, which can be
@@ -122,8 +124,9 @@ type indexReaderWithLimitTag struct {
 }
 
 // newIndexReaderWithLimitTag constructs a index reader with indexing position.
-func newIndexReaderWithLimitTag(db ethdb.KeyValueReader, state stateIdent, limit uint64) (*indexReaderWithLimitTag, error) {
-	r, err := newIndexReader(db, state)
+// Add timings parameter to pass through
+func newIndexReaderWithLimitTag(db ethdb.KeyValueReader, state stateIdent, limit uint64, timings *readTimings) (*indexReaderWithLimitTag, error) {
+	r, err := newIndexReaderWithTimings(db, state, timings)
 	if err != nil {
 		return nil, err
 	}
@@ -197,10 +200,24 @@ func newHistoryReader(disk ethdb.KeyValueReader, freezer ethdb.AncientReader) *h
 	}
 }
 
+// Struct to collect timing info for account or storage read
+type readTimings struct {
+	kvdbMeta    time.Duration
+	kvdbIndex   time.Duration
+	kvdbBlock   time.Duration
+	frdbIndex   time.Duration
+	frdbHistory time.Duration
+	frdbMeta    time.Duration
+}
+
 // readAccountMetadata resolves the account metadata within the specified
 // state history.
-func (r *historyReader) readAccountMetadata(address common.Address, historyID uint64) ([]byte, error) {
+func (r *historyReader) readAccountMetadata(address common.Address, historyID uint64, timings *readTimings) ([]byte, error) {
+	start := time.Now()
 	blob := rawdb.ReadStateAccountIndex(r.freezer, historyID)
+	if timings != nil {
+		timings.frdbIndex = time.Since(start)
+	}
 	if len(blob) == 0 {
 		return nil, fmt.Errorf("account index is truncated, historyID: %d", historyID)
 	}
@@ -225,9 +242,13 @@ func (r *historyReader) readAccountMetadata(address common.Address, historyID ui
 
 // readStorageMetadata resolves the storage slot metadata within the specified
 // state history.
-func (r *historyReader) readStorageMetadata(storageKey common.Hash, storageHash common.Hash, historyID uint64, slotOffset, slotNumber int) ([]byte, error) {
+func (r *historyReader) readStorageMetadata(storageKey common.Hash, storageHash common.Hash, historyID uint64, slotOffset, slotNumber int, timings *readTimings) ([]byte, error) {
 	// TODO(rj493456442) optimize it with partial read
+	start := time.Now()
 	blob := rawdb.ReadStateStorageIndex(r.freezer, historyID)
+	if timings != nil {
+		timings.frdbIndex = time.Since(start)
+	}
 	if len(blob) == 0 {
 		return nil, fmt.Errorf("storage index is truncated, historyID: %d", historyID)
 	}
@@ -244,7 +265,11 @@ func (r *historyReader) readStorageMetadata(storageKey common.Hash, storageHash 
 		m      meta
 		target common.Hash
 	)
+	startMeta := time.Now()
 	blob = rawdb.ReadStateHistoryMeta(r.freezer, historyID)
+	if timings != nil {
+		timings.frdbMeta = time.Since(startMeta)
+	}
 	if err := m.decode(blob); err != nil {
 		return nil, err
 	}
@@ -268,8 +293,8 @@ func (r *historyReader) readStorageMetadata(storageKey common.Hash, storageHash 
 }
 
 // readAccount retrieves the account data from the specified state history.
-func (r *historyReader) readAccount(address common.Address, historyID uint64) ([]byte, error) {
-	metadata, err := r.readAccountMetadata(address, historyID)
+func (r *historyReader) readAccount(address common.Address, historyID uint64, timings *readTimings) ([]byte, error) {
+	metadata, err := r.readAccountMetadata(address, historyID, timings)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +302,11 @@ func (r *historyReader) readAccount(address common.Address, historyID uint64) ([
 	offset := int(binary.BigEndian.Uint32(metadata[common.AddressLength+1 : common.AddressLength+5])) // four bytes for the account data offset
 
 	// TODO(rj493456442) optimize it with partial read
+	start := time.Now()
 	data := rawdb.ReadStateAccountHistory(r.freezer, historyID)
+	if timings != nil {
+		timings.frdbHistory = time.Since(start)
+	}
 	if len(data) < length+offset {
 		return nil, fmt.Errorf("account data is truncated, address: %#x, historyID: %d, size: %d, offset: %d, len: %d", address, historyID, len(data), offset, length)
 	}
@@ -285,8 +314,8 @@ func (r *historyReader) readAccount(address common.Address, historyID uint64) ([
 }
 
 // readStorage retrieves the storage slot data from the specified state history.
-func (r *historyReader) readStorage(address common.Address, storageKey common.Hash, storageHash common.Hash, historyID uint64) ([]byte, error) {
-	metadata, err := r.readAccountMetadata(address, historyID)
+func (r *historyReader) readStorage(address common.Address, storageKey common.Hash, storageHash common.Hash, historyID uint64, timings *readTimings) ([]byte, error) {
+	metadata, err := r.readAccountMetadata(address, historyID, nil) // No timings for account metadata in storage read
 	if err != nil {
 		return nil, err
 	}
@@ -297,7 +326,7 @@ func (r *historyReader) readStorage(address common.Address, storageKey common.Ha
 	slotIndexOffset := int(binary.BigEndian.Uint32(metadata[common.AddressLength+5 : common.AddressLength+9]))
 	slotIndexNumber := int(binary.BigEndian.Uint32(metadata[common.AddressLength+9 : common.AddressLength+13]))
 
-	slotMetadata, err := r.readStorageMetadata(storageKey, storageHash, historyID, slotIndexOffset, slotIndexNumber)
+	slotMetadata, err := r.readStorageMetadata(storageKey, storageHash, historyID, slotIndexOffset, slotIndexNumber, timings)
 	if err != nil {
 		return nil, err
 	}
@@ -305,7 +334,11 @@ func (r *historyReader) readStorage(address common.Address, storageKey common.Ha
 	offset := int(binary.BigEndian.Uint32(slotMetadata[common.HashLength+1 : common.HashLength+5])) // four bytes for slot data offset
 
 	// TODO(rj493456442) optimize it with partial read
+	start := time.Now()
 	data := rawdb.ReadStateStorageHistory(r.freezer, historyID)
+	if timings != nil {
+		timings.frdbHistory = time.Since(start)
+	}
 	if len(data) < offset+length {
 		return nil, fmt.Errorf("storage data is truncated, address: %#x, key: %#x, historyID: %d, size: %d, offset: %d, len: %d", address, storageKey, historyID, len(data), offset, length)
 	}
@@ -317,6 +350,8 @@ func (r *historyReader) readStorage(address common.Address, storageKey common.Ha
 // lastID: represents the ID of the latest/newest state history;
 // latestValue: represents the state value at the current disk layer with ID == lastID;
 func (r *historyReader) read(state stateIdentQuery, stateID uint64, lastID uint64, latestValue []byte) ([]byte, error) {
+	origin := time.Now()
+	timings := &readTimings{}
 	tail, err := r.freezer.Tail()
 	if err != nil {
 		return nil, err
@@ -330,7 +365,9 @@ func (r *historyReader) read(state stateIdentQuery, stateID uint64, lastID uint6
 	// To serve the request, all state histories from stateID+1 to lastID
 	// must be indexed. It's not supposed to happen unless system is very
 	// wrong.
+	start := time.Now()
 	metadata := loadIndexMetadata(r.disk)
+	timings.kvdbMeta = time.Since(start)
 	if metadata == nil || metadata.Last < lastID {
 		indexed := "null"
 		if metadata != nil {
@@ -343,12 +380,13 @@ func (r *historyReader) read(state stateIdentQuery, stateID uint64, lastID uint6
 	// state retrieval
 	ir, ok := r.readers[state.String()]
 	if !ok {
-		ir, err = newIndexReaderWithLimitTag(r.disk, state.stateIdent, metadata.Last)
+		ir, err = newIndexReaderWithLimitTag(r.disk, state.stateIdent, metadata.Last, timings)
 		if err != nil {
 			return nil, err
 		}
 		r.readers[state.String()] = ir
 	}
+	ir.reader.timings = timings
 	historyID, err := ir.readGreaterThan(stateID, lastID)
 	if err != nil {
 		return nil, err
@@ -363,8 +401,18 @@ func (r *historyReader) read(state stateIdentQuery, stateID uint64, lastID uint6
 	// that the associated state histories are no longer available due to a rollback.
 	// Such truncation should be captured by the state resolver below, rather than returning
 	// invalid data.
+	var result []byte
+	var item string
 	if state.account {
-		return r.readAccount(state.address, historyID)
+		item = "account"
+		result, err = r.readAccount(state.address, historyID, timings)
+	} else {
+		item = "storage"
+		result, err = r.readStorage(state.address, state.storageKey, state.storageHash, historyID, timings)
 	}
-	return r.readStorage(state.address, state.storageKey, state.storageHash, historyID)
+	log.Info("HistoryRead", "item", item, "elapsed", time.Since(origin),
+		"kvdbMeta", timings.kvdbMeta, "kvdbIndex", timings.kvdbIndex, "kvdbBlock", timings.kvdbBlock,
+		"frdbIndex", timings.frdbIndex, "frdbHistory", timings.frdbHistory, "frdbMeta", timings.frdbMeta,
+	)
+	return result, err
 }
