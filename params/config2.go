@@ -18,6 +18,7 @@ package params
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -97,15 +98,16 @@ func (cfg *Config2) SetParam(param ...ParamValue) *Config2 {
 
 // LatestFork returns the latest time-based fork that would be active for the given time.
 func (cfg *Config2) LatestFork(time uint64) forks.Fork {
-	londonBlock := cfg.activation[forks.London]
-	for _, f := range slices.Backward(forks.CanonOrder) {
+	var active []forks.Fork
+	for f := range forks.All() {
 		if f.BlockBased() {
-			break
+			continue
 		}
-		if cfg.Active(f, londonBlock, time) {
-			return f
+		if a, ok := cfg.activation[f]; ok && a <= time {
+			active = append(active, f)
 		}
 	}
+
 	return forks.Paris
 }
 
@@ -124,9 +126,9 @@ func (cfg *Config2) MarshalJSON() ([]byte, error) {
 	for f, act := range cfg.activation {
 		var name string
 		if f.BlockBased() {
-			name = fmt.Sprintf("%sBlock", strings.ToLower(name))
+			name = fmt.Sprintf("%sBlock", f.ConfigName())
 		} else {
-			name = fmt.Sprintf("%sTime", strings.ToLower(name))
+			name = fmt.Sprintf("%sTime", f.ConfigName())
 		}
 		m[name] = act
 	}
@@ -176,12 +178,12 @@ func (cfg *Config2) decodeActivation(key string, dec *json.Decoder) error {
 	var f forks.Fork
 	name, ok := strings.CutSuffix(key, "Block")
 	if ok {
-		f, ok = forks.ByName(name)
+		f, ok = forks.ForkByConfigName(name)
 		if !ok || !f.BlockBased() {
 			return fmt.Errorf("unknown block-based fork %q", name)
 		}
 	} else if name, ok = strings.CutSuffix(key, "Time"); ok {
-		f, ok = forks.ByName(name)
+		f, ok = forks.ForkByConfigName(name)
 		if !ok || f.BlockBased() {
 			return fmt.Errorf("unknown time-based fork %q", name)
 		}
@@ -206,35 +208,28 @@ func (cfg *Config2) decodeParameter(key string, dec *json.Decoder) error {
 // Validate checks the configuration to ensure forks are scheduled in order,
 // and required settings are present.
 func (cfg *Config2) Validate() error {
-	sanityCheckCanonOrder()
-
-	// Check forks.
-	lastFork := forks.CanonOrder[0]
-	for _, f := range forks.CanonOrder[1:] {
+	for f := range forks.All() {
 		act := "timestamp"
 		if f.BlockBased() {
 			act = "block"
 		}
 
-		switch {
-		// Non-optional forks must all be present in the chain config up to the last defined fork.
-		case !cfg.Scheduled(lastFork) && cfg.Scheduled(f):
-			return fmt.Errorf("unsupported fork ordering: %v not enabled, but %v enabled at %s %v", lastFork, f, act, cfg.activation[f])
+		for dep := range f.DirectDependencies() {
+			switch {
+			// Non-optional forks must all be present in the chain config up to the last defined fork.
+			case !cfg.Scheduled(dep) && cfg.Scheduled(f):
+				return fmt.Errorf("unsupported fork ordering: %v not enabled, but %v enabled at %s %v", dep, f, act, cfg.activation[f])
 
-		// Fork (whether defined by block or timestamp) must follow the fork definition sequence.
-		case cfg.Scheduled(lastFork) && cfg.Scheduled(f):
-			// Timestamp based forks can follow block based ones, but not the other way around.
-			if !lastFork.BlockBased() && f.BlockBased() {
-				return fmt.Errorf("unsupported fork ordering: %v used timestamp ordering, but %v reverted to block ordering", lastFork, f)
+			// Fork (whether defined by block or timestamp) must follow the fork definition sequence.
+			case cfg.Scheduled(dep) && cfg.Scheduled(f):
+				// Timestamp based forks can follow block based ones, but not the other way around.
+				if !dep.BlockBased() && f.BlockBased() {
+					return fmt.Errorf("unsupported fork ordering: %v used timestamp ordering, but %v reverted to block ordering", dep, f)
+				}
+				if dep.BlockBased() == f.BlockBased() && cfg.activation[dep] > cfg.activation[f] {
+					return fmt.Errorf("unsupported fork ordering: %v enabled at %s %v, but %v enabled at %s %v", dep, act, cfg.activation[dep], f, act, cfg.activation[f])
+				}
 			}
-			if lastFork.BlockBased() == f.BlockBased() && cfg.activation[lastFork] > cfg.activation[f] {
-				return fmt.Errorf("unsupported fork ordering: %v enabled at %s %v, but %v enabled at %s %v", lastFork, act, cfg.activation[lastFork], f, act, cfg.activation[f])
-			}
-		}
-
-		// If it was optional and not set, then ignore it.
-		if !f.Optional() || cfg.Scheduled(f) {
-			lastFork = f
 		}
 	}
 
@@ -263,14 +258,35 @@ func (cfg *Config2) Validate() error {
 // An error is returned when the new configuration attempts to schedule a fork below the
 // current chain head. The error contains enough information to rewind the chain to a
 // point where the new config can be applied safely.
-func (c *Config2) CheckCompatible(newcfg *Config2, blocknum uint64, time uint64) *ConfigCompatError {
-	sanityCheckCanonOrder()
+func (cfg *Config2) CheckCompatible(newcfg *Config2, blocknum uint64, time uint64) *ConfigCompatError {
+	// Gather forks which are active in either config, and sort them by activation.
+	// Here we assume block-based forks activate before time-based ones.
+	// For forks with equal activation, the ordering is based on fork name to ensure a consistent result.
+	var forkList []forkActivation
+	for f := range forks.All() {
+		a, ok := minActivation(f, cfg, newcfg)
+		if ok {
+			forkList = append(forkList, forkActivation{f, a})
+		}
+	}
+	slices.SortFunc(forkList, func(f1, f2 forkActivation) int {
+		switch {
+		case f1.fork.BlockBased() && !f2.fork.BlockBased():
+			return -1
+		case !f2.fork.BlockBased() && f2.fork.BlockBased():
+			return 1
+		case f1.activation == f2.activation:
+			return strings.Compare(f1.fork.String(), f2.fork.String())
+		default:
+			return cmp.Compare(f1.activation, f2.activation)
+		}
+	})
 
 	// Iterate checkCompatible to find the lowest conflict.
 	var lasterr *ConfigCompatError
 	bhead, btime := blocknum, time
 	for {
-		err := c.checkCompatible(newcfg, bhead, btime)
+		err := cfg.checkCompatible(newcfg, forkList, bhead, btime)
 		if err == nil || (lasterr != nil && err.RewindToBlock == lasterr.RewindToBlock && err.RewindToTime == lasterr.RewindToTime) {
 			break
 		}
@@ -286,26 +302,28 @@ func (c *Config2) CheckCompatible(newcfg *Config2, blocknum uint64, time uint64)
 }
 
 // checkCompatible checks config compatibility at a specific block height.
-func (cfg *Config2) checkCompatible(newcfg *Config2, num uint64, time uint64) *ConfigCompatError {
+func (cfg *Config2) checkCompatible(newcfg *Config2, forkList []forkActivation, num uint64, time uint64) *ConfigCompatError {
 	incompatible := func(f forks.Fork) bool {
 		return (cfg.Active(f, num, time) || newcfg.Active(f, num, time)) && !activationEqual(f, cfg, newcfg)
 	}
-
-	for _, f := range forks.CanonOrder[1:] {
+	for _, fa := range forkList {
+		f := fa.fork
 		if incompatible(f) {
 			if f.BlockBased() {
-				return newBlockCompatError2(fmt.Sprintf("%v fork block", f), f, cfg, newcfg)
+				return newBlockCompatError2(f.ConfigName()+"Block", f, cfg, newcfg)
 			}
-			return newTimestampCompatError2("%v fork timestamp", f, cfg, newcfg)
+			return newTimestampCompatError2(f.ConfigName()+"Time", f, cfg, newcfg)
 		}
 	}
 
+	// Specialty checks.
 	if cfg.Active(forks.DAO, num, time) && DAOForkSupport.Get(cfg) != DAOForkSupport.Get(newcfg) {
 		return newBlockCompatError2("DAO fork support flag", forks.DAO, cfg, newcfg)
 	}
 	if cfg.Active(forks.TangerineWhistle, num, time) && !configBlockEqual(ChainID.Get(cfg), ChainID.Get(newcfg)) {
 		return newBlockCompatError2("EIP158 chain ID", forks.TangerineWhistle, cfg, newcfg)
 	}
+	// TODO: Something should be checked here for TTD and blobSchedule.
 
 	return nil
 }
@@ -365,20 +383,7 @@ func activationEqual(f forks.Fork, cfg1, cfg2 *Config2) bool {
 	return cfg1.Scheduled(f) == cfg2.Scheduled(f) && cfg1.activation[f] == cfg2.activation[f]
 }
 
-// sanityCheckCanonOrder verifies forks.CanonOrder is defined sensibly.
-// This exists to ensure library code doesn't mess with this slice in an incompatible way.
-func sanityCheckCanonOrder() {
-	if len(forks.CanonOrder) == 0 {
-		panic("forks.CanonOrder is empty")
-	}
-	if forks.CanonOrder[0] != forks.Frontier {
-		panic("forks.CanonOrder must start with Frontier")
-	}
-}
-
-func cloneBig(x *big.Int) *big.Int {
-	if x == nil {
-		return nil
-	}
-	return new(big.Int).Set(x)
+type forkActivation struct {
+	fork       forks.Fork
+	activation uint64
 }

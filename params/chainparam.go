@@ -26,6 +26,7 @@ func validateChainID(v *big.Int, cfg *Config2) error {
 // true=supports or false=opposes the fork.
 // The default value is true.
 var DAOForkSupport = Define(T[bool]{
+	Name:     "daoForkSupport",
 	Optional: true,
 	Default:  true,
 })
@@ -50,15 +51,15 @@ var BlobSchedule = Define(T[map[forks.Fork]BlobConfig]{
 	Validate: validateBlobSchedule,
 })
 
+// validateBlobSchedule verifies that all forks after cancun explicitly define a blob
+// schedule configuration.
 func validateBlobSchedule(schedule map[forks.Fork]BlobConfig, cfg *Config2) error {
-	// Check that all forks with blobs explicitly define the blob schedule configuration.
-	for _, f := range forks.CanonOrder {
-		if f.HasBlobs() {
+	for f := range forks.All() {
+		if cfg.Scheduled(f) && f.Requires(forks.Cancun) {
 			bcfg, defined := schedule[f]
-			if cfg.Scheduled(f) && !defined {
+			if !defined {
 				return fmt.Errorf("invalid chain configuration: missing entry for fork %q in blobSchedule", f)
-			}
-			if defined {
+			} else {
 				if err := bcfg.validate(); err != nil {
 					return fmt.Errorf("invalid chain configuration in blobSchedule for fork %q: %v", f, err)
 				}
