@@ -127,9 +127,8 @@ func (d *Database) onCompactionEnd(info pebble.CompactionInfo) {
 		d.compTime.Add(int64(time.Since(d.compStartTime)))
 	case 0:
 		panic("should not happen")
-	default:
-		d.activeComp--
 	}
+	d.activeComp--
 }
 
 func (d *Database) onWriteStallBegin(b pebble.WriteStallBeginInfo) {
