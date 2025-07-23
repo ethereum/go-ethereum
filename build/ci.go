@@ -433,7 +433,14 @@ func doLint(cmdline []string) {
 	}
 
 	linter := downloadLinter(*cachedir)
-	lflags := []string{"run", "--config", ".golangci.yml", "--new-from-rev=origin/master"}
+	baseRef := "master"
+	if ref := os.Getenv("GITHUB_BASE_REF"); ref != "" {
+		baseRef = ref
+	}
+
+	lflags := []string{"run", "--config", ".golangci.yml",
+		fmt.Sprintf("--new-from-rev=origin/%s", baseRef),
+	}
 	build.MustRunCommandWithOutput(linter, append(lflags, packages...)...)
 	fmt.Println("You have achieved perfection.")
 }
@@ -1172,3 +1179,4 @@ func doSanityCheck() {
 	csdb := download.MustLoadChecksums("build/checksums.txt")
 	csdb.DownloadAndVerifyAll()
 }
+
