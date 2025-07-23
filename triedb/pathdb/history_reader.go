@@ -34,6 +34,7 @@ import (
 
 var (
 	historyIndexCache = lru.NewCache[string, []byte](10000)
+	historyBlockCache = lru.NewCache[string, []byte](10000)
 )
 
 // stateIdent represents the identifier of a state element, which can be
