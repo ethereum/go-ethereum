@@ -614,7 +614,7 @@ func (c *bn256AddIstanbul) Run(input []byte) ([]byte, error) {
 }
 
 func (c *bn256AddIstanbul) Name() string {
-	return "BN256_ADD"
+	return "BN254_ADD"
 }
 
 // bn256AddByzantium implements a native elliptic curve point addition
@@ -631,7 +631,7 @@ func (c *bn256AddByzantium) Run(input []byte) ([]byte, error) {
 }
 
 func (c *bn256AddByzantium) Name() string {
-	return "BN256_ADD"
+	return "BN254_ADD"
 }
 
 // runBn256ScalarMul implements the Bn256ScalarMul precompile, referenced by
@@ -660,7 +660,7 @@ func (c *bn256ScalarMulIstanbul) Run(input []byte) ([]byte, error) {
 }
 
 func (c *bn256ScalarMulIstanbul) Name() string {
-	return "BN256_MUL"
+	return "BN254_MUL"
 }
 
 // bn256ScalarMulByzantium implements a native elliptic curve scalar
@@ -677,7 +677,7 @@ func (c *bn256ScalarMulByzantium) Run(input []byte) ([]byte, error) {
 }
 
 func (c *bn256ScalarMulByzantium) Name() string {
-	return "BN256_MUL"
+	return "BN254_MUL"
 }
 
 var (
@@ -736,7 +736,7 @@ func (c *bn256PairingIstanbul) Run(input []byte) ([]byte, error) {
 }
 
 func (c *bn256PairingIstanbul) Name() string {
-	return "BN256_PAIRING"
+	return "BN254_PAIRING"
 }
 
 // bn256PairingByzantium implements a pairing pre-compile for the bn256 curve
@@ -753,7 +753,7 @@ func (c *bn256PairingByzantium) Run(input []byte) ([]byte, error) {
 }
 
 func (c *bn256PairingByzantium) Name() string {
-	return "BN256_PAIRING"
+	return "BN254_PAIRING"
 }
 
 type blake2F struct{}
