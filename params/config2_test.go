@@ -18,14 +18,45 @@ package params_test
 
 import (
 	"math/big"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/ethereum/go-ethereum/params/presets"
 )
+
+func TestConfigValidateErrors(t *testing.T) {
+	files, err := filepath.Glob("testdata/invalid-*.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type test struct {
+		Config params.Config2 `json:"config"`
+		Error  string         `json:"error"`
+	}
+
+	for _, f := range files {
+		name := filepath.Base(f)
+		t.Run(name, func(t *testing.T) {
+			var test test
+			if err := common.LoadJSON(f, &test); err != nil {
+				t.Fatal(err)
+			}
+			err := test.Config.Validate()
+			if err == nil {
+				t.Fatal("expected validation error, got none")
+			}
+			if err.Error() != test.Error {
+				t.Fatal("wrong error:\n got:", err.Error(), "want:", test.Error)
+			}
+		})
+	}
+}
 
 func TestCheckCompatible2(t *testing.T) {
 	type test struct {

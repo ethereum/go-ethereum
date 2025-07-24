@@ -1,0 +1,7 @@
+{
+	"config": {
+		"homesteadBlock": 10,
+		"eip150Block": 8
+	},
+	"error": "unsupported fork ordering: Homestead enabled at block 10, but TangerineWhistle enabled at block 8"
+}

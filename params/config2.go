@@ -24,6 +24,7 @@ import (
 	"maps"
 	"math/big"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/params/forks"
@@ -43,7 +44,6 @@ func NewConfig2(activations Activations, param ...ParamValue) *Config2 {
 		activation: maps.Clone(activations),
 		param:      make(map[int]any, len(param)),
 	}
-	cfg.activation[forks.Frontier] = 0
 	for _, pv := range param {
 		cfg.param[pv.id] = pv.value
 	}
@@ -52,6 +52,9 @@ func NewConfig2(activations Activations, param ...ParamValue) *Config2 {
 
 // Active reports whether the given fork is active for a block number/time.
 func (cfg *Config2) Active(f forks.Fork, block, timestamp uint64) bool {
+	if f == forks.Frontier {
+		return true
+	}
 	activation, ok := cfg.activation[f]
 	if f.BlockBased() {
 		return ok && block >= activation
@@ -61,6 +64,9 @@ func (cfg *Config2) Active(f forks.Fork, block, timestamp uint64) bool {
 
 // ActiveAtBlock reports whether the given fork is active for a block number/time.
 func (cfg *Config2) ActiveAtBlock(f forks.Fork, block *big.Int) bool {
+	if f == forks.Frontier {
+		return true
+	}
 	if !f.BlockBased() {
 		panic(fmt.Sprintf("fork %v has time-based scheduling", f))
 	}
@@ -96,19 +102,38 @@ func (cfg *Config2) SetParam(param ...ParamValue) *Config2 {
 	return cpy
 }
 
-// LatestFork returns the latest time-based fork that would be active for the given time.
-func (cfg *Config2) LatestFork(time uint64) forks.Fork {
-	var active []forks.Fork
-	for f := range forks.All() {
-		if f.BlockBased() {
-			continue
-		}
-		if a, ok := cfg.activation[f]; ok && a <= time {
-			active = append(active, f)
-		}
+// String encodes the config in a readable way.
+func (cfg *Config2) String() string {
+	paramList := slices.Sorted(maps.Keys(cfg.param))
+	forkList := make([]forkActivation, 0, len(cfg.activation))
+	for f, a := range cfg.activation {
+		forkList = append(forkList, forkActivation{f, a})
 	}
+	slices.SortFunc(forkList, forkActivation.compare)
 
-	return forks.Paris
+	var out strings.Builder
+	var sp bool
+	writeSp := func() {
+		if sp {
+			out.WriteString(" ")
+		}
+		sp = true
+	}
+	out.WriteRune('[')
+	for _, fa := range forkList {
+		writeSp()
+		out.WriteString(fa.fork.ConfigName())
+		out.WriteString(":")
+		out.WriteString(strconv.FormatUint(fa.activation, 10))
+	}
+	for _, p := range paramList {
+		writeSp()
+		out.WriteString(paramRegistry[p].name)
+		out.WriteString(":")
+		fmt.Fprintf(&out, "%v", cfg.param[p])
+	}
+	out.WriteRune(']')
+	return out.String()
 }
 
 // MarshalJSON encodes the config as JSON.
@@ -146,9 +171,7 @@ func (cfg *Config2) UnmarshalJSON(input []byte) error {
 		return fmt.Errorf("expected JSON object for chain configuration")
 	}
 	// Now we're in the object.
-	newcfg := Config2{
-		activation: make(Activations),
-	}
+	newcfg := Config2{activation: Activations{}}
 	for {
 		tok, err = dec.Token()
 		if tok == json.Delim('}') {
@@ -181,6 +204,9 @@ func (cfg *Config2) decodeActivation(key string, dec *json.Decoder) error {
 		f, ok = forks.ForkByConfigName(name)
 		if !ok || !f.BlockBased() {
 			return fmt.Errorf("unknown block-based fork %q", name)
+		}
+		if f == forks.Frontier {
+			return fmt.Errorf("frontier fork cannot be scheduled")
 		}
 	} else if name, ok = strings.CutSuffix(key, "Time"); ok {
 		f, ok = forks.ForkByConfigName(name)
@@ -215,6 +241,9 @@ func (cfg *Config2) Validate() error {
 		}
 
 		for dep := range f.DirectDependencies() {
+			if dep == forks.Frontier {
+				continue
+			}
 			switch {
 			// Non-optional forks must all be present in the chain config up to the last defined fork.
 			case !cfg.Scheduled(dep) && cfg.Scheduled(f):
@@ -238,7 +267,7 @@ func (cfg *Config2) Validate() error {
 		v, isSet := cfg.param[id]
 		if !isSet {
 			if !info.optional {
-				return fmt.Errorf("required chain parameter %s is not set", info.name)
+				return fmt.Errorf("required chain parameter %q is not set", info.name)
 			}
 			v = info.defaultValue
 		}
@@ -260,8 +289,6 @@ func (cfg *Config2) Validate() error {
 // point where the new config can be applied safely.
 func (cfg *Config2) CheckCompatible(newcfg *Config2, blocknum uint64, time uint64) *ConfigCompatError {
 	// Gather forks which are active in either config, and sort them by activation.
-	// Here we assume block-based forks activate before time-based ones.
-	// For forks with equal activation, the ordering is based on fork name to ensure a consistent result.
 	var forkList []forkActivation
 	for f := range forks.All() {
 		a, ok := minActivation(f, cfg, newcfg)
@@ -269,18 +296,7 @@ func (cfg *Config2) CheckCompatible(newcfg *Config2, blocknum uint64, time uint6
 			forkList = append(forkList, forkActivation{f, a})
 		}
 	}
-	slices.SortFunc(forkList, func(f1, f2 forkActivation) int {
-		switch {
-		case f1.fork.BlockBased() && !f2.fork.BlockBased():
-			return -1
-		case !f2.fork.BlockBased() && f2.fork.BlockBased():
-			return 1
-		case f1.activation == f2.activation:
-			return strings.Compare(f1.fork.String(), f2.fork.String())
-		default:
-			return cmp.Compare(f1.activation, f2.activation)
-		}
-	})
+	slices.SortFunc(forkList, forkActivation.compare)
 
 	// Iterate checkCompatible to find the lowest conflict.
 	var lasterr *ConfigCompatError
@@ -386,4 +402,19 @@ func activationEqual(f forks.Fork, cfg1, cfg2 *Config2) bool {
 type forkActivation struct {
 	fork       forks.Fork
 	activation uint64
+}
+
+func (fa forkActivation) compare(other forkActivation) int {
+	// Here we assume block-based forks activate before time-based ones. For forks with
+	// equal activation, the ordering is based on fork name to ensure a consistent result.
+	switch {
+	case fa.fork.BlockBased() && !other.fork.BlockBased():
+		return -1
+	case !fa.fork.BlockBased() && other.fork.BlockBased():
+		return 1
+	case fa.activation == other.activation:
+		return strings.Compare(fa.fork.String(), other.fork.String())
+	default:
+		return cmp.Compare(fa.activation, other.activation)
+	}
 }
