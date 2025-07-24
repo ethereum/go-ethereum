@@ -1,0 +1,8 @@
+{
+	"config": {
+		"homesteadBlock": 7,
+		"eip150Block": 8,
+		"eip155Block": 9
+	},
+	"error": "required chain parameter \"chainId\" is not set"
+}
