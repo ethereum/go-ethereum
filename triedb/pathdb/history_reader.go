@@ -198,10 +198,10 @@ type historyCacher struct {
 }
 
 // newHistoryCacher creates a new historyCacher instance.
-func newHistoryCacher(size int) *historyCacher {
+func newHistoryCacher(indexSize, blockSize int) *historyCacher {
 	return &historyCacher{
-		index: lru.NewCache[string, []byte](size),
-		block: lru.NewCache[string, []byte](size),
+		index: lru.NewCache[string, []byte](indexSize),
+		block: lru.NewCache[string, []byte](blockSize),
 	}
 }
 
