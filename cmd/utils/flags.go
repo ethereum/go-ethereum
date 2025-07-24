@@ -116,8 +116,7 @@ var (
 	}
 	EraFormatFlag = &cli.StringFlag{
 		Name:     "era.format",
-		Usage:    "Archive format to import: 'era1' or 'erae'",
-		Value:    "era1",
+		Usage:    "Archive format: 'era1' or 'erae'",
 		Category: flags.EthCategory,
 	}
 	MinFreeDiskSpaceFlag = &cli.IntFlag{
