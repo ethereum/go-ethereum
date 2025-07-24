@@ -118,6 +118,9 @@ func (l *limbo) finalize(final *types.Header) {
 		if item.Block > final.Number.Uint64() {
 			continue
 		}
+		if err := l.store.Delete(item.id); err != nil {
+			log.Error("Failed to drop finalized blob", "block", item.Block, "id", item.id, "err", err)
+		}
 		delete(l.index, item.TxHash)
 	}
 }
