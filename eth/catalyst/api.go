@@ -1034,14 +1034,18 @@ func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
 func (api *ConsensusAPI) GetClientVersionV1(info engine.ClientVersionV1) []engine.ClientVersionV1 {
 	log.Trace("Engine API request received", "method", "GetClientVersionV1", "info", info.String())
 	commit := make([]byte, 4)
+	vsn := version.WithMeta
 	if vcs, ok := version.VCS(); ok {
 		commit = common.FromHex(vcs.Commit)[0:4]
+		if vcs.Tag != "" {
+			vsn = vcs.Tag
+		}
 	}
 	return []engine.ClientVersionV1{
 		{
 			Code:    engine.ClientCode,
 			Name:    engine.ClientName,
-			Version: version.WithMeta,
+			Version: vsn,
 			Commit:  hexutil.Encode(commit),
 		},
 	}

@@ -28,9 +28,6 @@ import (
 
 const ourPath = "github.com/ethereum/go-ethereum" // Path to our module
 
-// Family holds the textual version string for major.minor
-var Family = fmt.Sprintf("%d.%d", version.Major, version.Minor)
-
 // Semantic holds the textual version string for major.minor.patch.
 var Semantic = fmt.Sprintf("%d.%d.%d", version.Major, version.Minor, version.Patch)
 
@@ -114,9 +111,9 @@ func Info() (version, vcs string) {
 // information. If it is unable to determine which module is related to our
 // package it falls back to the hardcoded values in the params package.
 func versionInfo(info *debug.BuildInfo) string {
-	// If the main package is from our repo, prefix version with "geth".
+	// If the main package is from our repo, prefix version with "bera-geth".
 	if strings.HasPrefix(info.Path, ourPath) {
-		return fmt.Sprintf("geth %s", info.Main.Version)
+		return fmt.Sprintf("bera-geth %s", info.Main.Version)
 	}
 	// Not our main package, so explicitly print out the module path and
 	// version.
@@ -130,7 +127,7 @@ func versionInfo(info *debug.BuildInfo) string {
 		// If our module path wasn't imported, it's unclear which
 		// version of our code they are running. Fallback to hardcoded
 		// version.
-		return version + fmt.Sprintf("geth %s", WithMeta)
+		return version + fmt.Sprintf("bera-geth %s", WithMeta)
 	}
 	// Our package is a dependency for the main module. Return path and
 	// version data for both.

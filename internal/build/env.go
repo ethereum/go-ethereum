@@ -172,7 +172,12 @@ func LocalEnv() Environment {
 		}
 	}
 	if info, err := os.Stat(".git/objects"); err == nil && info.IsDir() && env.Tag == "" {
+		// Try to get tag at HEAD first
 		env.Tag = firstLine(RunGit("tag", "-l", "--points-at", "HEAD"))
+		// If no tag points at HEAD, get the most recent tag
+		if env.Tag == "" {
+			env.Tag = firstLine(RunGit("describe", "--tags", "--abbrev=0"))
+		}
 	}
 	return env
 }

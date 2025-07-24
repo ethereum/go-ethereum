@@ -59,9 +59,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	gethversion "github.com/ethereum/go-ethereum/version"
 )
 
 const (
@@ -359,13 +357,14 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 func makeExtraData(extra []byte) []byte {
 	if len(extra) == 0 {
-		// create default extradata
-		extra, _ = rlp.EncodeToBytes([]interface{}{
-			uint(gethversion.Major<<16 | gethversion.Minor<<8 | gethversion.Patch),
-			"geth",
-			runtime.Version(),
-			runtime.GOOS,
-		})
+		// create default extradata in ASCII format similar to reth
+		// Format: "bera-geth/vX.Y.Z/platform"
+		tag := version.WithMeta
+		if vcs, ok := version.VCS(); ok && vcs.Tag != "" {
+			tag = vcs.Tag
+		}
+		versionStr := fmt.Sprintf("bera-geth/v%s/%s", tag, runtime.GOOS)
+		extra = []byte(versionStr)
 	}
 	if uint64(len(extra)) > params.MaximumExtraDataSize {
 		log.Warn("Miner extra data exceed limit", "extra", hexutil.Bytes(extra), "limit", params.MaximumExtraDataSize)

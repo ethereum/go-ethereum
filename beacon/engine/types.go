@@ -362,8 +362,8 @@ type ExecutionPayloadBody struct {
 
 // Client identifiers to support ClientVersionV1.
 const (
-	ClientCode = "GE"
-	ClientName = "go-ethereum"
+	ClientCode = "BG"
+	ClientName = "bera-geth"
 )
 
 // ClientVersionV1 contains information which identifies a client implementation.

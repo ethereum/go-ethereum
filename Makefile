@@ -8,6 +8,11 @@ GOBIN = ./build/bin
 GO ?= latest
 GORUN = go run
 
+COMMIT = $(shell git log -1 --format='%H')
+BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
+TAG := $(shell git describe --tags --abbrev=0 --match "v*")
+BUILD_FLAGS := -git-commit=$(COMMIT) -git-branch=$(BRANCH) -git-tag=$(TAG)
+
 #? geth: Build geth.
 geth:
 	$(GORUN) build/ci.go install ./cmd/geth
