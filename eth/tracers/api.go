@@ -1053,10 +1053,11 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 // be tracer dependent.
 func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *core.Message, txctx *Context, vmctx vm.BlockContext, statedb vm.StateDB, config *TraceConfig, precompiles vm.PrecompiledContracts) (value interface{}, returnErr error) {
 	var (
-		tracer  *Tracer
-		err     error
-		timeout = defaultTraceTimeout
-		usedGas uint64
+		tracer    *Tracer
+		tracerMtx *sync.Mutex
+		err       error
+		timeout   = defaultTraceTimeout
+		usedGas   uint64
 	)
 	defer func() {
 		if r := recover(); r != nil {
@@ -1082,6 +1083,7 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 		}
 	}
 	tracingStateDB := state.NewHookedState(statedb, tracer.Hooks)
+	tracerMtx = &sync.Mutex{}
 	txCtx := core.NewEVMTxContext(message)
 	evm := vm.NewEVM(vmctx, tracingStateDB, api.backend.ChainConfig(), vm.Config{Tracer: tracer.Hooks, NoBaseFee: true}, api.backend.GetCustomPrecompiles(vmctx.BlockNumber.Int64()))
 	if precompiles != nil {
@@ -1099,7 +1101,9 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 	go func() {
 		<-deadlineCtx.Done()
 		if errors.Is(deadlineCtx.Err(), context.DeadlineExceeded) {
+			tracerMtx.Lock()
 			tracer.Stop(errors.New("execution timeout"))
+			tracerMtx.Unlock()
 			// Stop evm execution. Note cancellation is not necessarily immediate.
 			evm.Cancel()
 		}
@@ -1119,7 +1123,10 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 		}
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}
-	return tracer.GetResult()
+	tracerMtx.Lock()
+	res, err := tracer.GetResult()
+	tracerMtx.Unlock()
+	return res, err
 }
 
 // APIs return the collection of RPC services the tracer package offers.
