@@ -23,45 +23,21 @@ import (
 	"math/big"
 	"os"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/era/e2store"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/klauspost/compress/snappy"
 )
 
-// metadata contains the information about the era file that is written into the file.
-type metadata struct {
-	start      uint64 // start block number
-	count      uint64 // number of blocks in the era
-	components uint64 // number of properties
-	length     int64  // length of the file in bytes
-}
-
-// componentType represents the integer form of a specific type that can be present in the era file.
-type componentType int
-
-// TypeCompressedHeader, TypeCompressedBody, TypeCompressedReceipts, TypeTotalDifficulty, and TypeProof are the different types of components that can be present in the era file.
-const (
-	header componentType = iota
-	body
-	receipts
-	td
-	proof
-)
-
-type ReadAtSeekCloser interface {
-	io.ReaderAt
-	io.Seeker
-	io.Closer
-}
-
 // Era object represents an era file that contains blocks and their components.
 type Era struct {
-	f ReadAtSeekCloser
+	f era.ReadAtSeekCloser
 	s *e2store.Reader
 	m metadata // metadata for the Era file
 }
@@ -96,7 +72,7 @@ func (e *Era) Close() error {
 }
 
 // From returns an Era backed by f.
-func From(f ReadAtSeekCloser) (*Era, error) {
+func From(f era.ReadAtSeekCloser) (*Era, error) {
 	e := &Era{f: f, s: e2store.NewReader(f)}
 	if err := e.loadIndex(); err != nil {
 		f.Close()
@@ -166,7 +142,7 @@ func (e *Era) GetHeader(num uint64) (*types.Header, error) {
 		return nil, err
 	}
 
-	r, _, err := e.s.ReaderAt(TypeCompressedHeader, int64(off))
+	r, _, err := e.s.ReaderAt(era.TypeCompressedHeader, int64(off))
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +159,7 @@ func (e *Era) GetBody(num uint64) (*types.Body, error) {
 		return nil, err
 	}
 
-	r, _, err := e.s.ReaderAt(TypeCompressedBody, int64(off))
+	r, _, err := e.s.ReaderAt(era.TypeCompressedBody, int64(off))
 	if err != nil {
 		return nil, err
 	}
@@ -199,12 +175,13 @@ func (e *Era) getTD(blockNum uint64) (*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
-	r, _, err := e.s.ReaderAt(TypeTotalDifficulty, int64(off))
+	r, _, err := e.s.ReaderAt(era.TypeTotalDifficulty, int64(off))
 	if err != nil {
 		return nil, err
 	}
 	buf, _ := io.ReadAll(r)
-	td := new(big.Int).SetBytes(reverseOrder(buf))
+	slices.Reverse(buf)
+	td := new(big.Int).SetBytes(buf)
 	return td, nil
 }
 
@@ -214,7 +191,7 @@ func (e *Era) GetRawBodyFrameByNumber(blockNum uint64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	r, _, err := e.s.ReaderAt(TypeCompressedBody, int64(off))
+	r, _, err := e.s.ReaderAt(era.TypeCompressedBody, int64(off))
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +204,7 @@ func (e *Era) GetRawReceiptsFrameByNumber(blockNum uint64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	r, _, err := e.s.ReaderAt(TypeCompressedReceipts, int64(off))
+	r, _, err := e.s.ReaderAt(era.TypeCompressedSlimReceipts, int64(off))
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +217,7 @@ func (e *Era) GetRawProofFrameByNumber(blockNum uint64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	r, _, err := e.s.ReaderAt(TypeProof, int64(off))
+	r, _, err := e.s.ReaderAt(era.TypeProof, int64(off))
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +296,7 @@ func (e *Era) GetHeaders(first, count uint64) ([]*types.Header, error) {
 		if err != nil {
 			return nil, err
 		}
-		r, _, err := e.s.ReaderAt(TypeCompressedHeader, int64(off))
+		r, _, err := e.s.ReaderAt(era.TypeCompressedHeader, int64(off))
 		if err != nil {
 			return nil, err
 		}
@@ -348,7 +325,7 @@ func (e *Era) GetBodies(first, count uint64) ([]*types.Body, error) {
 		if err != nil {
 			return nil, err
 		}
-		r, _, err := e.s.ReaderAt(TypeCompressedBody, int64(off))
+		r, _, err := e.s.ReaderAt(era.TypeCompressedBody, int64(off))
 		if err != nil {
 			return nil, err
 		}
@@ -377,7 +354,7 @@ func (e *Era) GetReceipts(first, count uint64) ([]types.Receipts, error) {
 		if err != nil {
 			return nil, err
 		}
-		r, _, err := e.s.ReaderAt(TypeCompressedReceipts, int64(off))
+		r, _, err := e.s.ReaderAt(era.TypeCompressedSlimReceipts, int64(off))
 		if err != nil {
 			return nil, err
 		}
@@ -389,3 +366,23 @@ func (e *Era) GetReceipts(first, count uint64) ([]types.Receipts, error) {
 	}
 	return out, nil
 }
+
+// metadata contains the information about the era file that is written into the file.
+type metadata struct {
+	start      uint64 // start block number
+	count      uint64 // number of blocks in the era
+	components uint64 // number of properties
+	length     int64  // length of the file in bytes
+}
+
+// componentType represents the integer form of a specific type that can be present in the era file.
+type componentType int
+
+// TypeCompressedHeader, TypeCompressedBody, TypeCompressedReceipts, TypeTotalDifficulty, and TypeProof are the different types of components that can be present in the era file.
+const (
+	header componentType = iota
+	body
+	receipts
+	td
+	proof
+)

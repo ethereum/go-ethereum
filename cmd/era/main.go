@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/era"
+	"github.com/ethereum/go-ethereum/internal/era/onedb"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/params"
@@ -53,7 +54,7 @@ var (
 	eraSizeFlag = &cli.IntFlag{
 		Name:  "size",
 		Usage: "number of blocks per era",
-		Value: era.MaxEra1Size,
+		Value: era.MaxSize,
 	}
 	txsFlag = &cli.BoolFlag{
 		Name:  "txs",
@@ -164,19 +165,19 @@ func info(ctx *cli.Context) error {
 }
 
 // open opens an era1 file at a certain epoch.
-func open(ctx *cli.Context, epoch uint64) (*era.Era, error) {
+func open(ctx *cli.Context, epoch uint64) (*onedb.Era, error) {
 	var (
 		dir     = ctx.String(dirFlag.Name)
 		network = ctx.String(networkFlag.Name)
 	)
-	entries, err := era.ReadDir(dir, network)
+	entries, err := onedb.ReadDir(dir, network)
 	if err != nil {
 		return nil, fmt.Errorf("error reading era dir: %w", err)
 	}
 	if epoch >= uint64(len(entries)) {
 		return nil, fmt.Errorf("epoch out-of-bounds: last %d, want %d", len(entries)-1, epoch)
 	}
-	return era.Open(filepath.Join(dir, entries[epoch]))
+	return onedb.Open(filepath.Join(dir, entries[epoch]))
 }
 
 // verify checks each era1 file in a directory to ensure it is well-formed and
@@ -198,7 +199,7 @@ func verify(ctx *cli.Context) error {
 		reported = time.Now()
 	)
 
-	entries, err := era.ReadDir(dir, network)
+	entries, err := onedb.ReadDir(dir, network)
 	if err != nil {
 		return fmt.Errorf("error reading %s: %w", dir, err)
 	}
@@ -212,7 +213,7 @@ func verify(ctx *cli.Context) error {
 		// Wrap in function so defers don't stack.
 		err := func() error {
 			name := entries[i]
-			e, err := era.Open(filepath.Join(dir, name))
+			e, err := onedb.Open(filepath.Join(dir, name))
 			if err != nil {
 				return fmt.Errorf("error opening era1 file %s: %w", name, err)
 			}
@@ -243,7 +244,7 @@ func verify(ctx *cli.Context) error {
 }
 
 // checkAccumulator verifies the accumulator matches the data in the Era.
-func checkAccumulator(e *era.Era) error {
+func checkAccumulator(e *onedb.Era) error {
 	var (
 		err    error
 		want   common.Hash
@@ -257,7 +258,7 @@ func checkAccumulator(e *era.Era) error {
 	if td, err = e.InitialTD(); err != nil {
 		return fmt.Errorf("error reading total difficulty: %w", err)
 	}
-	it, err := era.NewIterator(e)
+	it, err := onedb.NewIterator(e)
 	if err != nil {
 		return fmt.Errorf("error making era iterator: %w", err)
 	}

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package era
+package onedb
 
 import (
 	"bytes"
@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/era/e2store"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/golang/snappy"
@@ -96,7 +97,10 @@ func NewBuilder(w io.Writer) *Builder {
 
 // Add writes a compressed block entry and compressed receipts entry to the
 // underlying e2store file.
-func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int) error {
+func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, proof era.Proof) error {
+	if proof != nil {
+		return fmt.Errorf("proof not allowed in era1 format")
+	}
 	eh, err := rlp.EncodeToBytes(block.Header())
 	if err != nil {
 		return err
@@ -117,7 +121,7 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int) 
 func (b *Builder) AddRLP(header, body, receipts []byte, number uint64, hash common.Hash, td, difficulty *big.Int) error {
 	// Write Era1 version entry before first block.
 	if b.startNum == nil {
-		n, err := b.w.Write(TypeVersion, nil)
+		n, err := b.w.Write(era.TypeVersion, nil)
 		if err != nil {
 			return err
 		}
@@ -126,8 +130,8 @@ func (b *Builder) AddRLP(header, body, receipts []byte, number uint64, hash comm
 		b.startTd = new(big.Int).Sub(td, difficulty)
 		b.written += n
 	}
-	if len(b.indexes) >= MaxEra1Size {
-		return fmt.Errorf("exceeds maximum batch size of %d", MaxEra1Size)
+	if len(b.indexes) >= era.MaxSize {
+		return fmt.Errorf("exceeds maximum batch size of %d", era.MaxSize)
 	}
 
 	b.indexes = append(b.indexes, uint64(b.written))
@@ -135,19 +139,19 @@ func (b *Builder) AddRLP(header, body, receipts []byte, number uint64, hash comm
 	b.tds = append(b.tds, td)
 
 	// Write block data.
-	if err := b.snappyWrite(TypeCompressedHeader, header); err != nil {
+	if err := b.snappyWrite(era.TypeCompressedHeader, header); err != nil {
 		return err
 	}
-	if err := b.snappyWrite(TypeCompressedBody, body); err != nil {
+	if err := b.snappyWrite(era.TypeCompressedBody, body); err != nil {
 		return err
 	}
-	if err := b.snappyWrite(TypeCompressedReceipts, receipts); err != nil {
+	if err := b.snappyWrite(era.TypeCompressedReceipts, receipts); err != nil {
 		return err
 	}
 
 	// Also write total difficulty, but don't snappy encode.
-	btd := bigToBytes32(td)
-	n, err := b.w.Write(TypeTotalDifficulty, btd[:])
+	btd := era.BigToBytes32(td)
+	n, err := b.w.Write(era.TypeTotalDifficulty, btd[:])
 	b.written += n
 	if err != nil {
 		return err
@@ -163,11 +167,11 @@ func (b *Builder) Finalize() (common.Hash, error) {
 		return common.Hash{}, errors.New("finalize called on empty builder")
 	}
 	// Compute accumulator root and write entry.
-	root, err := ComputeAccumulator(b.hashes, b.tds)
+	root, err := era.ComputeAccumulator(b.hashes, b.tds)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("error calculating accumulator root: %w", err)
 	}
-	n, err := b.w.Write(TypeAccumulator, root[:])
+	n, err := b.w.Write(era.TypeAccumulator, root[:])
 	b.written += n
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("error writing accumulator: %w", err)
@@ -196,7 +200,7 @@ func (b *Builder) Finalize() (common.Hash, error) {
 	binary.LittleEndian.PutUint64(index[8+count*8:], uint64(count))
 
 	// Finally, write the block index entry.
-	if _, err := b.w.Write(TypeBlockIndex, index); err != nil {
+	if _, err := b.w.Write(era.TypeBlockIndex, index); err != nil {
 		return common.Hash{}, fmt.Errorf("unable to write block index: %w", err)
 	}
 
