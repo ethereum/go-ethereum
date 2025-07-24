@@ -61,8 +61,12 @@ var (
 	// maxDiffLayers is the maximum diff layers allowed in the layer tree.
 	maxDiffLayers = 128
 
-	// historyCacheSize is the maximum size of history cache.
-	historyCacheSize = 4096
+	// historyIndexCacheSize is the maximum count of history index cache.
+	// Each indexBlockDesc is 14bytes, assume each account has 10 descriptors,
+	// then the total memory usage is ~54MB.
+	historyIndexCacheSize = 409600
+	// historyBlockCacheSize is the maximum count of history block cache.
+	historyBlockCacheSize = 4096
 )
 
 // layer is the interface implemented by all state layers which includes some
@@ -246,7 +250,7 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 		config:   config,
 		diskdb:   diskdb,
 		hasher:   merkleNodeHasher,
-		cacher:   newHistoryCacher(historyCacheSize),
+		cacher:   newHistoryCacher(historyIndexCacheSize, historyBlockCacheSize),
 	}
 	// Establish a dedicated database namespace tailored for verkle-specific
 	// data, ensuring the isolation of both verkle and merkle tree data. It's
