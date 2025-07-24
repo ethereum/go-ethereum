@@ -17,6 +17,7 @@
 package forks
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -46,5 +47,31 @@ func TestForkName(t *testing.T) {
 	}
 	if f != Cancun {
 		t.Fatal("wrong fork found by name cancun")
+	}
+}
+
+func TestForkDependencyOrder(t *testing.T) {
+	tests := []struct {
+		list, result []Fork
+	}{
+		{
+			list:   []Fork{},
+			result: []Fork{},
+		},
+		{
+			list:   []Fork{BPO2, Homestead, Cancun, London, Paris},
+			result: []Fork{Homestead, London, Paris, Cancun, BPO2},
+		},
+		{
+			list:   []Fork{BPO3, Osaka, Cancun, Prague, BPO1, BPO2},
+			result: []Fork{Cancun, Prague, Osaka, BPO1, BPO2, BPO3},
+		},
+	}
+
+	for _, test := range tests {
+		res := DependencyOrder(test.list)
+		if !slices.Equal(res, test.result) {
+			t.Errorf("DependencyOrder(%v) -> %v\n  want: %v", test.list, res, test.result)
+		}
 	}
 }

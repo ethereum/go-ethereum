@@ -75,6 +75,43 @@ func (f *Fork) MarshalText() ([]byte, error) {
 	return []byte(f.configName), nil
 }
 
+// DependencyOrder computes an ordering of the given forks, according to their dependencies.
+// Note the resulting ordering may not be unique!
+func DependencyOrder(list []Fork) []Fork {
+	var (
+		inList   = make(map[Fork]bool, len(list))
+		visiting = make(map[Fork]bool, len(list))
+		mark     = make(map[Fork]bool, len(list))
+		result   = make([]Fork, 0, len(list))
+	)
+	for _, f := range list {
+		inList[f] = true
+	}
+
+	var visit func(Fork)
+	visit = func(f Fork) {
+		if mark[f] {
+			return
+		}
+		if visiting[f] {
+			// This can't happen because we check for cycles at definition time.
+			panic("fork dependency cycle")
+		}
+		visiting[f] = true
+		for _, dep := range f.directDeps {
+			visit(dep)
+		}
+		mark[f] = true
+		if inList[f] {
+			result = append(result, f)
+		}
+	}
+	for _, l := range list {
+		visit(l)
+	}
+	return result
+}
+
 type forkProperties struct {
 	name       string
 	configName string
