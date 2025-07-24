@@ -55,13 +55,16 @@ var BlobSchedule = Define(T[map[forks.Fork]BlobConfig]{
 // schedule configuration.
 func validateBlobSchedule(schedule map[forks.Fork]BlobConfig, cfg *Config2) error {
 	for f := range forks.All() {
-		if cfg.Scheduled(f) && f.Requires(forks.Cancun) {
+		if _, defined := schedule[f]; f.BlockBased() && defined {
+			return fmt.Errorf("contains fork %q with block-number based scheduling", f.ConfigName())
+		}
+		if cfg.Scheduled(f) && f.After(forks.Cancun) {
 			bcfg, defined := schedule[f]
 			if !defined {
-				return fmt.Errorf("invalid chain configuration: missing entry for fork %q in blobSchedule", f)
+				return fmt.Errorf("missing entry for fork %q", f.ConfigName())
 			} else {
 				if err := bcfg.validate(); err != nil {
-					return fmt.Errorf("invalid chain configuration in blobSchedule for fork %q: %v", f, err)
+					return fmt.Errorf("invalid blob config for fork %q: %v", f.ConfigName(), err)
 				}
 			}
 		}

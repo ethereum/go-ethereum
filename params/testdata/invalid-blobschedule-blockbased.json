@@ -1,0 +1,24 @@
+{
+	"config": {
+		"homesteadBlock": 0,
+		"eip150Block": 0,
+		"eip155Block": 0,
+		"byzantiumBlock": 0,
+		"constantinopleBlock": 0,
+		"petersburgBlock": 0,
+		"istanbulBlock": 0,
+		"berlinBlock": 0,
+		"londonBlock": 0,
+		"mergeNetsplitBlock": 0,
+		"shanghaiTime": 900,
+		"chainId": 99,
+		"blobSchedule": {
+			"berlin": {
+				"target": 8,
+				"max": 5,
+				"baseFeeUpdateFraction": 3338477
+			}
+		}
+	},
+	"error": "invalid blobSchedule: contains fork \"berlin\" with block-number based scheduling"
+}
