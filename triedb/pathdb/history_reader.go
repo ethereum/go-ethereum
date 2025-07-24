@@ -32,11 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-var (
-	historyIndexCache = lru.NewCache[string, []byte](10000)
-	historyBlockCache = lru.NewCache[string, []byte](10000)
-)
-
 // stateIdent represents the identifier of a state element, which can be
 // either an account or a storage slot.
 type stateIdent struct {
@@ -131,8 +126,8 @@ type indexReaderWithLimitTag struct {
 
 // newIndexReaderWithLimitTag constructs a index reader with indexing position.
 // Add timings parameter to pass through
-func newIndexReaderWithLimitTag(db ethdb.KeyValueReader, state stateIdent, limit uint64, timings *readTimings) (*indexReaderWithLimitTag, error) {
-	r, err := newIndexReaderWithTimings(db, state, timings)
+func newIndexReaderWithLimitTag(db ethdb.KeyValueReader, state stateIdent, limit uint64, timings *readTimings, cacher *historyCacher) (*indexReaderWithLimitTag, error) {
+	r, err := newIndexReaderWithTimings(db, state, timings, cacher)
 	if err != nil {
 		return nil, err
 	}
@@ -190,19 +185,35 @@ func (r *indexReaderWithLimitTag) readGreaterThan(id uint64, lastID uint64) (uin
 	return r.reader.readGreaterThan(id)
 }
 
+// historyCacher is responsible for caching history objects in memory to speed up access.
+type historyCacher struct {
+	index *lru.Cache[string, []byte]
+	block *lru.Cache[string, []byte]
+}
+
+// newHistoryCacher creates a new historyCacher instance.
+func newHistoryCacher(size int) *historyCacher {
+	return &historyCacher{
+		index: lru.NewCache[string, []byte](size),
+		block: lru.NewCache[string, []byte](size),
+	}
+}
+
 // historyReader is the structure to access historic state data.
 type historyReader struct {
 	disk    ethdb.KeyValueReader
 	freezer ethdb.AncientReader
 	readers map[string]*indexReaderWithLimitTag
+	cacher  *historyCacher
 }
 
-// newHistoryReader constructs the history reader with the supplied db.
-func newHistoryReader(disk ethdb.KeyValueReader, freezer ethdb.AncientReader) *historyReader {
+// newHistoryReader constructs the history reader with the supplied db and cacher.
+func newHistoryReader(disk ethdb.KeyValueReader, freezer ethdb.AncientReader, cacher *historyCacher) *historyReader {
 	return &historyReader{
 		disk:    disk,
 		freezer: freezer,
 		readers: make(map[string]*indexReaderWithLimitTag),
+		cacher:  cacher,
 	}
 }
 
@@ -386,7 +397,7 @@ func (r *historyReader) read(state stateIdentQuery, stateID uint64, lastID uint6
 	// state retrieval
 	ir, ok := r.readers[state.String()]
 	if !ok {
-		ir, err = newIndexReaderWithLimitTag(r.disk, state.stateIdent, metadata.Last, timings)
+		ir, err = newIndexReaderWithLimitTag(r.disk, state.stateIdent, metadata.Last, timings, r.cacher)
 		if err != nil {
 			return nil, err
 		}

@@ -133,7 +133,7 @@ func testHistoryReader(t *testing.T, historyLimit uint64) {
 	var (
 		roots = env.roots
 		dRoot = env.db.tree.bottom().rootHash()
-		hr    = newHistoryReader(env.db.diskdb, env.db.freezer)
+		hr    = newHistoryReader(env.db.diskdb, env.db.freezer, env.db.cacher)
 	)
 	for _, root := range roots {
 		if root == dRoot {
