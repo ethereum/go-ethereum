@@ -80,11 +80,11 @@ type indexReader struct {
 }
 
 // loadIndexData loads the index data associated with the specified state.
-func loadIndexData(db ethdb.KeyValueReader, state stateIdent, timings *readTimings, cacheRead bool, cacher *historyCacher) ([]*indexBlockDesc, error) {
+func loadIndexData(db ethdb.KeyValueReader, state stateIdent, timings *readTimings, cacher *historyCacher) ([]*indexBlockDesc, error) {
 	start := time.Now()
 	key := state.String()
 	var blob []byte
-	if cacheRead && cacher != nil && cacher.index.Contains(key) {
+	if cacher != nil && cacher.index.Contains(key) {
 		blob, _ = cacher.index.Get(key)
 	} else {
 		if state.account {
@@ -113,7 +113,7 @@ func newIndexReader(db ethdb.KeyValueReader, state stateIdent, cacher *historyCa
 
 // Helper to allow passing timings
 func newIndexReaderWithTimings(db ethdb.KeyValueReader, state stateIdent, timings *readTimings, cacher *historyCacher) (*indexReader, error) {
-	descList, err := loadIndexData(db, state, timings, true, cacher)
+	descList, err := loadIndexData(db, state, timings, cacher)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +138,7 @@ func (r *indexReader) refresh() error {
 			delete(r.readers, last.id)
 		}
 	}
-	descList, err := loadIndexData(r.db, r.state, r.timings, false, r.cacher)
+	descList, err := loadIndexData(r.db, r.state, r.timings, nil)
 	if err != nil {
 		return err
 	}
@@ -211,10 +211,19 @@ type indexWriter struct {
 // newIndexWriter constructs the index writer for the specified state.
 func newIndexWriter(db ethdb.KeyValueReader, state stateIdent, cacher *historyCacher) (*indexWriter, error) {
 	var blob []byte
-	if state.account {
-		blob = rawdb.ReadAccountHistoryIndex(db, state.addressHash)
+
+	key := state.String()
+	if cacher != nil && cacher.index.Contains(key) {
+		blob, _ = cacher.index.Get(key)
 	} else {
-		blob = rawdb.ReadStorageHistoryIndex(db, state.addressHash, state.storageHash)
+		if state.account {
+			blob = rawdb.ReadAccountHistoryIndex(db, state.addressHash)
+		} else {
+			blob = rawdb.ReadStorageHistoryIndex(db, state.addressHash, state.storageHash)
+		}
+		if cacher != nil {
+			cacher.index.Add(key, blob)
+		}
 	}
 	if len(blob) == 0 {
 		desc := newIndexBlockDesc(0)
@@ -235,10 +244,18 @@ func newIndexWriter(db ethdb.KeyValueReader, state stateIdent, cacher *historyCa
 		indexBlock []byte
 		lastDesc   = descList[len(descList)-1]
 	)
-	if state.account {
-		indexBlock = rawdb.ReadAccountHistoryIndexBlock(db, state.addressHash, lastDesc.id)
+	key = fmt.Sprintf("%s:%d", state.String(), lastDesc.id)
+	if cacher != nil && cacher.block.Contains(key) {
+		indexBlock, _ = cacher.block.Get(key)
 	} else {
-		indexBlock = rawdb.ReadStorageHistoryIndexBlock(db, state.addressHash, state.storageHash, lastDesc.id)
+		if state.account {
+			indexBlock = rawdb.ReadAccountHistoryIndexBlock(db, state.addressHash, lastDesc.id)
+		} else {
+			indexBlock = rawdb.ReadStorageHistoryIndexBlock(db, state.addressHash, state.storageHash, lastDesc.id)
+		}
+		if cacher != nil {
+			cacher.block.Add(key, indexBlock)
+		}
 	}
 	bw, err := newBlockWriter(indexBlock, lastDesc)
 	if err != nil {
@@ -352,10 +369,18 @@ type indexDeleter struct {
 // newIndexDeleter constructs the index deleter for the specified state.
 func newIndexDeleter(db ethdb.KeyValueReader, state stateIdent, cacher *historyCacher) (*indexDeleter, error) {
 	var blob []byte
-	if state.account {
-		blob = rawdb.ReadAccountHistoryIndex(db, state.addressHash)
+	key := state.String()
+	if cacher != nil && cacher.index.Contains(key) {
+		blob, _ = cacher.index.Get(key)
 	} else {
-		blob = rawdb.ReadStorageHistoryIndex(db, state.addressHash, state.storageHash)
+		if state.account {
+			blob = rawdb.ReadAccountHistoryIndex(db, state.addressHash)
+		} else {
+			blob = rawdb.ReadStorageHistoryIndex(db, state.addressHash, state.storageHash)
+		}
+		if cacher != nil {
+			cacher.index.Add(key, blob)
+		}
 	}
 	if len(blob) == 0 {
 		// TODO(rjl493456442) we can probably return an error here,
@@ -378,10 +403,18 @@ func newIndexDeleter(db ethdb.KeyValueReader, state stateIdent, cacher *historyC
 		indexBlock []byte
 		lastDesc   = descList[len(descList)-1]
 	)
-	if state.account {
-		indexBlock = rawdb.ReadAccountHistoryIndexBlock(db, state.addressHash, lastDesc.id)
+	key = fmt.Sprintf("%s:%d", state.String(), lastDesc.id)
+	if cacher != nil && cacher.block.Contains(key) {
+		indexBlock, _ = cacher.block.Get(key)
 	} else {
-		indexBlock = rawdb.ReadStorageHistoryIndexBlock(db, state.addressHash, state.storageHash, lastDesc.id)
+		if state.account {
+			indexBlock = rawdb.ReadAccountHistoryIndexBlock(db, state.addressHash, lastDesc.id)
+		} else {
+			indexBlock = rawdb.ReadStorageHistoryIndexBlock(db, state.addressHash, state.storageHash, lastDesc.id)
+		}
+		if cacher != nil {
+			cacher.block.Add(key, indexBlock)
+		}
 	}
 	bw, err := newBlockWriter(indexBlock, lastDesc)
 	if err != nil {
