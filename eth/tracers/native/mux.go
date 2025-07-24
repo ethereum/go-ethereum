@@ -57,7 +57,7 @@ func newMuxTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params
 
 	t := &muxTracer{names: names, tracers: objects}
 	return &tracers.Tracer{
-		Hooks: &tracing.Hooks{
+		Hooks: tracing.Hooks{
 			OnTxStart:       t.OnTxStart,
 			OnTxEnd:         t.OnTxEnd,
 			OnEnter:         t.OnEnter,

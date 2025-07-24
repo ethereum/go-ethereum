@@ -167,11 +167,11 @@ func Transition(ctx *cli.Context) error {
 			EnableReturnData: ctx.Bool(TraceEnableReturnDataFlag.Name),
 		}
 		if ctx.Bool(TraceEnableCallFramesFlag.Name) {
-			vmConfig.Tracer = newFileWriter(baseDir, func(out io.Writer) *tracing.Hooks {
+			vmConfig.Tracer = newFileWriter(baseDir, func(out io.Writer) tracing.Hooks {
 				return logger.NewJSONLoggerWithCallFrames(logConfig, out)
 			})
 		} else {
-			vmConfig.Tracer = newFileWriter(baseDir, func(out io.Writer) *tracing.Hooks {
+			vmConfig.Tracer = newFileWriter(baseDir, func(out io.Writer) tracing.Hooks {
 				return logger.NewJSONLogger(logConfig, out)
 			})
 		}

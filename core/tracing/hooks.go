@@ -217,6 +217,27 @@ type Hooks struct {
 	OnBlockHashRead BlockHashReadHook
 }
 
+// HooksVM returns if any of the VM events are being hooked
+func (h *Hooks) HooksVM() bool {
+	return h.OnTxStart != nil ||
+		h.OnTxEnd != nil ||
+		h.OnEnter != nil ||
+		h.OnExit != nil ||
+		h.OnOpcode != nil ||
+		h.OnFault != nil ||
+		h.OnGasChange != nil
+}
+
+// HooksState returns if any of the state events are being hooked
+func (h *Hooks) HooksState() bool {
+	return h.OnBalanceChange != nil ||
+		h.OnNonceChange != nil ||
+		h.OnNonceChangeV2 != nil ||
+		h.OnCodeChange != nil ||
+		h.OnStorageChange != nil ||
+		h.OnLog != nil
+}
+
 // BalanceChangeReason is used to indicate the reason for a balance change, useful
 // for tracing and reporting.
 type BalanceChangeReason byte
@@ -339,6 +360,9 @@ const (
 	// GasChangeTxDataFloor is the amount of extra gas the transaction has to pay to reach the minimum gas requirement for the
 	// transaction data. This change will always be a negative change.
 	GasChangeTxDataFloor GasChangeReason = 19
+	// GasChangeCallOpCodeDynamic is the amount of dynamic gas that will be charged for an opcode executed by the EVM.
+	// It will be emitted after the `OnOpcode` callback. So the cost should be attributed to the last instance of `OnOpcode`.
+	GasChangeCallOpCodeDynamic GasChangeReason = 20
 
 	// GasChangeIgnored is a special value that can be used to indicate that the gas change should be ignored as
 	// it will be "manually" tracked by a direct emit of the gas change event.

@@ -17,8 +17,11 @@
 package vm
 
 import (
+	"reflect"
 	"sync"
+	"unsafe"
 
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
@@ -49,79 +52,411 @@ func (st *Stack) Data() []uint256.Int {
 	return st.data
 }
 
-func (st *Stack) push(d *uint256.Int) {
-	// NOTE push limit (1024) is checked in baseCheck
-	st.data = append(st.data, *d)
-}
-
-func (st *Stack) pop() (ret uint256.Int) {
-	ret = st.data[len(st.data)-1]
-	st.data = st.data[:len(st.data)-1]
-	return
-}
-
 func (st *Stack) len() int {
 	return len(st.data)
 }
 
-func (st *Stack) swap1() {
-	st.data[st.len()-2], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-2]
-}
-func (st *Stack) swap2() {
-	st.data[st.len()-3], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-3]
-}
-func (st *Stack) swap3() {
-	st.data[st.len()-4], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-4]
-}
-func (st *Stack) swap4() {
-	st.data[st.len()-5], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-5]
-}
-func (st *Stack) swap5() {
-	st.data[st.len()-6], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-6]
-}
-func (st *Stack) swap6() {
-	st.data[st.len()-7], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-7]
-}
-func (st *Stack) swap7() {
-	st.data[st.len()-8], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-8]
-}
-func (st *Stack) swap8() {
-	st.data[st.len()-9], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-9]
-}
-func (st *Stack) swap9() {
-	st.data[st.len()-10], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-10]
-}
-func (st *Stack) swap10() {
-	st.data[st.len()-11], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-11]
-}
-func (st *Stack) swap11() {
-	st.data[st.len()-12], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-12]
-}
-func (st *Stack) swap12() {
-	st.data[st.len()-13], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-13]
-}
-func (st *Stack) swap13() {
-	st.data[st.len()-14], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-14]
-}
-func (st *Stack) swap14() {
-	st.data[st.len()-15], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-15]
-}
-func (st *Stack) swap15() {
-	st.data[st.len()-16], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-16]
-}
-func (st *Stack) swap16() {
-	st.data[st.len()-17], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-17]
+func (st *Stack) growUnsafeByN(n uint) {
+	sh := (*reflect.SliceHeader)(unsafe.Pointer(&st.data))
+	sh.Len += int(n)
 }
 
-func (st *Stack) dup(n int) {
-	st.push(&st.data[st.len()-n])
+func (st *Stack) push(d *uint256.Int) error {
+	if uint64(st.len()) >= params.StackLimit {
+		return ErrStackOverflow{st.len(), int(params.StackLimit)}
+	}
+	st.data = append(st.data, *d)
+	return nil
 }
 
-func (st *Stack) peek() *uint256.Int {
-	return &st.data[st.len()-1]
+func (st *Stack) pop(peekLastN uint) (*uint256.Int, error) {
+	const requiredDepth = 1
+	depth := st.len()
+	if depth < requiredDepth {
+		return nil, ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	stack := st.data
+	st.data = st.data[:depth-requiredDepth]
+	st.growUnsafeByN(peekLastN)
+	return &stack[depth-1], nil
 }
 
-// Back returns the n'th item in stack
-func (st *Stack) Back(n int) *uint256.Int {
-	return &st.data[st.len()-n-1]
+func (st *Stack) pop2(peekLastN uint) (*uint256.Int, *uint256.Int, error) {
+	const requiredDepth = 2
+	depth := st.len()
+	if depth < requiredDepth {
+		return nil, nil, ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	stack := st.data
+	st.data = st.data[:depth-requiredDepth]
+	st.growUnsafeByN(peekLastN)
+	return &stack[depth-1], &stack[depth-2], nil
+}
+
+func (st *Stack) pop3(peekLastN uint) (*uint256.Int, *uint256.Int, *uint256.Int, error) {
+	const requiredDepth = 3
+	depth := st.len()
+	if depth < requiredDepth {
+		return nil, nil, nil, ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	stack := st.data
+	st.data = st.data[:depth-requiredDepth]
+	st.growUnsafeByN(peekLastN)
+	return &stack[depth-1], &stack[depth-2], &stack[depth-3], nil
+}
+
+func (st *Stack) pop4(peekLastN uint) (*uint256.Int, *uint256.Int, *uint256.Int, *uint256.Int, error) {
+	const requiredDepth = 4
+	depth := st.len()
+	if depth < requiredDepth {
+		return nil, nil, nil, nil, ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	stack := st.data
+	st.data = st.data[:depth-requiredDepth]
+	st.growUnsafeByN(peekLastN)
+	return &stack[depth-1], &stack[depth-2], &stack[depth-3], &stack[depth-4], nil
+}
+
+func (st *Stack) pop6(peekLastN uint) (*uint256.Int, *uint256.Int, *uint256.Int, *uint256.Int, *uint256.Int, *uint256.Int, error) {
+	const requiredDepth = 6
+	depth := st.len()
+	if depth < requiredDepth {
+		return nil, nil, nil, nil, nil, nil, ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	stack := st.data
+	st.data = st.data[:depth-requiredDepth]
+	st.growUnsafeByN(peekLastN)
+	return &stack[depth-1], &stack[depth-2], &stack[depth-3], &stack[depth-4], &stack[depth-5], &stack[depth-6], nil
+}
+
+func (st *Stack) pop7(peekLastN uint) (*uint256.Int, *uint256.Int, *uint256.Int, *uint256.Int, *uint256.Int, *uint256.Int, *uint256.Int, error) {
+	const requiredDepth = 7
+	depth := st.len()
+	if depth < requiredDepth {
+		return nil, nil, nil, nil, nil, nil, nil, ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	stack := st.data
+	st.data = st.data[:depth-requiredDepth]
+	st.growUnsafeByN(peekLastN)
+	return &stack[depth-1], &stack[depth-2], &stack[depth-3], &stack[depth-4], &stack[depth-5], &stack[depth-6], &stack[depth-7], nil
+}
+
+func (st *Stack) swap1() error {
+	const requiredDepth = 2
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	topOfStack := st.data[depth-requiredDepth:]
+	topOfStack[0], topOfStack[len(topOfStack)-1] = topOfStack[len(topOfStack)-1], topOfStack[0]
+	return nil
+}
+
+func (st *Stack) swap2() error {
+	const requiredDepth = 3
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	topOfStack := st.data[depth-requiredDepth:]
+	topOfStack[0], topOfStack[len(topOfStack)-1] = topOfStack[len(topOfStack)-1], topOfStack[0]
+	return nil
+}
+
+func (st *Stack) swap3() error {
+	const requiredDepth = 4
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	topOfStack := st.data[depth-requiredDepth:]
+	topOfStack[0], topOfStack[len(topOfStack)-1] = topOfStack[len(topOfStack)-1], topOfStack[0]
+	return nil
+}
+
+func (st *Stack) swap4() error {
+	const requiredDepth = 5
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	topOfStack := st.data[depth-requiredDepth:]
+	topOfStack[0], topOfStack[len(topOfStack)-1] = topOfStack[len(topOfStack)-1], topOfStack[0]
+	return nil
+}
+
+func (st *Stack) swap5() error {
+	const requiredDepth = 6
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	topOfStack := st.data[depth-requiredDepth:]
+	topOfStack[0], topOfStack[len(topOfStack)-1] = topOfStack[len(topOfStack)-1], topOfStack[0]
+	return nil
+}
+
+func (st *Stack) swap6() error {
+	const requiredDepth = 7
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	topOfStack := st.data[depth-requiredDepth:]
+	topOfStack[0], topOfStack[len(topOfStack)-1] = topOfStack[len(topOfStack)-1], topOfStack[0]
+	return nil
+}
+
+func (st *Stack) swap7() error {
+	const requiredDepth = 8
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	topOfStack := st.data[depth-requiredDepth:]
+	topOfStack[0], topOfStack[len(topOfStack)-1] = topOfStack[len(topOfStack)-1], topOfStack[0]
+	return nil
+}
+
+func (st *Stack) swap8() error {
+	const requiredDepth = 9
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	topOfStack := st.data[depth-requiredDepth:]
+	topOfStack[0], topOfStack[len(topOfStack)-1] = topOfStack[len(topOfStack)-1], topOfStack[0]
+	return nil
+}
+
+func (st *Stack) swap9() error {
+	const requiredDepth = 10
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	topOfStack := st.data[depth-requiredDepth:]
+	topOfStack[0], topOfStack[len(topOfStack)-1] = topOfStack[len(topOfStack)-1], topOfStack[0]
+	return nil
+}
+
+func (st *Stack) swap10() error {
+	const requiredDepth = 11
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	topOfStack := st.data[depth-requiredDepth:]
+	topOfStack[0], topOfStack[len(topOfStack)-1] = topOfStack[len(topOfStack)-1], topOfStack[0]
+	return nil
+}
+
+func (st *Stack) swap11() error {
+	const requiredDepth = 12
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	topOfStack := st.data[depth-requiredDepth:]
+	topOfStack[0], topOfStack[len(topOfStack)-1] = topOfStack[len(topOfStack)-1], topOfStack[0]
+	return nil
+}
+
+func (st *Stack) swap12() error {
+	const requiredDepth = 13
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	topOfStack := st.data[depth-requiredDepth:]
+	topOfStack[0], topOfStack[len(topOfStack)-1] = topOfStack[len(topOfStack)-1], topOfStack[0]
+	return nil
+}
+
+func (st *Stack) swap13() error {
+	const requiredDepth = 14
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	topOfStack := st.data[depth-requiredDepth:]
+	topOfStack[0], topOfStack[len(topOfStack)-1] = topOfStack[len(topOfStack)-1], topOfStack[0]
+	return nil
+}
+
+func (st *Stack) swap14() error {
+	const requiredDepth = 15
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	topOfStack := st.data[depth-requiredDepth:]
+	topOfStack[0], topOfStack[len(topOfStack)-1] = topOfStack[len(topOfStack)-1], topOfStack[0]
+	return nil
+}
+
+func (st *Stack) swap15() error {
+	const requiredDepth = 16
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	topOfStack := st.data[depth-requiredDepth:]
+	topOfStack[0], topOfStack[len(topOfStack)-1] = topOfStack[len(topOfStack)-1], topOfStack[0]
+	return nil
+}
+
+func (st *Stack) swap16() error {
+	const requiredDepth = 17
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	topOfStack := st.data[depth-requiredDepth:]
+	topOfStack[0], topOfStack[len(topOfStack)-1] = topOfStack[len(topOfStack)-1], topOfStack[0]
+	return nil
+}
+
+func (st *Stack) dup1() error {
+	const requiredDepth = 1
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	return st.push(&st.data[depth-requiredDepth])
+}
+
+func (st *Stack) dup2() error {
+	const requiredDepth = 2
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	return st.push(&st.data[depth-requiredDepth])
+}
+
+func (st *Stack) dup3() error {
+	const requiredDepth = 3
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	return st.push(&st.data[depth-requiredDepth])
+}
+
+func (st *Stack) dup4() error {
+	const requiredDepth = 4
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	return st.push(&st.data[depth-requiredDepth])
+}
+
+func (st *Stack) dup5() error {
+	const requiredDepth = 5
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	return st.push(&st.data[depth-requiredDepth])
+}
+
+func (st *Stack) dup6() error {
+	const requiredDepth = 6
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	return st.push(&st.data[depth-requiredDepth])
+}
+
+func (st *Stack) dup7() error {
+	const requiredDepth = 7
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	return st.push(&st.data[depth-requiredDepth])
+}
+
+func (st *Stack) dup8() error {
+	const requiredDepth = 8
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	return st.push(&st.data[depth-requiredDepth])
+}
+
+func (st *Stack) dup9() error {
+	const requiredDepth = 9
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	return st.push(&st.data[depth-requiredDepth])
+}
+
+func (st *Stack) dup10() error {
+	const requiredDepth = 10
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	return st.push(&st.data[depth-requiredDepth])
+}
+
+func (st *Stack) dup11() error {
+	const requiredDepth = 11
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	return st.push(&st.data[depth-requiredDepth])
+}
+
+func (st *Stack) dup12() error {
+	const requiredDepth = 12
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	return st.push(&st.data[depth-requiredDepth])
+}
+
+func (st *Stack) dup13() error {
+	const requiredDepth = 13
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	return st.push(&st.data[depth-requiredDepth])
+}
+
+func (st *Stack) dup14() error {
+	const requiredDepth = 14
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	return st.push(&st.data[depth-requiredDepth])
+}
+
+func (st *Stack) dup15() error {
+	const requiredDepth = 15
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	return st.push(&st.data[depth-requiredDepth])
+}
+
+func (st *Stack) dup16() error {
+	const requiredDepth = 16
+	depth := st.len()
+	if depth < requiredDepth {
+		return ErrStackUnderflow{st.len(), requiredDepth}
+	}
+	return st.push(&st.data[depth-requiredDepth])
 }
