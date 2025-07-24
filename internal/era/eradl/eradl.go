@@ -86,8 +86,8 @@ func (l *Loader) DownloadAll(destDir string) error {
 
 // DownloadBlockRange fetches the era1 files for the given block range.
 func (l *Loader) DownloadBlockRange(start, end uint64, destDir string) error {
-	startEpoch := start / uint64(era.MaxEra1Size)
-	endEpoch := end / uint64(era.MaxEra1Size)
+	startEpoch := start / uint64(era.MaxSize)
+	endEpoch := end / uint64(era.MaxSize)
 	return l.DownloadEpochRange(startEpoch, endEpoch, destDir)
 }
 

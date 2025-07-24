@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/internal/era2"
+	"github.com/ethereum/go-ethereum/internal/era/onedb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -89,7 +89,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	dir := t.TempDir()
 
 	// Export history to temp directory.
-	if err := ExportHistory(chain, dir, 0, count, step, Era1); err != nil {
+	if err := ExportHistory(chain, dir, 0, count, step); err != nil {
 		t.Fatalf("error exporting history: %v", err)
 	}
 
@@ -101,7 +101,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	checksums := strings.Split(string(b), "\n")
 
 	// Verify each Era.
-	entries, _ := era2.ReadDir(dir, "mainnet")
+	entries, _ := onedb.ReadDir(dir, "mainnet")
 	for i, filename := range entries {
 		func() {
 			f, err := os.Open(filepath.Join(dir, filename))
@@ -118,12 +118,12 @@ func TestHistoryImportAndExport(t *testing.T) {
 			if got, want := common.BytesToHash(h.Sum(buf.Bytes()[:])).Hex(), checksums[i]; got != want {
 				t.Fatalf("checksum %d does not match: got %s, want %s", i, got, want)
 			}
-			e, err := era2.From(f)
+			e, err := onedb.From(f)
 			if err != nil {
 				t.Fatalf("error opening era: %v", err)
 			}
 			defer e.Close()
-			it, err := era2.NewIterator(e)
+			it, err := onedb.NewIterator(e)
 			if err != nil {
 				t.Fatalf("error making era reader: %v", err)
 			}
@@ -170,7 +170,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to initialize chain: %v", err)
 	}
-	if err := ImportHistory(imported, dir, "mainnet", EraE); err != nil {
+	if err := ImportHistory(imported, dir, "mainnet"); err != nil {
 		t.Fatalf("failed to import chain: %v", err)
 	}
 	if have, want := imported.CurrentHeader(), chain.CurrentHeader(); have.Hash() != want.Hash() {

@@ -52,23 +52,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/era/e2store"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/golang/snappy"
-)
-
-// Type constants for the e2store entries in the Era2 format.
-const (
-	TypeVersion            uint16 = 0x3265
-	TypeCompressedHeader   uint16 = 0x08
-	TypeCompressedBody     uint16 = 0x09
-	TypeCompressedReceipts uint16 = 0x0a
-	TypeTotalDifficulty    uint16 = 0x0b
-	TypeProof              uint16 = 0x0c
-	TypeAccumulatorRoot    uint16 = 0x0d
-	TypeBlockIndex         uint16 = 0x3267
-	MaxEraESize            int    = 8192
-	headerSize             uint64 = 8
 )
 
 // Temporary buffer for writing blocks until the Finalize method is called.
@@ -113,7 +100,7 @@ func NewBuilder(w io.Writer) *Builder {
 }
 
 // Add writes a block entry, its reciepts, and optionally its proofs as well into the e2store file.
-func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, proof Proof) error {
+func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, proof era.Proof) error {
 	header := block.Header()
 	body := block.Body()
 	if len(b.buff.headers) == 0 { // first block determines wether proofs are expected
@@ -156,8 +143,8 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, 
 
 // AddRLP takes the RLP encoded block components and writes them to the underlying e2store file.
 func (b *Builder) AddRLP(headerRLP []byte, bodyRLP []byte, receipts []byte, proof []byte, blockNum uint64, blockHash common.Hash, td *big.Int) error {
-	if len(b.buff.headers) >= MaxEraESize {
-		return fmt.Errorf("exceeds MaxEraESize %d", MaxEraESize)
+	if len(b.buff.headers) >= era.MaxSize {
+		return fmt.Errorf("exceeds max size %d", era.MaxSize)
 	}
 
 	b.buff.headers = append(b.buff.headers, headerRLP)
@@ -173,7 +160,7 @@ func (b *Builder) AddRLP(headerRLP []byte, bodyRLP []byte, receipts []byte, proo
 	if b.startNum == nil {
 		b.startNum = new(uint64)
 		*b.startNum = blockNum
-		if n, err := b.w.Write(TypeVersion, nil); err != nil {
+		if n, err := b.w.Write(era.TypeVersion, nil); err != nil {
 			return fmt.Errorf("write version entry: %w", err)
 		} else {
 			b.written += uint64(n)
@@ -189,7 +176,7 @@ func (b *Builder) Finalize() (common.Hash, error) {
 		return common.Hash{}, errors.New("no blocks added, cannot finalize")
 	}
 	for _, data := range b.buff.headers {
-		off, err := b.addEntry(TypeCompressedHeader, data, true)
+		off, err := b.addEntry(era.TypeCompressedHeader, data, true)
 		if err != nil {
 			return common.Hash{}, fmt.Errorf("headers: %w", err)
 		}
@@ -197,7 +184,7 @@ func (b *Builder) Finalize() (common.Hash, error) {
 	}
 
 	for _, data := range b.buff.bodies {
-		off, err := b.addEntry(TypeCompressedBody, data, true)
+		off, err := b.addEntry(era.TypeCompressedBody, data, true)
 		if err != nil {
 			return common.Hash{}, fmt.Errorf("bodies: %w", err)
 		}
@@ -205,7 +192,7 @@ func (b *Builder) Finalize() (common.Hash, error) {
 	}
 
 	for _, data := range b.buff.receipts {
-		off, err := b.addEntry(TypeCompressedReceipts, data, true)
+		off, err := b.addEntry(era.TypeCompressedSlimReceipts, data, true)
 		if err != nil {
 			return common.Hash{}, fmt.Errorf("receipts: %w", err)
 		}
@@ -215,7 +202,7 @@ func (b *Builder) Finalize() (common.Hash, error) {
 	if len(b.buff.tds) > 0 {
 		for _, data := range b.buff.tds {
 			littleEndian := uint256LE(data)
-			off, err := b.addEntry(TypeTotalDifficulty, littleEndian, false)
+			off, err := b.addEntry(era.TypeTotalDifficulty, littleEndian, false)
 			if err != nil {
 				return common.Hash{}, fmt.Errorf("total-difficulty: %w", err)
 			}
@@ -225,7 +212,7 @@ func (b *Builder) Finalize() (common.Hash, error) {
 
 	if len(b.buff.proofs) > 0 {
 		for _, data := range b.buff.proofs {
-			off, err := b.addEntry(TypeProof, data, true)
+			off, err := b.addEntry(era.TypeProof, data, true)
 			if err != nil {
 				return common.Hash{}, fmt.Errorf("proofs: %w", err)
 			}
@@ -236,11 +223,11 @@ func (b *Builder) Finalize() (common.Hash, error) {
 	var accRoot common.Hash
 	if len(b.hashes) > 0 {
 		var err error
-		accRoot, err = ComputeAccumulator(b.hashes, b.buff.tds)
+		accRoot, err = era.ComputeAccumulator(b.hashes, b.buff.tds)
 		if err != nil {
 			return common.Hash{}, fmt.Errorf("compute accumulator: %w", err)
 		}
-		if n, err := b.w.Write(TypeAccumulatorRoot, accRoot[:]); err != nil {
+		if n, err := b.w.Write(era.TypeAccumulator, accRoot[:]); err != nil {
 			return common.Hash{}, fmt.Errorf("write accumulator: %w", err)
 		} else {
 			b.written += uint64(n)
@@ -332,7 +319,7 @@ func (b *Builder) writeIndex() error {
 
 	binary.LittleEndian.PutUint64(index[end+0:], componentCount)
 	binary.LittleEndian.PutUint64(index[end+8:], count)
-	if n, err := b.w.Write(TypeBlockIndex, index); err != nil {
+	if n, err := b.w.Write(era.TypeComponentIndex, index); err != nil {
 		return err
 	} else {
 		b.written += uint64(n)

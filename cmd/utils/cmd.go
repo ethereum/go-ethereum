@@ -44,7 +44,8 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/internal/era2"
+	era2 "github.com/ethereum/go-ethereum/internal/era/execdb"
+	"github.com/ethereum/go-ethereum/internal/era/onedb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -252,11 +253,11 @@ func readList(filename string) ([]string, error) {
 // ImportHistory imports Era1 files containing historical block information,
 // starting from genesis. The assumption is held that the provided chain
 // segment in Era1 file should all be canonical and verified.
-func ImportHistory(chain *core.BlockChain, dir string, network string, format Format) error {
+func ImportHistory(chain *core.BlockChain, dir string, network string) error {
 	if chain.CurrentSnapBlock().Number.BitLen() != 0 {
 		return errors.New("history import only supported when starting from genesis")
 	}
-	entries, err := format.ReadDir(dir, network)
+	entries, err := onedb.ReadDir(dir, network)
 	if err != nil {
 		return fmt.Errorf("error reading %s: %w", dir, err)
 	}
@@ -299,12 +300,12 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, format Fo
 				f.Close()
 				return fmt.Errorf("%s checksum mismatch: have %s want %s", file, got, want)
 			}
-			// rewind for reading
-			if _, err := f.Seek(0, io.SeekStart); err != nil {
-				f.Close()
-				return fmt.Errorf("rewind %s: %w", file, err)
+			// Import all block data from Era1.
+			e, err := onedb.From(f)
+			if err != nil {
+				return fmt.Errorf("error opening era: %w", err)
 			}
-			it, err := format.NewIterator(f)
+			it, err := onedb.NewIterator(e)
 			if err != nil {
 				return fmt.Errorf("error creating iterator: %w", err)
 			}
@@ -515,7 +516,7 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 
 // ExportHistory exports blockchain history into the specified directory,
 // following the Era format.
-func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64, f Format) error {
+func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) error {
 	log.Info("Exporting blockchain history", "dir", dir)
 	if head := bc.CurrentBlock().Number.Uint64(); head < last {
 		log.Warn("Last block beyond head, setting last = head", "head", head, "last", last)
@@ -544,7 +545,7 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64, f 
 
 	for batch := first; batch <= last; batch += step {
 		idx := int(batch / step)
-		tmpPath := filepath.Join(dir, f.Filename(network, idx, common.Hash{}))
+		tmpPath := filepath.Join(dir, onedb.Filename(network, idx, common.Hash{}))
 
 		if err := func() error {
 			fh, err := os.Create(tmpPath)
@@ -553,7 +554,7 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64, f 
 			}
 			defer fh.Close()
 
-			bldr := f.NewBuilder(fh)
+			bldr := onedb.NewBuilder(fh)
 
 			for j := uint64(0); j < step && batch+j <= last; j++ {
 				n := batch + j
@@ -576,7 +577,7 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64, f 
 			if err != nil {
 				return err
 			}
-			final := filepath.Join(dir, f.Filename(network, idx, root))
+			final := filepath.Join(dir, onedb.Filename(network, idx, root))
 			if err := os.Rename(tmpPath, final); err != nil {
 				return err
 			}

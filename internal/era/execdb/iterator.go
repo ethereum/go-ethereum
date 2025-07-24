@@ -20,8 +20,10 @@ import (
 	"errors"
 	"io"
 	"math/big"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/era/e2store"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/klauspost/compress/snappy"
@@ -100,7 +102,8 @@ func (it *Iterator) TotalDifficulty() (*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
-	return new(big.Int).SetBytes(reverseOrder(tdBytes)), nil
+	slices.Reverse(tdBytes)
+	return new(big.Int).SetBytes(tdBytes), nil
 }
 
 // -----------------------------------------------------------------------------
@@ -137,7 +140,7 @@ func (it *RawIterator) Next() bool {
 		it.setErr(err)
 		return false
 	}
-	it.Header, _, err = newSnappyReader(it.e.s, TypeCompressedHeader, int64(headerOffset))
+	it.Header, _, err = newSnappyReader(it.e.s, era.TypeCompressedHeader, int64(headerOffset))
 	if err != nil {
 		it.setErr(err)
 		return false
@@ -148,7 +151,7 @@ func (it *RawIterator) Next() bool {
 		it.setErr(err)
 		return false
 	}
-	it.Body, _, err = newSnappyReader(it.e.s, TypeCompressedBody, int64(bodyOffset))
+	it.Body, _, err = newSnappyReader(it.e.s, era.TypeCompressedBody, int64(bodyOffset))
 	if err != nil {
 		it.setErr(err)
 		return false
@@ -159,7 +162,7 @@ func (it *RawIterator) Next() bool {
 		it.setErr(err)
 		return false
 	}
-	it.Receipts, _, err = newSnappyReader(it.e.s, TypeCompressedReceipts, int64(receiptsOffset))
+	it.Receipts, _, err = newSnappyReader(it.e.s, era.TypeCompressedReceipts, int64(receiptsOffset))
 	if err != nil {
 		it.setErr(err)
 		return false
@@ -171,7 +174,7 @@ func (it *RawIterator) Next() bool {
 			it.setErr(err)
 			return false
 		}
-		it.TotalDifficulty, _, err = it.e.s.ReaderAt(TypeTotalDifficulty, int64(tdOffset))
+		it.TotalDifficulty, _, err = it.e.s.ReaderAt(era.TypeTotalDifficulty, int64(tdOffset))
 		if err != nil {
 			it.setErr(err)
 			return false
