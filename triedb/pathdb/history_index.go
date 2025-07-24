@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math"
 	"sort"
-	"time"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -75,13 +74,11 @@ type indexReader struct {
 	descList []*indexBlockDesc
 	readers  map[uint32]*blockReader
 	state    stateIdent
-	timings  *readTimings
 	cacher   *historyCacher
 }
 
 // loadIndexData loads the index data associated with the specified state.
-func loadIndexData(db ethdb.KeyValueReader, state stateIdent, timings *readTimings, cacher *historyCacher) ([]*indexBlockDesc, error) {
-	start := time.Now()
+func loadIndexData(db ethdb.KeyValueReader, state stateIdent, cacher *historyCacher) ([]*indexBlockDesc, error) {
 	key := state.CacheKey()
 	var blob []byte
 	if cacher != nil && cacher.index.Contains(key) {
@@ -92,9 +89,6 @@ func loadIndexData(db ethdb.KeyValueReader, state stateIdent, timings *readTimin
 		} else {
 			blob = rawdb.ReadStorageHistoryIndex(db, state.addressHash, state.storageHash)
 		}
-	}
-	if timings != nil {
-		timings.kvdbIndex = time.Since(start)
 	}
 	if len(blob) == 0 {
 		return nil, nil
@@ -108,12 +102,7 @@ func loadIndexData(db ethdb.KeyValueReader, state stateIdent, timings *readTimin
 // newIndexReader constructs a index reader for the specified state. Reader with
 // empty data is allowed.
 func newIndexReader(db ethdb.KeyValueReader, state stateIdent, cacher *historyCacher) (*indexReader, error) {
-	return newIndexReaderWithTimings(db, state, nil, cacher)
-}
-
-// Helper to allow passing timings
-func newIndexReaderWithTimings(db ethdb.KeyValueReader, state stateIdent, timings *readTimings, cacher *historyCacher) (*indexReader, error) {
-	descList, err := loadIndexData(db, state, timings, cacher)
+	descList, err := loadIndexData(db, state, cacher)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +111,6 @@ func newIndexReaderWithTimings(db ethdb.KeyValueReader, state stateIdent, timing
 		readers:  make(map[uint32]*blockReader),
 		db:       db,
 		state:    state,
-		timings:  timings,
 		cacher:   cacher,
 	}, nil
 }
@@ -138,7 +126,7 @@ func (r *indexReader) refresh() error {
 			delete(r.readers, last.id)
 		}
 	}
-	descList, err := loadIndexData(r.db, r.state, r.timings, nil)
+	descList, err := loadIndexData(r.db, r.state, nil)
 	if err != nil {
 		return err
 	}
@@ -163,7 +151,6 @@ func (r *indexReader) readGreaterThan(id uint64) (uint64, error) {
 			err  error
 			blob []byte
 		)
-		start := time.Now()
 		key := fmt.Sprintf("%s:%d", r.state.CacheKey(), desc.id)
 		if r.cacher != nil && r.cacher.block.Contains(key) {
 			blob, _ = r.cacher.block.Get(key)
@@ -177,9 +164,6 @@ func (r *indexReader) readGreaterThan(id uint64) (uint64, error) {
 			if r.cacher != nil && len(blob) > 0 {
 				r.cacher.block.Add(key, blob)
 			}
-		}
-		if r.timings != nil {
-			r.timings.kvdbBlock = time.Since(start)
 		}
 		br, err = newBlockReader(blob)
 		if err != nil {
