@@ -561,7 +561,7 @@ func exportHistory(ctx *cli.Context) error {
 		utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.Number.Uint64())
 	}
 
-	format := ctx.String(utils.EraFormatFlag.Name)
+	format := ctx.String(utils.EraFormatFlag.Get(ctx))
 	switch format {
 	case "era1", "era":
 		if err := utils.ExportHistory(chain, dir, uint64(first), uint64(last), uint64(era.MaxEra1Size), utils.Era1); err != nil {
