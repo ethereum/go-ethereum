@@ -36,7 +36,7 @@ import (
 // and on tx end it closes the file.
 type fileWritingTracer struct {
 	txIndex     int            // transaction counter
-	inner       *tracing.Hooks // inner hooks
+	inner       tracing.Hooks  // inner hooks
 	destination io.WriteCloser // the currently open file (if any)
 	baseDir     string         // baseDir to write output-files to
 	suffix      string         // suffix is the suffix to use when creating files
@@ -58,7 +58,7 @@ func (l *fileWritingTracer) Write(p []byte) (n int, err error) {
 
 // newFileWriter creates a set of hooks which wraps inner hooks (typically a logger),
 // and writes the output to a file, one file per transaction.
-func newFileWriter(baseDir string, innerFn func(out io.Writer) *tracing.Hooks) *tracing.Hooks {
+func newFileWriter(baseDir string, innerFn func(out io.Writer) tracing.Hooks) tracing.Hooks {
 	t := &fileWritingTracer{
 		baseDir: baseDir,
 		suffix:  "jsonl",
@@ -69,7 +69,7 @@ func newFileWriter(baseDir string, innerFn func(out io.Writer) *tracing.Hooks) *
 
 // newResultWriter creates a set of hooks wraps and invokes an underlying tracer,
 // and writes the result (getResult-output) to file, one per transaction.
-func newResultWriter(baseDir string, tracer *tracers.Tracer) *tracing.Hooks {
+func newResultWriter(baseDir string, tracer *tracers.Tracer) tracing.Hooks {
 	t := &fileWritingTracer{
 		baseDir:   baseDir,
 		getResult: tracer.GetResult,
@@ -91,7 +91,7 @@ func (l *fileWritingTracer) OnTxStart(env *tracing.VMContext, tx *types.Transact
 		log.Info("Created tracing-file", "path", fname)
 		l.destination = traceFile
 	}
-	if l.inner != nil && l.inner.OnTxStart != nil {
+	if l.inner.OnTxStart != nil {
 		l.inner.OnTxStart(env, tx, from)
 	}
 }
@@ -99,7 +99,7 @@ func (l *fileWritingTracer) OnTxStart(env *tracing.VMContext, tx *types.Transact
 // OnTxEnd writes result (if getResult exist), closes any currently open output-file,
 // and invokes the inner OnTxEnd handler.
 func (l *fileWritingTracer) OnTxEnd(receipt *types.Receipt, err error) {
-	if l.inner != nil && l.inner.OnTxEnd != nil {
+	if l.inner.OnTxEnd != nil {
 		l.inner.OnTxEnd(receipt, err)
 	}
 	if l.getResult != nil && l.destination != nil {
@@ -114,37 +114,37 @@ func (l *fileWritingTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	l.txIndex++
 }
 
-func (l *fileWritingTracer) hooks() *tracing.Hooks {
-	return &tracing.Hooks{
+func (l *fileWritingTracer) hooks() tracing.Hooks {
+	return tracing.Hooks{
 		OnTxStart: l.OnTxStart,
 		OnTxEnd:   l.OnTxEnd,
 		OnEnter: func(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-			if l.inner != nil && l.inner.OnEnter != nil {
+			if l.inner.OnEnter != nil {
 				l.inner.OnEnter(depth, typ, from, to, input, gas, value)
 			}
 		},
 		OnExit: func(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
-			if l.inner != nil && l.inner.OnExit != nil {
+			if l.inner.OnExit != nil {
 				l.inner.OnExit(depth, output, gasUsed, err, reverted)
 			}
 		},
 		OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
-			if l.inner != nil && l.inner.OnOpcode != nil {
+			if l.inner.OnOpcode != nil {
 				l.inner.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
 			}
 		},
 		OnFault: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
-			if l.inner != nil && l.inner.OnFault != nil {
+			if l.inner.OnFault != nil {
 				l.inner.OnFault(pc, op, gas, cost, scope, depth, err)
 			}
 		},
 		OnSystemCallStart: func() {
-			if l.inner != nil && l.inner.OnSystemCallStart != nil {
+			if l.inner.OnSystemCallStart != nil {
 				l.inner.OnSystemCallStart()
 			}
 		},
 		OnSystemCallEnd: func() {
-			if l.inner != nil && l.inner.OnSystemCallEnd != nil {
+			if l.inner.OnSystemCallEnd != nil {
 				l.inner.OnSystemCallEnd()
 			}
 		},

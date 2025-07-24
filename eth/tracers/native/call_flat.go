@@ -143,7 +143,7 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *p
 
 	ft := &flatCallTracer{tracer: t, ctx: ctx, config: config, chainConfig: chainConfig}
 	return &tracers.Tracer{
-		Hooks: &tracing.Hooks{
+		Hooks: tracing.Hooks{
 			OnTxStart: ft.OnTxStart,
 			OnTxEnd:   ft.OnTxEnd,
 			OnEnter:   ft.OnEnter,

@@ -208,7 +208,7 @@ func newStateTracer(ctx *Context, cfg json.RawMessage, chainCfg *params.ChainCon
 		GetResult: func() (json.RawMessage, error) {
 			return json.Marshal(t)
 		},
-		Hooks: &tracing.Hooks{
+		Hooks: tracing.Hooks{
 			OnBalanceChange: func(addr common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
 				t.Balance[addr] = (*hexutil.Big)(new)
 			},
