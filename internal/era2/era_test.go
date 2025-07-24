@@ -65,7 +65,7 @@ func TestEra2Builder(t *testing.T) {
 			receipts = chain.receipts[i]
 			td       = chain.tds[i]
 		)
-		if err = builder.Add(header, body, receipts, td, nil); err != nil {
+		if err = builder.Add(types.NewBlockWithHeader(&header).WithBody(body), receipts, td, nil); err != nil {
 			t.Fatalf("error adding entry: %v", err)
 		}
 	}

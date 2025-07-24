@@ -44,7 +44,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/era2"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -58,12 +57,7 @@ const (
 	importBatchSize = 2500
 )
 
-type ExportFormat int
-
-const (
-	Era1 ExportFormat = iota
-	EraE
-)
+type EraFileFormat int
 
 // ErrImportInterrupted is returned when the user interrupts the import process.
 var ErrImportInterrupted = errors.New("interrupted")
@@ -258,11 +252,11 @@ func readList(filename string) ([]string, error) {
 // ImportHistory imports Era1 files containing historical block information,
 // starting from genesis. The assumption is held that the provided chain
 // segment in Era1 file should all be canonical and verified.
-func ImportHistory(chain *core.BlockChain, dir string, network string) error {
+func ImportHistory(chain *core.BlockChain, dir string, network string, format Format) error {
 	if chain.CurrentSnapBlock().Number.BitLen() != 0 {
 		return errors.New("history import only supported when starting from genesis")
 	}
-	entries, err := era.ReadDir(dir, network)
+	entries, err := format.ReadDir(dir, network)
 	if err != nil {
 		return fmt.Errorf("error reading %s: %w", dir, err)
 	}
@@ -271,42 +265,50 @@ func ImportHistory(chain *core.BlockChain, dir string, network string) error {
 		return fmt.Errorf("unable to read checksums.txt: %w", err)
 	}
 	if len(checksums) != len(entries) {
-		return fmt.Errorf("expected equal number of checksums and entries, have: %d checksums, %d entries", len(checksums), len(entries))
+		return fmt.Errorf("expected equal number of checksums and entries, have: %d checksums, %d entries",
+			len(checksums), len(entries))
 	}
+
 	var (
 		start    = time.Now()
 		reported = time.Now()
 		imported = 0
 		h        = sha256.New()
-		buf      = bytes.NewBuffer(nil)
+		scratch  = bytes.NewBuffer(nil)
 	)
-	for i, filename := range entries {
+
+	for i, file := range entries {
 		err := func() error {
-			f, err := os.Open(filepath.Join(dir, filename))
-			if err != nil {
-				return fmt.Errorf("unable to open era: %w", err)
-			}
-			defer f.Close()
+			path := filepath.Join(dir, file)
 
-			// Validate checksum.
+			// validate against checksum file in directory
+			f, err := os.Open(path)
+			if err != nil {
+				return fmt.Errorf("open %s: %w", path, err)
+			}
 			if _, err := io.Copy(h, f); err != nil {
-				return fmt.Errorf("unable to recalculate checksum: %w", err)
+				f.Close()
+				return fmt.Errorf("checksum %s: %w", path, err)
 			}
-			if have, want := common.BytesToHash(h.Sum(buf.Bytes()[:])).Hex(), checksums[i]; have != want {
-				return fmt.Errorf("checksum mismatch: have %s, want %s", have, want)
-			}
+			got := common.BytesToHash(h.Sum(scratch.Bytes()[:])).Hex()
+			want := checksums[i]
 			h.Reset()
-			buf.Reset()
+			scratch.Reset()
 
-			// Import all block data from Era1.
-			e, err := era.From(f)
-			if err != nil {
-				return fmt.Errorf("error opening era: %w", err)
+			if got != want {
+				f.Close()
+				return fmt.Errorf("%s checksum mismatch: have %s want %s", file, got, want)
 			}
-			it, err := era.NewIterator(e)
-			if err != nil {
-				return fmt.Errorf("error making era reader: %w", err)
+			// rewind for reading
+			if _, err := f.Seek(0, io.SeekStart); err != nil {
+				f.Close()
+				return fmt.Errorf("rewind %s: %w", file, err)
 			}
+			it, err := format.NewIterator(f)
+			if err != nil {
+				return fmt.Errorf("error creating iterator: %w", err)
+			}
+
 			for it.Next() {
 				block, err := it.Block()
 				if err != nil {
@@ -315,22 +317,25 @@ func ImportHistory(chain *core.BlockChain, dir string, network string) error {
 				if block.Number().BitLen() == 0 {
 					continue // skip genesis
 				}
-				receipts, err := it.Receipts()
+				rcpts, err := it.Receipts()
 				if err != nil {
 					return fmt.Errorf("error reading receipts %d: %w", it.Number(), err)
 				}
-				encReceipts := types.EncodeBlockReceiptLists([]types.Receipts{receipts})
-				if _, err := chain.InsertReceiptChain([]*types.Block{block}, encReceipts, math.MaxUint64); err != nil {
+				enc := types.EncodeBlockReceiptLists([]types.Receipts{rcpts})
+				if _, err := chain.InsertReceiptChain([]*types.Block{block}, enc, math.MaxUint64); err != nil {
 					return fmt.Errorf("error inserting body %d: %w", it.Number(), err)
 				}
-				imported += 1
+				imported++
 
-				// Give the user some feedback that something is happening.
 				if time.Since(reported) >= 8*time.Second {
-					log.Info("Importing Era files", "head", it.Number(), "imported", imported, "elapsed", common.PrettyDuration(time.Since(start)))
+					log.Info("Importing Era files", "head", it.Number(), "imported", imported,
+						"elapsed", common.PrettyDuration(time.Since(start)))
 					imported = 0
 					reported = time.Now()
 				}
+			}
+			if err := it.Error(); err != nil {
+				return err
 			}
 			return nil
 		}()
@@ -338,7 +343,6 @@ func ImportHistory(chain *core.BlockChain, dir string, network string) error {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -511,8 +515,8 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 
 // ExportHistory exports blockchain history into the specified directory,
 // following the Era format.
-func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64, f ExportFormat) error {
-	log.Info("Exporting blockchain history", "dir", dir, "format", f)
+func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64, f Format) error {
+	log.Info("Exporting blockchain history", "dir", dir)
 	if head := bc.CurrentBlock().Number.Uint64(); head < last {
 		log.Warn("Last block beyond head, setting last = head", "head", head, "last", last)
 		last = head
@@ -523,26 +527,6 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64, f 
 	}
 	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
 		return fmt.Errorf("error creating output directory: %w", err)
-	}
-
-	var (
-		filename   func(string, int, common.Hash) string
-		newBuilder func(io.Writer) any
-		add        func(any, *types.Block, types.Receipts, *big.Int) error
-	)
-
-	if f == Era1 {
-		filename = era.Filename
-		newBuilder = func(w io.Writer) any { return era.NewBuilder(w) }
-		add = func(b any, blk *types.Block, rcpt types.Receipts, td *big.Int) error {
-			return b.(*era.Builder).Add(blk, rcpt, td)
-		}
-	} else {
-		filename = era2.Filename
-		newBuilder = func(w io.Writer) any { return era2.NewBuilder(w) }
-		add = func(b any, blk *types.Block, rcpt types.Receipts, td *big.Int) error {
-			return b.(*era2.Builder).Add(*blk.Header(), *blk.Body(), rcpt, td, nil)
-		}
 	}
 
 	td := new(big.Int)
@@ -560,16 +544,16 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64, f 
 
 	for batch := first; batch <= last; batch += step {
 		idx := int(batch / step)
-		tmpPath := filepath.Join(dir, filename(network, idx, common.Hash{}))
+		tmpPath := filepath.Join(dir, f.Filename(network, idx, common.Hash{}))
 
 		if err := func() error {
-			f, err := os.Create(tmpPath)
+			fh, err := os.Create(tmpPath)
 			if err != nil {
 				return err
 			}
-			defer f.Close()
+			defer fh.Close()
 
-			bldr := newBuilder(f)
+			bldr := f.NewBuilder(fh)
 
 			for j := uint64(0); j < step && batch+j <= last; j++ {
 				n := batch + j
@@ -582,26 +566,27 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64, f 
 					return fmt.Errorf("receipts for #%d missing", n)
 				}
 				td.Add(td, blk.Difficulty())
-				if err := add(bldr, blk, rcpt, new(big.Int).Set(td)); err != nil {
+
+				if err := bldr.Add(blk, rcpt, new(big.Int).Set(td), nil); err != nil {
 					return err
 				}
 			}
 
-			root, err := bldr.(interface{ Finalize() (common.Hash, error) }).Finalize()
+			root, err := bldr.Finalize()
 			if err != nil {
 				return err
 			}
-			final := filepath.Join(dir, filename(network, idx, root))
+			final := filepath.Join(dir, f.Filename(network, idx, root))
 			if err := os.Rename(tmpPath, final); err != nil {
 				return err
 			}
 
-			if _, err := f.Seek(0, io.SeekStart); err != nil {
+			if _, err := fh.Seek(0, io.SeekStart); err != nil {
 				return err
 			}
 			h.Reset()
 			buf.Reset()
-			if _, err := io.Copy(h, f); err != nil {
+			if _, err := io.Copy(h, fh); err != nil {
 				return err
 			}
 			checksums = append(checksums, common.BytesToHash(h.Sum(buf.Bytes()[:])).Hex())

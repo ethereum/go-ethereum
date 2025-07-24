@@ -113,7 +113,9 @@ func NewBuilder(w io.Writer) *Builder {
 }
 
 // Add writes a block entry, its reciepts, and optionally its proofs as well into the e2store file.
-func (b *Builder) Add(header types.Header, body types.Body, receipts types.Receipts, td *big.Int, proof Proof) error {
+func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, proof Proof) error {
+	header := block.Header()
+	body := block.Body()
 	if len(b.buff.headers) == 0 { // first block determines wether proofs are expected
 		b.expectsProofs = proof != nil
 	} else if b.expectsProofs && proof == nil { // every later block must follow this policy

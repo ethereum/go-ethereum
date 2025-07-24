@@ -519,11 +519,11 @@ func importHistory(ctx *cli.Context) error {
 	format := ctx.String(utils.EraFormatFlag.Name)
 	switch format {
 	case "era1", "era":
-		if err := utils.ImportHistory(chain, dir, network); err != nil {
+		if err := utils.ImportHistory(chain, dir, network, utils.Era1); err != nil {
 			return err
 		}
 	case "erae":
-		if err := utils.ImportHistoryEraE(chain, dir, network); err != nil {
+		if err := utils.ImportHistory(chain, dir, network, utils.EraE); err != nil {
 			return err
 		}
 	default:

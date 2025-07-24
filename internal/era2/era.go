@@ -46,11 +46,11 @@ type componentType int
 
 // TypeCompressedHeader, TypeCompressedBody, TypeCompressedReceipts, TypeTotalDifficulty, and TypeProof are the different types of components that can be present in the era file.
 const (
-	componentHeader componentType = iota
-	componentBody
-	componentReceipts
-	componentTD
-	componentProof
+	header componentType = iota
+	body
+	receipts
+	td
+	proof
 )
 
 type ReadAtSeekCloser interface {
@@ -274,11 +274,11 @@ func (e *Era) loadIndex() error {
 }
 
 // headerOff, bodyOff, receiptOff, tdOff, and proofOff return the offsets of the respective components for a given block number.
-func (e *Era) headerOff(num uint64) (uint64, error)  { return e.indexOffset(num, componentHeader) }
-func (e *Era) bodyOff(num uint64) (uint64, error)    { return e.indexOffset(num, componentBody) }
-func (e *Era) receiptOff(num uint64) (uint64, error) { return e.indexOffset(num, componentReceipts) }
-func (e *Era) tdOff(num uint64) (uint64, error)      { return e.indexOffset(num, componentTD) }
-func (e *Era) proofOff(num uint64) (uint64, error)   { return e.indexOffset(num, componentProof) }
+func (e *Era) headerOff(num uint64) (uint64, error)  { return e.indexOffset(num, header) }
+func (e *Era) bodyOff(num uint64) (uint64, error)    { return e.indexOffset(num, body) }
+func (e *Era) receiptOff(num uint64) (uint64, error) { return e.indexOffset(num, receipts) }
+func (e *Era) tdOff(num uint64) (uint64, error)      { return e.indexOffset(num, td) }
+func (e *Era) proofOff(num uint64) (uint64, error)   { return e.indexOffset(num, proof) }
 
 // indexOffset calculates offset to a certain component for a block number within a file.
 func (e *Era) indexOffset(n uint64, component componentType) (uint64, error) {
