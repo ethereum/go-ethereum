@@ -208,7 +208,6 @@ func (b *batchIndexer) finish(force bool) error {
 	if err := eg.Wait(); err != nil {
 		return err
 	}
-	mtime := time.Now()
 
 	// Update the position of last indexed state history
 	if !b.delete {
@@ -220,14 +219,10 @@ func (b *batchIndexer) finish(force bool) error {
 			storeIndexMetadata(batch, b.lastID-1)
 		}
 	}
-	wtime := time.Now()
 	if err := batch.Write(); err != nil {
 		return err
 	}
-	log.Debug("Committed batch indexer", "accounts", len(b.accounts), "storages", storages, "records", b.counter, "elapsed", common.PrettyDuration(time.Since(start)),
-		"mtime", common.PrettyDuration(mtime.Sub(start)),
-		"utime", common.PrettyDuration(wtime.Sub(mtime)),
-		"wtime", common.PrettyDuration(time.Since(wtime)))
+	log.Debug("Committed batch indexer", "accounts", len(b.accounts), "storages", storages, "records", b.counter, "elapsed", common.PrettyDuration(time.Since(start)))
 	b.counter = 0
 	b.accounts = make(map[common.Hash][]uint64)
 	b.storages = make(map[common.Hash]map[common.Hash][]uint64)
