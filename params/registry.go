@@ -101,8 +101,7 @@ func Define[V any](def T[V]) Parameter[V] {
 		optional:     def.Optional,
 		defaultValue: def.Default,
 		new: func() any {
-			var z V
-			return z
+			return new(V)
 		},
 		validate: func(v any, cfg *Config2) error {
 			if def.Validate == nil {

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"maps"
 	"math/big"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -171,7 +172,10 @@ func (cfg *Config2) UnmarshalJSON(input []byte) error {
 		return fmt.Errorf("expected JSON object for chain configuration")
 	}
 	// Now we're in the object.
-	newcfg := Config2{activation: Activations{}}
+	newcfg := Config2{
+		activation: make(Activations),
+		param:      make(map[int]any),
+	}
 	for {
 		tok, err = dec.Token()
 		if tok == json.Delim('}') {
@@ -227,7 +231,7 @@ func (cfg *Config2) decodeParameter(key string, dec *json.Decoder) error {
 	if err := dec.Decode(v); err != nil {
 		return err
 	}
-	cfg.param[id] = v
+	cfg.param[id] = reflect.ValueOf(v).Elem().Interface()
 	return nil
 }
 
