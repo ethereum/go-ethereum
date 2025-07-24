@@ -300,10 +300,14 @@ func (w *indexWriter) finish(batch ethdb.Batch) {
 		return // nothing to commit
 	}
 	for _, bw := range writers {
+		buf := bw.finish()
+		if key := fmt.Sprintf("%s:%d", w.state.String(), bw.desc.id); historyBlockCache.Contains(key) {
+			historyBlockCache.Add(key, buf)
+		}
 		if w.state.account {
-			rawdb.WriteAccountHistoryIndexBlock(batch, w.state.addressHash, bw.desc.id, bw.finish())
+			rawdb.WriteAccountHistoryIndexBlock(batch, w.state.addressHash, bw.desc.id, buf)
 		} else {
-			rawdb.WriteStorageHistoryIndexBlock(batch, w.state.addressHash, w.state.storageHash, bw.desc.id, bw.finish())
+			rawdb.WriteStorageHistoryIndexBlock(batch, w.state.addressHash, w.state.storageHash, bw.desc.id, buf)
 		}
 	}
 	w.frozen = nil // release all the frozen writers
