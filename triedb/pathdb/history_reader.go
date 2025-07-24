@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -59,6 +60,14 @@ func (ident stateIdent) String() string {
 		return ident.addressHash.Hex()
 	}
 	return ident.addressHash.Hex() + ident.storageHash.Hex()
+}
+
+// CacheKey returns the cache key for the state identifier.
+func (ident stateIdent) CacheKey() string {
+	if ident.account {
+		return ident.addressHash.Hex()
+	}
+	return crypto.Keccak256Hash(ident.addressHash.Bytes(), ident.storageHash.Bytes()).Hex()
 }
 
 // newAccountIdent constructs a state identifier for an account.

@@ -82,7 +82,7 @@ type indexReader struct {
 // loadIndexData loads the index data associated with the specified state.
 func loadIndexData(db ethdb.KeyValueReader, state stateIdent, timings *readTimings, cacher *historyCacher) ([]*indexBlockDesc, error) {
 	start := time.Now()
-	key := state.String()
+	key := state.CacheKey()
 	var blob []byte
 	if cacher != nil && cacher.index.Contains(key) {
 		blob, _ = cacher.index.Get(key)
@@ -164,7 +164,7 @@ func (r *indexReader) readGreaterThan(id uint64) (uint64, error) {
 			blob []byte
 		)
 		start := time.Now()
-		key := fmt.Sprintf("%s:%d", r.state.String(), desc.id)
+		key := fmt.Sprintf("%s:%d", r.state.CacheKey(), desc.id)
 		if r.cacher != nil && r.cacher.block.Contains(key) {
 			blob, _ = r.cacher.block.Get(key)
 		} else {
@@ -211,8 +211,7 @@ type indexWriter struct {
 // newIndexWriter constructs the index writer for the specified state.
 func newIndexWriter(db ethdb.KeyValueReader, state stateIdent, cacher *historyCacher) (*indexWriter, error) {
 	var blob []byte
-
-	key := state.String()
+	key := state.CacheKey()
 	if cacher != nil && cacher.index.Contains(key) {
 		blob, _ = cacher.index.Get(key)
 	} else {
@@ -244,7 +243,7 @@ func newIndexWriter(db ethdb.KeyValueReader, state stateIdent, cacher *historyCa
 		indexBlock []byte
 		lastDesc   = descList[len(descList)-1]
 	)
-	key = fmt.Sprintf("%s:%d", state.String(), lastDesc.id)
+	key = fmt.Sprintf("%s:%d", state.CacheKey(), lastDesc.id)
 	if cacher != nil && cacher.block.Contains(key) {
 		indexBlock, _ = cacher.block.Get(key)
 	} else {
@@ -327,7 +326,7 @@ func (w *indexWriter) finish(batch ethdb.Batch) {
 	for _, bw := range writers {
 		buf := bw.finish()
 		if w.cacher != nil {
-			if key := fmt.Sprintf("%s:%d", w.state.String(), bw.desc.id); w.cacher.block.Contains(key) {
+			if key := fmt.Sprintf("%s:%d", w.state.CacheKey(), bw.desc.id); w.cacher.block.Contains(key) {
 				w.cacher.block.Add(key, buf)
 			}
 		}
@@ -344,7 +343,7 @@ func (w *indexWriter) finish(batch ethdb.Batch) {
 		buf = append(buf, desc.encode()...)
 	}
 	if w.cacher != nil {
-		if key := w.state.String(); w.cacher.index.Contains(key) {
+		if key := w.state.CacheKey(); w.cacher.index.Contains(key) {
 			w.cacher.index.Add(key, buf)
 		}
 	}
@@ -369,7 +368,7 @@ type indexDeleter struct {
 // newIndexDeleter constructs the index deleter for the specified state.
 func newIndexDeleter(db ethdb.KeyValueReader, state stateIdent, cacher *historyCacher) (*indexDeleter, error) {
 	var blob []byte
-	key := state.String()
+	key := state.CacheKey()
 	if cacher != nil && cacher.index.Contains(key) {
 		blob, _ = cacher.index.Get(key)
 	} else {
@@ -403,7 +402,7 @@ func newIndexDeleter(db ethdb.KeyValueReader, state stateIdent, cacher *historyC
 		indexBlock []byte
 		lastDesc   = descList[len(descList)-1]
 	)
-	key = fmt.Sprintf("%s:%d", state.String(), lastDesc.id)
+	key = fmt.Sprintf("%s:%d", state.CacheKey(), lastDesc.id)
 	if cacher != nil && cacher.block.Contains(key) {
 		indexBlock, _ = cacher.block.Get(key)
 	} else {
@@ -485,7 +484,7 @@ func (d *indexDeleter) pop(id uint64) error {
 func (d *indexDeleter) finish(batch ethdb.Batch) {
 	for _, id := range d.dropped {
 		if d.cacher != nil {
-			if key := fmt.Sprintf("%s:%d", d.state.String(), id); d.cacher.block.Contains(key) {
+			if key := fmt.Sprintf("%s:%d", d.state.CacheKey(), id); d.cacher.block.Contains(key) {
 				d.cacher.block.Remove(key)
 			}
 		}
@@ -501,7 +500,7 @@ func (d *indexDeleter) finish(batch ethdb.Batch) {
 	if !d.bw.empty() {
 		buf := d.bw.finish()
 		if d.cacher != nil {
-			if key := fmt.Sprintf("%s:%d", d.state.String(), d.bw.desc.id); d.cacher.block.Contains(key) {
+			if key := fmt.Sprintf("%s:%d", d.state.CacheKey(), d.bw.desc.id); d.cacher.block.Contains(key) {
 				d.cacher.block.Add(key, buf)
 			}
 		}
@@ -515,7 +514,7 @@ func (d *indexDeleter) finish(batch ethdb.Batch) {
 	// Flush the index metadata into the supplied batch
 	if d.empty() {
 		if d.cacher != nil {
-			if key := d.state.String(); d.cacher.index.Contains(key) {
+			if key := d.state.CacheKey(); d.cacher.index.Contains(key) {
 				d.cacher.index.Remove(key)
 			}
 		}
@@ -531,7 +530,7 @@ func (d *indexDeleter) finish(batch ethdb.Batch) {
 		}
 
 		if d.cacher != nil {
-			if key := d.state.String(); d.cacher.index.Contains(key) {
+			if key := d.state.CacheKey(); d.cacher.index.Contains(key) {
 				d.cacher.index.Add(key, buf)
 			}
 		}
