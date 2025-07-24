@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/params/presets"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 	"github.com/kylelemons/godebug/diff"
@@ -330,7 +331,8 @@ func TestDeriveFields(t *testing.T) {
 	blobGasPrice := big.NewInt(920)
 	receipts := getTestReceipts()
 	derivedReceipts := clearComputedFieldsOnReceipts(receipts)
-	err := Receipts(derivedReceipts).DeriveFields(params.TestChainConfig, blockHash, blockNumber.Uint64(), blockTime, basefee, blobGasPrice, txs)
+	config := presets.AllEthashProtocolChanges
+	err := Receipts(derivedReceipts).DeriveFields(config, blockHash, blockNumber.Uint64(), blockTime, basefee, blobGasPrice, txs)
 	if err != nil {
 		t.Fatalf("DeriveFields(...) = %v, want <nil>", err)
 	}

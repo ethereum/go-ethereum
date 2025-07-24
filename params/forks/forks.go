@@ -1,4 +1,4 @@
-// Copyright 2023 The go-ethereum Authors
+// Copyright 2025 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -16,60 +16,155 @@
 
 package forks
 
-// Fork is a numerical identifier of specific network upgrades (forks).
-type Fork int
+// Ethereum mainnet forks.
+var (
+	Frontier = Define(Spec{
+		Name:       "Frontier",
+		BlockBased: true,
+	})
 
-const (
-	Frontier Fork = iota
-	FrontierThawing
-	Homestead
-	DAO
-	TangerineWhistle // a.k.a. the EIP150 fork
-	SpuriousDragon   // a.k.a. the EIP155 fork
-	Byzantium
-	Constantinople
-	Petersburg
-	Istanbul
-	MuirGlacier
-	Berlin
-	London
-	ArrowGlacier
-	GrayGlacier
-	Paris
-	Shanghai
-	Cancun
-	Prague
-	Osaka
+	Homestead = Define(Spec{
+		Name:       "Homestead",
+		BlockBased: true,
+		Requires:   []Fork{Frontier},
+	})
+
+	DAO = Define(Spec{
+		Name:       "DAO",
+		ConfigName: "daoFork",
+		BlockBased: true,
+		Requires:   []Fork{Homestead},
+	})
+
+	TangerineWhistle = Define(Spec{
+		Name:       "TangerineWhistle",
+		ConfigName: "eip150",
+		BlockBased: true,
+		Requires:   []Fork{Homestead},
+	})
+
+	SpuriousDragon = Define(Spec{
+		Name:       "SpuriousDragon",
+		ConfigName: "eip155",
+		BlockBased: true,
+		Requires:   []Fork{TangerineWhistle},
+	})
+
+	Byzantium = Define(Spec{
+		Name:       "Byzantium",
+		BlockBased: true,
+		Requires:   []Fork{SpuriousDragon},
+	})
+
+	Constantinople = Define(Spec{
+		Name:       "Constantinople",
+		BlockBased: true,
+		Requires:   []Fork{Byzantium},
+	})
+
+	Petersburg = Define(Spec{
+		Name:       "Petersburg",
+		BlockBased: true,
+		Requires:   []Fork{Constantinople},
+	})
+
+	Istanbul = Define(Spec{
+		Name:       "Istanbul",
+		BlockBased: true,
+		Requires:   []Fork{Petersburg},
+	})
+
+	MuirGlacier = Define(Spec{
+		Name:       "MuirGlacier",
+		BlockBased: true,
+		Requires:   []Fork{Istanbul},
+	})
+
+	Berlin = Define(Spec{
+		Name:       "Berlin",
+		BlockBased: true,
+		Requires:   []Fork{Istanbul},
+	})
+
+	London = Define(Spec{
+		Name:       "London",
+		BlockBased: true,
+		Requires:   []Fork{Berlin},
+	})
+
+	ArrowGlacier = Define(Spec{
+		Name:       "ArrowGlacier",
+		BlockBased: true,
+		Requires:   []Fork{London, MuirGlacier},
+	})
+
+	GrayGlacier = Define(Spec{
+		Name:       "GrayGlacier",
+		BlockBased: true,
+		Requires:   []Fork{London, ArrowGlacier},
+	})
+
+	Paris = Define(Spec{
+		Name:       "Paris",
+		ConfigName: "mergeNetsplit",
+		BlockBased: true,
+		Requires:   []Fork{London},
+	})
+
+	Shanghai = Define(Spec{
+		Name:     "Shanghai",
+		Requires: []Fork{Paris},
+	})
+
+	Cancun = Define(Spec{
+		Name:     "Cancun",
+		Requires: []Fork{Shanghai},
+	})
+
+	Prague = Define(Spec{
+		Name:     "Prague",
+		Requires: []Fork{Cancun},
+	})
+
+	Osaka = Define(Spec{
+		Name:     "Osaka",
+		Requires: []Fork{Prague},
+	})
 )
 
-// String implements fmt.Stringer.
-func (f Fork) String() string {
-	s, ok := forkToString[f]
-	if !ok {
-		return "Unknown fork"
-	}
-	return s
-}
+// Verkle forks.
+var (
+	Verkle = Define(Spec{
+		Name:     "Verkle",
+		Requires: []Fork{Prague},
+	})
+)
 
-var forkToString = map[Fork]string{
-	Frontier:         "Frontier",
-	FrontierThawing:  "Frontier Thawing",
-	Homestead:        "Homestead",
-	DAO:              "DAO",
-	TangerineWhistle: "Tangerine Whistle",
-	SpuriousDragon:   "Spurious Dragon",
-	Byzantium:        "Byzantium",
-	Constantinople:   "Constantinople",
-	Petersburg:       "Petersburg",
-	Istanbul:         "Istanbul",
-	MuirGlacier:      "Muir Glacier",
-	Berlin:           "Berlin",
-	London:           "London",
-	ArrowGlacier:     "Arrow Glacier",
-	GrayGlacier:      "Gray Glacier",
-	Paris:            "Paris",
-	Shanghai:         "Shanghai",
-	Cancun:           "Cancun",
-	Prague:           "Prague",
-	Osaka:            "Osaka",
-}
+// BPOs - 'blob parameter only' forks.
+var (
+	BPO1 = Define(Spec{
+		Name:       "BPO1",
+		ConfigName: "bpo1",
+		Requires:   []Fork{Osaka},
+	})
+	BPO2 = Define(Spec{
+		Name:       "BPO2",
+		ConfigName: "bpo2",
+		Requires:   []Fork{BPO1},
+	})
+	BPO3 = Define(Spec{
+		Name:       "BPO3",
+		ConfigName: "bpo3",
+		Requires:   []Fork{BPO2},
+	})
+	BPO4 = Define(Spec{
+		Name:       "BPO4",
+		ConfigName: "bpo4",
+		Requires:   []Fork{BPO3},
+	})
+	BPO5 = Define(Spec{
+		Name:       "BPO5",
+		ConfigName: "bpo5",
+		Requires:   []Fork{BPO4},
+	})
+)
