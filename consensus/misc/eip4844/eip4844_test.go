@@ -88,9 +88,9 @@ func TestCalcBlobFee(t *testing.T) {
 				forks.London: 0,
 				forks.Cancun: 0,
 			},
-			params.BlobSchedule{
+			params.BlobSchedule.V(map[forks.Fork]params.BlobConfig{
 				forks.Cancun: *params.DefaultCancunBlobConfig,
-			},
+			}),
 		)
 		header := &types.Header{ExcessBlobGas: &tt.excessBlobGas}
 		have := CalcBlobFee(config, header)

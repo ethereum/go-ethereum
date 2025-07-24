@@ -19,8 +19,8 @@ package eip4844
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
-	"slices"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -38,6 +38,7 @@ func VerifyEIP4844Header(config *params.Config2, parent, header *types.Header) e
 	if header.Number.Uint64() != parent.Number.Uint64()+1 {
 		panic("bad header pair")
 	}
+
 	// Verify the header is not malformed
 	if header.ExcessBlobGas == nil {
 		return errors.New("header is missing excessBlobGas")
@@ -45,8 +46,14 @@ func VerifyEIP4844Header(config *params.Config2, parent, header *types.Header) e
 	if header.BlobGasUsed == nil {
 		return errors.New("header is missing blobGasUsed")
 	}
+
+	blobcfg := scheduleAtTime(config, header.Time)
+	if blobcfg == nil {
+		return fmt.Errorf("blob schedule is undefined at time %d", header.Time)
+	}
+
 	// Verify that the blob gas used remains within reasonable limits.
-	maxBlobGas := MaxBlobGasPerBlock(config, header.Time)
+	maxBlobGas := uint64(blobcfg.Max) * params.BlobTxBlobGasPerBlob
 	if *header.BlobGasUsed > maxBlobGas {
 		return fmt.Errorf("blob gas used %d exceeds maximum allowance %d", *header.BlobGasUsed, maxBlobGas)
 	}
@@ -101,18 +108,21 @@ func CalcExcessBlobGas(config *params.Config2, parent *types.Header, headTimesta
 
 // CalcBlobFee calculates the blobfee from the header's excess blob gas field.
 func CalcBlobFee(config *params.Config2, header *types.Header) *big.Int {
-	schedule := params.BlobSchedule.Get(config)
-	if schedule == nil {
+	blobcfg := scheduleAtTime(config, header.Time)
+	if blobcfg == nil {
 		return new(big.Int)
 	}
-	f := config.LatestFork(header.Time)
-	frac := schedule[f].UpdateFraction
+	frac := blobcfg.UpdateFraction
 	return fakeExponential(minBlobGasPrice, new(big.Int).SetUint64(*header.ExcessBlobGas), new(big.Int).SetUint64(frac))
 }
 
 // MaxBlobsPerBlock returns the max blobs per block for a block at the given timestamp.
 func MaxBlobsPerBlock(cfg *params.Config2, time uint64) int {
-	return scheduleAtTime(cfg, time).Max
+	blobcfg := scheduleAtTime(cfg, time)
+	if blobcfg == nil {
+		return 0
+	}
+	return blobcfg.Max
 }
 
 // MaxBlobsPerBlock returns the maximum blob gas that can be spent in a block at the given timestamp.
@@ -123,16 +133,8 @@ func MaxBlobGasPerBlock(cfg *params.Config2, time uint64) uint64 {
 // LatestMaxBlobsPerBlock returns the latest max blobs per block defined by the
 // configuration, regardless of the currently active fork.
 func LatestMaxBlobsPerBlock(cfg *params.Config2) int {
-	schedule := params.BlobSchedule.Get(cfg)
-	if schedule == nil {
-		return 0
-	}
-	for _, f := range slices.Backward(forks.CanonOrder) {
-		if f.HasBlobs() && cfg.Scheduled(f) {
-			return schedule[f].Max
-		}
-	}
-	return 0
+	blobcfg := scheduleAtTime(cfg, math.MaxUint64)
+	return blobcfg.Max
 }
 
 // targetBlobsPerBlock returns the target number of blobs in a block at the given timestamp.
@@ -140,13 +142,29 @@ func targetBlobsPerBlock(cfg *params.Config2, time uint64) int {
 	return scheduleAtTime(cfg, time).Target
 }
 
-func scheduleAtTime(cfg *params.Config2, time uint64) params.BlobConfig {
+// scheduleAtTime resolves the blob schedule at the given timestamp.
+func scheduleAtTime(cfg *params.Config2, time uint64) *params.BlobConfig {
 	schedule := params.BlobSchedule.Get(cfg)
 	if schedule == nil {
-		return params.BlobConfig{}
+		return nil
 	}
-	f := cfg.LatestFork(time)
-	return schedule[f]
+
+	// Find the latest fork defined by the schedule.
+	forkList := make([]forks.Fork, 0, len(schedule))
+	for f := range schedule {
+		act, ok := cfg.Activation(f)
+		if ok && act <= time {
+			forkList = append(forkList, f)
+		}
+	}
+	forkList = forks.DependencyOrder(forkList)
+
+	// Return the blob config of the last available fork.
+	if len(forkList) == 0 {
+		return nil
+	}
+	blobcfg := schedule[forkList[len(forkList)-1]]
+	return &blobcfg
 }
 
 // fakeExponential approximates factor * e ** (numerator / denominator) using
