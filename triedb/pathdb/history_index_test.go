@@ -33,7 +33,7 @@ func TestIndexReaderBasic(t *testing.T) {
 		1, 5, 10, 11, 20,
 	}
 	db := rawdb.NewMemoryDatabase()
-	bw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}))
+	bw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), nil)
 	for i := 0; i < len(elements); i++ {
 		bw.append(elements[i])
 	}
@@ -41,7 +41,7 @@ func TestIndexReaderBasic(t *testing.T) {
 	bw.finish(batch)
 	batch.Write()
 
-	br, err := newIndexReader(db, newAccountIdent(common.Hash{0xa}))
+	br, err := newIndexReader(db, newAccountIdent(common.Hash{0xa}), nil)
 	if err != nil {
 		t.Fatalf("Failed to construct the index reader, %v", err)
 	}
@@ -75,7 +75,7 @@ func TestIndexReaderLarge(t *testing.T) {
 	slices.Sort(elements)
 
 	db := rawdb.NewMemoryDatabase()
-	bw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}))
+	bw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), nil)
 	for i := 0; i < len(elements); i++ {
 		bw.append(elements[i])
 	}
@@ -83,7 +83,7 @@ func TestIndexReaderLarge(t *testing.T) {
 	bw.finish(batch)
 	batch.Write()
 
-	br, err := newIndexReader(db, newAccountIdent(common.Hash{0xa}))
+	br, err := newIndexReader(db, newAccountIdent(common.Hash{0xa}), nil)
 	if err != nil {
 		t.Fatalf("Failed to construct the index reader, %v", err)
 	}
@@ -107,7 +107,7 @@ func TestIndexReaderLarge(t *testing.T) {
 }
 
 func TestEmptyIndexReader(t *testing.T) {
-	br, err := newIndexReader(rawdb.NewMemoryDatabase(), newAccountIdent(common.Hash{0xa}))
+	br, err := newIndexReader(rawdb.NewMemoryDatabase(), newAccountIdent(common.Hash{0xa}), nil)
 	if err != nil {
 		t.Fatalf("Failed to construct the index reader, %v", err)
 	}
@@ -122,7 +122,7 @@ func TestEmptyIndexReader(t *testing.T) {
 
 func TestIndexWriterBasic(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}))
+	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), nil)
 	iw.append(2)
 	if err := iw.append(1); err == nil {
 		t.Fatal("out-of-order insertion is not expected")
@@ -134,7 +134,7 @@ func TestIndexWriterBasic(t *testing.T) {
 	iw.finish(batch)
 	batch.Write()
 
-	iw, err := newIndexWriter(db, newAccountIdent(common.Hash{0xa}))
+	iw, err := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), nil)
 	if err != nil {
 		t.Fatalf("Failed to construct the block writer, %v", err)
 	}
@@ -148,7 +148,7 @@ func TestIndexWriterBasic(t *testing.T) {
 
 func TestIndexWriterDelete(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}))
+	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), nil)
 	for i := 0; i < indexBlockEntriesCap*4; i++ {
 		iw.append(uint64(i + 1))
 	}
@@ -157,7 +157,7 @@ func TestIndexWriterDelete(t *testing.T) {
 	batch.Write()
 
 	// Delete unknown id, the request should be rejected
-	id, _ := newIndexDeleter(db, newAccountIdent(common.Hash{0xa}))
+	id, _ := newIndexDeleter(db, newAccountIdent(common.Hash{0xa}), nil)
 	if err := id.pop(indexBlockEntriesCap * 5); err == nil {
 		t.Fatal("Expect error to occur for unknown id")
 	}
@@ -179,7 +179,7 @@ func TestIndexWriterDelete(t *testing.T) {
 func TestBatchIndexerWrite(t *testing.T) {
 	var (
 		db        = rawdb.NewMemoryDatabase()
-		batch     = newBatchIndexer(db, false)
+		batch     = newBatchIndexer(db, nil, false)
 		histories = makeHistories(10)
 	)
 	for i, h := range histories {
@@ -212,7 +212,7 @@ func TestBatchIndexerWrite(t *testing.T) {
 		}
 	}
 	for addrHash, indexes := range accounts {
-		ir, _ := newIndexReader(db, newAccountIdent(addrHash))
+		ir, _ := newIndexReader(db, newAccountIdent(addrHash), nil)
 		for i := 0; i < len(indexes)-1; i++ {
 			n, err := ir.readGreaterThan(indexes[i])
 			if err != nil {
@@ -232,7 +232,7 @@ func TestBatchIndexerWrite(t *testing.T) {
 	}
 	for addrHash, slots := range storages {
 		for slotHash, indexes := range slots {
-			ir, _ := newIndexReader(db, newStorageIdent(addrHash, slotHash))
+			ir, _ := newIndexReader(db, newStorageIdent(addrHash, slotHash), nil)
 			for i := 0; i < len(indexes)-1; i++ {
 				n, err := ir.readGreaterThan(indexes[i])
 				if err != nil {
@@ -256,7 +256,7 @@ func TestBatchIndexerWrite(t *testing.T) {
 func TestBatchIndexerDelete(t *testing.T) {
 	var (
 		db        = rawdb.NewMemoryDatabase()
-		bw        = newBatchIndexer(db, false)
+		bw        = newBatchIndexer(db, nil, false)
 		histories = makeHistories(10)
 	)
 	// Index histories
@@ -270,7 +270,7 @@ func TestBatchIndexerDelete(t *testing.T) {
 	}
 
 	// Unindex histories
-	bd := newBatchIndexer(db, true)
+	bd := newBatchIndexer(db, nil, true)
 	for i := len(histories) - 1; i >= 0; i-- {
 		if err := bd.process(histories[i], uint64(i+1)); err != nil {
 			t.Fatalf("Failed to process history, %v", err)

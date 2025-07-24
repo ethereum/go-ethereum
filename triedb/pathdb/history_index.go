@@ -76,15 +76,16 @@ type indexReader struct {
 	readers  map[uint32]*blockReader
 	state    stateIdent
 	timings  *readTimings
+	cacher   *historyCacher
 }
 
 // loadIndexData loads the index data associated with the specified state.
-func loadIndexData(db ethdb.KeyValueReader, state stateIdent, timings *readTimings, cacheRead bool) ([]*indexBlockDesc, error) {
+func loadIndexData(db ethdb.KeyValueReader, state stateIdent, timings *readTimings, cacheRead bool, cacher *historyCacher) ([]*indexBlockDesc, error) {
 	start := time.Now()
 	key := state.String()
 	var blob []byte
-	if cacheRead && historyIndexCache.Contains(key) {
-		blob, _ = historyIndexCache.Get(key)
+	if cacheRead && cacher != nil && cacher.index.Contains(key) {
+		blob, _ = cacher.index.Get(key)
 	} else {
 		if state.account {
 			blob = rawdb.ReadAccountHistoryIndex(db, state.addressHash)
@@ -98,19 +99,21 @@ func loadIndexData(db ethdb.KeyValueReader, state stateIdent, timings *readTimin
 	if len(blob) == 0 {
 		return nil, nil
 	}
-	historyIndexCache.Add(key, blob)
+	if cacher != nil {
+		cacher.index.Add(key, blob)
+	}
 	return parseIndex(blob)
 }
 
 // newIndexReader constructs a index reader for the specified state. Reader with
 // empty data is allowed.
-func newIndexReader(db ethdb.KeyValueReader, state stateIdent) (*indexReader, error) {
-	return newIndexReaderWithTimings(db, state, nil)
+func newIndexReader(db ethdb.KeyValueReader, state stateIdent, cacher *historyCacher) (*indexReader, error) {
+	return newIndexReaderWithTimings(db, state, nil, cacher)
 }
 
 // Helper to allow passing timings
-func newIndexReaderWithTimings(db ethdb.KeyValueReader, state stateIdent, timings *readTimings) (*indexReader, error) {
-	descList, err := loadIndexData(db, state, timings, true)
+func newIndexReaderWithTimings(db ethdb.KeyValueReader, state stateIdent, timings *readTimings, cacher *historyCacher) (*indexReader, error) {
+	descList, err := loadIndexData(db, state, timings, true, cacher)
 	if err != nil {
 		return nil, err
 	}
@@ -120,6 +123,7 @@ func newIndexReaderWithTimings(db ethdb.KeyValueReader, state stateIdent, timing
 		db:       db,
 		state:    state,
 		timings:  timings,
+		cacher:   cacher,
 	}, nil
 }
 
@@ -134,7 +138,7 @@ func (r *indexReader) refresh() error {
 			delete(r.readers, last.id)
 		}
 	}
-	descList, err := loadIndexData(r.db, r.state, r.timings, false)
+	descList, err := loadIndexData(r.db, r.state, r.timings, false, r.cacher)
 	if err != nil {
 		return err
 	}
@@ -161,16 +165,17 @@ func (r *indexReader) readGreaterThan(id uint64) (uint64, error) {
 		)
 		start := time.Now()
 		key := fmt.Sprintf("%s:%d", r.state.String(), desc.id)
-		if val, ok := historyBlockCache.Get(key); ok {
-			blob = val
+		if r.cacher != nil && r.cacher.block.Contains(key) {
+			blob, _ = r.cacher.block.Get(key)
 		} else {
 			if r.state.account {
 				blob = rawdb.ReadAccountHistoryIndexBlock(r.db, r.state.addressHash, desc.id)
 			} else {
 				blob = rawdb.ReadStorageHistoryIndexBlock(r.db, r.state.addressHash, r.state.storageHash, desc.id)
 			}
-			if len(blob) > 0 {
-				historyBlockCache.Add(key, blob)
+
+			if r.cacher != nil && len(blob) > 0 {
+				r.cacher.block.Add(key, blob)
 			}
 		}
 		if r.timings != nil {
@@ -200,10 +205,11 @@ type indexWriter struct {
 	lastID   uint64            // The ID of the latest tracked history
 	state    stateIdent
 	db       ethdb.KeyValueReader
+	cacher   *historyCacher
 }
 
 // newIndexWriter constructs the index writer for the specified state.
-func newIndexWriter(db ethdb.KeyValueReader, state stateIdent) (*indexWriter, error) {
+func newIndexWriter(db ethdb.KeyValueReader, state stateIdent, cacher *historyCacher) (*indexWriter, error) {
 	var blob []byte
 	if state.account {
 		blob = rawdb.ReadAccountHistoryIndex(db, state.addressHash)
@@ -218,6 +224,7 @@ func newIndexWriter(db ethdb.KeyValueReader, state stateIdent) (*indexWriter, er
 			bw:       bw,
 			state:    state,
 			db:       db,
+			cacher:   cacher,
 		}, nil
 	}
 	descList, err := parseIndex(blob)
@@ -243,6 +250,7 @@ func newIndexWriter(db ethdb.KeyValueReader, state stateIdent) (*indexWriter, er
 		bw:       bw,
 		state:    state,
 		db:       db,
+		cacher:   cacher,
 	}, nil
 }
 
@@ -301,8 +309,10 @@ func (w *indexWriter) finish(batch ethdb.Batch) {
 	}
 	for _, bw := range writers {
 		buf := bw.finish()
-		if key := fmt.Sprintf("%s:%d", w.state.String(), bw.desc.id); historyBlockCache.Contains(key) {
-			historyBlockCache.Add(key, buf)
+		if w.cacher != nil {
+			if key := fmt.Sprintf("%s:%d", w.state.String(), bw.desc.id); w.cacher.block.Contains(key) {
+				w.cacher.block.Add(key, buf)
+			}
 		}
 		if w.state.account {
 			rawdb.WriteAccountHistoryIndexBlock(batch, w.state.addressHash, bw.desc.id, buf)
@@ -316,8 +326,10 @@ func (w *indexWriter) finish(batch ethdb.Batch) {
 	for _, desc := range descList {
 		buf = append(buf, desc.encode()...)
 	}
-	if key := w.state.String(); historyIndexCache.Contains(key) {
-		historyIndexCache.Add(key, buf)
+	if w.cacher != nil {
+		if key := w.state.String(); w.cacher.index.Contains(key) {
+			w.cacher.index.Add(key, buf)
+		}
 	}
 	if w.state.account {
 		rawdb.WriteAccountHistoryIndex(batch, w.state.addressHash, buf)
@@ -334,10 +346,11 @@ type indexDeleter struct {
 	lastID   uint64            // The ID of the latest tracked history
 	state    stateIdent
 	db       ethdb.KeyValueReader
+	cacher   *historyCacher
 }
 
 // newIndexDeleter constructs the index deleter for the specified state.
-func newIndexDeleter(db ethdb.KeyValueReader, state stateIdent) (*indexDeleter, error) {
+func newIndexDeleter(db ethdb.KeyValueReader, state stateIdent, cacher *historyCacher) (*indexDeleter, error) {
 	var blob []byte
 	if state.account {
 		blob = rawdb.ReadAccountHistoryIndex(db, state.addressHash)
@@ -354,6 +367,7 @@ func newIndexDeleter(db ethdb.KeyValueReader, state stateIdent) (*indexDeleter, 
 			bw:       bw,
 			state:    state,
 			db:       db,
+			cacher:   cacher,
 		}, nil
 	}
 	descList, err := parseIndex(blob)
@@ -379,6 +393,7 @@ func newIndexDeleter(db ethdb.KeyValueReader, state stateIdent) (*indexDeleter, 
 		bw:       bw,
 		state:    state,
 		db:       db,
+		cacher:   cacher,
 	}, nil
 }
 
@@ -436,9 +451,10 @@ func (d *indexDeleter) pop(id uint64) error {
 // This function is safe to be called multiple times.
 func (d *indexDeleter) finish(batch ethdb.Batch) {
 	for _, id := range d.dropped {
-		key := fmt.Sprintf("%s:%d", d.state.String(), id)
-		if historyBlockCache.Contains(key) {
-			historyBlockCache.Remove(key)
+		if d.cacher != nil {
+			if key := fmt.Sprintf("%s:%d", d.state.String(), id); d.cacher.block.Contains(key) {
+				d.cacher.block.Remove(key)
+			}
 		}
 		if d.state.account {
 			rawdb.DeleteAccountHistoryIndexBlock(batch, d.state.addressHash, id)
@@ -451,9 +467,10 @@ func (d *indexDeleter) finish(batch ethdb.Batch) {
 	// Flush the content of last block writer, regardless it's dirty or not
 	if !d.bw.empty() {
 		buf := d.bw.finish()
-		key := fmt.Sprintf("%s:%d", d.state.String(), d.bw.desc.id)
-		if historyBlockCache.Contains(key) {
-			historyBlockCache.Add(key, buf)
+		if d.cacher != nil {
+			if key := fmt.Sprintf("%s:%d", d.state.String(), d.bw.desc.id); d.cacher.block.Contains(key) {
+				d.cacher.block.Add(key, buf)
+			}
 		}
 
 		if d.state.account {
@@ -464,8 +481,10 @@ func (d *indexDeleter) finish(batch ethdb.Batch) {
 	}
 	// Flush the index metadata into the supplied batch
 	if d.empty() {
-		if key := d.state.String(); historyIndexCache.Contains(key) {
-			historyIndexCache.Remove(key)
+		if d.cacher != nil {
+			if key := d.state.String(); d.cacher.index.Contains(key) {
+				d.cacher.index.Remove(key)
+			}
 		}
 		if d.state.account {
 			rawdb.DeleteAccountHistoryIndex(batch, d.state.addressHash)
@@ -477,8 +496,11 @@ func (d *indexDeleter) finish(batch ethdb.Batch) {
 		for _, desc := range d.descList {
 			buf = append(buf, desc.encode()...)
 		}
-		if key := d.state.String(); historyIndexCache.Contains(key) {
-			historyIndexCache.Add(key, buf)
+
+		if d.cacher != nil {
+			if key := d.state.String(); d.cacher.index.Contains(key) {
+				d.cacher.index.Add(key, buf)
+			}
 		}
 
 		if d.state.account {
