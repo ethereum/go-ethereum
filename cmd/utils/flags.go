@@ -115,7 +115,7 @@ var (
 		Category: flags.EthCategory,
 	}
 	EraFormatFlag = &cli.StringFlag{
-		Name:     "era.format",
+		Name:     "eraformat",
 		Usage:    "Archive format: 'era1' or 'erae'",
 		Category: flags.EthCategory,
 	}
