@@ -691,7 +691,7 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 			// Note: healing may be rerun in subsequent cycles to fill gaps between
 			// pivot states (e.g., if chain sync takes longer).
 			if !s.healStartTime.IsZero() {
-				stateHealTimeResettingTimer.Update(time.Since(s.healStartTime))
+				stateHealTimeGauge.Inc(int64(time.Since(s.healStartTime)))
 				log.Info("State healing phase is completed", "elapsed", common.PrettyDuration(time.Since(s.healStartTime)))
 				s.healStartTime = time.Time{}
 			}
