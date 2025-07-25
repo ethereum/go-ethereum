@@ -151,11 +151,11 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			if err == nil {
 				return
 			}
-			if !logged && evm.Config.Tracer.OnOpcode != nil {
-				evm.Config.Tracer.OnOpcode(pcCopy, byte(op), gasCopy, cost, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))
+			if !logged {
+				evm.tracer.OnOpcode(pcCopy, byte(op), gasCopy, cost, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))
 			}
-			if logged && evm.Config.Tracer.OnFault != nil {
-				evm.Config.Tracer.OnFault(pcCopy, byte(op), gasCopy, cost, callContext, evm.depth, VMErrorFromErr(err))
+			if logged {
+				evm.tracer.OnFault(pcCopy, byte(op), gasCopy, cost, callContext, evm.depth, VMErrorFromErr(err))
 			}
 		}()
 	}
@@ -175,7 +175,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			// associated costs.
 			contractAddr := contract.Address()
 			consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas)
-			contract.UseGas(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
+			evm.UseGas(contract, consumed, tracing.GasChangeWitnessCodeChunk)
 			if consumed < wanted {
 				return nil, ErrOutOfGas
 			}
@@ -235,13 +235,9 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 
 		// Do tracing before potential memory expansion
 		if debug {
-			if evm.Config.Tracer.OnGasChange != nil {
-				evm.Config.Tracer.OnGasChange(gasCopy, gasCopy-cost, tracing.GasChangeCallOpCode)
-			}
-			if evm.Config.Tracer.OnOpcode != nil {
-				evm.Config.Tracer.OnOpcode(pc, byte(op), gasCopy, cost, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))
-				logged = true
-			}
+			evm.tracer.OnGasChange(gasCopy, gasCopy-cost, tracing.GasChangeCallOpCode)
+			evm.tracer.OnOpcode(pc, byte(op), gasCopy, cost, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))
+			logged = true
 		}
 		if memorySize > 0 {
 			mem.Resize(memorySize)
@@ -260,4 +256,27 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 	}
 
 	return res, err
+}
+
+// UseGas attempts the use gas and subtracts it and returns true on success
+func (evm *EVM) UseGas(c *Contract, gas uint64, reason tracing.GasChangeReason) (ok bool) {
+	if c.Gas < gas {
+		return false
+	}
+	if reason != tracing.GasChangeIgnored {
+		evm.tracer.OnGasChange(c.Gas, c.Gas-gas, reason)
+	}
+	c.Gas -= gas
+	return true
+}
+
+// RefundGas refunds gas to the contract
+func (evm *EVM) RefundGas(c *Contract, gas uint64, reason tracing.GasChangeReason) {
+	if gas == 0 {
+		return
+	}
+	if reason != tracing.GasChangeIgnored {
+		evm.tracer.OnGasChange(c.Gas, c.Gas+gas, reason)
+	}
+	c.Gas += gas
 }
