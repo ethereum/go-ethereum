@@ -14,57 +14,35 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package catalyst
+package eth
 
 import (
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 )
 
-// FullSyncTester is an auxiliary service that allows Geth to perform full sync
+// SyncOverride is an auxiliary service that allows Geth to perform full sync
 // alone without consensus-layer attached. Users must specify a valid block hash
 // as the sync target.
 //
 // This tester can be applied to different networks, no matter it's pre-merge or
 // post-merge, but only for full-sync.
-type FullSyncTester struct {
-	stack          *node.Node
-	backend        *eth.Ethereum
-	target         common.Hash
-	closed         chan struct{}
-	wg             sync.WaitGroup
-	exitWhenSynced bool
+type SyncOverride struct {
+	stack   *node.Node
+	backend *Ethereum
+	closed  chan struct{}
 }
 
-// RegisterFullSyncTester registers the full-sync tester service into the node
-// stack for launching and stopping the service controlled by node.
-func RegisterFullSyncTester(stack *node.Node, backend *eth.Ethereum, target common.Hash, exitWhenSynced bool) (*FullSyncTester, error) {
-	cl := &FullSyncTester{
-		stack:          stack,
-		backend:        backend,
-		target:         target,
-		closed:         make(chan struct{}),
-		exitWhenSynced: exitWhenSynced,
-	}
-	stack.RegisterLifecycle(cl)
-	return cl, nil
-}
-
-// Start launches the beacon sync with provided sync target.
-func (tester *FullSyncTester) Start() error {
-	tester.wg.Add(1)
+// SyncTarget sets the target of the client sync to the given block hash
+func (f *SyncOverride) SyncTarget(target common.Hash, exitWhenSynced bool) {
 	go func() {
-		defer tester.wg.Done()
-
 		// Trigger beacon sync with the provided block hash as trusted
 		// chain head.
-		err := tester.backend.Downloader().BeaconDevSync(ethconfig.FullSync, tester.target, tester.closed)
+		err := f.backend.Downloader().BeaconDevSync(ethconfig.FullSync, target, f.closed)
 		if err != nil {
 			log.Info("Failed to trigger beacon sync", "err", err)
 		}
@@ -76,28 +54,25 @@ func (tester *FullSyncTester) Start() error {
 			select {
 			case <-ticker.C:
 				// Stop in case the target block is already stored locally.
-				if block := tester.backend.BlockChain().GetBlockByHash(tester.target); block != nil {
+				if block := f.backend.BlockChain().GetBlockByHash(target); block != nil {
 					log.Info("Full-sync target reached", "number", block.NumberU64(), "hash", block.Hash())
-
-					if tester.exitWhenSynced {
-						go tester.stack.Close() // async since we need to close ourselves
-						log.Info("Terminating the node")
+					if exitWhenSynced {
+						log.Info("Terminating node")
+						f.stack.Close()
 					}
 					return
 				}
 
-			case <-tester.closed:
+			case <-f.closed:
 				return
 			}
 		}
 	}()
-	return nil
 }
 
 // Stop stops the full-sync tester to stop all background activities.
 // This function can only be called for one time.
-func (tester *FullSyncTester) Stop() error {
-	close(tester.closed)
-	tester.wg.Wait()
+func (f *SyncOverride) Stop() error {
+	close(f.closed)
 	return nil
 }

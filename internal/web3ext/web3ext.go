@@ -468,6 +468,11 @@ web3._extend({
 			call: 'debug_getTrieFlushInterval',
 			params: 0
 		}),
+		new web3._extend.Method({
+			name: 'syncTarget',
+			call: 'debug_syncTarget',
+			params: 1
+		}),
 	],
 	properties: []
 });
