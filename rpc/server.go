@@ -52,14 +52,16 @@ type Server struct {
 	run                atomic.Bool
 	batchItemLimit     int
 	batchResponseLimit int
+	readerLimit        int64
 }
 
 // NewServer creates a new server instance with no registered handlers.
 func NewServer() *Server {
 	server := &Server{
-		idgen:    randomIDGenerator(),
-		codecs:   make(map[ServerCodec]struct{}),
-		denyList: make(map[string]struct{}),
+		idgen:       randomIDGenerator(),
+		codecs:      make(map[ServerCodec]struct{}),
+		denyList:    make(map[string]struct{}),
+		readerLimit: wsDefaultReadLimit,
 	}
 	server.run.Store(true)
 	// Register the default service providing meta information about the RPC service such
@@ -78,6 +80,12 @@ func NewServer() *Server {
 func (s *Server) SetBatchLimits(itemLimit, maxResponseSize int) {
 	s.batchItemLimit = itemLimit
 	s.batchResponseLimit = maxResponseSize
+}
+
+// SetReadLimits sets the limit for max message size to limit the request message size.
+// This would be useful to prevent the server from OOM by taking too large messages.
+func (s *Server) SetReadLimits(maxMessageSize int64) {
+	s.readerLimit = maxMessageSize
 }
 
 // RegisterName creates a service for the given receiver type under the given name. When no
