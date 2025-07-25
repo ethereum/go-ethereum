@@ -67,7 +67,7 @@ func TestEra1Builder(t *testing.T) {
 			hash     = common.Hash{byte(i)}
 			td       = chain.tds[i]
 		)
-		if err = builder.AddRLP(header, body, receipts, uint64(i), hash, td, big.NewInt(1)); err != nil {
+		if err = builder.AddRLP(header, body, receipts, nil, uint64(i), hash, td, big.NewInt(1)); err != nil {
 			t.Fatalf("error adding entry: %v", err)
 		}
 	}
@@ -83,7 +83,11 @@ func TestEra1Builder(t *testing.T) {
 		t.Fatalf("failed to open era: %v", err)
 	}
 	defer e.Close()
-	it, err := NewRawIterator(e)
+	eraPtr, ok := e.(*Era)
+	if !ok {
+		t.Fatalf("failed to assert *Era type")
+	}
+	it, err := NewRawIterator(eraPtr)
 	if err != nil {
 		t.Fatalf("failed to make iterator: %s", err)
 	}
@@ -120,7 +124,7 @@ func TestEra1Builder(t *testing.T) {
 		if !bytes.Equal(rawReceipts, chain.receipts[i]) {
 			t.Fatalf("mismatched receipts: want %s, got %s", chain.receipts[i], rawReceipts)
 		}
-		receipts, err := getReceiptsByNumber(e, i)
+		receipts, err := getReceiptsByNumber(eraPtr, i)
 		if err != nil {
 			t.Fatalf("error reading receipts: %v", err)
 		}

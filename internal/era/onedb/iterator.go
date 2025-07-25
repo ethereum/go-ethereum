@@ -34,8 +34,8 @@ type Iterator struct {
 
 // NewIterator returns a new Iterator instance. Next must be immediately
 // called on new iterators to load the first item.
-func NewIterator(e *Era) (*Iterator, error) {
-	inner, err := NewRawIterator(e)
+func NewIterator(e era.Era) (era.Iterator, error) {
+	inner, err := NewRawIterator(e.(*Era))
 	if err != nil {
 		return nil, err
 	}

@@ -35,8 +35,8 @@ type Iterator struct {
 
 // NewIterator returns a header/body/receipt iterator over the archive.
 // Call Next immediately to position on the first block.
-func NewIterator(e *Era) (*Iterator, error) {
-	inner, err := NewRawIterator(e)
+func NewIterator(e era.Era) (era.Iterator, error) {
+	inner, err := NewRawIterator(e.(*Era))
 	if err != nil {
 		return nil, err
 	}
