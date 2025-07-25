@@ -446,7 +446,7 @@ func (g *Genesis) chainConfigOrDefault(ghash common.Hash, stored *params.ChainCo
 // IsVerkle indicates whether the state is already stored in a verkle
 // tree at genesis time.
 func (g *Genesis) IsVerkle() bool {
-	return g.Config.IsVerkleGenesis()
+	return g != nil && g.Config != nil && g.Config.VerkleTime != nil && *g.Config.VerkleTime == g.Timestamp
 }
 
 // ToBlock returns the genesis block according to genesis specification.
@@ -570,29 +570,6 @@ func (g *Genesis) MustCommit(db ethdb.Database, triedb *triedb.Database) *types.
 		panic(err)
 	}
 	return block
-}
-
-// EnableVerkleAtGenesis indicates whether the verkle fork should be activated
-// at genesis. This is a temporary solution only for verkle devnet testing, where
-// verkle fork is activated at genesis, and the configured activation date has
-// already passed.
-//
-// In production networks (mainnet and public testnets), verkle activation always
-// occurs after the genesis block, making this function irrelevant in those cases.
-func EnableVerkleAtGenesis(db ethdb.Database, genesis *Genesis) (bool, error) {
-	if genesis != nil {
-		if genesis.Config == nil {
-			return false, errGenesisNoConfig
-		}
-		return genesis.Config.EnableVerkleAtGenesis, nil
-	}
-	if ghash := rawdb.ReadCanonicalHash(db, 0); ghash != (common.Hash{}) {
-		chainCfg := rawdb.ReadChainConfig(db, ghash)
-		if chainCfg != nil {
-			return chainCfg.EnableVerkleAtGenesis, nil
-		}
-	}
-	return false, nil
 }
 
 // DefaultGenesisBlock returns the Ethereum main net genesis block.

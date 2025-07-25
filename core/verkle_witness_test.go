@@ -58,7 +58,6 @@ var (
 		ShanghaiTime:            u64(0),
 		VerkleTime:              u64(0),
 		TerminalTotalDifficulty: common.Big0,
-		EnableVerkleAtGenesis:   true,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Verkle: params.DefaultPragueBlobConfig,
 		},
@@ -82,7 +81,6 @@ var (
 		ShanghaiTime:            u64(0),
 		VerkleTime:              u64(0),
 		TerminalTotalDifficulty: common.Big0,
-		EnableVerkleAtGenesis:   true,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Verkle: params.DefaultPragueBlobConfig,
 		},
