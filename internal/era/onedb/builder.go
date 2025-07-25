@@ -86,7 +86,7 @@ type Builder struct {
 }
 
 // NewBuilder returns a new Builder instance.
-func NewBuilder(w io.Writer) *Builder {
+func NewBuilder(w io.Writer) era.Builder {
 	buf := bytes.NewBuffer(nil)
 	return &Builder{
 		w:      e2store.NewWriter(w),
@@ -113,12 +113,15 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, 
 	if err != nil {
 		return err
 	}
-	return b.AddRLP(eh, eb, er, block.NumberU64(), block.Hash(), td, block.Difficulty())
+	return b.AddRLP(eh, eb, er, nil, block.NumberU64(), block.Hash(), td, block.Difficulty())
 }
 
 // AddRLP writes a compressed block entry and compressed receipts entry to the
 // underlying e2store file.
-func (b *Builder) AddRLP(header, body, receipts []byte, number uint64, hash common.Hash, td, difficulty *big.Int) error {
+func (b *Builder) AddRLP(header, body, receipts, proof []byte, number uint64, hash common.Hash, td, difficulty *big.Int) error {
+	if proof != nil {
+		return fmt.Errorf("proof not allowed in era1 format")
+	}
 	// Write Era1 version entry before first block.
 	if b.startNum == nil {
 		n, err := b.w.Write(era.TypeVersion, nil)

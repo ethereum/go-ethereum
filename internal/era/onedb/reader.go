@@ -22,10 +22,7 @@ import (
 	"io"
 	"math/big"
 	"os"
-	"path"
 	"slices"
-	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -40,37 +37,6 @@ import (
 // epoch and network.
 func Filename(network string, epoch int, root common.Hash) string {
 	return fmt.Sprintf("%s-%05d-%s.era1", network, epoch, root.Hex()[2:10])
-}
-
-// ReadDir reads all the era1 files in a directory for a given network.
-// Format: <network>-<epoch>-<hexroot>.era1
-func ReadDir(dir, network string) ([]string, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("error reading directory %s: %w", dir, err)
-	}
-	var (
-		next = uint64(0)
-		eras []string
-	)
-	for _, entry := range entries {
-		if path.Ext(entry.Name()) != ".era1" {
-			continue
-		}
-		parts := strings.Split(entry.Name(), "-")
-		if len(parts) != 3 || parts[0] != network {
-			// Invalid era1 filename, skip.
-			continue
-		}
-		if epoch, err := strconv.ParseUint(parts[1], 10, 64); err != nil {
-			return nil, fmt.Errorf("malformed era1 filename: %s", entry.Name())
-		} else if epoch != next {
-			return nil, fmt.Errorf("missing epoch %d", next)
-		}
-		next += 1
-		eras = append(eras, entry.Name())
-	}
-	return eras, nil
 }
 
 type ReadAtSeekCloser interface {
@@ -89,7 +55,7 @@ type Era struct {
 }
 
 // From returns an Era backed by f.
-func From(f ReadAtSeekCloser) (*Era, error) {
+func From(f era.ReadAtSeekCloser) (era.Era, error) {
 	m, err := readMetadata(f)
 	if err != nil {
 		return nil, err
@@ -103,7 +69,7 @@ func From(f ReadAtSeekCloser) (*Era, error) {
 }
 
 // Open returns an Era backed by the given filename.
-func Open(filename string) (*Era, error) {
+func Open(filename string) (era.Era, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err

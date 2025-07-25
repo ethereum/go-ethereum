@@ -44,7 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/debug"
-	era2 "github.com/ethereum/go-ethereum/internal/era/execdb"
+	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/era/onedb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -253,11 +253,11 @@ func readList(filename string) ([]string, error) {
 // ImportHistory imports Era1 files containing historical block information,
 // starting from genesis. The assumption is held that the provided chain
 // segment in Era1 file should all be canonical and verified.
-func ImportHistory(chain *core.BlockChain, dir string, network string) error {
+func ImportHistory(chain *core.BlockChain, dir string, network string, from era.FromFn, iterator era.NewIteratorFn) error {
 	if chain.CurrentSnapBlock().Number.BitLen() != 0 {
 		return errors.New("history import only supported when starting from genesis")
 	}
-	entries, err := onedb.ReadDir(dir, network)
+	entries, err := era.ReadDir(dir, network)
 	if err != nil {
 		return fmt.Errorf("error reading %s: %w", dir, err)
 	}
@@ -301,11 +301,11 @@ func ImportHistory(chain *core.BlockChain, dir string, network string) error {
 				return fmt.Errorf("%s checksum mismatch: have %s want %s", file, got, want)
 			}
 			// Import all block data from Era1.
-			e, err := onedb.From(f)
+			e, err := from(f)
 			if err != nil {
 				return fmt.Errorf("error opening era: %w", err)
 			}
-			it, err := onedb.NewIterator(e)
+			it, err := iterator(e)
 			if err != nil {
 				return fmt.Errorf("error creating iterator: %w", err)
 			}
@@ -344,105 +344,6 @@ func ImportHistory(chain *core.BlockChain, dir string, network string) error {
 			return err
 		}
 	}
-	return nil
-}
-
-// ImportHistoryEraE imports Era-E files containing historical block information,
-// starting from genesis. Currently this function follows the assumptions that the provided chain
-// segment in Era-E file should all be canonical and verified. In the future, this function will be
-// extended to support importing Era-E files with proof verification.
-func ImportHistoryEraE(chain *core.BlockChain, dir, network string) error {
-	if chain.CurrentSnapBlock().Number.Sign() != 0 {
-		return errors.New("history import only supported when starting from genesis")
-	}
-
-	entries, err := era2.ReadDir(dir, network)
-	if err != nil {
-		return fmt.Errorf("reading %q: %w", dir, err)
-	}
-	checksums, err := readList(filepath.Join(dir, "checksums.txt"))
-	if err != nil {
-		return fmt.Errorf("reading checksums.txt: %w", err)
-	}
-	if len(entries) != len(checksums) {
-		return fmt.Errorf("mismatch: %d erae files, %d checksums", len(entries), len(checksums))
-	}
-
-	var (
-		start    = time.Now()
-		reported = time.Now()
-		imported int
-		h        = sha256.New()
-		scratch  bytes.Buffer
-	)
-
-	for i, file := range entries {
-		path := filepath.Join(dir, file)
-
-		// validate against checksum file in directory
-		f, err := os.Open(path)
-		if err != nil {
-			return fmt.Errorf("open %s: %w", path, err)
-		}
-		if _, err := io.Copy(h, f); err != nil {
-			f.Close()
-			return fmt.Errorf("checksum %s: %w", path, err)
-		}
-		got := common.BytesToHash(h.Sum(scratch.Bytes()[:])).Hex()
-		want := checksums[i]
-		h.Reset()
-		scratch.Reset()
-		if got != want {
-			f.Close()
-			return fmt.Errorf("%s checksum mismatch: have %s want %s", file, got, want)
-		}
-		// rewind for reading
-		if _, err := f.Seek(0, io.SeekStart); err != nil {
-			f.Close()
-			return fmt.Errorf("rewind %s: %w", file, err)
-		}
-		// import archive
-		e, err := era2.From(f)
-		if err != nil {
-			f.Close()
-			return fmt.Errorf("open erae %s: %w", file, err)
-		}
-		blockCount := e.Count()
-
-		for j := uint64(0); j < blockCount; j++ {
-			hdr, err := e.GetHeader(e.Start() + j)
-			if err != nil {
-				return fmt.Errorf("header #%d: %w", hdr.Number.Uint64(), err)
-			}
-			if hdr.Number.Sign() == 0 { // skip genesis
-				continue
-			}
-			body, err := e.GetBody(hdr.Number.Uint64())
-			if err != nil {
-				return fmt.Errorf("body #%d: %w", hdr.Number.Uint64(), err)
-			}
-			rcpts, err := e.GetReceipts(hdr.Number.Uint64(), 1)
-			if err != nil {
-				return fmt.Errorf("receipts #%d: %w", hdr.Number.Uint64(), err)
-			}
-			blk := types.NewBlockWithHeader(hdr).WithBody(*body)
-
-			enc := types.EncodeBlockReceiptLists(rcpts)
-			if _, err := chain.InsertReceiptChain([]*types.Block{blk}, enc, ^uint64(0)); err != nil {
-				return fmt.Errorf("insert #%d: %w", hdr.Number.Uint64(), err)
-			}
-
-			imported++
-			if time.Since(reported) >= 8*time.Second {
-				log.Info("Importing Era‑E", "head", hdr.Number, "imported", imported, "elapsed", common.PrettyDuration(time.Since(start)))
-				reported = time.Now()
-				imported = 0
-			}
-		}
-		f.Close()
-	}
-
-	log.Info("Era‑E import complete", "duration", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
@@ -516,7 +417,7 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 
 // ExportHistory exports blockchain history into the specified directory,
 // following the Era format.
-func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) error {
+func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64, builderfn era.NewBuilderFn, filename era.FilenameFn) error {
 	log.Info("Exporting blockchain history", "dir", dir)
 	if head := bc.CurrentBlock().Number.Uint64(); head < last {
 		log.Warn("Last block beyond head, setting last = head", "head", head, "last", last)
@@ -545,7 +446,7 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 
 	for batch := first; batch <= last; batch += step {
 		idx := int(batch / step)
-		tmpPath := filepath.Join(dir, onedb.Filename(network, idx, common.Hash{}))
+		tmpPath := filepath.Join(dir, filename(network, idx, common.Hash{}))
 
 		if err := func() error {
 			fh, err := os.Create(tmpPath)
@@ -554,7 +455,7 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 			}
 			defer fh.Close()
 
-			bldr := onedb.NewBuilder(fh)
+			bldr := builderfn(fh)
 
 			for j := uint64(0); j < step && batch+j <= last; j++ {
 				n := batch + j

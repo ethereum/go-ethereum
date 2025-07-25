@@ -22,10 +22,7 @@ import (
 	"io"
 	"math/big"
 	"os"
-	"path"
 	"slices"
-	"strconv"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -72,44 +69,13 @@ func (e *Era) Close() error {
 }
 
 // From returns an Era backed by f.
-func From(f era.ReadAtSeekCloser) (*Era, error) {
+func From(f era.ReadAtSeekCloser) (era.Era, error) {
 	e := &Era{f: f, s: e2store.NewReader(f)}
 	if err := e.loadIndex(); err != nil {
 		f.Close()
 		return nil, err
 	}
 	return e, nil
-}
-
-// ReadDir reads all the era1 files in a directory for a given network.
-// Format: <network>-<epoch>-<hexroot>.erae
-func ReadDir(dir, network string) ([]string, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("error reading directory %s: %w", dir, err)
-	}
-	var (
-		next = uint64(0)
-		eras []string
-	)
-	for _, entry := range entries {
-		if path.Ext(entry.Name()) != ".erae" {
-			continue
-		}
-		parts := strings.Split(entry.Name(), "-")
-		if len(parts) != 3 || parts[0] != network {
-			// Invalid era1 filename, skip.
-			continue
-		}
-		if epoch, err := strconv.ParseUint(parts[1], 10, 64); err != nil {
-			return nil, fmt.Errorf("malformed era1 filename: %s", entry.Name())
-		} else if epoch != next {
-			return nil, fmt.Errorf("missing epoch %d", next)
-		}
-		next += 1
-		eras = append(eras, entry.Name())
-	}
-	return eras, nil
 }
 
 // Start retrieves the starting block number.
@@ -185,8 +151,8 @@ func (e *Era) getTD(blockNum uint64) (*big.Int, error) {
 	return td, nil
 }
 
-// GetRawBodyFrameByNumber retrieves the raw body frame in bytes of a specific block.
-func (e *Era) GetRawBodyFrameByNumber(blockNum uint64) ([]byte, error) {
+// GetRawBodyByNumber returns the RLP-encoded body for the given block number.
+func (e *Era) GetRawBodyByNumber(blockNum uint64) ([]byte, error) {
 	off, err := e.bodyOff(blockNum)
 	if err != nil {
 		return nil, err
@@ -198,8 +164,8 @@ func (e *Era) GetRawBodyFrameByNumber(blockNum uint64) ([]byte, error) {
 	return io.ReadAll(r)
 }
 
-// GetRawReceiptsFrameByNumber retrieves the raw receipts frame in bytes of a specific block.
-func (e *Era) GetRawReceiptsFrameByNumber(blockNum uint64) ([]byte, error) {
+// GetRawReceiptsByNumber returns the RLP-encoded receipts for the given block number.
+func (e *Era) GetRawReceiptsByNumber(blockNum uint64) ([]byte, error) {
 	off, err := e.receiptOff(blockNum)
 	if err != nil {
 		return nil, err
@@ -211,7 +177,7 @@ func (e *Era) GetRawReceiptsFrameByNumber(blockNum uint64) ([]byte, error) {
 	return io.ReadAll(r)
 }
 
-// GetRawProofFrameByNumber retrieves the raw proof frame in bytes of a specific block proof.
+// GetRawProofFrameByNumber returns the RLP-encoded receipts for the given block number.
 func (e *Era) GetRawProofFrameByNumber(blockNum uint64) ([]byte, error) {
 	off, err := e.proofOff(blockNum)
 	if err != nil {

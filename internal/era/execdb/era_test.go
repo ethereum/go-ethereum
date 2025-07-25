@@ -139,7 +139,7 @@ func TestEra2Builder(t *testing.T) {
 			t.Fatalf("body %d mismatch", i)
 		}
 
-		rawBody, err := era.GetRawBodyFrameByNumber(bn)
+		rawBody, err := era.GetRawBodyByNumber(bn)
 		if err != nil {
 			t.Fatalf("raw body %d: %v", i, err)
 		}
@@ -153,7 +153,7 @@ func TestEra2Builder(t *testing.T) {
 			t.Fatalf("body frame %d mismatch", i)
 		}
 
-		rawRcpt, err := era.GetRawReceiptsFrameByNumber(bn)
+		rawRcpt, err := era.GetRawReceiptsByNumber(bn)
 		if err != nil {
 			t.Fatalf("raw receipts %d: %v", i, err)
 		}

@@ -308,7 +308,7 @@ func (db *Store) openEraFile(epoch uint64) (*onedb.Era, error) {
 		return nil, fmt.Errorf("pre-merge era1 file has invalid boundary. %d %% %d != 0", e.Start(), era.MaxSize)
 	}
 	log.Debug("Opened era1 file", "epoch", epoch)
-	return e, nil
+	return e.(*onedb.Era), nil
 }
 
 // doneWithFile signals that the caller has finished using a file.

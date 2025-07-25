@@ -43,6 +43,8 @@ import (
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/era/eradl"
+	"github.com/ethereum/go-ethereum/internal/era/execdb"
+	"github.com/ethereum/go-ethereum/internal/era/onedb"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -518,11 +520,11 @@ func importHistory(ctx *cli.Context) error {
 	format := ctx.String(utils.EraFormatFlag.Name)
 	switch format {
 	case "era1", "era":
-		if err := utils.ImportHistory(chain, dir, network, utils.Era1); err != nil {
+		if err := utils.ImportHistory(chain, dir, network, onedb.From, onedb.NewIterator); err != nil {
 			return err
 		}
 	case "erae":
-		if err := utils.ImportHistory(chain, dir, network, utils.EraE); err != nil {
+		if err := utils.ImportHistory(chain, dir, network, execdb.From, execdb.NewIterator); err != nil {
 			return err
 		}
 	default:
@@ -563,11 +565,11 @@ func exportHistory(ctx *cli.Context) error {
 	format := ctx.String(utils.EraFormatFlag.Get(ctx))
 	switch format {
 	case "era1", "era":
-		if err := utils.ExportHistory(chain, dir, uint64(first), uint64(last), uint64(era.MaxEra1Size), utils.Era1); err != nil {
+		if err := utils.ExportHistory(chain, dir, uint64(first), uint64(last), uint64(era.MaxSize), onedb.NewBuilder, onedb.Filename); err != nil {
 			utils.Fatalf("Export error: %v\n", err)
 		}
 	case "erae":
-		if err := utils.ExportHistory(chain, dir, uint64(first), uint64(last), uint64(era2.MaxEraESize), utils.EraE); err != nil {
+		if err := utils.ExportHistory(chain, dir, uint64(first), uint64(last), uint64(era.MaxSize), execdb.NewBuilder, execdb.Filename); err != nil {
 			utils.Fatalf("Export error: %v\n", err)
 		}
 	default:

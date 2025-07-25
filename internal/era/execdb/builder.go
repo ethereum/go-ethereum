@@ -51,9 +51,11 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/era/e2store"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/golang/snappy"
 )
@@ -91,7 +93,7 @@ type Builder struct {
 }
 
 // NewBuilder returns a new Builder instance.
-func NewBuilder(w io.Writer) *Builder {
+func NewBuilder(w io.Writer) era.Builder {
 	tmp := bytes.NewBuffer(nil)
 	return &Builder{
 		w:   e2store.NewWriter(w),
@@ -137,12 +139,15 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, 
 	return b.AddRLP(
 		eh, eb, er, ep,
 		header.Number.Uint64(),
-		header.Hash(), td,
+		header.Hash(), td, nil,
 	)
 }
 
 // AddRLP takes the RLP encoded block components and writes them to the underlying e2store file.
-func (b *Builder) AddRLP(headerRLP []byte, bodyRLP []byte, receipts []byte, proof []byte, blockNum uint64, blockHash common.Hash, td *big.Int) error {
+func (b *Builder) AddRLP(headerRLP []byte, bodyRLP []byte, receipts []byte, proof []byte, blockNum uint64, blockHash common.Hash, td, difficulty *big.Int) error {
+	if difficulty != nil {
+		return fmt.Errorf("block difficulty not allowed in erae format")
+	}
 	if len(b.buff.headers) >= era.MaxSize {
 		return fmt.Errorf("exceeds max size %d", era.MaxSize)
 	}
@@ -154,6 +159,11 @@ func (b *Builder) AddRLP(headerRLP []byte, bodyRLP []byte, receipts []byte, proo
 	b.hashes = append(b.hashes, blockHash)
 	if proof != nil {
 		b.buff.proofs = append(b.buff.proofs, proof)
+	}
+
+	mergeblock := history.PrunePoints[params.MainnetGenesisHash]
+	if mergeblock != nil && blockNum <= mergeblock.BlockNumber {
+		b.buff.tds = append(b.buff.tds, new(big.Int).Set(td))
 	}
 
 	// Write Era2 version before writing any blocks.

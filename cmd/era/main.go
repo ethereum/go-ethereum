@@ -170,14 +170,15 @@ func open(ctx *cli.Context, epoch uint64) (*onedb.Era, error) {
 		dir     = ctx.String(dirFlag.Name)
 		network = ctx.String(networkFlag.Name)
 	)
-	entries, err := onedb.ReadDir(dir, network)
+	entries, err := era.ReadDir(dir, network)
 	if err != nil {
 		return nil, fmt.Errorf("error reading era dir: %w", err)
 	}
 	if epoch >= uint64(len(entries)) {
 		return nil, fmt.Errorf("epoch out-of-bounds: last %d, want %d", len(entries)-1, epoch)
 	}
-	return onedb.Open(filepath.Join(dir, entries[epoch]))
+	era, err := onedb.Open(filepath.Join(dir, entries[epoch]))
+	return era.(*onedb.Era), err
 }
 
 // verify checks each era1 file in a directory to ensure it is well-formed and
@@ -199,7 +200,7 @@ func verify(ctx *cli.Context) error {
 		reported = time.Now()
 	)
 
-	entries, err := onedb.ReadDir(dir, network)
+	entries, err := era.ReadDir(dir, network)
 	if err != nil {
 		return fmt.Errorf("error reading %s: %w", dir, err)
 	}
@@ -214,18 +215,19 @@ func verify(ctx *cli.Context) error {
 		err := func() error {
 			name := entries[i]
 			e, err := onedb.Open(filepath.Join(dir, name))
+			eraPointer := e.(*onedb.Era)
 			if err != nil {
 				return fmt.Errorf("error opening era1 file %s: %w", name, err)
 			}
 			defer e.Close()
 			// Read accumulator and check against expected.
-			if got, err := e.Accumulator(); err != nil {
+			if got, err := eraPointer.Accumulator(); err != nil {
 				return fmt.Errorf("error retrieving accumulator for %s: %w", name, err)
 			} else if got != want {
 				return fmt.Errorf("invalid root %s: got %s, want %s", name, got, want)
 			}
 			// Recompute accumulator.
-			if err := checkAccumulator(e); err != nil {
+			if err := checkAccumulator(eraPointer); err != nil {
 				return fmt.Errorf("error verify era1 file %s: %w", name, err)
 			}
 			// Give the user some feedback that something is happening.
