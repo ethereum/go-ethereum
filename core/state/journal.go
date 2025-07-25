@@ -110,14 +110,14 @@ func (j *journal) append(entry journalEntry) {
 func (j *journal) revert(statedb *StateDB, snapshot int) {
 	for i := len(j.entries) - 1; i >= snapshot; i-- {
 		// Undo the changes made by the operation
-        entry := j.entries[i]
-        if addr := entry.dirtied(); addr != nil {
-            if statedb.getStateObject(*addr) == nil {
-                // State object was deleted, recreate it for safe reversion
-                statedb.createObject(*addr)
-            }
-        }
-        entry.revert(statedb)
+		entry := j.entries[i]
+		if addr := entry.dirtied(); addr != nil {
+			if statedb.getStateObject(*addr) == nil {
+				// State object was deleted, recreate it for safe reversion
+				statedb.createObject(*addr)
+			}
+		}
+		entry.revert(statedb)
 
 		// Drop any dirty tracking induced by the change
 		if addr := entry.dirtied(); addr != nil {
