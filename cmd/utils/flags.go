@@ -116,6 +116,11 @@ var (
 		Usage:    "Root directory for era1 history (default = inside ancient/chain)",
 		Category: flags.EthCategory,
 	}
+	EraFormatFlag = &cli.StringFlag{
+		Name:     "eraformat",
+		Usage:    "Archive format: 'era1' or 'erae'",
+		Category: flags.EthCategory,
+	}
 	MinFreeDiskSpaceFlag = &flags.DirectoryFlag{
 		Name:     "datadir.minfreedisk",
 		Usage:    "Minimum free disk space in MB, once reached triggers auto shut down (default = --cache.gc converted to MB, 0 = disabled)",
