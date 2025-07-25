@@ -1,4 +1,4 @@
-package vm
+package main
 
 import (
 	"fmt"
@@ -10,9 +10,21 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var fSet = token.NewFileSet()
+
+type OpcodeImpl interface {
+	MemoryFunc() any
+	GasFunc() any
+	ExecuteFunc() any
+	ConstantGas() uint64
+	MinStack() uint64
+	MaxStack() uint64
+}
 
 type opFuncNames struct {
 	memory    string
@@ -35,13 +47,14 @@ func functionName(f any) string {
 	return arr[len(arr)-1]
 }
 
-func collectFuncNames(jt JumpTable) [256]opFuncNames {
+func collectFuncNames(jt vm.JumpTable) [256]opFuncNames {
 	var funcNames [256]opFuncNames
 	for opCode, entry := range jt {
+		impl := (OpcodeImpl)(entry)
 		funcNames[opCode] = opFuncNames{
-			memory:    functionName(entry.memorySize),
-			gas:       functionName(entry.dynamicGas),
-			execution: functionName(entry.execute),
+			memory:    functionName(impl.MemoryFunc()),
+			gas:       functionName(impl.GasFunc()),
+			execution: functionName(impl.ExecuteFunc()),
 		}
 	}
 	return funcNames
@@ -81,7 +94,7 @@ func extractBody(funcDef string) string {
 }
 
 func collectFuncDefinitions(funcNames [256]opFuncNames) [256]opFuncDefs {
-	pkgs, err := parser.ParseDir(fSet, ".", nil, 0)
+	pkgs, err := parser.ParseDir(fSet, "..", nil, 0)
 	if err != nil {
 		panic(fmt.Sprint("failed to parse vm package", err))
 	}
@@ -165,12 +178,18 @@ func outputExecution(w io.Writer, op *funcDef) {
 	`, extractBody(op.source))
 }
 
-func GenerateRun() {
-	set := newLondonInstructionSet()
+func main() {
+	set, err := vm.LookupInstructionSet(params.Rules{
+		IsLondon: true,
+	})
+	if err != nil {
+		panic("failed to get instruction set")
+	}
+
 	funcNames := collectFuncNames(set)
 	funcDefinitions := collectFuncDefinitions(funcNames)
 
-	output, _ := os.Create("out.go")
+	output, _ := os.Create("../out.go")
 
 	fmt.Fprintln(output, `package vm
 	func Run(interpreter *EVMInterpreter, callContext *ScopeContext) ([]byte, error) {
@@ -181,6 +200,8 @@ func GenerateRun() {
 	switch op {
 	`)
 	for opCode := range funcDefinitions {
+		impl := (OpcodeImpl)(set[opCode])
+
 		fmt.Fprintf(output, `case %d:
 			if !callContext.Contract.UseGas(%d, nil, tracing.GasChangeIgnored) {
 				return nil, ErrOutOfGas
@@ -191,23 +212,23 @@ func GenerateRun() {
 			} else if sLen > %d {
 				return nil, &ErrStackOverflow{stackLen: sLen, limit: %d}
 			}
-		`, opCode, set[opCode].constantGas, set[opCode].minStack, set[opCode].minStack, set[opCode].maxStack, set[opCode].maxStack)
+		`, opCode, impl.ConstantGas(), impl.MinStack(), impl.MinStack(), impl.MaxStack(), impl.MaxStack())
 		if funcDefinitions[opCode].memory.decl != nil {
 			outputMemoryCalc(output, &funcDefinitions[opCode].memory)
 		} else if len(funcNames[opCode].memory) > 0 {
-			panic(fmt.Sprint("failed to get memory handler definition for ", opCodeToString[opCode]))
+			panic(fmt.Sprint("failed to get memory handler definition for ", opCode))
 		}
 
 		if funcDefinitions[opCode].gas.decl != nil {
 			outputDynamicGas(output, &funcDefinitions[opCode].gas, funcDefinitions[opCode].memory.decl != nil)
 		} else if len(funcNames[opCode].gas) > 0 {
-			panic(fmt.Sprint("failed to get gas handler definition for ", opCodeToString[opCode]))
+			panic(fmt.Sprint("failed to get gas handler definition for ", opCode))
 		}
 
 		if funcDefinitions[opCode].execution.decl != nil {
 			outputExecution(output, &funcDefinitions[opCode].execution)
 		} else if len(funcNames[opCode].execution) > 0 {
-			panic(fmt.Sprint("failed to get exec handler definition for ", opCodeToString[opCode]))
+			panic(fmt.Sprint("failed to get exec handler definition for ", opCode))
 		}
 	}
 	fmt.Fprintln(output, `}

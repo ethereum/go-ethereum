@@ -47,6 +47,14 @@ type operation struct {
 	undefined bool
 }
 
+// Generator interface
+func (o *operation) MemoryFunc() any     { return o.memorySize }
+func (o *operation) GasFunc() any        { return o.dynamicGas }
+func (o *operation) ExecuteFunc() any    { return o.execute }
+func (o *operation) ConstantGas() uint64 { return o.constantGas }
+func (o *operation) MinStack() uint64    { return uint64(o.minStack) }
+func (o *operation) MaxStack() uint64    { return uint64(o.minStack) }
+
 var (
 	frontierInstructionSet         = newFrontierInstructionSet()
 	homesteadInstructionSet        = newHomesteadInstructionSet()
