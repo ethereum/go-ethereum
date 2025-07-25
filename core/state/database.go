@@ -389,7 +389,7 @@ func (db *CachingDB) LoadTransitionState(root common.Hash) *TransitionState {
 	ts, ok := db.TransitionStatePerRoot.Get(root)
 	if !ok {
 		// Not in the cache, try getting it from the DB
-		data, _ := rawdb.ReadVerkleTransitionState(db.TrieDB().Disk(), root)
+		data := rawdb.ReadVerkleTransitionState(db.TrieDB().Disk(), root)
 		// if err != nil && errors.Is(err, triedb.ErrNotFound) {
 		// 	log.Error("failed to read transition state", "err", err)
 		// 	return nil

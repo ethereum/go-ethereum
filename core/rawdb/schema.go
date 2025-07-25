@@ -95,7 +95,7 @@ var (
 	uncleanShutdownKey = []byte("unclean-shutdown") // config prefix for the db
 
 	// transitionStatusKey tracks the eth2 transition status.
-	transitionStatusKey = []byte("eth2-transition")
+	transitionStatusKey = []byte("eth2-transition") // deprecated!
 
 	// snapSyncStatusFlagKey flags that status of snap sync.
 	snapSyncStatusFlagKey = []byte("SnapSyncStatus")
@@ -160,7 +160,7 @@ var (
 	preimageMissCounter = metrics.NewRegisteredCounter("db/preimage/miss", nil)
 
 	// Verkle transition information
-	VerkleTransitionStatePrefix = []byte("verkle-transition-state-")
+	verkleTransitionStatePrefix = []byte("verkle-transition-state-")
 )
 
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary
@@ -401,7 +401,7 @@ func storageHistoryIndexBlockKey(addressHash common.Hash, storageHash common.Has
 	return append(append(append(StateHistoryStorageBlockPrefix, addressHash.Bytes()...), storageHash.Bytes()...), buf[:]...)
 }
 
-// transitionStateKey = transitionStatusKey + hash
+// transitionStateKey = verkleTransitionStatePrefix + hash
 func transitionStateKey(hash common.Hash) []byte {
-	return append(VerkleTransitionStatePrefix, hash.Bytes()...)
+	return append(verkleTransitionStatePrefix, hash.Bytes()...)
 }

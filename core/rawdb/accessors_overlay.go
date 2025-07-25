@@ -19,12 +19,18 @@ package rawdb
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 )
 
-func ReadVerkleTransitionState(db ethdb.KeyValueReader, hash common.Hash) ([]byte, error) {
-	return db.Get(transitionStateKey(hash))
+// ReadVerkleTransitionState reads the verkle transition data from the database.
+func ReadVerkleTransitionState(db ethdb.KeyValueReader, hash common.Hash) []byte {
+	data, _ := db.Get(transitionStateKey(hash))
+	return data
 }
 
-func WriteVerkleTransitionState(db ethdb.KeyValueWriter, hash common.Hash, state []byte) error {
-	return db.Put(transitionStateKey(hash), state)
+// WriteVerkleTransitionState writes the verkle transition data into the database.
+func WriteVerkleTransitionState(db ethdb.KeyValueWriter, hash common.Hash, state []byte) {
+	if err := db.Put(transitionStateKey(hash), state); err != nil {
+		log.Crit("Failed to write the verkle transition state", "hash", hash, "err", err)
+	}
 }
