@@ -94,12 +94,12 @@ func newBatchIndexer(db ethdb.KeyValueStore, delete bool) *batchIndexer {
 // process iterates through the accounts and their associated storage slots in the
 // state history, tracking the mapping between state and history IDs.
 func (b *batchIndexer) process(h *history, historyID uint64) error {
-	for _, address := range h.accountList {
+	for address := range h.accounts {
 		addrHash := crypto.Keccak256Hash(address.Bytes())
 		b.counter += 1
 		b.accounts[addrHash] = append(b.accounts[addrHash], historyID)
 
-		for _, slotKey := range h.storageList[address] {
+		for slotKey := range h.storages[address] {
 			b.counter += 1
 			if _, ok := b.storages[addrHash]; !ok {
 				b.storages[addrHash] = make(map[common.Hash][]uint64)
