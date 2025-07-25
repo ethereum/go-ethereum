@@ -19,8 +19,10 @@ package rpc
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"io"
 	"net"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -199,6 +201,118 @@ func TestServerBatchResponseSizeLimit(t *testing.T) {
 		wantedCode := errcodeResponseTooLarge
 		if re.ErrorCode() != wantedCode {
 			t.Errorf("batch elem %d wrong error code, have %d want %d", i, re.ErrorCode(), wantedCode)
+		}
+	}
+}
+
+func TestServerSetReadLimits(t *testing.T) {
+	t.Parallel()
+
+	// Test different read limits
+	testCases := []struct {
+		name       string
+		readLimit  int64
+		testSize   int
+		shouldFail bool
+	}{
+		{
+			name:       "small limit with small request - should succeed",
+			readLimit:  2048,
+			testSize:   500, // Small request data
+			shouldFail: false,
+		},
+		{
+			name:       "small limit with large request - should fail",
+			readLimit:  2048,
+			testSize:   5000, // Large request data that should exceed limit
+			shouldFail: true,
+		},
+		{
+			name:       "medium limit with medium request - should succeed",
+			readLimit:  10240,
+			testSize:   5000, // Medium request data
+			shouldFail: false,
+		},
+		{
+			name:       "medium limit with large request - should fail",
+			readLimit:  10240,
+			testSize:   20000, // Large request data
+			shouldFail: true,
+		},
+		{
+			name:       "large limit with large request - should succeed",
+			readLimit:  50000,
+			testSize:   20000, // Large request data that should fit
+			shouldFail: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create server and set read limits
+			srv := newTestServer()
+			srv.SetReadLimits(tc.readLimit)
+			defer srv.Stop()
+
+			// Start HTTP server with WebSocket handler
+			httpsrv := httptest.NewServer(srv.WebsocketHandler([]string{"*"}))
+			defer httpsrv.Close()
+
+			wsURL := "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
+
+			// Connect WebSocket client
+			client, err := DialOptions(context.Background(), wsURL)
+			if err != nil {
+				t.Fatalf("can't dial: %v", err)
+			}
+			defer client.Close()
+
+			// Create large request data - this is what will be limited
+			largeString := strings.Repeat("A", tc.testSize)
+
+			// Send the large string as a parameter in the request
+			var result echoResult
+			err = client.Call(&result, "test_echo", largeString, 42, &echoArgs{S: "test"})
+
+			if tc.shouldFail {
+				// Expecting an error due to read limit exceeded
+				if err == nil {
+					t.Fatalf("expected error for request size %d with limit %d, but got none", tc.testSize, tc.readLimit)
+				}
+				// Check if it's the expected message size limit error
+				if !strings.Contains(err.Error(), "message too big") {
+					t.Fatalf("expected 'message too big' error, got: %v", err)
+				}
+			} else {
+				// Expecting success
+				if err != nil {
+					t.Fatalf("unexpected error for request size %d with limit %d: %v", tc.testSize, tc.readLimit, err)
+				}
+				// Verify the response is correct - the echo should return our string
+				if result.String != largeString {
+					t.Fatalf("expected echo result to match input")
+				}
+			}
+		})
+	}
+}
+
+// Test that SetReadLimits properly updates the server's readerLimit field
+func TestServerSetReadLimitsField(t *testing.T) {
+	server := NewServer()
+
+	// Test initial default value
+	if server.readLimit != wsDefaultReadLimit {
+		t.Errorf("expected initial readerLimit to be %d, got %d", wsDefaultReadLimit, server.readLimit)
+	}
+
+	// Test setting different values
+	testValues := []int64{1024, 10240, 102400, 1048576}
+
+	for _, expectedLimit := range testValues {
+		server.SetReadLimits(expectedLimit)
+		if server.readLimit != expectedLimit {
+			t.Errorf("expected readerLimit to be %d after SetReadLimits, got %d", expectedLimit, server.readLimit)
 		}
 	}
 }
