@@ -27,10 +27,10 @@ import (
 // tracking which parts of the legacy MPT-based state have already been
 // migrated to the Verkle-based state.
 type TransitionState struct {
-	// CurrentAccountHash is the address of the next account to be migrated
+	// CurrentAccountHash is the hash of the next account to be migrated
 	// from the MPT state to the Verkle state. Null means nothing has been
 	// migrated yet.
-	CurrentAccountAddress *common.Address
+	CurrentAccountHash common.Hash
 
 	// CurrentSlotHash is the hash of the next storage slot (within the
 	// current account) to be migrated from the MPT state to the Verkle state.
@@ -72,22 +72,6 @@ func (ts *TransitionState) InTransition() bool {
 // Transitioned returns true if the translation process has been completed.
 func (ts *TransitionState) Transitioned() bool {
 	return ts != nil && ts.Ended
-}
-
-// Copy returns a deep copy of the TransitionState object.
-func (ts *TransitionState) Copy() *TransitionState {
-	ret := &TransitionState{
-		Started:               ts.Started,
-		Ended:                 ts.Ended,
-		CurrentSlotHash:       ts.CurrentSlotHash,
-		CurrentPreimageOffset: ts.CurrentPreimageOffset,
-		StorageProcessed:      ts.StorageProcessed,
-	}
-	if ts.CurrentAccountAddress != nil {
-		ret.CurrentAccountAddress = &common.Address{}
-		copy(ret.CurrentAccountAddress[:], ts.CurrentAccountAddress[:])
-	}
-	return ret
 }
 
 // LoadTransitionState retrieves the Verkle transition state associated with
