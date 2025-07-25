@@ -38,6 +38,36 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Install Cosign
+      uses: sigstore/cosign-installer@v3
+
     - name: Build and push multi-arch images to GHCR
       run: |
         go run build/ci.go dockerx -platform linux/amd64,linux/arm64 -hub ghcr.io/berachain/bera-geth -upload
+
+    - name: Get image digest and version
+      id: image_info
+      run: |
+        # Extract version information
+        if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          VERSION="${{ github.ref_name }}"
+        elif [[ "${{ github.ref }}" == refs/heads/main ]]; then
+          VERSION="latest"
+        else
+          VERSION="branch-${GITHUB_REF##*/}"
+        fi
+        
+        # Get the digest of the pushed image
+        DIGEST=$(docker buildx imagetools inspect ghcr.io/berachain/bera-geth:${VERSION} --format "{{.Manifest.Digest}}")
+        echo "digest=${DIGEST}" >> $GITHUB_OUTPUT
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+    - name: Sign Docker images with Cosign
+      env:
+        COSIGN_EXPERIMENTAL: true
+      run: |
+        # Sign the multi-arch manifest by digest
+        cosign sign --yes ghcr.io/berachain/bera-geth@${{ steps.image_info.outputs.digest }}
+        
+        # Also sign the tagged version
+        cosign sign --yes ghcr.io/berachain/bera-geth:${{ steps.image_info.outputs.version }}

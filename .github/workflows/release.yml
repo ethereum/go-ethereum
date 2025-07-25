@@ -39,14 +39,18 @@ jobs:
 
     - name: Create archive (amd64)
       run: |
-        go run build/ci.go archive -arch amd64 -type tar
+        go run build/ci.go archive -arch amd64 -type tar -signer LINUX_SIGNING_KEY
+      env:
+        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
     - name: Upload artifacts (amd64)
       uses: actions/upload-artifact@v4
       with:
         name: bera-geth-linux-amd64-archives
         path: |
           bera-geth-linux-amd64-*.tar.gz
+          bera-geth-linux-amd64-*.tar.gz.asc
           bera-geth-alltools-linux-amd64-*.tar.gz
+          bera-geth-alltools-linux-amd64-*.tar.gz.asc
     - name: Cleanup bin
       run: rm -f build/bin/*
 
@@ -74,19 +78,23 @@ jobs:
 
     - name: Create archive (arm64)
       run: |
-        go run build/ci.go archive -arch arm64 -type tar
+        go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY
+      env:
+        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
     - name: Upload artifacts (arm64)
       uses: actions/upload-artifact@v4
       with:
         name: bera-geth-linux-arm64-archives
         path: |
           bera-geth-linux-arm64-*.tar.gz
+          bera-geth-linux-arm64-*.tar.gz.asc
           bera-geth-alltools-linux-arm64-*.tar.gz
+          bera-geth-alltools-linux-arm64-*.tar.gz.asc
     - name: Cleanup bin
       run: rm -fr build/bin/*
 
   draft-release:
-    name: Draft Release
+    name: Draft Release 
     needs: [extract-version, linux-intel, linux-arm]
     runs-on: ubuntu-latest
     env:
@@ -176,14 +184,31 @@ jobs:
 
         ## Binaries
 
-        | System | Architecture | Binary | Notes |
-        |:---:|:---:|:---:|:---|
-        | <img src="https://simpleicons.org/icons/linux.svg" style="width: 32px;"/> | amd64 | [GETH_AMD64_PLACEHOLDER](https://github.com/${{ github.repository }}/releases/download/RELEASE_TAG_PLACEHOLDER/GETH_AMD64_PLACEHOLDER) | Most Linux systems |
-        | <img src="https://simpleicons.org/icons/linux.svg" style="width: 32px;"/> | arm64 | [GETH_ARM64_PLACEHOLDER](https://github.com/${{ github.repository }}/releases/download/RELEASE_TAG_PLACEHOLDER/GETH_ARM64_PLACEHOLDER) | 64-bit ARM systems |
-        | <img src="https://simpleicons.org/icons/linux.svg" style="width: 32px;"/> | amd64 | [GETH_ALLTOOLS_AMD64_PLACEHOLDER](https://github.com/${{ github.repository }}/releases/download/RELEASE_TAG_PLACEHOLDER/GETH_ALLTOOLS_AMD64_PLACEHOLDER) | All tools bundle (amd64) |
-        | <img src="https://simpleicons.org/icons/linux.svg" style="width: 32px;"/> | arm64 | [GETH_ALLTOOLS_ARM64_PLACEHOLDER](https://github.com/${{ github.repository }}/releases/download/RELEASE_TAG_PLACEHOLDER/GETH_ALLTOOLS_ARM64_PLACEHOLDER) | All tools bundle (arm64) |
+        | System | Architecture | Binary | PGP Signature | Notes |
+        |:---:|:---:|:---:|:---:|:---|
+        | <img src="https://simpleicons.org/icons/linux.svg" style="width: 32px;"/> | amd64 | [GETH_AMD64_PLACEHOLDER](https://github.com/${{ github.repository }}/releases/download/RELEASE_TAG_PLACEHOLDER/GETH_AMD64_PLACEHOLDER) | [Signature](https://github.com/${{ github.repository }}/releases/download/RELEASE_TAG_PLACEHOLDER/GETH_AMD64_PLACEHOLDER.asc) | Most Linux systems |
+        | <img src="https://simpleicons.org/icons/linux.svg" style="width: 32px;"/> | arm64 | [GETH_ARM64_PLACEHOLDER](https://github.com/${{ github.repository }}/releases/download/RELEASE_TAG_PLACEHOLDER/GETH_ARM64_PLACEHOLDER) | [Signature](https://github.com/${{ github.repository }}/releases/download/RELEASE_TAG_PLACEHOLDER/GETH_ARM64_PLACEHOLDER.asc) | 64-bit ARM systems |
+        | <img src="https://simpleicons.org/icons/linux.svg" style="width: 32px;"/> | amd64 | [GETH_ALLTOOLS_AMD64_PLACEHOLDER](https://github.com/${{ github.repository }}/releases/download/RELEASE_TAG_PLACEHOLDER/GETH_ALLTOOLS_AMD64_PLACEHOLDER) | [Signature](https://github.com/${{ github.repository }}/releases/download/RELEASE_TAG_PLACEHOLDER/GETH_ALLTOOLS_AMD64_PLACEHOLDER.asc) | All tools bundle (amd64) |
+        | <img src="https://simpleicons.org/icons/linux.svg" style="width: 32px;"/> | arm64 | [GETH_ALLTOOLS_ARM64_PLACEHOLDER](https://github.com/${{ github.repository }}/releases/download/RELEASE_TAG_PLACEHOLDER/GETH_ALLTOOLS_ARM64_PLACEHOLDER) | [Signature](https://github.com/${{ github.repository }}/releases/download/RELEASE_TAG_PLACEHOLDER/GETH_ALLTOOLS_ARM64_PLACEHOLDER.asc) | All tools bundle (arm64) |
         | **System** | **Option** | - | **Resource** |
         | <img src="https://simpleicons.org/icons/docker.svg" style="width: 32px;"/> | Docker | | [ghcr.io/berachain/bera-geth](https://ghcr.io/berachain/bera-geth) |
+        
+        ### Verifying Binary Signatures
+        
+        All release binaries are signed with PGP. To verify:
+        
+        1. Download the [public key](https://raw.githubusercontent.com/${{ github.repository }}/master/.github/workflows/release.asc)
+        2. Import the key: `gpg --import release.asc`
+        3. Verify the signature: `gpg --verify <filename>.asc <filename>`
+        
+        ### Docker Images
+        
+        Docker images are available at `ghcr.io/berachain/bera-geth` and are signed with [Cosign](https://github.com/sigstore/cosign).
+        
+        To verify Docker images:
+        ```bash
+        cosign verify ghcr.io/berachain/bera-geth:RELEASE_TAG_PLACEHOLDER
+        ```
         
         ### Installation
         
