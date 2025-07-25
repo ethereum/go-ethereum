@@ -18,7 +18,6 @@ package core
 
 import (
 	"bytes"
-	"encoding/gob"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -147,9 +145,6 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 		emptyRoot = types.EmptyVerkleHash
 	}
 	db := rawdb.NewMemoryDatabase()
-	if isVerkle {
-		saveVerkleTransitionStatusAtVerlkeGenesis(db)
-	}
 	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb.NewDatabase(db, config), nil))
 	if err != nil {
 		return common.Hash{}, err
@@ -281,24 +276,6 @@ func (o *ChainOverrides) apply(cfg *params.ChainConfig) error {
 	return cfg.CheckConfigForkOrder()
 }
 
-// saveVerkleTransitionStatusAtVerlkeGenesis saves a conversion marker
-// representing a converted state, which is used in devnets that activate
-// verkle at genesis.
-func saveVerkleTransitionStatusAtVerlkeGenesis(db ethdb.Database) {
-	saveVerkleTransitionStatus(db, common.Hash{}, &overlay.TransitionState{Ended: true})
-}
-
-func saveVerkleTransitionStatus(db ethdb.Database, root common.Hash, ts *overlay.TransitionState) {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(ts)
-	if err != nil {
-		log.Error("failed to encode transition state", "err", err)
-		return
-	}
-	rawdb.WriteVerkleTransitionState(db, root, buf.Bytes())
-}
-
 // SetupGenesisBlock writes or updates the genesis block in db.
 // The block that will be used is:
 //
@@ -321,11 +298,6 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, g
 	// config attached.
 	if genesis != nil && genesis.Config == nil {
 		return nil, common.Hash{}, nil, errGenesisNoConfig
-	}
-	// In case of verkle-at-genesis, we need to ensure that the conversion
-	// markers are indicating that the conversion has completed.
-	if genesis != nil && genesis.Config.VerkleTime != nil && *genesis.Config.VerkleTime == genesis.Timestamp {
-		saveVerkleTransitionStatusAtVerlkeGenesis(db)
 	}
 	// Commit the genesis if the database is empty
 	ghash := rawdb.ReadCanonicalHash(db, 0)
@@ -577,9 +549,6 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 	blob, err := json.Marshal(g.Alloc)
 	if err != nil {
 		return nil, err
-	}
-	if g.IsVerkle() {
-		saveVerkleTransitionStatus(db, block.Root(), &overlay.TransitionState{Ended: true})
 	}
 	batch := db.NewBatch()
 	rawdb.WriteGenesisStateSpec(batch, block.Hash(), blob)

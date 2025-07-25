@@ -314,7 +314,6 @@ func TestVerkleGenesisCommit(t *testing.T) {
 	}
 
 	db := rawdb.NewMemoryDatabase()
-	saveVerkleTransitionStatusAtVerlkeGenesis(db)
 	config := *pathdb.Defaults
 	config.NoAsyncFlush = true
 
