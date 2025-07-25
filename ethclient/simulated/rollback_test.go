@@ -40,6 +40,7 @@ func TestTransactionRollbackBehavior(t *testing.T) {
 
 	btx0 := testSendSignedTx(t, testKey, sim, true)
 	tx0 := testSendSignedTx(t, testKey2, sim, false)
+	time.Sleep(200 * time.Millisecond) // Wait to avoid nonce race condition
 	tx1 := testSendSignedTx(t, testKey2, sim, false)
 
 	sim.Rollback()
@@ -50,6 +51,7 @@ func TestTransactionRollbackBehavior(t *testing.T) {
 
 	btx2 := testSendSignedTx(t, testKey, sim, true)
 	tx2 := testSendSignedTx(t, testKey2, sim, false)
+	time.Sleep(200 * time.Millisecond) // Wait to avoid nonce race condition
 	tx3 := testSendSignedTx(t, testKey2, sim, false)
 
 	sim.Commit()
@@ -96,13 +98,13 @@ func pendingStateHasTx(client Client, tx *types.Transaction) bool {
 	)
 
 	// Poll for receipt with timeout
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(200 * time.Millisecond)
 	for time.Now().Before(deadline) {
 		receipt, err = client.TransactionReceipt(ctx, tx.Hash())
 		if err == nil && receipt != nil {
 			break
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 	}
 
 	if err != nil {
