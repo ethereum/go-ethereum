@@ -515,7 +515,7 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 	}
 	// enforce size cap for inputs
 	if c.eip7823 && max(baseLen, expLen, modLen) > 1024 {
-		return nil, fmt.Errorf("one or more of base/exponent/modulus length exceeded 1024 bytes")
+		return nil, errors.New("one or more of base/exponent/modulus length exceeded 1024 bytes")
 	}
 	// Retrieve the operands and execute the exponentiation
 	var (
