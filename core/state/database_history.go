@@ -153,11 +153,3 @@ func (db *HistoricDB) TrieDB() *triedb.Database {
 func (db *HistoricDB) Snapshot() *snapshot.Tree {
 	return nil
 }
-
-func (db *HistoricDB) LoadTransitionState(common.Hash) *TransitionState {
-	panic("should not be called")
-}
-
-func (db *HistoricDB) SaveTransitionState(common.Hash, *TransitionState) {
-	panic("should not be called")
-}
