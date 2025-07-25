@@ -319,10 +319,8 @@ func (s *supplyTracer) write(data any) {
 	}
 
 	out, _ := json.Marshal(supply)
+	out = append(out, '\n')
 	if _, err := s.logger.Write(out); err != nil {
-		log.Warn("failed to write to supply tracer log file", "error", err)
-	}
-	if _, err := s.logger.Write([]byte{'\n'}); err != nil {
 		log.Warn("failed to write to supply tracer log file", "error", err)
 	}
 }
