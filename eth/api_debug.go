@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -442,4 +443,19 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 		return "", errors.New("trie flush interval is undefined for path-based scheme")
 	}
 	return api.eth.blockchain.GetTrieFlushInterval().String(), nil
+}
+
+func (api *DebugAPI) ExecuteWitnessByHash(hash common.Hash) (*stateless.ExtWitness, error) {
+	bc := api.eth.blockchain
+	block := bc.GetBlockByHash(hash)
+	if block == nil {
+		return &stateless.ExtWitness{}, fmt.Errorf("block hash %x not found", hash)
+	}
+	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
+	result, err := bc.ProcessBlock(parent.Root, block, false, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return result.Witness().ToExtWitness(), nil
 }
