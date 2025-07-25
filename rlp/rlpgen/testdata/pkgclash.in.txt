@@ -1,0 +1,13 @@
+// -*- mode: go -*-
+
+package test
+
+import (
+       eth1 "github.com/ethereum/go-ethereum/eth"
+       eth2 "github.com/ethereum/go-ethereum/eth/protocols/eth"
+)
+
+type Test struct {
+    A eth1.MinerAPI
+    B eth2.GetReceiptsPacket
+}
