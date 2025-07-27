@@ -27,6 +27,7 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -217,7 +218,7 @@ func init() {
 	case BalPreblockKeysPostValues:
 		{
 			println("bal preblock keys post values")
-			fileName = "access_lists_kpostv.2000.json"
+			fileName = "access_lists_kpostv.json"
 			data, err := os.ReadFile(fileName)
 			if err != nil {
 				log.Error("Failed to load access lists", "err", err)
@@ -732,8 +733,22 @@ func (s *StateDB) MergePostBalStates() {
 	}
 }
 
+// Must profile it seperately with sequentially processing postState merge and parallel processing in parallel_state_processor.go
+var PrefetchTrieCPUTime = time.Duration(0)
+
+func GetCPU() int64 {
+	usage := new(syscall.Rusage)
+	syscall.Getrusage(syscall.RUSAGE_SELF, usage)
+	return usage.Utime.Nano() + usage.Stime.Nano()
+}
+
 func (s *StateDB) PrefetchTrie() {
 	var workers errgroup.Group
+
+	cpuUsed := runtime.NumCPU() / 2
+	workers.SetLimit(cpuUsed)
+
+	start := GetCPU()
 
 	for addr := range s.journal.dirties {
 		addr := addr
@@ -778,6 +793,8 @@ func (s *StateDB) PrefetchTrie() {
 		tr, _ := s.db.OpenStorageTrie(s.originalRoot, params.BeaconRootsAddress, obj.data.Root, nil)
 		obj.trie = tr
 	}
+
+	PrefetchTrieCPUTime += time.Duration((GetCPU() - start) / int64(cpuUsed) * 2)
 }
 
 func (s *StateDB) setRefund(gas uint64) {

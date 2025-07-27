@@ -474,11 +474,12 @@ func showMetrics() {
 	fmt.Println("StateCopyTime:    ", state.StateCopyTime)
 	fmt.Println("StateCopyNewTime: ", state.StateNewTime)
 	fmt.Println("StateDeepCpTime:  ", state.StateDeepCpTime)
-	fmt.Println("PrefetchBALTime:  ", core.PrefetchBALTime)
+	fmt.Println("PrefetchBALtime:  ", core.PrefetchBALTime)
 	fmt.Println("PrefetchMergeTime:", core.PrefetchMergeBALTime)
 	fmt.Println("ParallelExeTime: ", core.ParallelExeTime)
 	fmt.Println("PostMergeTime:    ", core.PostMergeTime)
-	fmt.Println("PrefetchTrieTime: ", core.PrefetchTrieTimer)
+	fmt.Println("PrefetchTrieWallTime: ", core.PrefetchTrieTimer)
+	// fmt.Println("PrefetchTrieCPUtime:  ", state.PrefetchTrieCPUTime)
 
 	// total
 	fmt.Println("blockInsertTimer", blockInsertTimer.Total())

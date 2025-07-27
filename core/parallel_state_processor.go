@@ -101,9 +101,9 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	go func() {
 		defer wg.Done()
 
-		start := time.Now()
+		preCalPostStart := time.Now()
 		statedb.PreComputePostState(block.NumberU64(), runtime.NumCPU()/2)
-		PrefetchMergeBALTime += time.Since(start)
+		PrefetchMergeBALTime += time.Since(preCalPostStart)
 
 		exeStart := time.Now()
 		result, err = p.executeParallel(block, statedb, cfg, gp, signer, context, initialdb)
