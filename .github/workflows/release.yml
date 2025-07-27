@@ -197,7 +197,7 @@ jobs:
         
         All release binaries are signed with PGP. To verify:
         
-        1. Download the [public key](https://raw.githubusercontent.com/${{ github.repository }}/master/.github/workflows/release.asc)
+        1. Download the [public key](https://raw.githubusercontent.com/${{ github.repository }}/main/.github/workflows/release.asc)
         2. Import the key: `gpg --import release.asc`
         3. Verify the signature: `gpg --verify <filename>.asc <filename>`
         

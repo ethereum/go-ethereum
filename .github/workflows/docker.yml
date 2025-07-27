@@ -57,8 +57,10 @@ jobs:
           VERSION="branch-${GITHUB_REF##*/}"
         fi
         
-        # Get the digest of the pushed image
-        DIGEST=$(docker buildx imagetools inspect ghcr.io/berachain/bera-geth:${VERSION} --format "{{.Manifest.Digest}}")
+        # Get the digest of the pushed image. The --format option can be unreliable,
+        # so we parse the full JSON output to find the digest of the manifest list.
+        MANIFEST_JSON=$(docker buildx imagetools inspect ghcr.io/berachain/bera-geth:${VERSION})
+        DIGEST=$(echo "${MANIFEST_JSON}" | grep '"digest"' | head -n 1 | cut -d '"' -f 4)
         echo "digest=${DIGEST}" >> $GITHUB_OUTPUT
         echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
