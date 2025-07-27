@@ -218,7 +218,7 @@ func init() {
 	case BalPreblockKeysPostValues:
 		{
 			println("bal preblock keys post values")
-			fileName = "access_lists_kpostv.json"
+			fileName = "bal_postKV.json"
 			data, err := os.ReadFile(fileName)
 			if err != nil {
 				log.Error("Failed to load access lists", "err", err)
