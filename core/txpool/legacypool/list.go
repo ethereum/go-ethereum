@@ -18,6 +18,7 @@ package legacypool
 
 import (
 	"container/heap"
+	"maps"
 	"math"
 	"math/big"
 	"slices"
@@ -113,23 +114,12 @@ func (m *SortedMap) Forward(threshold uint64) types.Transactions {
 // If you want to do several consecutive filterings, it's therefore better to first
 // do a .filter(func1) followed by .Filter(func2) or reheap()
 func (m *SortedMap) Filter(filter func(*types.Transaction) bool) types.Transactions {
-	removed := m.filter(filter)
-	// If transactions were removed, the heap and cache are ruined
-	if len(removed) > 0 {
-		m.reheap()
-	}
-	return removed
+	return m.filter(filter)
 }
 
 func (m *SortedMap) reheap() {
-	*m.index = make([]uint64, 0, len(m.items))
-	for nonce := range m.items {
-		*m.index = append(*m.index, nonce)
-	}
+	*m.index = slices.Collect(maps.Keys(m.items))
 	heap.Init(m.index)
-	m.cacheMu.Lock()
-	m.cache = nil
-	m.cacheMu.Unlock()
 }
 
 // filter is identical to Filter, but **does not** regenerate the heap. This method
@@ -148,6 +138,8 @@ func (m *SortedMap) filter(filter func(*types.Transaction) bool) types.Transacti
 		m.cacheMu.Lock()
 		m.cache = nil
 		m.cacheMu.Unlock()
+		// If transactions were removed, the heap and cache are ruined
+		m.reheap()
 	}
 	return removed
 }
@@ -238,10 +230,7 @@ func (m *SortedMap) flatten() types.Transactions {
 	defer m.cacheMu.Unlock()
 	// If the sorting was not cached yet, create and cache it
 	if m.cache == nil {
-		m.cache = make(types.Transactions, 0, len(m.items))
-		for _, tx := range m.items {
-			m.cache = append(m.cache, tx)
-		}
+		m.cache = slices.Collect(maps.Values(m.items))
 		sort.Sort(types.TxByNonce(m.cache))
 	}
 	return m.cache
@@ -251,11 +240,8 @@ func (m *SortedMap) flatten() types.Transactions {
 // sorted internal representation. The result of the sorting is cached in case
 // it's requested again before any modifications are made to the contents.
 func (m *SortedMap) Flatten() types.Transactions {
-	cache := m.flatten()
 	// Copy the cache to prevent accidental modification
-	txs := make(types.Transactions, len(cache))
-	copy(txs, cache)
-	return txs
+	return slices.Clone(m.flatten())
 }
 
 // LastElement returns the last element of a flattened list, thus, the
@@ -367,11 +353,11 @@ func (l *list) Filter(costLimit *uint256.Int, gasLimit uint64) (types.Transactio
 	if l.costcap.Cmp(costLimit) <= 0 && l.gascap <= gasLimit {
 		return nil, nil
 	}
-	l.costcap = new(uint256.Int).Set(costLimit) // Lower the caps to the thresholds
+	l.costcap.Set(costLimit) // Lower the caps to the thresholds
 	l.gascap = gasLimit
 
 	// Filter out all the transactions above the account's funds
-	removed := l.txs.Filter(func(tx *types.Transaction) bool {
+	removed := l.txs.filter(func(tx *types.Transaction) bool {
 		return tx.Gas() > gasLimit || tx.Cost().Cmp(costLimit.ToBig()) > 0
 	})
 
@@ -392,7 +378,6 @@ func (l *list) Filter(costLimit *uint256.Int, gasLimit uint64) (types.Transactio
 	// Reset total cost
 	l.subTotalCost(removed)
 	l.subTotalCost(invalids)
-	l.txs.reheap()
 	return removed, invalids
 }
 
