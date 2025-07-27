@@ -226,9 +226,9 @@ and merge procedures quick and simple.
 
 Please make sure your contributions adhere to our coding guidelines:
 
- * Code must adhere to the official Go [formatting](https://golang.org/doc/effective_go.html#formatting)
-   guidelines (i.e. uses [gofmt](https://golang.org/cmd/gofmt/)).
- * Code must be documented adhering to the official Go [commentary](https://golang.org/doc/effective_go.html#commentary)
+ * Code must adhere to the official Go [formatting](https://go.dev/doc/effective_go.html#formatting)
+   guidelines (i.e. uses [gofmt](https://go.dev/cmd/gofmt/)).
+ * Code must be documented adhering to the official Go [commentary](https://go.dev/doc/effective_go.html#commentary)
    guidelines.
  * Pull requests need to be based on and opened against the `master` branch.
  * Commit messages should be prefixed with the package(s) they modify.
