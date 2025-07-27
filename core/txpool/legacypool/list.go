@@ -78,18 +78,17 @@ func (m *SortedMap) Get(nonce uint64) *types.Transaction {
 // index. If a transaction already exists with the same nonce, it's overwritten.
 func (m *SortedMap) Put(tx *types.Transaction) {
 	nonce := tx.Nonce()
-	// If the tx already exit, return immediately.
-	if m.items[nonce] != nil {
-		return
+	if m.items[nonce] == nil {
+		heap.Push(m.index, nonce)
 	}
-
 	m.items[nonce] = tx
-	heap.Push(m.index, nonce)
 
 	m.cacheMu.Lock()
 	if m.cache != nil {
-		m.cache = append(m.cache, tx)
-		sort.Sort(types.TxByNonce(m.cache))
+		index := slices.IndexFunc(m.cache, func(tx *types.Transaction) bool {
+			return tx.Nonce() == nonce
+		})
+		m.cache[index] = tx
 	}
 	m.cacheMu.Unlock()
 }
