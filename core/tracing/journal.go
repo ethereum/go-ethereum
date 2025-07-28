@@ -17,7 +17,7 @@
 package tracing
 
 import (
-	"fmt"
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -39,14 +39,14 @@ type entry interface {
 // WrapWithJournal wraps the given tracer with a journaling layer.
 func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 	if hooks == nil {
-		return nil, fmt.Errorf("wrapping nil tracer")
+		return nil, errors.New("wrapping nil tracer")
 	}
 	// No state change to journal, return the wrapped hooks as is
 	if hooks.OnBalanceChange == nil && hooks.OnNonceChange == nil && hooks.OnNonceChangeV2 == nil && hooks.OnCodeChange == nil && hooks.OnStorageChange == nil {
 		return hooks, nil
 	}
 	if hooks.OnNonceChange != nil && hooks.OnNonceChangeV2 != nil {
-		return nil, fmt.Errorf("cannot have both OnNonceChange and OnNonceChangeV2")
+		return nil, errors.New("cannot have both OnNonceChange and OnNonceChangeV2")
 	}
 
 	// Create a new Hooks instance and copy all hooks
