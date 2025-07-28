@@ -88,7 +88,12 @@ func (m *SortedMap) Put(tx *types.Transaction) {
 		index := slices.IndexFunc(m.cache, func(tx *types.Transaction) bool {
 			return tx.Nonce() == nonce
 		})
-		m.cache[index] = tx
+		if index == -1 {
+			m.cache = append(m.cache, tx)
+			sort.Sort(types.TxByNonce(m.cache))
+		} else {
+			m.cache[index] = tx
+		}
 	}
 	m.cacheMu.Unlock()
 }
@@ -200,11 +205,7 @@ func (m *SortedMap) Remove(nonce uint64) bool {
 	delete(m.items, nonce)
 
 	m.cacheMu.Lock()
-	if m.cache != nil {
-		slices.DeleteFunc(m.cache, func(tx *types.Transaction) bool {
-			return tx.Nonce() == nonce
-		})
-	}
+	m.cache = nil
 	m.cacheMu.Unlock()
 
 	return true
