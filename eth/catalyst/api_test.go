@@ -1497,7 +1497,7 @@ func checkEqualBody(a *types.Body, b *engine.ExecutionPayloadBody) error {
 		}
 	}
 	if !reflect.DeepEqual(a.Withdrawals, b.Withdrawals) {
-		return fmt.Errorf("withdrawals mismatch")
+		return errors.New("withdrawals mismatch")
 	}
 	return nil
 }

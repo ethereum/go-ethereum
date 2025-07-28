@@ -19,6 +19,7 @@ package ethtest
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -1092,7 +1093,7 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			return
 		}
 		if !readUntilDisconnect(conn) {
-			errc <- fmt.Errorf("expected bad peer to be disconnected")
+			errc <- errors.New("expected bad peer to be disconnected")
 			return
 		}
 		stage3.Done()
@@ -1139,7 +1140,7 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 		}
 
 		if req.GetPooledTransactionsRequest[0] != tx.Hash() {
-			errc <- fmt.Errorf("requested unknown tx hash")
+			errc <- errors.New("requested unknown tx hash")
 			return
 		}
 
@@ -1149,7 +1150,7 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			return
 		}
 		if readUntilDisconnect(conn) {
-			errc <- fmt.Errorf("unexpected disconnect")
+			errc <- errors.New("unexpected disconnect")
 			return
 		}
 		close(errc)
