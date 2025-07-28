@@ -98,7 +98,7 @@ func TestHooks(t *testing.T) {
 		OnBalanceChange: func(addr common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
 			emitF("%v.balance: %v->%v (%v)", addr, prev, new, reason)
 		},
-		OnNonceChange: func(addr common.Address, prev, new uint64) {
+		OnNonceChangeV2: func(addr common.Address, prev, new uint64, reason tracing.NonceChangeReason) {
 			emitF("%v.nonce: %v->%v", addr, prev, new)
 		},
 		OnCodeChange: func(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte) {

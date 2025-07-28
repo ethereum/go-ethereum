@@ -23,7 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -216,7 +215,9 @@ func ApplyTransaction(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *
 // contract. This method is exported to be used in tests.
 func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM) {
 	if tracer := evm.Config.Tracer; tracer != nil {
-		onSystemCallStart(tracer, evm.GetVMContext())
+		if tracer.OnSystemCallStartV2 != nil {
+			tracer.OnSystemCallStartV2(evm.GetVMContext())
+		}
 		if tracer.OnSystemCallEnd != nil {
 			defer tracer.OnSystemCallEnd()
 		}
@@ -240,7 +241,9 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM) {
 // as per EIP-2935/7709.
 func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) {
 	if tracer := evm.Config.Tracer; tracer != nil {
-		onSystemCallStart(tracer, evm.GetVMContext())
+		if tracer.OnSystemCallStartV2 != nil {
+			tracer.OnSystemCallStartV2(evm.GetVMContext())
+		}
 		if tracer.OnSystemCallEnd != nil {
 			defer tracer.OnSystemCallEnd()
 		}
@@ -280,7 +283,9 @@ func ProcessConsolidationQueue(requests *[][]byte, evm *vm.EVM) error {
 
 func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte, addr common.Address) error {
 	if tracer := evm.Config.Tracer; tracer != nil {
-		onSystemCallStart(tracer, evm.GetVMContext())
+		if tracer.OnSystemCallStartV2 != nil {
+			tracer.OnSystemCallStartV2(evm.GetVMContext())
+		}
 		if tracer.OnSystemCallEnd != nil {
 			defer tracer.OnSystemCallEnd()
 		}
@@ -330,12 +335,4 @@ func ParseDepositLogs(requests *[][]byte, logs []*types.Log, config *params.Chai
 		*requests = append(*requests, deposits)
 	}
 	return nil
-}
-
-func onSystemCallStart(tracer *tracing.Hooks, ctx *tracing.VMContext) {
-	if tracer.OnSystemCallStartV2 != nil {
-		tracer.OnSystemCallStartV2(ctx)
-	} else if tracer.OnSystemCallStart != nil {
-		tracer.OnSystemCallStart()
-	}
 }

@@ -69,11 +69,11 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.Hooks {
 		l.cfg = &Config{}
 	}
 	l.hooks = &tracing.Hooks{
-		OnTxStart:         l.OnTxStart,
-		OnSystemCallStart: l.onSystemCallStart,
-		OnExit:            l.OnExit,
-		OnOpcode:          l.OnOpcode,
-		OnFault:           l.OnFault,
+		OnTxStart:           l.OnTxStart,
+		OnSystemCallStartV2: l.onSystemCallStartV2,
+		OnExit:              l.OnExit,
+		OnOpcode:            l.OnOpcode,
+		OnFault:             l.OnFault,
 	}
 	return l.hooks
 }
@@ -86,12 +86,12 @@ func NewJSONLoggerWithCallFrames(cfg *Config, writer io.Writer) *tracing.Hooks {
 		l.cfg = &Config{}
 	}
 	l.hooks = &tracing.Hooks{
-		OnTxStart:         l.OnTxStart,
-		OnSystemCallStart: l.onSystemCallStart,
-		OnEnter:           l.OnEnter,
-		OnExit:            l.OnExit,
-		OnOpcode:          l.OnOpcode,
-		OnFault:           l.OnFault,
+		OnTxStart:           l.OnTxStart,
+		OnSystemCallStartV2: l.onSystemCallStartV2,
+		OnEnter:             l.OnEnter,
+		OnExit:              l.OnExit,
+		OnOpcode:            l.OnOpcode,
+		OnFault:             l.OnFault,
 	}
 	return l.hooks
 }
@@ -127,7 +127,7 @@ func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracin
 	l.encoder.Encode(log)
 }
 
-func (l *jsonLogger) onSystemCallStart() {
+func (l *jsonLogger) onSystemCallStartV2(ctx *tracing.VMContext) {
 	// Process no events while in system call.
 	hooks := *l.hooks
 	*l.hooks = tracing.Hooks{
