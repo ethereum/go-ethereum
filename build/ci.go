@@ -684,13 +684,12 @@ func doDockerBuildx(cmdline []string) {
 	//  - ethereum/client-go:alltools-latest                   - Pushes to the main branch, Geth & tools
 	//  - ethereum/client-go:v<major>.<minor>.<patch>          - Version tag publish on GitHub, Geth only
 	//  - ethereum/client-go:alltools-v<major>.<minor>.<patch> - Version tag publish on GitHub, Geth & tools
-	var tags []string
-
+	var tag string
 	switch {
 	case env.Branch == "main":
-		tags = []string{"latest"}
+		tag = "latest"
 	case strings.HasPrefix(env.Tag, "v1."):
-		tags = []string{env.Tag}
+		tag = env.Tag
 	}
 	// Need to create a mult-arch builder
 	check := exec.Command("docker", "buildx", "inspect", "multi-arch-builder")
@@ -705,22 +704,20 @@ func doDockerBuildx(cmdline []string) {
 		{file: "Dockerfile", base: fmt.Sprintf("%s:", *hubImage)},
 		{file: "Dockerfile.alltools", base: fmt.Sprintf("%s:alltools-", *hubImage)},
 	} {
-		for _, tag := range tags { // latest, stable etc
-			gethImage := fmt.Sprintf("%s%s", spec.base, tag)
-			cmd := exec.Command("docker", "buildx", "build",
-				"--build-arg", "COMMIT="+env.Commit,
-				"--build-arg", "VERSION="+version.WithMeta,
-				"--build-arg", "BUILDNUM="+env.Buildnum,
-				"--tag", gethImage,
-				"--platform", *platform,
-				"--file", spec.file,
-			)
-			if *upload {
-				cmd.Args = append(cmd.Args, "--push")
-			}
-			cmd.Args = append(cmd.Args, ".")
-			build.MustRun(cmd)
+		gethImage := fmt.Sprintf("%s%s", spec.base, tag)
+		cmd := exec.Command("docker", "buildx", "build",
+			"--build-arg", "COMMIT="+env.Commit,
+			"--build-arg", "VERSION="+version.WithMeta,
+			"--build-arg", "BUILDNUM="+env.Buildnum,
+			"--tag", gethImage,
+			"--platform", *platform,
+			"--file", spec.file,
+		)
+		if *upload {
+			cmd.Args = append(cmd.Args, "--push")
 		}
+		cmd.Args = append(cmd.Args, ".")
+		build.MustRun(cmd)
 	}
 }
 

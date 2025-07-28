@@ -6,9 +6,10 @@ on:
       - "v1.*"
     branches:
       - "main"
+  workflow_dispatch:
 
 jobs:
-  docker:
+  docker-build:
     name: Docker Image
     runs-on: ubuntu-latest
     permissions:
@@ -38,9 +39,6 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Install Cosign
-      uses: sigstore/cosign-installer@v3
-
     - name: Build and push multi-arch images to GHCR
       run: |
         go run build/ci.go dockerx -platform linux/amd64,linux/arm64 -hub ghcr.io/berachain/bera-geth -upload
@@ -50,26 +48,47 @@ jobs:
       run: |
         # Extract version information
         if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-          VERSION="${{ github.ref_name }}"
+          echo "VERSION=${{ github.ref_name }}" >> $GITHUB_OUTPUT
         elif [[ "${{ github.ref }}" == refs/heads/main ]]; then
-          VERSION="latest"
+          echo "VERSION=latest" >> $GITHUB_OUTPUT
         else
-          VERSION="branch-${GITHUB_REF##*/}"
+          echo "VERSION=" >> $GITHUB_OUTPUT
         fi
         
         # Get the digest of the pushed image. The --format option can be unreliable,
         # so we parse the full JSON output to find the digest of the manifest list.
         MANIFEST_JSON=$(docker buildx imagetools inspect ghcr.io/berachain/bera-geth:${VERSION})
-        DIGEST=$(echo "${MANIFEST_JSON}" | grep '"digest"' | head -n 1 | cut -d '"' -f 4)
-        echo "digest=${DIGEST}" >> $GITHUB_OUTPUT
-        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "DIGEST=$(echo "${MANIFEST_JSON}" | grep '"digest"' | head -n 1 | cut -d '"' -f 4)" >> $GITHUB_OUTPUT
+    outputs:
+      VERSION: ${{ steps.image_info.outputs.VERSION }}
+      DIGEST: ${{ steps.image_info.outputs.DIGEST }}
+
+  docker-signatures:
+    name: Docker Signatures
+    needs: [docker-build]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.docker-build.outputs.VERSION }}
+      DIGEST: ${{ needs.docker-build.outputs.DIGEST }}
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Cosign
+      uses: sigstore/cosign-installer@v3
 
     - name: Sign Docker images with Cosign
       env:
         COSIGN_EXPERIMENTAL: true
       run: |
-        # Sign the multi-arch manifest by digest
-        cosign sign --yes ghcr.io/berachain/bera-geth@${{ steps.image_info.outputs.digest }}
+        # Sign the tagged version if it exists
+        if [ -n "${{ env.VERSION }}" ]; then
+          cosign sign --yes ghcr.io/berachain/bera-geth:${{ env.VERSION }}
+        fi
         
-        # Also sign the tagged version
-        cosign sign --yes ghcr.io/berachain/bera-geth:${{ steps.image_info.outputs.version }}
+        # Sign the multi-arch manifest by digest
+        cosign sign --yes ghcr.io/berachain/bera-geth@${{ env.DIGEST }}
