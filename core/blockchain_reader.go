@@ -266,6 +266,14 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	if !ok {
 		return nil
 	}
+	return bc.GetReceipts(hash, number)
+}
+
+// GetReceipts retrieves the receipts for all transactions in a given block.
+func (bc *BlockChain) GetReceipts(hash common.Hash, number uint64) types.Receipts {
+	if receipts, ok := bc.receiptsCache.Get(hash); ok {
+		return receipts
+	}
 	header := bc.GetHeader(hash, number)
 	if header == nil {
 		return nil
@@ -310,6 +318,24 @@ func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.
 // GetCanonicalHash returns the canonical hash for a given block number
 func (bc *BlockChain) GetCanonicalHash(number uint64) common.Hash {
 	return bc.hc.GetCanonicalHash(number)
+}
+
+// GetCanonicalHashes returns the canonical hashes for a given set of block numbers
+func (bc *BlockChain) GetCanonicalHashes(numbers []uint64) ([]common.Hash, error) {
+	if !bc.chainmu.TryLock() {
+		return nil, errChainStopped
+	}
+	defer bc.chainmu.Unlock()
+
+	hashes := make([]common.Hash, 0, len(numbers))
+	for _, number := range numbers {
+		if hash := bc.hc.GetCanonicalHash(number); hash != (common.Hash{}) {
+			hashes = append(hashes, hash)
+		} else {
+			break
+		}
+	}
+	return hashes, nil
 }
 
 // GetAncestor retrieves the Nth ancestor of a given block. It assumes that either the given block or
