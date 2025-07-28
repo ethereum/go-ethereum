@@ -42,7 +42,7 @@ import (
 
 type testBackend struct {
 	db              ethdb.Database
-	fm              *filtermaps.FilterMaps
+	logIndexer      *filtermaps.Indexer
 	txFeed          event.Feed
 	logsFeed        event.Feed
 	rmLogsFeed      event.Feed
@@ -160,31 +160,51 @@ func (b *testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subsc
 	return b.chainFeed.Subscribe(ch)
 }
 
-func (b *testBackend) CurrentView() *filtermaps.ChainView {
+func (b *testBackend) CurrentChainView() *filtermaps.ChainView {
 	head := b.CurrentBlock()
 	return filtermaps.NewChainView(b, head.Number.Uint64(), head.Hash())
 }
 
-func (b *testBackend) NewMatcherBackend() filtermaps.MatcherBackend {
-	return b.fm.NewMatcherBackend()
+func (b *testBackend) GetIndexView(headBlockHash common.Hash) *filtermaps.IndexView {
+	return b.logIndexer.GetIndexView(headBlockHash)
 }
 
 func (b *testBackend) startFilterMaps(history uint64, disabled bool, params filtermaps.Params) {
 	head := b.CurrentBlock()
-	chainView := filtermaps.NewChainView(b, head.Number.Uint64(), head.Hash())
 	config := filtermaps.Config{
 		History:        history,
 		Disabled:       disabled,
 		ExportFileName: "",
 	}
-	b.fm, _ = filtermaps.NewFilterMaps(b.db, chainView, 0, 0, params, config)
-	b.fm.Start()
-	b.fm.WaitIdle()
+	b.logIndexer = filtermaps.NewIndexer(b.db, params, config)
+	if !disabled {
+		b.indexHead(head.Number.Uint64())
+	}
+}
+
+func (b *testBackend) indexHead(head uint64) {
+	header, _ := b.HeaderByNumber(context.Background(), rpc.BlockNumber(head))
+	receipts, _ := b.GetReceipts(context.Background(), header.Hash())
+	b.logIndexer.AddBlockData([]*types.Header{header}, []types.Receipts{receipts})
+	b.backfillBlocks()
+}
+
+func (b *testBackend) backfillBlocks() {
+	ready, needBlocks := b.logIndexer.Status()
+	for !ready || !needBlocks.IsEmpty() {
+		for !ready {
+			time.Sleep(time.Millisecond)
+			ready, needBlocks = b.logIndexer.Status()
+		}
+		header, _ := b.HeaderByNumber(context.Background(), rpc.BlockNumber(needBlocks.First()))
+		receipts, _ := b.GetReceipts(context.Background(), header.Hash())
+		ready, needBlocks = b.logIndexer.AddBlockData([]*types.Header{header}, []types.Receipts{receipts})
+	}
 }
 
 func (b *testBackend) stopFilterMaps() {
-	b.fm.Stop()
-	b.fm = nil
+	b.logIndexer.Stop()
+	b.logIndexer = nil
 }
 
 func (b *testBackend) setPending(block *types.Block, receipts types.Receipts) {

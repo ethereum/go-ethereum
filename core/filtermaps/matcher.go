@@ -28,6 +28,18 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+)
+
+var (
+	matchRequestTimer       = metrics.NewRegisteredTimer("filtermaps/match/requesttime", nil)   // processing time a matching request in a single epoch
+	matchEpochTimer         = metrics.NewRegisteredTimer("filtermaps/match/epochtime", nil)     // total processing time a matching request
+	matchBaseRowAccessMeter = metrics.NewRegisteredMeter("filtermaps/match/baserowaccess", nil) // number of accessed rows on layer 0
+	matchBaseRowSizeMeter   = metrics.NewRegisteredMeter("filtermaps/match/baserowsize", nil)   // size of accessed rows on layer 0
+	matchExtRowAccessMeter  = metrics.NewRegisteredMeter("filtermaps/match/extrowaccess", nil)  // number of accessed rows on higher layers
+	matchExtRowSizeMeter    = metrics.NewRegisteredMeter("filtermaps/match/extrowsize", nil)    // size of accessed rows on higher layers
+	matchLogLookup          = metrics.NewRegisteredMeter("filtermaps/match/loglookup", nil)     // number of log lookups based on potential matches
+	matchAllMeter           = metrics.NewRegisteredMeter("filtermaps/match/matchall", nil)      // number of requests returned with ErrMatchAll
 )
 
 const doRuntimeStats = false
@@ -37,32 +49,32 @@ const doRuntimeStats = false
 // would actually be slower than reverting to legacy filter.
 var ErrMatchAll = errors.New("match all patterns not supported")
 
-// MatcherBackend defines the functions required for searching in the log index
-// data structure. It is currently implemented by FilterMapsMatcherBackend but
-// once EIP-7745 is implemented and active, these functions can also be trustlessly
-// served by a remote prover.
-type MatcherBackend interface {
-	GetParams() *Params
-	GetBlockLvPointer(ctx context.Context, blockNumber uint64) (uint64, error)
-	GetFilterMapRows(ctx context.Context, mapIndices []uint32, rowIndex uint32, baseLayerOnly bool) ([]FilterRow, error)
-	GetLogByLvIndex(ctx context.Context, lvIndex uint64) (*types.Log, error)
-	SyncLogIndex(ctx context.Context) (SyncRange, error)
-	Close()
+type LogPosition struct {
+	BlockNumber, startPtr, logPtr, valuesPerMap uint64
 }
 
-// SyncRange is returned by MatcherBackend.SyncLogIndex. It contains the latest
-// chain head, the indexed range that is currently consistent with the chain
-// and the valid range that has not been changed and has been consistent with
-// all states of the chain since the previous SyncLogIndex or the creation of
-// the matcher backend.
-type SyncRange struct {
-	IndexedView *ChainView
-	// block range where the index has not changed since the last matcher sync
-	// and therefore the set of matches found in this region is guaranteed to
-	// be valid and complete.
-	ValidBlocks common.Range[uint64]
-	// block range indexed according to the given chain head.
-	IndexedBlocks common.Range[uint64]
+func (l *LogPosition) GetLog(receipts types.Receipts) (*types.Log, error) {
+	ptr := l.startPtr
+	for _, receipt := range receipts {
+		for _, log := range receipt.Logs {
+			step := uint64(len(log.Topics) + 1)
+			subPtr := ptr % l.valuesPerMap
+			if subPtr+step > l.valuesPerMap {
+				ptr += l.valuesPerMap - subPtr
+			}
+			if ptr == l.logPtr {
+				return log, nil
+			}
+			ptr += step
+			if ptr > l.logPtr {
+				return nil, nil // log position is in block range but there is no log there (false positive)
+			}
+		}
+	}
+	if ptr == l.logPtr {
+		return nil, nil // points to the block delimiter (false positive)
+	}
+	return nil, fmt.Errorf("invalid log position: block #%d start pointer %d log pointer %d", l.BlockNumber, l.startPtr, l.logPtr)
 }
 
 // GetPotentialMatches returns a list of logs that are potential matches for the
@@ -70,14 +82,14 @@ type SyncRange struct {
 // missing or changed during the search process then the resulting logs belonging
 // to that block range might be missing or incorrect.
 // Also note that the returned list may contain false positives.
-func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock, lastBlock uint64, addresses []common.Address, topics [][]common.Hash) ([]*types.Log, error) {
+func GetPotentialMatches(ctx context.Context, backend *IndexView, firstBlock, lastBlock uint64, addresses []common.Address, topics [][]common.Hash) ([]LogPosition, error) {
 	params := backend.GetParams()
 	// find the log value index range to search
-	firstIndex, err := backend.GetBlockLvPointer(ctx, firstBlock)
+	firstIndex, err := backend.GetBlockLvPointer(firstBlock)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve log value pointer for first block %d: %v", firstBlock, err)
 	}
-	lastIndex, err := backend.GetBlockLvPointer(ctx, lastBlock+1)
+	lastIndex, err := backend.GetBlockLvPointer(lastBlock + 1)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve log value pointer after last block %d: %v", lastBlock, err)
 	}
@@ -112,10 +124,11 @@ func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 	matcher := newMatchSequence(params, matchers)
 
 	m := &matcherEnv{
-		ctx:        ctx,
 		backend:    backend,
 		params:     params,
 		matcher:    matcher,
+		firstBlock: firstBlock,
+		lastBlock:  lastBlock,
 		firstIndex: firstIndex,
 		lastIndex:  lastIndex,
 		firstMap:   uint32(firstIndex >> params.logValuesPerMap),
@@ -123,7 +136,7 @@ func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 	}
 
 	start := time.Now()
-	res, err := m.process()
+	res, err := m.process(ctx)
 	matchRequestTimer.Update(time.Since(start))
 
 	if doRuntimeStats {
@@ -142,18 +155,18 @@ func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 
 type matcherEnv struct {
 	getLogStats           runtimeStats // 64 bit aligned
-	ctx                   context.Context
-	backend               MatcherBackend
+	backend               *IndexView
 	params                *Params
 	matcher               matcher
+	firstBlock, lastBlock uint64
 	firstIndex, lastIndex uint64
 	firstMap, lastMap     uint32
 }
 
-func (m *matcherEnv) process() ([]*types.Log, error) {
+func (m *matcherEnv) process(ctx context.Context) ([]LogPosition, error) {
 	type task struct {
 		epochIndex uint32
-		logs       []*types.Log
+		logs       []LogPosition
 		err        error
 		done       chan struct{}
 	}
@@ -182,7 +195,7 @@ func (m *matcherEnv) process() ([]*types.Log, error) {
 	}
 
 	firstEpoch, lastEpoch := m.firstMap>>m.params.logMapsPerEpoch, m.lastMap>>m.params.logMapsPerEpoch
-	var logs []*types.Log
+	var logs []LogPosition
 	// startEpoch is the next task to send whenever a worker can accept it.
 	// waitEpoch is the next task we are waiting for to finish in order to append
 	// results in the correct order.
@@ -214,15 +227,17 @@ func (m *matcherEnv) process() ([]*types.Log, error) {
 					tasks[waitEpoch] = &task{epochIndex: waitEpoch, done: make(chan struct{})}
 				}
 			}
+			/*case <-ctx.Done():    //TODO
+			return nil, ctx.Err()*/
 		}
 	}
 	return logs, nil
 }
 
 // processEpoch returns the potentially matching logs from the given epoch.
-func (m *matcherEnv) processEpoch(epochIndex uint32) ([]*types.Log, error) {
+func (m *matcherEnv) processEpoch(epochIndex uint32) ([]LogPosition, error) {
 	start := time.Now()
-	var logs []*types.Log
+	var logs []LogPosition
 	// create a list of map indices to process
 	fm, lm := epochIndex<<m.params.logMapsPerEpoch, (epochIndex+1)<<m.params.logMapsPerEpoch-1
 	if fm < m.firstMap {
@@ -260,22 +275,56 @@ func (m *matcherEnv) processEpoch(epochIndex uint32) ([]*types.Log, error) {
 	return logs, nil
 }
 
+func (m *matcherEnv) getLogPosition(lvIndex uint64) (LogPosition, error) {
+	// find possible block range based on map to block pointers
+	mapIndex := uint32(lvIndex >> m.params.logValuesPerMap)
+	lastBlockNumber, _, err := m.backend.GetLastBlockOfMap(mapIndex)
+	if err != nil {
+		return LogPosition{}, fmt.Errorf("failed to retrieve last block of map %d containing searched log value index %d: %v", mapIndex, lvIndex, err)
+	}
+	var firstBlockNumber uint64
+	if mapIndex > 0 {
+		firstBlockNumber, _, err = m.backend.GetLastBlockOfMap(mapIndex - 1)
+		if err != nil {
+			return LogPosition{}, fmt.Errorf("failed to retrieve last block of map %d before searched log value index %d: %v", mapIndex, lvIndex, err)
+		}
+	}
+	firstBlockNumber = max(firstBlockNumber, m.firstBlock)
+	lastBlockNumber = min(lastBlockNumber, m.lastBlock)
+	// find block with binary search based on block to log value index pointers
+	for firstBlockNumber < lastBlockNumber {
+		midBlockNumber := (firstBlockNumber + lastBlockNumber + 1) / 2
+		midLvPointer, err := m.backend.GetBlockLvPointer(midBlockNumber)
+		if err != nil {
+			return LogPosition{}, fmt.Errorf("failed to retrieve log value pointer of block %d while binary searching log value index %d: %v", midBlockNumber, lvIndex, err)
+		}
+		if lvIndex < midLvPointer {
+			lastBlockNumber = midBlockNumber - 1
+		} else {
+			firstBlockNumber = midBlockNumber
+		}
+	}
+	blockLvPointer, err := m.backend.GetBlockLvPointer(firstBlockNumber)
+	if err != nil {
+		return LogPosition{}, fmt.Errorf("failed to retrieve log value pointer of block %d containing searched log value index %d: %v", firstBlockNumber, lvIndex, err)
+	}
+	return LogPosition{BlockNumber: firstBlockNumber, startPtr: blockLvPointer, logPtr: lvIndex, valuesPerMap: m.params.valuesPerMap}, nil
+}
+
 // getLogsFromMatches returns the list of potentially matching logs located at
 // the given list of matching log indices. Matches outside the firstIndex to
 // lastIndex range are not returned.
-func (m *matcherEnv) getLogsFromMatches(matches potentialMatches) ([]*types.Log, error) {
-	var logs []*types.Log
+func (m *matcherEnv) getLogsFromMatches(matches potentialMatches) ([]LogPosition, error) {
+	var logs []LogPosition
 	for _, match := range matches {
 		if match < m.firstIndex || match > m.lastIndex {
 			continue
 		}
-		log, err := m.backend.GetLogByLvIndex(m.ctx, match)
+		log, err := m.getLogPosition(match)
 		if err != nil {
 			return logs, fmt.Errorf("failed to retrieve log at index %d: %v", match, err)
 		}
-		if log != nil {
-			logs = append(logs, log)
-		}
+		logs = append(logs, log)
 		matchLogLookup.Mark(1)
 	}
 	return logs, nil
@@ -288,7 +337,7 @@ func (m *matcherEnv) getAllMatches(mapIndices []uint32) ([]potentialMatches, err
 	instance := m.matcher.newInstance(mapIndices)
 	resultsMap := make(map[uint32]potentialMatches)
 	for layerIndex := uint32(0); len(resultsMap) < len(mapIndices); layerIndex++ {
-		results, err := instance.getMatchesForLayer(m.ctx, layerIndex)
+		results, err := instance.getMatchesForLayer(layerIndex)
 		if err != nil {
 			return nil, err
 		}
@@ -319,7 +368,7 @@ type matcher interface {
 // a result has been returned has no effect. Exactly one matcherResult is
 // returned per requested map index unless dropped.
 type matcherInstance interface {
-	getMatchesForLayer(ctx context.Context, layerIndex uint32) ([]matcherResult, error)
+	getMatchesForLayer(layerIndex uint32) ([]matcherResult, error)
 	dropIndices(mapIndices []uint32)
 }
 
@@ -332,7 +381,7 @@ type matcherResult struct {
 
 // singleMatcher implements matcher by returning matches for a single log value hash.
 type singleMatcher struct {
-	backend MatcherBackend
+	backend *IndexView
 	value   common.Hash
 	stats   runtimeStats
 }
@@ -360,7 +409,7 @@ func (m *singleMatcher) newInstance(mapIndices []uint32) matcherInstance {
 }
 
 // getMatchesForLayer implements matcherInstance.
-func (m *singleMatcherInstance) getMatchesForLayer(ctx context.Context, layerIndex uint32) (results []matcherResult, err error) {
+func (m *singleMatcherInstance) getMatchesForLayer(layerIndex uint32) (results []matcherResult, err error) {
 	var st int
 	m.stats.setState(&st, stOther)
 	params := m.backend.GetParams()
@@ -378,7 +427,7 @@ func (m *singleMatcherInstance) getMatchesForLayer(ctx context.Context, layerInd
 		} else {
 			m.stats.setState(&st, stFetchMore)
 		}
-		groupRows, err := m.backend.GetFilterMapRows(ctx, m.mapIndices[ptr:ptr+groupLength], rowIndex, layerIndex == 0)
+		groupRows, err := m.backend.GetFilterMapRows(m.mapIndices[ptr:ptr+groupLength], rowIndex, layerIndex)
 		if err != nil {
 			m.stats.setState(&st, stNone)
 			return nil, fmt.Errorf("failed to retrieve filter map %d row %d: %v", m.mapIndices[ptr], rowIndex, err)
@@ -400,7 +449,7 @@ func (m *singleMatcherInstance) getMatchesForLayer(ctx context.Context, layerInd
 			}
 			m.stats.addAmount(st, int64(len(filterRow)))
 			filterRows = append(filterRows, filterRow)
-			if uint32(len(filterRow)) < params.maxRowLength(layerIndex) {
+			if uint32(len(filterRow)) < params.getMaxRowLength(layerIndex) {
 				m.stats.setState(&st, stProcess)
 				matches := params.potentialMatches(filterRows, mapIndex, m.value)
 				m.stats.addAmount(st, int64(len(matches)))
@@ -415,6 +464,12 @@ func (m *singleMatcherInstance) getMatchesForLayer(ctx context.Context, layerInd
 			}
 		}
 		ptr += groupLength
+	}
+	if len(m.mapIndices) > 0 {
+		var r int
+		for _, res := range results {
+			r += len(res.matches)
+		}
 	}
 	m.cleanMapIndices()
 	m.stats.setState(&st, stNone)
@@ -491,7 +546,7 @@ func (m matchAny) newInstance(mapIndices []uint32) matcherInstance {
 }
 
 // getMatchesForLayer implements matcherInstance.
-func (m *matchAnyInstance) getMatchesForLayer(ctx context.Context, layerIndex uint32) (mergedResults []matcherResult, err error) {
+func (m *matchAnyInstance) getMatchesForLayer(layerIndex uint32) (mergedResults []matcherResult, err error) {
 	if len(m.matchAny) == 0 {
 		// return "wild card" results (potentialMatches(nil) is interpreted as a
 		// potential match at every log value index of the map).
@@ -504,7 +559,7 @@ func (m *matchAnyInstance) getMatchesForLayer(ctx context.Context, layerIndex ui
 		return mergedResults, nil
 	}
 	for i, childInstance := range m.childInstances {
-		results, err := childInstance.getMatchesForLayer(ctx, layerIndex)
+		results, err := childInstance.getMatchesForLayer(layerIndex)
 		if err != nil {
 			return nil, fmt.Errorf("failed to evaluate child matcher on layer %d: %v", layerIndex, err)
 		}
@@ -698,19 +753,19 @@ type matchSequenceInstance struct {
 }
 
 // getMatchesForLayer implements matcherInstance.
-func (m *matchSequenceInstance) getMatchesForLayer(ctx context.Context, layerIndex uint32) (matchedResults []matcherResult, err error) {
+func (m *matchSequenceInstance) getMatchesForLayer(layerIndex uint32) (matchedResults []matcherResult, err error) {
 	// decide whether to evaluate base or next matcher first
 	baseFirst := m.baseFirst()
 	if baseFirst {
-		if err := m.evalBase(ctx, layerIndex); err != nil {
+		if err := m.evalBase(layerIndex); err != nil {
 			return nil, err
 		}
 	}
-	if err := m.evalNext(ctx, layerIndex); err != nil {
+	if err := m.evalNext(layerIndex); err != nil {
 		return nil, err
 	}
 	if !baseFirst {
-		if err := m.evalBase(ctx, layerIndex); err != nil {
+		if err := m.evalBase(layerIndex); err != nil {
 			return nil, err
 		}
 	}
@@ -753,8 +808,8 @@ func (m *matchSequenceInstance) dropIndices(dropIndices []uint32) {
 
 // evalBase evaluates the base child matcher and drops map indices from the
 // next matcher if possible.
-func (m *matchSequenceInstance) evalBase(ctx context.Context, layerIndex uint32) error {
-	results, err := m.baseInstance.getMatchesForLayer(ctx, layerIndex)
+func (m *matchSequenceInstance) evalBase(layerIndex uint32) error {
+	results, err := m.baseInstance.getMatchesForLayer(layerIndex)
 	if err != nil {
 		return fmt.Errorf("failed to evaluate base matcher on layer %d: %v", layerIndex, err)
 	}
@@ -781,8 +836,8 @@ func (m *matchSequenceInstance) evalBase(ctx context.Context, layerIndex uint32)
 
 // evalNext evaluates the next child matcher and drops map indices from the
 // base matcher if possible.
-func (m *matchSequenceInstance) evalNext(ctx context.Context, layerIndex uint32) error {
-	results, err := m.nextInstance.getMatchesForLayer(ctx, layerIndex)
+func (m *matchSequenceInstance) evalNext(layerIndex uint32) error {
+	results, err := m.nextInstance.getMatchesForLayer(layerIndex)
 	if err != nil {
 		return fmt.Errorf("failed to evaluate next matcher on layer %d: %v", layerIndex, err)
 	}

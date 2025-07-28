@@ -690,10 +690,10 @@ func (b testBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) 
 func (b testBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	panic("implement me")
 }
-func (b testBackend) CurrentView() *filtermaps.ChainView {
+func (b testBackend) CurrentChainView() *filtermaps.ChainView {
 	panic("implement me")
 }
-func (b testBackend) NewMatcherBackend() filtermaps.MatcherBackend {
+func (b testBackend) GetIndexView(headBlockHash common.Hash) *filtermaps.IndexView {
 	panic("implement me")
 }
 

@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"math/big"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -431,173 +432,45 @@ func TestRangeLogs(t *testing.T) {
 		t.Fatal(err)
 	}
 	chain, _ := core.GenerateChain(gspec.Config, gspec.ToBlock(), ethash.NewFaker(), db, 1000, func(i int, gen *core.BlockGen) {})
-
 	options := core.DefaultConfig().WithStateScheme(rawdb.HashScheme)
 	options.TxLookupLimit = 0 // index all txs
 	bc, err := core.NewBlockChain(db, gspec, ethash.NewFaker(), options)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = bc.InsertChain(chain[:600])
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	backend.startFilterMaps(200, false, filtermaps.RangeTestParams)
-	defer backend.stopFilterMaps()
-
-	var (
-		testCase, event int
-		filter          *Filter
-		addresses       = []common.Address{{}}
-	)
-
-	expEvent := func(expEvent int, expFirst, expAfterLast uint64) {
-		exp := rangeLogsTestEvent{expEvent, common.NewRange[uint64](expFirst, expAfterLast-expFirst)}
-		event++
-		ev := <-filter.rangeLogsTestHook
-		if ev != exp {
-			t.Fatalf("Test case #%d: wrong test event #%d received (got %v, expected %v)", testCase, event, ev, exp)
+	rangeTest := func(testCase int, begin, end int64, expRanges []testFilterRange) {
+		filter := sys.NewRangeFilter(begin, end, []common.Address{{}}, nil)
+		filter.testFilterRanges = []testFilterRange{}
+		filter.Logs(context.Background())
+		if !slices.Equal(filter.testFilterRanges, expRanges) {
+			t.Fatalf("Test case #%d: wrong list of filtered ranges received (got %v, expected %v)", testCase, filter.testFilterRanges, expRanges)
 		}
 	}
 
-	newFilter := func(begin, end int64) {
-		testCase++
-		event = 0
-		filter = sys.NewRangeFilter(begin, end, addresses, nil)
-		filter.rangeLogsTestHook = make(chan rangeLogsTestEvent)
-		go func(filter *Filter) {
-			filter.Logs(context.Background())
-			// ensure that filter will not be blocked if we exit early
-			for range filter.rangeLogsTestHook {
-			}
-		}(filter)
-	}
+	bc.InsertChain(chain[:600])
+	backend.startFilterMaps(200, false, filtermaps.RangeTestParams)
+	defer backend.stopFilterMaps()
 
-	updateHead := func() {
-		head := bc.CurrentBlock()
-		backend.fm.SetTarget(filtermaps.NewChainView(backend, head.Number.Uint64(), head.Hash()), 0, 0)
-		backend.fm.WaitIdle()
-	}
+	rangeTest(1, 0, 300, []testFilterRange{{0, 300, false}})
+	rangeTest(2, 300, 500, []testFilterRange{{400, 500, true}, {300, 399, false}})
+	rangeTest(3, 400, 10000, []testFilterRange{{400, 600, true}})
+	bc.SetCanonical(chain[99])
+	backend.logIndexer.Revert(100)
+	rangeTest(4, 0, 10000, []testFilterRange{{0, 100, false}})
+	backend.backfillBlocks()
+	bc.InsertChain(chain[100:120])
+	backend.indexHead(120)
+	rangeTest(5, 0, 10000, []testFilterRange{{0, 120, true}})
+	bc.InsertChain(chain[120:800])
+	backend.indexHead(800)
+	rangeTest(6, 400, 800, []testFilterRange{{600, 800, true}, {400, 599, false}})
+	backend.stopFilterMaps()
 
-	// test case #1
-	newFilter(300, 500)
-	expEvent(rangeLogsTestIndexed, 401, 501)
-	expEvent(rangeLogsTestSync, 0, 0)
-	expEvent(rangeLogsTestSynced, 401, 601)
-	expEvent(rangeLogsTestResults, 401, 501)
-	expEvent(rangeLogsTestUnindexed, 300, 401)
-	if _, err := bc.InsertChain(chain[600:700]); err != nil {
-		t.Fatal(err)
-	}
-	updateHead()
-	expEvent(rangeLogsTestResults, 300, 501)
-	expEvent(rangeLogsTestDone, 0, 0)
+	backend.startFilterMaps(0, true, filtermaps.RangeTestParams)
+	rangeTest(7, 0, 10000, []testFilterRange{{0, 800, false}})
+	backend.stopFilterMaps()
 
-	// test case #2
-	newFilter(400, int64(rpc.LatestBlockNumber))
-	expEvent(rangeLogsTestIndexed, 501, 701)
-	if _, err := bc.InsertChain(chain[700:800]); err != nil {
-		t.Fatal(err)
-	}
-	updateHead()
-	expEvent(rangeLogsTestSync, 0, 0)
-	expEvent(rangeLogsTestSynced, 601, 699)
-	expEvent(rangeLogsTestResults, 601, 699)
-	expEvent(rangeLogsTestUnindexed, 400, 601)
-	expEvent(rangeLogsTestResults, 400, 699)
-	expEvent(rangeLogsTestIndexed, 699, 801)
-	if _, err := bc.SetCanonical(chain[749]); err != nil { // set head to block 750
-		t.Fatal(err)
-	}
-	updateHead()
-	expEvent(rangeLogsTestSync, 0, 0)
-	expEvent(rangeLogsTestSynced, 601, 749)
-	expEvent(rangeLogsTestResults, 400, 749)
-	expEvent(rangeLogsTestIndexed, 749, 751)
-	expEvent(rangeLogsTestSync, 0, 0)
-	expEvent(rangeLogsTestSynced, 551, 751)
-	expEvent(rangeLogsTestResults, 400, 751)
-	expEvent(rangeLogsTestDone, 0, 0)
-
-	// test case #3
-	newFilter(int64(rpc.LatestBlockNumber), int64(rpc.LatestBlockNumber))
-	expEvent(rangeLogsTestIndexed, 750, 751)
-	if _, err := bc.SetCanonical(chain[739]); err != nil {
-		t.Fatal(err)
-	}
-	updateHead()
-	expEvent(rangeLogsTestSync, 0, 0)
-	expEvent(rangeLogsTestSynced, 551, 739)
-	expEvent(rangeLogsTestResults, 0, 0)
-	expEvent(rangeLogsTestIndexed, 740, 741)
-	if _, err := bc.InsertChain(chain[740:750]); err != nil {
-		t.Fatal(err)
-	}
-	updateHead()
-	expEvent(rangeLogsTestSync, 0, 0)
-	expEvent(rangeLogsTestSynced, 551, 739)
-	expEvent(rangeLogsTestResults, 0, 0)
-	expEvent(rangeLogsTestIndexed, 750, 751)
-	expEvent(rangeLogsTestSync, 0, 0)
-	expEvent(rangeLogsTestSynced, 551, 751)
-	expEvent(rangeLogsTestResults, 750, 751)
-	expEvent(rangeLogsTestDone, 0, 0)
-
-	// test case #4
-	if _, err := bc.SetCanonical(chain[499]); err != nil {
-		t.Fatal(err)
-	}
-	updateHead()
-	newFilter(400, int64(rpc.LatestBlockNumber))
-	expEvent(rangeLogsTestIndexed, 400, 501)
-	if _, err := bc.InsertChain(chain[500:650]); err != nil {
-		t.Fatal(err)
-	}
-	updateHead()
-	expEvent(rangeLogsTestSync, 0, 0)
-	expEvent(rangeLogsTestSynced, 451, 499)
-	expEvent(rangeLogsTestResults, 451, 499)
-	expEvent(rangeLogsTestUnindexed, 400, 451)
-	expEvent(rangeLogsTestResults, 400, 499)
-	// indexed head extension seems possible
-	expEvent(rangeLogsTestIndexed, 499, 651)
-	// further head extension causes tail unindexing in searched range
-	if _, err := bc.InsertChain(chain[650:750]); err != nil {
-		t.Fatal(err)
-	}
-	updateHead()
-	expEvent(rangeLogsTestSync, 0, 0)
-	expEvent(rangeLogsTestSynced, 551, 649)
-	// tail trimmed to 551; cannot merge with existing results
-	expEvent(rangeLogsTestResults, 551, 649)
-	expEvent(rangeLogsTestUnindexed, 400, 551)
-	expEvent(rangeLogsTestResults, 400, 649)
-	expEvent(rangeLogsTestIndexed, 649, 751)
-	expEvent(rangeLogsTestSync, 0, 0)
-	expEvent(rangeLogsTestSynced, 551, 751)
-	expEvent(rangeLogsTestResults, 400, 751)
-	expEvent(rangeLogsTestDone, 0, 0)
-
-	// test case #5
-	newFilter(400, int64(rpc.LatestBlockNumber))
-	expEvent(rangeLogsTestIndexed, 551, 751)
-	expEvent(rangeLogsTestSync, 0, 0)
-	expEvent(rangeLogsTestSynced, 551, 751)
-	expEvent(rangeLogsTestResults, 551, 751)
-	expEvent(rangeLogsTestUnindexed, 400, 551)
-	if _, err := bc.InsertChain(chain[750:1000]); err != nil {
-		t.Fatal(err)
-	}
-	updateHead()
-	expEvent(rangeLogsTestResults, 400, 751)
-	// indexed tail already beyond results head; revert to unindexed head search
-	expEvent(rangeLogsTestUnindexed, 751, 1001)
-	if _, err := bc.SetCanonical(chain[899]); err != nil {
-		t.Fatal(err)
-	}
-	updateHead()
-	expEvent(rangeLogsTestResults, 400, 1001)
-	expEvent(rangeLogsTestReorg, 400, 901)
-	expEvent(rangeLogsTestDone, 0, 0)
+	backend.startFilterMaps(0, false, filtermaps.RangeTestParams)
+	rangeTest(8, 0, 10000, []testFilterRange{{0, 800, true}})
 }

@@ -87,7 +87,7 @@ func TestPotentialMatches(t *testing.T) {
 		// split up into a list of rows if longer than allowed
 		var rows []FilterRow
 		for layerIndex := uint32(0); row != nil; layerIndex++ {
-			maxLen := int(params.maxRowLength(layerIndex))
+			maxLen := int(params.getMaxRowLength(layerIndex))
 			if len(row) > maxLen {
 				rows = append(rows, row[:maxLen])
 				row = row[maxLen:]

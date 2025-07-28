@@ -459,7 +459,7 @@ func (b *EthAPIBackend) RPCTxFeeCap() float64 {
 	return b.eth.config.RPCTxFeeCap
 }
 
-func (b *EthAPIBackend) CurrentView() *filtermaps.ChainView {
+func (b *EthAPIBackend) CurrentChainView() *filtermaps.ChainView {
 	head := b.eth.blockchain.CurrentBlock()
 	if head == nil {
 		return nil
@@ -467,8 +467,8 @@ func (b *EthAPIBackend) CurrentView() *filtermaps.ChainView {
 	return filtermaps.NewChainView(b.eth.blockchain, head.Number.Uint64(), head.Hash())
 }
 
-func (b *EthAPIBackend) NewMatcherBackend() filtermaps.MatcherBackend {
-	return b.eth.filterMaps.NewMatcherBackend()
+func (b *EthAPIBackend) GetIndexView(headBlockHash common.Hash) *filtermaps.IndexView {
+	return b.eth.logIndexer.GetIndexView(headBlockHash)
 }
 
 func (b *EthAPIBackend) Engine() consensus.Engine {
