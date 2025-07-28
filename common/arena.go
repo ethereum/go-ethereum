@@ -16,37 +16,55 @@
 
 package common
 
+import "fmt"
+
 // Arena is an allocation primitive that allows individual allocations
 // out of a page of items and bulk de-allocations of last N allocations.
 // The most common way of using an Arena is to pair it up with a sync.Pool
 // of pages.
+//
+// Notably, arena is not thread safe, please manage the concurrency issues
+// by yourselves.
 type Arena[T any] struct {
-	used  uint32
-	pages [][]T
-
-	PageSize    uint32
-	NewPage     func() any
-	ReleasePage func(any)
+	used        uint32
+	pages       [][]T
+	pageSize    uint32
+	newPage     func() any
+	releasePage func(any)
 }
 
-// Alloc returns the next free item on the arena
-// Allocates a new page if needed
+// NewArena constructs the arena for the given type.
+func NewArena[T any](pageSize uint32, newPage func() any, releasePage func(any)) *Arena[T] {
+	return &Arena[T]{
+		pageSize:    pageSize,
+		newPage:     newPage,
+		releasePage: releasePage,
+	}
+}
+
+// Alloc returns the next free item on the arena.
 func (a *Arena[T]) Alloc() *T {
-	pageIndex := a.used / a.PageSize
-	pageOffset := a.used % a.PageSize
-	if pageOffset == 0 {
-		a.pages = append(a.pages, a.NewPage().([]T))
+	pageIndex := a.used / a.pageSize
+	pageOffset := a.used % a.pageSize
+
+	// Allocate additional items if all pre-allocated ones have been exhausted
+	if pageOffset == 0 && int(pageIndex) == len(a.pages) {
+		items := a.newPage().([]T)
+		if len(items) != int(a.pageSize) {
+			panic(fmt.Errorf("invalid page size, want: %d, got: %d", a.pageSize, len(items)))
+		}
+		a.pages = append(a.pages, items)
 	}
 	a.used++
 	return &a.pages[pageIndex][pageOffset]
 }
 
-// Used returns the number of items that live on this arena
+// Used returns the number of items that live on this arena.
 func (a *Arena[T]) Used() uint32 {
 	return a.used
 }
 
-// Reset rollsback the active set of live elements to the given number
+// Reset rollbacks the active set of live elements to the given number.
 func (a *Arena[T]) Reset(to uint32) {
 	a.used = to
 }
@@ -54,7 +72,7 @@ func (a *Arena[T]) Reset(to uint32) {
 // Release releases all the pages that the arena currently owns
 func (a *Arena[T]) Release() {
 	for _, page := range a.pages {
-		a.ReleasePage(page)
+		a.releasePage(page)
 	}
 	a.pages = nil
 	a.used = 0

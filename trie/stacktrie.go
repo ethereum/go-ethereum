@@ -90,8 +90,8 @@ func NewStackTrie(onTrieNode OnTrieNode) *StackTrie {
 		onTrieNode:    onTrieNode,
 		kBuf:          make([]byte, 64),
 		pBuf:          make([]byte, 64),
-		nodeAllocator: common.Arena[stNode]{NewPage: stPagePool.Get, PageSize: uint32(stPageSize), ReleasePage: stPagePool.Put},
-		byteAllocator: common.Arena[[32]byte]{NewPage: bytePagePool.Get, PageSize: uint32(stPageSize), ReleasePage: bytePagePool.Put},
+		nodeAllocator: *common.NewArena[stNode](uint32(stPageSize), stPagePool.Get, stPagePool.Put),
+		byteAllocator: *common.NewArena[[32]byte](uint32(stPageSize), bytePagePool.Get, bytePagePool.Put),
 	}
 	t.root = t.nodeAllocator.Alloc().reset()
 	t.tmpNode = t.nodeAllocator.Alloc().reset()
