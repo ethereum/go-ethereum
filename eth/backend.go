@@ -537,7 +537,10 @@ func (s *Ethereum) setupDiscovery() error {
 			// RequestENR does not yet support context. It will simply time out.
 			// If the ENR can't be resolved, RequestENR will return nil. We don't
 			// care about the specific error here, so we ignore it.
-			nn, _ := s.p2pServer.DiscoveryV4().RequestENR(enr)
+			nn, err := s.p2pServer.DiscoveryV4().RequestENR(enr)
+			if err != nil {
+				log.Debug("Filtered dial node", "id", enr.ID(), "err", err)
+			}
 			return nn
 		}
 		iter = enode.AsyncFilter(iter, resolverFunc, maxParallelENRRequests)
