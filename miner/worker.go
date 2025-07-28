@@ -336,23 +336,20 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 // applyTransaction runs the transaction. If execution fails, state and gas pool are reverted.
 func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*types.Receipt, error) {
 	var (
-		gasPool      = env.gasPool
-		blockGasUsed = &env.header.GasUsed
-		snap         = env.state.Snapshot()
-		gasBefore    uint64
+		snap = env.state.Snapshot()
+		gp   = env.gasPool.Gas()
 	)
-	// Berachain: PoL tx does not consume gas.
+
+	// Berachain: PoL tx does not consume any block gas.
+	blockGasUsed := &env.header.GasUsed
 	if tx.Type() == types.PoLTxType {
-		gasPool = nil
 		blockGasUsed = new(uint64)
 	}
-	if gasPool != nil {
-		gasBefore = gasPool.Gas()
-	}
+
 	receipt, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx, blockGasUsed)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
-		env.gasPool.SetGas(gasBefore)
+		env.gasPool.SetGas(gp)
 	}
 	return receipt, err
 }

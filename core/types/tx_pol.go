@@ -93,13 +93,13 @@ func (tx *PoLTx) gas() uint64         { return tx.GasLimit }
 func (tx *PoLTx) gasPrice() *big.Int  { return tx.GasPrice }
 func (tx *PoLTx) gasTipCap() *big.Int { return tx.GasPrice }
 func (tx *PoLTx) gasFeeCap() *big.Int { return tx.GasPrice }
-func (*PoLTx) value() *big.Int        { return new(big.Int) }
+func (*PoLTx) value() *big.Int        { return common.Big0 }
 func (tx *PoLTx) nonce() uint64       { return tx.Nonce }
 func (tx *PoLTx) to() *common.Address { return &tx.To }
 
 // No-op: PoLTx is originated from the system address and carries no signature.
 func (*PoLTx) rawSignatureValues() (v, r, s *big.Int) {
-	return nil, nil, nil
+	return common.Big0, common.Big0, common.Big0
 }
 
 func (*PoLTx) setSignatureValues(chainID, v, r, s *big.Int) {

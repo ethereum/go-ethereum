@@ -122,7 +122,7 @@ func TestPoLTx_RawSignatureValues(t *testing.T) {
 		t.Fatalf("failed to create PoL tx: %v", err)
 	}
 	v, r, s := tx.RawSignatureValues()
-	if v != nil || r != nil || s != nil {
-		t.Fatalf("expected nil signature values, have v=%v r=%v s=%v", v, r, s)
+	if v.Sign() != 0 || r.Sign() != 0 || s.Sign() != 0 {
+		t.Fatalf("expected 0 signature values, have v=%v r=%v s=%v", v, r, s)
 	}
 }
