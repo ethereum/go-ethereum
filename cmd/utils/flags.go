@@ -253,6 +253,11 @@ var (
 		Usage:    "Manually specify the Delegation Activation timestamp, overriding the bundled setting",
 		Category: flags.EthCategory,
 	}
+	OverrideRestakingActivation = &cli.Uint64Flag{
+		Name:     "override.restakingActivation",
+		Usage:    "Manually specify the Restaking Activation timestamp, overriding the bundled setting",
+		Category: flags.EthCategory,
+	}
 	SyncModeFlag = &cli.StringFlag{
 		Name:     "syncmode",
 		Usage:    `Blockchain sync mode ("snap" or "full")`,

@@ -56,6 +56,7 @@ var (
 			utils.OverridePrague,
 			utils.OverrideVerkle,
 			utils.OverrideDelegationActivation,
+			utils.OverrideRestakingActivation,
 		}, utils.DatabaseFlags),
 		Description: `
 The init command initializes a new genesis block and definition for the network.
@@ -240,6 +241,10 @@ func initGenesis(ctx *cli.Context) error {
 	if ctx.IsSet(utils.OverrideDelegationActivation.Name) {
 		v := ctx.Uint64(utils.OverrideDelegationActivation.Name)
 		overrides.OverrideDelegationActivation = &v
+	}
+	if ctx.IsSet(utils.OverrideRestakingActivation.Name) {
+		v := ctx.Uint64(utils.OverrideRestakingActivation.Name)
+		overrides.OverrideRestakingActivation = &v
 	}
 
 	chaindb, err := stack.OpenDatabaseWithFreezer("chaindata", 0, 0, ctx.String(utils.AncientFlag.Name), "", false)

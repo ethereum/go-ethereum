@@ -344,6 +344,17 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 					}
 				}
 			}
+			if sim.chainConfig.IsRestakingActive(header.Number, header.Time) {
+				if block.BlockOverrides.Withdrawals != nil && len(*block.BlockOverrides.Withdrawals) > 1 {
+					secondWithdrawal := (*block.BlockOverrides.Withdrawals)[1]
+					if secondWithdrawal.Validator == math.MaxUint64 {
+						amount := new(big.Int).Mul(new(big.Int).SetUint64(secondWithdrawal.Amount), big.NewInt(params.GWei))
+						if err := core.ProcessRestakingDistribution(evm, secondWithdrawal.Address, amount); err != nil {
+							log.Error("could not process restaking distribution", "err", err)
+						}
+					}
+				}
+			}
 		}
 		// EIP-7002
 		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {

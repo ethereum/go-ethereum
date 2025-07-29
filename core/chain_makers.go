@@ -339,6 +339,17 @@ func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
 					}
 				}
 			}
+			if b.cm.config.IsRestakingActive(b.header.Number, b.header.Time) {
+				if len(b.withdrawals) > 1 {
+					secondWithdrawal := b.withdrawals[1]
+					if secondWithdrawal.Validator == math.MaxUint64 {
+						amount := new(big.Int).Mul(new(big.Int).SetUint64(secondWithdrawal.Amount), big.NewInt(params.GWei))
+						if err := ProcessRestakingDistribution(evm, secondWithdrawal.Address, amount); err != nil {
+							log.Error("could not process restaking distribution", "err", err)
+						}
+					}
+				}
+			}
 		}
 		// EIP-7002
 		if err := ProcessWithdrawalQueue(&requests, evm); err != nil {

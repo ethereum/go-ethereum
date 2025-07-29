@@ -125,6 +125,17 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 					}
 				}
 			}
+			if p.config.IsRestakingActive(block.Number(), block.Time()) {
+				if len(block.Withdrawals()) > 1 {
+					secondWithdrawal := block.Withdrawals()[1]
+					if secondWithdrawal.Validator == math.MaxUint64 {
+						amount := new(big.Int).Mul(new(big.Int).SetUint64(secondWithdrawal.Amount), big.NewInt(params.GWei))
+						if err := ProcessRestakingDistribution(evm, secondWithdrawal.Address, amount); err != nil {
+							log.Error("could not process restaking distribution", "err", err)
+						}
+					}
+				}
+			}
 		}
 		// EIP-7002
 		if err := ProcessWithdrawalQueue(&requests, evm); err != nil {
@@ -326,6 +337,16 @@ func ProcessStakingDistribution(evm *vm.EVM, address common.Address, amount *big
 	if err != nil {
 		return fmt.Errorf("system call failed to execute: %v", err)
 	}
+	return nil
+}
+
+func ProcessRestakingDistribution(evm *vm.EVM, address common.Address, amount *big.Int) error {
+	evm.StateDB.AddBalance(
+		address,
+		uint256.NewInt(0).SetBytes(amount.Bytes()),
+		tracing.BalanceIncreaseRewardMineBlock,
+	)
+	evm.StateDB.Finalise(true)
 	return nil
 }
 
