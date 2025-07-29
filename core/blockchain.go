@@ -67,6 +67,7 @@ var (
 
 	chainInfoGauge   = metrics.NewRegisteredGaugeInfo("chain/info", nil)
 	chainMgaspsMeter = metrics.NewRegisteredResettingTimer("chain/mgasps", nil)
+	chainGasCounter  = metrics.NewRegisteredCounter("chain/gas/total", nil)
 
 	accountReadTimer   = metrics.NewRegisteredResettingTimer("chain/account/reads", nil)
 	accountHashTimer   = metrics.NewRegisteredResettingTimer("chain/account/hashes", nil)
@@ -1888,6 +1889,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		// Report the import stats before returning the various results
 		stats.processed++
 		stats.usedGas += res.usedGas
+		chainGasCounter.Inc(int64(res.usedGas))
 		witness = res.witness
 
 		var snapDiffItems, snapBufItems common.StorageSize
