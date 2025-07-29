@@ -77,10 +77,7 @@ func (t transientStorage) PrettyPrint() string {
 	for _, addr := range sortedAddrs {
 		fmt.Fprintf(out, "%#x:", addr)
 		storage := t[addr]
-		sortedKeys := make([]common.Hash, 0, len(storage))
-		for key := range storage {
-			sortedKeys = append(sortedKeys, key)
-		}
+		sortedKeys := slices.Collect(maps.Keys(storage))
 		slices.SortFunc(sortedKeys, common.Hash.Cmp)
 		for _, key := range sortedKeys {
 			fmt.Fprintf(out, "  %X : %X\n", key, storage[key])
