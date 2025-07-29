@@ -51,11 +51,9 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/era/e2store"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/golang/snappy"
 )
@@ -90,6 +88,9 @@ type Builder struct {
 	startNum      *uint64
 	written       uint64
 	expectsProofs bool
+	isPreMerge    bool
+	numPreMerge   int      // number of pre-merge blocks
+	finalTD       *big.Int // final total difficulty, used for pre-merge and merge straddling files
 }
 
 // NewBuilder returns a new Builder instance.
@@ -151,19 +152,27 @@ func (b *Builder) AddRLP(headerRLP []byte, bodyRLP []byte, receipts []byte, proo
 	if len(b.buff.headers) >= era.MaxSize {
 		return fmt.Errorf("exceeds max size %d", era.MaxSize)
 	}
+	if len(b.buff.headers) == 0 && td != nil {
+		if td.Sign() > 0 {
+			b.isPreMerge = true
+		}
+	}
 
 	b.buff.headers = append(b.buff.headers, headerRLP)
 	b.buff.bodies = append(b.buff.bodies, bodyRLP)
 	b.buff.receipts = append(b.buff.receipts, receipts)
-	b.buff.tds = append(b.buff.tds, new(big.Int).Set(td))
-	b.hashes = append(b.hashes, blockHash)
-	if proof != nil {
-		b.buff.proofs = append(b.buff.proofs, proof)
+	if td != nil {
+		if b.isPreMerge && td.Sign() > 0 {
+			b.buff.tds = append(b.buff.tds, new(big.Int).Set(td))
+			b.finalTD = new(big.Int).Set(td)
+			b.hashes = append(b.hashes, blockHash)
+		} else if b.isPreMerge {
+			b.buff.tds = append(b.buff.tds, new(big.Int).Set(b.finalTD))
+		}
 	}
 
-	mergeblock := history.PrunePoints[params.MainnetGenesisHash]
-	if mergeblock != nil && blockNum <= mergeblock.BlockNumber {
-		b.buff.tds = append(b.buff.tds, new(big.Int).Set(td))
+	if proof != nil {
+		b.buff.proofs = append(b.buff.proofs, proof)
 	}
 
 	// Write Era2 version before writing any blocks.
@@ -233,7 +242,7 @@ func (b *Builder) Finalize() (common.Hash, error) {
 	var accRoot common.Hash
 	if len(b.hashes) > 0 {
 		var err error
-		accRoot, err = era.ComputeAccumulator(b.hashes, b.buff.tds)
+		accRoot, err = era.ComputeAccumulator(b.hashes, b.buff.tds[:len(b.hashes)])
 		if err != nil {
 			return common.Hash{}, fmt.Errorf("compute accumulator: %w", err)
 		}

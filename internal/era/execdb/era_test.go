@@ -54,7 +54,7 @@ func TestEra2Builder(t *testing.T) {
 		chain.headers = append(chain.headers, types.Header{Number: big.NewInt(int64(i))})
 		chain.bodies = append(chain.bodies, types.Body{Transactions: []*types.Transaction{types.NewTransaction(0, common.Address{byte(i)}, nil, 0, nil, nil)}})
 		chain.receipts = append(chain.receipts, types.Receipts{{CumulativeGasUsed: uint64(i)}})
-		chain.tds = append(chain.tds, big.NewInt(int64(i)))
+		chain.tds = append(chain.tds, big.NewInt(int64(i+1)))
 	}
 
 	// Write blocks to Era1.
