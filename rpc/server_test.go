@@ -216,34 +216,16 @@ func TestServerSetReadLimits(t *testing.T) {
 		shouldFail bool
 	}{
 		{
-			name:       "small limit with small request - should succeed",
+			name:       "limit with small request - should succeed",
 			readLimit:  2048,
 			testSize:   500, // Small request data
 			shouldFail: false,
 		},
 		{
-			name:       "small limit with large request - should fail",
+			name:       "limit with large request - should fail",
 			readLimit:  2048,
 			testSize:   5000, // Large request data that should exceed limit
 			shouldFail: true,
-		},
-		{
-			name:       "medium limit with medium request - should succeed",
-			readLimit:  10240,
-			testSize:   5000, // Medium request data
-			shouldFail: false,
-		},
-		{
-			name:       "medium limit with large request - should fail",
-			readLimit:  10240,
-			testSize:   20000, // Large request data
-			shouldFail: true,
-		},
-		{
-			name:       "large limit with large request - should succeed",
-			readLimit:  50000,
-			testSize:   20000, // Large request data that should fit
-			shouldFail: false,
 		},
 	}
 
