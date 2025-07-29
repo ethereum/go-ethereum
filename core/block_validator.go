@@ -91,6 +91,11 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	isPrague1 := v.config.IsPrague1(block.Number(), block.Time())
 	var expectedPoLHash common.Hash
 	if isPrague1 {
+		if block.ProposerPubkey() == nil {
+			// TODO: does this need to enforce the proposer pubkey is the exact value we expect?
+			return errors.New("post-prague1 block missing parent proposer pubkey")
+		}
+
 		polTx, err := types.NewPoLTx(
 			v.config.ChainID,
 			v.config.Berachain.Prague1.PoLDistributorAddress,

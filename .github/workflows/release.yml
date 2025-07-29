@@ -130,13 +130,14 @@ jobs:
         # Move all artifacts to current directory
         if [ -d "./artifacts" ]; then
           find ./artifacts -name "*.tar.gz" -exec mv {} . \;
+          find ./artifacts -name "*.tar.gz.asc" -exec mv {} . \;
         else
           echo "Warning: No artifacts directory found"
         fi
         
         # List available files for debugging
         echo "Available files:"
-        ls -la *.tar.gz || echo "No tar.gz files found"
+        ls -la *.tar.gz *.tar.gz.asc 2>/dev/null || echo "No archive files found"
         
         # Get actual archive names
         GETH_AMD64=$(ls bera-geth-linux-amd64-*.tar.gz 2>/dev/null | grep -v alltools | head -1)
@@ -237,7 +238,7 @@ jobs:
         
         # Create assets array for gh release
         assets=()
-        for asset in bera-geth-*.tar.gz; do
+        for asset in bera-geth-*.tar.gz bera-geth-*.tar.gz.asc; do
             if [ -f "$asset" ]; then
                 assets+=("$asset")
             fi

@@ -777,6 +777,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 			"len(params.Withdrawals)", len(params.Withdrawals),
 			"beaconRoot", beaconRoot,
 			"len(requests)", len(requests),
+			"proposerPubkey", proposerPubkey,
 			"error", err)
 		return api.invalid(err, nil), nil
 	}

@@ -358,11 +358,7 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 	var (
 		isOsaka  = miner.chainConfig.IsOsaka(env.header.Number, env.header.Time)
 		isCancun = miner.chainConfig.IsCancun(env.header.Number, env.header.Time)
-		gasLimit = env.header.GasLimit
 	)
-	if env.gasPool == nil {
-		env.gasPool = new(core.GasPool).AddGas(gasLimit)
-	}
 	for {
 		// Check interruption signal and abort building if it's fired.
 		if interrupt != nil {
@@ -497,6 +493,11 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 	miner.confMu.RUnlock()
 
 	// Berachain: Post-Prague1, add PoL tx to the block according to BRIP-0004.
+	if env.gasPool == nil {
+		// NOTE: this check is moved here from the commitTransactions loop because we are
+		// "committing" a transaction outside of the loop.
+		env.gasPool = new(core.GasPool).AddGas(env.header.GasLimit)
+	}
 	if miner.chainConfig.IsPrague1(env.header.Number, env.header.Time) {
 		tx, err := types.NewPoLTx(
 			miner.chainConfig.ChainID,
