@@ -114,7 +114,11 @@ func (c *BeaconNodeClient) GetBlobByVersionedHashAndBlockTime(ctx context.Contex
 	if err != nil {
 		return nil, fmt.Errorf("failed to join path, err: %w", err)
 	}
-	resp, err := c.client.Get(blobSidecarPath)
+	req, err := http.NewRequestWithContext(ctx, "GET", blobSidecarPath, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request, err: %w", err)
+	}
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("cannot do request, err: %w", err)
 	}
