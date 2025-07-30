@@ -21,6 +21,13 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"reflect"
+	"strconv"
+	"sync"
+	"sync/atomic"
+	"time"
+	"unicode"
+
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -38,12 +45,6 @@ import (
 	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	"reflect"
-	"strconv"
-	"sync"
-	"sync/atomic"
-	"time"
-	"unicode"
 )
 
 // Register adds the engine API to the full node.
