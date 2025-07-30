@@ -33,6 +33,10 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+var (
+	intRegex = regexp.MustCompile(`(u)?int([0-9]*)`)
+)
+
 func isKeyWord(arg string) bool {
 	switch arg {
 	case "break":
@@ -299,7 +303,7 @@ func bindBasicType(kind abi.Type) string {
 	case abi.AddressTy:
 		return "common.Address"
 	case abi.IntTy, abi.UintTy:
-		parts := regexp.MustCompile(`(u)?int([0-9]*)`).FindStringSubmatch(kind.String())
+		parts := intRegex.FindStringSubmatch(kind.String())
 		switch parts[2] {
 		case "8", "16", "32", "64":
 			return fmt.Sprintf("%sint%s", parts[1], parts[2])
