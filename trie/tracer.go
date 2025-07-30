@@ -19,7 +19,6 @@ package trie
 import (
 	"maps"
 	"slices"
-	"sync"
 )
 
 // opTracer tracks the changes of trie nodes. During the trie operations,
@@ -96,13 +95,13 @@ func (t *opTracer) deletedList() [][]byte {
 }
 
 // prevalueTracer tracks the original values of resolved trie nodes. Cached trie
-// node values are expected to be immutable.
+// node values are expected to be immutable. A zero-size node value is treated as
+// non-existent and should not occur in practice.
 //
-// prevalueTracer is protected by a lock to ensure concurrency safety, as
-// concurrent map writes may occur during concurrent trie read operations.
+// Note prevalueTracer is not thread-safe, callers should be responsible for
+// handling the concurrency issues by themselves.
 type prevalueTracer struct {
 	data map[string][]byte
-	lock sync.RWMutex
 }
 
 // newPrevalueTracer initializes the tracer for capturing resolved trie nodes.
@@ -116,28 +115,18 @@ func newPrevalueTracer() *prevalueTracer {
 // blob internally. Do not modify the value outside this function,
 // as it is not deep-copied.
 func (t *prevalueTracer) put(path []byte, val []byte) {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-
 	t.data[string(path)] = val
 }
 
-// has returns a flag indicating whether the corresponding trie node specified
-// by the path exists in the trie.
-func (t *prevalueTracer) has(path []byte) bool {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-
-	_, ok := t.data[string(path)]
-	return ok
+// get returns the cached trie node value. If the node is not found, nil will
+// be returned.
+func (t *prevalueTracer) get(path []byte) []byte {
+	return t.data[string(path)]
 }
 
-// hasList returns a list of flag indicating whether the corresponding trie nodes
-// specified by the path exists in the trie.
+// hasList returns a list of flags indicating whether the corresponding trie nodes
+// specified by the path exist in the trie.
 func (t *prevalueTracer) hasList(list [][]byte) []bool {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-
 	exists := make([]bool, 0, len(list))
 	for _, path := range list {
 		_, ok := t.data[string(path)]
@@ -148,25 +137,16 @@ func (t *prevalueTracer) hasList(list [][]byte) []bool {
 
 // values returns a list of values of the cached trie nodes.
 func (t *prevalueTracer) values() [][]byte {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-
 	return slices.Collect(maps.Values(t.data))
 }
 
 // reset resets the cached content in the prevalueTracer.
 func (t *prevalueTracer) reset() {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-
 	clear(t.data)
 }
 
 // copy returns a copied prevalueTracer instance.
 func (t *prevalueTracer) copy() *prevalueTracer {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-
 	// Shadow clone is used, as the cached trie node values are immutable
 	return &prevalueTracer{
 		data: maps.Clone(t.data),

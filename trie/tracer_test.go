@@ -52,15 +52,15 @@ var (
 	}
 )
 
-func TestTrieTracer(t *testing.T) {
-	testTrieTracer(t, tiny)
-	testTrieTracer(t, nonAligned)
-	testTrieTracer(t, standard)
+func TestTrieOpTracer(t *testing.T) {
+	testTrieOpTracer(t, tiny)
+	testTrieOpTracer(t, nonAligned)
+	testTrieOpTracer(t, standard)
 }
 
 // Tests if the trie diffs are tracked correctly. Tracer should capture
 // all non-leaf dirty nodes, no matter the node is embedded or not.
-func testTrieTracer(t *testing.T, vals []struct{ k, v string }) {
+func testTrieOpTracer(t *testing.T, vals []struct{ k, v string }) {
 	db := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
 	trie := NewEmpty(db)
 
@@ -70,6 +70,7 @@ func testTrieTracer(t *testing.T, vals []struct{ k, v string }) {
 	}
 	insertSet := copySet(trie.opTracer.inserts) // copy before commit
 	deleteSet := copySet(trie.opTracer.deletes) // copy before commit
+
 	root, nodes := trie.Commit(false)
 	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 
@@ -97,13 +98,13 @@ func testTrieTracer(t *testing.T, vals []struct{ k, v string }) {
 
 // Test that after inserting a new batch of nodes and deleting them immediately,
 // the trie tracer should be cleared normally as no operation happened.
-func TestTrieTracerNoop(t *testing.T) {
-	testTrieTracerNoop(t, tiny)
-	testTrieTracerNoop(t, nonAligned)
-	testTrieTracerNoop(t, standard)
+func TestTrieOpTracerNoop(t *testing.T) {
+	testTrieOpTracerNoop(t, tiny)
+	testTrieOpTracerNoop(t, nonAligned)
+	testTrieOpTracerNoop(t, standard)
 }
 
-func testTrieTracerNoop(t *testing.T, vals []struct{ k, v string }) {
+func testTrieOpTracerNoop(t *testing.T, vals []struct{ k, v string }) {
 	db := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
 	trie := NewEmpty(db)
 	for _, val := range vals {
@@ -120,14 +121,14 @@ func testTrieTracerNoop(t *testing.T, vals []struct{ k, v string }) {
 	}
 }
 
-// Tests if the accessList is correctly tracked.
-func TestAccessList(t *testing.T) {
-	testAccessList(t, tiny)
-	testAccessList(t, nonAligned)
-	testAccessList(t, standard)
+// Tests if the original value of trie nodes are correctly tracked.
+func TestPrevalueTracer(t *testing.T) {
+	testPrevalueTracer(t, tiny)
+	testPrevalueTracer(t, nonAligned)
+	testPrevalueTracer(t, standard)
 }
 
-func testAccessList(t *testing.T, vals []struct{ k, v string }) {
+func testPrevalueTracer(t *testing.T, vals []struct{ k, v string }) {
 	var (
 		db   = newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
 		trie = NewEmpty(db)
@@ -210,7 +211,7 @@ func testAccessList(t *testing.T, vals []struct{ k, v string }) {
 }
 
 // Tests origin values won't be tracked in Iterator or Prover
-func TestAccessListLeak(t *testing.T) {
+func TestPrevalueTracerLeak(t *testing.T) {
 	var (
 		db   = newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
 		trie = NewEmpty(db)

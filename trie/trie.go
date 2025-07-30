@@ -55,7 +55,7 @@ type Trie struct {
 	// reader is the handler trie can retrieve nodes from.
 	reader *trieReader
 
-	// Various tracers for capturing the modification to trie
+	// Various tracers for capturing the modifications to trie
 	opTracer       *opTracer
 	prevalueTracer *prevalueTracer
 }
@@ -627,18 +627,16 @@ func (t *Trie) resolveAndTrack(n hashNode, prefix []byte) (node, error) {
 }
 
 // deletedNodes returns a list of node paths, referring the nodes being deleted
-// from the trie.
+// from the trie. It's possible a few deleted nodes were embedded in their parent
+// before, the deletions can be no effect by deleting nothing, filter them out.
 func (t *Trie) deletedNodes() [][]byte {
-	list := t.opTracer.deletedList()
-
-	// It's possible a few deleted nodes were embedded in their parent before,
-	// the deletions can be no effect by deleting nothing, filter them out.
 	var (
 		pos   int
+		list  = t.opTracer.deletedList()
 		flags = t.prevalueTracer.hasList(list)
 	)
 	for i := 0; i < len(list); i++ {
-		if flags[i] { // exist, keep it
+		if flags[i] {
 			list[pos] = list[i]
 			pos++
 		}
@@ -673,7 +671,7 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 		}
 		nodes := trienode.NewNodeSet(t.owner)
 		for _, path := range paths {
-			nodes.AddNode(path, trienode.NewDeleted())
+			nodes.AddNode(path, trienode.NewDeletedWithPrev(t.prevalueTracer.get(path)))
 		}
 		return types.EmptyRootHash, nodes // case (b)
 	}
@@ -691,7 +689,7 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 	}
 	nodes := trienode.NewNodeSet(t.owner)
 	for _, path := range t.deletedNodes() {
-		nodes.AddNode(path, trienode.NewDeleted())
+		nodes.AddNode(path, trienode.NewDeletedWithPrev(t.prevalueTracer.get(path)))
 	}
 	// If the number of changes is below 100, we let one thread handle it
 	t.root = newCommitter(nodes, t.prevalueTracer, collectLeaf).Commit(t.root, t.uncommitted > 100)

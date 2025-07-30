@@ -449,35 +449,35 @@ func verifyAccessList(old *Trie, new *Trie, set *trienode.NodeSet) error {
 		if !ok || n.IsDeleted() {
 			return errors.New("expect new node")
 		}
-		//if len(n.Prev) > 0 {
-		//	return errors.New("unexpected origin value")
-		//}
+		if len(set.Origins[path]) > 0 {
+			return errors.New("unexpected origin value")
+		}
 	}
 	// Check deletion set
-	for path := range deletes {
+	for path, blob := range deletes {
 		n, ok := set.Nodes[path]
 		if !ok || !n.IsDeleted() {
 			return errors.New("expect deleted node")
 		}
-		//if len(n.Prev) == 0 {
-		//	return errors.New("expect origin value")
-		//}
-		//if !bytes.Equal(n.Prev, blob) {
-		//	return errors.New("invalid origin value")
-		//}
+		if len(set.Origins[path]) == 0 {
+			return errors.New("expect origin value")
+		}
+		if !bytes.Equal(set.Origins[path], blob) {
+			return errors.New("invalid origin value")
+		}
 	}
 	// Check update set
-	for path := range updates {
+	for path, blob := range updates {
 		n, ok := set.Nodes[path]
 		if !ok || n.IsDeleted() {
 			return errors.New("expect updated node")
 		}
-		//if len(n.Prev) == 0 {
-		//	return errors.New("expect origin value")
-		//}
-		//if !bytes.Equal(n.Prev, blob) {
-		//	return errors.New("invalid origin value")
-		//}
+		if len(set.Origins[path]) == 0 {
+			return errors.New("expect origin value")
+		}
+		if !bytes.Equal(set.Origins[path], blob) {
+			return errors.New("invalid origin value")
+		}
 	}
 	return nil
 }
