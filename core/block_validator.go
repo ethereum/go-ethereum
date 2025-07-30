@@ -69,7 +69,8 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	if hash := types.CalcUncleHash(block.Uncles()); hash != header.UncleHash {
 		return fmt.Errorf("uncle root hash mismatch (header value %x, calculated %x)", header.UncleHash, hash)
 	}
-	if hash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash {
+	txs := block.Transactions()
+	if hash := types.DeriveSha(txs, trie.NewStackTrie(nil)); hash != header.TxHash {
 		return fmt.Errorf("transaction root hash mismatch (header value %x, calculated %x)", header.TxHash, hash)
 	}
 
@@ -92,7 +93,6 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	var expectedPoLHash common.Hash
 	if isPrague1 {
 		if block.ProposerPubkey() == nil {
-			// TODO: does this need to enforce the proposer pubkey is the exact value we expect?
 			return errors.New("post-prague1 block missing parent proposer pubkey")
 		}
 
@@ -108,11 +108,16 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 			return fmt.Errorf("failed to create expected PoL tx: %w", err)
 		}
 		expectedPoLHash = polTx.Hash()
+
+		// Validate that the block has at least one tx.
+		if len(txs) == 0 {
+			return errors.New("post-prague1 block missing PoL tx")
+		}
 	}
 
 	// Blob transactions may be present after the Cancun fork.
 	var blobs int
-	for i, tx := range block.Transactions() {
+	for i, tx := range txs {
 		// Berachain: validate the PoL tx is only the first tx in the block.
 		switch {
 		case isPrague1 && i == 0:
