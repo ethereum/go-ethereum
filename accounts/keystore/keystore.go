@@ -30,6 +30,7 @@ import (
 	"reflect"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -68,7 +69,7 @@ type KeyStore struct {
 	wallets     []accounts.Wallet       // Wallet wrappers around the individual key files
 	updateFeed  event.Feed              // Event feed to notify wallet additions/removals
 	updateScope event.SubscriptionScope // Subscription scope tracking current live listeners
-	updating    bool                    // Whether the event notification loop is running
+	updating    atomic.Bool             // Whether the event notification loop is running
 
 	mu       sync.RWMutex
 	importMu sync.Mutex // Import Mutex locks the import to prevent two insertions from racing
@@ -182,8 +183,7 @@ func (ks *KeyStore) Subscribe(sink chan<- accounts.WalletEvent) event.Subscripti
 	sub := ks.updateScope.Track(ks.updateFeed.Subscribe(sink))
 
 	// Subscribers require an active notification loop, start it
-	if !ks.updating {
-		ks.updating = true
+	if !ks.updating.CompareAndSwap(false, true) {
 		go ks.updater()
 	}
 	return sub
@@ -207,7 +207,7 @@ func (ks *KeyStore) updater() {
 		// If all our subscribers left, stop the updater
 		ks.mu.Lock()
 		if ks.updateScope.Count() == 0 {
-			ks.updating = false
+			ks.updating.Store(false)
 			ks.mu.Unlock()
 			return
 		}
@@ -491,9 +491,7 @@ func (ks *KeyStore) ImportPreSaleKey(keyJSON []byte, passphrase string) (account
 // isUpdating returns whether the event notification loop is running.
 // This method is mainly meant for tests.
 func (ks *KeyStore) isUpdating() bool {
-	ks.mu.RLock()
-	defer ks.mu.RUnlock()
-	return ks.updating
+	return ks.updating.Load()
 }
 
 // zeroKey zeroes a private key in memory.
