@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -63,7 +64,7 @@ func ValidEip(eipNum int) bool {
 func ActivateableEips() []string {
 	var nums []string
 	for k := range activators {
-		nums = append(nums, fmt.Sprintf("%d", k))
+		nums = append(nums, strconv.FormatInt(int64(k), 10))
 	}
 	sort.Strings(nums)
 	return nums
