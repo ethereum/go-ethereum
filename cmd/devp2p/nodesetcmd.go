@@ -82,7 +82,8 @@ func showAttributeCounts(ns nodeSet) {
 		}
 	}
 
-	keys := make([]string, 0, len(attrcount))
+	// keys := make([]string, 0, len(attrcount))
+	var keys []string
 	var maxlength int
 	for key := range attrcount {
 		keys = append(keys, key)
