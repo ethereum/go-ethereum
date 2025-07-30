@@ -104,7 +104,7 @@ func (f *chainFreezer) Close() error {
 func (f *chainFreezer) readHeadNumber(db ethdb.KeyValueReader) uint64 {
 	hash := ReadHeadBlockHash(db)
 	if hash == (common.Hash{}) {
-		log.Error("Head block is not reachable")
+		log.Warn("Head block is not reachable")
 		return 0
 	}
 	number, ok := ReadHeaderNumber(db, hash)

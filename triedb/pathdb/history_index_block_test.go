@@ -232,3 +232,22 @@ func BenchmarkParseIndexBlock(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkBlockWriterAppend benchmarks the performance of indexblock.writer
+func BenchmarkBlockWriterAppend(b *testing.B) {
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	desc := newIndexBlockDesc(0)
+	writer, _ := newBlockWriter(nil, desc)
+
+	for i := 0; i < b.N; i++ {
+		if writer.full() {
+			desc = newIndexBlockDesc(0)
+			writer, _ = newBlockWriter(nil, desc)
+		}
+		if err := writer.append(writer.desc.max + 1); err != nil {
+			b.Error(err)
+		}
+	}
+}

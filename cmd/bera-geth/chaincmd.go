@@ -724,7 +724,7 @@ func downloadEra(ctx *cli.Context) error {
 		case ctx.IsSet(utils.BepoliaFlag.Name):
 			network = "bepolia"
 		default:
-			return fmt.Errorf("unsupported network, no known era1 checksums")
+			return errors.New("unsupported network, no known era1 checksums")
 		}
 	}
 
