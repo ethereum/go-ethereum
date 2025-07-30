@@ -114,7 +114,12 @@ func (m *SortedMap) Forward(threshold uint64) types.Transactions {
 // If you want to do several consecutive filterings, it's therefore better to first
 // do a .filter(func1) followed by .Filter(func2) or reheap()
 func (m *SortedMap) Filter(filter func(*types.Transaction) bool) types.Transactions {
-	return m.filter(filter)
+	removed := m.filter(filter)
+	// If transactions were removed, the heap and cache are ruined
+	if len(removed) > 0 {
+		m.reheap()
+	}
+	return removed
 }
 
 func (m *SortedMap) reheap() {
@@ -138,8 +143,6 @@ func (m *SortedMap) filter(filter func(*types.Transaction) bool) types.Transacti
 		m.cacheMu.Lock()
 		m.cache = nil
 		m.cacheMu.Unlock()
-		// If transactions were removed, the heap and cache are ruined
-		m.reheap()
 	}
 	return removed
 }
@@ -353,7 +356,7 @@ func (l *list) Filter(costLimit *uint256.Int, gasLimit uint64) (types.Transactio
 	if l.costcap.Cmp(costLimit) <= 0 && l.gascap <= gasLimit {
 		return nil, nil
 	}
-	l.costcap.Set(costLimit) // Lower the caps to the thresholds
+	l.costcap = new(uint256.Int).Set(costLimit) // Lower the caps to the thresholds
 	l.gascap = gasLimit
 
 	// Filter out all the transactions above the account's funds
@@ -378,6 +381,7 @@ func (l *list) Filter(costLimit *uint256.Int, gasLimit uint64) (types.Transactio
 	// Reset total cost
 	l.subTotalCost(removed)
 	l.subTotalCost(invalids)
+	l.txs.reheap()
 	return removed, invalids
 }
 
