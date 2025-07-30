@@ -21,11 +21,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"strconv"
-	"sync"
-	"sync/atomic"
-	"time"
-
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -43,6 +38,12 @@ import (
 	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"reflect"
+	"strconv"
+	"sync"
+	"sync/atomic"
+	"time"
+	"unicode"
 )
 
 // Register adds the engine API to the full node.
@@ -81,41 +82,6 @@ const (
 	// the beacon client is offline.
 	beaconUpdateWarnFrequency = 5 * time.Minute
 )
-
-// All methods provided over the engine endpoint.
-var caps = []string{
-	"engine_forkchoiceUpdatedV1",
-	"engine_forkchoiceUpdatedV2",
-	"engine_forkchoiceUpdatedV3",
-	"engine_forkchoiceUpdatedWithWitnessV1",
-	"engine_forkchoiceUpdatedWithWitnessV2",
-	"engine_forkchoiceUpdatedWithWitnessV3",
-	"engine_exchangeTransitionConfigurationV1",
-	"engine_getPayloadV1",
-	"engine_getPayloadV2",
-	"engine_getPayloadV3",
-	"engine_getPayloadV4",
-	"engine_getPayloadV5",
-	"engine_getBlobsV1",
-	"engine_getBlobsV2",
-	"engine_newPayloadV1",
-	"engine_newPayloadV2",
-	"engine_newPayloadV3",
-	"engine_newPayloadV4",
-	"engine_newPayloadWithWitnessV1",
-	"engine_newPayloadWithWitnessV2",
-	"engine_newPayloadWithWitnessV3",
-	"engine_newPayloadWithWitnessV4",
-	"engine_executeStatelessPayloadV1",
-	"engine_executeStatelessPayloadV2",
-	"engine_executeStatelessPayloadV3",
-	"engine_executeStatelessPayloadV4",
-	"engine_getPayloadBodiesByHashV1",
-	"engine_getPayloadBodiesByHashV2",
-	"engine_getPayloadBodiesByRangeV1",
-	"engine_getPayloadBodiesByRangeV2",
-	"engine_getClientVersionV1",
-}
 
 var (
 	// Number of blobs requested via getBlobsV2
@@ -957,6 +923,15 @@ func (api *ConsensusAPI) checkFork(timestamp uint64, forks ...forks.Fork) bool {
 
 // ExchangeCapabilities returns the current methods provided by this node.
 func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
+	valueT := reflect.TypeOf(api)
+	caps := make([]string, 0, valueT.NumMethod())
+	for i := 0; i < valueT.NumMethod(); i++ {
+		name := []rune(valueT.Method(i).Name)
+		if string(name) == "ExchangeCapabilities" {
+			continue
+		}
+		caps = append(caps, "engine_"+string(unicode.ToLower(name[0]))+string(name[1:]))
+	}
 	return caps
 }
 
