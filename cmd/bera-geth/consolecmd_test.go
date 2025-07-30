@@ -69,7 +69,7 @@ func TestConsoleWelcome(t *testing.T) {
 	geth.Expect(`
 Welcome to the Geth JavaScript console!
 
-instance: bera-geth/v{{gethver}}/{{goos}}-{{goarch}}/{{gover}}
+instance: BeraGeth/v{{gethver}}/{{goos}}-{{goarch}}/{{gover}}
 at block: 0 ({{niltime}})
  datadir: {{.Datadir}}
  modules: {{apis}}
@@ -140,7 +140,7 @@ func testAttachWelcome(t *testing.T, geth *testgeth, endpoint, apis string) {
 	attach.Expect(`
 Welcome to the Geth JavaScript console!
 
-instance: bera-geth/v{{gethver}}/{{goos}}-{{goarch}}/{{gover}}
+instance: BeraGeth/v{{gethver}}/{{goos}}-{{goarch}}/{{gover}}
 at block: 0 ({{niltime}}){{if ipc}}
  datadir: {{datadir}}{{end}}
  modules: {{apis}}

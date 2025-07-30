@@ -19,7 +19,7 @@ ADD . /bera-geth
 # makes it so that under certain circumstances, the docker layer can be cached,
 # and the builder can jump to the next (build all) command, with the go cache fully loaded.
 #
-RUN cd /bera-geth && go run build/ci.go install -static ./cmd/geth
+RUN cd /bera-geth && go run build/ci.go install -static ./cmd/bera-geth
 
 RUN cd /bera-geth && go run build/ci.go install -static
 

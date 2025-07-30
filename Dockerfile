@@ -14,16 +14,16 @@ COPY go.sum /bera-geth/
 RUN cd /bera-geth && go mod download
 
 ADD . /bera-geth
-RUN cd /bera-geth && go run build/ci.go install -static ./cmd/geth
+RUN cd /bera-geth && go run build/ci.go install -static ./cmd/bera-geth
 
 # Pull Geth into a second stage deploy alpine container
 FROM alpine:latest
 
 RUN apk add --no-cache ca-certificates
-COPY --from=builder /bera-geth/build/bin/geth /usr/local/bin/
+COPY --from=builder /bera-geth/build/bin/bera-geth /usr/local/bin/
 
 EXPOSE 8545 8546 30303 30303/udp
-ENTRYPOINT ["geth"]
+ENTRYPOINT ["bera-geth"]
 
 # Add some metadata labels to help programmatic image consumption
 ARG COMMIT=""

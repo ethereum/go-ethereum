@@ -64,18 +64,18 @@ import (
 )
 
 var (
-	// Files that end up in the geth*.zip archive.
+	// Files that end up in the bera-geth*.zip archive.
 	gethArchiveFiles = []string{
 		"COPYING",
-		executablePath("geth"),
+		executablePath("bera-geth"),
 	}
 
-	// Files that end up in the geth-alltools*.zip archive.
+	// Files that end up in the bera-geth-alltools*.zip archive.
 	allToolsArchiveFiles = []string{
 		"COPYING",
 		executablePath("abigen"),
 		executablePath("evm"),
-		executablePath("geth"),
+		executablePath("bera-geth"),
 		executablePath("rlpdump"),
 		executablePath("clef"),
 	}
@@ -91,7 +91,7 @@ var (
 			Description: "Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
 		},
 		{
-			BinaryName:  "geth",
+			BinaryName:  "bera-geth",
 			Description: "Ethereum CLI client.",
 		},
 		{
@@ -558,7 +558,7 @@ func doArchive(cmdline []string) {
 		atype   = flag.String("type", "zip", "Type of archive to write (zip|tar)")
 		signer  = flag.String("signer", "", `Environment variable holding the signing key (e.g. LINUX_SIGNING_KEY)`)
 		signify = flag.String("signify", "", `Environment variable holding the signify key (e.g. LINUX_SIGNIFY_KEY)`)
-		upload  = flag.String("upload", "", `Destination to upload the archives (usually "gethstore/builds")`)
+		upload  = flag.String("upload", "", `Destination to upload the archives (usually "berachain/bera-geth")`)
 		ext     string
 	)
 	flag.CommandLine.Parse(cmdline)
@@ -615,7 +615,7 @@ func archiveUpload(archive string, blobstore string, signer string, signifyVar s
 	}
 	if signifyVar != "" {
 		key := os.Getenv(signifyVar)
-		untrustedComment := "verify with geth-release.pub"
+		untrustedComment := "verify with bera-geth-release.pub"
 		trustedComment := fmt.Sprintf("%s (%s)", archive, time.Now().UTC().Format(time.RFC1123))
 		if err := signify.SignFile(archive, archive+".sig", key, untrustedComment, trustedComment); err != nil {
 			return err
@@ -727,7 +727,7 @@ func doDebianSource(cmdline []string) {
 		cachedir = flag.String("cachedir", "./build/cache", `Filesystem path to cache the downloaded Go bundles at`)
 		signer   = flag.String("signer", "", `Signing key name, also used as package author`)
 		upload   = flag.String("upload", "", `Where to upload the source package (usually "ethereum/ethereum")`)
-		sshUser  = flag.String("sftp-user", "", `Username for SFTP upload (usually "geth-ci")`)
+		sshUser  = flag.String("sftp-user", "", `Username for SFTP upload (usually "bera-geth-ci")`)
 		workdir  = flag.String("workdir", "", `Output directory for packages (uses temp dir if unset)`)
 		now      = time.Now()
 	)
@@ -886,7 +886,7 @@ func makeWorkdir(wdflag string) string {
 	if wdflag != "" {
 		err = os.MkdirAll(wdflag, 0744)
 	} else {
-		wdflag, err = os.MkdirTemp("", "geth-build-")
+		wdflag, err = os.MkdirTemp("", "bera-geth-build-")
 	}
 	if err != nil {
 		log.Fatal(err)
@@ -1040,7 +1040,7 @@ func doWindowsInstaller(cmdline []string) {
 		arch    = flag.String("arch", runtime.GOARCH, "Architecture for cross build packaging")
 		signer  = flag.String("signer", "", `Environment variable holding the signing key (e.g. WINDOWS_SIGNING_KEY)`)
 		signify = flag.String("signify key", "", `Environment variable holding the signify signing key (e.g. WINDOWS_SIGNIFY_KEY)`)
-		upload  = flag.String("upload", "", `Destination to upload the archives (usually "gethstore/builds")`)
+		upload  = flag.String("upload", "", `Destination to upload the archives (usually "berachain/bera-geth")`)
 		workdir = flag.String("workdir", "", `Output directory for packages (uses temp dir if unset)`)
 	)
 	flag.CommandLine.Parse(cmdline)
@@ -1059,7 +1059,7 @@ func doWindowsInstaller(cmdline []string) {
 			continue
 		}
 		allTools = append(allTools, filepath.Base(file))
-		if filepath.Base(file) == "geth.exe" {
+		if filepath.Base(file) == "bera-geth.exe" {
 			gethTool = file
 		} else {
 			devTools = append(devTools, file)
@@ -1073,7 +1073,7 @@ func doWindowsInstaller(cmdline []string) {
 		"Geth":     gethTool,
 		"DevTools": devTools,
 	}
-	build.Render("build/nsis.geth.nsi", filepath.Join(*workdir, "geth.nsi"), 0644, nil)
+	build.Render("build/nsis.geth.nsi", filepath.Join(*workdir, "bera-geth.nsi"), 0644, nil)
 	build.Render("build/nsis.install.nsh", filepath.Join(*workdir, "install.nsh"), 0644, templateData)
 	build.Render("build/nsis.uninstall.nsh", filepath.Join(*workdir, "uninstall.nsh"), 0644, allTools)
 	build.Render("build/nsis.pathupdate.nsh", filepath.Join(*workdir, "PathUpdate.nsh"), 0644, nil)
@@ -1091,7 +1091,7 @@ func doWindowsInstaller(cmdline []string) {
 	if env.Commit != "" {
 		ver[2] += "-" + env.Commit[:8]
 	}
-	installer, err := filepath.Abs("geth-" + archiveBasename(*arch, version.Archive(env.Tag, env.Commit)) + ".exe")
+	installer, err := filepath.Abs("bera-geth-" + archiveBasename(*arch, version.Archive(env.Tag, env.Commit)) + ".exe")
 	if err != nil {
 		log.Fatalf("Failed to convert installer file path: %v", err)
 	}
@@ -1101,7 +1101,7 @@ func doWindowsInstaller(cmdline []string) {
 		"/DMINORVERSION="+ver[1],
 		"/DBUILDVERSION="+ver[2],
 		"/DARCH="+*arch,
-		filepath.Join(*workdir, "geth.nsi"),
+		filepath.Join(*workdir, "bera-geth.nsi"),
 	)
 	// Sign and publish installer.
 	if err := archiveUpload(installer, *upload, *signer, *signify); err != nil {
@@ -1113,7 +1113,7 @@ func doWindowsInstaller(cmdline []string) {
 
 func doPurge(cmdline []string) {
 	var (
-		store = flag.String("store", "", `Destination from where to purge archives (usually "gethstore/builds")`)
+		store = flag.String("store", "", `Destination from where to purge archives (usually "berachain/bera-geth")`)
 		limit = flag.Int("days", 30, `Age threshold above which to delete unstable archives`)
 	)
 	flag.CommandLine.Parse(cmdline)
