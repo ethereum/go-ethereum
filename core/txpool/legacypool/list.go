@@ -125,6 +125,9 @@ func (m *SortedMap) Filter(filter func(*types.Transaction) bool) types.Transacti
 func (m *SortedMap) reheap() {
 	*m.index = slices.Collect(maps.Keys(m.items))
 	heap.Init(m.index)
+	m.cacheMu.Lock()
+	m.cache = nil
+	m.cacheMu.Unlock()
 }
 
 // filter is identical to Filter, but **does not** regenerate the heap. This method
