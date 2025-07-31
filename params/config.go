@@ -193,7 +193,7 @@ var (
 		},
 		Berachain: BerachainConfig{
 			Prague1: Prague1Config{
-				Time:                     newUint64(999999999999999),
+				Time:                     newUint64(17446744073709551614),
 				MinimumBaseFeeWei:        1000000000, // 1 gwei
 				BaseFeeChangeDenominator: 48,         // 6x increase from the default
 			},
@@ -230,7 +230,7 @@ var (
 		},
 		Berachain: BerachainConfig{
 			Prague1: Prague1Config{
-				Time:                     newUint64(999999999999999),
+				Time:                     newUint64(1754496000),
 				MinimumBaseFeeWei:        1000000000, // 1 gwei
 				BaseFeeChangeDenominator: 48,         // 6x increase from the default
 			},
@@ -458,6 +458,10 @@ var NetworkNames = map[string]string{
 	SepoliaChainConfig.ChainID.String(): "sepolia",
 	HoleskyChainConfig.ChainID.String(): "holesky",
 	HoodiChainConfig.ChainID.String():   "hoodi",
+
+	// Berachain
+	BerachainChainConfig.ChainID.String(): "berachain mainnet",
+	BepoliaChainConfig.ChainID.String():   "bepolia testnet",
 }
 
 // ChainConfig is the core config which determines the blockchain settings.

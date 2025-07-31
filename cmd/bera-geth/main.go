@@ -300,7 +300,7 @@ func prepare(ctx *cli.Context) {
 	case ctx.IsSet(utils.BepoliaFlag.Name):
 		log.Info("Starting bera-geth on Bepolia testnet...")
 
-	case !ctx.IsSet(utils.NetworkIdFlag.Name), ctx.IsSet(utils.BerachainFlag.Name):
+	case ctx.IsSet(utils.BerachainFlag.Name):
 		log.Info("Starting bera-geth on Berachain mainnet...")
 	}
 
