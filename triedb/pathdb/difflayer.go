@@ -34,7 +34,7 @@ type diffLayer struct {
 	root   common.Hash         // Root hash to which this layer diff belongs to
 	id     uint64              // Corresponding state id
 	block  uint64              // Associated block number
-	nodes  *nodeSet            // Cached trie nodes indexed by owner and path
+	nodes  *nodeSetWithOrigin  // Cached trie nodes indexed by owner and path
 	states *StateSetWithOrigin // Associated state changes along with origin value
 
 	parent layer        // Parent layer modified by this one, never nil, **can be changed**
@@ -42,7 +42,7 @@ type diffLayer struct {
 }
 
 // newDiffLayer creates a new diff layer on top of an existing layer.
-func newDiffLayer(parent layer, root common.Hash, id uint64, block uint64, nodes *nodeSet, states *StateSetWithOrigin) *diffLayer {
+func newDiffLayer(parent layer, root common.Hash, id uint64, block uint64, nodes *nodeSetWithOrigin, states *StateSetWithOrigin) *diffLayer {
 	dl := &diffLayer{
 		root:   root,
 		id:     id,
@@ -151,7 +151,7 @@ func (dl *diffLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 
 // update implements the layer interface, creating a new layer on top of the
 // existing layer tree with the specified data items.
-func (dl *diffLayer) update(root common.Hash, id uint64, block uint64, nodes *nodeSet, states *StateSetWithOrigin) *diffLayer {
+func (dl *diffLayer) update(root common.Hash, id uint64, block uint64, nodes *nodeSetWithOrigin, states *StateSetWithOrigin) *diffLayer {
 	return newDiffLayer(dl, root, id, block, nodes, states)
 }
 
