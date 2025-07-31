@@ -47,13 +47,19 @@ jobs:
       id: image_info
       run: |
         # Extract version information
+        VERSION=""
         if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-          echo "VERSION=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          VERSION="${{ github.ref_name }}"
         elif [[ "${{ github.ref }}" == refs/heads/main ]]; then
-          echo "VERSION=latest" >> $GITHUB_OUTPUT
-        else
-          echo "VERSION=" >> $GITHUB_OUTPUT
+          VERSION="latest"
         fi
+
+        if [ -z "$VERSION" ]; then
+          echo "Error: Could not determine version from ref '${{ github.ref }}'"
+          exit 1
+        fi
+
+        echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
         
         # Get the digest of the pushed image. The --format option can be unreliable,
         # so we parse the full JSON output to find the digest of the manifest list.
