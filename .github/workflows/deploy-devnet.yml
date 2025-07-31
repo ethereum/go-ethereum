@@ -37,8 +37,7 @@ jobs:
             --dev --http --http.api eth,net,web3,personal
 
 #      - name: check if curl is installed
-#        run: docker exec $CONTAINER_NAME which curl   
-            
+#        run: docker exec $CONTAINER_NAME which curl             
     #   - name: Wait for Geth RPC to become available
     #     run: |
     #       echo "Waiting for Geth RPC to be ready..."
