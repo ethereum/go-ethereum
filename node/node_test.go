@@ -364,7 +364,7 @@ func TestLifecycleTerminationGuarantee(t *testing.T) {
 	if err, ok := err.(*StopError); !ok {
 		t.Fatalf("termination failure mismatch: have %v, want StopError", err)
 	} else {
-		failer := reflect.TypeOf(&InstrumentedService{})
+		failer := reflect.TypeFor[*InstrumentedService]()
 		if err.Services[failer] != failure {
 			t.Fatalf("failer termination failure mismatch: have %v, want %v", err.Services[failer], failure)
 		}
