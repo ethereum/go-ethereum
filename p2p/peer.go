@@ -561,7 +561,7 @@ type PeerInfo struct {
 // Info gathers and returns a collection of metadata known about a peer.
 func (p *Peer) Info() *PeerInfo {
 	// Gather the protocol capabilities
-	var caps []string
+	caps := make([]string, 0, len(p.Caps()))
 	for _, cap := range p.Caps() {
 		caps = append(caps, cap.String())
 	}
