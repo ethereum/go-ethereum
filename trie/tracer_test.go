@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+	"maps"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -68,8 +69,8 @@ func testTrieTracer(t *testing.T, vals []struct{ k, v string }) {
 	for _, val := range vals {
 		trie.MustUpdate([]byte(val.k), []byte(val.v))
 	}
-	insertSet := copySet(trie.tracer.inserts) // copy before commit
-	deleteSet := copySet(trie.tracer.deletes) // copy before commit
+	insertSet := maps.Clone(trie.tracer.inserts) // copy before commit
+	deleteSet := maps.Clone(trie.tracer.deletes) // copy before commit
 	root, nodes := trie.Commit(false)
 	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 
@@ -365,12 +366,4 @@ func setKeys(set map[string][]byte) map[string]struct{} {
 		keys[k] = struct{}{}
 	}
 	return keys
-}
-
-func copySet(set map[string]struct{}) map[string]struct{} {
-	copied := make(map[string]struct{})
-	for k := range set {
-		copied[k] = struct{}{}
-	}
-	return copied
 }
