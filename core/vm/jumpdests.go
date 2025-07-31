@@ -18,10 +18,8 @@ package vm
 
 import "github.com/ethereum/go-ethereum/common"
 
-// JumpDests is an interface for managing the jumpdest analysis cache.
-// It provides methods to store and retrieve the results of JUMPDEST analysis
-// for contract bytecode, which is used to determine valid jump destinations.
-type JumpDests interface {
+// JumpDestCache represents the cache of jumpdest analysis results.
+type JumpDestCache interface {
 	// Load retrieves the cached jumpdest analysis for the given code hash.
 	// Returns the BitVec and true if found, or nil and false if not cached.
 	Load(codeHash common.Hash) (BitVec, bool)
@@ -35,17 +33,15 @@ type JumpDests interface {
 type mapJumpDests map[common.Hash]BitVec
 
 // newMapJumpDests creates a new map-based JumpDests implementation.
-func newMapJumpDests() JumpDests {
+func newMapJumpDests() JumpDestCache {
 	return make(mapJumpDests)
 }
 
-// Load retrieves the cached jumpdest analysis for the given code hash.
 func (j mapJumpDests) Load(codeHash common.Hash) (BitVec, bool) {
 	vec, ok := j[codeHash]
 	return vec, ok
 }
 
-// Store saves the jumpdest analysis for the given code hash.
 func (j mapJumpDests) Store(codeHash common.Hash, vec BitVec) {
 	j[codeHash] = vec
 }

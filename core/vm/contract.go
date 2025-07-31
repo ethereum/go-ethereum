@@ -31,8 +31,8 @@ type Contract struct {
 	caller  common.Address
 	address common.Address
 
-	jumpDests JumpDests // Aggregated result of JUMPDEST analysis.
-	analysis  BitVec    // Locally cached result of JUMPDEST analysis
+	jumpDests JumpDestCache // Aggregated result of JUMPDEST analysis.
+	analysis  BitVec        // Locally cached result of JUMPDEST analysis
 
 	Code     []byte
 	CodeHash common.Hash
@@ -47,7 +47,7 @@ type Contract struct {
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
-func NewContract(caller common.Address, address common.Address, value *uint256.Int, gas uint64, jumpDests JumpDests) *Contract {
+func NewContract(caller common.Address, address common.Address, value *uint256.Int, gas uint64, jumpDests JumpDestCache) *Contract {
 	// Initialize the jump analysis cache if it's nil, mostly for tests
 	if jumpDests == nil {
 		jumpDests = newMapJumpDests()

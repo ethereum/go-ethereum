@@ -123,7 +123,7 @@ type EVM struct {
 	precompiles map[common.Address]PrecompiledContract
 
 	// jumpDests stores results of JUMPDEST analysis.
-	jumpDests JumpDests
+	jumpDests JumpDestCache
 }
 
 // NewEVM constructs an EVM instance with the supplied block context, state
@@ -151,10 +151,8 @@ func (evm *EVM) SetPrecompiles(precompiles PrecompiledContracts) {
 	evm.precompiles = precompiles
 }
 
-// SetJumpDests sets a custom JumpDests implementation for the EVM.
-// This allows for flexible caching strategies, including global caches
-// that can be shared across multiple EVM instances.
-func (evm *EVM) SetJumpDests(jumpDests JumpDests) {
+// SetJumpDestCache configures the analysis cache.
+func (evm *EVM) SetJumpDestCache(jumpDests JumpDestCache) {
 	evm.jumpDests = jumpDests
 }
 
