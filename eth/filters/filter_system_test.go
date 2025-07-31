@@ -435,7 +435,7 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 		1: {FromBlock: big.NewInt(rpc.PendingBlockNumber.Int64()), ToBlock: big.NewInt(100)},
 		2: {FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64()), ToBlock: big.NewInt(100)},
 		3: {Topics: [][]common.Hash{{}, {}, {}, {}, {}}},
-		4: {Addresses: make([]common.Address, maxAddresses+1)},
+		4: {Addresses: make([]common.Address, api.maxAddresses+1)},
 	}
 
 	for i, test := range testCases {
@@ -500,8 +500,8 @@ func TestInvalidGetLogsRequest(t *testing.T) {
 			err: errExceedMaxTopics,
 		},
 		{
-			f:   FilterCriteria{BlockHash: &blockHash, Addresses: make([]common.Address, maxAddresses+1)},
-			err: errExceedMaxAddresses,
+			f:   FilterCriteria{BlockHash: &blockHash, Addresses: make([]common.Address, api.logQueryLimit+1)},
+			err: errExceedLogQueryLimit,
 		},
 	}
 
@@ -525,6 +525,54 @@ func TestInvalidGetRangeLogsRequest(t *testing.T) {
 
 	if _, err := api.GetLogs(context.Background(), FilterCriteria{FromBlock: big.NewInt(2), ToBlock: big.NewInt(1)}); err != errInvalidBlockRange {
 		t.Errorf("Expected Logs for invalid range return error, but got: %v", err)
+	}
+}
+
+// TestInvalidAddressLengthRequest tests getLogs with too many addresses
+func TestInvalidAddressLengthRequest(t *testing.T) {
+	t.Parallel()
+
+	// Test with custom config (MaxAddresses = 5 for easier testing)
+	var (
+		db     = rawdb.NewMemoryDatabase()
+		_, sys = newTestFilterSystem(db, Config{MaxAddresses: 5})
+		api    = NewFilterAPI(sys)
+	)
+
+	// Test that 6 addresses fails with correct error
+	invalidAddresses := make([]common.Address, 6)
+	for i := range invalidAddresses {
+		invalidAddresses[i] = common.HexToAddress("0x1234567890123456789012345678901234567890")
+	}
+
+	// Add FromBlock and ToBlock to make it similar to other invalid tests
+	if _, err := api.GetLogs(context.Background(), FilterCriteria{
+		FromBlock: big.NewInt(0),
+		ToBlock:   big.NewInt(100),
+		Addresses: invalidAddresses,
+	}); err != errExceedMaxAddresses {
+		t.Errorf("Expected GetLogs with 6 addresses to return errExceedMaxAddresses, but got: %v", err)
+	}
+
+	// Test with default config should reject 1001 addresses
+	var (
+		db2     = rawdb.NewMemoryDatabase()
+		_, sys2 = newTestFilterSystem(db2, Config{}) // Uses default MaxAddresses = 1000
+		api2    = NewFilterAPI(sys2)
+	)
+
+	// Test that 1001 addresses fails with correct error
+	tooManyAddresses := make([]common.Address, 1001)
+	for i := range tooManyAddresses {
+		tooManyAddresses[i] = common.HexToAddress("0x1234567890123456789012345678901234567890")
+	}
+
+	if _, err := api2.GetLogs(context.Background(), FilterCriteria{
+		FromBlock: big.NewInt(0),
+		ToBlock:   big.NewInt(100),
+		Addresses: tooManyAddresses,
+	}); err != errExceedMaxAddresses {
+		t.Errorf("Expected GetLogs with 1001 addresses to return errExceedMaxAddresses, but got: %v", err)
 	}
 }
 

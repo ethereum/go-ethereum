@@ -46,8 +46,6 @@ var (
 )
 
 const (
-	// The maximum number of addresses allowed in a filter criteria
-	maxAddresses = 1000
 	// The maximum number of topic criteria allowed, vm.LOG4 - vm.LOG0
 	maxTopics = 4
 	// The maximum number of allowed topics within a topic criteria
@@ -70,20 +68,22 @@ type filter struct {
 // FilterAPI offers support to create and manage filters. This will allow external clients to retrieve various
 // information related to the Ethereum protocol such as blocks, transactions and logs.
 type FilterAPI struct {
-	sys       *FilterSystem
-	events    *EventSystem
-	filtersMu sync.Mutex
-	filters   map[rpc.ID]*filter
-	timeout   time.Duration
+	sys          *FilterSystem
+	events       *EventSystem
+	filtersMu    sync.Mutex
+	filters      map[rpc.ID]*filter
+	timeout      time.Duration
+	maxAddresses int
 }
 
 // NewFilterAPI returns a new FilterAPI instance.
 func NewFilterAPI(system *FilterSystem) *FilterAPI {
 	api := &FilterAPI{
-		sys:     system,
-		events:  NewEventSystem(system),
-		filters: make(map[rpc.ID]*filter),
-		timeout: system.cfg.Timeout,
+		sys:          system,
+		events:       NewEventSystem(system),
+		filters:      make(map[rpc.ID]*filter),
+		timeout:      system.cfg.Timeout,
+		maxAddresses: system.cfg.MaxAddresses,
 	}
 	go api.timeoutLoop(system.cfg.Timeout)
 
@@ -347,7 +347,7 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 	if len(crit.Topics) > maxTopics {
 		return nil, errExceedMaxTopics
 	}
-	if len(crit.Addresses) > maxAddresses {
+	if len(crit.Addresses) > api.maxAddresses {
 		return nil, errExceedMaxAddresses
 	}
 
@@ -545,9 +545,6 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 		// raw.Address can contain a single address or an array of addresses
 		switch rawAddr := raw.Addresses.(type) {
 		case []interface{}:
-			if len(rawAddr) > maxAddresses {
-				return errExceedMaxAddresses
-			}
 			for i, addr := range rawAddr {
 				if strAddr, ok := addr.(string); ok {
 					addr, err := decodeAddress(strAddr)
