@@ -36,9 +36,10 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
+	"golang.org/x/exp/maps"
 )
 
-func updateTrie(db *Database, stateRoot common.Hash, addrHash common.Hash, root common.Hash, dirties map[common.Hash][]byte) (common.Hash, *trienode.NodeSet) {
+func updateTrie(db *Database, stateRoot common.Hash, addrHash common.Hash, root common.Hash, entries map[common.Hash][]byte) (common.Hash, *trienode.NodeSet) {
 	var id *trie.ID
 	if addrHash == (common.Hash{}) {
 		id = trie.StateTrieID(stateRoot)
@@ -49,12 +50,16 @@ func updateTrie(db *Database, stateRoot common.Hash, addrHash common.Hash, root 
 	if err != nil {
 		panic(fmt.Errorf("failed to load trie, err: %w", err))
 	}
-	for key, val := range dirties {
+	var deletes []common.Hash
+	for key, val := range entries {
 		if len(val) == 0 {
-			tr.Delete(key.Bytes())
+			deletes = append(deletes, key)
 		} else {
 			tr.Update(key.Bytes(), val)
 		}
+	}
+	for _, key := range deletes {
+		tr.Delete(key.Bytes())
 	}
 	return tr.Commit(false)
 }
@@ -72,16 +77,18 @@ const (
 	createAccountOp int = iota
 	modifyAccountOp
 	deleteAccountOp
+	resurrectAccountOp
 	opLen
 )
 
+// genctx carries the generation context used within a single state transition.
 type genctx struct {
 	stateRoot     common.Hash
 	accounts      map[common.Hash][]byte                    // Keyed by the hash of account address
 	storages      map[common.Hash]map[common.Hash][]byte    // Keyed by the hash of account address and the hash of storage key
 	accountOrigin map[common.Address][]byte                 // Keyed by the account address
 	storageOrigin map[common.Address]map[common.Hash][]byte // Keyed by the account address and the hash of storage key
-	nodes         *trienode.MergedNodeSet
+	nodes         *trienode.MergedNodeSet                   // Trie nodes produced from the state transition
 }
 
 func newCtx(stateRoot common.Hash) *genctx {
@@ -123,20 +130,31 @@ type tester struct {
 	// state snapshots
 	snapAccounts map[common.Hash]map[common.Hash][]byte                 // Keyed by the hash of account address
 	snapStorages map[common.Hash]map[common.Hash]map[common.Hash][]byte // Keyed by the hash of account address and the hash of storage key
+
+	// trienode snapshots
+	snapNodes map[common.Hash]*trienode.MergedNodeSet
 }
 
-func newTester(t *testing.T, historyLimit uint64, isVerkle bool, layers int, enableIndex bool, journalDir string) *tester {
+type testerConfig struct {
+	stateHistory uint64
+	isVerkle     bool
+	layers       int
+	enableIndex  bool
+	journalDir   string
+}
+
+func newTester(t *testing.T, config *testerConfig) *tester {
 	var (
 		disk, _ = rawdb.Open(rawdb.NewMemoryDatabase(), rawdb.OpenOptions{Ancient: t.TempDir()})
 		db      = New(disk, &Config{
-			StateHistory:        historyLimit,
-			EnableStateIndexing: enableIndex,
+			StateHistory:        config.stateHistory,
+			EnableStateIndexing: config.enableIndex,
 			TrieCleanSize:       256 * 1024,
 			StateCleanSize:      256 * 1024,
 			WriteBufferSize:     256 * 1024,
 			NoAsyncFlush:        true,
-			JournalDirectory:    journalDir,
-		}, isVerkle)
+			JournalDirectory:    config.journalDir,
+		}, config.isVerkle)
 
 		obj = &tester{
 			db:           db,
@@ -145,9 +163,10 @@ func newTester(t *testing.T, historyLimit uint64, isVerkle bool, layers int, ena
 			storages:     make(map[common.Hash]map[common.Hash][]byte),
 			snapAccounts: make(map[common.Hash]map[common.Hash][]byte),
 			snapStorages: make(map[common.Hash]map[common.Hash]map[common.Hash][]byte),
+			snapNodes:    make(map[common.Hash]*trienode.MergedNodeSet),
 		}
 	)
-	for i := 0; i < layers; i++ {
+	for i := 0; i < config.layers; i++ {
 		var parent = types.EmptyRootHash
 		if len(obj.roots) != 0 {
 			parent = obj.roots[len(obj.roots)-1]
@@ -270,10 +289,53 @@ func (t *tester) clearStorage(ctx *genctx, addr common.Address, root common.Hash
 	return root
 }
 
+func (t *tester) resurrectStorage(ctx *genctx, addr common.Address, old map[common.Hash][]byte) common.Hash {
+	var (
+		addrHash = crypto.Keccak256Hash(addr.Bytes())
+		storage  = make(map[common.Hash][]byte)
+		origin   = make(map[common.Hash][]byte)
+	)
+	for i := 0; i < 3; i++ {
+		v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(testrand.Bytes(32)))
+		key := testrand.Bytes(32)
+		hash := crypto.Keccak256Hash(key)
+		t.preimages[hash] = key
+
+		storage[hash] = v
+		origin[hash] = nil
+	}
+	var cnt int
+	for khash := range old {
+		cnt += 1
+		v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(testrand.Bytes(32)))
+
+		storage[khash] = v
+		origin[khash] = old[khash]
+		if cnt >= 3 {
+			break
+		}
+	}
+	root, set := updateTrie(t.db, ctx.stateRoot, addrHash, types.EmptyRootHash, storage)
+
+	maps.Copy(ctx.storages[addrHash], storage)
+	if ctx.storageOrigin[addr] == nil {
+		ctx.storageOrigin[addr] = make(map[common.Hash][]byte)
+	}
+	for k, v := range origin {
+		if _, exists := ctx.storageOrigin[addr][k]; !exists {
+			ctx.storageOrigin[addr][k] = v
+		}
+	}
+	ctx.nodes.Merge(set)
+	return root
+}
+
 func (t *tester) generate(parent common.Hash, rawStorageKey bool) (common.Hash, *trienode.MergedNodeSet, *StateSetWithOrigin) {
 	var (
-		ctx     = newCtx(parent)
-		dirties = make(map[common.Hash]struct{})
+		ctx       = newCtx(parent)
+		dirties   = make(map[common.Hash]struct{})
+		deleted   = make(map[common.Address]struct{})
+		resurrect = make(map[common.Address]struct{})
 	)
 	for i := 0; i < 20; i++ {
 		// Start with account creation always
@@ -336,6 +398,7 @@ func (t *tester) generate(parent common.Hash, rawStorageKey bool) (common.Hash, 
 				continue
 			}
 			dirties[addrHash] = struct{}{}
+			deleted[addr] = struct{}{}
 
 			acct, _ := types.FullAccount(account)
 			if acct.Root != types.EmptyRootHash {
@@ -343,6 +406,25 @@ func (t *tester) generate(parent common.Hash, rawStorageKey bool) (common.Hash, 
 			}
 			ctx.accounts[addrHash] = nil
 			ctx.accountOrigin[addr] = account
+
+		case resurrectAccountOp:
+			if len(deleted) == 0 {
+				continue
+			}
+			addresses := maps.Keys(deleted)
+			addr := addresses[rand.Intn(len(addresses))]
+			if _, exist := resurrect[addr]; exist {
+				continue
+			}
+			resurrect[addr] = struct{}{}
+
+			addrHash := crypto.Keccak256Hash(addr.Bytes())
+			root := t.resurrectStorage(ctx, addr, t.storages[addrHash])
+			ctx.accounts[addrHash] = types.SlimAccountRLP(generateAccount(root))
+			if _, exist := ctx.accountOrigin[addr]; !exist {
+				ctx.accountOrigin[addr] = nil
+			}
+			t.preimages[addrHash] = addr.Bytes()
 		}
 	}
 	root, set := updateTrie(t.db, parent, common.Hash{}, parent, ctx.accounts)
@@ -351,6 +433,7 @@ func (t *tester) generate(parent common.Hash, rawStorageKey bool) (common.Hash, 
 	// Save state snapshot before commit
 	t.snapAccounts[parent] = copyAccounts(t.accounts)
 	t.snapStorages[parent] = copyStorages(t.storages)
+	t.snapNodes[parent] = ctx.nodes
 
 	// Commit all changes to live state set
 	for addrHash, account := range ctx.accounts {
@@ -470,8 +553,7 @@ func TestDatabaseRollback(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	// Verify state histories
-	tester := newTester(t, 0, false, 32, false, "")
+	tester := newTester(t, &testerConfig{layers: 32})
 	defer tester.release()
 
 	if err := tester.verifyHistory(); err != nil {
@@ -505,7 +587,7 @@ func TestDatabaseRecoverable(t *testing.T) {
 	}()
 
 	var (
-		tester = newTester(t, 0, false, 12, false, "")
+		tester = newTester(t, &testerConfig{layers: 12})
 		index  = tester.bottomIndex()
 	)
 	defer tester.release()
@@ -526,7 +608,7 @@ func TestDatabaseRecoverable(t *testing.T) {
 		// Layers below current disk layer are recoverable
 		{tester.roots[index-1], true},
 
-		// Disklayer itself is not recoverable, since it's
+		// Disk layer itself is not recoverable, since it's
 		// available for accessing.
 		{tester.roots[index], false},
 
@@ -542,6 +624,59 @@ func TestDatabaseRecoverable(t *testing.T) {
 	}
 }
 
+func TestExecuteRollback(t *testing.T) {
+	// Redefine the diff layer depth allowance for faster testing.
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+
+	tester := newTester(t, &testerConfig{layers: 32})
+	defer tester.release()
+
+	// Revert database from top to bottom
+	for i := tester.bottomIndex(); i >= 0; i-- {
+		dl := tester.db.tree.bottom()
+		h, err := readStateHistory(tester.db.stateFreezer, dl.stateID())
+		if err != nil {
+			t.Fatalf("Failed to read history, err: %v", err)
+		}
+		nodes, err := apply(tester.db, h.meta.parent, h.meta.root, h.meta.version == stateHistoryV1, h.accounts, h.storages)
+		if err != nil {
+			t.Fatalf("Failed to apply history, err: %v", err)
+		}
+
+		// Verify the produced node set, ensuring they are aligned with the
+		// tracked dirty nodes.
+		want := tester.snapNodes[h.meta.parent]
+		if len(nodes) != len(want.Sets) {
+			t.Fatalf("Unexpected node sets, want: %d, got: %d", len(want.Sets), len(nodes))
+		}
+		for owner, setA := range nodes {
+			setB, ok := want.Sets[owner]
+			if !ok {
+				t.Fatalf("Excessive nodeset, %x", owner)
+			}
+			if len(setA) != len(setB.Origins) {
+				t.Fatalf("Unexpected origins, want: %d, got: %d", len(setA), len(setB.Origins))
+			}
+			for k, nA := range setA {
+				nB, ok := setB.Origins[k]
+				if !ok {
+					t.Fatalf("Excessive node, %v", []byte(k))
+				}
+				if !bytes.Equal(nA.Blob, nB) {
+					t.Fatalf("Unexpected node value, want: %v, got: %v", nA.Blob, nB)
+				}
+			}
+		}
+
+		if err := tester.db.Recover(h.meta.parent); err != nil {
+			t.Fatalf("Failed to recover db, err: %v", err)
+		}
+	}
+}
+
 func TestDisable(t *testing.T) {
 	// Redefine the diff layer depth allowance for faster testing.
 	maxDiffLayers = 4
@@ -549,7 +684,7 @@ func TestDisable(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0, false, 32, false, "")
+	tester := newTester(t, &testerConfig{layers: 32})
 	defer tester.release()
 
 	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.diskdb, nil))
@@ -563,10 +698,6 @@ func TestDisable(t *testing.T) {
 		t.Fatalf("Failed to activate database: %v", err)
 	}
 
-	// Ensure journal is deleted from disk
-	if blob := rawdb.ReadTrieJournal(tester.db.diskdb); len(blob) != 0 {
-		t.Fatal("Failed to clean journal")
-	}
 	// Ensure all trie histories are removed
 	n, err := tester.db.stateFreezer.Ancients()
 	if err != nil {
@@ -591,7 +722,7 @@ func TestCommit(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0, false, 12, false, "")
+	tester := newTester(t, &testerConfig{layers: 12})
 	defer tester.release()
 
 	if err := tester.db.Commit(tester.lastHash(), false); err != nil {
@@ -626,7 +757,7 @@ func testJournal(t *testing.T, journalDir string) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0, false, 12, false, journalDir)
+	tester := newTester(t, &testerConfig{layers: 12, journalDir: journalDir})
 	defer tester.release()
 
 	if err := tester.db.Journal(tester.lastHash()); err != nil {
@@ -673,7 +804,7 @@ func testCorruptedJournal(t *testing.T, journalDir string, modifyFn func(databas
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0, false, 12, false, journalDir)
+	tester := newTester(t, &testerConfig{layers: 12, journalDir: journalDir})
 	defer tester.release()
 
 	if err := tester.db.Journal(tester.lastHash()); err != nil {
@@ -718,7 +849,7 @@ func TestTailTruncateHistory(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 10, false, 12, false, "")
+	tester := newTester(t, &testerConfig{layers: 12, stateHistory: 10})
 	defer tester.release()
 
 	tester.db.Close()

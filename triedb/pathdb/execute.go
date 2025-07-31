@@ -59,13 +59,19 @@ func apply(db database.NodeDatabase, prevRoot common.Hash, postRoot common.Hash,
 		rawStorageKey: rawStorageKey,
 		nodes:         trienode.NewMergedNodeSet(),
 	}
+	var deletes []common.Address
 	for addr, account := range accounts {
-		var err error
 		if len(account) == 0 {
-			err = deleteAccount(ctx, db, addr)
+			deletes = append(deletes, addr)
 		} else {
-			err = updateAccount(ctx, db, addr)
+			err := updateAccount(ctx, db, addr)
+			if err != nil {
+				return nil, fmt.Errorf("failed to revert state, err: %w", err)
+			}
 		}
+	}
+	for _, addr := range deletes {
+		err := deleteAccount(ctx, db, addr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to revert state, err: %w", err)
 		}
@@ -77,7 +83,7 @@ func apply(db database.NodeDatabase, prevRoot common.Hash, postRoot common.Hash,
 	if err := ctx.nodes.Merge(result); err != nil {
 		return nil, err
 	}
-	return ctx.nodes.Flatten(), nil
+	return ctx.nodes.Nodes(), nil
 }
 
 // updateAccount the account was present in prev-state, and may or may not
@@ -108,17 +114,23 @@ func updateAccount(ctx *context, db database.NodeDatabase, addr common.Address) 
 	if err != nil {
 		return err
 	}
+	var deletes []common.Hash
 	for key, val := range ctx.storages[addr] {
 		tkey := key
 		if ctx.rawStorageKey {
 			tkey = crypto.Keccak256Hash(key.Bytes())
 		}
-		var err error
 		if len(val) == 0 {
-			err = st.Delete(tkey.Bytes())
+			deletes = append(deletes, tkey)
 		} else {
-			err = st.Update(tkey.Bytes(), val)
+			err := st.Update(tkey.Bytes(), val)
+			if err != nil {
+				return err
+			}
 		}
+	}
+	for _, tkey := range deletes {
+		err := st.Delete(tkey.Bytes())
 		if err != nil {
 			return err
 		}

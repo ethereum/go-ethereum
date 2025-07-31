@@ -319,7 +319,7 @@ func (dl *diskLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 
 // update implements the layer interface, returning a new diff layer on top
 // with the given state set.
-func (dl *diskLayer) update(root common.Hash, id uint64, block uint64, nodes *nodeSet, states *StateSetWithOrigin) *diffLayer {
+func (dl *diskLayer) update(root common.Hash, id uint64, block uint64, nodes *nodeSetWithOrigin, states *StateSetWithOrigin) *diffLayer {
 	return newDiffLayer(dl, root, id, block, nodes, states)
 }
 
@@ -413,7 +413,7 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 
 	// Merge the trie nodes and flat states of the bottom-most diff layer into the
 	// buffer as the combined layer.
-	combined := dl.buffer.commit(bottom.nodes, bottom.states.stateSet)
+	combined := dl.buffer.commit(bottom.nodes.nodeSet, bottom.states.stateSet)
 
 	// Terminate the background state snapshot generation before mutating the
 	// persistent state.
