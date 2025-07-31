@@ -5,6 +5,8 @@ async function main() {
 
   console.log("Deploying contracts with the account:", deployer.address);
 
+  const unlockTime = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+  
   const Lock = await ethers.getContractFactory("Lock", deployer);
   const lock = await Lock.deploy();
 
