@@ -19,6 +19,7 @@ package eth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -277,16 +278,35 @@ func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 
 	// Forward to remote sequencer RPC
 	if b.eth.sequencerRPCService != nil {
-		signedTxData, err := signedTx.MarshalBinary()
-		if err != nil {
+		// If the transaction pool is disabled, then we need to make sure that we send the transaction to the sequencer RPC synchronously.
+		if b.disableTxPool {
+			err = b.sendToSequencer(ctx, signedTx)
+			if err != nil {
+				log.Warn("failed to forward tx to sequencer", "tx", signedTx.Hash(), "err", err)
+			}
 			return err
 		}
-		if err = b.eth.sequencerRPCService.CallContext(ctx, nil, "eth_sendRawTransaction", hexutil.Encode(signedTxData)); err != nil {
-			log.Warn("failed to forward tx to sequencer", "tx", signedTx.Hash(), "err", err)
-			if b.disableTxPool {
-				return err
+
+		// If the transaction pool is enabled, we send the transaction to the sequencer RPC asynchronously as this is
+		// additional to the public mempool.
+		go func() {
+			err := b.sendToSequencer(ctx, signedTx)
+			if err != nil {
+				log.Warn("failed to forward tx to sequencer", "tx", signedTx.Hash(), "err", err)
 			}
-		}
+		}()
+	}
+
+	return nil
+}
+
+func (b *EthAPIBackend) sendToSequencer(ctx context.Context, signedTx *types.Transaction) error {
+	signedTxData, err := signedTx.MarshalBinary()
+	if err != nil {
+		return fmt.Errorf("failed to marshal signed tx: %w", err)
+	}
+	if err = b.eth.sequencerRPCService.CallContext(ctx, nil, "eth_sendRawTransaction", hexutil.Encode(signedTxData)); err != nil {
+		return fmt.Errorf("eth_sendRawTransaction to sequencer RPC failed: %w", err)
 	}
 
 	return nil
