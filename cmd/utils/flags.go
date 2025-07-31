@@ -1067,9 +1067,9 @@ func setNodeUserIdent(ctx *cli.Context, cfg *node.Config) {
 // 1. --bootnodes flag
 // 2. Config file
 // 3. Network preset flags (e.g. --holesky)
-// 4. default to mainnet nodes
+// 4. default to Berachainmainnet nodes
 func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
-	urls := params.MainnetBootnodes
+	urls := params.BerachainBootnodes
 	if ctx.IsSet(BootnodesFlag.Name) {
 		urls = SplitAndTrim(ctx.String(BootnodesFlag.Name))
 	} else {
@@ -1077,12 +1077,16 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 			return // Already set by config file, don't apply defaults.
 		}
 		switch {
+		case ctx.Bool(MainnetFlag.Name):
+			urls = params.MainnetBootnodes
 		case ctx.Bool(HoleskyFlag.Name):
 			urls = params.HoleskyBootnodes
 		case ctx.Bool(SepoliaFlag.Name):
 			urls = params.SepoliaBootnodes
 		case ctx.Bool(HoodiFlag.Name):
 			urls = params.HoodiBootnodes
+		case ctx.Bool(BepoliaFlag.Name):
+			urls = params.BepoliaBootnodes
 		}
 	}
 	cfg.BootstrapNodes = mustParseBootnodes(urls)
