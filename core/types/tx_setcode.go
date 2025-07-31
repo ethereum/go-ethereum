@@ -105,6 +105,7 @@ func SignSetCode(prv *ecdsa.PrivateKey, auth SetCodeAuthorization) (SetCodeAutho
 	}, nil
 }
 
+// SigHash returns the hash of SetCodeAuthorization for signing.
 func (a *SetCodeAuthorization) SigHash() common.Hash {
 	return prefixedRlpHash(0x05, []any{
 		a.ChainID,
