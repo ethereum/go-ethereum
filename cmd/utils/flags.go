@@ -1696,7 +1696,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.FilterLogCacheSize = ctx.Int(CacheLogSizeFlag.Name)
 	}
 	if ctx.IsSet(EthGetLogMaxAddressFlag.Name) {
-		cfg.FilterMaxAddresses = int(ctx.Uint64(EthGetLogMaxAddressFlag.Name))
+		cfg.FilterMaxAddresses = ctx.Int(EthGetLogMaxAddressFlag.Name)
 	}
 	if !ctx.Bool(SnapshotFlag.Name) || cfg.SnapshotCache == 0 {
 		// If snap-sync is requested, this flag is also required
