@@ -198,7 +198,7 @@ func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) ([]byte, exe
 
 func runCmd(ctx *cli.Context) error {
 	var (
-		tracer      *tracing.Hooks
+		tracer      tracing.Hooks
 		prestate    *state.StateDB
 		chainConfig *params.ChainConfig
 		sender      = common.BytesToAddress([]byte("sender"))
@@ -363,11 +363,11 @@ allocations:     %d
 allocated bytes: %d
 `, stats.GasUsed, stats.Time, stats.Allocs, stats.BytesAllocated)
 	}
-	if tracer == nil {
+	if len(output) > 0 {
 		fmt.Printf("%#x\n", output)
-		if err != nil {
-			fmt.Printf(" error: %v\n", err)
-		}
+	}
+	if err != nil {
+		fmt.Printf(" error: %v\n", err)
 	}
 
 	return nil

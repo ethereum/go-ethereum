@@ -235,7 +235,7 @@ func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage, chainCo
 	t.logValue = t.log.setupObject()
 
 	return &tracers.Tracer{
-		Hooks: &tracing.Hooks{
+		Hooks: tracing.Hooks{
 			OnTxStart: t.OnTxStart,
 			OnTxEnd:   t.OnTxEnd,
 			OnEnter:   t.OnEnter,
