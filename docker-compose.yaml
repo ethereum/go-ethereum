@@ -27,36 +27,36 @@ services:
       "--nodiscover"
     ]
 
-  postgres:
-    image: postgres:13
-    container_name: blockscout-db
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: blockscout
-    ports:
-      - "5432:5432"
-    volumes:
-      - pg-data:/var/lib/postgresql/data
+  # postgres:
+  #   image: postgres:13
+  #   container_name: blockscout-db
+  #   environment:
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: postgres
+  #     POSTGRES_DB: blockscout
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - pg-data:/var/lib/postgresql/data
 
-  blockscout:
-    image: blockscout/blockscout:latest
-    container_name: blockscout
-    depends_on:
-      - geth-node
-      - postgres
-    ports:
-      - "4000:4000"
-    environment:
-      ETHEREUM_JSONRPC_HTTP_URL: http://geth-node:8545
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/blockscout
-      NETWORK: "Devnet"
-      SUBNETWORK: "Geth Dev Mode"
-      COIN: "ETH"
-      MIX_ENV: "prod"
-      PORT: 4000
-      BLOCKSCOUT_HOST: "0.0.0.0"
-    restart: unless-stopped
+  # blockscout:
+  #   image: blockscout/blockscout:latest
+  #   container_name: blockscout
+  #   depends_on:
+  #     - geth-node
+  #     - postgres
+  #   ports:
+  #     - "4000:4000"
+  #   environment:
+  #     ETHEREUM_JSONRPC_HTTP_URL: http://geth-node:8545
+  #     DATABASE_URL: postgresql://postgres:postgres@postgres:5432/blockscout
+  #     NETWORK: "Devnet"
+  #     SUBNETWORK: "Geth Dev Mode"
+  #     COIN: "ETH"
+  #     MIX_ENV: "prod"
+  #     PORT: 4000
+  #     BLOCKSCOUT_HOST: "0.0.0.0"
+  #   restart: unless-stopped
 
 volumes:
   geth-data:
