@@ -584,6 +584,12 @@ var (
 		Value:    ethconfig.Defaults.RPCTxFeeCap,
 		Category: flags.APICategory,
 	}
+	EthGetLogMaxAddressFlag = &cli.IntFlag{
+		Name:     "rpc.getlogmaxaddrs",
+		Usage:    "Maximum number of addresses allowed in eth_getLogs filter criteria",
+		Value:    ethconfig.Defaults.FilterMaxAddresses,
+		Category: flags.APICategory,
+	}
 	// Authenticated RPC HTTP settings
 	AuthListenFlag = &cli.StringFlag{
 		Name:     "authrpc.addr",
@@ -1683,6 +1689,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(CacheLogSizeFlag.Name) {
 		cfg.FilterLogCacheSize = ctx.Int(CacheLogSizeFlag.Name)
 	}
+	if ctx.IsSet(EthGetLogMaxAddressFlag.Name) {
+		cfg.FilterMaxAddresses = ctx.Int(EthGetLogMaxAddressFlag.Name)
+	}
 	if !ctx.Bool(SnapshotFlag.Name) || cfg.SnapshotCache == 0 {
 		// If snap-sync is requested, this flag is also required
 		if cfg.SyncMode == ethconfig.SnapSync {
@@ -1989,6 +1998,7 @@ func RegisterGraphQLService(stack *node.Node, backend ethapi.Backend, filterSyst
 func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconfig.Config) *filters.FilterSystem {
 	filterSystem := filters.NewFilterSystem(backend, filters.Config{
 		LogCacheSize: ethcfg.FilterLogCacheSize,
+		MaxAddresses: ethcfg.FilterMaxAddresses,
 	})
 	stack.RegisterAPIs([]rpc.API{{
 		Namespace: "eth",
