@@ -590,10 +590,10 @@ var (
 		Value:    ethconfig.Defaults.RPCTxFeeCap,
 		Category: flags.APICategory,
 	}
-	EthGetLogMaxAddressFlag = &cli.Uint64Flag{
+	EthGetLogMaxAddressFlag = &cli.IntFlag{
 		Name:     "rpc.getlogmaxaddrs",
 		Usage:    "Maximum number of addresses allowed in eth_getLogs filter criteria",
-		Value:    1000,
+		Value:    ethconfig.Defaults.FilterMaxAddresses,
 		Category: flags.APICategory,
 	}
 	// Authenticated RPC HTTP settings
