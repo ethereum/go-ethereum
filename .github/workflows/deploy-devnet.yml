@@ -20,7 +20,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-        # capture SHA as an env variables  
+        # capture SHA as an env variable  
       - name: Get short commit SHA
         id: vars
         run: echo "COMMIT_SHA=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_ENV        
