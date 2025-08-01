@@ -18,12 +18,15 @@
 package kzg4844
 
 import (
+	"crypto/sha256"
 	"embed"
 	"errors"
 	"hash"
 	"reflect"
+	"sync"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -183,6 +186,39 @@ func CalcBlobHashV1(hasher hash.Hash, commit *Commitment) (vh [32]byte) {
 	hasher.Sum(vh[:0])
 	vh[0] = 0x01 // version
 	return vh
+}
+
+// CalcBlobHashListV1 calculates the 'versioned blob hash' of a list of commitment with 2 go routines.
+func CalcBlobHashListV1(list []Commitment, output []common.Hash) {
+	if len(list) != len(output) {
+		panic("wrong output size")
+	}
+	if len(list) == 0 {
+		return
+	}
+	hasher1 := sha256.New()
+	if len(list) == 1 {
+		output[0] = CalcBlobHashV1(hasher1, &list[0])
+		return
+	}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go calcBlobHashListPartV1(list, output, &wg, hasher1, 0)
+	hasher2 := sha256.New()
+	go calcBlobHashListPartV1(list, output, &wg, hasher2, 1)
+	wg.Wait()
+}
+
+// calcs hashes of all odd or all even parts of the list
+func calcBlobHashListPartV1(list []Commitment, output []common.Hash, wg *sync.WaitGroup, hasher hash.Hash, where int) {
+	defer wg.Done()
+	for ; where < len(list); where += 2 {
+		hasher.Reset()
+		var commitment *Commitment = &list[where]
+		hasher.Write(commitment[:])
+		hasher.Sum(output[where][:0])
+		output[where][0] = 0x01 // version
+	}
 }
 
 // IsValidVersionedHash checks that h is a structurally-valid versioned blob hash.

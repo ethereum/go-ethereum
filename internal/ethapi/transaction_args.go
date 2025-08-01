@@ -19,7 +19,6 @@ package ethapi
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math"
@@ -341,10 +340,7 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context) error {
 	}
 
 	hashes := make([]common.Hash, n)
-	hasher := sha256.New()
-	for i, c := range args.Commitments {
-		hashes[i] = kzg4844.CalcBlobHashV1(hasher, &c)
-	}
+	kzg4844.CalcBlobHashListV1(args.Commitments, hashes)
 	if args.BlobHashes != nil {
 		for i, h := range hashes {
 			if h != args.BlobHashes[i] {

@@ -18,7 +18,6 @@
 package catalyst
 
 import (
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"strconv"
@@ -496,7 +495,6 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 	}
 	var (
 		res      = make([]*engine.BlobAndProofV1, len(hashes))
-		hasher   = sha256.New()
 		index    = make(map[common.Hash]int)
 		sidecars = api.eth.BlobTxPool().GetBlobs(hashes)
 	)
@@ -509,8 +507,10 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 			// already filled
 			continue
 		}
-		for cIdx, commitment := range sidecar.Commitments {
-			computed := kzg4844.CalcBlobHashV1(hasher, &commitment)
+		var listComputed = make([]common.Hash, len(sidecar.Commitments))
+		kzg4844.CalcBlobHashListV1(sidecar.Commitments, listComputed)
+		for cIdx, _ := range sidecar.Commitments {
+			computed := listComputed[cIdx]
 			if idx, ok := index[computed]; ok {
 				res[idx] = &engine.BlobAndProofV1{
 					Blob:  sidecar.Blobs[cIdx][:],

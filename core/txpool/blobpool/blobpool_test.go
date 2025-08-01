@@ -1675,6 +1675,35 @@ func TestAdd(t *testing.T) {
 	}
 }
 
+func TestCommitmentList(t *testing.T) {
+	var liste []kzg4844.Commitment
+	for i := 0; i < 4; i++ {
+		blob := &kzg4844.Blob{byte(i)}
+		commit, _ := kzg4844.BlobToCommitment(blob)
+		liste = append(liste, commit)
+	}
+	output := make([]common.Hash, 4)
+
+	kzg4844.CalcBlobHashListV1(liste, output)
+
+	if output[0][0] != 1 || output[0][1] != 6 ||
+		output[0][30] != 64 || output[0][31] != 20 {
+		t.Errorf("Hash 1 is different")
+	}
+	if output[1][0] != 1 || output[1][1] != 90 ||
+		output[1][30] != 47 || output[1][31] != 104 {
+		t.Errorf("Hash 2 is different")
+	}
+	if output[2][0] != 1 || output[2][1] != 129 ||
+		output[2][30] != 50 || output[2][31] != 12 {
+		t.Errorf("Hash 3 is different")
+	}
+	if output[3][0] != 1 || output[3][1] != 53 ||
+		output[3][30] != 101 || output[3][31] != 224 {
+		t.Errorf("Hash 4 is different")
+	}
+}
+
 // fakeBilly is a billy.Database implementation which just drops data on the floor.
 type fakeBilly struct {
 	billy.Database
