@@ -10,7 +10,7 @@ async function main() {
   const Lock = await ethers.getContractFactory("Lock", deployer);
   const lock = await Lock.deploy(unlockTime);
 
-  await lock.deployed();
+  await lock.waitForDeployment();
 
   console.log("Lock deployed to:", lock.address);
 }
