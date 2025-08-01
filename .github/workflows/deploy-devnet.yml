@@ -34,7 +34,7 @@ jobs:
             --name $CONTAINER_NAME \
             -p 8545:8545 \
             $BASE_IMAGE \
-            --dev --http --http.api eth,net,web3,personal
+            --dev --http --http.addr 0.0.0.0 --http.vhosts "*" --http.api eth,net,web3,personal
 
 #      - name: check if curl is installed
 #        run: docker exec $CONTAINER_NAME which curl             
@@ -97,7 +97,7 @@ jobs:
             --name test-node \
             -p 8545:8545 \
             $FINAL_IMAGE:latest \
-            --dev --http --http.api eth,net,web3,personal
+            --dev --http --http.addr 0.0.0.0 --http.vhosts "*" --http.api eth,net,web3,personal
             sleep 20
 
       # - name: Wait for RPC to be ready

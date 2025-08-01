@@ -10,20 +10,21 @@ services:
       - "30303:30303"
     volumes:
       - geth-data:/root/.ethereum
-    # command: [
-    #   "geth",
-    #   "--dev",
-    #   "--http",
-    #   "--http.addr", "0.0.0.0",
-    #   "--http.api", "personal,eth,net,web3,miner",
-    #   "--http.corsdomain", "*",
-    #   "--ws",
-    #   "--ws.addr", "0.0.0.0",
-    #   "--ws.api", "personal,eth,net,web3,miner",
-    #   "--allow-insecure-unlock",
-    #   "--mine",
-    #   "--nodiscover"
-    # ]
+    command: [
+      "geth",
+      "--dev",
+      "--http",
+      "--http.addr", "0.0.0.0",
+      "--http.vhosts", "*",
+      "--http.api", "personal,eth,net,web3,miner",
+      "--http.corsdomain", "*",
+      "--ws",
+      "--ws.addr", "0.0.0.0",
+      "--ws.api", "personal,eth,net,web3,miner",
+      "--allow-insecure-unlock",
+      "--mine",
+      "--nodiscover"
+    ]
     restart: unless-stopped
 
 volumes:
