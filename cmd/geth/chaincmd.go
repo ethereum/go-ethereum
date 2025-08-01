@@ -716,7 +716,7 @@ func downloadEra(ctx *cli.Context) error {
 		case ctx.IsSet(utils.SepoliaFlag.Name):
 			network = "sepolia"
 		default:
-			return fmt.Errorf("unsupported network, no known era1 checksums")
+			return errors.New("unsupported network, no known era1 checksums")
 		}
 	}
 

@@ -169,7 +169,7 @@ func (e *AccountAccess) validate() error {
 	// Convert code change
 	if len(e.Code) == 1 {
 		if len(e.Code[0].Code) > params.MaxCodeSize {
-			return fmt.Errorf("code change contained oversized code")
+			return errors.New("code change contained oversized code")
 		}
 	}
 	return nil

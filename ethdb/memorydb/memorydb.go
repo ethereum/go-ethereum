@@ -20,7 +20,6 @@ package memorydb
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -327,7 +326,7 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 						return err
 					}
 				} else {
-					return fmt.Errorf("ethdb.KeyValueWriter does not implement DeleteRange")
+					return errors.New("ethdb.KeyValueWriter does not implement DeleteRange")
 				}
 			}
 			continue

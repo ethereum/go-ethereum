@@ -145,7 +145,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	}
 	if tx.Type() == types.SetCodeTxType {
 		if len(tx.SetCodeAuthorizations()) == 0 {
-			return fmt.Errorf("set code tx must have at least one authorization tuple")
+			return errors.New("set code tx must have at least one authorization tuple")
 		}
 	}
 	return nil

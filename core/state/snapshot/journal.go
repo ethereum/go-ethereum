@@ -350,7 +350,7 @@ func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
 			}
 			if len(destructs) > 0 {
 				log.Warn("Incompatible legacy journal detected", "version", journalV0)
-				return fmt.Errorf("incompatible legacy journal detected")
+				return errors.New("incompatible legacy journal detected")
 			}
 		}
 		if err := r.Decode(&accounts); err != nil {

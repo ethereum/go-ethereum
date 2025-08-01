@@ -502,8 +502,10 @@ type Syncer struct {
 	storageHealed      uint64             // Number of storage slots downloaded during the healing stage
 	storageHealedBytes common.StorageSize // Number of raw storage bytes persisted to disk during the healing stage
 
-	startTime time.Time // Time instance when snapshot sync started
-	logTime   time.Time // Time instance when status was last reported
+	startTime     time.Time // Time instance when snapshot sync started
+	healStartTime time.Time // Time instance when the state healing started
+	syncTimeOnce  sync.Once // Ensure that the state sync time is uploaded only once
+	logTime       time.Time // Time instance when status was last reported
 
 	pend sync.WaitGroup // Tracks network request goroutines for graceful shutdown
 	lock sync.RWMutex   // Protects fields that can change outside of sync (peers, reqs, root)
@@ -685,6 +687,14 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		s.cleanStorageTasks()
 		s.cleanAccountTasks()
 		if len(s.tasks) == 0 && s.healer.scheduler.Pending() == 0 {
+			// State healing phase completed, record the elapsed time in metrics.
+			// Note: healing may be rerun in subsequent cycles to fill gaps between
+			// pivot states (e.g., if chain sync takes longer).
+			if !s.healStartTime.IsZero() {
+				stateHealTimeGauge.Inc(int64(time.Since(s.healStartTime)))
+				log.Info("State healing phase is completed", "elapsed", common.PrettyDuration(time.Since(s.healStartTime)))
+				s.healStartTime = time.Time{}
+			}
 			return nil
 		}
 		// Assign all the data retrieval tasks to any free peers
@@ -693,7 +703,17 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		s.assignStorageTasks(storageResps, storageReqFails, cancel)
 
 		if len(s.tasks) == 0 {
-			// Sync phase done, run heal phase
+			// State sync phase completed, record the elapsed time in metrics.
+			// Note: the initial state sync runs only once, regardless of whether
+			// a new cycle is started later. Any state differences in subsequent
+			// cycles will be handled by the state healer.
+			s.syncTimeOnce.Do(func() {
+				stateSyncTimeGauge.Update(int64(time.Since(s.startTime)))
+				log.Info("State sync phase is completed", "elapsed", common.PrettyDuration(time.Since(s.startTime)))
+			})
+			if s.healStartTime.IsZero() {
+				s.healStartTime = time.Now()
+			}
 			s.assignTrienodeHealTasks(trienodeHealResps, trienodeHealReqFails, cancel)
 			s.assignBytecodeHealTasks(bytecodeHealResps, bytecodeHealReqFails, cancel)
 		}

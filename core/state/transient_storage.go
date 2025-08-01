@@ -18,6 +18,7 @@ package state
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -70,19 +71,13 @@ func (t transientStorage) Copy() transientStorage {
 // PrettyPrint prints the contents of the access list in a human-readable form
 func (t transientStorage) PrettyPrint() string {
 	out := new(strings.Builder)
-	var sortedAddrs []common.Address
-	for addr := range t {
-		sortedAddrs = append(sortedAddrs, addr)
-		slices.SortFunc(sortedAddrs, common.Address.Cmp)
-	}
+	sortedAddrs := slices.Collect(maps.Keys(t))
+	slices.SortFunc(sortedAddrs, common.Address.Cmp)
 
 	for _, addr := range sortedAddrs {
 		fmt.Fprintf(out, "%#x:", addr)
-		var sortedKeys []common.Hash
 		storage := t[addr]
-		for key := range storage {
-			sortedKeys = append(sortedKeys, key)
-		}
+		sortedKeys := slices.Collect(maps.Keys(storage))
 		slices.SortFunc(sortedKeys, common.Hash.Cmp)
 		for _, key := range sortedKeys {
 			fmt.Fprintf(out, "  %X : %X\n", key, storage[key])

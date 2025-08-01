@@ -18,7 +18,7 @@ package main
 
 import (
 	"embed"
-	"fmt"
+	"errors"
 	"io/fs"
 	"os"
 
@@ -97,7 +97,7 @@ type testConfig struct {
 	traceTestFile     string
 }
 
-var errPrunedHistory = fmt.Errorf("attempt to access pruned history")
+var errPrunedHistory = errors.New("attempt to access pruned history")
 
 // validateHistoryPruneErr checks whether the given error is caused by access
 // to history before the pruning threshold block (it is an rpc.Error with code 4444).
@@ -109,7 +109,7 @@ func validateHistoryPruneErr(err error, blockNum uint64, historyPruneBlock *uint
 	if err != nil {
 		if rpcErr, ok := err.(rpc.Error); ok && rpcErr.ErrorCode() == 4444 {
 			if historyPruneBlock != nil && blockNum > *historyPruneBlock {
-				return fmt.Errorf("pruned history error returned after pruning threshold")
+				return errors.New("pruned history error returned after pruning threshold")
 			}
 			return errPrunedHistory
 		}

@@ -353,7 +353,7 @@ func (d *indexDeleter) empty() bool {
 // pop removes the last written element from the index writer.
 func (d *indexDeleter) pop(id uint64) error {
 	if id == 0 {
-		return fmt.Errorf("zero history ID is not valid")
+		return errors.New("zero history ID is not valid")
 	}
 	if id != d.lastID {
 		return fmt.Errorf("pop element out of order, last: %d, this: %d", d.lastID, id)

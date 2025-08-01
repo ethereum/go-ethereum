@@ -18,6 +18,7 @@
 package pebble
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -705,7 +706,7 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 					return err
 				}
 			} else {
-				return fmt.Errorf("ethdb.KeyValueWriter does not implement DeleteRange")
+				return errors.New("ethdb.KeyValueWriter does not implement DeleteRange")
 			}
 		} else {
 			return fmt.Errorf("unhandled operation, keytype: %v", kind)

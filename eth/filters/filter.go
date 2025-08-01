@@ -456,7 +456,6 @@ func (f *Filter) blockLogs(ctx context.Context, header *types.Header) ([]*types.
 
 // checkMatches checks if the receipts belonging to the given header contain any log events that
 // match the filter criteria. This function is called when the bloom filter signals a potential match.
-// skipFilter signals all logs of the given block are requested.
 func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*types.Log, error) {
 	hash := header.Hash()
 	// Logs in cache are partially filled with context data

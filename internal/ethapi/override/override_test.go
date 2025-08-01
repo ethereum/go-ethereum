@@ -31,6 +31,10 @@ import (
 
 type precompileContract struct{}
 
+func (p *precompileContract) Name() string {
+	panic("implement me")
+}
+
 func (p *precompileContract) RequiredGas(input []byte) uint64 { return 0 }
 
 func (p *precompileContract) Run(input []byte) ([]byte, error) { return nil, nil }

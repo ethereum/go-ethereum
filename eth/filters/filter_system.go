@@ -207,7 +207,7 @@ type EventSystem struct {
 }
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
-// parses and filters them. It uses the all map to retrieve filter changes. The
+// parses and filters them. It uses an internal map to retrieve filter changes. The
 // work loop holds its own index that is used to forward events to filters.
 //
 // The returned manager has a loop that needs to be stopped with the Stop function

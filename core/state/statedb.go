@@ -258,7 +258,7 @@ func (s *StateDB) GetLogs(hash common.Hash, blockNumber uint64, blockHash common
 }
 
 func (s *StateDB) Logs() []*types.Log {
-	var logs []*types.Log
+	logs := make([]*types.Log, 0, s.logSize)
 	for _, lgs := range s.logs {
 		logs = append(logs, lgs...)
 	}

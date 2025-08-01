@@ -392,16 +392,17 @@ func (i *indexIniter) run(lastID uint64) {
 		select {
 		case signal := <-i.interrupt:
 			// The indexing limit can only be extended or shortened continuously.
-			if signal.newLastID != lastID+1 && signal.newLastID != lastID-1 {
-				signal.result <- fmt.Errorf("invalid history id, last: %d, got: %d", lastID, signal.newLastID)
+			newLastID := signal.newLastID
+			if newLastID != lastID+1 && newLastID != lastID-1 {
+				signal.result <- fmt.Errorf("invalid history id, last: %d, got: %d", lastID, newLastID)
 				continue
 			}
-			i.last.Store(signal.newLastID) // update indexing range
+			i.last.Store(newLastID) // update indexing range
 
 			// The index limit is extended by one, update the limit without
 			// interrupting the current background process.
-			if signal.newLastID == lastID+1 {
-				lastID = signal.newLastID
+			if newLastID == lastID+1 {
+				lastID = newLastID
 				signal.result <- nil
 				log.Debug("Extended state history range", "last", lastID)
 				continue
@@ -425,7 +426,9 @@ func (i *indexIniter) run(lastID uint64) {
 				return
 			}
 			// Adjust the indexing target and relaunch the process
-			lastID = signal.newLastID
+			lastID = newLastID
+			signal.result <- nil
+
 			done, interrupt = make(chan struct{}), new(atomic.Int32)
 			go i.index(done, interrupt, lastID)
 			log.Debug("Shortened state history range", "last", lastID)

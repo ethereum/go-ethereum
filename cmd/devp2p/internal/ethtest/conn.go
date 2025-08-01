@@ -129,7 +129,7 @@ func (c *Conn) Write(proto Proto, code uint64, msg any) error {
 	return err
 }
 
-var errDisc error = fmt.Errorf("disconnect")
+var errDisc error = errors.New("disconnect")
 
 // ReadEth reads an Eth sub-protocol wire message.
 func (c *Conn) ReadEth() (any, error) {
