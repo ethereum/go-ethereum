@@ -36,6 +36,7 @@ jobs:
             $BASE_IMAGE \
             --dev --http --http.addr 0.0.0.0 --http.vhosts "*" --http.api eth,net,web3,personal
 
+            
 #      - name: check if curl is installed
 #        run: docker exec $CONTAINER_NAME which curl             
     #   - name: Wait for Geth RPC to become available
