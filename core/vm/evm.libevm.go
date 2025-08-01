@@ -43,3 +43,21 @@ func (evm *EVM) canCreateContract(caller ContractRef, contractToCreate common.Ad
 
 	return gas, err
 }
+
+// InvalidateExecution sets the error that will be returned by
+// [EVM.ExecutionInvalidated] for the length of the current transaction; i.e.
+// until [EVM.Reset] is called. This is honoured by state-transition logic to
+// render the execution itself void (as against reverted).
+//
+// This method MUST NOT be exposed in a manner that allows contracts to set
+// the error; it MAY be exposed to precompiles.
+func (evm *EVM) InvalidateExecution(err error) {
+	evm.executionInvalidated = err
+}
+
+// ExecutionInvalidated returns the last value passed to
+// [EVM.InvalidateExecution] or nil if no such call has occurred or if
+// [EVM.Reset] has been called.
+func (evm *EVM) ExecutionInvalidated() error {
+	return evm.executionInvalidated
+}

@@ -17,6 +17,9 @@
 package core
 
 import (
+	"fmt"
+
+	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/params"
 )
@@ -25,6 +28,50 @@ func (st *StateTransition) rulesHooks() params.RulesHooks {
 	bCtx := st.evm.Context
 	rules := st.evm.ChainConfig().Rules(bCtx.BlockNumber, bCtx.Random != nil, bCtx.Time)
 	return rules.Hooks()
+}
+
+// NOTE: other than the final paragraph, the comment on
+// [StateTransition.TransitionDb] is copied, verbatim, from the upstream
+// version, which has been changed to [StateTransition.transitionDb] to allow
+// its behaviour to be augmented.
+
+// Keeps the vm package imported by this specific file so VS Code can support
+// comments like [vm.EVM].
+var _ = (*vm.EVM)(nil)
+
+// TransitionDb will transition the state by applying the current message and
+// returning the evm execution result with following fields.
+//
+//   - used gas: total gas used (including gas being refunded)
+//   - returndata: the returned data from evm
+//   - concrete execution error: various EVM errors which abort the execution, e.g.
+//     ErrOutOfGas, ErrExecutionReverted
+//
+// However if any consensus issue encountered, return the error directly with
+// nil evm execution result.
+//
+// libevm-specific behaviour: if, during execution, [vm.EVM.InvalidateExecution]
+// is called with a non-nil error then said error will be returned, wrapped. All
+// state transitions (e.g. nonce incrementing) will be reverted to a snapshot
+// taken before execution.
+func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
+	if err := st.canExecuteTransaction(); err != nil {
+		return nil, err
+	}
+
+	snap := st.state.Snapshot()   // computationally cheap operation
+	res, err := st.transitionDb() // original geth implementation
+
+	// [NOTE]: At the time of implementation of this libevm override, non-nil
+	// values of `err` and `invalid` (below) are mutually exclusive. However, as
+	// a defensive measure, we don't return early on non-nil `err` in case an
+	// upstream update breaks this invariant.
+
+	if invalid := st.evm.ExecutionInvalidated(); invalid != nil {
+		st.state.RevertToSnapshot(snap)
+		err = fmt.Errorf("execution invalidated: %w", invalid)
+	}
+	return res, err
 }
 
 // canExecuteTransaction is a convenience wrapper for calling the

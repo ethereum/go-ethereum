@@ -18,7 +18,9 @@ package vm_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"reflect"
 	"strings"
@@ -298,6 +300,79 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, wantOutput.String(), string(gotReturnData))
 			assert.Equal(t, wantGasLeft, gotGasLeft)
+		})
+	}
+}
+
+func TestPrecompileInvalidatesExecution(t *testing.T) {
+	errIfInvalidated := errors.New("execution invalidated")
+	inputToInvalidate := []byte("invalidate")
+	run := func(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
+		if bytes.Equal(input, inputToInvalidate) {
+			env.InvalidateExecution(errIfInvalidated)
+		}
+		return []byte{}, nil
+	}
+
+	precompile := common.HexToAddress("60C0DE") // GO CODE
+	hooks := &hookstest.Stub{
+		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+			precompile: vm.NewStatefulPrecompile(run),
+		},
+	}
+	hooks.Register(t)
+
+	// The EVM instance MUST be reused across all tests to ensure that
+	// [vm.EVM.Reset] undoes any invalidation.
+	stateDB, evm := ethtest.NewZeroEVM(t)
+
+	tests := []struct {
+		name    string
+		nonce   uint64
+		input   []byte
+		wantErr error
+	}{
+		{
+			name:    "not_invalidating",
+			input:   []byte{},
+			nonce:   0,
+			wantErr: nil,
+		},
+		{
+			name:    "invalidating",
+			nonce:   1,
+			input:   inputToInvalidate,
+			wantErr: errIfInvalidated,
+		},
+		{
+			// Tests that:
+			// (a) [vm.EVM.Reset] undoes the previous invalidation; and
+			// (b) Invalidation reverted state changes, as seen by the nonce.
+			name:    "evm_reset_not_invalidating_after_invalid",
+			input:   []byte{},
+			nonce:   1, // unchanged because the last was invalidated
+			wantErr: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := &core.Message{
+				Nonce: tt.nonce,
+				Data:  tt.input,
+
+				// Common across all txs
+				To:       &precompile,
+				GasLimit: 1e6, // arbitrary but sufficiently high
+				GasPrice: big.NewInt(0),
+				Value:    big.NewInt(0),
+			}
+
+			evm.Reset(core.NewEVMTxContext(msg), stateDB)
+
+			gas := core.GasPool(math.MaxUint64)
+			_, err := core.ApplyMessage(evm, msg, &gas)
+			require.ErrorIs(t, err, tt.wantErr, "core.ApplyMessage()")
 		})
 	}
 }

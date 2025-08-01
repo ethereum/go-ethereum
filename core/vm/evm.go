@@ -128,6 +128,9 @@ type EVM struct {
 	// available gas is calculated in gasCall* according to the 63/64 rule and later
 	// applied in opCall*.
 	callGasTemp uint64
+
+	// libevm
+	executionInvalidated error // see [EVM.InvalidateExecution]
 }
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
@@ -160,6 +163,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 // Reset resets the EVM with a new transaction context.Reset
 // This is not threadsafe and should only be done very cautiously.
 func (evm *EVM) Reset(txCtx TxContext, statedb StateDB) {
+	evm.executionInvalidated = nil // see [EVM.InvalidateExecution]
 	evm.TxContext, evm.StateDB = evm.overrideEVMResetArgs(txCtx, statedb)
 }
 

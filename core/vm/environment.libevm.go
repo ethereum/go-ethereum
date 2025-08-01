@@ -49,6 +49,8 @@ func (e *environment) IncomingCallType() CallType        { return e.callType }
 func (e *environment) BlockNumber() *big.Int             { return new(big.Int).Set(e.evm.Context.BlockNumber) }
 func (e *environment) BlockTime() uint64                 { return e.evm.Context.Time }
 
+func (e *environment) InvalidateExecution(err error) { e.evm.InvalidateExecution(err) }
+
 func (e *environment) refundGas(add uint64) error {
 	gas, overflow := math.SafeAdd(e.self.Gas, add)
 	if overflow {

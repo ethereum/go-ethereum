@@ -187,6 +187,9 @@ type PrecompileEnvironment interface {
 	BlockNumber() *big.Int
 	BlockTime() uint64
 
+	// Invalidate invalidates the transaction calling this precompile.
+	InvalidateExecution(error)
+
 	// Call is equivalent to [EVM.Call] except that the `caller` argument is
 	// removed and automatically determined according to the type of call that
 	// invoked the precompile.
