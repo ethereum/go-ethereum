@@ -270,7 +270,7 @@ func (s *hookedStateDB) TxIndex() int {
 	return s.inner.TxIndex()
 }
 
-func (s *hookedStateDB) Finalise(deleteEmptyObjects bool, balDiff *bal.StateDiff) (postState *bal.StateDiff, err error) {
+func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) (diff *bal.StateDiff) {
 	if s.hooks.OnBalanceChange == nil {
 		return
 	}
@@ -283,5 +283,5 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool, balDiff *bal.StateDiff
 			}
 		}
 	}
-	return s.inner.Finalise(deleteEmptyObjects, balDiff)
+	return s.inner.Finalise(deleteEmptyObjects)
 }

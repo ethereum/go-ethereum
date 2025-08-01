@@ -790,9 +790,12 @@ func (s *StateDB) GetRefund() uint64 {
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
 //
+// It returns a state diff containing the state which was mutated since the
+// previous invocation of Finalise.
+//
 // if accessList is provided, verify the post-tx state against the diff.
-func (s *StateDB) Finalise(deleteEmptyObjects bool, balPost *bal.StateDiff) (post *bal.StateDiff, err error) {
-	post = &bal.StateDiff{make(map[common.Address]*bal.AccountState)}
+func (s *StateDB) Finalise(deleteEmptyObjects bool) (diff *bal.StateDiff) {
+	diff = &bal.StateDiff{make(map[common.Address]*bal.AccountState)}
 	addressesToPrefetch := make([]common.Address, 0, len(s.journal.dirties))
 	for addr := range s.journal.dirties {
 		obj, exist := s.stateObjects[addr]
@@ -806,38 +809,17 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool, balPost *bal.StateDiff) (pos
 			continue
 		}
 		if obj.selfDestructed || (deleteEmptyObjects && obj.empty()) {
-			// an object that was not created in the current transaction
-			// can only become empty and be removed if only the balance
-			// was non-zero before, the account was the target of a create
-			// whose initcode called SENDALL leaving the account empty at
-			// the end of the transaction.
-
-			// an account with a preexisting balance will not have its nonce set to 1 upon being the target of a CREATE
-
-			// TODO: why is the nonce set here (thus making empty() false)
-
+			// TODO: only enable recording of post-state optionally
 			// TODO: for testing purposes we should probably have tests that create/destroy the same account multiple times via this same edge-case with create2
-			if obj.address != params.SystemAddress && s.constructionBAL != nil {
-				s.constructionBAL.BalanceChange(uint16(s.balIndex), obj.address, uint256.NewInt(0))
-			} else if balPost != nil {
-				// TODO: ensure this path is tested elsewhere (this is an unused code path intentionally)
-				balDiff, ok := balPost.Mutations[obj.address]
-				if !ok {
-					panic("account not found in bal post mutations")
-				}
-				if balDiff.Nonce != nil || balDiff.Code != nil || balDiff.StorageWrites != nil || balDiff.Balance == nil || !new(uint256.Int).SetBytes(balDiff.Balance[:]).IsZero() {
-					panic("crap")
-				}
-			}
-
-			// the system address will be deleted, so need to ensure it's not included in the bal
-			// by explicitly checking the selfDestructed flag
 			if obj.address != params.SystemAddress {
+				// TODO: only record the object in the state diff if it wasn't created in the current transaction
+				if s.constructionBAL != nil {
+					s.constructionBAL.BalanceChange(uint16(s.balIndex), obj.address, uint256.NewInt(0))
+				}
 				postState := bal.NewEmptyAccountState()
 				postState.Balance = &bal.Balance{}
-				post.Mutations[obj.address] = postState
+				diff.Mutations[obj.address] = postState
 			}
-			// TODO: only enable recording of post-state optionally
 
 			delete(s.stateObjects, obj.address)
 			s.markDelete(addr)
@@ -852,7 +834,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool, balPost *bal.StateDiff) (pos
 
 			// if the account executed SENDALL but did not send a balance, don't include it in the diff
 			if accountPost.Nonce != nil || accountPost.Code != nil || accountPost.StorageWrites != nil || accountPost.Balance != nil {
-				post.Mutations[obj.address] = &accountPost
+				diff.Mutations[obj.address] = &accountPost
 			}
 			s.markUpdate(addr)
 		}
@@ -869,9 +851,9 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool, balPost *bal.StateDiff) (pos
 	// Invalidate journal because reverting across transactions is not allowed.
 	s.clearJournalAndRefund()
 
-	s.diff.Merge(post)
+	s.diff.Merge(diff)
 
-	return post, nil
+	return diff
 }
 
 // IntermediateRoot computes the current root hash of the state trie.
@@ -879,7 +861,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool, balPost *bal.StateDiff) (pos
 // goes into transaction receipts.
 func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// Finalise all the dirty storage states and write them into the tries
-	s.Finalise(deleteEmptyObjects, nil)
+	s.Finalise(deleteEmptyObjects)
 
 	// Initialize the trie if it's not constructed yet. If the prefetch
 	// is enabled, the trie constructed below will be replaced by the

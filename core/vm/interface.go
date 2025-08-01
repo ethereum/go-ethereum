@@ -105,5 +105,5 @@ type StateDB interface {
 	TxIndex() int
 
 	// Finalise must be invoked at the end of a transaction
-	Finalise(bool, *bal.StateDiff) (*bal.StateDiff, error)
+	Finalise(bool) *bal.StateDiff
 }

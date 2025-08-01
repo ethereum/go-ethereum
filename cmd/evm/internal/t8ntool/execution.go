@@ -281,7 +281,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		{
 			var root []byte
 			if chainConfig.IsByzantium(vmContext.BlockNumber) {
-				statedb.Finalise(true, nil)
+				statedb.Finalise(true)
 			} else {
 				root = statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber)).Bytes()
 			}

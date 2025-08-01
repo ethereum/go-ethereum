@@ -242,7 +242,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 		// TODO: apply withdrawals state diff from the Finalize call
 		p.chain.engine.Finalize(p.chain, header, tracingStateDB, block.Body())
 		// invoke Finalise so that withdrawals are accounted for in the state diff
-		postTxState.Finalise(true, nil)
+		postTxState.Finalise(true)
 
 		if err := bal.ValidateTxStateDiff(expectedStateDiff, postTxState.GetStateDiff()); err != nil {
 			return &ProcessResult{
@@ -396,14 +396,14 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	if err := bal.ValidateTxStateDiff(preTxDiff, computedDiff); err != nil {
 		return nil, nil, nil, err
 	}
-	statedb.Finalise(true, nil)
+	statedb.Finalise(true)
 
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		go execTx(ctx, tx, i, statedb.Copy(), stateDiffs[i+1])
 
 		statedb.ApplyDiff(stateDiffs[i+1])
-		statedb.Finalise(true, nil)
+		statedb.Finalise(true)
 	}
 
 	go resultHandler(blockStateDiff, statedb.Copy())
@@ -434,10 +434,7 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 	if evm.ChainConfig().IsByzantium(blockNumber) {
 		// TODO: when executing BAL here, the returned diff includes the transaction prestate when it should only return the state accessed+modified by the transaction
 		//panic("fixme")
-		diff, err = evm.StateDB.Finalise(true, balDiff)
-		if err != nil {
-			return nil, nil, err
-		}
+		diff = evm.StateDB.Finalise(true)
 	} else {
 		root = statedb.IntermediateRoot(evm.ChainConfig().IsEIP158(blockNumber)).Bytes()
 	}
@@ -518,7 +515,7 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM) *bal.StateDiff 
 	evm.SetTxContext(NewEVMTxContext(msg))
 	evm.StateDB.AddAddressToAccessList(params.BeaconRootsAddress)
 	_, _, _ = evm.Call(msg.From, *msg.To, msg.Data, 30_000_000, common.U2560)
-	diff, _ := evm.StateDB.Finalise(true, nil)
+	diff := evm.StateDB.Finalise(true)
 	return diff
 }
 
@@ -549,8 +546,7 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) *bal.StateDiff {
 	if evm.StateDB.AccessEvents() != nil {
 		evm.StateDB.AccessEvents().Merge(evm.AccessEvents)
 	}
-	diff, _ := evm.StateDB.Finalise(true, nil)
-	return diff
+	return evm.StateDB.Finalise(true)
 }
 
 // ProcessWithdrawalQueue calls the EIP-7002 withdrawal queue contract.
@@ -591,7 +587,7 @@ func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte
 		}
 	*/
 	ret, _, err := evm.Call(msg.From, *msg.To, msg.Data, 30_000_000, common.U2560)
-	evm.StateDB.Finalise(true, nil)
+	evm.StateDB.Finalise(true)
 	if err != nil {
 		return fmt.Errorf("system call failed to execute: %v", err)
 	}
