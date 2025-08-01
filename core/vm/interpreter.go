@@ -218,11 +218,11 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			if err == nil {
 				return
 			}
-			if !logged && in.evm.Config.Tracer.OnOpcode != nil {
-				in.evm.Config.Tracer.OnOpcode(pcCopy, byte(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
+			if !logged {
+				in.evm.tracer.OnOpcode(pcCopy, byte(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
 			}
-			if logged && in.evm.Config.Tracer.OnFault != nil {
-				in.evm.Config.Tracer.OnFault(pcCopy, byte(op), gasCopy, cost, callContext, in.evm.depth, VMErrorFromErr(err))
+			if logged {
+				in.evm.tracer.OnFault(pcCopy, byte(op), gasCopy, cost, callContext, in.evm.depth, VMErrorFromErr(err))
 			}
 		}()
 	}
@@ -242,7 +242,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			// associated costs.
 			contractAddr := contract.Address()
 			consumed, wanted := in.evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas)
-			contract.UseGas(consumed, in.evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
+			contract.UseGas(consumed, in.evm.tracer.OnGasChange, tracing.GasChangeWitnessCodeChunk)
 			if consumed < wanted {
 				return nil, ErrOutOfGas
 			}
@@ -302,13 +302,9 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 		// Do tracing before potential memory expansion
 		if debug {
-			if in.evm.Config.Tracer.OnGasChange != nil {
-				in.evm.Config.Tracer.OnGasChange(gasCopy, gasCopy-cost, tracing.GasChangeCallOpCode)
-			}
-			if in.evm.Config.Tracer.OnOpcode != nil {
-				in.evm.Config.Tracer.OnOpcode(pc, byte(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
-				logged = true
-			}
+			in.evm.tracer.OnGasChange(gasCopy, gasCopy-cost, tracing.GasChangeCallOpCode)
+			in.evm.tracer.OnOpcode(pc, byte(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
+			logged = true
 		}
 		if memorySize > 0 {
 			mem.Resize(memorySize)
