@@ -85,7 +85,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 			return nil, err
 		}
 		if header == nil {
-			return nil, errors.New("unknown block")
+			return nil, errUnknownBlock
 		}
 		if header.Number.Uint64() < f.sys.backend.HistoryPruningCutoff() {
 			return nil, &history.PrunedHistoryError{}
