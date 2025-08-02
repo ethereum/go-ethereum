@@ -1723,7 +1723,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 // racey behaviour. If a sidechain import is in progress, and the historic state
 // is imported, but then new canon-head is added before the actual sidechain
 // completes, then the historic state could be pruned again
-func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness bool, makeBAL bool) (*stateless.Witness, int, error) {
+func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness bool, enableBAL bool) (*stateless.Witness, int, error) {
 	// If the chain is terminating, don't even bother starting up.
 	if bc.insertStopped() {
 		return nil, 0, nil
@@ -1881,7 +1881,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		}
 		// The traced section of block import.
 		start := time.Now()
-		res, err := bc.processBlock(parent.Root, block, setHead, makeWitness && len(chain) == 1, makeBAL)
+
+		blockHasAccessList := block.Body().AccessList != nil
+		// BAL generation/verification not enabled pre-selfdestruct removal
+		enableBAL := enableBAL && bc.chainConfig.IsCancun(block.Number(), block.Time())
+		makeBAL := enableBAL && !blockHasAccessList
+		validateBAL := enableBAL && blockHasAccessList
+
+		res, err := bc.processBlock(parent.Root, block, setHead, makeWitness && len(chain) == 1, makeBAL, validateBAL)
 		if err != nil {
 			return nil, it.index, err
 		}
@@ -1948,7 +1955,7 @@ type blockProcessingResult struct {
 
 // processBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
-func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, setHead bool, makeWitness bool, makeBAL bool) (bpr *blockProcessingResult, blockEndErr error) {
+func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, setHead bool, makeWitness bool, makeBAL bool, validateBALTesting bool) (bpr *blockProcessingResult, blockEndErr error) {
 	var (
 		err       error
 		startTime = time.Now()
@@ -2054,13 +2061,10 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 			//return nil, fmt.Errorf("genesis block cannot have a block access list")
 			panic("genesis block cannot have BAL")
 		}
-		// TODO: reenable the below check outside of testing
-		/*
-			if !bc.chainConfig.IsGlamsterdam(block.Number(), block.Time()) {
-				bc.reportBlock(block, res, fmt.Errorf("received block containing access list before glamsterdam activated"))
-				return nil, err
-			}
-		*/
+		if !validateBALTesting && !bc.chainConfig.IsGlamsterdam(block.Number(), block.Time()) {
+			bc.reportBlock(block, res, fmt.Errorf("received block containing access list before glamsterdam activated"))
+			return nil, err
+		}
 		// Process block using the parent state as reference point
 		pstart := time.Now()
 		var resCh chan *ProcessResult

@@ -67,7 +67,7 @@ func TestBlockchain(t *testing.T) {
 	bt.skipLoad(`.*\.meta/.*`)
 
 	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
-		execBlockTest(t, bt, test)
+		execBlockTest(t, bt, test, false)
 	})
 	// There is also a LegacyTests folder, containing blockchain tests generated
 	// prior to Istanbul. However, they are all derived from GeneralStateTests,
@@ -175,7 +175,16 @@ func TestBlockchainBAL(t *testing.T) {
 	bt.skipLoad(`.*/bcExploitTest/SuicideIssue.json`)
 
 	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
-		execBlockTest(t, bt, test)
+		config, ok := Forks[test.json.Network]
+		if !ok {
+			t.Fatalf("unsupported fork: %s\n", test.json.Network)
+		}
+		gspec := test.genesis(config)
+		// skip any tests which are not past the cancun fork (selfdestruct removal)
+		if gspec.Config.CancunTime == nil || *gspec.Config.CancunTime != 0 {
+			return
+		}
+		execBlockTest(t, bt, test, true)
 	})
 	// There is also a LegacyTests folder, containing blockchain tests generated
 	// prior to Istanbul. However, they are all derived from GeneralStateTests,
@@ -193,7 +202,16 @@ func TestExecutionSpecBlocktestsBAL(t *testing.T) {
 	bt.skipLoad(".*prague/eip7002_el_triggerable_withdrawals/contract_deployment/system_contract_deployment.json")
 
 	bt.walk(t, executionSpecBlockchainTestDir, func(t *testing.T, name string, test *BlockTest) {
-		execBlockTest(t, bt, test)
+		config, ok := Forks[test.json.Network]
+		if !ok {
+			t.Fatalf("unsupported fork: %s\n", test.json.Network)
+		}
+		gspec := test.genesis(config)
+		// skip any tests which are not past the cancun fork (selfdestruct removal)
+		if gspec.Config.CancunTime == nil || *gspec.Config.CancunTime != 0 {
+			return
+		}
+		execBlockTest(t, bt, test, true)
 	})
 }
 
@@ -208,11 +226,11 @@ func TestExecutionSpecBlocktests(t *testing.T) {
 	bt.skipLoad(".*prague/eip7002_el_triggerable_withdrawals/contract_deployment/system_contract_deployment.json")
 
 	bt.walk(t, executionSpecBlockchainTestDir, func(t *testing.T, name string, test *BlockTest) {
-		execBlockTest(t, bt, test)
+		execBlockTest(t, bt, test, false)
 	})
 }
 
-func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest) {
+func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest, testBAL bool) {
 	// Define all the different flag combinations we should run the tests with,
 	// picking only one for short tests.
 	//
@@ -229,7 +247,7 @@ func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest) {
 
 	for _, snapshot := range snapshotConf {
 		for _, dbscheme := range dbschemeConf {
-			if err := bt.checkFailure(t, test.Run(snapshot, dbscheme, false, true, nil, nil)); err != nil {
+			if err := bt.checkFailure(t, test.Run(snapshot, dbscheme, false, testBAL, nil, nil)); err != nil {
 				t.Errorf("test with config {snapshotter:%v, scheme:%v} failed: %v", snapshot, dbscheme, err)
 				return
 			}

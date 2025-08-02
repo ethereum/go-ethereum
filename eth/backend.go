@@ -221,8 +221,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		}
 	}
 	var buildBAL bool
-	if config.BuildBAL != nil {
-		buildBAL = *config.BuildBAL
+	if config.ExperimentalBAL != nil {
+		buildBAL = *config.ExperimentalBAL
 	}
 	var (
 		options = &core.BlockChainConfig{

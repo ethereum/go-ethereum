@@ -151,7 +151,7 @@ var (
 		utils.BeaconGenesisTimeFlag,
 		utils.BeaconCheckpointFlag,
 		utils.BeaconCheckpointFileFlag,
-		utils.BuildBALFlag,
+		utils.ExperimentalBALFlag,
 	}, utils.NetworkFlags, utils.DatabaseFlags)
 
 	rpcFlags = []cli.Flag{
@@ -339,7 +339,7 @@ func startNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 		log.Warn(`The "unlock" flag has been deprecated and has no effect`)
 	}
 
-	if ctx.IsSet(utils.BuildBALFlag.Name) {
+	if ctx.IsSet(utils.ExperimentalBALFlag.Name) {
 		log.Warn(`block-access-list construction enabled.  This is an experimental feature that shouldn't be enabled outside of a Geth development context.'`)
 	}
 

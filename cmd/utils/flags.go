@@ -968,9 +968,10 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 	}
 
 	// Block Access List flags
-	BuildBALFlag = &cli.BoolFlag{
-		Name:     "buildbal",
-		Usage:    "Enable block-access-list building when executing blocks (This is for development purposes only.  Do not enable this flag)",
+
+	ExperimentalBALFlag = &cli.BoolFlag{
+		Name:     "experimentalbal",
+		Usage:    "Enable block-access-list building when executing blocks, and validation of post-cancun blocks that contain access lists. This is used for development purposes only.  Do not enable this flag on a live node.",
 		Category: flags.MiscCategory,
 	}
 )
@@ -1860,9 +1861,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 	}
 
-	if ctx.IsSet(BuildBALFlag.Name) {
-		enabled := ctx.Bool(BuildBALFlag.Name)
-		cfg.BuildBAL = &enabled
+	if ctx.IsSet(ExperimentalBALFlag.Name) {
+		enabled := ctx.Bool(ExperimentalBALFlag.Name)
+		cfg.ExperimentalBAL = &enabled
 	}
 }
 

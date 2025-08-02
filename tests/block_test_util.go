@@ -111,7 +111,7 @@ type btHeaderMarshaling struct {
 	ExcessBlobGas *math.HexOrDecimal64
 }
 
-func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, bal bool, tracer *tracing.Hooks, postCheck func(error, *core.BlockChain)) (result error) {
+func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, testBAL bool, tracer *tracing.Hooks, postCheck func(error, *core.BlockChain)) (result error) {
 	config, ok := Forks[t.json.Network]
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
@@ -130,11 +130,6 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, bal bool,
 	}
 	// Commit genesis state
 	gspec := t.genesis(config)
-
-	// skip any tests which are not past the cancun fork (selfdestruct removal)
-	if gspec.Config.CancunTime == nil || *gspec.Config.CancunTime != 0 {
-		return nil
-	}
 
 	// if ttd is not specified, set an arbitrary huge value
 	if gspec.Config.TerminalTotalDifficulty == nil {
@@ -164,7 +159,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, bal bool,
 		VmConfig: vm.Config{
 			Tracer:                  tracer,
 			StatelessSelfValidation: witness,
-			BALConstruction:         bal,
+			BALConstruction:         testBAL,
 		},
 	}
 	if snapshotter {
@@ -210,7 +205,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, bal bool,
 		return err
 	}
 
-	if bal {
+	if testBAL {
 		chain.GetVMConfig().BALConstruction = false
 		var blocksWithBAL types.Blocks
 		for i := uint64(1); i <= chain.CurrentBlock().Number.Uint64(); i++ {
