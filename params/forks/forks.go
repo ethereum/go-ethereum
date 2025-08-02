@@ -40,6 +40,7 @@ const (
 	Cancun
 	Prague
 	Osaka
+	Eip7805
 )
 
 // String implements fmt.Stringer.

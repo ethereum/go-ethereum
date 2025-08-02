@@ -69,28 +69,30 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 // the revenue. Therefore, the empty-block here is always available and full-block
 // will be set/updated afterwards.
 type Payload struct {
-	id            engine.PayloadID
-	empty         *types.Block
-	emptyWitness  *stateless.Witness
-	full          *types.Block
-	fullWitness   *stateless.Witness
-	sidecars      []*types.BlobTxSidecar
-	emptyRequests [][]byte
-	requests      [][]byte
-	fullFees      *big.Int
-	stop          chan struct{}
-	lock          sync.Mutex
-	cond          *sync.Cond
+	id               engine.PayloadID
+	empty            *types.Block
+	emptyWitness     *stateless.Witness
+	full             *types.Block
+	fullWitness      *stateless.Witness
+	sidecars         []*types.BlobTxSidecar
+	emptyRequests    [][]byte
+	requests         [][]byte
+	fullFees         *big.Int
+	stop             chan struct{}
+	inclusionListTxs chan []*types.Transaction
+	lock             sync.Mutex
+	cond             *sync.Cond
 }
 
 // newPayload initializes the payload object.
 func newPayload(empty *types.Block, emptyRequests [][]byte, witness *stateless.Witness, id engine.PayloadID) *Payload {
 	payload := &Payload{
-		id:            id,
-		empty:         empty,
-		emptyRequests: emptyRequests,
-		emptyWitness:  witness,
-		stop:          make(chan struct{}),
+		id:               id,
+		empty:            empty,
+		emptyRequests:    emptyRequests,
+		emptyWitness:     witness,
+		stop:             make(chan struct{}),
+		inclusionListTxs: make(chan []*types.Transaction),
 	}
 	log.Info("Starting work on payload", "id", payload.id)
 	payload.cond = sync.NewCond(&payload.lock)
@@ -205,6 +207,13 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 	return envelope
 }
 
+func (payload *Payload) UpdateWithInclusionList(inclusionListTxs []*types.Transaction) {
+	payload.lock.Lock()
+	defer payload.lock.Unlock()
+
+	payload.inclusionListTxs <- inclusionListTxs
+}
+
 // buildPayload builds the payload according to the provided parameters.
 func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload, error) {
 	// Build the initial version with no transaction included. It should be fast
@@ -250,6 +259,7 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 			beaconRoot:  args.BeaconRoot,
 			noTxs:       false,
 		}
+		var inclusionListTxs []*types.Transaction
 
 		for {
 			select {
@@ -262,6 +272,9 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 					log.Info("Error while generating work", "id", payload.id, "err", r.err)
 				}
 				timer.Reset(miner.config.Recommit)
+			case inclusionListTxs = <-payload.inclusionListTxs:
+				fullParams.inclusionListTxs = inclusionListTxs
+				timer.Reset(0)
 			case <-payload.stop:
 				log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
 				return

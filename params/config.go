@@ -410,6 +410,7 @@ type ChainConfig struct {
 	CancunTime   *uint64 `json:"cancunTime,omitempty"`   // Cancun switch time (nil = no fork, 0 = already on cancun)
 	PragueTime   *uint64 `json:"pragueTime,omitempty"`   // Prague switch time (nil = no fork, 0 = already on prague)
 	OsakaTime    *uint64 `json:"osakaTime,omitempty"`    // Osaka switch time (nil = no fork, 0 = already on osaka)
+	Eip7805Time  *uint64 `json:"eip7805Time,omitempty"`  // Eip7805 switch time (nil = no fork, 0 = already on eip7805)
 	VerkleTime   *uint64 `json:"verkleTime,omitempty"`   // Verkle switch time (nil = no fork, 0 = already on verkle)
 	BPO1Time     *uint64 `json:"bpo1Time,omitempty"`     // BPO1 switch time (nil = no fork, 0 = already on bpo1)
 	BPO2Time     *uint64 `json:"bpo2Time,omitempty"`     // BPO2 switch time (nil = no fork, 0 = already on bpo2)
@@ -672,6 +673,11 @@ func (c *ChainConfig) IsPrague(num *big.Int, time uint64) bool {
 // IsOsaka returns whether time is either equal to the Osaka fork time or greater.
 func (c *ChainConfig) IsOsaka(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.OsakaTime, time)
+}
+
+// IsEip7805 returns whether time is either equal to the Eip7805 fork time or greater.
+func (c *ChainConfig) IsEip7805(num *big.Int, time uint64) bool {
+	return c.IsLondon(num) && isTimestampForked(c.Eip7805Time, time)
 }
 
 // IsVerkle returns whether time is either equal to the Verkle fork time or greater.
@@ -972,6 +978,8 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 	london := c.LondonBlock
 
 	switch {
+	case c.IsEip7805(london, time):
+		return forks.Eip7805
 	case c.IsOsaka(london, time):
 		return forks.Osaka
 	case c.IsPrague(london, time):
