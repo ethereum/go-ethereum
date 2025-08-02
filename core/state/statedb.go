@@ -832,8 +832,9 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) (diff *bal.StateDiff) {
 		} else {
 			accountPost := obj.finalise()
 
-			// if the account executed SENDALL but did not send a balance, don't include it in the diff
 			if accountPost.Nonce != nil || accountPost.Code != nil || accountPost.StorageWrites != nil || accountPost.Balance != nil {
+				// the account executed SENDALL but did not send a balance, don't include it in the diff
+				// TODO: probably shouldn't include the account in the dirty set in this case
 				diff.Mutations[obj.address] = &accountPost
 			}
 			s.markUpdate(addr)

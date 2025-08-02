@@ -20,11 +20,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"maps"
 	"os"
 	"regexp"
 	"slices"
+
+	"github.com/ethereum/go-ethereum/cmd/utils"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"

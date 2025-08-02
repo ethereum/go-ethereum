@@ -8,8 +8,13 @@ import (
 	"sync/atomic"
 )
 
+// balPrefetcher implements a state prefetcher for block access lists.
+// State present in the block access list is retrieved in parallel for
+// each account.
 type balPrefetcher struct{}
 
+// Prefetch retrieves state contained in the block's access list to warm state
+// caches before executing the block.
 func (p *balPrefetcher) Prefetch(block *types.Block, db *state.StateDB, interrupt *atomic.Bool) {
 	al := block.Body().AccessList
 

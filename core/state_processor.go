@@ -166,7 +166,7 @@ func (p *StateProcessor) calcStateDiffs(evm *vm.EVM, block *types.Block, txPrest
 	return txDiffIt.BuildStateDiffs(prestateDiff, uint16(len(block.Transactions()))+1)
 }
 
-func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *state.StateDB, cfg vm.Config, al *bal.BlockAccessList) (*state.StateDB, *bal.StateDiff, chan *ProcessResult, error) {
+func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *state.StateDB, cfg vm.Config) (chan *ProcessResult, error) {
 	var (
 		header      = block.Header()
 		blockHash   = block.Hash()
@@ -185,6 +185,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	}
 
 	txResCh := make(chan txExecResult)
+	rootCalcErrCh := make(chan error) // used for communicating if the state root calculation doesn't match the reported root
 
 	// called by resultHandler when all transactions have successfully executed.
 	// performs post-tx state transition (system contracts and withdrawals)
@@ -298,7 +299,22 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 			}
 		}
 
-		resCh <- prepareExecResult(postTxState, expectedDiff, receipts)
+		execResults := prepareExecResult(postTxState, expectedDiff, receipts)
+		err := <-rootCalcErrCh
+		if err != nil {
+			resCh <- &ProcessResult{Error: err}
+		} else {
+			resCh <- execResults
+		}
+	}
+
+	calcAndVerifyRoot := func(postState *state.StateDB, block *types.Block, resCh chan<- error) {
+		root := postState.IntermediateRoot(false)
+		if root != block.Root() {
+			resCh <- fmt.Errorf("state root mismatch. local: %x. remote: %x", root, block.Root())
+		} else {
+			resCh <- nil
+		}
 	}
 
 	// executes single transaction, validating the computed diff against the BAL
@@ -377,7 +393,6 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 
 	// TODO: use TxContext (hash == common.Hash{}) as a signal that we aren't
 	// executing a tx yet, and don't record state based on that?
-	prestate := statedb.Copy()
 
 	blockStateDiff, stateDiffs, err := p.calcStateDiffs(evm, block, statedb)
 	if err != nil {
@@ -394,7 +409,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 
 	computedDiff := statedb.GetStateDiff()
 	if err := bal.ValidateTxStateDiff(preTxDiff, computedDiff); err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	statedb.Finalise(true)
 
@@ -408,7 +423,15 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 
 	go resultHandler(blockStateDiff, statedb.Copy())
 
-	return prestate, blockStateDiff, resCh, nil
+	// it's possible that there isn't a post-tx-execution state diff
+	// if there are no withdrawals or consolidations
+	if len(stateDiffs) == len(block.Transactions())+2 {
+		statedb.ApplyDiff(stateDiffs[len(block.Transactions())+1])
+		statedb.Finalise(true)
+	}
+	go calcAndVerifyRoot(statedb, block, rootCalcErrCh)
+
+	return resCh, nil
 }
 
 // ApplyTransactionWithEVM attempts to apply a transaction to the given state database

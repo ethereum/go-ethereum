@@ -20,7 +20,6 @@ package core
 import (
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 	"io"
 	"math"
 	"math/big"
@@ -2064,10 +2063,8 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		*/
 		// Process block using the parent state as reference point
 		pstart := time.Now()
-		var diff *bal.StateDiff
-		var prestate *state.StateDB
 		var resCh chan *ProcessResult
-		prestate, diff, resCh, err = bc.processor.ProcessWithAccessList(block, statedb, bc.cfg.VmConfig, block.Body().AccessList)
+		resCh, err = bc.processor.ProcessWithAccessList(block, statedb, bc.cfg.VmConfig)
 		if err != nil {
 			// TODO: okay to pass nil here as execution result?
 			bc.reportBlock(block, nil, err)
@@ -2077,13 +2074,12 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 
 		vstart := time.Now()
 		var err error
-		res, err = bc.validator.ValidateStateWithDiff(block, prestate, resCh, diff, false)
+		res, err = bc.validator.ValidateProcessResult(block, resCh, false)
 		if err != nil {
 			// TODO: okay to pass nil here as execution result?
 			bc.reportBlock(block, nil, err)
 			return nil, err
 		}
-		statedb = prestate // TODO: temporary hack.  remove the need to assign this directly
 		vtime = time.Since(vstart)
 
 	} else {

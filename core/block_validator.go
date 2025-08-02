@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -121,19 +120,14 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	return nil
 }
 
-func (v *BlockValidator) ValidateStateWithDiff(block *types.Block, prestate *state.StateDB, resCh chan *ProcessResult, diff *bal.StateDiff, stateless bool) (*ProcessResult, error) {
+func (v *BlockValidator) ValidateProcessResult(block *types.Block, resCh chan *ProcessResult, stateless bool) (*ProcessResult, error) {
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
 	header := block.Header()
-	prestate.ApplyDiff(diff)
-	root := prestate.IntermediateRoot(v.config.IsEIP158(header.Number))
 
 	res := <-resCh
 	if res.Error != nil {
 		return nil, res.Error
-	}
-	if header.Root != root {
-		return res, fmt.Errorf("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, prestate.Error())
 	}
 
 	if block.GasUsed() != res.GasUsed {

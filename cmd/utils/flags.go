@@ -970,7 +970,7 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 	// Block Access List flags
 	BuildBALFlag = &cli.BoolFlag{
 		Name:     "buildbal",
-		Usage:    "Enable block-access-list building when executing blocks (experimental)",
+		Usage:    "Enable block-access-list building when executing blocks (This is for development purposes only.  Do not enable this flag)",
 		Category: flags.MiscCategory,
 	}
 )
