@@ -124,6 +124,18 @@ func newTestBackend(config *node.Config) (*node.Node, []*types.Block, error) {
 			break
 		}
 	}
+	// Wait until the pending nonce reflects all submitted transactions
+	numTxs := 0
+	for _, block := range blocks[1:] {
+		numTxs += len(block.Transactions())
+	}
+	for ; ; time.Sleep(time.Millisecond * 100) {
+		pendingNonceAt, err := ethservice.APIBackend.GetPoolNonce(context.Background(), testAddr)
+		if err == nil && pendingNonceAt == uint64(numTxs) {
+			break
+		}
+	}
+
 	return n, blocks, nil
 }
 
@@ -506,8 +518,9 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	}
 
 	// send a transaction for some interesting pending status
-	// and wait for the transaction to be included in the pending block
-	sendTransaction(ec)
+	if err = sendTransaction(ec); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// wait for the transaction to be included in the pending block
 	for {
