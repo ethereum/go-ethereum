@@ -33,16 +33,12 @@ import (
 // on state operations.
 type hookedStateDB struct {
 	inner *StateDB
-	hooks *tracing.Hooks
+	hooks tracing.Hooks
 }
 
 // NewHookedState wraps the given stateDb with the given hooks
-func NewHookedState(stateDb *StateDB, hooks *tracing.Hooks) *hookedStateDB {
-	s := &hookedStateDB{stateDb, hooks}
-	if s.hooks == nil {
-		s.hooks = new(tracing.Hooks)
-	}
-	return s
+func NewHookedState(stateDb *StateDB, hooks tracing.Hooks) *hookedStateDB {
+	return &hookedStateDB{stateDb, hooks}
 }
 
 func (s *hookedStateDB) CreateAccount(addr common.Address) {
