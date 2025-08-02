@@ -371,8 +371,7 @@ func (bc *BlockChain) TxIndexDone() bool {
 
 // HasState checks if state trie is fully present in the database or not.
 func (bc *BlockChain) HasState(hash common.Hash) bool {
-	_, err := bc.statedb.OpenTrie(hash)
-	return err == nil
+	return bc.stateDB.hasState(hash)
 }
 
 // HasBlockAndState checks if a block and associated state trie is fully present
@@ -391,7 +390,7 @@ func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
 // state is not treated as recoverable if it's available, thus
 // false will be returned in this case.
 func (bc *BlockChain) stateRecoverable(root common.Hash) bool {
-	if bc.triedb.Scheme() == rawdb.HashScheme {
+	if bc.cfg.StateScheme == rawdb.HashScheme {
 		return false
 	}
 	result, _ := bc.triedb.Recoverable(root)
@@ -403,7 +402,7 @@ func (bc *BlockChain) stateRecoverable(root common.Hash) bool {
 func (bc *BlockChain) ContractCodeWithPrefix(hash common.Hash) []byte {
 	// TODO(rjl493456442) The associated account address is also required
 	// in Verkle scheme. Fix it once snap-sync is supported for Verkle.
-	return bc.statedb.ContractCodeWithPrefix(common.Address{}, hash)
+	return bc.stateDB.contractCode(common.Address{}, hash)
 }
 
 // State returns a new mutable state based on the current HEAD block.
@@ -413,7 +412,8 @@ func (bc *BlockChain) State() (*state.StateDB, error) {
 
 // StateAt returns a new mutable state based on a particular point in time.
 func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
-	return state.New(root, bc.statedb)
+	// TODO(rjl493456442) support verkle state accessing
+	return state.New(root, bc.stateDB.stateDB(false))
 }
 
 // HistoricState returns a historic state specified by the given root.
@@ -446,7 +446,8 @@ func (bc *BlockChain) Processor() Processor {
 
 // StateCache returns the caching database underpinning the blockchain instance.
 func (bc *BlockChain) StateCache() state.Database {
-	return bc.statedb
+	// TODO(rjl493456442) support verkle database
+	return bc.stateDB.stateDB(false)
 }
 
 // GasLimit returns the gas limit of the current HEAD block.
