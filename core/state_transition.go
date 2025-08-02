@@ -19,7 +19,6 @@ package core
 import (
 	"bytes"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/state"
 	"math"
 	"math/big"
 
@@ -564,35 +563,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		Err:        vmerr,
 		ReturnData: ret,
 	}, nil
-}
-
-func validateAuth(auth *types.SetCodeAuthorization, evm *vm.EVM, state state.BALStateReader) (common.Address, error) {
-	// Verify chain ID is null or equal to current chain ID.
-	if !auth.ChainID.IsZero() && auth.ChainID.CmpBig(evm.ChainConfig().ChainID) != 0 {
-		return common.Address{}, ErrAuthorizationWrongChainID
-	}
-	// Limit nonce to 2^64-1 per EIP-2681.
-	if auth.Nonce+1 < auth.Nonce {
-		return common.Address{}, ErrAuthorizationNonceOverflow
-	}
-	// Validate signature values and recover authority.
-	authority, err := auth.Authority()
-	if err != nil {
-		return common.Address{}, fmt.Errorf("%w: %v", ErrAuthorizationInvalidSignature, err)
-	}
-	// Check the authority account
-	//  1) doesn't have code or has exisiting delegation
-	//  2) matches the auth's nonce
-	//
-	// Note it is added to the access list even if the authorization is invalid.
-	code := state.GetCode(authority)
-	if _, ok := types.ParseDelegation(code); len(code) != 0 && !ok {
-		return common.Address{}, ErrAuthorizationDestinationHasCode
-	}
-	if have := state.GetNonce(authority); have != auth.Nonce {
-		return common.Address{}, ErrAuthorizationNonceMismatch
-	}
-	return authority, nil
 }
 
 // validateAuthorization validates an EIP-7702 authorization against the state.
