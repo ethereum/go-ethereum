@@ -18,7 +18,6 @@
 package catalyst
 
 import (
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"strconv"
@@ -31,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/version"
@@ -120,10 +118,13 @@ var caps = []string{
 var (
 	// Number of blobs requested via getBlobsV2
 	getBlobsRequestedCounter = metrics.NewRegisteredCounter("engine/getblobs/requested", nil)
+
 	// Number of blobs requested via getBlobsV2 that are present in the blobpool
 	getBlobsAvailableCounter = metrics.NewRegisteredCounter("engine/getblobs/available", nil)
+
 	// Number of times getBlobsV2 responded with “hit”
 	getBlobsV2RequestHit = metrics.NewRegisteredCounter("engine/getblobs/hit", nil)
+
 	// Number of times getBlobsV2 responded with “miss”
 	getBlobsV2RequestMiss = metrics.NewRegisteredCounter("engine/getblobs/miss", nil)
 )
@@ -494,29 +495,15 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
-	var (
-		res      = make([]*engine.BlobAndProofV1, len(hashes))
-		hasher   = sha256.New()
-		index    = make(map[common.Hash]int)
-		sidecars = api.eth.BlobTxPool().GetBlobs(hashes)
-	)
-
-	for i, hash := range hashes {
-		index[hash] = i
+	blobs, _, proofs, err := api.eth.BlobTxPool().GetBlobs(hashes, types.BlobSidecarVersion0)
+	if err != nil {
+		return nil, engine.InvalidParams.With(err)
 	}
-	for i, sidecar := range sidecars {
-		if res[i] != nil || sidecar == nil {
-			// already filled
-			continue
-		}
-		for cIdx, commitment := range sidecar.Commitments {
-			computed := kzg4844.CalcBlobHashV1(hasher, &commitment)
-			if idx, ok := index[computed]; ok {
-				res[idx] = &engine.BlobAndProofV1{
-					Blob:  sidecar.Blobs[cIdx][:],
-					Proof: sidecar.Proofs[cIdx][:],
-				}
-			}
+	res := make([]*engine.BlobAndProofV1, len(hashes))
+	for i := 0; i < len(blobs); i++ {
+		res[i] = &engine.BlobAndProofV1{
+			Blob:  blobs[i][:],
+			Proof: proofs[i][0][:],
 		}
 	}
 	return res, nil
@@ -538,47 +525,19 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 	}
 	getBlobsV2RequestHit.Inc(1)
 
-	// pull up the blob hashes
-	var (
-		res      = make([]*engine.BlobAndProofV2, len(hashes))
-		index    = make(map[common.Hash][]int)
-		sidecars = api.eth.BlobTxPool().GetBlobs(hashes)
-	)
-
-	for i, hash := range hashes {
-		index[hash] = append(index[hash], i)
+	blobs, _, proofs, err := api.eth.BlobTxPool().GetBlobs(hashes, types.BlobSidecarVersion1)
+	if err != nil {
+		return nil, engine.InvalidParams.With(err)
 	}
-	for i, sidecar := range sidecars {
-		if res[i] != nil {
-			// already filled
-			continue
+	res := make([]*engine.BlobAndProofV2, len(hashes))
+	for i := 0; i < len(blobs); i++ {
+		var cellProofs []hexutil.Bytes
+		for _, proof := range proofs[i] {
+			cellProofs = append(cellProofs, proof[:])
 		}
-		if sidecar == nil {
-			// not found, return empty response
-			return nil, nil
-		}
-		if sidecar.Version != types.BlobSidecarVersion1 {
-			log.Info("GetBlobs queried V0 transaction: index %v, blobhashes %v", index, sidecar.BlobHashes())
-			return nil, nil
-		}
-		blobHashes := sidecar.BlobHashes()
-		for bIdx, hash := range blobHashes {
-			if idxes, ok := index[hash]; ok {
-				proofs, err := sidecar.CellProofsAt(bIdx)
-				if err != nil {
-					return nil, engine.InvalidParams.With(err)
-				}
-				var cellProofs []hexutil.Bytes
-				for _, proof := range proofs {
-					cellProofs = append(cellProofs, proof[:])
-				}
-				for _, idx := range idxes {
-					res[idx] = &engine.BlobAndProofV2{
-						Blob:       sidecar.Blobs[bIdx][:],
-						CellProofs: cellProofs,
-					}
-				}
-			}
+		res[i] = &engine.BlobAndProofV2{
+			Blob:       blobs[i][:],
+			CellProofs: cellProofs,
 		}
 	}
 	return res, nil
