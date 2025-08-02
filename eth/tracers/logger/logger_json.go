@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"io"
 	"math/big"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -27,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/holiman/uint256"
 )
 
 //go:generate go run github.com/fjl/gencodec -type callFrame -field-override callFrameMarshaling -out gen_callframe.go
@@ -59,6 +61,9 @@ type jsonLogger struct {
 	cfg     *Config
 	env     *tracing.VMContext
 	hooks   *tracing.Hooks
+
+	// stitchingContext
+	inflightLog StructLog
 }
 
 // NewJSONLogger creates a new EVM tracer that prints execution steps as JSON objects
@@ -68,12 +73,14 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.Hooks {
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
+	l.inflightLog = StructLog{Depth: -1, Memory: []byte{}, Stack: []uint256.Int{}, ReturnData: []byte{}}
 	l.hooks = &tracing.Hooks{
 		OnTxStart:         l.OnTxStart,
 		OnSystemCallStart: l.onSystemCallStart,
 		OnExit:            l.OnExit,
 		OnOpcode:          l.OnOpcode,
 		OnFault:           l.OnFault,
+		OnGasChange:       l.OnGasChange,
 	}
 	return l.hooks
 }
@@ -85,6 +92,7 @@ func NewJSONLoggerWithCallFrames(cfg *Config, writer io.Writer) *tracing.Hooks {
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
+	l.inflightLog = StructLog{Depth: -1, Memory: []byte{}, Stack: []uint256.Int{}, ReturnData: []byte{}}
 	l.hooks = &tracing.Hooks{
 		OnTxStart:         l.OnTxStart,
 		OnSystemCallStart: l.onSystemCallStart,
@@ -92,20 +100,38 @@ func NewJSONLoggerWithCallFrames(cfg *Config, writer io.Writer) *tracing.Hooks {
 		OnExit:            l.OnExit,
 		OnOpcode:          l.OnOpcode,
 		OnFault:           l.OnFault,
+		OnGasChange:       l.OnGasChange,
 	}
 	return l.hooks
 }
 
 func (l *jsonLogger) OnFault(pc uint64, op byte, gas uint64, cost uint64, scope tracing.OpContext, depth int, err error) {
-	// TODO: Add rData to this interface as well
-	l.OnOpcode(pc, op, gas, cost, scope, nil, depth, err)
+	l.inflightLog.Err = err
+	l.flushInflightLog()
+}
+
+func (l *jsonLogger) OnGasChange(old, new uint64, reason tracing.GasChangeReason) {
+	if reason == tracing.GasChangeCallOpCodeDynamic {
+		l.inflightLog.GasCost += old - new
+		l.inflightLog.RefundCounter = l.env.StateDB.GetRefund()
+	}
+}
+
+func (l *jsonLogger) flushInflightLog() {
+	if l.inflightLog.Depth != -1 {
+		l.encoder.Encode(l.inflightLog)
+	}
+	l.inflightLog.Depth = -1 // Signify no inflight log
 }
 
 func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
-	memory := scope.MemoryData()
-	stack := scope.StackData()
+	l.flushInflightLog()
+	memoryBuf := l.inflightLog.Memory[:0]
+	stackBuf := l.inflightLog.Stack[:0]
+	rDataBuf := l.inflightLog.ReturnData[:0]
 
-	log := StructLog{
+	memory := scope.MemoryData()
+	l.inflightLog = StructLog{
 		Pc:            pc,
 		Op:            vm.OpCode(op),
 		Gas:           gas,
@@ -114,17 +140,27 @@ func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracin
 		Depth:         depth,
 		RefundCounter: l.env.StateDB.GetRefund(),
 		Err:           err,
+		Memory:        memoryBuf,
+		Stack:         stackBuf,
+		ReturnData:    rDataBuf,
 	}
+
+	// Since we are holding on to the data for a little longer and it might get modified before
+	// we know about it. We need to make copies here.
 	if l.cfg.EnableMemory {
-		log.Memory = memory
+		l.inflightLog.Memory = append(slices.Grow(memoryBuf, len(memory)), memory...)
 	}
 	if !l.cfg.DisableStack {
-		log.Stack = stack
+		stack := scope.StackData()
+		l.inflightLog.Stack = append(slices.Grow(stackBuf, len(stack)), stack...)
 	}
 	if l.cfg.EnableReturnData {
-		log.ReturnData = rData
+		l.inflightLog.ReturnData = append(slices.Grow(rDataBuf, len(rData)), rData...)
 	}
-	l.encoder.Encode(log)
+
+	if op == byte(vm.STOP) {
+		l.flushInflightLog()
+	}
 }
 
 func (l *jsonLogger) onSystemCallStart() {
@@ -139,6 +175,7 @@ func (l *jsonLogger) onSystemCallStart() {
 
 // OnEnter is not enabled by default.
 func (l *jsonLogger) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	l.flushInflightLog()
 	frame := callFrame{
 		op:    vm.OpCode(typ),
 		From:  from,
@@ -153,6 +190,7 @@ func (l *jsonLogger) OnEnter(depth int, typ byte, from common.Address, to common
 }
 
 func (l *jsonLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	l.flushInflightLog()
 	type endLog struct {
 		Output  string              `json:"output"`
 		GasUsed math.HexOrDecimal64 `json:"gasUsed"`
