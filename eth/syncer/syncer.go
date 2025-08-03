@@ -119,7 +119,7 @@ func (s *Syncer) run() {
 					retries++
 					continue
 				}
-				// If the remote number is equal or bigger to the target, we don't need to resync.
+				// If the target number is smaller than the remote number, we don't need to sync.
 				if target != nil && header.Number.Cmp(target.Number) <= 0 {
 					log.Info("Syncer already synced", "hash", req.hash, "target", target)
 					req.errc <- nil
