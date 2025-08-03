@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // TestHistoryIndexerShortenDeadlock tests that a call to shorten does not
@@ -53,5 +54,45 @@ func TestHistoryIndexerShortenDeadlock(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for shorten to complete, potential deadlock")
+	}
+}
+
+// TestHistoryIndexerDeadLoop tests the specific scenario that causes
+// dead loop when the metadata shows a higher value than the target.
+func TestHistoryIndexerDeadLoop(t *testing.T) {
+	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
+	db := rawdb.NewMemoryDatabase()
+	freezer, _ := rawdb.NewStateFreezer(t.TempDir(), false, false)
+	defer freezer.Close()
+
+	histories := makeHistories(10)
+	for i, h := range histories {
+		accountData, storageData, accountIndex, storageIndex := h.encode()
+		rawdb.WriteStateHistory(freezer, uint64(i+1), h.meta.encode(), accountIndex, storageIndex, accountData, storageData)
+	}
+
+	var m indexMetadata
+	m.Version = stateIndexVersion
+	m.Last = 8 // Higher than our target of 5
+	blob, _ := rlp.EncodeToBytes(m)
+	rawdb.WriteStateHistoryIndexMetadata(db, blob)
+
+	// Create indexer with target that is less than the metadata
+	indexer := newHistoryIndexer(db, freezer, 5)
+	defer indexer.close()
+
+	// Wait for indexing to complete
+	timeout := time.After(5 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("timed out waiting for indexing to complete")
+		default:
+			if indexer.inited() {
+				// Indexing completed successfully, no infinite loop occurred
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 	}
 }
