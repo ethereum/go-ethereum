@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // TestHistoryIndexerShortenDeadlock tests that a call to shorten does not
@@ -71,11 +70,7 @@ func TestHistoryIndexerDeadLoop(t *testing.T) {
 		rawdb.WriteStateHistory(freezer, uint64(i+1), h.meta.encode(), accountIndex, storageIndex, accountData, storageData)
 	}
 
-	var m indexMetadata
-	m.Version = stateIndexVersion
-	m.Last = 8 // Higher than our target of 5
-	blob, _ := rlp.EncodeToBytes(m)
-	rawdb.WriteStateHistoryIndexMetadata(db, blob)
+	storeIndexMetadata(db, 8) // Higher than our target of 5
 
 	// Create indexer with target that is less than the metadata
 	indexer := newHistoryIndexer(db, freezer, 5)
