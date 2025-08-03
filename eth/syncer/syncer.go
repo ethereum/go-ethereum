@@ -120,7 +120,12 @@ func (s *Syncer) run() {
 					continue
 				}
 				if target != nil && header.Number.Cmp(target.Number) <= 0 {
-					req.errc <- fmt.Errorf("stale sync target, current: %d, received: %d", target.Number, header.Number)
+					// If the remote number is equal to the target, we don't need to resync.
+					if header.Number == target.Number {
+						req.errc <- nil
+					} else {
+						req.errc <- fmt.Errorf("stale sync target, current: %d, received: %d", target.Number, header.Number)
+					}
 					break
 				}
 				target = header
@@ -137,7 +142,7 @@ func (s *Syncer) run() {
 			}
 			if block := s.backend.BlockChain().GetBlockByHash(target.Hash()); block != nil {
 				log.Info("Sync target reached", "number", block.NumberU64(), "hash", block.Hash())
-				go s.stack.Close() // async since we need to close ourselves
+				go s.Stop() // async since we need to close ourselves
 				return
 			}
 
