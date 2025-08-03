@@ -5,7 +5,7 @@ ARG BUILDNUM=""
 # Base Geth build stage remains the same
 
 # Additional stage for Blockscout dependencies
-FROM hexpm/elixir:1.17.0-erlang-27.0.4-alpine-3.19.1 as blockscout-builder
+FROM hexpm/elixir:1.17.0-erlang-27.0-alpine-3.19.1 as blockscout-builder
 
 RUN apk add --no-cache build-base git curl postgresql-dev inotify-tools npm gcompat
 
