@@ -10,7 +10,7 @@ jobs:
   deploy-hardhat:
     if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Deploy')
     runs-on: ubuntu-latest
-
+   
     env:
       BASE_IMAGE: yohands/my_first_container:latest
       FINAL_IMAGE: yohands/my_first-contracts
@@ -131,3 +131,5 @@ jobs:
 
       - name: Stop and remove test container
         run: docker rm -f test-node
+
+        #adding comment to ensure the workflow is complete
