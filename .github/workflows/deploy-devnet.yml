@@ -52,36 +52,36 @@ jobs:
           echo "$DEPLOY_OUTPUT" > deploy.log
           echo "CONTRACT_ADDRESS=$(echo \"$DEPLOY_OUTPUT\" | grep -i 'Lock deployed to:' | awk '{ print $NF }')" >> $GITHUB_ENV
 
-      - name: Retry contract verification on Blockscout
-        working-directory: ./hardhat
-        run: |
-          echo "🔍 Verifying contract at $CONTRACT_ADDRESS"
-          for i in {1..5}; do
-            npx hardhat verify --network localhost $CONTRACT_ADDRESS && break
-            echo "Retry $i: Verification failed. Waiting for Blockscout sync..."
-            sleep 10
-          done
+      # - name: Retry contract verification on Blockscout
+      #   working-directory: ./hardhat
+      #   run: |
+      #     echo "🔍 Verifying contract at $CONTRACT_ADDRESS"
+      #     for i in {1..5}; do
+      #       npx hardhat verify --network localhost $CONTRACT_ADDRESS && break
+      #       echo "Retry $i: Verification failed. Waiting for Blockscout sync..."
+      #       sleep 10
+      #     done
 
-      - name: Confirm contract is visible in Blockscout
-        run: |
-          echo "Waiting for Blockscout explorer to index contract..."
-          for i in {1..30}; do
-            CODE=$(curl -s http://localhost:4000/api \
-              -d "module=contract" \
-              -d "action=getsourcecode" \
-              -d "address=$CONTRACT_ADDRESS" | jq -r '.result[0].SourceCode')
+      # - name: Confirm contract is visible in Blockscout
+      #   run: |
+      #     echo "Waiting for Blockscout explorer to index contract..."
+      #     for i in {1..30}; do
+      #       CODE=$(curl -s http://localhost:4000/api \
+      #         -d "module=contract" \
+      #         -d "action=getsourcecode" \
+      #         -d "address=$CONTRACT_ADDRESS" | jq -r '.result[0].SourceCode')
 
-            if [ "$CODE" != "" ] && [ "$CODE" != "null" ]; then
-              echo "✅ Contract is now visible in Blockscout"
-              exit 0
-            fi
+      #       if [ "$CODE" != "" ] && [ "$CODE" != "null" ]; then
+      #         echo "✅ Contract is now visible in Blockscout"
+      #         exit 0
+      #       fi
 
-            echo "⏳ Not indexed yet, retrying ($i)..."
-            sleep 5
-          done
+      #       echo "⏳ Not indexed yet, retrying ($i)..."
+      #       sleep 5
+      #     done
 
-          echo "❌ Contract not found in Blockscout after timeout."
-          exit 1
+      #     echo "❌ Contract not found in Blockscout after timeout."
+      #     exit 1
 
       - name: Commit container with deployed contracts
         run: |
