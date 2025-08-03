@@ -507,6 +507,8 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 			storeIndexMetadata(i.disk, 0)
 			log.Info("Initialized history indexing flag")
 		} else {
+			// Update the metadata to indicate that indexing is complete up to lastID
+			storeIndexMetadata(i.disk, lastID)
 			log.Debug("State history is fully indexed", "last", lastID)
 		}
 		return
