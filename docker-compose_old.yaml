@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  geth-node:
+    image: yohands/my_first_container
+    container_name: geth-devnet
+    ports:
+      - "8545:8545"
+      - "8546:8546"
+      - "30303:30303"
+      - "4000:4000"
+    volumes:
+      - geth-data:/root/.ethereum
+    restart: unless-stopped
+    command: [
+      "geth",
+      "--dev",
+      "--http",
+      "--http.addr", "0.0.0.0",
+      "--http.vhosts", "*",
+      "--http.api", "personal,eth,net,web3,miner",
+      "--http.corsdomain", "*",
+      "--ws",
+      "--ws.addr", "0.0.0.0",
+      "--ws.api", "personal,eth,net,web3,miner",
+      "--allow-insecure-unlock",
+      "--mine",
+      "--nodiscover"
+    ]
+
+  # postgres:
+  #   image: postgres:13
+  #   container_name: blockscout-db
+  #   environment:
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: postgres
+  #     POSTGRES_DB: blockscout
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - pg-data:/var/lib/postgresql/data
+
+  # blockscout:
+  #   image: blockscout/blockscout:latest
+  #   container_name: blockscout
+  #   depends_on:
+  #     - geth-node
+  #     - postgres
+  #   ports:
+  #     - "4000:4000"
+  #   environment:
+  #     ETHEREUM_JSONRPC_HTTP_URL: http://geth-node:8545
+  #     DATABASE_URL: postgresql://postgres:postgres@postgres:5432/blockscout
+  #     NETWORK: "Devnet"
+  #     SUBNETWORK: "Geth Dev Mode"
+  #     COIN: "ETH"
+  #     MIX_ENV: "prod"
+  #     PORT: 4000
+  #     BLOCKSCOUT_HOST: "0.0.0.0"
+  #   restart: unless-stopped
+
+volumes:
+  geth-data:
+  pg-data:

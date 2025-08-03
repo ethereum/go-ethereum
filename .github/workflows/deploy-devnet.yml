@@ -20,7 +20,6 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-        # capture SHA as an env variables  
       - name: Get short commit SHA
         id: vars
         run: echo "COMMIT_SHA=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_ENV        
@@ -32,33 +31,9 @@ jobs:
         run: |
           docker run -d \
             --name $CONTAINER_NAME \
-            -p 8545:8545 \
+            -p 8545:8545 -p 4000:4000 \
             $BASE_IMAGE \
-            --dev --http --http.addr 0.0.0.0 --http.vhosts "*" --http.api eth,net,web3,personal
-
-            
-#      - name: check if curl is installed
-#        run: docker exec $CONTAINER_NAME which curl             
-    #   - name: Wait for Geth RPC to become available
-    #     run: |
-    #       echo "Waiting for Geth RPC to be ready..."
-    #       for i in {1..30}; do
-    #         if docker exec $CONTAINER_NAME curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8545 > /dev/null; then
-    #           echo "Geth RPC is up!"
-    #           break
-    #         fi
-    #         echo "Attempt $i: Not yet ready..."
-    #         sleep 2
-    #       done
-
-    #       if ! docker exec $CONTAINER_NAME curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8545 > /dev/null; then
-    #         echo "❌ Geth RPC did not start within 60 seconds."
-    #         echo "--- Container logs ---"
-    #         docker logs $CONTAINER_NAME
-    #         echo "--- Container status ---"
-    #         docker ps -a
-    #         exit 1
-    #       fi
+            /bin/sh /start.sh
 
       - name: Set up Node.js
         uses: actions/setup-node@v3
@@ -69,9 +44,44 @@ jobs:
         working-directory: ./hardhat
         run: npm install
 
-      - name: Deploy contracts to devnet
+      - name: Deploy contracts to devnet and capture address
         working-directory: ./hardhat
-        run: npx hardhat run scripts/deploy.js --network localhost
+        run: |
+          DEPLOY_OUTPUT=$(npx hardhat run scripts/deploy.js --network localhost)
+          echo "$DEPLOY_OUTPUT"
+          echo "$DEPLOY_OUTPUT" > deploy.log
+          echo "CONTRACT_ADDRESS=$(echo \"$DEPLOY_OUTPUT\" | grep -i 'Lock deployed to:' | awk '{ print $NF }')" >> $GITHUB_ENV
+
+      - name: Retry contract verification on Blockscout
+        working-directory: ./hardhat
+        run: |
+          echo "🔍 Verifying contract at $CONTRACT_ADDRESS"
+          for i in {1..5}; do
+            npx hardhat verify --network localhost $CONTRACT_ADDRESS && break
+            echo "Retry $i: Verification failed. Waiting for Blockscout sync..."
+            sleep 10
+          done
+
+      - name: Confirm contract is visible in Blockscout
+        run: |
+          echo "Waiting for Blockscout explorer to index contract..."
+          for i in {1..30}; do
+            CODE=$(curl -s http://localhost:4000/api \
+              -d "module=contract" \
+              -d "action=getsourcecode" \
+              -d "address=$CONTRACT_ADDRESS" | jq -r '.result[0].SourceCode')
+
+            if [ "$CODE" != "" ] && [ "$CODE" != "null" ]; then
+              echo "✅ Contract is now visible in Blockscout"
+              exit 0
+            fi
+
+            echo "⏳ Not indexed yet, retrying ($i)..."
+            sleep 5
+          done
+
+          echo "❌ Contract not found in Blockscout after timeout."
+          exit 1
 
       - name: Commit container with deployed contracts
         run: |
@@ -91,30 +101,33 @@ jobs:
         run: |
           docker push $FINAL_IMAGE:latest
           docker push $FINAL_IMAGE:${{ env.COMMIT_SHA }}
-  
+
       - name: Run container with predeployed contracts
         run: |
           docker run -d \
             --name test-node \
-            -p 8545:8545 \
+            -p 8545:8545 -p 4000:4000 \
             $FINAL_IMAGE:latest \
-            --dev --http --http.addr 0.0.0.0 --http.vhosts "*" --http.api eth,net,web3,personal
-            sleep 20
+            /bin/sh /start.sh
+          sleep 20
 
-      # - name: Wait for RPC to be ready
-      #   run: |
-      #     echo "Waiting for devnet to be ready..."
-      #     for i in {1..20}; do
-      #       if curl -s http://localhost:8545 > /dev/null; then
-      #         echo "RPC is ready."
-      #         break
-      #       fi
-      #       sleep 2
-      #     done
+      - name: Check Blockscout Explorer
+        run: |
+          echo "Waiting for Blockscout..."
+          for i in {1..30}; do
+              if curl -s http://localhost:4000 | grep -qi "blockscout"; then
+                echo "✅ Blockscout UI is up!"
+                exit 0
+              fi
+              sleep 5
+          done
+          echo "❌ Blockscout did not respond."
+          docker logs test-node
+          exit 1
 
       - name: Run Hardhat tests
         working-directory: ./hardhat
-        run: npx hardhat test # --network localhost
+        run: npx hardhat test
 
       - name: Stop and remove test container
-        run: docker rm -f test-node          
+        run: docker rm -f test-node

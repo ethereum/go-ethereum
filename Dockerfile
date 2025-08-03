@@ -1,33 +1,35 @@
-# Support setting various labels on the final image
-ARG COMMIT=""
-ARG VERSION=""
-ARG BUILDNUM=""
+# Base Geth build stage remains the same
 
-# Build Geth in a stock Go builder container
-FROM golang:1.24-alpine AS builder
+# Additional stage for Blockscout dependencies
+FROM hexpm/elixir:1.14.5-erlang-25.3.2.6-alpine-3.18.0 as blockscout-builder
 
-RUN apk add --no-cache gcc musl-dev linux-headers git
+RUN apk add --no-cache build-base git curl postgresql-dev inotify-tools npm gcompat
 
-# Get dependencies - will also be cached if we won't change go.mod/go.sum
-COPY go.mod /go-ethereum/
-COPY go.sum /go-ethereum/
-RUN cd /go-ethereum && go mod download
+# Clone Blockscout source
+RUN git clone https://github.com/blockscout/blockscout.git /blockscout
 
-ADD . /go-ethereum
-RUN cd /go-ethereum && go run build/ci.go install -static ./cmd/geth
+WORKDIR /blockscout
 
-# Pull Geth into a second stage deploy alpine container
+RUN mix local.hex --force && \
+    mix local.rebar --force && \
+    mix deps.get && \
+    mix compile
+
+RUN mix do ecto.create, ecto.migrate
+
+RUN mix phx.digest && MIX_ENV=prod mix release
+
+# Final image
 FROM alpine:latest
 
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates libstdc++ postgresql-client su-exec bash curl
+
 COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
+COPY --from=blockscout-builder /blockscout /blockscout
 
-EXPOSE 8545 8546 30303 30303/udp
-ENTRYPOINT ["geth", "--dev", "--http", "--http.addr", "0.0.0.0", "--http.vhosts", "*", "--http.api", "eth,net,web3,personal"]
+# Custom entrypoint
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
 
-# Add some metadata labels to help programmatic image consumption
-ARG COMMIT=""
-ARG VERSION=""
-ARG BUILDNUM=""
-
-LABEL commit="$COMMIT" version="$VERSION" buildnum="$BUILDNUM"
+EXPOSE 8545 8546 30303 4000
+ENTRYPOINT ["/bin/sh", "/start.sh"]
