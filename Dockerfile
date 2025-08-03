@@ -24,8 +24,10 @@ FROM alpine:latest
 
 RUN apk add --no-cache ca-certificates libstdc++ postgresql-client su-exec bash curl
 
-COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
+#COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
+COPY --from=geth-builder /go-ethereum/build/bin/geth /usr/local/bin/
 COPY --from=blockscout-builder /blockscout /blockscout
+
 
 # Custom entrypoint
 COPY start.sh /start.sh
