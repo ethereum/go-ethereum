@@ -1,9 +1,8 @@
 #!/bin/sh
-# Start PostgreSQL for Blockscout
-docker-entrypoint.sh postgres &
+set -e
 
-# Wait for DB to be ready
-until pg_isready -h localhost -p 5432; do
+# Wait for Postgres to be ready (assumes external Postgres service)
+until pg_isready -h "$DB_HOST" -p "$DB_PORT"; do
   echo "Waiting for Postgres..."
   sleep 2
 done
@@ -15,12 +14,19 @@ geth --dev \
   --ws --ws.addr 0.0.0.0 \
   --allow-insecure-unlock --mine --nodiscover &
 
+# Set environment variables for Blockscout
+export DATABASE_URL="postgresql://postgres:postgres@${DB_HOST:-localhost}:${DB_PORT:-5432}/blockscout"
+export ETHEREUM_JSONRPC_HTTP_URL="http://localhost:8545"
+export PORT=4000
+export MIX_ENV=prod
+
+cd /blockscout
+
+# Run DB setup
+mix ecto.create
+mix ecto.migrate
+
 # Start Blockscout
-cd /blockscout && \
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/blockscout \
-ETHEREUM_JSONRPC_HTTP_URL=http://localhost:8545 \
-PORT=4000 \
-MIX_ENV=prod \
 /blockscout/_build/prod/rel/blockscout/bin/blockscout start
 
 wait

@@ -19,7 +19,7 @@ RUN mix local.hex --force && \
     mix deps.get && \
     mix compile
 
-RUN mix do ecto.create, ecto.migrate
+#RUN mix do ecto.create, ecto.migrate
 
 RUN mix phx.digest && MIX_ENV=prod mix release
 
