@@ -119,10 +119,8 @@ func (s *Syncer) run() {
 					retries++
 					continue
 				}
-				// If the target number is smaller than the remote number, we don't need to sync.
 				if target != nil && header.Number.Cmp(target.Number) <= 0 {
-					log.Info("Syncer already synced", "hash", req.hash, "target", target)
-					req.errc <- nil
+					req.errc <- fmt.Errorf("stale sync target, current: %d, received: %d", target.Number, header.Number)
 					break
 				}
 				target = header
@@ -162,7 +160,11 @@ func (s *Syncer) Start() error {
 // Stop terminates the synchronization service and stop all background activities.
 // This function can only be called for one time.
 func (s *Syncer) Stop() error {
+	if s.closed == nil { // Already closed
+		return nil
+	}
 	close(s.closed)
+	s.closed = nil
 	s.wg.Wait()
 	return nil
 }
