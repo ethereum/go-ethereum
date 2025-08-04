@@ -152,7 +152,7 @@ type AncientWriter interface {
 	SyncAncient() error
 
 	// TruncateHead discards all but the first n ancient data from the ancient store.
-	// After the truncation, the latest item can be accessed it item_n-1(start from 0).
+	// After the truncation, the latest item can be accessed at item_n-1(start from 0).
 	TruncateHead(n uint64) (uint64, error)
 
 	// TruncateTail discards the first n ancient data from the ancient store. The already
