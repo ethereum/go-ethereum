@@ -180,6 +180,8 @@ const (
 	BlobTxMaxBlobs                     = 6
 	BlobBaseCost                       = 1 << 13 // Base execution gas cost for a blob.
 
+	HistoryServeWindow = 8191 // Number of blocks to serve historical block hashes for, EIP-2935.
+
 	MaxBlockSize = 8_388_608 // maximum size of an RLP-encoded block
 )
 

@@ -40,9 +40,6 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// historyServeWindow is the number of blocks to serve historical block hashes for, as per EIP-2935.
-const historyServeWindow = 8191
-
 var (
 	testVerkleChainConfig = &params.ChainConfig{
 		ChainID:                 big.NewInt(1),
@@ -268,7 +265,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 
 // getContractStoredBlockHash is a utility method which reads the stored parent blockhash for block 'number'
 func getContractStoredBlockHash(statedb *state.StateDB, number uint64, isVerkle bool) common.Hash {
-	ringIndex := number % historyServeWindow
+	ringIndex := number % params.HistoryServeWindow
 	var key common.Hash
 	binary.BigEndian.PutUint64(key[24:], ringIndex)
 	if isVerkle {
