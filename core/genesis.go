@@ -572,6 +572,29 @@ func (g *Genesis) MustCommit(db ethdb.Database, triedb *triedb.Database) *types.
 	return block
 }
 
+// EnableVerkleAtGenesis indicates whether the verkle fork should be activated
+// at genesis. This is a temporary solution only for verkle devnet testing, where
+// verkle fork is activated at genesis, and the configured activation date has
+// already passed.
+//
+// In production networks (mainnet and public testnets), verkle activation always
+// occurs after the genesis block, making this function irrelevant in those cases.
+func EnableVerkleAtGenesis(db ethdb.Database, genesis *Genesis) (bool, error) {
+	if genesis != nil {
+		if genesis.Config == nil {
+			return false, errGenesisNoConfig
+		}
+		return genesis.Config.EnableVerkleAtGenesis, nil
+	}
+	if ghash := rawdb.ReadCanonicalHash(db, 0); ghash != (common.Hash{}) {
+		chainCfg := rawdb.ReadChainConfig(db, ghash)
+		if chainCfg != nil {
+			return chainCfg.EnableVerkleAtGenesis, nil
+		}
+	}
+	return false, nil
+}
+
 // DefaultGenesisBlock returns the Ethereum main net genesis block.
 func DefaultGenesisBlock() *Genesis {
 	return &Genesis{
