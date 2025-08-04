@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
+	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -233,7 +234,7 @@ type trieReader struct {
 
 // trieReader constructs a trie reader of the specific state. An error will be
 // returned if the associated trie specified by root is not existent.
-func newTrieReader(root common.Hash, db *triedb.Database, cache *utils.PointCache, ts *TransitionState) (*trieReader, error) {
+func newTrieReader(root common.Hash, db *triedb.Database, cache *utils.PointCache, ts *overlay.TransitionState) (*trieReader, error) {
 	var (
 		tr  Trie
 		err error

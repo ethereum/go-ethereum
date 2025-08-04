@@ -315,6 +315,7 @@ func TestVerkleGenesisCommit(t *testing.T) {
 	}
 
 	db := rawdb.NewMemoryDatabase()
+
 	config := *pathdb.Defaults
 	config.NoAsyncFlush = true
 

@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
+	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -145,50 +146,6 @@ type Trie interface {
 	IsVerkle() bool
 }
 
-// TransitionState is a structure that holds the progress markers of the
-// translation process.
-type TransitionState struct {
-	CurrentAccountAddress *common.Address // addresss of the last translated account
-	CurrentSlotHash       common.Hash     // hash of the last translated storage slot
-	CurrentPreimageOffset int64           // next byte to read from the preimage file
-	Started, Ended        bool
-
-	// Mark whether the storage for an account has been processed. This is useful if the
-	// maximum number of leaves of the conversion is reached before the whole storage is
-	// processed.
-	StorageProcessed bool
-
-	BaseRoot common.Hash // hash of the last read-only MPT base tree
-}
-
-// InTransition returns true if the translation process is in progress.
-func (ts *TransitionState) InTransition() bool {
-	return ts != nil && ts.Started && !ts.Ended
-}
-
-// Transitioned returns true if the translation process has been completed.
-func (ts *TransitionState) Transitioned() bool {
-	return ts != nil && ts.Ended
-}
-
-// Copy returns a deep copy of the TransitionState object.
-func (ts *TransitionState) Copy() *TransitionState {
-	ret := &TransitionState{
-		Started:               ts.Started,
-		Ended:                 ts.Ended,
-		CurrentSlotHash:       ts.CurrentSlotHash,
-		CurrentPreimageOffset: ts.CurrentPreimageOffset,
-		StorageProcessed:      ts.StorageProcessed,
-	}
-
-	if ts.CurrentAccountAddress != nil {
-		ret.CurrentAccountAddress = &common.Address{}
-		copy(ret.CurrentAccountAddress[:], ts.CurrentAccountAddress[:])
-	}
-
-	return ret
-}
-
 // CachingDB is an implementation of Database interface. It leverages both trie and
 // state snapshot to provide functionalities for state access. It's meant to be a
 // long-live object and has a few caches inside for sharing between blocks.
@@ -201,7 +158,7 @@ type CachingDB struct {
 	pointCache    *utils.PointCache
 
 	// Transition-specific fields
-	TransitionStatePerRoot *lru.Cache[common.Hash, *TransitionState]
+	TransitionStatePerRoot *lru.Cache[common.Hash, *overlay.TransitionState]
 }
 
 // NewDatabase creates a state database with the provided data sources.
@@ -213,7 +170,7 @@ func NewDatabase(triedb *triedb.Database, snap *snapshot.Tree) *CachingDB {
 		codeCache:              lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
 		codeSizeCache:          lru.NewCache[common.Hash, int](codeSizeCacheSize),
 		pointCache:             utils.NewPointCache(pointCacheSize),
-		TransitionStatePerRoot: lru.NewCache[common.Hash, *TransitionState](1000),
+		TransitionStatePerRoot: lru.NewCache[common.Hash, *overlay.TransitionState](1000),
 	}
 }
 
@@ -349,7 +306,7 @@ func mustCopyTrie(t Trie) Trie {
 
 // SaveTransitionState saves the transition state to the cache and commits
 // it to the database if it's not already in the cache.
-func (db *CachingDB) SaveTransitionState(root common.Hash, ts *TransitionState) {
+func (db *CachingDB) SaveTransitionState(root common.Hash, ts *overlay.TransitionState) {
 	if ts == nil {
 		panic("nil transition state")
 	}
@@ -381,7 +338,7 @@ func (db *CachingDB) SaveTransitionState(root common.Hash, ts *TransitionState) 
 	log.Debug("saving transition state", "storage processed", ts.StorageProcessed, "addr", ts.CurrentAccountAddress, "slot hash", ts.CurrentSlotHash, "root", root, "ended", ts.Ended, "started", ts.Started)
 }
 
-func (db *CachingDB) LoadTransitionState(root common.Hash) *TransitionState {
+func (db *CachingDB) LoadTransitionState(root common.Hash) *overlay.TransitionState {
 	// Try to get the transition state from the cache and
 	// the DB if it's not there.
 	ts, ok := db.TransitionStatePerRoot.Get(root)
@@ -396,7 +353,7 @@ func (db *CachingDB) LoadTransitionState(root common.Hash) *TransitionState {
 		// if a state could be read from the db, attempt to decode it
 		if len(data) > 0 {
 			var (
-				newts TransitionState
+				newts overlay.TransitionState
 				buf   = bytes.NewBuffer(data[:])
 				dec   = gob.NewDecoder(buf)
 			)
@@ -416,7 +373,7 @@ func (db *CachingDB) LoadTransitionState(root common.Hash) *TransitionState {
 			// as a verkle database.
 			log.Debug("no transition state found, starting fresh", "is verkle", db.triedb.IsVerkle())
 			// Start with a fresh state
-			ts = &TransitionState{Ended: db.triedb.IsVerkle()}
+			ts = &overlay.TransitionState{Ended: db.triedb.IsVerkle()}
 		}
 
 		db.TransitionStatePerRoot.Add(root, ts)
