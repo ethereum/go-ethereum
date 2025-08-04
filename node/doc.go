@@ -19,7 +19,7 @@ Package node sets up multi-protocol Ethereum nodes.
 
 In the model exposed by this package, a node is a collection of services which use shared
 resources to provide RPC APIs. Services can also offer devp2p protocols, which are wired
-up the devp2p network when the node instance is started.
+up to the devp2p network when the node instance is started.
 
 # Node Lifecycle
 
