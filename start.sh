@@ -23,8 +23,8 @@ export MIX_ENV=prod
 cd /blockscout
 
 # Run DB setup
-mix ecto.create
-mix ecto.migrate
+#mix ecto.create
+#mix ecto.migrate
 
 # Start Blockscout
 /blockscout/_build/prod/rel/blockscout/bin/blockscout start
