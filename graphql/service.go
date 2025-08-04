@@ -32,6 +32,11 @@ import (
 	gqlErrors "github.com/graph-gophers/graphql-go/errors"
 )
 
+// maxQueryDepth limits the maximum field nesting depth allowed in GraphQL queries.
+// Without this bound, deeply nested queries could exhaust resources and lead to DoS.
+// See https://github.com/ethereum/go-ethereum/issues/26026 for more details.
+const maxQueryDepth = 20
+
 type handler struct {
 	Schema *graphql.Schema
 }
@@ -116,7 +121,7 @@ func New(stack *node.Node, backend ethapi.Backend, filterSystem *filters.FilterS
 func newHandler(stack *node.Node, backend ethapi.Backend, filterSystem *filters.FilterSystem, cors, vhosts []string) (*handler, error) {
 	q := Resolver{backend, filterSystem}
 
-	s, err := graphql.ParseSchema(schema, &q)
+	s, err := graphql.ParseSchema(schema, &q, graphql.MaxDepth(maxQueryDepth))
 	if err != nil {
 		return nil, err
 	}
