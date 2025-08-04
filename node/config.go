@@ -107,7 +107,7 @@ type Config struct {
 	HTTPHost string
 
 	// HTTPPort is the TCP port number on which to start the HTTP RPC server. The
-	// default zero value is/ valid and will pick a port number randomly (useful
+	// default zero value is valid and will pick a port number randomly (useful
 	// for ephemeral nodes).
 	HTTPPort int `toml:",omitempty"`
 
@@ -152,7 +152,7 @@ type Config struct {
 	WSHost string
 
 	// WSPort is the TCP port number on which to start the websocket RPC server. The
-	// default zero value is/ valid and will pick a port number randomly (useful for
+	// default zero value is valid and will pick a port number randomly (useful for
 	// ephemeral nodes).
 	WSPort int `toml:",omitempty"`
 
