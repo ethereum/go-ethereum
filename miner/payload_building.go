@@ -228,7 +228,7 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 	payload := newPayload(empty.block, empty.requests, empty.witness, args.Id())
 
 	// Spin up a routine for updating the payload in background. This strategy
-	// can maximum the revenue for including transactions with highest fee.
+	// can maximize the revenue for including transactions with highest fee.
 	go func() {
 		// Setup the timer for re-building the payload. The initial clock is kept
 		// for triggering process immediately.
