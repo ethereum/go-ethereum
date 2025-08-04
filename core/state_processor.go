@@ -421,19 +421,23 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	}
 	statedb.Finalise(true)
 
+	var txPrestates []*state.StateDB
 	// Iterate over and process the individual transactions
 	for i := range block.Transactions() {
+		txPrestates = append(txPrestates, statedb.Copy())
 		statedb.ApplyDiff(stateDiffs[i+1])
 		statedb.Finalise(true)
 	}
+	postState := statedb.Copy()
+
 	tPreprocess = time.Since(pStart)
 
 	tExecStart = time.Now()
 	for i, tx := range block.Transactions() {
-		go execTx(ctx, tx, i, statedb.Copy(), stateDiffs[i+1])
+		go execTx(ctx, tx, i, txPrestates[i], stateDiffs[i+1])
 	}
 
-	go resultHandler(blockStateDiff, statedb.Copy())
+	go resultHandler(blockStateDiff, postState)
 
 	// it's possible that there isn't a post-tx-execution state diff
 	// if there are no withdrawals or consolidations
