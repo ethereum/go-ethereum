@@ -33,14 +33,14 @@ import (
 )
 
 const (
-	// Number of codehash->size associations to keep.
-	codeSizeCacheSize = 1_000_000 // 4 megabytes in total
+	// CodeSizeCacheSize is the number of codehash->size associations to keep.
+	CodeSizeCacheSize = 1_000_000 // 4 megabytes in total
 
-	// Cache size granted for caching clean code.
-	codeCacheSize = 256 * 1024 * 1024
+	// CodeCacheSize is the cache size granted for caching clean code.
+	CodeCacheSize = 256 * 1024 * 1024
 
-	// Number of address->curve point associations to keep.
-	pointCacheSize = 4096
+	// PointCacheSize is the number of address->curve point associations to keep.
+	PointCacheSize = 4096
 )
 
 // Database wraps access to tries and contract code.
@@ -159,9 +159,22 @@ func NewDatabase(triedb *triedb.Database, snap *snapshot.Tree) *CachingDB {
 		disk:          triedb.Disk(),
 		triedb:        triedb,
 		snap:          snap,
-		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
-		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
-		pointCache:    utils.NewPointCache(pointCacheSize),
+		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](CodeCacheSize),
+		codeSizeCache: lru.NewCache[common.Hash, int](CodeSizeCacheSize),
+		pointCache:    utils.NewPointCache(PointCacheSize),
+	}
+}
+
+// NewDatabaseWithCache creates a state database with the provided database
+// and relative caches.
+func NewDatabaseWithCache(disk ethdb.KeyValueStore, triedb *triedb.Database, snap *snapshot.Tree, codeCache *lru.SizeConstrainedCache[common.Hash, []byte], codeSizeCache *lru.Cache[common.Hash, int], pointCache *utils.PointCache) *CachingDB {
+	return &CachingDB{
+		disk:          disk,
+		snap:          snap,
+		triedb:        triedb,
+		codeCache:     codeCache,
+		codeSizeCache: codeSizeCache,
+		pointCache:    pointCache,
 	}
 }
 
@@ -246,22 +259,6 @@ func (db *CachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Addre
 		return nil, err
 	}
 	return tr, nil
-}
-
-// ContractCodeWithPrefix retrieves a particular contract's code. If the
-// code can't be found in the cache, then check the existence with **new**
-// db scheme.
-func (db *CachingDB) ContractCodeWithPrefix(address common.Address, codeHash common.Hash) []byte {
-	code, _ := db.codeCache.Get(codeHash)
-	if len(code) > 0 {
-		return code
-	}
-	code = rawdb.ReadCodeWithPrefix(db.disk, codeHash)
-	if len(code) > 0 {
-		db.codeCache.Add(codeHash, code)
-		db.codeSizeCache.Add(codeHash, len(code))
-	}
-	return code
 }
 
 // TrieDB retrieves any intermediate trie-node caching layer.
