@@ -695,9 +695,9 @@ func (db *Database) journalPath() string {
 	}
 	var fname string
 	if db.isVerkle {
-		fname = fmt.Sprintf("verkle.journal")
+		fname = "verkle.journal"
 	} else {
-		fname = fmt.Sprintf("merkle.journal")
+		fname = "merkle.journal"
 	}
 	return filepath.Join(db.config.JournalDirectory, fname)
 }
