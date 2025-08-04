@@ -77,7 +77,7 @@ func TestMultisub(t *testing.T) {
 	}
 }
 
-func TestMutisubPartialUnsubscribe(t *testing.T) {
+func TestMultisubPartialUnsubscribe(t *testing.T) {
 	// Create a double subscription but terminate one half, ensuring no error
 	// is propagated yet up to the outer subscription
 	var (
