@@ -20,6 +20,9 @@ import (
 	"cmp"
 	context2 "context"
 	"fmt"
+	"math/big"
+	"slices"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -29,8 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"math/big"
-	"slices"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -96,7 +97,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	for i, tx := range block.Transactions() {
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 		if err != nil {
-
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 

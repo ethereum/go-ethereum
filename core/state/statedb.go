@@ -20,12 +20,13 @@ package state
 import (
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 	"maps"
 	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethereum/go-ethereum/core/types/bal"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -221,7 +222,7 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 // using GetStateDiff.
 func (s *StateDB) EnableStateDiffRecording() {
 	if s.diff == nil {
-		s.diff = &bal.StateDiff{make(map[common.Address]*bal.AccountState)}
+		s.diff = &bal.StateDiff{Mutations: make(map[common.Address]*bal.AccountState)}
 	}
 }
 
@@ -799,7 +800,7 @@ func (s *StateDB) GetRefund() uint64 {
 // If EnableStateDiffRecording has been called, it returns a state diff containing
 // the state which was mutated since the previous invocation of Finalise. Otherwise, nil.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) (diff *bal.StateDiff) {
-	diff = &bal.StateDiff{make(map[common.Address]*bal.AccountState)}
+	diff = &bal.StateDiff{Mutations: make(map[common.Address]*bal.AccountState)}
 	addressesToPrefetch := make([]common.Address, 0, len(s.journal.dirties))
 	for addr := range s.journal.dirties {
 		obj, exist := s.stateObjects[addr]

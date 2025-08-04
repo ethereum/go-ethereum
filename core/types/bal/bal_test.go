@@ -296,7 +296,6 @@ func TestBALIteration(t *testing.T) {
 }
 
 func TestBALStateDiffAccumulation(t *testing.T) {
-
 	cBAL := makeTestConstructionBAL()
 	bal := cBAL.ToEncodingObj()
 

@@ -44,12 +44,12 @@ type BlockAccessList struct {
 	Accesses []AccountAccess `ssz-max:"300000" json:"accesses"`
 }
 
-func (a *BlockAccessList) String() string {
+func (e *BlockAccessList) String() string {
 	var res bytes.Buffer
 	enc := json.NewEncoder(&res)
 	enc.SetIndent("", "    ")
 	// TODO: check error
-	enc.Encode(a)
+	enc.Encode(e)
 	return res.String()
 }
 
@@ -424,21 +424,21 @@ type StateDiff struct {
 	Mutations map[common.Address]*AccountState `json:"Mutations,omitempty"`
 }
 
-func (as *AccountState) Copy() *AccountState {
+func (a *AccountState) Copy() *AccountState {
 	res := NewEmptyAccountState()
-	if as.Nonce != nil {
+	if a.Nonce != nil {
 		res.Nonce = new(uint64)
-		*res.Nonce = *as.Nonce
+		*res.Nonce = *a.Nonce
 	}
-	if as.Code != nil {
-		res.Code = bytes.Clone(as.Code)
+	if a.Code != nil {
+		res.Code = bytes.Clone(a.Code)
 	}
-	if as.Balance != nil {
+	if a.Balance != nil {
 		res.Balance = new(Balance)
-		copy(res.Balance[:], (*as.Balance)[:])
+		copy(res.Balance[:], (*a.Balance)[:])
 	}
-	if as.StorageWrites != nil {
-		res.StorageWrites = maps.Clone(as.StorageWrites)
+	if a.StorageWrites != nil {
+		res.StorageWrites = maps.Clone(a.StorageWrites)
 	}
 	return res
 }

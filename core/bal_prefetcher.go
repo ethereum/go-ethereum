@@ -1,11 +1,12 @@
 package core
 
 import (
+	"runtime"
+	"sync/atomic"
+
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"golang.org/x/sync/errgroup"
-	"runtime"
-	"sync/atomic"
 )
 
 // balPrefetcher implements a state prefetcher for block access lists.

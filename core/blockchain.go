@@ -2101,7 +2101,6 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 			return nil, err
 		}
 		vtime = time.Since(vstart)
-
 	} else {
 		// Process block using the parent state as reference point
 		pstart := time.Now()
@@ -2118,7 +2117,6 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 			return nil, err
 		}
 		vtime = time.Since(vstart)
-
 	}
 
 	if constructBAL {
