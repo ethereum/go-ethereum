@@ -17,7 +17,7 @@
 // Package remotedb implements the key-value database layer based on a remote geth
 // node. Under the hood, it utilises the `debug_dbGet` method to implement a
 // read-only database.
-// There really are no guarantees in this database, since the local geth does not
+// There really are no guarantees in this database, since the local geth does not have
 // exclusive access, but it can be used for basic diagnostics of a remote node.
 package remotedb
 
