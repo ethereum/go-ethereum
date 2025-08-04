@@ -145,10 +145,7 @@ func (al *accessList) Equal(other *accessList) bool {
 // PrettyPrint prints the contents of the access list in a human-readable form
 func (al *accessList) PrettyPrint() string {
 	out := new(strings.Builder)
-	var sortedAddrs []common.Address
-	for addr := range al.addresses {
-		sortedAddrs = append(sortedAddrs, addr)
-	}
+	sortedAddrs := slices.Collect(maps.Keys(al.addresses))
 	slices.SortFunc(sortedAddrs, common.Address.Cmp)
 	for _, addr := range sortedAddrs {
 		idx := al.addresses[addr]

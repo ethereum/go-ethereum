@@ -477,7 +477,9 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 			gas.Mul(gas, adjExpLen)
 		}
 		// 2. Different divisor (`GQUADDIVISOR`) (3)
-		gas.Div(gas, big3)
+		if !c.eip7883 {
+			gas.Div(gas, big3)
+		}
 		if gas.BitLen() > 64 {
 			return math.MaxUint64
 		}
@@ -513,7 +515,7 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 	}
 	// enforce size cap for inputs
 	if c.eip7823 && max(baseLen, expLen, modLen) > 1024 {
-		return nil, fmt.Errorf("one or more of base/exponent/modulus length exceeded 1024 bytes")
+		return nil, errors.New("one or more of base/exponent/modulus length exceeded 1024 bytes")
 	}
 	// Retrieve the operands and execute the exponentiation
 	var (

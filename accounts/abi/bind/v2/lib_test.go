@@ -65,6 +65,14 @@ func makeTestDeployer(backend simulated.Client) func(input, deployer []byte) (co
 	return bind.DefaultDeployer(bind.NewKeyedTransactor(testKey, chainId), backend)
 }
 
+// makeTestDeployerWithNonceAssignment is similar to makeTestDeployer,
+// but it returns a deployer that automatically tracks nonce,
+// enabling the deployment of multiple contracts from the same account.
+func makeTestDeployerWithNonceAssignment(backend simulated.Client) func(input, deployer []byte) (common.Address, *types.Transaction, error) {
+	chainId, _ := backend.ChainID(context.Background())
+	return bind.DeployerWithNonceAssignment(bind.NewKeyedTransactor(testKey, chainId), backend)
+}
+
 // test that deploying a contract with library dependencies works,
 // verifying by calling method on the deployed contract.
 func TestDeploymentLibraries(t *testing.T) {
@@ -80,7 +88,7 @@ func TestDeploymentLibraries(t *testing.T) {
 		Contracts: []*bind.MetaData{&nested_libraries.C1MetaData},
 		Inputs:    map[string][]byte{nested_libraries.C1MetaData.ID: constructorInput},
 	}
-	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(bindBackend.Client))
+	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployerWithNonceAssignment(bindBackend.Client))
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}
@@ -122,7 +130,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	deploymentParams := &bind.DeploymentParams{
 		Contracts: nested_libraries.C1MetaData.Deps,
 	}
-	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(bindBackend))
+	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployerWithNonceAssignment(bindBackend))
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}

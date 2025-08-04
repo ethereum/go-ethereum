@@ -29,5 +29,5 @@ miner/                          @MariusVanDerWijden @fjl @rjl493456442
 node/                           @fjl
 p2p/                            @fjl @zsfelfoldi
 rlp/                            @fjl
-params/                         @fjl @karalabe @gballet @rjl493456442 @zsfelfoldi
+params/                         @fjl @gballet @rjl493456442 @zsfelfoldi
 rpc/                            @fjl

@@ -28,7 +28,7 @@ const (
 	MaxGasLimit          uint64 = 0x7fffffffffffffff // Maximum the gas limit (2^63-1).
 	GenesisGasLimit      uint64 = 4712388            // Gas limit of the Genesis block.
 
-	MaxTxGas uint64 = 30_000_000 // Maximum transaction gas limit after eip-7825.
+	MaxTxGas uint64 = 1 << 24 // Maximum transaction gas limit after eip-7825 (16,777,216).
 
 	MaximumExtraDataSize  uint64 = 32    // Maximum size extra data may be after Genesis.
 	ExpByteGas            uint64 = 10    // Times ceil(log256(exponent)) for the EXP instruction.
@@ -177,6 +177,7 @@ const (
 	BlobTxBlobGasPerBlob               = 1 << 17 // Gas consumption of a single data blob (== blob byte size)
 	BlobTxMinBlobGasprice              = 1       // Minimum gas price for data blobs
 	BlobTxPointEvaluationPrecompileGas = 50000   // Gas price for the point evaluation precompile.
+	BlobTxMaxBlobs                     = 6
 	BlobBaseCost                       = 1 << 13 // Base execution gas cost for a blob.
 
 	MaxBlockSize = 8_388_608 // maximum size of an RLP-encoded block

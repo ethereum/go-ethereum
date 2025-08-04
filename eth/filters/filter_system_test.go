@@ -92,18 +92,18 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 	switch blockNr {
 	case rpc.LatestBlockNumber:
 		hash = rawdb.ReadHeadBlockHash(b.db)
-		number := rawdb.ReadHeaderNumber(b.db, hash)
-		if number == nil {
+		number, ok := rawdb.ReadHeaderNumber(b.db, hash)
+		if !ok {
 			return nil, nil
 		}
-		num = *number
+		num = number
 	case rpc.FinalizedBlockNumber:
 		hash = rawdb.ReadFinalizedBlockHash(b.db)
-		number := rawdb.ReadHeaderNumber(b.db, hash)
-		if number == nil {
+		number, ok := rawdb.ReadHeaderNumber(b.db, hash)
+		if !ok {
 			return nil, nil
 		}
-		num = *number
+		num = number
 	case rpc.SafeBlockNumber:
 		return nil, errors.New("safe block not found")
 	default:
@@ -114,11 +114,11 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 }
 
 func (b *testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
-	number := rawdb.ReadHeaderNumber(b.db, hash)
-	if number == nil {
+	number, ok := rawdb.ReadHeaderNumber(b.db, hash)
+	if !ok {
 		return nil, nil
 	}
-	return rawdb.ReadHeader(b.db, hash, *number), nil
+	return rawdb.ReadHeader(b.db, hash, number), nil
 }
 
 func (b *testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
@@ -129,9 +129,9 @@ func (b *testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.
 }
 
 func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	if number := rawdb.ReadHeaderNumber(b.db, hash); number != nil {
-		if header := rawdb.ReadHeader(b.db, hash, *number); header != nil {
-			return rawdb.ReadReceipts(b.db, hash, *number, header.Time, params.TestChainConfig), nil
+	if number, ok := rawdb.ReadHeaderNumber(b.db, hash); ok {
+		if header := rawdb.ReadHeader(b.db, hash, number); header != nil {
+			return rawdb.ReadReceipts(b.db, hash, number, header.Time, params.TestChainConfig), nil
 		}
 	}
 	return nil, nil
@@ -450,24 +450,65 @@ func TestInvalidGetLogsRequest(t *testing.T) {
 	t.Parallel()
 
 	var (
-		db        = rawdb.NewMemoryDatabase()
-		_, sys    = newTestFilterSystem(db, Config{})
-		api       = NewFilterAPI(sys)
-		blockHash = common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
+		genesis = &core.Genesis{
+			Config:  params.TestChainConfig,
+			BaseFee: big.NewInt(params.InitialBaseFee),
+		}
+		db, blocks, _    = core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 10, func(i int, gen *core.BlockGen) {})
+		_, sys           = newTestFilterSystem(db, Config{})
+		api              = NewFilterAPI(sys)
+		blockHash        = blocks[0].Hash()
+		unknownBlockHash = common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
 	)
 
-	// Reason: Cannot specify both BlockHash and FromBlock/ToBlock)
-	testCases := []FilterCriteria{
-		0: {BlockHash: &blockHash, FromBlock: big.NewInt(100)},
-		1: {BlockHash: &blockHash, ToBlock: big.NewInt(500)},
-		2: {BlockHash: &blockHash, FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64())},
-		3: {BlockHash: &blockHash, Topics: [][]common.Hash{{}, {}, {}, {}, {}}},
-		4: {BlockHash: &blockHash, Addresses: make([]common.Address, maxAddresses+1)},
+	// Insert the blocks into the chain so filter can look them up
+	blockchain, err := core.NewBlockChain(db, genesis, ethash.NewFaker(), nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := blockchain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	type testcase struct {
+		f   FilterCriteria
+		err error
+	}
+	testCases := []testcase{
+		{
+			f:   FilterCriteria{BlockHash: &blockHash, FromBlock: big.NewInt(100)},
+			err: errBlockHashWithRange,
+		},
+		{
+			f:   FilterCriteria{BlockHash: &blockHash, ToBlock: big.NewInt(500)},
+			err: errBlockHashWithRange,
+		},
+		{
+			f:   FilterCriteria{BlockHash: &blockHash, FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64())},
+			err: errBlockHashWithRange,
+		},
+		{
+			f:   FilterCriteria{BlockHash: &unknownBlockHash},
+			err: errUnknownBlock,
+		},
+		{
+			f:   FilterCriteria{BlockHash: &blockHash, Topics: [][]common.Hash{{}, {}, {}, {}, {}}},
+			err: errExceedMaxTopics,
+		},
+		{
+			f:   FilterCriteria{BlockHash: &blockHash, Topics: [][]common.Hash{{}, {}, {}, {}, {}}},
+			err: errExceedMaxTopics,
+		},
+		{
+			f:   FilterCriteria{BlockHash: &blockHash, Addresses: make([]common.Address, maxAddresses+1)},
+			err: errExceedMaxAddresses,
+		},
 	}
 
 	for i, test := range testCases {
-		if _, err := api.GetLogs(context.Background(), test); err == nil {
-			t.Errorf("Expected Logs for case #%d to fail", i)
+		_, err := api.GetLogs(context.Background(), test.f)
+		if !errors.Is(err, test.err) {
+			t.Errorf("case %d: wrong error: %q\nwant: %q", i, err, test.err)
 		}
 	}
 }

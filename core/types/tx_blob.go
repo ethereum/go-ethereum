@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -30,6 +29,18 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
+)
+
+const (
+	// BlobSidecarVersion0 includes a single proof for verifying the entire blob
+	// against its commitment. Used when the full blob is available and needs to
+	// be checked as a whole.
+	BlobSidecarVersion0 = byte(0)
+
+	// BlobSidecarVersion1 includes multiple cell proofs for verifying specific
+	// blob elements (cells). Used in scenarios like data availability sampling,
+	// where only portions of the blob are verified individually.
+	BlobSidecarVersion1 = byte(1)
 )
 
 // BlobTx represents an EIP-4844 transaction.
@@ -64,6 +75,16 @@ type BlobTxSidecar struct {
 	Proofs      []kzg4844.Proof      // Proofs needed by the blob pool
 }
 
+// NewBlobTxSidecar initialises the BlobTxSidecar object with the provided parameters.
+func NewBlobTxSidecar(version byte, blobs []kzg4844.Blob, commitments []kzg4844.Commitment, proofs []kzg4844.Proof) *BlobTxSidecar {
+	return &BlobTxSidecar{
+		Version:     version,
+		Blobs:       blobs,
+		Commitments: commitments,
+		Proofs:      proofs,
+	}
+}
+
 // BlobHashes computes the blob hashes of the given blobs.
 func (sc *BlobTxSidecar) BlobHashes() []common.Hash {
 	hasher := sha256.New()
@@ -75,17 +96,39 @@ func (sc *BlobTxSidecar) BlobHashes() []common.Hash {
 }
 
 // CellProofsAt returns the cell proofs for blob with index idx.
-func (sc *BlobTxSidecar) CellProofsAt(idx int) []kzg4844.Proof {
-	var cellProofs []kzg4844.Proof
-	for i := range kzg4844.CellProofsPerBlob {
-		index := idx*kzg4844.CellProofsPerBlob + i
-		if index > len(sc.Proofs) {
-			return nil
-		}
-		proof := sc.Proofs[index]
-		cellProofs = append(cellProofs, proof)
+// This method is only valid for sidecars with version 1.
+func (sc *BlobTxSidecar) CellProofsAt(idx int) ([]kzg4844.Proof, error) {
+	if sc.Version != BlobSidecarVersion1 {
+		return nil, fmt.Errorf("cell proof unsupported, version: %d", sc.Version)
 	}
-	return cellProofs
+	if idx < 0 || idx >= len(sc.Blobs) {
+		return nil, fmt.Errorf("cell proof out of bounds, index: %d, blobs: %d", idx, len(sc.Blobs))
+	}
+	index := idx * kzg4844.CellProofsPerBlob
+	if len(sc.Proofs) < index+kzg4844.CellProofsPerBlob {
+		return nil, fmt.Errorf("cell proof is corrupted, index: %d, proofs: %d", idx, len(sc.Proofs))
+	}
+	return sc.Proofs[index : index+kzg4844.CellProofsPerBlob], nil
+}
+
+// ToV1 converts the BlobSidecar to version 1, attaching the cell proofs.
+func (sc *BlobTxSidecar) ToV1() error {
+	if sc.Version == BlobSidecarVersion1 {
+		return nil
+	}
+	if sc.Version == BlobSidecarVersion0 {
+		proofs := make([]kzg4844.Proof, 0, len(sc.Blobs)*kzg4844.CellProofsPerBlob)
+		for _, blob := range sc.Blobs {
+			cellProofs, err := kzg4844.ComputeCellProofs(&blob)
+			if err != nil {
+				return err
+			}
+			proofs = append(proofs, cellProofs...)
+		}
+		sc.Version = BlobSidecarVersion1
+		sc.Proofs = proofs
+	}
+	return nil
 }
 
 // encodedSize computes the RLP size of the sidecar elements. This does NOT return the
@@ -120,6 +163,19 @@ func (sc *BlobTxSidecar) ValidateBlobCommitmentHashes(hashes []common.Hash) erro
 	return nil
 }
 
+// Copy returns a deep-copied BlobTxSidecar object.
+func (sc *BlobTxSidecar) Copy() *BlobTxSidecar {
+	return &BlobTxSidecar{
+		Version: sc.Version,
+
+		// The element of these slice is fix-size byte array,
+		// therefore slices.Clone will actually deep copy by value.
+		Blobs:       slices.Clone(sc.Blobs),
+		Commitments: slices.Clone(sc.Commitments),
+		Proofs:      slices.Clone(sc.Proofs),
+	}
+}
+
 // blobTxWithBlobs represents blob tx with its corresponding sidecar.
 // This is an interface because sidecars are versioned.
 type blobTxWithBlobs interface {
@@ -147,7 +203,7 @@ func (btx *blobTxWithBlobsV0) tx() *BlobTx {
 }
 
 func (btx *blobTxWithBlobsV0) assign(sc *BlobTxSidecar) error {
-	sc.Version = 0
+	sc.Version = BlobSidecarVersion0
 	sc.Blobs = btx.Blobs
 	sc.Commitments = btx.Commitments
 	sc.Proofs = btx.Proofs
@@ -159,10 +215,10 @@ func (btx *blobTxWithBlobsV1) tx() *BlobTx {
 }
 
 func (btx *blobTxWithBlobsV1) assign(sc *BlobTxSidecar) error {
-	if btx.Version != 1 {
+	if btx.Version != BlobSidecarVersion1 {
 		return fmt.Errorf("unsupported blob tx version %d", btx.Version)
 	}
-	sc.Version = 1
+	sc.Version = BlobSidecarVersion1
 	sc.Blobs = btx.Blobs
 	sc.Commitments = btx.Commitments
 	sc.Proofs = btx.Proofs
@@ -216,11 +272,7 @@ func (tx *BlobTx) copy() TxData {
 		cpy.S.Set(tx.S)
 	}
 	if tx.Sidecar != nil {
-		cpy.Sidecar = &BlobTxSidecar{
-			Blobs:       slices.Clone(tx.Sidecar.Blobs),
-			Commitments: slices.Clone(tx.Sidecar.Commitments),
-			Proofs:      slices.Clone(tx.Sidecar.Proofs),
-		}
+		cpy.Sidecar = tx.Sidecar.Copy()
 	}
 	return cpy
 }
@@ -278,7 +330,7 @@ func (tx *BlobTx) encode(b *bytes.Buffer) error {
 	case tx.Sidecar == nil:
 		return rlp.Encode(b, tx)
 
-	case tx.Sidecar.Version == 0:
+	case tx.Sidecar.Version == BlobSidecarVersion0:
 		return rlp.Encode(b, &blobTxWithBlobsV0{
 			BlobTx:      tx,
 			Blobs:       tx.Sidecar.Blobs,
@@ -286,7 +338,7 @@ func (tx *BlobTx) encode(b *bytes.Buffer) error {
 			Proofs:      tx.Sidecar.Proofs,
 		})
 
-	case tx.Sidecar.Version == 1:
+	case tx.Sidecar.Version == BlobSidecarVersion1:
 		return rlp.Encode(b, &blobTxWithBlobsV1{
 			BlobTx:      tx,
 			Version:     tx.Sidecar.Version,

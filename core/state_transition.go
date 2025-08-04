@@ -354,6 +354,7 @@ func (st *stateTransition) preCheck() error {
 		}
 	}
 	// Check the blob version validity
+	isOsaka := st.evm.ChainConfig().IsOsaka(st.evm.Context.BlockNumber, st.evm.Context.Time)
 	if msg.BlobHashes != nil {
 		// The to field of a blob tx type is mandatory, and a `BlobTx` transaction internally
 		// has it as a non-nillable value, so any msg derived from blob transaction has it non-nil.
@@ -363,6 +364,9 @@ func (st *stateTransition) preCheck() error {
 		}
 		if len(msg.BlobHashes) == 0 {
 			return ErrMissingBlobHashes
+		}
+		if isOsaka && len(msg.BlobHashes) > params.BlobTxMaxBlobs {
+			return ErrTooManyBlobs
 		}
 		for i, hash := range msg.BlobHashes {
 			if !kzg4844.IsValidVersionedHash(hash[:]) {
@@ -395,7 +399,7 @@ func (st *stateTransition) preCheck() error {
 		}
 	}
 	// Verify tx gas limit does not exceed EIP-7825 cap.
-	if st.evm.ChainConfig().IsOsaka(st.evm.Context.BlockNumber, st.evm.Context.Time) && msg.GasLimit > params.MaxTxGas {
+	if isOsaka && msg.GasLimit > params.MaxTxGas {
 		return fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxGas, msg.GasLimit)
 	}
 	return st.buyGas()

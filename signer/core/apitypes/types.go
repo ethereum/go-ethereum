@@ -150,6 +150,9 @@ func (args *SendTxArgs) ToTransaction() (*types.Transaction, error) {
 		if args.AccessList != nil {
 			al = *args.AccessList
 		}
+		if to == nil {
+			return nil, errors.New("transaction recipient must be set for blob transactions")
+		}
 		data = &types.BlobTx{
 			To:         *to,
 			ChainID:    uint256.MustFromBig((*big.Int)(args.ChainID)),
@@ -164,11 +167,8 @@ func (args *SendTxArgs) ToTransaction() (*types.Transaction, error) {
 			BlobFeeCap: uint256.MustFromBig((*big.Int)(args.BlobFeeCap)),
 		}
 		if args.Blobs != nil {
-			data.(*types.BlobTx).Sidecar = &types.BlobTxSidecar{
-				Blobs:       args.Blobs,
-				Commitments: args.Commitments,
-				Proofs:      args.Proofs,
-			}
+			// TODO(rjl493456442, marius) support V1
+			data.(*types.BlobTx).Sidecar = types.NewBlobTxSidecar(types.BlobSidecarVersion0, args.Blobs, args.Commitments, args.Proofs)
 		}
 
 	case args.MaxFeePerGas != nil:
@@ -219,7 +219,6 @@ func (args *SendTxArgs) validateTxSidecar() error {
 		return nil
 	}
 
-	n := len(args.Blobs)
 	// Assume user provides either only blobs (w/o hashes), or
 	// blobs together with commitments and proofs.
 	if args.Commitments == nil && args.Proofs != nil {
@@ -229,6 +228,7 @@ func (args *SendTxArgs) validateTxSidecar() error {
 	}
 
 	// len(blobs) == len(commitments) == len(proofs) == len(hashes)
+	n := len(args.Blobs)
 	if args.Commitments != nil && len(args.Commitments) != n {
 		return fmt.Errorf("number of blobs and commitments mismatch (have=%d, want=%d)", len(args.Commitments), n)
 	}
