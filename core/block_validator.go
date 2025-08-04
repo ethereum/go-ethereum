@@ -124,7 +124,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 // ValidateProcessResult validates block fields against the result of execution.
 // It is used for the purpose of validating access-list-containing blocks and
 // does not check the integrity of the block's state root.
-func (v *BlockValidator) ValidateProcessResult(block *types.Block, resCh chan *ProcessResult, stateless bool) (*ProcessResult, error) {
+func (v *BlockValidator) ValidateProcessResult(block *types.Block, resCh chan *ProcessResultWithMetrics, stateless bool) (*ProcessResultWithMetrics, error) {
 	header := block.Header()
 
 	res := <-resCh
@@ -132,8 +132,8 @@ func (v *BlockValidator) ValidateProcessResult(block *types.Block, resCh chan *P
 		return nil, res.Error
 	}
 
-	if block.GasUsed() != res.GasUsed {
-		return res, fmt.Errorf("invalid gas used (remote: %d local: %d)", block.GasUsed(), res.GasUsed)
+	if block.GasUsed() != res.ProcessResult.GasUsed {
+		return res, fmt.Errorf("invalid gas used (remote: %d local: %d)", block.GasUsed(), res.ProcessResult.GasUsed)
 	}
 	// Validate the received block's bloom with the one derived from the generated receipts.
 	// For valid blocks this should always validate to true.
@@ -141,7 +141,7 @@ func (v *BlockValidator) ValidateProcessResult(block *types.Block, resCh chan *P
 	// Receipts must go through MakeReceipt to calculate the receipt's bloom
 	// already. Merge the receipt's bloom together instead of recalculating
 	// everything.
-	rbloom := types.MergeBloom(res.Receipts)
+	rbloom := types.MergeBloom(res.ProcessResult.Receipts)
 	if rbloom != header.Bloom {
 		return res, fmt.Errorf("invalid bloom (remote: %x  local: %x)", header.Bloom, rbloom)
 	}
@@ -151,17 +151,17 @@ func (v *BlockValidator) ValidateProcessResult(block *types.Block, resCh chan *P
 		return res, nil
 	}
 	// The receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, Rn]]))
-	receiptSha := types.DeriveSha(res.Receipts, trie.NewStackTrie(nil))
+	receiptSha := types.DeriveSha(res.ProcessResult.Receipts, trie.NewStackTrie(nil))
 	if receiptSha != header.ReceiptHash {
 		return res, fmt.Errorf("invalid receipt root hash (remote: %x local: %x)", header.ReceiptHash, receiptSha)
 	}
 	// Validate the parsed requests match the expected header value.
 	if header.RequestsHash != nil {
-		reqhash := types.CalcRequestsHash(res.Requests)
+		reqhash := types.CalcRequestsHash(res.ProcessResult.Requests)
 		if reqhash != *header.RequestsHash {
 			return res, fmt.Errorf("invalid requests hash (remote: %x local: %x)", *header.RequestsHash, reqhash)
 		}
-	} else if res.Requests != nil {
+	} else if res.ProcessResult.Requests != nil {
 		return res, errors.New("block has requests before prague fork")
 	}
 

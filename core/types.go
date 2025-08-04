@@ -37,7 +37,7 @@ type Validator interface {
 	// ValidateProcessResult validates block fields against the result of execution.
 	// It is used for the purpose of validating access-list-containing blocks and
 	// does not check the integrity of the block's state root.
-	ValidateProcessResult(*types.Block, chan *ProcessResult, bool) (*ProcessResult, error)
+	ValidateProcessResult(*types.Block, chan *ProcessResultWithMetrics, bool) (*ProcessResultWithMetrics, error)
 }
 
 // Prefetcher is an interface for pre-caching transaction signatures and state.
@@ -54,7 +54,7 @@ type Processor interface {
 	// the transaction messages using the statedb and applying any rewards to both
 	// the processor (coinbase) and any included uncles.
 	Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (*ProcessResult, error)
-	ProcessWithAccessList(block *types.Block, statedb *state.StateDB, cfg vm.Config) (chan *ProcessResult, error)
+	ProcessWithAccessList(block *types.Block, statedb *state.StateDB, cfg vm.Config) (chan *ProcessResultWithMetrics, error)
 }
 
 // ProcessResult contains the values computed by Process.

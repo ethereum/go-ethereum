@@ -20,9 +20,6 @@ import (
 	"cmp"
 	context2 "context"
 	"fmt"
-	"math/big"
-	"slices"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -32,6 +29,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"math/big"
+	"slices"
+	"time"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -49,6 +49,15 @@ func NewStateProcessor(config *params.ChainConfig, chain *HeaderChain) *StatePro
 		config: config,
 		chain:  chain,
 	}
+}
+
+type ProcessResultWithMetrics struct {
+	ProcessResult   *ProcessResult
+	PreProcessTime  time.Duration
+	PostProcessTime time.Duration
+	RootCalcTime    time.Duration
+	ExecTime        time.Duration
+	Error           error
 }
 
 // Process processes the state changes according to the Ethereum rules by running
@@ -152,12 +161,12 @@ func (p *StateProcessor) calcStateDiffs(evm *vm.EVM, block *types.Block, txPrest
 	return txDiffIt.BuildStateDiffs(prestateDiff, uint16(len(block.Transactions()))+1)
 }
 
-func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *state.StateDB, cfg vm.Config) (chan *ProcessResult, error) {
+func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *state.StateDB, cfg vm.Config) (chan *ProcessResultWithMetrics, error) {
 	var (
 		header      = block.Header()
 		blockHash   = block.Hash()
 		blockNumber = block.Number()
-		resCh       = make(chan *ProcessResult)
+		resCh       = make(chan *ProcessResultWithMetrics)
 		requests    [][]byte
 		signer      = types.MakeSigner(p.config, header.Number, header.Time)
 		ctx, cancel = context2.WithCancel(context2.Background())
@@ -172,12 +181,23 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 
 	txResCh := make(chan txExecResult)
 	rootCalcErrCh := make(chan error) // used for communicating if the state root calculation doesn't match the reported root
+	pStart := time.Now()
+	var (
+		tPreprocess  time.Duration
+		tVerifyStart time.Time
+		tVerify      time.Duration
+		tExecStart   time.Time
+		tExec        time.Duration
+		tPostprocess time.Duration
+	)
 
 	// called by resultHandler when all transactions have successfully executed.
 	// performs post-tx state transition (system contracts and withdrawals)
 	// and calculates the ProcessResult, returning it to be sent on resCh
 	// by resultHandler
 	prepareExecResult := func(postTxState *state.StateDB, expectedStateDiff *bal.StateDiff, receipts types.Receipts) *ProcessResult {
+		tExec = time.Since(tExecStart)
+		tPostprocessStart := time.Now()
 		var tracingStateDB = vm.StateDB(postTxState)
 		if hooks := cfg.Tracer; hooks != nil {
 			tracingStateDB = state.NewHookedState(postTxState, hooks)
@@ -236,6 +256,8 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 			}
 		}
 
+		tPostprocess = time.Since(tPostprocessStart)
+
 		return &ProcessResult{
 			Receipts: receipts,
 			Requests: requests,
@@ -278,7 +300,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 			}
 
 			if execErr != nil {
-				resCh <- &ProcessResult{Error: execErr}
+				resCh <- &ProcessResultWithMetrics{ProcessResult: &ProcessResult{Error: execErr}}
 				return
 			}
 		}
@@ -286,14 +308,23 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 		execResults := prepareExecResult(postTxState, expectedDiff, receipts)
 		err := <-rootCalcErrCh
 		if err != nil {
-			resCh <- &ProcessResult{Error: err}
+			resCh <- &ProcessResultWithMetrics{ProcessResult: &ProcessResult{Error: err}}
 		} else {
-			resCh <- execResults
+			resCh <- &ProcessResultWithMetrics{
+				ProcessResult:   execResults,
+				PreProcessTime:  tPreprocess,
+				PostProcessTime: tPostprocess,
+				ExecTime:        tExec,
+				RootCalcTime:    tVerify,
+			}
 		}
 	}
 
 	calcAndVerifyRoot := func(postState *state.StateDB, block *types.Block, resCh chan<- error) {
+		tVerifyStart = time.Now()
 		root := postState.IntermediateRoot(false)
+		tVerify = time.Since(tVerifyStart)
+
 		if root != block.Root() {
 			resCh <- fmt.Errorf("state root mismatch. local: %x. remote: %x", root, block.Root())
 		} else {
@@ -391,11 +422,15 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	statedb.Finalise(true)
 
 	// Iterate over and process the individual transactions
-	for i, tx := range block.Transactions() {
-		go execTx(ctx, tx, i, statedb.Copy(), stateDiffs[i+1])
-
+	for i := range block.Transactions() {
 		statedb.ApplyDiff(stateDiffs[i+1])
 		statedb.Finalise(true)
+	}
+	tPreprocess = time.Since(pStart)
+
+	tExecStart = time.Now()
+	for i, tx := range block.Transactions() {
+		go execTx(ctx, tx, i, statedb.Copy(), stateDiffs[i+1])
 	}
 
 	go resultHandler(blockStateDiff, statedb.Copy())

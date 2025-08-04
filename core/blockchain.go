@@ -99,6 +99,12 @@ var (
 	blockExecutionTimer       = metrics.NewRegisteredResettingTimer("chain/execution", nil)
 	blockWriteTimer           = metrics.NewRegisteredResettingTimer("chain/write", nil)
 
+	// BAL-specific timers
+	blockPreprocessingTimer  = metrics.NewRegisteredResettingTimer("chain/preprocess", nil)
+	txExecutionTimer         = metrics.NewRegisteredResettingTimer("chain/txexecution", nil)
+	stateRootCalctimer       = metrics.NewRegisteredResettingTimer("chain/rootcalculation", nil)
+	blockPostprocessingTimer = metrics.NewRegisteredResettingTimer("chain/postprocess", nil)
+
 	blockReorgMeter     = metrics.NewRegisteredMeter("chain/reorg/executes", nil)
 	blockReorgAddMeter  = metrics.NewRegisteredMeter("chain/reorg/add", nil)
 	blockReorgDropMeter = metrics.NewRegisteredMeter("chain/reorg/drop", nil)
@@ -2072,6 +2078,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	}
 
 	var res *ProcessResult
+	var resWithMetrics *ProcessResultWithMetrics
 	var ptime, vtime time.Duration
 	if block.Body().AccessList != nil {
 		if block.NumberU64() == 0 {
@@ -2083,7 +2090,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		}
 		// Process block using the parent state as reference point
 		pstart := time.Now()
-		var resCh chan *ProcessResult
+		var resCh chan *ProcessResultWithMetrics
 		resCh, err = bc.processor.ProcessWithAccessList(block, statedb, bc.cfg.VmConfig)
 		if err != nil {
 			// TODO: okay to pass nil here as execution result?
@@ -2094,12 +2101,13 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 
 		vstart := time.Now()
 		var err error
-		res, err = bc.validator.ValidateProcessResult(block, resCh, false)
+		resWithMetrics, err = bc.validator.ValidateProcessResult(block, resCh, false)
 		if err != nil {
 			// TODO: okay to pass nil here as execution result?
 			bc.reportBlock(block, nil, err)
 			return nil, err
 		}
+		res = resWithMetrics.ProcessResult
 		vtime = time.Since(vstart)
 	} else {
 		// Process block using the parent state as reference point
@@ -2157,26 +2165,35 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 			return nil, fmt.Errorf("stateless self-validation receipt root mismatch (cross: %x local: %x)", crossReceiptRoot, block.ReceiptHash())
 		}
 	}
-	xvtime := time.Since(xvstart)
-	proctime := time.Since(startTime) // processing + validation + cross validation
 
-	// Update the metrics touched during block processing and validation
-	accountReadTimer.Update(statedb.AccountReads) // Account reads are complete(in processing)
-	storageReadTimer.Update(statedb.StorageReads) // Storage reads are complete(in processing)
-	if statedb.AccountLoaded != 0 {
-		accountReadSingleTimer.Update(statedb.AccountReads / time.Duration(statedb.AccountLoaded))
+	var proctime time.Duration
+	if block.Body().AccessList != nil {
+		blockPreprocessingTimer.Update(resWithMetrics.PreProcessTime)
+		txExecutionTimer.Update(resWithMetrics.ExecTime)
+		stateRootCalctimer.Update(resWithMetrics.RootCalcTime)
+		blockPostprocessingTimer.Update(resWithMetrics.PostProcessTime)
+	} else {
+		xvtime := time.Since(xvstart)
+		proctime = time.Since(startTime) // processing + validation + cross validation
+
+		// Update the metrics touched during block processing and validation
+		accountReadTimer.Update(statedb.AccountReads) // Account reads are complete(in processing)
+		storageReadTimer.Update(statedb.StorageReads) // Storage reads are complete(in processing)
+		if statedb.AccountLoaded != 0 {
+			accountReadSingleTimer.Update(statedb.AccountReads / time.Duration(statedb.AccountLoaded))
+		}
+		if statedb.StorageLoaded != 0 {
+			storageReadSingleTimer.Update(statedb.StorageReads / time.Duration(statedb.StorageLoaded))
+		}
+		accountUpdateTimer.Update(statedb.AccountUpdates)                                 // Account updates are complete(in validation)
+		storageUpdateTimer.Update(statedb.StorageUpdates)                                 // Storage updates are complete(in validation)
+		accountHashTimer.Update(statedb.AccountHashes)                                    // Account hashes are complete(in validation)
+		triehash := statedb.AccountHashes                                                 // The time spent on tries hashing
+		trieUpdate := statedb.AccountUpdates + statedb.StorageUpdates                     // The time spent on tries update
+		blockExecutionTimer.Update(ptime - (statedb.AccountReads + statedb.StorageReads)) // The time spent on EVM processing
+		blockValidationTimer.Update(vtime - (triehash + trieUpdate))                      // The time spent on block validation
+		blockCrossValidationTimer.Update(xvtime)                                          // The time spent on stateless cross validation
 	}
-	if statedb.StorageLoaded != 0 {
-		storageReadSingleTimer.Update(statedb.StorageReads / time.Duration(statedb.StorageLoaded))
-	}
-	accountUpdateTimer.Update(statedb.AccountUpdates)                                 // Account updates are complete(in validation)
-	storageUpdateTimer.Update(statedb.StorageUpdates)                                 // Storage updates are complete(in validation)
-	accountHashTimer.Update(statedb.AccountHashes)                                    // Account hashes are complete(in validation)
-	triehash := statedb.AccountHashes                                                 // The time spent on tries hashing
-	trieUpdate := statedb.AccountUpdates + statedb.StorageUpdates                     // The time spent on tries update
-	blockExecutionTimer.Update(ptime - (statedb.AccountReads + statedb.StorageReads)) // The time spent on EVM processing
-	blockValidationTimer.Update(vtime - (triehash + trieUpdate))                      // The time spent on block validation
-	blockCrossValidationTimer.Update(xvtime)                                          // The time spent on stateless cross validation
 
 	// Write the block to the chain and get the status.
 	var (
