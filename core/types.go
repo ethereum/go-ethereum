@@ -34,7 +34,9 @@ type Validator interface {
 	// ValidateState validates the given statedb and optionally the process result.
 	ValidateState(block *types.Block, state *state.StateDB, res *ProcessResult, stateless bool) error
 
-	// ValidateProcessResult validates the process result.
+	// ValidateProcessResult validates block fields against the result of execution.
+	// It is used for the purpose of validating access-list-containing blocks and
+	// does not check the integrity of the block's state root.
 	ValidateProcessResult(*types.Block, chan *ProcessResult, bool) (*ProcessResult, error)
 }
 

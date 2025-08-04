@@ -971,7 +971,7 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 
 	ExperimentalBALFlag = &cli.BoolFlag{
 		Name:     "experimentalbal",
-		Usage:    "Enable block-access-list building when executing blocks, and validation of post-cancun blocks that contain access lists. This is used for development purposes only.  Do not enable this flag on a live node.",
+		Usage:    "Enable block-access-list building when importing post-Cancun blocks, and validation that access lists contained in post-Cancun blocks correctly correspond to the state changes in those blocks. This is used for development purposes only.  Do not enable it otherwise.",
 		Category: flags.MiscCategory,
 	}
 )

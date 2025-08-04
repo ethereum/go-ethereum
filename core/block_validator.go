@@ -120,9 +120,10 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	return nil
 }
 
+// ValidateProcessResult validates block fields against the result of execution.
+// It is used for the purpose of validating access-list-containing blocks and
+// does not check the integrity of the block's state root.
 func (v *BlockValidator) ValidateProcessResult(block *types.Block, resCh chan *ProcessResult, stateless bool) (*ProcessResult, error) {
-	// Validate the state root against the received state root and throw
-	// an error if they don't match.
 	header := block.Header()
 
 	res := <-resCh

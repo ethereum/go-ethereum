@@ -97,7 +97,6 @@ func encodeBalance(val *uint256.Int) [16]byte {
 type Balance [16]byte
 
 func (b Balance) MarshalJSON() ([]byte, error) {
-	//return json.Marshal(new(uint256.Int).SetBytes(b[:]).Uint64())
 	return json.Marshal(fmt.Sprintf("%x", b))
 }
 
@@ -345,8 +344,9 @@ func (e *BlockAccessList) PrettyPrint() string {
 
 		if len(accountDiff.CodeChanges) > 0 {
 			printWithIndent(1, "code:")
-			printWithIndent(2, fmt.Sprintf("%d: %x", accountDiff.CodeChanges[0].TxIndex, accountDiff.CodeChanges[0].Code))
-			panic("this is bugged.  there canbe more than one code change per block")
+			for _, change := range accountDiff.CodeChanges {
+				printWithIndent(2, fmt.Sprintf("%d: %x", change.TxIndex, change.Code))
+			}
 		}
 	}
 	return res.String()
@@ -368,18 +368,9 @@ func (c *ContractCode) MarshalJSON() ([]byte, error) {
 }
 
 type AccountState struct {
-	Balance *Balance `json:"Balance,omitempty"`
-	Nonce   *uint64  `json:"Nonce,omitempty"`
-
-	// TODO: this can refer to the code of a delegated account.  as delegations
-	// are not dependent on the code size of the delegation target, naively including
-	// this in the state diff (done in statedb when we augment BAL state diffs to include
-	// delegated accounts), could balloon the size of the state diff.
-	//
-	// Instead of having a pointer to the bytes here, we should have this refer to a resolver
-	// that can load the code when needed (or it might be already loaded in some state object).
-	Code ContractCode `json:"Code,omitempty"`
-
+	Balance       *Balance                    `json:"Balance,omitempty"`
+	Nonce         *uint64                     `json:"Nonce,omitempty"`
+	Code          ContractCode                `json:"Code,omitempty"`
 	StorageWrites map[common.Hash]common.Hash `json:"StorageWrites,omitempty"`
 }
 
@@ -452,12 +443,8 @@ func (as *AccountState) Copy() *AccountState {
 	return res
 }
 
-// TODO: augment this to account for delegation changes in the totalDiff but not in the balDiff
-func ValidateTxStateDiff(balDiff, totalDiff *StateDiff) error {
-	// if the number of account mutations was equal:
-	// * the tx sender was modified other than the nonce (e.g.balance), or it was a delegated EOA that performed creations
-	// * each
-
+// ValidateStateDiff ensures that the two state diffs match exactly.
+func ValidateStateDiff(balDiff, totalDiff *StateDiff) error {
 	expectedBALAddrs := len(totalDiff.Mutations)
 	for addr, computedDiff := range totalDiff.Mutations {
 		balAccountDiff, ok := balDiff.Mutations[addr]
@@ -469,13 +456,9 @@ func ValidateTxStateDiff(balDiff, totalDiff *StateDiff) error {
 			return fmt.Errorf("mismatch between BAl value and computed value")
 		}
 	}
-
-	// assert that the BAL contains exactly the computed addresses minus the allowed excludeable
-	// only check length because we already checked inclusion above
 	if len(balDiff.Mutations) != expectedBALAddrs {
 		return fmt.Errorf("BAL contained unexpected mutations compared to computed")
 	}
-
 	return nil
 }
 
@@ -498,7 +481,6 @@ func (s *StateDiff) Merge(next *StateDiff) {
 				mut.Code = diff.Code
 			}
 			if diff.Nonce != nil {
-				// TODO: not deep copying the nonce from next is causing problems here
 				mut.Nonce = diff.Nonce
 			}
 			if len(diff.StorageWrites) > 0 {
@@ -524,6 +506,7 @@ func (s *StateDiff) Copy() *StateDiff {
 	return res
 }
 
+// AccountIterator facilitates the iteration of an account's changes at each txindex in the BAL
 type AccountIterator struct {
 	address          common.Address
 	slotWriteIndices [][]int
@@ -553,7 +536,7 @@ func NewAccountIterator(accesses *AccountAccess, txCount int) *AccountIterator {
 	}
 }
 
-// increment the account iterator by one, returning only the mutated state by the new transaction
+// Increment increments the account iterator by one, returning only the mutated state by the new transaction
 func (it *AccountIterator) Increment() (accountState *AccountState, mut bool) {
 	if it.curTxIdx > it.maxIdx {
 		return nil, false
@@ -602,6 +585,9 @@ func (it *AccountIterator) Increment() (accountState *AccountState, mut bool) {
 	return layerMut, isMut
 }
 
+// BALIterator facilitates the txindex ordered iteration of an access list
+// allowing for an access list to be converted into a set of ordered state diffs
+// that correspond to each txindex.
 type BALIterator struct {
 	bal           *BlockAccessList
 	acctIterators map[common.Address]*AccountIterator
@@ -622,7 +608,7 @@ func NewIterator(b *BlockAccessList, txCount int) *BALIterator {
 	}
 }
 
-// Iterate one transaction into the BAL, returning the state diff from that tx
+// Next iterates one transaction into the BAL, returning the state diff from that tx
 func (it *BALIterator) Next() (mutations *StateDiff) {
 	if it.curIdx == it.maxIdx {
 		return nil
@@ -638,17 +624,19 @@ func (it *BALIterator) Next() (mutations *StateDiff) {
 	return &diff
 }
 
-// return nil if there is no state diff (can this happen with base-fee burning, does the base-fee portion get burned when the tx is applied or at the end of the block when crediting the coinbase?)
-func (it *BALIterator) BuildStateDiffs(initialDiff *StateDiff, until uint16) (*StateDiff, []*StateDiff, error) {
+// BuildStateDiffs returns a set of ordered state diffs from the BAL
+// corresponding to each txIndex.  "until" is specified as the maximum
+// index which will be contained in the result.
+// It returns the aggregated state diff of all layers and a state diff for each layer.
+func (it *BALIterator) BuildStateDiffs(initialDiff *StateDiff, until uint16) (*StateDiff, []*StateDiff) {
 	if until < it.curIdx {
-		return nil, nil, nil
+		return nil, nil
 	}
 
 	var resDiffs []*StateDiff
 	var accumDiff *StateDiff
 
 	if initialDiff != nil {
-		// TODO: define scenarios where initial diff is not set
 		accumDiff = initialDiff
 	}
 
@@ -668,5 +656,5 @@ func (it *BALIterator) BuildStateDiffs(initialDiff *StateDiff, until uint16) (*S
 		accumDiff.Merge(layerMutations.Copy())
 	}
 
-	return accumDiff, resDiffs, nil
+	return accumDiff, resDiffs
 }

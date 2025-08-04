@@ -194,7 +194,7 @@ type BlockChainConfig struct {
 	// If the value is -1, indexing is disabled.
 	TxLookupLimit int64
 
-	// EnableBAL enables block access list creation and verification (TODO better wording here)
+	// EnableBAL enables block access list creation and verification for post-Cancun blocks which contain access lists.
 	EnableBAL bool
 }
 
@@ -1960,7 +1960,7 @@ type blockProcessingResult struct {
 
 // processBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
-func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, setHead bool, makeWitness bool, constructBAL bool, validateBALTesting bool) (bpr *blockProcessingResult, blockEndErr error) {
+func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, setHead bool, makeWitness bool, constructBAL bool, validateBAL bool) (bpr *blockProcessingResult, blockEndErr error) {
 	var (
 		err       error
 		startTime = time.Now()
@@ -1971,7 +1971,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 
 	if bc.cfg.NoPrefetch {
 		statedb, err = state.New(parentRoot, bc.statedb)
-		if constructBAL || validateBALTesting {
+		if constructBAL || validateBAL {
 			statedb.EnableStateDiffRecording()
 		}
 		if err != nil {
@@ -1995,7 +1995,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		if err != nil {
 			return nil, err
 		}
-		if constructBAL || validateBALTesting {
+		if constructBAL || validateBAL {
 			statedb.EnableStateDiffRecording()
 		}
 		// Upload the statistics of reader at the end
@@ -2077,7 +2077,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		if block.NumberU64() == 0 {
 			return nil, fmt.Errorf("genesis block cannot have a block access list")
 		}
-		if !validateBALTesting && !bc.chainConfig.IsGlamsterdam(block.Number(), block.Time()) {
+		if !validateBAL && !bc.chainConfig.IsGlamsterdam(block.Number(), block.Time()) {
 			bc.reportBlock(block, res, fmt.Errorf("received block containing access list before glamsterdam activated"))
 			return nil, err
 		}

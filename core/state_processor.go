@@ -112,10 +112,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs = append(allLogs, receipt.Logs...)
 	}
 
-	// TODO: note that the below clause is only for BAL building.  Perhaps use the idea I showed above to remove explicit call to disable mutations
-	// don't write post-block state mutations to the BAL to save on size.
-	// these can be easily computed in BAL verification.
-
 	if statedb.BlockAccessList() != nil {
 		statedb.SetAccessListIndex(len(block.Transactions()) + 1)
 	}
@@ -149,7 +145,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}, nil
 }
 
-func (p *StateProcessor) calcStateDiffs(evm *vm.EVM, block *types.Block, txPrestate *state.StateDB) (totalDiff *bal.StateDiff, txDiffs []*bal.StateDiff, err error) {
+func (p *StateProcessor) calcStateDiffs(evm *vm.EVM, block *types.Block, txPrestate *state.StateDB) (totalDiff *bal.StateDiff, txDiffs []*bal.StateDiff) {
 	prestateDiff := txPrestate.GetStateDiff()
 	// create a number of diffs (one for each worker goroutine)
 	txDiffIt := bal.NewIterator(block.Body().AccessList, len(block.Transactions()))
@@ -230,18 +226,16 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 			}
 		}
 		// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-		// TODO: apply withdrawals state diff from the Finalize call
 		p.chain.engine.Finalize(p.chain, header, tracingStateDB, block.Body())
 		// invoke Finalise so that withdrawals are accounted for in the state diff
 		postTxState.Finalise(true)
 
-		if err := bal.ValidateTxStateDiff(expectedStateDiff, postTxState.GetStateDiff()); err != nil {
+		if err := bal.ValidateStateDiff(expectedStateDiff, postTxState.GetStateDiff()); err != nil {
 			return &ProcessResult{
 				Error: fmt.Errorf("post-transaction-execution state transition produced a different diff that what was reported in the BAL"),
 			}
 		}
 
-		// TODO: validate against the last entry in the BAL
 		return &ProcessResult{
 			Receipts: receipts,
 			Requests: requests,
@@ -346,8 +340,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 			return
 		}
 
-		if err := bal.ValidateTxStateDiff(expectedDiff, computedDiff); err != nil {
-			//fmt.Printf("errrrr.  bal diff:\n%s\nexpected:\n%s\n", balStateDiffs[idx].String(), txStateDiff.String())
+		if err := bal.ValidateStateDiff(expectedDiff, computedDiff); err != nil {
 			txResCh <- txExecResult{err: err}
 			return
 		}
@@ -381,13 +374,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	// * beacon root will be provided as a standalone field in the BAL
 	// * parent block hash is already in the header field of the block
 
-	// TODO: use TxContext (hash == common.Hash{}) as a signal that we aren't
-	// executing a tx yet, and don't record state based on that?
-
-	blockStateDiff, stateDiffs, err := p.calcStateDiffs(evm, block, statedb)
-	if err != nil {
-		panic("bad block")
-	}
+	blockStateDiff, stateDiffs := p.calcStateDiffs(evm, block, statedb)
 	preTxDiff := stateDiffs[0]
 
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
@@ -398,7 +385,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	}
 
 	computedDiff := statedb.GetStateDiff()
-	if err := bal.ValidateTxStateDiff(preTxDiff, computedDiff); err != nil {
+	if err := bal.ValidateStateDiff(preTxDiff, computedDiff); err != nil {
 		return nil, err
 	}
 	statedb.Finalise(true)
@@ -445,8 +432,6 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 	// Update the state with pending changes.
 	var root []byte
 	if evm.ChainConfig().IsByzantium(blockNumber) {
-		// TODO: when executing BAL here, the returned diff includes the transaction prestate when it should only return the state accessed+modified by the transaction
-		//panic("fixme")
 		diff = evm.StateDB.Finalise(true)
 	} else {
 		root = statedb.IntermediateRoot(evm.ChainConfig().IsEIP158(blockNumber)).Bytes()
@@ -509,7 +494,7 @@ func ApplyTransaction(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *
 
 // ProcessBeaconBlockRoot applies the EIP-4788 system call to the beacon block root
 // contract. This method is exported to be used in tests.
-func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM) *bal.StateDiff {
+func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM) {
 	if tracer := evm.Config.Tracer; tracer != nil {
 		onSystemCallStart(tracer, evm.GetVMContext())
 		if tracer.OnSystemCallEnd != nil {
@@ -528,13 +513,12 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM) *bal.StateDiff 
 	evm.SetTxContext(NewEVMTxContext(msg))
 	evm.StateDB.AddAddressToAccessList(params.BeaconRootsAddress)
 	_, _, _ = evm.Call(msg.From, *msg.To, msg.Data, 30_000_000, common.U2560)
-	diff := evm.StateDB.Finalise(true)
-	return diff
+	evm.StateDB.Finalise(true)
 }
 
 // ProcessParentBlockHash stores the parent block hash in the history storage contract
 // as per EIP-2935/7709.
-func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) *bal.StateDiff {
+func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) {
 	if tracer := evm.Config.Tracer; tracer != nil {
 		onSystemCallStart(tracer, evm.GetVMContext())
 		if tracer.OnSystemCallEnd != nil {
@@ -559,7 +543,7 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) *bal.StateDiff {
 	if evm.StateDB.AccessEvents() != nil {
 		evm.StateDB.AccessEvents().Merge(evm.AccessEvents)
 	}
-	return evm.StateDB.Finalise(true)
+	evm.StateDB.Finalise(true)
 }
 
 // ProcessWithdrawalQueue calls the EIP-7002 withdrawal queue contract.
@@ -591,14 +575,6 @@ func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte
 	}
 	evm.SetTxContext(NewEVMTxContext(msg))
 	evm.StateDB.AddAddressToAccessList(addr)
-	/*
-		if addr == params.ConsolidationQueueAddress {
-			evm.Config.Tracer = logger.NewJSONLogger(&logger.Config{}, os.Stdout)
-			defer func() {
-				evm.Config.Tracer = nil
-			}()
-		}
-	*/
 	ret, _, err := evm.Call(msg.From, *msg.To, msg.Data, 30_000_000, common.U2560)
 	evm.StateDB.Finalise(true)
 	if err != nil {

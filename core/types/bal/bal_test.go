@@ -62,10 +62,10 @@ func makeTestConstructionBAL() *ConstructionBlockAccessList {
 					1: 2,
 					2: 6,
 				},
-				CodeChange: &CodeChange{
+				CodeChanges: map[uint16]CodeChange{0: {
 					TxIndex: 0,
 					Code:    common.Hex2Bytes("deadbeef"),
-				},
+				}},
 			},
 			common.BytesToAddress([]byte{0xff, 0xff, 0xff}): {
 				StorageWrites: map[common.Hash]map[uint16]common.Hash{
@@ -89,7 +89,6 @@ func makeTestConstructionBAL() *ConstructionBlockAccessList {
 				},
 			},
 		},
-		true,
 	}
 }
 
@@ -302,12 +301,7 @@ func TestBALStateDiffAccumulation(t *testing.T) {
 	bal := cBAL.ToEncodingObj()
 
 	it := NewIterator(bal, 22)
-	diff, err := it.BuildStateDiff(22, func(txIndex uint16, accumDiff, txDiff *StateDiff) error {
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("received error when trying to get bal state diff: %v\n", err)
-	}
+	diff, _ := it.BuildStateDiffs(nil, 22)
 	var res bytes.Buffer
 	encoder := json.NewEncoder(&res)
 	encoder.Encode(diff)

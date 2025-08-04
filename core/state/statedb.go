@@ -18,7 +18,6 @@
 package state
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/core/types/bal"
@@ -678,8 +677,6 @@ func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
 	}
 
 	if s.constructionBAL != nil && addr != params.SystemAddress {
-		// note: when sending a transfer with no value, the target account is loaded here
-		// we probably want to specify whether this is proper behavior in the EIP
 		s.constructionBAL.AccountRead(addr)
 	}
 	return obj
@@ -799,10 +796,8 @@ func (s *StateDB) GetRefund() uint64 {
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
 //
-// It returns a state diff containing the state which was mutated since the
-// previous invocation of Finalise.
-//
-// if accessList is provided, verify the post-tx state against the diff.
+// If EnableStateDiffRecording has been called, it returns a state diff containing
+// the state which was mutated since the previous invocation of Finalise. Otherwise, nil.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) (diff *bal.StateDiff) {
 	diff = &bal.StateDiff{make(map[common.Address]*bal.AccountState)}
 	addressesToPrefetch := make([]common.Address, 0, len(s.journal.dirties))
@@ -820,8 +815,9 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) (diff *bal.StateDiff) {
 		if obj.selfDestructed || (deleteEmptyObjects && obj.empty()) {
 			// TODO: for testing purposes we should probably have tests that create/destroy the same account multiple times via this same edge-case with create2
 			if obj.address != params.SystemAddress {
-				// TODO: probably it's unnecessary to record here, because BALs only support post-Cancun
-				// TODO: only record the object in the state diff if it wasn't created in the current transaction
+				// TODO: need to ensure that we aren't recording accounts in the state diff/BAL which were created/selfdestructed in the same transaction.
+				// It should be as easy as modifying the check above to not include selfdestructed contracts.  However, doing this causes some blockchain tests
+				// to fail and I'm not sure why.
 				if s.constructionBAL != nil {
 					s.constructionBAL.BalanceChange(uint16(s.balIndex), obj.address, uint256.NewInt(0))
 				}
@@ -1054,6 +1050,8 @@ func (s *StateDB) SetTxSender(sender common.Address) {
 	s.sender = sender
 }
 
+// ApplyDiff applies the state diff to the StateDB so that the current object
+// set reflects the changes in the diff.
 func (s *StateDB) ApplyDiff(diff *bal.StateDiff) {
 	for addr, accountDiff := range diff.Mutations {
 		stateObject := s.getOrNewStateObject(addr)
@@ -1194,7 +1192,7 @@ func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root 
 //	    however it's resurrected later in the same block.
 //
 // In case (a), nothing needs be deleted, nil to nil transition can be ignored.
-// In case (constructionBAL), nothing needs be deleted, nil is used as the original value for
+// In case (b), nothing needs be deleted, nil is used as the original value for
 // newly created account and storages
 // In case (c), **original** account along with its storages should be deleted,
 // with their values be tracked as original value.
@@ -1248,22 +1246,6 @@ func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*acco
 // GetTrie returns the account trie.
 func (s *StateDB) GetTrie() Trie {
 	return s.trie
-}
-
-func (s *StateDB) PrintStateObjects() {
-	var sObjectAddrs []common.Address
-
-	for addr, _ := range s.stateObjects {
-		sObjectAddrs = append(sObjectAddrs, addr)
-	}
-	slices.SortFunc(sObjectAddrs, func(i, j common.Address) int {
-		return bytes.Compare(i[:], j[:])
-	})
-
-	for _, addr := range sObjectAddrs {
-		fmt.Println(addr)
-		s.stateObjects[addr].PrettyPrint()
-	}
 }
 
 // commit gathers the state mutations accumulated along with the associated

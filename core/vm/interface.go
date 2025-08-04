@@ -98,8 +98,6 @@ type StateDB interface {
 
 	Witness() *stateless.Witness
 
-	//BlockAccessList() *types.BlockAccessList
-
 	AccessEvents() *state.AccessEvents
 
 	TxIndex() int
