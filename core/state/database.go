@@ -276,12 +276,14 @@ func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (ReaderWithSta
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
-	ts := db.LoadTransitionState(root)
-	if ts.InTransition() {
-		panic("transition isn't supported yet")
-	}
-	if ts.Transitioned() {
-		return trie.NewVerkleTrie(root, db.triedb, db.pointCache)
+	if db.triedb.IsVerkle() {
+		ts := db.LoadTransitionState(root)
+		if ts.InTransition() {
+			panic("transition isn't supported yet")
+		}
+		if ts.Transitioned() {
+			return trie.NewVerkleTrie(root, db.triedb, db.pointCache)
+		}
 	}
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 	if err != nil {
@@ -292,11 +294,7 @@ func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 
 // OpenStorageTrie opens the storage trie of an account.
 func (db *CachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
-	ts := db.LoadTransitionState(stateRoot)
-	// In the verkle case, there is only one tree. But the two-tree structure
-	// is hardcoded in the codebase. So we need to return the same trie in this
-	// case.
-	if ts.InTransition() || ts.Transitioned() {
+	if db.triedb.IsVerkle() {
 		return self, nil
 	}
 	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), db.triedb)

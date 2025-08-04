@@ -59,6 +59,7 @@ var (
 		ShanghaiTime:            u64(0),
 		VerkleTime:              u64(0),
 		TerminalTotalDifficulty: common.Big0,
+		EnableVerkleAtGenesis:   true,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Verkle: params.DefaultPragueBlobConfig,
 		},
@@ -82,6 +83,7 @@ var (
 		ShanghaiTime:            u64(0),
 		VerkleTime:              u64(0),
 		TerminalTotalDifficulty: common.Big0,
+		EnableVerkleAtGenesis:   true,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Verkle: params.DefaultPragueBlobConfig,
 		},
@@ -209,7 +211,7 @@ func TestProcessVerkle(t *testing.T) {
 		t.Fatalf("block %d imported with error: %v", endnum, err)
 	}
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		b := blockchain.GetBlockByNumber(uint64(i) + 1)
 		if b == nil {
 			t.Fatalf("expected block %d to be present in chain", i+1)

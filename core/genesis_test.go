@@ -287,6 +287,7 @@ func TestVerkleGenesisCommit(t *testing.T) {
 		OsakaTime:               &verkleTime,
 		VerkleTime:              &verkleTime,
 		TerminalTotalDifficulty: big.NewInt(0),
+		EnableVerkleAtGenesis:   true,
 		Ethash:                  nil,
 		Clique:                  nil,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
@@ -314,7 +315,6 @@ func TestVerkleGenesisCommit(t *testing.T) {
 	}
 
 	db := rawdb.NewMemoryDatabase()
-	saveVerkleTransitionStatusAtVerlkeGenesis(db)
 	config := *pathdb.Defaults
 	config.NoAsyncFlush = true
 
