@@ -19,7 +19,7 @@ Package node sets up multi-protocol Ethereum nodes.
 
 In the model exposed by this package, a node is a collection of services which use shared
 resources to provide RPC APIs. Services can also offer devp2p protocols, which are wired
-up to the devp2p network when the node instance is started.
+up the devp2p network when the node instance is started.
 
 # Node Lifecycle
 
@@ -62,7 +62,7 @@ data directory. The location of each resource can be overridden through addition
 configuration. The data directory is optional. If it is not set and the location of a
 resource is otherwise unspecified, package node will create the resource in memory.
 
-To access to the devp2p network, Node configures and starts p2p.Server. Each host on the
+To access the devp2p network, Node configures and starts p2p.Server. Each host on the
 devp2p network has a unique identifier, the node key. The Node instance persists this key
 across restarts. Node also loads static and trusted node lists and ensures that knowledge
 about other hosts is persisted.
