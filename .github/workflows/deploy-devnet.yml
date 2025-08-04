@@ -1,6 +1,7 @@
 name: Deploy Hardhat Project to Devnet and Save Image
 
 on:
+  workflow_dispatch:
   pull_request:
     types: [closed]
     branches:
@@ -131,5 +132,3 @@ jobs:
 
       - name: Stop and remove test container
         run: docker rm -f test-node
-
-        #adding comment to ensure the workflow is complete
