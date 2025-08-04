@@ -23,6 +23,8 @@ RUN mix local.hex --force && \
 
 RUN mix phx.digest && MIX_ENV=prod mix release
 
+RUN cp config/config_helper.exs _build/prod/rel/blockscout/releases/$(ls _build/prod/rel/blockscout/releases)/config_helper.exs
+
 # Build Geth in a stock Go builder container
 FROM golang:1.24-alpine AS builder
 
