@@ -2127,6 +2127,8 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		vtime = time.Since(vstart)
 	}
 
+	blockHadBAL := block.Body().AccessList != nil
+
 	if constructBAL {
 		// very ugly... deep-copy the block body before setting the block access
 		// list on it to prevent mutating the block instance passed by the caller.
@@ -2167,7 +2169,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	}
 
 	var proctime time.Duration
-	if block.Body().AccessList != nil {
+	if blockHadBAL {
 		blockPreprocessingTimer.Update(resWithMetrics.PreProcessTime)
 		txExecutionTimer.Update(resWithMetrics.ExecTime)
 		stateRootCalctimer.Update(resWithMetrics.RootCalcTime)
