@@ -21,7 +21,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
-	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -153,12 +152,4 @@ func (db *HistoricDB) TrieDB() *triedb.Database {
 // Snapshot returns the underlying state snapshot.
 func (db *HistoricDB) Snapshot() *snapshot.Tree {
 	return nil
-}
-
-func (db *HistoricDB) LoadTransitionState(common.Hash) *overlay.TransitionState {
-	panic("should not be called")
-}
-
-func (db *HistoricDB) SaveTransitionState(common.Hash, *overlay.TransitionState) {
-	panic("should not be called")
 }

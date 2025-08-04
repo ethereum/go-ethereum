@@ -17,10 +17,7 @@
 package state
 
 import (
-	"bytes"
-	"encoding/gob"
 	"fmt"
-	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -30,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/utils"
@@ -193,7 +189,7 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 			readers = append(readers, newFlatReader(snap))
 		}
 	}
-	ts := db.LoadTransitionState(stateRoot)
+	ts := overlay.LoadTransitionState(db.TrieDB().Disk(), stateRoot, db.triedb.IsVerkle())
 	// Configure the state reader using the path database in path mode.
 	// This reader offers improved performance but is optional and only
 	// partially useful if the snapshot data in path database is not
@@ -234,7 +230,7 @@ func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (ReaderWithSta
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	if db.triedb.IsVerkle() {
-		ts := db.LoadTransitionState(root)
+		ts := overlay.LoadTransitionState(db.TrieDB().Disk(), root, db.triedb.IsVerkle())
 		if ts.InTransition() {
 			panic("transition isn't supported yet")
 		}
@@ -302,87 +298,4 @@ func mustCopyTrie(t Trie) Trie {
 	default:
 		panic(fmt.Errorf("unknown trie type %T", t))
 	}
-}
-
-// SaveTransitionState saves the transition state to the cache and commits
-// it to the database if it's not already in the cache.
-func (db *CachingDB) SaveTransitionState(root common.Hash, ts *overlay.TransitionState) {
-	if ts == nil {
-		panic("nil transition state")
-	}
-
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(ts)
-	if err != nil {
-		log.Error("failed to encode transition state", "err", err)
-		return
-	}
-
-	if !db.TransitionStatePerRoot.Contains(root) {
-		// Copy so that the address pointer isn't updated after
-		// it has been saved.
-		db.TransitionStatePerRoot.Add(root, ts.Copy())
-		rawdb.WriteVerkleTransitionState(db.TrieDB().Disk(), root, buf.Bytes())
-	} else {
-		// Check that the state is consistent with what is in the cache,
-		// which is not strictly necessary but a good sanity check. Can
-		// be removed when the transition is stable.
-		cachedState, _ := db.TransitionStatePerRoot.Get(root)
-		if !reflect.DeepEqual(cachedState, ts) {
-			fmt.Println("transition state mismatch", "cached state", cachedState, "new state", ts)
-			panic("transition state mismatch")
-		}
-	}
-
-	log.Debug("saving transition state", "storage processed", ts.StorageProcessed, "addr", ts.CurrentAccountAddress, "slot hash", ts.CurrentSlotHash, "root", root, "ended", ts.Ended, "started", ts.Started)
-}
-
-func (db *CachingDB) LoadTransitionState(root common.Hash) *overlay.TransitionState {
-	// Try to get the transition state from the cache and
-	// the DB if it's not there.
-	ts, ok := db.TransitionStatePerRoot.Get(root)
-	if !ok {
-		// Not in the cache, try getting it from the DB
-		data, _ := rawdb.ReadVerkleTransitionState(db.TrieDB().Disk(), root)
-		// if err != nil && errors.Is(err, triedb.ErrNotFound) {
-		// 	log.Error("failed to read transition state", "err", err)
-		// 	return nil
-		// }
-
-		// if a state could be read from the db, attempt to decode it
-		if len(data) > 0 {
-			var (
-				newts overlay.TransitionState
-				buf   = bytes.NewBuffer(data[:])
-				dec   = gob.NewDecoder(buf)
-			)
-			// Decode transition state
-			err := dec.Decode(&newts)
-			if err != nil {
-				log.Error("failed to decode transition state", "err", err)
-				return nil
-			}
-			ts = &newts
-		}
-
-		// Fallback that should only happen before the transition
-		if ts == nil {
-			// Initialize the first transition state, with the "ended"
-			// field set to true if the database was created
-			// as a verkle database.
-			log.Debug("no transition state found, starting fresh", "is verkle", db.triedb.IsVerkle())
-			// Start with a fresh state
-			ts = &overlay.TransitionState{Ended: db.triedb.IsVerkle()}
-		}
-
-		db.TransitionStatePerRoot.Add(root, ts)
-	}
-
-	// Copy so that the CurrentAddress pointer in the map
-	// doesn't get overwritten.
-	// db.CurrentTransitionState = ts.Copy()
-
-	log.Debug("loaded transition state", "storage processed", ts.StorageProcessed, "addr", ts.CurrentAccountAddress, "slot hash", ts.CurrentSlotHash, "root", root, "ended", ts.Ended, "started", ts.Started)
-	return ts
 }
