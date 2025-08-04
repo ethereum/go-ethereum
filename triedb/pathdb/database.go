@@ -337,6 +337,12 @@ func (db *Database) repairHistory() error {
 	}
 	if pruned != 0 {
 		log.Warn("Truncated extra state histories", "number", pruned)
+		oldID := uint64(0)
+		if meta := loadIndexMetadata(db.diskdb); meta != nil {
+			oldID = meta.Last
+		}
+		log.Warn("Reset state history index metadata after truncation", "oldID", oldID, "newID", id)
+		storeIndexMetadata(db.diskdb, id)
 	}
 	return nil
 }
