@@ -65,7 +65,7 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 
 // Payload wraps the built payload(block waiting for sealing). According to the
 // engine-api specification, EL should build the initial version of the payload
-// which has an empty transaction set and then keep update it in order to maximize
+// which has an empty transaction set and then keep updating it in order to maximize
 // the revenue. Therefore, the empty-block here is always available and full-block
 // will be set/updated afterwards.
 type Payload struct {
