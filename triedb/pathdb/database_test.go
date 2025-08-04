@@ -121,13 +121,16 @@ type tester struct {
 	snapStorages map[common.Hash]map[common.Hash]map[common.Hash][]byte // Keyed by the hash of account address and the hash of storage key
 }
 
-func newTester(t *testing.T, historyLimit uint64, isVerkle bool, layers int) *tester {
+func newTester(t *testing.T, historyLimit uint64, isVerkle bool, layers int, enableIndex bool) *tester {
 	var (
-		disk, _ = rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
+		disk, _ = rawdb.Open(rawdb.NewMemoryDatabase(), rawdb.OpenOptions{Ancient: t.TempDir()})
 		db      = New(disk, &Config{
-			StateHistory:    historyLimit,
-			CleanCacheSize:  256 * 1024,
-			WriteBufferSize: 256 * 1024,
+			StateHistory:        historyLimit,
+			EnableStateIndexing: enableIndex,
+			TrieCleanSize:       256 * 1024,
+			StateCleanSize:      256 * 1024,
+			WriteBufferSize:     256 * 1024,
+			NoAsyncFlush:        true,
 		}, isVerkle)
 
 		obj = &tester{
@@ -160,6 +163,20 @@ func (t *tester) accountPreimage(hash common.Hash) common.Address {
 
 func (t *tester) hashPreimage(hash common.Hash) common.Hash {
 	return common.BytesToHash(t.preimages[hash])
+}
+
+func (t *tester) extend(layers int) {
+	for i := 0; i < layers; i++ {
+		var parent = types.EmptyRootHash
+		if len(t.roots) != 0 {
+			parent = t.roots[len(t.roots)-1]
+		}
+		root, nodes, states := t.generate(parent, true)
+		if err := t.db.Update(root, parent, uint64(i), nodes, states); err != nil {
+			panic(fmt.Errorf("failed to update state changes, err: %w", err))
+		}
+		t.roots = append(t.roots, root)
+	}
 }
 
 func (t *tester) release() {
@@ -449,7 +466,7 @@ func TestDatabaseRollback(t *testing.T) {
 	}()
 
 	// Verify state histories
-	tester := newTester(t, 0, false, 32)
+	tester := newTester(t, 0, false, 32, false)
 	defer tester.release()
 
 	if err := tester.verifyHistory(); err != nil {
@@ -483,7 +500,7 @@ func TestDatabaseRecoverable(t *testing.T) {
 	}()
 
 	var (
-		tester = newTester(t, 0, false, 12)
+		tester = newTester(t, 0, false, 12, false)
 		index  = tester.bottomIndex()
 	)
 	defer tester.release()
@@ -527,7 +544,7 @@ func TestDisable(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0, false, 32)
+	tester := newTester(t, 0, false, 32, false)
 	defer tester.release()
 
 	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.diskdb, nil))
@@ -569,7 +586,7 @@ func TestCommit(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0, false, 12)
+	tester := newTester(t, 0, false, 12, false)
 	defer tester.release()
 
 	if err := tester.db.Commit(tester.lastHash(), false); err != nil {
@@ -599,7 +616,7 @@ func TestJournal(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0, false, 12)
+	tester := newTester(t, 0, false, 12, false)
 	defer tester.release()
 
 	if err := tester.db.Journal(tester.lastHash()); err != nil {
@@ -629,7 +646,7 @@ func TestCorruptedJournal(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0, false, 12)
+	tester := newTester(t, 0, false, 12, false)
 	defer tester.release()
 
 	if err := tester.db.Journal(tester.lastHash()); err != nil {
@@ -677,7 +694,7 @@ func TestTailTruncateHistory(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 10, false, 12)
+	tester := newTester(t, 10, false, 12, false)
 	defer tester.release()
 
 	tester.db.Close()

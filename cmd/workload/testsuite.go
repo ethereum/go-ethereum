@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"slices"
 
 	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/internal/flags"
@@ -45,10 +44,13 @@ var (
 			testPatternFlag,
 			testTAPFlag,
 			testSlowFlag,
+			testArchiveFlag,
 			testSepoliaFlag,
 			testMainnetFlag,
 			filterQueryFileFlag,
 			historyTestFileFlag,
+			traceTestFileFlag,
+			traceTestInvalidOutputFlag,
 		},
 	}
 	testPatternFlag = &cli.StringFlag{
@@ -64,6 +66,12 @@ var (
 	testSlowFlag = &cli.BoolFlag{
 		Name:     "slow",
 		Usage:    "Enable slow tests",
+		Value:    false,
+		Category: flags.TestingCategory,
+	}
+	testArchiveFlag = &cli.BoolFlag{
+		Name:     "archive",
+		Usage:    "Enable archive tests",
 		Value:    false,
 		Category: flags.TestingCategory,
 	}
@@ -86,6 +94,7 @@ type testConfig struct {
 	filterQueryFile   string
 	historyTestFile   string
 	historyPruneBlock *uint64
+	traceTestFile     string
 }
 
 var errPrunedHistory = fmt.Errorf("attempt to access pruned history")
@@ -125,36 +134,85 @@ func testConfigFromCLI(ctx *cli.Context) (cfg testConfig) {
 		cfg.historyTestFile = "queries/history_mainnet.json"
 		cfg.historyPruneBlock = new(uint64)
 		*cfg.historyPruneBlock = history.PrunePoints[params.MainnetGenesisHash].BlockNumber
+		cfg.traceTestFile = "queries/trace_mainnet.json"
 	case ctx.Bool(testSepoliaFlag.Name):
 		cfg.fsys = builtinTestFiles
 		cfg.filterQueryFile = "queries/filter_queries_sepolia.json"
 		cfg.historyTestFile = "queries/history_sepolia.json"
 		cfg.historyPruneBlock = new(uint64)
 		*cfg.historyPruneBlock = history.PrunePoints[params.SepoliaGenesisHash].BlockNumber
+		cfg.traceTestFile = "queries/trace_sepolia.json"
 	default:
 		cfg.fsys = os.DirFS(".")
 		cfg.filterQueryFile = ctx.String(filterQueryFileFlag.Name)
 		cfg.historyTestFile = ctx.String(historyTestFileFlag.Name)
+		cfg.traceTestFile = ctx.String(traceTestFileFlag.Name)
 	}
 	return cfg
+}
+
+// workloadTest represents a single test in the workload. It's a wrapper
+// of utesting.Test by adding a few additional attributes.
+type workloadTest struct {
+	utesting.Test
+
+	archive bool // Flag whether the archive node (full state history) is required for this test
+}
+
+func newWorkLoadTest(name string, fn func(t *utesting.T)) workloadTest {
+	return workloadTest{
+		Test: utesting.Test{
+			Name: name,
+			Fn:   fn,
+		},
+	}
+}
+
+func newSlowWorkloadTest(name string, fn func(t *utesting.T)) workloadTest {
+	t := newWorkLoadTest(name, fn)
+	t.Slow = true
+	return t
+}
+
+func newArchiveWorkloadTest(name string, fn func(t *utesting.T)) workloadTest {
+	t := newWorkLoadTest(name, fn)
+	t.archive = true
+	return t
+}
+
+func filterTests(tests []workloadTest, pattern string, filterFn func(t workloadTest) bool) []utesting.Test {
+	var utests []utesting.Test
+	for _, t := range tests {
+		if filterFn(t) {
+			utests = append(utests, t.Test)
+		}
+	}
+	if pattern == "" {
+		return utests
+	}
+	return utesting.MatchTests(utests, pattern)
 }
 
 func runTestCmd(ctx *cli.Context) error {
 	cfg := testConfigFromCLI(ctx)
 	filterSuite := newFilterTestSuite(cfg)
 	historySuite := newHistoryTestSuite(cfg)
+	traceSuite := newTraceTestSuite(cfg, ctx)
 
 	// Filter test cases.
 	tests := filterSuite.allTests()
 	tests = append(tests, historySuite.allTests()...)
-	if ctx.IsSet(testPatternFlag.Name) {
-		tests = utesting.MatchTests(tests, ctx.String(testPatternFlag.Name))
-	}
-	if !ctx.Bool(testSlowFlag.Name) {
-		tests = slices.DeleteFunc(tests, func(test utesting.Test) bool {
-			return test.Slow
-		})
-	}
+	tests = append(tests, traceSuite.allTests()...)
+
+	utests := filterTests(tests, ctx.String(testPatternFlag.Name), func(t workloadTest) bool {
+		if t.Slow && !ctx.Bool(testSlowFlag.Name) {
+			return false
+		}
+		if t.archive && !ctx.Bool(testArchiveFlag.Name) {
+			return false
+		}
+		return true
+	})
 
 	// Disable logging unless explicitly enabled.
 	if !ctx.IsSet("verbosity") && !ctx.IsSet("vmodule") {
@@ -166,7 +224,7 @@ func runTestCmd(ctx *cli.Context) error {
 	if ctx.Bool(testTAPFlag.Name) {
 		run = utesting.RunTAP
 	}
-	results := run(tests, os.Stdout)
+	results := run(utests, os.Stdout)
 	if utesting.CountFailures(results) > 0 {
 		os.Exit(1)
 	}

@@ -81,6 +81,10 @@ func (api *DownloaderAPI) eventLoop() {
 				prog.TxIndexFinishedBlocks = txProg.Indexed
 				prog.TxIndexRemainingBlocks = txProg.Remaining
 			}
+			remain, err := api.chain.StateIndexProgress()
+			if err == nil {
+				prog.StateIndexRemaining = remain
+			}
 			return prog
 		}
 	)

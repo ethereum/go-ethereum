@@ -76,11 +76,22 @@ func newFastIterator(db *Database, root common.Hash, account common.Hash, seek c
 		if accountIterator {
 			switch dl := current.(type) {
 			case *diskLayer:
+				// Ensure no active background buffer flush is in progress, otherwise,
+				// part of the state data may become invisible.
+				if err := dl.waitFlush(); err != nil {
+					return nil, err
+				}
+				// The state set in the disk layer is mutable, hold the lock before obtaining
+				// the account list to prevent concurrent map iteration and write.
+				dl.lock.RLock()
+				accountList := dl.buffer.states.accountList()
+				dl.lock.RUnlock()
+
 				fi.iterators = append(fi.iterators, &weightedIterator{
 					// The state set in the disk layer is mutable, and the entire state becomes stale
 					// if a diff layer above is merged into it. Therefore, staleness must be checked,
 					// and the storage slot should be retrieved with read lock protection.
-					it: newDiffAccountIterator(seek, dl.buffer.states, func(hash common.Hash) ([]byte, error) {
+					it: newDiffAccountIterator(seek, accountList, func(hash common.Hash) ([]byte, error) {
 						dl.lock.RLock()
 						defer dl.lock.RUnlock()
 
@@ -98,19 +109,31 @@ func newFastIterator(db *Database, root common.Hash, account common.Hash, seek c
 			case *diffLayer:
 				// The state set in diff layer is immutable and will never be stale,
 				// so the read lock protection is unnecessary.
+				accountList := dl.states.accountList()
 				fi.iterators = append(fi.iterators, &weightedIterator{
-					it:       newDiffAccountIterator(seek, dl.states.stateSet, dl.states.mustAccount),
+					it:       newDiffAccountIterator(seek, accountList, dl.states.mustAccount),
 					priority: depth,
 				})
 			}
 		} else {
 			switch dl := current.(type) {
 			case *diskLayer:
+				// Ensure no active background buffer flush is in progress, otherwise,
+				// part of the state data may become invisible.
+				if err := dl.waitFlush(); err != nil {
+					return nil, err
+				}
+				// The state set in the disk layer is mutable, hold the lock before obtaining
+				// the storage list to prevent concurrent map iteration and write.
+				dl.lock.RLock()
+				storageList := dl.buffer.states.storageList(account)
+				dl.lock.RUnlock()
+
 				fi.iterators = append(fi.iterators, &weightedIterator{
 					// The state set in the disk layer is mutable, and the entire state becomes stale
 					// if a diff layer above is merged into it. Therefore, staleness must be checked,
 					// and the storage slot should be retrieved with read lock protection.
-					it: newDiffStorageIterator(account, seek, dl.buffer.states, func(addrHash common.Hash, slotHash common.Hash) ([]byte, error) {
+					it: newDiffStorageIterator(account, seek, storageList, func(addrHash common.Hash, slotHash common.Hash) ([]byte, error) {
 						dl.lock.RLock()
 						defer dl.lock.RUnlock()
 
@@ -128,8 +151,12 @@ func newFastIterator(db *Database, root common.Hash, account common.Hash, seek c
 			case *diffLayer:
 				// The state set in diff layer is immutable and will never be stale,
 				// so the read lock protection is unnecessary.
+				storageList := dl.states.storageList(account)
+
+				// The state set in diff layer is immutable and will never be stale,
+				// so the read lock protection is unnecessary.
 				fi.iterators = append(fi.iterators, &weightedIterator{
-					it:       newDiffStorageIterator(account, seek, dl.states.stateSet, dl.states.mustStorage),
+					it:       newDiffStorageIterator(account, seek, storageList, dl.states.mustStorage),
 					priority: depth,
 				})
 			}

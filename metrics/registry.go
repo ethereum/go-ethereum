@@ -3,7 +3,6 @@ package metrics
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -30,10 +29,9 @@ type Registry interface {
 	// GetAll metrics in the Registry.
 	GetAll() map[string]map[string]interface{}
 
-	// GetOrRegister gets an existing metric or registers the given one.
-	// The interface can be the metric to register if not found in registry,
-	// or a function returning the metric for lazy instantiation.
-	GetOrRegister(string, interface{}) interface{}
+	// GetOrRegister returns an existing metric or registers the one returned
+	// by the given constructor.
+	GetOrRegister(string, func() interface{}) interface{}
 
 	// Register the given metric under the given name.
 	Register(string, interface{}) error
@@ -95,19 +93,13 @@ func (r *StandardRegistry) Get(name string) interface{} {
 // alternative to calling Get and Register on failure.
 // The interface can be the metric to register if not found in registry,
 // or a function returning the metric for lazy instantiation.
-func (r *StandardRegistry) GetOrRegister(name string, i interface{}) interface{} {
+func (r *StandardRegistry) GetOrRegister(name string, ctor func() interface{}) interface{} {
 	// fast path
 	cached, ok := r.metrics.Load(name)
 	if ok {
 		return cached
 	}
-	if v := reflect.ValueOf(i); v.Kind() == reflect.Func {
-		i = v.Call(nil)[0].Interface()
-	}
-	item, _, ok := r.loadOrRegister(name, i)
-	if !ok {
-		return i
-	}
+	item, _, _ := r.loadOrRegister(name, ctor())
 	return item
 }
 
@@ -120,9 +112,6 @@ func (r *StandardRegistry) Register(name string, i interface{}) error {
 		return fmt.Errorf("%w: %v", ErrDuplicateMetric, name)
 	}
 
-	if v := reflect.ValueOf(i); v.Kind() == reflect.Func {
-		i = v.Call(nil)[0].Interface()
-	}
 	_, loaded, _ := r.loadOrRegister(name, i)
 	if loaded {
 		return fmt.Errorf("%w: %v", ErrDuplicateMetric, name)
@@ -295,9 +284,9 @@ func (r *PrefixedRegistry) Get(name string) interface{} {
 // GetOrRegister gets an existing metric or registers the given one.
 // The interface can be the metric to register if not found in registry,
 // or a function returning the metric for lazy instantiation.
-func (r *PrefixedRegistry) GetOrRegister(name string, metric interface{}) interface{} {
+func (r *PrefixedRegistry) GetOrRegister(name string, ctor func() interface{}) interface{} {
 	realName := r.prefix + name
-	return r.underlying.GetOrRegister(realName, metric)
+	return r.underlying.GetOrRegister(realName, ctor)
 }
 
 // Register the given metric under the given name. The name will be prefixed.
@@ -338,8 +327,15 @@ func Get(name string) interface{} {
 
 // GetOrRegister gets an existing metric or creates and registers a new one. Threadsafe
 // alternative to calling Get and Register on failure.
-func GetOrRegister(name string, i interface{}) interface{} {
+func GetOrRegister(name string, i func() interface{}) interface{} {
 	return DefaultRegistry.GetOrRegister(name, i)
+}
+
+func getOrRegister[T any](name string, ctor func() T, r Registry) T {
+	if r == nil {
+		r = DefaultRegistry
+	}
+	return r.GetOrRegister(name, func() any { return ctor() }).(T)
 }
 
 // Register the given metric under the given name.  Returns a ErrDuplicateMetric

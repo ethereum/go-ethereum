@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -48,34 +49,39 @@ func (d *Downloader) BeaconDevSync(mode SyncMode, hash common.Hash, stop chan st
 			return errors.New("stop requested")
 		default:
 		}
-		// Pick a random peer to sync from and keep retrying if none are yet
-		// available due to fresh startup
-		d.peers.lock.RLock()
-		var peer *peerConnection
-		for _, peer = range d.peers.peers {
-			break
-		}
-		d.peers.lock.RUnlock()
-
-		if peer == nil {
+		header, err := d.GetHeader(hash)
+		if err != nil {
 			time.Sleep(time.Second)
 			continue
 		}
+		return d.BeaconSync(mode, header, header)
+	}
+}
+
+// GetHeader tries to retrieve the header with a given hash from a random peer.
+func (d *Downloader) GetHeader(hash common.Hash) (*types.Header, error) {
+	// Pick a random peer to sync from and keep retrying if none are yet
+	// available due to fresh startup
+	d.peers.lock.RLock()
+	defer d.peers.lock.RUnlock()
+
+	for _, peer := range d.peers.peers {
+		if peer == nil {
+			return nil, errors.New("could not find peer")
+		}
 		// Found a peer, attempt to retrieve the header whilst blocking and
 		// retry if it fails for whatever reason
-		log.Info("Attempting to retrieve sync target", "peer", peer.id)
+		log.Debug("Attempting to retrieve sync target", "peer", peer.id, "hash", hash)
 		headers, metas, err := d.fetchHeadersByHash(peer, hash, 1, 0, false)
 		if err != nil || len(headers) != 1 {
-			log.Warn("Failed to fetch sync target", "headers", len(headers), "err", err)
-			time.Sleep(time.Second)
 			continue
 		}
 		// Head header retrieved, if the hash matches, start the actual sync
 		if metas[0] != hash {
-			log.Error("Received invalid sync target", "want", hash, "have", metas[0])
-			time.Sleep(time.Second)
+			log.Warn("Received invalid sync target", "peer", peer.id, "want", hash, "have", metas[0])
 			continue
 		}
-		return d.BeaconSync(mode, headers[0], headers[0])
+		return headers[0], nil
 	}
+	return nil, errors.New("failed to fetch sync target")
 }

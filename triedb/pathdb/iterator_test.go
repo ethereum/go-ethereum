@@ -132,18 +132,15 @@ func TestAccountIteratorBasics(t *testing.T) {
 		}
 	}
 	states := newStates(accounts, storage, false)
-	it := newDiffAccountIterator(common.Hash{}, states, nil)
+	it := newDiffAccountIterator(common.Hash{}, states.accountList(), nil)
 	verifyIterator(t, 100, it, verifyNothing) // Nil is allowed for single layer iterator
 
-	// TODO reenable these tests once the persistent state iteration
-	// is implemented.
-
-	//db := rawdb.NewMemoryDatabase()
-	//batch := db.NewBatch()
-	//states.write(db, batch, nil, nil)
-	//batch.Write()
-	//it = newDiskAccountIterator(db, common.Hash{})
-	//verifyIterator(t, 100, it, verifyNothing) // Nil is allowed for single layer iterator
+	db := rawdb.NewMemoryDatabase()
+	batch := db.NewBatch()
+	states.write(batch, nil, nil)
+	batch.Write()
+	it = newDiskAccountIterator(db, common.Hash{})
+	verifyIterator(t, 100, it, verifyNothing) // Nil is allowed for single layer iterator
 }
 
 // TestStorageIteratorBasics tests some simple single-layer(diff and disk) iteration for storage
@@ -173,21 +170,18 @@ func TestStorageIteratorBasics(t *testing.T) {
 	}
 	states := newStates(accounts, storage, false)
 	for account := range accounts {
-		it := newDiffStorageIterator(account, common.Hash{}, states, nil)
+		it := newDiffStorageIterator(account, common.Hash{}, states.storageList(account), nil)
 		verifyIterator(t, 100, it, verifyNothing) // Nil is allowed for single layer iterator
 	}
 
-	// TODO reenable these tests once the persistent state iteration
-	// is implemented.
-
-	//db := rawdb.NewMemoryDatabase()
-	//batch := db.NewBatch()
-	//states.write(db, batch, nil, nil)
-	//batch.Write()
-	//for account := range accounts {
-	//	it := newDiskStorageIterator(db, account, common.Hash{})
-	//	verifyIterator(t, 100-nilStorage[account], it, verifyNothing) // Nil is allowed for single layer iterator
-	//}
+	db := rawdb.NewMemoryDatabase()
+	batch := db.NewBatch()
+	states.write(batch, nil, nil)
+	batch.Write()
+	for account := range accounts {
+		it := newDiskStorageIterator(db, account, common.Hash{})
+		verifyIterator(t, 100-nilStorage[account], it, verifyNothing) // Nil is allowed for single layer iterator
+	}
 }
 
 type testIterator struct {
@@ -260,10 +254,9 @@ func TestFastIteratorBasics(t *testing.T) {
 // TestAccountIteratorTraversal tests some simple multi-layer iteration.
 func TestAccountIteratorTraversal(t *testing.T) {
 	config := &Config{
-		WriteBufferSize: 0,
+		NoAsyncGeneration: true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
 
 	// Stack three diff layers on top with various overlaps
 	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 0, trienode.NewMergedNodeSet(),
@@ -279,7 +272,7 @@ func TestAccountIteratorTraversal(t *testing.T) {
 	head := db.tree.get(common.HexToHash("0x04"))
 
 	// singleLayer: 0xcc, 0xf0, 0xff
-	it := newDiffAccountIterator(common.Hash{}, head.(*diffLayer).states.stateSet, nil)
+	it := newDiffAccountIterator(common.Hash{}, head.(*diffLayer).states.stateSet.accountList(), nil)
 	verifyIterator(t, 3, it, verifyNothing)
 
 	// binaryIterator: 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xf0, 0xff
@@ -290,27 +283,23 @@ func TestAccountIteratorTraversal(t *testing.T) {
 	verifyIterator(t, 7, it, verifyAccount)
 	it.Release()
 
-	// TODO reenable these tests once the persistent state iteration
-	// is implemented.
-
 	// Test after persist some bottom-most layers into the disk,
 	// the functionalities still work.
-	//db.tree.cap(common.HexToHash("0x04"), 2)
+	db.tree.cap(common.HexToHash("0x04"), 2)
 
-	//head = db.tree.get(common.HexToHash("0x04"))
-	//verifyIterator(t, 7, head.(*diffLayer).newBinaryAccountIterator(), verifyAccount)
-	//
-	//it, _ = db.AccountIterator(common.HexToHash("0x04"), common.Hash{})
-	//verifyIterator(t, 7, it, verifyAccount)
-	//it.Release()
+	head = db.tree.get(common.HexToHash("0x04"))
+	verifyIterator(t, 7, head.(*diffLayer).newBinaryAccountIterator(common.Hash{}), verifyAccount)
+
+	it, _ = db.AccountIterator(common.HexToHash("0x04"), common.Hash{})
+	verifyIterator(t, 7, it, verifyAccount)
+	it.Release()
 }
 
 func TestStorageIteratorTraversal(t *testing.T) {
 	config := &Config{
-		WriteBufferSize: 0,
+		NoAsyncGeneration: true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
 
 	// Stack three diff layers on top with various overlaps
 	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 0, trienode.NewMergedNodeSet(),
@@ -320,14 +309,14 @@ func TestStorageIteratorTraversal(t *testing.T) {
 		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x04", "0x05", "0x06"}}, nil), nil, nil, false))
 
 	db.Update(common.HexToHash("0x04"), common.HexToHash("0x03"), 0, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x01", "0x02", "0x03"}}, nil), nil, nil, false))
+		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x01", "0x02"}}, nil), nil, nil, false))
 
 	// Verify the single and multi-layer iterators
 	head := db.tree.get(common.HexToHash("0x04"))
 
 	// singleLayer: 0x1, 0x2, 0x3
-	diffIter := newDiffStorageIterator(common.HexToHash("0xaa"), common.Hash{}, head.(*diffLayer).states.stateSet, nil)
-	verifyIterator(t, 3, diffIter, verifyNothing)
+	diffIter := newDiffStorageIterator(common.HexToHash("0xaa"), common.Hash{}, head.(*diffLayer).states.stateSet.storageList(common.HexToHash("0xaa")), nil)
+	verifyIterator(t, 2, diffIter, verifyNothing)
 
 	// binaryIterator: 0x1, 0x2, 0x3, 0x4, 0x5, 0x6
 	verifyIterator(t, 6, head.(*diffLayer).newBinaryStorageIterator(common.HexToHash("0xaa"), common.Hash{}), verifyStorage)
@@ -337,27 +326,23 @@ func TestStorageIteratorTraversal(t *testing.T) {
 	verifyIterator(t, 6, it, verifyStorage)
 	it.Release()
 
-	// TODO reenable these tests once the persistent state iteration
-	// is implemented.
-
 	// Test after persist some bottom-most layers into the disk,
 	// the functionalities still work.
-	//db.tree.cap(common.HexToHash("0x04"), 2)
-	//verifyIterator(t, 6, head.(*diffLayer).newBinaryStorageIterator(common.HexToHash("0xaa")), verifyStorage)
-	//
-	//it, _ = db.StorageIterator(common.HexToHash("0x04"), common.HexToHash("0xaa"), common.Hash{})
-	//verifyIterator(t, 6, it, verifyStorage)
-	//it.Release()
+	db.tree.cap(common.HexToHash("0x04"), 2)
+	verifyIterator(t, 6, head.(*diffLayer).newBinaryStorageIterator(common.HexToHash("0xaa"), common.Hash{}), verifyStorage)
+
+	it, _ = db.StorageIterator(common.HexToHash("0x04"), common.HexToHash("0xaa"), common.Hash{})
+	verifyIterator(t, 6, it, verifyStorage)
+	it.Release()
 }
 
 // TestAccountIteratorTraversalValues tests some multi-layer iteration, where we
 // also expect the correct values to show up.
 func TestAccountIteratorTraversalValues(t *testing.T) {
 	config := &Config{
-		WriteBufferSize: 0,
+		NoAsyncGeneration: true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
 
 	// Create a batch of account sets to seed subsequent layers with
 	var (
@@ -434,34 +419,45 @@ func TestAccountIteratorTraversalValues(t *testing.T) {
 	}
 	it.Release()
 
-	// TODO reenable these tests once the persistent state iteration
-	// is implemented.
-
 	// Test after persist some bottom-most layers into the disk,
 	// the functionalities still work.
-	//db.tree.cap(common.HexToHash("0x09"), 2)
-	//
-	//it, _ = db.AccountIterator(common.HexToHash("0x09"), common.Hash{})
-	//for it.Next() {
-	//	hash := it.Hash()
-	//	account, err := head.Account(hash)
-	//	if err != nil {
-	//		t.Fatalf("failed to retrieve expected account: %v", err)
-	//	}
-	//	want, _ := rlp.EncodeToBytes(account)
-	//	if have := it.Account(); !bytes.Equal(want, have) {
-	//		t.Fatalf("hash %x: account mismatch: have %x, want %x", hash, have, want)
-	//	}
-	//}
-	//it.Release()
+	db.tree.cap(common.HexToHash("0x09"), 2)
+
+	// binaryIterator
+	head = db.tree.get(common.HexToHash("0x09"))
+	it = head.(*diffLayer).newBinaryAccountIterator(common.Hash{})
+	for it.Next() {
+		hash := it.Hash()
+		want, err := r.(*reader).AccountRLP(hash)
+		if err != nil {
+			t.Fatalf("failed to retrieve expected account: %v", err)
+		}
+		if have := it.Account(); !bytes.Equal(want, have) {
+			t.Fatalf("hash %x: account mismatch: have %x, want %x", hash, have, want)
+		}
+	}
+	it.Release()
+
+	// fastIterator
+	it, _ = db.AccountIterator(common.HexToHash("0x09"), common.Hash{})
+	for it.Next() {
+		hash := it.Hash()
+		want, err := r.(*reader).AccountRLP(hash)
+		if err != nil {
+			t.Fatalf("failed to retrieve expected account: %v", err)
+		}
+		if have := it.Account(); !bytes.Equal(want, have) {
+			t.Fatalf("hash %x: account mismatch: have %x, want %x", hash, have, want)
+		}
+	}
+	it.Release()
 }
 
 func TestStorageIteratorTraversalValues(t *testing.T) {
 	config := &Config{
-		WriteBufferSize: 0,
+		NoAsyncGeneration: true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
 
 	wrapStorage := func(storage map[common.Hash][]byte) map[common.Hash]map[common.Hash][]byte {
 		return map[common.Hash]map[common.Hash][]byte{
@@ -543,25 +539,38 @@ func TestStorageIteratorTraversalValues(t *testing.T) {
 	}
 	it.Release()
 
-	// TODO reenable these tests once the persistent state iteration
-	// is implemented.
-
 	// Test after persist some bottom-most layers into the disk,
 	// the functionalities still work.
-	//db.tree.cap(common.HexToHash("0x09"), 2)
-	//
-	//it, _ = db.StorageIterator(common.HexToHash("0x09"), common.HexToHash("0xaa"), common.Hash{})
-	//for it.Next() {
-	//	hash := it.Hash()
-	//	want, err := head.Storage(common.HexToHash("0xaa"), hash)
-	//	if err != nil {
-	//		t.Fatalf("failed to retrieve expected slot: %v", err)
-	//	}
-	//	if have := it.Slot(); !bytes.Equal(want, have) {
-	//		t.Fatalf("hash %x: slot mismatch: have %x, want %x", hash, have, want)
-	//	}
-	//}
-	//it.Release()
+	db.tree.cap(common.HexToHash("0x09"), 2)
+
+	// binaryIterator
+	head = db.tree.get(common.HexToHash("0x09"))
+	it = head.(*diffLayer).newBinaryStorageIterator(common.HexToHash("0xaa"), common.Hash{})
+	for it.Next() {
+		hash := it.Hash()
+		want, err := r.Storage(common.HexToHash("0xaa"), hash)
+		if err != nil {
+			t.Fatalf("failed to retrieve expected account: %v", err)
+		}
+		if have := it.Slot(); !bytes.Equal(want, have) {
+			t.Fatalf("hash %x: account mismatch: have %x, want %x", hash, have, want)
+		}
+	}
+	it.Release()
+
+	// fastIterator
+	it, _ = db.StorageIterator(common.HexToHash("0x09"), common.HexToHash("0xaa"), common.Hash{})
+	for it.Next() {
+		hash := it.Hash()
+		want, err := r.Storage(common.HexToHash("0xaa"), hash)
+		if err != nil {
+			t.Fatalf("failed to retrieve expected storage slot: %v", err)
+		}
+		if have := it.Slot(); !bytes.Equal(want, have) {
+			t.Fatalf("hash %x: slot mismatch: have %x, want %x", hash, have, want)
+		}
+	}
+	it.Release()
 }
 
 // This testcase is notorious, all layers contain the exact same 200 accounts.
@@ -578,10 +587,10 @@ func TestAccountIteratorLargeTraversal(t *testing.T) {
 	}
 	// Build up a large stack of snapshots
 	config := &Config{
-		WriteBufferSize: 0,
+		NoAsyncGeneration: true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
+
 	for i := 1; i < 128; i++ {
 		parent := types.EmptyRootHash
 		if i == 1 {
@@ -592,25 +601,22 @@ func TestAccountIteratorLargeTraversal(t *testing.T) {
 	}
 	// Iterate the entire stack and ensure everything is hit only once
 	head := db.tree.get(common.HexToHash("0x80"))
-	verifyIterator(t, 200, newDiffAccountIterator(common.Hash{}, head.(*diffLayer).states.stateSet, nil), verifyNothing)
+	verifyIterator(t, 200, newDiffAccountIterator(common.Hash{}, head.(*diffLayer).states.stateSet.accountList(), nil), verifyNothing)
 	verifyIterator(t, 200, head.(*diffLayer).newBinaryAccountIterator(common.Hash{}), verifyAccount)
 
 	it, _ := db.AccountIterator(common.HexToHash("0x80"), common.Hash{})
 	verifyIterator(t, 200, it, verifyAccount)
 	it.Release()
 
-	// TODO reenable these tests once the persistent state iteration
-	// is implemented.
-
 	// Test after persist some bottom-most layers into the disk,
 	// the functionalities still work.
-	//db.tree.cap(common.HexToHash("0x80"), 2)
-	//
-	//verifyIterator(t, 200, head.(*diffLayer).newBinaryAccountIterator(), verifyAccount)
-	//
-	//it, _ = db.AccountIterator(common.HexToHash("0x80"), common.Hash{})
-	//verifyIterator(t, 200, it, verifyAccount)
-	//it.Release()
+	db.tree.cap(common.HexToHash("0x80"), 2)
+
+	verifyIterator(t, 200, head.(*diffLayer).newBinaryAccountIterator(common.Hash{}), verifyAccount)
+
+	it, _ = db.AccountIterator(common.HexToHash("0x80"), common.Hash{})
+	verifyIterator(t, 200, it, verifyAccount)
+	it.Release()
 }
 
 // TestAccountIteratorFlattening tests what happens when we
@@ -619,10 +625,10 @@ func TestAccountIteratorLargeTraversal(t *testing.T) {
 // - continues iterating
 func TestAccountIteratorFlattening(t *testing.T) {
 	config := &Config{
-		WriteBufferSize: 10 * 1024,
+		WriteBufferSize:   10 * 1024,
+		NoAsyncGeneration: true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
 
 	// Create a stack of diffs on top
 	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 1, trienode.NewMergedNodeSet(),
@@ -651,11 +657,24 @@ func TestAccountIteratorFlattening(t *testing.T) {
 }
 
 func TestAccountIteratorSeek(t *testing.T) {
+	t.Run("fast", func(t *testing.T) {
+		testAccountIteratorSeek(t, func(db *Database, root, seek common.Hash) AccountIterator {
+			it, _ := db.AccountIterator(root, seek)
+			return it
+		})
+	})
+	t.Run("binary", func(t *testing.T) {
+		testAccountIteratorSeek(t, func(db *Database, root, seek common.Hash) AccountIterator {
+			return db.tree.get(root).(*diffLayer).newBinaryAccountIterator(seek)
+		})
+	})
+}
+
+func testAccountIteratorSeek(t *testing.T, newIterator func(db *Database, root, seek common.Hash) AccountIterator) {
 	config := &Config{
-		WriteBufferSize: 0,
+		NoAsyncGeneration: true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
 
 	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 1, trienode.NewMergedNodeSet(),
 		NewStateSetWithOrigin(randomAccountSet("0xaa", "0xee", "0xff", "0xf0"), nil, nil, nil, false))
@@ -671,39 +690,39 @@ func TestAccountIteratorSeek(t *testing.T) {
 	// 03: aa, bb, dd, ee, f0 (, f0), ff
 	// 04: aa, bb, cc, dd, ee, f0 (, f0), ff (, ff)
 	// Construct various iterators and ensure their traversal is correct
-	it, _ := db.AccountIterator(common.HexToHash("0x02"), common.HexToHash("0xdd"))
+	it := newIterator(db, common.HexToHash("0x02"), common.HexToHash("0xdd"))
 	defer it.Release()
 	verifyIterator(t, 3, it, verifyAccount) // expected: ee, f0, ff
 
-	it, _ = db.AccountIterator(common.HexToHash("0x02"), common.HexToHash("0xaa"))
+	it = newIterator(db, common.HexToHash("0x02"), common.HexToHash("0xaa"))
 	defer it.Release()
 	verifyIterator(t, 4, it, verifyAccount) // expected: aa, ee, f0, ff
 
-	it, _ = db.AccountIterator(common.HexToHash("0x02"), common.HexToHash("0xff"))
+	it = newIterator(db, common.HexToHash("0x02"), common.HexToHash("0xff"))
 	defer it.Release()
 	verifyIterator(t, 1, it, verifyAccount) // expected: ff
 
-	it, _ = db.AccountIterator(common.HexToHash("0x02"), common.HexToHash("0xff1"))
+	it = newIterator(db, common.HexToHash("0x02"), common.HexToHash("0xff1"))
 	defer it.Release()
 	verifyIterator(t, 0, it, verifyAccount) // expected: nothing
 
-	it, _ = db.AccountIterator(common.HexToHash("0x04"), common.HexToHash("0xbb"))
+	it = newIterator(db, common.HexToHash("0x04"), common.HexToHash("0xbb"))
 	defer it.Release()
 	verifyIterator(t, 6, it, verifyAccount) // expected: bb, cc, dd, ee, f0, ff
 
-	it, _ = db.AccountIterator(common.HexToHash("0x04"), common.HexToHash("0xef"))
+	it = newIterator(db, common.HexToHash("0x04"), common.HexToHash("0xef"))
 	defer it.Release()
 	verifyIterator(t, 2, it, verifyAccount) // expected: f0, ff
 
-	it, _ = db.AccountIterator(common.HexToHash("0x04"), common.HexToHash("0xf0"))
+	it = newIterator(db, common.HexToHash("0x04"), common.HexToHash("0xf0"))
 	defer it.Release()
 	verifyIterator(t, 2, it, verifyAccount) // expected: f0, ff
 
-	it, _ = db.AccountIterator(common.HexToHash("0x04"), common.HexToHash("0xff"))
+	it = newIterator(db, common.HexToHash("0x04"), common.HexToHash("0xff"))
 	defer it.Release()
 	verifyIterator(t, 1, it, verifyAccount) // expected: ff
 
-	it, _ = db.AccountIterator(common.HexToHash("0x04"), common.HexToHash("0xff1"))
+	it = newIterator(db, common.HexToHash("0x04"), common.HexToHash("0xff1"))
 	defer it.Release()
 	verifyIterator(t, 0, it, verifyAccount) // expected: nothing
 }
@@ -724,10 +743,9 @@ func TestStorageIteratorSeek(t *testing.T) {
 
 func testStorageIteratorSeek(t *testing.T, newIterator func(db *Database, root, account, seek common.Hash) StorageIterator) {
 	config := &Config{
-		WriteBufferSize: 0,
+		NoAsyncGeneration: true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
 
 	// Stack three diff layers on top with various overlaps
 	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 1, trienode.NewMergedNodeSet(),
@@ -796,10 +814,10 @@ func TestAccountIteratorDeletions(t *testing.T) {
 
 func testAccountIteratorDeletions(t *testing.T, newIterator func(db *Database, root, seek common.Hash) AccountIterator) {
 	config := &Config{
-		WriteBufferSize: 0,
+		NoAsyncGeneration: true,
 	}
-	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
+	memoryDB := rawdb.NewMemoryDatabase()
+	db := New(memoryDB, config, false)
 
 	// Stack three diff layers on top with various overlaps
 	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 1, trienode.NewMergedNodeSet(),
@@ -814,32 +832,55 @@ func testAccountIteratorDeletions(t *testing.T, newIterator func(db *Database, r
 	db.Update(common.HexToHash("0x04"), common.HexToHash("0x03"), 3, trienode.NewMergedNodeSet(),
 		NewStateSetWithOrigin(randomAccountSet("0x33", "0x44", "0x55"), nil, nil, nil, false))
 
-	// The output should be 11,33,44,55
-	it := newIterator(db, common.HexToHash("0x04"), common.Hash{})
-	// Do a quick check
-	verifyIterator(t, 4, it, verifyAccount)
-	it.Release()
+	verify := func() {
+		// The output should be 11,33,44,55
+		it := newIterator(db, common.HexToHash("0x04"), common.Hash{})
+		// Do a quick check
+		verifyIterator(t, 4, it, verifyAccount)
+		it.Release()
 
-	// And a more detailed verification that we indeed do not see '0x22'
-	it = newIterator(db, common.HexToHash("0x04"), common.Hash{})
-	defer it.Release()
-	for it.Next() {
-		hash := it.Hash()
-		if it.Account() == nil {
-			t.Errorf("iterator returned nil-value for hash %x", hash)
-		}
-		if hash == deleted {
-			t.Errorf("expected deleted elem %x to not be returned by iterator", deleted)
+		// And a more detailed verification that we indeed do not see '0x22'
+		it = newIterator(db, common.HexToHash("0x04"), common.Hash{})
+		defer it.Release()
+		for it.Next() {
+			hash := it.Hash()
+			if it.Account() == nil {
+				t.Errorf("iterator returned nil-value for hash %x", hash)
+			}
+			if hash == deleted {
+				t.Errorf("expected deleted elem %x to not be returned by iterator", deleted)
+			}
 		}
 	}
+	verify()
+
+	if err := db.Journal(common.HexToHash("0x04")); err != nil {
+		t.Fatalf("Failed to journal the database, %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("Failed to close the database, %v", err)
+	}
+	db = New(memoryDB, config, false)
+
+	verify()
 }
 
 func TestStorageIteratorDeletions(t *testing.T) {
 	config := &Config{
-		WriteBufferSize: 0,
+		NoAsyncGeneration: true,
 	}
-	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
+	memoryDB := rawdb.NewMemoryDatabase()
+	db := New(memoryDB, config, false)
+
+	restart := func(head common.Hash) {
+		if err := db.Journal(head); err != nil {
+			t.Fatalf("Failed to journal the database, %v", err)
+		}
+		if err := db.Close(); err != nil {
+			t.Fatalf("Failed to close the database, %v", err)
+		}
+		db = New(memoryDB, config, false)
+	}
 
 	// Stack three diff layers on top with various overlaps
 	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 1, trienode.NewMergedNodeSet(),
@@ -850,6 +891,19 @@ func TestStorageIteratorDeletions(t *testing.T) {
 
 	// The output should be 02,04,05,06
 	it, _ := db.StorageIterator(common.HexToHash("0x03"), common.HexToHash("0xaa"), common.Hash{})
+	verifyIterator(t, 4, it, verifyStorage)
+	it.Release()
+
+	// The output should be 04,05,06
+	it, _ = db.StorageIterator(common.HexToHash("0x03"), common.HexToHash("0xaa"), common.HexToHash("0x03"))
+	verifyIterator(t, 3, it, verifyStorage)
+	it.Release()
+
+	// Ensure the iteration result aligns after the database restart
+	restart(common.HexToHash("0x03"))
+
+	// The output should be 02,04,05,06
+	it, _ = db.StorageIterator(common.HexToHash("0x03"), common.HexToHash("0xaa"), common.Hash{})
 	verifyIterator(t, 4, it, verifyStorage)
 	it.Release()
 
@@ -869,9 +923,23 @@ func TestStorageIteratorDeletions(t *testing.T) {
 	verifyIterator(t, 0, it, verifyStorage)
 	it.Release()
 
+	// Ensure the iteration result aligns after the database restart
+	restart(common.HexToHash("0x04"))
+	it, _ = db.StorageIterator(common.HexToHash("0x04"), common.HexToHash("0xaa"), common.Hash{})
+	verifyIterator(t, 0, it, verifyStorage)
+	it.Release()
+
 	// Re-insert the slots of the same account
 	db.Update(common.HexToHash("0x05"), common.HexToHash("0x04"), 4, trienode.NewMergedNodeSet(),
 		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x07", "0x08", "0x09"}}, nil), nil, nil, false))
+
+	// The output should be 07,08,09
+	it, _ = db.StorageIterator(common.HexToHash("0x05"), common.HexToHash("0xaa"), common.Hash{})
+	verifyIterator(t, 3, it, verifyStorage)
+	it.Release()
+
+	// Ensure the iteration result aligns after the database restart
+	restart(common.HexToHash("0x05"))
 
 	// The output should be 07,08,09
 	it, _ = db.StorageIterator(common.HexToHash("0x05"), common.HexToHash("0xaa"), common.Hash{})
@@ -886,6 +954,13 @@ func TestStorageIteratorDeletions(t *testing.T) {
 	verifyIterator(t, 2, it, verifyStorage) // The output should be 11,12
 	it.Release()
 
+	verifyIterator(t, 2, db.tree.get(common.HexToHash("0x06")).(*diffLayer).newBinaryStorageIterator(common.HexToHash("0xaa"), common.Hash{}), verifyStorage)
+
+	// Ensure the iteration result aligns after the database restart
+	restart(common.HexToHash("0x06"))
+	it, _ = db.StorageIterator(common.HexToHash("0x06"), common.HexToHash("0xaa"), common.Hash{})
+	verifyIterator(t, 2, it, verifyStorage) // The output should be 11,12
+	it.Release()
 	verifyIterator(t, 2, db.tree.get(common.HexToHash("0x06")).(*diffLayer).newBinaryStorageIterator(common.HexToHash("0xaa"), common.Hash{}), verifyStorage)
 }
 
@@ -904,10 +979,10 @@ func TestStaleIterator(t *testing.T) {
 
 func testStaleIterator(t *testing.T, newIter func(db *Database, hash common.Hash) Iterator) {
 	config := &Config{
-		WriteBufferSize: 16 * 1024 * 1024,
+		WriteBufferSize:   16 * 1024 * 1024,
+		NoAsyncGeneration: true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
 
 	// [02 (disk), 03]
 	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 1, trienode.NewMergedNodeSet(),
@@ -959,10 +1034,9 @@ func BenchmarkAccountIteratorTraversal(b *testing.B) {
 		return accounts
 	}
 	config := &Config{
-		WriteBufferSize: 0,
+		NoAsyncGeneration: true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
 
 	for i := 1; i <= 100; i++ {
 		parent := types.EmptyRootHash
@@ -1054,10 +1128,9 @@ func BenchmarkAccountIteratorLargeBaselayer(b *testing.B) {
 		return accounts
 	}
 	config := &Config{
-		WriteBufferSize: 0,
+		NoAsyncGeneration: true,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
 
 	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 1, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(makeAccounts(2000), nil, nil, nil, false))
 	for i := 2; i <= 100; i++ {

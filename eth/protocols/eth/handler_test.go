@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -120,7 +119,7 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, cancun bool, generat
 		Alloc:      types.GenesisAlloc{testAddr: {Balance: big.NewInt(100_000_000_000_000_000)}},
 		Difficulty: common.Big0,
 	}
-	chain, _ := core.NewBlockChain(db, nil, gspec, nil, engine, vm.Config{}, nil)
+	chain, _ := core.NewBlockChain(db, gspec, engine, nil)
 
 	_, bs, _ := core.GenerateChainWithGenesis(gspec, engine, blocks, generator)
 	if _, err := chain.InsertChain(bs); err != nil {
@@ -529,22 +528,23 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 	// Collect the hashes to request, and the response to expect
 	var (
 		hashes   []common.Hash
-		receipts [][]*types.Receipt
+		receipts []*ReceiptList68
 	)
 	for i := uint64(0); i <= backend.chain.CurrentBlock().Number.Uint64(); i++ {
 		block := backend.chain.GetBlockByNumber(i)
-
 		hashes = append(hashes, block.Hash())
-		receipts = append(receipts, backend.chain.GetReceiptsByHash(block.Hash()))
+		trs := backend.chain.GetReceiptsByHash(block.Hash())
+		receipts = append(receipts, NewReceiptList68(trs))
 	}
+
 	// Send the hash request and verify the response
 	p2p.Send(peer.app, GetReceiptsMsg, &GetReceiptsPacket{
 		RequestId:          123,
 		GetReceiptsRequest: hashes,
 	})
-	if err := p2p.ExpectMsg(peer.app, ReceiptsMsg, &ReceiptsPacket{
-		RequestId:        123,
-		ReceiptsResponse: receipts,
+	if err := p2p.ExpectMsg(peer.app, ReceiptsMsg, &ReceiptsPacket[*ReceiptList68]{
+		RequestId: 123,
+		List:      receipts,
 	}); err != nil {
 		t.Errorf("receipts mismatch: %v", err)
 	}
@@ -612,10 +612,10 @@ func setup() (*testBackend, *testPeer) {
 }
 
 func FuzzEthProtocolHandlers(f *testing.F) {
-	handlers := eth68
+	handlers := eth69
 	backend, peer := setup()
 	f.Fuzz(func(t *testing.T, code byte, msg []byte) {
-		handler := handlers[uint64(code)%protocolLengths[ETH68]]
+		handler := handlers[uint64(code)%protocolLengths[ETH69]]
 		if handler == nil {
 			return
 		}

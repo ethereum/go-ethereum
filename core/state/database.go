@@ -175,26 +175,27 @@ func NewDatabaseForTesting() *CachingDB {
 func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	var readers []StateReader
 
-	// Set up the state snapshot reader if available. This feature
-	// is optional and may be partially useful if it's not fully
-	// generated.
-	if db.snap != nil {
-		// If standalone state snapshot is available (hash scheme),
-		// then construct the legacy snap reader.
+	// Configure the state reader using the standalone snapshot in hash mode.
+	// This reader offers improved performance but is optional and only
+	// partially useful if the snapshot is not fully generated.
+	if db.TrieDB().Scheme() == rawdb.HashScheme && db.snap != nil {
 		snap := db.snap.Snapshot(stateRoot)
 		if snap != nil {
 			readers = append(readers, newFlatReader(snap))
 		}
-	} else {
-		// If standalone state snapshot is not available, try to construct
-		// the state reader with database.
+	}
+	// Configure the state reader using the path database in path mode.
+	// This reader offers improved performance but is optional and only
+	// partially useful if the snapshot data in path database is not
+	// fully generated.
+	if db.TrieDB().Scheme() == rawdb.PathScheme {
 		reader, err := db.triedb.StateReader(stateRoot)
 		if err == nil {
-			readers = append(readers, newFlatReader(reader)) // state reader is optional
+			readers = append(readers, newFlatReader(reader))
 		}
 	}
-	// Set up the trie reader, which is expected to always be available
-	// as the gatekeeper unless the state is corrupted.
+	// Configure the trie reader, which is expected to be available as the
+	// gatekeeper unless the state is corrupted.
 	tr, err := newTrieReader(stateRoot, db.triedb, db.pointCache)
 	if err != nil {
 		return nil, err
@@ -208,13 +209,16 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	return newReader(newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache), combined), nil
 }
 
-// ReaderWithCache creates a state reader with internal local cache.
-func (db *CachingDB) ReaderWithCache(stateRoot common.Hash) (Reader, error) {
+// ReadersWithCacheStats creates a pair of state readers sharing the same internal cache and
+// same backing Reader, but exposing separate statistics.
+// and statistics.
+func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (ReaderWithStats, ReaderWithStats, error) {
 	reader, err := db.Reader(stateRoot)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return newReaderWithCache(reader), nil
+	shared := newReaderWithCache(reader)
+	return newReaderWithCacheStats(shared), newReaderWithCacheStats(shared), nil
 }
 
 // OpenTrie opens the main account trie at a specific root hash.

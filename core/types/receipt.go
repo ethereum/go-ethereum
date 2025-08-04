@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -257,8 +258,64 @@ func (r *Receipt) Size() common.StorageSize {
 	return size
 }
 
+// DeriveReceiptContext holds the contextual information needed to derive a receipt
+type DeriveReceiptContext struct {
+	BlockHash    common.Hash
+	BlockNumber  uint64
+	BlockTime    uint64
+	BaseFee      *big.Int
+	BlobGasPrice *big.Int
+	GasUsed      uint64
+	LogIndex     uint // Number of logs in the block until this receipt
+	Tx           *Transaction
+	TxIndex      uint
+}
+
+// DeriveFields fills the receipt with computed fields based on consensus
+// data and contextual infos like containing block and transactions.
+func (r *Receipt) DeriveFields(signer Signer, context DeriveReceiptContext) {
+	// The transaction type and hash can be retrieved from the transaction itself
+	r.Type = context.Tx.Type()
+	r.TxHash = context.Tx.Hash()
+	r.GasUsed = context.GasUsed
+	r.EffectiveGasPrice = context.Tx.inner.effectiveGasPrice(new(big.Int), context.BaseFee)
+
+	// EIP-4844 blob transaction fields
+	if context.Tx.Type() == BlobTxType {
+		r.BlobGasUsed = context.Tx.BlobGas()
+		r.BlobGasPrice = context.BlobGasPrice
+	}
+
+	// Block location fields
+	r.BlockHash = context.BlockHash
+	r.BlockNumber = new(big.Int).SetUint64(context.BlockNumber)
+	r.TransactionIndex = context.TxIndex
+
+	// The contract address can be derived from the transaction itself
+	if context.Tx.To() == nil {
+		// Deriving the signer is expensive, only do if it's actually needed
+		from, _ := Sender(signer, context.Tx)
+		r.ContractAddress = crypto.CreateAddress(from, context.Tx.Nonce())
+	} else {
+		r.ContractAddress = common.Address{}
+	}
+	// The derived log fields can simply be set from the block and transaction
+	logIndex := context.LogIndex
+	for j := 0; j < len(r.Logs); j++ {
+		r.Logs[j].BlockNumber = context.BlockNumber
+		r.Logs[j].BlockHash = context.BlockHash
+		r.Logs[j].BlockTimestamp = context.BlockTime
+		r.Logs[j].TxHash = r.TxHash
+		r.Logs[j].TxIndex = context.TxIndex
+		r.Logs[j].Index = logIndex
+		logIndex++
+	}
+	// Also derive the Bloom if not derived yet
+	r.Bloom = CreateBloom(r)
+}
+
 // ReceiptForStorage is a wrapper around a Receipt with RLP serialization
-// that omits the Bloom field and deserialization that re-computes it.
+// that omits the Bloom field. The Bloom field is recomputed by DeriveFields.
 type ReceiptForStorage Receipt
 
 // EncodeRLP implements rlp.Encoder, and flattens all content fields of a receipt
@@ -291,7 +348,6 @@ func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
 	}
 	r.CumulativeGasUsed = stored.CumulativeGasUsed
 	r.Logs = stored.Logs
-	r.Bloom = CreateBloom((*Receipt)(r))
 
 	return nil
 }
@@ -323,55 +379,48 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 
 // DeriveFields fills the receipts with their computed fields based on consensus
 // data and contextual infos like containing block and transactions.
-func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, number uint64, time uint64, baseFee *big.Int, blobGasPrice *big.Int, txs []*Transaction) error {
-	signer := MakeSigner(config, new(big.Int).SetUint64(number), time)
+func (rs Receipts) DeriveFields(config *params.ChainConfig, blockHash common.Hash, blockNumber uint64, blockTime uint64, baseFee *big.Int, blobGasPrice *big.Int, txs []*Transaction) error {
+	signer := MakeSigner(config, new(big.Int).SetUint64(blockNumber), blockTime)
 
 	logIndex := uint(0)
 	if len(txs) != len(rs) {
 		return errors.New("transaction and receipt count mismatch")
 	}
 	for i := 0; i < len(rs); i++ {
-		// The transaction type and hash can be retrieved from the transaction itself
-		rs[i].Type = txs[i].Type()
-		rs[i].TxHash = txs[i].Hash()
-		rs[i].EffectiveGasPrice = txs[i].inner.effectiveGasPrice(new(big.Int), baseFee)
-
-		// EIP-4844 blob transaction fields
-		if txs[i].Type() == BlobTxType {
-			rs[i].BlobGasUsed = txs[i].BlobGas()
-			rs[i].BlobGasPrice = blobGasPrice
+		var cumulativeGasUsed uint64
+		if i > 0 {
+			cumulativeGasUsed = rs[i-1].CumulativeGasUsed
 		}
-
-		// block location fields
-		rs[i].BlockHash = hash
-		rs[i].BlockNumber = new(big.Int).SetUint64(number)
-		rs[i].TransactionIndex = uint(i)
-
-		// The contract address can be derived from the transaction itself
-		if txs[i].To() == nil {
-			// Deriving the signer is expensive, only do if it's actually needed
-			from, _ := Sender(signer, txs[i])
-			rs[i].ContractAddress = crypto.CreateAddress(from, txs[i].Nonce())
-		} else {
-			rs[i].ContractAddress = common.Address{}
-		}
-
-		// The used gas can be calculated based on previous r
-		if i == 0 {
-			rs[i].GasUsed = rs[i].CumulativeGasUsed
-		} else {
-			rs[i].GasUsed = rs[i].CumulativeGasUsed - rs[i-1].CumulativeGasUsed
-		}
-
-		// The derived log fields can simply be set from the block and transaction
-		for j := 0; j < len(rs[i].Logs); j++ {
-			rs[i].Logs[j].BlockNumber = number
-			rs[i].Logs[j].BlockHash = hash
-			rs[i].Logs[j].TxHash = rs[i].TxHash
-			rs[i].Logs[j].TxIndex = uint(i)
-			rs[i].Logs[j].Index = logIndex
-			logIndex++
-		}
+		rs[i].DeriveFields(signer, DeriveReceiptContext{
+			BlockHash:    blockHash,
+			BlockNumber:  blockNumber,
+			BlockTime:    blockTime,
+			BaseFee:      baseFee,
+			BlobGasPrice: blobGasPrice,
+			GasUsed:      rs[i].CumulativeGasUsed - cumulativeGasUsed,
+			LogIndex:     logIndex,
+			Tx:           txs[i],
+			TxIndex:      uint(i),
+		})
+		logIndex += uint(len(rs[i].Logs))
 	}
 	return nil
+}
+
+// EncodeBlockReceiptLists encodes a list of block receipt lists into RLP.
+func EncodeBlockReceiptLists(receipts []Receipts) []rlp.RawValue {
+	var storageReceipts []*ReceiptForStorage
+	result := make([]rlp.RawValue, len(receipts))
+	for i, receipt := range receipts {
+		storageReceipts = storageReceipts[:0]
+		for _, r := range receipt {
+			storageReceipts = append(storageReceipts, (*ReceiptForStorage)(r))
+		}
+		bytes, err := rlp.EncodeToBytes(storageReceipts)
+		if err != nil {
+			log.Crit("Failed to encode block receipts", "err", err)
+		}
+		result[i] = bytes
+	}
+	return result
 }

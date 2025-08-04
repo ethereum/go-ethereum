@@ -17,6 +17,7 @@
 package pathdb
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -35,8 +36,11 @@ import (
 )
 
 const (
-	// defaultCleanSize is the default memory allowance of clean cache.
-	defaultCleanSize = 16 * 1024 * 1024
+	// defaultTrieCleanSize is the default memory allowance of clean trie cache.
+	defaultTrieCleanSize = 16 * 1024 * 1024
+
+	// defaultStateCleanSize is the default memory allowance of clean state cache.
+	defaultStateCleanSize = 16 * 1024 * 1024
 
 	// maxBufferSize is the maximum memory allowance of node buffer.
 	// Too large buffer will cause the system to pause for a long
@@ -110,10 +114,17 @@ type layer interface {
 
 // Config contains the settings for database.
 type Config struct {
-	StateHistory    uint64 // Number of recent blocks to maintain state history for
-	CleanCacheSize  int    // Maximum memory allowance (in bytes) for caching clean nodes
-	WriteBufferSize int    // Maximum memory allowance (in bytes) for write buffer
-	ReadOnly        bool   // Flag whether the database is opened in read only mode.
+	StateHistory        uint64 // Number of recent blocks to maintain state history for
+	EnableStateIndexing bool   // Whether to enable state history indexing for external state access
+	TrieCleanSize       int    // Maximum memory allowance (in bytes) for caching clean trie nodes
+	StateCleanSize      int    // Maximum memory allowance (in bytes) for caching clean state data
+	WriteBufferSize     int    // Maximum memory allowance (in bytes) for write buffer
+	ReadOnly            bool   // Flag whether the database is opened in read only mode
+
+	// Testing configurations
+	SnapshotNoBuild   bool // Flag Whether the state generation is allowed
+	NoAsyncFlush      bool // Flag whether the background buffer flushing is allowed
+	NoAsyncGeneration bool // Flag whether the background generation is allowed
 }
 
 // sanitize checks the provided user configurations and changes anything that's
@@ -133,16 +144,26 @@ func (c *Config) fields() []interface{} {
 	if c.ReadOnly {
 		list = append(list, "readonly", true)
 	}
-	list = append(list, "cache", common.StorageSize(c.CleanCacheSize))
+	if c.SnapshotNoBuild {
+		list = append(list, "snapshot", false)
+	}
+	list = append(list, "triecache", common.StorageSize(c.TrieCleanSize))
+	list = append(list, "statecache", common.StorageSize(c.StateCleanSize))
 	list = append(list, "buffer", common.StorageSize(c.WriteBufferSize))
-	list = append(list, "history", c.StateHistory)
+
+	if c.StateHistory == 0 {
+		list = append(list, "history", "entire chain")
+	} else {
+		list = append(list, "history", fmt.Sprintf("last %d blocks", c.StateHistory))
+	}
 	return list
 }
 
 // Defaults contains default settings for Ethereum mainnet.
 var Defaults = &Config{
 	StateHistory:    params.FullImmutabilityThreshold,
-	CleanCacheSize:  defaultCleanSize,
+	TrieCleanSize:   defaultTrieCleanSize,
+	StateCleanSize:  defaultStateCleanSize,
 	WriteBufferSize: defaultBufferSize,
 }
 
@@ -198,6 +219,7 @@ type Database struct {
 	tree    *layerTree                   // The group for all known layers
 	freezer ethdb.ResettableAncientStore // Freezer for storing trie histories, nil possible in tests
 	lock    sync.RWMutex                 // Lock to prevent mutations from happening at the same time
+	indexer *historyIndexer              // History indexer
 }
 
 // New attempts to load an already existing layer from a persistent key-value
@@ -240,6 +262,18 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 			log.Crit("Failed to disable database", "err", err) // impossible to happen
 		}
 	}
+	// Resolving the state snapshot generation progress from the database is
+	// mandatory. This ensures that uncovered flat states are not accessed,
+	// even if background generation is not allowed. If permitted, the generation
+	// might be scheduled.
+	if err := db.setStateGenerator(); err != nil {
+		log.Crit("Failed to setup the generator", "err", err)
+	}
+	// TODO (rjl493456442) disable the background indexing in read-only mode
+	if db.freezer != nil && db.config.EnableStateIndexing {
+		db.indexer = newHistoryIndexer(db.diskdb, db.freezer, db.tree.bottom().stateID())
+		log.Info("Enabled state history indexing")
+	}
 	fields := config.fields()
 	if db.isVerkle {
 		fields = append(fields, "verkle", true)
@@ -277,6 +311,11 @@ func (db *Database) repairHistory() error {
 			log.Crit("Failed to retrieve head of state history", "err", err)
 		}
 		if frozen != 0 {
+			// TODO(rjl493456442) would be better to group them into a batch.
+			//
+			// Purge all state history indexing data first
+			rawdb.DeleteStateHistoryIndexMetadata(db.diskdb)
+			rawdb.DeleteStateHistoryIndex(db.diskdb)
 			err := db.freezer.Reset()
 			if err != nil {
 				log.Crit("Failed to reset state histories", "err", err)
@@ -293,6 +332,66 @@ func (db *Database) repairHistory() error {
 	}
 	if pruned != 0 {
 		log.Warn("Truncated extra state histories", "number", pruned)
+	}
+	return nil
+}
+
+// setStateGenerator loads the state generation progress marker and potentially
+// resume the state generation if it's permitted.
+func (db *Database) setStateGenerator() error {
+	// Load the state snapshot generation progress marker to prevent access
+	// to uncovered states.
+	generator, root, err := loadGenerator(db.diskdb, db.hasher)
+	if err != nil {
+		return err
+	}
+	if generator == nil {
+		// Initialize an empty generator to rebuild the state snapshot from scratch
+		generator = &journalGenerator{
+			Marker: []byte{},
+		}
+	}
+	// Short circuit if the whole state snapshot has already been fully generated.
+	// The generator will be left as nil in disk layer for representing the whole
+	// state snapshot is available for accessing.
+	if generator.Done {
+		return nil
+	}
+	var origin uint64
+	if len(generator.Marker) >= 8 {
+		origin = binary.BigEndian.Uint64(generator.Marker)
+	}
+	stats := &generatorStats{
+		origin:   origin,
+		start:    time.Now(),
+		accounts: generator.Accounts,
+		slots:    generator.Slots,
+		storage:  common.StorageSize(generator.Storage),
+	}
+	dl := db.tree.bottom()
+
+	// Disable the background snapshot building in these circumstances:
+	// - the database is opened in read only mode
+	// - the snapshot build is explicitly disabled
+	// - the database is opened in verkle tree mode
+	noBuild := db.readOnly || db.config.SnapshotNoBuild || db.isVerkle
+
+	// Construct the generator and link it to the disk layer, ensuring that the
+	// generation progress is resolved to prevent accessing uncovered states
+	// regardless of whether background state snapshot generation is allowed.
+	dl.setGenerator(newGenerator(db.diskdb, noBuild, generator.Marker, stats))
+
+	// Short circuit if the background generation is not permitted
+	if noBuild || db.waitSync {
+		return nil
+	}
+	stats.log("Starting snapshot generation", root, generator.Marker)
+	dl.generator.run(root)
+
+	// Block until the generation completes. It's the feature used in
+	// unit tests.
+	if db.config.NoAsyncGeneration {
+		<-dl.generator.done
 	}
 	return nil
 }
@@ -359,8 +458,13 @@ func (db *Database) Disable() error {
 	}
 	db.waitSync = true
 
-	// Mark the disk layer as stale to prevent access to persistent state.
-	db.tree.bottom().markStale()
+	// Terminate the state generator if it's active and mark the disk layer
+	// as stale to prevent access to persistent state.
+	disk := db.tree.bottom()
+	if err := disk.terminate(); err != nil {
+		return err
+	}
+	disk.markStale()
 
 	// Write the initial sync flag to persist it across restarts.
 	rawdb.WriteSnapSyncStatusFlag(db.diskdb, rawdb.StateSyncRunning)
@@ -390,6 +494,7 @@ func (db *Database) Enable(root common.Hash) error {
 	// reset the persistent state id back to zero.
 	batch := db.diskdb.NewBatch()
 	rawdb.DeleteTrieJournal(batch)
+	rawdb.DeleteSnapshotRoot(batch)
 	rawdb.WritePersistentStateID(batch, 0)
 	if err := batch.Write(); err != nil {
 		return err
@@ -399,17 +504,32 @@ func (db *Database) Enable(root common.Hash) error {
 	// mappings can be huge and might take a while to clear
 	// them, just leave them in disk and wait for overwriting.
 	if db.freezer != nil {
+		// TODO(rjl493456442) would be better to group them into a batch.
+		//
+		// Purge all state history indexing data first
+		rawdb.DeleteStateHistoryIndexMetadata(db.diskdb)
+		rawdb.DeleteStateHistoryIndex(db.diskdb)
 		if err := db.freezer.Reset(); err != nil {
 			return err
 		}
 	}
-	// Re-construct a new disk layer backed by persistent state
-	// with **empty clean cache and node buffer**.
-	db.tree.reset(newDiskLayer(root, 0, db, nil, newBuffer(db.config.WriteBufferSize, nil, nil, 0)))
-
 	// Re-enable the database as the final step.
 	db.waitSync = false
 	rawdb.WriteSnapSyncStatusFlag(db.diskdb, rawdb.StateSyncFinished)
+
+	// Re-construct a new disk layer backed by persistent state
+	// and schedule the state snapshot generation if it's permitted.
+	db.tree.init(generateSnapshot(db, root, db.isVerkle || db.config.SnapshotNoBuild))
+
+	// After snap sync, the state of the database may have changed completely.
+	// To ensure the history indexer always matches the current state, we must:
+	//   1. Close any existing indexer
+	//   2. Re-initialize the indexer so it starts indexing from the new state root.
+	if db.indexer != nil && db.freezer != nil && db.config.EnableStateIndexing {
+		db.indexer.close()
+		db.indexer = newHistoryIndexer(db.diskdb, db.freezer, db.tree.bottom().stateID())
+		log.Info("Re-enabled state history indexing")
+	}
 	log.Info("Rebuilt trie database", "root", root)
 	return nil
 }
@@ -451,7 +571,7 @@ func (db *Database) Recover(root common.Hash) error {
 		// reset layer with newly created disk layer. It must be
 		// done after each revert operation, otherwise the new
 		// disk layer won't be accessible from outside.
-		db.tree.reset(dl)
+		db.tree.init(dl)
 	}
 	rawdb.DeleteTrieJournal(db.diskdb)
 
@@ -514,9 +634,19 @@ func (db *Database) Close() error {
 	// following mutations.
 	db.readOnly = true
 
-	// Release the memory held by clean cache.
-	db.tree.bottom().resetCache()
+	// Block until the background flushing is finished. It must
+	// be done before terminating the potential background snapshot
+	// generator.
+	dl := db.tree.bottom()
+	if err := dl.terminate(); err != nil {
+		return err
+	}
+	dl.resetCache() // release the memory held by clean cache
 
+	// Terminate the background state history indexer
+	if db.indexer != nil {
+		db.indexer.close()
+	}
 	// Close the attached state history freezer.
 	if db.freezer == nil {
 		return nil
@@ -580,14 +710,41 @@ func (db *Database) HistoryRange() (uint64, uint64, error) {
 	return historyRange(db.freezer)
 }
 
+// IndexProgress returns the indexing progress made so far. It provides the
+// number of states that remain unindexed.
+func (db *Database) IndexProgress() (uint64, error) {
+	if db.indexer == nil {
+		return 0, nil
+	}
+	return db.indexer.progress()
+}
+
 // AccountIterator creates a new account iterator for the specified root hash and
 // seeks to a starting account hash.
 func (db *Database) AccountIterator(root common.Hash, seek common.Hash) (AccountIterator, error) {
+	db.lock.RLock()
+	wait := db.waitSync
+	db.lock.RUnlock()
+	if wait {
+		return nil, errDatabaseWaitSync
+	}
+	if !db.tree.bottom().genComplete() {
+		return nil, errNotConstructed
+	}
 	return newFastAccountIterator(db, root, seek)
 }
 
 // StorageIterator creates a new storage iterator for the specified root hash and
 // account. The iterator will be moved to the specific start position.
 func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek common.Hash) (StorageIterator, error) {
+	db.lock.RLock()
+	wait := db.waitSync
+	db.lock.RUnlock()
+	if wait {
+		return nil, errDatabaseWaitSync
+	}
+	if !db.tree.bottom().genComplete() {
+		return nil, errNotConstructed
+	}
 	return newFastStorageIterator(db, root, account, seek)
 }

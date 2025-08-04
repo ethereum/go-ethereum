@@ -77,14 +77,14 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 	_, blocks, _ := core.GenerateChainWithGenesis(gspec, backend.engine, n, generator)
 
 	// Import the canonical chain
-	cacheConfig := &core.CacheConfig{
-		TrieCleanLimit:    256,
-		TrieDirtyLimit:    256,
-		TrieTimeLimit:     5 * time.Minute,
-		SnapshotLimit:     0,
-		TrieDirtyDisabled: true, // Archive mode
+	options := &core.BlockChainConfig{
+		TrieCleanLimit: 256,
+		TrieDirtyLimit: 256,
+		TrieTimeLimit:  5 * time.Minute,
+		SnapshotLimit:  0,
+		ArchiveMode:    true, // Archive mode
 	}
-	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, gspec, nil, backend.engine, vm.Config{}, nil)
+	chain, err := core.NewBlockChain(backend.chaindb, gspec, backend.engine, options)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -117,8 +117,8 @@ func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber)
 	return b.chain.GetBlockByNumber(uint64(number)), nil
 }
 
-func (b *testBackend) GetTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64) {
-	tx, hash, blockNumber, index := rawdb.ReadTransaction(b.chaindb, txHash)
+func (b *testBackend) GetCanonicalTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64) {
+	tx, hash, blockNumber, index := rawdb.ReadCanonicalTransaction(b.chaindb, txHash)
 	return tx != nil, tx, hash, blockNumber, index
 }
 
@@ -1144,14 +1144,14 @@ func newTestMergedBackend(t *testing.T, n int, gspec *core.Genesis, generator fu
 	_, blocks, _ := core.GenerateChainWithGenesis(gspec, backend.engine, n, generator)
 
 	// Import the canonical chain
-	cacheConfig := &core.CacheConfig{
-		TrieCleanLimit:    256,
-		TrieDirtyLimit:    256,
-		TrieTimeLimit:     5 * time.Minute,
-		SnapshotLimit:     0,
-		TrieDirtyDisabled: true, // Archive mode
+	options := &core.BlockChainConfig{
+		TrieCleanLimit: 256,
+		TrieDirtyLimit: 256,
+		TrieTimeLimit:  5 * time.Minute,
+		SnapshotLimit:  0,
+		ArchiveMode:    true, // Archive mode
 	}
-	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, gspec, nil, backend.engine, vm.Config{}, nil)
+	chain, err := core.NewBlockChain(backend.chaindb, gspec, backend.engine, options)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}

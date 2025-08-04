@@ -45,11 +45,11 @@ func newFilterTestSuite(cfg testConfig) *filterTestSuite {
 	return s
 }
 
-func (s *filterTestSuite) allTests() []utesting.Test {
-	return []utesting.Test{
-		{Name: "Filter/ShortRange", Fn: s.filterShortRange},
-		{Name: "Filter/LongRange", Fn: s.filterLongRange, Slow: true},
-		{Name: "Filter/FullRange", Fn: s.filterFullRange, Slow: true},
+func (s *filterTestSuite) allTests() []workloadTest {
+	return []workloadTest{
+		newWorkLoadTest("Filter/ShortRange", s.filterShortRange),
+		newSlowWorkloadTest("Filter/LongRange", s.filterLongRange),
+		newSlowWorkloadTest("Filter/FullRange", s.filterFullRange),
 	}
 }
 

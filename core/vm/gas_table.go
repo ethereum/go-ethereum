@@ -485,20 +485,3 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	}
 	return gas, nil
 }
-
-func gasExtCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	panic("not implemented")
-}
-
-func gasExtDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	panic("not implemented")
-}
-func gasExtStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	panic("not implemented")
-}
-
-// gasEOFCreate returns the gas-cost for EOF-Create. Hashing charge needs to be
-// deducted in the opcode itself, since it depends on the immediate
-func gasEOFCreate(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	panic("not implemented")
-}

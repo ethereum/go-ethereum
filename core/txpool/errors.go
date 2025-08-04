@@ -58,6 +58,10 @@ var (
 	// making the transaction invalid, rather a DOS protection.
 	ErrOversizedData = errors.New("oversized data")
 
+	// ErrTxBlobLimitExceeded is returned if a transaction would exceed the number
+	// of blobs allowed by blobpool.
+	ErrTxBlobLimitExceeded = errors.New("transaction blob limit exceeded")
+
 	// ErrAlreadyReserved is returned if the sender address has a pending transaction
 	// in a different subpool. For example, this error is returned in response to any
 	// input transaction of non-blob type when a blob transaction from this sender

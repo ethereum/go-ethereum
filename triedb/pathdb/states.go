@@ -23,8 +23,10 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -385,8 +387,8 @@ func (s *stateSet) decode(r *rlp.Stream) error {
 	if err := r.Decode(&dec); err != nil {
 		return fmt.Errorf("load diff accounts: %v", err)
 	}
-	for i := 0; i < len(dec.AddrHashes); i++ {
-		accountSet[dec.AddrHashes[i]] = dec.Accounts[i]
+	for i := range dec.AddrHashes {
+		accountSet[dec.AddrHashes[i]] = empty2nil(dec.Accounts[i])
 	}
 	s.accountData = accountSet
 
@@ -405,8 +407,8 @@ func (s *stateSet) decode(r *rlp.Stream) error {
 	}
 	for _, entry := range storages {
 		storageSet[entry.AddrHash] = make(map[common.Hash][]byte, len(entry.Keys))
-		for i := 0; i < len(entry.Keys); i++ {
-			storageSet[entry.AddrHash][entry.Keys[i]] = entry.Vals[i]
+		for i := range entry.Keys {
+			storageSet[entry.AddrHash][entry.Keys[i]] = empty2nil(entry.Vals[i])
 		}
 	}
 	s.storageData = storageSet
@@ -414,6 +416,11 @@ func (s *stateSet) decode(r *rlp.Stream) error {
 
 	s.size = s.check()
 	return nil
+}
+
+// write flushes state mutations into the provided database batch as a whole.
+func (s *stateSet) write(batch ethdb.Batch, genMarker []byte, clean *fastcache.Cache) (int, int) {
+	return writeStates(batch, genMarker, s.accountData, s.storageData, clean)
 }
 
 // reset clears all cached state data, including any optional sorted lists that
@@ -427,8 +434,6 @@ func (s *stateSet) reset() {
 }
 
 // dbsize returns the approximate size for db write.
-//
-// nolint:unused
 func (s *stateSet) dbsize() int {
 	m := len(s.accountData) * len(rawdb.SnapshotAccountPrefix)
 	for _, slots := range s.storageData {
@@ -545,8 +550,8 @@ func (s *StateSetWithOrigin) decode(r *rlp.Stream) error {
 	if err := r.Decode(&accounts); err != nil {
 		return fmt.Errorf("load diff account origin set: %v", err)
 	}
-	for i := 0; i < len(accounts.Accounts); i++ {
-		accountSet[accounts.Addresses[i]] = accounts.Accounts[i]
+	for i := range accounts.Accounts {
+		accountSet[accounts.Addresses[i]] = empty2nil(accounts.Accounts[i])
 	}
 	s.accountOrigin = accountSet
 
@@ -565,10 +570,17 @@ func (s *StateSetWithOrigin) decode(r *rlp.Stream) error {
 	}
 	for _, storage := range storages {
 		storageSet[storage.Address] = make(map[common.Hash][]byte)
-		for i := 0; i < len(storage.Keys); i++ {
-			storageSet[storage.Address][storage.Keys[i]] = storage.Vals[i]
+		for i := range storage.Keys {
+			storageSet[storage.Address][storage.Keys[i]] = empty2nil(storage.Vals[i])
 		}
 	}
 	s.storageOrigin = storageSet
 	return nil
+}
+
+func empty2nil(b []byte) []byte {
+	if len(b) == 0 {
+		return nil
+	}
+	return b
 }

@@ -18,7 +18,6 @@
 package pebble
 
 import (
-	"bytes"
 	"fmt"
 	"runtime"
 	"strings"
@@ -84,6 +83,7 @@ type Database struct {
 	estimatedCompDebtGauge *metrics.Gauge   // Gauge for tracking the number of bytes that need to be compacted
 	liveCompGauge          *metrics.Gauge   // Gauge for tracking the number of in-progress compactions
 	liveCompSizeGauge      *metrics.Gauge   // Gauge for tracking the size of in-progress compactions
+	liveIterGauge          *metrics.Gauge   // Gauge for tracking the number of live database iterators
 	levelsGauge            []*metrics.Gauge // Gauge for tracking the number of tables in levels
 
 	quitLock sync.RWMutex    // Mutex protecting the quit channel and the closed flag
@@ -199,9 +199,12 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	// Taken from https://github.com/cockroachdb/pebble/blob/master/internal/constants/constants.go
 	maxMemTableSize := (1<<31)<<(^uint(0)>>63) - 1
 
-	// Two memory tables is configured which is identical to leveldb,
-	// including a frozen memory table and another live one.
-	memTableLimit := 2
+	// Four memory tables are configured, each with a default size of 256 MB.
+	// Having multiple smaller memory tables while keeping the total memory
+	// limit unchanged allows writes to be flushed more smoothly. This helps
+	// avoid compaction spikes and mitigates write stalls caused by heavy
+	// compaction workloads.
+	memTableLimit := 4
 	memTableSize := cache * 1024 * 1024 / 2 / memTableLimit
 
 	// The memory table size is currently capped at maxMemTableSize-1 due to a
@@ -277,6 +280,17 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		// By setting the WALBytesPerSync, the cached WAL writes will be periodically
 		// flushed at the background if the accumulated size exceeds this threshold.
 		WALBytesPerSync: 5 * ethdb.IdealBatchSize,
+
+		// L0CompactionThreshold specifies the number of L0 read-amplification
+		// necessary to trigger an L0 compaction. It essentially refers to the
+		// number of sub-levels at the L0. For each sub-level, it contains several
+		// L0 files which are non-overlapping with each other, typically produced
+		// by a single memory-table flush.
+		//
+		// The default value in Pebble is 4, which is a bit too large to have
+		// the compaction debt as around 10GB. By reducing it to 2, the compaction
+		// debt will be less than 1GB, but with more frequent compactions scheduled.
+		L0CompactionThreshold: 2,
 	}
 	// Disable seek compaction explicitly. Check https://github.com/ethereum/go-ethereum/pull/20130
 	// for more details.
@@ -313,6 +327,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	db.estimatedCompDebtGauge = metrics.GetOrRegisterGauge(namespace+"compact/estimateDebt", nil)
 	db.liveCompGauge = metrics.GetOrRegisterGauge(namespace+"compact/live/count", nil)
 	db.liveCompSizeGauge = metrics.GetOrRegisterGauge(namespace+"compact/live/size", nil)
+	db.liveIterGauge = metrics.GetOrRegisterGauge(namespace+"iter/count", nil)
 
 	// Start up the metrics gathering and return
 	go db.meter(metricsGatheringInterval, namespace)
@@ -403,8 +418,15 @@ func (d *Database) Delete(key []byte) error {
 func (d *Database) DeleteRange(start, end []byte) error {
 	d.quitLock.RLock()
 	defer d.quitLock.RUnlock()
+
 	if d.closed {
 		return pebble.ErrClosed
+	}
+	// There is no special flag to represent the end of key range
+	// in pebble(nil in leveldb). Use an ugly hack to construct a
+	// large key to represent it.
+	if end == nil {
+		end = ethdb.MaximumKey
 	}
 	return d.db.DeleteRange(start, end, d.writeOptions)
 }
@@ -464,7 +486,7 @@ func (d *Database) Compact(start []byte, limit []byte) error {
 	// 0xff-s, so 32 ensures than only a hash collision could touch it.
 	// https://github.com/cockroachdb/pebble/issues/2359#issuecomment-1443995833
 	if limit == nil {
-		limit = bytes.Repeat([]byte{0xff}, 32)
+		limit = ethdb.MaximumKey
 	}
 	return d.db.Compact(start, limit, true) // Parallelization is preferred
 }
@@ -562,6 +584,7 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		d.seekCompGauge.Update(stats.Compact.ReadCount)
 		d.liveCompGauge.Update(stats.Compact.NumInProgress)
 		d.liveCompSizeGauge.Update(stats.Compact.InProgressBytes)
+		d.liveIterGauge.Update(stats.TableIters)
 
 		d.liveMemTablesGauge.Update(stats.MemTable.Count)
 		d.zombieMemTablesGauge.Update(stats.MemTable.ZombieCount)
@@ -619,6 +642,23 @@ func (b *batch) Delete(key []byte) error {
 	return nil
 }
 
+// DeleteRange removes all keys in the range [start, end) from the batch for
+// later committing, inclusive on start, exclusive on end.
+func (b *batch) DeleteRange(start, end []byte) error {
+	// There is no special flag to represent the end of key range
+	// in pebble(nil in leveldb). Use an ugly hack to construct a
+	// large key to represent it.
+	if end == nil {
+		end = ethdb.MaximumKey
+	}
+	if err := b.b.DeleteRange(start, end, nil); err != nil {
+		return err
+	}
+	// Approximate size impact - just the keys
+	b.size += len(start) + len(end)
+	return nil
+}
+
 // ValueSize retrieves the amount of data queued up for writing.
 func (b *batch) ValueSize() int {
 	return b.size
@@ -657,6 +697,15 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 		} else if kind == pebble.InternalKeyKindDelete {
 			if err = w.Delete(k); err != nil {
 				return err
+			}
+		} else if kind == pebble.InternalKeyKindRangeDelete {
+			// For range deletion, k is the start key and v is the end key
+			if rangeDeleter, ok := w.(ethdb.KeyValueRangeDeleter); ok {
+				if err = rangeDeleter.DeleteRange(k, v); err != nil {
+					return err
+				}
+			} else {
+				return fmt.Errorf("ethdb.KeyValueWriter does not implement DeleteRange")
 			}
 		} else {
 			return fmt.Errorf("unhandled operation, keytype: %v", kind)

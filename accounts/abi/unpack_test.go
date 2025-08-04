@@ -1014,128 +1014,134 @@ func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
 	cases := []struct {
 		decodeType  string
 		inputValue  *big.Int
-		err         error
+		unpackErr   error
+		packErr     error
 		expectValue interface{}
 	}{
 		{
 			decodeType: "uint8",
 			inputValue: big.NewInt(math.MaxUint8 + 1),
-			err:        errBadUint8,
+			unpackErr:  errBadUint8,
 		},
 		{
 			decodeType:  "uint8",
 			inputValue:  big.NewInt(math.MaxUint8),
-			err:         nil,
+			unpackErr:   nil,
 			expectValue: uint8(math.MaxUint8),
 		},
 		{
 			decodeType: "uint16",
 			inputValue: big.NewInt(math.MaxUint16 + 1),
-			err:        errBadUint16,
+			unpackErr:  errBadUint16,
 		},
 		{
 			decodeType:  "uint16",
 			inputValue:  big.NewInt(math.MaxUint16),
-			err:         nil,
+			unpackErr:   nil,
 			expectValue: uint16(math.MaxUint16),
 		},
 		{
 			decodeType: "uint32",
 			inputValue: big.NewInt(math.MaxUint32 + 1),
-			err:        errBadUint32,
+			unpackErr:  errBadUint32,
 		},
 		{
 			decodeType:  "uint32",
 			inputValue:  big.NewInt(math.MaxUint32),
-			err:         nil,
+			unpackErr:   nil,
 			expectValue: uint32(math.MaxUint32),
 		},
 		{
 			decodeType: "uint64",
 			inputValue: maxU64Plus1,
-			err:        errBadUint64,
+			unpackErr:  errBadUint64,
 		},
 		{
 			decodeType:  "uint64",
 			inputValue:  maxU64,
-			err:         nil,
+			unpackErr:   nil,
 			expectValue: uint64(math.MaxUint64),
 		},
 		{
 			decodeType:  "uint256",
 			inputValue:  maxU64Plus1,
-			err:         nil,
+			unpackErr:   nil,
 			expectValue: maxU64Plus1,
 		},
 		{
 			decodeType: "int8",
 			inputValue: big.NewInt(math.MaxInt8 + 1),
-			err:        errBadInt8,
+			unpackErr:  errBadInt8,
 		},
 		{
-			decodeType: "int8",
 			inputValue: big.NewInt(math.MinInt8 - 1),
-			err:        errBadInt8,
+			packErr:    errInvalidSign,
 		},
 		{
 			decodeType:  "int8",
 			inputValue:  big.NewInt(math.MaxInt8),
-			err:         nil,
+			unpackErr:   nil,
 			expectValue: int8(math.MaxInt8),
 		},
 		{
 			decodeType: "int16",
 			inputValue: big.NewInt(math.MaxInt16 + 1),
-			err:        errBadInt16,
+			unpackErr:  errBadInt16,
 		},
 		{
-			decodeType: "int16",
 			inputValue: big.NewInt(math.MinInt16 - 1),
-			err:        errBadInt16,
+			packErr:    errInvalidSign,
 		},
 		{
 			decodeType:  "int16",
 			inputValue:  big.NewInt(math.MaxInt16),
-			err:         nil,
+			unpackErr:   nil,
 			expectValue: int16(math.MaxInt16),
 		},
 		{
 			decodeType: "int32",
 			inputValue: big.NewInt(math.MaxInt32 + 1),
-			err:        errBadInt32,
+			unpackErr:  errBadInt32,
 		},
 		{
-			decodeType: "int32",
 			inputValue: big.NewInt(math.MinInt32 - 1),
-			err:        errBadInt32,
+			packErr:    errInvalidSign,
 		},
 		{
 			decodeType:  "int32",
 			inputValue:  big.NewInt(math.MaxInt32),
-			err:         nil,
+			unpackErr:   nil,
 			expectValue: int32(math.MaxInt32),
 		},
 		{
 			decodeType: "int64",
 			inputValue: new(big.Int).Add(big.NewInt(math.MaxInt64), big.NewInt(1)),
-			err:        errBadInt64,
+			unpackErr:  errBadInt64,
 		},
 		{
-			decodeType: "int64",
 			inputValue: new(big.Int).Sub(big.NewInt(math.MinInt64), big.NewInt(1)),
-			err:        errBadInt64,
+			packErr:    errInvalidSign,
 		},
 		{
 			decodeType:  "int64",
 			inputValue:  big.NewInt(math.MaxInt64),
-			err:         nil,
+			unpackErr:   nil,
 			expectValue: int64(math.MaxInt64),
 		},
 	}
 	for i, testCase := range cases {
 		packed, err := encodeABI.Pack(testCase.inputValue)
-		if err != nil {
-			panic(err)
+		if testCase.packErr != nil {
+			if err == nil {
+				t.Fatalf("expected packing of testcase input value to fail")
+			}
+			if err != testCase.packErr {
+				t.Fatalf("expected error '%v', got '%v'", testCase.packErr, err)
+			}
+			continue
+		}
+		if err != nil && err != testCase.packErr {
+			panic(fmt.Errorf("unexpected error packing test-case input: %v", err))
 		}
 		ty, err := NewType(testCase.decodeType, "", nil)
 		if err != nil {
@@ -1145,8 +1151,8 @@ func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
 			{Type: ty},
 		}
 		decoded, err := decodeABI.Unpack(packed)
-		if err != testCase.err {
-			t.Fatalf("Expected error %v, actual error %v. case %d", testCase.err, err, i)
+		if err != testCase.unpackErr {
+			t.Fatalf("Expected error %v, actual error %v. case %d", testCase.unpackErr, err, i)
 		}
 		if err != nil {
 			continue
