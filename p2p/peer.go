@@ -173,8 +173,9 @@ func (p *Peer) Fullname() string {
 
 // Caps returns the capabilities (supported subprotocols) of the remote peer.
 func (p *Peer) Caps() []Cap {
-	// TODO: maybe return copy
-	return p.rw.caps
+	capsCopy := make([]Cap, len(p.rw.caps))
+	copy(capsCopy, p.rw.caps)
+	return capsCopy
 }
 
 // RunningCap returns true if the peer is actively connected using any of the
