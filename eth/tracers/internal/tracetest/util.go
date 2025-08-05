@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 
 	// Force-load native and js packages, to trigger registration
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
@@ -67,7 +68,13 @@ func (c *traceContext) toBlockContext(genesis *core.Genesis) vm.BlockContext {
 		context.BaseFee = (*big.Int)(c.BaseFee)
 	}
 
-	if genesis.Config.TerminalTotalDifficulty != nil && genesis.Config.TerminalTotalDifficulty.Sign() == 0 {
+	isPostMerge := func(config *params.ChainConfig, blockNum uint64, timestamp uint64) bool {
+		mergedAtGenesis := config.TerminalTotalDifficulty != nil && config.TerminalTotalDifficulty.Sign() == 0
+		return mergedAtGenesis ||
+			config.MergeNetsplitBlock != nil && blockNum >= config.MergeNetsplitBlock.Uint64() ||
+			config.ShanghaiTime != nil && timestamp >= *config.ShanghaiTime
+	}
+	if isPostMerge(genesis.Config, uint64(c.Number), uint64(c.Time)) {
 		context.Random = &genesis.Mixhash
 	}
 
