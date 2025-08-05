@@ -1904,6 +1904,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 			return nil, it.index, err
 		}
 		// Report the import stats before returning the various results
+		stats.processed++
 		stats.usedGas += res.usedGas
 		witness = res.witness
 
