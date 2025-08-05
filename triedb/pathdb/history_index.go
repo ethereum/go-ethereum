@@ -202,12 +202,14 @@ func newIndexWriter(db ethdb.KeyValueReader, state stateIdent, cacher *historyCa
 	key := state.CacheKey()
 	if cacher != nil && cacher.index.Contains(key) {
 		blob, _ = cacher.index.Get(key)
+		historyIndexCacheHitMeter.Mark(1)
 	} else {
 		if state.account {
 			blob = rawdb.ReadAccountHistoryIndex(db, state.addressHash)
 		} else {
 			blob = rawdb.ReadStorageHistoryIndex(db, state.addressHash, state.storageHash)
 		}
+		historyIndexCacheMissMeter.Mark(1)
 		if cacher != nil {
 			cacher.index.Add(key, blob)
 		}
@@ -361,12 +363,14 @@ func newIndexDeleter(db ethdb.KeyValueReader, state stateIdent, cacher *historyC
 	key := state.CacheKey()
 	if cacher != nil && cacher.index.Contains(key) {
 		blob, _ = cacher.index.Get(key)
+		historyIndexCacheHitMeter.Mark(1)
 	} else {
 		if state.account {
 			blob = rawdb.ReadAccountHistoryIndex(db, state.addressHash)
 		} else {
 			blob = rawdb.ReadStorageHistoryIndex(db, state.addressHash, state.storageHash)
 		}
+		historyIndexCacheMissMeter.Mark(1)
 		if cacher != nil {
 			cacher.index.Add(key, blob)
 		}
@@ -395,12 +399,14 @@ func newIndexDeleter(db ethdb.KeyValueReader, state stateIdent, cacher *historyC
 	key = fmt.Sprintf("%s:%d", state.CacheKey(), lastDesc.id)
 	if cacher != nil && cacher.block.Contains(key) {
 		indexBlock, _ = cacher.block.Get(key)
+		historyBlockCacheHitMeter.Mark(1)
 	} else {
 		if state.account {
 			indexBlock = rawdb.ReadAccountHistoryIndexBlock(db, state.addressHash, lastDesc.id)
 		} else {
 			indexBlock = rawdb.ReadStorageHistoryIndexBlock(db, state.addressHash, state.storageHash, lastDesc.id)
 		}
+		historyBlockCacheMissMeter.Mark(1)
 		if cacher != nil {
 			cacher.block.Add(key, indexBlock)
 		}
