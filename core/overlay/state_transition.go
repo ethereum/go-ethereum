@@ -61,12 +61,10 @@ func (ts *TransitionState) Copy() *TransitionState {
 		CurrentPreimageOffset: ts.CurrentPreimageOffset,
 		StorageProcessed:      ts.StorageProcessed,
 	}
-
 	if ts.CurrentAccountAddress != nil {
-		ret.CurrentAccountAddress = &common.Address{}
-		copy(ret.CurrentAccountAddress[:], ts.CurrentAccountAddress[:])
+		addr := *ts.CurrentAccountAddress
+		ret.CurrentAccountAddress = &addr
 	}
-
 	return ret
 }
 
@@ -99,9 +97,9 @@ func LoadTransitionState(db ethdb.KeyValueReader, root common.Hash, isVerkle boo
 		// field set to true if the database was created
 		// as a verkle database.
 		log.Debug("no transition state found, starting fresh", "is verkle", db)
+
 		// Start with a fresh state
 		ts = &TransitionState{Ended: isVerkle}
 	}
-
 	return ts
 }

@@ -189,7 +189,6 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 			readers = append(readers, newFlatReader(snap))
 		}
 	}
-	ts := overlay.LoadTransitionState(db.TrieDB().Disk(), stateRoot, db.triedb.IsVerkle())
 	// Configure the state reader using the path database in path mode.
 	// This reader offers improved performance but is optional and only
 	// partially useful if the snapshot data in path database is not
@@ -202,7 +201,7 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	}
 	// Configure the trie reader, which is expected to be available as the
 	// gatekeeper unless the state is corrupted.
-	tr, err := newTrieReader(stateRoot, db.triedb, db.pointCache, ts)
+	tr, err := newTrieReader(stateRoot, db.triedb, db.pointCache)
 	if err != nil {
 		return nil, err
 	}

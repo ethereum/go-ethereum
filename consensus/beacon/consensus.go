@@ -353,9 +353,9 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 
 // FinalizeAndAssemble implements consensus.Engine, setting the final state and
 // assembling the block.
-func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, statedb *state.StateDB, body *types.Body, receipts []*types.Receipt) (*types.Block, error) {
+func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt) (*types.Block, error) {
 	if !beacon.IsPoSHeader(header) {
-		return beacon.ethone.FinalizeAndAssemble(chain, header, statedb, body, receipts)
+		return beacon.ethone.FinalizeAndAssemble(chain, header, state, body, receipts)
 	}
 	shanghai := chain.Config().IsShanghai(header.Number, header.Time)
 	if shanghai {
@@ -369,10 +369,10 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 		}
 	}
 	// Finalize and assemble the block.
-	beacon.Finalize(chain, header, statedb, body)
+	beacon.Finalize(chain, header, state, body)
 
 	// Assign the final state root to header.
-	header.Root = statedb.IntermediateRoot(true)
+	header.Root = state.IntermediateRoot(true)
 
 	// Assemble the final block.
 	block := types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
@@ -380,20 +380,23 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	// Create the block witness and attach to block.
 	// This step needs to happen as late as possible to catch all access events.
 	if chain.Config().IsVerkle(header.Number, header.Time) {
-		//statedb.Database().SaveTransitionState(header.Root, &state.TransitionState{Ended: true})
-		keys := statedb.AccessEvents().Keys()
+		keys := state.AccessEvents().Keys()
 
 		// Open the pre-tree to prove the pre-state against
 		parent := chain.GetHeaderByNumber(header.Number.Uint64() - 1)
 		if parent == nil {
 			return nil, fmt.Errorf("nil parent header for block %d", header.Number)
 		}
-		preTrie, err := statedb.Database().OpenTrie(parent.Root)
+		preTrie, err := state.Database().OpenTrie(parent.Root)
 		if err != nil {
 			return nil, fmt.Errorf("error opening pre-state tree root: %w", err)
 		}
+		postTrie := state.GetTrie()
+		if postTrie == nil {
+			return nil, errors.New("post-state tree is not available")
+		}
 		vktPreTrie, okpre := preTrie.(*trie.VerkleTrie)
-		vktPostTrie, okpost := statedb.GetTrie().(*trie.VerkleTrie)
+		vktPostTrie, okpost := postTrie.(*trie.VerkleTrie)
 
 		// The witness is only attached iff both parent and current block are
 		// using verkle tree.
