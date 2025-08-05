@@ -266,6 +266,23 @@ func TestNewPeer(t *testing.T) {
 	p.Disconnect(DiscAlreadyConnected) // Should not hang
 }
 
+// TestCapsReturnsCopy verifies that Caps() returns a copy of the internal slice.
+func TestCapsReturnsCopy(t *testing.T) {
+	id := randomID()
+	name := "nodename"
+	caps := []Cap{{"a", 1}, {"b", 2}}
+	p := NewPeer(id, name, caps)
+
+	returned := p.Caps()
+	// Modify the returned slice.
+	returned[0] = Cap{"modified", 99}
+
+	// Ensure the internal slice was not affected.
+	if reflect.DeepEqual(returned, p.Caps()) {
+		t.Fatal("Caps() should return a copy, not a reference to the internal slice")
+	}
+}
+
 func TestMatchProtocols(t *testing.T) {
 	tests := []struct {
 		Remote []Cap
