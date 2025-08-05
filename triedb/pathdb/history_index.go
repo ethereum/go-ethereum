@@ -83,12 +83,14 @@ func loadIndexData(db ethdb.KeyValueReader, state stateIdent, cacher *historyCac
 	var blob []byte
 	if cacher != nil && cacher.index.Contains(key) {
 		blob, _ = cacher.index.Get(key)
+		historyIndexCacheHitMeter.Mark(1)
 	} else {
 		if state.account {
 			blob = rawdb.ReadAccountHistoryIndex(db, state.addressHash)
 		} else {
 			blob = rawdb.ReadStorageHistoryIndex(db, state.addressHash, state.storageHash)
 		}
+		historyIndexCacheMissMeter.Mark(1)
 	}
 	if len(blob) == 0 {
 		return nil, nil
@@ -154,12 +156,14 @@ func (r *indexReader) readGreaterThan(id uint64) (uint64, error) {
 		key := fmt.Sprintf("%s:%d", r.state.CacheKey(), desc.id)
 		if r.cacher != nil && r.cacher.block.Contains(key) {
 			blob, _ = r.cacher.block.Get(key)
+			historyBlockCacheHitMeter.Mark(1)
 		} else {
 			if r.state.account {
 				blob = rawdb.ReadAccountHistoryIndexBlock(r.db, r.state.addressHash, desc.id)
 			} else {
 				blob = rawdb.ReadStorageHistoryIndexBlock(r.db, r.state.addressHash, r.state.storageHash, desc.id)
 			}
+			historyBlockCacheMissMeter.Mark(1)
 
 			if r.cacher != nil && len(blob) > 0 {
 				r.cacher.block.Add(key, blob)
@@ -230,12 +234,14 @@ func newIndexWriter(db ethdb.KeyValueReader, state stateIdent, cacher *historyCa
 	key = fmt.Sprintf("%s:%d", state.CacheKey(), lastDesc.id)
 	if cacher != nil && cacher.block.Contains(key) {
 		indexBlock, _ = cacher.block.Get(key)
+		historyBlockCacheHitMeter.Mark(1)
 	} else {
 		if state.account {
 			indexBlock = rawdb.ReadAccountHistoryIndexBlock(db, state.addressHash, lastDesc.id)
 		} else {
 			indexBlock = rawdb.ReadStorageHistoryIndexBlock(db, state.addressHash, state.storageHash, lastDesc.id)
 		}
+		historyBlockCacheMissMeter.Mark(1)
 		if cacher != nil {
 			cacher.block.Add(key, indexBlock)
 		}
