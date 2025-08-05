@@ -193,9 +193,9 @@ var (
 		},
 		Berachain: BerachainConfig{
 			Prague1: Prague1Config{
-				Time:                     newUint64(17446744073709551614),
-				MinimumBaseFeeWei:        1000000000, // 1 gwei
-				BaseFeeChangeDenominator: 48,         // 6x increase from the default
+				Time:                     newUint64(17446744073709551614), // TODO: set mainnet timestamp.
+				MinimumBaseFeeWei:        10000000000,                     // 10 gwei
+				BaseFeeChangeDenominator: 48,                              // 6x increase from the default
 			},
 		},
 	}
@@ -231,8 +231,8 @@ var (
 		Berachain: BerachainConfig{
 			Prague1: Prague1Config{
 				Time:                     newUint64(1754496000),
-				MinimumBaseFeeWei:        1000000000, // 1 gwei
-				BaseFeeChangeDenominator: 48,         // 6x increase from the default
+				MinimumBaseFeeWei:        10000000000, // 10 gwei
+				BaseFeeChangeDenominator: 48,          // 6x increase from the default
 			},
 		},
 	}

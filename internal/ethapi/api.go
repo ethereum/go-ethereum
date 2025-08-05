@@ -1249,11 +1249,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf(
 				"failed to apply transaction: %v err: %v",
-				args.ToTransaction(
-					types.LegacyTxType,
-					b.ChainConfig().IsPrague1(header.Number, header.Time),
-					b.ChainConfig().Berachain.Prague1.PoLDistributorAddress,
-				).Hash(),
+				args.ToTransaction(types.LegacyTxType, isPrague1, distributorAddress).Hash(),
 				err,
 			)
 		}

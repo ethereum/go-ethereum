@@ -122,16 +122,14 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 	var (
 		blockContext = NewEVMBlockContext(b.header, bc, &b.header.Coinbase)
 		evm          = vm.NewEVM(blockContext, b.statedb, b.cm.config, vmConfig)
-		gasPool      = b.gasPool
 		gasUsed      = &b.header.GasUsed
 	)
 	// Berachain: PoL txs do not count towards block gas.
 	if tx.Type() == types.PoLTxType {
-		gasPool = new(GasPool).AddGas(params.PoLTxGasLimit)
 		gasUsed = new(uint64)
 	}
 	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(evm, gasPool, b.statedb, b.header, tx, gasUsed)
+	receipt, err := ApplyTransaction(evm, b.gasPool, b.statedb, b.header, tx, gasUsed)
 	if err != nil {
 		panic(err)
 	}
