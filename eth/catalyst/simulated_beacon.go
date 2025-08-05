@@ -158,6 +158,11 @@ func (c *SimulatedBeacon) Stop() error {
 	return nil
 }
 
+// Oasys: Returns the simulated Ethereum.
+func (c *SimulatedBeacon) Ethereum() *eth.Ethereum {
+	return c.eth
+}
+
 // sealBlock initiates payload building for a new block and creates a new block
 // with the completed payload.
 func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp uint64) error {
