@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// All states must has been cachae to statedb.
+// All states must has been cached to statedb.
 func (s *StateDB) Account(addr common.Address) (*types.StateAccount, error) {
 	// s.getStateObject() shouldn't be used, cause when acct is nil, it'll load account from DB and result concurrent map writes for accts
 	obj := s.stateObjects[addr]
@@ -33,12 +33,4 @@ func (s *StateDB) Storage(addr common.Address, slot common.Hash) (common.Hash, e
 		}
 	}
 	return common.Hash{}, nil
-}
-
-func (s *StateDB) AccountBAL(addr common.Address) (*types.StateAccount, error) {
-	panic("AccountBAL not implemented for statedb")
-}
-
-func (s *StateDB) StorageBAL(addr common.Address, slot common.Hash) (common.Hash, error) {
-	panic("StorageBAL not implemented for statedb")
 }

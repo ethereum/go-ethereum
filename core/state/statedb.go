@@ -249,8 +249,13 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 // NewWithReader creates a new state for the specified state root. Unlike New,
 // this function accepts an additional Reader which is bound to the given root.
 func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, error) {
+	tr, err := db.OpenTrie(root)
+	if err != nil {
+		return nil, err
+	}
 	sdb := &StateDB{
 		db:                   db,
+		trie:                 tr,
 		originalRoot:         root,
 		reader:               reader,
 		stateObjects:         make(map[common.Address]*stateObject),
@@ -373,17 +378,16 @@ func (s *StateDB) prefetchBalPreblockKeys() {
 		lenMaxSlots += len(acl.StorageKeys)
 
 		workers.Go(func() error {
-			acctBal, err := s.reader.AccountBAL(addr)
+			acctBal, err := s.reader.Account(addr)
 			var obj *stateObject
 			if err != nil {
 				log.Error("fail to fetch account from BALs:", addr)
-				acct, err := s.reader.Account(addr)
-				if err != nil {
-					panic("fail to fetch account from BALs")
-				}
-				obj = newObject(s, addr, acct)
+				panic("fail to fetch account from BALs")
 			} else {
-				obj = newObject(s, addr, acctBal)
+				// If obj is nil, we shouldn't newObject, it will cause invalid gas used error. Because 7702 will use Exist(addr) to decide where an account exists, which should be false if account is nil, but if we newObject it'll be true.
+				if acctBal != nil {
+					obj = newObject(s, addr, acctBal)
+				}
 			}
 			accounts <- obj
 			return nil
@@ -393,8 +397,10 @@ func (s *StateDB) prefetchBalPreblockKeys() {
 
 	for range len(preBal) {
 		obj := <-accounts
-		// must set it first to avoid accounts read later in storageBAL fetching
-		s.setStateObject(obj)
+		// must set it first to avoid accounts read later in storage fetching
+		if obj != nil {
+			s.setStateObject(obj)
+		}
 	}
 
 	close(accounts)
@@ -407,7 +413,7 @@ func (s *StateDB) prefetchBalPreblockKeys() {
 
 		obj := s.stateObjects[addr]
 
-		if obj.origin == nil {
+		if obj == nil || obj.origin == nil {
 			continue
 		}
 
@@ -415,16 +421,11 @@ func (s *StateDB) prefetchBalPreblockKeys() {
 
 		for _, key := range keys {
 			workers.Go(func() error {
-				val, err := s.reader.StorageBAL(addr, key)
+				val, err := s.reader.Storage(addr, key)
 				kv := &StorageKV{&addr, &key, &val}
 				if err != nil {
 					log.Error("fail to fetch storage from BALs:", addr, key)
-					// It's not safe to concurrent read from trie with StorageBAL, so we use the locked version Storage as fallback
-					val, err := s.reader.Storage(addr, key)
-					if err != nil {
-						panic("fail to fetch storage from BALs")
-					}
-					kv.val = &val
+					panic("fail to fetch storage from BALs")
 				}
 				storages <- kv
 

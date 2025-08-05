@@ -47,7 +47,6 @@ func (st *insertStats) report(chain []*types.Block, index int, snapDiffItems, sn
 		mgasps  = float64(st.usedGas) * 1000 / float64(elapsed)
 	)
 	// Update the Mgas per second gauge
-	chainMgaspsGauge.Update(int64(mgasps))
 	mgaspsHist.Update(int64(mgasps))
 
 	// If we're at the last block of the batch or report period reached, log

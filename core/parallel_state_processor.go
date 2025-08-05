@@ -197,7 +197,7 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 			}
 			// todo: handle gp race
 			gpcp := *gp
-			receipt, entries, err := ApplyTransactionWithParallelEVM(msg, &gpcp, cleanStatedb, blockNumber, blockHash, tx, usedGas, evm)
+			receipt, entries, err := ApplyTransactionWithParallelEVM(msg, &gpcp, cleanStatedb, blockNumber, blockHash, block.Time(), tx, usedGas, evm)
 			if err != nil {
 				return err
 			}
@@ -234,8 +234,7 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 	}
 
 	// Read requests if Prague is enabled.
-	// commented out EIP-7002, EIP-7251 and p.chain.engine.Finalize for now, since statedb might cause concurrent map writes (journal.go:211) when postState = statedb.Copy()
-	// evm := vm.NewEVM(context, statedb, p.config, cfg)
+
 	var requests [][]byte
 	if p.config.IsPrague(block.Number(), block.Time()) {
 		requests = [][]byte{}
@@ -243,18 +242,25 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 		if err := ParseDepositLogs(&requests, allLogs, p.config); err != nil {
 			return nil, err
 		}
-		// // EIP-7002
-		// if err := ProcessWithdrawalQueue(&requests, evm); err != nil {
-		// 	return nil, err
-		// }
-		// // EIP-7251
-		// if err := ProcessConsolidationQueue(&requests, evm); err != nil {
-		// 	return nil, err
-		// }
+		// Commented out EIP-7002, EIP-7251 and p.chain.engine.Finalize for now, since statedb might cause concurrent map writes (journal.go:211) when postState = statedb.Copy()
+		if preStateType == SeqPreState {
+			evm := vm.NewEVM(context, statedb, p.config, cfg)
+			// // EIP-7002
+			if err := ProcessWithdrawalQueue(&requests, evm); err != nil {
+				return nil, err
+			}
+			// // EIP-7251
+			if err := ProcessConsolidationQueue(&requests, evm); err != nil {
+				return nil, err
+			}
+		}
+
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	// p.chain.engine.Finalize(p.chain, header, statedb, block.Body())
+	if preStateType == SeqPreState {
+		p.chain.engine.Finalize(p.chain, header, statedb, block.Body())
+	}
 
 	return &ProcessResult{
 		Receipts: receipts,
@@ -264,7 +270,7 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 	}, nil
 }
 
-func ApplyTransactionWithParallelEVM(msg *Message, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (receipt *types.Receipt, entries []state.JournalEntry, err error) {
+func ApplyTransactionWithParallelEVM(msg *Message, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, blockTime uint64, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (receipt *types.Receipt, entries []state.JournalEntry, err error) {
 	if hooks := evm.Config.Tracer; hooks != nil {
 		if hooks.OnTxStart != nil {
 			hooks.OnTxStart(evm.GetVMContext(), tx, msg.From)
@@ -295,5 +301,5 @@ func ApplyTransactionWithParallelEVM(msg *Message, gp *GasPool, statedb *state.S
 		statedb.AccessEvents().Merge(evm.AccessEvents)
 	}
 
-	return MakeReceipt(evm, result, statedb, blockNumber, blockHash, tx, *usedGas, root), entries, nil
+	return MakeReceipt(evm, result, statedb, blockNumber, blockHash, blockTime, tx, *usedGas, root), entries, nil
 }

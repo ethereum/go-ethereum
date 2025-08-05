@@ -52,7 +52,7 @@ func (s *SequentialPrestateProvider) PrestateAtIndex(i int) (*state.StateDB, err
 	}
 	statedb.SetTxContext(tx.Hash(), i)
 
-	_, err = ApplyTransactionWithEVM(msg, s.gp, statedb, blockNumber, blockHash, tx, s.usedGas, s.evm)
+	_, err = ApplyTransactionWithEVM(msg, s.gp, statedb, blockNumber, blockHash, s.block.Time(), tx, s.usedGas, s.evm)
 	if err != nil {
 		return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 	}
