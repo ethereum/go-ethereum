@@ -124,19 +124,12 @@ func (cv *ChainView) RawReceipts(number uint64) types.Receipts {
 
 // SharedRange returns the block range shared by two chain views.
 func (cv *ChainView) SharedRange(cv2 *ChainView) common.Range[uint64] {
-	cv.lock.Lock()
-	defer cv.lock.Unlock()
-
-	if cv == nil || cv2 == nil || !cv.extendNonCanonical() || !cv2.extendNonCanonical() {
+	if cv == nil || cv2 == nil {
 		return common.Range[uint64]{}
 	}
-	var sharedLen uint64
-	for n := min(cv.headNumber+1-uint64(len(cv.hashes)), cv2.headNumber+1-uint64(len(cv2.hashes))); n <= cv.headNumber && n <= cv2.headNumber; n++ {
-		h1, h2 := cv.blockHash(n), cv2.blockHash(n)
-		if h1 != h2 || h1 == (common.Hash{}) {
-			break
-		}
-		sharedLen = n + 1
+	sharedLen := min(cv.headNumber, cv2.headNumber) + 1
+	for sharedLen > 0 && cv.BlockId(sharedLen-1) != cv2.BlockId(sharedLen-1) {
+		sharedLen--
 	}
 	return common.NewRange(0, sharedLen)
 }
