@@ -27,6 +27,8 @@ import (
 	"github.com/holiman/uint256"
 )
 
+var _ Interpreter = &EVMInterpreter{}
+
 // Config are the configuration options for the Interpreter
 type Config struct {
 	Tracer                  *tracing.Hooks
@@ -327,4 +329,29 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	}
 
 	return res, err
+}
+
+// EVM returns the EVM instance
+func (in *EVMInterpreter) EVM() *EVM {
+	return in.evm
+}
+
+// Config returns the configuration of the interpreter
+func (in EVMInterpreter) Config() Config {
+	return in.evm.Config
+}
+
+// ReadOnly returns whether the interpreter is in read-only mode
+func (in EVMInterpreter) ReadOnly() bool {
+	return in.readOnly
+}
+
+// ReturnData gets the last CALL's return data for subsequent reuse
+func (in *EVMInterpreter) ReturnData() []byte {
+	return in.returnData
+}
+
+// SetReturnData sets the last CALL's return data
+func (in *EVMInterpreter) SetReturnData(data []byte) {
+	in.returnData = data
 }

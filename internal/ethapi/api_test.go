@@ -1731,13 +1731,13 @@ func TestSimulateV1(t *testing.T) {
 			want: []blockRes{{
 				Number:        "0xb",
 				GasLimit:      "0x47e7c4",
-				GasUsed:       "0x52f6",
+				GasUsed:       "0x5cba",
 				Miner:         coinbase,
 				BaseFeePerGas: "0x0",
 				Calls: []callRes{{
 					// Caller is in this case the contract that invokes ecrecover.
 					ReturnValue: strings.ToLower(randomAccounts[2].addr.String()),
-					GasUsed:     "0x52f6",
+					GasUsed:     "0x5cba",
 					Logs:        []log{},
 					Status:      "0x1",
 				}},
