@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 // State size metrics
@@ -55,75 +56,272 @@ type StateSizeMetrics struct {
 	ContractBytes uint64
 }
 
-// stateSizeGenerator handles the initialization and tracking of state size metrics
-type stateSizeGenerator struct {
-	db  ethdb.KeyValueStore
-	sdb Database
+// StateSizeGenerator handles the initialization and tracking of state size metrics
+type StateSizeGenerator struct {
+	db     ethdb.KeyValueStore
+	triedb *triedb.Database
 
 	// Generator state
 	running bool
 	abort   chan struct{}
 	done    chan struct{}
 
+	// Async message channel for updates
+	updateChan chan *stateUpdate
+
 	// Metrics state
-	metrics     *StateSizeMetrics
-	metricsLock sync.RWMutex
+	metrics  *StateSizeMetrics
+	buffered *StateSizeMetrics
 }
 
-// newStateSizeGenerator creates a new state size generator
-func newStateSizeGenerator(db ethdb.KeyValueStore, sdb Database, root common.Hash) *stateSizeGenerator {
-	return &stateSizeGenerator{
-		db:      db,
-		sdb:     sdb,
-		abort:   make(chan struct{}),
-		done:    make(chan struct{}),
-		metrics: &StateSizeMetrics{Root: root},
+// NewStateSizeGenerator creates a new state size generator and starts it automatically
+func NewStateSizeGenerator(db ethdb.KeyValueStore, triedb *triedb.Database, root common.Hash) *StateSizeGenerator {
+	g := &StateSizeGenerator{
+		db:         db,
+		triedb:     triedb,
+		abort:      make(chan struct{}),
+		done:       make(chan struct{}),
+		updateChan: make(chan *stateUpdate, 1000), // Buffered channel for updates
+		metrics:    &StateSizeMetrics{Root: root},
+		buffered:   &StateSizeMetrics{Root: root},
 	}
-}
 
-// run starts the state size initialization in the background
-func (g *stateSizeGenerator) run() {
-	if g.running {
-		g.stop()
-		log.Warn("Paused the leftover state size generation cycle")
-	}
+	// Start the generator automatically
 	g.running = true
 	go g.generate()
+
+	return g
 }
 
 // stop terminates the background generation
-func (g *stateSizeGenerator) stop() {
+func (g *StateSizeGenerator) Stop() {
 	if !g.running {
 		return
 	}
+
+	// Signal the goroutine to stop
 	close(g.abort)
+
+	// Wait for the goroutine to actually finish
+	<-g.done
+
+	// Now it's safe to persist metrics since the goroutine has stopped
 	g.running = false
+	g.persistMetrics()
 }
 
-// generate performs the state size initialization
-func (g *stateSizeGenerator) generate() {
+// isRunning returns true if the generator is currently running
+func (g *StateSizeGenerator) IsRunning() bool {
+	return g.running
+}
+
+// waitForCompletion waits for the generator to complete (useful for testing or graceful shutdown)
+func (g *StateSizeGenerator) WaitForCompletion() {
+	if g.running {
+		<-g.done
+	}
+}
+
+// generate performs the state size initialization and handles updates
+func (g *StateSizeGenerator) generate() {
 	defer close(g.done)
-	start := time.Now()
+
+	var inited bool
+	var initDone chan struct{}
 
 	if g.hasExistingMetrics() {
 		log.Info("State size metrics already initialized")
-		return
+		inited = true
 	}
 
 	// Wait for snapshot generator to complete
-	if db := g.sdb.TrieDB(); db != nil {
-		for !db.SnapshotCompleted() {
-			time.Sleep(5 * time.Second)
+	snapDone := make(chan struct{})
+	go func() {
+		defer close(snapDone)
+
+		for !g.triedb.SnapshotCompleted() {
+			select {
+			case <-g.abort:
+				log.Info("State size generation aborted during snapshot")
+				return
+			default:
+				time.Sleep(10 * time.Second)
+			}
+		}
+	}()
+
+	for {
+		select {
+		case update := <-g.updateChan:
+			g.handleUpdate(update, inited)
+		case <-g.abort:
+			log.Info("State size generation aborted")
+			// Wait for initialization goroutine to finish if it's running
+			if initDone != nil {
+				select {
+				case <-initDone:
+				case <-time.After(5 * time.Second):
+					log.Warn("Initialization goroutine did not finish in time")
+				}
+			}
+			return
+		case <-snapDone:
+			if !inited {
+				initDone = make(chan struct{})
+				go func() {
+					defer close(initDone)
+					start := time.Now()
+					log.Info("Starting state size initialization")
+					g.initializeMetrics()
+					log.Info("Completed state size initialization", "elapsed", time.Since(start))
+					inited = true
+				}()
+			}
+		case <-initDone:
+			// Initialization completed, merge buffered metrics if needed
+			if g.buffered != nil && g.buffered.Root != (common.Hash{}) {
+				log.Info("Merging buffered metrics into main metrics")
+				g.metrics.AccountCount += g.buffered.AccountCount
+				g.metrics.AccountBytes += g.buffered.AccountBytes
+				g.metrics.StorageCount += g.buffered.StorageCount
+				g.metrics.StorageBytes += g.buffered.StorageBytes
+				g.metrics.TrieNodeCount += g.buffered.TrieNodeCount
+				g.metrics.TrieNodeBytes += g.buffered.TrieNodeBytes
+				g.metrics.ContractCount += g.buffered.ContractCount
+				g.metrics.ContractBytes += g.buffered.ContractBytes
+				// Reset buffered metrics
+				g.buffered = &StateSizeMetrics{Root: g.metrics.Root}
+			}
+			initDone = nil // Clear the channel
+		}
+	}
+}
+
+// handleUpdate processes a single update with proper root continuity checking
+func (g *StateSizeGenerator) handleUpdate(update *stateUpdate, inited bool) {
+	// TODO: Check if the update root matches the current metrics root
+
+	// Calculate the diff
+	diff := g.calculateUpdateDiff(update)
+
+	var m *StateSizeMetrics
+	if inited {
+		m = g.metrics
+	} else {
+		m = g.buffered
+	}
+
+	// TODO: When to merge the buffered metrics into the main metrics
+	m.Root = update.root
+	m.AccountCount += diff.AccountCount
+	m.AccountBytes += diff.AccountBytes
+	m.StorageCount += diff.StorageCount
+	m.StorageBytes += diff.StorageBytes
+	m.TrieNodeCount += diff.TrieNodeCount
+	m.TrieNodeBytes += diff.TrieNodeBytes
+	m.ContractCount += diff.ContractCount
+	m.ContractBytes += diff.ContractBytes
+
+	// Fire the metrics only if the initialization is done
+	if inited {
+		g.updateMetrics()
+		g.persistMetrics()
+	}
+}
+
+// calculateUpdateDiff calculates the diff for a state update
+func (g *StateSizeGenerator) calculateUpdateDiff(update *stateUpdate) StateSizeMetrics {
+	var diff StateSizeMetrics
+
+	// Calculate account changes
+	for addr, oldValue := range update.accountsOrigin {
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
+		newValue, exists := update.accounts[addrHash]
+		if !exists {
+			log.Warn("State update missing account", "address", addr)
+			continue
+		}
+		if len(newValue) == 0 {
+			diff.AccountCount -= 1
+			diff.AccountBytes -= common.HashLength
+		}
+		if len(oldValue) == 0 {
+			diff.AccountCount += 1
+			diff.AccountBytes += common.HashLength
+		}
+		diff.AccountBytes += uint64(len(newValue) - len(oldValue))
+	}
+
+	// Calculate storage changes
+	for addr, slots := range update.storagesOrigin {
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
+		subset, exists := update.storages[addrHash]
+		if !exists {
+			log.Warn("State update missing storage", "address", addr)
+			continue
+		}
+		for key, oldValue := range slots {
+			var (
+				exists   bool
+				newValue []byte
+			)
+			if update.rawStorageKey {
+				newValue, exists = subset[crypto.Keccak256Hash(key.Bytes())]
+			} else {
+				newValue, exists = subset[key]
+			}
+			if !exists {
+				log.Warn("State update missing storage slot", "address", addr, "key", key)
+				continue
+			}
+			if len(newValue) == 0 {
+				diff.StorageCount -= 1
+				diff.StorageBytes -= common.HashLength
+			}
+			if len(oldValue) == 0 {
+				diff.StorageCount += 1
+				diff.StorageBytes += common.HashLength
+			}
+			diff.StorageBytes += uint64(len(newValue) - len(oldValue))
 		}
 	}
 
-	log.Info("Starting state size initialization")
-	g.initializeMetrics()
-	log.Info("Completed state size initialization", "elapsed", time.Since(start))
+	// Calculate trie node changes
+	for _, subset := range update.nodes.Sets {
+		for path, n := range subset.Nodes {
+			if len(n.Blob) == 0 {
+				diff.TrieNodeCount -= 1
+				diff.TrieNodeBytes -= uint64(len(path) + common.HashLength)
+			}
+			prev, ok := subset.Origins[path]
+			if ok {
+				diff.TrieNodeCount += 1
+				diff.TrieNodeBytes += uint64(len(path) + common.HashLength)
+			}
+			diff.TrieNodeBytes += uint64(len(n.Blob) - len(prev))
+		}
+	}
+
+	// Calculate code changes
+	for _, code := range update.codes {
+		diff.ContractCount += 1
+		diff.ContractBytes += uint64(len(code.blob) + common.HashLength)
+	}
+
+	return diff
+}
+
+// Track is an async method used to send the state update to the generator.
+// It ignores empty updates (where no state changes occurred).
+func (g *StateSizeGenerator) Track(update *stateUpdate) {
+	if update == nil || update.empty() {
+		return
+	}
+	g.updateChan <- update
 }
 
 // hasExistingMetrics checks if state size metrics already exist in the database
-func (g *stateSizeGenerator) hasExistingMetrics() bool {
+func (g *StateSizeGenerator) hasExistingMetrics() bool {
 	// Check for existing metrics by looking for a marker key
 	marker := rawdb.ReadStateSizeMetrics(g.db)
 	// TODO: check if the marker's root is the same as the current root
@@ -131,7 +329,7 @@ func (g *stateSizeGenerator) hasExistingMetrics() bool {
 }
 
 // initializeMetrics performs the actual metrics initialization
-func (g *stateSizeGenerator) initializeMetrics() {
+func (g *StateSizeGenerator) initializeMetrics() {
 	var (
 		wg                                         sync.WaitGroup
 		accountCount, accountBytes                 uint64
@@ -155,6 +353,7 @@ func (g *stateSizeGenerator) initializeMetrics() {
 			count++
 			bytes += uint64(len(iter.Key()) + len(iter.Value()))
 
+			// Check for abort
 			select {
 			case <-g.abort:
 				return
@@ -183,7 +382,6 @@ func (g *stateSizeGenerator) initializeMetrics() {
 	wg.Wait()
 
 	// Update metrics
-	g.metricsLock.Lock()
 	g.metrics.AccountCount = accountCount
 	g.metrics.AccountBytes = accountBytes
 	g.metrics.StorageCount = storageCount
@@ -192,29 +390,26 @@ func (g *stateSizeGenerator) initializeMetrics() {
 	g.metrics.TrieNodeBytes = trieAccountNodeBytes + trieStorageNodeBytes
 	g.metrics.ContractCount = contractCount
 	g.metrics.ContractBytes = contractBytes
-	g.metricsLock.Unlock()
 
-	// Update metrics in database
+	g.updateMetrics()
 	g.persistMetrics()
+}
 
+func (g *StateSizeGenerator) updateMetrics() {
 	// Update global metrics
-	stateSizeAccountsCountMeter.Mark(int64(accountCount))
-	stateSizeAccountsBytesMeter.Mark(int64(accountBytes))
-	stateSizeStorageCountMeter.Mark(int64(storageCount))
-	stateSizeStorageBytesMeter.Mark(int64(storageBytes))
-	stateSizeTrieNodesCountMeter.Mark(int64(trieAccountNodeCount + trieStorageNodeCount))
-	stateSizeTrieNodesBytesMeter.Mark(int64(trieStorageNodeBytes + trieStorageNodeBytes))
-	stateSizeContractsCountMeter.Mark(int64(contractCount))
-	stateSizeContractsBytesMeter.Mark(int64(contractBytes))
+	stateSizeAccountsCountMeter.Mark(int64(g.metrics.AccountCount))
+	stateSizeAccountsBytesMeter.Mark(int64(g.metrics.AccountBytes))
+	stateSizeStorageCountMeter.Mark(int64(g.metrics.StorageCount))
+	stateSizeStorageBytesMeter.Mark(int64(g.metrics.StorageBytes))
+	stateSizeTrieNodesCountMeter.Mark(int64(g.metrics.TrieNodeCount))
+	stateSizeTrieNodesBytesMeter.Mark(int64(g.metrics.TrieNodeBytes))
+	stateSizeContractsCountMeter.Mark(int64(g.metrics.ContractCount))
+	stateSizeContractsBytesMeter.Mark(int64(g.metrics.ContractBytes))
 }
 
 // persistMetrics saves the current metrics to the database
-func (g *stateSizeGenerator) persistMetrics() {
-	g.metricsLock.RLock()
-	metrics := *g.metrics
-	g.metricsLock.RUnlock()
-
-	data, err := rlp.EncodeToBytes(metrics)
+func (g *StateSizeGenerator) persistMetrics() {
+	data, err := rlp.EncodeToBytes(*g.metrics)
 	if err != nil {
 		log.Error("Failed to encode state size metrics", "err", err)
 		return
@@ -225,94 +420,4 @@ func (g *stateSizeGenerator) persistMetrics() {
 	if err := batch.Write(); err != nil {
 		log.Error("Failed to persist state size metrics", "err", err)
 	}
-}
-
-// updateMetrics updates metrics based on state changes
-func (g *stateSizeGenerator) updateMetrics(update *stateUpdate) {
-	var (
-		accountBytes, storageBytes, nodeBytes, codeBytes int
-		accountCount, storageCount, nodeCount, codeCount int
-	)
-
-	for addr, oldValue := range update.accountsOrigin {
-		addrHash := crypto.Keccak256Hash(addr.Bytes())
-		newValue, exists := update.accounts[addrHash]
-		if !exists {
-			log.Warn("State update missing account", "address", addr)
-			continue
-		}
-		if len(newValue) == 0 {
-			accountCount -= 1
-			accountBytes -= common.HashLength
-		}
-		if len(oldValue) == 0 {
-			accountCount += 1
-			accountBytes += common.HashLength
-		}
-		accountBytes += len(newValue) - len(oldValue)
-	}
-
-	for addr, slots := range update.storagesOrigin {
-		addrHash := crypto.Keccak256Hash(addr.Bytes())
-		subset, exists := update.storages[addrHash]
-		if !exists {
-			log.Warn("State update missing storage", "address", addr)
-			continue
-		}
-		for key, oldValue := range slots {
-			var (
-				exists   bool
-				newValue []byte
-			)
-			if update.rawStorageKey {
-				newValue, exists = subset[crypto.Keccak256Hash(key.Bytes())]
-			} else {
-				newValue, exists = subset[key]
-			}
-			if !exists {
-				log.Warn("State update missing storage slot", "address", addr, "key", key)
-				continue
-			}
-			if len(newValue) == 0 {
-				storageCount -= 1
-				storageBytes -= common.HashLength
-			}
-			if len(oldValue) == 0 {
-				storageCount += 1
-				storageBytes += common.HashLength
-			}
-			storageBytes += len(newValue) - len(oldValue)
-		}
-	}
-	for _, subset := range update.nodes.Sets {
-		for path, n := range subset.Nodes {
-			if len(n.Blob) == 0 {
-				nodeCount -= 1
-				nodeBytes -= len(path) + common.HashLength
-			}
-			prev, ok := subset.Origins[path]
-			if ok {
-				nodeCount += 1
-				nodeBytes += len(path) + common.HashLength
-			}
-			nodeBytes += len(n.Blob) - len(prev)
-		}
-	}
-	for _, code := range update.codes {
-		codeCount += 1
-		codeBytes += len(code.blob) + common.HashLength // no deduplication
-	}
-
-	// Update local metrics
-	g.metricsLock.Lock()
-	g.metrics.Root = update.root
-	g.metrics.AccountCount += uint64(accountCount)
-	g.metrics.AccountBytes += uint64(accountBytes)
-	g.metrics.StorageCount += uint64(storageCount)
-	g.metrics.StorageBytes += uint64(storageBytes)
-	g.metrics.TrieNodeCount += uint64(nodeCount)
-	g.metrics.TrieNodeBytes += uint64(nodeBytes)
-	g.metrics.ContractCount += uint64(codeCount)
-	g.metrics.ContractBytes += uint64(codeBytes)
-	g.metricsLock.Unlock()
 }
