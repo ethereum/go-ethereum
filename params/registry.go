@@ -39,6 +39,15 @@ func (p Parameter[V]) Get(cfg *Config2) V {
 	return p.info.defaultValue.(V)
 }
 
+// Defined reports whether the parameter is set in the config.
+func (p Parameter[V]) Defined(cfg *Config2) bool {
+	if p.info.id == 0 {
+		panic("zero parameter")
+	}
+	_, ok := cfg.param[p.info.id]
+	return ok
+}
+
 // V creates a ParamValue with the given value. You need this to
 // specify parameter values when constructing a Config in code.
 func (p Parameter[V]) V(v V) ParamValue {
