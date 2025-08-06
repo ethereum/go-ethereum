@@ -17,13 +17,11 @@
 package state
 
 import (
-	"bytes"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -136,86 +134,55 @@ func (g *stateSizeGenerator) hasExistingMetrics() bool {
 // initializeMetrics performs the actual metrics initialization
 func (g *stateSizeGenerator) initializeMetrics() {
 	var (
-		accountCount, accountBytes   uint64
-		storageCount, storageBytes   uint64
-		trieNodeCount, trieNodeBytes uint64
-		contractCount, contractBytes uint64
+		wg                                         sync.WaitGroup
+		accountCount, accountBytes                 uint64
+		storageCount, storageBytes                 uint64
+		trieAccountNodeCount, trieAccountNodeBytes uint64
+		trieStorageNodeCount, trieStorageNodeBytes uint64
+		contractCount, contractBytes               uint64
 	)
 
-	// Process accounts
-	log.Info("Initializing account metrics")
-	accountIter := g.db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
-	defer accountIter.Release()
+	iterate := func(prefix []byte, name string, count, bytes uint64) {
+		defer wg.Done()
 
-	for accountIter.Next() {
-		key := accountIter.Key()
-		value := accountIter.Value()
+		log.Info("Iterating over state size", "table", name)
+		defer func(st time.Time) {
+			log.Info("Finished iterating over state size", "table", name, "count", count, "bytes", bytes, "elapsed", common.PrettyDuration(time.Since(st)))
+		}(time.Now())
 
-		// Count account
-		accountCount++
-		accountBytes += uint64(len(key) + len(value))
+		iter := g.db.NewIterator(prefix, nil)
+		defer iter.Release()
+		for iter.Next() {
+			count++
+			bytes += uint64(len(iter.Key()) + len(iter.Value()))
 
-		// Check if account has code (contract)
-		var account types.StateAccount
-		if err := rlp.DecodeBytes(value, &account); err == nil {
-			if !bytes.Equal(account.CodeHash, types.EmptyCodeHash[:]) {
-				contractCount++
-				// Code size will be counted separately
+			// Check for abort
+			select {
+			case abort := <-g.abort:
+				close(abort)
+			default:
 			}
 		}
-
-		// Process storage for this account
-		storageIter := g.db.NewIterator(append(rawdb.SnapshotStoragePrefix, key[1:]...), nil)
-		for storageIter.Next() {
-			storageKey := storageIter.Key()
-			storageValue := storageIter.Value()
-			storageCount++
-			storageBytes += uint64(len(storageKey) + len(storageValue))
-		}
-		storageIter.Release()
-
-		// Check for abort
-		select {
-		case abort := <-g.abort:
-			close(abort)
-			return
-		default:
-		}
 	}
 
-	// Process trie nodes
-	log.Info("Initializing trie node metrics")
-	trieNodeIter := g.db.NewIterator(rawdb.TrieNodeAccountPrefix, nil)
-	defer trieNodeIter.Release()
-
-	for trieNodeIter.Next() {
-		key := trieNodeIter.Key()
-		value := trieNodeIter.Value()
-		trieNodeCount++
-		trieNodeBytes += uint64(len(key) + len(value))
+	tables := []struct {
+		prefix []byte
+		name   string
+		count  *uint64
+		bytes  *uint64
+	}{
+		{rawdb.SnapshotAccountPrefix, "account", &accountCount, &accountBytes},
+		{rawdb.SnapshotStoragePrefix, "storage", &storageCount, &storageBytes},
+		{rawdb.TrieNodeAccountPrefix, "trie account node", &trieAccountNodeCount, &trieAccountNodeBytes},
+		{rawdb.TrieNodeStoragePrefix, "trie storage node", &trieStorageNodeCount, &trieStorageNodeBytes},
+		{rawdb.CodePrefix, "contract code", &contractCount, &contractBytes},
+	}
+	wg.Add(len(tables))
+	for _, table := range tables {
+		go iterate(table.prefix, table.name, *table.count, *table.bytes)
 	}
 
-	// Process storage trie nodes
-	storageTrieIter := g.db.NewIterator(rawdb.TrieNodeStoragePrefix, nil)
-	defer storageTrieIter.Release()
-
-	for storageTrieIter.Next() {
-		key := storageTrieIter.Key()
-		value := storageTrieIter.Value()
-		trieNodeCount++
-		trieNodeBytes += uint64(len(key) + len(value))
-	}
-
-	// Process contract code
-	log.Info("Initializing contract code metrics")
-	codeIter := g.db.NewIterator(rawdb.CodePrefix, nil)
-	defer codeIter.Release()
-
-	for codeIter.Next() {
-		key := codeIter.Key()
-		value := codeIter.Value()
-		contractBytes += uint64(len(key) + len(value))
-	}
+	wg.Wait()
 
 	// Update metrics
 	g.metricsLock.Lock()
@@ -223,8 +190,8 @@ func (g *stateSizeGenerator) initializeMetrics() {
 	g.metrics.AccountBytes = accountBytes
 	g.metrics.StorageCount = storageCount
 	g.metrics.StorageBytes = storageBytes
-	g.metrics.TrieNodeCount = trieNodeCount
-	g.metrics.TrieNodeBytes = trieNodeBytes
+	g.metrics.TrieNodeCount = trieAccountNodeCount + trieStorageNodeCount
+	g.metrics.TrieNodeBytes = trieAccountNodeBytes + trieStorageNodeBytes
 	g.metrics.ContractCount = contractCount
 	g.metrics.ContractBytes = contractBytes
 	g.metricsLock.Unlock()
@@ -237,8 +204,8 @@ func (g *stateSizeGenerator) initializeMetrics() {
 	stateSizeAccountsBytesMeter.Mark(int64(accountBytes))
 	stateSizeStorageCountMeter.Mark(int64(storageCount))
 	stateSizeStorageBytesMeter.Mark(int64(storageBytes))
-	stateSizeTrieNodesCountMeter.Mark(int64(trieNodeCount))
-	stateSizeTrieNodesBytesMeter.Mark(int64(trieNodeBytes))
+	stateSizeTrieNodesCountMeter.Mark(int64(trieAccountNodeCount + trieStorageNodeCount))
+	stateSizeTrieNodesBytesMeter.Mark(int64(trieStorageNodeBytes + trieStorageNodeBytes))
 	stateSizeContractsCountMeter.Mark(int64(contractCount))
 	stateSizeContractsBytesMeter.Mark(int64(contractBytes))
 }
