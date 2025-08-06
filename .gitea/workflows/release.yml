@@ -4,6 +4,7 @@ on:
       - "master"
     tags:
       - "v*"
+  workflow_dispatch:
 
 jobs:
   linux-intel:
@@ -25,7 +26,7 @@ jobs:
 
     - name: Build (amd64)
       run: |
-        go run build/ci.go install -arch amd64 -dlgo
+        go run build/ci.go install -static -arch amd64 -dlgo
 
     - name: Create/upload archive (amd64)
       run: |
@@ -37,7 +38,7 @@ jobs:
 
     - name: Build (386)
       run: |
-        go run build/ci.go install -arch 386 -dlgo
+        go run build/ci.go install -static -arch 386 -dlgo
 
     - name: Create/upload archive (386)
       run: |
@@ -67,7 +68,7 @@ jobs:
 
     - name: Build (arm64)
       run: |
-        go run build/ci.go install -dlgo -arch arm64 -cc aarch64-linux-gnu-gcc
+        go run build/ci.go install -static -dlgo -arch arm64 -cc aarch64-linux-gnu-gcc
 
     - name: Create/upload archive (arm64)
       run: |
@@ -79,7 +80,7 @@ jobs:
 
     - name: Run build (arm5)
       run: |
-        go run build/ci.go install -dlgo -arch arm -cc arm-linux-gnueabi-gcc
+        go run build/ci.go install -static -dlgo -arch arm -cc arm-linux-gnueabi-gcc
       env:
         GOARM: "5"
 
@@ -93,7 +94,7 @@ jobs:
 
     - name: Run build (arm6)
       run: |
-        go run build/ci.go install -dlgo -arch arm -cc arm-linux-gnueabi-gcc
+        go run build/ci.go install -static -dlgo -arch arm -cc arm-linux-gnueabi-gcc
       env:
         GOARM: "6"
 
@@ -108,7 +109,7 @@ jobs:
 
     - name: Run build (arm7)
       run: |
-        go run build/ci.go install -dlgo -arch arm -cc arm-linux-gnueabi-gcc
+        go run build/ci.go install -static -dlgo -arch arm -cc arm-linux-gnueabi-gcc
       env:
         GOARM: "7"
 
@@ -120,6 +121,37 @@ jobs:
         GOARM: "7"
         LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
         AZURE_BLOBSTORE_TOKEN: ${{ secrets.AZURE_BLOBSTORE_TOKEN }}
+
+  windows:
+    name: Windows Build
+    runs-on: "win-11"
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.24
+        cache: false
+
+    # Note: gcc.exe only works properly if the corresponding bin/ directory is
+    # contained in PATH.
+
+    - name: "Build (amd64)"
+      shell: cmd
+      run: |
+        set PATH=%GETH_MINGW%\bin;%PATH%
+        go run build/ci.go install -dlgo -arch amd64 -cc %GETH_MINGW%\bin\gcc.exe
+      env:
+        GETH_MINGW: 'C:\msys64\mingw64'
+
+    - name: "Build (386)"
+      shell: cmd
+      run: |
+        set PATH=%GETH_MINGW%\bin;%PATH%
+        go run build/ci.go install -dlgo -arch 386 -cc %GETH_MINGW%\bin\gcc.exe
+      env:
+        GETH_MINGW: 'C:\msys64\mingw32'
 
   docker:
     name: Docker Image

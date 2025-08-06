@@ -449,14 +449,18 @@ func (tx *Transaction) BlobGasFeeCapIntCmp(other *big.Int) int {
 // WithoutBlobTxSidecar returns a copy of tx with the blob sidecar removed.
 func (tx *Transaction) WithoutBlobTxSidecar() *Transaction {
 	blobtx, ok := tx.inner.(*BlobTx)
-	if !ok {
+	if !ok || blobtx.Sidecar == nil {
 		return tx
 	}
 	cpy := &Transaction{
 		inner: blobtx.withoutSidecar(),
 		time:  tx.time,
 	}
-	// Note: tx.size cache not carried over because the sidecar is included in size!
+	if size := tx.size.Load(); size != 0 {
+		// The tx had a sidecar before, so we need to subtract it from the size.
+		scSize := rlp.ListSize(blobtx.Sidecar.encodedSize())
+		cpy.size.Store(size - scSize)
+	}
 	if h := tx.hash.Load(); h != nil {
 		cpy.hash.Store(h)
 	}

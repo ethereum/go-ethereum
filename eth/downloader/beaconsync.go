@@ -250,6 +250,9 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 		check := (start + end) / 2
 
 		h := d.skeleton.Header(check)
+		if h == nil {
+			return 0, fmt.Errorf("filled skeleton header is missing: %d", check)
+		}
 		n := h.Number.Uint64()
 
 		var known bool

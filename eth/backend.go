@@ -236,9 +236,13 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			VmConfig: vm.Config{
 				EnablePreimageRecording: config.EnablePreimageRecording,
 			},
+			// Enables file journaling for the trie database. The journal files will be stored
+			// within the data directory. The corresponding paths will be either:
+			// - DATADIR/triedb/merkle.journal
+			// - DATADIR/triedb/verkle.journal
+			TrieJournalDirectory: stack.ResolvePath("triedb"),
 		}
 	)
-
 	if config.VMTrace != "" {
 		traceConfig := json.RawMessage("{}")
 		if config.VMTraceJsonConfig != "" {
@@ -278,7 +282,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if fb := eth.blockchain.CurrentFinalBlock(); fb != nil {
 		finalBlock = fb.Number.Uint64()
 	}
-	eth.filterMaps = filtermaps.NewFilterMaps(chainDb, chainView, historyCutoff, finalBlock, filtermaps.DefaultParams, fmConfig)
+	filterMaps, err := filtermaps.NewFilterMaps(chainDb, chainView, historyCutoff, finalBlock, filtermaps.DefaultParams, fmConfig)
+	if err != nil {
+		return nil, err
+	}
+	eth.filterMaps = filterMaps
 	eth.closeFilterMaps = make(chan chan struct{})
 
 	// TxPool

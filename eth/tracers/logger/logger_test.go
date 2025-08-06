@@ -39,6 +39,10 @@ func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash) co
 	return common.Hash{}
 }
 
+func (*dummyStatedb) GetStateAndCommittedState(common.Address, common.Hash) (common.Hash, common.Hash) {
+	return common.Hash{}, common.Hash{}
+}
+
 func TestStoreCapture(t *testing.T) {
 	var (
 		logger   = NewStructLogger(nil)

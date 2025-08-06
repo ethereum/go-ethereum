@@ -18,7 +18,7 @@ package main
 
 import (
 	"embed"
-	"fmt"
+	"errors"
 	"io/fs"
 	"os"
 
@@ -97,7 +97,7 @@ type testConfig struct {
 	traceTestFile     string
 }
 
-var errPrunedHistory = fmt.Errorf("attempt to access pruned history")
+var errPrunedHistory = errors.New("attempt to access pruned history")
 
 // validateHistoryPruneErr checks whether the given error is caused by access
 // to history before the pruning threshold block (it is an rpc.Error with code 4444).
@@ -109,7 +109,7 @@ func validateHistoryPruneErr(err error, blockNum uint64, historyPruneBlock *uint
 	if err != nil {
 		if rpcErr, ok := err.(rpc.Error); ok && rpcErr.ErrorCode() == 4444 {
 			if historyPruneBlock != nil && blockNum > *historyPruneBlock {
-				return fmt.Errorf("pruned history error returned after pruning threshold")
+				return errors.New("pruned history error returned after pruning threshold")
 			}
 			return errPrunedHistory
 		}
@@ -130,18 +130,42 @@ func testConfigFromCLI(ctx *cli.Context) (cfg testConfig) {
 	switch {
 	case ctx.Bool(testMainnetFlag.Name):
 		cfg.fsys = builtinTestFiles
-		cfg.filterQueryFile = "queries/filter_queries_mainnet.json"
-		cfg.historyTestFile = "queries/history_mainnet.json"
+		if ctx.IsSet(filterQueryFileFlag.Name) {
+			cfg.filterQueryFile = ctx.String(filterQueryFileFlag.Name)
+		} else {
+			cfg.filterQueryFile = "queries/filter_queries_mainnet.json"
+		}
+		if ctx.IsSet(historyTestFileFlag.Name) {
+			cfg.historyTestFile = ctx.String(historyTestFileFlag.Name)
+		} else {
+			cfg.historyTestFile = "queries/history_mainnet.json"
+		}
+		if ctx.IsSet(traceTestFileFlag.Name) {
+			cfg.traceTestFile = ctx.String(traceTestFileFlag.Name)
+		} else {
+			cfg.traceTestFile = "queries/trace_mainnet.json"
+		}
 		cfg.historyPruneBlock = new(uint64)
 		*cfg.historyPruneBlock = history.PrunePoints[params.MainnetGenesisHash].BlockNumber
-		cfg.traceTestFile = "queries/trace_mainnet.json"
 	case ctx.Bool(testSepoliaFlag.Name):
 		cfg.fsys = builtinTestFiles
-		cfg.filterQueryFile = "queries/filter_queries_sepolia.json"
-		cfg.historyTestFile = "queries/history_sepolia.json"
+		if ctx.IsSet(filterQueryFileFlag.Name) {
+			cfg.filterQueryFile = ctx.String(filterQueryFileFlag.Name)
+		} else {
+			cfg.filterQueryFile = "queries/filter_queries_sepolia.json"
+		}
+		if ctx.IsSet(historyTestFileFlag.Name) {
+			cfg.historyTestFile = ctx.String(historyTestFileFlag.Name)
+		} else {
+			cfg.historyTestFile = "queries/history_sepolia.json"
+		}
+		if ctx.IsSet(traceTestFileFlag.Name) {
+			cfg.traceTestFile = ctx.String(traceTestFileFlag.Name)
+		} else {
+			cfg.traceTestFile = "queries/trace_sepolia.json"
+		}
 		cfg.historyPruneBlock = new(uint64)
 		*cfg.historyPruneBlock = history.PrunePoints[params.SepoliaGenesisHash].BlockNumber
-		cfg.traceTestFile = "queries/trace_sepolia.json"
 	default:
 		cfg.fsys = os.DirFS(".")
 		cfg.filterQueryFile = ctx.String(filterQueryFileFlag.Name)

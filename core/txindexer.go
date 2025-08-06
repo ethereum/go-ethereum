@@ -217,11 +217,11 @@ func (indexer *txIndexer) resolveHead() uint64 {
 	if headBlockHash == (common.Hash{}) {
 		return 0
 	}
-	headBlockNumber := rawdb.ReadHeaderNumber(indexer.db, headBlockHash)
-	if headBlockNumber == nil {
+	headBlockNumber, ok := rawdb.ReadHeaderNumber(indexer.db, headBlockHash)
+	if !ok {
 		return 0
 	}
-	return *headBlockNumber
+	return headBlockNumber
 }
 
 // loop is the scheduler of the indexer, assigning indexing/unindexing tasks depending

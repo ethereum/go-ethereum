@@ -56,8 +56,9 @@ type Log struct {
 }
 
 type logMarshaling struct {
-	Data        hexutil.Bytes
-	BlockNumber hexutil.Uint64
-	TxIndex     hexutil.Uint
-	Index       hexutil.Uint
+	Data           hexutil.Bytes
+	BlockNumber    hexutil.Uint64
+	TxIndex        hexutil.Uint
+	BlockTimestamp hexutil.Uint64
+	Index          hexutil.Uint
 }

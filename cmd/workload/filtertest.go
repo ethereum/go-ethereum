@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -153,7 +154,14 @@ func (s *filterTestSuite) fullRangeQueryAndCheck(t *utesting.T, query *filterQue
 func (s *filterTestSuite) loadQueries() error {
 	file, err := s.cfg.fsys.Open(s.cfg.filterQueryFile)
 	if err != nil {
-		return fmt.Errorf("can't open filterQueryFile: %v", err)
+		// If not found in embedded FS, try to load it from disk
+		if !os.IsNotExist(err) {
+			return err
+		}
+		file, err = os.OpenFile(s.cfg.filterQueryFile, os.O_RDONLY, 0666)
+		if err != nil {
+			return fmt.Errorf("can't open filterQueryFile: %v", err)
+		}
 	}
 	defer file.Close()
 

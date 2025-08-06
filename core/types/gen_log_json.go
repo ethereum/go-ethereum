@@ -22,7 +22,7 @@ func (l Log) MarshalJSON() ([]byte, error) {
 		TxHash         common.Hash    `json:"transactionHash" gencodec:"required" rlp:"-"`
 		TxIndex        hexutil.Uint   `json:"transactionIndex" rlp:"-"`
 		BlockHash      common.Hash    `json:"blockHash" rlp:"-"`
-		BlockTimestamp uint64         `json:"blockTimestamp" rlp:"-"`
+		BlockTimestamp hexutil.Uint64 `json:"blockTimestamp" rlp:"-"`
 		Index          hexutil.Uint   `json:"logIndex" rlp:"-"`
 		Removed        bool           `json:"removed" rlp:"-"`
 	}
@@ -34,7 +34,7 @@ func (l Log) MarshalJSON() ([]byte, error) {
 	enc.TxHash = l.TxHash
 	enc.TxIndex = hexutil.Uint(l.TxIndex)
 	enc.BlockHash = l.BlockHash
-	enc.BlockTimestamp = l.BlockTimestamp
+	enc.BlockTimestamp = hexutil.Uint64(l.BlockTimestamp)
 	enc.Index = hexutil.Uint(l.Index)
 	enc.Removed = l.Removed
 	return json.Marshal(&enc)
@@ -50,7 +50,7 @@ func (l *Log) UnmarshalJSON(input []byte) error {
 		TxHash         *common.Hash    `json:"transactionHash" gencodec:"required" rlp:"-"`
 		TxIndex        *hexutil.Uint   `json:"transactionIndex" rlp:"-"`
 		BlockHash      *common.Hash    `json:"blockHash" rlp:"-"`
-		BlockTimestamp *uint64         `json:"blockTimestamp" rlp:"-"`
+		BlockTimestamp *hexutil.Uint64 `json:"blockTimestamp" rlp:"-"`
 		Index          *hexutil.Uint   `json:"logIndex" rlp:"-"`
 		Removed        *bool           `json:"removed" rlp:"-"`
 	}
@@ -84,7 +84,7 @@ func (l *Log) UnmarshalJSON(input []byte) error {
 		l.BlockHash = *dec.BlockHash
 	}
 	if dec.BlockTimestamp != nil {
-		l.BlockTimestamp = *dec.BlockTimestamp
+		l.BlockTimestamp = uint64(*dec.BlockTimestamp)
 	}
 	if dec.Index != nil {
 		l.Index = uint(*dec.Index)

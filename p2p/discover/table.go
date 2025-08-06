@@ -562,7 +562,7 @@ func (tab *Table) addReplacement(b *bucket, n *enode.Node) {
 }
 
 func (tab *Table) nodeAdded(b *bucket, n *tableNode) {
-	if n.addedToTable == (time.Time{}) {
+	if n.addedToTable.IsZero() {
 		n.addedToTable = time.Now()
 	}
 	n.addedToBucket = time.Now()

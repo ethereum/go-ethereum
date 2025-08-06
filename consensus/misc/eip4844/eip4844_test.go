@@ -127,3 +127,43 @@ func TestFakeExponential(t *testing.T) {
 		}
 	}
 }
+
+func TestCalcExcessBlobGasEIP7918(t *testing.T) {
+	var (
+		cfg           = params.MergedTestChainConfig
+		targetBlobs   = targetBlobsPerBlock(cfg, *cfg.CancunTime)
+		blobGasTarget = uint64(targetBlobs) * params.BlobTxBlobGasPerBlob
+	)
+	makeHeader := func(parentExcess, parentBaseFee uint64, blobsUsed int) *types.Header {
+		blobGasUsed := uint64(blobsUsed) * params.BlobTxBlobGasPerBlob
+		return &types.Header{
+			BaseFee:       big.NewInt(int64(parentBaseFee)),
+			ExcessBlobGas: &parentExcess,
+			BlobGasUsed:   &blobGasUsed,
+		}
+	}
+
+	tests := []struct {
+		name          string
+		header        *types.Header
+		wantExcessGas uint64
+	}{
+		{
+			name:          "BelowReservePrice",
+			header:        makeHeader(0, 1_000_000_000, targetBlobs),
+			wantExcessGas: blobGasTarget * 3 / 9,
+		},
+		{
+			name:          "AboveReservePrice",
+			header:        makeHeader(0, 1, targetBlobs),
+			wantExcessGas: 0,
+		},
+	}
+	for _, tc := range tests {
+		got := CalcExcessBlobGas(cfg, tc.header, *cfg.CancunTime)
+		if got != tc.wantExcessGas {
+			t.Fatalf("%s: excess-blob-gas mismatch – have %d, want %d",
+				tc.name, got, tc.wantExcessGas)
+		}
+	}
+}

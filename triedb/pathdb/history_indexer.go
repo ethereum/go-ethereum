@@ -73,8 +73,8 @@ func storeIndexMetadata(db ethdb.KeyValueWriter, last uint64) {
 // batchIndexer is a structure designed to perform batch indexing or unindexing
 // of state histories atomically.
 type batchIndexer struct {
-	accounts map[common.Hash][]uint64                 // History ID list, Keyed by account address
-	storages map[common.Hash]map[common.Hash][]uint64 // History ID list, Keyed by account address and the hash of raw storage key
+	accounts map[common.Hash][]uint64                 // History ID list, Keyed by the hash of account address
+	storages map[common.Hash]map[common.Hash][]uint64 // History ID list, Keyed by the hash of account address and the hash of raw storage key
 	counter  int                                      // The counter of processed states
 	delete   bool                                     // Index or unindex mode
 	lastID   uint64                                   // The ID of latest processed history
@@ -392,16 +392,17 @@ func (i *indexIniter) run(lastID uint64) {
 		select {
 		case signal := <-i.interrupt:
 			// The indexing limit can only be extended or shortened continuously.
-			if signal.newLastID != lastID+1 && signal.newLastID != lastID-1 {
-				signal.result <- fmt.Errorf("invalid history id, last: %d, got: %d", lastID, signal.newLastID)
+			newLastID := signal.newLastID
+			if newLastID != lastID+1 && newLastID != lastID-1 {
+				signal.result <- fmt.Errorf("invalid history id, last: %d, got: %d", lastID, newLastID)
 				continue
 			}
-			i.last.Store(signal.newLastID) // update indexing range
+			i.last.Store(newLastID) // update indexing range
 
 			// The index limit is extended by one, update the limit without
 			// interrupting the current background process.
-			if signal.newLastID == lastID+1 {
-				lastID = signal.newLastID
+			if newLastID == lastID+1 {
+				lastID = newLastID
 				signal.result <- nil
 				log.Debug("Extended state history range", "last", lastID)
 				continue
@@ -425,7 +426,9 @@ func (i *indexIniter) run(lastID uint64) {
 				return
 			}
 			// Adjust the indexing target and relaunch the process
-			lastID = signal.newLastID
+			lastID = newLastID
+			signal.result <- nil
+
 			done, interrupt = make(chan struct{}), new(atomic.Int32)
 			go i.index(done, interrupt, lastID)
 			log.Debug("Shortened state history range", "last", lastID)
@@ -494,7 +497,18 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 	// when the state is reverted manually (chain.SetHead) or the deep reorg is
 	// encountered. In such cases, no indexing should be scheduled.
 	if beginID > lastID {
-		log.Debug("State history is fully indexed", "last", lastID)
+		if lastID == 0 && beginID == 1 {
+			// Initialize the indexing flag if the state history is empty by
+			// using zero as the disk layer ID. This is a common case that
+			// can occur after snap sync.
+			//
+			// This step is essential to avoid spinning up indexing thread
+			// endlessly until a history object is produced.
+			storeIndexMetadata(i.disk, 0)
+			log.Info("Initialized history indexing flag")
+		} else {
+			log.Debug("State history is fully indexed", "last", lastID)
+		}
 		return
 	}
 	log.Info("Start history indexing", "beginID", beginID, "lastID", lastID)

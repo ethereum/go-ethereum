@@ -143,13 +143,13 @@ func ReadAllCanonicalHashes(db ethdb.Iteratee, from uint64, to uint64, limit int
 }
 
 // ReadHeaderNumber returns the header number assigned to a hash.
-func ReadHeaderNumber(db ethdb.KeyValueReader, hash common.Hash) *uint64 {
+func ReadHeaderNumber(db ethdb.KeyValueReader, hash common.Hash) (uint64, bool) {
 	data, _ := db.Get(headerNumberKey(hash))
 	if len(data) != 8 {
-		return nil
+		return 0, false
 	}
 	number := binary.BigEndian.Uint64(data)
-	return &number
+	return number, true
 }
 
 // WriteHeaderNumber stores the hash->number mapping.
@@ -449,9 +449,10 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 	return data
 }
 
-// ReadCanonicalBodyRLP retrieves the block body (transactions and uncles) for the canonical
-// block at number, in RLP encoding.
-func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64) rlp.RawValue {
+// ReadCanonicalBodyRLP retrieves the block body (transactions and uncles) for the
+// canonical block at number, in RLP encoding. Optionally it takes the block hash
+// to avoid looking it up
+func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64, hash *common.Hash) rlp.RawValue {
 	var data []byte
 	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
 		data, _ = reader.Ancient(ChainFreezerBodiesTable, number)
@@ -459,10 +460,14 @@ func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64) rlp.RawValue {
 			return nil
 		}
 		// Block is not in ancients, read from leveldb by hash and number.
-		// Note: ReadCanonicalHash cannot be used here because it also
-		// calls ReadAncients internally.
-		hash, _ := db.Get(headerHashKey(number))
-		data, _ = db.Get(blockBodyKey(number, common.BytesToHash(hash)))
+		if hash != nil {
+			data, _ = db.Get(blockBodyKey(number, *hash))
+		} else {
+			// Note: ReadCanonicalHash cannot be used here because it also
+			// calls ReadAncients internally.
+			hashBytes, _ := db.Get(headerHashKey(number))
+			data, _ = db.Get(blockBodyKey(number, common.BytesToHash(hashBytes)))
+		}
 		return nil
 	})
 	return data
@@ -539,6 +544,29 @@ func ReadReceiptsRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawVa
 		}
 		// If not, try reading from leveldb
 		data, _ = db.Get(blockReceiptsKey(number, hash))
+		return nil
+	})
+	return data
+}
+
+// ReadCanonicalReceiptsRLP retrieves the receipts RLP for the canonical block at
+// number, in RLP encoding. Optionally it takes the block hash to avoid looking it up.
+func ReadCanonicalReceiptsRLP(db ethdb.Reader, number uint64, hash *common.Hash) rlp.RawValue {
+	var data []byte
+	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+		data, _ = reader.Ancient(ChainFreezerReceiptTable, number)
+		if len(data) > 0 {
+			return nil
+		}
+		// Block is not in ancients, read from leveldb by hash and number.
+		if hash != nil {
+			data, _ = db.Get(blockReceiptsKey(number, *hash))
+		} else {
+			// Note: ReadCanonicalHash cannot be used here because it also
+			// calls ReadAncients internally.
+			hashBytes, _ := db.Get(headerHashKey(number))
+			data, _ = db.Get(blockReceiptsKey(number, common.BytesToHash(hashBytes)))
+		}
 		return nil
 	})
 	return data
@@ -907,11 +935,11 @@ func ReadHeadHeader(db ethdb.Reader) *types.Header {
 	if headHeaderHash == (common.Hash{}) {
 		return nil
 	}
-	headHeaderNumber := ReadHeaderNumber(db, headHeaderHash)
-	if headHeaderNumber == nil {
+	headHeaderNumber, ok := ReadHeaderNumber(db, headHeaderHash)
+	if !ok {
 		return nil
 	}
-	return ReadHeader(db, headHeaderHash, *headHeaderNumber)
+	return ReadHeader(db, headHeaderHash, headHeaderNumber)
 }
 
 // ReadHeadBlock returns the current canonical head block.
@@ -920,9 +948,9 @@ func ReadHeadBlock(db ethdb.Reader) *types.Block {
 	if headBlockHash == (common.Hash{}) {
 		return nil
 	}
-	headBlockNumber := ReadHeaderNumber(db, headBlockHash)
-	if headBlockNumber == nil {
+	headBlockNumber, ok := ReadHeaderNumber(db, headBlockHash)
+	if !ok {
 		return nil
 	}
-	return ReadBlock(db, headBlockHash, *headBlockNumber)
+	return ReadBlock(db, headBlockHash, headBlockNumber)
 }

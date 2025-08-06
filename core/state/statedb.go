@@ -258,7 +258,7 @@ func (s *StateDB) GetLogs(hash common.Hash, blockNumber uint64, blockHash common
 }
 
 func (s *StateDB) Logs() []*types.Log {
-	var logs []*types.Log
+	logs := make([]*types.Log, 0, s.logSize)
 	for _, lgs := range s.logs {
 		logs = append(logs, lgs...)
 	}
@@ -387,6 +387,15 @@ func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) commo
 		return stateObject.GetCommittedState(hash)
 	}
 	return common.Hash{}
+}
+
+// GetStateAndCommittedState returns the current value and the original value.
+func (s *StateDB) GetStateAndCommittedState(addr common.Address, hash common.Hash) (common.Hash, common.Hash) {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.getState(hash)
+	}
+	return common.Hash{}, common.Hash{}
 }
 
 // Database retrieves the low level database supporting the lower level trie ops.

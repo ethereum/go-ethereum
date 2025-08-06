@@ -57,7 +57,8 @@ func (c *Structs) Instance(backend bind.ContractBackend, addr common.Address) *b
 }
 
 // PackF is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x28811f59.
+// the contract method with ID 0x28811f59.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function F() view returns((bytes32)[] a, uint256[] c, bool[] d)
 func (structs *Structs) PackF() []byte {
@@ -66,6 +67,15 @@ func (structs *Structs) PackF() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackF is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x28811f59.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function F() view returns((bytes32)[] a, uint256[] c, bool[] d)
+func (structs *Structs) TryPackF() ([]byte, error) {
+	return structs.abi.Pack("F")
 }
 
 // FOutput serves as a container for the return parameters of contract
@@ -89,12 +99,12 @@ func (structs *Structs) UnpackF(data []byte) (FOutput, error) {
 	outstruct.A = *abi.ConvertType(out[0], new([]Struct0)).(*[]Struct0)
 	outstruct.C = *abi.ConvertType(out[1], new([]*big.Int)).(*[]*big.Int)
 	outstruct.D = *abi.ConvertType(out[2], new([]bool)).(*[]bool)
-	return *outstruct, err
-
+	return *outstruct, nil
 }
 
 // PackG is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x6fecb623.
+// the contract method with ID 0x6fecb623.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function G() view returns((bytes32)[] a)
 func (structs *Structs) PackG() []byte {
@@ -103,6 +113,15 @@ func (structs *Structs) PackG() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackG is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x6fecb623.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function G() view returns((bytes32)[] a)
+func (structs *Structs) TryPackG() ([]byte, error) {
+	return structs.abi.Pack("G")
 }
 
 // UnpackG is the Go binding that unpacks the parameters returned
@@ -115,5 +134,5 @@ func (structs *Structs) UnpackG(data []byte) ([]Struct0, error) {
 		return *new([]Struct0), err
 	}
 	out0 := *abi.ConvertType(out[0], new([]Struct0)).(*[]Struct0)
-	return out0, err
+	return out0, nil
 }

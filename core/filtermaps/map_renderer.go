@@ -284,7 +284,7 @@ func (r *mapRenderer) run(stopCb func() bool, writeCb func()) (bool, error) {
 		// map finished
 		r.finishedMaps[r.currentMap.mapIndex] = r.currentMap
 		r.finished.SetLast(r.finished.AfterLast())
-		if len(r.finishedMaps) >= maxMapsPerBatch || r.finished.AfterLast()&(r.f.baseRowGroupLength-1) == 0 {
+		if len(r.finishedMaps) >= maxMapsPerBatch || r.f.mapGroupOffset(r.finished.AfterLast()) == 0 {
 			if err := r.writeFinishedMaps(stopCb); err != nil {
 				return false, err
 			}

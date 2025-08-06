@@ -540,8 +540,10 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		return block, b.receipts
 	}
 
+	sdb := state.NewDatabase(trdb, nil)
+
 	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabase(trdb, nil))
+		statedb, err := state.New(parent.Root(), sdb)
 		if err != nil {
 			panic(err)
 		}

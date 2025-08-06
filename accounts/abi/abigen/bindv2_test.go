@@ -281,7 +281,7 @@ func TestBindingV2ConvertedV1Tests(t *testing.T) {
 			}
 			// Set this environment variable to regenerate the test outputs.
 			if os.Getenv("WRITE_TEST_FILES") != "" {
-				if err := os.WriteFile((fname), []byte(have), 0666); err != nil {
+				if err := os.WriteFile(fname, []byte(have), 0666); err != nil {
 					t.Fatalf("err writing expected output to file: %v\n", err)
 				}
 			}

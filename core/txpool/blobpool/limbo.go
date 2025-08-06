@@ -110,7 +110,7 @@ func (l *limbo) finalize(final *types.Header, fn func(id uint64, txHash common.H
 	// Just in case there's no final block yet (network not yet merged, weird
 	// restart, sethead, etc), fail gracefully.
 	if final == nil {
-		log.Error("Nil finalized block cannot evict old blobs")
+		log.Warn("Nil finalized block cannot evict old blobs")
 		return
 	}
 	for id, item := range l.limbos {

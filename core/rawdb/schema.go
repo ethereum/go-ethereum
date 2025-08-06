@@ -125,8 +125,8 @@ var (
 	StateHistoryIndexPrefix           = []byte("m")   // The global prefix of state history index data
 	StateHistoryAccountMetadataPrefix = []byte("ma")  // StateHistoryAccountMetadataPrefix + account address hash => account metadata
 	StateHistoryStorageMetadataPrefix = []byte("ms")  // StateHistoryStorageMetadataPrefix + account address hash + storage slot hash => slot metadata
-	StateHistoryAccountBlockPrefix    = []byte("mba") // StateHistoryAccountBlockPrefix + account address hash + block_number => account block
-	StateHistoryStorageBlockPrefix    = []byte("mbs") // StateHistoryStorageBlockPrefix + account address hash + storage slot hash + block_number => slot block
+	StateHistoryAccountBlockPrefix    = []byte("mba") // StateHistoryAccountBlockPrefix + account address hash + blockID => account block
+	StateHistoryStorageBlockPrefix    = []byte("mbs") // StateHistoryStorageBlockPrefix + account address hash + storage slot hash + blockID => slot block
 
 	// VerklePrefix is the database prefix for Verkle trie data, which includes:
 	// (a) Trie nodes
@@ -158,6 +158,9 @@ var (
 	preimageCounter     = metrics.NewRegisteredCounter("db/preimage/total", nil)
 	preimageHitsCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
 	preimageMissCounter = metrics.NewRegisteredCounter("db/preimage/miss", nil)
+
+	// Verkle transition information
+	VerkleTransitionStatePrefix = []byte("verkle-transition-state-")
 )
 
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary
@@ -396,4 +399,9 @@ func storageHistoryIndexBlockKey(addressHash common.Hash, storageHash common.Has
 	var buf [4]byte
 	binary.BigEndian.PutUint32(buf[:], blockID)
 	return append(append(append(StateHistoryStorageBlockPrefix, addressHash.Bytes()...), storageHash.Bytes()...), buf[:]...)
+}
+
+// transitionStateKey = transitionStatusKey + hash
+func transitionStateKey(hash common.Hash) []byte {
+	return append(VerkleTransitionStatePrefix, hash.Bytes()...)
 }

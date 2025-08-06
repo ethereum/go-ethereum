@@ -52,7 +52,8 @@ func (c *MyContract) Instance(backend bind.ContractBackend, addr common.Address)
 }
 
 // PackGetNums is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0xbd6d1007.
+// the contract method with ID 0xbd6d1007.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function GetNums() pure returns(uint256[5])
 func (myContract *MyContract) PackGetNums() []byte {
@@ -61,6 +62,15 @@ func (myContract *MyContract) PackGetNums() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackGetNums is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xbd6d1007.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function GetNums() pure returns(uint256[5])
+func (myContract *MyContract) TryPackGetNums() ([]byte, error) {
+	return myContract.abi.Pack("GetNums")
 }
 
 // UnpackGetNums is the Go binding that unpacks the parameters returned
@@ -73,5 +83,5 @@ func (myContract *MyContract) UnpackGetNums(data []byte) ([5]*big.Int, error) {
 		return *new([5]*big.Int), err
 	}
 	out0 := *abi.ConvertType(out[0], new([5]*big.Int)).(*[5]*big.Int)
-	return out0, err
+	return out0, nil
 }

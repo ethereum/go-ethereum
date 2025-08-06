@@ -49,10 +49,10 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/eth/syncer"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/remotedb"
@@ -261,7 +261,7 @@ var (
 	}
 	GCModeFlag = &cli.StringFlag{
 		Name:     "gcmode",
-		Usage:    `Blockchain garbage collection mode, only relevant in state.scheme=hash ("full", "archive")`,
+		Usage:    `Blockchain garbage collection mode ("full", "archive")`,
 		Value:    "full",
 		Category: flags.StateCategory,
 	}
@@ -1379,13 +1379,13 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 		cfg.UseLightweightKDF = ctx.Bool(LightKDFFlag.Name)
 	}
 	if ctx.IsSet(NoUSBFlag.Name) || cfg.NoUSB {
-		log.Warn("Option nousb is deprecated and USB is deactivated by default. Use --usb to enable")
+		log.Warn("Option --nousb is deprecated and USB is deactivated by default. Use --usb to enable")
 	}
 	if ctx.IsSet(USBFlag.Name) {
 		cfg.USB = ctx.Bool(USBFlag.Name)
 	}
 	if ctx.IsSet(InsecureUnlockAllowedFlag.Name) {
-		log.Warn(fmt.Sprintf("Option %q is deprecated and has no effect", InsecureUnlockAllowedFlag.Name))
+		log.Warn(fmt.Sprintf("Option --%s is deprecated and has no effect", InsecureUnlockAllowedFlag.Name))
 	}
 	if ctx.IsSet(DBEngineFlag.Name) {
 		dbEngine := ctx.String(DBEngineFlag.Name)
@@ -1397,10 +1397,10 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	}
 	// deprecation notice for log debug flags (TODO: find a more appropriate place to put these?)
 	if ctx.IsSet(LogBacktraceAtFlag.Name) {
-		log.Warn("log.backtrace flag is deprecated")
+		log.Warn("Option --log.backtrace flag is deprecated")
 	}
 	if ctx.IsSet(LogDebugFlag.Name) {
-		log.Warn("log.debug flag is deprecated")
+		log.Warn("Option --log.debug flag is deprecated")
 	}
 }
 
@@ -1859,7 +1859,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 func MakeBeaconLightConfig(ctx *cli.Context) bparams.ClientConfig {
 	var config bparams.ClientConfig
 	customConfig := ctx.IsSet(BeaconConfigFlag.Name)
-	flags.CheckExclusive(ctx, MainnetFlag, SepoliaFlag, HoleskyFlag, BeaconConfigFlag)
+	flags.CheckExclusive(ctx, MainnetFlag, SepoliaFlag, HoleskyFlag, HoodiFlag, BeaconConfigFlag)
 	switch {
 	case ctx.Bool(MainnetFlag.Name):
 		config.ChainConfig = *bparams.MainnetLightConfig
@@ -1997,10 +1997,14 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 	return filterSystem
 }
 
-// RegisterFullSyncTester adds the full-sync tester service into node.
-func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, target common.Hash) {
-	catalyst.RegisterFullSyncTester(stack, eth, target)
-	log.Info("Registered full-sync tester", "hash", target)
+// RegisterSyncOverrideService adds the synchronization override service into node.
+func RegisterSyncOverrideService(stack *node.Node, eth *eth.Ethereum, target common.Hash, exitWhenSynced bool) {
+	if target != (common.Hash{}) {
+		log.Info("Registered sync override service", "hash", target, "exitWhenSynced", exitWhenSynced)
+	} else {
+		log.Info("Registered sync override service")
+	}
+	syncer.Register(stack, eth, target, exitWhenSynced)
 }
 
 // SetupMetrics configures the metrics system.
@@ -2198,6 +2202,12 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		StateHistory:   ctx.Uint64(StateHistoryFlag.Name),
 		// Disable transaction indexing/unindexing.
 		TxLookupLimit: -1,
+
+		// Enables file journaling for the trie database. The journal files will be stored
+		// within the data directory. The corresponding paths will be either:
+		// - DATADIR/triedb/merkle.journal
+		// - DATADIR/triedb/verkle.journal
+		TrieJournalDirectory: stack.ResolvePath("triedb"),
 	}
 	if options.ArchiveMode && !options.Preimages {
 		options.Preimages = true

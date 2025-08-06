@@ -52,7 +52,8 @@ func (c *IdentifierCollision) Instance(backend bind.ContractBackend, addr common
 }
 
 // PackMyVar is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x4ef1f0ad.
+// the contract method with ID 0x4ef1f0ad.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function MyVar() view returns(uint256)
 func (identifierCollision *IdentifierCollision) PackMyVar() []byte {
@@ -61,6 +62,15 @@ func (identifierCollision *IdentifierCollision) PackMyVar() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackMyVar is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x4ef1f0ad.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function MyVar() view returns(uint256)
+func (identifierCollision *IdentifierCollision) TryPackMyVar() ([]byte, error) {
+	return identifierCollision.abi.Pack("MyVar")
 }
 
 // UnpackMyVar is the Go binding that unpacks the parameters returned
@@ -73,11 +83,12 @@ func (identifierCollision *IdentifierCollision) UnpackMyVar(data []byte) (*big.I
 		return new(big.Int), err
 	}
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-	return out0, err
+	return out0, nil
 }
 
 // PackPubVar is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x01ad4d87.
+// the contract method with ID 0x01ad4d87.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function _myVar() view returns(uint256)
 func (identifierCollision *IdentifierCollision) PackPubVar() []byte {
@@ -86,6 +97,15 @@ func (identifierCollision *IdentifierCollision) PackPubVar() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackPubVar is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x01ad4d87.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function _myVar() view returns(uint256)
+func (identifierCollision *IdentifierCollision) TryPackPubVar() ([]byte, error) {
+	return identifierCollision.abi.Pack("_myVar")
 }
 
 // UnpackPubVar is the Go binding that unpacks the parameters returned
@@ -98,5 +118,5 @@ func (identifierCollision *IdentifierCollision) UnpackPubVar(data []byte) (*big.
 		return new(big.Int), err
 	}
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-	return out0, err
+	return out0, nil
 }
