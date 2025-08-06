@@ -385,7 +385,7 @@ var (
 		DarwinV2Time:        newUint64(1725264000),
 		EuclidTime:          newUint64(1744815600),
 		EuclidV2Time:        newUint64(1745305200),
-		FeynmanTime:         nil,
+		FeynmanTime:         newUint64(1755576000),
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
