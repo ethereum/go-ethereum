@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/holiman/uint256"
 )
 
@@ -99,10 +100,10 @@ type EVM struct {
 	depth int
 
 	// chainConfig contains information about the current chain
-	chainConfig *params.ChainConfig
+	chainConfig *params.Config2
 
 	// chain rules contains the chain rules for the current epoch
-	chainRules params.Rules
+	chainRules params.Rules2
 
 	// virtual machine configuration options used to initialise the evm
 	Config Config
@@ -130,13 +131,18 @@ type EVM struct {
 // database and several configs. It meant to be used throughout the entire
 // state transition of a block, with the transaction context switched as
 // needed by calling evm.SetTxContext.
-func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainConfig, config Config) *EVM {
+func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.Config2, config Config) *EVM {
+	blocknum := uint64(0)
+	if blockCtx.BlockNumber != nil {
+		blocknum = blockCtx.BlockNumber.Uint64()
+	}
+
 	evm := &EVM{
 		Context:     blockCtx,
 		StateDB:     statedb,
 		Config:      config,
 		chainConfig: chainConfig,
-		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time),
+		chainRules:  chainConfig.Rules(blocknum, blockCtx.Time),
 		jumpDests:   newMapJumpDests(),
 	}
 	evm.precompiles = activePrecompiledContracts(evm.chainRules)
@@ -159,7 +165,7 @@ func (evm *EVM) SetJumpDestCache(jumpDests JumpDestCache) {
 // SetTxContext resets the EVM with a new transaction context.
 // This is not threadsafe and should only be done very cautiously.
 func (evm *EVM) SetTxContext(txCtx TxContext) {
-	if evm.chainRules.IsEIP4762 {
+	if evm.chainRules.Active(forks.Verkle) {
 		txCtx.AccessEvents = state.NewAccessEvents(evm.StateDB.PointCache())
 	}
 	evm.TxContext = txCtx
@@ -209,7 +215,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	p, isPrecompile := evm.precompile(addr)
 
 	if !evm.StateDB.Exist(addr) {
-		if !isPrecompile && evm.chainRules.IsEIP4762 && !isSystemCall(caller) {
+		if !isPrecompile && evm.chainRules.Active(forks.Verkle) && !isSystemCall(caller) {
 			// Add proof of absence to witness
 			// At this point, the read costs have already been charged, either because this
 			// is a direct tx call, in which case it's covered by the intrinsic gas, or because
@@ -225,7 +231,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			gas -= wgas
 		}
 
-		if !isPrecompile && evm.chainRules.IsEIP158 && value.IsZero() {
+		if !isPrecompile && evm.chainRules.Active(forks.SpuriousDragon) && value.IsZero() {
 			// Calling a non-existing account, don't do anything.
 			return nil, gas, nil
 		}
@@ -442,7 +448,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 	evm.StateDB.SetNonce(caller, nonce+1, tracing.NonceChangeContractCreator)
 
 	// Charge the contract creation init gas in verkle mode
-	if evm.chainRules.IsEIP4762 {
+	if evm.chainRules.Active(forks.Verkle) {
 		statelessGas := evm.AccessEvents.ContractCreatePreCheckGas(address, gas)
 		if statelessGas > gas {
 			return nil, common.Address{}, 0, ErrOutOfGas
@@ -455,7 +461,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 
 	// We add this to the access list _before_ taking a snapshot. Even if the
 	// creation fails, the access-list change should not be rolled back.
-	if evm.chainRules.IsEIP2929 {
+	if evm.chainRules.Active(forks.Berlin) && !evm.chainRules.Active(forks.Verkle) {
 		evm.StateDB.AddAddressToAccessList(address)
 	}
 	// Ensure there's no existing contract already at the designated address.
@@ -486,11 +492,11 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 	// acts inside that account.
 	evm.StateDB.CreateContract(address)
 
-	if evm.chainRules.IsEIP158 {
+	if evm.chainRules.Active(forks.SpuriousDragon) {
 		evm.StateDB.SetNonce(address, 1, tracing.NonceChangeNewContract)
 	}
 	// Charge the contract creation init gas in verkle mode
-	if evm.chainRules.IsEIP4762 {
+	if evm.chainRules.Active(forks.Verkle) {
 		consumed, wanted := evm.AccessEvents.ContractCreateInitGas(address, gas)
 		if consumed < wanted {
 			return nil, common.Address{}, 0, ErrOutOfGas
@@ -512,7 +518,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 	contract.IsDeployment = true
 
 	ret, err = evm.initNewContract(contract, address)
-	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
+	if err != nil && (evm.chainRules.Active(forks.Homestead) || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
 			contract.UseGas(contract.Gas, evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
@@ -530,16 +536,16 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 	}
 
 	// Check whether the max code size has been exceeded, assign err if the case.
-	if evm.chainRules.IsEIP158 && len(ret) > params.MaxCodeSize {
+	if evm.chainRules.Active(forks.SpuriousDragon) && len(ret) > params.MaxCodeSize {
 		return ret, ErrMaxCodeSizeExceeded
 	}
 
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
-	if len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsLondon {
+	if len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.Active(forks.London) {
 		return ret, ErrInvalidCode
 	}
 
-	if !evm.chainRules.IsEIP4762 {
+	if !evm.chainRules.Active(forks.Verkle) {
 		createDataGas := uint64(len(ret)) * params.CreateDataGas
 		if !contract.UseGas(createDataGas, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
 			return ret, ErrCodeStoreOutOfGas
@@ -576,7 +582,7 @@ func (evm *EVM) Create2(caller common.Address, code []byte, gas uint64, endowmen
 // Prague, it can also resolve code pointed to by a delegation designator.
 func (evm *EVM) resolveCode(addr common.Address) []byte {
 	code := evm.StateDB.GetCode(addr)
-	if !evm.chainRules.IsPrague {
+	if !evm.chainRules.Active(forks.Prague) {
 		return code
 	}
 	if target, ok := types.ParseDelegation(code); ok {
@@ -591,7 +597,7 @@ func (evm *EVM) resolveCode(addr common.Address) []byte {
 // delegation designator. Although this is not accessible in the EVM it is used
 // internally to associate jumpdest analysis to code.
 func (evm *EVM) resolveCodeHash(addr common.Address) common.Hash {
-	if evm.chainRules.IsPrague {
+	if evm.chainRules.Active(forks.Prague) {
 		code := evm.StateDB.GetCode(addr)
 		if target, ok := types.ParseDelegation(code); ok {
 			// Note we only follow one level of delegation.
@@ -602,7 +608,7 @@ func (evm *EVM) resolveCodeHash(addr common.Address) common.Hash {
 }
 
 // ChainConfig returns the environment's chain configuration
-func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
+func (evm *EVM) ChainConfig() *params.Config2 { return evm.chainConfig }
 
 func (evm *EVM) captureBegin(depth int, typ OpCode, from common.Address, to common.Address, input []byte, startGas uint64, value *big.Int) {
 	tracer := evm.Config.Tracer
@@ -623,7 +629,7 @@ func (evm *EVM) captureEnd(depth int, startGas uint64, leftOverGas uint64, ret [
 	if err != nil {
 		reverted = true
 	}
-	if !evm.chainRules.IsHomestead && errors.Is(err, ErrCodeStoreOutOfGas) {
+	if !evm.chainRules.Active(forks.Homestead) && errors.Is(err, ErrCodeStoreOutOfGas) {
 		reverted = false
 	}
 	if tracer.OnExit != nil {

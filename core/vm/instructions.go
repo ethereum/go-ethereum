@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/holiman/uint256"
 )
 
@@ -663,7 +664,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 		input        = scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
 		gas          = scope.Contract.Gas
 	)
-	if interpreter.evm.chainRules.IsEIP150 {
+	if interpreter.evm.chainRules.Active(forks.TangerineWhistle) {
 		gas -= gas / 64
 	}
 
@@ -677,7 +678,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
 	// rule) and treat as an error, if the ruleset is frontier we must
 	// ignore this error and pretend the operation was successful.
-	if interpreter.evm.chainRules.IsHomestead && suberr == ErrCodeStoreOutOfGas {
+	if interpreter.evm.chainRules.Active(forks.Homestead) && suberr == ErrCodeStoreOutOfGas {
 		stackvalue.Clear()
 	} else if suberr != nil && suberr != ErrCodeStoreOutOfGas {
 		stackvalue.Clear()

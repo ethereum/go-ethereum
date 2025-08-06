@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/params/presets"
 	"github.com/holiman/uint256"
 )
 
@@ -48,7 +49,7 @@ func TestLoopInterrupt(t *testing.T) {
 		statedb.SetCode(address, common.Hex2Bytes(tt))
 		statedb.Finalise(true)
 
-		evm := NewEVM(vmctx, statedb, params.AllEthashProtocolChanges, Config{})
+		evm := NewEVM(vmctx, statedb, presets.AllEthashProtocolChanges, Config{})
 
 		errChannel := make(chan error)
 		timeout := make(chan bool)
@@ -79,7 +80,7 @@ func TestLoopInterrupt(t *testing.T) {
 func BenchmarkInterpreter(b *testing.B) {
 	var (
 		statedb, _        = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
-		evm               = NewEVM(BlockContext{BlockNumber: big.NewInt(1), Time: 1, Random: &common.Hash{}}, statedb, params.MergedTestChainConfig, Config{})
+		evm               = NewEVM(BlockContext{BlockNumber: big.NewInt(1), Time: 1, Random: &common.Hash{}}, statedb, presets.MergedTestChainConfig, Config{})
 		startGas   uint64 = 100_000_000
 		value             = uint256.NewInt(0)
 		stack             = newstack()

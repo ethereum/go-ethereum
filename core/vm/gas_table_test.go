@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/params/presets"
 	"github.com/holiman/uint256"
 )
 
@@ -95,7 +95,7 @@ func TestEIP2200(t *testing.T) {
 			CanTransfer: func(StateDB, common.Address, *uint256.Int) bool { return true },
 			Transfer:    func(StateDB, common.Address, common.Address, *uint256.Int) {},
 		}
-		evm := NewEVM(vmctx, statedb, params.AllEthashProtocolChanges, Config{ExtraEips: []int{2200}})
+		evm := NewEVM(vmctx, statedb, presets.AllEthashProtocolChanges, Config{ExtraEips: []int{2200}})
 
 		_, gas, err := evm.Call(common.Address{}, address, nil, tt.gaspool, new(uint256.Int))
 		if !errors.Is(err, tt.failure) {
@@ -151,7 +151,7 @@ func TestCreateGas(t *testing.T) {
 				config.ExtraEips = []int{3860}
 			}
 
-			evm := NewEVM(vmctx, statedb, params.AllEthashProtocolChanges, config)
+			evm := NewEVM(vmctx, statedb, presets.AllEthashProtocolChanges, config)
 			var startGas = uint64(testGas)
 			ret, gas, err := evm.Call(common.Address{}, address, nil, startGas, new(uint256.Int))
 			if err != nil {

@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/crypto/secp256r1"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/params/forks"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -206,21 +207,21 @@ func init() {
 	}
 }
 
-func activePrecompiledContracts(rules params.Rules) PrecompiledContracts {
+func activePrecompiledContracts(rules params.Rules2) PrecompiledContracts {
 	switch {
-	case rules.IsVerkle:
+	case rules.Active(forks.Verkle):
 		return PrecompiledContractsVerkle
-	case rules.IsOsaka:
+	case rules.Active(forks.Osaka):
 		return PrecompiledContractsOsaka
-	case rules.IsPrague:
+	case rules.Active(forks.Prague):
 		return PrecompiledContractsPrague
-	case rules.IsCancun:
+	case rules.Active(forks.Cancun):
 		return PrecompiledContractsCancun
-	case rules.IsBerlin:
+	case rules.Active(forks.Berlin):
 		return PrecompiledContractsBerlin
-	case rules.IsIstanbul:
+	case rules.Active(forks.Istanbul):
 		return PrecompiledContractsIstanbul
-	case rules.IsByzantium:
+	case rules.Active(forks.Byzantium):
 		return PrecompiledContractsByzantium
 	default:
 		return PrecompiledContractsHomestead
@@ -228,7 +229,7 @@ func activePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 }
 
 // ActivePrecompiledContracts returns a copy of precompiled contracts enabled with the current configuration.
-func ActivePrecompiledContracts(rules params.Rules) PrecompiledContracts {
+func ActivePrecompiledContracts(rules params.Rules2) PrecompiledContracts {
 	return maps.Clone(activePrecompiledContracts(rules))
 }
 
