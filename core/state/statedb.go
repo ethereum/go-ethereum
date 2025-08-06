@@ -138,6 +138,9 @@ type StateDB struct {
 	// State witness if cross validation is needed
 	witness *stateless.Witness
 
+	// State size tracking
+	stateSizeGen *stateSizeGenerator
+
 	// Measurements gathered during execution for debugging purposes
 	AccountReads    time.Duration
 	AccountHashes   time.Duration
@@ -185,6 +188,15 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 	if db.TrieDB().IsVerkle() {
 		sdb.accessEvents = NewAccessEvents(db.PointCache())
 	}
+
+	// Initialize state size tracking
+	if cachingDB, ok := db.(*CachingDB); ok {
+		sdb.stateSizeGen = newStateSizeGenerator(cachingDB.disk, db, root)
+		if !db.TrieDB().IsVerkle() {
+			sdb.stateSizeGen.run()
+		}
+	}
+
 	return sdb, nil
 }
 
@@ -1328,6 +1340,11 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorag
 				return nil, err
 			}
 			s.TrieDBCommits += time.Since(start)
+
+			// Update state size metrics
+			if s.stateSizeGen != nil {
+				s.stateSizeGen.updateMetrics(ret)
+			}
 		}
 	}
 	s.reader, _ = s.db.Reader(s.originalRoot)
