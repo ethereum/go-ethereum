@@ -61,7 +61,7 @@ type stateSizeGenerator struct {
 
 	// Generator state
 	running bool
-	abort   chan chan struct{}
+	abort   chan struct{}
 	done    chan struct{}
 
 	// Metrics state
@@ -74,7 +74,7 @@ func newStateSizeGenerator(db ethdb.KeyValueStore, sdb Database, root common.Has
 	return &stateSizeGenerator{
 		db:      db,
 		sdb:     sdb,
-		abort:   make(chan chan struct{}),
+		abort:   make(chan struct{}),
 		done:    make(chan struct{}),
 		metrics: &StateSizeMetrics{Root: root},
 	}
@@ -95,9 +95,7 @@ func (g *stateSizeGenerator) stop() {
 	if !g.running {
 		return
 	}
-	ch := make(chan struct{})
-	g.abort <- ch
-	<-ch
+	close(g.abort)
 	g.running = false
 }
 
@@ -156,10 +154,9 @@ func (g *stateSizeGenerator) initializeMetrics() {
 			count++
 			bytes += uint64(len(iter.Key()) + len(iter.Value()))
 
-			// Check for abort
 			select {
-			case abort := <-g.abort:
-				close(abort)
+			case <-g.abort:
+				return
 			default:
 			}
 		}
