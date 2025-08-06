@@ -43,8 +43,10 @@ func newPrague1Config(distributor common.Address) *params.ChainConfig {
 	zero := uint64(0)
 	cfg := *params.AllDevChainProtocolChanges // copy
 	cfg.Berachain.Prague1 = params.Prague1Config{
-		Time:                  &zero,
-		PoLDistributorAddress: distributor,
+		Time:                     &zero,
+		BaseFeeChangeDenominator: 48,
+		MinimumBaseFeeWei:        10000000000,
+		PoLDistributorAddress:    distributor,
 	}
 	return &cfg
 }
@@ -140,6 +142,8 @@ func TestValidateBody_PrePrague1_PoLProhibited(t *testing.T) {
 	future := uint64(1000)
 	cfg := *params.AllDevChainProtocolChanges
 	cfg.Berachain.Prague1.Time = &future
+	cfg.Berachain.Prague1.BaseFeeChangeDenominator = 48
+	cfg.Berachain.Prague1.MinimumBaseFeeWei = 10000000000
 	cfg.Berachain.Prague1.PoLDistributorAddress = distributor
 	chain, validator := buildTestChain(t, &cfg)
 
