@@ -334,12 +334,11 @@ type BlockChain struct {
 	stopping      atomic.Bool // false if chain is running, true when stopped
 	procInterrupt atomic.Bool // interrupt signaler for block processing
 
-	engine        consensus.Engine
-	validator     Validator // Block and state validator interface
-	prefetcher    Prefetcher
-	balPrefetcher balPrefetcher
-	processor     Processor // Block transaction processor interface
-	logger        *tracing.Hooks
+	engine     consensus.Engine
+	validator  Validator // Block and state validator interface
+	prefetcher Prefetcher
+	processor  Processor // Block transaction processor interface
+	logger     *tracing.Hooks
 
 	lastForkReadyAlert time.Time // Last time there was a fork readiness print out
 }
@@ -398,7 +397,6 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	bc.statedb = state.NewDatabase(bc.triedb, nil)
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
-	bc.balPrefetcher = balPrefetcher{}
 	bc.processor = NewStateProcessor(chainConfig, bc.hc)
 
 	genesisHeader := bc.GetHeaderByNumber(0)
@@ -2023,9 +2021,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 			// Disable tracing for prefetcher executions.
 			vmCfg := bc.cfg.VmConfig
 			vmCfg.Tracer = nil
-			if block.Body().AccessList != nil {
-				bc.balPrefetcher.Prefetch(block, throwaway, &interrupt)
-			} else {
+			if block.Body().AccessList == nil {
 				bc.prefetcher.Prefetch(block, throwaway, vmCfg, &interrupt)
 			}
 
