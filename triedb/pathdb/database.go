@@ -682,7 +682,14 @@ func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek 
 	return newFastStorageIterator(db, root, account, seek)
 }
 
-// SnapshotCompleted returns the indicator if the snapshot generation is completed.
-func (db *Database) SnapshotCompleted() bool {
-	return !db.waitSync && db.tree.bottom().genComplete()
+// SnapshotCompleted returns the snapshot root if the snapshot generation is completed.
+func (db *Database) SnapshotCompleted() (common.Hash, bool) {
+	if db.waitSync {
+		return common.Hash{}, false
+	}
+	dl := db.tree.bottom()
+	if dl.genComplete() {
+		return dl.rootHash(), true
+	}
+	return common.Hash{}, false
 }
