@@ -141,15 +141,14 @@ func (g *StateSizeGenerator) generate() {
 
 // initialize starts the initialization process if not already initialized
 func (g *StateSizeGenerator) initialize() chan struct{} {
-	initDone := make(chan struct{})
-
 	// Check if we already have existing metrics
 	if g.hasExistingMetrics() {
 		log.Info("State size metrics already initialized")
 		g.initialized.Store(true)
-		close(initDone)
-		return initDone
+		return nil
 	}
+
+	initDone := make(chan struct{})
 
 	// Wait for snapshot completion and then initialize
 	go func() {
@@ -166,6 +165,7 @@ func (g *StateSizeGenerator) initialize() chan struct{} {
 				root, done := g.triedb.SnapshotCompleted()
 				if done {
 					g.metrics.Root = root
+					g.buffered.Root = root
 					break LOOP
 				}
 				time.Sleep(10 * time.Second)
@@ -190,8 +190,9 @@ func (g *StateSizeGenerator) initialize() chan struct{} {
 
 // mergeBufferedMetrics merges buffered metrics into main metrics
 func (g *StateSizeGenerator) mergeBufferedMetrics() {
-	if g.buffered != nil && g.buffered.Root != (common.Hash{}) {
+	if g.buffered != nil {
 		log.Info("Merging buffered metrics into main metrics")
+		g.metrics.Root = g.buffered.Root
 		g.metrics.AccountCount += g.buffered.AccountCount
 		g.metrics.AccountBytes += g.buffered.AccountBytes
 		g.metrics.StorageCount += g.buffered.StorageCount
@@ -201,8 +202,7 @@ func (g *StateSizeGenerator) mergeBufferedMetrics() {
 		g.metrics.ContractCount += g.buffered.ContractCount
 		g.metrics.ContractBytes += g.buffered.ContractBytes
 
-		// Reset buffered metrics
-		g.buffered = &StateSizeMetrics{Root: g.metrics.Root}
+		g.buffered = nil
 	}
 }
 
