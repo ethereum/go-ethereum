@@ -79,6 +79,9 @@ func (d *DASignersPrecompile) Address() common.Address {
 
 // RequiredGas implements vm.PrecompiledContract.
 func (d *DASignersPrecompile) RequiredGas(input []byte) uint64 {
+	if len(input) < 4 {
+		return DASignersRequiredGasMax
+	}
 	method, err := d.abi.MethodById(input[:4])
 	if err != nil {
 		return DASignersRequiredGasMax
