@@ -478,6 +478,11 @@ web3._extend({
 			call: 'debug_getBlockAccessList',
 			params: 1
 		}),
+		new web3._extend.Method({
+			name: 'getEncodedBlockAccessList',
+			call: 'debug_getEncodedBlockAccessList',
+			params: 1
+		}),
 	],
 	properties: []
 });
