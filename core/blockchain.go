@@ -334,6 +334,8 @@ type BlockChain struct {
 	processor  Processor // Block transaction processor interface
 	logger     *tracing.Hooks
 
+	stateSizeGen *state.StateSizeGenerator // State size tracking
+
 	lastForkReadyAlert time.Time // Last time there was a fork readiness print out
 }
 
@@ -526,6 +528,11 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	if bc.cfg.TxLookupLimit >= 0 {
 		bc.txIndexer = newTxIndexer(uint64(bc.cfg.TxLookupLimit), bc)
 	}
+
+	// Start state size tracker
+	bc.stateSizeGen = state.NewStateSizeGenerator(bc.statedb.DiskDB(), bc.triedb, head.Root)
+	log.Info("Started state size generator", "root", head.Root)
+
 	return bc, nil
 }
 
@@ -1313,6 +1320,12 @@ func (bc *BlockChain) Stop() {
 			}
 		}
 	}
+	// Stop state size generator if running
+	if bc.stateSizeGen != nil {
+		bc.stateSizeGen.Stop()
+		log.Info("Stopped state size generator")
+	}
+
 	// Allow tracers to clean-up and release resources.
 	if bc.logger != nil && bc.logger.OnClose != nil {
 		bc.logger.OnClose()
@@ -1586,9 +1599,14 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		log.Crit("Failed to write block into disk", "err", err)
 	}
 	// Commit all cached state changes into underlying memory database.
-	root, err := statedb.Commit(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()), bc.chainConfig.IsCancun(block.Number(), block.Time()))
+	root, stateUpdate, err := statedb.CommitWithUpdate(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()), bc.chainConfig.IsCancun(block.Number(), block.Time()))
 	if err != nil {
 		return err
+	}
+
+	// Track state size changes if generator is running
+	if bc.stateSizeGen != nil && stateUpdate != nil {
+		bc.stateSizeGen.Track(stateUpdate)
 	}
 	// If node is running in path mode, skip explicit gc operation
 	// which is unnecessary in this mode.
