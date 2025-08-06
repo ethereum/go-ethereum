@@ -461,7 +461,7 @@ func (api *DebugAPI) GetBlockAccessList(number rpc.BlockNumberOrHash) (*bal.Bloc
 	return block.Body().AccessList, nil
 }
 
-func (api *DebugAPI) GetEncodedAccessList(number rpc.BlockNumberOrHash) ([]byte, error) {
+func (api *DebugAPI) GetEncodedBlockAccessList(number rpc.BlockNumberOrHash) ([]byte, error) {
 	bal, err := api.GetBlockAccessList(number)
 	if err != nil {
 		return nil, err
