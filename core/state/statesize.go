@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -228,42 +229,90 @@ func (g *stateSizeGenerator) persistMetrics() {
 
 // updateMetrics updates metrics based on state changes
 func (g *stateSizeGenerator) updateMetrics(update *stateUpdate) {
-	var diff StateSizeMetrics
+	var (
+		accountBytes, storageBytes, nodeBytes, codeBytes int
+		accountCount, storageCount, nodeCount, codeCount int
+	)
 
-	// Calculate account changes
-	for _, data := range update.accounts {
-		if len(data) > 0 {
-			diff.AccountCount++
-			diff.AccountBytes += uint64(common.HashLength + len(data))
+	for addr, oldValue := range update.accountsOrigin {
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
+		newValue, exists := update.accounts[addrHash]
+		if !exists {
+			log.Warn("State update missing account", "address", addr)
+			continue
 		}
+		if len(newValue) == 0 {
+			accountCount -= 1
+			accountBytes -= common.HashLength
+		}
+		if len(oldValue) == 0 {
+			accountCount += 1
+			accountBytes += common.HashLength
+		}
+		accountBytes += len(newValue) - len(oldValue)
 	}
 
-	// Calculate storage changes
-	for _, slots := range update.storages {
-		for _, data := range slots {
-			if len(data) > 0 {
-				diff.StorageCount++
-				diff.StorageBytes += uint64(2*common.HashLength + len(data))
+	for addr, slots := range update.storagesOrigin {
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
+		subset, exists := update.storages[addrHash]
+		if !exists {
+			log.Warn("State update missing storage", "address", addr)
+			continue
+		}
+		for key, oldValue := range slots {
+			var (
+				exists   bool
+				newValue []byte
+			)
+			if update.rawStorageKey {
+				newValue, exists = subset[crypto.Keccak256Hash(key.Bytes())]
+			} else {
+				newValue, exists = subset[key]
 			}
+			if !exists {
+				log.Warn("State update missing storage slot", "address", addr, "key", key)
+				continue
+			}
+			if len(newValue) == 0 {
+				storageCount -= 1
+				storageBytes -= common.HashLength
+			}
+			if len(oldValue) == 0 {
+				storageCount += 1
+				storageBytes += common.HashLength
+			}
+			storageBytes += len(newValue) - len(oldValue)
 		}
 	}
-
-	// Calculate trie node changes
-	for _, nodeSet := range update.nodes.Sets {
-		for _, node := range nodeSet.Nodes {
-			diff.TrieNodeCount++
-			diff.TrieNodeBytes += uint64(len(node.Blob))
+	for _, subset := range update.nodes.Sets {
+		for path, n := range subset.Nodes {
+			if len(n.Blob) == 0 {
+				nodeCount -= 1
+				nodeBytes -= len(path) + common.HashLength
+			}
+			prev, ok := subset.Origins[path]
+			if ok {
+				nodeCount += 1
+				nodeBytes += len(path) + common.HashLength
+			}
+			nodeBytes += len(n.Blob) - len(prev)
 		}
+	}
+	for _, code := range update.codes {
+		codeCount += 1
+		codeBytes += len(code.blob) + common.HashLength // no deduplication
 	}
 
 	// Update local metrics
 	g.metricsLock.Lock()
 	g.metrics.Root = update.root
-	g.metrics.AccountCount += diff.AccountCount
-	g.metrics.AccountBytes += diff.AccountBytes
-	g.metrics.StorageCount += diff.StorageCount
-	g.metrics.StorageBytes += diff.StorageBytes
-	g.metrics.TrieNodeCount += diff.TrieNodeCount
-	g.metrics.TrieNodeBytes += diff.TrieNodeBytes
+	g.metrics.AccountCount += uint64(accountCount)
+	g.metrics.AccountBytes += uint64(accountBytes)
+	g.metrics.StorageCount += uint64(storageCount)
+	g.metrics.StorageBytes += uint64(storageBytes)
+	g.metrics.TrieNodeCount += uint64(nodeCount)
+	g.metrics.TrieNodeBytes += uint64(nodeBytes)
+	g.metrics.ContractCount += uint64(codeCount)
+	g.metrics.ContractBytes += uint64(codeBytes)
 	g.metricsLock.Unlock()
 }
