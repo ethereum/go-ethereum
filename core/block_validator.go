@@ -21,10 +21,11 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -90,7 +91,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 
 	// Berachain: Pre-compute expected PoL tx hash when in Prague1.
 	isPrague1 := v.config.IsPrague1(block.Number(), block.Time())
-	var expectedPoLHash common.Hash
+	var expectedPoLTx *types.Transaction
 	if isPrague1 {
 		if block.ProposerPubkey() == nil {
 			return errors.New("post-prague1 block missing parent proposer pubkey")
@@ -107,7 +108,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		if err != nil {
 			return fmt.Errorf("failed to create expected PoL tx: %w", err)
 		}
-		expectedPoLHash = polTx.Hash()
+		expectedPoLTx = polTx
 
 		// Validate that the block has at least one tx.
 		if len(txs) == 0 {
@@ -121,8 +122,10 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		// Berachain: validate the PoL tx is only the first tx in the block.
 		switch {
 		case isPrague1 && i == 0:
-			if tx.Hash() != expectedPoLHash {
-				return fmt.Errorf("PoL tx hash mismatch: have %v, want %v", tx.Hash(), expectedPoLHash)
+			if tx.Hash() != expectedPoLTx.Hash() {
+				log.Debug("PoL tx hash mismatch", "have", tx.Hash(), "expected", expectedPoLTx.Hash())
+				log.Debug("PoL tx contents", "have", spew.Sdump(tx), "expected", spew.Sdump(expectedPoLTx))
+				return fmt.Errorf("PoL tx hash mismatch: have %v, want %v", tx.Hash(), expectedPoLTx.Hash())
 			}
 		case tx.Type() == types.PoLTxType:
 			return fmt.Errorf("invalid block: tx at index %d is a PoL tx", i)

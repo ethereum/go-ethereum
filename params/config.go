@@ -994,6 +994,16 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 			}
 		}
 	}
+
+	// Berachain: Check that Prague1 is configured correctly if it is enabled.
+	if c.Berachain.Prague1.Time != nil {
+		if c.Berachain.Prague1.PoLDistributorAddress == (common.Address{}) {
+			return fmt.Errorf("invalid chain configuration: missing PoL distributor address for Prague1 fork")
+		}
+		if c.Berachain.Prague1.BaseFeeChangeDenominator == 0 {
+			return fmt.Errorf("invalid chain configuration: base fee change denominator must be > 0 for Prague1 fork")
+		}
+	}
 	return nil
 }
 
