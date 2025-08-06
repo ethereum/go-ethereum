@@ -196,6 +196,7 @@ var (
 				Time:                     newUint64(17446744073709551614), // TODO: set mainnet timestamp.
 				MinimumBaseFeeWei:        10000000000,                     // 10 gwei
 				BaseFeeChangeDenominator: 48,                              // 6x increase from the default
+				PoLDistributorAddress:    common.HexToAddress("0xD2f19a79b026Fb636A7c300bF5947df113940761"),
 			},
 		},
 	}
@@ -233,6 +234,7 @@ var (
 				Time:                     newUint64(1754496000),
 				MinimumBaseFeeWei:        10000000000, // 10 gwei
 				BaseFeeChangeDenominator: 48,          // 6x increase from the default
+				PoLDistributorAddress:    common.HexToAddress("0xD2f19a79b026Fb636A7c300bF5947df113940761"),
 			},
 		},
 	}
