@@ -1674,7 +1674,7 @@ func (p *BlobPool) Pending(filter txpool.PendingFilter) map[common.Address][]*tx
 				}
 			}
 			if filter.GasLimitCap != 0 {
-				if tx.execGas > filter.GasLimitCap {
+				if tx.ExecGas > filter.GasLimitCap {
 					break // execution gas limit is too high
 				}
 			}
