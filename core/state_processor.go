@@ -135,6 +135,15 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 						}
 					}
 				}
+				if len(block.Withdrawals()) > 2 {
+					thirdWithdrawal := block.Withdrawals()[2]
+					if thirdWithdrawal.Validator == math.MaxUint64 {
+						amount := new(big.Int).Mul(new(big.Int).SetUint64(thirdWithdrawal.Amount), big.NewInt(params.GWei))
+						if err := ProcessBaseInflation(evm, thirdWithdrawal.Address, amount); err != nil {
+							log.Error("could not process base inflation", "err", err)
+						}
+					}
+				}
 			}
 		}
 		// EIP-7002
@@ -341,6 +350,16 @@ func ProcessStakingDistribution(evm *vm.EVM, address common.Address, amount *big
 }
 
 func ProcessRestakingDistribution(evm *vm.EVM, address common.Address, amount *big.Int) error {
+	evm.StateDB.AddBalance(
+		address,
+		uint256.NewInt(0).SetBytes(amount.Bytes()),
+		tracing.BalanceIncreaseRewardMineBlock,
+	)
+	evm.StateDB.Finalise(true)
+	return nil
+}
+
+func ProcessBaseInflation(evm *vm.EVM, address common.Address, amount *big.Int) error {
 	evm.StateDB.AddBalance(
 		address,
 		uint256.NewInt(0).SetBytes(amount.Bytes()),
