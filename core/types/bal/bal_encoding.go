@@ -485,6 +485,7 @@ func (s *StateDiff) Merge(next *StateDiff) {
 				mut.Nonce = diff.Nonce
 			}
 			if len(diff.StorageWrites) > 0 {
+				// TODO: this is wrong, need to merge the two maps
 				mut.StorageWrites = maps.Clone(diff.StorageWrites)
 			}
 		} else {

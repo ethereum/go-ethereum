@@ -1893,6 +1893,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 
 		blockHasAccessList := block.Body().AccessList != nil
 		// BAL generation/verification not enabled pre-selfdestruct removal
+
+		// TODO: state diff recording will be activated any time it's cancun.
+		// This shouldn't happen....
 		forkSupportsBAL := bc.chainConfig.IsCancun(block.Number(), block.Time())
 		makeBAL := forkSupportsBAL && !blockHasAccessList
 		validateBAL := forkSupportsBAL && blockHasAccessList

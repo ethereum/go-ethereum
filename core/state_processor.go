@@ -29,7 +29,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"golang.org/x/sync/errgroup"
 	"math/big"
+	"runtime"
 	"slices"
 	"time"
 )
@@ -336,13 +338,12 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 
 	// executes single transaction, validating the computed diff against the BAL
 	// and forwarding the txExecResult to be consumed by resultHandler
-	execTx := func(ctx context2.Context, tx *types.Transaction, idx int, db *state.StateDB, expectedDiff *bal.StateDiff) {
+	execTx := func(ctx context2.Context, tx *types.Transaction, idx int, db *state.StateDB, expectedDiff *bal.StateDiff) *txExecResult {
 		// if an error with another transaction rendered the block invalid, don't proceed with executing this one
 		// TODO: also interrupt any currently-executing transactions if one failed.
 		select {
 		case <-ctx.Done():
-			txResCh <- txExecResult{err: ctx.Err()}
-			return
+			return &txExecResult{err: ctx.Err()}
 		default:
 		}
 		var tracingStateDB = vm.StateDB(db)
@@ -355,8 +356,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 		if err != nil {
 			err = fmt.Errorf("could not apply tx %d [%v]: %w", idx, tx.Hash().Hex(), err)
-			txResCh <- txExecResult{err: err}
-			return
+			return &txExecResult{err: err}
 		}
 		sender, _ := types.Sender(signer, tx)
 		db.SetTxSender(sender)
@@ -369,20 +369,17 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 		computedDiff, receipt, err := ApplyTransactionWithEVM(msg, gp, db, blockNumber, blockHash, context.Time, tx, &gasUsed, evm, nil)
 		if err != nil {
 			err := fmt.Errorf("could not apply tx %d [%v]: %w", idx, tx.Hash().Hex(), err)
-			txResCh <- txExecResult{err: err}
-			return
+			return &txExecResult{err: err}
 		}
 
 		if err := bal.ValidateStateDiff(expectedDiff, computedDiff); err != nil {
-			txResCh <- txExecResult{err: err}
-			return
+			return &txExecResult{err: err}
 		}
 
-		txResCh <- txExecResult{
+		return &txExecResult{
 			idx:     idx,
 			receipt: receipt,
 		}
-		return
 	}
 
 	// Mutate the block and state according to any hard-fork specs
@@ -433,11 +430,18 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	tPreprocess = time.Since(pStart)
 
 	tExecStart = time.Now()
-	for i, tx := range block.Transactions() {
-		go execTx(ctx, tx, i, txPrestates[i], intermediateStateDiffs[i+1])
-	}
-
 	go resultHandler(intermediateStateDiffs[len(block.Transactions())+1], postTxState)
+	var workers errgroup.Group
+	workers.SetLimit(runtime.NumCPU() / 2)
+	for i, tx := range block.Transactions() {
+		tx := tx
+		i := i
+		workers.Go(func() error {
+			res := execTx(ctx, tx, i, txPrestates[i], intermediateStateDiffs[i+1])
+			txResCh <- *res
+			return nil
+		})
+	}
 
 	// it's possible that there isn't a post-tx-execution state diff
 	// if there are no withdrawals or consolidations
