@@ -26,23 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
 	"golang.org/x/sync/errgroup"
-)
-
-// State size metrics
-var (
-	// Baseline state size metrics
-	stateSizeAccountsCountMeter  = metrics.NewRegisteredMeter("statedb/statesize/accounts/count", nil)
-	stateSizeAccountsBytesMeter  = metrics.NewRegisteredMeter("statedb/statesize/accounts/bytes", nil)
-	stateSizeStorageCountMeter   = metrics.NewRegisteredMeter("statedb/statesize/storage/count", nil)
-	stateSizeStorageBytesMeter   = metrics.NewRegisteredMeter("statedb/statesize/storage/bytes", nil)
-	stateSizeTrieNodesCountMeter = metrics.NewRegisteredMeter("statedb/statesize/trienodes/count", nil)
-	stateSizeTrieNodesBytesMeter = metrics.NewRegisteredMeter("statedb/statesize/trienodes/bytes", nil)
-	stateSizeContractsCountMeter = metrics.NewRegisteredMeter("statedb/statesize/contracts/count", nil)
-	stateSizeContractsBytesMeter = metrics.NewRegisteredMeter("statedb/statesize/contracts/bytes", nil)
 )
 
 // StateSizeMetrics represents the current state size statistics
@@ -494,14 +480,14 @@ func (g *StateSizeGenerator) iterateTable(ctx context.Context, prefix []byte, na
 }
 
 func (g *StateSizeGenerator) updateMetrics() {
-	stateSizeAccountsCountMeter.Mark(int64(g.metrics.AccountCount))
-	stateSizeAccountsBytesMeter.Mark(int64(g.metrics.AccountBytes))
-	stateSizeStorageCountMeter.Mark(int64(g.metrics.StorageCount))
-	stateSizeStorageBytesMeter.Mark(int64(g.metrics.StorageBytes))
-	stateSizeTrieNodesCountMeter.Mark(int64(g.metrics.TrieNodeCount))
-	stateSizeTrieNodesBytesMeter.Mark(int64(g.metrics.TrieNodeBytes))
-	stateSizeContractsCountMeter.Mark(int64(g.metrics.ContractCount))
-	stateSizeContractsBytesMeter.Mark(int64(g.metrics.ContractBytes))
+	accountCountGauge.Update(int64(g.metrics.AccountCount))
+	accountBytesGauge.Update(int64(g.metrics.AccountBytes))
+	storageCountGauge.Update(int64(g.metrics.StorageCount))
+	storageBytesGauge.Update(int64(g.metrics.StorageBytes))
+	trienodeCountGauge.Update(int64(g.metrics.TrieNodeCount))
+	trienodeBytesGauge.Update(int64(g.metrics.TrieNodeBytes))
+	contractCountGauge.Update(int64(g.metrics.ContractCount))
+	contractBytesGauge.Update(int64(g.metrics.ContractBytes))
 }
 
 // persistMetrics saves the current metrics to the database

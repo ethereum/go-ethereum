@@ -29,4 +29,14 @@ var (
 	storageTriesUpdatedMeter = metrics.NewRegisteredMeter("state/update/storagenodes", nil)
 	accountTrieDeletedMeter  = metrics.NewRegisteredMeter("state/delete/accountnodes", nil)
 	storageTriesDeletedMeter = metrics.NewRegisteredMeter("state/delete/storagenodes", nil)
+
+	// State size metrics
+	accountCountGauge  = metrics.NewRegisteredGauge("state/account/count", nil)
+	accountBytesGauge  = metrics.NewRegisteredGauge("state/account/bytes", nil)
+	storageCountGauge  = metrics.NewRegisteredGauge("state/storage/count", nil)
+	storageBytesGauge  = metrics.NewRegisteredGauge("state/storage/bytes", nil)
+	trienodeCountGauge = metrics.NewRegisteredGauge("state/trienode/count", nil)
+	trienodeBytesGauge = metrics.NewRegisteredGauge("state/trienode/bytes", nil)
+	contractCountGauge = metrics.NewRegisteredGauge("state/contract/count", nil)
+	contractBytesGauge = metrics.NewRegisteredGauge("state/contract/bytes", nil)
 )
