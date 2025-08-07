@@ -43,7 +43,12 @@ func (oracle *Oracle) calculateSuggestPriorityFee(ctx context.Context, header *t
 	// capacity margin
 	receipts, err := oracle.backend.GetReceipts(ctx, header.Hash())
 	if receipts == nil || err != nil {
-		log.Error("failed to get block receipts", "block number", header.Number, "err", err)
+		log.Error("failed to get block receipts during calculating suggest priority fee", "block number", header.Number, "err", err)
+		// If the lastIsCongested is true on the cache, return the lastPrice.
+		// We believe it's better to err on the side of returning a higher-than-needed suggestion than a lower-than-needed one.
+		if lastIsCongested {
+			return lastPrice, lastIsCongested
+		}
 		return suggestion, isCongested
 	}
 	var maxTxGasUsed uint64
