@@ -223,9 +223,11 @@ func (args *evmCallArgs) env() *environment {
 	}
 
 	return &environment{
-		evm:      args.evm,
-		self:     contract,
-		callType: args.callType,
+		evm:       args.evm,
+		self:      contract,
+		callType:  args.callType,
+		rawCaller: args.caller.Address(),
+		rawSelf:   args.addr,
 	}
 }
 

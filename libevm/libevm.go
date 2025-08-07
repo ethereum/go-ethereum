@@ -61,10 +61,30 @@ type StateReader interface {
 // AddressContext carries addresses available to contexts such as calls and
 // contract creation.
 //
-// With respect to contract creation, the Self address MAY be the predicted
-// address of the contract about to be deployed, which may not exist yet.
+// With respect to contract creation, the EVMSemantic.Self address MAY be the
+// predicted address of the contract about to be deployed, which might not exist
+// yet.
 type AddressContext struct {
 	Origin common.Address // equivalent to vm.ORIGIN op code
-	Caller common.Address // equivalent to vm.CALLER op code
-	Self   common.Address // equivalent to vm.ADDRESS op code
+	// EVMSemantic addresses are those defined by the rules of the EVM, based on
+	// the type of call made to a contract; i.e. the addresses pushed to the
+	// stack by the vm.CALLER and vm.SELF op codes, respectively.
+	EVMSemantic CallerAndSelf
+	// Raw addresses are those that would be available to a contract under a
+	// standard CALL; i.e. not interpreted according EVM rules. They are the
+	// "intuitive" addresses such that the `Caller` is the account that called
+	// `Self` even if it did so via DELEGATECALL or CALLCODE (in which cases
+	// `Raw` and `EVMSemantic` would differ).
+	//
+	// Raw MUST NOT be nil when returned to a precompile implementation but MAY
+	// be nil in other situations (e.g. hooks), which MUST document behaviour on
+	// a case-by-case basis.
+	Raw *CallerAndSelf
+}
+
+// CallerAndSelf carries said addresses for use in an [AddressContext], where
+// the definitions of `Caller` and `Self` are defined based on context.
+type CallerAndSelf struct {
+	Caller common.Address
+	Self   common.Address
 }
