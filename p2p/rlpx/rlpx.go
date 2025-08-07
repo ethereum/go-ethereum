@@ -287,9 +287,7 @@ func (m *hashMAC) compute(sum1, seed []byte) []byte {
 	}
 
 	m.cipher.Encrypt(m.aesBuffer[:], sum1)
-	for i := range m.aesBuffer {
-		m.aesBuffer[i] ^= seed[i]
-	}
+	bitutil.XORBytes(m.aesBuffer[:], m.aesBuffer[:], seed)
 	m.hash.Write(m.aesBuffer[:])
 	sum2 := m.hash.Sum(m.hashBuffer[:0])
 	return sum2[:16]
