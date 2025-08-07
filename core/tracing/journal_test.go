@@ -293,7 +293,7 @@ func newTracerAllHooks() *tracerAllHooks {
 	t := &tracerAllHooks{hooksCalled: make(map[string]bool)}
 	// Initialize all hooks to false. We will use this to
 	// get total count of hooks.
-	hooksType := reflect.TypeOf((*Hooks)(nil)).Elem()
+	hooksType := reflect.TypeFor[Hooks]()
 	for i := 0; i < hooksType.NumField(); i++ {
 		t.hooksCalled[hooksType.Field(i).Name] = false
 	}
