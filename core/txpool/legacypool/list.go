@@ -81,8 +81,20 @@ func (m *SortedMap) Put(tx *types.Transaction) {
 	if m.items[nonce] == nil {
 		heap.Push(m.index, nonce)
 	}
+	m.items[nonce] = tx
+
 	m.cacheMu.Lock()
-	m.items[nonce], m.cache = tx, nil
+	if m.cache != nil {
+		index := slices.IndexFunc(m.cache, func(tx *types.Transaction) bool {
+			return tx.Nonce() == nonce
+		})
+		if index == -1 {
+			m.cache = append(m.cache, tx)
+			sort.Sort(types.TxByNonce(m.cache))
+		} else {
+			m.cache[index] = tx
+		}
+	}
 	m.cacheMu.Unlock()
 }
 
@@ -162,9 +174,9 @@ func (m *SortedMap) Cap(threshold int) types.Transactions {
 	// Otherwise gather and drop the highest nonce'd transactions
 	var drops types.Transactions
 	slices.Sort(*m.index)
-	for size := len(m.items); size > threshold; size-- {
-		drops = append(drops, m.items[(*m.index)[size-1]])
-		delete(m.items, (*m.index)[size-1])
+	for _, nonce := range (*m.index)[threshold:] {
+		drops = append(drops, m.items[nonce])
+		delete(m.items, nonce)
 	}
 	*m.index = (*m.index)[:threshold]
 	// The sorted m.index slice is still a valid heap, so there is no need to
@@ -173,7 +185,7 @@ func (m *SortedMap) Cap(threshold int) types.Transactions {
 	// If we had a cache, shift the back
 	m.cacheMu.Lock()
 	if m.cache != nil {
-		m.cache = m.cache[:len(m.cache)-len(drops)]
+		m.cache = m.cache[:threshold]
 	}
 	m.cacheMu.Unlock()
 	return drops
@@ -188,13 +200,10 @@ func (m *SortedMap) Remove(nonce uint64) bool {
 		return false
 	}
 	// Otherwise delete the transaction and fix the heap index
-	for i := 0; i < m.index.Len(); i++ {
-		if (*m.index)[i] == nonce {
-			heap.Remove(m.index, i)
-			break
-		}
-	}
+	index := slices.Index(*m.index, nonce)
+	heap.Remove(m.index, index)
 	delete(m.items, nonce)
+
 	m.cacheMu.Lock()
 	m.cache = nil
 	m.cacheMu.Unlock()
