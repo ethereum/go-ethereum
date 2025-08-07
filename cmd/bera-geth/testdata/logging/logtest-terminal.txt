@@ -1,0 +1,53 @@
+INFO [xx-xx|xx:xx:xx.xxx] big.Int                                  111,222,333,444,555,678,999=111,222,333,444,555,678,999
+INFO [xx-xx|xx:xx:xx.xxx] -big.Int                                 -111,222,333,444,555,678,999=-111,222,333,444,555,678,999
+INFO [xx-xx|xx:xx:xx.xxx] big.Int                                  11,122,233,344,455,567,899,900=11,122,233,344,455,567,899,900
+INFO [xx-xx|xx:xx:xx.xxx] -big.Int                                 -11,122,233,344,455,567,899,900=-11,122,233,344,455,567,899,900
+INFO [xx-xx|xx:xx:xx.xxx] uint256                                  111,222,333,444,555,678,999=111,222,333,444,555,678,999
+INFO [xx-xx|xx:xx:xx.xxx] uint256                                  11,122,233,344,455,567,899,900=11,122,233,344,455,567,899,900
+INFO [xx-xx|xx:xx:xx.xxx] int64                                    1,000,000=1,000,000
+INFO [xx-xx|xx:xx:xx.xxx] int64                                    -1,000,000=-1,000,000
+INFO [xx-xx|xx:xx:xx.xxx] int64                                    9,223,372,036,854,775,807=9,223,372,036,854,775,807
+INFO [xx-xx|xx:xx:xx.xxx] int64                                    -9,223,372,036,854,775,808=-9,223,372,036,854,775,808
+INFO [xx-xx|xx:xx:xx.xxx] uint64                                   1,000,000=1,000,000
+INFO [xx-xx|xx:xx:xx.xxx] uint64                                   18,446,744,073,709,551,615=18,446,744,073,709,551,615
+INFO [xx-xx|xx:xx:xx.xxx] Special chars in value                   key="special \r\n\t chars"
+INFO [xx-xx|xx:xx:xx.xxx] Special chars in key                     "special \n\t chars"=value
+INFO [xx-xx|xx:xx:xx.xxx] nospace                                  nospace=nospace
+INFO [xx-xx|xx:xx:xx.xxx] with space                               "with nospace"="with nospace"
+INFO [xx-xx|xx:xx:xx.xxx] Bash escapes in value                    key="\x1b[1G\x1b[K\x1b[1A"
+INFO [xx-xx|xx:xx:xx.xxx] Bash escapes in key                      "\x1b[1G\x1b[K\x1b[1A"=value
+INFO [xx-xx|xx:xx:xx.xxx] "Bash escapes in message  \x1b[1G\x1b[K\x1b[1A end" key=value
+INFO [xx-xx|xx:xx:xx.xxx] "\x1b[35mColored\x1b[0m["                "\x1b[35mColored\x1b[0m["="\x1b[35mColored\x1b[0m["
+INFO [xx-xx|xx:xx:xx.xxx] an error message with quotes             error="this is an 'error'"
+INFO [xx-xx|xx:xx:xx.xxx] Custom Stringer value                    2562047h47m16.854s=2562047h47m16.854s
+INFO [xx-xx|xx:xx:xx.xxx] a custom stringer that emits quoted text output="output with 'quotes'"
+INFO [xx-xx|xx:xx:xx.xxx] "A message with wonky 💩 characters"
+INFO [xx-xx|xx:xx:xx.xxx] "A multiline message \nINFO [10-18|14:11:31.106] with wonky characters 💩" 
+INFO [xx-xx|xx:xx:xx.xxx] A multiline message 
+LALA [ZZZZZZZZZZZZZZZZZZ] Actually part of message above 
+INFO [xx-xx|xx:xx:xx.xxx] boolean                                  true=true false=false
+INFO [xx-xx|xx:xx:xx.xxx] repeated-key 1                           foo=alpha foo=beta
+INFO [xx-xx|xx:xx:xx.xxx] repeated-key 2                           xx=short xx=longer
+INFO [xx-xx|xx:xx:xx.xxx] log at level info 
+WARN [xx-xx|xx:xx:xx.xxx] log at level warn 
+ERROR[xx-xx|xx:xx:xx.xxx] log at level error 
+INFO [xx-xx|xx:xx:xx.xxx] test                                     bar=short a="aligned left"
+INFO [xx-xx|xx:xx:xx.xxx] test                                     bar="a long message" a=1
+INFO [xx-xx|xx:xx:xx.xxx] test                                     bar=short            a="aligned right"
+INFO [xx-xx|xx:xx:xx.xxx] The following logs should align so that the key-fields make 5 columns 
+INFO [xx-xx|xx:xx:xx.xxx] Inserted known block                     number=1012 hash=000000..001234 txs=200 gas=1,123,123 other=first
+INFO [xx-xx|xx:xx:xx.xxx] Inserted new block                       number=1    hash=000000..001235 txs=2   gas=1123      other=second
+INFO [xx-xx|xx:xx:xx.xxx] Inserted known block                     number=99   hash=000000..012322 txs=10  gas=1         other=third
+WARN [xx-xx|xx:xx:xx.xxx] Inserted known block                     number=1012 hash=000000..001234 txs=200 gas=99        other=fourth
+INFO [xx-xx|xx:xx:xx.xxx] (*big.Int)(nil)                          <nil>=<nil>
+INFO [xx-xx|xx:xx:xx.xxx] (*uint256.Int)(nil)                      <nil>=<nil>
+INFO [xx-xx|xx:xx:xx.xxx] (fmt.Stringer)(nil)                      res=<nil>
+INFO [xx-xx|xx:xx:xx.xxx] nil-concrete-stringer                    res=<nil>
+INFO [xx-xx|xx:xx:xx.xxx] error(nil)                               res=<nil>
+INFO [xx-xx|xx:xx:xx.xxx] nil-concrete-error                       res=
+INFO [xx-xx|xx:xx:xx.xxx] nil-custom-struct                        res=<nil>
+INFO [xx-xx|xx:xx:xx.xxx] raw nil                                  res=<nil>
+INFO [xx-xx|xx:xx:xx.xxx] (*uint64)(nil)                           res=<nil>
+INFO [xx-xx|xx:xx:xx.xxx] Using keys 't', 'lvl', 'time', 'level' and 'msg' t=t time=time lvl=lvl level=level msg=msg
+INFO [xx-xx|xx:xx:xx.xxx] Odd pair (1 attr)                        key=<nil>                  LOG_ERROR="Normalized odd number of arguments by adding nil"
+INFO [xx-xx|xx:xx:xx.xxx] Odd pair (3 attr)                        key=value                  key2=<nil> LOG_ERROR="Normalized odd number of arguments by adding nil"

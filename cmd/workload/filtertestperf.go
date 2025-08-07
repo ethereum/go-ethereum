@@ -37,6 +37,8 @@ var (
 		Flags: []cli.Flag{
 			testSepoliaFlag,
 			testMainnetFlag,
+			testBepoliaFlag,
+			testBerachainFlag,
 			filterQueryFileFlag,
 			filterErrorFileFlag,
 		},

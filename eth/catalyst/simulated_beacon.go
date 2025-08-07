@@ -100,6 +100,8 @@ type SimulatedBeacon struct {
 
 func payloadVersion(config *params.ChainConfig, time uint64) engine.PayloadVersion {
 	switch config.LatestFork(time) {
+	case forks.Prague1:
+		return engine.PayloadV3P11
 	case forks.Prague, forks.Cancun:
 		return engine.PayloadV3
 	case forks.Paris, forks.Shanghai:
@@ -191,6 +193,10 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	}
 
 	version := payloadVersion(c.eth.BlockChain().Config(), timestamp)
+	var proposerPubkey *common.Pubkey
+	if version == engine.PayloadV3P11 {
+		proposerPubkey = &common.Pubkey{}
+	}
 
 	var random [32]byte
 	rand.Read(random[:])
@@ -200,6 +206,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		Withdrawals:           withdrawals,
 		Random:                random,
 		BeaconRoot:            &common.Hash{},
+		ProposerPubkey:        proposerPubkey,
 	}, version, false)
 	if err != nil {
 		return err
@@ -256,7 +263,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	}
 
 	// Mark the payload as canon
-	_, err = c.engineAPI.newPayload(*payload, blobHashes, beaconRoot, requests, false)
+	_, err = c.engineAPI.newPayload(*payload, blobHashes, beaconRoot, requests, false, proposerPubkey)
 	if err != nil {
 		return err
 	}
@@ -317,6 +324,7 @@ func (c *SimulatedBeacon) Commit() common.Hash {
 	withdrawals := c.withdrawals.pop(10)
 	if err := c.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
 		log.Warn("Error performing sealing work", "err", err)
+		panic(err)
 	}
 	return c.eth.BlockChain().CurrentBlock().Hash()
 }

@@ -2,17 +2,22 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth evm all test lint fmt clean devtools help
+.PHONY: bera-geth evm all test lint fmt clean devtools help
 
 GOBIN = ./build/bin
 GO ?= latest
 GORUN = go run
 
-#? geth: Build geth.
-geth:
-	$(GORUN) build/ci.go install ./cmd/geth
+COMMIT = $(shell git log -1 --format='%H')
+BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
+TAG := $(shell git describe --tags --abbrev=0 --match "v*")
+BUILD_FLAGS := -git-commit=$(COMMIT) -git-branch=$(BRANCH) -git-tag=$(TAG)
+
+#? bera-geth: Build bera-geth.
+bera-geth:
+	$(GORUN) build/ci.go install ./cmd/bera-geth
 	@echo "Done building."
-	@echo "Run \"$(GOBIN)/geth\" to launch geth."
+	@echo "Run \"$(GOBIN)/bera-geth\" to launch bera-geth."
 
 #? evm: Build evm.
 evm:

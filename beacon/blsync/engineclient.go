@@ -101,6 +101,17 @@ func (ec *engineClient) callNewPayload(fork string, event types.ChainHeadEvent) 
 		params = []any{execData}
 	)
 	switch fork {
+	case "electra1":
+		// TODO(BRIP-4): Add ParentProposerPubkey to the chainHeadEvent to add to the newPayload call.
+		method = "engine_newPayloadV4P11"
+		parentBeaconRoot := event.BeaconHead.ParentRoot
+		blobHashes := collectBlobHashes(event.Block)
+		hexRequests := make([]hexutil.Bytes, len(event.ExecRequests))
+		for i := range event.ExecRequests {
+			hexRequests[i] = hexutil.Bytes(event.ExecRequests[i])
+		}
+		parentProposerPubkey := &common.Pubkey{}
+		params = append(params, blobHashes, parentBeaconRoot, hexRequests, parentProposerPubkey)
 	case "electra":
 		method = "engine_newPayloadV4"
 		parentBeaconRoot := event.BeaconHead.ParentRoot
@@ -145,6 +156,8 @@ func (ec *engineClient) callForkchoiceUpdated(fork string, event types.ChainHead
 
 	var method string
 	switch fork {
+	case "electra1":
+		method = "engine_forkchoiceUpdatedV3P11"
 	case "deneb", "electra":
 		method = "engine_forkchoiceUpdatedV3"
 	case "capella":

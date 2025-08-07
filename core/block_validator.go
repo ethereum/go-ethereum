@@ -19,10 +19,13 @@ package core
 import (
 	"errors"
 	"fmt"
+	"math/big"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -47,7 +50,7 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain) *Bloc
 
 // ValidateBody validates the given block's uncles and verifies the block
 // header's transaction and uncle roots. The headers are assumed to be already
-// validated at this point.
+// validated at this point. Also it the Prague1 block according to BRIP-0004.
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	// check EIP 7934 RLP-encoded block size cap
 	if v.config.IsOsaka(block.Number(), block.Time()) && block.Size() > params.MaxBlockSize {
@@ -67,7 +70,8 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	if hash := types.CalcUncleHash(block.Uncles()); hash != header.UncleHash {
 		return fmt.Errorf("uncle root hash mismatch (header value %x, calculated %x)", header.UncleHash, hash)
 	}
-	if hash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash {
+	txs := block.Transactions()
+	if hash := types.DeriveSha(txs, trie.NewStackTrie(nil)); hash != header.TxHash {
 		return fmt.Errorf("transaction root hash mismatch (header value %x, calculated %x)", header.TxHash, hash)
 	}
 
@@ -85,9 +89,48 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		return errors.New("withdrawals present in block body")
 	}
 
+	// Berachain: Pre-compute expected PoL tx hash when in Prague1.
+	isPrague1 := v.config.IsPrague1(block.Number(), block.Time())
+	var expectedPoLTx *types.Transaction
+	if isPrague1 {
+		if block.ProposerPubkey() == nil {
+			return errors.New("post-prague1 block missing parent proposer pubkey")
+		}
+
+		polTx, err := types.NewPoLTx(
+			v.config.ChainID,
+			v.config.Berachain.Prague1.PoLDistributorAddress,
+			new(big.Int).Sub(block.Number(), big.NewInt(1)),
+			params.PoLTxGasLimit,
+			block.BaseFee(),
+			block.ProposerPubkey(),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create expected PoL tx: %w", err)
+		}
+		expectedPoLTx = polTx
+
+		// Validate that the block has at least one tx.
+		if len(txs) == 0 {
+			return errors.New("post-prague1 block missing PoL tx")
+		}
+	}
+
 	// Blob transactions may be present after the Cancun fork.
 	var blobs int
-	for i, tx := range block.Transactions() {
+	for i, tx := range txs {
+		// Berachain: validate the PoL tx is only the first tx in the block.
+		switch {
+		case isPrague1 && i == 0:
+			if tx.Hash() != expectedPoLTx.Hash() {
+				log.Debug("PoL tx hash mismatch", "have", tx.Hash(), "expected", expectedPoLTx.Hash())
+				log.Debug("PoL tx contents", "have", spew.Sdump(tx), "expected", spew.Sdump(expectedPoLTx))
+				return fmt.Errorf("PoL tx hash mismatch: have %v, want %v", tx.Hash(), expectedPoLTx.Hash())
+			}
+		case tx.Type() == types.PoLTxType:
+			return fmt.Errorf("invalid block: tx at index %d is a PoL tx", i)
+		}
+
 		// Count the number of blobs to validate against the header's blobGasUsed
 		blobs += len(tx.BlobHashes())
 

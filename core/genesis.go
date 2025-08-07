@@ -223,6 +223,10 @@ func getGenesisState(db ethdb.Database, blockhash common.Hash) (alloc types.Gene
 		genesis = DefaultHoleskyGenesisBlock()
 	case params.HoodiGenesisHash:
 		genesis = DefaultHoodiGenesisBlock()
+	case params.BerachainGenesisHash:
+		genesis = DefaultBerachainGenesisBlock()
+	case params.BepoliaGenesisHash:
+		genesis = DefaultBepoliaGenesisBlock()
 	}
 	if genesis != nil {
 		return genesis.Alloc, nil
@@ -438,6 +442,10 @@ func (g *Genesis) chainConfigOrDefault(ghash common.Hash, stored *params.ChainCo
 		return params.SepoliaChainConfig
 	case ghash == params.HoodiGenesisHash:
 		return params.HoodiChainConfig
+	case ghash == params.BerachainGenesisHash:
+		return params.BerachainChainConfig
+	case ghash == params.BepoliaGenesisHash:
+		return params.BepoliaChainConfig
 	default:
 		return stored
 	}
@@ -517,6 +525,12 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 		}
 		if conf.IsPrague(num, g.Timestamp) {
 			head.RequestsHash = &types.EmptyRequestsHash
+		}
+		if conf.IsPrague1(num, g.Timestamp) {
+			// BRIP-0004: The parentProposerPubkey of the genesis block is always
+			// the zero pubkey. This is because the genesis block does not have a parent
+			// by definition.
+			head.ParentProposerPubkey = new(common.Pubkey)
 		}
 	}
 	return types.NewBlock(head, &types.Body{Withdrawals: withdrawals}, nil, trie.NewStackTrie(nil))
@@ -641,6 +655,32 @@ func DefaultHoodiGenesisBlock() *Genesis {
 		Difficulty: big.NewInt(0x01),
 		Timestamp:  1742212800,
 		Alloc:      decodePrealloc(hoodiAllocData),
+	}
+}
+
+// DefaultBerachainGenesisBlock returns the Berachain main net genesis block.
+func DefaultBerachainGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.BerachainChainConfig,
+		Nonce:      0x1234,
+		ExtraData:  []byte{},
+		GasLimit:   0x1c9c380,
+		Difficulty: big.NewInt(0x01),
+		Timestamp:  1737381600,
+		Alloc:      decodePrealloc(berachainAllocData),
+	}
+}
+
+// DefaultBepoliaGenesisBlock returns the Bepolia network genesis block.
+func DefaultBepoliaGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.BepoliaChainConfig,
+		Nonce:      0x1234,
+		ExtraData:  []byte{},
+		GasLimit:   0x1c9c380,
+		Difficulty: big.NewInt(0x01),
+		Timestamp:  1739976735,
+		Alloc:      decodePrealloc(bepoliaAllocData),
 	}
 }
 

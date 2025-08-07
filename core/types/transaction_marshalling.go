@@ -154,6 +154,7 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 			enc.Commitments = itx.Sidecar.Commitments
 			enc.Proofs = itx.Sidecar.Proofs
 		}
+
 	case *SetCodeTx:
 		enc.ChainID = (*hexutil.Big)(itx.ChainID.ToBig())
 		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
@@ -169,6 +170,22 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.R = (*hexutil.Big)(itx.R.ToBig())
 		enc.S = (*hexutil.Big)(itx.S.ToBig())
 		yparity := itx.V.Uint64()
+		enc.YParity = (*hexutil.Uint64)(&yparity)
+
+	case *PoLTx:
+		enc.ChainID = (*hexutil.Big)(itx.ChainID)
+		enc.To = tx.To()
+		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
+		enc.Gas = (*hexutil.Uint64)(&itx.GasLimit)
+		enc.MaxFeePerGas = (*hexutil.Big)(itx.GasPrice)
+		enc.MaxPriorityFeePerGas = (*hexutil.Big)(itx.GasPrice)
+		enc.GasPrice = (*hexutil.Big)(itx.GasPrice)
+		enc.Input = (*hexutil.Bytes)(&itx.Data)
+		v, r, s := itx.rawSignatureValues()
+		enc.V = (*hexutil.Big)(v)
+		enc.R = (*hexutil.Big)(r)
+		enc.S = (*hexutil.Big)(s)
+		yparity := v.Uint64()
 		enc.YParity = (*hexutil.Uint64)(&yparity)
 	}
 	return json.Marshal(&enc)
@@ -506,6 +523,38 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 				return err
 			}
 		}
+
+	case PoLTxType:
+		var itx PoLTx
+		inner = &itx
+		if dec.ChainID == nil {
+			return errors.New("missing required field 'chainId' in transaction")
+		}
+		var overflow bool
+		chainID, overflow := uint256.FromBig(dec.ChainID.ToInt())
+		if overflow {
+			return errors.New("'chainId' value overflows uint256")
+		}
+		itx.ChainID = chainID.ToBig()
+		if dec.To == nil {
+			return errors.New("missing required field 'to' in transaction")
+		}
+		itx.To = *dec.To
+		if dec.Nonce == nil {
+			return errors.New("missing required field 'nonce' in transaction")
+		}
+		itx.Nonce = uint64(*dec.Nonce)
+		if dec.Gas == nil {
+			return errors.New("missing required field 'gas' for txdata")
+		}
+		itx.GasLimit = uint64(*dec.Gas)
+		if dec.Value == nil {
+			return errors.New("missing required field 'value' in transaction")
+		}
+		if dec.Input == nil {
+			return errors.New("missing required field 'input' in transaction")
+		}
+		itx.Data = *dec.Input
 
 	default:
 		return ErrTxTypeNotSupported
