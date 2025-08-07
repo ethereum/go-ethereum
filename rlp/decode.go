@@ -512,7 +512,7 @@ func makeNilPtrDecoder(etype reflect.Type, etypeinfo *typeinfo, ts rlpstruct.Tag
 	}
 }
 
-var ifsliceType = reflect.TypeFor[[]interface{}]()
+var ifsliceType = reflect.TypeFor[[]any]()
 
 func decodeInterface(s *Stream, val reflect.Value) error {
 	if val.Type().NumMethod() != 0 {
