@@ -161,7 +161,7 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 			blockchain.reportBlock(block, res, err)
 			return err
 		}
-		err = blockchain.validator.ValidateState(block, statedb, res, false)
+		_, err = blockchain.validator.ValidateState(block, statedb, res, false)
 		if err != nil {
 			blockchain.reportBlock(block, res, err)
 			return err
@@ -3425,7 +3425,7 @@ func testSetCanonical(t *testing.T, scheme string) {
 		gen.AddTx(tx)
 	})
 	for _, block := range side {
-		_, err := chain.InsertBlockWithoutSetHead(block, false)
+		_, _, err := chain.InsertBlockWithoutSetHead(block, false)
 		if err != nil {
 			t.Fatalf("Failed to insert into chain: %v", err)
 		}
