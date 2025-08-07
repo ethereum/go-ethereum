@@ -199,8 +199,7 @@ func (s *supplyTracer) onBalanceChange(a common.Address, prevBalance, newBalance
 
 	// NOTE: don't handle "BalanceIncreaseGenesisBalance" because it is handled in OnGenesisBlock
 	switch reason {
-	case tracing.BalanceIncreaseRewardMineUncle:
-	case tracing.BalanceIncreaseRewardMineBlock:
+	case tracing.BalanceIncreaseRewardMineBlock, tracing.BalanceIncreaseRewardMineUncle:
 		s.delta.Issuance.Reward.Add(s.delta.Issuance.Reward, diff)
 	case tracing.BalanceIncreaseWithdrawal:
 		s.delta.Issuance.Withdrawals.Add(s.delta.Issuance.Withdrawals, diff)
