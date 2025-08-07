@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/holiman/uint256"
 )
 
@@ -106,34 +107,34 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 	// If jump table was not initialised we set the default one.
 	var table *JumpTable
 	switch {
-	case evm.chainRules.IsOsaka:
+	case evm.chainRules.Active(forks.Osaka):
 		table = &osakaInstructionSet
-	case evm.chainRules.IsVerkle:
+	case evm.chainRules.Active(forks.Verkle):
 		// TODO replace with proper instruction set when fork is specified
 		table = &verkleInstructionSet
-	case evm.chainRules.IsPrague:
+	case evm.chainRules.Active(forks.Prague):
 		table = &pragueInstructionSet
-	case evm.chainRules.IsCancun:
+	case evm.chainRules.Active(forks.Cancun):
 		table = &cancunInstructionSet
-	case evm.chainRules.IsShanghai:
+	case evm.chainRules.Active(forks.Shanghai):
 		table = &shanghaiInstructionSet
-	case evm.chainRules.IsMerge:
+	case evm.chainRules.Active(forks.Paris):
 		table = &mergeInstructionSet
-	case evm.chainRules.IsLondon:
+	case evm.chainRules.Active(forks.London):
 		table = &londonInstructionSet
-	case evm.chainRules.IsBerlin:
+	case evm.chainRules.Active(forks.Berlin):
 		table = &berlinInstructionSet
-	case evm.chainRules.IsIstanbul:
+	case evm.chainRules.Active(forks.Istanbul):
 		table = &istanbulInstructionSet
-	case evm.chainRules.IsConstantinople:
+	case evm.chainRules.Active(forks.Constantinople):
 		table = &constantinopleInstructionSet
-	case evm.chainRules.IsByzantium:
+	case evm.chainRules.Active(forks.Byzantium):
 		table = &byzantiumInstructionSet
-	case evm.chainRules.IsEIP158:
+	case evm.chainRules.Active(forks.SpuriousDragon):
 		table = &spuriousDragonInstructionSet
-	case evm.chainRules.IsEIP150:
+	case evm.chainRules.Active(forks.TangerineWhistle):
 		table = &tangerineWhistleInstructionSet
-	case evm.chainRules.IsHomestead:
+	case evm.chainRules.Active(forks.Homestead):
 		table = &homesteadInstructionSet
 	default:
 		table = &frontierInstructionSet
@@ -237,7 +238,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			logged, pcCopy, gasCopy = false, pc, contract.Gas
 		}
 
-		if in.evm.chainRules.IsEIP4762 && !contract.IsDeployment && !contract.IsSystemCall {
+		if in.evm.chainRules.Active(forks.Verkle) && !contract.IsDeployment && !contract.IsSystemCall {
 			// if the PC ends up in a new "chunk" of verkleized code, charge the
 			// associated costs.
 			contractAddr := contract.Address()

@@ -31,7 +31,7 @@ import (
 // blockchain during header verification.
 type ChainHeaderReader interface {
 	// Config retrieves the blockchain's chain configuration.
-	Config() *params.ChainConfig
+	Config() *params.Config2
 
 	// CurrentHeader retrieves the current header from the local chain.
 	CurrentHeader() *types.Header

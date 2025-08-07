@@ -39,20 +39,23 @@ type sigCache struct {
 }
 
 // MakeSigner returns a Signer based on the given chain config and block number.
-func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint64) Signer {
+func MakeSigner(config *params.Config2, blockNumber *big.Int, blockTime uint64) Signer {
+	number := blockNumber.Uint64()
+	chainID := params.ChainID.Get(config)
+
 	var signer Signer
 	switch {
-	case config.IsPrague(blockNumber, blockTime):
-		signer = NewPragueSigner(config.ChainID)
-	case config.IsCancun(blockNumber, blockTime):
-		signer = NewCancunSigner(config.ChainID)
-	case config.IsLondon(blockNumber):
-		signer = NewLondonSigner(config.ChainID)
-	case config.IsBerlin(blockNumber):
-		signer = NewEIP2930Signer(config.ChainID)
-	case config.IsEIP155(blockNumber):
-		signer = NewEIP155Signer(config.ChainID)
-	case config.IsHomestead(blockNumber):
+	case config.Active(forks.Prague, number, blockTime):
+		signer = NewPragueSigner(chainID)
+	case config.Active(forks.Cancun, number, blockTime):
+		signer = NewCancunSigner(chainID)
+	case config.Active(forks.London, number, blockTime):
+		signer = NewLondonSigner(chainID)
+	case config.Active(forks.Berlin, number, blockTime):
+		signer = NewEIP2930Signer(chainID)
+	case config.Active(forks.SpuriousDragon, number, blockTime):
+		signer = NewEIP155Signer(chainID)
+	case config.Active(forks.Homestead, number, blockTime):
 		signer = HomesteadSigner{}
 	default:
 		signer = FrontierSigner{}
@@ -67,20 +70,22 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint
 //
 // Use this in transaction-handling code where the current block number is unknown. If you
 // have the current block number available, use MakeSigner instead.
-func LatestSigner(config *params.ChainConfig) Signer {
+func LatestSigner(config *params.Config2) Signer {
+	chainID := params.ChainID.Get(config)
+
 	var signer Signer
-	if config.ChainID != nil {
+	if chainID != nil {
 		switch {
-		case config.PragueTime != nil:
-			signer = NewPragueSigner(config.ChainID)
-		case config.CancunTime != nil:
-			signer = NewCancunSigner(config.ChainID)
-		case config.LondonBlock != nil:
-			signer = NewLondonSigner(config.ChainID)
-		case config.BerlinBlock != nil:
-			signer = NewEIP2930Signer(config.ChainID)
-		case config.EIP155Block != nil:
-			signer = NewEIP155Signer(config.ChainID)
+		case config.Scheduled(forks.Prague):
+			signer = NewPragueSigner(chainID)
+		case config.Scheduled(forks.Cancun):
+			signer = NewCancunSigner(chainID)
+		case config.Scheduled(forks.London):
+			signer = NewLondonSigner(chainID)
+		case config.Scheduled(forks.Berlin):
+			signer = NewEIP2930Signer(chainID)
+		case config.Scheduled(forks.SpuriousDragon):
+			signer = NewEIP155Signer(chainID)
 		default:
 			signer = HomesteadSigner{}
 		}
@@ -198,25 +203,25 @@ func newModernSigner(chainID *big.Int, fork forks.Fork) Signer {
 	}
 	// configure legacy signer
 	switch {
-	case fork >= forks.SpuriousDragon:
+	case fork.After(forks.SpuriousDragon):
 		s.legacy = NewEIP155Signer(chainID)
-	case fork >= forks.Homestead:
+	case fork.After(forks.Homestead):
 		s.legacy = HomesteadSigner{}
 	default:
 		s.legacy = FrontierSigner{}
 	}
 	s.txtypes[LegacyTxType] = struct{}{}
 	// configure tx types
-	if fork >= forks.Berlin {
+	if fork.After(forks.Berlin) {
 		s.txtypes[AccessListTxType] = struct{}{}
 	}
-	if fork >= forks.London {
+	if fork.After(forks.London) {
 		s.txtypes[DynamicFeeTxType] = struct{}{}
 	}
-	if fork >= forks.Cancun {
+	if fork.After(forks.Cancun) {
 		s.txtypes[BlobTxType] = struct{}{}
 	}
-	if fork >= forks.Prague {
+	if fork.After(forks.Prague) {
 		s.txtypes[SetCodeTxType] = struct{}{}
 	}
 	return s

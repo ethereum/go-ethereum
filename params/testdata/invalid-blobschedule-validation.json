@@ -1,0 +1,24 @@
+{
+	"config": {
+		"homesteadBlock": 0,
+		"eip150Block": 0,
+		"eip155Block": 0,
+		"byzantiumBlock": 0,
+		"constantinopleBlock": 0,
+		"petersburgBlock": 0,
+		"istanbulBlock": 0,
+		"berlinBlock": 0,
+		"londonBlock": 0,
+		"mergeNetsplitBlock": 0,
+		"shanghaiTime": 900,
+		"cancunTime": 1000,
+		"chainId": 99,
+		"blobSchedule": {
+			"cancun": {
+				"target": 8,
+				"max": 10
+			}
+		}
+	},
+	"error": "invalid blobSchedule: invalid blob config for fork \"cancun\": update fraction must be defined and non-zero"
+}
