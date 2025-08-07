@@ -88,7 +88,6 @@ func BenchmarkInterpreter(b *testing.B) {
 	)
 	stack.push(uint256.NewInt(123))
 	stack.push(uint256.NewInt(123))
-	gasSStoreEIP3529 = makeGasSStoreFunc(params.SstoreClearsScheduleRefundEIP3529)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		gasSStoreEIP3529(evm, contract, stack, mem, 1234)
