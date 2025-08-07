@@ -31,6 +31,14 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+var (
+	accountSnapKeySize       = int64(len(rawdb.SnapshotAccountPrefix) + common.HashLength)
+	storageSnapKeySize       = int64(len(rawdb.SnapshotStoragePrefix) + common.HashLength + common.HashLength)
+	accountTrieKeyPrefixSize = int64(len(rawdb.TrieNodeAccountPrefix))
+	storageTrieKeyPrefixSize = int64(len(rawdb.TrieNodeStoragePrefix) + common.HashLength)
+	codeKeySize              = int64(len(rawdb.CodePrefix) + common.HashLength)
+)
+
 // stateSizeMetrics represents the current state size statistics
 type stateSizeMetrics struct {
 	Root          common.Hash // Root hash of the state trie
@@ -180,7 +188,6 @@ func (g *StateSizeGenerator) initialize() chan struct{} {
 
 // handleUpdate processes a single update with proper root continuity checking
 func (g *StateSizeGenerator) handleUpdate(update *stateUpdate, initialized bool) {
-	// Calculate the diff
 	diff := g.calculateUpdateDiff(update)
 
 	var targetMetrics *stateSizeMetrics
@@ -192,12 +199,7 @@ func (g *StateSizeGenerator) handleUpdate(update *stateUpdate, initialized bool)
 
 	// Check root continuity - the update should build on our current state
 	if targetMetrics.Root != (common.Hash{}) && targetMetrics.Root != update.originRoot {
-		log.Warn("State update root discontinuity detected",
-			"current", targetMetrics.Root,
-			"updateOrigin", update.originRoot,
-			"updateNew", update.root)
-		// For now, we accept the discontinuity but log it
-		// In production, you might want to reset metrics or handle differently
+		log.Warn("State update root discontinuity detected", "current", targetMetrics.Root, "updateOrigin", update.originRoot, "updateNew", update.root)
 	}
 
 	// Update to the new state root
@@ -230,15 +232,20 @@ func (g *StateSizeGenerator) calculateUpdateDiff(update *stateUpdate) stateSizeM
 			log.Warn("State update missing account", "address", addr)
 			continue
 		}
-		if len(newValue) == 0 {
+
+		oldLen, newLen := len(oldValue), len(newValue)
+		if oldLen > 0 && newLen == 0 {
+			// Account deletion
 			diff.AccountCount -= 1
-			diff.AccountBytes -= common.HashLength
-		}
-		if len(oldValue) == 0 {
+			diff.AccountBytes -= accountSnapKeySize + int64(oldLen)
+		} else if oldLen == 0 && newLen > 0 {
+			// Account creation
 			diff.AccountCount += 1
-			diff.AccountBytes += common.HashLength
+			diff.AccountBytes += accountSnapKeySize + int64(newLen)
+		} else {
+			// Account update
+			diff.AccountBytes += int64(newLen - oldLen)
 		}
-		diff.AccountBytes += int64(len(newValue) - len(oldValue))
 	}
 
 	// Calculate storage changes
@@ -263,38 +270,58 @@ func (g *StateSizeGenerator) calculateUpdateDiff(update *stateUpdate) stateSizeM
 				log.Warn("State update missing storage slot", "address", addr, "key", key)
 				continue
 			}
-			if len(newValue) == 0 {
+
+			oldLen, newLen := len(oldValue), len(newValue)
+			if oldLen > 0 && newLen == 0 {
+				// Storage deletion
 				diff.StorageCount -= 1
-				diff.StorageBytes -= common.HashLength
-			}
-			if len(oldValue) == 0 {
+				diff.StorageBytes -= storageSnapKeySize + int64(oldLen)
+			} else if oldLen == 0 && newLen > 0 {
+				// Storage creation
 				diff.StorageCount += 1
-				diff.StorageBytes += common.HashLength
+				diff.StorageBytes += storageSnapKeySize + int64(newLen)
+			} else {
+				// Storage update
+				diff.StorageBytes += int64(newLen - oldLen)
 			}
-			diff.StorageBytes += int64(len(newValue) - len(oldValue))
 		}
 	}
 
 	// Calculate trie node changes
-	for _, subset := range update.nodes.Sets {
-		for path, n := range subset.Nodes {
-			if len(n.Blob) == 0 {
+	for owner, subset := range update.nodes.Sets {
+		isAccountTrie := owner == (common.Hash{})
+		var keyPrefixSize int64
+		if isAccountTrie {
+			keyPrefixSize = accountTrieKeyPrefixSize
+		} else {
+			keyPrefixSize = storageTrieKeyPrefixSize
+		}
+
+		// Iterate over Origins since every modified node has an origin entry
+		for path, oldNode := range subset.Origins {
+			newNode, hasNew := subset.Nodes[path]
+
+			keySize := keyPrefixSize + int64(len(path))
+
+			if len(oldNode) > 0 && (!hasNew || len(newNode.Blob) == 0) {
+				// Node deletion
 				diff.TrieNodeCount -= 1
-				diff.TrieNodeBytes -= int64(len(path) + common.HashLength)
-			}
-			prev, ok := subset.Origins[path]
-			if ok {
+				diff.TrieNodeBytes -= keySize + int64(len(oldNode))
+			} else if len(oldNode) == 0 && hasNew && len(newNode.Blob) > 0 {
+				// Node creation
 				diff.TrieNodeCount += 1
-				diff.TrieNodeBytes += int64(len(path) + common.HashLength)
+				diff.TrieNodeBytes += keySize + int64(len(newNode.Blob))
+			} else if len(oldNode) > 0 && hasNew && len(newNode.Blob) > 0 {
+				// Node update
+				diff.TrieNodeBytes += int64(len(newNode.Blob) - len(oldNode))
 			}
-			diff.TrieNodeBytes += int64(len(n.Blob) - len(prev))
 		}
 	}
 
 	// Calculate code changes
 	for _, code := range update.codes {
 		diff.ContractCount += 1
-		diff.ContractBytes += int64(len(code.blob) + common.HashLength)
+		diff.ContractBytes += codeKeySize + int64(len(code.blob))
 	}
 
 	return diff
@@ -356,52 +383,52 @@ func (g *StateSizeGenerator) initializeMetrics() error {
 
 	// Metrics will be directly updated by each goroutine
 	var (
-		accountCount, accountBytes                 int64
-		storageCount, storageBytes                 int64
-		trieAccountNodeCount, trieAccountNodeBytes int64
-		trieStorageNodeCount, trieStorageNodeBytes int64
-		contractCount, contractBytes               int64
+		accountSnapCount, accountSnapBytes int64
+		storageSnapCount, storageSnapBytes int64
+		accountTrieCount, accountTrieBytes int64
+		storageTrieCount, storageTrieBytes int64
+		contractCount, contractBytes       int64
 	)
 
 	// Start all table iterations concurrently with direct metric updates
 	group.Go(func() error {
-		count, bytes, err := g.iterateTable(ctx, rawdb.SnapshotAccountPrefix, "account")
+		count, bytes, err := g.iterateTable(ctx, rawdb.SnapshotAccountPrefix, "accountSnap")
 		if err != nil {
 			return err
 		}
-		accountCount, accountBytes = count, bytes
+		accountSnapCount, accountSnapBytes = count, bytes
 		return nil
 	})
 
 	group.Go(func() error {
-		count, bytes, err := g.iterateTable(ctx, rawdb.SnapshotStoragePrefix, "storage")
+		count, bytes, err := g.iterateTable(ctx, rawdb.SnapshotStoragePrefix, "storageSnap")
 		if err != nil {
 			return err
 		}
-		storageCount, storageBytes = count, bytes
+		storageSnapCount, storageSnapBytes = count, bytes
 		return nil
 	})
 
 	group.Go(func() error {
-		count, bytes, err := g.iterateTable(ctx, rawdb.TrieNodeAccountPrefix, "trie account node")
+		count, bytes, err := g.iterateTable(ctx, rawdb.TrieNodeAccountPrefix, "accountTrie")
 		if err != nil {
 			return err
 		}
-		trieAccountNodeCount, trieAccountNodeBytes = count, bytes
+		accountTrieCount, accountTrieBytes = count, bytes
 		return nil
 	})
 
 	group.Go(func() error {
-		count, bytes, err := g.iterateTable(ctx, rawdb.TrieNodeStoragePrefix, "trie storage node")
+		count, bytes, err := g.iterateTable(ctx, rawdb.TrieNodeStoragePrefix, "storageTrie")
 		if err != nil {
 			return err
 		}
-		trieStorageNodeCount, trieStorageNodeBytes = count, bytes
+		storageTrieCount, storageTrieBytes = count, bytes
 		return nil
 	})
 
 	group.Go(func() error {
-		count, bytes, err := g.iterateTable(ctx, rawdb.CodePrefix, "contract code")
+		count, bytes, err := g.iterateTable(ctx, rawdb.CodePrefix, "contract")
 		if err != nil {
 			return err
 		}
@@ -414,12 +441,12 @@ func (g *StateSizeGenerator) initializeMetrics() error {
 		return err
 	}
 
-	g.metrics.AccountCount = accountCount
-	g.metrics.AccountBytes = accountBytes
-	g.metrics.StorageCount = storageCount
-	g.metrics.StorageBytes = storageBytes
-	g.metrics.TrieNodeCount = trieAccountNodeCount + trieStorageNodeCount
-	g.metrics.TrieNodeBytes = trieAccountNodeBytes + trieStorageNodeBytes
+	g.metrics.AccountCount = accountSnapCount
+	g.metrics.AccountBytes = accountSnapBytes
+	g.metrics.StorageCount = storageSnapCount
+	g.metrics.StorageBytes = storageSnapBytes
+	g.metrics.TrieNodeCount = accountTrieCount + storageTrieCount
+	g.metrics.TrieNodeBytes = accountTrieBytes + storageTrieBytes
 	g.metrics.ContractCount = contractCount
 	g.metrics.ContractBytes = contractBytes
 
