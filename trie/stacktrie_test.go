@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStackTrieInsertAndHash(t *testing.T) {
@@ -443,4 +444,76 @@ func TestInsert100K(t *testing.T) {
 	if have := s.Hash(); have != want {
 		t.Fatalf("hash wrong, have %x want %x", have, want)
 	}
+}
+
+func TestAllocationFrame(t *testing.T) {
+	val := []byte{0}
+
+	t.Run("leaf turning into a branch", func(t *testing.T) {
+		s := NewStackTrie(nil)
+		require.NoError(t, s.Update([]byte{0x01, 0x00}, val))
+		assert.Equal(t, uint8(leafNode), s.root.typ)
+		assert.Equal(t, []byte{0, 0x1, 0, 0}, s.root.key)
+		require.NoError(t, s.Update([]byte{0x11, 0x00}, val))
+		assert.Equal(t, uint8(branchNode), s.root.typ)
+		assert.Len(t, s.allocationStackFrames, 1)
+		s.Hash()
+		assert.Len(t, s.allocationStackFrames, 0)
+	})
+
+	t.Run("leaf turning into an extension node", func(t *testing.T) {
+		s := NewStackTrie(nil)
+		require.NoError(t, s.Update([]byte{0x01, 0x00}, val))
+		assert.Equal(t, uint8(leafNode), s.root.typ)
+		assert.Equal(t, []byte{0, 0x1, 0, 0}, s.root.key)
+		require.NoError(t, s.Update([]byte{0x01, 0x10}, val))
+		assert.Equal(t, uint8(extNode), s.root.typ)
+		assert.Len(t, s.allocationStackFrames, 2)
+		s.Hash()
+		assert.Len(t, s.allocationStackFrames, 0)
+	})
+
+	t.Run("extension node creates an intermediate branch", func(t *testing.T) {
+		s := NewStackTrie(nil)
+		require.NoError(t, s.Update([]byte{0x01, 0x00}, val))
+		assert.Equal(t, uint8(leafNode), s.root.typ)
+		assert.Equal(t, []byte{0, 0x1, 0, 0}, s.root.key)
+		require.NoError(t, s.Update([]byte{0x01, 0x10}, val))
+		assert.Equal(t, uint8(extNode), s.root.typ)
+		assert.Len(t, s.allocationStackFrames, 2)
+		require.NoError(t, s.Update([]byte{0x02, 0x10}, val))
+		assert.Equal(t, uint8(extNode), s.root.typ)
+		assert.Len(t, s.allocationStackFrames, 2)
+		s.Hash()
+		assert.Len(t, s.allocationStackFrames, 0)
+	})
+
+	t.Run("extension node creates an intermediate extension node", func(t *testing.T) {
+		s := NewStackTrie(nil)
+		require.NoError(t, s.Update([]byte{0x01, 0x00}, val))
+		assert.Equal(t, uint8(leafNode), s.root.typ)
+		assert.Equal(t, []byte{0, 0x1, 0, 0}, s.root.key)
+		require.NoError(t, s.Update([]byte{0x01, 0x10}, val))
+		assert.Equal(t, uint8(extNode), s.root.typ)
+		assert.Len(t, s.allocationStackFrames, 2)
+		require.NoError(t, s.Update([]byte{0x11, 0x10}, val))
+		assert.Equal(t, uint8(branchNode), s.root.typ)
+		assert.Len(t, s.allocationStackFrames, 1)
+		s.Hash()
+		assert.Len(t, s.allocationStackFrames, 0)
+	})
+	t.Run("extension node creates an intermediate extension node (2)", func(t *testing.T) {
+		s := NewStackTrie(nil)
+		require.NoError(t, s.Update([]byte{0x00, 0x10}, val))
+		assert.Equal(t, uint8(leafNode), s.root.typ)
+		assert.Equal(t, []byte{0, 0, 1, 0}, s.root.key)
+		require.NoError(t, s.Update([]byte{0x00, 0x11}, val))
+		assert.Equal(t, uint8(extNode), s.root.typ)
+		assert.Len(t, s.allocationStackFrames, 2)
+		require.NoError(t, s.Update([]byte{0x01, 0x11}, val))
+		assert.Equal(t, uint8(extNode), s.root.typ)
+		assert.Len(t, s.allocationStackFrames, 2)
+		s.Hash()
+		assert.Len(t, s.allocationStackFrames, 0)
+	})
 }
