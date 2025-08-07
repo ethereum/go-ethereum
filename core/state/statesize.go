@@ -18,6 +18,7 @@ package state
 
 import (
 	"context"
+	"encoding/json"
 	"sync/atomic"
 	"time"
 
@@ -26,42 +27,33 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
 	"golang.org/x/sync/errgroup"
 )
 
-// StateSizeMetrics represents the current state size statistics
-type StateSizeMetrics struct {
+// stateSizeMetrics represents the current state size statistics
+type stateSizeMetrics struct {
 	Root          common.Hash // Root hash of the state trie
-	AccountCount  uint64
-	AccountBytes  uint64
-	StorageCount  uint64
-	StorageBytes  uint64
-	TrieNodeCount uint64
-	TrieNodeBytes uint64
-	ContractCount uint64
-	ContractBytes uint64
+	AccountCount  int64
+	AccountBytes  int64
+	StorageCount  int64
+	StorageBytes  int64
+	TrieNodeCount int64
+	TrieNodeBytes int64
+	ContractCount int64
+	ContractBytes int64
 }
 
 // StateSizeGenerator handles the initialization and tracking of state size metrics
 type StateSizeGenerator struct {
-	db     ethdb.KeyValueStore
-	triedb *triedb.Database
-
-	// Generator state
-	abort chan struct{}
-	done  chan struct{}
-
-	// Async message channel for updates
-	updateChan chan *stateUpdate
-
-	// Metrics state (only modified by generate() goroutine)
-	metrics  *StateSizeMetrics
-	buffered *StateSizeMetrics
-
-	// Initialization state
-	initialized atomic.Bool
+	db          ethdb.KeyValueStore
+	triedb      *triedb.Database
+	abort       chan struct{}
+	done        chan struct{}
+	updateChan  chan *stateUpdate // Async message channel for updates
+	metrics     *stateSizeMetrics
+	buffered    *stateSizeMetrics
+	initialized atomic.Bool // Initialization state
 }
 
 // NewStateSizeGenerator creates a new state size generator and starts it automatically
@@ -72,8 +64,8 @@ func NewStateSizeGenerator(db ethdb.KeyValueStore, triedb *triedb.Database, root
 		abort:      make(chan struct{}),
 		done:       make(chan struct{}),
 		updateChan: make(chan *stateUpdate, 1000), // Buffered channel for updates
-		metrics:    &StateSizeMetrics{Root: root},
-		buffered:   &StateSizeMetrics{Root: root},
+		metrics:    &stateSizeMetrics{Root: root},
+		buffered:   &stateSizeMetrics{Root: root},
 	}
 
 	// Start the generator automatically
@@ -82,13 +74,12 @@ func NewStateSizeGenerator(db ethdb.KeyValueStore, triedb *triedb.Database, root
 	return g
 }
 
-// Stop terminates the background generation
+// Stop terminates the background generation and persists the metrics.
 func (g *StateSizeGenerator) Stop() {
 	close(g.abort)
 
 	<-g.done
 
-	// Persist metrics after all the goroutines were stopped
 	g.persistMetrics()
 }
 
@@ -119,7 +110,20 @@ func (g *StateSizeGenerator) generate() {
 
 		case <-initDone:
 			// Initialization completed, merge buffered metrics
-			g.mergeBufferedMetrics()
+			if g.buffered != nil {
+				log.Info("Merging buffered metrics into main metrics")
+				g.metrics.Root = g.buffered.Root
+				g.metrics.AccountCount += g.buffered.AccountCount
+				g.metrics.AccountBytes += g.buffered.AccountBytes
+				g.metrics.StorageCount += g.buffered.StorageCount
+				g.metrics.StorageBytes += g.buffered.StorageBytes
+				g.metrics.TrieNodeCount += g.buffered.TrieNodeCount
+				g.metrics.TrieNodeBytes += g.buffered.TrieNodeBytes
+				g.metrics.ContractCount += g.buffered.ContractCount
+				g.metrics.ContractBytes += g.buffered.ContractBytes
+
+				g.buffered = nil
+			}
 			initDone = nil // Clear the channel to prevent future selects
 		}
 	}
@@ -174,30 +178,12 @@ func (g *StateSizeGenerator) initialize() chan struct{} {
 	return initDone
 }
 
-// mergeBufferedMetrics merges buffered metrics into main metrics
-func (g *StateSizeGenerator) mergeBufferedMetrics() {
-	if g.buffered != nil {
-		log.Info("Merging buffered metrics into main metrics")
-		g.metrics.Root = g.buffered.Root
-		g.metrics.AccountCount += g.buffered.AccountCount
-		g.metrics.AccountBytes += g.buffered.AccountBytes
-		g.metrics.StorageCount += g.buffered.StorageCount
-		g.metrics.StorageBytes += g.buffered.StorageBytes
-		g.metrics.TrieNodeCount += g.buffered.TrieNodeCount
-		g.metrics.TrieNodeBytes += g.buffered.TrieNodeBytes
-		g.metrics.ContractCount += g.buffered.ContractCount
-		g.metrics.ContractBytes += g.buffered.ContractBytes
-
-		g.buffered = nil
-	}
-}
-
 // handleUpdate processes a single update with proper root continuity checking
 func (g *StateSizeGenerator) handleUpdate(update *stateUpdate, initialized bool) {
 	// Calculate the diff
 	diff := g.calculateUpdateDiff(update)
 
-	var targetMetrics *StateSizeMetrics
+	var targetMetrics *stateSizeMetrics
 	if initialized {
 		targetMetrics = g.metrics
 	} else {
@@ -233,8 +219,8 @@ func (g *StateSizeGenerator) handleUpdate(update *stateUpdate, initialized bool)
 }
 
 // calculateUpdateDiff calculates the diff for a state update
-func (g *StateSizeGenerator) calculateUpdateDiff(update *stateUpdate) StateSizeMetrics {
-	var diff StateSizeMetrics
+func (g *StateSizeGenerator) calculateUpdateDiff(update *stateUpdate) stateSizeMetrics {
+	var diff stateSizeMetrics
 
 	// Calculate account changes
 	for addr, oldValue := range update.accountsOrigin {
@@ -252,7 +238,7 @@ func (g *StateSizeGenerator) calculateUpdateDiff(update *stateUpdate) StateSizeM
 			diff.AccountCount += 1
 			diff.AccountBytes += common.HashLength
 		}
-		diff.AccountBytes += uint64(len(newValue) - len(oldValue))
+		diff.AccountBytes += int64(len(newValue) - len(oldValue))
 	}
 
 	// Calculate storage changes
@@ -285,7 +271,7 @@ func (g *StateSizeGenerator) calculateUpdateDiff(update *stateUpdate) StateSizeM
 				diff.StorageCount += 1
 				diff.StorageBytes += common.HashLength
 			}
-			diff.StorageBytes += uint64(len(newValue) - len(oldValue))
+			diff.StorageBytes += int64(len(newValue) - len(oldValue))
 		}
 	}
 
@@ -294,21 +280,21 @@ func (g *StateSizeGenerator) calculateUpdateDiff(update *stateUpdate) StateSizeM
 		for path, n := range subset.Nodes {
 			if len(n.Blob) == 0 {
 				diff.TrieNodeCount -= 1
-				diff.TrieNodeBytes -= uint64(len(path) + common.HashLength)
+				diff.TrieNodeBytes -= int64(len(path) + common.HashLength)
 			}
 			prev, ok := subset.Origins[path]
 			if ok {
 				diff.TrieNodeCount += 1
-				diff.TrieNodeBytes += uint64(len(path) + common.HashLength)
+				diff.TrieNodeBytes += int64(len(path) + common.HashLength)
 			}
-			diff.TrieNodeBytes += uint64(len(n.Blob) - len(prev))
+			diff.TrieNodeBytes += int64(len(n.Blob) - len(prev))
 		}
 	}
 
 	// Calculate code changes
 	for _, code := range update.codes {
 		diff.ContractCount += 1
-		diff.ContractBytes += uint64(len(code.blob) + common.HashLength)
+		diff.ContractBytes += int64(len(code.blob) + common.HashLength)
 	}
 
 	return diff
@@ -333,15 +319,15 @@ func (g *StateSizeGenerator) hasExistingMetrics() bool {
 		return false
 	}
 
-	var existed StateSizeMetrics
-	if err := rlp.DecodeBytes(data, &existed); err != nil {
-		log.Warn("Failed to decode existing state size metrics", "err", err)
+	var existed stateSizeMetrics
+	if err := json.Unmarshal(data, &existed); err != nil {
+		log.Warn("Failed to decode existed state size metrics", "err", err)
 		return false
 	}
 
 	// Check if the existing metrics root matches our current root
 	if (g.metrics.Root != common.Hash{}) && existed.Root != g.metrics.Root {
-		log.Info("Existing state size metrics found but root mismatch", "existing", existed.Root, "current", g.metrics.Root)
+		log.Info("Existing state size metrics found but root mismatch", "existed", existed.Root, "current", g.metrics.Root)
 		return false
 	}
 
@@ -370,11 +356,11 @@ func (g *StateSizeGenerator) initializeMetrics() error {
 
 	// Metrics will be directly updated by each goroutine
 	var (
-		accountCount, accountBytes                 uint64
-		storageCount, storageBytes                 uint64
-		trieAccountNodeCount, trieAccountNodeBytes uint64
-		trieStorageNodeCount, trieStorageNodeBytes uint64
-		contractCount, contractBytes               uint64
+		accountCount, accountBytes                 int64
+		storageCount, storageBytes                 int64
+		trieAccountNodeCount, trieAccountNodeBytes int64
+		trieStorageNodeCount, trieStorageNodeBytes int64
+		contractCount, contractBytes               int64
 	)
 
 	// Start all table iterations concurrently with direct metric updates
@@ -428,7 +414,6 @@ func (g *StateSizeGenerator) initializeMetrics() error {
 		return err
 	}
 
-	// Update metrics (safe since we're in the single writer goroutine)
 	g.metrics.AccountCount = accountCount
 	g.metrics.AccountBytes = accountBytes
 	g.metrics.StorageCount = storageCount
@@ -445,17 +430,17 @@ func (g *StateSizeGenerator) initializeMetrics() error {
 }
 
 // iterateTable performs iteration over a specific table and returns the results
-func (g *StateSizeGenerator) iterateTable(ctx context.Context, prefix []byte, name string) (uint64, uint64, error) {
+func (g *StateSizeGenerator) iterateTable(ctx context.Context, prefix []byte, name string) (int64, int64, error) {
 	log.Info("Iterating over state size", "table", name)
 	start := time.Now()
 
-	var count, bytes uint64
+	var count, bytes int64
 	iter := g.db.NewIterator(prefix, nil)
 	defer iter.Release()
 
 	for iter.Next() {
 		count++
-		bytes += uint64(len(iter.Key()) + len(iter.Value()))
+		bytes += int64(len(iter.Key()) + len(iter.Value()))
 
 		// Check for cancellation periodically for performance
 		if count%10000 == 0 {
@@ -480,19 +465,20 @@ func (g *StateSizeGenerator) iterateTable(ctx context.Context, prefix []byte, na
 }
 
 func (g *StateSizeGenerator) updateMetrics() {
-	accountCountGauge.Update(int64(g.metrics.AccountCount))
-	accountBytesGauge.Update(int64(g.metrics.AccountBytes))
-	storageCountGauge.Update(int64(g.metrics.StorageCount))
-	storageBytesGauge.Update(int64(g.metrics.StorageBytes))
-	trienodeCountGauge.Update(int64(g.metrics.TrieNodeCount))
-	trienodeBytesGauge.Update(int64(g.metrics.TrieNodeBytes))
-	contractCountGauge.Update(int64(g.metrics.ContractCount))
-	contractBytesGauge.Update(int64(g.metrics.ContractBytes))
+	accountCountGauge.Update(g.metrics.AccountCount)
+	accountBytesGauge.Update(g.metrics.AccountBytes)
+	storageCountGauge.Update(g.metrics.StorageCount)
+	storageBytesGauge.Update(g.metrics.StorageBytes)
+	trienodeCountGauge.Update(g.metrics.TrieNodeCount)
+	trienodeBytesGauge.Update(g.metrics.TrieNodeBytes)
+	contractCountGauge.Update(g.metrics.ContractCount)
+	contractBytesGauge.Update(g.metrics.ContractBytes)
 }
 
 // persistMetrics saves the current metrics to the database
 func (g *StateSizeGenerator) persistMetrics() {
-	data, err := rlp.EncodeToBytes(*g.metrics)
+	// RLP doesn't support int64, so we use JSON for simplicity
+	data, err := json.Marshal(*g.metrics)
 	if err != nil {
 		log.Error("Failed to encode state size metrics", "err", err)
 		return
