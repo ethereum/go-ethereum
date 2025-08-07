@@ -754,3 +754,116 @@ func copyStorages(set map[common.Hash]map[common.Hash][]byte) map[common.Hash]ma
 	}
 	return copied
 }
+
+// TestDatabaseRepair tests the fix for issue where state history index
+// metadata is not updated after state truncation during repairHistory.
+func TestDatabaseRepair(t *testing.T) {
+	ancient := t.TempDir()
+	diskdb, _ := rawdb.Open(rawdb.NewMemoryDatabase(), rawdb.OpenOptions{Ancient: ancient})
+	defer diskdb.Close()
+
+	var (
+		roots  []common.Hash
+		hs     []*history
+		config = &Config{EnableStateIndexing: true}
+	)
+
+	for i := 0; i < 5; i++ {
+		accounts := make(map[common.Address][]byte)
+		storages := make(map[common.Address]map[common.Hash][]byte)
+
+		addr := testrand.Address()
+		accounts[addr] = testrand.Bytes(32)
+		storages[addr] = make(map[common.Hash][]byte)
+		storages[addr][testrand.Hash()] = testrand.Bytes(32)
+
+		root := testrand.Hash()
+		h := newHistory(root, common.Hash{}, uint64(i+1), accounts, storages, false)
+
+		hs = append(hs, h)
+		roots = append(roots, root)
+	}
+
+	db := New(diskdb, config, false)
+	defer db.Close()
+
+	for i, h := range hs {
+		accountData, storageData, accountIndex, storageIndex := h.encode()
+		err := rawdb.WriteStateHistory(db.freezer, uint64(i+1), h.meta.encode(), accountIndex, storageIndex, accountData, storageData)
+		if err != nil {
+			t.Fatalf("Failed to write state history %d: %v", i+1, err)
+		}
+		rawdb.WriteStateID(diskdb, roots[i], uint64(i+1))
+	}
+
+	// Create index metadata pointing to the last state (ID 5)
+	storeIndexMetadata(diskdb, 5)
+
+	// Verify metadata exists and points to state ID 5
+	meta := loadIndexMetadata(diskdb)
+	if meta == nil {
+		t.Fatal("Index metadata should exist")
+	}
+	if meta.Last != 5 {
+		t.Fatalf("Expected metadata.Last = 5, got %d", meta.Last)
+	}
+
+	// Close the current database to replace its tree
+	db.Close()
+
+	// Create a new database with a mock tree that has state ID 3 as bottom
+	// This simulates a scenario where the disk layer has state ID 3, but the
+	// freezer has histories up to ID 5, and metadata points to ID 5
+	db = &Database{
+		readOnly: false,
+		config:   config,
+		diskdb:   diskdb,
+		hasher:   merkleNodeHasher,
+	}
+
+	tree := &layerTree{
+		base:   newDiskLayer(roots[2], 3, db, nil, nil, nil, nil),
+		layers: make(map[common.Hash]layer),
+	}
+	db.tree = tree
+
+	// repairHistory should truncate histories above state ID 3
+	// and reset the index metadata from 5 to 3
+	if err := db.repairHistory(); err != nil {
+		t.Fatalf("repairHistory failed: %v", err)
+	}
+
+	// Verify that histories above state ID 3 have been truncated
+	head, err := db.freezer.Ancients()
+	if err != nil {
+		t.Fatalf("Failed to get freezer head: %v", err)
+	}
+	if head != 3 {
+		t.Fatalf("Expected freezer head = 3, got %d", head)
+	}
+
+	// Verify that the index metadata has been reset to 3
+	meta = loadIndexMetadata(diskdb)
+	if meta == nil {
+		t.Fatal("Index metadata should still exist after repair")
+	}
+	if meta.Last != 3 {
+		t.Fatalf("Expected metadata.Last = %d after repair, got %d", 3, meta.Last)
+	}
+
+	// Verify that state ID mappings for truncated histories are removed
+	for i := 4; i <= 5; i++ {
+		if rawdb.ReadStateID(diskdb, roots[i-1]) != nil {
+			t.Fatalf("State ID mapping for root %d should be removed", i)
+		}
+	}
+
+	// Verify that state ID mappings for remaining histories still exist
+	for i := 1; i <= 3; i++ {
+		if rawdb.ReadStateID(diskdb, roots[i-1]) == nil {
+			t.Fatalf("State ID mapping for root %d should still exist", i)
+		}
+	}
+
+	t.Log("Successfully verified that index metadata is reset after state history truncation")
+}

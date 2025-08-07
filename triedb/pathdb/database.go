@@ -337,6 +337,14 @@ func (db *Database) repairHistory() error {
 	}
 	if pruned != 0 {
 		log.Warn("Truncated extra state histories", "number", pruned)
+		if meta := loadIndexMetadata(db.diskdb); meta != nil {
+			// Reset the state history index metadata to current state id
+			// if it's out of boundary.
+			if old := meta.Last; old > id {
+				log.Warn("Reset state history index metadata after truncation", "oldID", old, "newID", id)
+				storeIndexMetadata(db.diskdb, id)
+			}
+		}
 	}
 	return nil
 }
@@ -689,9 +697,9 @@ func (db *Database) journalPath() string {
 	}
 	var fname string
 	if db.isVerkle {
-		fname = fmt.Sprintf("verkle.journal")
+		fname = "verkle.journal"
 	} else {
-		fname = fmt.Sprintf("merkle.journal")
+		fname = "merkle.journal"
 	}
 	return filepath.Join(db.config.JournalDirectory, fname)
 }
