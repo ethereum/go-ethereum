@@ -33,8 +33,6 @@ import (
 )
 
 // maxQueryDepth limits the maximum field nesting depth allowed in GraphQL queries.
-// Without this bound, deeply nested queries could exhaust resources and lead to DoS.
-// See https://github.com/ethereum/go-ethereum/issues/26026 for more details.
 const maxQueryDepth = 20
 
 type handler struct {
