@@ -187,3 +187,16 @@ func WriteTransitionStatus(db ethdb.KeyValueWriter, data []byte) {
 		log.Crit("Failed to store the eth2 transition status", "err", err)
 	}
 }
+
+// WriteStateSizeMetrics writes the state size metrics to the database
+func WriteStateSizeMetrics(db ethdb.KeyValueWriter, data []byte) {
+	if err := db.Put(stateSizeMetricsKey, data); err != nil {
+		log.Warn("Failed to store state size metrics", "err", err)
+	}
+}
+
+// ReadStateSizeMetrics reads the state size metrics from the database
+func ReadStateSizeMetrics(db ethdb.KeyValueReader) []byte {
+	data, _ := db.Get(stateSizeMetricsKey)
+	return data
+}

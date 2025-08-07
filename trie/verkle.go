@@ -42,6 +42,7 @@ type VerkleTrie struct {
 	root   verkle.VerkleNode
 	cache  *utils.PointCache
 	reader *trieReader
+	tracer *prevalueTracer
 }
 
 // NewVerkleTrie constructs a verkle tree based on the specified root hash.
@@ -50,27 +51,25 @@ func NewVerkleTrie(root common.Hash, db database.NodeDatabase, cache *utils.Poin
 	if err != nil {
 		return nil, err
 	}
-	// Parse the root verkle node if it's not empty.
-	node := verkle.New()
-	if root != types.EmptyVerkleHash && root != types.EmptyRootHash {
-		blob, err := reader.node(nil, common.Hash{})
-		if err != nil {
-			return nil, err
-		}
-		node, err = verkle.ParseNode(blob, 0)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return &VerkleTrie{
-		root:   node,
+	t := &VerkleTrie{
+		root:   verkle.New(),
 		cache:  cache,
 		reader: reader,
-	}, nil
-}
-
-func (t *VerkleTrie) FlatdbNodeResolver(path []byte) ([]byte, error) {
-	return t.reader.node(path, common.Hash{})
+		tracer: newPrevalueTracer(),
+	}
+	// Parse the root verkle node if it's not empty.
+	if root != types.EmptyVerkleHash && root != types.EmptyRootHash {
+		blob, err := t.nodeResolver(nil)
+		if err != nil {
+			return nil, err
+		}
+		node, err := verkle.ParseNode(blob, 0)
+		if err != nil {
+			return nil, err
+		}
+		t.root = node
+	}
+	return t, nil
 }
 
 // GetKey returns the sha3 preimage of a hashed key that was previously used
@@ -268,7 +267,7 @@ func (t *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 	nodeset := trienode.NewNodeSet(common.Hash{})
 	for _, node := range nodes {
 		// Hash parameter is not used in pathdb
-		nodeset.AddNode(node.Path, trienode.New(common.Hash{}, node.SerializedBytes))
+		nodeset.AddNode(node.Path, trienode.NewNodeWithPrev(common.Hash{}, node.SerializedBytes, t.tracer.get(node.Path)))
 	}
 	// Serialize root commitment form
 	return t.Hash(), nodeset
@@ -301,6 +300,7 @@ func (t *VerkleTrie) Copy() *VerkleTrie {
 		root:   t.root.Copy(),
 		cache:  t.cache,
 		reader: t.reader,
+		tracer: t.tracer.copy(),
 	}
 }
 
@@ -317,7 +317,7 @@ func (t *VerkleTrie) Proof(posttrie *VerkleTrie, keys [][]byte) (*verkle.VerkleP
 	if posttrie != nil {
 		postroot = posttrie.root
 	}
-	proof, _, _, _, err := verkle.MakeVerkleMultiProof(t.root, postroot, keys, t.FlatdbNodeResolver)
+	proof, _, _, _, err := verkle.MakeVerkleMultiProof(t.root, postroot, keys, t.nodeResolver)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -421,7 +421,12 @@ func (t *VerkleTrie) ToDot() string {
 }
 
 func (t *VerkleTrie) nodeResolver(path []byte) ([]byte, error) {
-	return t.reader.node(path, common.Hash{})
+	blob, err := t.reader.node(path, common.Hash{})
+	if err != nil {
+		return nil, err
+	}
+	t.tracer.put(path, blob)
+	return blob, nil
 }
 
 // Witness returns a set containing all trie nodes that have been accessed.
