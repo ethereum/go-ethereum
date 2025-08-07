@@ -786,6 +786,18 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
 func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
+	return s.intermediateRoot(deleteEmptyObjects, false)
+}
+
+// IntermediateRootPrefetch triggers trie loading for cache warming without
+// computing the actual root hash, optimized for prefetching.
+func (s *StateDB) IntermediateRootPrefetch(deleteEmptyObjects bool) {
+	s.intermediateRoot(deleteEmptyObjects, true)
+}
+
+// intermediateRoot is the internal implementation that supports both normal
+// and prefetch modes to reduce memory allocations in prefetching scenarios.
+func (s *StateDB) intermediateRoot(deleteEmptyObjects bool, prefetchMode bool) common.Hash {
 	// Finalise all the dirty storage states and write them into the tries
 	s.Finalise(deleteEmptyObjects)
 
@@ -834,6 +846,10 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		obj := s.stateObjects[addr] // closure for the task runner below
 		workers.Go(func() error {
 			if s.db.TrieDB().IsVerkle() {
+				obj.updateTrie()
+			} else if prefetchMode {
+				// In prefetch mode, flushes cached storage mutations to trie
+				// for cache warming without computing the expensive root hash
 				obj.updateTrie()
 			} else {
 				obj.updateRoot()
@@ -935,6 +951,13 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	if s.prefetcher != nil {
 		s.prefetcher.used(common.Hash{}, s.originalRoot, usedAddrs, nil)
 	}
+
+	// In prefetch mode, skip expensive hash computation since we only want
+	// the side effects of trie loading for cache warming
+	if prefetchMode {
+		return common.Hash{}
+	}
+
 	// Track the amount of time wasted on hashing the account trie
 	defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())
 
