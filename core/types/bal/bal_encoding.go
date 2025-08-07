@@ -19,6 +19,7 @@ package bal
 import (
 	"bytes"
 	"cmp"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -40,7 +41,16 @@ import (
 
 // BlockAccessList is the encoding format of ConstructionBlockAccessList.
 type BlockAccessList struct {
-	Accesses []AccountAccess `ssz-max:"300000"`
+	Accesses []AccountAccess `ssz-max:"300000" json:"accesses"`
+}
+
+func (e *BlockAccessList) String() string {
+	var res bytes.Buffer
+	enc := json.NewEncoder(&res)
+	enc.SetIndent("", "    ")
+	// TODO: check error
+	enc.Encode(e)
+	return res.String()
 }
 
 // Validate returns an error if the contents of the access list are not ordered
@@ -84,28 +94,35 @@ func encodeBalance(val *uint256.Int) [16]byte {
 	return enc
 }
 
+// TODO: if we don't go with SSZ, this can be a variable-sized byte array
+type Balance [16]byte
+
+func (b Balance) MarshalJSON() ([]byte, error) {
+	return json.Marshal(fmt.Sprintf("%x", b))
+}
+
 // encodingBalanceChange is the encoding format of BalanceChange.
 type encodingBalanceChange struct {
-	TxIdx   uint16   `ssz-size:"2"`
-	Balance [16]byte `ssz-size:"16"`
+	TxIdx   uint16  `ssz-size:"2" json:"txIndex"`
+	Balance Balance `ssz-size:"16" json:"balance"`
 }
 
 // encodingAccountNonce is the encoding format of NonceChange.
 type encodingAccountNonce struct {
-	TxIdx uint16 `ssz-size:"2"`
-	Nonce uint64 `ssz-size:"8"`
+	TxIdx uint16 `ssz-size:"2" json:"txIndex"`
+	Nonce uint64 `ssz-size:"8" json:"nonce"`
 }
 
 // encodingStorageWrite is the encoding format of StorageWrites.
 type encodingStorageWrite struct {
-	TxIdx      uint16
-	ValueAfter [32]byte `ssz-size:"32"`
+	TxIdx      uint16      `json:"txIndex"`
+	ValueAfter common.Hash `ssz-size:"32" json:"valueAfter"`
 }
 
 // encodingStorageWrite is the encoding format of SlotWrites.
 type encodingSlotWrites struct {
-	Slot     [32]byte               `ssz-size:"32"`
-	Accesses []encodingStorageWrite `ssz-max:"300000"`
+	Slot     common.Hash            `ssz-size:"32" json:"slot"`
+	Accesses []encodingStorageWrite `ssz-max:"300000" json:"accesses"`
 }
 
 // validate returns an instance of the encoding-representation slot writes in
@@ -121,12 +138,12 @@ func (e *encodingSlotWrites) validate() error {
 
 // AccountAccess is the encoding format of ConstructionAccountAccess.
 type AccountAccess struct {
-	Address        [20]byte                `ssz-size:"20"`    // 20-byte Ethereum address
-	StorageWrites  []encodingSlotWrites    `ssz-max:"300000"` // Storage changes (slot -> [tx_index -> new_value])
-	StorageReads   [][32]byte              `ssz-max:"300000"` // Read-only storage keys
-	BalanceChanges []encodingBalanceChange `ssz-max:"300000"` // Balance changes ([tx_index -> post_balance])
-	NonceChanges   []encodingAccountNonce  `ssz-max:"300000"` // Nonce changes ([tx_index -> new_nonce])
-	Code           []CodeChange            `ssz-max:"1"`      // Code changes ([tx_index -> new_code])
+	Address        common.Address          `ssz-size:"20" json:"address,omitempty"`           // 20-byte Ethereum address
+	StorageWrites  []encodingSlotWrites    `ssz-max:"300000" json:"storageWrites,omitempty"`  // Storage changes (slot -> [tx_index -> new_value])
+	StorageReads   []common.Hash           `ssz-max:"300000" json:"storageReads,omitempty"`   // Read-only storage keys
+	BalanceChanges []encodingBalanceChange `ssz-max:"300000" json:"balanceChanges,omitempty"` // Balance changes ([tx_index -> post_balance])
+	NonceChanges   []encodingAccountNonce  `ssz-max:"300000" json:"nonceChanges,omitempty"`   // Nonce changes ([tx_index -> new_nonce])
+	CodeChanges    []CodeChange            `ssz-max:"1" json:"code,omitempty"`                // CodeChanges changes ([tx_index -> new_code])
 }
 
 // validate converts the account accesses out of encoding format.
@@ -146,7 +163,7 @@ func (e *AccountAccess) validate() error {
 	}
 
 	// Check the storage read slots are sorted in order
-	if !slices.IsSortedFunc(e.StorageReads, func(a, b [32]byte) int {
+	if !slices.IsSortedFunc(e.StorageReads, func(a, b common.Hash) int {
 		return bytes.Compare(a[:], b[:])
 	}) {
 		return errors.New("storage read slots not in lexicographic order")
@@ -167,9 +184,9 @@ func (e *AccountAccess) validate() error {
 	}
 
 	// Convert code change
-	if len(e.Code) == 1 {
-		if len(e.Code[0].Code) > params.MaxCodeSize {
-			return errors.New("code change contained oversized code")
+	for _, codeChange := range e.CodeChanges {
+		if len(codeChange.Code) > params.MaxCodeSize {
+			return fmt.Errorf("code change contained oversized code")
 		}
 	}
 	return nil
@@ -189,20 +206,19 @@ func (e *AccountAccess) Copy() AccountAccess {
 			Accesses: slices.Clone(storageWrite.Accesses),
 		})
 	}
-	if len(e.Code) == 1 {
-		res.Code = []CodeChange{
-			{
-				e.Code[0].TxIndex,
-				bytes.Clone(e.Code[0].Code),
-			},
-		}
+	for _, codeChange := range e.CodeChanges {
+		res.CodeChanges = append(res.CodeChanges,
+			CodeChange{
+				codeChange.TxIndex,
+				bytes.Clone(codeChange.Code),
+			})
 	}
 	return res
 }
 
 // EncodeRLP returns the RLP-encoded access list
-func (b *ConstructionBlockAccessList) EncodeRLP(wr io.Writer) error {
-	return b.toEncodingObj().EncodeRLP(wr)
+func (c *ConstructionBlockAccessList) EncodeRLP(wr io.Writer) error {
+	return c.ToEncodingObj().EncodeRLP(wr)
 }
 
 var _ rlp.Encoder = &ConstructionBlockAccessList{}
@@ -213,10 +229,10 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 	res := AccountAccess{
 		Address:        addr,
 		StorageWrites:  make([]encodingSlotWrites, 0),
-		StorageReads:   make([][32]byte, 0),
+		StorageReads:   make([]common.Hash, 0),
 		BalanceChanges: make([]encodingBalanceChange, 0),
 		NonceChanges:   make([]encodingAccountNonce, 0),
-		Code:           nil,
+		CodeChanges:    make([]CodeChange, 0),
 	}
 
 	// Convert write slots
@@ -268,29 +284,29 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 	}
 
 	// Convert code change
-	if a.CodeChange != nil {
-		res.Code = []CodeChange{
-			{
-				a.CodeChange.TxIndex,
-				bytes.Clone(a.CodeChange.Code),
-			},
-		}
+	codeChangeIdxs := slices.Collect(maps.Keys(a.CodeChanges))
+	slices.SortFunc(codeChangeIdxs, cmp.Compare[uint16])
+	for _, idx := range codeChangeIdxs {
+		res.CodeChanges = append(res.CodeChanges, CodeChange{
+			idx,
+			bytes.Clone(a.CodeChanges[idx].Code),
+		})
 	}
 	return res
 }
 
-// toEncodingObj returns an instance of the access list expressed as the type
+// ToEncodingObj returns an instance of the access list expressed as the type
 // which is used as input for the encoding/decoding.
-func (b *ConstructionBlockAccessList) toEncodingObj() *BlockAccessList {
+func (c *ConstructionBlockAccessList) ToEncodingObj() *BlockAccessList {
 	var addresses []common.Address
-	for addr := range b.Accounts {
+	for addr := range c.Accounts {
 		addresses = append(addresses, addr)
 	}
 	slices.SortFunc(addresses, common.Address.Cmp)
 
 	var res BlockAccessList
 	for _, addr := range addresses {
-		res.Accesses = append(res.Accesses, b.Accounts[addr].toEncodingObj(addr))
+		res.Accesses = append(res.Accesses, c.Accounts[addr].toEncodingObj(addr))
 	}
 	return &res
 }
@@ -327,9 +343,11 @@ func (e *BlockAccessList) PrettyPrint() string {
 			printWithIndent(2, fmt.Sprintf("%d: %d", change.TxIdx, change.Nonce))
 		}
 
-		if len(accountDiff.Code) > 0 {
+		if len(accountDiff.CodeChanges) > 0 {
 			printWithIndent(1, "code:")
-			printWithIndent(2, fmt.Sprintf("%d: %x", accountDiff.Code[0].TxIndex, accountDiff.Code[0].Code))
+			for _, change := range accountDiff.CodeChanges {
+				printWithIndent(2, fmt.Sprintf("%d: %x", change.TxIndex, change.Code))
+			}
 		}
 	}
 	return res.String()
@@ -341,4 +359,335 @@ func (e *BlockAccessList) Copy() (res BlockAccessList) {
 		res.Accesses = append(res.Accesses, accountAccess.Copy())
 	}
 	return
+}
+
+type ContractCode []byte
+
+func (c *ContractCode) MarshalJSON() ([]byte, error) {
+	hexStr := fmt.Sprintf("%x", *c)
+	return json.Marshal(hexStr)
+}
+
+type AccountState struct {
+	Balance       *Balance                    `json:"Balance,omitempty"`
+	Nonce         *uint64                     `json:"Nonce,omitempty"`
+	Code          ContractCode                `json:"Code,omitempty"`
+	StorageWrites map[common.Hash]common.Hash `json:"StorageWrites,omitempty"`
+}
+
+func NewEmptyAccountState() *AccountState {
+	return &AccountState{
+		nil,
+		nil,
+		nil,
+		nil,
+	}
+}
+
+func (a *AccountState) Eq(other *AccountState) bool {
+	if a.Balance != nil || other.Balance != nil {
+		if a.Balance == nil || other.Balance == nil {
+			return false
+		}
+
+		if !bytes.Equal(a.Balance[:], other.Balance[:]) {
+			return false
+		}
+	}
+
+	if (len(a.Code) != 0 || len(other.Code) != 0) && !bytes.Equal(a.Code, other.Code) {
+		return false
+	}
+
+	if a.Nonce != nil || other.Nonce != nil {
+		if a.Nonce == nil || other.Nonce == nil {
+			return false
+		}
+
+		if *a.Nonce != *other.Nonce {
+			return false
+		}
+	}
+
+	if a.StorageWrites != nil || other.StorageWrites != nil {
+		if a.StorageWrites == nil || other.StorageWrites == nil {
+			return false
+		}
+
+		if !maps.Equal(a.StorageWrites, other.StorageWrites) {
+			return false
+		}
+	}
+	return true
+}
+
+type StateDiff struct {
+	Mutations map[common.Address]*AccountState `json:"Mutations,omitempty"`
+}
+
+func (a *AccountState) Copy() *AccountState {
+	res := NewEmptyAccountState()
+	if a.Nonce != nil {
+		res.Nonce = new(uint64)
+		*res.Nonce = *a.Nonce
+	}
+	if a.Code != nil {
+		res.Code = bytes.Clone(a.Code)
+	}
+	if a.Balance != nil {
+		res.Balance = new(Balance)
+		copy(res.Balance[:], (*a.Balance)[:])
+	}
+	if a.StorageWrites != nil {
+		res.StorageWrites = maps.Clone(a.StorageWrites)
+	}
+	return res
+}
+
+// ValidateStateDiff ensures that the two state diffs match exactly.
+func ValidateStateDiff(balDiff, totalDiff *StateDiff) error {
+	expectedBALAddrs := len(totalDiff.Mutations)
+	for addr, computedDiff := range totalDiff.Mutations {
+		balAccountDiff, ok := balDiff.Mutations[addr]
+		if !ok {
+			return fmt.Errorf("missing from BAL")
+		}
+
+		if !computedDiff.Eq(balAccountDiff) {
+			return fmt.Errorf("mismatch between BAl value and computed value")
+		}
+	}
+	if len(balDiff.Mutations) != expectedBALAddrs {
+		return fmt.Errorf("BAL contained unexpected mutations compared to computed")
+	}
+	return nil
+}
+
+func (s *StateDiff) String() string {
+	var res bytes.Buffer
+	enc := json.NewEncoder(&res)
+	enc.SetIndent("", "    ")
+	enc.Encode(s)
+	return res.String()
+}
+
+// merge the future state from next into the current diff modifying the caller
+func (s *StateDiff) Merge(next *StateDiff) {
+	for account, diff := range next.Mutations {
+		if mut, ok := s.Mutations[account]; ok {
+			if diff.Balance != nil {
+				mut.Balance = diff.Balance
+			}
+			if diff.Code != nil {
+				mut.Code = diff.Code
+			}
+			if diff.Nonce != nil {
+				mut.Nonce = diff.Nonce
+			}
+			if len(diff.StorageWrites) > 0 {
+				// TODO: this is wrong, need to merge the two maps
+				mut.StorageWrites = maps.Clone(diff.StorageWrites)
+			}
+		} else {
+			s.Mutations[account] = diff
+		}
+	}
+}
+
+func (s *StateDiff) Copy() *StateDiff {
+	res := &StateDiff{make(map[common.Address]*AccountState)}
+	for addr, accountDiff := range s.Mutations {
+		cpy := accountDiff.Copy()
+		res.Mutations[addr] = cpy
+	}
+	return res
+}
+
+// AccountIterator facilitates the iteration of an account's changes at each txindex in the BAL
+type AccountIterator struct {
+	address          common.Address
+	slotWriteIndices [][]int
+	balanceChangeIdx int
+	nonceChangeIdx   int
+	codeChangeIdx    int
+
+	curTxIdx int
+	maxIdx   int
+	aa       *AccountAccess
+}
+
+func NewAccountIterator(accesses *AccountAccess, txCount int) *AccountIterator {
+	slotWriteIndices := make([][]int, len(accesses.StorageWrites))
+	for i, slotWrites := range accesses.StorageWrites {
+		slotWriteIndices[i] = make([]int, len(slotWrites.Accesses))
+	}
+	return &AccountIterator{
+		address:          accesses.Address,
+		slotWriteIndices: slotWriteIndices,
+		balanceChangeIdx: 0,
+		nonceChangeIdx:   0,
+		codeChangeIdx:    0,
+		curTxIdx:         0,
+		maxIdx:           txCount + 2,
+		aa:               accesses,
+	}
+}
+
+// Increment increments the account iterator by one, returning only the mutated state by the new transaction
+func (it *AccountIterator) Increment() (accountState *AccountState, mut bool) {
+	if it.curTxIdx > it.maxIdx {
+		return nil, false
+	}
+
+	layerMut := NewEmptyAccountState()
+
+	for i, accountSlotsIdxs := range it.slotWriteIndices {
+		for j, curSlotIdx := range accountSlotsIdxs {
+			if curSlotIdx < len(it.aa.StorageWrites[i].Accesses) {
+				storageWrite := it.aa.StorageWrites[i].Accesses[curSlotIdx]
+				if storageWrite.TxIdx == uint16(it.curTxIdx) {
+					if layerMut.StorageWrites == nil {
+						layerMut.StorageWrites = make(map[common.Hash]common.Hash)
+					}
+					layerMut.StorageWrites[it.aa.StorageWrites[i].Slot] = storageWrite.ValueAfter
+					accountSlotsIdxs[j]++
+				}
+			}
+		}
+	}
+
+	if it.balanceChangeIdx < len(it.aa.BalanceChanges) && it.aa.BalanceChanges[it.balanceChangeIdx].TxIdx == uint16(it.curTxIdx) {
+		balance := it.aa.BalanceChanges[it.balanceChangeIdx].Balance
+		layerMut.Balance = &balance
+		it.balanceChangeIdx++
+	}
+
+	if it.codeChangeIdx < len(it.aa.CodeChanges) && it.aa.CodeChanges[it.codeChangeIdx].TxIndex == uint16(it.curTxIdx) {
+		newCode := bytes.Clone(it.aa.CodeChanges[it.codeChangeIdx].Code)
+		if newCode == nil {
+			newCode = make([]byte, 0)
+		}
+		layerMut.Code = newCode
+		it.codeChangeIdx++
+	}
+
+	if it.nonceChangeIdx < len(it.aa.NonceChanges) && it.aa.NonceChanges[it.nonceChangeIdx].TxIdx == uint16(it.curTxIdx) {
+		layerMut.Nonce = new(uint64)
+		*layerMut.Nonce = it.aa.NonceChanges[it.nonceChangeIdx].Nonce
+		it.nonceChangeIdx++
+	}
+	it.curTxIdx++
+
+	isMut := len(layerMut.StorageWrites) > 0 || layerMut.Code != nil || layerMut.Nonce != nil || layerMut.Balance != nil
+	return layerMut, isMut
+}
+
+// BALIterator facilitates the txindex ordered iteration of an access list
+// allowing for an access list to be converted into a set of ordered state diffs
+// that correspond to each txindex.
+type BALIterator struct {
+	bal           *BlockAccessList
+	acctIterators map[common.Address]*AccountIterator
+	curIdx        uint16
+	maxIdx        uint16
+}
+
+func NewIterator(b *BlockAccessList, txCount int) *BALIterator {
+	accounts := make(map[common.Address]*AccountIterator)
+	for _, aa := range b.Accesses {
+		accounts[aa.Address] = NewAccountIterator(&aa, txCount)
+	}
+	return &BALIterator{
+		b,
+		accounts,
+		0,
+		uint16(txCount) + 2,
+	}
+}
+
+// Next iterates one transaction into the BAL, returning the state diff from that tx
+func (it *BALIterator) Next() (mutations *StateDiff) {
+	if it.curIdx == it.maxIdx {
+		return nil
+	}
+	diff := StateDiff{Mutations: make(map[common.Address]*AccountState)}
+	for addr, acctIt := range it.acctIterators {
+		acctMut, isMut := acctIt.Increment()
+		if isMut {
+			diff.Mutations[addr] = acctMut
+		}
+	}
+	it.curIdx++
+	return &diff
+}
+
+// BuildStateDiffs returns a set of ordered state diffs from the BAL
+// corresponding to each txIndex.  "until" is specified as the maximum
+// index which will be contained in the result.
+// It returns the aggregated state diff of all layers and a state diff for each layer.
+func BuildStateDiffs(bal *BlockAccessList, txCount int) []*StateDiff {
+	stateDiffs := make([]*StateDiff, txCount+2)
+	for i := 0; i < len(stateDiffs); i++ {
+		stateDiffs[i] = &StateDiff{make(map[common.Address]*AccountState)}
+	}
+
+	for _, accountDiff := range bal.Accesses {
+
+		if len(accountDiff.StorageWrites) > 0 {
+			for _, storageWrites := range accountDiff.StorageWrites {
+				for _, storageWrite := range storageWrites.Accesses {
+					if _, ok := stateDiffs[storageWrite.TxIdx].Mutations[accountDiff.Address]; !ok {
+						stateDiffs[storageWrite.TxIdx].Mutations[accountDiff.Address] = &AccountState{
+							StorageWrites: make(map[common.Hash]common.Hash),
+						}
+					}
+					if _, ok := stateDiffs[storageWrite.TxIdx].Mutations[accountDiff.Address]; !ok {
+						stateDiffs[storageWrite.TxIdx].Mutations[accountDiff.Address] = &AccountState{}
+					}
+					stateDiffs[storageWrite.TxIdx].Mutations[accountDiff.Address].StorageWrites[storageWrites.Slot] = storageWrite.ValueAfter
+				}
+			}
+		}
+
+		if len(accountDiff.BalanceChanges) > 0 {
+			for _, balanceChange := range accountDiff.BalanceChanges {
+				if _, ok := stateDiffs[balanceChange.TxIdx].Mutations[accountDiff.Address]; !ok {
+					stateDiffs[balanceChange.TxIdx].Mutations[accountDiff.Address] = &AccountState{}
+				}
+				var postBalance Balance
+				copy(postBalance[:], balanceChange.Balance[:])
+				stateDiffs[balanceChange.TxIdx].Mutations[accountDiff.Address].Balance = &postBalance
+			}
+		}
+
+		if len(accountDiff.NonceChanges) > 0 {
+			for _, nonceChange := range accountDiff.NonceChanges {
+				if _, ok := stateDiffs[nonceChange.TxIdx].Mutations[accountDiff.Address]; !ok {
+					stateDiffs[nonceChange.TxIdx].Mutations[accountDiff.Address] = &AccountState{}
+				}
+				if _, ok := stateDiffs[nonceChange.TxIdx].Mutations[accountDiff.Address]; !ok {
+					stateDiffs[nonceChange.TxIdx].Mutations[accountDiff.Address] = &AccountState{}
+				}
+
+				newNonce := nonceChange.Nonce
+				stateDiffs[nonceChange.TxIdx].Mutations[accountDiff.Address].Nonce = &newNonce
+			}
+		}
+
+		if len(accountDiff.CodeChanges) > 0 {
+			for _, codeChange := range accountDiff.CodeChanges {
+				if _, ok := stateDiffs[codeChange.TxIndex].Mutations[accountDiff.Address]; !ok {
+					stateDiffs[codeChange.TxIndex].Mutations[accountDiff.Address] = &AccountState{}
+				}
+				// TODO: rename TxIndex -> TxIdx (or vice versa with everything else)
+				if _, ok := stateDiffs[codeChange.TxIndex].Mutations[accountDiff.Address]; !ok {
+					stateDiffs[codeChange.TxIndex].Mutations[accountDiff.Address] = &AccountState{}
+				}
+
+				stateDiffs[codeChange.TxIndex].Mutations[accountDiff.Address].Code = codeChange.Code
+			}
+		}
+	}
+
+	return stateDiffs
 }

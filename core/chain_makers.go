@@ -328,11 +328,11 @@ func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
 		blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
 		evm := vm.NewEVM(blockContext, statedb, b.cm.config, vm.Config{})
 		// EIP-7002
-		if err := ProcessWithdrawalQueue(&requests, evm); err != nil {
+		if _, err := ProcessWithdrawalQueue(&requests, evm); err != nil {
 			panic(fmt.Sprintf("could not process withdrawal requests: %v", err))
 		}
 		// EIP-7251
-		if err := ProcessConsolidationQueue(&requests, evm); err != nil {
+		if _, err := ProcessConsolidationQueue(&requests, evm); err != nil {
 			panic(fmt.Sprintf("could not process consolidation requests: %v", err))
 		}
 	}
