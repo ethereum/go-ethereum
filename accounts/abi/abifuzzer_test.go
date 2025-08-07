@@ -79,7 +79,7 @@ func unpackPack(abi ABI, method string, input []byte) ([]interface{}, bool) {
 
 func packUnpack(abi ABI, method string, input *[]interface{}) bool {
 	if packed, err := abi.Pack(method, input); err == nil {
-		outptr := reflect.New(reflect.TypeFor[*[]interface{}]())
+		outptr := reflect.New(reflect.TypeOf(input))
 		err := abi.UnpackIntoInterface(outptr.Interface(), method, packed)
 		if err != nil {
 			panic(err)
