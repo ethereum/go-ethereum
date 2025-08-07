@@ -153,7 +153,7 @@ func newErc7562Tracer(ctx *tracers.Context, cfg json.RawMessage, _ *params.Chain
 		return nil, err
 	}
 	return &tracers.Tracer{
-		Hooks: &tracing.Hooks{
+		Hooks: tracing.Hooks{
 			OnTxStart: t.OnTxStart,
 			OnOpcode:  t.OnOpcode,
 			OnTxEnd:   t.OnTxEnd,
