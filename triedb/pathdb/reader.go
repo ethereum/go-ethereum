@@ -64,7 +64,14 @@ type reader struct {
 // node info. Don't modify the returned byte slice since it's not deep-copied
 // and still be referenced by database.
 func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
-	blob, got, loc, err := r.layer.node(owner, path, 0)
+	l, err := r.db.tree.lookupNode(owner, string(path), r.state)
+	if err != nil {
+		return nil, err
+	}
+	blob, got, loc, err := l.node(owner, path, 0)
+	if errors.Is(err, errSnapshotStale) {
+		blob, got, loc, err = r.layer.node(owner, path, 0)
+	}
 	if err != nil {
 		return nil, err
 	}
