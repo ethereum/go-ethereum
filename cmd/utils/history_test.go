@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/internal/era"
+	"github.com/ethereum/go-ethereum/internal/era/onedb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -101,7 +101,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	checksums := strings.Split(string(b), "\n")
 
 	// Verify each Era.
-	entries, _ := era.ReadDir(dir, "mainnet")
+	entries, _ := onedb.ReadDir(dir, "mainnet")
 	for i, filename := range entries {
 		func() {
 			f, err := os.Open(filepath.Join(dir, filename))
@@ -118,12 +118,12 @@ func TestHistoryImportAndExport(t *testing.T) {
 			if got, want := common.BytesToHash(h.Sum(buf.Bytes()[:])).Hex(), checksums[i]; got != want {
 				t.Fatalf("checksum %d does not match: got %s, want %s", i, got, want)
 			}
-			e, err := era.From(f)
+			e, err := onedb.From(f)
 			if err != nil {
 				t.Fatalf("error opening era: %v", err)
 			}
 			defer e.Close()
-			it, err := era.NewIterator(e)
+			it, err := onedb.NewIterator(e)
 			if err != nil {
 				t.Fatalf("error making era reader: %v", err)
 			}
