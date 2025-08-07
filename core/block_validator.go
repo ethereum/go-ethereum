@@ -128,8 +128,8 @@ func (v *BlockValidator) ValidateProcessResult(block *types.Block, resCh chan *P
 	header := block.Header()
 
 	res := <-resCh
-	if res.Error != nil {
-		return nil, res.Error
+	if res.ProcessResult.Error != nil {
+		return nil, res.ProcessResult.Error
 	}
 
 	if block.GasUsed() != res.ProcessResult.GasUsed {

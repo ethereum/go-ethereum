@@ -57,7 +57,9 @@ type ProcessResultWithMetrics struct {
 	PostProcessTime time.Duration
 	RootCalcTime    time.Duration
 	ExecTime        time.Duration
-	Error           error
+
+	StateDiffCalcTime   time.Duration // time it took to convert BAL into a set of state diffs
+	TxStateDiffPrepTime time.Duration // time it took to convert state diffs into prestate statedbs for each tx
 }
 
 // Process processes the state changes according to the Ethereum rules by running
@@ -134,11 +136,11 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			return nil, err
 		}
 		// EIP-7002
-		if err := ProcessWithdrawalQueue(&requests, evm); err != nil {
+		if _, err := ProcessWithdrawalQueue(&requests, evm); err != nil {
 			return nil, err
 		}
 		// EIP-7251
-		if err := ProcessConsolidationQueue(&requests, evm); err != nil {
+		if _, err := ProcessConsolidationQueue(&requests, evm); err != nil {
 			return nil, err
 		}
 	}
@@ -154,13 +156,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}, nil
 }
 
-func (p *StateProcessor) calcStateDiffs(evm *vm.EVM, block *types.Block, txPrestate *state.StateDB) (totalDiff *bal.StateDiff, txDiffs []*bal.StateDiff) {
-	prestateDiff := txPrestate.GetStateDiff()
-	// create a number of diffs (one for each worker goroutine)
-	txDiffIt := bal.NewIterator(block.Body().AccessList, len(block.Transactions()))
-	return txDiffIt.BuildStateDiffs(prestateDiff, uint16(len(block.Transactions()))+1)
-}
-
 func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *state.StateDB, cfg vm.Config) (chan *ProcessResultWithMetrics, error) {
 	var (
 		header      = block.Header()
@@ -173,10 +168,9 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	)
 
 	type txExecResult struct {
-		idx        int
-		netGasUsed uint64 // accounts for the net gas used (refunds accounted for)
-		receipt    *types.Receipt
-		err        error
+		idx     int
+		receipt *types.Receipt
+		err     error
 	}
 
 	txResCh := make(chan txExecResult)
@@ -222,6 +216,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 			allLogs = append(allLogs, receipt.Logs...)
 		}
 
+		computedDiff := &bal.StateDiff{make(map[common.Address]*bal.AccountState)}
 		// Read requests if Prague is enabled.
 		if p.config.IsPrague(block.Number(), block.Time()) {
 			requests = [][]byte{}
@@ -233,24 +228,31 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 			}
 
 			// EIP-7002
-			if err := ProcessWithdrawalQueue(&requests, evm); err != nil {
+			diff, err := ProcessWithdrawalQueue(&requests, evm)
+			if err != nil {
 				return &ProcessResult{
 					Error: err,
 				}
 			}
+			computedDiff = diff
 			// EIP-7251
-			if err := ProcessConsolidationQueue(&requests, evm); err != nil {
+			diff, err = ProcessConsolidationQueue(&requests, evm)
+			if err != nil {
 				return &ProcessResult{
 					Error: err,
 				}
 			}
+			computedDiff.Merge(diff)
 		}
 		// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 		p.chain.engine.Finalize(p.chain, header, tracingStateDB, block.Body())
 		// invoke Finalise so that withdrawals are accounted for in the state diff
-		postTxState.Finalise(true)
+		computedDiff.Merge(postTxState.Finalise(true))
 
-		if err := bal.ValidateStateDiff(expectedStateDiff, postTxState.GetStateDiff()); err != nil {
+		// TODO:  at each step, we should only be comparing the "intermediate" state diffs
+		// not the entire state diff up until that point.
+
+		if err := bal.ValidateStateDiff(expectedStateDiff, computedDiff); err != nil {
 			return &ProcessResult{
 				Error: fmt.Errorf("post-transaction-execution state transition produced a different diff that what was reported in the BAL"),
 			}
@@ -377,9 +379,8 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 		}
 
 		txResCh <- txExecResult{
-			idx:        idx,
-			receipt:    receipt,
-			netGasUsed: gp.Gas(),
+			idx:     idx,
+			receipt: receipt,
 		}
 		return
 	}
@@ -405,44 +406,43 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	// * beacon root will be provided as a standalone field in the BAL
 	// * parent block hash is already in the header field of the block
 
-	blockStateDiff, stateDiffs := p.calcStateDiffs(evm, block, statedb)
-	preTxDiff := stateDiffs[0]
+	intermediateStateDiffs := bal.BuildStateDiffs(block.Body().AccessList, len(block.Transactions()))
+	preTxDiff := intermediateStateDiffs[0]
 
+	computedDiff := &bal.StateDiff{make(map[common.Address]*bal.AccountState)}
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
-		ProcessBeaconBlockRoot(*beaconRoot, evm)
+		computedDiff.Merge(ProcessBeaconBlockRoot(*beaconRoot, evm))
 	}
 	if p.config.IsPrague(block.Number(), block.Time()) || p.config.IsVerkle(block.Number(), block.Time()) {
-		ProcessParentBlockHash(block.ParentHash(), evm)
+		computedDiff.Merge(ProcessParentBlockHash(block.ParentHash(), evm))
 	}
 
-	computedDiff := statedb.GetStateDiff()
 	if err := bal.ValidateStateDiff(preTxDiff, computedDiff); err != nil {
 		return nil, err
 	}
-	statedb.Finalise(true)
 
 	var txPrestates []*state.StateDB
 	// Iterate over and process the individual transactions
 	for i := range block.Transactions() {
 		txPrestates = append(txPrestates, statedb.Copy())
-		statedb.ApplyDiff(stateDiffs[i+1])
+		statedb.ApplyDiff(intermediateStateDiffs[i+1])
 		statedb.Finalise(true)
 	}
-	postState := statedb.Copy()
+	postTxState := statedb.Copy()
 
 	tPreprocess = time.Since(pStart)
 
 	tExecStart = time.Now()
 	for i, tx := range block.Transactions() {
-		go execTx(ctx, tx, i, txPrestates[i], stateDiffs[i+1])
+		go execTx(ctx, tx, i, txPrestates[i], intermediateStateDiffs[i+1])
 	}
 
-	go resultHandler(blockStateDiff, postState)
+	go resultHandler(intermediateStateDiffs[len(block.Transactions())+1], postTxState)
 
 	// it's possible that there isn't a post-tx-execution state diff
 	// if there are no withdrawals or consolidations
-	if len(stateDiffs) == len(block.Transactions())+2 {
-		statedb.ApplyDiff(stateDiffs[len(block.Transactions())+1])
+	if len(intermediateStateDiffs) == len(block.Transactions())+2 {
+		statedb.ApplyDiff(intermediateStateDiffs[len(block.Transactions())+1])
 		statedb.Finalise(true)
 	}
 	go calcAndVerifyRoot(statedb, block, rootCalcErrCh)
@@ -533,7 +533,7 @@ func ApplyTransaction(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *
 
 // ProcessBeaconBlockRoot applies the EIP-4788 system call to the beacon block root
 // contract. This method is exported to be used in tests.
-func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM) {
+func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM) *bal.StateDiff {
 	if tracer := evm.Config.Tracer; tracer != nil {
 		onSystemCallStart(tracer, evm.GetVMContext())
 		if tracer.OnSystemCallEnd != nil {
@@ -552,12 +552,12 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM) {
 	evm.SetTxContext(NewEVMTxContext(msg))
 	evm.StateDB.AddAddressToAccessList(params.BeaconRootsAddress)
 	_, _, _ = evm.Call(msg.From, *msg.To, msg.Data, 30_000_000, common.U2560)
-	evm.StateDB.Finalise(true)
+	return evm.StateDB.Finalise(true)
 }
 
 // ProcessParentBlockHash stores the parent block hash in the history storage contract
 // as per EIP-2935/7709.
-func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) {
+func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) *bal.StateDiff {
 	if tracer := evm.Config.Tracer; tracer != nil {
 		onSystemCallStart(tracer, evm.GetVMContext())
 		if tracer.OnSystemCallEnd != nil {
@@ -582,22 +582,22 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) {
 	if evm.StateDB.AccessEvents() != nil {
 		evm.StateDB.AccessEvents().Merge(evm.AccessEvents)
 	}
-	evm.StateDB.Finalise(true)
+	return evm.StateDB.Finalise(true)
 }
 
 // ProcessWithdrawalQueue calls the EIP-7002 withdrawal queue contract.
 // It returns the opaque request data returned by the contract.
-func ProcessWithdrawalQueue(requests *[][]byte, evm *vm.EVM) error {
+func ProcessWithdrawalQueue(requests *[][]byte, evm *vm.EVM) (*bal.StateDiff, error) {
 	return processRequestsSystemCall(requests, evm, 0x01, params.WithdrawalQueueAddress)
 }
 
 // ProcessConsolidationQueue calls the EIP-7251 consolidation queue contract.
 // It returns the opaque request data returned by the contract.
-func ProcessConsolidationQueue(requests *[][]byte, evm *vm.EVM) error {
+func ProcessConsolidationQueue(requests *[][]byte, evm *vm.EVM) (*bal.StateDiff, error) {
 	return processRequestsSystemCall(requests, evm, 0x02, params.ConsolidationQueueAddress)
 }
 
-func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte, addr common.Address) error {
+func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte, addr common.Address) (*bal.StateDiff, error) {
 	if tracer := evm.Config.Tracer; tracer != nil {
 		onSystemCallStart(tracer, evm.GetVMContext())
 		if tracer.OnSystemCallEnd != nil {
@@ -615,19 +615,19 @@ func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte
 	evm.SetTxContext(NewEVMTxContext(msg))
 	evm.StateDB.AddAddressToAccessList(addr)
 	ret, _, err := evm.Call(msg.From, *msg.To, msg.Data, 30_000_000, common.U2560)
-	evm.StateDB.Finalise(true)
+	diff := evm.StateDB.Finalise(true)
 	if err != nil {
-		return fmt.Errorf("system call failed to execute: %v", err)
+		return nil, fmt.Errorf("system call failed to execute: %v", err)
 	}
 	if len(ret) == 0 {
-		return nil // skip empty output
+		return diff, nil // skip empty output
 	}
 	// Append prefixed requestsData to the requests list.
 	requestsData := make([]byte, len(ret)+1)
 	requestsData[0] = requestType
 	copy(requestsData[1:], ret)
 	*requests = append(*requests, requestsData)
-	return nil
+	return diff, nil
 }
 
 var depositTopic = common.HexToHash("0x649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c5")

@@ -20,7 +20,11 @@ import (
 	"bytes"
 	"cmp"
 	"encoding/json"
-	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"io"
+	"log"
+	"math"
+	"os"
 	"reflect"
 	"slices"
 	"testing"
@@ -295,6 +299,7 @@ func TestBALIteration(t *testing.T) {
 	}
 }
 
+/*
 func TestBALStateDiffAccumulation(t *testing.T) {
 	cBAL := makeTestConstructionBAL()
 	bal := cBAL.ToEncodingObj()
@@ -305,4 +310,40 @@ func TestBALStateDiffAccumulation(t *testing.T) {
 	encoder := json.NewEncoder(&res)
 	encoder.Encode(diff)
 	fmt.Println(res.String())
+}
+*/
+
+func BenchmarkBALIteration(b *testing.B) {
+	// Specify the file path
+	filePath := "bal.rlp.hex"
+
+	// Open the file
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Fatalf("failed to open file: %v", err)
+	}
+	defer file.Close()
+
+	// Read the file into a []byte
+	data, err := io.ReadAll(file)
+	if err != nil {
+		log.Fatalf("failed to read file: %v", err)
+	}
+
+	// Print the file contents
+	dataBytes, err := hexutil.Decode("0x" + string(data[:len(data)-1]))
+	if err != nil {
+		b.Fatalf("failed to decode hex: %v\n", err)
+	}
+
+	var al BlockAccessList
+	err = al.DecodeRLP(rlp.NewStream(bytes.NewBuffer(dataBytes), math.MaxUint64))
+	if err != nil {
+		b.Fatalf("crap: %v\n", err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Tx count is 326
+		BuildStateDiffs(&al, 326)
+	}
 }

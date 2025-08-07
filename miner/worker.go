@@ -149,11 +149,11 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 			return &newPayloadResult{err: err}
 		}
 		// EIP-7002
-		if err := core.ProcessWithdrawalQueue(&requests, work.evm); err != nil {
+		if _, err := core.ProcessWithdrawalQueue(&requests, work.evm); err != nil {
 			return &newPayloadResult{err: err}
 		}
 		// EIP-7251 consolidations
-		if err := core.ProcessConsolidationQueue(&requests, work.evm); err != nil {
+		if _, err := core.ProcessConsolidationQueue(&requests, work.evm); err != nil {
 			return &newPayloadResult{err: err}
 		}
 	}

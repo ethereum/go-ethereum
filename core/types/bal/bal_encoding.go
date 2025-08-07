@@ -94,6 +94,7 @@ func encodeBalance(val *uint256.Int) [16]byte {
 	return enc
 }
 
+// TODO: if we don't go with SSZ, this can be a variable-sized byte array
 type Balance [16]byte
 
 func (b Balance) MarshalJSON() ([]byte, error) {
@@ -484,12 +485,7 @@ func (s *StateDiff) Merge(next *StateDiff) {
 				mut.Nonce = diff.Nonce
 			}
 			if len(diff.StorageWrites) > 0 {
-				if mut.StorageWrites == nil {
-					mut.StorageWrites = make(map[common.Hash]common.Hash)
-				}
-				for slot, val := range diff.StorageWrites {
-					mut.StorageWrites[slot] = val
-				}
+				mut.StorageWrites = maps.Clone(diff.StorageWrites)
 			}
 		} else {
 			s.Mutations[account] = diff
@@ -628,33 +624,69 @@ func (it *BALIterator) Next() (mutations *StateDiff) {
 // corresponding to each txIndex.  "until" is specified as the maximum
 // index which will be contained in the result.
 // It returns the aggregated state diff of all layers and a state diff for each layer.
-func (it *BALIterator) BuildStateDiffs(initialDiff *StateDiff, until uint16) (*StateDiff, []*StateDiff) {
-	if until < it.curIdx {
-		return nil, nil
+func BuildStateDiffs(bal *BlockAccessList, txCount int) []*StateDiff {
+	stateDiffs := make([]*StateDiff, txCount+2)
+	for i := 0; i < len(stateDiffs); i++ {
+		stateDiffs[i] = &StateDiff{make(map[common.Address]*AccountState)}
 	}
 
-	var resDiffs []*StateDiff
-	var accumDiff *StateDiff
+	for _, accountDiff := range bal.Accesses {
 
-	if initialDiff != nil {
-		accumDiff = initialDiff
-	}
-
-	for ; it.curIdx <= until; it.curIdx++ {
-		// update accumDiff based on the BAL
-
-		layerMutations := StateDiff{
-			make(map[common.Address]*AccountState),
-		}
-		for addr, acctIt := range it.acctIterators {
-			if diff, mut := acctIt.Increment(); mut {
-				layerMutations.Mutations[addr] = diff.Copy()
+		if len(accountDiff.StorageWrites) > 0 {
+			for _, storageWrites := range accountDiff.StorageWrites {
+				for _, storageWrite := range storageWrites.Accesses {
+					if _, ok := stateDiffs[storageWrite.TxIdx].Mutations[accountDiff.Address]; !ok {
+						stateDiffs[storageWrite.TxIdx].Mutations[accountDiff.Address] = &AccountState{
+							StorageWrites: make(map[common.Hash]common.Hash),
+						}
+					}
+					if _, ok := stateDiffs[storageWrite.TxIdx].Mutations[accountDiff.Address]; !ok {
+						stateDiffs[storageWrite.TxIdx].Mutations[accountDiff.Address] = &AccountState{}
+					}
+					stateDiffs[storageWrite.TxIdx].Mutations[accountDiff.Address].StorageWrites[storageWrites.Slot] = storageWrite.ValueAfter
+				}
 			}
 		}
 
-		resDiffs = append(resDiffs, &layerMutations)
-		accumDiff.Merge(layerMutations.Copy())
+		if len(accountDiff.BalanceChanges) > 0 {
+			for _, balanceChange := range accountDiff.BalanceChanges {
+				if _, ok := stateDiffs[balanceChange.TxIdx].Mutations[accountDiff.Address]; !ok {
+					stateDiffs[balanceChange.TxIdx].Mutations[accountDiff.Address] = &AccountState{}
+				}
+				var postBalance Balance
+				copy(postBalance[:], balanceChange.Balance[:])
+				stateDiffs[balanceChange.TxIdx].Mutations[accountDiff.Address].Balance = &postBalance
+			}
+		}
+
+		if len(accountDiff.NonceChanges) > 0 {
+			for _, nonceChange := range accountDiff.NonceChanges {
+				if _, ok := stateDiffs[nonceChange.TxIdx].Mutations[accountDiff.Address]; !ok {
+					stateDiffs[nonceChange.TxIdx].Mutations[accountDiff.Address] = &AccountState{}
+				}
+				if _, ok := stateDiffs[nonceChange.TxIdx].Mutations[accountDiff.Address]; !ok {
+					stateDiffs[nonceChange.TxIdx].Mutations[accountDiff.Address] = &AccountState{}
+				}
+
+				newNonce := nonceChange.Nonce
+				stateDiffs[nonceChange.TxIdx].Mutations[accountDiff.Address].Nonce = &newNonce
+			}
+		}
+
+		if len(accountDiff.CodeChanges) > 0 {
+			for _, codeChange := range accountDiff.CodeChanges {
+				if _, ok := stateDiffs[codeChange.TxIndex].Mutations[accountDiff.Address]; !ok {
+					stateDiffs[codeChange.TxIndex].Mutations[accountDiff.Address] = &AccountState{}
+				}
+				// TODO: rename TxIndex -> TxIdx (or vice versa with everything else)
+				if _, ok := stateDiffs[codeChange.TxIndex].Mutations[accountDiff.Address]; !ok {
+					stateDiffs[codeChange.TxIndex].Mutations[accountDiff.Address] = &AccountState{}
+				}
+
+				stateDiffs[codeChange.TxIndex].Mutations[accountDiff.Address].Code = codeChange.Code
+			}
+		}
 	}
 
-	return accumDiff, resDiffs
+	return stateDiffs
 }

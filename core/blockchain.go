@@ -2171,6 +2171,10 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		txExecutionTimer.Update(resWithMetrics.ExecTime)
 		stateRootCalctimer.Update(resWithMetrics.RootCalcTime)
 		blockPostprocessingTimer.Update(resWithMetrics.PostProcessTime)
+
+		accountUpdateTimer.Update(statedb.AccountUpdates)
+		storageUpdateTimer.Update(statedb.StorageUpdates)
+		accountHashTimer.Update(statedb.AccountHashes)
 	} else {
 		xvtime := time.Since(xvstart)
 		proctime = time.Since(startTime) // processing + validation + cross validation

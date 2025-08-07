@@ -249,7 +249,7 @@ func (s *stateObject) setState(key common.Hash, value common.Hash, origin common
 // committed later. It is invoked at the end of every transaction.
 func (s *stateObject) finalise() *bal.AccountState {
 	var accountPost bal.AccountState
-	if s.db.diff != nil {
+	if s.db.enableStateDiffRecording {
 		if s.Balance().Cmp(s.txPreBalance) != 0 {
 			if s.db.constructionBAL != nil {
 				s.db.constructionBAL.BalanceChange(uint16(s.db.balIndex), s.address, s.Balance())
@@ -285,7 +285,7 @@ func (s *stateObject) finalise() *bal.AccountState {
 			delete(s.uncommittedStorage, key)
 
 			// TODO: ensure that we should record the diff here: i.e. this storage slot had a different val at the start of the transaction
-			if s.db.diff != nil {
+			if s.db.enableStateDiffRecording {
 				if s.db.constructionBAL != nil {
 					s.db.BlockAccessList().StorageWrite(uint16(s.db.balIndex), s.address, key, value)
 				}
@@ -297,7 +297,7 @@ func (s *stateObject) finalise() *bal.AccountState {
 		} else if exist {
 			// The slot is modified to another value and the slot has been
 			// tracked for commit in uncommittedStorage.
-			if s.db.diff != nil {
+			if s.db.enableStateDiffRecording {
 				if s.db.constructionBAL != nil {
 					s.db.BlockAccessList().StorageWrite(uint16(s.db.balIndex), s.address, key, value)
 				}
@@ -311,7 +311,7 @@ func (s *stateObject) finalise() *bal.AccountState {
 			// tracked for commit yet.
 			s.uncommittedStorage[key] = s.GetCommittedState(key)
 			slotsToPrefetch = append(slotsToPrefetch, key) // Copy needed for closure
-			if s.db.diff != nil {
+			if s.db.enableStateDiffRecording {
 				if s.db.constructionBAL != nil {
 					s.db.BlockAccessList().StorageWrite(uint16(s.db.balIndex), s.address, key, value)
 				}

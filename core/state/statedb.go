@@ -151,8 +151,7 @@ type StateDB struct {
 	// block access list, if bal construction is specified
 	constructionBAL *bal.ConstructionBlockAccessList
 
-	// all accumulated state changes
-	diff *bal.StateDiff
+	enableStateDiffRecording bool // if true, calls to Finalise will return the mutated state
 
 	// Measurements gathered during execution for debugging purposes
 	AccountReads    time.Duration
@@ -221,15 +220,7 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 // which are accumulated at each call to Finalise and can be retrieved
 // using GetStateDiff.
 func (s *StateDB) EnableStateDiffRecording() {
-	if s.diff == nil {
-		s.diff = &bal.StateDiff{Mutations: make(map[common.Address]*bal.AccountState)}
-	}
-}
-
-// GetStateDiff returns all accumulated state changes, or nil if state diff
-// recording has not been enabled
-func (s *StateDB) GetStateDiff() *bal.StateDiff {
-	return s.diff.Copy()
+	s.enableStateDiffRecording = true
 }
 
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
@@ -677,9 +668,6 @@ func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
 		obj = s.createObject(addr)
 	}
 
-	if s.constructionBAL != nil && addr != params.SystemAddress {
-		s.constructionBAL.AccountRead(addr)
-	}
 	return obj
 }
 
@@ -732,6 +720,8 @@ func (s *StateDB) Copy() *StateDB {
 		logSize:              s.logSize,
 		preimages:            maps.Clone(s.preimages),
 
+		enableStateDiffRecording: s.enableStateDiffRecording,
+
 		// Do we need to copy the access list and transient storage?
 		// In practice: No. At the start of a transaction, these two lists are empty.
 		// In practice, we only ever copy state _between_ transactions/blocks, never
@@ -741,9 +731,6 @@ func (s *StateDB) Copy() *StateDB {
 		accessList:       s.accessList.Copy(),
 		transientStorage: s.transientStorage.Copy(),
 		journal:          s.journal.copy(),
-	}
-	if s.diff != nil {
-		state.diff = s.diff.Copy()
 	}
 	if s.trie != nil {
 		state.trie = mustCopyTrie(s.trie)
@@ -819,6 +806,9 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) (diff *bal.StateDiff) {
 				// TODO: need to ensure that we aren't recording accounts in the state diff/BAL which were created/selfdestructed in the same transaction.
 				// It should be as easy as modifying the check above to not include selfdestructed contracts.  However, doing this causes some blockchain tests
 				// to fail and I'm not sure why.
+				//
+				// TODO: the coinbase can be touched and then become empty here: see BlockchainBAL/GeneralStateTests/stExample/solidityExample.json/solidityExample_d0g0v0_Cancun
+				// ^ coinbase probably shouldn't be in the BAL/statediff in this case.
 				if s.constructionBAL != nil {
 					s.constructionBAL.BalanceChange(uint16(s.balIndex), obj.address, uint256.NewInt(0))
 				}
@@ -838,7 +828,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) (diff *bal.StateDiff) {
 		} else {
 			accountPost := obj.finalise()
 
-			if s.diff != nil && (accountPost.Nonce != nil || accountPost.Code != nil || accountPost.StorageWrites != nil || accountPost.Balance != nil) {
+			if s.enableStateDiffRecording && (accountPost.Nonce != nil || accountPost.Code != nil || accountPost.StorageWrites != nil || accountPost.Balance != nil) {
 				// the account executed SENDALL but did not send a balance, don't include it in the diff
 				// TODO: probably shouldn't include the account in the dirty set in this case
 				diff.Mutations[obj.address] = accountPost
@@ -857,10 +847,6 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) (diff *bal.StateDiff) {
 	}
 	// Invalidate journal because reverting across transactions is not allowed.
 	s.clearJournalAndRefund()
-
-	if s.diff != nil {
-		s.diff.Merge(diff)
-	}
 
 	return diff
 }
