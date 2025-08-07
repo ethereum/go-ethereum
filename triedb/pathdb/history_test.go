@@ -100,12 +100,6 @@ func testEncodeDecodeHistory(t *testing.T, rawStorageKey bool) {
 	if !compareStorages(dec.storages, obj.storages) {
 		t.Fatal("storage data is mismatched")
 	}
-	if !compareList(dec.accountList, obj.accountList) {
-		t.Fatal("account list is mismatched")
-	}
-	if !compareStorageList(dec.storageList, obj.storageList) {
-		t.Fatal("storage list is mismatched")
-	}
 }
 
 func checkHistory(t *testing.T, db ethdb.KeyValueReader, freezer ethdb.AncientReader, id uint64, root common.Hash, exist bool) {
@@ -290,18 +284,6 @@ func compareSet[k comparable](a, b map[k][]byte) bool {
 	return true
 }
 
-func compareList[k comparable](a, b []k) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
 func compareStorages(a, b map[common.Address]map[common.Hash][]byte) bool {
 	if len(a) != len(b) {
 		return false
@@ -312,22 +294,6 @@ func compareStorages(a, b map[common.Address]map[common.Hash][]byte) bool {
 			return false
 		}
 		if !compareSet(subA, subB) {
-			return false
-		}
-	}
-	return true
-}
-
-func compareStorageList(a, b map[common.Address][]common.Hash) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for h, la := range a {
-		lb, ok := b[h]
-		if !ok {
-			return false
-		}
-		if !compareList(la, lb) {
 			return false
 		}
 	}
