@@ -623,6 +623,19 @@ func (t *Trie) resolveAndTrack(n hashNode, prefix []byte) (node, error) {
 	return decodeNodeUnsafe(n, blob)
 }
 
+// resolveWithoutTrack loads node from the underlying store with the given node hash
+// and path prefix.
+func (t *Trie) resolveWithoutTrack(n node, prefix []byte) (node, error) {
+	if n, ok := n.(hashNode); ok {
+		blob, err := t.reader.node(prefix, common.BytesToHash(n))
+		if err != nil {
+			return nil, err
+		}
+		return mustDecodeNode(n, blob), nil
+	}
+	return n, nil
+}
+
 // Hash returns the root hash of the trie. It does not write to the
 // database and can be used even if the trie doesn't have one.
 func (t *Trie) Hash() common.Hash {
