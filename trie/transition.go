@@ -86,9 +86,6 @@ func (t *TransitionTrie) GetAccount(address common.Address) (*types.StateAccount
 		return nil, err
 	}
 	if data != nil {
-		if t.overlay.db.HasStorageRootConversion(address) {
-			data.Root = t.overlay.db.StorageRootConversion(address)
-		}
 		return data, nil
 	}
 	return t.base.GetAccount(address)
@@ -112,9 +109,9 @@ func (t *TransitionTrie) UpdateStorage(address common.Address, key []byte, value
 
 // UpdateAccount abstract an account write to the trie.
 func (t *TransitionTrie) UpdateAccount(addr common.Address, account *types.StateAccount, codeLen int) error {
-	if account.Root != (common.Hash{}) && account.Root != types.EmptyRootHash {
-		t.overlay.db.SetStorageRootConversion(addr, account.Root)
-	}
+	// NOTE: before the rebase, this was saving the state root, so that OpenStorageTrie
+	// could still work during a replay. This is no longer needed, as OpenStorageTrie
+	// only needs to know what the account trie does now.
 	return t.overlay.UpdateAccount(addr, account, codeLen)
 }
 
@@ -194,4 +191,9 @@ func (t *TransitionTrie) Copy() *TransitionTrie {
 
 func (t *TransitionTrie) UpdateContractCode(addr common.Address, codeHash common.Hash, code []byte) error {
 	return t.overlay.UpdateContractCode(addr, codeHash, code)
+}
+
+// Witness returns a set containing all trie nodes that have been accessed.
+func (t *TransitionTrie) Witness() map[string]struct{} {
+	panic("not implemented")
 }
