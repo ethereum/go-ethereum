@@ -60,6 +60,9 @@ func (w *WrappedA0giBasePrecompile) Address() common.Address {
 
 // RequiredGas implements vm.PrecompiledContract.
 func (w *WrappedA0giBasePrecompile) RequiredGas(input []byte) uint64 {
+	if len(input) < 4 {
+		return WrappedA0GIBaseRequiredGasMax
+	}
 	method, err := w.abi.MethodById(input[:4])
 	if err != nil {
 		return WrappedA0GIBaseRequiredGasMax
