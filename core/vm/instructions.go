@@ -1003,9 +1003,9 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 }
 
 // make dup instruction function
-func makeDup(size int64) executionFunc {
+func makeDup(size int) executionFunc {
 	return func(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-		scope.Stack.dup(int(size))
+		scope.Stack.dup(size)
 		return nil, nil
 	}
 }
