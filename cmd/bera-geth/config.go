@@ -131,7 +131,13 @@ func defaultNodeConfig() node.Config {
 	git, _ := version.VCS()
 	cfg := node.DefaultConfig
 	cfg.Name = clientIdentifier
-	cfg.Version = version.WithCommit(git.Commit, git.Date)
+	// Prefer git tag for the advertised version (used in web3_clientVersion),
+	// trimming any leading 'v' because NodeName adds the 'v' prefix itself.
+	ver := version.WithMeta
+	if git.Tag != "" {
+		ver = strings.TrimPrefix(git.Tag, "v")
+	}
+	cfg.Version = ver
 	cfg.HTTPModules = append(cfg.HTTPModules, "eth")
 	cfg.WSModules = append(cfg.WSModules, "eth")
 	cfg.IPCPath = clientIdentifier + ".ipc"

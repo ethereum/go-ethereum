@@ -6,6 +6,11 @@ ARG BUILDNUM=""
 # Build Geth in a stock Go builder container
 FROM golang:1.24-alpine AS builder
 
+# These build arguments need to be redeclared in the builder stage
+ARG COMMIT
+ARG VERSION
+ARG BUILDNUM
+
 RUN apk add --no-cache gcc musl-dev linux-headers git
 
 # Get dependencies - will also be cached if we won't change go.mod/go.sum
@@ -14,7 +19,14 @@ COPY go.sum /bera-geth/
 RUN cd /bera-geth && go mod download
 
 ADD . /bera-geth
-RUN cd /bera-geth && go run build/ci.go install -static ./cmd/bera-geth
+# Pass git information to the build process
+# When VERSION is provided (e.g., from CI), use it as the git tag
+RUN cd /bera-geth && \
+    if [ -n "$VERSION" ]; then \
+        go run build/ci.go install -static -git-tag="$VERSION" -git-commit="$COMMIT" ./cmd/bera-geth; \
+    else \
+        go run build/ci.go install -static ./cmd/bera-geth; \
+    fi
 
 # Pull Geth into a second stage deploy alpine container
 FROM alpine:latest

@@ -24,6 +24,7 @@ import (
 	"math"
 	"math/big"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -357,13 +358,21 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 func makeExtraData(extra []byte) []byte {
 	if len(extra) == 0 {
-		// create default extradata in ASCII format similar to reth
-		// Format: "bera-geth/vX.Y.Z/platform"
+		// Create default extradata in ASCII format similar to reth
+		// Desired format examples:
+		// - bera-geth/v1.011602.0-rc5/linux when tag exists
+		// - bera-geth/v<with-meta>/linux as fallback
 		tag := version.WithMeta
 		if vcs, ok := version.VCS(); ok && vcs.Tag != "" {
+			// Use tag as-is here because the desired extradata includes the leading 'v'
 			tag = vcs.Tag
 		}
-		versionStr := fmt.Sprintf("bera-geth/v%s/%s", tag, runtime.GOOS)
+		versionStr := fmt.Sprintf("bera-geth/%s/%s", func() string {
+			if strings.HasPrefix(tag, "v") {
+				return tag
+			}
+			return "v" + tag
+		}(), runtime.GOOS)
 		extra = []byte(versionStr)
 	}
 	if uint64(len(extra)) > params.MaximumExtraDataSize {

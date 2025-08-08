@@ -19,7 +19,10 @@ jobs:
 
   linux-intel:
     name: Linux Build (intel)
+    needs: [extract-version]
     runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.extract-version.outputs.VERSION }}
     steps:
     - uses: actions/checkout@v4
 
@@ -36,7 +39,7 @@ jobs:
 
     - name: Build (amd64)
       run: |
-        go run build/ci.go install -static -arch amd64 -dlgo
+        go run build/ci.go install -static -arch amd64 -dlgo -git-tag="${{ env.VERSION }}"
 
     - name: Create archive (amd64)
       run: |
@@ -57,7 +60,10 @@ jobs:
 
   linux-arm:
     name: Linux Build (arm)
+    needs: [extract-version]
     runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.extract-version.outputs.VERSION }}
     steps:
     - uses: actions/checkout@v4
 
@@ -75,7 +81,7 @@ jobs:
 
     - name: Build (arm64)
       run: |
-        go run build/ci.go install -static -dlgo -arch arm64 -cc aarch64-linux-gnu-gcc
+        go run build/ci.go install -static -dlgo -arch arm64 -cc aarch64-linux-gnu-gcc -git-tag="${{ env.VERSION }}"
 
     - name: Create archive (arm64)
       run: |

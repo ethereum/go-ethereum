@@ -69,9 +69,15 @@ func Archive(tag, gitCommit string) string {
 // conventions in the Ethereum p2p network.
 func ClientName(clientIdentifier string) string {
 	git, _ := VCS()
+	// Compose version for client name: prefer git tag (without leading 'v'),
+	// otherwise fall back to WithCommit (which includes meta/commit/date if needed).
+	ver := WithCommit(git.Commit, git.Date)
+	if git.Tag != "" {
+		ver = strings.TrimPrefix(git.Tag, "v")
+	}
 	return fmt.Sprintf("%s/v%v/%v-%v/%v",
 		strings.Title(clientIdentifier),
-		WithCommit(git.Commit, git.Date),
+		ver,
 		runtime.GOOS, runtime.GOARCH,
 		runtime.Version(),
 	)

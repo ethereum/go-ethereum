@@ -705,9 +705,14 @@ func doDockerBuildx(cmdline []string) {
 		{file: "Dockerfile.alltools", base: fmt.Sprintf("%s:alltools-", *hubImage)},
 	} {
 		gethImage := fmt.Sprintf("%s%s", spec.base, tag)
+		// Prefer tag when present for VERSION
+		dockerVersion := version.WithMeta
+		if env.Tag != "" {
+			dockerVersion = env.Tag
+		}
 		cmd := exec.Command("docker", "buildx", "build",
 			"--build-arg", "COMMIT="+env.Commit,
-			"--build-arg", "VERSION="+version.WithMeta,
+			"--build-arg", "VERSION="+dockerVersion,
 			"--build-arg", "BUILDNUM="+env.Buildnum,
 			"--tag", gethImage,
 			"--platform", *platform,
