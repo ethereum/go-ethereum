@@ -1005,7 +1005,7 @@ func newFrontierInstructionSet() JumpTable {
 			maxStack:    maxSwapStack(17),
 		},
 		LOG0: {
-			execute:    makeLog(0),
+			execute:    opLog0,
 			dynamicGas: makeGasLog(0),
 			minStack:   minStack(2, 0),
 			maxStack:   maxStack(2, 0),

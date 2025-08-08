@@ -920,6 +920,26 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 	return nil, errStopToken
 }
 
+func opLog0(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	if evm.readOnly {
+		return nil, ErrWriteProtection
+	}
+	stack := scope.Stack
+	mStart, mSize := stack.pop(), stack.pop()
+
+	d := scope.Memory.GetCopy(mStart.Uint64(), mSize.Uint64())
+	evm.StateDB.AddLog(&types.Log{
+		Address: scope.Contract.Address(),
+		Topics:  nil,
+		Data:    d,
+		// This is a non-consensus field, but assigned here because
+		// core/state doesn't know the current block number.
+		BlockNumber: evm.Context.BlockNumber.Uint64(),
+	})
+
+	return nil, nil
+}
+
 // following functions are used by the instruction jump  table
 
 // make log instruction function
