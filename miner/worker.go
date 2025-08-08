@@ -168,7 +168,7 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 	}
 	return &newPayloadResult{
 		block:    block,
-		fees:     totalFees(block, work.receipts),
+		fees:     totalFees(miner.chainConfig, block, work.receipts),
 		sidecars: work.sidecars,
 		stateDB:  work.state,
 		receipts: work.receipts,
@@ -538,12 +538,25 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 }
 
 // totalFees computes total consumed miner fees in Wei. Block transactions and receipts have to have the same order.
-func totalFees(block *types.Block, receipts []*types.Receipt) *big.Int {
+func totalFees(chainConfig *params.ChainConfig, block *types.Block, receipts []*types.Receipt) *big.Int {
 	feesWei := new(big.Int)
+	var blobBaseFee *big.Int
+	if block.BlobGasUsed() != nil && block.ExcessBlobGas() != nil {
+		blobBaseFee = eip4844.CalcBlobFee(chainConfig, block.Header())
+	}
+
 	for i, tx := range block.Transactions() {
 		minerFee, _ := tx.EffectiveGasTip(block.BaseFee())
 		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
-		// TODO (MariusVanDerWijden) add blob fees
+
+		// Add blob fees for blob transactions (EIP-4844)
+		if tx.Type() == types.BlobTxType {
+			blobGasUsed := receipts[i].BlobGasUsed
+			if blobGasUsed > 0 && blobBaseFee != nil {
+				blobFees := new(big.Int).Mul(new(big.Int).SetUint64(blobGasUsed), blobBaseFee)
+				feesWei.Add(feesWei, blobFees)
+			}
+		}
 	}
 	return feesWei
 }
