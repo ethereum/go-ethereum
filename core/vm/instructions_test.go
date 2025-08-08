@@ -559,6 +559,29 @@ func BenchmarkOpMstore(bench *testing.B) {
 	}
 }
 
+func BenchmarkOpLog0(bench *testing.B) {
+	var (
+		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		evm        = NewEVM(BlockContext{BlockNumber: big1}, statedb, params.TestChainConfig, Config{})
+		stack      = newstack()
+		mem        = NewMemory()
+		caller     = common.Address{}
+		to         = common.Address{1}
+		contract   = NewContract(caller, to, new(uint256.Int), 0, nil)
+	)
+	mem.Resize(64)
+	pc := uint64(0)
+	memStart := new(uint256.Int)
+	size := new(uint256.Int).SetUint64(64)
+
+	bench.ResetTimer()
+	for i := 0; i < bench.N; i++ {
+		stack.push(size)
+		stack.push(memStart)
+		_, _ = opLog0(&pc, evm, &ScopeContext{mem, stack, contract})
+	}
+}
+
 func TestOpTstore(t *testing.T) {
 	var (
 		statedb, _   = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
