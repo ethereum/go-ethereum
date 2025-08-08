@@ -205,7 +205,7 @@ func TestServerBatchResponseSizeLimit(t *testing.T) {
 	}
 }
 
-func TestServerSetReadLimits(t *testing.T) {
+func TestServerWebsocketReadLimit(t *testing.T) {
 	t.Parallel()
 
 	// Test different read limits
@@ -233,7 +233,7 @@ func TestServerSetReadLimits(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create server and set read limits
 			srv := newTestServer()
-			srv.SetReadLimits(tc.readLimit)
+			srv.SetWebsocketReadLimit(tc.readLimit)
 			defer srv.Stop()
 
 			// Start HTTP server with WebSocket handler
@@ -276,25 +276,5 @@ func TestServerSetReadLimits(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-// Test that SetReadLimits properly updates the server's readerLimit field
-func TestServerSetReadLimitsField(t *testing.T) {
-	server := NewServer()
-
-	// Test initial default value
-	if server.readLimit != wsDefaultReadLimit {
-		t.Errorf("expected initial readerLimit to be %d, got %d", wsDefaultReadLimit, server.readLimit)
-	}
-
-	// Test setting different values
-	testValues := []int64{1024, 10240, 102400, 1048576}
-
-	for _, expectedLimit := range testValues {
-		server.SetReadLimits(expectedLimit)
-		if server.readLimit != expectedLimit {
-			t.Errorf("expected readerLimit to be %d after SetReadLimits, got %d", expectedLimit, server.readLimit)
-		}
 	}
 }
