@@ -108,8 +108,6 @@ var (
 	blockPrefetchTxsInvalidMeter = metrics.NewRegisteredMeter("chain/prefetch/txs/invalid", nil)
 	blockPrefetchTxsValidMeter   = metrics.NewRegisteredMeter("chain/prefetch/txs/valid", nil)
 
-	mgaspsHist = metrics.NewRegisteredHistogram("chain/execution/mgasps", nil, metrics.NewUniformSample(2000))
-
 	errInsertionInterrupted = errors.New("insertion is interrupted")
 	errChainStopped         = errors.New("blockchain is stopped")
 	errInvalidOldChain      = errors.New("invalid old chain")
@@ -1712,7 +1710,8 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	}
 	defer bc.chainmu.Unlock()
 
-	_, n, err := bc.insertChain(chain, true, false) // No witness collection for mass inserts (would get super large)
+	// _, n, err := bc.insertChain(chain, true, false) // No witness collection for mass inserts (would get super large)
+	_, n, err := bc.insertChainN(chain, true, false)
 	return n, err
 }
 
@@ -1946,6 +1945,9 @@ type blockProcessingResult struct {
 	procTime time.Duration
 	status   WriteStatus
 	witness  *stateless.Witness
+	// For merged N-blocks
+	receipts types.Receipts
+	logs     []*types.Log
 }
 
 // processBlock executes and validates the given block. If there was no error

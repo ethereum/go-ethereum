@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/big"
 	"runtime"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -17,11 +16,9 @@ import (
 )
 
 var (
-	PrefetchBALTime      = time.Duration(0)
-	PrefetchMergeBALTime = time.Duration(0)
 	ParallelExeTime      = time.Duration(0)
-	PostMergeTime        = time.Duration(0)
-	PrefetchTrieTimer    = time.Duration(0)
+	PrefetchMergeBALTime = time.Duration(0)
+	EmptyStatedb         = state.NewEmptyDB()
 )
 
 type ParallelStateProcessor struct {
@@ -43,10 +40,8 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		context   vm.BlockContext
 		gp        = new(GasPool).AddGas(block.GasLimit())
 		signer    = types.MakeSigner(p.config, header.Number, header.Time)
-		initialdb = statedb.Copy()
-		postState *state.StateDB
+		initialdb = EmptyStatedb
 
-		wg     sync.WaitGroup
 		result *ProcessResult
 		err    error
 	)
@@ -56,14 +51,9 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		misc.ApplyDAOHardFork(statedb)
 	}
 
-	if preStateType == BALPreState {
-		// copy initialdb before PrefetchStateBAL to avoid redundant copy
-		start := time.Now()
-		// Must prefetch bal before syscall to avoid overriding syscall's state, thus merkle root might mismatch
-		statedb.PrefetchStateBAL(block.NumberU64())
-		// statedb.SetBlocknumber(block.NumberU64())
-		PrefetchBALTime += time.Since(start)
-	}
+	preCalPostStart := time.Now()
+	statedb.PreComputePostState(block.NumberU64(), runtime.NumCPU()/2)
+	PrefetchMergeBALTime += time.Since(preCalPostStart)
 
 	// Apply pre-execution system calls.
 	var tracingStateDB = vm.StateDB(statedb)
@@ -80,43 +70,9 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-
-		start := time.Now()
-		postState = statedb.CopyState()
-		// Stop prefetcher cause we'll directly fetch tries in parallel
-		postState.StopPrefetcher()
-
-		postState.MergePostBalStates()
-		PostMergeTime += time.Since(start)
-
-		// Prewarm the updating trie
-		start = time.Now()
-		postState.PrefetchTrie()
-		PrefetchTrieTimer += time.Since(start)
-	}()
-
-	go func() {
-		defer wg.Done()
-
-		preCalPostStart := time.Now()
-		statedb.PreComputePostState(block.NumberU64(), runtime.NumCPU()/2)
-		PrefetchMergeBALTime += time.Since(preCalPostStart)
-
-		exeStart := time.Now()
-		result, err = p.executeParallel(block, statedb, cfg, gp, signer, context, initialdb)
-		ParallelExeTime += time.Since(exeStart)
-
-	}()
-
-	wg.Wait()
-
-	// Last tx alreadly includes the state change in requests after all txs
-	if preStateType == BALPreState {
-		*statedb = *postState
-	}
+	exeStart := time.Now()
+	result, err = p.executeParallel(block, statedb, cfg, gp, signer, context, initialdb)
+	ParallelExeTime += time.Since(exeStart)
 	return result, err
 }
 
@@ -135,15 +91,16 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 	)
 
 	// leave some cpus for prefetching
-	workers.SetLimit(runtime.NumCPU() / 2)
 
 	switch preStateType {
 	case BALPreState:
 		{
+			workers.SetLimit(runtime.NumCPU() / 2)
 		}
 
 	case SeqPreState: // must set workers limit = 1
 		{
+			workers.SetLimit(1)
 			preStatedb := statedb.Copy()
 			gpcp := *gp
 			preStateProvider = &SequentialPrestateProvider{
@@ -297,7 +254,7 @@ func ApplyTransactionWithParallelEVM(msg *Message, gp *GasPool, statedb *state.S
 
 	// Merge the tx-local access event into the "block-local" one, in order to collect
 	// all values, so that the witness can be built.
-	if statedb.GetTrie().IsVerkle() {
+	if statedb.GetTrie() != nil && statedb.GetTrie().IsVerkle() {
 		statedb.AccessEvents().Merge(evm.AccessEvents)
 	}
 

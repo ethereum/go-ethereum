@@ -28,6 +28,13 @@ func (s *StateDB) CodeSize(addr common.Address, codeHash common.Hash) (int, erro
 func (s *StateDB) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
 	stateObject := s.stateObjects[addr]
 	if stateObject != nil {
+		// Must use dirtyStorage and pendingStorage first, because statedb.MergePostBalStates will modify originStorage during N-blocks scenerio.
+		if value, cached := stateObject.dirtyStorage[slot]; cached {
+			return value, nil
+		}
+		if value, cached := stateObject.pendingStorage[slot]; cached {
+			return value, nil
+		}
 		if value, cached := stateObject.originStorage[slot]; cached {
 			return value, nil
 		}

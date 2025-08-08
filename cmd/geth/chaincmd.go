@@ -439,7 +439,7 @@ func showMetrics() {
 	blockWriteTimer := metrics.GetOrRegisterResettingTimer("chain/write", nil)
 
 	blockPrefetchExecuteTimer := metrics.GetOrRegisterResettingTimer("chain/prefetch/executes", nil)
-	mgaspsHist := metrics.GetOrRegisterHistogram("chain/execution/mgasps", nil, metrics.NewUniformSample(2000))
+	chainMgaspsMeter := metrics.GetOrRegisterResettingTimer("chain/mgasps", nil)
 
 	// not important
 	fmt.Println("accountReadSingleTimer", accountReadSingleTimer.Total())
@@ -475,14 +475,16 @@ func showMetrics() {
 	fmt.Println("PrefetchBALtime:  ", core.PrefetchBALTime)
 	fmt.Println("PrefetchMergeTime:", core.PrefetchMergeBALTime)
 	fmt.Println("ParallelExeTime: ", core.ParallelExeTime)
-	fmt.Println("PostMergeTime:    ", core.PostMergeTime)
 	fmt.Println("PrefetchTrieWallTime: ", core.PrefetchTrieTimer)
 	// fmt.Println("PrefetchTrieCPUtime:  ", state.PrefetchTrieCPUTime)
+
+	// Sync state time
+	fmt.Println("PrefetchChTime: ", core.PrefetchChTime)
 
 	// total
 	fmt.Println("blockInsertTimer", blockInsertTimer.Total())
 
-	mgasps := mgaspsHist.Snapshot()
+	mgasps := chainMgaspsMeter.Snapshot()
 	fmt.Println("mgasps,mean,max,min:", int64(mgasps.Mean()), mgasps.Max(), mgasps.Min())
 }
 

@@ -246,6 +246,23 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 	return NewWithReader(root, db, reader)
 }
 
+// Empty statedb without tr
+func NewEmptyDB() *StateDB {
+	sdb := &StateDB{
+		stateObjects:         make(map[common.Address]*stateObject),
+		stateObjectsDestruct: make(map[common.Address]*stateObject),
+		mutations:            make(map[common.Address]*mutation),
+		logs:                 make(map[common.Hash][]*types.Log),
+		preimages:            make(map[common.Hash][]byte),
+		journal:              newJournal(),
+		updateJournal:        newJournal(),
+		accessList:           newAccessList(),
+		transientStorage:     newTransientStorage(),
+		postStates:           make(map[int]*StateDB),
+	}
+	return sdb
+}
+
 // NewWithReader creates a new state for the specified state root. Unlike New,
 // this function accepts an additional Reader which is bound to the given root.
 func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, error) {
@@ -357,7 +374,7 @@ func (s *StateDB) PrefetchStateBAL(blockNumber uint64) {
 }
 
 func (s *StateDB) prefetchBalPreblockKeys() {
-	log.Info("PrefetchBalPreblockKeys...")
+	log.Info("PrefetchBalPreblockKeys for:", "block:", s.blockNumber)
 	type StorageKV struct {
 		addr *common.Address
 		key  *common.Hash
@@ -370,12 +387,17 @@ func (s *StateDB) prefetchBalPreblockKeys() {
 		workers     errgroup.Group
 	)
 
-	workers.SetLimit(runtime.NumCPU() - 2)
+	workers.SetLimit(runtime.NumCPU() / 2)
 	// Fetch pre-block acccount state
 	accounts := make(chan *stateObject, len(preBal))
+	lenAcctCh := 0
 	for _, acl := range preBal {
 		addr := acl.Address
 		lenMaxSlots += len(acl.StorageKeys)
+		if s.stateObjects[addr] != nil { // Skip already fetched pre-block bals or newObject will override existing storage!
+			continue
+		}
+		lenAcctCh++
 
 		workers.Go(func() error {
 			acctBal, err := s.reader.Account(addr)
@@ -393,9 +415,8 @@ func (s *StateDB) prefetchBalPreblockKeys() {
 			return nil
 		})
 	}
-	workers.Wait()
 
-	for range len(preBal) {
+	for range lenAcctCh {
 		obj := <-accounts
 		// must set it first to avoid accounts read later in storage fetching
 		if obj != nil {
@@ -404,7 +425,6 @@ func (s *StateDB) prefetchBalPreblockKeys() {
 	}
 
 	close(accounts)
-
 	// Fetch pre-block storage state
 	storages := make(chan *StorageKV, lenMaxSlots)
 	for _, acl := range preBal {
@@ -417,9 +437,13 @@ func (s *StateDB) prefetchBalPreblockKeys() {
 			continue
 		}
 
-		lenSlots += len(acl.StorageKeys)
-
 		for _, key := range keys {
+			// Skip already fetched slots to simulate merged N-blocks BALs
+			if _, cached := obj.originStorage[key]; cached {
+				continue
+			}
+			lenSlots++
+
 			workers.Go(func() error {
 				val, err := s.reader.Storage(addr, key)
 				kv := &StorageKV{&addr, &key, &val}
@@ -433,7 +457,6 @@ func (s *StateDB) prefetchBalPreblockKeys() {
 			})
 		}
 	}
-	workers.Wait()
 
 	for range lenSlots {
 		kv := <-storages
@@ -443,7 +466,6 @@ func (s *StateDB) prefetchBalPreblockKeys() {
 			s.setStateObject(account)
 		}
 	}
-
 	close(storages)
 }
 
@@ -683,16 +705,17 @@ func (s *StateDB) MergeState(entries []JournalEntry) {
 	}
 }
 
-func (s *StateDB) MergePostBalStates() {
+func (s *StateDB) MergePostBalStates(blockNumber uint64) {
 	if balType != BalPreblockKeysPostValues {
 		panic("MergePostBal is only supported with BalPreblockKeysPostValues")
 	}
 	var (
-		postBal = AllBlockTxPostValues[s.blockNumber]
+		postBal = AllBlockTxPostValues[blockNumber]
 	)
+	s.blockNumber = blockNumber
 
-	// -1 and len(postBal)-1 (not used) are syscalls pre and post all txs.
-	for txIndex := -1; txIndex < len(postBal)-1; txIndex++ {
+	// -1 and len(postBal)-1 (used for N-blocks) are syscalls pre and post all txs.
+	for txIndex := -1; txIndex < len(postBal); txIndex++ {
 		postVals := postBal[txIndex]
 
 		for addr, acct := range postVals {
@@ -1241,23 +1264,26 @@ func (s *StateDB) Copy() *StateDB {
 }
 
 func (s *StateDB) CopyState() *StateDB {
-	// Copy all the basic fields, initialize the memory ones
+	// Only copy all the basic fields for N-blocks state, initialize the memory ones
 	state := &StateDB{
-		db:                   s.db,
-		prefetcher:           s.prefetcher,
+		db: s.db,
+		// prefetcher:           s.prefetcher,  // don't need prefetcher for BAL
 		trie:                 s.trie,
 		reader:               s.reader,
 		originalRoot:         s.originalRoot,
 		stateObjects:         make(map[common.Address]*stateObject, len(s.stateObjects)),
 		stateObjectsDestruct: make(map[common.Address]*stateObject, len(s.stateObjectsDestruct)),
-		mutations:            make(map[common.Address]*mutation, len(s.mutations)),
-		dbErr:                s.dbErr,
-		refund:               s.refund,
-		thash:                s.thash,
-		txIndex:              s.txIndex,
-		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
-		logSize:              s.logSize,
-		preimages:            maps.Clone(s.preimages),
+		// mutations:            make(map[common.Address]*mutation, len(s.mutations)),
+		mutations: make(map[common.Address]*mutation),
+		dbErr:     s.dbErr,
+		refund:    s.refund,
+		thash:     s.thash,
+		txIndex:   s.txIndex,
+		// logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
+		logs: make(map[common.Hash][]*types.Log),
+
+		logSize: s.logSize,
+		// preimages:            maps.Clone(s.preimages),
 
 		// Do we need to copy the access list and transient storage?
 		// In practice: No. At the start of a transaction, these two lists are empty.
@@ -1265,9 +1291,12 @@ func (s *StateDB) CopyState() *StateDB {
 		// in the middle of a transaction. However, it doesn't cost us much to copy
 		// empty lists, so we do it anyway to not blow up if we ever decide copy them
 		// in the middle of a transaction.
-		accessList:       s.accessList.Copy(),
-		transientStorage: s.transientStorage.Copy(),
-		journal:          s.journal.copy(),
+		// accessList:       s.accessList.Copy(),
+		// transientStorage: s.transientStorage.Copy(),
+		// journal:          s.journal.copy(),
+		accessList:       newAccessList(),
+		transientStorage: newTransientStorage(),
+		journal:          newJournal(),
 		// The update journal is not copies to avoid duplicated updates in later transactions.
 		blockNumber:   s.blockNumber,
 		updateJournal: newJournal(),
@@ -1277,9 +1306,9 @@ func (s *StateDB) CopyState() *StateDB {
 	if s.witness != nil {
 		state.witness = s.witness.Copy()
 	}
-	if s.accessEvents != nil {
-		state.accessEvents = s.accessEvents.Copy()
-	}
+	// if s.accessEvents != nil {
+	// 	state.accessEvents = s.accessEvents.Copy()
+	// }
 	// Deep copy cached state objects.
 	for addr, obj := range s.stateObjects {
 		state.stateObjects[addr] = obj.simpleCopy(state)
@@ -1289,18 +1318,19 @@ func (s *StateDB) CopyState() *StateDB {
 		state.stateObjectsDestruct[addr] = obj.simpleCopy(state)
 	}
 	// Deep copy the object state markers.
-	for addr, op := range s.mutations {
-		state.mutations[addr] = op.copy()
-	}
+	// for addr, op := range s.mutations {
+	// 	state.mutations[addr] = op.copy()
+	// }
 	// Deep copy the logs occurred in the scope of block
-	for hash, logs := range s.logs {
-		cpy := make([]*types.Log, len(logs))
-		for i, l := range logs {
-			cpy[i] = new(types.Log)
-			*cpy[i] = *l
-		}
-		state.logs[hash] = cpy
-	}
+	// for hash, logs := range s.logs {
+	// 	cpy := make([]*types.Log, len(logs))
+	// 	for i, l := range logs {
+	// 		cpy[i] = new(types.Log)
+	// 		*cpy[i] = *l
+	// 	}
+	// 	state.logs[hash] = cpy
+	// }
+
 	return state
 }
 
