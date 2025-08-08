@@ -160,10 +160,10 @@ func getDistributeForData(pubkey *common.Pubkey) ([]byte, error) {
 }
 
 // IsPoLDistribution returns true if the transaction is a PoL distribution.
-func IsPoLDistribution(to *common.Address, data []byte, distributorAddress common.Address) bool {
+func IsPoLDistribution(from common.Address, to *common.Address, data []byte, distributorAddress common.Address) bool {
 	// Txs that call the `distributeFor(bytes pubkey)` method on the PoL Distributor
 	// contract are also consideredPoL txs.
-	return to != nil && *to == distributorAddress && isDistributeForCall(data)
+	return from == params.SystemAddress && to != nil && *to == distributorAddress && isDistributeForCall(data)
 }
 
 // isDistributeForCall returns true if the provided calldata corresponds to a

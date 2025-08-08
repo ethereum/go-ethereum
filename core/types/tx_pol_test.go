@@ -92,25 +92,30 @@ func TestIsPoLDistribution(t *testing.T) {
 	}
 
 	// Positive case.
-	if !IsPoLDistribution(&distributor, tx.Data(), distributor) {
+	if !IsPoLDistribution(params.SystemAddress, &distributor, tx.Data(), distributor) {
 		t.Fatalf("expected IsPoLDistribution to return true for valid PoL call")
 	}
 
 	// Wrong address.
 	otherAddr := common.HexToAddress("0x0200000000000000000000000000000000000002")
-	if IsPoLDistribution(&otherAddr, tx.Data(), distributor) {
+	if IsPoLDistribution(params.SystemAddress, &otherAddr, tx.Data(), distributor) {
 		t.Fatalf("expected false when distributor address mismatches")
 	}
 
 	// Too-short data.
 	shortData := []byte{0x01, 0x02, 0x03}
-	if IsPoLDistribution(&distributor, shortData, distributor) {
+	if IsPoLDistribution(params.SystemAddress, &distributor, shortData, distributor) {
 		t.Fatalf("expected false for data shorter than selector")
 	}
 
 	// Nil address.
-	if IsPoLDistribution(nil, tx.Data(), distributor) {
+	if IsPoLDistribution(params.SystemAddress, nil, tx.Data(), distributor) {
 		t.Fatalf("expected false when to==nil")
+	}
+
+	// Wrong from address.
+	if IsPoLDistribution(distributor, &distributor, tx.Data(), distributor) {
+		t.Fatalf("expected false when from address mismatches")
 	}
 }
 

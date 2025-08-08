@@ -463,7 +463,7 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck, skipEoA
 		SetCodeAuthorizations: args.AuthorizationList,
 		SkipNonceChecks:       skipNonceCheck,
 		SkipFromEOACheck:      skipEoACheck,
-		IsPoLTx:               isPrague1 && types.IsPoLDistribution(args.To, args.data(), distributorAddress),
+		IsPoLTx:               isPrague1 && types.IsPoLDistribution(args.from(), args.To, args.data(), distributorAddress),
 	}
 }
 
@@ -472,7 +472,7 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck, skipEoA
 func (args *TransactionArgs) ToTransaction(defaultType int, isPrague1 bool, distributorAddress common.Address) *types.Transaction {
 	usedType := types.LegacyTxType
 	switch {
-	case isPrague1 && types.IsPoLDistribution(args.To, args.data(), distributorAddress):
+	case isPrague1 && types.IsPoLDistribution(args.from(), args.To, args.data(), distributorAddress):
 		usedType = types.PoLTxType
 	case args.AuthorizationList != nil || defaultType == types.SetCodeTxType:
 		usedType = types.SetCodeTxType
