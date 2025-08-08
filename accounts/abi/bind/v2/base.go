@@ -272,8 +272,24 @@ func (c *BoundContract) RawCreationTransact(opts *TransactOpts, calldata []byte)
 // Transfer initiates a plain transaction to move funds to the contract, calling
 // its default method if one is available.
 func (c *BoundContract) Transfer(opts *TransactOpts) (*types.Transaction, error) {
-	// todo(rjl493456442) check the payable fallback or receive is defined
-	// or not, reject invalid transaction at the first place
+	// Check if payable fallback or receive is defined
+	hasPayable := false
+	for _, method := range c.abi.Methods {
+		// In ABI, receive and fallback are special
+		if method.Name == "" && method.Type == abi.Fallback && method.Payable {
+			hasPayable = true
+			break
+		}
+		if method.Type == abi.Receive && method.Payable {
+			hasPayable = true
+			break
+		}
+	}
+
+	if !hasPayable {
+		return nil, fmt.Errorf("contract does not have a payable fallback or receive function")
+	}
+
 	return c.transact(opts, &c.address, nil)
 }
 
