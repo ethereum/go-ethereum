@@ -973,6 +973,25 @@ func TestPush(t *testing.T) {
 	}
 }
 
+func BenchmarkPush(b *testing.B) {
+	code := common.FromHex("ff")
+
+	push32 := makePush(32, 32)
+
+	scope := &ScopeContext{
+		Memory: nil,
+		Stack:  newstack(),
+		Contract: &Contract{
+			Code: code,
+		},
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pc := new(uint64)
+		_, _ = push32(pc, nil, scope)
+	}
+}
+
 func TestOpCLZ(t *testing.T) {
 	evm := NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
 

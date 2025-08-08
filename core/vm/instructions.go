@@ -990,12 +990,9 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 			start   = min(codeLen, int(*pc+1))
 			end     = min(codeLen, start+pushByteSize)
 		)
-		a := new(uint256.Int).SetBytes(scope.Contract.Code[start:end])
-
-		// Missing bytes: pushByteSize - len(pushData)
-		if missing := pushByteSize - (end - start); missing > 0 {
-			a.Lsh(a, uint(8*missing))
-		}
+		var b [32]byte
+		copy(b[:], scope.Contract.Code[start:end])
+		a := new(uint256.Int).SetBytes(b[:pushByteSize])
 		scope.Stack.push(a)
 		*pc += size
 		return nil, nil
