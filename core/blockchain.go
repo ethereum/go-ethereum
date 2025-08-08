@@ -64,6 +64,8 @@ var (
 	headFastBlockGauge      = metrics.NewRegisteredGauge("chain/head/receipt", nil)
 	headFinalizedBlockGauge = metrics.NewRegisteredGauge("chain/head/finalized", nil)
 	headSafeBlockGauge      = metrics.NewRegisteredGauge("chain/head/safe", nil)
+	stateMaxDepthGauge      = metrics.NewRegisteredGauge("chain/state/maxdepth", nil)
+	stateAvgDepthGauge      = metrics.NewRegisteredGauge("chain/state/avgdepth", nil)
 
 	chainInfoGauge   = metrics.NewRegisteredGaugeInfo("chain/info", nil)
 	chainMgaspsMeter = metrics.NewRegisteredResettingTimer("chain/mgasps", nil)
@@ -2131,6 +2133,38 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	// TODO(rjl493456442) generalize the ResettingTimer
 	mgasps := float64(res.GasUsed) * 1000 / float64(elapsed)
 	chainMgaspsMeter.Update(time.Duration(mgasps))
+
+	//get state db trie node iterator
+	it, error := statedb.GetTrie().NodeIterator(nil)
+	if error != nil {
+		//log that iterator was not working
+		log.Error("Failed to get trie node iterator", "error", error)
+	} else {
+		var (
+			maxDepth int
+			sumDepth int
+			count    int
+		)
+
+		for it.Next(true) {
+			// it.Path() is a hex-nibble slice; the “terminator” nibble (0x10)
+			// exists only on leaf-nodes, so strip it if present.
+			d := len(it.Path())
+			if d > 0 && it.Path()[d-1] == 0x10 {
+				d--
+			}
+			if d > maxDepth {
+				maxDepth = d
+			}
+			sumDepth += d
+			count++
+		}
+
+		stateMaxDepthGauge.Update(int64(maxDepth))
+		if count > 0 {
+			stateAvgDepthGauge.Update(int64(sumDepth / count))
+		}
+	}
 
 	return &blockProcessingResult{
 		usedGas:  res.GasUsed,
