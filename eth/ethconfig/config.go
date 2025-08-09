@@ -74,7 +74,7 @@ var Defaults = Config{
 		return &i
 	}(),
 	OverrideRestakingActivation: func() *uint64 {
-		var i uint64 = 1_749_902_400 // TBD
+		var i uint64 = 1_754_812_800 // 2025-08-10 8:00:00 UTC
 		return &i
 	}(),
 }
