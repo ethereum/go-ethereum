@@ -83,16 +83,16 @@ func (l *lookup) sizeOfTx(txhash common.Hash) (uint64, bool) {
 // hashes; and from transaction hashes to datastore storage item ids.
 func (l *lookup) track(tx *blobTxMeta) {
 	// Map all the blobs to the transaction hash
-	for _, vhash := range tx.VHashes {
+	for _, vhash := range tx.vhashes {
 		if _, ok := l.blobIndex[vhash]; !ok {
 			l.blobIndex[vhash] = make(map[common.Hash]struct{})
 		}
-		l.blobIndex[vhash][tx.TxHash] = struct{}{} // may be double mapped if a tx contains the same blob twice
+		l.blobIndex[vhash][tx.hash] = struct{}{} // may be double mapped if a tx contains the same blob twice
 	}
 	// Map the transaction hash to the datastore id and RLP-encoded transaction size
-	l.txIndex[tx.TxHash] = &txMetadata{
-		id:   tx.Id,
-		size: tx.Size,
+	l.txIndex[tx.hash] = &txMetadata{
+		id:   tx.id,
+		size: tx.size,
 	}
 }
 
@@ -100,11 +100,11 @@ func (l *lookup) track(tx *blobTxMeta) {
 // hashes from the blob index.
 func (l *lookup) untrack(tx *blobTxMeta) {
 	// Unmap the transaction hash from the datastore id
-	delete(l.txIndex, tx.TxHash)
+	delete(l.txIndex, tx.hash)
 
 	// Unmap all the blobs from the transaction hash
-	for _, vhash := range tx.VHashes {
-		delete(l.blobIndex[vhash], tx.TxHash) // may be double deleted if a tx contains the same blob twice
+	for _, vhash := range tx.vhashes {
+		delete(l.blobIndex[vhash], tx.hash) // may be double deleted if a tx contains the same blob twice
 		if len(l.blobIndex[vhash]) == 0 {
 			delete(l.blobIndex, vhash)
 		}

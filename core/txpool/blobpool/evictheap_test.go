@@ -145,12 +145,12 @@ func TestPriceHeapSorting(t *testing.T) {
 				blobfeeJumps = dynamicFeeJumps(blobFee)
 			)
 			index[addr] = []*blobTxMeta{{
-				Id:                   uint64(j),
-				StorageSize:          128 * 1024,
-				Nonce:                0,
-				ExecTipCap:           execTip,
-				ExecFeeCap:           execFee,
-				BlobFeeCap:           blobFee,
+				id:                   uint64(j),
+				storageSize:          128 * 1024,
+				nonce:                0,
+				execTipCap:           execTip,
+				execFeeCap:           execFee,
+				blobFeeCap:           blobFee,
 				basefeeJumps:         basefeeJumps,
 				blobfeeJumps:         blobfeeJumps,
 				evictionExecTip:      execTip,
@@ -204,12 +204,12 @@ func benchmarkPriceHeapReinit(b *testing.B, datacap uint64) {
 			blobfeeJumps = dynamicFeeJumps(blobFee)
 		)
 		index[addr] = []*blobTxMeta{{
-			Id:                   uint64(i),
-			StorageSize:          128 * 1024,
-			Nonce:                0,
-			ExecTipCap:           execTip,
-			ExecFeeCap:           execFee,
-			BlobFeeCap:           blobFee,
+			id:                   uint64(i),
+			storageSize:          128 * 1024,
+			nonce:                0,
+			execTipCap:           execTip,
+			execFeeCap:           execFee,
+			blobFeeCap:           blobFee,
 			basefeeJumps:         basefeeJumps,
 			blobfeeJumps:         blobfeeJumps,
 			evictionExecTip:      execTip,
@@ -280,12 +280,12 @@ func benchmarkPriceHeapOverflow(b *testing.B, datacap uint64) {
 			blobfeeJumps = dynamicFeeJumps(blobFee)
 		)
 		index[addr] = []*blobTxMeta{{
-			Id:                   uint64(i),
-			StorageSize:          128 * 1024,
-			Nonce:                0,
-			ExecTipCap:           execTip,
-			ExecFeeCap:           execFee,
-			BlobFeeCap:           blobFee,
+			id:                   uint64(i),
+			storageSize:          128 * 1024,
+			nonce:                0,
+			execTipCap:           execTip,
+			execFeeCap:           execFee,
+			blobFeeCap:           blobFee,
 			basefeeJumps:         basefeeJumps,
 			blobfeeJumps:         blobfeeJumps,
 			evictionExecTip:      execTip,
@@ -311,12 +311,12 @@ func benchmarkPriceHeapOverflow(b *testing.B, datacap uint64) {
 			blobfeeJumps = dynamicFeeJumps(blobFee)
 		)
 		metas[i] = &blobTxMeta{
-			Id:                   uint64(int(blobs) + i),
-			StorageSize:          128 * 1024,
-			Nonce:                0,
-			ExecTipCap:           execTip,
-			ExecFeeCap:           execFee,
-			BlobFeeCap:           blobFee,
+			id:                   uint64(int(blobs) + i),
+			storageSize:          128 * 1024,
+			nonce:                0,
+			execTipCap:           execTip,
+			execFeeCap:           execFee,
+			blobFeeCap:           blobFee,
 			basefeeJumps:         basefeeJumps,
 			blobfeeJumps:         blobfeeJumps,
 			evictionExecTip:      execTip,

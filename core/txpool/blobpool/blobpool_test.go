@@ -283,10 +283,10 @@ func verifyPoolInternals(t *testing.T, pool *BlobPool) {
 	seen := make(map[common.Hash]struct{})
 	for addr, txs := range pool.index {
 		for _, tx := range txs {
-			if _, ok := seen[tx.TxHash]; ok {
-				t.Errorf("duplicate hash #%x in transaction index: address %s, nonce %d", tx.TxHash, addr, tx.Nonce)
+			if _, ok := seen[tx.hash]; ok {
+				t.Errorf("duplicate hash #%x in transaction index: address %s, nonce %d", tx.hash, addr, tx.nonce)
 			}
-			seen[tx.TxHash] = struct{}{}
+			seen[tx.hash] = struct{}{}
 		}
 	}
 	for hash, id := range pool.lookup.txIndex {
@@ -302,11 +302,11 @@ func verifyPoolInternals(t *testing.T, pool *BlobPool) {
 	blobs := make(map[common.Hash]map[common.Hash]struct{})
 	for _, txs := range pool.index {
 		for _, tx := range txs {
-			for _, vhash := range tx.VHashes {
+			for _, vhash := range tx.vhashes {
 				if blobs[vhash] == nil {
 					blobs[vhash] = make(map[common.Hash]struct{})
 				}
-				blobs[vhash][tx.TxHash] = struct{}{}
+				blobs[vhash][tx.hash] = struct{}{}
 			}
 		}
 	}
@@ -328,18 +328,18 @@ func verifyPoolInternals(t *testing.T, pool *BlobPool) {
 	// and that the first nonce is the next expected one based on the state.
 	for addr, txs := range pool.index {
 		for i := 1; i < len(txs); i++ {
-			if txs[i].Nonce != txs[i-1].Nonce+1 {
-				t.Errorf("addr %v, tx %d nonce mismatch: have %d, want %d", addr, i, txs[i].Nonce, txs[i-1].Nonce+1)
+			if txs[i].nonce != txs[i-1].nonce+1 {
+				t.Errorf("addr %v, tx %d nonce mismatch: have %d, want %d", addr, i, txs[i].nonce, txs[i-1].nonce+1)
 			}
 		}
-		if txs[0].Nonce != pool.state.GetNonce(addr) {
-			t.Errorf("addr %v, first tx nonce mismatch: have %d, want %d", addr, txs[0].Nonce, pool.state.GetNonce(addr))
+		if txs[0].nonce != pool.state.GetNonce(addr) {
+			t.Errorf("addr %v, first tx nonce mismatch: have %d, want %d", addr, txs[0].nonce, pool.state.GetNonce(addr))
 		}
 	}
 	// Verify that calculated evacuation thresholds are correct
 	for addr, txs := range pool.index {
-		if !txs[0].evictionExecTip.Eq(txs[0].ExecTipCap) {
-			t.Errorf("addr %v, tx %d eviction execution tip mismatch: have %d, want %d", addr, 0, txs[0].evictionExecTip, txs[0].ExecTipCap)
+		if !txs[0].evictionExecTip.Eq(txs[0].execTipCap) {
+			t.Errorf("addr %v, tx %d eviction execution tip mismatch: have %d, want %d", addr, 0, txs[0].evictionExecTip, txs[0].execTipCap)
 		}
 		if math.Abs(txs[0].evictionExecFeeJumps-txs[0].basefeeJumps) > 0.001 {
 			t.Errorf("addr %v, tx %d eviction execution fee jumps mismatch: have %f, want %f", addr, 0, txs[0].evictionExecFeeJumps, txs[0].basefeeJumps)
@@ -349,8 +349,8 @@ func verifyPoolInternals(t *testing.T, pool *BlobPool) {
 		}
 		for i := 1; i < len(txs); i++ {
 			wantExecTip := txs[i-1].evictionExecTip
-			if wantExecTip.Gt(txs[i].ExecTipCap) {
-				wantExecTip = txs[i].ExecTipCap
+			if wantExecTip.Gt(txs[i].execTipCap) {
+				wantExecTip = txs[i].execTipCap
 			}
 			if !txs[i].evictionExecTip.Eq(wantExecTip) {
 				t.Errorf("addr %v, tx %d eviction execution tip mismatch: have %d, want %d", addr, i, txs[i].evictionExecTip, wantExecTip)
@@ -377,7 +377,7 @@ func verifyPoolInternals(t *testing.T, pool *BlobPool) {
 	for addr, txs := range pool.index {
 		spent := new(uint256.Int)
 		for _, tx := range txs {
-			spent.Add(spent, tx.CostCap)
+			spent.Add(spent, tx.costCap)
 		}
 		if !pool.spent[addr].Eq(spent) {
 			t.Errorf("addr %v expenditure mismatch: have %d, want %d", addr, pool.spent[addr], spent)
@@ -387,7 +387,7 @@ func verifyPoolInternals(t *testing.T, pool *BlobPool) {
 	var stored uint64
 	for _, txs := range pool.index {
 		for _, tx := range txs {
-			stored += uint64(tx.StorageSize)
+			stored += uint64(tx.storageSize)
 		}
 	}
 	if pool.stored != stored {
@@ -410,7 +410,7 @@ func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
 	)
 	for _, txs := range pool.index {
 		for _, tx := range txs {
-			for _, vhash := range tx.VHashes {
+			for _, vhash := range tx.vhashes {
 				known[vhash] = struct{}{}
 			}
 			hashes = append(hashes, tx.vhashes...)
@@ -721,36 +721,36 @@ func TestOpenDrops(t *testing.T) {
 	alive := make(map[uint64]struct{})
 	for _, txs := range pool.index {
 		for _, tx := range txs {
-			switch tx.Id {
+			switch tx.id {
 			case malformed:
 				t.Errorf("malformed RLP transaction remained in storage")
 			case badsig:
 				t.Errorf("invalidly signed transaction remained in storage")
 			default:
-				if _, ok := dangling[tx.Id]; ok {
-					t.Errorf("dangling transaction remained in storage: %d", tx.Id)
-				} else if _, ok := filled[tx.Id]; ok {
-					t.Errorf("filled transaction remained in storage: %d", tx.Id)
-				} else if _, ok := overlapped[tx.Id]; ok {
-					t.Errorf("overlapped transaction remained in storage: %d", tx.Id)
-				} else if _, ok := gapped[tx.Id]; ok {
-					t.Errorf("gapped transaction remained in storage: %d", tx.Id)
-				} else if _, ok := underpaid[tx.Id]; ok {
-					t.Errorf("underpaid transaction remained in storage: %d", tx.Id)
-				} else if _, ok := outpriced[tx.Id]; ok {
-					t.Errorf("outpriced transaction remained in storage: %d", tx.Id)
-				} else if _, ok := exceeded[tx.Id]; ok {
-					t.Errorf("fully overdrafted transaction remained in storage: %d", tx.Id)
-				} else if _, ok := overdrafted[tx.Id]; ok {
-					t.Errorf("partially overdrafted transaction remained in storage: %d", tx.Id)
-				} else if _, ok := overcapped[tx.Id]; ok {
-					t.Errorf("overcapped transaction remained in storage: %d", tx.Id)
-				} else if _, ok := duplicated[tx.Id]; ok {
-					t.Errorf("duplicated transaction remained in storage: %d", tx.Id)
-				} else if _, ok := repeated[tx.Id]; ok {
-					t.Errorf("repeated Nonce transaction remained in storage: %d", tx.Id)
+				if _, ok := dangling[tx.id]; ok {
+					t.Errorf("dangling transaction remained in storage: %d", tx.id)
+				} else if _, ok := filled[tx.id]; ok {
+					t.Errorf("filled transaction remained in storage: %d", tx.id)
+				} else if _, ok := overlapped[tx.id]; ok {
+					t.Errorf("overlapped transaction remained in storage: %d", tx.id)
+				} else if _, ok := gapped[tx.id]; ok {
+					t.Errorf("gapped transaction remained in storage: %d", tx.id)
+				} else if _, ok := underpaid[tx.id]; ok {
+					t.Errorf("underpaid transaction remained in storage: %d", tx.id)
+				} else if _, ok := outpriced[tx.id]; ok {
+					t.Errorf("outpriced transaction remained in storage: %d", tx.id)
+				} else if _, ok := exceeded[tx.id]; ok {
+					t.Errorf("fully overdrafted transaction remained in storage: %d", tx.id)
+				} else if _, ok := overdrafted[tx.id]; ok {
+					t.Errorf("partially overdrafted transaction remained in storage: %d", tx.id)
+				} else if _, ok := overcapped[tx.id]; ok {
+					t.Errorf("overcapped transaction remained in storage: %d", tx.id)
+				} else if _, ok := duplicated[tx.id]; ok {
+					t.Errorf("duplicated transaction remained in storage: %d", tx.id)
+				} else if _, ok := repeated[tx.id]; ok {
+					t.Errorf("repeated nonce transaction remained in storage: %d", tx.id)
 				} else {
-					alive[tx.Id] = struct{}{}
+					alive[tx.id] = struct{}{}
 				}
 			}
 		}
@@ -836,8 +836,8 @@ func TestOpenIndex(t *testing.T) {
 
 	// Verify that the transactions have been sorted by nonce (case 1)
 	for i := 0; i < len(pool.index[addr]); i++ {
-		if pool.index[addr][i].Nonce != uint64(i) {
-			t.Errorf("tx %d nonce mismatch: have %d, want %d", i, pool.index[addr][i].Nonce, uint64(i))
+		if pool.index[addr][i].nonce != uint64(i) {
+			t.Errorf("tx %d nonce mismatch: have %d, want %d", i, pool.index[addr][i].nonce, uint64(i))
 		}
 	}
 	// Verify that the cumulative fee minimums have been correctly calculated (case 2)

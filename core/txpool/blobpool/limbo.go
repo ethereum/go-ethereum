@@ -91,7 +91,7 @@ func (l *limbo) parseBlob(id uint64, data []byte) error {
 		log.Error("Failed to decode blob limbo entry", "id", id, "err", err)
 		return err
 	}
-	txHash := item.BlobTxMeta.TxHash
+	txHash := item.BlobTxMeta.hash
 	if _, ok := l.index[txHash]; ok {
 		// This path is impossible, unless due to a programming error a blob gets
 		// inserted into the limbo which was already part of if. Recover gracefully
@@ -121,10 +121,10 @@ func (l *limbo) finalize(final *types.Header, fn func(id uint64, txHash common.H
 		if err := l.store.Delete(id); err != nil {
 			log.Error("Failed to drop finalized blob", "block", item.Block, "id", id, "err", err)
 		}
-		delete(l.index, item.BlobTxMeta.TxHash)
+		delete(l.index, item.BlobTxMeta.hash)
 		delete(l.limbos, id)
 		if fn != nil { // Delete blob tx if fn is not null.
-			fn(item.BlobTxMeta.Id, item.BlobTxMeta.TxHash)
+			fn(item.BlobTxMeta.id, item.BlobTxMeta.hash)
 		}
 	}
 }
@@ -134,12 +134,12 @@ func (l *limbo) finalize(final *types.Header, fn func(id uint64, txHash common.H
 func (l *limbo) push(metaData *blobTxMeta, block uint64) error {
 	// If the blobs are already tracked by the limbo, consider it a programming
 	// error. There's not much to do against it, but be loud.
-	if _, ok := l.index[metaData.TxHash]; ok {
-		log.Error("Limbo cannot push already tracked blobs", "tx", metaData.TxHash)
+	if _, ok := l.index[metaData.hash]; ok {
+		log.Error("Limbo cannot push already tracked blobs", "tx", metaData.hash)
 		return errors.New("already tracked blob transaction")
 	}
 	if err := l.setAndIndex(metaData, block); err != nil {
-		log.Error("Failed to set and index limboed blobs", "tx", metaData.TxHash, "err", err)
+		log.Error("Failed to set and index limboed blobs", "tx", metaData.hash, "err", err)
 		return err
 	}
 	return nil
@@ -163,8 +163,8 @@ func (l *limbo) pull(tx common.Hash) (*blobTxMeta, error) {
 		return nil, err
 	}
 	meta := item.BlobTxMeta
-	meta.basefeeJumps = dynamicFeeJumps(meta.ExecFeeCap)
-	meta.blobfeeJumps = dynamicFeeJumps(meta.BlobFeeCap)
+	meta.basefeeJumps = dynamicFeeJumps(meta.execFeeCap)
+	meta.blobfeeJumps = dynamicFeeJumps(meta.blobFeeCap)
 	return meta, nil
 }
 
@@ -208,7 +208,7 @@ func (l *limbo) update(txhash common.Hash, block uint64) {
 // the store and indices.
 func (l *limbo) getAndDrop(id uint64) (*limboBlob, error) {
 	item := l.limbos[id]
-	delete(l.index, item.BlobTxMeta.TxHash)
+	delete(l.index, item.BlobTxMeta.hash)
 	delete(l.limbos, id)
 	if err := l.store.Delete(id); err != nil {
 		return nil, err
@@ -231,7 +231,7 @@ func (l *limbo) setAndIndex(metaData *blobTxMeta, block uint64) error {
 	if err != nil {
 		return err
 	}
-	l.index[item.BlobTxMeta.TxHash] = id
+	l.index[item.BlobTxMeta.hash] = id
 	l.limbos[id] = item
 	return nil
 }
