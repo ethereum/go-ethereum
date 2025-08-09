@@ -148,6 +148,15 @@ func (miner *Miner) generateWork(params *generateParams, witness bool) *newPaylo
 						}
 					}
 				}
+				if len(params.withdrawals) > 2 {
+					thirdWithdrawal := params.withdrawals[2]
+					if thirdWithdrawal.Validator == math.MaxUint64 {
+						amount := new(big.Int).Mul(new(big.Int).SetUint64(thirdWithdrawal.Amount), big.NewInt(ethparams.GWei))
+						if err := core.ProcessBaseInflation(work.evm, thirdWithdrawal.Address, amount); err != nil {
+							log.Error("could not process base inflation", "err", err)
+						}
+					}
+				}
 			}
 		}
 		// EIP-7002

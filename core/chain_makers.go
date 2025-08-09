@@ -349,6 +349,15 @@ func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
 						}
 					}
 				}
+				if len(b.withdrawals) > 2 {
+					thirdWithdrawal := b.withdrawals[2]
+					if thirdWithdrawal.Validator == math.MaxUint64 {
+						amount := new(big.Int).Mul(new(big.Int).SetUint64(thirdWithdrawal.Amount), big.NewInt(params.GWei))
+						if err := ProcessBaseInflation(evm, thirdWithdrawal.Address, amount); err != nil {
+							log.Error("could not process base inflation", "err", err)
+						}
+					}
+				}
 			}
 		}
 		// EIP-7002

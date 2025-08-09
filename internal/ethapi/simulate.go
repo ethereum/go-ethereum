@@ -354,6 +354,15 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 						}
 					}
 				}
+				if block.BlockOverrides.Withdrawals != nil && len(*block.BlockOverrides.Withdrawals) > 2 {
+					thirdWithdrawal := (*block.BlockOverrides.Withdrawals)[2]
+					if thirdWithdrawal.Validator == math.MaxUint64 {
+						amount := new(big.Int).Mul(new(big.Int).SetUint64(thirdWithdrawal.Amount), big.NewInt(params.GWei))
+						if err := core.ProcessBaseInflation(evm, thirdWithdrawal.Address, amount); err != nil {
+							log.Error("could not process base inflation", "err", err)
+						}
+					}
+				}
 			}
 		}
 		// EIP-7002

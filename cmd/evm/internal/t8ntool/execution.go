@@ -389,6 +389,15 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 						}
 					}
 				}
+				if len(pre.Env.Withdrawals) > 2 {
+					thirdWithdrawal := pre.Env.Withdrawals[2]
+					if thirdWithdrawal.Validator == gomath.MaxUint64 {
+						amount := new(big.Int).Mul(new(big.Int).SetUint64(thirdWithdrawal.Amount), big.NewInt(params.GWei))
+						if err := core.ProcessBaseInflation(evm, thirdWithdrawal.Address, amount); err != nil {
+							log.Error("could not process base inflation", "err", err)
+						}
+					}
+				}
 			}
 		}
 		// EIP-7002
