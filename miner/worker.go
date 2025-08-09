@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	ethparams "github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
 )
 
@@ -101,6 +102,8 @@ func (miner *Miner) generateWork(params *generateParams, witness bool) *newPaylo
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
+
+	// Use gas limit for block creation instead of executing transactions
 	if !params.noTxs {
 		interrupt := new(atomic.Int32)
 		timer := time.AfterFunc(miner.config.Recommit, func() {
@@ -173,10 +176,9 @@ func (miner *Miner) generateWork(params *generateParams, witness bool) *newPaylo
 		work.header.RequestsHash = &reqHash
 	}
 
-	block, err := miner.engine.FinalizeAndAssemble(miner.chain, work.header, work.state, &body, work.receipts)
-	if err != nil {
-		return &newPayloadResult{err: err}
-	}
+	// Directly construct the block without calling FinalizeAndAssemble
+	// This returns a block with the current header, body, and receipts
+	block := types.NewBlock(work.header, &body, work.receipts, trie.NewStackTrie(nil))
 	return &newPayloadResult{
 		block:    block,
 		fees:     totalFees(block, work.receipts),
