@@ -549,7 +549,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 
 			// Included transactions blobs need to be moved to the limbo
 			if filled && inclusions != nil {
-				p.offload(addr, txs[i].nonce, txs[i].id, inclusions)
+				p.offload(addr, txs[i], inclusions)
 			}
 		}
 		delete(p.index, addr)
@@ -566,9 +566,13 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 			log.Trace("Dropping filled blob transactions", "from", addr, "filled", nonces, "ids", ids)
 			dropFilledMeter.Mark(int64(len(ids)))
 		}
-		for _, id := range ids {
-			if err := p.store.Delete(id); err != nil {
-				log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
+
+		// If the txs were recorded in the limbo, we don't delete them.
+		if !(filled && inclusions != nil) {
+			for _, id := range ids {
+				if err := p.store.Delete(id); err != nil {
+					log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
+				}
 			}
 		}
 		return
@@ -590,16 +594,19 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 
 			// Included transactions blobs need to be moved to the limbo
 			if inclusions != nil {
-				p.offload(addr, txs[0].nonce, txs[0].id, inclusions)
+				p.offload(addr, txs[0], inclusions)
 			}
 			txs = txs[1:]
 		}
 		log.Trace("Dropping overlapped blob transactions", "from", addr, "overlapped", nonces, "ids", ids, "left", len(txs))
 		dropOverlappedMeter.Mark(int64(len(ids)))
 
-		for _, id := range ids {
-			if err := p.store.Delete(id); err != nil {
-				log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
+		// If the txs were recorded in the limbo, we don't delete them.
+		if inclusions == nil {
+			for _, id := range ids {
+				if err := p.store.Delete(id); err != nil {
+					log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
+				}
 			}
 		}
 		p.index[addr] = txs
@@ -769,23 +776,13 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 // any of it since there's no clear error case. Some errors may be due to coding
 // issues, others caused by signers mining MEV stuff or swapping transactions. In
 // all cases, the pool needs to continue operating.
-func (p *BlobPool) offload(addr common.Address, nonce uint64, id uint64, inclusions map[common.Hash]uint64) {
-	data, err := p.store.Get(id)
-	if err != nil {
-		log.Error("Blobs missing for included transaction", "from", addr, "nonce", nonce, "id", id, "err", err)
-		return
-	}
-	var tx types.Transaction
-	if err = rlp.DecodeBytes(data, &tx); err != nil {
-		log.Error("Blobs corrupted for included transaction", "from", addr, "nonce", nonce, "id", id, "err", err)
-		return
-	}
-	block, ok := inclusions[tx.Hash()]
+func (p *BlobPool) offload(addr common.Address, blobTxMeta *blobTxMeta, inclusions map[common.Hash]uint64) {
+	block, ok := inclusions[blobTxMeta.hash]
 	if !ok {
-		log.Warn("Blob transaction swapped out by signer", "from", addr, "nonce", nonce, "id", id)
+		log.Warn("Blob transaction swapped out by signer", "from", addr, "nonce", blobTxMeta.nonce, "id", blobTxMeta.id)
 		return
 	}
-	if err := p.limbo.push(&tx, block); err != nil {
+	if err := p.limbo.push(blobTxMeta, block); err != nil {
 		log.Warn("Failed to offload blob tx into limbo", "err", err)
 		return
 	}
@@ -831,8 +828,13 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 		}
 	}
 	// Flush out any blobs from limbo that are older than the latest finality
+	// and also delete the txs from the store.
 	if p.chain.Config().IsCancun(p.head.Number, p.head.Time) {
-		p.limbo.finalize(p.chain.CurrentFinalBlock())
+		p.limbo.finalize(p.chain.CurrentFinalBlock(), func(id uint64, txHash common.Hash) {
+			if err := p.store.Delete(id); err != nil {
+				log.Error("Failed to delete blob transaction", "hash", txHash, "id", id, "err", err)
+			}
+		})
 	}
 	// Reset the price heap for the new set of basefee/blobfee pairs
 	var (
@@ -986,31 +988,14 @@ func (p *BlobPool) reorg(oldHead, newHead *types.Header) (map[common.Address][]*
 func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 	// Retrieve the associated blob from the limbo. Without the blobs, we cannot
 	// add the transaction back into the pool as it is not mineable.
-	tx, err := p.limbo.pull(txhash)
+	meta, err := p.limbo.pull(txhash)
 	if err != nil {
 		log.Error("Blobs unavailable, dropping reorged tx", "err", err)
 		return err
 	}
-	// TODO: seems like an easy optimization here would be getting the serialized tx
-	// from limbo instead of re-serializing it here.
-
-	// Serialize the transaction back into the primary datastore.
-	blob, err := rlp.EncodeToBytes(tx)
-	if err != nil {
-		log.Error("Failed to encode transaction for storage", "hash", tx.Hash(), "err", err)
-		return err
-	}
-	id, err := p.store.Put(blob)
-	if err != nil {
-		log.Error("Failed to write transaction into storage", "hash", tx.Hash(), "err", err)
-		return err
-	}
-
-	// Update the indices and metrics
-	meta := newBlobTxMeta(id, tx.Size(), p.store.Size(id), tx)
 	if _, ok := p.index[addr]; !ok {
 		if err := p.reserver.Hold(addr); err != nil {
-			log.Warn("Failed to reserve account for blob pool", "tx", tx.Hash(), "from", addr, "err", err)
+			log.Warn("Failed to reserve account for blob pool", "tx", meta.hash, "from", addr, "err", err)
 			return err
 		}
 		p.index[addr] = []*blobTxMeta{meta}
