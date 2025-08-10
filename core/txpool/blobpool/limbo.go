@@ -41,8 +41,6 @@ type limboBlob struct {
 // limbo is a light, indexed database to temporarily store recently included
 // blobs until they are finalized. The purpose is to support small reorgs, which
 // would require pulling back up old blobs (which aren't part of the chain).
-//
-// TODO(karalabe): Currently updating the inclusion block of a blob needs a full db rewrite. Can we do without?
 type limbo struct {
 	store billy.Database             // Persistent data store for limboed blobs
 	index map[common.Hash]*limboBlob // Mappings from tx hashes to datastore ids
@@ -60,7 +58,13 @@ func newLimbo(datadir string, maxBlobsPerTransaction int) (*limbo, error) {
 			fails = append(fails, id)
 		}
 	}
-	store, err := billy.Open(billy.Options{Path: datadir, Repair: true}, newSlotter(maxBlobsPerTransaction), index)
+	store, err := billy.Open(billy.Options{Path: datadir, Repair: true}, func() (size uint32, done bool) {
+		// 8*6: Total size of uint64.
+		// 4: The size of uint32.
+		// 32*4: The max total size of big.Int.
+		// 32*(maxBlobsPerTransaction+2): The total size of hashes.
+		return 8*6 + 4 + 32*4 + 32*uint32(maxBlobsPerTransaction+2), true
+	}, index)
 	if err != nil {
 		return nil, err
 	}
