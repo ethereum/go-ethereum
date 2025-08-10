@@ -145,9 +145,11 @@ func (l *limbo) setTxMeta(store billy.Database) error {
 			return err
 		}
 		meta := newBlobTxMeta(id, tx.Size(), store.Size(id), tx)
-		if _, err := l.pull(meta.hash); err != nil {
+		// Delete the old item which hash blob tx content.
+		if err := l.drop(meta.hash); err != nil {
 			return err
 		}
+		// Set the new one which has blob tx metadata.
 		if err := l.push(meta, item.Block); err != nil {
 			return err
 		}
@@ -167,10 +169,9 @@ func (l *limbo) finalize(final *types.Header, fn func(id uint64, txHash common.H
 		if item.Block > final.Number.Uint64() {
 			continue
 		}
-		if err := l.store.Delete(item.id); err != nil {
+		if err := l.drop(item.TxHash); err != nil {
 			log.Error("Failed to drop finalized blob", "block", item.Block, "id", item.id, "err", err)
 		}
-		delete(l.index, item.TxHash)
 		if fn != nil {
 			meta := item.TxMeta
 			fn(meta.id, meta.hash)
@@ -206,7 +207,7 @@ func (l *limbo) pull(txhash common.Hash) (*blobTxMeta, error) {
 		log.Trace("Limbo cannot pull non-tracked blobs", "tx", txhash)
 		return nil, errors.New("unseen blob transaction")
 	}
-	if err := l.store.Delete(item.id); err != nil {
+	if err := l.drop(item.TxHash); err != nil {
 		return nil, err
 	}
 	return item.TxMeta, nil
@@ -234,10 +235,8 @@ func (l *limbo) update(txhash common.Hash, block uint64) {
 		log.Trace("Blob transaction unchanged in limbo", "tx", txhash, "block", block)
 		return
 	}
-	// Retrieve the old blobs from the data store and write them back with a new
-	// block number. IF anything fails, there's not much to do, go on.
-	if err := l.store.Delete(item.id); err != nil {
-		log.Error("Failed to drop old limboed blobs", "tx", txhash, "err", err)
+	if err := l.drop(txhash); err != nil {
+		log.Error("Failed to drop old limboed metadata", "tx", txhash, "err", err)
 		return
 	}
 	if err := l.setAndIndex(item.TxMeta, block); err != nil {
@@ -245,6 +244,20 @@ func (l *limbo) update(txhash common.Hash, block uint64) {
 		return
 	}
 	log.Trace("Blob transaction updated in limbo", "tx", txhash, "old-block", item.Block, "new-block", block)
+}
+
+// drop removes the blob metadata from the limbo.
+func (l *limbo) drop(txhash common.Hash) error {
+	if item, ok := l.index[txhash]; ok {
+		// Retrieve the old blobs from the data store and write them back with a new
+		// block number. IF anything fails, there's not much to do, go on.
+		if err := l.store.Delete(item.id); err != nil {
+			log.Error("Failed to drop old limboed blobs", "tx", txhash, "err", err)
+			return err
+		}
+		delete(l.index, txhash)
+	}
+	return nil
 }
 
 // setAndIndex assembles a limbo blob database entry and stores it, also updating
