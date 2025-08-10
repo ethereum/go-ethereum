@@ -1,4 +1,4 @@
-// Copyright 2024 The go-ethereum Authors
+// Copyright 2025 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,11 +14,17 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package version
+package rawdb
 
-const (
-	Major = 1          // Major version component of the current release
-	Minor = 16         // Minor version component of the current release
-	Patch = 3          // Patch version component of the current release
-	Meta  = "unstable" // Version metadata to append to the version string
+import (
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
+
+func ReadVerkleTransitionState(db ethdb.KeyValueReader, hash common.Hash) ([]byte, error) {
+	return db.Get(transitionStateKey(hash))
+}
+
+func WriteVerkleTransitionState(db ethdb.KeyValueWriter, hash common.Hash, state []byte) error {
+	return db.Put(transitionStateKey(hash), state)
+}

@@ -151,7 +151,7 @@ func (args *SendTxArgs) ToTransaction() (*types.Transaction, error) {
 			al = *args.AccessList
 		}
 		if to == nil {
-			return nil, fmt.Errorf("transaction recipient must be set for blob transactions")
+			return nil, errors.New("transaction recipient must be set for blob transactions")
 		}
 		data = &types.BlobTx{
 			To:         *to,
@@ -544,7 +544,7 @@ func parseBytes(encType interface{}) ([]byte, bool) {
 	// Handle array types.
 	val := reflect.ValueOf(encType)
 	if val.Kind() == reflect.Array && val.Type().Elem().Kind() == reflect.Uint8 {
-		v := reflect.MakeSlice(reflect.TypeOf([]byte{}), val.Len(), val.Len())
+		v := reflect.ValueOf(make([]byte, val.Len()))
 		reflect.Copy(v, val)
 		return v.Bytes(), true
 	}
