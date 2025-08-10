@@ -142,7 +142,7 @@ func (l *limbo) tryRepair(store billy.Database) error {
 			return err
 		}
 		meta := newBlobTxMeta(id, tx.Size(), store.Size(id), tx)
-		item.TxMeta, item.Tx = meta, nil
+		l.existsAndSet(meta)
 	}
 	return nil
 }
@@ -247,7 +247,7 @@ func (l *limbo) setAndIndex(meta *blobTxMeta, block uint64) error {
 		TxHash: txhash,
 		Block:  block,
 		TxMeta: meta,
-		Tx:     nil,
+		Tx:     nil, // The tx is stored in the blob database, not here.
 	}
 	data, err := rlp.EncodeToBytes(item)
 	if err != nil {
