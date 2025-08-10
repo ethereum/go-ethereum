@@ -76,10 +76,17 @@ var (
 		  if parsed == nil {
 			return common.Address{}, nil, nil, errors.New("GetABI returned nil")
 		  }
-		  {{range $pattern, $name := .Libraries}}
-			{{decapitalise $name}}Addr, _, _, _ := Deploy{{capitalise $name}}(auth, backend)
-			{{$contract.Type}}Bin = strings.ReplaceAll({{$contract.Type}}Bin, "__${{$pattern}}$__", {{decapitalise $name}}Addr.String()[2:])
-		  {{end}}
+		{{range $pattern, $name := .Libraries}}
+		{{decapitalise $name}}Addr, {{decapitalise $name}}Tx, _, err := Deploy{{capitalise $name}}(auth, backend)
+		  if err != nil {
+			return common.Address{}, nil, nil, err
+		}
+		{{$contract.Type}}Bin = strings.ReplaceAll({{$contract.Type}}Bin, "__${{$pattern}}$__", {{decapitalise $name}}Addr.String()[2:])
+		// Update nonce for subsequent deployments
+		if auth.Nonce != nil {
+		  auth.Nonce = big.NewInt(int64({{decapitalise $name}}Tx.Nonce() + 1))
+		}
+		{{end}}
 		  address, tx, contract, err := bind.DeployContract(auth, *parsed, common.FromHex({{.Type}}Bin), backend {{range .Constructor.Inputs}}, {{.Name}}{{end}})
 		  if err != nil {
 		    return common.Address{}, nil, nil, err
