@@ -32,10 +32,9 @@ import (
 type limboBlob struct {
 	TxHash common.Hash        // Owner transaction's hash to support resurrecting reorged txs
 	Block  uint64             // Block in which the blob transaction was included
-	Tx     *types.Transaction `rlp:"omitempty"`
-	// Optional blob transaction metadata.
-	TxMeta *blobTxMeta `rlp:"omitempty"`
-	id     uint64      // the billy id of limboBlob
+	Tx     *types.Transaction `rlp:"omitempty"` // After this commitment the Tx field is optional, as the TxMeta contains the tx metadata.
+	TxMeta *blobTxMeta        `rlp:"omitempty"` // Optional blob transaction metadata.
+	id     uint64             // the billy id of limboBlob
 }
 
 // limbo is a light, indexed database to temporarily store recently included
@@ -115,7 +114,7 @@ func (l *limbo) parseBlob(id uint64, data []byte) error {
 // existsAndSet checks whether a blob transaction is already tracked by the limbo.
 func (l *limbo) existsAndSet(meta *blobTxMeta) bool {
 	if item := l.index[meta.hash]; item != nil {
-		if item.Tx != nil {
+		if item.TxMeta == nil {
 			item.TxMeta, item.Tx = meta, nil
 		}
 		return true
@@ -123,12 +122,12 @@ func (l *limbo) existsAndSet(meta *blobTxMeta) bool {
 	return false
 }
 
-// tryRepair attempts to repair the limbo by re-encoding all transactions that are
+// setTxMeta attempts to repair the limbo by re-encoding all transactions that are
 // currently in the limbo, but not yet stored in the database. This is useful
 // when the limbo is created from a previous state, and the transactions are not
 // yet stored in the database. The method will re-encode all transactions and
 // store them in the database, updating the in-memory indices at the same time.
-func (l *limbo) tryRepair(store billy.Database) error {
+func (l *limbo) setTxMeta(store billy.Database) error {
 	for _, item := range l.index {
 		if item.Tx == nil {
 			continue
@@ -146,7 +145,12 @@ func (l *limbo) tryRepair(store billy.Database) error {
 			return err
 		}
 		meta := newBlobTxMeta(id, tx.Size(), store.Size(id), tx)
-		l.existsAndSet(meta)
+		if _, err := l.pull(meta.hash); err != nil {
+			return err
+		}
+		if err := l.push(meta, item.Block); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -251,7 +255,7 @@ func (l *limbo) setAndIndex(meta *blobTxMeta, block uint64) error {
 		TxHash: txhash,
 		Block:  block,
 		TxMeta: meta,
-		Tx:     nil, // The tx is stored in the blob database, not here.
+		Tx:     nil, // The tx already stored in the blob database, not here.
 	}
 	data, err := rlp.EncodeToBytes(item)
 	if err != nil {

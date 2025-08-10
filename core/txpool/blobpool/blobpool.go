@@ -133,7 +133,7 @@ type blobTxMetaMarshal struct {
 
 // EncodeRLP encodes the blobTxMeta into the given writer.
 func (b *blobTxMeta) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, blobTxMetaMarshal{
+	return rlp.Encode(w, &blobTxMetaMarshal{
 		Hash:        b.hash,
 		Vhashes:     b.vhashes,
 		ID:          b.id,
@@ -468,8 +468,8 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	}
 	p.store = store
 
-	// If still exit blob txs in limbo, try to repair them. This is needed.
-	if err = p.limbo.tryRepair(p.store); err != nil {
+	// If still exit blob txs in limbo, delete the old reset a new one without tx content.
+	if err = p.limbo.setTxMeta(p.store); err != nil {
 		return err
 	}
 
@@ -552,6 +552,8 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 	}
 
 	meta := newBlobTxMeta(id, tx.Size(), size, tx)
+
+	// If the tx metadata is already in limbo, we don't need to add it to the pool.
 	if p.limbo.existsAndSet(meta) {
 		return nil
 	}
