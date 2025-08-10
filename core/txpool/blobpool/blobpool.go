@@ -620,7 +620,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 			p.lookup.untrack(txs[i])
 
 			if filled && inclusions != nil {
-				// If the tx metadata is recorded by limbo, we don't need to delete the tx from db.
+				// If the tx metadata is recorded by limbo, keep the tx in the db.
 				if p.offload(addr, txs[i], inclusions) {
 					ids = ids[:len(ids)-1]
 				}
@@ -664,7 +664,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 
 			// Included transactions blobs need to be moved to the limbo
 			if inclusions != nil {
-				// If the tx metadata is recorded by limbo, we don't need to delete the tx from db.
+				// If the tx metadata is recorded by limbo, keep the tx in the db.
 				if p.offload(addr, txs[0], inclusions) {
 					ids = ids[:len(ids)-1]
 				}
