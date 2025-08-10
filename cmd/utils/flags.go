@@ -1067,7 +1067,7 @@ func setNodeUserIdent(ctx *cli.Context, cfg *node.Config) {
 // 1. --bootnodes flag
 // 2. Config file
 // 3. Network preset flags (e.g. --holesky)
-// 4. default to Berachainmainnet nodes
+// 4. default to Berachain mainnet nodes
 func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 	urls := params.BerachainBootnodes
 	if ctx.IsSet(BootnodesFlag.Name) {
