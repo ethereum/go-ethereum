@@ -211,11 +211,22 @@ jobs:
         
         ### Docker Images
         
-        Docker images are available at `ghcr.io/berachain/bera-geth` and are signed with [Cosign](https://github.com/sigstore/cosign).
+        Docker images are available at `ghcr.io/berachain/bera-geth` and are signed with [Cosign](https://github.com/sigstore/cosign) using keyless signing from GitHub Actions OIDC.
         
-        To verify Docker images:
+        To verify a specific release image (recommended: by digest):
         ```bash
-        cosign verify ghcr.io/berachain/bera-geth:RELEASE_TAG_PLACEHOLDER
+        cosign verify \
+          --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+          --certificate-identity-regexp "^https://github.com/berachain/bera-geth/.github/workflows/docker.yml@.+" \
+          ghcr.io/berachain/bera-geth@$(docker buildx imagetools inspect ghcr.io/berachain/bera-geth:RELEASE_TAG_PLACEHOLDER | awk '/^Digest:/ {print $2; exit}')
+        ```
+        
+        To verify the `latest` unstable image instead (not recommended; tags can move):
+        ```bash
+        cosign verify \
+          --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+          --certificate-identity-regexp "^https://github.com/berachain/bera-geth/.github/workflows/docker.yml@.+" \
+          ghcr.io/berachain/bera-geth@$(docker buildx imagetools inspect ghcr.io/berachain/bera-geth:latest | awk '/^Digest:/ {print $2; exit}')
         ```
         
         ### Installation
