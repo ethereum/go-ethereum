@@ -1464,3 +1464,11 @@ func (s *StateDB) Witness() *stateless.Witness {
 func (s *StateDB) AccessEvents() *AccessEvents {
 	return s.accessEvents
 }
+
+func (s *StateDB) BeginTrieDepthWindow() {
+	trie.StateDepthMetricsStartBlock()
+}
+
+func (s *StateDB) EndTrieDepthWindow() {
+	trie.StateDepthMetricsEndBlock()
+}
