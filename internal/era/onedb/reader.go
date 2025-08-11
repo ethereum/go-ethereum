@@ -81,6 +81,11 @@ func (e *Era) Close() error {
 	return e.f.Close()
 }
 
+// Iterator returns an iterator over the era file.
+func (e *Era) Iterator() (era.Iterator, error) {
+	return NewIterator(e)
+}
+
 // GetBlockByNumber returns the block for the given block number.
 func (e *Era) GetBlockByNumber(num uint64) (*types.Block, error) {
 	if e.m.start > num || e.m.start+e.m.count <= num {
