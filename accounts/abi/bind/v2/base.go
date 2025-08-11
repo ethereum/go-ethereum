@@ -474,7 +474,7 @@ func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]any
 		config.ToBlock = new(big.Int).SetUint64(*opts.End)
 	}
 	sub, err := c.filterer.SubscribeFilterLogs(ensureContext(opts.Context), config, logs)
-	return logs, sub, nil
+	return logs, sub, err
 }
 
 // WatchLogs filters subscribes to contract logs for future blocks, returning a
