@@ -44,11 +44,12 @@ func init() {
 type stateMap = map[common.Address]*account
 
 type account struct {
-	Balance *big.Int                    `json:"balance,omitempty"`
-	Code    []byte                      `json:"code,omitempty"`
-	Nonce   uint64                      `json:"nonce,omitempty"`
-	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
-	empty   bool
+	Balance  *big.Int                    `json:"balance,omitempty"`
+	Code     []byte                      `json:"code,omitempty"`
+	CodeHash common.Hash                 `json:"codeHash,omitempty"`
+	Nonce    uint64                      `json:"nonce,omitempty"`
+	Storage  map[common.Hash]common.Hash `json:"storage,omitempty"`
+	empty    bool
 }
 
 func (a *account) exists() bool {
@@ -247,6 +248,7 @@ func (t *prestateTracer) processDiffState() {
 		postAccount := &account{Storage: make(map[common.Hash]common.Hash)}
 		newBalance := t.env.StateDB.GetBalance(addr).ToBig()
 		newNonce := t.env.StateDB.GetNonce(addr)
+		newCodeHash := t.env.StateDB.GetCodeHash(addr)
 
 		if newBalance.Cmp(t.pre[addr].Balance) != 0 {
 			modified = true
@@ -255,6 +257,10 @@ func (t *prestateTracer) processDiffState() {
 		if newNonce != t.pre[addr].Nonce {
 			modified = true
 			postAccount.Nonce = newNonce
+		}
+		if newCodeHash != t.pre[addr].CodeHash {
+			modified = true
+			postAccount.CodeHash = newCodeHash
 		}
 		if !t.config.DisableCode {
 			newCode := t.env.StateDB.GetCode(addr)
@@ -301,9 +307,10 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 	}
 
 	acc := &account{
-		Balance: t.env.StateDB.GetBalance(addr).ToBig(),
-		Nonce:   t.env.StateDB.GetNonce(addr),
-		Code:    t.env.StateDB.GetCode(addr),
+		Balance:  t.env.StateDB.GetBalance(addr).ToBig(),
+		Nonce:    t.env.StateDB.GetNonce(addr),
+		Code:     t.env.StateDB.GetCode(addr),
+		CodeHash: t.env.StateDB.GetCodeHash(addr),
 	}
 	if !acc.exists() {
 		acc.empty = true
