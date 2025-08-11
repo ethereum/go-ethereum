@@ -64,8 +64,6 @@ var (
 	headFastBlockGauge      = metrics.NewRegisteredGauge("chain/head/receipt", nil)
 	headFinalizedBlockGauge = metrics.NewRegisteredGauge("chain/head/finalized", nil)
 	headSafeBlockGauge      = metrics.NewRegisteredGauge("chain/head/safe", nil)
-	stateMaxDepthGauge      = metrics.NewRegisteredGauge("chain/state/maxdepth", nil)
-	stateAvgDepthGauge      = metrics.NewRegisteredGauge("chain/state/avgdepth", nil)
 
 	chainInfoGauge   = metrics.NewRegisteredGaugeInfo("chain/info", nil)
 	chainMgaspsMeter = metrics.NewRegisteredResettingTimer("chain/mgasps", nil)
