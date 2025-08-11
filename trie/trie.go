@@ -326,6 +326,10 @@ func (t *Trie) update(key, value []byte) error {
 
 func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error) {
 	if len(key) == 0 {
+		if t.owner == (common.Hash{}) {
+			stateDepthAggregator.record(int64(len(prefix)))
+		}
+
 		if v, ok := n.(valueNode); ok {
 			return !bytes.Equal(v, value.(valueNode)), value, nil
 		}
@@ -445,7 +449,9 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 			// it in the deletion set. The same the valueNode doesn't
 			// need to be tracked at all since it's always embedded.
 			t.tracer.onDelete(prefix)
-
+			if t.owner == (common.Hash{}) {
+				stateDepthAggregator.record(int64(len(prefix)))
+			}
 			return true, nil, nil // remove n entirely for whole matches
 		}
 		// The key is longer than n.Key. Remove the remaining suffix
@@ -468,6 +474,9 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 			// always creates a new slice) instead of append to
 			// avoid modifying n.Key since it might be shared with
 			// other nodes.
+			if t.owner == (common.Hash{}) {
+				stateDepthAggregator.record(int64(len(prefix) + len(key)))
+			}
 			return true, &shortNode{concat(n.Key, child.Key...), child.Val, t.newFlag()}, nil
 		default:
 			return true, &shortNode{n.Key, child, t.newFlag()}, nil
@@ -526,6 +535,9 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 					// Mark the original short node as deleted since the
 					// value is embedded into the parent now.
 					t.tracer.onDelete(append(prefix, byte(pos)))
+					if t.owner == (common.Hash{}) {
+						stateDepthAggregator.record(int64(len(prefix) + 1))
+					}
 
 					k := append([]byte{byte(pos)}, cnode.Key...)
 					return true, &shortNode{k, cnode.Val, t.newFlag()}, nil
