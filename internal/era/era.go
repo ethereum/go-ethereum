@@ -59,44 +59,33 @@ type Era interface {
 	Close() error
 	Start() uint64
 	Count() uint64
+	Iterator() (Iterator, error)
 	GetBlockByNumber(num uint64) (*types.Block, error)
 	GetRawBodyByNumber(num uint64) ([]byte, error)
 	GetRawReceiptsByNumber(num uint64) ([]byte, error)
 }
 
-// NewBuilderFn defines a function type for creating a new Builder.
-type NewBuilderFn func(w io.Writer) Builder
-
-// FilenameFn defines a function type for generating a filename based on network, epoch, and root hash.
-type FilenameFn func(network string, epoch int, root common.Hash) string
-
-// FromFn defines a function type for creating an Era from a ReadAtSeekCloser.
-type FromFn func(f ReadAtSeekCloser) (Era, error)
-
-// NewIteratorFn defines a function type for creating a new Iterator from an Era.
-type NewIteratorFn func(e Era) (Iterator, error)
-
 // ReadDir reads all the era1 files in a directory for a given network.
 // Format: <network>-<epoch>-<hexroot>.erae or <network>-<epoch>-<hexroot>.era1
 func ReadDir(dir, network string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
-	var directoryExtension string
+
 	if err != nil {
 		return nil, fmt.Errorf("error reading directory %s: %w", dir, err)
 	}
 	var (
-		next = uint64(0)
-		eras []string
+		next    = uint64(0)
+		eras    []string
+		dirType string
 	)
-	for i, entry := range entries {
-		fileExtension := path.Ext(entry.Name())
-		if i == 0 {
-			directoryExtension = fileExtension
-		} else if directoryExtension != fileExtension {
-			return nil, fmt.Errorf("directory %s contains mixed era file formats", dir)
-		}
-		if fileExtension != ".erae" || fileExtension != ".era1" {
+	fmt.Println("entries", entries)
+	for _, entry := range entries {
+		ext := path.Ext(entry.Name())
+		if ext != ".erae" && ext != ".era1" {
 			continue
+		}
+		if dirType == "" {
+			dirType = ext
 		}
 		parts := strings.Split(entry.Name(), "-")
 		if len(parts) != 3 || parts[0] != network {
@@ -107,6 +96,9 @@ func ReadDir(dir, network string) ([]string, error) {
 			return nil, fmt.Errorf("malformed era filenames: %s", entry.Name())
 		} else if epoch != next {
 			return nil, fmt.Errorf("missing epoch %d", next)
+		}
+		if dirType != ext {
+			return nil, fmt.Errorf("directory %s contains mixed era file formats: want %s, have %s", dir, dirType, ext)
 		}
 		next += 1
 		eras = append(eras, entry.Name())

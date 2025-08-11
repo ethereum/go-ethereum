@@ -88,6 +88,11 @@ func (e *Era) Count() uint64 {
 	return e.m.count
 }
 
+// Iterator returns an iterator over the era file.
+func (e *Era) Iterator() (era.Iterator, error) {
+	return NewIterator(e)
+}
+
 // GetBlockByNumber retrieves the block if present within the era file.
 func (e *Era) GetBlockByNumber(blockNum uint64) (*types.Block, error) {
 	h, err := e.GetHeader(blockNum)

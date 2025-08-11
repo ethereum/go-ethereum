@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -517,18 +518,20 @@ func importHistory(ctx *cli.Context) error {
 		network = networks[0]
 	}
 
-	format := ctx.String(utils.EraFormatFlag.Name)
+	var (
+		format = ctx.String(utils.EraFormatFlag.Name)
+		from   func(era.ReadAtSeekCloser) (era.Era, error)
+	)
 	switch format {
 	case "era1", "era":
-		if err := utils.ImportHistory(chain, dir, network, onedb.From, onedb.NewIterator); err != nil {
-			return err
-		}
+		from = onedb.From
 	case "erae":
-		if err := utils.ImportHistory(chain, dir, network, execdb.From, execdb.NewIterator); err != nil {
-			return err
-		}
+		from = execdb.From
 	default:
 		return fmt.Errorf("unknown --era.format %q (expected 'era1' or 'erae')", format)
+	}
+	if err := utils.ImportHistory(chain, dir, network, from); err != nil {
+		return err
 	}
 
 	fmt.Printf("Import done in %v\n", time.Since(start))
@@ -562,18 +565,23 @@ func exportHistory(ctx *cli.Context) error {
 		utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.Number.Uint64())
 	}
 
-	format := ctx.String(utils.EraFormatFlag.Get(ctx))
+	var (
+		format     = ctx.String(utils.EraFormatFlag.Get(ctx))
+		filename   func(network string, epoch int, root common.Hash) string
+		newBuilder func(w io.Writer) era.Builder
+	)
 	switch format {
 	case "era1", "era":
-		if err := utils.ExportHistory(chain, dir, uint64(first), uint64(last), uint64(era.MaxSize), onedb.NewBuilder, onedb.Filename); err != nil {
-			utils.Fatalf("Export error: %v\n", err)
-		}
+		newBuilder = func(w io.Writer) era.Builder { return onedb.NewBuilder(w) }
+		filename = func(network string, epoch int, root common.Hash) string { return onedb.Filename(network, epoch, root) }
 	case "erae":
-		if err := utils.ExportHistory(chain, dir, uint64(first), uint64(last), uint64(era.MaxSize), execdb.NewBuilder, execdb.Filename); err != nil {
-			utils.Fatalf("Export error: %v\n", err)
-		}
+		newBuilder = func(w io.Writer) era.Builder { return execdb.NewBuilder(w) }
+		filename = func(network string, epoch int, root common.Hash) string { return execdb.Filename(network, epoch, root) }
 	default:
 		return fmt.Errorf("unknown archive format %q (use 'era1' or 'erae')", format)
+	}
+	if err := utils.ExportHistory(chain, dir, uint64(first), uint64(last), uint64(era.MaxSize), newBuilder, filename); err != nil {
+		utils.Fatalf("Export error: %v\n", err)
 	}
 
 	fmt.Printf("Export done in %v\n", time.Since(start))

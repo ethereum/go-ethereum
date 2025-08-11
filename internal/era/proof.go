@@ -110,7 +110,3 @@ func (p *BlockProofHistoricalSummariesDeneb) EncodeRLP(w io.Writer) error {
 
 // Variant returns the variant type of the BlockProofHistoricalSummariesDeneb.
 func (*BlockProofHistoricalSummariesDeneb) Variant() variant { return proofDeneb }
-
-func variantOf(p Proof) variant {
-	return p.Variant()
-}

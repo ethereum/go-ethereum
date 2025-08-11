@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/era/onedb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
@@ -89,7 +90,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	dir := t.TempDir()
 
 	// Export history to temp directory.
-	if err := ExportHistory(chain, dir, 0, count, step); err != nil {
+	if err := ExportHistory(chain, dir, 0, count, step, onedb.NewBuilder, onedb.Filename); err != nil {
 		t.Fatalf("error exporting history: %v", err)
 	}
 
@@ -101,7 +102,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	checksums := strings.Split(string(b), "\n")
 
 	// Verify each Era.
-	entries, _ := onedb.ReadDir(dir, "mainnet")
+	entries, _ := era.ReadDir(dir, "mainnet")
 	for i, filename := range entries {
 		func() {
 			f, err := os.Open(filepath.Join(dir, filename))
@@ -170,7 +171,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to initialize chain: %v", err)
 	}
-	if err := ImportHistory(imported, dir, "mainnet"); err != nil {
+	if err := ImportHistory(imported, dir, "mainnet", onedb.From); err != nil {
 		t.Fatalf("failed to import chain: %v", err)
 	}
 	if have, want := imported.CurrentHeader(), chain.CurrentHeader(); have.Hash() != want.Hash() {

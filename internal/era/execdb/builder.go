@@ -89,7 +89,6 @@ type Builder struct {
 	written       uint64
 	expectsProofs bool
 	isPreMerge    bool
-	numPreMerge   int      // number of pre-merge blocks
 	finalTD       *big.Int // final total difficulty, used for pre-merge and merge straddling files
 }
 

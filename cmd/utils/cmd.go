@@ -253,7 +253,7 @@ func readList(filename string) ([]string, error) {
 // ImportHistory imports Era1 files containing historical block information,
 // starting from genesis. The assumption is held that the provided chain
 // segment in Era1 file should all be canonical and verified.
-func ImportHistory(chain *core.BlockChain, dir string, network string, from era.FromFn, iterator era.NewIteratorFn) error {
+func ImportHistory(chain *core.BlockChain, dir string, network string, from func(f era.ReadAtSeekCloser) (era.Era, error)) error {
 	if chain.CurrentSnapBlock().Number.BitLen() != 0 {
 		return errors.New("history import only supported when starting from genesis")
 	}
@@ -305,7 +305,7 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from era.
 			if err != nil {
 				return fmt.Errorf("error opening era: %w", err)
 			}
-			it, err := iterator(e)
+			it, err := e.Iterator()
 			if err != nil {
 				return fmt.Errorf("error creating iterator: %w", err)
 			}
@@ -417,7 +417,7 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 
 // ExportHistory exports blockchain history into the specified directory,
 // following the Era format.
-func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64, builderfn era.NewBuilderFn, filename era.FilenameFn) error {
+func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64, newBuilder func(io.Writer) era.Builder, filename func(network string, epoch int, root common.Hash) string) error {
 	log.Info("Exporting blockchain history", "dir", dir)
 	if head := bc.CurrentBlock().Number.Uint64(); head < last {
 		log.Warn("Last block beyond head, setting last = head", "head", head, "last", last)
@@ -455,7 +455,7 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64, bu
 			}
 			defer fh.Close()
 
-			bldr := builderfn(fh)
+			bldr := newBuilder(fh)
 
 			for j := uint64(0); j < step && batch+j <= last; j++ {
 				n := batch + j
