@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// ApiServer is a wrapper around BeaconLightApi that implements request.requestServer.
+// ApiServer is a wrapper around BeaconLightApi that implements request.Server.
 type ApiServer struct {
 	api           *BeaconLightApi
 	eventCallback func(event request.Event)
@@ -38,7 +38,7 @@ func NewApiServer(api *BeaconLightApi) *ApiServer {
 	return &ApiServer{api: api}
 }
 
-// Subscribe implements request.requestServer.
+// Subscribe implements request.Server.
 func (s *ApiServer) Subscribe(eventCallback func(event request.Event)) {
 	s.eventCallback = eventCallback
 	listener := HeadEventListener{
@@ -61,7 +61,7 @@ func (s *ApiServer) Subscribe(eventCallback func(event request.Event)) {
 	s.unsubscribe = s.api.StartHeadListener(listener)
 }
 
-// SendRequest implements request.requestServer.
+// SendRequest implements request.Server.
 func (s *ApiServer) SendRequest(id request.ID, req request.Request) {
 	go func() {
 		var resp request.Response
@@ -99,7 +99,7 @@ func (s *ApiServer) SendRequest(id request.ID, req request.Request) {
 	}()
 }
 
-// Unsubscribe implements request.requestServer.
+// Unsubscribe implements request.Server.
 // Note: Unsubscribe should not be called concurrently with Subscribe.
 func (s *ApiServer) Unsubscribe() {
 	if s.unsubscribe != nil {
