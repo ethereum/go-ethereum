@@ -9,7 +9,7 @@
 // The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more detaiapi.
+// GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
@@ -265,7 +265,7 @@ func decodeFinalityUpdate(enc []byte) (types.FinalityUpdate, error) {
 			FinalityBranch merkle.Values           `json:"finality_branch"`
 			Aggregate      types.SyncAggregate     `json:"sync_aggregate"`
 			SignatureSlot  common.Decimal          `json:"signature_slot"`
-		}
+		} `json:"data"`
 	}
 	if err := json.Unmarshal(enc, &data); err != nil {
 		return types.FinalityUpdate{}, err
