@@ -54,8 +54,8 @@ func (iter *testIterator) Next() (byte, []byte, []byte, bool) {
 	if iter.index == 42 {
 		iter.index += 1
 	}
-	return OpBatchAdd, []byte(fmt.Sprintf("key-%04d", iter.index)),
-		[]byte(fmt.Sprintf("value %d", iter.index)), true
+	return OpBatchAdd, fmt.Appendf(nil, "key-%04d", iter.index),
+		fmt.Appendf(nil, "value %d", iter.index), true
 }
 
 func (iter *testIterator) Release() {}
@@ -72,7 +72,7 @@ func testExport(t *testing.T, f string) {
 	}
 	// verify
 	for i := 0; i < 1000; i++ {
-		v, err := db.Get([]byte(fmt.Sprintf("key-%04d", i)))
+		v, err := db.Get(fmt.Appendf(nil, "key-%04d", i))
 		if (i < 5 || i == 42) && err == nil {
 			t.Fatalf("expected no element at idx %d, got '%v'", i, string(v))
 		}
@@ -85,7 +85,7 @@ func testExport(t *testing.T, f string) {
 			}
 		}
 	}
-	v, err := db.Get([]byte(fmt.Sprintf("key-%04d", 1000)))
+	v, err := db.Get(fmt.Appendf(nil, "key-%04d", 1000))
 	if err == nil {
 		t.Fatalf("expected no element at idx %d, got '%v'", 1000, string(v))
 	}
@@ -120,7 +120,7 @@ func (iter *deletionIterator) Next() (byte, []byte, []byte, bool) {
 	if iter.index == 42 {
 		iter.index += 1
 	}
-	return OpBatchDel, []byte(fmt.Sprintf("key-%04d", iter.index)), nil, true
+	return OpBatchDel, fmt.Appendf(nil, "key-%04d", iter.index), nil, true
 }
 
 func (iter *deletionIterator) Release() {}
@@ -132,14 +132,14 @@ func testDeletion(t *testing.T, f string) {
 	}
 	db := rawdb.NewMemoryDatabase()
 	for i := 0; i < 1000; i++ {
-		db.Put([]byte(fmt.Sprintf("key-%04d", i)), []byte(fmt.Sprintf("value %d", i)))
+		db.Put(fmt.Appendf(nil, "key-%04d", i), fmt.Appendf(nil, "value %d", i))
 	}
 	err = ImportLDBData(db, f, 5, make(chan struct{}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < 1000; i++ {
-		v, err := db.Get([]byte(fmt.Sprintf("key-%04d", i)))
+		v, err := db.Get(fmt.Appendf(nil, "key-%04d", i))
 		if i < 5 || i == 42 {
 			if err != nil {
 				t.Fatalf("expected element at idx %d, got '%v'", i, err)

@@ -12,10 +12,7 @@ import (
 // Be sure to unregister the meter from the registry once it is of no use to
 // allow for garbage collection.
 func GetOrRegisterMeter(name string, r Registry) *Meter {
-	if r == nil {
-		r = DefaultRegistry
-	}
-	return r.GetOrRegister(name, NewMeter).(*Meter)
+	return getOrRegister(name, NewMeter, r)
 }
 
 // NewMeter constructs a new Meter and launches a goroutine.
@@ -131,19 +128,15 @@ var arbiter = meterTicker{meters: make(map[*Meter]struct{})}
 type meterTicker struct {
 	mu sync.RWMutex
 
-	started bool
-	meters  map[*Meter]struct{}
+	once   sync.Once
+	meters map[*Meter]struct{}
 }
 
-// add adds another *Meter ot the arbiter, and starts the arbiter ticker.
+// add a *Meter to the arbiter
 func (ma *meterTicker) add(m *Meter) {
 	ma.mu.Lock()
 	defer ma.mu.Unlock()
 	ma.meters[m] = struct{}{}
-	if !ma.started {
-		ma.started = true
-		go ma.loop()
-	}
 }
 
 // remove removes a meter from the set of ticked meters.
@@ -153,7 +146,7 @@ func (ma *meterTicker) remove(m *Meter) {
 	ma.mu.Unlock()
 }
 
-// loop ticks meters on a 5 second interval.
+// loop ticks meters on a 5-second interval.
 func (ma *meterTicker) loop() {
 	ticker := time.NewTicker(5 * time.Second)
 	for range ticker.C {
@@ -166,4 +159,9 @@ func (ma *meterTicker) loop() {
 		}
 		ma.mu.RUnlock()
 	}
+}
+
+// startMeterTickerLoop will start the arbiter ticker.
+func startMeterTickerLoop() {
+	arbiter.once.Do(func() { go arbiter.loop() })
 }

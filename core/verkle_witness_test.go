@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"slices"
 	"testing"
@@ -119,9 +120,9 @@ func TestProcessVerkle(t *testing.T) {
 	// Verkle trees use the snapshot, which must be enabled before the
 	// data is saved into the tree+database.
 	// genesis := gspec.MustCommit(bcdb, triedb)
-	cacheConfig := DefaultCacheConfigWithScheme(rawdb.PathScheme)
-	cacheConfig.SnapshotLimit = 0
-	blockchain, _ := NewBlockChain(bcdb, cacheConfig, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil)
+	options := DefaultConfig().WithStateScheme(rawdb.PathScheme)
+	options.SnapshotLimit = 0
+	blockchain, _ := NewBlockChain(bcdb, gspec, beacon.New(ethash.NewFaker()), options)
 	defer blockchain.Stop()
 
 	txCost1 := params.TxGas
@@ -202,12 +203,15 @@ func TestProcessVerkle(t *testing.T) {
 
 	t.Log("verified verkle proof, inserting blocks into the chain")
 
+	for i, b := range chain {
+		fmt.Printf("%d %x\n", i, b.Root())
+	}
 	endnum, err := blockchain.InsertChain(chain)
 	if err != nil {
 		t.Fatalf("block %d imported with error: %v", endnum, err)
 	}
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		b := blockchain.GetBlockByNumber(uint64(i) + 1)
 		if b == nil {
 			t.Fatalf("expected block %d to be present in chain", i+1)
@@ -255,7 +259,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 	})
 	t.Run("Verkle", func(t *testing.T) {
 		db := rawdb.NewMemoryDatabase()
-		cacheConfig := DefaultCacheConfigWithScheme(rawdb.PathScheme)
+		cacheConfig := DefaultConfig().WithStateScheme(rawdb.PathScheme)
 		cacheConfig.SnapshotLimit = 0
 		triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(true))
 		statedb, _ := state.New(types.EmptyVerkleHash, state.NewDatabase(triedb, nil))

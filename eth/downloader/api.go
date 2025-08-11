@@ -81,6 +81,10 @@ func (api *DownloaderAPI) eventLoop() {
 				prog.TxIndexFinishedBlocks = txProg.Indexed
 				prog.TxIndexRemainingBlocks = txProg.Remaining
 			}
+			remain, err := api.chain.StateIndexProgress()
+			if err == nil {
+				prog.StateIndexRemaining = remain
+			}
 			return prog
 		}
 	)
@@ -196,7 +200,7 @@ func (s *SyncStatusSubscription) Unsubscribe() {
 }
 
 // SubscribeSyncStatus creates a subscription that will broadcast new synchronisation updates.
-// The given channel must receive interface values, the result can either.
+// The given channel must receive interface values, the result can either be a SyncingResult or false.
 func (api *DownloaderAPI) SubscribeSyncStatus(status chan interface{}) *SyncStatusSubscription {
 	api.installSyncSubscription <- status
 	return &SyncStatusSubscription{api: api, c: status}

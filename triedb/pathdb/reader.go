@@ -17,11 +17,15 @@
 package pathdb
 
 import (
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb/database"
@@ -50,8 +54,10 @@ func (loc *nodeLoc) string() string {
 // reader implements the database.NodeReader interface, providing the functionalities to
 // retrieve trie nodes by wrapping the internal state layer.
 type reader struct {
-	layer       layer
+	db          *Database
+	state       common.Hash
 	noHashCheck bool
+	layer       layer
 }
 
 // Node implements database.NodeReader interface, retrieving the node with specified
@@ -94,7 +100,23 @@ func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte,
 // - the returned account data is not a copy, please don't modify it
 // - no error will be returned if the requested account is not found in database
 func (r *reader) AccountRLP(hash common.Hash) ([]byte, error) {
-	return r.layer.account(hash, 0)
+	l, err := r.db.tree.lookupAccount(hash, r.state)
+	if err != nil {
+		return nil, err
+	}
+	// If the located layer is stale, fall back to the slow path to retrieve
+	// the account data. This is an edge case where the located layer is the
+	// disk layer (e.g., the requested account was not changed in all the diff
+	// layers), and it becomes stale within a very short time window.
+	//
+	// This fallback mechanism is essential, because the traversal starts from
+	// the entry point layer and goes down, the staleness of the disk layer does
+	// not affect the result unless the entry point layer is also stale.
+	blob, err := l.account(hash, 0)
+	if errors.Is(err, errSnapshotStale) {
+		return r.layer.account(hash, 0)
+	}
+	return blob, err
 }
 
 // Account directly retrieves the account associated with a particular hash in
@@ -105,7 +127,7 @@ func (r *reader) AccountRLP(hash common.Hash) ([]byte, error) {
 // - the returned account object is safe to modify
 // - no error will be returned if the requested account is not found in database
 func (r *reader) Account(hash common.Hash) (*types.SlimAccount, error) {
-	blob, err := r.layer.account(hash, 0)
+	blob, err := r.AccountRLP(hash)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +149,23 @@ func (r *reader) Account(hash common.Hash) (*types.SlimAccount, error) {
 // - the returned storage data is not a copy, please don't modify it
 // - no error will be returned if the requested slot is not found in database
 func (r *reader) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
-	return r.layer.storage(accountHash, storageHash, 0)
+	l, err := r.db.tree.lookupStorage(accountHash, storageHash, r.state)
+	if err != nil {
+		return nil, err
+	}
+	// If the located layer is stale, fall back to the slow path to retrieve
+	// the storage data. This is an edge case where the located layer is the
+	// disk layer (e.g., the requested account was not changed in all the diff
+	// layers), and it becomes stale within a very short time window.
+	//
+	// This fallback mechanism is essential, because the traversal starts from
+	// the entry point layer and goes down, the staleness of the disk layer does
+	// not affect the result unless the entry point layer is also stale.
+	blob, err := l.storage(accountHash, storageHash, 0)
+	if errors.Is(err, errSnapshotStale) {
+		return r.layer.storage(accountHash, storageHash, 0)
+	}
+	return blob, err
 }
 
 // NodeReader retrieves a layer belonging to the given state root.
@@ -136,7 +174,12 @@ func (db *Database) NodeReader(root common.Hash) (database.NodeReader, error) {
 	if layer == nil {
 		return nil, fmt.Errorf("state %#x is not available", root)
 	}
-	return &reader{layer: layer, noHashCheck: db.isVerkle}, nil
+	return &reader{
+		db:          db,
+		state:       root,
+		noHashCheck: db.isVerkle,
+		layer:       layer,
+	}, nil
 }
 
 // StateReader returns a reader that allows access to the state data associated
@@ -146,5 +189,128 @@ func (db *Database) StateReader(root common.Hash) (database.StateReader, error) 
 	if layer == nil {
 		return nil, fmt.Errorf("state %#x is not available", root)
 	}
-	return &reader{layer: layer}, nil
+	return &reader{
+		db:    db,
+		state: root,
+		layer: layer,
+	}, nil
+}
+
+// HistoricalStateReader is a wrapper over history reader, providing access to
+// historical state.
+type HistoricalStateReader struct {
+	db     *Database
+	reader *historyReader
+	id     uint64
+}
+
+// HistoricReader constructs a reader for accessing the requested historic state.
+func (db *Database) HistoricReader(root common.Hash) (*HistoricalStateReader, error) {
+	// Bail out if the state history hasn't been fully indexed
+	if db.indexer == nil || !db.indexer.inited() {
+		return nil, errors.New("state histories haven't been fully indexed yet")
+	}
+	if db.freezer == nil {
+		return nil, errors.New("state histories are not available")
+	}
+	// States at the current disk layer or above are directly accessible via
+	// db.StateReader.
+	//
+	// States older than the current disk layer (including the disk layer
+	// itself) are available through historic state access.
+	//
+	// Note: the requested state may refer to a stale historic state that has
+	// already been pruned. This function does not validate availability, as
+	// underlying states may be pruned dynamically. Validity is checked during
+	// each actual state retrieval.
+	id := rawdb.ReadStateID(db.diskdb, root)
+	if id == nil {
+		return nil, fmt.Errorf("state %#x is not available", root)
+	}
+	return &HistoricalStateReader{
+		id:     *id,
+		db:     db,
+		reader: newHistoryReader(db.diskdb, db.freezer),
+	}, nil
+}
+
+// AccountRLP directly retrieves the account RLP associated with a particular
+// address in the slim data format. An error will be returned if the read
+// operation exits abnormally. Specifically, if the layer is already stale.
+//
+// Note:
+// - the returned account is not a copy, please don't modify it.
+// - no error will be returned if the requested account is not found in database.
+func (r *HistoricalStateReader) AccountRLP(address common.Address) ([]byte, error) {
+	defer func(start time.Time) {
+		historicalAccountReadTimer.UpdateSince(start)
+	}(time.Now())
+
+	// TODO(rjl493456442): Theoretically, the obtained disk layer could become stale
+	// within a very short time window.
+	//
+	// While reading the account data while holding `db.tree.lock` can resolve
+	// this issue, but it will introduce a heavy contention over the lock.
+	//
+	// Let's optimistically assume the situation is very unlikely to happen,
+	// and try to define a low granularity lock if the current approach doesn't
+	// work later.
+	dl := r.db.tree.bottom()
+	hash := crypto.Keccak256Hash(address.Bytes())
+	latest, err := dl.account(hash, 0)
+	if err != nil {
+		return nil, err
+	}
+	return r.reader.read(newAccountIdentQuery(address, hash), r.id, dl.stateID(), latest)
+}
+
+// Account directly retrieves the account associated with a particular address in
+// the slim data format. An error will be returned if the read operation exits
+// abnormally. Specifically, if the layer is already stale.
+//
+// No error will be returned if the requested account is not found in database
+func (r *HistoricalStateReader) Account(address common.Address) (*types.SlimAccount, error) {
+	blob, err := r.AccountRLP(address)
+	if err != nil {
+		return nil, err
+	}
+	if len(blob) == 0 {
+		return nil, nil
+	}
+	account := new(types.SlimAccount)
+	if err := rlp.DecodeBytes(blob, account); err != nil {
+		panic(err)
+	}
+	return account, nil
+}
+
+// Storage directly retrieves the storage data associated with a particular key,
+// within a particular account. An error will be returned if the read operation
+// exits abnormally. Specifically, if the layer is already stale.
+//
+// Note:
+// - the returned storage data is not a copy, please don't modify it.
+// - no error will be returned if the requested slot is not found in database.
+func (r *HistoricalStateReader) Storage(address common.Address, key common.Hash) ([]byte, error) {
+	defer func(start time.Time) {
+		historicalStorageReadTimer.UpdateSince(start)
+	}(time.Now())
+
+	// TODO(rjl493456442): Theoretically, the obtained disk layer could become stale
+	// within a very short time window.
+	//
+	// While reading the account data while holding `db.tree.lock` can resolve
+	// this issue, but it will introduce a heavy contention over the lock.
+	//
+	// Let's optimistically assume the situation is very unlikely to happen,
+	// and try to define a low granularity lock if the current approach doesn't
+	// work later.
+	dl := r.db.tree.bottom()
+	addrHash := crypto.Keccak256Hash(address.Bytes())
+	keyHash := crypto.Keccak256Hash(key.Bytes())
+	latest, err := dl.storage(addrHash, keyHash, 0)
+	if err != nil {
+		return nil, err
+	}
+	return r.reader.read(newStorageIdentQuery(address, addrHash, key, keyHash), r.id, dl.stateID(), latest)
 }

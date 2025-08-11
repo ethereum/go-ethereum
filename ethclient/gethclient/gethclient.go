@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -204,6 +205,28 @@ func (ec *Client) SubscribePendingTransactions(ctx context.Context, ch chan<- co
 	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions")
 }
 
+// TraceTransaction returns the structured logs created during the execution of EVM
+// and returns them as a JSON object.
+func (ec *Client) TraceTransaction(ctx context.Context, hash common.Hash, config *tracers.TraceConfig) (any, error) {
+	var result any
+	err := ec.c.CallContext(ctx, &result, "debug_traceTransaction", hash.Hex(), config)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// TraceBlock returns the structured logs created during the execution of EVM
+// and returns them as a JSON object.
+func (ec *Client) TraceBlock(ctx context.Context, hash common.Hash, config *tracers.TraceConfig) (any, error) {
+	var result any
+	err := ec.c.CallContext(ctx, &result, "debug_traceBlockByHash", hash, config)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func toBlockNumArg(number *big.Int) string {
 	if number == nil {
 		return "latest"
@@ -250,6 +273,9 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 	}
 	if msg.BlobHashes != nil {
 		arg["blobVersionedHashes"] = msg.BlobHashes
+	}
+	if msg.AuthorizationList != nil {
+		arg["authorizationList"] = msg.AuthorizationList
 	}
 	return arg
 }

@@ -55,7 +55,7 @@ func startSimulatedBeaconEthService(t *testing.T, genesis *core.Genesis, period 
 		t.Fatal("can't create eth service:", err)
 	}
 
-	simBeacon, err := NewSimulatedBeacon(period, ethservice)
+	simBeacon, err := NewSimulatedBeacon(period, common.Address{}, ethservice)
 	if err != nil {
 		t.Fatal("can't create simulated beacon:", err)
 	}
@@ -120,7 +120,7 @@ func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 	includedTxs := make(map[common.Hash]struct{})
 	var includedWithdrawals []uint64
 
-	timer := time.NewTimer(12 * time.Second)
+	timer := time.NewTimer(30 * time.Second)
 	for {
 		select {
 		case ev := <-chainHeadCh:
@@ -131,8 +131,8 @@ func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 			for _, includedWithdrawal := range block.Withdrawals() {
 				includedWithdrawals = append(includedWithdrawals, includedWithdrawal.Index)
 			}
-			// ensure all withdrawals/txs included. this will take two blocks b/c number of withdrawals > 10
-			if len(includedTxs) == len(txs) && len(includedWithdrawals) == len(withdrawals) && ev.Header.Number.Cmp(big.NewInt(2)) == 0 {
+			// ensure all withdrawals/txs included. this will at least take two blocks b/c number of withdrawals > 10
+			if len(includedTxs) == len(txs) && len(includedWithdrawals) == len(withdrawals) {
 				return
 			}
 		case <-timer.C:

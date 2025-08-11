@@ -278,12 +278,11 @@ func newHistory(root common.Hash, parent common.Hash, block uint64, accounts map
 // and the hash of the storage slot key.
 func (h *history) stateSet() (map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte) {
 	var (
-		buff     = crypto.NewKeccakState()
 		accounts = make(map[common.Hash][]byte)
 		storages = make(map[common.Hash]map[common.Hash][]byte)
 	)
 	for addr, blob := range h.accounts {
-		addrHash := crypto.HashData(buff, addr.Bytes())
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
 		accounts[addrHash] = blob
 
 		storage, exist := h.storages[addr]
@@ -295,7 +294,7 @@ func (h *history) stateSet() (map[common.Hash][]byte, map[common.Hash]map[common
 		} else {
 			subset := make(map[common.Hash][]byte)
 			for key, slot := range storage {
-				subset[crypto.HashData(buff, key.Bytes())] = slot
+				subset[crypto.Keccak256Hash(key.Bytes())] = slot
 			}
 			storages[addrHash] = subset
 		}
@@ -506,25 +505,41 @@ func (h *history) decode(accountData, storageData, accountIndexes, storageIndexe
 
 // readHistory reads and decodes the state history object by the given id.
 func readHistory(reader ethdb.AncientReader, id uint64) (*history, error) {
-	blob := rawdb.ReadStateHistoryMeta(reader, id)
-	if len(blob) == 0 {
-		return nil, fmt.Errorf("state history not found %d", id)
+	mData, accountIndexes, storageIndexes, accountData, storageData, err := rawdb.ReadStateHistory(reader, id)
+	if err != nil {
+		return nil, err
 	}
 	var m meta
-	if err := m.decode(blob); err != nil {
+	if err := m.decode(mData); err != nil {
 		return nil, err
 	}
-	var (
-		dec            = history{meta: &m}
-		accountData    = rawdb.ReadStateAccountHistory(reader, id)
-		storageData    = rawdb.ReadStateStorageHistory(reader, id)
-		accountIndexes = rawdb.ReadStateAccountIndex(reader, id)
-		storageIndexes = rawdb.ReadStateStorageIndex(reader, id)
-	)
-	if err := dec.decode(accountData, storageData, accountIndexes, storageIndexes); err != nil {
+	h := history{meta: &m}
+	if err := h.decode(accountData, storageData, accountIndexes, storageIndexes); err != nil {
 		return nil, err
 	}
-	return &dec, nil
+	return &h, nil
+}
+
+// readHistories reads and decodes a list of state histories with the specific
+// history range.
+func readHistories(freezer ethdb.AncientReader, start uint64, count uint64) ([]*history, error) {
+	var histories []*history
+	metaList, aIndexList, sIndexList, aDataList, sDataList, err := rawdb.ReadStateHistoryList(freezer, start, count)
+	if err != nil {
+		return nil, err
+	}
+	for i := 0; i < len(metaList); i++ {
+		var m meta
+		if err := m.decode(metaList[i]); err != nil {
+			return nil, err
+		}
+		h := history{meta: &m}
+		if err := h.decode(aDataList[i], sDataList[i], aIndexList[i], sIndexList[i]); err != nil {
+			return nil, err
+		}
+		histories = append(histories, &h)
+	}
+	return histories, nil
 }
 
 // writeHistory persists the state history with the provided state set.
@@ -542,8 +557,9 @@ func writeHistory(writer ethdb.AncientWriter, dl *diffLayer) error {
 	indexSize := common.StorageSize(len(accountIndex) + len(storageIndex))
 
 	// Write history data into five freezer table respectively.
-	rawdb.WriteStateHistory(writer, dl.stateID(), history.meta.encode(), accountIndex, storageIndex, accountData, storageData)
-
+	if err := rawdb.WriteStateHistory(writer, dl.stateID(), history.meta.encode(), accountIndex, storageIndex, accountData, storageData); err != nil {
+		return err
+	}
 	historyDataBytesMeter.Mark(int64(dataSize))
 	historyIndexBytesMeter.Mark(int64(indexSize))
 	historyBuildTimeMeter.UpdateSince(start)

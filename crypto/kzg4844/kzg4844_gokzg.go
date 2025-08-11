@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"sync"
 
-	gokzg4844 "github.com/crate-crypto/go-kzg-4844"
+	gokzg4844 "github.com/crate-crypto/go-eth-kzg"
 )
 
 // context is the crypto primitive pre-seeded with the trusted setup parameters.
@@ -95,4 +95,56 @@ func gokzgVerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error 
 	gokzgIniter.Do(gokzgInit)
 
 	return context.VerifyBlobKZGProof((*gokzg4844.Blob)(blob), (gokzg4844.KZGCommitment)(commitment), (gokzg4844.KZGProof)(proof))
+}
+
+// gokzgComputeCellProofs returns the KZG cell proofs that are used to verify the blob against
+// the commitment.
+//
+// This method does not verify that the commitment is correct with respect to blob.
+func gokzgComputeCellProofs(blob *Blob) ([]Proof, error) {
+	gokzgIniter.Do(gokzgInit)
+
+	_, proofs, err := context.ComputeCellsAndKZGProofs((*gokzg4844.Blob)(blob), 0)
+	if err != nil {
+		return []Proof{}, err
+	}
+	var p []Proof
+	for _, proof := range proofs {
+		p = append(p, (Proof)(proof))
+	}
+	return p, nil
+}
+
+// gokzgVerifyCellProofs verifies that the blob data corresponds to the provided commitment.
+func gokzgVerifyCellProofBatch(blobs []Blob, commitments []Commitment, cellProofs []Proof) error {
+	gokzgIniter.Do(gokzgInit)
+
+	var (
+		proofs      = make([]gokzg4844.KZGProof, len(cellProofs))
+		commits     = make([]gokzg4844.KZGCommitment, 0, len(cellProofs))
+		cellIndices = make([]uint64, 0, len(cellProofs))
+		cells       = make([]*gokzg4844.Cell, 0, len(cellProofs))
+	)
+	// Copy over the cell proofs
+	for i, proof := range cellProofs {
+		proofs[i] = gokzg4844.KZGProof(proof)
+	}
+	// Blow up the commitments to be the same length as the proofs
+	for _, commitment := range commitments {
+		for range gokzg4844.CellsPerExtBlob {
+			commits = append(commits, gokzg4844.KZGCommitment(commitment))
+		}
+	}
+	// Compute the cell and cell indices
+	for i := range blobs {
+		cellsI, err := context.ComputeCells((*gokzg4844.Blob)(&blobs[i]), 2)
+		if err != nil {
+			return err
+		}
+		cells = append(cells, cellsI[:]...)
+		for idx := range len(cellsI) {
+			cellIndices = append(cellIndices, uint64(idx))
+		}
+	}
+	return context.VerifyCellKZGProofBatch(commits, cellIndices, cells[:], proofs)
 }

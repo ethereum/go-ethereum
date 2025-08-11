@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	ctypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -100,6 +101,15 @@ func (ec *engineClient) callNewPayload(fork string, event types.ChainHeadEvent) 
 		params = []any{execData}
 	)
 	switch fork {
+	case "electra":
+		method = "engine_newPayloadV4"
+		parentBeaconRoot := event.BeaconHead.ParentRoot
+		blobHashes := collectBlobHashes(event.Block)
+		hexRequests := make([]hexutil.Bytes, len(event.ExecRequests))
+		for i := range event.ExecRequests {
+			hexRequests[i] = hexutil.Bytes(event.ExecRequests[i])
+		}
+		params = append(params, blobHashes, parentBeaconRoot, hexRequests)
 	case "deneb":
 		method = "engine_newPayloadV3"
 		parentBeaconRoot := event.BeaconHead.ParentRoot
@@ -135,7 +145,7 @@ func (ec *engineClient) callForkchoiceUpdated(fork string, event types.ChainHead
 
 	var method string
 	switch fork {
-	case "deneb":
+	case "deneb", "electra":
 		method = "engine_forkchoiceUpdatedV3"
 	case "capella":
 		method = "engine_forkchoiceUpdatedV2"

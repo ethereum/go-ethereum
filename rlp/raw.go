@@ -26,7 +26,7 @@ import (
 // not verify whether the content of RawValues is valid RLP.
 type RawValue []byte
 
-var rawValueType = reflect.TypeOf(RawValue{})
+var rawValueType = reflect.TypeFor[RawValue]()
 
 // StringSize returns the encoded size of a string.
 func StringSize(s string) uint64 {

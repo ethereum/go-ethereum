@@ -97,15 +97,15 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 
 // GetBlockNumber retrieves the block number belonging to the given hash
 // from the cache or database
-func (hc *HeaderChain) GetBlockNumber(hash common.Hash) *uint64 {
+func (hc *HeaderChain) GetBlockNumber(hash common.Hash) (uint64, bool) {
 	if cached, ok := hc.numberCache.Get(hash); ok {
-		return &cached
+		return cached, true
 	}
-	number := rawdb.ReadHeaderNumber(hc.chainDb, hash)
-	if number != nil {
-		hc.numberCache.Add(hash, *number)
+	number, ok := rawdb.ReadHeaderNumber(hc.chainDb, hash)
+	if ok {
+		hc.numberCache.Add(hash, number)
 	}
-	return number
+	return number, ok
 }
 
 type headerWriteResult struct {
@@ -237,7 +237,8 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header) (int, error) {
 }
 
 // writeHeadersAndSetHead writes a batch of block headers and applies the last
-// header as the chain head if the fork choicer says it's ok to update the chain.
+// header as the chain head.
+//
 // Note: This method is not concurrent-safe with inserting blocks simultaneously
 // into the chain, as side effects caused by reorganisations cannot be emulated
 // without the real blocks. Hence, writing headers directly should only be done
@@ -272,12 +273,14 @@ func (hc *HeaderChain) writeHeadersAndSetHead(headers []*types.Header) (*headerW
 	return result, nil
 }
 
+// ValidateHeaderChain verifies that the supplied header chain is contiguous
+// and conforms to consensus rules.
 func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header) (int, error) {
 	// Do a sanity check that the provided chain is actually ordered and linked
 	for i := 1; i < len(chain); i++ {
 		if chain[i].Number.Uint64() != chain[i-1].Number.Uint64()+1 {
-			hash := chain[i].Hash()
-			parentHash := chain[i-1].Hash()
+			hash, parentHash := chain[i].Hash(), chain[i-1].Hash()
+
 			// Chain broke ancestry, log a message (programming error) and skip insertion
 			log.Error("Non contiguous header insert", "number", chain[i].Number, "hash", hash,
 				"parent", chain[i].ParentHash, "prevnumber", chain[i-1].Number, "prevhash", parentHash)
@@ -302,7 +305,6 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header) (int, error) {
 			return i, err
 		}
 	}
-
 	return 0, nil
 }
 
@@ -400,11 +402,11 @@ func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header 
 // GetHeaderByHash retrieves a block header from the database by hash, caching it if
 // found.
 func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.Header {
-	number := hc.GetBlockNumber(hash)
-	if number == nil {
+	number, ok := hc.GetBlockNumber(hash)
+	if !ok {
 		return nil
 	}
-	return hc.GetHeader(hash, *number)
+	return hc.GetHeader(hash, number)
 }
 
 // HasHeader checks if a block header is present in the database or not.
@@ -589,17 +591,50 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 				hashes = append(hashes, hdr.Hash())
 			}
 			for _, hash := range hashes {
+				// Remove the associated block body and receipts if required.
+				//
+				// If the block is in the chain freezer, then this delete operation
+				// is actually ineffective.
 				if delFn != nil {
 					delFn(batch, hash, num)
 				}
+				// Remove the hash->number mapping along with the header itself
 				rawdb.DeleteHeader(batch, hash, num)
 			}
+			// Remove the number->hash mapping
 			rawdb.DeleteCanonicalHash(batch, num)
 		}
 	}
 	// Flush all accumulated deletions.
 	if err := batch.Write(); err != nil {
-		log.Crit("Failed to rewind block", "error", err)
+		log.Crit("Failed to commit batch in setHead", "err", err)
+	}
+	// Explicitly flush the pending writes in the key-value store to disk, ensuring
+	// data durability of the previous deletions.
+	if err := hc.chainDb.SyncKeyValue(); err != nil {
+		log.Crit("Failed to sync the key-value store in setHead", "err", err)
+	}
+	// Truncate the excessive chain segments in the ancient store.
+	// These are actually deferred deletions from the loop above.
+	//
+	// This step must be performed after synchronizing the key-value store;
+	// otherwise, in the event of a panic, it's theoretically possible to
+	// lose recent key-value store writes while the ancient store deletions
+	// remain, leading to data inconsistency, e.g., the gap between the key
+	// value store and ancient can be created due to unclean shutdown.
+	if delFn != nil {
+		// Ignore the error here since light client won't hit this path
+		frozen, _ := hc.chainDb.Ancients()
+		header := hc.CurrentHeader()
+
+		// Truncate the excessive chain segment above the current chain head
+		// in the ancient store.
+		if header.Number.Uint64()+1 < frozen {
+			_, err := hc.chainDb.TruncateHead(header.Number.Uint64() + 1)
+			if err != nil {
+				log.Crit("Failed to truncate head block", "err", err)
+			}
+		}
 	}
 	// Clear out any stale content from the caches
 	hc.headerCache.Purge()

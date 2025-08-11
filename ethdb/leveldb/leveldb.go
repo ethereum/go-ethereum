@@ -22,6 +22,7 @@ package leveldb
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -31,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/errors"
+	lerrors "github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -120,7 +121,7 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, options)
-	if _, corrupted := err.(*errors.ErrCorrupted); corrupted {
+	if _, corrupted := err.(*lerrors.ErrCorrupted); corrupted {
 		db, err = leveldb.RecoverFile(file, nil)
 	}
 	if err != nil {
@@ -207,8 +208,6 @@ func (db *Database) Delete(key []byte) error {
 	return db.db.Delete(key, nil)
 }
 
-var ErrTooManyKeys = errors.New("too many keys in deleted range")
-
 // DeleteRange deletes all of the keys (and values) in the range [start,end)
 // (inclusive on start, exclusive on end).
 // Note that this is a fallback implementation as leveldb does not natively
@@ -222,17 +221,20 @@ func (db *Database) DeleteRange(start, end []byte) error {
 	defer it.Release()
 
 	var count int
-	for it.Next() && bytes.Compare(end, it.Key()) > 0 {
+	for it.Next() && (end == nil || bytes.Compare(end, it.Key()) > 0) {
 		count++
 		if count > 10000 { // should not block for more than a second
 			if err := batch.Write(); err != nil {
 				return err
 			}
-			return ErrTooManyKeys
+			return ethdb.ErrTooManyKeys
 		}
 		if err := batch.Delete(it.Key()); err != nil {
 			return err
 		}
+	}
+	if err := it.Error(); err != nil {
+		return err
 	}
 	return batch.Write()
 }
@@ -326,6 +328,22 @@ func (db *Database) Path() string {
 	return db.fn
 }
 
+// SyncKeyValue flushes all pending writes in the write-ahead-log to disk,
+// ensuring data durability up to that point.
+func (db *Database) SyncKeyValue() error {
+	// In theory, the WAL (Write-Ahead Log) can be explicitly synchronized using
+	// a write operation with SYNC=true. However, there is no dedicated key reserved
+	// for this purpose, and even a nil key (key=nil) is considered a valid
+	// database entry.
+	//
+	// In LevelDB, writes are blocked until the data is written to the WAL, meaning
+	// recent writes won't be lost unless a power failure or system crash occurs.
+	// Additionally, LevelDB is no longer the default database engine and is likely
+	// only used by hash-mode archive nodes. Given this, the durability guarantees
+	// without explicit sync are acceptable in the context of LevelDB.
+	return nil
+}
+
 // meter periodically retrieves internal leveldb counters and reports them to
 // the metrics subsystem.
 func (db *Database) meter(refresh time.Duration, namespace string) {
@@ -368,29 +386,17 @@ func (db *Database) meter(refresh time.Duration, namespace string) {
 		compactions[i%2][2] = stats.LevelRead.Sum()
 		compactions[i%2][3] = stats.LevelWrite.Sum()
 		// Update all the requested meters
-		if db.diskSizeGauge != nil {
-			db.diskSizeGauge.Update(compactions[i%2][0])
-		}
-		if db.compTimeMeter != nil {
-			db.compTimeMeter.Mark(compactions[i%2][1] - compactions[(i-1)%2][1])
-		}
-		if db.compReadMeter != nil {
-			db.compReadMeter.Mark(compactions[i%2][2] - compactions[(i-1)%2][2])
-		}
-		if db.compWriteMeter != nil {
-			db.compWriteMeter.Mark(compactions[i%2][3] - compactions[(i-1)%2][3])
-		}
+		db.diskSizeGauge.Update(compactions[i%2][0])
+		db.compTimeMeter.Mark(compactions[i%2][1] - compactions[(i-1)%2][1])
+		db.compReadMeter.Mark(compactions[i%2][2] - compactions[(i-1)%2][2])
+		db.compWriteMeter.Mark(compactions[i%2][3] - compactions[(i-1)%2][3])
 		var (
 			delayN   = int64(stats.WriteDelayCount)
 			duration = stats.WriteDelayDuration
 			paused   = stats.WritePaused
 		)
-		if db.writeDelayNMeter != nil {
-			db.writeDelayNMeter.Mark(delayN - delaystats[0])
-		}
-		if db.writeDelayMeter != nil {
-			db.writeDelayMeter.Mark(duration.Nanoseconds() - delaystats[1])
-		}
+		db.writeDelayNMeter.Mark(delayN - delaystats[0])
+		db.writeDelayMeter.Mark(duration.Nanoseconds() - delaystats[1])
 		// If a warning that db is performing compaction has been displayed, any subsequent
 		// warnings will be withheld for one minute not to overwhelm the user.
 		if paused && delayN-delaystats[0] == 0 && duration.Nanoseconds()-delaystats[1] == 0 &&
@@ -404,12 +410,8 @@ func (db *Database) meter(refresh time.Duration, namespace string) {
 			nRead  = int64(stats.IORead)
 			nWrite = int64(stats.IOWrite)
 		)
-		if db.diskReadMeter != nil {
-			db.diskReadMeter.Mark(nRead - iostats[0])
-		}
-		if db.diskWriteMeter != nil {
-			db.diskWriteMeter.Mark(nWrite - iostats[1])
-		}
+		db.diskReadMeter.Mark(nRead - iostats[0])
+		db.diskWriteMeter.Mark(nWrite - iostats[1])
 		iostats[0], iostats[1] = nRead, nWrite
 
 		db.memCompGauge.Update(int64(stats.MemComp))
@@ -463,6 +465,38 @@ func (b *batch) Delete(key []byte) error {
 	return nil
 }
 
+// DeleteRange removes all keys in the range [start, end) from the batch for
+// later committing, inclusive on start, exclusive on end.
+//
+// Note that this is a fallback implementation as leveldb does not natively
+// support range deletion in batches. It iterates through the database to find
+// keys in the range and adds them to the batch for deletion.
+func (b *batch) DeleteRange(start, end []byte) error {
+	// Create an iterator to scan through the keys in the range
+	slice := &util.Range{
+		Start: start, // If nil, it represents the key before all keys
+		Limit: end,   // If nil, it represents the key after all keys
+	}
+	it := b.db.NewIterator(slice, nil)
+	defer it.Release()
+
+	var count int
+	for it.Next() {
+		count++
+		key := it.Key()
+		if count > 10000 { // should not block for more than a second
+			return ethdb.ErrTooManyKeys
+		}
+		// Add this key to the batch for deletion
+		b.b.Delete(key)
+		b.size += len(key)
+	}
+	if err := it.Error(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // ValueSize retrieves the amount of data queued up for writing.
 func (b *batch) ValueSize() int {
 	return b.size
@@ -506,6 +540,20 @@ func (r *replayer) Delete(key []byte) {
 		return
 	}
 	r.failure = r.writer.Delete(key)
+}
+
+// DeleteRange removes all keys in the range [start, end) from the key-value data store.
+func (r *replayer) DeleteRange(start, end []byte) {
+	// If the replay already failed, stop executing ops
+	if r.failure != nil {
+		return
+	}
+	// Check if the writer also supports range deletion
+	if rangeDeleter, ok := r.writer.(ethdb.KeyValueRangeDeleter); ok {
+		r.failure = rangeDeleter.DeleteRange(start, end)
+	} else {
+		r.failure = errors.New("ethdb.KeyValueWriter does not implement DeleteRange")
+	}
 }
 
 // bytesPrefixRange returns key range that satisfy

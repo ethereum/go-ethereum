@@ -49,7 +49,7 @@ type resettableFreezer struct {
 //
 // The reset function will delete directory atomically and re-create the
 // freezer from scratch.
-func newResettableFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]bool) (*resettableFreezer, error) {
+func newResettableFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]freezerTableConfig) (*resettableFreezer, error) {
 	if err := cleanup(datadir); err != nil {
 		return nil, err
 	}
@@ -103,15 +103,6 @@ func (f *resettableFreezer) Close() error {
 	defer f.lock.RUnlock()
 
 	return f.freezer.Close()
-}
-
-// HasAncient returns an indicator whether the specified ancient data exists
-// in the freezer
-func (f *resettableFreezer) HasAncient(kind string, number uint64) (bool, error) {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
-
-	return f.freezer.HasAncient(kind, number)
 }
 
 // Ancient retrieves an ancient binary blob from the append-only immutable files.
@@ -194,12 +185,12 @@ func (f *resettableFreezer) TruncateTail(tail uint64) (uint64, error) {
 	return f.freezer.TruncateTail(tail)
 }
 
-// Sync flushes all data tables to disk.
-func (f *resettableFreezer) Sync() error {
+// SyncAncient flushes all data tables to disk.
+func (f *resettableFreezer) SyncAncient() error {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
-	return f.freezer.Sync()
+	return f.freezer.SyncAncient()
 }
 
 // AncientDatadir returns the path of the ancient store.

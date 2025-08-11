@@ -1,0 +1,52 @@
+// Code generated via abigen V2 - DO NOT EDIT.
+// This file is a generated binding and any manual changes will be lost.
+
+package bindtests
+
+import (
+	"bytes"
+	"errors"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+)
+
+// Reference imports to suppress errors if they are not otherwise used.
+var (
+	_ = bytes.Equal
+	_ = errors.New
+	_ = big.NewInt
+	_ = common.Big1
+	_ = types.BloomLookup
+	_ = abi.ConvertType
+)
+
+// EmptyMetaData contains all meta data concerning the Empty contract.
+var EmptyMetaData = bind.MetaData{
+	ABI: "[]",
+	ID:  "c4ce3210982aa6fc94dabe46dc1dbf454d",
+	Bin: "0x606060405260068060106000396000f3606060405200",
+}
+
+// Empty is an auto generated Go binding around an Ethereum contract.
+type Empty struct {
+	abi abi.ABI
+}
+
+// NewEmpty creates a new instance of Empty.
+func NewEmpty() *Empty {
+	parsed, err := EmptyMetaData.ParseABI()
+	if err != nil {
+		panic(errors.New("invalid ABI: " + err.Error()))
+	}
+	return &Empty{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *Empty) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
+	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
+}

@@ -45,6 +45,16 @@ type binaryIterator struct {
 // accounts in a slow, but easily verifiable way. Note this function is used
 // for initialization, use `newBinaryAccountIterator` as the API.
 func (dl *diskLayer) initBinaryAccountIterator(seek common.Hash) *binaryIterator {
+	// Block until the frozen buffer flushing is completed.
+	if err := dl.waitFlush(); err != nil {
+		panic(err)
+	}
+	// The state set in the disk layer is mutable, hold the lock before obtaining
+	// the account list to prevent concurrent map iteration and write.
+	dl.lock.RLock()
+	accountList := dl.buffer.states.accountList()
+	dl.lock.RUnlock()
+
 	// Create two iterators for state buffer and the persistent state in disk
 	// respectively and combine them as a binary iterator.
 	l := &binaryIterator{
@@ -54,7 +64,7 @@ func (dl *diskLayer) initBinaryAccountIterator(seek common.Hash) *binaryIterator
 		// The account key list for iteration is deterministic once the iterator
 		// is constructed, no matter the referenced disk layer is stale or not
 		// later.
-		a: newDiffAccountIterator(seek, dl.buffer.states, nil),
+		a: newDiffAccountIterator(seek, accountList, nil),
 		b: newDiskAccountIterator(dl.db.diskdb, seek),
 	}
 	l.aDone = !l.a.Next()
@@ -68,6 +78,9 @@ func (dl *diskLayer) initBinaryAccountIterator(seek common.Hash) *binaryIterator
 func (dl *diffLayer) initBinaryAccountIterator(seek common.Hash) *binaryIterator {
 	parent, ok := dl.parent.(*diffLayer)
 	if !ok {
+		// The state set in diff layer is immutable and will never be stale,
+		// so the read lock protection is unnecessary.
+		accountList := dl.states.stateSet.accountList()
 		l := &binaryIterator{
 			// The account loader function is unnecessary; the account key list
 			// produced by the supplied state set alone is sufficient for iteration.
@@ -75,13 +88,16 @@ func (dl *diffLayer) initBinaryAccountIterator(seek common.Hash) *binaryIterator
 			// The account key list for iteration is deterministic once the iterator
 			// is constructed, no matter the referenced disk layer is stale or not
 			// later.
-			a: newDiffAccountIterator(seek, dl.states.stateSet, nil),
+			a: newDiffAccountIterator(seek, accountList, nil),
 			b: dl.parent.(*diskLayer).initBinaryAccountIterator(seek),
 		}
 		l.aDone = !l.a.Next()
 		l.bDone = !l.b.Next()
 		return l
 	}
+	// The state set in diff layer is immutable and will never be stale,
+	// so the read lock protection is unnecessary.
+	accountList := dl.states.stateSet.accountList()
 	l := &binaryIterator{
 		// The account loader function is unnecessary; the account key list
 		// produced by the supplied state set alone is sufficient for iteration.
@@ -89,7 +105,7 @@ func (dl *diffLayer) initBinaryAccountIterator(seek common.Hash) *binaryIterator
 		// The account key list for iteration is deterministic once the iterator
 		// is constructed, no matter the referenced disk layer is stale or not
 		// later.
-		a: newDiffAccountIterator(seek, dl.states.stateSet, nil),
+		a: newDiffAccountIterator(seek, accountList, nil),
 		b: parent.initBinaryAccountIterator(seek),
 	}
 	l.aDone = !l.a.Next()
@@ -101,6 +117,16 @@ func (dl *diffLayer) initBinaryAccountIterator(seek common.Hash) *binaryIterator
 // storage slots in a slow, but easily verifiable way. Note this function is used
 // for initialization, use `newBinaryStorageIterator` as the API.
 func (dl *diskLayer) initBinaryStorageIterator(account common.Hash, seek common.Hash) *binaryIterator {
+	// Block until the frozen buffer flushing is completed.
+	if err := dl.waitFlush(); err != nil {
+		panic(err)
+	}
+	// The state set in the disk layer is mutable, hold the lock before obtaining
+	// the storage list to prevent concurrent map iteration and write.
+	dl.lock.RLock()
+	storageList := dl.buffer.states.storageList(account)
+	dl.lock.RUnlock()
+
 	// Create two iterators for state buffer and the persistent state in disk
 	// respectively and combine them as a binary iterator.
 	l := &binaryIterator{
@@ -110,7 +136,7 @@ func (dl *diskLayer) initBinaryStorageIterator(account common.Hash, seek common.
 		// The storage key list for iteration is deterministic once the iterator
 		// is constructed, no matter the referenced disk layer is stale or not
 		// later.
-		a: newDiffStorageIterator(account, seek, dl.buffer.states, nil),
+		a: newDiffStorageIterator(account, seek, storageList, nil),
 		b: newDiskStorageIterator(dl.db.diskdb, account, seek),
 	}
 	l.aDone = !l.a.Next()
@@ -124,6 +150,9 @@ func (dl *diskLayer) initBinaryStorageIterator(account common.Hash, seek common.
 func (dl *diffLayer) initBinaryStorageIterator(account common.Hash, seek common.Hash) *binaryIterator {
 	parent, ok := dl.parent.(*diffLayer)
 	if !ok {
+		// The state set in diff layer is immutable and will never be stale,
+		// so the read lock protection is unnecessary.
+		storageList := dl.states.stateSet.storageList(account)
 		l := &binaryIterator{
 			// The storage loader function is unnecessary; the storage key list
 			// produced by the supplied state set alone is sufficient for iteration.
@@ -131,13 +160,16 @@ func (dl *diffLayer) initBinaryStorageIterator(account common.Hash, seek common.
 			// The storage key list for iteration is deterministic once the iterator
 			// is constructed, no matter the referenced disk layer is stale or not
 			// later.
-			a: newDiffStorageIterator(account, seek, dl.states.stateSet, nil),
+			a: newDiffStorageIterator(account, seek, storageList, nil),
 			b: dl.parent.(*diskLayer).initBinaryStorageIterator(account, seek),
 		}
 		l.aDone = !l.a.Next()
 		l.bDone = !l.b.Next()
 		return l
 	}
+	// The state set in diff layer is immutable and will never be stale,
+	// so the read lock protection is unnecessary.
+	storageList := dl.states.stateSet.storageList(account)
 	l := &binaryIterator{
 		// The storage loader function is unnecessary; the storage key list
 		// produced by the supplied state set alone is sufficient for iteration.
@@ -145,7 +177,7 @@ func (dl *diffLayer) initBinaryStorageIterator(account common.Hash, seek common.
 		// The storage key list for iteration is deterministic once the iterator
 		// is constructed, no matter the referenced disk layer is stale or not
 		// later.
-		a: newDiffStorageIterator(account, seek, dl.states.stateSet, nil),
+		a: newDiffStorageIterator(account, seek, storageList, nil),
 		b: parent.initBinaryStorageIterator(account, seek),
 	}
 	l.aDone = !l.a.Next()

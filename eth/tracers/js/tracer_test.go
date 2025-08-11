@@ -65,7 +65,7 @@ func runTrace(tracer *tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCo
 
 	tracer.OnTxStart(evm.GetVMContext(), types.NewTx(&types.LegacyTx{Gas: gasLimit, GasPrice: vmctx.txCtx.GasPrice}), contract.Caller())
 	tracer.OnEnter(0, byte(vm.CALL), contract.Caller(), contract.Address(), []byte{}, startGas, value.ToBig())
-	ret, err := evm.Interpreter().Run(contract, []byte{}, false)
+	ret, err := evm.Run(contract, []byte{}, false)
 	tracer.OnExit(0, ret, startGas-contract.Gas, err, true)
 	// Rest gas assumes no refund
 	tracer.OnTxEnd(&types.Receipt{GasUsed: gasLimit - contract.Gas}, nil)
@@ -122,9 +122,15 @@ func TestTracer(t *testing.T) {
 		}, { // tests gasUsed
 			code: "{depths: [], step: function() {}, fault: function() {}, result: function(ctx) { return ctx.gasPrice+'.'+ctx.gasUsed; }}",
 			want: `"100000.21006"`,
-		}, {
+		}, { // tests toWord with byte array length < 32
 			code: "{res: null, step: function(log) {}, fault: function() {}, result: function() { return toWord('0xffaa') }}",
 			want: `{"0":0,"1":0,"2":0,"3":0,"4":0,"5":0,"6":0,"7":0,"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14":0,"15":0,"16":0,"17":0,"18":0,"19":0,"20":0,"21":0,"22":0,"23":0,"24":0,"25":0,"26":0,"27":0,"28":0,"29":0,"30":255,"31":170}`,
+		}, { // tests toWord with byte array length = 32
+			code: "{step: function() {}, fault: function() {}, result: function() { return toWord('0x1234567890123456789012345678901234567890123456789012345678901234'); }}",
+			want: `{"0":18,"1":52,"2":86,"3":120,"4":144,"5":18,"6":52,"7":86,"8":120,"9":144,"10":18,"11":52,"12":86,"13":120,"14":144,"15":18,"16":52,"17":86,"18":120,"19":144,"20":18,"21":52,"22":86,"23":120,"24":144,"25":18,"26":52,"27":86,"28":120,"29":144,"30":18,"31":52}`,
+		}, { // tests toWord with byte array length > 32
+			code: "{step: function() {}, fault: function() {}, result: function() { return toWord('0x1234567890123456789012345678901234567890123456789012345678901234567890'); }}",
+			want: `{"0":120,"1":144,"2":18,"3":52,"4":86,"5":120,"6":144,"7":18,"8":52,"9":86,"10":120,"11":144,"12":18,"13":52,"14":86,"15":120,"16":144,"17":18,"18":52,"19":86,"20":120,"21":144,"22":18,"23":52,"24":86,"25":120,"26":144,"27":18,"28":52,"29":86,"30":120,"31":144}`,
 		}, { // test feeding a buffer back into go
 			code: "{res: null, step: function(log) { var address = log.contract.getAddress(); this.res = toAddress(address); }, fault: function() {}, result: function() { return this.res }}",
 			want: `{"0":0,"1":0,"2":0,"3":0,"4":0,"5":0,"6":0,"7":0,"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14":0,"15":0,"16":0,"17":0,"18":0,"19":0}`,

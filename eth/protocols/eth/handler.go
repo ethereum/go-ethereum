@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -86,6 +87,14 @@ type Backend interface {
 type TxPool interface {
 	// Get retrieves the transaction from the local txpool with the given hash.
 	Get(hash common.Hash) *types.Transaction
+
+	// GetRLP retrieves the RLP-encoded transaction from the local txpool with
+	// the given hash.
+	GetRLP(hash common.Hash) []byte
+
+	// GetMetadata returns the transaction type and transaction size with the
+	// given transaction hash.
+	GetMetadata(hash common.Hash) *txpool.TxMetadata
 }
 
 // MakeProtocols constructs the P2P protocol definitions for `eth`.
@@ -166,10 +175,24 @@ var eth68 = map[uint64]msgHandler{
 	BlockHeadersMsg:               handleBlockHeaders,
 	GetBlockBodiesMsg:             handleGetBlockBodies,
 	BlockBodiesMsg:                handleBlockBodies,
-	GetReceiptsMsg:                handleGetReceipts,
-	ReceiptsMsg:                   handleReceipts,
+	GetReceiptsMsg:                handleGetReceipts68,
+	ReceiptsMsg:                   handleReceipts[*ReceiptList68],
 	GetPooledTransactionsMsg:      handleGetPooledTransactions,
 	PooledTransactionsMsg:         handlePooledTransactions,
+}
+
+var eth69 = map[uint64]msgHandler{
+	TransactionsMsg:               handleTransactions,
+	NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes,
+	GetBlockHeadersMsg:            handleGetBlockHeaders,
+	BlockHeadersMsg:               handleBlockHeaders,
+	GetBlockBodiesMsg:             handleGetBlockBodies,
+	BlockBodiesMsg:                handleBlockBodies,
+	GetReceiptsMsg:                handleGetReceipts69,
+	ReceiptsMsg:                   handleReceipts[*ReceiptList69],
+	GetPooledTransactionsMsg:      handleGetPooledTransactions,
+	PooledTransactionsMsg:         handlePooledTransactions,
+	BlockRangeUpdateMsg:           handleBlockRangeUpdate,
 }
 
 // handleMessage is invoked whenever an inbound message is received from a remote
@@ -185,7 +208,14 @@ func handleMessage(backend Backend, peer *Peer) error {
 	}
 	defer msg.Discard()
 
-	var handlers = eth68
+	var handlers map[uint64]msgHandler
+	if peer.version == ETH68 {
+		handlers = eth68
+	} else if peer.version == ETH69 {
+		handlers = eth69
+	} else {
+		return fmt.Errorf("unknown eth protocol version: %v", peer.version)
+	}
 
 	// Track the amount of time it takes to serve the request and run the handler
 	if metrics.Enabled() {

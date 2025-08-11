@@ -229,7 +229,7 @@ func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, *Block) 
 		return t.tx, t.block
 	}
 	// Try to return an already finalized transaction
-	found, tx, blockHash, _, index, _ := t.r.backend.GetTransaction(ctx, t.hash)
+	found, tx, blockHash, _, index := t.r.backend.GetCanonicalTransaction(t.hash)
 	if found {
 		t.tx = tx
 		blockNrOrHash := rpc.BlockNumberOrHashWithHash(blockHash, false)
@@ -1510,6 +1510,9 @@ func (s *SyncState) TxIndexFinishedBlocks() hexutil.Uint64 {
 func (s *SyncState) TxIndexRemainingBlocks() hexutil.Uint64 {
 	return hexutil.Uint64(s.progress.TxIndexRemainingBlocks)
 }
+func (s *SyncState) StateIndexRemaining() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.StateIndexRemaining)
+}
 
 // Syncing returns false in case the node is currently not syncing with the network. It can be up-to-date or has not
 // yet received the latest block headers from its peers. In case it is synchronizing:
@@ -1530,8 +1533,8 @@ func (s *SyncState) TxIndexRemainingBlocks() hexutil.Uint64 {
 // - healingBytecode:     number of bytecodes pending
 // - txIndexFinishedBlocks:  number of blocks whose transactions are indexed
 // - txIndexRemainingBlocks: number of blocks whose transactions are not indexed yet
-func (r *Resolver) Syncing() (*SyncState, error) {
-	progress := r.backend.SyncProgress()
+func (r *Resolver) Syncing(ctx context.Context) (*SyncState, error) {
+	progress := r.backend.SyncProgress(ctx)
 
 	// Return not syncing if the synchronisation already completed
 	if progress.Done() {

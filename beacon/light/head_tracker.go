@@ -21,7 +21,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/beacon/types"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -38,13 +40,15 @@ type HeadTracker struct {
 	hasFinalityUpdate   bool
 	prefetchHead        types.HeadInfo
 	changeCounter       uint64
+	saveCheckpoint      func(common.Hash)
 }
 
 // NewHeadTracker creates a new HeadTracker.
-func NewHeadTracker(committeeChain *CommitteeChain, minSignerCount int) *HeadTracker {
+func NewHeadTracker(committeeChain *CommitteeChain, minSignerCount int, saveCheckpoint func(common.Hash)) *HeadTracker {
 	return &HeadTracker{
 		committeeChain: committeeChain,
 		minSignerCount: minSignerCount,
+		saveCheckpoint: saveCheckpoint,
 	}
 }
 
@@ -100,6 +104,9 @@ func (h *HeadTracker) ValidateFinality(update types.FinalityUpdate) (bool, error
 	if replace {
 		h.finalityUpdate, h.hasFinalityUpdate = update, true
 		h.changeCounter++
+		if h.saveCheckpoint != nil && update.Finalized.Slot%params.EpochLength == 0 {
+			h.saveCheckpoint(update.Finalized.Hash())
+		}
 	}
 	return replace, err
 }

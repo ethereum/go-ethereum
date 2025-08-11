@@ -46,7 +46,9 @@ func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, c
 	// Create an empty state
 	config := &triedb.Config{Preimages: true}
 	if scheme == rawdb.PathScheme {
-		config.PathDB = pathdb.Defaults
+		pconfig := *pathdb.Defaults
+		pconfig.NoAsyncFlush = true
+		config.PathDB = &pconfig
 	} else {
 		config.HashDB = hashdb.Defaults
 	}

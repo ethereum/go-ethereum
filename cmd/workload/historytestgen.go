@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -51,7 +52,7 @@ var (
 	}
 	historyTestEarliestFlag = &cli.IntFlag{
 		Name:     "earliest",
-		Usage:    "JSON file containing filter test queries",
+		Usage:    "The earliest block to test queries",
 		Value:    0,
 		Category: flags.TestingCategory,
 	}
@@ -137,11 +138,17 @@ func calcReceiptsHash(rcpt []*types.Receipt) common.Hash {
 }
 
 func writeJSON(fileName string, value any) {
+	// Ensure the directory exists
+	dir := filepath.Dir(fileName)
+	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		exit(fmt.Errorf("failed to create directories: %w", err))
+	}
 	file, err := os.Create(fileName)
 	if err != nil {
-		exit(fmt.Errorf("Error creating %s: %v", fileName, err))
+		exit(fmt.Errorf("error creating %s: %v", fileName, err))
 		return
 	}
 	defer file.Close()
+
 	json.NewEncoder(file).Encode(value)
 }

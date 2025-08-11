@@ -62,6 +62,23 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 	if call.GasLimit >= params.TxGas {
 		hi = call.GasLimit
 	}
+
+	// Cap the maximum gas allowance according to EIP-7825 if the estimation targets Osaka
+	if hi > params.MaxTxGas {
+		blockNumber, blockTime := opts.Header.Number, opts.Header.Time
+		if opts.BlockOverrides != nil {
+			if opts.BlockOverrides.Number != nil {
+				blockNumber = opts.BlockOverrides.Number.ToInt()
+			}
+			if opts.BlockOverrides.Time != nil {
+				blockTime = uint64(*opts.BlockOverrides.Time)
+			}
+		}
+		if opts.Config.IsOsaka(blockNumber, blockTime) {
+			hi = params.MaxTxGas
+		}
+	}
+
 	// Normalize the max fee per gas the call is willing to spend.
 	var feeCap *big.Int
 	if call.GasFeeCap != nil {
@@ -144,7 +161,7 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 	// There's a fairly high chance for the transaction to execute successfully
 	// with gasLimit set to the first execution's usedGas + gasRefund. Explicitly
 	// check that gas amount and use as a limit for the binary search.
-	optimisticGasLimit := (result.UsedGas + result.RefundedGas + params.CallStipend) * 64 / 63
+	optimisticGasLimit := (result.MaxUsedGas + params.CallStipend) * 64 / 63
 	if optimisticGasLimit < hi {
 		failed, _, err = execute(ctx, call, opts, optimisticGasLimit)
 		if err != nil {
@@ -170,7 +187,7 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 				break
 			}
 		}
-		mid := (hi + lo) / 2
+		mid := lo + (hi-lo)/2
 		if mid > lo*2 {
 			// Most txs don't need much higher gas limit than their gas used, and most txs don't
 			// require near the full block limit of gas, so the selection of where to bisect the
@@ -209,6 +226,9 @@ func execute(ctx context.Context, call *core.Message, opts *Options, gasLimit ui
 		if errors.Is(err, core.ErrIntrinsicGas) {
 			return true, nil, nil // Special case, raise gas limit
 		}
+		if errors.Is(err, core.ErrGasLimitTooHigh) {
+			return true, nil, nil // Special case, lower gas limit
+		}
 		return true, nil, err // Bail out
 	}
 	return result.Failed(), result, nil
@@ -223,7 +243,9 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 		dirtyState = opts.State.Copy()
 	)
 	if opts.BlockOverrides != nil {
-		opts.BlockOverrides.Apply(&evmContext)
+		if err := opts.BlockOverrides.Apply(&evmContext); err != nil {
+			return nil, err
+		}
 	}
 	// Lower the basefee to 0 to avoid breaking EVM
 	// invariants (basefee < feecap).

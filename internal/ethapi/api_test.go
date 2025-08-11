@@ -46,7 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
+	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -442,21 +442,16 @@ type testBackend struct {
 }
 
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.Engine, generator func(i int, b *core.BlockGen)) *testBackend {
-	var (
-		cacheConfig = &core.CacheConfig{
-			TrieCleanLimit:    256,
-			TrieDirtyLimit:    256,
-			TrieTimeLimit:     5 * time.Minute,
-			SnapshotLimit:     0,
-			TrieDirtyDisabled: true, // Archive mode
-		}
-	)
+	options := core.DefaultConfig().WithArchive(true)
+	options.TxLookupLimit = 0 // index all txs
+
 	accman, acc := newTestAccountManager(t)
 	gspec.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Ether)}
+
 	// Generate blocks for testing
 	db, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, generator)
-	txlookupLimit := uint64(0)
-	chain, err := core.NewBlockChain(db, cacheConfig, gspec, nil, engine, vm.Config{}, &txlookupLimit)
+
+	chain, err := core.NewBlockChain(db, gspec, engine, options)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -472,7 +467,9 @@ func (b *testBackend) setPendingBlock(block *types.Block) {
 	b.pending = block
 }
 
-func (b testBackend) SyncProgress() ethereum.SyncProgress { return ethereum.SyncProgress{} }
+func (b testBackend) SyncProgress(ctx context.Context) ethereum.SyncProgress {
+	return ethereum.SyncProgress{}
+}
 func (b testBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	return big.NewInt(0), nil
 }
@@ -520,8 +517,12 @@ func (b testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) 
 	if number == rpc.PendingBlockNumber {
 		return b.pending, nil
 	}
+	if number == rpc.EarliestBlockNumber {
+		number = 0
+	}
 	return b.chain.GetBlockByNumber(uint64(number)), nil
 }
+
 func (b testBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.chain.GetBlockByHash(hash), nil
 }
@@ -585,9 +586,15 @@ func (b testBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) even
 func (b testBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
 	panic("implement me")
 }
-func (b testBackend) GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error) {
-	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.db, txHash)
-	return true, tx, blockHash, blockNumber, index, nil
+func (b testBackend) GetCanonicalTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64) {
+	tx, blockHash, blockNumber, index := rawdb.ReadCanonicalTransaction(b.db, txHash)
+	return tx != nil, tx, blockHash, blockNumber, index
+}
+func (b testBackend) GetCanonicalReceipt(tx *types.Transaction, blockHash common.Hash, blockNumber, blockIndex uint64) (*types.Receipt, error) {
+	return b.chain.GetCanonicalReceipt(tx, blockHash, blockNumber, blockIndex)
+}
+func (b testBackend) TxIndexDone() bool {
+	return true
 }
 func (b testBackend) GetPoolTransactions() (types.Transactions, error)         { panic("implement me") }
 func (b testBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction { panic("implement me") }
@@ -615,9 +622,16 @@ func (b testBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) 
 func (b testBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	panic("implement me")
 }
-func (b testBackend) BloomStatus() (uint64, uint64) { panic("implement me") }
-func (b testBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
+func (b testBackend) CurrentView() *filtermaps.ChainView {
 	panic("implement me")
+}
+func (b testBackend) NewMatcherBackend() filtermaps.MatcherBackend {
+	panic("implement me")
+}
+
+func (b testBackend) HistoryPruningCutoff() uint64 {
+	bn, _ := b.chain.HistoryPruningCutoff()
+	return bn
 }
 
 func TestEstimateGas(t *testing.T) {
@@ -656,6 +670,11 @@ func TestEstimateGas(t *testing.T) {
 		b.AddTx(tx)
 		b.SetPoS()
 	}))
+
+	setCodeAuthorization, _ := types.SignSetCode(accounts[0].key, types.SetCodeAuthorization{
+		Address: accounts[0].addr,
+		Nonce:   uint64(genBlocks + 1),
+	})
 
 	var testSuite = []struct {
 		blockNumber    rpc.BlockNumber
@@ -835,6 +854,50 @@ func TestEstimateGas(t *testing.T) {
 			},
 			want: 21000,
 		},
+		// Should be able to estimate SetCodeTx.
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:              &accounts[0].addr,
+				To:                &accounts[1].addr,
+				Value:             (*hexutil.Big)(big.NewInt(0)),
+				AuthorizationList: []types.SetCodeAuthorization{setCodeAuthorization},
+			},
+			want: 46000,
+		},
+		// Should retrieve the code of 0xef0001 || accounts[0].addr and return an invalid opcode error.
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:              &accounts[0].addr,
+				To:                &accounts[0].addr,
+				Value:             (*hexutil.Big)(big.NewInt(0)),
+				AuthorizationList: []types.SetCodeAuthorization{setCodeAuthorization},
+			},
+			expectErr: errors.New("invalid opcode: opcode 0xef not defined"),
+		},
+		// SetCodeTx with empty authorization list should fail.
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:              &accounts[0].addr,
+				To:                &common.Address{},
+				Value:             (*hexutil.Big)(big.NewInt(0)),
+				AuthorizationList: []types.SetCodeAuthorization{},
+			},
+			expectErr: core.ErrEmptyAuthList,
+		},
+		// SetCodeTx with nil `to` should fail.
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:              &accounts[0].addr,
+				To:                nil,
+				Value:             (*hexutil.Big)(big.NewInt(0)),
+				AuthorizationList: []types.SetCodeAuthorization{setCodeAuthorization},
+			},
+			expectErr: core.ErrSetCodeTxCreate,
+		},
 	}
 	for i, tc := range testSuite {
 		result, err := api.EstimateGas(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)
@@ -844,7 +907,7 @@ func TestEstimateGas(t *testing.T) {
 				continue
 			}
 			if !errors.Is(err, tc.expectErr) {
-				if !reflect.DeepEqual(err, tc.expectErr) {
+				if err.Error() != tc.expectErr.Error() {
 					t.Errorf("test %d: error mismatch, want %v, have %v", i, tc.expectErr, err)
 				}
 			}
@@ -1135,6 +1198,24 @@ func TestCall(t *testing.T) {
 				},
 			},
 			want: "0x0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			name:        "unsupported block override beaconRoot",
+			blockNumber: rpc.LatestBlockNumber,
+			call:        TransactionArgs{},
+			blockOverrides: override.BlockOverrides{
+				BeaconRoot: &common.Hash{0, 1, 2},
+			},
+			expectErr: errors.New(`block override "beaconRoot" is not supported for this RPC method`),
+		},
+		{
+			name:        "unsupported block override withdrawals",
+			blockNumber: rpc.LatestBlockNumber,
+			call:        TransactionArgs{},
+			blockOverrides: override.BlockOverrides{
+				Withdrawals: &types.Withdrawals{},
+			},
+			expectErr: errors.New(`block override "withdrawals" is not supported for this RPC method`),
 		},
 	}
 	for _, tc := range testSuite {
@@ -2405,6 +2486,77 @@ func TestSimulateV1ChainLinkage(t *testing.T) {
 	require.Equal(t, block2.Hash().Bytes(), []byte(results[2].Calls[1].ReturnValue), "returned blockhash for block2 does not match")
 }
 
+func TestSimulateV1TxSender(t *testing.T) {
+	var (
+		sender    = common.Address{0xaa, 0xaa}
+		sender2   = common.Address{0xaa, 0xab}
+		sender3   = common.Address{0xaa, 0xac}
+		recipient = common.Address{0xbb, 0xbb}
+		gspec     = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
+				sender:  {Balance: big.NewInt(params.Ether)},
+				sender2: {Balance: big.NewInt(params.Ether)},
+				sender3: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+		ctx = context.Background()
+	)
+	backend := newTestBackend(t, 0, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {})
+	stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(ctx, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+	if err != nil {
+		t.Fatalf("failed to get state and header: %v", err)
+	}
+
+	sim := &simulator{
+		b:              backend,
+		state:          stateDB,
+		base:           baseHeader,
+		chainConfig:    backend.ChainConfig(),
+		gp:             new(core.GasPool).AddGas(math.MaxUint64),
+		traceTransfers: false,
+		validate:       false,
+		fullTx:         true,
+	}
+
+	results, err := sim.execute(ctx, []simBlock{
+		{Calls: []TransactionArgs{
+			{From: &sender, To: &recipient, Value: (*hexutil.Big)(big.NewInt(1000))},
+			{From: &sender2, To: &recipient, Value: (*hexutil.Big)(big.NewInt(2000))},
+			{From: &sender3, To: &recipient, Value: (*hexutil.Big)(big.NewInt(3000))},
+		}},
+		{Calls: []TransactionArgs{
+			{From: &sender2, To: &recipient, Value: (*hexutil.Big)(big.NewInt(4000))},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("simulation execution failed: %v", err)
+	}
+	require.Len(t, results, 2, "expected 2 simulated blocks")
+	require.Len(t, results[0].Block.Transactions(), 3, "expected 3 transaction in simulated block")
+	require.Len(t, results[1].Block.Transactions(), 1, "expected 1 transaction in 2nd simulated block")
+	enc, err := json.Marshal(results)
+	if err != nil {
+		t.Fatalf("failed to marshal results: %v", err)
+	}
+	type resultType struct {
+		Transactions []struct {
+			From common.Address `json:"from"`
+		}
+	}
+	var summary []resultType
+	if err := json.Unmarshal(enc, &summary); err != nil {
+		t.Fatalf("failed to unmarshal results: %v", err)
+	}
+	require.Len(t, summary, 2, "expected 2 simulated blocks")
+	require.Len(t, summary[0].Transactions, 3, "expected 3 transaction in simulated block")
+	require.Equal(t, sender, summary[0].Transactions[0].From, "sender address mismatch")
+	require.Equal(t, sender2, summary[0].Transactions[1].From, "sender address mismatch")
+	require.Equal(t, sender3, summary[0].Transactions[2].From, "sender address mismatch")
+	require.Len(t, summary[1].Transactions, 1, "expected 1 transaction in simulated block")
+	require.Equal(t, sender2, summary[1].Transactions[0].From, "sender address mismatch")
+}
+
 func TestSignTransaction(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
@@ -2606,12 +2758,8 @@ func TestFillBlobTransaction(t *testing.T) {
 				Proofs:      []kzg4844.Proof{emptyBlobProof},
 			},
 			want: &result{
-				Hashes: []common.Hash{emptyBlobHash},
-				Sidecar: &types.BlobTxSidecar{
-					Blobs:       emptyBlobs,
-					Commitments: []kzg4844.Commitment{emptyBlobCommit},
-					Proofs:      []kzg4844.Proof{emptyBlobProof},
-				},
+				Hashes:  []common.Hash{emptyBlobHash},
+				Sidecar: types.NewBlobTxSidecar(types.BlobSidecarVersion0, emptyBlobs, []kzg4844.Commitment{emptyBlobCommit}, []kzg4844.Proof{emptyBlobProof}),
 			},
 		},
 		{
@@ -2626,12 +2774,8 @@ func TestFillBlobTransaction(t *testing.T) {
 				Proofs:      []kzg4844.Proof{emptyBlobProof},
 			},
 			want: &result{
-				Hashes: []common.Hash{emptyBlobHash},
-				Sidecar: &types.BlobTxSidecar{
-					Blobs:       emptyBlobs,
-					Commitments: []kzg4844.Commitment{emptyBlobCommit},
-					Proofs:      []kzg4844.Proof{emptyBlobProof},
-				},
+				Hashes:  []common.Hash{emptyBlobHash},
+				Sidecar: types.NewBlobTxSidecar(types.BlobSidecarVersion0, emptyBlobs, []kzg4844.Commitment{emptyBlobCommit}, []kzg4844.Proof{emptyBlobProof}),
 			},
 		},
 		{
@@ -2656,12 +2800,8 @@ func TestFillBlobTransaction(t *testing.T) {
 				Blobs: emptyBlobs,
 			},
 			want: &result{
-				Hashes: []common.Hash{emptyBlobHash},
-				Sidecar: &types.BlobTxSidecar{
-					Blobs:       emptyBlobs,
-					Commitments: []kzg4844.Commitment{emptyBlobCommit},
-					Proofs:      []kzg4844.Proof{emptyBlobProof},
-				},
+				Hashes:  []common.Hash{emptyBlobHash},
+				Sidecar: types.NewBlobTxSidecar(types.BlobSidecarVersion0, emptyBlobs, []kzg4844.Commitment{emptyBlobCommit}, []kzg4844.Proof{emptyBlobProof}),
 			},
 		},
 	}
@@ -3512,4 +3652,77 @@ func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc s
 
 func addressToHash(a common.Address) common.Hash {
 	return common.BytesToHash(a.Bytes())
+}
+
+func TestCreateAccessListWithStateOverrides(t *testing.T) {
+	// Initialize test backend
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			common.HexToAddress("0x71562b71999873db5b286df957af199ec94617f7"): {Balance: big.NewInt(1000000000000000000)},
+		},
+	}
+	backend := newTestBackend(t, 1, genesis, ethash.NewFaker(), nil)
+
+	// Create a new BlockChainAPI instance
+	api := NewBlockChainAPI(backend)
+
+	// Create test contract code - a simple storage contract
+	//
+	// SPDX-License-Identifier: MIT
+	// pragma solidity ^0.8.0;
+	//
+	// contract SimpleStorage {
+	//     uint256 private value;
+	//
+	//     function retrieve() public view returns (uint256) {
+	//         return value;
+	//     }
+	// }
+	var (
+		contractCode = hexutil.Bytes(common.Hex2Bytes("6080604052348015600f57600080fd5b506004361060285760003560e01c80632e64cec114602d575b600080fd5b60336047565b604051603e91906067565b60405180910390f35b60008054905090565b6000819050919050565b6061816050565b82525050565b6000602082019050607a6000830184605a565b9291505056"))
+		// Create state overrides with more complete state
+		contractAddr = common.HexToAddress("0x1234567890123456789012345678901234567890")
+		nonce        = hexutil.Uint64(1)
+		overrides    = &override.StateOverride{
+			contractAddr: override.OverrideAccount{
+				Code:    &contractCode,
+				Balance: (*hexutil.Big)(big.NewInt(1000000000000000000)),
+				Nonce:   &nonce,
+				State: map[common.Hash]common.Hash{
+					common.Hash{}: common.HexToHash("0x000000000000000000000000000000000000000000000000000000000000002a"),
+				},
+			},
+		}
+	)
+
+	// Create transaction arguments with gas and value
+	var (
+		from = common.HexToAddress("0x71562b71999873db5b286df957af199ec94617f7")
+		data = hexutil.Bytes(common.Hex2Bytes("2e64cec1")) // retrieve()
+		gas  = hexutil.Uint64(100000)
+		args = TransactionArgs{
+			From:  &from,
+			To:    &contractAddr,
+			Data:  &data,
+			Gas:   &gas,
+			Value: new(hexutil.Big),
+		}
+	)
+	// Call CreateAccessList
+	result, err := api.CreateAccessList(context.Background(), args, nil, overrides)
+	if err != nil {
+		t.Fatalf("Failed to create access list: %v", err)
+	}
+	if err != nil || result == nil {
+		t.Fatalf("Failed to create access list: %v", err)
+	}
+	require.NotNil(t, result.Accesslist)
+
+	// Verify access list contains the contract address and storage slot
+	expected := &types.AccessList{{
+		Address:     contractAddr,
+		StorageKeys: []common.Hash{{}},
+	}}
+	require.Equal(t, expected, result.Accesslist)
 }

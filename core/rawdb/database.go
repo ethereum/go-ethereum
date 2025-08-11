@@ -20,17 +20,22 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/olekukonko/tablewriter"
 )
+
+var ErrDeleteRangeInterrupted = errors.New("safe delete range operation interrupted")
 
 // freezerdb is a database wrapper that enables ancient chain segment freezing.
 type freezerdb struct {
@@ -81,11 +86,6 @@ type nofreezedb struct {
 	ethdb.KeyValueStore
 }
 
-// HasAncient returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) HasAncient(kind string, number uint64) (bool, error) {
-	return false, errNotSupported
-}
-
 // Ancient returns an error as we don't have a backing chain freezer.
 func (db *nofreezedb) Ancient(kind string, number uint64) ([]byte, error) {
 	return nil, errNotSupported
@@ -126,8 +126,8 @@ func (db *nofreezedb) TruncateTail(items uint64) (uint64, error) {
 	return 0, errNotSupported
 }
 
-// Sync returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) Sync() error {
+// SyncAncient returns an error as we don't have a backing chain freezer.
+func (db *nofreezedb) SyncAncient() error {
 	return errNotSupported
 }
 
@@ -181,19 +181,49 @@ func resolveChainFreezerDir(ancient string) string {
 	return freezer
 }
 
-// NewDatabaseWithFreezer creates a high level database on top of a given key-
-// value data store with a freezer moving immutable chain segments into cold
-// storage. The passed ancient indicates the path of root ancient directory
-// where the chain freezer can be opened.
+// resolveChainEraDir is a helper function which resolves the absolute path of era database.
+func resolveChainEraDir(chainFreezerDir string, era string) string {
+	switch {
+	case era == "":
+		return filepath.Join(chainFreezerDir, "era")
+	case !filepath.IsAbs(era):
+		return filepath.Join(chainFreezerDir, era)
+	default:
+		return era
+	}
+}
+
+// NewDatabaseWithFreezer creates a high level database on top of a given key-value store.
+// The passed ancient indicates the path of root ancient directory where the chain freezer
+// can be opened.
+//
+// Deprecated: use Open.
 func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
+	return Open(db, OpenOptions{
+		Ancient:          ancient,
+		MetricsNamespace: namespace,
+		ReadOnly:         readonly,
+	})
+}
+
+// OpenOptions specifies options for opening the database.
+type OpenOptions struct {
+	Ancient          string // ancients directory
+	Era              string // era files directory
+	MetricsNamespace string // prefix added to freezer metric names
+	ReadOnly         bool
+}
+
+// Open creates a high-level database wrapper for the given key-value store.
+func Open(db ethdb.KeyValueStore, opts OpenOptions) (ethdb.Database, error) {
 	// Create the idle freezer instance. If the given ancient directory is empty,
 	// in-memory chain freezer is used (e.g. dev mode); otherwise the regular
 	// file-based freezer is created.
-	chainFreezerDir := ancient
+	chainFreezerDir := opts.Ancient
 	if chainFreezerDir != "" {
 		chainFreezerDir = resolveChainFreezerDir(chainFreezerDir)
 	}
-	frdb, err := newChainFreezer(chainFreezerDir, namespace, readonly)
+	frdb, err := newChainFreezer(chainFreezerDir, opts.Era, opts.MetricsNamespace, opts.ReadOnly)
 	if err != nil {
 		printChainMetadata(db)
 		return nil, err
@@ -238,7 +268,12 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 			if kvhash, _ := db.Get(headerHashKey(frozen)); len(kvhash) == 0 {
 				// Subsequent header after the freezer limit is missing from the database.
 				// Reject startup if the database has a more recent head.
-				if head := *ReadHeaderNumber(db, ReadHeadHeaderHash(db)); head > frozen-1 {
+				head, ok := ReadHeaderNumber(db, ReadHeadHeaderHash(db))
+				if !ok {
+					printChainMetadata(db)
+					return nil, fmt.Errorf("could not read header number, hash %v", ReadHeadHeaderHash(db))
+				}
+				if head > frozen-1 {
 					// Find the smallest block stored in the key-value store
 					// in range of [frozen, head]
 					var number uint64
@@ -277,7 +312,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 		}
 	}
 	// Freezer is consistent with the key-value database, permit combining the two
-	if !readonly {
+	if !opts.ReadOnly {
 		frdb.wg.Add(1)
 		go func() {
 			frdb.freeze(db)
@@ -285,7 +320,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 		}()
 	}
 	return &freezerdb{
-		ancientRoot:   ancient,
+		ancientRoot:   opts.Ancient,
 		KeyValueStore: db,
 		chainFreezer:  frdb,
 	}, nil
@@ -360,32 +395,34 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		logged = time.Now()
 
 		// Key-value store statistics
-		headers         stat
-		bodies          stat
-		receipts        stat
-		tds             stat
-		numHashPairings stat
-		hashNumPairings stat
-		legacyTries     stat
-		stateLookups    stat
-		accountTries    stat
-		storageTries    stat
-		codes           stat
-		txLookups       stat
-		accountSnaps    stat
-		storageSnaps    stat
-		preimages       stat
-		bloomBits       stat
-		beaconHeaders   stat
-		cliqueSnaps     stat
+		headers            stat
+		bodies             stat
+		receipts           stat
+		tds                stat
+		numHashPairings    stat
+		hashNumPairings    stat
+		legacyTries        stat
+		stateLookups       stat
+		accountTries       stat
+		storageTries       stat
+		codes              stat
+		txLookups          stat
+		accountSnaps       stat
+		storageSnaps       stat
+		preimages          stat
+		beaconHeaders      stat
+		cliqueSnaps        stat
+		bloomBits          stat
+		filterMapRows      stat
+		filterMapLastBlock stat
+		filterMapBlockLV   stat
+
+		// Path-mode archive data
+		stateIndex stat
 
 		// Verkle statistics
 		verkleTries        stat
 		verkleStateLookups stat
-
-		// Les statistic
-		chtTrieNodes   stat
-		bloomTrieNodes stat
 
 		// Meta- and unaccounted data
 		metadata    stat
@@ -393,6 +430,11 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 
 		// Totals
 		total common.StorageSize
+
+		// This map tracks example keys for unaccounted data.
+		// For each unique two-byte prefix, the first unaccounted key encountered
+		// by the iterator will be stored.
+		unaccountedKeys = make(map[[2]byte][]byte)
 	)
 	// Inspect key-value database first.
 	for it.Next() {
@@ -436,22 +478,28 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			metadata.Add(size)
 		case bytes.HasPrefix(key, genesisPrefix) && len(key) == (len(genesisPrefix)+common.HashLength):
 			metadata.Add(size)
-		case bytes.HasPrefix(key, bloomBitsPrefix) && len(key) == (len(bloomBitsPrefix)+10+common.HashLength):
-			bloomBits.Add(size)
-		case bytes.HasPrefix(key, BloomBitsIndexPrefix):
-			bloomBits.Add(size)
 		case bytes.HasPrefix(key, skeletonHeaderPrefix) && len(key) == (len(skeletonHeaderPrefix)+8):
 			beaconHeaders.Add(size)
 		case bytes.HasPrefix(key, CliqueSnapshotPrefix) && len(key) == 7+common.HashLength:
 			cliqueSnaps.Add(size)
-		case bytes.HasPrefix(key, ChtTablePrefix) ||
-			bytes.HasPrefix(key, ChtIndexTablePrefix) ||
-			bytes.HasPrefix(key, ChtPrefix): // Canonical hash trie
-			chtTrieNodes.Add(size)
-		case bytes.HasPrefix(key, BloomTrieTablePrefix) ||
-			bytes.HasPrefix(key, BloomTrieIndexPrefix) ||
-			bytes.HasPrefix(key, BloomTriePrefix): // Bloomtrie sub
-			bloomTrieNodes.Add(size)
+
+		// new log index
+		case bytes.HasPrefix(key, filterMapRowPrefix) && len(key) <= len(filterMapRowPrefix)+9:
+			filterMapRows.Add(size)
+		case bytes.HasPrefix(key, filterMapLastBlockPrefix) && len(key) == len(filterMapLastBlockPrefix)+4:
+			filterMapLastBlock.Add(size)
+		case bytes.HasPrefix(key, filterMapBlockLVPrefix) && len(key) == len(filterMapBlockLVPrefix)+8:
+			filterMapBlockLV.Add(size)
+
+		// old log index (deprecated)
+		case bytes.HasPrefix(key, bloomBitsPrefix) && len(key) == (len(bloomBitsPrefix)+10+common.HashLength):
+			bloomBits.Add(size)
+		case bytes.HasPrefix(key, bloomBitsMetaPrefix) && len(key) < len(bloomBitsMetaPrefix)+8:
+			bloomBits.Add(size)
+
+		// Path-based historic state indexes
+		case bytes.HasPrefix(key, StateHistoryIndexPrefix) && len(key) >= len(StateHistoryIndexPrefix)+common.HashLength:
+			stateIndex.Add(size)
 
 		// Verkle trie data is detected, determine the sub-category
 		case bytes.HasPrefix(key, VerklePrefix):
@@ -470,23 +518,18 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			default:
 				unaccounted.Add(size)
 			}
+
+		// Metadata keys
+		case slices.ContainsFunc(knownMetadataKeys, func(x []byte) bool { return bytes.Equal(x, key) }):
+			metadata.Add(size)
+
 		default:
-			var accounted bool
-			for _, meta := range [][]byte{
-				databaseVersionKey, headHeaderKey, headBlockKey, headFastBlockKey, headFinalizedBlockKey,
-				lastPivotKey, fastTrieProgressKey, snapshotDisabledKey, SnapshotRootKey, snapshotJournalKey,
-				snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
-				uncleanShutdownKey, badBlockKey, transitionStatusKey, skeletonSyncStatusKey,
-				persistentStateIDKey, trieJournalKey, snapshotSyncStatusKey, snapSyncStatusFlagKey,
-			} {
-				if bytes.Equal(key, meta) {
-					metadata.Add(size)
-					accounted = true
-					break
+			unaccounted.Add(size)
+			if len(key) >= 2 {
+				prefix := [2]byte(key[:2])
+				if _, ok := unaccountedKeys[prefix]; !ok {
+					unaccountedKeys[prefix] = bytes.Clone(key)
 				}
-			}
-			if !accounted {
-				unaccounted.Add(size)
 			}
 		}
 		count++
@@ -504,12 +547,16 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Block number->hash", numHashPairings.Size(), numHashPairings.Count()},
 		{"Key-Value store", "Block hash->number", hashNumPairings.Size(), hashNumPairings.Count()},
 		{"Key-Value store", "Transaction index", txLookups.Size(), txLookups.Count()},
-		{"Key-Value store", "Bloombit index", bloomBits.Size(), bloomBits.Count()},
+		{"Key-Value store", "Log index filter-map rows", filterMapRows.Size(), filterMapRows.Count()},
+		{"Key-Value store", "Log index last-block-of-map", filterMapLastBlock.Size(), filterMapLastBlock.Count()},
+		{"Key-Value store", "Log index block-lv", filterMapBlockLV.Size(), filterMapBlockLV.Count()},
+		{"Key-Value store", "Log bloombits (deprecated)", bloomBits.Size(), bloomBits.Count()},
 		{"Key-Value store", "Contract codes", codes.Size(), codes.Count()},
 		{"Key-Value store", "Hash trie nodes", legacyTries.Size(), legacyTries.Count()},
 		{"Key-Value store", "Path trie state lookups", stateLookups.Size(), stateLookups.Count()},
 		{"Key-Value store", "Path trie account nodes", accountTries.Size(), accountTries.Count()},
 		{"Key-Value store", "Path trie storage nodes", storageTries.Size(), storageTries.Count()},
+		{"Key-Value store", "Path state history indexes", stateIndex.Size(), stateIndex.Count()},
 		{"Key-Value store", "Verkle trie nodes", verkleTries.Size(), verkleTries.Count()},
 		{"Key-Value store", "Verkle trie state lookups", verkleStateLookups.Size(), verkleStateLookups.Count()},
 		{"Key-Value store", "Trie preimages", preimages.Size(), preimages.Count()},
@@ -518,8 +565,6 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Beacon sync headers", beaconHeaders.Size(), beaconHeaders.Count()},
 		{"Key-Value store", "Clique snapshots", cliqueSnaps.Size(), cliqueSnaps.Count()},
 		{"Key-Value store", "Singleton metadata", metadata.Size(), metadata.Count()},
-		{"Light client", "CHT trie nodes", chtTrieNodes.Size(), chtTrieNodes.Count()},
-		{"Light client", "Bloom trie nodes", bloomTrieNodes.Size(), bloomTrieNodes.Count()},
 	}
 	// Inspect all registered append-only file store then.
 	ancients, err := inspectFreezers(db)
@@ -545,8 +590,21 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 
 	if unaccounted.size > 0 {
 		log.Error("Database contains unaccounted data", "size", unaccounted.size, "count", unaccounted.count)
+		for _, e := range slices.SortedFunc(maps.Values(unaccountedKeys), bytes.Compare) {
+			log.Error(fmt.Sprintf("   example key: %x", e))
+		}
 	}
 	return nil
+}
+
+// This is the list of known 'metadata' keys stored in the databasse.
+var knownMetadataKeys = [][]byte{
+	databaseVersionKey, headHeaderKey, headBlockKey, headFastBlockKey, headFinalizedBlockKey,
+	lastPivotKey, fastTrieProgressKey, snapshotDisabledKey, SnapshotRootKey, snapshotJournalKey,
+	snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
+	uncleanShutdownKey, badBlockKey, transitionStatusKey, skeletonSyncStatusKey,
+	persistentStateIDKey, trieJournalKey, snapshotSyncStatusKey, snapSyncStatusFlagKey,
+	filterMapsRangeKey, headStateHistoryIndexKey, VerkleTransitionStatePrefix,
 }
 
 // printChainMetadata prints out chain metadata to stderr.
@@ -568,6 +626,7 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 		}
 		return fmt.Sprintf("%d (%#x)", *val, *val)
 	}
+
 	data := [][]string{
 		{"databaseVersion", pp(ReadDatabaseVersion(db))},
 		{"headBlockHash", fmt.Sprintf("%v", ReadHeadBlockHash(db))},
@@ -584,5 +643,77 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 	if b := ReadSkeletonSyncStatus(db); b != nil {
 		data = append(data, []string{"SkeletonSyncStatus", string(b)})
 	}
+	if fmr, ok, _ := ReadFilterMapsRange(db); ok {
+		data = append(data, []string{"filterMapsRange", fmt.Sprintf("%+v", fmr)})
+	}
 	return data
+}
+
+// SafeDeleteRange deletes all of the keys (and values) in the range
+// [start,end) (inclusive on start, exclusive on end).
+// If hashScheme is true then it always uses an iterator and skips hashdb trie
+// node entries. If it is false and the backing db is pebble db then it uses
+// the fast native range delete.
+// In case of fallback mode (hashdb or leveldb) the range deletion might be
+// very slow depending on the number of entries. In this case stopCallback
+// is periodically called and if it returns an error then SafeDeleteRange
+// stops and also returns that error. The callback is not called if native
+// range delete is used or there are a small number of keys only. The bool
+// argument passed to the callback is true if enrties have actually been
+// deleted already.
+func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashScheme bool, stopCallback func(bool) bool) error {
+	if !hashScheme {
+		// delete entire range; use fast native range delete on pebble db
+		for {
+			switch err := db.DeleteRange(start, end); {
+			case err == nil:
+				return nil
+			case errors.Is(err, ethdb.ErrTooManyKeys):
+				if stopCallback(true) {
+					return ErrDeleteRangeInterrupted
+				}
+			default:
+				return err
+			}
+		}
+	}
+
+	var (
+		count, deleted, skipped int
+		startTime               = time.Now()
+	)
+
+	batch := db.NewBatch()
+	it := db.NewIterator(nil, start)
+	defer func() {
+		it.Release() // it might be replaced during the process
+		log.Debug("SafeDeleteRange finished", "deleted", deleted, "skipped", skipped, "elapsed", common.PrettyDuration(time.Since(startTime)))
+	}()
+
+	for it.Next() && bytes.Compare(end, it.Key()) > 0 {
+		// Prevent deletion for trie nodes in hash mode
+		if len(it.Key()) != 32 || crypto.Keccak256Hash(it.Value()) != common.BytesToHash(it.Key()) {
+			if err := batch.Delete(it.Key()); err != nil {
+				return err
+			}
+			deleted++
+		} else {
+			skipped++
+		}
+		count++
+		if count > 10000 { // should not block for more than a second
+			if err := batch.Write(); err != nil {
+				return err
+			}
+			if stopCallback(deleted != 0) {
+				return ErrDeleteRangeInterrupted
+			}
+			start = append(bytes.Clone(it.Key()), 0) // appending a zero gives us the next possible key
+			it.Release()
+			batch = db.NewBatch()
+			it = db.NewIterator(nil, start)
+			count = 0
+		}
+	}
+	return batch.Write()
 }

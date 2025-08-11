@@ -18,9 +18,10 @@
 package pebble
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -55,24 +56,36 @@ const (
 // Apart from basic data storage functionality it also supports batch writes and
 // iterating over the keyspace in binary-alphabetical order.
 type Database struct {
-	fn string     // filename for reporting
-	db *pebble.DB // Underlying pebble storage engine
+	fn        string     // filename for reporting
+	db        *pebble.DB // Underlying pebble storage engine
+	namespace string     // Namespace for metrics
 
-	compTimeMeter       *metrics.Meter // Meter for measuring the total time spent in database compaction
-	compReadMeter       *metrics.Meter // Meter for measuring the data read during compaction
-	compWriteMeter      *metrics.Meter // Meter for measuring the data written during compaction
-	writeDelayNMeter    *metrics.Meter // Meter for measuring the write delay number due to database compaction
-	writeDelayMeter     *metrics.Meter // Meter for measuring the write delay duration due to database compaction
-	diskSizeGauge       *metrics.Gauge // Gauge for tracking the size of all the levels in the database
-	diskReadMeter       *metrics.Meter // Meter for measuring the effective amount of data read
-	diskWriteMeter      *metrics.Meter // Meter for measuring the effective amount of data written
-	memCompGauge        *metrics.Gauge // Gauge for tracking the number of memory compaction
-	level0CompGauge     *metrics.Gauge // Gauge for tracking the number of table compaction in level0
-	nonlevel0CompGauge  *metrics.Gauge // Gauge for tracking the number of table compaction in non0 level
-	seekCompGauge       *metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
-	manualMemAllocGauge *metrics.Gauge // Gauge for tracking amount of non-managed memory currently allocated
-
-	levelsGauge []*metrics.Gauge // Gauge for tracking the number of tables in levels
+	compTimeMeter          *metrics.Meter   // Meter for measuring the total time spent in database compaction
+	compReadMeter          *metrics.Meter   // Meter for measuring the data read during compaction
+	compWriteMeter         *metrics.Meter   // Meter for measuring the data written during compaction
+	writeDelayNMeter       *metrics.Meter   // Meter for measuring the write delay number due to database compaction
+	writeDelayMeter        *metrics.Meter   // Meter for measuring the write delay duration due to database compaction
+	diskSizeGauge          *metrics.Gauge   // Gauge for tracking the size of all the levels in the database
+	diskReadMeter          *metrics.Meter   // Meter for measuring the effective amount of data read
+	diskWriteMeter         *metrics.Meter   // Meter for measuring the effective amount of data written
+	memCompGauge           *metrics.Gauge   // Gauge for tracking the number of memory compaction
+	level0CompGauge        *metrics.Gauge   // Gauge for tracking the number of table compaction in level0
+	nonlevel0CompGauge     *metrics.Gauge   // Gauge for tracking the number of table compaction in non0 level
+	seekCompGauge          *metrics.Gauge   // Gauge for tracking the number of table compaction caused by read opt
+	manualMemAllocGauge    *metrics.Gauge   // Gauge for tracking amount of non-managed memory currently allocated
+	liveMemTablesGauge     *metrics.Gauge   // Gauge for tracking the number of live memory tables
+	zombieMemTablesGauge   *metrics.Gauge   // Gauge for tracking the number of zombie memory tables
+	blockCacheHitGauge     *metrics.Gauge   // Gauge for tracking the number of total hit in the block cache
+	blockCacheMissGauge    *metrics.Gauge   // Gauge for tracking the number of total miss in the block cache
+	tableCacheHitGauge     *metrics.Gauge   // Gauge for tracking the number of total hit in the table cache
+	tableCacheMissGauge    *metrics.Gauge   // Gauge for tracking the number of total miss in the table cache
+	filterHitGauge         *metrics.Gauge   // Gauge for tracking the number of total hit in bloom filter
+	filterMissGauge        *metrics.Gauge   // Gauge for tracking the number of total miss in bloom filter
+	estimatedCompDebtGauge *metrics.Gauge   // Gauge for tracking the number of bytes that need to be compacted
+	liveCompGauge          *metrics.Gauge   // Gauge for tracking the number of in-progress compactions
+	liveCompSizeGauge      *metrics.Gauge   // Gauge for tracking the size of in-progress compactions
+	liveIterGauge          *metrics.Gauge   // Gauge for tracking the number of live database iterators
+	levelsGauge            []*metrics.Gauge // Gauge for tracking the number of tables in levels
 
 	quitLock sync.RWMutex    // Mutex protecting the quit channel and the closed flag
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
@@ -88,6 +101,7 @@ type Database struct {
 
 	writeStalled        atomic.Bool  // Flag whether the write is stalled
 	writeDelayStartTime time.Time    // The start time of the latest write stall
+	writeDelayReason    string       // The reason of the latest write stall
 	writeDelayCount     atomic.Int64 // Total number of write stall counts
 	writeDelayTime      atomic.Int64 // Total time spent in write stalls
 
@@ -120,11 +134,30 @@ func (d *Database) onWriteStallBegin(b pebble.WriteStallBeginInfo) {
 	d.writeDelayStartTime = time.Now()
 	d.writeDelayCount.Add(1)
 	d.writeStalled.Store(true)
+
+	// Take just the first word of the reason. These are two potential
+	// reasons for the write stall:
+	// - memtable count limit reached
+	// - L0 file count limit exceeded
+	reason := b.Reason
+	if i := strings.IndexByte(reason, ' '); i != -1 {
+		reason = reason[:i]
+	}
+	if reason == "L0" || reason == "memtable" {
+		d.writeDelayReason = reason
+		metrics.GetOrRegisterGauge(d.namespace+"stall/count/"+reason, nil).Inc(1)
+	}
 }
 
 func (d *Database) onWriteStallEnd() {
 	d.writeDelayTime.Add(int64(time.Since(d.writeDelayStartTime)))
 	d.writeStalled.Store(false)
+
+	if d.writeDelayReason != "" {
+		metrics.GetOrRegisterResettingTimer(d.namespace+"stall/time/"+d.writeDelayReason, nil).UpdateSince(d.writeDelayStartTime)
+		d.writeDelayReason = ""
+	}
+	d.writeDelayStartTime = time.Time{}
 }
 
 // panicLogger is just a noop logger to disable Pebble's internal logger.
@@ -167,9 +200,12 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	// Taken from https://github.com/cockroachdb/pebble/blob/master/internal/constants/constants.go
 	maxMemTableSize := (1<<31)<<(^uint(0)>>63) - 1
 
-	// Two memory tables is configured which is identical to leveldb,
-	// including a frozen memory table and another live one.
-	memTableLimit := 2
+	// Four memory tables are configured, each with a default size of 256 MB.
+	// Having multiple smaller memory tables while keeping the total memory
+	// limit unchanged allows writes to be flushed more smoothly. This helps
+	// avoid compaction spikes and mitigates write stalls caused by heavy
+	// compaction workloads.
+	memTableLimit := 4
 	memTableSize := cache * 1024 * 1024 / 2 / memTableLimit
 
 	// The memory table size is currently capped at maxMemTableSize-1 due to a
@@ -182,10 +218,18 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		memTableSize = maxMemTableSize - 1
 	}
 	db := &Database{
-		fn:           file,
-		log:          logger,
-		quitChan:     make(chan chan error),
-		writeOptions: &pebble.WriteOptions{Sync: false},
+		fn:       file,
+		log:      logger,
+		quitChan: make(chan chan error),
+
+		// Use asynchronous write mode by default. Otherwise, the overhead of frequent fsync
+		// operations can be significant, especially on platforms with slow fsync performance
+		// (e.g., macOS) or less capable SSDs.
+		//
+		// Note that enabling async writes means recent data may be lost in the event of an
+		// application-level panic (writes will also be lost on a machine-level failure,
+		// of course). Geth is expected to handle recovery from an unclean shutdown.
+		writeOptions: pebble.NoSync,
 	}
 	opt := &pebble.Options{
 		// Pebble has a single combined cache area and the write
@@ -228,6 +272,26 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 			WriteStallEnd:   db.onWriteStallEnd,
 		},
 		Logger: panicLogger{}, // TODO(karalabe): Delete when this is upstreamed in Pebble
+
+		// Pebble is configured to use asynchronous write mode, meaning write operations
+		// return as soon as the data is cached in memory, without waiting for the WAL
+		// to be written. This mode offers better write performance but risks losing
+		// recent writes if the application crashes or a power failure/system crash occurs.
+		//
+		// By setting the WALBytesPerSync, the cached WAL writes will be periodically
+		// flushed at the background if the accumulated size exceeds this threshold.
+		WALBytesPerSync: 5 * ethdb.IdealBatchSize,
+
+		// L0CompactionThreshold specifies the number of L0 read-amplification
+		// necessary to trigger an L0 compaction. It essentially refers to the
+		// number of sub-levels at the L0. For each sub-level, it contains several
+		// L0 files which are non-overlapping with each other, typically produced
+		// by a single memory-table flush.
+		//
+		// The default value in Pebble is 4, which is a bit too large to have
+		// the compaction debt as around 10GB. By reducing it to 2, the compaction
+		// debt will be less than 1GB, but with more frequent compactions scheduled.
+		L0CompactionThreshold: 2,
 	}
 	// Disable seek compaction explicitly. Check https://github.com/ethereum/go-ethereum/pull/20130
 	// for more details.
@@ -253,6 +317,18 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	db.nonlevel0CompGauge = metrics.GetOrRegisterGauge(namespace+"compact/nonlevel0", nil)
 	db.seekCompGauge = metrics.GetOrRegisterGauge(namespace+"compact/seek", nil)
 	db.manualMemAllocGauge = metrics.GetOrRegisterGauge(namespace+"memory/manualalloc", nil)
+	db.liveMemTablesGauge = metrics.GetOrRegisterGauge(namespace+"table/live", nil)
+	db.zombieMemTablesGauge = metrics.GetOrRegisterGauge(namespace+"table/zombie", nil)
+	db.blockCacheHitGauge = metrics.GetOrRegisterGauge(namespace+"cache/block/hit", nil)
+	db.blockCacheMissGauge = metrics.GetOrRegisterGauge(namespace+"cache/block/miss", nil)
+	db.tableCacheHitGauge = metrics.GetOrRegisterGauge(namespace+"cache/table/hit", nil)
+	db.tableCacheMissGauge = metrics.GetOrRegisterGauge(namespace+"cache/table/miss", nil)
+	db.filterHitGauge = metrics.GetOrRegisterGauge(namespace+"filter/hit", nil)
+	db.filterMissGauge = metrics.GetOrRegisterGauge(namespace+"filter/miss", nil)
+	db.estimatedCompDebtGauge = metrics.GetOrRegisterGauge(namespace+"compact/estimateDebt", nil)
+	db.liveCompGauge = metrics.GetOrRegisterGauge(namespace+"compact/live/count", nil)
+	db.liveCompSizeGauge = metrics.GetOrRegisterGauge(namespace+"compact/live/size", nil)
+	db.liveIterGauge = metrics.GetOrRegisterGauge(namespace+"iter/count", nil)
 
 	// Start up the metrics gathering and return
 	go db.meter(metricsGatheringInterval, namespace)
@@ -343,8 +419,15 @@ func (d *Database) Delete(key []byte) error {
 func (d *Database) DeleteRange(start, end []byte) error {
 	d.quitLock.RLock()
 	defer d.quitLock.RUnlock()
+
 	if d.closed {
 		return pebble.ErrClosed
+	}
+	// There is no special flag to represent the end of key range
+	// in pebble(nil in leveldb). Use an ugly hack to construct a
+	// large key to represent it.
+	if end == nil {
+		end = ethdb.MaximumKey
 	}
 	return d.db.DeleteRange(start, end, d.writeOptions)
 }
@@ -404,7 +487,7 @@ func (d *Database) Compact(start []byte, limit []byte) error {
 	// 0xff-s, so 32 ensures than only a hash collision could touch it.
 	// https://github.com/cockroachdb/pebble/issues/2359#issuecomment-1443995833
 	if limit == nil {
-		limit = bytes.Repeat([]byte{0xff}, 32)
+		limit = ethdb.MaximumKey
 	}
 	return d.db.Compact(start, limit, true) // Parallelization is preferred
 }
@@ -412,6 +495,18 @@ func (d *Database) Compact(start []byte, limit []byte) error {
 // Path returns the path to the database directory.
 func (d *Database) Path() string {
 	return d.fn
+}
+
+// SyncKeyValue flushes all pending writes in the write-ahead-log to disk,
+// ensuring data durability up to that point.
+func (d *Database) SyncKeyValue() error {
+	// The entry (value=nil) is not written to the database; it is only
+	// added to the WAL. Writing this special log entry in sync mode
+	// automatically flushes all previous writes, ensuring database
+	// durability up to this point.
+	b := d.db.NewBatch()
+	b.LogData(nil, nil)
+	return d.db.Apply(b, pebble.Sync)
 }
 
 // meter periodically retrieves internal pebble counters and reports them to
@@ -465,12 +560,8 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		compReads[i%2] = compRead
 		nWrites[i%2] = nWrite
 
-		if d.writeDelayNMeter != nil {
-			d.writeDelayNMeter.Mark(writeDelayCounts[i%2] - writeDelayCounts[(i-1)%2])
-		}
-		if d.writeDelayMeter != nil {
-			d.writeDelayMeter.Mark(writeDelayTimes[i%2] - writeDelayTimes[(i-1)%2])
-		}
+		d.writeDelayNMeter.Mark(writeDelayCounts[i%2] - writeDelayCounts[(i-1)%2])
+		d.writeDelayMeter.Mark(writeDelayTimes[i%2] - writeDelayTimes[(i-1)%2])
 		// Print a warning log if writing has been stalled for a while. The log will
 		// be printed per minute to avoid overwhelming users.
 		if d.writeStalled.Load() && writeDelayCounts[i%2] == writeDelayCounts[(i-1)%2] &&
@@ -478,24 +569,13 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 			d.log.Warn("Database compacting, degraded performance")
 			lastWriteStallReport = time.Now()
 		}
-		if d.compTimeMeter != nil {
-			d.compTimeMeter.Mark(compTimes[i%2] - compTimes[(i-1)%2])
-		}
-		if d.compReadMeter != nil {
-			d.compReadMeter.Mark(compReads[i%2] - compReads[(i-1)%2])
-		}
-		if d.compWriteMeter != nil {
-			d.compWriteMeter.Mark(compWrites[i%2] - compWrites[(i-1)%2])
-		}
-		if d.diskSizeGauge != nil {
-			d.diskSizeGauge.Update(int64(stats.DiskSpaceUsage()))
-		}
-		if d.diskReadMeter != nil {
-			d.diskReadMeter.Mark(0) // pebble doesn't track non-compaction reads
-		}
-		if d.diskWriteMeter != nil {
-			d.diskWriteMeter.Mark(nWrites[i%2] - nWrites[(i-1)%2])
-		}
+		d.compTimeMeter.Mark(compTimes[i%2] - compTimes[(i-1)%2])
+		d.compReadMeter.Mark(compReads[i%2] - compReads[(i-1)%2])
+		d.compWriteMeter.Mark(compWrites[i%2] - compWrites[(i-1)%2])
+		d.diskSizeGauge.Update(int64(stats.DiskSpaceUsage()))
+		d.diskReadMeter.Mark(0) // pebble doesn't track non-compaction reads
+		d.diskWriteMeter.Mark(nWrites[i%2] - nWrites[(i-1)%2])
+
 		// See https://github.com/cockroachdb/pebble/pull/1628#pullrequestreview-1026664054
 		manuallyAllocated := stats.BlockCache.Size + int64(stats.MemTable.Size) + int64(stats.MemTable.ZombieSize)
 		d.manualMemAllocGauge.Update(manuallyAllocated)
@@ -503,6 +583,19 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		d.nonlevel0CompGauge.Update(nonLevel0CompCount)
 		d.level0CompGauge.Update(level0CompCount)
 		d.seekCompGauge.Update(stats.Compact.ReadCount)
+		d.liveCompGauge.Update(stats.Compact.NumInProgress)
+		d.liveCompSizeGauge.Update(stats.Compact.InProgressBytes)
+		d.liveIterGauge.Update(stats.TableIters)
+
+		d.liveMemTablesGauge.Update(stats.MemTable.Count)
+		d.zombieMemTablesGauge.Update(stats.MemTable.ZombieCount)
+		d.estimatedCompDebtGauge.Update(int64(stats.Compact.EstimatedDebt))
+		d.tableCacheHitGauge.Update(stats.TableCache.Hits)
+		d.tableCacheMissGauge.Update(stats.TableCache.Misses)
+		d.blockCacheHitGauge.Update(stats.BlockCache.Hits)
+		d.blockCacheMissGauge.Update(stats.BlockCache.Misses)
+		d.filterHitGauge.Update(stats.Filter.Hits)
+		d.filterMissGauge.Update(stats.Filter.Misses)
 
 		for i, level := range stats.Levels {
 			// Append metrics for additional layers
@@ -550,6 +643,23 @@ func (b *batch) Delete(key []byte) error {
 	return nil
 }
 
+// DeleteRange removes all keys in the range [start, end) from the batch for
+// later committing, inclusive on start, exclusive on end.
+func (b *batch) DeleteRange(start, end []byte) error {
+	// There is no special flag to represent the end of key range
+	// in pebble(nil in leveldb). Use an ugly hack to construct a
+	// large key to represent it.
+	if end == nil {
+		end = ethdb.MaximumKey
+	}
+	if err := b.b.DeleteRange(start, end, nil); err != nil {
+		return err
+	}
+	// Approximate size impact - just the keys
+	b.size += len(start) + len(end)
+	return nil
+}
+
 // ValueSize retrieves the amount of data queued up for writing.
 func (b *batch) ValueSize() int {
 	return b.size
@@ -588,6 +698,15 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 		} else if kind == pebble.InternalKeyKindDelete {
 			if err = w.Delete(k); err != nil {
 				return err
+			}
+		} else if kind == pebble.InternalKeyKindRangeDelete {
+			// For range deletion, k is the start key and v is the end key
+			if rangeDeleter, ok := w.(ethdb.KeyValueRangeDeleter); ok {
+				if err = rangeDeleter.DeleteRange(k, v); err != nil {
+					return err
+				}
+			} else {
+				return errors.New("ethdb.KeyValueWriter does not implement DeleteRange")
 			}
 		} else {
 			return fmt.Errorf("unhandled operation, keytype: %v", kind)

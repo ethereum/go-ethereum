@@ -20,10 +20,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 )
 
@@ -53,7 +53,14 @@ func newHistoryTestSuite(cfg testConfig) *historyTestSuite {
 func (s *historyTestSuite) loadTests() error {
 	file, err := s.cfg.fsys.Open(s.cfg.historyTestFile)
 	if err != nil {
-		return fmt.Errorf("can't open historyTestFile: %v", err)
+		// If not found in embedded FS, try to load it from disk
+		if !os.IsNotExist(err) {
+			return err
+		}
+		file, err = os.OpenFile(s.cfg.historyTestFile, os.O_RDONLY, 0666)
+		if err != nil {
+			return fmt.Errorf("can't open historyTestFile: %v", err)
+		}
 	}
 	defer file.Close()
 	if err := json.NewDecoder(file).Decode(&s.tests); err != nil {
@@ -65,40 +72,16 @@ func (s *historyTestSuite) loadTests() error {
 	return nil
 }
 
-func (s *historyTestSuite) allTests() []utesting.Test {
-	return []utesting.Test{
-		{
-			Name: "History/getBlockByHash",
-			Fn:   s.testGetBlockByHash,
-		},
-		{
-			Name: "History/getBlockByNumber",
-			Fn:   s.testGetBlockByNumber,
-		},
-		{
-			Name: "History/getBlockReceiptsByHash",
-			Fn:   s.testGetBlockReceiptsByHash,
-		},
-		{
-			Name: "History/getBlockReceiptsByNumber",
-			Fn:   s.testGetBlockReceiptsByNumber,
-		},
-		{
-			Name: "History/getBlockTransactionCountByHash",
-			Fn:   s.testGetBlockTransactionCountByHash,
-		},
-		{
-			Name: "History/getBlockTransactionCountByNumber",
-			Fn:   s.testGetBlockTransactionCountByNumber,
-		},
-		{
-			Name: "History/getTransactionByBlockHashAndIndex",
-			Fn:   s.testGetTransactionByBlockHashAndIndex,
-		},
-		{
-			Name: "History/getTransactionByBlockNumberAndIndex",
-			Fn:   s.testGetTransactionByBlockNumberAndIndex,
-		},
+func (s *historyTestSuite) allTests() []workloadTest {
+	return []workloadTest{
+		newWorkLoadTest("History/getBlockByHash", s.testGetBlockByHash),
+		newWorkLoadTest("History/getBlockByNumber", s.testGetBlockByNumber),
+		newWorkLoadTest("History/getBlockReceiptsByHash", s.testGetBlockReceiptsByHash),
+		newWorkLoadTest("History/getBlockReceiptsByNumber", s.testGetBlockReceiptsByNumber),
+		newWorkLoadTest("History/getBlockTransactionCountByHash", s.testGetBlockTransactionCountByHash),
+		newWorkLoadTest("History/getBlockTransactionCountByNumber", s.testGetBlockTransactionCountByNumber),
+		newWorkLoadTest("History/getTransactionByBlockHashAndIndex", s.testGetTransactionByBlockHashAndIndex),
+		newWorkLoadTest("History/getTransactionByBlockNumberAndIndex", s.testGetTransactionByBlockNumberAndIndex),
 	}
 }
 
@@ -108,8 +91,11 @@ func (s *historyTestSuite) testGetBlockByHash(t *utesting.T) {
 	for i, num := range s.tests.BlockNumbers {
 		bhash := s.tests.BlockHashes[i]
 		b, err := s.cfg.client.getBlockByHash(ctx, bhash, false)
-		if err != nil {
-			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
+		if err = validateHistoryPruneErr(err, num, s.cfg.historyPruneBlock); err == errPrunedHistory {
+			continue
+		} else if err != nil {
+			t.Errorf("block %d (hash %v): error %v", num, bhash, err)
+			continue
 		}
 		if b == nil {
 			t.Errorf("block %d (hash %v): not found", num, bhash)
@@ -127,8 +113,11 @@ func (s *historyTestSuite) testGetBlockByNumber(t *utesting.T) {
 	for i, num := range s.tests.BlockNumbers {
 		bhash := s.tests.BlockHashes[i]
 		b, err := s.cfg.client.getBlockByNumber(ctx, num, false)
-		if err != nil {
-			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
+		if err = validateHistoryPruneErr(err, num, s.cfg.historyPruneBlock); err == errPrunedHistory {
+			continue
+		} else if err != nil {
+			t.Errorf("block %d (hash %v): error %v", num, bhash, err)
+			continue
 		}
 		if b == nil {
 			t.Errorf("block %d (hash %v): not found", num, bhash)
@@ -146,8 +135,11 @@ func (s *historyTestSuite) testGetBlockTransactionCountByHash(t *utesting.T) {
 	for i, num := range s.tests.BlockNumbers {
 		bhash := s.tests.BlockHashes[i]
 		count, err := s.cfg.client.getBlockTransactionCountByHash(ctx, bhash)
-		if err != nil {
-			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
+		if err = validateHistoryPruneErr(err, num, s.cfg.historyPruneBlock); err == errPrunedHistory {
+			continue
+		} else if err != nil {
+			t.Errorf("block %d (hash %v): error %v", num, bhash, err)
+			continue
 		}
 		expectedCount := uint64(s.tests.TxCounts[i])
 		if count != expectedCount {
@@ -162,8 +154,11 @@ func (s *historyTestSuite) testGetBlockTransactionCountByNumber(t *utesting.T) {
 	for i, num := range s.tests.BlockNumbers {
 		bhash := s.tests.BlockHashes[i]
 		count, err := s.cfg.client.getBlockTransactionCountByNumber(ctx, num)
-		if err != nil {
-			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
+		if err = validateHistoryPruneErr(err, num, s.cfg.historyPruneBlock); err == errPrunedHistory {
+			continue
+		} else if err != nil {
+			t.Errorf("block %d (hash %v): error %v", num, bhash, err)
+			continue
 		}
 		expectedCount := uint64(s.tests.TxCounts[i])
 		if count != expectedCount {
@@ -178,8 +173,11 @@ func (s *historyTestSuite) testGetBlockReceiptsByHash(t *utesting.T) {
 	for i, num := range s.tests.BlockNumbers {
 		bhash := s.tests.BlockHashes[i]
 		receipts, err := s.cfg.client.getBlockReceipts(ctx, bhash)
-		if err != nil {
-			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
+		if err = validateHistoryPruneErr(err, num, s.cfg.historyPruneBlock); err == errPrunedHistory {
+			continue
+		} else if err != nil {
+			t.Errorf("block %d (hash %v): error %v", num, bhash, err)
+			continue
 		}
 		hash := calcReceiptsHash(receipts)
 		expectedHash := s.tests.ReceiptsHashes[i]
@@ -195,8 +193,11 @@ func (s *historyTestSuite) testGetBlockReceiptsByNumber(t *utesting.T) {
 	for i, num := range s.tests.BlockNumbers {
 		bhash := s.tests.BlockHashes[i]
 		receipts, err := s.cfg.client.getBlockReceipts(ctx, hexutil.Uint64(num))
-		if err != nil {
-			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
+		if err = validateHistoryPruneErr(err, num, s.cfg.historyPruneBlock); err == errPrunedHistory {
+			continue
+		} else if err != nil {
+			t.Errorf("block %d (hash %v): error %v", num, bhash, err)
+			continue
 		}
 		hash := calcReceiptsHash(receipts)
 		expectedHash := s.tests.ReceiptsHashes[i]
@@ -218,8 +219,11 @@ func (s *historyTestSuite) testGetTransactionByBlockHashAndIndex(t *utesting.T) 
 		}
 
 		tx, err := s.cfg.client.getTransactionByBlockHashAndIndex(ctx, bhash, uint64(txIndex))
-		if err != nil {
-			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
+		if err = validateHistoryPruneErr(err, num, s.cfg.historyPruneBlock); err == errPrunedHistory {
+			continue
+		} else if err != nil {
+			t.Errorf("block %d (hash %v): error %v", num, bhash, err)
+			continue
 		}
 		if tx == nil {
 			t.Errorf("block %d (hash %v): txIndex %d not found", num, bhash, txIndex)
@@ -243,8 +247,11 @@ func (s *historyTestSuite) testGetTransactionByBlockNumberAndIndex(t *utesting.T
 		}
 
 		tx, err := s.cfg.client.getTransactionByBlockNumberAndIndex(ctx, num, uint64(txIndex))
-		if err != nil {
-			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
+		if err = validateHistoryPruneErr(err, num, s.cfg.historyPruneBlock); err == errPrunedHistory {
+			continue
+		} else if err != nil {
+			t.Errorf("block %d (hash %v): error %v", num, bhash, err)
+			continue
 		}
 		if tx == nil {
 			t.Errorf("block %d (hash %v): txIndex %d not found", num, bhash, txIndex)
@@ -254,56 +261,4 @@ func (s *historyTestSuite) testGetTransactionByBlockNumberAndIndex(t *utesting.T
 			t.Errorf("block %d (hash %v): txIndex %d has wrong txHash/Index", num, bhash, txIndex)
 		}
 	}
-}
-
-type simpleBlock struct {
-	Number hexutil.Uint64 `json:"number"`
-	Hash   common.Hash    `json:"hash"`
-}
-
-type simpleTransaction struct {
-	Hash             common.Hash    `json:"hash"`
-	TransactionIndex hexutil.Uint64 `json:"transactionIndex"`
-}
-
-func (c *client) getBlockByHash(ctx context.Context, arg common.Hash, fullTx bool) (*simpleBlock, error) {
-	var r *simpleBlock
-	err := c.RPC.CallContext(ctx, &r, "eth_getBlockByHash", arg, fullTx)
-	return r, err
-}
-
-func (c *client) getBlockByNumber(ctx context.Context, arg uint64, fullTx bool) (*simpleBlock, error) {
-	var r *simpleBlock
-	err := c.RPC.CallContext(ctx, &r, "eth_getBlockByNumber", hexutil.Uint64(arg), fullTx)
-	return r, err
-}
-
-func (c *client) getTransactionByBlockHashAndIndex(ctx context.Context, block common.Hash, index uint64) (*simpleTransaction, error) {
-	var r *simpleTransaction
-	err := c.RPC.CallContext(ctx, &r, "eth_getTransactionByBlockHashAndIndex", block, hexutil.Uint64(index))
-	return r, err
-}
-
-func (c *client) getTransactionByBlockNumberAndIndex(ctx context.Context, block uint64, index uint64) (*simpleTransaction, error) {
-	var r *simpleTransaction
-	err := c.RPC.CallContext(ctx, &r, "eth_getTransactionByBlockNumberAndIndex", hexutil.Uint64(block), hexutil.Uint64(index))
-	return r, err
-}
-
-func (c *client) getBlockTransactionCountByHash(ctx context.Context, block common.Hash) (uint64, error) {
-	var r hexutil.Uint64
-	err := c.RPC.CallContext(ctx, &r, "eth_getBlockTransactionCountByHash", block)
-	return uint64(r), err
-}
-
-func (c *client) getBlockTransactionCountByNumber(ctx context.Context, block uint64) (uint64, error) {
-	var r hexutil.Uint64
-	err := c.RPC.CallContext(ctx, &r, "eth_getBlockTransactionCountByNumber", hexutil.Uint64(block))
-	return uint64(r), err
-}
-
-func (c *client) getBlockReceipts(ctx context.Context, arg any) ([]*types.Receipt, error) {
-	var result []*types.Receipt
-	err := c.RPC.CallContext(ctx, &result, "eth_getBlockReceipts", arg)
-	return result, err
 }

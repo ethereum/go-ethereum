@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/flags"
@@ -180,12 +181,51 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	return stack, cfg
 }
 
+// constructs the disclaimer text block which will be printed in the logs upon
+// startup when Geth is running in dev mode.
+func constructDevModeBanner(ctx *cli.Context, cfg gethConfig) string {
+	devModeBanner := `You are running Geth in --dev mode. Please note the following:
+
+  1. This mode is only intended for fast, iterative development without assumptions on
+     security or persistence.
+  2. The database is created in memory unless specified otherwise. Therefore, shutting down
+     your computer or losing power will wipe your entire block data and chain state for
+     your dev environment.
+  3. A random, pre-allocated developer account will be available and unlocked as
+     eth.coinbase, which can be used for testing. The random dev account is temporary,
+     stored on a ramdisk, and will be lost if your machine is restarted.
+  4. Mining is enabled by default. However, the client will only seal blocks if transactions
+     are pending in the mempool. The miner's minimum accepted gas price is 1.
+  5. Networking is disabled; there is no listen-address, the maximum number of peers is set
+     to 0, and discovery is disabled.
+`
+	if !ctx.IsSet(utils.DataDirFlag.Name) {
+		devModeBanner += fmt.Sprintf(`
+
+ Running in ephemeral mode.  The following account has been prefunded in the genesis:
+
+       Account
+       ------------------
+       0x%x (10^49 ETH)
+`, cfg.Eth.Miner.PendingFeeRecipient)
+		if cfg.Eth.Miner.PendingFeeRecipient == utils.DeveloperAddr {
+			devModeBanner += fmt.Sprintf(` 
+       Private Key
+       ------------------
+       0x%x
+`, crypto.FromECDSA(utils.DeveloperKey))
+		}
+	}
+
+	return devModeBanner
+}
+
 // makeFullNode loads geth configuration and creates the Ethereum backend.
 func makeFullNode(ctx *cli.Context) *node.Node {
 	stack, cfg := makeConfigNode(ctx)
-	if ctx.IsSet(utils.OverrideCancun.Name) {
-		v := ctx.Uint64(utils.OverrideCancun.Name)
-		cfg.Eth.OverrideCancun = &v
+	if ctx.IsSet(utils.OverrideOsaka.Name) {
+		v := ctx.Uint64(utils.OverrideOsaka.Name)
+		cfg.Eth.OverrideOsaka = &v
 	}
 	if ctx.IsSet(utils.OverrideVerkle.Name) {
 		v := ctx.Uint64(utils.OverrideVerkle.Name)
@@ -222,23 +262,30 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	if cfg.Ethstats.URL != "" {
 		utils.RegisterEthStatsService(stack, backend, cfg.Ethstats.URL)
 	}
-	// Configure full-sync tester service if requested
+	// Configure synchronization override service
+	var synctarget common.Hash
 	if ctx.IsSet(utils.SyncTargetFlag.Name) {
 		hex := hexutil.MustDecode(ctx.String(utils.SyncTargetFlag.Name))
 		if len(hex) != common.HashLength {
 			utils.Fatalf("invalid sync target length: have %d, want %d", len(hex), common.HashLength)
 		}
-		utils.RegisterFullSyncTester(stack, eth, common.BytesToHash(hex))
+		synctarget = common.BytesToHash(hex)
 	}
+	utils.RegisterSyncOverrideService(stack, eth, synctarget, ctx.Bool(utils.ExitWhenSyncedFlag.Name))
 
 	if ctx.IsSet(utils.DeveloperFlag.Name) {
 		// Start dev mode.
-		simBeacon, err := catalyst.NewSimulatedBeacon(ctx.Uint64(utils.DeveloperPeriodFlag.Name), eth)
+		simBeacon, err := catalyst.NewSimulatedBeacon(ctx.Uint64(utils.DeveloperPeriodFlag.Name), cfg.Eth.Miner.PendingFeeRecipient, eth)
 		if err != nil {
 			utils.Fatalf("failed to register dev mode catalyst service: %v", err)
 		}
 		catalyst.RegisterSimulatedBeaconAPIs(stack, simBeacon)
 		stack.RegisterLifecycle(simBeacon)
+
+		banner := constructDevModeBanner(ctx, cfg)
+		for _, line := range strings.Split(banner, "\n") {
+			log.Warn(line)
+		}
 	} else if ctx.IsSet(utils.BeaconApiFlag.Name) {
 		// Start blsync mode.
 		srv := rpc.NewServer()

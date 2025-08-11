@@ -220,9 +220,33 @@ func (p *Peer) String() string {
 	return fmt.Sprintf("Peer %x %v", id[:8], p.RemoteAddr())
 }
 
-// Inbound returns true if the peer is an inbound connection
+// Inbound returns true if the peer is an inbound (not dialed) connection.
 func (p *Peer) Inbound() bool {
 	return p.rw.is(inboundConn)
+}
+
+// Trusted returns true if the peer is configured as trusted.
+// Trusted peers are accepted in above the MaxInboundConns limit.
+// The peer can be either inbound or dialed.
+func (p *Peer) Trusted() bool {
+	return p.rw.is(trustedConn)
+}
+
+// DynDialed returns true if the peer was dialed successfully (passed handshake) and
+// it is not configured as static.
+func (p *Peer) DynDialed() bool {
+	return p.rw.is(dynDialedConn)
+}
+
+// StaticDialed returns true if the peer was dialed successfully (passed handshake) and
+// it is configured as static.
+func (p *Peer) StaticDialed() bool {
+	return p.rw.is(staticDialedConn)
+}
+
+// Lifetime returns the time since peer creation.
+func (p *Peer) Lifetime() mclock.AbsTime {
+	return mclock.Now() - p.created
 }
 
 func newPeer(log log.Logger, conn *conn, protocols []Protocol) *Peer {
@@ -254,6 +278,8 @@ func (p *Peer) run() (remoteRequested bool, err error) {
 	p.wg.Add(2)
 	go p.readLoop(readErr)
 	go p.pingLoop()
+	live1min := time.NewTimer(1 * time.Minute)
+	defer live1min.Stop()
 
 	// Start all protocol handlers.
 	writeStart <- struct{}{}
@@ -285,6 +311,12 @@ loop:
 		case err = <-p.disc:
 			reason = discReasonForError(err)
 			break loop
+		case <-live1min.C:
+			if p.Inbound() {
+				serve1MinSuccessMeter.Mark(1)
+			} else {
+				dial1MinSuccessMeter.Mark(1)
+			}
 		}
 	}
 

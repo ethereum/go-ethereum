@@ -562,7 +562,7 @@ func (tab *Table) addReplacement(b *bucket, n *enode.Node) {
 }
 
 func (tab *Table) nodeAdded(b *bucket, n *tableNode) {
-	if n.addedToTable == (time.Time{}) {
+	if n.addedToTable.IsZero() {
 		n.addedToTable = time.Now()
 	}
 	n.addedToBucket = time.Now()
@@ -693,4 +693,12 @@ func pushNode(list []*tableNode, n *tableNode, max int) ([]*tableNode, *tableNod
 	copy(list[1:], list)
 	list[0] = n
 	return list, removed
+}
+
+// deleteNode removes a node from the table.
+func (tab *Table) deleteNode(n *enode.Node) {
+	tab.mutex.Lock()
+	defer tab.mutex.Unlock()
+	b := tab.bucket(n.ID())
+	tab.deleteInBucket(b, n.ID())
 }

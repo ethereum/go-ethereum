@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -37,15 +38,21 @@ var (
 	errInvalidTopic           = errors.New("invalid topic(s)")
 	errFilterNotFound         = errors.New("filter not found")
 	errInvalidBlockRange      = errors.New("invalid block range params")
+	errUnknownBlock           = errors.New("unknown block")
+	errBlockHashWithRange     = errors.New("can't specify fromBlock/toBlock with blockHash")
 	errPendingLogsUnsupported = errors.New("pending logs are not supported")
 	errExceedMaxTopics        = errors.New("exceed max topics")
+	errExceedMaxAddresses     = errors.New("exceed max addresses")
 )
 
-// The maximum number of topic criteria allowed, vm.LOG4 - vm.LOG0
-const maxTopics = 4
-
-// The maximum number of allowed topics within a topic criteria
-const maxSubTopics = 1000
+const (
+	// The maximum number of addresses allowed in a filter criteria
+	maxAddresses = 1000
+	// The maximum number of topic criteria allowed, vm.LOG4 - vm.LOG0
+	maxTopics = 4
+	// The maximum number of allowed topics within a topic criteria
+	maxSubTopics = 1000
+)
 
 // filter is a helper struct that holds meta information over the filter type
 // and associated subscription in the event system.
@@ -340,8 +347,16 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 	if len(crit.Topics) > maxTopics {
 		return nil, errExceedMaxTopics
 	}
+	if len(crit.Addresses) > maxAddresses {
+		return nil, errExceedMaxAddresses
+	}
+
 	var filter *Filter
 	if crit.BlockHash != nil {
+		if crit.FromBlock != nil || crit.ToBlock != nil {
+			return nil, errBlockHashWithRange
+		}
+
 		// Block filter requested, construct a single-shot filter
 		filter = api.sys.NewBlockFilter(*crit.BlockHash, crit.Addresses, crit.Topics)
 	} else {
@@ -354,12 +369,17 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 		if crit.ToBlock != nil {
 			end = crit.ToBlock.Int64()
 		}
+		// Block numbers below 0 are special cases.
 		if begin > 0 && end > 0 && begin > end {
 			return nil, errInvalidBlockRange
+		}
+		if begin >= 0 && begin < int64(api.events.backend.HistoryPruningCutoff()) {
+			return nil, &history.PrunedHistoryError{}
 		}
 		// Construct the range filter
 		filter = api.sys.NewRangeFilter(begin, end, crit.Addresses, crit.Topics)
 	}
+
 	// Run the filter and return all the logs
 	logs, err := filter.Logs(ctx)
 	if err != nil {
@@ -525,6 +545,9 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 		// raw.Address can contain a single address or an array of addresses
 		switch rawAddr := raw.Addresses.(type) {
 		case []interface{}:
+			if len(rawAddr) > maxAddresses {
+				return errExceedMaxAddresses
+			}
 			for i, addr := range rawAddr {
 				if strAddr, ok := addr.(string); ok {
 					addr, err := decodeAddress(strAddr)
