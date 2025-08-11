@@ -343,10 +343,6 @@ func downloadSpecTestFixtures(csdb *download.ChecksumDB, cachedir string) string
 	return filepath.Join(cachedir, base)
 }
 
-// doCheckTidy assets that the Go modules files are tidied already.
-func doCheckTidy() {
-}
-
 // doCheckGenerate ensures that re-generating generated files does not cause
 // any mutations in the source file tree.
 func doCheckGenerate() {
