@@ -101,6 +101,11 @@ func (b Balance) MarshalJSON() ([]byte, error) {
 	return json.Marshal(fmt.Sprintf("%x", b))
 }
 
+func (b Balance) IsZero() bool {
+	zeroBytes := [16]byte{}
+	return bytes.Equal(b[:], zeroBytes[:])
+}
+
 // encodingBalanceChange is the encoding format of BalanceChange.
 type encodingBalanceChange struct {
 	TxIdx   uint16  `ssz-size:"2" json:"txIndex"`
@@ -375,6 +380,31 @@ type AccountState struct {
 	StorageWrites map[common.Hash]common.Hash `json:"StorageWrites,omitempty"`
 }
 
+func (a *AccountState) IsEmpty() bool {
+	return a.Balance == nil || a.Balance.IsZero() || a.Nonce == nil || a.Code == nil
+}
+
+func (a *AccountState) Merge(next *AccountState) {
+	if next.Balance != nil {
+		a.Balance = next.Balance
+	}
+	if next.Nonce != nil {
+		a.Nonce = next.Nonce
+	}
+	if next.Code != nil {
+		a.Code = next.Code
+	}
+	if next.StorageWrites != nil {
+		if a.StorageWrites == nil {
+			a.StorageWrites = maps.Clone(next.StorageWrites)
+		} else {
+			for key, val := range next.StorageWrites {
+				a.StorageWrites[key] = val
+			}
+		}
+	}
+}
+
 func NewEmptyAccountState() *AccountState {
 	return &AccountState{
 		nil,
@@ -444,20 +474,19 @@ func (a *AccountState) Copy() *AccountState {
 	return res
 }
 
-// ValidateStateDiff ensures that the two state diffs match exactly.
-func ValidateStateDiff(balDiff, totalDiff *StateDiff) error {
-	expectedBALAddrs := len(totalDiff.Mutations)
-	for addr, computedDiff := range totalDiff.Mutations {
+// ValidateStateDiff asserts that the state from layerDiff are present in totalDiffAtLayer.
+func ValidateStateDiff(balDiff, computedDiff *StateDiff) error {
+	for addr, computedAccountDiff := range computedDiff.Mutations {
 		balAccountDiff, ok := balDiff.Mutations[addr]
 		if !ok {
 			return fmt.Errorf("missing from BAL")
 		}
 
-		if !computedDiff.Eq(balAccountDiff) {
+		if !computedAccountDiff.Eq(balAccountDiff) {
 			return fmt.Errorf("mismatch between BAl value and computed value")
 		}
 	}
-	if len(balDiff.Mutations) != expectedBALAddrs {
+	if len(balDiff.Mutations) != len(computedDiff.Mutations) {
 		return fmt.Errorf("BAL contained unexpected mutations compared to computed")
 	}
 	return nil
@@ -485,8 +514,43 @@ func (s *StateDiff) Merge(next *StateDiff) {
 				mut.Nonce = diff.Nonce
 			}
 			if len(diff.StorageWrites) > 0 {
-				// TODO: this is wrong, need to merge the two maps
-				mut.StorageWrites = maps.Clone(diff.StorageWrites)
+				if mut.StorageWrites == nil {
+					mut.StorageWrites = maps.Clone(diff.StorageWrites)
+				} else {
+					for key, val := range diff.StorageWrites {
+						mut.StorageWrites[key] = val
+					}
+				}
+
+			}
+		} else {
+			s.Mutations[account] = diff.Copy()
+		}
+	}
+}
+
+func (s *StateDiff) MergePrev(prev *StateDiff) {
+	for account, diff := range prev.Mutations {
+		if mut, ok := s.Mutations[account]; ok {
+			if mut.Balance == nil {
+				mut.Balance = diff.Balance
+			}
+			if mut.Code == nil {
+				mut.Code = diff.Code
+			}
+			if mut.Nonce == nil {
+				mut.Nonce = diff.Nonce
+			}
+			if len(diff.StorageWrites) > 0 {
+				if mut.StorageWrites == nil {
+					mut.StorageWrites = diff.StorageWrites
+				} else {
+					for key, val := range diff.StorageWrites {
+						if _, ok := mut.StorageWrites[key]; !ok {
+							mut.StorageWrites[key] = val
+						}
+					}
+				}
 			}
 		} else {
 			s.Mutations[account] = diff
@@ -648,7 +712,6 @@ func BuildStateDiffs(bal *BlockAccessList, txCount int) []*StateDiff {
 				}
 			}
 		}
-
 		if len(accountDiff.BalanceChanges) > 0 {
 			for _, balanceChange := range accountDiff.BalanceChanges {
 				if _, ok := stateDiffs[balanceChange.TxIdx].Mutations[accountDiff.Address]; !ok {

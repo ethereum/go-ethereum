@@ -159,6 +159,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 }
 
 func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *state.StateDB, cfg vm.Config) (chan *ProcessResultWithMetrics, error) {
+	fmt.Println("start ProcessWithAccessList")
 	var (
 		header      = block.Header()
 		blockHash   = block.Hash()
@@ -207,11 +208,11 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 			return cmp.Compare(a.TransactionIndex, b.TransactionIndex)
 		})
 
-		var cumGasUsed uint64
+		var cumulativeGasUsed uint64
 		var allLogs []*types.Log
 		for _, receipt := range receipts {
-			receipt.CumulativeGasUsed = cumGasUsed + receipt.GasUsed
-			cumGasUsed += receipt.GasUsed
+			receipt.CumulativeGasUsed = cumulativeGasUsed + receipt.GasUsed
+			cumulativeGasUsed += receipt.GasUsed
 			if receipt.CumulativeGasUsed > header.GasLimit {
 				return &ProcessResult{Error: fmt.Errorf("gas limit exceeded")}
 			}
@@ -266,7 +267,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 			Receipts: receipts,
 			Requests: requests,
 			Logs:     allLogs,
-			GasUsed:  cumGasUsed,
+			GasUsed:  cumulativeGasUsed,
 		}
 	}
 	resultHandler := func(expectedDiff *bal.StateDiff, postTxState *state.StateDB) {
@@ -323,7 +324,6 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 			}
 		}
 	}
-
 	calcAndVerifyRoot := func(postState *state.StateDB, block *types.Block, resCh chan<- error) {
 		tVerifyStart = time.Now()
 		root := postState.IntermediateRoot(false)
@@ -335,10 +335,10 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 			resCh <- nil
 		}
 	}
-
 	// executes single transaction, validating the computed diff against the BAL
 	// and forwarding the txExecResult to be consumed by resultHandler
-	execTx := func(ctx context2.Context, tx *types.Transaction, idx int, db *state.StateDB, expectedDiff *bal.StateDiff) *txExecResult {
+	execTx := func(ctx context2.Context, tx *types.Transaction, idx int, db *state.StateDB, prestateDiff, expectedDiff *bal.StateDiff) *txExecResult {
+		db.ApplyDiff(prestateDiff, true)
 		// if an error with another transaction rendered the block invalid, don't proceed with executing this one
 		// TODO: also interrupt any currently-executing transactions if one failed.
 		select {
@@ -373,6 +373,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 		}
 
 		if err := bal.ValidateStateDiff(expectedDiff, computedDiff); err != nil {
+			fmt.Printf("failed %d.  prestate diff is\n%s\ndiff is\n%s\nexpected is\n%s\n", idx, prestateDiff.String(), computedDiff.String(), expectedDiff.String())
 			return &txExecResult{err: err}
 		}
 
@@ -406,6 +407,14 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	intermediateStateDiffs := bal.BuildStateDiffs(block.Body().AccessList, len(block.Transactions()))
 	preTxDiff := intermediateStateDiffs[0]
 
+	totalDiff := bal.StateDiff{make(map[common.Address]*bal.AccountState)}
+	var totalDiffs []*bal.StateDiff
+	for _, diff := range intermediateStateDiffs {
+		totalDiff.Merge(diff.Copy()) // TODO: it shouldn't be necessary to Copy here
+		totalDiffs = append(totalDiffs, totalDiff.Copy())
+	}
+	statedb.InstantiateWithStateDiffs(&totalDiff)
+
 	computedDiff := &bal.StateDiff{make(map[common.Address]*bal.AccountState)}
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		computedDiff.Merge(ProcessBeaconBlockRoot(*beaconRoot, evm))
@@ -419,11 +428,11 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	}
 
 	var txPrestates []*state.StateDB
+
 	// Iterate over and process the individual transactions
-	for i := range block.Transactions() {
-		txPrestates = append(txPrestates, statedb.Copy())
-		statedb.ApplyDiff(intermediateStateDiffs[i+1])
-		statedb.Finalise(true)
+	for range block.Transactions() {
+		state := statedb.Copy()
+		txPrestates = append(txPrestates, state)
 	}
 	postTxState := statedb.Copy()
 
@@ -437,19 +446,16 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 		tx := tx
 		i := i
 		workers.Go(func() error {
-			res := execTx(ctx, tx, i, txPrestates[i], intermediateStateDiffs[i+1])
+			res := execTx(ctx, tx, i, txPrestates[i], totalDiffs[i], intermediateStateDiffs[i+1])
 			txResCh <- *res
 			return nil
 		})
 	}
 
-	// it's possible that there isn't a post-tx-execution state diff
-	// if there are no withdrawals or consolidations
-	if len(intermediateStateDiffs) == len(block.Transactions())+2 {
-		statedb.ApplyDiff(intermediateStateDiffs[len(block.Transactions())+1])
-		statedb.Finalise(true)
-	}
-	go calcAndVerifyRoot(statedb, block, rootCalcErrCh)
+	statedb.ApplyDiff(&totalDiff, false)
+	statedb.Finalise(true)
+	//fmt.Printf("total diff is\n%s\napplied diff is\n%s\n", totalDiff.String(), appliedDiff.String())
+	go calcAndVerifyRoot(statedb.Copy(), block, rootCalcErrCh)
 
 	return resCh, nil
 }

@@ -318,6 +318,30 @@ func (s *StateDB) AddRefund(gas uint64) {
 	s.refund += gas
 }
 
+func (s *StateDB) InstantiateWithStateDiffs(totalDiff *bal.StateDiff) {
+	stateAccounts := new(sync.Map)
+	wg := new(sync.WaitGroup)
+
+	for addr, _ := range totalDiff.Mutations {
+		wg.Add(1)
+		go func(addr common.Address) {
+			acct, err := s.reader.Account(addr)
+			if err == nil && acct != nil { // TODO: what should we do if the error is not nil?
+				stateAccounts.Store(addr, acct)
+			}
+			wg.Done()
+		}(addr)
+	}
+	wg.Wait()
+	stateAccounts.Range(func(addr any, val any) bool {
+		address := addr.(common.Address)
+		stateAccount := val.(*types.StateAccount)
+		obj := newObject(s, address, stateAccount)
+		s.stateObjects[address] = obj
+		return true
+	})
+}
+
 // SubRefund removes gas from the refund counter.
 // This method will panic if the refund counter goes below zero
 func (s *StateDB) SubRefund(gas uint64) {
@@ -631,6 +655,7 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	if _, ok := s.stateObjectsDestruct[addr]; ok {
 		return nil
 	}
+
 	s.AccountLoaded++
 
 	start := time.Now()
@@ -802,7 +827,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) (diff *bal.StateDiff) {
 		}
 		if obj.selfDestructed || (deleteEmptyObjects && obj.empty()) {
 			// TODO: for testing purposes we should probably have tests that create/destroy the same account multiple times via this same edge-case with create2
-			if obj.address != params.SystemAddress {
+			if obj.txPreBalance != nil && !obj.txPreBalance.IsZero() { // TODO: IsZero check is somehow needed for coinbase.  figure out why.
 				// TODO: need to ensure that we aren't recording accounts in the state diff/BAL which were created/selfdestructed in the same transaction.
 				// It should be as easy as modifying the check above to not include selfdestructed contracts.  However, doing this causes some blockchain tests
 				// to fail and I'm not sure why.
@@ -1039,15 +1064,27 @@ func (s *StateDB) SetTxSender(sender common.Address) {
 
 // ApplyDiff applies the state diff to the StateDB so that the current object
 // set reflects the changes in the diff.
-func (s *StateDB) ApplyDiff(diff *bal.StateDiff) {
+func (s *StateDB) ApplyDiff(diff *bal.StateDiff, isTxPrestate bool) {
 	for addr, accountDiff := range diff.Mutations {
-		stateObject := s.getOrNewStateObject(addr)
+		stateObject, ok := s.stateObjects[addr]
+		if !ok {
+			stateObject = newObject(s, addr, &types.StateAccount{
+				0,
+				uint256.NewInt(0),
+				types.EmptyRootHash,
+				types.EmptyCodeHash[:],
+			})
+		}
 		if accountDiff.Code != nil {
 			stateObject.SetCode(crypto.Keccak256Hash(accountDiff.Code), accountDiff.Code)
 		}
 		if accountDiff.StorageWrites != nil {
 			for slot, value := range accountDiff.StorageWrites {
-				stateObject.SetState(slot, value)
+				if isTxPrestate {
+					stateObject.pendingStorage[slot] = value
+				} else {
+					stateObject.SetState(slot, value)
+				}
 			}
 		}
 		if accountDiff.Nonce != nil {
@@ -1055,6 +1092,9 @@ func (s *StateDB) ApplyDiff(diff *bal.StateDiff) {
 		}
 		if accountDiff.Balance != nil {
 			stateObject.SetBalance(new(uint256.Int).SetBytes((*accountDiff.Balance)[:]))
+		}
+		if !stateObject.empty() {
+			s.setStateObject(stateObject)
 		}
 	}
 }

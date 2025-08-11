@@ -186,6 +186,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	if value, pending := s.pendingStorage[key]; pending {
 		return value
 	}
+
 	if value, cached := s.originStorage[key]; cached {
 		return value
 	}
