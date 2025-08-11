@@ -37,12 +37,12 @@ func TestBlobs(t *testing.T) {
 	sidecarWithoutCellProofs := types.NewBlobTxSidecar(types.BlobSidecarVersion0, []kzg4844.Blob{*emptyBlob}, []kzg4844.Commitment{emptyBlobCommit}, []kzg4844.Proof{emptyBlobProof})
 	env := BlockToExecutableData(block, common.Big0, []*types.BlobTxSidecar{sidecarWithoutCellProofs}, nil)
 	if len(env.BlobsBundle.Proofs) != 1 {
-		t.Fatalf("Expect 1 proof in blobs bundle, got %v", len(env.BlobsBundle.Proofs))
+		t.Fatalf("Expected 1 proof in blobs bundle, got %v", len(env.BlobsBundle.Proofs))
 	}
 
 	sidecarWithCellProofs := types.NewBlobTxSidecar(types.BlobSidecarVersion0, []kzg4844.Blob{*emptyBlob}, []kzg4844.Commitment{emptyBlobCommit}, emptyCellProof)
 	env = BlockToExecutableData(block, common.Big0, []*types.BlobTxSidecar{sidecarWithCellProofs}, nil)
 	if len(env.BlobsBundle.Proofs) != 128 {
-		t.Fatalf("Expect 128 proofs in blobs bundle, got %v", len(env.BlobsBundle.Proofs))
+		t.Fatalf("Expected 128 proofs in blobs bundle, got %v", len(env.BlobsBundle.Proofs))
 	}
 }
