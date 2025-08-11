@@ -7,8 +7,8 @@ import (
 )
 
 var (
-	avgAccessDepthInBlock = metrics.NewRegisteredMeter("trie/access/depth/avg", nil)
-	minAccessDepthInBlock = metrics.NewRegisteredMeter("trie/access/depth/min", nil)
+	avgAccessDepthInBlock = metrics.NewRegisteredGauge("trie/access/depth/avg", nil)
+	minAccessDepthInBlock = metrics.NewRegisteredGauge("trie/access/depth/min", nil)
 	stateDepthAggregator  = &depthAggregator{}
 )
 
@@ -44,8 +44,8 @@ func (d *depthAggregator) end() {
 	sum, cnt, min := d.sum, d.cnt, d.min
 	d.mu.Unlock()
 	if cnt > 0 {
-		avgAccessDepthInBlock.Mark(sum / cnt)
-		minAccessDepthInBlock.Mark(min)
+		avgAccessDepthInBlock.Update(sum / cnt)
+		minAccessDepthInBlock.Update(min)
 	}
 }
 
