@@ -155,18 +155,19 @@ func (g *StateSizeGenerator) initialize() chan struct{} {
 	LOOP:
 		// Wait for snapshot generator to complete first
 		for {
+			root, done := g.triedb.SnapshotCompleted()
+			if done {
+				g.metrics.Root = root
+				g.buffered.Root = root
+				break LOOP
+			}
+
 			select {
 			case <-g.abort:
 				log.Info("State size initialization aborted during snapshot wait")
 				return
-			default:
-				root, done := g.triedb.SnapshotCompleted()
-				if done {
-					g.metrics.Root = root
-					g.buffered.Root = root
-					break LOOP
-				}
-				time.Sleep(10 * time.Second)
+			case <-time.After(10 * time.Second):
+				// Continue checking for snapshot completion
 			}
 		}
 
