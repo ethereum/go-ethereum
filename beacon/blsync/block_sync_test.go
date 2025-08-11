@@ -82,7 +82,7 @@ func TestBlockSync(t *testing.T) {
 		default:
 		}
 		if headNumber != expNumber {
-			t.Errorf("Wrong head block, expected block number %d, got %d)", expNumber, headNumber)
+			t.Errorf("Wrong head block, expected block number %d, got %d", expNumber, headNumber)
 		}
 	}
 
