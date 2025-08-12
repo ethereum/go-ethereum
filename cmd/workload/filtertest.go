@@ -92,7 +92,7 @@ func (s *filterTestSuite) filterShortRange(t *utesting.T) {
 	}, s.queryAndCheck)
 }
 
-// filterShortRange runs all long-range filter tests.
+// filterLongRange runs all long-range filter tests.
 func (s *filterTestSuite) filterLongRange(t *utesting.T) {
 	s.filterRange(t, func(query *filterQuery) bool {
 		return query.ToBlock+1-query.FromBlock > filterRangeThreshold
