@@ -1259,6 +1259,12 @@ func (bc *BlockChain) stopWithoutSaving() {
 	// Signal shutdown to all goroutines.
 	bc.InterruptInsert(true)
 
+	// Stop state size generator if running
+	if bc.stateSizeGen != nil {
+		bc.stateSizeGen.Stop()
+		log.Info("Stopped state size generator")
+	}
+
 	// Now wait for all chain modifications to end and persistent goroutines to exit.
 	//
 	// Note: Close waits for the mutex to become available, i.e. any running chain
@@ -1319,11 +1325,6 @@ func (bc *BlockChain) Stop() {
 				log.Error("Dangling trie nodes after full cleanup")
 			}
 		}
-	}
-	// Stop state size generator if running
-	if bc.stateSizeGen != nil {
-		bc.stateSizeGen.Stop()
-		log.Info("Stopped state size generator")
 	}
 
 	// Allow tracers to clean-up and release resources.
