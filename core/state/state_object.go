@@ -629,13 +629,17 @@ func (s *stateObject) CodeSize() int {
 func (s *stateObject) SetCode(codeHash common.Hash, code []byte) (prev []byte) {
 	prev = slices.Clone(s.code)
 	s.db.journal.setCode(s.address, prev)
-	s.setCode(codeHash, code)
+	s.setCodeModified(codeHash, code)
 	return prev
 }
 
 func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
 	s.code = code
 	s.data.CodeHash = codeHash[:]
+}
+
+func (s *stateObject) setCodeModified(codeHash common.Hash, code []byte) {
+	s.setCode(codeHash, code)
 	s.dirtyCode = true
 	s.nonFinalizedCode = true
 }

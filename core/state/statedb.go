@@ -1062,9 +1062,55 @@ func (s *StateDB) SetTxSender(sender common.Address) {
 	s.sender = sender
 }
 
-// ApplyDiff applies the state diff to the StateDB so that the current object
-// set reflects the changes in the diff.
-func (s *StateDB) ApplyDiff(diff *bal.StateDiff, isTxPrestate bool) {
+func (s *StateDB) ApplyPrestate(prestateDiff *bal.StateDiff) {
+	for addr, accountDiff := range prestateDiff.Mutations {
+		stateObject, preexisting := s.stateObjects[addr]
+		if !preexisting {
+			stateObject = newObject(s, addr, &types.StateAccount{
+				0,
+				uint256.NewInt(0),
+				types.EmptyRootHash,
+				types.EmptyCodeHash[:],
+			})
+		}
+		if accountDiff.Code != nil {
+			stateObject.setCode(crypto.Keccak256Hash(accountDiff.Code), accountDiff.Code)
+		}
+		if accountDiff.StorageWrites != nil {
+			for slot, value := range accountDiff.StorageWrites {
+				stateObject.pendingStorage[slot] = value
+			}
+		}
+		if accountDiff.Nonce != nil {
+			stateObject.setNonce(*accountDiff.Nonce)
+			stateObject.txPreNonce = stateObject.Nonce()
+		}
+		if accountDiff.Balance != nil {
+			stateObject.setBalance(new(uint256.Int).SetBytes((*accountDiff.Balance)[:]))
+			stateObject.txPreBalance = stateObject.Balance()
+		}
+
+		if stateObject.empty() {
+			// an object that exists at the start of the block can become empty:
+			// e.g. target of a create is prefunded but the creation context performs a SENDALL without deploying a contract
+			if preexisting {
+				// TODO: I mindlessly copied this logic from elsewhere in the statedb, need to verify that it is correct.
+				delete(s.stateObjects, addr)
+				s.markDelete(addr)
+				// We need to maintain account deletions explicitly (will remain
+				// set indefinitely). Note only the first occurred self-destruct
+				// event is tracked.
+				if _, ok := s.stateObjectsDestruct[addr]; !ok {
+					s.stateObjectsDestruct[addr] = stateObject
+				}
+			}
+		} else if !preexisting {
+			s.setStateObject(stateObject)
+		}
+	}
+}
+
+func (s *StateDB) ApplyStateDiff(diff *bal.StateDiff) {
 	for addr, accountDiff := range diff.Mutations {
 		stateObject, ok := s.stateObjects[addr]
 		if !ok {
@@ -1080,11 +1126,7 @@ func (s *StateDB) ApplyDiff(diff *bal.StateDiff, isTxPrestate bool) {
 		}
 		if accountDiff.StorageWrites != nil {
 			for slot, value := range accountDiff.StorageWrites {
-				if isTxPrestate {
-					stateObject.pendingStorage[slot] = value
-				} else {
-					stateObject.SetState(slot, value)
-				}
+				stateObject.SetState(slot, value)
 			}
 		}
 		if accountDiff.Nonce != nil {

@@ -207,6 +207,7 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	} else if res.Requests != nil {
 		return errors.New("block has requests before prague fork")
 	}
+
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
 	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {

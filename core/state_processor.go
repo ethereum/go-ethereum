@@ -159,7 +159,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 }
 
 func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *state.StateDB, cfg vm.Config) (chan *ProcessResultWithMetrics, error) {
-	fmt.Println("start ProcessWithAccessList")
 	var (
 		header      = block.Header()
 		blockHash   = block.Hash()
@@ -250,7 +249,8 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 		// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 		p.chain.engine.Finalize(p.chain, header, tracingStateDB, block.Body())
 		// invoke Finalise so that withdrawals are accounted for in the state diff
-		computedDiff.Merge(postTxState.Finalise(true))
+		finalDiff := postTxState.Finalise(true)
+		computedDiff.Merge(finalDiff)
 
 		// TODO:  at each step, we should only be comparing the "intermediate" state diffs
 		// not the entire state diff up until that point.
@@ -338,7 +338,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	// executes single transaction, validating the computed diff against the BAL
 	// and forwarding the txExecResult to be consumed by resultHandler
 	execTx := func(ctx context2.Context, tx *types.Transaction, idx int, db *state.StateDB, prestateDiff, expectedDiff *bal.StateDiff) *txExecResult {
-		db.ApplyDiff(prestateDiff, true)
+		db.ApplyPrestate(prestateDiff)
 		// if an error with another transaction rendered the block invalid, don't proceed with executing this one
 		// TODO: also interrupt any currently-executing transactions if one failed.
 		select {
@@ -373,7 +373,6 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 		}
 
 		if err := bal.ValidateStateDiff(expectedDiff, computedDiff); err != nil {
-			fmt.Printf("failed %d.  prestate diff is\n%s\ndiff is\n%s\nexpected is\n%s\n", idx, prestateDiff.String(), computedDiff.String(), expectedDiff.String())
 			return &txExecResult{err: err}
 		}
 
@@ -435,6 +434,8 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 		txPrestates = append(txPrestates, state)
 	}
 	postTxState := statedb.Copy()
+	postTxState.ApplyStateDiff(totalDiffs[len(totalDiffs)-2])
+	postTxState.Finalise(true)
 
 	tPreprocess = time.Since(pStart)
 
@@ -452,7 +453,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 		})
 	}
 
-	statedb.ApplyDiff(&totalDiff, false)
+	statedb.ApplyStateDiff(&totalDiff)
 	statedb.Finalise(true)
 	//fmt.Printf("total diff is\n%s\napplied diff is\n%s\n", totalDiff.String(), appliedDiff.String())
 	go calcAndVerifyRoot(statedb.Copy(), block, rootCalcErrCh)
