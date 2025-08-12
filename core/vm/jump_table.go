@@ -48,21 +48,21 @@ type operation struct {
 }
 
 var (
-	frontierInstructionSet         = newFrontierInstructionSet()
-	homesteadInstructionSet        = newHomesteadInstructionSet()
-	tangerineWhistleInstructionSet = newTangerineWhistleInstructionSet()
-	spuriousDragonInstructionSet   = newSpuriousDragonInstructionSet()
-	byzantiumInstructionSet        = newByzantiumInstructionSet()
-	constantinopleInstructionSet   = newConstantinopleInstructionSet()
-	istanbulInstructionSet         = newIstanbulInstructionSet()
-	berlinInstructionSet           = newBerlinInstructionSet()
-	londonInstructionSet           = newLondonInstructionSet()
-	mergeInstructionSet            = newMergeInstructionSet()
-	shanghaiInstructionSet         = newShanghaiInstructionSet()
-	cancunInstructionSet           = newCancunInstructionSet()
-	verkleInstructionSet           = newVerkleInstructionSet()
-	pragueInstructionSet           = newPragueInstructionSet()
-	osakaInstructionSet            = newOsakaInstructionSet()
+	frontierInstructionSet, frontierInstructionSetNT                 = newFrontierInstructionSet[TracingEnabled](), newFrontierInstructionSet[TracingDisabled]()
+	homesteadInstructionSet, homesteadInstructionSetNT               = newHomesteadInstructionSet[TracingEnabled](), newHomesteadInstructionSet[TracingDisabled]()
+	tangerineWhistleInstructionSet, tangerineWhistleInstructionSetNT = newTangerineWhistleInstructionSet[TracingEnabled](), newTangerineWhistleInstructionSet[TracingDisabled]()
+	spuriousDragonInstructionSet, spuriousDragonInstructionSetNT     = newSpuriousDragonInstructionSet[TracingEnabled](), newSpuriousDragonInstructionSet[TracingDisabled]()
+	byzantiumInstructionSet, byzantiumInstructionSetNT               = newByzantiumInstructionSet[TracingEnabled](), newByzantiumInstructionSet[TracingDisabled]()
+	constantinopleInstructionSet, constantinopleInstructionSetNT     = newConstantinopleInstructionSet[TracingEnabled](), newConstantinopleInstructionSet[TracingDisabled]()
+	istanbulInstructionSet, istanbulInstructionSetNT                 = newIstanbulInstructionSet[TracingEnabled](), newIstanbulInstructionSet[TracingDisabled]()
+	berlinInstructionSet, berlinInstructionSetNT                     = newBerlinInstructionSet[TracingEnabled](), newBerlinInstructionSet[TracingDisabled]()
+	londonInstructionSet, londonInstructionSetNT                     = newLondonInstructionSet[TracingEnabled](), newLondonInstructionSet[TracingDisabled]()
+	mergeInstructionSet, mergeInstructionSetNT                       = newMergeInstructionSet[TracingEnabled](), newMergeInstructionSet[TracingDisabled]()
+	shanghaiInstructionSet, shanghaiInstructionSetNT                 = newShanghaiInstructionSet[TracingEnabled](), newShanghaiInstructionSet[TracingDisabled]()
+	cancunInstructionSet, cancunInstructionSetNT                     = newCancunInstructionSet[TracingEnabled](), newCancunInstructionSet[TracingDisabled]()
+	verkleInstructionSet, verkleInstructionSetNT                     = newVerkleInstructionSet[TracingEnabled](), newVerkleInstructionSet[TracingDisabled]()
+	pragueInstructionSet, pragueInstructionSetNT                     = newPragueInstructionSet[TracingEnabled](), newPragueInstructionSet[TracingDisabled]()
+	osakaInstructionSet, osakaInstructionSetNT                       = newOsakaInstructionSet[TracingEnabled](), newOsakaInstructionSet[TracingDisabled]()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -86,26 +86,26 @@ func validate(jt JumpTable) JumpTable {
 	return jt
 }
 
-func newVerkleInstructionSet() JumpTable {
-	instructionSet := newShanghaiInstructionSet()
-	enable4762(&instructionSet)
+func newVerkleInstructionSet[TS TracingSwitch]() JumpTable {
+	instructionSet := newShanghaiInstructionSet[TS]()
+	enable4762[TS](&instructionSet)
 	return validate(instructionSet)
 }
 
-func newOsakaInstructionSet() JumpTable {
-	instructionSet := newPragueInstructionSet()
+func newOsakaInstructionSet[TS TracingSwitch]() JumpTable {
+	instructionSet := newPragueInstructionSet[TS]()
 	enable7939(&instructionSet) // EIP-7939 (CLZ opcode)
 	return validate(instructionSet)
 }
 
-func newPragueInstructionSet() JumpTable {
-	instructionSet := newCancunInstructionSet()
-	enable7702(&instructionSet) // EIP-7702 Setcode transaction type
+func newPragueInstructionSet[TS TracingSwitch]() JumpTable {
+	instructionSet := newCancunInstructionSet[TS]()
+	enable7702[TS](&instructionSet) // EIP-7702 Setcode transaction type
 	return validate(instructionSet)
 }
 
-func newCancunInstructionSet() JumpTable {
-	instructionSet := newShanghaiInstructionSet()
+func newCancunInstructionSet[TS TracingSwitch]() JumpTable {
+	instructionSet := newShanghaiInstructionSet[TS]()
 	enable4844(&instructionSet) // EIP-4844 (BLOBHASH opcode)
 	enable7516(&instructionSet) // EIP-7516 (BLOBBASEFEE opcode)
 	enable1153(&instructionSet) // EIP-1153 "Transient Storage"
@@ -114,16 +114,16 @@ func newCancunInstructionSet() JumpTable {
 	return validate(instructionSet)
 }
 
-func newShanghaiInstructionSet() JumpTable {
-	instructionSet := newMergeInstructionSet()
+func newShanghaiInstructionSet[TS TracingSwitch]() JumpTable {
+	instructionSet := newMergeInstructionSet[TS]()
 	enable3855(&instructionSet) // PUSH0 instruction
 	enable3860(&instructionSet) // Limit and meter initcode
 
 	return validate(instructionSet)
 }
 
-func newMergeInstructionSet() JumpTable {
-	instructionSet := newLondonInstructionSet()
+func newMergeInstructionSet[TS TracingSwitch]() JumpTable {
+	instructionSet := newLondonInstructionSet[TS]()
 	instructionSet[PREVRANDAO] = &operation{
 		execute:     opRandom,
 		constantGas: GasQuickStep,
@@ -135,8 +135,8 @@ func newMergeInstructionSet() JumpTable {
 
 // newLondonInstructionSet returns the frontier, homestead, byzantium,
 // constantinople, istanbul, petersburg, berlin and london instructions.
-func newLondonInstructionSet() JumpTable {
-	instructionSet := newBerlinInstructionSet()
+func newLondonInstructionSet[TS TracingSwitch]() JumpTable {
+	instructionSet := newBerlinInstructionSet[TS]()
 	enable3529(&instructionSet) // EIP-3529: Reduction in refunds https://eips.ethereum.org/EIPS/eip-3529
 	enable3198(&instructionSet) // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
 	return validate(instructionSet)
@@ -144,16 +144,16 @@ func newLondonInstructionSet() JumpTable {
 
 // newBerlinInstructionSet returns the frontier, homestead, byzantium,
 // constantinople, istanbul, petersburg and berlin instructions.
-func newBerlinInstructionSet() JumpTable {
-	instructionSet := newIstanbulInstructionSet()
-	enable2929(&instructionSet) // Gas cost increases for state access opcodes https://eips.ethereum.org/EIPS/eip-2929
+func newBerlinInstructionSet[TS TracingSwitch]() JumpTable {
+	instructionSet := newIstanbulInstructionSet[TS]()
+	enable2929[TS](&instructionSet) // Gas cost increases for state access opcodes https://eips.ethereum.org/EIPS/eip-2929
 	return validate(instructionSet)
 }
 
 // newIstanbulInstructionSet returns the frontier, homestead, byzantium,
 // constantinople, istanbul and petersburg instructions.
-func newIstanbulInstructionSet() JumpTable {
-	instructionSet := newConstantinopleInstructionSet()
+func newIstanbulInstructionSet[TS TracingSwitch]() JumpTable {
+	instructionSet := newConstantinopleInstructionSet[TS]()
 
 	enable1344(&instructionSet) // ChainID opcode - https://eips.ethereum.org/EIPS/eip-1344
 	enable1884(&instructionSet) // Reprice reader opcodes - https://eips.ethereum.org/EIPS/eip-1884
@@ -164,8 +164,8 @@ func newIstanbulInstructionSet() JumpTable {
 
 // newConstantinopleInstructionSet returns the frontier, homestead,
 // byzantium and constantinople instructions.
-func newConstantinopleInstructionSet() JumpTable {
-	instructionSet := newByzantiumInstructionSet()
+func newConstantinopleInstructionSet[TS TracingSwitch]() JumpTable {
+	instructionSet := newByzantiumInstructionSet[TS]()
 	instructionSet[SHL] = &operation{
 		execute:     opSHL,
 		constantGas: GasFastestStep,
@@ -191,7 +191,7 @@ func newConstantinopleInstructionSet() JumpTable {
 		maxStack:    maxStack(1, 1),
 	}
 	instructionSet[CREATE2] = &operation{
-		execute:     opCreate2,
+		execute:     opCreate2[TS],
 		constantGas: params.Create2Gas,
 		dynamicGas:  gasCreate2,
 		minStack:    minStack(4, 1),
@@ -203,10 +203,10 @@ func newConstantinopleInstructionSet() JumpTable {
 
 // newByzantiumInstructionSet returns the frontier, homestead and
 // byzantium instructions.
-func newByzantiumInstructionSet() JumpTable {
-	instructionSet := newSpuriousDragonInstructionSet()
+func newByzantiumInstructionSet[TS TracingSwitch]() JumpTable {
+	instructionSet := newSpuriousDragonInstructionSet[TS]()
 	instructionSet[STATICCALL] = &operation{
-		execute:     opStaticCall,
+		execute:     opStaticCall[TS],
 		constantGas: params.CallGasEIP150,
 		dynamicGas:  gasStaticCall,
 		minStack:    minStack(6, 1),
@@ -238,15 +238,15 @@ func newByzantiumInstructionSet() JumpTable {
 }
 
 // EIP 158 a.k.a Spurious Dragon
-func newSpuriousDragonInstructionSet() JumpTable {
-	instructionSet := newTangerineWhistleInstructionSet()
+func newSpuriousDragonInstructionSet[TS TracingSwitch]() JumpTable {
+	instructionSet := newTangerineWhistleInstructionSet[TS]()
 	instructionSet[EXP].dynamicGas = gasExpEIP158
 	return validate(instructionSet)
 }
 
 // EIP 150 a.k.a Tangerine Whistle
-func newTangerineWhistleInstructionSet() JumpTable {
-	instructionSet := newHomesteadInstructionSet()
+func newTangerineWhistleInstructionSet[TS TracingSwitch]() JumpTable {
+	instructionSet := newHomesteadInstructionSet[TS]()
 	instructionSet[BALANCE].constantGas = params.BalanceGasEIP150
 	instructionSet[EXTCODESIZE].constantGas = params.ExtcodeSizeGasEIP150
 	instructionSet[SLOAD].constantGas = params.SloadGasEIP150
@@ -259,10 +259,10 @@ func newTangerineWhistleInstructionSet() JumpTable {
 
 // newHomesteadInstructionSet returns the frontier and homestead
 // instructions that can be executed during the homestead phase.
-func newHomesteadInstructionSet() JumpTable {
-	instructionSet := newFrontierInstructionSet()
+func newHomesteadInstructionSet[TS TracingSwitch]() JumpTable {
+	instructionSet := newFrontierInstructionSet[TS]()
 	instructionSet[DELEGATECALL] = &operation{
-		execute:     opDelegateCall,
+		execute:     opDelegateCall[TS],
 		dynamicGas:  gasDelegateCall,
 		constantGas: params.CallGasFrontier,
 		minStack:    minStack(6, 1),
@@ -274,7 +274,7 @@ func newHomesteadInstructionSet() JumpTable {
 
 // newFrontierInstructionSet returns the frontier instructions
 // that can be executed during the frontier phase.
-func newFrontierInstructionSet() JumpTable {
+func newFrontierInstructionSet[TS TracingSwitch]() JumpTable {
 	tbl := JumpTable{
 		STOP: {
 			execute:     opStop,
@@ -1040,7 +1040,7 @@ func newFrontierInstructionSet() JumpTable {
 			memorySize: memoryLog,
 		},
 		CREATE: {
-			execute:     opCreate,
+			execute:     opCreate[TS],
 			constantGas: params.CreateGas,
 			dynamicGas:  gasCreate,
 			minStack:    minStack(3, 1),
@@ -1048,7 +1048,7 @@ func newFrontierInstructionSet() JumpTable {
 			memorySize:  memoryCreate,
 		},
 		CALL: {
-			execute:     opCall,
+			execute:     opCall[TS],
 			constantGas: params.CallGasFrontier,
 			dynamicGas:  gasCall,
 			minStack:    minStack(7, 1),
@@ -1056,7 +1056,7 @@ func newFrontierInstructionSet() JumpTable {
 			memorySize:  memoryCall,
 		},
 		CALLCODE: {
-			execute:     opCallCode,
+			execute:     opCallCode[TS],
 			constantGas: params.CallGasFrontier,
 			dynamicGas:  gasCallCode,
 			minStack:    minStack(7, 1),

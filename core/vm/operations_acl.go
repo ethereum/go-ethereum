@@ -152,7 +152,7 @@ func gasEip2929AccountCheck(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 	return 0, nil
 }
 
-func makeCallVariantGasCallEIP2929(oldCalculator gasFunc, addressPosition int) gasFunc {
+func makeCallVariantGasCallEIP2929[TS TracingSwitch](oldCalculator gasFunc, addressPosition int) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 		addr := common.Address(stack.Back(addressPosition).Bytes20())
 		// Check slot presence in the access list
@@ -164,7 +164,7 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc, addressPosition int) g
 			evm.StateDB.AddAddressToAccessList(addr)
 			// Charge the remaining difference here already, to correctly calculate available
 			// gas for call
-			if !contract.UseGas(coldCost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
+			if !useGas[TS](contract, coldCost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
 				return 0, ErrOutOfGas
 			}
 		}
@@ -192,10 +192,6 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc, addressPosition int) g
 }
 
 var (
-	gasCallEIP2929         = makeCallVariantGasCallEIP2929(gasCall, 1)
-	gasDelegateCallEIP2929 = makeCallVariantGasCallEIP2929(gasDelegateCall, 1)
-	gasStaticCallEIP2929   = makeCallVariantGasCallEIP2929(gasStaticCall, 1)
-	gasCallCodeEIP2929     = makeCallVariantGasCallEIP2929(gasCallCode, 1)
 	gasSelfdestructEIP2929 = makeSelfdestructGasFn(true)
 	// gasSelfdestructEIP3529 implements the changes in EIP-3529 (no refunds)
 	gasSelfdestructEIP3529 = makeSelfdestructGasFn(false)
@@ -243,14 +239,7 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 	return gasFunc
 }
 
-var (
-	gasCallEIP7702         = makeCallVariantGasCallEIP7702(gasCall)
-	gasDelegateCallEIP7702 = makeCallVariantGasCallEIP7702(gasDelegateCall)
-	gasStaticCallEIP7702   = makeCallVariantGasCallEIP7702(gasStaticCall)
-	gasCallCodeEIP7702     = makeCallVariantGasCallEIP7702(gasCallCode)
-)
-
-func makeCallVariantGasCallEIP7702(oldCalculator gasFunc) gasFunc {
+func makeCallVariantGasCallEIP7702[TS TracingSwitch](oldCalculator gasFunc) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 		var (
 			total uint64 // total dynamic gas used
@@ -265,7 +254,7 @@ func makeCallVariantGasCallEIP7702(oldCalculator gasFunc) gasFunc {
 			coldCost := params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
 			// Charge the remaining difference here already, to correctly calculate available
 			// gas for call
-			if !contract.UseGas(coldCost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
+			if !useGas[TS](contract, coldCost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
 				return 0, ErrOutOfGas
 			}
 			total += coldCost
@@ -280,7 +269,7 @@ func makeCallVariantGasCallEIP7702(oldCalculator gasFunc) gasFunc {
 				evm.StateDB.AddAddressToAccessList(target)
 				cost = params.ColdAccountAccessCostEIP2929
 			}
-			if !contract.UseGas(cost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
+			if !useGas[TS](contract, cost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
 				return 0, ErrOutOfGas
 			}
 			total += cost

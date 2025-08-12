@@ -24,38 +24,38 @@ import (
 
 // LookupInstructionSet returns the instruction set for the fork configured by
 // the rules.
-func LookupInstructionSet(rules params.Rules) (JumpTable, error) {
+func LookupInstructionSet[TS TracingSwitch](rules params.Rules) (JumpTable, error) {
 	switch {
 	case rules.IsVerkle:
-		return newCancunInstructionSet(), errors.New("verkle-fork not defined yet")
+		return newCancunInstructionSet[TS](), errors.New("verkle-fork not defined yet")
 	case rules.IsOsaka:
-		return newOsakaInstructionSet(), nil
+		return newOsakaInstructionSet[TS](), nil
 	case rules.IsPrague:
-		return newPragueInstructionSet(), nil
+		return newPragueInstructionSet[TS](), nil
 	case rules.IsCancun:
-		return newCancunInstructionSet(), nil
+		return newCancunInstructionSet[TS](), nil
 	case rules.IsShanghai:
-		return newShanghaiInstructionSet(), nil
+		return newShanghaiInstructionSet[TS](), nil
 	case rules.IsMerge:
-		return newMergeInstructionSet(), nil
+		return newMergeInstructionSet[TS](), nil
 	case rules.IsLondon:
-		return newLondonInstructionSet(), nil
+		return newLondonInstructionSet[TS](), nil
 	case rules.IsBerlin:
-		return newBerlinInstructionSet(), nil
+		return newBerlinInstructionSet[TS](), nil
 	case rules.IsIstanbul:
-		return newIstanbulInstructionSet(), nil
+		return newIstanbulInstructionSet[TS](), nil
 	case rules.IsConstantinople:
-		return newConstantinopleInstructionSet(), nil
+		return newConstantinopleInstructionSet[TS](), nil
 	case rules.IsByzantium:
-		return newByzantiumInstructionSet(), nil
+		return newByzantiumInstructionSet[TS](), nil
 	case rules.IsEIP158:
-		return newSpuriousDragonInstructionSet(), nil
+		return newSpuriousDragonInstructionSet[TS](), nil
 	case rules.IsEIP150:
-		return newTangerineWhistleInstructionSet(), nil
+		return newTangerineWhistleInstructionSet[TS](), nil
 	case rules.IsHomestead:
-		return newHomesteadInstructionSet(), nil
+		return newHomesteadInstructionSet[TS](), nil
 	}
-	return newFrontierInstructionSet(), nil
+	return newFrontierInstructionSet[TS](), nil
 }
 
 // Stack returns the minimum and maximum stack requirements.

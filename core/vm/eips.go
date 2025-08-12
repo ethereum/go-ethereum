@@ -27,32 +27,36 @@ import (
 	"github.com/holiman/uint256"
 )
 
-var activators = map[int]func(*JumpTable){
-	5656: enable5656,
-	6780: enable6780,
-	3855: enable3855,
-	3860: enable3860,
-	3529: enable3529,
-	3198: enable3198,
-	2929: enable2929,
-	2200: enable2200,
-	1884: enable1884,
-	1344: enable1344,
-	1153: enable1153,
-	4762: enable4762,
-	7702: enable7702,
-	7939: enable7939,
+var activators = map[int][2]func(*JumpTable){
+	5656: {enable5656},
+	6780: {enable6780},
+	3855: {enable3855},
+	3860: {enable3860},
+	3529: {enable3529},
+	3198: {enable3198},
+	2929: {enable2929[TracingEnabled], enable2929[TracingDisabled]},
+	2200: {enable2200},
+	1884: {enable1884},
+	1344: {enable1344},
+	1153: {enable1153},
+	4762: {enable4762[TracingEnabled], enable4762[TracingDisabled]},
+	7702: {enable7702[TracingEnabled], enable7702[TracingDisabled]},
+	7939: {enable7939},
 }
 
 // EnableEIP enables the given EIP on the config.
 // This operation writes in-place, and callers need to ensure that the globally
 // defined jump tables are not polluted.
-func EnableEIP(eipNum int, jt *JumpTable) error {
-	enablerFn, ok := activators[eipNum]
+func EnableEIP(eipNum int, jt *JumpTable, traced bool) error {
+	enablerFns, ok := activators[eipNum]
 	if !ok {
 		return fmt.Errorf("undefined eip %d", eipNum)
 	}
-	enablerFn(jt)
+	if traced || enablerFns[1] == nil {
+		enablerFns[0](jt)
+	} else {
+		enablerFns[1](jt)
+	}
 	return nil
 }
 
@@ -122,7 +126,7 @@ func enable2200(jt *JumpTable) {
 
 // enable2929 enables "EIP-2929: Gas cost increases for state access opcodes"
 // https://eips.ethereum.org/EIPS/eip-2929
-func enable2929(jt *JumpTable) {
+func enable2929[TS TracingSwitch](jt *JumpTable) {
 	jt[SSTORE].dynamicGas = gasSStoreEIP2929
 
 	jt[SLOAD].constantGas = 0
@@ -141,16 +145,16 @@ func enable2929(jt *JumpTable) {
 	jt[BALANCE].dynamicGas = gasEip2929AccountCheck
 
 	jt[CALL].constantGas = params.WarmStorageReadCostEIP2929
-	jt[CALL].dynamicGas = gasCallEIP2929
+	jt[CALL].dynamicGas = makeCallVariantGasCallEIP2929[TS](gasCall, 1)
 
 	jt[CALLCODE].constantGas = params.WarmStorageReadCostEIP2929
-	jt[CALLCODE].dynamicGas = gasCallCodeEIP2929
+	jt[CALLCODE].dynamicGas = makeCallVariantGasCallEIP2929[TS](gasCallCode, 1)
 
 	jt[STATICCALL].constantGas = params.WarmStorageReadCostEIP2929
-	jt[STATICCALL].dynamicGas = gasStaticCallEIP2929
+	jt[STATICCALL].dynamicGas = makeCallVariantGasCallEIP2929[TS](gasStaticCall, 1)
 
 	jt[DELEGATECALL].constantGas = params.WarmStorageReadCostEIP2929
-	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP2929
+	jt[DELEGATECALL].dynamicGas = makeCallVariantGasCallEIP2929[TS](gasDelegateCall, 1)
 
 	// This was previously part of the dynamic cost, but we're using it as a constantGas
 	// factor here
@@ -342,7 +346,7 @@ func enable6780(jt *JumpTable) {
 	}
 }
 
-func opExtCodeCopyEIP4762(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+func opExtCodeCopyEIP4762[TS TracingSwitch](pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	var (
 		stack      = scope.Stack
 		a          = stack.pop()
@@ -358,7 +362,7 @@ func opExtCodeCopyEIP4762(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, er
 	code := evm.StateDB.GetCode(addr)
 	paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(code, uint64CodeOffset, length.Uint64())
 	consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(addr, copyOffset, nonPaddedCopyLength, uint64(len(code)), false, scope.Contract.Gas)
-	scope.Contract.UseGas(consumed, evm.Config.Tracer, tracing.GasChangeUnspecified)
+	useGas[TS](scope.Contract, consumed, evm.Config.Tracer, tracing.GasChangeUnspecified)
 	if consumed < wanted {
 		return nil, ErrOutOfGas
 	}
@@ -370,7 +374,7 @@ func opExtCodeCopyEIP4762(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, er
 // opPush1EIP4762 handles the special case of PUSH1 opcode for EIP-4762, which
 // need not worry about the adjusted bound logic when adding the PUSHDATA to
 // the list of access events.
-func opPush1EIP4762(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+func opPush1EIP4762[TS TracingSwitch](pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	var (
 		codeLen = uint64(len(scope.Contract.Code))
 		integer = new(uint256.Int)
@@ -384,7 +388,7 @@ func opPush1EIP4762(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 			// advanced past this boundary.
 			contractAddr := scope.Contract.Address()
 			consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(contractAddr, *pc+1, uint64(1), uint64(len(scope.Contract.Code)), false, scope.Contract.Gas)
-			scope.Contract.UseGas(wanted, evm.Config.Tracer, tracing.GasChangeUnspecified)
+			useGas[TS](scope.Contract, wanted, evm.Config.Tracer, tracing.GasChangeUnspecified)
 			if consumed < wanted {
 				return nil, ErrOutOfGas
 			}
@@ -395,7 +399,7 @@ func opPush1EIP4762(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	return nil, nil
 }
 
-func makePushEIP4762(size uint64, pushByteSize int) executionFunc {
+func makePushEIP4762[TS TracingSwitch](size uint64, pushByteSize int) executionFunc {
 	return func(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		var (
 			codeLen = len(scope.Contract.Code)
@@ -412,7 +416,7 @@ func makePushEIP4762(size uint64, pushByteSize int) executionFunc {
 		if !scope.Contract.IsDeployment && !scope.Contract.IsSystemCall {
 			contractAddr := scope.Contract.Address()
 			consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(contractAddr, uint64(start), uint64(pushByteSize), uint64(len(scope.Contract.Code)), false, scope.Contract.Gas)
-			scope.Contract.UseGas(consumed, evm.Config.Tracer, tracing.GasChangeUnspecified)
+			useGas[TS](scope.Contract, consumed, evm.Config.Tracer, tracing.GasChangeUnspecified)
 			if consumed < wanted {
 				return nil, ErrOutOfGas
 			}
@@ -423,7 +427,7 @@ func makePushEIP4762(size uint64, pushByteSize int) executionFunc {
 	}
 }
 
-func enable4762(jt *JumpTable) {
+func enable4762[TS TracingSwitch](jt *JumpTable) {
 	jt[SSTORE] = &operation{
 		dynamicGas: gasSStore4762,
 		execute:    opSstore,
@@ -459,7 +463,7 @@ func enable4762(jt *JumpTable) {
 	}
 
 	jt[EXTCODECOPY] = &operation{
-		execute:    opExtCodeCopyEIP4762,
+		execute:    opExtCodeCopyEIP4762[TS],
 		dynamicGas: gasExtCodeCopyEIP4762,
 		minStack:   minStack(4, 0),
 		maxStack:   maxStack(4, 0),
@@ -484,7 +488,7 @@ func enable4762(jt *JumpTable) {
 	}
 
 	jt[CREATE] = &operation{
-		execute:     opCreate,
+		execute:     opCreate[TS],
 		constantGas: params.CreateNGasEip4762,
 		dynamicGas:  gasCreateEip3860,
 		minStack:    minStack(3, 1),
@@ -493,7 +497,7 @@ func enable4762(jt *JumpTable) {
 	}
 
 	jt[CREATE2] = &operation{
-		execute:     opCreate2,
+		execute:     opCreate2[TS],
 		constantGas: params.CreateNGasEip4762,
 		dynamicGas:  gasCreate2Eip3860,
 		minStack:    minStack(4, 1),
@@ -502,7 +506,7 @@ func enable4762(jt *JumpTable) {
 	}
 
 	jt[CALL] = &operation{
-		execute:    opCall,
+		execute:    opCall[TS],
 		dynamicGas: gasCallEIP4762,
 		minStack:   minStack(7, 1),
 		maxStack:   maxStack(7, 1),
@@ -510,7 +514,7 @@ func enable4762(jt *JumpTable) {
 	}
 
 	jt[CALLCODE] = &operation{
-		execute:    opCallCode,
+		execute:    opCallCode[TS],
 		dynamicGas: gasCallCodeEIP4762,
 		minStack:   minStack(7, 1),
 		maxStack:   maxStack(7, 1),
@@ -518,7 +522,7 @@ func enable4762(jt *JumpTable) {
 	}
 
 	jt[STATICCALL] = &operation{
-		execute:    opStaticCall,
+		execute:    opStaticCall[TS],
 		dynamicGas: gasStaticCallEIP4762,
 		minStack:   minStack(6, 1),
 		maxStack:   maxStack(6, 1),
@@ -526,7 +530,7 @@ func enable4762(jt *JumpTable) {
 	}
 
 	jt[DELEGATECALL] = &operation{
-		execute:    opDelegateCall,
+		execute:    opDelegateCall[TS],
 		dynamicGas: gasDelegateCallEIP4762,
 		minStack:   minStack(6, 1),
 		maxStack:   maxStack(6, 1),
@@ -534,14 +538,14 @@ func enable4762(jt *JumpTable) {
 	}
 
 	jt[PUSH1] = &operation{
-		execute:     opPush1EIP4762,
+		execute:     opPush1EIP4762[TS],
 		constantGas: GasFastestStep,
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
 	}
 	for i := 1; i < 32; i++ {
 		jt[PUSH1+OpCode(i)] = &operation{
-			execute:     makePushEIP4762(uint64(i+1), i+1),
+			execute:     makePushEIP4762[TS](uint64(i+1), i+1),
 			constantGas: GasFastestStep,
 			minStack:    minStack(0, 1),
 			maxStack:    maxStack(0, 1),
@@ -550,9 +554,9 @@ func enable4762(jt *JumpTable) {
 }
 
 // enable7702 the EIP-7702 changes to support delegation designators.
-func enable7702(jt *JumpTable) {
-	jt[CALL].dynamicGas = gasCallEIP7702
-	jt[CALLCODE].dynamicGas = gasCallCodeEIP7702
-	jt[STATICCALL].dynamicGas = gasStaticCallEIP7702
-	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP7702
+func enable7702[TS TracingSwitch](jt *JumpTable) {
+	jt[CALL].dynamicGas = makeCallVariantGasCallEIP7702[TS](gasCall)
+	jt[CALLCODE].dynamicGas = makeCallVariantGasCallEIP7702[TS](gasCallCode)
+	jt[STATICCALL].dynamicGas = makeCallVariantGasCallEIP7702[TS](gasStaticCall)
+	jt[DELEGATECALL].dynamicGas = makeCallVariantGasCallEIP7702[TS](gasDelegateCall)
 }

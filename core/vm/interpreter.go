@@ -18,12 +18,24 @@ package vm
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/holiman/uint256"
 )
+
+type TracingEnabled uint8
+type TracingDisabled uint16
+
+type TracingSwitch interface {
+	TracingDisabled | TracingEnabled
+}
+
+func tracingIsEnabled[TS TracingSwitch]() bool {
+	return unsafe.Sizeof(*new(TS)) == 1
+}
 
 // Config are the configuration options for the Interpreter
 type Config struct {
@@ -93,7 +105,7 @@ func (ctx *ScopeContext) ContractCode() []byte {
 // It's important to note that any errors returned by the interpreter should be
 // considered a revert-and-consume-all-gas operation except for
 // ErrExecutionReverted which means revert-and-keep-gas-left.
-func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
+func Run[TS TracingSwitch](evm *EVM, contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
 	// Increment the call depth which is restricted to 1024
 	evm.depth++
 	defer func() { evm.depth-- }()
@@ -134,7 +146,6 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 		gasCopy   uint64 // for EVMLogger to log gas remaining before execution
 		logged    bool   // deferred EVMLogger should ignore already logged steps
 		res       []byte // result of the opcode execution function
-		debug     = evm.Config.Tracer != nil
 		isEIP4762 = evm.chainRules.IsEIP4762
 	)
 	// Don't move this deferred function, it's placed before the OnOpcode-deferred method,
@@ -146,7 +157,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 	}()
 	contract.Input = input
 
-	if debug {
+	if tracingIsEnabled[TS]() {
 		defer func() { // this deferred method handles exit-with-error
 			if err == nil {
 				return
@@ -165,7 +176,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 	// parent context.
 	_ = jumpTable[0] // nil-check the jumpTable out of the loop
 	for {
-		if debug {
+		if tracingIsEnabled[TS]() {
 			// Capture pre-execution values for tracing.
 			logged, pcCopy, gasCopy = false, pc, contract.Gas
 		}
@@ -175,7 +186,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			// associated costs.
 			contractAddr := contract.Address()
 			consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas)
-			contract.UseGas(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
+			useGas[TS](contract, consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
 			if consumed < wanted {
 				return nil, ErrOutOfGas
 			}
@@ -234,7 +245,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 		}
 
 		// Do tracing before potential memory expansion
-		if debug {
+		if tracingIsEnabled[TS]() {
 			if evm.Config.Tracer.OnGasChange != nil {
 				evm.Config.Tracer.OnGasChange(gasCopy, gasCopy-cost, tracing.GasChangeCallOpCode)
 			}
@@ -260,4 +271,27 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 	}
 
 	return res, err
+}
+
+// useGas attempts the use gas and subtracts it and returns true on success
+func useGas[TS TracingSwitch](c *Contract, gas uint64, hooks *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
+	if c.Gas < gas {
+		return false
+	}
+	if tracingIsEnabled[TS]() && hooks.OnGasChange != nil && reason != tracing.GasChangeIgnored {
+		hooks.OnGasChange(c.Gas, c.Gas-gas, reason)
+	}
+	c.Gas -= gas
+	return true
+}
+
+// refundGas refunds gas to the contract
+func refundGas[TS TracingSwitch](c *Contract, gas uint64, hooks *tracing.Hooks, reason tracing.GasChangeReason) {
+	if gas == 0 {
+		return
+	}
+	if tracingIsEnabled[TS]() && hooks.OnGasChange != nil && reason != tracing.GasChangeIgnored {
+		hooks.OnGasChange(c.Gas, c.Gas+gas, reason)
+	}
+	c.Gas += gas
 }
