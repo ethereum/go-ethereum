@@ -166,7 +166,7 @@ func checkDecodeFromJSON(s *rlp.Stream, exp interface{}) error {
 }
 
 func addStack(op string, val interface{}, err error) error {
-	lines := strings.Split(err.Error(), "\n")
+	lines := []string{err.Error()}
 	lines = append(lines, fmt.Sprintf("\t%s: %v", op, val))
 	return errors.New(strings.Join(lines, "\n"))
 }
