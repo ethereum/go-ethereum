@@ -26,12 +26,17 @@ import (
 	"github.com/ethereum/go-verkle"
 )
 
+// TransitionTrie is a trie that implements a façade design pattern, presenting
+// a single interface to the old MPT trie and the new verkle/binary trie. Reads
+// first from the overlay trie, and falls back to the base trie if the key isn't
+// found. All writes go to the overlay trie.
 type TransitionTrie struct {
 	overlay *VerkleTrie
 	base    *SecureTrie
 	storage bool
 }
 
+// NewTransitionTrie creates a new TransitionTrie.
 func NewTransitionTree(base *SecureTrie, overlay *VerkleTrie, st bool) *TransitionTrie {
 	return &TransitionTrie{
 		overlay: overlay,
@@ -40,19 +45,18 @@ func NewTransitionTree(base *SecureTrie, overlay *VerkleTrie, st bool) *Transiti
 	}
 }
 
+// Base returns the base trie.
 func (t *TransitionTrie) Base() *SecureTrie {
 	return t.base
 }
 
-// TODO(gballet/jsign): consider removing this API.
+// Overlay returns the overlay trie.
 func (t *TransitionTrie) Overlay() *VerkleTrie {
 	return t.overlay
 }
 
 // GetKey returns the sha3 preimage of a hashed key that was previously used
 // to store a value.
-//
-// TODO(fjl): remove this when StateTrie is removed
 func (t *TransitionTrie) GetKey(key []byte) []byte {
 	if key := t.overlay.GetKey(key); key != nil {
 		return key
@@ -60,9 +64,8 @@ func (t *TransitionTrie) GetKey(key []byte) []byte {
 	return t.base.GetKey(key)
 }
 
-// Get returns the value for key stored in the trie. The value bytes must
-// not be modified by the caller. If a node was not found in the database, a
-// trie.MissingNodeError is returned.
+// GetStorage returns the value for key stored in the trie. The value bytes must
+// not be modified by the caller.
 func (t *TransitionTrie) GetStorage(addr common.Address, key []byte) ([]byte, error) {
 	val, err := t.overlay.GetStorage(addr, key)
 	if err != nil {
@@ -91,10 +94,9 @@ func (t *TransitionTrie) GetAccount(address common.Address) (*types.StateAccount
 	return t.base.GetAccount(address)
 }
 
-// Update associates key with value in the trie. If value has length zero, any
+// UpdateStorage associates key with value in the trie. If value has length zero, any
 // existing value is deleted from the trie. The value bytes must not be modified
-// by the caller while they are stored in the trie. If a node was not found in the
-// database, a trie.MissingNodeError is returned.
+// by the caller while they are stored in the trie.
 func (t *TransitionTrie) UpdateStorage(address common.Address, key []byte, value []byte) error {
 	var v []byte
 	if len(value) >= 32 {
@@ -115,7 +117,7 @@ func (t *TransitionTrie) UpdateAccount(addr common.Address, account *types.State
 	return t.overlay.UpdateAccount(addr, account, codeLen)
 }
 
-// Delete removes any existing value for key from the trie. If a node was not
+// DeleteStorage removes any existing value for key from the trie. If a node was not
 // found in the database, a trie.MissingNodeError is returned.
 func (t *TransitionTrie) DeleteStorage(addr common.Address, key []byte) error {
 	return t.overlay.DeleteStorage(addr, key)
@@ -171,6 +173,8 @@ func (t *TransitionTrie) IsVerkle() bool {
 	return true
 }
 
+// UpdateStems updates a group of values, given the stem they are using. If
+// a value already exists, it is overwritten.
 func (t *TransitionTrie) UpdateStem(key []byte, values [][]byte) error {
 	trie := t.overlay
 	switch root := trie.root.(type) {
@@ -181,6 +185,7 @@ func (t *TransitionTrie) UpdateStem(key []byte, values [][]byte) error {
 	}
 }
 
+// Copy creates a deep copy of the transition trie.
 func (t *TransitionTrie) Copy() *TransitionTrie {
 	return &TransitionTrie{
 		overlay: t.overlay.Copy(),
@@ -189,6 +194,7 @@ func (t *TransitionTrie) Copy() *TransitionTrie {
 	}
 }
 
+// UpdateContractCode updates the contract code for the given address.
 func (t *TransitionTrie) UpdateContractCode(addr common.Address, codeHash common.Hash, code []byte) error {
 	return t.overlay.UpdateContractCode(addr, codeHash, code)
 }
