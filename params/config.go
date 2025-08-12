@@ -185,7 +185,7 @@ var (
 		ShanghaiTime:            newUint64(0),
 		CancunTime:              newUint64(0),
 		PragueTime:              newUint64(1749056400),
-		DepositContractAddress:  common.HexToAddress("0x4242424242424242424242424242424242424242"),
+		DepositContractAddress:  BerachainDepositContractAddress,
 		Ethash:                  new(EthashConfig),
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
@@ -193,10 +193,10 @@ var (
 		},
 		Berachain: BerachainConfig{
 			Prague1: Prague1Config{
-				Time:                     newUint64(17446744073709551614), // TODO: set mainnet timestamp.
-				MinimumBaseFeeWei:        10000000000,                     // 10 gwei
-				BaseFeeChangeDenominator: 48,                              // 6x increase from the default
-				PoLDistributorAddress:    common.HexToAddress("0xD2f19a79b026Fb636A7c300bF5947df113940761"),
+				Time:                     newUint64(1756310400), // Aug 27th 2025 16:00:00 UTC
+				MinimumBaseFeeWei:        1 * GWei,
+				BaseFeeChangeDenominator: BerachainBaseFeeChangeDenominator,
+				PoLDistributorAddress:    PoLDistributorAddress,
 			},
 		},
 	}
@@ -223,7 +223,7 @@ var (
 		ShanghaiTime:            newUint64(0),
 		CancunTime:              newUint64(0),
 		PragueTime:              newUint64(1746633600),
-		DepositContractAddress:  common.HexToAddress("0x4242424242424242424242424242424242424242"),
+		DepositContractAddress:  BerachainDepositContractAddress,
 		Ethash:                  new(EthashConfig),
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
@@ -231,10 +231,10 @@ var (
 		},
 		Berachain: BerachainConfig{
 			Prague1: Prague1Config{
-				Time:                     newUint64(1754496000),
-				MinimumBaseFeeWei:        10000000000, // 10 gwei
-				BaseFeeChangeDenominator: 48,          // 6x increase from the default
-				PoLDistributorAddress:    common.HexToAddress("0xD2f19a79b026Fb636A7c300bF5947df113940761"),
+				Time:                     newUint64(1754496000), // Aug 6th 2025 16:00:00 UTC
+				MinimumBaseFeeWei:        10 * GWei,
+				BaseFeeChangeDenominator: BerachainBaseFeeChangeDenominator,
+				PoLDistributorAddress:    PoLDistributorAddress,
 			},
 		},
 	}
