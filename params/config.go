@@ -664,7 +664,7 @@ func (c *ChainConfig) Description() string {
 		banner += fmt.Sprintf(" - Prague:                      @%-10v\n", *c.PragueTime)
 	}
 	if c.Berachain.Prague1.Time != nil {
-		banner += fmt.Sprintf(" - Prague1:                     @%-10v\n", *c.Berachain.Prague1.Time)
+		banner += fmt.Sprintf(" - Prague1:                     %-10v (https://github.com/berachain/BRIPs/blob/main/meta/BRIP-0004.md)\n", c.Berachain.Prague1)
 	}
 	if c.OsakaTime != nil {
 		banner += fmt.Sprintf(" - Osaka:                      @%-10v\n", *c.OsakaTime)
