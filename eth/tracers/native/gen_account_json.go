@@ -8,7 +8,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
 )
 
 var _ = (*accountMarshaling)(nil)
@@ -18,16 +17,14 @@ func (a account) MarshalJSON() ([]byte, error) {
 	type account struct {
 		Balance  *hexutil.Big                `json:"balance,omitempty"`
 		Code     hexutil.Bytes               `json:"code,omitempty"`
-		CodeHash *common.Hash                `json:"codeHash,omitempty"`
+		CodeHash common.Hash                 `json:"codeHash,omitempty"`
 		Nonce    uint64                      `json:"nonce,omitempty"`
 		Storage  map[common.Hash]common.Hash `json:"storage,omitempty"`
 	}
 	var enc account
 	enc.Balance = (*hexutil.Big)(a.Balance)
 	enc.Code = a.Code
-	if a.CodeHash != (common.Hash{}) && a.CodeHash != types.EmptyCodeHash {
-		enc.CodeHash = &a.CodeHash
-	}
+	enc.CodeHash = a.CodeHash
 	enc.Nonce = a.Nonce
 	enc.Storage = a.Storage
 	return json.Marshal(&enc)
@@ -52,7 +49,7 @@ func (a *account) UnmarshalJSON(input []byte) error {
 	if dec.Code != nil {
 		a.Code = *dec.Code
 	}
-	if dec.CodeHash != nil && *dec.CodeHash != (common.Hash{}) && *dec.CodeHash != types.EmptyCodeHash {
+	if dec.CodeHash != nil {
 		a.CodeHash = *dec.CodeHash
 	}
 	if dec.Nonce != nil {
