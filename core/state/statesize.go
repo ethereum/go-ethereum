@@ -19,7 +19,6 @@ package state
 import (
 	"context"
 	"encoding/json"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -54,14 +53,13 @@ type stateSizeMetrics struct {
 
 // StateSizeGenerator handles the initialization and tracking of state size metrics
 type StateSizeGenerator struct {
-	db          ethdb.KeyValueStore
-	triedb      *triedb.Database
-	abort       chan struct{}
-	done        chan struct{}
-	updateChan  chan *stateUpdate // Async message channel for updates
-	metrics     *stateSizeMetrics
-	buffered    *stateSizeMetrics
-	initialized atomic.Bool // Initialization state
+	db         ethdb.KeyValueStore
+	triedb     *triedb.Database
+	abort      chan struct{}
+	done       chan struct{}
+	updateChan chan *stateUpdate // Async message channel for updates
+	metrics    *stateSizeMetrics
+	buffered   *stateSizeMetrics
 }
 
 // NewStateSizeGenerator creates a new state size generator and starts it automatically
@@ -95,12 +93,20 @@ func (g *StateSizeGenerator) Stop() {
 func (g *StateSizeGenerator) generate() {
 	defer close(g.done)
 
+	var inited bool
+
+	// Check if we already have existing metrics
+	if g.hasExistingMetrics() {
+		log.Info("State size metrics already initialized")
+		inited = true
+	}
+
 	initDone := g.initialize()
 
 	for {
 		select {
 		case update := <-g.updateChan:
-			g.handleUpdate(update, g.initialized.Load())
+			g.handleUpdate(update, inited)
 
 		case <-g.abort:
 			log.Info("State size generation aborted")
@@ -132,6 +138,8 @@ func (g *StateSizeGenerator) generate() {
 
 				g.buffered = nil
 			}
+
+			inited = true
 			initDone = nil // Clear the channel to prevent future selects
 		}
 	}
@@ -139,18 +147,11 @@ func (g *StateSizeGenerator) generate() {
 
 // initialize starts the initialization process if not already initialized
 func (g *StateSizeGenerator) initialize() chan struct{} {
-	// Check if we already have existing metrics
-	if g.hasExistingMetrics() {
-		log.Info("State size metrics already initialized")
-		g.initialized.Store(true)
-		return nil
-	}
-
-	initDone := make(chan struct{})
+	done := make(chan struct{})
 
 	// Wait for snapshot completion and then initialize
 	go func() {
-		defer close(initDone)
+		defer close(done)
 
 	LOOP:
 		// Wait for snapshot generator to complete first
@@ -179,12 +180,10 @@ func (g *StateSizeGenerator) initialize() chan struct{} {
 			return
 		}
 
-		g.initialized.Store(true)
-
 		log.Info("Completed state size initialization", "elapsed", time.Since(start))
 	}()
 
-	return initDone
+	return done
 }
 
 // handleUpdate processes a single update with proper root continuity checking
