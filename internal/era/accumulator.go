@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	ssz "github.com/ferranbt/fastssz"
@@ -78,14 +79,6 @@ func (h *headerRecord) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 // bigToBytes32 converts a big.Int into a little-endian 32-byte array.
 func bigToBytes32(n *big.Int) (b [32]byte) {
 	n.FillBytes(b[:])
-	reverseOrder(b[:])
+	slices.Reverse(b[:])
 	return
-}
-
-// reverseOrder reverses the byte order of a slice.
-func reverseOrder(b []byte) []byte {
-	for i := 0; i < 16; i++ {
-		b[i], b[32-i-1] = b[32-i-1], b[i]
-	}
-	return b
 }

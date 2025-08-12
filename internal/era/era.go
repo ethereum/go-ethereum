@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"os"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -244,7 +245,8 @@ func (e *Era) InitialTD() (*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
-	td := new(big.Int).SetBytes(reverseOrder(rawTd))
+	slices.Reverse(rawTd)
+	td := new(big.Int).SetBytes(rawTd)
 	return td.Sub(td, header.Difficulty), nil
 }
 

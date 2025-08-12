@@ -20,6 +20,7 @@ import (
 	"errors"
 	"io"
 	"math/big"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -107,7 +108,8 @@ func (it *Iterator) TotalDifficulty() (*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
-	return new(big.Int).SetBytes(reverseOrder(td)), nil
+	slices.Reverse(td)
+	return new(big.Int).SetBytes(td), nil
 }
 
 // RawIterator reads an RLP-encode Era1 entries.
