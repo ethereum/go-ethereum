@@ -466,12 +466,6 @@ func (g *StateSizeGenerator) iterateTable(ctx context.Context, prefix []byte, na
 	iter := g.db.NewIterator(prefix, nil)
 	defer iter.Release()
 
-	// Check for iterator errors before starting iteration
-	if err := iter.Error(); err != nil {
-		log.Warn("Iterator error before iteration, database may be closed", "table", name, "err", err)
-		return 0, 0, err
-	}
-
 	for iter.Next() {
 		count++
 		bytes += int64(len(iter.Key()) + len(iter.Value()))
