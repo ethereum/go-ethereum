@@ -285,7 +285,6 @@ func (s *stateObject) finalise() *bal.AccountState {
 			// to avoid thrashing the data structures.
 			delete(s.uncommittedStorage, key)
 
-			// TODO: ensure that we should record the diff here: i.e. this storage slot had a different val at the start of the transaction
 			if s.db.enableStateDiffRecording {
 				if s.db.constructionBAL != nil {
 					s.db.BlockAccessList().StorageWrite(uint16(s.db.balIndex), s.address, key, value)
@@ -638,6 +637,7 @@ func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
 	s.data.CodeHash = codeHash[:]
 }
 
+// setCode sets the code and hash and dirty markers.
 func (s *stateObject) setCodeModified(codeHash common.Hash, code []byte) {
 	s.setCode(codeHash, code)
 	s.dirtyCode = true

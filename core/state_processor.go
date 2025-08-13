@@ -158,6 +158,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}, nil
 }
 
+// ProcessWithAccessList performs EVM execution and state root computation for a block which is known
+// to contain an access list.
 func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *state.StateDB, cfg vm.Config) (chan *ProcessResultWithMetrics, error) {
 	var (
 		header      = block.Header()
@@ -179,12 +181,12 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	rootCalcErrCh := make(chan error) // used for communicating if the state root calculation doesn't match the reported root
 	pStart := time.Now()
 	var (
-		tPreprocess  time.Duration
+		tPreprocess  time.Duration // time to create a set of prestates for parallel transaction execution
 		tVerifyStart time.Time
-		tVerify      time.Duration
+		tVerify      time.Duration // time to compute and verify the state root
 		tExecStart   time.Time
-		tExec        time.Duration
-		tPostprocess time.Duration
+		tExec        time.Duration // time to execute block transactions
+		tPostprocess time.Duration // time to perform post-transaction execution system calls and withdrawals.
 	)
 
 	// called by resultHandler when all transactions have successfully executed.
@@ -251,9 +253,6 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 		// invoke Finalise so that withdrawals are accounted for in the state diff
 		finalDiff := postTxState.Finalise(true)
 		computedDiff.Merge(finalDiff)
-
-		// TODO:  at each step, we should only be comparing the "intermediate" state diffs
-		// not the entire state diff up until that point.
 
 		if err := bal.ValidateStateDiff(expectedStateDiff, computedDiff); err != nil {
 			return &ProcessResult{
@@ -340,12 +339,12 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	execTx := func(ctx context2.Context, tx *types.Transaction, idx int, db *state.StateDB, prestateDiff, expectedDiff *bal.StateDiff) *txExecResult {
 		db.ApplyPrestate(prestateDiff)
 		// if an error with another transaction rendered the block invalid, don't proceed with executing this one
-		// TODO: also interrupt any currently-executing transactions if one failed.
 		select {
 		case <-ctx.Done():
 			return &txExecResult{err: ctx.Err()}
 		default:
 		}
+		// TODO: also interrupt any currently-executing transactions if one failed.
 		var tracingStateDB = vm.StateDB(db)
 		if hooks := cfg.Tracer; hooks != nil {
 			tracingStateDB = state.NewHookedState(db, hooks)
@@ -362,7 +361,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 		db.SetTxSender(sender)
 		db.SetTxContext(tx.Hash(), idx)
 
-		evm.StateDB = db // TODO: unsure if need to set this here since the evm should maintain a reference to the db but I recall that adding this fixed some broken tests
+		evm.StateDB = db
 		gp := new(GasPool)
 		gp.SetGas(block.GasLimit())
 		var gasUsed uint64
@@ -398,46 +397,46 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	context = NewEVMBlockContext(header, p.chain, nil)
 	evm := vm.NewEVM(context, tracingStateDB, p.config, cfg)
 
-	// process beacon-root and parent block system contracts.
-	// do not include the storage writes in the BAL:
-	// * beacon root will be provided as a standalone field in the BAL
-	// * parent block hash is already in the header field of the block
-
+	// convert the BAL entries into an ordered list of state diffs per index
 	intermediateStateDiffs := bal.BuildStateDiffs(block.Body().AccessList, len(block.Transactions()))
 	preTxDiff := intermediateStateDiffs[0]
 
+	// validate the correctness of pre-transaction execution state changes
+	computedPreTxDiff := &bal.StateDiff{make(map[common.Address]*bal.AccountState)}
+	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
+		computedPreTxDiff.Merge(ProcessBeaconBlockRoot(*beaconRoot, evm))
+	}
+	if p.config.IsPrague(block.Number(), block.Time()) || p.config.IsVerkle(block.Number(), block.Time()) {
+		computedPreTxDiff.Merge(ProcessParentBlockHash(block.ParentHash(), evm))
+	}
+	if err := bal.ValidateStateDiff(preTxDiff, computedPreTxDiff); err != nil {
+		return nil, err
+	}
+
+	// compute the aggregate state diff of the block
 	totalDiff := bal.StateDiff{make(map[common.Address]*bal.AccountState)}
 	var totalDiffs []*bal.StateDiff
 	for _, diff := range intermediateStateDiffs {
 		totalDiff.Merge(diff.Copy()) // TODO: it shouldn't be necessary to Copy here
 		totalDiffs = append(totalDiffs, totalDiff.Copy())
 	}
+
+	// instantiate a set of StateDBs to be used for executing each transaction in parallel
 	statedb.InstantiateWithStateDiffs(&totalDiff)
-
-	computedDiff := &bal.StateDiff{make(map[common.Address]*bal.AccountState)}
-	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
-		computedDiff.Merge(ProcessBeaconBlockRoot(*beaconRoot, evm))
-	}
-	if p.config.IsPrague(block.Number(), block.Time()) || p.config.IsVerkle(block.Number(), block.Time()) {
-		computedDiff.Merge(ProcessParentBlockHash(block.ParentHash(), evm))
-	}
-
-	if err := bal.ValidateStateDiff(preTxDiff, computedDiff); err != nil {
-		return nil, err
-	}
-
 	var txPrestates []*state.StateDB
-
-	// Iterate over and process the individual transactions
 	for range block.Transactions() {
 		state := statedb.Copy()
 		txPrestates = append(txPrestates, state)
 	}
+
+	// compute the post-tx state prestate (before applying final block system calls and eip-4895 withdrawals)
 	postTxState := statedb.Copy()
-	postTxState.ApplyStateDiff(totalDiffs[len(totalDiffs)-2])
+	postTxState.ApplyPrestate(totalDiffs[len(totalDiffs)-2])
 	postTxState.Finalise(true)
 
 	tPreprocess = time.Since(pStart)
+
+	// execute transactions and state root calculation in parallel
 
 	tExecStart = time.Now()
 	go resultHandler(intermediateStateDiffs[len(block.Transactions())+1], postTxState)
@@ -455,7 +454,6 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 
 	statedb.ApplyStateDiff(&totalDiff)
 	statedb.Finalise(true)
-	//fmt.Printf("total diff is\n%s\napplied diff is\n%s\n", totalDiff.String(), appliedDiff.String())
 	go calcAndVerifyRoot(statedb.Copy(), block, rootCalcErrCh)
 
 	return resCh, nil

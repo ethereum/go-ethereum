@@ -318,6 +318,8 @@ func (s *StateDB) AddRefund(gas uint64) {
 	s.refund += gas
 }
 
+// InstantiateWithStateDiffs instantiates the live object based on accounts
+// which appeared in the total state diff of a block, and were also preexisting.
 func (s *StateDB) InstantiateWithStateDiffs(totalDiff *bal.StateDiff) {
 	stateAccounts := new(sync.Map)
 	wg := new(sync.WaitGroup)
@@ -826,14 +828,11 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) (diff *bal.StateDiff) {
 			continue
 		}
 		if obj.selfDestructed || (deleteEmptyObjects && obj.empty()) {
-			// TODO: for testing purposes we should probably have tests that create/destroy the same account multiple times via this same edge-case with create2
-			if obj.txPreBalance != nil && !obj.txPreBalance.IsZero() { // TODO: IsZero check is somehow needed for coinbase.  figure out why.
-				// TODO: need to ensure that we aren't recording accounts in the state diff/BAL which were created/selfdestructed in the same transaction.
-				// It should be as easy as modifying the check above to not include selfdestructed contracts.  However, doing this causes some blockchain tests
-				// to fail and I'm not sure why.
-				//
-				// TODO: the coinbase can be touched and then become empty here: see BlockchainBAL/GeneralStateTests/stExample/solidityExample.json/solidityExample_d0g0v0_Cancun
-				// ^ coinbase probably shouldn't be in the BAL/statediff in this case.
+			// record state diffs for any preexisting accounts which became empty
+			if s.enableStateDiffRecording && obj.txPreBalance != nil && !obj.txPreBalance.IsZero() {
+				// TODO: IsZero check is somehow needed for coinbase.  figure out why.
+				// TODO: the above check should be as easy as checking that the account was not selfdestructed in the
+				// current transaction, but that causes spec tests to fail.  need to figure out why.
 				if s.constructionBAL != nil {
 					s.constructionBAL.BalanceChange(uint16(s.balIndex), obj.address, uint256.NewInt(0))
 				}
@@ -855,7 +854,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) (diff *bal.StateDiff) {
 
 			if s.enableStateDiffRecording && (accountPost.Nonce != nil || accountPost.Code != nil || accountPost.StorageWrites != nil || accountPost.Balance != nil) {
 				// the account executed SENDALL but did not send a balance, don't include it in the diff
-				// TODO: probably shouldn't include the account in the dirty set in this case
+				// TODO: probably shouldn't include the account in the dirty set in this case (unrelated to the BAL changes)
 				diff.Mutations[obj.address] = accountPost
 			}
 			s.markUpdate(addr)
@@ -1062,6 +1061,7 @@ func (s *StateDB) SetTxSender(sender common.Address) {
 	s.sender = sender
 }
 
+// ApplyPrestate applies finalised pre-state changes which occurred between the start of the block and the end of the previous transaction.
 func (s *StateDB) ApplyPrestate(prestateDiff *bal.StateDiff) {
 	for addr, accountDiff := range prestateDiff.Mutations {
 		stateObject, preexisting := s.stateObjects[addr]
@@ -1110,6 +1110,8 @@ func (s *StateDB) ApplyPrestate(prestateDiff *bal.StateDiff) {
 	}
 }
 
+// ApplyStateDiff applies a state diff to the StateDB.  All state changes will be marked as mutations
+// for the purpose of applying them in the next call to Commit.
 func (s *StateDB) ApplyStateDiff(diff *bal.StateDiff) {
 	for addr, accountDiff := range diff.Mutations {
 		stateObject, ok := s.stateObjects[addr]

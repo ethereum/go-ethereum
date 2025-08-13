@@ -380,10 +380,8 @@ type AccountState struct {
 	StorageWrites map[common.Hash]common.Hash `json:"StorageWrites,omitempty"`
 }
 
-func (a *AccountState) IsEmpty() bool {
-	return a.Balance == nil || a.Balance.IsZero() || a.Nonce == nil || a.Code == nil
-}
-
+// Merge the changes of a future AccountState into the caller, resulting in the
+// combined state changes through next.
 func (a *AccountState) Merge(next *AccountState) {
 	if next.Balance != nil {
 		a.Balance = next.Balance
@@ -474,7 +472,7 @@ func (a *AccountState) Copy() *AccountState {
 	return res
 }
 
-// ValidateStateDiff asserts that the state from layerDiff are present in totalDiffAtLayer.
+// ValidateStateDiff asserts that both state diffs are equivalent.
 func ValidateStateDiff(balDiff, computedDiff *StateDiff) error {
 	for addr, computedAccountDiff := range computedDiff.Mutations {
 		balAccountDiff, ok := balDiff.Mutations[addr]
@@ -500,7 +498,8 @@ func (s *StateDiff) String() string {
 	return res.String()
 }
 
-// merge the future state from next into the current diff modifying the caller
+// Merge merges the state changes present in next into the caller.  After,
+// the state of the caller is the aggregate diff through next.
 func (s *StateDiff) Merge(next *StateDiff) {
 	for account, diff := range next.Mutations {
 		if mut, ok := s.Mutations[account]; ok {
@@ -525,35 +524,6 @@ func (s *StateDiff) Merge(next *StateDiff) {
 			}
 		} else {
 			s.Mutations[account] = diff.Copy()
-		}
-	}
-}
-
-func (s *StateDiff) MergePrev(prev *StateDiff) {
-	for account, diff := range prev.Mutations {
-		if mut, ok := s.Mutations[account]; ok {
-			if mut.Balance == nil {
-				mut.Balance = diff.Balance
-			}
-			if mut.Code == nil {
-				mut.Code = diff.Code
-			}
-			if mut.Nonce == nil {
-				mut.Nonce = diff.Nonce
-			}
-			if len(diff.StorageWrites) > 0 {
-				if mut.StorageWrites == nil {
-					mut.StorageWrites = diff.StorageWrites
-				} else {
-					for key, val := range diff.StorageWrites {
-						if _, ok := mut.StorageWrites[key]; !ok {
-							mut.StorageWrites[key] = val
-						}
-					}
-				}
-			}
-		} else {
-			s.Mutations[account] = diff
 		}
 	}
 }
@@ -685,10 +655,7 @@ func (it *BALIterator) Next() (mutations *StateDiff) {
 	return &diff
 }
 
-// BuildStateDiffs returns a set of ordered state diffs from the BAL
-// corresponding to each txIndex.  "until" is specified as the maximum
-// index which will be contained in the result.
-// It returns the aggregated state diff of all layers and a state diff for each layer.
+// BuildStateDiffs computes the ordered set of state diffs from an access list.
 func BuildStateDiffs(bal *BlockAccessList, txCount int) []*StateDiff {
 	stateDiffs := make([]*StateDiff, txCount+2)
 	for i := 0; i < len(stateDiffs); i++ {
