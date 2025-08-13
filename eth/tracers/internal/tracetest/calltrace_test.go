@@ -321,7 +321,7 @@ func TestInternals(t *testing.T) {
 				byte(vm.LOG0),
 			},
 			tracer: mkTracer("prestateTracer", nil),
-			want:   fmt.Sprintf(`{"0x00000000000000000000000000000000deadbeef":{"balance":"0x0","code":"0x6001600052600164ffffffffff60016000f560ff6000a0"},"%s":{"balance":"0x1c6bf52634000"}}`, originHex),
+			want:   fmt.Sprintf(`{"0x00000000000000000000000000000000deadbeef":{"balance":"0x0","code":"0x6001600052600164ffffffffff60016000f560ff6000a0","codeHash":"0x27be17a236425a9b513d736c4bb84eca4505a15564cae640e85558cf4d7ff7bb"},"%s":{"balance":"0x1c6bf52634000"}}`, originHex),
 		},
 		{
 			// CREATE2 which requires padding memory by prestate tracer
@@ -340,7 +340,7 @@ func TestInternals(t *testing.T) {
 				byte(vm.LOG0),
 			},
 			tracer: mkTracer("prestateTracer", nil),
-			want:   fmt.Sprintf(`{"0x00000000000000000000000000000000deadbeef":{"balance":"0x0","code":"0x6001600052600160ff60016000f560ff6000a0"},"%s":{"balance":"0x1c6bf52634000"}}`, originHex),
+			want:   fmt.Sprintf(`{"0x00000000000000000000000000000000deadbeef":{"balance":"0x0","code":"0x6001600052600160ff60016000f560ff6000a0","codeHash":"0x5544040a7fd107ba8164108904724a38fb9c664daae88a5cc53580841e648edf"},"%s":{"balance":"0x1c6bf52634000"}}`, originHex),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -977,7 +977,7 @@ func (s *StateDB) fastDeleteStorage(snaps *snapshot.Tree, addrHash common.Hash, 
 		storageOrigins = make(map[common.Hash][]byte)  // the set for tracking the original value of slot
 	)
 	stack := trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
-		nodes.AddNode(path, trienode.NewDeleted())
+		nodes.AddNode(path, trienode.NewDeletedWithPrev(blob))
 	})
 	for iter.Next() {
 		slot := common.CopyBytes(iter.Slot())
@@ -1028,7 +1028,7 @@ func (s *StateDB) slowDeleteStorage(addr common.Address, addrHash common.Hash, r
 		if it.Hash() == (common.Hash{}) {
 			continue
 		}
-		nodes.AddNode(it.Path(), trienode.NewDeleted())
+		nodes.AddNode(it.Path(), trienode.NewDeletedWithPrev(it.NodeBlob()))
 	}
 	if err := it.Error(); err != nil {
 		return nil, nil, nil, err
@@ -1160,7 +1160,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool) (*stateU
 		//
 		// Given that some accounts may be destroyed and then recreated within
 		// the same block, it's possible that a node set with the same owner
-		// may already exists. In such cases, these two sets are combined, with
+		// may already exist. In such cases, these two sets are combined, with
 		// the later one overwriting the previous one if any nodes are modified
 		// or deleted in both sets.
 		//

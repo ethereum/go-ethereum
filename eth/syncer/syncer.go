@@ -99,7 +99,7 @@ func (s *Syncer) run() {
 			)
 			for {
 				if retries >= 10 {
-					req.errc <- fmt.Errorf("sync target is not avaibale, %x", req.hash)
+					req.errc <- fmt.Errorf("sync target is not available, %x", req.hash)
 					break
 				}
 				select {

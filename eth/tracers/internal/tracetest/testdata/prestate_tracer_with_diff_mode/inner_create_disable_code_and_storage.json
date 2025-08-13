@@ -211,13 +211,16 @@
       },
       "0x6c8f2a135f6ed072de4503bd7c4999a1a17f824b": {
         "balance": "0x0",
-        "nonce": 237
+        "nonce": 237,
+        "codeHash":"0x461e17b7ae561793f22843985fc6866a3395c1fcee8ebf2d7ed5f293aec1b473"
       },
       "0x741467b251fca923d6229c4b439078b55dca233b": {
-        "balance": "0x29c613529e8218f8"
+        "balance": "0x29c613529e8218f8",
+        "codeHash":"0x7678943ba1f399d76abe8e77b6f899c193f72aaefb5c4bd47fffb63c7f57ad9e"
       },
       "0x7dd677b54fc954824a7bc49bd26cbdfa12c75adf": {
-        "balance": "0xd7a58f5b73b4b6c4"
+        "balance": "0xd7a58f5b73b4b6c4",
+        "codeHash":"0xd1255e5eabbe40c6e18c87b2ed2acf8157356103d1ca1df617f7b52811edefc4"
       },
       "0xb834e3edfc1a927bdcecb67a9d0eccbd752a5bb3": {
         "balance": "0xffe9b09a5c474dca",
@@ -233,7 +236,8 @@
         "balance": "0x98e2b02f14529b1eb2"
       },
       "0x651913977e8140c323997fce5e03c19e0015eebf": {
-        "balance": "0x29a2241af62c0000"
+        "balance": "0x29a2241af62c0000",
+        "codeHash":"0x7678943ba1f399d76abe8e77b6f899c193f72aaefb5c4bd47fffb63c7f57ad9e"
       },
       "0x6c8f2a135f6ed072de4503bd7c4999a1a17f824b": {
         "nonce": 238

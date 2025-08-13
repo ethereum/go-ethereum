@@ -14,7 +14,7 @@ func getOrRegisterRuntimeHistogram(name string, scale float64, r Registry) *runt
 
 // runtimeHistogram wraps a runtime/metrics histogram.
 type runtimeHistogram struct {
-	v           atomic.Value // v is a pointer to a metrics.Float64Histogram
+	v           atomic.Pointer[metrics.Float64Histogram]
 	scaleFactor float64
 }
 
@@ -58,7 +58,7 @@ func (h *runtimeHistogram) Update(int64) {
 
 // Snapshot returns a non-changing copy of the histogram.
 func (h *runtimeHistogram) Snapshot() HistogramSnapshot {
-	hist := h.v.Load().(*metrics.Float64Histogram)
+	hist := h.v.Load()
 	return newRuntimeHistogramSnapshot(hist)
 }
 

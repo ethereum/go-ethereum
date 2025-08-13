@@ -32,7 +32,7 @@ func VerifyGaslimit(parentGasLimit, headerGasLimit uint64) error {
 	}
 	limit := parentGasLimit / params.GasLimitBoundDivisor
 	if uint64(diff) >= limit {
-		return fmt.Errorf("invalid gas limit: have %d, want %d +-= %d", headerGasLimit, parentGasLimit, limit-1)
+		return fmt.Errorf("invalid gas limit: have %d, want %d +/- %d", headerGasLimit, parentGasLimit, limit-1)
 	}
 	if headerGasLimit < params.MinGasLimit {
 		return fmt.Errorf("invalid gas limit below %d", params.MinGasLimit)

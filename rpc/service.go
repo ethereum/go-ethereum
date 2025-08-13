@@ -29,10 +29,10 @@ import (
 )
 
 var (
-	contextType      = reflect.TypeOf((*context.Context)(nil)).Elem()
-	errorType        = reflect.TypeOf((*error)(nil)).Elem()
-	subscriptionType = reflect.TypeOf(Subscription{})
-	stringType       = reflect.TypeOf("")
+	contextType      = reflect.TypeFor[context.Context]()
+	errorType        = reflect.TypeFor[error]()
+	subscriptionType = reflect.TypeFor[Subscription]()
+	stringType       = reflect.TypeFor[string]()
 )
 
 type serviceRegistry struct {

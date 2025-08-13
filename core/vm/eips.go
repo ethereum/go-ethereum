@@ -89,8 +89,8 @@ func enable1884(jt *JumpTable) {
 	}
 }
 
-func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	balance := interpreter.evm.StateDB.GetBalance(scope.Contract.Address())
+func opSelfBalance(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	balance := evm.StateDB.GetBalance(scope.Contract.Address())
 	scope.Stack.push(balance)
 	return nil, nil
 }
@@ -108,8 +108,8 @@ func enable1344(jt *JumpTable) {
 }
 
 // opChainID implements CHAINID opcode
-func opChainID(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	chainId, _ := uint256.FromBig(interpreter.evm.chainConfig.ChainID)
+func opChainID(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	chainId, _ := uint256.FromBig(evm.chainConfig.ChainID)
 	scope.Stack.push(chainId)
 	return nil, nil
 }
@@ -199,28 +199,28 @@ func enable1153(jt *JumpTable) {
 }
 
 // opTload implements TLOAD opcode
-func opTload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opTload(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	loc := scope.Stack.peek()
 	hash := common.Hash(loc.Bytes32())
-	val := interpreter.evm.StateDB.GetTransientState(scope.Contract.Address(), hash)
+	val := evm.StateDB.GetTransientState(scope.Contract.Address(), hash)
 	loc.SetBytes(val.Bytes())
 	return nil, nil
 }
 
 // opTstore implements TSTORE opcode
-func opTstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	if interpreter.readOnly {
+func opTstore(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	if evm.readOnly {
 		return nil, ErrWriteProtection
 	}
 	loc := scope.Stack.pop()
 	val := scope.Stack.pop()
-	interpreter.evm.StateDB.SetTransientState(scope.Contract.Address(), loc.Bytes32(), val.Bytes32())
+	evm.StateDB.SetTransientState(scope.Contract.Address(), loc.Bytes32(), val.Bytes32())
 	return nil, nil
 }
 
 // opBaseFee implements BASEFEE opcode
-func opBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	baseFee, _ := uint256.FromBig(interpreter.evm.Context.BaseFee)
+func opBaseFee(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	baseFee, _ := uint256.FromBig(evm.Context.BaseFee)
 	scope.Stack.push(baseFee)
 	return nil, nil
 }
@@ -237,7 +237,7 @@ func enable3855(jt *JumpTable) {
 }
 
 // opPush0 implements the PUSH0 opcode
-func opPush0(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opPush0(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.push(new(uint256.Int))
 	return nil, nil
 }
@@ -263,7 +263,7 @@ func enable5656(jt *JumpTable) {
 }
 
 // opMcopy implements the MCOPY opcode (https://eips.ethereum.org/EIPS/eip-5656)
-func opMcopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opMcopy(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	var (
 		dst    = scope.Stack.pop()
 		src    = scope.Stack.pop()
@@ -276,10 +276,10 @@ func opMcopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 }
 
 // opBlobHash implements the BLOBHASH opcode
-func opBlobHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opBlobHash(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	index := scope.Stack.peek()
-	if index.LtUint64(uint64(len(interpreter.evm.TxContext.BlobHashes))) {
-		blobHash := interpreter.evm.TxContext.BlobHashes[index.Uint64()]
+	if index.LtUint64(uint64(len(evm.TxContext.BlobHashes))) {
+		blobHash := evm.TxContext.BlobHashes[index.Uint64()]
 		index.SetBytes32(blobHash[:])
 	} else {
 		index.Clear()
@@ -288,14 +288,14 @@ func opBlobHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 }
 
 // opBlobBaseFee implements BLOBBASEFEE opcode
-func opBlobBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	blobBaseFee, _ := uint256.FromBig(interpreter.evm.Context.BlobBaseFee)
+func opBlobBaseFee(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	blobBaseFee, _ := uint256.FromBig(evm.Context.BlobBaseFee)
 	scope.Stack.push(blobBaseFee)
 	return nil, nil
 }
 
 // opCLZ implements the CLZ opcode (count leading zero bytes)
-func opCLZ(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opCLZ(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	x := scope.Stack.peek()
 	x.SetUint64(256 - uint64(x.BitLen()))
 	return nil, nil
@@ -342,7 +342,7 @@ func enable6780(jt *JumpTable) {
 	}
 }
 
-func opExtCodeCopyEIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opExtCodeCopyEIP4762(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	var (
 		stack      = scope.Stack
 		a          = stack.pop()
@@ -355,10 +355,10 @@ func opExtCodeCopyEIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeC
 		uint64CodeOffset = math.MaxUint64
 	}
 	addr := common.Address(a.Bytes20())
-	code := interpreter.evm.StateDB.GetCode(addr)
+	code := evm.StateDB.GetCode(addr)
 	paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(code, uint64CodeOffset, length.Uint64())
-	consumed, wanted := interpreter.evm.AccessEvents.CodeChunksRangeGas(addr, copyOffset, nonPaddedCopyLength, uint64(len(code)), false, scope.Contract.Gas)
-	scope.Contract.UseGas(consumed, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified)
+	consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(addr, copyOffset, nonPaddedCopyLength, uint64(len(code)), false, scope.Contract.Gas)
+	scope.Contract.UseGas(consumed, evm.Config.Tracer, tracing.GasChangeUnspecified)
 	if consumed < wanted {
 		return nil, ErrOutOfGas
 	}
@@ -370,7 +370,7 @@ func opExtCodeCopyEIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeC
 // opPush1EIP4762 handles the special case of PUSH1 opcode for EIP-4762, which
 // need not worry about the adjusted bound logic when adding the PUSHDATA to
 // the list of access events.
-func opPush1EIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opPush1EIP4762(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	var (
 		codeLen = uint64(len(scope.Contract.Code))
 		integer = new(uint256.Int)
@@ -383,8 +383,8 @@ func opPush1EIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 			// touch next chunk if PUSH1 is at the boundary. if so, *pc has
 			// advanced past this boundary.
 			contractAddr := scope.Contract.Address()
-			consumed, wanted := interpreter.evm.AccessEvents.CodeChunksRangeGas(contractAddr, *pc+1, uint64(1), uint64(len(scope.Contract.Code)), false, scope.Contract.Gas)
-			scope.Contract.UseGas(wanted, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified)
+			consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(contractAddr, *pc+1, uint64(1), uint64(len(scope.Contract.Code)), false, scope.Contract.Gas)
+			scope.Contract.UseGas(wanted, evm.Config.Tracer, tracing.GasChangeUnspecified)
 			if consumed < wanted {
 				return nil, ErrOutOfGas
 			}
@@ -396,7 +396,7 @@ func opPush1EIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 }
 
 func makePushEIP4762(size uint64, pushByteSize int) executionFunc {
-	return func(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return func(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		var (
 			codeLen = len(scope.Contract.Code)
 			start   = min(codeLen, int(*pc+1))
@@ -411,8 +411,8 @@ func makePushEIP4762(size uint64, pushByteSize int) executionFunc {
 
 		if !scope.Contract.IsDeployment && !scope.Contract.IsSystemCall {
 			contractAddr := scope.Contract.Address()
-			consumed, wanted := interpreter.evm.AccessEvents.CodeChunksRangeGas(contractAddr, uint64(start), uint64(pushByteSize), uint64(len(scope.Contract.Code)), false, scope.Contract.Gas)
-			scope.Contract.UseGas(consumed, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified)
+			consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(contractAddr, uint64(start), uint64(pushByteSize), uint64(len(scope.Contract.Code)), false, scope.Contract.Gas)
+			scope.Contract.UseGas(consumed, evm.Config.Tracer, tracing.GasChangeUnspecified)
 			if consumed < wanted {
 				return nil, ErrOutOfGas
 			}
