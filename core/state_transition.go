@@ -585,7 +585,7 @@ func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorizatio
 		return authority, fmt.Errorf("%w: %v", ErrAuthorizationInvalidSignature, err)
 	}
 	// Check the authority account
-	//  1) doesn't have code or has exisiting delegation
+	//  1) doesn't have code or has existing delegation
 	//  2) matches the auth's nonce
 	//
 	// Note it is added to the access list even if the authorization is invalid.
