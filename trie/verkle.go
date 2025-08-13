@@ -41,13 +41,13 @@ var (
 type VerkleTrie struct {
 	root   verkle.VerkleNode
 	cache  *utils.PointCache
-	reader *trieReader
+	reader *TrieReader
 	tracer *prevalueTracer
 }
 
 // NewVerkleTrie constructs a verkle tree based on the specified root hash.
 func NewVerkleTrie(root common.Hash, db database.NodeDatabase, cache *utils.PointCache) (*VerkleTrie, error) {
-	reader, err := newTrieReader(root, common.Hash{}, db)
+	reader, err := NewTrieReader(root, common.Hash{}, db)
 	if err != nil {
 		return nil, err
 	}
@@ -70,6 +70,10 @@ func NewVerkleTrie(root common.Hash, db database.NodeDatabase, cache *utils.Poin
 		t.root = node
 	}
 	return t, nil
+}
+
+func (t *VerkleTrie) FlatdbNodeResolver(path []byte) ([]byte, error) {
+	return t.reader.Node(path, common.Hash{})
 }
 
 // GetKey returns the sha3 preimage of a hashed key that was previously used
@@ -443,7 +447,7 @@ func (t *VerkleTrie) ToDot() string {
 }
 
 func (t *VerkleTrie) nodeResolver(path []byte) ([]byte, error) {
-	blob, err := t.reader.node(path, common.Hash{})
+	blob, err := t.reader.Node(path, common.Hash{})
 	if err != nil {
 		return nil, err
 	}

@@ -22,30 +22,30 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
-// trieReader is a wrapper of the underlying node reader. It's not safe
+// TrieReader is a wrapper of the underlying node reader. It's not safe
 // for concurrent usage.
-type trieReader struct {
+type TrieReader struct {
 	owner  common.Hash
 	reader database.NodeReader
 	banned map[string]struct{} // Marker to prevent node from being accessed, for tests
 }
 
-// newTrieReader initializes the trie reader with the given node reader.
-func newTrieReader(stateRoot, owner common.Hash, db database.NodeDatabase) (*trieReader, error) {
+// NewTrieReader initializes the trie reader with the given node reader.
+func NewTrieReader(stateRoot, owner common.Hash, db database.NodeDatabase) (*TrieReader, error) {
 	if stateRoot == (common.Hash{}) || stateRoot == types.EmptyRootHash {
-		return &trieReader{owner: owner}, nil
+		return &TrieReader{owner: owner}, nil
 	}
 	reader, err := db.NodeReader(stateRoot)
 	if err != nil {
 		return nil, &MissingNodeError{Owner: owner, NodeHash: stateRoot, err: err}
 	}
-	return &trieReader{owner: owner, reader: reader}, nil
+	return &TrieReader{owner: owner, reader: reader}, nil
 }
 
 // newEmptyReader initializes the pure in-memory reader. All read operations
 // should be forbidden and returns the MissingNodeError.
-func newEmptyReader() *trieReader {
-	return &trieReader{}
+func newEmptyReader() *TrieReader {
+	return &TrieReader{}
 }
 
 // node retrieves the rlp-encoded trie node with the provided trie node
@@ -54,7 +54,7 @@ func newEmptyReader() *trieReader {
 //
 // Don't modify the returned byte slice since it's not deep-copied and
 // still be referenced by database.
-func (r *trieReader) node(path []byte, hash common.Hash) ([]byte, error) {
+func (r *TrieReader) Node(path []byte, hash common.Hash) ([]byte, error) {
 	// Perform the logics in tests for preventing trie node access.
 	if r.banned != nil {
 		if _, ok := r.banned[string(path)]; ok {
