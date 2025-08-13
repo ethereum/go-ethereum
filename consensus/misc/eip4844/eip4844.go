@@ -140,8 +140,11 @@ func calcExcessBlobGas(isOsaka bool, bcfg *BlobConfig, parent *types.Header) uin
 		parentExcessBlobGas = *parent.ExcessBlobGas
 		parentBlobGasUsed = *parent.BlobGasUsed
 	}
-	excessBlobGas := parentExcessBlobGas + parentBlobGasUsed
-	targetGas := uint64(bcfg.Target) * params.BlobTxBlobGasPerBlob
+
+	var (
+		excessBlobGas = parentExcessBlobGas + parentBlobGasUsed
+		targetGas     = uint64(bcfg.Target) * params.BlobTxBlobGasPerBlob
+	)
 	if excessBlobGas < targetGas {
 		return 0
 	}
