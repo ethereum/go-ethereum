@@ -434,21 +434,25 @@ func putint(b []byte, i uint64) (size int) {
 		b[0] = byte(i)
 		return 1
 	case i < (1 << 16):
+		_ = b[1] //bce
 		b[0] = byte(i >> 8)
 		b[1] = byte(i)
 		return 2
 	case i < (1 << 24):
+		_ = b[2] //bce
 		b[0] = byte(i >> 16)
 		b[1] = byte(i >> 8)
 		b[2] = byte(i)
 		return 3
 	case i < (1 << 32):
+		_ = b[3] //bce
 		b[0] = byte(i >> 24)
 		b[1] = byte(i >> 16)
 		b[2] = byte(i >> 8)
 		b[3] = byte(i)
 		return 4
 	case i < (1 << 40):
+		_ = b[4] //bce
 		b[0] = byte(i >> 32)
 		b[1] = byte(i >> 24)
 		b[2] = byte(i >> 16)
@@ -456,6 +460,7 @@ func putint(b []byte, i uint64) (size int) {
 		b[4] = byte(i)
 		return 5
 	case i < (1 << 48):
+		_ = b[5] //bce
 		b[0] = byte(i >> 40)
 		b[1] = byte(i >> 32)
 		b[2] = byte(i >> 24)
@@ -464,6 +469,7 @@ func putint(b []byte, i uint64) (size int) {
 		b[5] = byte(i)
 		return 6
 	case i < (1 << 56):
+		_ = b[6] //bce
 		b[0] = byte(i >> 48)
 		b[1] = byte(i >> 40)
 		b[2] = byte(i >> 32)
@@ -473,6 +479,7 @@ func putint(b []byte, i uint64) (size int) {
 		b[6] = byte(i)
 		return 7
 	default:
+		_ = b[7] //bce
 		b[0] = byte(i >> 56)
 		b[1] = byte(i >> 48)
 		b[2] = byte(i >> 40)
