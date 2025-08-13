@@ -28,9 +28,10 @@ import (
 func TestCalcExcessBlobGas(t *testing.T) {
 	var (
 		config        = params.MainnetChainConfig
-		targetBlobs   = targetBlobsPerBlock(config, *config.CancunTime)
+		targetBlobs   = config.BlobScheduleConfig.Cancun.Target
 		targetBlobGas = uint64(targetBlobs) * params.BlobTxBlobGasPerBlob
 	)
+
 	var tests = []struct {
 		excess uint64
 		blobs  int
@@ -131,9 +132,10 @@ func TestFakeExponential(t *testing.T) {
 func TestCalcExcessBlobGasEIP7918(t *testing.T) {
 	var (
 		cfg           = params.MergedTestChainConfig
-		targetBlobs   = targetBlobsPerBlock(cfg, *cfg.CancunTime)
+		targetBlobs   = cfg.BlobScheduleConfig.Osaka.Target
 		blobGasTarget = uint64(targetBlobs) * params.BlobTxBlobGasPerBlob
 	)
+
 	makeHeader := func(parentExcess, parentBaseFee uint64, blobsUsed int) *types.Header {
 		blobGasUsed := uint64(blobsUsed) * params.BlobTxBlobGasPerBlob
 		return &types.Header{
