@@ -94,19 +94,19 @@ func (t *opTracer) deletedList() [][]byte {
 	return paths
 }
 
-// prevalueTracer tracks the original values of resolved trie nodes. Cached trie
+// PrevalueTracer tracks the original values of resolved trie nodes. Cached trie
 // node values are expected to be immutable. A zero-size node value is treated as
 // non-existent and should not occur in practice.
 //
-// Note prevalueTracer is not thread-safe, callers should be responsible for
+// Note PrevalueTracer is not thread-safe, callers should be responsible for
 // handling the concurrency issues by themselves.
-type prevalueTracer struct {
+type PrevalueTracer struct {
 	data map[string][]byte
 }
 
 // newPrevalueTracer initializes the tracer for capturing resolved trie nodes.
-func newPrevalueTracer() *prevalueTracer {
-	return &prevalueTracer{
+func newPrevalueTracer() *PrevalueTracer {
+	return &PrevalueTracer{
 		data: make(map[string][]byte),
 	}
 }
@@ -114,19 +114,19 @@ func newPrevalueTracer() *prevalueTracer {
 // put tracks the newly loaded trie node and caches its RLP-encoded
 // blob internally. Do not modify the value outside this function,
 // as it is not deep-copied.
-func (t *prevalueTracer) put(path []byte, val []byte) {
+func (t *PrevalueTracer) put(path []byte, val []byte) {
 	t.data[string(path)] = val
 }
 
-// get returns the cached trie node value. If the node is not found, nil will
+// Get returns the cached trie node value. If the node is not found, nil will
 // be returned.
-func (t *prevalueTracer) get(path []byte) []byte {
+func (t *PrevalueTracer) Get(path []byte) []byte {
 	return t.data[string(path)]
 }
 
 // hasList returns a list of flags indicating whether the corresponding trie nodes
 // specified by the path exist in the trie.
-func (t *prevalueTracer) hasList(list [][]byte) []bool {
+func (t *PrevalueTracer) hasList(list [][]byte) []bool {
 	exists := make([]bool, 0, len(list))
 	for _, path := range list {
 		_, ok := t.data[string(path)]
@@ -136,19 +136,19 @@ func (t *prevalueTracer) hasList(list [][]byte) []bool {
 }
 
 // values returns a list of values of the cached trie nodes.
-func (t *prevalueTracer) values() [][]byte {
+func (t *PrevalueTracer) values() [][]byte {
 	return slices.Collect(maps.Values(t.data))
 }
 
 // reset resets the cached content in the prevalueTracer.
-func (t *prevalueTracer) reset() {
+func (t *PrevalueTracer) reset() {
 	clear(t.data)
 }
 
 // copy returns a copied prevalueTracer instance.
-func (t *prevalueTracer) copy() *prevalueTracer {
+func (t *PrevalueTracer) copy() *PrevalueTracer {
 	// Shadow clone is used, as the cached trie node values are immutable
-	return &prevalueTracer{
+	return &PrevalueTracer{
 		data: maps.Clone(t.data),
 	}
 }

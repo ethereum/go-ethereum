@@ -44,6 +44,7 @@ func NewBinaryNode() BinaryNode {
 type BinaryTrie struct {
 	root   BinaryNode
 	reader *trie.TrieReader
+	tracer *trie.PrevalueTracer
 }
 
 // ToDot converts the binary trie to a DOT language representation. Useful for debugging.
@@ -246,7 +247,7 @@ func (t *BinaryTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet, error) {
 
 	err := root.CollectNodes(nil, func(path []byte, node BinaryNode) {
 		serialized := SerializeNode(node)
-		nodeset.AddNode(path, trienode.New(common.Hash{}, serialized))
+		nodeset.AddNode(path, trienode.NewNodeWithPrev(common.Hash{}, serialized, t.tracer.Get(path)))
 	})
 	if err != nil {
 		panic(fmt.Errorf("CollectNodes failed: %v", err))
