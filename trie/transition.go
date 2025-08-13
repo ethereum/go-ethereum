@@ -179,7 +179,7 @@ func (t *TransitionTrie) UpdateStem(key []byte, values [][]byte) error {
 	trie := t.overlay
 	switch root := trie.root.(type) {
 	case *verkle.InternalNode:
-		return root.InsertValuesAtStem(key, values, t.overlay.FlatdbNodeResolver)
+		return root.InsertValuesAtStem(key, values, t.overlay.nodeResolver)
 	default:
 		panic("invalid root type")
 	}
