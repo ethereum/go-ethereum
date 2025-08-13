@@ -129,12 +129,12 @@ func VerifyEIP4844Header(config *params.ChainConfig, parent, header *types.Heade
 // CalcExcessBlobGas calculates the excess blob gas after applying the set of
 // blobs on top of the excess blob gas.
 func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header, headTimestamp uint64) uint64 {
-	rules := config.Rules(config.LondonBlock, true, headTimestamp)
+	isOsaka := config.IsOsaka(config.LondonBlock, headTimestamp)
 	bcfg := latestBlobConfig(config, headTimestamp)
-	return calcExcessBlobGas(rules, bcfg, parent)
+	return calcExcessBlobGas(isOsaka, bcfg, parent)
 }
 
-func calcExcessBlobGas(rules params.Rules, bcfg *BlobConfig, parent *types.Header) uint64 {
+func calcExcessBlobGas(isOsaka bool, bcfg *BlobConfig, parent *types.Header) uint64 {
 	var parentExcessBlobGas, parentBlobGasUsed uint64
 	if parent.ExcessBlobGas != nil {
 		parentExcessBlobGas = *parent.ExcessBlobGas
@@ -148,7 +148,7 @@ func calcExcessBlobGas(rules params.Rules, bcfg *BlobConfig, parent *types.Heade
 
 	// EIP-7918 (post-Osaka) introduces a different formula for computing excess,
 	// in cases where the price is lower than a 'reserve price'.
-	if rules.IsOsaka {
+	if isOsaka {
 		var (
 			baseCost     = big.NewInt(params.BlobBaseCost)
 			reservePrice = baseCost.Mul(baseCost, parent.BaseFee)
