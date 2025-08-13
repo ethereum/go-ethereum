@@ -41,19 +41,19 @@ var (
 type VerkleTrie struct {
 	root   verkle.VerkleNode
 	cache  *utils.PointCache
-	reader *trieReader
+	reader *TrieReader
 }
 
 // NewVerkleTrie constructs a verkle tree based on the specified root hash.
 func NewVerkleTrie(root common.Hash, db database.NodeDatabase, cache *utils.PointCache) (*VerkleTrie, error) {
-	reader, err := newTrieReader(root, common.Hash{}, db)
+	reader, err := NewTrieReader(root, common.Hash{}, db)
 	if err != nil {
 		return nil, err
 	}
 	// Parse the root verkle node if it's not empty.
 	node := verkle.New()
 	if root != types.EmptyVerkleHash && root != types.EmptyRootHash {
-		blob, err := reader.node(nil, common.Hash{})
+		blob, err := reader.Node(nil, common.Hash{})
 		if err != nil {
 			return nil, err
 		}
@@ -70,7 +70,7 @@ func NewVerkleTrie(root common.Hash, db database.NodeDatabase, cache *utils.Poin
 }
 
 func (t *VerkleTrie) FlatdbNodeResolver(path []byte) ([]byte, error) {
-	return t.reader.node(path, common.Hash{})
+	return t.reader.Node(path, common.Hash{})
 }
 
 // GetKey returns the sha3 preimage of a hashed key that was previously used
@@ -421,7 +421,7 @@ func (t *VerkleTrie) ToDot() string {
 }
 
 func (t *VerkleTrie) nodeResolver(path []byte) ([]byte, error) {
-	return t.reader.node(path, common.Hash{})
+	return t.reader.Node(path, common.Hash{})
 }
 
 // Witness returns a set containing all trie nodes that have been accessed.

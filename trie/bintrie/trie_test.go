@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package trie
+package bintrie
 
 import (
 	"bytes"
@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/trie/bintrie"
 )
 
 var (
@@ -152,7 +151,7 @@ func TestInsertDuplicateKey(t *testing.T) {
 		t.Fatal("invalid height")
 	}
 	// Verify that the value is updated
-	if !bytes.Equal(tree.(*bintrie.StemNode).Values[1], twoKey[:]) {
+	if !bytes.Equal(tree.(*StemNode).Values[1], twoKey[:]) {
 		t.Fatal("invalid height")
 	}
 }

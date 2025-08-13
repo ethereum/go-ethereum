@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package trie
+package bintrie
 
 import (
 	"testing"
@@ -22,8 +22,22 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/hashdb"
+	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
 )
+
+func newTestDatabase(diskdb ethdb.Database, scheme string) *triedb.Database {
+	config := &triedb.Config{Preimages: true}
+	if scheme == rawdb.HashScheme {
+		config.HashDB = &hashdb.Config{CleanCacheSize: 0}
+	} else {
+		config.PathDB = &pathdb.Config{TrieCleanSize: 0, StateCleanSize: 0}
+	}
+	return triedb.NewDatabase(diskdb, config)
+}
 
 func TestBinaryIterator(t *testing.T) {
 	trie, err := NewBinaryTrie(types.EmptyVerkleHash, newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.PathScheme))
