@@ -278,7 +278,7 @@ func (t *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 //
 // TODO(gballet, rjl493456442) implement it.
 func (t *VerkleTrie) NodeIterator(startKey []byte) (NodeIterator, error) {
-	panic("not implemented")
+	return nil, errors.New("NodeIterator not implemented for VerkleTrie")
 }
 
 // Prove implements state.Trie, constructing a Merkle proof for key. The result
@@ -291,7 +291,7 @@ func (t *VerkleTrie) NodeIterator(startKey []byte) (NodeIterator, error) {
 //
 // TODO(gballet, rjl493456442) implement it.
 func (t *VerkleTrie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
-	panic("not implemented")
+	return errors.New("Prove not implemented for VerkleTrie")
 }
 
 // Copy returns a deep-copied verkle tree.
