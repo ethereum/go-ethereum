@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"math/bits"
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/rlp/internal/rlpstruct"
@@ -487,9 +488,8 @@ func putint(b []byte, i uint64) (size int) {
 
 // intsize computes the minimum number of bytes required to store i.
 func intsize(i uint64) (size int) {
-	for size = 1; ; size++ {
-		if i >>= 8; i == 0 {
-			return size
-		}
+	if i == 0 {
+		return 1
 	}
+	return (bits.Len64(i) + 7) / 8
 }
