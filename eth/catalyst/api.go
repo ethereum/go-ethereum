@@ -655,6 +655,10 @@ func (api *ConsensusAPI) GetInclusionListV1(parentHash common.Hash) (types.Inclu
 		return inclusionList, nil
 	}
 
+	if api.eth.BlockChain().GetBlockByHash(parentHash) == nil {
+		return nil, engine.UnknownParent
+	}
+
 	args := &miner.BuildInclusionListArgs{
 		Parent: parentHash,
 	}
