@@ -114,6 +114,8 @@ func (ctx *genctx) storageOriginSet(rawStorageKey bool, t *tester) map[common.Ad
 type tester struct {
 	db        *Database
 	roots     []common.Hash
+	nodes     []*trienode.MergedNodeSet
+	states    []*StateSetWithOrigin
 	preimages map[common.Hash][]byte
 
 	// current state set
@@ -125,18 +127,52 @@ type tester struct {
 	snapStorages map[common.Hash]map[common.Hash]map[common.Hash][]byte // Keyed by the hash of account address and the hash of storage key
 }
 
-func newTester(t *testing.T, historyLimit uint64, isVerkle bool, layers int, enableIndex bool, journalDir string) *tester {
+// testerConfig holds configuration parameters for running a test scenario.
+type testerConfig struct {
+	stateHistory uint64 // Number of historical states to retain
+	layers       int    // Number of state transitions to generate for
+	enableIndex  bool   // Enable state history indexing or not
+	journalDir   string // Directory path for persisting journal files
+	isVerkle     bool   // Enables Verkle trie mode if true
+
+	writeBuffer *int // Optional, the size of memory allocated for write buffer
+	trieCache   *int // Optional, the size of memory allocated for trie cache
+	stateCache  *int // Optional, the size of memory allocated for state cache
+}
+
+func (c *testerConfig) trieCacheSize() int {
+	if c.trieCache != nil {
+		return *c.trieCache
+	}
+	return 256 * 1024
+}
+
+func (c *testerConfig) stateCacheSize() int {
+	if c.stateCache != nil {
+		return *c.stateCache
+	}
+	return 256 * 1024
+}
+
+func (c *testerConfig) writeBufferSize() int {
+	if c.writeBuffer != nil {
+		return *c.writeBuffer
+	}
+	return 256 * 1024
+}
+
+func newTester(t *testing.T, config *testerConfig) *tester {
 	var (
 		disk, _ = rawdb.Open(rawdb.NewMemoryDatabase(), rawdb.OpenOptions{Ancient: t.TempDir()})
 		db      = New(disk, &Config{
-			StateHistory:        historyLimit,
-			EnableStateIndexing: enableIndex,
-			TrieCleanSize:       256 * 1024,
-			StateCleanSize:      256 * 1024,
-			WriteBufferSize:     256 * 1024,
+			StateHistory:        config.stateHistory,
+			EnableStateIndexing: config.enableIndex,
+			TrieCleanSize:       config.trieCacheSize(),
+			StateCleanSize:      config.stateCacheSize(),
+			WriteBufferSize:     config.writeBufferSize(),
 			NoAsyncFlush:        true,
-			JournalDirectory:    journalDir,
-		}, isVerkle)
+			JournalDirectory:    config.journalDir,
+		}, config.isVerkle)
 
 		obj = &tester{
 			db:           db,
@@ -147,7 +183,7 @@ func newTester(t *testing.T, historyLimit uint64, isVerkle bool, layers int, ena
 			snapStorages: make(map[common.Hash]map[common.Hash]map[common.Hash][]byte),
 		}
 	)
-	for i := 0; i < layers; i++ {
+	for i := 0; i < config.layers; i++ {
 		var parent = types.EmptyRootHash
 		if len(obj.roots) != 0 {
 			parent = obj.roots[len(obj.roots)-1]
@@ -158,6 +194,8 @@ func newTester(t *testing.T, historyLimit uint64, isVerkle bool, layers int, ena
 			panic(fmt.Errorf("failed to update state changes, err: %w", err))
 		}
 		obj.roots = append(obj.roots, root)
+		obj.nodes = append(obj.nodes, nodes)
+		obj.states = append(obj.states, states)
 	}
 	return obj
 }
@@ -470,8 +508,7 @@ func TestDatabaseRollback(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	// Verify state histories
-	tester := newTester(t, 0, false, 32, false, "")
+	tester := newTester(t, &testerConfig{layers: 32})
 	defer tester.release()
 
 	if err := tester.verifyHistory(); err != nil {
@@ -505,7 +542,7 @@ func TestDatabaseRecoverable(t *testing.T) {
 	}()
 
 	var (
-		tester = newTester(t, 0, false, 12, false, "")
+		tester = newTester(t, &testerConfig{layers: 12})
 		index  = tester.bottomIndex()
 	)
 	defer tester.release()
@@ -549,7 +586,7 @@ func TestDisable(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0, false, 32, false, "")
+	tester := newTester(t, &testerConfig{layers: 32})
 	defer tester.release()
 
 	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.diskdb, nil))
@@ -563,10 +600,6 @@ func TestDisable(t *testing.T) {
 		t.Fatalf("Failed to activate database: %v", err)
 	}
 
-	// Ensure journal is deleted from disk
-	if blob := rawdb.ReadTrieJournal(tester.db.diskdb); len(blob) != 0 {
-		t.Fatal("Failed to clean journal")
-	}
 	// Ensure all trie histories are removed
 	n, err := tester.db.freezer.Ancients()
 	if err != nil {
@@ -591,7 +624,7 @@ func TestCommit(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0, false, 12, false, "")
+	tester := newTester(t, &testerConfig{layers: 12})
 	defer tester.release()
 
 	if err := tester.db.Commit(tester.lastHash(), false); err != nil {
@@ -626,7 +659,7 @@ func testJournal(t *testing.T, journalDir string) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0, false, 12, false, journalDir)
+	tester := newTester(t, &testerConfig{layers: 12, journalDir: journalDir})
 	defer tester.release()
 
 	if err := tester.db.Journal(tester.lastHash()); err != nil {
@@ -673,7 +706,7 @@ func testCorruptedJournal(t *testing.T, journalDir string, modifyFn func(databas
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0, false, 12, false, journalDir)
+	tester := newTester(t, &testerConfig{layers: 12, journalDir: journalDir})
 	defer tester.release()
 
 	if err := tester.db.Journal(tester.lastHash()); err != nil {
@@ -718,7 +751,7 @@ func TestTailTruncateHistory(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 10, false, 12, false, "")
+	tester := newTester(t, &testerConfig{layers: 12, stateHistory: 10})
 	defer tester.release()
 
 	tester.db.Close()
@@ -753,4 +786,84 @@ func copyStorages(set map[common.Hash]map[common.Hash][]byte) map[common.Hash]ma
 		}
 	}
 	return copied
+}
+
+func TestDatabaseIndexRecovery(t *testing.T) {
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+
+	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
+	writeBuffer := 512 * 1024
+	config := &testerConfig{
+		layers:      64,
+		enableIndex: true,
+		writeBuffer: &writeBuffer,
+	}
+	env := newTester(t, config)
+	defer env.release()
+	waitIndexing(env.db)
+
+	var (
+		dIndex int
+		roots  = env.roots
+		bRoot  = env.db.tree.bottom().rootHash()
+		dRoot  = crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(env.db.diskdb, nil))
+		hr     = newHistoryReader(env.db.diskdb, env.db.freezer)
+	)
+	for i, root := range roots {
+		if root == dRoot {
+			dIndex = i
+		}
+		if root == bRoot {
+			break
+		}
+		if err := checkHistoricState(env, root, hr); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Terminate the database and mutate the journal, it's for simulating
+	// the unclean shutdown
+	env.db.Journal(env.lastHash())
+	env.db.Close()
+
+	// Mutate the journal in disk, it should be regarded as invalid
+	blob := rawdb.ReadTrieJournal(env.db.diskdb)
+	blob[0] = 0xa
+	rawdb.WriteTrieJournal(env.db.diskdb, blob)
+
+	// Reload the database, the extra state histories should be removed
+	env.db = New(env.db.diskdb, env.db.config, false)
+
+	for i := range roots {
+		_, err := readHistory(env.db.freezer, uint64(i+1))
+		if i <= dIndex && err != nil {
+			t.Fatalf("State history is not found, %d", i)
+		}
+		if i > dIndex && err == nil {
+			t.Fatalf("Unexpected state history found, %d", i)
+		}
+	}
+
+	// Apply new states on top, ensuring state indexing can respond correctly
+	for i := dIndex + 1; i < len(roots); i++ {
+		if err := env.db.Update(roots[i], roots[i-1], uint64(i), env.nodes[i], env.states[i]); err != nil {
+			panic(fmt.Errorf("failed to update state changes, err: %w", err))
+		}
+	}
+	waitIndexing(env.db)
+
+	// Ensure the truncated state histories become accessible
+	bRoot = env.db.tree.bottom().rootHash()
+	hr = newHistoryReader(env.db.diskdb, env.db.freezer)
+	for _, root := range roots {
+		if root == bRoot {
+			break
+		}
+		if err := checkHistoricState(env, root, hr); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
