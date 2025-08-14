@@ -267,7 +267,7 @@ func (dl *diskLayer) journal(w io.Writer) error {
 	if err := dl.buffer.states.encode(w); err != nil {
 		return err
 	}
-	log.Debug("Journaled pathdb disk layer", "root", dl.root)
+	log.Debug("Journaled pathdb disk layer", "root", dl.root, "id", dl.id)
 	return nil
 }
 
