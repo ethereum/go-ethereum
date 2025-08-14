@@ -1468,3 +1468,113 @@ func TestEuclidV2TransitionVerification(t *testing.T) {
 	_, err = chain.InsertChain(blocks)
 	assert.NoError(t, err)
 }
+
+// TestBlockIntervalWithWorkerDeadline tests the block interval calculation
+// that simulates the actual worker deadline calculation logic
+func TestBlockIntervalWithWorkerDeadline(t *testing.T) {
+	tests := []struct {
+		name             string
+		period           uint64
+		blocksPerSecond  uint64
+		expectedInterval time.Duration
+		blocks           int // number of blocks to simulate
+	}{
+		{
+			name:             "1 second period, 1 block per second",
+			period:           1,
+			blocksPerSecond:  1,
+			expectedInterval: 1000 * time.Millisecond,
+			blocks:           5,
+		},
+		{
+			name:             "1 second period, 2 blocks per second",
+			period:           1,
+			blocksPerSecond:  2,
+			expectedInterval: 500 * time.Millisecond,
+			blocks:           6,
+		},
+		{
+			name:             "1 second period, 4 blocks per second",
+			period:           1,
+			blocksPerSecond:  4,
+			expectedInterval: 250 * time.Millisecond,
+			blocks:           8,
+		},
+		{
+			name:             "2 second period, 2 blocks per second",
+			period:           2,
+			blocksPerSecond:  2,
+			expectedInterval: 500 * time.Millisecond,
+			blocks:           2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &params.SystemContractConfig{
+				Period:          tt.period,
+				BlocksPerSecond: tt.blocksPerSecond,
+				RelaxedPeriod:   false,
+			}
+
+			// Start with a future timestamp to avoid time.Now() interference
+			currentTime := uint64(time.Now().Unix()) + 3600 // 1 hour in the future
+			var deadlines []time.Time
+			var timestamps []uint64
+
+			for i := 0; i < tt.blocks; i++ {
+				// Create header for current block
+				header := &types.Header{
+					Time:   currentTime,
+					Number: new(big.Int).SetUint64(uint64(i)),
+				}
+
+				// Simulate the worker deadline calculation logic from newWork
+				deadline := CalculateBlockDeadline(config, header)
+				deadlines = append(deadlines, deadline)
+
+				// Simulate timestamp calculation manually for next iteration
+				// This mimics the CalcTimestamp logic but simplified for testing
+				blocksPerSecond := system_contract.CalcBlocksPerSecond(tt.blocksPerSecond)
+				blocksPerPeriod := blocksPerSecond * tt.period
+				nextBlockNumber := uint64(i + 1)
+
+				var newTimestamp uint64
+				if nextBlockNumber%blocksPerPeriod == 0 && nextBlockNumber > 0 {
+					// Period boundary - increment timestamp
+					newTimestamp = currentTime + tt.period
+				} else {
+					// Within period - keep same timestamp
+					newTimestamp = currentTime
+				}
+
+				timestamps = append(timestamps, newTimestamp)
+
+				// Update currentTime for next iteration (simulate blockchain progression)
+				currentTime = newTimestamp
+			}
+
+			// Verify the intervals between deadlines
+			for i := 1; i < len(deadlines); i++ {
+				interval := deadlines[i].Sub(deadlines[i-1])
+
+				// Allow small tolerance for timing precision
+				tolerance := 10 * time.Millisecond
+				if interval < tt.expectedInterval-tolerance || interval > tt.expectedInterval+tolerance {
+					t.Errorf("Block %d interval: got %v, want %v (±%v)",
+						i, interval, tt.expectedInterval, tolerance)
+				}
+			}
+
+			// Note: Timestamp progression logic is verified in TestTimestampIncrementLogic
+			// Here we focus on deadline intervals which is what really matters for block production timing
+			blocksPerSecond := system_contract.CalcBlocksPerSecond(tt.blocksPerSecond)
+			blocksPerPeriod := blocksPerSecond * tt.period
+
+			t.Logf("Test %s completed successfully:", tt.name)
+			t.Logf("  - Expected interval: %v", tt.expectedInterval)
+			t.Logf("  - Blocks per period: %d", blocksPerPeriod)
+			t.Logf("  - Period length: %d seconds", tt.period)
+		})
+	}
+}

@@ -227,8 +227,42 @@ func (s *SystemContract) VerifyUncles(chain consensus.ChainReader, block *types.
 	return nil
 }
 
+// CalcBlocksPerSecond returns the number of blocks per second
+// Uses the BlocksPerSecond configuration parameter directly
+// Default is 1 block per second if not specified
+func CalcBlocksPerSecond(blocksPerSecond uint64) uint64 {
+	if blocksPerSecond == 0 {
+		return 1 // Default to 1 block per second
+	}
+	return blocksPerSecond
+}
+
+// CalcPeriodMs calculates the period in milliseconds between blocks
+// based on the blocks per second configuration
+func CalcPeriodMs(blocksPerSecond uint64) uint64 {
+	bps := CalcBlocksPerSecond(blocksPerSecond)
+	return 1000 / bps
+}
+
 func (s *SystemContract) CalcTimestamp(parent *types.Header) uint64 {
-	timestamp := parent.Time + s.config.Period
+	var timestamp uint64
+	if s.config.Period == 1 {
+		// Get the base timestamp (in seconds)
+		timestamp = parent.Time
+
+		blocksPerSecond := CalcBlocksPerSecond(s.config.BlocksPerSecond)
+
+		// Calculate the block index within the current period for the next block
+		blockIndex := parent.Number.Uint64() % blocksPerSecond
+
+		// If this block is the last one in the current second, increment the timestamp
+		// We compare with blocksPerSecond-1 because blockIndex is 0-based
+		if blockIndex == blocksPerSecond-1 {
+			timestamp++
+		}
+	} else {
+		timestamp = parent.Time + s.config.Period
+	}
 
 	// If RelaxedPeriod is enabled, always set the header timestamp to now (ie the time we start building it) as
 	// we don't know when it will be sealed

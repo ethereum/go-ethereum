@@ -5,8 +5,8 @@ go 1.22
 replace github.com/scroll-tech/go-ethereum => ../../..
 
 require (
-	github.com/scroll-tech/da-codec v0.1.3-0.20250313120912-344f2d5e33e1
-	github.com/scroll-tech/go-ethereum v1.10.14-0.20250305151038-478940e79601
+	github.com/scroll-tech/da-codec v0.1.3-0.20250626091118-58b899494da6
+	github.com/scroll-tech/go-ethereum v1.10.14-0.20250625112225-a67863c65587
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
 	gorm.io/driver/postgres v1.5.7

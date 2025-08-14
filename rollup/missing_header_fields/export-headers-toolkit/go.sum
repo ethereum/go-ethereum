@@ -172,6 +172,7 @@ github.com/rs/cors v1.7.0/go.mod h1:gFx+x8UowdsKA9AchylcLynDq+nNFfI8FkUZdN/jGCU=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/scroll-tech/da-codec v0.1.3-0.20250313120912-344f2d5e33e1 h1:Dhd58LE1D+dnoxpgLVeQBMF9uweL/fhQfZHWtWSiOlE=
 github.com/scroll-tech/da-codec v0.1.3-0.20250313120912-344f2d5e33e1/go.mod h1:yhTS9OVC0xQGhg7DN5iV5KZJvnSIlFWAxDdp+6jxQtY=
+github.com/scroll-tech/da-codec v0.1.3-0.20250626091118-58b899494da6/go.mod h1:Z6kN5u2khPhiqHyk172kGB7o38bH/nj7Ilrb/46wZGg=
 github.com/scroll-tech/zktrie v0.8.4 h1:UagmnZ4Z3ITCk+aUq9NQZJNAwnWl4gSxsLb2Nl7IgRE=
 github.com/scroll-tech/zktrie v0.8.4/go.mod h1:XvNo7vAk8yxNyTjBDj5WIiFzYW4bx/gJ78+NK6Zn6Uk=
 github.com/shirou/gopsutil v3.21.11+incompatible h1:+1+c1VGhc88SSonWP6foOcLhvnKlUeu/erjjvaPEYiI=
