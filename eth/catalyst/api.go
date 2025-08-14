@@ -20,6 +20,7 @@ package catalyst
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -906,12 +907,7 @@ func (api *ConsensusAPI) config() *params.ChainConfig {
 // is one of the forks provided.
 func (api *ConsensusAPI) checkFork(timestamp uint64, forks ...forks.Fork) bool {
 	latest := api.config().LatestFork(timestamp)
-	for _, fork := range forks {
-		if latest == fork {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(forks, latest)
 }
 
 // ExchangeCapabilities returns the current methods provided by this node.
