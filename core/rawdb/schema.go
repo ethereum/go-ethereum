@@ -396,9 +396,19 @@ func accountHistoryIndexBlockKey(addressHash common.Hash, blockID uint32) []byte
 
 // storageHistoryIndexBlockKey = StateHistoryStorageBlockPrefix + addressHash + storageHash + blockID
 func storageHistoryIndexBlockKey(addressHash common.Hash, storageHash common.Hash, blockID uint32) []byte {
-	var buf [4]byte
-	binary.BigEndian.PutUint32(buf[:], blockID)
-	return append(append(append(StateHistoryStorageBlockPrefix, addressHash.Bytes()...), storageHash.Bytes()...), buf[:]...)
+	var buf4 [4]byte
+	binary.BigEndian.PutUint32(buf4[:], blockID)
+
+	totalLen := len(StateHistoryStorageBlockPrefix) + len(addressHash) + len(storageHash) + 4
+	out := make([]byte, totalLen)
+
+	off := 0
+	off += copy(out[off:], StateHistoryStorageBlockPrefix)
+	off += copy(out[off:], addressHash.Bytes())
+	off += copy(out[off:], storageHash.Bytes())
+	copy(out[off:], buf4[:])
+
+	return out
 }
 
 // transitionStateKey = transitionStatusKey + hash
