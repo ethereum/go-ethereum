@@ -26,6 +26,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/core/types/bal"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -118,6 +120,14 @@ type StateDB struct {
 	// The tx context and all occurred logs in the scope of transaction.
 	thash   common.Hash
 	txIndex int
+	sender  common.Address
+
+	// block access list modifications will be recorded with this index.
+	// 0 - state access before transaction execution
+	// 1 -> len(block txs) - state access of each transaction
+	// len(block txs) + 1 - state access after transaction execution.
+	balIndex int
+
 	logs    map[common.Hash][]*types.Log
 	logSize uint
 
@@ -138,6 +148,11 @@ type StateDB struct {
 	// State witness if cross validation is needed
 	witness *stateless.Witness
 
+	// block access list, if bal construction is specified
+	constructionBAL *bal.ConstructionBlockAccessList
+
+	enableStateDiffRecording bool // if true, calls to Finalise will return the mutated state
+
 	// Measurements gathered during execution for debugging purposes
 	AccountReads    time.Duration
 	AccountHashes   time.Duration
@@ -155,6 +170,19 @@ type StateDB struct {
 	StorageLoaded  int          // Number of storage slots retrieved from the database during the state transition
 	StorageUpdated atomic.Int64 // Number of storage slots updated during the state transition
 	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
+}
+
+// EnableBALConstruction configures the StateDB instance to construct block
+// access lists from state reads/writes recorded during block execution
+func (s *StateDB) EnableBALConstruction() {
+	bal := bal.NewConstructionBlockAccessList()
+	s.constructionBAL = &bal
+}
+
+// BlockAccessList retrieves the access list that has been constructed
+// by the StateDB instance, or nil if BAL construction was not enabled.
+func (s *StateDB) BlockAccessList() *bal.ConstructionBlockAccessList {
+	return s.constructionBAL
 }
 
 // New creates a new state from a given trie.
@@ -186,6 +214,13 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 		sdb.accessEvents = NewAccessEvents(db.PointCache())
 	}
 	return sdb, nil
+}
+
+// EnableStateDiffRecording enables the recording of state modifications
+// which are accumulated at each call to Finalise and can be retrieved
+// using GetStateDiff.
+func (s *StateDB) EnableStateDiffRecording() {
+	s.enableStateDiffRecording = true
 }
 
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
@@ -283,6 +318,32 @@ func (s *StateDB) AddRefund(gas uint64) {
 	s.refund += gas
 }
 
+// InstantiateWithStateDiffs instantiates the live object based on accounts
+// which appeared in the total state diff of a block, and were also preexisting.
+func (s *StateDB) InstantiateWithStateDiffs(totalDiff *bal.StateDiff) {
+	stateAccounts := new(sync.Map)
+	wg := new(sync.WaitGroup)
+
+	for addr, _ := range totalDiff.Mutations {
+		wg.Add(1)
+		go func(addr common.Address) {
+			acct, err := s.reader.Account(addr)
+			if err == nil && acct != nil { // TODO: what should we do if the error is not nil?
+				stateAccounts.Store(addr, acct)
+			}
+			wg.Done()
+		}(addr)
+	}
+	wg.Wait()
+	stateAccounts.Range(func(addr any, val any) bool {
+		address := addr.(common.Address)
+		stateAccount := val.(*types.StateAccount)
+		obj := newObject(s, address, stateAccount)
+		s.stateObjects[address] = obj
+		return true
+	})
+}
+
 // SubRefund removes gas from the refund counter.
 // This method will panic if the refund counter goes below zero
 func (s *StateDB) SubRefund(gas uint64) {
@@ -373,6 +434,9 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 // GetState retrieves the value associated with the specific key.
 func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
+	if s.constructionBAL != nil {
+		s.constructionBAL.StorageRead(addr, hash)
+	}
 	if stateObject != nil {
 		return stateObject.GetState(hash)
 	}
@@ -593,6 +657,7 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	if _, ok := s.stateObjectsDestruct[addr]; ok {
 		return nil
 	}
+
 	s.AccountLoaded++
 
 	start := time.Now()
@@ -629,6 +694,7 @@ func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
 	if obj == nil {
 		obj = s.createObject(addr)
 	}
+
 	return obj
 }
 
@@ -680,6 +746,8 @@ func (s *StateDB) Copy() *StateDB {
 		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
 		logSize:              s.logSize,
 		preimages:            maps.Clone(s.preimages),
+
+		enableStateDiffRecording: s.enableStateDiffRecording,
 
 		// Do we need to copy the access list and transient storage?
 		// In practice: No. At the start of a transaction, these two lists are empty.
@@ -742,7 +810,11 @@ func (s *StateDB) GetRefund() uint64 {
 // Finalise finalises the state by removing the destructed objects and clears
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
-func (s *StateDB) Finalise(deleteEmptyObjects bool) {
+//
+// If EnableStateDiffRecording has been called, it returns a state diff containing
+// the state which was mutated since the previous invocation of Finalise. Otherwise, nil.
+func (s *StateDB) Finalise(deleteEmptyObjects bool) (diff *bal.StateDiff) {
+	diff = &bal.StateDiff{Mutations: make(map[common.Address]*bal.AccountState)}
 	addressesToPrefetch := make([]common.Address, 0, len(s.journal.dirties))
 	for addr := range s.journal.dirties {
 		obj, exist := s.stateObjects[addr]
@@ -756,6 +828,19 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			continue
 		}
 		if obj.selfDestructed || (deleteEmptyObjects && obj.empty()) {
+			// record state diffs for any preexisting accounts which became empty
+			if s.enableStateDiffRecording && obj.txPreBalance != nil && !obj.txPreBalance.IsZero() {
+				// TODO: IsZero check is somehow needed for coinbase.  figure out why.
+				// TODO: the above check should be as easy as checking that the account was not selfdestructed in the
+				// current transaction, but that causes spec tests to fail.  need to figure out why.
+				if s.constructionBAL != nil {
+					s.constructionBAL.BalanceChange(uint16(s.balIndex), obj.address, uint256.NewInt(0))
+				}
+				postState := bal.NewEmptyAccountState()
+				postState.Balance = &bal.Balance{}
+				diff.Mutations[obj.address] = postState
+			}
+
 			delete(s.stateObjects, obj.address)
 			s.markDelete(addr)
 			// We need to maintain account deletions explicitly (will remain
@@ -765,7 +850,13 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 				s.stateObjectsDestruct[obj.address] = obj
 			}
 		} else {
-			obj.finalise()
+			accountPost := obj.finalise()
+
+			if s.enableStateDiffRecording && (accountPost.Nonce != nil || accountPost.Code != nil || accountPost.StorageWrites != nil || accountPost.Balance != nil) {
+				// the account executed SENDALL but did not send a balance, don't include it in the diff
+				// TODO: probably shouldn't include the account in the dirty set in this case (unrelated to the BAL changes)
+				diff.Mutations[obj.address] = accountPost
+			}
 			s.markUpdate(addr)
 		}
 		// At this point, also ship the address off to the precacher. The precacher
@@ -780,6 +871,8 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 	}
 	// Invalidate journal because reverting across transactions is not allowed.
 	s.clearJournalAndRefund()
+
+	return diff
 }
 
 // IntermediateRoot computes the current root hash of the state trie.
@@ -953,6 +1046,101 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
 	s.thash = thash
 	s.txIndex = ti
+	s.balIndex = ti + 1
+}
+
+// SetAccessListIndex sets the current index that state mutations will
+// be reported as in the BAL.  It is only relevant if this StateDB instance
+// is being used in the BAL construction path.
+func (s *StateDB) SetAccessListIndex(idx int) {
+	s.balIndex = idx
+}
+
+// SetTxSender sets the sender of the currently-executing transaction.
+func (s *StateDB) SetTxSender(sender common.Address) {
+	s.sender = sender
+}
+
+// ApplyPrestate applies finalised pre-state changes which occurred between the start of the block and the end of the previous transaction.
+func (s *StateDB) ApplyPrestate(prestateDiff *bal.StateDiff) {
+	for addr, accountDiff := range prestateDiff.Mutations {
+		stateObject, preexisting := s.stateObjects[addr]
+		if !preexisting {
+			stateObject = newObject(s, addr, &types.StateAccount{
+				0,
+				uint256.NewInt(0),
+				types.EmptyRootHash,
+				types.EmptyCodeHash[:],
+			})
+		}
+		if accountDiff.Code != nil {
+			stateObject.setCode(crypto.Keccak256Hash(accountDiff.Code), accountDiff.Code)
+		}
+		if accountDiff.StorageWrites != nil {
+			for slot, value := range accountDiff.StorageWrites {
+				stateObject.pendingStorage[slot] = value
+			}
+		}
+		if accountDiff.Nonce != nil {
+			stateObject.setNonce(*accountDiff.Nonce)
+			stateObject.txPreNonce = stateObject.Nonce()
+		}
+		if accountDiff.Balance != nil {
+			stateObject.setBalance(new(uint256.Int).SetBytes((*accountDiff.Balance)[:]))
+			stateObject.txPreBalance = stateObject.Balance()
+		}
+
+		if stateObject.empty() {
+			// an object that exists at the start of the block can become empty:
+			// e.g. target of a create is prefunded but the creation context performs a SENDALL without deploying a contract
+			if preexisting {
+				// TODO: I mindlessly copied this logic from elsewhere in the statedb, need to verify that it is correct.
+				delete(s.stateObjects, addr)
+				s.markDelete(addr)
+				// We need to maintain account deletions explicitly (will remain
+				// set indefinitely). Note only the first occurred self-destruct
+				// event is tracked.
+				if _, ok := s.stateObjectsDestruct[addr]; !ok {
+					s.stateObjectsDestruct[addr] = stateObject
+				}
+			}
+		} else if !preexisting {
+			s.setStateObject(stateObject)
+		}
+	}
+}
+
+// ApplyStateDiff applies a state diff to the StateDB.  All state changes will be marked as mutations
+// for the purpose of applying them in the next call to Commit.
+func (s *StateDB) ApplyStateDiff(diff *bal.StateDiff) {
+	for addr, accountDiff := range diff.Mutations {
+		stateObject, ok := s.stateObjects[addr]
+		if !ok {
+			stateObject = newObject(s, addr, &types.StateAccount{
+				0,
+				uint256.NewInt(0),
+				types.EmptyRootHash,
+				types.EmptyCodeHash[:],
+			})
+		}
+		if accountDiff.Code != nil {
+			stateObject.SetCode(crypto.Keccak256Hash(accountDiff.Code), accountDiff.Code)
+		}
+		if accountDiff.StorageWrites != nil {
+			for slot, value := range accountDiff.StorageWrites {
+				stateObject.SetState(slot, value)
+			}
+		}
+		if accountDiff.Nonce != nil {
+			stateObject.SetNonce(*accountDiff.Nonce)
+		}
+		if accountDiff.Balance != nil {
+			stateObject.SetBalance(new(uint256.Int).SetBytes((*accountDiff.Balance)[:]))
+		}
+		if !stateObject.empty() {
+			s.setStateObject(stateObject)
+		}
+	}
 }
 
 func (s *StateDB) clearJournalAndRefund() {
@@ -1138,6 +1326,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool) (*stateU
 	if s.dbErr != nil {
 		return nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
+
 	// Finalize any pending changes and merge everything into the tries
 	s.IntermediateRoot(deleteEmptyObjects)
 

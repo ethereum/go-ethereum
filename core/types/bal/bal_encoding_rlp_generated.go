@@ -2,6 +2,7 @@
 
 package bal
 
+import "github.com/ethereum/go-ethereum/common"
 import "github.com/ethereum/go-ethereum/rlp"
 import "io"
 
@@ -49,7 +50,7 @@ func (obj *BlockAccessList) EncodeRLP(_w io.Writer) error {
 		}
 		w.ListEnd(_tmp15)
 		_tmp18 := w.List()
-		for _, _tmp19 := range _tmp2.Code {
+		for _, _tmp19 := range _tmp2.CodeChanges {
 			_tmp20 := w.List()
 			w.WriteUint64(uint64(_tmp19.TxIndex))
 			w.WriteBytes(_tmp19.Code)
@@ -81,7 +82,7 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 					return err
 				}
 				// Address:
-				var _tmp3 [20]byte
+				var _tmp3 common.Address
 				if err := dec.ReadBytes(_tmp3[:]); err != nil {
 					return err
 				}
@@ -98,7 +99,7 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 							return err
 						}
 						// Slot:
-						var _tmp6 [32]byte
+						var _tmp6 common.Hash
 						if err := dec.ReadBytes(_tmp6[:]); err != nil {
 							return err
 						}
@@ -121,7 +122,7 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 								}
 								_tmp8.TxIdx = _tmp9
 								// ValueAfter:
-								var _tmp10 [32]byte
+								var _tmp10 common.Hash
 								if err := dec.ReadBytes(_tmp10[:]); err != nil {
 									return err
 								}
@@ -147,12 +148,12 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 				}
 				_tmp2.StorageWrites = _tmp4
 				// StorageReads:
-				var _tmp11 [][32]byte
+				var _tmp11 []common.Hash
 				if _, err := dec.List(); err != nil {
 					return err
 				}
 				for dec.MoreDataInList() {
-					var _tmp12 [32]byte
+					var _tmp12 common.Hash
 					if err := dec.ReadBytes(_tmp12[:]); err != nil {
 						return err
 					}
@@ -260,7 +261,7 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 				if err := dec.ListEnd(); err != nil {
 					return err
 				}
-				_tmp2.Code = _tmp21
+				_tmp2.CodeChanges = _tmp21
 				if err := dec.ListEnd(); err != nil {
 					return err
 				}
