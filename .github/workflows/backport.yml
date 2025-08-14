@@ -121,10 +121,11 @@ jobs:
           # Add original PR author as assignee
           add_author_as_assignee: true
           
-          # What to do when there are conflicts
-          # Options: "fail" or "draft_commit_conflicts"
-          # Using draft_commit_conflicts so conflicts don't block the process
-          conflicts_strategy: "draft_commit_conflicts"
+          # Enable experimental features (includes conflict handling)
+          experimental: |
+            {
+              "detect_merge_method": true
+            }
           
           # Cherry-picking strategy
           # Options: "auto", "recursive", "ort"
