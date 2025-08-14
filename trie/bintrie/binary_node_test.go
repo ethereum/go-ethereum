@@ -18,7 +18,6 @@ package bintrie
 
 import (
 	"bytes"
-	"errors"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
