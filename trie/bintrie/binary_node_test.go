@@ -246,24 +246,3 @@ func TestKeyToPath(t *testing.T) {
 		})
 	}
 }
-
-// Mock resolver function for testing
-func mockResolver(path []byte, hash common.Hash) ([]byte, error) {
-	// Return a simple stem node for testing
-	if hash == common.HexToHash("0x1234") {
-		stem := make([]byte, 31)
-		var values [256][]byte
-		values[0] = common.HexToHash("0xabcd").Bytes()
-		node := &StemNode{
-			Stem:   stem,
-			Values: values[:],
-		}
-		return SerializeNode(node), nil
-	}
-	return nil, errors.New("node not found")
-}
-
-// Mock flush function for testing
-func mockFlushFn(path []byte, node BinaryNode) {
-	// Just a stub for testing
-}
