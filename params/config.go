@@ -193,7 +193,7 @@ var (
 		},
 		Berachain: BerachainConfig{
 			Prague1: Prague1Config{
-				Time:                     newUint64(1756310400), // Aug 27th 2025 16:00:00 UTC
+				Time:                     newUint64(1756915200), // Sep 03 2025 16:00:00 UTC
 				MinimumBaseFeeWei:        1 * GWei,
 				BaseFeeChangeDenominator: BerachainBaseFeeChangeDenominator,
 				PoLDistributorAddress:    PoLDistributorAddress,
