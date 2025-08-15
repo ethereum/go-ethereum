@@ -2075,6 +2075,15 @@ func SplitTagsFlag(tagsFlag string) map[string]string {
 
 // MakeChainDatabase opens a database using the flags passed to the client and will hard crash if it fails.
 func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.Database {
+	chainDb, err := tryMakeChainDatabase(ctx, stack, readonly)
+	if err != nil {
+		Fatalf("Could not open database: %v", err)
+	}
+	return chainDb
+}
+
+// tryMakeChainDatabase tries to open the chain database with the given context and stack.
+func tryMakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) (ethdb.Database, error) {
 	var (
 		cache   = ctx.Int(CacheFlag.Name) * ctx.Int(CacheDatabaseFlag.Name) / 100
 		handles = MakeDatabaseHandles(ctx.Int(FDLimitFlag.Name))
@@ -2086,7 +2095,7 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 		log.Info("Using remote db", "url", ctx.String(RemoteDBFlag.Name), "headers", len(ctx.StringSlice(HttpHeaderFlag.Name)))
 		client, err := DialRPCWithHeaders(ctx.String(RemoteDBFlag.Name), ctx.StringSlice(HttpHeaderFlag.Name))
 		if err != nil {
-			break
+			return nil, err
 		}
 		chainDb = remotedb.New(client)
 	default:
@@ -2099,11 +2108,11 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 			EraDirectory:      ctx.String(EraFlag.Name),
 		}
 		chainDb, err = stack.OpenDatabaseWithOptions("chaindata", options)
+		if err != nil {
+			return nil, err
+		}
 	}
-	if err != nil {
-		Fatalf("Could not open database: %v", err)
-	}
-	return chainDb
+	return chainDb, nil
 }
 
 // tryMakeReadOnlyDatabase try to open the chain database in read-only mode,
@@ -2115,6 +2124,32 @@ func tryMakeReadOnlyDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database 
 	if rawdb.PreexistingDatabase(stack.ResolvePath("chaindata")) == "" {
 		readonly = false
 	}
+
+	// First attempt to open in readonly mode
+	if readonly {
+		chainDb, err := tryMakeChainDatabase(ctx, stack, true)
+		if err == nil {
+			return chainDb
+		}
+
+		// If opening in readonly mode failed (possibly due to corruption),
+		// try opening in read-write mode to allow repair, then close and reopen readonly
+		log.Warn("Failed to open database in readonly mode, attempting repair...", "err", err)
+		repairDb, repairErr := tryMakeChainDatabase(ctx, stack, false)
+		if repairErr != nil {
+			// If repair also failed, fallback to the original error
+			Fatalf("Could not open database even after repair attempt: readonly error: %v, repair error: %v", err, repairErr)
+		}
+		repairDb.Close()
+
+		log.Info("Database repair completed, reopening in readonly mode")
+		chainDb, err = tryMakeChainDatabase(ctx, stack, true)
+		if err == nil {
+			return chainDb
+		}
+		Fatalf("Could not reopen database in readonly mode after repair: %v", err)
+	}
+
 	return MakeChainDatabase(ctx, stack, readonly)
 }
 
