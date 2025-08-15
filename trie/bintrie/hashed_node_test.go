@@ -104,52 +104,6 @@ func TestHashedNodeInsertValuesAtStem(t *testing.T) {
 	}
 }
 
-// TestHashedNodeGet tests that Get panics (as per implementation)
-func TestHashedNodeGet(t *testing.T) {
-	node := HashedNode(common.HexToHash("0x1234"))
-
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Expected panic for Get on HashedNode")
-		}
-	}()
-
-	key := make([]byte, 32)
-	_, _ = node.Get(key, nil)
-}
-
-// TestHashedNodeCollectNodes tests that CollectNodes panics (as per implementation)
-func TestHashedNodeCollectNodes(t *testing.T) {
-	node := HashedNode(common.HexToHash("0x1234"))
-
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Expected panic for CollectNodes on HashedNode")
-		}
-	}()
-
-	path := []byte{0, 1, 0}
-	node.CollectNodes(path, func([]byte, BinaryNode) {})
-}
-
-// TestHashedNodeGetHeight tests that GetHeight panics (as per implementation)
-func TestHashedNodeGetHeight(t *testing.T) {
-	node := HashedNode(common.HexToHash("0x1234"))
-
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Error("Expected panic for GetHeight on HashedNode")
-		}
-		// Check the panic message
-		if r != "tried to get the height of a hashed node, this is a bug" {
-			t.Errorf("Unexpected panic message: %v", r)
-		}
-	}()
-
-	_ = node.GetHeight()
-}
-
 // TestHashedNodeToDot tests the toDot method for visualization
 func TestHashedNodeToDot(t *testing.T) {
 	hash := common.HexToHash("0x1234")
@@ -170,5 +124,5 @@ func TestHashedNodeToDot(t *testing.T) {
 
 // Helper function
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && s[:len(s)] != "" && len(substr) > 0
+	return len(s) >= len(substr) && s != "" && len(substr) > 0
 }

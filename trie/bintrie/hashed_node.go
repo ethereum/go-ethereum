@@ -58,7 +58,7 @@ func (h HashedNode) toDot(parent string, path string) string {
 }
 
 func (h HashedNode) CollectNodes([]byte, NodeFlushFn) error {
-	panic("not implemented") // TODO: Implement
+	return errors.New("collectNodes not implemented for hashed node")
 }
 
 func (h HashedNode) GetHeight() int {

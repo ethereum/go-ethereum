@@ -69,9 +69,9 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 
 		// recurse into both children
 		if context.Index == 0 {
-			if _, isempty := node.Left.(Empty); node.Left != nil && !isempty {
-				it.stack = append(it.stack, binaryNodeIteratorState{Node: node.Left})
-				it.current = node.Left
+			if _, isempty := node.left.(Empty); node.left != nil && !isempty {
+				it.stack = append(it.stack, binaryNodeIteratorState{Node: node.left})
+				it.current = node.left
 				return it.Next(descend)
 			}
 
@@ -79,9 +79,9 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 		}
 
 		if context.Index == 1 {
-			if _, isempty := node.Right.(Empty); node.Right != nil && !isempty {
-				it.stack = append(it.stack, binaryNodeIteratorState{Node: node.Right})
-				it.current = node.Right
+			if _, isempty := node.right.(Empty); node.right != nil && !isempty {
+				it.stack = append(it.stack, binaryNodeIteratorState{Node: node.right})
+				it.current = node.right
 				return it.Next(descend)
 			}
 
@@ -127,9 +127,9 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 		it.stack[len(it.stack)-1].Node = it.current
 		parent := &it.stack[len(it.stack)-2]
 		if parent.Index == 0 {
-			parent.Node.(*InternalNode).Left = it.current
+			parent.Node.(*InternalNode).left = it.current
 		} else {
-			parent.Node.(*InternalNode).Right = it.current
+			parent.Node.(*InternalNode).right = it.current
 		}
 		return it.Next(descend)
 	case Empty:
@@ -177,8 +177,9 @@ func (it *binaryNodeIterator) Path() []byte {
 	return path
 }
 
+// NodeBlob returns the serialized bytes of the current node.
 func (it *binaryNodeIterator) NodeBlob() []byte {
-	panic("not completely implemented")
+	return SerializeNode(it.current)
 }
 
 // Leaf returns true iff the current node is a leaf node.
@@ -215,13 +216,35 @@ func (it *binaryNodeIterator) LeafBlob() []byte {
 // iterator is not positioned at a leaf. Callers must not retain references
 // to the value after calling Next.
 func (it *binaryNodeIterator) LeafProof() [][]byte {
-	_, ok := it.current.(*StemNode)
+	sn, ok := it.current.(*StemNode)
 	if !ok {
 		panic("LeafProof() called on an binary node iterator not at a leaf location")
 	}
 
-	// return it.trie.Prove(leaf.Key())
-	panic("not completely implemented")
+	proof := make([][]byte, 0, len(it.stack)+NodeWidth)
+
+	// Build proof by walking up the stack and collecting sibling hashes
+	for i := range it.stack[:len(it.stack)-2] {
+		state := it.stack[i]
+		internalNode := state.Node.(*InternalNode) // should panic if the node isn't an InternalNode
+
+		// Add the sibling hash to the proof
+		if state.Index == 0 {
+			// We came from left, so include right sibling
+			proof = append(proof, internalNode.right.Hash().Bytes())
+		} else {
+			// We came from right, so include left sibling
+			proof = append(proof, internalNode.left.Hash().Bytes())
+		}
+	}
+
+	// Add the stem and siblings
+	proof = append(proof, sn.Stem)
+	for _, v := range sn.Values {
+		proof = append(proof, v)
+	}
+
+	return proof
 }
 
 // AddResolver sets an intermediate database to use for looking up trie nodes

@@ -47,13 +47,13 @@ func (bt *StemNode) Insert(key []byte, value []byte, _ NodeResolverFn) (BinaryNo
 		bt.depth++
 		var child, other *BinaryNode
 		if bitStem == 0 {
-			new.Left = bt
-			child = &new.Left
-			other = &new.Right
+			new.left = bt
+			child = &new.left
+			other = &new.right
 		} else {
-			new.Right = bt
-			child = &new.Right
-			other = &new.Left
+			new.right = bt
+			child = &new.right
+			other = &new.left
 		}
 
 		bitKey := key[new.depth/8] >> (7 - (new.depth % 8)) & 1
@@ -157,13 +157,13 @@ func (bt *StemNode) InsertValuesAtStem(key []byte, values [][]byte, _ NodeResolv
 		bt.depth++
 		var child, other *BinaryNode
 		if bitStem == 0 {
-			new.Left = bt
-			child = &new.Left
-			other = &new.Right
+			new.left = bt
+			child = &new.left
+			other = &new.right
 		} else {
-			new.Right = bt
-			child = &new.Right
-			other = &new.Left
+			new.right = bt
+			child = &new.right
+			other = &new.left
 		}
 
 		bitKey := key[new.depth/8] >> (7 - (new.depth % 8)) & 1

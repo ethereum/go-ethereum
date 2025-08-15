@@ -31,16 +31,16 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 
 	node := &InternalNode{
 		depth: 5,
-		Left:  HashedNode(leftHash),
-		Right: HashedNode(rightHash),
+		left:  HashedNode(leftHash),
+		right: HashedNode(rightHash),
 	}
 
 	// Serialize the node
 	serialized := SerializeNode(node)
 
 	// Check the serialized format
-	if serialized[0] != 1 {
-		t.Errorf("Expected type byte to be 1, got %d", serialized[0])
+	if serialized[0] != nodeTypeInternal {
+		t.Errorf("Expected type byte to be %d, got %d", nodeTypeInternal, serialized[0])
 	}
 
 	if len(serialized) != 65 {
@@ -65,12 +65,12 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 	}
 
 	// Check the left and right hashes
-	if internalNode.Left.Hash() != leftHash {
-		t.Errorf("Left hash mismatch: expected %x, got %x", leftHash, internalNode.Left.Hash())
+	if internalNode.left.Hash() != leftHash {
+		t.Errorf("Left hash mismatch: expected %x, got %x", leftHash, internalNode.left.Hash())
 	}
 
-	if internalNode.Right.Hash() != rightHash {
-		t.Errorf("Right hash mismatch: expected %x, got %x", rightHash, internalNode.Right.Hash())
+	if internalNode.right.Hash() != rightHash {
+		t.Errorf("Right hash mismatch: expected %x, got %x", rightHash, internalNode.right.Hash())
 	}
 }
 
@@ -98,8 +98,8 @@ func TestSerializeDeserializeStemNode(t *testing.T) {
 	serialized := SerializeNode(node)
 
 	// Check the serialized format
-	if serialized[0] != 2 {
-		t.Errorf("Expected type byte to be 2, got %d", serialized[0])
+	if serialized[0] != nodeTypeStem {
+		t.Errorf("Expected type byte to be %d, got %d", nodeTypeStem, serialized[0])
 	}
 
 	// Check the stem is correctly serialized
@@ -169,7 +169,7 @@ func TestDeserializeInvalidType(t *testing.T) {
 // TestDeserializeInvalidLength tests deserialization with invalid data length
 func TestDeserializeInvalidLength(t *testing.T) {
 	// InternalNode with type byte 1 but wrong length
-	invalidData := []byte{1, 0, 0} // Too short for internal node
+	invalidData := []byte{nodeTypeInternal, 0, 0} // Too short for internal node
 
 	_, err := DeserializeNode(invalidData, 0)
 	if err == nil {
