@@ -196,6 +196,9 @@ type BlockChainConfig struct {
 	// If the value is zero, all transactions of the entire chain will be indexed.
 	// If the value is -1, indexing is disabled.
 	TxLookupLimit int64
+
+	// EnableStateSizeTracking indicates whether the state size tracking is enabled.
+	EnableStateSizeTracking bool
 }
 
 // DefaultConfig returns the default config.
@@ -333,8 +336,7 @@ type BlockChain struct {
 	prefetcher Prefetcher
 	processor  Processor // Block transaction processor interface
 	logger     *tracing.Hooks
-
-	stateSizeGen *state.StateSizeGenerator // State size tracking
+	stateSizer *state.SizeTracker // State size tracking
 
 	lastForkReadyAlert time.Time // Last time there was a fork readiness print out
 }
@@ -530,9 +532,10 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	}
 
 	// Start state size tracker
-	bc.stateSizeGen = state.NewStateSizeGenerator(bc.statedb.DiskDB(), bc.triedb, head.Root)
-	log.Info("Started state size generator", "root", head.Root)
-
+	if bc.cfg.EnableStateSizeTracking {
+		bc.stateSizer = state.NewSizeTracker(bc.db, bc.triedb)
+		bc.stateSizer.Start()
+	}
 	return bc, nil
 }
 
@@ -1259,12 +1262,10 @@ func (bc *BlockChain) stopWithoutSaving() {
 	// Signal shutdown to all goroutines.
 	bc.InterruptInsert(true)
 
-	// Stop state size generator if running
-	if bc.stateSizeGen != nil {
-		bc.stateSizeGen.Stop()
-		log.Info("Stopped state size generator")
+	// Stop state size tracker
+	if bc.stateSizer != nil {
+		bc.stateSizer.Stop()
 	}
-
 	// Now wait for all chain modifications to end and persistent goroutines to exit.
 	//
 	// Note: Close waits for the mutex to become available, i.e. any running chain
@@ -1604,10 +1605,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if err != nil {
 		return err
 	}
-
-	// Track state size changes if generator is running
-	if bc.stateSizeGen != nil && stateUpdate != nil {
-		bc.stateSizeGen.Track(stateUpdate)
+	// Emit the state update to the state sizestats if it's active
+	if bc.stateSizer != nil {
+		bc.stateSizer.Notify(stateUpdate)
 	}
 	// If node is running in path mode, skip explicit gc operation
 	// which is unnecessary in this mode.

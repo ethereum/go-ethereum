@@ -377,10 +377,10 @@ func (db *Database) Disk() ethdb.Database {
 }
 
 // SnapshotCompleted returns the indicator if the snapshot is completed.
-func (db *Database) SnapshotCompleted() (common.Hash, bool) {
+func (db *Database) SnapshotCompleted() bool {
 	pdb, ok := db.backend.(*pathdb.Database)
 	if !ok {
-		return common.Hash{}, false
+		return false
 	}
 	return pdb.SnapshotCompleted()
 }
