@@ -372,7 +372,7 @@ func (i *indexIniter) remain() uint64 {
 		last, indexed := i.last.Load(), i.indexed.Load()
 		if last < indexed {
 			log.Warn("State indexer is in recovery", "indexed", indexed, "last", last)
-			return 0
+			return indexed - last
 		}
 		return last - indexed
 	}
