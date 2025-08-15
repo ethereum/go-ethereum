@@ -185,6 +185,7 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 	if db.TrieDB().IsVerkle() {
 		sdb.accessEvents = NewAccessEvents(db.PointCache())
 	}
+
 	return sdb, nil
 }
 
@@ -1354,6 +1355,16 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, noStorageWiping 
 		return common.Hash{}, err
 	}
 	return ret.root, nil
+}
+
+// CommitWithUpdate writes the state mutations and returns both the root hash and the state update.
+// This is useful for tracking state changes at the blockchain level.
+func (s *StateDB) CommitWithUpdate(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, *stateUpdate, error) {
+	ret, err := s.commitAndFlush(block, deleteEmptyObjects, noStorageWiping)
+	if err != nil {
+		return common.Hash{}, nil, err
+	}
+	return ret.root, ret, nil
 }
 
 // Prepare handles the preparatory steps for executing a state transition with.
