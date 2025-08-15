@@ -155,7 +155,7 @@ func calcExcessBlobGas(isOsaka bool, bcfg *BlobConfig, parent *types.Header) uin
 		var (
 			baseCost     = big.NewInt(params.BlobBaseCost)
 			reservePrice = baseCost.Mul(baseCost, parent.BaseFee)
-			blobPrice    = bcfg.blobPrice(excessBlobGas)
+			blobPrice    = bcfg.blobPrice(parentExcessBlobGas)
 		)
 		if reservePrice.Cmp(blobPrice) > 0 {
 			scaledExcess := parentBlobGasUsed * uint64(bcfg.Max-bcfg.Target) / uint64(bcfg.Max)
