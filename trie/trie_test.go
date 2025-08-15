@@ -1579,3 +1579,57 @@ func BenchmarkTrieSeqPrefetch(b *testing.B) {
 		}
 	}
 }
+
+func TestUpdateBatch(t *testing.T) {
+	testUpdateBatch(t, []kv{
+		{k: []byte("do"), v: []byte("verb")},
+		{k: []byte("ether"), v: []byte("wookiedoo")},
+		{k: []byte("horse"), v: []byte("stallion")},
+		{k: []byte("shaman"), v: []byte("horse")},
+		{k: []byte("doge"), v: []byte("coin")},
+		{k: []byte("dog"), v: []byte("puppy")},
+	})
+
+	var entries []kv
+	for i := 0; i < 256; i++ {
+		entries = append(entries, kv{k: testrand.Bytes(32), v: testrand.Bytes(32)})
+	}
+	testUpdateBatch(t, entries)
+}
+
+func testUpdateBatch(t *testing.T, entries []kv) {
+	var (
+		base = NewEmpty(nil)
+		keys [][]byte
+		vals [][]byte
+	)
+	for _, entry := range entries {
+		base.Update(entry.k, entry.v)
+		keys = append(keys, entry.k)
+		vals = append(vals, entry.v)
+	}
+	for i := 0; i < 10; i++ {
+		k, v := testrand.Bytes(32), testrand.Bytes(32)
+		base.Update(k, v)
+		keys = append(keys, k)
+		vals = append(vals, v)
+	}
+
+	cmp := NewEmpty(nil)
+	if err := cmp.UpdateBatch(keys, vals); err != nil {
+		t.Fatalf("Failed to update batch, %v", err)
+	}
+
+	// Traverse the original tree, the changes made on the copy one shouldn't
+	// affect the old one
+	for _, key := range keys {
+		v1, _ := base.Get(key)
+		v2, _ := cmp.Get(key)
+		if !bytes.Equal(v1, v2) {
+			t.Errorf("Unexpected data, key: %v, want: %v, got: %v", key, v1, v2)
+		}
+	}
+	if base.Hash() != cmp.Hash() {
+		t.Errorf("Hash mismatch: want %x, got %x", base.Hash(), cmp.Hash())
+	}
+}
