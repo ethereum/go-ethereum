@@ -136,8 +136,13 @@ func TestSerializeDeserializeStemNode(t *testing.T) {
 	}
 
 	// Check that other values are nil
-	if stemNode.Values[1] != nil {
-		t.Errorf("Expected nil value at index 1, got %x", stemNode.Values[1])
+	for i := range NodeWidth {
+		if i == 0 || i == 10 || i == 255 {
+			continue
+		}
+		if stemNode.Values[i] != nil {
+			t.Errorf("Expected nil value at index %d, got %x", i, stemNode.Values[i])
+		}
 	}
 }
 
