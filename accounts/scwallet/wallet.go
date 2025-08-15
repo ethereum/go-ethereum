@@ -56,7 +56,7 @@ var ErrPINNeeded = errors.New("smartcard: pin needed")
 // ErrPINUnblockNeeded is returned if opening the smart card requires a PIN code,
 // but all PIN attempts have already been exhausted. In this case the calling
 // application should request user input for the PUK and a new PIN code to set
-// fo the card.
+// for the card.
 var ErrPINUnblockNeeded = errors.New("smartcard: pin unblock needed")
 
 // ErrAlreadyOpen is returned if the smart card is attempted to be opened, but

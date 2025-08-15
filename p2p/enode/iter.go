@@ -207,7 +207,7 @@ func AsyncFilter(it Iterator, check AsyncFilterFunc, workers int) Iterator {
 					item := iteratorItem{nn, nodeSource}
 					select {
 					case f.passed <- item:
-					case <-ctx.Done(): // bale out if downstream is already closed and not calling Next
+					case <-ctx.Done(): // bail out if downstream is already closed and not calling Next
 					}
 				}
 				f.slots <- struct{}{}

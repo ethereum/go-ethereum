@@ -445,7 +445,7 @@ func (m *singleMatcherInstance) cleanMapIndices() {
 	m.mapIndices = m.mapIndices[:j]
 }
 
-// matchAny combinines a set of matchers and returns a match for every position
+// matchAny combines a set of matchers and returns a match for every position
 // where any of the underlying matchers signaled a match. A zero-length matchAny
 // acts as a "wild card" that signals a potential match at every position.
 type matchAny []matcher
@@ -458,7 +458,7 @@ type matchAnyInstance struct {
 }
 
 // matchAnyResults is used by matchAnyInstance to collect results from all
-// child matchers for a specific map index. Once all results has been received
+// child matchers for a specific map index. Once all results have been received
 // a merged result is returned for the given map and this structure is discarded.
 type matchAnyResults struct {
 	matches  []potentialMatches

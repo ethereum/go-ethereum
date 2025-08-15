@@ -175,7 +175,7 @@ to check if the node disconnects after receiving multiple invalid requests.`)
 		},
 	}
 
-	// Send request 10 times. Some clients are lient on the first few invalids.
+	// Send request 10 times. Some clients are lenient on the first few invalids.
 	for i := 0; i < 10; i++ {
 		badReq.RequestId = uint64(i)
 		if err := conn.Write(ethProto, eth.GetBlockHeadersMsg, badReq); err != nil {
@@ -542,7 +542,7 @@ func (s *Suite) TestBlockRangeUpdateInvalid(t *utesting.T) {
 
 func (s *Suite) TestBlockRangeUpdateFuture(t *utesting.T) {
 	t.Log(`This test sends a BlockRangeUpdate that is beyond the chain head.
-The node should accept the update and should not disonnect.`)
+The node should accept the update and should not disconnect.`)
 	conn, err := s.dialAndPeer(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -578,7 +578,7 @@ The node should accept the update and should not disonnect.`)
 
 func (s *Suite) TestBlockRangeUpdateHistoryExp(t *utesting.T) {
 	t.Log(`This test sends a BlockRangeUpdate announcing incomplete (expired) history.
-The node should accept the update and should not disonnect.`)
+The node should accept the update and should not disconnect.`)
 	conn, err := s.dialAndPeer(nil)
 	if err != nil {
 		t.Fatal(err)

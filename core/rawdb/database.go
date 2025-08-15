@@ -597,7 +597,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	return nil
 }
 
-// This is the list of known 'metadata' keys stored in the databasse.
+// This is the list of known 'metadata' keys stored in the database.
 var knownMetadataKeys = [][]byte{
 	databaseVersionKey, headHeaderKey, headBlockKey, headFastBlockKey, headFinalizedBlockKey,
 	lastPivotKey, fastTrieProgressKey, snapshotDisabledKey, SnapshotRootKey, snapshotJournalKey,
@@ -659,7 +659,7 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 // is periodically called and if it returns an error then SafeDeleteRange
 // stops and also returns that error. The callback is not called if native
 // range delete is used or there are a small number of keys only. The bool
-// argument passed to the callback is true if enrties have actually been
+// argument passed to the callback is true if entries have actually been
 // deleted already.
 func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashScheme bool, stopCallback func(bool) bool) error {
 	if !hashScheme {

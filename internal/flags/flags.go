@@ -156,7 +156,7 @@ func (f *BigFlag) IsSet() bool     { return f.HasBeenSet }
 func (f *BigFlag) String() string  { return cli.FlagStringer(f) }
 
 func (f *BigFlag) Apply(set *flag.FlagSet) error {
-	// Set default value so that environment wont be able to overwrite it
+	// Set default value so that environment won't be able to overwrite it
 	if f.Value != nil {
 		f.defaultValue = new(big.Int).Set(f.Value)
 	}
