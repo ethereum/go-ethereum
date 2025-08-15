@@ -77,8 +77,10 @@ const (
 	// sources (disc/v4 and disc/v5). We set this number large enough to be able to
 	// feed the dial queue with enough peers. Since the whole discovery process is triggered
 	// only when dial candidates are needed, we can keep this number high without worrying
-	// about overloading the DHT.
-	discoveryParallelLookups = 3
+	// about overloading the DHT. Only caveat is that in a small network, where maxpeers is
+	// higher than the actual number of nodes, this may lead to continuous lookups. We don't
+	// yet have a self-tuning solution for this, so we keep the value at 2.
+	discoveryParallelLookups = 2
 
 	// discoveryPrefetchBuffer is the number of peers to pre-fetch from a discovery
 	// source. It is useful to avoid the negative effects of potential longer timeouts
