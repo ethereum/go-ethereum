@@ -240,7 +240,6 @@ func makeByteArrayWriter(typ reflect.Type) writer {
 	case 1:
 		return writeLengthOneByteArray
 	default:
-		length := typ.Len()
 		return func(val reflect.Value, w *encBuffer) error {
 			if !val.CanAddr() {
 				// Getting the byte slice of val requires it to be addressable. Make it
@@ -249,7 +248,7 @@ func makeByteArrayWriter(typ reflect.Type) writer {
 				copy.Set(val)
 				val = copy
 			}
-			slice := byteArrayBytes(val, length)
+			slice := val.Bytes()
 			w.encodeStringHeader(len(slice))
 			w.str = append(w.str, slice...)
 			return nil
