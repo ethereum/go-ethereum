@@ -72,7 +72,12 @@ func printVersion(ctx *cli.Context) error {
 	git, _ := version.VCS()
 
 	fmt.Println(strings.Title(clientIdentifier))
-	fmt.Println("Version:", version.WithMeta)
+	// Use git tag if available, otherwise fall back to hardcoded version
+	if git.Tag != "" {
+		fmt.Println("Version:", git.Tag)
+	} else {
+		fmt.Println("Version:", version.WithMeta)
+	}
 	if git.Commit != "" {
 		fmt.Println("Git Commit:", git.Commit)
 	}

@@ -64,18 +64,18 @@ import (
 )
 
 var (
-	// Files that end up in the geth*.zip archive.
+	// Files that end up in the bera-geth*.zip archive.
 	gethArchiveFiles = []string{
 		"COPYING",
-		executablePath("geth"),
+		executablePath("bera-geth"),
 	}
 
-	// Files that end up in the geth-alltools*.zip archive.
+	// Files that end up in the bera-geth-alltools*.zip archive.
 	allToolsArchiveFiles = []string{
 		"COPYING",
 		executablePath("abigen"),
 		executablePath("evm"),
-		executablePath("geth"),
+		executablePath("bera-geth"),
 		executablePath("rlpdump"),
 		executablePath("clef"),
 	}
@@ -91,7 +91,7 @@ var (
 			Description: "Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
 		},
 		{
-			BinaryName:  "geth",
+			BinaryName:  "bera-geth",
 			Description: "Ethereum CLI client.",
 		},
 		{
@@ -237,6 +237,7 @@ func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (
 	if env.Commit != "" {
 		ld = append(ld, "-X", "github.com/ethereum/go-ethereum/internal/version.gitCommit="+env.Commit)
 		ld = append(ld, "-X", "github.com/ethereum/go-ethereum/internal/version.gitDate="+env.Date)
+		ld = append(ld, "-X", "github.com/ethereum/go-ethereum/internal/version.gitTag="+env.Tag)
 	}
 	// Strip DWARF on darwin. This used to be required for certain things,
 	// and there is no downside to this, so we just keep doing it.
@@ -553,7 +554,7 @@ func doArchive(cmdline []string) {
 		atype   = flag.String("type", "zip", "Type of archive to write (zip|tar)")
 		signer  = flag.String("signer", "", `Environment variable holding the signing key (e.g. LINUX_SIGNING_KEY)`)
 		signify = flag.String("signify", "", `Environment variable holding the signify key (e.g. LINUX_SIGNIFY_KEY)`)
-		upload  = flag.String("upload", "", `Destination to upload the archives (usually "gethstore/builds")`)
+		upload  = flag.String("upload", "", `Destination to upload the archives (usually "berachain/bera-geth")`)
 		ext     string
 	)
 	flag.CommandLine.Parse(cmdline)
@@ -568,9 +569,9 @@ func doArchive(cmdline []string) {
 
 	var (
 		env      = build.Env()
-		basegeth = archiveBasename(*arch, version.Archive(env.Commit))
-		geth     = "geth-" + basegeth + ext
-		alltools = "geth-alltools-" + basegeth + ext
+		basegeth = archiveBasename(*arch, version.Archive(env.Tag, env.Commit))
+		geth     = "bera-geth-" + basegeth + ext
+		alltools = "bera-geth-alltools-" + basegeth + ext
 	)
 	maybeSkipArchive(env)
 	if err := build.WriteArchive(geth, gethArchiveFiles); err != nil {
@@ -610,7 +611,7 @@ func archiveUpload(archive string, blobstore string, signer string, signifyVar s
 	}
 	if signifyVar != "" {
 		key := os.Getenv(signifyVar)
-		untrustedComment := "verify with geth-release.pub"
+		untrustedComment := "verify with bera-geth-release.pub"
 		trustedComment := fmt.Sprintf("%s (%s)", archive, time.Now().UTC().Format(time.RFC1123))
 		if err := signify.SignFile(archive, archive+".sig", key, untrustedComment, trustedComment); err != nil {
 			return err
@@ -646,17 +647,17 @@ func maybeSkipArchive(env build.Environment) {
 		log.Printf("skipping archive creation because this is a PR build")
 		os.Exit(0)
 	}
-	if env.Branch != "master" && !strings.HasPrefix(env.Tag, "v1.") {
+	if env.Branch != "main" && !strings.HasPrefix(env.Tag, "v1.") {
 		log.Printf("skipping archive creation because branch %q, tag %q is not on the inclusion list", env.Branch, env.Tag)
 		os.Exit(0)
 	}
 }
 
-// Builds the docker images and optionally uploads them to Docker Hub.
+// Builds the docker images and optionally uploads them to GHCR.
 func doDockerBuildx(cmdline []string) {
 	var (
 		platform = flag.String("platform", "", `Push a multi-arch docker image for the specified architectures (usually "linux/amd64,linux/arm64")`)
-		hubImage = flag.String("hub", "ethereum/client-go", `Where to upload the docker image`)
+		hubImage = flag.String("hub", "ghcr.io/berachain/bera-geth", `Where to upload the docker image`)
 		upload   = flag.Bool("upload", false, `Whether to trigger upload`)
 	)
 	flag.CommandLine.Parse(cmdline)
@@ -675,21 +676,16 @@ func doDockerBuildx(cmdline []string) {
 		build.MustRun(auther)
 	}
 	// Retrieve the version infos to build and push to the following paths:
-	//  - ethereum/client-go:latest                            - Pushes to the master branch, Geth only
-	//  - ethereum/client-go:stable                            - Version tag publish on GitHub, Geth only
-	//  - ethereum/client-go:alltools-latest                   - Pushes to the master branch, Geth & tools
-	//  - ethereum/client-go:alltools-stable                   - Version tag publish on GitHub, Geth & tools
-	//  - ethereum/client-go:release-<major>.<minor>           - Version tag publish on GitHub, Geth only
-	//  - ethereum/client-go:alltools-release-<major>.<minor>  - Version tag publish on GitHub, Geth & tools
+	//  - ethereum/client-go:latest                            - Pushes to the main branch, Geth only
+	//  - ethereum/client-go:alltools-latest                   - Pushes to the main branch, Geth & tools
 	//  - ethereum/client-go:v<major>.<minor>.<patch>          - Version tag publish on GitHub, Geth only
 	//  - ethereum/client-go:alltools-v<major>.<minor>.<patch> - Version tag publish on GitHub, Geth & tools
-	var tags []string
-
+	var tag string
 	switch {
-	case env.Branch == "master":
-		tags = []string{"latest"}
+	case env.Branch == "main":
+		tag = "latest"
 	case strings.HasPrefix(env.Tag, "v1."):
-		tags = []string{"stable", fmt.Sprintf("release-%v", version.Family), "v" + version.Semantic}
+		tag = env.Tag
 	}
 	// Need to create a mult-arch builder
 	check := exec.Command("docker", "buildx", "inspect", "multi-arch-builder")
@@ -704,22 +700,25 @@ func doDockerBuildx(cmdline []string) {
 		{file: "Dockerfile", base: fmt.Sprintf("%s:", *hubImage)},
 		{file: "Dockerfile.alltools", base: fmt.Sprintf("%s:alltools-", *hubImage)},
 	} {
-		for _, tag := range tags { // latest, stable etc
-			gethImage := fmt.Sprintf("%s%s", spec.base, tag)
-			cmd := exec.Command("docker", "buildx", "build",
-				"--build-arg", "COMMIT="+env.Commit,
-				"--build-arg", "VERSION="+version.WithMeta,
-				"--build-arg", "BUILDNUM="+env.Buildnum,
-				"--tag", gethImage,
-				"--platform", *platform,
-				"--file", spec.file,
-			)
-			if *upload {
-				cmd.Args = append(cmd.Args, "--push")
-			}
-			cmd.Args = append(cmd.Args, ".")
-			build.MustRun(cmd)
+		gethImage := fmt.Sprintf("%s%s", spec.base, tag)
+		// Prefer tag when present for VERSION
+		dockerVersion := version.WithMeta
+		if env.Tag != "" {
+			dockerVersion = env.Tag
 		}
+		cmd := exec.Command("docker", "buildx", "build",
+			"--build-arg", "COMMIT="+env.Commit,
+			"--build-arg", "VERSION="+dockerVersion,
+			"--build-arg", "BUILDNUM="+env.Buildnum,
+			"--tag", gethImage,
+			"--platform", *platform,
+			"--file", spec.file,
+		)
+		if *upload {
+			cmd.Args = append(cmd.Args, "--push")
+		}
+		cmd.Args = append(cmd.Args, ".")
+		build.MustRun(cmd)
 	}
 }
 
@@ -729,7 +728,7 @@ func doDebianSource(cmdline []string) {
 		cachedir = flag.String("cachedir", "./build/cache", `Filesystem path to cache the downloaded Go bundles at`)
 		signer   = flag.String("signer", "", `Signing key name, also used as package author`)
 		upload   = flag.String("upload", "", `Where to upload the source package (usually "ethereum/ethereum")`)
-		sshUser  = flag.String("sftp-user", "", `Username for SFTP upload (usually "geth-ci")`)
+		sshUser  = flag.String("sftp-user", "", `Username for SFTP upload (usually "bera-geth-ci")`)
 		workdir  = flag.String("workdir", "", `Output directory for packages (uses temp dir if unset)`)
 		now      = time.Now()
 	)
@@ -888,7 +887,7 @@ func makeWorkdir(wdflag string) string {
 	if wdflag != "" {
 		err = os.MkdirAll(wdflag, 0744)
 	} else {
-		wdflag, err = os.MkdirTemp("", "geth-build-")
+		wdflag, err = os.MkdirTemp("", "bera-geth-build-")
 	}
 	if err != nil {
 		log.Fatal(err)
@@ -1042,7 +1041,7 @@ func doWindowsInstaller(cmdline []string) {
 		arch    = flag.String("arch", runtime.GOARCH, "Architecture for cross build packaging")
 		signer  = flag.String("signer", "", `Environment variable holding the signing key (e.g. WINDOWS_SIGNING_KEY)`)
 		signify = flag.String("signify key", "", `Environment variable holding the signify signing key (e.g. WINDOWS_SIGNIFY_KEY)`)
-		upload  = flag.String("upload", "", `Destination to upload the archives (usually "gethstore/builds")`)
+		upload  = flag.String("upload", "", `Destination to upload the archives (usually "berachain/bera-geth")`)
 		workdir = flag.String("workdir", "", `Output directory for packages (uses temp dir if unset)`)
 	)
 	flag.CommandLine.Parse(cmdline)
@@ -1061,7 +1060,7 @@ func doWindowsInstaller(cmdline []string) {
 			continue
 		}
 		allTools = append(allTools, filepath.Base(file))
-		if filepath.Base(file) == "geth.exe" {
+		if filepath.Base(file) == "bera-geth.exe" {
 			gethTool = file
 		} else {
 			devTools = append(devTools, file)
@@ -1075,7 +1074,7 @@ func doWindowsInstaller(cmdline []string) {
 		"Geth":     gethTool,
 		"DevTools": devTools,
 	}
-	build.Render("build/nsis.geth.nsi", filepath.Join(*workdir, "geth.nsi"), 0644, nil)
+	build.Render("build/nsis.geth.nsi", filepath.Join(*workdir, "bera-geth.nsi"), 0644, nil)
 	build.Render("build/nsis.install.nsh", filepath.Join(*workdir, "install.nsh"), 0644, templateData)
 	build.Render("build/nsis.uninstall.nsh", filepath.Join(*workdir, "uninstall.nsh"), 0644, allTools)
 	build.Render("build/nsis.pathupdate.nsh", filepath.Join(*workdir, "PathUpdate.nsh"), 0644, nil)
@@ -1093,7 +1092,7 @@ func doWindowsInstaller(cmdline []string) {
 	if env.Commit != "" {
 		ver[2] += "-" + env.Commit[:8]
 	}
-	installer, err := filepath.Abs("geth-" + archiveBasename(*arch, version.Archive(env.Commit)) + ".exe")
+	installer, err := filepath.Abs("bera-geth-" + archiveBasename(*arch, version.Archive(env.Tag, env.Commit)) + ".exe")
 	if err != nil {
 		log.Fatalf("Failed to convert installer file path: %v", err)
 	}
@@ -1103,7 +1102,7 @@ func doWindowsInstaller(cmdline []string) {
 		"/DMINORVERSION="+ver[1],
 		"/DBUILDVERSION="+ver[2],
 		"/DARCH="+*arch,
-		filepath.Join(*workdir, "geth.nsi"),
+		filepath.Join(*workdir, "bera-geth.nsi"),
 	)
 	// Sign and publish installer.
 	if err := archiveUpload(installer, *upload, *signer, *signify); err != nil {
@@ -1115,7 +1114,7 @@ func doWindowsInstaller(cmdline []string) {
 
 func doPurge(cmdline []string) {
 	var (
-		store = flag.String("store", "", `Destination from where to purge archives (usually "gethstore/builds")`)
+		store = flag.String("store", "", `Destination from where to purge archives (usually "berachain/bera-geth")`)
 		limit = flag.Int("days", 30, `Age threshold above which to delete unstable archives`)
 	)
 	flag.CommandLine.Parse(cmdline)

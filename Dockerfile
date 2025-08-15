@@ -6,24 +6,36 @@ ARG BUILDNUM=""
 # Build Geth in a stock Go builder container
 FROM golang:1.24-alpine AS builder
 
+# These build arguments need to be redeclared in the builder stage
+ARG COMMIT
+ARG VERSION
+ARG BUILDNUM
+
 RUN apk add --no-cache gcc musl-dev linux-headers git
 
 # Get dependencies - will also be cached if we won't change go.mod/go.sum
-COPY go.mod /go-ethereum/
-COPY go.sum /go-ethereum/
-RUN cd /go-ethereum && go mod download
+COPY go.mod /bera-geth/
+COPY go.sum /bera-geth/
+RUN cd /bera-geth && go mod download
 
-ADD . /go-ethereum
-RUN cd /go-ethereum && go run build/ci.go install -static ./cmd/geth
+ADD . /bera-geth
+# Pass git information to the build process
+# When VERSION is provided (e.g., from CI), use it as the git tag
+RUN cd /bera-geth && \
+    if [ -n "$VERSION" ]; then \
+        go run build/ci.go install -static -git-tag="$VERSION" -git-commit="$COMMIT" ./cmd/bera-geth; \
+    else \
+        go run build/ci.go install -static ./cmd/bera-geth; \
+    fi
 
 # Pull Geth into a second stage deploy alpine container
 FROM alpine:latest
 
 RUN apk add --no-cache ca-certificates
-COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
+COPY --from=builder /bera-geth/build/bin/bera-geth /usr/local/bin/
 
 EXPOSE 8545 8546 30303 30303/udp
-ENTRYPOINT ["geth"]
+ENTRYPOINT ["bera-geth"]
 
 # Add some metadata labels to help programmatic image consumption
 ARG COMMIT=""

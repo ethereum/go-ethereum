@@ -102,6 +102,12 @@ func (b *BlockGen) SetParentBeaconRoot(root common.Hash) {
 	ProcessBeaconBlockRoot(root, vm.NewEVM(blockContext, b.statedb, b.cm.config, vm.Config{}))
 }
 
+// SetParentProposerPubkey sets the parent proposer pubkey field of the generated
+// block.
+func (b *BlockGen) SetParentProposerPubkey(pubkey common.Pubkey) {
+	b.header.ParentProposerPubkey = &pubkey
+}
+
 // addTx adds a transaction to the generated block. If no coinbase has
 // been set, the block's coinbase is set to the zero address.
 //
@@ -116,9 +122,14 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 	var (
 		blockContext = NewEVMBlockContext(b.header, bc, &b.header.Coinbase)
 		evm          = vm.NewEVM(blockContext, b.statedb, b.cm.config, vmConfig)
+		gasUsed      = &b.header.GasUsed
 	)
+	// Berachain: PoL txs do not count towards block gas.
+	if tx.Type() == types.PoLTxType {
+		gasUsed = new(uint64)
+	}
 	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(evm, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed)
+	receipt, err := ApplyTransaction(evm, b.gasPool, b.statedb, b.header, tx, gasUsed)
 	if err != nil {
 		panic(err)
 	}
@@ -618,6 +629,9 @@ func (cm *chainMaker) makeHeader(parent *types.Block, state *state.StateDB, engi
 		header.ExcessBlobGas = &excessBlobGas
 		header.BlobGasUsed = new(uint64)
 		header.ParentBeaconRoot = new(common.Hash)
+	}
+	if cm.config.IsPrague1(header.Number, header.Time) {
+		header.ParentProposerPubkey = new(common.Pubkey)
 	}
 	return header
 }

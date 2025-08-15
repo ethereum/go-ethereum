@@ -97,6 +97,7 @@ type btHeader struct {
 	BlobGasUsed           *uint64
 	ExcessBlobGas         *uint64
 	ParentBeaconBlockRoot *common.Hash
+	ParentProposerPubkey  *common.Pubkey
 }
 
 type btHeaderMarshaling struct {
@@ -335,6 +336,9 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	}
 	if !reflect.DeepEqual(h.ParentBeaconBlockRoot, h2.ParentBeaconRoot) {
 		return fmt.Errorf("parentBeaconBlockRoot: want: %v have: %v", h.ParentBeaconBlockRoot, h2.ParentBeaconRoot)
+	}
+	if !reflect.DeepEqual(h.ParentProposerPubkey, h2.ParentProposerPubkey) {
+		return fmt.Errorf("parentProposerPubkey: want: %v have: %v", h.ParentProposerPubkey, h2.ParentProposerPubkey)
 	}
 	return nil
 }

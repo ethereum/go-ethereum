@@ -101,6 +101,7 @@ type stEnv struct {
 	ParentExcessBlobGas   *uint64                             `json:"parentExcessBlobGas,omitempty"`
 	ParentBlobGasUsed     *uint64                             `json:"parentBlobGasUsed,omitempty"`
 	ParentBeaconBlockRoot *common.Hash                        `json:"parentBeaconBlockRoot"`
+	ParentProposerPubkey  *common.Pubkey                      `json:"parentProposerPubkey"`
 }
 
 type stEnvMarshaling struct {
@@ -220,6 +221,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		)
 		core.ProcessParentBlockHash(prevHash, evm)
 	}
+	// TODO(BRIP-4): Validate Prague1 block rules.
 	for i := 0; txIt.Next(); i++ {
 		tx, err := txIt.Tx()
 		if err != nil {

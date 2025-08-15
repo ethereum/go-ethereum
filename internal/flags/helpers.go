@@ -38,7 +38,12 @@ func NewApp(usage string) *cli.App {
 	git, _ := version.VCS()
 	app := cli.NewApp()
 	app.EnableBashCompletion = true
-	app.Version = version.WithCommit(git.Commit, git.Date)
+	// Prefer git tag for the concise CLI version (-v), falling back to commit-based string
+	if git.Tag != "" {
+		app.Version = git.Tag
+	} else {
+		app.Version = version.WithCommit(git.Commit, git.Date)
+	}
 	app.Usage = usage
 	app.Copyright = "Copyright 2013-2025 The go-ethereum Authors"
 	app.Before = func(ctx *cli.Context) error {

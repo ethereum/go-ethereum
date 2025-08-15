@@ -139,7 +139,7 @@ var (
 	}
 	NetworkIdFlag = &cli.Uint64Flag{
 		Name:     "networkid",
-		Usage:    "Explicitly set network id (integer)(For testnets: use --sepolia, --holesky, --hoodi instead)",
+		Usage:    "Explicitly set network id (integer)(Testnet: use --bepolia)(For Ethereum: use --mainnet, --sepolia, etc.)",
 		Value:    ethconfig.Defaults.NetworkId,
 		Category: flags.EthCategory,
 	}
@@ -161,6 +161,17 @@ var (
 	HoodiFlag = &cli.BoolFlag{
 		Name:     "hoodi",
 		Usage:    "Hoodi network: pre-configured proof-of-stake test network",
+		Category: flags.EthCategory,
+	}
+	// Berachain
+	BerachainFlag = &cli.BoolFlag{
+		Name:     "berachain",
+		Usage:    "Berachain mainnet",
+		Category: flags.EthCategory,
+	}
+	BepoliaFlag = &cli.BoolFlag{
+		Name:     "bepolia",
+		Usage:    "Bepolia network: pre-configured proof-of-stake test network",
 		Category: flags.EthCategory,
 	}
 	// Dev mode
@@ -449,7 +460,7 @@ var (
 	// Performance tuning settings
 	CacheFlag = &cli.IntFlag{
 		Name:     "cache",
-		Usage:    "Megabytes of memory allocated to internal caching (default = 4096 mainnet full node, 128 light mode)",
+		Usage:    "Megabytes of memory allocated to internal caching (default = 4096 berachain mainnet full node, 128 light mode)",
 		Value:    1024,
 		Category: flags.PerfCategory,
 	}
@@ -1056,9 +1067,9 @@ func setNodeUserIdent(ctx *cli.Context, cfg *node.Config) {
 // 1. --bootnodes flag
 // 2. Config file
 // 3. Network preset flags (e.g. --holesky)
-// 4. default to mainnet nodes
+// 4. default to Berachain mainnet nodes
 func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
-	urls := params.MainnetBootnodes
+	urls := params.BerachainBootnodes
 	if ctx.IsSet(BootnodesFlag.Name) {
 		urls = SplitAndTrim(ctx.String(BootnodesFlag.Name))
 	} else {
@@ -1066,12 +1077,16 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 			return // Already set by config file, don't apply defaults.
 		}
 		switch {
+		case ctx.Bool(MainnetFlag.Name):
+			urls = params.MainnetBootnodes
 		case ctx.Bool(HoleskyFlag.Name):
 			urls = params.HoleskyBootnodes
 		case ctx.Bool(SepoliaFlag.Name):
 			urls = params.SepoliaBootnodes
 		case ctx.Bool(HoodiFlag.Name):
 			urls = params.HoodiBootnodes
+		case ctx.Bool(BepoliaFlag.Name):
+			urls = params.BepoliaBootnodes
 		}
 	}
 	cfg.BootstrapNodes = mustParseBootnodes(urls)
@@ -1562,7 +1577,7 @@ func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags, don't allow network id override on preset networks
-	flags.CheckExclusive(ctx, MainnetFlag, DeveloperFlag, SepoliaFlag, HoleskyFlag, HoodiFlag, NetworkIdFlag)
+	flags.CheckExclusive(ctx, BerachainFlag, BepoliaFlag, MainnetFlag, DeveloperFlag, SepoliaFlag, HoleskyFlag, HoodiFlag, NetworkIdFlag)
 	flags.CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 
 	// Set configurations from CLI flags

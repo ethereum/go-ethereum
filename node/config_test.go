@@ -79,15 +79,15 @@ func TestIPCPathResolution(t *testing.T) {
 	}{
 		{"", "", false, ""},
 		{"data", "", false, ""},
-		{"", "geth.ipc", false, filepath.Join(os.TempDir(), "geth.ipc")},
-		{"data", "geth.ipc", false, "data/geth.ipc"},
-		{"data", "./geth.ipc", false, "./geth.ipc"},
-		{"data", "/geth.ipc", false, "/geth.ipc"},
+		{"", "bera-geth.ipc", false, filepath.Join(os.TempDir(), "bera-geth.ipc")},
+		{"data", "bera-geth.ipc", false, "data" + string(os.PathSeparator) + "bera-geth.ipc"},
+		{"data", "./bera-geth.ipc", false, "." + string(os.PathSeparator) + "bera-geth.ipc"},
+		{"data", "/bera-geth.ipc", false, "/bera-geth.ipc"},
 		{"", "", true, ``},
 		{"data", "", true, ``},
-		{"", "geth.ipc", true, `\\.\pipe\geth.ipc`},
-		{"data", "geth.ipc", true, `\\.\pipe\geth.ipc`},
-		{"data", `\\.\pipe\geth.ipc`, true, `\\.\pipe\geth.ipc`},
+		{"", "bera-geth.ipc", true, `\\.\pipe\bera-geth.ipc`},
+		{"data", "bera-geth.ipc", true, `\\.\pipe\bera-geth.ipc`},
+		{"data", `\\.\pipe\bera-geth.ipc`, true, `\\.\pipe\bera-geth.ipc`},
 	}
 	for i, test := range tests {
 		// Only run when platform/test match

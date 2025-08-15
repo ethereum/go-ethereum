@@ -199,6 +199,37 @@ func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]*simBlo
 		if err != nil {
 			return nil, err
 		}
+
+		// Berachain: Pre-compute expected PoL tx hash when in Prague1.
+		isPrague1 := sim.chainConfig.IsPrague1(result.Number(), result.Time())
+		var expectedPoLHash common.Hash
+		if isPrague1 {
+			polTx, err := types.NewPoLTx(
+				sim.chainConfig.ChainID,
+				sim.chainConfig.Berachain.Prague1.PoLDistributorAddress,
+				new(big.Int).Sub(result.Number(), big.NewInt(1)),
+				params.PoLTxGasLimit,
+				result.BaseFee(),
+				result.ProposerPubkey(),
+			)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create expected PoL tx: %w", err)
+			}
+			expectedPoLHash = polTx.Hash()
+		}
+
+		// Berachain: validate the PoL tx is only the first tx in the block.
+		for i, tx := range result.Transactions() {
+			switch {
+			case isPrague1 && i == 0:
+				if tx.Hash() != expectedPoLHash {
+					return nil, fmt.Errorf("PoL tx hash mismatch: have %v, want %v", tx.Hash(), expectedPoLHash)
+				}
+			case tx.Type() == types.PoLTxType:
+				return nil, fmt.Errorf("invalid block: tx at index %d is a PoL tx", i)
+			}
+		}
+
 		headers[bi] = result.Header()
 		results[bi] = &simBlockResult{fullTx: sim.fullTx, chainConfig: sim.chainConfig, Block: result, Calls: callResults, senders: senders}
 		parent = result.Header()
@@ -279,15 +310,17 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			return nil, nil, nil, err
 		}
 		var (
-			tx     = call.ToTransaction(types.DynamicFeeTxType)
-			txHash = tx.Hash()
+			isPrague1          = sim.chainConfig.IsPrague1(header.Number, header.Time)
+			distributorAddress = sim.chainConfig.Berachain.Prague1.PoLDistributorAddress
+			tx                 = call.ToTransaction(types.DynamicFeeTxType, isPrague1, distributorAddress)
+			txHash             = tx.Hash()
 		)
 		txes[i] = tx
 		senders[txHash] = call.from()
 		tracer.reset(txHash, uint(i))
 		sim.state.SetTxContext(txHash, i)
 		// EoA check is always skipped, even in validation mode.
-		msg := call.ToMessage(header.BaseFee, !sim.validate, true)
+		msg := call.ToMessage(header.BaseFee, !sim.validate, true, isPrague1, distributorAddress)
 		result, err := applyMessageWithEVM(ctx, evm, msg, timeout, sim.gp)
 		if err != nil {
 			txErr := txValidationError(err)
@@ -484,15 +517,24 @@ func (sim *simulator) makeHeaders(blocks []simBlock) ([]*types.Header, error) {
 				parentBeaconRoot = overrides.BeaconRoot
 			}
 		}
+		var parentProposerPubkey *common.Pubkey
+		if sim.chainConfig.IsPrague1(overrides.Number.ToInt(), (uint64)(*overrides.Time)) {
+			parentProposerPubkey = new(common.Pubkey)
+			if overrides.ProposerPubkey == nil {
+				return nil, errors.New("proposer pubkey override is required for post Prague1 blocks")
+			}
+			*parentProposerPubkey = *overrides.ProposerPubkey
+		}
 		header = overrides.MakeHeader(&types.Header{
-			UncleHash:        types.EmptyUncleHash,
-			ReceiptHash:      types.EmptyReceiptsHash,
-			TxHash:           types.EmptyTxsHash,
-			Coinbase:         header.Coinbase,
-			Difficulty:       header.Difficulty,
-			GasLimit:         header.GasLimit,
-			WithdrawalsHash:  withdrawalsHash,
-			ParentBeaconRoot: parentBeaconRoot,
+			UncleHash:            types.EmptyUncleHash,
+			ReceiptHash:          types.EmptyReceiptsHash,
+			TxHash:               types.EmptyTxsHash,
+			Coinbase:             header.Coinbase,
+			Difficulty:           header.Difficulty,
+			GasLimit:             header.GasLimit,
+			WithdrawalsHash:      withdrawalsHash,
+			ParentBeaconRoot:     parentBeaconRoot,
+			ParentProposerPubkey: parentProposerPubkey,
 		})
 		res[bi] = header
 	}

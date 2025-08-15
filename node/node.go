@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -103,6 +104,16 @@ func New(conf *Config) (*Node, error) {
 	if strings.HasSuffix(conf.Name, ".ipc") {
 		return nil, errors.New(`Config.Name cannot end in ".ipc"`)
 	}
+
+	// Berachain: If the user specifies a datadir, the following logic migrates
+	// the db path within the data directory from "geth" to "bera-geth".
+	if conf.DataDir != "" && conf.Name == "bera-geth" {
+		// If the new directory doesn't exist but the old one does, move it.
+		if err := migrateDataDir(conf); err != nil {
+			return nil, err
+		}
+	}
+
 	server := rpc.NewServer()
 	server.SetBatchLimits(conf.BatchRequestLimit, conf.BatchResponseMaxSize)
 	node := &Node{
@@ -157,6 +168,55 @@ func New(conf *Config) (*Node, error) {
 	node.ipc = newIPCServer(node.log, conf.IPCEndpoint())
 
 	return node, nil
+}
+
+// migrateDataDir moves the data directory from an old path to a new path.
+// It only migrates if the new path doesn't exist or is an empty directory.
+func migrateDataDir(conf *Config) error {
+	oldPath := filepath.Join(conf.DataDir, "geth")
+	newPath := filepath.Join(conf.DataDir, conf.Name)
+
+	// If old path doesn't exist, there's nothing to do.
+	if _, err := os.Stat(oldPath); os.IsNotExist(err) {
+		return nil
+	}
+
+	// If new path exists, check if it is empty.
+	if _, err := os.Stat(newPath); err == nil {
+		empty, err := isDirEmpty(newPath)
+		if err != nil {
+			return fmt.Errorf("failed to check if new data directory is empty: %w", err)
+		}
+		if !empty {
+			log.Debug("Not migrating data, new directory is not empty", "path", newPath)
+			return nil
+		}
+		// remove the empty dir
+		if err := os.Remove(newPath); err != nil {
+			return fmt.Errorf("failed to remove empty new data directory: %w", err)
+		}
+	}
+
+	conf.Logger.Info("Migrating data directory", "old", oldPath, "new", newPath)
+	if err := os.Rename(oldPath, newPath); err != nil {
+		return fmt.Errorf("failed to rename data directory: %w", err)
+	}
+	return nil
+}
+
+// isDirEmpty checks if a directory is empty.
+func isDirEmpty(name string) (bool, error) {
+	f, err := os.Open(name)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+
+	_, err = f.Readdirnames(1)
+	if err == io.EOF {
+		return true, nil
+	}
+	return false, err
 }
 
 // Start starts all registered lifecycles, RPC services and p2p networking.

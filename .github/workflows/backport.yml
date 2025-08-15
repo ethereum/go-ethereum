@@ -1,0 +1,137 @@
+name: Backport merged pull request
+on:
+  pull_request_target:
+    types: [closed]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write # Required to push branches
+  pull-requests: write # Required to create pull requests
+
+jobs:
+  backport:
+    name: Backport pull request
+    runs-on: ubuntu-latest
+    
+    # Only run when:
+    # - A pull request to main is merged (not just closed)
+    # - OR a comment starting with '/backport' is created by someone other than the bot
+    if: >
+      (
+        github.event_name == 'pull_request_target' &&
+        github.event.pull_request.merged &&
+        github.event.pull_request.base.ref == 'main'
+      ) || (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        github.event.comment.user.id != 97796249 &&
+        startsWith(github.event.comment.body, '/backport')
+      )
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Fetch all history for all branches
+          fetch-depth: 0
+      
+      - name: Extract backport targets from labels
+        id: extract-targets
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = context.payload.pull_request?.labels || [];
+            const backportLabels = labels
+              .map(label => label.name)
+              .filter(name => name.startsWith('backport/'))
+              .map(name => {
+                // Extract version from "backport/{version}"
+                const version = name.replace('backport/', '');
+                // Transform to "release/{version}"
+                return `release/${version}`;
+              });
+            
+            if (backportLabels.length > 0) {
+              console.log(`Found backport targets: ${backportLabels.join(', ')}`);
+              // Join with spaces as the backport action expects
+              core.setOutput('targets', backportLabels.join(' '));
+              core.setOutput('has-targets', 'true');
+            } else {
+              console.log('No backport labels found');
+              core.setOutput('has-targets', 'false');
+            }
+            
+            // Also output the original labels for the action
+            const originalLabels = labels
+              .map(label => label.name)
+              .filter(name => name.startsWith('backport/'))
+              .map(name => {
+                // Transform "backport/{version}" to "backport release/{version}"
+                const version = name.replace('backport/', '');
+                return `backport release/${version}`;
+              })
+              .join(',');
+            
+            core.setOutput('transformed-labels', originalLabels);
+      
+      - name: Create backport pull requests
+        if: steps.extract-targets.outputs.has-targets == 'true'
+        uses: korthout/backport-action@v3
+        with:
+          # GitHub token for authentication
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          
+          # Directly specify target branches extracted from labels
+          target_branches: ${{ steps.extract-targets.outputs.targets }}
+          
+          # Disable label pattern matching since we're using target_branches
+          label_pattern: ""
+          
+          # Branch name template for the backport branch
+          # This creates branches like: backport-123-to-release-v1.0.0
+          branch_name: "backport-${pull_number}-to-${target_branch}"
+          
+          # Title template for the backport PR
+          pull_title: "[Backport ${target_branch}] ${pull_title}"
+          
+          # Description template for the backport PR
+          pull_description: |
+            # Backport to ${target_branch}
+            
+            This is an automatic backport of pull request #${pull_number} to `${target_branch}`.
+            
+            ## Original PR Information
+            - **Title**: ${pull_title}
+            - **Author**: @${pull_author}
+            - **Original PR**: #${pull_number}
+            
+            ## Original Description
+            ${pull_description}
+            
+            ## Related Issues
+            ${issue_refs}
+            
+            ---
+            *This pull request was created automatically by the backport action.*
+          
+          # Labels to add to the backport PR
+          add_labels: "automated"
+          
+          # Add original PR author as assignee
+          add_author_as_assignee: true
+          
+          # Enable experimental features (includes conflict handling)
+          experimental: |
+            {
+              "detect_merge_method": true
+            }
+          
+          # Cherry-picking strategy
+          # Options: "auto", "recursive", "ort"
+          cherry_picking: "auto"
+          
+          # How to handle merge commits
+          # Options: "fail" or "skip"
+          # Using skip to handle PRs that were kept in sync with base via merge commits
+          merge_commits: "skip"
