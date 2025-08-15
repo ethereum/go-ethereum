@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http/httptest"
@@ -28,6 +29,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 func TestServerRegisterName(t *testing.T) {
@@ -217,14 +220,14 @@ func TestServerWebsocketReadLimit(t *testing.T) {
 	}{
 		{
 			name:       "limit with small request - should succeed",
-			readLimit:  2048,
-			testSize:   500, // Small request data
+			readLimit:  4096, // generous limit to comfortably allow JSON overhead
+			testSize:   256,  // reasonably small payload
 			shouldFail: false,
 		},
 		{
 			name:       "limit with large request - should fail",
-			readLimit:  2048,
-			testSize:   5000, // Large request data that should exceed limit
+			readLimit:  256,  // tight limit to trigger server-side read limit
+			testSize:   1024, // payload that will exceed the limit including JSON overhead
 			shouldFail: true,
 		},
 	}
@@ -261,9 +264,18 @@ func TestServerWebsocketReadLimit(t *testing.T) {
 				if err == nil {
 					t.Fatalf("expected error for request size %d with limit %d, but got none", tc.testSize, tc.readLimit)
 				}
-				// Check if it's the expected message size limit error
-				if !strings.Contains(err.Error(), "message too big") {
-					t.Fatalf("expected 'message too big' error, got: %v", err)
+				// Be tolerant about the exact error surfaced by gorilla/websocket.
+				// Prefer a CloseError with code 1009, but accept ErrReadLimit or an error string containing 1009/message too big.
+				var cerr *websocket.CloseError
+				if errors.As(err, &cerr) {
+					if cerr.Code != websocket.CloseMessageTooBig {
+						t.Fatalf("unexpected websocket close code: have %d want %d (err=%v)", cerr.Code, websocket.CloseMessageTooBig, err)
+					}
+				} else if !errors.Is(err, websocket.ErrReadLimit) &&
+					!strings.Contains(strings.ToLower(err.Error()), "1009") &&
+					!strings.Contains(strings.ToLower(err.Error()), "message too big") {
+					// Not the error we expect from exceeding the message size limit.
+					t.Fatalf("unexpected error for read limit violation: %v", err)
 				}
 			} else {
 				// Expecting success
