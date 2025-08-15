@@ -81,6 +81,11 @@ var (
 
 	historicalAccountReadTimer = metrics.NewRegisteredResettingTimer("pathdb/history/account/reads", nil)
 	historicalStorageReadTimer = metrics.NewRegisteredResettingTimer("pathdb/history/storage/reads", nil)
+
+	historyIndexCacheHitMeter  = metrics.NewRegisteredMeter("pathdb/history/index/cache/hit", nil)
+	historyIndexCacheMissMeter = metrics.NewRegisteredMeter("pathdb/history/index/cache/miss", nil)
+	historyBlockCacheHitMeter  = metrics.NewRegisteredMeter("pathdb/history/block/cache/hit", nil)
+	historyBlockCacheMissMeter = metrics.NewRegisteredMeter("pathdb/history/block/cache/miss", nil)
 )
 
 // Metrics in generation
