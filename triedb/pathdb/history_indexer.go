@@ -511,6 +511,19 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 		}
 		return
 	}
+	// If the freezer is empty, no state history has been written.
+	// This can happen when the freezer was corrupted/lost
+	frozen, err := i.freezer.Ancients()
+	if err != nil {
+		log.Error("Failed to retrieve head of state history", "err", err)
+		return
+	}
+	if frozen == 0 {
+		storeIndexMetadata(i.disk, lastID)
+		log.Info("No state history to index, skipping", "beginID", beginID, "lastID", lastID)
+		return
+	}
+
 	log.Info("Start history indexing", "beginID", beginID, "lastID", lastID)
 
 	var (
