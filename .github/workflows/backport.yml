@@ -93,13 +93,13 @@ jobs:
           branch_name: "backport-${pull_number}-to-${target_branch}"
           
           # Title template for the backport PR
-          pull_title: "[Backport ${target_branch}] ${pull_title}"
+          pull_title: "${pull_title}"
           
           # Description template for the backport PR
           pull_description: |
             # Backport to ${target_branch}
             
-            This is an automatic backport of pull request #${pull_number} to `${target_branch}`.
+            This is an automatic backport of pull request #${pull_number} to ${target_branch}.
             
             ## Original PR Information
             - **Title**: ${pull_title}
