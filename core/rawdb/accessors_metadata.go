@@ -174,29 +174,3 @@ func UpdateUncleanShutdownMarker(db ethdb.KeyValueStore) {
 		log.Warn("Failed to write unclean-shutdown marker", "err", err)
 	}
 }
-
-// ReadTransitionStatus retrieves the eth2 transition status from the database
-func ReadTransitionStatus(db ethdb.KeyValueReader) []byte {
-	data, _ := db.Get(transitionStatusKey)
-	return data
-}
-
-// WriteTransitionStatus stores the eth2 transition status to the database
-func WriteTransitionStatus(db ethdb.KeyValueWriter, data []byte) {
-	if err := db.Put(transitionStatusKey, data); err != nil {
-		log.Crit("Failed to store the eth2 transition status", "err", err)
-	}
-}
-
-// WriteStateSizeMetrics writes the state size metrics to the database
-func WriteStateSizeMetrics(db ethdb.KeyValueWriter, data []byte) {
-	if err := db.Put(stateSizeMetricsKey, data); err != nil {
-		log.Warn("Failed to store state size metrics", "err", err)
-	}
-}
-
-// ReadStateSizeMetrics reads the state size metrics from the database
-func ReadStateSizeMetrics(db ethdb.KeyValueReader) []byte {
-	data, _ := db.Get(stateSizeMetricsKey)
-	return data
-}

@@ -73,7 +73,7 @@ func TestVerklePrefetcher(t *testing.T) {
 
 	state, err := New(types.EmptyRootHash, sdb)
 	if err != nil {
-		t.Fatalf("failed to initialize state: %v", err)
+		t.Fatalf("failed to init state: %v", err)
 	}
 	// Create an account and check if the retrieved balance is correct
 	addr := testrand.Address()

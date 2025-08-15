@@ -1,0 +1,547 @@
+// Copyright 2025 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+package state
+
+import (
+	"container/heap"
+	"errors"
+	"fmt"
+	"maps"
+	"slices"
+	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/triedb"
+	"golang.org/x/sync/errgroup"
+)
+
+const (
+	statEvictThreshold = 128 // the depth of statistic to be preserved
+)
+
+// Metrics for uploading the state statistics.
+var (
+	accountsGauge             = metrics.NewRegisteredGauge("state/size/account/count", nil)
+	accountBytesGauge         = metrics.NewRegisteredGauge("state/size/account/bytes", nil)
+	storagesGauge             = metrics.NewRegisteredGauge("state/size/storage/count", nil)
+	storageBytesGauge         = metrics.NewRegisteredGauge("state/size/storage/bytes", nil)
+	accountTrienodesGauge     = metrics.NewRegisteredGauge("state/size/trienode/account/count", nil)
+	accountTrienodeBytesGauge = metrics.NewRegisteredGauge("state/size/trienode/account/bytes", nil)
+	storageTrienodesGauge     = metrics.NewRegisteredGauge("state/size/trienode/storage/count", nil)
+	storageTrienodeBytesGauge = metrics.NewRegisteredGauge("state/size/trienode/storage/bytes", nil)
+	contractCodesGauge        = metrics.NewRegisteredGauge("state/size/contractcode/count", nil)
+	contractCodeBytesGauge    = metrics.NewRegisteredGauge("state/size/contractcode/bytes", nil)
+)
+
+// Database key scheme for states.
+var (
+	accountKeySize            = int64(len(rawdb.SnapshotAccountPrefix) + common.HashLength)
+	storageKeySize            = int64(len(rawdb.SnapshotStoragePrefix) + common.HashLength + common.HashLength)
+	accountTrienodePrefixSize = int64(len(rawdb.TrieNodeAccountPrefix))
+	storageTrienodePrefixSize = int64(len(rawdb.TrieNodeStoragePrefix) + common.HashLength)
+	codeKeySize               = int64(len(rawdb.CodePrefix) + common.HashLength)
+)
+
+// SizeStats represents either the current state size statistics or the size
+// differences resulting from a state transition.
+type SizeStats struct {
+	StateRoot   common.Hash // State root hash at the time of measurement
+	BlockNumber uint64      // Associated block number at the time of measurement
+
+	Accounts             int64 // Total number of accounts in the state
+	AccountBytes         int64 // Total storage size used by all account data (in bytes)
+	Storages             int64 // Total number of storage slots across all accounts
+	StorageBytes         int64 // Total storage size used by all storage slot data (in bytes)
+	AccountTrienodes     int64 // Total number of account trie nodes in the state
+	AccountTrienodeBytes int64 // Total storage size occupied by account trie nodes (in bytes)
+	StorageTrienodes     int64 // Total number of storage trie nodes in the state
+	StorageTrienodeBytes int64 // Total storage size occupied by storage trie nodes (in bytes)
+	ContractCodes        int64 // Total number of contract codes in the state
+	ContractCodeBytes    int64 // Total size of all contract code (in bytes)
+}
+
+// add applies the given state diffs and produces a new version of the statistics.
+func (s SizeStats) add(diff SizeStats) SizeStats {
+	var combo SizeStats
+	combo.StateRoot = diff.StateRoot
+	combo.BlockNumber = diff.BlockNumber
+
+	combo.Accounts += diff.Accounts
+	combo.AccountBytes += diff.AccountBytes
+	combo.Storages += diff.Storages
+	combo.StorageBytes += diff.StorageBytes
+	combo.AccountTrienodes += diff.AccountTrienodes
+	combo.AccountTrienodeBytes += diff.AccountTrienodeBytes
+	combo.StorageTrienodes += diff.StorageTrienodes
+	combo.StorageTrienodeBytes += diff.StorageTrienodeBytes
+	combo.ContractCodes += diff.ContractCodes
+	combo.ContractCodeBytes += diff.ContractCodeBytes
+	return combo
+}
+
+// calSizeStats measures the state size changes of the provided state update.
+func calSizeStats(update *stateUpdate) (SizeStats, error) {
+	stats := SizeStats{
+		BlockNumber: update.blockNumber,
+		StateRoot:   update.root,
+	}
+
+	// Measure the account changes
+	for addr, oldValue := range update.accountsOrigin {
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
+		newValue, exists := update.accounts[addrHash]
+		if !exists {
+			return SizeStats{}, fmt.Errorf("account %x not found", addr)
+		}
+		oldLen, newLen := len(oldValue), len(newValue)
+
+		switch {
+		case oldLen > 0 && newLen == 0:
+			// Account deletion
+			stats.Accounts -= 1
+			stats.AccountBytes -= accountKeySize + int64(oldLen)
+		case oldLen == 0 && newLen > 0:
+			// Account creation
+			stats.Accounts += 1
+			stats.AccountBytes += accountKeySize + int64(newLen)
+		default:
+			// Account update
+			stats.AccountBytes += int64(newLen - oldLen)
+		}
+	}
+
+	// Measure storage changes
+	for addr, slots := range update.storagesOrigin {
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
+		subset, exists := update.storages[addrHash]
+		if !exists {
+			return SizeStats{}, fmt.Errorf("storage %x not found", addr)
+		}
+		for key, oldValue := range slots {
+			var (
+				exists   bool
+				newValue []byte
+			)
+			if update.rawStorageKey {
+				newValue, exists = subset[crypto.Keccak256Hash(key.Bytes())]
+			} else {
+				newValue, exists = subset[key]
+			}
+			if !exists {
+				return SizeStats{}, fmt.Errorf("storage slot %x-%x not found", addr, key)
+			}
+			oldLen, newLen := len(oldValue), len(newValue)
+
+			switch {
+			case oldLen > 0 && newLen == 0:
+				// Storage deletion
+				stats.Storages -= 1
+				stats.StorageBytes -= storageKeySize + int64(oldLen)
+			case oldLen == 0 && newLen > 0:
+				// Storage creation
+				stats.Storages += 1
+				stats.StorageBytes += storageKeySize + int64(newLen)
+			default:
+				// Storage update
+				stats.StorageBytes += int64(newLen - oldLen)
+			}
+		}
+	}
+
+	// Measure trienode changes
+	for owner, subset := range update.nodes.Sets {
+		var (
+			keyPrefix int64
+			isAccount = owner == (common.Hash{})
+		)
+		if isAccount {
+			keyPrefix = accountTrienodePrefixSize
+		} else {
+			keyPrefix = storageTrienodePrefixSize
+		}
+
+		// Iterate over Origins since every modified node has an origin entry
+		for path, oldNode := range subset.Origins {
+			newNode, exists := subset.Nodes[path]
+			if !exists {
+				return SizeStats{}, fmt.Errorf("node %x-%v not found", owner, path)
+			}
+			keySize := keyPrefix + int64(len(path))
+
+			switch {
+			case len(oldNode) > 0 && len(newNode.Blob) == 0:
+				// Node deletion
+				if isAccount {
+					stats.AccountTrienodes -= 1
+					stats.AccountTrienodeBytes -= keySize + int64(len(oldNode))
+				} else {
+					stats.StorageTrienodes -= 1
+					stats.StorageTrienodeBytes -= keySize + int64(len(oldNode))
+				}
+			case len(oldNode) == 0 && len(newNode.Blob) > 0:
+				// Node creation
+				if isAccount {
+					stats.AccountTrienodes += 1
+					stats.AccountTrienodeBytes += keySize + int64(len(newNode.Blob))
+				} else {
+					stats.StorageTrienodes += 1
+					stats.StorageTrienodeBytes += keySize + int64(len(newNode.Blob))
+				}
+			default:
+				// Node update
+				if isAccount {
+					stats.AccountTrienodeBytes += int64(len(newNode.Blob) - len(oldNode))
+				} else {
+					stats.StorageTrienodeBytes += int64(len(newNode.Blob) - len(oldNode))
+				}
+			}
+		}
+	}
+
+	// Measure code changes. Note that the reported contract code size may be slightly
+	// inaccurate due to database deduplication (code is stored by its hash). However,
+	// this deviation is negligible and acceptable for measurement purposes.
+	for _, code := range update.codes {
+		stats.ContractCodes += 1
+		stats.ContractCodeBytes += codeKeySize + int64(len(code.blob))
+	}
+	return stats, nil
+}
+
+// SizeTracker handles the state size initialization and tracks of state size metrics.
+type SizeTracker struct {
+	db       ethdb.KeyValueStore
+	triedb   *triedb.Database
+	abort    chan struct{}
+	aborted  chan struct{}
+	updateCh chan *stateUpdate
+}
+
+// NewSizeTracker creates a new state size tracker and starts it automatically
+func NewSizeTracker(db ethdb.KeyValueStore, triedb *triedb.Database) *SizeTracker {
+	return &SizeTracker{
+		db:       db,
+		triedb:   triedb,
+		abort:    make(chan struct{}),
+		aborted:  make(chan struct{}),
+		updateCh: make(chan *stateUpdate),
+	}
+}
+
+func (t *SizeTracker) Start() {
+	go t.run()
+}
+
+func (t *SizeTracker) Stop() {
+	close(t.abort)
+	<-t.aborted
+}
+
+// sizeStatsHeap is a heap.Interface implementation over statesize statistics for
+// retrieving the oldest statistics for eviction.
+type sizeStatsHeap []SizeStats
+
+func (h sizeStatsHeap) Len() int           { return len(h) }
+func (h sizeStatsHeap) Less(i, j int) bool { return h[i].BlockNumber < h[j].BlockNumber }
+func (h sizeStatsHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+
+func (h *sizeStatsHeap) Push(x any) {
+	*h = append(*h, x.(SizeStats))
+}
+
+func (h *sizeStatsHeap) Pop() any {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[0 : n-1]
+	return x
+}
+
+// run performs the state size initialization and handles updates
+func (t *SizeTracker) run() {
+	defer close(t.aborted)
+
+	stats, err := t.init() // launch background thread for state size init
+	if err != nil {
+		return
+	}
+	h := sizeStatsHeap(slices.Collect(maps.Values(stats)))
+	heap.Init(&h)
+
+	for {
+		select {
+		case u := <-t.updateCh:
+			base, found := stats[u.originRoot]
+			if !found {
+				continue
+			}
+			diff, err := calSizeStats(u)
+			if err != nil {
+				continue
+			}
+			stat := base.add(diff)
+			t.upload(stat)
+
+			stats[u.root] = stat
+			heap.Push(&h, stats[u.root])
+			for u.blockNumber-h[0].BlockNumber > statEvictThreshold {
+				heap.Pop(&h)
+			}
+
+		case <-t.abort:
+			return
+		}
+	}
+}
+
+type buildResult struct {
+	stat        SizeStats
+	root        common.Hash
+	blockNumber uint64
+	err         error
+}
+
+func (t *SizeTracker) init() (map[common.Hash]SizeStats, error) {
+	// Wait for snapshot completion and then init
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+wait:
+	for {
+		select {
+		case <-ticker.C:
+			if t.triedb.SnapshotCompleted() {
+				break wait
+			}
+		case <-t.abort:
+			return nil, errors.New("size tracker closed")
+		}
+	}
+
+	var (
+		updates  = make(map[common.Hash]*stateUpdate)
+		children = make(map[common.Hash][]common.Hash)
+		done     = make(chan buildResult)
+	)
+	for {
+		select {
+		case u := <-t.updateCh:
+			updates[u.root] = u
+			children[u.originRoot] = append(children[u.originRoot], u.root)
+
+		case <-ticker.C:
+			root := rawdb.ReadSnapshotRoot(t.db)
+			if root == (common.Hash{}) {
+				continue
+			}
+			entry, exists := updates[root]
+			if !exists {
+				continue
+			}
+			if done == nil {
+				done = make(chan buildResult)
+				go t.build(entry.root, entry.blockNumber, done)
+			}
+
+		case result := <-done:
+			if result.err != nil {
+				return nil, result.err
+			}
+			var (
+				stats = make(map[common.Hash]SizeStats)
+				apply func(root common.Hash, stats SizeStats) error
+			)
+			apply = func(root common.Hash, stat SizeStats) error {
+				for _, child := range children[root] {
+					entry, ok := updates[child]
+					if !ok {
+						return fmt.Errorf("the state update is not found, %x", child)
+					}
+					diff, err := calSizeStats(entry)
+					if err != nil {
+						return err
+					}
+					stats[child] = stat.add(diff)
+					if err := apply(child, stats[child]); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+			if err := apply(result.root, result.stat); err != nil {
+				return nil, err
+			}
+			return stats, nil
+
+		case <-t.abort:
+			return nil, errors.New("size tracker closed")
+		}
+	}
+}
+
+func (t *SizeTracker) build(root common.Hash, blockNumber uint64, done chan buildResult) {
+	// Metrics will be directly updated by each goroutine
+	var (
+		accounts, accountBytes int64
+		storages, storageBytes int64
+		codes, codeBytes       int64
+
+		accountTrienodes, accountTrienodeBytes int64
+		storageTrienodes, storageTrienodeBytes int64
+
+		group errgroup.Group
+	)
+
+	// Start all table iterations concurrently with direct metric updates
+	group.Go(func() error {
+		count, bytes, err := t.iterateTable(t.abort, rawdb.SnapshotAccountPrefix, "account")
+		if err != nil {
+			return err
+		}
+		accounts, accountBytes = count, bytes
+		return nil
+	})
+
+	group.Go(func() error {
+		count, bytes, err := t.iterateTable(t.abort, rawdb.SnapshotStoragePrefix, "storage")
+		if err != nil {
+			return err
+		}
+		storages, storageBytes = count, bytes
+		return nil
+	})
+
+	group.Go(func() error {
+		count, bytes, err := t.iterateTable(t.abort, rawdb.TrieNodeAccountPrefix, "accountnode")
+		if err != nil {
+			return err
+		}
+		accountTrienodes, accountTrienodeBytes = count, bytes
+		return nil
+	})
+
+	group.Go(func() error {
+		count, bytes, err := t.iterateTable(t.abort, rawdb.TrieNodeStoragePrefix, "storagenode")
+		if err != nil {
+			return err
+		}
+		storageTrienodes, storageTrienodeBytes = count, bytes
+		return nil
+	})
+
+	group.Go(func() error {
+		count, bytes, err := t.iterateTable(t.abort, rawdb.CodePrefix, "contractcode")
+		if err != nil {
+			return err
+		}
+		codes, codeBytes = count, bytes
+		return nil
+	})
+
+	// Wait for all goroutines to complete
+	if err := group.Wait(); err != nil {
+		done <- buildResult{err: err}
+	} else {
+		stat := SizeStats{
+			StateRoot:            root,
+			BlockNumber:          blockNumber,
+			Accounts:             accounts,
+			AccountBytes:         accountBytes,
+			Storages:             storages,
+			StorageBytes:         storageBytes,
+			AccountTrienodes:     accountTrienodes,
+			AccountTrienodeBytes: accountTrienodeBytes,
+			StorageTrienodes:     storageTrienodes,
+			StorageTrienodeBytes: storageTrienodeBytes,
+			ContractCodes:        codes,
+			ContractCodeBytes:    codeBytes,
+		}
+		done <- buildResult{
+			root:        root,
+			blockNumber: blockNumber,
+			stat:        stat,
+		}
+	}
+}
+
+// Notify is an async method used to send the state update to the size tracker.
+// It ignores empty updates (where no state changes occurred).
+// If the channel is full, it drops the update to avoid blocking.
+func (t *SizeTracker) Notify(update *stateUpdate) {
+	if update == nil || update.empty() {
+		return
+	}
+	select {
+	case t.updateCh <- update:
+	case <-t.abort:
+		return
+	}
+}
+
+// iterateTable performs iteration over a specific table and returns the results.
+func (t *SizeTracker) iterateTable(closed chan struct{}, prefix []byte, name string) (int64, int64, error) {
+	var (
+		start        = time.Now()
+		logged       = time.Now()
+		count, bytes int64
+	)
+	iter := t.db.NewIterator(prefix, nil)
+	defer iter.Release()
+
+	log.Info("Iterating state", "category", name)
+	for iter.Next() {
+		count++
+		bytes += int64(len(iter.Key()) + len(iter.Value()))
+
+		if time.Since(logged) > time.Second*8 {
+			logged = time.Now()
+
+			select {
+			case <-closed:
+				log.Info("State iteration cancelled", "category", name)
+				return 0, 0, errors.New("size tracker closed")
+			default:
+				log.Info("Iterating state", "category", name, "count", count, "size", common.StorageSize(bytes))
+			}
+		}
+	}
+	// Check for iterator errors
+	if err := iter.Error(); err != nil {
+		log.Error("Iterator error", "category", name, "err", err)
+		return 0, 0, err
+	}
+	log.Info("Finished state iteration", "category", name, "count", count, "size", common.StorageSize(bytes), "elapsed", common.PrettyDuration(time.Since(start)))
+	return count, bytes, nil
+}
+
+func (t *SizeTracker) upload(stats SizeStats) {
+	accountsGauge.Update(stats.Accounts)
+	accountBytesGauge.Update(stats.AccountBytes)
+	storagesGauge.Update(stats.Storages)
+	storageBytesGauge.Update(stats.StorageBytes)
+	accountTrienodesGauge.Update(stats.AccountTrienodes)
+	accountTrienodeBytesGauge.Update(stats.AccountTrienodeBytes)
+	storageTrienodesGauge.Update(stats.StorageTrienodes)
+	storageTrienodeBytesGauge.Update(stats.StorageTrienodeBytes)
+	contractCodesGauge.Update(stats.ContractCodes)
+	contractCodeBytesGauge.Update(stats.ContractCodeBytes)
+}
