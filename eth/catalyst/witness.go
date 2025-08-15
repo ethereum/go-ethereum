@@ -84,6 +84,22 @@ func (api *ConsensusAPI) ForkchoiceUpdatedWithWitnessV3(update engine.Forkchoice
 	return api.forkchoiceUpdated(update, params, engine.PayloadV3, true)
 }
 
+// ForkchoiceUpdatedWithWitnessV4 is analogous to ForkchoiceUpdatedV4, only it
+// generates an execution witness too if block building was requested.
+func (api *ConsensusAPI) ForkchoiceUpdatedWithWitnessV4(update engine.ForkchoiceStateV1, params *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
+	if params != nil {
+		switch {
+		case params.Withdrawals == nil:
+			return engine.STATUS_INVALID, attributesErr("missing withdrawals")
+		case params.BeaconRoot == nil:
+			return engine.STATUS_INVALID, attributesErr("missing beacon root")
+		case !api.checkFork(params.Timestamp, forks.Eip7805):
+			return engine.STATUS_INVALID, unsupportedForkErr("fcuV4 must only be called for eip7805 payloads")
+		}
+	}
+	return api.forkchoiceUpdated(update, params, engine.PayloadV4, true)
+}
+
 // NewPayloadWithWitnessV1 is analogous to NewPayloadV1, only it also generates
 // and returns a stateless witness after running the payload.
 func (api *ConsensusAPI) NewPayloadWithWitnessV1(params engine.ExecutableData) (engine.PayloadStatusV1, error) {

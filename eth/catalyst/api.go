@@ -92,6 +92,7 @@ var caps = []string{
 	"engine_forkchoiceUpdatedWithWitnessV1",
 	"engine_forkchoiceUpdatedWithWitnessV2",
 	"engine_forkchoiceUpdatedWithWitnessV3",
+	"engine_forkchoiceUpdatedWithWitnessV4",
 	"engine_exchangeTransitionConfigurationV1",
 	"engine_getPayloadV1",
 	"engine_getPayloadV2",
