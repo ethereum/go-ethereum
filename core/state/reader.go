@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
+	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -242,6 +243,18 @@ func newTrieReader(root common.Hash, db *triedb.Database, cache *utils.PointCach
 		tr, err = trie.NewStateTrie(trie.StateTrieID(root), db)
 	} else {
 		tr, err = trie.NewVerkleTrie(root, db, cache)
+
+		// Based on the transition status, determine if the overlay
+		// tree needs to be created, or if a single, target tree is
+		// to be picked.
+		ts := overlay.LoadTransitionState(db.Disk(), root, true)
+		if ts.InTransition() {
+			mpt, err := trie.NewStateTrie(trie.StateTrieID(ts.BaseRoot), db)
+			if err != nil {
+				return nil, err
+			}
+			tr = trie.NewTransitionTree(mpt, tr.(*trie.VerkleTrie), false)
+		}
 	}
 	if err != nil {
 		return nil, err

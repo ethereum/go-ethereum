@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -55,8 +56,9 @@ type Trie struct {
 	// reader is the handler trie can retrieve nodes from.
 	reader *trieReader
 
-	// tracer is the tool to track the trie changes.
-	tracer *tracer
+	// Various tracers for capturing the modifications to trie
+	opTracer       *opTracer
+	prevalueTracer *prevalueTracer
 }
 
 // newFlag returns the cache flag value for a newly created node.
@@ -67,13 +69,14 @@ func (t *Trie) newFlag() nodeFlag {
 // Copy returns a copy of Trie.
 func (t *Trie) Copy() *Trie {
 	return &Trie{
-		root:        copyNode(t.root),
-		owner:       t.owner,
-		committed:   t.committed,
-		unhashed:    t.unhashed,
-		uncommitted: t.uncommitted,
-		reader:      t.reader,
-		tracer:      t.tracer.copy(),
+		root:           copyNode(t.root),
+		owner:          t.owner,
+		committed:      t.committed,
+		unhashed:       t.unhashed,
+		uncommitted:    t.uncommitted,
+		reader:         t.reader,
+		opTracer:       t.opTracer.copy(),
+		prevalueTracer: t.prevalueTracer.copy(),
 	}
 }
 
@@ -89,9 +92,10 @@ func New(id *ID, db database.NodeDatabase) (*Trie, error) {
 		return nil, err
 	}
 	trie := &Trie{
-		owner:  id.Owner,
-		reader: reader,
-		tracer: newTracer(),
+		owner:          id.Owner,
+		reader:         reader,
+		opTracer:       newOpTracer(),
+		prevalueTracer: newPrevalueTracer(),
 	}
 	if id.Root != (common.Hash{}) && id.Root != types.EmptyRootHash {
 		rootnode, err := trie.resolveAndTrack(id.Root[:], nil)
@@ -361,7 +365,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		// New branch node is created as a child of the original short node.
 		// Track the newly inserted node in the tracer. The node identifier
 		// passed is the path from the root node.
-		t.tracer.onInsert(append(prefix, key[:matchlen]...))
+		t.opTracer.onInsert(append(prefix, key[:matchlen]...))
 
 		// Replace it with a short node leading up to the branch.
 		return true, &shortNode{key[:matchlen], branch, t.newFlag()}, nil
@@ -379,7 +383,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		// New short node is created and track it in the tracer. The node identifier
 		// passed is the path from the root node. Note the valueNode won't be tracked
 		// since it's always embedded in its parent.
-		t.tracer.onInsert(prefix)
+		t.opTracer.onInsert(prefix)
 
 		return true, &shortNode{key, value, t.newFlag()}, nil
 
@@ -444,7 +448,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 			// The matched short node is deleted entirely and track
 			// it in the deletion set. The same the valueNode doesn't
 			// need to be tracked at all since it's always embedded.
-			t.tracer.onDelete(prefix)
+			t.opTracer.onDelete(prefix)
 
 			return true, nil, nil // remove n entirely for whole matches
 		}
@@ -460,7 +464,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		case *shortNode:
 			// The child shortNode is merged into its parent, track
 			// is deleted as well.
-			t.tracer.onDelete(append(prefix, n.Key...))
+			t.opTracer.onDelete(append(prefix, n.Key...))
 
 			// Deleting from the subtrie reduced it to another
 			// short node. Merge the nodes to avoid creating a
@@ -468,7 +472,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 			// always creates a new slice) instead of append to
 			// avoid modifying n.Key since it might be shared with
 			// other nodes.
-			return true, &shortNode{concat(n.Key, child.Key...), child.Val, t.newFlag()}, nil
+			return true, &shortNode{slices.Concat(n.Key, child.Key), child.Val, t.newFlag()}, nil
 		default:
 			return true, &shortNode{n.Key, child, t.newFlag()}, nil
 		}
@@ -525,7 +529,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 					// Replace the entire full node with the short node.
 					// Mark the original short node as deleted since the
 					// value is embedded into the parent now.
-					t.tracer.onDelete(append(prefix, byte(pos)))
+					t.opTracer.onDelete(append(prefix, byte(pos)))
 
 					k := append([]byte{byte(pos)}, cnode.Key...)
 					return true, &shortNode{k, cnode.Val, t.newFlag()}, nil
@@ -561,13 +565,6 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v (%v)", n, n, key))
 	}
-}
-
-func concat(s1 []byte, s2 ...byte) []byte {
-	r := make([]byte, len(s1)+len(s2))
-	copy(r, s1)
-	copy(r[len(s1):], s2)
-	return r
 }
 
 // copyNode deep-copies the supplied node along with its children recursively.
@@ -616,17 +613,35 @@ func (t *Trie) resolveAndTrack(n hashNode, prefix []byte) (node, error) {
 	if err != nil {
 		return nil, err
 	}
-	t.tracer.onRead(prefix, blob)
+	t.prevalueTracer.put(prefix, blob)
 
 	// The returned node blob won't be changed afterward. No need to
 	// deep-copy the slice.
 	return decodeNodeUnsafe(n, blob)
 }
 
+// deletedNodes returns a list of node paths, referring the nodes being deleted
+// from the trie. It's possible a few deleted nodes were embedded in their parent
+// before, the deletions can be no effect by deleting nothing, filter them out.
+func (t *Trie) deletedNodes() [][]byte {
+	var (
+		pos   int
+		list  = t.opTracer.deletedList()
+		flags = t.prevalueTracer.hasList(list)
+	)
+	for i := 0; i < len(list); i++ {
+		if flags[i] {
+			list[pos] = list[i]
+			pos++
+		}
+	}
+	return list[:pos] // trim to the new length
+}
+
 // Hash returns the root hash of the trie. It does not write to the
 // database and can be used even if the trie doesn't have one.
 func (t *Trie) Hash() common.Hash {
-	return common.BytesToHash(t.hashRoot().(hashNode))
+	return common.BytesToHash(t.hashRoot())
 }
 
 // Commit collects all dirty nodes in the trie and replaces them with the
@@ -644,13 +659,13 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 	// (b) The trie was non-empty and all nodes are dropped => return
 	//     the node set includes all deleted nodes
 	if t.root == nil {
-		paths := t.tracer.deletedNodes()
+		paths := t.deletedNodes()
 		if len(paths) == 0 {
 			return types.EmptyRootHash, nil // case (a)
 		}
 		nodes := trienode.NewNodeSet(t.owner)
 		for _, path := range paths {
-			nodes.AddNode([]byte(path), trienode.NewDeleted())
+			nodes.AddNode(path, trienode.NewDeletedWithPrev(t.prevalueTracer.get(path)))
 		}
 		return types.EmptyRootHash, nodes // case (b)
 	}
@@ -667,19 +682,19 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 		return rootHash, nil
 	}
 	nodes := trienode.NewNodeSet(t.owner)
-	for _, path := range t.tracer.deletedNodes() {
-		nodes.AddNode([]byte(path), trienode.NewDeleted())
+	for _, path := range t.deletedNodes() {
+		nodes.AddNode(path, trienode.NewDeletedWithPrev(t.prevalueTracer.get(path)))
 	}
 	// If the number of changes is below 100, we let one thread handle it
-	t.root = newCommitter(nodes, t.tracer, collectLeaf).Commit(t.root, t.uncommitted > 100)
+	t.root = newCommitter(nodes, t.prevalueTracer, collectLeaf).Commit(t.root, t.uncommitted > 100)
 	t.uncommitted = 0
 	return rootHash, nodes
 }
 
 // hashRoot calculates the root hash of the given trie
-func (t *Trie) hashRoot() node {
+func (t *Trie) hashRoot() []byte {
 	if t.root == nil {
-		return hashNode(types.EmptyRootHash.Bytes())
+		return types.EmptyRootHash.Bytes()
 	}
 	// If the number of changes is below 100, we let one thread handle it
 	h := newHasher(t.unhashed >= 100)
@@ -692,12 +707,13 @@ func (t *Trie) hashRoot() node {
 
 // Witness returns a set containing all trie nodes that have been accessed.
 func (t *Trie) Witness() map[string]struct{} {
-	if len(t.tracer.accessList) == 0 {
+	values := t.prevalueTracer.values()
+	if len(values) == 0 {
 		return nil
 	}
-	witness := make(map[string]struct{}, len(t.tracer.accessList))
-	for _, node := range t.tracer.accessList {
-		witness[string(node)] = struct{}{}
+	witness := make(map[string]struct{}, len(values))
+	for _, val := range values {
+		witness[string(val)] = struct{}{}
 	}
 	return witness
 }
@@ -708,6 +724,7 @@ func (t *Trie) Reset() {
 	t.owner = common.Hash{}
 	t.unhashed = 0
 	t.uncommitted = 0
-	t.tracer.reset()
+	t.opTracer.reset()
+	t.prevalueTracer.reset()
 	t.committed = false
 }

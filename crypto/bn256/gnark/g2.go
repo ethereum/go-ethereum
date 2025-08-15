@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/consensys/gnark-crypto/ecc/bn254"
+	"github.com/ethereum/go-ethereum/common/bitutil"
 )
 
 // G2 is the affine representation of a G2 group element.
@@ -31,7 +32,7 @@ func (g *G2) Unmarshal(buf []byte) (int, error) {
 		return 0, errors.New("invalid G2 point size")
 	}
 
-	if allZeroes(buf[:128]) {
+	if !bitutil.TestBytes(buf[:128]) {
 		// point at infinity
 		g.inner.X.A0.SetZero()
 		g.inner.X.A1.SetZero()
