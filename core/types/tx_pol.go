@@ -45,7 +45,7 @@ type PoLTx struct {
 func NewPoLTx(
 	chainID *big.Int,
 	distributorAddress common.Address,
-	distributionBlockNumber *big.Int,
+	currentBlockNumber *big.Int,
 	gasLimit uint64,
 	baseFee *big.Int,
 	pubkey *common.Pubkey,
@@ -54,11 +54,14 @@ func NewPoLTx(
 	if err != nil {
 		return nil, err
 	}
+	if currentBlockNumber.Sign() <= 0 {
+		return nil, errors.New("PoL tx must only be created for a block number greater than 0")
+	}
 	return NewTx(&PoLTx{
 		ChainID:  chainID,
 		From:     params.SystemAddress,
 		To:       distributorAddress,
-		Nonce:    distributionBlockNumber.Uint64(),
+		Nonce:    currentBlockNumber.Uint64() - 1, // PoL txs are distributing for the previous block
 		GasLimit: gasLimit,
 		GasPrice: baseFee,
 		Data:     data,

@@ -502,7 +502,7 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 		tx, err := types.NewPoLTx(
 			miner.chainConfig.ChainID,
 			miner.chainConfig.Berachain.Prague1.PoLDistributorAddress,
-			new(big.Int).Sub(env.header.Number, big.NewInt(1)),
+			env.header.Number,
 			params.PoLTxGasLimit,
 			env.header.BaseFee,
 			env.header.ParentProposerPubkey,

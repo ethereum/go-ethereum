@@ -86,28 +86,59 @@ func TestNewPoLTx_NilPubkey(t *testing.T) {
 	}
 }
 
-// TestNewPoLTx_NegativeBlockNumber ensures negative block numbers are handled
-// without panicking (uint64 wrap-around is expected).
-func TestNewPoLTx_NegativeBlockNumber(t *testing.T) {
+// TestNewPoLTx_InvalidBlockNumber ensures that block numbers <= 0 are rejected.
+func TestNewPoLTx_InvalidBlockNumber(t *testing.T) {
 	chainID := big.NewInt(1)
 	distributor := common.Address{}
-	negBlock := big.NewInt(-1)
 	baseFee := big.NewInt(1000000000)
+	expectedErr := "PoL tx must only be created for a block number greater than 0"
 
-	tx, err := NewPoLTx(chainID, distributor, negBlock, params.PoLTxGasLimit, baseFee, samplePubkey())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	testCases := []struct {
+		name        string
+		blockNumber *big.Int
+	}{
+		{"negative block number", big.NewInt(-1)},
+		{"zero block number", big.NewInt(0)},
 	}
-	if got, want := tx.Nonce(), negBlock.Uint64(); got != want {
-		t.Fatalf("nonce mismatch: have %d, want %d", got, want)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tx, err := NewPoLTx(chainID, distributor, tc.blockNumber, params.PoLTxGasLimit, baseFee, samplePubkey())
+			if err == nil {
+				t.Fatalf("expected error for block number %v, but got nil", tc.blockNumber)
+			}
+			if tx != nil {
+				t.Fatalf("expected nil transaction when error occurs, but got %v", tx)
+			}
+			if err.Error() != expectedErr {
+				t.Fatalf("error message mismatch: have %q, want %q", err.Error(), expectedErr)
+			}
+		})
 	}
+
+	// Test that positive block numbers work correctly
+	t.Run("positive block number", func(t *testing.T) {
+		positiveBlock := big.NewInt(123)
+		tx, err := NewPoLTx(chainID, distributor, positiveBlock, params.PoLTxGasLimit, baseFee, samplePubkey())
+		if err != nil {
+			t.Fatalf("unexpected error for positive block number: %v", err)
+		}
+		if tx == nil {
+			t.Fatalf("expected transaction for positive block number, but got nil")
+		}
+		// Nonce should be blockNumber - 1 (as per the implementation)
+		expectedNonce := positiveBlock.Uint64() - 1
+		if got := tx.Nonce(); got != expectedNonce {
+			t.Fatalf("nonce mismatch: have %d, want %d", got, expectedNonce)
+		}
+	})
 }
 
 // TestIsPoLDistribution exercises positive and negative cases for the helper.
 func TestIsPoLDistribution(t *testing.T) {
 	distributor := common.HexToAddress("0x1000000000000000000000000000000000000001")
 	baseFee := big.NewInt(1000000000)
-	tx, err := NewPoLTx(big.NewInt(1), distributor, big.NewInt(0), params.PoLTxGasLimit, baseFee, samplePubkey())
+	tx, err := NewPoLTx(big.NewInt(1), distributor, big.NewInt(1), params.PoLTxGasLimit, baseFee, samplePubkey())
 	if err != nil {
 		t.Fatalf("failed to build PoL tx: %v", err)
 	}
@@ -143,7 +174,7 @@ func TestIsPoLDistribution(t *testing.T) {
 // TestPoLTx_RawSignatureValues confirms that PoLTx reports no signature.
 func TestPoLTx_RawSignatureValues(t *testing.T) {
 	baseFee := big.NewInt(1000000000)
-	tx, err := NewPoLTx(big.NewInt(1), common.Address{}, big.NewInt(0), params.PoLTxGasLimit, baseFee, samplePubkey())
+	tx, err := NewPoLTx(big.NewInt(1), common.Address{}, big.NewInt(1), params.PoLTxGasLimit, baseFee, samplePubkey())
 	if err != nil {
 		t.Fatalf("failed to create PoL tx: %v", err)
 	}

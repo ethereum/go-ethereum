@@ -19,7 +19,6 @@ package core
 import (
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -100,7 +99,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		polTx, err := types.NewPoLTx(
 			v.config.ChainID,
 			v.config.Berachain.Prague1.PoLDistributorAddress,
-			new(big.Int).Sub(block.Number(), big.NewInt(1)),
+			block.Number(),
 			params.PoLTxGasLimit,
 			block.BaseFee(),
 			block.ProposerPubkey(),

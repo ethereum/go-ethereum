@@ -207,7 +207,7 @@ func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]*simBlo
 			polTx, err := types.NewPoLTx(
 				sim.chainConfig.ChainID,
 				sim.chainConfig.Berachain.Prague1.PoLDistributorAddress,
-				new(big.Int).Sub(result.Number(), big.NewInt(1)),
+				result.Number(),
 				params.PoLTxGasLimit,
 				result.BaseFee(),
 				result.ProposerPubkey(),
