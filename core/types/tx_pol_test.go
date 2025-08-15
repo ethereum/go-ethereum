@@ -65,6 +65,27 @@ func TestNewPoLTx_DataPacking(t *testing.T) {
 	}
 }
 
+// TestNewPoLTx_NilPubkey verifies that NewPoLTx returns an error when pubkey is nil.
+func TestNewPoLTx_NilPubkey(t *testing.T) {
+	chainID := big.NewInt(1)
+	distributor := common.HexToAddress("0x000000000000000000000000000000000000dEaD")
+	blockNum := big.NewInt(123)
+	baseFee := big.NewInt(1000000000)
+
+	// Call NewPoLTx with nil pubkey
+	tx, err := NewPoLTx(chainID, distributor, blockNum, params.PoLTxGasLimit, baseFee, nil)
+	if err == nil {
+		t.Fatalf("expected error for nil pubkey, but got nil")
+	}
+	if tx != nil {
+		t.Fatalf("expected nil transaction when error occurs, but got %v", tx)
+	}
+	expectedErr := "pubkey cannot be nil for PoL transaction"
+	if err.Error() != expectedErr {
+		t.Fatalf("error message mismatch: have %q, want %q", err.Error(), expectedErr)
+	}
+}
+
 // TestNewPoLTx_NegativeBlockNumber ensures negative block numbers are handled
 // without panicking (uint64 wrap-around is expected).
 func TestNewPoLTx_NegativeBlockNumber(t *testing.T) {

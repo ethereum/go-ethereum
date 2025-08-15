@@ -18,6 +18,7 @@ package types
 
 import (
 	"bytes"
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -145,14 +146,11 @@ var (
 
 // getDistributeForData returns the tx data for the `distributeFor(bytes pubkey)` method.
 func getDistributeForData(pubkey *common.Pubkey) ([]byte, error) {
-	var pubkeyBytes []byte
 	if pubkey == nil {
-		pubkeyBytes = common.Pubkey{}.Bytes()
-	} else {
-		pubkeyBytes = pubkey.Bytes()
+		return nil, errors.New("pubkey cannot be nil for PoL transaction")
 	}
 
-	arguments, err := distributeForMethod.Inputs.Pack(pubkeyBytes)
+	arguments, err := distributeForMethod.Inputs.Pack(pubkey.Bytes())
 	if err != nil {
 		return nil, err
 	}
