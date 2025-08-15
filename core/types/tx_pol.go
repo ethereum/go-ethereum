@@ -91,7 +91,7 @@ func (*PoLTx) accessList() AccessList { return nil }
 func (tx *PoLTx) data() []byte        { return tx.Data }
 func (tx *PoLTx) gas() uint64         { return tx.GasLimit }
 func (tx *PoLTx) gasPrice() *big.Int  { return tx.GasPrice }
-func (tx *PoLTx) gasTipCap() *big.Int { return tx.GasPrice }
+func (tx *PoLTx) gasTipCap() *big.Int { return common.Big0 }
 func (tx *PoLTx) gasFeeCap() *big.Int { return tx.GasPrice }
 func (*PoLTx) value() *big.Int        { return common.Big0 }
 func (tx *PoLTx) nonce() uint64       { return tx.Nonce }
