@@ -112,6 +112,9 @@ var (
 	errChainStopped         = errors.New("blockchain is stopped")
 	errInvalidOldChain      = errors.New("invalid old chain")
 	errInvalidNewChain      = errors.New("invalid new chain")
+
+	avgAccessDepthInBlock = metrics.NewRegisteredGauge("trie/access/depth/avg", nil)
+	minAccessDepthInBlock = metrics.NewRegisteredGauge("trie/access/depth/min", nil)
 )
 
 var (
@@ -2083,6 +2086,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 			return nil, fmt.Errorf("stateless self-validation receipt root mismatch (cross: %x local: %x)", crossReceiptRoot, block.ReceiptHash())
 		}
 	}
+
 	xvtime := time.Since(xvstart)
 	proctime := time.Since(startTime) // processing + validation + cross validation
 
@@ -2118,6 +2122,24 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	if err != nil {
 		return nil, err
 	}
+
+	// If witness was generated, update metrics regarding the access paths.
+	if witness != nil {
+		paths := witness.Paths
+		totaldepth, pathnum, mindepth := 0, 0, -1
+		if len(paths) > 0 {
+			for path, _ := range paths {
+				if len(path) < mindepth || mindepth < 0 {
+					mindepth = len(path)
+				}
+				totaldepth += len(path)
+				pathnum++
+			}
+			avgAccessDepthInBlock.Update(int64(totaldepth) / int64(pathnum))
+			minAccessDepthInBlock.Update(int64(mindepth))
+		}
+	}
+
 	// Update the metrics touched during block commit
 	accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
 	storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them

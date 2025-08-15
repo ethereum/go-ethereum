@@ -277,6 +277,11 @@ func (t *StateTrie) Witness() map[string]struct{} {
 	return t.trie.Witness()
 }
 
+// Witness returns a set containing all trie nodes that have been accessed.
+func (t *StateTrie) WitnessPaths() map[string]struct{} {
+	return t.trie.WitnessPaths()
+}
+
 // Commit collects all dirty nodes in the trie and replaces them with the
 // corresponding node hash. All collected nodes (including dirty leaves if
 // collectLeaf is true) will be encapsulated into a nodeset for return.

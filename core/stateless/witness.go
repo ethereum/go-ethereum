@@ -41,6 +41,7 @@ type Witness struct {
 	Headers []*types.Header     // Past headers in reverse order (0=parent, 1=parent's-parent, etc). First *must* be set.
 	Codes   map[string]struct{} // Set of bytecodes ran or accessed
 	State   map[string]struct{} // Set of MPT state trie nodes (account and storage together)
+	Paths   map[string]struct{} // Set of MPT trie paths (i.e. all accessed nodes, not just the ones in state)
 
 	chain HeaderReader // Chain reader to convert block hash ops to header proofs
 	lock  sync.Mutex   // Lock to allow concurrent state insertions
@@ -58,13 +59,15 @@ func NewWitness(context *types.Header, chain HeaderReader) (*Witness, error) {
 		}
 		headers = append(headers, parent)
 	}
-	// Create the wtness with a reconstructed gutted out block
+	// Create the witness with a reconstructed gutted out block
 	return &Witness{
 		context: context,
 		Headers: headers,
 		Codes:   make(map[string]struct{}),
 		State:   make(map[string]struct{}),
-		chain:   chain,
+		Paths:   make(map[string]struct{}),
+
+		chain: chain,
 	}, nil
 }
 
@@ -88,7 +91,7 @@ func (w *Witness) AddCode(code []byte) {
 }
 
 // AddState inserts a batch of MPT trie nodes into the witness.
-func (w *Witness) AddState(nodes map[string]struct{}) {
+func (w *Witness) AddState(nodes map[string]struct{}, paths map[string]struct{}) {
 	if len(nodes) == 0 {
 		return
 	}
@@ -96,6 +99,9 @@ func (w *Witness) AddState(nodes map[string]struct{}) {
 	defer w.lock.Unlock()
 
 	maps.Copy(w.State, nodes)
+	if paths != nil {
+		maps.Copy(w.Paths, paths)
+	}
 }
 
 // Copy deep-copies the witness object.  Witness.Block isn't deep-copied as it
@@ -105,6 +111,7 @@ func (w *Witness) Copy() *Witness {
 		Headers: slices.Clone(w.Headers),
 		Codes:   maps.Clone(w.Codes),
 		State:   maps.Clone(w.State),
+		Paths:   maps.Clone(w.Paths),
 		chain:   w.chain,
 	}
 	if w.context != nil {

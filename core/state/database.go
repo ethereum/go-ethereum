@@ -132,6 +132,10 @@ type Trie interface {
 	// The returned map could be nil if the witness is empty.
 	Witness() map[string]struct{}
 
+	// WitnessPaths returns a set of paths for all trie nodes. For future reference,
+	// witness can be deprecated and used as a replacement to witness.
+	WitnessPaths() map[string]struct{}
+
 	// NodeIterator returns an iterator that returns nodes of the trie. Iteration
 	// starts at the key after the given start key. And error will be returned
 	// if fails to create node iterator.

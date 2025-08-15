@@ -63,5 +63,6 @@ func (w *Witness) MakeHashDB() ethdb.Database {
 
 		rawdb.WriteLegacyTrieNode(memdb, common.BytesToHash(hash), blob)
 	}
+
 	return memdb
 }

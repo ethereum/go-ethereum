@@ -762,11 +762,26 @@ func (t *Trie) Witness() map[string]struct{} {
 	if len(values) == 0 {
 		return nil
 	}
-	witness := make(map[string]struct{}, len(values))
+	witnessStates := make(map[string]struct{}, len(values))
 	for _, val := range values {
-		witness[string(val)] = struct{}{}
+		witnessStates[string(val)] = struct{}{}
 	}
-	return witness
+
+	return witnessStates
+}
+
+func (t *Trie) WitnessPaths() map[string]struct{} {
+	// Return the paths of all nodes that have been accessed.
+	// The paths are the keys of the prevalue tracer.
+	keys := t.prevalueTracer.keys()
+	if len(keys) == 0 {
+		return nil
+	}
+	witnessPaths := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		witnessPaths[string(key)] = struct{}{}
+	}
+	return witnessPaths
 }
 
 // Reset drops the referenced root node and cleans all internal state.
