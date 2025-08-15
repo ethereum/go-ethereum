@@ -548,9 +548,6 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'gas' for txdata")
 		}
 		itx.GasLimit = uint64(*dec.Gas)
-		if dec.Value == nil {
-			return errors.New("missing required field 'value' in transaction")
-		}
 		if dec.Input == nil {
 			return errors.New("missing required field 'input' in transaction")
 		}
