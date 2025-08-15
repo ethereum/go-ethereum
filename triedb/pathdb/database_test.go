@@ -974,12 +974,26 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 			t.Fatalf("Unexpected state history found, %d", i)
 		}
 	}
+	remain, err := env.db.IndexProgress()
+	if err != nil {
+		t.Fatalf("Failed to obtain the progress, %v", err)
+	}
+	if remain == 0 {
+		t.Fatalf("Unexpected progress remain, %d", remain)
+	}
 
 	// Apply new states on top, ensuring state indexing can respond correctly
 	for i := dIndex + 1; i < len(roots); i++ {
 		if err := env.db.Update(roots[i], roots[i-1], uint64(i), env.nodes[i], env.states[i]); err != nil {
 			panic(fmt.Errorf("failed to update state changes, err: %w", err))
 		}
+	}
+	remain, err = env.db.IndexProgress()
+	if err != nil {
+		t.Fatalf("Failed to obtain the progress, %v", err)
+	}
+	if remain != 0 {
+		t.Fatalf("Unexpected progress remain, %d", remain)
 	}
 	waitIndexing(env.db)
 
