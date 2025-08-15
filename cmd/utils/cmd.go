@@ -526,7 +526,7 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 		preimages[crypto.Keccak256Hash(blob)] = common.CopyBytes(blob)
 		if len(preimages) > 1024 {
 			rawdb.WritePreimages(db, preimages)
-			preimages = make(map[common.Hash][]byte)
+			clear(preimages)
 		}
 	}
 	// Flush the last batch preimage data
