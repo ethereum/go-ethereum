@@ -310,19 +310,24 @@ func (db *Database) repairHistory() error {
 	// yet. This action is necessary because these state histories are not
 	// expected to exist without an initialized trie database.
 	id := db.tree.bottom().stateID()
-	if id == 0 {
-		frozen, err := db.freezer.Ancients()
-		if err != nil {
-			log.Crit("Failed to retrieve head of state history", "err", err)
-		}
+	frozen, err := db.freezer.Ancients()
+	if err != nil {
+		log.Crit("Failed to retrieve head of state history", "err", err)
+	}
+
+	// Handle the case where state ID is 0 or freezer is empty but state ID is non-zero
+	// This can happen after an unclean shutdown where the freezer was corrupted/lost
+	if (frozen != 0 && id == 0) || (frozen == 0 && id != 0) {
+		// TODO(rjl493456442) would be better to group them into a batch.
+		//
+		// Purge all state history indexing data first
+		rawdb.DeleteStateHistoryIndexMetadata(db.diskdb)
+		rawdb.DeleteStateHistoryIndex(db.diskdb)
+		// Reset the persistent state ID to 0
+		rawdb.WritePersistentStateID(db.diskdb, 0)
+
 		if frozen != 0 {
-			// TODO(rjl493456442) would be better to group them into a batch.
-			//
-			// Purge all state history indexing data first
-			rawdb.DeleteStateHistoryIndexMetadata(db.diskdb)
-			rawdb.DeleteStateHistoryIndex(db.diskdb)
-			err := db.freezer.Reset()
-			if err != nil {
+			if err := db.freezer.Reset(); err != nil {
 				log.Crit("Failed to reset state histories", "err", err)
 			}
 			log.Info("Truncated extraneous state history")
