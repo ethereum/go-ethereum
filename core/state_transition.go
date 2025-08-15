@@ -228,7 +228,7 @@ func ApplyPoLMessage(msg *Message, evm *vm.EVM) *ExecutionResult {
 	result := &ExecutionResult{}
 	ret, leftOverGas, err := evm.Call(msg.From, *msg.To, msg.Data, msg.GasLimit, common.U2560)
 	if err != nil {
-		result.Err = fmt.Errorf("PoL tx failed to execute: %v", err)
+		result.Err = fmt.Errorf("PoL tx failed to execute: %w", err)
 	}
 	result.ReturnData = ret
 	result.MaxUsedGas = msg.GasLimit - leftOverGas // To inform how much gas was needed to run the msg.
