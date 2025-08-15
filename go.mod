@@ -62,6 +62,7 @@ require (
 	github.com/supranational/blst v0.3.14
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/urfave/cli/v2 v2.27.5
+	github.com/zeebo/blake3 v0.2.4
 	go.uber.org/automaxprocs v1.5.2
 	go.uber.org/goleak v1.3.0
 	golang.org/x/crypto v0.36.0
@@ -115,7 +116,7 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/kilic/bls12-381 v0.1.0 // indirect
 	github.com/klauspost/compress v1.16.0 // indirect
-	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
+	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect

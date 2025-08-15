@@ -41,13 +41,13 @@ var (
 type VerkleTrie struct {
 	root   verkle.VerkleNode
 	cache  *utils.PointCache
-	reader *trieReader
-	tracer *prevalueTracer
+	reader *TrieReader
+	tracer *PrevalueTracer
 }
 
 // NewVerkleTrie constructs a verkle tree based on the specified root hash.
 func NewVerkleTrie(root common.Hash, db database.NodeDatabase, cache *utils.PointCache) (*VerkleTrie, error) {
-	reader, err := newTrieReader(root, common.Hash{}, db)
+	reader, err := NewTrieReader(root, common.Hash{}, db)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +267,7 @@ func (t *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 	nodeset := trienode.NewNodeSet(common.Hash{})
 	for _, node := range nodes {
 		// Hash parameter is not used in pathdb
-		nodeset.AddNode(node.Path, trienode.NewNodeWithPrev(common.Hash{}, node.SerializedBytes, t.tracer.get(node.Path)))
+		nodeset.AddNode(node.Path, trienode.NewNodeWithPrev(common.Hash{}, node.SerializedBytes, t.tracer.Get(node.Path)))
 	}
 	// Serialize root commitment form
 	return t.Hash(), nodeset
@@ -421,7 +421,7 @@ func (t *VerkleTrie) ToDot() string {
 }
 
 func (t *VerkleTrie) nodeResolver(path []byte) ([]byte, error) {
-	blob, err := t.reader.node(path, common.Hash{})
+	blob, err := t.reader.Node(path, common.Hash{})
 	if err != nil {
 		return nil, err
 	}
