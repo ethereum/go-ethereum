@@ -1200,7 +1200,7 @@ func (pool *LegacyPool) scheduleReorgLoop() {
 			launchNextRun = false
 
 			reset, dirtyAccounts = nil, nil
-			queuedEvents = make(map[common.Address]*SortedMap)
+			clear(queuedEvents)
 		}
 
 		select {
