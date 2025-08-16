@@ -734,3 +734,45 @@ func testSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 		t.Fatalf("Failed to sync chain in three seconds")
 	}
 }
+
+// TestSkeletonResetAfterSetHead tests that the skeleton syncer is properly reset
+// when the chain is rewound using SetHead, preventing data inconsistency issues.
+func TestSkeletonResetAfterSetHead(t *testing.T) {
+	tester := newTester(t)
+	defer tester.terminate()
+
+	chain := testChainBase.shorten(800)
+	tester.newPeer("peer", eth.ETH68, chain.blocks[1:])
+
+	if _, err := tester.chain.InsertChain(chain.blocks[1:401]); err != nil {
+		t.Fatalf("Failed to insert chain: %v", err)
+	}
+
+	// Start beacon sync to populate the skeleton
+	if err := tester.downloader.BeaconSync(SnapSync, chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
+		t.Fatalf("Failed to start beacon sync: %v", err)
+	}
+
+	// Wait for the skeleton state
+	time.Sleep(20 * time.Millisecond)
+
+	// Check skeleton sync status exists in database before SetHead
+	if skeleton := rawdb.ReadSkeletonSyncStatus(tester.downloader.stateDB); len(skeleton) == 0 {
+		t.Fatal("Skeleton sync status should exist in database before SetHead")
+	}
+
+	// Simulate chain rewind by calling SetHead
+	tester.downloader.Cancel()
+	tester.downloader.ResetSkeleton()
+	tester.chain.SetHead(200)
+
+	// Verify skeleton sync status was cleared from database
+	if skeleton := rawdb.ReadSkeletonSyncStatus(tester.downloader.stateDB); len(skeleton) != 0 {
+		t.Fatal("Skeleton sync status should be cleared from database after SetHead")
+	}
+
+	// Verify we can start a new sync after reset
+	if err := tester.downloader.BeaconSync(SnapSync, chain.blocks[400].Header(), nil); err != nil {
+		t.Fatalf("Failed to start beacon sync after reset: %v", err)
+	}
+}
