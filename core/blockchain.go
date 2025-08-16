@@ -100,10 +100,11 @@ var (
 	blockWriteTimer           = metrics.NewRegisteredResettingTimer("chain/write", nil)
 
 	// BAL-specific timers
-	blockPreprocessingTimer  = metrics.NewRegisteredResettingTimer("chain/preprocess", nil)
-	txExecutionTimer         = metrics.NewRegisteredResettingTimer("chain/txexecution", nil)
-	stateRootCalctimer       = metrics.NewRegisteredResettingTimer("chain/rootcalculation", nil)
-	blockPostprocessingTimer = metrics.NewRegisteredResettingTimer("chain/postprocess", nil)
+	blockPreprocessingTimer     = metrics.NewRegisteredResettingTimer("chain/preprocess", nil)
+	blockPreprocessingLoadTimer = metrics.NewRegisteredResettingTimer("chain/preprocessload", nil)
+	txExecutionTimer            = metrics.NewRegisteredResettingTimer("chain/txexecution", nil)
+	stateRootCalctimer          = metrics.NewRegisteredResettingTimer("chain/rootcalculation", nil)
+	blockPostprocessingTimer    = metrics.NewRegisteredResettingTimer("chain/postprocess", nil)
 
 	blockReorgMeter     = metrics.NewRegisteredMeter("chain/reorg/executes", nil)
 	blockReorgAddMeter  = metrics.NewRegisteredMeter("chain/reorg/add", nil)
@@ -2171,6 +2172,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	var proctime time.Duration
 	if blockHadBAL {
 		blockPreprocessingTimer.Update(resWithMetrics.PreProcessTime)
+		blockPreprocessingLoadTimer.Update(resWithMetrics.PreProcessLoadTime)
 		txExecutionTimer.Update(resWithMetrics.ExecTime)
 		stateRootCalctimer.Update(resWithMetrics.RootCalcTime)
 		blockPostprocessingTimer.Update(resWithMetrics.PostProcessTime)

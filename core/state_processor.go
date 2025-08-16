@@ -54,11 +54,12 @@ func NewStateProcessor(config *params.ChainConfig, chain *HeaderChain) *StatePro
 }
 
 type ProcessResultWithMetrics struct {
-	ProcessResult   *ProcessResult
-	PreProcessTime  time.Duration
-	PostProcessTime time.Duration
-	RootCalcTime    time.Duration
-	ExecTime        time.Duration
+	ProcessResult      *ProcessResult
+	PreProcessTime     time.Duration
+	PreProcessLoadTime time.Duration
+	PostProcessTime    time.Duration
+	RootCalcTime       time.Duration
+	ExecTime           time.Duration
 
 	StateDiffCalcTime   time.Duration // time it took to convert BAL into a set of state diffs
 	TxStateDiffPrepTime time.Duration // time it took to convert state diffs into prestate statedbs for each tx
@@ -181,12 +182,13 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	rootCalcErrCh := make(chan error) // used for communicating if the state root calculation doesn't match the reported root
 	pStart := time.Now()
 	var (
-		tPreprocess  time.Duration // time to create a set of prestates for parallel transaction execution
-		tVerifyStart time.Time
-		tVerify      time.Duration // time to compute and verify the state root
-		tExecStart   time.Time
-		tExec        time.Duration // time to execute block transactions
-		tPostprocess time.Duration // time to perform post-transaction execution system calls and withdrawals.
+		tPreprocess     time.Duration // time to create a set of prestates for parallel transaction execution
+		tVerifyStart    time.Time
+		tVerify         time.Duration // time to compute and verify the state root
+		tExecStart      time.Time
+		tExec           time.Duration // time to execute block transactions
+		tPostprocess    time.Duration // time to perform post-transaction execution system calls and withdrawals.
+		tPreprocessLoad time.Duration
 	)
 
 	// called by resultHandler when all transactions have successfully executed.
@@ -315,11 +317,12 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 			resCh <- &ProcessResultWithMetrics{ProcessResult: &ProcessResult{Error: err}}
 		} else {
 			resCh <- &ProcessResultWithMetrics{
-				ProcessResult:   execResults,
-				PreProcessTime:  tPreprocess,
-				PostProcessTime: tPostprocess,
-				ExecTime:        tExec,
-				RootCalcTime:    tVerify,
+				ProcessResult:      execResults,
+				PreProcessTime:     tPreprocess,
+				PreProcessLoadTime: tPreprocessLoad,
+				PostProcessTime:    tPostprocess,
+				ExecTime:           tExec,
+				RootCalcTime:       tVerify,
 			}
 		}
 	}
@@ -422,7 +425,9 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	}
 
 	// instantiate a set of StateDBs to be used for executing each transaction in parallel
+	tPreprocessLoadStart := time.Now()
 	statedb.InstantiateWithStateDiffs(&totalDiff)
+	tPreprocessLoad = time.Since(tPreprocessLoadStart)
 	var txPrestates []*state.StateDB
 	for range block.Transactions() {
 		state := statedb.Copy()
