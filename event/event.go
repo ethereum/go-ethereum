@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"sync"
 	"time"
 )
@@ -122,7 +123,7 @@ func (mux *TypeMux) del(s *TypeMuxSubscription) {
 			if len(subs) == 1 {
 				delete(mux.subm, typ)
 			} else {
-				mux.subm[typ] = posdelete(subs, pos)
+				mux.subm[typ] = slices.Delete(slices.Clone(subs), pos, pos+1)
 			}
 		}
 	}
@@ -135,13 +136,6 @@ func find(slice []*TypeMuxSubscription, item *TypeMuxSubscription) int {
 		}
 	}
 	return -1
-}
-
-func posdelete(slice []*TypeMuxSubscription, pos int) []*TypeMuxSubscription {
-	news := make([]*TypeMuxSubscription, len(slice)-1)
-	copy(news[:pos], slice[:pos])
-	copy(news[pos:], slice[pos+1:])
-	return news
 }
 
 // TypeMuxSubscription is a subscription established through TypeMux.
