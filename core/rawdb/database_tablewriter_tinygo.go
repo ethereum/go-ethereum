@@ -161,7 +161,6 @@ func (t *Table) calculateColumnWidths() []int {
 		widths[i] = max(widths[i], len(f))
 	}
 
-	// Add padding: cellPadding spaces on each side of content
 	for i := range widths {
 		widths[i] += totalPadding
 	}
