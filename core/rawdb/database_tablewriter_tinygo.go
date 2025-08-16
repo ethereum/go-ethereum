@@ -86,11 +86,11 @@ func (t *Table) render() error {
 	}
 
 	widths := t.calculateColumnWidths()
-	separator := t.buildSeparator(widths)
+	rowSeparator := t.buildRowSeparator(widths)
 
 	if len(t.headers) > 0 {
 		t.printRow(t.headers, widths)
-		fmt.Fprintln(t.out, separator)
+		fmt.Fprintln(t.out, rowSeparator)
 	}
 
 	for _, row := range t.rows {
@@ -98,7 +98,7 @@ func (t *Table) render() error {
 	}
 
 	if len(t.footer) > 0 {
-		fmt.Fprintln(t.out, separator)
+		fmt.Fprintln(t.out, rowSeparator)
 		t.printRow(t.footer, widths)
 	}
 
@@ -168,12 +168,12 @@ func (t *Table) calculateColumnWidths() []int {
 	return widths
 }
 
-// buildSeparator creates a horizontal line to separate table sections.
+// buildRowSeparator creates a horizontal line to separate table rows.
 //
 // It generates a string with dashes (-) for each column width, joined by plus signs (+).
 //
 // Example output: "----------+--------+-----------"
-func (t *Table) buildSeparator(widths []int) string {
+func (t *Table) buildRowSeparator(widths []int) string {
 	parts := make([]string, len(widths))
 	for i, w := range widths {
 		parts[i] = strings.Repeat("-", w)
