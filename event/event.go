@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"sync"
 	"time"
 )
@@ -66,7 +67,7 @@ func (mux *TypeMux) Subscribe(types ...interface{}) *TypeMuxSubscription {
 		for _, t := range types {
 			rtyp := reflect.TypeOf(t)
 			oldsubs := mux.subm[rtyp]
-			if find(oldsubs, sub) != -1 {
+			if slices.Index(oldsubs, sub) != -1 {
 				panic(fmt.Sprintf("event: duplicate type %s in Subscribe", rtyp))
 			}
 			subs := make([]*TypeMuxSubscription, len(oldsubs)+1)
@@ -118,7 +119,7 @@ func (mux *TypeMux) del(s *TypeMuxSubscription) {
 	mux.mutex.Lock()
 	defer mux.mutex.Unlock()
 	for typ, subs := range mux.subm {
-		if pos := find(subs, s); pos >= 0 {
+		if pos := slices.Index(subs, s); pos >= 0 {
 			if len(subs) == 1 {
 				delete(mux.subm, typ)
 			} else {
@@ -126,15 +127,6 @@ func (mux *TypeMux) del(s *TypeMuxSubscription) {
 			}
 		}
 	}
-}
-
-func find(slice []*TypeMuxSubscription, item *TypeMuxSubscription) int {
-	for i, v := range slice {
-		if v == item {
-			return i
-		}
-	}
-	return -1
 }
 
 func posdelete(slice []*TypeMuxSubscription, pos int) []*TypeMuxSubscription {
