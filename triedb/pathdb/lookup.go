@@ -161,6 +161,12 @@ func (l *lookup) storageTip(accountHash common.Hash, slotHash common.Hash, state
 	return common.Hash{}
 }
 
+var listPool = sync.Pool{
+	New: func() any {
+		return make([]common.Hash, 0, 16)
+	},
+}
+
 // addLayer traverses the state data retained in the specified diff layer and
 // integrates it into the lookup set.
 //
@@ -182,7 +188,7 @@ func (l *lookup) addLayer(diff *diffLayer) {
 		for accountHash := range diff.states.accountData {
 			list, exists := l.accounts[accountHash]
 			if !exists {
-				list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
+				list = listPool.Get().([]common.Hash)
 			}
 			list = append(list, state)
 			l.accounts[accountHash] = list
@@ -197,7 +203,7 @@ func (l *lookup) addLayer(diff *diffLayer) {
 				key := storageKey(accountHash, slotHash)
 				list, exists := l.storages[key]
 				if !exists {
-					list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
+					list = listPool.Get().([]common.Hash)
 				}
 				list = append(list, state)
 				l.storages[key] = list
@@ -251,6 +257,7 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 			if len(list) != 0 {
 				l.accounts[accountHash] = list
 			} else {
+				listPool.Put(list[:0])
 				delete(l.accounts, accountHash)
 			}
 		}
@@ -268,6 +275,7 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 				if len(list) != 0 {
 					l.storages[key] = list
 				} else {
+					listPool.Put(list[:0])
 					delete(l.storages, key)
 				}
 			}
