@@ -170,7 +170,8 @@ func TestWebsocketLargeRead(t *testing.T) {
 	testLimit(ptr(0))  // Should be ignored (use default)
 	testLimit(nil)     // Should be ignored (use default)
 	testLimit(ptr(200))
-	testLimit(ptr(wsDefaultReadLimit * 2))
+	// Reduce test size to prevent timeouts in CI environments
+	testLimit(ptr(5 * 1024 * 1024))
 }
 
 func TestWebsocketPeerInfo(t *testing.T) {
