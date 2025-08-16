@@ -110,13 +110,40 @@ var (
 
 	DevnetV2Configs = map[uint64]*V2Config{
 		Default: {
-			MaxMasternodes:       108,
 			SwitchRound:          0,
 			CertThreshold:        0.667,
 			TimeoutSyncThreshold: 3,
 			TimeoutPeriod:        5,
 			MinePeriod:           2,
 			ExpTimeoutConfig:     ExpTimeoutConfig{Base: 2.0, MaxExponent: 5},
+			MaxMasternodes:       108,
+		},
+		252000: {
+			SwitchRound:          250000,
+			CertThreshold:        0.667,
+			TimeoutSyncThreshold: 3,
+			TimeoutPeriod:        5,
+			MinePeriod:           2,
+			ExpTimeoutConfig:     ExpTimeoutConfig{Base: 2.0, MaxExponent: 5},
+			MaxMasternodes:       10,
+		},
+		261000: {
+			SwitchRound:          261000,
+			CertThreshold:        0.667,
+			TimeoutSyncThreshold: 3,
+			TimeoutPeriod:        5,
+			MinePeriod:           2,
+			ExpTimeoutConfig:     ExpTimeoutConfig{Base: 2.0, MaxExponent: 5},
+			MaxMasternodes:       12,
+		},
+		300000: {
+			SwitchRound:          300000,
+			CertThreshold:        0.667,
+			TimeoutSyncThreshold: 3,
+			TimeoutPeriod:        5,
+			MinePeriod:           2,
+			ExpTimeoutConfig:     ExpTimeoutConfig{Base: 2.0, MaxExponent: 5},
+			MaxMasternodes:       12,
 		},
 	}
 
