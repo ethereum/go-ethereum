@@ -601,9 +601,18 @@ func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rp
 	if block == nil || err != nil {
 		return nil, err
 	}
-	receipts, err := api.b.GetReceipts(ctx, block.Hash())
-	if err != nil {
-		return nil, err
+	var receipts types.Receipts
+	if blockNr, ok := blockNrOrHash.Number(); ok && blockNr == rpc.PendingBlockNumber {
+		var pendingBlock *types.Block
+		pendingBlock, receipts, _ = api.b.Pending()
+		if pendingBlock.Hash() != block.Hash() {
+			return nil, fmt.Errorf("pending block hash mismatch: %s vs %s", pendingBlock.Hash(), block.Hash())
+		}
+	} else {
+		receipts, err = api.b.GetReceipts(ctx, block.Hash())
+		if err != nil {
+			return nil, err
+		}
 	}
 	txs := block.Transactions()
 	if len(txs) != len(receipts) {
