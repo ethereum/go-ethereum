@@ -666,6 +666,7 @@ func (d *Downloader) Cancel() {
 
 // ResetSkeleton terminates the skeleton syncer and reinitializes it.
 func (d *Downloader) ResetSkeleton() {
+	log.Debug("Resetting skeleton syncer due to chain rewind")
 	d.skeleton.Terminate()
 	rawdb.DeleteSkeletonSyncStatus(d.stateDB)
 	d.skeleton = newSkeleton(d.stateDB, d.peers, d.dropPeer, newBeaconBackfiller(d, d.success))
