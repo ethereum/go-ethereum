@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb/database"
+	"golang.org/x/sync/errgroup"
 )
 
 // Trie represents a Merkle Patricia Trie. Use New to create a trie that operates
@@ -192,6 +193,51 @@ func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode no
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
 	}
+}
+
+// Prefetch attempts to resolve the leaves and intermediate trie nodes
+// specified by the key list in parallel. The results are silently
+// discarded to simplify the function.
+func (t *Trie) Prefetch(keylist [][]byte) error {
+	// Short circuit if the trie is already committed and not usable.
+	if t.committed {
+		return ErrCommitted
+	}
+	// Resolve the trie nodes sequentially if there are not too many
+	// trie nodes in the trie.
+	fn, ok := t.root.(*fullNode)
+	if !ok || len(keylist) < 16 {
+		for _, key := range keylist {
+			_, err := t.Get(key)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	var (
+		keys = make(map[byte][][]byte)
+		eg   errgroup.Group
+	)
+	for _, key := range keylist {
+		hkey := keybytesToHex(key)
+		keys[hkey[0]] = append(keys[hkey[0]], hkey)
+	}
+	for pos, ks := range keys {
+		eg.Go(func() error {
+			for _, k := range ks {
+				_, newnode, didResolve, err := t.get(fn.Children[pos], k, 1)
+				if err == nil && didResolve {
+					fn.Children[pos] = newnode
+				}
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
+	return eg.Wait()
 }
 
 // MustGetNode is a wrapper of GetNode and will omit any encountered error but
