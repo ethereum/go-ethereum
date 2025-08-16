@@ -316,11 +316,12 @@ func (db *Database) repairHistory() error {
 			log.Crit("Failed to retrieve head of state history", "err", err)
 		}
 		if frozen != 0 {
-			// TODO(rjl493456442) would be better to group them into a batch.
-			//
-			// Purge all state history indexing data first
-			rawdb.DeleteStateHistoryIndexMetadata(db.diskdb)
-			rawdb.DeleteStateHistoryIndex(db.diskdb)
+			batch := db.diskdb.NewBatch()
+			rawdb.DeleteStateHistoryIndexMetadata(batch)
+			rawdb.DeleteStateHistoryIndex(batch)
+			if err := batch.Write(); err != nil {
+				log.Crit("Failed to clean the history index", "err", err)
+			}
 			err := db.freezer.Reset()
 			if err != nil {
 				log.Crit("Failed to reset state histories", "err", err)
@@ -508,11 +509,12 @@ func (db *Database) Enable(root common.Hash) error {
 	// mappings can be huge and might take a while to clear
 	// them, just leave them in disk and wait for overwriting.
 	if db.freezer != nil {
-		// TODO(rjl493456442) would be better to group them into a batch.
-		//
-		// Purge all state history indexing data first
-		rawdb.DeleteStateHistoryIndexMetadata(db.diskdb)
-		rawdb.DeleteStateHistoryIndex(db.diskdb)
+		batch.Reset()
+		rawdb.DeleteStateHistoryIndexMetadata(batch)
+		rawdb.DeleteStateHistoryIndex(batch)
+		if err := batch.Write(); err != nil {
+			return err
+		}
 		if err := db.freezer.Reset(); err != nil {
 			return err
 		}
