@@ -280,13 +280,30 @@ func (tx *BlobTx) withSidecar(sideCar *BlobTxSidecar) *BlobTx {
 }
 
 func (tx *BlobTx) encode(b *bytes.Buffer) error {
-	if err := rlp.Encode(b, tx); err != nil {
+	err := rlp.Encode(b, tx)
+	if err != nil {
 		return err
 	}
-	if tx.Sidecar != nil {
-		return rlp.Encode(b, tx.Sidecar)
+
+	type blobTxSidecar struct {
+		Blobs       []kzg4844.Blob       // Blobs needed by the blob pool
+		Commitments []kzg4844.Commitment // Commitments needed by the blob pool
+		Proofs      []kzg4844.Proof      // Proofs needed by the blob pool
 	}
-	return nil
+
+	if sidecar := tx.Sidecar; sidecar != nil {
+		if sidecar.Version != BlobSidecarVersion0 {
+			err = rlp.Encode(b, sidecar.Version)
+		}
+		if err == nil {
+			err = rlp.Encode(b, &blobTxSidecar{
+				Blobs:       sidecar.Blobs,
+				Commitments: sidecar.Commitments,
+				Proofs:      sidecar.Proofs,
+			})
+		}
+	}
+	return err
 }
 
 func (tx *BlobTx) decode(input []byte) error {
@@ -294,14 +311,36 @@ func (tx *BlobTx) decode(input []byte) error {
 	if err != nil {
 		return err
 	}
+
+	type blobTxSidecar struct {
+		Blobs       []kzg4844.Blob       // Blobs needed by the blob pool
+		Commitments []kzg4844.Commitment // Commitments needed by the blob pool
+		Proofs      []kzg4844.Proof      // Proofs needed by the blob pool
+	}
+
 	// If the input is shorter than the RLP-encoded transaction, it means
 	// that the transaction does not have a sidecar.
-	if len(input) > bLen {
-		var sidecar *BlobTxSidecar
-		if err = rlp.DecodeBytes(input[bLen:], &sidecar); err != nil {
+	if input = input[bLen:]; len(input) > 0 {
+		var (
+			version byte
+			sidecar = blobTxSidecar{}
+		)
+		kind, content, _, err := rlp.Split(input)
+		if kind == rlp.Byte {
+			if err = rlp.DecodeBytes(content, &version); err != nil {
+				return err
+			}
+			input = input[len(content):]
+		}
+		if err = rlp.DecodeBytes(input, &sidecar); err != nil {
 			return err
 		}
-		tx.Sidecar = sidecar
+		tx.Sidecar = &BlobTxSidecar{
+			Version:     version,
+			Blobs:       sidecar.Blobs,
+			Commitments: sidecar.Commitments,
+			Proofs:      sidecar.Proofs,
+		}
 	}
 	return nil
 }
