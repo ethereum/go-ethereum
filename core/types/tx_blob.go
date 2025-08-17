@@ -312,36 +312,39 @@ func (tx *BlobTx) decode(input []byte) error {
 		return err
 	}
 
+	// If the bLen is equal to the length of the input, it means that the sidecar is not present.
+	if len(input) == bLen {
+		return nil
+	}
+
 	type sidecarNoVersion struct {
 		Blobs       []kzg4844.Blob       // Blobs needed by the blob pool
 		Commitments []kzg4844.Commitment // Commitments needed by the blob pool
 		Proofs      []kzg4844.Proof      // Proofs needed by the blob pool
 	}
 
-	// If the input is shorter than the RLP-encoded transaction, it means
-	// that the transaction does not have a sidecar.
-	if input = input[bLen:]; len(input) > 0 {
-		var (
-			version = byte(0)
-			sidecar = sidecarNoVersion{}
-		)
-		kind, content, _, err := rlp.Split(input)
-		// If the first element is a byte, it means that the sidecar version is encoded.
-		if kind == rlp.Byte {
-			if err = rlp.DecodeBytes(content, &version); err != nil {
-				return err
-			}
-			input = input[len(content):]
-		}
-		if err = rlp.DecodeBytes(input, &sidecar); err != nil {
+	// Decode the sidecar, which may or may not have a version byte.
+	var (
+		version = byte(0)
+		sidecar = sidecarNoVersion{}
+	)
+	input = input[bLen:]
+	kind, content, _, err := rlp.Split(input)
+	// If the first element is a byte, it means that the sidecar version is encoded.
+	if kind == rlp.Byte {
+		if err = rlp.DecodeBytes(content, &version); err != nil {
 			return err
 		}
-		tx.Sidecar = &BlobTxSidecar{
-			Version:     version,
-			Blobs:       sidecar.Blobs,
-			Commitments: sidecar.Commitments,
-			Proofs:      sidecar.Proofs,
-		}
+		input = input[len(content):]
+	}
+	if err = rlp.DecodeBytes(input, &sidecar); err != nil {
+		return err
+	}
+	tx.Sidecar = &BlobTxSidecar{
+		Version:     version,
+		Blobs:       sidecar.Blobs,
+		Commitments: sidecar.Commitments,
+		Proofs:      sidecar.Proofs,
 	}
 	return nil
 }
