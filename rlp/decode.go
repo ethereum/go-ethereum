@@ -105,6 +105,23 @@ func DecodeBytes(b []byte, val interface{}) error {
 	return nil
 }
 
+// DecodeBytesV1 parses RLP data from b into val. Please see package-level documentation for
+// the decoding rules. The input must contain exactly one value and no trailing data.
+// DecodeBytesV1 is similar to DecodeBytes, but it returns the number of bytes read from b.
+func DecodeBytesV1(b []byte, val interface{}) (int, error) {
+	r := (*sliceReader)(&b)
+
+	stream := streamPool.Get().(*Stream)
+	defer streamPool.Put(stream)
+
+	bLen := len(b)
+	stream.Reset(r, uint64(bLen))
+	if err := stream.Decode(val); err != nil {
+		return 0, err
+	}
+	return bLen - len(b), nil
+}
+
 type decodeError struct {
 	msg string
 	typ reflect.Type

@@ -19,7 +19,6 @@ package types
 import (
 	"bytes"
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"math/big"
 	"slices"
@@ -113,10 +112,7 @@ func (sc *BlobTxSidecar) CellProofsAt(idx int) ([]kzg4844.Proof, error) {
 
 // ToV1 converts the BlobSidecar to version 1, attaching the cell proofs.
 func (sc *BlobTxSidecar) ToV1() error {
-	if sc.Version == BlobSidecarVersion1 {
-		return nil
-	}
-	if sc.Version == BlobSidecarVersion0 {
+	if sc.Version != BlobSidecarVersion1 {
 		proofs := make([]kzg4844.Proof, 0, len(sc.Blobs)*kzg4844.CellProofsPerBlob)
 		for _, blob := range sc.Blobs {
 			cellProofs, err := kzg4844.ComputeCellProofs(&blob)
@@ -181,48 +177,6 @@ func (sc *BlobTxSidecar) Copy() *BlobTxSidecar {
 type blobTxWithBlobs interface {
 	tx() *BlobTx
 	assign(*BlobTxSidecar) error
-}
-
-type blobTxWithBlobsV0 struct {
-	BlobTx      *BlobTx
-	Blobs       []kzg4844.Blob
-	Commitments []kzg4844.Commitment
-	Proofs      []kzg4844.Proof
-}
-
-type blobTxWithBlobsV1 struct {
-	BlobTx      *BlobTx
-	Version     byte
-	Blobs       []kzg4844.Blob
-	Commitments []kzg4844.Commitment
-	Proofs      []kzg4844.Proof
-}
-
-func (btx *blobTxWithBlobsV0) tx() *BlobTx {
-	return btx.BlobTx
-}
-
-func (btx *blobTxWithBlobsV0) assign(sc *BlobTxSidecar) error {
-	sc.Version = BlobSidecarVersion0
-	sc.Blobs = btx.Blobs
-	sc.Commitments = btx.Commitments
-	sc.Proofs = btx.Proofs
-	return nil
-}
-
-func (btx *blobTxWithBlobsV1) tx() *BlobTx {
-	return btx.BlobTx
-}
-
-func (btx *blobTxWithBlobsV1) assign(sc *BlobTxSidecar) error {
-	if btx.Version != BlobSidecarVersion1 {
-		return fmt.Errorf("unsupported blob tx version %d", btx.Version)
-	}
-	sc.Version = BlobSidecarVersion1
-	sc.Blobs = btx.Blobs
-	sc.Commitments = btx.Commitments
-	sc.Proofs = btx.Proofs
-	return nil
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
@@ -326,98 +280,29 @@ func (tx *BlobTx) withSidecar(sideCar *BlobTxSidecar) *BlobTx {
 }
 
 func (tx *BlobTx) encode(b *bytes.Buffer) error {
-	switch {
-	case tx.Sidecar == nil:
-		return rlp.Encode(b, tx)
-
-	case tx.Sidecar.Version == BlobSidecarVersion0:
-		return rlp.Encode(b, &blobTxWithBlobsV0{
-			BlobTx:      tx,
-			Blobs:       tx.Sidecar.Blobs,
-			Commitments: tx.Sidecar.Commitments,
-			Proofs:      tx.Sidecar.Proofs,
-		})
-
-	case tx.Sidecar.Version == BlobSidecarVersion1:
-		return rlp.Encode(b, &blobTxWithBlobsV1{
-			BlobTx:      tx,
-			Version:     tx.Sidecar.Version,
-			Blobs:       tx.Sidecar.Blobs,
-			Commitments: tx.Sidecar.Commitments,
-			Proofs:      tx.Sidecar.Proofs,
-		})
-
-	default:
-		return errors.New("unsupported sidecar version")
+	if err := rlp.Encode(b, tx); err != nil {
+		return err
 	}
+	if tx.Sidecar != nil {
+		return rlp.Encode(b, tx.Sidecar)
+	}
+	return nil
 }
 
 func (tx *BlobTx) decode(input []byte) error {
-	// Here we need to support two outer formats: the network protocol encoding of the tx
-	// (with blobs) or the canonical encoding without blobs.
-	//
-	// The canonical encoding is just a list of fields:
-	//
-	//     [chainID, nonce, ...]
-	//
-	// The network encoding is a list where the first element is the tx in the canonical encoding,
-	// and the remaining elements are the 'sidecar':
-	//
-	//     [[chainID, nonce, ...], ...]
-	//
-	// The two outer encodings can be distinguished by checking whether the first element
-	// of the input list is itself a list. If it's the canonical encoding, the first
-	// element is the chainID, which is a number.
-
-	firstElem, _, err := rlp.SplitList(input)
+	bLen, err := rlp.DecodeBytesV1(input, tx)
 	if err != nil {
 		return err
 	}
-	firstElemKind, _, secondElem, err := rlp.Split(firstElem)
-	if err != nil {
-		return err
+	// If the input is shorter than the RLP-encoded transaction, it means
+	// that the transaction does not have a sidecar.
+	if len(input) > bLen {
+		var sidecar *BlobTxSidecar
+		if err = rlp.DecodeBytes(input[bLen:], &sidecar); err != nil {
+			return err
+		}
+		tx.Sidecar = sidecar
 	}
-	if firstElemKind != rlp.List {
-		// Blob tx without blobs.
-		return rlp.DecodeBytes(input, tx)
-	}
-
-	// Now we know it's the network encoding with the blob sidecar. Here we again need to
-	// support multiple encodings: legacy sidecars (v0) with a blob proof, and versioned
-	// sidecars.
-	//
-	// The legacy encoding is:
-	//
-	//     [tx, blobs, commitments, proofs]
-	//
-	// The versioned encoding is:
-	//
-	//     [tx, version, blobs, ...]
-	//
-	// We can tell the two apart by checking whether the second element is the version byte.
-	// For legacy sidecar the second element is a list of blobs.
-
-	secondElemKind, _, _, err := rlp.Split(secondElem)
-	if err != nil {
-		return err
-	}
-	var payload blobTxWithBlobs
-	if secondElemKind == rlp.List {
-		// No version byte: blob sidecar v0.
-		payload = new(blobTxWithBlobsV0)
-	} else {
-		// It has a version byte. Decode as v1, version is checked by assign()
-		payload = new(blobTxWithBlobsV1)
-	}
-	if err := rlp.DecodeBytes(input, payload); err != nil {
-		return err
-	}
-	sc := new(BlobTxSidecar)
-	if err := payload.assign(sc); err != nil {
-		return err
-	}
-	*tx = *payload.tx()
-	tx.Sidecar = sc
 	return nil
 }
 

@@ -946,8 +946,8 @@ func (pool *LegacyPool) addRemoteSync(tx *types.Transaction) error {
 func (pool *LegacyPool) Add(txs []*types.Transaction, sync bool) []error {
 	// Filter out known ones without obtaining the pool lock or recovering signatures
 	var (
-		errs = make([]error, len(txs))
-		news = make([]*types.Transaction, 0, len(txs))
+		errs        = make([]error, len(txs))
+		verifiedTxs int
 	)
 	for i, tx := range txs {
 		// If the transaction is known, pre-set the error slot
@@ -965,26 +965,18 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, sync bool) []error {
 			invalidTxMeter.Mark(1)
 			continue
 		}
-		// Accumulate all unknown transactions for deeper processing
-		news = append(news, tx)
+		verifiedTxs++
 	}
-	if len(news) == 0 {
+	if verifiedTxs == 0 {
 		return errs
 	}
 
 	// Process all the new transaction and merge any errors into the original slice
+	var dirtyAddrs *accountSet
 	pool.mu.Lock()
-	newErrs, dirtyAddrs := pool.addTxsLocked(news)
+	errs, dirtyAddrs = pool.addTxsLocked(txs, errs)
 	pool.mu.Unlock()
 
-	var nilSlot = 0
-	for _, err := range newErrs {
-		for errs[nilSlot] != nil {
-			nilSlot++
-		}
-		errs[nilSlot] = err
-		nilSlot++
-	}
 	// Reorg the pool internals if needed and return
 	done := pool.requestPromoteExecutables(dirtyAddrs)
 	if sync {
@@ -995,10 +987,15 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, sync bool) []error {
 
 // addTxsLocked attempts to queue a batch of transactions if they are valid.
 // The transaction pool lock must be held.
-func (pool *LegacyPool) addTxsLocked(txs []*types.Transaction) ([]error, *accountSet) {
+func (pool *LegacyPool) addTxsLocked(txs []*types.Transaction, errs []error) ([]error, *accountSet) {
 	dirty := newAccountSet(pool.signer)
-	errs := make([]error, len(txs))
+	if errs == nil {
+		errs = make([]error, len(txs))
+	}
 	for i, tx := range txs {
+		if errs[i] != nil {
+			continue
+		}
 		replaced, err := pool.add(tx)
 		errs[i] = err
 		if err == nil && !replaced {
@@ -1439,7 +1436,7 @@ func (pool *LegacyPool) reset(oldHead, newHead *types.Header) {
 	// Inject any transactions discarded due to reorgs
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
 	core.SenderCacher().Recover(pool.signer, reinject)
-	pool.addTxsLocked(reinject)
+	pool.addTxsLocked(reinject, nil)
 }
 
 // promoteExecutables moves transactions that have become processable from the
