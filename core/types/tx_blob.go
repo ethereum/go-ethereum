@@ -285,7 +285,7 @@ func (tx *BlobTx) encode(b *bytes.Buffer) error {
 		return err
 	}
 
-	type blobTxSidecar struct {
+	type sidecarNoVersion struct {
 		Blobs       []kzg4844.Blob       // Blobs needed by the blob pool
 		Commitments []kzg4844.Commitment // Commitments needed by the blob pool
 		Proofs      []kzg4844.Proof      // Proofs needed by the blob pool
@@ -296,7 +296,7 @@ func (tx *BlobTx) encode(b *bytes.Buffer) error {
 			err = rlp.Encode(b, sidecar.Version)
 		}
 		if err == nil {
-			err = rlp.Encode(b, &blobTxSidecar{
+			err = rlp.Encode(b, &sidecarNoVersion{
 				Blobs:       sidecar.Blobs,
 				Commitments: sidecar.Commitments,
 				Proofs:      sidecar.Proofs,
@@ -312,7 +312,7 @@ func (tx *BlobTx) decode(input []byte) error {
 		return err
 	}
 
-	type blobTxSidecar struct {
+	type sidecarNoVersion struct {
 		Blobs       []kzg4844.Blob       // Blobs needed by the blob pool
 		Commitments []kzg4844.Commitment // Commitments needed by the blob pool
 		Proofs      []kzg4844.Proof      // Proofs needed by the blob pool
@@ -322,10 +322,11 @@ func (tx *BlobTx) decode(input []byte) error {
 	// that the transaction does not have a sidecar.
 	if input = input[bLen:]; len(input) > 0 {
 		var (
-			version byte
-			sidecar = blobTxSidecar{}
+			version = byte(0)
+			sidecar = sidecarNoVersion{}
 		)
 		kind, content, _, err := rlp.Split(input)
+		// If the first element is a byte, it means that the sidecar version is encoded.
 		if kind == rlp.Byte {
 			if err = rlp.DecodeBytes(content, &version); err != nil {
 				return err
