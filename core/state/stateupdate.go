@@ -254,11 +254,11 @@ func (sc *StateUpdate) IntoChangeset() *StateChangeset {
 			}
 			if len(newValue) == 0 {
 				storages -= 1
-				storageSize -= common.HashLength
+				storageSize -= 2 * common.HashLength
 			}
 			if len(oldValue) == 0 {
 				storages += 1
-				storageSize += common.HashLength
+				storageSize += 2 * common.HashLength
 			}
 			storageSize += len(newValue) - len(oldValue)
 		}

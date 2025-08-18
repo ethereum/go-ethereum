@@ -77,7 +77,7 @@ func (s *stateTracer) onGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
 	)
 	for _, account := range alloc {
 		accounts++
-		accountSize += common.AddressLength
+		accountSize += common.HashLength
 		storages += len(account.Storage)
 		storageSize += len(account.Storage) * 2 * common.HashLength
 		if len(account.Code) > 0 {
