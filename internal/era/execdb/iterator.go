@@ -31,6 +31,7 @@ import (
 
 type Iterator struct {
 	inner *RawIterator
+	block *types.Block // cache for decoded block
 }
 
 // NewIterator returns a header/body/receipt iterator over the archive.
@@ -44,7 +45,10 @@ func NewIterator(e era.Era) (era.Iterator, error) {
 }
 
 // Next advances to the next block entry.
-func (it *Iterator) Next() bool { return it.inner.Next() }
+func (it *Iterator) Next() bool {
+	it.block = nil
+	return it.inner.Next()
+}
 
 // Number is the number of the block currently loaded.
 func (it *Iterator) Number() uint64 { return it.inner.next - 1 }
@@ -55,6 +59,9 @@ func (it *Iterator) Error() error { return it.inner.Error() }
 
 // Block decodes the current header+body into a *types.Block.
 func (it *Iterator) Block() (*types.Block, error) {
+	if it.block != nil {
+		return it.block, nil
+	}
 	if it.inner.Header == nil || it.inner.Body == nil {
 		return nil, errors.New("header and body must be non‑nil")
 	}
@@ -68,16 +75,35 @@ func (it *Iterator) Block() (*types.Block, error) {
 	if err := rlp.Decode(it.inner.Body, &b); err != nil {
 		return nil, err
 	}
-	return types.NewBlockWithHeader(&h).WithBody(b), nil
+	it.block = types.NewBlockWithHeader(&h).WithBody(b)
+	return it.block, nil
 }
 
 // Receipts decodes receipts for the current block.
 func (it *Iterator) Receipts() (types.Receipts, error) {
+	block, err := it.Block()
+	if err != nil {
+		return nil, err
+	}
 	if it.inner.Receipts == nil {
 		return nil, errors.New("receipts must be non‑nil")
 	}
-	var r types.Receipts
-	return r, rlp.Decode(it.inner.Receipts, &r)
+	var rs []*types.ReceiptForStorage
+	if err := rlp.Decode(it.inner.Receipts, &rs); err != nil {
+		return nil, err
+	}
+
+	if len(rs) != len(block.Transactions()) {
+		return nil, errors.New("number of txs does not match receipts")
+	}
+
+	receipts := make([]*types.Receipt, len(rs))
+	for i, receipt := range rs {
+		receipts[i] = (*types.Receipt)(receipt)
+		receipts[i].Type = block.Transactions()[i].Type()
+		receipts[i].Bloom = types.CreateBloom(receipts[i])
+	}
+	return receipts, nil
 }
 
 // BlockAndReceipts is a convenience wrapper.
@@ -162,7 +188,7 @@ func (it *RawIterator) Next() bool {
 		it.setErr(err)
 		return false
 	}
-	it.Receipts, _, err = newSnappyReader(it.e.s, era.TypeCompressedReceipts, int64(receiptsOffset))
+	it.Receipts, _, err = newSnappyReader(it.e.s, era.TypeCompressedSlimReceipts, int64(receiptsOffset))
 	if err != nil {
 		it.setErr(err)
 		return false

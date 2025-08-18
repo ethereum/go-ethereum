@@ -22,25 +22,26 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/klauspost/compress/snappy"
 )
 
 type testchain struct {
-	headers  []types.Header
-	bodies   []types.Body
-	receipts []types.Receipts
+	headers  [][]byte
+	bodies   [][]byte
+	receipts [][]byte
 	tds      []*big.Int
 }
 
-func TestEra2Builder(t *testing.T) {
+func TestEra1Builder(t *testing.T) {
 	t.Parallel()
+
 	// Get temp directory.
-	f, err := os.CreateTemp(t.TempDir(), "era2-test")
+	f, err := os.CreateTemp(t.TempDir(), "era1-test")
 	if err != nil {
 		t.Fatalf("error creating temp file: %v", err)
 	}
@@ -51,10 +52,10 @@ func TestEra2Builder(t *testing.T) {
 		chain   = testchain{}
 	)
 	for i := 0; i < 128; i++ {
-		chain.headers = append(chain.headers, types.Header{Number: big.NewInt(int64(i))})
-		chain.bodies = append(chain.bodies, types.Body{Transactions: []*types.Transaction{types.NewTransaction(0, common.Address{byte(i)}, nil, 0, nil, nil)}})
-		chain.receipts = append(chain.receipts, types.Receipts{{CumulativeGasUsed: uint64(i)}})
-		chain.tds = append(chain.tds, big.NewInt(int64(i+1)))
+		chain.headers = append(chain.headers, mustEncode(&types.Header{Number: big.NewInt(int64(i))}))
+		chain.bodies = append(chain.bodies, mustEncode(&types.Body{Transactions: []*types.Transaction{types.NewTransaction(0, common.Address{byte(i)}, nil, 0, nil, nil)}}))
+		chain.receipts = append(chain.receipts, mustEncode([]types.ReceiptForStorage{{CumulativeGasUsed: uint64(i)}}))
+		chain.tds = append(chain.tds, big.NewInt(int64(i)))
 	}
 
 	// Write blocks to Era1.
@@ -63,9 +64,10 @@ func TestEra2Builder(t *testing.T) {
 			header   = chain.headers[i]
 			body     = chain.bodies[i]
 			receipts = chain.receipts[i]
+			hash     = common.Hash{byte(i)}
 			td       = chain.tds[i]
 		)
-		if err = builder.Add(types.NewBlockWithHeader(&header).WithBody(body), receipts, td, nil); err != nil {
+		if err = builder.AddRLP(header, body, receipts, nil, uint64(i), hash, td, big.NewInt(1)); err != nil {
 			t.Fatalf("error adding entry: %v", err)
 		}
 	}
@@ -75,104 +77,70 @@ func TestEra2Builder(t *testing.T) {
 		t.Fatalf("error finalizing era1: %v", err)
 	}
 
-	// 3. open reader
-	t.Logf("filename: %s", f.Name())
-	era, err := Open(f.Name())
+	// Verify Era1 contents.
+	e, err := Open(f.Name())
 	if err != nil {
-		t.Fatalf("open era: %v", err)
+		t.Fatalf("failed to open era: %v", err)
 	}
-	defer era.Close()
-
-	hdrs, err := era.GetHeaders(0, 128)
+	defer e.Close()
+	it, err := NewRawIterator(e)
 	if err != nil {
-		t.Fatalf("BatchHeaders full: %v", err)
+		t.Fatalf("failed to make iterator: %s", err)
 	}
-	bods, err := era.GetBodies(0, 128)
-	if err != nil {
-		t.Fatalf("BatchBodies full: %v", err)
-	}
-	recs, err := era.GetReceipts(0, 128)
-	if err != nil {
-		t.Fatalf("BatchReceipts full: %v", err)
-	}
-
-	for i := 0; i < 128; i++ {
-		if hdrs[i].Hash() != chain.headers[i].Hash() {
-			t.Fatalf("batch header %d mismatch", i)
+	for i := uint64(0); i < uint64(len(chain.headers)); i++ {
+		if !it.Next() {
+			t.Fatalf("expected more entries, have %d want %d", i, len(chain.headers))
 		}
-		if !bytes.Equal(
-			mustEncode(chain.bodies[i]),
-			mustEncode(bods[i]),
-		) {
-			t.Fatalf("batch body %d mismatch", i)
+		if it.Error() != nil {
+			t.Fatalf("unexpected error %v", it.Error())
 		}
-		if !bytes.Equal(
-			mustEncode(chain.receipts[i]),
-			mustEncode(recs[i]),
-		) {
-			t.Fatalf("batch receipts %d mismatch", i)
-		}
-	}
-
-	const start, cnt = 50, 10
-	winHdrs, err := era.GetHeaders(start, cnt)
-	if err != nil {
-		t.Fatalf("BatchHeaders window: %v", err)
-	}
-	for j := 0; j < cnt; j++ {
-		idx := start + j
-		if winHdrs[j].Hash() != chain.headers[idx].Hash() {
-			t.Fatalf("window header %d mismatch", idx)
-		}
-	}
-
-	for i := 0; i < 128; i++ {
-		bn := uint64(i)
-		gotBlock, err := era.GetBlockByNumber(bn)
+		// Check headers.
+		rawHeader, err := io.ReadAll(it.Header)
 		if err != nil {
-			t.Fatalf("get block %d: %v", i, err)
+			t.Fatalf("error reading header from iterator: %v", err)
 		}
-		if chain.headers[i].Hash() != gotBlock.Header().Hash() {
-			t.Fatalf("header %d mismatch", i)
-		}
-		if !bytes.Equal(mustEncode(chain.bodies[i]), mustEncode(gotBlock.Body())) {
-			t.Fatalf("body %d mismatch", i)
+		if !bytes.Equal(rawHeader, chain.headers[i]) {
+			t.Fatalf("mismatched header: want %s, got %s", chain.headers[i], rawHeader)
 		}
 
-		rawBody, err := era.GetRawBodyByNumber(bn)
+		// Check bodies.
+		body, err := io.ReadAll(it.Body)
 		if err != nil {
-			t.Fatalf("raw body %d: %v", i, err)
+			t.Fatalf("error reading body: %v", err)
 		}
-		decBody, err := io.ReadAll(
-			snappy.NewReader(bytes.NewReader(rawBody)),
-		)
-		if err != nil {
-			t.Fatalf("snappy decode body %d: %v", i, err)
-		}
-		if !bytes.Equal(decBody, mustEncode(chain.bodies[i])) {
-			t.Fatalf("body frame %d mismatch", i)
+		if !bytes.Equal(body, chain.bodies[i]) {
+			t.Fatalf("mismatched body: want %s, got %s", chain.bodies[i], body)
 		}
 
-		rawRcpt, err := era.GetRawReceiptsByNumber(bn)
+		// Check receipts.
+		rawReceipts, err := io.ReadAll(it.Receipts)
 		if err != nil {
-			t.Fatalf("raw receipts %d: %v", i, err)
+			t.Fatalf("error reading receipts from iterator: %v", err)
 		}
-		decRcpt, err := io.ReadAll(
-			snappy.NewReader(bytes.NewReader(rawRcpt)),
-		)
+		if !bytes.Equal(rawReceipts, chain.receipts[i]) {
+			t.Fatalf("mismatched receipts: want %s, got %s", chain.receipts[i], rawReceipts)
+		}
+		receipts, err := getReceiptsByNumber(e, i)
 		if err != nil {
-			t.Fatalf("snappy decode receipts %d: %v", i, err)
+			t.Fatalf("error reading receipts: %v", err)
 		}
-		if !bytes.Equal(decRcpt, mustEncode(chain.receipts[i])) {
-			t.Fatalf("receipts frame %d mismatch", i)
+		encReceipts, err := rlp.EncodeToBytes(receipts)
+		if err != nil {
+			t.Fatalf("error encoding receipts: %v", err)
+		}
+		if !bytes.Equal(encReceipts, chain.receipts[i]) {
+			t.Fatalf("mismatched receipts: want %s, got %s", chain.receipts[i], encReceipts)
 		}
 
-		td, err := era.getTD(bn)
+		// Check total difficulty.
+		rawTd, err := io.ReadAll(it.TotalDifficulty)
 		if err != nil {
-			t.Fatalf("getTD %d: %v", i, err)
+			t.Fatalf("error reading td: %v", err)
 		}
+		slices.Reverse(rawTd)
+		td := new(big.Int).SetBytes(rawTd)
 		if td.Cmp(chain.tds[i]) != 0 {
-			t.Fatalf("td %d mismatch: want %v got %v", i, chain.tds[i], td)
+			t.Fatalf("mismatched tds: want %s, got %s", chain.tds[i], td)
 		}
 	}
 }
@@ -183,4 +151,16 @@ func mustEncode(obj any) []byte {
 		panic(fmt.Sprintf("failed in encode obj: %v", err))
 	}
 	return b
+}
+
+func getReceiptsByNumber(e *Era, number uint64) ([]*types.ReceiptForStorage, error) {
+	r, err := e.GetRawReceiptsByNumber(number)
+	if err != nil {
+		return nil, err
+	}
+	var receipts []*types.ReceiptForStorage
+	if err := rlp.DecodeBytes(r, &receipts); err != nil {
+		return nil, err
+	}
+	return receipts, nil
 }

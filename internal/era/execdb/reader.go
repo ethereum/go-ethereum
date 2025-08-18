@@ -166,6 +166,7 @@ func (e *Era) GetRawBodyByNumber(blockNum uint64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	r = snappy.NewReader(r)
 	return io.ReadAll(r)
 }
 
@@ -179,19 +180,7 @@ func (e *Era) GetRawReceiptsByNumber(blockNum uint64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return io.ReadAll(r)
-}
-
-// GetRawProofFrameByNumber returns the RLP-encoded receipts for the given block number.
-func (e *Era) GetRawProofFrameByNumber(blockNum uint64) ([]byte, error) {
-	off, err := e.proofOff(blockNum)
-	if err != nil {
-		return nil, err
-	}
-	r, _, err := e.s.ReaderAt(era.TypeProof, int64(off))
-	if err != nil {
-		return nil, err
-	}
+	r = snappy.NewReader(r)
 	return io.ReadAll(r)
 }
 
@@ -249,93 +238,6 @@ func (e *Era) indexOffset(n uint64, component componentType) (uint64, error) {
 	}
 	rel := binary.LittleEndian.Uint64(buf[:])
 	return uint64(int64(rel) + indstart), nil
-}
-
-// GetHeaders returns RLP-decoded headers for a range of blocks.
-func (e *Era) GetHeaders(first, count uint64) ([]*types.Header, error) {
-	if count == 0 {
-		return nil, fmt.Errorf("count must be > 0")
-	}
-	if first < e.m.start || first+count > e.m.start+e.m.count {
-		return nil, fmt.Errorf("range [%d,%d) out of bounds", first, first+count)
-	}
-
-	out := make([]*types.Header, count)
-	for i := uint64(0); i < count; i++ {
-		n := first + i
-		off, err := e.headerOff(n)
-		if err != nil {
-			return nil, err
-		}
-		r, _, err := e.s.ReaderAt(era.TypeCompressedHeader, int64(off))
-		if err != nil {
-			return nil, err
-		}
-		var h types.Header
-		if err := rlp.Decode(snappy.NewReader(r), &h); err != nil {
-			return nil, err
-		}
-		out[i] = &h
-	}
-	return out, nil
-}
-
-// GetHeaders returns RLP-decoded headers for a range of blocks.
-func (e *Era) GetBodies(first, count uint64) ([]*types.Body, error) {
-	if count == 0 {
-		return nil, fmt.Errorf("count must be > 0")
-	}
-	if first < e.m.start || first+count > e.m.start+e.m.count {
-		return nil, fmt.Errorf("range [%d,%d) out of bounds", first, first+count)
-	}
-
-	out := make([]*types.Body, count)
-	for i := uint64(0); i < count; i++ {
-		n := first + i
-		off, err := e.bodyOff(n)
-		if err != nil {
-			return nil, err
-		}
-		r, _, err := e.s.ReaderAt(era.TypeCompressedBody, int64(off))
-		if err != nil {
-			return nil, err
-		}
-		var b types.Body
-		if err := rlp.Decode(snappy.NewReader(r), &b); err != nil {
-			return nil, err
-		}
-		out[i] = &b
-	}
-	return out, nil
-}
-
-// GetReceipts returns RLP-decoded receipts for a range of blocks.
-func (e *Era) GetReceipts(first, count uint64) ([]types.Receipts, error) {
-	if count == 0 {
-		return nil, fmt.Errorf("count must be > 0")
-	}
-	if first < e.m.start || first+count > e.m.start+e.m.count {
-		return nil, fmt.Errorf("range [%d,%d) out of bounds", first, first+count)
-	}
-
-	out := make([]types.Receipts, count)
-	for i := uint64(0); i < count; i++ {
-		n := first + i
-		off, err := e.receiptOff(n)
-		if err != nil {
-			return nil, err
-		}
-		r, _, err := e.s.ReaderAt(era.TypeCompressedSlimReceipts, int64(off))
-		if err != nil {
-			return nil, err
-		}
-		var rc types.Receipts
-		if err := rlp.Decode(snappy.NewReader(r), &rc); err != nil {
-			return nil, err
-		}
-		out[i] = rc
-	}
-	return out, nil
 }
 
 // metadata contains the information about the era file that is written into the file.

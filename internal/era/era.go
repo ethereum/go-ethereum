@@ -78,7 +78,6 @@ func ReadDir(dir, network string) ([]string, error) {
 		eras    []string
 		dirType string
 	)
-	fmt.Println("entries", entries)
 	for _, entry := range entries {
 		ext := path.Ext(entry.Name())
 		if ext != ".erae" && ext != ".era1" {
