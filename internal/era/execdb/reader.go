@@ -184,6 +184,49 @@ func (e *Era) GetRawReceiptsByNumber(blockNum uint64) ([]byte, error) {
 	return io.ReadAll(r)
 }
 
+// InitialTD returns initial total difficulty before the difficulty of the
+// first block of the Era is applied.
+func (e *Era) InitialTD() (*big.Int, error) {
+	var (
+		r      io.Reader
+		header types.Header
+		rawTd  []byte
+		n      int64
+		off    int64
+		err    error
+	)
+
+	// Read first header.
+	if off, err = e.headerOff(e.m.start); err != nil {
+		return nil, err
+	}
+	if r, n, err = newSnappyReader(e.s, era.TypeCompressedHeader, off); err != nil {
+		return nil, err
+	}
+	if err := rlp.Decode(r, &header); err != nil {
+		return nil, err
+	}
+	off += n
+
+	// Skip over header and body.
+	off, err = e.s.SkipN(off, 2)
+	if err != nil {
+		return nil, err
+	}
+
+	// Read total difficulty after first block.
+	if r, _, err = e.s.ReaderAt(era.TypeTotalDifficulty, off); err != nil {
+		return nil, err
+	}
+	rawTd, err = io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	slices.Reverse(rawTd)
+	td := new(big.Int).SetBytes(rawTd)
+	return td.Sub(td, header.Difficulty), nil
+}
+
 // loadIndex loads in the index table containing all offsets and caches it.
 func (e *Era) loadIndex() error {
 	var err error
@@ -211,14 +254,13 @@ func (e *Era) loadIndex() error {
 }
 
 // headerOff, bodyOff, receiptOff, tdOff, and proofOff return the offsets of the respective components for a given block number.
-func (e *Era) headerOff(num uint64) (uint64, error)  { return e.indexOffset(num, header) }
-func (e *Era) bodyOff(num uint64) (uint64, error)    { return e.indexOffset(num, body) }
-func (e *Era) receiptOff(num uint64) (uint64, error) { return e.indexOffset(num, receipts) }
-func (e *Era) tdOff(num uint64) (uint64, error)      { return e.indexOffset(num, td) }
-func (e *Era) proofOff(num uint64) (uint64, error)   { return e.indexOffset(num, proof) }
+func (e *Era) headerOff(num uint64) (int64, error)  { return e.indexOffset(num, header) }
+func (e *Era) bodyOff(num uint64) (int64, error)    { return e.indexOffset(num, body) }
+func (e *Era) receiptOff(num uint64) (int64, error) { return e.indexOffset(num, receipts) }
+func (e *Era) tdOff(num uint64) (int64, error)      { return e.indexOffset(num, td) }
 
 // indexOffset calculates offset to a certain component for a block number within a file.
-func (e *Era) indexOffset(n uint64, component componentType) (uint64, error) {
+func (e *Era) indexOffset(n uint64, component componentType) (int64, error) {
 	if n < e.m.start || n >= e.m.start+e.m.count {
 		return 0, fmt.Errorf("block %d out of range [%d,%d)", n, e.m.start, e.m.start+e.m.count)
 	}
@@ -237,7 +279,7 @@ func (e *Era) indexOffset(n uint64, component componentType) (uint64, error) {
 		return 0, err
 	}
 	rel := binary.LittleEndian.Uint64(buf[:])
-	return uint64(int64(rel) + indstart), nil
+	return int64(rel) + indstart, nil
 }
 
 // metadata contains the information about the era file that is written into the file.

@@ -166,7 +166,7 @@ func (it *RawIterator) Next() bool {
 		it.setErr(err)
 		return false
 	}
-	it.Header, _, err = newSnappyReader(it.e.s, era.TypeCompressedHeader, int64(headerOffset))
+	it.Header, _, err = newSnappyReader(it.e.s, era.TypeCompressedHeader, headerOffset)
 	if err != nil {
 		it.setErr(err)
 		return false
@@ -177,7 +177,7 @@ func (it *RawIterator) Next() bool {
 		it.setErr(err)
 		return false
 	}
-	it.Body, _, err = newSnappyReader(it.e.s, era.TypeCompressedBody, int64(bodyOffset))
+	it.Body, _, err = newSnappyReader(it.e.s, era.TypeCompressedBody, bodyOffset)
 	if err != nil {
 		it.setErr(err)
 		return false
@@ -188,7 +188,7 @@ func (it *RawIterator) Next() bool {
 		it.setErr(err)
 		return false
 	}
-	it.Receipts, _, err = newSnappyReader(it.e.s, era.TypeCompressedSlimReceipts, int64(receiptsOffset))
+	it.Receipts, _, err = newSnappyReader(it.e.s, era.TypeCompressedSlimReceipts, receiptsOffset)
 	if err != nil {
 		it.setErr(err)
 		return false
@@ -200,7 +200,7 @@ func (it *RawIterator) Next() bool {
 			it.setErr(err)
 			return false
 		}
-		it.TotalDifficulty, _, err = it.e.s.ReaderAt(era.TypeTotalDifficulty, int64(tdOffset))
+		it.TotalDifficulty, _, err = it.e.s.ReaderAt(era.TypeTotalDifficulty, tdOffset)
 		if err != nil {
 			it.setErr(err)
 			return false
