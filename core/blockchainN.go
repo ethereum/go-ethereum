@@ -305,11 +305,19 @@ func (bc *BlockChain) insertChainN(chain types.Blocks, setHead bool, makeWitness
 
 	// Validate stateRoot for N-blocks at once.
 	xvtime := time.Now()
+	statedb.AccountUpdates = time.Duration(0)
+	statedb.StorageUpdates = time.Duration(0)
+	statedb.AccountHashes = time.Duration(0)
 	header := endBlock.Header()
 	if root := statedb.IntermediateRoot(true); header.Root != root {
 		log.Crit("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, statedb.Error())
 	}
-	blockCrossValidationTimer.Update(time.Since(xvtime))
+	accountUpdateTimer.Update(statedb.AccountUpdates)                         // Account updates are complete(in validation)
+	storageUpdateTimer.Update(statedb.StorageUpdates)                         // Storage updates are complete(in validation)
+	accountHashTimer.Update(statedb.AccountHashes)                            // Account hashes are complete(in validation)
+	triehash := statedb.AccountHashes                                         // The time spent on tries hashing
+	trieUpdate := statedb.AccountUpdates + statedb.StorageUpdates             // The time spent on tries update
+	blockValidationTimer.Update(time.Since(xvtime) - (triehash + trieUpdate)) // The time spent on block validation
 
 	// Commit N-blocks together to the chain and get the status.
 	var (

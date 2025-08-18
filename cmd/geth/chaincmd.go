@@ -48,7 +48,6 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
 	"github.com/urfave/cli/v2"
 )
 
@@ -447,9 +446,19 @@ func showMetrics() {
 	fmt.Println("blockCrossValidationTimer", blockCrossValidationTimer.Total())
 
 	// execution
-	fmt.Println("prefetchTimer", blockPrefetchExecuteTimer.Total())
+	fmt.Println("prefetchTimer    :", blockPrefetchExecuteTimer.Total())
+	fmt.Println("prefetchBALtime:  ", core.PrefetchBALTime)
+
+	// execution: parallel merging post state for deriving the new stateRoot
+	fmt.Println("postStateMergeTime:", core.PostMergeTime)
+	fmt.Println("prefetchTrieWallT:", core.PrefetchTrieTimer)
+	// execution: parallel execution for validation
+	fmt.Println("prestateMergeTime:", core.PrefetchMergeBALTime)
+	fmt.Println("parallelExeTime:  ", core.ParallelExeTime)
+	// Other:Sync state time
+	fmt.Println("prefetchChTime:   ", core.PrefetchChTime)
+
 	fmt.Println("accountReadTimer", accountReadTimer.Total())
-	fmt.Println("ResolveTimer", trie.ResolveTime)
 	fmt.Println("storageReadTimer", storageReadTimer.Total())
 	fmt.Println("blockExecutionTimer", blockExecutionTimer.Total())
 
@@ -465,27 +474,19 @@ func showMetrics() {
 	fmt.Println("triedbCommitTimer", triedbCommitTimer.Total())
 	fmt.Println("blockWriteTimer", blockWriteTimer.Total())
 
-	// Parallel
+	// Others
 	fmt.Println("StateSetTime:     ", state.StateSetTime)
 	fmt.Println("StateLoadTime:    ", state.StateLoadTime)
 	fmt.Println("StateFinaliTime:  ", state.StateFinalizeTime)
 	fmt.Println("StateCopyTime:    ", state.StateCopyTime)
 	fmt.Println("StateCopyNewTime: ", state.StateNewTime)
 	fmt.Println("StateDeepCpTime:  ", state.StateDeepCpTime)
-	fmt.Println("PrefetchBALtime:  ", core.PrefetchBALTime)
-	fmt.Println("PrefetchMergeTime:", core.PrefetchMergeBALTime)
-	fmt.Println("ParallelExeTime: ", core.ParallelExeTime)
-	fmt.Println("PrefetchTrieWallTime: ", core.PrefetchTrieTimer)
-	// fmt.Println("PrefetchTrieCPUtime:  ", state.PrefetchTrieCPUTime)
-
-	// Sync state time
-	fmt.Println("PrefetchChTime: ", core.PrefetchChTime)
 
 	// total
-	fmt.Println("blockInsertTimer", blockInsertTimer.Total())
+	fmt.Println("blockInsertTimer: ", blockInsertTimer.Total())
 
 	mgasps := chainMgaspsMeter.Snapshot()
-	fmt.Println("mgasps,mean,max,min:", int64(mgasps.Mean()), mgasps.Max(), mgasps.Min())
+	fmt.Println("mgasps min,mean,max:", mgasps.Min(), int64(mgasps.Mean()), mgasps.Max())
 }
 
 func exportChain(ctx *cli.Context) error {
