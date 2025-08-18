@@ -205,22 +205,22 @@ func (bitCurve *BitCurve) doubleJacobian(x, y, z *big.Int) (*big.Int, *big.Int, 
 	d.Mul(d, d)                 //(X1+B)²
 	d.Sub(d, a)                 //(X1+B)²-A
 	d.Sub(d, c)                 //(X1+B)²-A-C
-	d.Mul(d, big.NewInt(2))     //2*((X1+B)²-A-C)
+	d.Lsh(d, 1)                 //2*((X1+B)²-A-C)
 
 	e := new(big.Int).Mul(big.NewInt(3), a) //3*A
 	f := new(big.Int).Mul(e, e)             //E²
 
-	x3 := new(big.Int).Mul(big.NewInt(2), d) //2*D
-	x3.Sub(f, x3)                            //F-2*D
+	x3 := new(big.Int).Lsh(d, 1) //2*D
+	x3.Sub(f, x3)                //F-2*D
 	x3.Mod(x3, bitCurve.P)
 
-	y3 := new(big.Int).Sub(d, x3)                  //D-X3
-	y3.Mul(e, y3)                                  //E*(D-X3)
-	y3.Sub(y3, new(big.Int).Mul(big.NewInt(8), c)) //E*(D-X3)-8*C
+	y3 := new(big.Int).Sub(d, x3)      //D-X3
+	y3.Mul(e, y3)                      //E*(D-X3)
+	y3.Sub(y3, new(big.Int).Lsh(c, 3)) //E*(D-X3)-8*C
 	y3.Mod(y3, bitCurve.P)
 
 	z3 := new(big.Int).Mul(y, z) //Y1*Z1
-	z3.Mul(big.NewInt(2), z3)    //3*Y1*Z1
+	z3.Lsh(z3, 1)                //2*Y1*Z1
 	z3.Mod(z3, bitCurve.P)
 
 	return x3, y3, z3
