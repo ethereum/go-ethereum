@@ -442,7 +442,6 @@ type testBackend struct {
 
 	pending         *types.Block
 	pendingReceipts types.Receipts
-	pendingState    *state.StateDB
 }
 
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.Engine, generator func(i int, b *core.BlockGen)) *testBackend {
