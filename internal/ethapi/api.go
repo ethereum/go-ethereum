@@ -597,18 +597,21 @@ func (api *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Addre
 
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
 func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
-	block, err := api.b.BlockByNumberOrHash(ctx, blockNrOrHash)
-	if block == nil || err != nil {
-		return nil, err
-	}
-	var receipts types.Receipts
+	var (
+		err      error
+		block    *types.Block
+		receipts types.Receipts
+	)
 	if blockNr, ok := blockNrOrHash.Number(); ok && blockNr == rpc.PendingBlockNumber {
-		var pendingBlock *types.Block
-		pendingBlock, receipts, _ = api.b.Pending()
-		if pendingBlock.Hash() != block.Hash() {
-			return nil, fmt.Errorf("pending block hash mismatch: %s vs %s", pendingBlock.Hash(), block.Hash())
+		block, receipts, _ = api.b.Pending()
+		if block == nil {
+			return nil, errors.New("pending receipts is not available")
 		}
 	} else {
+		block, err = api.b.BlockByNumberOrHash(ctx, blockNrOrHash)
+		if block == nil || err != nil {
+			return nil, err
+		}
 		receipts, err = api.b.GetReceipts(ctx, block.Hash())
 		if err != nil {
 			return nil, err
@@ -618,7 +621,6 @@ func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rp
 	if len(txs) != len(receipts) {
 		return nil, fmt.Errorf("receipts length mismatch: %d vs %d", len(txs), len(receipts))
 	}
-
 	// Derive the sender.
 	signer := types.MakeSigner(api.b.ChainConfig(), block.Number(), block.Time())
 
@@ -626,7 +628,6 @@ func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rp
 	for i, receipt := range receipts {
 		result[i] = marshalReceipt(receipt, block.Hash(), block.NumberU64(), signer, txs[i], i)
 	}
-
 	return result, nil
 }
 
