@@ -58,133 +58,113 @@ import (
 	"github.com/golang/snappy"
 )
 
-// Temporary buffer for writing blocks until the Finalize method is called.
-type buffer struct {
+// Builder is used to build an Era2 e2store file. It collects block entries and writes them to the underlying e2store.Writer.
+type Builder struct {
+	w *e2store.Writer
+
 	headers  [][]byte
+	hashes   []common.Hash
 	bodies   [][]byte
 	receipts [][]byte
 	proofs   [][]byte
 	tds      []*big.Int
-}
 
-// The offsets holds the offsets of the different block components in the e2store file. Eventually these offsets will be used to write the index table at the end of the file.
-type offsets struct {
-	headers      []uint64
-	bodys        []uint64
-	receipts     []uint64
-	proofoffsets []uint64
-	tdoff        []uint64
-}
+	startNum *uint64
+	merged   bool
+	written  uint64
 
-// Builder is used to build an Era2 e2store file. It collects block entries and writes them to the underlying e2store.Writer.
-type Builder struct {
-	w   *e2store.Writer
-	tmp *bytes.Buffer
-
-	buff buffer
-	off  offsets
-
-	hashes        []common.Hash
-	startNum      *uint64
-	written       uint64
-	expectsProofs bool
-	isPreMerge    bool
-	finalTD       *big.Int // final total difficulty, used for pre-merge and merge straddling files
+	buf    *bytes.Buffer
+	snappy *snappy.Writer
 }
 
 // NewBuilder returns a new Builder instance.
 func NewBuilder(w io.Writer) era.Builder {
-	tmp := bytes.NewBuffer(nil)
 	return &Builder{
-		w:   e2store.NewWriter(w),
-		tmp: tmp,
+		w: e2store.NewWriter(w),
 	}
 }
 
 // Add writes a block entry, its reciepts, and optionally its proofs as well into the e2store file.
 func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, proof era.Proof) error {
-	header := block.Header()
-	body := block.Body()
-	if len(b.buff.headers) == 0 { // first block determines wether proofs are expected
-		b.expectsProofs = proof != nil
-	} else if b.expectsProofs && proof == nil { // every later block must follow this policy
-		return fmt.Errorf("block %d missing proof: proofs required for every block", header.Number.Uint64())
-	} else if !b.expectsProofs && proof != nil {
-		return fmt.Errorf("unexpected proof for block %d: first block had none", header.Number.Uint64())
-	}
-
-	eh, err := rlp.EncodeToBytes(&header)
+	eh, err := rlp.EncodeToBytes(block.Header())
 	if err != nil {
 		return fmt.Errorf("encode header: %w", err)
 	}
-	eb, err := rlp.EncodeToBytes(&body)
+	eb, err := rlp.EncodeToBytes(block.Body())
 	if err != nil {
 		return fmt.Errorf("encode body: %w", err)
 	}
-	er, err := rlp.EncodeToBytes(receipts)
+
+	rs := make([]*types.ReceiptForStorage, len(receipts))
+	for i, receipt := range receipts {
+		rs[i] = (*types.ReceiptForStorage)(receipt)
+	}
+	er, err := rlp.EncodeToBytes(rs)
 	if err != nil {
 		return fmt.Errorf("encode receipts: %w", err)
 	}
 
 	var ep []byte
-	var buffer bytes.Buffer
-
 	if proof != nil {
-		if err := proof.EncodeRLP(&buffer); err != nil {
+		ep, err = rlp.EncodeToBytes(ep)
+		if err != nil {
 			return fmt.Errorf("encode proof: %w", err)
 		}
-		ep = buffer.Bytes()
+	}
+	var difficulty *big.Int
+	if !b.merged {
+		difficulty = block.Difficulty()
 	}
 
-	return b.AddRLP(
-		eh, eb, er, ep,
-		header.Number.Uint64(),
-		header.Hash(), td, nil,
-	)
+	return b.AddRLP(eh, eb, er, ep, block.Number().Uint64(), block.Hash(), td, difficulty)
 }
 
 // AddRLP takes the RLP encoded block components and writes them to the underlying e2store file.
-func (b *Builder) AddRLP(headerRLP []byte, bodyRLP []byte, receipts []byte, proof []byte, blockNum uint64, blockHash common.Hash, td, difficulty *big.Int) error {
-	if difficulty != nil {
-		return fmt.Errorf("block difficulty not allowed in erae format")
+func (b *Builder) AddRLP(header []byte, body []byte, receipts []byte, proof []byte, number uint64, blockHash common.Hash, td, difficulty *big.Int) error {
+	if b.startNum == nil {
+		b.startNum = new(uint64)
+		*b.startNum = number
+		b.merged = difficulty.Sign() == 0
 	}
-	if len(b.buff.headers) >= era.MaxSize {
+	if len(b.headers) >= era.MaxSize {
 		return fmt.Errorf("exceeds max size %d", era.MaxSize)
 	}
-	if len(b.buff.headers) == 0 && td != nil {
-		if td.Sign() > 0 {
-			b.isPreMerge = true
-		}
+	if !b.merged && (td == nil || difficulty == nil || difficulty.Sign() == 0) {
+		return fmt.Errorf("era pre-merge, but difficulty values not supplied")
+	}
+	if b.merged && (td != nil || difficulty != nil) {
+		return fmt.Errorf("era already merged, but given non-nil difficulty values")
+	}
+	if len(b.headers) != 0 && len(b.proofs) == 0 && proof != nil {
+		return fmt.Errorf("unexpected proof for block %d: first block had none", number)
+	}
+	if len(b.headers) != 0 && len(b.proofs) != 0 && proof == nil {
+		return fmt.Errorf("block %d missing proof: proofs required for every block", number)
 	}
 
-	b.buff.headers = append(b.buff.headers, headerRLP)
-	b.buff.bodies = append(b.buff.bodies, bodyRLP)
-	b.buff.receipts = append(b.buff.receipts, receipts)
-	if td != nil {
-		if b.isPreMerge && td.Sign() > 0 {
-			b.buff.tds = append(b.buff.tds, new(big.Int).Set(td))
-			b.finalTD = new(big.Int).Set(td)
+	b.headers = append(b.headers, header)
+	b.bodies = append(b.bodies, body)
+	b.receipts = append(b.receipts, receipts)
+
+	if !b.merged {
+		if difficulty.Sign() != 0 {
 			b.hashes = append(b.hashes, blockHash)
-		} else if b.isPreMerge {
-			b.buff.tds = append(b.buff.tds, new(big.Int).Set(b.finalTD))
 		}
+		b.tds = append(b.tds, new(big.Int).Set(td))
 	}
 
 	if proof != nil {
-		b.buff.proofs = append(b.buff.proofs, proof)
-	}
-
-	// Write Era2 version before writing any blocks.
-	if b.startNum == nil {
-		b.startNum = new(uint64)
-		*b.startNum = blockNum
-		if n, err := b.w.Write(era.TypeVersion, nil); err != nil {
-			return fmt.Errorf("write version entry: %w", err)
-		} else {
-			b.written += uint64(n)
-		}
+		b.proofs = append(b.proofs, proof)
 	}
 	return nil
+}
+
+type offsets struct {
+	headers  []uint64
+	bodies   []uint64
+	receipts []uint64
+	tds      []uint64
+	proofs   []uint64
 }
 
 // Finalize writes all collected block entries to the e2store file and returns the accumulator root hash.
@@ -193,55 +173,60 @@ func (b *Builder) Finalize() (common.Hash, error) {
 	if b.startNum == nil {
 		return common.Hash{}, errors.New("no blocks added, cannot finalize")
 	}
-	for _, data := range b.buff.headers {
-		off, err := b.addEntry(era.TypeCompressedHeader, data, true)
-		if err != nil {
-			return common.Hash{}, fmt.Errorf("headers: %w", err)
-		}
-		b.off.headers = append(b.off.headers, off)
+	// Write Era2 version before writing any blocks.
+	if n, err := b.w.Write(era.TypeVersion, nil); err != nil {
+		return common.Hash{}, fmt.Errorf("write version entry: %w", err)
+	} else {
+		b.written += uint64(n)
 	}
 
-	for _, data := range b.buff.bodies {
-		off, err := b.addEntry(era.TypeCompressedBody, data, true)
-		if err != nil {
-			return common.Hash{}, fmt.Errorf("bodies: %w", err)
-		}
-		b.off.bodys = append(b.off.bodys, off)
+	// Convert int values to byte-level LE representation.
+	var tds [][]byte
+	for _, td := range b.tds {
+		tds = append(tds, uint256LE(td))
 	}
 
-	for _, data := range b.buff.receipts {
-		off, err := b.addEntry(era.TypeCompressedSlimReceipts, data, true)
-		if err != nil {
-			return common.Hash{}, fmt.Errorf("receipts: %w", err)
-		}
-		b.off.receipts = append(b.off.receipts, off)
-	}
+	// Create snappy writer.
+	b.buf = bytes.NewBuffer(nil)
+	b.snappy = snappy.NewBufferedWriter(b.buf)
 
-	if len(b.buff.tds) > 0 {
-		for _, data := range b.buff.tds {
-			littleEndian := uint256LE(data)
-			off, err := b.addEntry(era.TypeTotalDifficulty, littleEndian, false)
-			if err != nil {
-				return common.Hash{}, fmt.Errorf("total-difficulty: %w", err)
+	var o offsets
+	for _, section := range []struct {
+		typ        uint16
+		data       [][]byte
+		compressed bool
+		offsets    *[]uint64
+	}{
+		{era.TypeCompressedHeader, b.headers, true, &o.headers},
+		{era.TypeCompressedBody, b.bodies, true, &o.bodies},
+		{era.TypeCompressedSlimReceipts, b.receipts, true, &o.receipts},
+		{era.TypeTotalDifficulty, tds, false, &o.tds},
+		{era.TypeProof, b.proofs, true, &o.proofs},
+	} {
+		for _, data := range section.data {
+			*section.offsets = append(*section.offsets, b.written)
+			if section.compressed {
+				// Write snappy compressed data.
+				if err := b.snappyWrite(section.typ, data); err != nil {
+					return common.Hash{}, err
+				}
+			} else {
+				// Directly write uncompressed data.
+				n, err := b.w.Write(section.typ, data)
+				if err != nil {
+					return common.Hash{}, err
+				}
+				b.written += uint64(n)
 			}
-			b.off.tdoff = append(b.off.tdoff, off)
 		}
 	}
 
-	if len(b.buff.proofs) > 0 {
-		for _, data := range b.buff.proofs {
-			off, err := b.addEntry(era.TypeProof, data, true)
-			if err != nil {
-				return common.Hash{}, fmt.Errorf("proofs: %w", err)
-			}
-			b.off.proofoffsets = append(b.off.proofoffsets, off)
-		}
-	}
-
+	// Compute and write accumlator root only when the first block the epoch is
+	// pre-merge, otherwise omit.
 	var accRoot common.Hash
-	if len(b.hashes) > 0 {
+	if !b.merged {
 		var err error
-		accRoot, err = era.ComputeAccumulator(b.hashes, b.buff.tds[:len(b.hashes)])
+		accRoot, err = era.ComputeAccumulator(b.hashes, b.tds[:len(b.hashes)])
 		if err != nil {
 			return common.Hash{}, fmt.Errorf("compute accumulator: %w", err)
 		}
@@ -252,7 +237,9 @@ func (b *Builder) Finalize() (common.Hash, error) {
 		}
 	}
 
-	return accRoot, b.writeIndex()
+	// TODO: accumulator root should only be returned when it's relevant
+	// (pre-merge)?
+	return accRoot, b.writeIndex(&o)
 }
 
 // uin256LE writes 32 byte big integers to little endian.
@@ -266,17 +253,15 @@ func uint256LE(v *big.Int) []byte {
 
 // SnappyWrite compresses the input data using snappy and writes it to the e2store file.
 func (b *Builder) snappyWrite(typ uint16, in []byte) error {
-	var tmp = b.tmp
-	snappy := snappy.NewBufferedWriter(b.tmp)
-	tmp.Reset()
-	snappy.Reset(tmp)
-	if _, err := snappy.Write(in); err != nil {
+	b.buf.Reset()
+	b.snappy.Reset(b.buf)
+	if _, err := b.snappy.Write(in); err != nil {
 		return fmt.Errorf("error snappy encoding: %w", err)
 	}
-	if err := snappy.Flush(); err != nil {
+	if err := b.snappy.Flush(); err != nil {
 		return fmt.Errorf("error flushing snappy encoding: %w", err)
 	}
-	n, err := b.w.Write(typ, b.tmp.Bytes())
+	n, err := b.w.Write(typ, b.buf.Bytes())
 	b.written += uint64(n)
 	if err != nil {
 		return fmt.Errorf("error writing e2store entry: %w", err)
@@ -284,32 +269,14 @@ func (b *Builder) snappyWrite(typ uint16, in []byte) error {
 	return nil
 }
 
-// addEntry takes the e2store object and writes it into the file.
-func (b *Builder) addEntry(typ uint16, payload []byte, compressed bool) (uint64, error) {
-	offset := b.written
-	var err error
-	if compressed {
-		if err = b.snappyWrite(typ, payload); err != nil {
-			return 0, err
-		}
-	} else {
-		var n int
-		if n, err = b.w.Write(typ, payload); err != nil {
-			return 0, err
-		}
-		b.written += uint64(n)
-	}
-	return offset, nil
-}
-
 // writeIndex takes all the offset table and writes it to the file. The index table contains all offsets to specific block entries
-func (b *Builder) writeIndex() error {
-	count := uint64(len(b.off.headers))
+func (b *Builder) writeIndex(o *offsets) error {
+	count := uint64(len(o.headers))
 	componentCount := uint64(3)
-	if len(b.buff.tds) > 0 {
+	if len(o.tds) > 0 {
 		componentCount++
 	}
-	if len(b.buff.proofs) > 0 {
+	if len(o.proofs) > 0 {
 		componentCount++
 	}
 
@@ -320,17 +287,17 @@ func (b *Builder) writeIndex() error {
 	for i := uint64(0); i < count; i++ {
 		basePosition := 8 + i*componentCount*8
 
-		binary.LittleEndian.PutUint64(index[basePosition:], rel(b.off.headers[i]))
-		binary.LittleEndian.PutUint64(index[basePosition+8:], rel(b.off.bodys[i]))
-		binary.LittleEndian.PutUint64(index[basePosition+16:], rel(b.off.receipts[i]))
+		binary.LittleEndian.PutUint64(index[basePosition:], rel(o.headers[i]))
+		binary.LittleEndian.PutUint64(index[basePosition+8:], rel(o.bodies[i]))
+		binary.LittleEndian.PutUint64(index[basePosition+16:], rel(o.receipts[i]))
 
 		pos := uint64(24)
-		if len(b.buff.tds) > 0 {
-			binary.LittleEndian.PutUint64(index[basePosition+pos:], rel(b.off.tdoff[i]))
+		if len(o.tds) > 0 {
+			binary.LittleEndian.PutUint64(index[basePosition+pos:], rel(o.tds[i]))
 			pos += 8
 		}
-		if len(b.buff.proofs) > 0 {
-			binary.LittleEndian.PutUint64(index[basePosition+pos:], rel(b.off.proofoffsets[i]))
+		if len(o.proofs) > 0 {
+			binary.LittleEndian.PutUint64(index[basePosition+pos:], rel(o.proofs[i]))
 		}
 	}
 	end := 8 + count*componentCount*8

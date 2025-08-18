@@ -45,7 +45,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/era"
-	"github.com/ethereum/go-ethereum/internal/era/onedb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -431,16 +430,12 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64, ne
 		return fmt.Errorf("error creating output directory: %w", err)
 	}
 
-	td := new(big.Int)
-	for n := uint64(0); n < first; n++ {
-		td.Add(td, bc.GetHeaderByNumber(n).Difficulty)
-	}
-
 	var (
 		start     = time.Now()
 		reported  = time.Now()
 		h         = sha256.New()
 		buf       = bytes.NewBuffer(nil)
+		td        = new(big.Int) // TODO: should disallow non-zero "first" since we need to compute td from genesis now that we don't store it
 		checksums []string
 	)
 
@@ -449,13 +444,13 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64, ne
 		tmpPath := filepath.Join(dir, filename(network, idx, common.Hash{}))
 
 		if err := func() error {
-			fh, err := os.Create(tmpPath)
+			f, err := os.Create(tmpPath)
 			if err != nil {
 				return err
 			}
-			defer fh.Close()
+			defer f.Close()
 
-			bldr := newBuilder(fh)
+			builder := newBuilder(f)
 
 			for j := uint64(0); j < step && batch+j <= last; j++ {
 				n := batch + j
@@ -469,26 +464,26 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64, ne
 				}
 				td.Add(td, blk.Difficulty())
 
-				if err := bldr.Add(blk, rcpt, new(big.Int).Set(td), nil); err != nil {
+				if err := builder.Add(blk, rcpt, new(big.Int).Set(td), nil); err != nil {
 					return err
 				}
 			}
-
-			root, err := bldr.Finalize()
+			root, err := builder.Finalize()
 			if err != nil {
 				return err
 			}
-			final := filepath.Join(dir, onedb.Filename(network, idx, root))
+			// TODO: this root shouldn't be used post merge!
+			final := filepath.Join(dir, filename(network, idx, root))
 			if err := os.Rename(tmpPath, final); err != nil {
 				return err
 			}
 
-			if _, err := fh.Seek(0, io.SeekStart); err != nil {
+			if _, err := f.Seek(0, io.SeekStart); err != nil {
 				return err
 			}
 			h.Reset()
 			buf.Reset()
-			if _, err := io.Copy(h, fh); err != nil {
+			if _, err := io.Copy(h, f); err != nil {
 				return err
 			}
 			checksums = append(checksums, common.BytesToHash(h.Sum(buf.Bytes()[:])).Hex())
