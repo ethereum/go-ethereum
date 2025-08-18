@@ -63,6 +63,11 @@ func BenchmarkAddNodes(b *testing.B) {
 			accountNodeCount: 2000,
 			nodesPerAccount:  40,
 		},
+		{
+			name:             "XLarge-5000-accounts-50-nodes",
+			accountNodeCount: 5000,
+			nodesPerAccount:  50,
+		},
 	}
 
 	for _, tc := range tests {
@@ -75,7 +80,7 @@ func BenchmarkAddNodes(b *testing.B) {
 
 			// Initialize all 16 storage node shards
 			for i := 0; i < storageNodesShardCount; i++ {
-				lookup.storageNodes[i] = make(map[string][]common.Hash)
+				lookup.storageNodes[i] = make(map[trienodeKey][]common.Hash)
 			}
 
 			var state common.Hash
@@ -87,7 +92,7 @@ func BenchmarkAddNodes(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				// Reset the lookup instance for each benchmark iteration
 				for j := 0; j < storageNodesShardCount; j++ {
-					lookup.storageNodes[j] = make(map[string][]common.Hash)
+					lookup.storageNodes[j] = make(map[trienodeKey][]common.Hash)
 				}
 
 				lookup.addStorageNodes(state, storageNodes)
