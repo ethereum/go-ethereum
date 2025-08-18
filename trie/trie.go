@@ -419,6 +419,7 @@ func (t *Trie) UpdateBatch(keys [][]byte, values [][]byte) error {
 	// Insert the entries sequentially if there are not too many
 	// trie nodes in the trie.
 	fn, ok := t.root.(*fullNode)
+
 	if !ok || len(keys) < 4 { // TODO(rjl493456442) the parallelism threshold should be twisted
 		for i, key := range keys {
 			err := t.Update(key, values[i])
@@ -438,7 +439,12 @@ func (t *Trie) UpdateBatch(keys [][]byte, values [][]byte) error {
 		ikeys[hkey[0]] = append(ikeys[hkey[0]], hkey)
 		ivals[hkey[0]] = append(ivals[hkey[0]], values[i])
 	}
-	for pos, ks := range ikeys {
+	if len(keys) > 0 {
+		fn.flags = t.newFlag()
+	}
+	for p, k := range ikeys {
+		pos := p
+		ks := k
 		eg.Go(func() error {
 			vs := ivals[pos]
 			for i, k := range ks {

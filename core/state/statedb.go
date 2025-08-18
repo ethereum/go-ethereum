@@ -574,6 +574,25 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code)
 	}
 }
+func (s *StateDB) updateStateObjects(objs []*stateObject) {
+	var addrs []common.Address
+	var accts []*types.StateAccount
+
+	for _, obj := range objs {
+		addrs = append(addrs, obj.Address())
+		accts = append(accts, &obj.data)
+	}
+
+	if err := s.trie.UpdateAccountBatch(addrs, accts, nil); err != nil {
+		s.setError(fmt.Errorf("updateStateObjects error: %v", err))
+	}
+
+	for _, obj := range objs {
+		if obj.dirtyCode {
+			s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code)
+		}
+	}
+}
 
 // deleteStateObject removes the given object from the state trie.
 func (s *StateDB) deleteStateObject(addr common.Address) {
@@ -883,6 +902,31 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	workers.Wait()
 	s.StorageUpdates += time.Since(start)
 
+	/*
+		fmt.Println("begin print mutations")
+		fmt.Println(s.txIndex)
+		for addr, _ := range s.mutations {
+			if _, ok := s.stateObjects[addr]; !ok {
+				continue
+			}
+			if s.stateObjects[addr].trie == nil {
+				continue
+			}
+			fmt.Printf("mut %x/%x:\n", addr, s.stateObjects[addr].addrHash)
+			it, err := s.stateObjects[addr].trie.NodeIterator([]byte{})
+			if err != nil {
+				panic(err)
+			}
+			for it.Next(true) {
+				if it.Leaf() {
+					fmt.Printf("%x: %x\n", it.Path(), it.LeafBlob())
+				} else {
+					fmt.Printf("%x: %x\n", it.Path(), it.Hash())
+				}
+			}
+		}
+	*/
+
 	// Now we're about to start to write changes to the trie. The trie is so far
 	// _untouched_. We can check with the prefetcher, if it can give us a trie
 	// which has the same root, but also has some content loaded into it.
@@ -911,6 +955,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	var (
 		usedAddrs    []common.Address
 		deletedAddrs []common.Address
+		updatedObjs  []*stateObject
 	)
 	for addr, op := range s.mutations {
 		if op.applied {
@@ -921,10 +966,13 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		if op.isDelete() {
 			deletedAddrs = append(deletedAddrs, addr)
 		} else {
-			s.updateStateObject(s.stateObjects[addr])
+			updatedObjs = append(updatedObjs, s.stateObjects[addr])
 			s.AccountUpdated += 1
 		}
 		usedAddrs = append(usedAddrs, addr) // Copy needed for closure
+	}
+	if len(updatedObjs) > 0 {
+		s.updateStateObjects(updatedObjs)
 	}
 	for _, deletedAddr := range deletedAddrs {
 		s.deleteStateObject(deletedAddr)
@@ -937,7 +985,6 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	}
 	// Track the amount of time wasted on hashing the account trie
 	defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())
-
 	hash := s.trie.Hash()
 
 	// If witness building is enabled, gather the account trie witness

@@ -322,8 +322,10 @@ func (s *stateObject) updateTrie() (Trie, error) {
 	// into a shortnode. This requires `B` to be resolved from disk.
 	// Whereas if the created node is handled first, then the collapse is avoided, and `B` is not resolved.
 	var (
-		deletions []common.Hash
-		used      = make([]common.Hash, 0, len(s.uncommittedStorage))
+		deletions    []common.Hash
+		used         = make([]common.Hash, 0, len(s.uncommittedStorage))
+		updateKeys   [][]byte
+		updateValues [][]byte
 	)
 	for key, origin := range s.uncommittedStorage {
 		// Skip noop changes, persist actual changes
@@ -337,16 +339,20 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			continue
 		}
 		if (value != common.Hash{}) {
-			if err := tr.UpdateStorage(s.address, key[:], common.TrimLeftZeroes(value[:])); err != nil {
-				s.db.setError(err)
-				return nil, err
-			}
+			updateKeys = append(updateKeys, key[:])
+			updateValues = append(updateValues, common.TrimLeftZeroes(value[:]))
 			s.db.StorageUpdated.Add(1)
 		} else {
 			deletions = append(deletions, key)
 		}
 		// Cache the items for preloading
 		used = append(used, key) // Copy needed for closure
+	}
+	if len(updateKeys) > 0 {
+		if err := tr.UpdateStorageBatch(common.Address{}, updateKeys, updateValues); err != nil {
+			s.db.setError(err)
+			return nil, err
+		}
 	}
 	for _, key := range deletions {
 		if err := tr.DeleteStorage(s.address, key[:]); err != nil {
