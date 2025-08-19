@@ -45,6 +45,10 @@ func NewTransitionTree(base *SecureTrie, overlay *VerkleTrie, st bool) *Transiti
 	}
 }
 
+func (t *TransitionTrie) Owner() common.Hash {
+	return t.overlay.Owner()
+}
+
 // Base returns the base trie.
 func (t *TransitionTrie) Base() *SecureTrie {
 	return t.base
