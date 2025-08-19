@@ -89,6 +89,7 @@ func (s *Syncer) run() {
 		target *types.Header
 		ticker = time.NewTicker(time.Second * 5)
 	)
+	defer ticker.Stop()
 	for {
 		select {
 		case req := <-s.request:
