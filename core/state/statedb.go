@@ -841,7 +841,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 				// If witness building is enabled and the state object has a trie,
 				// gather the witnesses for its specific storage trie
 				if s.witness != nil && obj.trie != nil {
-					s.witness.AddState(obj.trie.Witness(), obj.trie.WitnessPaths())
+					s.witness.AddState(obj.trie.Witness())
 				}
 			}
 			return nil
@@ -858,9 +858,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 				continue
 			}
 			if trie := obj.getPrefetchedTrie(); trie != nil {
-				s.witness.AddState(trie.Witness(), trie.WitnessPaths())
+				s.witness.AddState(trie.Witness())
 			} else if obj.trie != nil {
-				s.witness.AddState(obj.trie.Witness(), obj.trie.WitnessPaths())
+				s.witness.AddState(obj.trie.Witness())
 			}
 		}
 		// Pull in only-read and non-destructed trie witnesses
@@ -874,9 +874,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 				continue
 			}
 			if trie := obj.getPrefetchedTrie(); trie != nil {
-				s.witness.AddState(trie.Witness(), trie.WitnessPaths())
+				s.witness.AddState(trie.Witness())
 			} else if obj.trie != nil {
-				s.witness.AddState(obj.trie.Witness(), obj.trie.WitnessPaths())
+				s.witness.AddState(obj.trie.Witness())
 			}
 		}
 	}
@@ -942,7 +942,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 
 	// If witness building is enabled, gather the account trie witness
 	if s.witness != nil {
-		s.witness.AddState(s.trie.Witness(), nil)
+		s.witness.AddState(s.trie.Witness())
 	}
 	return hash
 }

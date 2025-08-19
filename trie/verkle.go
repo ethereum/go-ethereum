@@ -452,11 +452,6 @@ func (t *VerkleTrie) nodeResolver(path []byte) ([]byte, error) {
 }
 
 // Witness returns a set containing all trie nodes that have been accessed.
-func (t *VerkleTrie) Witness() map[string]struct{} {
-	panic("not implemented")
-}
-
-// Witness returns a set containing all trie nodes that have been accessed.
-func (t *VerkleTrie) WitnessPaths() map[string]struct{} {
+func (t *VerkleTrie) Witness() map[string][]byte {
 	panic("not implemented")
 }

@@ -133,6 +133,12 @@ func (t *Trie) NodeIterator(start []byte) (NodeIterator, error) {
 	return newNodeIterator(t, start), nil
 }
 
+// Owner returns the owner of the trie, allowing us to distinguis between
+// storage and account tries.
+func (t *Trie) Owner() common.Hash {
+	return t.owner
+}
+
 // MustGet is a wrapper of Get and will omit any encountered error but just
 // print out an error message.
 func (t *Trie) MustGet(key []byte) []byte {
@@ -517,9 +523,6 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 			// always creates a new slice) instead of append to
 			// avoid modifying n.Key since it might be shared with
 			// other nodes.
-			if t.owner == (common.Hash{}) {
-				stateDepthAggregator.record(int64(len(prefix) + len(key)))
-			}
 			return true, &shortNode{concat(n.Key, child.Key...), child.Val, t.newFlag()}, nil
 		default:
 			return true, &shortNode{n.Key, child, t.newFlag()}, nil
@@ -577,10 +580,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 					// Replace the entire full node with the short node.
 					// Mark the original short node as deleted since the
 					// value is embedded into the parent now.
-					t.tracer.onDelete(append(prefix, byte(pos)))
-					if t.owner == (common.Hash{}) {
-						stateDepthAggregator.record(int64(len(prefix) + 1))
-					}
+					t.opTracer.onDelete(append(prefix, byte(pos)))
 
 					k := append([]byte{byte(pos)}, cnode.Key...)
 					return true, &shortNode{k, cnode.Val, t.newFlag()}, nil
@@ -616,6 +616,13 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v (%v)", n, n, key))
 	}
+}
+
+func concat(s1 []byte, s2 ...byte) []byte {
+	r := make([]byte, len(s1)+len(s2))
+	copy(r, s1)
+	copy(r[len(s1):], s2)
+	return r
 }
 
 // copyNode deep-copies the supplied node along with its children recursively.
@@ -757,31 +764,12 @@ func (t *Trie) hashRoot() []byte {
 }
 
 // Witness returns a set containing all trie nodes that have been accessed.
-func (t *Trie) Witness() map[string]struct{} {
-	values := t.prevalueTracer.values()
-	if len(values) == 0 {
+func (t *Trie) Witness() map[string][]byte {
+	dataMap := t.prevalueTracer.getMap()
+	if len(dataMap) == 0 {
 		return nil
 	}
-	witnessStates := make(map[string]struct{}, len(values))
-	for _, val := range values {
-		witnessStates[string(val)] = struct{}{}
-	}
-
-	return witnessStates
-}
-
-func (t *Trie) WitnessPaths() map[string]struct{} {
-	// Return the paths of all nodes that have been accessed.
-	// The paths are the keys of the prevalue tracer.
-	keys := t.prevalueTracer.keys()
-	if len(keys) == 0 {
-		return nil
-	}
-	witnessPaths := make(map[string]struct{}, len(keys))
-	for _, key := range keys {
-		witnessPaths[string(key)] = struct{}{}
-	}
-	return witnessPaths
+	return dataMap
 }
 
 // Reset drops the referenced root node and cleans all internal state.

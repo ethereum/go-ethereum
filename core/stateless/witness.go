@@ -91,16 +91,15 @@ func (w *Witness) AddCode(code []byte) {
 }
 
 // AddState inserts a batch of MPT trie nodes into the witness.
-func (w *Witness) AddState(nodes map[string]struct{}, paths map[string]struct{}) {
-	if len(nodes) == 0 {
+func (w *Witness) AddState(nodemap map[string][]byte) {
+	if len(nodemap) == 0 {
 		return
 	}
 	w.lock.Lock()
 	defer w.lock.Unlock()
-
-	maps.Copy(w.State, nodes)
-	if paths != nil {
-		maps.Copy(w.Paths, paths)
+	for path, value := range nodemap {
+		w.State[string(value)] = struct{}{}
+		w.Paths[string(path)] = struct{}{} // Also track the path for the node
 	}
 }
 

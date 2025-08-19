@@ -158,6 +158,10 @@ func (t *prevalueTracer) keys() []string {
 	return slices.Collect(maps.Keys(t.data))
 }
 
+func (t *prevalueTracer) getMap() map[string][]byte {
+	return maps.Clone(t.data)
+}
+
 // reset resets the cached content in the prevalueTracer.
 func (t *prevalueTracer) reset() {
 	t.lock.Lock()

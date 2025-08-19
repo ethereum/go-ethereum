@@ -273,7 +273,7 @@ func (t *StateTrie) GetKey(shaKey []byte) []byte {
 }
 
 // Witness returns a set containing all trie nodes that have been accessed.
-func (t *StateTrie) Witness() map[string]struct{} {
+func (t *StateTrie) Witness() map[string][]byte {
 	return t.trie.Witness()
 }
 
