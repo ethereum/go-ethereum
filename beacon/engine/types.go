@@ -36,6 +36,7 @@ var (
 	PayloadV1 PayloadVersion = 0x1
 	PayloadV2 PayloadVersion = 0x2
 	PayloadV3 PayloadVersion = 0x3
+	PayloadV4 PayloadVersion = 0x4
 )
 
 //go:generate go run github.com/fjl/gencodec -type PayloadAttributes -field-override payloadAttributesMarshaling -out gen_blockparams.go
@@ -48,6 +49,7 @@ type PayloadAttributes struct {
 	SuggestedFeeRecipient common.Address      `json:"suggestedFeeRecipient" gencodec:"required"`
 	Withdrawals           []*types.Withdrawal `json:"withdrawals"`
 	BeaconRoot            *common.Hash        `json:"parentBeaconBlockRoot"`
+	InclusionList         types.InclusionList `json:"inclusionListTransactions"`
 }
 
 // JSON type overrides for PayloadAttributes.
@@ -218,8 +220,8 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 // and that the blockhash of the constructed block matches the parameters. Nil
 // Withdrawals value will propagate through the returned block. Empty
 // Withdrawals value must be passed via non-nil, length 0 value in data.
-func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
-	block, err := ExecutableDataToBlockNoHash(data, versionedHashes, beaconRoot, requests)
+func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, inclusionListTxs []*types.Transaction) (*types.Block, error) {
+	block, err := ExecutableDataToBlockNoHash(data, versionedHashes, beaconRoot, requests, inclusionListTxs)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +234,7 @@ func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, b
 // ExecutableDataToBlockNoHash is analogous to ExecutableDataToBlock, but is used
 // for stateless execution, so it skips checking if the executable data hashes to
 // the requested hash (stateless has to *compute* the root hash, it's not given).
-func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
+func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, inclusionListTxs []*types.Transaction) (*types.Block, error) {
 	txs, err := decodeTransactions(data.Transactions)
 	if err != nil {
 		return nil, err
@@ -298,7 +300,8 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 	}
 	return types.NewBlockWithHeader(header).
 			WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals}).
-			WithWitness(data.ExecutionWitness),
+			WithWitness(data.ExecutionWitness).
+			WithInclusionListTransactions(inclusionListTxs),
 		nil
 }
 
