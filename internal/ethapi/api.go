@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -1157,28 +1158,60 @@ type config struct {
 	ActivationTime  uint64                    `json:"activationTime"`
 	BlobSchedule    *params.BlobConfig        `json:"blobSchedule"`
 	ChainId         *hexutil.Big              `json:"chainId"`
+	ForkId          hexutil.Bytes             `json:"forkId"`
 	Precompiles     map[common.Address]string `json:"precompiles"`
 	SystemContracts map[string]common.Address `json:"systemContracts"`
 }
 
+type configResponse struct {
+	Current *config `json:"current"`
+	Next    *config `json:"next"`
+	Last    *config `json:"last"`
+}
+
 // Config implements the EIP-7910 eth_config method.
-func (api *BlockChainAPI) Config(ctx context.Context) config {
+func (api *BlockChainAPI) Config(ctx context.Context) (*configResponse, error) {
+	genesis, err := api.b.BlockByNumber(ctx, 0)
+	if err != nil {
+		return nil, fmt.Errorf("unable to load genesis: %w", err)
+	}
+	assemble := func(c *params.ChainConfig, ts *uint64) *config {
+		if ts == nil {
+			return nil
+		}
+		t := *ts
+
+		var (
+			rules       = c.Rules(c.LondonBlock, true, t)
+			precompiles = make(map[common.Address]string)
+		)
+		for addr, c := range vm.ActivePrecompiledContracts(rules) {
+			precompiles[addr] = c.Name()
+		}
+		forkid := forkid.NewID(c, genesis, ^uint64(0), t).Hash
+		return &config{
+			ActivationTime:  t,
+			BlobSchedule:    c.BlobConfig(c.LatestFork(t)),
+			ChainId:         (*hexutil.Big)(c.ChainID),
+			ForkId:          forkid[:],
+			Precompiles:     precompiles,
+			SystemContracts: c.ActiveSystemContracts(t),
+		}
+	}
 	var (
-		c           = api.b.ChainConfig()
-		h           = api.b.CurrentBlock()
-		rules       = c.Rules(h.Number, true, h.Time)
-		precompiles = make(map[common.Address]string)
+		c = api.b.ChainConfig()
+		t = api.b.CurrentHeader().Time
 	)
-	for addr, c := range vm.ActivePrecompiledContracts(rules) {
-		precompiles[addr] = c.Name()
+	resp := configResponse{
+		Next:    assemble(c, c.Timestamp(c.LatestFork(t)+1)),
+		Current: assemble(c, c.Timestamp(c.LatestFork(t))),
+		Last:    assemble(c, c.Timestamp(c.LatestFork(^uint64(0)))),
 	}
-	return config{
-		ActivationTime:  c.NextForkTime(h.Time),
-		BlobSchedule:    c.BlobConfig(c.LatestFork(h.Time)),
-		ChainId:         (*hexutil.Big)(c.ChainID),
-		Precompiles:     precompiles,
-		SystemContracts: c.ActiveSystemContracts(h.Time),
+	// Nil out last if no future-fork is configured.
+	if resp.Next == nil {
+		resp.Last = nil
 	}
+	return &resp, nil
 }
 
 // AccessList creates an access list for the given transaction.
