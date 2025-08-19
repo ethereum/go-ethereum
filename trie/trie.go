@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -376,10 +375,6 @@ func (t *Trie) update(key, value []byte) error {
 
 func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error) {
 	if len(key) == 0 {
-		if t.owner == (common.Hash{}) {
-			stateDepthAggregator.record(int64(len(prefix)))
-		}
-
 		if v, ok := n.(valueNode); ok {
 			return !bytes.Equal(v, value.(valueNode)), value, nil
 		}
@@ -522,7 +517,10 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 			// always creates a new slice) instead of append to
 			// avoid modifying n.Key since it might be shared with
 			// other nodes.
-			return true, &shortNode{slices.Concat(n.Key, child.Key), child.Val, t.newFlag()}, nil
+			if t.owner == (common.Hash{}) {
+				stateDepthAggregator.record(int64(len(prefix) + len(key)))
+			}
+			return true, &shortNode{concat(n.Key, child.Key...), child.Val, t.newFlag()}, nil
 		default:
 			return true, &shortNode{n.Key, child, t.newFlag()}, nil
 		}
@@ -579,7 +577,10 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 					// Replace the entire full node with the short node.
 					// Mark the original short node as deleted since the
 					// value is embedded into the parent now.
-					t.opTracer.onDelete(append(prefix, byte(pos)))
+					t.tracer.onDelete(append(prefix, byte(pos)))
+					if t.owner == (common.Hash{}) {
+						stateDepthAggregator.record(int64(len(prefix) + 1))
+					}
 
 					k := append([]byte{byte(pos)}, cnode.Key...)
 					return true, &shortNode{k, cnode.Val, t.newFlag()}, nil
