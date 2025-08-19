@@ -33,6 +33,13 @@ type HeaderReader interface {
 	GetHeader(hash common.Hash, number uint64) *types.Header
 }
 
+type DepthTracker struct {
+	Sum   int
+	Count int
+	Min   int
+	Max   int
+}
+
 // Witness encompasses the state required to apply a set of transactions and
 // derive a post state/receipt root.
 type Witness struct {
@@ -41,10 +48,11 @@ type Witness struct {
 	Headers []*types.Header     // Past headers in reverse order (0=parent, 1=parent's-parent, etc). First *must* be set.
 	Codes   map[string]struct{} // Set of bytecodes ran or accessed
 	State   map[string]struct{} // Set of MPT state trie nodes (account and storage together)
-	Paths   map[string]struct{} // Set of MPT trie paths (i.e. all accessed nodes, not just the ones in state)
 
-	chain HeaderReader // Chain reader to convert block hash ops to header proofs
-	lock  sync.Mutex   // Lock to allow concurrent state insertions
+	StateDepthMetrics   DepthTracker // Metrics about the state trie paths, used for debugging
+	AccountDepthMetrics DepthTracker // Metrics about the account trie paths, used for debugging
+	chain               HeaderReader // Chain reader to convert block hash ops to header proofs
+	lock                sync.Mutex   // Lock to allow concurrent state insertions
 }
 
 // NewWitness creates an empty witness ready for population.
@@ -59,16 +67,33 @@ func NewWitness(context *types.Header, chain HeaderReader) (*Witness, error) {
 		}
 		headers = append(headers, parent)
 	}
+
+	var stateDepthTracker = DepthTracker{Sum: 0, Count: 0, Min: -1, Max: 0}
+	var accountDepthTracker = DepthTracker{Sum: 0, Count: 0, Min: -1, Max: 0}
 	// Create the witness with a reconstructed gutted out block
 	return &Witness{
-		context: context,
-		Headers: headers,
-		Codes:   make(map[string]struct{}),
-		State:   make(map[string]struct{}),
-		Paths:   make(map[string]struct{}),
-
-		chain: chain,
+		context:             context,
+		Headers:             headers,
+		Codes:               make(map[string]struct{}),
+		State:               make(map[string]struct{}),
+		StateDepthMetrics:   stateDepthTracker,
+		AccountDepthMetrics: accountDepthTracker,
+		chain:               chain,
 	}, nil
+}
+
+func (d *DepthTracker) Add(n int) {
+	if n < 0 {
+		n = 0
+	}
+	d.Sum += n
+	d.Count++
+	if d.Min == -1 || n < d.Min {
+		d.Min = n
+	}
+	if n > d.Max {
+		d.Max = n
+	}
 }
 
 // AddBlockHash adds a "blockhash" to the witness with the designated offset from
@@ -91,7 +116,7 @@ func (w *Witness) AddCode(code []byte) {
 }
 
 // AddState inserts a batch of MPT trie nodes into the witness.
-func (w *Witness) AddState(nodemap map[string][]byte) {
+func (w *Witness) AddState(nodemap map[string][]byte, owner common.Hash) {
 	if len(nodemap) == 0 {
 		return
 	}
@@ -99,7 +124,25 @@ func (w *Witness) AddState(nodemap map[string][]byte) {
 	defer w.lock.Unlock()
 	for path, value := range nodemap {
 		w.State[string(value)] = struct{}{}
-		w.Paths[string(path)] = struct{}{} // Also track the path for the node
+		if owner != (common.Hash{}) {
+			w.AccountDepthMetrics.Add(len(path))
+		} else {
+			w.StateDepthMetrics.Add(len(path))
+		}
+	}
+}
+
+// AddStateModify tracks the modification of a node in the witness.
+func (w *Witness) AddStateModify(path int, owner common.Hash) {
+	if path < 0 {
+		return
+	}
+	w.lock.Lock()
+	defer w.lock.Unlock()
+	if owner != (common.Hash{}) {
+		w.AccountDepthMetrics.Add(path)
+	} else {
+		w.StateDepthMetrics.Add(path)
 	}
 }
 
@@ -107,11 +150,12 @@ func (w *Witness) AddState(nodemap map[string][]byte) {
 // is never mutated by Witness
 func (w *Witness) Copy() *Witness {
 	cpy := &Witness{
-		Headers: slices.Clone(w.Headers),
-		Codes:   maps.Clone(w.Codes),
-		State:   maps.Clone(w.State),
-		Paths:   maps.Clone(w.Paths),
-		chain:   w.chain,
+		Headers:             slices.Clone(w.Headers),
+		Codes:               maps.Clone(w.Codes),
+		State:               maps.Clone(w.State),
+		StateDepthMetrics:   w.StateDepthMetrics,
+		AccountDepthMetrics: w.AccountDepthMetrics,
+		chain:               w.chain,
 	}
 	if w.context != nil {
 		cpy.context = types.CopyHeader(w.context)

@@ -841,7 +841,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 				// If witness building is enabled and the state object has a trie,
 				// gather the witnesses for its specific storage trie
 				if s.witness != nil && obj.trie != nil {
-					s.witness.AddState(obj.trie.Witness())
+					s.witness.AddState(obj.trie.Witness(), obj.trie.Owner())
 				}
 			}
 			return nil
@@ -858,9 +858,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 				continue
 			}
 			if trie := obj.getPrefetchedTrie(); trie != nil {
-				s.witness.AddState(trie.Witness())
+				s.witness.AddState(trie.Witness(), trie.Owner())
 			} else if obj.trie != nil {
-				s.witness.AddState(obj.trie.Witness())
+				s.witness.AddState(obj.trie.Witness(), obj.trie.Owner())
 			}
 		}
 		// Pull in only-read and non-destructed trie witnesses
@@ -874,9 +874,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 				continue
 			}
 			if trie := obj.getPrefetchedTrie(); trie != nil {
-				s.witness.AddState(trie.Witness())
+				s.witness.AddState(trie.Witness(), trie.Owner())
 			} else if obj.trie != nil {
-				s.witness.AddState(obj.trie.Witness())
+				s.witness.AddState(obj.trie.Witness(), trie.Owner())
 			}
 		}
 	}
@@ -942,7 +942,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 
 	// If witness building is enabled, gather the account trie witness
 	if s.witness != nil {
-		s.witness.AddState(s.trie.Witness())
+		s.witness.AddState(s.trie.Witness(), s.trie.Owner())
 	}
 	return hash
 }
@@ -1295,6 +1295,17 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorag
 	if err != nil {
 		return nil, err
 	}
+
+	// This iterates through nodeset and tracks path depths for tracking
+	// state and account trie modifications.
+	if s.witness != nil && ret != nil && !ret.empty() {
+		for owner, set := range ret.nodes.Sets {
+			for path := range set.Origins {
+				s.witness.AddStateModify(len(path), owner)
+			}
+		}
+	}
+
 	// Commit dirty contract code if any exists
 	if db := s.db.TrieDB().Disk(); db != nil && len(ret.codes) > 0 {
 		batch := db.NewBatch()

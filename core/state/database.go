@@ -132,6 +132,10 @@ type Trie interface {
 	// The returned map could be nil if the witness is empty.
 	Witness() map[string][]byte
 
+	// Owner returns the owner of the trie, allowing us to distinguish between
+	// storage and account tries.
+	Owner() common.Hash
+
 	// NodeIterator returns an iterator that returns nodes of the trie. Iteration
 	// starts at the key after the given start key. And error will be returned
 	// if fails to create node iterator.

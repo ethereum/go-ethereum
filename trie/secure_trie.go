@@ -96,6 +96,10 @@ func NewStateTrie(id *ID, db database.NodeDatabase) (*StateTrie, error) {
 	return tr, nil
 }
 
+func (t *StateTrie) Owner() common.Hash {
+	return t.trie.Owner()
+}
+
 // MustGet returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 //
@@ -275,11 +279,6 @@ func (t *StateTrie) GetKey(shaKey []byte) []byte {
 // Witness returns a set containing all trie nodes that have been accessed.
 func (t *StateTrie) Witness() map[string][]byte {
 	return t.trie.Witness()
-}
-
-// Witness returns a set containing all trie nodes that have been accessed.
-func (t *StateTrie) WitnessPaths() map[string]struct{} {
-	return t.trie.WitnessPaths()
 }
 
 // Commit collects all dirty nodes in the trie and replaces them with the

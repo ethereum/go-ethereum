@@ -113,8 +113,12 @@ var (
 	errInvalidOldChain      = errors.New("invalid old chain")
 	errInvalidNewChain      = errors.New("invalid new chain")
 
-	avgAccessDepthInBlock = metrics.NewRegisteredGauge("trie/access/depth/avg", nil)
-	minAccessDepthInBlock = metrics.NewRegisteredGauge("trie/access/depth/min", nil)
+	accountAccessDepthAvg = metrics.NewRegisteredGauge("trie/access/account/avg", nil)
+	accountAccessDepthMin = metrics.NewRegisteredGauge("trie/access/account/min", nil)
+	accountAccessDepthMax = metrics.NewRegisteredGauge("trie/access/account/max", nil)
+	storageAccessDepthAvg = metrics.NewRegisteredGauge("trie/access/storage/avg", nil)
+	storageAccessDepthMin = metrics.NewRegisteredGauge("trie/access/storage/min", nil)
+	storageAccessDepthMax = metrics.NewRegisteredGauge("trie/access/storage/max", nil)
 )
 
 var (
@@ -2125,18 +2129,21 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 
 	// If witness was generated, update metrics regarding the access paths.
 	if witness != nil {
-		paths := witness.Paths
-		totaldepth, pathnum, mindepth := 0, 0, -1
-		if len(paths) > 0 {
-			for path, _ := range paths {
-				if len(path) < mindepth || mindepth < 0 {
-					mindepth = len(path)
-				}
-				totaldepth += len(path)
-				pathnum++
+		a := witness.AccountDepthMetrics
+		if a.Count > 0 {
+			accountAccessDepthAvg.Update(int64(a.Sum) / int64(a.Count))
+			if a.Min != -1 {
+				accountAccessDepthMin.Update(int64(a.Min))
 			}
-			avgAccessDepthInBlock.Update(int64(totaldepth) / int64(pathnum))
-			minAccessDepthInBlock.Update(int64(mindepth))
+			accountAccessDepthMax.Update(int64(a.Max))
+		}
+		s := witness.StateDepthMetrics
+		if s.Count > 0 {
+			storageAccessDepthAvg.Update(int64(s.Sum) / int64(s.Count))
+			if s.Min != -1 {
+				storageAccessDepthMin.Update(int64(s.Min))
+			}
+			storageAccessDepthMax.Update(int64(s.Max))
 		}
 	}
 
