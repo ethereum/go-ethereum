@@ -434,11 +434,10 @@ func newTestAccountManager(t *testing.T) (*accounts.Manager, accounts.Account) {
 }
 
 type testBackend struct {
-	db        ethdb.Database
-	chain     *core.BlockChain
-	accman    *accounts.Manager
-	acc       accounts.Account
-	generator func(i int, b *core.BlockGen)
+	db     ethdb.Database
+	chain  *core.BlockChain
+	accman *accounts.Manager
+	acc    accounts.Account
 
 	pending         *types.Block
 	pendingReceipts types.Receipts
@@ -462,12 +461,10 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.E
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
 	backend := &testBackend{
-		db:        db,
-		chain:     chain,
-		accman:    accman,
-		acc:       acc,
-		generator: generator,
-
+		db:              db,
+		chain:           chain,
+		accman:          accman,
+		acc:             acc,
 		pending:         blocks[n],
 		pendingReceipts: receipts[n],
 	}
