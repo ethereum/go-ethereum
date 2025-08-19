@@ -185,12 +185,33 @@ func headerKeyPrefix(number uint64) []byte {
 
 // headerKey = headerPrefix + num (uint64 big endian) + hash
 func headerKey(number uint64, hash common.Hash) []byte {
-	return append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+	numEnc := encodeBlockNumber(number)
+	hashBytes := hash.Bytes()
+
+	totalLen := len(headerPrefix) + len(numEnc) + len(hashBytes)
+	b := make([]byte, totalLen)
+
+	off := 0
+	off += copy(b[off:], headerPrefix)
+	off += copy(b[off:], numEnc)
+	copy(b[off:], hashBytes)
+
+	return b
 }
 
 // headerHashKey = headerPrefix + num (uint64 big endian) + headerHashSuffix
 func headerHashKey(number uint64) []byte {
-	return append(append(headerPrefix, encodeBlockNumber(number)...), headerHashSuffix...)
+	numEnc := encodeBlockNumber(number)
+
+	totalLen := len(headerPrefix) + len(numEnc) + len(headerHashSuffix)
+	b := make([]byte, totalLen)
+
+	off := 0
+	off += copy(b[off:], headerPrefix)
+	off += copy(b[off:], numEnc)
+	copy(b[off:], headerHashSuffix)
+
+	return b
 }
 
 // headerNumberKey = headerNumberPrefix + hash
@@ -200,12 +221,34 @@ func headerNumberKey(hash common.Hash) []byte {
 
 // blockBodyKey = blockBodyPrefix + num (uint64 big endian) + hash
 func blockBodyKey(number uint64, hash common.Hash) []byte {
-	return append(append(blockBodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+	numEnc := encodeBlockNumber(number)
+	hashBytes := hash.Bytes()
+
+	totalLen := len(blockBodyPrefix) + len(numEnc) + len(hashBytes)
+	b := make([]byte, totalLen)
+
+	off := 0
+	off += copy(b[off:], blockBodyPrefix)
+	off += copy(b[off:], numEnc)
+	copy(b[off:], hashBytes)
+
+	return b
 }
 
 // blockReceiptsKey = blockReceiptsPrefix + num (uint64 big endian) + hash
 func blockReceiptsKey(number uint64, hash common.Hash) []byte {
-	return append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+	numEnc := encodeBlockNumber(number)
+	hashBytes := hash.Bytes()
+
+	totalLen := len(blockReceiptsPrefix) + len(numEnc) + len(hashBytes)
+	b := make([]byte, totalLen)
+
+	off := 0
+	off += copy(b[off:], blockReceiptsPrefix)
+	off += copy(b[off:], numEnc)
+	copy(b[off:], hashBytes)
+
+	return b
 }
 
 // txLookupKey = txLookupPrefix + hash
