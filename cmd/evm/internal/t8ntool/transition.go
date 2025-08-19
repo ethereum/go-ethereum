@@ -111,11 +111,6 @@ func Transition(ctx *cli.Context) error {
 			return err
 		}
 	}
-	if vktStr != stdinSelector {
-		if err := readFile(vktStr, "VKT", &inputData.Alloc); err != nil {
-			return err
-		}
-	}
 	prestate.Pre = inputData.Alloc
 	if vktStr != stdinSelector && vktStr != "" {
 		if err := readFile(vktStr, "VKT", &inputData.VKT); err != nil {

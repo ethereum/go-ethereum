@@ -144,7 +144,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		return h
 	}
 	var (
-		statedb     = MakePreState(rawdb.NewMemoryDatabase(), chainConfig, pre, chainConfig.IsVerkle(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp))
+		isEIP4762   = chainConfig.IsVerkle(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
+		statedb     = MakePreState(rawdb.NewMemoryDatabase(), chainConfig, pre, isEIP4762)
 		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp)
 		gaspool     = new(core.GasPool)
 		blockHash   = common.Hash{0x13, 0x37}
@@ -253,7 +254,6 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 			}
 		}
 		statedb.SetTxContext(tx.Hash(), txIndex)
-		evm.AccessEvents = state.NewAccessEvents(evm.StateDB.PointCache())
 		var (
 			snapshot = statedb.Snapshot()
 			prevGas  = gaspool.Gas()
@@ -318,7 +318,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 				evm.Config.Tracer.OnTxEnd(receipt, nil)
 			}
 		}
-		statedb.AccessEvents().Merge(evm.AccessEvents)
+		if isEIP4762 {
+			statedb.AccessEvents().Merge(evm.AccessEvents)
+		}
 		txIndex++
 	}
 	statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber))
@@ -352,7 +354,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
 		statedb.AddBalance(w.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
 
-		statedb.AccessEvents().AddAccount(w.Address, true)
+		if isEIP4762 {
+			statedb.AccessEvents().AddAccount(w.Address, true)
+		}
 	}
 
 	// Gather the execution-layer triggered requests.
@@ -424,7 +428,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 }
 
 func MakePreState(db ethdb.Database, chainConfig *params.ChainConfig, pre *Prestate, verkle bool) *state.StateDB {
-	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
+	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true, IsVerkle: verkle})
 	sdb := state.NewDatabase(tdb, nil)
 
 	statedb, _ := state.New(types.EmptyRootHash, sdb)
