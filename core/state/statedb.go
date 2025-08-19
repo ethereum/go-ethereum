@@ -153,6 +153,9 @@ type StateDB struct {
 
 	enableStateDiffRecording bool // if true, calls to Finalise will return the mutated state
 
+	prestateDiff         *bal.StateDiff
+	prestateDiffAccounts map[common.Address]*types.StateAccount
+
 	// Measurements gathered during execution for debugging purposes
 	AccountReads    time.Duration
 	AccountHashes   time.Duration
@@ -318,11 +321,17 @@ func (s *StateDB) AddRefund(gas uint64) {
 	s.refund += gas
 }
 
-// InstantiateWithStateDiffs instantiates the live object based on accounts
+func (s *StateDB) SetPrestate(diff *bal.StateDiff, prestate map[common.Address]*types.StateAccount) {
+	s.prestateDiff = diff
+	s.prestateDiffAccounts = prestate
+}
+
+// LoadModifiedPrestate instantiates the live object based on accounts
 // which appeared in the total state diff of a block, and were also preexisting.
-func (s *StateDB) InstantiateWithStateDiffs(totalDiff *bal.StateDiff) {
+func (s *StateDB) LoadModifiedPrestate(totalDiff *bal.StateDiff) (res map[common.Address]*types.StateAccount) {
 	stateAccounts := new(sync.Map)
 	wg := new(sync.WaitGroup)
+	res = make(map[common.Address]*types.StateAccount)
 
 	for addr, _ := range totalDiff.Mutations {
 		wg.Add(1)
@@ -338,10 +347,11 @@ func (s *StateDB) InstantiateWithStateDiffs(totalDiff *bal.StateDiff) {
 	stateAccounts.Range(func(addr any, val any) bool {
 		address := addr.(common.Address)
 		stateAccount := val.(*types.StateAccount)
-		obj := newObject(s, address, stateAccount)
-		s.stateObjects[address] = obj
+		res[address] = stateAccount
 		return true
 	})
+
+	return res
 }
 
 // SubRefund removes gas from the refund counter.
@@ -665,6 +675,112 @@ func (s *StateDB) deleteStateObject(addr common.Address) {
 	}
 }
 
+func (s *StateDB) initObjFromDiff(addr common.Address, a *types.StateAccount, diff *bal.AccountState) *stateObject {
+	acct := a.Copy()
+	if diff.Nonce != nil {
+		acct.Nonce = *diff.Nonce
+	}
+	if diff.Balance != nil {
+		acct.Balance = new(uint256.Int).SetBytes((*diff.Balance)[:])
+	}
+	obj := newObject(s, addr, acct)
+	if diff.Code != nil {
+		obj.setCode(crypto.Keccak256Hash(diff.Code), diff.Code)
+	}
+	if diff.StorageWrites != nil {
+		for key, val := range diff.StorageWrites {
+			obj.setState(key, val, common.Hash{}) // TODO: this is not the actual origin of the storage slot
+		}
+	}
+	if obj.empty() {
+		return nil
+	}
+	s.setStateObject(obj)
+	return obj
+}
+
+// ApplyPrestate applies finalised pre-state changes which occurred between the start of the block and the end of the previous transaction.
+func (s *StateDB) ApplyPrestate(prestateDiff *bal.StateDiff) {
+	for addr, accountDiff := range prestateDiff.Mutations {
+		stateObject, preexisting := s.stateObjects[addr]
+		if !preexisting {
+			stateObject = newObject(s, addr, &types.StateAccount{
+				0,
+				uint256.NewInt(0),
+				types.EmptyRootHash,
+				types.EmptyCodeHash[:],
+			})
+		}
+		if accountDiff.Code != nil {
+			stateObject.setCode(crypto.Keccak256Hash(accountDiff.Code), accountDiff.Code)
+		}
+		if accountDiff.StorageWrites != nil {
+			for slot, value := range accountDiff.StorageWrites {
+				stateObject.pendingStorage[slot] = value
+			}
+		}
+		if accountDiff.Nonce != nil {
+			stateObject.setNonce(*accountDiff.Nonce)
+			stateObject.txPreNonce = stateObject.Nonce()
+		}
+		if accountDiff.Balance != nil {
+			stateObject.setBalance(new(uint256.Int).SetBytes((*accountDiff.Balance)[:]))
+			stateObject.txPreBalance = stateObject.Balance()
+		}
+
+		if stateObject.empty() {
+			// an object that exists at the start of the block can become empty:
+			// e.g. target of a create is prefunded but the creation context performs a SENDALL without deploying a contract
+			if preexisting {
+				// TODO: I mindlessly copied this logic from elsewhere in the statedb, need to verify that it is correct.
+				delete(s.stateObjects, addr)
+				s.markDelete(addr)
+				// We need to maintain account deletions explicitly (will remain
+				// set indefinitely). Note only the first occurred self-destruct
+				// event is tracked.
+				if _, ok := s.stateObjectsDestruct[addr]; !ok {
+					s.stateObjectsDestruct[addr] = stateObject
+				}
+			}
+		} else if !preexisting {
+			s.setStateObject(stateObject)
+		}
+	}
+}
+
+// ApplyStateDiff applies a state diff to the StateDB.  All state changes will be marked as mutations
+// for the purpose of applying them in the next call to Commit.
+func (s *StateDB) ApplyStateDiff(diff *bal.StateDiff) {
+	for addr, accountDiff := range diff.Mutations {
+		stateObject, ok := s.stateObjects[addr]
+		if !ok {
+			stateObject = newObject(s, addr, &types.StateAccount{
+				0,
+				uint256.NewInt(0),
+				types.EmptyRootHash,
+				types.EmptyCodeHash[:],
+			})
+		}
+		if accountDiff.Code != nil {
+			stateObject.SetCode(crypto.Keccak256Hash(accountDiff.Code), accountDiff.Code)
+		}
+		if accountDiff.StorageWrites != nil {
+			for slot, value := range accountDiff.StorageWrites {
+				stateObject.SetState(slot, value)
+			}
+		}
+		if accountDiff.Nonce != nil {
+			stateObject.SetNonce(*accountDiff.Nonce)
+		}
+		if accountDiff.Balance != nil {
+			stateObject.SetBalance(new(uint256.Int).SetBytes((*accountDiff.Balance)[:]))
+		}
+		if !stateObject.empty() {
+			s.setStateObject(stateObject)
+		}
+	}
+}
+
 // getStateObject retrieves a state object given by the address, returning nil if
 // the object is not found or was deleted in this execution context.
 func (s *StateDB) getStateObject(addr common.Address) *stateObject {
@@ -675,6 +791,14 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	// Short circuit if the account is already destructed in this block.
 	if _, ok := s.stateObjectsDestruct[addr]; ok {
 		return nil
+	}
+
+	if s.prestateDiff != nil {
+		if acctDiff, ok := s.prestateDiff.Mutations[addr]; ok {
+			acctPrestate := s.prestateDiffAccounts[addr]
+			obj := s.initObjFromDiff(addr, acctPrestate, acctDiff)
+			return obj
+		}
 	}
 
 	s.AccountLoaded++
@@ -1106,88 +1230,6 @@ func (s *StateDB) SetAccessListIndex(idx int) {
 // SetTxSender sets the sender of the currently-executing transaction.
 func (s *StateDB) SetTxSender(sender common.Address) {
 	s.sender = sender
-}
-
-// ApplyPrestate applies finalised pre-state changes which occurred between the start of the block and the end of the previous transaction.
-func (s *StateDB) ApplyPrestate(prestateDiff *bal.StateDiff) {
-	for addr, accountDiff := range prestateDiff.Mutations {
-		stateObject, preexisting := s.stateObjects[addr]
-		if !preexisting {
-			stateObject = newObject(s, addr, &types.StateAccount{
-				0,
-				uint256.NewInt(0),
-				types.EmptyRootHash,
-				types.EmptyCodeHash[:],
-			})
-		}
-		if accountDiff.Code != nil {
-			stateObject.setCode(crypto.Keccak256Hash(accountDiff.Code), accountDiff.Code)
-		}
-		if accountDiff.StorageWrites != nil {
-			for slot, value := range accountDiff.StorageWrites {
-				stateObject.pendingStorage[slot] = value
-			}
-		}
-		if accountDiff.Nonce != nil {
-			stateObject.setNonce(*accountDiff.Nonce)
-			stateObject.txPreNonce = stateObject.Nonce()
-		}
-		if accountDiff.Balance != nil {
-			stateObject.setBalance(new(uint256.Int).SetBytes((*accountDiff.Balance)[:]))
-			stateObject.txPreBalance = stateObject.Balance()
-		}
-
-		if stateObject.empty() {
-			// an object that exists at the start of the block can become empty:
-			// e.g. target of a create is prefunded but the creation context performs a SENDALL without deploying a contract
-			if preexisting {
-				// TODO: I mindlessly copied this logic from elsewhere in the statedb, need to verify that it is correct.
-				delete(s.stateObjects, addr)
-				s.markDelete(addr)
-				// We need to maintain account deletions explicitly (will remain
-				// set indefinitely). Note only the first occurred self-destruct
-				// event is tracked.
-				if _, ok := s.stateObjectsDestruct[addr]; !ok {
-					s.stateObjectsDestruct[addr] = stateObject
-				}
-			}
-		} else if !preexisting {
-			s.setStateObject(stateObject)
-		}
-	}
-}
-
-// ApplyStateDiff applies a state diff to the StateDB.  All state changes will be marked as mutations
-// for the purpose of applying them in the next call to Commit.
-func (s *StateDB) ApplyStateDiff(diff *bal.StateDiff) {
-	for addr, accountDiff := range diff.Mutations {
-		stateObject, ok := s.stateObjects[addr]
-		if !ok {
-			stateObject = newObject(s, addr, &types.StateAccount{
-				0,
-				uint256.NewInt(0),
-				types.EmptyRootHash,
-				types.EmptyCodeHash[:],
-			})
-		}
-		if accountDiff.Code != nil {
-			stateObject.SetCode(crypto.Keccak256Hash(accountDiff.Code), accountDiff.Code)
-		}
-		if accountDiff.StorageWrites != nil {
-			for slot, value := range accountDiff.StorageWrites {
-				stateObject.SetState(slot, value)
-			}
-		}
-		if accountDiff.Nonce != nil {
-			stateObject.SetNonce(*accountDiff.Nonce)
-		}
-		if accountDiff.Balance != nil {
-			stateObject.SetBalance(new(uint256.Int).SetBytes((*accountDiff.Balance)[:]))
-		}
-		if !stateObject.empty() {
-			s.setStateObject(stateObject)
-		}
-	}
 }
 
 func (s *StateDB) clearJournalAndRefund() {

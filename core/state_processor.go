@@ -182,13 +182,14 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	rootCalcErrCh := make(chan error) // used for communicating if the state root calculation doesn't match the reported root
 	pStart := time.Now()
 	var (
-		tPreprocess     time.Duration // time to create a set of prestates for parallel transaction execution
-		tVerifyStart    time.Time
-		tVerify         time.Duration // time to compute and verify the state root
-		tExecStart      time.Time
-		tExec           time.Duration // time to execute block transactions
-		tPostprocess    time.Duration // time to perform post-transaction execution system calls and withdrawals.
-		tPreprocessLoad time.Duration
+		tPreprocess      time.Duration // time to create a set of prestates for parallel transaction execution
+		tVerifyStart     time.Time
+		tVerify          time.Duration // time to compute and verify the state root
+		tExecStart       time.Time
+		tExec            time.Duration // time to execute block transactions
+		tPostprocess     time.Duration // time to perform post-transaction execution system calls and withdrawals.
+		tPreprocessLoad  time.Duration
+		modifiedPrestate = make(map[common.Address]*types.StateAccount)
 	)
 
 	// called by resultHandler when all transactions have successfully executed.
@@ -340,7 +341,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	// executes single transaction, validating the computed diff against the BAL
 	// and forwarding the txExecResult to be consumed by resultHandler
 	execTx := func(ctx context2.Context, tx *types.Transaction, idx int, db *state.StateDB, prestateDiff, expectedDiff *bal.StateDiff) *txExecResult {
-		db.ApplyPrestate(prestateDiff)
+		db.SetPrestate(prestateDiff, modifiedPrestate)
 		// if an error with another transaction rendered the block invalid, don't proceed with executing this one
 		select {
 		case <-ctx.Done():
@@ -426,7 +427,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 
 	// instantiate a set of StateDBs to be used for executing each transaction in parallel
 	tPreprocessLoadStart := time.Now()
-	statedb.InstantiateWithStateDiffs(&totalDiff)
+	statedb.LoadModifiedPrestate(&totalDiff)
 	tPreprocessLoad = time.Since(tPreprocessLoadStart)
 	var txPrestates []*state.StateDB
 	for range block.Transactions() {
