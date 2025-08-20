@@ -37,6 +37,7 @@ var (
 	ErrInvalidTxType        = errors.New("transaction type not valid in this context")
 	ErrTxTypeNotSupported   = errors.New("transaction type not supported")
 	ErrGasFeeCapTooLow      = errors.New("fee cap less than base fee")
+	ErrGasFeeCapOverflow    = errors.New("fee cap overflow, too large for uint256")
 	errShortTypedTx         = errors.New("typed transaction too short")
 	errInvalidYParity       = errors.New("'yParity' field must be 0 or 1")
 	errVYParityMismatch     = errors.New("'v' and 'yParity' fields do not match")
@@ -374,7 +375,9 @@ func (tx *Transaction) calcEffectiveGasTip(dst *uint256.Int, baseFee *uint256.In
 	}
 
 	var err error
-	dst.SetFromBig(tx.inner.gasFeeCap())
+	if dst.SetFromBig(tx.inner.gasFeeCap()) {
+		return ErrGasFeeCapOverflow
+	}
 	if dst.Cmp(baseFee) < 0 {
 		err = ErrGasFeeCapTooLow
 	}
