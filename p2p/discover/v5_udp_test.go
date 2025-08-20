@@ -379,8 +379,66 @@ func TestUDPv5_findnodeCall(t *testing.T) {
 		t.Fatalf("wrong nodes in response")
 	}
 
-	// TODO: check invalid IPs
-	// TODO: check invalid/unsigned record
+	// Negative cases for invalid responses:
+	// 1) Invalid IP: deliver a Nodes packet where one record has an unspecified IP, expect it to be ignored.
+	{
+		var (
+			distances = []uint{230}
+			remote    = test.getNode(test.remotekey, test.remoteaddr).Node()
+			nodes     = nodesAtDistance(remote.ID(), int(distances[0]), 1)
+			done      = make(chan error, 1)
+			respNodes []*enode.Node
+		)
+		go func() {
+			var err error
+			respNodes, err = test.udp.Findnode(remote, distances)
+			done <- err
+		}()
+		test.waitPacketOut(func(p *v5wire.Findnode, addr netip.AddrPort, _ v5wire.Nonce) {
+			// Craft a record with unspecified IP (invalid according to netutil.CheckRelayAddr).
+			r := new(enr.Record)
+			r.Set(enr.IP(net.IPv4zero))
+			r.Set(enr.UDP(30303))
+			bad := enode.SignNull(r, nodes[0].ID())
+			test.packetIn(&v5wire.Nodes{ReqID: p.ReqID, RespCount: 1, Nodes: []*enr.Record{bad.Record()}})
+		})
+		if err := <-done; err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(respNodes) != 0 {
+			t.Fatalf("expected 0 nodes for invalid IP, got %d", len(respNodes))
+		}
+	}
+
+	// 2) Invalid UDP port (<=1024): deliver a record with low port, expect it to be ignored.
+	{
+		var (
+			distances = []uint{230}
+			remote    = test.getNode(test.remotekey, test.remoteaddr).Node()
+			nodes     = nodesAtDistance(remote.ID(), int(distances[0]), 1)
+			done      = make(chan error, 1)
+			respNodes []*enode.Node
+		)
+		go func() {
+			var err error
+			respNodes, err = test.udp.Findnode(remote, distances)
+			done <- err
+		}()
+		test.waitPacketOut(func(p *v5wire.Findnode, addr netip.AddrPort, _ v5wire.Nonce) {
+			r := new(enr.Record)
+			r.Set(enr.IP(nodes[0].IP()))
+			r.Set(enr.UDP(1024)) // invalid low port
+			bad := enode.SignNull(r, nodes[0].ID())
+			test.packetIn(&v5wire.Nodes{ReqID: p.ReqID, RespCount: 1, Nodes: []*enr.Record{bad.Record()}})
+		})
+		if err := <-done; err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(respNodes) != 0 {
+			t.Fatalf("expected 0 nodes for low UDP port, got %d", len(respNodes))
+		}
+	}
+
 }
 
 // This test checks that pending calls are re-sent when a handshake happens.
