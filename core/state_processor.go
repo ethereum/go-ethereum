@@ -61,8 +61,7 @@ type ProcessResultWithMetrics struct {
 	RootCalcTime       time.Duration
 	ExecTime           time.Duration
 
-	StateDiffCalcTime   time.Duration // time it took to convert BAL into a set of state diffs
-	TxStateDiffPrepTime time.Duration // time it took to convert state diffs into prestate statedbs for each tx
+	StateDiffCalcTime time.Duration // time it took to convert BAL into a set of state diffs
 }
 
 // Process processes the state changes according to the Ethereum rules by running
@@ -182,14 +181,15 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	rootCalcErrCh := make(chan error) // used for communicating if the state root calculation doesn't match the reported root
 	pStart := time.Now()
 	var (
-		tPreprocess      time.Duration // time to create a set of prestates for parallel transaction execution
-		tVerifyStart     time.Time
-		tVerify          time.Duration // time to compute and verify the state root
-		tExecStart       time.Time
-		tExec            time.Duration // time to execute block transactions
-		tPostprocess     time.Duration // time to perform post-transaction execution system calls and withdrawals.
-		tPreprocessLoad  time.Duration
-		modifiedPrestate = make(map[common.Address]*types.StateAccount)
+		tPreprocess           time.Duration // time to create a set of prestates for parallel transaction execution
+		tPreprocessStateDiffs time.Duration // time that it took to build state diffs from the BAL
+		tVerifyStart          time.Time
+		tVerify               time.Duration // time to compute and verify the state root
+		tExecStart            time.Time
+		tExec                 time.Duration // time to execute block transactions
+		tPostprocess          time.Duration // time to perform post-transaction execution system calls and withdrawals.
+		tPreprocessLoad       time.Duration
+		modifiedPrestate      = make(map[common.Address]*types.StateAccount)
 	)
 
 	// called by resultHandler when all transactions have successfully executed.
@@ -320,6 +320,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 			resCh <- &ProcessResultWithMetrics{
 				ProcessResult:      execResults,
 				PreProcessTime:     tPreprocess,
+				StateDiffCalcTime:  tPreprocessStateDiffs,
 				PreProcessLoadTime: tPreprocessLoad,
 				PostProcessTime:    tPostprocess,
 				ExecTime:           tExec,
@@ -401,8 +402,11 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	context = NewEVMBlockContext(header, p.chain, nil)
 	evm := vm.NewEVM(context, tracingStateDB, p.config, cfg)
 
+	tPreprocessStateDiffsStart := time.Now()
 	// convert the BAL entries into an ordered list of state diffs per index
 	intermediateStateDiffs := bal.BuildStateDiffs(block.Body().AccessList, len(block.Transactions()))
+	tPreprocessStateDiffs = time.Since(tPreprocessStateDiffsStart)
+
 	preTxDiff := intermediateStateDiffs[0]
 
 	// validate the correctness of pre-transaction execution state changes

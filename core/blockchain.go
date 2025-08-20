@@ -100,11 +100,12 @@ var (
 	blockWriteTimer           = metrics.NewRegisteredResettingTimer("chain/write", nil)
 
 	// BAL-specific timers
-	blockPreprocessingTimer     = metrics.NewRegisteredResettingTimer("chain/preprocess", nil)
-	blockPreprocessingLoadTimer = metrics.NewRegisteredResettingTimer("chain/preprocessload", nil)
-	txExecutionTimer            = metrics.NewRegisteredResettingTimer("chain/txexecution", nil)
-	stateRootCalctimer          = metrics.NewRegisteredResettingTimer("chain/rootcalculation", nil)
-	blockPostprocessingTimer    = metrics.NewRegisteredResettingTimer("chain/postprocess", nil)
+	blockPreprocessingTimer             = metrics.NewRegisteredResettingTimer("chain/preprocess", nil)
+	blockPreprocessingLoadTimer         = metrics.NewRegisteredResettingTimer("chain/preprocessload", nil)
+	blockPreprocessingDiffCreationTimer = metrics.NewRegisteredResettingTimer("chain/preprocessdiff", nil)
+	txExecutionTimer                    = metrics.NewRegisteredResettingTimer("chain/txexecution", nil)
+	stateRootCalctimer                  = metrics.NewRegisteredResettingTimer("chain/rootcalculation", nil)
+	blockPostprocessingTimer            = metrics.NewRegisteredResettingTimer("chain/postprocess", nil)
 
 	blockReorgMeter     = metrics.NewRegisteredMeter("chain/reorg/executes", nil)
 	blockReorgAddMeter  = metrics.NewRegisteredMeter("chain/reorg/add", nil)
@@ -2173,12 +2174,11 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	if blockHadBAL {
 		blockPreprocessingTimer.Update(resWithMetrics.PreProcessTime)
 		blockPreprocessingLoadTimer.Update(resWithMetrics.PreProcessLoadTime)
+		blockPreprocessingDiffCreationTimer.Update(resWithMetrics.StateDiffCalcTime)
 		txExecutionTimer.Update(resWithMetrics.ExecTime)
 		stateRootCalctimer.Update(resWithMetrics.RootCalcTime)
 		blockPostprocessingTimer.Update(resWithMetrics.PostProcessTime)
 
-		accountUpdateTimer.Update(statedb.AccountUpdates)
-		storageUpdateTimer.Update(statedb.StorageUpdates)
 		accountHashTimer.Update(statedb.AccountHashes)
 	} else {
 		xvtime := time.Since(xvstart)
