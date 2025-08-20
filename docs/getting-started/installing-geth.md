@@ -205,6 +205,10 @@ The image has the following ports automatically exposed:
 
 **Note:** if you are running an Ethereum client inside a Docker container, you should mount a data volume as the client's data directory (located at `/root/.ethereum` inside the container) to ensure that downloaded data is preserved between restarts and/or container life-cycles.
 
+```sh
+docker run -v $HOME/.geth:/root/.ethereum -it -p 30303:30303 ethereum/client-go
+```
+
 Updating Geth to the latest version simply requires stopping the container, pulling the latest version from Docker and running it:
 
 ```sh
