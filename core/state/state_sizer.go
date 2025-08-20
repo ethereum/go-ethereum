@@ -347,8 +347,21 @@ wait:
 	var (
 		updates  = make(map[common.Hash]*stateUpdate)
 		children = make(map[common.Hash][]common.Hash)
-		done     = make(chan buildResult)
+		done     chan buildResult
 	)
+
+	// Add snapshot root to updates map when snapshot completes
+	if root := rawdb.ReadSnapshotRoot(t.db); root != (common.Hash{}) {
+		var number uint64
+		if recoveryNumber := rawdb.ReadSnapshotRecoveryNumber(t.db); recoveryNumber != nil {
+			number = *recoveryNumber
+		}
+		updates[root] = &stateUpdate{
+			root:        root,
+			blockNumber: number,
+		}
+	}
+
 	for {
 		select {
 		case u := <-t.updateCh:
@@ -356,6 +369,10 @@ wait:
 			children[u.originRoot] = append(children[u.originRoot], u.root)
 
 		case <-ticker.C:
+			// Only check timer if build hasn't started yet
+			if done != nil {
+				continue
+			}
 			root := rawdb.ReadSnapshotRoot(t.db)
 			if root == (common.Hash{}) {
 				continue
@@ -364,11 +381,9 @@ wait:
 			if !exists {
 				continue
 			}
-			if done == nil {
-				done = make(chan buildResult)
-				go t.build(entry.root, entry.blockNumber, done)
-				log.Info("Measuring persistent state size", "root", root, "number", entry.blockNumber)
-			}
+			done = make(chan buildResult)
+			go t.build(entry.root, entry.blockNumber, done)
+			log.Info("Measuring persistent state size", "root", root, "number", entry.blockNumber)
 
 		case result := <-done:
 			if result.err != nil {
