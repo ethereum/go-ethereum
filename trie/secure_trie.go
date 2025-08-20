@@ -96,10 +96,6 @@ func NewStateTrie(id *ID, db database.NodeDatabase) (*StateTrie, error) {
 	return tr, nil
 }
 
-func (t *StateTrie) Owner() common.Hash {
-	return t.trie.Owner()
-}
-
 // MustGet returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 //

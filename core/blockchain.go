@@ -112,13 +112,6 @@ var (
 	errChainStopped         = errors.New("blockchain is stopped")
 	errInvalidOldChain      = errors.New("invalid old chain")
 	errInvalidNewChain      = errors.New("invalid new chain")
-
-	accountAccessDepthAvg = metrics.NewRegisteredGauge("trie/access/account/avg", nil)
-	accountAccessDepthMin = metrics.NewRegisteredGauge("trie/access/account/min", nil)
-	accountAccessDepthMax = metrics.NewRegisteredGauge("trie/access/account/max", nil)
-	storageAccessDepthAvg = metrics.NewRegisteredGauge("trie/access/storage/avg", nil)
-	storageAccessDepthMin = metrics.NewRegisteredGauge("trie/access/storage/min", nil)
-	storageAccessDepthMax = metrics.NewRegisteredGauge("trie/access/storage/max", nil)
 )
 
 var (
@@ -2018,7 +2011,10 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	// If we are past Byzantium, enable prefetching to pull in trie node paths
 	// while processing transactions. Before Byzantium the prefetcher is mostly
 	// useless due to the intermediate root hashing after each transaction.
-	var witness *stateless.Witness
+	var (
+		witness      *stateless.Witness
+		witnessStats *stateless.WitnessStats
+	)
 	if bc.chainConfig.IsByzantium(block.Number()) {
 		// Generate witnesses either if we're self-testing, or if it's the
 		// only block being inserted. A bit crude, but witnesses are huge,
@@ -2028,8 +2024,11 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 			if err != nil {
 				return nil, err
 			}
+			if bc.cfg.VmConfig.EnableWitnessStats {
+				witnessStats = stateless.NewWitnessStats()
+			}
 		}
-		statedb.StartPrefetcher("chain", witness)
+		statedb.StartPrefetcher("chain", witness, witnessStats)
 		defer statedb.StopPrefetcher()
 	}
 
@@ -2126,25 +2125,9 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	if err != nil {
 		return nil, err
 	}
-
-	// If witness was generated, update metrics regarding the access paths.
-	if witness != nil {
-		a := witness.AccountDepthMetrics
-		if a.Count > 0 {
-			accountAccessDepthAvg.Update(int64(a.Sum) / int64(a.Count))
-			if a.Min != -1 {
-				accountAccessDepthMin.Update(int64(a.Min))
-			}
-			accountAccessDepthMax.Update(int64(a.Max))
-		}
-		s := witness.StateDepthMetrics
-		if s.Count > 0 {
-			storageAccessDepthAvg.Update(int64(s.Sum) / int64(s.Count))
-			if s.Min != -1 {
-				storageAccessDepthMin.Update(int64(s.Min))
-			}
-			storageAccessDepthMax.Update(int64(s.Max))
-		}
+	// Report the collected witness statistics
+	if witnessStats != nil {
+		witnessStats.ReportMetrics()
 	}
 
 	// Update the metrics touched during block commit

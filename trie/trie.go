@@ -133,12 +133,6 @@ func (t *Trie) NodeIterator(start []byte) (NodeIterator, error) {
 	return newNodeIterator(t, start), nil
 }
 
-// Owner returns the owner of the trie, allowing us to distinguis between
-// storage and account tries.
-func (t *Trie) Owner() common.Hash {
-	return t.owner
-}
-
 // MustGet is a wrapper of Get and will omit any encountered error but just
 // print out an error message.
 func (t *Trie) MustGet(key []byte) []byte {
@@ -765,11 +759,7 @@ func (t *Trie) hashRoot() []byte {
 
 // Witness returns a set containing all trie nodes that have been accessed.
 func (t *Trie) Witness() map[string][]byte {
-	dataMap := t.prevalueTracer.getMap()
-	if len(dataMap) == 0 {
-		return nil
-	}
-	return dataMap
+	return t.prevalueTracer.values()
 }
 
 // Reset drops the referenced root node and cleans all internal state.

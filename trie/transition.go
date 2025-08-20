@@ -45,10 +45,6 @@ func NewTransitionTree(base *SecureTrie, overlay *VerkleTrie, st bool) *Transiti
 	}
 }
 
-func (t *TransitionTrie) Owner() common.Hash {
-	return t.overlay.Owner()
-}
-
 // Base returns the base trie.
 func (t *TransitionTrie) Base() *SecureTrie {
 	return t.base
@@ -226,6 +222,6 @@ func (t *TransitionTrie) UpdateContractCode(addr common.Address, codeHash common
 }
 
 // Witness returns a set containing all trie nodes that have been accessed.
-func (t *TransitionTrie) Witness() map[string]struct{} {
+func (t *TransitionTrie) Witness() map[string][]byte {
 	panic("not implemented")
 }

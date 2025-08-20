@@ -78,10 +78,6 @@ func (t *VerkleTrie) GetKey(key []byte) []byte {
 	return key
 }
 
-func (t *VerkleTrie) Owner() common.Hash {
-	panic("VerkleTrie does not have an owner")
-}
-
 // GetAccount implements state.Trie, retrieving the account with the specified
 // account address. If the specified account is not in the verkle tree, nil will
 // be returned. If the tree is corrupted, an error will be returned.

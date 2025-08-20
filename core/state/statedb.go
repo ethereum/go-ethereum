@@ -136,7 +136,8 @@ type StateDB struct {
 	journal *journal
 
 	// State witness if cross validation is needed
-	witness *stateless.Witness
+	witness      *stateless.Witness
+	witnessStats *stateless.WitnessStats
 
 	// Measurements gathered during execution for debugging purposes
 	AccountReads    time.Duration
@@ -191,12 +192,13 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
-func (s *StateDB) StartPrefetcher(namespace string, witness *stateless.Witness) {
+func (s *StateDB) StartPrefetcher(namespace string, witness *stateless.Witness, witnessStats *stateless.WitnessStats) {
 	// Terminate any previously running prefetcher
 	s.StopPrefetcher()
 
 	// Enable witness collection if requested
 	s.witness = witness
+	s.witnessStats = witnessStats
 
 	// With the switch to the Proof-of-Stake consensus algorithm, block production
 	// rewards are now handled at the consensus layer. Consequently, a block may
@@ -841,7 +843,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 				// If witness building is enabled and the state object has a trie,
 				// gather the witnesses for its specific storage trie
 				if s.witness != nil && obj.trie != nil {
-					s.witness.AddState(obj.trie.Witness(), obj.trie.Owner())
+					s.witness.AddState(obj.trie.Witness())
 				}
 			}
 			return nil
@@ -858,9 +860,17 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 				continue
 			}
 			if trie := obj.getPrefetchedTrie(); trie != nil {
-				s.witness.AddState(trie.Witness(), trie.Owner())
+				witness := trie.Witness()
+				s.witness.AddState(witness)
+				if s.witnessStats != nil {
+					s.witnessStats.Add(witness, obj.addrHash)
+				}
 			} else if obj.trie != nil {
-				s.witness.AddState(obj.trie.Witness(), obj.trie.Owner())
+				witness := obj.trie.Witness()
+				s.witness.AddState(witness)
+				if s.witnessStats != nil {
+					s.witnessStats.Add(witness, obj.addrHash)
+				}
 			}
 		}
 		// Pull in only-read and non-destructed trie witnesses
@@ -874,9 +884,17 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 				continue
 			}
 			if trie := obj.getPrefetchedTrie(); trie != nil {
-				s.witness.AddState(trie.Witness(), trie.Owner())
+				witness := trie.Witness()
+				s.witness.AddState(witness)
+				if s.witnessStats != nil {
+					s.witnessStats.Add(witness, obj.addrHash)
+				}
 			} else if obj.trie != nil {
-				s.witness.AddState(obj.trie.Witness(), trie.Owner())
+				witness := trie.Witness()
+				s.witness.AddState(witness)
+				if s.witnessStats != nil {
+					s.witnessStats.Add(witness, obj.addrHash)
+				}
 			}
 		}
 	}
@@ -942,7 +960,11 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 
 	// If witness building is enabled, gather the account trie witness
 	if s.witness != nil {
-		s.witness.AddState(s.trie.Witness(), s.trie.Owner())
+		witness := s.trie.Witness()
+		s.witness.AddState(witness)
+		if s.witnessStats != nil {
+			s.witnessStats.Add(witness, common.Hash{})
+		}
 	}
 	return hash
 }
@@ -1295,17 +1317,6 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorag
 	if err != nil {
 		return nil, err
 	}
-
-	// This iterates through nodeset and tracks path depths for tracking
-	// state and account trie modifications.
-	if s.witness != nil && ret != nil && !ret.empty() {
-		for owner, set := range ret.nodes.Sets {
-			for path := range set.Origins {
-				s.witness.AddStateModify(len(path), owner)
-			}
-		}
-	}
-
 	// Commit dirty contract code if any exists
 	if db := s.db.TrieDB().Disk(); db != nil && len(ret.codes) > 0 {
 		batch := db.NewBatch()
