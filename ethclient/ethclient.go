@@ -238,12 +238,13 @@ func (ec *Client) TransactionCount(ctx context.Context, blockHash common.Hash) (
 func (ec *Client) TransactionInBlock(ctx context.Context, blockHash common.Hash, index uint) (*types.Transaction, error) {
 	var json *rpcTransaction
 	err := ec.c.CallContext(ctx, &json, "eth_getTransactionByBlockHashAndIndex", blockHash, hexutil.Uint64(index))
-	if err == nil {
-		if json == nil {
-			return nil, ethereum.ErrNotFound
-		} else if _, r, _ := json.tx.RawSignatureValues(); r == nil {
-			return nil, errors.New("server returned transaction without signature")
-		}
+	if err != nil {
+		return nil, err
+	}
+	if json == nil {
+		return nil, ethereum.ErrNotFound
+	} else if _, r, _ := json.tx.RawSignatureValues(); r == nil {
+		return nil, errors.New("server returned transaction without signature")
 	}
 	setSenderFromServer(json.tx, json.From, json.BlockHash)
 	return json.tx, err
