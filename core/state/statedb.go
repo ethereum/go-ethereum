@@ -699,7 +699,7 @@ func (s *StateDB) initObjFromDiff(addr common.Address, a *types.StateAccount, di
 	}
 	if diff.StorageWrites != nil {
 		for key, val := range diff.StorageWrites {
-			obj.setState(key, val, common.Hash{}) // TODO: this is not the actual origin of the storage slot
+			obj.pendingStorage[key] = val
 		}
 	}
 	if obj.empty() {
