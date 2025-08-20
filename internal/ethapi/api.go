@@ -1159,7 +1159,7 @@ type config struct {
 	BlobSchedule    *params.BlobConfig        `json:"blobSchedule"`
 	ChainId         *hexutil.Big              `json:"chainId"`
 	ForkId          hexutil.Bytes             `json:"forkId"`
-	Precompiles     map[common.Address]string `json:"precompiles"`
+	Precompiles     map[string]common.Address `json:"precompiles"`
 	SystemContracts map[string]common.Address `json:"systemContracts"`
 }
 
@@ -1183,10 +1183,10 @@ func (api *BlockChainAPI) Config(ctx context.Context) (*configResponse, error) {
 
 		var (
 			rules       = c.Rules(c.LondonBlock, true, t)
-			precompiles = make(map[common.Address]string)
+			precompiles = make(map[string]common.Address)
 		)
 		for addr, c := range vm.ActivePrecompiledContracts(rules) {
-			precompiles[addr] = c.Name()
+			precompiles[c.Name()] = addr
 		}
 		forkid := forkid.NewID(c, genesis, ^uint64(0), t).Hash
 		return &config{
@@ -1209,6 +1209,7 @@ func (api *BlockChainAPI) Config(ctx context.Context) (*configResponse, error) {
 	}
 	// Nil out last if no future-fork is configured.
 	if resp.Next == nil {
+		resp.Current.ActivationTime = 0
 		resp.Last = nil
 	}
 	return &resp, nil
