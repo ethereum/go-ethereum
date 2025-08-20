@@ -46,8 +46,8 @@ func newDepthStats() *depthStats {
 	return &depthStats{minDepth: -1}
 }
 
-// Add records a new depth sample.
-func (d *depthStats) Add(n int64) {
+// add records a new depth sample.
+func (d *depthStats) add(n int64) {
 	if n < 0 {
 		return
 	}
@@ -92,11 +92,11 @@ func NewWitnessStats() *WitnessStats {
 func (s *WitnessStats) Add(nodes map[string][]byte, owner common.Hash) {
 	if owner == (common.Hash{}) {
 		for path := range maps.Keys(nodes) {
-			s.accountTrie.Add(int64(len(path)))
+			s.accountTrie.add(int64(len(path)))
 		}
 	} else {
 		for path := range maps.Keys(nodes) {
-			s.storageTrie.Add(int64(len(path)))
+			s.storageTrie.add(int64(len(path)))
 		}
 	}
 }
