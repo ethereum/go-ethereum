@@ -1499,3 +1499,83 @@ func testTrieCopyNewTrie(t *testing.T, entries []kv) {
 		t.Errorf("Hash mismatch: old %v, new %v", hash, tr.Hash())
 	}
 }
+
+// goos: darwin
+// goarch: arm64
+// pkg: github.com/ethereum/go-ethereum/trie
+// cpu: Apple M1 Pro
+// BenchmarkTriePrefetch
+// BenchmarkTriePrefetch-8   	    9961	    100706 ns/op
+func BenchmarkTriePrefetch(b *testing.B) {
+	db := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
+	tr := NewEmpty(db)
+	vals := make(map[string]*kv)
+	for i := 0; i < 3000; i++ {
+		value := &kv{
+			k: randBytes(32),
+			v: randBytes(20),
+			t: false,
+		}
+		tr.MustUpdate(value.k, value.v)
+		vals[string(value.k)] = value
+	}
+	root, nodes := tr.Commit(false)
+	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		tr, err := New(TrieID(root), db)
+		if err != nil {
+			b.Fatalf("Failed to open the trie")
+		}
+		var keys [][]byte
+		for k := range vals {
+			keys = append(keys, []byte(k))
+			if len(keys) > 64 {
+				break
+			}
+		}
+		tr.Prefetch(keys)
+	}
+}
+
+// goos: darwin
+// goarch: arm64
+// pkg: github.com/ethereum/go-ethereum/trie
+// cpu: Apple M1 Pro
+// BenchmarkTrieSeqPrefetch
+// BenchmarkTrieSeqPrefetch-8   	   12879	     96710 ns/op
+func BenchmarkTrieSeqPrefetch(b *testing.B) {
+	db := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
+	tr := NewEmpty(db)
+	vals := make(map[string]*kv)
+	for i := 0; i < 3000; i++ {
+		value := &kv{
+			k: randBytes(32),
+			v: randBytes(20),
+			t: false,
+		}
+		tr.MustUpdate(value.k, value.v)
+		vals[string(value.k)] = value
+	}
+	root, nodes := tr.Commit(false)
+	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		tr, err := New(TrieID(root), db)
+		if err != nil {
+			b.Fatalf("Failed to open the trie")
+		}
+		var keys [][]byte
+		for k := range vals {
+			keys = append(keys, []byte(k))
+			if len(keys) > 64 {
+				break
+			}
+		}
+		for _, k := range keys {
+			tr.Get(k)
+		}
+	}
+}
