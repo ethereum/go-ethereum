@@ -329,7 +329,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	}
 	calcAndVerifyRoot := func(postState *state.StateDB, block *types.Block, resCh chan<- error) {
 		tVerifyStart = time.Now()
-		root := postState.IntermediateRoot(false)
+		root := postState.IntermediateRoot(true)
 		tVerify = time.Since(tVerifyStart)
 
 		if root != block.Root() {

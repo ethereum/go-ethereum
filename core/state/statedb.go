@@ -789,9 +789,7 @@ func (s *StateDB) ApplyStateDiff(blockDiff *bal.StateDiff, diffPrestate map[comm
 		if accountDiff.Balance != nil {
 			stateObject.SetBalance(new(uint256.Int).SetBytes((*accountDiff.Balance)[:]))
 		}
-		if !stateObject.empty() {
-			s.setStateObject(stateObject)
-		}
+		s.setStateObject(stateObject)
 	}
 }
 
