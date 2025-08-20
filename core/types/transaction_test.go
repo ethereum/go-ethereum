@@ -635,9 +635,6 @@ func BenchmarkEffectiveGasTip(b *testing.B) {
 }
 
 func TestEffectiveGasTipInto(t *testing.T) {
-	signer := LatestSigner(params.TestChainConfig)
-	key, _ := crypto.GenerateKey()
-
 	testCases := []struct {
 		tipCap  int64
 		feeCap  int64
@@ -653,8 +650,26 @@ func TestEffectiveGasTipInto(t *testing.T) {
 		{tipCap: 50, feeCap: 100, baseFee: nil}, // nil base fee
 	}
 
+	// original, non-allocation golfed version
+	orig := func(tx *Transaction, baseFee *big.Int) (*big.Int, error) {
+		if baseFee == nil {
+			return tx.GasTipCap(), nil
+		}
+		var err error
+		gasFeeCap := tx.GasFeeCap()
+		if gasFeeCap.Cmp(baseFee) < 0 {
+			err = ErrGasFeeCapTooLow
+		}
+		gasFeeCap = gasFeeCap.Sub(gasFeeCap, baseFee)
+		gasTipCap := tx.GasTipCap()
+		if gasTipCap.Cmp(gasFeeCap) < 0 {
+			return gasTipCap, err
+		}
+		return gasFeeCap, err
+	}
+
 	for i, tc := range testCases {
-		txdata := &DynamicFeeTx{
+		tx := NewTx(&DynamicFeeTx{
 			ChainID:   big.NewInt(1),
 			Nonce:     0,
 			GasTipCap: big.NewInt(tc.tipCap),
@@ -663,8 +678,7 @@ func TestEffectiveGasTipInto(t *testing.T) {
 			To:        &common.Address{},
 			Value:     big.NewInt(0),
 			Data:      nil,
-		}
-		tx, _ := SignNewTx(key, signer, txdata)
+		})
 
 		var baseFee *big.Int
 		var baseFee2 *uint256.Int
@@ -674,7 +688,7 @@ func TestEffectiveGasTipInto(t *testing.T) {
 		}
 
 		// Get result from original method
-		orig, origErr := tx.EffectiveGasTip(baseFee)
+		orig, origErr := orig(tx, baseFee)
 
 		// Get result from new method
 		dst := new(uint256.Int)
