@@ -449,7 +449,7 @@ func (sf *subfetcher) loop() {
 				}
 			}
 			if len(slots) != 0 {
-				if err := sf.trie.PrefetchStorage(common.Address{}, slots); err != nil {
+				if err := sf.trie.PrefetchStorage(sf.addr, slots); err != nil {
 					log.Error("Failed to prefetch storage", "err", err)
 				}
 			}
