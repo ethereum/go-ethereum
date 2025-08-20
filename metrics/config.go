@@ -33,6 +33,8 @@ type Config struct {
 	InfluxDBToken        string `toml:",omitempty"`
 	InfluxDBBucket       string `toml:",omitempty"`
 	InfluxDBOrganization string `toml:",omitempty"`
+
+	EnableStateSizeTracking bool `toml:",omitempty"`
 }
 
 // DefaultConfig is the default config for metrics used in go-ethereum.
@@ -53,4 +55,6 @@ var DefaultConfig = Config{
 	InfluxDBToken:        "test",
 	InfluxDBBucket:       "geth",
 	InfluxDBOrganization: "geth",
+
+	EnableStateSizeTracking: false,
 }

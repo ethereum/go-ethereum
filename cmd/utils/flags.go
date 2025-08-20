@@ -966,6 +966,13 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+	MetricsStateSizeFlag = &cli.BoolFlag{
+		Name:     "metrics.statesize",
+		Usage:    "Enable state size tracking for metrics collection",
+		Value:    metrics.DefaultConfig.EnableStateSizeTracking,
+		Category: flags.MetricsCategory,
+	}
 )
 
 var (
@@ -2217,6 +2224,10 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		options.SnapshotLimit = 0 // Disabled
 	} else if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheSnapshotFlag.Name) {
 		options.SnapshotLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheSnapshotFlag.Name) / 100
+	}
+	if ctx.Bool(MetricsStateSizeFlag.Name) {
+		log.Info("Enabling state size tracking")
+		options.EnableStateSizeTracking = true
 	}
 	// If we're in readonly, do not bother generating snapshot data.
 	if readonly {
