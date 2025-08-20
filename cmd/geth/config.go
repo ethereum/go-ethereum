@@ -375,9 +375,6 @@ func applyMetricConfig(ctx *cli.Context, cfg *gethConfig) {
 	if ctx.IsSet(utils.MetricsInfluxDBOrganizationFlag.Name) {
 		cfg.Metrics.InfluxDBOrganization = ctx.String(utils.MetricsInfluxDBOrganizationFlag.Name)
 	}
-	if ctx.IsSet(utils.MetricsStateSizeFlag.Name) {
-		cfg.Metrics.EnableStateSizeTracking = ctx.Bool(utils.MetricsStateSizeFlag.Name)
-	}
 	// Sanity-check the commandline flags. It is fine if some unused fields is part
 	// of the toml-config, but we expect the commandline to only contain relevant
 	// arguments, otherwise it indicates an error.

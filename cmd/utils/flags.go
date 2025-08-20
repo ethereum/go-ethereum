@@ -970,7 +970,7 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 	MetricsStateSizeFlag = &cli.BoolFlag{
 		Name:     "metrics.statesize",
 		Usage:    "Enable state size tracking for metrics collection",
-		Value:    metrics.DefaultConfig.EnableStateSizeTracking,
+		Value:    ethconfig.Defaults.EnableStateSizeTracking,
 		Category: flags.MetricsCategory,
 	}
 )
@@ -1733,6 +1733,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.EthDiscoveryURLs = SplitAndTrim(urls)
 		}
 	}
+
+	if ctx.Bool(MetricsEnabledFlag.Name) && ctx.Bool(MetricsStateSizeFlag.Name) {
+		log.Error("Enabling state size metrics")
+		cfg.EnableStateSizeTracking = true
+	}
 	// Override any default configs for hard coded networks.
 	switch {
 	case ctx.Bool(MainnetFlag.Name):
@@ -2224,10 +2229,6 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		options.SnapshotLimit = 0 // Disabled
 	} else if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheSnapshotFlag.Name) {
 		options.SnapshotLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheSnapshotFlag.Name) / 100
-	}
-	if ctx.Bool(MetricsStateSizeFlag.Name) {
-		log.Info("Enabling state size tracking")
-		options.EnableStateSizeTracking = true
 	}
 	// If we're in readonly, do not bother generating snapshot data.
 	if readonly {
