@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -40,6 +41,7 @@ const (
 
 // Metrics for uploading the state statistics.
 var (
+	blockInfoGauge            = metrics.NewRegisteredGaugeInfo("state/size/block", nil)
 	accountsGauge             = metrics.NewRegisteredGauge("state/size/account/count", nil)
 	accountBytesGauge         = metrics.NewRegisteredGauge("state/size/account/bytes", nil)
 	storagesGauge             = metrics.NewRegisteredGauge("state/size/storage/count", nil)
@@ -237,18 +239,19 @@ type SizeTracker struct {
 }
 
 // NewSizeTracker creates a new state size tracker and starts it automatically
-func NewSizeTracker(db ethdb.KeyValueStore, triedb *triedb.Database) *SizeTracker {
-	return &SizeTracker{
+func NewSizeTracker(db ethdb.KeyValueStore, triedb *triedb.Database) (*SizeTracker, error) {
+	if triedb.Scheme() != rawdb.PathScheme {
+		return nil, errors.New("state size tracker is not compatible with hash mode")
+	}
+	t := &SizeTracker{
 		db:       db,
 		triedb:   triedb,
 		abort:    make(chan struct{}),
 		aborted:  make(chan struct{}),
 		updateCh: make(chan *stateUpdate),
 	}
-}
-
-func (t *SizeTracker) Start() {
 	go t.run()
+	return t, nil
 }
 
 func (t *SizeTracker) Stop() {
@@ -299,11 +302,12 @@ func (t *SizeTracker) run() {
 				continue
 			}
 			stat := base.add(diff)
+			stats[u.root] = stat
 			t.upload(stat)
 
-			stats[u.root] = stat
 			heap.Push(&h, stats[u.root])
 			for u.blockNumber-h[0].BlockNumber > statEvictThreshold {
+				delete(stats, h[0].StateRoot)
 				heap.Pop(&h)
 			}
 
@@ -317,6 +321,7 @@ type buildResult struct {
 	stat        SizeStats
 	root        common.Hash
 	blockNumber uint64
+	elapsed     time.Duration
 	err         error
 }
 
@@ -332,6 +337,8 @@ wait:
 			if t.triedb.SnapshotCompleted() {
 				break wait
 			}
+		case <-t.updateCh:
+			continue
 		case <-t.abort:
 			return nil, errors.New("size tracker closed")
 		}
@@ -360,6 +367,7 @@ wait:
 			if done == nil {
 				done = make(chan buildResult)
 				go t.build(entry.root, entry.blockNumber, done)
+				log.Info("Measuring persistent state size", "root", root, "number", entry.blockNumber)
 			}
 
 		case result := <-done:
@@ -368,9 +376,9 @@ wait:
 			}
 			var (
 				stats = make(map[common.Hash]SizeStats)
-				apply func(root common.Hash, stats SizeStats) error
+				apply func(root common.Hash, stat SizeStats) error
 			)
-			apply = func(root common.Hash, stat SizeStats) error {
+			apply = func(root common.Hash, base SizeStats) error {
 				for _, child := range children[root] {
 					entry, ok := updates[child]
 					if !ok {
@@ -380,7 +388,7 @@ wait:
 					if err != nil {
 						return err
 					}
-					stats[child] = stat.add(diff)
+					stats[child] = base.add(diff)
 					if err := apply(child, stats[child]); err != nil {
 						return err
 					}
@@ -390,6 +398,7 @@ wait:
 			if err := apply(result.root, result.stat); err != nil {
 				return nil, err
 			}
+			log.Info("Measured persistent state size", "root", result.root, "number", result.blockNumber, "elapsed", common.PrettyDuration(result.elapsed))
 			return stats, nil
 
 		case <-t.abort:
@@ -409,6 +418,7 @@ func (t *SizeTracker) build(root common.Hash, blockNumber uint64, done chan buil
 		storageTrienodes, storageTrienodeBytes int64
 
 		group errgroup.Group
+		start = time.Now()
 	)
 
 	// Start all table iterations concurrently with direct metric updates
@@ -479,6 +489,7 @@ func (t *SizeTracker) build(root common.Hash, blockNumber uint64, done chan buil
 			root:        root,
 			blockNumber: blockNumber,
 			stat:        stat,
+			elapsed:     time.Since(start),
 		}
 	}
 }
@@ -534,6 +545,10 @@ func (t *SizeTracker) iterateTable(closed chan struct{}, prefix []byte, name str
 }
 
 func (t *SizeTracker) upload(stats SizeStats) {
+	blockInfoGauge.Update(metrics.GaugeInfoValue{
+		"number": hexutil.Uint64(stats.BlockNumber).String(),
+		"hash":   stats.StateRoot.Hex(),
+	})
 	accountsGauge.Update(stats.Accounts)
 	accountBytesGauge.Update(stats.AccountBytes)
 	storagesGauge.Update(stats.Storages)
