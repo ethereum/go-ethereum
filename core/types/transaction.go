@@ -354,8 +354,8 @@ func (tx *Transaction) GasTipCapIntCmp(other *big.Int) int {
 }
 
 // EffectiveGasTip returns the effective miner gasTipCap for the given base fee.
-// Note: if the effective gasTipCap is negative, this method returns both error
-// the actual negative value, _and_ ErrGasFeeCapTooLow
+// Note: if the effective gasTipCap would be negative, this method
+// returns ErrGasFeeCapTooLow, and value is undefined.
 func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
 	dst := new(uint256.Int)
 	base := new(uint256.Int)
