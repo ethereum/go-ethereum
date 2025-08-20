@@ -121,6 +121,53 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	return nil
 }
 
+// ValidateProcessResult validates block fields against the result of execution.
+// It is used for the purpose of validating access-list-containing blocks and
+// does not check the integrity of the block's state root.
+func (v *BlockValidator) ValidateProcessResult(block *types.Block, resCh chan *ProcessResultWithMetrics, stateless bool) (*ProcessResultWithMetrics, error) {
+	header := block.Header()
+
+	res := <-resCh
+	if res.ProcessResult.Error != nil {
+		return nil, res.ProcessResult.Error
+	}
+
+	if block.GasUsed() != res.ProcessResult.GasUsed {
+		return res, fmt.Errorf("invalid gas used (remote: %d local: %d)", block.GasUsed(), res.ProcessResult.GasUsed)
+	}
+	// Validate the received block's bloom with the one derived from the generated receipts.
+	// For valid blocks this should always validate to true.
+	//
+	// Receipts must go through MakeReceipt to calculate the receipt's bloom
+	// already. Merge the receipt's bloom together instead of recalculating
+	// everything.
+	rbloom := types.MergeBloom(res.ProcessResult.Receipts)
+	if rbloom != header.Bloom {
+		return res, fmt.Errorf("invalid bloom (remote: %x  local: %x)", header.Bloom, rbloom)
+	}
+	// In stateless mode, return early because the receipt and state root are not
+	// provided through the witness, rather the cross validator needs to return it.
+	if stateless {
+		return res, nil
+	}
+	// The receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, Rn]]))
+	receiptSha := types.DeriveSha(res.ProcessResult.Receipts, trie.NewStackTrie(nil))
+	if receiptSha != header.ReceiptHash {
+		return res, fmt.Errorf("invalid receipt root hash (remote: %x local: %x)", header.ReceiptHash, receiptSha)
+	}
+	// Validate the parsed requests match the expected header value.
+	if header.RequestsHash != nil {
+		reqhash := types.CalcRequestsHash(res.ProcessResult.Requests)
+		if reqhash != *header.RequestsHash {
+			return res, fmt.Errorf("invalid requests hash (remote: %x local: %x)", *header.RequestsHash, reqhash)
+		}
+	} else if res.ProcessResult.Requests != nil {
+		return res, errors.New("block has requests before prague fork")
+	}
+
+	return res, nil
+}
+
 // ValidateState validates the various changes that happen after a state transition,
 // such as amount of used gas, the receipt roots and the state root itself.
 func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, res *ProcessResult, stateless bool) error {
@@ -160,6 +207,7 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	} else if res.Requests != nil {
 		return errors.New("block has requests before prague fork")
 	}
+
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
 	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
