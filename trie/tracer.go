@@ -19,6 +19,7 @@ package trie
 import (
 	"maps"
 	"slices"
+	"sync"
 )
 
 // opTracer tracks the changes of trie nodes. During the trie operations,
@@ -33,12 +34,10 @@ import (
 // while the latter is inserted/deleted in order to follow the rule of trie.
 // This tool can track all of them no matter the node is embedded in its
 // parent or not, but valueNode is never tracked.
-//
-// Note opTracer is not thread-safe, callers should be responsible for handling
-// the concurrency issues by themselves.
 type opTracer struct {
 	inserts map[string]struct{}
 	deletes map[string]struct{}
+	lock    sync.RWMutex
 }
 
 // newOpTracer initializes the tracer for capturing trie changes.
@@ -53,6 +52,9 @@ func newOpTracer() *opTracer {
 // in the deletion set (resurrected node), then just wipe it from
 // the deletion set as it's "untouched".
 func (t *opTracer) onInsert(path []byte) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	if _, present := t.deletes[string(path)]; present {
 		delete(t.deletes, string(path))
 		return
@@ -64,6 +66,9 @@ func (t *opTracer) onInsert(path []byte) {
 // in the addition set, then just wipe it from the addition set
 // as it's untouched.
 func (t *opTracer) onDelete(path []byte) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	if _, present := t.inserts[string(path)]; present {
 		delete(t.inserts, string(path))
 		return
@@ -73,12 +78,18 @@ func (t *opTracer) onDelete(path []byte) {
 
 // reset clears the content tracked by tracer.
 func (t *opTracer) reset() {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	clear(t.inserts)
 	clear(t.deletes)
 }
 
 // copy returns a deep copied tracer instance.
 func (t *opTracer) copy() *opTracer {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
 	return &opTracer{
 		inserts: maps.Clone(t.inserts),
 		deletes: maps.Clone(t.deletes),
@@ -87,6 +98,9 @@ func (t *opTracer) copy() *opTracer {
 
 // deletedList returns a list of node paths which are deleted from the trie.
 func (t *opTracer) deletedList() [][]byte {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
 	paths := make([][]byte, 0, len(t.deletes))
 	for path := range t.deletes {
 		paths = append(paths, []byte(path))
@@ -97,11 +111,9 @@ func (t *opTracer) deletedList() [][]byte {
 // prevalueTracer tracks the original values of resolved trie nodes. Cached trie
 // node values are expected to be immutable. A zero-size node value is treated as
 // non-existent and should not occur in practice.
-//
-// Note prevalueTracer is not thread-safe, callers should be responsible for
-// handling the concurrency issues by themselves.
 type prevalueTracer struct {
 	data map[string][]byte
+	lock sync.RWMutex
 }
 
 // newPrevalueTracer initializes the tracer for capturing resolved trie nodes.
@@ -115,18 +127,27 @@ func newPrevalueTracer() *prevalueTracer {
 // blob internally. Do not modify the value outside this function,
 // as it is not deep-copied.
 func (t *prevalueTracer) put(path []byte, val []byte) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	t.data[string(path)] = val
 }
 
 // get returns the cached trie node value. If the node is not found, nil will
 // be returned.
 func (t *prevalueTracer) get(path []byte) []byte {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
 	return t.data[string(path)]
 }
 
 // hasList returns a list of flags indicating whether the corresponding trie nodes
 // specified by the path exist in the trie.
 func (t *prevalueTracer) hasList(list [][]byte) []bool {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
 	exists := make([]bool, 0, len(list))
 	for _, path := range list {
 		_, ok := t.data[string(path)]
@@ -137,16 +158,25 @@ func (t *prevalueTracer) hasList(list [][]byte) []bool {
 
 // values returns a list of values of the cached trie nodes.
 func (t *prevalueTracer) values() [][]byte {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
 	return slices.Collect(maps.Values(t.data))
 }
 
 // reset resets the cached content in the prevalueTracer.
 func (t *prevalueTracer) reset() {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	clear(t.data)
 }
 
 // copy returns a copied prevalueTracer instance.
 func (t *prevalueTracer) copy() *prevalueTracer {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
 	// Shadow clone is used, as the cached trie node values are immutable
 	return &prevalueTracer{
 		data: maps.Clone(t.data),
