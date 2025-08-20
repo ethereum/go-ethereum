@@ -429,11 +429,6 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	tPreprocessLoadStart := time.Now()
 	modifiedPrestate = statedb.LoadModifiedPrestate(&totalDiff)
 	tPreprocessLoad = time.Since(tPreprocessLoadStart)
-	var txPrestates []*state.StateDB
-	for range block.Transactions() {
-		state := statedb.Copy()
-		txPrestates = append(txPrestates, state)
-	}
 
 	// compute the post-tx state prestate (before applying final block system calls and eip-4895 withdrawals)
 	// the post-tx state transition is verified by resultHandler
@@ -448,11 +443,12 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	go resultHandler(intermediateStateDiffs[len(block.Transactions())+1], postTxState)
 	var workers errgroup.Group
 	workers.SetLimit(runtime.NumCPU() / 2)
+	startingState := statedb.Copy()
 	for i, tx := range block.Transactions() {
 		tx := tx
 		i := i
 		workers.Go(func() error {
-			res := execTx(ctx, tx, i, txPrestates[i], totalDiffs[i], intermediateStateDiffs[i+1])
+			res := execTx(ctx, tx, i, startingState.Copy(), totalDiffs[i], intermediateStateDiffs[i+1])
 			txResCh <- *res
 			return nil
 		})
