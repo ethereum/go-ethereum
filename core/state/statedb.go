@@ -676,7 +676,17 @@ func (s *StateDB) deleteStateObject(addr common.Address) {
 }
 
 func (s *StateDB) initObjFromDiff(addr common.Address, a *types.StateAccount, diff *bal.AccountState) *stateObject {
-	acct := a.Copy()
+	var acct *types.StateAccount
+	if a == nil {
+		acct = &types.StateAccount{
+			Nonce:    0,
+			Balance:  uint256.NewInt(0),
+			Root:     types.EmptyRootHash,
+			CodeHash: types.EmptyCodeHash[:],
+		}
+	} else {
+		acct = a.Copy()
+	}
 	if diff.Nonce != nil {
 		acct.Nonce = *diff.Nonce
 	}
@@ -750,17 +760,21 @@ func (s *StateDB) ApplyPrestate(prestateDiff *bal.StateDiff) {
 
 // ApplyStateDiff applies a state diff to the StateDB.  All state changes will be marked as mutations
 // for the purpose of applying them in the next call to Commit.
-func (s *StateDB) ApplyStateDiff(diff *bal.StateDiff) {
-	for addr, accountDiff := range diff.Mutations {
-		stateObject, ok := s.stateObjects[addr]
-		if !ok {
-			stateObject = newObject(s, addr, &types.StateAccount{
-				0,
-				uint256.NewInt(0),
-				types.EmptyRootHash,
-				types.EmptyCodeHash[:],
-			})
+func (s *StateDB) ApplyStateDiff(blockDiff *bal.StateDiff, diffPrestate map[common.Address]*types.StateAccount) {
+	for addr, accountDiff := range blockDiff.Mutations {
+		var acct *types.StateAccount
+		a, preexisting := diffPrestate[addr]
+		if !preexisting {
+			acct = &types.StateAccount{
+				Nonce:    0,
+				Balance:  uint256.NewInt(0),
+				Root:     types.EmptyRootHash,
+				CodeHash: types.EmptyCodeHash[:],
+			}
+		} else {
+			acct = a.Copy()
 		}
+		stateObject := newObject(s, addr, acct)
 		if accountDiff.Code != nil {
 			stateObject.SetCode(crypto.Keccak256Hash(accountDiff.Code), accountDiff.Code)
 		}
@@ -1120,8 +1134,6 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	s.StorageUpdates += time.Since(start)
 
 	/*
-		fmt.Println("begin print mutations")
-		fmt.Println(s.txIndex)
 		for addr, _ := range s.mutations {
 			if _, ok := s.stateObjects[addr]; !ok {
 				continue
@@ -1203,7 +1215,20 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// Track the amount of time wasted on hashing the account trie
 	defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())
 	hash := s.trie.Hash()
-
+	/*
+		fmt.Println("state trie")
+		it, err := s.trie.NodeIterator([]byte{})
+		if err != nil {
+			panic(err)
+		}
+		for it.Next(true) {
+			if it.Leaf() {
+				fmt.Printf("%x: %x\n", it.Path(), it.LeafBlob())
+			} else {
+				fmt.Printf("%x: %x\n", it.Path(), it.Hash())
+			}
+		}
+	*/
 	// If witness building is enabled, gather the account trie witness
 	if s.witness != nil {
 		s.witness.AddState(s.trie.Witness())

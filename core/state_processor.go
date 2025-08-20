@@ -427,7 +427,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 
 	// instantiate a set of StateDBs to be used for executing each transaction in parallel
 	tPreprocessLoadStart := time.Now()
-	statedb.LoadModifiedPrestate(&totalDiff)
+	modifiedPrestate = statedb.LoadModifiedPrestate(&totalDiff)
 	tPreprocessLoad = time.Since(tPreprocessLoadStart)
 	var txPrestates []*state.StateDB
 	for range block.Transactions() {
@@ -436,9 +436,9 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	}
 
 	// compute the post-tx state prestate (before applying final block system calls and eip-4895 withdrawals)
+	// the post-tx state transition is verified by resultHandler
 	postTxState := statedb.Copy()
-	postTxState.ApplyPrestate(totalDiffs[len(totalDiffs)-2])
-	postTxState.Finalise(true)
+	postTxState.SetPrestate(totalDiffs[len(totalDiffs)-2], modifiedPrestate)
 
 	tPreprocess = time.Since(pStart)
 
@@ -458,9 +458,9 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 		})
 	}
 
-	statedb.ApplyStateDiff(&totalDiff)
-	statedb.Finalise(true)
-	go calcAndVerifyRoot(statedb.Copy(), block, rootCalcErrCh)
+	// TODO: move the state diff application into calcAndVerifyRoot
+	statedb.ApplyStateDiff(&totalDiff, modifiedPrestate)
+	go calcAndVerifyRoot(statedb, block, rootCalcErrCh)
 
 	return resCh, nil
 }
