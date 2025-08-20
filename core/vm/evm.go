@@ -499,10 +499,10 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 	// - the code is non-empty
 	// - the storage is non-empty
 	contractHash := evm.StateDB.GetCodeHash(address)
-	storageRoot := evm.StateDB.GetStorageRoot(address)
+	isStorageEmpty := evm.StateDB.IsStorageEmpty(address)
 	if evm.StateDB.GetNonce(address) != 0 ||
 		(contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) || // non-empty code
-		(storageRoot != (common.Hash{}) && storageRoot != types.EmptyRootHash) { // non-empty storage
+		!isStorageEmpty { // non-empty storage
 		if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 			evm.Config.Tracer.OnGasChange(gas, 0, tracing.GasChangeCallFailedExecution)
 		}

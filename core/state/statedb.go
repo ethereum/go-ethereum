@@ -335,6 +335,12 @@ func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
 	return common.Hash{}
 }
 
+// IsStorageEmpty returns if the contract storage is empty
+func (s *StateDB) IsStorageEmpty(addr common.Address) bool {
+	storageRoot := s.GetStorageRoot(addr)
+	return storageRoot == (common.Hash{}) || storageRoot == types.EmptyRootHash
+}
+
 // TxIndex returns the current transaction index set by SetTxContext.
 func (s *StateDB) TxIndex() int {
 	return s.txIndex

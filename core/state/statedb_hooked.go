@@ -97,6 +97,10 @@ func (s *hookedStateDB) GetStorageRoot(addr common.Address) common.Hash {
 	return s.inner.GetStorageRoot(addr)
 }
 
+func (s *hookedStateDB) IsStorageEmpty(addr common.Address) bool {
+	return s.inner.IsStorageEmpty(addr)
+}
+
 func (s *hookedStateDB) GetTransientState(addr common.Address, key common.Hash) common.Hash {
 	return s.inner.GetTransientState(addr, key)
 }
