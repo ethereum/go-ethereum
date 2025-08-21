@@ -1105,6 +1105,7 @@ func TestTraceChain(t *testing.T) {
 			nonce += 1
 		}
 	})
+	defer backend.teardown()
 	backend.refHook = func() { ref.Add(1) }
 	backend.relHook = func() { rel.Add(1) }
 	api := NewAPI(backend)
