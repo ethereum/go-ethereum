@@ -472,24 +472,6 @@ func (a *AccountState) Copy() *AccountState {
 	return res
 }
 
-// ValidateStateDiff asserts that both state diffs are equivalent.
-func ValidateStateDiff(balDiff, computedDiff *StateDiff) error {
-	for addr, computedAccountDiff := range computedDiff.Mutations {
-		balAccountDiff, ok := balDiff.Mutations[addr]
-		if !ok {
-			return fmt.Errorf("missing from BAL")
-		}
-
-		if !computedAccountDiff.Eq(balAccountDiff) {
-			return fmt.Errorf("mismatch between BAl value and computed value")
-		}
-	}
-	if len(balDiff.Mutations) != len(computedDiff.Mutations) {
-		return fmt.Errorf("BAL contained unexpected mutations compared to computed")
-	}
-	return nil
-}
-
 func (s *StateDiff) String() string {
 	var res bytes.Buffer
 	enc := json.NewEncoder(&res)

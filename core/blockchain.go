@@ -2137,7 +2137,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		existingBody := block.Body()
 		block = block.WithBody(*existingBody)
 		existingBody = block.Body()
-		existingBody.AccessList = statedb.BlockAccessList().ToEncodingObj()
+		existingBody.AccessList = statedb.ConstructionBlockAccessList().ToEncodingObj()
 		block = block.WithBody(*existingBody)
 	}
 

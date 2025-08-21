@@ -287,7 +287,7 @@ func (s *stateObject) finalise() *bal.AccountState {
 
 			if s.db.enableStateDiffRecording {
 				if s.db.constructionBAL != nil {
-					s.db.BlockAccessList().StorageWrite(uint16(s.db.balIndex), s.address, key, value)
+					s.db.ConstructionBlockAccessList().StorageWrite(uint16(s.db.balIndex), s.address, key, value)
 				}
 				if accountPost.StorageWrites == nil {
 					accountPost.StorageWrites = make(map[common.Hash]common.Hash)
@@ -299,7 +299,7 @@ func (s *stateObject) finalise() *bal.AccountState {
 			// tracked for commit in uncommittedStorage.
 			if s.db.enableStateDiffRecording {
 				if s.db.constructionBAL != nil {
-					s.db.BlockAccessList().StorageWrite(uint16(s.db.balIndex), s.address, key, value)
+					s.db.ConstructionBlockAccessList().StorageWrite(uint16(s.db.balIndex), s.address, key, value)
 				}
 				if accountPost.StorageWrites == nil {
 					accountPost.StorageWrites = make(map[common.Hash]common.Hash)
@@ -313,7 +313,7 @@ func (s *stateObject) finalise() *bal.AccountState {
 			slotsToPrefetch = append(slotsToPrefetch, key) // Copy needed for closure
 			if s.db.enableStateDiffRecording {
 				if s.db.constructionBAL != nil {
-					s.db.BlockAccessList().StorageWrite(uint16(s.db.balIndex), s.address, key, value)
+					s.db.ConstructionBlockAccessList().StorageWrite(uint16(s.db.balIndex), s.address, key, value)
 				}
 				if accountPost.StorageWrites == nil {
 					accountPost.StorageWrites = make(map[common.Hash]common.Hash)

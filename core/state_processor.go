@@ -125,7 +125,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs = append(allLogs, receipt.Logs...)
 	}
 
-	if statedb.BlockAccessList() != nil {
+	if statedb.ConstructionBlockAccessList() != nil {
 		statedb.SetAccessListIndex(len(block.Transactions()) + 1)
 	}
 
@@ -257,7 +257,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 		finalDiff := postTxState.Finalise(true)
 		computedDiff.Merge(finalDiff)
 
-		if err := bal.ValidateStateDiff(expectedStateDiff, computedDiff); err != nil {
+		if err := postTxState.BlockAccessList().ValidateStateDiff(len(block.Transactions())+1, computedDiff); err != nil {
 			return &ProcessResult{
 				Error: fmt.Errorf("post-transaction-execution state transition produced a different diff that what was reported in the BAL"),
 			}
@@ -329,6 +329,14 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 		}
 	}
 	calcAndVerifyRoot := func(postState *state.StateDB, block *types.Block, resCh chan<- error) {
+		// calculate and apply the block state modifications
+		postStateDiff := &bal.StateDiff{make(map[common.Address]*bal.AccountState)}
+		postState.BlockAccessList().Iterate(len(block.Transactions())+2, func(addr common.Address, state *bal.AccountState) bool {
+			postStateDiff.Mutations[addr] = state
+			return true
+		})
+		postState.ApplyStateDiff(postStateDiff)
+
 		tVerifyStart = time.Now()
 		root := postState.IntermediateRoot(true)
 		tVerify = time.Since(tVerifyStart)
@@ -341,8 +349,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	}
 	// executes single transaction, validating the computed diff against the BAL
 	// and forwarding the txExecResult to be consumed by resultHandler
-	execTx := func(ctx context2.Context, tx *types.Transaction, idx int, db *state.StateDB, prestateDiff, expectedDiff *bal.StateDiff) *txExecResult {
-		db.SetPrestate(prestateDiff, modifiedPrestate)
+	execTx := func(ctx context2.Context, tx *types.Transaction, idx int, db *state.StateDB) *txExecResult {
 		// if an error with another transaction rendered the block invalid, don't proceed with executing this one
 		select {
 		case <-ctx.Done():
@@ -365,6 +372,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 		sender, _ := types.Sender(signer, tx)
 		db.SetTxSender(sender)
 		db.SetTxContext(tx.Hash(), idx)
+		db.SetAccessListIndex(idx + 1)
 
 		evm.StateDB = db
 		gp := new(GasPool)
@@ -376,7 +384,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 			return &txExecResult{err: err}
 		}
 
-		if err := bal.ValidateStateDiff(expectedDiff, computedDiff); err != nil {
+		if err := statedb.BlockAccessList().ValidateStateDiff(idx, computedDiff); err != nil {
 			return &txExecResult{err: err}
 		}
 
@@ -407,8 +415,6 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	intermediateStateDiffs := bal.BuildStateDiffs(block.Body().AccessList, len(block.Transactions()))
 	tPreprocessStateDiffs = time.Since(tPreprocessStateDiffsStart)
 
-	preTxDiff := intermediateStateDiffs[0]
-
 	// validate the correctness of pre-transaction execution state changes
 	computedPreTxDiff := &bal.StateDiff{make(map[common.Address]*bal.AccountState)}
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
@@ -417,27 +423,24 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	if p.config.IsPrague(block.Number(), block.Time()) || p.config.IsVerkle(block.Number(), block.Time()) {
 		computedPreTxDiff.Merge(ProcessParentBlockHash(block.ParentHash(), evm))
 	}
-	if err := bal.ValidateStateDiff(preTxDiff, computedPreTxDiff); err != nil {
+
+	if err := statedb.BlockAccessList().ValidateStateDiff(0, computedPreTxDiff); err != nil {
 		return nil, err
 	}
 
-	// compute the aggregate state diff of the block
-	totalDiff := bal.StateDiff{make(map[common.Address]*bal.AccountState)}
-	var totalDiffs []*bal.StateDiff
-	for _, diff := range intermediateStateDiffs {
-		totalDiff.Merge(diff.Copy()) // TODO: it shouldn't be necessary to Copy here
-		totalDiffs = append(totalDiffs, totalDiff.Copy())
-	}
+	alReader := bal.NewReader(block.Body().AccessList)
 
 	// instantiate a set of StateDBs to be used for executing each transaction in parallel
 	tPreprocessLoadStart := time.Now()
-	modifiedPrestate = statedb.LoadModifiedPrestate(&totalDiff)
+	modifiedPrestate = statedb.LoadModifiedPrestate(alReader.Accounts())
 	tPreprocessLoad = time.Since(tPreprocessLoadStart)
+
+	statedb.SetBlockAccessList(&alReader)
+	statedb.SetPrestate(modifiedPrestate)
 
 	// compute the post-tx state prestate (before applying final block system calls and eip-4895 withdrawals)
 	// the post-tx state transition is verified by resultHandler
 	postTxState := statedb.Copy()
-	postTxState.SetPrestate(totalDiffs[len(totalDiffs)-2], modifiedPrestate)
 
 	tPreprocess = time.Since(pStart)
 
@@ -452,14 +455,14 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 		tx := tx
 		i := i
 		workers.Go(func() error {
-			res := execTx(ctx, tx, i, startingState.Copy(), totalDiffs[i], intermediateStateDiffs[i+1])
+			res := execTx(ctx, tx, i, startingState.Copy())
 			txResCh <- *res
 			return nil
 		})
 	}
 
-	// TODO: move the state diff application into calcAndVerifyRoot
-	statedb.ApplyStateDiff(&totalDiff, modifiedPrestate)
+	// TODO: we can start the root calculation much sooner.  we don't need to
+	// verify the pre-tx state changes before kicking it off.
 	go calcAndVerifyRoot(statedb, block, rootCalcErrCh)
 
 	return resCh, nil

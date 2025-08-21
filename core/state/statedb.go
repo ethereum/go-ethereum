@@ -153,7 +153,7 @@ type StateDB struct {
 
 	enableStateDiffRecording bool // if true, calls to Finalise will return the mutated state
 
-	prestateDiff         *bal.StateDiff
+	blockAccessList      *bal.Reader
 	prestateDiffAccounts map[common.Address]*types.StateAccount
 
 	// Measurements gathered during execution for debugging purposes
@@ -182,10 +182,14 @@ func (s *StateDB) EnableBALConstruction() {
 	s.constructionBAL = &bal
 }
 
-// BlockAccessList retrieves the access list that has been constructed
+// ConstructionBlockAccessList retrieves the access list that has been constructed
 // by the StateDB instance, or nil if BAL construction was not enabled.
-func (s *StateDB) BlockAccessList() *bal.ConstructionBlockAccessList {
+func (s *StateDB) ConstructionBlockAccessList() *bal.ConstructionBlockAccessList {
 	return s.constructionBAL
+}
+
+func (s *StateDB) BlockAccessList() *bal.Reader {
+	return s.blockAccessList
 }
 
 // New creates a new state from a given trie.
@@ -321,19 +325,22 @@ func (s *StateDB) AddRefund(gas uint64) {
 	s.refund += gas
 }
 
-func (s *StateDB) SetPrestate(diff *bal.StateDiff, prestate map[common.Address]*types.StateAccount) {
-	s.prestateDiff = diff
+func (s *StateDB) SetBlockAccessList(al *bal.Reader) {
+	s.blockAccessList = al
+}
+
+func (s *StateDB) SetPrestate(prestate map[common.Address]*types.StateAccount) {
 	s.prestateDiffAccounts = prestate
 }
 
 // LoadModifiedPrestate instantiates the live object based on accounts
 // which appeared in the total state diff of a block, and were also preexisting.
-func (s *StateDB) LoadModifiedPrestate(totalDiff *bal.StateDiff) (res map[common.Address]*types.StateAccount) {
+func (s *StateDB) LoadModifiedPrestate(addrs []common.Address) (res map[common.Address]*types.StateAccount) {
 	stateAccounts := new(sync.Map)
 	wg := new(sync.WaitGroup)
 	res = make(map[common.Address]*types.StateAccount)
 
-	for addr, _ := range totalDiff.Mutations {
+	for _, addr := range addrs {
 		wg.Add(1)
 		go func(addr common.Address) {
 			acct, err := s.reader.Account(addr)
@@ -709,61 +716,12 @@ func (s *StateDB) initObjFromDiff(addr common.Address, a *types.StateAccount, di
 	return obj
 }
 
-// ApplyPrestate applies finalised pre-state changes which occurred between the start of the block and the end of the previous transaction.
-func (s *StateDB) ApplyPrestate(prestateDiff *bal.StateDiff) {
-	for addr, accountDiff := range prestateDiff.Mutations {
-		stateObject, preexisting := s.stateObjects[addr]
-		if !preexisting {
-			stateObject = newObject(s, addr, &types.StateAccount{
-				0,
-				uint256.NewInt(0),
-				types.EmptyRootHash,
-				types.EmptyCodeHash[:],
-			})
-		}
-		if accountDiff.Code != nil {
-			stateObject.setCode(crypto.Keccak256Hash(accountDiff.Code), accountDiff.Code)
-		}
-		if accountDiff.StorageWrites != nil {
-			for slot, value := range accountDiff.StorageWrites {
-				stateObject.pendingStorage[slot] = value
-			}
-		}
-		if accountDiff.Nonce != nil {
-			stateObject.setNonce(*accountDiff.Nonce)
-			stateObject.txPreNonce = stateObject.Nonce()
-		}
-		if accountDiff.Balance != nil {
-			stateObject.setBalance(new(uint256.Int).SetBytes((*accountDiff.Balance)[:]))
-			stateObject.txPreBalance = stateObject.Balance()
-		}
-
-		if stateObject.empty() {
-			// an object that exists at the start of the block can become empty:
-			// e.g. target of a create is prefunded but the creation context performs a SENDALL without deploying a contract
-			if preexisting {
-				// TODO: I mindlessly copied this logic from elsewhere in the statedb, need to verify that it is correct.
-				delete(s.stateObjects, addr)
-				s.markDelete(addr)
-				// We need to maintain account deletions explicitly (will remain
-				// set indefinitely). Note only the first occurred self-destruct
-				// event is tracked.
-				if _, ok := s.stateObjectsDestruct[addr]; !ok {
-					s.stateObjectsDestruct[addr] = stateObject
-				}
-			}
-		} else if !preexisting {
-			s.setStateObject(stateObject)
-		}
-	}
-}
-
 // ApplyStateDiff applies a state diff to the StateDB.  All state changes will be marked as mutations
 // for the purpose of applying them in the next call to Commit.
-func (s *StateDB) ApplyStateDiff(blockDiff *bal.StateDiff, diffPrestate map[common.Address]*types.StateAccount) {
+func (s *StateDB) ApplyStateDiff(blockDiff *bal.StateDiff) {
 	for addr, accountDiff := range blockDiff.Mutations {
 		var acct *types.StateAccount
-		a, preexisting := diffPrestate[addr]
+		a, preexisting := s.prestateDiffAccounts[addr]
 		if !preexisting {
 			acct = &types.StateAccount{
 				Nonce:    0,
@@ -805,8 +763,8 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 		return nil
 	}
 
-	if s.prestateDiff != nil {
-		if acctDiff, ok := s.prestateDiff.Mutations[addr]; ok {
+	if s.blockAccessList != nil {
+		if acctDiff := s.blockAccessList.ReadAccount(addr, s.balIndex); acctDiff != nil {
 			acctPrestate := s.prestateDiffAccounts[addr]
 			obj := s.initObjFromDiff(addr, acctPrestate, acctDiff)
 			return obj
@@ -898,11 +856,13 @@ func (s *StateDB) Copy() *StateDB {
 		refund:               s.refund,
 		thash:                s.thash,
 		txIndex:              s.txIndex,
+		balIndex:             s.txIndex,
 		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
 		logSize:              s.logSize,
 		preimages:            maps.Clone(s.preimages),
 
 		enableStateDiffRecording: s.enableStateDiffRecording,
+		blockAccessList:          s.blockAccessList,
 
 		// Do we need to copy the access list and transient storage?
 		// In practice: No. At the start of a transaction, these two lists are empty.

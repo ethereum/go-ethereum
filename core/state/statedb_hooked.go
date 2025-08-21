@@ -160,7 +160,7 @@ func (s *hookedStateDB) Witness() *stateless.Witness {
 }
 
 func (s *hookedStateDB) BlockAccessList() *bal.ConstructionBlockAccessList {
-	return s.inner.BlockAccessList()
+	return s.inner.ConstructionBlockAccessList()
 }
 
 func (s *hookedStateDB) AccessEvents() *AccessEvents {
