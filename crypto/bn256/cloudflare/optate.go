@@ -2,7 +2,7 @@ package bn256
 
 func lineFunctionAdd(r, p *twistPoint, q *curvePoint, r2 *gfP2) (a, b, c *gfP2, rOut *twistPoint) {
 	// See the mixed addition algorithm from "Faster Computation of the
-	// Tate Pairing", http://arxiv.org/pdf/0904.0854v3.pdf
+	// Tate Pairing", <https://arxiv.org/pdf/0904.0854v3.pdf>.
 	B := (&gfP2{}).Mul(&p.x, &r.t)
 
 	D := (&gfP2{}).Add(&p.y, &r.z)
