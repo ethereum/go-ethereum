@@ -378,67 +378,91 @@ func TestUDPv5_findnodeCall(t *testing.T) {
 	if !reflect.DeepEqual(response, nodes) {
 		t.Fatalf("wrong nodes in response")
 	}
+}
 
-	// Negative cases for invalid responses:
-	// 1) Invalid IP: deliver a Nodes packet where one record has an unspecified IP, expect it to be ignored.
-	{
-		var (
-			distances = []uint{230}
-			remote    = test.getNode(test.remotekey, test.remoteaddr).Node()
-			nodes     = nodesAtDistance(remote.ID(), int(distances[0]), 1)
-			done      = make(chan error, 1)
-			respNodes []*enode.Node
-		)
-		go func() {
-			var err error
-			respNodes, err = test.udp.Findnode(remote, distances)
-			done <- err
-		}()
-		test.waitPacketOut(func(p *v5wire.Findnode, addr netip.AddrPort, _ v5wire.Nonce) {
-			// Craft a record with unspecified IP (invalid according to netutil.CheckRelayAddr).
+// runFindnodeOnce issues a single FINDNODE for the given distances and injects a single NODES response
+// created by the makeRecords function. It returns the collected response nodes and any error from Findnode.
+func runFindnodeOnce(t *testing.T, test *udpV5Test, distances []uint, makeRecords func(remote *enode.Node) []*enr.Record) ([]*enode.Node, error) {
+	t.Helper()
+	remote := test.getNode(test.remotekey, test.remoteaddr).Node()
+	done := make(chan error, 1)
+	var got []*enode.Node
+	go func() {
+		var err error
+		got, err = test.udp.Findnode(remote, distances)
+		done <- err
+	}()
+	test.waitPacketOut(func(p *v5wire.Findnode, addr netip.AddrPort, _ v5wire.Nonce) {
+		test.packetIn(&v5wire.Nodes{ReqID: p.ReqID, RespCount: 1, Nodes: makeRecords(remote)})
+	})
+	if err := <-done; err != nil {
+		return nil, err
+	}
+	return got, nil
+}
+
+// This test covers invalid NODES responses for the FINDNODE call.
+func TestUDPv5_findnodeCall_InvalidResponses(t *testing.T) {
+	t.Parallel()
+	test := newUDPV5Test(t)
+	defer test.close()
+
+	distances := []uint{230}
+
+	t.Run("invalid ip (unspecified)", func(t *testing.T) {
+		got, err := runFindnodeOnce(t, test, distances, func(remote *enode.Node) []*enr.Record {
+			// Record with unspecified IP should be rejected by netutil.CheckRelayAddr.
+			one := nodesAtDistance(remote.ID(), int(distances[0]), 1)[0]
 			r := new(enr.Record)
 			r.Set(enr.IP(net.IPv4zero))
 			r.Set(enr.UDP(30303))
-			bad := enode.SignNull(r, nodes[0].ID())
-			test.packetIn(&v5wire.Nodes{ReqID: p.ReqID, RespCount: 1, Nodes: []*enr.Record{bad.Record()}})
+			bad := enode.SignNull(r, one.ID()) // allowed in tests via ValidSchemesForTesting
+			return []*enr.Record{bad.Record()}
 		})
-		if err := <-done; err != nil {
+		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(respNodes) != 0 {
-			t.Fatalf("expected 0 nodes for invalid IP, got %d", len(respNodes))
+		if len(got) != 0 {
+			t.Fatalf("expected 0 nodes for invalid IP, got %d", len(got))
 		}
-	}
+	})
 
-	// 2) Invalid UDP port (<=1024): deliver a record with low port, expect it to be ignored.
-	{
-		var (
-			distances = []uint{230}
-			remote    = test.getNode(test.remotekey, test.remoteaddr).Node()
-			nodes     = nodesAtDistance(remote.ID(), int(distances[0]), 1)
-			done      = make(chan error, 1)
-			respNodes []*enode.Node
-		)
-		go func() {
-			var err error
-			respNodes, err = test.udp.Findnode(remote, distances)
-			done <- err
-		}()
-		test.waitPacketOut(func(p *v5wire.Findnode, addr netip.AddrPort, _ v5wire.Nonce) {
+	t.Run("invalid udp port (<=1024)", func(t *testing.T) {
+		got, err := runFindnodeOnce(t, test, distances, func(remote *enode.Node) []*enr.Record {
+			one := nodesAtDistance(remote.ID(), int(distances[0]), 1)[0]
 			r := new(enr.Record)
-			r.Set(enr.IP(nodes[0].IP()))
-			r.Set(enr.UDP(1024)) // invalid low port
-			bad := enode.SignNull(r, nodes[0].ID())
-			test.packetIn(&v5wire.Nodes{ReqID: p.ReqID, RespCount: 1, Nodes: []*enr.Record{bad.Record()}})
+			r.Set(enr.IP(one.IP()))
+			r.Set(enr.UDP(1024)) // invalid low port; verifyResponseNode rejects UDP <= 1024
+			bad := enode.SignNull(r, one.ID())
+			return []*enr.Record{bad.Record()}
 		})
-		if err := <-done; err != nil {
+		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(respNodes) != 0 {
-			t.Fatalf("expected 0 nodes for low UDP port, got %d", len(respNodes))
+		if len(got) != 0 {
+			t.Fatalf("expected 0 nodes for low UDP port, got %d", len(got))
 		}
-	}
+	})
 
+	t.Run("invalid scheme (null not allowed)", func(t *testing.T) {
+		// Use a separate UDPv5 instance where only v4 is allowed, then send a null-signed record.
+		test2 := newUDPV5TestWithSchemes(t, enode.ValidSchemes)
+		defer test2.close()
+		got, err := runFindnodeOnce(t, test2, distances, func(remote *enode.Node) []*enr.Record {
+			one := nodesAtDistance(remote.ID(), int(distances[0]), 1)[0]
+			r := new(enr.Record)
+			r.Set(enr.IP(one.IP()))
+			r.Set(enr.UDP(30303))
+			bad := enode.SignNull(r, one.ID()) // encodable but invalid under ValidSchemes (no "null")
+			return []*enr.Record{bad.Record()}
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(got) != 0 {
+			t.Fatalf("expected 0 nodes for invalid identity scheme, got %d", len(got))
+		}
+	})
 }
 
 // This test checks that pending calls are re-sent when a handshake happens.
@@ -915,6 +939,33 @@ func newUDPV5Test(t *testing.T) *udpV5Test {
 	test.table = test.udp.tab
 	test.nodesByID[ln.ID()] = ln
 	// Wait for initial refresh so the table doesn't send unexpected findnode.
+	<-test.table.initDone
+	return test
+}
+
+// newUDPV5TestWithSchemes is like newUDPV5Test but allows overriding the accepted identity schemes.
+func newUDPV5TestWithSchemes(t *testing.T, schemes enr.IdentityScheme) *udpV5Test {
+	test := &udpV5Test{
+		t:          t,
+		pipe:       newpipe(),
+		localkey:   newkey(),
+		remotekey:  newkey(),
+		remoteaddr: netip.MustParseAddrPort("10.0.1.99:30303"),
+		nodesByID:  make(map[enode.ID]*enode.LocalNode),
+		nodesByIP:  make(map[netip.Addr]*enode.LocalNode),
+	}
+	test.db, _ = enode.OpenDB("")
+	ln := enode.NewLocalNode(test.db, test.localkey)
+	ln.SetStaticIP(net.IP{10, 0, 0, 1})
+	ln.Set(enr.UDP(30303))
+	test.udp, _ = ListenV5(test.pipe, ln, Config{
+		PrivateKey:   test.localkey,
+		Log:          testlog.Logger(t, log.LvlTrace),
+		ValidSchemes: schemes,
+	})
+	test.udp.codec = &testCodec{test: test, id: ln.ID()}
+	test.table = test.udp.tab
+	test.nodesByID[ln.ID()] = ln
 	<-test.table.initDone
 	return test
 }
