@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/sync/errgroup"
 	"math/big"
-	"runtime"
 	"slices"
 	"time"
 )
@@ -443,7 +442,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	tExecStart = time.Now()
 	go resultHandler(postTxState)
 	var workers errgroup.Group
-	workers.SetLimit(runtime.NumCPU() / 2)
+	//workers.SetLimit(runtime.NumCPU() / 2)
 	startingState := statedb.Copy()
 	for i, tx := range block.Transactions() {
 		tx := tx
