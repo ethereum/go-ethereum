@@ -18,6 +18,7 @@ package t8ntool
 
 import (
 	"fmt"
+	stdmath "math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -355,7 +356,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		statedb.AddBalance(w.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
 
 		if isEIP4762 {
-			statedb.AccessEvents().AddAccount(w.Address, true)
+			statedb.AccessEvents().AddAccount(w.Address, true, stdmath.MaxUint64)
 		}
 	}
 
@@ -431,7 +432,11 @@ func MakePreState(db ethdb.Database, chainConfig *params.ChainConfig, pre *Prest
 	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true, IsVerkle: verkle})
 	sdb := state.NewDatabase(tdb, nil)
 
-	statedb, _ := state.New(types.EmptyRootHash, sdb)
+	root := types.EmptyRootHash
+	if verkle {
+		root = types.EmptyVerkleHash
+	}
+	statedb, _ := state.New(root, sdb)
 	for addr, a := range pre.Pre {
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce, tracing.NonceChangeGenesis)
