@@ -12,7 +12,7 @@ jobs:
     name: Lint
     runs-on: self-hosted-ghr
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         submodules: false
 
@@ -44,7 +44,7 @@ jobs:
           - '1.25'
           - '1.24'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: true
 
