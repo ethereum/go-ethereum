@@ -37,7 +37,7 @@ var (
 	ErrInvalidTxType        = errors.New("transaction type not valid in this context")
 	ErrTxTypeNotSupported   = errors.New("transaction type not supported")
 	ErrGasFeeCapTooLow      = errors.New("fee cap less than base fee")
-	ErrGasFeeCapOverflow    = errors.New("fee cap overflow, too large for uint256")
+	ErrUint256Overflow      = errors.New("bigint overflow, too large for uint256")
 	errShortTypedTx         = errors.New("typed transaction too short")
 	errInvalidYParity       = errors.New("'yParity' field must be 0 or 1")
 	errVYParityMismatch     = errors.New("'v' and 'yParity' fields do not match")
@@ -360,7 +360,9 @@ func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
 	dst := new(uint256.Int)
 	base := new(uint256.Int)
 	if baseFee != nil {
-		base.SetFromBig(baseFee)
+		if base.SetFromBig(baseFee) {
+			return nil, ErrUint256Overflow
+		}
 	}
 	err := tx.calcEffectiveGasTip(dst, base)
 	return dst.ToBig(), err
@@ -370,13 +372,15 @@ func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
 // saves the result to dst.
 func (tx *Transaction) calcEffectiveGasTip(dst *uint256.Int, baseFee *uint256.Int) error {
 	if baseFee == nil {
-		dst.SetFromBig(tx.inner.gasTipCap())
+		if dst.SetFromBig(tx.inner.gasTipCap()) {
+			return ErrUint256Overflow
+		}
 		return nil
 	}
 
 	var err error
 	if dst.SetFromBig(tx.inner.gasFeeCap()) {
-		return ErrGasFeeCapOverflow
+		return ErrUint256Overflow
 	}
 	if dst.Cmp(baseFee) < 0 {
 		err = ErrGasFeeCapTooLow
@@ -384,7 +388,9 @@ func (tx *Transaction) calcEffectiveGasTip(dst *uint256.Int, baseFee *uint256.In
 
 	dst.Sub(dst, baseFee)
 	gasTipCap := new(uint256.Int)
-	gasTipCap.SetFromBig(tx.inner.gasTipCap())
+	if gasTipCap.SetFromBig(tx.inner.gasTipCap()) {
+		return ErrUint256Overflow
+	}
 	if gasTipCap.Cmp(dst) < 0 {
 		dst.Set(gasTipCap)
 	}
