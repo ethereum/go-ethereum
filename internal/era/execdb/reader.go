@@ -227,6 +227,16 @@ func (e *Era) InitialTD() (*big.Int, error) {
 	return td.Sub(td, header.Difficulty), nil
 }
 
+// Accumulator reads the accumulator entry in the EraE file if it exists.
+// Note that one premerge erae files will contain an accumulator entry.
+func (e *Era) Accumulator() (common.Hash, error) {
+	entry, err := e.s.Find(era.TypeAccumulator)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return common.BytesToHash(entry.Value), nil
+}
+
 // loadIndex loads in the index table containing all offsets and caches it.
 func (e *Era) loadIndex() error {
 	var err error
