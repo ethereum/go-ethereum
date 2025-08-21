@@ -27,10 +27,84 @@ func (r *Reader) Accounts() (res []common.Address) {
 func (r *Reader) Iterate(idx int, cb func(addr common.Address, state *AccountState) bool) {
 	for addr, _ := range r.accesses {
 		acct := r.ReadAccount(addr, idx)
-		if !cb(addr, acct) {
+		if acct != nil && !cb(addr, acct) {
 			return
 		}
 	}
+}
+
+func (r *Reader) ChangesAt(idx int) *StateDiff {
+	res := &StateDiff{make(map[common.Address]*AccountState)}
+	for addr, _ := range r.accesses {
+		accountChanges := r.AccountChangesAt(addr, idx)
+		if accountChanges != nil {
+			res.Mutations[addr] = accountChanges
+		}
+	}
+	return res
+}
+
+func (r *Reader) AccountChangesAt(addr common.Address, idx int) *AccountState {
+	acct, exist := r.accesses[addr]
+	if !exist {
+		return nil
+	}
+
+	var res AccountState
+
+	for i := len(acct.BalanceChanges) - 1; i >= 0; i-- {
+		if acct.BalanceChanges[i].TxIdx == uint16(idx) {
+			res.Balance = &acct.BalanceChanges[i].Balance
+		}
+		if acct.BalanceChanges[i].TxIdx < uint16(idx) {
+			break
+		}
+	}
+
+	for i := len(acct.CodeChanges) - 1; i >= 0; i-- {
+		if acct.CodeChanges[i].TxIndex == uint16(idx) {
+			res.Code = acct.CodeChanges[i].Code
+			break
+		}
+		if acct.CodeChanges[i].TxIndex < uint16(idx) {
+			break
+		}
+	}
+
+	for i := len(acct.NonceChanges) - 1; i >= 0; i-- {
+		if acct.NonceChanges[i].TxIdx == uint16(idx) {
+			res.Nonce = &acct.NonceChanges[i].Nonce
+			break
+		}
+		if acct.NonceChanges[i].TxIdx < uint16(idx) {
+			break
+		}
+	}
+
+	for i := len(acct.StorageWrites) - 1; i >= 0; i-- {
+		if res.StorageWrites == nil {
+			res.StorageWrites = make(map[common.Hash]common.Hash)
+		}
+		slotWrites := acct.StorageWrites[i]
+
+		for j := len(slotWrites.Accesses) - 1; j >= 0; j-- {
+			if slotWrites.Accesses[j].TxIdx == uint16(idx) {
+				res.StorageWrites[slotWrites.Slot] = slotWrites.Accesses[j].ValueAfter
+				break
+			}
+			if slotWrites.Accesses[j].TxIdx < uint16(idx) {
+				break
+			}
+		}
+		if len(res.StorageWrites) == 0 {
+			res.StorageWrites = nil
+		}
+	}
+
+	if res.Code == nil && res.Nonce == nil && len(res.StorageWrites) == 0 && res.Balance == nil {
+		return nil
+	}
+	return &res
 }
 
 // ReadAccount returns the post-state of the account at the given bal index.
@@ -70,7 +144,7 @@ func (r *Reader) ReadAccount(addr common.Address, idx int) *AccountState {
 		}
 		slotWrites := acct.StorageWrites[i]
 
-		for j := len(slotWrites.Accesses) - 1; i >= 0; i-- {
+		for j := len(slotWrites.Accesses) - 1; j >= 0; j-- {
 			if slotWrites.Accesses[j].TxIdx <= uint16(idx) {
 				if _, exist := res.StorageWrites[slotWrites.Slot]; !exist {
 					res.StorageWrites[slotWrites.Slot] = slotWrites.Accesses[j].ValueAfter
@@ -78,33 +152,32 @@ func (r *Reader) ReadAccount(addr common.Address, idx int) *AccountState {
 				}
 			}
 		}
+		if len(res.StorageWrites) == 0 {
+			res.StorageWrites = nil
+		}
+	}
+
+	if res.Code == nil && res.Nonce == nil && len(res.StorageWrites) == 0 && res.Balance == nil {
+		return nil
 	}
 	return &res
 }
 
 // ValidateStateDiff asserts that both state diffs are equivalent.
 func (r *Reader) ValidateStateDiff(idx int, computedDiff *StateDiff) error {
-	var err error
-	var balDiffCount int
-	r.Iterate(idx, func(addr common.Address, state *AccountState) bool {
+	balChanges := r.ChangesAt(idx)
+	for addr, state := range balChanges.Mutations {
 		computedAccountDiff, ok := computedDiff.Mutations[addr]
 		if !ok {
-			err = fmt.Errorf("missing from BAL")
-			return false
+			return fmt.Errorf("BAL change not reported in computed")
 		}
 
 		if !state.Eq(computedAccountDiff) {
-			err = fmt.Errorf("unequal")
-			return false
+			return fmt.Errorf("unequal")
 		}
-		balDiffCount++
-		return true
-	})
-	if err != nil {
-		return err
 	}
 
-	if balDiffCount != len(computedDiff.Mutations) {
+	if len(balChanges.Mutations) != len(computedDiff.Mutations) {
 		return fmt.Errorf("computed diff contained additional mutations compared to BAL")
 	}
 

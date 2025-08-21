@@ -196,9 +196,10 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	// performs post-tx state transition (system contracts and withdrawals)
 	// and calculates the ProcessResult, returning it to be sent on resCh
 	// by resultHandler
-	prepareExecResult := func(postTxState *state.StateDB, expectedStateDiff *bal.StateDiff, receipts types.Receipts) *ProcessResult {
+	prepareExecResult := func(postTxState *state.StateDB, receipts types.Receipts) *ProcessResult {
 		tExec = time.Since(tExecStart)
 		tPostprocessStart := time.Now()
+		postTxState.SetAccessListIndex(len(block.Transactions()))
 		var tracingStateDB = vm.StateDB(postTxState)
 		if hooks := cfg.Tracer; hooks != nil {
 			tracingStateDB = state.NewHookedState(postTxState, hooks)
@@ -272,7 +273,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 			GasUsed:  cumulativeGasUsed,
 		}
 	}
-	resultHandler := func(expectedDiff *bal.StateDiff, postTxState *state.StateDB) {
+	resultHandler := func(postTxState *state.StateDB) {
 		defer cancel()
 		// 1. if the block has transactions, receive the execution results from all of them and return an error on resCh if any txs err'd
 		// 2. once all txs are executed, compute the post-tx state transition and produce the ProcessResult sending it on resCh (or an error if the post-tx state didn't match what is reported in the BAL)
@@ -312,7 +313,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 			}
 		}
 
-		execResults := prepareExecResult(postTxState, expectedDiff, receipts)
+		execResults := prepareExecResult(postTxState, receipts)
 		err := <-rootCalcErrCh
 		if err != nil {
 			resCh <- &ProcessResultWithMetrics{ProcessResult: &ProcessResult{Error: err}}
@@ -372,7 +373,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 		sender, _ := types.Sender(signer, tx)
 		db.SetTxSender(sender)
 		db.SetTxContext(tx.Hash(), idx)
-		db.SetAccessListIndex(idx + 1)
+		db.SetAccessListIndex(idx)
 
 		evm.StateDB = db
 		gp := new(GasPool)
@@ -384,7 +385,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 			return &txExecResult{err: err}
 		}
 
-		if err := statedb.BlockAccessList().ValidateStateDiff(idx, computedDiff); err != nil {
+		if err := statedb.BlockAccessList().ValidateStateDiff(idx+1, computedDiff); err != nil {
 			return &txExecResult{err: err}
 		}
 
@@ -401,6 +402,14 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	var (
 		context vm.BlockContext
 	)
+	alReader := bal.NewReader(block.Body().AccessList)
+	statedb.SetBlockAccessList(&alReader)
+	// instantiate a set of StateDBs to be used for executing each transaction in parallel
+	tPreprocessLoadStart := time.Now()
+	modifiedPrestate = statedb.LoadModifiedPrestate(alReader.Accounts())
+	tPreprocessLoad = time.Since(tPreprocessLoadStart)
+
+	statedb.SetPrestate(modifiedPrestate)
 
 	// Apply pre-execution system calls.
 	var tracingStateDB = vm.StateDB(statedb)
@@ -409,11 +418,6 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	}
 	context = NewEVMBlockContext(header, p.chain, nil)
 	evm := vm.NewEVM(context, tracingStateDB, p.config, cfg)
-
-	tPreprocessStateDiffsStart := time.Now()
-	// convert the BAL entries into an ordered list of state diffs per index
-	intermediateStateDiffs := bal.BuildStateDiffs(block.Body().AccessList, len(block.Transactions()))
-	tPreprocessStateDiffs = time.Since(tPreprocessStateDiffsStart)
 
 	// validate the correctness of pre-transaction execution state changes
 	computedPreTxDiff := &bal.StateDiff{make(map[common.Address]*bal.AccountState)}
@@ -428,16 +432,6 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 		return nil, err
 	}
 
-	alReader := bal.NewReader(block.Body().AccessList)
-
-	// instantiate a set of StateDBs to be used for executing each transaction in parallel
-	tPreprocessLoadStart := time.Now()
-	modifiedPrestate = statedb.LoadModifiedPrestate(alReader.Accounts())
-	tPreprocessLoad = time.Since(tPreprocessLoadStart)
-
-	statedb.SetBlockAccessList(&alReader)
-	statedb.SetPrestate(modifiedPrestate)
-
 	// compute the post-tx state prestate (before applying final block system calls and eip-4895 withdrawals)
 	// the post-tx state transition is verified by resultHandler
 	postTxState := statedb.Copy()
@@ -447,7 +441,7 @@ func (p *StateProcessor) ProcessWithAccessList(block *types.Block, statedb *stat
 	// execute transactions and state root calculation in parallel
 
 	tExecStart = time.Now()
-	go resultHandler(intermediateStateDiffs[len(block.Transactions())+1], postTxState)
+	go resultHandler(postTxState)
 	var workers errgroup.Group
 	workers.SetLimit(runtime.NumCPU() / 2)
 	startingState := statedb.Copy()

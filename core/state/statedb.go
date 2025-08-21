@@ -763,7 +763,8 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 		return nil
 	}
 
-	if s.blockAccessList != nil {
+	if s.blockAccessList != nil && s.balIndex > 0 {
+		// TODO: instead of having special case for balIndex == 0, maybe we modify ReadAccount to support that case?
 		if acctDiff := s.blockAccessList.ReadAccount(addr, s.balIndex); acctDiff != nil {
 			acctPrestate := s.prestateDiffAccounts[addr]
 			obj := s.initObjFromDiff(addr, acctPrestate, acctDiff)
@@ -861,8 +862,10 @@ func (s *StateDB) Copy() *StateDB {
 		logSize:              s.logSize,
 		preimages:            maps.Clone(s.preimages),
 
+		// don't deep-copy these
 		enableStateDiffRecording: s.enableStateDiffRecording,
 		blockAccessList:          s.blockAccessList,
+		prestateDiffAccounts:     s.prestateDiffAccounts,
 
 		// Do we need to copy the access list and transient storage?
 		// In practice: No. At the start of a transaction, these two lists are empty.
