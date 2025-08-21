@@ -28,15 +28,22 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests"
+	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/holiman/uint256"
 	"github.com/urfave/cli/v2"
 )
 
@@ -194,7 +201,9 @@ func Transition(ctx *cli.Context) error {
 		s.DumpToCollector(collector, nil)
 	} else {
 		vktleaves = make(map[common.Hash]hexutil.Bytes)
-		s.DumpVKTLeaves(vktleaves)
+		if err := s.DumpVKTLeaves(vktleaves); err != nil {
+			return err
+		}
 	}
 	return dispatchOutput(ctx, baseDir, result, collector, body, vktleaves)
 }
@@ -366,5 +375,173 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 		os.Stderr.Write(b)
 		os.Stderr.WriteString("\n")
 	}
+	return nil
+}
+
+// VerkleKey computes the tree key given an address and an optional
+// slot number.
+func VerkleKey(ctx *cli.Context) error {
+	if ctx.Args().Len() == 0 || ctx.Args().Len() > 2 {
+		return errors.New("invalid number of arguments: expecting an address and an optional slot number")
+	}
+
+	addr, err := hexutil.Decode(ctx.Args().Get(0))
+	if err != nil {
+		return fmt.Errorf("error decoding address: %w", err)
+	}
+
+	ap := utils.EvaluateAddressPoint(addr)
+	if ctx.Args().Len() == 2 {
+		slot, err := hexutil.Decode(ctx.Args().Get(1))
+		if err != nil {
+			return fmt.Errorf("error decoding slot: %w", err)
+		}
+		fmt.Printf("%#x\n", utils.GetTreeKeyStorageSlotWithEvaluatedAddress(ap, slot))
+	} else {
+		fmt.Printf("%#x\n", utils.GetTreeKeyBasicDataEvaluatedAddress(ap))
+	}
+	return nil
+}
+
+// VerkleKeys computes a set of tree keys given a genesis alloc.
+func VerkleKeys(ctx *cli.Context) error {
+	var allocStr = ctx.String(InputAllocFlag.Name)
+	var alloc core.GenesisAlloc
+	// Figure out the prestate alloc
+	if allocStr == stdinSelector {
+		decoder := json.NewDecoder(os.Stdin)
+		if err := decoder.Decode(&alloc); err != nil {
+			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling stdin: %v", err))
+		}
+	}
+	if allocStr != stdinSelector {
+		if err := readFile(allocStr, "alloc", &alloc); err != nil {
+			return err
+		}
+	}
+
+	vkt, err := genVktFromAlloc(alloc)
+	if err != nil {
+		return fmt.Errorf("error generating vkt: %w", err)
+	}
+
+	collector := make(map[common.Hash]hexutil.Bytes)
+	it, err := vkt.NodeIterator(nil)
+	if err != nil {
+		panic(err)
+	}
+	for it.Next(true) {
+		if it.Leaf() {
+			collector[common.BytesToHash(it.LeafKey())] = it.LeafBlob()
+		}
+	}
+
+	output, err := json.MarshalIndent(collector, "", "")
+	if err != nil {
+		return fmt.Errorf("error outputting tree: %w", err)
+	}
+
+	fmt.Println(string(output))
+
+	return nil
+}
+
+// VerkleRoot computes the root of a VKT from a genesis alloc.
+func VerkleRoot(ctx *cli.Context) error {
+	var allocStr = ctx.String(InputAllocFlag.Name)
+	var alloc core.GenesisAlloc
+	if allocStr == stdinSelector {
+		decoder := json.NewDecoder(os.Stdin)
+		if err := decoder.Decode(&alloc); err != nil {
+			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling stdin: %v", err))
+		}
+	}
+	if allocStr != stdinSelector {
+		if err := readFile(allocStr, "alloc", &alloc); err != nil {
+			return err
+		}
+	}
+
+	vkt, err := genVktFromAlloc(alloc)
+	if err != nil {
+		return fmt.Errorf("error generating vkt: %w", err)
+	}
+	fmt.Println(vkt.Hash().Hex())
+
+	return nil
+}
+
+func genVktFromAlloc(alloc core.GenesisAlloc) (*trie.VerkleTrie, error) {
+	vkt, err := trie.NewVerkleTrie(types.EmptyVerkleHash, triedb.NewDatabase(rawdb.NewMemoryDatabase(),
+		&triedb.Config{
+			IsVerkle: true,
+		}), utils.NewPointCache(1024))
+	if err != nil {
+		return nil, err
+	}
+
+	for addr, acc := range alloc {
+		for slot, value := range acc.Storage {
+			err := vkt.UpdateStorage(addr, slot.Bytes(), value.Big().Bytes())
+			if err != nil {
+				return nil, fmt.Errorf("error inserting storage: %w", err)
+			}
+		}
+
+		account := &types.StateAccount{
+			Balance:  uint256.MustFromBig(acc.Balance),
+			Nonce:    acc.Nonce,
+			CodeHash: crypto.Keccak256Hash(acc.Code).Bytes(),
+			Root:     common.Hash{},
+		}
+		err := vkt.UpdateAccount(addr, account, len(acc.Code))
+		if err != nil {
+			return nil, fmt.Errorf("error inserting account: %w", err)
+		}
+
+		err = vkt.UpdateContractCode(addr, common.BytesToHash(account.CodeHash), acc.Code)
+		if err != nil {
+			return nil, fmt.Errorf("error inserting code: %w", err)
+		}
+	}
+	return vkt, nil
+}
+
+// VerkleCodeChunkKey computes the tree key of a code-chunk for a given address.
+func VerkleCodeChunkKey(ctx *cli.Context) error {
+	if ctx.Args().Len() == 0 || ctx.Args().Len() > 2 {
+		return errors.New("invalid number of arguments: expecting an address and an code-chunk number")
+	}
+
+	addr, err := hexutil.Decode(ctx.Args().Get(0))
+	if err != nil {
+		return fmt.Errorf("error decoding address: %w", err)
+	}
+	chunkNumberBytes, err := hexutil.Decode(ctx.Args().Get(1))
+	if err != nil {
+		return fmt.Errorf("error decoding chunk number: %w", err)
+	}
+	var chunkNumber uint256.Int
+	chunkNumber.SetBytes(chunkNumberBytes)
+
+	fmt.Printf("%#x\n", utils.GetTreeKeyCodeChunk(addr, &chunkNumber))
+
+	return nil
+}
+
+// VerkleChunkifyCode returns the code chunkification for a given code.
+func VerkleChunkifyCode(ctx *cli.Context) error {
+	if ctx.Args().Len() == 0 || ctx.Args().Len() > 1 {
+		return errors.New("invalid number of arguments: expecting a bytecode")
+	}
+
+	bytecode, err := hexutil.Decode(ctx.Args().Get(0))
+	if err != nil {
+		return fmt.Errorf("error decoding address: %w", err)
+	}
+
+	chunkedCode := trie.ChunkifyCode(bytecode)
+	fmt.Printf("%#x\n", chunkedCode)
+
 	return nil
 }

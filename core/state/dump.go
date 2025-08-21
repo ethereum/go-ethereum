@@ -221,7 +221,15 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 	return nextKey
 }
 
-func (s *StateDB) DumpVKTLeaves(collector map[common.Hash]hexutil.Bytes) {
+func (s *StateDB) DumpVKTLeaves(collector map[common.Hash]hexutil.Bytes) error {
+	if s.trie == nil {
+		trie, err := s.db.OpenTrie(s.originalRoot)
+		if err != nil {
+			return err
+		}
+		s.trie = trie
+	}
+
 	it, err := s.trie.(*trie.VerkleTrie).NodeIterator(nil)
 	if err != nil {
 		panic(err)
@@ -231,6 +239,7 @@ func (s *StateDB) DumpVKTLeaves(collector map[common.Hash]hexutil.Bytes) {
 			collector[common.BytesToHash(it.LeafKey())] = it.LeafBlob()
 		}
 	}
+	return nil
 }
 
 // RawDump returns the state. If the processing is aborted e.g. due to options

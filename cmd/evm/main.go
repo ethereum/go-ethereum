@@ -159,6 +159,51 @@ var (
 			t8ntool.RewardFlag,
 		},
 	}
+
+	verkleCommand = &cli.Command{
+		Name:    "verkle",
+		Aliases: []string{"vkt"},
+		Usage:   "Verkle helpers",
+		Subcommands: []*cli.Command{
+			{
+				Name:    "tree-keys",
+				Aliases: []string{"v"},
+				Usage:   "compute a set of verkle tree keys, given their source addresses and optional slot numbers",
+				Action:  t8ntool.VerkleKeys,
+				Flags: []cli.Flag{
+					t8ntool.InputAllocFlag,
+				},
+			},
+			{
+				Name:    "single-key",
+				Aliases: []string{"vk"},
+				Usage:   "compute the verkle tree key given an address and optional slot number",
+				Action:  t8ntool.VerkleKey,
+			},
+			{
+				Name:    "code-chunk-key",
+				Aliases: []string{"vck"},
+				Usage:   "compute the verkle tree key given an address and chunk number",
+				Action:  t8ntool.VerkleCodeChunkKey,
+			},
+			{
+				Name:    "chunkify-code",
+				Aliases: []string{"vcc"},
+				Usage:   "chunkify a given bytecode",
+				Action:  t8ntool.VerkleChunkifyCode,
+			},
+			{
+				Name:    "state-root",
+				Aliases: []string{"vsr"},
+				Usage:   "compute the state-root of a verkle tree for the given alloc",
+				Action:  t8ntool.VerkleRoot,
+				Flags: []cli.Flag{
+					t8ntool.InputAllocFlag,
+				},
+			},
+		},
+	}
+
 	transactionCommand = &cli.Command{
 		Name:    "transaction",
 		Aliases: []string{"t9n"},
@@ -213,6 +258,7 @@ func init() {
 		stateTransitionCommand,
 		transactionCommand,
 		blockBuilderCommand,
+		verkleCommand,
 	}
 	app.Before = func(ctx *cli.Context) error {
 		flags.MigrateGlobalFlags(ctx)
