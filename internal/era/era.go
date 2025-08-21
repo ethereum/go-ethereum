@@ -63,6 +63,8 @@ type Era interface {
 	GetBlockByNumber(num uint64) (*types.Block, error)
 	GetRawBodyByNumber(num uint64) ([]byte, error)
 	GetRawReceiptsByNumber(num uint64) ([]byte, error)
+	InitialTD() (*big.Int, error)
+	Accumulator() (common.Hash, error)
 }
 
 // ReadDir reads all the era1 files in a directory for a given network.
