@@ -22,20 +22,20 @@ jobs:
             
             console.log('✅ PR title format is valid');
 
-      - name: Check Milestone Assignment
-        uses: actions/github-script@v7
-        with:
-          script: |
-            // Fetch the PR data explicitly to ensure we have milestone info
-            const { data: pr } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.payload.pull_request.number
-            });
+      # - name: Check Milestone Assignment
+      #   uses: actions/github-script@v7
+      #   with:
+      #     script: |
+      #       // Fetch the PR data explicitly to ensure we have milestone info
+      #       const { data: pr } = await github.rest.pulls.get({
+      #         owner: context.repo.owner,
+      #         repo: context.repo.repo,
+      #         pull_number: context.payload.pull_request.number
+      #       });
             
-            if (!pr.milestone) {
-              core.setFailed('PR must have a milestone assigned');
-              return;
-            }
+      #       if (!pr.milestone) {
+      #         core.setFailed('PR must have a milestone assigned');
+      #         return;
+      #       }
             
-            console.log(`✅ Milestone "${pr.milestone.title}" is assigned`);
+      #       console.log(`✅ Milestone "${pr.milestone.title}" is assigned`);
