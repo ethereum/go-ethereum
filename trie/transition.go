@@ -222,6 +222,6 @@ func (t *TransitionTrie) UpdateContractCode(addr common.Address, codeHash common
 }
 
 // Witness returns a set containing all trie nodes that have been accessed.
-func (t *TransitionTrie) Witness() map[string]struct{} {
+func (t *TransitionTrie) Witness() map[string][]byte {
 	panic("not implemented")
 }

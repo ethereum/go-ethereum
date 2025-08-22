@@ -130,7 +130,7 @@ type Trie interface {
 
 	// Witness returns a set containing all trie nodes that have been accessed.
 	// The returned map could be nil if the witness is empty.
-	Witness() map[string]struct{}
+	Witness() map[string][]byte
 
 	// NodeIterator returns an iterator that returns nodes of the trie. Iteration
 	// starts at the key after the given start key. And error will be returned

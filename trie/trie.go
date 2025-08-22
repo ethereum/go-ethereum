@@ -752,16 +752,8 @@ func (t *Trie) hashRoot() []byte {
 }
 
 // Witness returns a set containing all trie nodes that have been accessed.
-func (t *Trie) Witness() map[string]struct{} {
-	values := t.prevalueTracer.values()
-	if len(values) == 0 {
-		return nil
-	}
-	witness := make(map[string]struct{}, len(values))
-	for _, val := range values {
-		witness[string(val)] = struct{}{}
-	}
-	return witness
+func (t *Trie) Witness() map[string][]byte {
+	return t.prevalueTracer.values()
 }
 
 // Reset drops the referenced root node and cleans all internal state.
