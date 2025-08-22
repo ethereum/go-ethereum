@@ -307,6 +307,8 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, config sideca
 		return fmt.Errorf("number of blobs and commitments mismatch (have=%d, want=%d)", len(args.Commitments), n)
 	}
 	proofLen := n
+	// if V0: len(blobs) == len(proofs)
+	// if V1: len(blobs) == len(proofs) * 128
 	if config.blobSidecarVersion == types.BlobSidecarVersion1 {
 		proofLen = n * kzg4844.CellProofsPerBlob
 	}
