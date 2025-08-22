@@ -1,0 +1,50 @@
+name: PR Format Validation
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR Title Format
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prTitle = context.payload.pull_request.title;
+            const titleRegex = /^([\w\s,{}]?): .+/;
+            
+            if (!titleRegex.test(prTitle)) {
+              core.setFailed(`PR title "${prTitle}" does not match required format: type(scope): description`);
+              return;
+            }
+            
+            console.log('✅ PR title format is valid');
+
+      - name: Check Milestone Assignment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const milestone = context.payload.pull_request.milestone;
+            
+            if (!milestone) {
+              core.setFailed('PR must have a milestone assigned');
+              return;
+            }
+            
+            console.log(`✅ Milestone "${milestone.title}" is assigned`);
+
+      - name: Update PR Status
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.payload.pull_request.head.sha,
+              state: 'success',
+              description: 'PR validation passed',
+              context: 'pr-validation'
+            });
