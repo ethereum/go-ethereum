@@ -1501,10 +1501,7 @@ func (api *TransactionAPI) SendTransaction(ctx context.Context, args Transaction
 	}
 
 	// Set some sanity defaults and terminate on failure
-	config := setDefaultConfig{
-		skipGasEstimation: false,
-	}
-	if err := args.setDefaults(ctx, api.b, config); err != nil {
+	if err := args.setDefaults(ctx, api.b, sidecarConfig{}); err != nil {
 		return common.Hash{}, err
 	}
 	// Assemble the transaction and sign with the wallet
@@ -1522,8 +1519,7 @@ func (api *TransactionAPI) SendTransaction(ctx context.Context, args Transaction
 // processing (signing + broadcast).
 func (api *TransactionAPI) FillTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
 	// Set some sanity defaults and terminate on failure
-	config := setDefaultConfig{
-		skipGasEstimation:  false,
+	config := sidecarConfig{
 		blobSidecarAllowed: true,
 		blobSidecarVersion: types.BlobSidecarVersion0,
 	}
@@ -1600,10 +1596,6 @@ func (api *TransactionAPI) SignTransaction(ctx context.Context, args Transaction
 	if args.Nonce == nil {
 		return nil, errors.New("nonce not specified")
 	}
-	config := setDefaultConfig{
-		skipGasEstimation:  false,
-		blobSidecarAllowed: true,
-	}
 	sidecarVersion := types.BlobSidecarVersion0
 	if len(args.Blobs) > 0 {
 		chainHead := api.b.CurrentHeader()
@@ -1612,8 +1604,11 @@ func (api *TransactionAPI) SignTransaction(ctx context.Context, args Transaction
 			sidecarVersion = types.BlobSidecarVersion1
 		}
 	}
-	config.blobSidecarVersion = sidecarVersion
 
+	config := sidecarConfig{
+		blobSidecarAllowed: true,
+		blobSidecarVersion: sidecarVersion,
+	}
 	if err := args.setDefaults(ctx, api.b, config); err != nil {
 		return nil, err
 	}
@@ -1671,10 +1666,7 @@ func (api *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs,
 	if sendArgs.Nonce == nil {
 		return common.Hash{}, errors.New("missing transaction nonce in transaction spec")
 	}
-	config := setDefaultConfig{
-		skipGasEstimation: false,
-	}
-	if err := sendArgs.setDefaults(ctx, api.b, config); err != nil {
+	if err := sendArgs.setDefaults(ctx, api.b, sidecarConfig{}); err != nil {
 		return common.Hash{}, err
 	}
 	matchTx := sendArgs.ToTransaction(types.LegacyTxType)

@@ -91,21 +91,16 @@ func (args *TransactionArgs) data() []byte {
 	return nil
 }
 
-// setDefaultConfig defines the options for deriving missing fields of transactions.
-type setDefaultConfig struct {
+// sidecarConfig defines the options for deriving missing fields of transactions.
+type sidecarConfig struct {
 	// This configures whether blobs are allowed to be passed and
 	// the associated sidecar version should be attached.
 	blobSidecarAllowed bool
 	blobSidecarVersion byte
-
-	// skipGasEstimation is the flag whether the gas estimation is skipped.
-	// this flag should only be used in the scenarios that a precise gas limit
-	// is not critical, e.g., in non-transaction calls.
-	skipGasEstimation bool
 }
 
 // setDefaults fills in default values for unspecified tx fields.
-func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config setDefaultConfig) error {
+func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config sidecarConfig) error {
 	if err := args.setBlobTxSidecar(ctx, config); err != nil {
 		return err
 	}
@@ -146,36 +141,28 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config 
 	}
 
 	if args.Gas == nil {
-		if config.skipGasEstimation {
-			gas := hexutil.Uint64(b.RPCGasCap())
-			if gas == 0 {
-				gas = hexutil.Uint64(math.MaxUint64 / 2)
-			}
-			args.Gas = &gas
-		} else {
-			// These fields are immutable during the estimation, safe to
-			// pass the pointer directly.
-			data := args.data()
-			callArgs := TransactionArgs{
-				From:                 args.From,
-				To:                   args.To,
-				GasPrice:             args.GasPrice,
-				MaxFeePerGas:         args.MaxFeePerGas,
-				MaxPriorityFeePerGas: args.MaxPriorityFeePerGas,
-				Value:                args.Value,
-				Data:                 (*hexutil.Bytes)(&data),
-				AccessList:           args.AccessList,
-				BlobFeeCap:           args.BlobFeeCap,
-				BlobHashes:           args.BlobHashes,
-			}
-			latestBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
-			estimated, err := DoEstimateGas(ctx, b, callArgs, latestBlockNr, nil, nil, b.RPCGasCap())
-			if err != nil {
-				return err
-			}
-			args.Gas = &estimated
-			log.Trace("Estimate gas usage automatically", "gas", args.Gas)
+		// These fields are immutable during the estimation, safe to
+		// pass the pointer directly.
+		data := args.data()
+		callArgs := TransactionArgs{
+			From:                 args.From,
+			To:                   args.To,
+			GasPrice:             args.GasPrice,
+			MaxFeePerGas:         args.MaxFeePerGas,
+			MaxPriorityFeePerGas: args.MaxPriorityFeePerGas,
+			Value:                args.Value,
+			Data:                 (*hexutil.Bytes)(&data),
+			AccessList:           args.AccessList,
+			BlobFeeCap:           args.BlobFeeCap,
+			BlobHashes:           args.BlobHashes,
 		}
+		latestBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+		estimated, err := DoEstimateGas(ctx, b, callArgs, latestBlockNr, nil, nil, b.RPCGasCap())
+		if err != nil {
+			return err
+		}
+		args.Gas = &estimated
+		log.Trace("Estimate gas usage automatically", "gas", args.Gas)
 	}
 
 	// If chain id is provided, ensure it matches the local chain id. Otherwise, set the local
@@ -292,7 +279,7 @@ func (args *TransactionArgs) setLondonFeeDefaults(ctx context.Context, head *typ
 }
 
 // setBlobTxSidecar adds the blob tx
-func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, config setDefaultConfig) error {
+func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, config sidecarConfig) error {
 	// No blobs, we're done.
 	if args.Blobs == nil {
 		return nil
@@ -311,7 +298,7 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, config setDef
 		return errors.New(`blob commitments provided while proofs were not`)
 	}
 
-	// len(blobs) == len(commitments) == len(proofs) == len(hashes)
+	// len(blobs) == len(commitments) == len(hashes)
 	n := len(args.Blobs)
 	if args.BlobHashes != nil && len(args.BlobHashes) != n {
 		return fmt.Errorf("number of blobs and hashes mismatch (have=%d, want=%d)", len(args.BlobHashes), n)
