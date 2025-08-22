@@ -18,7 +18,6 @@ package trie
 
 import (
 	"maps"
-	"slices"
 	"sync"
 )
 
@@ -147,18 +146,10 @@ func (t *prevalueTracer) hasList(list [][]byte) []bool {
 }
 
 // values returns a list of values of the cached trie nodes.
-func (t *prevalueTracer) values() [][]byte {
+func (t *prevalueTracer) values() map[string][]byte {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
-	return slices.Collect(maps.Values(t.data))
-}
-
-func (t *prevalueTracer) keys() []string {
-	return slices.Collect(maps.Keys(t.data))
-}
-
-func (t *prevalueTracer) getMap() map[string][]byte {
 	return maps.Clone(t.data)
 }
 
