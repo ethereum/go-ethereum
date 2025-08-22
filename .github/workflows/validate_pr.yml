@@ -39,17 +39,3 @@ jobs:
             }
             
             console.log(`✅ Milestone "${pr.milestone.title}" is assigned`);
-
-      - name: Update PR Status
-        if: success()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.repos.createCommitStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              sha: context.payload.pull_request.head.sha,
-              state: 'success',
-              description: 'PR validation passed',
-              context: 'pr-validation'
-            });
