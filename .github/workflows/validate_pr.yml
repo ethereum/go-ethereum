@@ -33,7 +33,7 @@ jobs:
               pull_number: context.payload.pull_request.number
             });
             
-            if (!milestone) {
+            if (!pr.milestone) {
               core.setFailed('PR must have a milestone assigned');
               return;
             }
