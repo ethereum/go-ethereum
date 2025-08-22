@@ -207,11 +207,11 @@ type HistoricalStateReader struct {
 // HistoricReader constructs a reader for accessing the requested historic state.
 func (db *Database) HistoricReader(root common.Hash) (*HistoricalStateReader, error) {
 	// Bail out if the state history hasn't been fully indexed
-	if db.indexer == nil || !db.indexer.inited() {
-		return nil, errors.New("state histories haven't been fully indexed yet")
+	if db.indexer == nil || db.freezer == nil {
+		return nil, fmt.Errorf("historical state %x is not available", root)
 	}
-	if db.freezer == nil {
-		return nil, errors.New("state histories are not available")
+	if !db.indexer.inited() {
+		return nil, errors.New("state histories haven't been fully indexed yet")
 	}
 	// States at the current disk layer or above are directly accessible via
 	// db.StateReader.
