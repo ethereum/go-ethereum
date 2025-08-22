@@ -5490,7 +5490,7 @@ var properties = function () {
         new Property({
             name: 'protocolVersion',
             getter: 'eth_protocolVersion'
-        }),
+        })
     ];
 };
 
