@@ -380,54 +380,85 @@ func TestUDPv5_findnodeCall(t *testing.T) {
 	}
 }
 
+// BadIdentityScheme mocks an identity scheme not supported by the test node.
+type BadIdentityScheme struct{}
+
+func (s BadIdentityScheme) Verify(r *enr.Record, sig []byte) error { return nil }
+func (s BadIdentityScheme) NodeAddr(r *enr.Record) []byte {
+	var id enode.ID
+	r.Load(enr.WithEntry("badaddr", &id))
+	return id[:]
+}
+
 // This test covers invalid NODES responses for the FINDNODE call in a single table-driven test.
-// Note: the test harness uses enode.ValidSchemesForTesting (which includes the "null" scheme),
-// so records created via enode.SignNull are valid with respect to signature; failures below
-// are due to IP/port validation in verifyResponseNode and netutil.CheckRelayAddr.
 func TestUDPv5_findnodeCall_InvalidNodes(t *testing.T) {
 	t.Parallel()
 	test := newUDPV5Test(t)
 	defer test.close()
 
-	distances := []uint{230}
-	cases := []struct {
-		name    string
-		makeRec func(remote *enode.Node) *enr.Record
+	for i, tt := range []struct {
+		name string
+		ip   enr.Entry
+		port enr.Entry
+		sign func(r *enr.Record, id enode.ID) *enode.Node
 	}{
 		{
 			name: "invalid ip (unspecified 0.0.0.0)",
-			makeRec: func(remote *enode.Node) *enr.Record {
-				one := nodesAtDistance(remote.ID(), int(distances[0]), 1)[0]
-				r := new(enr.Record)
-				r.Set(enr.IP(net.IPv4zero))
-				r.Set(enr.UDP(30303))
-				return enode.SignNull(r, one.ID()).Record()
-			},
+			ip:   enr.IP(net.IPv4zero),
 		},
 		{
 			name: "invalid udp port (<=1024)",
-			makeRec: func(remote *enode.Node) *enr.Record {
-				one := nodesAtDistance(remote.ID(), int(distances[0]), 1)[0]
-				r := new(enr.Record)
-				r.Set(enr.IP(one.IP()))
-				r.Set(enr.UDP(1024))
-				return enode.SignNull(r, one.ID()).Record()
+			port: enr.UDP(1024),
+		},
+		{
+			name: "invalid record, no signature",
+			sign: func(r *enr.Record, id enode.ID) *enode.Node {
+				r.Set(enr.ID("bad"))
+				r.Set(enr.WithEntry("badaddr", id))
+				r.SetSig(BadIdentityScheme{}, []byte{})
+				n, err := enode.New(BadIdentityScheme{}, r)
+				if err != nil {
+					panic(err)
+				}
+				return n
 			},
 		},
-	}
-
-	for _, tt := range cases {
+	} {
 		t.Run(tt.name, func(t *testing.T) {
-			remote := test.getNode(test.remotekey, test.remoteaddr).Node()
-			done := make(chan error, 1)
-			var got []*enode.Node
+			// Build ENR node for test.
+			var (
+				distance = 230
+				remote   = test.getNode(test.remotekey, test.remoteaddr).Node()
+				id       = idAtDistance(remote.ID(), distance)
+				r        enr.Record
+			)
+			r.Set(enr.IP(intIP(i)))
+			if tt.ip != nil {
+				r.Set(tt.ip)
+			}
+			r.Set(enr.UDP(30303))
+			if tt.port != nil {
+				r.Set(tt.port)
+			}
+			r = *enode.SignNull(&r, id).Record()
+			if tt.sign != nil {
+				r = *tt.sign(&r, id).Record()
+			}
+
+			// Launch findnode request.
+			var (
+				done = make(chan error, 1)
+				got  []*enode.Node
+			)
 			go func() {
 				var err error
-				got, err = test.udp.Findnode(remote, distances)
+				got, err = test.udp.Findnode(remote, []uint{uint(distance)})
 				done <- err
 			}()
-			test.waitPacketOut(func(p *v5wire.Findnode, addr netip.AddrPort, _ v5wire.Nonce) {
-				test.packetIn(&v5wire.Nodes{ReqID: p.ReqID, RespCount: 1, Nodes: []*enr.Record{tt.makeRec(remote)}})
+
+			// Handle request.
+			test.waitPacketOut(func(p *v5wire.Findnode, _ netip.AddrPort, _ v5wire.Nonce) {
+				test.packetIn(&v5wire.Nodes{ReqID: p.ReqID, RespCount: 1, Nodes: []*enr.Record{&r}})
 			})
 			if err := <-done; err != nil {
 				t.Fatalf("unexpected error: %v", err)
