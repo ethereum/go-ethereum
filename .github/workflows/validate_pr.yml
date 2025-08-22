@@ -38,7 +38,7 @@ jobs:
               return;
             }
             
-            console.log(`✅ Milestone "${milestone.title}" is assigned`);
+            console.log(`✅ Milestone "${pr.milestone.title}" is assigned`);
 
       - name: Update PR Status
         if: success()
