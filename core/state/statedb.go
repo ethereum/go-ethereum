@@ -890,7 +890,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 					s.witnessStats.Add(witness, obj.addrHash)
 				}
 			} else if obj.trie != nil {
-				witness := trie.Witness()
+				witness := obj.trie.Witness()
 				s.witness.AddState(witness)
 				if s.witnessStats != nil {
 					s.witnessStats.Add(witness, obj.addrHash)
