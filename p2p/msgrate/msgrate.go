@@ -67,7 +67,7 @@ const rttMinConfidence = 0.1
 
 // ttlScaling is the multiplier that converts the estimated roundtrip time to a
 // timeout cap for network requests. The expectation is that peers' response time
-// will fluctuate around the estimated roundtrip, but depending in their load at
+// will fluctuate around the estimated roundtrip, but depending on their load at
 // request time, it might be higher than anticipated. This scaling factor ensures
 // that we allow remote connections some slack but at the same time do enforce a
 // behavior similar to our median peers.
@@ -81,8 +81,8 @@ const ttlLimit = time.Minute
 
 // tuningConfidenceCap is the number of active peers above which to stop detuning
 // the confidence number. The idea here is that once we hone in on the capacity
-// of a meaningful number of peers, adding one more should ot have a significant
-// impact on things, so just ron with the originals.
+// of a meaningful number of peers, adding one more should not have a significant
+// impact on things, so just run with the originals.
 const tuningConfidenceCap = 10
 
 // tuningImpact is the influence that a new tuning target has on the previously
@@ -344,7 +344,7 @@ func (t *Trackers) meanCapacities() map[uint64]float64 {
 }
 
 // TargetRoundTrip returns the current target round trip time for a request to
-// complete in.The returned RTT is slightly under the estimated RTT. The reason
+// complete in. The returned RTT is slightly under the estimated RTT. The reason
 // is that message rate estimation is a 2 dimensional problem which is solvable
 // for any RTT. The goal is to gravitate towards smaller RTTs instead of large
 // messages, to result in a stabler download stream.

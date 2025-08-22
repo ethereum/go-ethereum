@@ -58,7 +58,7 @@ type jsonrpcSubscriptionNotification struct {
 	Params  subscriptionResultEnc `json:"params"`
 }
 
-// A value of this type can a JSON-RPC request, notification, successful response or
+// A value of this type can be a JSON-RPC request, notification, successful response or
 // error response. Which one it is depends on the fields.
 type jsonrpcMessage struct {
 	Version string          `json:"jsonrpc,omitempty"`
