@@ -378,9 +378,65 @@ func TestUDPv5_findnodeCall(t *testing.T) {
 	if !reflect.DeepEqual(response, nodes) {
 		t.Fatalf("wrong nodes in response")
 	}
+}
 
-	// TODO: check invalid IPs
-	// TODO: check invalid/unsigned record
+// This test covers invalid NODES responses for the FINDNODE call in a single table-driven test.
+// Note: the test harness uses enode.ValidSchemesForTesting (which includes the "null" scheme),
+// so records created via enode.SignNull are valid with respect to signature; failures below
+// are due to IP/port validation in verifyResponseNode and netutil.CheckRelayAddr.
+func TestUDPv5_findnodeCall_InvalidNodes(t *testing.T) {
+	t.Parallel()
+	test := newUDPV5Test(t)
+	defer test.close()
+
+	distances := []uint{230}
+	cases := []struct {
+		name    string
+		makeRec func(remote *enode.Node) *enr.Record
+	}{
+		{
+			name: "invalid ip (unspecified 0.0.0.0)",
+			makeRec: func(remote *enode.Node) *enr.Record {
+				one := nodesAtDistance(remote.ID(), int(distances[0]), 1)[0]
+				r := new(enr.Record)
+				r.Set(enr.IP(net.IPv4zero))
+				r.Set(enr.UDP(30303))
+				return enode.SignNull(r, one.ID()).Record()
+			},
+		},
+		{
+			name: "invalid udp port (<=1024)",
+			makeRec: func(remote *enode.Node) *enr.Record {
+				one := nodesAtDistance(remote.ID(), int(distances[0]), 1)[0]
+				r := new(enr.Record)
+				r.Set(enr.IP(one.IP()))
+				r.Set(enr.UDP(1024))
+				return enode.SignNull(r, one.ID()).Record()
+			},
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			remote := test.getNode(test.remotekey, test.remoteaddr).Node()
+			done := make(chan error, 1)
+			var got []*enode.Node
+			go func() {
+				var err error
+				got, err = test.udp.Findnode(remote, distances)
+				done <- err
+			}()
+			test.waitPacketOut(func(p *v5wire.Findnode, addr netip.AddrPort, _ v5wire.Nonce) {
+				test.packetIn(&v5wire.Nodes{ReqID: p.ReqID, RespCount: 1, Nodes: []*enr.Record{tt.makeRec(remote)}})
+			})
+			if err := <-done; err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(got) != 0 {
+				t.Fatalf("expected 0 nodes, got %d", len(got))
+			}
+		})
+	}
 }
 
 // This test checks that pending calls are re-sent when a handshake happens.
