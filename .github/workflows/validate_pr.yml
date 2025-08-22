@@ -16,7 +16,7 @@ jobs:
             const titleRegex = /^(\.?[\w\s,{}/]+): .+/;
             
             if (!titleRegex.test(prTitle)) {
-              core.setFailed(`PR title "${prTitle}" does not match required format: type(scope): description`);
+              core.setFailed(`PR title "${prTitle}" does not match required format: directory, ...: description`);
               return;
             }
             
