@@ -416,10 +416,7 @@ func TestUDPv5_findnodeCall_InvalidNodes(t *testing.T) {
 				r.Set(enr.ID("bad"))
 				r.Set(enr.WithEntry("badaddr", id))
 				r.SetSig(BadIdentityScheme{}, []byte{})
-				n, err := enode.New(BadIdentityScheme{}, r)
-				if err != nil {
-					panic(err)
-				}
+				n, _ := enode.New(BadIdentityScheme{}, r)
 				return n
 			},
 		},
