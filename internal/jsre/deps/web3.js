@@ -5491,10 +5491,6 @@ var properties = function () {
             name: 'protocolVersion',
             getter: 'eth_protocolVersion'
         }),
-        new Property({
-          name: 'config',
-          getter: 'eth_config'
-        })
     ];
 };
 
