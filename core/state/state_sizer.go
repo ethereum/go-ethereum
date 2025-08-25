@@ -352,14 +352,7 @@ wait:
 
 	// Add snapshot root to updates map when snapshot completes
 	if root := rawdb.ReadSnapshotRoot(t.db); root != (common.Hash{}) {
-		var number uint64
-		if recoveryNumber := rawdb.ReadSnapshotRecoveryNumber(t.db); recoveryNumber != nil {
-			number = *recoveryNumber
-		}
-		updates[root] = &stateUpdate{
-			root:        root,
-			blockNumber: number,
-		}
+		updates[root] = &stateUpdate{root: root}
 	}
 
 	for {
