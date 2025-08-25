@@ -385,11 +385,11 @@ func (db *Database) SnapshotCompleted() bool {
 	return pdb.SnapshotCompleted()
 }
 
-// EnableForceFlush enables the pathdb to flush any pending changes to disk immediately,
-// regardless of the buffer size threshold. This can be used to accelerate
+// SetForceFlush enables or disables the pathdb to flush any pending changes to disk
+// immediately, regardless of the buffer size threshold. This can be used to accelerate
 // state sizer initialization by making buffered state changes visible on disk.
-func (db *Database) EnableForceFlush() {
+func (db *Database) SetForceFlush(enabled bool) {
 	if pdb, ok := db.backend.(*pathdb.Database); ok {
-		pdb.EnableForceFlush()
+		pdb.SetForceFlush(enabled)
 	}
 }

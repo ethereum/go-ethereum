@@ -360,6 +360,8 @@ wait:
 		done     chan buildResult
 	)
 
+	t.triedb.SetForceFlush(true)
+
 	for {
 		select {
 		case u := <-t.updateCh:
@@ -384,6 +386,8 @@ wait:
 			log.Info("Measuring persistent state size", "root", root.Hex())
 
 		case result := <-done:
+			t.triedb.SetForceFlush(false)
+
 			if result.err != nil {
 				return nil, result.err
 			}

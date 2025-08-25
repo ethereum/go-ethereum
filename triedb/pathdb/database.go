@@ -361,17 +361,13 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	return db.tree.cap(root, 0)
 }
 
-// EnableForceFlush enables force flushing for the next state update.
-// This will cause the next Update() call to flush the disk buffer immediately,
-// regardless of the buffer threshold, while preserving the 128 diff layers in memory.
-func (db *Database) EnableForceFlush() {
+// SetForceFlush enables or disables force flushing for the next state update.
+func (db *Database) SetForceFlush(enabled bool) {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	if !db.forceFlush {
-		log.Info("Enabling force flush for next pathdb update")
-		db.forceFlush = true
-	}
+	db.forceFlush = enabled
+	log.Info("Set triedb force flush for next pathdb update", "enabled", enabled)
 }
 
 // Disable deactivates the database and invalidates all available state layers
