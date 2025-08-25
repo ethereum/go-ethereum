@@ -103,18 +103,18 @@ func TestStemNodeInsertDifferentStem(t *testing.T) {
 	}
 
 	// Original stem should be on the left (bit 0)
-	leftStem, ok := internalNode.Left.(*StemNode)
+	leftStem, ok := internalNode.left.(*StemNode)
 	if !ok {
-		t.Fatalf("Expected left child to be StemNode, got %T", internalNode.Left)
+		t.Fatalf("Expected left child to be StemNode, got %T", internalNode.left)
 	}
 	if !bytes.Equal(leftStem.Stem, stem1) {
 		t.Errorf("Left stem mismatch")
 	}
 
 	// New stem should be on the right (bit 1)
-	rightStem, ok := internalNode.Right.(*StemNode)
+	rightStem, ok := internalNode.right.(*StemNode)
 	if !ok {
-		t.Fatalf("Expected right child to be StemNode, got %T", internalNode.Right)
+		t.Fatalf("Expected right child to be StemNode, got %T", internalNode.right)
 	}
 	if !bytes.Equal(rightStem.Stem, key[:31]) {
 		t.Errorf("Right stem mismatch")

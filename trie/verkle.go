@@ -42,7 +42,7 @@ type VerkleTrie struct {
 	root   verkle.VerkleNode
 	cache  *utils.PointCache
 	reader *TrieReader
-	tracer *prevalueTracer
+	tracer *PrevalueTracer
 }
 
 // NewVerkleTrie constructs a verkle tree based on the specified root hash.
@@ -293,7 +293,7 @@ func (t *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 	nodeset := trienode.NewNodeSet(common.Hash{})
 	for _, node := range nodes {
 		// Hash parameter is not used in pathdb
-		nodeset.AddNode(node.Path, trienode.NewNodeWithPrev(common.Hash{}, node.SerializedBytes, t.tracer.get(node.Path)))
+		nodeset.AddNode(node.Path, trienode.NewNodeWithPrev(common.Hash{}, node.SerializedBytes, t.tracer.Get(node.Path)))
 	}
 	// Serialize root commitment form
 	return t.Hash(), nodeset

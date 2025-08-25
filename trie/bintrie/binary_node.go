@@ -35,6 +35,11 @@ const (
 	StemSize  = 31  // Number of bytes to travel before reaching a group of leaves
 )
 
+const (
+	nodeTypeStem = iota + 1 // Stem node, contains a stem and a bitmap of values
+	nodeTypeInternal
+)
+
 // BinaryNode is an interface for a binary trie node.
 type BinaryNode interface {
 	Get([]byte, NodeResolverFn) ([]byte, error)
@@ -55,13 +60,13 @@ func SerializeNode(node BinaryNode) []byte {
 	switch n := (node).(type) {
 	case *InternalNode:
 		var serialized [65]byte
-		serialized[0] = 1
-		copy(serialized[1:33], n.Left.Hash().Bytes())
-		copy(serialized[33:65], n.Right.Hash().Bytes())
+		serialized[0] = nodeTypeInternal
+		copy(serialized[1:33], n.left.Hash().Bytes())
+		copy(serialized[33:65], n.right.Hash().Bytes())
 		return serialized[:]
 	case *StemNode:
 		var serialized [32 + 256*32]byte
-		serialized[0] = 2
+		serialized[0] = nodeTypeStem
 		copy(serialized[1:32], node.(*StemNode).Stem)
 		bitmap := serialized[32:64]
 		offset := 64
@@ -78,6 +83,8 @@ func SerializeNode(node BinaryNode) []byte {
 	}
 }
 
+var invalidSerializedLength = errors.New("invalid serialized node length")
+
 // DeserializeNode deserializes a binary trie node from a byte slice.
 func DeserializeNode(serialized []byte, depth int) (BinaryNode, error) {
 	if len(serialized) == 0 {
@@ -85,22 +92,28 @@ func DeserializeNode(serialized []byte, depth int) (BinaryNode, error) {
 	}
 
 	switch serialized[0] {
-	case 1:
+	case nodeTypeInternal:
 		if len(serialized) != 65 {
-			return nil, errors.New("invalid serialized node length")
+			return nil, invalidSerializedLength
 		}
 		return &InternalNode{
 			depth: depth,
-			Left:  HashedNode(common.BytesToHash(serialized[1:33])),
-			Right: HashedNode(common.BytesToHash(serialized[33:65])),
+			left:  HashedNode(common.BytesToHash(serialized[1:33])),
+			right: HashedNode(common.BytesToHash(serialized[33:65])),
 		}, nil
-	case 2:
+	case nodeTypeStem:
+		if len(serialized) < 64 {
+			return nil, invalidSerializedLength
+		}
 		var values [256][]byte
 		bitmap := serialized[32:64]
 		offset := 64
 
 		for i := range 256 {
 			if bitmap[i/8]>>(7-(i%8))&1 == 1 {
+				if len(serialized) < offset+32 {
+					return nil, invalidSerializedLength
+				}
 				values[i] = serialized[offset : offset+32]
 				offset += 32
 			}

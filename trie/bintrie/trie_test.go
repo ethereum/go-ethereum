@@ -42,7 +42,7 @@ func TestSingleEntry(t *testing.T) {
 	if tree.GetHeight() != 1 {
 		t.Fatal("invalid depth")
 	}
-	expected := common.HexToHash("694545468677064fd833cddc8455762fe6b21c6cabe2fc172529e0f573181cd5")
+	expected := common.HexToHash("aab1060e04cb4f5dc6f697ae93156a95714debbf77d54238766adc5709282b6f")
 	got := tree.Hash()
 	if got != expected {
 		t.Fatalf("invalid tree root, got %x, want %x", got, expected)
@@ -63,7 +63,7 @@ func TestTwoEntriesDiffFirstBit(t *testing.T) {
 	if tree.GetHeight() != 2 {
 		t.Fatal("invalid height")
 	}
-	if tree.Hash() != common.HexToHash("85fc622076752a6fcda2c886c18058d639066a83473d9684704b5a29455ed2ed") {
+	if tree.Hash() != common.HexToHash("dfc69c94013a8b3c65395625a719a87534a7cfd38719251ad8c8ea7fe79f065e") {
 		t.Fatal("invalid tree root")
 	}
 }
@@ -190,7 +190,7 @@ func TestMerkleizeMultipleEntries(t *testing.T) {
 		}
 	}
 	got := tree.Hash()
-	expected := common.HexToHash("8c74de28e6bb6b2296cae37cff16266e2dbf533bc204fa4cb0c237761ae8a2c8")
+	expected := common.HexToHash("9317155862f7a3867660ddd0966ff799a3d16aa4df1e70a7516eaa4a675191b5")
 	if got != expected {
 		t.Fatalf("invalid root, expected=%x, got = %x", expected, got)
 	}

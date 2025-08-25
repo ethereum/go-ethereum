@@ -18,7 +18,6 @@ package bintrie
 
 import (
 	"bytes"
-	"errors"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -32,16 +31,16 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 
 	node := &InternalNode{
 		depth: 5,
-		Left:  HashedNode(leftHash),
-		Right: HashedNode(rightHash),
+		left:  HashedNode(leftHash),
+		right: HashedNode(rightHash),
 	}
 
 	// Serialize the node
 	serialized := SerializeNode(node)
 
 	// Check the serialized format
-	if serialized[0] != 1 {
-		t.Errorf("Expected type byte to be 1, got %d", serialized[0])
+	if serialized[0] != nodeTypeInternal {
+		t.Errorf("Expected type byte to be %d, got %d", nodeTypeInternal, serialized[0])
 	}
 
 	if len(serialized) != 65 {
@@ -66,12 +65,12 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 	}
 
 	// Check the left and right hashes
-	if internalNode.Left.Hash() != leftHash {
-		t.Errorf("Left hash mismatch: expected %x, got %x", leftHash, internalNode.Left.Hash())
+	if internalNode.left.Hash() != leftHash {
+		t.Errorf("Left hash mismatch: expected %x, got %x", leftHash, internalNode.left.Hash())
 	}
 
-	if internalNode.Right.Hash() != rightHash {
-		t.Errorf("Right hash mismatch: expected %x, got %x", rightHash, internalNode.Right.Hash())
+	if internalNode.right.Hash() != rightHash {
+		t.Errorf("Right hash mismatch: expected %x, got %x", rightHash, internalNode.right.Hash())
 	}
 }
 
@@ -99,8 +98,8 @@ func TestSerializeDeserializeStemNode(t *testing.T) {
 	serialized := SerializeNode(node)
 
 	// Check the serialized format
-	if serialized[0] != 2 {
-		t.Errorf("Expected type byte to be 2, got %d", serialized[0])
+	if serialized[0] != nodeTypeStem {
+		t.Errorf("Expected type byte to be %d, got %d", nodeTypeStem, serialized[0])
 	}
 
 	// Check the stem is correctly serialized
@@ -137,8 +136,13 @@ func TestSerializeDeserializeStemNode(t *testing.T) {
 	}
 
 	// Check that other values are nil
-	if stemNode.Values[1] != nil {
-		t.Errorf("Expected nil value at index 1, got %x", stemNode.Values[1])
+	for i := range NodeWidth {
+		if i == 0 || i == 10 || i == 255 {
+			continue
+		}
+		if stemNode.Values[i] != nil {
+			t.Errorf("Expected nil value at index %d, got %x", i, stemNode.Values[i])
+		}
 	}
 }
 
@@ -170,7 +174,7 @@ func TestDeserializeInvalidType(t *testing.T) {
 // TestDeserializeInvalidLength tests deserialization with invalid data length
 func TestDeserializeInvalidLength(t *testing.T) {
 	// InternalNode with type byte 1 but wrong length
-	invalidData := []byte{1, 0, 0} // Too short for internal node
+	invalidData := []byte{nodeTypeInternal, 0, 0} // Too short for internal node
 
 	_, err := DeserializeNode(invalidData, 0)
 	if err == nil {
@@ -245,25 +249,4 @@ func TestKeyToPath(t *testing.T) {
 			}
 		})
 	}
-}
-
-// Mock resolver function for testing
-func mockResolver(path []byte, hash common.Hash) ([]byte, error) {
-	// Return a simple stem node for testing
-	if hash == common.HexToHash("0x1234") {
-		stem := make([]byte, 31)
-		var values [256][]byte
-		values[0] = common.HexToHash("0xabcd").Bytes()
-		node := &StemNode{
-			Stem:   stem,
-			Values: values[:],
-		}
-		return SerializeNode(node), nil
-	}
-	return nil, errors.New("node not found")
-}
-
-// Mock flush function for testing
-func mockFlushFn(path []byte, node BinaryNode) {
-	// Just a stub for testing
 }

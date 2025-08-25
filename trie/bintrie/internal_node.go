@@ -21,7 +21,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/zeebo/blake3"
+	"crypto/sha256"
 )
 
 func keyToPath(depth int, key []byte) ([]byte, error) {
@@ -41,7 +41,7 @@ func keyToPath(depth int, key []byte) ([]byte, error) {
 
 // InternalNode is a binary trie internal node.
 type InternalNode struct {
-	Left, Right BinaryNode
+	left, right BinaryNode
 	depth       int
 }
 
@@ -54,9 +54,9 @@ func (bt *InternalNode) GetValuesAtStem(stem []byte, resolver NodeResolverFn) ([
 	bit := stem[bt.depth/8] >> (7 - (bt.depth % 8)) & 1
 	var child *BinaryNode
 	if bit == 0 {
-		child = &bt.Left
+		child = &bt.left
 	} else {
-		child = &bt.Right
+		child = &bt.right
 	}
 
 	if hn, ok := (*child).(HashedNode); ok {
@@ -96,22 +96,22 @@ func (bt *InternalNode) Insert(key []byte, value []byte, resolver NodeResolverFn
 // Copy creates a deep copy of the node.
 func (bt *InternalNode) Copy() BinaryNode {
 	return &InternalNode{
-		Left:  bt.Left.Copy(),
-		Right: bt.Right.Copy(),
+		left:  bt.left.Copy(),
+		right: bt.right.Copy(),
 		depth: bt.depth,
 	}
 }
 
 // Hash returns the hash of the node.
 func (bt *InternalNode) Hash() common.Hash {
-	h := blake3.New()
-	if bt.Left != nil {
-		h.Write(bt.Left.Hash().Bytes())
+	h := sha256.New()
+	if bt.left != nil {
+		h.Write(bt.left.Hash().Bytes())
 	} else {
 		h.Write(zero[:])
 	}
-	if bt.Right != nil {
-		h.Write(bt.Right.Hash().Bytes())
+	if bt.right != nil {
+		h.Write(bt.right.Hash().Bytes())
 	} else {
 		h.Write(zero[:])
 	}
@@ -127,9 +127,9 @@ func (bt *InternalNode) InsertValuesAtStem(stem []byte, values [][]byte, resolve
 		err   error
 	)
 	if bit == 0 {
-		child = &bt.Left
+		child = &bt.left
 	} else {
-		child = &bt.Right
+		child = &bt.right
 	}
 
 	*child, err = (*child).InsertValuesAtStem(stem, values, resolver, depth+1)
@@ -139,21 +139,21 @@ func (bt *InternalNode) InsertValuesAtStem(stem []byte, values [][]byte, resolve
 // CollectNodes collects all child nodes at a given path, and flushes it
 // into the provided node collector.
 func (bt *InternalNode) CollectNodes(path []byte, flushfn NodeFlushFn) error {
-	if bt.Left != nil {
+	if bt.left != nil {
 		var p [256]byte
 		copy(p[:], path)
 		childpath := p[:len(path)]
 		childpath = append(childpath, 0)
-		if err := bt.Left.CollectNodes(childpath, flushfn); err != nil {
+		if err := bt.left.CollectNodes(childpath, flushfn); err != nil {
 			return err
 		}
 	}
-	if bt.Right != nil {
+	if bt.right != nil {
 		var p [256]byte
 		copy(p[:], path)
 		childpath := p[:len(path)]
 		childpath = append(childpath, 1)
-		if err := bt.Right.CollectNodes(childpath, flushfn); err != nil {
+		if err := bt.right.CollectNodes(childpath, flushfn); err != nil {
 			return err
 		}
 	}
@@ -167,11 +167,11 @@ func (bt *InternalNode) GetHeight() int {
 		leftHeight  int
 		rightHeight int
 	)
-	if bt.Left != nil {
-		leftHeight = bt.Left.GetHeight()
+	if bt.left != nil {
+		leftHeight = bt.left.GetHeight()
 	}
-	if bt.Right != nil {
-		rightHeight = bt.Right.GetHeight()
+	if bt.right != nil {
+		rightHeight = bt.right.GetHeight()
 	}
 	return 1 + max(leftHeight, rightHeight)
 }
@@ -183,11 +183,11 @@ func (bt *InternalNode) toDot(parent, path string) string {
 		ret = fmt.Sprintf("%s %s -> %s\n", ret, parent, me)
 	}
 
-	if bt.Left != nil {
-		ret = fmt.Sprintf("%s%s", ret, bt.Left.toDot(me, fmt.Sprintf("%s%02x", path, 0)))
+	if bt.left != nil {
+		ret = fmt.Sprintf("%s%s", ret, bt.left.toDot(me, fmt.Sprintf("%s%02x", path, 0)))
 	}
-	if bt.Right != nil {
-		ret = fmt.Sprintf("%s%s", ret, bt.Right.toDot(me, fmt.Sprintf("%s%02x", path, 1)))
+	if bt.right != nil {
+		ret = fmt.Sprintf("%s%s", ret, bt.right.toDot(me, fmt.Sprintf("%s%02x", path, 1)))
 	}
 
 	return ret

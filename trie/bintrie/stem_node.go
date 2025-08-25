@@ -23,7 +23,7 @@ import (
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/zeebo/blake3"
+	"crypto/sha256"
 )
 
 // StemNode represents a group of `NodeWith` values sharing the same stem.
@@ -47,13 +47,13 @@ func (bt *StemNode) Insert(key []byte, value []byte, _ NodeResolverFn) (BinaryNo
 		bt.depth++
 		var child, other *BinaryNode
 		if bitStem == 0 {
-			new.Left = bt
-			child = &new.Left
-			other = &new.Right
+			new.left = bt
+			child = &new.left
+			other = &new.right
 		} else {
-			new.Right = bt
-			child = &new.Right
-			other = &new.Left
+			new.right = bt
+			child = &new.right
+			other = &new.left
 		}
 
 		bitKey := key[new.depth/8] >> (7 - (new.depth % 8)) & 1
@@ -107,12 +107,12 @@ func (bt *StemNode) Hash() common.Hash {
 	var data [NodeWidth]common.Hash
 	for i, v := range bt.Values {
 		if v != nil {
-			h := blake3.Sum256(v)
+			h := sha256.Sum256(v)
 			data[i] = common.BytesToHash(h[:])
 		}
 	}
 
-	h := blake3.New()
+	h := sha256.New()
 	for level := 1; level <= 8; level++ {
 		for i := range NodeWidth / (1 << level) {
 			h.Reset()
@@ -157,13 +157,13 @@ func (bt *StemNode) InsertValuesAtStem(key []byte, values [][]byte, _ NodeResolv
 		bt.depth++
 		var child, other *BinaryNode
 		if bitStem == 0 {
-			new.Left = bt
-			child = &new.Left
-			other = &new.Right
+			new.left = bt
+			child = &new.left
+			other = &new.right
 		} else {
-			new.Right = bt
-			child = &new.Right
-			other = &new.Left
+			new.right = bt
+			child = &new.right
+			other = &new.left
 		}
 
 		bitKey := key[new.depth/8] >> (7 - (new.depth % 8)) & 1
