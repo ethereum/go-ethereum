@@ -360,11 +360,6 @@ wait:
 		done     chan buildResult
 	)
 
-	// Add snapshot root to updates map when snapshot completes
-	if root := rawdb.ReadSnapshotRoot(t.db); root != (common.Hash{}) {
-		updates[root] = &stateUpdate{root: root}
-	}
-
 	for {
 		select {
 		case u := <-t.updateCh:
