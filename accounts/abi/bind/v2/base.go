@@ -473,8 +473,22 @@ func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]any
 	if opts.End != nil {
 		config.ToBlock = new(big.Int).SetUint64(*opts.End)
 	}
-	sub, err := c.filterer.SubscribeFilterLogs(ensureContext(opts.Context), config, logs)
-	return logs, sub, err
+	buff, err := c.filterer.FilterLogs(ensureContext(opts.Context), config)
+	if err != nil {
+		return nil, nil, err
+	}
+	sub := event.NewSubscription(func(quit <-chan struct{}) error {
+		for _, log := range buff {
+			select {
+			case logs <- log:
+			case <-quit:
+				return nil
+			}
+		}
+		return nil
+	})
+
+	return logs, sub, nil
 }
 
 // WatchLogs filters subscribes to contract logs for future blocks, returning a
