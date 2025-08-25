@@ -1398,7 +1398,7 @@ func (p *BlobPool) AvailableBlobs(vhashes []common.Hash) int {
 }
 
 // convertSidecar converts the legacy sidecar in the submitted transactions
-// if osaka fork has been activated.
+// if Osaka fork has been activated.
 func (p *BlobPool) convertSidecar(txs []*types.Transaction) ([]*types.Transaction, []error) {
 	head := p.chain.CurrentBlock()
 	if !p.chain.Config().IsOsaka(head.Number, head.Time) {

@@ -162,7 +162,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config 
 			return err
 		}
 		args.Gas = &estimated
-		log.Trace("Estimate gas usage automatically", "gas", args.Gas)
+		log.Trace("Estimated gas usage automatically", "gas", args.Gas)
 	}
 
 	// If chain id is provided, ensure it matches the local chain id. Otherwise, set the local

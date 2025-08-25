@@ -1705,25 +1705,8 @@ func TestAddLegacyBlobTx(t *testing.T) {
 	statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 	statedb.Commit(0, true, false)
 
-	// Make Prague-enabled custom chain config.
-	cancunTime := uint64(0)
-	pragueTime := uint64(0)
-	osakaTime := uint64(0)
-	config := &params.ChainConfig{
-		ChainID:     big.NewInt(1),
-		LondonBlock: big.NewInt(0),
-		BerlinBlock: big.NewInt(0),
-		CancunTime:  &cancunTime,
-		PragueTime:  &pragueTime,
-		OsakaTime:   &osakaTime,
-		BlobScheduleConfig: &params.BlobScheduleConfig{
-			Cancun: params.DefaultCancunBlobConfig,
-			Prague: params.DefaultPragueBlobConfig,
-			Osaka:  params.DefaultOsakaBlobConfig,
-		},
-	}
 	chain := &testBlockChain{
-		config:  config,
+		config:  params.MergedTestChainConfig,
 		basefee: uint256.NewInt(1050),
 		blobfee: uint256.NewInt(105),
 		statedb: statedb,

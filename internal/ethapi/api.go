@@ -1521,9 +1521,8 @@ func (api *TransactionAPI) FillTransaction(ctx context.Context, args Transaction
 	// Set some sanity defaults and terminate on failure
 	sidecarVersion := types.BlobSidecarVersion0
 	if len(args.Blobs) > 0 {
-		chainHead := api.b.CurrentHeader()
-		isOsaka := api.b.ChainConfig().IsOsaka(chainHead.Number, chainHead.Time)
-		if isOsaka {
+		h := api.b.CurrentHeader()
+		if api.b.ChainConfig().IsOsaka(h.Number, h.Time) {
 			sidecarVersion = types.BlobSidecarVersion1
 		}
 	}
@@ -1599,9 +1598,8 @@ func (api *TransactionAPI) SignTransaction(ctx context.Context, args Transaction
 	}
 	sidecarVersion := types.BlobSidecarVersion0
 	if len(args.Blobs) > 0 {
-		chainHead := api.b.CurrentHeader()
-		isOsaka := api.b.ChainConfig().IsOsaka(chainHead.Number, chainHead.Time)
-		if isOsaka {
+		h := api.b.CurrentHeader()
+		if api.b.ChainConfig().IsOsaka(h.Number, h.Time) {
 			sidecarVersion = types.BlobSidecarVersion1
 		}
 	}
