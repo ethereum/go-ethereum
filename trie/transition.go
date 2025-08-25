@@ -37,7 +37,7 @@ type TransitionTrie struct {
 }
 
 // NewTransitionTrie creates a new TransitionTrie.
-func NewTransitionTree(base *SecureTrie, overlay *VerkleTrie, st bool) *TransitionTrie {
+func NewTransitionTrie(base *SecureTrie, overlay *VerkleTrie, st bool) *TransitionTrie {
 	return &TransitionTrie{
 		overlay: overlay,
 		base:    base,
