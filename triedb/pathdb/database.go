@@ -137,7 +137,8 @@ type Database struct {
 	stateFreezer ethdb.ResettableAncientStore // Freezer for storing state histories, nil possible in tests
 	stateIndexer *historyIndexer              // History indexer historical state data, nil possible
 
-	lock sync.RWMutex // Lock to prevent mutations from happening at the same time
+	lock       sync.RWMutex // Lock to prevent mutations from happening at the same time
+	forceFlush bool         // Flag to force buffer flush regardless of size
 }
 
 // New attempts to load an already existing layer from a persistent key-value
@@ -358,6 +359,19 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 		return err
 	}
 	return db.tree.cap(root, 0)
+}
+
+// EnableForceFlush enables force flushing for the next state update.
+// This will cause the next Update() call to flush the disk buffer immediately,
+// regardless of the buffer threshold, while preserving the 128 diff layers in memory.
+func (db *Database) EnableForceFlush() {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	if !db.forceFlush {
+		log.Info("Enabling force flush for next pathdb update")
+		db.forceFlush = true
+	}
 }
 
 // Disable deactivates the database and invalidates all available state layers

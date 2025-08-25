@@ -417,7 +417,7 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 
 	// Terminate the background state snapshot generation before mutating the
 	// persistent state.
-	if combined.full() || force || flush {
+	if combined.full() || force || flush || dl.db.forceFlush {
 		// Wait until the previous frozen buffer is fully flushed
 		if dl.frozen != nil {
 			if err := dl.frozen.waitFlush(); err != nil {
