@@ -83,21 +83,20 @@ type SizeStats struct {
 
 // add applies the given state diffs and produces a new version of the statistics.
 func (s SizeStats) add(diff SizeStats) SizeStats {
-	var combo SizeStats
-	combo.StateRoot = diff.StateRoot
-	combo.BlockNumber = diff.BlockNumber
+	s.StateRoot = diff.StateRoot
+	s.BlockNumber = diff.BlockNumber
 
-	combo.Accounts += diff.Accounts
-	combo.AccountBytes += diff.AccountBytes
-	combo.Storages += diff.Storages
-	combo.StorageBytes += diff.StorageBytes
-	combo.AccountTrienodes += diff.AccountTrienodes
-	combo.AccountTrienodeBytes += diff.AccountTrienodeBytes
-	combo.StorageTrienodes += diff.StorageTrienodes
-	combo.StorageTrienodeBytes += diff.StorageTrienodeBytes
-	combo.ContractCodes += diff.ContractCodes
-	combo.ContractCodeBytes += diff.ContractCodeBytes
-	return combo
+	s.Accounts += diff.Accounts
+	s.AccountBytes += diff.AccountBytes
+	s.Storages += diff.Storages
+	s.StorageBytes += diff.StorageBytes
+	s.AccountTrienodes += diff.AccountTrienodes
+	s.AccountTrienodeBytes += diff.AccountTrienodeBytes
+	s.StorageTrienodes += diff.StorageTrienodes
+	s.StorageTrienodeBytes += diff.StorageTrienodeBytes
+	s.ContractCodes += diff.ContractCodes
+	s.ContractCodeBytes += diff.ContractCodeBytes
+	return s
 }
 
 // calSizeStats measures the state size changes of the provided state update.
