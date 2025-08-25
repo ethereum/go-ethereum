@@ -81,6 +81,17 @@ type SizeStats struct {
 	ContractCodeBytes    int64 // Total size of all contract code (in bytes)
 }
 
+func (s SizeStats) String() string {
+	return fmt.Sprintf("Block: %d Root: %s, Accounts: %d (%s), Storages: %d (%s), AccountTrienodes: %d (%s), StorageTrienodes: %d (%s), ContractCodes: %d (%s)",
+		s.BlockNumber, s.StateRoot.Hex(),
+		s.Accounts, common.StorageSize(s.AccountBytes),
+		s.Storages, common.StorageSize(s.StorageBytes),
+		s.AccountTrienodes, common.StorageSize(s.AccountTrienodeBytes),
+		s.StorageTrienodes, common.StorageSize(s.StorageTrienodeBytes),
+		s.ContractCodes, common.StorageSize(s.ContractCodeBytes),
+	)
+}
+
 // add applies the given state diffs and produces a new version of the statistics.
 func (s SizeStats) add(diff SizeStats) SizeStats {
 	s.StateRoot = diff.StateRoot
@@ -375,7 +386,7 @@ wait:
 			}
 			done = make(chan buildResult)
 			go t.build(entry.root, entry.blockNumber, done)
-			log.Info("Measuring persistent state size", "root", root, "number", entry.blockNumber)
+			log.Info("Measuring persistent state size", "root", root.Hex())
 
 		case result := <-done:
 			if result.err != nil {
@@ -405,6 +416,7 @@ wait:
 			if err := apply(result.root, result.stat); err != nil {
 				return nil, err
 			}
+			log.Info("Init state size", "stat", result.stat)
 			log.Info("Measured persistent state size", "root", result.root, "number", result.blockNumber, "elapsed", common.PrettyDuration(result.elapsed))
 			return stats, nil
 
@@ -552,6 +564,7 @@ func (t *SizeTracker) iterateTable(closed chan struct{}, prefix []byte, name str
 }
 
 func (t *SizeTracker) upload(stats SizeStats) {
+	log.Info("Update state size", "stat", stats)
 	blockInfoGauge.Update(metrics.GaugeInfoValue{
 		"number": hexutil.Uint64(stats.BlockNumber).String(),
 		"hash":   stats.StateRoot.Hex(),
