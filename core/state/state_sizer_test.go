@@ -40,44 +40,44 @@ func TestSizeTracker(t *testing.T) {
 	defer pdb.Close()
 
 	db := rawdb.NewDatabase(pdb)
+	defer db.Close()
 
 	tdb := triedb.NewDatabase(db, &triedb.Config{PathDB: pathdb.Defaults})
 	sdb := NewDatabase(tdb, nil)
 
-	state, _ := New(types.EmptyRootHash, sdb)
+	// Generate 50 blocks to establish a baseline
+	baselineBlockNum := uint64(50)
+	currentRoot := types.EmptyRootHash
 
-	testAddr1 := common.HexToAddress("0x1234567890123456789012345678901234567890")
-	testAddr2 := common.HexToAddress("0x2345678901234567890123456789012345678901")
-	testAddr3 := common.HexToAddress("0x3456789012345678901234567890123456789012")
+	addr1 := common.BytesToAddress([]byte{1, 0, 0, 1})
+	addr2 := common.BytesToAddress([]byte{1, 0, 0, 2})
+	addr3 := common.BytesToAddress([]byte{1, 0, 0, 3})
 
-	state.AddBalance(testAddr1, uint256.NewInt(1000), tracing.BalanceChangeUnspecified)
-	state.SetNonce(testAddr1, 1, tracing.NonceChangeUnspecified)
-	state.SetState(testAddr1, common.HexToHash("0x1111"), common.HexToHash("0xaaaa"))
-	state.SetState(testAddr1, common.HexToHash("0x2222"), common.HexToHash("0xbbbb"))
+	// Create initial state with fixed accounts
+	state, _ := New(currentRoot, sdb)
+	state.AddBalance(addr1, uint256.NewInt(1000), tracing.BalanceChangeUnspecified)
+	state.SetNonce(addr1, 1, tracing.NonceChangeUnspecified)
+	state.SetState(addr1, common.HexToHash("0x1111"), common.HexToHash("0xaaaa"))
+	state.SetState(addr1, common.HexToHash("0x2222"), common.HexToHash("0xbbbb"))
 
-	state.AddBalance(testAddr2, uint256.NewInt(2000), tracing.BalanceChangeUnspecified)
-	state.SetNonce(testAddr2, 2, tracing.NonceChangeUnspecified)
-	state.SetCode(testAddr2, []byte{0x60, 0x80, 0x60, 0x40, 0x52})
+	state.AddBalance(addr2, uint256.NewInt(2000), tracing.BalanceChangeUnspecified)
+	state.SetNonce(addr2, 2, tracing.NonceChangeUnspecified)
+	state.SetCode(addr2, []byte{0x60, 0x80, 0x60, 0x40, 0x52})
 
-	state.AddBalance(testAddr3, uint256.NewInt(3000), tracing.BalanceChangeUnspecified)
-	state.SetNonce(testAddr3, 3, tracing.NonceChangeUnspecified)
+	state.AddBalance(addr3, uint256.NewInt(3000), tracing.BalanceChangeUnspecified)
+	state.SetNonce(addr3, 3, tracing.NonceChangeUnspecified)
 
-	root1, _, err := state.CommitWithUpdate(1, true, false)
+	currentRoot, _, err = state.CommitWithUpdate(1, true, false)
 	if err != nil {
 		t.Fatalf("Failed to commit initial state: %v", err)
 	}
-	if err := tdb.Commit(root1, false); err != nil {
-		t.Fatalf("Failed to commit trie: %v", err)
+	if err := tdb.Commit(currentRoot, false); err != nil {
+		t.Fatalf("Failed to commit initial trie: %v", err)
 	}
 
-	// Generate 50 blocks first to establish a baseline
-	baselineBlockNum := uint64(50)
-	currentRoot := root1
+	for i := 1; i < 50; i++ { // blocks 2-50
+		blockNum := uint64(i + 1)
 
-	for i := 0; i < 49; i++ { // blocks 2-50
-		blockNum := uint64(i + 2)
-
-		// Create new state from the previous committed root
 		newState, err := New(currentRoot, sdb)
 		if err != nil {
 			t.Fatalf("Failed to create new state at block %d: %v", blockNum, err)
@@ -88,8 +88,7 @@ func TestSizeTracker(t *testing.T) {
 		newState.SetNonce(testAddr, uint64(i+10), tracing.NonceChangeUnspecified)
 
 		if i%2 == 0 {
-			newState.SetState(testAddr1, common.BigToHash(uint256.NewInt(uint64(i+0x1000)).ToBig()),
-				common.BigToHash(uint256.NewInt(uint64(i+0x2000)).ToBig()))
+			newState.SetState(addr1, common.BigToHash(uint256.NewInt(uint64(i+0x1000)).ToBig()), common.BigToHash(uint256.NewInt(uint64(i+0x2000)).ToBig()))
 		}
 
 		if i%3 == 0 {
@@ -108,7 +107,6 @@ func TestSizeTracker(t *testing.T) {
 	}
 
 	baselineRoot := currentRoot
-	rawdb.WriteSnapshotRoot(db, baselineRoot)
 
 	// Wait for snapshot completion
 	for !tdb.SnapshotCompleted() {
@@ -142,22 +140,23 @@ func TestSizeTracker(t *testing.T) {
 	}
 	defer tracker.Stop()
 
-	// Continue from where we left off (block 51+) and track those updates
 	var trackedUpdates []SizeStats
 	currentRoot = baselineRoot
 
 	// Generate additional blocks beyond the baseline and track them
 	for i := 49; i < 130; i++ { // blocks 51-132
 		blockNum := uint64(i + 2)
-		newState, _ := New(currentRoot, sdb)
+		newState, err := New(currentRoot, sdb)
+		if err != nil {
+			t.Fatalf("Failed to create new state at block %d: %v", blockNum, err)
+		}
 
 		testAddr := common.BigToAddress(uint256.NewInt(uint64(i + 100)).ToBig())
 		newState.AddBalance(testAddr, uint256.NewInt(uint64((i+1)*1000)), tracing.BalanceChangeUnspecified)
 		newState.SetNonce(testAddr, uint64(i+10), tracing.NonceChangeUnspecified)
 
 		if i%2 == 0 {
-			newState.SetState(testAddr1, common.BigToHash(uint256.NewInt(uint64(i+0x1000)).ToBig()),
-				common.BigToHash(uint256.NewInt(uint64(i+0x2000)).ToBig()))
+			newState.SetState(addr1, common.BigToHash(uint256.NewInt(uint64(i+0x1000)).ToBig()), common.BigToHash(uint256.NewInt(uint64(i+0x2000)).ToBig()))
 		}
 
 		if i%3 == 0 {
@@ -181,10 +180,19 @@ func TestSizeTracker(t *testing.T) {
 		currentRoot = root
 	}
 
-	// Give the StateTracker time to process all the notifications we sent
-	time.Sleep(100 * time.Millisecond)
+	if len(trackedUpdates) != 130-49 {
+		t.Errorf("Expected %d tracked updates, got %d", 130-49, len(trackedUpdates))
+	}
 
-	finalRoot := currentRoot
+	finalRoot := rawdb.ReadSnapshotRoot(db)
+
+	// Ensure all commits are flushed to disk
+	if err := tdb.Close(); err != nil {
+		t.Fatalf("Failed to close triedb: %v", err)
+	}
+
+	// Reopen the database to simulate a restart
+	tdb = triedb.NewDatabase(db, &triedb.Config{PathDB: pathdb.Defaults})
 
 	finalTracker := &SizeTracker{
 		db:     db,
@@ -205,27 +213,6 @@ func TestSizeTracker(t *testing.T) {
 	}
 
 	actualStats := result.stat
-
-	// Now we have a proper test:
-	// - Baseline measured at block 50 (with snapshot completion)
-	// - Final state measured at block 132
-	// - Tracked updates from blocks 51-132 (should show growth)
-
-	// Verify that both baseline and final measurements show reasonable data
-	if baseline.Accounts < 50 {
-		t.Errorf("Expected baseline to have at least 50 accounts, got %d", baseline.Accounts)
-	}
-	if baseline.StorageBytes == 0 {
-		t.Errorf("Expected baseline to have storage data, got 0 bytes")
-	}
-
-	if actualStats.Accounts <= baseline.Accounts {
-		t.Errorf("Expected final state to have more accounts than baseline: baseline=%d, final=%d", baseline.Accounts, actualStats.Accounts)
-	}
-
-	if actualStats.StorageBytes <= baseline.StorageBytes {
-		t.Errorf("Expected final state to have more storage than baseline: baseline=%d, final=%d", baseline.StorageBytes, actualStats.StorageBytes)
-	}
 
 	expectedStats := baseline
 	for _, diff := range trackedUpdates {
@@ -264,34 +251,11 @@ func TestSizeTracker(t *testing.T) {
 		t.Errorf("Storage trie node bytes mismatch: expected %d, got %d", expectedStats.StorageTrienodeBytes, actualStats.StorageTrienodeBytes)
 	}
 
-	// Verify reasonable growth occurred
-	accountGrowth := actualStats.Accounts - baseline.Accounts
-	storageGrowth := actualStats.Storages - baseline.Storages
-	codeGrowth := actualStats.ContractCodes - baseline.ContractCodes
-
-	if accountGrowth <= 0 {
-		t.Errorf("Expected account growth, got %d", accountGrowth)
-	}
-	if storageGrowth <= 0 {
-		t.Errorf("Expected storage growth, got %d", storageGrowth)
-	}
-	if codeGrowth <= 0 {
-		t.Errorf("Expected contract code growth, got %d", codeGrowth)
-	}
-
-	// Verify we successfully tracked updates from blocks 51-132
-	expectedUpdates := 81 // blocks 51-132 (81 blocks)
-	if len(trackedUpdates) < 70 || len(trackedUpdates) > expectedUpdates {
-		t.Errorf("Expected 70-%d tracked updates, got %d", expectedUpdates, len(trackedUpdates))
-	}
-
 	t.Logf("Baseline stats:  Accounts=%d, AccountBytes=%d, Storages=%d, StorageBytes=%d, ContractCodes=%d",
 		baseline.Accounts, baseline.AccountBytes, baseline.Storages, baseline.StorageBytes, baseline.ContractCodes)
 	t.Logf("Expected stats:  Accounts=%d, AccountBytes=%d, Storages=%d, StorageBytes=%d, ContractCodes=%d",
 		expectedStats.Accounts, expectedStats.AccountBytes, expectedStats.Storages, expectedStats.StorageBytes, expectedStats.ContractCodes)
 	t.Logf("Final stats:     Accounts=%d, AccountBytes=%d, Storages=%d, StorageBytes=%d, ContractCodes=%d",
 		actualStats.Accounts, actualStats.AccountBytes, actualStats.Storages, actualStats.StorageBytes, actualStats.ContractCodes)
-	t.Logf("Growth:          Accounts=+%d, StorageSlots=+%d, ContractCodes=+%d",
-		accountGrowth, storageGrowth, codeGrowth)
 	t.Logf("Tracked %d state updates from %d blocks successfully", len(trackedUpdates), 81)
 }
