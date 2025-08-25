@@ -235,7 +235,6 @@ type SizeTracker struct {
 	abort    chan struct{}
 	aborted  chan struct{}
 	updateCh chan *stateUpdate
-	stats    map[common.Hash]SizeStats // internal stats map
 }
 
 // NewSizeTracker creates a new state size tracker and starts it automatically
@@ -249,7 +248,6 @@ func NewSizeTracker(db ethdb.KeyValueStore, triedb *triedb.Database) (*SizeTrack
 		abort:    make(chan struct{}),
 		aborted:  make(chan struct{}),
 		updateCh: make(chan *stateUpdate),
-		stats:    make(map[common.Hash]SizeStats),
 	}
 	go t.run()
 	return t, nil
@@ -288,14 +286,13 @@ func (t *SizeTracker) run() {
 	if err != nil {
 		return
 	}
-	t.stats = stats
 	h := sizeStatsHeap(slices.Collect(maps.Values(stats)))
 	heap.Init(&h)
 
 	for {
 		select {
 		case u := <-t.updateCh:
-			base, found := t.stats[u.originRoot]
+			base, found := stats[u.originRoot]
 			if !found {
 				continue
 			}
@@ -304,14 +301,15 @@ func (t *SizeTracker) run() {
 				continue
 			}
 			stat := base.add(diff)
-			t.stats[u.root] = stat
+			stats[u.root] = stat
 			t.upload(stat)
 
-			heap.Push(&h, t.stats[u.root])
-			for len(h) > 0 && u.blockNumber-h[0].BlockNumber > statEvictThreshold {
-				delete(t.stats, h[0].StateRoot)
+			heap.Push(&h, stats[u.root])
+			for u.blockNumber-h[0].BlockNumber > statEvictThreshold {
+				delete(stats, h[0].StateRoot)
 				heap.Pop(&h)
 			}
+
 		case <-t.abort:
 			return
 		}
@@ -514,8 +512,6 @@ func (t *SizeTracker) Notify(update *stateUpdate) {
 	case t.updateCh <- update:
 	case <-t.abort:
 		return
-	default:
-		// Drop update if channel is full
 	}
 }
 
