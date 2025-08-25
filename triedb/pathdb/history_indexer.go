@@ -598,13 +598,16 @@ func checkVersion(disk ethdb.KeyValueStore) {
 	if err == nil && m.Version == stateIndexVersion {
 		return
 	}
-	// TODO(rjl493456442) would be better to group them into a batch.
-	rawdb.DeleteStateHistoryIndexMetadata(disk)
-	rawdb.DeleteStateHistoryIndex(disk)
-
 	version := "unknown"
 	if err == nil {
 		version = fmt.Sprintf("%d", m.Version)
+	}
+
+	batch := disk.NewBatch()
+	rawdb.DeleteStateHistoryIndexMetadata(batch)
+	rawdb.DeleteStateHistoryIndex(batch)
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to purge state history index", "err", err)
 	}
 	log.Info("Cleaned up obsolete state history index", "version", version, "want", stateIndexVersion)
 }
