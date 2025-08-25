@@ -253,7 +253,7 @@ func newTrieReader(root common.Hash, db *triedb.Database, cache *utils.PointCach
 			if err != nil {
 				return nil, err
 			}
-			tr = trie.NewTransitionTree(mpt, tr.(*trie.VerkleTrie), false)
+			tr = trie.NewTransitionTrie(mpt, tr.(*trie.VerkleTrie), false)
 		}
 	}
 	if err != nil {
