@@ -51,7 +51,7 @@ func newSlotterEIP7594(maxBlobsPerTransaction int) func() (uint32, bool) {
 
 	return func() (size uint32, done bool) {
 		slotsize += blobSize + txBlobOverhead
-		finished := slotsize > uint32(maxBlobsPerTransaction)*blobSize+txMaxSize
+		finished := slotsize > uint32(maxBlobsPerTransaction)*(blobSize+txBlobOverhead)+txMaxSize
 
 		return slotsize, finished
 	}
