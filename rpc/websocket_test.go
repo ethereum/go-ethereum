@@ -131,9 +131,9 @@ func TestWebsocketLargeRead(t *testing.T) {
 		limit int
 		err   bool
 	}{
-		{200, 200, false},                                       // Small, successful request and limit
-		{wsDefaultReadLimit + buffer, 0, false},                 // Large, successful request, infinite limit
-		{wsDefaultReadLimit + buffer, wsDefaultReadLimit, true}, // Large, failed request, finite limit
+		{200, 200, false},                       // Small, successful request and limit
+		{2048, 1024, true},                      // Normal, failed request
+		{wsDefaultReadLimit + buffer, 0, false}, // Large, successful request, infinite limit
 	} {
 		func() {
 			if tt.limit != 0 {
