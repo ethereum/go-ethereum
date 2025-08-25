@@ -306,9 +306,10 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, config sideca
 	if args.Commitments != nil && len(args.Commitments) != n {
 		return fmt.Errorf("number of blobs and commitments mismatch (have=%d, want=%d)", len(args.Commitments), n)
 	}
-	proofLen := n
+
 	// if V0: len(blobs) == len(proofs)
 	// if V1: len(blobs) == len(proofs) * 128
+	proofLen := n
 	if config.blobSidecarVersion == types.BlobSidecarVersion1 {
 		proofLen = n * kzg4844.CellProofsPerBlob
 	}
@@ -326,7 +327,7 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, config sideca
 	if args.Commitments == nil {
 		var (
 			commitments = make([]kzg4844.Commitment, n)
-			proofs      = make([]kzg4844.Proof, proofLen)
+			proofs      = make([]kzg4844.Proof, 0, proofLen)
 		)
 		for i, b := range args.Blobs {
 			c, err := kzg4844.BlobToCommitment(&b)
@@ -341,11 +342,11 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, config sideca
 				if err != nil {
 					return fmt.Errorf("blobs[%d]: error computing proof: %v", i, err)
 				}
-				proofs[i] = p
+				proofs = append(proofs, p)
 			case types.BlobSidecarVersion1:
 				ps, err := kzg4844.ComputeCellProofs(&b)
 				if err != nil {
-					return fmt.Errorf("blobs[%d]: error computing cell proof: %v", i, err)
+					return fmt.Errorf("blobs[%d]: error computing proof: %v", i, err)
 				}
 				proofs = append(proofs, ps...)
 			}
@@ -362,7 +363,7 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, config sideca
 			}
 		case types.BlobSidecarVersion1:
 			if err := kzg4844.VerifyCellProofs(args.Blobs, args.Commitments, args.Proofs); err != nil {
-				return fmt.Errorf("failed to verify blob cell proof: %v", err)
+				return fmt.Errorf("failed to verify blob proof: %v", err)
 			}
 		}
 	}

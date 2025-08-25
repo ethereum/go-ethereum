@@ -1519,16 +1519,17 @@ func (api *TransactionAPI) SendTransaction(ctx context.Context, args Transaction
 // processing (signing + broadcast).
 func (api *TransactionAPI) FillTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
 	// Set some sanity defaults and terminate on failure
-	config := sidecarConfig{
-		blobSidecarAllowed: true,
-		blobSidecarVersion: types.BlobSidecarVersion0,
-	}
+	sidecarVersion := types.BlobSidecarVersion0
 	if len(args.Blobs) > 0 {
 		chainHead := api.b.CurrentHeader()
 		isOsaka := api.b.ChainConfig().IsOsaka(chainHead.Number, chainHead.Time)
 		if isOsaka {
-			config.blobSidecarVersion = types.BlobSidecarVersion1
+			sidecarVersion = types.BlobSidecarVersion1
 		}
+	}
+	config := sidecarConfig{
+		blobSidecarAllowed: true,
+		blobSidecarVersion: sidecarVersion,
 	}
 	if err := args.setDefaults(ctx, api.b, config); err != nil {
 		return nil, err
