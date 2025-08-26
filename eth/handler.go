@@ -60,9 +60,6 @@ const (
 	// All transactions with a higher size will be announced and need to be fetched
 	// by the peer.
 	txMaxBroadcastSize = 4096
-
-	// Hysteresis to stabilize the number of direct peers to send transactions to.
-	directPeersHysteresis = 0.5
 )
 
 var syncChallengeTimeout = 15 * time.Second // Time allowance for a node to reply to the sync progress challenge
