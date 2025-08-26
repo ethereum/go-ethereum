@@ -17,9 +17,12 @@
 package eth
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"errors"
+	"hash"
 	"maps"
-	"math"
+	gmath "math"
 	"math/big"
 	"slices"
 	"sync"
@@ -27,11 +30,11 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/fetcher"
@@ -484,29 +487,11 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 
 		txset = make(map[*ethPeer][]common.Hash) // Set peer->hash to transfer directly
 		annos = make(map[*ethPeer][]common.Hash) // Set peer->hash to announce
+
+		signer = types.LatestSigner(h.chain.Config())
+		choice = newBroadcastChoice(h.peers.len())
 	)
-	// Broadcast transactions to a batch of peers not knowing about it
-	sqrtPeers := math.Sqrt(float64(h.peers.len())) // Approximate number of peers to broadcast to
 
-	// Use some hysteresis to avoid oscillating between two values, stabilising the modulus in the peer selection
-	// If the number of peers is small, use a minimum of 1 peer
-	var directInt int64
-	lastDirect := h.lastDirect.Load()
-	if int64(sqrtPeers) >= lastDirect {
-		directInt = max(int64(sqrtPeers), 1)
-	} else {
-		directInt = max(min(int64(sqrtPeers+directPeersHysteresis), lastDirect), 1)
-	}
-	h.lastDirect.Store(directInt)
-
-	direct := big.NewInt(directInt)            // Number of peers to send directly to
-	total := big.NewInt(directInt * directInt) // Stabilise total peer count a bit based on sqrt peers
-
-	var (
-		signer = types.LatestSigner(h.chain.Config()) // Don't care about chain status, we just need *a* sender
-		hasher = crypto.NewKeccakState()
-		hash   = make([]byte, 32)
-	)
 	for _, tx := range txs {
 		var maybeDirect bool
 		switch {
@@ -517,33 +502,21 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		default:
 			maybeDirect = true
 		}
-		// Send the transaction (if it's small enough) directly to a subset of
-		// the peers that have not received it yet, ensuring that the flow of
-		// transactions is grouped by account to (try and) avoid nonce gaps.
-		//
-		// To do this, we hash the local enode IW with together with a peer's
-		// enode ID together with the transaction sender and broadcast if
-		// `sha(self, peer, sender) mod peers < sqrt(peers)`.
+
 		for _, peer := range h.peers.peersWithoutTransaction(tx.Hash()) {
-			var broadcast bool
 			if maybeDirect {
-				hasher.Reset()
-				hasher.Write(h.nodeID.Bytes())
-				hasher.Write(peer.Node().ID().Bytes())
-
-				from, _ := types.Sender(signer, tx) // Ignore error, we only use the addr as a propagation target splitter
-				hasher.Write(from.Bytes())
-
-				hasher.Read(hash)
-				if new(big.Int).Mod(new(big.Int).SetBytes(hash), total).Cmp(direct) < 0 {
-					broadcast = true
+				// Get transaction sender address. Here we can ignore any error
+				// since we're just interested in any value.
+				txSender, _ := types.Sender(signer, tx)
+				if choice.shouldBroadcastTx(h.nodeID, peer.Peer.Peer.ID(), txSender) {
+					// Send directly to peer.
+					txset[peer] = append(txset[peer], tx.Hash())
+					continue
 				}
 			}
-			if broadcast {
-				txset[peer] = append(txset[peer], tx.Hash())
-			} else {
-				annos[peer] = append(annos[peer], tx.Hash())
-			}
+
+			// Send announcement to peer.
+			annos[peer] = append(annos[peer], tx.Hash())
 		}
 	}
 	for peer, hashes := range txset {
@@ -709,4 +682,45 @@ func (st *blockRangeState) stop() {
 // This is safe to call from any goroutine.
 func (st *blockRangeState) currentRange() eth.BlockRangeUpdatePacket {
 	return *st.next.Load()
+}
+
+// Send the transaction (if it's small enough) directly to a subset of
+// the peers that have not received it yet, ensuring that the flow of
+// transactions is grouped by account to (try and) avoid nonce gaps.
+//
+// To do this, we hash the local node ID together with a peer's
+// node ID together with the transaction sender and broadcast if
+// `sha(self, peer, sender) mod peers < sqrt(peers)`.
+
+type broadcastChoice struct {
+	hash      hash.Hash
+	threshold []byte
+	hashBytes []byte
+}
+
+func newBroadcastChoice(npeers int) *broadcastChoice {
+	var bc broadcastChoice
+	bc.hash = sha256.New()
+	bc.hashBytes = make([]byte, 32)
+
+	// compute the hash comparison threshold for one peer
+	unit := math.BigPow(2, 256)
+	unit.Sub(unit, common.Big1)
+	unit.Div(unit, big.NewInt(int64(max(1, npeers))))
+
+	// compute the threshold for n peers
+	sqrtp := max(gmath.Sqrt(float64(npeers)), 1)
+	thr := big.NewInt(int64(gmath.Ceil(sqrtp)))
+	thr.Mul(thr, unit)
+	bc.threshold = thr.FillBytes(make([]byte, 32))
+	return &bc
+}
+
+func (bc *broadcastChoice) shouldBroadcastTx(self, peer enode.ID, txSender common.Address) bool {
+	bc.hash.Reset()
+	bc.hash.Write(self[:])
+	bc.hash.Write(peer[:])
+	bc.hash.Write(txSender[:])
+	bc.hash.Sum(bc.hashBytes[:0])
+	return bytes.Compare(bc.hashBytes, bc.threshold) < 0
 }

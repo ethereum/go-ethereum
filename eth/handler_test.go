@@ -18,8 +18,10 @@ package eth
 
 import (
 	"math/big"
+	"math/rand"
 	"sort"
 	"sync"
+	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -31,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
@@ -211,4 +214,67 @@ func newTestHandlerWithBlocks(blocks int) *testHandler {
 func (b *testHandler) close() {
 	b.handler.Stop()
 	b.chain.Stop()
+}
+
+func TestBroadcastChoice(t *testing.T) {
+	choice49 := newBroadcastChoice(49)
+	choice50 := newBroadcastChoice(50)
+
+	var (
+		self      = enode.HexID("1111111111111111111111111111111111111111111111111111111111111111")
+		peers     = make([]enode.ID, 50)
+		txsenders = make([]common.Address, 400)
+		rand      = rand.New(rand.NewSource(33))
+	)
+	for i := range peers {
+		rand.Read(peers[i][:])
+	}
+	for i := range txsenders {
+		rand.Read(txsenders[i][:])
+	}
+
+	// Evaluate choice49 first.
+	var chosen49 = make([][]bool, len(txsenders))
+	for i, txSender := range txsenders {
+		chosen49[i] = make([]bool, len(peers))
+		for peerIndex, peer := range peers {
+			chosen49[i][peerIndex] = choice49.shouldBroadcastTx(self, peer, txSender)
+		}
+	}
+
+	// Sanity check choices.
+	for i := range chosen49 {
+		c := count(chosen49[i], true)
+		if c == 0 {
+			t.Errorf("for tx %d, choice49 chose zero peers", i)
+		}
+	}
+
+	// Evaluate choice50 for the same peers and transactions. It should always yield more
+	// peers than choice49, and the chosen set should be a superset of choice49's.
+	for i, txSender := range txsenders {
+		var chosen50 int
+		for peerIndex, peer := range peers {
+			send := choice50.shouldBroadcastTx(self, peer, txSender)
+			if chosen49[i][peerIndex] && !send {
+				t.Errorf("for tx %d, choice50 did not choose peer %d, but choice49 did", i, peerIndex)
+			}
+			if send {
+				chosen50++
+			}
+		}
+		if chosen50 < count(chosen49[i], true) {
+			t.Errorf("for tx %d, choice50 has less peers than choice49", i)
+		}
+	}
+}
+
+func count[T comparable](s []T, v T) int {
+	var c int
+	for _, elem := range s {
+		if elem == v {
+			c++
+		}
+	}
+	return c
 }
