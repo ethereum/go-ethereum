@@ -20,8 +20,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
 	"crypto/sha256"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func keyToPath(depth int, key []byte) ([]byte, error) {
