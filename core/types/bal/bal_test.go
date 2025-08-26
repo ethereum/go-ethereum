@@ -19,12 +19,6 @@ package bal
 import (
 	"bytes"
 	"cmp"
-	"encoding/json"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"io"
-	"log"
-	"math"
-	"os"
 	"reflect"
 	"slices"
 	"testing"
@@ -254,96 +248,5 @@ func TestBlockAccessListValidation(t *testing.T) {
 	listB := cBAL.ToEncodingObj()
 	if err := listB.Validate(); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
-	}
-}
-
-func TestBALIteration(t *testing.T) {
-	cBAL := makeTestConstructionBAL()
-	bal := cBAL.ToEncodingObj()
-
-	var receivedRes string
-	it := NewIterator(bal, 22)
-	for i := 0; i < 22; i++ {
-		mut := it.Next()
-		var res bytes.Buffer
-		encoder := json.NewEncoder(&res)
-		encoder.Encode(&mut)
-		receivedRes += res.String()
-	}
-
-	expectedRes := `{"Mutations":{"0x000000000000000000000000000000000000ffff":{"Code":"deadbeef"}}}
-{"Mutations":{"0x000000000000000000000000000000000000ffff":{"Balance":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,100],"Nonce":2,"StorageWrites":{"0x0000000000000000000000000000000000000000000000000000000000000001":"0x0000000000000000000000000000000000000000000000000000000001020304"}},"0x0000000000000000000000000000000000ffffff":{"Nonce":2}}}
-{"Mutations":{"0x000000000000000000000000000000000000ffff":{"Balance":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,244],"Nonce":6,"StorageWrites":{"0x0000000000000000000000000000000000000000000000000000000000000001":"0x0000000000000000000000000000000000000000000000000000010203040506"}},"0x0000000000000000000000000000000000ffffff":{"Balance":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,100],"StorageWrites":{"0x0000000000000000000000000000000000000000000000000000000000000001":"0x0000000000000000000000000000000000000000000000000000010203040506"}}}}
-{"Mutations":{"0x0000000000000000000000000000000000ffffff":{"Balance":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,244],"StorageWrites":{"0x0000000000000000000000000000000000000000000000000000000000000001":"0x0000000000000000000000000000000000000000000000000102030405060708"}}}}
-{}
-{}
-{}
-{}
-{}
-{}
-{}
-{}
-{}
-{}
-{}
-{}
-{}
-{}
-{}
-{}
-{"Mutations":{"0x000000000000000000000000000000000000ffff":{"StorageWrites":{"0x0000000000000000000000000000000000000000000000000000000000000010":"0x0000000000000000000000000000000000000000000000000000000001020304"}}}}
-{}
-`
-	if receivedRes != expectedRes {
-		t.Fatalf("bal iteration didn't produce expected output")
-	}
-}
-
-/*
-func TestBALStateDiffAccumulation(t *testing.T) {
-	cBAL := makeTestConstructionBAL()
-	bal := cBAL.ToEncodingObj()
-
-	it := NewIterator(bal, 22)
-	diff, _ := it.BuildStateDiffs(nil, 22)
-	var res bytes.Buffer
-	encoder := json.NewEncoder(&res)
-	encoder.Encode(diff)
-	fmt.Println(res.String())
-}
-*/
-
-func BenchmarkBALIteration(b *testing.B) {
-	// Specify the file path
-	filePath := "bal.rlp.hex"
-
-	// Open the file
-	file, err := os.Open(filePath)
-	if err != nil {
-		log.Fatalf("failed to open file: %v", err)
-	}
-	defer file.Close()
-
-	// Read the file into a []byte
-	data, err := io.ReadAll(file)
-	if err != nil {
-		log.Fatalf("failed to read file: %v", err)
-	}
-
-	// Print the file contents
-	dataBytes, err := hexutil.Decode("0x" + string(data[:len(data)-1]))
-	if err != nil {
-		b.Fatalf("failed to decode hex: %v\n", err)
-	}
-
-	var al BlockAccessList
-	err = al.DecodeRLP(rlp.NewStream(bytes.NewBuffer(dataBytes), math.MaxUint64))
-	if err != nil {
-		b.Fatalf("crap: %v\n", err)
-	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		// Tx count is 326
-		BuildStateDiffs(&al, 326)
 	}
 }

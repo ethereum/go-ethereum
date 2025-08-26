@@ -18,7 +18,10 @@ package bal
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"maps"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
@@ -179,4 +182,200 @@ func (c *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 		res.Accounts[addr] = &aaCopy
 	}
 	return &res
+}
+
+type StateDiff struct {
+	Mutations map[common.Address]*AccountState `json:"Mutations,omitempty"`
+}
+
+type AccountState struct {
+	Balance       *Balance                    `json:"Balance,omitempty"`
+	Nonce         *uint64                     `json:"Nonce,omitempty"`
+	Code          ContractCode                `json:"Code,omitempty"`
+	StorageWrites map[common.Hash]common.Hash `json:"StorageWrites,omitempty"`
+}
+
+// Merge the changes of a future AccountState into the caller, resulting in the
+// combined state changes through next.
+func (a *AccountState) Merge(next *AccountState) {
+	if next.Balance != nil {
+		a.Balance = next.Balance
+	}
+	if next.Nonce != nil {
+		a.Nonce = next.Nonce
+	}
+	if next.Code != nil {
+		a.Code = next.Code
+	}
+	if next.StorageWrites != nil {
+		if a.StorageWrites == nil {
+			a.StorageWrites = maps.Clone(next.StorageWrites)
+		} else {
+			for key, val := range next.StorageWrites {
+				a.StorageWrites[key] = val
+			}
+		}
+	}
+}
+
+func NewEmptyAccountState() *AccountState {
+	return &AccountState{
+		nil,
+		nil,
+		nil,
+		nil,
+	}
+}
+
+func (a *AccountState) Eq(other *AccountState) bool {
+	if a.Balance != nil || other.Balance != nil {
+		if a.Balance == nil || other.Balance == nil {
+			return false
+		}
+
+		if !bytes.Equal(a.Balance[:], other.Balance[:]) {
+			return false
+		}
+	}
+
+	if (len(a.Code) != 0 || len(other.Code) != 0) && !bytes.Equal(a.Code, other.Code) {
+		return false
+	}
+
+	if a.Nonce != nil || other.Nonce != nil {
+		if a.Nonce == nil || other.Nonce == nil {
+			return false
+		}
+
+		if *a.Nonce != *other.Nonce {
+			return false
+		}
+	}
+
+	if a.StorageWrites != nil || other.StorageWrites != nil {
+		if a.StorageWrites == nil || other.StorageWrites == nil {
+			return false
+		}
+
+		if !maps.Equal(a.StorageWrites, other.StorageWrites) {
+			return false
+		}
+	}
+	return true
+}
+
+func (a *AccountState) Copy() *AccountState {
+	res := NewEmptyAccountState()
+	if a.Nonce != nil {
+		res.Nonce = new(uint64)
+		*res.Nonce = *a.Nonce
+	}
+	if a.Code != nil {
+		res.Code = bytes.Clone(a.Code)
+	}
+	if a.Balance != nil {
+		res.Balance = new(Balance)
+		copy(res.Balance[:], (*a.Balance)[:])
+	}
+	if a.StorageWrites != nil {
+		res.StorageWrites = maps.Clone(a.StorageWrites)
+	}
+	return res
+}
+
+func (s *StateDiff) String() string {
+	var res bytes.Buffer
+	enc := json.NewEncoder(&res)
+	enc.SetIndent("", "    ")
+	enc.Encode(s)
+	return res.String()
+}
+
+// Merge merges the state changes present in next into the caller.  After,
+// the state of the caller is the aggregate diff through next.
+func (s *StateDiff) Merge(next *StateDiff) {
+	for account, diff := range next.Mutations {
+		if mut, ok := s.Mutations[account]; ok {
+			if diff.Balance != nil {
+				mut.Balance = diff.Balance
+			}
+			if diff.Code != nil {
+				mut.Code = diff.Code
+			}
+			if diff.Nonce != nil {
+				mut.Nonce = diff.Nonce
+			}
+			if len(diff.StorageWrites) > 0 {
+				if mut.StorageWrites == nil {
+					mut.StorageWrites = maps.Clone(diff.StorageWrites)
+				} else {
+					for key, val := range diff.StorageWrites {
+						mut.StorageWrites[key] = val
+					}
+				}
+
+			}
+		} else {
+			s.Mutations[account] = diff.Copy()
+		}
+	}
+}
+
+func (s *StateDiff) Copy() *StateDiff {
+	res := &StateDiff{make(map[common.Address]*AccountState)}
+	for addr, accountDiff := range s.Mutations {
+		cpy := accountDiff.Copy()
+		res.Mutations[addr] = cpy
+	}
+	return res
+}
+
+func (e *BlockAccessList) PrettyPrint() string {
+	var res bytes.Buffer
+	printWithIndent := func(indent int, text string) {
+		fmt.Fprintf(&res, "%s%s\n", strings.Repeat("    ", indent), text)
+	}
+	for _, accountDiff := range e.Accesses {
+		printWithIndent(0, fmt.Sprintf("%x:", accountDiff.Address))
+
+		printWithIndent(1, "storage writes:")
+		for _, sWrite := range accountDiff.StorageWrites {
+			printWithIndent(2, fmt.Sprintf("%x:", sWrite.Slot))
+			for _, access := range sWrite.Accesses {
+				printWithIndent(3, fmt.Sprintf("%d: %x", access.TxIdx, access.ValueAfter))
+			}
+		}
+
+		printWithIndent(1, "storage reads:")
+		for _, slot := range accountDiff.StorageReads {
+			printWithIndent(2, fmt.Sprintf("%x", slot))
+		}
+
+		printWithIndent(1, "balance changes:")
+		for _, change := range accountDiff.BalanceChanges {
+			balance := new(uint256.Int).SetBytes(change.Balance[:]).String()
+			printWithIndent(2, fmt.Sprintf("%d: %s", change.TxIdx, balance))
+		}
+
+		printWithIndent(1, "nonce changes:")
+		for _, change := range accountDiff.NonceChanges {
+			printWithIndent(2, fmt.Sprintf("%d: %d", change.TxIdx, change.Nonce))
+		}
+
+		if len(accountDiff.CodeChanges) > 0 {
+			printWithIndent(1, "code:")
+			for _, change := range accountDiff.CodeChanges {
+				printWithIndent(2, fmt.Sprintf("%d: %x", change.TxIndex, change.Code))
+			}
+		}
+	}
+	return res.String()
+}
+
+// Copy returns a deep copy of the access list
+func (e *BlockAccessList) Copy() (res BlockAccessList) {
+	for _, accountAccess := range e.Accesses {
+		res.Accesses = append(res.Accesses, accountAccess.Copy())
+	}
+	return
 }
