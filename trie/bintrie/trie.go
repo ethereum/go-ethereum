@@ -241,7 +241,7 @@ func (t *BinaryTrie) Hash() common.Hash {
 
 // Commit writes all nodes to the trie's memory database, tracking the internal
 // and external (for account tries) references.
-func (t *BinaryTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet, error) {
+func (t *BinaryTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 	root := t.root.(*InternalNode)
 	nodeset := trienode.NewNodeSet(common.Hash{})
 
@@ -254,7 +254,7 @@ func (t *BinaryTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet, error) {
 	}
 
 	// Serialize root commitment form
-	return t.Hash(), nodeset, nil
+	return t.Hash(), nodeset
 }
 
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration
@@ -317,4 +317,29 @@ func (t *BinaryTrie) UpdateContractCode(addr common.Address, codeHash common.Has
 		}
 	}
 	return nil
+}
+
+func (t *BinaryTrie) PrefetchAccount(addresses []common.Address) error {
+	for _, addr := range addresses {
+		if _, err := t.GetAccount(addr); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// PrefetchStorage attempts to resolve specific storage slots from the database
+// to accelerate subsequent trie operations.
+func (t *BinaryTrie) PrefetchStorage(addr common.Address, keys [][]byte) error {
+	for _, key := range keys {
+		if _, err := t.GetStorage(addr, key); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Witness returns a set containing all trie nodes that have been accessed.
+func (t *BinaryTrie) Witness() map[string][]byte {
+	panic("not implemented")
 }
