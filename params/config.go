@@ -406,17 +406,17 @@ type ChainConfig struct {
 
 	// Fork scheduling was switched from blocks to timestamps here
 
-	ShanghaiTime    *uint64 `json:"shanghaiTime,omitempty"`    // Shanghai switch time (nil = no fork, 0 = already on shanghai)
-	CancunTime      *uint64 `json:"cancunTime,omitempty"`      // Cancun switch time (nil = no fork, 0 = already on cancun)
-	PragueTime      *uint64 `json:"pragueTime,omitempty"`      // Prague switch time (nil = no fork, 0 = already on prague)
-	OsakaTime       *uint64 `json:"osakaTime,omitempty"`       // Osaka switch time (nil = no fork, 0 = already on osaka)
-	GlamsterdamTime *uint64 `json:"glamsterdamTime,omitempty"` // Glamsterdam switch time (nil = no fork, 0 = already on glamsterdam)
-	VerkleTime      *uint64 `json:"verkleTime,omitempty"`      // Verkle switch time (nil = no fork, 0 = already on verkle)
-	BPO1Time        *uint64 `json:"bpo1Time,omitempty"`        // BPO1 switch time (nil = no fork, 0 = already on bpo1)
-	BPO2Time        *uint64 `json:"bpo2Time,omitempty"`        // BPO2 switch time (nil = no fork, 0 = already on bpo2)
-	BPO3Time        *uint64 `json:"bpo3Time,omitempty"`        // BPO3 switch time (nil = no fork, 0 = already on bpo3)
-	BPO4Time        *uint64 `json:"bpo4Time,omitempty"`        // BPO4 switch time (nil = no fork, 0 = already on bpo4)
-	BPO5Time        *uint64 `json:"bpo5Time,omitempty"`        // BPO5 switch time (nil = no fork, 0 = already on bpo5)
+	ShanghaiTime  *uint64 `json:"shanghaiTime,omitempty"`  // Shanghai switch time (nil = no fork, 0 = already on shanghai)
+	CancunTime    *uint64 `json:"cancunTime,omitempty"`    // Cancun switch time (nil = no fork, 0 = already on cancun)
+	PragueTime    *uint64 `json:"pragueTime,omitempty"`    // Prague switch time (nil = no fork, 0 = already on prague)
+	OsakaTime     *uint64 `json:"osakaTime,omitempty"`     // Osaka switch time (nil = no fork, 0 = already on osaka)
+	AmsterdamTime *uint64 `json:"amsterdamTime,omitempty"` // Amsterdam switch time (nil = no fork, 0 = already on glamsterdam)
+	VerkleTime    *uint64 `json:"verkleTime,omitempty"`    // Verkle switch time (nil = no fork, 0 = already on verkle)
+	BPO1Time      *uint64 `json:"bpo1Time,omitempty"`      // BPO1 switch time (nil = no fork, 0 = already on bpo1)
+	BPO2Time      *uint64 `json:"bpo2Time,omitempty"`      // BPO2 switch time (nil = no fork, 0 = already on bpo2)
+	BPO3Time      *uint64 `json:"bpo3Time,omitempty"`      // BPO3 switch time (nil = no fork, 0 = already on bpo3)
+	BPO4Time      *uint64 `json:"bpo4Time,omitempty"`      // BPO4 switch time (nil = no fork, 0 = already on bpo4)
+	BPO5Time      *uint64 `json:"bpo5Time,omitempty"`      // BPO5 switch time (nil = no fork, 0 = already on bpo5)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -677,7 +677,7 @@ func (c *ChainConfig) IsOsaka(num *big.Int, time uint64) bool {
 
 // IsGlamsterdam returns whether time is either equal to the Glamsterdam fork time or greater.
 func (c *ChainConfig) IsGlamsterdam(num *big.Int, time uint64) bool {
-	return c.IsLondon(num) && isTimestampForked(c.GlamsterdamTime, time)
+	return c.IsLondon(num) && isTimestampForked(c.AmsterdamTime, time)
 }
 
 // IsVerkle returns whether time is either equal to the Verkle fork time or greater.
