@@ -156,18 +156,18 @@ func LocalEnv() Environment {
 		// see: https://git-scm.com/docs/git-checkout#_detached_head
 		// Additional check required to verify, that file contains commit hash
 		commitRe, _ := regexp.Compile("^([0-9a-f]{40})$")
-		if commit := commitRe.FindString(head); commit != "" && env.Commit == "" {
+		if commit := commitRe.FindString(strings.TrimSpace(head)); commit != "" && env.Commit == "" {
 			env.Commit = commit
 			env.Date = getDate(env.Commit)
 		}
-		return env
+		// Do not return early; allow tag discovery even in detached HEAD.
 	}
 	if env.Commit == "" {
 		env.Commit = readGitFile(head)
 	}
 	env.Date = getDate(env.Commit)
 	if env.Branch == "" {
-		if head != "HEAD" {
+		if strings.HasPrefix(head, "refs/heads/") {
 			env.Branch = strings.TrimPrefix(head, "refs/heads/")
 		}
 	}
