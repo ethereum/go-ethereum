@@ -22,7 +22,7 @@ import (
 	"hash"
 	"hash/fnv"
 	"maps"
-	gmath "math"
+	"math"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -729,7 +729,7 @@ func (bc *broadcastChoice) choosePeers(peers []*ethPeer, txSender common.Address
 
 	// Take top n.
 	clear(bc.buffer)
-	n := int(gmath.Ceil(gmath.Sqrt(float64(len(bc.tmp)))))
+	n := int(math.Ceil(math.Sqrt(float64(len(bc.tmp)))))
 	for i := range n {
 		bc.buffer[bc.tmp[i].p] = struct{}{}
 	}
