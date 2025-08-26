@@ -356,7 +356,7 @@ type writePatterItem struct {
 
 // dirty: before setting write range to dirty
 func (m *mapDatabase) writeMaps(writeMaps, valid, dirty common.Range[uint32], maps map[uint32]*finishedMap, stopCallback func() bool) (bool, error) {
-	fmt.Println("writeMaps", writeMaps, valid, dirty)
+	//fmt.Println("writeMaps", writeMaps, valid, dirty)
 	writePattern := m.makeWritePattern(writeMaps, valid, dirty)
 	batch := m.db.NewBatch()
 	rowsPerBatch := uint32(max(maxWritesPerBatch/len(writePattern), 1))
@@ -403,7 +403,7 @@ func (m *mapDatabase) writeMaps(writeMaps, valid, dirty common.Range[uint32], ma
 	if err := batch.Write(); err != nil {
 		return false, err
 	}
-	fmt.Println("writeMaps success")
+	//fmt.Println("writeMaps success")
 	return true, nil
 }
 

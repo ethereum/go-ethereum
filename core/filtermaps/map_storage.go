@@ -71,12 +71,12 @@ func newMapStorage(params *Params, mapDb *mapDatabase) *mapStorage {
 			m.resetWithError(fmt.Sprintf("could not initialize valid block range: %v", err))
 		}
 	}
-	fmt.Println("newMapStorage")
-	fmt.Println(" valid:", m.valid)
-	fmt.Println(" validBlocks:", m.validBlocks)
-	fmt.Println(" dirty:", m.dirty)
-	fmt.Println(" knownEpochs:", m.knownEpochs)
-	fmt.Println(" knownEpochBlocks:", m.knownEpochBlocks)
+	//fmt.Println("newMapStorage")
+	//fmt.Println(" valid:", m.valid)
+	//fmt.Println(" validBlocks:", m.validBlocks)
+	//fmt.Println(" dirty:", m.dirty)
+	//fmt.Println(" knownEpochs:", m.knownEpochs)
+	//fmt.Println(" knownEpochBlocks:", m.knownEpochBlocks)
 	m.closeWg.Add(1)
 	go m.eventLoop()
 	return m
@@ -197,7 +197,7 @@ func (m *mapStorage) addMap(mapIndex uint32, fm *finishedMap, forceCommit bool) 
 	if fm == nil {
 		panic("trying to add nil map")
 	}
-	fmt.Println("addMap", mapIndex, forceCommit, m.overlay.count())
+	//fmt.Println("addMap", mapIndex, forceCommit, m.overlay.count())
 	if m.valid.includes(mapIndex) || m.overlay.includes(mapIndex) {
 		panic("addMap to non-empty map index")
 	}
@@ -223,14 +223,14 @@ func (m *mapStorage) deleteMaps(maps common.Range[uint32]) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	fmt.Println("deleteMaps", maps)
+	//fmt.Println("deleteMaps", maps)
 	dr := rangeSet[uint32]{maps}
 	for i := range dr.intersection(m.overlay).iter() {
 		delete(m.maps, i)
 	}
-	fmt.Println(" overlay before", m.overlay)
+	//fmt.Println(" overlay before", m.overlay)
 	m.overlay = m.overlay.exclude(dr)
-	fmt.Println(" overlay after", m.overlay)
+	//fmt.Println(" overlay after", m.overlay)
 	m.overlayUpdated()
 	m.dirty = m.dirty.union(dr.intersection(m.valid))
 	m.valid = m.valid.exclude(dr)
@@ -277,7 +277,7 @@ func (m *mapStorage) eventLoop() {
 		select {
 		case <-m.closeCh:
 			stopped = true
-			fmt.Println("STOPPED")
+			//fmt.Println("STOPPED")
 		case <-m.triggerCh:
 		}
 	}
@@ -286,7 +286,7 @@ func (m *mapStorage) eventLoop() {
 		select {
 		case <-m.closeCh:
 			stopped = true
-			fmt.Println("STOPPED")
+			//fmt.Println("STOPPED")
 		case <-m.triggerCh:
 		default:
 		}
@@ -326,7 +326,7 @@ func (m *mapStorage) eventLoop() {
 		}
 		//fmt.Println("e5")
 	}
-	fmt.Println("e6")
+	//fmt.Println("e6")
 }
 
 func (m *mapStorage) trigger() {
@@ -448,7 +448,7 @@ func (m *mapStorage) selectEpochTriggeredWrite() (uint32, bool) {
 	if len(m.writeEpochs) == 0 {
 		return 0, false
 	}
-	fmt.Println("selectEpochTriggeredWrite", m.writeEpochs)
+	//fmt.Println("selectEpochTriggeredWrite", m.writeEpochs)
 	epoch := m.writeEpochs[len(m.writeEpochs)-1].First()
 	m.writeEpochs = m.writeEpochs.exclude(rangeSet[uint32]{common.NewRange[uint32](epoch, 1)})
 	return epoch, true
@@ -464,7 +464,7 @@ func (m *mapStorage) selectEpochForcedWrite() (uint32, bool) {
 			longest = r
 		}
 	}
-	fmt.Println("selectEpochForcedWrite", m.overlay)
+	//fmt.Println("selectEpochForcedWrite", m.overlay)
 	return m.params.mapEpoch(longest.First()), true
 }
 
@@ -483,7 +483,7 @@ func (m *mapStorage) selectEpochOnlyDirty() (uint32, bool) {
 	if len(epochs) == 0 {
 		return 0, false
 	}
-	fmt.Println("selectEpochForcedWrite", epochs, m.dirty, m.overlay)
+	//fmt.Println("selectEpochForcedWrite", epochs, m.dirty, m.overlay)
 	return epochs[0].First(), true
 }
 
@@ -507,10 +507,10 @@ func (m *mapStorage) doWriteCycle(stopCallback func() bool) (bool, error) {
 	writeMaps := epochRange.intersection(m.overlay).singleRange()
 	validInEpoch := epochRange.intersection(m.valid).singleRange()
 	dirtyInEpoch := epochRange.intersection(m.dirty).singleRange()
-	fmt.Println("* epoch", epoch, epochRange)
-	fmt.Println("* writeMaps", writeMaps, m.overlay)
-	fmt.Println("* validInEpoch", validInEpoch, m.valid)
-	fmt.Println("* dirtyInEpoch", dirtyInEpoch, m.dirty)
+	//fmt.Println("* epoch", epoch, epochRange)
+	//fmt.Println("* writeMaps", writeMaps, m.overlay)
+	//fmt.Println("* validInEpoch", validInEpoch, m.valid)
+	//fmt.Println("* dirtyInEpoch", dirtyInEpoch, m.dirty)
 	// delete old pointers
 	if !dirtyInEpoch.IsEmpty() {
 		m.mapDb.deletePointers(m.extendPointerRange(dirtyInEpoch), stopCallback)

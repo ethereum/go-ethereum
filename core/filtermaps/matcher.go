@@ -80,7 +80,7 @@ func (l *LogPosition) GetLog(receipts types.Receipts) (*types.Log, error) {
 // to that block range might be missing or incorrect.
 // Also note that the returned list may contain false positives.
 func GetPotentialMatches(ctx context.Context, backend *IndexView, firstBlock, lastBlock uint64, addresses []common.Address, topics [][]common.Hash) ([]LogPosition, error) {
-	fmt.Println("GetPotentialMatches", firstBlock, lastBlock, addresses, topics)
+	//fmt.Println("GetPotentialMatches", firstBlock, lastBlock, addresses, topics)
 	params := backend.GetParams()
 	// find the log value index range to search
 	firstIndex, err := backend.GetBlockLvPointer(firstBlock)
@@ -94,7 +94,7 @@ func GetPotentialMatches(ctx context.Context, backend *IndexView, firstBlock, la
 	if lastIndex > 0 {
 		lastIndex--
 	}
-	fmt.Println(" lv range", firstIndex, lastIndex)
+	//fmt.Println(" lv range", firstIndex, lastIndex)
 
 	// build matcher according to the given filter criteria
 	matchers := make([]matcher, len(topics)+1)
@@ -149,7 +149,7 @@ func GetPotentialMatches(ctx context.Context, backend *IndexView, firstBlock, la
 		log.Info("Get log stats")
 		m.getLogStats.print()
 	}
-	fmt.Println("res", len(res))
+	//fmt.Println("res", len(res))
 	return res, err
 }
 
@@ -472,9 +472,9 @@ func (m *singleMatcherInstance) getMatchesForLayer(layerIndex uint32) (results [
 		for _, res := range results {
 			r += len(res.matches)
 		}
-		fmt.Println("sm results", layerIndex, m.mapIndices[0], len(m.mapIndices), r, totalsize)
+		//fmt.Println("sm results", layerIndex, m.mapIndices[0], len(m.mapIndices), r, totalsize)
 	} else {
-		fmt.Println("sm results *")
+		//fmt.Println("sm results *")
 	}
 	m.cleanMapIndices()
 	m.stats.setState(&st, stNone)

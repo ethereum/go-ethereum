@@ -17,7 +17,6 @@
 package filtermaps
 
 import (
-	"fmt"
 	"math"
 	"sync"
 
@@ -89,22 +88,22 @@ func NewIndexer(db ethdb.KeyValueStore, params *Params, config Config) *Indexer 
 	ix.updateTailEpoch()
 	ix.updateActiveViewTailEpoch()
 	ix.updateTailState()
-	fmt.Println("init  tail epoch", ix.tailEpoch, "tail target", ix.targetTailEpoch, "head number", ix.headNumber)
+	//fmt.Println("init  tail epoch", ix.tailEpoch, "tail target", ix.targetTailEpoch, "head number", ix.headNumber)
 	return ix
 }
 
 func (ix *Indexer) initMapBoundary(nextMap, limitMap uint32) *renderState {
-	fmt.Println("initMapBoundary", nextMap, limitMap)
+	//fmt.Println("initMapBoundary", nextMap, limitMap)
 	rs := &renderState{
 		params:      ix.storage.params,
 		renderRange: common.NewRange[uint32](nextMap, limitMap-nextMap),
 	}
 	for {
 		nextMap = ix.storage.lastBoundaryBefore(nextMap)
-		fmt.Println(" lbb", nextMap)
+		//fmt.Println(" lbb", nextMap)
 		if nextMap == 0 {
 			// initialize at genesis
-			fmt.Println(" genesis")
+			//fmt.Println(" genesis")
 			rs.currentMap = rs.params.newMemoryMap()
 			return rs
 		}
@@ -127,7 +126,7 @@ func (ix *Indexer) initMapBoundary(nextMap, limitMap uint32) *renderState {
 		rs.nextBlock = lastNumber
 		rs.partialBlock = true
 		rs.partialBlockHash = lastHash
-		fmt.Println(" nextBlock", rs.nextBlock, "mapIndex", rs.mapIndex)
+		//fmt.Println(" nextBlock", rs.nextBlock, "mapIndex", rs.mapIndex)
 		return rs
 	}
 }
@@ -140,7 +139,7 @@ func (ix *Indexer) initSnapshot(snapshot *IndexView) *renderState {
 		return nil
 	}
 
-	fmt.Println("initSnapshot", snapshot.headBlockHash)
+	//fmt.Println("initSnapshot", snapshot.headBlockHash)
 	return &renderState{
 		params:      ix.storage.params,
 		renderRange: common.NewRange[uint32](snapshot.headMapIndex, math.MaxUint32-snapshot.headMapIndex),
@@ -153,7 +152,7 @@ func (ix *Indexer) initSnapshot(snapshot *IndexView) *renderState {
 // Note that revertMaps might be called while headRenderer is nil and might set
 // headRenderer to nil.
 func (ix *Indexer) revertMaps(mapIndex uint32) {
-	fmt.Println("revertMaps", mapIndex)
+	//fmt.Println("revertMaps", mapIndex)
 	if mapIndex < ix.storage.lastBoundaryBefore(math.MaxUint32) {
 		for hash, iv := range ix.snapshots {
 			if iv.firstMemoryMap > mapIndex {
@@ -437,8 +436,8 @@ func (ix *Indexer) needBlocks() common.Range[uint64] {
 }
 
 func (ix *Indexer) Stop() {
-	fmt.Println("/Stop")
-	defer fmt.Println("\\Stop")
+	/*fmt.Println("/Stop")
+	defer fmt.Println("\\Stop")*/
 
 	ix.storage.stop()
 }

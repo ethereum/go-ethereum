@@ -18,7 +18,6 @@
 package core
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -369,7 +368,7 @@ func (s *indexServer) setSuspended(suspended bool) {
 	if (s.suspendCh != nil) == suspended {
 		return
 	}
-	fmt.Println("setSuspended", suspended)
+	//fmt.Println("setSuspended", suspended)
 	if suspended {
 		s.suspendCh = make(chan struct{})
 		s.indexer.Suspended()
@@ -403,7 +402,7 @@ func (s *indexServer) sendHeadBlockData(headers []*types.Header, receipts []type
 	}*/
 	s.ready, s.needBlocks = s.indexer.AddBlockData(headers, receipts)
 	if s.suspendCh != nil {
-		fmt.Println("setSuspended false (head)")
+		//fmt.Println("setSuspended false (head)")
 		close(s.suspendCh)
 		s.suspendCh = nil
 	}
