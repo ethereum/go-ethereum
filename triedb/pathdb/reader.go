@@ -230,7 +230,7 @@ func (db *Database) HistoricReader(root common.Hash) (*HistoricalStateReader, er
 	return &HistoricalStateReader{
 		id:     *id,
 		db:     db,
-		reader: newHistoryReader(db.diskdb, db.freezer),
+		reader: newHistoryReader(db.diskdb, db.freezer, db.cacher),
 	}, nil
 }
 

@@ -25,7 +25,9 @@ import (
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
@@ -56,6 +58,14 @@ func (ident stateIdent) String() string {
 		return ident.addressHash.Hex()
 	}
 	return ident.addressHash.Hex() + ident.storageHash.Hex()
+}
+
+// CacheKey returns the cache key for the state identifier.
+func (ident stateIdent) CacheKey() string {
+	if ident.account {
+		return ident.addressHash.Hex()
+	}
+	return crypto.Keccak256Hash(ident.addressHash.Bytes(), ident.storageHash.Bytes()).Hex()
 }
 
 // newAccountIdent constructs a state identifier for an account.
@@ -122,8 +132,8 @@ type indexReaderWithLimitTag struct {
 }
 
 // newIndexReaderWithLimitTag constructs a index reader with indexing position.
-func newIndexReaderWithLimitTag(db ethdb.KeyValueReader, state stateIdent, limit uint64) (*indexReaderWithLimitTag, error) {
-	r, err := newIndexReader(db, state)
+func newIndexReaderWithLimitTag(db ethdb.KeyValueReader, state stateIdent, limit uint64, cacher *historyCacher) (*indexReaderWithLimitTag, error) {
+	r, err := newIndexReader(db, state, cacher)
 	if err != nil {
 		return nil, err
 	}
@@ -181,19 +191,35 @@ func (r *indexReaderWithLimitTag) readGreaterThan(id uint64, lastID uint64) (uin
 	return r.reader.readGreaterThan(id)
 }
 
+// historyCacher is responsible for caching history objects in memory to speed up access.
+type historyCacher struct {
+	index *lru.Cache[string, []byte]
+	block *lru.Cache[string, []byte]
+}
+
+// newHistoryCacher creates a new historyCacher instance.
+func newHistoryCacher(indexSize, blockSize int) *historyCacher {
+	return &historyCacher{
+		index: lru.NewCache[string, []byte](indexSize),
+		block: lru.NewCache[string, []byte](blockSize),
+	}
+}
+
 // historyReader is the structure to access historic state data.
 type historyReader struct {
 	disk    ethdb.KeyValueReader
 	freezer ethdb.AncientReader
 	readers map[string]*indexReaderWithLimitTag
+	cacher  *historyCacher
 }
 
-// newHistoryReader constructs the history reader with the supplied db.
-func newHistoryReader(disk ethdb.KeyValueReader, freezer ethdb.AncientReader) *historyReader {
+// newHistoryReader constructs the history reader with the supplied db and cacher.
+func newHistoryReader(disk ethdb.KeyValueReader, freezer ethdb.AncientReader, cacher *historyCacher) *historyReader {
 	return &historyReader{
 		disk:    disk,
 		freezer: freezer,
 		readers: make(map[string]*indexReaderWithLimitTag),
+		cacher:  cacher,
 	}
 }
 
@@ -343,7 +369,7 @@ func (r *historyReader) read(state stateIdentQuery, stateID uint64, lastID uint6
 	// state retrieval
 	ir, ok := r.readers[state.String()]
 	if !ok {
-		ir, err = newIndexReaderWithLimitTag(r.disk, state.stateIdent, metadata.Last)
+		ir, err = newIndexReaderWithLimitTag(r.disk, state.stateIdent, metadata.Last, r.cacher)
 		if err != nil {
 			return nil, err
 		}
@@ -363,8 +389,11 @@ func (r *historyReader) read(state stateIdentQuery, stateID uint64, lastID uint6
 	// that the associated state histories are no longer available due to a rollback.
 	// Such truncation should be captured by the state resolver below, rather than returning
 	// invalid data.
+	var result []byte
 	if state.account {
-		return r.readAccount(state.address, historyID)
+		result, err = r.readAccount(state.address, historyID)
+	} else {
+		result, err = r.readStorage(state.address, state.storageKey, state.storageHash, historyID)
 	}
-	return r.readStorage(state.address, state.storageKey, state.storageHash, historyID)
+	return result, err
 }

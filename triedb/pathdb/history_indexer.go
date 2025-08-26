@@ -79,15 +79,17 @@ type batchIndexer struct {
 	delete   bool                                     // Index or unindex mode
 	lastID   uint64                                   // The ID of latest processed history
 	db       ethdb.KeyValueStore
+	cacher   *historyCacher
 }
 
 // newBatchIndexer constructs the batch indexer with the supplied mode.
-func newBatchIndexer(db ethdb.KeyValueStore, delete bool) *batchIndexer {
+func newBatchIndexer(db ethdb.KeyValueStore, cacher *historyCacher, delete bool) *batchIndexer {
 	return &batchIndexer{
 		accounts: make(map[common.Hash][]uint64),
 		storages: make(map[common.Hash]map[common.Hash][]uint64),
 		delete:   delete,
 		db:       db,
+		cacher:   cacher,
 	}
 }
 
@@ -139,7 +141,7 @@ func (b *batchIndexer) finish(force bool) error {
 	for addrHash, idList := range b.accounts {
 		eg.Go(func() error {
 			if !b.delete {
-				iw, err := newIndexWriter(b.db, newAccountIdent(addrHash))
+				iw, err := newIndexWriter(b.db, newAccountIdent(addrHash), b.cacher)
 				if err != nil {
 					return err
 				}
@@ -152,7 +154,7 @@ func (b *batchIndexer) finish(force bool) error {
 				iw.finish(batch)
 				batchMu.Unlock()
 			} else {
-				id, err := newIndexDeleter(b.db, newAccountIdent(addrHash))
+				id, err := newIndexDeleter(b.db, newAccountIdent(addrHash), b.cacher)
 				if err != nil {
 					return err
 				}
@@ -173,7 +175,7 @@ func (b *batchIndexer) finish(force bool) error {
 		for storageHash, idList := range slots {
 			eg.Go(func() error {
 				if !b.delete {
-					iw, err := newIndexWriter(b.db, newStorageIdent(addrHash, storageHash))
+					iw, err := newIndexWriter(b.db, newStorageIdent(addrHash, storageHash), b.cacher)
 					if err != nil {
 						return err
 					}
@@ -186,7 +188,7 @@ func (b *batchIndexer) finish(force bool) error {
 					iw.finish(batch)
 					batchMu.Unlock()
 				} else {
-					id, err := newIndexDeleter(b.db, newStorageIdent(addrHash, storageHash))
+					id, err := newIndexDeleter(b.db, newStorageIdent(addrHash, storageHash), b.cacher)
 					if err != nil {
 						return err
 					}
@@ -206,6 +208,7 @@ func (b *batchIndexer) finish(force bool) error {
 	if err := eg.Wait(); err != nil {
 		return err
 	}
+
 	// Update the position of last indexed state history
 	if !b.delete {
 		storeIndexMetadata(batch, b.lastID)
@@ -227,7 +230,7 @@ func (b *batchIndexer) finish(force bool) error {
 }
 
 // indexSingle processes the state history with the specified ID for indexing.
-func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.AncientReader) error {
+func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.AncientReader, cacher *historyCacher) error {
 	start := time.Now()
 	defer func() {
 		indexHistoryTimer.UpdateSince(start)
@@ -245,7 +248,7 @@ func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancient
 	if err != nil {
 		return err
 	}
-	b := newBatchIndexer(db, false)
+	b := newBatchIndexer(db, cacher, false)
 	if err := b.process(h, historyID); err != nil {
 		return err
 	}
@@ -257,7 +260,7 @@ func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancient
 }
 
 // unindexSingle processes the state history with the specified ID for unindexing.
-func unindexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.AncientReader) error {
+func unindexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.AncientReader, cacher *historyCacher) error {
 	start := time.Now()
 	defer func() {
 		unindexHistoryTimer.UpdateSince(start)
@@ -275,7 +278,7 @@ func unindexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancie
 	if err != nil {
 		return err
 	}
-	b := newBatchIndexer(db, true)
+	b := newBatchIndexer(db, cacher, true)
 	if err := b.process(h, historyID); err != nil {
 		return err
 	}
@@ -302,6 +305,7 @@ type interruptSignal struct {
 type indexIniter struct {
 	disk      ethdb.KeyValueStore
 	freezer   ethdb.AncientStore
+	cacher    *historyCacher
 	interrupt chan *interruptSignal
 	done      chan struct{}
 	closed    chan struct{}
@@ -416,7 +420,7 @@ func (i *indexIniter) run(lastID uint64) {
 			// been fully indexed, unindex it here and shut down the initializer.
 			if checkDone() {
 				log.Info("Truncate the extra history", "id", lastID)
-				if err := unindexSingle(lastID, i.disk, i.freezer); err != nil {
+				if err := unindexSingle(lastID, i.disk, i.freezer, i.cacher); err != nil {
 					signal.result <- err
 					return
 				}
@@ -517,7 +521,7 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 		current = beginID
 		start   = time.Now()
 		logged  = time.Now()
-		batch   = newBatchIndexer(i.disk, false)
+		batch   = newBatchIndexer(i.disk, i.cacher, false)
 	)
 	for current <= lastID {
 		count := lastID - current + 1
@@ -585,6 +589,7 @@ type historyIndexer struct {
 	initer  *indexIniter
 	disk    ethdb.KeyValueStore
 	freezer ethdb.AncientStore
+	cacher  *historyCacher
 }
 
 // checkVersion checks whether the index data in the database matches the version.
@@ -611,12 +616,13 @@ func checkVersion(disk ethdb.KeyValueStore) {
 
 // newHistoryIndexer constructs the history indexer and launches the background
 // initer to complete the indexing of any remaining state histories.
-func newHistoryIndexer(disk ethdb.KeyValueStore, freezer ethdb.AncientStore, lastHistoryID uint64) *historyIndexer {
+func newHistoryIndexer(disk ethdb.KeyValueStore, freezer ethdb.AncientStore, lastHistoryID uint64, cacher *historyCacher) *historyIndexer {
 	checkVersion(disk)
 	return &historyIndexer{
 		initer:  newIndexIniter(disk, freezer, lastHistoryID),
 		disk:    disk,
 		freezer: freezer,
+		cacher:  cacher,
 	}
 }
 
@@ -642,7 +648,7 @@ func (i *historyIndexer) extend(historyID uint64) error {
 	case <-i.initer.closed:
 		return errors.New("indexer is closed")
 	case <-i.initer.done:
-		return indexSingle(historyID, i.disk, i.freezer)
+		return indexSingle(historyID, i.disk, i.freezer, i.cacher)
 	case i.initer.interrupt <- signal:
 		return <-signal.result
 	}
@@ -659,7 +665,7 @@ func (i *historyIndexer) shorten(historyID uint64) error {
 	case <-i.initer.closed:
 		return errors.New("indexer is closed")
 	case <-i.initer.done:
-		return unindexSingle(historyID, i.disk, i.freezer)
+		return unindexSingle(historyID, i.disk, i.freezer, i.cacher)
 	case i.initer.interrupt <- signal:
 		return <-signal.result
 	}

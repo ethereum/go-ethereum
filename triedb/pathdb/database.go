@@ -60,6 +60,13 @@ const (
 var (
 	// maxDiffLayers is the maximum diff layers allowed in the layer tree.
 	maxDiffLayers = 128
+
+	// historyIndexCacheSize is the maximum count of history index cache.
+	// Each indexBlockDesc is 14bytes, assume each account has 10 descriptors,
+	// then the total memory usage is ~54MB.
+	historyIndexCacheSize = 409600
+	// historyBlockCacheSize is the maximum count of history block cache.
+	historyBlockCacheSize = 4096
 )
 
 // layer is the interface implemented by all state layers which includes some
@@ -225,6 +232,7 @@ type Database struct {
 	freezer ethdb.ResettableAncientStore // Freezer for storing trie histories, nil possible in tests
 	lock    sync.RWMutex                 // Lock to prevent mutations from happening at the same time
 	indexer *historyIndexer              // History indexer
+	cacher  *historyCacher               // History cacher
 }
 
 // New attempts to load an already existing layer from a persistent key-value
@@ -242,6 +250,7 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 		config:   config,
 		diskdb:   diskdb,
 		hasher:   merkleNodeHasher,
+		cacher:   newHistoryCacher(historyIndexCacheSize, historyBlockCacheSize),
 	}
 	// Establish a dedicated database namespace tailored for verkle-specific
 	// data, ensuring the isolation of both verkle and merkle tree data. It's
@@ -276,7 +285,7 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 	}
 	// TODO (rjl493456442) disable the background indexing in read-only mode
 	if db.freezer != nil && db.config.EnableStateIndexing {
-		db.indexer = newHistoryIndexer(db.diskdb, db.freezer, db.tree.bottom().stateID())
+		db.indexer = newHistoryIndexer(db.diskdb, db.freezer, db.tree.bottom().stateID(), db.cacher)
 		log.Info("Enabled state history indexing")
 	}
 	fields := config.fields()
@@ -531,7 +540,7 @@ func (db *Database) Enable(root common.Hash) error {
 	//   2. Re-initialize the indexer so it starts indexing from the new state root.
 	if db.indexer != nil && db.freezer != nil && db.config.EnableStateIndexing {
 		db.indexer.close()
-		db.indexer = newHistoryIndexer(db.diskdb, db.freezer, db.tree.bottom().stateID())
+		db.indexer = newHistoryIndexer(db.diskdb, db.freezer, db.tree.bottom().stateID(), db.cacher)
 		log.Info("Re-enabled state history indexing")
 	}
 	log.Info("Rebuilt trie database", "root", root)
