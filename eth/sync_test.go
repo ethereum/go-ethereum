@@ -89,13 +89,14 @@ func testSnapSyncDisabling(t *testing.T, ethVer uint, snapVer uint) {
 		t.Fatal("sync failed:", err)
 	}
 	// Wait for downloader to finish processing with a timeout
-	for t0 := time.Now(); time.Since(t0) < 10*time.Second; time.Sleep(100 * time.Millisecond) {
-		if !empty.handler.snapSync.Load() {
-			break
+	for timeout := time.After(5 * time.Second); ; {
+		select {
+		case <-timeout:
+			t.Fatalf("snap sync not disabled after successful synchronisation")
+		case <-time.After(100 * time.Millisecond):
+			if !empty.handler.snapSync.Load() {
+				return
+			}
 		}
-	}
-
-	if empty.handler.snapSync.Load() {
-		t.Fatalf("snap sync not disabled after successful synchronisation")
 	}
 }
