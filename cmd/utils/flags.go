@@ -1735,7 +1735,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 
 	if ctx.Bool(MetricsEnabledFlag.Name) && ctx.Bool(MetricsStateSizeFlag.Name) {
-		log.Error("Enabling state size metrics")
+		log.Info("Enabling state size metrics")
 		cfg.EnableStateSizeTracking = true
 	}
 	// Override any default configs for hard coded networks.
