@@ -152,7 +152,7 @@ func (st *bucketStats) print(name string) {
 		name, st.count, float64(st.blocks)/float64(st.count), float64(st.logs)/float64(st.count), st.runtime/time.Duration(st.count))
 }
 
-// writeQueries serializes the generated errors to the error file.
+// writeErrors serializes the generated errors to the error file.
 func writeErrors(errorFile string, errors []*filterQuery) {
 	file, err := os.Create(errorFile)
 	if err != nil {
