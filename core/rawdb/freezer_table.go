@@ -112,8 +112,9 @@ type freezerTable struct {
 	headId uint32              // number of the currently active head file
 	tailId uint32              // number of the earliest file
 
-	metadata *freezerTableMeta // metadata of the table
-	lastSync time.Time         // Timestamp when the last sync was performed
+	metadata    *freezerTableMeta // metadata of the table
+	uncommitted uint64            // Count of items written without flushing to file
+	lastSync    time.Time         // Timestamp when the last sync was performed
 
 	headBytes  int64          // Number of bytes written to the head file
 	readMeter  *metrics.Meter // Meter for measuring the effective amount of data read
@@ -1104,12 +1105,6 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 	// Update metrics.
 	t.readMeter.Mark(int64(totalSize))
 	return output, sizes, nil
-}
-
-// has returns an indicator whether the specified number data is still accessible
-// in the freezer table.
-func (t *freezerTable) has(number uint64) bool {
-	return t.items.Load() > number && t.itemHidden.Load() <= number
 }
 
 // size returns the total data size in the freezer table.

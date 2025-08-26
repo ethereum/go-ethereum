@@ -19,6 +19,7 @@ package crypto
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"crypto/rand"
 	"encoding/hex"
 	"math/big"
 	"os"
@@ -296,4 +297,39 @@ func TestPythonIntegration(t *testing.T) {
 
 	t.Logf("msg: %x, privkey: %s sig: %x\n", msg0, kh, sig0)
 	t.Logf("msg: %x, privkey: %s sig: %x\n", msg1, kh, sig1)
+}
+
+// goos: darwin
+// goarch: arm64
+// pkg: github.com/ethereum/go-ethereum/crypto
+// cpu: Apple M1 Pro
+// BenchmarkKeccak256Hash
+// BenchmarkKeccak256Hash-8   	  931095	      1270 ns/op	      32 B/op	       1 allocs/op
+func BenchmarkKeccak256Hash(b *testing.B) {
+	var input [512]byte
+	rand.Read(input[:])
+
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		Keccak256Hash(input[:])
+	}
+}
+
+// goos: darwin
+// goarch: arm64
+// pkg: github.com/ethereum/go-ethereum/crypto
+// cpu: Apple M1 Pro
+// BenchmarkHashData
+// BenchmarkHashData-8   	  793386	      1278 ns/op	      32 B/op	       1 allocs/op
+func BenchmarkHashData(b *testing.B) {
+	var (
+		input  [512]byte
+		buffer = NewKeccakState()
+	)
+	rand.Read(input[:])
+
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		HashData(buffer, input[:])
+	}
 }

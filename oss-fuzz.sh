@@ -152,6 +152,14 @@ compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bn256 \
   FuzzPair fuzzBn256Pair \
   $repo/tests/fuzzers/bn256/bn256_test.go
 
+compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bn256 \
+  FuzzUnmarshalG1 fuzzBn256UnmarshalG1 \
+  $repo/tests/fuzzers/bn256/bn256_test.go
+
+compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bn256 \
+  FuzzUnmarshalG2 fuzzBn256UnmarshalG2 \
+  $repo/tests/fuzzers/bn256/bn256_test.go
+
 compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/txfetcher \
   Fuzz fuzzTxfetcher \
   $repo/tests/fuzzers/txfetcher/txfetcher_test.go

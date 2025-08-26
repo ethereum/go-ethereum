@@ -85,7 +85,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 			return nil, err
 		}
 		if header == nil {
-			return nil, errors.New("unknown block")
+			return nil, errUnknownBlock
 		}
 		if header.Number.Uint64() < f.sys.backend.HistoryPruningCutoff() {
 			return nil, &history.PrunedHistoryError{}
@@ -456,14 +456,13 @@ func (f *Filter) blockLogs(ctx context.Context, header *types.Header) ([]*types.
 
 // checkMatches checks if the receipts belonging to the given header contain any log events that
 // match the filter criteria. This function is called when the bloom filter signals a potential match.
-// skipFilter signals all logs of the given block are requested.
 func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*types.Log, error) {
 	hash := header.Hash()
 	// Logs in cache are partially filled with context data
 	// such as tx index, block hash, etc.
 	// Notably tx hash is NOT filled in because it needs
 	// access to block body data.
-	cached, err := f.sys.cachedLogElem(ctx, hash, header.Number.Uint64())
+	cached, err := f.sys.cachedLogElem(ctx, hash, header.Number.Uint64(), header.Time)
 	if err != nil {
 		return nil, err
 	}

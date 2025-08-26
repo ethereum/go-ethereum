@@ -20,10 +20,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -39,7 +41,11 @@ func DecodeTxLookupEntry(data []byte, db ethdb.Reader) *uint64 {
 	}
 	// Database v4-v5 tx lookup format just stores the hash
 	if len(data) == common.HashLength {
-		return ReadHeaderNumber(db, common.BytesToHash(data))
+		number, ok := ReadHeaderNumber(db, common.BytesToHash(data))
+		if !ok {
+			return nil
+		}
+		return &number
 	}
 	// Finally try database v3 tx lookup format
 	var entry LegacyTxLookupEntry
@@ -128,9 +134,50 @@ func DeleteAllTxLookupEntries(db ethdb.KeyValueStore, condition func(common.Hash
 	}
 }
 
-// ReadTransaction retrieves a specific transaction from the database, along with
-// its added positional metadata.
-func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64) {
+// findTxInBlockBody traverses the given RLP-encoded block body, searching for
+// the transaction specified by its hash.
+func findTxInBlockBody(blockbody rlp.RawValue, target common.Hash) (*types.Transaction, uint64, error) {
+	txnListRLP, _, err := rlp.SplitList(blockbody)
+	if err != nil {
+		return nil, 0, err
+	}
+	iter, err := rlp.NewListIterator(txnListRLP)
+	if err != nil {
+		return nil, 0, err
+	}
+	txIndex := uint64(0)
+	for iter.Next() {
+		if iter.Err() != nil {
+			return nil, 0, err
+		}
+		// The preimage for the hash calculation of legacy transactions
+		// is just their RLP encoding. For typed (EIP-2718) transactions,
+		// which are encoded as byte arrays, the preimage is the content of
+		// the byte array, so trim their prefix here.
+		txRLP := iter.Value()
+		kind, txHashPayload, _, err := rlp.Split(txRLP)
+		if err != nil {
+			return nil, 0, err
+		}
+		if kind == rlp.List { // Legacy transaction
+			txHashPayload = txRLP
+		}
+		if crypto.Keccak256Hash(txHashPayload) == target {
+			var tx types.Transaction
+			if err := rlp.DecodeBytes(txRLP, &tx); err != nil {
+				return nil, 0, err
+			}
+			return &tx, txIndex, nil
+		}
+		txIndex++
+	}
+	return nil, 0, errors.New("transaction not found")
+}
+
+// ReadCanonicalTransaction retrieves a specific transaction from the database, along
+// with its added positional metadata. Notably, only the transaction in the canonical
+// chain is visible.
+func ReadCanonicalTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64) {
 	blockNumber := ReadTxLookupEntry(db, hash)
 	if blockNumber == nil {
 		return nil, common.Hash{}, 0, 0
@@ -139,23 +186,23 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 	if blockHash == (common.Hash{}) {
 		return nil, common.Hash{}, 0, 0
 	}
-	body := ReadBody(db, blockHash, *blockNumber)
-	if body == nil {
+	bodyRLP := ReadCanonicalBodyRLP(db, *blockNumber, &blockHash)
+	if bodyRLP == nil {
 		log.Error("Transaction referenced missing", "number", *blockNumber, "hash", blockHash)
 		return nil, common.Hash{}, 0, 0
 	}
-	for txIndex, tx := range body.Transactions {
-		if tx.Hash() == hash {
-			return tx, blockHash, *blockNumber, uint64(txIndex)
-		}
+	tx, txIndex, err := findTxInBlockBody(bodyRLP, hash)
+	if err != nil {
+		log.Error("Transaction not found", "number", *blockNumber, "hash", blockHash, "txhash", hash, "err", err)
+		return nil, common.Hash{}, 0, 0
 	}
-	log.Error("Transaction not found", "number", *blockNumber, "hash", blockHash, "txhash", hash)
-	return nil, common.Hash{}, 0, 0
+	return tx, blockHash, *blockNumber, txIndex
 }
 
-// ReadReceipt retrieves a specific transaction receipt from the database, along with
-// its added positional metadata.
-func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) (*types.Receipt, common.Hash, uint64, uint64) {
+// ReadCanonicalReceipt retrieves a specific transaction receipt from the database,
+// along with its added positional metadata. Notably, only the receipt in the canonical
+// chain is visible.
+func ReadCanonicalReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) (*types.Receipt, common.Hash, uint64, uint64) {
 	// Retrieve the context of the receipt based on the transaction hash
 	blockNumber := ReadTxLookupEntry(db, hash)
 	if blockNumber == nil {
@@ -180,7 +227,91 @@ func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) 
 	return nil, common.Hash{}, 0, 0
 }
 
-// ReadFilterMapRow retrieves a filter map row at the given mapRowIndex
+// extractReceiptFields takes a raw RLP-encoded receipt blob and extracts
+// specific fields from it.
+func extractReceiptFields(receiptRLP rlp.RawValue) (uint64, uint, error) {
+	receiptList, _, err := rlp.SplitList(receiptRLP)
+	if err != nil {
+		return 0, 0, err
+	}
+	// Decode the field: receipt status
+	// for receipt before the byzantium fork:
+	// - bytes: post state root
+	// for receipt after the byzantium fork:
+	// - bytes: receipt status flag
+	_, _, rest, err := rlp.Split(receiptList)
+	if err != nil {
+		return 0, 0, err
+	}
+	// Decode the field: cumulative gas used (type: uint64)
+	gasUsed, rest, err := rlp.SplitUint64(rest)
+	if err != nil {
+		return 0, 0, err
+	}
+	// Decode the field: logs (type: rlp list)
+	logList, _, err := rlp.SplitList(rest)
+	if err != nil {
+		return 0, 0, err
+	}
+	logCount, err := rlp.CountValues(logList)
+	if err != nil {
+		return 0, 0, err
+	}
+	return gasUsed, uint(logCount), nil
+}
+
+// RawReceiptContext carries the contextual information that is needed to derive
+// a complete receipt from a raw one.
+type RawReceiptContext struct {
+	GasUsed  uint64 // Amount of gas used by the associated transaction
+	LogIndex uint   // Starting index of the logs within the block
+}
+
+// ReadCanonicalRawReceipt reads a raw receipt at the specified position. It also
+// returns the gas used by the associated transaction and the starting index of
+// the logs within the block. The main difference with ReadCanonicalReceipt is
+// that the additional positional fields are not directly included in the receipt.
+// Notably, only receipts from the canonical chain are visible.
+func ReadCanonicalRawReceipt(db ethdb.Reader, blockHash common.Hash, blockNumber, txIndex uint64) (*types.Receipt, RawReceiptContext, error) {
+	receiptIt, err := rlp.NewListIterator(ReadCanonicalReceiptsRLP(db, blockNumber, &blockHash))
+	if err != nil {
+		return nil, RawReceiptContext{}, err
+	}
+	var (
+		cumulativeGasUsed uint64
+		logIndex          uint
+	)
+	for i := uint64(0); i <= txIndex; i++ {
+		// Unexpected iteration error
+		if receiptIt.Err() != nil {
+			return nil, RawReceiptContext{}, receiptIt.Err()
+		}
+		// Unexpected end of iteration
+		if !receiptIt.Next() {
+			return nil, RawReceiptContext{}, fmt.Errorf("receipt not found, %d, %x, %d", blockNumber, blockHash, txIndex)
+		}
+		if i == txIndex {
+			var stored types.ReceiptForStorage
+			if err := rlp.DecodeBytes(receiptIt.Value(), &stored); err != nil {
+				return nil, RawReceiptContext{}, err
+			}
+			return (*types.Receipt)(&stored), RawReceiptContext{
+				GasUsed:  stored.CumulativeGasUsed - cumulativeGasUsed,
+				LogIndex: logIndex,
+			}, nil
+		} else {
+			gas, logs, err := extractReceiptFields(receiptIt.Value())
+			if err != nil {
+				return nil, RawReceiptContext{}, err
+			}
+			cumulativeGasUsed = gas
+			logIndex += logs
+		}
+	}
+	return nil, RawReceiptContext{}, fmt.Errorf("receipt not found, %d, %x, %d", blockNumber, blockHash, txIndex)
+}
+
+// ReadFilterMapExtRow retrieves a filter map row at the given mapRowIndex
 // (see filtermaps.mapRowIndex for the storage index encoding).
 // Note that zero length rows are not stored in the database and therefore all
 // non-existent entries are interpreted as empty rows and return no error.
@@ -207,7 +338,7 @@ func ReadFilterMapExtRow(db ethdb.KeyValueReader, mapRowIndex uint64, bitLength 
 		return nil, err
 	}
 	if len(encRow)%byteLength != 0 {
-		return nil, errors.New("Invalid encoded extended filter row length")
+		return nil, errors.New("invalid encoded extended filter row length")
 	}
 	row := make([]uint32, len(encRow)/byteLength)
 	var b [4]byte
@@ -261,7 +392,7 @@ func ReadFilterMapBaseRows(db ethdb.KeyValueReader, mapRowIndex uint64, rowCount
 		headerBits--
 	}
 	if headerLen+byteLength*entryCount > encLen {
-		return nil, errors.New("Invalid encoded base filter rows length")
+		return nil, errors.New("invalid encoded base filter rows length")
 	}
 	if entriesInRow > 0 {
 		rows[rowIndex] = make([]uint32, entriesInRow)
@@ -278,8 +409,8 @@ func ReadFilterMapBaseRows(db ethdb.KeyValueReader, mapRowIndex uint64, rowCount
 	return rows, nil
 }
 
-// WriteFilterMapRow stores a filter map row at the given mapRowIndex or deletes
-// any existing entry if the row is empty.
+// WriteFilterMapExtRow stores an extended filter map row at the given mapRowIndex
+// or deletes any existing entry if the row is empty.
 func WriteFilterMapExtRow(db ethdb.KeyValueWriter, mapRowIndex uint64, row []uint32, bitLength uint) {
 	byteLength := int(bitLength) / 8
 	if int(bitLength) != byteLength*8 {
@@ -446,7 +577,7 @@ type FilterMapsRange struct {
 // database entry is not present, that is interpreted as a valid non-initialized
 // state and returns a blank range structure and no error.
 func ReadFilterMapsRange(db ethdb.KeyValueReader) (FilterMapsRange, bool, error) {
-	if has, err := db.Has(filterMapsRangeKey); !has || err != nil {
+	if has, err := db.Has(filterMapsRangeKey); err != nil || !has {
 		return FilterMapsRange{}, false, err
 	}
 	encRange, err := db.Get(filterMapsRangeKey)
@@ -457,7 +588,8 @@ func ReadFilterMapsRange(db ethdb.KeyValueReader) (FilterMapsRange, bool, error)
 	if err := rlp.DecodeBytes(encRange, &fmRange); err != nil {
 		return FilterMapsRange{}, false, err
 	}
-	return fmRange, true, err
+
+	return fmRange, true, nil
 }
 
 // WriteFilterMapsRange stores the filter maps range data.

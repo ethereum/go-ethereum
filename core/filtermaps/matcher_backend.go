@@ -67,18 +67,15 @@ func (fm *FilterMapsMatcherBackend) Close() {
 	delete(fm.f.matchers, fm)
 }
 
-// GetFilterMapRow returns the given row of the given map. If the row is empty
+// GetFilterMapRows returns the given row of the given map. If the row is empty
 // then a non-nil zero length row is returned. If baseLayerOnly is true then
 // only the first baseRowLength entries of the row are guaranteed to be
 // returned.
 // Note that the returned slices should not be modified, they should be copied
 // on write.
-// GetFilterMapRow implements MatcherBackend.
-func (fm *FilterMapsMatcherBackend) GetFilterMapRow(ctx context.Context, mapIndex, rowIndex uint32, baseLayerOnly bool) (FilterRow, error) {
-	fm.f.indexLock.RLock()
-	defer fm.f.indexLock.RUnlock()
-
-	return fm.f.getFilterMapRow(mapIndex, rowIndex, baseLayerOnly)
+// GetFilterMapRows implements MatcherBackend.
+func (fm *FilterMapsMatcherBackend) GetFilterMapRows(ctx context.Context, mapIndices []uint32, rowIndex uint32, baseLayerOnly bool) ([]FilterRow, error) {
+	return fm.f.getFilterMapRows(mapIndices, rowIndex, baseLayerOnly)
 }
 
 // GetBlockLvPointer returns the starting log value index where the log values

@@ -17,6 +17,13 @@ and `eth_getBlockByNumber`, use this command:
 > ./workload test --sepolia --run History/getBlockBy http://host:8545
 ```
 
+Notably, trace tests require archive which keeps all the historical states for tracing.
+The additional flag is required to activate the trace tests.
+
+```
+> ./workload test --sepolia --archive --run Trace/Block http://host:8545
+```
+
 ### Regenerating tests
 
 There is a facility for updating the tests from the chain. This can also be used to
@@ -26,4 +33,5 @@ the following commands (in this directory) against a synced mainnet node:
 ```shell
 > go run . filtergen --queries queries/filter_queries_mainnet.json http://host:8545
 > go run . historygen --history-tests queries/history_mainnet.json http://host:8545
+> go run . tracegen --trace-tests queries/trace_mainnet.json --trace-start 4000000 --trace-end 4000100 http://host:8545
 ```

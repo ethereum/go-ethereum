@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -45,11 +46,11 @@ func newFilterTestSuite(cfg testConfig) *filterTestSuite {
 	return s
 }
 
-func (s *filterTestSuite) allTests() []utesting.Test {
-	return []utesting.Test{
-		{Name: "Filter/ShortRange", Fn: s.filterShortRange},
-		{Name: "Filter/LongRange", Fn: s.filterLongRange, Slow: true},
-		{Name: "Filter/FullRange", Fn: s.filterFullRange, Slow: true},
+func (s *filterTestSuite) allTests() []workloadTest {
+	return []workloadTest{
+		newWorkLoadTest("Filter/ShortRange", s.filterShortRange),
+		newSlowWorkloadTest("Filter/LongRange", s.filterLongRange),
+		newSlowWorkloadTest("Filter/FullRange", s.filterFullRange),
 	}
 }
 
@@ -91,7 +92,7 @@ func (s *filterTestSuite) filterShortRange(t *utesting.T) {
 	}, s.queryAndCheck)
 }
 
-// filterShortRange runs all long-range filter tests.
+// filterLongRange runs all long-range filter tests.
 func (s *filterTestSuite) filterLongRange(t *utesting.T) {
 	s.filterRange(t, func(query *filterQuery) bool {
 		return query.ToBlock+1-query.FromBlock > filterRangeThreshold
@@ -153,7 +154,14 @@ func (s *filterTestSuite) fullRangeQueryAndCheck(t *utesting.T, query *filterQue
 func (s *filterTestSuite) loadQueries() error {
 	file, err := s.cfg.fsys.Open(s.cfg.filterQueryFile)
 	if err != nil {
-		return fmt.Errorf("can't open filterQueryFile: %v", err)
+		// If not found in embedded FS, try to load it from disk
+		if !os.IsNotExist(err) {
+			return err
+		}
+		file, err = os.OpenFile(s.cfg.filterQueryFile, os.O_RDONLY, 0666)
+		if err != nil {
+			return fmt.Errorf("can't open filterQueryFile: %v", err)
+		}
 	}
 	defer file.Close()
 

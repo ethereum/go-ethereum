@@ -218,11 +218,6 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'seedHash',
-			call: 'debug_seedHash',
-			params: 1
-		}),
-		new web3._extend.Method({
 			name: 'dumpBlock',
 			call: 'debug_dumpBlock',
 			params: 1,
@@ -467,6 +462,11 @@ web3._extend({
 			name: 'getTrieFlushInterval',
 			call: 'debug_getTrieFlushInterval',
 			params: 0
+		}),
+		new web3._extend.Method({
+			name: 'sync',
+			call: 'debug_sync',
+			params: 1
 		}),
 	],
 	properties: []

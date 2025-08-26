@@ -23,7 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/holiman/uint256"
 )
@@ -74,9 +73,10 @@ type LazyResolver interface {
 // a very specific call site in mind and each one can be evaluated very cheaply
 // by the pool implementations. Only add new ones that satisfy those constraints.
 type PendingFilter struct {
-	MinTip  *uint256.Int // Minimum miner tip required to include a transaction
-	BaseFee *uint256.Int // Minimum 1559 basefee needed to include a transaction
-	BlobFee *uint256.Int // Minimum 4844 blobfee needed to include a blob transaction
+	MinTip      *uint256.Int // Minimum miner tip required to include a transaction
+	BaseFee     *uint256.Int // Minimum 1559 basefee needed to include a transaction
+	BlobFee     *uint256.Int // Minimum 4844 blobfee needed to include a blob transaction
+	GasLimitCap uint64       // Maximum gas can be used for a single transaction execution (0 means no limit)
 
 	OnlyPlainTxs bool // Return only plain EVM transactions (peer-join announces, block space filling)
 	OnlyBlobTxs  bool // Return only blob transactions (block blob-space filling)
@@ -132,11 +132,6 @@ type SubPool interface {
 	// GetMetadata returns the transaction type and transaction size with the
 	// given transaction hash.
 	GetMetadata(hash common.Hash) *TxMetadata
-
-	// GetBlobs returns a number of blobs are proofs for the given versioned hashes.
-	// This is a utility method for the engine API, enabling consensus clients to
-	// retrieve blobs from the pools directly instead of the network.
-	GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof)
 
 	// ValidateTxBasics checks whether a transaction is valid according to the consensus
 	// rules, but does not check state-dependent validation such as sufficient balance.

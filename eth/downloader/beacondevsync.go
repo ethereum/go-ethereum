@@ -18,9 +18,9 @@ package downloader
 
 import (
 	"errors"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -33,49 +33,41 @@ import (
 // Note, this must not be used in live code. If the forkchcoice endpoint where
 // to use this instead of giving us the payload first, then essentially nobody
 // in the network would have the block yet that we'd attempt to retrieve.
-func (d *Downloader) BeaconDevSync(mode SyncMode, hash common.Hash, stop chan struct{}) error {
+func (d *Downloader) BeaconDevSync(mode SyncMode, header *types.Header) error {
 	// Be very loud that this code should not be used in a live node
 	log.Warn("----------------------------------")
-	log.Warn("Beacon syncing with hash as target", "hash", hash)
+	log.Warn("Beacon syncing with hash as target", "number", header.Number, "hash", header.Hash())
 	log.Warn("This is unhealthy for a live node!")
+	log.Warn("This is incompatible with the consensus layer!")
 	log.Warn("----------------------------------")
+	return d.BeaconSync(mode, header, header)
+}
 
-	log.Info("Waiting for peers to retrieve sync target")
-	for {
-		// If the node is going down, unblock
-		select {
-		case <-stop:
-			return errors.New("stop requested")
-		default:
-		}
-		// Pick a random peer to sync from and keep retrying if none are yet
-		// available due to fresh startup
-		d.peers.lock.RLock()
-		var peer *peerConnection
-		for _, peer = range d.peers.peers {
-			break
-		}
-		d.peers.lock.RUnlock()
+// GetHeader tries to retrieve the header with a given hash from a random peer.
+func (d *Downloader) GetHeader(hash common.Hash) (*types.Header, error) {
+	// Pick a random peer to sync from and keep retrying if none are yet
+	// available due to fresh startup
+	d.peers.lock.RLock()
+	defer d.peers.lock.RUnlock()
 
+	for _, peer := range d.peers.peers {
 		if peer == nil {
-			time.Sleep(time.Second)
+			log.Warn("Encountered nil peer while retrieving sync target", "hash", hash)
 			continue
 		}
 		// Found a peer, attempt to retrieve the header whilst blocking and
 		// retry if it fails for whatever reason
-		log.Info("Attempting to retrieve sync target", "peer", peer.id)
+		log.Debug("Attempting to retrieve sync target", "peer", peer.id, "hash", hash)
 		headers, metas, err := d.fetchHeadersByHash(peer, hash, 1, 0, false)
 		if err != nil || len(headers) != 1 {
-			log.Warn("Failed to fetch sync target", "headers", len(headers), "err", err)
-			time.Sleep(time.Second)
 			continue
 		}
 		// Head header retrieved, if the hash matches, start the actual sync
 		if metas[0] != hash {
-			log.Error("Received invalid sync target", "want", hash, "have", metas[0])
-			time.Sleep(time.Second)
+			log.Warn("Received invalid sync target", "peer", peer.id, "want", hash, "have", metas[0])
 			continue
 		}
-		return d.BeaconSync(mode, headers[0], headers[0])
+		return headers[0], nil
 	}
+	return nil, errors.New("failed to fetch sync target")
 }

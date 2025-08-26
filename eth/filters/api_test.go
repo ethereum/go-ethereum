@@ -19,6 +19,7 @@ package filters
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -181,5 +182,16 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	}
 	if len(test7.Topics[2]) != 0 {
 		t.Fatalf("expected 0 topics, got %d topics", len(test7.Topics[2]))
+	}
+
+	// multiple address exceeding max
+	var test8 FilterCriteria
+	addresses := make([]string, maxAddresses+1)
+	for i := 0; i < maxAddresses+1; i++ {
+		addresses[i] = fmt.Sprintf(`"%s"`, common.HexToAddress(fmt.Sprintf("0x%x", i)).Hex())
+	}
+	vector = fmt.Sprintf(`{"address": [%s]}`, strings.Join(addresses, ", "))
+	if err := json.Unmarshal([]byte(vector), &test8); err != errExceedMaxAddresses {
+		t.Fatal("expected errExceedMaxAddresses, got", err)
 	}
 }

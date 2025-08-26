@@ -62,6 +62,12 @@ const (
 	// limit can never hurt.
 	txMaxSize = 1024 * 1024
 
+	// maxBlobsPerTx is the maximum number of blobs that a single transaction can
+	// carry. We choose a smaller limit than the protocol-permitted MaxBlobsPerBlock
+	// in order to ensure network and txpool stability.
+	// Note: if you increase this, validation will fail on txMaxSize.
+	maxBlobsPerTx = params.BlobTxMaxBlobs
+
 	// maxTxsPerAccount is the maximum number of blob transactions admitted from
 	// a single account. The limit is enforced to minimize the DoS potential of
 	// a private tx cancelling publicly propagated blobs.
@@ -321,10 +327,6 @@ type BlobPool struct {
 	discoverFeed event.Feed // Event feed to send out new tx events on pool discovery (reorg excluded)
 	insertFeed   event.Feed // Event feed to send out new tx events on pool inclusion (reorg included)
 
-	// txValidationFn defaults to txpool.ValidateTransaction, but can be
-	// overridden for testing purposes.
-	txValidationFn txpool.ValidationFunction
-
 	lock sync.RWMutex // Mutex protecting the pool during reorg handling
 }
 
@@ -343,7 +345,6 @@ func New(config Config, chain BlockChain, hasPendingAuth func(common.Address) bo
 		lookup:         newLookup(),
 		index:          make(map[common.Address][]*blobTxMeta),
 		spent:          make(map[common.Address]*uint256.Int),
-		txValidationFn: txpool.ValidateTransaction,
 	}
 }
 
@@ -1095,10 +1096,11 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 // and does not require the pool mutex to be held.
 func (p *BlobPool) ValidateTxBasics(tx *types.Transaction) error {
 	opts := &txpool.ValidationOptions{
-		Config:  p.chain.Config(),
-		Accept:  1 << types.BlobTxType,
-		MaxSize: txMaxSize,
-		MinTip:  p.gasTip.ToBig(),
+		Config:       p.chain.Config(),
+		Accept:       1 << types.BlobTxType,
+		MaxSize:      txMaxSize,
+		MinTip:       p.gasTip.ToBig(),
+		MaxBlobCount: maxBlobsPerTx,
 	}
 	return txpool.ValidateTransaction(tx, p.head, p.signer, opts)
 }
@@ -1295,56 +1297,104 @@ func (p *BlobPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 	}
 }
 
-// GetBlobs returns a number of blobs are proofs for the given versioned hashes.
+// GetBlobs returns a number of blobs and proofs for the given versioned hashes.
 // This is a utility method for the engine API, enabling consensus clients to
 // retrieve blobs from the pools directly instead of the network.
-func (p *BlobPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof) {
-	// Create a map of the blob hash to indices for faster fills
+func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blob, []kzg4844.Commitment, [][]kzg4844.Proof, error) {
 	var (
-		blobs  = make([]*kzg4844.Blob, len(vhashes))
-		proofs = make([]*kzg4844.Proof, len(vhashes))
-	)
-	index := make(map[common.Hash]int)
-	for i, vhash := range vhashes {
-		index[vhash] = i
-	}
-	// Iterate over the blob hashes, pulling transactions that fill it. Take care
-	// to also fill anything else the transaction might include (probably will).
-	for i, vhash := range vhashes {
-		// If already filled by a previous fetch, skip
-		if blobs[i] != nil {
-			continue
-		}
-		// Unfilled, retrieve the datastore item (in a short lock)
-		p.lock.RLock()
-		id, exists := p.lookup.storeidOfBlob(vhash)
-		if !exists {
-			p.lock.RUnlock()
-			continue
-		}
-		data, err := p.store.Get(id)
-		p.lock.RUnlock()
+		blobs       = make([]*kzg4844.Blob, len(vhashes))
+		commitments = make([]kzg4844.Commitment, len(vhashes))
+		proofs      = make([][]kzg4844.Proof, len(vhashes))
 
-		// After releasing the lock, try to fill any blobs requested
+		indices = make(map[common.Hash][]int)
+		filled  = make(map[common.Hash]struct{})
+	)
+	for i, h := range vhashes {
+		indices[h] = append(indices[h], i)
+	}
+	for _, vhash := range vhashes {
+		// Skip duplicate vhash that was already resolved in a previous iteration
+		if _, ok := filled[vhash]; ok {
+			continue
+		}
+		// Retrieve the corresponding blob tx with the vhash
+		p.lock.RLock()
+		txID, exists := p.lookup.storeidOfBlob(vhash)
+		p.lock.RUnlock()
+		if !exists {
+			return nil, nil, nil, fmt.Errorf("blob with vhash %x is not found", vhash)
+		}
+		data, err := p.store.Get(txID)
 		if err != nil {
-			log.Error("Tracked blob transaction missing from store", "id", id, "err", err)
-			continue
+			return nil, nil, nil, err
 		}
-		item := new(types.Transaction)
-		if err = rlp.DecodeBytes(data, item); err != nil {
-			log.Error("Blobs corrupted for traced transaction", "id", id, "err", err)
-			continue
+
+		// Decode the blob transaction
+		tx := new(types.Transaction)
+		if err := rlp.DecodeBytes(data, tx); err != nil {
+			return nil, nil, nil, err
 		}
-		// Fill anything requested, not just the current versioned hash
-		sidecar := item.BlobTxSidecar()
-		for j, blobhash := range item.BlobHashes() {
-			if idx, ok := index[blobhash]; ok {
-				blobs[idx] = &sidecar.Blobs[j]
-				proofs[idx] = &sidecar.Proofs[j]
+		sidecar := tx.BlobTxSidecar()
+		if sidecar == nil {
+			return nil, nil, nil, fmt.Errorf("blob tx without sidecar %x", tx.Hash())
+		}
+		// Traverse the blobs in the transaction
+		for i, hash := range tx.BlobHashes() {
+			list, ok := indices[hash]
+			if !ok {
+				continue // non-interesting blob
 			}
+			var pf []kzg4844.Proof
+			switch version {
+			case types.BlobSidecarVersion0:
+				if sidecar.Version == types.BlobSidecarVersion0 {
+					pf = []kzg4844.Proof{sidecar.Proofs[i]}
+				} else {
+					proof, err := kzg4844.ComputeBlobProof(&sidecar.Blobs[i], sidecar.Commitments[i])
+					if err != nil {
+						return nil, nil, nil, err
+					}
+					pf = []kzg4844.Proof{proof}
+				}
+			case types.BlobSidecarVersion1:
+				if sidecar.Version == types.BlobSidecarVersion0 {
+					cellProofs, err := kzg4844.ComputeCellProofs(&sidecar.Blobs[i])
+					if err != nil {
+						return nil, nil, nil, err
+					}
+					pf = cellProofs
+				} else {
+					cellProofs, err := sidecar.CellProofsAt(i)
+					if err != nil {
+						return nil, nil, nil, err
+					}
+					pf = cellProofs
+				}
+			}
+			for _, index := range list {
+				blobs[index] = &sidecar.Blobs[i]
+				commitments[index] = sidecar.Commitments[i]
+				proofs[index] = pf
+			}
+			filled[hash] = struct{}{}
 		}
 	}
-	return blobs, proofs
+	return blobs, commitments, proofs, nil
+}
+
+// AvailableBlobs returns the number of blobs that are available in the subpool.
+func (p *BlobPool) AvailableBlobs(vhashes []common.Hash) int {
+	available := 0
+	for _, vhash := range vhashes {
+		// Retrieve the datastore item (in a short lock)
+		p.lock.RLock()
+		_, exists := p.lookup.storeidOfBlob(vhash)
+		p.lock.RUnlock()
+		if exists {
+			available++
+		}
+	}
+	return available
 }
 
 // Add inserts a set of blob transactions into the pool if they pass validation (both
@@ -1636,6 +1686,11 @@ func (p *BlobPool) Pending(filter txpool.PendingFilter) map[common.Address][]*tx
 			if filter.BlobFee != nil {
 				if tx.blobFeeCap.Lt(filter.BlobFee) {
 					break // blobfee too low, cannot be included, discard rest of txs from the account
+				}
+			}
+			if filter.GasLimitCap != 0 {
+				if tx.execGas > filter.GasLimitCap {
+					break // execution gas limit is too high
 				}
 			}
 			// Transaction was accepted according to the filter, append to the pending list

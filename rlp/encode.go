@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"math/bits"
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/rlp/internal/rlpstruct"
@@ -133,7 +134,7 @@ func puthead(buf []byte, smalltag, largetag byte, size uint64) int {
 	return sizesize + 1
 }
 
-var encoderInterface = reflect.TypeOf(new(Encoder)).Elem()
+var encoderInterface = reflect.TypeFor[Encoder]()
 
 // makeWriter creates a writer function for the given type.
 func makeWriter(typ reflect.Type, ts rlpstruct.Tags) (writer, error) {
@@ -239,7 +240,6 @@ func makeByteArrayWriter(typ reflect.Type) writer {
 	case 1:
 		return writeLengthOneByteArray
 	default:
-		length := typ.Len()
 		return func(val reflect.Value, w *encBuffer) error {
 			if !val.CanAddr() {
 				// Getting the byte slice of val requires it to be addressable. Make it
@@ -248,7 +248,7 @@ func makeByteArrayWriter(typ reflect.Type) writer {
 				copy.Set(val)
 				val = copy
 			}
-			slice := byteArrayBytes(val, length)
+			slice := val.Bytes()
 			w.encodeStringHeader(len(slice))
 			w.str = append(w.str, slice...)
 			return nil
@@ -487,9 +487,8 @@ func putint(b []byte, i uint64) (size int) {
 
 // intsize computes the minimum number of bytes required to store i.
 func intsize(i uint64) (size int) {
-	for size = 1; ; size++ {
-		if i >>= 8; i == 0 {
-			return size
-		}
+	if i == 0 {
+		return 1
 	}
+	return (bits.Len64(i) + 7) / 8
 }
