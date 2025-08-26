@@ -336,11 +336,12 @@ type BlockChain struct {
 	stopping      atomic.Bool // false if chain is running, true when stopped
 	procInterrupt atomic.Bool // interrupt signaler for block processing
 
-	engine     consensus.Engine
-	validator  Validator // Block and state validator interface
-	prefetcher Prefetcher
-	processor  Processor // Block transaction processor interface
-	logger     *tracing.Hooks
+	engine            consensus.Engine
+	validator         Validator // Block and state validator interface
+	prefetcher        Prefetcher
+	processor         Processor // Block transaction processor interface
+	parallelProcessor ParallelStateProcessor
+	logger            *tracing.Hooks
 
 	lastForkReadyAlert time.Time // Last time there was a fork readiness print out
 }
@@ -400,6 +401,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
 	bc.processor = NewStateProcessor(chainConfig, bc.hc)
+	bc.parallelProcessor = NewParallelStateProcessor(chainConfig, bc.hc, bc.GetVMConfig())
 
 	genesisHeader := bc.GetHeaderByNumber(0)
 	if genesisHeader == nil {
@@ -2092,8 +2094,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		}
 		// Process block using the parent state as reference point
 		pstart := time.Now()
-		var resCh chan *ProcessResultWithMetrics
-		resCh, err = bc.processor.ProcessWithAccessList(block, statedb, bc.cfg.VmConfig)
+		resWithMetrics, err = bc.parallelProcessor.Process(block, statedb, bc.cfg.VmConfig)
 		if err != nil {
 			// TODO: okay to pass nil here as execution result?
 			bc.reportBlock(block, nil, err)
@@ -2103,7 +2104,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 
 		vstart := time.Now()
 		var err error
-		resWithMetrics, err = bc.validator.ValidateProcessResult(block, resCh, false)
+		err = bc.validator.ValidateState(block, statedb, resWithMetrics.ProcessResult, false, false)
 		if err != nil {
 			// TODO: okay to pass nil here as execution result?
 			bc.reportBlock(block, nil, err)
@@ -2122,7 +2123,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		ptime = time.Since(pstart)
 
 		vstart := time.Now()
-		if err := bc.validator.ValidateState(block, statedb, res, false); err != nil {
+		if err := bc.validator.ValidateState(block, statedb, res, true, false); err != nil {
 			bc.reportBlock(block, res, err)
 			return nil, err
 		}
