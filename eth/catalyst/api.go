@@ -883,7 +883,7 @@ func (api *ConsensusAPI) checkFork(timestamp uint64, forks ...forks.Fork) bool {
 
 // ExchangeCapabilities returns the current methods provided by this node.
 func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
-	valueT := reflect.TypeOf(api)
+	valueT := reflect.TypeFor[*ConsensusAPI]()
 	caps := make([]string, 0, valueT.NumMethod())
 	for i := 0; i < valueT.NumMethod(); i++ {
 		name := []rune(valueT.Method(i).Name)
