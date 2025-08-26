@@ -32,7 +32,7 @@ func TestHistoryIndexerShortenDeadlock(t *testing.T) {
 	freezer, _ := rawdb.NewStateFreezer(t.TempDir(), false, false)
 	defer freezer.Close()
 
-	histories := makeHistories(100)
+	histories := makeStateHistories(100)
 	for i, h := range histories {
 		accountData, storageData, accountIndex, storageIndex := h.encode()
 		rawdb.WriteStateHistory(freezer, uint64(i+1), h.meta.encode(), accountIndex, storageIndex, accountData, storageData)
