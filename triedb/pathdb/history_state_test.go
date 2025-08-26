@@ -49,12 +49,12 @@ func randomStateSet(n int) (map[common.Address][]byte, map[common.Address]map[co
 	return accounts, storages
 }
 
-func makeHistory(rawStorageKey bool) *stateHistory {
+func makeStateHistory(rawStorageKey bool) *stateHistory {
 	accounts, storages := randomStateSet(3)
 	return newStateHistory(testrand.Hash(), types.EmptyRootHash, 0, accounts, storages, rawStorageKey)
 }
 
-func makeHistories(n int) []*stateHistory {
+func makeStateHistories(n int) []*stateHistory {
 	var (
 		parent = types.EmptyRootHash
 		result []*stateHistory
@@ -69,16 +69,16 @@ func makeHistories(n int) []*stateHistory {
 	return result
 }
 
-func TestEncodeDecodeHistory(t *testing.T) {
-	testEncodeDecodeHistory(t, false)
-	testEncodeDecodeHistory(t, true)
+func TestEncodeDecodeStateHistory(t *testing.T) {
+	testEncodeDecodeStateHistory(t, false)
+	testEncodeDecodeStateHistory(t, true)
 }
 
-func testEncodeDecodeHistory(t *testing.T, rawStorageKey bool) {
+func testEncodeDecodeStateHistory(t *testing.T, rawStorageKey bool) {
 	var (
 		m   meta
 		dec stateHistory
-		obj = makeHistory(rawStorageKey)
+		obj = makeStateHistory(rawStorageKey)
 	)
 	// check if meta data can be correctly encode/decode
 	blob := obj.meta.encode()
@@ -108,7 +108,7 @@ func testEncodeDecodeHistory(t *testing.T, rawStorageKey bool) {
 	}
 }
 
-func checkHistory(t *testing.T, db ethdb.KeyValueReader, freezer ethdb.AncientReader, id uint64, root common.Hash, exist bool) {
+func checkStateHistory(t *testing.T, db ethdb.KeyValueReader, freezer ethdb.AncientReader, id uint64, root common.Hash, exist bool) {
 	blob := rawdb.ReadStateHistoryMeta(freezer, id)
 	if exist && len(blob) == 0 {
 		t.Fatalf("Failed to load trie history, %d", id)
@@ -126,14 +126,14 @@ func checkHistory(t *testing.T, db ethdb.KeyValueReader, freezer ethdb.AncientRe
 
 func checkHistoriesInRange(t *testing.T, db ethdb.KeyValueReader, freezer ethdb.AncientReader, from, to uint64, roots []common.Hash, exist bool) {
 	for i, j := from, 0; i <= to; i, j = i+1, j+1 {
-		checkHistory(t, db, freezer, i, roots[j], exist)
+		checkStateHistory(t, db, freezer, i, roots[j], exist)
 	}
 }
 
-func TestTruncateHeadHistory(t *testing.T) {
+func TestTruncateHeadStateHistory(t *testing.T) {
 	var (
 		roots      []common.Hash
-		hs         = makeHistories(10)
+		hs         = makeStateHistories(10)
 		db         = rawdb.NewMemoryDatabase()
 		freezer, _ = rawdb.NewStateFreezer(t.TempDir(), false, false)
 	)
@@ -158,10 +158,10 @@ func TestTruncateHeadHistory(t *testing.T) {
 	}
 }
 
-func TestTruncateTailHistory(t *testing.T) {
+func TestTruncateTailStateHistory(t *testing.T) {
 	var (
 		roots      []common.Hash
-		hs         = makeHistories(10)
+		hs         = makeStateHistories(10)
 		db         = rawdb.NewMemoryDatabase()
 		freezer, _ = rawdb.NewStateFreezer(t.TempDir(), false, false)
 	)
@@ -183,7 +183,7 @@ func TestTruncateTailHistory(t *testing.T) {
 	}
 }
 
-func TestTruncateTailHistories(t *testing.T) {
+func TestTruncateTailStateHistories(t *testing.T) {
 	var cases = []struct {
 		limit       uint64
 		expPruned   int
@@ -204,7 +204,7 @@ func TestTruncateTailHistories(t *testing.T) {
 	for i, c := range cases {
 		var (
 			roots      []common.Hash
-			hs         = makeHistories(10)
+			hs         = makeStateHistories(10)
 			db         = rawdb.NewMemoryDatabase()
 			freezer, _ = rawdb.NewStateFreezer(t.TempDir()+fmt.Sprintf("%d", i), false, false)
 		)
@@ -232,7 +232,7 @@ func TestTruncateTailHistories(t *testing.T) {
 
 func TestTruncateOutOfRange(t *testing.T) {
 	var (
-		hs         = makeHistories(10)
+		hs         = makeStateHistories(10)
 		db         = rawdb.NewMemoryDatabase()
 		freezer, _ = rawdb.NewStateFreezer(t.TempDir(), false, false)
 	)
