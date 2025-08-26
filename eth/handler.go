@@ -120,11 +120,10 @@ type handler struct {
 	snapSync atomic.Bool // Flag whether snap sync is enabled (gets disabled if we already have blocks)
 	synced   atomic.Bool // Flag whether we're considered synchronised (enables transaction processing)
 
-	database   ethdb.Database
-	txpool     txPool
-	chain      *core.BlockChain
-	maxPeers   int
-	lastDirect atomic.Int64 // Last number of peers we sent transactions to, used to stabilize the randomness
+	database ethdb.Database
+	txpool   txPool
+	chain    *core.BlockChain
+	maxPeers int
 
 	downloader *downloader.Downloader
 	txFetcher  *fetcher.TxFetcher
