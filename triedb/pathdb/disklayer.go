@@ -374,7 +374,8 @@ func (dl *diskLayer) writeStateHistory(diff *diffLayer) (bool, error) {
 	//
 	// These measures ensure the persisted state ID always remains greater
 	// than or equal to the first history ID.
-	if rawdb.ReadPersistentStateID(dl.db.diskdb) < newFirst {
+	if persistentID := rawdb.ReadPersistentStateID(dl.db.diskdb); persistentID < newFirst {
+		log.Debug("Skip tail truncation", "persistentID", persistentID, "tailID", tail+1, "headID", diff.stateID(), "limit", limit)
 		return true, nil
 	}
 	pruned, err := truncateFromTail(dl.db.diskdb, dl.db.stateFreezer, newFirst-1)
