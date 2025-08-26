@@ -337,16 +337,16 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 		overflow bool
 		oldest   uint64
 	)
-	if dl.db.freezer != nil {
+	if dl.db.stateFreezer != nil {
 		// Bail out with an error if writing the state history fails.
 		// This can happen, for example, if the device is full.
-		err := writeHistory(dl.db.freezer, bottom)
+		err := writeStateHistory(dl.db.stateFreezer, bottom)
 		if err != nil {
 			return nil, err
 		}
 		// Determine if the persisted history object has exceeded the configured
 		// limitation, set the overflow as true if so.
-		tail, err := dl.db.freezer.Tail()
+		tail, err := dl.db.stateFreezer.Tail()
 		if err != nil {
 			return nil, err
 		}
@@ -356,8 +356,8 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 			oldest = bottom.stateID() - limit + 1 // track the id of history **after truncation**
 		}
 		// Notify the state history indexer for newly created history
-		if dl.db.indexer != nil {
-			if err := dl.db.indexer.extend(bottom.stateID()); err != nil {
+		if dl.db.stateIndexer != nil {
+			if err := dl.db.stateIndexer.extend(bottom.stateID()); err != nil {
 				return nil, err
 			}
 		}
@@ -418,7 +418,7 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 
 		// Freeze the live buffer and schedule background flushing
 		dl.frozen = combined
-		dl.frozen.flush(bottom.root, dl.db.diskdb, dl.db.freezer, progress, dl.nodes, dl.states, bottom.stateID(), func() {
+		dl.frozen.flush(bottom.root, dl.db.diskdb, dl.db.stateFreezer, progress, dl.nodes, dl.states, bottom.stateID(), func() {
 			// Resume the background generation if it's not completed yet.
 			// The generator is assumed to be available if the progress is
 			// not nil.
@@ -448,7 +448,7 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	// To remove outdated history objects from the end, we set the 'tail' parameter
 	// to 'oldest-1' due to the offset between the freezer index and the history ID.
 	if overflow {
-		pruned, err := truncateFromTail(ndl.db.diskdb, ndl.db.freezer, oldest-1)
+		pruned, err := truncateFromTail(ndl.db.diskdb, ndl.db.stateFreezer, oldest-1)
 		if err != nil {
 			return nil, err
 		}
@@ -458,7 +458,7 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 }
 
 // revert applies the given state history and return a reverted disk layer.
-func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
+func (dl *diskLayer) revert(h *stateHistory) (*diskLayer, error) {
 	start := time.Now()
 	if h.meta.root != dl.rootHash() {
 		return nil, errUnexpectedHistory
@@ -484,8 +484,8 @@ func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 	dl.stale = true
 
 	// Unindex the corresponding state history
-	if dl.db.indexer != nil {
-		if err := dl.db.indexer.shorten(dl.id); err != nil {
+	if dl.db.stateIndexer != nil {
+		if err := dl.db.stateIndexer.shorten(dl.id); err != nil {
 			return nil, err
 		}
 	}
