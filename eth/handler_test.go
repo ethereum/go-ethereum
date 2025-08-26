@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"maps"
 	"math/big"
 	"math/rand"
 	"sort"
@@ -31,8 +32,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -217,64 +220,63 @@ func (b *testHandler) close() {
 }
 
 func TestBroadcastChoice(t *testing.T) {
-	choice49 := newBroadcastChoice(49)
-	choice50 := newBroadcastChoice(50)
+	// Create choices.
+	self := enode.HexID("1111111111111111111111111111111111111111111111111111111111111111")
+	choice49 := newBroadcastChoice(self)
+	choice50 := newBroadcastChoice(self)
 
+	// Create test peers.
 	var (
-		self      = enode.HexID("1111111111111111111111111111111111111111111111111111111111111111")
-		peers     = make([]enode.ID, 50)
-		txsenders = make([]common.Address, 400)
-		rand      = rand.New(rand.NewSource(33))
+		rand  = rand.New(rand.NewSource(33))
+		peers = make([]*ethPeer, 50)
 	)
 	for i := range peers {
-		rand.Read(peers[i][:])
+		var id enode.ID
+		rand.Read(id[:])
+		p2pPeer := p2p.NewPeer(id, "test", nil)
+		ep := eth.NewPeer(eth.ETH69, p2pPeer, nil, nil)
+		peers[i] = &ethPeer{Peer: ep}
 	}
+	defer func() {
+		for _, p := range peers {
+			p.Close()
+		}
+	}()
+
+	// Create random tx sender addresses.
+	txsenders := make([]common.Address, 400)
 	for i := range txsenders {
 		rand.Read(txsenders[i][:])
 	}
 
 	// Evaluate choice49 first.
-	var chosen49 = make([][]bool, len(txsenders))
+	expectedCount := 7 // sqrt(49)
+	var chosen49 = make([]map[*ethPeer]struct{}, len(txsenders))
 	for i, txSender := range txsenders {
-		chosen49[i] = make([]bool, len(peers))
-		for peerIndex, peer := range peers {
-			chosen49[i][peerIndex] = choice49.shouldBroadcastTx(self, peer, txSender)
-		}
-	}
+		set := choice49.choosePeers(peers[:49], txSender)
+		chosen49[i] = maps.Clone(set)
 
-	// Sanity check choices.
-	for i := range chosen49 {
-		c := count(chosen49[i], true)
-		if c == 0 {
-			t.Errorf("for tx %d, choice49 chose zero peers", i)
+		// Sanity check choices. Here we check that the function selects different peers
+		// for different transaction senders.
+		if len(set) != expectedCount {
+			t.Fatalf("choice49 produced wrong count %d, want %d", len(set), expectedCount)
+		}
+		if i > 0 && maps.Equal(set, chosen49[i-1]) {
+			t.Errorf("choice49 for tx %d is equal to tx %d", i, i-1)
 		}
 	}
 
 	// Evaluate choice50 for the same peers and transactions. It should always yield more
 	// peers than choice49, and the chosen set should be a superset of choice49's.
 	for i, txSender := range txsenders {
-		var chosen50 int
-		for peerIndex, peer := range peers {
-			send := choice50.shouldBroadcastTx(self, peer, txSender)
-			if chosen49[i][peerIndex] && !send {
-				t.Errorf("for tx %d, choice50 did not choose peer %d, but choice49 did", i, peerIndex)
-			}
-			if send {
-				chosen50++
-			}
-		}
-		if chosen50 < count(chosen49[i], true) {
+		set := choice50.choosePeers(peers[:50], txSender)
+		if len(set) < len(chosen49[i]) {
 			t.Errorf("for tx %d, choice50 has less peers than choice49", i)
 		}
-	}
-}
-
-func count[T comparable](s []T, v T) int {
-	var c int
-	for _, elem := range s {
-		if elem == v {
-			c++
+		for p := range chosen49[i] {
+			if _, ok := set[p]; !ok {
+				t.Errorf("for tx %d, choice50 did not choose peer %v, but choice49 did", i, p.ID())
+			}
 		}
 	}
-	return c
 }
