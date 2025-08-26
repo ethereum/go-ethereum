@@ -1,4 +1,4 @@
-// Copyright 2021 The go-ethereum Authors
+// Copyright 2025 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,17 +14,20 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !nacl && !js && cgo
-// +build !nacl,!js,cgo
+//go:build !tinygo
+// +build !tinygo
 
-package rlp
+package rawdb
 
 import (
-	"reflect"
-	"unsafe"
+	"io"
+
+	"github.com/olekukonko/tablewriter"
 )
 
-// byteArrayBytes returns a slice of the byte array v.
-func byteArrayBytes(v reflect.Value, length int) []byte {
-	return unsafe.Slice((*byte)(unsafe.Pointer(v.UnsafeAddr())), length)
+// Re-export the real tablewriter types and functions
+type Table = tablewriter.Table
+
+func newTableWriter(w io.Writer) *Table {
+	return tablewriter.NewWriter(w)
 }

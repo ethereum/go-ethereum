@@ -204,12 +204,12 @@ func TestConvertType(t *testing.T) {
 	var fields []reflect.StructField
 	fields = append(fields, reflect.StructField{
 		Name: "X",
-		Type: reflect.TypeOf(new(big.Int)),
+		Type: reflect.TypeFor[*big.Int](),
 		Tag:  "json:\"" + "x" + "\"",
 	})
 	fields = append(fields, reflect.StructField{
 		Name: "Y",
-		Type: reflect.TypeOf(new(big.Int)),
+		Type: reflect.TypeFor[*big.Int](),
 		Tag:  "json:\"" + "y" + "\"",
 	})
 	val := reflect.New(reflect.StructOf(fields))

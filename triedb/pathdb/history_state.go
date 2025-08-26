@@ -234,12 +234,13 @@ func (m *meta) decode(blob []byte) error {
 	}
 }
 
-// history represents a set of state changes belong to a block along with
+// stateHistory represents a set of state changes belong to a block along with
 // the metadata including the state roots involved in the state transition.
+//
 // State history objects in disk are linked with each other by a unique id
 // (8-bytes integer), the oldest state history object can be pruned on demand
 // in order to control the storage size.
-type history struct {
+type stateHistory struct {
 	meta        *meta                                     // Meta data of history
 	accounts    map[common.Address][]byte                 // Account data keyed by its address hash
 	accountList []common.Address                          // Sorted account hash list
@@ -247,8 +248,8 @@ type history struct {
 	storageList map[common.Address][]common.Hash          // Sorted slot hash list
 }
 
-// newHistory constructs the state history object with provided state change set.
-func newHistory(root common.Hash, parent common.Hash, block uint64, accounts map[common.Address][]byte, storages map[common.Address]map[common.Hash][]byte, rawStorageKey bool) *history {
+// newStateHistory constructs the state history object with provided states.
+func newStateHistory(root common.Hash, parent common.Hash, block uint64, accounts map[common.Address][]byte, storages map[common.Address]map[common.Hash][]byte, rawStorageKey bool) *stateHistory {
 	var (
 		accountList = slices.SortedFunc(maps.Keys(accounts), common.Address.Cmp)
 		storageList = make(map[common.Address][]common.Hash)
@@ -260,7 +261,7 @@ func newHistory(root common.Hash, parent common.Hash, block uint64, accounts map
 	if !rawStorageKey {
 		version = stateHistoryV0
 	}
-	return &history{
+	return &stateHistory{
 		meta: &meta{
 			version: version,
 			parent:  parent,
@@ -276,7 +277,7 @@ func newHistory(root common.Hash, parent common.Hash, block uint64, accounts map
 
 // stateSet returns the state set, keyed by the hash of the account address
 // and the hash of the storage slot key.
-func (h *history) stateSet() (map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte) {
+func (h *stateHistory) stateSet() (map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte) {
 	var (
 		accounts = make(map[common.Hash][]byte)
 		storages = make(map[common.Hash]map[common.Hash][]byte)
@@ -304,7 +305,7 @@ func (h *history) stateSet() (map[common.Hash][]byte, map[common.Hash]map[common
 
 // encode serializes the state history and returns four byte streams represent
 // concatenated account/storage data, account/storage indexes respectively.
-func (h *history) encode() ([]byte, []byte, []byte, []byte) {
+func (h *stateHistory) encode() ([]byte, []byte, []byte, []byte) {
 	var (
 		slotNumber     uint32 // the number of processed slots
 		accountData    []byte // the buffer for concatenated account data
@@ -459,7 +460,7 @@ func (r *decoder) readStorage(accIndex accountIndex) ([]common.Hash, map[common.
 }
 
 // decode deserializes the account and storage data from the provided byte stream.
-func (h *history) decode(accountData, storageData, accountIndexes, storageIndexes []byte) error {
+func (h *stateHistory) decode(accountData, storageData, accountIndexes, storageIndexes []byte) error {
 	var (
 		count       = len(accountIndexes) / accountIndexSize
 		accounts    = make(map[common.Address][]byte, count)
@@ -503,8 +504,8 @@ func (h *history) decode(accountData, storageData, accountIndexes, storageIndexe
 	return nil
 }
 
-// readHistory reads and decodes the state history object by the given id.
-func readHistory(reader ethdb.AncientReader, id uint64) (*history, error) {
+// readStateHistory reads a single state history records with the specified id.
+func readStateHistory(reader ethdb.AncientReader, id uint64) (*stateHistory, error) {
 	mData, accountIndexes, storageIndexes, accountData, storageData, err := rawdb.ReadStateHistory(reader, id)
 	if err != nil {
 		return nil, err
@@ -513,17 +514,16 @@ func readHistory(reader ethdb.AncientReader, id uint64) (*history, error) {
 	if err := m.decode(mData); err != nil {
 		return nil, err
 	}
-	h := history{meta: &m}
+	h := stateHistory{meta: &m}
 	if err := h.decode(accountData, storageData, accountIndexes, storageIndexes); err != nil {
 		return nil, err
 	}
 	return &h, nil
 }
 
-// readHistories reads and decodes a list of state histories with the specific
-// history range.
-func readHistories(freezer ethdb.AncientReader, start uint64, count uint64) ([]*history, error) {
-	var histories []*history
+// readStateHistories reads a list of state history records within the specified range.
+func readStateHistories(freezer ethdb.AncientReader, start uint64, count uint64) ([]*stateHistory, error) {
+	var histories []*stateHistory
 	metaList, aIndexList, sIndexList, aDataList, sDataList, err := rawdb.ReadStateHistoryList(freezer, start, count)
 	if err != nil {
 		return nil, err
@@ -533,7 +533,7 @@ func readHistories(freezer ethdb.AncientReader, start uint64, count uint64) ([]*
 		if err := m.decode(metaList[i]); err != nil {
 			return nil, err
 		}
-		h := history{meta: &m}
+		h := stateHistory{meta: &m}
 		if err := h.decode(aDataList[i], sDataList[i], aIndexList[i], sIndexList[i]); err != nil {
 			return nil, err
 		}
@@ -542,15 +542,15 @@ func readHistories(freezer ethdb.AncientReader, start uint64, count uint64) ([]*
 	return histories, nil
 }
 
-// writeHistory persists the state history with the provided state set.
-func writeHistory(writer ethdb.AncientWriter, dl *diffLayer) error {
+// writeStateHistory persists the state history associated with the given diff layer.
+func writeStateHistory(writer ethdb.AncientWriter, dl *diffLayer) error {
 	// Short circuit if state set is not available.
 	if dl.states == nil {
 		return errors.New("state change set is not available")
 	}
 	var (
 		start   = time.Now()
-		history = newHistory(dl.rootHash(), dl.parentLayer().rootHash(), dl.block, dl.states.accountOrigin, dl.states.storageOrigin, dl.states.rawStorageKey)
+		history = newStateHistory(dl.rootHash(), dl.parentLayer().rootHash(), dl.block, dl.states.accountOrigin, dl.states.storageOrigin, dl.states.rawStorageKey)
 	)
 	accountData, storageData, accountIndex, storageIndex := history.encode()
 	dataSize := common.StorageSize(len(accountData) + len(storageData))
@@ -568,9 +568,9 @@ func writeHistory(writer ethdb.AncientWriter, dl *diffLayer) error {
 	return nil
 }
 
-// checkHistories retrieves a batch of meta objects with the specified range
+// checkStateHistories retrieves a batch of meta objects with the specified range
 // and performs the callback on each item.
-func checkHistories(reader ethdb.AncientReader, start, count uint64, check func(*meta) error) error {
+func checkStateHistories(reader ethdb.AncientReader, start, count uint64, check func(*meta) error) error {
 	for count > 0 {
 		number := count
 		if number > 10000 {

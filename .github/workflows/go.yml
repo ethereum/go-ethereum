@@ -25,7 +25,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.24
+        go-version: 1.25
         cache: false
 
     - name: Run linters
@@ -41,8 +41,8 @@ jobs:
     strategy:
       matrix:
         go:
+          - '1.25'
           - '1.24'
-          - '1.23'
     steps:
       - uses: actions/checkout@v4
         with:

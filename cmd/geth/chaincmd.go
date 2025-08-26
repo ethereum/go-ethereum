@@ -704,7 +704,7 @@ func pruneHistory(ctx *cli.Context) error {
 	return nil
 }
 
-// downladEra is the era1 file downloader tool.
+// downloadEra is the era1 file downloader tool.
 func downloadEra(ctx *cli.Context) error {
 	flags.CheckExclusive(ctx, eraBlockFlag, eraEpochFlag, eraAllFlag)
 

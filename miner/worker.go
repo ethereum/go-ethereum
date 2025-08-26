@@ -271,7 +271,7 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 		if err != nil {
 			return nil, err
 		}
-		state.StartPrefetcher("miner", bundle)
+		state.StartPrefetcher("miner", bundle, nil)
 	}
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
@@ -543,7 +543,6 @@ func totalFees(block *types.Block, receipts []*types.Receipt) *big.Int {
 	for i, tx := range block.Transactions() {
 		minerFee, _ := tx.EffectiveGasTip(block.BaseFee())
 		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
-		// TODO (MariusVanDerWijden) add blob fees
 	}
 	return feesWei
 }

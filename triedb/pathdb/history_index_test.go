@@ -180,7 +180,7 @@ func TestBatchIndexerWrite(t *testing.T) {
 	var (
 		db        = rawdb.NewMemoryDatabase()
 		batch     = newBatchIndexer(db, false)
-		histories = makeHistories(10)
+		histories = makeStateHistories(10)
 	)
 	for i, h := range histories {
 		if err := batch.process(h, uint64(i+1)); err != nil {
@@ -257,7 +257,7 @@ func TestBatchIndexerDelete(t *testing.T) {
 	var (
 		db        = rawdb.NewMemoryDatabase()
 		bw        = newBatchIndexer(db, false)
-		histories = makeHistories(10)
+		histories = makeStateHistories(10)
 	)
 	// Index histories
 	for i, h := range histories {
