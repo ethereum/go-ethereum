@@ -643,7 +643,7 @@ func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
 	s.data.CodeHash = codeHash[:]
 }
 
-// setCode sets the code and hash and dirty markers.
+// setCodeModified sets the code and hash and dirty markers.
 func (s *stateObject) setCodeModified(codeHash common.Hash, code []byte) {
 	s.setCode(codeHash, code)
 	s.dirtyCode = true
