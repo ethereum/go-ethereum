@@ -82,8 +82,7 @@ type SizeStats struct {
 }
 
 func (s SizeStats) String() string {
-	return fmt.Sprintf("Block: %d Root: %s, Accounts: %d (%s), Storages: %d (%s), AccountTrienodes: %d (%s), StorageTrienodes: %d (%s), ContractCodes: %d (%s)",
-		s.BlockNumber, s.StateRoot.Hex(),
+	return fmt.Sprintf("Accounts: %d (%s), Storages: %d (%s), AccountTrienodes: %d (%s), StorageTrienodes: %d (%s), ContractCodes: %d (%s)",
 		s.Accounts, common.StorageSize(s.AccountBytes),
 		s.Storages, common.StorageSize(s.StorageBytes),
 		s.AccountTrienodes, common.StorageSize(s.AccountTrienodeBytes),
@@ -383,7 +382,7 @@ wait:
 			}
 			done = make(chan buildResult)
 			go t.build(entry.root, entry.blockNumber, done)
-			log.Info("Measuring persistent state size", "root", root.Hex())
+			log.Info("Measuring persistent state size", "root", root.Hex(), "number", entry.blockNumber)
 
 		case result := <-done:
 			t.triedb.SetForceFlush(false)
@@ -415,8 +414,7 @@ wait:
 			if err := apply(result.root, result.stat); err != nil {
 				return nil, err
 			}
-			log.Info("Init state size", "stat", result.stat)
-			log.Info("Measured persistent state size", "root", result.root, "number", result.blockNumber, "elapsed", common.PrettyDuration(result.elapsed))
+			log.Info("Measured persistent state size", "root", result.root, "number", result.blockNumber, "stat", result.stat, "elapsed", common.PrettyDuration(result.elapsed))
 			return stats, nil
 
 		case <-t.abort:
@@ -563,7 +561,7 @@ func (t *SizeTracker) iterateTable(closed chan struct{}, prefix []byte, name str
 }
 
 func (t *SizeTracker) upload(stats SizeStats) {
-	log.Info("Update state size", "stat", stats)
+	log.Debug("Uploading state size", "number", stats.BlockNumber, "root", stats.StateRoot, "stat", stats)
 	blockInfoGauge.Update(metrics.GaugeInfoValue{
 		"number": hexutil.Uint64(stats.BlockNumber).String(),
 		"hash":   stats.StateRoot.Hex(),
