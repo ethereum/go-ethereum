@@ -709,17 +709,16 @@ func newBroadcastChoice(self enode.ID) *broadcastChoice {
 }
 
 // choosePeers selects the peers that will receive a direct transaction broadcast message.
-//
 // Note the return value will only stay valid until the next call to choosePeers.
 func (bc *broadcastChoice) choosePeers(peers []*ethPeer, txSender common.Address) map[*ethPeer]struct{} {
 	// Compute scores.
-	bc.tmp = bc.tmp[:0]
-	for _, peer := range peers {
+	bc.tmp = slices.Grow(bc.tmp[:0], len(peers))[:len(peers)]
+	for i, peer := range peers {
 		bc.hash.Reset()
 		bc.hash.Write(bc.self[:])
 		bc.hash.Write(peer.Peer.Peer.ID().Bytes())
 		bc.hash.Write(txSender[:])
-		bc.tmp = append(bc.tmp, broadcastPeer{peer, bc.hash.Sum64()})
+		bc.tmp[i] = broadcastPeer{peer, bc.hash.Sum64()}
 	}
 
 	// Sort by score.
