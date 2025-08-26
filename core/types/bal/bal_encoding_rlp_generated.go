@@ -52,7 +52,7 @@ func (obj *BlockAccessList) EncodeRLP(_w io.Writer) error {
 		_tmp18 := w.List()
 		for _, _tmp19 := range _tmp2.CodeChanges {
 			_tmp20 := w.List()
-			w.WriteUint64(uint64(_tmp19.TxIndex))
+			w.WriteUint64(uint64(_tmp19.TxIdx))
 			w.WriteBytes(_tmp19.Code)
 			w.ListEnd(_tmp20)
 		}
@@ -245,7 +245,7 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 						if err != nil {
 							return err
 						}
-						_tmp22.TxIndex = _tmp23
+						_tmp22.TxIdx = _tmp23
 						// Code:
 						_tmp24, err := dec.Bytes()
 						if err != nil {

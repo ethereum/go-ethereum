@@ -1094,29 +1094,6 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	workers.Wait()
 	s.StorageUpdates += time.Since(start)
 
-	/*
-		for addr, _ := range s.mutations {
-			if _, ok := s.stateObjects[addr]; !ok {
-				continue
-			}
-			if s.stateObjects[addr].trie == nil {
-				continue
-			}
-			fmt.Printf("mut %x/%x:\n", addr, s.stateObjects[addr].addrHash)
-			it, err := s.stateObjects[addr].trie.NodeIterator([]byte{})
-			if err != nil {
-				panic(err)
-			}
-			for it.Next(true) {
-				if it.Leaf() {
-					fmt.Printf("%x: %x\n", it.Path(), it.LeafBlob())
-				} else {
-					fmt.Printf("%x: %x\n", it.Path(), it.Hash())
-				}
-			}
-		}
-	*/
-
 	// Now we're about to start to write changes to the trie. The trie is so far
 	// _untouched_. We can check with the prefetcher, if it can give us a trie
 	// which has the same root, but also has some content loaded into it.
@@ -1176,20 +1153,6 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// Track the amount of time wasted on hashing the account trie
 	defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())
 	hash := s.trie.Hash()
-	/*
-		fmt.Println("state trie")
-		it, err := s.trie.NodeIterator([]byte{})
-		if err != nil {
-			panic(err)
-		}
-		for it.Next(true) {
-			if it.Leaf() {
-				fmt.Printf("%x: %x\n", it.Path(), it.LeafBlob())
-			} else {
-				fmt.Printf("%x: %x\n", it.Path(), it.Hash())
-			}
-		}
-	*/
 	// If witness building is enabled, gather the account trie witness
 	if s.witness != nil {
 		s.witness.AddState(s.trie.Witness())

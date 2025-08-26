@@ -62,11 +62,11 @@ func (r *Reader) AccountChangesAt(addr common.Address, idx int) *AccountState {
 	}
 
 	for i := len(acct.CodeChanges) - 1; i >= 0; i-- {
-		if acct.CodeChanges[i].TxIndex == uint16(idx) {
+		if acct.CodeChanges[i].TxIdx == uint16(idx) {
 			res.Code = acct.CodeChanges[i].Code
 			break
 		}
-		if acct.CodeChanges[i].TxIndex < uint16(idx) {
+		if acct.CodeChanges[i].TxIdx < uint16(idx) {
 			break
 		}
 	}
@@ -117,43 +117,24 @@ func (r *Reader) ReadAccount(addr common.Address, idx int) *AccountState {
 
 	var res AccountState
 
-	for i := len(acct.BalanceChanges) - 1; i >= 0; i-- {
-		if acct.BalanceChanges[i].TxIdx <= uint16(idx) {
-			res.Balance = &acct.BalanceChanges[i].Balance
-			break
-		}
+	for i := 0; i < len(acct.BalanceChanges) && acct.BalanceChanges[i].TxIdx <= uint16(idx); i++ {
+		res.Balance = &acct.BalanceChanges[i].Balance
 	}
 
-	for i := len(acct.CodeChanges) - 1; i >= 0; i-- {
-		if acct.CodeChanges[i].TxIndex <= uint16(idx) {
-			res.Code = acct.CodeChanges[i].Code
-			break
-		}
+	for i := 0; i < len(acct.CodeChanges) && acct.CodeChanges[i].TxIdx <= uint16(idx); i++ {
+		res.Code = acct.CodeChanges[i].Code
 	}
 
-	for i := len(acct.NonceChanges) - 1; i >= 0; i-- {
-		if acct.NonceChanges[i].TxIdx <= uint16(idx) {
-			res.Nonce = &acct.NonceChanges[i].Nonce
-			break
-		}
+	for i := 0; i < len(acct.NonceChanges) && acct.NonceChanges[i].TxIdx <= uint16(idx); i++ {
+		res.Nonce = &acct.NonceChanges[i].Nonce
 	}
 
-	for i := len(acct.StorageWrites) - 1; i >= 0; i-- {
-		if res.StorageWrites == nil {
-			res.StorageWrites = make(map[common.Hash]common.Hash)
-		}
-		slotWrites := acct.StorageWrites[i]
-
-		for j := len(slotWrites.Accesses) - 1; j >= 0; j-- {
-			if slotWrites.Accesses[j].TxIdx <= uint16(idx) {
-				if _, exist := res.StorageWrites[slotWrites.Slot]; !exist {
-					res.StorageWrites[slotWrites.Slot] = slotWrites.Accesses[j].ValueAfter
-					break
-				}
+	if len(acct.StorageWrites) > 0 {
+		res.StorageWrites = make(map[common.Hash]common.Hash)
+		for _, slotWrites := range acct.StorageWrites {
+			for i := 0; i < len(slotWrites.Accesses) && slotWrites.Accesses[i].TxIdx <= uint16(idx); i++ {
+				res.StorageWrites[slotWrites.Slot] = slotWrites.Accesses[i].ValueAfter
 			}
-		}
-		if len(res.StorageWrites) == 0 {
-			res.StorageWrites = nil
 		}
 	}
 

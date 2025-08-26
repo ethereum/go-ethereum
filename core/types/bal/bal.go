@@ -30,8 +30,8 @@ import (
 // CodeChange contains the runtime bytecode deployed at an address and the
 // transaction index where the deployment took place.
 type CodeChange struct {
-	TxIndex uint16
-	Code    []byte `json:"code,omitempty"`
+	TxIdx uint16
+	Code  []byte `json:"code,omitempty"`
 }
 
 // ConstructionAccountAccess contains post-block account state for mutations as well as
@@ -123,8 +123,8 @@ func (c *ConstructionBlockAccessList) CodeChange(address common.Address, txIndex
 		c.Accounts[address] = NewConstructionAccountAccess()
 	}
 	c.Accounts[address].CodeChanges[txIndex] = CodeChange{
-		TxIndex: txIndex,
-		Code:    bytes.Clone(code),
+		TxIdx: txIndex,
+		Code:  bytes.Clone(code),
 	}
 }
 
@@ -175,8 +175,8 @@ func (c *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 		codeChangesCopy := make(map[uint16]CodeChange)
 		for idx, codeChange := range aa.CodeChanges {
 			codeChangesCopy[idx] = CodeChange{
-				TxIndex: idx,
-				Code:    bytes.Clone(codeChange.Code),
+				TxIdx: idx,
+				Code:  bytes.Clone(codeChange.Code),
 			}
 		}
 		res.Accounts[addr] = &aaCopy
@@ -365,7 +365,7 @@ func (e *BlockAccessList) PrettyPrint() string {
 		if len(accountDiff.CodeChanges) > 0 {
 			printWithIndent(1, "code:")
 			for _, change := range accountDiff.CodeChanges {
-				printWithIndent(2, fmt.Sprintf("%d: %x", change.TxIndex, change.Code))
+				printWithIndent(2, fmt.Sprintf("%d: %x", change.TxIdx, change.Code))
 			}
 		}
 	}

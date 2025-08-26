@@ -212,7 +212,7 @@ func (e *AccountAccess) Copy() AccountAccess {
 	for _, codeChange := range e.CodeChanges {
 		res.CodeChanges = append(res.CodeChanges,
 			CodeChange{
-				codeChange.TxIndex,
+				codeChange.TxIdx,
 				bytes.Clone(codeChange.Code),
 			})
 	}

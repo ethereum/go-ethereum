@@ -61,8 +61,8 @@ func makeTestConstructionBAL() *ConstructionBlockAccessList {
 					2: 6,
 				},
 				CodeChanges: map[uint16]CodeChange{0: {
-					TxIndex: 0,
-					Code:    common.Hex2Bytes("deadbeef"),
+					TxIdx: 0,
+					Code:  common.Hex2Bytes("deadbeef"),
 				}},
 			},
 			common.BytesToAddress([]byte{0xff, 0xff, 0xff}): {
@@ -181,8 +181,8 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 		NonceChanges:   nonces,
 		CodeChanges: []CodeChange{
 			{
-				TxIndex: 100,
-				Code:    testrand.Bytes(256),
+				TxIdx: 100,
+				Code:  testrand.Bytes(256),
 			},
 		},
 	}
