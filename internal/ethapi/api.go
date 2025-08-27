@@ -1171,7 +1171,7 @@ type configResponse struct {
 
 // Config implements the EIP-7910 eth_config method.
 func (api *BlockChainAPI) Config(ctx context.Context) (*configResponse, error) {
-	genesis, err := api.b.BlockByNumber(ctx, 0)
+	genesis, err := api.b.HeaderByNumber(ctx, 0)
 	if err != nil {
 		return nil, fmt.Errorf("unable to load genesis: %w", err)
 	}
@@ -1188,7 +1188,7 @@ func (api *BlockChainAPI) Config(ctx context.Context) (*configResponse, error) {
 		for addr, c := range vm.ActivePrecompiledContracts(rules) {
 			precompiles[c.Name()] = addr
 		}
-		forkid := forkid.NewID(c, genesis, ^uint64(0), t).Hash
+		forkid := forkid.NewID(c, types.NewBlockWithHeader(genesis), ^uint64(0), t).Hash
 		return &config{
 			ActivationTime:  t,
 			BlobSchedule:    c.BlobConfig(c.LatestFork(t)),

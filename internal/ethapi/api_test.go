@@ -3842,9 +3842,9 @@ func (b configTimeBackend) ChainConfig() *params.ChainConfig {
 	return b.genesis.Config
 }
 
-func (b configTimeBackend) BlockByNumber(_ context.Context, n rpc.BlockNumber) (*types.Block, error) {
+func (b configTimeBackend) HeaderByNumber(_ context.Context, n rpc.BlockNumber) (*types.Header, error) {
 	if n == 0 {
-		return b.genesis.ToBlock(), nil
+		return b.genesis.ToBlock().Header(), nil
 	}
 	panic("not implemented")
 }
