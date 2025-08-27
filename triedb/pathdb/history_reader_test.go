@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/internal/testrand"
 )
 
 func waitIndexing(db *Database) {
@@ -36,7 +37,7 @@ func waitIndexing(db *Database) {
 	}
 }
 
-func checkHistoricState(env *tester, root common.Hash, hr *historyReader) error {
+func checkHistoricalState(env *tester, root common.Hash, hr *historyReader) error {
 	// Short circuit if the historical state is no longer available
 	if rawdb.ReadStateID(env.db.diskdb, root) == nil {
 		return nil
@@ -139,7 +140,7 @@ func testHistoryReader(t *testing.T, historyLimit uint64) {
 		if root == dRoot {
 			break
 		}
-		if err := checkHistoricState(env, root, hr); err != nil {
+		if err := checkHistoricalState(env, root, hr); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -152,8 +153,37 @@ func testHistoryReader(t *testing.T, historyLimit uint64) {
 		if root == dRoot {
 			break
 		}
-		if err := checkHistoricState(env, root, hr); err != nil {
+		if err := checkHistoricalState(env, root, hr); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestHistoricalStateReader(t *testing.T) {
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+
+	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
+	env := newTester(t, 0, false, 64, true, "")
+	defer env.release()
+	waitIndexing(env.db)
+
+	// non-canonical state
+	fakeRoot := testrand.Hash()
+	rawdb.WriteStateID(env.db.diskdb, fakeRoot, 10)
+
+	_, err := env.db.HistoricReader(fakeRoot)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	t.Log(err)
+
+	// canonical state
+	realRoot := env.roots[9]
+	_, err = env.db.HistoricReader(realRoot)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
 	}
 }
