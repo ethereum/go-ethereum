@@ -35,28 +35,9 @@ package secp256k1
 import (
 	"crypto/elliptic"
 	"math/big"
-)
 
-const (
-	// number of bits in a big.Word
-	wordBits = 32 << (uint64(^big.Word(0)) >> 63)
-	// number of bytes in a big.Word
-	wordBytes = wordBits / 8
+	"github.com/ethereum/go-ethereum/common/math"
 )
-
-// readBits encodes the absolute value of bigint as big-endian bytes. Callers
-// must ensure that buf has enough space. If buf is too short the result will
-// be incomplete.
-func readBits(bigint *big.Int, buf []byte) {
-	i := len(buf)
-	for _, d := range bigint.Bits() {
-		for j := 0; j < wordBytes && i > 0; j++ {
-			i--
-			buf[i] = byte(d)
-			d >>= 8
-		}
-	}
-}
 
 // This code is from https://github.com/ThePiachu/GoBit and implements
 // several Koblitz elliptic curves over prime fields.
@@ -257,8 +238,8 @@ func (bitCurve *BitCurve) Marshal(x, y *big.Int) []byte {
 	byteLen := (bitCurve.BitSize + 7) >> 3
 	ret := make([]byte, 1+2*byteLen)
 	ret[0] = 4 // uncompressed point flag
-	readBits(x, ret[1:1+byteLen])
-	readBits(y, ret[1+byteLen:])
+	math.ReadBits(x, ret[1:1+byteLen])
+	math.ReadBits(y, ret[1+byteLen:])
 	return ret
 }
 

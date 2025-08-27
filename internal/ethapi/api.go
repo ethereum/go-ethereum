@@ -597,19 +597,30 @@ func (api *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Addre
 
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
 func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
-	block, err := api.b.BlockByNumberOrHash(ctx, blockNrOrHash)
-	if block == nil || err != nil {
-		return nil, err
-	}
-	receipts, err := api.b.GetReceipts(ctx, block.Hash())
-	if err != nil {
-		return nil, err
+	var (
+		err      error
+		block    *types.Block
+		receipts types.Receipts
+	)
+	if blockNr, ok := blockNrOrHash.Number(); ok && blockNr == rpc.PendingBlockNumber {
+		block, receipts, _ = api.b.Pending()
+		if block == nil {
+			return nil, errors.New("pending receipts is not available")
+		}
+	} else {
+		block, err = api.b.BlockByNumberOrHash(ctx, blockNrOrHash)
+		if block == nil || err != nil {
+			return nil, err
+		}
+		receipts, err = api.b.GetReceipts(ctx, block.Hash())
+		if err != nil {
+			return nil, err
+		}
 	}
 	txs := block.Transactions()
 	if len(txs) != len(receipts) {
 		return nil, fmt.Errorf("receipts length mismatch: %d vs %d", len(txs), len(receipts))
 	}
-
 	// Derive the sender.
 	signer := types.MakeSigner(api.b.ChainConfig(), block.Number(), block.Time())
 
@@ -617,7 +628,6 @@ func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rp
 	for i, receipt := range receipts {
 		result[i] = marshalReceipt(receipt, block.Hash(), block.NumberU64(), signer, txs[i], i)
 	}
-
 	return result, nil
 }
 
@@ -819,7 +829,15 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	if state == nil || err != nil {
 		return 0, err
 	}
-	if err := overrides.Apply(state, nil); err != nil {
+	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
+	if blockOverrides != nil {
+		if err := blockOverrides.Apply(&blockCtx); err != nil {
+			return 0, err
+		}
+	}
+	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time)
+	precompiles := vm.ActivePrecompiledContracts(rules)
+	if err := overrides.Apply(state, precompiles); err != nil {
 		return 0, err
 	}
 	// Construct the gas estimator option from the user input

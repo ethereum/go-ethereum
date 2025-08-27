@@ -31,9 +31,9 @@ import (
 var content embed.FS
 
 var (
-	blobT       = reflect.TypeOf(Blob{})
-	commitmentT = reflect.TypeOf(Commitment{})
-	proofT      = reflect.TypeOf(Proof{})
+	blobT       = reflect.TypeFor[Blob]()
+	commitmentT = reflect.TypeFor[Commitment]()
+	proofT      = reflect.TypeFor[Proof]()
 
 	CellProofsPerBlob = 128
 )

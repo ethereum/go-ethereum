@@ -93,7 +93,7 @@ func newBatchIndexer(db ethdb.KeyValueStore, delete bool) *batchIndexer {
 
 // process iterates through the accounts and their associated storage slots in the
 // state history, tracking the mapping between state and history IDs.
-func (b *batchIndexer) process(h *history, historyID uint64) error {
+func (b *batchIndexer) process(h *stateHistory, historyID uint64) error {
 	for _, address := range h.accountList {
 		addrHash := crypto.Keccak256Hash(address.Bytes())
 		b.counter += 1
@@ -241,7 +241,7 @@ func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancient
 		}
 		return fmt.Errorf("history indexing is out of order, last: %s, requested: %d", last, historyID)
 	}
-	h, err := readHistory(freezer, historyID)
+	h, err := readStateHistory(freezer, historyID)
 	if err != nil {
 		return err
 	}
@@ -271,7 +271,7 @@ func unindexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancie
 		}
 		return fmt.Errorf("history unindexing is out of order, last: %s, requested: %d", last, historyID)
 	}
-	h, err := readHistory(freezer, historyID)
+	h, err := readStateHistory(freezer, historyID)
 	if err != nil {
 		return err
 	}
@@ -524,7 +524,7 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 		if count > historyReadBatch {
 			count = historyReadBatch
 		}
-		histories, err := readHistories(i.freezer, current, count)
+		histories, err := readStateHistories(i.freezer, current, count)
 		if err != nil {
 			// The history read might fall if the history is truncated from
 			// head due to revert operation.
@@ -598,13 +598,16 @@ func checkVersion(disk ethdb.KeyValueStore) {
 	if err == nil && m.Version == stateIndexVersion {
 		return
 	}
-	// TODO(rjl493456442) would be better to group them into a batch.
-	rawdb.DeleteStateHistoryIndexMetadata(disk)
-	rawdb.DeleteStateHistoryIndex(disk)
-
 	version := "unknown"
 	if err == nil {
 		version = fmt.Sprintf("%d", m.Version)
+	}
+
+	batch := disk.NewBatch()
+	rawdb.DeleteStateHistoryIndexMetadata(batch)
+	rawdb.DeleteStateHistoryIndex(batch)
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to purge state history index", "err", err)
 	}
 	log.Info("Cleaned up obsolete state history index", "version", version, "want", stateIndexVersion)
 }

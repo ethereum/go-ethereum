@@ -1,0 +1,23 @@
+name: PR Format Validation
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR Title Format
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prTitle = context.payload.pull_request.title;
+            const titleRegex = /^(\.?[\w\s,{}/]+): .+/;
+            
+            if (!titleRegex.test(prTitle)) {
+              core.setFailed(`PR title "${prTitle}" does not match required format: directory, ...: description`);
+              return;
+            }
+            
+            console.log('✅ PR title format is valid');

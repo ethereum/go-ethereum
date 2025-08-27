@@ -426,7 +426,7 @@ func (t *tester) verifyHistory() error {
 	for i, root := range t.roots {
 		// The state history related to the state above disk layer should not exist.
 		if i > bottom {
-			_, err := readHistory(t.db.freezer, uint64(i+1))
+			_, err := readStateHistory(t.db.stateFreezer, uint64(i+1))
 			if err == nil {
 				return errors.New("unexpected state history")
 			}
@@ -434,7 +434,7 @@ func (t *tester) verifyHistory() error {
 		}
 		// The state history related to the state below or equal to the disk layer
 		// should exist.
-		obj, err := readHistory(t.db.freezer, uint64(i+1))
+		obj, err := readStateHistory(t.db.stateFreezer, uint64(i+1))
 		if err != nil {
 			return err
 		}
@@ -568,7 +568,7 @@ func TestDisable(t *testing.T) {
 		t.Fatal("Failed to clean journal")
 	}
 	// Ensure all trie histories are removed
-	n, err := tester.db.freezer.Ancients()
+	n, err := tester.db.stateFreezer.Ancients()
 	if err != nil {
 		t.Fatal("Failed to clean state history")
 	}
@@ -724,7 +724,7 @@ func TestTailTruncateHistory(t *testing.T) {
 	tester.db.Close()
 	tester.db = New(tester.db.diskdb, &Config{StateHistory: 10}, false)
 
-	head, err := tester.db.freezer.Ancients()
+	head, err := tester.db.stateFreezer.Ancients()
 	if err != nil {
 		t.Fatalf("Failed to obtain freezer head")
 	}

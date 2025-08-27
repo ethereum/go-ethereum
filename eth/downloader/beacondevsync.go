@@ -52,7 +52,8 @@ func (d *Downloader) GetHeader(hash common.Hash) (*types.Header, error) {
 
 	for _, peer := range d.peers.peers {
 		if peer == nil {
-			return nil, errors.New("could not find peer")
+			log.Warn("Encountered nil peer while retrieving sync target", "hash", hash)
+			continue
 		}
 		// Found a peer, attempt to retrieve the header whilst blocking and
 		// retry if it fails for whatever reason
