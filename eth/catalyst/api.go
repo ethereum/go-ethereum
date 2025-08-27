@@ -100,6 +100,7 @@ var caps = []string{
 	"engine_newPayloadV2",
 	"engine_newPayloadV3",
 	"engine_newPayloadV4",
+	"engine_newPayloadV5",
 	"engine_newPayloadWithWitnessV1",
 	"engine_newPayloadWithWitnessV2",
 	"engine_newPayloadWithWitnessV3",
