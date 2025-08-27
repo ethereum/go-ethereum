@@ -1209,7 +1209,6 @@ func (api *BlockChainAPI) Config(ctx context.Context) (*configResponse, error) {
 	}
 	// Nil out last if no future-fork is configured.
 	if resp.Next == nil {
-		resp.Current.ActivationTime = 0
 		resp.Last = nil
 	}
 	return &resp, nil
