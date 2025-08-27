@@ -5,10 +5,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// Reader provides methods for reading account state from a block access
+// list.
 type Reader struct {
 	accesses map[common.Address]*AccountAccess
 }
 
+// NewReader constructs a new reader from an access list
 func NewReader(al *BlockAccessList) Reader {
 	r := Reader{make(map[common.Address]*AccountAccess)}
 	for _, acctDiff := range al.Accesses {
@@ -17,6 +20,7 @@ func NewReader(al *BlockAccessList) Reader {
 	return r
 }
 
+// Accounts returns a list of all accounts from the access list
 func (r *Reader) Accounts() (res []common.Address) {
 	for addr, _ := range r.accesses {
 		res = append(res, addr)
@@ -24,6 +28,9 @@ func (r *Reader) Accounts() (res []common.Address) {
 	return res
 }
 
+// Iterate computes the accumulated state changes of each account in the
+// access list up through an index.  These are passed to the provided
+// callback, which if it returns false, will stop iteration.
 func (r *Reader) Iterate(idx int, cb func(addr common.Address, state *AccountState) bool) {
 	for addr, _ := range r.accesses {
 		acct := r.ReadAccount(addr, idx)
@@ -33,10 +40,11 @@ func (r *Reader) Iterate(idx int, cb func(addr common.Address, state *AccountSta
 	}
 }
 
-func (r *Reader) ChangesAt(idx int) *StateDiff {
+// changesAt returns all state changes at the given index.
+func (r *Reader) changesAt(idx int) *StateDiff {
 	res := &StateDiff{make(map[common.Address]*AccountState)}
 	for addr, _ := range r.accesses {
-		accountChanges := r.AccountChangesAt(addr, idx)
+		accountChanges := r.accountChangesAt(addr, idx)
 		if accountChanges != nil {
 			res.Mutations[addr] = accountChanges
 		}
@@ -44,7 +52,9 @@ func (r *Reader) ChangesAt(idx int) *StateDiff {
 	return res
 }
 
-func (r *Reader) AccountChangesAt(addr common.Address, idx int) *AccountState {
+// accountChangesAt returns the state changes of an account at a given index,
+// or nil if there are no changes.
+func (r *Reader) accountChangesAt(addr common.Address, idx int) *AccountState {
 	acct, exist := r.accesses[addr]
 	if !exist {
 		return nil
@@ -107,8 +117,7 @@ func (r *Reader) AccountChangesAt(addr common.Address, idx int) *AccountState {
 	return &res
 }
 
-// ReadAccount returns the post-state of the account at the given bal index.
-// Do not modify the returned object.
+// ReadAccount returns the accumulated state changes of an account up through idx.
 func (r *Reader) ReadAccount(addr common.Address, idx int) *AccountState {
 	acct, exist := r.accesses[addr]
 	if !exist {
@@ -144,9 +153,10 @@ func (r *Reader) ReadAccount(addr common.Address, idx int) *AccountState {
 	return &res
 }
 
-// ValidateStateDiff asserts that both state diffs are equivalent.
+// ValidateStateDiff returns an error if the computed state diff is not equal to
+// diff reported from the access list at the given index.
 func (r *Reader) ValidateStateDiff(idx int, computedDiff *StateDiff) error {
-	balChanges := r.ChangesAt(idx)
+	balChanges := r.changesAt(idx)
 	for addr, state := range balChanges.Mutations {
 		computedAccountDiff, ok := computedDiff.Mutations[addr]
 		if !ok {

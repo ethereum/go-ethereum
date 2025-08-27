@@ -764,7 +764,6 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	}
 
 	if s.blockAccessList != nil && s.balIndex > 0 {
-		// TODO: instead of having special case for balIndex == 0, maybe we modify ReadAccount to support that case?
 		if acctDiff := s.blockAccessList.ReadAccount(addr, s.balIndex); acctDiff != nil {
 			acctPrestate := s.prestateDiffAccounts[addr]
 			obj := s.initObjFromDiff(addr, acctPrestate, acctDiff)
