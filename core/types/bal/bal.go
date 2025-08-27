@@ -19,12 +19,9 @@ package bal
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
-	"maps"
-	"strings"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
+	"maps"
 )
 
 // CodeChange contains the runtime bytecode deployed at an address and the
@@ -144,12 +141,6 @@ func (c *ConstructionBlockAccessList) BalanceChange(txIdx uint16, address common
 		c.Accounts[address] = NewConstructionAccountAccess()
 	}
 	c.Accounts[address].BalanceChanges[txIdx] = balance.Clone()
-}
-
-// PrettyPrint returns a human-readable representation of the access list
-func (c *ConstructionBlockAccessList) PrettyPrint() string {
-	enc := c.ToEncodingObj()
-	return enc.PrettyPrint()
 }
 
 // Copy returns a deep copy of the access list.
@@ -328,48 +319,6 @@ func (s *StateDiff) Copy() *StateDiff {
 		res.Mutations[addr] = cpy
 	}
 	return res
-}
-
-func (e *BlockAccessList) PrettyPrint() string {
-	var res bytes.Buffer
-	printWithIndent := func(indent int, text string) {
-		fmt.Fprintf(&res, "%s%s\n", strings.Repeat("    ", indent), text)
-	}
-	for _, accountDiff := range e.Accesses {
-		printWithIndent(0, fmt.Sprintf("%x:", accountDiff.Address))
-
-		printWithIndent(1, "storage writes:")
-		for _, sWrite := range accountDiff.StorageWrites {
-			printWithIndent(2, fmt.Sprintf("%x:", sWrite.Slot))
-			for _, access := range sWrite.Accesses {
-				printWithIndent(3, fmt.Sprintf("%d: %x", access.TxIdx, access.ValueAfter))
-			}
-		}
-
-		printWithIndent(1, "storage reads:")
-		for _, slot := range accountDiff.StorageReads {
-			printWithIndent(2, fmt.Sprintf("%x", slot))
-		}
-
-		printWithIndent(1, "balance changes:")
-		for _, change := range accountDiff.BalanceChanges {
-			balance := new(uint256.Int).SetBytes(change.Balance[:]).String()
-			printWithIndent(2, fmt.Sprintf("%d: %s", change.TxIdx, balance))
-		}
-
-		printWithIndent(1, "nonce changes:")
-		for _, change := range accountDiff.NonceChanges {
-			printWithIndent(2, fmt.Sprintf("%d: %d", change.TxIdx, change.Nonce))
-		}
-
-		if len(accountDiff.CodeChanges) > 0 {
-			printWithIndent(1, "code:")
-			for _, change := range accountDiff.CodeChanges {
-				printWithIndent(2, fmt.Sprintf("%d: %x", change.TxIdx, change.Code))
-			}
-		}
-	}
-	return res.String()
 }
 
 // Copy returns a deep copy of the access list

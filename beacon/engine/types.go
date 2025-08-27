@@ -18,6 +18,7 @@ package engine
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"math/big"
 	"slices"
 
@@ -76,6 +77,7 @@ type ExecutableData struct {
 	Withdrawals      []*types.Withdrawal     `json:"withdrawals"`
 	BlobGasUsed      *uint64                 `json:"blobGasUsed"`
 	ExcessBlobGas    *uint64                 `json:"excessBlobGas"`
+	BlockAccessList  *bal.BlockAccessList    `json:"blockAccessList"`
 	ExecutionWitness *types.ExecutionWitness `json:"executionWitness,omitempty"`
 }
 
@@ -274,6 +276,11 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 		requestsHash = &h
 	}
 
+	body := types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals}
+	if data.BlockAccessList != nil {
+		body.AccessList = data.BlockAccessList
+	}
+
 	header := &types.Header{
 		ParentHash:       data.ParentHash,
 		UncleHash:        types.EmptyUncleHash,
@@ -297,7 +304,7 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 		RequestsHash:     requestsHash,
 	}
 	return types.NewBlockWithHeader(header).
-			WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals}).
+			WithBody(body).
 			WithWitness(data.ExecutionWitness),
 		nil
 }

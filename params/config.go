@@ -675,8 +675,8 @@ func (c *ChainConfig) IsOsaka(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.OsakaTime, time)
 }
 
-// IsGlamsterdam returns whether time is either equal to the Glamsterdam fork time or greater.
-func (c *ChainConfig) IsGlamsterdam(num *big.Int, time uint64) bool {
+// IsAmsterdam returns whether time is either equal to the Glamsterdam fork time or greater.
+func (c *ChainConfig) IsAmsterdam(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.AmsterdamTime, time)
 }
 
@@ -986,6 +986,8 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 		return forks.Cancun
 	case c.IsShanghai(london, time):
 		return forks.Shanghai
+	case c.IsAmsterdam(london, time):
+		return forks.Amsterdam
 	default:
 		return forks.Paris
 	}
@@ -1179,7 +1181,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsCancun:         isMerge && c.IsCancun(num, timestamp),
 		IsPrague:         isMerge && c.IsPrague(num, timestamp),
 		IsOsaka:          isMerge && c.IsOsaka(num, timestamp),
-		IsGlamsterdam:    isMerge && c.IsGlamsterdam(num, timestamp),
+		IsGlamsterdam:    isMerge && c.IsAmsterdam(num, timestamp),
 		IsVerkle:         isVerkle,
 		IsEIP4762:        isVerkle,
 	}

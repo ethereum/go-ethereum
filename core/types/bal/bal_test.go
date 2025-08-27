@@ -250,3 +250,6 @@ func TestBlockAccessListValidation(t *testing.T) {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 }
+
+// BALReader test ideas
+// * BAL which doesn't have any pre-tx system contracts should return an empty state diff at idx 0

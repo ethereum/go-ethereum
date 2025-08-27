@@ -273,6 +273,9 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 		}
 		state.StartPrefetcher("miner", bundle)
 	}
+	if miner.chainConfig.IsAmsterdam(header.Number, header.Time) {
+		state.EnableBALConstruction()
+	}
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
 		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time),

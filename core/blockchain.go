@@ -2088,7 +2088,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		if block.NumberU64() == 0 {
 			return nil, fmt.Errorf("genesis block cannot have a block access list")
 		}
-		if !validateBAL && !bc.chainConfig.IsGlamsterdam(block.Number(), block.Time()) {
+		if !validateBAL && !bc.chainConfig.IsAmsterdam(block.Number(), block.Time()) {
 			bc.reportBlock(block, res, fmt.Errorf("received block containing access list before glamsterdam activated"))
 			return nil, err
 		}

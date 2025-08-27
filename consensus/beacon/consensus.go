@@ -374,6 +374,11 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	// Assign the final state root to header.
 	header.Root = state.IntermediateRoot(true)
 
+	// embed the block access list in the body
+	if chain.Config().IsAmsterdam(header.Number, header.Time) {
+		body.AccessList = state.ConstructionBlockAccessList().ToEncodingObj()
+	}
+
 	// Assemble the final block.
 	block := types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
 
