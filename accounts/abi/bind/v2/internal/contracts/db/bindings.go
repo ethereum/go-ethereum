@@ -276,7 +276,7 @@ func (DBInsert) ContractEventName() string {
 // Solidity: event Insert(uint256 key, uint256 value, uint256 length)
 func (dB *DB) UnpackInsertEvent(log *types.Log) (*DBInsert, error) {
 	event := "Insert"
-	if log.Topics[0] != dB.abi.Events[event].ID {
+	if len(log.Topics) == 0 || log.Topics[0] != dB.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(DBInsert)
@@ -318,7 +318,7 @@ func (DBKeyedInsert) ContractEventName() string {
 // Solidity: event KeyedInsert(uint256 indexed key, uint256 value)
 func (dB *DB) UnpackKeyedInsertEvent(log *types.Log) (*DBKeyedInsert, error) {
 	event := "KeyedInsert"
-	if log.Topics[0] != dB.abi.Events[event].ID {
+	if len(log.Topics) == 0 || log.Topics[0] != dB.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(DBKeyedInsert)

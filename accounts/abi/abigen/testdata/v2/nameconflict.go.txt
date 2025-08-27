@@ -134,7 +134,7 @@ func (NameConflictLog) ContractEventName() string {
 // Solidity: event log(int256 msg, int256 _msg)
 func (nameConflict *NameConflict) UnpackLogEvent(log *types.Log) (*NameConflictLog, error) {
 	event := "log"
-	if log.Topics[0] != nameConflict.abi.Events[event].ID {
+	if len(log.Topics) == 0 || log.Topics[0] != nameConflict.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(NameConflictLog)
