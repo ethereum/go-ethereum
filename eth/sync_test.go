@@ -88,9 +88,17 @@ func testSnapSyncDisabling(t *testing.T, ethVer uint, snapVer uint) {
 	if err := empty.handler.downloader.BeaconSync(ethconfig.SnapSync, full.chain.CurrentBlock(), nil); err != nil {
 		t.Fatal("sync failed:", err)
 	}
-	time.Sleep(time.Second * 5) // Downloader internally has to wait a timer (3s) to be expired before exiting
-
-	if empty.handler.snapSync.Load() {
-		t.Fatalf("snap sync not disabled after successful synchronisation")
+	// Downloader internally has to wait for a timer (3s) to be expired before
+	// exiting. Poll after to determine if sync is disabled.
+	time.Sleep(time.Second * 3)
+	for timeout := time.After(time.Second); ; {
+		select {
+		case <-timeout:
+			t.Fatalf("snap sync not disabled after successful synchronisation")
+		case <-time.After(100 * time.Millisecond):
+			if !empty.handler.snapSync.Load() {
+				return
+			}
+		}
 	}
 }
