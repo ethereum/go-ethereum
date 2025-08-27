@@ -40,7 +40,7 @@ import (
 
 type testBackend struct {
 	db              ethdb.Database
-	fm              *filtermaps.FilterMaps
+	logIndexer      *filtermaps.Indexer
 	txFeed          event.Feed
 	logsFeed        event.Feed
 	rmLogsFeed      event.Feed
@@ -158,13 +158,13 @@ func (b *testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subsc
 	return b.chainFeed.Subscribe(ch)
 }
 
-func (b *testBackend) CurrentView() *filtermaps.ChainView {
+func (b *testBackend) CurrentChainView() *filtermaps.ChainView {
 	head := b.CurrentBlock()
 	return filtermaps.NewChainView(b, head.Number.Uint64(), head.Hash())
 }
 
-func (b *testBackend) NewMatcherBackend() filtermaps.MatcherBackend {
-	return b.fm.NewMatcherBackend()
+func (b *testBackend) GetIndexView(headBlockHash common.Hash) *filtermaps.IndexView {
+	return b.logIndexer.GetIndexView(headBlockHash)
 }
 
 func (b *testBackend) startFilterMaps(history uint64, disabled bool, params filtermaps.Params) {
