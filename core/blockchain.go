@@ -2153,7 +2153,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	}
 	// Report the collected witness statistics
 	if witnessStats != nil {
-		witnessStats.ReportMetrics()
+		witnessStats.ReportMetrics(block.NumberU64())
 	}
 
 	// Update the metrics touched during block commit
