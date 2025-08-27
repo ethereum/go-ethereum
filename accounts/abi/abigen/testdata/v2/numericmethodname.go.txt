@@ -136,7 +136,7 @@ func (NumericMethodNameE1TestEvent) ContractEventName() string {
 // Solidity: event _1TestEvent(address _param)
 func (numericMethodName *NumericMethodName) UnpackE1TestEventEvent(log *types.Log) (*NumericMethodNameE1TestEvent, error) {
 	event := "_1TestEvent"
-	if log.Topics[0] != numericMethodName.abi.Events[event].ID {
+	if len(log.Topics) == 0 || log.Topics[0] != numericMethodName.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(NumericMethodNameE1TestEvent)
