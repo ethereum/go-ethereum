@@ -17,10 +17,10 @@
 package bintrie
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 
-	"crypto/sha256"
 	"github.com/ethereum/go-ethereum/common"
 )
 

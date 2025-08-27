@@ -18,12 +18,12 @@ package bintrie
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
-	"crypto/sha256"
 )
 
 // StemNode represents a group of `NodeWith` values sharing the same stem.
