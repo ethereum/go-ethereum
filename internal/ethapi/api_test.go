@@ -3725,3 +3725,45 @@ func TestCreateAccessListWithStateOverrides(t *testing.T) {
 	}}
 	require.Equal(t, expected, result.Accesslist)
 }
+
+func TestEstimateGasWithMovePrecompile(t *testing.T) {
+	t.Parallel()
+	// Initialize test accounts
+	var (
+		accounts = newAccounts(2)
+		genesis  = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+	)
+	backend := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	})
+	api := NewBlockChainAPI(backend)
+	// Move SHA256 precompile (0x2) to a new address (0x100)
+	// and estimate gas for calling the moved precompile.
+	var (
+		sha256Addr    = common.BytesToAddress([]byte{0x2})
+		newSha256Addr = common.BytesToAddress([]byte{0x10, 0})
+		sha256Input   = hexutil.Bytes([]byte("hello"))
+		args          = TransactionArgs{
+			From: &accounts[0].addr,
+			To:   &newSha256Addr,
+			Data: &sha256Input,
+		}
+		overrides = &override.StateOverride{
+			sha256Addr: override.OverrideAccount{
+				MovePrecompileTo: &newSha256Addr,
+			},
+		}
+	)
+	gas, err := api.EstimateGas(context.Background(), args, nil, overrides, nil)
+	if err != nil {
+		t.Fatalf("EstimateGas failed: %v", err)
+	}
+	if gas != 21366 {
+		t.Fatalf("mismatched gas: %d, want 21366", gas)
+	}
+}
