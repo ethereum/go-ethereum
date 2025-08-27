@@ -220,34 +220,18 @@ func (b *testHandler) close() {
 }
 
 func TestBroadcastChoice(t *testing.T) {
-	// Create choices.
 	self := enode.HexID("1111111111111111111111111111111111111111111111111111111111111111")
 	choice49 := newBroadcastChoice(self)
 	choice50 := newBroadcastChoice(self)
 
-	// Create test peers.
-	var (
-		rand  = rand.New(rand.NewSource(33))
-		peers = make([]*ethPeer, 50)
-	)
-	for i := range peers {
-		var id enode.ID
-		rand.Read(id[:])
-		p2pPeer := p2p.NewPeer(id, "test", nil)
-		ep := eth.NewPeer(eth.ETH69, p2pPeer, nil, nil)
-		peers[i] = &ethPeer{Peer: ep}
-	}
-	defer func() {
-		for _, p := range peers {
-			p.Close()
-		}
-	}()
-
-	// Create random tx sender addresses.
+	// Create test peers and random tx sender addresses.
+	rand := rand.New(rand.NewSource(33))
 	txsenders := make([]common.Address, 400)
 	for i := range txsenders {
 		rand.Read(txsenders[i][:])
 	}
+	peers := createTestPeers(rand, 50)
+	defer closePeers(peers)
 
 	// Evaluate choice49 first.
 	expectedCount := 7 // sqrt(49)
@@ -278,5 +262,58 @@ func TestBroadcastChoice(t *testing.T) {
 				t.Errorf("for tx %d, choice50 did not choose peer %v, but choice49 did", i, p.ID())
 			}
 		}
+	}
+}
+
+func BenchmarkBroadcastChoice(b *testing.B) {
+	b.Run("50", func(b *testing.B) {
+		benchmarkBroadcastChoice(b, 50)
+	})
+	b.Run("200", func(b *testing.B) {
+		benchmarkBroadcastChoice(b, 200)
+	})
+	b.Run("500", func(b *testing.B) {
+		benchmarkBroadcastChoice(b, 500)
+	})
+}
+
+// This measures the overhead of sending one transaction to N peers.
+func benchmarkBroadcastChoice(b *testing.B, npeers int) {
+	rand := rand.New(rand.NewSource(33))
+	peers := createTestPeers(rand, npeers)
+	defer closePeers(peers)
+
+	txsenders := make([]common.Address, b.N)
+	for i := range txsenders {
+		rand.Read(txsenders[i][:])
+	}
+
+	self := enode.HexID("1111111111111111111111111111111111111111111111111111111111111111")
+	choice := newBroadcastChoice(self)
+
+	b.ResetTimer()
+	for i := range b.N {
+		set := choice.choosePeers(peers, txsenders[i])
+		if len(set) == 0 {
+			b.Fatal("empty result")
+		}
+	}
+}
+
+func createTestPeers(rand *rand.Rand, n int) []*ethPeer {
+	peers := make([]*ethPeer, n)
+	for i := range peers {
+		var id enode.ID
+		rand.Read(id[:])
+		p2pPeer := p2p.NewPeer(id, "test", nil)
+		ep := eth.NewPeer(eth.ETH69, p2pPeer, nil, nil)
+		peers[i] = &ethPeer{Peer: ep}
+	}
+	return peers
+}
+
+func closePeers(peers []*ethPeer) {
+	for _, p := range peers {
+		p.Close()
 	}
 }

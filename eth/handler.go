@@ -19,7 +19,6 @@ package eth
 import (
 	"cmp"
 	"errors"
-	"hash"
 	"hash/fnv"
 	"maps"
 	"math"
@@ -690,7 +689,6 @@ func (st *blockRangeState) currentRange() eth.BlockRangeUpdatePacket {
 
 type broadcastChoice struct {
 	self   enode.ID
-	hash   hash.Hash64
 	buffer map[*ethPeer]struct{}
 	tmp    []broadcastPeer
 }
@@ -703,7 +701,6 @@ type broadcastPeer struct {
 func newBroadcastChoice(self enode.ID) *broadcastChoice {
 	return &broadcastChoice{
 		self:   self,
-		hash:   fnv.New64(),
 		buffer: make(map[*ethPeer]struct{}),
 	}
 }
@@ -713,12 +710,13 @@ func newBroadcastChoice(self enode.ID) *broadcastChoice {
 func (bc *broadcastChoice) choosePeers(peers []*ethPeer, txSender common.Address) map[*ethPeer]struct{} {
 	// Compute scores.
 	bc.tmp = slices.Grow(bc.tmp[:0], len(peers))[:len(peers)]
+	hash := fnv.New64()
 	for i, peer := range peers {
-		bc.hash.Reset()
-		bc.hash.Write(bc.self[:])
-		bc.hash.Write(peer.Peer.Peer.ID().Bytes())
-		bc.hash.Write(txSender[:])
-		bc.tmp[i] = broadcastPeer{peer, bc.hash.Sum64()}
+		hash.Reset()
+		hash.Write(bc.self[:])
+		hash.Write(peer.Peer.Peer.ID().Bytes())
+		hash.Write(txSender[:])
+		bc.tmp[i] = broadcastPeer{peer, hash.Sum64()}
 	}
 
 	// Sort by score.
