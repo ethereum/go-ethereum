@@ -1497,6 +1497,8 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 
 // SendTransaction creates a transaction for the given argument, sign it and submit it to the
 // transaction pool.
+//
+// This API is not capable for submitting blob transaction with sidecar.
 func (api *TransactionAPI) SendTransaction(ctx context.Context, args TransactionArgs) (common.Hash, error) {
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: args.from()}
@@ -1517,7 +1519,7 @@ func (api *TransactionAPI) SendTransaction(ctx context.Context, args Transaction
 	}
 
 	// Set some sanity defaults and terminate on failure
-	if err := args.setDefaults(ctx, api.b, false); err != nil {
+	if err := args.setDefaults(ctx, api.b, sidecarConfig{}); err != nil {
 		return common.Hash{}, err
 	}
 	// Assemble the transaction and sign with the wallet
@@ -1534,10 +1536,19 @@ func (api *TransactionAPI) SendTransaction(ctx context.Context, args Transaction
 // on a given unsigned transaction, and returns it to the caller for further
 // processing (signing + broadcast).
 func (api *TransactionAPI) FillTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
-	args.blobSidecarAllowed = true
-
 	// Set some sanity defaults and terminate on failure
-	if err := args.setDefaults(ctx, api.b, false); err != nil {
+	sidecarVersion := types.BlobSidecarVersion0
+	if len(args.Blobs) > 0 {
+		h := api.b.CurrentHeader()
+		if api.b.ChainConfig().IsOsaka(h.Number, h.Time) {
+			sidecarVersion = types.BlobSidecarVersion1
+		}
+	}
+	config := sidecarConfig{
+		blobSidecarAllowed: true,
+		blobSidecarVersion: sidecarVersion,
+	}
+	if err := args.setDefaults(ctx, api.b, config); err != nil {
 		return nil, err
 	}
 	// Assemble the transaction and obtain rlp
@@ -1594,8 +1605,6 @@ type SignTransactionResult struct {
 // The node needs to have the private key of the account corresponding with
 // the given from address and it needs to be unlocked.
 func (api *TransactionAPI) SignTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
-	args.blobSidecarAllowed = true
-
 	if args.Gas == nil {
 		return nil, errors.New("gas not specified")
 	}
@@ -1605,7 +1614,19 @@ func (api *TransactionAPI) SignTransaction(ctx context.Context, args Transaction
 	if args.Nonce == nil {
 		return nil, errors.New("nonce not specified")
 	}
-	if err := args.setDefaults(ctx, api.b, false); err != nil {
+	sidecarVersion := types.BlobSidecarVersion0
+	if len(args.Blobs) > 0 {
+		h := api.b.CurrentHeader()
+		if api.b.ChainConfig().IsOsaka(h.Number, h.Time) {
+			sidecarVersion = types.BlobSidecarVersion1
+		}
+	}
+
+	config := sidecarConfig{
+		blobSidecarAllowed: true,
+		blobSidecarVersion: sidecarVersion,
+	}
+	if err := args.setDefaults(ctx, api.b, config); err != nil {
 		return nil, err
 	}
 	// Before actually sign the transaction, ensure the transaction fee is reasonable.
@@ -1621,7 +1642,7 @@ func (api *TransactionAPI) SignTransaction(ctx context.Context, args Transaction
 	// no longer retains the blobs, only the blob hashes. In this step, we need
 	// to put back the blob(s).
 	if args.IsEIP4844() {
-		signed = signed.WithBlobTxSidecar(types.NewBlobTxSidecar(types.BlobSidecarVersion0, args.Blobs, args.Commitments, args.Proofs))
+		signed = signed.WithBlobTxSidecar(types.NewBlobTxSidecar(sidecarVersion, args.Blobs, args.Commitments, args.Proofs))
 	}
 	data, err := signed.MarshalBinary()
 	if err != nil {
@@ -1656,11 +1677,13 @@ func (api *TransactionAPI) PendingTransactions() ([]*RPCTransaction, error) {
 
 // Resend accepts an existing transaction and a new gas price and limit. It will remove
 // the given transaction from the pool and reinsert it with the new gas price and limit.
+//
+// This API is not capable for submitting blob transaction with sidecar.
 func (api *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs, gasPrice *hexutil.Big, gasLimit *hexutil.Uint64) (common.Hash, error) {
 	if sendArgs.Nonce == nil {
 		return common.Hash{}, errors.New("missing transaction nonce in transaction spec")
 	}
-	if err := sendArgs.setDefaults(ctx, api.b, false); err != nil {
+	if err := sendArgs.setDefaults(ctx, api.b, sidecarConfig{}); err != nil {
 		return common.Hash{}, err
 	}
 	matchTx := sendArgs.ToTransaction(types.LegacyTxType)
