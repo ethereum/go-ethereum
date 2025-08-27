@@ -255,10 +255,7 @@ func (s *stateObject) finalise() *bal.AccountState {
 			if s.db.constructionBAL != nil {
 				s.db.constructionBAL.BalanceChange(uint16(s.db.balIndex), s.address, s.Balance())
 			}
-			var postBalance bal.Balance
-			postBalanceBytes := s.Balance().Bytes()
-			copy(postBalance[16-len(postBalanceBytes):], postBalanceBytes[:])
-			accountPost.Balance = &postBalance
+			accountPost.Balance = s.Balance()
 		}
 
 		if s.Nonce() != s.txPreNonce {

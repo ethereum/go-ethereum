@@ -81,33 +81,10 @@ func (e *BlockAccessList) Hash() common.Hash {
 	return crypto.Keccak256Hash(enc.Bytes())
 }
 
-// encodeBalance encodes the provided balance into 16-bytes.
-func encodeBalance(val *uint256.Int) [16]byte {
-	valBytes := val.Bytes()
-	if len(valBytes) > 16 {
-		panic("can't encode value that is greater than 16 bytes in size")
-	}
-	var enc [16]byte
-	copy(enc[16-len(valBytes):], valBytes[:])
-	return enc
-}
-
-// TODO: if we don't go with SSZ, this can be a variable-sized byte array
-type Balance [16]byte
-
-func (b Balance) MarshalJSON() ([]byte, error) {
-	return json.Marshal(fmt.Sprintf("%x", b))
-}
-
-func (b Balance) IsZero() bool {
-	zeroBytes := [16]byte{}
-	return bytes.Equal(b[:], zeroBytes[:])
-}
-
 // encodingBalanceChange is the encoding format of BalanceChange.
 type encodingBalanceChange struct {
-	TxIdx   uint16  `ssz-size:"2" json:"txIndex"`
-	Balance Balance `ssz-size:"16" json:"balance"`
+	TxIdx   uint16       `ssz-size:"2" json:"txIndex"`
+	Balance *uint256.Int `ssz-size:"16" json:"balance"`
 }
 
 // encodingAccountNonce is the encoding format of NonceChange.
@@ -272,7 +249,7 @@ func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAc
 	for _, idx := range balanceIndices {
 		res.BalanceChanges = append(res.BalanceChanges, encodingBalanceChange{
 			TxIdx:   idx,
-			Balance: encodeBalance(a.BalanceChanges[idx]),
+			Balance: new(uint256.Int).Set(a.BalanceChanges[idx]),
 		})
 	}
 

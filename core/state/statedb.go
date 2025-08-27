@@ -698,7 +698,7 @@ func (s *StateDB) initObjFromDiff(addr common.Address, a *types.StateAccount, di
 		acct.Nonce = *diff.Nonce
 	}
 	if diff.Balance != nil {
-		acct.Balance = new(uint256.Int).SetBytes((*diff.Balance)[:])
+		acct.Balance = new(uint256.Int).Set(diff.Balance)
 	}
 	obj := newObject(s, addr, acct)
 	if diff.Code != nil {
@@ -745,7 +745,7 @@ func (s *StateDB) ApplyStateDiff(blockDiff *bal.StateDiff) {
 			stateObject.SetNonce(*accountDiff.Nonce)
 		}
 		if accountDiff.Balance != nil {
-			stateObject.SetBalance(new(uint256.Int).SetBytes((*accountDiff.Balance)[:]))
+			stateObject.SetBalance(new(uint256.Int).Set(accountDiff.Balance))
 		}
 		s.setStateObject(stateObject)
 	}
@@ -954,7 +954,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) (diff *bal.StateDiff) {
 					s.constructionBAL.BalanceChange(uint16(s.balIndex), obj.address, uint256.NewInt(0))
 				}
 				postState := bal.NewEmptyAccountState()
-				postState.Balance = &bal.Balance{}
+				postState.Balance = new(uint256.Int)
 				diff.Mutations[obj.address] = postState
 			}
 

@@ -6,7 +6,7 @@ import (
 )
 
 // Reader provides methods for reading account state from a block access
-// list.
+// list.  State values returned from the Reader methods must not be modified.
 type Reader struct {
 	accesses map[common.Address]*AccountAccess
 }
@@ -64,7 +64,7 @@ func (r *Reader) accountChangesAt(addr common.Address, idx int) *AccountState {
 
 	for i := len(acct.BalanceChanges) - 1; i >= 0; i-- {
 		if acct.BalanceChanges[i].TxIdx == uint16(idx) {
-			res.Balance = &acct.BalanceChanges[i].Balance
+			res.Balance = acct.BalanceChanges[i].Balance
 		}
 		if acct.BalanceChanges[i].TxIdx < uint16(idx) {
 			break
@@ -127,7 +127,7 @@ func (r *Reader) ReadAccount(addr common.Address, idx int) *AccountState {
 	var res AccountState
 
 	for i := 0; i < len(acct.BalanceChanges) && acct.BalanceChanges[i].TxIdx <= uint16(idx); i++ {
-		res.Balance = &acct.BalanceChanges[i].Balance
+		res.Balance = acct.BalanceChanges[i].Balance
 	}
 
 	for i := 0; i < len(acct.CodeChanges) && acct.CodeChanges[i].TxIdx <= uint16(idx); i++ {

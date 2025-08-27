@@ -180,7 +180,7 @@ type StateDiff struct {
 }
 
 type AccountState struct {
-	Balance       *Balance                    `json:"Balance,omitempty"`
+	Balance       *uint256.Int                `json:"Balance,omitempty"`
 	Nonce         *uint64                     `json:"Nonce,omitempty"`
 	Code          ContractCode                `json:"Code,omitempty"`
 	StorageWrites map[common.Hash]common.Hash `json:"StorageWrites,omitempty"`
@@ -224,7 +224,7 @@ func (a *AccountState) Eq(other *AccountState) bool {
 			return false
 		}
 
-		if !bytes.Equal(a.Balance[:], other.Balance[:]) {
+		if !a.Balance.Eq(other.Balance) {
 			return false
 		}
 	}
@@ -265,8 +265,7 @@ func (a *AccountState) Copy() *AccountState {
 		res.Code = bytes.Clone(a.Code)
 	}
 	if a.Balance != nil {
-		res.Balance = new(Balance)
-		copy(res.Balance[:], (*a.Balance)[:])
+		res.Balance = new(uint256.Int).Set(res.Balance)
 	}
 	if a.StorageWrites != nil {
 		res.StorageWrites = maps.Clone(a.StorageWrites)

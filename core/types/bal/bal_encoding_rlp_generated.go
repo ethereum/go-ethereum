@@ -4,6 +4,7 @@ package bal
 
 import "github.com/ethereum/go-ethereum/common"
 import "github.com/ethereum/go-ethereum/rlp"
+import "github.com/holiman/uint256"
 import "io"
 
 func (obj *BlockAccessList) EncodeRLP(_w io.Writer) error {
@@ -37,7 +38,11 @@ func (obj *BlockAccessList) EncodeRLP(_w io.Writer) error {
 		for _, _tmp13 := range _tmp2.BalanceChanges {
 			_tmp14 := w.List()
 			w.WriteUint64(uint64(_tmp13.TxIdx))
-			w.WriteBytes(_tmp13.Balance[:])
+			if _tmp13.Balance == nil {
+				w.Write(rlp.EmptyString)
+			} else {
+				w.WriteUint256(_tmp13.Balance)
+			}
 			w.ListEnd(_tmp14)
 		}
 		w.ListEnd(_tmp12)
@@ -181,11 +186,11 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 						}
 						_tmp14.TxIdx = _tmp15
 						// Balance:
-						var _tmp16 [16]byte
-						if err := dec.ReadBytes(_tmp16[:]); err != nil {
+						var _tmp16 uint256.Int
+						if err := dec.ReadUint256(&_tmp16); err != nil {
 							return err
 						}
-						_tmp14.Balance = _tmp16
+						_tmp14.Balance = &_tmp16
 						if err := dec.ListEnd(); err != nil {
 							return err
 						}
@@ -229,7 +234,7 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 					return err
 				}
 				_tmp2.NonceChanges = _tmp17
-				// Code:
+				// CodeChanges:
 				var _tmp21 []CodeChange
 				if _, err := dec.List(); err != nil {
 					return err
@@ -240,7 +245,7 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 						if _, err := dec.List(); err != nil {
 							return err
 						}
-						// TxIndex:
+						// TxIdx:
 						_tmp23, err := dec.Uint16()
 						if err != nil {
 							return err
