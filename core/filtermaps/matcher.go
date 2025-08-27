@@ -57,19 +57,22 @@ func (l *LogPosition) GetLog(receipts types.Receipts) (*types.Log, error) {
 	ptr := l.startPtr
 	for _, receipt := range receipts {
 		for _, log := range receipt.Logs {
-			if ptr == l.logPtr {
-				return log, nil
-			}
 			step := uint64(len(log.Topics) + 1)
 			subPtr := ptr % l.valuesPerMap
 			if subPtr+step > l.valuesPerMap {
 				ptr += l.valuesPerMap - subPtr
+			}
+			if ptr == l.logPtr {
+				return log, nil
 			}
 			ptr += step
 			if ptr > l.logPtr {
 				return nil, nil // log position is in block range but there is no log there (false positive)
 			}
 		}
+	}
+	if ptr == l.logPtr {
+		return nil, nil // points to the block delimiter (false positive)
 	}
 	return nil, fmt.Errorf("invalid log position: block #%d start pointer %d log pointer %d", l.BlockNumber, l.startPtr, l.logPtr)
 }
@@ -80,7 +83,6 @@ func (l *LogPosition) GetLog(receipts types.Receipts) (*types.Log, error) {
 // to that block range might be missing or incorrect.
 // Also note that the returned list may contain false positives.
 func GetPotentialMatches(ctx context.Context, backend *IndexView, firstBlock, lastBlock uint64, addresses []common.Address, topics [][]common.Hash) ([]LogPosition, error) {
-	//fmt.Println("GetPotentialMatches", firstBlock, lastBlock, addresses, topics)
 	params := backend.GetParams()
 	// find the log value index range to search
 	firstIndex, err := backend.GetBlockLvPointer(firstBlock)
@@ -94,7 +96,7 @@ func GetPotentialMatches(ctx context.Context, backend *IndexView, firstBlock, la
 	if lastIndex > 0 {
 		lastIndex--
 	}
-	//fmt.Println(" lv range", firstIndex, lastIndex)
+	//fmt.Println("GetPotentialMatches", firstBlock, lastBlock, firstIndex, lastIndex, addresses, topics)
 
 	// build matcher according to the given filter criteria
 	matchers := make([]matcher, len(topics)+1)
@@ -414,7 +416,7 @@ func (m *singleMatcherInstance) getMatchesForLayer(layerIndex uint32) (results [
 	m.stats.setState(&st, stOther)
 	params := m.backend.GetParams()
 	var ptr int
-	var totalsize int //TODO
+	//var totalsize int //TODO
 	for len(m.mapIndices) > ptr {
 		// find next group of map indices mapped onto the same row
 		maskedMapIndex := params.maskedMapIndex(m.mapIndices[ptr], layerIndex)
@@ -437,7 +439,8 @@ func (m *singleMatcherInstance) getMatchesForLayer(layerIndex uint32) (results [
 		for i := range groupLength {
 			mapIndex := m.mapIndices[ptr+i]
 			filterRow := groupRows[i]
-			totalsize += len(filterRow)
+			//fmt.Println("map", mapIndex, "row", rowIndex, "layer", layerIndex, "len", min(uint32(len(filterRow)), params.getMaxRowLength(layerIndex)), "max", params.getMaxRowLength(layerIndex))
+			//totalsize += len(filterRow)
 			filterRows, ok := m.filterRows[mapIndex]
 			if !ok {
 				panic("dropped map in mapIndices")
@@ -473,9 +476,9 @@ func (m *singleMatcherInstance) getMatchesForLayer(layerIndex uint32) (results [
 			r += len(res.matches)
 		}
 		//fmt.Println("sm results", layerIndex, m.mapIndices[0], len(m.mapIndices), r, totalsize)
-	} else {
-		//fmt.Println("sm results *")
-	}
+	} /* else {
+		fmt.Println("sm results *")
+	}*/
 	m.cleanMapIndices()
 	m.stats.setState(&st, stNone)
 	return results, nil

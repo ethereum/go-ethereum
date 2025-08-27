@@ -237,8 +237,8 @@ func (m *mapDatabase) getFilterMapRows(mapIndices []uint32, rowIndex, layers uin
 				if j != i {
 					mapIndices[j] = mapIndices[i]
 					readRows[j] = readRows[i]
-					j++
 				}
+				j++
 			}
 		}
 		if j == 0 {
@@ -294,11 +294,11 @@ func (m *mapDatabase) getFilterMapRowsOfDbLayerGroup(mapIndices []uint32, rowInd
 	}
 	rows, err := rawdb.ReadFilterMapRowGroup(m.db, mapRowIndex, dbLayer, groupSize, m.params.logMapWidth)
 
-	var totalsize int //TODO
+	/*var totalsize int //TODO
 	for _, row := range rows {
 		totalsize += len(row)
 	}
-	//fmt.Println("ReadFilterMapRowGroup", mapRowIndex, dbLayer, groupSize, m.params.logMapWidth, totalsize)
+	fmt.Println("ReadFilterMapRowGroup", mapRowIndex, dbLayer, groupSize, m.params.logMapWidth, totalsize)*/
 
 	if err != nil {
 		return fmt.Errorf("failed to retrieve row group %d of row %d layer %d: %v", groupIndex, rowIndex, dbLayer, err)
