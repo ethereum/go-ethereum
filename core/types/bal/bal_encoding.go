@@ -39,7 +39,7 @@ import (
 
 // BlockAccessList is the encoding format of ConstructionBlockAccessList.
 type BlockAccessList struct {
-	Accesses []AccountAccess `ssz-max:"300000" json:"accesses"`
+	Accesses []AccountAccess `json:"accesses"`
 }
 
 func (e *BlockAccessList) String() string {
@@ -83,26 +83,26 @@ func (e *BlockAccessList) Hash() common.Hash {
 
 // encodingBalanceChange is the encoding format of BalanceChange.
 type encodingBalanceChange struct {
-	TxIdx   uint16       `ssz-size:"2" json:"txIndex"`
-	Balance *uint256.Int `ssz-size:"16" json:"balance"`
+	TxIdx   uint16       `json:"txIndex"`
+	Balance *uint256.Int `json:"balance"`
 }
 
 // encodingAccountNonce is the encoding format of NonceChange.
 type encodingAccountNonce struct {
-	TxIdx uint16 `ssz-size:"2" json:"txIndex"`
-	Nonce uint64 `ssz-size:"8" json:"nonce"`
+	TxIdx uint16 `json:"txIndex"`
+	Nonce uint64 `json:"nonce"`
 }
 
 // encodingStorageWrite is the encoding format of StorageWrites.
 type encodingStorageWrite struct {
 	TxIdx      uint16      `json:"txIndex"`
-	ValueAfter common.Hash `ssz-size:"32" json:"valueAfter"`
+	ValueAfter common.Hash `json:"valueAfter"`
 }
 
 // encodingStorageWrite is the encoding format of SlotWrites.
 type encodingSlotWrites struct {
-	Slot     common.Hash            `ssz-size:"32" json:"slot"`
-	Accesses []encodingStorageWrite `ssz-max:"300000" json:"accesses"`
+	Slot     common.Hash            `json:"slot"`
+	Accesses []encodingStorageWrite `json:"accesses"`
 }
 
 // validate returns an instance of the encoding-representation slot writes in
@@ -118,12 +118,12 @@ func (e *encodingSlotWrites) validate() error {
 
 // AccountAccess is the encoding format of ConstructionAccountAccess.
 type AccountAccess struct {
-	Address        common.Address          `ssz-size:"20" json:"address,omitempty"`           // 20-byte Ethereum address
-	StorageWrites  []encodingSlotWrites    `ssz-max:"300000" json:"storageWrites,omitempty"`  // Storage changes (slot -> [tx_index -> new_value])
-	StorageReads   []common.Hash           `ssz-max:"300000" json:"storageReads,omitempty"`   // Read-only storage keys
-	BalanceChanges []encodingBalanceChange `ssz-max:"300000" json:"balanceChanges,omitempty"` // Balance changes ([tx_index -> post_balance])
-	NonceChanges   []encodingAccountNonce  `ssz-max:"300000" json:"nonceChanges,omitempty"`   // Nonce changes ([tx_index -> new_nonce])
-	CodeChanges    []CodeChange            `ssz-max:"1" json:"code,omitempty"`                // CodeChanges changes ([tx_index -> new_code])
+	Address        common.Address          `json:"address,omitempty"`        // 20-byte Ethereum address
+	StorageWrites  []encodingSlotWrites    `json:"storageWrites,omitempty"`  // Storage changes (slot -> [tx_index -> new_value])
+	StorageReads   []common.Hash           `json:"storageReads,omitempty"`   // Read-only storage keys
+	BalanceChanges []encodingBalanceChange `json:"balanceChanges,omitempty"` // Balance changes ([tx_index -> post_balance])
+	NonceChanges   []encodingAccountNonce  `json:"nonceChanges,omitempty"`   // Nonce changes ([tx_index -> new_nonce])
+	CodeChanges    []CodeChange            `json:"code,omitempty"`           // CodeChanges changes ([tx_index -> new_code])
 }
 
 // validate converts the account accesses out of encoding format.
