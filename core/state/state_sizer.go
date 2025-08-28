@@ -440,7 +440,7 @@ func (t *SizeTracker) build(root common.Hash, blockNumber uint64, done chan buil
 
 	// Start all table iterations concurrently with direct metric updates
 	group.Go(func() error {
-		count, bytes, err := t.iterateTable(t.abort, rawdb.SnapshotAccountPrefix, "account")
+		count, bytes, err := t.iterateTableParallel(t.abort, rawdb.SnapshotAccountPrefix, "account")
 		if err != nil {
 			return err
 		}
@@ -448,7 +448,6 @@ func (t *SizeTracker) build(root common.Hash, blockNumber uint64, done chan buil
 		return nil
 	})
 
-	// Storage table is huge, iterate in parallel
 	group.Go(func() error {
 		count, bytes, err := t.iterateTableParallel(t.abort, rawdb.SnapshotStoragePrefix, "storage")
 		if err != nil {
@@ -459,7 +458,7 @@ func (t *SizeTracker) build(root common.Hash, blockNumber uint64, done chan buil
 	})
 
 	group.Go(func() error {
-		count, bytes, err := t.iterateTable(t.abort, rawdb.TrieNodeAccountPrefix, "accountnode")
+		count, bytes, err := t.iterateTableParallel(t.abort, rawdb.TrieNodeAccountPrefix, "accountnode")
 		if err != nil {
 			return err
 		}
@@ -467,7 +466,6 @@ func (t *SizeTracker) build(root common.Hash, blockNumber uint64, done chan buil
 		return nil
 	})
 
-	// Storage trienode table is huge, iterate in parallel
 	group.Go(func() error {
 		count, bytes, err := t.iterateTableParallel(t.abort, rawdb.TrieNodeStoragePrefix, "storagenode")
 		if err != nil {
@@ -582,7 +580,7 @@ func (t *SizeTracker) iterateTableParallel(closed chan struct{}, prefix []byte, 
 	for i := 0; i < 256; i++ {
 		h := byte(i)
 		group.Go(func() error {
-			count, bytes, err := t.iterateTable(closed, slices.Concat(prefix, []byte{h}), fmt.Sprintf("%s-%x", name, h))
+			count, bytes, err := t.iterateTable(closed, slices.Concat(prefix, []byte{h}), fmt.Sprintf("%s-%02x", name, h))
 			if err != nil {
 				return err
 			}
