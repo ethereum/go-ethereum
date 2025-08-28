@@ -394,7 +394,7 @@ func (s *stat) GetCount() counter {
 
 // InspectDatabase traverses the entire database and checks the size
 // of all different categories of data.
-func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
+func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, workers int) error {
 	var (
 		start = time.Now()
 
@@ -538,20 +538,17 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		return it.Error()
 	}
 
-	// Create error group for parallel processing
-	var g errgroup.Group
+	var eg errgroup.Group
+	eg.SetLimit(workers)
 
-	// Split key space into 256 ranges (0x00 to 0xFF)
-	log.Info("Starting parallel database inspection", "workers", 256)
+	log.Info("Starting parallel database inspection", "workers", workers)
+
 	for i := 0; i < 256; i++ {
 		rangePrefix := []byte{byte(i)}
-		g.Go(func() error {
-			return processRange(rangePrefix)
-		})
+		eg.Go(func() error { return processRange(rangePrefix) })
 	}
 
-	// Wait for all workers to complete
-	if err := g.Wait(); err != nil {
+	if err := eg.Wait(); err != nil {
 		return err
 	}
 
@@ -613,7 +610,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	table.AppendBulk(stats)
 	table.Render()
 
-	log.Info("Parallel database inspection completed", "total_entries", totalCount.Load(), "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Database inspection completed", "count", totalCount.Load(), "elapsed", common.PrettyDuration(time.Since(start)))
 
 	if unaccounted.GetSize() > 0 {
 		log.Error("Database contains unaccounted data", "size", unaccounted.GetSize(), "count", unaccounted.GetCount())

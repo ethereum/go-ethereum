@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -89,7 +90,13 @@ Remove blockchain and state databases`,
 		Action:      inspect,
 		Name:        "inspect",
 		ArgsUsage:   "<prefix> <start>",
-		Flags:       slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
+		Flags: slices.Concat(utils.NetworkFlags, utils.DatabaseFlags, []cli.Flag{
+			&cli.IntFlag{
+				Name:  "workers",
+				Usage: "Number of parallel workers for database inspection",
+				Value: runtime.NumCPU(),
+			},
+		}),
 		Usage:       "Inspect the storage size for each type of data in the database",
 		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
 	}
@@ -329,7 +336,8 @@ func inspect(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
 
-	return rawdb.InspectDatabase(db, prefix, start)
+	workers := ctx.Int("workers")
+	return rawdb.InspectDatabase(db, prefix, start, workers)
 }
 
 func checkStateContent(ctx *cli.Context) error {
