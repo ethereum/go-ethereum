@@ -155,6 +155,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		txpool:         config.TxPool,
 		chain:          config.Chain,
 		peers:          newPeerSet(),
+		txBroadcastKey: newBroadcastChoiceKey(),
 		requiredBlocks: config.RequiredBlocks,
 		quitSync:       make(chan struct{}),
 		handlerDoneCh:  make(chan struct{}),
@@ -205,7 +206,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	addTxs := func(txs []*types.Transaction) []error {
 		return h.txpool.Add(txs, false)
 	}
-	h.txBroadcastKey = newBroadcastChoiceKey()
 	h.txFetcher = fetcher.NewTxFetcher(h.txpool.Has, addTxs, fetchTx, h.removePeer)
 	return h, nil
 }
