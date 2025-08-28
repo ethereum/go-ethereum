@@ -1189,9 +1189,9 @@ func TestBillyMigration(t *testing.T) {
 		addr2 = crypto.PubkeyToAddress(key2.PublicKey)
 		addr3 = crypto.PubkeyToAddress(key3.PublicKey)
 
-		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 6, key1)
-		tx2 = makeMultiBlobTx(0, 1, 800, 70, 6, key2)
-		tx3 = makeMultiBlobTx(0, 1, 800, 110, 24, key3)
+		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 6, 0, key1, types.BlobSidecarVersion0)
+		tx2 = makeMultiBlobTx(0, 1, 800, 70, 6, 0, key2, types.BlobSidecarVersion0)
+		tx3 = makeMultiBlobTx(0, 1, 800, 110, 24, 0, key3, types.BlobSidecarVersion0)
 
 		blob1, _ = rlp.EncodeToBytes(tx1)
 		blob2, _ = rlp.EncodeToBytes(tx2)
