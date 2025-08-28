@@ -286,7 +286,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	// been mutated in the BAL.  Execution will apply BAL state diffs on top
 	// to compute the correct intermediate state of an account within the block.
 	tPreprocessLoadStart := time.Now()
-	modifiedPrestate = statedb.LoadModifiedPrestate(alReader.Accounts())
+	modifiedPrestate = statedb.LoadModifiedPrestate(alReader.ModifiedAccounts())
 	tPreprocessLoad := time.Since(tPreprocessLoadStart)
 	statedb.SetPrestate(modifiedPrestate)
 

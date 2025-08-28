@@ -20,10 +20,12 @@ func NewReader(al *BlockAccessList) Reader {
 	return r
 }
 
-// Accounts returns a list of all accounts from the access list
-func (r *Reader) Accounts() (res []common.Address) {
-	for addr, _ := range r.accesses {
-		res = append(res, addr)
+// ModifiedAccounts returns a list of all accounts with mutations in the access list
+func (r *Reader) ModifiedAccounts() (res []common.Address) {
+	for addr, access := range r.accesses {
+		if len(access.NonceChanges) != 0 || len(access.CodeChanges) != 0 || len(access.StorageWrites) != 0 || len(access.BalanceChanges) != 0 {
+			res = append(res, addr)
+		}
 	}
 	return res
 }
