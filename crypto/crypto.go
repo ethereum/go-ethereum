@@ -144,7 +144,12 @@ func ToECDSA(d []byte) (*ecdsa.PrivateKey, error) {
 // never be used unless you are sure the input is valid and want to avoid hitting
 // errors due to bad origin encoding (0 prefixes cut off).
 func ToECDSAUnsafe(d []byte) *ecdsa.PrivateKey {
-	priv, _ := toECDSA(d, false)
+	priv, err := toECDSA(d, false)
+	if err != nil {
+		// In unsafe mode, we panic on error to maintain backward compatibility
+		// but provide better error information for debugging
+		panic(fmt.Sprintf("ToECDSAUnsafe failed: %v", err))
+	}
 	return priv
 }
 
