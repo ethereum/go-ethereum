@@ -754,6 +754,9 @@ func (s *StateDB) ApplyStateDiff(blockDiff *bal.StateDiff) {
 // getStateObject retrieves a state object given by the address, returning nil if
 // the object is not found or was deleted in this execution context.
 func (s *StateDB) getStateObject(addr common.Address) *stateObject {
+	if s.constructionBAL != nil {
+		s.constructionBAL.AccountRead(addr)
+	}
 	// Prefer live objects if any is available
 	if obj := s.stateObjects[addr]; obj != nil {
 		return obj
