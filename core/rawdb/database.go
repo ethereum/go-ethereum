@@ -541,6 +541,22 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, workers int)
 	var eg errgroup.Group
 	eg.SetLimit(workers)
 
+	// Start progress reporting goroutine
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(8 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				log.Info("Inspecting database progress", "count", totalCount.Load(), "size", common.StorageSize(totalSize.Load()), "elapsed", common.PrettyDuration(time.Since(start)))
+			case <-done:
+				return
+			}
+		}
+	}()
+
 	log.Info("Starting parallel database inspection", "workers", workers)
 
 	for i := 0; i < 256; i++ {
@@ -549,8 +565,10 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, workers int)
 	}
 
 	if err := eg.Wait(); err != nil {
+		close(done)
 		return err
 	}
+	close(done)
 
 	// Display the database statistic of key-value store.
 	stats := [][]string{
