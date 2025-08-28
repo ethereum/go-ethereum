@@ -30,7 +30,7 @@ const (
 	headLogDelay = time.Second      // head indexing log info delay (do not log if finished faster)
 )
 
-// updateLoop initializes and updates the log index structure according to the
+// indexerLoop initializes and updates the log index structure according to the
 // current targetView.
 func (f *FilterMaps) indexerLoop() {
 	defer f.closeWg.Done()
@@ -221,7 +221,7 @@ func (f *FilterMaps) processSingleEvent(blocking bool) bool {
 	return true
 }
 
-// setTargetView updates the target chain view of the iterator.
+// setTarget updates the target chain view of the iterator.
 func (f *FilterMaps) setTarget(target targetUpdate) {
 	f.targetView = target.targetView
 	f.historyCutoff = target.historyCutoff

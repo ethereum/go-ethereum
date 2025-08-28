@@ -38,7 +38,7 @@ type SourceIterator interface {
 	NodeSource() string // source of current node
 }
 
-// WithSource attaches a 'source name' to an iterator.
+// WithSourceName attaches a 'source name' to an iterator.
 func WithSourceName(name string, it Iterator) SourceIterator {
 	return sourceIter{it, name}
 }

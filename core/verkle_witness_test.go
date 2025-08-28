@@ -787,7 +787,7 @@ func TestProcessVerkleSelfDestructInSeparateTx(t *testing.T) {
 	}
 }
 
-// TestProcessVerkleSelfDestructInSeparateTx controls the contents of the witness after
+// TestProcessVerkleSelfDestructInSameTx controls the contents of the witness after
 // a eip6780-compliant selfdestruct occurs.
 func TestProcessVerkleSelfDestructInSameTx(t *testing.T) {
 	// The test txs were taken from a secondary testnet with chain id 69421
