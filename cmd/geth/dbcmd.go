@@ -87,9 +87,9 @@ Remove blockchain and state databases`,
 		},
 	}
 	dbInspectCmd = &cli.Command{
-		Action:      inspect,
-		Name:        "inspect",
-		ArgsUsage:   "<prefix> <start>",
+		Action:    inspect,
+		Name:      "inspect",
+		ArgsUsage: "<prefix> <start>",
 		Flags: slices.Concat(utils.NetworkFlags, utils.DatabaseFlags, []cli.Flag{
 			&cli.IntFlag{
 				Name:  "workers",
