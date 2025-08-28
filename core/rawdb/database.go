@@ -23,6 +23,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -395,7 +396,7 @@ func (s *stat) GetCount() counter {
 
 // InspectDatabase traverses the entire database and checks the size
 // of all different categories of data.
-func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, workers int) error {
+func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	var (
 		start = time.Now()
 		count atomic.Int64
@@ -550,7 +551,10 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, workers int)
 		return it.Error()
 	}
 
-	var eg errgroup.Group
+	var (
+		eg      errgroup.Group
+		workers = runtime.NumCPU()
+	)
 	eg.SetLimit(workers)
 
 	log.Info("Starting parallel database inspection", "workers", workers)
