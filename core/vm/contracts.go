@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -352,17 +353,17 @@ type bigModExp struct {
 }
 
 var (
-	big1      = big.NewInt(1)
-	big3      = big.NewInt(3)
-	big7      = big.NewInt(7)
-	big20     = big.NewInt(20)
-	big32     = big.NewInt(32)
-	big64     = big.NewInt(64)
-	big96     = big.NewInt(96)
-	big480    = big.NewInt(480)
-	big1024   = big.NewInt(1024)
-	big3072   = big.NewInt(3072)
-	big199680 = big.NewInt(199680)
+	big1      = uint256.NewInt(1)
+	big3      = uint256.NewInt(3)
+	big7      = uint256.NewInt(7)
+	big20     = uint256.NewInt(20)
+	big32     = uint256.NewInt(32)
+	big64     = uint256.NewInt(64)
+	big96     = uint256.NewInt(96)
+	big480    = uint256.NewInt(480)
+	big1024   = uint256.NewInt(1024)
+	big3072   = uint256.NewInt(3072)
+	big199680 = uint256.NewInt(199680)
 )
 
 // modexpMultComplexity implements bigModexp multComplexity formula, as defined in EIP-198
@@ -373,21 +374,21 @@ var (
 //		else: return x ** 2 // 16 + 480 * x - 199680
 //
 // where is x is max(length_of_MODULUS, length_of_BASE)
-func modexpMultComplexity(x *big.Int) *big.Int {
+func modexpMultComplexity(x *uint256.Int) *uint256.Int {
 	switch {
 	case x.Cmp(big64) <= 0:
 		x.Mul(x, x) // x ** 2
 	case x.Cmp(big1024) <= 0:
 		// (x ** 2 // 4 ) + ( 96 * x - 3072)
-		x = new(big.Int).Add(
-			new(big.Int).Rsh(new(big.Int).Mul(x, x), 2),
-			new(big.Int).Sub(new(big.Int).Mul(big96, x), big3072),
+		x = new(uint256.Int).Add(
+			new(uint256.Int).Rsh(new(uint256.Int).Mul(x, x), 2),
+			new(uint256.Int).Sub(new(uint256.Int).Mul(big96, x), big3072),
 		)
 	default:
 		// (x ** 2 // 16) + (480 * x - 199680)
-		x = new(big.Int).Add(
-			new(big.Int).Rsh(new(big.Int).Mul(x, x), 4),
-			new(big.Int).Sub(new(big.Int).Mul(big480, x), big199680),
+		x = new(uint256.Int).Add(
+			new(uint256.Int).Rsh(new(uint256.Int).Mul(x, x), 4),
+			new(uint256.Int).Sub(new(uint256.Int).Mul(big480, x), big199680),
 		)
 	}
 	return x
@@ -396,24 +397,43 @@ func modexpMultComplexity(x *big.Int) *big.Int {
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	var (
-		baseLen = new(big.Int).SetBytes(getData(input, 0, 32))
-		expLen  = new(big.Int).SetBytes(getData(input, 32, 32))
-		modLen  = new(big.Int).SetBytes(getData(input, 64, 32))
+		in      = getData(input, 0, 96)
+		baseLen = new(uint256.Int).SetBytes32(in[0:32])
+		expLen  = new(uint256.Int).SetBytes32(in[32:64])
+		modLen  = new(uint256.Int).SetBytes32(in[64:96])
+		minGas  = uint64(0)
 	)
+	if c.eip2565 {
+		minGas = 200
+	} else if c.eip7883 {
+		minGas = 500
+	}
+
+	// base or mod > 32 bits results in massive gas costs
+	if baseLen.BitLen() > 32 || modLen.BitLen() > 32 {
+		return math.MaxUint64
+	}
+	if expLen.BitLen() > 32 {
+		// Zero base and zero mod cancel out big exponent before eip 7883
+		if !c.eip7883 && baseLen.IsZero() && modLen.IsZero() {
+			return minGas
+		}
+		return math.MaxUint64
+	}
 	if len(input) > 96 {
 		input = input[96:]
 	} else {
 		input = input[:0]
 	}
 	// Retrieve the head 32 bytes of exp for the adjusted exponent length
-	var expHead *big.Int
-	if big.NewInt(int64(len(input))).Cmp(baseLen) <= 0 {
-		expHead = new(big.Int)
+	var expHead *uint256.Int
+	if uint256.NewInt(uint64(len(input))).Cmp(baseLen) <= 0 {
+		expHead = new(uint256.Int)
 	} else {
 		if expLen.Cmp(big32) > 0 {
-			expHead = new(big.Int).SetBytes(getData(input, baseLen.Uint64(), 32))
+			expHead = new(uint256.Int).SetBytes(getData(input, baseLen.Uint64(), 32))
 		} else {
-			expHead = new(big.Int).SetBytes(getData(input, baseLen.Uint64(), expLen.Uint64()))
+			expHead = new(uint256.Int).SetBytes(getData(input, baseLen.Uint64(), expLen.Uint64()))
 		}
 	}
 	// Calculate the adjusted exponent length
@@ -421,7 +441,7 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	if bitlen := expHead.BitLen(); bitlen > 0 {
 		msb = bitlen - 1
 	}
-	adjExpLen := new(big.Int)
+	adjExpLen := new(uint256.Int)
 	if expLen.Cmp(big32) > 0 {
 		adjExpLen.Sub(expLen, big32)
 		if c.eip7883 {
@@ -430,9 +450,9 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 			adjExpLen.Lsh(adjExpLen, 3)
 		}
 	}
-	adjExpLen.Add(adjExpLen, big.NewInt(int64(msb)))
+	adjExpLen.Add(adjExpLen, uint256.NewInt(uint64(msb)))
 	// Calculate the gas cost of the operation
-	gas := new(big.Int)
+	gas := new(uint256.Int)
 	if modLen.Cmp(baseLen) < 0 {
 		gas.Set(baseLen)
 	} else {
@@ -460,7 +480,7 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 			if maxLenOver32 {
 				gas.Add(gas, gas)
 			} else {
-				gas = big.NewInt(16)
+				gas = uint256.NewInt(16)
 			}
 		}
 
