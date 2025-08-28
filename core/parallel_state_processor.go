@@ -15,22 +15,33 @@ import (
 	"time"
 )
 
+// ProcessResultWithMetrics wraps ProcessResult with some metrics that are
+// emitted when executing blocks containing access lists.
 type ProcessResultWithMetrics struct {
-	ProcessResult      *ProcessResult
-	PreProcessTime     time.Duration
+	ProcessResult *ProcessResult
+
+	// the time it took to load modified prestate accounts from disk and instantiate statedbs for execution
+	PreProcessTime time.Duration
+	// the time it took to load modified prestate accounts from disk
 	PreProcessLoadTime time.Duration
-	PostProcessTime    time.Duration
-	RootCalcTime       time.Duration
-	ExecTime           time.Duration
+	// the time it took to validate the block post transaction execution and state root calculation
+	PostProcessTime time.Duration
+	// the time it took to hash the state root, including intermediate node reads
+	RootCalcTime time.Duration
+	// the time it took to execute all txs in the block
+	ExecTime time.Duration
 
 	StateDiffCalcTime time.Duration // time it took to convert BAL into a set of state diffs
 }
 
+// ParallelStateProcessor is used to execute and verify blocks containing
+// access lists.
 type ParallelStateProcessor struct {
 	*StateProcessor
 	vmCfg *vm.Config
 }
 
+// NewParallelStateProcessor returns a new ParallelStateProcessor instance.
 func NewParallelStateProcessor(config *params.ChainConfig, chain *HeaderChain, cfg *vm.Config) ParallelStateProcessor {
 	res := NewStateProcessor(config, chain)
 	return ParallelStateProcessor{
@@ -131,11 +142,13 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, tExecStar
 }
 
 type txExecResult struct {
-	idx     int
+	idx     int // transaction index
 	receipt *types.Receipt
-	err     error
+	err     error // non-EVM error which would render the block invalid
 }
 
+// resultHandler polls until all transactions have finished executing and the
+// state root calculation is complete. The result is emitted on resCh.
 func (p *ParallelStateProcessor) resultHandler(block *types.Block, postTxState *state.StateDB, tExecStart time.Time, txResCh <-chan txExecResult, stateRootCalcResCh <-chan stateRootCalculationResult, resCh chan *ProcessResultWithMetrics) {
 	// 1. if the block has transactions, receive the execution results from all of them and return an error on resCh if any txs err'd
 	// 2. once all txs are executed, compute the post-tx state transition and produce the ProcessResult sending it on resCh (or an error if the post-tx state didn't match what is reported in the BAL)
@@ -189,6 +202,8 @@ type stateRootCalculationResult struct {
 	duration time.Duration
 }
 
+// calcAndVerifyRoot performs the post-state root hash calculation, verifying
+// it against what is reported by the block and returning a result on resCh.
 func (p *ParallelStateProcessor) calcAndVerifyRoot(postState *state.StateDB, block *types.Block, resCh chan stateRootCalculationResult) {
 	// calculate and apply the block state modifications
 	postStateDiff := &bal.StateDiff{make(map[common.Address]*bal.AccountState)}
@@ -211,10 +226,9 @@ func (p *ParallelStateProcessor) calcAndVerifyRoot(postState *state.StateDB, blo
 	resCh <- res
 }
 
-// executes single transaction, validating the computed diff against the BAL
+// execTx executes single transaction, validating the computed diff against the BAL
 // and forwarding the txExecResult to be consumed by resultHandler
 func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transaction, idx int, db *state.StateDB, signer types.Signer) *txExecResult {
-	// TODO: also interrupt any currently-executing transactions if one failed.
 	header := block.Header()
 	var tracingStateDB = vm.StateDB(db)
 	if hooks := p.vmCfg.Tracer; hooks != nil {
