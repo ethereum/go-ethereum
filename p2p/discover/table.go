@@ -428,6 +428,12 @@ func (tab *Table) doRefresh(done chan struct{}) {
 	// (hopefully) still alive.
 	tab.loadSeedNodes()
 
+	// If the table is empty, we cannot perform any lookups.
+	if tab.len() == 0 {
+		log.Debug("doRefresh called, but no nodes to start from")
+		return
+	}
+
 	// Run self lookup to discover new neighbor nodes.
 	tab.net.lookupSelf()
 
