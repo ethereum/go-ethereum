@@ -8,6 +8,7 @@
 package bitutil
 
 import (
+	"math/bits"
 	"runtime"
 	"unsafe"
 )
@@ -27,21 +28,34 @@ func XORBytes(dst, a, b []byte) int {
 // fastXORBytes xors in bulk. It only works on architectures that support
 // unaligned read/writes.
 func fastXORBytes(dst, a, b []byte) int {
-	n := len(a)
-	if len(b) < n {
-		n = len(b)
-	}
-	w := n / wordSize
+	n := min(len(b), len(a))
+
+	w := n >> bits.TrailingZeros(uint(wordSize))
+
 	if w > 0 {
 		dw := *(*[]uintptr)(unsafe.Pointer(&dst))
 		aw := *(*[]uintptr)(unsafe.Pointer(&a))
 		bw := *(*[]uintptr)(unsafe.Pointer(&b))
-		for i := 0; i < w; i++ {
+
+		i := 0
+		for i <= w-4 {
 			dw[i] = aw[i] ^ bw[i]
+			dw[i+1] = aw[i+1] ^ bw[i+1]
+			dw[i+2] = aw[i+2] ^ bw[i+2]
+			dw[i+3] = aw[i+3] ^ bw[i+3]
+			i += 4
+		}
+		// Handle remaining words
+		for i < w {
+			dw[i] = aw[i] ^ bw[i]
+			i++
 		}
 	}
-	for i := n - n%wordSize; i < n; i++ {
-		dst[i] = a[i] ^ b[i]
+
+	// Handle remaining bytes
+	start := w * wordSize
+	for i := 0; i < n&(wordSize-1); i++ {
+		dst[start+i] = a[start+i] ^ b[start+i]
 	}
 	return n
 }
@@ -49,11 +63,8 @@ func fastXORBytes(dst, a, b []byte) int {
 // safeXORBytes xors one by one. It works on all architectures, independent if
 // it supports unaligned read/writes or not.
 func safeXORBytes(dst, a, b []byte) int {
-	n := len(a)
-	if len(b) < n {
-		n = len(b)
-	}
-	for i := 0; i < n; i++ {
+	n := min(len(b), len(a))
+	for i := range n {
 		dst[i] = a[i] ^ b[i]
 	}
 	return n
