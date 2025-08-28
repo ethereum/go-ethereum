@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -447,8 +448,9 @@ func (t *SizeTracker) build(root common.Hash, blockNumber uint64, done chan buil
 		return nil
 	})
 
+	// Storage table is huge, iterate in parallel
 	group.Go(func() error {
-		count, bytes, err := t.iterateTable(t.abort, rawdb.SnapshotStoragePrefix, "storage")
+		count, bytes, err := t.iterateTableParallel(t.abort, rawdb.SnapshotStoragePrefix, "storage")
 		if err != nil {
 			return err
 		}
@@ -465,8 +467,9 @@ func (t *SizeTracker) build(root common.Hash, blockNumber uint64, done chan buil
 		return nil
 	})
 
+	// Storage trienode table is huge, iterate in parallel
 	group.Go(func() error {
-		count, bytes, err := t.iterateTable(t.abort, rawdb.TrieNodeStoragePrefix, "storagenode")
+		count, bytes, err := t.iterateTableParallel(t.abort, rawdb.TrieNodeStoragePrefix, "storagenode")
 		if err != nil {
 			return err
 		}
@@ -531,6 +534,7 @@ func (t *SizeTracker) iterateTable(closed chan struct{}, prefix []byte, name str
 		logged       = time.Now()
 		count, bytes int64
 	)
+
 	iter := t.db.NewIterator(prefix, nil)
 	defer iter.Release()
 
@@ -558,6 +562,44 @@ func (t *SizeTracker) iterateTable(closed chan struct{}, prefix []byte, name str
 	}
 	log.Info("Finished state iteration", "category", name, "count", count, "size", common.StorageSize(bytes), "elapsed", common.PrettyDuration(time.Since(start)))
 	return count, bytes, nil
+}
+
+// iterateTableParallel performs parallel iteration over a table by splitting into hex ranges
+// For storage tables, it splits on the first byte of the account hash (after the prefix)
+func (t *SizeTracker) iterateTableParallel(closed chan struct{}, prefix []byte, name string) (int64, int64, error) {
+	var (
+		start      = time.Now()
+		workers    = 16
+		totalCount int64
+		totalBytes int64
+		group      errgroup.Group
+		mu         sync.Mutex
+	)
+	group.SetLimit(workers)
+
+	log.Info("Starting parallel state iteration", "category", name, "workers", workers)
+
+	for i := 0; i < 256; i++ {
+		h := byte(i)
+		group.Go(func() error {
+			count, bytes, err := t.iterateTable(closed, slices.Concat(prefix, []byte{h}), fmt.Sprintf("%s-%x", name, h))
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			totalCount += count
+			totalBytes += bytes
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		return 0, 0, err
+	}
+
+	log.Info("Finished parallel state iteration", "category", name, "count", totalCount, "size", common.StorageSize(totalBytes), "elapsed", common.PrettyDuration(time.Since(start)))
+	return totalCount, totalBytes, nil
 }
 
 func (t *SizeTracker) upload(stats SizeStats) {
