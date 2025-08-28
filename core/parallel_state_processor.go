@@ -179,7 +179,7 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, postTxState *
 	if rootCalcRes.err != nil {
 		resCh <- &ProcessResultWithMetrics{ProcessResult: &ProcessResult{Error: rootCalcRes.err}}
 	} else {
-		execResults.StateDiffCalcTime = rootCalcRes.duration
+		execResults.RootCalcTime = rootCalcRes.duration
 		resCh <- execResults
 	}
 }
