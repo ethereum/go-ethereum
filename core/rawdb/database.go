@@ -367,10 +367,11 @@ func (c counter) Percentage(current uint64) string {
 
 // stat provides lock-free statistics aggregation using atomic operations
 type stat struct {
-	size  uint64 // stored as uint64 for atomic operations
+	size  uint64
 	count uint64
 }
 
+// Add size to the stat and increase the counter by 1
 func (s *stat) Add(size common.StorageSize) {
 	atomic.AddUint64(&s.size, uint64(size))
 	atomic.AddUint64(&s.count, 1)
@@ -397,8 +398,10 @@ func (s *stat) GetCount() counter {
 func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, workers int) error {
 	var (
 		start = time.Now()
+		count atomic.Int64
+		total atomic.Uint64
 
-		// Key-value store statistics (lock-free with atomic operations)
+		// Key-value store statistics
 		headers            stat
 		bodies             stat
 		receipts           stat
@@ -432,15 +435,13 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, workers int)
 		metadata    stat
 		unaccounted stat
 
-		// Totals
-		totalSize  atomic.Uint64
-		totalCount atomic.Int64
-
+		// This map tracks example keys for unaccounted data.
+		// For each unique two-byte prefix, the first unaccounted key encountered
+		// by the iterator will be stored.
 		unaccountedKeys = make(map[[2]byte][]byte)
 		unaccountedMu   sync.Mutex
 	)
 
-	// Create worker function to process key ranges
 	processRange := func(rangePrefix []byte) error {
 		it := db.NewIterator(slices.Concat(keyPrefix, rangePrefix), keyStart)
 		defer it.Release()
@@ -450,8 +451,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, workers int)
 				key  = it.Key()
 				size = common.StorageSize(len(key) + len(it.Value()))
 			)
-			totalSize.Add(uint64(size))
-			totalCount.Add(1)
+			total.Add(uint64(size))
+			count.Add(1)
 
 			switch {
 			case bytes.HasPrefix(key, headerPrefix) && len(key) == (len(headerPrefix)+8+common.HashLength):
@@ -492,18 +493,26 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, workers int)
 				beaconHeaders.Add(size)
 			case bytes.HasPrefix(key, CliqueSnapshotPrefix) && len(key) == 7+common.HashLength:
 				cliqueSnaps.Add(size)
+
+			// new log index
 			case bytes.HasPrefix(key, filterMapRowPrefix) && len(key) <= len(filterMapRowPrefix)+9:
 				filterMapRows.Add(size)
 			case bytes.HasPrefix(key, filterMapLastBlockPrefix) && len(key) == len(filterMapLastBlockPrefix)+4:
 				filterMapLastBlock.Add(size)
 			case bytes.HasPrefix(key, filterMapBlockLVPrefix) && len(key) == len(filterMapBlockLVPrefix)+8:
 				filterMapBlockLV.Add(size)
+
+			// old log index (deprecated)
 			case bytes.HasPrefix(key, bloomBitsPrefix) && len(key) == (len(bloomBitsPrefix)+10+common.HashLength):
 				bloomBits.Add(size)
 			case bytes.HasPrefix(key, bloomBitsMetaPrefix) && len(key) < len(bloomBitsMetaPrefix)+8:
 				bloomBits.Add(size)
+
+			// Path-based historic state indexes
 			case bytes.HasPrefix(key, StateHistoryIndexPrefix) && len(key) >= len(StateHistoryIndexPrefix)+common.HashLength:
 				stateIndex.Add(size)
+
+			// Verkle trie data is detected, determine the sub-category
 			case bytes.HasPrefix(key, VerklePrefix):
 				remain := key[len(VerklePrefix):]
 				switch {
@@ -520,8 +529,11 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, workers int)
 				default:
 					unaccounted.Add(size)
 				}
+
+			// Metadata keys
 			case slices.ContainsFunc(knownMetadataKeys, func(x []byte) bool { return bytes.Equal(x, key) }):
 				metadata.Add(size)
+
 			default:
 				unaccounted.Add(size)
 				if len(key) >= 2 {
@@ -541,7 +553,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, workers int)
 	var eg errgroup.Group
 	eg.SetLimit(workers)
 
-	// Start progress reporting goroutine
+	log.Info("Starting parallel database inspection", "workers", workers)
+
 	done := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(8 * time.Second)
@@ -550,15 +563,14 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, workers int)
 		for {
 			select {
 			case <-ticker.C:
-				log.Info("Inspecting database progress", "count", totalCount.Load(), "size", common.StorageSize(totalSize.Load()), "elapsed", common.PrettyDuration(time.Since(start)))
+				log.Info("Inspecting database progress", "count", count.Load(), "size", common.StorageSize(total.Load()), "elapsed", common.PrettyDuration(time.Since(start)))
 			case <-done:
 				return
 			}
 		}
 	}()
 
-	log.Info("Starting parallel database inspection", "workers", workers)
-
+	// Inspect key-value database in parallel.
 	for i := 0; i < 256; i++ {
 		rangePrefix := []byte{byte(i)}
 		eg.Go(func() error { return processRange(rangePrefix) })
@@ -602,13 +614,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, workers int)
 	// Inspect all registered append-only file store then.
 	ancients, err := inspectFreezers(db)
 	if err != nil {
-		// If freezer inspection is not supported, continue without ancient data
-		if err.Error() == "this operation is not supported" {
-			log.Warn("Freezer inspection not supported, skipping ancient data")
-			ancients = nil
-		} else {
-			return err
-		}
+		return err
 	}
 	for _, ancient := range ancients {
 		for _, table := range ancient.sizes {
@@ -619,16 +625,14 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, workers int)
 				fmt.Sprintf("%d", ancient.count()),
 			})
 		}
-		totalSize.Add(uint64(ancient.size()))
+		total.Add(uint64(ancient.size()))
 	}
 
 	table := newTableWriter(os.Stdout)
 	table.SetHeader([]string{"Database", "Category", "Size", "Items"})
-	table.SetFooter([]string{"", "Total", common.StorageSize(totalSize.Load()).String(), fmt.Sprintf("%d", totalCount.Load())})
+	table.SetFooter([]string{"", "Total", common.StorageSize(total.Load()).String(), fmt.Sprintf("%d", count.Load())})
 	table.AppendBulk(stats)
 	table.Render()
-
-	log.Info("Database inspection completed", "count", totalCount.Load(), "elapsed", common.PrettyDuration(time.Since(start)))
 
 	if unaccounted.GetSize() > 0 {
 		log.Error("Database contains unaccounted data", "size", unaccounted.GetSize(), "count", unaccounted.GetCount())
@@ -636,6 +640,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, workers int)
 			log.Error(fmt.Sprintf("   example key: %x", e))
 		}
 	}
+	log.Info("Database inspection completed", "count", count.Load(), "size", common.StorageSize(total.Load()), "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
