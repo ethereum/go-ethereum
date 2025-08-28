@@ -682,14 +682,12 @@ func (st *blockRangeState) currentRange() eth.BlockRangeUpdatePacket {
 	return *st.next.Load()
 }
 
-// Send the transaction (if it's small enough) directly to a subset of
-// the peers that have not received it yet, ensuring that the flow of
-// transactions is grouped by account to (try and) avoid nonce gaps.
+// broadcastChoice implements a deterministic random choice of peers. This is designed
+// specifically for choosing which peer receives a direct broadcast of a transaction.
 //
-// To do this, we hash the local node ID together with a peer's
-// node ID together with the transaction sender and broadcast if
-// `sha(self, peer, sender) mod peers < sqrt(peers)`.
-
+// The choice is made based on the involved p2p node IDs and the transaction sender,
+// ensuring that the flow of transactions is grouped by account to (try and) avoid nonce
+// gaps.
 type broadcastChoice struct {
 	self   enode.ID
 	key    [16]byte
@@ -718,7 +716,7 @@ func newBroadcastChoice(self enode.ID, key [16]byte) *broadcastChoice {
 // choosePeers selects the peers that will receive a direct transaction broadcast message.
 // Note the return value will only stay valid until the next call to choosePeers.
 func (bc *broadcastChoice) choosePeers(peers []*ethPeer, txSender common.Address) map[*ethPeer]struct{} {
-	// Compute scores.
+	// Compute randomized scores.
 	bc.tmp = slices.Grow(bc.tmp[:0], len(peers))[:len(peers)]
 	hash := siphash.New(bc.key[:])
 	for i, peer := range peers {
