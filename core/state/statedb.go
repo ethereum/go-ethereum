@@ -410,8 +410,8 @@ func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
 // storage. This function should only be used for debugging.
 func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common.Hash) {
 	stateObject := s.GetOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.SetStorage(storage)
+	for k, v := range storage {
+		stateObject.SetState(s.db, k, v)
 	}
 }
 
