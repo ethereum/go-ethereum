@@ -253,7 +253,7 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 	}
 }
 
-// ProcessWithAccessList performs EVM execution and state root computation for a block which is known
+// Process performs EVM execution and state root computation for a block which is known
 // to contain an access list.
 func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (*ProcessResultWithMetrics, error) {
 	var (
@@ -280,11 +280,14 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	)
 	alReader := bal.NewReader(block.Body().AccessList)
 	statedb.SetBlockAccessList(&alReader)
-	// instantiate a set of StateDBs to be used for executing each transaction in parallel
+	// Create a set of StateDBs to be used for executing each transaction
+	// in parallel with state root calculation.
+	// Instantiate them with the prestate accounts which were reported as having
+	// been mutated in the BAL.  Execution will apply BAL state diffs on top
+	// to compute the correct intermediate state of an account within the block.
 	tPreprocessLoadStart := time.Now()
 	modifiedPrestate = statedb.LoadModifiedPrestate(alReader.Accounts())
 	tPreprocessLoad := time.Since(tPreprocessLoadStart)
-
 	statedb.SetPrestate(modifiedPrestate)
 
 	// Apply pre-execution system calls.

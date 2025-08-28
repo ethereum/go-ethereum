@@ -1895,13 +1895,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		// The traced section of block import.
 		start := time.Now()
 
+		// construct or verify block access lists if BALs are enabled and
+		// we are post-selfdestruct removal fork.
+		enableBAL := bc.cfg.EnableBAL && bc.chainConfig.IsCancun(block.Number(), block.Time())
 		blockHasAccessList := block.Body().AccessList != nil
-		// BAL generation/verification is not enabled pre-selfdestruct removal.
-		// TODO: there is a bug where state diff recording will be activated if
-		// cancun is enabled, this should be fixed before merging!
-		forkSupportsBAL := bc.chainConfig.IsCancun(block.Number(), block.Time())
-		makeBAL := forkSupportsBAL && !blockHasAccessList
-		validateBAL := forkSupportsBAL && blockHasAccessList
+		makeBAL := enableBAL && !blockHasAccessList
+		validateBAL := enableBAL && blockHasAccessList
 
 		res, err := bc.processBlock(parent.Root, block, setHead, makeWitness && len(chain) == 1, makeBAL, validateBAL)
 		if err != nil {

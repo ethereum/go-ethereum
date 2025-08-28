@@ -265,7 +265,7 @@ func (a *AccountState) Copy() *AccountState {
 		res.Code = bytes.Clone(a.Code)
 	}
 	if a.Balance != nil {
-		res.Balance = new(uint256.Int).Set(res.Balance)
+		res.Balance = new(uint256.Int).Set(a.Balance)
 	}
 	if a.StorageWrites != nil {
 		res.StorageWrites = maps.Clone(a.StorageWrites)
