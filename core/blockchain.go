@@ -1981,9 +1981,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 
 	if bc.cfg.NoPrefetch {
 		statedb, err = state.New(parentRoot, bc.statedb)
-		if constructBAL || validateBAL {
-			statedb.EnableStateDiffRecording()
-		}
+
 		if err != nil {
 			return nil, err
 		}
@@ -2004,9 +2002,6 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		statedb, err = state.NewWithReader(parentRoot, bc.statedb, process)
 		if err != nil {
 			return nil, err
-		}
-		if constructBAL || validateBAL {
-			statedb.EnableStateDiffRecording()
 		}
 		// Upload the statistics of reader at the end
 		defer func() {
@@ -2038,6 +2033,9 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		}(time.Now(), throwaway, block)
 	}
 
+	if constructBAL || validateBAL {
+		statedb.EnableStateDiffRecording()
+	}
 	if constructBAL {
 		statedb.EnableBALConstruction()
 	}
