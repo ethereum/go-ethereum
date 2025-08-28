@@ -221,8 +221,8 @@ func (b *testHandler) close() {
 
 func TestBroadcastChoice(t *testing.T) {
 	self := enode.HexID("1111111111111111111111111111111111111111111111111111111111111111")
-	choice49 := newBroadcastChoice(self)
-	choice50 := newBroadcastChoice(self)
+	choice49 := newBroadcastChoice(self, [16]byte{1})
+	choice50 := newBroadcastChoice(self, [16]byte{1})
 
 	// Create test peers and random tx sender addresses.
 	rand := rand.New(rand.NewSource(33))
@@ -289,7 +289,7 @@ func benchmarkBroadcastChoice(b *testing.B, npeers int) {
 	}
 
 	self := enode.HexID("1111111111111111111111111111111111111111111111111111111111111111")
-	choice := newBroadcastChoice(self)
+	choice := newBroadcastChoice(self, [16]byte{1})
 
 	b.ResetTimer()
 	for i := range b.N {

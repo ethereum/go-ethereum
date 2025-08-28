@@ -18,8 +18,8 @@ package eth
 
 import (
 	"cmp"
+	crand "crypto/rand"
 	"errors"
-	"hash/fnv"
 	"maps"
 	"math"
 	"slices"
@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dchest/siphash"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -119,9 +120,10 @@ type handler struct {
 	chain    *core.BlockChain
 	maxPeers int
 
-	downloader *downloader.Downloader
-	txFetcher  *fetcher.TxFetcher
-	peers      *peerSet
+	downloader     *downloader.Downloader
+	txFetcher      *fetcher.TxFetcher
+	peers          *peerSet
+	txBroadcastKey [16]byte
 
 	eventMux   *event.TypeMux
 	txsCh      chan core.NewTxsEvent
@@ -203,6 +205,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	addTxs := func(txs []*types.Transaction) []error {
 		return h.txpool.Add(txs, false)
 	}
+	h.txBroadcastKey = newBroadcastChoiceKey()
 	h.txFetcher = fetcher.NewTxFetcher(h.txpool.Has, addTxs, fetchTx, h.removePeer)
 	return h, nil
 }
@@ -482,7 +485,7 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		annos = make(map[*ethPeer][]common.Hash) // Set peer->hash to announce
 
 		signer = types.LatestSigner(h.chain.Config())
-		choice = newBroadcastChoice(h.nodeID)
+		choice = newBroadcastChoice(h.nodeID, h.txBroadcastKey)
 		peers  = h.peers.all()
 	)
 
@@ -689,6 +692,7 @@ func (st *blockRangeState) currentRange() eth.BlockRangeUpdatePacket {
 
 type broadcastChoice struct {
 	self   enode.ID
+	key    [16]byte
 	buffer map[*ethPeer]struct{}
 	tmp    []broadcastPeer
 }
@@ -698,9 +702,15 @@ type broadcastPeer struct {
 	score uint64
 }
 
-func newBroadcastChoice(self enode.ID) *broadcastChoice {
+func newBroadcastChoiceKey() (k [16]byte) {
+	crand.Read(k[:])
+	return k
+}
+
+func newBroadcastChoice(self enode.ID, key [16]byte) *broadcastChoice {
 	return &broadcastChoice{
 		self:   self,
+		key:    key,
 		buffer: make(map[*ethPeer]struct{}),
 	}
 }
@@ -710,7 +720,7 @@ func newBroadcastChoice(self enode.ID) *broadcastChoice {
 func (bc *broadcastChoice) choosePeers(peers []*ethPeer, txSender common.Address) map[*ethPeer]struct{} {
 	// Compute scores.
 	bc.tmp = slices.Grow(bc.tmp[:0], len(peers))[:len(peers)]
-	hash := fnv.New64()
+	hash := siphash.New(bc.key[:])
 	for i, peer := range peers {
 		hash.Reset()
 		hash.Write(bc.self[:])
