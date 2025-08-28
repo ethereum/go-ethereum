@@ -433,8 +433,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		unaccounted stat
 
 		// Totals
-		totalSize  uint64
-		totalCount int64
+		totalSize  atomic.Uint64
+		totalCount atomic.Int64
 
 		unaccountedKeys = make(map[[2]byte][]byte)
 		unaccountedMu   sync.Mutex
@@ -450,8 +450,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				key  = it.Key()
 				size = common.StorageSize(len(key) + len(it.Value()))
 			)
-			atomic.AddUint64(&totalSize, uint64(size))
-			atomic.AddInt64(&totalCount, 1)
+			totalSize.Add(uint64(size))
+			totalCount.Add(1)
 
 			switch {
 			case bytes.HasPrefix(key, headerPrefix) && len(key) == (len(headerPrefix)+8+common.HashLength):
@@ -604,16 +604,16 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				fmt.Sprintf("%d", ancient.count()),
 			})
 		}
-		atomic.AddUint64(&totalSize, uint64(ancient.size()))
+		totalSize.Add(uint64(ancient.size()))
 	}
 
 	table := newTableWriter(os.Stdout)
 	table.SetHeader([]string{"Database", "Category", "Size", "Items"})
-	table.SetFooter([]string{"", "Total", common.StorageSize(atomic.LoadUint64(&totalSize)).String(), fmt.Sprintf("%d", atomic.LoadInt64(&totalCount))})
+	table.SetFooter([]string{"", "Total", common.StorageSize(totalSize.Load()).String(), fmt.Sprintf("%d", totalCount.Load())})
 	table.AppendBulk(stats)
 	table.Render()
 
-	log.Info("Parallel database inspection completed", "total_entries", atomic.LoadInt64(&totalCount), "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Parallel database inspection completed", "total_entries", totalCount.Load(), "elapsed", common.PrettyDuration(time.Since(start)))
 
 	if unaccounted.GetSize() > 0 {
 		log.Error("Database contains unaccounted data", "size", unaccounted.GetSize(), "count", unaccounted.GetCount())
