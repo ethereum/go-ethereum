@@ -444,7 +444,21 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	)
 
 	processRange := func(rangePrefix []byte) error {
-		it := db.NewIterator(slices.Concat(keyPrefix, rangePrefix), keyStart)
+		// Skip ranges that are entirely before keyStart
+		if len(keyStart) > 0 && len(rangePrefix) > 0 && rangePrefix[0] < keyStart[0] {
+			return nil
+		}
+
+		var (
+			prefix = slices.Concat(keyPrefix, rangePrefix)
+			start  = []byte(nil)
+		)
+		// Only apply keyStart to the range that contains it
+		if len(keyStart) > 0 && len(rangePrefix) > 0 && rangePrefix[0] == keyStart[0] {
+			start = keyStart[1:] // skip the first byte, as it's in rangePrefix
+		}
+
+		it := db.NewIterator(prefix, start)
 		defer it.Release()
 
 		for it.Next() {
