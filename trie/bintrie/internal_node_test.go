@@ -128,7 +128,7 @@ func TestInternalNodeInsert(t *testing.T) {
 	leftKey[31] = 10
 	leftValue := common.HexToHash("0x0101").Bytes()
 
-	newNode, err := node.Insert(leftKey, leftValue, nil)
+	newNode, err := node.Insert(leftKey, leftValue, nil, 0)
 	if err != nil {
 		t.Fatalf("Failed to insert: %v", err)
 	}

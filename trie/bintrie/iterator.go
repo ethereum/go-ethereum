@@ -114,7 +114,7 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 		return it.Next(descend)
 	case HashedNode:
 		// resolve the node
-		data, err := it.trie.FlatdbNodeResolver(it.Path(), common.Hash(node))
+		data, err := it.trie.nodeResolver(it.Path(), common.Hash(node))
 		if err != nil {
 			panic(err)
 		}

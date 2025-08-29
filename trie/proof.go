@@ -571,7 +571,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 		root:           root,
 		reader:         newEmptyReader(),
 		opTracer:       newOpTracer(),
-		prevalueTracer: newPrevalueTracer(),
+		prevalueTracer: NewPrevalueTracer(),
 	}
 	if empty {
 		tr.root = nil

@@ -43,8 +43,7 @@ const (
 // BinaryNode is an interface for a binary trie node.
 type BinaryNode interface {
 	Get([]byte, NodeResolverFn) ([]byte, error)
-	Insert([]byte, []byte, NodeResolverFn) (BinaryNode, error)
-	// Commit() common.Hash
+	Insert([]byte, []byte, NodeResolverFn, int) (BinaryNode, error)
 	Copy() BinaryNode
 	Hash() common.Hash
 	GetValuesAtStem([]byte, NodeResolverFn) ([][]byte, error)
@@ -65,7 +64,7 @@ func SerializeNode(node BinaryNode) []byte {
 		copy(serialized[33:65], n.right.Hash().Bytes())
 		return serialized[:]
 	case *StemNode:
-		var serialized [32 + 256*32]byte
+		var serialized [32 + 32 + 256*32]byte
 		serialized[0] = nodeTypeStem
 		copy(serialized[1:32], node.(*StemNode).Stem)
 		bitmap := serialized[32:64]

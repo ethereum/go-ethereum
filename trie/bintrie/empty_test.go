@@ -47,7 +47,7 @@ func TestEmptyInsert(t *testing.T) {
 	key[31] = 0x34
 	value := common.HexToHash("0xabcd").Bytes()
 
-	newNode, err := node.Insert(key, value, nil)
+	newNode, err := node.Insert(key, value, nil, 0)
 	if err != nil {
 		t.Fatalf("Failed to insert: %v", err)
 	}

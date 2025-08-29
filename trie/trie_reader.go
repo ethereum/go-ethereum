@@ -22,39 +22,39 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
-// TrieReader is a wrapper of the underlying node reader. It's not safe
+// Reader is a wrapper of the underlying database reader. It's not safe
 // for concurrent usage.
-type TrieReader struct {
+type Reader struct {
 	owner  common.Hash
 	reader database.NodeReader
 	banned map[string]struct{} // Marker to prevent node from being accessed, for tests
 }
 
-// NewTrieReader initializes the trie reader with the given node reader.
-func NewTrieReader(stateRoot, owner common.Hash, db database.NodeDatabase) (*TrieReader, error) {
+// NewReader initializes the trie reader with the given database reader.
+func NewReader(stateRoot, owner common.Hash, db database.NodeDatabase) (*Reader, error) {
 	if stateRoot == (common.Hash{}) || stateRoot == types.EmptyRootHash {
-		return &TrieReader{owner: owner}, nil
+		return &Reader{owner: owner}, nil
 	}
 	reader, err := db.NodeReader(stateRoot)
 	if err != nil {
 		return nil, &MissingNodeError{Owner: owner, NodeHash: stateRoot, err: err}
 	}
-	return &TrieReader{owner: owner, reader: reader}, nil
+	return &Reader{owner: owner, reader: reader}, nil
 }
 
 // newEmptyReader initializes the pure in-memory reader. All read operations
 // should be forbidden and returns the MissingNodeError.
-func newEmptyReader() *TrieReader {
-	return &TrieReader{}
+func newEmptyReader() *Reader {
+	return &Reader{}
 }
 
-// node retrieves the rlp-encoded trie node with the provided trie node
+// Node retrieves the rlp-encoded trie node with the provided trie node
 // information. An MissingNodeError will be returned in case the node is
 // not found or any error is encountered.
 //
 // Don't modify the returned byte slice since it's not deep-copied and
 // still be referenced by database.
-func (r *TrieReader) Node(path []byte, hash common.Hash) ([]byte, error) {
+func (r *Reader) Node(path []byte, hash common.Hash) ([]byte, error) {
 	// Perform the logics in tests for preventing trie node access.
 	if r.banned != nil {
 		if _, ok := r.banned[string(path)]; ok {

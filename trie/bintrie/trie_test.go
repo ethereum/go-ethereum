@@ -35,7 +35,7 @@ var (
 
 func TestSingleEntry(t *testing.T) {
 	tree := NewBinaryNode()
-	tree, err := tree.Insert(zeroKey[:], oneKey[:], nil)
+	tree, err := tree.Insert(zeroKey[:], oneKey[:], nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,11 +52,11 @@ func TestSingleEntry(t *testing.T) {
 func TestTwoEntriesDiffFirstBit(t *testing.T) {
 	var err error
 	tree := NewBinaryNode()
-	tree, err = tree.Insert(zeroKey[:], oneKey[:], nil)
+	tree, err = tree.Insert(zeroKey[:], oneKey[:], nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	tree, err = tree.Insert(common.HexToHash("8000000000000000000000000000000000000000000000000000000000000000").Bytes(), twoKey[:], nil)
+	tree, err = tree.Insert(common.HexToHash("8000000000000000000000000000000000000000000000000000000000000000").Bytes(), twoKey[:], nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,19 +71,19 @@ func TestTwoEntriesDiffFirstBit(t *testing.T) {
 func TestOneStemColocatedValues(t *testing.T) {
 	var err error
 	tree := NewBinaryNode()
-	tree, err = tree.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000003").Bytes(), oneKey[:], nil)
+	tree, err = tree.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000003").Bytes(), oneKey[:], nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	tree, err = tree.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000004").Bytes(), twoKey[:], nil)
+	tree, err = tree.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000004").Bytes(), twoKey[:], nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	tree, err = tree.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000009").Bytes(), threeKey[:], nil)
+	tree, err = tree.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000009").Bytes(), threeKey[:], nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	tree, err = tree.Insert(common.HexToHash("00000000000000000000000000000000000000000000000000000000000000FF").Bytes(), fourKey[:], nil)
+	tree, err = tree.Insert(common.HexToHash("00000000000000000000000000000000000000000000000000000000000000FF").Bytes(), fourKey[:], nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,20 +96,20 @@ func TestTwoStemColocatedValues(t *testing.T) {
 	var err error
 	tree := NewBinaryNode()
 	// stem: 0...0
-	tree, err = tree.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000003").Bytes(), oneKey[:], nil)
+	tree, err = tree.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000003").Bytes(), oneKey[:], nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	tree, err = tree.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000004").Bytes(), twoKey[:], nil)
+	tree, err = tree.Insert(common.HexToHash("0000000000000000000000000000000000000000000000000000000000000004").Bytes(), twoKey[:], nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// stem: 10...0
-	tree, err = tree.Insert(common.HexToHash("8000000000000000000000000000000000000000000000000000000000000003").Bytes(), oneKey[:], nil)
+	tree, err = tree.Insert(common.HexToHash("8000000000000000000000000000000000000000000000000000000000000003").Bytes(), oneKey[:], nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	tree, err = tree.Insert(common.HexToHash("8000000000000000000000000000000000000000000000000000000000000004").Bytes(), twoKey[:], nil)
+	tree, err = tree.Insert(common.HexToHash("8000000000000000000000000000000000000000000000000000000000000004").Bytes(), twoKey[:], nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,11 +124,11 @@ func TestTwoKeysMatchFirst42Bits(t *testing.T) {
 	// key1 and key 2 have the same prefix of 42 bits (b0*42+b1+b1) and differ after.
 	key1 := common.HexToHash("0000000000C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0C0").Bytes()
 	key2 := common.HexToHash("0000000000E00000000000000000000000000000000000000000000000000000").Bytes()
-	tree, err = tree.Insert(key1, oneKey[:], nil)
+	tree, err = tree.Insert(key1, oneKey[:], nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	tree, err = tree.Insert(key2, twoKey[:], nil)
+	tree, err = tree.Insert(key2, twoKey[:], nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,11 +139,11 @@ func TestTwoKeysMatchFirst42Bits(t *testing.T) {
 func TestInsertDuplicateKey(t *testing.T) {
 	var err error
 	tree := NewBinaryNode()
-	tree, err = tree.Insert(oneKey[:], oneKey[:], nil)
+	tree, err = tree.Insert(oneKey[:], oneKey[:], nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	tree, err = tree.Insert(oneKey[:], twoKey[:], nil)
+	tree, err = tree.Insert(oneKey[:], twoKey[:], nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func TestLargeNumberOfEntries(t *testing.T) {
 	for i := range 256 {
 		var key [32]byte
 		key[0] = byte(i)
-		tree, err = tree.Insert(key[:], ffKey[:], nil)
+		tree, err = tree.Insert(key[:], ffKey[:], nil, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -184,7 +184,7 @@ func TestMerkleizeMultipleEntries(t *testing.T) {
 	for i, key := range keys {
 		var v [32]byte
 		binary.LittleEndian.PutUint64(v[:8], uint64(i))
-		tree, err = tree.Insert(key, v[:], nil)
+		tree, err = tree.Insert(key, v[:], nil, 0)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -25,17 +25,14 @@ import (
 )
 
 func keyToPath(depth int, key []byte) ([]byte, error) {
-	path := make([]byte, 0, depth+1)
-
 	if depth > 31*8 {
 		return nil, errors.New("node too deep")
 	}
-
+	path := make([]byte, 0, depth+1)
 	for i := range depth + 1 {
 		bit := key[i/8] >> (7 - (i % 8)) & 1
 		path = append(path, bit)
 	}
-
 	return path, nil
 }
 
@@ -81,16 +78,16 @@ func (bt *InternalNode) GetValuesAtStem(stem []byte, resolver NodeResolverFn) ([
 func (bt *InternalNode) Get(key []byte, resolver NodeResolverFn) ([]byte, error) {
 	values, err := bt.GetValuesAtStem(key[:31], resolver)
 	if err != nil {
-		return nil, fmt.Errorf("Get error: %w", err)
+		return nil, fmt.Errorf("get error: %w", err)
 	}
 	return values[key[31]], nil
 }
 
 // Insert inserts a new key-value pair into the trie.
-func (bt *InternalNode) Insert(key []byte, value []byte, resolver NodeResolverFn) (BinaryNode, error) {
+func (bt *InternalNode) Insert(key []byte, value []byte, resolver NodeResolverFn, depth int) (BinaryNode, error) {
 	var values [256][]byte
 	values[key[31]] = value
-	return bt.InsertValuesAtStem(key[:31], values[:], resolver, 0)
+	return bt.InsertValuesAtStem(key[:31], values[:], resolver, depth)
 }
 
 // Copy creates a deep copy of the node.
@@ -121,11 +118,11 @@ func (bt *InternalNode) Hash() common.Hash {
 // InsertValuesAtStem inserts a full value group at the given stem in the internal node.
 // Already-existing values will be overwritten.
 func (bt *InternalNode) InsertValuesAtStem(stem []byte, values [][]byte, resolver NodeResolverFn, depth int) (BinaryNode, error) {
-	bit := stem[bt.depth/8] >> (7 - (bt.depth % 8)) & 1
 	var (
 		child *BinaryNode
 		err   error
 	)
+	bit := stem[bt.depth/8] >> (7 - (bt.depth % 8)) & 1
 	if bit == 0 {
 		child = &bt.left
 	} else {

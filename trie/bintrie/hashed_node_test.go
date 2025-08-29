@@ -62,7 +62,7 @@ func TestHashedNodeInsert(t *testing.T) {
 	key := make([]byte, 32)
 	value := make([]byte, 32)
 
-	_, err := node.Insert(key, value, nil)
+	_, err := node.Insert(key, value, nil, 0)
 	if err == nil {
 		t.Fatal("Expected error for Insert on HashedNode")
 	}

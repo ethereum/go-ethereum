@@ -41,13 +41,13 @@ var (
 type VerkleTrie struct {
 	root   verkle.VerkleNode
 	cache  *utils.PointCache
-	reader *TrieReader
+	reader *Reader
 	tracer *PrevalueTracer
 }
 
 // NewVerkleTrie constructs a verkle tree based on the specified root hash.
 func NewVerkleTrie(root common.Hash, db database.NodeDatabase, cache *utils.PointCache) (*VerkleTrie, error) {
-	reader, err := NewTrieReader(root, common.Hash{}, db)
+	reader, err := NewReader(root, common.Hash{}, db)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +55,7 @@ func NewVerkleTrie(root common.Hash, db database.NodeDatabase, cache *utils.Poin
 		root:   verkle.New(),
 		cache:  cache,
 		reader: reader,
-		tracer: newPrevalueTracer(),
+		tracer: NewPrevalueTracer(),
 	}
 	// Parse the root verkle node if it's not empty.
 	if root != types.EmptyVerkleHash && root != types.EmptyRootHash {
@@ -326,7 +326,7 @@ func (t *VerkleTrie) Copy() *VerkleTrie {
 		root:   t.root.Copy(),
 		cache:  t.cache,
 		reader: t.reader,
-		tracer: t.tracer.copy(),
+		tracer: t.tracer.Copy(),
 	}
 }
 
@@ -451,7 +451,7 @@ func (t *VerkleTrie) nodeResolver(path []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	t.tracer.put(path, blob)
+	t.tracer.Put(path, blob)
 	return blob, nil
 }
 

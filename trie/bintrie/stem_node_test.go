@@ -45,7 +45,7 @@ func TestStemNodeInsertSameStem(t *testing.T) {
 	key[31] = 10
 	value := common.HexToHash("0x0202").Bytes()
 
-	newNode, err := node.Insert(key, value, nil)
+	newNode, err := node.Insert(key, value, nil, 0)
 	if err != nil {
 		t.Fatalf("Failed to insert: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestStemNodeInsertDifferentStem(t *testing.T) {
 	key[0] = 0x80 // First bit is 1 instead of 0
 	value := common.HexToHash("0x0202").Bytes()
 
-	newNode, err := node.Insert(key, value, nil)
+	newNode, err := node.Insert(key, value, nil, 0)
 	if err != nil {
 		t.Fatalf("Failed to insert: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestStemNodeInsertInvalidValueLength(t *testing.T) {
 	copy(key[:31], stem)
 	invalidValue := []byte{1, 2, 3} // Not 32 bytes
 
-	_, err := node.Insert(key, invalidValue, nil)
+	_, err := node.Insert(key, invalidValue, nil, 0)
 	if err == nil {
 		t.Fatal("Expected error for invalid value length")
 	}

@@ -104,17 +104,17 @@ type PrevalueTracer struct {
 	lock sync.RWMutex
 }
 
-// newPrevalueTracer initializes the tracer for capturing resolved trie nodes.
-func newPrevalueTracer() *PrevalueTracer {
+// NewPrevalueTracer initializes the tracer for capturing resolved trie nodes.
+func NewPrevalueTracer() *PrevalueTracer {
 	return &PrevalueTracer{
 		data: make(map[string][]byte),
 	}
 }
 
-// put tracks the newly loaded trie node and caches its RLP-encoded
+// Put tracks the newly loaded trie node and caches its RLP-encoded
 // blob internally. Do not modify the value outside this function,
 // as it is not deep-copied.
-func (t *PrevalueTracer) put(path []byte, val []byte) {
+func (t *PrevalueTracer) Put(path []byte, val []byte) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -130,9 +130,9 @@ func (t *PrevalueTracer) Get(path []byte) []byte {
 	return t.data[string(path)]
 }
 
-// hasList returns a list of flags indicating whether the corresponding trie nodes
+// HasList returns a list of flags indicating whether the corresponding trie nodes
 // specified by the path exist in the trie.
-func (t *PrevalueTracer) hasList(list [][]byte) []bool {
+func (t *PrevalueTracer) HasList(list [][]byte) []bool {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
@@ -144,24 +144,24 @@ func (t *PrevalueTracer) hasList(list [][]byte) []bool {
 	return exists
 }
 
-// values returns a list of values of the cached trie nodes.
-func (t *PrevalueTracer) values() map[string][]byte {
+// Values returns a list of values of the cached trie nodes.
+func (t *PrevalueTracer) Values() map[string][]byte {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
 	return maps.Clone(t.data)
 }
 
-// reset resets the cached content in the prevalueTracer.
-func (t *PrevalueTracer) reset() {
+// Reset resets the cached content in the prevalueTracer.
+func (t *PrevalueTracer) Reset() {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
 	clear(t.data)
 }
 
-// copy returns a copied prevalueTracer instance.
-func (t *PrevalueTracer) copy() *PrevalueTracer {
+// Copy returns a copied prevalueTracer instance.
+func (t *PrevalueTracer) Copy() *PrevalueTracer {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 

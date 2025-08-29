@@ -28,12 +28,13 @@ func (e Empty) Get(_ []byte, _ NodeResolverFn) ([]byte, error) {
 	return nil, nil
 }
 
-func (e Empty) Insert(key []byte, value []byte, _ NodeResolverFn) (BinaryNode, error) {
+func (e Empty) Insert(key []byte, value []byte, _ NodeResolverFn, depth int) (BinaryNode, error) {
 	var values [256][]byte
 	values[key[31]] = value
 	return &StemNode{
 		Stem:   slices.Clone(key[:31]),
 		Values: values[:],
+		depth:  depth,
 	}, nil
 }
 

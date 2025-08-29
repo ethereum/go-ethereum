@@ -39,7 +39,7 @@ func (bt *StemNode) Get(key []byte, _ NodeResolverFn) ([]byte, error) {
 }
 
 // Insert inserts a new key-value pair into the node.
-func (bt *StemNode) Insert(key []byte, value []byte, _ NodeResolverFn) (BinaryNode, error) {
+func (bt *StemNode) Insert(key []byte, value []byte, _ NodeResolverFn, depth int) (BinaryNode, error) {
 	if !bytes.Equal(bt.Stem, key[:31]) {
 		bitStem := bt.Stem[bt.depth/8] >> (7 - (bt.depth % 8)) & 1
 
@@ -59,7 +59,7 @@ func (bt *StemNode) Insert(key []byte, value []byte, _ NodeResolverFn) (BinaryNo
 		bitKey := key[new.depth/8] >> (7 - (new.depth % 8)) & 1
 		if bitKey == bitStem {
 			var err error
-			*child, err = (*child).Insert(key, value, nil)
+			*child, err = (*child).Insert(key, value, nil, depth+1)
 			if err != nil {
 				return new, fmt.Errorf("insert error: %w", err)
 			}
@@ -70,16 +70,14 @@ func (bt *StemNode) Insert(key []byte, value []byte, _ NodeResolverFn) (BinaryNo
 			*other = &StemNode{
 				Stem:   slices.Clone(key[:31]),
 				Values: values[:],
-				depth:  new.depth + 1,
+				depth:  depth + 1,
 			}
 		}
-
 		return new, nil
 	}
 	if len(value) != 32 {
 		return bt, errors.New("invalid insertion: value length")
 	}
-
 	bt.Values[key[31]] = value
 	return bt, nil
 }
@@ -181,7 +179,6 @@ func (bt *StemNode) InsertValuesAtStem(key []byte, values [][]byte, _ NodeResolv
 				depth:  new.depth + 1,
 			}
 		}
-
 		return new, nil
 	}
 

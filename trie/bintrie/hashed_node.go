@@ -29,7 +29,7 @@ func (h HashedNode) Get(_ []byte, _ NodeResolverFn) ([]byte, error) {
 	panic("not implemented") // TODO: Implement
 }
 
-func (h HashedNode) Insert(key []byte, value []byte, resolver NodeResolverFn) (BinaryNode, error) {
+func (h HashedNode) Insert(key []byte, value []byte, resolver NodeResolverFn, depth int) (BinaryNode, error) {
 	return nil, errors.New("insert not implemented for hashed node")
 }
 
