@@ -224,11 +224,11 @@ func (db *Database) HistoricReader(root common.Hash) (*HistoricalStateReader, er
 	}
 	// Ensure the requested state is canonical, historical states on side chain
 	// are not accessible.
-	meta, err := readStateHistoryMeta(db.stateFreezer, *id)
+	meta, err := readStateHistoryMeta(db.stateFreezer, *id+1)
 	if err != nil {
 		return nil, err // e.g., the referred state history has been pruned
 	}
-	if meta.root != root {
+	if meta.parent != root {
 		return nil, fmt.Errorf("state %#x is not canonincal", root)
 	}
 	return &HistoricalStateReader{

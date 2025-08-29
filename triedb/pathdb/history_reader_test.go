@@ -37,19 +37,29 @@ func waitIndexing(db *Database) {
 	}
 }
 
-func checkHistoricalState(env *tester, root common.Hash, hr *historyReader) error {
-	// Short circuit if the historical state is no longer available
-	id := rawdb.ReadStateID(env.db.diskdb, root)
-	if id == nil {
+func stateAvail(id uint64, env *tester) bool {
+	if env.db.config.StateHistory == 0 {
+		return true
+	}
+	dl := env.db.tree.bottom()
+	if dl.stateID() <= env.db.config.StateHistory {
+		return true
+	}
+	firstID := dl.stateID() - env.db.config.StateHistory + 1
+
+	return id+1 >= firstID
+}
+
+func checkHistoricalState(env *tester, root common.Hash, id uint64, hr *historyReader) error {
+	if !stateAvail(id, env) {
 		return nil
 	}
-	meta, err := readStateHistoryMeta(env.db.stateFreezer, *id)
-	if err != nil {
-		return nil // e.g., the referred state history has been pruned
+
+	// Short circuit if the historical state is no longer available
+	if rawdb.ReadStateID(env.db.diskdb, root) == nil {
+		return fmt.Errorf("state not found %d %x", id, root)
 	}
-	if meta.root != root {
-		return fmt.Errorf("state %#x is not canonincal", root)
-	}
+
 	var (
 		dl       = env.db.tree.bottom()
 		stateID  = rawdb.ReadStateID(env.db.diskdb, root)
@@ -141,14 +151,14 @@ func testHistoryReader(t *testing.T, historyLimit uint64) {
 
 	var (
 		roots = env.roots
-		dRoot = env.db.tree.bottom().rootHash()
+		dl    = env.db.tree.bottom()
 		hr    = newHistoryReader(env.db.diskdb, env.db.stateFreezer)
 	)
-	for _, root := range roots {
-		if root == dRoot {
+	for i, root := range roots {
+		if root == dl.rootHash() {
 			break
 		}
-		if err := checkHistoricalState(env, root, hr); err != nil {
+		if err := checkHistoricalState(env, root, uint64(i+1), hr); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -157,11 +167,11 @@ func testHistoryReader(t *testing.T, historyLimit uint64) {
 	env.extend(4)
 	waitIndexing(env.db)
 
-	for _, root := range roots {
-		if root == dRoot {
+	for i, root := range roots {
+		if root == dl.rootHash() {
 			break
 		}
-		if err := checkHistoricalState(env, root, hr); err != nil {
+		if err := checkHistoricalState(env, root, uint64(i+1), hr); err != nil {
 			t.Fatal(err)
 		}
 	}
