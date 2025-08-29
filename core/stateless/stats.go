@@ -18,6 +18,9 @@ package stateless
 
 import (
 	"maps"
+	"slices"
+	"sort"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -90,13 +93,19 @@ func NewWitnessStats() *WitnessStats {
 // If `owner` is the zero hash, accesses are attributed to the account trie;
 // otherwise, they are attributed to the storage trie of that account.
 func (s *WitnessStats) Add(nodes map[string][]byte, owner common.Hash) {
-	if owner == (common.Hash{}) {
-		for path := range maps.Keys(nodes) {
-			s.accountTrie.add(int64(len(path)))
-		}
-	} else {
-		for path := range maps.Keys(nodes) {
-			s.storageTrie.add(int64(len(path)))
+	// Extract paths from the nodes map
+	paths := slices.Collect(maps.Keys(nodes))
+	sort.Strings(paths)
+
+	for i, path := range paths {
+		// If current path is a prefix of the next path, it's not a leaf.
+		// The last path is always a leaf.
+		if i == len(paths)-1 || !strings.HasPrefix(paths[i+1], paths[i]) {
+			if owner == (common.Hash{}) {
+				s.accountTrie.add(int64(len(path)))
+			} else {
+				s.storageTrie.add(int64(len(path)))
+			}
 		}
 	}
 }
