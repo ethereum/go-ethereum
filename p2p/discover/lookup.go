@@ -19,6 +19,7 @@ package discover
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
@@ -105,10 +106,8 @@ func (it *lookup) startQueries() bool {
 	// The first query returns nodes from the local table.
 	if it.queries == -1 {
 		closest := it.tab.findnodeByID(it.result.target, bucketSize, false)
-		// Avoid finishing the lookup too quickly if table is empty.
-		// Wait for the table to fill.
 		if len(closest.entries) == 0 {
-			it.tab.waitForNodes(1)
+			return false
 		}
 		it.queries = 1
 		it.replyCh <- closest.entries
@@ -171,6 +170,7 @@ func (it *lookupIterator) Next() bool {
 	if len(it.buffer) > 0 {
 		it.buffer = it.buffer[1:]
 	}
+
 	// Advance the lookup to refill the buffer.
 	for len(it.buffer) == 0 {
 		if it.ctx.Err() != nil {
@@ -183,12 +183,23 @@ func (it *lookupIterator) Next() bool {
 			continue
 		}
 		if !it.lookup.advance() {
+			it.lookupFailed(it.lookup.tab)
 			it.lookup = nil
 			continue
 		}
 		it.buffer = it.lookup.replyBuffer
 	}
 	return true
+}
+
+// lookupFailed handles failed lookup attempts. This can be called when the table has
+// exited, or when it runs out of nodes.
+func (it *lookupIterator) lookupFailed(tab *Table) {
+	timeout, cancel := context.WithTimeout(it.ctx, 1*time.Minute)
+	defer cancel()
+	tab.waitForNodes(timeout, 1)
+
+	// TODO: here we need to trigger a table refresh somehow
 }
 
 // Close ends the iterator.
