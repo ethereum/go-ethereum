@@ -708,7 +708,7 @@ func (tab *Table) deleteNode(n *enode.Node) {
 }
 
 // waitForNodes blocks until the table contains at least n nodes.
-func (tab *Table) waitForNodes(n int) bool {
+func (tab *Table) waitForNodes(ctx context.Context, n int) error {
 	getlength := func() (count int) {
 		for _, b := range &tab.buckets {
 			count += len(b.entries)
@@ -721,7 +721,7 @@ func (tab *Table) waitForNodes(n int) bool {
 		tab.mutex.Lock()
 		if getlength() >= n {
 			tab.mutex.Unlock()
-			return true
+			return nil
 		}
 		if ch == nil {
 			// Init subscription.
@@ -734,8 +734,10 @@ func (tab *Table) waitForNodes(n int) bool {
 		// Wait for a node add event.
 		select {
 		case <-ch:
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-tab.closeReq:
-			return false
+			return errClosed
 		}
 	}
 }
