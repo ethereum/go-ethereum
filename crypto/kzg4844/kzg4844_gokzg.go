@@ -115,7 +115,7 @@ func gokzgComputeCellProofs(blob *Blob) ([]Proof, error) {
 	return p, nil
 }
 
-// gokzgVerifyCellProofs verifies that the blob data corresponds to the provided commitment.
+// gokzgVerifyCellProofBatch verifies that the blob data corresponds to the provided commitment.
 func gokzgVerifyCellProofBatch(blobs []Blob, commitments []Commitment, cellProofs []Proof) error {
 	gokzgIniter.Do(gokzgInit)
 

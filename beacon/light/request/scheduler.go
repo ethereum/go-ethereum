@@ -269,7 +269,7 @@ func (s *Scheduler) addEvent(event Event) {
 	s.Trigger()
 }
 
-// filterEvent sorts each Event either as a request event or a server event,
+// filterEvents sorts each Event either as a request event or a server event,
 // depending on its type. Request events are also sorted in a map based on the
 // module that originally initiated the request. It also ensures that no events
 // related to a server are returned before EvRegistered or after EvUnregistered.

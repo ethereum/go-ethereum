@@ -232,7 +232,7 @@ type trieReader struct {
 	lock     sync.Mutex                     // Lock for protecting concurrent read
 }
 
-// trieReader constructs a trie reader of the specific state. An error will be
+// newTrieReader constructs a trie reader of the specific state. An error will be
 // returned if the associated trie specified by root is not existent.
 func newTrieReader(root common.Hash, db *triedb.Database, cache *utils.PointCache) (*trieReader, error) {
 	var (

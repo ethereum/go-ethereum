@@ -579,7 +579,7 @@ func newBlockRangeState(chain *core.BlockChain, typeMux *event.TypeMux) *blockRa
 	return st
 }
 
-// blockRangeBroadcastLoop announces changes in locally-available block range to peers.
+// blockRangeLoop announces changes in locally-available block range to peers.
 // The range to announce is the range that is available in the store, so it's not just
 // about imported blocks.
 func (h *handler) blockRangeLoop(st *blockRangeState) {
