@@ -19,7 +19,6 @@ package discover
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
@@ -106,11 +105,10 @@ func (it *lookup) startQueries() bool {
 	// The first query returns nodes from the local table.
 	if it.queries == -1 {
 		closest := it.tab.findnodeByID(it.result.target, bucketSize, false)
-		// Avoid finishing the lookup too quickly if table is empty. It'd be better to wait
-		// for the table to fill in this case, but there is no good mechanism for that
-		// yet.
+		// Avoid finishing the lookup too quickly if table is empty.
+		// Wait for the table to fill.
 		if len(closest.entries) == 0 {
-			it.slowdown()
+			it.tab.waitForNodes(1)
 		}
 		it.queries = 1
 		it.replyCh <- closest.entries
@@ -128,15 +126,6 @@ func (it *lookup) startQueries() bool {
 	}
 	// The lookup ends when no more nodes can be asked.
 	return it.queries > 0
-}
-
-func (it *lookup) slowdown() {
-	sleep := time.NewTimer(1 * time.Second)
-	defer sleep.Stop()
-	select {
-	case <-sleep.C:
-	case <-it.tab.closeReq:
-	}
 }
 
 func (it *lookup) query(n *enode.Node, reply chan<- []*enode.Node) {
