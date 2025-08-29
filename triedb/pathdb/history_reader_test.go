@@ -39,8 +39,16 @@ func waitIndexing(db *Database) {
 
 func checkHistoricalState(env *tester, root common.Hash, hr *historyReader) error {
 	// Short circuit if the historical state is no longer available
-	if rawdb.ReadStateID(env.db.diskdb, root) == nil {
+	id := rawdb.ReadStateID(env.db.diskdb, root)
+	if id == nil {
 		return nil
+	}
+	meta, err := readStateHistoryMeta(env.db.stateFreezer, *id)
+	if err != nil {
+		return nil // e.g., the referred state history has been pruned
+	}
+	if meta.root != root {
+		return fmt.Errorf("state %#x is not canonincal", root)
 	}
 	var (
 		dl       = env.db.tree.bottom()
@@ -125,8 +133,8 @@ func testHistoryReader(t *testing.T, historyLimit uint64) {
 	defer func() {
 		maxDiffLayers = 128
 	}()
-	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
 
+	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
 	env := newTester(t, historyLimit, false, 64, true, "")
 	defer env.release()
 	waitIndexing(env.db)

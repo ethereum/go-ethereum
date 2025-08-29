@@ -18,6 +18,7 @@ package pathdb
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -244,11 +245,11 @@ func TestTruncateOutOfRange(t *testing.T) {
 		expErr error
 	}{
 		{0, head, nil}, // nothing to delete
-		{0, head + 1, fmt.Errorf("out of range, tail: %d, head: %d, target: %d", tail, head, head+1)},
-		{0, tail - 1, fmt.Errorf("out of range, tail: %d, head: %d, target: %d", tail, head, tail-1)},
+		{0, head + 1, errHeadTruncationOutOfRange},
+		{0, tail - 1, errHeadTruncationOutOfRange},
 		{1, tail, nil}, // nothing to delete
-		{1, head + 1, fmt.Errorf("out of range, tail: %d, head: %d, target: %d", tail, head, head+1)},
-		{1, tail - 1, fmt.Errorf("out of range, tail: %d, head: %d, target: %d", tail, head, tail-1)},
+		{1, head + 1, errTailTruncationOutOfRange},
+		{1, tail - 1, errTailTruncationOutOfRange},
 	}
 	for _, c := range cases {
 		var gotErr error
@@ -257,7 +258,7 @@ func TestTruncateOutOfRange(t *testing.T) {
 		} else {
 			_, gotErr = truncateFromTail(freezer, c.target)
 		}
-		if !reflect.DeepEqual(gotErr, c.expErr) {
+		if !errors.Is(gotErr, c.expErr) {
 			t.Errorf("Unexpected error, want: %v, got: %v", c.expErr, gotErr)
 		}
 	}
