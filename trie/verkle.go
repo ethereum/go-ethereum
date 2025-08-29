@@ -41,13 +41,13 @@ var (
 type VerkleTrie struct {
 	root   verkle.VerkleNode
 	cache  *utils.PointCache
-	reader *trieReader
-	tracer *prevalueTracer
+	reader *Reader
+	tracer *PrevalueTracer
 }
 
 // NewVerkleTrie constructs a verkle tree based on the specified root hash.
 func NewVerkleTrie(root common.Hash, db database.NodeDatabase, cache *utils.PointCache) (*VerkleTrie, error) {
-	reader, err := newTrieReader(root, common.Hash{}, db)
+	reader, err := NewReader(root, common.Hash{}, db)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +55,7 @@ func NewVerkleTrie(root common.Hash, db database.NodeDatabase, cache *utils.Poin
 		root:   verkle.New(),
 		cache:  cache,
 		reader: reader,
-		tracer: newPrevalueTracer(),
+		tracer: NewPrevalueTracer(),
 	}
 	// Parse the root verkle node if it's not empty.
 	if root != types.EmptyVerkleHash && root != types.EmptyRootHash {
@@ -70,6 +70,10 @@ func NewVerkleTrie(root common.Hash, db database.NodeDatabase, cache *utils.Poin
 		t.root = node
 	}
 	return t, nil
+}
+
+func (t *VerkleTrie) FlatdbNodeResolver(path []byte) ([]byte, error) {
+	return t.reader.Node(path, common.Hash{})
 }
 
 // GetKey returns the sha3 preimage of a hashed key that was previously used
@@ -289,7 +293,7 @@ func (t *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 	nodeset := trienode.NewNodeSet(common.Hash{})
 	for _, node := range nodes {
 		// Hash parameter is not used in pathdb
-		nodeset.AddNode(node.Path, trienode.NewNodeWithPrev(common.Hash{}, node.SerializedBytes, t.tracer.get(node.Path)))
+		nodeset.AddNode(node.Path, trienode.NewNodeWithPrev(common.Hash{}, node.SerializedBytes, t.tracer.Get(node.Path)))
 	}
 	// Serialize root commitment form
 	return t.Hash(), nodeset
@@ -322,7 +326,7 @@ func (t *VerkleTrie) Copy() *VerkleTrie {
 		root:   t.root.Copy(),
 		cache:  t.cache,
 		reader: t.reader,
-		tracer: t.tracer.copy(),
+		tracer: t.tracer.Copy(),
 	}
 }
 
@@ -443,11 +447,11 @@ func (t *VerkleTrie) ToDot() string {
 }
 
 func (t *VerkleTrie) nodeResolver(path []byte) ([]byte, error) {
-	blob, err := t.reader.node(path, common.Hash{})
+	blob, err := t.reader.Node(path, common.Hash{})
 	if err != nil {
 		return nil, err
 	}
-	t.tracer.put(path, blob)
+	t.tracer.Put(path, blob)
 	return blob, nil
 }
 
