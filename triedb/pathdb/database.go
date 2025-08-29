@@ -189,7 +189,7 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 	}
 	// TODO (rjl493456442) disable the background indexing in read-only mode
 	if db.stateFreezer != nil && db.config.EnableStateIndexing {
-		db.stateIndexer = newHistoryIndexer(db.diskdb, db.stateFreezer, db.tree.bottom().stateID())
+		db.stateIndexer = newHistoryIndexer(db.diskdb, db.stateFreezer, db.tree.bottom().stateID(), typeStateHistory)
 		log.Info("Enabled state history indexing")
 	}
 	fields := config.fields()
@@ -245,7 +245,7 @@ func (db *Database) repairHistory() error {
 	}
 	// Truncate the extra state histories above in freezer in case it's not
 	// aligned with the disk layer. It might happen after a unclean shutdown.
-	pruned, err := truncateFromHead(db.stateFreezer, id)
+	pruned, err := truncateFromHead(db.stateFreezer, typeStateHistory, id)
 	if err != nil {
 		log.Crit("Failed to truncate extra state histories", "err", err)
 	}
@@ -448,7 +448,7 @@ func (db *Database) Enable(root common.Hash) error {
 	//   2. Re-initialize the indexer so it starts indexing from the new state root.
 	if db.stateIndexer != nil && db.stateFreezer != nil && db.config.EnableStateIndexing {
 		db.stateIndexer.close()
-		db.stateIndexer = newHistoryIndexer(db.diskdb, db.stateFreezer, db.tree.bottom().stateID())
+		db.stateIndexer = newHistoryIndexer(db.diskdb, db.stateFreezer, db.tree.bottom().stateID(), typeStateHistory)
 		log.Info("Re-enabled state history indexing")
 	}
 	log.Info("Rebuilt trie database", "root", root)
@@ -502,7 +502,7 @@ func (db *Database) Recover(root common.Hash) error {
 	if err := db.diskdb.SyncKeyValue(); err != nil {
 		return err
 	}
-	_, err := truncateFromHead(db.stateFreezer, dl.stateID())
+	_, err := truncateFromHead(db.stateFreezer, typeStateHistory, dl.stateID())
 	if err != nil {
 		return err
 	}
