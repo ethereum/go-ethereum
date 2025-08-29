@@ -20,157 +20,188 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
-func TestIsLeafNode(t *testing.T) {
+func TestWitnessStatsAdd(t *testing.T) {
 	tests := []struct {
-		name     string
-		nodeData []byte
-		want     bool
+		name                 string
+		nodes                map[string][]byte
+		owner                common.Hash
+		expectedAccountDepth int64
+		expectedStorageDepth int64
 	}{
 		{
-			name: "leaf node with terminator",
-			// Compact encoding: first byte 0x20 means odd length key with terminator
-			// This represents a leaf node
-			nodeData: mustEncodeNode(t, [][]byte{
-				{0x20, 0x01, 0x02, 0x03}, // Key with terminator flag
-				{0x01, 0x02, 0x03, 0x04},  // Value
-			}),
-			want: true,
+			name:                 "empty nodes",
+			nodes:                map[string][]byte{},
+			owner:                common.Hash{},
+			expectedAccountDepth: 0,
+			expectedStorageDepth: 0,
 		},
 		{
-			name: "leaf node with even key and terminator",
-			// Compact encoding: first byte 0x30 means even length key with terminator
-			nodeData: mustEncodeNode(t, [][]byte{
-				{0x30, 0x01, 0x02}, // Key with terminator flag (even length)
-				{0x05, 0x06},        // Value
-			}),
-			want: true,
+			name: "single account trie leaf",
+			nodes: map[string][]byte{
+				"abc": []byte("data"),
+			},
+			owner:                common.Hash{},
+			expectedAccountDepth: 3,
+			expectedStorageDepth: 0,
 		},
 		{
-			name: "extension node (no terminator)",
-			// Compact encoding: first byte 0x00 means even length key without terminator
-			// This represents an extension node
-			nodeData: mustEncodeNode(t, [][]byte{
-				{0x00, 0x01, 0x02},                                                              // Key without terminator flag
-				{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, // 32-byte hash
-					0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a,
-					0x1b, 0x1c, 0x1d, 0x1e, 0x1f},
-			}),
-			want: false,
+			name: "account trie with internal nodes",
+			nodes: map[string][]byte{
+				"a":   []byte("data1"),
+				"ab":  []byte("data2"),
+				"abc": []byte("data3"),
+			},
+			owner:                common.Hash{},
+			expectedAccountDepth: 3, // Only "abc" is a leaf
+			expectedStorageDepth: 0,
 		},
 		{
-			name: "extension node with odd key (no terminator)",
-			// Compact encoding: first byte 0x10 means odd length key without terminator
-			nodeData: mustEncodeNode(t, [][]byte{
-				{0x10, 0x01, 0x02, 0x03}, // Key without terminator flag (odd length)
-				{0x01, 0x02, 0x03, 0x04}, // Could be hash reference
-			}),
-			want: false,
+			name: "multiple account trie branches",
+			nodes: map[string][]byte{
+				"a":   []byte("data1"),
+				"ab":  []byte("data2"),
+				"abc": []byte("data3"),
+				"b":   []byte("data4"),
+				"bc":  []byte("data5"),
+				"bcd": []byte("data6"),
+			},
+			owner:                common.Hash{},
+			expectedAccountDepth: 6, // "abc" (3) + "bcd" (3) = 6
+			expectedStorageDepth: 0,
 		},
 		{
-			name: "branch node",
-			// Branch nodes have 17 elements
-			nodeData: mustEncodeNode(t, [][]byte{
-				{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
-			}),
-			want: false,
+			name: "siblings are all leaves",
+			nodes: map[string][]byte{
+				"aa": []byte("data1"),
+				"ab": []byte("data2"),
+				"ac": []byte("data3"),
+			},
+			owner:                common.Hash{},
+			expectedAccountDepth: 6, // 2 + 2 + 2 = 6
+			expectedStorageDepth: 0,
 		},
 		{
-			name:     "empty data",
-			nodeData: []byte{},
-			want:     false,
+			name: "storage trie leaves",
+			nodes: map[string][]byte{
+				"1":   []byte("data1"),
+				"12":  []byte("data2"),
+				"123": []byte("data3"),
+				"124": []byte("data4"),
+			},
+			owner:                common.HexToHash("0x1234"),
+			expectedAccountDepth: 0,
+			expectedStorageDepth: 6, // "123" (3) + "124" (3) = 6
 		},
 		{
-			name:     "invalid RLP",
-			nodeData: []byte{0xff, 0xff, 0xff},
-			want:     false,
+			name: "complex trie structure",
+			nodes: map[string][]byte{
+				"1":   []byte("data1"),
+				"12":  []byte("data2"),
+				"123": []byte("data3"),
+				"124": []byte("data4"),
+				"2":   []byte("data5"),
+				"23":  []byte("data6"),
+				"234": []byte("data7"),
+				"235": []byte("data8"),
+				"3":   []byte("data9"),
+			},
+			owner:                common.Hash{},
+			expectedAccountDepth: 13, // "123"(3) + "124"(3) + "234"(3) + "235"(3) + "3"(1) = 13
+			expectedStorageDepth: 0,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isLeafNode(tt.nodeData)
-			if got != tt.want {
-				t.Errorf("isLeafNode() = %v, want %v", got, tt.want)
+			stats := NewWitnessStats()
+			stats.Add(tt.nodes, tt.owner)
+
+			// Check account trie depth
+			if stats.accountTrie.totalDepth != tt.expectedAccountDepth {
+				t.Errorf("Account trie total depth = %d, want %d", stats.accountTrie.totalDepth, tt.expectedAccountDepth)
+			}
+
+			// Check storage trie depth
+			if stats.storageTrie.totalDepth != tt.expectedStorageDepth {
+				t.Errorf("Storage trie total depth = %d, want %d", stats.storageTrie.totalDepth, tt.expectedStorageDepth)
 			}
 		})
 	}
 }
 
-func mustEncodeNode(t *testing.T, elems [][]byte) []byte {
-	data, err := rlp.EncodeToBytes(elems)
-	if err != nil {
-		t.Fatalf("Failed to encode node: %v", err)
-	}
-	return data
-}
-
-func TestWitnessStats(t *testing.T) {
-	// Create a witness stats collector
+func TestWitnessStatsMinMax(t *testing.T) {
 	stats := NewWitnessStats()
 
-	// Create witness data with both leaf and non-leaf nodes
-	witness := map[string][]byte{
-		// Leaf node at depth 4 (path length 4)
-		"abcd": mustEncodeNode(t, [][]byte{
-			{0x20, 0x01, 0x02}, // Key with terminator
-			{0x01, 0x02},        // Value
-		}),
-		// Extension node at depth 2 (should not be counted)
-		"ab": mustEncodeNode(t, [][]byte{
-			{0x00, 0x01, 0x02}, // Key without terminator
-			{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
-				0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a,
-				0x1b, 0x1c, 0x1d, 0x1e, 0x1f}, // 31-byte hash (simulated)
-		}),
-		// Another leaf node at depth 6
-		"abcdef": mustEncodeNode(t, [][]byte{
-			{0x30, 0x01}, // Key with terminator
-			{0x03, 0x04}, // Value
-		}),
-		// Branch node (should not be counted)
-		"a": mustEncodeNode(t, [][]byte{
-			{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
-		}),
+	// Add some account trie nodes with varying depths
+	stats.Add(map[string][]byte{
+		"a":     []byte("data1"),
+		"ab":    []byte("data2"),
+		"abc":   []byte("data3"),
+		"abcd":  []byte("data4"),
+		"abcde": []byte("data5"),
+	}, common.Hash{})
+
+	// Only "abcde" is a leaf (depth 5)
+	if stats.accountTrie.minDepth != 5 {
+		t.Errorf("Account trie min depth = %d, want %d", stats.accountTrie.minDepth, 5)
+	}
+	if stats.accountTrie.maxDepth != 5 {
+		t.Errorf("Account trie max depth = %d, want %d", stats.accountTrie.maxDepth, 5)
 	}
 
-	// Add account trie data (zero owner hash)
-	stats.Add(witness, common.Hash{})
+	// Add more leaves with different depths
+	stats.Add(map[string][]byte{
+		"x":  []byte("data6"),
+		"yz": []byte("data7"),
+	}, common.Hash{})
 
-	// Verify only leaf nodes were counted
-	if stats.accountTrie.samples != 2 {
-		t.Errorf("Expected 2 leaf nodes in account trie, got %d", stats.accountTrie.samples)
+	// Now we have leaves at depths 1, 2, and 5
+	if stats.accountTrie.minDepth != 1 {
+		t.Errorf("Account trie min depth after update = %d, want %d", stats.accountTrie.minDepth, 1)
+	}
+	if stats.accountTrie.maxDepth != 5 {
+		t.Errorf("Account trie max depth after update = %d, want %d", stats.accountTrie.maxDepth, 5)
+	}
+}
+
+func TestWitnessStatsAverage(t *testing.T) {
+	stats := NewWitnessStats()
+
+	// Add nodes that will create leaves at depths 2, 3, and 4
+	stats.Add(map[string][]byte{
+		"aa":   []byte("data1"),
+		"bb":   []byte("data2"),
+		"ccc":  []byte("data3"),
+		"dddd": []byte("data4"),
+	}, common.Hash{})
+
+	// All are leaves: 2 + 2 + 3 + 4 = 11 total, 4 samples
+	expectedAvg := int64(11) / int64(4)
+	actualAvg := stats.accountTrie.totalDepth / stats.accountTrie.samples
+
+	if actualAvg != expectedAvg {
+		t.Errorf("Account trie average depth = %d, want %d", actualAvg, expectedAvg)
+	}
+}
+
+func BenchmarkWitnessStatsAdd(b *testing.B) {
+	// Create a realistic trie node structure
+	nodes := make(map[string][]byte)
+	for i := 0; i < 100; i++ {
+		base := string(rune('a' + i%26))
+		nodes[base] = []byte("data")
+		for j := 0; j < 9; j++ {
+			key := base + string(rune('0'+j))
+			nodes[key] = []byte("data")
+		}
 	}
 
-	// Check the depth statistics
-	expectedAvg := int64((4 + 6) / 2) // Average of path lengths 4 and 6
-	if stats.accountTrie.totalDepth/stats.accountTrie.samples != expectedAvg {
-		t.Errorf("Expected average depth %d, got %d", expectedAvg, stats.accountTrie.totalDepth/stats.accountTrie.samples)
-	}
-	if stats.accountTrie.minDepth != 4 {
-		t.Errorf("Expected min depth 4, got %d", stats.accountTrie.minDepth)
-	}
-	if stats.accountTrie.maxDepth != 6 {
-		t.Errorf("Expected max depth 6, got %d", stats.accountTrie.maxDepth)
-	}
+	stats := NewWitnessStats()
+	b.ResetTimer()
 
-	// Test storage trie (non-zero owner hash)
-	storageStats := NewWitnessStats()
-	storageWitness := map[string][]byte{
-		// Leaf node
-		"xyz": mustEncodeNode(t, [][]byte{
-			{0x20, 0x01}, // Key with terminator
-			{0x05, 0x06}, // Value
-		}),
-	}
-	storageStats.Add(storageWitness, common.HexToHash("0x1234"))
-
-	if storageStats.storageTrie.samples != 1 {
-		t.Errorf("Expected 1 leaf node in storage trie, got %d", storageStats.storageTrie.samples)
-	}
-	if storageStats.accountTrie.samples != 0 {
-		t.Errorf("Expected 0 nodes in account trie for storage access, got %d", storageStats.accountTrie.samples)
+	for i := 0; i < b.N; i++ {
+		stats.Add(nodes, common.Hash{})
 	}
 }

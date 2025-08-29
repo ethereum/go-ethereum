@@ -17,9 +17,13 @@
 package stateless
 
 import (
+	"maps"
+	"slices"
+	"sort"
+	"strings"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
@@ -85,60 +89,21 @@ func NewWitnessStats() *WitnessStats {
 	}
 }
 
-// isLeafNode checks if the given RLP-encoded node data represents a leaf node.
-// In Ethereum's Modified Merkle Patricia Trie, a leaf node is identified by:
-// - Having exactly 2 RLP list elements (for both shortNode and leafNode encodings)
-// - The second element being a value (not a hash reference to another node)
-func isLeafNode(nodeData []byte) bool {
-	if len(nodeData) == 0 {
-		return false
-	}
-	
-	// Decode the RLP list
-	var elems [][]byte
-	if err := rlp.DecodeBytes(nodeData, &elems); err != nil {
-		return false
-	}
-	
-	// A leaf node in MPT has exactly 2 elements: [key, value]
-	// An extension node also has 2 elements but the value is a hash (32 bytes)
-	if len(elems) != 2 {
-		return false // Branch nodes have 17 elements
-	}
-	
-	// If the second element is 32 bytes, it's likely a hash reference (extension node)
-	// Leaf nodes typically have values that are not exactly 32 bytes
-	// However, this is not a perfect heuristic as values could be 32 bytes
-	// A more accurate check would require checking the key's terminator flag
-	
-	// Check if the key has a terminator (indicates leaf node)
-	// In compact encoding, the first nibble of the key indicates the node type
-	if len(elems[0]) > 0 {
-		// Get the first byte which contains the flags
-		flags := elems[0][0]
-		// Check if the terminator flag is set (bit 5)
-		// Leaf nodes have the terminator flag set (0x20 or 0x30)
-		return (flags & 0x20) != 0
-	}
-	
-	return false
-}
-
 // Add records trie access depths from the given node paths.
 // If `owner` is the zero hash, accesses are attributed to the account trie;
 // otherwise, they are attributed to the storage trie of that account.
 func (s *WitnessStats) Add(nodes map[string][]byte, owner common.Hash) {
-	if owner == (common.Hash{}) {
-		for path, nodeData := range nodes {
-			// Only record depth for leaf nodes
-			if isLeafNode(nodeData) {
+	// Extract paths from the nodes map
+	paths := slices.Collect(maps.Keys(nodes))
+	sort.Strings(paths)
+
+	for i, path := range paths {
+		// If current path is a prefix of the next path, it's not a leaf.
+		// The last path is always a leaf.
+		if i == len(paths)-1 || !strings.HasPrefix(paths[i+1], paths[i]) {
+			if owner == (common.Hash{}) {
 				s.accountTrie.add(int64(len(path)))
-			}
-		}
-	} else {
-		for path, nodeData := range nodes {
-			// Only record depth for leaf nodes
-			if isLeafNode(nodeData) {
+			} else {
 				s.storageTrie.add(int64(len(path)))
 			}
 		}
