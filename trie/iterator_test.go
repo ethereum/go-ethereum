@@ -624,6 +624,58 @@ func isTrieNode(scheme string, key, val []byte) (bool, []byte, common.Hash) {
 	return true, path, hash
 }
 
+func TestSubtreeIterator(t *testing.T) {
+	diskDb := rawdb.NewMemoryDatabase()
+	db := newTestDatabase(diskDb, rawdb.HashScheme)
+	tr := NewEmpty(db)
+	vals := []struct{ k, v string }{
+		{"do", "verb"},
+		{"dog", "puppy"},
+		{"doge", "coin"},
+		{"horse", "stallion"},
+		{"house", "building"},
+		{"houses", "multiple"},
+	}
+	all := make(map[string]string)
+	for _, val := range vals {
+		all[val.k] = val.v
+		tr.MustUpdate([]byte(val.k), []byte(val.v))
+	}
+	root, nodes := tr.Commit(false)
+	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+
+	// Test subtree iteration with prefix "do"
+	prefix := []byte("do")
+	stop := []byte("e")
+
+	// We need to re-open the trie from the committed state
+	tr, _ = New(TrieID(root), db)
+	it := NewSubtreeIterator(tr, prefix, stop)
+
+	found := make(map[string]string)
+	for it.Next(true) {
+		if it.Leaf() {
+			found[string(it.LeafKey())] = string(it.LeafBlob())
+		}
+	}
+
+	// Should find "do", "dog", "doge" but not "horse", "house", "houses"
+	expected := map[string]string{
+		"do":   "verb",
+		"dog":  "puppy",
+		"doge": "coin",
+	}
+
+	if len(found) != len(expected) {
+		t.Errorf("wrong number of values: got %d, want %d", len(found), len(expected))
+	}
+	for k, v := range expected {
+		if found[k] != v {
+			t.Errorf("wrong value for %s: got %s, want %s", k, found[k], v)
+		}
+	}
+}
+
 func BenchmarkIterator(b *testing.B) {
 	diskDb, srcDb, tr, _ := makeTestTrie(rawdb.HashScheme)
 	root := tr.Hash()
