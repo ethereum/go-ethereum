@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
@@ -44,6 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/holiman/uint256"
 )
 
 const (
@@ -158,7 +160,8 @@ type TraceConfig struct {
 	Reexec  *uint64
 	// Config specific to given tracer. Note struct logger
 	// config are historically embedded in main object.
-	TracerConfig json.RawMessage
+	TracerConfig       json.RawMessage
+	IncludeWithdrawals *bool `json:"includeWithdrawals,omitempty"` // Enable tracing of beacon chain withdrawals
 }
 
 // TraceCallConfig is the config for traceCall API. It holds one more
@@ -578,6 +581,49 @@ func (api *API) StandardTraceBadBlockToFile(ctx context.Context, hash common.Has
 	return api.standardTraceBlockToFile(ctx, block, config)
 }
 
+// shouldTraceWithdrawals returns true if withdrawal tracing is enabled in the config
+func (api *API) shouldTraceWithdrawals(config *TraceConfig) bool {
+	return config != nil && config.IncludeWithdrawals != nil && *config.IncludeWithdrawals
+}
+
+// traceWithdrawals processes withdrawal balance changes and adds them to the trace results
+func (api *API) traceWithdrawals(ctx context.Context, block *types.Block, statedb *state.StateDB, config *TraceConfig, results *[]*txTraceResult) error {
+	// Process each withdrawal with tracing
+	for _, withdrawal := range block.Withdrawals() {
+		// Capture pre-withdrawal balance
+		preBalance := statedb.GetBalance(withdrawal.Address).ToBig()
+
+		// Convert withdrawal amount from gwei to wei (same as beacon consensus)
+		amount := new(big.Int).SetUint64(withdrawal.Amount)
+		amount = amount.Mul(amount, big.NewInt(params.GWei))
+
+		// Process the withdrawal by adding balance
+		statedb.AddBalance(withdrawal.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
+
+		// Capture post-withdrawal balance
+		postBalance := statedb.GetBalance(withdrawal.Address).ToBig()
+
+		// Create a withdrawal trace result
+		withdrawalResult := &txTraceResult{
+			TxHash: common.Hash{}, // Withdrawals don't have transaction hashes
+			Result: map[string]interface{}{
+				"type":           "withdrawal",
+				"index":          withdrawal.Index,
+				"validatorIndex": withdrawal.Validator,
+				"address":        withdrawal.Address,
+				"amount":         (*hexutil.Big)(amount),
+				"preBalance":     (*hexutil.Big)(preBalance),
+				"postBalance":    (*hexutil.Big)(postBalance),
+			},
+		}
+
+		// Add to results
+		*results = append(*results, withdrawalResult)
+	}
+
+	return nil
+}
+
 // traceBlock configures a new tracer according to the provided configuration, and
 // executes all the transactions contained within. The return value will be one item
 // per transaction, dependent on the requested tracer.
@@ -639,6 +685,14 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		}
 		results[i] = &txTraceResult{TxHash: tx.Hash(), Result: res}
 	}
+
+	// Process withdrawals if enabled and block contains withdrawals
+	if len(block.Withdrawals()) > 0 && api.shouldTraceWithdrawals(config) {
+		if err := api.traceWithdrawals(ctx, block, statedb, config, &results); err != nil {
+			return nil, err
+		}
+	}
+
 	return results, nil
 }
 
