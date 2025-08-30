@@ -141,10 +141,8 @@ func (t *Trie) NodeIteratorWithPrefix(prefix []byte) (NodeIterator, error) {
 	if t.committed {
 		return nil, ErrCommitted
 	}
-	baseIterator := newNodeIterator(t, prefix)
-	hexPrefix := keybytesToHex(prefix)
-	hexPrefix = hexPrefix[:len(hexPrefix)-1] // Remove terminator
-	return NewPrefixIterator(baseIterator, hexPrefix), nil
+	// Use NewSubtreeIterator with just a prefix and no stop boundary
+	return NewSubtreeIterator(t, prefix, nil), nil
 }
 
 // MustGet is a wrapper of Get and will omit any encountered error but just
