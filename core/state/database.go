@@ -285,6 +285,11 @@ func (db *CachingDB) TrieDB() *triedb.Database {
 	return db.triedb
 }
 
+// DiskDB returns the underlying disk database for direct access.
+func (db *CachingDB) DiskDB() ethdb.KeyValueStore {
+	return db.disk
+}
+
 // PointCache returns the cache of evaluated curve points.
 func (db *CachingDB) PointCache() *utils.PointCache {
 	return db.pointCache

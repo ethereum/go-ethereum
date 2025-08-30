@@ -375,3 +375,21 @@ func (db *Database) IsVerkle() bool {
 func (db *Database) Disk() ethdb.Database {
 	return db.disk
 }
+
+// SnapshotCompleted returns the indicator if the snapshot is completed.
+func (db *Database) SnapshotCompleted() bool {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return false
+	}
+	return pdb.SnapshotCompleted()
+}
+
+// SetForceFlush enables or disables the pathdb to flush any pending changes to disk
+// immediately, regardless of the buffer size threshold. This can be used to accelerate
+// state sizer initialization by making buffered state changes visible on disk.
+func (db *Database) SetForceFlush(enabled bool) {
+	if pdb, ok := db.backend.(*pathdb.Database); ok {
+		pdb.SetForceFlush(enabled)
+	}
+}

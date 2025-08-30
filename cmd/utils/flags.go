@@ -966,6 +966,13 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+	MetricsStateSizeFlag = &cli.BoolFlag{
+		Name:     "metrics.statesize",
+		Usage:    "Enable state size tracking for metrics collection",
+		Value:    ethconfig.Defaults.EnableStateSizeTracking,
+		Category: flags.MetricsCategory,
+	}
 )
 
 var (
@@ -1725,6 +1732,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		} else {
 			cfg.EthDiscoveryURLs = SplitAndTrim(urls)
 		}
+	}
+
+	if ctx.Bool(MetricsEnabledFlag.Name) && ctx.Bool(MetricsStateSizeFlag.Name) {
+		log.Info("Enabling state size metrics")
+		cfg.EnableStateSizeTracking = true
 	}
 	// Override any default configs for hard coded networks.
 	switch {

@@ -226,7 +226,8 @@ type Database struct {
 	stateFreezer ethdb.ResettableAncientStore // Freezer for storing state histories, nil possible in tests
 	stateIndexer *historyIndexer              // History indexer historical state data, nil possible
 
-	lock sync.RWMutex // Lock to prevent mutations from happening at the same time
+	lock       sync.RWMutex // Lock to prevent mutations from happening at the same time
+	forceFlush bool         // Flag to force buffer flush regardless of size
 }
 
 // New attempts to load an already existing layer from a persistent key-value
@@ -446,6 +447,15 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 		return err
 	}
 	return db.tree.cap(root, 0)
+}
+
+// SetForceFlush enables or disables force flushing for the next state update.
+func (db *Database) SetForceFlush(enabled bool) {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	db.forceFlush = enabled
+	log.Info("Set triedb force flush for next pathdb update", "enabled", enabled)
 }
 
 // Disable deactivates the database and invalidates all available state layers
@@ -768,4 +778,15 @@ func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek 
 		return nil, errNotConstructed
 	}
 	return newFastStorageIterator(db, root, account, seek)
+}
+
+// SnapshotCompleted returns the snapshot root if the snapshot generation is completed.
+func (db *Database) SnapshotCompleted() bool {
+	db.lock.RLock()
+	wait := db.waitSync
+	db.lock.RUnlock()
+	if wait {
+		return false
+	}
+	return db.tree.bottom().genComplete()
 }
