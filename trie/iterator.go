@@ -146,6 +146,10 @@ type nodeIterator struct {
 
 	resolver NodeResolver         // optional node resolver for avoiding disk hits
 	pool     []*nodeIteratorState // local pool for iterator states
+
+	// Fields for subtree iteration
+	prefix []byte // Prefix for subtree iteration (nil for full trie)
+	stop   []byte // Stop boundary for subtree iteration (nil for full trie)
 }
 
 // errIteratorEnd is stored in nodeIterator.err when iteration is done.
@@ -296,6 +300,31 @@ func (it *nodeIterator) Next(descend bool) bool {
 	if it.err != nil {
 		return false
 	}
+
+	// Check if we're still within the subtree boundaries
+	// Note: path is already hex-encoded by the iterator
+	if it.prefix != nil && len(path) > 0 {
+		prefixHex := keybytesToHex(it.prefix)
+		// Remove terminator from prefix hex if present
+		if hasTerm(prefixHex) {
+			prefixHex = prefixHex[:len(prefixHex)-1]
+		}
+		if !bytes.HasPrefix(path, prefixHex) {
+			it.err = errIteratorEnd
+			return false
+		}
+	}
+	if it.stop != nil && len(path) > 0 {
+		stopHex := keybytesToHex(it.stop)
+		if hasTerm(stopHex) {
+			stopHex = stopHex[:len(stopHex)-1]
+		}
+		if bytes.Compare(path, stopHex) >= 0 {
+			it.err = errIteratorEnd
+			return false
+		}
+	}
+
 	it.push(state, parentIndex, path)
 	return true
 }
@@ -835,4 +864,35 @@ func (it *unionIterator) Error() error {
 		}
 	}
 	return nil
+}
+
+// NewSubtreeIterator creates an iterator that only traverses nodes within a subtree
+// defined by the given prefix and stopping point. The prefix defines where iteration
+// starts, and stop defines where it ends (exclusive).
+func NewSubtreeIterator(trie *Trie, prefix []byte, stop []byte) NodeIterator {
+	if trie.Hash() == types.EmptyRootHash {
+		return &nodeIterator{
+			trie:   trie,
+			err:    errIteratorEnd,
+			prefix: prefix,
+			stop:   stop,
+		}
+	}
+	it := &nodeIterator{
+		trie:   trie,
+		prefix: prefix,
+		stop:   stop,
+	}
+	// Seek to the starting position if prefix is provided
+	if prefix != nil && len(prefix) > 0 {
+		it.err = it.seek(prefix)
+	} else {
+		state, err := it.init()
+		if err != nil {
+			it.err = err
+		} else {
+			it.push(state, nil, nil)
+		}
+	}
+	return it
 }
