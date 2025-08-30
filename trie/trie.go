@@ -134,6 +134,19 @@ func (t *Trie) NodeIterator(start []byte) (NodeIterator, error) {
 	return newNodeIterator(t, start), nil
 }
 
+// NodeIteratorWithPrefix returns an iterator that returns nodes of the trie with a specific prefix.
+// Iteration starts at the key after the given prefix and stops when leaving the subtree.
+func (t *Trie) NodeIteratorWithPrefix(prefix []byte) (NodeIterator, error) {
+	// Short circuit if the trie is already committed and not usable.
+	if t.committed {
+		return nil, ErrCommitted
+	}
+	baseIterator := newNodeIterator(t, prefix)
+	hexPrefix := keybytesToHex(prefix)
+	hexPrefix = hexPrefix[:len(hexPrefix)-1] // Remove terminator
+	return NewPrefixIterator(baseIterator, hexPrefix), nil
+}
+
 // MustGet is a wrapper of Get and will omit any encountered error but just
 // print out an error message.
 func (t *Trie) MustGet(key []byte) []byte {

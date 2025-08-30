@@ -836,3 +836,41 @@ func (it *unionIterator) Error() error {
 	}
 	return nil
 }
+
+// prefixIterator is a wrapper around NodeIterator that stops iteration
+// when it leaves a subtree with a specific prefix.
+type prefixIterator struct {
+	NodeIterator
+	prefix []byte
+	ended  bool
+}
+
+// NewPrefixIterator creates an iterator that only traverses nodes with the given prefix.
+func NewPrefixIterator(base NodeIterator, prefix []byte) NodeIterator {
+	return &prefixIterator{
+		NodeIterator: base,
+		prefix:       prefix,
+	}
+}
+
+// Next moves the iterator to the next node within the prefix boundary.
+// It returns false when no more nodes exist within the prefix.
+func (pi *prefixIterator) Next(descend bool) bool {
+	if pi.ended {
+		return false
+	}
+
+	if !pi.NodeIterator.Next(descend) {
+		pi.ended = true
+		return false
+	}
+
+	// Check if current path is still within the prefix boundary
+	path := pi.Path()
+	if len(path) > 0 && len(pi.prefix) > 0 && !bytes.HasPrefix(path, pi.prefix) {
+		pi.ended = true
+		return false
+	}
+
+	return true
+}
