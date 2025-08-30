@@ -160,11 +160,8 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 
 			var eta time.Duration // Realistically will never remain uninited
 			if done := binary.BigEndian.Uint64(key[:8]); done > 0 {
-				var (
-					left  = math.MaxUint64 - binary.BigEndian.Uint64(key[:8])
-					speed = done/uint64(time.Since(pstart)/time.Millisecond+1) + 1 // +1s to avoid division by zero
-				)
-				eta = time.Duration(left/speed) * time.Millisecond
+				left := math.MaxUint64 - binary.BigEndian.Uint64(key[:8])
+				eta = common.CalculateETA(done, left, time.Since(pstart))
 			}
 			if time.Since(logged) > 8*time.Second {
 				log.Info("Pruning state data", "nodes", count, "skipped", skipped, "size", size,

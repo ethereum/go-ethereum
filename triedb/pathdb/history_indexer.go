@@ -543,12 +543,10 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 				logged = time.Now()
 
 				var (
-					left  = lastID - current + 1
-					done  = current - beginID
-					speed = done/uint64(time.Since(start)/time.Millisecond+1) + 1 // +1s to avoid division by zero
+					left = lastID - current + 1
+					done = current - beginID
 				)
-				// Override the ETA if larger than the largest until now
-				eta := time.Duration(left/speed) * time.Millisecond
+				eta := common.CalculateETA(done, left, time.Since(start))
 				log.Info("Indexing state history", "processed", done, "left", left, "elapsed", common.PrettyDuration(time.Since(start)), "eta", common.PrettyDuration(eta))
 			}
 		}

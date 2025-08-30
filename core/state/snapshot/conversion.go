@@ -171,20 +171,16 @@ func (stat *generateStats) report() {
 		// If there's progress on the account trie, estimate the time to finish crawling it
 		if done := binary.BigEndian.Uint64(stat.head[:8]) / stat.accounts; done > 0 {
 			var (
-				left  = (math.MaxUint64 - binary.BigEndian.Uint64(stat.head[:8])) / stat.accounts
-				speed = done/uint64(time.Since(stat.start)/time.Millisecond+1) + 1 // +1s to avoid division by zero
-				eta   = time.Duration(left/speed) * time.Millisecond
+				left = (math.MaxUint64 - binary.BigEndian.Uint64(stat.head[:8])) / stat.accounts
+				eta  = common.CalculateETA(done, left, time.Since(stat.start))
 			)
 			// If there are large contract crawls in progress, estimate their finish time
 			for acc, head := range stat.slotsHead {
 				start := stat.slotsStart[acc]
 				if done := binary.BigEndian.Uint64(head[:8]); done > 0 {
-					var (
-						left  = math.MaxUint64 - binary.BigEndian.Uint64(head[:8])
-						speed = done/uint64(time.Since(start)/time.Millisecond+1) + 1 // +1s to avoid division by zero
-					)
+					left := math.MaxUint64 - binary.BigEndian.Uint64(head[:8])
 					// Override the ETA if larger than the largest until now
-					if slotETA := time.Duration(left/speed) * time.Millisecond; eta < slotETA {
+					if slotETA := common.CalculateETA(done, left, time.Since(start)); eta < slotETA {
 						eta = slotETA
 					}
 				}
