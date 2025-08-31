@@ -445,7 +445,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	)
 
 	processRange := func(ctx context.Context, rangePrefix []byte) error {
-		var start = []byte(nil)
+		var start []byte
 
 		if len(keyStart) > 0 && len(rangePrefix) > 0 {
 			r0, s0 := rangePrefix[0], keyStart[0]
@@ -453,8 +453,9 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				// Skip ranges that are entirely before keyStart
 				return nil
 			} else if r0 == s0 {
-				// Only apply keyStart to the range that contains it
-				start = keyStart[1:] // skip the first byte, as it's in rangePrefix
+				// Only apply keyStart to the range that contains it,
+				// skip the first byte, as it's already in rangePrefix
+				start = keyStart[1:]
 			}
 		}
 
