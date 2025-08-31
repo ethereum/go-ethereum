@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"maps"
@@ -443,7 +444,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		unaccountedMu   sync.Mutex
 	)
 
-	processRange := func(rangePrefix []byte) error {
+	processRange := func(ctx context.Context, rangePrefix []byte) error {
 		// Skip ranges that are entirely before keyStart
 		if len(keyStart) > 0 && len(rangePrefix) > 0 && rangePrefix[0] < keyStart[0] {
 			return nil
@@ -560,13 +561,19 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 					unaccountedMu.Unlock()
 				}
 			}
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
 		}
 
 		return it.Error()
 	}
 
 	var (
-		eg      errgroup.Group
+		eg, ctx = errgroup.WithContext(context.Background())
 		workers = runtime.NumCPU()
 	)
 	eg.SetLimit(workers)
@@ -591,7 +598,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	// Inspect key-value database in parallel.
 	for i := 0; i < 256; i++ {
 		rangePrefix := []byte{byte(i)}
-		eg.Go(func() error { return processRange(rangePrefix) })
+		eg.Go(func() error { return processRange(ctx, rangePrefix) })
 	}
 
 	if err := eg.Wait(); err != nil {
