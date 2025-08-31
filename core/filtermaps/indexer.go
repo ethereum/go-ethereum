@@ -17,6 +17,7 @@
 package filtermaps
 
 import (
+	"fmt"
 	"math"
 	"sync"
 
@@ -88,7 +89,7 @@ func NewIndexer(db ethdb.KeyValueStore, params *Params, config Config) *Indexer 
 	ix.updateTailEpoch()
 	ix.updateActiveViewTailEpoch()
 	ix.updateTailState()
-	//fmt.Println("init  tail epoch", ix.tailEpoch, "tail target", ix.targetTailEpoch, "head number", ix.headNumber)
+	fmt.Println("init  tail epoch", ix.tailEpoch, "tail target", ix.targetTailEpoch, "head number", ix.headNumber)
 	return ix
 }
 
@@ -175,6 +176,9 @@ func (ix *Indexer) revertMaps(mapIndex uint32) {
 
 func (ix *Indexer) updateTailEpoch() {
 	ix.tailEpoch = ix.storage.tailEpoch()
+	if ix.tailEpoch != 0 {
+		fmt.Println("*** tailEpoch", ix.tailEpoch)
+	}
 	if ix.config.History == 0 {
 		ix.targetTailEpoch = 0
 		return
