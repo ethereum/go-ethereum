@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -45,7 +46,7 @@ func TestLoopInterrupt(t *testing.T) {
 	for i, tt := range loopInterruptTests {
 		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		statedb.CreateAccount(address)
-		statedb.SetCode(address, common.Hex2Bytes(tt))
+		statedb.SetCode(address, common.Hex2Bytes(tt), tracing.CodeChangeUnspecified)
 		statedb.Finalise(true)
 
 		evm := NewEVM(vmctx, statedb, params.AllEthashProtocolChanges, Config{})
