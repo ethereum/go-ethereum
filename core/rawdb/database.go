@@ -568,7 +568,6 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		eg, ctx = errgroup.WithContext(context.Background())
 		workers = runtime.NumCPU()
 	)
-	ctx.Done()
 	eg.SetLimit(workers)
 
 	// Progress reporter
