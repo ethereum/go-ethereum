@@ -312,8 +312,8 @@ func (cpList checkpointList) epochsUntilBlock(number uint64) uint32 {
 	return first
 }
 
-func (ix *Indexer) tryCheckpointInit(number uint64, id common.Hash) {
-	//fmt.Println("tryCheckpointInit", number, id)
+func (ix *Indexer) tryCheckpointInit(number uint64, hash common.Hash) {
+	//fmt.Println("tryCheckpointInit", number, hash)
 	var ci int
 	for ci < len(ix.checkpoints) {
 		//fmt.Println(" t1")
@@ -331,7 +331,7 @@ func (ix *Indexer) tryCheckpointInit(number uint64, id common.Hash) {
 			//fmt.Println(" t2")
 			continue
 		}
-		if cpList[epochs-1].BlockId == id {
+		if cpList[epochs-1].BlockHash == hash {
 			//fmt.Println(" t4")
 			// apply matching checkpoint, discard other lists
 			if err := ix.storage.addKnownEpochs(cpList[:epochs]); err == nil {

@@ -97,8 +97,8 @@ func testMapReader(t *testing.T, testCase string, params *Params, reader mapRead
 		lastBlock, lbHash, err := reader.getLastBlockOfMap(mapIndex)
 		if err != nil {
 			t.Errorf("Test case %s: error reading last block of map %d: %v", testCase, mapIndex, err)
-		} else if (lastBlockOfMap{number: lastBlock, id: lbHash}) != expLastBlock {
-			t.Errorf("Test case %s: incorrect results when reading last block of map %d (expected %v, got %v)", testCase, mapIndex, expLastBlock, lastBlockOfMap{number: lastBlock, id: lbHash})
+		} else if (lastBlockOfMap{number: lastBlock, hash: lbHash}) != expLastBlock {
+			t.Errorf("Test case %s: incorrect results when reading last block of map %d (expected %v, got %v)", testCase, mapIndex, expLastBlock, lastBlockOfMap{number: lastBlock, hash: lbHash})
 		}
 		if blockNumber != math.MaxUint64 {
 			blockPtr, err := reader.getBlockLvPointer(blockNumber)
@@ -116,7 +116,7 @@ func testMapReader(t *testing.T, testCase string, params *Params, reader mapRead
 	}
 	testKnownEpoch := func(epoch uint32) {
 		testNoPointer(params.firstEpochMap(epoch))
-		testPointers(params.lastEpochMap(epoch), lastBlockOfMap{number: knownEpochs[epoch].BlockNumber, id: knownEpochs[epoch].BlockId}, knownEpochs[epoch].BlockNumber, knownEpochs[epoch].FirstIndex)
+		testPointers(params.lastEpochMap(epoch), lastBlockOfMap{number: knownEpochs[epoch].BlockNumber, hash: knownEpochs[epoch].BlockHash}, knownEpochs[epoch].BlockNumber, knownEpochs[epoch].FirstIndex)
 	}
 	if len(knownEpochs) > 0 {
 		for range testPointersCount {
@@ -199,7 +199,7 @@ func generateTestMaps(params *Params, maps []*finishedMap, amount uint32) []*fin
 					fm.blockPtrs[i] = startPtr + uint64(i)*params.valuesPerMap/uint64(blockCount) + uint64(rand.Intn(int(params.valuesPerMap)/blockCount/2))
 				}
 			}
-			rand.Read(lastBlock.id[:])
+			rand.Read(lastBlock.hash[:])
 		}
 		fm.lastBlock = lastBlock
 		maps = append(maps, fm)
@@ -213,7 +213,7 @@ func generateEpochCheckpoint(mapIndex uint32, maps []*finishedMap) epochCheckpoi
 	}
 	return epochCheckpoint{
 		BlockNumber: maps[mapIndex].lastBlock.number,
-		BlockId:     maps[mapIndex].lastBlock.id,
+		BlockHash:   maps[mapIndex].lastBlock.hash,
 		FirstIndex:  maps[mapIndex].blockPtrs[len(maps[mapIndex].blockPtrs)-1],
 	}
 }

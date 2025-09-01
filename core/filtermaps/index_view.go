@@ -122,10 +122,10 @@ func (iv *IndexView) GetLastBlockOfMap(mapIndex uint32) (uint64, common.Hash, er
 		return 0, common.Hash{}, errors.New("map index out of range")
 	}
 	if mapIndex == iv.headMapIndex {
-		return iv.headMap.lastBlock.number, iv.headMap.lastBlock.id, nil
+		return iv.headMap.lastBlock.number, iv.headMap.lastBlock.hash, nil
 	}
 	fm := iv.finishedMaps[mapIndex-iv.firstMemoryMap]
-	return fm.lastBlock.number, fm.lastBlock.id, nil
+	return fm.lastBlock.number, fm.lastBlock.hash, nil
 }
 
 // assumes strictly ascending order of map indices
@@ -224,7 +224,7 @@ func (rs *renderState) addHeader(header *types.Header) (uint32, []*finishedMap) 
 		rs.advance(1) //TODO blockValue
 	}
 	rs.nextBlock++
-	lastBlock := lastBlockOfMap{number: header.Number.Uint64(), id: header.Hash()}
+	lastBlock := lastBlockOfMap{number: header.Number.Uint64(), hash: header.Hash()}
 	if rs.currentMap != nil {
 		rs.currentMap.lastBlock = lastBlock
 	}

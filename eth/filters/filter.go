@@ -166,7 +166,7 @@ func (f *Filter) rangeLogs(ctx context.Context, firstBlock, lastBlock uint64) ([
 		lastBlock = chainView.HeadNumber()
 	}
 
-	indexView := f.sys.backend.GetIndexView(chainView.BlockId(chainView.HeadNumber()))
+	indexView := f.sys.backend.GetIndexView(chainView.BlockHash(chainView.HeadNumber()))
 	if indexView == nil {
 		return f.unindexedLogs(ctx, chainView, firstBlock, lastBlock)
 	}

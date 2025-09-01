@@ -46,11 +46,11 @@ type mapDatabase struct {
 	lvPointerCache *lru.Cache[uint64, uint64]
 }
 
-// lastBlockOfMap is used for caching the (number, id) pairs belonging to the
+// lastBlockOfMap is used for caching the (number, hash) pairs belonging to the
 // last block of each map.
 type lastBlockOfMap struct {
 	number uint64
-	id     common.Hash
+	hash   common.Hash
 }
 
 func newMapDatabase(params *Params, db ethdb.KeyValueStore, hashScheme bool) *mapDatabase {
@@ -123,26 +123,26 @@ func (m *mapDatabase) storeBlockLvPointer(blockNumber, lvPointer uint64) {
 	//fmt.Println("storeBlockLvPointer", blockNumber, lvPointer)
 }
 
-// getLastBlockOfMap returns the number and id of the block that generated the
+// getLastBlockOfMap returns the number and hash of the block that generated the
 // last log value entry of the given map.
 func (m *mapDatabase) getLastBlockOfMap(mapIndex uint32) (uint64, common.Hash, error) {
 	if lastBlock, ok := m.lastBlockCache.Get(mapIndex); ok {
-		return lastBlock.number, lastBlock.id, nil
+		return lastBlock.number, lastBlock.hash, nil
 	}
-	number, id, err := rawdb.ReadFilterMapLastBlock(m.db, mapIndex)
+	number, hash, err := rawdb.ReadFilterMapLastBlock(m.db, mapIndex)
 	//fmt.Println(" read lbm", mapIndex, number, err)
 	if err != nil {
 		return 0, common.Hash{}, fmt.Errorf("failed to retrieve last block of map %d: %v", mapIndex, err)
 	}
-	m.lastBlockCache.Add(mapIndex, lastBlockOfMap{number: number, id: id})
-	return number, id, nil
+	m.lastBlockCache.Add(mapIndex, lastBlockOfMap{number: number, hash: hash})
+	return number, hash, nil
 }
 
 // storeLastBlockOfMap stores the number of the block that generated the last
 // log value entry of the given map.
-func (m *mapDatabase) storeLastBlockOfMap(mapIndex uint32, number uint64, id common.Hash) {
-	m.lastBlockCache.Add(mapIndex, lastBlockOfMap{number: number, id: id})
-	rawdb.WriteFilterMapLastBlock(m.db, mapIndex, number, id)
+func (m *mapDatabase) storeLastBlockOfMap(mapIndex uint32, number uint64, hash common.Hash) {
+	m.lastBlockCache.Add(mapIndex, lastBlockOfMap{number: number, hash: hash})
+	rawdb.WriteFilterMapLastBlock(m.db, mapIndex, number, hash)
 	//fmt.Println("storeLastBlockOfMap", mapIndex, number)
 }
 
@@ -305,7 +305,7 @@ func (m *mapDatabase) getFilterMap(mapIndex uint32) (*finishedMap, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve last block of map %d: %v", mapIndex, err)
 	}
-	fm.lastBlock = lastBlockOfMap{number: lastBlock, id: lbHash}
+	fm.lastBlock = lastBlockOfMap{number: lastBlock, hash: lbHash}
 	var firstBlock uint64
 	if mapIndex > 0 {
 		plb, _, err := m.getLastBlockOfMap(mapIndex - 1)
@@ -376,7 +376,7 @@ func (m *mapDatabase) writeMaps(writeMaps, valid, dirty common.Range[uint32], ma
 	}
 	for mapIndex := range writeMaps.Iter() {
 		fm := maps[mapIndex]
-		rawdb.WriteFilterMapLastBlock(batch, mapIndex, fm.lastBlock.number, fm.lastBlock.id)
+		rawdb.WriteFilterMapLastBlock(batch, mapIndex, fm.lastBlock.number, fm.lastBlock.hash)
 		if checkStopOrCommit() {
 			return false, writeErr
 		}
@@ -505,7 +505,7 @@ func (m *mapDatabase) removeBloomBits(stopCb func() bool) {
 }
 
 func (m *mapDatabase) storeEpochCheckpoint(epoch uint32, cp epochCheckpoint) {
-	m.storeLastBlockOfMap(m.params.lastEpochMap(epoch), cp.BlockNumber, cp.BlockId)
+	m.storeLastBlockOfMap(m.params.lastEpochMap(epoch), cp.BlockNumber, cp.BlockHash)
 	m.storeBlockLvPointer(cp.BlockNumber, cp.FirstIndex)
 }
 

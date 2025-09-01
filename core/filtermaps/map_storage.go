@@ -152,7 +152,7 @@ func (m *mapStorage) matchKnownEpochs(cpList checkpointList) bool {
 		m.resetWithError(fmt.Sprintf("could not read last known epoch boundary: %v", err))
 		return true
 	}
-	return number == cpList[epoch].BlockNumber && hash == cpList[epoch].BlockId
+	return number == cpList[epoch].BlockNumber && hash == cpList[epoch].BlockHash
 }
 
 func (m *mapStorage) addKnownEpochs(cpList checkpointList) error {
@@ -174,7 +174,7 @@ func (m *mapStorage) addKnownEpochs(cpList checkpointList) error {
 		if err != nil {
 			return err //TODO fmt.Errorf
 		}
-		if cp := cpList[m.knownEpochs-1]; cp.BlockNumber != lastNumber || cp.BlockId != lastHash || cp.FirstIndex != lvPointer {
+		if cp := cpList[m.knownEpochs-1]; cp.BlockNumber != lastNumber || cp.BlockHash != lastHash || cp.FirstIndex != lvPointer {
 			return errors.New("checkpoint init list does not match known epochs")
 		}
 	}
@@ -359,7 +359,7 @@ func (m *mapStorage) getLastBlockOfMap(mapIndex uint32) (uint64, common.Hash, er
 		if fm == nil {
 			return 0, common.Hash{}, errors.New("memory overlay map not found")
 		}
-		return fm.lastBlock.number, fm.lastBlock.id, nil
+		return fm.lastBlock.number, fm.lastBlock.hash, nil
 	}
 	if mapIndex < m.params.firstEpochMap(m.knownEpochs) || m.valid.includes(mapIndex) || m.valid.includes(mapIndex+1) {
 		return m.mapDb.getLastBlockOfMap(mapIndex)
