@@ -69,7 +69,7 @@ func (t *Trie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 			// loaded blob will be tracked, while it's not required here since
 			// all loaded nodes won't be linked to trie at all and track nodes
 			// may lead to out-of-memory issue.
-			blob, err := t.reader.node(prefix, common.BytesToHash(n))
+			blob, err := t.reader.Node(prefix, common.BytesToHash(n))
 			if err != nil {
 				log.Error("Unhandled trie error in Trie.Prove", "err", err)
 				return err
@@ -571,7 +571,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 		root:           root,
 		reader:         newEmptyReader(),
 		opTracer:       newOpTracer(),
-		prevalueTracer: newPrevalueTracer(),
+		prevalueTracer: NewPrevalueTracer(),
 	}
 	if empty {
 		tr.root = nil
