@@ -23,6 +23,7 @@
 package blocktest
 
 import (
+	"bytes"
 	"hash"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -48,15 +49,9 @@ func (h *testHasher) Reset() {
 
 // Update updates the hash state with the given key and value.
 func (h *testHasher) Update(key, val []byte) error {
-	h.hasher.Write(key)
-	h.hasher.Write(val)
+	h.hasher.Write(bytes.Clone(key))
+	h.hasher.Write(bytes.Clone(val))
 	return nil
-}
-
-// UpdateSafe is identical to Update, except that this method will copy the
-// value slice. The caller is free to modify the value bytes after this method returns.
-func (h *testHasher) UpdateSafe(key, value []byte) error {
-	return h.Update(key, common.CopyBytes(value))
 }
 
 // Hash returns the hash value.

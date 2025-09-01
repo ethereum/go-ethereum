@@ -28,7 +28,7 @@ import (
 var (
 	stPool = sync.Pool{New: func() any { return new(stNode) }}
 	bPool  = newBytesPool(32, 100)
-	_      = types.TrieHasher((*StackTrie)(nil))
+	_      = types.ListHasher((*StackTrie)(nil))
 )
 
 // OnTrieNode is a callback method invoked when a trie node is committed
@@ -75,16 +75,10 @@ func (t *StackTrie) grow(key []byte) {
 	}
 }
 
-// UpdateSafe is identical to Update, except that this method will copy the
-// value slice. The caller is free to modify the value bytes after this method returns.
-func (t *StackTrie) UpdateSafe(key, value []byte) error {
-	// The stacktrie always copies the value (is already safe).
-	return t.Update(key, value)
-}
-
 // Update inserts a (key, value) pair into the stack trie.
-// The value is copied, and the caller is free to modify the value after this
-// method returns.
+//
+// Note the supplied key value pair is copied and managed internally, they are
+// safe to be modified after this method returns.
 func (t *StackTrie) Update(key, value []byte) error {
 	if len(value) == 0 {
 		return errors.New("trying to insert empty (deletion)")
@@ -114,7 +108,6 @@ func (t *StackTrie) Update(key, value []byte) error {
 func (t *StackTrie) Reset() {
 	t.root = stPool.Get().(*stNode)
 	t.last = nil
-	t.onTrieNode = nil
 }
 
 // TrieKey returns the internal key representation for the given user key.

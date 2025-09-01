@@ -75,14 +75,17 @@ func prefixedRlpHash(prefix byte, x interface{}) (h common.Hash) {
 	return h
 }
 
-// TrieHasher is the tool used to calculate the hash of derivable list.
-// This is internal, do not use.
-type TrieHasher interface {
+// ListHasher defines the interface for computing the hash of a derivable list.
+type ListHasher interface {
+	// Reset clears the internal state of the hasher, preparing it for reuse.
 	Reset()
-	Update([]byte, []byte) error
-	// UpdateSafe is identical to Update, except that this method will copy the
-	// value slice. The caller is free to modify the value bytes after this method returns.
-	UpdateSafe([]byte, []byte) error
+
+	// Update inserts the given key-value pair into the hasher.
+	// The implementation must copy the provided slices, allowing the caller
+	// to safely modify them after the call returns.
+	Update(key []byte, value []byte) error
+
+	// Hash computes and returns the final hash of all inserted key-value pairs.
 	Hash() common.Hash
 }
 
@@ -94,6 +97,7 @@ type DerivableList interface {
 	EncodeIndex(int, *bytes.Buffer)
 }
 
+// encodeForDerive encodes the element in the list at the position i into the buffer.
 func encodeForDerive(list DerivableList, i int, buf *bytes.Buffer) []byte {
 	buf.Reset()
 	list.EncodeIndex(i, buf)
@@ -101,9 +105,12 @@ func encodeForDerive(list DerivableList, i int, buf *bytes.Buffer) []byte {
 }
 
 // DeriveSha creates the tree hashes of transactions, receipts, and withdrawals in a block header.
-func DeriveSha(list DerivableList, hasher TrieHasher) common.Hash {
+func DeriveSha(list DerivableList, hasher ListHasher) common.Hash {
 	hasher.Reset()
 
+	// Allocate a buffer for value encoding. As the hasher is claimed that all
+	// supplied key value pairs will be copied by hasher and safe to reuse the
+	// encoding buffer.
 	valueBuf := encodeBufferPool.Get().(*bytes.Buffer)
 	defer encodeBufferPool.Put(valueBuf)
 
@@ -117,17 +124,17 @@ func DeriveSha(list DerivableList, hasher TrieHasher) common.Hash {
 	for i := 1; i < list.Len() && i <= 0x7f; i++ {
 		indexBuf = rlp.AppendUint64(indexBuf[:0], uint64(i))
 		value := encodeForDerive(list, i, valueBuf)
-		hasher.UpdateSafe(indexBuf, value)
+		hasher.Update(indexBuf, value)
 	}
 	if list.Len() > 0 {
 		indexBuf = rlp.AppendUint64(indexBuf[:0], 0)
 		value := encodeForDerive(list, 0, valueBuf)
-		hasher.UpdateSafe(indexBuf, value)
+		hasher.Update(indexBuf, value)
 	}
 	for i := 0x80; i < list.Len(); i++ {
 		indexBuf = rlp.AppendUint64(indexBuf[:0], uint64(i))
 		value := encodeForDerive(list, i, valueBuf)
-		hasher.UpdateSafe(indexBuf, value)
+		hasher.Update(indexBuf, value)
 	}
 	return hasher.Hash()
 }
