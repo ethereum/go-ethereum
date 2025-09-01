@@ -3800,3 +3800,88 @@ func TestEstimateGasWithMovePrecompile(t *testing.T) {
 		t.Fatalf("mismatched gas: %d, want 21366", gas)
 	}
 }
+
+func TestEIP7910Config(t *testing.T) {
+	var (
+		newUint64 = func(val uint64) *uint64 { return &val }
+		// Define a snapshot of the current Hoodi config (only Prague scheduled) so that future forks do not
+		// cause this test to fail.
+		config = &params.ChainConfig{
+			ChainID:                 big.NewInt(560048),
+			HomesteadBlock:          big.NewInt(0),
+			DAOForkBlock:            nil,
+			DAOForkSupport:          true,
+			EIP150Block:             big.NewInt(0),
+			EIP155Block:             big.NewInt(0),
+			EIP158Block:             big.NewInt(0),
+			ByzantiumBlock:          big.NewInt(0),
+			ConstantinopleBlock:     big.NewInt(0),
+			PetersburgBlock:         big.NewInt(0),
+			IstanbulBlock:           big.NewInt(0),
+			MuirGlacierBlock:        big.NewInt(0),
+			BerlinBlock:             big.NewInt(0),
+			LondonBlock:             big.NewInt(0),
+			ArrowGlacierBlock:       nil,
+			GrayGlacierBlock:        nil,
+			TerminalTotalDifficulty: big.NewInt(0),
+			MergeNetsplitBlock:      big.NewInt(0),
+			ShanghaiTime:            newUint64(0),
+			CancunTime:              newUint64(0),
+			PragueTime:              newUint64(1742999832),
+			DepositContractAddress:  common.HexToAddress("0x00000000219ab540356cBB839Cbe05303d7705Fa"),
+			Ethash:                  new(params.EthashConfig),
+			BlobScheduleConfig: &params.BlobScheduleConfig{
+				Cancun: params.DefaultCancunBlobConfig,
+				Prague: params.DefaultPragueBlobConfig,
+			},
+		}
+	)
+	gspec := core.DefaultHoodiGenesisBlock()
+	gspec.Config = config
+
+	var testSuite = []struct {
+		time uint64
+		file string
+	}{
+		{
+			time: 0,
+			file: "next-and-last",
+		},
+		{
+			time: *gspec.Config.PragueTime,
+			file: "current",
+		},
+	}
+
+	for i, tt := range testSuite {
+		backend := configTimeBackend{nil, gspec, tt.time}
+		api := NewBlockChainAPI(backend)
+		result, err := api.Config(context.Background())
+		if err != nil {
+			t.Errorf("test %d: want no error, have %v", i, err)
+			continue
+		}
+		testRPCResponseWithFile(t, i, result, "eth_config", tt.file)
+	}
+}
+
+type configTimeBackend struct {
+	*testBackend
+	genesis *core.Genesis
+	time    uint64
+}
+
+func (b configTimeBackend) ChainConfig() *params.ChainConfig {
+	return b.genesis.Config
+}
+
+func (b configTimeBackend) HeaderByNumber(_ context.Context, n rpc.BlockNumber) (*types.Header, error) {
+	if n == 0 {
+		return b.genesis.ToBlock().Header(), nil
+	}
+	panic("not implemented")
+}
+
+func (b configTimeBackend) CurrentHeader() *types.Header {
+	return &types.Header{Time: b.time}
+}
