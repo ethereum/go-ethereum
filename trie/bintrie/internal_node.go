@@ -128,7 +128,6 @@ func (bt *InternalNode) InsertValuesAtStem(stem []byte, values [][]byte, resolve
 	} else {
 		child = &bt.right
 	}
-
 	*child, err = (*child).InsertValuesAtStem(stem, values, resolver, depth+1)
 	return bt, err
 }
@@ -186,6 +185,5 @@ func (bt *InternalNode) toDot(parent, path string) string {
 	if bt.right != nil {
 		ret = fmt.Sprintf("%s%s", ret, bt.right.toDot(me, fmt.Sprintf("%s%02x", path, 1)))
 	}
-
 	return ret
 }

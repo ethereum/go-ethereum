@@ -43,25 +43,25 @@ func (bt *StemNode) Insert(key []byte, value []byte, _ NodeResolverFn, depth int
 	if !bytes.Equal(bt.Stem, key[:31]) {
 		bitStem := bt.Stem[bt.depth/8] >> (7 - (bt.depth % 8)) & 1
 
-		new := &InternalNode{depth: bt.depth}
+		n := &InternalNode{depth: bt.depth}
 		bt.depth++
 		var child, other *BinaryNode
 		if bitStem == 0 {
-			new.left = bt
-			child = &new.left
-			other = &new.right
+			n.left = bt
+			child = &n.left
+			other = &n.right
 		} else {
-			new.right = bt
-			child = &new.right
-			other = &new.left
+			n.right = bt
+			child = &n.right
+			other = &n.left
 		}
 
-		bitKey := key[new.depth/8] >> (7 - (new.depth % 8)) & 1
+		bitKey := key[n.depth/8] >> (7 - (n.depth % 8)) & 1
 		if bitKey == bitStem {
 			var err error
 			*child, err = (*child).Insert(key, value, nil, depth+1)
 			if err != nil {
-				return new, fmt.Errorf("insert error: %w", err)
+				return n, fmt.Errorf("insert error: %w", err)
 			}
 			*other = Empty{}
 		} else {
@@ -73,7 +73,7 @@ func (bt *StemNode) Insert(key []byte, value []byte, _ NodeResolverFn, depth int
 				depth:  depth + 1,
 			}
 		}
-		return new, nil
+		return n, nil
 	}
 	if len(value) != 32 {
 		return bt, errors.New("invalid insertion: value length")
@@ -151,35 +151,35 @@ func (bt *StemNode) InsertValuesAtStem(key []byte, values [][]byte, _ NodeResolv
 	if !bytes.Equal(bt.Stem, key[:31]) {
 		bitStem := bt.Stem[bt.depth/8] >> (7 - (bt.depth % 8)) & 1
 
-		new := &InternalNode{depth: bt.depth}
+		n := &InternalNode{depth: bt.depth}
 		bt.depth++
 		var child, other *BinaryNode
 		if bitStem == 0 {
-			new.left = bt
-			child = &new.left
-			other = &new.right
+			n.left = bt
+			child = &n.left
+			other = &n.right
 		} else {
-			new.right = bt
-			child = &new.right
-			other = &new.left
+			n.right = bt
+			child = &n.right
+			other = &n.left
 		}
 
-		bitKey := key[new.depth/8] >> (7 - (new.depth % 8)) & 1
+		bitKey := key[n.depth/8] >> (7 - (n.depth % 8)) & 1
 		if bitKey == bitStem {
 			var err error
 			*child, err = (*child).InsertValuesAtStem(key, values, nil, depth+1)
 			if err != nil {
-				return new, fmt.Errorf("insert error: %w", err)
+				return n, fmt.Errorf("insert error: %w", err)
 			}
 			*other = Empty{}
 		} else {
 			*other = &StemNode{
 				Stem:   slices.Clone(key[:31]),
 				Values: values,
-				depth:  new.depth + 1,
+				depth:  n.depth + 1,
 			}
 		}
-		return new, nil
+		return n, nil
 	}
 
 	// same stem, just merge the two value lists

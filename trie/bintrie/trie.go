@@ -256,7 +256,6 @@ func (t *BinaryTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 	if err != nil {
 		panic(fmt.Errorf("CollectNodes failed: %v", err))
 	}
-
 	// Serialize root commitment form
 	return t.Hash(), nodeset
 }
@@ -283,6 +282,7 @@ func (t *BinaryTrie) Copy() *BinaryTrie {
 	return &BinaryTrie{
 		root:   t.root.Copy(),
 		reader: t.reader,
+		tracer: t.tracer.Copy(),
 	}
 }
 
@@ -325,6 +325,8 @@ func (t *BinaryTrie) UpdateContractCode(addr common.Address, codeHash common.Has
 	return nil
 }
 
+// PrefetchAccount attempts to resolve specific accounts from the database
+// to accelerate subsequent trie operations.
 func (t *BinaryTrie) PrefetchAccount(addresses []common.Address) error {
 	for _, addr := range addresses {
 		if _, err := t.GetAccount(addr); err != nil {

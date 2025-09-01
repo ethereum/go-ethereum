@@ -196,7 +196,6 @@ func (it *binaryNodeIterator) LeafKey() []byte {
 	if !ok {
 		panic("Leaf() called on an binary node iterator not at a leaf location")
 	}
-
 	return leaf.Key(it.stack[len(it.stack)-1].Index - 1)
 }
 
@@ -208,7 +207,6 @@ func (it *binaryNodeIterator) LeafBlob() []byte {
 	if !ok {
 		panic("LeafBlob() called on an binary node iterator not at a leaf location")
 	}
-
 	return leaf.Values[it.stack[len(it.stack)-1].Index-1]
 }
 
