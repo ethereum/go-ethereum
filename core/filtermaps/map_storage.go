@@ -179,11 +179,7 @@ func (m *mapStorage) addKnownEpochs(cpList checkpointList) error {
 		}
 	}
 
-	for epoch := m.knownEpochs; epoch < uint32(len(cpList)); epoch++ {
-		//fmt.Println(" store", epoch, cpList[epoch].BlockNumber)
-		m.mapDb.storeLastBlockOfMap(m.params.lastEpochMap(epoch), cpList[epoch].BlockNumber, cpList[epoch].BlockId)
-		m.mapDb.storeBlockLvPointer(cpList[epoch].BlockNumber, cpList[epoch].FirstIndex)
-	}
+	m.mapDb.storeCheckpointList(m.knownEpochs, cpList[m.knownEpochs:])
 	m.knownEpochs = uint32(len(cpList))
 	m.knownEpochBlocks = cpList[len(cpList)-1].BlockNumber + 1
 	m.mapDb.storeMapRange(m.valid, m.dirty, m.knownEpochs)

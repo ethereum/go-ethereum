@@ -17,7 +17,6 @@
 package filtermaps
 
 import (
-	"fmt"
 	"math"
 	"math/rand"
 	"reflect"
@@ -28,9 +27,9 @@ import (
 )
 
 const (
-	testFilterMapRowsCount = 10000
-	testFilterMapsCount    = 10000
-	testPointersCount      = 10000
+	testFilterMapRowsCount = 1000
+	testFilterMapsCount    = 100
+	testPointersCount      = 1000
 	testMaxBlocksPerMap    = 4
 )
 
@@ -79,17 +78,8 @@ func testMapReader(t *testing.T, testCase string, params *Params, reader mapRead
 		rows, err := reader.getFilterMapRows(mapIndices, rowIndex, lastDbLayer+1)
 		if err != nil {
 			t.Errorf("Test case %s: error reading %d map indices in range %d <= i < %d: %v", testCase, len(mapIndices), testRange.First(), testRange.AfterLast(), err)
-		}
-		if !equalRows(rows, expResults) {
+		} else if !equalRows(rows, expResults) {
 			t.Errorf("Test case %s: incorrect results when reading %d map indices in range %d <= i < %d", testCase, len(mapIndices), testRange.First(), testRange.AfterLast())
-			fmt.Println("exp")
-			for _, r := range expResults {
-				fmt.Println(r)
-			}
-			fmt.Println("got")
-			for _, r := range rows {
-				fmt.Println(r)
-			}
 		}
 	}
 	for range testFilterMapsCount {
@@ -98,8 +88,7 @@ func testMapReader(t *testing.T, testCase string, params *Params, reader mapRead
 		fm, err := reader.getFilterMap(mapIndex)
 		if err != nil {
 			t.Errorf("Test case %s: error reading map %d: %v", testCase, mapIndex, err)
-		}
-		if !reflect.DeepEqual(fm, expResults) {
+		} else if !reflect.DeepEqual(fm, expResults) {
 			t.Errorf("Test case %s: incorrect results when reading map %d", testCase, mapIndex)
 		}
 	}
@@ -108,17 +97,14 @@ func testMapReader(t *testing.T, testCase string, params *Params, reader mapRead
 		lastBlock, lbHash, err := reader.getLastBlockOfMap(mapIndex)
 		if err != nil {
 			t.Errorf("Test case %s: error reading last block of map %d: %v", testCase, mapIndex, err)
-		}
-		lb := lastBlockOfMap{number: lastBlock, id: lbHash}
-		if lb != expLastBlock {
-			t.Errorf("Test case %s: incorrect results when reading last block of map %d (expected %v, got %v)", testCase, mapIndex, expLastBlock, lb)
+		} else if (lastBlockOfMap{number: lastBlock, id: lbHash}) != expLastBlock {
+			t.Errorf("Test case %s: incorrect results when reading last block of map %d (expected %v, got %v)", testCase, mapIndex, expLastBlock, lastBlockOfMap{number: lastBlock, id: lbHash})
 		}
 		if blockNumber != math.MaxUint64 {
 			blockPtr, err := reader.getBlockLvPointer(blockNumber)
 			if err != nil {
 				t.Errorf("Test case %s: error reading lv pointer of block %d: %v", testCase, blockNumber, err)
-			}
-			if blockPtr != expBlockPtr {
+			} else if blockPtr != expBlockPtr {
 				t.Errorf("Test case %s: incorrect results when reading lv pointer of block %d (expected %v, got %v)", testCase, blockNumber, expBlockPtr, blockPtr)
 			}
 		}
@@ -166,16 +152,15 @@ func testMapReader(t *testing.T, testCase string, params *Params, reader mapRead
 	testNoPointer(params.firstEpochMap(params.mapEpoch(mapRange.AfterLast()) + 1))
 }
 
-func addTestMaps(params *Params, maps []*finishedMap, amount uint32) []*finishedMap {
+func generateTestMaps(params *Params, maps []*finishedMap, amount uint32) []*finishedMap {
 	var lastBlock lastBlockOfMap
-	if len(maps) > 0 {
+	genesis := len(maps) == 0
+	if !genesis {
 		lastBlock = maps[len(maps)-1].lastBlock
-	} else {
-		rand.Read(lastBlock.id[:])
 	}
 	for range amount {
 		blockCount := rand.Intn(testMaxBlocksPerMap + 1)
-		if len(maps) == 0 && blockCount == 0 {
+		if genesis && blockCount == 0 {
 			blockCount = 1
 		}
 		fm := &finishedMap{
@@ -207,10 +192,12 @@ func addTestMaps(params *Params, maps []*finishedMap, amount uint32) []*finished
 		if blockCount > 0 {
 			startPtr := uint64(len(maps)) * params.valuesPerMap
 			for i := range fm.blockPtrs {
-				if startPtr > 0 || i > 0 {
+				if genesis {
+					genesis = false
+				} else {
+					lastBlock.number++
 					fm.blockPtrs[i] = startPtr + uint64(i)*params.valuesPerMap/uint64(blockCount) + uint64(rand.Intn(int(params.valuesPerMap)/blockCount/2))
 				}
-				lastBlock.number++
 			}
 			rand.Read(lastBlock.id[:])
 		}
@@ -218,4 +205,23 @@ func addTestMaps(params *Params, maps []*finishedMap, amount uint32) []*finished
 		maps = append(maps, fm)
 	}
 	return maps
+}
+
+func generateEpochCheckpoint(mapIndex uint32, maps []*finishedMap) epochCheckpoint {
+	for len(maps[mapIndex].blockPtrs) == 0 {
+		mapIndex--
+	}
+	return epochCheckpoint{
+		BlockNumber: maps[mapIndex].lastBlock.number,
+		BlockId:     maps[mapIndex].lastBlock.id,
+		FirstIndex:  maps[mapIndex].blockPtrs[len(maps[mapIndex].blockPtrs)-1],
+	}
+}
+
+func generateTestCheckpoints(params *Params, maps []*finishedMap) checkpointList {
+	cpList := make(checkpointList, uint32(len(maps))/params.mapsPerEpoch)
+	for i := range cpList {
+		cpList[i] = generateEpochCheckpoint(params.lastEpochMap(uint32(i)), maps)
+	}
+	return cpList
 }

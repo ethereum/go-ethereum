@@ -120,6 +120,7 @@ func (m *mapDatabase) getBlockLvPointer(blockNumber uint64) (uint64, error) {
 func (m *mapDatabase) storeBlockLvPointer(blockNumber, lvPointer uint64) {
 	m.lvPointerCache.Add(blockNumber, lvPointer)
 	rawdb.WriteBlockLvPointer(m.db, blockNumber, lvPointer)
+	//fmt.Println("storeBlockLvPointer", blockNumber, lvPointer)
 }
 
 // getLastBlockOfMap returns the number and id of the block that generated the
@@ -142,7 +143,7 @@ func (m *mapDatabase) getLastBlockOfMap(mapIndex uint32) (uint64, common.Hash, e
 func (m *mapDatabase) storeLastBlockOfMap(mapIndex uint32, number uint64, id common.Hash) {
 	m.lastBlockCache.Add(mapIndex, lastBlockOfMap{number: number, id: id})
 	rawdb.WriteFilterMapLastBlock(m.db, mapIndex, number, id)
-	//fmt.Println(" store lbm", mapIndex, number)
+	//fmt.Println("storeLastBlockOfMap", mapIndex, number)
 }
 
 func (m *mapDatabase) deleteEpochRows(epoch uint32, stopCallback func() bool) (bool, error) {
@@ -380,7 +381,8 @@ func (m *mapDatabase) writeMaps(writeMaps, valid, dirty common.Range[uint32], ma
 			return false, writeErr
 		}
 		for i, lvPtr := range fm.blockPtrs {
-			rawdb.WriteBlockLvPointer(batch, fm.firstBlock()+uint64(i), lvPtr)
+			rawdb.WriteBlockLvPointer(batch, fm.firstBlock()+uint64(i), lvPtr) //TODO store?
+			//fmt.Println("WriteBlockLvPointer", fm.firstBlock()+uint64(i), lvPtr)
 			if checkStopOrCommit() {
 				return false, writeErr
 			}
@@ -500,4 +502,15 @@ func (m *mapDatabase) safeDeleteWithLogs(deleteFn func(db ethdb.KeyValueStore, h
 // removeBloomBits removes old bloom bits data from the database.
 func (m *mapDatabase) removeBloomBits(stopCb func() bool) {
 	m.safeDeleteWithLogs(rawdb.DeleteBloomBitsDb, "Removing old bloom bits database", stopCb)
+}
+
+func (m *mapDatabase) storeEpochCheckpoint(epoch uint32, cp epochCheckpoint) {
+	m.storeLastBlockOfMap(m.params.lastEpochMap(epoch), cp.BlockNumber, cp.BlockId)
+	m.storeBlockLvPointer(cp.BlockNumber, cp.FirstIndex)
+}
+
+func (m *mapDatabase) storeCheckpointList(firstEpoch uint32, cpList checkpointList) {
+	for i, cp := range cpList {
+		m.storeEpochCheckpoint(firstEpoch+uint32(i), cp)
+	}
 }

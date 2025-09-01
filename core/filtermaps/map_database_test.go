@@ -37,17 +37,21 @@ func TestMapDatabase(t *testing.T) {
 	testParams.sanitize()
 	db := memorydb.New()
 	mapDb := newMapDatabase(&testParams, db, false)
-	maps := addTestMaps(&testParams, nil, 1000)
+	maps := generateTestMaps(&testParams, nil, 1024)
 	writeMaps := make(map[uint32]*finishedMap)
 	for i, fm := range maps {
 		writeMaps[uint32(i)] = fm
 	}
-	mapDb.writeMaps(common.NewRange[uint32](0, 1000), common.Range[uint32]{}, common.Range[uint32]{}, writeMaps, func() bool { return false })
+	cpList := generateTestCheckpoints(&testParams, maps)[:4]
+	for epoch, cp := range cpList {
+		mapDb.storeEpochCheckpoint(uint32(epoch), cp)
+	}
+	mapDb.writeMaps(common.NewRange[uint32](256, 768), common.Range[uint32]{}, common.Range[uint32]{}, writeMaps, func() bool { return false })
 	reader := mapReader{
 		getFilterMapRows:  mapDb.getFilterMapRows,
 		getFilterMap:      mapDb.getFilterMap,
 		getBlockLvPointer: mapDb.getBlockLvPointer,
 		getLastBlockOfMap: mapDb.getLastBlockOfMap,
 	}
-	testMapReader(t, "mapDatabase test", &testParams, reader, nil, maps[:900])
+	testMapReader(t, "mapDatabase test", &testParams, reader, cpList, maps[256:])
 }
