@@ -26,12 +26,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/triedb"
 )
 
 func TestDeriveSha(t *testing.T) {
@@ -40,7 +38,7 @@ func TestDeriveSha(t *testing.T) {
 		t.Fatal(err)
 	}
 	for len(txs) < 1000 {
-		exp := types.DeriveSha(txs, trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)))
+		exp := types.DeriveSha(txs, trie.NewListHasher())
 		got := types.DeriveSha(txs, trie.NewStackTrie(nil))
 		if !bytes.Equal(got[:], exp[:]) {
 			t.Fatalf("%d txs: got %x exp %x", len(txs), got, exp)
@@ -81,12 +79,12 @@ func BenchmarkDeriveSha200(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	want := types.DeriveSha(txs, trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)))
+	want := types.DeriveSha(txs, trie.NewListHasher())
 	var have common.Hash
 	b.Run("std_trie", func(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
-			have = types.DeriveSha(txs, trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)))
+			have = types.DeriveSha(txs, trie.NewListHasher())
 		}
 		if have != want {
 			b.Errorf("have %x want %x", have, want)
@@ -111,7 +109,7 @@ func TestFuzzDeriveSha(t *testing.T) {
 	rndSeed := mrand.Int()
 	for i := 0; i < 10; i++ {
 		seed := rndSeed + i
-		exp := types.DeriveSha(newDummy(i), trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)))
+		exp := types.DeriveSha(newDummy(i), trie.NewListHasher())
 		got := types.DeriveSha(newDummy(i), trie.NewStackTrie(nil))
 		if !bytes.Equal(got[:], exp[:]) {
 			printList(t, newDummy(seed))
@@ -139,7 +137,7 @@ func TestDerivableList(t *testing.T) {
 		},
 	}
 	for i, tc := range tcs[1:] {
-		exp := types.DeriveSha(flatList(tc), trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)))
+		exp := types.DeriveSha(flatList(tc), trie.NewListHasher())
 		got := types.DeriveSha(flatList(tc), trie.NewStackTrie(nil))
 		if !bytes.Equal(got[:], exp[:]) {
 			t.Fatalf("case %d: got %x exp %x", i, got, exp)
@@ -233,12 +231,6 @@ func (d *hashToHumanReadable) Update(i []byte, i2 []byte) error {
 	l := fmt.Sprintf("%x %x\n", i, i2)
 	d.data = append(d.data, []byte(l)...)
 	return nil
-}
-
-// UpdateSafe is identical to Update, except that this method will copy the
-// value slice. The caller is free to modify the value bytes after this method returns.
-func (d *hashToHumanReadable) UpdateSafe(key, value []byte) error {
-	return d.Update(key, common.CopyBytes(value))
 }
 
 func (d *hashToHumanReadable) Hash() common.Hash {
