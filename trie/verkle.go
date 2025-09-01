@@ -72,10 +72,6 @@ func NewVerkleTrie(root common.Hash, db database.NodeDatabase, cache *utils.Poin
 	return t, nil
 }
 
-func (t *VerkleTrie) FlatdbNodeResolver(path []byte) ([]byte, error) {
-	return t.reader.Node(path, common.Hash{})
-}
-
 // GetKey returns the sha3 preimage of a hashed key that was previously used
 // to store a value.
 func (t *VerkleTrie) GetKey(key []byte) []byte {
