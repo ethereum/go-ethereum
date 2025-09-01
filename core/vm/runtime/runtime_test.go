@@ -460,7 +460,7 @@ func BenchmarkSimpleLoop(b *testing.B) {
 	p, lbl = program.New().Jumpdest()
 	callEOA := p.
 		Call(nil, 0xE0, 0, 0, 0, 0, 0). // call addr of EOA
-		Op(vm.POP).Jump(lbl).Bytes() // pop return value and jump to label
+		Op(vm.POP).Jump(lbl).Bytes()    // pop return value and jump to label
 
 	p, lbl = program.New().Jumpdest()
 	// Push as if we were making call, then pop it off again, and loop
@@ -721,19 +721,19 @@ func TestRuntimeJSTracer(t *testing.T) {
 	}{
 		{ // CREATE
 			code: program.New().MstoreSmall(initcode, 0).
-				Push(len(initcode)). // length
+				Push(len(initcode)).      // length
 				Push(32 - len(initcode)). // offset
-				Push(0). // value
+				Push(0).                  // value
 				Op(vm.CREATE).
 				Op(vm.POP).Bytes(),
 			results: []string{`"1,1,952853,6,12"`, `"1,1,952853,6,0"`},
 		},
 		{ // CREATE2
 			code: program.New().MstoreSmall(initcode, 0).
-				Push(1). // salt
-				Push(len(initcode)). // length
+				Push(1).                  // salt
+				Push(len(initcode)).      // length
 				Push(32 - len(initcode)). // offset
-				Push(0). // value
+				Push(0).                  // value
 				Op(vm.CREATE2).
 				Op(vm.POP).Bytes(),
 			results: []string{`"1,1,952844,6,13"`, `"1,1,952844,6,0"`},

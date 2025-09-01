@@ -731,7 +731,7 @@ func TestCopyCommitCopy(t *testing.T) {
 	sval := common.HexToHash("bbb")
 
 	state.SetBalance(addr, uint256.NewInt(42), tracing.BalanceChangeUnspecified) // Change the account trie
-	state.SetCode(addr, []byte("hello"), tracing.CodeChangeUnspecified)                                         // Change an external metadata
+	state.SetCode(addr, []byte("hello"), tracing.CodeChangeUnspecified)          // Change an external metadata
 	state.SetState(addr, skey, sval)                                             // Change the storage trie
 
 	if balance := state.GetBalance(addr); balance.Cmp(uint256.NewInt(42)) != 0 {
@@ -804,7 +804,7 @@ func TestCopyCopyCommitCopy(t *testing.T) {
 	sval := common.HexToHash("bbb")
 
 	state.SetBalance(addr, uint256.NewInt(42), tracing.BalanceChangeUnspecified) // Change the account trie
-	state.SetCode(addr, []byte("hello"), tracing.CodeChangeUnspecified)                                         // Change an external metadata
+	state.SetCode(addr, []byte("hello"), tracing.CodeChangeUnspecified)          // Change an external metadata
 	state.SetState(addr, skey, sval)                                             // Change the storage trie
 
 	if balance := state.GetBalance(addr); balance.Cmp(uint256.NewInt(42)) != 0 {
@@ -874,7 +874,7 @@ func TestCommitCopy(t *testing.T) {
 	sval1, sval2 := common.HexToHash("b1"), common.HexToHash("b2")
 
 	state.SetBalance(addr, uint256.NewInt(42), tracing.BalanceChangeUnspecified) // Change the account trie
-	state.SetCode(addr, []byte("hello"), tracing.CodeChangeUnspecified)                                         // Change an external metadata
+	state.SetCode(addr, []byte("hello"), tracing.CodeChangeUnspecified)          // Change an external metadata
 	state.SetState(addr, skey1, sval1)                                           // Change the storage trie
 
 	if balance := state.GetBalance(addr); balance.Cmp(uint256.NewInt(42)) != 0 {
