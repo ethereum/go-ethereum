@@ -1188,9 +1188,14 @@ func (api *BlockChainAPI) Config(ctx context.Context) (*configResponse, error) {
 		for addr, c := range vm.ActivePrecompiledContracts(rules) {
 			precompiles[c.Name()] = addr
 		}
+		// Activation time is required. If a fork is activated at genesis the value 0 is used
+		activationTime := t
+		if genesis.Time >= t {
+			activationTime = 0
+		}
 		forkid := forkid.NewID(c, types.NewBlockWithHeader(genesis), ^uint64(0), t).Hash
 		return &config{
-			ActivationTime:  t,
+			ActivationTime:  activationTime,
 			BlobSchedule:    c.BlobConfig(c.LatestFork(t)),
 			ChainId:         (*hexutil.Big)(c.ChainID),
 			ForkId:          forkid[:],
