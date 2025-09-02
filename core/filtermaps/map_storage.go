@@ -499,10 +499,12 @@ func (m *mapStorage) doWriteCycle(stopCallback func() bool) (bool, error) {
 		}
 	}
 	//TODO wait for group boundary unless last map is added
-	epochRange := rangeSet[uint32]{common.NewRange[uint32](epoch<<m.params.logMapsPerEpoch, m.params.mapsPerEpoch)}
+	epochRange := rangeSet[uint32]{common.NewRange[uint32](m.params.firstEpochMap(epoch), m.params.mapsPerEpoch)}
 	writeMaps := epochRange.intersection(m.overlay).singleRange()
 	validInEpoch := epochRange.intersection(m.valid).singleRange()
 	dirtyInEpoch := epochRange.intersection(m.dirty).singleRange()
+	keepEmptyFrom := max(m.params.firstEpochMap(epoch), writeMaps.First(), validInEpoch.First(), dirtyInEpoch.First())
+	keepEmptyInEpoch := common.NewRange[uint32](keepEmptyFrom, m.params.firstEpochMap(epoch+1)-keepEmptyFrom)
 	//fmt.Println("* epoch", epoch, epochRange)
 	//fmt.Println("* writeMaps", writeMaps, m.overlay)
 	//fmt.Println("* validInEpoch", validInEpoch, m.valid)
@@ -523,9 +525,9 @@ func (m *mapStorage) doWriteCycle(stopCallback func() bool) (bool, error) {
 		}
 		return done, err
 	}
-	maps := make(map[uint32]*finishedMap)
+	maps := make([]*finishedMap, writeMaps.Count())
 	for i := range writeMaps.Iter() {
-		maps[i] = m.maps[i]
+		maps[i-writeMaps.First()] = m.maps[i]
 	}
 	// temporarily mark newly written maps as dirty (replaced/deleted maps are already dirty)
 	if err := m.updateRange(m.valid, m.dirty.union(rangeSet[uint32]{writeMaps}), m.overlay); err != nil {
@@ -533,7 +535,7 @@ func (m *mapStorage) doWriteCycle(stopCallback func() bool) (bool, error) {
 	}
 	m.lock.Unlock()
 	// write/overwrite map rows and delete dirty map data, write new pointers
-	done, err := m.mapDb.writeMaps(writeMaps, validInEpoch, dirtyInEpoch, maps, stopCallback)
+	done, err := m.mapDb.writeMaps(writeMaps, dirtyInEpoch, keepEmptyInEpoch, maps, stopCallback)
 	m.lock.Lock()
 	if !done {
 		return false, err
@@ -541,7 +543,7 @@ func (m *mapStorage) doWriteCycle(stopCallback func() bool) (bool, error) {
 	// check if newly written maps are still valid according to the current memory
 	// map overlay and shorten range if some maps have been invalidated
 	for mapIndex := range writeMaps.Iter() {
-		if m.maps[mapIndex] != maps[mapIndex] {
+		if m.maps[mapIndex] != maps[mapIndex-writeMaps.First()] {
 			writeMaps = common.NewRange[uint32](writeMaps.First(), mapIndex-writeMaps.First())
 			break
 		}

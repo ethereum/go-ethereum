@@ -17,6 +17,7 @@
 package filtermaps
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -38,20 +39,21 @@ func TestMapDatabase(t *testing.T) {
 	db := memorydb.New()
 	mapDb := newMapDatabase(&testParams, db, false)
 	maps := generateTestMaps(&testParams, nil, 1024)
-	writeMaps := make(map[uint32]*finishedMap)
-	for i, fm := range maps {
-		writeMaps[uint32(i)] = fm
-	}
 	cpList := generateTestCheckpoints(&testParams, maps)[:4]
 	for epoch, cp := range cpList {
 		mapDb.storeEpochCheckpoint(uint32(epoch), cp)
 	}
-	mapDb.writeMaps(common.NewRange[uint32](256, 768), common.Range[uint32]{}, common.Range[uint32]{}, writeMaps, func() bool { return false })
 	reader := mapReader{
 		getFilterMapRows:  mapDb.getFilterMapRows,
 		getFilterMap:      mapDb.getFilterMap,
 		getBlockLvPointer: mapDb.getBlockLvPointer,
 		getLastBlockOfMap: mapDb.getLastBlockOfMap,
 	}
-	testMapReader(t, "mapDatabase test", &testParams, reader, cpList, maps[256:])
+	mapDb.writeMaps(common.NewRange[uint32](256, 768), common.Range[uint32]{}, common.Range[uint32]{}, maps[256:], func() bool { return false })
+	testMapReader(t, "mapDatabase test 1", &testParams, reader, cpList, maps[256:])
+	mapDb.writeMaps(common.NewRange[uint32](0, 256), common.Range[uint32]{}, common.Range[uint32]{}, maps[:256], func() bool { return false })
+	testMapReader(t, "mapDatabase test 2", &testParams, reader, nil, maps)
+	maps2 := generateTestMaps(&testParams, slices.Clone(maps[:512]), 1024)
+	mapDb.writeMaps(common.NewRange[uint32](512, 1024), common.NewRange[uint32](512, 512), common.Range[uint32]{}, maps2[512:], func() bool { return false })
+	testMapReader(t, "mapDatabase test 3", &testParams, reader, nil, maps2)
 }

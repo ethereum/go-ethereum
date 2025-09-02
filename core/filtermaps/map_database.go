@@ -336,14 +336,13 @@ func (m *mapDatabase) getFilterMap(mapIndex uint32) (*finishedMap, error) {
 }
 
 type writePatterItem struct {
-	mapIndex, dbLayer uint32
-	keepRange         common.Range[uint32] // keep existing rows of layer group
-	hasDeleteRange    bool                 // there are dirty entries in the layer group that need to be deleted or overwritten
+	mapIndex, dbLayer                       uint32
+	writeRange, deleteRange, keepEmptyRange common.Range[uint32]
 }
 
-func (m *mapDatabase) writeMaps(writeRange, keepRange, deleteRange common.Range[uint32], maps map[uint32]*finishedMap, stopCallback func() bool) (bool, error) {
+func (m *mapDatabase) writeMaps(writeRange, deleteRange, keepEmptyRange common.Range[uint32], maps []*finishedMap, stopCallback func() bool) (bool, error) {
 	//fmt.Println("writeMaps", writeRange, keepRange, deleteRange)
-	writePattern := m.makeWritePattern(writeRange, keepRange, deleteRange)
+	writePattern := m.makeWritePattern(writeRange, deleteRange, keepEmptyRange)
 	batch := m.db.NewBatch()
 	rowsPerBatch := uint32(max(maxWritesPerBatch/len(writePattern), 1))
 	var (
@@ -366,7 +365,7 @@ func (m *mapDatabase) writeMaps(writeRange, keepRange, deleteRange common.Range[
 	}
 
 	for rowIndex := range m.params.mapHeight {
-		if err := m.writeRowUpdates(batch, writePattern, maps, rowIndex); err != nil {
+		if err := m.writeRowUpdates(batch, writePattern, writeRange, maps, rowIndex); err != nil {
 			return false, err
 		}
 		if checkStopOrCommit() {
@@ -374,7 +373,7 @@ func (m *mapDatabase) writeMaps(writeRange, keepRange, deleteRange common.Range[
 		}
 	}
 	for mapIndex := range writeRange.Iter() {
-		fm := maps[mapIndex]
+		fm := maps[mapIndex-writeRange.First()]
 		rawdb.WriteFilterMapLastBlock(batch, mapIndex, fm.lastBlock.number, fm.lastBlock.hash)
 		if checkStopOrCommit() {
 			return false, writeErr
@@ -394,7 +393,7 @@ func (m *mapDatabase) writeMaps(writeRange, keepRange, deleteRange common.Range[
 	return true, nil
 }
 
-func (m *mapDatabase) makeWritePattern(writeRange, keepRange, deleteRange common.Range[uint32]) (writePattern []writePatterItem) {
+func (m *mapDatabase) makeWritePattern(writeRange, deleteRange, keepEmptyRange common.Range[uint32]) (writePattern []writePatterItem) {
 	for dbLayer, groupSize := range m.params.rowGroupSize {
 		updateRange := deleteRange.Union(writeRange)
 		firstGroup, lastGroup := updateRange.First()/groupSize, updateRange.Last()/groupSize
@@ -403,8 +402,9 @@ func (m *mapDatabase) makeWritePattern(writeRange, keepRange, deleteRange common
 			writePattern = append(writePattern, writePatterItem{
 				mapIndex:       i * groupSize,
 				dbLayer:        uint32(dbLayer),
-				keepRange:      keepRange.Intersection(groupRange),
-				hasDeleteRange: !deleteRange.Intersection(groupRange).IsEmpty(),
+				writeRange:     writeRange.Intersection(groupRange),
+				deleteRange:    deleteRange.Intersection(groupRange),
+				keepEmptyRange: keepEmptyRange.Intersection(groupRange),
 			})
 		}
 	}
@@ -415,12 +415,12 @@ func (m *mapDatabase) makeWritePattern(writeRange, keepRange, deleteRange common
 	return
 }
 
-func (m *mapDatabase) writeRowUpdates(batch ethdb.Batch, writePattern []writePatterItem, maps map[uint32]*finishedMap, rowIndex uint32) error {
+func (m *mapDatabase) writeRowUpdates(batch ethdb.Batch, writePattern []writePatterItem, writeRange common.Range[uint32], maps []*finishedMap, rowIndex uint32) error {
 	for _, w := range writePattern {
 		if groupSize := m.params.rowGroupSize[w.dbLayer]; groupSize == 1 {
 			var row FilterRow
-			if fm := maps[w.mapIndex]; fm != nil {
-				row = fm.getRow(rowIndex, m.params.maxRowLength[w.dbLayer])
+			if writeRange.Includes(w.mapIndex) {
+				row = maps[w.mapIndex-writeRange.First()].getRow(rowIndex, m.params.maxRowLength[w.dbLayer])
 			}
 			var from uint32
 			if w.dbLayer > 0 {
@@ -431,21 +431,23 @@ func (m *mapDatabase) writeRowUpdates(batch ethdb.Batch, writePattern []writePat
 			} else {
 				row = nil
 			}
-			if len(row) > 0 || w.hasDeleteRange {
+			if len(row) > 0 || !w.deleteRange.IsEmpty() {
 				rawdb.WriteFilterMapSingleRow(batch, m.params.mapRowIndex(w.mapIndex, rowIndex), w.dbLayer, row, m.params.logMapWidth)
 			}
 		} else {
 			rows := make([][]uint32, groupSize)
-			writeGroup := w.hasDeleteRange
-			if !w.keepRange.IsEmpty() {
+			writeGroup := !w.deleteRange.IsEmpty()
+			if w.writeRange.First() > w.mapIndex || w.deleteRange.First() > w.writeRange.AfterLast() ||
+				w.keepEmptyRange.First() > w.deleteRange.AfterLast() || w.keepEmptyRange.AfterLast() < w.mapIndex+groupSize {
 				oldRows, err := rawdb.ReadFilterMapRowGroup(m.db, m.params.mapRowIndex(w.mapIndex, rowIndex), w.dbLayer, groupSize, m.params.logMapWidth)
 				if err != nil {
 					return err
 				}
-				for mapIndex := range w.keepRange.Iter() {
-					rows[mapIndex-w.mapIndex] = oldRows[mapIndex-w.mapIndex]
+				for i := range groupSize {
+					if mapIndex := w.mapIndex + i; !w.writeRange.Includes(mapIndex) && !w.deleteRange.Includes(mapIndex) && !w.keepEmptyRange.Includes(mapIndex) {
+						rows[i] = oldRows[i]
+					}
 				}
-
 			}
 			var from uint32
 			if w.dbLayer > 0 {
@@ -453,8 +455,8 @@ func (m *mapDatabase) writeRowUpdates(batch ethdb.Batch, writePattern []writePat
 			}
 			to := m.params.maxRowLength[w.dbLayer]
 			for i := range groupSize {
-				if fm := maps[w.mapIndex+i]; fm != nil {
-					if row := fm.getRow(rowIndex, to); uint32(len(row)) > from {
+				if writeRange.Includes(w.mapIndex + i) {
+					if row := maps[w.mapIndex+i-writeRange.First()].getRow(rowIndex, to); uint32(len(row)) > from {
 						rows[i] = row[from:]
 						writeGroup = true
 					}
