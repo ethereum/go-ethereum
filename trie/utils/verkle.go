@@ -45,6 +45,10 @@ var (
 	verkleNodeWidth                     = uint256.NewInt(256)
 	codeStorageDelta                    = uint256.NewInt(0).Sub(codeOffset, headerStorageOffset)
 	mainStorageOffsetLshVerkleNodeWidth = new(uint256.Int).Lsh(uint256.NewInt(1), 248-uint(verkleNodeWidthLog2))
+	CodeOffset                          = uint256.NewInt(128)
+	VerkleNodeWidth                     = uint256.NewInt(256)
+	HeaderStorageOffset                 = uint256.NewInt(64)
+	VerkleNodeWidthLog2                 = 8
 
 	index0Point *verkle.Point // pre-computed commitment of polynomial [2+256*64]
 
@@ -200,6 +204,22 @@ func CodeChunkKey(address []byte, chunk *uint256.Int) []byte {
 	return GetTreeKey(address, treeIndex, subIndex)
 }
 
+func GetTreeKeyCodeChunkIndices(chunk *uint256.Int) (*uint256.Int, byte) {
+	chunkOffset := new(uint256.Int).Add(CodeOffset, chunk)
+	treeIndex := new(uint256.Int).Div(chunkOffset, VerkleNodeWidth)
+	subIndexMod := new(uint256.Int).Mod(chunkOffset, VerkleNodeWidth)
+	var subIndex byte
+	if len(subIndexMod) != 0 {
+		subIndex = byte(subIndexMod[0])
+	}
+	return treeIndex, subIndex
+}
+
+func GetTreeKeyCodeChunk(address []byte, chunk *uint256.Int) []byte {
+	treeIndex, subIndex := GetTreeKeyCodeChunkIndices(chunk)
+	return GetTreeKey(address, treeIndex, subIndex)
+}
+
 func StorageIndex(storageKey []byte) (*uint256.Int, byte) {
 	// If the storage slot is in the header, we need to add the header offset.
 	var key uint256.Int
@@ -296,4 +316,98 @@ func evaluateAddressPoint(address []byte) *verkle.Point {
 	// add a constant point
 	ret.Add(ret, index0Point)
 	return ret
+}
+
+func EvaluateAddressPoint(address []byte) *verkle.Point {
+	if len(address) < 32 {
+		var aligned [32]byte
+		address = append(aligned[:32-len(address)], address...)
+	}
+	var poly [3]fr.Element
+
+	poly[0].SetZero()
+
+	// 32-byte address, interpreted as two little endian
+	// 16-byte numbers.
+	verkle.FromLEBytes(&poly[1], address[:16])
+	verkle.FromLEBytes(&poly[2], address[16:])
+
+	cfg := verkle.GetConfig()
+	ret := cfg.CommitToPoly(poly[:], 0)
+
+	// add a constant point
+	ret.Add(ret, index0Point)
+
+	return ret
+}
+
+func GetTreeKeyStorageSlotWithEvaluatedAddress(evaluated *verkle.Point, storageKey []byte) []byte {
+	treeIndex, subIndex := GetTreeKeyStorageSlotTreeIndexes(storageKey)
+	return GetTreeKeyWithEvaluatedAddess(evaluated, treeIndex, subIndex)
+}
+
+func GetTreeKeyStorageSlotTreeIndexes(storageKey []byte) (*uint256.Int, byte) {
+	var pos uint256.Int
+	pos.SetBytes(storageKey)
+
+	// If the storage slot is in the header, we need to add the header offset.
+	if pos.Cmp(codeStorageDelta) < 0 {
+		// This addition is always safe; it can't ever overflow since pos<codeStorageDelta.
+		pos.Add(HeaderStorageOffset, &pos)
+
+		// In this branch, the tree-index is zero since we're in the account header,
+		// and the sub-index is the LSB of the modified storage key.
+		return zero, byte(pos[0] & 0xFF)
+	}
+	// If the storage slot is in the main storage, we need to add the main storage offset.
+
+	// The first MAIN_STORAGE_OFFSET group will see its
+	// first 64 slots unreachable. This is either a typo in the
+	// spec or intended to conserve the 256-u256
+	// aligment. If we decide to ever access these 64
+	// slots, uncomment this.
+	// // Get the new offset since we now know that we are above 64.
+	// pos.Sub(&pos, codeStorageDelta)
+	// suffix := byte(pos[0] & 0xFF)
+	suffix := storageKey[len(storageKey)-1]
+
+	// We first divide by VerkleNodeWidth to create room to avoid an overflow next.
+	pos.Rsh(&pos, uint(VerkleNodeWidthLog2))
+
+	// We add mainStorageOffset/VerkleNodeWidth which can't overflow.
+	pos.Add(&pos, mainStorageOffsetLshVerkleNodeWidth)
+
+	// The sub-index is the LSB of the original storage key, since mainStorageOffset
+	// doesn't affect this byte, so we can avoid masks or shifts.
+	return &pos, suffix
+}
+
+func GetTreeKeyWithEvaluatedAddess(evaluated *verkle.Point, treeIndex *uint256.Int, subIndex byte) []byte {
+	var poly [5]fr.Element
+
+	poly[0].SetZero()
+	poly[1].SetZero()
+	poly[2].SetZero()
+
+	trieIndexBytes := treeIndex.Bytes32()
+	verkle.FromBytes(&poly[3], trieIndexBytes[16:])
+	verkle.FromBytes(&poly[4], trieIndexBytes[:16])
+
+	cfg := verkle.GetConfig()
+	ret := cfg.CommitToPoly(poly[:], 0)
+
+	// add the pre-evaluated address
+	ret.Add(ret, evaluated)
+
+	return PointToHash(ret, subIndex)
+}
+
+func GetTreeKeyBasicDataEvaluatedAddress(addrp *verkle.Point) []byte {
+	return GetTreeKeyWithEvaluatedAddess(addrp, zero, BasicDataLeafKey)
+}
+
+func PointToHash(evaluated *verkle.Point, suffix byte) []byte {
+	retb := verkle.HashPointToBytes(evaluated)
+	retb[31] = suffix
+	return retb[:]
 }
