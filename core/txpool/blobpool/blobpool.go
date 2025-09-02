@@ -1413,7 +1413,7 @@ func (p *BlobPool) convertSidecar(txs []*types.Transaction) ([]*types.Transactio
 		}
 
 		sidecar := tx.BlobTxSidecar()
-		if tx.BlobTxSidecar().Version == types.BlobSidecarVersion0 {
+		if sidecar.Version == types.BlobSidecarVersion0 {
 			if err := sidecar.ToV1(); err != nil {
 				errs = append(errs, err)
 				continue
