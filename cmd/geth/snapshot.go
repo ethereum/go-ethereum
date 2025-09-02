@@ -112,7 +112,7 @@ will traverse the whole state from the given state root and will abort if any
 referenced trie node or contract code is missing. This command can be used for
 state integrity verification. The default checking target is the HEAD state.
 
-If accountHash or accountAddress is provided, traversal will start from that specific account.
+If accountHash or accountAddress is provided, traversal will start from that specific account and continue through all subsequent accounts.
 The format is auto-detected: 40/42 chars for address, 64/66 chars for hash.
 
 It's also usable without snapshot enabled.
@@ -121,7 +121,7 @@ It's also usable without snapshot enabled.
 			{
 				Name:      "traverse-rawstate",
 				Usage:     "Traverse the state with given root hash and perform detailed verification",
-				ArgsUsage: "<root>",
+				ArgsUsage: "<root> [accountHash|accountAddress]",
 				Action:    traverseRawState,
 				Flags:     slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
@@ -130,6 +130,9 @@ will traverse the whole state from the given root and will abort if any referenc
 trie node or contract code is missing. This command can be used for state integrity
 verification. The default checking target is the HEAD state. It's basically identical
 to traverse-state, but the check granularity is smaller.
+
+If accountHash or accountAddress is provided, traversal will start from that specific account and continue through all subsequent accounts.
+The format is auto-detected: 40/42 chars for address, 64/66 chars for hash.
 
 It's also usable without snapshot enabled.
 `,
@@ -293,35 +296,13 @@ func traverseState(ctx *cli.Context) error {
 		log.Error("Failed to load head block")
 		return errors.New("no head block")
 	}
-	if ctx.NArg() > 2 {
-		log.Error("Too many arguments given")
-		return errors.New("too many arguments")
-	}
-	var (
-		root     common.Hash
-		startKey []byte
-		err      error
-	)
-	if ctx.NArg() >= 1 {
-		root, err = parseRoot(ctx.Args().First())
-		if err != nil {
-			log.Error("Failed to resolve state root", "err", err)
-			return err
-		}
-	} else {
-		root = headBlock.Root()
-	}
 
-	if ctx.NArg() == 2 {
-		arg := ctx.Args().Get(1)
-		switch len(arg) {
-		case 40, 42:
-			startKey = crypto.Keccak256Hash(common.HexToAddress(arg).Bytes()).Bytes()
-		case 64, 66:
-			startKey = common.HexToHash(arg).Bytes()
-		default:
-			return errors.New("invalid account format: must be 40/42 chars for address or 64/66 chars for hash")
-		}
+	root, startKey, err := parseTraverseArgs(ctx)
+	if err != nil {
+		return err
+	}
+	if root == (common.Hash{}) {
+		root = headBlock.Root()
 	}
 
 	log.Info("Start traversing the state", "root", root.Hex(), "startKey", common.Bytes2Hex(startKey))
@@ -397,6 +378,34 @@ func traverseState(ctx *cli.Context) error {
 	return nil
 }
 
+func parseTraverseArgs(ctx *cli.Context) (root common.Hash, startKey []byte, err error) {
+	if ctx.NArg() > 2 {
+		err = errors.New("too many arguments")
+		return
+	}
+
+	if ctx.NArg() >= 1 {
+		root, err = parseRoot(ctx.Args().First())
+		if err != nil {
+			return
+		}
+	}
+
+	if ctx.NArg() == 2 {
+		arg := ctx.Args().Get(1)
+		switch len(arg) {
+		case 40, 42:
+			startKey = crypto.Keccak256Hash(common.HexToAddress(arg).Bytes()).Bytes()
+		case 64, 66:
+			startKey = common.HexToHash(arg).Bytes()
+		default:
+			err = errors.New("invalid account format: must be 40/42 chars for address or 64/66 chars for hash")
+			return
+		}
+	}
+	return root, startKey, nil
+}
+
 // traverseRawState is a helper function used for pruning verification.
 // Basically it just iterates the trie, ensure all nodes and associated
 // contract codes are present. It's basically identical to traverseState
@@ -416,25 +425,14 @@ func traverseRawState(ctx *cli.Context) error {
 		log.Error("Failed to load head block")
 		return errors.New("no head block")
 	}
-	if ctx.NArg() > 1 {
-		log.Error("Too many arguments given")
-		return errors.New("too many arguments")
+
+	root, startKey, err := parseTraverseArgs(ctx)
+	if err != nil {
+		log.Error("Failed to parse arguments", "err", err)
+		return err
 	}
-	var (
-		root common.Hash
-		err  error
-	)
-	if ctx.NArg() == 1 {
-		root, err = parseRoot(ctx.Args().First())
-		if err != nil {
-			log.Error("Failed to resolve state root", "err", err)
-			return err
-		}
-		log.Info("Start traversing the state", "root", root)
-	} else {
-		root = headBlock.Root()
-		log.Info("Start traversing the state", "root", root, "number", headBlock.NumberU64())
-	}
+
+	log.Info("Start traversing the state", "root", root.Hex(), "startKey", common.Bytes2Hex(startKey))
 	t, err := trie.NewStateTrie(trie.StateTrieID(root), triedb)
 	if err != nil {
 		log.Error("Failed to open trie", "root", root, "err", err)
@@ -450,7 +448,7 @@ func traverseRawState(ctx *cli.Context) error {
 		hasher     = crypto.NewKeccakState()
 		got        = make([]byte, 32)
 	)
-	accIter, err := t.NodeIterator(nil)
+	accIter, err := t.NodeIterator(startKey)
 	if err != nil {
 		log.Error("Failed to open iterator", "root", root, "err", err)
 		return err
