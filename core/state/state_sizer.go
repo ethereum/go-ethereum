@@ -26,12 +26,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/triedb"
 	"golang.org/x/sync/errgroup"
 )
@@ -40,25 +38,10 @@ const (
 	statEvictThreshold = 128 // the depth of statistic to be preserved
 )
 
-// Metrics for uploading the state statistics.
-var (
-	blockInfoGauge            = metrics.NewRegisteredGaugeInfo("state/size/block", nil)
-	accountsGauge             = metrics.NewRegisteredGauge("state/size/account/count", nil)
-	accountBytesGauge         = metrics.NewRegisteredGauge("state/size/account/bytes", nil)
-	storagesGauge             = metrics.NewRegisteredGauge("state/size/storage/count", nil)
-	storageBytesGauge         = metrics.NewRegisteredGauge("state/size/storage/bytes", nil)
-	accountTrienodesGauge     = metrics.NewRegisteredGauge("state/size/trienode/account/count", nil)
-	accountTrienodeBytesGauge = metrics.NewRegisteredGauge("state/size/trienode/account/bytes", nil)
-	storageTrienodesGauge     = metrics.NewRegisteredGauge("state/size/trienode/storage/count", nil)
-	storageTrienodeBytesGauge = metrics.NewRegisteredGauge("state/size/trienode/storage/bytes", nil)
-	contractCodesGauge        = metrics.NewRegisteredGauge("state/size/contractcode/count", nil)
-	contractCodeBytesGauge    = metrics.NewRegisteredGauge("state/size/contractcode/bytes", nil)
-)
-
 // Database key scheme for states.
 var (
 	accountKeySize            = int64(len(rawdb.SnapshotAccountPrefix) + common.HashLength)
-	storageKeySize            = int64(len(rawdb.SnapshotStoragePrefix) + common.HashLength + common.HashLength)
+	storageKeySize            = int64(len(rawdb.SnapshotStoragePrefix) + common.HashLength*2)
 	accountTrienodePrefixSize = int64(len(rawdb.TrieNodeAccountPrefix))
 	storageTrienodePrefixSize = int64(len(rawdb.TrieNodeStoragePrefix) + common.HashLength)
 	codeKeySize               = int64(len(rawdb.CodePrefix) + common.HashLength)
@@ -246,6 +229,9 @@ type SizeTracker struct {
 	abort    chan struct{}
 	aborted  chan struct{}
 	updateCh chan *stateUpdate
+
+	mu          sync.RWMutex
+	latestStats *SizeStats
 }
 
 // NewSizeTracker creates a new state size tracker and starts it automatically
@@ -313,7 +299,12 @@ func (t *SizeTracker) run() {
 			}
 			stat := base.add(diff)
 			stats[u.root] = stat
-			t.upload(stat)
+			log.Info("Update state size", "number", stat.BlockNumber, "root", stat.StateRoot, "stat", stat)
+
+			// Update latest stats
+			t.mu.Lock()
+			t.latestStats = &stat
+			t.mu.Unlock()
 
 			heap.Push(&h, stats[u.root])
 			for u.blockNumber-h[0].BlockNumber > statEvictThreshold {
@@ -415,6 +406,13 @@ wait:
 			if err := apply(result.root, result.stat); err != nil {
 				return nil, err
 			}
+
+			// Set initial latest stats
+			stats[result.root] = result.stat
+			t.mu.Lock()
+			t.latestStats = &result.stat
+			t.mu.Unlock()
+
 			log.Info("Measured persistent state size", "root", result.root, "number", result.blockNumber, "stat", result.stat, "elapsed", common.PrettyDuration(result.elapsed))
 			return stats, nil
 
@@ -600,20 +598,9 @@ func (t *SizeTracker) iterateTableParallel(closed chan struct{}, prefix []byte, 
 	return totalCount, totalBytes, nil
 }
 
-func (t *SizeTracker) upload(stats SizeStats) {
-	log.Debug("Uploading state size", "number", stats.BlockNumber, "root", stats.StateRoot, "stat", stats)
-	blockInfoGauge.Update(metrics.GaugeInfoValue{
-		"number": hexutil.Uint64(stats.BlockNumber).String(),
-		"hash":   stats.StateRoot.Hex(),
-	})
-	accountsGauge.Update(stats.Accounts)
-	accountBytesGauge.Update(stats.AccountBytes)
-	storagesGauge.Update(stats.Storages)
-	storageBytesGauge.Update(stats.StorageBytes)
-	accountTrienodesGauge.Update(stats.AccountTrienodes)
-	accountTrienodeBytesGauge.Update(stats.AccountTrienodeBytes)
-	storageTrienodesGauge.Update(stats.StorageTrienodes)
-	storageTrienodeBytesGauge.Update(stats.StorageTrienodeBytes)
-	contractCodesGauge.Update(stats.ContractCodes)
-	contractCodeBytesGauge.Update(stats.ContractCodeBytes)
+// GetLatestStats returns the latest state size statistics, or nil if not available
+func (t *SizeTracker) GetLatestStats() *SizeStats {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.latestStats
 }

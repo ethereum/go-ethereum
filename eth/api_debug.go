@@ -443,3 +443,19 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 	}
 	return api.eth.blockchain.GetTrieFlushInterval().String(), nil
 }
+
+// StateSize returns the current state size statistics from the state size tracker.
+// Returns an error if the state size tracker is not initialized or if stats are not ready.
+func (api *DebugAPI) StateSize() (*state.SizeStats, error) {
+	sizer := api.eth.blockchain.StateSizer()
+	if sizer == nil {
+		return nil, errors.New("state size tracker is not enabled")
+	}
+
+	stats := sizer.GetLatestStats()
+	if stats == nil {
+		return nil, errors.New("state size statistics are not ready yet")
+	}
+
+	return stats, nil
+}

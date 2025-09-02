@@ -628,6 +628,12 @@ var (
 		TakesFile: true,
 		Category:  flags.MiscCategory,
 	}
+	StateSizeTrackingFlag = &cli.BoolFlag{
+		Name:     "state-size-tracking",
+		Usage:    "Enable state size tracking",
+		Value:    ethconfig.Defaults.EnableStateSizeTracking,
+		Category: flags.MiscCategory,
+	}
 
 	// RPC settings
 	IPCDisabledFlag = &cli.BoolFlag{
@@ -964,13 +970,6 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Name:     "metrics.influxdb.organization",
 		Usage:    "InfluxDB organization name (v2 only)",
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
-		Category: flags.MetricsCategory,
-	}
-
-	MetricsStateSizeFlag = &cli.BoolFlag{
-		Name:     "metrics.statesize",
-		Usage:    "Enable state size tracking for metrics collection",
-		Value:    ethconfig.Defaults.EnableStateSizeTracking,
 		Category: flags.MetricsCategory,
 	}
 )
@@ -1734,7 +1733,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 	}
 
-	if ctx.Bool(MetricsEnabledFlag.Name) && ctx.Bool(MetricsStateSizeFlag.Name) {
+	if ctx.Bool(StateSizeTrackingFlag.Name) {
 		log.Info("Enabling state size metrics")
 		cfg.EnableStateSizeTracking = true
 	}
@@ -2221,8 +2220,8 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		// - DATADIR/triedb/verkle.journal
 		TrieJournalDirectory: stack.ResolvePath("triedb"),
 
-		// Enable state size tracking if metrics and state size metrics are both enabled
-		EnableStateSizeTracking: ctx.Bool(MetricsEnabledFlag.Name) && ctx.Bool(MetricsStateSizeFlag.Name),
+		// Enable state size tracking if enabled
+		EnableStateSizeTracking: ctx.Bool(StateSizeTrackingFlag.Name),
 	}
 	if options.ArchiveMode && !options.Preimages {
 		options.Preimages = true

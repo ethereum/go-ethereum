@@ -200,7 +200,7 @@ var (
 		utils.MetricsInfluxDBTokenFlag,
 		utils.MetricsInfluxDBBucketFlag,
 		utils.MetricsInfluxDBOrganizationFlag,
-		utils.MetricsStateSizeFlag,
+		utils.StateSizeTrackingFlag,
 	}
 )
 
