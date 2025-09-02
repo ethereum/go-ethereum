@@ -497,6 +497,9 @@ func calculateIterationCount(expLen uint64, expHead uint256.Int, multiplier uint
 func byzantiumGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
 	maxLen := max(baseLen, modLen)
 	multComplexity := byzantiumMultComplexity(maxLen)
+	if multComplexity == math.MaxUint64 {
+		return math.MaxUint64
+	}
 	iterationCount := calculateIterationCount(expLen, expHead, byzantiumMultiplier)
 
 	// Calculate gas: (multComplexity * iterationCount) / byzantiumDivisor
@@ -512,6 +515,9 @@ func byzantiumGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint6
 func berlinGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
 	maxLen := max(baseLen, modLen)
 	multComplexity := berlinMultComplexity(maxLen)
+	if multComplexity == math.MaxUint64 {
+		return math.MaxUint64
+	}
 	iterationCount := calculateIterationCount(expLen, expHead, berlinMultiplier)
 
 	// Calculate gas: (multComplexity * iterationCount) / berlinDivisor
@@ -528,11 +534,13 @@ func berlinGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
 func osakaGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
 	maxLen := max(baseLen, modLen)
 	multComplexity := osakaMultComplexity(maxLen)
+	if multComplexity == math.MaxUint64 {
+		return math.MaxUint64
+	}
 	iterationCount := calculateIterationCount(expLen, expHead, osakaMultiplier)
 
 	// Calculate gas: (multComplexity * iterationCount) / osakaDivisor
 	carry, gas := bits.Mul64(iterationCount, multComplexity)
-	gas /= osakaDivisor
 	if carry != 0 {
 		return math.MaxUint64
 	}
@@ -608,13 +616,13 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 	} else {
 		input = input[:0]
 	}
-	// Handle a special case when both the base and mod length is zero
-	if baseLen == 0 && modLen == 0 {
-		return []byte{}, nil
-	}
 	// enforce size cap for inputs
 	if c.eip7823 && max(baseLen, expLen, modLen) > 1024 {
 		return nil, fmt.Errorf("one or more of base/exponent/modulus length exceeded 1024 bytes")
+	}
+	// Handle a special case when both the base and mod length is zero
+	if baseLen == 0 && modLen == 0 {
+		return []byte{}, nil
 	}
 	// Retrieve the operands and execute the exponentiation
 	var (
