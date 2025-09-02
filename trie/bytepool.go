@@ -79,7 +79,7 @@ func newUnsafeBytesPool(sliceCap, nitems int) *unsafeBytesPool {
 	}
 }
 
-// Get returns a slice.
+// Get returns a slice with pre-allocated space.
 func (bp *unsafeBytesPool) get() []byte {
 	if len(bp.items) > 0 {
 		last := bp.items[len(bp.items)-1]
@@ -89,8 +89,8 @@ func (bp *unsafeBytesPool) get() []byte {
 	return make([]byte, 0, bp.w)
 }
 
-// put returns a slice to the pool. This method
-// will ignore slices that are too small or too large (>3x the cap)
+// put returns a slice to the pool. This method will ignore slices that are
+// too small or too large (>3x the cap)
 func (bp *unsafeBytesPool) put(b []byte) {
 	if c := cap(b); c < bp.w || c > 3*bp.w {
 		return

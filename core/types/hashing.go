@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// hasherPool holds LegacyKeccak256 hashers for rlpHash.
+// hasherPool holds LegacyKeccak256 buffer for rlpHash.
 var hasherPool = sync.Pool{
 	New: func() interface{} { return crypto.NewKeccakState() },
 }
