@@ -103,14 +103,17 @@ information about the specified address.
 			{
 				Name:      "traverse-state",
 				Usage:     "Traverse the state with given root hash and perform quick verification",
-				ArgsUsage: "<root>",
+				ArgsUsage: "<root> [accountHash|accountAddress]",
 				Action:    traverseState,
 				Flags:     slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
-geth snapshot traverse-state <state-root>
+geth snapshot traverse-state <state-root> [accountHash|accountAddress]
 will traverse the whole state from the given state root and will abort if any
 referenced trie node or contract code is missing. This command can be used for
 state integrity verification. The default checking target is the HEAD state.
+
+If accountHash or accountAddress is provided, traversal will start from that specific account.
+The format is auto-detected: 40/42 chars for address, 64/66 chars for hash.
 
 It's also usable without snapshot enabled.
 `,
@@ -290,25 +293,38 @@ func traverseState(ctx *cli.Context) error {
 		log.Error("Failed to load head block")
 		return errors.New("no head block")
 	}
-	if ctx.NArg() > 1 {
+	if ctx.NArg() > 2 {
 		log.Error("Too many arguments given")
 		return errors.New("too many arguments")
 	}
 	var (
-		root common.Hash
-		err  error
+		root     common.Hash
+		startKey []byte
+		err      error
 	)
-	if ctx.NArg() == 1 {
+	if ctx.NArg() >= 1 {
 		root, err = parseRoot(ctx.Args().First())
 		if err != nil {
 			log.Error("Failed to resolve state root", "err", err)
 			return err
 		}
-		log.Info("Start traversing the state", "root", root)
 	} else {
 		root = headBlock.Root()
-		log.Info("Start traversing the state", "root", root, "number", headBlock.NumberU64())
 	}
+
+	if ctx.NArg() == 2 {
+		arg := ctx.Args().Get(1)
+		switch len(arg) {
+		case 40, 42:
+			startKey = crypto.Keccak256Hash(common.HexToAddress(arg).Bytes()).Bytes()
+		case 64, 66:
+			startKey = common.HexToHash(arg).Bytes()
+		default:
+			return errors.New("invalid account format: must be 40/42 chars for address or 64/66 chars for hash")
+		}
+	}
+
+	log.Info("Start traversing the state", "root", root.Hex(), "startKey", common.Bytes2Hex(startKey))
 	t, err := trie.NewStateTrie(trie.StateTrieID(root), triedb)
 	if err != nil {
 		log.Error("Failed to open trie", "root", root, "err", err)
@@ -321,7 +337,8 @@ func traverseState(ctx *cli.Context) error {
 		lastReport time.Time
 		start      = time.Now()
 	)
-	acctIt, err := t.NodeIterator(nil)
+
+	acctIt, err := t.NodeIterator(startKey)
 	if err != nil {
 		log.Error("Failed to open iterator", "root", root, "err", err)
 		return err
