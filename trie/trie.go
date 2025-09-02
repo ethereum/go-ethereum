@@ -382,12 +382,6 @@ func (t *Trie) Update(key, value []byte) error {
 	return t.update(key, value)
 }
 
-// UpdateSafe is identical to Update, except that this method will copy the
-// value slice. The caller is free to modify the value bytes after this method returns.
-func (t *Trie) UpdateSafe(key, value []byte) error {
-	return t.Update(key, common.CopyBytes(value))
-}
-
 func (t *Trie) update(key, value []byte) error {
 	t.unhashed++
 	t.uncommitted++
