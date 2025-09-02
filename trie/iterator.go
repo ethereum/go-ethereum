@@ -148,8 +148,8 @@ type nodeIterator struct {
 	pool     []*nodeIteratorState // local pool for iterator states
 
 	// Fields for subtree iteration
-	prefix []byte // Prefix for subtree iteration (nil for full trie)
-	stop   []byte // Stop boundary for subtree iteration (nil for full trie)
+	startKey []byte // Start key for subtree iteration (nil for full trie)
+	stopKey  []byte // Stop key for subtree iteration (nil for full trie)
 }
 
 // errIteratorEnd is stored in nodeIterator.err when iteration is done.
@@ -303,23 +303,23 @@ func (it *nodeIterator) Next(descend bool) bool {
 
 	// Check if we're still within the subtree boundaries
 	// Note: path is already hex-encoded by the iterator
-	if it.prefix != nil && len(path) > 0 {
-		prefixHex := keybytesToHex(it.prefix)
-		// Remove terminator from prefix hex if present
-		if hasTerm(prefixHex) {
-			prefixHex = prefixHex[:len(prefixHex)-1]
+	if it.startKey != nil && len(path) > 0 {
+		startKeyHex := keybytesToHex(it.startKey)
+		// Remove terminator from startKey hex if present
+		if hasTerm(startKeyHex) {
+			startKeyHex = startKeyHex[:len(startKeyHex)-1]
 		}
-		if !bytes.HasPrefix(path, prefixHex) {
+		if !bytes.HasPrefix(path, startKeyHex) {
 			it.err = errIteratorEnd
 			return false
 		}
 	}
-	if it.stop != nil && len(path) > 0 {
-		stopHex := keybytesToHex(it.stop)
-		if hasTerm(stopHex) {
-			stopHex = stopHex[:len(stopHex)-1]
+	if it.stopKey != nil && len(path) > 0 {
+		stopKeyHex := keybytesToHex(it.stopKey)
+		if hasTerm(stopKeyHex) {
+			stopKeyHex = stopKeyHex[:len(stopKeyHex)-1]
 		}
-		if bytes.Compare(path, stopHex) >= 0 {
+		if bytes.Compare(path, stopKeyHex) >= 0 {
 			it.err = errIteratorEnd
 			return false
 		}
@@ -867,25 +867,25 @@ func (it *unionIterator) Error() error {
 }
 
 // NewSubtreeIterator creates an iterator that only traverses nodes within a subtree
-// defined by the given prefix and stopping point. The prefix defines where iteration
-// starts, and stop defines where it ends (exclusive).
-func NewSubtreeIterator(trie *Trie, prefix []byte, stop []byte) NodeIterator {
+// defined by the given startKey and stopKey. The startKey defines where iteration
+// starts, and stopKey defines where it ends (exclusive).
+func NewSubtreeIterator(trie *Trie, startKey, stopKey []byte) NodeIterator {
 	if trie.Hash() == types.EmptyRootHash {
 		return &nodeIterator{
-			trie:   trie,
-			err:    errIteratorEnd,
-			prefix: prefix,
-			stop:   stop,
+			trie:     trie,
+			err:      errIteratorEnd,
+			startKey: startKey,
+			stopKey:  stopKey,
 		}
 	}
 	it := &nodeIterator{
-		trie:   trie,
-		prefix: prefix,
-		stop:   stop,
+		trie:     trie,
+		startKey: startKey,
+		stopKey:  stopKey,
 	}
-	// Seek to the starting position if prefix is provided
-	if prefix != nil && len(prefix) > 0 {
-		it.err = it.seek(prefix)
+	// Seek to the starting position if startKey is provided
+	if startKey != nil && len(startKey) > 0 {
+		it.err = it.seek(startKey)
 	} else {
 		state, err := it.init()
 		if err != nil {
