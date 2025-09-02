@@ -617,12 +617,12 @@ func (st *stateTransition) applyAuthorization(auth *types.SetCodeAuthorization) 
 	st.state.SetNonce(authority, auth.Nonce+1, tracing.NonceChangeAuthorization)
 	if auth.Address == (common.Address{}) {
 		// Delegation to zero address means clear.
-		st.state.SetCode(authority, nil)
+		st.state.SetCode(authority, nil, tracing.CodeChangeAuthorizationClear)
 		return nil
 	}
 
 	// Otherwise install delegation to auth.Address.
-	st.state.SetCode(authority, types.AddressToDelegation(auth.Address))
+	st.state.SetCode(authority, types.AddressToDelegation(auth.Address), tracing.CodeChangeAuthorization)
 
 	return nil
 }

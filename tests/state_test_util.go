@@ -511,7 +511,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 	sdb := state.NewDatabase(triedb, nil)
 	statedb, _ := state.New(types.EmptyRootHash, sdb)
 	for addr, a := range accounts {
-		statedb.SetCode(addr, a.Code)
+		statedb.SetCode(addr, a.Code, tracing.CodeChangeUnspecified)
 		statedb.SetNonce(addr, a.Nonce, tracing.NonceChangeUnspecified)
 		statedb.SetBalance(addr, uint256.MustFromBig(a.Balance), tracing.BalanceChangeUnspecified)
 		for k, v := range a.Storage {

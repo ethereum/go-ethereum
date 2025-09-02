@@ -2292,8 +2292,8 @@ func TestSetCodeTransactions(t *testing.T) {
 			pending: 1,
 			run: func(name string) {
 				aa := common.Address{0xaa, 0xaa}
-				statedb.SetCode(addrA, append(types.DelegationPrefix, aa.Bytes()...))
-				statedb.SetCode(aa, []byte{byte(vm.ADDRESS), byte(vm.PUSH0), byte(vm.SSTORE)})
+				statedb.SetCode(addrA, append(types.DelegationPrefix, aa.Bytes()...), tracing.CodeChangeUnspecified)
+				statedb.SetCode(aa, []byte{byte(vm.ADDRESS), byte(vm.PUSH0), byte(vm.SSTORE)}, tracing.CodeChangeUnspecified)
 
 				// Send gapped transaction, it should be rejected.
 				if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(1), keyA)); !errors.Is(err, ErrOutOfOrderTxFromDelegated) {
@@ -2317,7 +2317,7 @@ func TestSetCodeTransactions(t *testing.T) {
 				}
 
 				// Reset the delegation, avoid leaking state into the other tests
-				statedb.SetCode(addrA, nil)
+				statedb.SetCode(addrA, nil, tracing.CodeChangeUnspecified)
 			},
 		},
 		{
@@ -2583,7 +2583,7 @@ func TestSetCodeTransactionsReorg(t *testing.T) {
 	}
 	// Simulate the chain moving
 	blockchain.statedb.SetNonce(addrA, 1, tracing.NonceChangeAuthorization)
-	blockchain.statedb.SetCode(addrA, types.AddressToDelegation(auth.Address))
+	blockchain.statedb.SetCode(addrA, types.AddressToDelegation(auth.Address), tracing.CodeChangeUnspecified)
 	<-pool.requestReset(nil, nil)
 	// Set an authorization for 0x00
 	auth, _ = types.SignSetCode(keyA, types.SetCodeAuthorization{
@@ -2601,7 +2601,7 @@ func TestSetCodeTransactionsReorg(t *testing.T) {
 	}
 	// Simulate the chain moving
 	blockchain.statedb.SetNonce(addrA, 2, tracing.NonceChangeAuthorization)
-	blockchain.statedb.SetCode(addrA, nil)
+	blockchain.statedb.SetCode(addrA, nil, tracing.CodeChangeUnspecified)
 	<-pool.requestReset(nil, nil)
 	// Now send two transactions from addrA
 	if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(1000), keyA)); err != nil {
