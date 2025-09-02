@@ -446,7 +446,7 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 
 // StateSize returns the current state size statistics from the state size tracker.
 // Returns an error if the state size tracker is not initialized or if stats are not ready.
-func (api *DebugAPI) StateSize() (*state.SizeStats, error) {
+func (api *DebugAPI) StateSize() (interface{}, error) {
 	sizer := api.eth.blockchain.StateSizer()
 	if sizer == nil {
 		return nil, errors.New("state size tracker is not enabled")
@@ -457,5 +457,18 @@ func (api *DebugAPI) StateSize() (*state.SizeStats, error) {
 		return nil, errors.New("state size statistics are not ready yet")
 	}
 
-	return stats, nil
+	return map[string]interface{}{
+		"stateRoot":             stats.StateRoot,
+		"blockNumber":           hexutil.Uint64(stats.BlockNumber),
+		"accounts":              hexutil.Uint64(stats.Accounts),
+		"accountBytes":          hexutil.Uint64(stats.AccountBytes),
+		"storages":              hexutil.Uint64(stats.Storages),
+		"storageBytes":          hexutil.Uint64(stats.StorageBytes),
+		"accountTrienodes":      hexutil.Uint64(stats.AccountTrienodes),
+		"accountTrienodeBytes":  hexutil.Uint64(stats.AccountTrienodeBytes),
+		"storageTrienodes":      hexutil.Uint64(stats.StorageTrienodes),
+		"storageTrienodeBytes":  hexutil.Uint64(stats.StorageTrienodeBytes),
+		"contractCodes":         hexutil.Uint64(stats.ContractCodes),
+		"contractCodeBytes":     hexutil.Uint64(stats.ContractCodeBytes),
+	}, nil
 }
