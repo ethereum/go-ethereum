@@ -141,7 +141,7 @@ func (t *Trie) NodeIteratorWithPrefix(prefix []byte) (NodeIterator, error) {
 	if t.committed {
 		return nil, ErrCommitted
 	}
-	// Use NewSubtreeIterator with just a prefix and no stop boundary
+	// Use NewSubtreeIterator with just a startKey and no stopKey boundary
 	return NewSubtreeIterator(t, prefix, nil), nil
 }
 
