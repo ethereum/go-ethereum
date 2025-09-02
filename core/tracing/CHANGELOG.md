@@ -4,6 +4,18 @@ All notable changes to the tracing interface will be documented in this file.
 
 ## [Unreleased]
 
+### Deprecated methods
+
+- `OnCodeChange(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte)`: This hook is deprecated in favor of `OnCodeChangeV2` which includes a reason parameter ([#32525](https://github.com/ethereum/go-ethereum/pull/32525)).
+
+### New methods
+
+- `OnCodeChangeV2(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte, reason CodeChangeReason)`: This hook is called when a code change occurs. It is a successor to `OnCodeChange` with an additional reason parameter ([#32525](https://github.com/ethereum/go-ethereum/pull/32525)).
+
+### New types
+
+- `CodeChangeReason` is a new type used to provide a reason for code changes. It includes various reasons such as contract creation, genesis initialization, EIP-7702 authorization, self-destruct, and revert operations ([#32525](https://github.com/ethereum/go-ethereum/pull/32525)).
+
 ## [v1.15.4](https://github.com/ethereum/go-ethereum/releases/tag/v1.15.4)
 
 ### Modified types
@@ -175,7 +187,7 @@ The hooks `CaptureStart` and `CaptureEnd` have been removed. These hooks signale
 - `CaptureState` -> `OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error)`. `op` is of type `byte` which can be cast to `vm.OpCode` when necessary. A `*vm.ScopeContext` is not passed anymore. It is replaced by `tracing.OpContext` which offers access to the memory, stack and current contract.
 - `CaptureFault` -> `OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error)`. Similar to above.
 
-[unreleased]: https://github.com/ethereum/go-ethereum/compare/v1.15.4...master
+[unreleased]: https://github.com/ethereum/go-ethereum/compare/v1.16.3...master
 [v1.15.4]: https://github.com/ethereum/go-ethereum/releases/tag/v1.15.4
 [v1.15.0]: https://github.com/ethereum/go-ethereum/releases/tag/v1.15.0
 [v1.14.12]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.12
