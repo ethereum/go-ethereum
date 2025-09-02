@@ -458,14 +458,6 @@ func berlinMultComplexity(x uint64) uint64 {
 	return x
 }
 
-// Slow Bigint way (benchmark this)
-// func berlinMultComplexity(xInt uint64) *big.Int {
-// 	x := new(big.Int).SetUint64(xInt)
-// 	x = new(big.Int).Add(x, big.NewInt(7))       // x + 7
-// 	x = new(big.Int).Rsh(x, 3)          // (x + 7) / 8
-// 	return new(big.Int).Mul(x, x)       // ((x + 7) / 8) ^ 2
-// }
-
 // osakaMultComplexity implements the multiplication complexity formula for Osaka.
 //
 // For x <= 32: returns 16
