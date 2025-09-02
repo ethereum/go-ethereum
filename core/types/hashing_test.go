@@ -74,15 +74,25 @@ func TestEIP2718DeriveSha(t *testing.T) {
 	}
 }
 
+// goos: darwin
+// goarch: arm64
+// pkg: github.com/ethereum/go-ethereum/core/types
+// cpu: Apple M1 Pro
+// BenchmarkDeriveSha200
+// BenchmarkDeriveSha200/std_trie
+// BenchmarkDeriveSha200/std_trie-8         	    6754	    174074 ns/op	   80054 B/op	    1926 allocs/op
+// BenchmarkDeriveSha200/stack_trie
+// BenchmarkDeriveSha200/stack_trie-8       	    7296	    162675 ns/op	     745 B/op	      19 allocs/op
 func BenchmarkDeriveSha200(b *testing.B) {
 	txs, err := genTxs(200)
 	if err != nil {
 		b.Fatal(err)
 	}
 	want := types.DeriveSha(txs, trie.NewListHasher())
-	var have common.Hash
+
 	b.Run("std_trie", func(b *testing.B) {
 		b.ReportAllocs()
+		var have common.Hash
 		for b.Loop() {
 			have = types.DeriveSha(txs, trie.NewListHasher())
 		}
@@ -94,6 +104,7 @@ func BenchmarkDeriveSha200(b *testing.B) {
 	st := trie.NewStackTrie(nil)
 	b.Run("stack_trie", func(b *testing.B) {
 		b.ReportAllocs()
+		var have common.Hash
 		for b.Loop() {
 			st.Reset()
 			have = types.DeriveSha(txs, st)
