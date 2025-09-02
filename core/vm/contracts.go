@@ -598,27 +598,24 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 }
 
 func (c *bigModExp) Run(input []byte) ([]byte, error) {
-	// Extract lengths - they're 32-byte big-endian integers
-	// with the actual uint64 value in the last 8 bytes
-	var baseLen, expLen, modLen uint64
-	if len(input) >= 32 {
-		baseLen = binary.BigEndian.Uint64(input[24:32])
-	}
-	if len(input) >= 64 {
-		expLen = binary.BigEndian.Uint64(input[56:64])
-	}
-	if len(input) >= 96 {
-		modLen = binary.BigEndian.Uint64(input[88:96])
-	}
-
+	var (
+		baseLenBig       = new(big.Int).SetBytes(getData(input, 0, 32))
+		expLenBig        = new(big.Int).SetBytes(getData(input, 32, 32))
+		modLenBig        = new(big.Int).SetBytes(getData(input, 64, 32))
+		baseLen          = baseLenBig.Uint64()
+		expLen           = expLenBig.Uint64()
+		modLen           = modLenBig.Uint64()
+		inputLenOverflow = max(baseLenBig.BitLen(), expLenBig.BitLen(), modLenBig.BitLen()) > 64
+	)
 	if len(input) > 96 {
 		input = input[96:]
 	} else {
 		input = input[:0]
 	}
+
 	// enforce size cap for inputs
-	if c.eip7823 && max(baseLen, expLen, modLen) > 1024 {
-		return nil, fmt.Errorf("one or more of base/exponent/modulus length exceeded 1024 bytes")
+	if c.eip7823 && (inputLenOverflow || max(baseLen, expLen, modLen) > 1024) {
+		return nil, errors.New("one or more of base/exponent/modulus length exceeded 1024 bytes")
 	}
 	// Handle a special case when both the base and mod length is zero
 	if baseLen == 0 && modLen == 0 {
