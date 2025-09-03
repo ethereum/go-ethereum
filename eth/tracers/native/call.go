@@ -19,6 +19,7 @@ package native
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"sync/atomic"
 
@@ -152,6 +153,7 @@ func newCallTracerObject(ctx *tracers.Context, cfg json.RawMessage) (*callTracer
 
 // OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (t *callTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	fmt.Println("[JEREMYDEBUG] OnEnter: depth %d, from %s, to %s, input %s, gas %d, value %s", depth, from, to, input, gas, value)
 	t.depth = depth
 	if t.config.OnlyTopCall && depth > 0 {
 		return
@@ -174,6 +176,7 @@ func (t *callTracer) OnEnter(depth int, typ byte, from common.Address, to common
 		call.Gas = t.gasLimit
 	}
 	t.callstack = append(t.callstack, call)
+	fmt.Println("[JEREMYDEBUG] callstack length: %d", len(t.callstack))
 }
 
 // OnExit is called when EVM exits a scope, even if the scope didn't
