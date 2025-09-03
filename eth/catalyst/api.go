@@ -275,7 +275,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		}
 		log.Info("Forkchoice requested sync to new head", context...)
 		if err := api.eth.Downloader().BeaconSync(api.eth.SyncMode(), header, finalized); err != nil {
-			return engine.STATUS_SYNCING, err
+			return engine.STATUS_SYNCING, logErr(err)
 		}
 		return engine.STATUS_SYNCING, nil
 	}
@@ -284,7 +284,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	if block.Difficulty().BitLen() > 0 && block.NumberU64() > 0 {
 		ph := api.eth.BlockChain().GetHeader(block.ParentHash(), block.NumberU64()-1)
 		if ph == nil {
-			return engine.STATUS_INVALID, errors.New("parent unavailable for difficulty check")
+			return engine.STATUS_INVALID, logErr(errors.New("parent unavailable for difficulty check"))
 		}
 		if ph.Difficulty.Sign() == 0 && block.Difficulty().Sign() > 0 {
 			log.Error("Parent block is already post-ttd", "number", block.NumberU64(), "hash", update.HeadBlockHash, "diff", block.Difficulty(), "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)))
@@ -303,7 +303,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	if rawdb.ReadCanonicalHash(api.eth.ChainDb(), block.NumberU64()) != update.HeadBlockHash {
 		// Block is not canonical, set head.
 		if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
-			return engine.ForkChoiceResponse{PayloadStatus: engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: &latestValid}}, err
+			return engine.ForkChoiceResponse{PayloadStatus: engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: &latestValid}}, logErr(err)
 		}
 	} else if api.eth.BlockChain().CurrentBlock().Hash() == update.HeadBlockHash {
 		// If the specified head matches with our local head, do nothing and keep
@@ -324,10 +324,10 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		finalBlock := api.eth.BlockChain().GetBlockByHash(update.FinalizedBlockHash)
 		if finalBlock == nil {
 			log.Warn("Final block not available in database", "hash", update.FinalizedBlockHash)
-			return engine.STATUS_INVALID, engine.InvalidForkChoiceState.With(errors.New("final block not available in database"))
+			return engine.STATUS_INVALID, invalidForkChoiceStateErr("final block not available in database")
 		} else if rawdb.ReadCanonicalHash(api.eth.ChainDb(), finalBlock.NumberU64()) != update.FinalizedBlockHash {
 			log.Warn("Final block not in canonical chain", "number", finalBlock.NumberU64(), "hash", update.FinalizedBlockHash)
-			return engine.STATUS_INVALID, engine.InvalidForkChoiceState.With(errors.New("final block not in canonical chain"))
+			return engine.STATUS_INVALID, invalidForkChoiceStateErr("final block not in canonical chain")
 		}
 		// Set the finalized block
 		api.eth.BlockChain().SetFinalized(finalBlock.Header())
@@ -337,11 +337,11 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		safeBlock := api.eth.BlockChain().GetBlockByHash(update.SafeBlockHash)
 		if safeBlock == nil {
 			log.Warn("Safe block not available in database")
-			return engine.STATUS_INVALID, engine.InvalidForkChoiceState.With(errors.New("safe block not available in database"))
+			return engine.STATUS_INVALID, invalidForkChoiceStateErr("safe block not available in database")
 		}
 		if rawdb.ReadCanonicalHash(api.eth.ChainDb(), safeBlock.NumberU64()) != update.SafeBlockHash {
 			log.Warn("Safe block not in canonical chain")
-			return engine.STATUS_INVALID, engine.InvalidForkChoiceState.With(errors.New("safe block not in canonical chain"))
+			return engine.STATUS_INVALID, invalidForkChoiceStateErr("safe block not in canonical chain")
 		}
 		// Set the safe block
 		api.eth.BlockChain().SetSafe(safeBlock.Header())
@@ -368,7 +368,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		payload, err := api.eth.Miner().BuildPayload(args, payloadWitness)
 		if err != nil {
 			log.Error("Failed to build payload", "err", err)
-			return valid(nil), engine.InvalidPayloadAttributes.With(err)
+			return valid(nil), logErr(engine.InvalidPayloadAttributes.With(err))
 		}
 		api.localBlocks.put(id, payload)
 		return valid(&id), nil
@@ -381,7 +381,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config engine.TransitionConfigurationV1) (*engine.TransitionConfigurationV1, error) {
 	log.Trace("Engine API request received", "method", "ExchangeTransitionConfiguration", "ttd", config.TerminalTotalDifficulty)
 	if config.TerminalTotalDifficulty == nil {
-		return nil, errors.New("invalid terminal total difficulty")
+		return nil, logErr(errors.New("invalid terminal total difficulty"))
 	}
 	// Stash away the last update to warn the user if the beacon client goes offline
 	api.lastTransitionUpdate.Store(time.Now().Unix())
@@ -389,7 +389,7 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config engine.Transit
 	ttd := api.config().TerminalTotalDifficulty
 	if ttd == nil || ttd.Cmp(config.TerminalTotalDifficulty.ToInt()) != 0 {
 		log.Warn("Invalid TTD configured", "geth", ttd, "beacon", config.TerminalTotalDifficulty)
-		return nil, fmt.Errorf("invalid ttd: execution %v consensus %v", ttd, config.TerminalTotalDifficulty)
+		return nil, logErr(fmt.Errorf("invalid ttd: execution %v consensus %v", ttd, config.TerminalTotalDifficulty))
 	}
 	if config.TerminalBlockHash != (common.Hash{}) {
 		if hash := api.eth.BlockChain().GetCanonicalHash(uint64(config.TerminalBlockNumber)); hash == config.TerminalBlockHash {
@@ -399,7 +399,7 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config engine.Transit
 				TerminalBlockNumber:     config.TerminalBlockNumber,
 			}, nil
 		}
-		return nil, errors.New("invalid terminal block hash")
+		return nil, logErr(errors.New("invalid terminal block hash"))
 	}
 	return &engine.TransitionConfigurationV1{TerminalTotalDifficulty: (*hexutil.Big)(ttd)}, nil
 }
@@ -407,11 +407,11 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config engine.Transit
 // GetPayloadV1 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV1(payloadID engine.PayloadID) (*engine.ExecutableData, error) {
 	if !payloadID.Is(engine.PayloadV1) {
-		return nil, engine.UnsupportedFork
+		return nil, logErr(engine.UnsupportedFork)
 	}
 	data, err := api.getPayload(payloadID, false)
 	if err != nil {
-		return nil, err
+		return nil, logErr(err)
 	}
 	return data.ExecutionPayload, nil
 }
@@ -419,7 +419,7 @@ func (api *ConsensusAPI) GetPayloadV1(payloadID engine.PayloadID) (*engine.Execu
 // GetPayloadV2 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV2(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
 	if !payloadID.Is(engine.PayloadV1, engine.PayloadV2) {
-		return nil, engine.UnsupportedFork
+		return nil, logErr(engine.UnsupportedFork)
 	}
 	return api.getPayload(payloadID, false)
 }
@@ -427,7 +427,7 @@ func (api *ConsensusAPI) GetPayloadV2(payloadID engine.PayloadID) (*engine.Execu
 // GetPayloadV3 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV3(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
 	if !payloadID.Is(engine.PayloadV3) {
-		return nil, engine.UnsupportedFork
+		return nil, logErr(engine.UnsupportedFork)
 	}
 	return api.getPayload(payloadID, false)
 }
@@ -435,7 +435,7 @@ func (api *ConsensusAPI) GetPayloadV3(payloadID engine.PayloadID) (*engine.Execu
 // GetPayloadV4 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV4(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
 	if !payloadID.Is(engine.PayloadV3) {
-		return nil, engine.UnsupportedFork
+		return nil, logErr(engine.UnsupportedFork)
 	}
 	return api.getPayload(payloadID, false)
 }
@@ -443,7 +443,7 @@ func (api *ConsensusAPI) GetPayloadV4(payloadID engine.PayloadID) (*engine.Execu
 // GetPayloadV5 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV5(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
 	if !payloadID.Is(engine.PayloadV3) {
-		return nil, engine.UnsupportedFork
+		return nil, logErr(engine.UnsupportedFork)
 	}
 	return api.getPayload(payloadID, false)
 }
@@ -452,7 +452,7 @@ func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool) (*eng
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
 	data := api.localBlocks.get(payloadID, full)
 	if data == nil {
-		return nil, engine.UnknownPayload
+		return nil, logErr(engine.UnknownPayload)
 	}
 	return data, nil
 }
@@ -480,11 +480,11 @@ func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool) (*eng
 // unable to serve blob pool data.
 func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProofV1, error) {
 	if len(hashes) > 128 {
-		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
+		return nil, logErr(engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes))))
 	}
 	blobs, _, proofs, err := api.eth.BlobTxPool().GetBlobs(hashes, types.BlobSidecarVersion0)
 	if err != nil {
-		return nil, engine.InvalidParams.With(err)
+		return nil, logErr(engine.InvalidParams.With(err))
 	}
 	res := make([]*engine.BlobAndProofV1, len(hashes))
 	for i := 0; i < len(blobs); i++ {
@@ -530,7 +530,7 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 // blob pool data.
 func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProofV2, error) {
 	if len(hashes) > 128 {
-		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
+		return nil, logErr(engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes))))
 	}
 	available := api.eth.BlobTxPool().AvailableBlobs(hashes)
 	getBlobsRequestedCounter.Inc(int64(len(hashes)))
@@ -545,7 +545,7 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 
 	blobs, _, proofs, err := api.eth.BlobTxPool().GetBlobs(hashes, types.BlobSidecarVersion1)
 	if err != nil {
-		return nil, engine.InvalidParams.With(err)
+		return nil, logErr(engine.InvalidParams.With(err))
 	}
 	res := make([]*engine.BlobAndProofV2, len(hashes))
 	for i := 0; i < len(blobs); i++ {
@@ -638,7 +638,7 @@ func (api *ConsensusAPI) NewPayloadV4(params engine.ExecutableData, versionedHas
 	}
 	requests := convertRequests(executionRequests)
 	if err := validateRequests(requests); err != nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(err)
+		return engine.PayloadStatusV1{Status: engine.INVALID}, logErr(engine.InvalidParams.With(err))
 	}
 	return api.newPayload(params, versionedHashes, beaconRoot, requests, false)
 }
@@ -1005,10 +1005,10 @@ func (api *ConsensusAPI) GetPayloadBodiesByRangeV2(start, count hexutil.Uint64) 
 
 func (api *ConsensusAPI) getBodiesByRange(start, count hexutil.Uint64) ([]*engine.ExecutionPayloadBody, error) {
 	if start == 0 || count == 0 {
-		return nil, engine.InvalidParams.With(fmt.Errorf("invalid start or count, start: %v count: %v", start, count))
+		return nil, logErr(engine.InvalidParams.With(fmt.Errorf("invalid start or count, start: %v count: %v", start, count)))
 	}
 	if count > 1024 {
-		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested count too large: %v", count))
+		return nil, logErr(engine.TooLargeRequest.With(fmt.Errorf("requested count too large: %v", count)))
 	}
 	// limit count up until current
 	current := api.eth.BlockChain().CurrentBlock().Number.Uint64()
@@ -1073,20 +1073,34 @@ func validateRequests(requests [][]byte) error {
 	return nil
 }
 
+// logErr is a helper to log errors passed on the API surface on our side as well
+func logErr(err error) error {
+	if err != nil {
+		log.Trace("Engine API error", "err", err)
+	}
+	return err
+}
+
 // paramsErr is a helper function for creating an InvalidPayloadAttributes
 // Engine API error.
 func paramsErr(msg string) error {
-	return engine.InvalidParams.With(errors.New(msg))
+	return logErr(engine.InvalidParams.With(errors.New(msg)))
 }
 
 // attributesErr is a helper function for creating an InvalidPayloadAttributes
 // Engine API error.
 func attributesErr(msg string) error {
-	return engine.InvalidPayloadAttributes.With(errors.New(msg))
+	return logErr(engine.InvalidPayloadAttributes.With(errors.New(msg)))
 }
 
 // unsupportedForkErr is a helper function for creating an UnsupportedFork
 // Engine API error.
 func unsupportedForkErr(msg string) error {
-	return engine.UnsupportedFork.With(errors.New(msg))
+	return logErr(engine.UnsupportedFork.With(errors.New(msg)))
+}
+
+// invalidForkChoiceStateErr is a helper function for creating an InvalidForkChoiceState
+// Engine API error.
+func invalidForkChoiceStateErr(msg string) error {
+	return logErr(engine.InvalidForkChoiceState.With(errors.New(msg)))
 }
