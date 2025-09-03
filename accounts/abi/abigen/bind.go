@@ -39,39 +39,11 @@ var (
 
 func isKeyWord(arg string) bool {
 	switch arg {
-	case "break":
-	case "case":
-	case "chan":
-	case "const":
-	case "continue":
-	case "default":
-	case "defer":
-	case "else":
-	case "fallthrough":
-	case "for":
-	case "func":
-	case "go":
-	case "goto":
-	case "if":
-	case "import":
-	case "interface":
-	case "iota":
-	case "map":
-	case "make":
-	case "new":
-	case "package":
-	case "range":
-	case "return":
-	case "select":
-	case "struct":
-	case "switch":
-	case "type":
-	case "var":
+	case "break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough", "for", "func", "go", "goto", "if", "import", "interface", "iota", "map", "make", "new", "package", "range", "return", "select", "struct", "switch", "type", "var":
+		return true
 	default:
 		return false
 	}
-
-	return true
 }
 
 // Bind generates a Go wrapper around a contract ABI. This wrapper isn't meant
