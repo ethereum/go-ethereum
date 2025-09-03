@@ -104,8 +104,21 @@ func (b *BlockGen) SetParentBeaconRoot(root common.Hash) {
 
 // SetParentProposerPubkey sets the parent proposer pubkey field of the generated
 // block.
-func (b *BlockGen) SetParentProposerPubkey(pubkey common.Pubkey) {
+func (b *BlockGen) SetParentProposerPubkey(pubkey common.Pubkey) error {
 	b.header.ParentProposerPubkey = &pubkey
+	tx, err := types.NewPoLTx(
+		b.cm.config.ChainID,
+		b.cm.config.Berachain.Prague1.PoLDistributorAddress,
+		b.header.Number,
+		params.PoLTxGasLimit,
+		b.header.BaseFee,
+		b.header.ParentProposerPubkey,
+	)
+	if err != nil {
+		return err
+	}
+	b.AddTx(tx)
+	return nil
 }
 
 // addTx adds a transaction to the generated block. If no coinbase has
