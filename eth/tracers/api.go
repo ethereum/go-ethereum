@@ -1033,6 +1033,8 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 		}
 	}
 	fmt.Printf("[JEREMYDEBUG] In traceTx, timeout: %d\n", timeout)
+	deadline, _ := ctx.Deadline()
+	fmt.Printf("[JEREMYDEBUG] In traceTx, ctx deadline: %v, current time: %v\n", deadline, time.Now())
 	deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
 	go func() {
 		<-deadlineCtx.Done()
