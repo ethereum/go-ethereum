@@ -458,6 +458,26 @@ func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool) (*eng
 }
 
 // GetBlobsV1 returns a blob from the transaction pool.
+//
+// Specification:
+//
+// Given an array of blob versioned hashes client software MUST respond with an
+// array of BlobAndProofV1 objects with matching versioned hashes, respecting the
+// order of versioned hashes in the input array.
+//
+// Client software MUST place responses in the order given in the request, using
+// null for any missing blobs. For instance:
+//
+// if the request is [A_versioned_hash, B_versioned_hash, C_versioned_hash] and
+// client software has data for blobs A and C, but doesn't have data for B, the
+// response MUST be [A, null, C].
+//
+// Client software MUST support request sizes of at least 128 blob versioned hashes.
+// The client MUST return -38004: Too large request error if the number of requested
+// blobs is too large.
+//
+// Client software MAY return an array of all null entries if syncing or otherwise
+// unable to serve blob pool data.
 func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProofV1, error) {
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
@@ -481,6 +501,33 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 }
 
 // GetBlobsV2 returns a blob from the transaction pool.
+//
+// Specification:
+// Refer to the specification for engine_getBlobsV1 with changes of the following:
+//
+// Given an array of blob versioned hashes client software MUST respond with an
+// array of BlobAndProofV2 objects with matching versioned hashes, respecting
+// the order of versioned hashes in the input array.
+//
+// Client software MUST return null in case of any missing or older version blobs.
+// For instance,
+//
+//   - if the request is [A_versioned_hash, B_versioned_hash, C_versioned_hash] and
+//     client software has data for blobs A and C, but doesn't have data for B, the
+//     response MUST be null.
+//
+//   - if the request is [A_versioned_hash_for_blob_with_blob_proof], the response
+//     MUST be null as well.
+//
+//     Note, geth internally make the conversion from old version to new one, so the
+//     data will be returned normally.
+//
+// Client software MUST support request sizes of at least 128 blob versioned
+// hashes. The client MUST return -38004: Too large request error if the number
+// of requested blobs is too large.
+//
+// Client software MUST return null if syncing or otherwise unable to serve
+// blob pool data.
 func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProofV2, error) {
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
@@ -502,9 +549,11 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 	}
 	res := make([]*engine.BlobAndProofV2, len(hashes))
 	for i := 0; i < len(blobs); i++ {
-		// Skip the non-existing blob
+		// the blob is missing, return null as response. It should
+		// be caught by `AvailableBlobs` though, perhaps data race
+		// occurs between two calls.
 		if blobs[i] == nil {
-			continue
+			return nil, nil
 		}
 		var cellProofs []hexutil.Bytes
 		for _, proof := range proofs[i] {
