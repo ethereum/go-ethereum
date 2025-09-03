@@ -874,12 +874,6 @@ func containsTx(block *types.Block, hash common.Hash) bool {
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
 func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *TraceConfig) (value interface{}, returnErr error) {
-	defer func() {
-		if r := recover(); r != nil {
-			value = nil
-			returnErr = fmt.Errorf("panic occurred: %v, could not trace tx: %s", r, hash.Hex())
-		}
-	}()
 	tx, blockHash, blockNumber, index, err := api.backend.GetTransaction(ctx, hash)
 	if err != nil {
 		return nil, err
@@ -1011,12 +1005,6 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 		timeout = defaultTraceTimeout
 		usedGas uint64
 	)
-	defer func() {
-		if r := recover(); r != nil {
-			value = nil
-			returnErr = fmt.Errorf("panic occurred: %v, could not trace tx: %s", r, tx.Hash())
-		}
-	}()
 	if config == nil {
 		config = &TraceConfig{}
 	}
