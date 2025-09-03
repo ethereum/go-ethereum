@@ -1334,17 +1334,20 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 		}
 		data, err := p.store.Get(txID)
 		if err != nil {
-			return nil, nil, nil, err
+			log.Error("Tracked blob transaction missing from store", "id", txID, "err", err)
+			continue
 		}
 
 		// Decode the blob transaction
 		tx := new(types.Transaction)
 		if err := rlp.DecodeBytes(data, tx); err != nil {
-			return nil, nil, nil, err
+			log.Error("Blobs corrupted for traced transaction", "id", txID, "err", err)
+			continue
 		}
 		sidecar := tx.BlobTxSidecar()
 		if sidecar == nil {
-			return nil, nil, nil, fmt.Errorf("blob tx without sidecar %x", tx.Hash())
+			log.Error("Blob tx without sidecar", "id", txID)
+			continue
 		}
 		// Traverse the blobs in the transaction
 		for i, hash := range tx.BlobHashes() {
