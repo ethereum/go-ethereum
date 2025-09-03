@@ -604,7 +604,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, opts ...Insp
 		{"Light client", "Bloom trie nodes", bloomTrieNodes.Size(), bloomTrieNodes.Count()},
 	}
 	// Inspect all registered append-only file store then.
-	ancients, err := inspectFreezers(db)
+	ancients, err := inspectFreezers(db, opts...)
 	if err != nil {
 		return err
 	}

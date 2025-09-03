@@ -28,6 +28,7 @@ type inspectDatabaseConfig struct {
 	statRecorders     []func([]byte, common.StorageSize) bool
 	isMetas           []func([]byte) bool
 	statsTransformers []func([][]string) [][]string
+	skipFreezers      bool
 }
 
 func (c inspectDatabaseConfig) recordStat(key []byte, size common.StorageSize) bool {
@@ -89,5 +90,12 @@ func WithDatabaseMetadataKeys(isMetadata func(key []byte) bool) InspectDatabaseO
 func WithDatabaseStatsTransformer(transform func(rows [][]string) [][]string) InspectDatabaseOption {
 	return newInspectOpt(func(c *inspectDatabaseConfig) {
 		c.statsTransformers = append(c.statsTransformers, transform)
+	})
+}
+
+// WithSkipFreezers returns an option that causes for freezer inspection to be skipped.
+func WithSkipFreezers() InspectDatabaseOption {
+	return newInspectOpt(func(c *inspectDatabaseConfig) {
+		c.skipFreezers = true
 	})
 }

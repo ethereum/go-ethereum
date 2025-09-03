@@ -22,6 +22,7 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/libevm/options"
 )
 
 type tableSize struct {
@@ -77,7 +78,10 @@ func inspect(name string, order map[string]bool, reader ethdb.AncientReader) (fr
 }
 
 // inspectFreezers inspects all freezers registered in the system.
-func inspectFreezers(db ethdb.Database) ([]freezerInfo, error) {
+func inspectFreezers(db ethdb.Database, opts ...InspectDatabaseOption) ([]freezerInfo, error) {
+	if options.As[inspectDatabaseConfig](opts...).skipFreezers {
+		return nil, nil
+	}
 	var infos []freezerInfo
 	for _, freezer := range freezers {
 		switch freezer {
