@@ -1298,6 +1298,13 @@ func (p *BlobPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 }
 
 // GetBlobs returns a number of blobs and proofs for the given versioned hashes.
+// Blobpool must place responses in the order given in the request, using null
+// for any missing blobs.
+//
+// For instance, if the request is [A_versioned_hash, B_versioned_hash,
+// C_versioned_hash] and blobpool has data for blobs A and C, but doesn't have
+// data for B, the response MUST be [A, null, C].
+//
 // This is a utility method for the engine API, enabling consensus clients to
 // retrieve blobs from the pools directly instead of the network.
 func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blob, []kzg4844.Commitment, [][]kzg4844.Proof, error) {
@@ -1317,12 +1324,13 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 		if _, ok := filled[vhash]; ok {
 			continue
 		}
-		// Retrieve the corresponding blob tx with the vhash
+		// Retrieve the corresponding blob tx with the vhash, skip blob resolution
+		// if it's not found locally and place the null instead.
 		p.lock.RLock()
 		txID, exists := p.lookup.storeidOfBlob(vhash)
 		p.lock.RUnlock()
 		if !exists {
-			return nil, nil, nil, fmt.Errorf("blob with vhash %x is not found", vhash)
+			continue
 		}
 		data, err := p.store.Get(txID)
 		if err != nil {

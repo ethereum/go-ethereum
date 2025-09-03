@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -41,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/billy"
@@ -1814,10 +1816,10 @@ func TestGetBlobs(t *testing.T) {
 	}
 
 	cases := []struct {
-		start   int
-		limit   int
-		version byte
-		expErr  bool
+		start      int
+		limit      int
+		fillRandom bool
+		version    byte
 	}{
 		{
 			start: 0, limit: 6,
@@ -1828,11 +1830,27 @@ func TestGetBlobs(t *testing.T) {
 			version: types.BlobSidecarVersion1,
 		},
 		{
+			start: 0, limit: 6, fillRandom: true,
+			version: types.BlobSidecarVersion0,
+		},
+		{
+			start: 0, limit: 6, fillRandom: true,
+			version: types.BlobSidecarVersion1,
+		},
+		{
 			start: 3, limit: 9,
 			version: types.BlobSidecarVersion0,
 		},
 		{
 			start: 3, limit: 9,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 3, limit: 9, fillRandom: true,
+			version: types.BlobSidecarVersion0,
+		},
+		{
+			start: 3, limit: 9, fillRandom: true,
 			version: types.BlobSidecarVersion1,
 		},
 		{
@@ -1844,6 +1862,14 @@ func TestGetBlobs(t *testing.T) {
 			version: types.BlobSidecarVersion1,
 		},
 		{
+			start: 3, limit: 15, fillRandom: true,
+			version: types.BlobSidecarVersion0,
+		},
+		{
+			start: 3, limit: 15, fillRandom: true,
+			version: types.BlobSidecarVersion1,
+		},
+		{
 			start: 0, limit: 18,
 			version: types.BlobSidecarVersion0,
 		},
@@ -1852,58 +1878,79 @@ func TestGetBlobs(t *testing.T) {
 			version: types.BlobSidecarVersion1,
 		},
 		{
-			start: 18, limit: 20,
+			start: 0, limit: 18, fillRandom: true,
 			version: types.BlobSidecarVersion0,
-			expErr:  true,
+		},
+		{
+			start: 0, limit: 18, fillRandom: true,
+			version: types.BlobSidecarVersion1,
 		},
 	}
 	for i, c := range cases {
-		var vhashes []common.Hash
+		var (
+			vhashes []common.Hash
+			filled  = make(map[int]struct{})
+		)
+		if c.fillRandom {
+			filled[len(vhashes)] = struct{}{}
+			vhashes = append(vhashes, testrand.Hash())
+		}
 		for j := c.start; j < c.limit; j++ {
 			vhashes = append(vhashes, testBlobVHashes[j])
+			if c.fillRandom && rand.Intn(2) == 0 {
+				filled[len(vhashes)] = struct{}{}
+				vhashes = append(vhashes, testrand.Hash())
+			}
+		}
+		if c.fillRandom {
+			filled[len(vhashes)] = struct{}{}
+			vhashes = append(vhashes, testrand.Hash())
 		}
 		blobs, _, proofs, err := pool.GetBlobs(vhashes, c.version)
+		if err != nil {
+			t.Errorf("Unexpected error for case %d, %v", i, err)
+		}
 
-		if c.expErr {
-			if err == nil {
-				t.Errorf("Unexpected return, want error for case %d", i)
-			}
-		} else {
-			if err != nil {
-				t.Errorf("Unexpected error for case %d, %v", i, err)
-			}
-			// Cross validate what we received vs what we wanted
-			length := c.limit - c.start
-			if len(blobs) != length || len(proofs) != length {
-				t.Errorf("retrieved blobs/proofs size mismatch: have %d/%d, want %d", len(blobs), len(proofs), length)
+		// Cross validate what we received vs what we wanted
+		length := c.limit - c.start
+		wantLen := length + len(filled)
+		if len(blobs) != wantLen || len(proofs) != wantLen {
+			t.Errorf("retrieved blobs/proofs size mismatch: have %d/%d, want %d", len(blobs), len(proofs), wantLen)
+			continue
+		}
+
+		var unknown int
+		for j := 0; j < len(blobs); j++ {
+			if _, exist := filled[j]; exist {
+				if blobs[j] != nil || proofs[j] != nil {
+					t.Errorf("Unexpected blob and proof, item %d", j)
+				}
+				unknown++
 				continue
 			}
-			for j := 0; j < len(blobs); j++ {
-				// If an item is missing, but shouldn't, error
-				if blobs[j] == nil || proofs[j] == nil {
-					t.Errorf("tracked blob retrieval failed: item %d, hash %x", j, vhashes[j])
-					continue
+			// If an item is missing, but shouldn't, error
+			if blobs[j] == nil || proofs[j] == nil {
+				t.Errorf("tracked blob retrieval failed: item %d, hash %x", j, vhashes[j])
+				continue
+			}
+			// Item retrieved, make sure the blob matches the expectation
+			if *blobs[j] != *testBlobs[c.start+j-unknown] {
+				t.Errorf("retrieved blob mismatch: item %d, hash %x", j, vhashes[j])
+				continue
+			}
+			// Item retrieved, make sure the proof matches the expectation
+			if c.version == types.BlobSidecarVersion0 {
+				if proofs[j][0] != testBlobProofs[c.start+j-unknown] {
+					t.Errorf("retrieved proof mismatch: item %d, hash %x", j, vhashes[j])
 				}
-				// Item retrieved, make sure the blob matches the expectation
-				if *blobs[j] != *testBlobs[c.start+j] {
-					t.Errorf("retrieved blob mismatch: item %d, hash %x", j, vhashes[j])
-					continue
-				}
-				// Item retrieved, make sure the proof matches the expectation
-				if c.version == types.BlobSidecarVersion0 {
-					if proofs[j][0] != testBlobProofs[c.start+j] {
-						t.Errorf("retrieved proof mismatch: item %d, hash %x", j, vhashes[j])
-					}
-				} else {
-					want, _ := kzg4844.ComputeCellProofs(blobs[j])
-					if !reflect.DeepEqual(want, proofs[j]) {
-						t.Errorf("retrieved proof mismatch: item %d, hash %x", j, vhashes[j])
-					}
+			} else {
+				want, _ := kzg4844.ComputeCellProofs(blobs[j])
+				if !reflect.DeepEqual(want, proofs[j]) {
+					t.Errorf("retrieved proof mismatch: item %d, hash %x", j, vhashes[j])
 				}
 			}
 		}
 	}
-
 	pool.Close()
 }
 
