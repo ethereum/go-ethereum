@@ -271,6 +271,7 @@ func (t *callTracer) GetResult() (json.RawMessage, error) {
 // Stop terminates execution of the tracer at the first opportune moment.
 func (t *callTracer) Stop(err error) {
 	t.reason = err
+	fmt.Printf("[JEREMYDEBUG] In callTracer, Stop: err %v\n", err)
 	t.interrupt.Store(true)
 }
 
