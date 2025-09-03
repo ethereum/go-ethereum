@@ -468,6 +468,10 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 	}
 	res := make([]*engine.BlobAndProofV1, len(hashes))
 	for i := 0; i < len(blobs); i++ {
+		// Skip the non-existing blob
+		if blobs[i] == nil {
+			continue
+		}
 		res[i] = &engine.BlobAndProofV1{
 			Blob:  blobs[i][:],
 			Proof: proofs[i][0][:],
@@ -498,6 +502,10 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 	}
 	res := make([]*engine.BlobAndProofV2, len(hashes))
 	for i := 0; i < len(blobs); i++ {
+		// Skip the non-existing blob
+		if blobs[i] == nil {
+			continue
+		}
 		var cellProofs []hexutil.Bytes
 		for _, proof := range proofs[i] {
 			cellProofs = append(cellProofs, proof[:])
