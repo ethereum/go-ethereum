@@ -190,3 +190,74 @@ func ckzgVerifyCellProofBatch(blobs []Blob, commitments []Commitment, cellProofs
 	}
 	return nil
 }
+
+func ckzgVerifyCells(cells []Cell, commitments []Commitment, cellProofs []Proof, cellIndices []uint64) error {
+	ckzgIniter.Do(ckzgInit)
+	var (
+		proofs   = make([]ckzg4844.Bytes48, len(cellProofs))
+		commits  = make([]ckzg4844.Bytes48, 0, len(cellProofs))
+		kzgcells = make([]ckzg4844.Cell, 0, len(cellProofs))
+	)
+	// Copy over the cell proofs and cells
+	for i := range cellProofs {
+		proofs[i] = (ckzg4844.Bytes48)(cellProofs[i])
+		kzgcells = append(kzgcells, (ckzg4844.Cell)(cells[i]))
+	}
+	if len(cellProofs)%len(commitments) != 0 {
+		return errors.New("wrong cell proofs and commitments length")
+	}
+	cellCounts := len(cellProofs) / len(commitments)
+	// Blow up the commitments to be the same length as the proofs
+	for _, commitment := range commitments {
+		for j := 0; j < cellCounts; j++ {
+			commits = append(commits, (ckzg4844.Bytes48)(commitment))
+		}
+	}
+	valid, err := ckzg4844.VerifyCellKZGProofBatch(commits, cellIndices, kzgcells, proofs)
+	if err != nil {
+		return err
+	}
+	if !valid {
+		return errors.New("invalid proof")
+	}
+	return nil
+}
+
+func ckzgComputeCells(blobs []Blob) ([]Cell, error) {
+	ckzgIniter.Do(ckzgInit)
+	var cells = make([]Cell, 0, ckzg4844.CellsPerExtBlob*len(blobs))
+
+	for i := range blobs {
+		cellsI, err := ckzg4844.ComputeCells((*ckzg4844.Blob)(&blobs[i]))
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range cellsI {
+			cells = append(cells, Cell(c))
+		}
+	}
+	return cells, nil
+}
+
+func ckzgRecoverBlob(cells []Cell, cellIndices []uint64) (Blob, error) {
+	ckzgIniter.Do(ckzgInit)
+
+	var kzgcells = make([]ckzg4844.Cell, 0, len(cells))
+
+	for _, cell := range cells {
+		kzgcells = append(kzgcells, ckzg4844.Cell(cell))
+	}
+
+	extCells, _, err := ckzg4844.RecoverCellsAndKZGProofs(cellIndices, kzgcells)
+	if err != nil {
+		return Blob{}, err
+	}
+
+	var result Blob
+	offset := 0
+	for _, cell := range extCells[:64] {
+		copy(result[offset:], cell[:])
+		offset += len(cell)
+	}
+	return result, nil
+}
