@@ -299,7 +299,7 @@ func (t *SizeTracker) run() {
 			}
 			stat := base.add(diff)
 			stats[u.root] = stat
-			log.Info("Update state size", "number", stat.BlockNumber, "root", stat.StateRoot, "stat", stat)
+			log.Debug("Update state size", "number", stat.BlockNumber, "root", stat.StateRoot, "stat", stat)
 
 			// Update latest stats
 			t.mu.Lock()
