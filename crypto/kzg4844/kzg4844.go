@@ -34,9 +34,9 @@ var (
 	blobT       = reflect.TypeFor[Blob]()
 	commitmentT = reflect.TypeFor[Commitment]()
 	proofT      = reflect.TypeFor[Proof]()
-
-	CellProofsPerBlob = 128
 )
+
+const CellProofsPerBlob = 128
 
 // Blob represents a 4844 data blob.
 type Blob [131072]byte
