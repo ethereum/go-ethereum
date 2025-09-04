@@ -1346,7 +1346,7 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 		}
 		sidecar := tx.BlobTxSidecar()
 		if sidecar == nil {
-			log.Error("Blob tx without sidecar", "id", txID)
+			log.Error("Blob tx without sidecar", "hash", tx.Hash(), "id", txID)
 			continue
 		}
 		// Traverse the blobs in the transaction
