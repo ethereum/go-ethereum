@@ -1323,7 +1323,7 @@ func TestBlobCountLimit(t *testing.T) {
 
 	// Check that first succeeds second fails.
 	if errs[0] != nil {
-		t.Fatalf("expected tx with 7 blobs to succeed")
+		t.Fatalf("expected tx with 7 blobs to succeed, got: %v", errs[0])
 	}
 	if !errors.Is(errs[1], txpool.ErrTxBlobLimitExceeded) {
 		t.Fatalf("expected tx with 8 blobs to fail, got: %v", errs[1])
@@ -1752,7 +1752,7 @@ func TestAdd(t *testing.T) {
 		// Add each transaction one by one, verifying the pool internals in between
 		for j, add := range tt.adds {
 			signed, _ := types.SignNewTx(keys[add.from], types.LatestSigner(params.MainnetChainConfig), add.tx)
-			if err := pool.add(signed); !errors.Is(err, add.err) {
+			if err := pool.add(signed.WithoutBlobTxSidecar(), signed.BlobTxSidecar().ToBlobTxCellSidecar()); !errors.Is(err, add.err) {
 				t.Errorf("test %d, tx %d: adding transaction error mismatch: have %v, want %v", i, j, err, add.err)
 			}
 			if add.err == nil {
@@ -2124,7 +2124,7 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 			b.Fatal(err)
 		}
 		statedb.AddBalance(addr, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
-		pool.add(tx)
+		pool.add(tx.WithoutBlobTxSidecar(), tx.BlobTxSidecar().ToBlobTxCellSidecar())
 	}
 	statedb.Commit(0, true, false)
 	defer pool.Close()

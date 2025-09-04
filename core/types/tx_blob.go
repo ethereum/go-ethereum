@@ -176,6 +176,44 @@ func (sc *BlobTxSidecar) Copy() *BlobTxSidecar {
 	}
 }
 
+func (sc *BlobTxSidecar) ToBlobTxCellSidecar() *BlobTxCellSidecar {
+	cells, _ := kzg4844.ComputeCells(sc.Blobs)
+	return &BlobTxCellSidecar{
+		Version:     sc.Version,
+		Cells:       cells,
+		Commitments: sc.Commitments,
+		Proofs:      sc.Proofs,
+		CellIndices: CustodyBitmap{}.SetAll(),
+	}
+}
+
+type BlobTxCellSidecar struct {
+	Version     byte
+	Cells       []kzg4844.Cell
+	Commitments []kzg4844.Commitment
+	Proofs      []kzg4844.Proof
+	CellIndices CustodyBitmap
+}
+
+func (c *BlobTxCellSidecar) ToBlobTxSidecar() *BlobTxSidecar {
+	blobs, _ := kzg4844.RecoverBlobs(c.Cells, c.CellIndices.Indices())
+	return &BlobTxSidecar{
+		Version:     c.Version,
+		Blobs:       blobs,
+		Commitments: c.Commitments,
+		Proofs:      c.Proofs,
+	}
+}
+
+// ValidateBlobCommitmentHashes checks whether the given hashes correspond to the
+// commitments in the sidecar
+func (c *BlobTxCellSidecar) ValidateBlobCommitmentHashes(hashes []common.Hash) error {
+	sc := BlobTxSidecar{
+		Commitments: c.Commitments,
+	}
+	return sc.ValidateBlobCommitmentHashes(hashes)
+}
+
 // blobTxWithBlobs represents blob tx with its corresponding sidecar.
 // This is an interface because sidecars are versioned.
 type blobTxWithBlobs interface {

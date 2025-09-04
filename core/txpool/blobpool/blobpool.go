@@ -1164,7 +1164,15 @@ func (p *BlobPool) checkDelegationLimit(tx *types.Transaction) error {
 
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
-func (p *BlobPool) validateTx(tx *types.Transaction) error {
+func (p *BlobPool) validateTx(tx *types.Transaction, cellSidecars *types.BlobTxCellSidecar) error {
+
+	if err := txpool.ValidateBlobSidecar(tx, cellSidecars, p.head, &txpool.ValidationOptions{
+		Config:       p.chain.Config(),
+		MaxBlobCount: maxBlobsPerTx,
+	}); err != nil {
+		return err
+	}
+
 	if err := p.ValidateTxBasics(tx); err != nil {
 		return err
 	}
@@ -1443,7 +1451,11 @@ func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 		adds = make([]*types.Transaction, 0, len(txs))
 	)
 	for i, tx := range txs {
-		errs[i] = p.add(tx)
+		if errs[i] != nil {
+			continue
+		}
+		cellSidecar := tx.BlobTxSidecar().ToBlobTxCellSidecar()
+		errs[i] = p.add(tx.WithoutBlobTxSidecar(), cellSidecar)
 		if errs[i] == nil {
 			adds = append(adds, tx.WithoutBlobTxSidecar())
 		}
@@ -1457,7 +1469,7 @@ func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 
 // add inserts a new blob transaction into the pool if it passes validation (both
 // consensus validity and pool restrictions).
-func (p *BlobPool) add(tx *types.Transaction) (err error) {
+func (p *BlobPool) add(tx *types.Transaction, cellSidecar *types.BlobTxCellSidecar) (err error) {
 	// The blob pool blocks on adding a transaction. This is because blob txs are
 	// only even pulled from the network, so this method will act as the overload
 	// protection for fetches.
@@ -1471,7 +1483,7 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	}(time.Now())
 
 	// Ensure the transaction is valid from all perspectives
-	if err := p.validateTx(tx); err != nil {
+	if err := p.validateTx(tx, cellSidecar); err != nil {
 		log.Trace("Transaction validation failed", "hash", tx.Hash(), "err", err)
 		switch {
 		case errors.Is(err, txpool.ErrUnderpriced):
@@ -1513,6 +1525,10 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 			}
 		}()
 	}
+
+	//todo(healthykim) remove this and seperate database or introduce list
+	blobSidecar := cellSidecar.ToBlobTxSidecar()
+	tx = tx.WithBlobTxSidecar(blobSidecar)
 	// Transaction permitted into the pool from a nonce and cost perspective,
 	// insert it into the database and update the indices
 	blob, err := rlp.EncodeToBytes(tx)
