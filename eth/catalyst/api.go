@@ -558,12 +558,6 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 
 	res := make([]*engine.BlobAndProofV2, len(hashes))
 	for i := 0; i < len(blobs); i++ {
-		// the blob is missing, return null as response. It should
-		// be caught by `AvailableBlobs` though, perhaps data race
-		// occurs between two calls.
-		if blobs[i] == nil {
-			return nil, nil
-		}
 		var cellProofs []hexutil.Bytes
 		for _, proof := range proofs[i] {
 			cellProofs = append(cellProofs, proof[:])
