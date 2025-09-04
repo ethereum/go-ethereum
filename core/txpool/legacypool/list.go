@@ -331,7 +331,11 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 	if overflow {
 		return false, nil
 	}
-	l.totalcost.Add(l.totalcost, cost)
+	total, overflow := new(uint256.Int).AddOverflow(l.totalcost, cost)
+	if overflow {
+		return false, nil
+	}
+	l.totalcost = total
 
 	// Otherwise overwrite the old transaction with the current one
 	l.txs.Put(tx)
