@@ -420,11 +420,11 @@ func (m *mapStorage) getFilterMap(mapIndex uint32) (*finishedMap, error) {
 }
 
 func (m *mapStorage) extendPointerRange(deleteRange common.Range[uint32]) common.Range[uint32] {
-	epoch := deleteRange.First() >> m.params.logMapsPerEpoch
-	if deleteRange.Last()>>m.params.logMapsPerEpoch != epoch {
+	epoch := m.params.mapEpoch(deleteRange.First())
+	if m.params.mapEpoch(deleteRange.Last()) != epoch {
 		panic("deleted map range crosses epoch boundary")
 	}
-	first := min(m.knownEpochs, epoch) << m.params.logMapsPerEpoch
+	first := m.params.firstEpochMap(min(m.knownEpochs, epoch))
 	if deleteRange.First() > 0 {
 		if c, ok := m.valid.closestLte(deleteRange.First() - 1); ok {
 			first = max(first, c+1)
@@ -432,7 +432,7 @@ func (m *mapStorage) extendPointerRange(deleteRange common.Range[uint32]) common
 	}
 	afterLast := uint32(math.MaxUint32)
 	if epoch < m.knownEpochs {
-		afterLast = (epoch + 1) << m.params.logMapsPerEpoch
+		afterLast = m.params.firstEpochMap(epoch + 1)
 	}
 	if fa, ok := m.valid.closestGte(deleteRange.AfterLast()); ok {
 		afterLast = min(afterLast, fa)
@@ -535,7 +535,10 @@ func (m *mapStorage) doWriteCycle(stopCallback func() bool) (bool, error) {
 	}
 	m.lock.Unlock()
 	// write/overwrite map rows and delete dirty map data, write new pointers
-	done, err := m.mapDb.writeMaps(writeMaps, dirtyInEpoch, keepEmptyInEpoch, maps, stopCallback)
+	done, err := m.mapDb.writeMapRows(writeMaps, dirtyInEpoch, keepEmptyInEpoch, maps, stopCallback)
+	if done {
+		done, err = m.mapDb.writePointers(writeMaps, maps, stopCallback)
+	}
 	m.lock.Lock()
 	if !done {
 		return false, err

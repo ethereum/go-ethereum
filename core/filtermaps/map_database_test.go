@@ -17,7 +17,7 @@
 package filtermaps
 
 import (
-	"slices"
+	"math"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -34,26 +34,45 @@ var testParams = Params{
 	rowGroupSize:        []uint32{16, 4, 1, 1},
 }
 
+func testStop() bool { return false }
+
 func TestMapDatabase(t *testing.T) {
 	testParams.sanitize()
 	db := memorydb.New()
 	mapDb := newMapDatabase(&testParams, db, false)
-	maps := generateTestMaps(&testParams, nil, 1024)
-	cpList := generateTestCheckpoints(&testParams, maps)[:4]
-	for epoch, cp := range cpList {
-		mapDb.storeEpochCheckpoint(uint32(epoch), cp)
-	}
 	reader := mapReader{
 		getFilterMapRows:  mapDb.getFilterMapRows,
 		getFilterMap:      mapDb.getFilterMap,
 		getBlockLvPointer: mapDb.getBlockLvPointer,
 		getLastBlockOfMap: mapDb.getLastBlockOfMap,
 	}
-	mapDb.writeMaps(common.NewRange[uint32](256, 768), common.Range[uint32]{}, common.Range[uint32]{}, maps[256:], func() bool { return false })
-	testMapReader(t, "mapDatabase test 1", &testParams, reader, cpList, maps[256:])
-	mapDb.writeMaps(common.NewRange[uint32](0, 256), common.Range[uint32]{}, common.Range[uint32]{}, maps[:256], func() bool { return false })
-	testMapReader(t, "mapDatabase test 2", &testParams, reader, nil, maps)
-	maps2 := generateTestMaps(&testParams, slices.Clone(maps[:512]), 1024)
-	mapDb.writeMaps(common.NewRange[uint32](512, 1024), common.NewRange[uint32](512, 512), common.Range[uint32]{}, maps2[512:], func() bool { return false })
-	testMapReader(t, "mapDatabase test 3", &testParams, reader, nil, maps2)
+	// initialize database with checkpoints
+	maps := generateTestMaps(&testParams, nil, 0x200)
+	cpList := generateTestCheckpoints(&testParams, maps)
+	mapDb.storeCheckpointList(0, cpList)
+	// add new maps to the head
+	maps = generateTestMaps(&testParams, maps, 0x50)
+	mapDb.writeMapRows(common.NewRange[uint32](0x200, 0x50), common.Range[uint32]{}, common.NewRange[uint32](0x250, math.MaxUint32-0x250), maps[0x200:], testStop)
+	mapDb.writePointers(common.NewRange[uint32](0x200, 0x50), maps[0x200:], testStop)
+	testMapReader(t, "mapDatabase test #1", &testParams, reader, cpList, maps[0x200:])
+	// backfill previous epoch with a single write
+	mapDb.writeMapRows(common.NewRange[uint32](0x1c0, 0x40), common.Range[uint32]{}, common.Range[uint32]{}, maps[0x1c0:0x200], testStop)
+	mapDb.writePointers(common.NewRange[uint32](0x1c0, 0x40), maps[0x1c0:0x200], testStop)
+	testMapReader(t, "mapDatabase test #2", &testParams, reader, cpList[:7], maps[0x1c0:])
+	// backfill previous epoch in two steps
+	mapDb.writeMapRows(common.NewRange[uint32](0x180, 0x10), common.Range[uint32]{}, common.NewRange[uint32](0x190, 0x30), maps[0x180:0x190], testStop)
+	mapDb.writePointers(common.NewRange[uint32](0x180, 0x10), maps[0x180:0x190], testStop)
+	mapDb.writeMapRows(common.NewRange[uint32](0x190, 0x30), common.Range[uint32]{}, common.Range[uint32]{}, maps[0x190:0x1c0], testStop)
+	mapDb.writePointers(common.NewRange[uint32](0x190, 0x30), maps[0x190:0x1c0], testStop)
+	testMapReader(t, "mapDatabase test #3", &testParams, reader, cpList[:6], maps[0x180:])
+	// add new maps while reorging some existing ones
+	maps = generateTestMaps(&testParams, maps[:0x230], 0x30)
+	mapDb.writeMapRows(common.NewRange[uint32](0x230, 0x30), common.NewRange[uint32](0x230, 0x30), common.NewRange[uint32](0x260, math.MaxUint32-0x260), maps[0x230:], testStop)
+	mapDb.deletePointers(common.NewRange[uint32](0x230, math.MaxUint32-0x230), testStop)
+	mapDb.writePointers(common.NewRange[uint32](0x230, 0x30), maps[0x230:], testStop)
+	testMapReader(t, "mapDatabase test #4", &testParams, reader, cpList[:6], maps[0x180:])
+	// unindex tail epoch
+	mapDb.writeMapRows(common.Range[uint32]{}, common.NewRange[uint32](0x180, 0x40), common.Range[uint32]{}, nil, testStop)
+	mapDb.deletePointers(common.NewRange[uint32](0x180, 0x40), testStop)
+	testMapReader(t, "mapDatabase test #5", &testParams, reader, cpList[:7], maps[0x1c0:])
 }
