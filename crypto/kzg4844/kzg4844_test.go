@@ -269,18 +269,18 @@ func testVerifyPartialCells(t *testing.T, ckzg bool) {
 		if err != nil {
 			t.Fatalf("failed to compute cells: %v", err)
 		}
+		commits = append(commits, commitments[bi])
 
 		// sample 0, 31, 63, 95 cells
 		step := len(cells) / 4
 
-		sampleIdx := []int{0, step - 1, 2*step - 1, 3*step - 1}
-		for _, idx := range sampleIdx {
+		indices = []uint64{0, uint64(step - 1), uint64(2*step - 1), uint64(3*step - 1)}
+		for _, idx := range indices {
 			partialCells = append(partialCells, cells[idx])
 			partialProofs = append(partialProofs, proofs[idx])
-			commits = append(commits, commitments[bi])
-			indices = append(indices, uint64(idx))
 		}
 	}
+	// t.Fatalf("length: %d %d %d %d", len(partialCells), len(commits), len(partialProofs), len(indices))
 
 	if err := VerifyCells(partialCells, commits, partialProofs, indices); err != nil {
 		t.Fatalf("failed to verify partial cell proofs: %v", err)
@@ -297,18 +297,29 @@ func testRecoverBlob(t *testing.T, ckzg bool) {
 	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
 	useCKZG.Store(ckzg)
 
-	var blob = randBlob()
-	cells, err := ComputeCells([]Blob{*blob})
+	blobs := []Blob{}
+	blobs = append(blobs, *randBlob())
+	blobs = append(blobs, *randBlob())
+	blobs = append(blobs, *randBlob())
+
+	cells, err := ComputeCells(blobs)
 	if err != nil {
 		t.Fatalf("failed to compute cells: %v", err)
 	}
-	proof, err := ComputeCellProofs(blob)
-	if err != nil {
-		t.Fatalf("failed to compute proof: %v", err)
-	}
-	commitment, err := BlobToCommitment(blob)
-	if err != nil {
-		t.Fatalf("failed to compute commitment: %v", err)
+	proofs := make([]Proof, 0)
+	commitments := make([]Commitment, len(blobs))
+	for i, blob := range blobs {
+		proof, err := ComputeCellProofs(&blob)
+		if err != nil {
+			t.Fatalf("failed to compute proof: %v", err)
+		}
+		proofs = append(proofs, proof...)
+
+		commitment, err := BlobToCommitment(&blob)
+		if err != nil {
+			t.Fatalf("failed to compute commitment: %v", err)
+		}
+		commitments[i] = commitment
 	}
 
 	var (
@@ -316,18 +327,23 @@ func testRecoverBlob(t *testing.T, ckzg bool) {
 		indices      []uint64
 	)
 
-	for ci, cell := range cells {
-		partialCells = append(partialCells, cell)
+	for ci := 64; ci < 128; ci++ {
 		indices = append(indices, uint64(ci))
 	}
 
-	recoverBlob, err := RecoverBlob(partialCells, indices)
+	for i := 0; i < len(cells); i += 128 {
+		start := i + 64
+		end := i + 128
+		partialCells = append(partialCells, cells[start:end]...)
+	}
+
+	recoverBlobs, err := RecoverBlobs(partialCells, indices)
 
 	if err != nil {
 		t.Fatalf("failed to recover blob: %v", err)
 	}
 
-	if err := VerifyCellProofs([]Blob{recoverBlob}, []Commitment{commitment}, proof); err != nil {
+	if err := VerifyCellProofs(recoverBlobs, commitments, proofs); err != nil {
 		t.Fatalf("failed to verify recovered blob: %v", err)
 	}
 }
