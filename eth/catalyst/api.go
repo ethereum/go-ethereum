@@ -541,20 +541,23 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 		getBlobsV2RequestMiss.Inc(1)
 		return nil, nil
 	}
-	getBlobsV2RequestHit.Inc(1)
 
 	blobs, _, proofs, err := api.eth.BlobTxPool().GetBlobs(hashes, types.BlobSidecarVersion1)
 	if err != nil {
 		return nil, engine.InvalidParams.With(err)
 	}
-	res := make([]*engine.BlobAndProofV2, len(hashes))
-	for i := 0; i < len(blobs); i++ {
-		// the blob is missing, return null as response. It should
-		// be caught by `AvailableBlobs` though, perhaps data race
-		// occurs between two calls.
-		if blobs[i] == nil {
+
+	// To comply with API spec, check again that we really got all data needed
+	for _, blob := range blobs {
+		if blob == nil {
+			getBlobsV2RequestMiss.Inc(1)
 			return nil, nil
 		}
+	}
+	getBlobsV2RequestHit.Inc(1)
+
+	res := make([]*engine.BlobAndProofV2, len(hashes))
+	for i := 0; i < len(blobs); i++ {
 		var cellProofs []hexutil.Bytes
 		for _, proof := range proofs[i] {
 			cellProofs = append(cellProofs, proof[:])
