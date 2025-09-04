@@ -73,7 +73,27 @@ func parseSlotterVersion(blob []byte) int {
 	return 0
 }
 
+// readSlotterVersion reads the current slotter version from the store.
+func readSlotterVersion(path string) (int, error) {
+	var version int
+	index := func(_ uint64, _ uint32, blob []byte) {
+		version = max(version, parseSlotterVersion(blob))
+	}
+	store, err := billy.Open(billy.Options{Path: path}, newVersionSlotter(), index)
+	if err != nil {
+		return 0, err
+	}
+	store.Close()
+	return version, nil
+}
+
 // writeSlotterVersion writes the current slotter version into the store.
-func writeSlotterVersion(store billy.Database, version int) {
-	store.Put([]byte{byte(version)})
+func writeSlotterVersion(path string, version int) error {
+	store, err := billy.Open(billy.Options{Path: path}, newVersionSlotter(), nil)
+	defer store.Close()
+	if err != nil {
+		return err
+	}
+	_, err = store.Put([]byte{byte(version)})
+	return err
 }

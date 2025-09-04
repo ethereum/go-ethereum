@@ -401,29 +401,28 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	if p.chain.Config().IsOsaka(head.Number, head.Time) {
 		// Open the store using the version slotter to see if any version has been
 		// written.
-		var version int
-		index := func(_ uint64, _ uint32, blob []byte) {
-			version = max(version, parseSlotterVersion(blob))
-		}
-		store, err := billy.Open(billy.Options{Path: queuedir}, newVersionSlotter(), index)
+		version, err := readSlotterVersion(queuedir)
 		if err != nil {
-			return err
+			return fmt.Errorf("error reading store version: %w", err)
 		}
-		store.Close()
 
 		// If the version found is less than the currently configured store version,
 		// perform a migration then write the updated version of the store.
 		if version < storeVersion {
+			// Convert v0 sidecars to v1.
+			log.Info("Converting pending v0 blob sidecars to v1")
+			if err := convertSidecars(queuedir, newSlotter(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))); err != nil {
+				return fmt.Errorf("failed to convert sidecars to v1: %w", err)
+			}
+			// Migrate shelves to new size.
 			newSlotter := newSlotterEIP7594(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
 			if err := billy.Migrate(billy.Options{Path: queuedir, Repair: true}, slotter, newSlotter); err != nil {
 				return err
 			}
-			store, err = billy.Open(billy.Options{Path: queuedir}, newVersionSlotter(), nil)
-			if err != nil {
-				return err
+			// Write updated store version.
+			if err := writeSlotterVersion(queuedir, storeVersion); err != nil {
+				return fmt.Errorf("failed to write updated store version: %w", err)
 			}
-			writeSlotterVersion(store, storeVersion)
-			store.Close()
 		}
 		// Set the slotter to the format now that the Osaka is active.
 		slotter = newSlotterEIP7594(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
@@ -1047,6 +1046,7 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 		log.Error("Failed to encode transaction for storage", "hash", tx.Hash(), "err", err)
 		return err
 	}
+	// TODO: check if we need to convert blob proof to v1
 	id, err := p.store.Put(blob)
 	if err != nil {
 		log.Error("Failed to write transaction into storage", "hash", tx.Hash(), "err", err)
@@ -1977,4 +1977,55 @@ func (p *BlobPool) Clear() {
 		blobfee = uint256.NewInt(params.BlobTxMinBlobGasprice)
 	)
 	p.evict = newPriceHeap(basefee, blobfee, p.index)
+}
+
+// convertSidecars iterates through the store at the given path and slotter and
+// converts all v0 sidecars to v1.
+func convertSidecars(path string, slotter func() (uint32, bool)) error {
+	// First open the store and record all known tx keys.
+	var keys []uint64
+	indexer := func(key uint64, _ uint32, _ []byte) {
+		keys = append(keys, key)
+	}
+	store, err := billy.Open(billy.Options{Path: path}, slotter, indexer)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+
+	// Iterate through the keys, load and deserialize the tx, perform the
+	// conversion, and replace with the updated tx.
+	for _, key := range keys {
+		convert := func() error {
+			data, err := store.Get(key)
+			if err != nil {
+				return fmt.Errorf("failed to get tx at key: %d", key)
+			}
+			tx := new(types.Transaction)
+			if err := rlp.DecodeBytes(data, tx); err != nil {
+				return fmt.Errorf("failed to decode tx with key %d: %w", key, err)
+			}
+			if sidecar := tx.BlobTxSidecar(); sidecar != nil {
+				if err := sidecar.ToV1(); err != nil {
+					return fmt.Errorf("failed to recompute cell proofs for tx %s: %w", tx.Hash(), err)
+				}
+			}
+			blob, err := rlp.EncodeToBytes(tx)
+			if err != nil {
+				return fmt.Errorf("failed to encode tx (%s) with updated sidecar: %w", tx.Hash(), err)
+			}
+			if _, err := store.Put(blob); err != nil {
+				return fmt.Errorf("failed to write converted tx %s: %w", tx.Hash(), err)
+			}
+			if err := store.Delete(key); err != nil {
+				return fmt.Errorf("failed to delete old tx %s with key %d: %w", tx.Hash(), key, err)
+			}
+			return nil
+		}
+		if err := convert(); err != nil {
+			log.Error("Failed to convert blob tx sidecar", "err", err)
+			continue
+		}
+	}
+	return nil
 }

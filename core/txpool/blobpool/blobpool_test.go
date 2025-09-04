@@ -1255,9 +1255,13 @@ func TestBillyMigration(t *testing.T) {
 		// Verify the regular two txs are always available.
 		if got := pool.Get(tx1.Hash()); got == nil {
 			t.Errorf("expected tx %s from %s in pool", tx1.Hash(), addr1)
+		} else if got.BlobTxSidecar().Version != types.BlobSidecarVersion1 {
+			t.Errorf("expected tx %s from %s to have v1 sidecar", tx1.Hash(), addr1)
 		}
 		if got := pool.Get(tx2.Hash()); got == nil {
 			t.Errorf("expected tx %s from %s in pool", tx2.Hash(), addr2)
+		} else if got.BlobTxSidecar().Version != types.BlobSidecarVersion1 {
+			t.Errorf("expected tx %s from %s to have v1 sidecar", tx1.Hash(), addr1)
 		}
 
 		// Verify all the calculated pool internals. Interestingly, this is **not**
