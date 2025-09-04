@@ -62,7 +62,7 @@ func TestSizeTracker(t *testing.T) {
 
 	state.AddBalance(addr2, uint256.NewInt(2000), tracing.BalanceChangeUnspecified)
 	state.SetNonce(addr2, 2, tracing.NonceChangeUnspecified)
-	state.SetCode(addr2, []byte{0x60, 0x80, 0x60, 0x40, 0x52})
+	state.SetCode(addr2, []byte{0x60, 0x80, 0x60, 0x40, 0x52}, tracing.CodeChangeUnspecified)
 
 	state.AddBalance(addr3, uint256.NewInt(3000), tracing.BalanceChangeUnspecified)
 	state.SetNonce(addr3, 3, tracing.NonceChangeUnspecified)
@@ -92,7 +92,7 @@ func TestSizeTracker(t *testing.T) {
 		}
 
 		if i%3 == 0 {
-			newState.SetCode(testAddr, []byte{byte(i), 0x60, 0x80, byte(i + 1), 0x52})
+			newState.SetCode(testAddr, []byte{byte(i), 0x60, 0x80, byte(i + 1), 0x52}, tracing.CodeChangeUnspecified)
 		}
 
 		root, _, err := newState.CommitWithUpdate(blockNum, true, false)
@@ -160,7 +160,7 @@ func TestSizeTracker(t *testing.T) {
 		}
 
 		if i%3 == 0 {
-			newState.SetCode(testAddr, []byte{byte(i), 0x60, 0x80, byte(i + 1), 0x52})
+			newState.SetCode(testAddr, []byte{byte(i), 0x60, 0x80, byte(i + 1), 0x52}, tracing.CodeChangeUnspecified)
 		}
 
 		root, update, err := newState.CommitWithUpdate(blockNum, true, false)

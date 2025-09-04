@@ -458,17 +458,17 @@ func (api *DebugAPI) StateSize() (interface{}, error) {
 	}
 
 	return map[string]interface{}{
-		"stateRoot":             stats.StateRoot,
-		"blockNumber":           hexutil.Uint64(stats.BlockNumber),
-		"accounts":              hexutil.Uint64(stats.Accounts),
-		"accountBytes":          hexutil.Uint64(stats.AccountBytes),
-		"storages":              hexutil.Uint64(stats.Storages),
-		"storageBytes":          hexutil.Uint64(stats.StorageBytes),
-		"accountTrienodes":      hexutil.Uint64(stats.AccountTrienodes),
-		"accountTrienodeBytes":  hexutil.Uint64(stats.AccountTrienodeBytes),
-		"storageTrienodes":      hexutil.Uint64(stats.StorageTrienodes),
-		"storageTrienodeBytes":  hexutil.Uint64(stats.StorageTrienodeBytes),
-		"contractCodes":         hexutil.Uint64(stats.ContractCodes),
-		"contractCodeBytes":     hexutil.Uint64(stats.ContractCodeBytes),
+		"stateRoot":            stats.StateRoot,
+		"blockNumber":          hexutil.Uint64(stats.BlockNumber),
+		"accounts":             hexutil.Uint64(stats.Accounts),
+		"accountBytes":         hexutil.Uint64(stats.AccountBytes),
+		"storages":             hexutil.Uint64(stats.Storages),
+		"storageBytes":         hexutil.Uint64(stats.StorageBytes),
+		"accountTrienodes":     hexutil.Uint64(stats.AccountTrienodes),
+		"accountTrienodeBytes": hexutil.Uint64(stats.AccountTrienodeBytes),
+		"storageTrienodes":     hexutil.Uint64(stats.StorageTrienodes),
+		"storageTrienodeBytes": hexutil.Uint64(stats.StorageTrienodeBytes),
+		"contractCodes":        hexutil.Uint64(stats.ContractCodes),
+		"contractCodeBytes":    hexutil.Uint64(stats.ContractCodeBytes),
 	}, nil
 }

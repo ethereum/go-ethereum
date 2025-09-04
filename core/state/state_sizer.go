@@ -535,7 +535,7 @@ func (t *SizeTracker) iterateTable(closed chan struct{}, prefix []byte, name str
 	iter := t.db.NewIterator(prefix, nil)
 	defer iter.Release()
 
-	log.Info("Iterating state", "category", name)
+	log.Debug("Iterating state", "category", name)
 	for iter.Next() {
 		count++
 		bytes += int64(len(iter.Key()) + len(iter.Value()))
@@ -557,7 +557,7 @@ func (t *SizeTracker) iterateTable(closed chan struct{}, prefix []byte, name str
 		log.Error("Iterator error", "category", name, "err", err)
 		return 0, 0, err
 	}
-	log.Info("Finished state iteration", "category", name, "count", count, "size", common.StorageSize(bytes), "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Debug("Finished state iteration", "category", name, "count", count, "size", common.StorageSize(bytes), "elapsed", common.PrettyDuration(time.Since(start)))
 	return count, bytes, nil
 }
 
