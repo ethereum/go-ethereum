@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"runtime"
 	"slices"
 	"sync"
 	"time"
@@ -565,7 +566,7 @@ func (t *SizeTracker) iterateTable(closed chan struct{}, prefix []byte, name str
 func (t *SizeTracker) iterateTableParallel(closed chan struct{}, prefix []byte, name string) (int64, int64, error) {
 	var (
 		start      = time.Now()
-		workers    = 16
+		workers    = runtime.NumCPU()
 		totalCount int64
 		totalBytes int64
 		group      errgroup.Group
@@ -574,6 +575,14 @@ func (t *SizeTracker) iterateTableParallel(closed chan struct{}, prefix []byte, 
 	group.SetLimit(workers)
 
 	log.Info("Starting parallel state iteration", "category", name, "workers", workers)
+
+	if len(prefix) > 0 {
+		if blob, err := t.db.Get(prefix); err == nil && len(blob) > 0 {
+			// If there's a direct hit on the prefix, include it in the stats
+			totalCount = 1
+			totalBytes = int64(len(prefix) + len(blob))
+		}
+	}
 
 	for i := 0; i < 256; i++ {
 		h := byte(i)
