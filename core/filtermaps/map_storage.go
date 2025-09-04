@@ -484,6 +484,16 @@ func (m *mapStorage) selectEpochOnlyDirty() (uint32, bool) {
 	return epochs[0].First(), true
 }
 
+// doWriteCycle selects an epoch where there are memory overlay maps and/or
+// dirty maps in the underlying database, cleans up dirty data and writes the
+// new maps to the database.
+// If an epoch has been successfully updated then the function returns (true, nil).
+// In this case a new write cycle can be attempted immediately until there is
+// nothing more left to do.
+// If there was nothing to do or if stopCallback aborted the operation then the
+// function returns (false, nil). In case of an error it returns (false, err).
+// Note that if the operation is aborted or failed then the partially updated
+// maps are left as marked dirty and the database remains consistent.
 func (m *mapStorage) doWriteCycle(stopCallback func() bool) (bool, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -495,7 +505,7 @@ func (m *mapStorage) doWriteCycle(stopCallback func() bool) (bool, error) {
 		if !ok {
 			epoch, ok = m.selectEpochOnlyDirty()
 			if !ok {
-				return true, nil
+				return false, nil
 			}
 		}
 	}
