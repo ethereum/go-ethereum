@@ -395,7 +395,7 @@ func (m *mapStorage) getFilterMapRows(mapIndices []uint32, rowIndex, layers uint
 			j++
 		}
 	}
-	if j != len(mapIndices) {
+	if j != len(dbMaps) {
 		panic("rows length mismatch")
 	}
 	return rows, nil
