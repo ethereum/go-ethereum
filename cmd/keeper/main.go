@@ -1,0 +1,52 @@
+// Copyright 2025 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+package main
+
+import (
+	"fmt"
+
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/stateless"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/rlp"
+)
+
+type Payload struct {
+	Block   *types.Block
+	Witness *stateless.Witness
+}
+
+func main() {
+	input := getPayload()
+	var payload Payload
+	rlp.DecodeBytes(input, &payload)
+
+	chainConfig := getChainConfig()
+	vmConfig := vm.Config{}
+
+	crossStateRoot, crossReceiptRoot, err := core.ExecuteStateless(chainConfig, vmConfig, payload.Block, payload.Witness)
+	if err != nil {
+		panic(fmt.Errorf("stateless self-validation failed: %v", err))
+	}
+	if crossStateRoot != payload.Block.Root() {
+		panic(fmt.Errorf("stateless self-validation root mismatch (cross: %x local: %x)", crossStateRoot, payload.Block.Root()))
+	}
+	if crossReceiptRoot != payload.Block.ReceiptHash() {
+		panic(fmt.Errorf("stateless self-validation receipt root mismatch (cross: %x local: %x)", crossReceiptRoot, payload.Block.ReceiptHash()))
+	}
+}
