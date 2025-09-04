@@ -31,6 +31,14 @@ import (
 	"github.com/ava-labs/libevm/params"
 )
 
+// P256Verify is a [PrecompiledContract] implementation of P-256 (secp256r1)
+// ECDSA verification, as defined by [EIP-7951].
+//
+// [EIP-7951]: https://eips.ethereum.org/EIPS/eip-7951
+type P256Verify struct {
+	p256Verify
+}
+
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	orig := activePrecompiles(rules) // original, upstream implementation
