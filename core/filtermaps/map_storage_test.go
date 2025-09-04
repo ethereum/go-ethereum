@@ -43,4 +43,26 @@ func TestMapStorage(t *testing.T) {
 		ms.addMap(m, maps[m], false)
 	}
 	testMapReader(t, "mapStorage test #1", &testParams, reader, cpList, maps[0x200:])
+	/*
+		// backfill previous epoch with a single write
+		mapDb.writeMapRows(common.NewRange[uint32](0x1c0, 0x40), common.Range[uint32]{}, common.Range[uint32]{}, maps[0x1c0:0x200], testStop)
+		mapDb.writePointers(common.NewRange[uint32](0x1c0, 0x40), maps[0x1c0:0x200], testStop)
+		testMapReader(t, "mapDatabase test #2", &testParams, reader, cpList[:7], maps[0x1c0:])
+		// backfill previous epoch in two steps
+		mapDb.writeMapRows(common.NewRange[uint32](0x180, 0x10), common.Range[uint32]{}, common.NewRange[uint32](0x190, 0x30), maps[0x180:0x190], testStop)
+		mapDb.writePointers(common.NewRange[uint32](0x180, 0x10), maps[0x180:0x190], testStop)
+		mapDb.writeMapRows(common.NewRange[uint32](0x190, 0x30), common.Range[uint32]{}, common.Range[uint32]{}, maps[0x190:0x1c0], testStop)
+		mapDb.writePointers(common.NewRange[uint32](0x190, 0x30), maps[0x190:0x1c0], testStop)
+		testMapReader(t, "mapDatabase test #3", &testParams, reader, cpList[:6], maps[0x180:])
+		// add new maps while reorging some existing ones
+		maps = generateTestMaps(&testParams, maps[:0x230], 0x30)
+		mapDb.writeMapRows(common.NewRange[uint32](0x230, 0x30), common.NewRange[uint32](0x230, 0x30), common.NewRange[uint32](0x260, math.MaxUint32-0x260), maps[0x230:], testStop)
+		mapDb.deletePointers(common.NewRange[uint32](0x230, math.MaxUint32-0x230), testStop)
+		mapDb.writePointers(common.NewRange[uint32](0x230, 0x30), maps[0x230:], testStop)
+		testMapReader(t, "mapDatabase test #4", &testParams, reader, cpList[:6], maps[0x180:])
+		// unindex tail epoch
+		mapDb.writeMapRows(common.Range[uint32]{}, common.NewRange[uint32](0x180, 0x40), common.Range[uint32]{}, nil, testStop)
+		mapDb.deletePointers(common.NewRange[uint32](0x180, 0x40), testStop)
+		testMapReader(t, "mapDatabase test #5", &testParams, reader, cpList[:7], maps[0x1c0:])
+	*/
 }

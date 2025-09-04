@@ -154,7 +154,7 @@ func (m *mapDatabase) deleteEpochRows(epoch uint32, stopCallback func() bool) (b
 	}
 	action := fmt.Sprintf("Deleting epoch #%d", epoch)
 	if err := m.safeDeleteWithLogs(deleteFn, action, stopCallback); err != rawdb.ErrDeleteRangeInterrupted {
-		return err == nil, err
+		return err == nil, err  ez jo ronda...
 	}
 	return false, nil
 }

@@ -17,6 +17,7 @@
 package filtermaps
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"reflect"
@@ -42,10 +43,12 @@ type mapReader struct {
 
 func equalRows(a, b []FilterRow) bool {
 	if len(a) != len(b) {
+		fmt.Println("* length", len(a), len(b))
 		return false
 	}
 	for i := range a {
 		if !slices.Equal(a[i], b[i]) {
+			fmt.Println("* diff", i, a[i], b[i])
 			return false
 		}
 	}

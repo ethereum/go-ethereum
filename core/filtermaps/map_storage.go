@@ -311,11 +311,12 @@ func (m *mapStorage) eventLoop() {
 		done, err := m.doWriteCycle(stopCallback)
 		//fmt.Println("e3", done, err)
 		if err != nil {
-			m.resetWithError(fmt.Sprintf("could not read last known epoch boundary: %v", err))
+			m.resetWithError(fmt.Sprintf("write cycle failed: %v", err))
 			continue
 		}
 		//fmt.Println("e4")
 		if !done && !stopped { // wait for next event if no changes done
+			xxxxx
 			blockingSelect()
 		} else {
 			nonBlockingSelect()
@@ -379,7 +380,7 @@ func (m *mapStorage) getFilterMapRows(mapIndices []uint32, rowIndex, layers uint
 			if fm == nil {
 				return nil, errors.New("memory overlay map not found") //TODO fmt.Errorf...
 			}
-			rows[i] = fm.getRow(rowIndex, m.params.getMaxRowLength(layers))
+			rows[i] = fm.getRow(rowIndex, m.params.getMaxRowLength(layers-1))
 		} else {
 			dbMaps = append(dbMaps, mapIndex)
 		}
