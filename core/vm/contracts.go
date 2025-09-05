@@ -436,7 +436,7 @@ func berlinMultComplexity(x uint64) uint64 {
 		return math.MaxUint64
 	}
 	x /= 8
-	
+
 	// x^2
 	carry, x = bits.Mul64(x, x)
 	if carry != 0 {
@@ -486,13 +486,13 @@ func byzantiumGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint6
 		multiplier = 8
 		divisor    = 20
 	)
-	
+
 	maxLen := max(baseLen, modLen)
 	multComplexity := byzantiumMultComplexity(maxLen)
 	if multComplexity == math.MaxUint64 {
 		return math.MaxUint64
 	}
-	iterationCount := calculateIterationCount(expLen, expHead, byzantiumMultiplier)
+	iterationCount := calculateIterationCount(expLen, expHead, multiplier)
 
 	// Calculate gas: (multComplexity * iterationCount) / divisor
 	carry, gas := bits.Mul64(iterationCount, multComplexity)
@@ -532,15 +532,15 @@ func osakaGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
 	const (
 		multiplier = 16
 		divisor    = 3
-		minGas     =  500
+		minGas     = 500
 	)
-	
+
 	maxLen := max(baseLen, modLen)
 	multComplexity := osakaMultComplexity(maxLen)
 	if multComplexity == math.MaxUint64 {
 		return math.MaxUint64
 	}
-	iterationCount := calculateIterationCount(expLen, expHead, osakaMultiplier)
+	iterationCount := calculateIterationCount(expLen, expHead, multiplier)
 
 	// Calculate gas: (multComplexity * iterationCount) / osakaDivisor
 	carry, gas := bits.Mul64(iterationCount, multComplexity)
