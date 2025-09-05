@@ -45,15 +45,18 @@ type mapStorage struct {
 	writeEpochs                rangeSet[uint32]
 	maps                       map[uint32]*finishedMap
 	suspended                  uint32
+
+	testHookCh chan bool
 }
 
-func newMapStorage(params *Params, mapDb *mapDatabase) *mapStorage {
+func newMapStorage(params *Params, mapDb *mapDatabase, testHookCh chan bool) *mapStorage {
 	m := &mapStorage{
-		params:    params,
-		mapDb:     mapDb,
-		triggerCh: make(chan struct{}, 1),
-		closeCh:   make(chan struct{}),
-		maps:      make(map[uint32]*finishedMap),
+		params:     params,
+		mapDb:      mapDb,
+		triggerCh:  make(chan struct{}, 1),
+		closeCh:    make(chan struct{}),
+		maps:       make(map[uint32]*finishedMap),
+		testHookCh: testHookCh,
 
 		mtForceWrite: params.rowGroupSize[0] * 9 / 8,
 		mtBusy:       params.rowGroupSize[0] * 10 / 8,
@@ -269,31 +272,43 @@ func (m *mapStorage) eventLoop() {
 
 	var stopped bool
 
-	blockingSelect := func() {
-		select {
-		case <-m.closeCh:
-			stopped = true
-			//fmt.Println("STOPPED")
-		case <-m.triggerCh:
+	selectEvent := func(blocking bool) {
+		if m.testHookCh != nil {
+			select {
+			case <-m.closeCh:
+				stopped = true
+				return
+			case m.testHookCh <- blocking:
+			}
 		}
-	}
-
-	nonBlockingSelect := func() {
-		select {
-		case <-m.closeCh:
-			stopped = true
-			//fmt.Println("STOPPED")
-		case <-m.triggerCh:
-		default:
+		if blocking {
+			select {
+			case <-m.closeCh:
+				stopped = true
+				return
+			case <-m.triggerCh:
+			}
+		} else {
+			select {
+			case <-m.closeCh:
+				stopped = true
+				return
+			case <-m.triggerCh:
+			default:
+			}
+		}
+		if m.testHookCh != nil {
+			select {
+			case <-m.closeCh:
+				stopped = true
+				return
+			case <-m.testHookCh:
+			}
 		}
 	}
 
 	stopCallback := func() bool {
-		if atomic.LoadUint32(&m.suspended) == 1 {
-			blockingSelect()
-		} else {
-			nonBlockingSelect()
-		}
+		selectEvent(atomic.LoadUint32(&m.suspended) == 1)
 		return stopped
 	}
 
@@ -308,19 +323,14 @@ func (m *mapStorage) eventLoop() {
 			m.lock.Unlock()
 		}
 		//fmt.Println("e2")
-		done, err := m.doWriteCycle(stopCallback)
+		more, err := m.doWriteCycle(stopCallback)
 		//fmt.Println("e3", done, err)
 		if err != nil {
 			m.resetWithError(fmt.Sprintf("write cycle failed: %v", err))
 			continue
 		}
 		//fmt.Println("e4")
-		if !done && !stopped { // wait for next event if no changes done
-			xxxxx
-			blockingSelect()
-		} else {
-			nonBlockingSelect()
-		}
+		selectEvent(!more && !stopped) // wait for next event if no changes done
 		//fmt.Println("e5")
 	}
 	//fmt.Println("e6")
@@ -567,6 +577,7 @@ func (m *mapStorage) doWriteCycle(stopCallback func() bool) (bool, error) {
 	if err := m.updateRange(m.valid.union(writeMapsRs), m.dirty.exclude(writeMapsRs), m.overlay.exclude(writeMapsRs)); err != nil {
 		return false, err
 	}
+	fmt.Println(" valid", m.valid, "dirty", m.dirty, "overlay", m.overlay)
 	return true, nil
 }
 

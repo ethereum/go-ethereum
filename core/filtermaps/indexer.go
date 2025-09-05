@@ -73,14 +73,13 @@ type Config struct {
 	HashScheme bool
 }
 
-// TODO blockId vs blockHash?
 // TODO disable, export, history, finalized
 func NewIndexer(db ethdb.KeyValueStore, params *Params, config Config) *Indexer {
 	params.sanitize()
 	mapDb := newMapDatabase(params, db, config.HashScheme)
 	ix := &Indexer{
 		config:        config,
-		storage:       newMapStorage(&DefaultParams, mapDb),
+		storage:       newMapStorage(&DefaultParams, mapDb, nil),
 		checkpoints:   checkpoints,
 		snapshots:     make(map[common.Hash]*IndexView),
 		headMapsCache: lru.NewCache[uint32, *finishedMap](maxIndexViewMaps),
