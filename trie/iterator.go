@@ -146,6 +146,10 @@ type nodeIterator struct {
 
 	resolver NodeResolver         // optional node resolver for avoiding disk hits
 	pool     []*nodeIteratorState // local pool for iterator states
+
+	// Fields for subtree iteration
+	startKey []byte // Start key for subtree iteration (nil for full trie)
+	stopKey  []byte // Stop key for subtree iteration (nil for full trie)
 }
 
 // errIteratorEnd is stored in nodeIterator.err when iteration is done.
@@ -296,6 +300,31 @@ func (it *nodeIterator) Next(descend bool) bool {
 	if it.err != nil {
 		return false
 	}
+
+	// Check if we're still within the subtree boundaries
+	// Note: path is already hex-encoded by the iterator
+	if it.startKey != nil && len(path) > 0 {
+		startKeyHex := keybytesToHex(it.startKey)
+		// Remove terminator from startKey hex if present
+		if hasTerm(startKeyHex) {
+			startKeyHex = startKeyHex[:len(startKeyHex)-1]
+		}
+		if !bytes.HasPrefix(path, startKeyHex) {
+			it.err = errIteratorEnd
+			return false
+		}
+	}
+	if it.stopKey != nil && len(path) > 0 {
+		stopKeyHex := keybytesToHex(it.stopKey)
+		if hasTerm(stopKeyHex) {
+			stopKeyHex = stopKeyHex[:len(stopKeyHex)-1]
+		}
+		if bytes.Compare(path, stopKeyHex) >= 0 {
+			it.err = errIteratorEnd
+			return false
+		}
+	}
+
 	it.push(state, parentIndex, path)
 	return true
 }
@@ -835,4 +864,35 @@ func (it *unionIterator) Error() error {
 		}
 	}
 	return nil
+}
+
+// NewSubtreeIterator creates an iterator that only traverses nodes within a subtree
+// defined by the given startKey and stopKey. The startKey defines where iteration
+// starts, and stopKey defines where it ends (exclusive).
+func NewSubtreeIterator(trie *Trie, startKey, stopKey []byte) NodeIterator {
+	if trie.Hash() == types.EmptyRootHash {
+		return &nodeIterator{
+			trie:     trie,
+			err:      errIteratorEnd,
+			startKey: startKey,
+			stopKey:  stopKey,
+		}
+	}
+	it := &nodeIterator{
+		trie:     trie,
+		startKey: startKey,
+		stopKey:  stopKey,
+	}
+	// Seek to the starting position if startKey is provided
+	if startKey != nil && len(startKey) > 0 {
+		it.err = it.seek(startKey)
+	} else {
+		state, err := it.init()
+		if err != nil {
+			it.err = err
+		} else {
+			it.push(state, nil, nil)
+		}
+	}
+	return it
 }

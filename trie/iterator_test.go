@@ -624,6 +624,164 @@ func isTrieNode(scheme string, key, val []byte) (bool, []byte, common.Hash) {
 	return true, path, hash
 }
 
+func TestSubtreeIterator(t *testing.T) {
+	diskDb := rawdb.NewMemoryDatabase()
+	db := newTestDatabase(diskDb, rawdb.HashScheme)
+	tr := NewEmpty(db)
+	vals := []struct{ k, v string }{
+		{"do", "verb"},
+		{"dog", "puppy"},
+		{"doge", "coin"},
+		{"horse", "stallion"},
+		{"house", "building"},
+		{"houses", "multiple"},
+	}
+	all := make(map[string]string)
+	for _, val := range vals {
+		all[val.k] = val.v
+		tr.MustUpdate([]byte(val.k), []byte(val.v))
+	}
+	root, nodes := tr.Commit(false)
+	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+
+	// Test subtree iteration with prefix "do"
+	prefix := []byte("do")
+	stop := []byte("e")
+
+	// We need to re-open the trie from the committed state
+	tr, _ = New(TrieID(root), db)
+	it := NewSubtreeIterator(tr, prefix, stop)
+
+	found := make(map[string]string)
+	for it.Next(true) {
+		if it.Leaf() {
+			found[string(it.LeafKey())] = string(it.LeafBlob())
+		}
+	}
+
+	// Should find "do", "dog", "doge" but not "horse", "house", "houses"
+	expected := map[string]string{
+		"do":   "verb",
+		"dog":  "puppy",
+		"doge": "coin",
+	}
+
+	if len(found) != len(expected) {
+		t.Errorf("wrong number of values: got %d, want %d", len(found), len(expected))
+	}
+	for k, v := range expected {
+		if found[k] != v {
+			t.Errorf("wrong value for %s: got %s, want %s", k, found[k], v)
+		}
+	}
+}
+
+func TestPrefixIterator(t *testing.T) {
+	// Create a new trie
+	trie := NewEmpty(newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme))
+
+	// Insert test data
+	testData := map[string]string{
+		"key1":      "value1",
+		"key2":      "value2",
+		"key10":     "value10",
+		"key11":     "value11",
+		"different": "value_different",
+	}
+
+	for key, value := range testData {
+		trie.Update([]byte(key), []byte(value))
+	}
+
+	// Test prefix iteration for "key1" prefix
+	prefix := []byte("key1")
+	iter, err := trie.NodeIteratorWithPrefix(prefix)
+	if err != nil {
+		t.Fatalf("Failed to create prefix iterator: %v", err)
+	}
+
+	var foundKeys [][]byte
+	for iter.Next(true) {
+		if iter.Leaf() {
+			foundKeys = append(foundKeys, iter.LeafKey())
+		}
+	}
+
+	if err := iter.Error(); err != nil {
+		t.Fatalf("Iterator error: %v", err)
+	}
+
+	// Verify only keys starting with "key1" were found
+	expectedCount := 3 // "key1", "key10", "key11"
+	if len(foundKeys) != expectedCount {
+		t.Errorf("Expected %d keys, found %d", expectedCount, len(foundKeys))
+	}
+
+	for _, key := range foundKeys {
+		keyStr := string(key)
+		if !bytes.HasPrefix(key, prefix) {
+			t.Errorf("Found key %s doesn't have prefix %s", keyStr, string(prefix))
+		}
+	}
+}
+
+func TestPrefixIteratorVsFullIterator(t *testing.T) {
+	// Create a new trie with more structured data
+	trie := NewEmpty(newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme))
+
+	// Insert structured test data
+	testData := map[string]string{
+		"aaa": "value_aaa",
+		"aab": "value_aab",
+		"aba": "value_aba",
+		"bbb": "value_bbb",
+	}
+
+	for key, value := range testData {
+		trie.Update([]byte(key), []byte(value))
+	}
+
+	// Test that prefix iterator stops at boundary
+	prefix := []byte("aa")
+	prefixIter, err := trie.NodeIteratorWithPrefix(prefix)
+	if err != nil {
+		t.Fatalf("Failed to create prefix iterator: %v", err)
+	}
+
+	var prefixKeys [][]byte
+	for prefixIter.Next(true) {
+		if prefixIter.Leaf() {
+			prefixKeys = append(prefixKeys, prefixIter.LeafKey())
+		}
+	}
+
+	// Should only find "aaa" and "aab", not "aba" or "bbb"
+	if len(prefixKeys) != 2 {
+		t.Errorf("Expected 2 keys with prefix 'aa', found %d", len(prefixKeys))
+	}
+
+	// Verify no keys outside prefix were found
+	for _, key := range prefixKeys {
+		if !bytes.HasPrefix(key, prefix) {
+			t.Errorf("Prefix iterator returned key %s outside prefix %s", string(key), string(prefix))
+		}
+	}
+}
+
+func TestEmptyPrefixIterator(t *testing.T) {
+	// Test with empty trie
+	trie := NewEmpty(newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme))
+
+	iter, err := trie.NodeIteratorWithPrefix([]byte("nonexistent"))
+	if err != nil {
+		t.Fatalf("Failed to create iterator: %v", err)
+	}
+
+	if iter.Next(true) {
+		t.Error("Expected no results from empty trie")
+	}
+}
+
 func BenchmarkIterator(b *testing.B) {
 	diskDb, srcDb, tr, _ := makeTestTrie(rawdb.HashScheme)
 	root := tr.Hash()
