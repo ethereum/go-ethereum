@@ -49,11 +49,14 @@ func newLookup(ctx context.Context, tab *Table, target enode.ID, q queryFunc) *l
 		result:    nodesByDistance{target: target},
 		replyCh:   make(chan []*enode.Node, alpha),
 		cancelCh:  ctx.Done(),
-		queries:   -1,
 	}
 	// Don't query further if we hit ourself.
 	// Unlikely to happen often in practice.
 	it.asked[tab.self().ID()] = true
+
+	// Initialize the lookup with nodes from table.
+	closest := it.tab.findnodeByID(it.result.target, bucketSize, false)
+	it.addNodes(closest.entries)
 	return it
 }
 
@@ -64,22 +67,18 @@ func (it *lookup) run() []*enode.Node {
 	return it.result.entries
 }
 
+func (it *lookup) empty() bool {
+	return len(it.replyBuffer) == 0
+}
+
 // advance advances the lookup until any new nodes have been found.
 // It returns false when the lookup has ended.
 func (it *lookup) advance() bool {
 	for it.startQueries() {
 		select {
 		case nodes := <-it.replyCh:
-			it.replyBuffer = it.replyBuffer[:0]
-			for _, n := range nodes {
-				if n != nil && !it.seen[n.ID()] {
-					it.seen[n.ID()] = true
-					it.result.push(n, bucketSize)
-					it.replyBuffer = append(it.replyBuffer, n)
-				}
-			}
 			it.queries--
-			if len(it.replyBuffer) > 0 {
+			if it.addNodes(nodes) {
 				return true
 			}
 		case <-it.cancelCh:
@@ -87,6 +86,18 @@ func (it *lookup) advance() bool {
 		}
 	}
 	return false
+}
+
+func (it *lookup) addNodes(nodes []*enode.Node) (done bool) {
+	it.replyBuffer = it.replyBuffer[:0]
+	for _, n := range nodes {
+		if n != nil && !it.seen[n.ID()] {
+			it.seen[n.ID()] = true
+			it.result.push(n, bucketSize)
+			it.replyBuffer = append(it.replyBuffer, n)
+		}
+	}
+	return len(it.replyBuffer) == 0
 }
 
 func (it *lookup) shutdown() {
@@ -101,17 +112,6 @@ func (it *lookup) shutdown() {
 func (it *lookup) startQueries() bool {
 	if it.queryfunc == nil {
 		return false
-	}
-
-	// The first query returns nodes from the local table.
-	if it.queries == -1 {
-		closest := it.tab.findnodeByID(it.result.target, bucketSize, false)
-		if len(closest.entries) == 0 {
-			return false
-		}
-		it.queries = 1
-		it.replyCh <- closest.entries
-		return true
 	}
 
 	// Ask the closest nodes that we haven't asked yet.
@@ -180,10 +180,14 @@ func (it *lookupIterator) Next() bool {
 		}
 		if it.lookup == nil {
 			it.lookup = it.nextLookup(it.ctx)
+			if it.lookup.empty() {
+				// If the lookup is empty right after creation, it means the local table
+				// is in a degraded state, and we need to wait for it to fill again.
+				it.lookupFailed(it.lookup.tab)
+			}
 			continue
 		}
 		if !it.lookup.advance() {
-			it.lookupFailed(it.lookup.tab)
 			it.lookup = nil
 			continue
 		}
