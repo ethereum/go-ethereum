@@ -16,6 +16,8 @@
 
 package blobpool
 
+import "github.com/holiman/billy"
+
 // newSlotter creates a helper method for the Billy datastore that returns the
 // individual shelf sizes used to store transactions in.
 //
@@ -35,4 +37,63 @@ func newSlotter(maxBlobsPerTransaction int) func() (uint32, bool) {
 
 		return slotsize, finished
 	}
+}
+
+// newSlotterEIP7594 creates a different slotter for EIP-7594 transactions.
+// EIP-7594 (PeerDAS) changes the average transaction size which means the current
+// static 4KB average size is not enough anymore.
+// This slotter adds a dynamic overhead component to the slotter, which also
+// captures the notion that blob transactions with more blobs are also more likely to
+// to have more calldata.
+func newSlotterEIP7594(maxBlobsPerTransaction int) func() (uint32, bool) {
+	slotsize := uint32(txAvgSize)
+	slotsize -= uint32(blobSize) + txBlobOverhead // underflows, it's ok, will overflow back in the first return
+
+	return func() (size uint32, done bool) {
+		slotsize += blobSize + txBlobOverhead
+		finished := slotsize > uint32(maxBlobsPerTransaction)*(blobSize+txBlobOverhead)+txMaxSize
+
+		return slotsize, finished
+	}
+}
+
+// newVersionSlotter creates a slotter with a single 8 byte shelf to store
+// version metadata in.
+func newVersionSlotter() func() (uint32, bool) {
+	return func() (size uint32, done bool) {
+		return 8, true
+	}
+}
+
+// parseSlotterVersion will parse the slotter's version from a given data blob.
+func parseSlotterVersion(blob []byte) int {
+	if len(blob) > 0 {
+		return int(blob[0])
+	}
+	return 0
+}
+
+// readSlotterVersion reads the current slotter version from the store.
+func readSlotterVersion(path string) (int, error) {
+	var version int
+	index := func(_ uint64, _ uint32, blob []byte) {
+		version = max(version, parseSlotterVersion(blob))
+	}
+	store, err := billy.Open(billy.Options{Path: path}, newVersionSlotter(), index)
+	if err != nil {
+		return 0, err
+	}
+	store.Close()
+	return version, nil
+}
+
+// writeSlotterVersion writes the current slotter version into the store.
+func writeSlotterVersion(path string, version int) error {
+	store, err := billy.Open(billy.Options{Path: path}, newVersionSlotter(), nil)
+	defer store.Close()
+	if err != nil {
+		return err
+	}
+	_, err = store.Put([]byte{byte(version)})
+	return err
 }
