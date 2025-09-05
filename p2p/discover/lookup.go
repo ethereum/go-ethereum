@@ -142,11 +142,12 @@ func (it *lookup) query(n *enode.Node, reply chan<- []*enode.Node) {
 // lookupIterator performs lookup operations and iterates over all seen nodes.
 // When a lookup finishes, a new one is created through nextLookup.
 type lookupIterator struct {
-	buffer     []*enode.Node
-	nextLookup lookupFunc
-	ctx        context.Context
-	cancel     func()
-	lookup     *lookup
+	buffer        []*enode.Node
+	nextLookup    lookupFunc
+	ctx           context.Context
+	cancel        func()
+	lookup        *lookup
+	tabRefreshing <-chan struct{}
 }
 
 type lookupFunc func(ctx context.Context) *lookup
@@ -187,11 +188,11 @@ func (it *lookupIterator) Next() bool {
 			}
 			continue
 		}
-		if !it.lookup.advance() {
-			it.lookup = nil
-			continue
-		}
+		newNodes := it.lookup.advance()
 		it.buffer = it.lookup.replyBuffer
+		if !newNodes {
+			it.lookup = nil
+		}
 	}
 	return true
 }
@@ -201,9 +202,27 @@ func (it *lookupIterator) Next() bool {
 func (it *lookupIterator) lookupFailed(tab *Table) {
 	timeout, cancel := context.WithTimeout(it.ctx, 1*time.Minute)
 	defer cancel()
-	tab.waitForNodes(timeout, 1)
 
-	// TODO: here we need to trigger a table refresh somehow
+	// Wait for Table initialization to complete, in case it is still in progress.
+	select {
+	case <-tab.initDone:
+	case <-timeout.Done():
+		return
+	}
+
+	// Wait for ongoing refresh operation, or trigger one.
+	if it.tabRefreshing == nil {
+		it.tabRefreshing = tab.refresh()
+	}
+	select {
+	case <-it.tabRefreshing:
+		it.tabRefreshing = nil
+	case <-timeout.Done():
+		return
+	}
+
+	// Wait for the table to fill.
+	tab.waitForNodes(timeout, 1)
 }
 
 // Close ends the iterator.
