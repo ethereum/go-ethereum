@@ -396,24 +396,24 @@ func byzantiumMultComplexity(x uint64) uint64 {
 	case x <= 1024:
 		// x^2 / 4 + 96*x - 3072
 		return x*x/4 + 96*x - 3072
+
 	default:
 		// For large x, use uint256 arithmetic to avoid overflow
 		// x^2 / 16 + 480*x - 199680
-		// xSqr = x^2
+
+		// xSqr = x^2 / 16
 		carry, xSqr := bits.Mul64(x, x)
 		if carry != 0 {
 			return math.MaxUint64
 		}
-
-		// Calculate x^2 / 16
 		xSqr = xSqr >> 4
 
 		// Calculate 480 * x (can't overflow if x^2 didn't overflow)
 		x480 := x * 480
-
 		// Calculate 480 * x - 199680 (will not underflow, since x > 1024)
 		x480 = x480 - 199680
 
+		// xSqr + x480
 		sum, carry := bits.Add64(xSqr, x480, 0)
 		if carry != 0 {
 			return math.MaxUint64
