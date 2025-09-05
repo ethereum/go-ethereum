@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/stateless"
@@ -32,7 +33,7 @@ type Payload struct {
 }
 
 func main() {
-	input := getPayload()
+	input := getInput()
 	var payload Payload
 	rlp.DecodeBytes(input, &payload)
 
@@ -41,12 +42,15 @@ func main() {
 
 	crossStateRoot, crossReceiptRoot, err := core.ExecuteStateless(chainConfig, vmConfig, payload.Block, payload.Witness)
 	if err != nil {
-		panic(fmt.Errorf("stateless self-validation failed: %v", err))
+		fmt.Fprintf(os.Stderr, "stateless self-validation failed: %v\n", err)
+		os.Exit(10)
 	}
 	if crossStateRoot != payload.Block.Root() {
-		panic(fmt.Errorf("stateless self-validation root mismatch (cross: %x local: %x)", crossStateRoot, payload.Block.Root()))
+		fmt.Fprintf(os.Stderr, "stateless self-validation root mismatch (cross: %x local: %x)\n", crossStateRoot, payload.Block.Root())
+		os.Exit(11)
 	}
 	if crossReceiptRoot != payload.Block.ReceiptHash() {
-		panic(fmt.Errorf("stateless self-validation receipt root mismatch (cross: %x local: %x)", crossReceiptRoot, payload.Block.ReceiptHash()))
+		fmt.Fprintf(os.Stderr, "stateless self-validation receipt root mismatch (cross: %x local: %x)\n", crossReceiptRoot, payload.Block.ReceiptHash())
+		os.Exit(12)
 	}
 }

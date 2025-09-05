@@ -19,7 +19,9 @@
 package main
 
 import (
+	"fmt"
 	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/stateless"
@@ -95,7 +97,8 @@ func getInput() []byte {
 
 	encoded, err := rlp.EncodeToBytes(payload)
 	if err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "failed to encode payload: %v\n", err)
+		os.Exit(20)
 	}
 	return encoded
 }
