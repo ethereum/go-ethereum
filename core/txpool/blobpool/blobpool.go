@@ -1417,11 +1417,13 @@ func (p *BlobPool) convertSidecar(txs []*types.Transaction) ([]*types.Transactio
 	}
 	var errs []error
 	for _, tx := range txs {
-		sidecar := tx.BlobTxSidecar()
-		if sidecar == nil {
-			errs = append(errs, errors.New("missing sidecar in blob transaction"))
+		// Validate the transaction at first to avoid unnecessary conversion.
+		if err := p.validateTx(tx); err != nil {
+			errs = append(errs, err)
 			continue
 		}
+
+		sidecar := tx.BlobTxSidecar()
 		if sidecar.Version == types.BlobSidecarVersion0 {
 			if err := sidecar.ToV1(); err != nil {
 				errs = append(errs, err)
