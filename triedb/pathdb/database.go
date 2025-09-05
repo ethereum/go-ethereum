@@ -502,12 +502,14 @@ func (db *Database) Recover(root common.Hash) error {
 	if err := db.diskdb.SyncKeyValue(); err != nil {
 		return err
 	}
-	_, err := truncateFromHead(db.stateFreezer, dl.stateID())
-	if err != nil {
-		return err
-	}
 	log.Debug("Recovered state", "root", root, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
+}
+
+// TruncateHead truncates all state histories in the freezer above the bottom state layer.
+func (db *Database) TruncateHead() error {
+	_, err := truncateFromHead(db.stateFreezer, db.tree.bottom().stateID())
+	return err
 }
 
 // Recoverable returns the indicator if the specified state is recoverable.
