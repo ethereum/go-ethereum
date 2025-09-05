@@ -462,9 +462,9 @@ func osakaMultComplexity(x uint64) uint64 {
 	return result
 }
 
-// calculateIterationCount calculates the number of iterations for the modexp precompile.
+// modexpIterationCount calculates the number of iterations for the modexp precompile.
 // This is the adjusted exponent length used in gas calculation.
-func calculateIterationCount(expLen uint64, expHead uint256.Int, multiplier uint64) uint64 {
+func modexpIterationCount(expLen uint64, expHead uint256.Int, multiplier uint64) uint64 {
 	var iterationCount uint64
 
 	// For large exponents (expLen > 32), add (expLen - 32) * multiplier
@@ -492,7 +492,7 @@ func byzantiumGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint6
 	if multComplexity == math.MaxUint64 {
 		return math.MaxUint64
 	}
-	iterationCount := calculateIterationCount(expLen, expHead, multiplier)
+	iterationCount := modexpIterationCount(expLen, expHead, multiplier)
 
 	// Calculate gas: (multComplexity * iterationCount) / divisor
 	carry, gas := bits.Mul64(iterationCount, multComplexity)
@@ -503,8 +503,8 @@ func byzantiumGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint6
 	return gas
 }
 
-// berlinGasCalc calculates the gas cost for the modexp precompile using Berlin rules.
-func berlinGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
+// berlinModexpGas calculates the gas cost for the modexp precompile using Berlin rules.
+func berlinModexpGas(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
 	const (
 		multiplier = 8
 		divisor    = 3
@@ -516,7 +516,7 @@ func berlinGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
 	if multComplexity == math.MaxUint64 {
 		return math.MaxUint64
 	}
-	iterationCount := calculateIterationCount(expLen, expHead, multiplier)
+	iterationCount := modexpIterationCount(expLen, expHead, multiplier)
 
 	// Calculate gas: (multComplexity * iterationCount) / divisor
 	carry, gas := bits.Mul64(iterationCount, multComplexity)
@@ -527,8 +527,8 @@ func berlinGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
 	return max(gas, minGas)
 }
 
-// osakaGasCalc calculates the gas cost for the modexp precompile using Osaka rules.
-func osakaGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
+// osakaModexpGas calculates the gas cost for the modexp precompile using Osaka rules.
+func osakaModexpGas(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
 	const (
 		multiplier = 16
 		divisor    = 3
@@ -540,7 +540,7 @@ func osakaGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
 	if multComplexity == math.MaxUint64 {
 		return math.MaxUint64
 	}
-	iterationCount := calculateIterationCount(expLen, expHead, multiplier)
+	iterationCount := modexpIterationCount(expLen, expHead, multiplier)
 
 	// Calculate gas: (multComplexity * iterationCount) / osakaDivisor
 	carry, gas := bits.Mul64(iterationCount, multComplexity)
@@ -591,9 +591,9 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 
 	// Choose the appropriate gas calculation based on the EIP flags
 	if c.eip7883 {
-		return osakaGasCalc(baseLen, expLen, modLen, expHead)
+		return osakaModexpGas(baseLen, expLen, modLen, expHead)
 	} else if c.eip2565 {
-		return berlinGasCalc(baseLen, expLen, modLen, expHead)
+		return berlinModexpGas(baseLen, expLen, modLen, expHead)
 	} else {
 		return byzantiumGasCalc(baseLen, expLen, modLen, expHead)
 	}
