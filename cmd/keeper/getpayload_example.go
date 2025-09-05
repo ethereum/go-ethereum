@@ -19,79 +19,78 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
-	"math/big"
 	"os"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
-func getChainConfig() *params.ChainConfig {
-	return params.MainnetChainConfig
+// This is taken from PR #32216 until it's merged
+// ExtWitness is a witness RLP encoding for transferring across clients.
+type ExtWitness struct {
+	Headers []*types.Header `json:"headers"`
+	Codes   []hexutil.Bytes `json:"codes"`
+	State   []hexutil.Bytes `json:"state"`
+	Keys    []hexutil.Bytes `json:"keys"`
 }
 
+// This is taken from PR #32216 until it's merged
+// fromExtWitness converts the consensus witness format into our internal one.
+func fromExtWitness(ext *ExtWitness) (*stateless.Witness, error) {
+	w := &stateless.Witness{}
+	w.Headers = ext.Headers
+
+	w.Codes = make(map[string]struct{}, len(ext.Codes))
+	for _, code := range ext.Codes {
+		w.Codes[string(code)] = struct{}{}
+	}
+	w.State = make(map[string]struct{}, len(ext.State))
+	for _, node := range ext.State {
+		w.State[string(node)] = struct{}{}
+	}
+	return w, nil
+}
+
+//go:embed 1192c3_witness.rlp
+var witnessRlp []byte
+
+//go:embed 1192c3_block.rlp
+var blockRlp []byte
+
+func getChainConfig() *params.ChainConfig {
+	return params.HoodiChainConfig
+}
+
+// getInput is a platform-specific function that will recover the input payload
+// and returns it as a slice. It is expected to be an RLP-encoded Payload structure
+// that contains the witness and the block.
+// This is a demo version, that is intended to run on a regular computer, so what
+// it does is embed a small Hoodi block, encodes the Payload structure containing
+// the block and its witness as RLP, and returns the encoding.
 func getInput() []byte {
-	header := &types.Header{
-		ParentHash:  common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"),
-		UncleHash:   types.EmptyUncleHash,
-		Coinbase:    common.HexToAddress("0x0000000000000000000000000000000000000000"),
-		Root:        common.Hash{}, // Will be computed by stateless execution
-		TxHash:      types.EmptyTxsHash,
-		ReceiptHash: types.EmptyReceiptsHash,
-		Bloom:       types.Bloom{},
-		Difficulty:  big.NewInt(0),
-		Number:      big.NewInt(20000000), // Post-merge block number
-		GasLimit:    30000000,
-		GasUsed:     0,
-		Time:        1700000000, // Recent timestamp
-		Extra:       []byte("Example block for platform builders"),
-		MixDigest:   common.Hash{},
-		Nonce:       types.BlockNonce{},
-		BaseFee:     big.NewInt(1000000000), // 1 gwei base fee
+	var block types.Block
+	err := rlp.DecodeBytes(blockRlp, &block)
+	if err != nil {
+		panic(err)
 	}
 
-	// For this example, create an empty block (no transactions)
-	// A real implementation would include properly funded accounts
-	body := &types.Body{
-		Transactions: []*types.Transaction{},
+	var extwitness ExtWitness
+	err = rlp.DecodeBytes(witnessRlp, &extwitness)
+	if err != nil {
+		panic(err)
 	}
-	block := types.NewBlock(header, body, nil, trie.NewStackTrie(nil))
-
-	// Create a parent header (required by witness)
-	parentHeader := &types.Header{
-		ParentHash:  common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
-		UncleHash:   types.EmptyUncleHash,
-		Coinbase:    common.HexToAddress("0x0000000000000000000000000000000000000000"),
-		Root:        common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
-		TxHash:      types.EmptyTxsHash,
-		ReceiptHash: types.EmptyReceiptsHash,
-		Bloom:       types.Bloom{},
-		Difficulty:  big.NewInt(0),
-		Number:      big.NewInt(19999999),
-		GasLimit:    30000000,
-		GasUsed:     0,
-		Time:        1699999999,
-		Extra:       []byte("Parent block"),
-		MixDigest:   common.Hash{},
-		Nonce:       types.BlockNonce{},
-		BaseFee:     big.NewInt(1000000000),
-	}
-
-	// The witness needs state nodes for any accounts accessed
-	// For an empty block, minimal state is needed
-	witness := &stateless.Witness{
-		Headers: []*types.Header{parentHeader},
-		Codes: map[string]struct{}{},
-		State: map[string]struct{}{},
+	witness, err := fromExtWitness(&extwitness)
+	if err != nil {
+		panic(err)
 	}
 
 	payload := Payload{
-		Block:   block,
+		Block:   &block,
 		Witness: witness,
 	}
 
