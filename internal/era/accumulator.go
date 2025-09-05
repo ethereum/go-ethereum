@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	ssz "github.com/ferranbt/fastssz"
@@ -31,8 +32,8 @@ func ComputeAccumulator(hashes []common.Hash, tds []*big.Int) (common.Hash, erro
 	if len(hashes) != len(tds) {
 		return common.Hash{}, errors.New("must have equal number hashes as td values")
 	}
-	if len(hashes) > MaxEra1Size {
-		return common.Hash{}, fmt.Errorf("too many records: have %d, max %d", len(hashes), MaxEra1Size)
+	if len(hashes) > MaxSize {
+		return common.Hash{}, fmt.Errorf("too many records: have %d, max %d", len(hashes), MaxSize)
 	}
 	hh := ssz.NewHasher()
 	for i := range hashes {
@@ -43,7 +44,7 @@ func ComputeAccumulator(hashes []common.Hash, tds []*big.Int) (common.Hash, erro
 		}
 		hh.Append(root[:])
 	}
-	hh.MerkleizeWithMixin(0, uint64(len(hashes)), uint64(MaxEra1Size))
+	hh.MerkleizeWithMixin(0, uint64(len(hashes)), uint64(MaxSize))
 	return hh.HashRoot()
 }
 
@@ -69,23 +70,15 @@ func (h *headerRecord) HashTreeRoot() ([32]byte, error) {
 // HashTreeRootWith ssz hashes the headerRecord object with a hasher.
 func (h *headerRecord) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 	hh.PutBytes(h.Hash[:])
-	td := bigToBytes32(h.TotalDifficulty)
+	td := BigToBytes32(h.TotalDifficulty)
 	hh.PutBytes(td[:])
 	hh.Merkleize(0)
 	return
 }
 
 // bigToBytes32 converts a big.Int into a little-endian 32-byte array.
-func bigToBytes32(n *big.Int) (b [32]byte) {
+func BigToBytes32(n *big.Int) (b [32]byte) {
 	n.FillBytes(b[:])
-	reverseOrder(b[:])
+	slices.Reverse(b[:])
 	return
-}
-
-// reverseOrder reverses the byte order of a slice.
-func reverseOrder(b []byte) []byte {
-	for i := 0; i < 16; i++ {
-		b[i], b[32-i-1] = b[32-i-1], b[i]
-	}
-	return b
 }
