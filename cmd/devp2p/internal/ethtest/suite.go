@@ -542,7 +542,7 @@ func (s *Suite) TestBlockRangeUpdateInvalid(t *utesting.T) {
 
 func (s *Suite) TestBlockRangeUpdateFuture(t *utesting.T) {
 	t.Log(`This test sends a BlockRangeUpdate that is beyond the chain head.
-The node should accept the update and should not disonnect.`)
+The node should accept the update and should not disconnect.`)
 	conn, err := s.dialAndPeer(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -578,7 +578,7 @@ The node should accept the update and should not disonnect.`)
 
 func (s *Suite) TestBlockRangeUpdateHistoryExp(t *utesting.T) {
 	t.Log(`This test sends a BlockRangeUpdate announcing incomplete (expired) history.
-The node should accept the update and should not disonnect.`)
+The node should accept the update and should not disconnect.`)
 	conn, err := s.dialAndPeer(nil)
 	if err != nil {
 		t.Fatal(err)
