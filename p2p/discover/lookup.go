@@ -49,11 +49,14 @@ func newLookup(ctx context.Context, tab *Table, target enode.ID, q queryFunc) *l
 		result:    nodesByDistance{target: target},
 		replyCh:   make(chan []*enode.Node, alpha),
 		cancelCh:  ctx.Done(),
-		queries:   -1,
 	}
 	// Don't query further if we hit ourself.
 	// Unlikely to happen often in practice.
 	it.asked[tab.self().ID()] = true
+
+	// Initialize the lookup with nodes from table.
+	closest := it.tab.findnodeByID(it.result.target, bucketSize, false)
+	it.addNodes(closest.entries)
 	return it
 }
 
@@ -64,22 +67,18 @@ func (it *lookup) run() []*enode.Node {
 	return it.result.entries
 }
 
+func (it *lookup) empty() bool {
+	return len(it.replyBuffer) == 0
+}
+
 // advance advances the lookup until any new nodes have been found.
 // It returns false when the lookup has ended.
 func (it *lookup) advance() bool {
 	for it.startQueries() {
 		select {
 		case nodes := <-it.replyCh:
-			it.replyBuffer = it.replyBuffer[:0]
-			for _, n := range nodes {
-				if n != nil && !it.seen[n.ID()] {
-					it.seen[n.ID()] = true
-					it.result.push(n, bucketSize)
-					it.replyBuffer = append(it.replyBuffer, n)
-				}
-			}
 			it.queries--
-			if len(it.replyBuffer) > 0 {
+			if it.addNodes(nodes) {
 				return true
 			}
 		case <-it.cancelCh:
@@ -87,6 +86,18 @@ func (it *lookup) advance() bool {
 		}
 	}
 	return false
+}
+
+func (it *lookup) addNodes(nodes []*enode.Node) (done bool) {
+	it.replyBuffer = it.replyBuffer[:0]
+	for _, n := range nodes {
+		if n != nil && !it.seen[n.ID()] {
+			it.seen[n.ID()] = true
+			it.result.push(n, bucketSize)
+			it.replyBuffer = append(it.replyBuffer, n)
+		}
+	}
+	return len(it.replyBuffer) == 0
 }
 
 func (it *lookup) shutdown() {
@@ -103,20 +114,6 @@ func (it *lookup) startQueries() bool {
 		return false
 	}
 
-	// The first query returns nodes from the local table.
-	if it.queries == -1 {
-		closest := it.tab.findnodeByID(it.result.target, bucketSize, false)
-		// Avoid finishing the lookup too quickly if table is empty. It'd be better to wait
-		// for the table to fill in this case, but there is no good mechanism for that
-		// yet.
-		if len(closest.entries) == 0 {
-			it.slowdown()
-		}
-		it.queries = 1
-		it.replyCh <- closest.entries
-		return true
-	}
-
 	// Ask the closest nodes that we haven't asked yet.
 	for i := 0; i < len(it.result.entries) && it.queries < alpha; i++ {
 		n := it.result.entries[i]
@@ -128,15 +125,6 @@ func (it *lookup) startQueries() bool {
 	}
 	// The lookup ends when no more nodes can be asked.
 	return it.queries > 0
-}
-
-func (it *lookup) slowdown() {
-	sleep := time.NewTimer(1 * time.Second)
-	defer sleep.Stop()
-	select {
-	case <-sleep.C:
-	case <-it.tab.closeReq:
-	}
 }
 
 func (it *lookup) query(n *enode.Node, reply chan<- []*enode.Node) {
@@ -182,6 +170,7 @@ func (it *lookupIterator) Next() bool {
 	if len(it.buffer) > 0 {
 		it.buffer = it.buffer[1:]
 	}
+
 	// Advance the lookup to refill the buffer.
 	for len(it.buffer) == 0 {
 		if it.ctx.Err() != nil {
@@ -191,6 +180,11 @@ func (it *lookupIterator) Next() bool {
 		}
 		if it.lookup == nil {
 			it.lookup = it.nextLookup(it.ctx)
+			if it.lookup.empty() {
+				// If the lookup is empty right after creation, it means the local table
+				// is in a degraded state, and we need to wait for it to fill again.
+				it.lookupFailed(it.lookup.tab)
+			}
 			continue
 		}
 		if !it.lookup.advance() {
@@ -200,6 +194,16 @@ func (it *lookupIterator) Next() bool {
 		it.buffer = it.lookup.replyBuffer
 	}
 	return true
+}
+
+// lookupFailed handles failed lookup attempts. This can be called when the table has
+// exited, or when it runs out of nodes.
+func (it *lookupIterator) lookupFailed(tab *Table) {
+	timeout, cancel := context.WithTimeout(it.ctx, 1*time.Minute)
+	defer cancel()
+	tab.waitForNodes(timeout, 1)
+
+	// TODO: here we need to trigger a table refresh somehow
 }
 
 // Close ends the iterator.
