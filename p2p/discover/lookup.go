@@ -78,7 +78,8 @@ func (it *lookup) advance() bool {
 		select {
 		case nodes := <-it.replyCh:
 			it.queries--
-			if it.addNodes(nodes) {
+			it.addNodes(nodes)
+			if !it.empty() {
 				return true
 			}
 		case <-it.cancelCh:
@@ -88,7 +89,7 @@ func (it *lookup) advance() bool {
 	return false
 }
 
-func (it *lookup) addNodes(nodes []*enode.Node) (done bool) {
+func (it *lookup) addNodes(nodes []*enode.Node) {
 	it.replyBuffer = it.replyBuffer[:0]
 	for _, n := range nodes {
 		if n != nil && !it.seen[n.ID()] {
@@ -97,7 +98,6 @@ func (it *lookup) addNodes(nodes []*enode.Node) (done bool) {
 			it.replyBuffer = append(it.replyBuffer, n)
 		}
 	}
-	return len(it.replyBuffer) == 0
 }
 
 func (it *lookup) shutdown() {
