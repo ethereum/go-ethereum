@@ -2269,7 +2269,7 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 }
 
 // MakeTrieDatabase constructs a trie database based on the configured scheme.
-func MakeTrieDatabase(ctx *cli.Context, disk ethdb.Database, preimage bool, readOnly bool, isVerkle bool) *triedb.Database {
+func MakeTrieDatabase(ctx *cli.Context, stack *node.Node, disk ethdb.Database, preimage bool, readOnly bool, isVerkle bool) *triedb.Database {
 	config := &triedb.Config{
 		Preimages: preimage,
 		IsVerkle:  isVerkle,
@@ -2285,10 +2285,13 @@ func MakeTrieDatabase(ctx *cli.Context, disk ethdb.Database, preimage bool, read
 		config.HashDB = hashdb.Defaults
 		return triedb.NewDatabase(disk, config)
 	}
+	var pathConfig pathdb.Config
 	if readOnly {
-		config.PathDB = pathdb.ReadOnly
+		pathConfig = *pathdb.ReadOnly
 	} else {
-		config.PathDB = pathdb.Defaults
+		pathConfig = *pathdb.Defaults
 	}
+	pathConfig.JournalDirectory = stack.ResolvePath("triedb")
+	config.PathDB = &pathConfig
 	return triedb.NewDatabase(disk, config)
 }
