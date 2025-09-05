@@ -536,6 +536,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		stateSizer, err := state.NewSizeTracker(bc.db, bc.triedb)
 		if err == nil {
 			bc.stateSizer = stateSizer
+			log.Info("Initialized state sizer")
 		} else {
 			log.Info("Failed to setup size tracker", "err", err)
 		}

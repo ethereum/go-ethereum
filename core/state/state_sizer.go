@@ -67,7 +67,7 @@ type SizeStats struct {
 }
 
 func (s SizeStats) String() string {
-	return fmt.Sprintf("Accounts: %d (%s), Storages: %d (%s), AccountTrienodes: %d (%s), StorageTrienodes: %d (%s), ContractCodes: %d (%s)",
+	return fmt.Sprintf("Accounts: %d(%s), Storages: %d(%s), AccountTrienodes: %d(%s), StorageTrienodes: %d(%s), Codes: %d(%s)",
 		s.Accounts, common.StorageSize(s.AccountBytes),
 		s.Storages, common.StorageSize(s.StorageBytes),
 		s.AccountTrienodes, common.StorageSize(s.AccountTrienodeBytes),
@@ -223,6 +223,12 @@ func calSizeStats(update *stateUpdate) (SizeStats, error) {
 	return stats, nil
 }
 
+type stateSizeQuery struct {
+	root   *common.Hash    // nil means latest
+	err    error           // non-nil if the state size is not yet initialized
+	result chan *SizeStats // nil means the state is unknown
+}
+
 // SizeTracker handles the state size initialization and tracks of state size metrics.
 type SizeTracker struct {
 	db       ethdb.KeyValueStore
@@ -230,9 +236,7 @@ type SizeTracker struct {
 	abort    chan struct{}
 	aborted  chan struct{}
 	updateCh chan *stateUpdate
-
-	mu          sync.RWMutex
-	latestStats *SizeStats
+	queryCh  chan *stateSizeQuery
 }
 
 // NewSizeTracker creates a new state size tracker and starts it automatically
@@ -246,6 +250,7 @@ func NewSizeTracker(db ethdb.KeyValueStore, triedb *triedb.Database) (*SizeTrack
 		abort:    make(chan struct{}),
 		aborted:  make(chan struct{}),
 		updateCh: make(chan *stateUpdate),
+		queryCh:  make(chan *stateSizeQuery),
 	}
 	go t.run()
 	return t, nil
@@ -280,6 +285,7 @@ func (h *sizeStatsHeap) Pop() any {
 func (t *SizeTracker) run() {
 	defer close(t.aborted)
 
+	var last common.Hash
 	stats, err := t.init() // launch background thread for state size init
 	if err != nil {
 		return
@@ -301,17 +307,26 @@ func (t *SizeTracker) run() {
 			}
 			stat := base.add(diff)
 			stats[u.root] = stat
-			log.Debug("Update state size", "number", stat.BlockNumber, "root", stat.StateRoot, "stat", stat)
-
-			// Update latest stats
-			t.mu.Lock()
-			t.latestStats = &stat
-			t.mu.Unlock()
+			last = u.root
 
 			heap.Push(&h, stats[u.root])
 			for u.blockNumber-h[0].BlockNumber > statEvictThreshold {
 				delete(stats, h[0].StateRoot)
 				heap.Pop(&h)
+			}
+			log.Debug("Update state size", "number", stat.BlockNumber, "root", stat.StateRoot, "stat", stat)
+
+		case r := <-t.queryCh:
+			var root common.Hash
+			if r.root != nil {
+				root = *r.root
+			} else {
+				root = last
+			}
+			if s, ok := stats[root]; ok {
+				r.result <- &s
+			} else {
+				r.result <- nil
 			}
 
 		case <-t.abort:
@@ -342,6 +357,9 @@ wait:
 			}
 		case <-t.updateCh:
 			continue
+		case r := <-t.queryCh:
+			r.err = errors.New("state size is not initialized yet")
+			r.result <- nil
 		case <-t.abort:
 			return nil, errors.New("size tracker closed")
 		}
@@ -358,6 +376,11 @@ wait:
 		case u := <-t.updateCh:
 			updates[u.root] = u
 			children[u.originRoot] = append(children[u.originRoot], u.root)
+			log.Debug("Received state update", "root", u.root, "blockNumber", u.blockNumber)
+
+		case r := <-t.queryCh:
+			r.err = errors.New("state size is not initialized yet")
+			r.result <- nil
 
 		case <-ticker.C:
 			// Only check timer if build hasn't started yet
@@ -407,11 +430,6 @@ wait:
 
 			// Set initial latest stats
 			stats[result.root] = result.stat
-
-			t.mu.Lock()
-			t.latestStats = &result.stat
-			t.mu.Unlock()
-
 			log.Info("Measured persistent state size", "root", result.root, "number", result.blockNumber, "stat", result.stat, "elapsed", common.PrettyDuration(result.elapsed))
 			return stats, nil
 
@@ -508,20 +526,6 @@ func (t *SizeTracker) build(root common.Hash, blockNumber uint64, done chan buil
 	}
 }
 
-// Notify is an async method used to send the state update to the size tracker.
-// It ignores empty updates (where no state changes occurred).
-// If the channel is full, it drops the update to avoid blocking.
-func (t *SizeTracker) Notify(update *stateUpdate) {
-	if update == nil || update.empty() {
-		return
-	}
-	select {
-	case t.updateCh <- update:
-	case <-t.abort:
-		return
-	}
-}
-
 // iterateTable performs iteration over a specific table and returns the results.
 func (t *SizeTracker) iterateTable(closed chan struct{}, prefix []byte, name string) (int64, int64, error) {
 	var (
@@ -543,10 +547,10 @@ func (t *SizeTracker) iterateTable(closed chan struct{}, prefix []byte, name str
 
 			select {
 			case <-closed:
-				log.Info("State iteration cancelled", "category", name)
+				log.Debug("State iteration cancelled", "category", name)
 				return 0, 0, errors.New("size tracker closed")
 			default:
-				log.Info("Iterating state", "category", name, "count", count, "size", common.StorageSize(bytes))
+				log.Debug("Iterating state", "category", name, "count", count, "size", common.StorageSize(bytes))
 			}
 		}
 	}
@@ -573,8 +577,7 @@ func (t *SizeTracker) iterateTableParallel(closed chan struct{}, prefix []byte, 
 		mu      sync.Mutex
 	)
 	group.SetLimit(workers)
-
-	log.Info("Starting parallel state iteration", "category", name, "workers", workers)
+	log.Debug("Starting parallel state iteration", "category", name, "workers", workers)
 
 	if len(prefix) > 0 {
 		if blob, err := t.db.Get(prefix); err == nil && len(blob) > 0 {
@@ -583,7 +586,6 @@ func (t *SizeTracker) iterateTableParallel(closed chan struct{}, prefix []byte, 
 			totalBytes = int64(len(prefix) + len(blob))
 		}
 	}
-
 	for i := 0; i < 256; i++ {
 		h := byte(i)
 		group.Go(func() error {
@@ -601,14 +603,36 @@ func (t *SizeTracker) iterateTableParallel(closed chan struct{}, prefix []byte, 
 	if err := group.Wait(); err != nil {
 		return 0, 0, err
 	}
-	log.Info("Finished parallel state iteration", "category", name, "count", totalCount, "size", common.StorageSize(totalBytes), "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Debug("Finished parallel state iteration", "category", name, "count", totalCount, "size", common.StorageSize(totalBytes), "elapsed", common.PrettyDuration(time.Since(start)))
 	return totalCount, totalBytes, nil
 }
 
-// GetLatestStats returns the latest state size statistics, or nil if not available
-func (t *SizeTracker) GetLatestStats() *SizeStats {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
+// Notify is an async method used to send the state update to the size tracker.
+// It ignores empty updates (where no state changes occurred).
+// If the channel is full, it drops the update to avoid blocking.
+func (t *SizeTracker) Notify(update *stateUpdate) {
+	if update == nil || update.empty() {
+		return
+	}
+	select {
+	case t.updateCh <- update:
+	case <-t.abort:
+		return
+	}
+}
 
-	return t.latestStats
+// Query returns the state size specified by the root, or nil if not available.
+// If the root is nil, query the size of latest chain head;
+// If the root is non-nil, query the size of the specified state;
+func (t *SizeTracker) Query(root *common.Hash) (*SizeStats, error) {
+	r := &stateSizeQuery{
+		root:   root,
+		result: make(chan *SizeStats, 1),
+	}
+	select {
+	case <-t.aborted:
+		return nil, errors.New("state sizer has been closed")
+	case t.queryCh <- r:
+		return <-r.result, r.err
+	}
 }
