@@ -138,7 +138,7 @@ func TestBlockWriterDelete(t *testing.T) {
 		}
 		newMax := uint64(i - 1)
 		if bw.desc.max != newMax {
-			t.Fatalf("Maxmium element is not matched, want: %d, got: %d", newMax, bw.desc.max)
+			t.Fatalf("Maximum element is not matched, want: %d, got: %d", newMax, bw.desc.max)
 		}
 	}
 }
