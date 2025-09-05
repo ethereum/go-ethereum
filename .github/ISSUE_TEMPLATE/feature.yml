@@ -10,6 +10,6 @@ body:
     validations:
       required: true
   - type: textarea
-    id: description
+    id: approach-and-alternatives
     attributes:
-      label: "How would you recommend implementing it?"
+      label: "Recommended approach and alternatives"
