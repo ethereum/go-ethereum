@@ -2221,7 +2221,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		TrieJournalDirectory: stack.ResolvePath("triedb"),
 
 		// Enable state size tracking if enabled
-		EnableStateSizeTracking: ctx.Bool(StateSizeTrackingFlag.Name),
+		StateSizeTracking: ctx.Bool(StateSizeTrackingFlag.Name),
 	}
 	if options.ArchiveMode && !options.Preimages {
 		options.Preimages = true

@@ -451,12 +451,10 @@ func (api *DebugAPI) StateSize() (interface{}, error) {
 	if sizer == nil {
 		return nil, errors.New("state size tracker is not enabled")
 	}
-
 	stats := sizer.GetLatestStats()
 	if stats == nil {
 		return nil, errors.New("state size statistics are not ready yet")
 	}
-
 	return map[string]interface{}{
 		"stateRoot":            stats.StateRoot,
 		"blockNumber":          hexutil.Uint64(stats.BlockNumber),

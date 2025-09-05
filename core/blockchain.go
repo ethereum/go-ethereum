@@ -197,8 +197,8 @@ type BlockChainConfig struct {
 	// If the value is -1, indexing is disabled.
 	TxLookupLimit int64
 
-	// EnableStateSizeTracking indicates whether the state size tracking is enabled.
-	EnableStateSizeTracking bool
+	// StateSizeTracking indicates whether the state size tracking is enabled.
+	StateSizeTracking bool
 }
 
 // DefaultConfig returns the default config.
@@ -532,7 +532,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	}
 
 	// Start state size tracker
-	if bc.cfg.EnableStateSizeTracking {
+	if bc.cfg.StateSizeTracking {
 		stateSizer, err := state.NewSizeTracker(bc.db, bc.triedb)
 		if err == nil {
 			bc.stateSizer = stateSizer

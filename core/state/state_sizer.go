@@ -292,6 +292,7 @@ func (t *SizeTracker) run() {
 		case u := <-t.updateCh:
 			base, found := stats[u.originRoot]
 			if !found {
+				log.Debug("Ignored the state size without parent", "parent", u.originRoot, "root", u.root, "number", u.blockNumber)
 				continue
 			}
 			diff, err := calSizeStats(u)
@@ -352,8 +353,6 @@ wait:
 		done     chan buildResult
 	)
 
-	t.triedb.SetForceFlush(true)
-
 	for {
 		select {
 		case u := <-t.updateCh:
@@ -378,8 +377,6 @@ wait:
 			log.Info("Measuring persistent state size", "root", root.Hex(), "number", entry.blockNumber)
 
 		case result := <-done:
-			t.triedb.SetForceFlush(false)
-
 			if result.err != nil {
 				return nil, result.err
 			}
@@ -410,6 +407,7 @@ wait:
 
 			// Set initial latest stats
 			stats[result.root] = result.stat
+
 			t.mu.Lock()
 			t.latestStats = &result.stat
 			t.mu.Unlock()
@@ -561,16 +559,18 @@ func (t *SizeTracker) iterateTable(closed chan struct{}, prefix []byte, name str
 	return count, bytes, nil
 }
 
-// iterateTableParallel performs parallel iteration over a table by splitting into hex ranges
-// For storage tables, it splits on the first byte of the account hash (after the prefix)
+// iterateTableParallel performs parallel iteration over a table by splitting into
+// hex ranges. For storage tables, it splits on the first byte of the account hash
+// (after the prefix).
 func (t *SizeTracker) iterateTableParallel(closed chan struct{}, prefix []byte, name string) (int64, int64, error) {
 	var (
-		start      = time.Now()
-		workers    = runtime.NumCPU()
 		totalCount int64
 		totalBytes int64
-		group      errgroup.Group
-		mu         sync.Mutex
+
+		start   = time.Now()
+		workers = runtime.NumCPU()
+		group   errgroup.Group
+		mu      sync.Mutex
 	)
 	group.SetLimit(workers)
 
@@ -598,11 +598,9 @@ func (t *SizeTracker) iterateTableParallel(closed chan struct{}, prefix []byte, 
 			return nil
 		})
 	}
-
 	if err := group.Wait(); err != nil {
 		return 0, 0, err
 	}
-
 	log.Info("Finished parallel state iteration", "category", name, "count", totalCount, "size", common.StorageSize(totalBytes), "elapsed", common.PrettyDuration(time.Since(start)))
 	return totalCount, totalBytes, nil
 }
@@ -611,5 +609,6 @@ func (t *SizeTracker) iterateTableParallel(closed chan struct{}, prefix []byte, 
 func (t *SizeTracker) GetLatestStats() *SizeStats {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
+
 	return t.latestStats
 }
