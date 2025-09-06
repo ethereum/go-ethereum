@@ -470,7 +470,7 @@ func (api *DebugAPI) StateSize(blockHashOrNumber *rpc.BlockNumberOrHash) (interf
 	if stats == nil {
 		var s string
 		if blockHashOrNumber == nil {
-			s = "latest"
+			s = "chain head"
 		} else {
 			s = blockHashOrNumber.String()
 		}

@@ -1732,9 +1732,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.EthDiscoveryURLs = SplitAndTrim(urls)
 		}
 	}
-
 	if ctx.Bool(StateSizeTrackingFlag.Name) {
-		log.Info("Enabling state size metrics")
 		cfg.EnableStateSizeTracking = true
 	}
 	// Override any default configs for hard coded networks.
