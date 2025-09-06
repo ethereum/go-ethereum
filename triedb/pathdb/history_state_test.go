@@ -98,13 +98,13 @@ func testEncodeDecodeStateHistory(t *testing.T, rawStorageKey bool) {
 	if !compareSet(dec.accounts, obj.accounts) {
 		t.Fatal("account data is mismatched")
 	}
-	if !compareStorages(dec.storages, obj.storages) {
+	if !compareMapSet(dec.storages, obj.storages) {
 		t.Fatal("storage data is mismatched")
 	}
 	if !compareList(dec.accountList, obj.accountList) {
 		t.Fatal("account list is mismatched")
 	}
-	if !compareStorageList(dec.storageList, obj.storageList) {
+	if !compareMapList(dec.storageList, obj.storageList) {
 		t.Fatal("storage list is mismatched")
 	}
 }
@@ -292,32 +292,32 @@ func compareList[k comparable](a, b []k) bool {
 	return true
 }
 
-func compareStorages(a, b map[common.Address]map[common.Hash][]byte) bool {
+func compareMapSet[K1 comparable, K2 comparable](a, b map[K1]map[K2][]byte) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	for h, subA := range a {
-		subB, ok := b[h]
+	for key, subsetA := range a {
+		subsetB, ok := b[key]
 		if !ok {
 			return false
 		}
-		if !compareSet(subA, subB) {
+		if !compareSet(subsetA, subsetB) {
 			return false
 		}
 	}
 	return true
 }
 
-func compareStorageList(a, b map[common.Address][]common.Hash) bool {
+func compareMapList[K comparable, V comparable](a, b map[K][]V) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	for h, la := range a {
-		lb, ok := b[h]
+	for key, listA := range a {
+		listB, ok := b[key]
 		if !ok {
 			return false
 		}
-		if !compareList(la, lb) {
+		if !compareList(listA, listB) {
 			return false
 		}
 	}
