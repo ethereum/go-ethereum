@@ -1332,7 +1332,6 @@ func (bc *BlockChain) Stop() {
 			}
 		}
 	}
-
 	// Allow tracers to clean-up and release resources.
 	if bc.logger != nil && bc.logger.OnClose != nil {
 		bc.logger.OnClose()

@@ -136,7 +136,8 @@ type Database struct {
 
 	stateFreezer ethdb.ResettableAncientStore // Freezer for storing state histories, nil possible in tests
 	stateIndexer *historyIndexer              // History indexer historical state data, nil possible
-	lock         sync.RWMutex                 // Lock to prevent mutations from happening at the same time
+
+	lock sync.RWMutex // Lock to prevent mutations from happening at the same time
 }
 
 // New attempts to load an already existing layer from a persistent key-value
@@ -681,7 +682,7 @@ func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek 
 	return newFastStorageIterator(db, root, account, seek)
 }
 
-// SnapshotCompleted returns the snapshot root if the snapshot generation is completed.
+// SnapshotCompleted returns the flag indicating if the snapshot generation is completed.
 func (db *Database) SnapshotCompleted() bool {
 	db.lock.RLock()
 	wait := db.waitSync

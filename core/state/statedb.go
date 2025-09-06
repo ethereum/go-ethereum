@@ -186,7 +186,6 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 	if db.TrieDB().IsVerkle() {
 		sdb.accessEvents = NewAccessEvents(db.PointCache())
 	}
-
 	return sdb, nil
 }
 
@@ -668,7 +667,7 @@ func (s *StateDB) CreateContract(addr common.Address) {
 // Copy creates a deep, independent copy of the state.
 // Snapshots of the copied state cannot be applied to the copy.
 func (s *StateDB) Copy() *StateDB {
-	// Copy all the basic fields, init the memory ones
+	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
 		db:                   s.db,
 		reader:               s.reader,
