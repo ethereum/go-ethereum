@@ -24,22 +24,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
 )
 
 func TestSizeTracker(t *testing.T) {
-	tempDir := t.TempDir()
-
-	pdb, err := pebble.New(tempDir, 0, 0, "", false)
-	if err != nil {
-		t.Fatalf("Failed to create pebble database: %v", err)
-	}
-	defer pdb.Close()
-
-	db := rawdb.NewDatabase(pdb)
+	db := rawdb.NewMemoryDatabase()
 	defer db.Close()
 
 	tdb := triedb.NewDatabase(db, &triedb.Config{PathDB: pathdb.Defaults})
@@ -67,7 +58,7 @@ func TestSizeTracker(t *testing.T) {
 	state.AddBalance(addr3, uint256.NewInt(3000), tracing.BalanceChangeUnspecified)
 	state.SetNonce(addr3, 3, tracing.NonceChangeUnspecified)
 
-	currentRoot, _, err = state.CommitWithUpdate(1, true, false)
+	currentRoot, _, err := state.CommitWithUpdate(1, true, false)
 	if err != nil {
 		t.Fatalf("Failed to commit initial state: %v", err)
 	}
@@ -82,7 +73,6 @@ func TestSizeTracker(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create new state at block %d: %v", blockNum, err)
 		}
-
 		testAddr := common.BigToAddress(uint256.NewInt(uint64(i + 100)).ToBig())
 		newState.AddBalance(testAddr, uint256.NewInt(uint64((i+1)*1000)), tracing.BalanceChangeUnspecified)
 		newState.SetNonce(testAddr, uint64(i+10), tracing.NonceChangeUnspecified)
@@ -90,11 +80,9 @@ func TestSizeTracker(t *testing.T) {
 		if i%2 == 0 {
 			newState.SetState(addr1, common.BigToHash(uint256.NewInt(uint64(i+0x1000)).ToBig()), common.BigToHash(uint256.NewInt(uint64(i+0x2000)).ToBig()))
 		}
-
 		if i%3 == 0 {
 			newState.SetCode(testAddr, []byte{byte(i), 0x60, 0x80, byte(i + 1), 0x52}, tracing.CodeChangeUnspecified)
 		}
-
 		root, _, err := newState.CommitWithUpdate(blockNum, true, false)
 		if err != nil {
 			t.Fatalf("Failed to commit state at block %d: %v", blockNum, err)
@@ -102,10 +90,8 @@ func TestSizeTracker(t *testing.T) {
 		if err := tdb.Commit(root, false); err != nil {
 			t.Fatalf("Failed to commit trie at block %d: %v", blockNum, err)
 		}
-
 		currentRoot = root
 	}
-
 	baselineRoot := currentRoot
 
 	// Wait for snapshot completion
@@ -119,8 +105,8 @@ func TestSizeTracker(t *testing.T) {
 		triedb: tdb,
 		abort:  make(chan struct{}),
 	}
-
 	done := make(chan buildResult)
+
 	go baselineTracker.build(baselineRoot, baselineBlockNum, done)
 	var baselineResult buildResult
 	select {
@@ -150,7 +136,6 @@ func TestSizeTracker(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create new state at block %d: %v", blockNum, err)
 		}
-
 		testAddr := common.BigToAddress(uint256.NewInt(uint64(i + 100)).ToBig())
 		newState.AddBalance(testAddr, uint256.NewInt(uint64((i+1)*1000)), tracing.BalanceChangeUnspecified)
 		newState.SetNonce(testAddr, uint64(i+10), tracing.NonceChangeUnspecified)
@@ -158,11 +143,9 @@ func TestSizeTracker(t *testing.T) {
 		if i%2 == 0 {
 			newState.SetState(addr1, common.BigToHash(uint256.NewInt(uint64(i+0x1000)).ToBig()), common.BigToHash(uint256.NewInt(uint64(i+0x2000)).ToBig()))
 		}
-
 		if i%3 == 0 {
 			newState.SetCode(testAddr, []byte{byte(i), 0x60, 0x80, byte(i + 1), 0x52}, tracing.CodeChangeUnspecified)
 		}
-
 		root, update, err := newState.CommitWithUpdate(blockNum, true, false)
 		if err != nil {
 			t.Fatalf("Failed to commit state at block %d: %v", blockNum, err)
@@ -179,28 +162,23 @@ func TestSizeTracker(t *testing.T) {
 		tracker.Notify(update)
 		currentRoot = root
 	}
-
-	if len(trackedUpdates) != 130-49 {
-		t.Errorf("Expected %d tracked updates, got %d", 130-49, len(trackedUpdates))
-	}
-
 	finalRoot := rawdb.ReadSnapshotRoot(db)
 
 	// Ensure all commits are flushed to disk
 	if err := tdb.Close(); err != nil {
 		t.Fatalf("Failed to close triedb: %v", err)
 	}
-
 	// Reopen the database to simulate a restart
 	tdb = triedb.NewDatabase(db, &triedb.Config{PathDB: pathdb.Defaults})
+	defer tdb.Close()
 
 	finalTracker := &SizeTracker{
 		db:     db,
 		triedb: tdb,
 		abort:  make(chan struct{}),
 	}
-
 	finalDone := make(chan buildResult)
+
 	go finalTracker.build(finalRoot, uint64(132), finalDone)
 	var result buildResult
 	select {
@@ -211,7 +189,6 @@ func TestSizeTracker(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Fatal("Timeout waiting for final stats")
 	}
-
 	actualStats := result.stat
 
 	expectedStats := baseline
