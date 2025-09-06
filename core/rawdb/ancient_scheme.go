@@ -75,15 +75,38 @@ var stateFreezerTableConfigs = map[string]freezerTableConfig{
 	stateHistoryStorageData:  {noSnappy: false, prunable: true},
 }
 
+const (
+	trienodeHistoryHeaderTable       = "trienode.header"
+	trienodeHistoryKeySectionTable   = "trienode.key"
+	trienodeHistoryValueSectionTable = "trienode.value"
+)
+
+// trienodeFreezerTableConfigs configures the settings for tables in the trienode freezer.
+var trienodeFreezerTableConfigs = map[string]freezerTableConfig{
+	trienodeHistoryHeaderTable: {noSnappy: false, prunable: true},
+
+	// Disable snappy compression to allow efficient partial read.
+	trienodeHistoryKeySectionTable: {noSnappy: true, prunable: true},
+
+	// Disable snappy compression to allow efficient partial read.
+	trienodeHistoryValueSectionTable: {noSnappy: true, prunable: true},
+}
+
 // The list of identifiers of ancient stores.
 var (
-	ChainFreezerName       = "chain"        // the folder name of chain segment ancient store.
-	MerkleStateFreezerName = "state"        // the folder name of state history ancient store.
-	VerkleStateFreezerName = "state_verkle" // the folder name of state history ancient store.
+	ChainFreezerName          = "chain"           // the folder name of chain segment ancient store.
+	MerkleStateFreezerName    = "state"           // the folder name of state history ancient store.
+	VerkleStateFreezerName    = "state_verkle"    // the folder name of state history ancient store.
+	MerkleTrienodeFreezerName = "trienode"        // the folder name of trienode history ancient store.
+	VerkleTrienodeFreezerName = "trienode_verkle" // the folder name of trienode history ancient store.
 )
 
 // freezers the collections of all builtin freezers.
-var freezers = []string{ChainFreezerName, MerkleStateFreezerName, VerkleStateFreezerName}
+var freezers = []string{
+	ChainFreezerName,
+	MerkleStateFreezerName, VerkleStateFreezerName,
+	MerkleTrienodeFreezerName, VerkleTrienodeFreezerName,
+}
 
 // NewStateFreezer initializes the ancient store for state history.
 //
@@ -102,4 +125,23 @@ func NewStateFreezer(ancientDir string, verkle bool, readOnly bool) (ethdb.Reset
 		name = filepath.Join(ancientDir, MerkleStateFreezerName)
 	}
 	return newResettableFreezer(name, "eth/db/state", readOnly, stateHistoryTableSize, stateFreezerTableConfigs)
+}
+
+// NewTrienodeFreezer initializes the ancient store for trienode history.
+//
+//   - if the empty directory is given, initializes the pure in-memory
+//     trienode freezer (e.g. dev mode).
+//   - if non-empty directory is given, initializes the regular file-based
+//     trienode freezer.
+func NewTrienodeFreezer(ancientDir string, verkle bool, readOnly bool) (ethdb.ResettableAncientStore, error) {
+	if ancientDir == "" {
+		return NewMemoryFreezer(readOnly, trienodeFreezerTableConfigs), nil
+	}
+	var name string
+	if verkle {
+		name = filepath.Join(ancientDir, VerkleTrienodeFreezerName)
+	} else {
+		name = filepath.Join(ancientDir, MerkleTrienodeFreezerName)
+	}
+	return newResettableFreezer(name, "eth/db/trienode", readOnly, stateHistoryTableSize, trienodeFreezerTableConfigs)
 }
