@@ -446,23 +446,35 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 
 // StateSize returns the current state size statistics from the state size tracker.
 // Returns an error if the state size tracker is not initialized or if stats are not ready.
-func (api *DebugAPI) StateSize(root *common.Hash) (interface{}, error) {
+func (api *DebugAPI) StateSize(blockHashOrNumber *rpc.BlockNumberOrHash) (interface{}, error) {
 	sizer := api.eth.blockchain.StateSizer()
 	if sizer == nil {
 		return nil, errors.New("state size tracker is not enabled")
 	}
-	stats, err := sizer.Query(root)
+	var (
+		err   error
+		stats *state.SizeStats
+	)
+	if blockHashOrNumber == nil {
+		stats, err = sizer.Query(nil)
+	} else {
+		header, herr := api.eth.APIBackend.HeaderByNumberOrHash(context.Background(), *blockHashOrNumber)
+		if herr != nil || header == nil {
+			return nil, fmt.Errorf("block %s is unknown", blockHashOrNumber)
+		}
+		stats, err = sizer.Query(&header.Root)
+	}
 	if err != nil {
 		return nil, err
 	}
 	if stats == nil {
 		var s string
-		if root == nil {
+		if blockHashOrNumber == nil {
 			s = "latest"
 		} else {
-			s = root.Hex()
+			s = blockHashOrNumber.String()
 		}
-		return nil, fmt.Errorf("state size %s is not available", s)
+		return nil, fmt.Errorf("state size of %s is not available", s)
 	}
 	return map[string]interface{}{
 		"stateRoot":            stats.StateRoot,
