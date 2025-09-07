@@ -328,12 +328,12 @@ func newIndexIniter(disk ethdb.KeyValueStore, freezer ethdb.AncientStore, lastID
 	if metadata != nil {
 		initer.indexed.Store(metadata.Last)
 		recover = metadata.Last > lastID
-		log.Info("State history indexer is recovering", "history", lastID, "index", metadata.Last)
 	}
 
 	// Launch background indexer
 	initer.wg.Add(1)
 	if recover {
+		log.Info("History indexer is recovering", "history", lastID, "indexed", metadata.Last)
 		go initer.recover(lastID)
 	} else {
 		go initer.run(lastID)
