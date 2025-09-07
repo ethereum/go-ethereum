@@ -528,7 +528,7 @@ func (c *ChainConfig) Description() string {
 		banner += fmt.Sprintf(" - Cancun:                      @%-10v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/cancun.md)\n", *c.CancunTime)
 	}
 	if c.PragueTime != nil {
-		banner += fmt.Sprintf(" - Prague:                      @%-10v\n", *c.PragueTime)
+		banner += fmt.Sprintf(" - Prague:                      @%-10v (https://eips.ethereum.org/EIPS/eip-7600)\n", *c.PragueTime)
 	}
 	if c.OsakaTime != nil {
 		banner += fmt.Sprintf(" - Osaka:                      @%-10v\n", *c.OsakaTime)
