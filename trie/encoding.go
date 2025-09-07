@@ -108,7 +108,6 @@ func keybytesToHex(str []byte) []byte {
 // OBS! This method omits the termination flag.
 // OBS! The dst slice must be at least 2x as large as the key
 func writeHexKey(dst []byte, key []byte) []byte {
-	_ = dst[2*len(key)-1]
 	for i, b := range key {
 		dst[i*2] = b / 16
 		dst[i*2+1] = b % 16

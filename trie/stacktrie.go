@@ -59,6 +59,7 @@ func NewStackTrie(onTrieNode OnTrieNode) *StackTrie {
 		root:       stPool.Get().(*stNode),
 		h:          newHasher(false),
 		onTrieNode: onTrieNode,
+		last:       make([]byte, 64),
 		kBuf:       make([]byte, 64),
 		pBuf:       make([]byte, 64),
 	}
@@ -83,11 +84,7 @@ func (t *StackTrie) Update(key, value []byte) error {
 	if bytes.Compare(t.last, k) >= 0 {
 		return errors.New("non-ascending key order")
 	}
-	if t.last == nil {
-		t.last = append([]byte{}, k...) // allocate key slice
-	} else {
-		t.last = append(t.last[:0], k...) // reuse key slice
-	}
+	t.last = append(t.last[:0], k...) // reuse key slice
 	t.insert(t.root, k, value, t.pBuf[:0])
 	return nil
 }
@@ -95,7 +92,7 @@ func (t *StackTrie) Update(key, value []byte) error {
 // Reset resets the stack trie object to empty state.
 func (t *StackTrie) Reset() {
 	t.root = stPool.Get().(*stNode)
-	t.last = nil
+	t.last = t.last[:0]
 }
 
 // TrieKey returns the internal key representation for the given user key.
