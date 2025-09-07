@@ -59,7 +59,7 @@ func NewStackTrie(onTrieNode OnTrieNode) *StackTrie {
 		root:       stPool.Get().(*stNode),
 		h:          newHasher(false),
 		onTrieNode: onTrieNode,
-		last:       make([]byte, 64),
+		last:       make([]byte, 0, 64),
 		kBuf:       make([]byte, 64),
 		pBuf:       make([]byte, 64),
 	}
