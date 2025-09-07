@@ -181,7 +181,8 @@ func (h *hasher) encodeFullNode(n *fullNode) []byte {
 // This convention exists because node.encode can only be inlined/escape-analyzed when
 // called on a concrete receiver type.
 func (h *hasher) encodedBytes() []byte {
-	h.tmp = h.encbuf.AppendToBytes(h.tmp[:0])
+	h.tmp = h.tmp[:0]
+	h.encbuf.AppendToBytes(&h.tmp)
 	h.encbuf.Reset(nil)
 	return h.tmp
 }

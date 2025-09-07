@@ -435,7 +435,7 @@ func TestEncodeToBytes(t *testing.T) {
 }
 
 func TestEncodeAppendToBytes(t *testing.T) {
-	buffer := make([]byte, 20)
+	buffer := make([]byte, 3)
 	runEncTests(t, func(val interface{}) ([]byte, error) {
 		w := NewEncoderBuffer(nil)
 		defer w.Flush()
@@ -444,8 +444,9 @@ func TestEncodeAppendToBytes(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		output := w.AppendToBytes(buffer[:0])
-		return output, nil
+		buffer = buffer[:0]
+		w.AppendToBytes(&buffer)
+		return buffer, nil
 	})
 }
 

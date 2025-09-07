@@ -359,11 +359,16 @@ func (w *EncoderBuffer) ToBytes() []byte {
 }
 
 // AppendToBytes appends the encoded bytes to dst.
-func (w *EncoderBuffer) AppendToBytes(dst []byte) []byte {
+func (w *EncoderBuffer) AppendToBytes(dst *[]byte) {
 	size := w.buf.size()
-	out := append(dst, make([]byte, size)...)
-	w.buf.copyTo(out[len(dst):])
-	return out
+	tmp, length := *dst, len(*dst)
+	if cap(tmp) >= size+length {
+		tmp = tmp[:size+length]
+	} else {
+		tmp = append(tmp, make([]byte, size)...)
+	}
+	*dst = tmp
+	w.buf.copyTo(tmp[length:])
 }
 
 // Write appends b directly to the encoder output.
