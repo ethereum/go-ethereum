@@ -99,7 +99,7 @@ func (it *verkleNodeIterator) Next(descend bool) bool {
 		return it.Next(descend)
 	case verkle.HashedNode:
 		// resolve the node
-		data, err := it.trie.reader.node(it.Path(), common.Hash{})
+		data, err := it.trie.reader.Node(it.Path(), common.Hash{})
 		if err != nil {
 			panic(err)
 		}
