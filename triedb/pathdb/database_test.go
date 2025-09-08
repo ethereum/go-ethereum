@@ -230,6 +230,8 @@ func (t *tester) extend(layers int) {
 			panic(fmt.Errorf("failed to update state changes, err: %w", err))
 		}
 		t.roots = append(t.roots, root)
+		t.nodes = append(t.nodes, nodes)
+		t.states = append(t.states, states)
 	}
 }
 
@@ -931,13 +933,23 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 	}
 	env := newTester(t, config)
 	defer env.release()
+
+	// Ensure the buffer in disk layer is not empty
+	var (
+		bRoot = env.db.tree.bottom().rootHash()
+		dRoot = crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(env.db.diskdb, nil))
+	)
+	for dRoot == bRoot {
+		env.extend(1)
+
+		bRoot = env.db.tree.bottom().rootHash()
+		dRoot = crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(env.db.diskdb, nil))
+	}
 	waitIndexing(env.db)
 
 	var (
 		dIndex int
 		roots  = env.roots
-		bRoot  = env.db.tree.bottom().rootHash()
-		dRoot  = crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(env.db.diskdb, nil))
 		hr     = newHistoryReader(env.db.diskdb, env.db.stateFreezer)
 	)
 	for i, root := range roots {
