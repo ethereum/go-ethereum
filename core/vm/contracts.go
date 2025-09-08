@@ -480,8 +480,8 @@ func modexpIterationCount(expLen uint64, expHead uint256.Int, multiplier uint64)
 	return max(iterationCount, 1)
 }
 
-// byzantiumGasCalc calculates the gas cost for the modexp precompile using Byzantium rules.
-func byzantiumGasCalc(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
+// byzantiumModexpGas calculates the gas cost for the modexp precompile using Byzantium rules.
+func byzantiumModexpGas(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
 	const (
 		multiplier = 8
 		divisor    = 20
@@ -595,7 +595,7 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	} else if c.eip2565 {
 		return berlinModexpGas(baseLen, expLen, modLen, expHead)
 	} else {
-		return byzantiumGasCalc(baseLen, expLen, modLen, expHead)
+		return byzantiumModexpGas(baseLen, expLen, modLen, expHead)
 	}
 }
 
