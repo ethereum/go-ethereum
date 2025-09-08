@@ -227,7 +227,7 @@ func basicWrite(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 	}
 
 	// Write should work after truncating everything
-	db.TruncateTail(0)
+	db.TruncateHead(0)
 	_, err = db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for i := 0; i < 100; i++ {
 			op.AppendRaw("a", uint64(i), dataA[i])
