@@ -176,15 +176,18 @@ func (sc *BlobTxSidecar) Copy() *BlobTxSidecar {
 	}
 }
 
-func (sc *BlobTxSidecar) ToBlobTxCellSidecar() *BlobTxCellSidecar {
-	cells, _ := kzg4844.ComputeCells(sc.Blobs)
+func (sc *BlobTxSidecar) ToBlobTxCellSidecar() (*BlobTxCellSidecar, error) {
+	cells, err := kzg4844.ComputeCells(sc.Blobs)
+	if err != nil {
+		return nil, err
+	}
 	return &BlobTxCellSidecar{
 		Version:     sc.Version,
 		Cells:       cells,
 		Commitments: sc.Commitments,
 		Proofs:      sc.Proofs,
 		CellIndices: CustodyBitmap{}.SetAll(),
-	}
+	}, nil
 }
 
 type BlobTxCellSidecar struct {

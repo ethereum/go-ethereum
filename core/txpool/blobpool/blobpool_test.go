@@ -452,8 +452,12 @@ func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
 		}
 		// Item retrieved, make sure it matches the expectation
 		index := testBlobIndices[hash]
-		if *blobs1[i] != *testBlobs[index] || proofs1[i][0] != testBlobProofs[index] {
-			t.Errorf("retrieved blob or proof mismatch: item %d, hash %x", i, hash)
+		if *blobs1[i] != *testBlobs[index] {
+			t.Errorf("retrieved blob mismatch: item %d, hash %x", i, hash)
+			continue
+		}
+		if proofs1[i][0] != testBlobProofs[index] {
+			t.Errorf("retrieved proof mismatch: item %d, hash %x", i, hash)
 			continue
 		}
 		if *blobs2[i] != *testBlobs[index] || !slices.Equal(proofs2[i], testBlobCellProofs[index]) {
@@ -1752,7 +1756,9 @@ func TestAdd(t *testing.T) {
 		// Add each transaction one by one, verifying the pool internals in between
 		for j, add := range tt.adds {
 			signed, _ := types.SignNewTx(keys[add.from], types.LatestSigner(params.MainnetChainConfig), add.tx)
-			if err := pool.add(signed.WithoutBlobTxSidecar(), signed.BlobTxSidecar().ToBlobTxCellSidecar()); !errors.Is(err, add.err) {
+			sidecar, _ := signed.BlobTxSidecar().ToBlobTxCellSidecar()
+
+			if err := pool.add(signed.WithoutBlobTxSidecar(), sidecar); !errors.Is(err, add.err) {
 				t.Errorf("test %d, tx %d: adding transaction error mismatch: have %v, want %v", i, j, err, add.err)
 			}
 			if add.err == nil {
@@ -1760,7 +1766,7 @@ func TestAdd(t *testing.T) {
 				if !exist {
 					t.Errorf("test %d, tx %d: failed to lookup transaction's size", i, j)
 				}
-				if size != signed.Size() {
+				if size != signed.WithoutBlobTxSidecar().Size() {
 					t.Errorf("test %d, tx %d: transaction's size mismatches: have %v, want %v",
 						i, j, size, signed.Size())
 				}
@@ -2124,7 +2130,8 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 			b.Fatal(err)
 		}
 		statedb.AddBalance(addr, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
-		pool.add(tx.WithoutBlobTxSidecar(), tx.BlobTxSidecar().ToBlobTxCellSidecar())
+		sidecar, _ := tx.BlobTxSidecar().ToBlobTxCellSidecar()
+		pool.add(tx.WithoutBlobTxSidecar(), sidecar)
 	}
 	statedb.Commit(0, true, false)
 	defer pool.Close()
