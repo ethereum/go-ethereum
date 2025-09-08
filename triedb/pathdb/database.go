@@ -681,3 +681,14 @@ func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek 
 	}
 	return newFastStorageIterator(db, root, account, seek)
 }
+
+// SnapshotCompleted returns the flag indicating if the snapshot generation is completed.
+func (db *Database) SnapshotCompleted() bool {
+	db.lock.RLock()
+	wait := db.waitSync
+	db.lock.RUnlock()
+	if wait {
+		return false
+	}
+	return db.tree.bottom().genComplete()
+}
