@@ -103,17 +103,24 @@ information about the specified address.
 			{
 				Name:      "traverse-state",
 				Usage:     "Traverse the state with given root hash and perform quick verification",
-				ArgsUsage: "<root> [accountHash|accountAddress]",
+				ArgsUsage: "<root>",
 				Action:    traverseState,
-				Flags:     slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
+				Flags:     slices.Concat(utils.TraverseStateFlags, utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
-geth snapshot traverse-state <state-root> [accountHash|accountAddress]
-will traverse the whole state from the given state root and will abort if any
-referenced trie node or contract code is missing. This command can be used for
-state integrity verification. The default checking target is the HEAD state.
+geth snapshot traverse-state [--account <account>] [--start <key>] [--limit <key>] <state-root>
 
-If accountHash or accountAddress is provided, traversal will start from that specific account and continue through all subsequent accounts.
-The format is auto-detected: 40/42 chars for address, 64/66 chars for hash.
+1. Traverse the whole state from the given state root:
+- --start: starting account key (64/66 chars hex) [optional]
+- --limit: ending account key (64/66 chars hex) [optional]
+
+2. Traverse a specific account's storage:
+- --account: account address (40/42 chars) or hash (64/66 chars) [required]
+- --start: starting storage key (64/66 chars hex) [optional]
+- --limit: ending storage key (64/66 chars hex) [optional]
+
+The default checking state root is the HEAD state if not specified.
+The command will abort if any referenced trie node or contract code is missing.
+This can be used for state integrity verification. The default target is HEAD state.
 
 It's also usable without snapshot enabled.
 `,
@@ -121,18 +128,26 @@ It's also usable without snapshot enabled.
 			{
 				Name:      "traverse-rawstate",
 				Usage:     "Traverse the state with given root hash and perform detailed verification",
-				ArgsUsage: "<root> [accountHash|accountAddress]",
+				ArgsUsage: "<root>",
 				Action:    traverseRawState,
-				Flags:     slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
+				Flags:     slices.Concat(utils.TraverseStateFlags, utils.NetworkFlags, utils.DatabaseFlags),
 				Description: `
-geth snapshot traverse-rawstate <state-root>
-will traverse the whole state from the given root and will abort if any referenced
-trie node or contract code is missing. This command can be used for state integrity
-verification. The default checking target is the HEAD state. It's basically identical
-to traverse-state, but the check granularity is smaller.
+geth snapshot traverse-rawstate [--account <account>] [--start <key>] [--limit <key>] <state-root>
 
-If accountHash or accountAddress is provided, traversal will start from that specific account and continue through all subsequent accounts.
-The format is auto-detected: 40/42 chars for address, 64/66 chars for hash.
+Similar to traverse-state but with more detailed verification at the trie node level.
+
+1. Traverse the whole state from the given state root:
+- --start: starting account key (64/66 chars hex) [optional]
+- --limit: ending account key (64/66 chars hex) [optional]
+
+2. Traverse a specific account's storage:
+- --account: account address (40/42 chars) or hash (64/66 chars) [required]
+- --start: starting storage key (64/66 chars hex) [optional]
+- --limit: ending storage key (64/66 chars hex) [optional]
+
+The default checking state root is the HEAD state if not specified.
+The command will abort if any referenced trie node or contract code is missing.
+This can be used for state integrity verification. The default target is HEAD state.
 
 It's also usable without snapshot enabled.
 `,
@@ -297,113 +312,188 @@ func traverseState(ctx *cli.Context) error {
 		return errors.New("no head block")
 	}
 
-	root, startKey, err := parseTraverseArgs(ctx)
+	config, err := parseTraverseArgs(ctx)
 	if err != nil {
 		return err
 	}
-	if root == (common.Hash{}) {
-		root = headBlock.Root()
+	if config.root == (common.Hash{}) {
+		config.root = headBlock.Root()
 	}
 
-	log.Info("Start traversing the state", "root", root.Hex(), "startKey", common.Bytes2Hex(startKey))
-	t, err := trie.NewStateTrie(trie.StateTrieID(root), triedb)
+	t, err := trie.NewStateTrie(trie.StateTrieID(config.root), triedb)
 	if err != nil {
-		log.Error("Failed to open trie", "root", root, "err", err)
+		log.Error("Failed to open trie", "root", config.root, "err", err)
 		return err
 	}
+
 	var (
-		accounts   int
-		slots      int
-		codes      int
-		lastReport time.Time
-		start      = time.Now()
+		accounts int
+		slots    int
+		codes    int
+		start    = time.Now()
 	)
 
-	acctIt, err := t.NodeIterator(startKey)
-	if err != nil {
-		log.Error("Failed to open iterator", "root", root, "err", err)
-		return err
-	}
-	accIter := trie.NewIterator(acctIt)
-	for accIter.Next() {
-		accounts += 1
-		var acc types.StateAccount
-		if err := rlp.DecodeBytes(accIter.Value, &acc); err != nil {
-			log.Error("Invalid account encountered during traversal", "err", err)
+	go func() {
+		timer := time.NewTicker(time.Second * 8)
+		defer timer.Stop()
+		for range timer.C {
+			log.Info("Traversing state", "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
+		}
+	}()
+
+	if config.isAccount {
+		log.Info("Start traversing storage trie", "root", config.root.Hex(), "account", config.account.Hex(), "startKey", common.Bytes2Hex(config.startKey), "limitKey", common.Bytes2Hex(config.limitKey))
+
+		acc, err := t.GetAccountByHash(config.account)
+		if err != nil {
+			log.Error("Get account failed", "account", config.account.Hex(), "err", err)
 			return err
 		}
-		if acc.Root != types.EmptyRootHash {
-			id := trie.StorageTrieID(root, common.BytesToHash(accIter.Key), acc.Root)
-			storageTrie, err := trie.NewStateTrie(id, triedb)
-			if err != nil {
-				log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
-				return err
-			}
-			storageIt, err := storageTrie.NodeIterator(nil)
-			if err != nil {
-				log.Error("Failed to open storage iterator", "root", acc.Root, "err", err)
-				return err
-			}
-			storageIter := trie.NewIterator(storageIt)
-			for storageIter.Next() {
-				slots += 1
 
-				if time.Since(lastReport) > time.Second*8 {
-					log.Info("Traversing state", "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
-					lastReport = time.Now()
+		if acc.Root == types.EmptyRootHash {
+			log.Info("Account has no storage")
+			return nil
+		}
+
+		id := trie.StorageTrieID(config.root, config.account, acc.Root)
+		storageTrie, err := trie.NewStateTrie(id, triedb)
+		if err != nil {
+			log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
+			return err
+		}
+
+		storageIt, err := storageTrie.NodeIterator(config.startKey)
+		if err != nil {
+			log.Error("Failed to open storage iterator", "root", acc.Root, "err", err)
+			return err
+		}
+
+		storageIter := trie.NewIterator(storageIt)
+		for storageIter.Next() {
+			if config.limitKey != nil && bytes.Compare(storageIter.Key, config.limitKey) >= 0 {
+				break
+			}
+
+			slots += 1
+			log.Debug("Storage slot", "key", common.Bytes2Hex(storageIter.Key), "value", common.Bytes2Hex(storageIter.Value))
+		}
+		if storageIter.Err != nil {
+			log.Error("Failed to traverse storage trie", "root", acc.Root, "err", storageIter.Err)
+			return storageIter.Err
+		}
+
+		log.Info("Storage traversal complete", "slots", slots, "elapsed", common.PrettyDuration(time.Since(start)))
+		return nil
+	} else {
+		log.Info("Start traversing state trie", "root", config.root.Hex(), "startKey", common.Bytes2Hex(config.startKey), "limitKey", common.Bytes2Hex(config.limitKey))
+
+		acctIt, err := t.NodeIterator(config.startKey)
+		if err != nil {
+			log.Error("Failed to open iterator", "root", config.root, "err", err)
+			return err
+		}
+		accIter := trie.NewIterator(acctIt)
+		for accIter.Next() {
+			if config.limitKey != nil && bytes.Compare(accIter.Key, config.limitKey) >= 0 {
+				break
+			}
+
+			accounts += 1
+			var acc types.StateAccount
+			if err := rlp.DecodeBytes(accIter.Value, &acc); err != nil {
+				log.Error("Invalid account encountered during traversal", "err", err)
+				return err
+			}
+			if acc.Root != types.EmptyRootHash {
+				id := trie.StorageTrieID(config.root, common.BytesToHash(accIter.Key), acc.Root)
+				storageTrie, err := trie.NewStateTrie(id, triedb)
+				if err != nil {
+					log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
+					return err
+				}
+				storageIt, err := storageTrie.NodeIterator(nil)
+				if err != nil {
+					log.Error("Failed to open storage iterator", "root", acc.Root, "err", err)
+					return err
+				}
+				storageIter := trie.NewIterator(storageIt)
+				for storageIter.Next() {
+					slots += 1
+				}
+				if storageIter.Err != nil {
+					log.Error("Failed to traverse storage trie", "root", acc.Root, "err", storageIter.Err)
+					return storageIter.Err
 				}
 			}
-			if storageIter.Err != nil {
-				log.Error("Failed to traverse storage trie", "root", acc.Root, "err", storageIter.Err)
-				return storageIter.Err
+			if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
+				if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
+					log.Error("Code is missing", "hash", common.BytesToHash(acc.CodeHash))
+					return errors.New("missing code")
+				}
+				codes += 1
 			}
 		}
-		if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
-			if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
-				log.Error("Code is missing", "hash", common.BytesToHash(acc.CodeHash))
-				return errors.New("missing code")
-			}
-			codes += 1
+		if accIter.Err != nil {
+			log.Error("Failed to traverse state trie", "root", config.root, "err", accIter.Err)
+			return accIter.Err
 		}
-		if time.Since(lastReport) > time.Second*8 {
-			log.Info("Traversing state", "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
-			lastReport = time.Now()
-		}
+		log.Info("State traversal complete", "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
+		return nil
 	}
-	if accIter.Err != nil {
-		log.Error("Failed to traverse state trie", "root", root, "err", accIter.Err)
-		return accIter.Err
-	}
-	log.Info("State is complete", "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
-	return nil
 }
 
-func parseTraverseArgs(ctx *cli.Context) (root common.Hash, startKey []byte, err error) {
-	if ctx.NArg() > 2 {
-		err = errors.New("too many arguments")
-		return
+type traverseConfig struct {
+	root      common.Hash
+	startKey  []byte
+	limitKey  []byte
+	account   common.Hash
+	isAccount bool
+}
+
+func parseTraverseArgs(ctx *cli.Context) (*traverseConfig, error) {
+	if ctx.NArg() > 1 {
+		return nil, errors.New("too many arguments, only <root> is required")
 	}
 
-	if ctx.NArg() >= 1 {
-		root, err = parseRoot(ctx.Args().First())
+	config := &traverseConfig{}
+	var err error
+
+	if ctx.NArg() == 1 {
+		config.root, err = parseRoot(ctx.Args().First())
 		if err != nil {
-			return
+			return nil, err
 		}
 	}
 
-	if ctx.NArg() == 2 {
-		arg := ctx.Args().Get(1)
-		switch len(arg) {
+	if accountFlag := ctx.String("account"); accountFlag != "" {
+		config.isAccount = true
+		switch len(accountFlag) {
 		case 40, 42:
-			startKey = crypto.Keccak256Hash(common.HexToAddress(arg).Bytes()).Bytes()
+			config.account = crypto.Keccak256Hash(common.HexToAddress(accountFlag).Bytes())
 		case 64, 66:
-			startKey = common.HexToHash(arg).Bytes()
+			config.account = common.HexToHash(accountFlag)
 		default:
-			err = errors.New("invalid account format: must be 40/42 chars for address or 64/66 chars for hash")
-			return
+			return nil, errors.New("account must be 40/42 chars for address or 64/66 chars for hash")
 		}
 	}
-	return root, startKey, nil
+
+	if startFlag := ctx.String("start"); startFlag != "" {
+		if len(startFlag) == 64 || len(startFlag) == 66 {
+			config.startKey = common.HexToHash(startFlag).Bytes()
+		} else {
+			return nil, errors.New("start key must be 64/66 chars hex")
+		}
+	}
+
+	if limitFlag := ctx.String("limit"); limitFlag != "" {
+		if len(limitFlag) == 64 || len(limitFlag) == 66 {
+			config.limitKey = common.HexToHash(limitFlag).Bytes()
+		} else {
+			return nil, errors.New("limit key must be 64/66 chars hex")
+		}
+	}
+
+	return config, nil
 }
 
 // traverseRawState is a helper function used for pruning verification.
@@ -426,132 +516,216 @@ func traverseRawState(ctx *cli.Context) error {
 		return errors.New("no head block")
 	}
 
-	root, startKey, err := parseTraverseArgs(ctx)
+	config, err := parseTraverseArgs(ctx)
 	if err != nil {
 		log.Error("Failed to parse arguments", "err", err)
 		return err
 	}
+	if config.root == (common.Hash{}) {
+		config.root = headBlock.Root()
+	}
+	t, err := trie.NewStateTrie(trie.StateTrieID(config.root), triedb)
+	if err != nil {
+		log.Error("Failed to open trie", "root", config.root, "err", err)
+		return err
+	}
 
-	log.Info("Start traversing the state", "root", root.Hex(), "startKey", common.Bytes2Hex(startKey))
-	t, err := trie.NewStateTrie(trie.StateTrieID(root), triedb)
-	if err != nil {
-		log.Error("Failed to open trie", "root", root, "err", err)
-		return err
-	}
 	var (
-		nodes      int
-		accounts   int
-		slots      int
-		codes      int
-		lastReport time.Time
-		start      = time.Now()
-		hasher     = crypto.NewKeccakState()
-		got        = make([]byte, 32)
+		accounts int
+		nodes    int
+		slots    int
+		codes    int
+		start    = time.Now()
+		hasher   = crypto.NewKeccakState()
+		got      = make([]byte, 32)
 	)
-	accIter, err := t.NodeIterator(startKey)
-	if err != nil {
-		log.Error("Failed to open iterator", "root", root, "err", err)
-		return err
-	}
-	reader, err := triedb.NodeReader(root)
-	if err != nil {
-		log.Error("State is non-existent", "root", root)
+
+	go func() {
+		timer := time.NewTicker(time.Second * 8)
+		defer timer.Stop()
+		for range timer.C {
+			log.Info("Traversing rawstate", "nodes", nodes, "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
+		}
+	}()
+
+	if config.isAccount {
+		log.Info("Start traversing storage trie (raw)", "root", config.root.Hex(), "account", config.account.Hex(), "startKey", common.Bytes2Hex(config.startKey), "limitKey", common.Bytes2Hex(config.limitKey))
+
+		acc, err := t.GetAccountByHash(config.account)
+		if err != nil {
+			log.Error("Get account failed", "account", config.account.Hex(), "err", err)
+			return err
+		}
+
+		if acc.Root == types.EmptyRootHash {
+			log.Info("Account has no storage")
+			return nil
+		}
+
+		// Traverse the storage trie with detailed verification
+		id := trie.StorageTrieID(config.root, config.account, acc.Root)
+		storageTrie, err := trie.NewStateTrie(id, triedb)
+		if err != nil {
+			log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
+			return err
+		}
+
+		storageIter, err := storageTrie.NodeIterator(config.startKey)
+		if err != nil {
+			log.Error("Failed to open storage iterator", "root", acc.Root, "err", err)
+			return err
+		}
+
+		reader, err := triedb.NodeReader(config.root)
+		if err != nil {
+			log.Error("State is non-existent", "root", config.root)
+			return nil
+		}
+
+		for storageIter.Next(true) {
+			nodes += 1
+			node := storageIter.Hash()
+
+			// Check the presence for non-empty hash node(embedded node doesn't
+			// have their own hash).
+			if node != (common.Hash{}) {
+				blob, _ := reader.Node(config.account, storageIter.Path(), node)
+				if len(blob) == 0 {
+					log.Error("Missing trie node(storage)", "hash", node)
+					return errors.New("missing storage")
+				}
+				hasher.Reset()
+				hasher.Write(blob)
+				hasher.Read(got)
+				if !bytes.Equal(got, node.Bytes()) {
+					log.Error("Invalid trie node(storage)", "hash", node.Hex(), "value", blob)
+					return errors.New("invalid storage node")
+				}
+			}
+
+			// Bump the counter if it's leaf node.
+			if storageIter.Leaf() {
+				// Check if we've exceeded the limit key for storage
+				if config.limitKey != nil && bytes.Compare(storageIter.LeafKey(), config.limitKey) >= 0 {
+					break
+				}
+
+				slots += 1
+				log.Debug("Storage slot", "key", common.Bytes2Hex(storageIter.LeafKey()), "value", common.Bytes2Hex(storageIter.LeafBlob()))
+			}
+		}
+		if storageIter.Error() != nil {
+			log.Error("Failed to traverse storage trie", "root", acc.Root, "err", storageIter.Error())
+			return storageIter.Error()
+		}
+
+		log.Info("Storage traversal complete (raw)", "nodes", nodes, "slots", slots, "elapsed", common.PrettyDuration(time.Since(start)))
+		return nil
+	} else {
+		log.Info("Start traversing the state trie (raw)", "root", config.root.Hex(), "startKey", common.Bytes2Hex(config.startKey), "limitKey", common.Bytes2Hex(config.limitKey))
+
+		accIter, err := t.NodeIterator(config.startKey)
+		if err != nil {
+			log.Error("Failed to open iterator", "root", config.root, "err", err)
+			return err
+		}
+		reader, err := triedb.NodeReader(config.root)
+		if err != nil {
+			log.Error("State is non-existent", "root", config.root)
+			return nil
+		}
+		for accIter.Next(true) {
+			nodes += 1
+			node := accIter.Hash()
+
+			// Check the present for non-empty hash node(embedded node doesn't
+			// have their own hash).
+			if node != (common.Hash{}) {
+				blob, _ := reader.Node(common.Hash{}, accIter.Path(), node)
+				if len(blob) == 0 {
+					log.Error("Missing trie node(account)", "hash", node)
+					return errors.New("missing account")
+				}
+				hasher.Reset()
+				hasher.Write(blob)
+				hasher.Read(got)
+				if !bytes.Equal(got, node.Bytes()) {
+					log.Error("Invalid trie node(account)", "hash", node.Hex(), "value", blob)
+					return errors.New("invalid account node")
+				}
+			}
+			// If it's a leaf node, yes we are touching an account,
+			// dig into the storage trie further.
+			if accIter.Leaf() {
+				// Check if we've exceeded the limit key for accounts
+				if config.limitKey != nil && bytes.Compare(accIter.LeafKey(), config.limitKey) >= 0 {
+					break
+				}
+
+				accounts += 1
+				var acc types.StateAccount
+				if err := rlp.DecodeBytes(accIter.LeafBlob(), &acc); err != nil {
+					log.Error("Invalid account encountered during traversal", "err", err)
+					return errors.New("invalid account")
+				}
+				if acc.Root != types.EmptyRootHash {
+					id := trie.StorageTrieID(config.root, common.BytesToHash(accIter.LeafKey()), acc.Root)
+					storageTrie, err := trie.NewStateTrie(id, triedb)
+					if err != nil {
+						log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
+						return errors.New("missing storage trie")
+					}
+					storageIter, err := storageTrie.NodeIterator(nil)
+					if err != nil {
+						log.Error("Failed to open storage iterator", "root", acc.Root, "err", err)
+						return err
+					}
+					for storageIter.Next(true) {
+						nodes += 1
+						node := storageIter.Hash()
+
+						// Check the presence for non-empty hash node(embedded node doesn't
+						// have their own hash).
+						if node != (common.Hash{}) {
+							blob, _ := reader.Node(common.BytesToHash(accIter.LeafKey()), storageIter.Path(), node)
+							if len(blob) == 0 {
+								log.Error("Missing trie node(storage)", "hash", node)
+								return errors.New("missing storage")
+							}
+							hasher.Reset()
+							hasher.Write(blob)
+							hasher.Read(got)
+							if !bytes.Equal(got, node.Bytes()) {
+								log.Error("Invalid trie node(storage)", "hash", node.Hex(), "value", blob)
+								return errors.New("invalid storage node")
+							}
+						}
+						// Bump the counter if it's leaf node.
+						if storageIter.Leaf() {
+							slots += 1
+						}
+					}
+					if storageIter.Error() != nil {
+						log.Error("Failed to traverse storage trie", "root", acc.Root, "err", storageIter.Error())
+						return storageIter.Error()
+					}
+				}
+				if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
+					if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
+						log.Error("Code is missing", "account", common.BytesToHash(accIter.LeafKey()))
+						return errors.New("missing code")
+					}
+					codes += 1
+				}
+			}
+		}
+		if accIter.Error() != nil {
+			log.Error("Failed to traverse state trie", "root", config.root, "err", accIter.Error())
+			return accIter.Error()
+		}
+		log.Info("State traversal complete (raw)", "nodes", nodes, "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
 		return nil
 	}
-	for accIter.Next(true) {
-		nodes += 1
-		node := accIter.Hash()
-
-		// Check the present for non-empty hash node(embedded node doesn't
-		// have their own hash).
-		if node != (common.Hash{}) {
-			blob, _ := reader.Node(common.Hash{}, accIter.Path(), node)
-			if len(blob) == 0 {
-				log.Error("Missing trie node(account)", "hash", node)
-				return errors.New("missing account")
-			}
-			hasher.Reset()
-			hasher.Write(blob)
-			hasher.Read(got)
-			if !bytes.Equal(got, node.Bytes()) {
-				log.Error("Invalid trie node(account)", "hash", node.Hex(), "value", blob)
-				return errors.New("invalid account node")
-			}
-		}
-		// If it's a leaf node, yes we are touching an account,
-		// dig into the storage trie further.
-		if accIter.Leaf() {
-			accounts += 1
-			var acc types.StateAccount
-			if err := rlp.DecodeBytes(accIter.LeafBlob(), &acc); err != nil {
-				log.Error("Invalid account encountered during traversal", "err", err)
-				return errors.New("invalid account")
-			}
-			if acc.Root != types.EmptyRootHash {
-				id := trie.StorageTrieID(root, common.BytesToHash(accIter.LeafKey()), acc.Root)
-				storageTrie, err := trie.NewStateTrie(id, triedb)
-				if err != nil {
-					log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
-					return errors.New("missing storage trie")
-				}
-				storageIter, err := storageTrie.NodeIterator(nil)
-				if err != nil {
-					log.Error("Failed to open storage iterator", "root", acc.Root, "err", err)
-					return err
-				}
-				for storageIter.Next(true) {
-					nodes += 1
-					node := storageIter.Hash()
-
-					// Check the presence for non-empty hash node(embedded node doesn't
-					// have their own hash).
-					if node != (common.Hash{}) {
-						blob, _ := reader.Node(common.BytesToHash(accIter.LeafKey()), storageIter.Path(), node)
-						if len(blob) == 0 {
-							log.Error("Missing trie node(storage)", "hash", node)
-							return errors.New("missing storage")
-						}
-						hasher.Reset()
-						hasher.Write(blob)
-						hasher.Read(got)
-						if !bytes.Equal(got, node.Bytes()) {
-							log.Error("Invalid trie node(storage)", "hash", node.Hex(), "value", blob)
-							return errors.New("invalid storage node")
-						}
-					}
-					// Bump the counter if it's leaf node.
-					if storageIter.Leaf() {
-						slots += 1
-					}
-					if time.Since(lastReport) > time.Second*8 {
-						log.Info("Traversing state", "nodes", nodes, "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
-						lastReport = time.Now()
-					}
-				}
-				if storageIter.Error() != nil {
-					log.Error("Failed to traverse storage trie", "root", acc.Root, "err", storageIter.Error())
-					return storageIter.Error()
-				}
-			}
-			if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
-				if !rawdb.HasCode(chaindb, common.BytesToHash(acc.CodeHash)) {
-					log.Error("Code is missing", "account", common.BytesToHash(accIter.LeafKey()))
-					return errors.New("missing code")
-				}
-				codes += 1
-			}
-			if time.Since(lastReport) > time.Second*8 {
-				log.Info("Traversing state", "nodes", nodes, "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
-				lastReport = time.Now()
-			}
-		}
-	}
-	if accIter.Error() != nil {
-		log.Error("Failed to traverse state trie", "root", root, "err", accIter.Error())
-		return accIter.Error()
-	}
-	log.Info("State is complete", "nodes", nodes, "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
-	return nil
 }
 
 func parseRoot(input string) (common.Hash, error) {
