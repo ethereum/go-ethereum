@@ -472,7 +472,7 @@ web3._extend({
 			name: 'stateSize',
 			call: 'debug_stateSize',
 			params: 1,
-			inputFormatter:[null],
+			inputFormatter: [null],
 		}),
 	],
 	properties: []
