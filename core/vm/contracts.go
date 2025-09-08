@@ -531,7 +531,6 @@ func berlinModexpGas(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64
 func osakaModexpGas(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 {
 	const (
 		multiplier = 16
-		divisor    = 3
 		minGas     = 500
 	)
 
@@ -542,7 +541,7 @@ func osakaModexpGas(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 
 	}
 	iterationCount := modexpIterationCount(expLen, expHead, multiplier)
 
-	// Calculate gas: (multComplexity * iterationCount) / osakaDivisor
+	// Calculate gas: multComplexity * iterationCount
 	carry, gas := bits.Mul64(iterationCount, multComplexity)
 	if carry != 0 {
 		return math.MaxUint64
