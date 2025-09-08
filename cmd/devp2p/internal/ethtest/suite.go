@@ -1133,7 +1133,10 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 		// transmit the same tx but with correct sidecar from the good peer.
 
 		var req *eth.GetPooledTransactionsPacket
-		req, err = readUntil[eth.GetPooledTransactionsPacket](context.Background(), conn)
+		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+		defer cancel()
+
+		req, err = readUntil[eth.GetPooledTransactionsPacket](ctx, conn)
 		if err != nil {
 			errc <- fmt.Errorf("reading pooled tx request failed: %v", err)
 			return
