@@ -12,13 +12,17 @@ It then executes the block statelessly and validates that the computed state roo
 
 ## Architecture
 
-The keeper uses build tags to compile platform-specific input methods:
+The keeper uses build tags to compile platform-specific input methods and chain configurations:
 
 ```
 cmd/keeper/
-├── main.go                 # Main execution logic
-├── getpayload_example.go     # Example implementation
-└── README.md              # This file
+├── main.go                    # Main execution logic
+├── getpayload_example.go      # Example implementation with embedded data
+├── getpayload_ziren.go        # Ziren zkVM implementation
+├── chainconfig_mainnet.go     # Mainnet chain configuration
+├── chainconfig_sepolia.go     # Sepolia chain configuration
+├── chainconfig_hoodi.go       # Hoodi chain configuration
+└── README.md                  # This file
 ```
 
 ## Creating a Custom Platform Implementation
@@ -66,7 +70,14 @@ func getInput() []byte {
 ### 2. Build for Your Platform
 
 ```bash
-go build -tags myplatform ./cmd/keeper
+# Build with specific platform and chain configuration
+go build -tags "myplatform mainnet" ./cmd/keeper
+
+# Available chain configurations:
+# - mainnet: Ethereum mainnet
+# - sepolia: Sepolia testnet
+# - hoodi: Hoodi testnet
+# If no chain tag is specified, defaults to mainnet
 ```
 
 ## Payload Structure
@@ -80,10 +91,24 @@ type Payload struct {
 }
 ```
 
-## Example Implementation
+## Build Examples
 
-See `getinput_example.go` for a complete example that contains a payload. To build the example:
+### Example Implementation
+See `getpayload_example.go` for a complete example with embedded Hoodi block data:
 
 ```bash
-go build -tags example ./cmd/keeper
+# Build example with different chain configurations
+go build -tags "example hoodi" ./cmd/keeper    # Example with Hoodi config (default for example)
+go build -tags "example mainnet" ./cmd/keeper  # Example with mainnet config
+go build -tags "example sepolia" ./cmd/keeper  # Example with Sepolia config
+```
+
+### Ziren zkVM Implementation
+Build for the Ziren zkVM platform:
+
+```bash
+# For MIPS architecture (typical for zkVM)
+GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build -tags "ziren mainnet" ./cmd/keeper
+GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build -tags "ziren sepolia" ./cmd/keeper
+GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build -tags "ziren hoodi" ./cmd/keeper
 ```

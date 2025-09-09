@@ -18,20 +18,10 @@
 
 package main
 
-import "github.com/ethereum/go-ethereum/params"
-
 // getInput is a stub implementation for when no platform-specific build tags are set.
 // This allows golangci-lint to typecheck the code without errors.
 // The actual implementations are provided in platform-specific files.
 func getInput() []byte {
-	// This is a no-op stub - real implementations are in platform-specific files
-	return nil
-}
-
-// getChainConfig is a stub implementation for when no platform-specific build tags are set.
-// This allows golangci-lint to typecheck the code without errors.
-// The actual implementations are provided in platform-specific files.
-func getChainConfig() *params.ChainConfig {
 	// This is a no-op stub - real implementations are in platform-specific files
 	return nil
 }

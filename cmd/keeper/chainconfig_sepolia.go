@@ -14,19 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build ziren
+//go:build sepolia
 
 package main
 
-import (
-	zkruntime "github.com/zkMIPS/zkMIPS/crates/go-runtime/zkm_runtime"
-)
+import "github.com/ethereum/go-ethereum/params"
 
-// getInput reads the input payload from the zkVM runtime environment.
-// The zkVM host provides the RLP-encoded Payload structure containing
-// the block and witness data through the runtime's input mechanism.
-func getInput() []byte {
-	// Read the RLP-encoded payload directly from the zkVM runtime
-	input := zkruntime.Read[[]byte]()
-	return input
+// getChainConfig returns the Sepolia testnet chain configuration.
+func getChainConfig() *params.ChainConfig {
+	return params.SepoliaChainConfig
 }

@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -64,9 +63,6 @@ var witnessRlp []byte
 //go:embed 1192c3_block.rlp
 var blockRlp []byte
 
-func getChainConfig() *params.ChainConfig {
-	return params.HoodiChainConfig
-}
 
 // getInput is a platform-specific function that will recover the input payload
 // and returns it as a slice. It is expected to be an RLP-encoded Payload structure
