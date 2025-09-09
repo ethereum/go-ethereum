@@ -323,8 +323,6 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 		if tx.GasFeeCapIntCmp(thresholdFeeCap) < 0 || tx.GasTipCapIntCmp(thresholdTip) < 0 {
 			return false, nil
 		}
-		// Old is being replaced, subtract old cost
-		l.subTotalCost([]*types.Transaction{old})
 	}
 	// Add new tx cost to totalcost
 	cost, overflow := uint256.FromBig(tx.Cost())
@@ -336,6 +334,9 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 		return false, nil
 	}
 	l.totalcost = total
+
+	// Old is being replaced, subtract old cost
+	l.subTotalCost([]*types.Transaction{old})
 
 	// Otherwise overwrite the old transaction with the current one
 	l.txs.Put(tx)
