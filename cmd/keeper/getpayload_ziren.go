@@ -14,24 +14,24 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !example && !ziren
+//go:build ziren
 
 package main
 
-import "github.com/ethereum/go-ethereum/params"
+import (
+	zkruntime "github.com/zkMIPS/zkMIPS/crates/go-runtime/zkm_runtime"
+	"github.com/ethereum/go-ethereum/params"
+)
 
-// getInput is a stub implementation for when no platform-specific build tags are set.
-// This allows golangci-lint to typecheck the code without errors.
-// The actual implementations are provided in platform-specific files.
-func getInput() []byte {
-	// This is a no-op stub - real implementations are in platform-specific files
-	return nil
+func getChainConfig() *params.ChainConfig {
+	return params.MainnetChainConfig
 }
 
-// getChainConfig is a stub implementation for when no platform-specific build tags are set.
-// This allows golangci-lint to typecheck the code without errors.
-// The actual implementations are provided in platform-specific files.
-func getChainConfig() *params.ChainConfig {
-	// This is a no-op stub - real implementations are in platform-specific files
-	return nil
+// getInput reads the input payload from the zkVM runtime environment.
+// The zkVM host provides the RLP-encoded Payload structure containing
+// the block and witness data through the runtime's input mechanism.
+func getInput() []byte {
+	// Read the RLP-encoded payload directly from the zkVM runtime
+	input := zkruntime.Read[[]byte]()
+	return input
 }

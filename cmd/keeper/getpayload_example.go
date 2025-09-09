@@ -30,8 +30,10 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// This is taken from PR #32216 until it's merged
 // ExtWitness is a witness RLP encoding for transferring across clients.
+// This is taken from PR #32216 until it's merged.
+// It contains block headers, contract codes, state nodes, and storage keys
+// required for stateless execution verification.
 type ExtWitness struct {
 	Headers []*types.Header `json:"headers"`
 	Codes   []hexutil.Bytes `json:"codes"`

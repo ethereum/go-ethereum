@@ -27,6 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// Payload represents the input data for stateless execution containing
+// a block and its associated witness data for verification.
 type Payload struct {
 	Block   *types.Block
 	Witness *stateless.Witness
