@@ -53,6 +53,7 @@ func newLookup(ctx context.Context, tab *Table, target enode.ID, q queryFunc) *l
 	// Don't query further if we hit ourself.
 	// Unlikely to happen often in practice.
 	it.asked[tab.self().ID()] = true
+	it.seen[tab.self().ID()] = true
 
 	// Initialize the lookup with nodes from table.
 	closest := it.tab.findnodeByID(it.result.target, bucketSize, false)
@@ -186,8 +187,12 @@ func (it *lookupIterator) Next() bool {
 				// is in a degraded state, and we need to wait for it to fill again.
 				it.lookupFailed(it.lookup.tab)
 			}
+			// Otherwise, yield the initial nodes from the iterator before advancing
+			// the lookup.
+			it.buffer = it.lookup.replyBuffer
 			continue
 		}
+
 		newNodes := it.lookup.advance()
 		it.buffer = it.lookup.replyBuffer
 		if !newNodes {
