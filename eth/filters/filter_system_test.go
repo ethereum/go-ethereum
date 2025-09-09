@@ -880,7 +880,7 @@ func TestLogsSubscription(t *testing.T) {
 			for {
 				select {
 				case log := <-tt.notifier.c:
-					fetched = append(fetched, *log.(**types.Log))
+					fetched = append(fetched, log.(*types.Log))
 				case <-timeout:
 					break fetchLoop
 				}
@@ -941,7 +941,6 @@ func parseTransferLog(log *types.Log) (from, to common.Address, amount uint64) {
 func calculateBalance(logs []*types.Log) map[common.Address]uint64 {
 	balances := make(map[common.Address]uint64)
 	for _, log := range logs {
-		log := log
 		from, to, amount := parseTransferLog(log)
 
 		if _, ok := balances[from]; !ok {
@@ -1042,7 +1041,7 @@ func testLogsSubscriptionReorg(t *testing.T, oldChainMaker, newChainMaker, pendi
 		for {
 			select {
 			case log := <-notifier.c:
-				l := *log.(**types.Log)
+				l := log.(*types.Log)
 
 				fetched = append(fetched, l)
 				// We halt the sender by blocking Notify(). However sender will already prepare

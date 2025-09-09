@@ -564,8 +564,7 @@ func notifyLogsIf(notifier notifier, id rpc.ID, logs []*types.Log, hashes *lru.B
 			hashes.Add(batch.hash, struct{}{})
 		}
 		for _, log := range logs[batch.start:batch.end] {
-			log := log
-			notifier.Notify(id, &log)
+			notifier.Notify(id, log)
 		}
 	}
 }
