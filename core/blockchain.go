@@ -168,10 +168,13 @@ type BlockChainConfig struct {
 	TrieNoAsyncFlush     bool          // Whether the asynchronous buffer flushing is disallowed
 	TrieJournalDirectory string        // Directory path to the journal used for persisting trie data across node restarts
 
-	Preimages    bool   // Whether to store preimage of trie key to the disk
-	StateHistory uint64 // Number of blocks from head whose state histories are reserved.
-	StateScheme  string // Scheme used to store ethereum states and merkle tree nodes on top
-	ArchiveMode  bool   // Whether to enable the archive mode
+	Preimages   bool   // Whether to store preimage of trie key to the disk
+	StateScheme string // Scheme used to store ethereum states and merkle tree nodes on top
+	ArchiveMode bool   // Whether to enable the archive mode
+
+	// Number of blocks from the chain head for which state histories are retained.
+	// If set to 0, all state histories across the entire chain will be retained;
+	StateHistory uint64
 
 	// State snapshot related options
 	SnapshotLimit   int  // Memory allowance (MB) to use for caching snapshot entries in memory
@@ -193,6 +196,9 @@ type BlockChainConfig struct {
 	// If the value is zero, all transactions of the entire chain will be indexed.
 	// If the value is -1, indexing is disabled.
 	TxLookupLimit int64
+
+	// StateSizeTracking indicates whether the state size tracking is enabled.
+	StateSizeTracking bool
 }
 
 // DefaultConfig returns the default config.
@@ -330,6 +336,7 @@ type BlockChain struct {
 	prefetcher Prefetcher
 	processor  Processor // Block transaction processor interface
 	logger     *tracing.Hooks
+	stateSizer *state.SizeTracker // State size tracking
 
 	lastForkReadyAlert time.Time // Last time there was a fork readiness print out
 }
@@ -522,6 +529,17 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	// Start tx indexer if it's enabled.
 	if bc.cfg.TxLookupLimit >= 0 {
 		bc.txIndexer = newTxIndexer(uint64(bc.cfg.TxLookupLimit), bc)
+	}
+
+	// Start state size tracker
+	if bc.cfg.StateSizeTracking {
+		stateSizer, err := state.NewSizeTracker(bc.db, bc.triedb)
+		if err == nil {
+			bc.stateSizer = stateSizer
+			log.Info("Enabled state size metrics")
+		} else {
+			log.Info("Failed to setup size tracker", "err", err)
+		}
 	}
 	return bc, nil
 }
@@ -1249,6 +1267,10 @@ func (bc *BlockChain) stopWithoutSaving() {
 	// Signal shutdown to all goroutines.
 	bc.InterruptInsert(true)
 
+	// Stop state size tracker
+	if bc.stateSizer != nil {
+		bc.stateSizer.Stop()
+	}
 	// Now wait for all chain modifications to end and persistent goroutines to exit.
 	//
 	// Note: Close waits for the mutex to become available, i.e. any running chain
@@ -1583,9 +1605,13 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		log.Crit("Failed to write block into disk", "err", err)
 	}
 	// Commit all cached state changes into underlying memory database.
-	root, err := statedb.Commit(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()), bc.chainConfig.IsCancun(block.Number(), block.Time()))
+	root, stateUpdate, err := statedb.CommitWithUpdate(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()), bc.chainConfig.IsCancun(block.Number(), block.Time()))
 	if err != nil {
 		return err
+	}
+	// Emit the state update to the state sizestats if it's active
+	if bc.stateSizer != nil {
+		bc.stateSizer.Notify(stateUpdate)
 	}
 	// If node is running in path mode, skip explicit gc operation
 	// which is unnecessary in this mode.
@@ -2011,7 +2037,10 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	// If we are past Byzantium, enable prefetching to pull in trie node paths
 	// while processing transactions. Before Byzantium the prefetcher is mostly
 	// useless due to the intermediate root hashing after each transaction.
-	var witness *stateless.Witness
+	var (
+		witness      *stateless.Witness
+		witnessStats *stateless.WitnessStats
+	)
 	if bc.chainConfig.IsByzantium(block.Number()) {
 		// Generate witnesses either if we're self-testing, or if it's the
 		// only block being inserted. A bit crude, but witnesses are huge,
@@ -2021,8 +2050,11 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 			if err != nil {
 				return nil, err
 			}
+			if bc.cfg.VmConfig.EnableWitnessStats {
+				witnessStats = stateless.NewWitnessStats()
+			}
 		}
-		statedb.StartPrefetcher("chain", witness)
+		statedb.StartPrefetcher("chain", witness, witnessStats)
 		defer statedb.StopPrefetcher()
 	}
 
@@ -2083,6 +2115,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 			return nil, fmt.Errorf("stateless self-validation receipt root mismatch (cross: %x local: %x)", crossReceiptRoot, block.ReceiptHash())
 		}
 	}
+
 	xvtime := time.Since(xvstart)
 	proctime := time.Since(startTime) // processing + validation + cross validation
 
@@ -2118,6 +2151,11 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	if err != nil {
 		return nil, err
 	}
+	// Report the collected witness statistics
+	if witnessStats != nil {
+		witnessStats.ReportMetrics()
+	}
+
 	// Update the metrics touched during block commit
 	accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
 	storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them
@@ -2775,4 +2813,9 @@ func (bc *BlockChain) SetTrieFlushInterval(interval time.Duration) {
 // GetTrieFlushInterval gets the in-memory tries flushAlloc interval
 func (bc *BlockChain) GetTrieFlushInterval() time.Duration {
 	return time.Duration(bc.flushInterval.Load())
+}
+
+// StateSizer returns the state size tracker, or nil if it's not initialized
+func (bc *BlockChain) StateSizer() *state.SizeTracker {
+	return bc.stateSizer
 }

@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -597,19 +598,30 @@ func (api *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Addre
 
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
 func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
-	block, err := api.b.BlockByNumberOrHash(ctx, blockNrOrHash)
-	if block == nil || err != nil {
-		return nil, err
-	}
-	receipts, err := api.b.GetReceipts(ctx, block.Hash())
-	if err != nil {
-		return nil, err
+	var (
+		err      error
+		block    *types.Block
+		receipts types.Receipts
+	)
+	if blockNr, ok := blockNrOrHash.Number(); ok && blockNr == rpc.PendingBlockNumber {
+		block, receipts, _ = api.b.Pending()
+		if block == nil {
+			return nil, errors.New("pending receipts is not available")
+		}
+	} else {
+		block, err = api.b.BlockByNumberOrHash(ctx, blockNrOrHash)
+		if block == nil || err != nil {
+			return nil, err
+		}
+		receipts, err = api.b.GetReceipts(ctx, block.Hash())
+		if err != nil {
+			return nil, err
+		}
 	}
 	txs := block.Transactions()
 	if len(txs) != len(receipts) {
 		return nil, fmt.Errorf("receipts length mismatch: %d vs %d", len(txs), len(receipts))
 	}
-
 	// Derive the sender.
 	signer := types.MakeSigner(api.b.ChainConfig(), block.Number(), block.Time())
 
@@ -617,7 +629,6 @@ func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rp
 	for i, receipt := range receipts {
 		result[i] = marshalReceipt(receipt, block.Hash(), block.NumberU64(), signer, txs[i], i)
 	}
-
 	return result, nil
 }
 
@@ -819,7 +830,15 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	if state == nil || err != nil {
 		return 0, err
 	}
-	if err := overrides.Apply(state, nil); err != nil {
+	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
+	if blockOverrides != nil {
+		if err := blockOverrides.Apply(&blockCtx); err != nil {
+			return 0, err
+		}
+	}
+	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time)
+	precompiles := vm.ActivePrecompiledContracts(rules)
+	if err := overrides.Apply(state, precompiles); err != nil {
 		return 0, err
 	}
 	// Construct the gas estimator option from the user input
@@ -1144,6 +1163,71 @@ func (api *BlockChainAPI) CreateAccessList(ctx context.Context, args Transaction
 		result.Error = vmerr.Error()
 	}
 	return result, nil
+}
+
+type config struct {
+	ActivationTime  uint64                    `json:"activationTime"`
+	BlobSchedule    *params.BlobConfig        `json:"blobSchedule"`
+	ChainId         *hexutil.Big              `json:"chainId"`
+	ForkId          hexutil.Bytes             `json:"forkId"`
+	Precompiles     map[string]common.Address `json:"precompiles"`
+	SystemContracts map[string]common.Address `json:"systemContracts"`
+}
+
+type configResponse struct {
+	Current *config `json:"current"`
+	Next    *config `json:"next"`
+	Last    *config `json:"last"`
+}
+
+// Config implements the EIP-7910 eth_config method.
+func (api *BlockChainAPI) Config(ctx context.Context) (*configResponse, error) {
+	genesis, err := api.b.HeaderByNumber(ctx, 0)
+	if err != nil {
+		return nil, fmt.Errorf("unable to load genesis: %w", err)
+	}
+	assemble := func(c *params.ChainConfig, ts *uint64) *config {
+		if ts == nil {
+			return nil
+		}
+		t := *ts
+
+		var (
+			rules       = c.Rules(c.LondonBlock, true, t)
+			precompiles = make(map[string]common.Address)
+		)
+		for addr, c := range vm.ActivePrecompiledContracts(rules) {
+			precompiles[c.Name()] = addr
+		}
+		// Activation time is required. If a fork is activated at genesis the value 0 is used
+		activationTime := t
+		if genesis.Time >= t {
+			activationTime = 0
+		}
+		forkid := forkid.NewID(c, types.NewBlockWithHeader(genesis), ^uint64(0), t).Hash
+		return &config{
+			ActivationTime:  activationTime,
+			BlobSchedule:    c.BlobConfig(c.LatestFork(t)),
+			ChainId:         (*hexutil.Big)(c.ChainID),
+			ForkId:          forkid[:],
+			Precompiles:     precompiles,
+			SystemContracts: c.ActiveSystemContracts(t),
+		}
+	}
+	var (
+		c = api.b.ChainConfig()
+		t = api.b.CurrentHeader().Time
+	)
+	resp := configResponse{
+		Next:    assemble(c, c.Timestamp(c.LatestFork(t)+1)),
+		Current: assemble(c, c.Timestamp(c.LatestFork(t))),
+		Last:    assemble(c, c.Timestamp(c.LatestFork(^uint64(0)))),
+	}
+	// Nil out last if no future-fork is configured.
+	if resp.Next == nil {
+		resp.Last = nil
+	}
+	return &resp, nil
 }
 
 // AccessList creates an access list for the given transaction.
@@ -1496,6 +1580,8 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 
 // SendTransaction creates a transaction for the given argument, sign it and submit it to the
 // transaction pool.
+//
+// This API is not capable for submitting blob transaction with sidecar.
 func (api *TransactionAPI) SendTransaction(ctx context.Context, args TransactionArgs) (common.Hash, error) {
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: args.from()}
@@ -1516,7 +1602,7 @@ func (api *TransactionAPI) SendTransaction(ctx context.Context, args Transaction
 	}
 
 	// Set some sanity defaults and terminate on failure
-	if err := args.setDefaults(ctx, api.b, false); err != nil {
+	if err := args.setDefaults(ctx, api.b, sidecarConfig{}); err != nil {
 		return common.Hash{}, err
 	}
 	// Assemble the transaction and sign with the wallet
@@ -1539,10 +1625,19 @@ func (api *TransactionAPI) SendTransaction(ctx context.Context, args Transaction
 // on a given unsigned transaction, and returns it to the caller for further
 // processing (signing + broadcast).
 func (api *TransactionAPI) FillTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
-	args.blobSidecarAllowed = true
-
 	// Set some sanity defaults and terminate on failure
-	if err := args.setDefaults(ctx, api.b, false); err != nil {
+	sidecarVersion := types.BlobSidecarVersion0
+	if len(args.Blobs) > 0 {
+		h := api.b.CurrentHeader()
+		if api.b.ChainConfig().IsOsaka(h.Number, h.Time) {
+			sidecarVersion = types.BlobSidecarVersion1
+		}
+	}
+	config := sidecarConfig{
+		blobSidecarAllowed: true,
+		blobSidecarVersion: sidecarVersion,
+	}
+	if err := args.setDefaults(ctx, api.b, config); err != nil {
 		return nil, err
 	}
 	// Assemble the transaction and obtain rlp
@@ -1604,8 +1699,6 @@ type SignTransactionResult struct {
 // The node needs to have the private key of the account corresponding with
 // the given from address and it needs to be unlocked.
 func (api *TransactionAPI) SignTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
-	args.blobSidecarAllowed = true
-
 	if args.Gas == nil {
 		return nil, errors.New("gas not specified")
 	}
@@ -1615,7 +1708,19 @@ func (api *TransactionAPI) SignTransaction(ctx context.Context, args Transaction
 	if args.Nonce == nil {
 		return nil, errors.New("nonce not specified")
 	}
-	if err := args.setDefaults(ctx, api.b, false); err != nil {
+	sidecarVersion := types.BlobSidecarVersion0
+	if len(args.Blobs) > 0 {
+		h := api.b.CurrentHeader()
+		if api.b.ChainConfig().IsOsaka(h.Number, h.Time) {
+			sidecarVersion = types.BlobSidecarVersion1
+		}
+	}
+
+	config := sidecarConfig{
+		blobSidecarAllowed: true,
+		blobSidecarVersion: sidecarVersion,
+	}
+	if err := args.setDefaults(ctx, api.b, config); err != nil {
 		return nil, err
 	}
 	// Before actually sign the transaction, ensure the transaction fee is reasonable.
@@ -1636,7 +1741,7 @@ func (api *TransactionAPI) SignTransaction(ctx context.Context, args Transaction
 	// no longer retains the blobs, only the blob hashes. In this step, we need
 	// to put back the blob(s).
 	if args.IsEIP4844() {
-		signed = signed.WithBlobTxSidecar(types.NewBlobTxSidecar(types.BlobSidecarVersion0, args.Blobs, args.Commitments, args.Proofs))
+		signed = signed.WithBlobTxSidecar(types.NewBlobTxSidecar(sidecarVersion, args.Blobs, args.Commitments, args.Proofs))
 	}
 	data, err := signed.MarshalBinary()
 	if err != nil {
@@ -1671,11 +1776,13 @@ func (api *TransactionAPI) PendingTransactions() ([]*RPCTransaction, error) {
 
 // Resend accepts an existing transaction and a new gas price and limit. It will remove
 // the given transaction from the pool and reinsert it with the new gas price and limit.
+//
+// This API is not capable for submitting blob transaction with sidecar.
 func (api *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs, gasPrice *hexutil.Big, gasLimit *hexutil.Uint64) (common.Hash, error) {
 	if sendArgs.Nonce == nil {
 		return common.Hash{}, errors.New("missing transaction nonce in transaction spec")
 	}
-	if err := sendArgs.setDefaults(ctx, api.b, false); err != nil {
+	if err := sendArgs.setDefaults(ctx, api.b, sidecarConfig{}); err != nil {
 		return common.Hash{}, err
 	}
 	header := api.b.CurrentHeader()

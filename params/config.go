@@ -1148,6 +1148,40 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 	}
 }
 
+// BlobConfig returns the blob config associated with the provided fork.
+func (c *ChainConfig) BlobConfig(fork forks.Fork) *BlobConfig {
+	switch fork {
+	case forks.Osaka:
+		return DefaultOsakaBlobConfig
+	case forks.Prague:
+		return DefaultPragueBlobConfig
+	case forks.Cancun:
+		return DefaultCancunBlobConfig
+	default:
+		return nil
+	}
+}
+
+// ActiveSystemContracts returns the currently active system contracts at the
+// given timestamp.
+func (c *ChainConfig) ActiveSystemContracts(time uint64) map[string]common.Address {
+	fork := c.LatestFork(time)
+	active := make(map[string]common.Address)
+	if fork >= forks.Osaka {
+		// no new system contracts
+	}
+	if fork >= forks.Prague {
+		active["CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS"] = ConsolidationQueueAddress
+		active["DEPOSIT_CONTRACT_ADDRESS"] = c.DepositContractAddress
+		active["HISTORY_STORAGE_ADDRESS"] = HistoryStorageAddress
+		active["WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS"] = WithdrawalQueueAddress
+	}
+	if fork >= forks.Cancun {
+		active["BEACON_ROOTS_ADDRESS"] = BeaconRootsAddress
+	}
+	return active
+}
+
 // Timestamp returns the timestamp associated with the fork or returns nil if
 // the fork isn't defined or isn't a time-based fork.
 func (c *ChainConfig) Timestamp(fork forks.Fork) *uint64 {

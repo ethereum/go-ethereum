@@ -181,7 +181,7 @@ func (s *stateSet) accountList() []common.Hash {
 	return list
 }
 
-// StorageList returns a sorted list of all storage slot hashes in this state set
+// storageList returns a sorted list of all storage slot hashes in this state set
 // for the given account. The returned list will include the hash of deleted
 // storage slot.
 //

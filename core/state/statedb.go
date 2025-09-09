@@ -136,7 +136,8 @@ type StateDB struct {
 	journal *journal
 
 	// State witness if cross validation is needed
-	witness *stateless.Witness
+	witness      *stateless.Witness
+	witnessStats *stateless.WitnessStats
 
 	// Measurements gathered during execution for debugging purposes
 	AccountReads    time.Duration
@@ -191,12 +192,13 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
-func (s *StateDB) StartPrefetcher(namespace string, witness *stateless.Witness) {
+func (s *StateDB) StartPrefetcher(namespace string, witness *stateless.Witness, witnessStats *stateless.WitnessStats) {
 	// Terminate any previously running prefetcher
 	s.StopPrefetcher()
 
 	// Enable witness collection if requested
 	s.witness = witness
+	s.witnessStats = witnessStats
 
 	// With the switch to the Proof-of-Stake consensus algorithm, block production
 	// rewards are now handled at the consensus layer. Consequently, a block may
@@ -456,7 +458,7 @@ func (s *StateDB) SetNonce(addr common.Address, nonce uint64, reason tracing.Non
 	}
 }
 
-func (s *StateDB) SetCode(addr common.Address, code []byte) (prev []byte) {
+func (s *StateDB) SetCode(addr common.Address, code []byte, reason tracing.CodeChangeReason) (prev []byte) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		return stateObject.SetCode(crypto.Keccak256Hash(code), code)
@@ -858,9 +860,17 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 				continue
 			}
 			if trie := obj.getPrefetchedTrie(); trie != nil {
-				s.witness.AddState(trie.Witness())
+				witness := trie.Witness()
+				s.witness.AddState(witness)
+				if s.witnessStats != nil {
+					s.witnessStats.Add(witness, obj.addrHash)
+				}
 			} else if obj.trie != nil {
-				s.witness.AddState(obj.trie.Witness())
+				witness := obj.trie.Witness()
+				s.witness.AddState(witness)
+				if s.witnessStats != nil {
+					s.witnessStats.Add(witness, obj.addrHash)
+				}
 			}
 		}
 		// Pull in only-read and non-destructed trie witnesses
@@ -874,9 +884,17 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 				continue
 			}
 			if trie := obj.getPrefetchedTrie(); trie != nil {
-				s.witness.AddState(trie.Witness())
+				witness := trie.Witness()
+				s.witness.AddState(witness)
+				if s.witnessStats != nil {
+					s.witnessStats.Add(witness, obj.addrHash)
+				}
 			} else if obj.trie != nil {
-				s.witness.AddState(obj.trie.Witness())
+				witness := obj.trie.Witness()
+				s.witness.AddState(witness)
+				if s.witnessStats != nil {
+					s.witnessStats.Add(witness, obj.addrHash)
+				}
 			}
 		}
 	}
@@ -942,7 +960,11 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 
 	// If witness building is enabled, gather the account trie witness
 	if s.witness != nil {
-		s.witness.AddState(s.trie.Witness())
+		witness := s.trie.Witness()
+		s.witness.AddState(witness)
+		if s.witnessStats != nil {
+			s.witnessStats.Add(witness, common.Hash{})
+		}
 	}
 	return hash
 }
@@ -1133,7 +1155,7 @@ func (s *StateDB) GetTrie() Trie {
 
 // commit gathers the state mutations accumulated along with the associated
 // trie changes, resetting all internal flags with the new state as the base.
-func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool) (*stateUpdate, error) {
+func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNumber uint64) (*stateUpdate, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
@@ -1285,13 +1307,13 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool) (*stateU
 	origin := s.originalRoot
 	s.originalRoot = root
 
-	return newStateUpdate(noStorageWiping, origin, root, deletes, updates, nodes), nil
+	return newStateUpdate(noStorageWiping, origin, root, blockNumber, deletes, updates, nodes), nil
 }
 
 // commitAndFlush is a wrapper of commit which also commits the state mutations
 // to the configured data stores.
 func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (*stateUpdate, error) {
-	ret, err := s.commit(deleteEmptyObjects, noStorageWiping)
+	ret, err := s.commit(deleteEmptyObjects, noStorageWiping, block)
 	if err != nil {
 		return nil, err
 	}
@@ -1354,6 +1376,16 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, noStorageWiping 
 		return common.Hash{}, err
 	}
 	return ret.root, nil
+}
+
+// CommitWithUpdate writes the state mutations and returns both the root hash and the state update.
+// This is useful for tracking state changes at the blockchain level.
+func (s *StateDB) CommitWithUpdate(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, *stateUpdate, error) {
+	ret, err := s.commitAndFlush(block, deleteEmptyObjects, noStorageWiping)
+	if err != nil {
+		return common.Hash{}, nil, err
+	}
+	return ret.root, ret, nil
 }
 
 // Prepare handles the preparatory steps for executing a state transition with.

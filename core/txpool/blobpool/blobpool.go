@@ -1298,6 +1298,13 @@ func (p *BlobPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 }
 
 // GetBlobs returns a number of blobs and proofs for the given versioned hashes.
+// Blobpool must place responses in the order given in the request, using null
+// for any missing blobs.
+//
+// For instance, if the request is [A_versioned_hash, B_versioned_hash,
+// C_versioned_hash] and blobpool has data for blobs A and C, but doesn't have
+// data for B, the response MUST be [A, null, C].
+//
 // This is a utility method for the engine API, enabling consensus clients to
 // retrieve blobs from the pools directly instead of the network.
 func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blob, []kzg4844.Commitment, [][]kzg4844.Proof, error) {
@@ -1317,26 +1324,30 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 		if _, ok := filled[vhash]; ok {
 			continue
 		}
-		// Retrieve the corresponding blob tx with the vhash
+		// Retrieve the corresponding blob tx with the vhash, skip blob resolution
+		// if it's not found locally and place the null instead.
 		p.lock.RLock()
 		txID, exists := p.lookup.storeidOfBlob(vhash)
 		p.lock.RUnlock()
 		if !exists {
-			return nil, nil, nil, fmt.Errorf("blob with vhash %x is not found", vhash)
+			continue
 		}
 		data, err := p.store.Get(txID)
 		if err != nil {
-			return nil, nil, nil, err
+			log.Error("Tracked blob transaction missing from store", "id", txID, "err", err)
+			continue
 		}
 
 		// Decode the blob transaction
 		tx := new(types.Transaction)
 		if err := rlp.DecodeBytes(data, tx); err != nil {
-			return nil, nil, nil, err
+			log.Error("Blobs corrupted for traced transaction", "id", txID, "err", err)
+			continue
 		}
 		sidecar := tx.BlobTxSidecar()
 		if sidecar == nil {
-			return nil, nil, nil, fmt.Errorf("blob tx without sidecar %x", tx.Hash())
+			log.Error("Blob tx without sidecar", "hash", tx.Hash(), "id", txID)
+			continue
 		}
 		// Traverse the blobs in the transaction
 		for i, hash := range tx.BlobHashes() {
@@ -1397,6 +1408,31 @@ func (p *BlobPool) AvailableBlobs(vhashes []common.Hash) int {
 	return available
 }
 
+// convertSidecar converts the legacy sidecar in the submitted transactions
+// if Osaka fork has been activated.
+func (p *BlobPool) convertSidecar(txs []*types.Transaction) ([]*types.Transaction, []error) {
+	head := p.chain.CurrentBlock()
+	if !p.chain.Config().IsOsaka(head.Number, head.Time) {
+		return txs, make([]error, len(txs))
+	}
+	var errs []error
+	for _, tx := range txs {
+		sidecar := tx.BlobTxSidecar()
+		if sidecar == nil {
+			errs = append(errs, errors.New("missing sidecar in blob transaction"))
+			continue
+		}
+		if sidecar.Version == types.BlobSidecarVersion0 {
+			if err := sidecar.ToV1(); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+		}
+		errs = append(errs, nil)
+	}
+	return txs, errs
+}
+
 // Add inserts a set of blob transactions into the pool if they pass validation (both
 // consensus validity and pool restrictions).
 //
@@ -1404,10 +1440,14 @@ func (p *BlobPool) AvailableBlobs(vhashes []common.Hash) int {
 // related to the add is finished. Only use this during tests for determinism.
 func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 	var (
+		errs []error
 		adds = make([]*types.Transaction, 0, len(txs))
-		errs = make([]error, len(txs))
 	)
+	txs, errs = p.convertSidecar(txs)
 	for i, tx := range txs {
+		if errs[i] != nil {
+			continue
+		}
 		errs[i] = p.add(tx)
 		if errs[i] == nil {
 			adds = append(adds, tx.WithoutBlobTxSidecar())

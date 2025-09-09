@@ -24,9 +24,11 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sync"
 	"testing"
 
@@ -40,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/billy"
@@ -47,11 +50,12 @@ import (
 )
 
 var (
-	testBlobs       []*kzg4844.Blob
-	testBlobCommits []kzg4844.Commitment
-	testBlobProofs  []kzg4844.Proof
-	testBlobVHashes [][32]byte
-	testBlobIndices = make(map[[32]byte]int)
+	testBlobs          []*kzg4844.Blob
+	testBlobCommits    []kzg4844.Commitment
+	testBlobProofs     []kzg4844.Proof
+	testBlobCellProofs [][]kzg4844.Proof
+	testBlobVHashes    [][32]byte
+	testBlobIndices    = make(map[[32]byte]int)
 )
 
 const testMaxBlobsPerBlock = 6
@@ -66,6 +70,9 @@ func init() {
 
 		testBlobProof, _ := kzg4844.ComputeBlobProof(testBlob, testBlobCommit)
 		testBlobProofs = append(testBlobProofs, testBlobProof)
+
+		testBlobCellProof, _ := kzg4844.ComputeCellProofs(testBlob)
+		testBlobCellProofs = append(testBlobCellProofs, testBlobCellProof)
 
 		testBlobVHash := kzg4844.CalcBlobHashV1(sha256.New(), &testBlobCommit)
 		testBlobIndices[testBlobVHash] = len(testBlobVHashes)
@@ -257,8 +264,8 @@ func makeUnsignedTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap
 	return makeUnsignedTxWithTestBlob(nonce, gasTipCap, gasFeeCap, blobFeeCap, rnd.Intn(len(testBlobs)))
 }
 
-// makeUnsignedTx is a utility method to construct a random blob transaction
-// without signing it.
+// makeUnsignedTxWithTestBlob is a utility method to construct a random blob transaction
+// with a specific test blob without signing it.
 func makeUnsignedTxWithTestBlob(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64, blobIdx int) *types.BlobTx {
 	return &types.BlobTx{
 		ChainID:    uint256.MustFromBig(params.MainnetChainConfig.ChainID),
@@ -416,24 +423,40 @@ func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
 			hashes = append(hashes, tx.vhashes...)
 		}
 	}
-	blobs, _, proofs, err := pool.GetBlobs(hashes, types.BlobSidecarVersion0)
+	blobs1, _, proofs1, err := pool.GetBlobs(hashes, types.BlobSidecarVersion0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blobs2, _, proofs2, err := pool.GetBlobs(hashes, types.BlobSidecarVersion1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Cross validate what we received vs what we wanted
-	if len(blobs) != len(hashes) || len(proofs) != len(hashes) {
-		t.Errorf("retrieved blobs/proofs size mismatch: have %d/%d, want %d", len(blobs), len(proofs), len(hashes))
+	if len(blobs1) != len(hashes) || len(proofs1) != len(hashes) {
+		t.Errorf("retrieved blobs/proofs size mismatch: have %d/%d, want %d", len(blobs1), len(proofs1), len(hashes))
+		return
+	}
+	if len(blobs2) != len(hashes) || len(proofs2) != len(hashes) {
+		t.Errorf("retrieved blobs/proofs size mismatch: have %d/%d, want blobs %d, want proofs: %d", len(blobs2), len(proofs2), len(hashes), len(hashes))
 		return
 	}
 	for i, hash := range hashes {
 		// If an item is missing, but shouldn't, error
-		if blobs[i] == nil || proofs[i] == nil {
+		if blobs1[i] == nil || proofs1[i] == nil {
+			t.Errorf("tracked blob retrieval failed: item %d, hash %x", i, hash)
+			continue
+		}
+		if blobs2[i] == nil || proofs2[i] == nil {
 			t.Errorf("tracked blob retrieval failed: item %d, hash %x", i, hash)
 			continue
 		}
 		// Item retrieved, make sure it matches the expectation
 		index := testBlobIndices[hash]
-		if *blobs[i] != *testBlobs[index] || proofs[i][0] != testBlobProofs[index] {
+		if *blobs1[i] != *testBlobs[index] || proofs1[i][0] != testBlobProofs[index] {
+			t.Errorf("retrieved blob or proof mismatch: item %d, hash %x", i, hash)
+			continue
+		}
+		if *blobs2[i] != *testBlobs[index] || !slices.Equal(proofs2[i], testBlobCellProofs[index]) {
 			t.Errorf("retrieved blob or proof mismatch: item %d, hash %x", i, hash)
 			continue
 		}
@@ -1668,6 +1691,49 @@ func TestAdd(t *testing.T) {
 	}
 }
 
+// Tests that adding the transactions with legacy sidecar and expect them to
+// be converted to new format correctly.
+func TestAddLegacyBlobTx(t *testing.T) {
+	var (
+		key1, _ = crypto.GenerateKey()
+		key2, _ = crypto.GenerateKey()
+
+		addr1 = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2 = crypto.PubkeyToAddress(key2.PublicKey)
+	)
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.Commit(0, true, false)
+
+	chain := &testBlockChain{
+		config:  params.MergedTestChainConfig,
+		basefee: uint256.NewInt(1050),
+		blobfee: uint256.NewInt(105),
+		statedb: statedb,
+	}
+	pool := New(Config{Datadir: t.TempDir()}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+
+	// Attempt to add legacy blob transactions.
+	var (
+		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 6, 0, key1, types.BlobSidecarVersion0)
+		tx2 = makeMultiBlobTx(0, 1, 800, 70, 6, 6, key2, types.BlobSidecarVersion0)
+		tx3 = makeMultiBlobTx(1, 1, 800, 70, 6, 12, key2, types.BlobSidecarVersion1)
+	)
+	errs := pool.Add([]*types.Transaction{tx1, tx2, tx3}, true)
+	for _, err := range errs {
+		if err != nil {
+			t.Fatalf("failed to add tx: %v", err)
+		}
+	}
+	verifyPoolInternals(t, pool)
+	pool.Close()
+}
+
 func TestGetBlobs(t *testing.T) {
 	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
@@ -1750,10 +1816,10 @@ func TestGetBlobs(t *testing.T) {
 	}
 
 	cases := []struct {
-		start   int
-		limit   int
-		version byte
-		expErr  bool
+		start      int
+		limit      int
+		fillRandom bool
+		version    byte
 	}{
 		{
 			start: 0, limit: 6,
@@ -1764,11 +1830,27 @@ func TestGetBlobs(t *testing.T) {
 			version: types.BlobSidecarVersion1,
 		},
 		{
+			start: 0, limit: 6, fillRandom: true,
+			version: types.BlobSidecarVersion0,
+		},
+		{
+			start: 0, limit: 6, fillRandom: true,
+			version: types.BlobSidecarVersion1,
+		},
+		{
 			start: 3, limit: 9,
 			version: types.BlobSidecarVersion0,
 		},
 		{
 			start: 3, limit: 9,
+			version: types.BlobSidecarVersion1,
+		},
+		{
+			start: 3, limit: 9, fillRandom: true,
+			version: types.BlobSidecarVersion0,
+		},
+		{
+			start: 3, limit: 9, fillRandom: true,
 			version: types.BlobSidecarVersion1,
 		},
 		{
@@ -1780,6 +1862,14 @@ func TestGetBlobs(t *testing.T) {
 			version: types.BlobSidecarVersion1,
 		},
 		{
+			start: 3, limit: 15, fillRandom: true,
+			version: types.BlobSidecarVersion0,
+		},
+		{
+			start: 3, limit: 15, fillRandom: true,
+			version: types.BlobSidecarVersion1,
+		},
+		{
 			start: 0, limit: 18,
 			version: types.BlobSidecarVersion0,
 		},
@@ -1788,58 +1878,79 @@ func TestGetBlobs(t *testing.T) {
 			version: types.BlobSidecarVersion1,
 		},
 		{
-			start: 18, limit: 20,
+			start: 0, limit: 18, fillRandom: true,
 			version: types.BlobSidecarVersion0,
-			expErr:  true,
+		},
+		{
+			start: 0, limit: 18, fillRandom: true,
+			version: types.BlobSidecarVersion1,
 		},
 	}
 	for i, c := range cases {
-		var vhashes []common.Hash
+		var (
+			vhashes []common.Hash
+			filled  = make(map[int]struct{})
+		)
+		if c.fillRandom {
+			filled[len(vhashes)] = struct{}{}
+			vhashes = append(vhashes, testrand.Hash())
+		}
 		for j := c.start; j < c.limit; j++ {
 			vhashes = append(vhashes, testBlobVHashes[j])
+			if c.fillRandom && rand.Intn(2) == 0 {
+				filled[len(vhashes)] = struct{}{}
+				vhashes = append(vhashes, testrand.Hash())
+			}
+		}
+		if c.fillRandom {
+			filled[len(vhashes)] = struct{}{}
+			vhashes = append(vhashes, testrand.Hash())
 		}
 		blobs, _, proofs, err := pool.GetBlobs(vhashes, c.version)
+		if err != nil {
+			t.Errorf("Unexpected error for case %d, %v", i, err)
+		}
 
-		if c.expErr {
-			if err == nil {
-				t.Errorf("Unexpected return, want error for case %d", i)
-			}
-		} else {
-			if err != nil {
-				t.Errorf("Unexpected error for case %d, %v", i, err)
-			}
-			// Cross validate what we received vs what we wanted
-			length := c.limit - c.start
-			if len(blobs) != length || len(proofs) != length {
-				t.Errorf("retrieved blobs/proofs size mismatch: have %d/%d, want %d", len(blobs), len(proofs), length)
+		// Cross validate what we received vs what we wanted
+		length := c.limit - c.start
+		wantLen := length + len(filled)
+		if len(blobs) != wantLen || len(proofs) != wantLen {
+			t.Errorf("retrieved blobs/proofs size mismatch: have %d/%d, want %d", len(blobs), len(proofs), wantLen)
+			continue
+		}
+
+		var unknown int
+		for j := 0; j < len(blobs); j++ {
+			if _, exist := filled[j]; exist {
+				if blobs[j] != nil || proofs[j] != nil {
+					t.Errorf("Unexpected blob and proof, item %d", j)
+				}
+				unknown++
 				continue
 			}
-			for j := 0; j < len(blobs); j++ {
-				// If an item is missing, but shouldn't, error
-				if blobs[j] == nil || proofs[j] == nil {
-					t.Errorf("tracked blob retrieval failed: item %d, hash %x", j, vhashes[j])
-					continue
+			// If an item is missing, but shouldn't, error
+			if blobs[j] == nil || proofs[j] == nil {
+				t.Errorf("tracked blob retrieval failed: item %d, hash %x", j, vhashes[j])
+				continue
+			}
+			// Item retrieved, make sure the blob matches the expectation
+			if *blobs[j] != *testBlobs[c.start+j-unknown] {
+				t.Errorf("retrieved blob mismatch: item %d, hash %x", j, vhashes[j])
+				continue
+			}
+			// Item retrieved, make sure the proof matches the expectation
+			if c.version == types.BlobSidecarVersion0 {
+				if proofs[j][0] != testBlobProofs[c.start+j-unknown] {
+					t.Errorf("retrieved proof mismatch: item %d, hash %x", j, vhashes[j])
 				}
-				// Item retrieved, make sure the blob matches the expectation
-				if *blobs[j] != *testBlobs[c.start+j] {
-					t.Errorf("retrieved blob mismatch: item %d, hash %x", j, vhashes[j])
-					continue
-				}
-				// Item retrieved, make sure the proof matches the expectation
-				if c.version == types.BlobSidecarVersion0 {
-					if proofs[j][0] != testBlobProofs[c.start+j] {
-						t.Errorf("retrieved proof mismatch: item %d, hash %x", j, vhashes[j])
-					}
-				} else {
-					want, _ := kzg4844.ComputeCellProofs(blobs[j])
-					if !reflect.DeepEqual(want, proofs[j]) {
-						t.Errorf("retrieved proof mismatch: item %d, hash %x", j, vhashes[j])
-					}
+			} else {
+				want, _ := kzg4844.ComputeCellProofs(blobs[j])
+				if !reflect.DeepEqual(want, proofs[j]) {
+					t.Errorf("retrieved proof mismatch: item %d, hash %x", j, vhashes[j])
 				}
 			}
 		}
 	}
-
 	pool.Close()
 }
 

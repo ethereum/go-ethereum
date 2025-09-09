@@ -350,7 +350,7 @@ func TestDecodeErrors(t *testing.T) {
 	}
 
 	if err := Decode(r, new(uint)); err != io.EOF {
-		t.Errorf("Decode(r, new(int)) error mismatch, got %q, want %q", err, io.EOF)
+		t.Errorf("Decode(r, new(uint)) error mismatch, got %q, want %q", err, io.EOF)
 	}
 }
 

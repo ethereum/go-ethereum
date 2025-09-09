@@ -37,7 +37,7 @@ type TransitionTrie struct {
 }
 
 // NewTransitionTrie creates a new TransitionTrie.
-func NewTransitionTree(base *SecureTrie, overlay *VerkleTrie, st bool) *TransitionTrie {
+func NewTransitionTrie(base *SecureTrie, overlay *VerkleTrie, st bool) *TransitionTrie {
 	return &TransitionTrie{
 		overlay: overlay,
 		base:    base,
@@ -78,6 +78,17 @@ func (t *TransitionTrie) GetStorage(addr common.Address, key []byte) ([]byte, er
 	return t.base.GetStorage(addr, key)
 }
 
+// PrefetchStorage attempts to resolve specific storage slots from the database
+// to accelerate subsequent trie operations.
+func (t *TransitionTrie) PrefetchStorage(addr common.Address, keys [][]byte) error {
+	for _, key := range keys {
+		if _, err := t.GetStorage(addr, key); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // GetAccount abstract an account read from the trie.
 func (t *TransitionTrie) GetAccount(address common.Address) (*types.StateAccount, error) {
 	data, err := t.overlay.GetAccount(address)
@@ -92,6 +103,17 @@ func (t *TransitionTrie) GetAccount(address common.Address) (*types.StateAccount
 		return data, nil
 	}
 	return t.base.GetAccount(address)
+}
+
+// PrefetchAccount attempts to resolve specific accounts from the database
+// to accelerate subsequent trie operations.
+func (t *TransitionTrie) PrefetchAccount(addresses []common.Address) error {
+	for _, addr := range addresses {
+		if _, err := t.GetAccount(addr); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // UpdateStorage associates key with value in the trie. If value has length zero, any
@@ -173,7 +195,7 @@ func (t *TransitionTrie) IsVerkle() bool {
 	return true
 }
 
-// UpdateStems updates a group of values, given the stem they are using. If
+// UpdateStem updates a group of values, given the stem they are using. If
 // a value already exists, it is overwritten.
 func (t *TransitionTrie) UpdateStem(key []byte, values [][]byte) error {
 	trie := t.overlay
@@ -200,6 +222,6 @@ func (t *TransitionTrie) UpdateContractCode(addr common.Address, codeHash common
 }
 
 // Witness returns a set containing all trie nodes that have been accessed.
-func (t *TransitionTrie) Witness() map[string]struct{} {
+func (t *TransitionTrie) Witness() map[string][]byte {
 	panic("not implemented")
 }

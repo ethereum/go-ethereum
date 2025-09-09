@@ -375,3 +375,12 @@ func (db *Database) IsVerkle() bool {
 func (db *Database) Disk() ethdb.Database {
 	return db.disk
 }
+
+// SnapshotCompleted returns the indicator if the snapshot is completed.
+func (db *Database) SnapshotCompleted() bool {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return false
+	}
+	return pdb.SnapshotCompleted()
+}

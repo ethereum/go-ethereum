@@ -443,3 +443,51 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 	}
 	return api.eth.blockchain.GetTrieFlushInterval().String(), nil
 }
+
+// StateSize returns the current state size statistics from the state size tracker.
+// Returns an error if the state size tracker is not initialized or if stats are not ready.
+func (api *DebugAPI) StateSize(blockHashOrNumber *rpc.BlockNumberOrHash) (interface{}, error) {
+	sizer := api.eth.blockchain.StateSizer()
+	if sizer == nil {
+		return nil, errors.New("state size tracker is not enabled")
+	}
+	var (
+		err   error
+		stats *state.SizeStats
+	)
+	if blockHashOrNumber == nil {
+		stats, err = sizer.Query(nil)
+	} else {
+		header, herr := api.eth.APIBackend.HeaderByNumberOrHash(context.Background(), *blockHashOrNumber)
+		if herr != nil || header == nil {
+			return nil, fmt.Errorf("block %s is unknown", blockHashOrNumber)
+		}
+		stats, err = sizer.Query(&header.Root)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if stats == nil {
+		var s string
+		if blockHashOrNumber == nil {
+			s = "chain head"
+		} else {
+			s = blockHashOrNumber.String()
+		}
+		return nil, fmt.Errorf("state size of %s is not available", s)
+	}
+	return map[string]interface{}{
+		"stateRoot":            stats.StateRoot,
+		"blockNumber":          hexutil.Uint64(stats.BlockNumber),
+		"accounts":             hexutil.Uint64(stats.Accounts),
+		"accountBytes":         hexutil.Uint64(stats.AccountBytes),
+		"storages":             hexutil.Uint64(stats.Storages),
+		"storageBytes":         hexutil.Uint64(stats.StorageBytes),
+		"accountTrienodes":     hexutil.Uint64(stats.AccountTrienodes),
+		"accountTrienodeBytes": hexutil.Uint64(stats.AccountTrienodeBytes),
+		"storageTrienodes":     hexutil.Uint64(stats.StorageTrienodes),
+		"storageTrienodeBytes": hexutil.Uint64(stats.StorageTrienodeBytes),
+		"contractCodes":        hexutil.Uint64(stats.ContractCodes),
+		"contractCodeBytes":    hexutil.Uint64(stats.ContractCodeBytes),
+	}, nil
+}

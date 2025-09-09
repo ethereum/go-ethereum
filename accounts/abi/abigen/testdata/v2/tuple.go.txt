@@ -193,7 +193,7 @@ func (TupleTupleEvent) ContractEventName() string {
 // Solidity: event TupleEvent((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e)
 func (tuple *Tuple) UnpackTupleEventEvent(log *types.Log) (*TupleTupleEvent, error) {
 	event := "TupleEvent"
-	if log.Topics[0] != tuple.abi.Events[event].ID {
+	if len(log.Topics) == 0 || log.Topics[0] != tuple.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(TupleTupleEvent)
@@ -234,7 +234,7 @@ func (TupleTupleEvent2) ContractEventName() string {
 // Solidity: event TupleEvent2((uint8,uint8)[] arg0)
 func (tuple *Tuple) UnpackTupleEvent2Event(log *types.Log) (*TupleTupleEvent2, error) {
 	event := "TupleEvent2"
-	if log.Topics[0] != tuple.abi.Events[event].ID {
+	if len(log.Topics) == 0 || log.Topics[0] != tuple.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(TupleTupleEvent2)

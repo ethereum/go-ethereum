@@ -93,7 +93,7 @@ func newBatchIndexer(db ethdb.KeyValueStore, delete bool) *batchIndexer {
 
 // process iterates through the accounts and their associated storage slots in the
 // state history, tracking the mapping between state and history IDs.
-func (b *batchIndexer) process(h *history, historyID uint64) error {
+func (b *batchIndexer) process(h *stateHistory, historyID uint64) error {
 	for _, address := range h.accountList {
 		addrHash := crypto.Keccak256Hash(address.Bytes())
 		b.counter += 1
@@ -241,7 +241,7 @@ func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancient
 		}
 		return fmt.Errorf("history indexing is out of order, last: %s, requested: %d", last, historyID)
 	}
-	h, err := readHistory(freezer, historyID)
+	h, err := readStateHistory(freezer, historyID)
 	if err != nil {
 		return err
 	}
@@ -271,7 +271,7 @@ func unindexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancie
 		}
 		return fmt.Errorf("history unindexing is out of order, last: %s, requested: %d", last, historyID)
 	}
-	h, err := readHistory(freezer, historyID)
+	h, err := readStateHistory(freezer, historyID)
 	if err != nil {
 		return err
 	}
@@ -322,15 +322,22 @@ func newIndexIniter(disk ethdb.KeyValueStore, freezer ethdb.AncientStore, lastID
 		closed:    make(chan struct{}),
 	}
 	// Load indexing progress
+	var recover bool
 	initer.last.Store(lastID)
 	metadata := loadIndexMetadata(disk)
 	if metadata != nil {
 		initer.indexed.Store(metadata.Last)
+		recover = metadata.Last > lastID
 	}
 
 	// Launch background indexer
 	initer.wg.Add(1)
-	go initer.run(lastID)
+	if recover {
+		log.Info("History indexer is recovering", "history", lastID, "indexed", metadata.Last)
+		go initer.recover(lastID)
+	} else {
+		go initer.run(lastID)
+	}
 	return initer
 }
 
@@ -364,8 +371,8 @@ func (i *indexIniter) remain() uint64 {
 	default:
 		last, indexed := i.last.Load(), i.indexed.Load()
 		if last < indexed {
-			log.Error("Invalid state indexing range", "last", last, "indexed", indexed)
-			return 0
+			log.Warn("State indexer is in recovery", "indexed", indexed, "last", last)
+			return indexed - last
 		}
 		return last - indexed
 	}
@@ -524,7 +531,7 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 		if count > historyReadBatch {
 			count = historyReadBatch
 		}
-		histories, err := readHistories(i.freezer, current, count)
+		histories, err := readStateHistories(i.freezer, current, count)
 		if err != nil {
 			// The history read might fall if the history is truncated from
 			// head due to revert operation.
@@ -543,12 +550,10 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 				logged = time.Now()
 
 				var (
-					left  = lastID - current + 1
-					done  = current - beginID
-					speed = done/uint64(time.Since(start)/time.Millisecond+1) + 1 // +1s to avoid division by zero
+					left = lastID - current + 1
+					done = current - beginID
 				)
-				// Override the ETA if larger than the largest until now
-				eta := time.Duration(left/speed) * time.Millisecond
+				eta := common.CalculateETA(done, left, time.Since(start))
 				log.Info("Indexing state history", "processed", done, "left", left, "elapsed", common.PrettyDuration(time.Since(start)), "eta", common.PrettyDuration(eta))
 			}
 		}
@@ -569,6 +574,49 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 		log.Error("Failed to flush index", "err", err)
 	}
 	log.Info("Indexed state history", "from", beginID, "to", lastID, "elapsed", common.PrettyDuration(time.Since(start)))
+}
+
+// recover handles unclean shutdown recovery. After an unclean shutdown, any
+// extra histories are typically truncated, while the corresponding history index
+// entries may still have been written. Ideally, we would unindex these histories
+// in reverse order, but there is no guarantee that the required histories will
+// still be available.
+//
+// As a workaround, indexIniter waits until the missing histories are regenerated
+// by chain recovery, under the assumption that the recovered histories will be
+// identical to the lost ones. Fork-awareness should be added in the future to
+// correctly handle histories affected by reorgs.
+func (i *indexIniter) recover(lastID uint64) {
+	defer i.wg.Done()
+
+	for {
+		select {
+		case signal := <-i.interrupt:
+			newLastID := signal.newLastID
+			if newLastID != lastID+1 && newLastID != lastID-1 {
+				signal.result <- fmt.Errorf("invalid history id, last: %d, got: %d", lastID, newLastID)
+				continue
+			}
+
+			// Update the last indexed flag
+			lastID = newLastID
+			signal.result <- nil
+			i.last.Store(newLastID)
+			log.Debug("Updated history index flag", "last", lastID)
+
+			// Terminate the recovery routine once the histories are fully aligned
+			// with the index data, indicating that index initialization is complete.
+			metadata := loadIndexMetadata(i.disk)
+			if metadata != nil && metadata.Last == lastID {
+				close(i.done)
+				log.Info("History indexer is recovered", "last", lastID)
+				return
+			}
+
+		case <-i.closed:
+			return
+		}
+	}
 }
 
 // historyIndexer manages the indexing and unindexing of state histories,
@@ -598,13 +646,16 @@ func checkVersion(disk ethdb.KeyValueStore) {
 	if err == nil && m.Version == stateIndexVersion {
 		return
 	}
-	// TODO(rjl493456442) would be better to group them into a batch.
-	rawdb.DeleteStateHistoryIndexMetadata(disk)
-	rawdb.DeleteStateHistoryIndex(disk)
-
 	version := "unknown"
 	if err == nil {
 		version = fmt.Sprintf("%d", m.Version)
+	}
+
+	batch := disk.NewBatch()
+	rawdb.DeleteStateHistoryIndexMetadata(batch)
+	rawdb.DeleteStateHistoryIndex(batch)
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to purge state history index", "err", err)
 	}
 	log.Info("Cleaned up obsolete state history index", "version", version, "want", stateIndexVersion)
 }

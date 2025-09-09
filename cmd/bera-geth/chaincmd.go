@@ -109,6 +109,7 @@ if one is set.  Otherwise it prints the genesis from the datadir.`,
 			utils.MetricsInfluxDBTokenFlag,
 			utils.MetricsInfluxDBBucketFlag,
 			utils.MetricsInfluxDBOrganizationFlag,
+			utils.StateSizeTrackingFlag,
 			utils.TxLookupLimitFlag,
 			utils.VMTraceFlag,
 			utils.VMTraceJsonConfigFlag,
@@ -292,7 +293,7 @@ func initGenesis(ctx *cli.Context) error {
 		// Only create triedb if we're not using PBSS or genesis is empty on disk. Refer to
 		// https://github.com/ethereum/go-ethereum/pull/25523 for why the triedb cannot be
 		// re-created when using PBSS.
-		triedb = utils.MakeTrieDatabase(ctx, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
+		triedb = utils.MakeTrieDatabase(ctx, stack, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
 		defer triedb.Close()
 	}
 
@@ -651,7 +652,7 @@ func dump(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	triedb := utils.MakeTrieDatabase(ctx, db, true, true, false) // always enable preimage lookup
+	triedb := utils.MakeTrieDatabase(ctx, stack, db, true, true, false) // always enable preimage lookup
 	defer triedb.Close()
 
 	state, err := state.New(root, state.NewDatabase(triedb, nil))
