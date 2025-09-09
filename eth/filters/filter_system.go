@@ -337,7 +337,7 @@ func (es *EventSystem) SubscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 	if from >= 0 && to == rpc.LatestBlockNumber {
 		return es.subscribeLogs(crit, logs), nil
 	}
-	return nil, errInvalidFromTo
+	return nil, errInvalidFromToBlock
 }
 
 // subscribeMinedPendingLogs creates a subscription that returned mined and

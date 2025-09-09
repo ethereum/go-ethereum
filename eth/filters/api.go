@@ -39,15 +39,15 @@ import (
 var (
 	errInvalidTopic           = errors.New("invalid topic(s)")
 	errFilterNotFound         = errors.New("filter not found")
-	errInvalidToBlock         = errors.New("log subscription does not support history block range")
-	errInvalidFromBlock       = errors.New("from block can be only a number, or \"safe\", or \"finalized\"")
-	errExceedMaxTopics        = errors.New("exceeds max topics")
-	errExceedMaxAddresses     = errors.New("exceeds max addresses")
-	errBlockHashWithRange     = errors.New("cannot specify block hash with block range")
-	errInvalidBlockRange      = errors.New("invalid block range")
+	errInvalidBlockRange      = errors.New("invalid block range params")
 	errUnknownBlock           = errors.New("unknown block")
+	errBlockHashWithRange     = errors.New("can't specify fromBlock/toBlock with blockHash")
 	errPendingLogsUnsupported = errors.New("pending logs are not supported")
-	errInvalidFromTo          = errors.New("invalid from and to block combination: from > to")
+	errExceedMaxTopics        = errors.New("exceed max topics")
+	errExceedMaxAddresses     = errors.New("exceed max addresses")
+	errInvalidFromBlock       = errors.New("from block can be only a number, or \"safe\", or \"finalized\"")
+	errInvalidToBlock         = errors.New("log subscription does not support history block range")
+	errInvalidFromToBlock     = errors.New("invalid from and to block combination: from > to")
 )
 
 const (
@@ -55,10 +55,10 @@ const (
 	maxAddresses = 1000
 	// The maximum number of topic criteria allowed, vm.LOG4 - vm.LOG0
 	maxTopics = 4
+	// The maximum number of allowed topics within a topic criteria
+	maxSubTopics = 1000
 	// maxTrackedBlocks is the number of block hashes that will be tracked by subscription.
 	maxTrackedBlocks = 32 * 1024
-	// maxSubTopics is the maximum number of sub-topics that can be specified in a single topic position
-	maxSubTopics = 1000
 )
 
 // filter is a helper struct that holds meta information over the filter type
