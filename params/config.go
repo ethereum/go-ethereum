@@ -531,25 +531,25 @@ func (c *ChainConfig) Description() string {
 		banner += fmt.Sprintf(" - Prague:                      @%-10v\n", *c.PragueTime)
 	}
 	if c.OsakaTime != nil {
-		banner += fmt.Sprintf(" - Osaka:                      @%-10v\n", *c.OsakaTime)
+		banner += fmt.Sprintf(" - Osaka:                       @%-10v\n", *c.OsakaTime)
 	}
 	if c.VerkleTime != nil {
 		banner += fmt.Sprintf(" - Verkle:                      @%-10v\n", *c.VerkleTime)
 	}
 	if c.BPO1Time != nil {
-		banner += fmt.Sprintf(" - BPO1:                      @%-10v\n", *c.BPO1Time)
+		banner += fmt.Sprintf(" - BPO1:                        @%-10v\n", *c.BPO1Time)
 	}
 	if c.BPO2Time != nil {
-		banner += fmt.Sprintf(" - BPO2:                      @%-10v\n", *c.BPO2Time)
+		banner += fmt.Sprintf(" - BPO2:                        @%-10v\n", *c.BPO2Time)
 	}
 	if c.BPO3Time != nil {
-		banner += fmt.Sprintf(" - BPO3:                      @%-10v\n", *c.BPO3Time)
+		banner += fmt.Sprintf(" - BPO3:                        @%-10v\n", *c.BPO3Time)
 	}
 	if c.BPO4Time != nil {
-		banner += fmt.Sprintf(" - BPO4:                      @%-10v\n", *c.BPO4Time)
+		banner += fmt.Sprintf(" - BPO4:                        @%-10v\n", *c.BPO4Time)
 	}
 	if c.BPO5Time != nil {
-		banner += fmt.Sprintf(" - BPO5:                      @%-10v\n", *c.BPO5Time)
+		banner += fmt.Sprintf(" - BPO5:                        @%-10v\n", *c.BPO5Time)
 	}
 	return banner
 }
