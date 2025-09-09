@@ -42,7 +42,7 @@ const (
 	// stateBloomFilePrefix is the filename prefix of state bloom filter.
 	stateBloomFilePrefix = "statebloom"
 
-	// stateBloomFilePrefix is the filename suffix of state bloom filter.
+	// stateBloomFileSuffix is the filename suffix of state bloom filter.
 	stateBloomFileSuffix = "bf.gz"
 
 	// stateBloomFileTempSuffix is the filename suffix of state bloom filter
