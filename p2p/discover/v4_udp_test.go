@@ -521,7 +521,6 @@ func TestUDPv4_smallNetConvergence(t *testing.T) {
 
 			it := self.RandomNodes()
 			for it.Next() {
-				fmt.Println(self.Self().ID(), "found:", it.Node().ID())
 				delete(missing, it.Node().ID())
 				if len(missing) == 0 {
 					status <- nil
