@@ -53,14 +53,14 @@ var (
 )
 
 const (
+	// The maximum number of addresses allowed in a filter criteria
+	maxAddresses = 1000
+	// The maximum number of topic criteria allowed, vm.LOG4 - vm.LOG0
+	maxTopics = 4
 	// maxTrackedBlocks is the number of block hashes that will be tracked by subscription.
 	maxTrackedBlocks = 32 * 1024
-	// maxTopics is the maximum number of topics that can be specified in a filter
-	maxTopics = 4
 	// maxSubTopics is the maximum number of sub-topics that can be specified in a single topic position
 	maxSubTopics = 1000
-	// maxAddresses is the maximum number of addresses that can be specified in a filter
-	maxAddresses = 1000
 )
 
 // filter is a helper struct that holds meta information over the filter type
