@@ -309,7 +309,7 @@ type diskStorageIterator struct {
 	it      ethdb.Iterator
 }
 
-// StorageIterator creates a storage iterator over the persistent state.
+// newDiskStorageIterator creates a storage iterator over the persistent state.
 func newDiskStorageIterator(db ethdb.KeyValueStore, account common.Hash, seek common.Hash) StorageIterator {
 	pos := common.TrimRightZeroes(seek[:])
 	return &diskStorageIterator{

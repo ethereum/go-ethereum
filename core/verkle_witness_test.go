@@ -232,7 +232,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 	// etc
 	checkBlockHashes := func(statedb *state.StateDB, isVerkle bool) {
 		statedb.SetNonce(params.HistoryStorageAddress, 1, tracing.NonceChangeUnspecified)
-		statedb.SetCode(params.HistoryStorageAddress, params.HistoryStorageCode)
+		statedb.SetCode(params.HistoryStorageAddress, params.HistoryStorageCode, tracing.CodeChangeUnspecified)
 		// Process n blocks, from 1 .. num
 		var num = 2
 		for i := 1; i <= num; i++ {
@@ -787,7 +787,7 @@ func TestProcessVerkleSelfDestructInSeparateTx(t *testing.T) {
 	}
 }
 
-// TestProcessVerkleSelfDestructInSeparateTx controls the contents of the witness after
+// TestProcessVerkleSelfDestructInSameTx controls the contents of the witness after
 // a eip6780-compliant selfdestruct occurs.
 func TestProcessVerkleSelfDestructInSameTx(t *testing.T) {
 	// The test txs were taken from a secondary testnet with chain id 69421

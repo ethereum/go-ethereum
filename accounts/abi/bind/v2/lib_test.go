@@ -367,3 +367,28 @@ func TestErrors(t *testing.T) {
 		t.Fatalf("bad unpacked error result: expected Arg4 to be false.  got true")
 	}
 }
+
+func TestEventUnpackEmptyTopics(t *testing.T) {
+	c := events.NewC()
+
+	for _, log := range []*types.Log{
+		{Topics: []common.Hash{}},
+		{Topics: nil},
+	} {
+		_, err := c.UnpackBasic1Event(log)
+		if err == nil {
+			t.Fatal("expected error when unpacking event with empty topics, got nil")
+		}
+		if err.Error() != "event signature mismatch" {
+			t.Fatalf("expected 'event signature mismatch' error, got: %v", err)
+		}
+
+		_, err = c.UnpackBasic2Event(log)
+		if err == nil {
+			t.Fatal("expected error when unpacking event with empty topics, got nil")
+		}
+		if err.Error() != "event signature mismatch" {
+			t.Fatalf("expected 'event signature mismatch' error, got: %v", err)
+		}
+	}
+}

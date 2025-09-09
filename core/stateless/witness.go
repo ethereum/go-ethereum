@@ -58,7 +58,7 @@ func NewWitness(context *types.Header, chain HeaderReader) (*Witness, error) {
 		}
 		headers = append(headers, parent)
 	}
-	// Create the wtness with a reconstructed gutted out block
+	// Create the witness with a reconstructed gutted out block
 	return &Witness{
 		context: context,
 		Headers: headers,
@@ -88,14 +88,16 @@ func (w *Witness) AddCode(code []byte) {
 }
 
 // AddState inserts a batch of MPT trie nodes into the witness.
-func (w *Witness) AddState(nodes map[string]struct{}) {
+func (w *Witness) AddState(nodes map[string][]byte) {
 	if len(nodes) == 0 {
 		return
 	}
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	maps.Copy(w.State, nodes)
+	for _, value := range nodes {
+		w.State[string(value)] = struct{}{}
+	}
 }
 
 // Copy deep-copies the witness object.  Witness.Block isn't deep-copied as it

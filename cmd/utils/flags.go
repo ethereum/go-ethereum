@@ -281,6 +281,12 @@ var (
 		Usage:    "Scheme to use for storing ethereum state ('hash' or 'path')",
 		Category: flags.StateCategory,
 	}
+	StateSizeTrackingFlag = &cli.BoolFlag{
+		Name:     "state.size-tracking",
+		Usage:    "Enable state size tracking, retrieve state size with debug_stateSize.",
+		Value:    ethconfig.Defaults.EnableStateSizeTracking,
+		Category: flags.StateCategory,
+	}
 	StateHistoryFlag = &cli.Uint64Flag{
 		Name:     "history.state",
 		Usage:    "Number of recent blocks to retain state history for, only relevant in state.scheme=path (default = 90,000 blocks, 0 = entire chain)",
@@ -1741,6 +1747,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.EthDiscoveryURLs = SplitAndTrim(urls)
 		}
 	}
+	if ctx.Bool(StateSizeTrackingFlag.Name) {
+		cfg.EnableStateSizeTracking = true
+	}
 	// Override any default configs for hard coded networks.
 	switch {
 	case ctx.Bool(MainnetFlag.Name):
@@ -2223,6 +2232,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		// - DATADIR/triedb/merkle.journal
 		// - DATADIR/triedb/verkle.journal
 		TrieJournalDirectory: stack.ResolvePath("triedb"),
+
+		// Enable state size tracking if enabled
+		StateSizeTracking: ctx.Bool(StateSizeTrackingFlag.Name),
 	}
 	if options.ArchiveMode && !options.Preimages {
 		options.Preimages = true
@@ -2284,7 +2296,7 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 }
 
 // MakeTrieDatabase constructs a trie database based on the configured scheme.
-func MakeTrieDatabase(ctx *cli.Context, disk ethdb.Database, preimage bool, readOnly bool, isVerkle bool) *triedb.Database {
+func MakeTrieDatabase(ctx *cli.Context, stack *node.Node, disk ethdb.Database, preimage bool, readOnly bool, isVerkle bool) *triedb.Database {
 	config := &triedb.Config{
 		Preimages: preimage,
 		IsVerkle:  isVerkle,
@@ -2300,10 +2312,13 @@ func MakeTrieDatabase(ctx *cli.Context, disk ethdb.Database, preimage bool, read
 		config.HashDB = hashdb.Defaults
 		return triedb.NewDatabase(disk, config)
 	}
+	var pathConfig pathdb.Config
 	if readOnly {
-		config.PathDB = pathdb.ReadOnly
+		pathConfig = *pathdb.ReadOnly
 	} else {
-		config.PathDB = pathdb.Defaults
+		pathConfig = *pathdb.Defaults
 	}
+	pathConfig.JournalDirectory = stack.ResolvePath("triedb")
+	config.PathDB = &pathConfig
 	return triedb.NewDatabase(disk, config)
 }

@@ -41,13 +41,13 @@ var (
 type VerkleTrie struct {
 	root   verkle.VerkleNode
 	cache  *utils.PointCache
-	reader *trieReader
-	tracer *prevalueTracer
+	reader *Reader
+	tracer *PrevalueTracer
 }
 
 // NewVerkleTrie constructs a verkle tree based on the specified root hash.
 func NewVerkleTrie(root common.Hash, db database.NodeDatabase, cache *utils.PointCache) (*VerkleTrie, error) {
-	reader, err := newTrieReader(root, common.Hash{}, db)
+	reader, err := NewReader(root, common.Hash{}, db)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +55,7 @@ func NewVerkleTrie(root common.Hash, db database.NodeDatabase, cache *utils.Poin
 		root:   verkle.New(),
 		cache:  cache,
 		reader: reader,
-		tracer: newPrevalueTracer(),
+		tracer: NewPrevalueTracer(),
 	}
 	// Parse the root verkle node if it's not empty.
 	if root != types.EmptyVerkleHash && root != types.EmptyRootHash {
@@ -108,6 +108,17 @@ func (t *VerkleTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	return acc, nil
 }
 
+// PrefetchAccount attempts to resolve specific accounts from the database
+// to accelerate subsequent trie operations.
+func (t *VerkleTrie) PrefetchAccount(addresses []common.Address) error {
+	for _, addr := range addresses {
+		if _, err := t.GetAccount(addr); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // GetStorage implements state.Trie, retrieving the storage slot with the specified
 // account address and storage key. If the specified slot is not in the verkle tree,
 // nil will be returned. If the tree is corrupted, an error will be returned.
@@ -118,6 +129,17 @@ func (t *VerkleTrie) GetStorage(addr common.Address, key []byte) ([]byte, error)
 		return nil, err
 	}
 	return common.TrimLeftZeroes(val), nil
+}
+
+// PrefetchStorage attempts to resolve specific storage slots from the database
+// to accelerate subsequent trie operations.
+func (t *VerkleTrie) PrefetchStorage(addr common.Address, keys [][]byte) error {
+	for _, key := range keys {
+		if _, err := t.GetStorage(addr, key); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // UpdateAccount implements state.Trie, writing the provided account into the tree.
@@ -267,7 +289,7 @@ func (t *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 	nodeset := trienode.NewNodeSet(common.Hash{})
 	for _, node := range nodes {
 		// Hash parameter is not used in pathdb
-		nodeset.AddNode(node.Path, trienode.NewNodeWithPrev(common.Hash{}, node.SerializedBytes, t.tracer.get(node.Path)))
+		nodeset.AddNode(node.Path, trienode.NewNodeWithPrev(common.Hash{}, node.SerializedBytes, t.tracer.Get(node.Path)))
 	}
 	// Serialize root commitment form
 	return t.Hash(), nodeset
@@ -300,7 +322,7 @@ func (t *VerkleTrie) Copy() *VerkleTrie {
 		root:   t.root.Copy(),
 		cache:  t.cache,
 		reader: t.reader,
-		tracer: t.tracer.copy(),
+		tracer: t.tracer.Copy(),
 	}
 }
 
@@ -421,15 +443,15 @@ func (t *VerkleTrie) ToDot() string {
 }
 
 func (t *VerkleTrie) nodeResolver(path []byte) ([]byte, error) {
-	blob, err := t.reader.node(path, common.Hash{})
+	blob, err := t.reader.Node(path, common.Hash{})
 	if err != nil {
 		return nil, err
 	}
-	t.tracer.put(path, blob)
+	t.tracer.Put(path, blob)
 	return blob, nil
 }
 
 // Witness returns a set containing all trie nodes that have been accessed.
-func (t *VerkleTrie) Witness() map[string]struct{} {
+func (t *VerkleTrie) Witness() map[string][]byte {
 	panic("not implemented")
 }

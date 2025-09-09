@@ -18,6 +18,7 @@ package pathdb
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -49,36 +50,36 @@ func randomStateSet(n int) (map[common.Address][]byte, map[common.Address]map[co
 	return accounts, storages
 }
 
-func makeHistory(rawStorageKey bool) *history {
+func makeStateHistory(rawStorageKey bool) *stateHistory {
 	accounts, storages := randomStateSet(3)
-	return newHistory(testrand.Hash(), types.EmptyRootHash, 0, accounts, storages, rawStorageKey)
+	return newStateHistory(testrand.Hash(), types.EmptyRootHash, 0, accounts, storages, rawStorageKey)
 }
 
-func makeHistories(n int) []*history {
+func makeStateHistories(n int) []*stateHistory {
 	var (
 		parent = types.EmptyRootHash
-		result []*history
+		result []*stateHistory
 	)
 	for i := 0; i < n; i++ {
 		root := testrand.Hash()
 		accounts, storages := randomStateSet(3)
-		h := newHistory(root, parent, uint64(i), accounts, storages, false)
+		h := newStateHistory(root, parent, uint64(i), accounts, storages, false)
 		parent = root
 		result = append(result, h)
 	}
 	return result
 }
 
-func TestEncodeDecodeHistory(t *testing.T) {
-	testEncodeDecodeHistory(t, false)
-	testEncodeDecodeHistory(t, true)
+func TestEncodeDecodeStateHistory(t *testing.T) {
+	testEncodeDecodeStateHistory(t, false)
+	testEncodeDecodeStateHistory(t, true)
 }
 
-func testEncodeDecodeHistory(t *testing.T, rawStorageKey bool) {
+func testEncodeDecodeStateHistory(t *testing.T, rawStorageKey bool) {
 	var (
 		m   meta
-		dec history
-		obj = makeHistory(rawStorageKey)
+		dec stateHistory
+		obj = makeStateHistory(rawStorageKey)
 	)
 	// check if meta data can be correctly encode/decode
 	blob := obj.meta.encode()
@@ -108,7 +109,7 @@ func testEncodeDecodeHistory(t *testing.T, rawStorageKey bool) {
 	}
 }
 
-func checkHistory(t *testing.T, db ethdb.KeyValueReader, freezer ethdb.AncientReader, id uint64, root common.Hash, exist bool) {
+func checkStateHistory(t *testing.T, freezer ethdb.AncientReader, id uint64, exist bool) {
 	blob := rawdb.ReadStateHistoryMeta(freezer, id)
 	if exist && len(blob) == 0 {
 		t.Fatalf("Failed to load trie history, %d", id)
@@ -116,25 +117,17 @@ func checkHistory(t *testing.T, db ethdb.KeyValueReader, freezer ethdb.AncientRe
 	if !exist && len(blob) != 0 {
 		t.Fatalf("Unexpected trie history, %d", id)
 	}
-	if exist && rawdb.ReadStateID(db, root) == nil {
-		t.Fatalf("Root->ID mapping is not found, %d", id)
-	}
-	if !exist && rawdb.ReadStateID(db, root) != nil {
-		t.Fatalf("Unexpected root->ID mapping, %d", id)
+}
+
+func checkHistoriesInRange(t *testing.T, freezer ethdb.AncientReader, from, to uint64, exist bool) {
+	for i := from; i <= to; i = i + 1 {
+		checkStateHistory(t, freezer, i, exist)
 	}
 }
 
-func checkHistoriesInRange(t *testing.T, db ethdb.KeyValueReader, freezer ethdb.AncientReader, from, to uint64, roots []common.Hash, exist bool) {
-	for i, j := from, 0; i <= to; i, j = i+1, j+1 {
-		checkHistory(t, db, freezer, i, roots[j], exist)
-	}
-}
-
-func TestTruncateHeadHistory(t *testing.T) {
+func TestTruncateHeadStateHistory(t *testing.T) {
 	var (
-		roots      []common.Hash
-		hs         = makeHistories(10)
-		db         = rawdb.NewMemoryDatabase()
+		hs         = makeStateHistories(10)
 		freezer, _ = rawdb.NewStateFreezer(t.TempDir(), false, false)
 	)
 	defer freezer.Close()
@@ -142,27 +135,23 @@ func TestTruncateHeadHistory(t *testing.T) {
 	for i := 0; i < len(hs); i++ {
 		accountData, storageData, accountIndex, storageIndex := hs[i].encode()
 		rawdb.WriteStateHistory(freezer, uint64(i+1), hs[i].meta.encode(), accountIndex, storageIndex, accountData, storageData)
-		rawdb.WriteStateID(db, hs[i].meta.root, uint64(i+1))
-		roots = append(roots, hs[i].meta.root)
 	}
 	for size := len(hs); size > 0; size-- {
-		pruned, err := truncateFromHead(db, freezer, uint64(size-1))
+		pruned, err := truncateFromHead(freezer, uint64(size-1))
 		if err != nil {
 			t.Fatalf("Failed to truncate from head %v", err)
 		}
 		if pruned != 1 {
 			t.Error("Unexpected pruned items", "want", 1, "got", pruned)
 		}
-		checkHistoriesInRange(t, db, freezer, uint64(size), uint64(10), roots[size-1:], false)
-		checkHistoriesInRange(t, db, freezer, uint64(1), uint64(size-1), roots[:size-1], true)
+		checkHistoriesInRange(t, freezer, uint64(size), uint64(10), false)
+		checkHistoriesInRange(t, freezer, uint64(1), uint64(size-1), true)
 	}
 }
 
-func TestTruncateTailHistory(t *testing.T) {
+func TestTruncateTailStateHistory(t *testing.T) {
 	var (
-		roots      []common.Hash
-		hs         = makeHistories(10)
-		db         = rawdb.NewMemoryDatabase()
+		hs         = makeStateHistories(10)
 		freezer, _ = rawdb.NewStateFreezer(t.TempDir(), false, false)
 	)
 	defer freezer.Close()
@@ -170,20 +159,18 @@ func TestTruncateTailHistory(t *testing.T) {
 	for i := 0; i < len(hs); i++ {
 		accountData, storageData, accountIndex, storageIndex := hs[i].encode()
 		rawdb.WriteStateHistory(freezer, uint64(i+1), hs[i].meta.encode(), accountIndex, storageIndex, accountData, storageData)
-		rawdb.WriteStateID(db, hs[i].meta.root, uint64(i+1))
-		roots = append(roots, hs[i].meta.root)
 	}
 	for newTail := 1; newTail < len(hs); newTail++ {
-		pruned, _ := truncateFromTail(db, freezer, uint64(newTail))
+		pruned, _ := truncateFromTail(freezer, uint64(newTail))
 		if pruned != 1 {
 			t.Error("Unexpected pruned items", "want", 1, "got", pruned)
 		}
-		checkHistoriesInRange(t, db, freezer, uint64(1), uint64(newTail), roots[:newTail], false)
-		checkHistoriesInRange(t, db, freezer, uint64(newTail+1), uint64(10), roots[newTail:], true)
+		checkHistoriesInRange(t, freezer, uint64(1), uint64(newTail), false)
+		checkHistoriesInRange(t, freezer, uint64(newTail+1), uint64(10), true)
 	}
 }
 
-func TestTruncateTailHistories(t *testing.T) {
+func TestTruncateTailStateHistories(t *testing.T) {
 	var cases = []struct {
 		limit       uint64
 		expPruned   int
@@ -191,21 +178,29 @@ func TestTruncateTailHistories(t *testing.T) {
 		minUnpruned uint64
 		empty       bool
 	}{
+		// history: id [10]
 		{
-			1, 9, 9, 10, false,
+			limit:     1,
+			expPruned: 9,
+			maxPruned: 9, minUnpruned: 10, empty: false,
 		},
+		// history: none
 		{
-			0, 10, 10, 0 /* no meaning */, true,
+			limit:     0,
+			expPruned: 10,
+			empty:     true,
 		},
+		// history: id [1:10]
 		{
-			10, 0, 0, 1, false,
+			limit:       10,
+			expPruned:   0,
+			maxPruned:   0,
+			minUnpruned: 1,
 		},
 	}
 	for i, c := range cases {
 		var (
-			roots      []common.Hash
-			hs         = makeHistories(10)
-			db         = rawdb.NewMemoryDatabase()
+			hs         = makeStateHistories(10)
 			freezer, _ = rawdb.NewStateFreezer(t.TempDir()+fmt.Sprintf("%d", i), false, false)
 		)
 		defer freezer.Close()
@@ -213,27 +208,23 @@ func TestTruncateTailHistories(t *testing.T) {
 		for i := 0; i < len(hs); i++ {
 			accountData, storageData, accountIndex, storageIndex := hs[i].encode()
 			rawdb.WriteStateHistory(freezer, uint64(i+1), hs[i].meta.encode(), accountIndex, storageIndex, accountData, storageData)
-			rawdb.WriteStateID(db, hs[i].meta.root, uint64(i+1))
-			roots = append(roots, hs[i].meta.root)
 		}
-		pruned, _ := truncateFromTail(db, freezer, uint64(10)-c.limit)
+		pruned, _ := truncateFromTail(freezer, uint64(10)-c.limit)
 		if pruned != c.expPruned {
 			t.Error("Unexpected pruned items", "want", c.expPruned, "got", pruned)
 		}
 		if c.empty {
-			checkHistoriesInRange(t, db, freezer, uint64(1), uint64(10), roots, false)
+			checkHistoriesInRange(t, freezer, uint64(1), uint64(10), false)
 		} else {
-			tail := 10 - int(c.limit)
-			checkHistoriesInRange(t, db, freezer, uint64(1), c.maxPruned, roots[:tail], false)
-			checkHistoriesInRange(t, db, freezer, c.minUnpruned, uint64(10), roots[tail:], true)
+			checkHistoriesInRange(t, freezer, uint64(1), c.maxPruned, false)
+			checkHistoriesInRange(t, freezer, c.minUnpruned, uint64(10), true)
 		}
 	}
 }
 
 func TestTruncateOutOfRange(t *testing.T) {
 	var (
-		hs         = makeHistories(10)
-		db         = rawdb.NewMemoryDatabase()
+		hs         = makeStateHistories(10)
 		freezer, _ = rawdb.NewStateFreezer(t.TempDir(), false, false)
 	)
 	defer freezer.Close()
@@ -241,9 +232,8 @@ func TestTruncateOutOfRange(t *testing.T) {
 	for i := 0; i < len(hs); i++ {
 		accountData, storageData, accountIndex, storageIndex := hs[i].encode()
 		rawdb.WriteStateHistory(freezer, uint64(i+1), hs[i].meta.encode(), accountIndex, storageIndex, accountData, storageData)
-		rawdb.WriteStateID(db, hs[i].meta.root, uint64(i+1))
 	}
-	truncateFromTail(db, freezer, uint64(len(hs)/2))
+	truncateFromTail(freezer, uint64(len(hs)/2))
 
 	// Ensure of-out-range truncations are rejected correctly.
 	head, _ := freezer.Ancients()
@@ -255,20 +245,20 @@ func TestTruncateOutOfRange(t *testing.T) {
 		expErr error
 	}{
 		{0, head, nil}, // nothing to delete
-		{0, head + 1, fmt.Errorf("out of range, tail: %d, head: %d, target: %d", tail, head, head+1)},
-		{0, tail - 1, fmt.Errorf("out of range, tail: %d, head: %d, target: %d", tail, head, tail-1)},
+		{0, head + 1, errHeadTruncationOutOfRange},
+		{0, tail - 1, errHeadTruncationOutOfRange},
 		{1, tail, nil}, // nothing to delete
-		{1, head + 1, fmt.Errorf("out of range, tail: %d, head: %d, target: %d", tail, head, head+1)},
-		{1, tail - 1, fmt.Errorf("out of range, tail: %d, head: %d, target: %d", tail, head, tail-1)},
+		{1, head + 1, errTailTruncationOutOfRange},
+		{1, tail - 1, errTailTruncationOutOfRange},
 	}
 	for _, c := range cases {
 		var gotErr error
 		if c.mode == 0 {
-			_, gotErr = truncateFromHead(db, freezer, c.target)
+			_, gotErr = truncateFromHead(freezer, c.target)
 		} else {
-			_, gotErr = truncateFromTail(db, freezer, c.target)
+			_, gotErr = truncateFromTail(freezer, c.target)
 		}
-		if !reflect.DeepEqual(gotErr, c.expErr) {
+		if !errors.Is(gotErr, c.expErr) {
 			t.Errorf("Unexpected error, want: %v, got: %v", c.expErr, gotErr)
 		}
 	}

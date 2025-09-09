@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/internal/testrand"
 )
 
 func waitIndexing(db *Database) {
@@ -36,11 +37,29 @@ func waitIndexing(db *Database) {
 	}
 }
 
-func checkHistoricState(env *tester, root common.Hash, hr *historyReader) error {
-	// Short circuit if the historical state is no longer available
-	if rawdb.ReadStateID(env.db.diskdb, root) == nil {
+func stateAvail(id uint64, env *tester) bool {
+	if env.db.config.StateHistory == 0 {
+		return true
+	}
+	dl := env.db.tree.bottom()
+	if dl.stateID() <= env.db.config.StateHistory {
+		return true
+	}
+	firstID := dl.stateID() - env.db.config.StateHistory + 1
+
+	return id+1 >= firstID
+}
+
+func checkHistoricalState(env *tester, root common.Hash, id uint64, hr *historyReader) error {
+	if !stateAvail(id, env) {
 		return nil
 	}
+
+	// Short circuit if the historical state is no longer available
+	if rawdb.ReadStateID(env.db.diskdb, root) == nil {
+		return fmt.Errorf("state not found %d %x", id, root)
+	}
+
 	var (
 		dl       = env.db.tree.bottom()
 		stateID  = rawdb.ReadStateID(env.db.diskdb, root)
@@ -124,22 +143,27 @@ func testHistoryReader(t *testing.T, historyLimit uint64) {
 	defer func() {
 		maxDiffLayers = 128
 	}()
-	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
 
-	env := newTester(t, historyLimit, false, 64, true, "")
+	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
+	config := &testerConfig{
+		stateHistory: historyLimit,
+		layers:       64,
+		enableIndex:  true,
+	}
+	env := newTester(t, config)
 	defer env.release()
 	waitIndexing(env.db)
 
 	var (
 		roots = env.roots
-		dRoot = env.db.tree.bottom().rootHash()
-		hr    = newHistoryReader(env.db.diskdb, env.db.freezer)
+		dl    = env.db.tree.bottom()
+		hr    = newHistoryReader(env.db.diskdb, env.db.stateFreezer)
 	)
-	for _, root := range roots {
-		if root == dRoot {
+	for i, root := range roots {
+		if root == dl.rootHash() {
 			break
 		}
-		if err := checkHistoricState(env, root, hr); err != nil {
+		if err := checkHistoricalState(env, root, uint64(i+1), hr); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -148,12 +172,46 @@ func testHistoryReader(t *testing.T, historyLimit uint64) {
 	env.extend(4)
 	waitIndexing(env.db)
 
-	for _, root := range roots {
-		if root == dRoot {
+	for i, root := range roots {
+		if root == dl.rootHash() {
 			break
 		}
-		if err := checkHistoricState(env, root, hr); err != nil {
+		if err := checkHistoricalState(env, root, uint64(i+1), hr); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestHistoricalStateReader(t *testing.T) {
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+
+	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
+	config := &testerConfig{
+		stateHistory: 0,
+		layers:       64,
+		enableIndex:  true,
+	}
+	env := newTester(t, config)
+	defer env.release()
+	waitIndexing(env.db)
+
+	// non-canonical state
+	fakeRoot := testrand.Hash()
+	rawdb.WriteStateID(env.db.diskdb, fakeRoot, 10)
+
+	_, err := env.db.HistoricReader(fakeRoot)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	t.Log(err)
+
+	// canonical state
+	realRoot := env.roots[9]
+	_, err = env.db.HistoricReader(realRoot)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
 	}
 }

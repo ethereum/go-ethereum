@@ -53,7 +53,7 @@ func (p *Program) add(op byte) *Program {
 	return p
 }
 
-// pushBig creates a PUSHX instruction and pushes the given val.
+// doPush creates a PUSHX instruction and pushes the given val.
 // - If the val is nil, it pushes zero
 // - If the val is bigger than 32 bytes, it panics
 func (p *Program) doPush(val *uint256.Int) {

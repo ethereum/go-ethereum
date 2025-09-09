@@ -110,15 +110,15 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		requests = [][]byte{}
 		// EIP-6110
 		if err := ParseDepositLogs(&requests, allLogs, p.config); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to parse deposit logs: %w", err)
 		}
 		// EIP-7002
 		if err := ProcessWithdrawalQueue(&requests, evm); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to process withdrawal queue: %w", err)
 		}
 		// EIP-7251
 		if err := ProcessConsolidationQueue(&requests, evm); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to process consolidation queue: %w", err)
 		}
 	}
 

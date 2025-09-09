@@ -17,21 +17,22 @@
 package eth
 
 import (
+	"cmp"
+	crand "crypto/rand"
 	"errors"
 	"maps"
 	"math"
-	"math/big"
 	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/dchest/siphash"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/fetcher"
@@ -119,9 +120,10 @@ type handler struct {
 	chain    *core.BlockChain
 	maxPeers int
 
-	downloader *downloader.Downloader
-	txFetcher  *fetcher.TxFetcher
-	peers      *peerSet
+	downloader     *downloader.Downloader
+	txFetcher      *fetcher.TxFetcher
+	peers          *peerSet
+	txBroadcastKey [16]byte
 
 	eventMux   *event.TypeMux
 	txsCh      chan core.NewTxsEvent
@@ -153,6 +155,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		txpool:         config.TxPool,
 		chain:          config.Chain,
 		peers:          newPeerSet(),
+		txBroadcastKey: newBroadcastChoiceKey(),
 		requiredBlocks: config.RequiredBlocks,
 		quitSync:       make(chan struct{}),
 		handlerDoneCh:  make(chan struct{}),
@@ -480,58 +483,40 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 
 		txset = make(map[*ethPeer][]common.Hash) // Set peer->hash to transfer directly
 		annos = make(map[*ethPeer][]common.Hash) // Set peer->hash to announce
-	)
-	// Broadcast transactions to a batch of peers not knowing about it
-	direct := big.NewInt(int64(math.Sqrt(float64(h.peers.len())))) // Approximate number of peers to broadcast to
-	if direct.BitLen() == 0 {
-		direct = big.NewInt(1)
-	}
-	total := new(big.Int).Exp(direct, big.NewInt(2), nil) // Stabilise total peer count a bit based on sqrt peers
 
-	var (
-		signer = types.LatestSigner(h.chain.Config()) // Don't care about chain status, we just need *a* sender
-		hasher = crypto.NewKeccakState()
-		hash   = make([]byte, 32)
+		signer = types.LatestSigner(h.chain.Config())
+		choice = newBroadcastChoice(h.nodeID, h.txBroadcastKey)
+		peers  = h.peers.all()
 	)
+
 	for _, tx := range txs {
-		var maybeDirect bool
+		var directSet map[*ethPeer]struct{}
 		switch {
 		case tx.Type() == types.BlobTxType:
 			blobTxs++
 		case tx.Size() > txMaxBroadcastSize:
 			largeTxs++
 		default:
-			maybeDirect = true
+			// Get transaction sender address. Here we can ignore any error
+			// since we're just interested in any value.
+			txSender, _ := types.Sender(signer, tx)
+			directSet = choice.choosePeers(peers, txSender)
 		}
-		// Send the transaction (if it's small enough) directly to a subset of
-		// the peers that have not received it yet, ensuring that the flow of
-		// transactions is grouped by account to (try and) avoid nonce gaps.
-		//
-		// To do this, we hash the local enode IW with together with a peer's
-		// enode ID together with the transaction sender and broadcast if
-		// `sha(self, peer, sender) mod peers < sqrt(peers)`.
-		for _, peer := range h.peers.peersWithoutTransaction(tx.Hash()) {
-			var broadcast bool
-			if maybeDirect {
-				hasher.Reset()
-				hasher.Write(h.nodeID.Bytes())
-				hasher.Write(peer.Node().ID().Bytes())
 
-				from, _ := types.Sender(signer, tx) // Ignore error, we only use the addr as a propagation target splitter
-				hasher.Write(from.Bytes())
-
-				hasher.Read(hash)
-				if new(big.Int).Mod(new(big.Int).SetBytes(hash), total).Cmp(direct) < 0 {
-					broadcast = true
-				}
+		for _, peer := range peers {
+			if peer.KnownTransaction(tx.Hash()) {
+				continue
 			}
-			if broadcast {
+			if _, ok := directSet[peer]; ok {
+				// Send direct.
 				txset[peer] = append(txset[peer], tx.Hash())
 			} else {
+				// Send announcement.
 				annos[peer] = append(annos[peer], tx.Hash())
 			}
 		}
 	}
+
 	for peer, hashes := range txset {
 		directCount += len(hashes)
 		peer.AsyncSendTransactions(hashes)
@@ -594,7 +579,7 @@ func newBlockRangeState(chain *core.BlockChain, typeMux *event.TypeMux) *blockRa
 	return st
 }
 
-// blockRangeBroadcastLoop announces changes in locally-available block range to peers.
+// blockRangeLoop announces changes in locally-available block range to peers.
 // The range to announce is the range that is available in the store, so it's not just
 // about imported blocks.
 func (h *handler) blockRangeLoop(st *blockRangeState) {
@@ -695,4 +680,63 @@ func (st *blockRangeState) stop() {
 // This is safe to call from any goroutine.
 func (st *blockRangeState) currentRange() eth.BlockRangeUpdatePacket {
 	return *st.next.Load()
+}
+
+// broadcastChoice implements a deterministic random choice of peers. This is designed
+// specifically for choosing which peer receives a direct broadcast of a transaction.
+//
+// The choice is made based on the involved p2p node IDs and the transaction sender,
+// ensuring that the flow of transactions is grouped by account to (try and) avoid nonce
+// gaps.
+type broadcastChoice struct {
+	self   enode.ID
+	key    [16]byte
+	buffer map[*ethPeer]struct{}
+	tmp    []broadcastPeer
+}
+
+type broadcastPeer struct {
+	p     *ethPeer
+	score uint64
+}
+
+func newBroadcastChoiceKey() (k [16]byte) {
+	crand.Read(k[:])
+	return k
+}
+
+func newBroadcastChoice(self enode.ID, key [16]byte) *broadcastChoice {
+	return &broadcastChoice{
+		self:   self,
+		key:    key,
+		buffer: make(map[*ethPeer]struct{}),
+	}
+}
+
+// choosePeers selects the peers that will receive a direct transaction broadcast message.
+// Note the return value will only stay valid until the next call to choosePeers.
+func (bc *broadcastChoice) choosePeers(peers []*ethPeer, txSender common.Address) map[*ethPeer]struct{} {
+	// Compute randomized scores.
+	bc.tmp = slices.Grow(bc.tmp[:0], len(peers))[:len(peers)]
+	hash := siphash.New(bc.key[:])
+	for i, peer := range peers {
+		hash.Reset()
+		hash.Write(bc.self[:])
+		hash.Write(peer.Peer.Peer.ID().Bytes())
+		hash.Write(txSender[:])
+		bc.tmp[i] = broadcastPeer{peer, hash.Sum64()}
+	}
+
+	// Sort by score.
+	slices.SortFunc(bc.tmp, func(a, b broadcastPeer) int {
+		return cmp.Compare(a.score, b.score)
+	})
+
+	// Take top n.
+	clear(bc.buffer)
+	n := int(math.Ceil(math.Sqrt(float64(len(bc.tmp)))))
+	for i := range n {
+		bc.buffer[bc.tmp[i].p] = struct{}{}
+	}
+	return bc.buffer
 }

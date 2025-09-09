@@ -20,10 +20,12 @@ package catalyst
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
@@ -79,47 +81,6 @@ const (
 	// the beacon client is offline.
 	beaconUpdateWarnFrequency = 5 * time.Minute
 )
-
-// All methods provided over the engine endpoint.
-var caps = []string{
-	"engine_forkchoiceUpdatedV1",
-	"engine_forkchoiceUpdatedV2",
-	"engine_forkchoiceUpdatedV3",
-	"engine_forkchoiceUpdatedV3P11",
-	"engine_forkchoiceUpdatedWithWitnessV1",
-	"engine_forkchoiceUpdatedWithWitnessV2",
-	"engine_forkchoiceUpdatedWithWitnessV3",
-	"engine_forkchoiceUpdatedWithWitnessV3P11",
-	"engine_exchangeTransitionConfigurationV1",
-	"engine_getPayloadV1",
-	"engine_getPayloadV2",
-	"engine_getPayloadV3",
-	"engine_getPayloadV4",
-	"engine_getPayloadV4P11",
-	"engine_getPayloadV5",
-	"engine_getBlobsV1",
-	"engine_getBlobsV2",
-	"engine_newPayloadV1",
-	"engine_newPayloadV2",
-	"engine_newPayloadV3",
-	"engine_newPayloadV4",
-	"engine_newPayloadV4P11",
-	"engine_newPayloadWithWitnessV1",
-	"engine_newPayloadWithWitnessV2",
-	"engine_newPayloadWithWitnessV3",
-	"engine_newPayloadWithWitnessV4",
-	"engine_newPayloadWithWitnessV4P11",
-	"engine_executeStatelessPayloadV1",
-	"engine_executeStatelessPayloadV2",
-	"engine_executeStatelessPayloadV3",
-	"engine_executeStatelessPayloadV4",
-	"engine_executeStatelessPayloadV4P11",
-	"engine_getPayloadBodiesByHashV1",
-	"engine_getPayloadBodiesByHashV2",
-	"engine_getPayloadBodiesByRangeV1",
-	"engine_getPayloadBodiesByRangeV2",
-	"engine_getClientVersionV1",
-}
 
 var (
 	// Number of blobs requested via getBlobsV2
@@ -534,6 +495,26 @@ func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool) (*eng
 }
 
 // GetBlobsV1 returns a blob from the transaction pool.
+//
+// Specification:
+//
+// Given an array of blob versioned hashes client software MUST respond with an
+// array of BlobAndProofV1 objects with matching versioned hashes, respecting the
+// order of versioned hashes in the input array.
+//
+// Client software MUST place responses in the order given in the request, using
+// null for any missing blobs. For instance:
+//
+// if the request is [A_versioned_hash, B_versioned_hash, C_versioned_hash] and
+// client software has data for blobs A and C, but doesn't have data for B, the
+// response MUST be [A, null, C].
+//
+// Client software MUST support request sizes of at least 128 blob versioned hashes.
+// The client MUST return -38004: Too large request error if the number of requested
+// blobs is too large.
+//
+// Client software MAY return an array of all null entries if syncing or otherwise
+// unable to serve blob pool data.
 func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProofV1, error) {
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
@@ -544,6 +525,10 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 	}
 	res := make([]*engine.BlobAndProofV1, len(hashes))
 	for i := 0; i < len(blobs); i++ {
+		// Skip the non-existing blob
+		if blobs[i] == nil {
+			continue
+		}
 		res[i] = &engine.BlobAndProofV1{
 			Blob:  blobs[i][:],
 			Proof: proofs[i][0][:],
@@ -553,6 +538,33 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 }
 
 // GetBlobsV2 returns a blob from the transaction pool.
+//
+// Specification:
+// Refer to the specification for engine_getBlobsV1 with changes of the following:
+//
+// Given an array of blob versioned hashes client software MUST respond with an
+// array of BlobAndProofV2 objects with matching versioned hashes, respecting
+// the order of versioned hashes in the input array.
+//
+// Client software MUST return null in case of any missing or older version blobs.
+// For instance,
+//
+//   - if the request is [A_versioned_hash, B_versioned_hash, C_versioned_hash] and
+//     client software has data for blobs A and C, but doesn't have data for B, the
+//     response MUST be null.
+//
+//   - if the request is [A_versioned_hash_for_blob_with_blob_proof], the response
+//     MUST be null as well.
+//
+//     Note, geth internally make the conversion from old version to new one, so the
+//     data will be returned normally.
+//
+// Client software MUST support request sizes of at least 128 blob versioned
+// hashes. The client MUST return -38004: Too large request error if the number
+// of requested blobs is too large.
+//
+// Client software MUST return null if syncing or otherwise unable to serve
+// blob pool data.
 func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProofV2, error) {
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
@@ -566,12 +578,21 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 		getBlobsV2RequestMiss.Inc(1)
 		return nil, nil
 	}
-	getBlobsV2RequestHit.Inc(1)
 
 	blobs, _, proofs, err := api.eth.BlobTxPool().GetBlobs(hashes, types.BlobSidecarVersion1)
 	if err != nil {
 		return nil, engine.InvalidParams.With(err)
 	}
+
+	// To comply with API spec, check again that we really got all data needed
+	for _, blob := range blobs {
+		if blob == nil {
+			getBlobsV2RequestMiss.Inc(1)
+			return nil, nil
+		}
+	}
+	getBlobsV2RequestHit.Inc(1)
+
 	res := make([]*engine.BlobAndProofV2, len(hashes))
 	for i := 0; i < len(blobs); i++ {
 		var cellProofs []hexutil.Bytes
@@ -987,6 +1008,15 @@ func (api *ConsensusAPI) checkFork(timestamp uint64, forks ...forks.Fork) bool {
 
 // ExchangeCapabilities returns the current methods provided by this node.
 func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
+	valueT := reflect.TypeOf(api)
+	caps := make([]string, 0, valueT.NumMethod())
+	for i := 0; i < valueT.NumMethod(); i++ {
+		name := []rune(valueT.Method(i).Name)
+		if string(name) == "ExchangeCapabilities" {
+			continue
+		}
+		caps = append(caps, "engine_"+string(unicode.ToLower(name[0]))+string(name[1:]))
+	}
 	return caps
 }
 
