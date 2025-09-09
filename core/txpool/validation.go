@@ -22,6 +22,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -30,11 +31,9 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-var (
-	// blobTxMinBlobGasPrice is the big.Int version of the configured protocol
-	// parameter to avoid constructing a new big integer for every transaction.
-	blobTxMinBlobGasPrice = big.NewInt(params.BlobTxMinBlobGasprice)
-)
+// blobTxMinBlobGasPrice is the big.Int version of the configured protocol
+// parameter to avoid constructing a new big integer for every transaction.
+var blobTxMinBlobGasPrice = big.NewInt(params.BlobTxMinBlobGasprice)
 
 // ValidationOptions define certain differences between transaction validation
 // across the different pools without having to duplicate those checks.
@@ -166,19 +165,27 @@ func validateBlobTx(tx *types.Transaction, head *types.Header, opts *ValidationO
 	if len(hashes) == 0 {
 		return errors.New("blobless blob transaction")
 	}
-	if len(hashes) > params.BlobTxMaxBlobs {
-		return fmt.Errorf("too many blobs in transaction: have %d, permitted %d", len(hashes), params.BlobTxMaxBlobs)
-	}
+
 	if len(sidecar.Blobs) != len(hashes) {
 		return fmt.Errorf("invalid number of %d blobs compared to %d blob hashes", len(sidecar.Blobs), len(hashes))
 	}
 	if err := sidecar.ValidateBlobCommitmentHashes(hashes); err != nil {
 		return err
 	}
-	// Fork-specific sidecar checks, including proof verification.
+	// Post-Osaka checks, Fork-specific sidecar checks, including proof verification.
 	if opts.Config.IsOsaka(head.Number, head.Time) {
+		if len(hashes) > params.BlobTxMaxBlobs {
+			return fmt.Errorf("too many blobs in transaction: have %d, permitted %d", len(hashes), params.BlobTxMaxBlobs)
+		}
+
 		return validateBlobSidecarOsaka(sidecar, hashes)
 	}
+
+	maxBlobs := eip4844.MaxBlobsPerBlock(opts.Config, head.Time)
+	if len(hashes) > maxBlobs {
+		return fmt.Errorf("too many blobs in transaction: have %d, permitted %d", len(hashes), maxBlobs)
+	}
+
 	return validateBlobSidecarLegacy(sidecar, hashes)
 }
 

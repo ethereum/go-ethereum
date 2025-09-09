@@ -66,7 +66,7 @@ const (
 	// carry. We choose a smaller limit than the protocol-permitted MaxBlobsPerBlock
 	// in order to ensure network and txpool stability.
 	// Note: if you increase this, validation will fail on txMaxSize.
-	maxBlobsPerTx = params.BlobTxMaxBlobs
+	maxBlobsPerTx = 7
 
 	// maxTxsPerAccount is the maximum number of blob transactions admitted from
 	// a single account. The limit is enforced to minimize the DoS potential of
@@ -1102,6 +1102,11 @@ func (p *BlobPool) ValidateTxBasics(tx *types.Transaction) error {
 		MinTip:       p.gasTip.ToBig(),
 		MaxBlobCount: maxBlobsPerTx,
 	}
+
+	if p.chain.Config().IsOsaka(p.head.Number, p.head.Time) {
+		opts.MaxBlobCount = params.BlobTxMaxBlobs
+	}
+
 	return txpool.ValidateTransaction(tx, p.head, p.signer, opts)
 }
 

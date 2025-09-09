@@ -2036,3 +2036,91 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 		}
 	}
 }
+
+// TestOsakaMaxBlobsPerTx verifies that the maxBlobsPerTx parameter is dynamic
+// and changes according to the Osaka hardfork activation.
+func TestOsakaMaxBlobsPerTx(t *testing.T) {
+	var (
+		key, _ = crypto.GenerateKey()
+		addr   = crypto.PubkeyToAddress(key.PublicKey)
+	)
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.AddBalance(addr, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.Commit(0, true, false)
+
+	osakaTime := uint64(1)
+	pragueTime := uint64(0)
+	cancunTime := uint64(0)
+	config := &params.ChainConfig{
+		ChainID:     big.NewInt(1),
+		LondonBlock: big.NewInt(0),
+		BerlinBlock: big.NewInt(0),
+		CancunTime:  &cancunTime,
+		PragueTime:  &pragueTime,
+		OsakaTime:   &osakaTime,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Cancun: params.DefaultCancunBlobConfig,
+			Prague: params.DefaultPragueBlobConfig,
+			Osaka:  params.DefaultOsakaBlobConfig,
+		},
+	}
+
+	chain := &testBlockChain{
+		config:  config,
+		basefee: uint256.NewInt(params.InitialBaseFee),
+		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
+		statedb: statedb,
+	}
+
+	tests := []struct {
+		name       string
+		header     *types.Header
+		numBlobs   int
+		sidecarVer uint8
+		expectErr  error
+	}{
+		{
+			name:       "before Osaka, maxBlobsPerTx blobs",
+			header:     &types.Header{Number: big.NewInt(0), Time: 0, Difficulty: common.Big0, GasLimit: 30_000_000, BaseFee: big.NewInt(int64(params.InitialBaseFee))},
+			numBlobs:   maxBlobsPerTx,
+			sidecarVer: types.BlobSidecarVersion0,
+			expectErr:  nil,
+		},
+		{
+			name:       "after Osaka, maxBlobsPerTx blobs",
+			header:     &types.Header{Number: big.NewInt(1), Time: 1, Difficulty: common.Big0, GasLimit: 30_000_000, BaseFee: big.NewInt(int64(params.InitialBaseFee))},
+			numBlobs:   maxBlobsPerTx,
+			sidecarVer: types.BlobSidecarVersion1,
+			expectErr:  txpool.ErrTxBlobLimitExceeded,
+		},
+		{
+			name:       "after Osaka, BlobTxMaxBlobs blobs",
+			header:     &types.Header{Number: big.NewInt(1), Time: 1, Difficulty: common.Big0, GasLimit: 30_000_000, BaseFee: big.NewInt(int64(params.InitialBaseFee))},
+			numBlobs:   params.BlobTxMaxBlobs,
+			sidecarVer: types.BlobSidecarVersion1,
+			expectErr:  nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := New(Config{Datadir: t.TempDir()}, chain, nil)
+			if err := pool.Init(1, tt.header, newReserver()); err != nil {
+				t.Fatalf("failed to create blob pool: %v", err)
+			}
+			tx := makeMultiBlobTx(0, 1, 1, 1, tt.numBlobs, 0, key, tt.sidecarVer)
+			err := pool.add(tx)
+			if tt.expectErr != nil {
+				if !errors.Is(err, tt.expectErr) {
+					t.Errorf("expected error %v, got: %v", tt.expectErr, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("expected success, got: %v", err)
+				}
+			}
+			pool.Close()
+		})
+	}
+}
