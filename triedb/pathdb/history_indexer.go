@@ -618,14 +618,14 @@ func (i *indexIniter) recover(lastID uint64) {
 			lastID = newLastID
 			signal.result <- nil
 			i.last.Store(newLastID)
-			log.Debug("Updated history index flag", "last", lastID)
+			i.log.Debug("Updated history index flag", "last", lastID)
 
 			// Terminate the recovery routine once the histories are fully aligned
 			// with the index data, indicating that index initialization is complete.
-			metadata := loadIndexMetadata(i.disk)
+			metadata := loadIndexMetadata(i.disk, i.typ)
 			if metadata != nil && metadata.Last == lastID {
 				close(i.done)
-				log.Info("History indexer is recovered", "last", lastID)
+				i.log.Info("History indexer is recovered", "last", lastID)
 				return
 			}
 
