@@ -1689,8 +1689,7 @@ func TestAdd(t *testing.T) {
 	}
 }
 
-// Tests that adding the transactions with legacy sidecar and expect them to
-// be converted to new format correctly.
+// Tests adding transactions with legacy sidecars are correctly rejected.
 func TestAddLegacyBlobTx(t *testing.T) {
 	var (
 		key1, _ = crypto.GenerateKey()
@@ -1724,8 +1723,8 @@ func TestAddLegacyBlobTx(t *testing.T) {
 	)
 	errs := pool.Add([]*types.Transaction{tx1, tx2, tx3}, true)
 	for _, err := range errs {
-		if err != nil {
-			t.Fatalf("failed to add tx: %v", err)
+		if err == nil {
+			t.Fatalf("expected tx add to fail")
 		}
 	}
 	verifyPoolInternals(t, pool)

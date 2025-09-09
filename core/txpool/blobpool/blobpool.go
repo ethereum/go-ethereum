@@ -1431,14 +1431,10 @@ func (p *BlobPool) convertSidecar(txs []*types.Transaction) ([]*types.Transactio
 // related to the add is finished. Only use this during tests for determinism.
 func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 	var (
-		errs []error
+		errs = make([]error, len(txs))
 		adds = make([]*types.Transaction, 0, len(txs))
 	)
-	txs, errs = p.convertSidecar(txs)
 	for i, tx := range txs {
-		if errs[i] != nil {
-			continue
-		}
 		errs[i] = p.add(tx)
 		if errs[i] == nil {
 			adds = append(adds, tx.WithoutBlobTxSidecar())
