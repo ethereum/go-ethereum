@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// geth is a command-line client for Ethereum.
+// bera-geth is a command-line client for Ethereum.
 package main
 
 import (
@@ -46,7 +46,7 @@ import (
 )
 
 const (
-	clientIdentifier = "geth" // Client identifier to advertise over the network
+	clientIdentifier = "bera-geth" // Client identifier to advertise over the network
 )
 
 var (
@@ -208,7 +208,7 @@ var app = flags.NewApp("the go-ethereum command line interface")
 
 func init() {
 	// Initialize the CLI app and start Geth
-	app.Action = geth
+	app.Action = berageth
 	app.Commands = []*cli.Command{
 		// See chaincmd.go:
 		initCommand,
@@ -256,7 +256,7 @@ func init() {
 		debug.Flags,
 		metricsFlags,
 	)
-	flags.AutoEnvVars(app.Flags, "GETH")
+	flags.AutoEnvVars(app.Flags, "BERA_GETH")
 
 	app.Before = func(ctx *cli.Context) error {
 		maxprocs.Set() // Automatically set GOMAXPROCS to match Linux container CPU quota.
@@ -264,7 +264,7 @@ func init() {
 		if err := debug.Setup(ctx); err != nil {
 			return err
 		}
-		flags.CheckEnvVars(ctx, app.Flags, "GETH")
+		flags.CheckEnvVars(ctx, app.Flags, "BERA_GETH")
 		return nil
 	}
 	app.After = func(ctx *cli.Context) error {
@@ -286,24 +286,32 @@ func main() {
 func prepare(ctx *cli.Context) {
 	// If we're running a known preset, log it for convenience.
 	switch {
+	case ctx.IsSet(utils.MainnetFlag.Name):
+		log.Info("Starting bera-geth on Ethereum mainnet...")
+
 	case ctx.IsSet(utils.SepoliaFlag.Name):
-		log.Info("Starting Geth on Sepolia testnet...")
+		log.Info("Starting bera-geth on Sepolia testnet...")
 
 	case ctx.IsSet(utils.HoleskyFlag.Name):
-		log.Info("Starting Geth on Holesky testnet...")
+		log.Info("Starting bera-geth on Holesky testnet...")
 
 	case ctx.IsSet(utils.HoodiFlag.Name):
-		log.Info("Starting Geth on Hoodi testnet...")
+		log.Info("Starting bera-geth on Hoodi testnet...")
 
-	case !ctx.IsSet(utils.NetworkIdFlag.Name):
-		log.Info("Starting Geth on Ethereum mainnet...")
+	case ctx.IsSet(utils.BepoliaFlag.Name):
+		log.Info("Starting bera-geth on Bepolia testnet...")
+
+	case ctx.IsSet(utils.BerachainFlag.Name):
+		log.Info("Starting bera-geth on Berachain mainnet...")
 	}
-	// If we're a full node on mainnet without --cache specified, bump default cache allowance
+
+	// If we're a full node on Berachain mainnet without --cache specified, bump default cache allowance
 	if !ctx.IsSet(utils.CacheFlag.Name) && !ctx.IsSet(utils.NetworkIdFlag.Name) {
 		// Make sure we're not on any supported preconfigured testnet either
 		if !ctx.IsSet(utils.HoleskyFlag.Name) &&
 			!ctx.IsSet(utils.SepoliaFlag.Name) &&
 			!ctx.IsSet(utils.HoodiFlag.Name) &&
+			!ctx.IsSet(utils.BepoliaFlag.Name) &&
 			!ctx.IsSet(utils.DeveloperFlag.Name) {
 			// Nope, we're really on mainnet. Bump that cache up!
 			log.Info("Bumping default cache on mainnet", "provided", ctx.Int(utils.CacheFlag.Name), "updated", 4096)
@@ -312,10 +320,10 @@ func prepare(ctx *cli.Context) {
 	}
 }
 
-// geth is the main entry point into the system if no special subcommand is run.
+// berageth is the main entry point into the system if no special subcommand is run.
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
-func geth(ctx *cli.Context) error {
+func berageth(ctx *cli.Context) error {
 	if args := ctx.Args().Slice(); len(args) > 0 {
 		return fmt.Errorf("invalid command: %q", args[0])
 	}
@@ -343,7 +351,7 @@ func startNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 	events := make(chan accounts.WalletEvent, 16)
 	stack.AccountManager().Subscribe(events)
 
-	// Create a client to interact with local geth node.
+	// Create a client to interact with local bera-geth node.
 	rpcClient := stack.Attach()
 	ethClient := ethclient.NewClient(rpcClient)
 

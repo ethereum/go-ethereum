@@ -1226,6 +1226,15 @@ func TestCall(t *testing.T) {
 			},
 			expectErr: errors.New(`block override "withdrawals" is not supported for this RPC method`),
 		},
+		{
+			name:        "unsupported block override proposerPubkey",
+			blockNumber: rpc.LatestBlockNumber,
+			call:        TransactionArgs{},
+			blockOverrides: override.BlockOverrides{
+				ProposerPubkey: &common.Pubkey{},
+			},
+			expectErr: errors.New(`block override "proposerPubkey" is not supported for this RPC method`),
+		},
 	}
 	for _, tc := range testSuite {
 		result, err := api.Call(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)

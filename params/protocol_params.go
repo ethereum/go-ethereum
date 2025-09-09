@@ -134,6 +134,9 @@ const (
 	DefaultElasticityMultiplier     = 2          // Bounds the maximum gas limit an EIP-1559 block may have.
 	InitialBaseFee                  = 1000000000 // Initial base fee for EIP-1559 blocks.
 
+	// BRIP-0002 - Base Fee Change Denominator
+	BerachainBaseFeeChangeDenominator = 48 // 6x increase from the default
+
 	MaxCodeSize     = 24576           // Maximum bytecode to permit for a contract
 	MaxInitCodeSize = 2 * MaxCodeSize // Maximum initcode to permit in a creation transaction and create instructions
 
@@ -201,7 +204,7 @@ var (
 
 // System contracts.
 var (
-	// SystemAddress is where the system-transaction is sent from as per EIP-4788
+	// SystemAddress is where the system-transaction is sent from as per EIP-4788 and BRIP-0004.
 	SystemAddress = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
 
 	// EIP-4788 - Beacon block root in the EVM
@@ -219,4 +222,11 @@ var (
 	// EIP-7251 - Increase the MAX_EFFECTIVE_BALANCE
 	ConsolidationQueueAddress = common.HexToAddress("0x0000BBdDc7CE488642fb579F8B00f3a590007251")
 	ConsolidationQueueCode    = common.FromHex("3373fffffffffffffffffffffffffffffffffffffffe1460d35760115f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1461019a57600182026001905f5b5f82111560685781019083028483029004916001019190604d565b9093900492505050366060146088573661019a573461019a575f5260205ff35b341061019a57600154600101600155600354806004026004013381556001015f358155600101602035815560010160403590553360601b5f5260605f60143760745fa0600101600355005b6003546002548082038060021160e7575060025b5f5b8181146101295782810160040260040181607402815460601b815260140181600101548152602001816002015481526020019060030154905260010160e9565b910180921461013b5790600255610146565b90505f6002555f6003555b5f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff141561017357505f5b6001546001828201116101885750505f61018e565b01600190035b5f555f6001556074025ff35b5f5ffd")
+
+	// Berachain - Deposit Contract
+	BerachainDepositContractAddress = common.HexToAddress("0x4242424242424242424242424242424242424242")
+
+	// BRIP-0004 - PoL Distributor
+	PoLTxGasLimit         = uint64(30_000_000)
+	PoLDistributorAddress = common.HexToAddress("0xD2f19a79b026Fb636A7c300bF5947df113940761")
 )

@@ -32,6 +32,10 @@ var (
 	HoleskyGenesisHash = common.HexToHash("0xb5f7f912443c940f21fd611f12828d75b534364ed9e95ca4e307729a4661bde4")
 	SepoliaGenesisHash = common.HexToHash("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9")
 	HoodiGenesisHash   = common.HexToHash("0xbbe312868b376a3001692a646dd2d7d1e4406380dfd86b98aa8a34d1557c971b")
+
+	// Berachain
+	BerachainGenesisHash = common.HexToHash("0xd57819422128da1c44339fc7956662378c17e2213e669b427ac91cd11dfcfb38")
+	BepoliaGenesisHash   = common.HexToHash("0x0207661de38f0e54ba91c8286096e72486784c79dc6a9681fc486b38335c042f")
 )
 
 func newUint64(val uint64) *uint64 { return &val }
@@ -156,6 +160,82 @@ var (
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
+		},
+	}
+	// BerachainChainConfig is the chain parameters to run a node on the Berachain network.
+	BerachainChainConfig = &ChainConfig{
+		ChainID:                 big.NewInt(80094),
+		HomesteadBlock:          big.NewInt(0),
+		DAOForkBlock:            big.NewInt(0),
+		DAOForkSupport:          true,
+		EIP150Block:             big.NewInt(0),
+		EIP155Block:             big.NewInt(0),
+		EIP158Block:             big.NewInt(0),
+		ByzantiumBlock:          big.NewInt(0),
+		ConstantinopleBlock:     big.NewInt(0),
+		PetersburgBlock:         big.NewInt(0),
+		IstanbulBlock:           big.NewInt(0),
+		MuirGlacierBlock:        big.NewInt(0),
+		BerlinBlock:             big.NewInt(0),
+		LondonBlock:             big.NewInt(0),
+		ArrowGlacierBlock:       big.NewInt(0),
+		GrayGlacierBlock:        big.NewInt(0),
+		TerminalTotalDifficulty: big.NewInt(0),
+		MergeNetsplitBlock:      big.NewInt(0),
+		ShanghaiTime:            newUint64(0),
+		CancunTime:              newUint64(0),
+		PragueTime:              newUint64(1749056400),
+		DepositContractAddress:  BerachainDepositContractAddress,
+		Ethash:                  new(EthashConfig),
+		BlobScheduleConfig: &BlobScheduleConfig{
+			Cancun: DefaultCancunBlobConfig,
+			Prague: DefaultBerachainPragueBlobConfig,
+		},
+		Berachain: BerachainConfig{
+			Prague1: Prague1Config{
+				Time:                     newUint64(1756915200), // Sep 03 2025 16:00:00 UTC
+				MinimumBaseFeeWei:        1 * GWei,
+				BaseFeeChangeDenominator: BerachainBaseFeeChangeDenominator,
+				PoLDistributorAddress:    PoLDistributorAddress,
+			},
+		},
+	}
+	// BepoliaChainConfig contains the chain parameters to run a node on the Bepolia test network.
+	BepoliaChainConfig = &ChainConfig{
+		ChainID:                 big.NewInt(80069),
+		HomesteadBlock:          big.NewInt(0),
+		DAOForkBlock:            big.NewInt(0),
+		DAOForkSupport:          true,
+		EIP150Block:             big.NewInt(0),
+		EIP155Block:             big.NewInt(0),
+		EIP158Block:             big.NewInt(0),
+		ByzantiumBlock:          big.NewInt(0),
+		ConstantinopleBlock:     big.NewInt(0),
+		PetersburgBlock:         big.NewInt(0),
+		IstanbulBlock:           big.NewInt(0),
+		MuirGlacierBlock:        big.NewInt(0),
+		BerlinBlock:             big.NewInt(0),
+		LondonBlock:             big.NewInt(0),
+		ArrowGlacierBlock:       big.NewInt(0),
+		GrayGlacierBlock:        big.NewInt(0),
+		TerminalTotalDifficulty: big.NewInt(0),
+		MergeNetsplitBlock:      big.NewInt(0),
+		ShanghaiTime:            newUint64(0),
+		CancunTime:              newUint64(0),
+		PragueTime:              newUint64(1746633600),
+		DepositContractAddress:  BerachainDepositContractAddress,
+		Ethash:                  new(EthashConfig),
+		BlobScheduleConfig: &BlobScheduleConfig{
+			Cancun: DefaultCancunBlobConfig,
+			Prague: DefaultBerachainPragueBlobConfig,
+		},
+		Berachain: BerachainConfig{
+			Prague1: Prague1Config{
+				Time:                     newUint64(1754496000), // Aug 6th 2025 16:00:00 UTC
+				MinimumBaseFeeWei:        10 * GWei,
+				BaseFeeChangeDenominator: BerachainBaseFeeChangeDenominator,
+				PoLDistributorAddress:    PoLDistributorAddress,
+			},
 		},
 	}
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
@@ -353,6 +433,13 @@ var (
 		Max:            9,
 		UpdateFraction: 5007716,
 	}
+	// DefaultBerachainPragueBlobConfig is the default blob configuration for the Prague fork
+	// on Berachain networks.
+	DefaultBerachainPragueBlobConfig = &BlobConfig{
+		Target:         3,
+		Max:            6,
+		UpdateFraction: 3338477,
+	}
 	// DefaultOsakaBlobConfig is the default blob configuration for the Osaka fork.
 	DefaultOsakaBlobConfig = &BlobConfig{
 		Target:         6,
@@ -373,6 +460,10 @@ var NetworkNames = map[string]string{
 	SepoliaChainConfig.ChainID.String(): "sepolia",
 	HoleskyChainConfig.ChainID.String(): "holesky",
 	HoodiChainConfig.ChainID.String():   "hoodi",
+
+	// Berachain
+	BerachainChainConfig.ChainID.String(): "berachain mainnet",
+	BepoliaChainConfig.ChainID.String():   "bepolia testnet",
 }
 
 // ChainConfig is the core config which determines the blockchain settings.
@@ -440,6 +531,48 @@ type ChainConfig struct {
 	Ethash             *EthashConfig       `json:"ethash,omitempty"`
 	Clique             *CliqueConfig       `json:"clique,omitempty"`
 	BlobScheduleConfig *BlobScheduleConfig `json:"blobSchedule,omitempty"`
+
+	// Berachain config
+	Berachain BerachainConfig `json:"berachain,omitempty"`
+}
+
+// BerachainConfig is the berachain config.
+type BerachainConfig struct {
+	// Prague1 fork values.
+	Prague1 Prague1Config `json:"prague1,omitempty"`
+}
+
+// String implements the stringer interface.
+func (o *BerachainConfig) String() string {
+	banner := "berachain"
+	if o.Prague1.Time != nil {
+		banner += fmt.Sprintf("(%s)", o.Prague1)
+	}
+	return banner
+}
+
+// Prague1Config is the config values for the Prague1 fork on Berachain.
+type Prague1Config struct {
+	// Time is the time of the Prague1 fork.
+	Time *uint64 `json:"time,omitempty"` // Prague1 switch time (0 = already on prague1, nil = no fork)
+	// BaseFeeChangeDenominator is the base fee change denominator.
+	BaseFeeChangeDenominator uint64 `json:"baseFeeChangeDenominator,omitempty"`
+	// MinimumBaseFeeWei is the minimum base fee in wei.
+	MinimumBaseFeeWei uint64 `json:"minimumBaseFeeWei,omitempty"`
+	// PoLDistributorAddress is the address of the PoL distributor.
+	PoLDistributorAddress common.Address `json:"polDistributorAddress,omitempty"`
+}
+
+// String implements the stringer interface.
+func (c Prague1Config) String() string {
+	banner := "prague1"
+	if c.Time != nil {
+		banner += fmt.Sprintf(
+			"(time: %v, baseFeeChangeDenominator: %v, minimumBaseFeeWei: %v, polDistributorAddress: %v)",
+			*c.Time, c.BaseFeeChangeDenominator, c.MinimumBaseFeeWei, c.PoLDistributorAddress,
+		)
+	}
+	return banner
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -529,6 +662,9 @@ func (c *ChainConfig) Description() string {
 	}
 	if c.PragueTime != nil {
 		banner += fmt.Sprintf(" - Prague:                      @%-10v\n", *c.PragueTime)
+	}
+	if c.Berachain.Prague1.Time != nil {
+		banner += fmt.Sprintf(" - Prague1:                     %-10v (https://github.com/berachain/BRIPs/blob/main/meta/BRIP-0004.md)\n", c.Berachain.Prague1)
 	}
 	if c.OsakaTime != nil {
 		banner += fmt.Sprintf(" - Osaka:                      @%-10v\n", *c.OsakaTime)
@@ -669,6 +805,12 @@ func (c *ChainConfig) IsPrague(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.PragueTime, time)
 }
 
+// IsPrague1 returns whether time is either equal to the Prague1 fork time or greater.
+// NOTE: Prague1 is a Berachain fork and must be on Ethereum's Prague fork.
+func (c *ChainConfig) IsPrague1(num *big.Int, time uint64) bool {
+	return c.IsPrague(num, time) && isTimestampForked(c.Berachain.Prague1.Time, time)
+}
+
 // IsOsaka returns whether time is either equal to the Osaka fork time or greater.
 func (c *ChainConfig) IsOsaka(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.OsakaTime, time)
@@ -777,6 +919,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "shanghaiTime", timestamp: c.ShanghaiTime},
 		{name: "cancunTime", timestamp: c.CancunTime, optional: true},
 		{name: "pragueTime", timestamp: c.PragueTime, optional: true},
+		{name: "prague1Time", timestamp: c.Berachain.Prague1.Time, optional: true},
 		{name: "osakaTime", timestamp: c.OsakaTime, optional: true},
 		{name: "verkleTime", timestamp: c.VerkleTime, optional: true},
 		{name: "bpo1", timestamp: c.BPO1Time, optional: true},
@@ -849,6 +992,16 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 			if cur.config == nil {
 				return fmt.Errorf("invalid chain configuration: missing entry for fork %q in blobSchedule", cur.name)
 			}
+		}
+	}
+
+	// Berachain: Check that Prague1 is configured correctly if it is enabled.
+	if c.Berachain.Prague1.Time != nil {
+		if c.Berachain.Prague1.PoLDistributorAddress == (common.Address{}) {
+			return fmt.Errorf("invalid chain configuration: missing PoL distributor address for Prague1 fork")
+		}
+		if c.Berachain.Prague1.BaseFeeChangeDenominator == 0 {
+			return fmt.Errorf("invalid chain configuration: base fee change denominator must be > 0 for Prague1 fork")
 		}
 	}
 	return nil
@@ -932,6 +1085,9 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	if isForkTimestampIncompatible(c.PragueTime, newcfg.PragueTime, headTimestamp) {
 		return newTimestampCompatError("Prague fork timestamp", c.PragueTime, newcfg.PragueTime)
 	}
+	if isForkTimestampIncompatible(c.Berachain.Prague1.Time, newcfg.Berachain.Prague1.Time, headTimestamp) {
+		return newTimestampCompatError("Prague1 fork timestamp", c.Berachain.Prague1.Time, newcfg.Berachain.Prague1.Time)
+	}
 	if isForkTimestampIncompatible(c.OsakaTime, newcfg.OsakaTime, headTimestamp) {
 		return newTimestampCompatError("Osaka fork timestamp", c.OsakaTime, newcfg.OsakaTime)
 	}
@@ -957,7 +1113,12 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 }
 
 // BaseFeeChangeDenominator bounds the amount the base fee can change between blocks.
-func (c *ChainConfig) BaseFeeChangeDenominator() uint64 {
+func (c *ChainConfig) BaseFeeChangeDenominator(num *big.Int, time uint64) uint64 {
+	// Starting at the Prague1 fork, we use the Berachain base fee change denominator.
+	if c.IsPrague1(num, time) {
+		return c.Berachain.Prague1.BaseFeeChangeDenominator
+	}
+
 	return DefaultBaseFeeChangeDenominator
 }
 
@@ -974,6 +1135,8 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 	switch {
 	case c.IsOsaka(london, time):
 		return forks.Osaka
+	case c.IsPrague1(london, time):
+		return forks.Prague1
 	case c.IsPrague(london, time):
 		return forks.Prague
 	case c.IsCancun(london, time):
@@ -1025,6 +1188,8 @@ func (c *ChainConfig) Timestamp(fork forks.Fork) *uint64 {
 	switch {
 	case fork == forks.Osaka:
 		return c.OsakaTime
+	case fork == forks.Prague1:
+		return c.Berachain.Prague1.Time
 	case fork == forks.Prague:
 		return c.PragueTime
 	case fork == forks.Cancun:
@@ -1171,13 +1336,13 @@ func (err *ConfigCompatError) Error() string {
 // Rules is a one time interface meaning that it shouldn't be used in between transition
 // phases.
 type Rules struct {
-	ChainID                                                 *big.Int
-	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
-	IsEIP2929, IsEIP4762                                    bool
-	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
-	IsBerlin, IsLondon                                      bool
-	IsMerge, IsShanghai, IsCancun, IsPrague, IsOsaka        bool
-	IsVerkle                                                bool
+	ChainID                                                     *big.Int
+	IsHomestead, IsEIP150, IsEIP155, IsEIP158                   bool
+	IsEIP2929, IsEIP4762                                        bool
+	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul     bool
+	IsBerlin, IsLondon                                          bool
+	IsMerge, IsShanghai, IsCancun, IsPrague, IsPrague1, IsOsaka bool
+	IsVerkle                                                    bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -1206,6 +1371,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsShanghai:       isMerge && c.IsShanghai(num, timestamp),
 		IsCancun:         isMerge && c.IsCancun(num, timestamp),
 		IsPrague:         isMerge && c.IsPrague(num, timestamp),
+		IsPrague1:        isMerge && c.IsPrague1(num, timestamp),
 		IsOsaka:          isMerge && c.IsOsaka(num, timestamp),
 		IsVerkle:         isVerkle,
 		IsEIP4762:        isVerkle,

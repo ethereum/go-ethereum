@@ -121,16 +121,17 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 
 // BlockOverrides is a set of header fields to override.
 type BlockOverrides struct {
-	Number        *hexutil.Big
-	Difficulty    *hexutil.Big // No-op if we're simulating post-merge calls.
-	Time          *hexutil.Uint64
-	GasLimit      *hexutil.Uint64
-	FeeRecipient  *common.Address
-	PrevRandao    *common.Hash
-	BaseFeePerGas *hexutil.Big
-	BlobBaseFee   *hexutil.Big
-	BeaconRoot    *common.Hash
-	Withdrawals   *types.Withdrawals
+	Number         *hexutil.Big
+	Difficulty     *hexutil.Big // No-op if we're simulating post-merge calls.
+	Time           *hexutil.Uint64
+	GasLimit       *hexutil.Uint64
+	FeeRecipient   *common.Address
+	PrevRandao     *common.Hash
+	BaseFeePerGas  *hexutil.Big
+	BlobBaseFee    *hexutil.Big
+	BeaconRoot     *common.Hash
+	Withdrawals    *types.Withdrawals
+	ProposerPubkey *common.Pubkey
 }
 
 // Apply overrides the given header fields into the given block context.
@@ -143,6 +144,9 @@ func (o *BlockOverrides) Apply(blockCtx *vm.BlockContext) error {
 	}
 	if o.Withdrawals != nil {
 		return errors.New(`block override "withdrawals" is not supported for this RPC method`)
+	}
+	if o.ProposerPubkey != nil {
+		return errors.New(`block override "proposerPubkey" is not supported for this RPC method`)
 	}
 	if o.Number != nil {
 		blockCtx.BlockNumber = o.Number.ToInt()

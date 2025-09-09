@@ -47,6 +47,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/urfave/cli/v2"
 )
 
@@ -282,8 +283,19 @@ func initGenesis(ctx *cli.Context) error {
 	chaindb := utils.MakeChainDatabase(ctx, stack, false)
 	defer chaindb.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, stack, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
-	defer triedb.Close()
+	// Berachain: Check if genesis already exists for PBSS databases BEFORE opening trie database.
+	// This prevents the state history truncation that happens during trie database initialization.
+	var triedb *triedb.Database
+	if rawdb.ReadStateScheme(chaindb) == rawdb.PathScheme &&
+		rawdb.ReadChainConfig(chaindb, rawdb.ReadCanonicalHash(chaindb, 0)) != nil {
+		log.Info("PBSS db already initialized with genesis, skipping trie db initialization")
+	} else {
+		// Only create triedb if we're not using PBSS or genesis is empty on disk. Refer to
+		// https://github.com/ethereum/go-ethereum/pull/25523 for why the triedb cannot be
+		// re-created when using PBSS.
+		triedb = utils.MakeTrieDatabase(ctx, stack, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
+		defer triedb.Close()
+	}
 
 	_, hash, compatErr, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides)
 	if err != nil {
@@ -480,6 +492,10 @@ func importHistory(ctx *cli.Context) error {
 			network = "holesky"
 		case ctx.Bool(utils.HoodiFlag.Name):
 			network = "hoodi"
+		case ctx.Bool(utils.BerachainFlag.Name):
+			network = "berachain"
+		case ctx.Bool(utils.BepoliaFlag.Name):
+			network = "bepolia"
 		}
 	} else {
 		// No network flag set, try to determine network based on files
@@ -716,6 +732,10 @@ func downloadEra(ctx *cli.Context) error {
 		case ctx.IsSet(utils.MainnetFlag.Name):
 		case ctx.IsSet(utils.SepoliaFlag.Name):
 			network = "sepolia"
+		case ctx.IsSet(utils.BerachainFlag.Name):
+			network = "berachain"
+		case ctx.IsSet(utils.BepoliaFlag.Name):
+			network = "bepolia"
 		default:
 			return errors.New("unsupported network, no known era1 checksums")
 		}

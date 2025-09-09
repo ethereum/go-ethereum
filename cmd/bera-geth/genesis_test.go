@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -94,6 +95,142 @@ func TestCustomGenesis(t *testing.T) {
 			"--exec", tt.query, "console")
 		geth.ExpectRegexp(tt.result)
 		geth.ExpectExit()
+	}
+}
+
+// TestPBSSRepeatInitNoTrieOpen verifies that running init twice on a PBSS (path-scheme)
+// database does not re-initialize the trie database and safely short-circuits.
+func TestPBSSRepeatInitNoTrieOpen(t *testing.T) {
+	t.Parallel()
+
+	// Minimal genesis with TTD=0 to keep execution simple
+	genesis := `{
+        "alloc": {"0x0000000000000000000000000000000000000001": {"balance": "0x1"}},
+        "coinbase": "0x0000000000000000000000000000000000000000",
+        "difficulty": "0x1",
+        "gasLimit": "0x2fefd8",
+        "nonce": "0x0000000000000000",
+        "mixhash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "timestamp": "0x00",
+        "config": { "terminalTotalDifficulty": 0 }
+    }`
+
+	datadir := t.TempDir()
+	jsonPath := filepath.Join(datadir, "genesis.json")
+	if err := os.WriteFile(jsonPath, []byte(genesis), 0600); err != nil {
+		t.Fatalf("failed to write genesis file: %v", err)
+	}
+
+	// First init should perform normal initialization
+	gethInit1 := runGeth(t, "--datadir", datadir, "init", jsonPath)
+	gethInit1.WaitExit()
+	if gethInit1.Err != nil {
+		t.Fatalf("first init failed: %v", gethInit1.Err)
+	}
+
+	// Second init should skip trie db initialization and not truncate freezer
+	gethInit2 := runGeth(t, "--datadir", datadir, "init", jsonPath)
+	gethInit2.WaitExit()
+	if gethInit2.Err != nil {
+		t.Fatalf("second init failed: %v", gethInit2.Err)
+	}
+	stderr := gethInit2.StderrText()
+	if !strings.Contains(stderr, "PBSS db already initialized with genesis, skipping trie db initialization") {
+		t.Fatalf("expected skip-triedb log not found in stderr. got:\n%s", stderr)
+	}
+}
+
+// TestPBSSConfigUpdate verifies that a repeat init on PBSS writes updated chain
+// configuration without touching the trie database when the genesis block hash
+// is unchanged.
+func TestPBSSConfigUpdate(t *testing.T) {
+	t.Parallel()
+
+	// Base genesis (no Prague1 yet). Include all prior timestamp forks explicitly
+	// with timestamp 0 to satisfy fork ordering: Shanghai -> Cancun -> Prague -> Prague1.
+	baseGenesis := `{
+        "alloc": {"0x0000000000000000000000000000000000000001": {"balance": "0x1"}},
+        "coinbase": "0x0000000000000000000000000000000000000000",
+        "difficulty": "0x1",
+        "gasLimit": "0x2fefd8",
+        "nonce": "0x0000000000000000",
+        "mixhash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "timestamp": "0x00",
+        "config": { 
+            "terminalTotalDifficulty": 0,
+			"homesteadBlock": 0,
+			"eip150Block": 0,
+			"eip155Block": 0,
+			"eip158Block": 0,
+			"byzantiumBlock": 0,
+			"constantinopleBlock": 0,
+			"petersburgBlock": 0,
+			"istanbulBlock": 0,
+			"berlinBlock": 0,
+			"londonBlock": 0,
+            "shanghaiTime": 0
+        }
+    }`
+
+	// Updated config: enable Berachain Prague1 while keeping genesis state identical.
+	// Include all prior timestamp forks to maintain correct ordering.
+	updatedGenesis := `{
+        "alloc": {"0x0000000000000000000000000000000000000001": {"balance": "0x1"}},
+        "coinbase": "0x0000000000000000000000000000000000000000",
+        "difficulty": "0x1",
+        "gasLimit": "0x2fefd8",
+        "nonce": "0x0000000000000000",
+        "mixhash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "timestamp": "0x00",
+        "config": {
+            "terminalTotalDifficulty": 0,
+			"homesteadBlock": 0,
+			"eip150Block": 0,
+			"eip155Block": 0,
+			"eip158Block": 0,
+			"byzantiumBlock": 0,
+			"constantinopleBlock": 0,
+			"petersburgBlock": 0,
+			"istanbulBlock": 0,
+			"berlinBlock": 0,
+			"londonBlock": 0,
+            "shanghaiTime": 0,
+            "berachain": {
+                "prague1": {
+                    "time": 1000,
+                    "baseFeeChangeDenominator": 48,
+                    "poLDistributorAddress": "0x1111111111111111111111111111111111111111"
+                }
+            }
+        }
+    }`
+
+	datadir := t.TempDir()
+	jsonPath := filepath.Join(datadir, "genesis.json")
+	if err := os.WriteFile(jsonPath, []byte(baseGenesis), 0600); err != nil {
+		t.Fatalf("failed to write base genesis file: %v", err)
+	}
+
+	// First init with base config
+	runGeth(t, "--datadir", datadir, "init", jsonPath).WaitExit()
+
+	// Overwrite with updated config (same genesis state, different chain config)
+	if err := os.WriteFile(jsonPath, []byte(updatedGenesis), 0600); err != nil {
+		t.Fatalf("failed to write updated genesis file: %v", err)
+	}
+
+	// Second init should skip trie db init and write the new chain config
+	geth := runGeth(t, "--datadir", datadir, "init", jsonPath)
+	geth.WaitExit()
+	stderr := geth.StderrText()
+	if !strings.Contains(stderr, "PBSS db already initialized with genesis, skipping trie db initialization") {
+		t.Fatalf("expected PBSS skip log not found in stderr. got:\n%s", stderr)
+	}
+	if !strings.Contains(stderr, "Writing new chain config") {
+		t.Fatalf("expected config-update log not found in stderr. got:\n%s", stderr)
 	}
 }
 
@@ -186,9 +323,9 @@ func TestCustomBackend(t *testing.T) {
 		{ // Reject invalid backend choice
 			initArgs:   []string{"--db.engine", "mssql"},
 			initExpect: `Fatal: Invalid choice for db.engine 'mssql', allowed 'leveldb' or 'pebble'`,
-			// Since the init fails, this will return the (default) mainnet genesis
+			// Since the init fails, this will return the (default) berachain mainnet genesis
 			// block nonce
-			execExpect: `0x0000000000000042`,
+			execExpect: `0x0000000000001234`,
 		},
 	} {
 		if err := testfunc(t, tt); err != nil {

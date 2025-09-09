@@ -24,6 +24,7 @@ import (
 	"math"
 	"math/big"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -59,9 +60,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	gethversion "github.com/ethereum/go-ethereum/version"
 )
 
 const (
@@ -360,13 +359,22 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 func makeExtraData(extra []byte) []byte {
 	if len(extra) == 0 {
-		// create default extradata
-		extra, _ = rlp.EncodeToBytes([]interface{}{
-			uint(gethversion.Major<<16 | gethversion.Minor<<8 | gethversion.Patch),
-			"geth",
-			runtime.Version(),
-			runtime.GOOS,
-		})
+		// Create default extradata in ASCII format similar to reth
+		// Desired format examples:
+		// - bera-geth/v1.011602.0-rc5/linux when tag exists
+		// - bera-geth/v<with-meta>/linux as fallback
+		tag := version.WithMeta
+		if vcs, ok := version.VCS(); ok && vcs.Tag != "" {
+			// Use tag as-is here because the desired extradata includes the leading 'v'
+			tag = vcs.Tag
+		}
+		versionStr := fmt.Sprintf("bera-geth/%s/%s", func() string {
+			if strings.HasPrefix(tag, "v") {
+				return tag
+			}
+			return "v" + tag
+		}(), runtime.GOOS)
+		extra = []byte(versionStr)
 	}
 	if uint64(len(extra)) > params.MaximumExtraDataSize {
 		log.Warn("Miner extra data exceed limit", "extra", hexutil.Bytes(extra), "limit", params.MaximumExtraDataSize)

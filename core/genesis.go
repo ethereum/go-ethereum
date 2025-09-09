@@ -223,6 +223,10 @@ func getGenesisState(db ethdb.Database, blockhash common.Hash) (alloc types.Gene
 		genesis = DefaultHoleskyGenesisBlock()
 	case params.HoodiGenesisHash:
 		genesis = DefaultHoodiGenesisBlock()
+	case params.BerachainGenesisHash:
+		genesis = DefaultBerachainGenesisBlock()
+	case params.BepoliaGenesisHash:
+		genesis = DefaultBepoliaGenesisBlock()
 	}
 	if genesis != nil {
 		return genesis.Alloc, nil
@@ -303,8 +307,8 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, g
 	ghash := rawdb.ReadCanonicalHash(db, 0)
 	if (ghash == common.Hash{}) {
 		if genesis == nil {
-			log.Info("Writing default main-net genesis block")
-			genesis = DefaultGenesisBlock()
+			log.Info("Writing default berachain mainnet genesis block")
+			genesis = DefaultBerachainGenesisBlock()
 		} else {
 			log.Info("Writing custom genesis block")
 		}
@@ -328,8 +332,8 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, g
 		// networks must explicitly specify the genesis in the config file, mainnet
 		// genesis will be used as default and the initialization will always fail.
 		if genesis == nil {
-			log.Info("Writing default main-net genesis block")
-			genesis = DefaultGenesisBlock()
+			log.Info("Writing default berachain mainnet genesis block")
+			genesis = DefaultBerachainGenesisBlock()
 		} else {
 			log.Info("Writing custom genesis block")
 		}
@@ -381,9 +385,11 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, g
 		return newCfg, ghash, compatErr, nil
 	}
 	// Don't overwrite if the old is identical to the new. It's useful
-	// for the scenarios that database is opened in the read-only mode.
+	// for the scenarios that database is opened in the read-only mode
+	// OR if the chain config is updated to include new Berachain fork info.
 	storedData, _ := json.Marshal(storedCfg)
 	if newData, _ := json.Marshal(newCfg); !bytes.Equal(storedData, newData) {
+		log.Info("Writing new chain config")
 		rawdb.WriteChainConfig(db, ghash, newCfg)
 	}
 	return newCfg, ghash, nil, nil
@@ -419,8 +425,8 @@ func LoadChainConfig(db ethdb.Database, genesis *Genesis) (cfg *params.ChainConf
 		return genesis.Config, ghash, nil
 	}
 	// There is no stored chain config and no new config provided,
-	// In this case the default chain config(mainnet) will be used
-	return params.MainnetChainConfig, params.MainnetGenesisHash, nil
+	// In this case the default chain config(berachain mainnet) will be used
+	return params.BerachainChainConfig, params.BerachainGenesisHash, nil
 }
 
 // chainConfigOrDefault retrieves the attached chain configuration. If the genesis
@@ -438,6 +444,10 @@ func (g *Genesis) chainConfigOrDefault(ghash common.Hash, stored *params.ChainCo
 		return params.SepoliaChainConfig
 	case ghash == params.HoodiGenesisHash:
 		return params.HoodiChainConfig
+	case ghash == params.BerachainGenesisHash:
+		return params.BerachainChainConfig
+	case ghash == params.BepoliaGenesisHash:
+		return params.BepoliaChainConfig
 	default:
 		return stored
 	}
@@ -517,6 +527,12 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 		}
 		if conf.IsPrague(num, g.Timestamp) {
 			head.RequestsHash = &types.EmptyRequestsHash
+		}
+		if conf.IsPrague1(num, g.Timestamp) {
+			// BRIP-0004: The parentProposerPubkey of the genesis block is always
+			// the zero pubkey. This is because the genesis block does not have a parent
+			// by definition.
+			head.ParentProposerPubkey = new(common.Pubkey)
 		}
 	}
 	return types.NewBlock(head, &types.Body{Withdrawals: withdrawals}, nil, trie.NewStackTrie(nil))
@@ -641,6 +657,32 @@ func DefaultHoodiGenesisBlock() *Genesis {
 		Difficulty: big.NewInt(0x01),
 		Timestamp:  1742212800,
 		Alloc:      decodePrealloc(hoodiAllocData),
+	}
+}
+
+// DefaultBerachainGenesisBlock returns the Berachain main net genesis block.
+func DefaultBerachainGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.BerachainChainConfig,
+		Nonce:      0x1234,
+		ExtraData:  []byte{},
+		GasLimit:   0x1c9c380,
+		Difficulty: big.NewInt(0x01),
+		Timestamp:  1737381600,
+		Alloc:      decodePrealloc(berachainAllocData),
+	}
+}
+
+// DefaultBepoliaGenesisBlock returns the Bepolia network genesis block.
+func DefaultBepoliaGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.BepoliaChainConfig,
+		Nonce:      0x1234,
+		ExtraData:  []byte{},
+		GasLimit:   0x1c9c380,
+		Difficulty: big.NewInt(0x01),
+		Timestamp:  1739976735,
+		Alloc:      decodePrealloc(bepoliaAllocData),
 	}
 }
 

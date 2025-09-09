@@ -30,10 +30,11 @@ const (
 
 // These variables are set at build-time by the linker when the build is
 // done by build/ci.go.
-var gitCommit, gitDate string
+var gitCommit, gitDate, gitTag string
 
 // VCSInfo represents the git repository state.
 type VCSInfo struct {
+	Tag    string // git tag
 	Commit string // head commit hash
 	Date   string // commit time in YYYYMMDD format
 	Dirty  bool
@@ -43,7 +44,7 @@ type VCSInfo struct {
 func VCS() (VCSInfo, bool) {
 	if gitCommit != "" {
 		// Use information set by the build script if present.
-		return VCSInfo{Commit: gitCommit, Date: gitDate}, true
+		return VCSInfo{Tag: gitTag, Commit: gitCommit, Date: gitDate}, true
 	}
 	if buildInfo, ok := debug.ReadBuildInfo(); ok {
 		if buildInfo.Main.Path == ourPath {

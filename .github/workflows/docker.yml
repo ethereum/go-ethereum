@@ -1,0 +1,118 @@
+name: Docker
+
+on:
+  push:
+    tags:
+      - "v1.*"
+    branches:
+      - "main"
+  workflow_dispatch:
+
+jobs:
+  docker-build:
+    name: Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.24
+        cache: false
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push multi-arch images to GHCR
+      run: |
+        go run build/ci.go dockerx -platform linux/amd64,linux/arm64 -hub ghcr.io/berachain/bera-geth -upload
+
+    - name: Get image digest and version
+      id: image_info
+      run: |
+        # Extract version information
+        VERSION=""
+        if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          VERSION="${{ github.ref_name }}"
+        elif [[ "${{ github.ref }}" == refs/heads/main ]]; then
+          VERSION="latest"
+        fi
+
+        if [ -z "$VERSION" ]; then
+          echo "Error: Could not determine version from ref '${{ github.ref }}'"
+          exit 1
+        fi
+
+        echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+        
+        # Get the digest of the pushed manifest list (top-level manifest list digest)
+        # Avoid relying on template fields (which vary across buildx versions) and avoid -e exit on failure
+        INSPECT_OUTPUT=$(docker buildx imagetools inspect ghcr.io/berachain/bera-geth:${VERSION} || true)
+        DIGEST=$(printf "%s\n" "$INSPECT_OUTPUT" | awk '/^Digest:/ {print $2; exit}')
+        if [ -z "$DIGEST" ]; then
+          echo "Error: Could not determine image digest for ghcr.io/berachain/bera-geth:${VERSION}"
+          exit 1
+        fi
+        echo "DIGEST=${DIGEST}" >> $GITHUB_OUTPUT
+    outputs:
+      VERSION: ${{ steps.image_info.outputs.VERSION }}
+      DIGEST: ${{ steps.image_info.outputs.DIGEST }}
+
+  docker-signatures:
+    name: Docker Signatures
+    needs: [docker-build]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.docker-build.outputs.VERSION }}
+      DIGEST: ${{ needs.docker-build.outputs.DIGEST }}
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Install Cosign
+      uses: sigstore/cosign-installer@v3
+
+    - name: Sign Docker images with Cosign
+      env:
+        COSIGN_EXPERIMENTAL: true
+        COSIGN_YES: "true"
+      run: |
+        # Sign the tagged version if it exists
+        if [ -n "${{ env.VERSION }}" ]; then
+          cosign sign --yes ghcr.io/berachain/bera-geth:${{ env.VERSION }}
+        fi
+        
+        # Sign the multi-arch manifest by digest
+        if [ -n "${{ env.DIGEST }}" ]; then
+          cosign sign --yes ghcr.io/berachain/bera-geth@${{ env.DIGEST }}
+        else
+          echo "Error: DIGEST is empty. Skipping digest signing."
+          exit 1
+        fi
