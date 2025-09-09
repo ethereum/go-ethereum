@@ -178,7 +178,7 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
 		enc.Gas = (*hexutil.Uint64)(&itx.GasLimit)
 		enc.MaxFeePerGas = (*hexutil.Big)(itx.GasPrice)
-		enc.MaxPriorityFeePerGas = (*hexutil.Big)(itx.GasPrice)
+		enc.MaxPriorityFeePerGas = (*hexutil.Big)(common.Big0)
 		enc.GasPrice = (*hexutil.Big)(itx.GasPrice)
 		enc.Input = (*hexutil.Bytes)(&itx.Data)
 		v, r, s := itx.rawSignatureValues()
