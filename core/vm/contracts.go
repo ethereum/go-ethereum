@@ -474,7 +474,11 @@ func modexpIterationCount(expLen uint64, expHead uint256.Int, multiplier uint64)
 
 	// Add the MSB position - 1 if expHead is non-zero
 	if bitLen := expHead.BitLen(); bitLen > 0 {
-		iterationCount += uint64(bitLen - 1)
+		count, carry := bits.Add64(iterationCount, uint64(bitLen-1), 0)
+		if carry > 0 {
+			return math.MaxUint64
+		}
+		iterationCount = count
 	}
 
 	return max(iterationCount, 1)
