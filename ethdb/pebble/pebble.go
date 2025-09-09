@@ -221,6 +221,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		fn:       file,
 		log:      logger,
 		quitChan: make(chan chan error),
+		namespace: namespace,
 
 		// Use asynchronous write mode by default. Otherwise, the overhead of frequent fsync
 		// operations can be significant, especially on platforms with slow fsync performance
