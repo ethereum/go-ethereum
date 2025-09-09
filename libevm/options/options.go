@@ -26,10 +26,15 @@ type Option[T any] interface {
 // As applies Options to a zero-value T, which it then returns.
 func As[T any](opts ...Option[T]) *T {
 	var t T
+	return ApplyTo(&t, opts...)
+}
+
+// ApplyTo applies Options to the T and returns it for convenience.
+func ApplyTo[T any](t *T, opts ...Option[T]) *T {
 	for _, o := range opts {
-		o.Configure(&t)
+		o.Configure(t)
 	}
-	return &t
+	return t
 }
 
 // A Func converts a function into an [Option], using itself as the Configure
