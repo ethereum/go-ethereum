@@ -350,7 +350,7 @@ func (f *FilterMaps) reset() {
 	f.lastBlockCache.Purge()
 	f.lvPointerCache.Purge()
 	f.indexLock.Unlock()
-	// deleting the range first ensures that resetDb will be called again at next
+	// deleting the range first ensures that DeleteFilterMapsDb will be called again at next
 	// startup and any leftover data will be removed even if it cannot finish now.
 	rawdb.DeleteFilterMapsRange(f.db)
 	f.safeDeleteWithLogs(rawdb.DeleteFilterMapsDb, "Resetting log index database", f.isShuttingDown)
