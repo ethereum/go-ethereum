@@ -768,9 +768,7 @@ func TestLogsSubscription(t *testing.T) {
 		t.Fatal(err)
 	}
 	blocks, _ := core.GenerateChain(genesis.Config, genesis.ToBlock(), ethash.NewFaker(), db, 4, func(i int, b *core.BlockGen) {
-		// transfer(address to, uint256 value)
-		data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 11)}).String()[2:])
-		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &contract, Value: big.NewInt(0), Gas: 46000, GasPrice: b.BaseFee(), Data: common.FromHex(data)}), signer, key)
+		tx := makeTx(i+1, i+11, b)
 		b.AddTx(tx)
 	})
 	bc, err := core.NewBlockChain(db, genesis, ethash.NewFaker(), nil)
