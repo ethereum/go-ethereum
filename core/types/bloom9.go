@@ -161,3 +161,17 @@ func bloomValues(data []byte, hashbuf []byte) (uint, byte, uint, byte, uint, byt
 func BloomLookup(bin Bloom, topic bytesBacked) bool {
 	return bin.Test(topic.Bytes())
 }
+
+// INITIA CUSTOM
+// LogsBloom returns the bloom bytes for the given logs
+func LogsBloom(logs []*Log) []byte {
+	buf := make([]byte, 6)
+	var bin Bloom
+	for _, log := range logs {
+		bin.add(log.Address.Bytes(), buf)
+		for _, b := range log.Topics {
+			bin.add(b[:], buf)
+		}
+	}
+	return bin[:]
+}

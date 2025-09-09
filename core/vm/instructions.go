@@ -436,12 +436,20 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		return nil, nil
 	}
 
+	// INITIA CUSTOM
+	// number of blocks to retain block hashes is parameterized by the chain config.
+	// - `0` means all block hashes are retained
+	numOfBlocks := uint64(256)
+	if interpreter.evm.Config.NumRetainBlockHashes != nil {
+		numOfBlocks = *interpreter.evm.Config.NumRetainBlockHashes
+	}
+
 	var upper, lower uint64
 	upper = interpreter.evm.Context.BlockNumber.Uint64()
-	if upper < 257 {
+	if numOfBlocks == 0 || upper < numOfBlocks+1 {
 		lower = 0
 	} else {
-		lower = upper - 256
+		lower = upper - numOfBlocks
 	}
 	if num64 >= lower && num64 < upper {
 		res := interpreter.evm.Context.GetHash(num64)

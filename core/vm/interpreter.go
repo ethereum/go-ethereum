@@ -35,6 +35,9 @@ type Config struct {
 	ExtraEips               []int // Additional EIPS that are to be enabled
 
 	StatelessSelfValidation bool // Generate execution witnesses and self-check against them (testing purpose)
+
+	// INITIA CUSTOM
+	NumRetainBlockHashes *uint64 // Number of block hashes to retain for the BLOCKHASH opcode
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
@@ -163,6 +166,12 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
+
+	// INITIA CUSTOM
+	originDisableCosmosDispatch := in.evm.GetDisallowCosmosDispatch()
+	defer func() {
+		in.evm.SetDisallowCosmosDispatch(originDisableCosmosDispatch)
+	}()
 
 	// Make sure the readOnly is only set if we aren't in readOnly yet.
 	// This also makes sure that the readOnly flag isn't removed for child calls.
