@@ -39,10 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-var (
-	errInvalidFromTo = errors.New("invalid from and to block combination: from > to")
-)
-
 // Config represents the configuration of the filter system.
 type Config struct {
 	LogCacheSize int           // maximum number of cached blocks (default: 32)
@@ -156,6 +152,8 @@ const (
 	UnknownSubscription Type = iota
 	// LogsSubscription queries for new or removed (chain reorg) logs
 	LogsSubscription
+	// MinedAndPendingLogsSubscription queries for both mined and pending logs
+	MinedAndPendingLogsSubscription
 	// PendingTransactionsSubscription queries for pending transactions entering
 	// the pending state
 	PendingTransactionsSubscription

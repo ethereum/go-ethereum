@@ -456,7 +456,7 @@ func TestRangeLogs(t *testing.T) {
 	)
 
 	expEvent := func(expEvent int, expFirst, expAfterLast uint64) {
-		exp := rangeLogsTestEvent{expEvent, common.NewRange[uint64](expFirst, expAfterLast-expFirst)}
+		exp := rangeLogsTestEvent{expEvent, common.NewRange(expFirst, expAfterLast-expFirst)}
 		event++
 		ev := <-filter.rangeLogsTestHook
 		if ev != exp {

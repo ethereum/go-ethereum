@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -40,7 +39,7 @@ import (
 	logger "github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 type testBackend struct {
@@ -185,7 +184,34 @@ func (b *testBackend) forwardLogEvents(logCh chan []*types.Log, removedLogCh cha
 	}()
 }
 
-func newTestFilterSystem(t testing.TB, db ethdb.Database, cfg Config) (*testBackend, *FilterSystem) {
+func (b *testBackend) startFilterMaps(history uint64, disabled bool, params filtermaps.Params) {
+	head := b.CurrentBlock()
+	chainView := filtermaps.NewChainView(b, head.Number.Uint64(), head.Hash())
+	config := filtermaps.Config{
+		History:        history,
+		Disabled:       disabled,
+		ExportFileName: "",
+	}
+	b.fm, _ = filtermaps.NewFilterMaps(b.db, chainView, 0, 0, params, config)
+	b.fm.Start()
+	b.fm.WaitIdle()
+}
+
+func (b *testBackend) stopFilterMaps() {
+	b.fm.Stop()
+	b.fm = nil
+}
+
+func (b *testBackend) setPending(block *types.Block, receipts types.Receipts) {
+	b.pendingBlock = block
+	b.pendingReceipts = receipts
+}
+
+func (b *testBackend) HistoryPruningCutoff() uint64 {
+	return 0
+}
+
+func newTestFilterSystem(db ethdb.Database, cfg Config) (*testBackend, *FilterSystem) {
 	backend := &testBackend{db: db}
 	sys := NewFilterSystem(backend, cfg)
 	return backend, sys
@@ -717,6 +743,7 @@ func TestLogsSubscription(t *testing.T) {
 
 	var (
 		db       = rawdb.NewMemoryDatabase()
+		tdb      = triedb.NewDatabase(db, triedb.HashDefaults)
 		signer   = types.HomesteadSigner{}
 		key, _   = crypto.GenerateKey()
 		addr     = crypto.PubkeyToAddress(key.PublicKey)
@@ -742,7 +769,7 @@ func TestLogsSubscription(t *testing.T) {
 
 	// Hack: GenerateChainWithGenesis creates a new db.
 	// Commit the genesis manually and use GenerateChain.
-	_, err := genesis.Commit(db, trie.NewDatabase(db))
+	_, err := genesis.Commit(db, tdb)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -752,7 +779,7 @@ func TestLogsSubscription(t *testing.T) {
 		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &contract, Value: big.NewInt(0), Gas: 46000, GasPrice: b.BaseFee(), Data: common.FromHex(data)}), signer, key)
 		b.AddTx(tx)
 	})
-	bc, err := core.NewBlockChain(db, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, new(uint64))
+	bc, err := core.NewBlockChain(db, genesis, ethash.NewFaker(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -771,11 +798,14 @@ func TestLogsSubscription(t *testing.T) {
 	})
 	liveLogs := preceipts[0][0].Logs
 	var (
-		backend, sys = newTestFilterSystem(t, db, Config{})
-		api          = NewFilterAPI(sys, false)
+		backend, sys = newTestFilterSystem(db, Config{})
+		api          = NewFilterAPI(sys)
 		// Transfer(address indexed from, address indexed to, uint256 value);
 		topic = common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
 	)
+
+	backend.startFilterMaps(0, false, filtermaps.RangeTestParams)
+	defer backend.stopFilterMaps()
 
 	i2h := func(i int) common.Hash { return common.BigToHash(big.NewInt(int64(i))) }
 
@@ -886,9 +916,8 @@ func TestLogsSubscription(t *testing.T) {
 	backend.logsFeed.Send(liveLogs)
 
 	for i := range testCases {
-		err := <-testCases[i].err
-		if err != nil {
-			t.Fatalf("test %d failed: %v", i, err)
+		if err := <-testCases[i].err; err != nil {
+			t.Errorf("test %d failed: %v", i, err)
 		}
 	}
 }
@@ -971,19 +1000,20 @@ func calculateBalance(logs []*types.Log) map[common.Address]uint64 {
 func testLogsSubscriptionReorg(t *testing.T, oldChainMaker, newChainMaker, pendingMaker func(i int, b *core.BlockGen), oldChainLen, newChainLen, forkAt, reorgAt int, expected []*types.Log) {
 	var (
 		db           = rawdb.NewMemoryDatabase()
-		backend, sys = newTestFilterSystem(t, db, Config{})
-		api          = NewFilterAPI(sys, false)
+		tdb          = triedb.NewDatabase(db, triedb.HashDefaults)
+		backend, sys = newTestFilterSystem(db, Config{})
+		api          = NewFilterAPI(sys)
 		genesis      = &core.Genesis{Config: params.TestChainConfig, Alloc: genesisAlloc, GasLimit: 10000000000000}
 	)
 
 	// Hack: GenerateChainWithGenesis creates a new db.
 	// Commit the genesis manually and use GenerateChain.
-	_, err := genesis.Commit(db, trie.NewDatabase(db))
+	_, err := genesis.Commit(db, tdb)
 	if err != nil {
 		t.Fatal(err)
 	}
 	oldChain, _ := core.GenerateChain(genesis.Config, genesis.ToBlock(), ethash.NewFaker(), db, oldChainLen, oldChainMaker)
-	bc, err := core.NewBlockChain(db, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, new(uint64))
+	bc, err := core.NewBlockChain(db, genesis, ethash.NewFaker(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1001,6 +1031,10 @@ func testLogsSubscriptionReorg(t *testing.T, oldChainMaker, newChainMaker, pendi
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	backend.startFilterMaps(0, false, filtermaps.RangeTestParams)
+	defer backend.stopFilterMaps()
+
 	newChain, _ := core.GenerateChain(genesis.Config, oldChain[forkAt], ethash.NewFaker(), db, newChainLen, newChainMaker)
 	logger.Info("oldChain/newChain", "oldChain", fmt.Sprintf("%d..%d", oldChain[0].Number(), oldChain[len(oldChain)-1].Number()), "newChain", fmt.Sprintf("%d..%d", newChain[0].Number(), newChain[len(newChain)-1].Number()))
 

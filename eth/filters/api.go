@@ -37,17 +37,30 @@ import (
 )
 
 var (
-	errInvalidTopic       = errors.New("invalid topic(s)")
-	errFilterNotFound     = errors.New("filter not found")
-	errConnectDropped     = errors.New("connection dropped")
-	errInvalidToBlock     = errors.New("log subscription does not support history block range")
-	errInvalidFromBlock   = errors.New("from block can be only a number, or \"safe\", or \"finalized\"")
-	errClientUnsubscribed = errors.New("client unsubscribed")
+	errInvalidTopic           = errors.New("invalid topic(s)")
+	errFilterNotFound         = errors.New("filter not found")
+	errConnectDropped         = errors.New("connection dropped")
+	errInvalidToBlock         = errors.New("log subscription does not support history block range")
+	errInvalidFromBlock       = errors.New("from block can be only a number, or \"safe\", or \"finalized\"")
+	errClientUnsubscribed     = errors.New("client unsubscribed")
+	errExceedMaxTopics        = errors.New("exceeds max topics")
+	errExceedMaxAddresses     = errors.New("exceeds max addresses")
+	errBlockHashWithRange     = errors.New("cannot specify block hash with block range")
+	errInvalidBlockRange      = errors.New("invalid block range")
+	errUnknownBlock           = errors.New("unknown block")
+	errPendingLogsUnsupported = errors.New("pending logs are not supported")
+	errInvalidFromTo          = errors.New("invalid from and to block combination: from > to")
 )
 
 const (
 	// maxTrackedBlocks is the number of block hashes that will be tracked by subscription.
 	maxTrackedBlocks = 32 * 1024
+	// maxTopics is the maximum number of topics that can be specified in a filter
+	maxTopics = 4
+	// maxSubTopics is the maximum number of sub-topics that can be specified in a single topic position
+	maxSubTopics = 1000
+	// maxAddresses is the maximum number of addresses that can be specified in a filter
+	maxAddresses = 1000
 )
 
 // filter is a helper struct that holds meta information over the filter type
@@ -261,7 +274,6 @@ func (api *FilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 // used in unit testing.
 type notifier interface {
 	Notify(id rpc.ID, data interface{}) error
-	Closed() <-chan interface{}
 }
 
 // Logs creates a subscription that fires for all historical
@@ -320,9 +332,6 @@ func (api *FilterAPI) liveLogs(notifier notifier, rpcSub *rpc.Subscription, crit
 				notifyLogsIf(notifier, rpcSub.ID, logs, nil)
 
 			case <-rpcSub.Err(): // client send an unsubscribe request
-				logsSub.Unsubscribe()
-				return
-			case <-notifier.Closed(): // connection dropped
 				logsSub.Unsubscribe()
 				return
 			}
@@ -448,8 +457,6 @@ func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from
 
 			case <-rpcSub.Err(): // client send an unsubscribe request
 				return
-			case <-notifier.Closed(): // connection dropped
-				return
 			}
 		}
 	}()
@@ -462,20 +469,36 @@ func (api *FilterAPI) doHistLogs(ctx context.Context, from int64, addrs []common
 	// Fetch logs from a range of blocks.
 	fetchRange := func(from, to int64) error {
 		f := api.sys.NewRangeFilter(from, to, addrs, topics)
-		logsCh, errChan := f.rangeLogsAsync(ctx)
-		for {
-			select {
-			case logs := <-logsCh:
+		logs, err := f.Logs(ctx)
+		if err != nil {
+			return err
+		}
+		// Group logs by block and send them in batches
+		var currentBlockLogs []*types.Log
+		var currentBlockNumber uint64
+
+		for _, log := range logs {
+			if currentBlockNumber != log.BlockNumber && len(currentBlockLogs) > 0 {
+				// Send the current block's logs
 				select {
-				case histLogs <- logs:
+				case histLogs <- currentBlockLogs:
 				case <-ctx.Done():
-					// Flush out all logs until the range filter voluntarily exits.
-					continue
+					return ctx.Err()
 				}
-			case err := <-errChan:
-				return err
+				currentBlockLogs = nil
+			}
+			currentBlockLogs = append(currentBlockLogs, log)
+			currentBlockNumber = log.BlockNumber
+		}
+		// Send remaining logs if any
+		if len(currentBlockLogs) > 0 {
+			select {
+			case histLogs <- currentBlockLogs:
+			case <-ctx.Done():
+				return ctx.Err()
 			}
 		}
+		return nil
 	}
 
 	for {
