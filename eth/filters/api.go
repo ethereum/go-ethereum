@@ -39,10 +39,8 @@ import (
 var (
 	errInvalidTopic           = errors.New("invalid topic(s)")
 	errFilterNotFound         = errors.New("filter not found")
-	errConnectDropped         = errors.New("connection dropped")
 	errInvalidToBlock         = errors.New("log subscription does not support history block range")
 	errInvalidFromBlock       = errors.New("from block can be only a number, or \"safe\", or \"finalized\"")
-	errClientUnsubscribed     = errors.New("client unsubscribed")
 	errExceedMaxTopics        = errors.New("exceeds max topics")
 	errExceedMaxAddresses     = errors.New("exceeds max addresses")
 	errBlockHashWithRange     = errors.New("cannot specify block hash with block range")
