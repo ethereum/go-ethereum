@@ -40,6 +40,11 @@ const (
 	Cancun
 	Prague
 	Osaka
+	BPO1
+	BPO2
+	BPO3
+	BPO4
+	BPO5
 )
 
 // String implements fmt.Stringer.
