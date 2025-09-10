@@ -336,7 +336,9 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 	l.totalcost = total
 
 	// Old is being replaced, subtract old cost
-	l.subTotalCost([]*types.Transaction{old})
+	if old != nil {
+		l.subTotalCost([]*types.Transaction{old})
+	}
 
 	// Otherwise overwrite the old transaction with the current one
 	l.txs.Put(tx)
