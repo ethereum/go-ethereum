@@ -150,11 +150,11 @@ type nodeIterator struct {
 	// Fields for subtree iteration (original byte keys)
 	startKey []byte // Start key for subtree iteration (nil for full trie)
 	stopKey  []byte // Stop key for subtree iteration (nil for full trie)
-	
+
 	// Precomputed nibble paths for efficient comparison
 	startPath []byte // Precomputed hex path for startKey (without terminator)
 	stopPath  []byte // Precomputed hex path for stopKey (without terminator)
-	
+
 	// Iteration mode
 	prefixMode bool // True if this is prefix iteration (use HasPrefix check)
 }
@@ -309,30 +309,30 @@ func (it *nodeIterator) Next(descend bool) bool {
 	}
 
 	// Check if we're still within the subtree boundaries using precomputed paths
-    if it.startPath != nil && len(path) > 0 {
-        if it.prefixMode {
-            // For prefix iteration, use HasPrefix to ensure we stay within the prefix
-            if !bytes.HasPrefix(path, it.startPath) {
-                it.err = errIteratorEnd
-                return false
-            }
-        } else {
-            // For range iteration, ensure we don't return nodes before the lower bound.
-            // Advance the iterator until we reach a node at or after startPath.
-            for bytes.Compare(path, it.startPath) < 0 {
-                // Progress the iterator by pushing the current candidate, then peeking again.
-                it.push(state, parentIndex, path)
-                state, parentIndex, path, err = it.peek(descend)
-                it.err = err
-                if it.err != nil {
-                    return false
-                }
-                if len(path) == 0 {
-                    break
-                }
-            }
-        }
-    }
+	if it.startPath != nil && len(path) > 0 {
+		if it.prefixMode {
+			// For prefix iteration, use HasPrefix to ensure we stay within the prefix
+			if !bytes.HasPrefix(path, it.startPath) {
+				it.err = errIteratorEnd
+				return false
+			}
+		} else {
+			// For range iteration, ensure we don't return nodes before the lower bound.
+			// Advance the iterator until we reach a node at or after startPath.
+			for bytes.Compare(path, it.startPath) < 0 {
+				// Progress the iterator by pushing the current candidate, then peeking again.
+				it.push(state, parentIndex, path)
+				state, parentIndex, path, err = it.peek(descend)
+				it.err = err
+				if it.err != nil {
+					return false
+				}
+				if len(path) == 0 {
+					break
+				}
+			}
+		}
+	}
 	if it.stopPath != nil && len(path) > 0 {
 		if bytes.Compare(path, it.stopPath) >= 0 {
 			it.err = errIteratorEnd
@@ -883,13 +883,13 @@ func (it *unionIterator) Error() error {
 
 // NewSubtreeIterator creates an iterator that only traverses nodes within a subtree
 // defined by the given startKey and stopKey. This supports general range iteration
-// where startKey is inclusive and stopKey is exclusive. 
+// where startKey is inclusive and stopKey is exclusive.
 //
 // The iterator will only visit nodes whose keys k satisfy: startKey <= k < stopKey,
 // where comparisons are performed in lexicographic order of byte keys (internally
 // implemented via hex-nibble path comparisons for efficiency).
 //
-// If startKey is nil, iteration starts from the beginning. If stopKey is nil, 
+// If startKey is nil, iteration starts from the beginning. If stopKey is nil,
 // iteration continues to the end of the trie. For prefix iteration, use the
 // Trie.NodeIteratorWithPrefix method which handles prefix semantics correctly.
 func NewSubtreeIterator(trie *Trie, startKey, stopKey []byte) NodeIterator {
@@ -912,7 +912,7 @@ func nextKey(prefix []byte) []byte {
 	// Make a copy to avoid modifying the original
 	next := make([]byte, len(prefix))
 	copy(next, prefix)
-	
+
 	// Increment the last byte that isn't 0xff
 	for i := len(next) - 1; i >= 0; i-- {
 		if next[i] < 0xff {
@@ -942,7 +942,7 @@ func newSubtreeIterator(trie *Trie, startKey, stopKey []byte, prefixMode bool) N
 			stopPath = stopPath[:len(stopPath)-1]
 		}
 	}
-	
+
 	if trie.Hash() == types.EmptyRootHash {
 		return &nodeIterator{
 			trie:       trie,

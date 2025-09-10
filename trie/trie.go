@@ -136,10 +136,10 @@ func (t *Trie) NodeIterator(start []byte) (NodeIterator, error) {
 
 // NodeIteratorWithPrefix returns an iterator that returns nodes of the trie whose leaf keys
 // start with the given prefix. Iteration includes all keys k where prefix <= k < nextKey(prefix),
-// effectively returning only keys that have the prefix. The iteration stops once it would 
+// effectively returning only keys that have the prefix. The iteration stops once it would
 // encounter a key that doesn't start with the prefix.
 //
-// For example, with prefix "dog", the iterator will return "dog", "dogcat", "dogfish" but 
+// For example, with prefix "dog", the iterator will return "dog", "dogcat", "dogfish" but
 // not "dot" or "fog". An empty prefix iterates the entire trie.
 func (t *Trie) NodeIteratorWithPrefix(prefix []byte) (NodeIterator, error) {
 	// Short circuit if the trie is already committed and not usable.
