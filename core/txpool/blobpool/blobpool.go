@@ -1691,10 +1691,10 @@ func (p *BlobPool) Pending(filter txpool.PendingFilter) map[common.Address][]*tx
 
 			// Skip v0 or v1 blob transactions if not requested
 			if filter.OnlyBlobV0Txs && tx.version != types.BlobSidecarVersion0 {
-				continue
+				break // skip the rest because of nonce ordering
 			}
 			if filter.OnlyBlobV1Txs && tx.version != types.BlobSidecarVersion1 {
-				continue
+				break // skip the rest because of nonce ordering
 			}
 
 			// If transaction filtering was requested, discard badly priced ones
