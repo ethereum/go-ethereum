@@ -59,6 +59,9 @@ const (
 	maxSubTopics = 1000
 	// maxTrackedBlocks is the number of block hashes that will be tracked by subscription.
 	maxTrackedBlocks = 32 * 1024
+	// histLogChunkSize is the maximum number of blocks to process in a single chunk
+	// when fetching historical logs to improve responsiveness
+	histLogChunkSize = 4096
 )
 
 // filter is a helper struct that holds meta information over the filter type
@@ -510,15 +513,28 @@ func (api *FilterAPI) doHistLogs(ctx context.Context, from int64, addrs []common
 			logger.Info("Finish historical sync", "from", from, "head", head)
 			return nil
 		}
-		if err := fetchRange(from, head); err != nil {
+
+		to := min(from+histLogChunkSize-1, head)
+
+		logger.Debug("Processing historical logs chunk", "from", from, "to", to, "head", head)
+		if err := fetchRange(from, to); err != nil {
 			if errors.Is(err, context.Canceled) {
-				logger.Info("Historical logs delivery canceled", "from", from, "to", head)
+				logger.Warn("Historical logs delivery canceled", "from", from, "to", to)
 				return nil
 			}
 			return err
 		}
-		// Move forward to the next batch
-		from = head + 1
+
+		// Move forward to the next chunk
+		from = to + 1
+
+		// Allow other goroutines to run and check for cancellation
+		select {
+		case <-ctx.Done():
+			logger.Warn("Historical logs delivery canceled", "from", from, "to", to)
+			return ctx.Err()
+		default:
+		}
 	}
 }
 
