@@ -1688,6 +1688,15 @@ func (p *BlobPool) Pending(filter txpool.PendingFilter) map[common.Address][]*tx
 	for addr, txs := range p.index {
 		lazies := make([]*txpool.LazyTransaction, 0, len(txs))
 		for _, tx := range txs {
+
+			// Skip v0 or v1 blob transactions if not requested
+			if filter.OnlyBlobV0Txs && tx.version != types.BlobSidecarVersion0 {
+				continue
+			}
+			if filter.OnlyBlobV1Txs && tx.version != types.BlobSidecarVersion1 {
+				continue
+			}
+
 			// If transaction filtering was requested, discard badly priced ones
 			if filter.MinTip != nil && filter.BaseFee != nil {
 				if tx.execFeeCap.Lt(filter.BaseFee) {

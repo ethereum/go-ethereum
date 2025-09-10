@@ -78,8 +78,9 @@ type PendingFilter struct {
 	BlobFee     *uint256.Int // Minimum 4844 blobfee needed to include a blob transaction
 	GasLimitCap uint64       // Maximum gas can be used for a single transaction execution (0 means no limit)
 
-	OnlyPlainTxs bool // Return only plain EVM transactions (peer-join announces, block space filling)
-	OnlyBlobTxs  bool // Return only blob transactions (block blob-space filling)
+	OnlyPlainTxs  bool // Return only plain EVM transactions (peer-join announces, block space filling)
+	OnlyBlobV0Txs bool // Return only V0 encoded blob transactions (block blob-space filling)
+	OnlyBlobV1Txs bool // Return only V1 encoded blob transactions (block blob-space filling)
 }
 
 // TxMetadata denotes the metadata of a transaction.
