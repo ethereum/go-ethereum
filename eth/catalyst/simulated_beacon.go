@@ -100,7 +100,7 @@ type SimulatedBeacon struct {
 
 func payloadVersion(config *params.ChainConfig, time uint64) engine.PayloadVersion {
 	switch config.LatestFork(time) {
-	case forks.Prague1:
+	case forks.Prague1, forks.Prague2:
 		return engine.PayloadV3P11
 	case forks.Prague, forks.Cancun:
 		return engine.PayloadV3

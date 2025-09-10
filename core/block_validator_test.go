@@ -34,7 +34,7 @@ import (
 )
 
 // -----------------------------------------------------------------------------
-// Berachain:Prague-1 PoL validation tests
+// Berachain: Prague-1 PoL validation tests
 // -----------------------------------------------------------------------------
 
 // newPrague1Config returns a ChainConfig where Prague (and Prague-1) are active
