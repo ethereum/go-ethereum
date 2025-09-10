@@ -4,14 +4,16 @@
         "request_context": {
             "transport": "http",
             "source": "localhost:4361"
-        }
+        },
+        "error_msg_pattern": "sign in request domain \\(https://localhost:4361\\) does not match source: http://localhost:4361"
     },
     "spoofed_source": {
         "msg": "https://important-website.com wants you to sign in with your Ethereum account:\n{{Account}}\n\nSIWE Notepad Example\n\nURI: https://important-website.com\nVersion: 1\nChain ID: 1\nNonce: b19JyMHnM0Jdm20as\nIssued At: 2022-04-19T18:57:09.490Z",
         "request_context": {
             "transport": "https",
             "source": "bad-website.com"
-        }
+        },
+        "error_msg_pattern": "sign in request domain \\(https://important-website.com\\) does not match source: https://bad-website.com"
     },
     "spoofed_account": {
         "msg": "localhost:4361 wants you to sign in with your Ethereum account:\n{{Account}}\n\nSIWE Notepad Example\n\nURI: https://localhost:4361\nVersion: 1\nChain ID: 1\nNonce: b19JyMHnM0Jdm20as\nIssued At: 2022-04-19T18:57:09.490Z",
@@ -19,6 +21,7 @@
             "transport": "https",
             "source": "localhost:4361",
             "account": "0x1234567890123456789012345678901234567890"
-        }
+        },
+        "error_msg_pattern": "sign in request address \\(0x1234567890123456789012345678901234567890\\) does not match source: 0x.*"
     }
 }

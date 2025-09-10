@@ -1088,6 +1088,8 @@ func TestSignInWithEtheriumValidLocalhost(t *testing.T) {
 			control.inputCh <- "a_long_password"
 			signature, err := api.SignData(ctx, apitypes.TextPlain.Mime, a, hexutil.Encode([]byte(message)))
 			require.NoError(t, err)
+			require.Equal(t, 0, len(control.infoMessages))
+			require.Equal(t, 0, len(control.errorMessages))
 
 			if signature == nil || len(signature) != 65 {
 				t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
@@ -1120,7 +1122,8 @@ func TestSignInWithEtheriumValidMessages(t *testing.T) {
 			control.inputCh <- "a_long_password"
 			signature, err := api.SignData(ctx, apitypes.TextPlain.Mime, a, hexutil.Encode([]byte(message)))
 			require.NoError(t, err)
-			// todo: check UI for warning message
+			require.Equal(t, 0, len(control.infoMessages))
+			require.Equal(t, 0, len(control.errorMessages))
 
 			if signature == nil || len(signature) != 65 {
 				t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
@@ -1138,6 +1141,7 @@ func TestSignInWithEtheriumInvlid(t *testing.T) {
 			Source    string `json:"source"`
 			Account   string `json:"account"`
 		} `json:"request_context"`
+		ErrorMsgPattern string `json:"error_msg_pattern"`
 	}
 	jsonFile, err := os.ReadFile(filepath.Join("testdata", "siwe", "error_spoofing.json"))
 	require.NoError(t, err)
@@ -1164,8 +1168,15 @@ func TestSignInWithEtheriumInvlid(t *testing.T) {
 				_, err = api.SignData(ctx, apitypes.TextPlain.Mime, a, hexutil.Encode([]byte(message)))
 				if enabled {
 					require.Error(t, err)
+
+					require.Equal(t, 0, len(control.infoMessages))
+					require.Equal(t, 1, len(control.errorMessages))
+					require.Regexp(t, testData.ErrorMsgPattern, err.Error())
 				} else {
 					require.NoError(t, err)
+
+					require.Equal(t, 0, len(control.infoMessages))
+					require.Equal(t, 0, len(control.errorMessages))
 				}
 			})
 		}
@@ -1198,6 +1209,7 @@ func TestSignInWithEtheriumWarning(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, 1, len(control.infoMessages))
 			require.Equal(t, core.ErrMalformedSIWEMessage.Error(), control.infoMessages[0])
+			require.Equal(t, 0, len(control.errorMessages))
 
 			if signature == nil || len(signature) != 65 {
 				t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
