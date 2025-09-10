@@ -644,13 +644,12 @@ func TestSubtreeIterator(t *testing.T) {
 	root, nodes := tr.Commit(false)
 	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 
-	// Test subtree iteration with prefix "do"
+	// Test prefix iteration using NewPrefixIterator
 	prefix := []byte("do")
-	stop := []byte("e")
 
 	// We need to re-open the trie from the committed state
 	tr, _ = New(TrieID(root), db)
-	it := NewSubtreeIterator(tr, prefix, stop)
+	it := newPrefixIterator(tr, prefix)
 
 	found := make(map[string]string)
 	for it.Next(true) {
@@ -780,6 +779,253 @@ func TestEmptyPrefixIterator(t *testing.T) {
 	if iter.Next(true) {
 		t.Error("Expected no results from empty trie")
 	}
+}
+
+// TestPrefixIteratorEdgeCases tests various edge cases for prefix iteration
+func TestPrefixIteratorEdgeCases(t *testing.T) {
+	// Create a trie with test data
+	trie := NewEmpty(newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme))
+	testData := map[string]string{
+		"abc":      "value1",
+		"abcd":     "value2",
+		"abce":     "value3",
+		"abd":      "value4",
+		"dog":      "value5",
+		"dog\xff":  "value6",  // Test with 0xff byte
+		"dog\xff\xff": "value7",  // Multiple 0xff bytes
+	}
+	for key, value := range testData {
+		trie.Update([]byte(key), []byte(value))
+	}
+
+	// Test 1: Prefix not present in trie
+	t.Run("NonexistentPrefix", func(t *testing.T) {
+		iter, err := trie.NodeIteratorWithPrefix([]byte("xyz"))
+		if err != nil {
+			t.Fatalf("Failed to create iterator: %v", err)
+		}
+		count := 0
+		for iter.Next(true) {
+			if iter.Leaf() {
+				count++
+			}
+		}
+		if count != 0 {
+			t.Errorf("Expected 0 results for nonexistent prefix, got %d", count)
+		}
+	})
+
+	// Test 2: Prefix exactly equals an existing key
+	t.Run("ExactKeyPrefix", func(t *testing.T) {
+		iter, err := trie.NodeIteratorWithPrefix([]byte("abc"))
+		if err != nil {
+			t.Fatalf("Failed to create iterator: %v", err)
+		}
+		found := make(map[string]bool)
+		for iter.Next(true) {
+			if iter.Leaf() {
+				found[string(iter.LeafKey())] = true
+			}
+		}
+		// Should find "abc", "abcd", "abce" but not "abd"
+		if !found["abc"] || !found["abcd"] || !found["abce"] {
+			t.Errorf("Missing expected keys: got %v", found)
+		}
+		if found["abd"] {
+			t.Errorf("Found unexpected key 'abd' with prefix 'abc'")
+		}
+	})
+
+	// Test 3: Prefix with trailing 0xff
+	t.Run("TrailingFFPrefix", func(t *testing.T) {
+		iter, err := trie.NodeIteratorWithPrefix([]byte("dog\xff"))
+		if err != nil {
+			t.Fatalf("Failed to create iterator: %v", err)
+		}
+		found := make(map[string]bool)
+		for iter.Next(true) {
+			if iter.Leaf() {
+				found[string(iter.LeafKey())] = true
+			}
+		}
+		// Should find "dog\xff" and "dog\xff\xff"
+		if !found["dog\xff"] || !found["dog\xff\xff"] {
+			t.Errorf("Missing expected keys with 0xff: got %v", found)
+		}
+		if found["dog"] {
+			t.Errorf("Found unexpected key 'dog' with prefix 'dog\\xff'")
+		}
+	})
+
+	// Test 4: All 0xff case (edge case for nextKey)
+	t.Run("AllFFPrefix", func(t *testing.T) {
+		// Add a key with all 0xff bytes
+		allFF := []byte{0xff, 0xff}
+		trie.Update(allFF, []byte("all_ff_value"))
+		trie.Update(append(allFF, 0x00), []byte("all_ff_plus"))
+		
+		iter, err := trie.NodeIteratorWithPrefix(allFF)
+		if err != nil {
+			t.Fatalf("Failed to create iterator: %v", err)
+		}
+		count := 0
+		for iter.Next(true) {
+			if iter.Leaf() {
+				count++
+			}
+		}
+		// Should find at least the allFF key itself
+		if count < 1 {
+			t.Errorf("Expected at least 1 result for all-0xff prefix, got %d", count)
+		}
+	})
+
+	// Test 5: Empty prefix (should iterate entire trie)
+	t.Run("EmptyPrefix", func(t *testing.T) {
+		iter, err := trie.NodeIteratorWithPrefix([]byte{})
+		if err != nil {
+			t.Fatalf("Failed to create iterator: %v", err)
+		}
+		count := 0
+		for iter.Next(true) {
+			if iter.Leaf() {
+				count++
+			}
+		}
+		// Should find all keys in the trie
+		expectedCount := len(testData) + 2 // +2 for the extra keys added in test 4
+		if count != expectedCount {
+			t.Errorf("Expected %d results for empty prefix, got %d", expectedCount, count)
+		}
+	})
+}
+
+// TestGeneralRangeIteration tests NewSubtreeIterator with arbitrary start/stop ranges
+func TestGeneralRangeIteration(t *testing.T) {
+	// Create a trie with test data
+	trie := NewEmpty(newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme))
+	testData := map[string]string{
+		"apple":  "fruit1",
+		"apricot": "fruit2",
+		"banana": "fruit3",
+		"cherry": "fruit4",
+		"date":   "fruit5",
+		"fig":    "fruit6",
+		"grape":  "fruit7",
+	}
+	for key, value := range testData {
+		trie.Update([]byte(key), []byte(value))
+	}
+
+	// Test range iteration from "banana" to "fig" (exclusive)
+	t.Run("RangeIteration", func(t *testing.T) {
+		iter := NewSubtreeIterator(trie, []byte("banana"), []byte("fig"))
+		found := make(map[string]bool)
+		for iter.Next(true) {
+			if iter.Leaf() {
+				found[string(iter.LeafKey())] = true
+			}
+		}
+		// Should find "banana", "cherry", "date" but not "fig"
+		if !found["banana"] || !found["cherry"] || !found["date"] {
+			t.Errorf("Missing expected keys in range: got %v", found)
+		}
+		if found["apple"] || found["apricot"] || found["fig"] || found["grape"] {
+			t.Errorf("Found unexpected keys outside range: got %v", found)
+		}
+	})
+
+	// Test with nil stopKey (iterate to end)
+	t.Run("NilStopKey", func(t *testing.T) {
+		iter := NewSubtreeIterator(trie, []byte("date"), nil)
+		found := make(map[string]bool)
+		for iter.Next(true) {
+			if iter.Leaf() {
+				found[string(iter.LeafKey())] = true
+			}
+		}
+		// Should find "date", "fig", "grape"
+		if !found["date"] || !found["fig"] || !found["grape"] {
+			t.Errorf("Missing expected keys from 'date' to end: got %v", found)
+		}
+		if found["apple"] || found["banana"] || found["cherry"] {
+			t.Errorf("Found unexpected keys before 'date': got %v", found)
+		}
+	})
+
+	// Test with nil startKey (iterate from beginning)
+	t.Run("NilStartKey", func(t *testing.T) {
+		iter := NewSubtreeIterator(trie, nil, []byte("cherry"))
+		found := make(map[string]bool)
+		for iter.Next(true) {
+			if iter.Leaf() {
+				found[string(iter.LeafKey())] = true
+			}
+		}
+		// Should find "apple", "apricot", "banana" but not "cherry" or later
+		if !found["apple"] || !found["apricot"] || !found["banana"] {
+			t.Errorf("Missing expected keys before 'cherry': got %v", found)
+		}
+		if found["cherry"] || found["date"] || found["fig"] || found["grape"] {
+			t.Errorf("Found unexpected keys at or after 'cherry': got %v", found)
+		}
+	})
+}
+
+// TestPrefixIteratorWithDescend tests prefix iteration with descend=false
+func TestPrefixIteratorWithDescend(t *testing.T) {
+	// Create a trie with nested structure
+	trie := NewEmpty(newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme))
+	testData := map[string]string{
+		"a":       "value_a",
+		"a/b":     "value_ab",
+		"a/b/c":   "value_abc",
+		"a/b/d":   "value_abd",
+		"a/e":     "value_ae",
+		"b":       "value_b",
+	}
+	for key, value := range testData {
+		trie.Update([]byte(key), []byte(value))
+	}
+
+	// Test skipping subtrees with descend=false
+	t.Run("SkipSubtrees", func(t *testing.T) {
+		iter, err := trie.NodeIteratorWithPrefix([]byte("a"))
+		if err != nil {
+			t.Fatalf("Failed to create iterator: %v", err)
+		}
+		
+		// Count nodes at each level
+		nodesVisited := 0
+		leafsFound := make(map[string]bool)
+		
+		// First call with descend=true to enter the "a" subtree
+		if !iter.Next(true) {
+			t.Fatal("Expected to find at least one node")
+		}
+		nodesVisited++
+		
+		// Continue iteration, sometimes with descend=false
+		descendPattern := []bool{false, true, false, true, true}
+		for i := 0; iter.Next(descendPattern[i%len(descendPattern)]); i++ {
+			nodesVisited++
+			if iter.Leaf() {
+				leafsFound[string(iter.LeafKey())] = true
+			}
+		}
+		
+		// We should still respect the prefix boundary even when skipping
+		for key := range leafsFound {
+			if !bytes.HasPrefix([]byte(key), []byte("a")) {
+				t.Errorf("Found key outside prefix when using descend=false: %s", key)
+			}
+		}
+		
+		// Should not have found "b" even if we skip some subtrees
+		if leafsFound["b"] {
+			t.Error("Iterator leaked outside prefix boundary with descend=false")
+		}
+	})
 }
 
 func BenchmarkIterator(b *testing.B) {
