@@ -786,13 +786,13 @@ func TestPrefixIteratorEdgeCases(t *testing.T) {
 	// Create a trie with test data
 	trie := NewEmpty(newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme))
 	testData := map[string]string{
-		"abc":      "value1",
-		"abcd":     "value2",
-		"abce":     "value3",
-		"abd":      "value4",
-		"dog":      "value5",
-		"dog\xff":  "value6",  // Test with 0xff byte
-		"dog\xff\xff": "value7",  // Multiple 0xff bytes
+		"abc":         "value1",
+		"abcd":        "value2",
+		"abce":        "value3",
+		"abd":         "value4",
+		"dog":         "value5",
+		"dog\xff":     "value6", // Test with 0xff byte
+		"dog\xff\xff": "value7", // Multiple 0xff bytes
 	}
 	for key, value := range testData {
 		trie.Update([]byte(key), []byte(value))
@@ -863,7 +863,7 @@ func TestPrefixIteratorEdgeCases(t *testing.T) {
 		allFF := []byte{0xff, 0xff}
 		trie.Update(allFF, []byte("all_ff_value"))
 		trie.Update(append(allFF, 0x00), []byte("all_ff_plus"))
-		
+
 		iter, err := trie.NodeIteratorWithPrefix(allFF)
 		if err != nil {
 			t.Fatalf("Failed to create iterator: %v", err)
@@ -905,13 +905,13 @@ func TestGeneralRangeIteration(t *testing.T) {
 	// Create a trie with test data
 	trie := NewEmpty(newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme))
 	testData := map[string]string{
-		"apple":  "fruit1",
+		"apple":   "fruit1",
 		"apricot": "fruit2",
-		"banana": "fruit3",
-		"cherry": "fruit4",
-		"date":   "fruit5",
-		"fig":    "fruit6",
-		"grape":  "fruit7",
+		"banana":  "fruit3",
+		"cherry":  "fruit4",
+		"date":    "fruit5",
+		"fig":     "fruit6",
+		"grape":   "fruit7",
 	}
 	for key, value := range testData {
 		trie.Update([]byte(key), []byte(value))
@@ -977,12 +977,12 @@ func TestPrefixIteratorWithDescend(t *testing.T) {
 	// Create a trie with nested structure
 	trie := NewEmpty(newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme))
 	testData := map[string]string{
-		"a":       "value_a",
-		"a/b":     "value_ab",
-		"a/b/c":   "value_abc",
-		"a/b/d":   "value_abd",
-		"a/e":     "value_ae",
-		"b":       "value_b",
+		"a":     "value_a",
+		"a/b":   "value_ab",
+		"a/b/c": "value_abc",
+		"a/b/d": "value_abd",
+		"a/e":   "value_ae",
+		"b":     "value_b",
 	}
 	for key, value := range testData {
 		trie.Update([]byte(key), []byte(value))
@@ -994,17 +994,17 @@ func TestPrefixIteratorWithDescend(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create iterator: %v", err)
 		}
-		
+
 		// Count nodes at each level
 		nodesVisited := 0
 		leafsFound := make(map[string]bool)
-		
+
 		// First call with descend=true to enter the "a" subtree
 		if !iter.Next(true) {
 			t.Fatal("Expected to find at least one node")
 		}
 		nodesVisited++
-		
+
 		// Continue iteration, sometimes with descend=false
 		descendPattern := []bool{false, true, false, true, true}
 		for i := 0; iter.Next(descendPattern[i%len(descendPattern)]); i++ {
@@ -1013,14 +1013,15 @@ func TestPrefixIteratorWithDescend(t *testing.T) {
 				leafsFound[string(iter.LeafKey())] = true
 			}
 		}
-		
+
 		// We should still respect the prefix boundary even when skipping
+		prefix := []byte("a")
 		for key := range leafsFound {
-			if !bytes.HasPrefix([]byte(key), []byte("a")) {
+			if !bytes.HasPrefix([]byte(key), prefix) {
 				t.Errorf("Found key outside prefix when using descend=false: %s", key)
 			}
 		}
-		
+
 		// Should not have found "b" even if we skip some subtrees
 		if leafsFound["b"] {
 			t.Error("Iterator leaked outside prefix boundary with descend=false")
