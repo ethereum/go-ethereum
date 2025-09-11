@@ -413,14 +413,14 @@ func (d *Downloader) getMode() SyncMode {
 // syncToHead starts a block synchronization based on the hash chain from
 // the specified head hash.
 func (d *Downloader) syncToHead() (err error) {
-	d.feed.Send(SyncEvent{Type: "start", Data: StartEvent{}})
+	d.feed.Send(SyncEvent{Type: SyncStarted})
 	defer func() {
 		// reset on error
 		if err != nil {
-			d.feed.Send(SyncEvent{Type: "failed", Data: FailedEvent{err}})
+			d.feed.Send(SyncEvent{Type: SyncFailed, Err: err})
 		} else {
 			latest := d.blockchain.CurrentHeader()
-			d.feed.Send(SyncEvent{Type: "done", Data: DoneEvent{latest}})
+			d.feed.Send(SyncEvent{Type: SyncCompleted, Latest: latest})
 		}
 	}()
 	mode := d.getMode()

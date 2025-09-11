@@ -18,14 +18,25 @@ package downloader
 
 import "github.com/ethereum/go-ethereum/core/types"
 
+// SyncEventType represents the type of sync event
+type SyncEventType int
+
+const (
+	SyncStarted SyncEventType = iota
+	SyncFailed
+	SyncCompleted
+)
+
+// SyncEvent represents a downloader synchronization event
+type SyncEvent struct {
+	Type   SyncEventType
+	Err    error          // Set when Type is SyncFailed
+	Latest *types.Header  // Set when Type is SyncCompleted
+}
+
+// Legacy event types for compatibility (can be removed later if not needed elsewhere)
 type DoneEvent struct {
 	Latest *types.Header
 }
 type StartEvent struct{}
 type FailedEvent struct{ Err error }
-
-// SyncEvent is a union type for all downloader events
-type SyncEvent struct {
-	Type string      // "start", "done", "failed"
-	Data interface{} // StartEvent, DoneEvent, or FailedEvent
-}
