@@ -125,11 +125,10 @@ type handler struct {
 	peers          *peerSet
 	txBroadcastKey [16]byte
 
-	eventMux       *event.TypeMux
-	downloaderFeed event.Feed // Feed for downloader events
-	txsCh          chan core.NewTxsEvent
-	txsSub         event.Subscription
-	blockRange     *blockRangeState
+	eventFeed  *event.Feed
+	txsCh      chan core.NewTxsEvent
+	txsSub     event.Subscription
+	blockRange *blockRangeState
 
 	requiredBlocks map[uint64]common.Hash
 
@@ -151,7 +150,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	h := &handler{
 		nodeID:         config.NodeID,
 		networkID:      config.Network,
-		eventMux:       config.EventMux,
 		database:       config.Database,
 		txpool:         config.TxPool,
 		chain:          config.Chain,
@@ -195,7 +193,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return nil, errors.New("snap sync not supported with snapshots disabled")
 	}
 	// Construct the downloader (long sync)
-	h.downloader = downloader.New(config.Database, &h.downloaderFeed, h.chain, h.removePeer, h.enableSyncedFeatures)
+	h.downloader = downloader.New(config.Database, h.eventFeed, h.chain, h.removePeer, h.enableSyncedFeatures)
 
 	fetchTx := func(peer string, hashes []common.Hash) error {
 		p := h.peers.peer(peer)
@@ -439,7 +437,7 @@ func (h *handler) Start(maxPeers int) {
 
 	// broadcast block range
 	h.wg.Add(1)
-	h.blockRange = newBlockRangeState(h.chain, h.eventMux)
+	h.blockRange = newBlockRangeState(h.chain, h.eventFeed)
 	go h.blockRangeLoop(h.blockRange)
 
 	// start sync handlers
@@ -563,16 +561,19 @@ type blockRangeState struct {
 	next    atomic.Pointer[eth.BlockRangeUpdatePacket]
 	headCh  chan core.ChainHeadEvent
 	headSub event.Subscription
-	syncSub *event.TypeMuxSubscription
+	syncCh  chan downloader.SyncEvent
+	syncSub event.Subscription
 }
 
-func newBlockRangeState(chain *core.BlockChain, typeMux *event.TypeMux) *blockRangeState {
+func newBlockRangeState(chain *core.BlockChain, eventFeed *event.Feed) *blockRangeState {
 	headCh := make(chan core.ChainHeadEvent, chainHeadChanSize)
 	headSub := chain.SubscribeChainHeadEvent(headCh)
-	syncSub := typeMux.Subscribe(downloader.StartEvent{}, downloader.DoneEvent{}, downloader.FailedEvent{})
+	syncCh := make(chan downloader.SyncEvent, 16)
+	syncSub := eventFeed.Subscribe(syncCh)
 	st := &blockRangeState{
 		headCh:  headCh,
 		headSub: headSub,
+		syncCh:  syncCh,
 		syncSub: syncSub,
 	}
 	st.update(chain, chain.CurrentBlock())
@@ -588,11 +589,8 @@ func (h *handler) blockRangeLoop(st *blockRangeState) {
 
 	for {
 		select {
-		case ev := <-st.syncSub.Chan():
-			if ev == nil {
-				continue
-			}
-			if _, ok := ev.Data.(downloader.StartEvent); ok && h.snapSync.Load() {
+		case ev := <-st.syncCh:
+			if ev.Type == downloader.SyncStarted && h.snapSync.Load() {
 				h.blockRangeWhileSnapSyncing(st)
 			}
 		case <-st.headCh:
@@ -620,12 +618,9 @@ func (h *handler) blockRangeWhileSnapSyncing(st *blockRangeState) {
 				h.broadcastBlockRange(st)
 			}
 		// back to processing head block updates when sync is done
-		case ev := <-st.syncSub.Chan():
-			if ev == nil {
-				continue
-			}
-			switch ev.Data.(type) {
-			case downloader.FailedEvent, downloader.DoneEvent:
+		case ev := <-st.syncCh:
+			switch ev.Type {
+			case downloader.SyncFailed, downloader.SyncCompleted:
 				return
 			}
 		// ignore head updates, but exit when the subscription ends

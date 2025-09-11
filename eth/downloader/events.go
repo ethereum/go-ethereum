@@ -30,13 +30,6 @@ const (
 // SyncEvent represents a downloader synchronization event
 type SyncEvent struct {
 	Type   SyncEventType
-	Err    error          // Set when Type is SyncFailed
-	Latest *types.Header  // Set when Type is SyncCompleted
+	Err    error         // Set when Type is SyncFailed
+	Latest *types.Header // Set when Type is SyncCompleted
 }
-
-// Legacy event types for compatibility (can be removed later if not needed elsewhere)
-type DoneEvent struct {
-	Latest *types.Header
-}
-type StartEvent struct{}
-type FailedEvent struct{ Err error }

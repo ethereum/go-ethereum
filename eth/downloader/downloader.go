@@ -410,6 +410,11 @@ func (d *Downloader) getMode() SyncMode {
 	return SyncMode(d.mode.Load())
 }
 
+// SubscribeSyncEvents creates a subscription for downloader sync events
+func (d *Downloader) SubscribeSyncEvents(ch chan<- SyncEvent) event.Subscription {
+	return d.feed.Subscribe(ch)
+}
+
 // syncToHead starts a block synchronization based on the hash chain from
 // the specified head hash.
 func (d *Downloader) syncToHead() (err error) {
