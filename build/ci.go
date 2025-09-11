@@ -64,12 +64,6 @@ import (
 )
 
 var (
-	// List of go modules for linting/testing/etc.
-	workspaceModules = []string{
-		".",
-		"./cmd/keeper",
-	}
-
 	// Files that end up in the geth*.zip archive.
 	gethArchiveFiles = []string{
 		"COPYING",
@@ -328,7 +322,7 @@ func doTest(cmdline []string) {
 		gotest.Args = append(gotest.Args, "-short")
 	}
 
-	packages := workspacePackagePatterns()
+	packages := []string{"work"}
 	if len(flag.CommandLine.Args()) > 0 {
 		packages = flag.CommandLine.Args()
 	}
@@ -370,7 +364,7 @@ func doCheckGenerate() {
 		protocPath      = downloadProtoc(*cachedir)
 		protocGenGoPath = downloadProtocGenGo(*cachedir)
 	)
-	c := tc.Go("generate", workspacePackagePatterns()...)
+	c := tc.Go("generate", "work")
 	pathList := []string{filepath.Join(protocPath, "bin"), protocGenGoPath, os.Getenv("PATH")}
 	c.Env = append(c.Env, "PATH="+strings.Join(pathList, string(os.PathListSeparator)))
 	build.MustRun(c)
@@ -428,11 +422,31 @@ func doCheckBadDeps() {
 func doLint(cmdline []string) {
 	var (
 		cachedir = flag.String("cachedir", "./build/cache", "directory for caching golangci-lint binary.")
+		tc       = new(build.GoToolchain)
 	)
 	flag.CommandLine.Parse(cmdline)
-	packages := workspacePackagePatterns()
-	if len(flag.CommandLine.Args()) > 0 {
-		packages = flag.CommandLine.Args()
+
+	packages := flag.CommandLine.Args()
+	if len(packages) == 0 {
+		// Get module directories in workspace.
+		listing, err := tc.Go("list", "-m").Output()
+		if err != nil {
+			log.Fatalf("go list failed:", err)
+		}
+		var mainModule []byte
+		for i, m := range bytes.Split(listing, []byte("\n")) {
+			m = bytes.TrimSpace(m)
+			if i == 0 {
+				mainModule = m
+				packages = append(packages, "./...")
+			} else if len(m) > 0 {
+				dir := string(bytes.TrimPrefix(m, mainModule))
+				packages = append(packages, "."+dir+"/...")
+			}
+		}
+		if len(packages) == 0 {
+			log.Fatal("no packages found")
+		}
 	}
 
 	linter := downloadLinter(*cachedir)
@@ -1174,12 +1188,4 @@ func doPurge(cmdline []string) {
 func doSanityCheck() {
 	csdb := download.MustLoadChecksums("build/checksums.txt")
 	csdb.DownloadAndVerifyAll()
-}
-
-func workspacePackagePatterns() []string {
-	p := make([]string, len(workspaceModules))
-	for i := range workspaceModules {
-		p[i] = workspaceModules[i] + "/..."
-	}
-	return p
 }
