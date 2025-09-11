@@ -23,3 +23,9 @@ type DoneEvent struct {
 }
 type StartEvent struct{}
 type FailedEvent struct{ Err error }
+
+// SyncEvent is a union type for all downloader events
+type SyncEvent struct {
+	Type string      // "start", "done", "failed"
+	Data interface{} // StartEvent, DoneEvent, or FailedEvent
+}

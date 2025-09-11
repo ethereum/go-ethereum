@@ -33,20 +33,20 @@ import (
 type DownloaderAPI struct {
 	d                         *Downloader
 	chain                     *core.BlockChain
-	mux                       *event.TypeMux
+	feed                      *event.Feed
 	installSyncSubscription   chan chan interface{}
 	uninstallSyncSubscription chan *uninstallSyncSubscriptionRequest
 }
 
 // NewDownloaderAPI creates a new DownloaderAPI. The API has an internal event loop that
-// listens for events from the downloader through the global event mux. In case it receives one of
+// listens for events from the downloader through the event feed. In case it receives one of
 // these events it broadcasts it to all syncing subscriptions that are installed through the
 // installSyncSubscription channel.
-func NewDownloaderAPI(d *Downloader, chain *core.BlockChain, m *event.TypeMux) *DownloaderAPI {
+func NewDownloaderAPI(d *Downloader, chain *core.BlockChain, f *event.Feed) *DownloaderAPI {
 	api := &DownloaderAPI{
 		d:                         d,
 		chain:                     chain,
-		mux:                       m,
+		feed:                      f,
 		installSyncSubscription:   make(chan chan interface{}),
 		uninstallSyncSubscription: make(chan *uninstallSyncSubscriptionRequest),
 	}
@@ -66,7 +66,8 @@ func NewDownloaderAPI(d *Downloader, chain *core.BlockChain, m *event.TypeMux) *
 // receive is {false}.
 func (api *DownloaderAPI) eventLoop() {
 	var (
-		sub               = api.mux.Subscribe(StartEvent{})
+		eventCh           = make(chan SyncEvent, 16)
+		sub               = api.feed.Subscribe(eventCh)
 		syncSubscriptions = make(map[chan interface{}]struct{})
 		checkInterval     = time.Second * 60
 		checkTimer        = time.NewTimer(checkInterval)
@@ -88,6 +89,7 @@ func (api *DownloaderAPI) eventLoop() {
 			return prog
 		}
 	)
+	defer sub.Unsubscribe()
 	defer checkTimer.Stop()
 
 	for {
@@ -100,12 +102,9 @@ func (api *DownloaderAPI) eventLoop() {
 		case u := <-api.uninstallSyncSubscription:
 			delete(syncSubscriptions, u.c)
 			close(u.uninstalled)
-		case event := <-sub.Chan():
-			if event == nil {
-				return
-			}
-			switch event.Data.(type) {
-			case StartEvent:
+		case event := <-eventCh:
+			switch event.Type {
+			case "start":
 				started = true
 			}
 		case <-checkTimer.C:

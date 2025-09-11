@@ -125,10 +125,11 @@ type handler struct {
 	peers          *peerSet
 	txBroadcastKey [16]byte
 
-	eventMux   *event.TypeMux
-	txsCh      chan core.NewTxsEvent
-	txsSub     event.Subscription
-	blockRange *blockRangeState
+	eventMux       *event.TypeMux
+	downloaderFeed event.Feed // Feed for downloader events
+	txsCh          chan core.NewTxsEvent
+	txsSub         event.Subscription
+	blockRange     *blockRangeState
 
 	requiredBlocks map[uint64]common.Hash
 
@@ -194,7 +195,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return nil, errors.New("snap sync not supported with snapshots disabled")
 	}
 	// Construct the downloader (long sync)
-	h.downloader = downloader.New(config.Database, h.eventMux, h.chain, h.removePeer, h.enableSyncedFeatures)
+	h.downloader = downloader.New(config.Database, &h.downloaderFeed, h.chain, h.removePeer, h.enableSyncedFeatures)
 
 	fetchTx := func(peer string, hashes []common.Hash) error {
 		p := h.peers.peer(peer)
