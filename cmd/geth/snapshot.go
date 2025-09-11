@@ -612,7 +612,7 @@ func (ts *traverseSetup) traverseState(ctx context.Context, counters *traverseCo
 
 			if ts.config != nil {
 				// Skip branches that are entirely before startKey
-				if limitKey != nil && bytes.Compare(limitKey, ts.config.startKey) <= 0 {
+				if ts.config.startKey != nil && limitKey != nil && bytes.Compare(limitKey, ts.config.startKey) <= 0 {
 					return nil
 				}
 
