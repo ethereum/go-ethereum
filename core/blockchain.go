@@ -2820,7 +2820,7 @@ func (bc *BlockChain) StateSizer() *state.SizeTracker {
 	return bc.stateSizer
 }
 
-// FirstStateBlock returns the first available state block number that is stored in the database.
-func (bc *BlockChain) FirstStateBlock() (uint64, error) {
-	return bc.triedb.FirstStateBlock()
+// FrezzerTailBlock returns the block number of the oldest state in the freezer.
+func (bc *BlockChain) FreezerTailBlock() (uint64, error) {
+	return bc.triedb.FreezerTailBlock()
 }

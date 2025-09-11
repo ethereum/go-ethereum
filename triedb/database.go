@@ -385,12 +385,11 @@ func (db *Database) SnapshotCompleted() bool {
 	return pdb.SnapshotCompleted()
 }
 
-// FirstStateBlock returns the first available state block number that is stored in the database.
-func (db *Database) FirstStateBlock() (uint64, error) {
+// FrezzerTailBlock returns the block number of the oldest state in the freezer.
+func (db *Database) FreezerTailBlock() (uint64, error) {
 	pdb, ok := db.backend.(*pathdb.Database)
 	if !ok {
-		// Ignore in hash scheme
 		return 0, nil
 	}
-	return pdb.FirstStateBlock()
+	return pdb.FrezzerTailBlock()
 }
