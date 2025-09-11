@@ -19,9 +19,10 @@ package bal
 import (
 	"bytes"
 	"encoding/json"
+	"maps"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
-	"maps"
 )
 
 // CodeChange contains the runtime bytecode deployed at an address and the
@@ -192,14 +193,14 @@ func (c *ConstructionBlockAccessList) ApplyDiff(i uint, diff *StateDiff) {
 			if c.Accounts[addr].NonceChanges == nil {
 				c.Accounts[addr].NonceChanges = make(map[uint16]uint64)
 			}
-			c.Accounts[addr].NonceChanges[uint16(idx)] = *acctDiff.Nonce
+			c.Accounts[addr].NonceChanges[idx] = *acctDiff.Nonce
 		}
 		if acctDiff.Code != nil {
 			if c.Accounts[addr].CodeChanges == nil {
 				c.Accounts[addr].CodeChanges = make(map[uint16]CodeChange)
 			}
 			// TODO: make the CodeChanges value just be []byte
-			c.Accounts[addr].CodeChanges[uint16(idx)] = CodeChange{idx, acctDiff.Code}
+			c.Accounts[addr].CodeChanges[idx] = CodeChange{idx, acctDiff.Code}
 		}
 		if acctDiff.StorageWrites != nil {
 			if c.Accounts[addr].StorageWrites == nil {
@@ -227,7 +228,6 @@ func (c *ConstructionBlockAccessList) ApplyAccesses(accesses StateAccesses) {
 			c.Accounts[addr] = &ConstructionAccountAccess{}
 		}
 		if len(acctAccesses) > 0 {
-
 			if c.Accounts[addr].StorageReads == nil {
 				c.Accounts[addr].StorageReads = make(map[common.Hash]struct{})
 			}
@@ -383,7 +383,6 @@ func (s *StateDiff) Merge(next *StateDiff) {
 						mut.StorageWrites[key] = val
 					}
 				}
-
 			}
 		} else {
 			s.Mutations[account] = diff.Copy()

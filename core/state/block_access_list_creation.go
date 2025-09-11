@@ -203,16 +203,16 @@ func (a *AccessListCreationDB) Database() Database {
 func (a *AccessListCreationDB) GetTrie() Trie {
 	return a.inner.GetTrie()
 }
-func (s *AccessListCreationDB) SetTxContext(thash common.Hash, ti int) {
-	s.inner.SetTxContext(thash, ti)
+func (a *AccessListCreationDB) SetTxContext(thash common.Hash, ti int) {
+	a.inner.SetTxContext(thash, ti)
 }
 
-func (s *AccessListCreationDB) Error() error {
-	return s.inner.Error()
+func (a *AccessListCreationDB) Error() error {
+	return a.inner.Error()
 }
 
-func (s *AccessListCreationDB) Copy() BlockProcessingDB {
-	return &AccessListCreationDB{s.idx, s.inner.Copy(), s.accessList.Copy()}
+func (a *AccessListCreationDB) Copy() BlockProcessingDB {
+	return &AccessListCreationDB{a.idx, a.inner.Copy(), a.accessList.Copy()}
 }
 
 var _ BlockProcessingDB = &AccessListCreationDB{}

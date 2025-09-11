@@ -22,14 +22,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"maps"
+	"slices"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
-	"io"
-	"maps"
-	"slices"
 )
 
 //go:generate go run github.com/ethereum/go-ethereum/rlp/rlpgen -out bal_encoding_rlp_generated.go -type AccountAccess -decoder
@@ -40,17 +41,17 @@ import (
 // BlockAccessList is the encoding format of ConstructionBlockAccessList.
 type BlockAccessList []AccountAccess
 
-func (obj BlockAccessList) EncodeRLP(_w io.Writer) error {
+func (e BlockAccessList) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
 	l := w.List()
-	for _, access := range obj {
+	for _, access := range e {
 		access.EncodeRLP(w)
 	}
 	w.ListEnd(l)
 	return w.Flush()
 }
 
-func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
+func (e *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 	if _, err := dec.List(); err != nil {
 		return err
 	}
@@ -59,7 +60,7 @@ func (obj *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 		if err := access.DecodeRLP(dec); err != nil {
 			return err
 		}
-		*obj = append(*obj, access)
+		*e = append(*e, access)
 	}
 	return nil
 }
