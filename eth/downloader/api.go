@@ -103,8 +103,7 @@ func (api *DownloaderAPI) eventLoop() {
 			delete(syncSubscriptions, u.c)
 			close(u.uninstalled)
 		case event := <-eventCh:
-			switch event.Type {
-			case SyncStarted:
+			if event.Type == SyncStarted {
 				started = true
 			}
 		case <-checkTimer.C:

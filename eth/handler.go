@@ -146,6 +146,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	h := &handler{
 		nodeID:         config.NodeID,
 		networkID:      config.Network,
+		eventFeed:      new(event.Feed),
 		database:       config.Database,
 		txpool:         config.TxPool,
 		chain:          config.Chain,
@@ -615,8 +616,7 @@ func (h *handler) blockRangeWhileSnapSyncing(st *blockRangeState) {
 			}
 		// back to processing head block updates when sync is done
 		case ev := <-st.syncCh:
-			switch ev.Type {
-			case downloader.SyncFailed, downloader.SyncCompleted:
+			if ev.Type == downloader.SyncFailed || ev.Type == downloader.SyncCompleted {
 				return
 			}
 		// ignore head updates, but exit when the subscription ends
