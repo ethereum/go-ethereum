@@ -1925,33 +1925,7 @@ type DebugAPI struct {
 
 // NewDebugAPI creates a new instance of DebugAPI.
 func NewDebugAPI(b Backend) *DebugAPI {
-	return &DebugAPI{b: b}
-}
-
-// BatchGetStorageAt returns multiple storage slots for a single account at the given block.
-// Params: address, [hexKey...], blockNrOrHash
-// Returns values in the same order as input keys.
-func (api *DebugAPI) BatchGetStorageAt(ctx context.Context, address common.Address, hexKeys []string, blockNrOrHash rpc.BlockNumberOrHash) ([]hexutil.Bytes, error) {
-	state, _, err := api.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
-	if state == nil || err != nil {
-		return nil, err
-	}
-	// Preallocate results
-	res := make([]hexutil.Bytes, len(hexKeys))
-	for i, k := range hexKeys {
-		key, _, err := decodeHash(k)
-		if err != nil {
-			return nil, fmt.Errorf("unable to decode storage key at index %d: %w", i, err)
-		}
-		v := state.GetState(address, key)
-		vv := make([]byte, len(v))
-		copy(vv, v[:])
-		res[i] = vv
-	}
-	if err := state.Error(); err != nil {
-		return nil, err
-	}
-	return res, nil
+    return &DebugAPI{b: b}
 }
 
 // BatchGetStorage returns multiple storage slots for multiple accounts at the given block.

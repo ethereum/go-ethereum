@@ -415,16 +415,11 @@ web3._extend({
 			call: 'debug_storageRangeAt',
 			params: 5,
 		}),
-		new web3._extend.Method({
-			name: 'batchGetStorageAt',
-			call: 'debug_batchGetStorageAt',
-			params: 3,
-		}),
-		new web3._extend.Method({
-			name: 'batchGetStorage',
-			call: 'debug_batchGetStorage',
-			params: 2,
-		}),
+        new web3._extend.Method({
+            name: 'batchGetStorage',
+            call: 'debug_batchGetStorage',
+            params: 2,
+        }),
 		new web3._extend.Method({
 			name: 'getModifiedAccountsByNumber',
 			call: 'debug_getModifiedAccountsByNumber',
