@@ -92,14 +92,14 @@ func LatestSigner(config *params.ChainConfig) Signer {
 
 // LatestSignerForChainID returns the 'most permissive' Signer available. Specifically,
 // this enables support for EIP-155 replay protection and all implemented EIP-2718
-// transaction types if chainID is non-nil.
+// transaction types if chainID is non-nil and greater than zero.
 //
 // Use this in transaction-handling code where the current block number and fork
 // configuration are unknown. If you have a ChainConfig, use LatestSigner instead.
 // If you have a ChainConfig and know the current block number, use MakeSigner instead.
 func LatestSignerForChainID(chainID *big.Int) Signer {
 	var signer Signer
-	if chainID != nil {
+	if chainID != nil && chainID.Sign() > 0 {
 		signer = NewPragueSigner(chainID)
 	} else {
 		signer = HomesteadSigner{}
