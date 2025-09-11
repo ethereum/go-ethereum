@@ -1098,9 +1098,9 @@ func TestSignInWithEtheriumValidLocalhost(t *testing.T) {
 	}
 }
 
-func TestSignInWithEtheriumValidMessages(t *testing.T) {
+func TestSignInWithEtheriumInValidMessages(t *testing.T) {
 	t.Parallel()
-	jsonFile, err := os.ReadFile(filepath.Join("testdata", "siwe", "valid_messages.json"))
+	jsonFile, err := os.ReadFile(filepath.Join("testdata", "siwe", "invalid_messages.json"))
 	require.NoError(t, err)
 	tests := make(map[string]string)
 	require.NoError(t, json.Unmarshal(jsonFile, &tests))
@@ -1122,7 +1122,7 @@ func TestSignInWithEtheriumValidMessages(t *testing.T) {
 			control.inputCh <- "a_long_password"
 			signature, err := api.SignData(ctx, apitypes.TextPlain.Mime, a, hexutil.Encode([]byte(message)))
 			require.NoError(t, err)
-			require.Equal(t, 0, len(control.infoMessages))
+			require.Equal(t, 1, len(control.infoMessages))
 			require.Equal(t, 0, len(control.errorMessages))
 
 			if signature == nil || len(signature) != 65 {

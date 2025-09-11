@@ -108,10 +108,12 @@ func validateSIWE(req *SignDataRequest) error {
 }
 
 func validateDomain(request *SignDataRequest, scheme, domain string) error {
-	siweOrigin := fmt.Sprintf("%s://%s", scheme, domain)
-	requestOrigin := fmt.Sprintf("%s://%s", request.Meta.Scheme, request.Meta.Origin)
-	if siweOrigin != requestOrigin {
-		return fmt.Errorf("sign in request domain (%s) does not match source: %s", siweOrigin, requestOrigin)
+	if request.Meta.Scheme == "http" || request.Meta.Scheme == "https" {
+		siweOrigin := fmt.Sprintf("%s://%s", scheme, domain)
+		requestOrigin := fmt.Sprintf("%s://%s", request.Meta.Scheme, request.Meta.Origin)
+		if siweOrigin != requestOrigin {
+			return fmt.Errorf("sign in request domain (%s) does not match source: %s", siweOrigin, requestOrigin)
+		}
 	}
 	return nil
 }

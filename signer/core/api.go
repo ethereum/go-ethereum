@@ -113,13 +113,13 @@ type Validator interface {
 
 // SignerAPI defines the actual implementation of ExternalAPI
 type SignerAPI struct {
-	chainID     *big.Int
-	am          *accounts.Manager
-	UI          UIClientAPI
-	validator   Validator
-	rejectMode  bool
+	chainID          *big.Int
+	am               *accounts.Manager
+	UI               UIClientAPI
+	validator        Validator
+	rejectMode       bool
 	validateSIWEMode bool
-	credentials storage.Storage
+	credentials      storage.Storage
 }
 
 // Metadata about a request
