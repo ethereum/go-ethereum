@@ -101,7 +101,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedWithWitnessV3P11(update engine.Forkcho
 			return engine.STATUS_INVALID, attributesErr("missing beacon root")
 		case params.ProposerPubkey == nil:
 			return engine.STATUS_INVALID, attributesErr("missing proposer pubkey")
-		case !api.checkFork(params.Timestamp, forks.Prague1, forks.Osaka):
+		case !api.checkFork(params.Timestamp, forks.Prague1, forks.Prague2, forks.Osaka):
 			return engine.STATUS_INVALID, unsupportedForkErr("fcuV3P11 must only be called for prague1 payloads")
 		}
 	}
@@ -207,7 +207,7 @@ func (api *ConsensusAPI) NewPayloadWithWitnessV4P11(params engine.ExecutableData
 		return invalidStatus, paramsErr("nil executionRequests post-prague")
 	case proposerPubkey == nil:
 		return invalidStatus, paramsErr("nil proposerPubkey post-prague1")
-	case !api.checkFork(params.Timestamp, forks.Prague1, forks.Osaka):
+	case !api.checkFork(params.Timestamp, forks.Prague1, forks.Prague2, forks.Osaka):
 		return invalidStatus, unsupportedForkErr("newPayloadV4P11 must only be called for prague1 payloads")
 	}
 	requests := convertRequests(executionRequests)
@@ -312,7 +312,7 @@ func (api *ConsensusAPI) ExecuteStatelessPayloadV4P11(params engine.ExecutableDa
 		return engine.StatelessPayloadStatusV1{Status: engine.INVALID}, paramsErr("nil executionRequests post-prague")
 	case proposerPubkey == nil:
 		return engine.StatelessPayloadStatusV1{Status: engine.INVALID}, paramsErr("nil proposerPubkey post-prague1")
-	case !api.checkFork(params.Timestamp, forks.Prague1, forks.Osaka):
+	case !api.checkFork(params.Timestamp, forks.Prague1, forks.Prague2, forks.Osaka):
 		return engine.StatelessPayloadStatusV1{Status: engine.INVALID}, unsupportedForkErr("executeStatelessPayloadV4P11 must only be called for prague1 payloads")
 	}
 	requests := convertRequests(executionRequests)

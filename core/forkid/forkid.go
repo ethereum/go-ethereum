@@ -268,10 +268,13 @@ func gatherForks(config *params.ChainConfig, genesis uint64) ([]uint64, []uint64
 			}
 		}
 	}
-	// Berachain-specific: include nested Prague1 fork time in the fork id set
+	// Berachain-specific: include nested Prague1 and Prague2 fork times in the fork id set
 	// so that clients using it (e.g. reth) compute the same fork checksum.
 	if config != nil && config.Berachain.Prague1.Time != nil {
 		forksByTime = append(forksByTime, *config.Berachain.Prague1.Time)
+	}
+	if config != nil && config.Berachain.Prague2.Time != nil {
+		forksByTime = append(forksByTime, *config.Berachain.Prague2.Time)
 	}
 	slices.Sort(forksByBlock)
 	slices.Sort(forksByTime)

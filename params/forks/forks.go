@@ -40,6 +40,7 @@ const (
 	Cancun
 	Prague
 	Prague1
+	Prague2
 	Osaka
 )
 
@@ -73,5 +74,6 @@ var forkToString = map[Fork]string{
 	Cancun:           "Cancun",
 	Prague:           "Prague",
 	Prague1:          "Prague1",
+	Prague2:          "Prague2",
 	Osaka:            "Osaka",
 }

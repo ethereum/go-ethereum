@@ -198,6 +198,10 @@ var (
 				BaseFeeChangeDenominator: BerachainBaseFeeChangeDenominator,
 				PoLDistributorAddress:    PoLDistributorAddress,
 			},
+			Prague2: Prague2Config{
+				Time:              newUint64(9999999999), // TODO(Prague2): Replace with actual time.
+				MinimumBaseFeeWei: 0,
+			},
 		},
 	}
 	// BepoliaChainConfig contains the chain parameters to run a node on the Bepolia test network.
@@ -235,6 +239,10 @@ var (
 				MinimumBaseFeeWei:        10 * GWei,
 				BaseFeeChangeDenominator: BerachainBaseFeeChangeDenominator,
 				PoLDistributorAddress:    PoLDistributorAddress,
+			},
+			Prague2: Prague2Config{
+				Time:              newUint64(9999999999), // TODO(Prague2): Replace with actual time.
+				MinimumBaseFeeWei: 0,
 			},
 		},
 	}
@@ -540,6 +548,9 @@ type ChainConfig struct {
 type BerachainConfig struct {
 	// Prague1 fork values.
 	Prague1 Prague1Config `json:"prague1,omitempty"`
+
+	// Prague2 fork values.
+	Prague2 Prague2Config `json:"prague2,omitempty"`
 }
 
 // String implements the stringer interface.
@@ -547,6 +558,9 @@ func (o *BerachainConfig) String() string {
 	banner := "berachain"
 	if o.Prague1.Time != nil {
 		banner += fmt.Sprintf("(%s)", o.Prague1)
+	}
+	if o.Prague2.Time != nil {
+		banner += fmt.Sprintf("(%s)", o.Prague2)
 	}
 	return banner
 }
@@ -571,6 +585,23 @@ func (c Prague1Config) String() string {
 			"(time: %v, baseFeeChangeDenominator: %v, minimumBaseFeeWei: %v, polDistributorAddress: %v)",
 			*c.Time, c.BaseFeeChangeDenominator, c.MinimumBaseFeeWei, c.PoLDistributorAddress,
 		)
+	}
+	return banner
+}
+
+// Prague2Config is the config values for the Prague2 fork on Berachain.
+type Prague2Config struct {
+	// Time is the time of the Prague2 fork.
+	Time *uint64 `json:"time,omitempty"` // Prague2 switch time (0 = already on prague2, nil = no fork)
+	// MinimumBaseFeeWei is the minimum base fee in wei.
+	MinimumBaseFeeWei uint64 `json:"minimumBaseFeeWei,omitempty"`
+}
+
+// String implements the stringer interface.
+func (c Prague2Config) String() string {
+	banner := "prague2"
+	if c.Time != nil {
+		banner += fmt.Sprintf("(time: %v, minimumBaseFeeWei: %v)", *c.Time, c.MinimumBaseFeeWei)
 	}
 	return banner
 }
@@ -665,6 +696,9 @@ func (c *ChainConfig) Description() string {
 	}
 	if c.Berachain.Prague1.Time != nil {
 		banner += fmt.Sprintf(" - Prague1:                     %-10v (https://github.com/berachain/BRIPs/blob/main/meta/BRIP-0004.md)\n", c.Berachain.Prague1)
+	}
+	if c.Berachain.Prague2.Time != nil {
+		banner += fmt.Sprintf(" - Prague2:                     %-10v\n", c.Berachain.Prague2)
 	}
 	if c.OsakaTime != nil {
 		banner += fmt.Sprintf(" - Osaka:                      @%-10v\n", *c.OsakaTime)
@@ -811,6 +845,12 @@ func (c *ChainConfig) IsPrague1(num *big.Int, time uint64) bool {
 	return c.IsPrague(num, time) && isTimestampForked(c.Berachain.Prague1.Time, time)
 }
 
+// IsPrague2 returns whether time is either equal to the Prague2 fork time or greater.
+// NOTE: Prague2 is a Berachain fork and must be on Ethereum's Prague fork.
+func (c *ChainConfig) IsPrague2(num *big.Int, time uint64) bool {
+	return c.IsPrague(num, time) && isTimestampForked(c.Berachain.Prague2.Time, time)
+}
+
 // IsOsaka returns whether time is either equal to the Osaka fork time or greater.
 func (c *ChainConfig) IsOsaka(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.OsakaTime, time)
@@ -920,6 +960,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "cancunTime", timestamp: c.CancunTime, optional: true},
 		{name: "pragueTime", timestamp: c.PragueTime, optional: true},
 		{name: "prague1Time", timestamp: c.Berachain.Prague1.Time, optional: true},
+		{name: "prague2Time", timestamp: c.Berachain.Prague2.Time, optional: true},
 		{name: "osakaTime", timestamp: c.OsakaTime, optional: true},
 		{name: "verkleTime", timestamp: c.VerkleTime, optional: true},
 		{name: "bpo1", timestamp: c.BPO1Time, optional: true},
@@ -1088,6 +1129,9 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	if isForkTimestampIncompatible(c.Berachain.Prague1.Time, newcfg.Berachain.Prague1.Time, headTimestamp) {
 		return newTimestampCompatError("Prague1 fork timestamp", c.Berachain.Prague1.Time, newcfg.Berachain.Prague1.Time)
 	}
+	if isForkTimestampIncompatible(c.Berachain.Prague2.Time, newcfg.Berachain.Prague2.Time, headTimestamp) {
+		return newTimestampCompatError("Prague2 fork timestamp", c.Berachain.Prague2.Time, newcfg.Berachain.Prague2.Time)
+	}
 	if isForkTimestampIncompatible(c.OsakaTime, newcfg.OsakaTime, headTimestamp) {
 		return newTimestampCompatError("Osaka fork timestamp", c.OsakaTime, newcfg.OsakaTime)
 	}
@@ -1122,6 +1166,17 @@ func (c *ChainConfig) BaseFeeChangeDenominator(num *big.Int, time uint64) uint64
 	return DefaultBaseFeeChangeDenominator
 }
 
+// MinBaseFee returns the minimum base fee (in wei) based on the active fork.
+func (c *ChainConfig) MinBaseFee(num *big.Int, time uint64) uint64 {
+	if c.IsPrague2(num, time) {
+		return c.Berachain.Prague2.MinimumBaseFeeWei
+	}
+	if c.IsPrague1(num, time) {
+		return c.Berachain.Prague1.MinimumBaseFeeWei
+	}
+	return 0
+}
+
 // ElasticityMultiplier bounds the maximum gas limit an EIP-1559 block may have.
 func (c *ChainConfig) ElasticityMultiplier() uint64 {
 	return DefaultElasticityMultiplier
@@ -1135,6 +1190,8 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 	switch {
 	case c.IsOsaka(london, time):
 		return forks.Osaka
+	case c.IsPrague2(london, time):
+		return forks.Prague2
 	case c.IsPrague1(london, time):
 		return forks.Prague1
 	case c.IsPrague(london, time):
@@ -1153,6 +1210,8 @@ func (c *ChainConfig) BlobConfig(fork forks.Fork) *BlobConfig {
 	switch fork {
 	case forks.Osaka:
 		return DefaultOsakaBlobConfig
+	case forks.Prague1, forks.Prague2:
+		return DefaultBerachainPragueBlobConfig
 	case forks.Prague:
 		return DefaultPragueBlobConfig
 	case forks.Cancun:
@@ -1170,6 +1229,7 @@ func (c *ChainConfig) ActiveSystemContracts(time uint64) map[string]common.Addre
 	if fork >= forks.Osaka {
 		// no new system contracts
 	}
+	// TODO(BRIP-4): Add PoL distributor address to the system contracts?
 	if fork >= forks.Prague {
 		active["CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS"] = ConsolidationQueueAddress
 		active["DEPOSIT_CONTRACT_ADDRESS"] = c.DepositContractAddress
@@ -1188,6 +1248,8 @@ func (c *ChainConfig) Timestamp(fork forks.Fork) *uint64 {
 	switch {
 	case fork == forks.Osaka:
 		return c.OsakaTime
+	case fork == forks.Prague2:
+		return c.Berachain.Prague2.Time
 	case fork == forks.Prague1:
 		return c.Berachain.Prague1.Time
 	case fork == forks.Prague:
@@ -1336,13 +1398,13 @@ func (err *ConfigCompatError) Error() string {
 // Rules is a one time interface meaning that it shouldn't be used in between transition
 // phases.
 type Rules struct {
-	ChainID                                                     *big.Int
-	IsHomestead, IsEIP150, IsEIP155, IsEIP158                   bool
-	IsEIP2929, IsEIP4762                                        bool
-	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul     bool
-	IsBerlin, IsLondon                                          bool
-	IsMerge, IsShanghai, IsCancun, IsPrague, IsPrague1, IsOsaka bool
-	IsVerkle                                                    bool
+	ChainID                                                                *big.Int
+	IsHomestead, IsEIP150, IsEIP155, IsEIP158                              bool
+	IsEIP2929, IsEIP4762                                                   bool
+	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul                bool
+	IsBerlin, IsLondon                                                     bool
+	IsMerge, IsShanghai, IsCancun, IsPrague, IsPrague1, IsPrague2, IsOsaka bool
+	IsVerkle                                                               bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -1372,6 +1434,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsCancun:         isMerge && c.IsCancun(num, timestamp),
 		IsPrague:         isMerge && c.IsPrague(num, timestamp),
 		IsPrague1:        isMerge && c.IsPrague1(num, timestamp),
+		IsPrague2:        isMerge && c.IsPrague2(num, timestamp),
 		IsOsaka:          isMerge && c.IsOsaka(num, timestamp),
 		IsVerkle:         isVerkle,
 		IsEIP4762:        isVerkle,
