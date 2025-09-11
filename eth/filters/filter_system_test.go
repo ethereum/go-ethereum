@@ -847,6 +847,11 @@ func TestLogsSubscription(t *testing.T) {
 			FilterCriteria{FromBlock: big.NewInt(-101)},
 			nil, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, errInvalidFromBlock, nil,
 		},
+		// from "latest" - should work like live logs only
+		{
+			FilterCriteria{FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64())},
+			liveLogs, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
+		},
 	}
 
 	// subscribe logs

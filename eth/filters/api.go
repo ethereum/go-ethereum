@@ -45,7 +45,7 @@ var (
 	errPendingLogsUnsupported = errors.New("pending logs are not supported")
 	errExceedMaxTopics        = errors.New("exceed max topics")
 	errExceedMaxAddresses     = errors.New("exceed max addresses")
-	errInvalidFromBlock       = errors.New("from block can be only a number, or \"safe\", or \"finalized\"")
+	errInvalidFromBlock       = errors.New(`from block can be only a number, or "latest", "safe", "finalized"`)
 	errInvalidToBlock         = errors.New("log subscription does not support history block range")
 	errInvalidFromToBlock     = errors.New("invalid from and to block combination: from > to")
 )
@@ -291,7 +291,7 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 
 // logs is the inner implementation of logs subscription.
 // The following criteria are valid:
-// * from: nil, to: nil -> yield live logs.
+// * from: nil | latest, to: nil -> yield live logs.
 // * from: blockNum | safe | finalized, to: nil -> historical beginning at `from` to head, then live logs.
 // * Every other case should fail with an error.
 func (api *FilterAPI) logs(ctx context.Context, notifier notifier, rpcSub *rpc.Subscription, crit FilterCriteria) error {
@@ -303,8 +303,10 @@ func (api *FilterAPI) logs(ctx context.Context, notifier notifier, rpcSub *rpc.S
 	}
 	from := rpc.BlockNumber(crit.FromBlock.Int64())
 	switch from {
-	case rpc.LatestBlockNumber, rpc.PendingBlockNumber:
+	case rpc.PendingBlockNumber:
 		return errInvalidFromBlock
+	case rpc.LatestBlockNumber:
+		return api.liveLogs(notifier, rpcSub, crit)
 	case rpc.SafeBlockNumber, rpc.FinalizedBlockNumber:
 		header, err := api.sys.backend.HeaderByNumber(ctx, from)
 		if err != nil {
