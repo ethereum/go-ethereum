@@ -69,7 +69,7 @@ func (m *mockOpContext) ContractCode() []byte {
 }
 
 func TestKeccak256PreimageTracerCreation(t *testing.T) {
-	tracer, err := tracers.DefaultDirectory.New("keccak256preimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
+	tracer, err := tracers.DefaultDirectory.New("keccak256PreimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
 	require.NoError(t, err)
 	require.NotNil(t, tracer)
 	require.NotNil(t, tracer.Hooks)
@@ -78,7 +78,7 @@ func TestKeccak256PreimageTracerCreation(t *testing.T) {
 }
 
 func TestKeccak256PreimageTracerInitialResult(t *testing.T) {
-	tracer, err := tracers.DefaultDirectory.New("keccak256preimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
+	tracer, err := tracers.DefaultDirectory.New("keccak256PreimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
 	require.NoError(t, err)
 
 	result, err := tracer.GetResult()
@@ -91,7 +91,7 @@ func TestKeccak256PreimageTracerInitialResult(t *testing.T) {
 }
 
 func TestKeccak256PreimageTracerSingleKeccak(t *testing.T) {
-	tracer, err := tracers.DefaultDirectory.New("keccak256preimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
+	tracer, err := tracers.DefaultDirectory.New("keccak256PreimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
 	require.NoError(t, err)
 
 	// Test data: "hello world"
@@ -129,7 +129,7 @@ func TestKeccak256PreimageTracerSingleKeccak(t *testing.T) {
 }
 
 func TestKeccak256PreimageTracerMultipleKeccak(t *testing.T) {
-	tracer, err := tracers.DefaultDirectory.New("keccak256preimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
+	tracer, err := tracers.DefaultDirectory.New("keccak256PreimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -184,7 +184,7 @@ func TestKeccak256PreimageTracerMultipleKeccak(t *testing.T) {
 }
 
 func TestKeccak256PreimageTracerNonKeccakOpcodes(t *testing.T) {
-	tracer, err := tracers.DefaultDirectory.New("keccak256preimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
+	tracer, err := tracers.DefaultDirectory.New("keccak256PreimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
 	require.NoError(t, err)
 
 	testData := []byte("should not be recorded")
@@ -223,7 +223,7 @@ func TestKeccak256PreimageTracerNonKeccakOpcodes(t *testing.T) {
 }
 
 func TestKeccak256PreimageTracerMemoryOffset(t *testing.T) {
-	tracer, err := tracers.DefaultDirectory.New("keccak256preimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
+	tracer, err := tracers.DefaultDirectory.New("keccak256PreimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
 	require.NoError(t, err)
 
 	// Test data at different memory offset
@@ -263,7 +263,7 @@ func TestKeccak256PreimageTracerMemoryOffset(t *testing.T) {
 }
 
 func TestKeccak256PreimageTracerMemoryPadding(t *testing.T) {
-	tracer, err := tracers.DefaultDirectory.New("keccak256preimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
+	tracer, err := tracers.DefaultDirectory.New("keccak256PreimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
 	require.NoError(t, err)
 
 	// Test data that extends beyond memory bounds (should be zero-padded)
@@ -306,7 +306,7 @@ func TestKeccak256PreimageTracerMemoryPadding(t *testing.T) {
 }
 
 func TestKeccak256PreimageTracerDuplicateHashes(t *testing.T) {
-	tracer, err := tracers.DefaultDirectory.New("keccak256preimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
+	tracer, err := tracers.DefaultDirectory.New("keccak256PreimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
 	require.NoError(t, err)
 
 	testData := []byte("duplicate_test")
@@ -344,7 +344,7 @@ func TestKeccak256PreimageTracerDuplicateHashes(t *testing.T) {
 }
 
 func TestKeccak256PreimageTracerWithExecutionError(t *testing.T) {
-	tracer, err := tracers.DefaultDirectory.New("keccak256preimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
+	tracer, err := tracers.DefaultDirectory.New("keccak256PreimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
 	require.NoError(t, err)
 
 	testData := []byte("error_test")
@@ -379,7 +379,7 @@ func TestKeccak256PreimageTracerWithExecutionError(t *testing.T) {
 }
 
 func TestKeccak256PreimageTracerInsufficientStack(t *testing.T) {
-	tracer, err := tracers.DefaultDirectory.New("keccak256preimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
+	tracer, err := tracers.DefaultDirectory.New("keccak256PreimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
 	require.NoError(t, err)
 
 	// Test with insufficient stack items (should cause panic, but we test it doesn't crash)
@@ -404,7 +404,7 @@ func TestKeccak256PreimageTracerInsufficientStack(t *testing.T) {
 }
 
 func TestKeccak256PreimageTracerLargeData(t *testing.T) {
-	tracer, err := tracers.DefaultDirectory.New("keccak256preimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
+	tracer, err := tracers.DefaultDirectory.New("keccak256PreimageTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
 	require.NoError(t, err)
 
 	// Test with large data
