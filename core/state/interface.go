@@ -11,6 +11,10 @@ import (
 	"github.com/holiman/uint256"
 )
 
+// BlockProcessingDB encapsulates all functionality necessary to fully execute
+// a block.  It is an amalgamation of state access/modification functionality
+// utilized by EVM execution and other functionality needed in block execution
+// (e.g. state root calculation).
 type BlockProcessingDB interface {
 	CreateAccount(common.Address)
 	CreateContract(common.Address)
