@@ -280,35 +280,15 @@ func (db *Database) Recover(target common.Hash) error {
 	return pdb.Recover(target)
 }
 
-// TruncateHead truncates all state histories in the freezer above the bottom state layer.
-// This operation is only supported by path-based database. It's typically used during
-// state recovery to align the state histories with the current state.
-func (db *Database) TruncateHead() error {
+// RecoverDone commits all pending soft truncations after a series of recovery operations.
+// This should be called after all recover operations are complete to finalize the state
+// freezer truncation in one efficient batch operation.
+func (db *Database) RecoverDone() error {
 	pdb, ok := db.backend.(*pathdb.Database)
 	if !ok {
 		return errors.New("not supported")
 	}
-	return pdb.TruncateHead()
-}
-
-// SoftTruncateHead marks state histories above the bottom state layer as logically deleted
-// without physical truncation. This is much faster than TruncateHead.
-func (db *Database) SoftTruncateHead() error {
-	pdb, ok := db.backend.(*pathdb.Database)
-	if !ok {
-		return errors.New("not supported")
-	}
-	return pdb.SoftTruncateHead()
-}
-
-// CommitTruncation performs the actual file truncation to match any soft truncations.
-// This should be called after all soft truncations are complete.
-func (db *Database) CommitTruncation() error {
-	pdb, ok := db.backend.(*pathdb.Database)
-	if !ok {
-		return errors.New("not supported")
-	}
-	return pdb.CommitTruncation()
+	return pdb.RecoverDone()
 }
 
 // Recoverable returns the indicator if the specified state is enabled to be

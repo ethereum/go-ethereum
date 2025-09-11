@@ -600,17 +600,15 @@ func TestDatabaseRollback(t *testing.T) {
 		if err := tester.db.Recover(parent); err != nil {
 			t.Fatalf("Failed to revert db, err: %v", err)
 		}
-		if err := tester.db.SoftTruncateHead(); err != nil {
-			t.Fatalf("Failed to soft truncate head, err: %v", err)
-		}
-		if err := tester.db.CommitTruncation(); err != nil {
-			t.Fatalf("Failed to commit truncation, err: %v", err)
-		}
 		if i > 0 {
 			if err := tester.verifyState(parent); err != nil {
 				t.Fatalf("Failed to verify state, err: %v", err)
 			}
 		}
+	}
+	// Finalize all recovery operations
+	if err := tester.db.RecoverDone(); err != nil {
+		t.Fatalf("Failed to finalize recovery, err: %v", err)
 	}
 	if tester.db.tree.len() != 1 {
 		t.Fatal("Only disk layer is expected")

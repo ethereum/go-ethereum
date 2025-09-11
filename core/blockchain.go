@@ -1003,13 +1003,6 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 			newHeadBlock, rootNumber = bc.rewindHead(header, root)
 			rawdb.WriteHeadBlockHash(db, newHeadBlock.Hash())
 
-			// Use soft truncate for fast rewind - actual truncation happens at the end
-			if bc.triedb.Scheme() == rawdb.PathScheme {
-				if err := bc.triedb.SoftTruncateHead(); err != nil {
-					log.Warn("Failed to soft truncate trie database", "err", err)
-				}
-			}
-
 			// Degrade the chain markers if they are explicitly reverted.
 			// In theory we should update all in-memory markers in the
 			// last step, however the direction of SetHead is from high
@@ -1103,11 +1096,9 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	bc.blockCache.Purge()
 	bc.txLookupCache.Purge()
 
-	// Commit all soft truncations to align the state histories with the current state.
-	if bc.triedb.Scheme() == rawdb.PathScheme {
-		if err := bc.triedb.CommitTruncation(); err != nil {
-			log.Crit("Failed to commit trie database truncation", "err", err)
-		}
+	// Commit all recovery operations to finalize state freezer truncation.
+	if err := bc.triedb.RecoverDone(); err != nil {
+		log.Crit("Failed to finalize trie database recovery", "err", err)
 	}
 
 	// Clear safe block, finalized block if needed

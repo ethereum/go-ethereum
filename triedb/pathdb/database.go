@@ -502,26 +502,20 @@ func (db *Database) Recover(root common.Hash) error {
 	if err := db.diskdb.SyncKeyValue(); err != nil {
 		return err
 	}
+
+	// Soft truncate the state freezer to the recovered state
+	if _, err := db.stateFreezer.SoftTruncateHead(dl.stateID()); err != nil {
+		return err
+	}
+
 	log.Debug("Recovered state", "root", root, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
-// TruncateHead truncates all state histories in the freezer above the bottom state layer.
-func (db *Database) TruncateHead() error {
-	_, err := truncateFromHead(db.stateFreezer, db.tree.bottom().stateID())
-	return err
-}
-
-// SoftTruncateHead marks state histories above the bottom state layer as logically deleted
-// without physical truncation. This is much faster than TruncateHead.
-func (db *Database) SoftTruncateHead() error {
-	_, err := db.stateFreezer.SoftTruncateHead(db.tree.bottom().stateID())
-	return err
-}
-
-// CommitTruncation performs the actual file truncation to match any soft truncations.
-// This should be called after all soft truncations are complete.
-func (db *Database) CommitTruncation() error {
+// RecoverDone commits all pending soft truncations after a series of recovery operations.
+// This should be called after all recover operations are complete to finalize the state
+// freezer truncation in one efficient batch operation.
+func (db *Database) RecoverDone() error {
 	return db.stateFreezer.CommitTruncation()
 }
 
