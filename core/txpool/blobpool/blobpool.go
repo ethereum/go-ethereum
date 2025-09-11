@@ -571,7 +571,6 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 		if err := rlp.DecodeBytes(blob, tx); err != nil {
 			log.Error("Failed to decode blob pool entry", "id", id, "err", err)
 			return errors.New("unknown tx type")
-
 		}
 		if tx.BlobTxSidecar() == nil {
 			log.Error("Missing sidecar in blob pool entry", "id", id, "hash", tx.Hash())

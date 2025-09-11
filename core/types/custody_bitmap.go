@@ -45,7 +45,7 @@ func (b *CustodyBitmap) Clear(i uint) error {
 func (b CustodyBitmap) OneCount() int {
 	total := 0
 	for _, byte := range b {
-		total += bits.OnesCount8(uint8(byte))
+		total += bits.OnesCount8(byte)
 	}
 	return total
 }
@@ -56,7 +56,7 @@ func (b CustodyBitmap) Indices() []uint64 {
 	for byteIdx, val := range b {
 		v := val
 		for v != 0 {
-			tz := bits.TrailingZeros8(uint8(v)) // 0..7
+			tz := bits.TrailingZeros8(v) // 0..7
 			idx := uint64(byteIdx*8 + tz)
 			out = append(out, idx)
 			v &^= 1 << tz
