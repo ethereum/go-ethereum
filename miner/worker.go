@@ -481,13 +481,14 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 	if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) {
 		filter.GasLimitCap = params.MaxTxGas
 	}
-	filter.OnlyPlainTxs, filter.OnlyBlobV0Txs, filter.OnlyBlobV1Txs = true, false, false
+	filter.BlobTxs = false
 	pendingPlainTxs := miner.txpool.Pending(filter)
 
+	filter.BlobTxs = true
 	if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) {
-		filter.OnlyPlainTxs, filter.OnlyBlobV0Txs, filter.OnlyBlobV1Txs = false, false, true
+		filter.BlobVersion = types.BlobSidecarVersion1
 	} else {
-		filter.OnlyPlainTxs, filter.OnlyBlobV0Txs, filter.OnlyBlobV1Txs = false, true, false
+		filter.BlobVersion = types.BlobSidecarVersion0
 	}
 	pendingBlobTxs := miner.txpool.Pending(filter)
 

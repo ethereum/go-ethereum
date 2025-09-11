@@ -1667,7 +1667,7 @@ func (p *BlobPool) drop() {
 func (p *BlobPool) Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction {
 	// If only plain transactions are requested, this pool is unsuitable as it
 	// contains none, don't even bother.
-	if filter.OnlyPlainTxs {
+	if !filter.BlobTxs {
 		return nil
 	}
 	// Track the amount of time waiting to retrieve the list of pending blob txs
@@ -1688,12 +1688,8 @@ func (p *BlobPool) Pending(filter txpool.PendingFilter) map[common.Address][]*tx
 	for addr, txs := range p.index {
 		lazies := make([]*txpool.LazyTransaction, 0, len(txs))
 		for _, tx := range txs {
-
-			// Skip v0 or v1 blob transactions if not requested
-			if filter.OnlyBlobV0Txs && tx.version != types.BlobSidecarVersion0 {
-				break // skip the rest because of nonce ordering
-			}
-			if filter.OnlyBlobV1Txs && tx.version != types.BlobSidecarVersion1 {
+			// Skip v0 or v1 blob transactions depending on the filter
+			if tx.version != filter.BlobVersion {
 				break // skip the rest because of nonce ordering
 			}
 
