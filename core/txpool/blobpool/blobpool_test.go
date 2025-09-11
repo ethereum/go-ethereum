@@ -1758,7 +1758,7 @@ func TestAdd(t *testing.T) {
 			signed, _ := types.SignNewTx(keys[add.from], types.LatestSigner(params.MainnetChainConfig), add.tx)
 			sidecar, _ := signed.BlobTxSidecar().ToBlobTxCellSidecar()
 
-			if err := pool.add(signed.WithoutBlobTxSidecar(), sidecar); !errors.Is(err, add.err) {
+			if err := pool.add(signed.WithoutBlobTxSidecar(), sidecar, signed.Size()); !errors.Is(err, add.err) {
 				t.Errorf("test %d, tx %d: adding transaction error mismatch: have %v, want %v", i, j, err, add.err)
 			}
 			if add.err == nil {
@@ -1766,7 +1766,7 @@ func TestAdd(t *testing.T) {
 				if !exist {
 					t.Errorf("test %d, tx %d: failed to lookup transaction's size", i, j)
 				}
-				if size != signed.WithoutBlobTxSidecar().Size() {
+				if size != signed.Size() {
 					t.Errorf("test %d, tx %d: transaction's size mismatches: have %v, want %v",
 						i, j, size, signed.Size())
 				}
@@ -2131,7 +2131,7 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 		}
 		statedb.AddBalance(addr, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 		sidecar, _ := tx.BlobTxSidecar().ToBlobTxCellSidecar()
-		pool.add(tx.WithoutBlobTxSidecar(), sidecar)
+		pool.add(tx.WithoutBlobTxSidecar(), sidecar, tx.Size())
 	}
 	statedb.Commit(0, true, false)
 	defer pool.Close()
