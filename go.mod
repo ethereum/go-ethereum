@@ -77,17 +77,10 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-replace (
-	github.com/zkMIPS/zkMIPS => github.com/weilzkm/zkMIPS v0.0.0-20250909003003-28d77c6da0a4
-	github.com/zkMIPS/zkMIPS/crates/go-runtime/zkm_runtime => github.com/weilzkm/zkMIPS/crates/go-runtime/zkm_runtime v0.0.0-20250909003003-28d77c6da0a4
-)
-
 require (
-	github.com/zkMIPS/zkMIPS/crates/go-runtime/zkm_runtime v0.0.0-00010101000000-000000000000
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.7.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.3.0 // indirect
 	github.com/DataDog/zstd v1.4.5 // indirect
-	github.com/ProjectZKM/Ziren v1.1.5-0.20250905082253-b08c6f04754a // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.13.13 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.43 // indirect
