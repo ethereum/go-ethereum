@@ -121,12 +121,6 @@ type StateDB struct {
 	thash   common.Hash
 	txIndex int
 
-	// block access list modifications will be recorded with this index.
-	// 0 - state access before transaction execution
-	// 1 -> len(block txs) - state access of each transaction
-	// len(block txs) + 1 - state access after transaction execution.
-	balIndex int
-
 	logs    map[common.Hash][]*types.Log
 	logSize uint
 
@@ -303,34 +297,6 @@ func (s *StateDB) Preimages() map[common.Hash][]byte {
 func (s *StateDB) AddRefund(gas uint64) {
 	s.journal.refundChange(s.refund)
 	s.refund += gas
-}
-
-// LoadModifiedPrestate instantiates the live object based on accounts
-// which appeared in the total state diff of a block, and were also preexisting.
-func (s *StateDB) LoadModifiedPrestate(addrs []common.Address) (res map[common.Address]*types.StateAccount) {
-	stateAccounts := new(sync.Map)
-	wg := new(sync.WaitGroup)
-	res = make(map[common.Address]*types.StateAccount)
-
-	for _, addr := range addrs {
-		wg.Add(1)
-		go func(addr common.Address) {
-			acct, err := s.reader.Account(addr)
-			if err == nil && acct != nil { // TODO: what should we do if the error is not nil?
-				stateAccounts.Store(addr, acct)
-			}
-			wg.Done()
-		}(addr)
-	}
-	wg.Wait()
-	stateAccounts.Range(func(addr any, val any) bool {
-		address := addr.(common.Address)
-		stateAccount := val.(*types.StateAccount)
-		res[address] = stateAccount
-		return true
-	})
-
-	return res
 }
 
 // SubRefund removes gas from the refund counter.
@@ -740,7 +706,6 @@ func (s *StateDB) Copy() BlockProcessingDB {
 		refund:               s.refund,
 		thash:                s.thash,
 		txIndex:              s.txIndex,
-		balIndex:             s.txIndex,
 		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
 		logSize:              s.logSize,
 		preimages:            maps.Clone(s.preimages),
@@ -1098,14 +1063,6 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
 	s.thash = thash
 	s.txIndex = ti
-	s.balIndex = ti + 1
-}
-
-// SetAccessListIndex sets the current index that state mutations will
-// be reported as in the BAL.  It is only relevant if this StateDB instance
-// is being used in the BAL construction path.
-func (s *StateDB) SetAccessListIndex(idx int) {
-	s.balIndex = idx
 }
 
 func (s *StateDB) clearJournalAndRefund() {
