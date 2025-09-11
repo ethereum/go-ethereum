@@ -42,6 +42,10 @@ var (
 	mapWriteTimer    = metrics.NewRegisteredTimer("filtermaps/maps/writetime", nil)  // time elapsed while writing a batch of finished maps to db
 )
 
+// Indexer maintains a search data structure based on a parent blockchain that
+// is intended to make log event search more efficient. Once indexed up to the
+// chain head, it provides IndexView objects for recent chain heads.
+// Indexer implements core.Indexer.
 type Indexer struct {
 	config                                          Config
 	storage                                         *mapStorage
@@ -58,7 +62,7 @@ type Indexer struct {
 	headMapsCache                                   *lru.Cache[uint32, *finishedMap]
 }
 
-// Config contains the configuration options for NewFilterMaps.
+// Config contains the configuration options for Indexer.
 type Config struct {
 	History  uint64 // number of historical blocks to index
 	Disabled bool   // disables indexing completely
@@ -72,6 +76,7 @@ type Config struct {
 	HashScheme bool
 }
 
+// NewIndexer creates a new Indexer.
 func NewIndexer(db ethdb.KeyValueStore, params Params, config Config) *Indexer {
 	params.sanitize()
 	mapDb := newMapDatabase(&params, db, config.HashScheme)
@@ -93,6 +98,14 @@ func NewIndexer(db ethdb.KeyValueStore, params Params, config Config) *Indexer {
 	return ix
 }
 
+// Status returns the current indexer status. The ready flag indicates whether
+// the indexer is ready to process new block data. The needBlocks range, if not
+// empty, indicates that the indexer requests past blocks in order to complete
+// the index. These blocks should be delivered in strictly ascending order.
+// Note that if ready is false then needBlocks might still be non-empty, in
+// which case the blocks are not expected to be delivered yet but the index
+// server might already start pre-fetching them.
+// Status implements core.Indexer.
 func (ix *Indexer) Status() (bool, common.Range[uint64]) {
 	if ix.config.Disabled {
 		return false, common.Range[uint64]{}
@@ -100,6 +113,14 @@ func (ix *Indexer) Status() (bool, common.Range[uint64]) {
 	return ix.storage.isReady(), ix.needBlocks()
 }
 
+// AddBlockData delivers block data for new heads and requested historical range.
+// It returns the indexer status. Unwanted data is silently ignored. If the
+// indexer is not ready to process then the received data is also ignored and
+// then requested through the needBlocks response either in the current response
+// or later.
+// Note that this function also resumes the storage layer background process if
+// it was previously suspended.
+// AddBlockData implements core.Indexer.
 func (ix *Indexer) AddBlockData(headers []*types.Header, receipts []types.Receipts) (ready bool, needBlocks common.Range[uint64]) {
 	if ix.config.Disabled {
 		return false, common.Range[uint64]{}
@@ -144,12 +165,20 @@ func (ix *Indexer) AddBlockData(headers []*types.Header, receipts []types.Receip
 			} else {
 				// Note that if there is a canonical hash mismatch at the tail epoch then we need to revert the head renderer before this point.
 				ix.headRenderer = ix.initMapBoundary(max(ix.tailRenderer.renderRange.First(), 1)-1, math.MaxUint32)
+				ix.tailRenderer = nil
 			}
 		}
 	}
-	return ix.Status()
+	return ix.storage.isReady(), ix.needBlocks()
 }
 
+// Revert resets the index head to the given block number. Note that the indexer
+// might have to discard more data if a snapshot is not available for the given
+// block number. In this case it will request previously delivered but discarded
+// block data through the needBlocks status response.
+// Note that Revert works even if the indexer is in a "not ready" status, thereby
+// guaranteeing that all index data is always consistent with the canonical chain.
+// Revert implements core.Indexer.
 func (ix *Indexer) Revert(blockNumber uint64) {
 	if ix.config.Disabled {
 		return
@@ -186,14 +215,22 @@ func (ix *Indexer) Revert(blockNumber uint64) {
 	ix.updateTailEpoch()
 }
 
+// SetFinalized notifies the indexer about the latest finalized block number.
+// SetFinalized implements core.Indexer.
 func (ix *Indexer) SetFinalized(blockNumber uint64) {
 	ix.finalized = blockNumber
 }
 
+// SetHistoryCutoff notifies the indexer about the latest historical cutoff point.
+// The indexer will not request block data earlier than this point.
+// SetHistoryCutoff implements core.Indexer.
 func (ix *Indexer) SetHistoryCutoff(blockNumber uint64) {
 	ix.historyCutoff = blockNumber
 }
 
+// Suspended suspends the asynchronous storage layer background process during
+// block processing. The next AddBlockData call will resume this process.
+// Suspended implements core.Indexer.
 func (ix *Indexer) Suspended() {
 	if ix.config.Disabled {
 		return
@@ -201,30 +238,35 @@ func (ix *Indexer) Suspended() {
 	ix.storage.suspendOrResume(true)
 }
 
-func (ix *Indexer) initMapBoundary(nextMap, limitMap uint32) *renderState {
+// initMapBoundary initializes a new map renderer at the last suitable map
+// boundary before startMap. If this boundary is not right before startMap then
+// startMap is lowered to right after the boundary. The returned renderState
+// will render maps in the startMap..limitMap-1 range.
+// Note that the first requested block typically still starts in the previous
+// map and in case of tail renderers with an upper map limit, the last requested
+// block typically ends after the upper limit. In this case the maps outside the
+// rendered range are not modified, the log values outside the range are ignored.
+func (ix *Indexer) initMapBoundary(startMap, limitMap uint32) *renderState {
 	rs := &renderState{
-		params:      ix.storage.params,
-		renderRange: common.NewRange[uint32](nextMap, limitMap-nextMap),
+		params: ix.storage.params,
 	}
 	for {
-		nextMap = ix.storage.lastBoundaryBefore(nextMap)
-		if nextMap == 0 {
-			// initialize at genesis
-			rs.currentMap = rs.params.newMemoryMap()
-			return rs
+		startMap = ix.storage.lastBoundaryBefore(startMap)
+		if startMap == 0 {
+			break
 		}
-		lastNumber, lastHash, err := ix.storage.getLastBlockOfMap(nextMap - 1)
+		lastNumber, lastHash, err := ix.storage.getLastBlockOfMap(startMap - 1)
 		if err != nil {
-			log.Error("Last block of map not found, reverting database", "mapIndex", nextMap-1)
-			nextMap = ix.storage.lastBoundaryBefore(nextMap - 1)
-			ix.revertMaps(nextMap)
+			log.Error("Last block of map not found, reverting database", "mapIndex", startMap-1)
+			startMap = ix.storage.lastBoundaryBefore(startMap - 1)
+			ix.revertMaps(startMap)
 			continue
 		}
 		lvPointer, err := ix.storage.getBlockLvPointer(lastNumber)
 		if err != nil {
-			log.Error("Block pointer of last block of map not found, reverting database", "mapIndex", nextMap-1, "blockNumber", lastNumber)
-			nextMap = ix.storage.lastBoundaryBefore(nextMap - 1)
-			ix.revertMaps(nextMap)
+			log.Error("Block pointer of last block of map not found, reverting database", "mapIndex", startMap-1, "blockNumber", lastNumber)
+			startMap = ix.storage.lastBoundaryBefore(startMap - 1)
+			ix.revertMaps(startMap)
 			continue
 		}
 		rs.lvPointer = lvPointer
@@ -232,10 +274,18 @@ func (ix *Indexer) initMapBoundary(nextMap, limitMap uint32) *renderState {
 		rs.nextBlock = lastNumber
 		rs.partialBlock = true
 		rs.partialBlockHash = lastHash
-		return rs
+		break
 	}
+	rs.renderRange = common.NewRange[uint32](startMap, limitMap-startMap)
+	if rs.renderRange.Includes(rs.mapIndex) {
+		rs.currentMap = rs.params.newMemoryMap()
+	}
+	return rs
 }
 
+// initSnapshot initializes a new map renderer based on a snapshot. Since this
+// method is only used to initialize head renderers, a snapshot initialized
+// renderState always has an upper render limit of MaxUint32-1.
 func (ix *Indexer) initSnapshot(snapshot *IndexView) *renderState {
 	mapIndex := ix.storage.lastBoundaryBefore(snapshot.firstMemoryMap)
 	ix.revertMaps(mapIndex)
@@ -253,8 +303,11 @@ func (ix *Indexer) initSnapshot(snapshot *IndexView) *renderState {
 	}
 }
 
-// Note that revertMaps might be called while headRenderer is nil and might set
-// headRenderer to nil.
+// revertMaps removes all rendered maps starting from mapIndex. It also removes
+// active renderers and snapshots invalidated by the revert and purges the map
+// cache.
+// Note that while headRenderer generally always exists, revertMaps might be
+// called while headRenderer is nil and might set headRenderer to nil.
 func (ix *Indexer) revertMaps(mapIndex uint32) {
 	if mapIndex < ix.storage.lastBoundaryBefore(math.MaxUint32) {
 		for hash, iv := range ix.snapshots {
@@ -372,7 +425,7 @@ func (ix *Indexer) tryCheckpointInit(number uint64, hash common.Hash) {
 			// apply matching checkpoint, discard other lists
 			if err := ix.storage.addKnownEpochs(cpList[:epochs]); err == nil {
 				ix.checkpoints = []checkpointList{cpList}
-				ix.headRenderer = ix.initMapBoundary(epochs*ix.storage.params.mapsPerEpoch, math.MaxUint32)
+				ix.headRenderer = ix.initMapBoundary(ix.storage.params.firstEpochMap(epochs), math.MaxUint32)
 				return
 			} else {
 				log.Error("Error initializing epoch boundaries", "error", err)
