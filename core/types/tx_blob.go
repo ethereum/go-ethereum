@@ -198,16 +198,6 @@ type BlobTxCellSidecar struct {
 	CellIndices CustodyBitmap
 }
 
-func (c *BlobTxCellSidecar) ToBlobTxSidecar() *BlobTxSidecar {
-	blobs, _ := kzg4844.RecoverBlobs(c.Cells, c.CellIndices.Indices())
-	return &BlobTxSidecar{
-		Version:     c.Version,
-		Blobs:       blobs,
-		Commitments: c.Commitments,
-		Proofs:      c.Proofs,
-	}
-}
-
 // ValidateBlobCommitmentHashes checks whether the given hashes correspond to the
 // commitments in the sidecar
 func (c *BlobTxCellSidecar) ValidateBlobCommitmentHashes(hashes []common.Hash) error {

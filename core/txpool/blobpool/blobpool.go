@@ -169,8 +169,18 @@ func (ptx *PooledBlobTx) Hash() common.Hash {
 	return ptx.Transaction.Hash()
 }
 
-func (ptx *PooledBlobTx) Convert() *types.Transaction {
-	return ptx.Transaction.WithBlobTxSidecar(ptx.Sidecar.ToBlobTxSidecar())
+func (ptx *PooledBlobTx) Convert() (*types.Transaction, error) {
+	if ptx.Sidecar == nil {
+		return nil, errors.New("cell sidecar missing")
+	}
+	cellSidecar := ptx.Sidecar
+	blobs, err := kzg4844.RecoverBlobs(cellSidecar.Cells, cellSidecar.CellIndices.Indices())
+	if err != nil {
+		return nil, err
+	}
+	sidecar := types.NewBlobTxSidecar(cellSidecar.Version, blobs, cellSidecar.Commitments, cellSidecar.Proofs)
+
+	return ptx.Transaction.WithBlobTxSidecar(sidecar), nil
 }
 
 // BlobPool is the transaction pool dedicated to EIP-4844 blob transactions.
@@ -533,12 +543,10 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 			return errors.New("missing sidecar")
 		}
 	} else {
-		sidecar := pooledTx.Sidecar.ToBlobTxSidecar()
-		if sidecar == nil {
-			log.Error("Missing sidecar in blob pool entry", "id", id, "hash", pooledTx.Transaction.Hash())
-			return errors.New("missing sidecar")
+		tx, err = pooledTx.Convert()
+		if err != nil {
+			return err
 		}
-		tx = pooledTx.Convert()
 	}
 	meta := newBlobTxMeta(id, tx.Size(), size, tx)
 
@@ -1326,8 +1334,12 @@ func (p *BlobPool) getRLP(hash common.Hash) []byte {
 		}
 		return data
 	}
-
-	encoded, err := rlp.EncodeToBytes(pooledTx.Convert())
+	tx, err = pooledTx.Convert()
+	if err != nil {
+		log.Error("Failed to convert transaction in blobpool", "hash", hash, "id", id, "err", err)
+		return nil
+	}
+	encoded, err := rlp.EncodeToBytes(tx)
 	if err != nil {
 		log.Error("Failed to encode transaction in blobpool", "hash", hash, "id", id, "err", err)
 		return nil
@@ -1354,7 +1366,8 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 		}
 		return tx
 	}
-	return pooledTx.Convert()
+	tx, _ = pooledTx.Convert()
+	return tx
 }
 
 // GetRLP returns a RLP-encoded transaction if it is contained in the pool.
@@ -1431,11 +1444,13 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 				log.Error("Blobs corrupted for traced transaction", "id", txID, "err", err)
 				continue
 			}
-			sidecar = tx.BlobTxSidecar()
 		} else {
-			tx = pooledTx.Transaction
-			sidecar = pooledTx.Sidecar.ToBlobTxSidecar()
+			tx, err = pooledTx.Convert()
+			if err != nil {
+				return nil, nil, nil, err
+			}
 		}
+		sidecar = tx.BlobTxSidecar()
 		if sidecar == nil {
 			log.Error("Blob tx without sidecar", "hash", tx.Hash(), "id", txID)
 			continue

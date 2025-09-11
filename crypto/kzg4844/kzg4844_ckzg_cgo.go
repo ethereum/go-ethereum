@@ -248,7 +248,7 @@ func ckzgComputeCells(blobs []Blob) ([]Cell, error) {
 func ckzgRecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 	ckzgIniter.Do(ckzgInit)
 
-	if len(cells)%len(cellIndices) != 0 {
+	if len(cellIndices) == 0 || len(cells)%len(cellIndices) != 0 {
 		return []Blob{}, errors.New("cells with wrong length")
 	}
 
@@ -263,7 +263,7 @@ func ckzgRecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 			kzgcells = append(kzgcells, ckzg4844.Cell(cell))
 		}
 
-		extCells, _, err := ckzg4844.RecoverCellsAndKZGProofs(cellIndices, kzgcells)
+		extCells, err := ckzg4844.RecoverCells(cellIndices, kzgcells)
 		if err != nil {
 			return []Blob{}, err
 		}

@@ -206,7 +206,7 @@ func gokzgComputeCells(blobs []Blob) ([]Cell, error) {
 func gokzgRecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 	gokzgIniter.Do(gokzgInit)
 
-	if len(cells)%len(cellIndices) != 0 {
+	if len(cellIndices) == 0 || len(cells)%len(cellIndices) != 0 {
 		return []Blob{}, errors.New("cells with wrong length")
 	}
 
@@ -222,7 +222,7 @@ func gokzgRecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 			kzgcells = append(kzgcells, &gc)
 		}
 
-		extCells, _, err := context.RecoverCellsAndComputeKZGProofs(cellIndices, kzgcells, 2) // todo
+		extCells, err := context.RecoverCells(cellIndices, kzgcells)
 		if err != nil {
 			return []Blob{}, err
 		}
