@@ -64,6 +64,12 @@ import (
 )
 
 var (
+	// List of go modules for linting/testing/etc.
+	workspaceModules = []string{
+		".",
+		"./cmd/keeper",
+	}
+
 	// Files that end up in the geth*.zip archive.
 	gethArchiveFiles = []string{
 		"COPYING",
@@ -322,7 +328,7 @@ func doTest(cmdline []string) {
 		gotest.Args = append(gotest.Args, "-short")
 	}
 
-	packages := []string{"./..."}
+	packages := workspacePackagePatterns()
 	if len(flag.CommandLine.Args()) > 0 {
 		packages = flag.CommandLine.Args()
 	}
@@ -364,7 +370,7 @@ func doCheckGenerate() {
 		protocPath      = downloadProtoc(*cachedir)
 		protocGenGoPath = downloadProtocGenGo(*cachedir)
 	)
-	c := tc.Go("generate", "./...")
+	c := tc.Go("generate", workspacePackagePatterns()...)
 	pathList := []string{filepath.Join(protocPath, "bin"), protocGenGoPath, os.Getenv("PATH")}
 	c.Env = append(c.Env, "PATH="+strings.Join(pathList, string(os.PathListSeparator)))
 	build.MustRun(c)
@@ -424,7 +430,7 @@ func doLint(cmdline []string) {
 		cachedir = flag.String("cachedir", "./build/cache", "directory for caching golangci-lint binary.")
 	)
 	flag.CommandLine.Parse(cmdline)
-	packages := []string{"./..."}
+	packages := workspacePackagePatterns()
 	if len(flag.CommandLine.Args()) > 0 {
 		packages = flag.CommandLine.Args()
 	}
@@ -1168,4 +1174,12 @@ func doPurge(cmdline []string) {
 func doSanityCheck() {
 	csdb := download.MustLoadChecksums("build/checksums.txt")
 	csdb.DownloadAndVerifyAll()
+}
+
+func workspacePackagePatterns() []string {
+	p := make([]string, len(workspaceModules))
+	for i := range workspaceModules {
+		p[i] = workspaceModules[i] + "/..."
+	}
+	return p
 }
