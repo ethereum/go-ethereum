@@ -92,6 +92,7 @@ const (
 type blobTxMeta struct {
 	hash    common.Hash   // Transaction hash to maintain the lookup table
 	vhashes []common.Hash // Blob versioned hashes to maintain the lookup table
+	version byte          // Blob transaction version to determine proof type
 
 	id          uint64 // Storage ID in the pool's persistent store
 	storageSize uint32 // Byte size in the pool's persistent store
@@ -115,10 +116,16 @@ type blobTxMeta struct {
 
 // newBlobTxMeta retrieves the indexed metadata fields from a blob transaction
 // and assembles a helper struct to track in memory.
+// Requires the transaction to have a sidecar (or that we introduce a special version tag for no-sidecar).
 func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transaction) *blobTxMeta {
+	if tx.BlobTxSidecar() == nil {
+		// This should never happen, as the pool only admits blob transactions with a sidecar
+		panic("missing blob tx sidecar")
+	}
 	meta := &blobTxMeta{
 		hash:        tx.Hash(),
 		vhashes:     tx.BlobHashes(),
+		version:     tx.BlobTxSidecar().Version,
 		id:          id,
 		storageSize: storageSize,
 		size:        size,
@@ -1660,7 +1667,7 @@ func (p *BlobPool) drop() {
 func (p *BlobPool) Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction {
 	// If only plain transactions are requested, this pool is unsuitable as it
 	// contains none, don't even bother.
-	if filter.OnlyPlainTxs {
+	if !filter.BlobTxs {
 		return nil
 	}
 	// Track the amount of time waiting to retrieve the list of pending blob txs
@@ -1681,6 +1688,11 @@ func (p *BlobPool) Pending(filter txpool.PendingFilter) map[common.Address][]*tx
 	for addr, txs := range p.index {
 		lazies := make([]*txpool.LazyTransaction, 0, len(txs))
 		for _, tx := range txs {
+			// Skip v0 or v1 blob transactions depending on the filter
+			if tx.version != filter.BlobVersion {
+				break // skip the rest because of nonce ordering
+			}
+
 			// If transaction filtering was requested, discard badly priced ones
 			if filter.MinTip != nil && filter.BaseFee != nil {
 				if tx.execFeeCap.Lt(filter.BaseFee) {
