@@ -402,7 +402,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	slotter := newSlotter(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
 
 	// Check if we need to migrate our blob db to the new slotter.
-	if p.chain.Config().IsOsaka(head.Number, head.Time) {
+	if p.chain.Config().OsakaTime != nil {
 		// Open the store using the version slotter to see if any version has been
 		// written.
 		var version int
