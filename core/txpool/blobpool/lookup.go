@@ -22,7 +22,7 @@ import (
 
 type txMetadata struct {
 	id   uint64 // the billy id of transction
-	size uint64 // the RLP encoded size of transaction (blobs are excluded)
+	size uint64 // the RLP encoded size of transaction (blobs are included)
 }
 
 // lookup maps blob versioned hashes to transaction hashes that include them,

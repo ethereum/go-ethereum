@@ -101,10 +101,6 @@ type Claim [32]byte
 // useCKZG controls whether the cryptography should use the Go or C backend.
 var useCKZG atomic.Bool
 
-func init() {
-	UseCKZG(true)
-}
-
 // UseCKZG can be called to switch the default Go implementation of KZG to the C
 // library if for some reason the user wishes to do so (e.g. consensus bug in one
 // or the other).

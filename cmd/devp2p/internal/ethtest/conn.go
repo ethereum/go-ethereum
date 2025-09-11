@@ -40,7 +40,7 @@ var (
 		DisablePointerAddresses: true,
 		SortKeys:                true,
 	}
-	timeout = 3 * time.Second
+	timeout = 2 * time.Second
 )
 
 // dial attempts to dial the given node and perform a handshake, returning the
