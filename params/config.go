@@ -972,6 +972,16 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 	london := c.LondonBlock
 
 	switch {
+	case c.IsBPO5(london, time):
+		return forks.BPO5
+	case c.IsBPO4(london, time):
+		return forks.BPO4
+	case c.IsBPO3(london, time):
+		return forks.BPO3
+	case c.IsBPO2(london, time):
+		return forks.BPO2
+	case c.IsBPO1(london, time):
+		return forks.BPO1
 	case c.IsOsaka(london, time):
 		return forks.Osaka
 	case c.IsPrague(london, time):
@@ -988,12 +998,22 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 // BlobConfig returns the blob config associated with the provided fork.
 func (c *ChainConfig) BlobConfig(fork forks.Fork) *BlobConfig {
 	switch fork {
+	case forks.BPO5:
+		return c.BlobScheduleConfig.BPO5
+	case forks.BPO4:
+		return c.BlobScheduleConfig.BPO4
+	case forks.BPO3:
+		return c.BlobScheduleConfig.BPO3
+	case forks.BPO2:
+		return c.BlobScheduleConfig.BPO2
+	case forks.BPO1:
+		return c.BlobScheduleConfig.BPO1
 	case forks.Osaka:
-		return DefaultOsakaBlobConfig
+		return c.BlobScheduleConfig.Osaka
 	case forks.Prague:
-		return DefaultPragueBlobConfig
+		return c.BlobScheduleConfig.Prague
 	case forks.Cancun:
-		return DefaultCancunBlobConfig
+		return c.BlobScheduleConfig.Cancun
 	default:
 		return nil
 	}
@@ -1023,6 +1043,16 @@ func (c *ChainConfig) ActiveSystemContracts(time uint64) map[string]common.Addre
 // the fork isn't defined or isn't a time-based fork.
 func (c *ChainConfig) Timestamp(fork forks.Fork) *uint64 {
 	switch {
+	case fork == forks.BPO5:
+		return c.BPO5Time
+	case fork == forks.BPO4:
+		return c.BPO4Time
+	case fork == forks.BPO3:
+		return c.BPO3Time
+	case fork == forks.BPO2:
+		return c.BPO2Time
+	case fork == forks.BPO1:
+		return c.BPO1Time
 	case fork == forks.Osaka:
 		return c.OsakaTime
 	case fork == forks.Prague:
