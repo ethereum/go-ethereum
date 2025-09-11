@@ -1,24 +1,7 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
-package vm
+package state
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -28,8 +11,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// StateDB is an EVM database for full state querying.
-type StateDB interface {
+type BlockProcessingDB interface {
 	CreateAccount(common.Address)
 	CreateContract(common.Address)
 
@@ -69,7 +51,7 @@ type StateDB interface {
 	// true iff the object was indeed destructed.
 	SelfDestruct6780(common.Address) (uint256.Int, bool)
 
-	// Exist reports whether the given account exists in state.
+	// Exist reports whether the given account exists in
 	// Notably this also returns true for self-destructed accounts within the current transaction.
 	Exist(common.Address) bool
 	// Empty returns whether the given account is empty. Empty
@@ -98,8 +80,21 @@ type StateDB interface {
 
 	Witness() *stateless.Witness
 
-	AccessEvents() *state.AccessEvents
+	AccessEvents() *AccessEvents
 
 	// Finalise must be invoked at the end of a transaction
 	Finalise(bool) (*bal.StateDiff, *bal.StateAccesses)
+
+	GetLogs(hash common.Hash, blockNumber uint64, blockHash common.Hash, blockTime uint64) []*types.Log
+
+	IntermediateRoot(deleteEmpty bool) common.Hash
+
+	Database() Database
+	GetTrie() Trie
+	SetTxContext(thash common.Hash, ti int)
+	Error() error
+
+	TxIndex() int
+
+	Copy() BlockProcessingDB
 }

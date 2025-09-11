@@ -17,6 +17,7 @@
 package state
 
 import (
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -32,12 +33,12 @@ import (
 // hookedStateDB represents a statedb which emits calls to tracing-hooks
 // on state operations.
 type hookedStateDB struct {
-	inner *StateDB
+	inner BlockProcessingDB
 	hooks *tracing.Hooks
 }
 
 // NewHookedState wraps the given stateDb with the given hooks
-func NewHookedState(stateDb *StateDB, hooks *tracing.Hooks) *hookedStateDB {
+func NewHookedState(stateDb BlockProcessingDB, hooks *tracing.Hooks) *hookedStateDB {
 	s := &hookedStateDB{stateDb, hooks}
 	if s.hooks == nil {
 		s.hooks = new(tracing.Hooks)
@@ -275,18 +276,21 @@ func (s *hookedStateDB) AddLog(log *types.Log) {
 	}
 }
 
-func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
-	defer s.inner.Finalise(deleteEmptyObjects)
-	if s.hooks.OnBalanceChange == nil {
-		return
-	}
-	for addr := range s.inner.journal.dirties {
-		obj := s.inner.stateObjects[addr]
-		if obj != nil && obj.selfDestructed {
-			// If ether was sent to account post-selfdestruct it is burnt.
-			if bal := obj.Balance(); bal.Sign() != 0 {
-				s.hooks.OnBalanceChange(addr, bal.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestructBurn)
+func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) (mutations *bal.StateDiff, accesses *bal.StateAccesses) {
+	return s.inner.Finalise(deleteEmptyObjects)
+	/*
+		// TODO: re-implement the below functionality using the returned state diff
+			if s.hooks.OnBalanceChange == nil {
+				return
 			}
-		}
-	}
+			for addr := range s.inner.journal.dirties {
+				obj := s.inner.stateObjects[addr]
+				if obj != nil && obj.selfDestructed {
+					// If ether was sent to account post-selfdestruct it is burnt.
+					if bal := obj.Balance(); bal.Sign() != 0 {
+						s.hooks.OnBalanceChange(addr, bal.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestructBurn)
+					}
+				}
+			}
+	*/
 }

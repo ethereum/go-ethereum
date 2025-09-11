@@ -270,12 +270,6 @@ var (
 		Usage:    "Scheme to use for storing ethereum state ('hash' or 'path')",
 		Category: flags.StateCategory,
 	}
-	StateSizeTrackingFlag = &cli.BoolFlag{
-		Name:     "state.size-tracking",
-		Usage:    "Enable state size tracking, retrieve state size with debug_stateSize.",
-		Value:    ethconfig.Defaults.EnableStateSizeTracking,
-		Category: flags.StateCategory,
-	}
 	StateHistoryFlag = &cli.Uint64Flag{
 		Name:     "history.state",
 		Usage:    "Number of recent blocks to retain state history for, only relevant in state.scheme=path (default = 90,000 blocks, 0 = entire chain)",
@@ -971,6 +965,14 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Usage:    "InfluxDB organization name (v2 only)",
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
+	}
+
+	// Block Access List flags
+
+	ExperimentalBALFlag = &cli.BoolFlag{
+		Name:     "experimentalbal",
+		Usage:    "Enable block-access-list building when importing post-Cancun blocks, and validation that access lists contained in post-Cancun blocks correctly correspond to the state changes in those blocks. This is used for development purposes only.  Do not enable it otherwise.",
+		Category: flags.MiscCategory,
 	}
 )
 
@@ -1732,9 +1734,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.EthDiscoveryURLs = SplitAndTrim(urls)
 		}
 	}
-	if ctx.Bool(StateSizeTrackingFlag.Name) {
-		cfg.EnableStateSizeTracking = true
-	}
 	// Override any default configs for hard coded networks.
 	switch {
 	case ctx.Bool(MainnetFlag.Name):
@@ -1861,6 +1860,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.VMTraceJsonConfig = ctx.String(VMTraceJsonConfigFlag.Name)
 		}
 	}
+
+	cfg.ExperimentalBAL = ctx.Bool(ExperimentalBALFlag.Name)
 }
 
 // MakeBeaconLightConfig constructs a beacon light client config based on the
@@ -2217,9 +2218,6 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		// - DATADIR/triedb/merkle.journal
 		// - DATADIR/triedb/verkle.journal
 		TrieJournalDirectory: stack.ResolvePath("triedb"),
-
-		// Enable state size tracking if enabled
-		StateSizeTracking: ctx.Bool(StateSizeTrackingFlag.Name),
 	}
 	if options.ArchiveMode && !options.Preimages {
 		options.Preimages = true
@@ -2256,6 +2254,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	}
 	options.VmConfig = vmcfg
 
+	options.EnableBAL = ctx.Bool(ExperimentalBALFlag.Name)
 	chain, err := core.NewBlockChain(chainDb, gspec, engine, options)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
@@ -2281,7 +2280,7 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 }
 
 // MakeTrieDatabase constructs a trie database based on the configured scheme.
-func MakeTrieDatabase(ctx *cli.Context, stack *node.Node, disk ethdb.Database, preimage bool, readOnly bool, isVerkle bool) *triedb.Database {
+func MakeTrieDatabase(ctx *cli.Context, disk ethdb.Database, preimage bool, readOnly bool, isVerkle bool) *triedb.Database {
 	config := &triedb.Config{
 		Preimages: preimage,
 		IsVerkle:  isVerkle,
@@ -2297,13 +2296,10 @@ func MakeTrieDatabase(ctx *cli.Context, stack *node.Node, disk ethdb.Database, p
 		config.HashDB = hashdb.Defaults
 		return triedb.NewDatabase(disk, config)
 	}
-	var pathConfig pathdb.Config
 	if readOnly {
-		pathConfig = *pathdb.ReadOnly
+		config.PathDB = pathdb.ReadOnly
 	} else {
-		pathConfig = *pathdb.Defaults
+		config.PathDB = pathdb.Defaults
 	}
-	pathConfig.JournalDirectory = stack.ResolvePath("triedb")
-	config.PathDB = &pathConfig
 	return triedb.NewDatabase(disk, config)
 }

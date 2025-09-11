@@ -18,17 +18,17 @@ package bal
 
 import (
 	"bytes"
-	"maps"
-
+	"encoding/json"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
+	"maps"
 )
 
 // CodeChange contains the runtime bytecode deployed at an address and the
 // transaction index where the deployment took place.
 type CodeChange struct {
-	TxIndex uint16
-	Code    []byte `json:"code,omitempty"`
+	TxIdx uint16
+	Code  []byte `json:"code,omitempty"`
 }
 
 // ConstructionAccountAccess contains post-block account state for mutations as well as
@@ -38,26 +38,24 @@ type ConstructionAccountAccess struct {
 	// StorageWrites is the post-state values of an account's storage slots
 	// that were modified in a block, keyed by the slot key and the tx index
 	// where the modification occurred.
-	StorageWrites map[common.Hash]map[uint16]common.Hash `json:"storageWrites,omitempty"`
+	StorageWrites map[common.Hash]map[uint16]common.Hash
 
 	// StorageReads is the set of slot keys that were accessed during block
 	// execution.
 	//
 	// Storage slots which are both read and written (with changed values)
 	// appear only in StorageWrites.
-	StorageReads map[common.Hash]struct{} `json:"storageReads,omitempty"`
+	StorageReads map[common.Hash]struct{}
 
 	// BalanceChanges contains the post-transaction balances of an account,
 	// keyed by transaction indices where it was changed.
-	BalanceChanges map[uint16]*uint256.Int `json:"balanceChanges,omitempty"`
+	BalanceChanges map[uint16]*uint256.Int
 
 	// NonceChanges contains the post-state nonce values of an account keyed
 	// by tx index.
-	NonceChanges map[uint16]uint64 `json:"nonceChanges,omitempty"`
+	NonceChanges map[uint16]uint64
 
-	// CodeChange is only set for contract accounts which were deployed in
-	// the block.
-	CodeChange *CodeChange `json:"codeChange,omitempty"`
+	CodeChanges map[uint16]CodeChange
 }
 
 // NewConstructionAccountAccess initializes the account access object.
@@ -67,6 +65,7 @@ func NewConstructionAccountAccess() *ConstructionAccountAccess {
 		StorageReads:   make(map[common.Hash]struct{}),
 		BalanceChanges: make(map[uint16]*uint256.Int),
 		NonceChanges:   make(map[uint16]uint64),
+		CodeChanges:    make(map[uint16]CodeChange),
 	}
 }
 
@@ -77,83 +76,77 @@ type ConstructionBlockAccessList struct {
 }
 
 // NewConstructionBlockAccessList instantiates an empty access list.
-func NewConstructionBlockAccessList() ConstructionBlockAccessList {
-	return ConstructionBlockAccessList{
+func NewConstructionBlockAccessList() *ConstructionBlockAccessList {
+	return &ConstructionBlockAccessList{
 		Accounts: make(map[common.Address]*ConstructionAccountAccess),
 	}
 }
 
 // AccountRead records the address of an account that has been read during execution.
-func (b *ConstructionBlockAccessList) AccountRead(addr common.Address) {
-	if _, ok := b.Accounts[addr]; !ok {
-		b.Accounts[addr] = NewConstructionAccountAccess()
+func (c *ConstructionBlockAccessList) AccountRead(addr common.Address) {
+	if _, ok := c.Accounts[addr]; !ok {
+		c.Accounts[addr] = NewConstructionAccountAccess()
 	}
 }
 
 // StorageRead records a storage key read during execution.
-func (b *ConstructionBlockAccessList) StorageRead(address common.Address, key common.Hash) {
-	if _, ok := b.Accounts[address]; !ok {
-		b.Accounts[address] = NewConstructionAccountAccess()
+func (c *ConstructionBlockAccessList) StorageRead(address common.Address, key common.Hash) {
+	if _, ok := c.Accounts[address]; !ok {
+		c.Accounts[address] = NewConstructionAccountAccess()
 	}
-	if _, ok := b.Accounts[address].StorageWrites[key]; ok {
+	if _, ok := c.Accounts[address].StorageWrites[key]; ok {
 		return
 	}
-	b.Accounts[address].StorageReads[key] = struct{}{}
+	c.Accounts[address].StorageReads[key] = struct{}{}
 }
 
 // StorageWrite records the post-transaction value of a mutated storage slot.
 // The storage slot is removed from the list of read slots.
-func (b *ConstructionBlockAccessList) StorageWrite(txIdx uint16, address common.Address, key, value common.Hash) {
-	if _, ok := b.Accounts[address]; !ok {
-		b.Accounts[address] = NewConstructionAccountAccess()
+func (c *ConstructionBlockAccessList) StorageWrite(txIdx uint16, address common.Address, key, value common.Hash) {
+	if _, ok := c.Accounts[address]; !ok {
+		c.Accounts[address] = NewConstructionAccountAccess()
 	}
-	if _, ok := b.Accounts[address].StorageWrites[key]; !ok {
-		b.Accounts[address].StorageWrites[key] = make(map[uint16]common.Hash)
+	if _, ok := c.Accounts[address].StorageWrites[key]; !ok {
+		c.Accounts[address].StorageWrites[key] = make(map[uint16]common.Hash)
 	}
-	b.Accounts[address].StorageWrites[key][txIdx] = value
+	c.Accounts[address].StorageWrites[key][txIdx] = value
 
-	delete(b.Accounts[address].StorageReads, key)
+	delete(c.Accounts[address].StorageReads, key)
 }
 
 // CodeChange records the code of a newly-created contract.
-func (b *ConstructionBlockAccessList) CodeChange(address common.Address, txIndex uint16, code []byte) {
-	if _, ok := b.Accounts[address]; !ok {
-		b.Accounts[address] = NewConstructionAccountAccess()
+func (c *ConstructionBlockAccessList) CodeChange(address common.Address, txIndex uint16, code []byte) {
+	if _, ok := c.Accounts[address]; !ok {
+		c.Accounts[address] = NewConstructionAccountAccess()
 	}
-	b.Accounts[address].CodeChange = &CodeChange{
-		TxIndex: txIndex,
-		Code:    bytes.Clone(code),
+	c.Accounts[address].CodeChanges[txIndex] = CodeChange{
+		TxIdx: txIndex,
+		Code:  bytes.Clone(code),
 	}
 }
 
 // NonceChange records tx post-state nonce of any contract-like accounts whose
 // nonce was incremented.
-func (b *ConstructionBlockAccessList) NonceChange(address common.Address, txIdx uint16, postNonce uint64) {
-	if _, ok := b.Accounts[address]; !ok {
-		b.Accounts[address] = NewConstructionAccountAccess()
+func (c *ConstructionBlockAccessList) NonceChange(address common.Address, txIdx uint16, postNonce uint64) {
+	if _, ok := c.Accounts[address]; !ok {
+		c.Accounts[address] = NewConstructionAccountAccess()
 	}
-	b.Accounts[address].NonceChanges[txIdx] = postNonce
+	c.Accounts[address].NonceChanges[txIdx] = postNonce
 }
 
 // BalanceChange records the post-transaction balance of an account whose
 // balance changed.
-func (b *ConstructionBlockAccessList) BalanceChange(txIdx uint16, address common.Address, balance *uint256.Int) {
-	if _, ok := b.Accounts[address]; !ok {
-		b.Accounts[address] = NewConstructionAccountAccess()
+func (c *ConstructionBlockAccessList) BalanceChange(txIdx uint16, address common.Address, balance *uint256.Int) {
+	if _, ok := c.Accounts[address]; !ok {
+		c.Accounts[address] = NewConstructionAccountAccess()
 	}
-	b.Accounts[address].BalanceChanges[txIdx] = balance.Clone()
-}
-
-// PrettyPrint returns a human-readable representation of the access list
-func (b *ConstructionBlockAccessList) PrettyPrint() string {
-	enc := b.toEncodingObj()
-	return enc.PrettyPrint()
+	c.Accounts[address].BalanceChanges[txIdx] = balance.Clone()
 }
 
 // Copy returns a deep copy of the access list.
-func (b *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
+func (c *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 	res := NewConstructionBlockAccessList()
-	for addr, aa := range b.Accounts {
+	for addr, aa := range c.Accounts {
 		var aaCopy ConstructionAccountAccess
 
 		slotWrites := make(map[common.Hash]map[uint16]common.Hash, len(aa.StorageWrites))
@@ -170,13 +163,247 @@ func (b *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 		aaCopy.BalanceChanges = balances
 		aaCopy.NonceChanges = maps.Clone(aa.NonceChanges)
 
-		if aa.CodeChange != nil {
-			aaCopy.CodeChange = &CodeChange{
-				TxIndex: aa.CodeChange.TxIndex,
-				Code:    bytes.Clone(aa.CodeChange.Code),
+		codeChangesCopy := make(map[uint16]CodeChange)
+		for idx, codeChange := range aa.CodeChanges {
+			codeChangesCopy[idx] = CodeChange{
+				TxIdx: idx,
+				Code:  bytes.Clone(codeChange.Code),
 			}
 		}
 		res.Accounts[addr] = &aaCopy
 	}
-	return &res
+	return res
+}
+
+// ApplyDiff includes the given changes in the block access list at the given index.
+func (c *ConstructionBlockAccessList) ApplyDiff(i uint, diff *StateDiff) {
+	idx := uint16(i)
+	for addr, acctDiff := range diff.Mutations {
+		if _, ok := c.Accounts[addr]; !ok {
+			c.Accounts[addr] = &ConstructionAccountAccess{}
+		}
+		if acctDiff.Balance != nil {
+			if c.Accounts[addr].BalanceChanges == nil {
+				c.Accounts[addr].BalanceChanges = make(map[uint16]*uint256.Int)
+			}
+			c.Accounts[addr].BalanceChanges[idx] = acctDiff.Balance
+		}
+		if acctDiff.Nonce != nil {
+			if c.Accounts[addr].NonceChanges == nil {
+				c.Accounts[addr].NonceChanges = make(map[uint16]uint64)
+			}
+			c.Accounts[addr].NonceChanges[uint16(idx)] = *acctDiff.Nonce
+		}
+		if acctDiff.Code != nil {
+			if c.Accounts[addr].CodeChanges == nil {
+				c.Accounts[addr].CodeChanges = make(map[uint16]CodeChange)
+			}
+			// TODO: make the CodeChanges value just be []byte
+			c.Accounts[addr].CodeChanges[uint16(idx)] = CodeChange{idx, acctDiff.Code}
+		}
+		if acctDiff.StorageWrites != nil {
+			if c.Accounts[addr].StorageWrites == nil {
+				// TODO: can we instantiate all these maps in the constructor?
+				c.Accounts[addr].StorageWrites = make(map[common.Hash]map[uint16]common.Hash)
+			}
+
+			for slot, val := range acctDiff.StorageWrites {
+				if c.Accounts[addr].StorageWrites[slot] == nil {
+					c.Accounts[addr].StorageWrites[slot] = make(map[uint16]common.Hash)
+				}
+
+				c.Accounts[addr].StorageWrites[slot][idx] = val
+
+				delete(c.Accounts[addr].StorageReads, slot)
+			}
+		}
+	}
+}
+
+// ApplyAccesses records the given account/storage accesses in the BAL.
+func (c *ConstructionBlockAccessList) ApplyAccesses(accesses StateAccesses) {
+	for addr, acctAccesses := range accesses {
+		if c.Accounts[addr] == nil {
+			c.Accounts[addr] = &ConstructionAccountAccess{}
+		}
+		if len(acctAccesses) > 0 {
+
+			if c.Accounts[addr].StorageReads == nil {
+				c.Accounts[addr].StorageReads = make(map[common.Hash]struct{})
+			}
+			for key, _ := range acctAccesses {
+				// if any of the accessed keys were previously written, they
+				// appear in the written set only and not also in accesses.
+				if len(c.Accounts[addr].StorageWrites) > 0 {
+					if _, ok := c.Accounts[addr].StorageWrites[key]; ok {
+						continue
+					}
+				}
+				c.Accounts[addr].StorageReads[key] = struct{}{}
+			}
+		}
+	}
+}
+
+type StateDiff struct {
+	Mutations map[common.Address]*AccountState `json:"Mutations,omitempty"`
+}
+
+type StateAccesses map[common.Address]map[common.Hash]struct{}
+
+type AccountState struct {
+	Balance       *uint256.Int                `json:"Balance,omitempty"`
+	Nonce         *uint64                     `json:"Nonce,omitempty"`
+	Code          ContractCode                `json:"Code,omitempty"`
+	StorageWrites map[common.Hash]common.Hash `json:"StorageWrites,omitempty"`
+}
+
+func (a *AccountState) String() string {
+	var res bytes.Buffer
+	enc := json.NewEncoder(&res)
+	enc.SetIndent("", "    ")
+	enc.Encode(a)
+	return res.String()
+}
+
+// Merge the changes of a future AccountState into the caller, resulting in the
+// combined state changes through next.
+func (a *AccountState) Merge(next *AccountState) {
+	if next.Balance != nil {
+		a.Balance = next.Balance
+	}
+	if next.Nonce != nil {
+		a.Nonce = next.Nonce
+	}
+	if next.Code != nil {
+		a.Code = next.Code
+	}
+	if next.StorageWrites != nil {
+		if a.StorageWrites == nil {
+			a.StorageWrites = maps.Clone(next.StorageWrites)
+		} else {
+			for key, val := range next.StorageWrites {
+				a.StorageWrites[key] = val
+			}
+		}
+	}
+}
+
+func NewEmptyAccountState() *AccountState {
+	return &AccountState{
+		nil,
+		nil,
+		nil,
+		nil,
+	}
+}
+
+func (a *AccountState) Eq(other *AccountState) bool {
+	if a.Balance != nil || other.Balance != nil {
+		if a.Balance == nil || other.Balance == nil {
+			return false
+		}
+
+		if !a.Balance.Eq(other.Balance) {
+			return false
+		}
+	}
+
+	if (len(a.Code) != 0 || len(other.Code) != 0) && !bytes.Equal(a.Code, other.Code) {
+		return false
+	}
+
+	if a.Nonce != nil || other.Nonce != nil {
+		if a.Nonce == nil || other.Nonce == nil {
+			return false
+		}
+
+		if *a.Nonce != *other.Nonce {
+			return false
+		}
+	}
+
+	if a.StorageWrites != nil || other.StorageWrites != nil {
+		if a.StorageWrites == nil || other.StorageWrites == nil {
+			return false
+		}
+
+		if !maps.Equal(a.StorageWrites, other.StorageWrites) {
+			return false
+		}
+	}
+	return true
+}
+
+func (a *AccountState) Copy() *AccountState {
+	res := NewEmptyAccountState()
+	if a.Nonce != nil {
+		res.Nonce = new(uint64)
+		*res.Nonce = *a.Nonce
+	}
+	if a.Code != nil {
+		res.Code = bytes.Clone(a.Code)
+	}
+	if a.Balance != nil {
+		res.Balance = new(uint256.Int).Set(a.Balance)
+	}
+	if a.StorageWrites != nil {
+		res.StorageWrites = maps.Clone(a.StorageWrites)
+	}
+	return res
+}
+
+func (s *StateDiff) String() string {
+	var res bytes.Buffer
+	enc := json.NewEncoder(&res)
+	enc.SetIndent("", "    ")
+	enc.Encode(s)
+	return res.String()
+}
+
+// Merge merges the state changes present in next into the caller.  After,
+// the state of the caller is the aggregate diff through next.
+func (s *StateDiff) Merge(next *StateDiff) {
+	for account, diff := range next.Mutations {
+		if mut, ok := s.Mutations[account]; ok {
+			if diff.Balance != nil {
+				mut.Balance = diff.Balance
+			}
+			if diff.Code != nil {
+				mut.Code = diff.Code
+			}
+			if diff.Nonce != nil {
+				mut.Nonce = diff.Nonce
+			}
+			if len(diff.StorageWrites) > 0 {
+				if mut.StorageWrites == nil {
+					mut.StorageWrites = maps.Clone(diff.StorageWrites)
+				} else {
+					for key, val := range diff.StorageWrites {
+						mut.StorageWrites[key] = val
+					}
+				}
+
+			}
+		} else {
+			s.Mutations[account] = diff.Copy()
+		}
+	}
+}
+
+func (s *StateDiff) Copy() *StateDiff {
+	res := &StateDiff{make(map[common.Address]*AccountState)}
+	for addr, accountDiff := range s.Mutations {
+		cpy := accountDiff.Copy()
+		res.Mutations[addr] = cpy
+	}
+	return res
+}
+
+// Copy returns a deep copy of the access list
+func (e BlockAccessList) Copy() (res BlockAccessList) {
+	for _, accountAccess := range e {
+		res = append(res, accountAccess.Copy())
+	}
+	return
 }
