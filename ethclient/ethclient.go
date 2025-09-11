@@ -479,6 +479,10 @@ func (ec *Client) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuer
 	// TODO(s1na): Log subscription prohibits ToBlock being set.
 	// This will be later re-allowed once it supports historical-only queries.
 	arg["toBlock"] = nil
+	// For subscriptions, if FromBlock is nil, we want only live logs, not historical logs from genesis
+	if q.FromBlock == nil {
+		arg["fromBlock"] = "latest"
+	}
 	sub, err := ec.c.EthSubscribe(ctx, ch, "logs", arg)
 	if err != nil {
 		// Defensively prefer returning nil interface explicitly on error-path, instead
