@@ -127,6 +127,8 @@ func (api *DownloaderAPI) eventLoop() {
 				c <- false
 			}
 			done = true
+		case <-sub.Err():
+			return
 		}
 	}
 }
