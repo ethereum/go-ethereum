@@ -31,7 +31,7 @@ import (
 )
 
 func init() {
-	tracers.DefaultDirectory.Register("keccak256preimageTracer", newKeccak256preimageTracer, false)
+	tracers.DefaultDirectory.Register("keccak256PreimageTracer", newKeccak256preimageTracer, false)
 }
 
 // keccak256preimageTracer is a native tracer that will collect preimages of all keccak256 calls.
