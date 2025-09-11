@@ -150,7 +150,7 @@ func ValidateBlobSidecar(tx *types.Transaction, sidecar *types.BlobTxCellSidecar
 		return fmt.Errorf("%w: blob fee cap %v, minimum needed %v", ErrTxGasPriceTooLow, tx.BlobGasFeeCap(), blobTxMinBlobGasPrice)
 	}
 	// Verify whether the blob count is consistent with other parts of the sidecar and the transaction
-	blobCount := len(sidecar.Cells) / sidecar.CellIndices.OneCount()
+	blobCount := len(sidecar.Cells) / sidecar.Custody.OneCount()
 	hashes := tx.BlobHashes()
 	if blobCount == 0 {
 		return errors.New("blobless blob transaction")
@@ -181,7 +181,7 @@ func validateBlobSidecarLegacy(sidecar *types.BlobTxCellSidecar, hashes []common
 	if len(sidecar.Proofs) != len(hashes) {
 		return fmt.Errorf("invalid number of %d blob proofs expected %d", len(sidecar.Proofs), len(hashes))
 	}
-	blobs, err := kzg4844.RecoverBlobs(sidecar.Cells, sidecar.CellIndices.Indices())
+	blobs, err := kzg4844.RecoverBlobs(sidecar.Cells, sidecar.Custody.Indices())
 	if err != nil {
 		return err
 	}
@@ -200,7 +200,7 @@ func validateBlobSidecarOsaka(sidecar *types.BlobTxCellSidecar, hashes []common.
 	if len(sidecar.Proofs) != len(hashes)*kzg4844.CellProofsPerBlob {
 		return fmt.Errorf("invalid number of %d blob proofs expected %d", len(sidecar.Proofs), len(hashes)*kzg4844.CellProofsPerBlob)
 	}
-	return kzg4844.VerifyCells(sidecar.Cells, sidecar.Commitments, sidecar.Proofs, sidecar.CellIndices.Indices())
+	return kzg4844.VerifyCells(sidecar.Cells, sidecar.Commitments, sidecar.Proofs, sidecar.Custody.Indices())
 }
 
 // ValidationOptionsWithState define certain differences between stateful transaction

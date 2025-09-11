@@ -37,7 +37,11 @@ var (
 	cellT       = reflect.TypeFor[Cell]()
 )
 
-const CellProofsPerBlob = 128
+const (
+	CellProofsPerBlob = 128
+	CellsPerBlob      = 128
+	DataPerBlob       = 64
+)
 
 type Cell [2048]byte
 

@@ -186,7 +186,7 @@ func (sc *BlobTxSidecar) ToBlobTxCellSidecar() (*BlobTxCellSidecar, error) {
 		Cells:       cells,
 		Commitments: sc.Commitments,
 		Proofs:      sc.Proofs,
-		CellIndices: CustodyBitmap{}.SetAll(),
+		Custody:     CustodyBitmap{}.SetAll(),
 	}, nil
 }
 
@@ -195,7 +195,7 @@ type BlobTxCellSidecar struct {
 	Cells       []kzg4844.Cell
 	Commitments []kzg4844.Commitment
 	Proofs      []kzg4844.Proof
-	CellIndices CustodyBitmap
+	Custody     CustodyBitmap
 }
 
 // ValidateBlobCommitmentHashes checks whether the given hashes correspond to the

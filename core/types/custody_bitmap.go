@@ -3,15 +3,15 @@ package types
 import (
 	"errors"
 	"math/bits"
+
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 )
 
 // `CustodyBitmap` is a bitmap to represent which custody index to store (little endian)
 type CustodyBitmap [16]byte
 
-const CustodySize = 128
-
 func (b CustodyBitmap) IsSet(i uint) bool {
-	if i >= CustodySize {
+	if i >= uint(kzg4844.CellsPerBlob) {
 		return false
 	}
 	index := i / 8
@@ -21,7 +21,7 @@ func (b CustodyBitmap) IsSet(i uint) bool {
 
 // Set ith bit
 func (b *CustodyBitmap) Set(i uint) error {
-	if i >= CustodySize {
+	if i >= uint(kzg4844.CellsPerBlob) {
 		return errors.New("bit index out of range")
 	}
 	index := i / 8
@@ -32,7 +32,7 @@ func (b *CustodyBitmap) Set(i uint) error {
 
 // Clear ith bit
 func (b *CustodyBitmap) Clear(i uint) error {
-	if i >= CustodySize {
+	if i >= uint(kzg4844.CellsPerBlob) {
 		return errors.New("bit index out of range")
 	}
 	index := i / 8
@@ -67,7 +67,7 @@ func (b CustodyBitmap) Indices() []uint64 {
 
 func (b CustodyBitmap) SetIndices(indices []uint64) error {
 	for _, i := range indices {
-		if i >= CustodySize {
+		if i >= uint64(kzg4844.CellsPerBlob) {
 			return errors.New("bit index out of range")
 		}
 		byteIdx := i / 8
@@ -79,6 +79,13 @@ func (b CustodyBitmap) SetIndices(indices []uint64) error {
 
 func (b CustodyBitmap) SetAll() CustodyBitmap {
 	for i := 0; i < len(b); i++ {
+		b[i] = 0xFF
+	}
+	return b
+}
+
+func (b CustodyBitmap) SetData() CustodyBitmap {
+	for i := 0; i < kzg4844.DataPerBlob/8; i++ {
 		b[i] = 0xFF
 	}
 	return b

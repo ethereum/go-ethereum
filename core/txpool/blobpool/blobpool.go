@@ -174,13 +174,42 @@ func (ptx *PooledBlobTx) Convert() (*types.Transaction, error) {
 		return nil, errors.New("cell sidecar missing")
 	}
 	cellSidecar := ptx.Sidecar
-	blobs, err := kzg4844.RecoverBlobs(cellSidecar.Cells, cellSidecar.CellIndices.Indices())
+	blobs, err := kzg4844.RecoverBlobs(cellSidecar.Cells, cellSidecar.Custody.Indices())
 	if err != nil {
 		return nil, err
 	}
 	sidecar := types.NewBlobTxSidecar(cellSidecar.Version, blobs, cellSidecar.Commitments, cellSidecar.Proofs)
 
 	return ptx.Transaction.WithBlobTxSidecar(sidecar), nil
+}
+
+func (ptx *PooledBlobTx) RemoveParity() error {
+	sc := ptx.Sidecar
+	custodySize := sc.Custody.OneCount()
+	if custodySize == 0 {
+		return errors.New("blobless transaction")
+	}
+	blobCount := len(sc.Cells) / custodySize
+
+	var cellsWithoutParity []kzg4844.Cell
+	pos := 0
+	for range blobCount {
+		for bit := 0; bit < kzg4844.CellsPerBlob; bit++ {
+			if sc.Custody.IsSet(uint(bit)) {
+				cell := sc.Cells[pos]
+				pos++
+				if bit < kzg4844.DataPerBlob {
+					cellsWithoutParity = append(cellsWithoutParity, cell)
+				}
+			}
+		}
+	}
+	sc.Cells = cellsWithoutParity
+	for bit := 64; bit < kzg4844.CellsPerBlob; bit++ {
+		sc.Custody.Clear(uint(bit))
+	}
+
+	return nil
 }
 
 // BlobPool is the transaction pool dedicated to EIP-4844 blob transactions.
@@ -1204,9 +1233,11 @@ func (p *BlobPool) checkDelegationLimit(tx *types.Transaction) error {
 
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
-func (p *BlobPool) validateTx(tx *types.Transaction, cellSidecars *types.BlobTxCellSidecar) error {
-
-	if err := txpool.ValidateBlobSidecar(tx, cellSidecars, p.head, &txpool.ValidationOptions{
+func (p *BlobPool) validateTx(tx *types.Transaction, cellSidecar *types.BlobTxCellSidecar) error {
+	if tx.BlobTxSidecar() != nil || cellSidecar == nil {
+		return errors.New("malformed transaction and cellSidecar")
+	}
+	if err := txpool.ValidateBlobSidecar(tx, cellSidecar, p.head, &txpool.ValidationOptions{
 		Config:       p.chain.Config(),
 		MaxBlobCount: maxBlobsPerTx,
 	}); err != nil {
@@ -1607,6 +1638,9 @@ func (p *BlobPool) add(tx *types.Transaction, cellSidecar *types.BlobTxCellSidec
 	// Transaction permitted into the pool from a nonce and cost perspective,
 	// insert it into the database and update the indices
 	pooledTx := NewPooledBlobTx(tx, cellSidecar)
+	if pooledTx.RemoveParity() != nil {
+		return err
+	}
 
 	blob, err := rlp.EncodeToBytes(pooledTx)
 	if err != nil {
