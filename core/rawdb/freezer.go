@@ -61,6 +61,7 @@ type Freezer struct {
 	datadir string
 	frozen  atomic.Uint64 // Number of items already frozen
 	tail    atomic.Uint64 // Number of the first stored item in the freezer
+	vHead   atomic.Uint64 // Virtual head for soft truncation (0 means not set)
 
 	// This lock synchronizes writers and the truncate operation, as well as
 	// the "atomic" (batched) read operations.
@@ -203,6 +204,10 @@ func (f *Freezer) AncientRange(kind string, start, count, maxBytes uint64) ([][]
 
 // Ancients returns the length of the frozen items.
 func (f *Freezer) Ancients() (uint64, error) {
+	vHead := f.vHead.Load()
+	if vHead > 0 {
+		return vHead, nil
+	}
 	return f.frozen.Load(), nil
 }
 
@@ -311,6 +316,61 @@ func (f *Freezer) TruncateTail(tail uint64) (uint64, error) {
 	}
 	f.tail.Store(tail)
 	return old, nil
+}
+
+// SoftTruncateHead marks items above threshold as logically deleted without physical truncation.
+// This is much faster than TruncateHead as it only updates a pointer.
+func (f *Freezer) SoftTruncateHead(items uint64) (uint64, error) {
+	if f.readonly {
+		return 0, errReadOnly
+	}
+
+	frozen := f.frozen.Load()
+	vHead := f.vHead.Load()
+
+	// Determine the current effective head
+	var currentHead uint64
+	if vHead > 0 {
+		currentHead = vHead
+	} else {
+		currentHead = frozen
+	}
+
+	if currentHead <= items {
+		return currentHead, nil
+	}
+
+	// Ensure we don't truncate below the tail
+	tail := f.tail.Load()
+	if items < tail {
+		return 0, fmt.Errorf("soft truncate below tail: tail=%d, target=%d", tail, items)
+	}
+
+	f.vHead.Store(items)
+	return currentHead, nil
+}
+
+// CommitTruncation performs the actual file truncation to match virtual head.
+// This should be called after all soft truncations are complete.
+func (f *Freezer) CommitTruncation() error {
+	if f.readonly {
+		return errReadOnly
+	}
+
+	vHead := f.vHead.Load()
+	if vHead == 0 {
+		return nil // No pending truncation
+	}
+
+	// Perform the actual truncation
+	_, err := f.TruncateHead(vHead)
+	if err != nil {
+		return err
+	}
+
+	// Clear virtual head since we've committed
+	f.vHead.Store(0)
+	return nil
 }
 
 // SyncAncient flushes all data tables to disk.

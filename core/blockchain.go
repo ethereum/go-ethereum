@@ -994,15 +994,6 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 		// and the current freezer limit to start nuking it's underflown.
 		pivot = rawdb.ReadLastPivotNumber(bc.db)
 	)
-	const truncateInterval = 100
-	truncateFn := func() {
-		// Truncate triedb to align the state histories with the current state.
-		if bc.triedb.Scheme() == rawdb.PathScheme {
-			if err := bc.triedb.TruncateHead(); err != nil {
-				log.Crit("Failed to truncate trie database", "err", err)
-			}
-		}
-	}
 	updateFn := func(db ethdb.KeyValueWriter, header *types.Header) (*types.Header, bool) {
 		// Rewind the blockchain, ensuring we don't end up with a stateless head
 		// block. Note, depth equality is permitted to allow using SetHead as a
@@ -1012,9 +1003,11 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 			newHeadBlock, rootNumber = bc.rewindHead(header, root)
 			rawdb.WriteHeadBlockHash(db, newHeadBlock.Hash())
 
-			// The truncate costs a lot of time, no need to run for each block
-			if header.Number.Uint64()%truncateInterval == 0 {
-				truncateFn()
+			// Use soft truncate for fast rewind - actual truncation happens at the end
+			if bc.triedb.Scheme() == rawdb.PathScheme {
+				if err := bc.triedb.SoftTruncateHead(); err != nil {
+					log.Warn("Failed to soft truncate trie database", "err", err)
+				}
 			}
 
 			// Degrade the chain markers if they are explicitly reverted.
@@ -1110,8 +1103,12 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	bc.blockCache.Purge()
 	bc.txLookupCache.Purge()
 
-	// Truncate to align the state histories with the current state.
-	truncateFn()
+	// Commit all soft truncations to align the state histories with the current state.
+	if bc.triedb.Scheme() == rawdb.PathScheme {
+		if err := bc.triedb.CommitTruncation(); err != nil {
+			log.Crit("Failed to commit trie database truncation", "err", err)
+		}
+	}
 
 	// Clear safe block, finalized block if needed
 	if safe := bc.CurrentSafeBlock(); safe != nil && head < safe.Number.Uint64() {

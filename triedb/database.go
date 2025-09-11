@@ -291,6 +291,26 @@ func (db *Database) TruncateHead() error {
 	return pdb.TruncateHead()
 }
 
+// SoftTruncateHead marks state histories above the bottom state layer as logically deleted
+// without physical truncation. This is much faster than TruncateHead.
+func (db *Database) SoftTruncateHead() error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.SoftTruncateHead()
+}
+
+// CommitTruncation performs the actual file truncation to match any soft truncations.
+// This should be called after all soft truncations are complete.
+func (db *Database) CommitTruncation() error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.CommitTruncation()
+}
+
 // Recoverable returns the indicator if the specified state is enabled to be
 // recovered. It's only supported by path-based database and will return an
 // error for others.

@@ -205,6 +205,7 @@ func (b *memoryBatch) commit(freezer *MemoryFreezer) (items uint64, writeSize in
 type MemoryFreezer struct {
 	items      uint64                  // Number of items stored
 	tail       uint64                  // Number of the first stored item in the freezer
+	vHead      uint64                  // Virtual head for soft truncation (0 means not set)
 	readonly   bool                    // Flag if the freezer is only for reading
 	lock       sync.RWMutex            // Lock to protect fields
 	tables     map[string]*memoryTable // Tables for storing everything
@@ -262,6 +263,9 @@ func (f *MemoryFreezer) Ancients() (uint64, error) {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
+	if f.vHead > 0 {
+		return f.vHead, nil
+	}
 	return f.items, nil
 }
 
@@ -338,17 +342,10 @@ func (f *MemoryFreezer) TruncateHead(items uint64) (uint64, error) {
 	if f.readonly {
 		return 0, errReadOnly
 	}
-	old := f.items
-	if old <= items {
-		return old, nil
-	}
-	for _, table := range f.tables {
-		if err := table.truncateHead(items); err != nil {
-			return 0, err
-		}
-	}
-	f.items = items
-	return old, nil
+
+	// Clear virtual head if we're doing a real truncation
+	f.vHead = 0
+	return f.truncateHead(items)
 }
 
 // TruncateTail discards all data below the provided threshold number.
@@ -373,6 +370,75 @@ func (f *MemoryFreezer) TruncateTail(tail uint64) (uint64, error) {
 		}
 	}
 	f.tail = tail
+	return old, nil
+}
+
+// SoftTruncateHead marks items above threshold as logically deleted without physical truncation.
+func (f *MemoryFreezer) SoftTruncateHead(items uint64) (uint64, error) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	if f.readonly {
+		return 0, errReadOnly
+	}
+
+	// Determine the current effective head
+	var currentHead uint64
+	if f.vHead > 0 {
+		currentHead = f.vHead
+	} else {
+		currentHead = f.items
+	}
+
+	if currentHead <= items {
+		return currentHead, nil
+	}
+
+	// Ensure we don't truncate below the tail
+	if items < f.tail {
+		return 0, fmt.Errorf("soft truncate below tail: tail=%d, target=%d", f.tail, items)
+	}
+
+	f.vHead = items
+	return currentHead, nil
+}
+
+// CommitTruncation performs the actual truncation to match virtual head.
+func (f *MemoryFreezer) CommitTruncation() error {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	if f.readonly {
+		return errReadOnly
+	}
+
+	if f.vHead == 0 {
+		return nil // No pending truncation
+	}
+
+	// Perform the actual truncation
+	_, err := f.truncateHead(f.vHead)
+	if err != nil {
+		return err
+	}
+
+	// Clear virtual head since we've committed
+	f.vHead = 0
+	return nil
+}
+
+// truncateHead is the internal method that does the actual head truncation.
+func (f *MemoryFreezer) truncateHead(items uint64) (uint64, error) {
+	old := f.items
+	if old <= items {
+		return old, nil
+	}
+	for _, table := range f.tables {
+		if err := table.truncateHead(items); err != nil {
+			return 0, err
+		}
+	}
+	f.items = items
 	return old, nil
 }
 

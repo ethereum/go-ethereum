@@ -130,6 +130,16 @@ func (db *nofreezedb) TruncateTail(items uint64) (uint64, error) {
 	return 0, errNotSupported
 }
 
+// SoftTruncateHead returns an error as we don't have a backing chain freezer.
+func (db *nofreezedb) SoftTruncateHead(items uint64) (uint64, error) {
+	return 0, errNotSupported
+}
+
+// CommitTruncation returns an error as we don't have a backing chain freezer.
+func (db *nofreezedb) CommitTruncation() error {
+	return errNotSupported
+}
+
 // SyncAncient returns an error as we don't have a backing chain freezer.
 func (db *nofreezedb) SyncAncient() error {
 	return errNotSupported

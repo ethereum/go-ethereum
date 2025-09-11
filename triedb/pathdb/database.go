@@ -512,6 +512,19 @@ func (db *Database) TruncateHead() error {
 	return err
 }
 
+// SoftTruncateHead marks state histories above the bottom state layer as logically deleted
+// without physical truncation. This is much faster than TruncateHead.
+func (db *Database) SoftTruncateHead() error {
+	_, err := db.stateFreezer.SoftTruncateHead(db.tree.bottom().stateID())
+	return err
+}
+
+// CommitTruncation performs the actual file truncation to match any soft truncations.
+// This should be called after all soft truncations are complete.
+func (db *Database) CommitTruncation() error {
+	return db.stateFreezer.CommitTruncation()
+}
+
 // Recoverable returns the indicator if the specified state is recoverable.
 //
 // The supplied root must be a valid trie hash value.
