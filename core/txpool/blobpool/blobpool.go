@@ -184,33 +184,37 @@ func (ptx *PooledBlobTx) Convert() (*types.Transaction, error) {
 
 	return ptx.Transaction.WithBlobTxSidecar(sidecar), nil
 }
-
 func (ptx *PooledBlobTx) RemoveParity() error {
 	sc := ptx.Sidecar
-	custodySize := sc.Custody.OneCount()
-	if custodySize == 0 {
-		return errors.New("blobless transaction")
+	if sc == nil {
+		return errors.New("nil sidecar")
 	}
-	blobCount := len(sc.Cells) / custodySize
 
-	var cellsWithoutParity []kzg4844.Cell
-	pos := 0
-	for range blobCount {
-		for bit := 0; bit < kzg4844.CellsPerBlob; bit++ {
-			if sc.Custody.IsSet(uint(bit)) {
-				cell := sc.Cells[pos]
-				pos++
-				if bit < kzg4844.DataPerBlob {
-					cellsWithoutParity = append(cellsWithoutParity, cell)
-				}
-			}
+	for bit := range kzg4844.DataPerBlob {
+		if !sc.Custody.IsSet(uint(bit)) {
+			return errors.New("cannot remove parity for non-full payload transaction")
 		}
 	}
-	sc.Cells = cellsWithoutParity
-	for bit := 64; bit < kzg4844.CellsPerBlob; bit++ {
-		sc.Custody.Clear(uint(bit))
+
+	blobCount := len(sc.Cells) / kzg4844.CellsPerBlob
+	if blobCount == 0 || len(sc.Cells)%kzg4844.CellsPerBlob != 0 {
+		return errors.New("inconsistent cell count")
 	}
 
+	var cellsWithoutParity []kzg4844.Cell
+	for blob := range blobCount {
+		offset := blob * kzg4844.CellsPerBlob
+		cellsWithoutParity = append(
+			cellsWithoutParity,
+			sc.Cells[offset:offset+kzg4844.DataPerBlob]...,
+		)
+
+		for bit := 64; bit < kzg4844.CellsPerBlob; bit++ {
+			sc.Custody.Clear(uint(bit))
+		}
+	}
+
+	sc.Cells = cellsWithoutParity
 	return nil
 }
 

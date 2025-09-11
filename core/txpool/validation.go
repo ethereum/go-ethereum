@@ -145,6 +145,9 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 }
 
 func ValidateBlobSidecar(tx *types.Transaction, sidecar *types.BlobTxCellSidecar, head *types.Header, opts *ValidationOptions) error {
+	if sidecar.Custody.OneCount() == 0 {
+		return errors.New("blobless blob transaction")
+	}
 	// Ensure the blob fee cap satisfies the minimum blob gas price
 	if tx.BlobGasFeeCapIntCmp(blobTxMinBlobGasPrice) < 0 {
 		return fmt.Errorf("%w: blob fee cap %v, minimum needed %v", ErrTxGasPriceTooLow, tx.BlobGasFeeCap(), blobTxMinBlobGasPrice)
