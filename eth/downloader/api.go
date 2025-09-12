@@ -32,11 +32,11 @@ import (
 type DownloaderAPI struct {
 	d     *Downloader
 	chain *core.BlockChain
-	feed  *event.Feed
+	feed  *event.FeedOf[SyncEvent]
 }
 
 // NewDownloaderAPI creates a new DownloaderAPI.
-func NewDownloaderAPI(d *Downloader, chain *core.BlockChain, f *event.Feed) *DownloaderAPI {
+func NewDownloaderAPI(d *Downloader, chain *core.BlockChain, f *event.FeedOf[SyncEvent]) *DownloaderAPI {
 	return &DownloaderAPI{
 		d:     d,
 		chain: chain,

@@ -124,7 +124,7 @@ type handler struct {
 	peers          *peerSet
 	txBroadcastKey [16]byte
 
-	eventFeed  *event.Feed
+	eventFeed  *event.FeedOf[downloader.SyncEvent]
 	txsCh      chan core.NewTxsEvent
 	txsSub     event.Subscription
 	blockRange *blockRangeState
@@ -146,7 +146,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	h := &handler{
 		nodeID:         config.NodeID,
 		networkID:      config.Network,
-		eventFeed:      new(event.Feed),
+		eventFeed:      new(event.FeedOf[downloader.SyncEvent]),
 		database:       config.Database,
 		txpool:         config.TxPool,
 		chain:          config.Chain,
@@ -562,7 +562,7 @@ type blockRangeState struct {
 	syncSub event.Subscription
 }
 
-func newBlockRangeState(chain *core.BlockChain, eventFeed *event.Feed) *blockRangeState {
+func newBlockRangeState(chain *core.BlockChain, eventFeed *event.FeedOf[downloader.SyncEvent]) *blockRangeState {
 	headCh := make(chan core.ChainHeadEvent, chainHeadChanSize)
 	headSub := chain.SubscribeChainHeadEvent(headCh)
 	syncCh := make(chan downloader.SyncEvent, 16)
