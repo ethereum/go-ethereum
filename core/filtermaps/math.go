@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"math"
-	"sort"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -245,7 +245,7 @@ func (p *Params) potentialMatches(rows []FilterRow, mapIndex uint32, logValue co
 			panic("potentialMatches: insufficient list of row alternatives")
 		}
 	}
-	sort.Sort(results)
+	slices.Sort(results)
 	// remove duplicates
 	j := 0
 	for i, match := range results {
@@ -260,12 +260,7 @@ func (p *Params) potentialMatches(rows []FilterRow, mapIndex uint32, logValue co
 // potentialMatches is a strictly monotonically increasing list of log value
 // indices in the range of a filter map that are potential matches for certain
 // filter criteria.
-// potentialMatches implements sort.Interface.
 // Note that nil is used as a wildcard and therefore means that all log value
 // indices in the filter map range are potential matches. If there are no
 // potential matches in the given map's range then an empty slice should be used.
 type potentialMatches []uint64
-
-func (p potentialMatches) Len() int           { return len(p) }
-func (p potentialMatches) Less(i, j int) bool { return p[i] < p[j] }
-func (p potentialMatches) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
