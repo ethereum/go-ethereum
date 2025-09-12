@@ -150,7 +150,7 @@ func HasTrieNode(db ethdb.KeyValueReader, owner common.Hash, path []byte, hash c
 		if len(blob) == 0 {
 			return false
 		}
-		return crypto.Keccak256Hash(blob) == hash // exists but not match
+		return crypto.Keccak256Hash(blob) == hash // exists and match
 	default:
 		panic(fmt.Sprintf("Unknown scheme %v", scheme))
 	}
