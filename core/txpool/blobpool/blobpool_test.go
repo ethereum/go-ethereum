@@ -1165,6 +1165,115 @@ func TestChangingSlotterSize(t *testing.T) {
 	}
 }
 
+// TestBillyMigration tests the billy migration from the default slotter to
+// the PeerDAS slotter. This tests both the migration of the slotter
+// as well as increasing the slotter size of the new slotter.
+func TestBillyMigration(t *testing.T) {
+	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
+
+	// Create a temporary folder for the persistent backend
+	storage := t.TempDir()
+
+	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+	os.MkdirAll(filepath.Join(storage, limboedTransactionStore), 0700)
+	// Create the billy with the old slotter
+	oldSlotter := newSlotterEIP7594(6)
+	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, oldSlotter, nil)
+
+	// Create transactions from a few accounts.
+	var (
+		key1, _ = crypto.GenerateKey()
+		key2, _ = crypto.GenerateKey()
+		key3, _ = crypto.GenerateKey()
+
+		addr1 = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2 = crypto.PubkeyToAddress(key2.PublicKey)
+		addr3 = crypto.PubkeyToAddress(key3.PublicKey)
+
+		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 6, 0, key1, types.BlobSidecarVersion0)
+		tx2 = makeMultiBlobTx(0, 1, 800, 70, 6, 0, key2, types.BlobSidecarVersion0)
+		tx3 = makeMultiBlobTx(0, 1, 800, 110, 24, 0, key3, types.BlobSidecarVersion0)
+
+		blob1, _ = rlp.EncodeToBytes(tx1)
+		blob2, _ = rlp.EncodeToBytes(tx2)
+	)
+
+	// Write the two safely sized txs to store. note: although the store is
+	// configured for a blob count of 6, it can also support around ~1mb of call
+	// data - all this to say that we aren't using the the absolute largest shelf
+	// available.
+	store.Put(blob1)
+	store.Put(blob2)
+	store.Close()
+
+	// Mimic a blobpool with max blob count of 6 upgrading to a max blob count of 24.
+	for _, maxBlobs := range []int{6, 24} {
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+		statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+		statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+		statedb.Commit(0, true, false)
+
+		// Make custom chain config where the max blob count changes based on the loop variable.
+		zero := uint64(0)
+		config := &params.ChainConfig{
+			ChainID:     big.NewInt(1),
+			LondonBlock: big.NewInt(0),
+			BerlinBlock: big.NewInt(0),
+			CancunTime:  &zero,
+			OsakaTime:   &zero,
+			BlobScheduleConfig: &params.BlobScheduleConfig{
+				Cancun: &params.BlobConfig{
+					Target:         maxBlobs / 2,
+					Max:            maxBlobs,
+					UpdateFraction: params.DefaultCancunBlobConfig.UpdateFraction,
+				},
+				Osaka: &params.BlobConfig{
+					Target:         maxBlobs / 2,
+					Max:            maxBlobs,
+					UpdateFraction: params.DefaultCancunBlobConfig.UpdateFraction,
+				},
+			},
+		}
+		chain := &testBlockChain{
+			config:  config,
+			basefee: uint256.NewInt(1050),
+			blobfee: uint256.NewInt(105),
+			statedb: statedb,
+		}
+		pool := New(Config{Datadir: storage}, chain, nil)
+		if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+			t.Fatalf("failed to create blob pool: %v", err)
+		}
+
+		// Try to add the big blob tx. In the initial iteration it should overflow
+		// the pool. On the subsequent iteration it should be accepted.
+		errs := pool.Add([]*types.Transaction{tx3}, true)
+		if _, ok := pool.index[addr3]; ok && maxBlobs == 6 {
+			t.Errorf("expected insert of oversized blob tx to fail: blobs=24, maxBlobs=%d, err=%v", maxBlobs, errs[0])
+		} else if !ok && maxBlobs == 10 {
+			t.Errorf("expected insert of oversized blob tx to succeed: blobs=24, maxBlobs=%d, err=%v", maxBlobs, errs[0])
+		}
+
+		// Verify the regular two txs are always available.
+		if got := pool.Get(tx1.Hash()); got == nil {
+			t.Errorf("expected tx %s from %s in pool", tx1.Hash(), addr1)
+		}
+		if got := pool.Get(tx2.Hash()); got == nil {
+			t.Errorf("expected tx %s from %s in pool", tx2.Hash(), addr2)
+		}
+
+		// Verify all the calculated pool internals. Interestingly, this is **not**
+		// a duplication of the above checks, this actually validates the verifier
+		// using the above already hard coded checks.
+		//
+		// Do not remove this, nor alter the above to be generic.
+		verifyPoolInternals(t, pool)
+
+		pool.Close()
+	}
+}
+
 // TestBlobCountLimit tests the blobpool enforced limits on the max blob count.
 func TestBlobCountLimit(t *testing.T) {
 	var (

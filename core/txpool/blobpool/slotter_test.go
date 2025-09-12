@@ -16,7 +16,9 @@
 
 package blobpool
 
-import "testing"
+import (
+	"testing"
+)
 
 // Tests that the slotter creates the expected database shelves.
 func TestNewSlotter(t *testing.T) {
@@ -48,6 +50,47 @@ func TestNewSlotter(t *testing.T) {
 		12*blobSize + txAvgSize, // 1-6 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
 		13*blobSize + txAvgSize, // 1-6 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
 		14*blobSize + txAvgSize, // 1-6 blobs + unexpectedly large tx infos >= 4 blobs + max tx metadata size
+	}
+	if len(shelves) != len(want) {
+		t.Errorf("shelves count mismatch: have %d, want %d", len(shelves), len(want))
+	}
+	for i := 0; i < len(shelves) && i < len(want); i++ {
+		if shelves[i] != want[i] {
+			t.Errorf("shelf %d mismatch: have %d, want %d", i, shelves[i], want[i])
+		}
+	}
+}
+
+// Tests that the slotter creates the expected database shelves.
+func TestNewSlotterEIP7594(t *testing.T) {
+	// Generate the database shelve sizes
+	slotter := newSlotterEIP7594(6)
+
+	var shelves []uint32
+	for {
+		shelf, done := slotter()
+		shelves = append(shelves, shelf)
+		if done {
+			break
+		}
+	}
+	// Compare the database shelves to the expected ones
+	want := []uint32{
+		0*blobSize + 0*txBlobOverhead + txAvgSize,   // 0 blob + some expected tx infos
+		1*blobSize + 1*txBlobOverhead + txAvgSize,   // 1 blob + some expected tx infos
+		2*blobSize + 2*txBlobOverhead + txAvgSize,   // 2 blob + some expected tx infos (could be fewer blobs and more tx data)
+		3*blobSize + 3*txBlobOverhead + txAvgSize,   // 3 blob + some expected tx infos (could be fewer blobs and more tx data)
+		4*blobSize + 4*txBlobOverhead + txAvgSize,   // 4 blob + some expected tx infos (could be fewer blobs and more tx data)
+		5*blobSize + 5*txBlobOverhead + txAvgSize,   // 1-6 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
+		6*blobSize + 6*txBlobOverhead + txAvgSize,   // 1-6 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
+		7*blobSize + 7*txBlobOverhead + txAvgSize,   // 1-6 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
+		8*blobSize + 8*txBlobOverhead + txAvgSize,   // 1-6 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
+		9*blobSize + 9*txBlobOverhead + txAvgSize,   // 1-6 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
+		10*blobSize + 10*txBlobOverhead + txAvgSize, // 1-6 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
+		11*blobSize + 11*txBlobOverhead + txAvgSize, // 1-6 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
+		12*blobSize + 12*txBlobOverhead + txAvgSize, // 1-6 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
+		13*blobSize + 13*txBlobOverhead + txAvgSize, // 1-6 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
+		14*blobSize + 14*txBlobOverhead + txAvgSize, // 1-6 blobs + unexpectedly large tx infos >= 4 blobs + max tx metadata size
 	}
 	if len(shelves) != len(want) {
 		t.Errorf("shelves count mismatch: have %d, want %d", len(shelves), len(want))

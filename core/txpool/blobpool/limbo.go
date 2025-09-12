@@ -20,8 +20,10 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/billy"
 )
@@ -48,11 +50,21 @@ type limbo struct {
 }
 
 // newLimbo opens and indexes a set of limboed blob transactions.
-func newLimbo(datadir string, maxBlobsPerTransaction int) (*limbo, error) {
+func newLimbo(config *params.ChainConfig, datadir string) (*limbo, error) {
 	l := &limbo{
 		index:  make(map[common.Hash]uint64),
 		groups: make(map[uint64]map[uint64]common.Hash),
 	}
+
+	// Create new slotter for pre-Osaka blob configuration.
+	slotter := newSlotter(eip4844.LatestMaxBlobsPerBlock(config))
+
+	// See if we need to migrate the limbo after fusaka.
+	slotter, err := tryMigrate(config, slotter, datadir)
+	if err != nil {
+		return nil, err
+	}
+
 	// Index all limboed blobs on disk and delete anything unprocessable
 	var fails []uint64
 	index := func(id uint64, size uint32, data []byte) {
@@ -60,7 +72,7 @@ func newLimbo(datadir string, maxBlobsPerTransaction int) (*limbo, error) {
 			fails = append(fails, id)
 		}
 	}
-	store, err := billy.Open(billy.Options{Path: datadir, Repair: true}, newSlotter(maxBlobsPerTransaction), index)
+	store, err := billy.Open(billy.Options{Path: datadir, Repair: true}, slotter, index)
 	if err != nil {
 		return nil, err
 	}
