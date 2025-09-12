@@ -111,7 +111,7 @@ type cachedNode struct {
 // cachedNodeSize is the raw size of a cachedNode data structure without any
 // node data included. It's an approximate size, but should be a lot better
 // than not counting them.
-var cachedNodeSize = int(reflect.TypeOf(cachedNode{}).Size())
+var cachedNodeSize = int(reflect.TypeFor[cachedNode]().Size())
 
 // forChildren invokes the callback for all the tracked children of this node,
 // both the implicit ones from inside the node as well as the explicit ones
