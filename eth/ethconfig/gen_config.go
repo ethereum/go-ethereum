@@ -31,6 +31,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		LogNoHistory            bool   `toml:",omitempty"`
 		LogExportCheckpoints    string
 		StateHistory            uint64                 `toml:",omitempty"`
+		TrienodeHistory         int64                  `toml:",omitempty"`
 		StateScheme             string                 `toml:",omitempty"`
 		RequiredBlocks          map[uint64]common.Hash `toml:"-"`
 		SlowBlockThreshold      time.Duration          `toml:",omitempty"`
@@ -81,6 +82,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.LogNoHistory = c.LogNoHistory
 	enc.LogExportCheckpoints = c.LogExportCheckpoints
 	enc.StateHistory = c.StateHistory
+	enc.TrienodeHistory = c.TrienodeHistory
 	enc.StateScheme = c.StateScheme
 	enc.RequiredBlocks = c.RequiredBlocks
 	enc.SlowBlockThreshold = c.SlowBlockThreshold
@@ -135,6 +137,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		LogNoHistory            *bool   `toml:",omitempty"`
 		LogExportCheckpoints    *string
 		StateHistory            *uint64                `toml:",omitempty"`
+		TrienodeHistory         *int64                 `toml:",omitempty"`
 		StateScheme             *string                `toml:",omitempty"`
 		RequiredBlocks          map[uint64]common.Hash `toml:"-"`
 		SlowBlockThreshold      *time.Duration         `toml:",omitempty"`
@@ -215,6 +218,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.StateHistory != nil {
 		c.StateHistory = *dec.StateHistory
+	}
+	if dec.TrienodeHistory != nil {
+		c.TrienodeHistory = *dec.TrienodeHistory
 	}
 	if dec.StateScheme != nil {
 		c.StateScheme = *dec.StateScheme
