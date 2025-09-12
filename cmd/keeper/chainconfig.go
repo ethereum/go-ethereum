@@ -14,13 +14,25 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build hoodi
-
 package main
 
-import "github.com/ethereum/go-ethereum/params"
+import (
+	"fmt"
 
-// getChainConfig returns the Hoodi testnet chain configuration.
-func getChainConfig() *params.ChainConfig {
-	return params.HoodiChainConfig
+	"github.com/ethereum/go-ethereum/params"
+)
+
+// getChainConfig returns the appropriate chain configuration based on the chainID.
+// Returns an error for unsupported chain IDs.
+func getChainConfig(chainID uint64) (*params.ChainConfig, error) {
+	switch chainID {
+	case 0, params.MainnetChainConfig.ChainID.Uint64():
+		return params.MainnetChainConfig, nil
+	case params.SepoliaChainConfig.ChainID.Uint64():
+		return params.SepoliaChainConfig, nil
+	case params.HoodiChainConfig.ChainID.Uint64():
+		return params.HoodiChainConfig, nil
+	default:
+		return nil, fmt.Errorf("unsupported chain ID: %d", chainID)
+	}
 }

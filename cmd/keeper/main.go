@@ -30,6 +30,7 @@ import (
 // Payload represents the input data for stateless execution containing
 // a block and its associated witness data for verification.
 type Payload struct {
+	ChainID uint64
 	Block   *types.Block
 	Witness *stateless.Witness
 }
@@ -39,7 +40,11 @@ func main() {
 	var payload Payload
 	rlp.DecodeBytes(input, &payload)
 
-	chainConfig := getChainConfig()
+	chainConfig, err := getChainConfig(payload.ChainID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to get chain config: %v\n", err)
+		os.Exit(13)
+	}
 	vmConfig := vm.Config{}
 
 	crossStateRoot, crossReceiptRoot, err := core.ExecuteStateless(chainConfig, vmConfig, payload.Block, payload.Witness)
