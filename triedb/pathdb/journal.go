@@ -177,7 +177,19 @@ func (db *Database) loadLayers() layer {
 		log.Info("Failed to load journal, discard it", "err", err)
 	}
 	// Return single layer with persistent state.
-	return newDiskLayer(root, rawdb.ReadPersistentStateID(db.diskdb), db, nil, nil, newBuffer(db.config.WriteBufferSize, nil, nil, 0), nil)
+	stateID := rawdb.ReadPersistentStateID(db.diskdb)
+	var block uint64
+	if stateID > 0 {
+		// Try to get block number from state history metadata
+		blob := rawdb.ReadStateHistoryMeta(db.diskdb, stateID)
+		if blob != nil {
+			var m meta
+			if err := m.decode(blob); err == nil {
+				block = m.block
+			}
+		}
+	}
+	return newDiskLayer(root, stateID, block, db, nil, nil, newBuffer(db.config.WriteBufferSize, nil, nil, 0), nil)
 }
 
 // loadDiskLayer reads the binary blob from the layer journal, reconstructing
@@ -195,6 +207,11 @@ func (db *Database) loadDiskLayer(r *rlp.Stream) (layer, error) {
 	if err := r.Decode(&id); err != nil {
 		return nil, fmt.Errorf("load state id: %v", err)
 	}
+	// Resolve the block number of disk layer
+	var block uint64
+	if err := r.Decode(&block); err != nil {
+		return nil, fmt.Errorf("load block number: %v", err)
+	}
 	stored := rawdb.ReadPersistentStateID(db.diskdb)
 	if stored > id {
 		return nil, fmt.Errorf("invalid state id: stored %d resolved %d", stored, id)
@@ -209,7 +226,7 @@ func (db *Database) loadDiskLayer(r *rlp.Stream) (layer, error) {
 	if err := states.decode(r); err != nil {
 		return nil, err
 	}
-	return newDiskLayer(root, id, db, nil, nil, newBuffer(db.config.WriteBufferSize, &nodes, &states, id-stored), nil), nil
+	return newDiskLayer(root, id, block, db, nil, nil, newBuffer(db.config.WriteBufferSize, &nodes, &states, id-stored), nil), nil
 }
 
 // loadDiffLayer reads the next sections of a layer journal, reconstructing a new
@@ -259,15 +276,19 @@ func (dl *diskLayer) journal(w io.Writer) error {
 	if err := rlp.Encode(w, dl.id); err != nil {
 		return err
 	}
-	// Step three, write the accumulated trie nodes into the journal
+	// Step three, write the corresponding block number into the journal
+	if err := rlp.Encode(w, dl.block); err != nil {
+		return err
+	}
+	// Step four, write the accumulated trie nodes into the journal
 	if err := dl.buffer.nodes.encode(w); err != nil {
 		return err
 	}
-	// Step four, write the accumulated flat states into the journal
+	// Step five, write the accumulated flat states into the journal
 	if err := dl.buffer.states.encode(w); err != nil {
 		return err
 	}
-	log.Debug("Journaled pathdb disk layer", "root", dl.root, "id", dl.id)
+	log.Debug("Journaled pathdb disk layer", "root", dl.root, "id", dl.id, "block", dl.block)
 	return nil
 }
 

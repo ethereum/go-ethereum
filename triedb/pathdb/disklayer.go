@@ -31,9 +31,10 @@ import (
 
 // diskLayer is a low level persistent layer built on top of a key-value store.
 type diskLayer struct {
-	root common.Hash // Immutable, root hash to which this layer was made for
-	id   uint64      // Immutable, corresponding state id
-	db   *Database   // Path-based trie database
+	root  common.Hash // Immutable, root hash to which this layer was made for
+	id    uint64      // Immutable, corresponding state id
+	block uint64      // Immutable, associated block number
+	db    *Database   // Path-based trie database
 
 	// These two caches must be maintained separately, because the key
 	// for the root node of the storage trie (accountHash) is identical
@@ -54,7 +55,7 @@ type diskLayer struct {
 }
 
 // newDiskLayer creates a new disk layer based on the passing arguments.
-func newDiskLayer(root common.Hash, id uint64, db *Database, nodes *fastcache.Cache, states *fastcache.Cache, buffer *buffer, frozen *buffer) *diskLayer {
+func newDiskLayer(root common.Hash, id uint64, block uint64, db *Database, nodes *fastcache.Cache, states *fastcache.Cache, buffer *buffer, frozen *buffer) *diskLayer {
 	// Initialize the clean caches if the memory allowance is not zero
 	// or reuse the provided caches if they are not nil (inherited from
 	// the original disk layer).
@@ -67,6 +68,7 @@ func newDiskLayer(root common.Hash, id uint64, db *Database, nodes *fastcache.Ca
 	return &diskLayer{
 		root:   root,
 		id:     id,
+		block:  block,
 		db:     db,
 		nodes:  nodes,
 		states: states,
@@ -83,6 +85,11 @@ func (dl *diskLayer) rootHash() common.Hash {
 // stateID implements the layer interface, returning the state id of disk layer.
 func (dl *diskLayer) stateID() uint64 {
 	return dl.id
+}
+
+// blockNumber returns the associated block number of disk layer.
+func (dl *diskLayer) blockNumber() uint64 {
+	return dl.block
 }
 
 // parentLayer implements the layer interface, returning nil as there's no layer
@@ -471,7 +478,7 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 		combined = newBuffer(dl.db.config.WriteBufferSize, nil, nil, 0)
 	}
 	// Link the generator if snapshot is not yet completed
-	ndl := newDiskLayer(bottom.root, bottom.stateID(), dl.db, dl.nodes, dl.states, combined, dl.frozen)
+	ndl := newDiskLayer(bottom.root, bottom.stateID(), bottom.block, dl.db, dl.nodes, dl.states, combined, dl.frozen)
 	if dl.generator != nil {
 		ndl.setGenerator(dl.generator)
 	}
@@ -520,7 +527,7 @@ func (dl *diskLayer) revert(h *stateHistory) (*diskLayer, error) {
 		if err != nil {
 			return nil, err
 		}
-		ndl := newDiskLayer(h.meta.parent, dl.id-1, dl.db, dl.nodes, dl.states, dl.buffer, dl.frozen)
+		ndl := newDiskLayer(h.meta.parent, dl.id-1, h.meta.block-1, dl.db, dl.nodes, dl.states, dl.buffer, dl.frozen)
 
 		// Link the generator if it exists
 		if dl.generator != nil {
@@ -559,7 +566,7 @@ func (dl *diskLayer) revert(h *stateHistory) (*diskLayer, error) {
 	}
 	// Link the generator and resume generation if the snapshot is not yet
 	// fully completed.
-	ndl := newDiskLayer(h.meta.parent, dl.id-1, dl.db, dl.nodes, dl.states, dl.buffer, dl.frozen)
+	ndl := newDiskLayer(h.meta.parent, dl.id-1, h.meta.block-1, dl.db, dl.nodes, dl.states, dl.buffer, dl.frozen)
 	if dl.generator != nil && !dl.generator.completed() {
 		ndl.generator = dl.generator
 		ndl.generator.run(h.meta.parent)
