@@ -452,8 +452,12 @@ func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
 		}
 		// Item retrieved, make sure it matches the expectation
 		index := testBlobIndices[hash]
-		if *blobs1[i] != *testBlobs[index] || proofs1[i][0] != testBlobProofs[index] {
-			t.Errorf("retrieved blob or proof mismatch: item %d, hash %x", i, hash)
+		if *blobs1[i] != *testBlobs[index] {
+			t.Errorf("retrieved blob mismatch: item %d, hash %x", i, hash)
+			continue
+		}
+		if proofs1[i][0] != testBlobProofs[index] {
+			t.Errorf("retrieved proof mismatch: item %d, hash %x", i, hash)
 			continue
 		}
 		if *blobs2[i] != *testBlobs[index] || !slices.Equal(proofs2[i], testBlobCellProofs[index]) {
@@ -1214,7 +1218,7 @@ func TestBlobCountLimit(t *testing.T) {
 
 	// Check that first succeeds second fails.
 	if errs[0] != nil {
-		t.Fatalf("expected tx with 7 blobs to succeed")
+		t.Fatalf("expected tx with 7 blobs to succeed, got: %v", errs[0])
 	}
 	if !errors.Is(errs[1], txpool.ErrTxBlobLimitExceeded) {
 		t.Fatalf("expected tx with 8 blobs to fail, got: %v", errs[1])
@@ -1643,7 +1647,9 @@ func TestAdd(t *testing.T) {
 		// Add each transaction one by one, verifying the pool internals in between
 		for j, add := range tt.adds {
 			signed, _ := types.SignNewTx(keys[add.from], types.LatestSigner(params.MainnetChainConfig), add.tx)
-			if err := pool.add(signed); !errors.Is(err, add.err) {
+			sidecar, _ := signed.BlobTxSidecar().ToBlobTxCellSidecar()
+
+			if err := pool.add(signed.WithoutBlobTxSidecar(), sidecar, signed.Size()); !errors.Is(err, add.err) {
 				t.Errorf("test %d, tx %d: adding transaction error mismatch: have %v, want %v", i, j, err, add.err)
 			}
 			if add.err == nil {
@@ -2015,7 +2021,8 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 			b.Fatal(err)
 		}
 		statedb.AddBalance(addr, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
-		pool.add(tx)
+		sidecar, _ := tx.BlobTxSidecar().ToBlobTxCellSidecar()
+		pool.add(tx.WithoutBlobTxSidecar(), sidecar, tx.Size())
 	}
 	statedb.Commit(0, true, false)
 	defer pool.Close()
