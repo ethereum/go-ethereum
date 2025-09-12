@@ -191,8 +191,7 @@ func (it *lookupIterator) Next() bool {
 				// is in a degraded state, and we need to wait for it to fill again.
 				it.lookupFailed(it.lookup.tab)
 			}
-			// Otherwise, yield the initial nodes from the iterator before advancing
-			// the lookup.
+			// Yield the initial nodes from the iterator before advancing the lookup.
 			it.buffer = it.lookup.replyBuffer
 			continue
 		}
