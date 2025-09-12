@@ -190,6 +190,8 @@ func (it *lookupIterator) Next() bool {
 				// If the lookup is empty right after creation, it means the local table
 				// is in a degraded state, and we need to wait for it to fill again.
 				it.lookupFailed(it.lookup.tab)
+				it.lookup = nil
+				continue
 			}
 			// Yield the initial nodes from the iterator before advancing the lookup.
 			it.buffer = it.lookup.replyBuffer
