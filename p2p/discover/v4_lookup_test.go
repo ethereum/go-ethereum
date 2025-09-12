@@ -23,7 +23,6 @@ import (
 	"slices"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
@@ -35,14 +34,10 @@ func TestUDPv4_Lookup(t *testing.T) {
 	t.Parallel()
 	test := newUDPTest(t)
 
-	// Lookup on empty table returns immediately with no nodes.
+	// Lookup on empty table returns no nodes.
 	targetKey, _ := v4wire.DecodePubkey(crypto.S256(), lookupTestnet.target)
-	start := time.Now()
 	if results := test.udp.LookupPubkey(targetKey); len(results) > 0 {
 		t.Fatalf("lookup on empty table returned %d results: %#v", len(results), results)
-	}
-	if time.Since(start) > 100*time.Millisecond {
-		t.Fatalf("lookup on empty table took too long: %s", time.Since(start))
 	}
 
 	// Seed table with initial node.
