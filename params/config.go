@@ -194,13 +194,13 @@ var (
 		Berachain: BerachainConfig{
 			Prague1: Prague1Config{
 				Time:                     newUint64(1756915200), // Sep 03 2025 16:00:00 UTC
-				MinimumBaseFeeWei:        1 * GWei,
+				MinimumBaseFeeWei:        big.NewInt(1 * GWei),
 				BaseFeeChangeDenominator: BerachainBaseFeeChangeDenominator,
 				PoLDistributorAddress:    PoLDistributorAddress,
 			},
 			Prague2: Prague2Config{
 				Time:              newUint64(9999999999), // TODO(Prague2): Replace with actual time.
-				MinimumBaseFeeWei: 0,
+				MinimumBaseFeeWei: big.NewInt(0),
 			},
 		},
 	}
@@ -236,13 +236,13 @@ var (
 		Berachain: BerachainConfig{
 			Prague1: Prague1Config{
 				Time:                     newUint64(1754496000), // Aug 6th 2025 16:00:00 UTC
-				MinimumBaseFeeWei:        10 * GWei,
+				MinimumBaseFeeWei:        big.NewInt(10 * GWei),
 				BaseFeeChangeDenominator: BerachainBaseFeeChangeDenominator,
 				PoLDistributorAddress:    PoLDistributorAddress,
 			},
 			Prague2: Prague2Config{
 				Time:              newUint64(9999999999), // TODO(Prague2): Replace with actual time.
-				MinimumBaseFeeWei: 0,
+				MinimumBaseFeeWei: big.NewInt(0),
 			},
 		},
 	}
@@ -572,7 +572,7 @@ type Prague1Config struct {
 	// BaseFeeChangeDenominator is the base fee change denominator.
 	BaseFeeChangeDenominator uint64 `json:"baseFeeChangeDenominator,omitempty"`
 	// MinimumBaseFeeWei is the minimum base fee in wei.
-	MinimumBaseFeeWei uint64 `json:"minimumBaseFeeWei,omitempty"`
+	MinimumBaseFeeWei *big.Int `json:"minimumBaseFeeWei,omitempty"`
 	// PoLDistributorAddress is the address of the PoL distributor.
 	PoLDistributorAddress common.Address `json:"polDistributorAddress,omitempty"`
 }
@@ -594,7 +594,7 @@ type Prague2Config struct {
 	// Time is the time of the Prague2 fork.
 	Time *uint64 `json:"time,omitempty"` // Prague2 switch time (0 = already on prague2, nil = no fork)
 	// MinimumBaseFeeWei is the minimum base fee in wei.
-	MinimumBaseFeeWei uint64 `json:"minimumBaseFeeWei,omitempty"`
+	MinimumBaseFeeWei *big.Int `json:"minimumBaseFeeWei,omitempty"`
 }
 
 // String implements the stringer interface.
@@ -1167,14 +1167,14 @@ func (c *ChainConfig) BaseFeeChangeDenominator(num *big.Int, time uint64) uint64
 }
 
 // MinBaseFee returns the minimum base fee (in wei) based on the active fork.
-func (c *ChainConfig) MinBaseFee(num *big.Int, time uint64) uint64 {
+func (c *ChainConfig) MinBaseFee(num *big.Int, time uint64) *big.Int {
 	if c.IsPrague2(num, time) {
 		return c.Berachain.Prague2.MinimumBaseFeeWei
 	}
 	if c.IsPrague1(num, time) {
 		return c.Berachain.Prague1.MinimumBaseFeeWei
 	}
-	return 0
+	return common.Big0
 }
 
 // ElasticityMultiplier bounds the maximum gas limit an EIP-1559 block may have.

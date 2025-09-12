@@ -57,8 +57,8 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 	calculatedBaseFee := calcBaseFee(config, parent)
 
 	// Starting at the Prague1 fork, the base fee must be at least the minimum base fee.
-	minBaseFee := new(big.Int).SetUint64(config.MinBaseFee(parent.Number, parent.Time))
-	if calculatedBaseFee.Cmp(minBaseFee) < 0 {
+	minBaseFee := config.MinBaseFee(parent.Number, parent.Time)
+	if calculatedBaseFee.Cmp(config.MinBaseFee(parent.Number, parent.Time)) < 0 {
 		calculatedBaseFee = minBaseFee
 	}
 
