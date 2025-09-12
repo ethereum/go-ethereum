@@ -16,7 +16,48 @@
 
 package blobpool
 
-import "github.com/holiman/billy"
+import (
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/billy"
+)
+
+// tryMigrate checks if the billy needs to be migrated and migrates if needed.
+// Returns a slotter that can be used for the database.
+func tryMigrate(config *params.ChainConfig, slotter billy.SlotSizeFn, datadir string) (billy.SlotSizeFn, error) {
+	// Check if we need to migrate our blob db to the new slotter.
+	if config.OsakaTime != nil {
+		// Open the store using the version slotter to see if any version has been
+		// written.
+		var version int
+		index := func(_ uint64, _ uint32, blob []byte) {
+			version = max(version, parseSlotterVersion(blob))
+		}
+		store, err := billy.Open(billy.Options{Path: datadir}, newVersionSlotter(), index)
+		if err != nil {
+			return nil, err
+		}
+		store.Close()
+
+		// If the version found is less than the currently configured store version,
+		// perform a migration then write the updated version of the store.
+		if version < storeVersion {
+			newSlotter := newSlotterEIP7594(eip4844.LatestMaxBlobsPerBlock(config))
+			if err := billy.Migrate(billy.Options{Path: datadir, Repair: true}, slotter, newSlotter); err != nil {
+				return nil, err
+			}
+			store, err = billy.Open(billy.Options{Path: datadir}, newVersionSlotter(), nil)
+			if err != nil {
+				return nil, err
+			}
+			writeSlotterVersion(store, storeVersion)
+			store.Close()
+		}
+		// Set the slotter to the format now that the Osaka is active.
+		slotter = newSlotterEIP7594(eip4844.LatestMaxBlobsPerBlock(config))
+	}
+	return slotter, nil
+}
 
 // newSlotter creates a helper method for the Billy datastore that returns the
 // individual shelf sizes used to store transactions in.
@@ -27,7 +68,7 @@ import "github.com/holiman/billy"
 // The slotter also creates a shelf for 0-blob transactions. Whilst those are not
 // allowed in the current protocol, having an empty shelf is not a relevant use
 // of resources, but it makes stress testing with junk transactions simpler.
-func newSlotter(maxBlobsPerTransaction int) func() (uint32, bool) {
+func newSlotter(maxBlobsPerTransaction int) billy.SlotSizeFn {
 	slotsize := uint32(txAvgSize)
 	slotsize -= uint32(blobSize) // underflows, it's ok, will overflow back in the first return
 
@@ -45,7 +86,7 @@ func newSlotter(maxBlobsPerTransaction int) func() (uint32, bool) {
 // This slotter adds a dynamic overhead component to the slotter, which also
 // captures the notion that blob transactions with more blobs are also more likely to
 // to have more calldata.
-func newSlotterEIP7594(maxBlobsPerTransaction int) func() (uint32, bool) {
+func newSlotterEIP7594(maxBlobsPerTransaction int) billy.SlotSizeFn {
 	slotsize := uint32(txAvgSize)
 	slotsize -= uint32(blobSize) + txBlobOverhead // underflows, it's ok, will overflow back in the first return
 
@@ -59,7 +100,7 @@ func newSlotterEIP7594(maxBlobsPerTransaction int) func() (uint32, bool) {
 
 // newVersionSlotter creates a slotter with a single 8 byte shelf to store
 // version metadata in.
-func newVersionSlotter() func() (uint32, bool) {
+func newVersionSlotter() billy.SlotSizeFn {
 	return func() (size uint32, done bool) {
 		return 8, true
 	}

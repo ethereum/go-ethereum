@@ -1175,8 +1175,9 @@ func TestBillyMigration(t *testing.T) {
 	storage := t.TempDir()
 
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+	os.MkdirAll(filepath.Join(storage, limboedTransactionStore), 0700)
 	// Create the billy with the old slotter
-	oldSlotter := newSlotter(6)
+	oldSlotter := newSlotterEIP7594(6)
 	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, oldSlotter, nil)
 
 	// Create transactions from a few accounts.

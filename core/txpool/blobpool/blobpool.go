@@ -398,36 +398,10 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	// Create new slotter for pre-Osaka blob configuration.
 	slotter := newSlotter(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
 
-	// Check if we need to migrate our blob db to the new slotter.
-	if p.chain.Config().OsakaTime != nil {
-		// Open the store using the version slotter to see if any version has been
-		// written.
-		var version int
-		index := func(_ uint64, _ uint32, blob []byte) {
-			version = max(version, parseSlotterVersion(blob))
-		}
-		store, err := billy.Open(billy.Options{Path: queuedir}, newVersionSlotter(), index)
-		if err != nil {
-			return err
-		}
-		store.Close()
-
-		// If the version found is less than the currently configured store version,
-		// perform a migration then write the updated version of the store.
-		if version < storeVersion {
-			newSlotter := newSlotterEIP7594(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
-			if err := billy.Migrate(billy.Options{Path: queuedir, Repair: true}, slotter, newSlotter); err != nil {
-				return err
-			}
-			store, err = billy.Open(billy.Options{Path: queuedir}, newVersionSlotter(), nil)
-			if err != nil {
-				return err
-			}
-			writeSlotterVersion(store, storeVersion)
-			store.Close()
-		}
-		// Set the slotter to the format now that the Osaka is active.
-		slotter = newSlotterEIP7594(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
+	// See if we need to migrate the limbo after fusaka.
+	slotter, err = tryMigrate(p.chain.Config(), slotter, p.config.Datadir)
+	if err != nil {
+		return err
 	}
 
 	// Index all transactions on disk and delete anything unprocessable
@@ -470,7 +444,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 
 	// Pool initialized, attach the blob limbo to it to track blobs included
 	// recently but not yet finalized
-	p.limbo, err = newLimbo(limbodir, eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
+	p.limbo, err = newLimbo(p.chain.Config(), limbodir)
 	if err != nil {
 		p.Close()
 		return err
