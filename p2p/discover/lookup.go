@@ -27,6 +27,7 @@ import (
 // lookup performs a network search for nodes close to the given target. It approaches the
 // target by querying nodes that are closer to it on each iteration. The given target does
 // not need to be an actual node identifier.
+// lookup on an empty table will return immediately with no nodes.
 type lookup struct {
 	tab         *Table
 	queryfunc   queryFunc
@@ -142,6 +143,9 @@ func (it *lookup) query(n *enode.Node, reply chan<- []*enode.Node) {
 
 // lookupIterator performs lookup operations and iterates over all seen nodes.
 // When a lookup finishes, a new one is created through nextLookup.
+// LookupIterator waits for table initialization and triggers a table refresh
+// when necessary.
+
 type lookupIterator struct {
 	buffer        []*enode.Node
 	nextLookup    lookupFunc
