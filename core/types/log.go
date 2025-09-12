@@ -29,6 +29,9 @@ import (
 type Log struct {
 	// Consensus fields:
 	// address of the contract that generated the event
+	//
+	// After Prague upgrade (EIP-7702), this can also be an EOA
+	// with delegated code that generated the event
 	Address common.Address `json:"address" gencodec:"required"`
 	// list of topics provided by the contract.
 	Topics []common.Hash `json:"topics" gencodec:"required"`
