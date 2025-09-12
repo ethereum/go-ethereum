@@ -338,10 +338,8 @@ func (db *Database) Journal(root common.Hash) error {
 	// but the ancient store is not properly closed, resulting in recent writes
 	// being lost. After a restart, the ancient store would then be misaligned
 	// with the disk layer, causing data corruption.
-	if db.stateFreezer != nil {
-		if err := db.stateFreezer.SyncAncient(); err != nil {
-			return err
-		}
+	if err := syncHistory(db.stateFreezer, db.trienodeFreezer); err != nil {
+		return err
 	}
 	// Store the journal into the database and return
 	var (
