@@ -697,7 +697,7 @@ func (db *Database) SnapshotCompleted() bool {
 func (db *Database) FrezzerTailBlock() (uint64, error) {
 	freezer := db.stateFreezer
 	if freezer == nil {
-		return db.tree.bottom().blockNumber(), nil
+		return 0, errors.New("freezer is not available")
 	}
 
 	tailID, err := freezer.Tail()
@@ -705,9 +705,9 @@ func (db *Database) FrezzerTailBlock() (uint64, error) {
 		return 0, err
 	}
 
-	// No state has been persistent, get the block number from in-memory state.
+	// No state has been persistent, return the genesis block number.
 	if tailID == 0 {
-		return db.tree.bottom().blockNumber(), nil
+		return 0, nil
 	}
 
 	blob := rawdb.ReadStateHistoryMeta(freezer, tailID+1)

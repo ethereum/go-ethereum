@@ -26,7 +26,7 @@ import (
 
 func newTestLayerTree() *layerTree {
 	db := New(rawdb.NewMemoryDatabase(), nil, false)
-	l := newDiskLayer(common.Hash{0x1}, 0, 0, db, nil, nil, newBuffer(0, nil, nil, 0), nil)
+	l := newDiskLayer(common.Hash{0x1}, 0, db, nil, nil, newBuffer(0, nil, nil, 0), nil)
 	t := newLayerTree(l)
 	return t
 }
