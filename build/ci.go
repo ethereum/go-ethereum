@@ -322,9 +322,9 @@ func doTest(cmdline []string) {
 		gotest.Args = append(gotest.Args, "-short")
 	}
 
-	packages := []string{"./..."}
-	if len(flag.CommandLine.Args()) > 0 {
-		packages = flag.CommandLine.Args()
+	packages := flag.CommandLine.Args()
+	if len(packages) == 0 {
+		packages = workspacePackagePatterns()
 	}
 	gotest.Args = append(gotest.Args, packages...)
 	build.MustRun(gotest)
@@ -364,7 +364,7 @@ func doCheckGenerate() {
 		protocPath      = downloadProtoc(*cachedir)
 		protocGenGoPath = downloadProtocGenGo(*cachedir)
 	)
-	c := tc.Go("generate", "./...")
+	c := tc.Go("generate", workspacePackagePatterns()...)
 	pathList := []string{filepath.Join(protocPath, "bin"), protocGenGoPath, os.Getenv("PATH")}
 	c.Env = append(c.Env, "PATH="+strings.Join(pathList, string(os.PathListSeparator)))
 	build.MustRun(c)
@@ -424,9 +424,16 @@ func doLint(cmdline []string) {
 		cachedir = flag.String("cachedir", "./build/cache", "directory for caching golangci-lint binary.")
 	)
 	flag.CommandLine.Parse(cmdline)
-	packages := []string{"./..."}
-	if len(flag.CommandLine.Args()) > 0 {
-		packages = flag.CommandLine.Args()
+
+	packages := flag.CommandLine.Args()
+	if len(packages) == 0 {
+		// Get module directories in workspace.
+		packages = []string{"./..."}
+		modules := workspaceModules()
+		for _, m := range modules[1:] {
+			dir := strings.TrimPrefix(m, modules[0])
+			packages = append(packages, "."+dir+"/...")
+		}
 	}
 
 	linter := downloadLinter(*cachedir)
@@ -1168,4 +1175,32 @@ func doPurge(cmdline []string) {
 func doSanityCheck() {
 	csdb := download.MustLoadChecksums("build/checksums.txt")
 	csdb.DownloadAndVerifyAll()
+}
+
+// workspaceModules lists the module paths in the current work.
+func workspaceModules() []string {
+	listing, err := new(build.GoToolchain).Go("list", "-m").Output()
+	if err != nil {
+		log.Fatalf("go list failed:", err)
+	}
+	var modules []string
+	for _, m := range bytes.Split(listing, []byte("\n")) {
+		m = bytes.TrimSpace(m)
+		if len(m) > 0 {
+			modules = append(modules, string(m))
+		}
+	}
+	if len(modules) == 0 {
+		panic("no modules found")
+	}
+	return modules
+}
+
+func workspacePackagePatterns() []string {
+	modules := workspaceModules()
+	patterns := make([]string, len(modules))
+	for i, m := range modules {
+		patterns[i] = m + "/..."
+	}
+	return patterns
 }
