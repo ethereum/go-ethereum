@@ -63,12 +63,12 @@ func (b *EthAPIBackend) CurrentBlock() *types.Header {
 }
 
 func (b *EthAPIBackend) SetHead(number uint64) error {
-	firstStateBlock, err := b.eth.blockchain.FirstStateBlock()
+	tailBlock, err := b.eth.blockchain.FreezerTailBlock()
 	if err != nil {
 		return err
 	}
-	if number < firstStateBlock {
-		return fmt.Errorf("cannot rewind to block %d, oldest available state is at block %d", number, firstStateBlock)
+	if number < tailBlock {
+		return fmt.Errorf("cannot rewind to block %d, oldest available state is at block %d", number, tailBlock)
 	}
 	b.eth.handler.downloader.Cancel()
 	return b.eth.blockchain.SetHead(number)

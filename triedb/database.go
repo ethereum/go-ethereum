@@ -391,5 +391,5 @@ func (db *Database) FreezerTailBlock() (uint64, error) {
 	if !ok {
 		return 0, nil
 	}
-	return pdb.FrezzerTailBlock()
+	return pdb.FreezerTailBlock()
 }

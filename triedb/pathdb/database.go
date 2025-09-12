@@ -693,8 +693,8 @@ func (db *Database) SnapshotCompleted() bool {
 	return db.tree.bottom().genComplete()
 }
 
-// FrezzerTailBlock returns the block number of the oldest state in the freezer.
-func (db *Database) FrezzerTailBlock() (uint64, error) {
+// FreezerTailBlock returns the block number of the oldest state in the freezer.
+func (db *Database) FreezerTailBlock() (uint64, error) {
 	freezer := db.stateFreezer
 	if freezer == nil {
 		return 0, errors.New("freezer is not available")
