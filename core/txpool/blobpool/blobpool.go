@@ -51,9 +51,6 @@ const (
 	// transaction. There can be multiple of these embedded into a single tx.
 	blobSize = params.BlobTxFieldElementsPerBlob * params.BlobTxBytesPerFieldElement
 
-	// proofSize is the size in bytes that each cell proof requires.
-	proofSize = kzg4844.CellProofsPerBlob * 48
-
 	// txAvgSize is an approximate byte size of a transaction metadata to avoid
 	// tiny overflows causing all txs to move a shelf higher, wasting disk space.
 	txAvgSize = 4 * 1024
@@ -62,7 +59,7 @@ const (
 	// has on transaction size. This is added to the slotter to avoid tiny
 	// overflows causing all txs to move a shelf higher, wasting disk space. A
 	// small buffer is added to the proof overhead.
-	txBlobOverhead = kzg4844.CellProofsPerBlob*proofSize + 64
+	txBlobOverhead = uint32(kzg4844.CellProofsPerBlob*len(kzg4844.Proof{}) + 64)
 
 	// txMaxSize is the maximum size a single transaction can have, outside
 	// the included blobs. Since blob transactions are pulled instead of pushed,
