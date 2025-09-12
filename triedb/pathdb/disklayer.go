@@ -378,7 +378,7 @@ func (dl *diskLayer) writeStateHistory(diff *diffLayer) (bool, error) {
 		log.Debug("Skip tail truncation", "persistentID", persistentID, "tailID", tail+1, "headID", diff.stateID(), "limit", limit)
 		return true, nil
 	}
-	pruned, err := truncateFromTail(dl.db.stateFreezer, newFirst-1)
+	pruned, err := truncateFromTail(dl.db.stateFreezer, typeStateHistory, newFirst-1)
 	if err != nil {
 		return false, err
 	}

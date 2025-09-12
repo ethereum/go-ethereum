@@ -29,88 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-// stateIdent represents the identifier of a state element, which can be
-// either an account or a storage slot.
-type stateIdent struct {
-	account bool
-
-	// The hash of the account address. This is used instead of the raw account
-	// address is to align the traversal order with the Merkle-Patricia-Trie.
-	addressHash common.Hash
-
-	// The hash of the storage slot key. This is used instead of the raw slot key
-	// because, in legacy state histories (prior to the Cancun fork), the slot
-	// identifier is the hash of the key, and the original key (preimage) cannot
-	// be recovered. To maintain backward compatibility, the key hash is used.
-	//
-	// Meanwhile, using the storage key hash also preserve the traversal order
-	// with Merkle-Patricia-Trie.
-	//
-	// This field is null if the identifier refers to account data.
-	storageHash common.Hash
-}
-
-// String returns the string format state identifier.
-func (ident stateIdent) String() string {
-	if ident.account {
-		return ident.addressHash.Hex()
-	}
-	return ident.addressHash.Hex() + ident.storageHash.Hex()
-}
-
-// newAccountIdent constructs a state identifier for an account.
-func newAccountIdent(addressHash common.Hash) stateIdent {
-	return stateIdent{
-		account:     true,
-		addressHash: addressHash,
-	}
-}
-
-// newStorageIdent constructs a state identifier for a storage slot.
-// The address denotes the address of the associated account;
-// the storageHash denotes the hash of the raw storage slot key;
-func newStorageIdent(addressHash common.Hash, storageHash common.Hash) stateIdent {
-	return stateIdent{
-		addressHash: addressHash,
-		storageHash: storageHash,
-	}
-}
-
-// stateIdentQuery is the extension of stateIdent by adding the raw storage key.
-type stateIdentQuery struct {
-	stateIdent
-
-	address    common.Address
-	storageKey common.Hash
-}
-
-// newAccountIdentQuery constructs a state identifier for an account.
-func newAccountIdentQuery(address common.Address, addressHash common.Hash) stateIdentQuery {
-	return stateIdentQuery{
-		stateIdent: stateIdent{
-			account:     true,
-			addressHash: addressHash,
-		},
-		address: address,
-	}
-}
-
-// newStorageIdentQuery constructs a state identifier for a storage slot.
-// the address denotes the address of the associated account;
-// the addressHash denotes the address hash of the associated account;
-// the storageKey denotes the raw storage slot key;
-// the storageHash denotes the hash of the raw storage slot key;
-func newStorageIdentQuery(address common.Address, addressHash common.Hash, storageKey common.Hash, storageHash common.Hash) stateIdentQuery {
-	return stateIdentQuery{
-		stateIdent: stateIdent{
-			addressHash: addressHash,
-			storageHash: storageHash,
-		},
-		address:    address,
-		storageKey: storageKey,
-	}
-}
-
 // indexReaderWithLimitTag is a wrapper around indexReader that includes an
 // additional index position. This position represents the ID of the last
 // indexed state history at the time the reader was created, implying that
@@ -169,7 +87,7 @@ func (r *indexReaderWithLimitTag) readGreaterThan(id uint64, lastID uint64) (uin
 	// Given that it's very unlikely to occur and users try to perform historical
 	// state queries while reverting the states at the same time. Simply returning
 	// an error should be sufficient for now.
-	metadata := loadIndexMetadata(r.db)
+	metadata := loadIndexMetadata(r.db, toHistoryType(r.reader.state.typ))
 	if metadata == nil || metadata.Last < lastID {
 		return 0, errors.New("state history hasn't been indexed yet")
 	}
@@ -331,7 +249,7 @@ func (r *historyReader) read(state stateIdentQuery, stateID uint64, lastID uint6
 	// To serve the request, all state histories from stateID+1 to lastID
 	// must be indexed. It's not supposed to happen unless system is very
 	// wrong.
-	metadata := loadIndexMetadata(r.disk)
+	metadata := loadIndexMetadata(r.disk, toHistoryType(state.typ))
 	if metadata == nil || metadata.Last < lastID {
 		indexed := "null"
 		if metadata != nil {
@@ -364,7 +282,7 @@ func (r *historyReader) read(state stateIdentQuery, stateID uint64, lastID uint6
 	// that the associated state histories are no longer available due to a rollback.
 	// Such truncation should be captured by the state resolver below, rather than returning
 	// invalid data.
-	if state.account {
+	if state.typ == typeAccount {
 		return r.readAccount(state.address, historyID)
 	}
 	return r.readStorage(state.address, state.storageKey, state.storageHash, historyID)
