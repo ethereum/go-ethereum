@@ -27,10 +27,13 @@ type NodeReader interface {
 	// node path and the corresponding node hash. No error will be returned
 	// if the node is not found.
 	//
-	// The returned node content won't be changed after the call.
+	// IMPORTANT: The returned byte slice is a direct reference to internal
+	// database storage and MUST NOT be modified. Any modification will
+	// corrupt the database state and cause undefined behavior. The slice
+	// is safe to read from but must be treated as read-only.
 	//
-	// Don't modify the returned byte slice since it's not deep-copied and
-	// still be referenced by database.
+	// For performance reasons, the data is not deep-copied. If you need
+	// to modify the data, create a copy using common.CopyBytes().
 	Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error)
 }
 
@@ -56,8 +59,15 @@ type StateReader interface {
 	// within a particular account. An error will be returned if the read operation
 	// exits abnormally.
 	//
+	// IMPORTANT: The returned byte slice is a direct reference to internal
+	// database storage and MUST NOT be modified. Any modification will
+	// corrupt the database state and cause undefined behavior. The slice
+	// is safe to read from but must be treated as read-only.
+	//
+	// For performance reasons, the data is not deep-copied. If you need
+	// to modify the data, create a copy using common.CopyBytes().
+	//
 	// Note:
-	// - the returned storage data is not a copy, please don't modify it
 	// - no error will be returned if the requested slot is not found in database
 	Storage(accountHash, storageHash common.Hash) ([]byte, error)
 }
