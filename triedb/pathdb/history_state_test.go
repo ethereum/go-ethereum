@@ -98,13 +98,13 @@ func testEncodeDecodeStateHistory(t *testing.T, rawStorageKey bool) {
 	if !compareSet(dec.accounts, obj.accounts) {
 		t.Fatal("account data is mismatched")
 	}
-	if !compareStorages(dec.storages, obj.storages) {
+	if !compareMapSet(dec.storages, obj.storages) {
 		t.Fatal("storage data is mismatched")
 	}
 	if !compareList(dec.accountList, obj.accountList) {
 		t.Fatal("account list is mismatched")
 	}
-	if !compareStorageList(dec.storageList, obj.storageList) {
+	if !compareMapList(dec.storageList, obj.storageList) {
 		t.Fatal("storage list is mismatched")
 	}
 }
@@ -137,7 +137,7 @@ func TestTruncateHeadStateHistory(t *testing.T) {
 		rawdb.WriteStateHistory(freezer, uint64(i+1), hs[i].meta.encode(), accountIndex, storageIndex, accountData, storageData)
 	}
 	for size := len(hs); size > 0; size-- {
-		pruned, err := truncateFromHead(freezer, uint64(size-1))
+		pruned, err := truncateFromHead(freezer, typeStateHistory, uint64(size-1))
 		if err != nil {
 			t.Fatalf("Failed to truncate from head %v", err)
 		}
@@ -161,7 +161,7 @@ func TestTruncateTailStateHistory(t *testing.T) {
 		rawdb.WriteStateHistory(freezer, uint64(i+1), hs[i].meta.encode(), accountIndex, storageIndex, accountData, storageData)
 	}
 	for newTail := 1; newTail < len(hs); newTail++ {
-		pruned, _ := truncateFromTail(freezer, uint64(newTail))
+		pruned, _ := truncateFromTail(freezer, typeStateHistory, uint64(newTail))
 		if pruned != 1 {
 			t.Error("Unexpected pruned items", "want", 1, "got", pruned)
 		}
@@ -209,7 +209,7 @@ func TestTruncateTailStateHistories(t *testing.T) {
 			accountData, storageData, accountIndex, storageIndex := hs[i].encode()
 			rawdb.WriteStateHistory(freezer, uint64(i+1), hs[i].meta.encode(), accountIndex, storageIndex, accountData, storageData)
 		}
-		pruned, _ := truncateFromTail(freezer, uint64(10)-c.limit)
+		pruned, _ := truncateFromTail(freezer, typeStateHistory, uint64(10)-c.limit)
 		if pruned != c.expPruned {
 			t.Error("Unexpected pruned items", "want", c.expPruned, "got", pruned)
 		}
@@ -233,7 +233,7 @@ func TestTruncateOutOfRange(t *testing.T) {
 		accountData, storageData, accountIndex, storageIndex := hs[i].encode()
 		rawdb.WriteStateHistory(freezer, uint64(i+1), hs[i].meta.encode(), accountIndex, storageIndex, accountData, storageData)
 	}
-	truncateFromTail(freezer, uint64(len(hs)/2))
+	truncateFromTail(freezer, typeStateHistory, uint64(len(hs)/2))
 
 	// Ensure of-out-range truncations are rejected correctly.
 	head, _ := freezer.Ancients()
@@ -254,9 +254,9 @@ func TestTruncateOutOfRange(t *testing.T) {
 	for _, c := range cases {
 		var gotErr error
 		if c.mode == 0 {
-			_, gotErr = truncateFromHead(freezer, c.target)
+			_, gotErr = truncateFromHead(freezer, typeStateHistory, c.target)
 		} else {
-			_, gotErr = truncateFromTail(freezer, c.target)
+			_, gotErr = truncateFromTail(freezer, typeStateHistory, c.target)
 		}
 		if !errors.Is(gotErr, c.expErr) {
 			t.Errorf("Unexpected error, want: %v, got: %v", c.expErr, gotErr)
@@ -292,32 +292,32 @@ func compareList[k comparable](a, b []k) bool {
 	return true
 }
 
-func compareStorages(a, b map[common.Address]map[common.Hash][]byte) bool {
+func compareMapSet[K1 comparable, K2 comparable](a, b map[K1]map[K2][]byte) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	for h, subA := range a {
-		subB, ok := b[h]
+	for key, subsetA := range a {
+		subsetB, ok := b[key]
 		if !ok {
 			return false
 		}
-		if !compareSet(subA, subB) {
+		if !compareSet(subsetA, subsetB) {
 			return false
 		}
 	}
 	return true
 }
 
-func compareStorageList(a, b map[common.Address][]common.Hash) bool {
+func compareMapList[K comparable, V comparable](a, b map[K][]V) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	for h, la := range a {
-		lb, ok := b[h]
+	for key, listA := range a {
+		listB, ok := b[key]
 		if !ok {
 			return false
 		}
-		if !compareList(la, lb) {
+		if !compareList(listA, listB) {
 			return false
 		}
 	}
