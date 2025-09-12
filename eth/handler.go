@@ -124,7 +124,6 @@ type handler struct {
 	peers          *peerSet
 	txBroadcastKey [16]byte
 
-	eventFeed  *event.FeedOf[downloader.SyncEvent]
 	txsCh      chan core.NewTxsEvent
 	txsSub     event.Subscription
 	blockRange *blockRangeState
@@ -146,7 +145,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	h := &handler{
 		nodeID:         config.NodeID,
 		networkID:      config.Network,
-		eventFeed:      new(event.FeedOf[downloader.SyncEvent]),
 		database:       config.Database,
 		txpool:         config.TxPool,
 		chain:          config.Chain,
@@ -190,7 +188,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return nil, errors.New("snap sync not supported with snapshots disabled")
 	}
 	// Construct the downloader (long sync)
-	h.downloader = downloader.New(config.Database, h.eventFeed, h.chain, h.removePeer, h.enableSyncedFeatures)
+	h.downloader = downloader.New(config.Database, h.chain, h.removePeer, h.enableSyncedFeatures)
 
 	fetchTx := func(peer string, hashes []common.Hash) error {
 		p := h.peers.peer(peer)
@@ -434,7 +432,7 @@ func (h *handler) Start(maxPeers int) {
 
 	// broadcast block range
 	h.wg.Add(1)
-	h.blockRange = newBlockRangeState(h.chain, h.eventFeed)
+	h.blockRange = newBlockRangeState(h.chain, h.downloader)
 	go h.blockRangeLoop(h.blockRange)
 
 	// start sync handlers
@@ -562,11 +560,11 @@ type blockRangeState struct {
 	syncSub event.Subscription
 }
 
-func newBlockRangeState(chain *core.BlockChain, eventFeed *event.FeedOf[downloader.SyncEvent]) *blockRangeState {
+func newBlockRangeState(chain *core.BlockChain, dl *downloader.Downloader) *blockRangeState {
 	headCh := make(chan core.ChainHeadEvent, chainHeadChanSize)
 	headSub := chain.SubscribeChainHeadEvent(headCh)
 	syncCh := make(chan downloader.SyncEvent, 16)
-	syncSub := eventFeed.Subscribe(syncCh)
+	syncSub := dl.SubscribeSyncEvents(syncCh)
 	st := &blockRangeState{
 		headCh:  headCh,
 		headSub: headSub,

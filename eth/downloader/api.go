@@ -22,7 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -32,15 +31,13 @@ import (
 type DownloaderAPI struct {
 	d     *Downloader
 	chain *core.BlockChain
-	feed  *event.FeedOf[SyncEvent]
 }
 
 // NewDownloaderAPI creates a new DownloaderAPI.
-func NewDownloaderAPI(d *Downloader, chain *core.BlockChain, f *event.FeedOf[SyncEvent]) *DownloaderAPI {
+func NewDownloaderAPI(d *Downloader, chain *core.BlockChain) *DownloaderAPI {
 	return &DownloaderAPI{
 		d:     d,
 		chain: chain,
-		feed:  f,
 	}
 }
 
@@ -80,7 +77,7 @@ type SyncingResult struct {
 // The given channel must receive interface values, the result can either be a SyncingResult or false.
 func (api *DownloaderAPI) SubscribeSyncStatus(status chan interface{}) {
 	eventCh := make(chan SyncEvent, 16)
-	sub := api.feed.Subscribe(eventCh)
+	sub := api.d.SubscribeSyncEvents(eventCh)
 
 	go func() {
 		defer close(status)

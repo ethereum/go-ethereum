@@ -97,8 +97,8 @@ type headerTask struct {
 }
 
 type Downloader struct {
-	mode atomic.Uint32            // Synchronisation mode defining the strategy used (per sync cycle), use d.getMode() to get the SyncMode
-	feed *event.FeedOf[SyncEvent] // Event feed to announce sync operation events
+	mode atomic.Uint32           // Synchronisation mode defining the strategy used (per sync cycle), use d.getMode() to get the SyncMode
+	feed event.FeedOf[SyncEvent] // Event feed to announce sync operation events
 
 	queue *queue   // Scheduler for selecting the hashes to download
 	peers *peerSet // Set of active peers from which download can proceed
@@ -221,11 +221,10 @@ type BlockChain interface {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(stateDb ethdb.Database, feed *event.FeedOf[SyncEvent], chain BlockChain, dropPeer peerDropFn, success func()) *Downloader {
+func New(stateDb ethdb.Database, chain BlockChain, dropPeer peerDropFn, success func()) *Downloader {
 	cutoffNumber, cutoffHash := chain.HistoryPruningCutoff()
 	dl := &Downloader{
 		stateDB:           stateDb,
-		feed:              feed,
 		queue:             newQueue(blockCacheMaxItems, blockCacheInitialItems),
 		peers:             newPeerSet(),
 		blockchain:        chain,
