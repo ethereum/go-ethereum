@@ -127,7 +127,7 @@ func (b *Builder) AddRLP(header, body, receipts []byte, number uint64, hash comm
 		b.written += n
 	}
 	if len(b.indexes) >= MaxEra1Size {
-		return fmt.Errorf("exceeds maximum batch size of %d", MaxEra1Size)
+		return fmt.Errorf("batch size %d exceeds maximum %d", len(b.indexes), MaxEra1Size)
 	}
 
 	b.indexes = append(b.indexes, uint64(b.written))
