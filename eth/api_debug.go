@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -490,4 +491,44 @@ func (api *DebugAPI) StateSize(blockHashOrNumber *rpc.BlockNumberOrHash) (interf
 		"contractCodes":        hexutil.Uint64(stats.ContractCodes),
 		"contractCodeBytes":    hexutil.Uint64(stats.ContractCodeBytes),
 	}, nil
+}
+
+func (api *DebugAPI) ExecutionWitness(bn rpc.BlockNumber) (*stateless.ExtWitness, error) {
+	bc := api.eth.blockchain
+	block, err := api.eth.APIBackend.BlockByNumber(context.Background(), bn)
+	if err != nil {
+		return &stateless.ExtWitness{}, fmt.Errorf("block number %v not found", bn)
+	}
+
+	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		return &stateless.ExtWitness{}, fmt.Errorf("block number %v found, but parent missing", bn)
+	}
+
+	result, err := bc.ProcessBlock(parent.Root, block, false, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return result.Witness().ToExtWitness(), nil
+}
+
+func (api *DebugAPI) ExecutionWitnessByHash(hash common.Hash) (*stateless.ExtWitness, error) {
+	bc := api.eth.blockchain
+	block := bc.GetBlockByHash(hash)
+	if block == nil {
+		return &stateless.ExtWitness{}, fmt.Errorf("block hash %x not found", hash)
+	}
+
+	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		return &stateless.ExtWitness{}, fmt.Errorf("block number %x found, but parent missing", hash)
+	}
+
+	result, err := bc.ProcessBlock(parent.Root, block, false, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return result.Witness().ToExtWitness(), nil
 }
