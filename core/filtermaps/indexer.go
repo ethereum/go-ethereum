@@ -17,7 +17,9 @@
 package filtermaps
 
 import (
+	"fmt"
 	"math"
+	"os"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -60,6 +62,7 @@ type Indexer struct {
 	snapshotsLock                                   sync.RWMutex
 	snapshots                                       map[common.Hash]*IndexView
 	headMapsCache                                   *lru.Cache[uint32, *finishedMap]
+	lastFinalEpoch                                  uint32
 }
 
 // Config contains the configuration options for Indexer.
@@ -81,11 +84,12 @@ func NewIndexer(db ethdb.KeyValueStore, params Params, config Config) *Indexer {
 	params.sanitize()
 	mapDb := newMapDatabase(&params, db, config.HashScheme)
 	ix := &Indexer{
-		config:        config,
-		storage:       newMapStorage(&params, mapDb, nil),
-		checkpoints:   checkpoints,
-		snapshots:     make(map[common.Hash]*IndexView),
-		headMapsCache: lru.NewCache[uint32, *finishedMap](maxIndexViewMaps),
+		config:         config,
+		storage:        newMapStorage(&params, mapDb, nil),
+		checkpoints:    checkpoints,
+		snapshots:      make(map[common.Hash]*IndexView),
+		headMapsCache:  lru.NewCache[uint32, *finishedMap](maxIndexViewMaps),
+		lastFinalEpoch: math.MaxUint32,
 	}
 	if config.Disabled {
 		ix.storage.deleteMaps(common.NewRange[uint32](0, math.MaxUint32))
@@ -96,6 +100,20 @@ func NewIndexer(db ethdb.KeyValueStore, params Params, config Config) *Indexer {
 	ix.updateActiveViewTailEpoch()
 	ix.updateTailState()
 	return ix
+}
+
+func (ix *Indexer) GetIndexView(hash common.Hash) *IndexView {
+	if ix.config.Disabled {
+		return nil
+	}
+	ix.snapshotsLock.RLock()
+	iv := ix.snapshots[hash]
+	ix.snapshotsLock.RUnlock()
+	if iv == nil || iv.checkReleased() {
+		return nil
+	}
+	iv.addRefCount(1)
+	return iv
 }
 
 // Status returns the current indexer status. The ready flag indicates whether
@@ -218,7 +236,11 @@ func (ix *Indexer) Revert(blockNumber uint64) {
 // SetFinalized notifies the indexer about the latest finalized block number.
 // SetFinalized implements core.Indexer.
 func (ix *Indexer) SetFinalized(blockNumber uint64) {
+	if ix.finalized == blockNumber {
+		return
+	}
 	ix.finalized = blockNumber
+	ix.exportCheckpoints()
 }
 
 // SetHistoryCutoff notifies the indexer about the latest historical cutoff point.
@@ -478,20 +500,6 @@ func (ix *Indexer) releaseView(hash common.Hash) {
 	}
 }
 
-func (ix *Indexer) GetIndexView(hash common.Hash) *IndexView {
-	if ix.config.Disabled {
-		return nil
-	}
-	ix.snapshotsLock.RLock()
-	iv := ix.snapshots[hash]
-	ix.snapshotsLock.RUnlock()
-	if iv == nil || iv.checkReleased() {
-		return nil
-	}
-	iv.addRefCount(1)
-	return iv
-}
-
 func (ix *Indexer) storeFinishedMaps(firstMapIndex uint32, maps []*finishedMap, forceCommit, cacheHeadMaps bool) {
 	if len(maps) == 0 {
 		return
@@ -603,4 +611,45 @@ func (ix *Indexer) storeHeadIndexView(number uint64, hash common.Hash) {
 	}
 	ix.updateActiveViewTailEpoch()
 	ix.updateTailState()
+}
+
+// exportCheckpoints exports epoch checkpoints in the format used by checkpoints.go.
+func (ix *Indexer) exportCheckpoints() {
+	finalLvPtr, err := ix.storage.getBlockLvPointer(ix.finalized + 1)
+	if err != nil {
+		log.Error("Error fetching log value pointer of finalized block", "block", ix.finalized, "error", err)
+		return
+	}
+	epochCount := ix.storage.params.mapEpoch(uint32(finalLvPtr >> ix.storage.params.logValuesPerMap))
+	if epochCount == ix.lastFinalEpoch {
+		return
+	}
+	w, err := os.Create(ix.config.ExportFileName)
+	if err != nil {
+		log.Error("Error creating checkpoint export file", "name", ix.config.ExportFileName, "error", err)
+		return
+	}
+	defer w.Close()
+
+	log.Info("Exporting log index checkpoints", "epochs", epochCount, "file", ix.config.ExportFileName)
+	w.WriteString("[\n")
+	comma := ","
+	for epoch := uint32(0); epoch < epochCount; epoch++ {
+		lastBlock, lastBlockId, err := ix.storage.getLastBlockOfMap(ix.storage.params.lastEpochMap(epoch))
+		if err != nil {
+			log.Error("Error fetching last block of epoch", "epoch", epoch, "error", err)
+			return
+		}
+		lvPtr, err := ix.storage.getBlockLvPointer(lastBlock)
+		if err != nil {
+			log.Error("Error fetching log value pointer of last block", "block", lastBlock, "error", err)
+			return
+		}
+		if epoch == epochCount-1 {
+			comma = ""
+		}
+		w.WriteString(fmt.Sprintf("{\"blockNumber\": %d, \"blockId\": \"0x%064x\", \"firstIndex\": %d}%s\n", lastBlock, lastBlockId, lvPtr, comma))
+	}
+	w.WriteString("]\n")
+	ix.lastFinalEpoch = epochCount
 }
