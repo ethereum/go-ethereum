@@ -28,9 +28,11 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	logger "github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -43,6 +45,9 @@ var (
 	errPendingLogsUnsupported = errors.New("pending logs are not supported")
 	errExceedMaxTopics        = errors.New("exceed max topics")
 	errExceedMaxAddresses     = errors.New("exceed max addresses")
+	errInvalidFromBlock       = errors.New(`from block can be only a number, or "latest", "safe", "finalized"`)
+	errInvalidToBlock         = errors.New("log subscription does not support history block range")
+	errInvalidFromToBlock     = errors.New("invalid from and to block combination: from > to")
 )
 
 const (
@@ -52,6 +57,11 @@ const (
 	maxTopics = 4
 	// The maximum number of allowed topics within a topic criteria
 	maxSubTopics = 1000
+	// maxTrackedBlocks is the number of block hashes that will be tracked by subscription.
+	maxTrackedBlocks = 32 * 1024
+	// histLogChunkSize is the maximum number of blocks to process in a single chunk
+	// when fetching historical logs to improve responsiveness
+	histLogChunkSize = 4096
 )
 
 // filter is a helper struct that holds meta information over the filter type
@@ -261,38 +271,320 @@ func (api *FilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 	return rpcSub, nil
 }
 
-// Logs creates a subscription that fires for all new log that match the given filter criteria.
+// notifier is used for broadcasting data(eg: logs) to rpc receivers
+// used in unit testing.
+type notifier interface {
+	Notify(id rpc.ID, data interface{}) error
+}
+
+// Logs creates a subscription that fires for all historical
+// and new logs that match the given filter criteria.
 func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
 	}
+	rpcSub := notifier.CreateSubscription()
+	err := api.logs(ctx, notifier, rpcSub, crit)
+	return rpcSub, err
+}
 
-	var (
-		rpcSub      = notifier.CreateSubscription()
-		matchedLogs = make(chan []*types.Log)
-	)
+// logs is the inner implementation of logs subscription.
+// The following criteria are valid:
+// * from: nil | latest, to: nil -> yield live logs.
+// * from: blockNum | safe | finalized, to: nil -> historical beginning at `from` to head, then live logs.
+// * Every other case should fail with an error.
+func (api *FilterAPI) logs(ctx context.Context, notifier notifier, rpcSub *rpc.Subscription, crit FilterCriteria) error {
+	if crit.ToBlock != nil {
+		return errInvalidToBlock
+	}
+	if crit.FromBlock == nil {
+		return api.liveLogs(notifier, rpcSub, crit)
+	}
+	from := rpc.BlockNumber(crit.FromBlock.Int64())
+	switch from {
+	case rpc.PendingBlockNumber:
+		return errInvalidFromBlock
+	case rpc.LatestBlockNumber:
+		return api.liveLogs(notifier, rpcSub, crit)
+	case rpc.SafeBlockNumber, rpc.FinalizedBlockNumber:
+		header, err := api.sys.backend.HeaderByNumber(ctx, from)
+		if err != nil {
+			return err
+		}
+		from = rpc.BlockNumber(header.Number.Int64())
+	}
+	if from < 0 {
+		return errInvalidFromBlock
+	}
+	return api.histLogs(notifier, rpcSub, int64(from), crit)
+}
 
+// liveLogs only retrieves live logs.
+func (api *FilterAPI) liveLogs(notifier notifier, rpcSub *rpc.Subscription, crit FilterCriteria) error {
+	matchedLogs := make(chan []*types.Log)
 	logsSub, err := api.events.SubscribeLogs(ethereum.FilterQuery(crit), matchedLogs)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	go func() {
-		defer logsSub.Unsubscribe()
 		for {
 			select {
 			case logs := <-matchedLogs:
-				for _, log := range logs {
-					notifier.Notify(rpcSub.ID, &log)
+				notifyLogsIf(notifier, rpcSub.ID, logs, nil)
+
+			case <-rpcSub.Err(): // client send an unsubscribe request
+				logsSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+	return nil
+}
+
+// histLogs retrieves logs older than current header.
+func (api *FilterAPI) histLogs(notifier notifier, rpcSub *rpc.Subscription, from int64, crit FilterCriteria) error {
+	// Subscribe the Live logs
+	// if an ChainReorg occurred,
+	// we will first recv the old chain's deleted logs in descending order,
+	// and then the new chain's added logs in descending order
+	// see core/blockchain.go#reorg(oldHead *types.Header, newHead *types.Block) for more details
+	// if an reorg happened between `from` and `to`, we will need to think about some scenarios:
+	// 1. if a reorg occurs after the currently delivered block, then because this is happening in the future, has nothing to do with the current historical sync, we can just ignore it.
+	// 2. if a reorg occurs before the currently delivered block, then we need to stop the historical delivery, and send all replaced logs instead
+	var (
+		liveLogs = make(chan []*types.Log)
+		histLogs = make(chan []*types.Log)
+		histDone = make(chan error)
+	)
+	liveLogsSub, err := api.events.SubscribeLogs(ethereum.FilterQuery(crit), liveLogs)
+	if err != nil {
+		return err
+	}
+
+	// The original request ctx will be canceled as soon as the parent goroutine
+	// returns a subscription. Use a new context instead.
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		histDone <- api.doHistLogs(ctx, from, crit.Addresses, crit.Topics, histLogs)
+	}()
+
+	// Compose and notify the logs from liveLogs and histLogs
+	go func() {
+		defer func() {
+			liveLogsSub.Unsubscribe()
+			cancel()
+		}()
+		var (
+			// delivered is the block number of the last historical log delivered.
+			delivered uint64
+
+			// liveMode is true when either:
+			// - all historical logs are delivered.
+			// - or, during history processing a reorg is detected.
+			liveMode bool
+
+			// reorgedBlockHash is the block hash of the reorg point. It is set when
+			// a reorg is detected in the future. It is used to detect if the history
+			// processor is sending stale logs.
+			reorgedBlockHash common.Hash
+
+			// hashes is used to track the hashes of the blocks that have been delivered.
+			// It is used as a guard to prevent duplicate logs as well as inaccurate "removed"
+			// logs being delivered during a reorg.
+			hashes = lru.NewBasicLRU[common.Hash, struct{}](maxTrackedBlocks)
+		)
+		for {
+			select {
+			case err := <-histDone:
+				if err != nil {
+					logger.Warn("History logs delivery failed", "err", err)
+					return
 				}
+				// Else historical logs are all delivered, let's switch to live mode
+				logger.Info("History logs delivery finished, and now enter into live mode", "delivered", delivered)
+				// TODO: It's theoretically possible that we miss logs due to
+				// asynchrony between the history processor and the chain subscription.
+				liveMode = true
+				histLogs = nil
+
+			case logs := <-liveLogs:
+				if len(logs) == 0 {
+					continue
+				}
+				// TODO: further reorgs are possible during history processing.
+				if !liveMode && logs[0].BlockNumber <= delivered {
+					// History is being processed and a reorg is encountered.
+					// From this point we ignore historical logs coming in and
+					// only send logs from the chain subscription.
+					logger.Info("Reorg detected", "reorgBlock", logs[0].BlockNumber, "delivered", delivered)
+					liveMode = true
+				}
+				if !liveMode {
+					if logs[0].Removed && reorgedBlockHash == (common.Hash{}) {
+						// Reorg in future. Remember fork point.
+						reorgedBlockHash = logs[0].BlockHash
+					}
+					// Implicit cases:
+					// - there was a reorg in future and blockchain is sending logs from the new chain.
+					// - history is still being processed and blockchain sends logs from the tip.
+					continue
+				}
+				// Removed logs from reorged chain, replacing logs or logs from tip of the chain.
+				notifyLogsIf(notifier, rpcSub.ID, logs, &hashes)
+
+			case logs := <-histLogs:
+				if len(logs) == 0 {
+					continue
+				}
+				if liveMode {
+					continue
+				}
+				if logs[0].BlockHash == reorgedBlockHash {
+					// We have reached the fork point and the historical producer
+					// is emitting old logs because of delay. Restart the process
+					// from last delivered block.
+					logger.Info("Restarting historical logs delivery", "from", logs[0].BlockNumber, "delivered", delivered)
+					liveLogsSub.Unsubscribe()
+					// Stop hist logs fetcher
+					cancel()
+					if err := api.histLogs(notifier, rpcSub, int64(logs[0].BlockNumber), crit); err != nil {
+						logger.Warn("failed to restart historical logs delivery", "err", err)
+					}
+					return
+				}
+				notifyLogsIf(notifier, rpcSub.ID, logs, &hashes)
+				// Assuming batch = all logs of a single block
+				delivered = logs[0].BlockNumber
+
 			case <-rpcSub.Err(): // client send an unsubscribe request
 				return
 			}
 		}
 	}()
 
-	return rpcSub, nil
+	return nil
+}
+
+// doHistLogs retrieves the logs older than current header, and forward them to the histLogs channel.
+func (api *FilterAPI) doHistLogs(ctx context.Context, from int64, addrs []common.Address, topics [][]common.Hash, histLogs chan<- []*types.Log) error {
+	// Fetch logs from a range of blocks.
+	fetchRange := func(from, to int64) error {
+		f := api.sys.NewRangeFilter(from, to, addrs, topics)
+		logs, err := f.Logs(ctx)
+		if err != nil {
+			return err
+		}
+		// Group logs by block and send them in batches
+		var currentBlockLogs []*types.Log
+		var currentBlockNumber uint64
+
+		for _, log := range logs {
+			if currentBlockNumber != log.BlockNumber && len(currentBlockLogs) > 0 {
+				// Send the current block's logs
+				select {
+				case histLogs <- currentBlockLogs:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+				currentBlockLogs = nil
+			}
+			currentBlockLogs = append(currentBlockLogs, log)
+			currentBlockNumber = log.BlockNumber
+		}
+		// Send remaining logs if any
+		if len(currentBlockLogs) > 0 {
+			select {
+			case histLogs <- currentBlockLogs:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		return nil
+	}
+
+	for {
+		// Get the latest block header.
+		header := api.sys.backend.CurrentHeader()
+		if header == nil {
+			return errors.New("unexpected error: no header block found")
+		}
+		head := header.Number.Int64()
+		if from > head {
+			logger.Info("Finish historical sync", "from", from, "head", head)
+			return nil
+		}
+
+		to := min(from+histLogChunkSize-1, head)
+
+		logger.Debug("Processing historical logs chunk", "from", from, "to", to, "head", head)
+		if err := fetchRange(from, to); err != nil {
+			if errors.Is(err, context.Canceled) {
+				logger.Warn("Historical logs delivery canceled", "from", from, "to", to)
+				return nil
+			}
+			return err
+		}
+
+		// Move forward to the next chunk
+		from = to + 1
+
+		// Allow other goroutines to run and check for cancellation
+		select {
+		case <-ctx.Done():
+			logger.Warn("Historical logs delivery canceled", "from", from, "to", to)
+			return ctx.Err()
+		default:
+		}
+	}
+}
+
+// notifyLogsIf sends logs to the notifier if the condition is met.
+// It assumes all logs of the same block are either all removed or all added.
+func notifyLogsIf(notifier notifier, id rpc.ID, logs []*types.Log, hashes *lru.BasicLRU[common.Hash, struct{}]) {
+	// Iterate logs and batch them by block hash.
+	type batch struct {
+		start   int
+		end     int
+		hash    common.Hash
+		removed bool
+	}
+	var (
+		batches = make([]batch, 0)
+		h       common.Hash
+	)
+	for i, log := range logs {
+		if h == log.BlockHash {
+			// Skip logs of seen block
+			continue
+		}
+		if len(batches) > 0 {
+			batches[len(batches)-1].end = i
+		}
+		batches = append(batches, batch{start: i, hash: log.BlockHash, removed: log.Removed})
+		h = log.BlockHash
+	}
+	// Close off last batch.
+	if batches[len(batches)-1].end == 0 {
+		batches[len(batches)-1].end = len(logs)
+	}
+	for _, batch := range batches {
+		if hashes != nil {
+			// During reorgs it's possible that logs from the new chain have been delivered.
+			// Avoid sending removed logs from the old chain and duplicate logs from new chain.
+			if batch.removed && !hashes.Contains(batch.hash) {
+				continue
+			}
+			if !batch.removed && hashes.Contains(batch.hash) {
+				continue
+			}
+			hashes.Add(batch.hash, struct{}{})
+		}
+		for _, log := range logs[batch.start:batch.end] {
+			notifier.Notify(id, log)
+		}
+	}
 }
 
 // FilterCriteria represents a request to create a new filter.

@@ -152,6 +152,8 @@ const (
 	UnknownSubscription Type = iota
 	// LogsSubscription queries for new or removed (chain reorg) logs
 	LogsSubscription
+	// MinedAndPendingLogsSubscription queries for both mined and pending logs
+	MinedAndPendingLogsSubscription
 	// PendingTransactionsSubscription queries for pending transactions entering
 	// the pending state
 	PendingTransactionsSubscription
@@ -327,11 +329,32 @@ func (es *EventSystem) SubscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 	if from >= 0 && to >= 0 && to >= from {
 		return es.subscribeLogs(crit, logs), nil
 	}
+	// interested in mined logs from a specific block number, new logs and pending logs
+	if (from == rpc.LatestBlockNumber || from >= 0) && to == rpc.PendingBlockNumber {
+		return es.subscribeMinedPendingLogs(crit, logs), nil
+	}
 	// interested in logs from a specific block number to new mined blocks
 	if from >= 0 && to == rpc.LatestBlockNumber {
 		return es.subscribeLogs(crit, logs), nil
 	}
-	return nil, errInvalidBlockRange
+	return nil, errInvalidFromToBlock
+}
+
+// subscribeMinedPendingLogs creates a subscription that returned mined and
+// pending logs that match the given criteria.
+func (es *EventSystem) subscribeMinedPendingLogs(crit ethereum.FilterQuery, logs chan []*types.Log) *Subscription {
+	sub := &subscription{
+		id:        rpc.NewID(),
+		typ:       MinedAndPendingLogsSubscription,
+		logsCrit:  crit,
+		created:   time.Now(),
+		logs:      logs,
+		txs:       make(chan []*types.Transaction),
+		headers:   make(chan *types.Header),
+		installed: make(chan struct{}),
+		err:       make(chan error),
+	}
+	return es.subscribe(sub)
 }
 
 // subscribeLogs creates a subscription that will write all logs matching the

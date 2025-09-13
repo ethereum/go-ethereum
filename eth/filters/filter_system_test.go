@@ -19,6 +19,7 @@ package filters
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"reflect"
 	"runtime"
@@ -31,11 +32,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	logger "github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 type testBackend struct {
@@ -165,6 +169,19 @@ func (b *testBackend) CurrentView() *filtermaps.ChainView {
 
 func (b *testBackend) NewMatcherBackend() filtermaps.MatcherBackend {
 	return b.fm.NewMatcherBackend()
+}
+
+func (b *testBackend) forwardLogEvents(logCh chan []*types.Log, removedLogCh chan core.RemovedLogsEvent) {
+	go func() {
+		for {
+			select {
+			case logs := <-logCh:
+				b.logsFeed.Send(logs)
+			case logs := <-removedLogCh:
+				b.rmLogsFeed.Send(logs)
+			}
+		}
+	}()
 }
 
 func (b *testBackend) startFilterMaps(history uint64, disabled bool, params filtermaps.Params) {
@@ -693,4 +710,517 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 			t.Fatalf("Filter timeout is hanging")
 		}
 	}
+}
+
+type mockNotifier struct {
+	c chan interface{}
+}
+
+func newMockNotifier() *mockNotifier {
+	return &mockNotifier{c: make(chan interface{})}
+}
+
+func (n *mockNotifier) Notify(id rpc.ID, data interface{}) error {
+	n.c <- data
+	return nil
+}
+
+var (
+	signer   = types.HomesteadSigner{}
+	key, _   = crypto.GenerateKey()
+	addr     = crypto.PubkeyToAddress(key.PublicKey)
+	addrHash = common.HexToHash(addr.Hex())
+	contract = common.HexToAddress("0000000000000000000000000000000000031ec7")
+	// Transfer(address indexed from, address indexed to, uint256 value);
+	topic        = common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
+	genesisAlloc = core.GenesisAlloc{
+		// // SPDX-License-Identifier: GPL-3.0
+		// pragma solidity >=0.7.0 <0.9.0;
+		//
+		// contract Token {
+		//     event Transfer(address indexed from, address indexed to, uint256 value);
+		//     function transfer(address to, uint256 value) public returns (bool) {
+		//         emit Transfer(msg.sender, to, value);
+		//         return true;
+		//     }
+		// }
+		contract: {Balance: big.NewInt(params.Ether), Code: common.FromHex("0x608060405234801561001057600080fd5b506004361061002b5760003560e01c8063a9059cbb14610030575b600080fd5b61004a6004803603810190610045919061016a565b610060565b60405161005791906101c5565b60405180910390f35b60008273ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef846040516100bf91906101ef565b60405180910390a36001905092915050565b600080fd5b600073ffffffffffffffffffffffffffffffffffffffff82169050919050565b6000610101826100d6565b9050919050565b610111816100f6565b811461011c57600080fd5b50565b60008135905061012e81610108565b92915050565b6000819050919050565b61014781610134565b811461015257600080fd5b50565b6000813590506101648161013e565b92915050565b60008060408385031215610181576101806100d1565b5b600061018f8582860161011f565b92505060206101a085828601610155565b9150509250929050565b60008115159050919050565b6101bf816101aa565b82525050565b60006020820190506101da60008301846101b6565b92915050565b6101e981610134565b82525050565b600060208201905061020460008301846101e0565b9291505056fea2646970667358221220b469033f4b77b9565ee84e0a2f04d496b18160d26034d54f9487e57788fd36d564736f6c63430008120033")},
+		addr:     {Balance: big.NewInt(params.Ether)},
+	}
+)
+
+// TestLogsSubscription tests if a rpc subscription receives the correct logs
+func TestLogsSubscription(t *testing.T) {
+	t.Parallel()
+
+	var (
+		db           = rawdb.NewMemoryDatabase()
+		tdb          = triedb.NewDatabase(db, triedb.HashDefaults)
+		genesis      = &core.Genesis{Config: params.TestChainConfig, Alloc: genesisAlloc}
+		backend, sys = newTestFilterSystem(db, Config{})
+		api          = NewFilterAPI(sys)
+	)
+
+	// Hack: GenerateChainWithGenesis creates a new db.
+	// Commit the genesis manually and use GenerateChain.
+	_, err := genesis.Commit(db, tdb)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocks, _ := core.GenerateChain(genesis.Config, genesis.ToBlock(), ethash.NewFaker(), db, 4, func(i int, b *core.BlockGen) {
+		tx := makeTx(i+1, i+11, b)
+		b.AddTx(tx)
+	})
+	bc, err := core.NewBlockChain(db, genesis, ethash.NewFaker(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Hack: FilterSystem is using mock backend, i.e. blockchain events will be not received
+	// by it. Forward them manually.
+	var (
+		bcLogsFeed   = make(chan []*types.Log)
+		bcRmLogsFeed = make(chan core.RemovedLogsEvent)
+	)
+	backend.forwardLogEvents(bcLogsFeed, bcRmLogsFeed)
+	bc.SubscribeLogsEvent(bcLogsFeed)
+
+	_, err = bc.InsertChain(blocks)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	backend.startFilterMaps(0, false, filtermaps.RangeTestParams)
+	defer backend.stopFilterMaps()
+
+	// Generate pending block, logs for which
+	// will be sent to subscription feed.
+	_, preceipts := core.GenerateChain(genesis.Config, blocks[len(blocks)-1], ethash.NewFaker(), db, 1, func(i int, gen *core.BlockGen) {
+		// transfer(address to, uint256 value)
+		data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 11)}).String()[2:])
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(len(blocks) + i), To: &contract, Value: big.NewInt(0), Gas: 46000, GasPrice: gen.BaseFee(), Data: common.FromHex(data)}), signer, key)
+		gen.AddTx(tx)
+	})
+	liveLogs := preceipts[0][0].Logs
+
+	allLogs := []*types.Log{
+		{Address: contract, Topics: []common.Hash{topic, addrHash, i2h(1)}, Data: i2b(11), BlockNumber: 1, BlockTimestamp: 10, BlockHash: blocks[0].Hash(), TxHash: blocks[0].Transactions()[0].Hash()},
+		{Address: contract, Topics: []common.Hash{topic, addrHash, i2h(2)}, Data: i2b(12), BlockNumber: 2, BlockTimestamp: 20, BlockHash: blocks[1].Hash(), TxHash: blocks[1].Transactions()[0].Hash()},
+		{Address: contract, Topics: []common.Hash{topic, addrHash, i2h(3)}, Data: i2b(13), BlockNumber: 3, BlockTimestamp: 30, BlockHash: blocks[2].Hash(), TxHash: blocks[2].Transactions()[0].Hash()},
+		{Address: contract, Topics: []common.Hash{topic, addrHash, i2h(4)}, Data: i2b(14), BlockNumber: 4, BlockTimestamp: 40, BlockHash: blocks[3].Hash(), TxHash: blocks[3].Transactions()[0].Hash()},
+	}
+	testCases := []struct {
+		crit      FilterCriteria
+		expected  []*types.Log
+		notifier  *mockNotifier
+		sub       *rpc.Subscription
+		expectErr error
+		err       chan error
+	}{
+		// from 0
+		{
+			FilterCriteria{FromBlock: big.NewInt(0)},
+			append(allLogs, liveLogs...), newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
+		},
+		// from 1 to latest
+		{
+			FilterCriteria{FromBlock: big.NewInt(1), ToBlock: big.NewInt(rpc.LatestBlockNumber.Int64())},
+			nil, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, errInvalidToBlock, nil,
+		},
+		// from 2
+		{
+			FilterCriteria{FromBlock: big.NewInt(2)},
+			append(allLogs[1:], liveLogs...), newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
+		},
+		// live logs
+		{
+			FilterCriteria{},
+			liveLogs, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
+		},
+		// from 1 to 3
+		{
+			FilterCriteria{FromBlock: big.NewInt(1), ToBlock: big.NewInt(3)},
+			nil, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, errInvalidToBlock, nil,
+		},
+		// from -101 to latest
+		{
+			FilterCriteria{FromBlock: big.NewInt(-101)},
+			nil, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, errInvalidFromBlock, nil,
+		},
+		// from "latest" - should work like live logs only
+		{
+			FilterCriteria{FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64())},
+			liveLogs, newMockNotifier(), &rpc.Subscription{ID: rpc.NewID()}, nil, nil,
+		},
+	}
+
+	// subscribe logs
+	for i, tc := range testCases {
+		testCases[i].err = make(chan error)
+		err := api.logs(context.Background(), tc.notifier, tc.sub, tc.crit)
+		if tc.expectErr != nil {
+			if err == nil {
+				t.Errorf("test %d: want error %v, have nothing", i, tc.expectErr)
+				continue
+			}
+			if !errors.Is(err, tc.expectErr) {
+				t.Errorf("test %d: error mismatch, want %v, have %v", i, tc.expectErr, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("SubscribeLogs %d failed: %v\n", i, err)
+		}
+	}
+
+	// receive logs
+	for n, test := range testCases {
+		i := n
+		tt := test
+		go func() {
+			var fetched []*types.Log
+
+			timeout := time.After(3 * time.Second)
+		fetchLoop:
+			for {
+				select {
+				case log := <-tt.notifier.c:
+					fetched = append(fetched, log.(*types.Log))
+				case <-timeout:
+					break fetchLoop
+				}
+			}
+
+			if len(fetched) != len(tt.expected) {
+				tt.err <- fmt.Errorf("invalid number of logs for case %d, want %d log(s), got %d", i, len(tt.expected), len(fetched))
+				return
+			}
+
+			for l := range fetched {
+				have, want := fetched[l], tt.expected[l]
+				if !reflect.DeepEqual(have, want) {
+					tt.err <- fmt.Errorf("invalid log on index %d for case %d have: %+v want: %+v\n", l, i, have, want)
+					return
+				}
+			}
+			tt.err <- nil
+		}()
+	}
+
+	// Wait for historical logs to be processed.
+	// The reason we need to wait is this test is artificial
+	// and no new block containing the logs is mined.
+	time.Sleep(1 * time.Second)
+	// Send live logs
+	backend.logsFeed.Send(liveLogs)
+
+	for i := range testCases {
+		if err := <-testCases[i].err; err != nil {
+			t.Errorf("test %d failed: %v", i, err)
+		}
+	}
+}
+
+func makeTx(to int, value int, b *core.BlockGen) *types.Transaction {
+	// transfer(address to, uint256 value)
+	data := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(to))).Hex()).String()[2:], common.BytesToHash([]byte{byte(value)}).String()[2:])
+	tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: b.TxNonce(addr), To: &contract, Gas: 46000, GasPrice: b.BaseFee(), Data: common.FromHex(data)}), signer, key)
+	return tx
+}
+
+func i2h(i int) common.Hash            { return common.BigToHash(big.NewInt(int64(i))) }
+func a2h(a common.Address) common.Hash { return common.HexToHash(a.Hex()) }
+func i2b(i int) []byte                 { return i2h(i).Bytes() }
+
+func parseTransferLog(log *types.Log) (from, to common.Address, amount uint64) {
+	from = common.BytesToAddress(log.Topics[1].Bytes())
+	to = common.BytesToAddress(log.Topics[2].Bytes())
+	amount = common.BytesToHash(log.Data).Big().Uint64()
+	return
+}
+
+// calculateBalance calculates the address balances of all Transfer events
+// We check with the balance instead of logs because there is a gap between the ChainReorg occurred and detected,
+// so we can't fully control how many logs we'll receive.
+// By checking the balance, we can test with the token transfer amount.
+func calculateBalance(logs []*types.Log) map[common.Address]uint64 {
+	balances := make(map[common.Address]uint64)
+	for _, log := range logs {
+		from, to, amount := parseTransferLog(log)
+
+		if _, ok := balances[from]; !ok {
+			balances[from] = 0
+		}
+		if _, ok := balances[to]; !ok {
+			balances[to] = 0
+		}
+
+		if log.Removed { // revert
+			balances[from] += amount
+			balances[to] -= amount
+		} else {
+			balances[from] -= amount
+			balances[to] += amount
+		}
+	}
+	// Remove zero balances
+	for addr, balance := range balances {
+		if balance == 0 {
+			delete(balances, addr)
+		}
+	}
+	return balances
+}
+
+// TestLogsSubscriptionReorg tests that logs subscription works correctly in case of reorg.
+func testLogsSubscriptionReorg(t *testing.T, oldChainMaker, newChainMaker, pendingMaker func(i int, b *core.BlockGen), oldChainLen, newChainLen, forkAt, reorgAt int, expected []*types.Log) {
+	var (
+		db           = rawdb.NewMemoryDatabase()
+		tdb          = triedb.NewDatabase(db, triedb.HashDefaults)
+		backend, sys = newTestFilterSystem(db, Config{})
+		api          = NewFilterAPI(sys)
+		genesis      = &core.Genesis{Config: params.TestChainConfig, Alloc: genesisAlloc, GasLimit: 10000000000000}
+	)
+
+	// Hack: GenerateChainWithGenesis creates a new db.
+	// Commit the genesis manually and use GenerateChain.
+	_, err := genesis.Commit(db, tdb)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldChain, _ := core.GenerateChain(genesis.Config, genesis.ToBlock(), ethash.NewFaker(), db, oldChainLen, oldChainMaker)
+	bc, err := core.NewBlockChain(db, genesis, ethash.NewFaker(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Hack: FilterSystem is using mock backend, i.e. blockchain events will be not received
+	// by it. Forward them manually.
+	var (
+		bcLogsFeed   = make(chan []*types.Log)
+		bcRmLogsFeed = make(chan core.RemovedLogsEvent)
+	)
+	backend.forwardLogEvents(bcLogsFeed, bcRmLogsFeed)
+	bc.SubscribeLogsEvent(bcLogsFeed)
+	bc.SubscribeRemovedLogsEvent(bcRmLogsFeed)
+
+	_, err = bc.InsertChain(oldChain)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	backend.startFilterMaps(0, false, filtermaps.RangeTestParams)
+	defer backend.stopFilterMaps()
+
+	newChain, _ := core.GenerateChain(genesis.Config, oldChain[forkAt], ethash.NewFaker(), db, newChainLen, newChainMaker)
+	logger.Info("oldChain/newChain", "oldChain", fmt.Sprintf("%d..%d", oldChain[0].Number(), oldChain[len(oldChain)-1].Number()), "newChain", fmt.Sprintf("%d..%d", newChain[0].Number(), newChain[len(newChain)-1].Number()))
+
+	// Generate pending block, logs for which
+	// will be sent to subscription feed.
+	_, preceipts := core.GenerateChain(genesis.Config, newChain[len(newChain)-1], ethash.NewFaker(), db, 1, pendingMaker)
+	liveLogs := preceipts[0][0].Logs
+
+	expected = append(expected, liveLogs...)
+
+	expectedBalance := calculateBalance(expected)
+
+	// Subscribe to logs
+	var (
+		errc        = make(chan error)
+		notifier    = newMockNotifier()
+		sub         = &rpc.Subscription{ID: rpc.NewID()}
+		crit        = FilterCriteria{FromBlock: big.NewInt(1)}
+		reorgSignal = make(chan struct{})
+	)
+	err = api.logs(context.Background(), notifier, sub, crit)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	go func() {
+		var (
+			fetched []*types.Log
+			timeout = time.After(3 * time.Second)
+			reorged = false
+		)
+	fetchLoop:
+		for {
+			select {
+			case log := <-notifier.c:
+				l := log.(*types.Log)
+
+				fetched = append(fetched, l)
+				// We halt the sender by blocking Notify(). However sender will already prepare
+				// logs for next block and send as soon as Notify is released. So we do reorg
+				// one block earlier than we intend.
+				if l.BlockNumber == uint64(reorgAt) && !reorged {
+					// signal reorg
+					reorgSignal <- struct{}{}
+					// wait for reorg to happen
+					<-reorgSignal
+					reorged = true
+				}
+			case <-timeout:
+				break fetchLoop
+			}
+		}
+
+		// for i, log := range fetched {
+		// 	logger.Info("Flog", "i", fmt.Sprintf("%02d", i), "blknum", log.BlockNumber, "index", log.Index, "removed", log.Removed, "to", common.BytesToAddress(log.Topics[2].Bytes()), "amount", common.BytesToHash(log.Data).Big().Uint64())
+		// }
+		//
+		// for i, log := range expected {
+		// 	logger.Debug("Elog", "i", fmt.Sprintf("%02d", i), "blknum", log.BlockNumber, "index", log.Index, "removed", log.Removed, "to", common.BytesToAddress(log.Topics[2].Bytes()), "amount", common.BytesToHash(log.Data).Big().Uint64())
+		// }
+
+		fetchedBalance := calculateBalance(fetched)
+		if len(fetchedBalance) != len(expectedBalance) {
+			errc <- fmt.Errorf("invalid number of balances, have %d, want %d", len(fetchedBalance), len(expectedBalance))
+			logger.Info("balance diff", "fetched", fetchedBalance, "expected", expectedBalance)
+			return
+		}
+
+		diffBalance := make(map[common.Address]struct{ have, want uint64 })
+		for addr, balance := range expectedBalance {
+			if fetchedBalance[addr] != balance {
+				diffBalance[addr] = struct{ have, want uint64 }{fetchedBalance[addr], balance}
+			}
+		}
+		if len(diffBalance) > 0 {
+			errc <- fmt.Errorf("invalid balance detected: %+v\n", diffBalance)
+			return
+		}
+
+		errc <- nil
+	}()
+	<-reorgSignal
+	if n, err := bc.InsertChain(newChain); err != nil {
+		t.Fatalf("failed to insert forked chain at %d: %v", n, err)
+	}
+	reorgSignal <- struct{}{}
+
+	// Wait for historical logs to be processed.
+	// The reason we need to wait is this test is artificial
+	// and no new block containing the logs is mined.
+	time.Sleep(2 * time.Second)
+	// Send live logs
+	backend.logsFeed.Send(liveLogs)
+
+	err = <-errc
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+}
+
+func TestLogsSubscriptionReorgedSimple(t *testing.T) {
+	t.Parallel()
+
+	expected := []*types.Log{
+		// Original chain until block 2
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(1)}, Data: i2h(11).Bytes(), BlockNumber: 1, Index: 0},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(12).Bytes(), BlockNumber: 2, Index: 0},
+
+		// New logs for 3 onwards
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(1)}, Data: i2h(103).Bytes(), BlockNumber: 3, Index: 0},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(104).Bytes(), BlockNumber: 4, Index: 0},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(3)}, Data: i2h(105).Bytes(), BlockNumber: 5, Index: 0},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(4)}, Data: i2h(106).Bytes(), BlockNumber: 6, Index: 0},
+	}
+	t.Run("reorg-during-historical", func(t *testing.T) {
+		testLogsSubscriptionReorg(t, func(i int, b *core.BlockGen) {
+			tx := makeTx(i+1, i+11, b)
+			b.AddTx(tx)
+		}, func(i int, b *core.BlockGen) {
+			tx := makeTx(i+1, i+103, b)
+			b.AddTx(tx)
+		}, func(i int, b *core.BlockGen) {
+			tx := makeTx(i+1, i+21, b)
+			b.AddTx(tx)
+		}, 5, 4, 1, 2, expected)
+	})
+	t.Run("reorg-after-historical", func(t *testing.T) {
+		testLogsSubscriptionReorg(t, func(i int, b *core.BlockGen) {
+			tx := makeTx(i+1, i+11, b)
+			b.AddTx(tx)
+		}, func(i int, b *core.BlockGen) {
+			tx := makeTx(i+1, i+103, b)
+			b.AddTx(tx)
+		}, func(i int, b *core.BlockGen) {
+			tx := makeTx(i+1, i+21, b)
+			b.AddTx(tx)
+		}, 5, 4, 1, 5, expected)
+	})
+}
+
+func TestLogsSubscriptionReorgOldMore(t *testing.T) {
+	t.Parallel()
+
+	txs := 520
+	expected := []*types.Log{}
+	// oldChain
+	for blknum := 1; blknum <= 2; blknum++ {
+		for i := 0; i < txs; i++ {
+			expected = append(expected, &types.Log{
+				Address: contract,
+				Topics:  []common.Hash{topic, a2h(addr), i2h(blknum + i)}, Data: i2h(10 + blknum).Bytes(),
+				BlockNumber: uint64(blknum),
+				Index:       uint(i),
+			})
+		}
+	}
+	expected = append(
+		expected,
+		// newChain
+		[]*types.Log{
+			{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(1)}, Data: i2h(103).Bytes(), BlockNumber: 3, Index: 0},
+			{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(104).Bytes(), BlockNumber: 4, Index: 0},
+			{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(3)}, Data: i2h(105).Bytes(), BlockNumber: 5, Index: 0},
+			{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(4)}, Data: i2h(106).Bytes(), BlockNumber: 6, Index: 0},
+		}...,
+	)
+	testLogsSubscriptionReorg(t, func(i int, b *core.BlockGen) {
+		for j := 0; j < txs; j++ {
+			tx := makeTx(i+j+1, i+11, b)
+			b.AddTx(tx)
+		}
+	}, func(i int, b *core.BlockGen) {
+		tx := makeTx(i+1, i+103, b)
+		b.AddTx(tx)
+	}, func(i int, b *core.BlockGen) {
+		tx := makeTx(i+1, i+21, b)
+		b.AddTx(tx)
+	}, 5, 4, 1, 2, expected)
+}
+
+func TestLogsSubscriptionReorgNewMore(t *testing.T) {
+	t.Parallel()
+
+	txs := 520
+	// oldChain
+	expected := []*types.Log{
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(1)}, Data: i2h(11).Bytes(), BlockNumber: 1, Index: 0},
+		{Address: contract, Topics: []common.Hash{topic, a2h(addr), i2h(2)}, Data: i2h(12).Bytes(), BlockNumber: 2, Index: 0},
+	}
+	// newChain
+	for blknum := 3; blknum <= 6; blknum++ {
+		for i := 0; i < txs; i++ {
+			expected = append(expected, &types.Log{
+				Address: contract,
+				Topics:  []common.Hash{topic, a2h(addr), i2h(blknum + i - 2)}, Data: i2h(100 + blknum).Bytes(),
+				BlockNumber: uint64(blknum),
+				Index:       uint(i),
+			})
+		}
+	}
+	testLogsSubscriptionReorg(t, func(i int, b *core.BlockGen) {
+		tx := makeTx(i+1, i+11, b)
+		b.AddTx(tx)
+	}, func(i int, b *core.BlockGen) {
+		for j := 0; j < txs; j++ {
+			tx := makeTx(i+j+1, i+103, b)
+			b.AddTx(tx)
+		}
+	}, func(i int, b *core.BlockGen) {
+		tx := makeTx(i+1, i+21, b)
+		b.AddTx(tx)
+	}, 5, 4, 1, 2, expected)
 }
