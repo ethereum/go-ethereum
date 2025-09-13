@@ -364,7 +364,12 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, g
 	if head == nil {
 		return nil, common.Hash{}, nil, errors.New("missing head header")
 	}
-	newCfg := genesis.chainConfigOrDefault(ghash, storedCfg)
+	// The new config is sourced either directly from provided Genesis or by
+	// applying overrides to the stored config.
+	newCfg := storedCfg
+	if genesis != nil {
+		newCfg = genesis.Config
+	}
 	if err := overrides.apply(newCfg); err != nil {
 		return nil, common.Hash{}, nil, err
 	}
@@ -421,26 +426,6 @@ func LoadChainConfig(db ethdb.Database, genesis *Genesis) (cfg *params.ChainConf
 	// There is no stored chain config and no new config provided,
 	// In this case the default chain config(mainnet) will be used
 	return params.MainnetChainConfig, params.MainnetGenesisHash, nil
-}
-
-// chainConfigOrDefault retrieves the attached chain configuration. If the genesis
-// object is null, it returns the default chain configuration based on the given
-// genesis hash, or the locally stored config if it's not a pre-defined network.
-func (g *Genesis) chainConfigOrDefault(ghash common.Hash, stored *params.ChainConfig) *params.ChainConfig {
-	switch {
-	case g != nil:
-		return g.Config
-	case ghash == params.MainnetGenesisHash:
-		return params.MainnetChainConfig
-	case ghash == params.HoleskyGenesisHash:
-		return params.HoleskyChainConfig
-	case ghash == params.SepoliaGenesisHash:
-		return params.SepoliaChainConfig
-	case ghash == params.HoodiGenesisHash:
-		return params.HoodiChainConfig
-	default:
-		return stored
-	}
 }
 
 // IsVerkle indicates whether the state is already stored in a verkle
