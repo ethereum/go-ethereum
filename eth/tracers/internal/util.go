@@ -39,7 +39,7 @@ func GetMemoryCopyPadded(m []byte, offset, size int64) ([]byte, error) {
 	}
 	paddingNeeded := offset + size - length
 	if paddingNeeded > memoryPadLimit {
-		return nil, fmt.Errorf("reached limit for padding memory slice: %d", paddingNeeded)
+		return nil, fmt.Errorf("padding %d exceeds limit %d", paddingNeeded, memoryPadLimit)
 	}
 	cpy := make([]byte, size)
 	if overlap := length - offset; overlap > 0 {
