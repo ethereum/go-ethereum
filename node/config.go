@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -264,7 +265,7 @@ func (c *Config) HTTPEndpoint() string {
 	if c.HTTPHost == "" {
 		return ""
 	}
-	return net.JoinHostPort(c.HTTPHost, fmt.Sprintf("%d", c.HTTPPort))
+	return net.JoinHostPort(c.HTTPHost, strconv.Itoa(c.HTTPPort))
 }
 
 // DefaultHTTPEndpoint returns the HTTP endpoint used by default.
@@ -279,7 +280,7 @@ func (c *Config) WSEndpoint() string {
 	if c.WSHost == "" {
 		return ""
 	}
-	return net.JoinHostPort(c.WSHost, fmt.Sprintf("%d", c.WSPort))
+	return net.JoinHostPort(c.WSHost, strconv.Itoa(c.WSPort))
 }
 
 // DefaultWSEndpoint returns the websocket endpoint used by default.
