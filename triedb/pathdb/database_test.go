@@ -606,6 +606,10 @@ func TestDatabaseRollback(t *testing.T) {
 			}
 		}
 	}
+	// Finalize all recovery operations
+	if err := tester.db.RecoverDone(); err != nil {
+		t.Fatalf("Failed to finalize recovery, err: %v", err)
+	}
 	if tester.db.tree.len() != 1 {
 		t.Fatal("Only disk layer is expected")
 	}

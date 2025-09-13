@@ -502,12 +502,21 @@ func (db *Database) Recover(root common.Hash) error {
 	if err := db.diskdb.SyncKeyValue(); err != nil {
 		return err
 	}
-	_, err := truncateFromHead(db.stateFreezer, dl.stateID())
-	if err != nil {
+
+	// Soft truncate the state freezer to the recovered state
+	if _, err := db.stateFreezer.SoftTruncateHead(dl.stateID()); err != nil {
 		return err
 	}
+
 	log.Debug("Recovered state", "root", root, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
+}
+
+// RecoverDone commits all pending soft truncations after a series of recovery operations.
+// This should be called after all recover operations are complete to finalize the state
+// freezer truncation in one efficient batch operation.
+func (db *Database) RecoverDone() error {
+	return db.stateFreezer.CommitTruncation()
 }
 
 // Recoverable returns the indicator if the specified state is recoverable.

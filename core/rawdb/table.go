@@ -101,6 +101,18 @@ func (t *table) TruncateTail(items uint64) (uint64, error) {
 	return t.db.TruncateTail(items)
 }
 
+// SoftTruncateHead is a noop passthrough that just forwards the request to the underlying
+// database.
+func (t *table) SoftTruncateHead(items uint64) (uint64, error) {
+	return t.db.SoftTruncateHead(items)
+}
+
+// CommitTruncation is a noop passthrough that just forwards the request to the underlying
+// database.
+func (t *table) CommitTruncation() error {
+	return t.db.CommitTruncation()
+}
+
 // SyncAncient is a noop passthrough that just forwards the request to the underlying
 // database.
 func (t *table) SyncAncient() error {

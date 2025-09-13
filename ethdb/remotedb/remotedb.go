@@ -140,6 +140,16 @@ func (db *Database) Close() error {
 	return nil
 }
 
+// SoftTruncateHead returns an error as we don't have a backing chain freezer.
+func (db *Database) SoftTruncateHead(items uint64) (uint64, error) {
+	panic("not supported")
+}
+
+// CommitTruncation returns an error as we don't have a backing chain freezer.
+func (db *Database) CommitTruncation() error {
+	panic("not supported")
+}
+
 func New(client *rpc.Client) ethdb.Database {
 	if client == nil {
 		return nil

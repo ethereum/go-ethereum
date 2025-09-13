@@ -1096,6 +1096,11 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	bc.blockCache.Purge()
 	bc.txLookupCache.Purge()
 
+	// Commit all recovery operations to finalize state freezer truncation.
+	if err := bc.triedb.RecoverDone(); err != nil {
+		log.Crit("Failed to finalize trie database recovery", "err", err)
+	}
+
 	// Clear safe block, finalized block if needed
 	if safe := bc.CurrentSafeBlock(); safe != nil && head < safe.Number.Uint64() {
 		log.Warn("SetHead invalidated safe block")

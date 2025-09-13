@@ -163,6 +163,14 @@ type AncientWriter interface {
 	//
 	// Note that data marked as non-prunable will still be retained and remain accessible.
 	TruncateTail(n uint64) (uint64, error)
+
+	// SoftTruncateHead marks items above threshold as logically deleted without physical truncation.
+	// This is much faster than TruncateHead as it only updates a pointer.
+	SoftTruncateHead(n uint64) (uint64, error)
+
+	// CommitTruncation performs the actual file truncation to match any soft truncations.
+	// This should be called after all soft truncations are complete.
+	CommitTruncation() error
 }
 
 // AncientWriteOp is given to the function argument of ModifyAncients.
