@@ -240,7 +240,7 @@ type extblock struct {
 //
 // The receipt's bloom must already calculated for the block's bloom to be
 // correctly calculated.
-func NewBlock(header *Header, body *Body, receipts []*Receipt, hasher TrieHasher) *Block {
+func NewBlock(header *Header, body *Body, receipts []*Receipt, hasher ListHasher) *Block {
 	if body == nil {
 		body = &Body{}
 	}

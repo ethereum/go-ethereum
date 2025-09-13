@@ -28,7 +28,7 @@ import (
 var (
 	stPool = sync.Pool{New: func() any { return new(stNode) }}
 	bPool  = newBytesPool(32, 100)
-	_      = types.TrieHasher((*StackTrie)(nil))
+	_      = types.ListHasher((*StackTrie)(nil))
 )
 
 // OnTrieNode is a callback method invoked when a trie node is committed
@@ -50,6 +50,7 @@ type StackTrie struct {
 	onTrieNode OnTrieNode
 	kBuf       []byte // buf space used for hex-key during insertions
 	pBuf       []byte // buf space used for path during insertions
+	vPool      *unsafeBytesPool
 }
 
 // NewStackTrie allocates and initializes an empty trie. The committed nodes
@@ -61,6 +62,7 @@ func NewStackTrie(onTrieNode OnTrieNode) *StackTrie {
 		onTrieNode: onTrieNode,
 		kBuf:       make([]byte, 64),
 		pBuf:       make([]byte, 64),
+		vPool:      newUnsafeBytesPool(300, 20),
 	}
 }
 
@@ -74,6 +76,9 @@ func (t *StackTrie) grow(key []byte) {
 }
 
 // Update inserts a (key, value) pair into the stack trie.
+//
+// Note the supplied key value pair is copied and managed internally,
+// they are safe to be modified after this method returns.
 func (t *StackTrie) Update(key, value []byte) error {
 	if len(value) == 0 {
 		return errors.New("trying to insert empty (deletion)")
@@ -88,7 +93,14 @@ func (t *StackTrie) Update(key, value []byte) error {
 	} else {
 		t.last = append(t.last[:0], k...) // reuse key slice
 	}
-	t.insert(t.root, k, value, t.pBuf[:0])
+	vBuf := t.vPool.get()
+	if cap(vBuf) < len(value) {
+		vBuf = common.CopyBytes(value)
+	} else {
+		vBuf = vBuf[:len(value)]
+		copy(vBuf, value)
+	}
+	t.insert(t.root, k, vBuf, t.pBuf[:0])
 	return nil
 }
 
@@ -108,14 +120,16 @@ func (t *StackTrie) TrieKey(key []byte) []byte {
 // stNode represents a node within a StackTrie
 type stNode struct {
 	typ      uint8       // node type (as in branch, ext, leaf)
-	key      []byte      // key chunk covered by this (leaf|ext) node
-	val      []byte      // value contained by this node if it's a leaf
-	children [16]*stNode // list of children (for branch and exts)
+	key      []byte      // exclusive owned key chunk covered by this (leaf|ext) node
+	val      []byte      // exclusive owned value contained by this node (leaf: value; hash: hash)
+	children [16]*stNode // list of children (for branch and ext)
 }
 
-// newLeaf constructs a leaf node with provided node key and value. The key
-// will be deep-copied in the function and safe to modify afterwards, but
-// value is not.
+// newLeaf constructs a leaf node with provided node key and value.
+//
+// The key is deep-copied within the function, so it can be safely modified
+// afterwards. The value is retained directly without copying, as it is
+// exclusively owned by the stackTrie.
 func newLeaf(key, val []byte) *stNode {
 	st := stPool.Get().(*stNode)
 	st.typ = leafNode
@@ -146,9 +160,9 @@ const (
 func (n *stNode) reset() *stNode {
 	if n.typ == hashedNode {
 		// On hashnodes, we 'own' the val: it is guaranteed to be not held
-		// by external caller. Hence, when we arrive here, we can put it back
-		// into the pool
-		bPool.Put(n.val)
+		// by external caller. Hence, when we arrive here, we can put it
+		// back into the pool
+		bPool.put(n.val)
 	}
 	n.key = n.key[:0]
 	n.val = nil
@@ -172,11 +186,6 @@ func (n *stNode) getDiffIndex(key []byte) int {
 }
 
 // Helper function to that inserts a (key, value) pair into the trie.
-//
-//   - The key is not retained by this method, but always copied if needed.
-//   - The value is retained by this method, as long as the leaf that it represents
-//     remains unhashed. However: it is never modified.
-//   - The path is not retained by this method.
 func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 	switch st.typ {
 	case branchNode: /* Branch */
@@ -235,16 +244,14 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 		}
 		var p *stNode
 		if diffidx == 0 {
-			// the break is on the first byte, so
-			// the current node is converted into
-			// a branch node.
+			// the break is on the first byte, so the current node
+			// is converted into a branch node.
 			st.children[0] = nil
-			p = st
 			st.typ = branchNode
+			p = st
 		} else {
-			// the common prefix is at least one byte
-			// long, insert a new intermediate branch
-			// node.
+			// the common prefix is at least one byte long, insert
+			// a new intermediate branch node.
 			st.children[0] = stPool.Get().(*stNode)
 			st.children[0].typ = branchNode
 			p = st.children[0]
@@ -280,8 +287,8 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 		if diffidx == 0 {
 			// Convert current leaf into a branch
 			st.typ = branchNode
-			p = st
 			st.children[0] = nil
+			p = st
 		} else {
 			// Convert current node into an ext,
 			// and insert a child branch node.
@@ -307,9 +314,7 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 		st.val = nil
 
 	case emptyNode: /* Empty */
-		st.typ = leafNode
-		st.key = append(st.key, key...) // deep-copy the key as it's volatile
-		st.val = value
+		*st = *newLeaf(key, value)
 
 	case hashedNode:
 		panic("trying to insert into hash")
@@ -393,18 +398,23 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 	st.typ = hashedNode
 	st.key = st.key[:0]
 
-	st.val = nil // Release reference to potentially externally held slice.
+	// Release reference to value slice which is exclusively owned
+	// by stackTrie itself.
+	if cap(st.val) > 0 && t.vPool != nil {
+		t.vPool.put(st.val)
+	}
+	st.val = nil
 
 	// Skip committing the non-root node if the size is smaller than 32 bytes
 	// as tiny nodes are always embedded in their parent except root node.
 	if len(blob) < 32 && len(path) > 0 {
-		st.val = bPool.GetWithSize(len(blob))
+		st.val = bPool.getWithSize(len(blob))
 		copy(st.val, blob)
 		return
 	}
 	// Write the hash to the 'val'. We allocate a new val here to not mutate
 	// input values.
-	st.val = bPool.GetWithSize(32)
+	st.val = bPool.getWithSize(32)
 	t.h.hashDataTo(st.val, blob)
 
 	// Invoke the callback it's provided. Notably, the path and blob slices are
