@@ -20,10 +20,10 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"math"
+	"math/big"
 	"os"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/beacon/merkle"
@@ -90,11 +90,7 @@ func (c *ChainConfig) AddFork(name string, epoch uint64, version []byte) *ChainC
 
 // LoadForks parses the beacon chain configuration file (config.yaml) and extracts
 // the list of forks.
-func (c *ChainConfig) LoadForks(path string) error {
-	file, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("failed to read beacon chain config file: %v", err)
-	}
+func (c *ChainConfig) LoadForks(file []byte) error {
 	config := make(map[string]any)
 	if err := yaml.Unmarshal(file, &config); err != nil {
 		return fmt.Errorf("failed to parse beacon chain config file: %v", err)
@@ -108,26 +104,29 @@ func (c *ChainConfig) LoadForks(path string) error {
 	for key, value := range config {
 		if strings.HasSuffix(key, "_FORK_VERSION") {
 			name := key[:len(key)-len("_FORK_VERSION")]
-			version, ok := value.(string)
-			if !ok {
-				version = fmt.Sprintf("0x%x", value)
-			}
-			if v, err := hexutil.Decode(version); err == nil {
+			switch version := value.(type) {
+			case int:
+				versions[name] = make([]byte, 4)
+				big.NewInt(int64(version)).FillBytes(versions[name])
+			case string:
+				v, err := hexutil.Decode(version)
+				if err != nil {
+					return fmt.Errorf("failed to decode hex fork id %q in beacon chain config file: %v", version, err)
+				}
 				versions[name] = v
-			} else {
-				return fmt.Errorf("failed to decode hex fork id %q in beacon chain config file: %v", version, err)
 			}
 		}
 		if strings.HasSuffix(key, "_FORK_EPOCH") {
 			name := key[:len(key)-len("_FORK_EPOCH")]
-			version, ok := value.(string)
-			if !ok {
-				version = fmt.Sprintf("0x%x", value)
-			}
-			if v, err := hexutil.DecodeUint64(version); err == nil {
+			switch epoch := value.(type) {
+			case int:
+				epochs[name] = uint64(epoch)
+			case string:
+				v, err := hexutil.DecodeUint64(epoch)
+				if err != nil {
+					return fmt.Errorf("failed to parse epoch number %q in beacon chain config file: %v", epoch, err)
+				}
 				epochs[name] = v
-			} else {
-				return fmt.Errorf("failed to parse epoch number %q in beacon chain config file: %v", version, err)
 			}
 		}
 	}
