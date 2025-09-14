@@ -24,6 +24,7 @@ import (
 	"os"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/beacon/merkle"
@@ -122,7 +123,7 @@ func (c *ChainConfig) LoadForks(file []byte) error {
 			case int:
 				epochs[name] = uint64(epoch)
 			case string:
-				v, err := hexutil.DecodeUint64(epoch)
+				v, err := strconv.ParseUint(epoch, 10, 64)
 				if err != nil {
 					return fmt.Errorf("failed to parse epoch number %q in beacon chain config file: %v", epoch, err)
 				}
