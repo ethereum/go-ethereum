@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestChainConfig_LoadForksName(t *testing.T) {
+func TestChainConfig_LoadForks(t *testing.T) {
 	const config = `
 GENESIS_FORK_VERSION: 0x00000000
 
