@@ -108,18 +108,26 @@ func (c *ChainConfig) LoadForks(path string) error {
 	for key, value := range config {
 		if strings.HasSuffix(key, "_FORK_VERSION") {
 			name := key[:len(key)-len("_FORK_VERSION")]
-			if v, err := hexutil.Decode(fmt.Sprintf("0x%x", value)); err == nil {
+			version, ok := value.(string)
+			if !ok {
+				version = fmt.Sprintf("0x%x", value)
+			}
+			if v, err := hexutil.Decode(version); err == nil {
 				versions[name] = v
 			} else {
-				return fmt.Errorf("failed to decode hex fork id %v in beacon chain config file: %v", value, err)
+				return fmt.Errorf("failed to decode hex fork id %q in beacon chain config file: %v", version, err)
 			}
 		}
 		if strings.HasSuffix(key, "_FORK_EPOCH") {
 			name := key[:len(key)-len("_FORK_EPOCH")]
-			if v, err := hexutil.DecodeUint64(fmt.Sprintf("0x%x", value)); err == nil {
+			version, ok := value.(string)
+			if !ok {
+				version = fmt.Sprintf("0x%x", value)
+			}
+			if v, err := hexutil.DecodeUint64(version); err == nil {
 				epochs[name] = v
 			} else {
-				return fmt.Errorf("failed to parse epoch number %v in beacon chain config file: %v", value, err)
+				return fmt.Errorf("failed to parse epoch number %q in beacon chain config file: %v", version, err)
 			}
 		}
 	}
