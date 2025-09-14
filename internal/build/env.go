@@ -158,7 +158,11 @@ func LocalEnv() Environment {
 }
 
 func firstLine(s string) string {
-	return strings.Split(s, "\n")[0]
+	for line := range strings.Lines(s) {
+		line, _ = strings.CutSuffix(line, "\n")
+		return line
+	}
+	return ""
 }
 
 func getDate(commit string) string {
