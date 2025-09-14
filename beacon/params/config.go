@@ -95,7 +95,7 @@ func (c *ChainConfig) LoadForks(path string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read beacon chain config file: %v", err)
 	}
-	config := make(map[string]string)
+	config := make(map[string]any)
 	if err := yaml.Unmarshal(file, &config); err != nil {
 		return fmt.Errorf("failed to parse beacon chain config file: %v", err)
 	}
@@ -108,18 +108,18 @@ func (c *ChainConfig) LoadForks(path string) error {
 	for key, value := range config {
 		if strings.HasSuffix(key, "_FORK_VERSION") {
 			name := key[:len(key)-len("_FORK_VERSION")]
-			if v, err := hexutil.Decode(value); err == nil {
+			if v, err := hexutil.Decode(fmt.Sprintf("0x%x", value)); err == nil {
 				versions[name] = v
 			} else {
-				return fmt.Errorf("failed to decode hex fork id %q in beacon chain config file: %v", value, err)
+				return fmt.Errorf("failed to decode hex fork id %v in beacon chain config file: %v", value, err)
 			}
 		}
 		if strings.HasSuffix(key, "_FORK_EPOCH") {
 			name := key[:len(key)-len("_FORK_EPOCH")]
-			if v, err := strconv.ParseUint(value, 10, 64); err == nil {
+			if v, err := hexutil.DecodeUint64(fmt.Sprintf("0x%x", value)); err == nil {
 				epochs[name] = v
 			} else {
-				return fmt.Errorf("failed to parse epoch number %q in beacon chain config file: %v", value, err)
+				return fmt.Errorf("failed to parse epoch number %v in beacon chain config file: %v", value, err)
 			}
 		}
 	}
