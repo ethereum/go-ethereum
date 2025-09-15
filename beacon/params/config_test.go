@@ -27,6 +27,5 @@ BLOB_SCHEDULE: []
 		if fork.Name == "ALTAIR" && (fork.Epoch != 1 || !bytes.Equal(fork.Version, []byte{0, 0, 0, 1})) {
 			t.Errorf("unexpected altair fork epoch %d version %x", fork.Epoch, fork.Version)
 		}
-
 	}
 }
