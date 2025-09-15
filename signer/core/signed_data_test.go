@@ -1102,10 +1102,16 @@ func TestSignInWithEtheriumValidMessages(t *testing.T) {
 	t.Parallel()
 	jsonFile, err := os.ReadFile(filepath.Join("testdata", "siwe", "valid_messages.json"))
 	require.NoError(t, err)
-	tests := make(map[string]string)
+	var tests map[string]struct {
+		Msg            string `json:"msg"`
+		RequestContext struct {
+			Transport string `json:"transport"`
+			Source    string `json:"source"`
+		} `json:"request_context"`
+	}
 	require.NoError(t, json.Unmarshal(jsonFile, &tests))
 
-	for testName, msg := range tests {
+	for testName, testData := range tests {
 		t.Run(testName, func(t *testing.T) {
 			api, control := setup(t, true)
 			createAccount(control, api, t)
@@ -1115,8 +1121,8 @@ func TestSignInWithEtheriumValidMessages(t *testing.T) {
 			require.NoError(t, err)
 			a := common.NewMixedcaseAddress(list[0])
 
-			ctx := rpc.ContextWithMockPeerInfo(context.Background(), "https", "service.org")
-			message := strings.ReplaceAll(msg, "{{Account}}", a.Address().Hex())
+			ctx := rpc.ContextWithMockPeerInfo(context.Background(), cmp.Or(testData.RequestContext.Transport, "https"), cmp.Or(testData.RequestContext.Source, "service.org"))
+			message := strings.ReplaceAll(testData.Msg, "{{Account}}", a.Address().Hex())
 
 			control.approveCh <- "Y"
 			control.inputCh <- "a_long_password"

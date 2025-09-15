@@ -25,9 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// Message size
-var messageSize = `(?:\d+)`
-
 // Regular expression to match SIWE messages
 // Scheme (optional)
 var scheme = `(?:([a-zA-Z][a-zA-Z0-9+\-.]*)://)?`
@@ -42,7 +39,8 @@ var wantsMsg = ` wants you to sign in with your Ethereum account:\n`
 var address = `(0x[a-fA-F0-9]{40})\n`
 
 // Optional statement (any line not containing "\n\n")
-var statement = `(?:[^\n]+\n)?`
+// var statement = `(?:[^\n]+\n)?`
+var statement = `(?:.*\n)?`
 
 // URI
 var uri = `URI: (?:.+)\n`
@@ -72,7 +70,7 @@ var requestID = `(?:\nRequest ID: (?:[^\n]+))?`
 var resources = `(?:\nResources:(?:\n- .+)+)?`
 
 // SIWE Message Regex
-var siweMessageRegex = regexp.MustCompile(`(?m)^` + messageSize + scheme + domain + wantsMsg +
+var siweMessageRegex = regexp.MustCompile(`(?m)^` + scheme + domain + wantsMsg +
 	address + `\n` + statement + `\n` +
 	uri + version + chainID + nonce + issuedAt +
 	expiration + notBefore + requestID + resources + `$`)
@@ -89,7 +87,7 @@ func validateSIWE(req *SignDataRequest) error {
 			continue
 		}
 
-		patterns := siweMessageRegex.FindStringSubmatch(s)
+		patterns := siweMessageRegex.FindStringSubmatch(s[bytesUntilStartOfMessage(s):])
 		if patterns == nil {
 			return ErrMalformedSIWEMessage
 		}
@@ -126,4 +124,30 @@ func validateAddress(request *SignDataRequest, address string) error {
 		return fmt.Errorf("sign in request address (%s) does not match source: %s", checksumAddr, requestAddr)
 	}
 	return nil
+}
+
+// bytestUntilStartOfMessage calculates the prefix attached to the message being signed
+// The first element of our message is the default "signed with etherium" prefix
+// The second element of our message is the size of the message that will follow (in bytes)
+// The third element is the "domain" that would like you to sign in, which can be an IP address.
+// Differentiating a number potentially followed by another number is not pretty in regex.
+// To resolve this, we calculate the number of characters required to represent the message and return
+// that (and the size of the etherium prefix) so they can be trimmed from the start of our message when matching.
+func bytesUntilStartOfMessage(s string) int {
+	const etheriumSignagureHeaderLength = 26
+	l := len(s) - etheriumSignagureHeaderLength
+	if l < 1 {
+		return 0
+	}
+
+	var n int
+	for l > 0 {
+		l /= 10
+		n++
+	}
+	if n < l {
+		n -= 1
+	}
+
+	return etheriumSignagureHeaderLength + n
 }
