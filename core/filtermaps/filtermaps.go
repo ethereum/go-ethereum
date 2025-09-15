@@ -600,27 +600,50 @@ func (f *FilterMaps) getFilterMapRows(mapIndices []uint32, rowIndex uint32, base
 // getFilterMapRowsOfGroup fetches a set of filter map rows at map indices
 // belonging to the same base row group.
 func (f *FilterMaps) getFilterMapRowsOfGroup(target []FilterRow, mapIndices []uint32, rowIndex uint32, baseLayerOnly bool) error {
-	var (
-		groupIndex  = f.mapGroupIndex(mapIndices[0])
-		mapRowIndex = f.mapRowIndex(groupIndex, rowIndex)
-	)
+	if len(mapIndices) == 0 {
+		return nil
+	}
+
+	groupIndex := f.mapGroupIndex(mapIndices[0])
+	mapRowIndex := f.mapRowIndex(groupIndex, rowIndex)
+
+	// Validate all indices belong to the same group before database access
+	for _, mapIndex := range mapIndices {
+		if f.mapGroupIndex(mapIndex) != groupIndex {
+			return fmt.Errorf("maps are not in the same base row group, index: %d, group: %d", mapIndex, groupIndex)
+		}
+	}
+
 	baseRows, err := rawdb.ReadFilterMapBaseRows(f.db, mapRowIndex, f.baseRowGroupSize, f.logMapWidth)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve base row group %d of row %d: %v", groupIndex, rowIndex, err)
 	}
+
+	// Process base layer rows
 	for i, mapIndex := range mapIndices {
-		if f.mapGroupIndex(mapIndex) != groupIndex {
-			return fmt.Errorf("maps are not in the same base row group, index: %d, group: %d", mapIndex, groupIndex)
-		}
 		row := baseRows[f.mapGroupOffset(mapIndex)]
-		if !baseLayerOnly {
+		target[i] = row
+	}
+
+	// Batch process extended rows if needed
+	if !baseLayerOnly {
+		for i, mapIndex := range mapIndices {
 			extRow, err := rawdb.ReadFilterMapExtRow(f.db, f.mapRowIndex(mapIndex, rowIndex), f.logMapWidth)
 			if err != nil {
 				return fmt.Errorf("failed to retrieve filter map %d extended row %d: %v", mapIndex, rowIndex, err)
 			}
-			row = append(row, extRow...)
+			if len(extRow) > 0 {
+				// Use append with pre-calculated capacity if possible
+				baseRow := target[i]
+				if cap(baseRow)-len(baseRow) >= len(extRow) {
+					target[i] = append(baseRow, extRow...)
+				} else {
+					newRow := make(FilterRow, len(baseRow), len(baseRow)+len(extRow))
+					copy(newRow, baseRow)
+					target[i] = append(newRow, extRow...)
+				}
+			}
 		}
-		target[i] = row
 	}
 	return nil
 }
