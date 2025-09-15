@@ -107,13 +107,17 @@ func (c *ChainConfig) LoadForks(file []byte) error {
 			name := key[:len(key)-len("_FORK_VERSION")]
 			switch version := value.(type) {
 			case int:
-				versions[name] = big.NewInt(int64(version)).FillBytes(make([]byte, 4))
+				versions[name] = new(big.Int).SetUint64(uint64(version)).FillBytes(make([]byte, 4))
+			case uint64:
+				versions[name] = new(big.Int).SetUint64(version).FillBytes(make([]byte, 4))
 			case string:
 				v, err := hexutil.Decode(version)
 				if err != nil {
 					return fmt.Errorf("failed to decode hex fork id %q in beacon chain config file: %v", version, err)
 				}
 				versions[name] = v
+			default:
+				return fmt.Errorf("invalid fork version %q in beacon chain config file", version)
 			}
 		}
 		if strings.HasSuffix(key, "_FORK_EPOCH") {
@@ -121,12 +125,16 @@ func (c *ChainConfig) LoadForks(file []byte) error {
 			switch epoch := value.(type) {
 			case int:
 				epochs[name] = uint64(epoch)
+			case uint64:
+				epochs[name] = epoch
 			case string:
 				v, err := strconv.ParseUint(epoch, 10, 64)
 				if err != nil {
 					return fmt.Errorf("failed to parse epoch number %q in beacon chain config file: %v", epoch, err)
 				}
 				epochs[name] = v
+			default:
+				return fmt.Errorf("invalid fork epoch %q in beacon chain config file", epoch)
 			}
 		}
 	}
