@@ -22,6 +22,5 @@ package main
 // This allows golangci-lint to typecheck the code without errors.
 // The actual implementations are provided in platform-specific files.
 func getInput() []byte {
-	// This is a no-op stub - real implementations are in platform-specific files
-	return nil
+	panic("stub")
 }
