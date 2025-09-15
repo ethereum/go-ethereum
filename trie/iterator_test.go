@@ -19,7 +19,9 @@ package trie
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"math/rand"
+	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -625,16 +627,22 @@ func isTrieNode(scheme string, key, val []byte) (bool, []byte, common.Hash) {
 }
 
 func TestSubtreeIterator(t *testing.T) {
-	diskDb := rawdb.NewMemoryDatabase()
-	db := newTestDatabase(diskDb, rawdb.HashScheme)
-	tr := NewEmpty(db)
+	var (
+		db = newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
+		tr = NewEmpty(db)
+	)
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
 		{"dog", "puppy"},
 		{"doge", "coin"},
+		{"dog\xff", "value6"},
+		{"dog\xff\xff", "value7"},
 		{"horse", "stallion"},
 		{"house", "building"},
 		{"houses", "multiple"},
+		{"xyz", "value"},
+		{"xyz\xff", "value"},
+		{"xyz\xff\xff", "value"},
 	}
 	all := make(map[string]string)
 	for _, val := range vals {
@@ -644,33 +652,156 @@ func TestSubtreeIterator(t *testing.T) {
 	root, nodes := tr.Commit(false)
 	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 
-	// Test prefix iteration using NewPrefixIterator
-	prefix := []byte("do")
-
-	// We need to re-open the trie from the committed state
+	allNodes := make(map[string][]byte)
 	tr, _ = New(TrieID(root), db)
-	it := newPrefixIterator(tr, prefix)
-
-	found := make(map[string]string)
+	it, err := tr.NodeIterator(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for it.Next(true) {
-		if it.Leaf() {
-			found[string(it.LeafKey())] = string(it.LeafBlob())
+		allNodes[string(it.Path())] = it.NodeBlob()
+	}
+	allKeys := slices.Collect(maps.Keys(all))
+
+	suites := []struct {
+		start    []byte
+		end      []byte
+		expected []string
+	}{
+		// entire key range
+		{
+			start:    nil,
+			end:      nil,
+			expected: allKeys,
+		},
+		{
+			start:    nil,
+			end:      bytes.Repeat([]byte{0xff}, 32),
+			expected: allKeys,
+		},
+		{
+			start:    bytes.Repeat([]byte{0x0}, 32),
+			end:      bytes.Repeat([]byte{0xff}, 32),
+			expected: allKeys,
+		},
+		// key range with start
+		{
+			start:    []byte("do"),
+			end:      nil,
+			expected: allKeys,
+		},
+		{
+			start:    []byte("doe"),
+			end:      nil,
+			expected: allKeys[1:],
+		},
+		{
+			start:    []byte("dog"),
+			end:      nil,
+			expected: allKeys[1:],
+		},
+		{
+			start:    []byte("doge"),
+			end:      nil,
+			expected: allKeys[2:],
+		},
+		{
+			start:    []byte("dog\xff"),
+			end:      nil,
+			expected: allKeys[3:],
+		},
+		{
+			start:    []byte("dog\xff\xff"),
+			end:      nil,
+			expected: allKeys[4:],
+		},
+		{
+			start:    []byte("dog\xff\xff\xff"),
+			end:      nil,
+			expected: allKeys[5:],
+		},
+		// key range with limit
+		{
+			start:    nil,
+			end:      []byte("xyz"),
+			expected: allKeys[:len(allKeys)-3],
+		},
+		{
+			start:    nil,
+			end:      []byte("xyz\xff"),
+			expected: allKeys[:len(allKeys)-2],
+		},
+		{
+			start:    nil,
+			end:      []byte("xyz\xff\xff"),
+			expected: allKeys[:len(allKeys)-1],
+		},
+		{
+			start:    nil,
+			end:      []byte("xyz\xff\xff\xff"),
+			expected: allKeys,
+		},
+	}
+	for _, suite := range suites {
+		// We need to re-open the trie from the committed state
+		tr, _ = New(TrieID(root), db)
+		it, err := newSubtreeIterator(tr, suite.start, suite.end)
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
 
-	// Should find "do", "dog", "doge" but not "horse", "house", "houses"
-	expected := map[string]string{
-		"do":   "verb",
-		"dog":  "puppy",
-		"doge": "coin",
-	}
+		found := make(map[string]string)
+		for it.Next(true) {
+			if it.Leaf() {
+				found[string(it.LeafKey())] = string(it.LeafBlob())
+			}
+		}
+		if len(found) != len(suite.expected) {
+			t.Errorf("wrong number of values: got %d, want %d", len(found), len(suite.expected))
+		}
+		for k, v := range found {
+			if all[k] != v {
+				t.Errorf("wrong value for %s: got %s, want %s", k, found[k], all[k])
+			}
+		}
 
-	if len(found) != len(expected) {
-		t.Errorf("wrong number of values: got %d, want %d", len(found), len(expected))
-	}
-	for k, v := range expected {
-		if found[k] != v {
-			t.Errorf("wrong value for %s: got %s, want %s", k, found[k], v)
+		expectedNodes := make(map[string][]byte)
+		for path, blob := range allNodes {
+			if suite.start != nil {
+				hexStart := keybytesToHex(suite.start)
+				hexStart = hexStart[:len(hexStart)-1]
+				if !reachedPath([]byte(path), hexStart) {
+					continue
+				}
+			}
+			if suite.end != nil {
+				hexEnd := keybytesToHex(suite.end)
+				hexEnd = hexEnd[:len(hexEnd)-1]
+				if reachedPath([]byte(path), hexEnd) {
+					continue
+				}
+			}
+			expectedNodes[path] = bytes.Clone(blob)
+		}
+
+		// Compare the result yield from the subtree iterator
+		var (
+			subCount int
+			subIt, _ = newSubtreeIterator(tr, suite.start, suite.end)
+		)
+		for subIt.Next(true) {
+			blob, ok := expectedNodes[string(subIt.Path())]
+			if !ok {
+				t.Errorf("Unexpected node iterated, path: %v", subIt.Path())
+			}
+			subCount++
+
+			if !bytes.Equal(blob, subIt.NodeBlob()) {
+				t.Errorf("Unexpected node blob, path: %v, want: %v, got: %v", subIt.Path(), blob, subIt.NodeBlob())
+			}
+		}
+		if subCount != len(expectedNodes) {
+			t.Errorf("Unexpected node being iterated, want: %d, got: %d", len(expectedNodes), subCount)
 		}
 	}
 }
@@ -875,7 +1006,7 @@ func TestPrefixIteratorEdgeCases(t *testing.T) {
 			}
 		}
 		// Should find at least the allFF key itself
-		if count < 1 {
+		if count != 2 {
 			t.Errorf("Expected at least 1 result for all-0xff prefix, got %d", count)
 		}
 	})
@@ -919,7 +1050,7 @@ func TestGeneralRangeIteration(t *testing.T) {
 
 	// Test range iteration from "banana" to "fig" (exclusive)
 	t.Run("RangeIteration", func(t *testing.T) {
-		iter := NewSubtreeIterator(trie, []byte("banana"), []byte("fig"))
+		iter, _ := newSubtreeIterator(trie, []byte("banana"), []byte("fig"))
 		found := make(map[string]bool)
 		for iter.Next(true) {
 			if iter.Leaf() {
@@ -937,7 +1068,7 @@ func TestGeneralRangeIteration(t *testing.T) {
 
 	// Test with nil stopKey (iterate to end)
 	t.Run("NilStopKey", func(t *testing.T) {
-		iter := NewSubtreeIterator(trie, []byte("date"), nil)
+		iter, _ := newSubtreeIterator(trie, []byte("date"), nil)
 		found := make(map[string]bool)
 		for iter.Next(true) {
 			if iter.Leaf() {
@@ -955,7 +1086,7 @@ func TestGeneralRangeIteration(t *testing.T) {
 
 	// Test with nil startKey (iterate from beginning)
 	t.Run("NilStartKey", func(t *testing.T) {
-		iter := NewSubtreeIterator(trie, nil, []byte("cherry"))
+		iter, _ := newSubtreeIterator(trie, nil, []byte("cherry"))
 		found := make(map[string]bool)
 		for iter.Next(true) {
 			if iter.Leaf() {

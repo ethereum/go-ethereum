@@ -146,17 +146,6 @@ type nodeIterator struct {
 
 	resolver NodeResolver         // optional node resolver for avoiding disk hits
 	pool     []*nodeIteratorState // local pool for iterator states
-
-	// Fields for subtree iteration (original byte keys)
-	startKey []byte // Start key for subtree iteration (nil for full trie)
-	stopKey  []byte // Stop key for subtree iteration (nil for full trie)
-
-	// Precomputed nibble paths for efficient comparison
-	startPath []byte // Precomputed hex path for startKey (without terminator)
-	stopPath  []byte // Precomputed hex path for stopKey (without terminator)
-
-	// Iteration mode
-	prefixMode bool // True if this is prefix iteration (use HasPrefix check)
 }
 
 // errIteratorEnd is stored in nodeIterator.err when iteration is done.
@@ -307,39 +296,6 @@ func (it *nodeIterator) Next(descend bool) bool {
 	if it.err != nil {
 		return false
 	}
-
-	// Check if we're still within the subtree boundaries using precomputed paths
-	if it.startPath != nil && len(path) > 0 {
-		if it.prefixMode {
-			// For prefix iteration, use HasPrefix to ensure we stay within the prefix
-			if !bytes.HasPrefix(path, it.startPath) {
-				it.err = errIteratorEnd
-				return false
-			}
-		} else {
-			// For range iteration, ensure we don't return nodes before the lower bound.
-			// Advance the iterator until we reach a node at or after startPath.
-			for bytes.Compare(path, it.startPath) < 0 {
-				// Progress the iterator by pushing the current candidate, then peeking again.
-				it.push(state, parentIndex, path)
-				state, parentIndex, path, err = it.peek(descend)
-				it.err = err
-				if it.err != nil {
-					return false
-				}
-				if len(path) == 0 {
-					break
-				}
-			}
-		}
-	}
-	if it.stopPath != nil && len(path) > 0 {
-		if bytes.Compare(path, it.stopPath) >= 0 {
-			it.err = errIteratorEnd
-			return false
-		}
-	}
-
 	it.push(state, parentIndex, path)
 	return true
 }
@@ -881,7 +837,16 @@ func (it *unionIterator) Error() error {
 	return nil
 }
 
-// NewSubtreeIterator creates an iterator that only traverses nodes within a subtree
+// subTreeIterator wraps nodeIterator to traverse a trie within a predefined
+// start and limit range, with optional prefix mode.
+type subtreeIterator struct {
+	NodeIterator
+
+	stopPath  []byte // Precomputed hex path for stopKey (without terminator), nil means no limit
+	exhausted bool   // Flag whether the iterator has been exhausted
+}
+
+// newSubtreeIterator creates an iterator that only traverses nodes within a subtree
 // defined by the given startKey and stopKey. This supports general range iteration
 // where startKey is inclusive and stopKey is exclusive.
 //
@@ -890,17 +855,27 @@ func (it *unionIterator) Error() error {
 // implemented via hex-nibble path comparisons for efficiency).
 //
 // If startKey is nil, iteration starts from the beginning. If stopKey is nil,
-// iteration continues to the end of the trie. For prefix iteration, use the
-// Trie.NodeIteratorWithPrefix method which handles prefix semantics correctly.
-func NewSubtreeIterator(trie *Trie, startKey, stopKey []byte) NodeIterator {
-	return newSubtreeIterator(trie, startKey, stopKey, false)
-}
-
-// newPrefixIterator creates an iterator that only traverses nodes with the given prefix.
-// This ensures that only keys starting with the prefix are visited.
-func newPrefixIterator(trie *Trie, prefix []byte) NodeIterator {
-	stopKey := nextKey(prefix)
-	return newSubtreeIterator(trie, prefix, stopKey, true)
+// iteration continues to the end of the trie.
+func newSubtreeIterator(trie *Trie, startKey, stopKey []byte) (NodeIterator, error) {
+	it, err := trie.NodeIterator(startKey)
+	if err != nil {
+		return nil, err
+	}
+	if startKey == nil && stopKey == nil {
+		return it, nil
+	}
+	// Precompute nibble paths for efficient comparison
+	var stopPath []byte
+	if stopKey != nil {
+		stopPath = keybytesToHex(stopKey)
+		if hasTerm(stopPath) {
+			stopPath = stopPath[:len(stopPath)-1]
+		}
+	}
+	return &subtreeIterator{
+		NodeIterator: it,
+		stopPath:     stopPath,
+	}, nil
 }
 
 // nextKey returns the next possible key after the given prefix.
@@ -927,51 +902,25 @@ func nextKey(prefix []byte) []byte {
 	return nil
 }
 
-func newSubtreeIterator(trie *Trie, startKey, stopKey []byte, prefixMode bool) NodeIterator {
-	// Precompute nibble paths for efficient comparison
-	var startPath, stopPath []byte
-	if startKey != nil {
-		startPath = keybytesToHex(startKey)
-		if hasTerm(startPath) {
-			startPath = startPath[:len(startPath)-1]
-		}
-	}
-	if stopKey != nil {
-		stopPath = keybytesToHex(stopKey)
-		if hasTerm(stopPath) {
-			stopPath = stopPath[:len(stopPath)-1]
-		}
-	}
+// newPrefixIterator creates an iterator that only traverses nodes with the given prefix.
+// This ensures that only keys starting with the prefix are visited.
+func newPrefixIterator(trie *Trie, prefix []byte) (NodeIterator, error) {
+	return newSubtreeIterator(trie, prefix, nextKey(prefix))
+}
 
-	if trie.Hash() == types.EmptyRootHash {
-		return &nodeIterator{
-			trie:       trie,
-			err:        errIteratorEnd,
-			startKey:   startKey,
-			stopKey:    stopKey,
-			startPath:  startPath,
-			stopPath:   stopPath,
-			prefixMode: prefixMode,
-		}
+// Next moves the iterator to the next node. If the parameter is false, any child
+// nodes will be skipped.
+func (it *subtreeIterator) Next(descend bool) bool {
+	if it.exhausted {
+		return false
 	}
-	it := &nodeIterator{
-		trie:       trie,
-		startKey:   startKey,
-		stopKey:    stopKey,
-		startPath:  startPath,
-		stopPath:   stopPath,
-		prefixMode: prefixMode,
+	if !it.NodeIterator.Next(descend) {
+		it.exhausted = true
+		return false
 	}
-	// Seek to the starting position if startKey is provided
-	if startKey != nil && len(startKey) > 0 {
-		it.err = it.seek(startKey)
-	} else {
-		state, err := it.init()
-		if err != nil {
-			it.err = err
-		} else {
-			it.push(state, nil, nil)
-		}
+	if it.stopPath != nil && reachedPath(it.NodeIterator.Path(), it.stopPath) {
+		it.exhausted = true
+		return false
 	}
-	return it
+	return true
 }
