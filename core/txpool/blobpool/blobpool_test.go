@@ -423,11 +423,11 @@ func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
 			hashes = append(hashes, tx.vhashes...)
 		}
 	}
-	blobs1, _, proofs1, err := pool.GetBlobs(hashes, types.BlobSidecarVersion0)
+	blobs1, _, proofs1, err := pool.GetBlobs(hashes, types.BlobSidecarVersion0, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	blobs2, _, proofs2, err := pool.GetBlobs(hashes, types.BlobSidecarVersion1)
+	blobs2, _, proofs2, err := pool.GetBlobs(hashes, types.BlobSidecarVersion1, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2014,7 +2014,7 @@ func TestGetBlobs(t *testing.T) {
 			filled[len(vhashes)] = struct{}{}
 			vhashes = append(vhashes, testrand.Hash())
 		}
-		blobs, _, proofs, err := pool.GetBlobs(vhashes, c.version)
+		blobs, _, proofs, err := pool.GetBlobs(vhashes, c.version, true)
 		if err != nil {
 			t.Errorf("Unexpected error for case %d, %v", i, err)
 		}

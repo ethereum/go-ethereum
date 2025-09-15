@@ -1333,9 +1333,9 @@ func (p *BlobPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 // retrieve blobs from the pools directly instead of the network.
 //
 // The version argument specifies the type of proofs to return, either the
-// blob proofs (version 0) or the cell proofs (version 1). Proofs are computed
-// on-the-fly in case of a version mismatch.
-func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blob, []kzg4844.Commitment, [][]kzg4844.Proof, error) {
+// blob proofs (version 0) or the cell proofs (version 1). Proofs conversion is
+// CPU intensive, so only done if explicitly requested with the convert flag.
+func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte, convert bool) ([]*kzg4844.Blob, []kzg4844.Commitment, [][]kzg4844.Proof, error) {
 	var (
 		blobs       = make([]*kzg4844.Blob, len(vhashes))
 		commitments = make([]kzg4844.Commitment, len(vhashes))
@@ -1384,6 +1384,9 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 				continue // non-interesting blob
 			}
 			var pf []kzg4844.Proof
+			if !convert && sidecar.Version != version {
+				return nil, nil, nil, fmt.Errorf("blob sidecar version mismatch: want %d, have %d", version, sidecar.Version)
+			}
 			switch version {
 			case types.BlobSidecarVersion0:
 				if sidecar.Version == types.BlobSidecarVersion0 {
