@@ -3,8 +3,8 @@ module github.com/ethereum/go-ethereum/cmd/keeper
 go 1.24.0
 
 require (
-	github.com/ethereum/go-ethereum v1.16.3
-	github.com/zkMIPS/zkMIPS/crates/go-runtime/zkm_runtime v0.0.0-00010101000000-000000000000
+	github.com/ethereum/go-ethereum v0.0.0-00010101000000-000000000000
+	github.com/zkMIPS/zkMIPS/crates/go-runtime/zkm_runtime v0.0.0-20250915074013-fbc07aa2c6f5
 )
 
 require (
@@ -44,6 +44,5 @@ require (
 
 replace (
 	github.com/ethereum/go-ethereum => ../../
-	github.com/zkMIPS/zkMIPS => github.com/weilzkm/zkMIPS v0.0.0-20250909003003-28d77c6da0a4
-	github.com/zkMIPS/zkMIPS/crates/go-runtime/zkm_runtime => github.com/weilzkm/zkMIPS/crates/go-runtime/zkm_runtime v0.0.0-20250909003003-28d77c6da0a4
+	github.com/zkMIPS/zkMIPS/crates/go-runtime/zkm_runtime => github.com/weilzkm/zkMIPS/crates/go-runtime/zkvm_runtime v0.0.0-20250915074013-fbc07aa2c6f5
 )
