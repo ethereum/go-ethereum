@@ -55,6 +55,12 @@ const (
 	// tiny overflows causing all txs to move a shelf higher, wasting disk space.
 	txAvgSize = 4 * 1024
 
+	// txBlobOverhead is an approximation of the overhead that an additional blob
+	// has on transaction size. This is added to the slotter to avoid tiny
+	// overflows causing all txs to move a shelf higher, wasting disk space. A
+	// small buffer is added to the proof overhead.
+	txBlobOverhead = uint32(kzg4844.CellProofsPerBlob*len(kzg4844.Proof{}) + 64)
+
 	// txMaxSize is the maximum size a single transaction can have, outside
 	// the included blobs. Since blob transactions are pulled instead of pushed,
 	// and only a small metadata is kept in ram, the rest is on disk, there is
@@ -83,6 +89,10 @@ const (
 	// limboedTransactionStore is the subfolder containing the currently included
 	// but not yet finalized transaction blobs.
 	limboedTransactionStore = "limbo"
+
+	// storeVersion is the current slotter layout used for the billy.Database
+	// store.
+	storeVersion = 1
 )
 
 // blobTxMeta is the minimal subset of types.BlobTx necessary to validate and
@@ -392,6 +402,14 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	}
 	p.head, p.state = head, state
 
+	// Create new slotter for pre-Osaka blob configuration.
+	slotter := newSlotter(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
+
+	// See if we need to migrate the queue blob store after fusaka
+	slotter, err = tryMigrate(p.chain.Config(), slotter, queuedir)
+	if err != nil {
+		return err
+	}
 	// Index all transactions on disk and delete anything unprocessable
 	var fails []uint64
 	index := func(id uint64, size uint32, blob []byte) {
@@ -399,7 +417,6 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 			fails = append(fails, id)
 		}
 	}
-	slotter := newSlotter(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
 	store, err := billy.Open(billy.Options{Path: queuedir, Repair: true}, slotter, index)
 	if err != nil {
 		return err
@@ -433,7 +450,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 
 	// Pool initialized, attach the blob limbo to it to track blobs included
 	// recently but not yet finalized
-	p.limbo, err = newLimbo(limbodir, eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
+	p.limbo, err = newLimbo(p.chain.Config(), limbodir)
 	if err != nil {
 		p.Close()
 		return err
