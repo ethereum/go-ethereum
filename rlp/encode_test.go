@@ -317,7 +317,6 @@ var encTests = []encTest{
 	{val: &optionalAndTailField{A: 1}, output: "C101"},
 	{val: &optionalAndTailField{A: 1, B: 2}, output: "C20102"},
 	{val: &optionalAndTailField{A: 1, Tail: []uint{5, 6}}, output: "C401800506"},
-	{val: &optionalAndTailField{A: 1, Tail: []uint{5, 6}}, output: "C401800506"},
 	{val: &optionalBigIntField{A: 1}, output: "C101"},
 	{val: &optionalPtrField{A: 1}, output: "C101"},
 	{val: &optionalPtrFieldNil{A: 1}, output: "C101"},
