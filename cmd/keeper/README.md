@@ -85,8 +85,11 @@ go build -tags "example" ./cmd/keeper
 ```
 
 ### Ziren zkVM Implementation
+
 Build for the Ziren zkVM platform, which is a MIPS ISA-based zkvm:
 
 ```bash
 GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build -tags "ziren" ./cmd/keeper
 ```
+
+As an example runner, refer to https://gist.github.com/gballet/7b669a99eb3ab2b593324e3a76abd23d
