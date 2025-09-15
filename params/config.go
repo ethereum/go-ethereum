@@ -199,7 +199,7 @@ var (
 				PoLDistributorAddress:    PoLDistributorAddress,
 			},
 			Prague2: Prague2Config{
-				Time:              newUint64(9999999999), // TODO(Prague2): Replace with actual time.
+				Time:              newUint64(1759248000), // Sep 30 2025 16:00:00 UTC
 				MinimumBaseFeeWei: big.NewInt(0),
 			},
 		},
@@ -235,13 +235,13 @@ var (
 		},
 		Berachain: BerachainConfig{
 			Prague1: Prague1Config{
-				Time:                     newUint64(1754496000), // Aug 6th 2025 16:00:00 UTC
+				Time:                     newUint64(1754496000), // Aug 06 2025 16:00:00 UTC
 				MinimumBaseFeeWei:        big.NewInt(10 * GWei),
 				BaseFeeChangeDenominator: BerachainBaseFeeChangeDenominator,
 				PoLDistributorAddress:    PoLDistributorAddress,
 			},
 			Prague2: Prague2Config{
-				Time:              newUint64(9999999999), // TODO(Prague2): Replace with actual time.
+				Time:              newUint64(1758124800), // Sep 17 2025 16:00:00 UTC
 				MinimumBaseFeeWei: big.NewInt(0),
 			},
 		},
