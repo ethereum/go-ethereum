@@ -11,17 +11,28 @@ The keeper reads an RLP-encoded payload containing:
 
 It then executes the block statelessly and validates that the computed state root and receipt root match the values in the block header.
 
-## Architecture
+## Building Keeper
 
 The keeper uses build tags to compile platform-specific input methods and chain configurations:
 
+### Example Implementation
+
+See `getpayload_example.go` for a complete example with embedded Hoodi block data:
+
+```bash
+# Build example with different chain configurations
+go build -tags "example" ./cmd/keeper
 ```
-cmd/keeper/
-├── main.go                    # Main execution logic
-├── getpayload_example.go      # Example implementation with embedded data
-├── getpayload_ziren.go        # Ziren zkVM implementation
-└── ...
+
+### Ziren zkVM Implementation
+
+Build for the Ziren zkVM platform, which is a MIPS ISA-based zkvm:
+
+```bash
+GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build -tags "ziren" ./cmd/keeper
 ```
+
+As an example runner, refer to https://gist.github.com/gballet/7b669a99eb3ab2b593324e3a76abd23d
 
 ## Creating a Custom Platform Implementation
 
@@ -44,52 +55,15 @@ func getInput() []byte {
     // Your platform-specific code to retrieve the RLP-encoded payload
     // This might read from:
     // - Memory-mapped I/O
-    // - Hardware registers  
+    // - Hardware registers
     // - Serial port
     // - Network interface
     // - File system
-    
+
     // The payload must be RLP-encoded and contain:
     // - Block with transactions
     // - Witness with parent headers and state data
-    
+
     return encodedPayload
 }
 ```
-
-### 2. Build for Your Platform
-
-```bash
-go build -tags "myplatform" ./cmd/keeper
-```
-
-## Payload Structure
-
-The payload is an RLP-encoded structure containing:
-
-```go
-type Payload struct {
-    Block   *types.Block
-    Witness *stateless.Witness
-}
-```
-
-## Build Examples
-
-### Example Implementation
-See `getpayload_example.go` for a complete example with embedded Hoodi block data:
-
-```bash
-# Build example with different chain configurations
-go build -tags "example" ./cmd/keeper
-```
-
-### Ziren zkVM Implementation
-
-Build for the Ziren zkVM platform, which is a MIPS ISA-based zkvm:
-
-```bash
-GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build -tags "ziren" ./cmd/keeper
-```
-
-As an example runner, refer to https://gist.github.com/gballet/7b669a99eb3ab2b593324e3a76abd23d
