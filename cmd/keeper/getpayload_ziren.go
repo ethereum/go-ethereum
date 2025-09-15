@@ -26,7 +26,6 @@ import (
 // The zkVM host provides the RLP-encoded Payload structure containing
 // the block and witness data through the runtime's input mechanism.
 func getInput() []byte {
-	// Read the RLP-encoded payload directly from the zkVM runtime
 	input := zkruntime.Read[[]byte]()
 	return input
 }
