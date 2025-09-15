@@ -107,8 +107,7 @@ func (c *ChainConfig) LoadForks(file []byte) error {
 			name := key[:len(key)-len("_FORK_VERSION")]
 			switch version := value.(type) {
 			case int:
-				versions[name] = make([]byte, 4)
-				big.NewInt(int64(version)).FillBytes(versions[name])
+				versions[name] = big.NewInt(int64(version)).FillBytes(make([]byte, 4))
 			case string:
 				v, err := hexutil.Decode(version)
 				if err != nil {
