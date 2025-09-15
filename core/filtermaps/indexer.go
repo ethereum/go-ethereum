@@ -102,12 +102,15 @@ func NewIndexer(db ethdb.KeyValueStore, params Params, config Config) *Indexer {
 	return ix
 }
 
-func (ix *Indexer) GetIndexView(hash common.Hash) *IndexView {
+// GetIndexView returns an immutable IndexView corresponding to the given head
+// block hash if available. Note that each returned IndexView has to be released
+// after use with the Release funcion in order to avoid memory leakage.
+func (ix *Indexer) GetIndexView(headBlockHash common.Hash) *IndexView {
 	if ix.config.Disabled {
 		return nil
 	}
 	ix.snapshotsLock.RLock()
-	iv := ix.snapshots[hash]
+	iv := ix.snapshots[headBlockHash]
 	ix.snapshotsLock.RUnlock()
 	if iv == nil || iv.checkReleased() {
 		return nil
@@ -351,6 +354,7 @@ func (ix *Indexer) revertMaps(mapIndex uint32) {
 	}
 }
 
+// updateTailEpoch recalculates the current tailEpoch and the targetTailEpoch.
 func (ix *Indexer) updateTailEpoch() {
 	ix.tailEpoch = ix.storage.tailEpoch()
 	if ix.config.History == 0 {
@@ -383,6 +387,9 @@ func (ix *Indexer) updateTailEpoch() {
 	}
 }
 
+// updateActiveViewTailEpoch recalculates activeViewTailEpoch which is the earliest
+// tail epoch required by an active IndexView. Tail unindexing is only allowed
+// if min(targetTailEpoch, activeViewTailEpoch) > tailEpoch.
 func (ix *Indexer) updateActiveViewTailEpoch() {
 	ix.snapshotsLock.RLock()
 	defer ix.snapshotsLock.RUnlock()
@@ -393,6 +400,8 @@ func (ix *Indexer) updateActiveViewTailEpoch() {
 	}
 }
 
+// updateTailState performs tail unindexing or initializes a new tailRenderer to
+// render a new tail epoch if necessary.
 func (ix *Indexer) updateTailState() {
 	epoch := min(ix.targetTailEpoch, ix.activeViewTailEpoch)
 	if epoch >= ix.tailEpoch && ix.tailRenderer != nil {

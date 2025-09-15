@@ -35,8 +35,8 @@ type IndexView struct {
 	refCount, invalid int32
 	storage           *mapStorage
 
-	tailEpoch     uint32
-	blockRange    common.Range[uint64]
+	tailEpoch     uint32               //TODO apply to read functions
+	blockRange    common.Range[uint64] //TODO apply to read functions
 	headBlockHash common.Hash
 	headLvPointer uint64 // points after head block delimiter
 
