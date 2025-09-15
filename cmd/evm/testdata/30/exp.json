@@ -47,7 +47,7 @@
         "effectiveGasPrice": null,
         "blockHash": "0x1337000000000000000000000000000000000000000000000000000000000000",
         "blockNumber": "0x1",
-        "transactionIndex": "0x2"
+        "transactionIndex": "0x1"
       }
     ],
     "rejected": [

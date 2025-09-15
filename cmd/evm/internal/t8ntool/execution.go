@@ -248,7 +248,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 				continue
 			}
 		}
-		statedb.SetTxContext(tx.Hash(), i)
+		statedb.SetTxContext(tx.Hash(), len(receipts))
 		var (
 			snapshot = statedb.Snapshot()
 			prevGas  = gaspool.Gas()
