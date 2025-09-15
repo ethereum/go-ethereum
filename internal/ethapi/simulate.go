@@ -458,6 +458,13 @@ func (sim *simulator) sanitizeChain(blocks []simBlock) ([]simBlock, error) {
 	return res, nil
 }
 
+func isPostMerge(config *params.ChainConfig, blockNum uint64, timestamp uint64) bool {
+	mergedAtGenesis := config.TerminalTotalDifficulty != nil && config.TerminalTotalDifficulty.Sign() == 0
+	return mergedAtGenesis ||
+		config.MergeNetsplitBlock != nil && blockNum >= config.MergeNetsplitBlock.Uint64() ||
+		config.ShanghaiTime != nil && timestamp >= *config.ShanghaiTime
+}
+
 // makeHeaders makes header object with preliminary fields based on a simulated block.
 // Some fields have to be filled post-execution.
 // It assumes blocks are in order and numbers have been validated.
@@ -474,22 +481,28 @@ func (sim *simulator) makeHeaders(blocks []simBlock) ([]*types.Header, error) {
 		overrides := block.BlockOverrides
 
 		var withdrawalsHash *common.Hash
-		if sim.chainConfig.IsShanghai(overrides.Number.ToInt(), (uint64)(*overrides.Time)) {
+		number := overrides.Number.ToInt()
+		timestamp := (uint64)(*overrides.Time)
+		if sim.chainConfig.IsShanghai(number, timestamp) {
 			withdrawalsHash = &types.EmptyWithdrawalsHash
 		}
 		var parentBeaconRoot *common.Hash
-		if sim.chainConfig.IsCancun(overrides.Number.ToInt(), (uint64)(*overrides.Time)) {
+		if sim.chainConfig.IsCancun(number, timestamp) {
 			parentBeaconRoot = &common.Hash{}
 			if overrides.BeaconRoot != nil {
 				parentBeaconRoot = overrides.BeaconRoot
 			}
+		}
+		difficulty := header.Difficulty
+		if isPostMerge(sim.chainConfig, number.Uint64(), timestamp) {
+			difficulty = big.NewInt(0)
 		}
 		header = overrides.MakeHeader(&types.Header{
 			UncleHash:        types.EmptyUncleHash,
 			ReceiptHash:      types.EmptyReceiptsHash,
 			TxHash:           types.EmptyTxsHash,
 			Coinbase:         header.Coinbase,
-			Difficulty:       header.Difficulty,
+			Difficulty:       difficulty,
 			GasLimit:         header.GasLimit,
 			WithdrawalsHash:  withdrawalsHash,
 			ParentBeaconRoot: parentBeaconRoot,
