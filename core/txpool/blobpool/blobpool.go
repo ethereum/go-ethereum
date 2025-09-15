@@ -398,12 +398,11 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	// Create new slotter for pre-Osaka blob configuration.
 	slotter := newSlotter(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
 
-	// See if we need to migrate the limbo after fusaka.
-	slotter, err = tryMigrate(p.chain.Config(), slotter, p.config.Datadir)
+	// See if we need to migrate the queue blob store after fusaka
+	slotter, err = tryMigrate(p.chain.Config(), slotter, queuedir)
 	if err != nil {
 		return err
 	}
-
 	// Index all transactions on disk and delete anything unprocessable
 	var fails []uint64
 	index := func(id uint64, size uint32, blob []byte) {
