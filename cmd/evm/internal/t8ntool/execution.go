@@ -253,10 +253,6 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 			snapshot = statedb.Snapshot()
 			prevGas  = gaspool.Gas()
 		)
-		if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxStart != nil {
-			evm.Config.Tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
-		}
-
 		receipt, err := core.ApplyTransactionWithEVM(msg, gaspool, statedb, vmContext.BlockNumber, blockHash, pre.Env.Timestamp, tx, &gasUsed, evm)
 		if err != nil {
 			statedb.RevertToSnapshot(snapshot)
