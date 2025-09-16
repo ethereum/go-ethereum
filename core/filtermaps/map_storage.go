@@ -224,7 +224,7 @@ func (m *mapStorage) addMap(mapIndex uint32, fm *finishedMap, forceCommit bool) 
 	}
 	mapRs := singleRangeSet[uint32](common.NewRange[uint32](mapIndex, 1))
 	m.overlay = m.overlay.union(mapRs)
-	m.writeInProgress = m.writeInProgress.exclude(mapRs)
+	m.writeInProgress = m.writeInProgress.difference(mapRs)
 	m.overlayMaps[mapIndex] = fm
 	m.updateOverlayBlocks()
 	if forceCommit || (mapIndex+1)%m.params.rowGroupSize[0] == 0 {
@@ -245,12 +245,12 @@ func (m *mapStorage) deleteMaps(maps common.Range[uint32]) {
 	for i := range dr.intersection(m.overlay).iter() {
 		delete(m.overlayMaps, i)
 	}
-	m.writeInProgress = m.writeInProgress.exclude(dr)
+	m.writeInProgress = m.writeInProgress.difference(dr)
 	knownEpochs := m.knownEpochs
 	if maps.Includes(m.params.firstEpochMap(knownEpochs)) {
 		knownEpochs = m.params.mapEpoch(maps.First())
 	}
-	if err := m.updateRange(m.valid.exclude(dr), m.dirty.union(dr.intersection(m.valid)), m.overlay.exclude(dr), knownEpochs); err != nil {
+	if err := m.updateRange(m.valid.difference(dr), m.dirty.union(dr.intersection(m.valid)), m.overlay.difference(dr), knownEpochs); err != nil {
 		m.resetWithError(fmt.Sprintf("could not revert valid block range: %v", err))
 	}
 	m.trigger()
@@ -467,7 +467,7 @@ func (m *mapStorage) selectEpochTriggeredWrite(canSelect []uint32) (uint32, bool
 		if !m.epochTrigger.includes(epoch) {
 			continue
 		}
-		m.epochTrigger = m.epochTrigger.exclude(singleRangeSet[uint32](common.NewRange[uint32](epoch, 1)))
+		m.epochTrigger = m.epochTrigger.difference(singleRangeSet[uint32](common.NewRange[uint32](epoch, 1)))
 		epochRange := common.NewRange[uint32](m.params.firstEpochMap(epoch), m.params.mapsPerEpoch)
 		if len(m.overlay.intersection(singleRangeSet[uint32](epochRange))) > 0 {
 			return epoch, true
@@ -510,7 +510,7 @@ func (m *mapStorage) mapToEpochRange(mapRange rangeSet[uint32]) rangeSet[uint32]
 // selectEpochDeleteOnly selects an epoch to update where there are no memory
 // maps to write, only dirty maps to clean up.
 func (m *mapStorage) selectEpochDeleteOnly() (uint32, bool) {
-	epochs := m.mapToEpochRange(m.dirty).exclude(m.mapToEpochRange(m.overlay))
+	epochs := m.mapToEpochRange(m.dirty).difference(m.mapToEpochRange(m.overlay))
 	if len(epochs) == 0 {
 		return 0, false
 	}
@@ -572,7 +572,7 @@ func (m *mapStorage) doWriteCycle(stopCallback func() bool) (bool, error) {
 		done, err := m.mapDb.deleteEpochRows(epoch, stopCallback)
 		m.lock.Lock()
 		if done {
-			if err := m.updateRange(m.valid, m.dirty.exclude(epochRange), m.overlay, m.knownEpochs); err != nil {
+			if err := m.updateRange(m.valid, m.dirty.difference(epochRange), m.overlay, m.knownEpochs); err != nil {
 				return false, err
 			}
 		}
@@ -584,7 +584,7 @@ func (m *mapStorage) doWriteCycle(stopCallback func() bool) (bool, error) {
 	}
 	// temporarily mark newly written maps as dirty (replaced/deleted maps are already dirty)
 	writeInProgress := singleRangeSet[uint32](writeMaps)
-	deleteInProgress := singleRangeSet[uint32](dirtyInEpoch).exclude(writeInProgress)
+	deleteInProgress := singleRangeSet[uint32](dirtyInEpoch).difference(writeInProgress)
 	if err := m.updateRange(m.valid, m.dirty.union(writeInProgress), m.overlay, m.knownEpochs); err != nil {
 		return false, err
 	}
@@ -609,7 +609,7 @@ func (m *mapStorage) doWriteCycle(stopCallback func() bool) (bool, error) {
 	if len(writeInProgress) > 0 {
 		knownEpochs = max(knownEpochs, m.params.mapEpoch(writeInProgress[len(writeInProgress)-1].Last()))
 	}
-	if err := m.updateRange(m.valid.union(writeInProgress), m.dirty.exclude(writeInProgress.union(deleteInProgress)), m.overlay.exclude(writeInProgress), knownEpochs); err != nil {
+	if err := m.updateRange(m.valid.union(writeInProgress), m.dirty.difference(writeInProgress.union(deleteInProgress)), m.overlay.difference(writeInProgress), knownEpochs); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -672,7 +672,6 @@ func (m *mapStorage) updateKnownEpochBlocks() error {
 // pointer points into the valid map set.
 func (m *mapStorage) updateValidBlocks() error {
 	if len(m.valid) > 2 || (len(m.valid) == 2 && m.valid[0].Count() >= m.params.mapsPerEpoch) {
-		panic("invalid mapStorage.valid")
 		return errors.New("invalid mapStorage.valid range set")
 	}
 	vb := make(rangeBoundaries[uint64], 0, len(m.valid)*2)

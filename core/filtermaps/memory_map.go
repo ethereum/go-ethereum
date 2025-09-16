@@ -35,7 +35,7 @@ type memoryMap struct {
 }
 
 // mmEntry is a linked list entry. The field next points to the next entry in the
-// entries slice. Zero singals the end of the list (entries[0] is always the first
+// entries slice. Zero signals the end of the list (entries[0] is always the first
 // entry of a list).
 type mmEntry struct {
 	value, next uint32
@@ -69,10 +69,16 @@ func (m *memoryMap) clone() *memoryMap {
 	}
 }
 
+// firstBlock returns the number of the first block that starts in the log value
+// range of the map and also the one that corresponts to blockPtrs[0].
+// Note that in the rare case when no blocks start in the map (one block that
+// starts in an earlier map covers the entire map range) firstBlock can be
+// bigger than lastBlock.
 func (m *memoryMap) firstBlock() uint64 {
 	return m.lastBlock.number + 1 - uint64(len(m.blockPtrs))
 }
 
+// blocks returns the range of blocks that start in this map's log value range.
 func (m *memoryMap) blocks() common.Range[uint64] {
 	l := uint64(len(m.blockPtrs))
 	return common.NewRange[uint64](m.lastBlock.number+1-l, l)
@@ -143,10 +149,16 @@ func (m *memoryMap) finished() *finishedMap {
 	return fm
 }
 
+// firstBlock returns the number of the first block that starts in the log value
+// range of the map and also the one that corresponts to blockPtrs[0].
+// Note that in the rare case when no blocks start in the map (one block that
+// starts in an earlier map covers the entire map range) firstBlock can be
+// bigger than lastBlock.
 func (fm *finishedMap) firstBlock() uint64 {
 	return fm.lastBlock.number + 1 - uint64(len(fm.blockPtrs))
 }
 
+// blocks returns the range of blocks that start in this map's log value range.
 func (fm *finishedMap) blocks() common.Range[uint64] {
 	l := uint64(len(fm.blockPtrs))
 	return common.NewRange[uint64](fm.lastBlock.number+1-l, l)

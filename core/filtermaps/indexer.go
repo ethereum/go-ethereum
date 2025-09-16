@@ -442,6 +442,10 @@ func (cpList checkpointList) epochsUntilBlock(number uint64) uint32 {
 	return first
 }
 
+// tryCheckpointInit checks whether a checkpoint with the given block number and
+// hash exists and initializes the index with it if possible. If a checkpoint
+// with the given block number exists in a checkpointList but its hash does not
+// match then the entire list is removed from the set of potential candidates.
 func (ix *Indexer) tryCheckpointInit(number uint64, hash common.Hash) {
 	var ci int
 	for ci < len(ix.checkpoints) {
@@ -468,6 +472,17 @@ func (ix *Indexer) tryCheckpointInit(number uint64, hash common.Hash) {
 	}
 }
 
+// needBlocks returns a historical block range that is required to complete the
+// index. If there are any potential checkpoint candidates between
+// headRenderer.nextBlock and headNumber that has not been checked yet then
+// needBlocks requests a single block number that is the last block number of
+// the checkpoint so that tryCheckpointInit can either initialize with the
+// checkpoint or rule it out.
+// If there are no more potential checkpoints but headRenderer.nextBlock is still
+// less than the latest known headNumber then needBlock requests the entire
+// range between the two in order to index the chain up to the latest head.
+// If the head is indexed and tailRenderer exists then needBlocks requests
+// the remaining block range of the rendered tail epoch.
 func (ix *Indexer) needBlocks() common.Range[uint64] {
 	if ix.finalized > ix.headRenderer.nextBlock {
 		// request potential checkpoint in this range if available
@@ -492,10 +507,44 @@ func (ix *Indexer) needBlocks() common.Range[uint64] {
 	return common.Range[uint64]{}
 }
 
+// Stop shuts down the underlying storage. The caller of the core.Indexer
+// interface guarantees that no subsequent calls are made after Stop.
 func (ix *Indexer) Stop() {
 	ix.storage.stop()
 }
 
+// storeFinishedMaps stores a continuous range of finished maps in the storage
+// and optionally also caches them. Note that maps are only cached during head
+// rendering as the purpose of the cache is to have the most recent maps available
+// in memory when creating head snapshots.
+func (ix *Indexer) storeFinishedMaps(firstMapIndex uint32, maps []*finishedMap, forceCommit, cacheHeadMaps bool) {
+	if len(maps) == 0 {
+		return
+	}
+	for i, fm := range maps {
+		ix.storage.addMap(firstMapIndex+uint32(i), fm, forceCommit && i == len(maps)-1)
+		if cacheHeadMaps {
+			ix.headMapsCache.Add(firstMapIndex+uint32(i), fm)
+		}
+	}
+}
+
+// getFilterMap reads the filter map with the specified map index from the
+// storage or the cache.
+func (ix *Indexer) getFilterMap(mapIndex uint32) (*finishedMap, error) {
+	if fm, ok := ix.headMapsCache.Get(mapIndex); ok {
+		return fm, nil
+	}
+	fm, err := ix.storage.getFilterMap(mapIndex)
+	if err != nil {
+		return nil, err
+	}
+	ix.headMapsCache.Add(mapIndex, fm)
+	return fm, nil
+}
+
+// releaseView decreases the reference counter of the IndexViex snapshot with
+// the given head block hash and deletes it if the counter reaches zero.
 func (ix *Indexer) releaseView(hash common.Hash) {
 	iv := ix.snapshots[hash]
 	if iv == nil {
@@ -509,30 +558,8 @@ func (ix *Indexer) releaseView(hash common.Hash) {
 	}
 }
 
-func (ix *Indexer) storeFinishedMaps(firstMapIndex uint32, maps []*finishedMap, forceCommit, cacheHeadMaps bool) {
-	if len(maps) == 0 {
-		return
-	}
-	for i, fm := range maps {
-		ix.storage.addMap(firstMapIndex+uint32(i), fm, forceCommit && i == len(maps)-1)
-		if cacheHeadMaps {
-			ix.headMapsCache.Add(firstMapIndex+uint32(i), fm)
-		}
-	}
-}
-
-func (ix *Indexer) getFilterMap(mapIndex uint32) (*finishedMap, error) {
-	if fm, ok := ix.headMapsCache.Get(mapIndex); ok {
-		return fm, nil
-	}
-	fm, err := ix.storage.getFilterMap(mapIndex)
-	if err != nil {
-		return nil, err
-	}
-	ix.headMapsCache.Add(mapIndex, fm)
-	return fm, nil
-}
-
+// checkReleasedViews iterates through snapshots and deletes those that do not
+// have a positive reference counter.
 func (ix *Indexer) checkReleasedViews() {
 	var deleted bool
 	for hash, iv := range ix.snapshots {
@@ -550,6 +577,11 @@ func (ix *Indexer) checkReleasedViews() {
 	}
 }
 
+// storeHeadIndexView creates an IndexView snapshot based on the headRenderer
+// and stores it in the snapshots map indexed by block hash. It also maintains
+// a list of the most recently creates snapshots and the latest canonical hashes.
+// Each snapshot is created with a reference counter of 2 and is released once
+// its hash is removed from either canonicalHashes or recentHashes.
 func (ix *Indexer) storeHeadIndexView(number uint64, hash common.Hash) {
 	if ix.headRenderer.currentMap == nil {
 		return

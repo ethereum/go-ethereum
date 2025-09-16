@@ -270,8 +270,11 @@ func (p potentialMatches) Len() int           { return len(p) }
 func (p potentialMatches) Less(i, j int) bool { return p[i] < p[j] }
 func (p potentialMatches) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
+// rangeSet represents a set of integers as an ordered list of disjoint and non
+// adjacent continuous ranges.
 type rangeSet[T uint32 | uint64] []common.Range[T]
 
+// includes returns true if the given element is in the set.
 func (a rangeSet[T]) includes(v T) bool {
 	for _, r := range a {
 		if r.Includes(v) {
@@ -281,6 +284,8 @@ func (a rangeSet[T]) includes(v T) bool {
 	return false
 }
 
+// closestLte returns the element in the set closest to v that is less than or
+// equal to v. If no such element exists then found is false.
 func (a rangeSet[T]) closestLte(v T) (last T, found bool) {
 	for _, r := range a {
 		if r.First() > v {
@@ -294,6 +299,8 @@ func (a rangeSet[T]) closestLte(v T) (last T, found bool) {
 	return
 }
 
+// closestGte returns the element in the set closest to v that is greater than or
+// equal to v. If no such element exists then found is false.
 func (a rangeSet[T]) closestGte(v T) (last T, found bool) {
 	for _, r := range a {
 		if r.First() > v {
@@ -306,17 +313,31 @@ func (a rangeSet[T]) closestGte(v T) (last T, found bool) {
 	return
 }
 
+// rangeBoundary is a single item of a rangeBoundaries list and represents
+// either the beginning or the end of a continuous range. A single range is
+// represented by {v: first, d: 1} and {v: afterLast, d: -1} rangeBoundary
+// items. Multiple overlapping ranges can also be represented in which case
+// the d field can also be more than 1 or less than -1.
 type rangeBoundary[T uint32 | uint64] struct {
 	v T
 	d int
 }
 
+// rangeBoundaries is a helper structure for range set operations. It represents
+// multiple potentially overlapping range sets by listing the section endpoints
+// along with a "d" field that is the number of overlapping ranges starting at
+// that point (if positive) or ending there (if negative).
+// Endpoints are not necessarily ordered (makeSet sorts them after adding all
+// endpoints in random order).
 type rangeBoundaries[T uint32 | uint64] []rangeBoundary[T]
 
+// add adds a range endpoint to rangeBoundaries.
 func (rb *rangeBoundaries[T]) add(r common.Range[T], d int) {
 	*rb = append((*rb), rangeBoundary[T]{v: r.First(), d: d}, rangeBoundary[T]{v: r.AfterLast(), d: -d})
 }
 
+// makeSet creates a rangeSet of the integers where SUM(rb[i].d) where
+// rb[i].v <= x is greater than or equal to threshold.
 func (rb rangeBoundaries[T]) makeSet(threshold int) rangeSet[T] {
 	res := make(rangeSet[T], 0, len(rb)/2)
 	sort.Slice(rb, func(i, j int) bool {
@@ -342,6 +363,7 @@ func (rb rangeBoundaries[T]) makeSet(threshold int) rangeSet[T] {
 	return res
 }
 
+// intersection returns the intersection of range sets a and b.
 func (a rangeSet[T]) intersection(b rangeSet[T]) rangeSet[T] {
 	if len(a) == 0 || len(b) == 0 {
 		return nil
@@ -356,7 +378,8 @@ func (a rangeSet[T]) intersection(b rangeSet[T]) rangeSet[T] {
 	return rb.makeSet(2)
 }
 
-func (a rangeSet[T]) exclude(b rangeSet[T]) rangeSet[T] {
+// difference returns the difference a-b of range sets a and b.
+func (a rangeSet[T]) difference(b rangeSet[T]) rangeSet[T] {
 	if len(a) == 0 {
 		return nil
 	}
@@ -373,6 +396,7 @@ func (a rangeSet[T]) exclude(b rangeSet[T]) rangeSet[T] {
 	return rb.makeSet(1)
 }
 
+// union returns the union of range sets a and b.
 func (a rangeSet[T]) union(b rangeSet[T]) rangeSet[T] {
 	if len(a) == 0 {
 		return b
@@ -391,10 +415,10 @@ func (a rangeSet[T]) union(b rangeSet[T]) rangeSet[T] {
 }
 
 // iter iterates all integers in the range set.
-func (r rangeSet[T]) iter() iter.Seq[T] {
+func (a rangeSet[T]) iter() iter.Seq[T] {
 	return func(yield func(T) bool) {
-		for _, rr := range r {
-			for i := range rr.Iter() {
+		for _, r := range a {
+			for i := range r.Iter() {
 				if !yield(i) {
 					break
 				}
@@ -403,6 +427,7 @@ func (r rangeSet[T]) iter() iter.Seq[T] {
 	}
 }
 
+// count returns the number of integers in the range set.
 func (a rangeSet[T]) count() T {
 	var count T
 	for _, r := range a {
@@ -411,6 +436,8 @@ func (a rangeSet[T]) count() T {
 	return count
 }
 
+// singleRange converts the range set to a single range or panics if it
+// consists of multiple ranges.
 func (a rangeSet[T]) singleRange() common.Range[T] {
 	if len(a) > 1 {
 		panic("singleRange called for non-continuous rangeSet")
@@ -421,6 +448,7 @@ func (a rangeSet[T]) singleRange() common.Range[T] {
 	return common.NewRange[T](0, 0)
 }
 
+// singleRangeSet converts a single range to a range set.
 func singleRangeSet[T uint32 | uint64](r common.Range[T]) rangeSet[T] {
 	if r.IsEmpty() {
 		return nil
@@ -428,6 +456,7 @@ func singleRangeSet[T uint32 | uint64](r common.Range[T]) rangeSet[T] {
 	return rangeSet[T]{r}
 }
 
+// equal returns true if the range sets a and b are equal.
 func (a rangeSet[T]) equal(b rangeSet[T]) bool {
 	if len(a) != len(b) {
 		return false
