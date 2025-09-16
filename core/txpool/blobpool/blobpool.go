@@ -127,25 +127,25 @@ type blobTxMeta struct {
 // newBlobTxMeta retrieves the indexed metadata fields from a blob transaction
 // and assembles a helper struct to track in memory.
 // Requires the transaction to have a sidecar (or that we introduce a special version tag for no-sidecar).
-func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transaction) *blobTxMeta {
-	if tx.BlobTxSidecar() == nil {
+func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *PooledBlobTx) *blobTxMeta {
+	if tx.Sidecar == nil {
 		// This should never happen, as the pool only admits blob transactions with a sidecar
 		panic("missing blob tx sidecar")
 	}
 	meta := &blobTxMeta{
-		hash:        tx.Hash(),
-		vhashes:     tx.BlobHashes(),
-		version:     tx.BlobTxSidecar().Version,
+		hash:        tx.Transaction.Hash(),
+		vhashes:     tx.Transaction.BlobHashes(),
+		version:     tx.Sidecar.Version,
 		id:          id,
 		storageSize: storageSize, // size of tx including cells
 		size:        size,        // size of tx including blobs
-		nonce:       tx.Nonce(),
-		costCap:     uint256.MustFromBig(tx.Cost()),
-		execTipCap:  uint256.MustFromBig(tx.GasTipCap()),
-		execFeeCap:  uint256.MustFromBig(tx.GasFeeCap()),
-		blobFeeCap:  uint256.MustFromBig(tx.BlobGasFeeCap()),
-		execGas:     tx.Gas(),
-		blobGas:     tx.BlobGas(),
+		nonce:       tx.Transaction.Nonce(),
+		costCap:     uint256.MustFromBig(tx.Transaction.Cost()),
+		execTipCap:  uint256.MustFromBig(tx.Transaction.GasTipCap()),
+		execFeeCap:  uint256.MustFromBig(tx.Transaction.GasFeeCap()),
+		blobFeeCap:  uint256.MustFromBig(tx.Transaction.BlobGasFeeCap()),
+		execGas:     tx.Transaction.Gas(),
+		blobGas:     tx.Transaction.BlobGas(),
 	}
 	meta.basefeeJumps = dynamicFeeJumps(meta.execFeeCap)
 	meta.blobfeeJumps = dynamicFeeJumps(meta.blobFeeCap)
@@ -166,11 +166,6 @@ func NewPooledBlobTx(tx *types.Transaction, sidecar *types.BlobTxCellSidecar, si
 		Size:        size,
 	}
 }
-
-func (ptx *PooledBlobTx) Hash() common.Hash {
-	return ptx.Transaction.Hash()
-}
-
 func (ptx *PooledBlobTx) Convert() (*types.Transaction, error) {
 	if ptx.Sidecar == nil {
 		return nil, errors.New("cell sidecar missing")
@@ -184,6 +179,7 @@ func (ptx *PooledBlobTx) Convert() (*types.Transaction, error) {
 
 	return ptx.Transaction.WithBlobTxSidecar(sidecar), nil
 }
+
 func (ptx *PooledBlobTx) RemoveParity() error {
 	sc := ptx.Sidecar
 	if sc == nil {
@@ -576,13 +572,17 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 			log.Error("Missing sidecar in blob pool entry", "id", id, "hash", tx.Hash())
 			return errors.New("missing sidecar")
 		}
-	} else {
-		tx, err = pooledTx.Convert()
+		cells, err := tx.BlobTxSidecar().ToBlobTxCellSidecar()
 		if err != nil {
 			return err
 		}
+		pooledTx = &PooledBlobTx{
+			Transaction: tx,
+			Sidecar:     cells,
+			Size:        tx.Size(),
+		}
 	}
-	meta := newBlobTxMeta(id, tx.Size(), size, tx)
+	meta := newBlobTxMeta(id, pooledTx.Size, size, pooledTx)
 
 	if p.lookup.exists(meta.hash) {
 		// This path is only possible after a crash, where deleted items are not
@@ -591,7 +591,7 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 		log.Error("Rejecting duplicate blob pool entry", "id", id, "hash", tx.Hash())
 		return errors.New("duplicate blob entry")
 	}
-	sender, err := types.Sender(p.signer, tx)
+	sender, err := types.Sender(p.signer, pooledTx.Transaction)
 	if err != nil {
 		// This path is impossible unless the signature validity changes across
 		// restarts. For that ever improbable case, recover gracefully by ignoring
@@ -1105,7 +1105,7 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 	}
 
 	// Update the indices and metrics
-	meta := newBlobTxMeta(id, tx.Size, p.store.Size(id), tx.Transaction)
+	meta := newBlobTxMeta(id, tx.Size, p.store.Size(id), tx)
 	if _, ok := p.index[addr]; !ok {
 		if err := p.reserver.Hold(addr); err != nil {
 			log.Warn("Failed to reserve account for blob pool", "tx", tx.Transaction.Hash(), "from", addr, "err", err)
@@ -1656,7 +1656,7 @@ func (p *BlobPool) add(tx *types.Transaction, cellSidecar *types.BlobTxCellSidec
 	if err != nil {
 		return err
 	}
-	meta := newBlobTxMeta(id, pooledTx.Size, p.store.Size(id), tx)
+	meta := newBlobTxMeta(id, pooledTx.Size, p.store.Size(id), pooledTx)
 
 	var (
 		next   = p.state.GetNonce(from)

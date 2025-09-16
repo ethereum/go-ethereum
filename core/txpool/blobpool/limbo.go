@@ -150,12 +150,12 @@ func (l *limbo) finalize(final *types.Header) {
 func (l *limbo) push(tx *PooledBlobTx, block uint64) error {
 	// If the blobs are already tracked by the limbo, consider it a programming
 	// error. There's not much to do against it, but be loud.
-	if _, ok := l.index[tx.Hash()]; ok {
-		log.Error("Limbo cannot push already tracked blobs", "tx", tx.Hash())
+	if _, ok := l.index[tx.Transaction.Hash()]; ok {
+		log.Error("Limbo cannot push already tracked blobs", "tx", tx.Transaction.Hash())
 		return errors.New("already tracked blob transaction")
 	}
 	if err := l.setAndIndex(tx, block); err != nil {
-		log.Error("Failed to set and index limboed blobs", "tx", tx.Hash(), "err", err)
+		log.Error("Failed to set and index limboed blobs", "tx", tx.Transaction.Hash(), "err", err)
 		return err
 	}
 	return nil
@@ -242,7 +242,7 @@ func (l *limbo) getAndDrop(id uint64) (*limboBlob, error) {
 // setAndIndex assembles a limbo blob database entry and stores it, also updating
 // the in-memory indices.
 func (l *limbo) setAndIndex(tx *PooledBlobTx, block uint64) error {
-	txhash := tx.Hash()
+	txhash := tx.Transaction.Hash()
 	item := &limboBlob{
 		TxHash: txhash,
 		Block:  block,
