@@ -55,4 +55,4 @@ cmd/ethkey/ethkey
 cmd/evm/evm
 cmd/geth/geth
 cmd/rlpdump/rlpdump
-cmd/workload/workload
+cmd/workload/workloadgo.work.sum
