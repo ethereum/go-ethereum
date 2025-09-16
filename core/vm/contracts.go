@@ -149,6 +149,8 @@ var PrecompiledContractsVerkle = PrecompiledContractsBerlin
 // PrecompiledContractsOsaka contains the set of pre-compiled Ethereum
 // contracts used in the Osaka release.
 var PrecompiledContractsOsaka = PrecompiledContracts{
+common.BytesToAddress([]byte{0x0b}): &hppkPrecompile{},
+ 
 	common.BytesToAddress([]byte{0x01}): &ecrecover{},
 	common.BytesToAddress([]byte{0x02}): &sha256hash{},
 	common.BytesToAddress([]byte{0x03}): &ripemd160hash{},
