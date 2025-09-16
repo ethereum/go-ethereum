@@ -300,7 +300,7 @@ func (t *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 //
 // TODO(gballet, rjl493456442) implement it.
 func (t *VerkleTrie) NodeIterator(startKey []byte) (NodeIterator, error) {
-	panic("not implemented")
+	return newVerkleNodeIterator(t, nil)
 }
 
 // Prove implements state.Trie, constructing a Merkle proof for key. The result
