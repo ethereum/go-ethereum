@@ -1636,6 +1636,38 @@ func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil
 	return SubmitTransaction(ctx, api.b, tx)
 }
 
+func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hexutil.Bytes, timeout int64) (map[string]interface{}, error) {
+	tx := new(types.Transaction)
+	if err := tx.UnmarshalBinary(input); err != nil {
+		return nil, err
+	}
+	hash, err := SubmitTransaction(ctx, api.b, tx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// waiting for receipt
+	timer := time.NewTimer(time.Duration(timeout) * time.Second)
+	defer timer.Stop()
+
+	<-timer.C
+	receipt, err := api.GetTransactionReceipt(ctx, hash)
+	// If the timeout expires without obtaining a receipt, return code error 4
+	if receipt == nil {
+		return nil, &timeoutError{
+			message: "the timeout expires without obtaining a receipt",
+		}
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return receipt, nil
+
+}
+
 // Sign calculates an ECDSA signature for:
 // keccak256("\x19Ethereum Signed Message:\n" + len(message) + message).
 //
