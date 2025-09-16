@@ -53,9 +53,6 @@ func (cfg Config) withDefaults() Config {
 	if cfg.LogCacheSize == 0 {
 		cfg.LogCacheSize = 32
 	}
-	if cfg.LogQueryLimit == 0 {
-		cfg.LogQueryLimit = 1000
-	}
 	return cfg
 }
 
