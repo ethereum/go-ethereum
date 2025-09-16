@@ -42,7 +42,7 @@ var (
 	errBlockHashWithRange     = errors.New("can't specify fromBlock/toBlock with blockHash")
 	errPendingLogsUnsupported = errors.New("pending logs are not supported")
 	errExceedMaxTopics        = errors.New("exceed max topics")
-	errExceedMaxAddresses     = errors.New("exceed max addresses")
+	errExceedLogQueryLimit    = errors.New("exceed max addresses or topics per search position")
 )
 
 const (
@@ -68,22 +68,22 @@ type filter struct {
 // FilterAPI offers support to create and manage filters. This will allow external clients to retrieve various
 // information related to the Ethereum protocol such as blocks, transactions and logs.
 type FilterAPI struct {
-	sys          *FilterSystem
-	events       *EventSystem
-	filtersMu    sync.Mutex
-	filters      map[rpc.ID]*filter
-	timeout      time.Duration
-	maxAddresses int
+	sys           *FilterSystem
+	events        *EventSystem
+	filtersMu     sync.Mutex
+	filters       map[rpc.ID]*filter
+	timeout       time.Duration
+	logQueryLimit int
 }
 
 // NewFilterAPI returns a new FilterAPI instance.
 func NewFilterAPI(system *FilterSystem) *FilterAPI {
 	api := &FilterAPI{
-		sys:          system,
-		events:       NewEventSystem(system),
-		filters:      make(map[rpc.ID]*filter),
-		timeout:      system.cfg.Timeout,
-		maxAddresses: system.cfg.MaxAddresses,
+		sys:           system,
+		events:        NewEventSystem(system),
+		filters:       make(map[rpc.ID]*filter),
+		timeout:       system.cfg.Timeout,
+		logQueryLimit: system.cfg.LogQueryLimit,
 	}
 	go api.timeoutLoop(system.cfg.Timeout)
 
@@ -347,8 +347,8 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 	if len(crit.Topics) > maxTopics {
 		return nil, errExceedMaxTopics
 	}
-	if len(crit.Addresses) > api.maxAddresses {
-		return nil, errExceedMaxAddresses
+	if len(crit.Addresses) > api.logQueryLimit {
+		return nil, errExceedLogQueryLimit
 	}
 
 	var filter *Filter

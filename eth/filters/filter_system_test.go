@@ -435,7 +435,7 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 		1: {FromBlock: big.NewInt(rpc.PendingBlockNumber.Int64()), ToBlock: big.NewInt(100)},
 		2: {FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64()), ToBlock: big.NewInt(100)},
 		3: {Topics: [][]common.Hash{{}, {}, {}, {}, {}}},
-		4: {Addresses: make([]common.Address, api.maxAddresses+1)},
+		4: {Addresses: make([]common.Address, api.logQueryLimit+1)},
 	}
 
 	for i, test := range testCases {
@@ -532,10 +532,10 @@ func TestInvalidGetRangeLogsRequest(t *testing.T) {
 func TestInvalidAddressLengthRequest(t *testing.T) {
 	t.Parallel()
 
-	// Test with custom config (MaxAddresses = 5 for easier testing)
+	// Test with custom config (LogQueryLimit = 5 for easier testing)
 	var (
 		db     = rawdb.NewMemoryDatabase()
-		_, sys = newTestFilterSystem(db, Config{MaxAddresses: 5})
+		_, sys = newTestFilterSystem(db, Config{LogQueryLimit: 5})
 		api    = NewFilterAPI(sys)
 	)
 
@@ -550,14 +550,14 @@ func TestInvalidAddressLengthRequest(t *testing.T) {
 		FromBlock: big.NewInt(0),
 		ToBlock:   big.NewInt(100),
 		Addresses: invalidAddresses,
-	}); err != errExceedMaxAddresses {
-		t.Errorf("Expected GetLogs with 6 addresses to return errExceedMaxAddresses, but got: %v", err)
+	}); err != errExceedLogQueryLimit {
+		t.Errorf("Expected GetLogs with 6 addresses to return errExceedLogQueryLimit, but got: %v", err)
 	}
 
 	// Test with default config should reject 1001 addresses
 	var (
 		db2     = rawdb.NewMemoryDatabase()
-		_, sys2 = newTestFilterSystem(db2, Config{}) // Uses default MaxAddresses = 1000
+		_, sys2 = newTestFilterSystem(db2, Config{}) // Uses default LogQueryLimit = 1000
 		api2    = NewFilterAPI(sys2)
 	)
 
@@ -571,8 +571,8 @@ func TestInvalidAddressLengthRequest(t *testing.T) {
 		FromBlock: big.NewInt(0),
 		ToBlock:   big.NewInt(100),
 		Addresses: tooManyAddresses,
-	}); err != errExceedMaxAddresses {
-		t.Errorf("Expected GetLogs with 1001 addresses to return errExceedMaxAddresses, but got: %v", err)
+	}); err != errExceedLogQueryLimit {
+		t.Errorf("Expected GetLogs with 1001 addresses to return errExceedLogQueryLimit, but got: %v", err)
 	}
 }
 
