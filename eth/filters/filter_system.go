@@ -295,8 +295,15 @@ func (es *EventSystem) SubscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 	if len(crit.Topics) > maxTopics {
 		return nil, errExceedMaxTopics
 	}
-	if len(crit.Addresses) > es.sys.cfg.LogQueryLimit {
-		return nil, errExceedLogQueryLimit
+	if es.sys.cfg.LogQueryLimit != 0 {
+		if len(crit.Addresses) > es.sys.cfg.LogQueryLimit {
+			return nil, errExceedLogQueryLimit
+		}
+		for _, topics := range crit.Topics {
+			if len(topics) > es.sys.cfg.LogQueryLimit {
+				return nil, errExceedLogQueryLimit
+			}
+		}
 	}
 	var from, to rpc.BlockNumber
 	if crit.FromBlock == nil {
