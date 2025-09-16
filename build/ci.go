@@ -183,14 +183,16 @@ func doInstall(cmdline []string) {
 	var (
 		dlgo       = flag.Bool("dlgo", false, "Download Go and build with it")
 		arch       = flag.String("arch", "", "Architecture to cross build for")
+		goos       = flag.String("os", "", "Operating system to cross build for")
 		cc         = flag.String("cc", "", "C compiler to cross build with")
 		staticlink = flag.Bool("static", false, "Create statically-linked executable")
+		tags       = flag.String("tags", "", "Additional build tags (comma-separated)")
 	)
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
 
 	// Configure the toolchain.
-	tc := build.GoToolchain{GOARCH: *arch, CC: *cc}
+	tc := build.GoToolchain{GOARCH: *arch, GOOS: *goos, CC: *cc}
 	if *dlgo {
 		csdb := download.MustLoadChecksums("build/checksums.txt")
 		tc.Root = build.DownloadGo(csdb)
@@ -201,6 +203,20 @@ func doInstall(cmdline []string) {
 	// Enable linking the CKZG library since we can make it work with additional flags.
 	if env.UbuntuVersion != "trusty" {
 		buildTags = append(buildTags, "ckzg")
+	}
+
+	// Add custom tags if provided
+	if *tags != "" {
+		// Split by both comma and whitespace
+		customTags := strings.FieldsFunc(*tags, func(r rune) bool {
+			return r == ',' || r == ' ' || r == '\t'
+		})
+		for _, tag := range customTags {
+			tag = strings.TrimSpace(tag)
+			if tag != "" {
+				buildTags = append(buildTags, tag)
+			}
+		}
 	}
 
 	// Configure the build.
