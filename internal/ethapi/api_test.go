@@ -4052,5 +4052,169 @@ func TestSendRawTransactionSync_Timeout(t *testing.T) {
 	}
 	if got, want := de.ErrorData(), tx.Hash().Hex(); got != want {
 		t.Fatalf("expected ErrorData=%s, got %v", want, got)
+
+	}
+}
+
+func TestStorageKeyUnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          string
+		expected       common.Hash
+		expectedLength int
+		expectedError  bool
+	}{
+		{
+			name:           "short hex with 0x prefix",
+			input:          `"0x1"`,
+			expected:       common.HexToHash("0x1"),
+			expectedLength: 1,
+		},
+		{
+			name:           "short hex without 0x prefix",
+			input:          `"1"`,
+			expected:       common.HexToHash("0x1"),
+			expectedLength: 1,
+		},
+		{
+			name:           "two byte hex",
+			input:          `"0x1234"`,
+			expected:       common.HexToHash("0x1234"),
+			expectedLength: 2,
+		},
+		{
+			name:           "four byte hex",
+			input:          `"0x12345678"`,
+			expected:       common.HexToHash("0x12345678"),
+			expectedLength: 4,
+		},
+		{
+			name:           "full 32-byte hash with 0x prefix",
+			input:          `"0x0000000000000000000000000000000000000000000000000000000000000001"`,
+			expected:       common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001"),
+			expectedLength: 32,
+		},
+		{
+			name:           "full 32-byte hash without 0x prefix",
+			input:          `"0000000000000000000000000000000000000000000000000000000000000001"`,
+			expected:       common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001"),
+			expectedLength: 32,
+		},
+		{
+			name:           "odd length hex (gets padded)",
+			input:          `"0x123"`,
+			expected:       common.HexToHash("0x0123"),
+			expectedLength: 2, // After padding "123" becomes "0123" which is 2 bytes
+		},
+		{
+			name:           "odd length without prefix (gets padded)",
+			input:          `"123"`,
+			expected:       common.HexToHash("0x0123"),
+			expectedLength: 2, // After padding "123" becomes "0123" which is 2 bytes
+		},
+		{
+			name:           "zero value",
+			input:          `"0x0"`,
+			expected:       common.HexToHash("0x0"),
+			expectedLength: 1,
+		},
+		{
+			name:           "zero value without prefix",
+			input:          `"0"`,
+			expected:       common.HexToHash("0x0"),
+			expectedLength: 1,
+		},
+		{
+			name:           "empty hex string",
+			input:          `"0x"`,
+			expected:       common.Hash{},
+			expectedLength: 0,
+		},
+		{
+			name:           "uppercase hex",
+			input:          `"0xDEADBEEF"`,
+			expected:       common.HexToHash("0xDEADBEEF"),
+			expectedLength: 4,
+		},
+		{
+			name:           "mixed case hex",
+			input:          `"0xDeAdBeEf"`,
+			expected:       common.HexToHash("0xDeAdBeEf"),
+			expectedLength: 4,
+		},
+		// Error cases
+		{
+			name:          "invalid hex characters",
+			input:         `"0xGG"`,
+			expectedError: true,
+		},
+		{
+			name:          "non-string input",
+			input:         `123`,
+			expectedError: true,
+		},
+		{
+			name:          "null input",
+			input:         `null`,
+			expectedError: true,
+		},
+		{
+			name:          "boolean input",
+			input:         `true`,
+			expectedError: true,
+		},
+		{
+			name:          "array input",
+			input:         `[]`,
+			expectedError: true,
+		},
+		{
+			name:          "object input",
+			input:         `{}`,
+			expectedError: true,
+		},
+		{
+			name:          "unterminated string",
+			input:         `"0x123`,
+			expectedError: true,
+		},
+		{
+			name:           "empty string",
+			input:          `""`,
+			expected:       common.Hash{},
+			expectedLength: 0,
+		},
+		{
+			name:          "hex string too long (more than 32 bytes)",
+			input:         `"0x00000000000000000000000000000000000000000000000000000000000000001"`, // 33 bytes
+			expectedError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var key StorageKey
+			err := json.Unmarshal([]byte(tt.input), &key)
+
+			if tt.expectedError {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			if key.Hash() != tt.expected {
+				t.Errorf("hash mismatch: got %x, want %x", key.Hash(), tt.expected)
+			}
+
+			if key.InputLength() != tt.expectedLength {
+				t.Errorf("length mismatch: got %d, want %d", key.InputLength(), tt.expectedLength)
+			}
+		})
 	}
 }
