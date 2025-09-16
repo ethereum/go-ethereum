@@ -14,7 +14,7 @@ require (
 	github.com/cloudflare/cloudflare-go v0.114.0
 	github.com/cockroachdb/pebble v1.1.5
 	github.com/consensys/gnark-crypto v0.18.0
-	github.com/crate-crypto/go-eth-kzg v1.3.0
+	github.com/crate-crypto/go-eth-kzg v1.3.1-0.20250915203452-9a5758b0a45d
 	github.com/crate-crypto/go-ipa v0.0.0-20240724233137-53bbb0ceb27a
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dchest/siphash v1.2.3
@@ -152,5 +152,3 @@ tool (
 	golang.org/x/tools/cmd/stringer
 	google.golang.org/protobuf/cmd/protoc-gen-go
 )
-
-replace github.com/crate-crypto/go-eth-kzg => github.com/healthykim/go-eth-kzg v0.0.0-20250909085852-cd8001ccdc13

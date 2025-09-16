@@ -222,7 +222,7 @@ func gokzgRecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 			kzgcells = append(kzgcells, &gc)
 		}
 
-		extCells, err := context.RecoverCells(cellIndices, kzgcells)
+		extCells, err := context.RecoverCells(cellIndices, kzgcells, 2)
 		if err != nil {
 			return []Blob{}, err
 		}
