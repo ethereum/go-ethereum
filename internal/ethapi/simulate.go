@@ -458,13 +458,6 @@ func (sim *simulator) sanitizeChain(blocks []simBlock) ([]simBlock, error) {
 	return res, nil
 }
 
-func isPostMerge(config *params.ChainConfig, blockNum uint64, timestamp uint64) bool {
-	mergedAtGenesis := config.TerminalTotalDifficulty != nil && config.TerminalTotalDifficulty.Sign() == 0
-	return mergedAtGenesis ||
-		config.MergeNetsplitBlock != nil && blockNum >= config.MergeNetsplitBlock.Uint64() ||
-		config.ShanghaiTime != nil && timestamp >= *config.ShanghaiTime
-}
-
 // makeHeaders makes header object with preliminary fields based on a simulated block.
 // Some fields have to be filled post-execution.
 // It assumes blocks are in order and numbers have been validated.
@@ -493,8 +486,10 @@ func (sim *simulator) makeHeaders(blocks []simBlock) ([]*types.Header, error) {
 				parentBeaconRoot = overrides.BeaconRoot
 			}
 		}
+		// Set difficulty to zero if the given block is post-merge. Without this, all post-merge hardforks would remain inactive.
+		// For example, calling eth_simulateV1(..., blockParameter: 0x0) on hoodi network will cause all blocks to have a difficulty of 1 and be treated as pre-merge.
 		difficulty := header.Difficulty
-		if isPostMerge(sim.chainConfig, number.Uint64(), timestamp) {
+		if sim.chainConfig.IsPostMerge(number.Uint64(), timestamp) {
 			difficulty = big.NewInt(0)
 		}
 		header = overrides.MakeHeader(&types.Header{
