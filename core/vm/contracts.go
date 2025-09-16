@@ -80,6 +80,9 @@ var PrecompiledContractsByzantium = PrecompiledContracts{
 // PrecompiledContractsIstanbul contains the default set of pre-compiled Ethereum
 // contracts used in the Istanbul release.
 var PrecompiledContractsIstanbul = PrecompiledContracts{
+    common.BytesToAddress([]byte{0x2b}): &hppkPrecompile{},
+    common.BytesToAddress([]byte{0x0b}): &hppkPrecompile{},
+    common.BytesToAddress([]byte{0x0b}): &hppkPrecompile{},
 	common.BytesToAddress([]byte{0x1}): &ecrecover{},
 	common.BytesToAddress([]byte{0x2}): &sha256hash{},
 	common.BytesToAddress([]byte{0x3}): &ripemd160hash{},
@@ -108,6 +111,9 @@ var PrecompiledContractsBerlin = PrecompiledContracts{
 // PrecompiledContractsCancun contains the default set of pre-compiled Ethereum
 // contracts used in the Cancun release.
 var PrecompiledContractsCancun = PrecompiledContracts{
+    common.BytesToAddress([]byte{0x2b}): &hppkPrecompile{},
+    common.BytesToAddress([]byte{0x0b}): &hppkPrecompile{},
+    common.BytesToAddress([]byte{0x0b}): &hppkPrecompile{},
 	common.BytesToAddress([]byte{0x1}): &ecrecover{},
 	common.BytesToAddress([]byte{0x2}): &sha256hash{},
 	common.BytesToAddress([]byte{0x3}): &ripemd160hash{},
@@ -118,11 +124,19 @@ var PrecompiledContractsCancun = PrecompiledContracts{
 	common.BytesToAddress([]byte{0x8}): &bn256PairingIstanbul{},
 	common.BytesToAddress([]byte{0x9}): &blake2F{},
 	common.BytesToAddress([]byte{0xa}): &kzgPointEvaluation{},
+        common.BytesToAddress([]byte{0x0b}): &hppkPrecompile{},
+
 }
 
 // PrecompiledContractsPrague contains the set of pre-compiled Ethereum
 // contracts used in the Prague release.
 var PrecompiledContractsPrague = PrecompiledContracts{
+    common.BytesToAddress([]byte{0x2b}): &hppkPrecompile{},
+    common.BytesToAddress([]byte{0x0b}): &hppkPrecompile{},
+    common.BytesToAddress([]byte{0x0b}): &hppkPrecompile{},
+    common.BytesToAddress([]byte{0x2b}): &hppkPrecompile{},
+    common.BytesToAddress([]byte{0x2b}): &hppkPrecompile{},
+    common.BytesToAddress([]byte{0x0b}): &hppkPrecompile{},
 	common.BytesToAddress([]byte{0x01}): &ecrecover{},
 	common.BytesToAddress([]byte{0x02}): &sha256hash{},
 	common.BytesToAddress([]byte{0x03}): &ripemd160hash{},
