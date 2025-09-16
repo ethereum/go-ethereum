@@ -597,7 +597,6 @@ func testSyncBloatedProof(t *testing.T, scheme string) {
 		proof := trienode.NewProofSet()
 		if err := t.accountTrie.Prove(origin[:], proof); err != nil {
 			t.logger.Error("Could not prove origin", "origin", origin, "error", err)
-			t.logger.Error("Could not prove origin", "origin", origin, "error", err)
 		}
 		// The bloat: add proof of every single element
 		for _, entry := range t.accountValues {
