@@ -456,7 +456,7 @@ func TestInvalidGetLogsRequest(t *testing.T) {
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 		db, blocks, _    = core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 10, func(i int, gen *core.BlockGen) {})
-		_, sys           = newTestFilterSystem(db, Config{})
+		_, sys           = newTestFilterSystem(db, Config{LogQueryLimit: 10})
 		api              = NewFilterAPI(sys)
 		blockHash        = blocks[0].Hash()
 		unknownBlockHash = common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
