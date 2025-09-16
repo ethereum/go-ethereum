@@ -350,9 +350,8 @@ loop:
 			}
 			return fmt.Errorf("disconnect received: %v", pretty.Sdump(msg))
 		case pingMsg:
-			// TODO (renaynay): in the future, this should be an error
-			// (PINGs should not be a response upon fresh connection)
-			c.Write(baseProto, pongMsg, nil)
+			// PINGs should not be a response upon fresh connection
+			return fmt.Errorf("unexpected ping message during status exchange")
 		default:
 			return fmt.Errorf("bad status message: code %d", code)
 		}
