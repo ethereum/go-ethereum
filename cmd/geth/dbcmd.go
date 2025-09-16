@@ -18,13 +18,17 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -43,6 +47,7 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -352,38 +357,112 @@ func checkStateContent(ctx *cli.Context) error {
 
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
+
+	return checkStateContentParallel(db, prefix, start)
+}
+
+func checkStateContentParallel(db ethdb.Database, prefix, start []byte) error {
 	var (
-		it        = rawdb.NewKeyLengthIterator(db.NewIterator(prefix, start), 32)
-		hasher    = crypto.NewKeccakState()
-		got       = make([]byte, 32)
-		errs      int
-		count     int
-		startTime = time.Now()
-		lastLog   = time.Now()
+		totalErrors atomic.Int64
+		totalCount  atomic.Int64
+		startTime   = time.Now()
+		eg, ctx     = errgroup.WithContext(context.Background())
+		errorsMutex sync.Mutex
+		workers     = runtime.NumCPU()
 	)
+	eg.SetLimit(workers)
+
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(8 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				log.Info("Checking state content", "count", totalCount.Load(), "errors", totalErrors.Load(), "elapsed", common.PrettyDuration(time.Since(startTime)))
+			case <-done:
+				return
+			}
+		}
+	}()
+
+	// Split the key space into 256 ranges
+	for i := 0; i < 256; i++ {
+		rangePrefix := append(prefix, byte(i))
+
+		if start != nil && len(start) > len(prefix) && bytes.Compare(rangePrefix, start[:len(rangePrefix)]) < 0 {
+			continue
+		}
+
+		eg.Go(func() error {
+			return checkStateContentRange(ctx, db, rangePrefix, start, &totalCount, &totalErrors, &errorsMutex)
+		})
+	}
+
+	if err := eg.Wait(); err != nil {
+		close(done)
+		return err
+	}
+	close(done)
+
+	log.Info("Completed state content check", "errors", totalErrors.Load(), "items", totalCount.Load(), "elapsed", common.PrettyDuration(time.Since(startTime)))
+	return nil
+}
+
+func checkStateContentRange(ctx context.Context, db ethdb.Database, prefix, start []byte, totalCount, totalErrors *atomic.Int64, errorsMutex *sync.Mutex) error {
+	var (
+		localCount  int64
+		localErrors int64
+		hasher      = crypto.NewKeccakState()
+		got         = make([]byte, 32)
+	)
+
+	// Determine the start key for this range
+	rangeStart := prefix
+	if start != nil && len(start) > len(prefix) && bytes.HasPrefix(start, prefix) {
+		rangeStart = start
+	}
+
+	it := rawdb.NewKeyLengthIterator(db.NewIterator(prefix, rangeStart), 32)
+	defer it.Release()
+
 	for it.Next() {
-		count++
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		localCount++
 		k := it.Key()
 		v := it.Value()
+
 		hasher.Reset()
 		hasher.Write(v)
 		hasher.Read(got)
+
 		if !bytes.Equal(k, got) {
-			errs++
+			localErrors++
+			errorsMutex.Lock()
 			fmt.Printf("Error at %#x\n", k)
 			fmt.Printf("  Hash:  %#x\n", got)
 			fmt.Printf("  Data:  %#x\n", v)
+			errorsMutex.Unlock()
 		}
-		if time.Since(lastLog) > 8*time.Second {
-			log.Info("Iterating the database", "at", fmt.Sprintf("%#x", k), "elapsed", common.PrettyDuration(time.Since(startTime)))
-			lastLog = time.Now()
+
+		if localCount%1000 == 0 {
+			totalCount.Add(1000)
+			totalErrors.Add(localErrors)
+			localErrors = 0
+			localCount = 0
 		}
 	}
-	if err := it.Error(); err != nil {
-		return err
-	}
-	log.Info("Iterated the state content", "errors", errs, "items", count)
-	return nil
+
+	totalCount.Add(localCount)
+	totalErrors.Add(localErrors)
+
+	return it.Error()
 }
 
 func showDBStats(db ethdb.KeyValueStater) {
