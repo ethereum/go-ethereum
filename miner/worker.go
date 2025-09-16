@@ -84,12 +84,12 @@ const maxBlockSizeBufferZone = 1_000_000
 type newPayloadResult struct {
 	err      error
 	block    *types.Block
-	fees     *big.Int               // total block fees
-	sidecars []*types.BlobTxSidecar // collected blobs of blob transactions
-	stateDB  *state.StateDB         // StateDB after executing the transactions
-	receipts []*types.Receipt       // Receipts collected during construction
-	requests [][]byte               // Consensus layer requests collected during block construction
-	witness  *stateless.Witness     // Witness is an optional stateless proof
+	fees     *big.Int                // total block fees
+	sidecars []*types.BlobTxSidecar  // collected blobs of blob transactions
+	stateDB  state.BlockProcessingDB // StateDB after executing the transactions
+	receipts []*types.Receipt        // Receipts collected during construction
+	requests [][]byte                // Consensus layer requests collected during block construction
+	witness  *stateless.Witness      // Witness is an optional stateless proof
 }
 
 // generateParams wraps various settings for generating sealing task.

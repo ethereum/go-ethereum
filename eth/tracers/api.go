@@ -398,7 +398,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			// Send the block over to the concurrent tracers (if not in the fast-forward phase)
 			txs := next.Transactions()
 			select {
-			case taskCh <- &blockTraceTask{statedb: statedb.Copy(), block: next, release: release, results: make([]*txTraceResult, len(txs))}:
+			case taskCh <- &blockTraceTask{statedb: statedb.Copy().(*state.StateDB), block: next, release: release, results: make([]*txTraceResult, len(txs))}:
 			case <-closed:
 				tracker.releaseState(number, release)
 				return
@@ -695,7 +695,7 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 txloop:
 	for i, tx := range txs {
 		// Send the trace task over for execution
-		task := &txTraceTask{statedb: statedb.Copy(), index: i}
+		task := &txTraceTask{statedb: statedb.Copy().(*state.StateDB), index: i}
 		select {
 		case <-ctx.Done():
 			failed = ctx.Err()
