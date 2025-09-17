@@ -838,7 +838,7 @@ func (it *unionIterator) Error() error {
 }
 
 // subTreeIterator wraps nodeIterator to traverse a trie within a predefined
-// start and limit range, with optional prefix mode.
+// start and limit range.
 type subtreeIterator struct {
 	NodeIterator
 
