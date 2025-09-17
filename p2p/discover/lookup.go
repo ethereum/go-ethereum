@@ -189,7 +189,7 @@ func (it *lookupIterator) Next() bool {
 			if it.lookup.empty() {
 				// If the lookup is empty right after creation, it means the local table
 				// is in a degraded state, and we need to wait for it to fill again.
-				it.lookupFailed(1 * time.Minute)
+				it.lookupFailed(it.lookup.tab, 1*time.Minute)
 				it.lookup = nil
 				continue
 			}
@@ -209,30 +209,30 @@ func (it *lookupIterator) Next() bool {
 
 // lookupFailed handles failed lookup attempts. This can be called when the table has
 // exited, or when it runs out of nodes.
-func (it *lookupIterator) lookupFailed(timeout time.Duration) {
-	ctx, cancel := context.WithTimeout(it.ctx, timeout)
+func (it *lookupIterator) lookupFailed(tab *Table, timeout time.Duration) {
+	tout, cancel := context.WithTimeout(it.ctx, timeout)
 	defer cancel()
 
 	// Wait for Table initialization to complete, in case it is still in progress.
 	select {
-	case <-it.lookup.tab.initDone:
-	case <-ctx.Done():
+	case <-tab.initDone:
+	case <-tout.Done():
 		return
 	}
 
 	// Wait for ongoing refresh operation, or trigger one.
 	if it.tabRefreshing == nil {
-		it.tabRefreshing = it.lookup.tab.refresh()
+		it.tabRefreshing = tab.refresh()
 	}
 	select {
 	case <-it.tabRefreshing:
 		it.tabRefreshing = nil
-	case <-ctx.Done():
+	case <-tout.Done():
 		return
 	}
 
 	// Wait for the table to fill.
-	it.lookup.tab.waitForNodes(ctx, 1)
+	tab.waitForNodes(tout, 1)
 }
 
 // Close ends the iterator.
