@@ -32,6 +32,7 @@ Available commands are:
 	test       [ -coverage ] [ packages... ]                           -- runs the tests
 
 	keeper     [ -dlgo ]
+	keeper-archive [ -signer key-envvar ] [ -signify key-envvar ] [ -upload dest ]
 
 	archive    [ -arch architecture ] [ -type zip|tar ] [ -signer key-envvar ] [ -signify key-envvar ] [ -upload dest ] -- archives build artifacts
 	importkeys                                                                                  -- imports signing keys from env
@@ -82,11 +83,7 @@ var (
 		executablePath("clef"),
 	}
 
-	keeperArchiveFiles = []string{
-		"COPYING",
-		executablePath("keeper"),
-	}
-
+	// Keeper build targets with their configurations
 	keeperTargets = []struct {
 		Name   string
 		GOOS   string
@@ -203,6 +200,8 @@ func main() {
 		doSanityCheck()
 	case "keeper":
 		doInstallKeeper(os.Args[2:])
+	case "keeper-archive":
+		doKeeperArchive(os.Args[2:])
 	default:
 		log.Fatal("unknown command ", os.Args[1])
 	}
@@ -657,6 +656,32 @@ func doArchive(cmdline []string) {
 		if err := archiveUpload(archive, *upload, *signer, *signify); err != nil {
 			log.Fatal(err)
 		}
+	}
+}
+
+func doKeeperArchive(cmdline []string) {
+	var (
+		signer  = flag.String("signer", "", `Environment variable holding the signing key (e.g. LINUX_SIGNING_KEY)`)
+		signify = flag.String("signify", "", `Environment variable holding the signify key (e.g. LINUX_SIGNIFY_KEY)`)
+		upload  = flag.String("upload", "", `Destination to upload the archives (usually "gethstore/builds")`)
+	)
+	flag.CommandLine.Parse(cmdline)
+
+	var (
+		env    = build.Env()
+		vsn    = version.Archive(env.Commit)
+		keeper = "keeper-" + vsn + ".tar.gz"
+	)
+	maybeSkipArchive(env)
+	files := []string{"COPYING"}
+	for _, target := range keeperTargets {
+		files = append(files, executablePath(fmt.Sprintf("keeper-%s", target.Name)))
+	}
+	if err := build.WriteArchive(keeper, files); err != nil {
+		log.Fatal(err)
+	}
+	if err := archiveUpload(keeper, *upload, *signer, *signify); err != nil {
+		log.Fatal(err)
 	}
 }
 
