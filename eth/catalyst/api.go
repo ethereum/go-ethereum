@@ -418,13 +418,21 @@ func (api *ConsensusAPI) GetPayloadV1(payloadID engine.PayloadID) (*engine.Execu
 
 // GetPayloadV2 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV2(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
+	// executionPayload: ExecutionPayloadV1 | ExecutionPayloadV2 where:
+	//
+	// - ExecutionPayloadV1 MUST be returned if the payload timestamp is lower
+	//   than the Shanghai timestamp
+	//
+	// - ExecutionPayloadV2 MUST be returned if the payload timestamp is greater
+	//   or equal to the Shanghai timestamp
 	if !payloadID.Is(engine.PayloadV1, engine.PayloadV2) {
 		return nil, engine.UnsupportedFork
 	}
 	return api.getPayload(payloadID, false)
 }
 
-// GetPayloadV3 returns a cached payload by id.
+// GetPayloadV3 returns a cached payload by id. This endpoint should only
+// be used after the Cancun fork.
 func (api *ConsensusAPI) GetPayloadV3(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
 	if !payloadID.Is(engine.PayloadV3) {
 		return nil, engine.UnsupportedFork
@@ -432,7 +440,8 @@ func (api *ConsensusAPI) GetPayloadV3(payloadID engine.PayloadID) (*engine.Execu
 	return api.getPayload(payloadID, false)
 }
 
-// GetPayloadV4 returns a cached payload by id.
+// GetPayloadV4 returns a cached payload by id. This endpoint should only
+// be used after the Prague fork.
 func (api *ConsensusAPI) GetPayloadV4(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
 	if !payloadID.Is(engine.PayloadV3) {
 		return nil, engine.UnsupportedFork
@@ -440,7 +449,11 @@ func (api *ConsensusAPI) GetPayloadV4(payloadID engine.PayloadID) (*engine.Execu
 	return api.getPayload(payloadID, false)
 }
 
-// GetPayloadV5 returns a cached payload by id.
+// GetPayloadV5 returns a cached payload by id. This endpoint should only
+// be used after the Osaka fork.
+//
+// This method follows the same specification as engine_getPayloadV4 with
+// changes of returning BlobsBundleV2 with BlobSidecar version 1.
 func (api *ConsensusAPI) GetPayloadV5(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
 	if !payloadID.Is(engine.PayloadV3) {
 		return nil, engine.UnsupportedFork
