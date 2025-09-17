@@ -23,3 +23,19 @@ type DoneEvent struct {
 }
 type StartEvent struct{}
 type FailedEvent struct{ Err error }
+
+// SyncEventType represents the type of sync event
+type SyncEventType int
+
+const (
+	SyncStarted SyncEventType = iota
+	SyncFailed
+	SyncCompleted
+)
+
+// SyncEvent represents a downloader synchronization event
+type SyncEvent struct {
+	Type   SyncEventType
+	Err    error         // Set when Type is SyncFailed
+	Latest *types.Header // Set when Type is SyncCompleted
+}
