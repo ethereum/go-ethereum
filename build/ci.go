@@ -96,9 +96,10 @@ var (
 			Name:   "ziren",
 			GOOS:   "linux",
 			GOARCH: "mipsle",
-			CC:     "mipsel-linux-gnu-gcc",
-			Tags:   "ziren",
-			Env:    map[string]string{"GOMIPS": "softfloat"},
+			// enable when cgo works
+			// CC:     "mipsel-linux-gnu-gcc",
+			Tags: "ziren",
+			Env:  map[string]string{"GOMIPS": "softfloat", "CGO_ENABLED": "0"},
 		},
 		{
 			Name: "example",
