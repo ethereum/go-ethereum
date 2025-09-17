@@ -2228,13 +2228,13 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 }
 
 // RegisterSyncOverrideService adds the synchronization override service into node.
-func RegisterSyncOverrideService(stack *node.Node, eth *eth.Ethereum, target common.Hash, exitWhenSynced bool) {
-	if target != (common.Hash{}) {
-		log.Info("Registered sync override service", "hash", target, "exitWhenSynced", exitWhenSynced)
+func RegisterSyncOverrideService(stack *node.Node, eth *eth.Ethereum, config syncer.Config) {
+	if config.TargetBlock != (common.Hash{}) {
+		log.Info("Registered sync override service", "hash", config.TargetBlock, "exitWhenSynced", config.ExitWhenSynced)
 	} else {
 		log.Info("Registered sync override service")
 	}
-	syncer.Register(stack, eth, target, exitWhenSynced)
+	syncer.Register(stack, eth, config)
 }
 
 // SetupMetrics configures the metrics system.

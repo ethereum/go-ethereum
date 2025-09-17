@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/eth/syncer"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/internal/telemetry/tracesetup"
 	"github.com/ethereum/go-ethereum/internal/version"
@@ -276,16 +277,19 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	if cfg.Ethstats.URL != "" {
 		utils.RegisterEthStatsService(stack, backend, cfg.Ethstats.URL)
 	}
+
 	// Configure synchronization override service
-	var synctarget common.Hash
+	syncConfig := syncer.Config{
+		ExitWhenSynced: ctx.Bool(utils.ExitWhenSyncedFlag.Name),
+	}
 	if ctx.IsSet(utils.SyncTargetFlag.Name) {
 		target := ctx.String(utils.SyncTargetFlag.Name)
 		if !common.IsHexHash(target) {
 			utils.Fatalf("sync target hash is not a valid hex hash: %s", target)
 		}
-		synctarget = common.HexToHash(target)
+		syncConfig.TargetBlock = common.HexToHash(target)
 	}
-	utils.RegisterSyncOverrideService(stack, eth, synctarget, ctx.Bool(utils.ExitWhenSyncedFlag.Name))
+	utils.RegisterSyncOverrideService(stack, eth, syncConfig)
 
 	if ctx.IsSet(utils.DeveloperFlag.Name) {
 		// Start dev mode.
