@@ -103,6 +103,9 @@ func (api *DownloaderAPI) eventLoop() {
 			if ev.Type == SyncStarted {
 				started = true
 			}
+		case <-sub.Err():
+			// The downloader is terminated or other internal error occurs
+			return
 		case <-checkTimer.C:
 			if !started {
 				checkTimer.Reset(checkInterval)
