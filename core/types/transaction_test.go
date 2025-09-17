@@ -591,7 +591,7 @@ func BenchmarkHash(b *testing.B) {
 		GasTipCap: big.NewInt(500),
 		GasFeeCap: big.NewInt(500),
 	})
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		signer.Hash(tx)
 	}
 }
@@ -614,7 +614,7 @@ func BenchmarkEffectiveGasTip(b *testing.B) {
 
 	b.Run("Original", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := tx.EffectiveGasTip(baseFee.ToBig())
 			if err != nil {
 				b.Fatal(err)
@@ -625,7 +625,7 @@ func BenchmarkEffectiveGasTip(b *testing.B) {
 	b.Run("IntoMethod", func(b *testing.B) {
 		b.ReportAllocs()
 		dst := new(uint256.Int)
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			err := tx.calcEffectiveGasTip(dst, baseFee)
 			if err != nil {
 				b.Fatal(err)
@@ -729,7 +729,7 @@ func BenchmarkEffectiveGasTipCmp(b *testing.B) {
 
 	b.Run("Original", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			tx.EffectiveGasTipCmp(other, baseFee)
 		}
 	})
