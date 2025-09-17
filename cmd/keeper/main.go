@@ -19,6 +19,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/stateless"
@@ -33,6 +34,10 @@ type Payload struct {
 	ChainID uint64
 	Block   *types.Block
 	Witness *stateless.Witness
+}
+
+func init() {
+	debug.SetGCPercent(-1) // Disable garbage collection
 }
 
 func main() {
