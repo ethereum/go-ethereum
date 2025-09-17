@@ -186,12 +186,6 @@ func (ptx *PooledBlobTx) RemoveParity() error {
 		return errors.New("nil sidecar")
 	}
 
-	for bit := range kzg4844.DataPerBlob {
-		if !sc.Custody.IsSet(uint(bit)) {
-			return errors.New("cannot remove parity for non-full payload transaction")
-		}
-	}
-
 	blobCount := len(sc.Cells) / kzg4844.CellsPerBlob
 	if blobCount == 0 || len(sc.Cells)%kzg4844.CellsPerBlob != 0 {
 		return errors.New("inconsistent cell count")
@@ -204,11 +198,9 @@ func (ptx *PooledBlobTx) RemoveParity() error {
 			cellsWithoutParity,
 			sc.Cells[offset:offset+kzg4844.DataPerBlob]...,
 		)
-
-		for bit := 64; bit < kzg4844.CellsPerBlob; bit++ {
-			sc.Custody.Clear(uint(bit))
-		}
 	}
+
+	sc.Custody = types.CustodyBitmap{}.SetData()
 
 	sc.Cells = cellsWithoutParity
 	return nil
