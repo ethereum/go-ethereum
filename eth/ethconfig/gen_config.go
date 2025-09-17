@@ -49,6 +49,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		BlobPool                blobpool.Config
 		GPO                     gasprice.Config
 		EnablePreimageRecording bool
+		EnableWitnessStats      bool
+		StatelessSelfValidation bool
 		EnableStateSizeTracking bool
 		VMTrace                 string
 		VMTraceJsonConfig       string
@@ -91,6 +93,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.BlobPool = c.BlobPool
 	enc.GPO = c.GPO
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
+	enc.EnableWitnessStats = c.EnableWitnessStats
+	enc.StatelessSelfValidation = c.StatelessSelfValidation
 	enc.EnableStateSizeTracking = c.EnableStateSizeTracking
 	enc.VMTrace = c.VMTrace
 	enc.VMTraceJsonConfig = c.VMTraceJsonConfig
@@ -137,6 +141,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		BlobPool                *blobpool.Config
 		GPO                     *gasprice.Config
 		EnablePreimageRecording *bool
+		EnableWitnessStats      *bool
+		StatelessSelfValidation *bool
 		EnableStateSizeTracking *bool
 		VMTrace                 *string
 		VMTraceJsonConfig       *string
@@ -245,6 +251,12 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.EnablePreimageRecording != nil {
 		c.EnablePreimageRecording = *dec.EnablePreimageRecording
+	}
+	if dec.EnableWitnessStats != nil {
+		c.EnableWitnessStats = *dec.EnableWitnessStats
+	}
+	if dec.StatelessSelfValidation != nil {
+		c.StatelessSelfValidation = *dec.StatelessSelfValidation
 	}
 	if dec.EnableStateSizeTracking != nil {
 		c.EnableStateSizeTracking = *dec.EnableStateSizeTracking

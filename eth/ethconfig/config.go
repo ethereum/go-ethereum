@@ -144,6 +144,12 @@ type Config struct {
 	// Enables tracking of SHA3 preimages in the VM
 	EnablePreimageRecording bool
 
+	// Enables collection of witness trie access statistics
+	EnableWitnessStats bool
+
+	// Generate execution witnesses and self-check against them (testing purpose)
+	StatelessSelfValidation bool
+
 	// Enables tracking of state size
 	EnableStateSizeTracking bool
 
