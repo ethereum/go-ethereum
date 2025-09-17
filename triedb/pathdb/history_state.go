@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"iter"
 	"maps"
 	"slices"
 	"time"
@@ -272,6 +273,36 @@ func newStateHistory(root common.Hash, parent common.Hash, block uint64, account
 		accountList: accountList,
 		storages:    storages,
 		storageList: storageList,
+	}
+}
+
+// typ implements the history interface, returning the historical data type held.
+func (h *stateHistory) typ() historyType {
+	return typeStateHistory
+}
+
+// forEach implements the history interface, returning an iterator to traverse the
+// state entries in the history.
+func (h *stateHistory) forEach() iter.Seq[stateIdent] {
+	return func(yield func(stateIdent) bool) {
+		for _, addr := range h.accountList {
+			addrHash := crypto.Keccak256Hash(addr.Bytes())
+			if !yield(newAccountIdent(addrHash)) {
+				return
+			}
+			for _, slotKey := range h.storageList[addr] {
+				// The hash of the storage slot key is used as the identifier because the
+				// legacy history does not include the raw storage key, therefore, the
+				// conversion from storage key to hash is necessary for non-v0 histories.
+				slotHash := slotKey
+				if h.meta.version != stateHistoryV0 {
+					slotHash = crypto.Keccak256Hash(slotKey.Bytes())
+				}
+				if !yield(newStorageIdent(addrHash, slotHash)) {
+					return
+				}
+			}
+		}
 	}
 }
 
@@ -536,8 +567,8 @@ func readStateHistory(reader ethdb.AncientReader, id uint64) (*stateHistory, err
 }
 
 // readStateHistories reads a list of state history records within the specified range.
-func readStateHistories(freezer ethdb.AncientReader, start uint64, count uint64) ([]*stateHistory, error) {
-	var histories []*stateHistory
+func readStateHistories(freezer ethdb.AncientReader, start uint64, count uint64) ([]history, error) {
+	var histories []history
 	metaList, aIndexList, sIndexList, aDataList, sDataList, err := rawdb.ReadStateHistoryList(freezer, start, count)
 	if err != nil {
 		return nil, err
