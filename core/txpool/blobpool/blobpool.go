@@ -61,11 +61,11 @@ const (
 	// small buffer is added to the proof overhead.
 	txBlobOverhead = uint32(kzg4844.CellProofsPerBlob*len(kzg4844.Proof{}) + 64)
 
-	// txMaxSize is the maximum size a single transaction can have, outside
-	// the included blobs. Since blob transactions are pulled instead of pushed,
-	// and only a small metadata is kept in ram, the rest is on disk, there is
-	// no critical limit that should be enforced. Still, capping it to some sane
-	// limit can never hurt.
+	// txMaxSize is the maximum size a single transaction can have, including the
+	// blobs. Since blob transactions are pulled instead of pushed, and only a
+	// small metadata is kept in ram, the rest is on disk, there is no critical
+	// limit that should be enforced. Still, capping it to some sane limit can
+	// never hurt, which is aligned with maxBlobsPerTx constraint enforced internally.
 	txMaxSize = 1024 * 1024
 
 	// maxBlobsPerTx is the maximum number of blobs that a single transaction can
@@ -329,8 +329,9 @@ type BlobPool struct {
 	stored uint64         // Useful data size of all transactions on disk
 	limbo  *limbo         // Persistent data store for the non-finalized blobs
 
-	signer types.Signer // Transaction signer to use for sender recovery
-	chain  BlockChain   // Chain object to access the state through
+	signer types.Signer     // Transaction signer to use for sender recovery
+	chain  BlockChain       // Chain object to access the state through
+	cQueue *conversionQueue // The queue for performing legacy sidecar conversion
 
 	head   *types.Header  // Current head of the chain
 	state  *state.StateDB // Current state at the head of the chain
@@ -359,6 +360,7 @@ func New(config Config, chain BlockChain, hasPendingAuth func(common.Address) bo
 		hasPendingAuth: hasPendingAuth,
 		signer:         types.LatestSigner(chain.Config()),
 		chain:          chain,
+		cQueue:         newConversionQueue(),
 		lookup:         newLookup(),
 		index:          make(map[common.Address][]*blobTxMeta),
 		spent:          make(map[common.Address]*uint256.Int),
@@ -475,6 +477,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 // Close closes down the underlying persistent store.
 func (p *BlobPool) Close() error {
 	var errs []error
+	p.cQueue.close()
 	if p.limbo != nil { // Close might be invoked due to error in constructor, before p,limbo is set
 		if err := p.limbo.Close(); err != nil {
 			errs = append(errs, err)
@@ -1164,10 +1167,10 @@ func (p *BlobPool) checkDelegationLimit(tx *types.Transaction) error {
 
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
+//
+// This function assumes the static validation has been performed already and
+// only runs the stateful checks with lock protection.
 func (p *BlobPool) validateTx(tx *types.Transaction) error {
-	if err := p.ValidateTxBasics(tx); err != nil {
-		return err
-	}
 	// Ensure the transaction adheres to the stateful pool filters (nonce, balance)
 	stateOpts := &txpool.ValidationOptionsWithState{
 		State: p.state,
@@ -1432,17 +1435,50 @@ func (p *BlobPool) AvailableBlobs(vhashes []common.Hash) int {
 	return available
 }
 
+// preprocess performs the static validation upon the provided txs and converts
+// the legacy sidecars if Osaka fork has been activated.
+//
+// This function is pure static and lock free.
+func (p *BlobPool) preprocess(txs []*types.Transaction) ([]*types.Transaction, []error) {
+	head := p.chain.CurrentBlock()
+	if !p.chain.Config().IsOsaka(head.Number, head.Time) {
+		return txs, make([]error, len(txs))
+	}
+	var errs []error
+	for _, tx := range txs {
+		// Validate the transaction statically at first to avoid unnecessary
+		// conversion. This step doesn't require lock.
+		if err := p.ValidateTxBasics(tx); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		// Convert the legacy sidecar after Osaka fork. This could be a long
+		// procedure which takes a few seconds, even minutes. Fortunately it
+		// will only block the routine of the source peer without affecting
+		// other parts.
+		if tx.BlobTxSidecar().Version == types.BlobSidecarVersion0 {
+			if err := p.cQueue.convert(tx); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+		}
+		errs = append(errs, nil)
+	}
+	return txs, errs
+}
+
 // Add inserts a set of blob transactions into the pool if they pass validation (both
 // consensus validity and pool restrictions).
-//
-// Note, if sync is set the method will block until all internal maintenance
-// related to the add is finished. Only use this during tests for determinism.
 func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 	var (
-		errs = make([]error, len(txs))
+		errs []error
 		adds = make([]*types.Transaction, 0, len(txs))
 	)
+	txs, errs = p.preprocess(txs)
 	for i, tx := range txs {
+		if errs[i] != nil {
+			continue
+		}
 		errs[i] = p.add(tx)
 		if errs[i] == nil {
 			adds = append(adds, tx.WithoutBlobTxSidecar())
