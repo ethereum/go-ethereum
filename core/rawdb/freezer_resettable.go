@@ -185,6 +185,22 @@ func (f *resettableFreezer) TruncateTail(tail uint64) (uint64, error) {
 	return f.freezer.TruncateTail(tail)
 }
 
+// SoftTruncateHead marks items above threshold as logically deleted without physical truncation.
+func (f *resettableFreezer) SoftTruncateHead(items uint64) (uint64, error) {
+	f.lock.RLock()
+	defer f.lock.RUnlock()
+
+	return f.freezer.SoftTruncateHead(items)
+}
+
+// CommitTruncation performs the actual file truncation to match any soft truncations.
+func (f *resettableFreezer) CommitTruncation() error {
+	f.lock.RLock()
+	defer f.lock.RUnlock()
+
+	return f.freezer.CommitTruncation()
+}
+
 // SyncAncient flushes all data tables to disk.
 func (f *resettableFreezer) SyncAncient() error {
 	f.lock.RLock()

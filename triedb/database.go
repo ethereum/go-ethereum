@@ -280,6 +280,17 @@ func (db *Database) Recover(target common.Hash) error {
 	return pdb.Recover(target)
 }
 
+// RecoverDone commits all pending soft truncations after a series of recovery operations.
+// This should be called after all recover operations are complete to finalize the state
+// freezer truncation in one efficient batch operation.
+func (db *Database) RecoverDone() error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.RecoverDone()
+}
+
 // Recoverable returns the indicator if the specified state is enabled to be
 // recovered. It's only supported by path-based database and will return an
 // error for others.

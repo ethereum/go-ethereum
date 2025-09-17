@@ -415,6 +415,14 @@ func (f *chainFreezer) TruncateTail(items uint64) (uint64, error) {
 	return f.ancients.TruncateTail(items)
 }
 
+func (f *chainFreezer) SoftTruncateHead(items uint64) (uint64, error) {
+	return f.ancients.SoftTruncateHead(items)
+}
+
+func (f *chainFreezer) CommitTruncation() error {
+	return f.ancients.CommitTruncation()
+}
+
 func (f *chainFreezer) SyncAncient() error {
 	return f.ancients.SyncAncient()
 }
