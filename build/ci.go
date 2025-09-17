@@ -31,6 +31,8 @@ Available commands are:
 	install    [ -arch architecture ] [ -cc compiler ] [ packages... ] -- builds packages and executables
 	test       [ -coverage ] [ packages... ]                           -- runs the tests
 
+	install-keeper [ -dlgo ]
+
 	archive    [ -arch architecture ] [ -type zip|tar ] [ -signer key-envvar ] [ -signify key-envvar ] [ -upload dest ] -- archives build artifacts
 	importkeys                                                                                  -- imports signing keys from env
 	debsrc     [ -signer key-id ] [ -upload dest ]                                              -- creates a debian source package
@@ -78,6 +80,33 @@ var (
 		executablePath("geth"),
 		executablePath("rlpdump"),
 		executablePath("clef"),
+	}
+
+	keeperArchiveFiles = []string{
+		"COPYING",
+		executablePath("keeper"),
+	}
+
+	keeperTargets = []struct {
+		Name   string
+		GOOS   string
+		GOARCH string
+		CC     string
+		Tags   string
+		Env    map[string]string
+	}{
+		{
+			Name:   "ziren",
+			GOOS:   "linux",
+			GOARCH: "mipsle",
+			CC:     "mipsel-linux-gnu-gcc",
+			Tags:   "ziren",
+			Env:    map[string]string{"GOMIPS": "softfloat"},
+		},
+		{
+			Name: "example",
+			Tags: "example",
+		},
 	}
 
 	// A debian package is created for all executables listed here.
@@ -172,6 +201,8 @@ func main() {
 		doPurge(os.Args[2:])
 	case "sanitycheck":
 		doSanityCheck()
+	case "keeper":
+		doInstallKeeper(os.Args[2:])
 	default:
 		log.Fatal("unknown command ", os.Args[1])
 	}
@@ -240,6 +271,38 @@ func doInstall(cmdline []string) {
 		args := slices.Clone(gobuild.Args)
 		args = append(args, "-o", executablePath(path.Base(pkg)))
 		args = append(args, pkg)
+		build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: args, Env: gobuild.Env})
+	}
+}
+
+// doInstallKeeper builds keeper binaries for all supported targets.
+func doInstallKeeper(cmdline []string) {
+	var dlgo = flag.Bool("dlgo", false, "Download Go and build with it")
+
+	flag.CommandLine.Parse(cmdline)
+	env := build.Env()
+
+	for _, target := range keeperTargets {
+		log.Printf("Building keeper for %s/%s (tags: %s)", target.GOOS, target.GOARCH, target.Tags)
+
+		// Configure the toolchain.
+		tc := build.GoToolchain{GOARCH: target.GOARCH, GOOS: target.GOOS, CC: target.CC}
+		if *dlgo {
+			csdb := download.MustLoadChecksums("build/checksums.txt")
+			tc.Root = build.DownloadGo(csdb)
+		}
+
+		gobuild := tc.Go("build", buildFlags(env, true, []string{target.Tags})...)
+		gobuild.Args = append(gobuild.Args, "-trimpath", "-v")
+
+		for key, value := range target.Env {
+			gobuild.Env = append(gobuild.Env, key+"="+value)
+		}
+		outputName := fmt.Sprintf("keeper-%s", target.Name)
+
+		args := slices.Clone(gobuild.Args)
+		args = append(args, "-o", executablePath(outputName))
+		args = append(args, "./cmd/keeper")
 		build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: args, Env: gobuild.Env})
 	}
 }
