@@ -29,7 +29,7 @@ import (
 
 func waitIndexing(db *Database) {
 	for {
-		metadata := loadIndexMetadata(db.diskdb)
+		metadata := loadIndexMetadata(db.diskdb, typeStateHistory)
 		if metadata != nil && metadata.Last >= db.tree.bottom().stateID() {
 			return
 		}

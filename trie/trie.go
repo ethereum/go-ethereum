@@ -134,6 +134,34 @@ func (t *Trie) NodeIterator(start []byte) (NodeIterator, error) {
 	return newNodeIterator(t, start), nil
 }
 
+// NodeIteratorWithPrefix returns an iterator that returns nodes of the trie
+// whose leaf keys start with the given prefix. Iteration includes all keys
+// where prefix <= k < nextKey(prefix), effectively returning only keys that
+// have the prefix. The iteration stops once it would encounter a key that
+// doesn't start with the prefix.
+//
+// For example, with prefix "dog", the iterator will return "dog", "dogcat",
+// "dogfish" but not "dot" or "fog". An empty prefix iterates the entire trie.
+func (t *Trie) NodeIteratorWithPrefix(prefix []byte) (NodeIterator, error) {
+	// Short circuit if the trie is already committed and not usable.
+	if t.committed {
+		return nil, ErrCommitted
+	}
+	// Use the dedicated prefix iterator which handles prefix checking correctly
+	return newPrefixIterator(t, prefix)
+}
+
+// NodeIteratorWithRange returns an iterator over trie nodes whose leaf keys
+// fall within the specified range. It includes all keys where start <= k < end.
+// Iteration stops once a key beyond the end boundary is encountered.
+func (t *Trie) NodeIteratorWithRange(start, end []byte) (NodeIterator, error) {
+	// Short circuit if the trie is already committed and not usable.
+	if t.committed {
+		return nil, ErrCommitted
+	}
+	return newSubtreeIterator(t, start, end)
+}
+
 // MustGet is a wrapper of Get and will omit any encountered error but just
 // print out an error message.
 func (t *Trie) MustGet(key []byte) []byte {

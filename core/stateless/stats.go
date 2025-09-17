@@ -17,6 +17,7 @@
 package stateless
 
 import (
+	"encoding/json"
 	"maps"
 	"slices"
 	"sort"
@@ -24,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 )
 
@@ -70,7 +72,19 @@ func (s *WitnessStats) Add(nodes map[string][]byte, owner common.Hash) {
 }
 
 // ReportMetrics reports the collected statistics to the global metrics registry.
-func (s *WitnessStats) ReportMetrics() {
+func (s *WitnessStats) ReportMetrics(blockNumber uint64) {
+	// Encode the metrics as JSON for easier consumption
+	accountLeavesJson, _ := json.Marshal(s.accountTrieLeaves)
+	storageLeavesJson, _ := json.Marshal(s.storageTrieLeaves)
+
+	// Log account trie depth statistics
+	log.Info("Account trie depth stats",
+		"block", blockNumber,
+		"leavesAtDepth", string(accountLeavesJson))
+	log.Info("Storage trie depth stats",
+		"block", blockNumber,
+		"leavesAtDepth", string(storageLeavesJson))
+
 	for i := 0; i < 16; i++ {
 		accountTrieLeavesAtDepth[i].Inc(s.accountTrieLeaves[i])
 		storageTrieLeavesAtDepth[i].Inc(s.storageTrieLeaves[i])

@@ -280,10 +280,6 @@ func TestAllHooksCalled(t *testing.T) {
 		if field.Type.Kind() != reflect.Func {
 			continue
 		}
-		// Skip non-hooks, i.e. Copy
-		if field.Name == "copy" {
-			continue
-		}
 		// Skip if field is not set
 		if wrappedValue.Field(i).IsNil() {
 			continue
