@@ -137,7 +137,7 @@ func TestTruncateHeadStateHistory(t *testing.T) {
 		rawdb.WriteStateHistory(freezer, uint64(i+1), hs[i].meta.encode(), accountIndex, storageIndex, accountData, storageData)
 	}
 	for size := len(hs); size > 0; size-- {
-		pruned, err := truncateFromHead(freezer, uint64(size-1))
+		pruned, err := truncateFromHead(freezer, typeStateHistory, uint64(size-1))
 		if err != nil {
 			t.Fatalf("Failed to truncate from head %v", err)
 		}
@@ -161,7 +161,7 @@ func TestTruncateTailStateHistory(t *testing.T) {
 		rawdb.WriteStateHistory(freezer, uint64(i+1), hs[i].meta.encode(), accountIndex, storageIndex, accountData, storageData)
 	}
 	for newTail := 1; newTail < len(hs); newTail++ {
-		pruned, _ := truncateFromTail(freezer, uint64(newTail))
+		pruned, _ := truncateFromTail(freezer, typeStateHistory, uint64(newTail))
 		if pruned != 1 {
 			t.Error("Unexpected pruned items", "want", 1, "got", pruned)
 		}
@@ -209,7 +209,7 @@ func TestTruncateTailStateHistories(t *testing.T) {
 			accountData, storageData, accountIndex, storageIndex := hs[i].encode()
 			rawdb.WriteStateHistory(freezer, uint64(i+1), hs[i].meta.encode(), accountIndex, storageIndex, accountData, storageData)
 		}
-		pruned, _ := truncateFromTail(freezer, uint64(10)-c.limit)
+		pruned, _ := truncateFromTail(freezer, typeStateHistory, uint64(10)-c.limit)
 		if pruned != c.expPruned {
 			t.Error("Unexpected pruned items", "want", c.expPruned, "got", pruned)
 		}
@@ -233,7 +233,7 @@ func TestTruncateOutOfRange(t *testing.T) {
 		accountData, storageData, accountIndex, storageIndex := hs[i].encode()
 		rawdb.WriteStateHistory(freezer, uint64(i+1), hs[i].meta.encode(), accountIndex, storageIndex, accountData, storageData)
 	}
-	truncateFromTail(freezer, uint64(len(hs)/2))
+	truncateFromTail(freezer, typeStateHistory, uint64(len(hs)/2))
 
 	// Ensure of-out-range truncations are rejected correctly.
 	head, _ := freezer.Ancients()
@@ -254,9 +254,9 @@ func TestTruncateOutOfRange(t *testing.T) {
 	for _, c := range cases {
 		var gotErr error
 		if c.mode == 0 {
-			_, gotErr = truncateFromHead(freezer, c.target)
+			_, gotErr = truncateFromHead(freezer, typeStateHistory, c.target)
 		} else {
-			_, gotErr = truncateFromTail(freezer, c.target)
+			_, gotErr = truncateFromTail(freezer, typeStateHistory, c.target)
 		}
 		if !errors.Is(gotErr, c.expErr) {
 			t.Errorf("Unexpected error, want: %v, got: %v", c.expErr, gotErr)
