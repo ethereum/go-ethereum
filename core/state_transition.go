@@ -166,6 +166,9 @@ type Message struct {
 
 	// When SkipFromEOACheck is true, the message sender is not checked to be an EOA.
 	SkipFromEOACheck bool
+
+	// If enabled, the message gas limit is not checked against the protocol-enforced tx gaslimit.
+	SkipTxGasLimitCheck bool
 }
 
 // TransactionToMessage converts a transaction into a Message.
@@ -399,7 +402,7 @@ func (st *stateTransition) preCheck() error {
 		}
 	}
 	// Verify tx gas limit does not exceed EIP-7825 cap.
-	if isOsaka && msg.GasLimit > params.MaxTxGas {
+	if isOsaka && !msg.SkipTxGasLimitCheck && msg.GasLimit > params.MaxTxGas {
 		return fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxGas, msg.GasLimit)
 	}
 	return st.buyGas()
