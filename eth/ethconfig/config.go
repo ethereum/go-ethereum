@@ -132,7 +132,8 @@ type Config struct {
 	// This is the number of blocks for which logs will be cached in the filter system.
 	FilterLogCacheSize int
 
-	// This is the maximum number of addresses allowed in filter criteria for eth_getLogs.
+	// This is the maximum number of addresses or topics allowed in filter criteria
+	// for eth_getLogs.
 	LogQueryLimit int
 
 	// Mining options
