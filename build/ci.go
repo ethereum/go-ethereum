@@ -31,7 +31,7 @@ Available commands are:
 	install    [ -arch architecture ] [ -cc compiler ] [ packages... ] -- builds packages and executables
 	test       [ -coverage ] [ packages... ]                           -- runs the tests
 
-	install-keeper [ -dlgo ]
+	keeper     [ -dlgo ]
 
 	archive    [ -arch architecture ] [ -type zip|tar ] [ -signer key-envvar ] [ -signify key-envvar ] [ -upload dest ] -- archives build artifacts
 	importkeys                                                                                  -- imports signing keys from env
