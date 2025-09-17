@@ -176,16 +176,14 @@ func validateBlobTx(tx *types.Transaction, head *types.Header, opts *ValidationO
 		return err
 	}
 	// Fork-specific sidecar checks, including proof verification.
-	if opts.Config.IsOsaka(head.Number, head.Time) {
+	if sidecar.Version == types.BlobSidecarVersion1 {
 		return validateBlobSidecarOsaka(sidecar, hashes)
+	} else {
+		return validateBlobSidecarLegacy(sidecar, hashes)
 	}
-	return validateBlobSidecarLegacy(sidecar, hashes)
 }
 
 func validateBlobSidecarLegacy(sidecar *types.BlobTxSidecar, hashes []common.Hash) error {
-	if sidecar.Version != types.BlobSidecarVersion0 {
-		return fmt.Errorf("invalid sidecar version pre-osaka: %v", sidecar.Version)
-	}
 	if len(sidecar.Proofs) != len(hashes) {
 		return fmt.Errorf("invalid number of %d blob proofs expected %d", len(sidecar.Proofs), len(hashes))
 	}
@@ -198,9 +196,6 @@ func validateBlobSidecarLegacy(sidecar *types.BlobTxSidecar, hashes []common.Has
 }
 
 func validateBlobSidecarOsaka(sidecar *types.BlobTxSidecar, hashes []common.Hash) error {
-	if sidecar.Version != types.BlobSidecarVersion1 {
-		return fmt.Errorf("invalid sidecar version post-osaka: %v", sidecar.Version)
-	}
 	if len(sidecar.Proofs) != len(hashes)*kzg4844.CellProofsPerBlob {
 		return fmt.Errorf("invalid number of %d blob proofs expected %d", len(sidecar.Proofs), len(hashes)*kzg4844.CellProofsPerBlob)
 	}
