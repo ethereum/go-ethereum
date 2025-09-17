@@ -237,9 +237,6 @@ func doInstall(cmdline []string) {
 	// Configure the build.
 	gobuild := tc.Go("build", buildFlags(env, *staticlink, buildTags)...)
 
-	// We use -trimpath to avoid leaking local paths into the built executables.
-	gobuild.Args = append(gobuild.Args, "-trimpath")
-
 	// Show packages during build.
 	gobuild.Args = append(gobuild.Args, "-v")
 
@@ -266,18 +263,22 @@ func doInstallKeeper(cmdline []string) {
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
 
+	// Configure the toolchain.
+	tc := build.GoToolchain{}
+	if *dlgo {
+		csdb := download.MustLoadChecksums("build/checksums.txt")
+		tc.Root = build.DownloadGo(csdb)
+	}
+
 	for _, target := range keeperTargets {
-		log.Printf("Building keeper for %s/%s (tags: %s)", target.GOOS, target.GOARCH, target.Tags)
+		log.Printf("Building keeper-%s", target.Name)
 
-		// Configure the toolchain.
-		tc := build.GoToolchain{GOARCH: target.GOARCH, GOOS: target.GOOS, CC: target.CC}
-		if *dlgo {
-			csdb := download.MustLoadChecksums("build/checksums.txt")
-			tc.Root = build.DownloadGo(csdb)
-		}
-
+		// Configure the build.
+		tc.GOARCH = target.GOARCH
+		tc.GOOS = target.GOOS
+		tc.CC = target.CC
 		gobuild := tc.Go("build", buildFlags(env, true, []string{target.Tags})...)
-		gobuild.Args = append(gobuild.Args, "-trimpath", "-v")
+		gobuild.Args = append(gobuild.Args, "-v")
 
 		for key, value := range target.Env {
 			gobuild.Env = append(gobuild.Env, key+"="+value)
@@ -329,6 +330,8 @@ func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (
 	if len(buildTags) > 0 {
 		flags = append(flags, "-tags", strings.Join(buildTags, ","))
 	}
+	// We use -trimpath to avoid leaking local paths into the built executables.
+	flags = append(flags, "-trimpath")
 	return flags
 }
 
