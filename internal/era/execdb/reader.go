@@ -113,7 +113,7 @@ func (e *Era) GetHeader(num uint64) (*types.Header, error) {
 		return nil, err
 	}
 
-	r, _, err := e.s.ReaderAt(era.TypeCompressedHeader, int64(off))
+	r, _, err := e.s.ReaderAt(era.TypeCompressedHeader, off)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func (e *Era) GetBody(num uint64) (*types.Body, error) {
 		return nil, err
 	}
 
-	r, _, err := e.s.ReaderAt(era.TypeCompressedBody, int64(off))
+	r, _, err := e.s.ReaderAt(era.TypeCompressedBody, off)
 	if err != nil {
 		return nil, err
 	}
@@ -140,13 +140,13 @@ func (e *Era) GetBody(num uint64) (*types.Body, error) {
 	return &b, rlp.Decode(r, &b)
 }
 
-// getTD retrieves the td from the era file through cached offset table.
-func (e *Era) getTD(blockNum uint64) (*big.Int, error) {
+// GetTD retrieves the td from the era file through cached offset table.
+func (e *Era) GetTD(blockNum uint64) (*big.Int, error) {
 	off, err := e.tdOff(blockNum)
 	if err != nil {
 		return nil, err
 	}
-	r, _, err := e.s.ReaderAt(era.TypeTotalDifficulty, int64(off))
+	r, _, err := e.s.ReaderAt(era.TypeTotalDifficulty, off)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +162,7 @@ func (e *Era) GetRawBodyByNumber(blockNum uint64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	r, _, err := e.s.ReaderAt(era.TypeCompressedBody, int64(off))
+	r, _, err := e.s.ReaderAt(era.TypeCompressedBody, off)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +176,7 @@ func (e *Era) GetRawReceiptsByNumber(blockNum uint64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	r, _, err := e.s.ReaderAt(era.TypeCompressedSlimReceipts, int64(off))
+	r, _, err := e.s.ReaderAt(era.TypeCompressedSlimReceipts, off)
 	if err != nil {
 		return nil, err
 	}
