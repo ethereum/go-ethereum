@@ -140,6 +140,64 @@ func TestWitnessStatsAdd(t *testing.T) {
 	}
 }
 
+func TestWitnessStatsMinMax(t *testing.T) {
+	stats := NewWitnessStats()
+
+	// Add some account trie nodes with varying depths
+	stats.Add(map[string][]byte{
+		"a":     []byte("data1"),
+		"ab":    []byte("data2"),
+		"abc":   []byte("data3"),
+		"abcd":  []byte("data4"),
+		"abcde": []byte("data5"),
+	}, common.Hash{})
+
+	// Only "abcde" is a leaf (depth 5)
+	for i, v := range stats.accountTrieLeaves {
+		if v != 0 && i != 5 {
+			t.Errorf("leaf found at invalid depth %d", i)
+		}
+	}
+
+	// Add more leaves with different depths
+	stats.Add(map[string][]byte{
+		"x":  []byte("data6"),
+		"yz": []byte("data7"),
+	}, common.Hash{})
+
+	// Now we have leaves at depths 1, 2, and 5
+	for i, v := range stats.accountTrieLeaves {
+		if v != 0 && (i != 5 && i != 2 && i != 1) {
+			t.Errorf("leaf found at invalid depth %d", i)
+		}
+	}
+}
+
+func TestWitnessStatsAverage(t *testing.T) {
+	stats := NewWitnessStats()
+
+	// Add nodes that will create leaves at depths 2, 3, and 4
+	stats.Add(map[string][]byte{
+		"aa":   []byte("data1"),
+		"bb":   []byte("data2"),
+		"ccc":  []byte("data3"),
+		"dddd": []byte("data4"),
+	}, common.Hash{})
+
+	// All are leaves: 2 + 2 + 3 + 4 = 11 total, 4 samples
+	expectedAvg := int64(11) / int64(4)
+	var actualAvg, totalSamples int64
+	for i, c := range stats.accountTrieLeaves {
+		actualAvg += c * int64(i)
+		totalSamples += c
+	}
+	actualAvg = actualAvg / totalSamples
+
+	if actualAvg != expectedAvg {
+		t.Errorf("Account trie average depth = %d, want %d", actualAvg, expectedAvg)
+	}
+}
+
 func BenchmarkWitnessStatsAdd(b *testing.B) {
 	// Create a realistic trie node structure
 	nodes := make(map[string][]byte)
