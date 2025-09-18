@@ -18,13 +18,22 @@ package blobpool
 
 import (
 	"errors"
+	"sync/atomic"
+	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 )
 
-// cTask represents a conversion task with an attached result channel.
+// maxPendingConversionTasks caps the number of pending conversion tasks. This
+// prevents excessive memory usage; the worst-case scenario (2k transactions
+// with 6 blobs each) would consume approximately 1.5GB of memory.
+const maxPendingConversionTasks = 2048
+
+// cTask represents a conversion task with an attached legacy blob transaction.
 type cTask struct {
-	tx   *types.Transaction // Blob transaction, sidecar is expected
+	tx   *types.Transaction // Legacy blob transaction
 	done chan error         // Channel for signaling back if the conversion succeeds
 }
 
@@ -74,17 +83,25 @@ func (q *conversionQueue) close() {
 	}
 }
 
-func (q *conversionQueue) run(tasks []*cTask, done chan struct{}) {
+// run converts a batch of legacy blob txs to the new cell proof format.
+func (q *conversionQueue) run(tasks []*cTask, done chan struct{}, interrupt *atomic.Int32) {
 	defer close(done)
 
 	for _, t := range tasks {
+		if interrupt != nil && interrupt.Load() != 0 {
+			log.Info("Legacy blob tx conversion is interrupted")
+			return
+		}
 		sidecar := t.tx.BlobTxSidecar()
 		if sidecar == nil {
 			t.done <- errors.New("tx without sidecar")
 			continue
 		}
 		// Run the conversion, the original sidecar will be mutated in place
-		t.done <- sidecar.ToV1()
+		start := time.Now()
+		err := sidecar.ToV1()
+		t.done <- err
+		log.Trace("Converted legacy blob tx", "hash", t.tx.Hash(), "err", err, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
 }
 
@@ -92,24 +109,41 @@ func (q *conversionQueue) loop() {
 	defer close(q.closed)
 
 	var (
-		done   = make(chan struct{})
+		done      chan struct{} // Non-nil if background routine is active
+		interrupt *atomic.Int32 // Flag to signal conversion interruption
+
+		// The pending tasks for sidecar conversion. We assume the number of legacy
+		// blob transactions requiring conversion will not be excessive. However,
+		// a hard cap is applied as a protective measure.
 		cTasks []*cTask
 	)
 	for {
 		select {
 		case t := <-q.tasks:
+			if len(cTasks) >= maxPendingConversionTasks {
+				t.done <- errors.New("conversion queue is overloaded")
+				continue
+			}
 			cTasks = append(cTasks, t)
+
+			// Launch the background conversion thread if it's idle
 			if done == nil {
-				done = make(chan struct{})
+				done, interrupt = make(chan struct{}), new(atomic.Int32)
 
 				tasks := cTasks
 				cTasks = cTasks[:0]
-				go q.run(tasks, done)
+				go q.run(tasks, done, interrupt)
 			}
 		case <-done:
-			done = nil
+			done, interrupt = nil, nil
 
 		case <-q.quit:
+			if done == nil {
+				return
+			}
+			interrupt.Store(1)
+			log.Info("Waiting background converter to exit")
+			<-done
 			return
 		}
 	}
