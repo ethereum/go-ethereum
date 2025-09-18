@@ -21,10 +21,12 @@ import (
 	"container/heap"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -473,7 +475,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	// Since the user might have modified their pool's capacity, evict anything
 	// above the current allowance
 	for p.stored > p.config.Datacap {
-		p.drop()
+		p.drop(true)
 	}
 	// Update the metrics and return the constructed pool
 	datacapGauge.Update(int64(p.config.Datacap))
@@ -883,6 +885,70 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	basefeeGauge.Update(int64(basefee.Uint64()))
 	blobfeeGauge.Update(int64(blobfee.Uint64()))
 	p.updateStorageMetrics()
+
+	// Perform the conversion logic at the fork boundary
+	if !p.chain.Config().IsOsaka(oldHead.Number, oldHead.Time) && p.chain.Config().IsOsaka(newHead.Number, newHead.Time) {
+		// Evicts all transactions from the pool. The pool should, at this stage,
+		// contain only legacy blob transactions. Evicting any new-format blob
+		// transactions is also safe, as they will be re-injected later.
+		txs := make(map[common.Address]map[uint64]uint64)
+		for p.stored > 0 {
+			sender, nonce, id := p.drop(false)
+			if txs[sender] == nil {
+				txs[sender] = make(map[uint64]uint64)
+			}
+			txs[sender][nonce] = id
+		}
+		// Initiate the background conversion thread, the mutex is not required
+		// and won't block any pool operation.
+		go func() {
+			var (
+				start   = time.Now()
+				success int
+				fail    int
+			)
+			for addr, list := range txs {
+				// Transactions evicted from the pool must be contiguous, if in any case,
+				// the transactions are gapped with each other, they will be discarded.
+				nonces := slices.Collect(maps.Keys(list))
+				slices.Sort(nonces)
+
+				// Convert and insert the txs in order
+				for _, nonce := range nonces {
+					id := list[nonce]
+					blob, err := p.store.Get(id)
+					if err != nil {
+						fail++
+						continue
+					}
+					// Remove the blob transaction regardless of conversion succeeds or not
+					if err := p.store.Delete(id); err != nil {
+						log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
+					}
+					var tx types.Transaction
+					if err = rlp.DecodeBytes(blob, &tx); err != nil {
+						log.Error("Blob transaction is corrupted", "id", id, "err", err)
+						fail++
+						continue
+					}
+					if err := tx.BlobTxSidecar().ToV1(); err != nil {
+						log.Error("Failed to convert blob transaction", "hash", tx.Hash(), "err", err)
+						fail++
+						continue
+					}
+					errs := p.Add([]*types.Transaction{&tx}, true)
+					if errs[0] != nil {
+						fail++
+						log.Error("Failed to re-inject the tx", "hash", tx.Hash(), "err", errs[0])
+					} else {
+						success++
+						log.Debug("Reinjected the converted tx", "hash", tx.Hash(), "err", errs[0])
+					}
+				}
+			}
+			log.Info("Completed the blob transaction conversion", "discarded", fail, "injected", success, "elapsed", common.PrettyDuration(time.Since(start)))
+		}()
+	}
 }
 
 // reorg assembles all the transactors and missing transactions between an old
@@ -1689,7 +1755,7 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	// If the pool went over the allowed data limit, evict transactions until
 	// we're again below the threshold
 	for p.stored > p.config.Datacap {
-		p.drop()
+		p.drop(true)
 	}
 	p.updateStorageMetrics()
 
@@ -1701,7 +1767,7 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 // freshly added transaction overflows the pool and needs to evict something. The
 // method is also called on startup if the user resizes their storage, might be an
 // expensive run but it should be fine-ish.
-func (p *BlobPool) drop() {
+func (p *BlobPool) drop(deleteTxBlob bool) (common.Address, uint64, uint64) {
 	// Peek at the account with the worse transaction set to evict from (Go's heap
 	// stores the minimum at index zero of the heap slice) and retrieve it's last
 	// transaction.
@@ -1746,9 +1812,12 @@ func (p *BlobPool) drop() {
 	log.Debug("Evicting overflown blob transaction", "from", from, "evicted", drop.nonce, "id", drop.id)
 	dropOverflownMeter.Mark(1)
 
-	if err := p.store.Delete(drop.id); err != nil {
-		log.Error("Failed to drop evicted transaction", "id", drop.id, "err", err)
+	if deleteTxBlob {
+		if err := p.store.Delete(drop.id); err != nil {
+			log.Error("Failed to drop evicted transaction", "id", drop.id, "err", err)
+		}
 	}
+	return from, drop.nonce, drop.id
 }
 
 // Pending retrieves all currently processable transactions, grouped by origin
