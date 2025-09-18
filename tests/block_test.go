@@ -81,7 +81,9 @@ func TestExecutionSpecBlocktests(t *testing.T) {
 	}
 	bt := new(testMatcher)
 
+	// These tests require us to handle scenarios where a system contract is not deployed at a fork
 	bt.skipLoad(".*prague/eip7251_consolidations/contract_deployment/test_system_contract_deployment.json")
+	bt.skipLoad(".*prague/eip7251_consolidations/test_system_contract_deployment.json")
 	bt.skipLoad(".*prague/eip7002_el_triggerable_withdrawals/contract_deployment/test_system_contract_deployment.json")
 	bt.skipLoad(".*prague/eip7002_el_triggerable_withdrawals/test_system_contract_deployment.json")
 
