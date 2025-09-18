@@ -535,6 +535,178 @@ func (h *stateHistory) decode(accountData, storageData, accountIndexes, storageI
 	return nil
 }
 
+// decodeAccount selectively decodes only the specified account from the byte streams.
+func (h *stateHistory) decodeAccount(accountData, accountIndexes []byte, targetAddr common.Address) error {
+	h.initializeEmptyState()
+
+	count := len(accountIndexes) / accountIndexSize
+	if count == 0 {
+		return nil
+	}
+
+	if err := (&decoder{accountData: accountData, accountIndexes: accountIndexes}).verify(); err != nil {
+		return err
+	}
+
+	targetIndex := h.binarySearchAccount(accountIndexes, count, targetAddr)
+	if targetIndex < 0 {
+		return nil
+	}
+
+	return h.extractAccountData(accountData, accountIndexes, targetIndex, targetAddr)
+}
+
+// initializeEmptyState initializes all state maps to empty
+func (h *stateHistory) initializeEmptyState() {
+	h.accounts = make(map[common.Address][]byte)
+	h.accountList = []common.Address{}
+	h.storages = make(map[common.Address]map[common.Hash][]byte)
+	h.storageList = make(map[common.Address][]common.Hash)
+}
+
+// binarySearchAccount performs binary search to find the target account index
+func (h *stateHistory) binarySearchAccount(accountIndexes []byte, count int, targetAddr common.Address) int {
+	left, right := 0, count-1
+
+	for left <= right {
+		mid := (left + right) / 2
+		var index accountIndex
+		index.decode(accountIndexes[mid*accountIndexSize : (mid+1)*accountIndexSize])
+
+		switch bytes.Compare(index.address.Bytes(), targetAddr.Bytes()) {
+		case 0:
+			return mid
+		case -1:
+			left = mid + 1
+		case 1:
+			right = mid - 1
+		}
+	}
+	return -1
+}
+
+// extractAccountData extracts and sets account data for the target account
+func (h *stateHistory) extractAccountData(accountData, accountIndexes []byte, targetIndex int, targetAddr common.Address) error {
+	var index accountIndex
+	index.decode(accountIndexes[targetIndex*accountIndexSize : (targetIndex+1)*accountIndexSize])
+
+	end := index.offset + uint32(index.length)
+	if uint32(len(accountData)) < end {
+		return errors.New("account data buffer is corrupted")
+	}
+
+	h.accounts[targetAddr] = accountData[index.offset:end]
+	h.accountList = []common.Address{targetAddr}
+	return nil
+}
+
+// decodeStorage decodes the specified account's storage slot.
+func (h *stateHistory) decodeStorage(accountIndexes, storageIndexes, storageData []byte, targetAddr common.Address, targetSlot common.Hash) error {
+	h.initializeEmptyState()
+
+	count := len(accountIndexes) / accountIndexSize
+	if count == 0 {
+		return nil
+	}
+
+	targetAccountIdx := h.binarySearchAccount(accountIndexes, count, targetAddr)
+	if targetAccountIdx < 0 {
+		return nil
+	}
+
+	var accountIdx accountIndex
+	accountIdx.decode(accountIndexes[targetAccountIdx*accountIndexSize : (targetAccountIdx+1)*accountIndexSize])
+	if accountIdx.storageSlots == 0 {
+		return nil
+	}
+
+	return h.extractStorageSlot(storageIndexes, storageData, &accountIdx, targetAddr, targetSlot)
+}
+
+// extractStorageSlot finds and extracts the target storage slot data using binary search
+func (h *stateHistory) extractStorageSlot(storageIndexes, storageData []byte, accountIdx *accountIndex, targetAddr common.Address, targetSlot common.Hash) error {
+	slotPos := h.binarySearchStorageSlot(storageIndexes, accountIdx, targetSlot)
+	if slotPos < 0 {
+		return nil
+	}
+
+	slotIdx := h.getSlotIndex(storageIndexes, accountIdx.storageOffset+uint32(slotPos))
+	if slotIdx == nil {
+		return nil
+	}
+
+	return h.setStorageData(storageData, slotIdx, targetAddr)
+}
+
+// binarySearchStorageSlot performs binary search to find the target storage slot index within an account's slots
+func (h *stateHistory) binarySearchStorageSlot(storageIndexes []byte, accountIdx *accountIndex, targetSlot common.Hash) int {
+	left, right := 0, int(accountIdx.storageSlots)-1
+
+	for left <= right {
+		mid := (left + right) / 2
+		slotIdx := h.getSlotIndex(storageIndexes, accountIdx.storageOffset+uint32(mid))
+		if slotIdx == nil {
+			return -1
+		}
+
+		var cmp int
+		if h.meta.version == stateHistoryV0 {
+			targetSlotHash := crypto.Keccak256Hash(targetSlot.Bytes())
+			cmp = bytes.Compare(slotIdx.id.Bytes(), targetSlotHash.Bytes())
+		} else {
+			cmp = bytes.Compare(slotIdx.id.Bytes(), targetSlot.Bytes())
+		}
+
+		switch cmp {
+		case 0:
+			return mid
+		case -1:
+			left = mid + 1
+		case 1:
+			right = mid - 1
+		}
+	}
+	return -1
+}
+
+// getSlotIndex safely extracts a slot index at the given position
+func (h *stateHistory) getSlotIndex(storageIndexes []byte, position uint32) *slotIndex {
+	start := position * uint32(slotIndexSize)
+	end := start + uint32(slotIndexSize)
+
+	if uint32(len(storageIndexes)) < end {
+		return nil
+	}
+
+	var index slotIndex
+	index.decode(storageIndexes[start:end])
+	return &index
+}
+
+// isTargetSlot checks if the slot index matches the target slot (handles v0/v1 compatibility)
+func (h *stateHistory) isTargetSlot(slotIdx *slotIndex, targetSlot common.Hash) bool {
+	if h.meta.version == stateHistoryV0 {
+		return slotIdx.id == crypto.Keccak256Hash(targetSlot.Bytes())
+	}
+	return slotIdx.id == targetSlot
+}
+
+// setStorageData safely extracts and sets the storage data
+func (h *stateHistory) setStorageData(storageData []byte, slotIdx *slotIndex, targetAddr common.Address) error {
+	end := slotIdx.offset + uint32(slotIdx.length)
+	if uint32(len(storageData)) < end {
+		return errors.New("storage data buffer is corrupted")
+	}
+
+	h.storages = map[common.Address]map[common.Hash][]byte{
+		targetAddr: {slotIdx.id: storageData[slotIdx.offset:end]},
+	}
+	h.storageList = map[common.Address][]common.Hash{
+		targetAddr: {slotIdx.id},
+	}
+	return nil
+}
+
 // readStateHistoryMeta reads the metadata of state history with the specified id.
 func readStateHistoryMeta(reader ethdb.AncientReader, id uint64) (*meta, error) {
 	data := rawdb.ReadStateHistoryMeta(reader, id)
@@ -561,6 +733,40 @@ func readStateHistory(reader ethdb.AncientReader, id uint64) (*stateHistory, err
 	}
 	h := stateHistory{meta: &m}
 	if err := h.decode(accountData, storageData, accountIndexes, storageIndexes); err != nil {
+		return nil, err
+	}
+	return &h, nil
+}
+
+// readAccountHistory reads account state history
+func readAccountHistory(reader ethdb.AncientReader, id uint64, targetAddr common.Address) (*stateHistory, error) {
+	mData, accountIndexes, _, accountData, _, err := rawdb.ReadStateHistory(reader, id)
+	if err != nil {
+		return nil, err
+	}
+	var m meta
+	if err := m.decode(mData); err != nil {
+		return nil, err
+	}
+	h := stateHistory{meta: &m}
+	if err := h.decodeAccount(accountData, accountIndexes, targetAddr); err != nil {
+		return nil, err
+	}
+	return &h, nil
+}
+
+// readSlotHistory reads slot state history
+func readSlotHistory(reader ethdb.AncientReader, id uint64, targetAddr common.Address, targetSlot common.Hash) (*stateHistory, error) {
+	mData, accountIndexes, storageIndexes, _, storageData, err := rawdb.ReadStateHistory(reader, id)
+	if err != nil {
+		return nil, err
+	}
+	var m meta
+	if err := m.decode(mData); err != nil {
+		return nil, err
+	}
+	h := stateHistory{meta: &m}
+	if err := h.decodeStorage(accountIndexes, storageIndexes, storageData, targetAddr, targetSlot); err != nil {
 		return nil, err
 	}
 	return &h, nil
