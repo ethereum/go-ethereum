@@ -423,11 +423,11 @@ func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
 			hashes = append(hashes, tx.vhashes...)
 		}
 	}
-	blobs1, _, proofs1, err := pool.GetBlobs(hashes, types.BlobSidecarVersion0, true)
+	blobs1, _, proofs1, err := pool.GetBlobs(hashes, types.BlobSidecarVersion0, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	blobs2, _, proofs2, err := pool.GetBlobs(hashes, types.BlobSidecarVersion1, true)
+	blobs2, _, proofs2, err := pool.GetBlobs(hashes, types.BlobSidecarVersion1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -441,22 +441,18 @@ func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
 		return
 	}
 	for i, hash := range hashes {
-		// If an item is missing, but shouldn't, error
-		if blobs1[i] == nil || proofs1[i] == nil {
-			t.Errorf("tracked blob retrieval failed: item %d, hash %x", i, hash)
-			continue
-		}
-		if blobs2[i] == nil || proofs2[i] == nil {
+		// If an item is missing from both, but shouldn't, error
+		if (blobs1[i] == nil || proofs1[i] == nil) && (blobs2[i] == nil || proofs2[i] == nil) {
 			t.Errorf("tracked blob retrieval failed: item %d, hash %x", i, hash)
 			continue
 		}
 		// Item retrieved, make sure it matches the expectation
 		index := testBlobIndices[hash]
-		if *blobs1[i] != *testBlobs[index] || proofs1[i][0] != testBlobProofs[index] {
+		if blobs1[i] != nil && (*blobs1[i] != *testBlobs[index] || proofs1[i][0] != testBlobProofs[index]) {
 			t.Errorf("retrieved blob or proof mismatch: item %d, hash %x", i, hash)
 			continue
 		}
-		if *blobs2[i] != *testBlobs[index] || !slices.Equal(proofs2[i], testBlobCellProofs[index]) {
+		if blobs2[i] != nil && (*blobs2[i] != *testBlobs[index] || !slices.Equal(proofs2[i], testBlobCellProofs[index])) {
 			t.Errorf("retrieved blob or proof mismatch: item %d, hash %x", i, hash)
 			continue
 		}

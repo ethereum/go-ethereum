@@ -1379,44 +1379,48 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte, convert bool) (
 		}
 		// Traverse the blobs in the transaction
 		for i, hash := range tx.BlobHashes() {
+			skip := false // if true, skip using null, but proceed
 			list, ok := indices[hash]
 			if !ok {
 				continue // non-interesting blob
 			}
 			var pf []kzg4844.Proof
 			if !convert && sidecar.Version != version {
-				return nil, nil, nil, fmt.Errorf("blob sidecar version mismatch: want %d, have %d", version, sidecar.Version)
-			}
-			switch version {
-			case types.BlobSidecarVersion0:
-				if sidecar.Version == types.BlobSidecarVersion0 {
-					pf = []kzg4844.Proof{sidecar.Proofs[i]}
-				} else {
-					proof, err := kzg4844.ComputeBlobProof(&sidecar.Blobs[i], sidecar.Commitments[i])
-					if err != nil {
-						return nil, nil, nil, err
+				skip = true // blob sidecar version mismatch, skip but proceed
+			} else {
+				switch version {
+				case types.BlobSidecarVersion0:
+					if sidecar.Version == types.BlobSidecarVersion0 {
+						pf = []kzg4844.Proof{sidecar.Proofs[i]}
+					} else {
+						proof, err := kzg4844.ComputeBlobProof(&sidecar.Blobs[i], sidecar.Commitments[i])
+						if err != nil {
+							return nil, nil, nil, err
+						}
+						pf = []kzg4844.Proof{proof}
 					}
-					pf = []kzg4844.Proof{proof}
+				case types.BlobSidecarVersion1:
+					if sidecar.Version == types.BlobSidecarVersion0 {
+						cellProofs, err := kzg4844.ComputeCellProofs(&sidecar.Blobs[i])
+						if err != nil {
+							return nil, nil, nil, err
+						}
+						pf = cellProofs
+					} else {
+						cellProofs, err := sidecar.CellProofsAt(i)
+						if err != nil {
+							return nil, nil, nil, err
+						}
+						pf = cellProofs
+					}
 				}
-			case types.BlobSidecarVersion1:
-				if sidecar.Version == types.BlobSidecarVersion0 {
-					cellProofs, err := kzg4844.ComputeCellProofs(&sidecar.Blobs[i])
-					if err != nil {
-						return nil, nil, nil, err
+				if !skip {
+					for _, index := range list {
+						blobs[index] = &sidecar.Blobs[i]
+						commitments[index] = sidecar.Commitments[i]
+						proofs[index] = pf
 					}
-					pf = cellProofs
-				} else {
-					cellProofs, err := sidecar.CellProofsAt(i)
-					if err != nil {
-						return nil, nil, nil, err
-					}
-					pf = cellProofs
 				}
-			}
-			for _, index := range list {
-				blobs[index] = &sidecar.Blobs[i]
-				commitments[index] = sidecar.Commitments[i]
-				proofs[index] = pf
 			}
 			filled[hash] = struct{}{}
 		}
