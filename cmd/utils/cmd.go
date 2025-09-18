@@ -568,6 +568,9 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 	return nil
 }
 
+// StateIterator is a temporary structure for traversing state in order. It serves
+// as an aggregator for both path scheme and hash scheme implementations and should
+// be removed once the hash scheme is fully deprecated.
 type StateIterator struct {
 	scheme    string
 	root      common.Hash
@@ -575,6 +578,7 @@ type StateIterator struct {
 	snapshots *snapshot.Tree
 }
 
+// NewStateIterator constructs the state iterator with the specific root.
 func NewStateIterator(triedb *triedb.Database, db ethdb.Database, root common.Hash) (*StateIterator, error) {
 	if triedb.Scheme() == rawdb.PathScheme {
 		return &StateIterator{
@@ -601,6 +605,8 @@ func NewStateIterator(triedb *triedb.Database, db ethdb.Database, root common.Ha
 	}, nil
 }
 
+// AccountIterator creates a new account iterator for the specified root hash and
+// seeks to a starting account hash.
 func (it *StateIterator) AccountIterator(root common.Hash, start common.Hash) (snapshot.AccountIterator, error) {
 	if it.scheme == rawdb.PathScheme {
 		return it.triedb.AccountIterator(root, start)
@@ -608,6 +614,8 @@ func (it *StateIterator) AccountIterator(root common.Hash, start common.Hash) (s
 	return it.snapshots.AccountIterator(root, start)
 }
 
+// StorageIterator creates a new storage iterator for the specified root hash and
+// account. The iterator will be moved to the specific start position.
 func (it *StateIterator) StorageIterator(root common.Hash, accountHash common.Hash, start common.Hash) (snapshot.StorageIterator, error) {
 	if it.scheme == rawdb.PathScheme {
 		return it.triedb.StorageIterator(root, accountHash, start)
