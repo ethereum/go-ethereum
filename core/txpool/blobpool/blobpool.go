@@ -884,7 +884,7 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	blobfeeGauge.Update(int64(blobfee.Uint64()))
 	p.updateStorageMetrics()
 
-	if p.chain.Config().IsOsaka(newHead.Number, newHead.Time) {
+	if !p.chain.Config().IsOsaka(oldHead.Number, oldHead.Time) && p.chain.Config().IsOsaka(newHead.Number, newHead.Time) {
 		txs := make(map[common.Address]map[common.Hash]uint64)
 		for address, list := range p.index {
 			txs[address] = make(map[common.Hash]uint64)
