@@ -361,27 +361,27 @@ var (
 	}
 	// DefaultBPO1BlobConfig is the default blob configuration for the Osaka fork.
 	DefaultBPO1BlobConfig = &BlobConfig{
-		Target:         6,
-		Max:            9,
-		UpdateFraction: 5007716,
+		Target:         9,
+		Max:            14,
+		UpdateFraction: 8832827,
 	}
 	// DefaultBPO1BlobConfig is the default blob configuration for the Osaka fork.
 	DefaultBPO2BlobConfig = &BlobConfig{
-		Target:         6,
-		Max:            9,
-		UpdateFraction: 5007716,
+		Target:         14,
+		Max:            21,
+		UpdateFraction: 13739630,
 	}
 	// DefaultBPO1BlobConfig is the default blob configuration for the Osaka fork.
 	DefaultBPO3BlobConfig = &BlobConfig{
-		Target:         6,
-		Max:            9,
-		UpdateFraction: 5007716,
+		Target:         21,
+		Max:            32,
+		UpdateFraction: 20609697,
 	}
 	// DefaultBPO1BlobConfig is the default blob configuration for the Osaka fork.
 	DefaultBPO4BlobConfig = &BlobConfig{
-		Target:         6,
-		Max:            9,
-		UpdateFraction: 5007716,
+		Target:         14,
+		Max:            21,
+		UpdateFraction: 13739630,
 	}
 	// DefaultBlobSchedule is the latest configured blob schedule for Ethereum mainnet.
 	DefaultBlobSchedule = &BlobScheduleConfig{
