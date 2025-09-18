@@ -32,8 +32,8 @@ func newBytesPool(sliceCap, nitems int) *bytesPool {
 	}
 }
 
-// Get returns a slice. Safe for concurrent use.
-func (bp *bytesPool) Get() []byte {
+// get returns a slice. Safe for concurrent use.
+func (bp *bytesPool) get() []byte {
 	select {
 	case b := <-bp.c:
 		return b
@@ -42,23 +42,60 @@ func (bp *bytesPool) Get() []byte {
 	}
 }
 
-// GetWithSize returns a slice with specified byte slice size.
-func (bp *bytesPool) GetWithSize(s int) []byte {
-	b := bp.Get()
+// getWithSize returns a slice with specified byte slice size.
+func (bp *bytesPool) getWithSize(s int) []byte {
+	b := bp.get()
 	if cap(b) < s {
 		return make([]byte, s)
 	}
 	return b[:s]
 }
 
-// Put returns a slice to the pool. Safe for concurrent use. This method
+// put returns a slice to the pool. Safe for concurrent use. This method
 // will ignore slices that are too small or too large (>3x the cap)
-func (bp *bytesPool) Put(b []byte) {
+func (bp *bytesPool) put(b []byte) {
 	if c := cap(b); c < bp.w || c > 3*bp.w {
 		return
 	}
 	select {
 	case bp.c <- b:
 	default:
+	}
+}
+
+// unsafeBytesPool is a pool for byte slices. It is not safe for concurrent use.
+type unsafeBytesPool struct {
+	items [][]byte
+	w     int
+}
+
+// newUnsafeBytesPool creates a new unsafeBytesPool. The sliceCap sets the
+// capacity of newly allocated slices, and the nitems determines how many
+// items the pool will hold, at maximum.
+func newUnsafeBytesPool(sliceCap, nitems int) *unsafeBytesPool {
+	return &unsafeBytesPool{
+		items: make([][]byte, 0, nitems),
+		w:     sliceCap,
+	}
+}
+
+// Get returns a slice with pre-allocated space.
+func (bp *unsafeBytesPool) get() []byte {
+	if len(bp.items) > 0 {
+		last := bp.items[len(bp.items)-1]
+		bp.items = bp.items[:len(bp.items)-1]
+		return last
+	}
+	return make([]byte, 0, bp.w)
+}
+
+// put returns a slice to the pool. This method will ignore slices that are
+// too small or too large (>3x the cap)
+func (bp *unsafeBytesPool) put(b []byte) {
+	if c := cap(b); c < bp.w || c > 3*bp.w {
+		return
+	}
+	if len(bp.items) < cap(bp.items) {
+		bp.items = append(bp.items, b)
 	}
 }
