@@ -76,8 +76,9 @@ type Freezer struct {
 // NewFreezer creates a freezer instance for maintaining immutable ordered
 // data according to the given parameters.
 //
-// The 'tables' argument defines the data tables. If the value of a map
-// entry is true, snappy compression is disabled for the table.
+// The 'tables' argument defines the freezer tables and their configuration.
+// Each value is a freezerTableConfig specifying whether snappy compression is
+// disabled (noSnappy) and whether the table is prunable (prunable).
 func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]freezerTableConfig) (*Freezer, error) {
 	// Create the initial freezer object
 	var (
