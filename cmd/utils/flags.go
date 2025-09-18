@@ -1931,11 +1931,15 @@ func MakeBeaconLightConfig(ctx *cli.Context) bparams.ClientConfig {
 		} else {
 			Fatalf("Could not parse --%s: %v", BeaconGenesisRootFlag.Name, err)
 		}
-		configFile := ctx.String(BeaconConfigFlag.Name)
-		if err := config.ChainConfig.LoadForks(configFile); err != nil {
-			Fatalf("Could not load beacon chain config '%s': %v", configFile, err)
+		configPath := ctx.String(BeaconConfigFlag.Name)
+		file, err := os.ReadFile(configPath)
+		if err != nil {
+			Fatalf("failed to read beacon chain config file '%s': %v", configPath, err)
 		}
-		log.Info("Using custom beacon chain config", "file", configFile)
+		if err := config.ChainConfig.LoadForks(file); err != nil {
+			Fatalf("Could not load beacon chain config '%s': %v", configPath, err)
+		}
+		log.Info("Using custom beacon chain config", "file", configPath)
 	} else {
 		if ctx.IsSet(BeaconGenesisRootFlag.Name) {
 			Fatalf("Genesis root is specified but custom beacon chain config is missing")
