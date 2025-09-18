@@ -18,6 +18,7 @@ package stateless
 
 import (
 	"io"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -26,47 +27,21 @@ import (
 
 // ToExtWitness converts our internal witness representation to the consensus one.
 func (w *Witness) ToExtWitness() *ExtWitness {
-	ext := &ExtWitness{
-		Headers: w.Headers,
+	return &ExtWitness{
+		Headers: slices.Clone(w.Headers),
+		Codes:   slices.Clone(w.Codes),
+		State:   slices.Clone(w.State),
 	}
-	ext.Codes = make([]hexutil.Bytes, 0, len(w.Codes))
-	for code := range w.Codes {
-		ext.Codes = append(ext.Codes, []byte(code))
-	}
-	ext.State = make([]hexutil.Bytes, 0, len(w.State))
-	for node := range w.State {
-		ext.State = append(ext.State, []byte(node))
-	}
-	return ext
-}
-
-// fromExtWitness converts the consensus witness format into our internal one.
-func (w *Witness) fromExtWitness(ext *ExtWitness) error {
-	w.Headers = ext.Headers
-
-	w.Codes = make(map[string]struct{}, len(ext.Codes))
-	for _, code := range ext.Codes {
-		w.Codes[string(code)] = struct{}{}
-	}
-	w.State = make(map[string]struct{}, len(ext.State))
-	for _, node := range ext.State {
-		w.State[string(node)] = struct{}{}
-	}
-	return nil
 }
 
 // EncodeRLP serializes a witness as RLP.
 func (w *Witness) EncodeRLP(wr io.Writer) error {
-	return rlp.Encode(wr, w.ToExtWitness())
+	return rlp.Encode(wr, w)
 }
 
 // DecodeRLP decodes a witness from RLP.
 func (w *Witness) DecodeRLP(s *rlp.Stream) error {
-	var ext ExtWitness
-	if err := s.Decode(&ext); err != nil {
-		return err
-	}
-	return w.fromExtWitness(&ext)
+	return s.Decode(&w)
 }
 
 // ExtWitness is a witness RLP encoding for transferring across clients.
@@ -74,5 +49,4 @@ type ExtWitness struct {
 	Headers []*types.Header `json:"headers"`
 	Codes   []hexutil.Bytes `json:"codes"`
 	State   []hexutil.Bytes `json:"state"`
-	Keys    []hexutil.Bytes `json:"keys"`
 }
