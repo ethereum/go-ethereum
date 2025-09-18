@@ -301,7 +301,7 @@ func makeChainForBench(db ethdb.Database, genesis *Genesis, full bool, count uin
 
 func benchWriteChain(b *testing.B, full bool, count uint64) {
 	genesis := &Genesis{Config: params.AllEthashProtocolChanges}
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		pdb, err := pebble.New(b.TempDir(), 1024, 128, "", false)
 		if err != nil {
 			b.Fatalf("error opening database: %v", err)
@@ -327,8 +327,7 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 	options := DefaultConfig().WithArchive(true)
 	b.ReportAllocs()
 	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		pdb, err = pebble.New(dir, 1024, 128, "", false)
 		if err != nil {
 			b.Fatalf("error opening database: %v", err)
