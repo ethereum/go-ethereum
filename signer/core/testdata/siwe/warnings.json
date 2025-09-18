@@ -32,5 +32,4 @@
   "No scheme - ://user:pass@example.com:123/one/two.three?q1=a1&q2=a2#body": "service.org wants you to sign in with your Ethereum account:\n0x{{Account}}\n\n\nURI: ://user:pass@example.com:123/one/two.three?q1=a1&q2=a2#body\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
   "bad query - uri://user:pass@example.com:123/one/two.three ?q1=a1&q2=a2#body": "service.org wants you to sign in with your Ethereum account:\n0x{{Account}}\n\n\nURI: uri://user:pass@example.com:123/one/two.three ?q1=a1&q2=a2#body\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
   "bad fragment - uri://user:pass@example.com:123/one/two.three?q1=a1&q2=a2 #body": "service.org wants you to sign in with your Ethereum account:\n0x{{Account}}\n\n\nURI: uri://user:pass@example.com:123/one/two.three?q1=a1&q2=a2 #body\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z"
-
 }

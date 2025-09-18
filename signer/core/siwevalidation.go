@@ -39,7 +39,6 @@ var wantsMsg = ` wants you to sign in with your Ethereum account:\n`
 var address = `(0x[a-fA-F0-9]{40})\n`
 
 // Optional statement (any line not containing "\n\n")
-// var statement = `(?:[^\n]+\n)?`
 var statement = `(?:.*\n)?`
 
 // URI
@@ -77,13 +76,15 @@ var siweMessageRegex = regexp.MustCompile(`(?m)^` + scheme + domain + wantsMsg +
 
 var ErrMalformedSIWEMessage = errors.New("the message is asking to sign in with Ethereum but does not conform to EIP-4361")
 
+const suggestiveLanguage = "wants you to sign in with your Ethereum account"
+
 func validateSIWE(req *SignDataRequest) error {
 	for _, message := range req.Messages {
 		s, ok := message.Value.(string)
 		if !ok {
 			continue
 		}
-		if !strings.Contains(s, "wants you to sign in with your Ethereum account") {
+		if !strings.Contains(s, suggestiveLanguage) {
 			continue
 		}
 

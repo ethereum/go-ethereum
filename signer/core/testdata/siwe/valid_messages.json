@@ -92,7 +92,7 @@
   },
   "domain is RFC 3986 authority with userinfo and port": {
     "msg": "test@127.0.0.1:8080 wants you to sign in with your Ethereum account:\n{{Account}}\n\nI accept the ServiceOrg Terms of Service: https://service.org/tos\n\nURI: https://service.org/login\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z",
-    "request_context":{
+    "request_context": {
       "transport": "https",
       "source": "test@127.0.0.1:8080"
     }
@@ -105,7 +105,7 @@
     "request_context": {
       "transport": "https",
       "source": "[::cafe]"
-    } 
+    }
   },
   "uri ipv6": {
     "msg": "service.org wants you to sign in with your Ethereum account:\n{{Account}}\n\n\nURI: https://[::cafe]\nVersion: 1\nChain ID: 1\nNonce: 32891757\nIssued At: 2021-09-30T16:25:24.000Z"
