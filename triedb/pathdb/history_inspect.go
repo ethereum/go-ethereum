@@ -60,41 +60,6 @@ func sanitizeRange(start, end uint64, freezer ethdb.AncientReader) (uint64, uint
 	return first, last, nil
 }
 
-func inspectHistory(freezer ethdb.AncientReader, start, end uint64, onHistory func(*stateHistory, *HistoryStats)) (*HistoryStats, error) {
-	var (
-		stats  = &HistoryStats{}
-		init   = time.Now()
-		logged = time.Now()
-	)
-	start, end, err := sanitizeRange(start, end, freezer)
-	if err != nil {
-		return nil, err
-	}
-	for id := start; id <= end; id += 1 {
-		// The entire history object is decoded, although it's unnecessary for
-		// account inspection. TODO(rjl493456442) optimization is worthwhile.
-		h, err := readStateHistory(freezer, id)
-		if err != nil {
-			return nil, err
-		}
-		if id == start {
-			stats.Start = h.meta.block
-		}
-		if id == end {
-			stats.End = h.meta.block
-		}
-		onHistory(h, stats)
-
-		if time.Since(logged) > time.Second*8 {
-			logged = time.Now()
-			eta := float64(time.Since(init)) / float64(id-start+1) * float64(end-id)
-			log.Info("Inspecting state history", "checked", id-start+1, "left", end-id, "elapsed", common.PrettyDuration(time.Since(init)), "eta", common.PrettyDuration(eta))
-		}
-	}
-	log.Info("Inspected state history", "total", end-start+1, "elapsed", common.PrettyDuration(time.Since(init)))
-	return stats, nil
-}
-
 // accountHistory inspects the account history within the range.
 func accountHistory(freezer ethdb.AncientReader, address common.Address, start, end uint64) (*HistoryStats, error) {
 	return inspectAccountHistory(freezer, address, start, end)

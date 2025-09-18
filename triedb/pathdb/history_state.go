@@ -683,14 +683,6 @@ func (h *stateHistory) getSlotIndex(storageIndexes []byte, position uint32) *slo
 	return &index
 }
 
-// isTargetSlot checks if the slot index matches the target slot (handles v0/v1 compatibility)
-func (h *stateHistory) isTargetSlot(slotIdx *slotIndex, targetSlot common.Hash) bool {
-	if h.meta.version == stateHistoryV0 {
-		return slotIdx.id == crypto.Keccak256Hash(targetSlot.Bytes())
-	}
-	return slotIdx.id == targetSlot
-}
-
 // setStorageData safely extracts and sets the storage data
 func (h *stateHistory) setStorageData(storageData []byte, slotIdx *slotIndex, targetAddr common.Address) error {
 	end := slotIdx.offset + uint32(slotIdx.length)
