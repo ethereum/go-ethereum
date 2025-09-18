@@ -344,7 +344,8 @@ type BlobPool struct {
 	discoverFeed event.Feed // Event feed to send out new tx events on pool discovery (reorg excluded)
 	insertFeed   event.Feed // Event feed to send out new tx events on pool inclusion (reorg included)
 
-	lock sync.RWMutex // Mutex protecting the pool during reorg handling
+	closeCh chan struct{} // Channel used by conversion thread to shutdown.
+	lock    sync.RWMutex  // Mutex protecting the pool during reorg handling
 }
 
 // New creates a new blob transaction pool to gather, sort and filter inbound
@@ -474,6 +475,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 
 // Close closes down the underlying persistent store.
 func (p *BlobPool) Close() error {
+	close(p.closeCh)
 	var errs []error
 	if p.limbo != nil { // Close might be invoked due to error in constructor, before p,limbo is set
 		if err := p.limbo.Close(); err != nil {
@@ -858,6 +860,20 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	if p.chain.Config().IsCancun(p.head.Number, p.head.Time) {
 		p.limbo.finalize(p.chain.CurrentFinalBlock())
 	}
+
+	// At the Osaka transition, begin converting all v0 sidecars to v1.
+	osaka := p.chain.Config().IsOsaka
+	if osaka(p.head.Number, p.head.Time) && !osaka(oldHead.Number, oldHead.Time) {
+		// Collect all indexed tx metadatas at point of fork. Future transactions
+		// added are required to already be v1.
+		var all []*blobTxMeta
+		for _, m := range p.index {
+			all = append(all, m...)
+		}
+		p.closeCh = make(chan struct{})
+		go p.convertSidecars(all, p.closeCh)
+	}
+
 	// Reset the price heap for the new set of basefee/blobfee pairs
 	var (
 		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), newHead))
@@ -871,6 +887,92 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	basefeeGauge.Update(int64(basefee.Uint64()))
 	blobfeeGauge.Update(int64(blobfee.Uint64()))
 	p.updateStorageMetrics()
+}
+
+// convertSidecars runs on a separate thread and manages the pool lock as needed
+// during the conversion. Any txs that fail to convert are dropped.
+func (p *BlobPool) convertSidecars(txs []*blobTxMeta, cancel chan struct{}) {
+	convert := func(m *blobTxMeta) error {
+		if m.version != types.BlobSidecarVersion0 {
+			return nil
+		}
+		p.lock.RLock()
+		data, err := p.store.Get(m.id)
+		if err != nil {
+			// This will most likely occur when a tx gets included before it can be
+			// converted locally.
+			p.lock.RUnlock()
+			return fmt.Errorf("unable to load tx for conversion: %w", err)
+		}
+		p.lock.RUnlock()
+
+		tx := new(types.Transaction)
+		if err := rlp.DecodeBytes(data, tx); err != nil {
+			return fmt.Errorf("failed to decode stored blob transaction: %w", err)
+		}
+		// Perform conversion.
+		sidecar := tx.BlobTxSidecar()
+		if sidecar == nil {
+			return fmt.Errorf("missing sidecar")
+		}
+		if err := sidecar.ToV1(); err != nil {
+			return fmt.Errorf("failed to convert sidecar: %w", err)
+		}
+
+		// Reencode and insert into store.
+		blob, err := rlp.EncodeToBytes(tx)
+		if err != nil {
+			return fmt.Errorf("failed to encode new sidecar: %w", err)
+		}
+		p.lock.Lock()
+		defer p.lock.Unlock()
+		id, err := p.store.Put(blob)
+		if err != nil {
+			return fmt.Errorf("failed to write tx with converted sidecar: %w", err)
+		}
+
+		// Update metadata and trackers for the tx.
+		m.id = id
+		m.version = types.BlobSidecarVersion1
+		p.lookup.track(m)
+
+		return nil
+	}
+
+	log.Info("Beginning blob sidecar conversion", "count", len(txs))
+
+	var (
+		start  = time.Now()
+		logged = time.Now()
+	)
+
+	for i, m := range txs {
+		select {
+		case <-cancel:
+			return
+		default:
+		}
+		if err := convert(m); err != nil {
+			// If the conversion fails for any reason, just remove the transaction.
+			// This should be pretty rare and we don't need to retry.
+			log.Error("Failed to convert sidecar", "err", err, "hash", m.hash, "id", m.id)
+			p.lock.Lock()
+			p.store.Delete(m.id)
+			p.lookup.untrack(m)
+			for acc, txs := range p.index {
+				for i, tx := range txs {
+					if tx.hash == m.hash {
+						p.index[acc][i] = nil
+					}
+				}
+			}
+			p.lock.Unlock()
+		}
+		if time.Since(logged) > time.Second*8 {
+			log.Info("Converting blob sidecars", "complete", i, "total", len(txs))
+		}
+	}
+	log.Info("Finished blob sidecar conversion", "elapsed", time.Since(start))
 }
 
 // reorg assembles all the transactors and missing transactions between an old

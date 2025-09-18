@@ -31,6 +31,7 @@ import (
 	"slices"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
@@ -43,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/internal/testrand"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/billy"
@@ -2062,6 +2064,94 @@ func TestGetBlobs(t *testing.T) {
 	pool.Close()
 }
 
+func TestSidecarConversion(t *testing.T) {
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
+
+	// Create a temporary folder for the persistent backend
+	storage := t.TempDir()
+
+	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
+	// store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(6), nil)
+
+	var (
+		count      = 10
+		keys       = make([]*ecdsa.PrivateKey, count)
+		addrs      = make([]common.Address, count)
+		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	)
+	for i := 0; i < count; i++ {
+		keys[i], _ = crypto.GenerateKey()
+		addrs[i] = crypto.PubkeyToAddress(keys[i].PublicKey)
+		statedb.AddBalance(addrs[i], uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	}
+	statedb.Commit(0, true, false)
+
+	config := &params.ChainConfig{
+		ChainID:            big.NewInt(1),
+		LondonBlock:        big.NewInt(0),
+		BerlinBlock:        big.NewInt(0),
+		CancunTime:         newUint64(0),
+		PragueTime:         newUint64(0),
+		OsakaTime:          newUint64(1),
+		BlobScheduleConfig: params.DefaultBlobSchedule,
+	}
+	chain := &testBlockChain{
+		config:  config,
+		basefee: uint256.NewInt(1050),
+		blobfee: uint256.NewInt(105),
+		statedb: statedb,
+	}
+
+	before := chain.CurrentBlock()
+	before.Time = 0
+	after := chain.CurrentBlock()
+	after.Time = 1
+
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, before, newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+
+	for i, key := range keys {
+		tx := makeMultiBlobTx(0, 1, 1000, 100, 2, 0, key, types.BlobSidecarVersion0)
+		if errs := pool.Add([]*types.Transaction{tx}, true); errs[0] != nil {
+			t.Errorf("failed to insert blob tx from %s: %s", addrs[i], errs[0])
+		}
+	}
+
+	// Should kick off migration.
+	pool.Reset(before, after)
+
+	time.Sleep(time.Second * 2)
+
+	for addr, acc := range pool.index {
+		for _, m := range acc {
+			if m.version != types.BlobSidecarVersion1 {
+				t.Errorf("expected sidecar to have been converted: from %s, hash %s", addr, m.hash)
+			}
+			fmt.Println("loading for test", "id", m.id)
+			tx := pool.Get(m.hash)
+			if tx == nil {
+				t.Errorf("failed to get tx by hash: %s", m.hash)
+			}
+			sc := tx.BlobTxSidecar()
+			fmt.Println(len(sc.Blobs), len(sc.Commitments), len(sc.Proofs))
+			if err := kzg4844.VerifyCellProofs(sc.Blobs, sc.Commitments, sc.Proofs); err != nil {
+				t.Errorf("failed to verify cell proofs for tx %s after conversion: %s", m.hash, err)
+			}
+		}
+	}
+
+	// Verify all the calculated pool internals. Interestingly, this is **not**
+	// a duplication of the above checks, this actually validates the verifier
+	// using the above already hard coded checks.
+	//
+	// Do not remove this, nor alter the above to be generic.
+	verifyPoolInternals(t, pool)
+
+	pool.Close()
+}
+
 // fakeBilly is a billy.Database implementation which just drops data on the floor.
 type fakeBilly struct {
 	billy.Database
@@ -2144,3 +2234,5 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 		}
 	}
 }
+
+func newUint64(val uint64) *uint64 { return &val }
