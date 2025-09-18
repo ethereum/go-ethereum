@@ -48,6 +48,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/urfave/cli/v2"
 )
 
@@ -567,9 +568,56 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 	return nil
 }
 
+type StateIterator struct {
+	scheme    string
+	root      common.Hash
+	triedb    *triedb.Database
+	snapshots *snapshot.Tree
+}
+
+func NewStateIterator(triedb *triedb.Database, db ethdb.Database, root common.Hash) (*StateIterator, error) {
+	if triedb.Scheme() == rawdb.PathScheme {
+		return &StateIterator{
+			scheme: rawdb.PathScheme,
+			root:   root,
+			triedb: triedb,
+		}, nil
+	}
+	config := snapshot.Config{
+		CacheSize:  256,
+		Recovery:   false,
+		NoBuild:    true,
+		AsyncBuild: false,
+	}
+	snapshots, err := snapshot.New(config, db, triedb, root)
+	if err != nil {
+		return nil, err
+	}
+	return &StateIterator{
+		scheme:    rawdb.HashScheme,
+		root:      root,
+		triedb:    triedb,
+		snapshots: snapshots,
+	}, nil
+}
+
+func (it *StateIterator) AccountIterator(root common.Hash, start common.Hash) (snapshot.AccountIterator, error) {
+	if it.scheme == rawdb.PathScheme {
+		return it.triedb.AccountIterator(root, start)
+	}
+	return it.snapshots.AccountIterator(root, start)
+}
+
+func (it *StateIterator) StorageIterator(root common.Hash, accountHash common.Hash, start common.Hash) (snapshot.StorageIterator, error) {
+	if it.scheme == rawdb.PathScheme {
+		return it.triedb.StorageIterator(root, accountHash, start)
+	}
+	return it.snapshots.StorageIterator(root, accountHash, start)
+}
+
 // ExportSnapshotPreimages exports the preimages corresponding to the enumeration of
 // the snapshot for a given root.
-func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn string, root common.Hash) error {
+func ExportSnapshotPreimages(chaindb ethdb.Database, stateIt *StateIterator, fn string, root common.Hash) error {
 	log.Info("Exporting preimages", "file", fn)
 
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
@@ -602,7 +650,7 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn
 	)
 	go func() {
 		defer close(hashCh)
-		accIt, err := snaptree.AccountIterator(root, common.Hash{})
+		accIt, err := stateIt.AccountIterator(root, common.Hash{})
 		if err != nil {
 			log.Error("Failed to create account iterator", "error", err)
 			return
@@ -619,7 +667,7 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn
 			hashCh <- hashAndPreimageSize{Hash: accIt.Hash(), Size: common.AddressLength}
 
 			if acc.Root != (common.Hash{}) && acc.Root != types.EmptyRootHash {
-				stIt, err := snaptree.StorageIterator(root, accIt.Hash(), common.Hash{})
+				stIt, err := stateIt.StorageIterator(root, accIt.Hash(), common.Hash{})
 				if err != nil {
 					log.Error("Failed to create storage iterator", "error", err)
 					return
