@@ -734,7 +734,6 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		if block.NumberU64() != 1 {
 			return api.delayPayloadImport(block), nil
 		}
-		api.eth.SetSynced()
 	}
 	if !api.eth.BlockChain().HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		api.remoteBlocks.put(block.Hash(), block.Header())
