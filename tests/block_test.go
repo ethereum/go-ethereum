@@ -83,6 +83,7 @@ func TestExecutionSpecBlocktests(t *testing.T) {
 
 	bt.skipLoad(".*prague/eip7251_consolidations/contract_deployment/test_system_contract_deployment.json")
 	bt.skipLoad(".*prague/eip7002_el_triggerable_withdrawals/contract_deployment/test_system_contract_deployment.json")
+	bt.skipLoad(".*prague/eip7002_el_triggerable_withdrawals/test_system_contract_deployment.json")
 
 	bt.walk(t, executionSpecBlockchainTestDir, func(t *testing.T, name string, test *BlockTest) {
 		execBlockTest(t, bt, test)
