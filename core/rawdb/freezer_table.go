@@ -100,7 +100,7 @@ type freezerTable struct {
 	// should never be lower than itemOffset.
 	itemHidden atomic.Uint64
 
-	config      freezerTableConfig // if true, disables snappy compression. Note: does not work retroactively
+    config      freezerTableConfig // table configuration (compression, prunability). Note: compression flag does not apply retroactively to existing files
 	readonly    bool
 	maxFileSize uint32 // Max file size for data-files
 	name        string
