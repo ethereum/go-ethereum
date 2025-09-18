@@ -63,6 +63,7 @@ require (
 	github.com/supranational/blst v0.3.16-0.20250831170142-f48500c1fdbe
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/urfave/cli/v2 v2.27.5
+	github.com/zkMIPS/zkMIPS/crates/go-runtime/zkm_runtime v0.0.0-00010101000000-000000000000
 	go.uber.org/automaxprocs v1.5.2
 	go.uber.org/goleak v1.3.0
 	golang.org/x/crypto v0.36.0
@@ -153,3 +154,5 @@ tool (
 	golang.org/x/tools/cmd/stringer
 	google.golang.org/protobuf/cmd/protoc-gen-go
 )
+
+replace github.com/zkMIPS/zkMIPS/crates/go-runtime/zkm_runtime => github.com/weilzkm/zkMIPS/crates/go-runtime/zkvm_runtime v0.0.0-20250915074013-fbc07aa2c6f5

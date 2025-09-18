@@ -78,6 +78,7 @@ var (
 		executablePath("geth"),
 		executablePath("rlpdump"),
 		executablePath("clef"),
+		executablePath("keeper"),
 	}
 
 	// A debian package is created for all executables listed here.
@@ -101,6 +102,10 @@ var (
 		{
 			BinaryName:  "clef",
 			Description: "Ethereum account management tool.",
+		},
+		{
+			BinaryName:  "keeper",
+			Description: "It's designed to run as a zkvm guest.",
 		},
 	}
 
