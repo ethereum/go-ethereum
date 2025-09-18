@@ -37,7 +37,7 @@ import (
 // across signing different data structures.
 const syncCommitteeDomain = 7
 
-var knownForks = []string{"GENESIS", "ALTAIR", "BELLATRIX", "CAPELLA", "DENEB"}
+var knownForks = []string{"GENESIS", "ALTAIR", "BELLATRIX", "CAPELLA", "DENEB", "ELECTRA"}
 
 // ClientConfig contains beacon light client configuration.
 type ClientConfig struct {
