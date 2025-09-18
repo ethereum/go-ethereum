@@ -129,13 +129,22 @@ func (db *Database) StateReader(blockRoot common.Hash) (database.StateReader, er
 	return db.backend.StateReader(blockRoot)
 }
 
-// HistoricReader constructs a reader for accessing the requested historic state.
-func (db *Database) HistoricReader(root common.Hash) (*pathdb.HistoricalStateReader, error) {
+// HistoricalStateReader constructs a reader for accessing the historical state.
+func (db *Database) HistoricalStateReader(root common.Hash) (*pathdb.HistoricalStateReader, error) {
 	pdb, ok := db.backend.(*pathdb.Database)
 	if !ok {
 		return nil, errors.New("not supported")
 	}
-	return pdb.HistoricReader(root)
+	return pdb.HistoricalStateReader(root)
+}
+
+// HistoricalNodeReader constructs a reader for accessing the historical trie node.
+func (db *Database) HistoricalNodeReader(root common.Hash) (*pathdb.HistoricalNodeReader, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return nil, errors.New("not supported")
+	}
+	return pdb.HistoricalNodeReader(root)
 }
 
 // Update performs a state transition by committing dirty nodes contained in the

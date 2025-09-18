@@ -182,7 +182,7 @@ func (eth *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), erro
 	if err == nil {
 		return statedb, noopReleaser, nil
 	}
-	statedb, err = eth.blockchain.HistoricState(block.Root())
+	statedb, err = eth.blockchain.HistoricalState(block.Root())
 	if err == nil {
 		return statedb, noopReleaser, nil
 	}

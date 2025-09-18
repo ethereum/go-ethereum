@@ -416,11 +416,11 @@ func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
 	return state.New(root, bc.statedb)
 }
 
-// HistoricState returns a historic state specified by the given root.
+// HistoricalState returns a historical state specified by the given root.
 // Live states are not available and won't be served, please use `State`
 // or `StateAt` instead.
-func (bc *BlockChain) HistoricState(root common.Hash) (*state.StateDB, error) {
-	return state.New(root, state.NewHistoricDatabase(bc.db, bc.triedb))
+func (bc *BlockChain) HistoricalState(root common.Hash) (*state.StateDB, error) {
+	return state.New(root, state.NewHistoricalDatabase(bc.db, bc.triedb))
 }
 
 // Config retrieves the chain's fork configuration.
