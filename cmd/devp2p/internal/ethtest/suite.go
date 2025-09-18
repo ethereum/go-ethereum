@@ -87,9 +87,9 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "Transaction", Fn: s.TestTransaction},
 		{Name: "InvalidTxs", Fn: s.TestInvalidTxs},
 		{Name: "NewPooledTxs", Fn: s.TestNewPooledTxs},
-		{Name: "BlobViolations", Fn: s.TestBlobViolations},
 		{Name: "TestBlobTxWithoutSidecar", Fn: s.TestBlobTxWithoutSidecar},
 		{Name: "TestBlobTxWithMismatchedSidecar", Fn: s.TestBlobTxWithMismatchedSidecar},
+		{Name: "BlobViolations", Fn: s.TestBlobViolations},
 	}
 }
 
