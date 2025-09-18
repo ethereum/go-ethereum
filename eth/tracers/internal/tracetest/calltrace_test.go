@@ -211,11 +211,9 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 	defer state.Close()
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	evm := vm.NewEVM(context, state.StateDB, test.Genesis.Config, vm.Config{})
-
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		snap := state.StateDB.Snapshot()
 		tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), nil, test.Genesis.Config)
 		if err != nil {
