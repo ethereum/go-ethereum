@@ -112,7 +112,6 @@ func benchmarkLogger(b *testing.B, l Logger) {
 			"err", err)
 		i++
 	}
-	b.StopTimer()
 }
 
 func TestLoggerOutput(t *testing.T) {
