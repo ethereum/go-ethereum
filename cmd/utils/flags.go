@@ -243,11 +243,6 @@ var (
 		Value:    2048,
 		Category: flags.EthCategory,
 	}
-	OverrideOsaka = &cli.Uint64Flag{
-		Name:     "override.osaka",
-		Usage:    "Manually specify the Osaka fork timestamp, overriding the bundled setting",
-		Category: flags.EthCategory,
-	}
 	OverrideVerkle = &cli.Uint64Flag{
 		Name:     "override.verkle",
 		Usage:    "Manually specify the Verkle fork timestamp, overriding the bundled setting",
