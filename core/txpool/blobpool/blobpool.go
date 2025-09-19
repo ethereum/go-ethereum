@@ -1379,15 +1379,12 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte, convert bool) (
 		}
 		// Traverse the blobs in the transaction
 		for i, hash := range tx.BlobHashes() {
-			skip := false // if true, skip using null, but proceed
 			list, ok := indices[hash]
 			if !ok {
 				continue // non-interesting blob
 			}
 			var pf []kzg4844.Proof
-			if !convert && sidecar.Version != version {
-				skip = true // blob sidecar version mismatch, skip but proceed
-			} else {
+			if convert || sidecar.Version == version {
 				switch version {
 				case types.BlobSidecarVersion0:
 					if sidecar.Version == types.BlobSidecarVersion0 {
@@ -1414,12 +1411,10 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte, convert bool) (
 						pf = cellProofs
 					}
 				}
-				if !skip {
-					for _, index := range list {
-						blobs[index] = &sidecar.Blobs[i]
-						commitments[index] = sidecar.Commitments[i]
-						proofs[index] = pf
-					}
+				for _, index := range list {
+					blobs[index] = &sidecar.Blobs[i]
+					commitments[index] = sidecar.Commitments[i]
+					proofs[index] = pf
 				}
 			}
 			filled[hash] = struct{}{}
