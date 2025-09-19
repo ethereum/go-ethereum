@@ -186,6 +186,7 @@ var (
 		utils.AllowUnprotectedTxs,
 		utils.BatchRequestLimit,
 		utils.BatchResponseMaxSize,
+		utils.ShutdownDelay,
 	}
 
 	metricsFlags = []cli.Flag{
