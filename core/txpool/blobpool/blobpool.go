@@ -1481,7 +1481,7 @@ func (p *BlobPool) preCheck(txs []*types.Transaction) ([]*types.Transaction, []e
 			errs = append(errs, nil)
 			continue
 		}
-		if time.Now().After(deadline) {
+		if head.Time > uint64(deadline.Unix()) {
 			errs = append(errs, errors.New("legacy blob tx is not supported"))
 			continue
 		}
