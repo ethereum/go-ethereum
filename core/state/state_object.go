@@ -333,7 +333,7 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			continue
 		}
 		if !exist {
-			log.Error("Storage slot is not found in pending area", s.address, "slot", key)
+			log.Error("Storage slot is not found in pending area", "address", s.address, "slot", key)
 			continue
 		}
 		if (value != common.Hash{}) {
