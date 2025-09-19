@@ -1226,6 +1226,25 @@ func TestCall(t *testing.T) {
 			},
 			expectErr: errors.New(`block override "withdrawals" is not supported for this RPC method`),
 		},
+		// Test transient storage override
+		{
+			name:        "transient storage override takes effect",
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From: &accounts[1].addr,
+				To:   &randomAccounts[2].addr,
+			},
+			overrides: override.StateOverride{
+				randomAccounts[2].addr: override.OverrideAccount{
+					// PUSH1 0x01 PUSH1 0x00 TSTORE PUSH1 0x00 TLOAD PUSH1 0x00 MSTORE PUSH1 0x20 PUSH1 0x00 RETURN
+					Code: hex2Bytes("0x600160005d60005c60005260206000f3"),
+					TransientStorage: map[common.Hash]common.Hash{
+						common.Hash{}: common.HexToHash("0xabcd"),
+					},
+				},
+			},
+			want: "0x000000000000000000000000000000000000000000000000000000000000abcd",
+		},
 	}
 	for _, tc := range testSuite {
 		result, err := api.Call(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)

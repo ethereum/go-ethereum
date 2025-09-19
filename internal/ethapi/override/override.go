@@ -33,7 +33,7 @@ import (
 // OverrideAccount indicates the overriding fields of account during the execution
 // of a message call.
 // Note, state and stateDiff can't be specified at the same time. If state is
-// set, message execution will only use the data in the given state. Otherwise
+// set, message execution will only use the data in the given state. Otherwise,
 // if stateDiff is set, all diff will be applied first and then execute the call
 // message.
 type OverrideAccount struct {
@@ -42,6 +42,7 @@ type OverrideAccount struct {
 	Balance          *hexutil.Big                `json:"balance"`
 	State            map[common.Hash]common.Hash `json:"state"`
 	StateDiff        map[common.Hash]common.Hash `json:"stateDiff"`
+	TransientStorage map[common.Hash]common.Hash `json:"transientStorage"`
 	MovePrecompileTo *common.Address             `json:"movePrecompileToAddress"`
 }
 
@@ -109,6 +110,12 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 		if account.StateDiff != nil {
 			for key, value := range account.StateDiff {
 				statedb.SetState(addr, key, value)
+			}
+		}
+		// Apply transient storage overrides.
+		if account.TransientStorage != nil {
+			for key, value := range account.TransientStorage {
+				statedb.SetTransientState(addr, key, value)
 			}
 		}
 	}

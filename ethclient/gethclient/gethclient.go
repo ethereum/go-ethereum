@@ -301,21 +301,26 @@ type OverrideAccount struct {
 
 	// StateDiff allows overriding individual storage slots.
 	StateDiff map[common.Hash]common.Hash
+
+	// TransientStorage allows overriding transient storage slots.
+	TransientStorage map[common.Hash]common.Hash
 }
 
 func (a OverrideAccount) MarshalJSON() ([]byte, error) {
 	type acc struct {
-		Nonce     hexutil.Uint64              `json:"nonce,omitempty"`
-		Code      string                      `json:"code,omitempty"`
-		Balance   *hexutil.Big                `json:"balance,omitempty"`
-		State     interface{}                 `json:"state,omitempty"`
-		StateDiff map[common.Hash]common.Hash `json:"stateDiff,omitempty"`
+		Nonce            hexutil.Uint64              `json:"nonce,omitempty"`
+		Code             string                      `json:"code,omitempty"`
+		Balance          *hexutil.Big                `json:"balance,omitempty"`
+		State            interface{}                 `json:"state,omitempty"`
+		StateDiff        map[common.Hash]common.Hash `json:"stateDiff,omitempty"`
+		TransientStorage map[common.Hash]common.Hash `json:"transientStorage,omitempty"`
 	}
 
 	output := acc{
-		Nonce:     hexutil.Uint64(a.Nonce),
-		Balance:   (*hexutil.Big)(a.Balance),
-		StateDiff: a.StateDiff,
+		Nonce:            hexutil.Uint64(a.Nonce),
+		Balance:          (*hexutil.Big)(a.Balance),
+		StateDiff:        a.StateDiff,
+		TransientStorage: a.TransientStorage,
 	}
 	if a.Code != nil {
 		output.Code = hexutil.Encode(a.Code)
