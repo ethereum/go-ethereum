@@ -1347,13 +1347,14 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte, convert bool) (
 	for i, h := range vhashes {
 		indices[h] = append(indices[h], i)
 	}
+
 	for _, vhash := range vhashes {
-		// Skip duplicate vhash that was already resolved in a previous iteration
 		if _, ok := filled[vhash]; ok {
+			// Skip vhash that was already resolved in a previous iteration
 			continue
 		}
-		// Retrieve the corresponding blob tx with the vhash, skip blob resolution
-		// if it's not found locally and place the null instead.
+
+		// Retrieve the corresponding blob tx with the vhash.
 		p.lock.RLock()
 		txID, exists := p.lookup.storeidOfBlob(vhash)
 		p.lock.RUnlock()
@@ -1383,41 +1384,46 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte, convert bool) (
 			if !ok {
 				continue // non-interesting blob
 			}
+			// Mark hash as seen.
+			filled[hash] = struct{}{}
+			if sidecar.Version != version && !convert {
+				// Skip blobs with incompatible version. Note we still track the blob hash
+				// in `filled` here, ensuring that we do not resolve this tx another time.
+				continue
+			}
+			// Get or convert the proof.
 			var pf []kzg4844.Proof
-			if convert || sidecar.Version == version {
-				switch version {
-				case types.BlobSidecarVersion0:
-					if sidecar.Version == types.BlobSidecarVersion0 {
-						pf = []kzg4844.Proof{sidecar.Proofs[i]}
-					} else {
-						proof, err := kzg4844.ComputeBlobProof(&sidecar.Blobs[i], sidecar.Commitments[i])
-						if err != nil {
-							return nil, nil, nil, err
-						}
-						pf = []kzg4844.Proof{proof}
+			switch version {
+			case types.BlobSidecarVersion0:
+				if sidecar.Version == types.BlobSidecarVersion0 {
+					pf = []kzg4844.Proof{sidecar.Proofs[i]}
+				} else {
+					proof, err := kzg4844.ComputeBlobProof(&sidecar.Blobs[i], sidecar.Commitments[i])
+					if err != nil {
+						return nil, nil, nil, err
 					}
-				case types.BlobSidecarVersion1:
-					if sidecar.Version == types.BlobSidecarVersion0 {
-						cellProofs, err := kzg4844.ComputeCellProofs(&sidecar.Blobs[i])
-						if err != nil {
-							return nil, nil, nil, err
-						}
-						pf = cellProofs
-					} else {
-						cellProofs, err := sidecar.CellProofsAt(i)
-						if err != nil {
-							return nil, nil, nil, err
-						}
-						pf = cellProofs
-					}
+					pf = []kzg4844.Proof{proof}
 				}
-				for _, index := range list {
-					blobs[index] = &sidecar.Blobs[i]
-					commitments[index] = sidecar.Commitments[i]
-					proofs[index] = pf
+			case types.BlobSidecarVersion1:
+				if sidecar.Version == types.BlobSidecarVersion0 {
+					cellProofs, err := kzg4844.ComputeCellProofs(&sidecar.Blobs[i])
+					if err != nil {
+						return nil, nil, nil, err
+					}
+					pf = cellProofs
+				} else {
+					cellProofs, err := sidecar.CellProofsAt(i)
+					if err != nil {
+						return nil, nil, nil, err
+					}
+					pf = cellProofs
 				}
 			}
-			filled[hash] = struct{}{}
+			for _, index := range list {
+				blobs[index] = &sidecar.Blobs[i]
+				commitments[index] = sidecar.Commitments[i]
+				proofs[index] = pf
+			}
 		}
 	}
 	return blobs, commitments, proofs, nil
