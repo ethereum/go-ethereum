@@ -298,7 +298,6 @@ func opBenchmark(bench *testing.B, op executionFunc, args ...string) {
 		op(&pc, evm, scope)
 		stack.pop()
 	}
-	bench.StopTimer()
 
 	for i, arg := range args {
 		want := new(uint256.Int).SetBytes(common.Hex2Bytes(arg))
