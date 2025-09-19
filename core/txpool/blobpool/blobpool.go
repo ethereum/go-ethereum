@@ -339,7 +339,9 @@ type BlobPool struct {
 
 	signer types.Signer     // Transaction signer to use for sender recovery
 	chain  BlockChain       // Chain object to access the state through
-	cQueue *conversionQueue // The queue for performing legacy sidecar conversion
+	cQueue *conversionQueue // The queue for performing legacy sidecar conversion (TODO: remove after Osaka)
+
+	sidecarMigrationDoneCh chan struct{} // Channel for signaling when all txs at the boundary have been converted (TODO: remove after Osaka)
 
 	head   atomic.Pointer[types.Header] // Current head of the chain
 	state  *state.StateDB               // Current state at the head of the chain
@@ -945,6 +947,9 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 						log.Debug("Reinjected the converted tx", "hash", tx.Hash(), "err", errs[0])
 					}
 				}
+			}
+			if p.sidecarMigrationDoneCh != nil {
+				close(p.sidecarMigrationDoneCh)
 			}
 			log.Info("Completed the blob transaction conversion", "discarded", fail, "injected", success, "elapsed", common.PrettyDuration(time.Since(start)))
 		}()
