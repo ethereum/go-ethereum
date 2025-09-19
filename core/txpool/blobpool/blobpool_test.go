@@ -423,11 +423,11 @@ func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
 			hashes = append(hashes, tx.vhashes...)
 		}
 	}
-	blobs1, _, proofs1, err := pool.GetBlobs(hashes, types.BlobSidecarVersion0)
+	blobs1, _, proofs1, err := pool.GetBlobs(hashes, types.BlobSidecarVersion0, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	blobs2, _, proofs2, err := pool.GetBlobs(hashes, types.BlobSidecarVersion1)
+	blobs2, _, proofs2, err := pool.GetBlobs(hashes, types.BlobSidecarVersion1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -441,22 +441,18 @@ func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
 		return
 	}
 	for i, hash := range hashes {
-		// If an item is missing, but shouldn't, error
-		if blobs1[i] == nil || proofs1[i] == nil {
-			t.Errorf("tracked blob retrieval failed: item %d, hash %x", i, hash)
-			continue
-		}
-		if blobs2[i] == nil || proofs2[i] == nil {
+		// If an item is missing from both, but shouldn't, error
+		if (blobs1[i] == nil || proofs1[i] == nil) && (blobs2[i] == nil || proofs2[i] == nil) {
 			t.Errorf("tracked blob retrieval failed: item %d, hash %x", i, hash)
 			continue
 		}
 		// Item retrieved, make sure it matches the expectation
 		index := testBlobIndices[hash]
-		if *blobs1[i] != *testBlobs[index] || proofs1[i][0] != testBlobProofs[index] {
+		if blobs1[i] != nil && (*blobs1[i] != *testBlobs[index] || proofs1[i][0] != testBlobProofs[index]) {
 			t.Errorf("retrieved blob or proof mismatch: item %d, hash %x", i, hash)
 			continue
 		}
-		if *blobs2[i] != *testBlobs[index] || !slices.Equal(proofs2[i], testBlobCellProofs[index]) {
+		if blobs2[i] != nil && (*blobs2[i] != *testBlobs[index] || !slices.Equal(proofs2[i], testBlobCellProofs[index])) {
 			t.Errorf("retrieved blob or proof mismatch: item %d, hash %x", i, hash)
 			continue
 		}
@@ -1926,8 +1922,9 @@ func TestGetBlobs(t *testing.T) {
 	cases := []struct {
 		start      int
 		limit      int
-		fillRandom bool
-		version    byte
+		fillRandom bool // Whether to randomly fill some of the requested blobs with unknowns
+		version    byte // Blob sidecar version to request
+		convert    bool // Whether to convert version on retrieval
 	}{
 		{
 			start: 0, limit: 6,
@@ -1993,6 +1990,11 @@ func TestGetBlobs(t *testing.T) {
 			start: 0, limit: 18, fillRandom: true,
 			version: types.BlobSidecarVersion1,
 		},
+		{
+			start: 0, limit: 18, fillRandom: true,
+			version: types.BlobSidecarVersion1,
+			convert: true, // Convert some version 0 blobs to version 1 while retrieving
+		},
 	}
 	for i, c := range cases {
 		var (
@@ -2014,7 +2016,7 @@ func TestGetBlobs(t *testing.T) {
 			filled[len(vhashes)] = struct{}{}
 			vhashes = append(vhashes, testrand.Hash())
 		}
-		blobs, _, proofs, err := pool.GetBlobs(vhashes, c.version)
+		blobs, _, proofs, err := pool.GetBlobs(vhashes, c.version, c.convert)
 		if err != nil {
 			t.Errorf("Unexpected error for case %d, %v", i, err)
 		}
@@ -2029,6 +2031,7 @@ func TestGetBlobs(t *testing.T) {
 
 		var unknown int
 		for j := 0; j < len(blobs); j++ {
+			testBlobIndex := c.start + j - unknown
 			if _, exist := filled[j]; exist {
 				if blobs[j] != nil || proofs[j] != nil {
 					t.Errorf("Unexpected blob and proof, item %d", j)
@@ -2038,17 +2041,22 @@ func TestGetBlobs(t *testing.T) {
 			}
 			// If an item is missing, but shouldn't, error
 			if blobs[j] == nil || proofs[j] == nil {
-				t.Errorf("tracked blob retrieval failed: item %d, hash %x", j, vhashes[j])
+				// This is only an error if there was no version mismatch
+				if c.convert ||
+					(c.version == types.BlobSidecarVersion1 && 6 <= testBlobIndex && testBlobIndex < 12) ||
+					(c.version == types.BlobSidecarVersion0 && (testBlobIndex < 6 || 12 <= testBlobIndex)) {
+					t.Errorf("tracked blob retrieval failed: item %d, hash %x", j, vhashes[j])
+				}
 				continue
 			}
 			// Item retrieved, make sure the blob matches the expectation
-			if *blobs[j] != *testBlobs[c.start+j-unknown] {
+			if *blobs[j] != *testBlobs[testBlobIndex] {
 				t.Errorf("retrieved blob mismatch: item %d, hash %x", j, vhashes[j])
 				continue
 			}
 			// Item retrieved, make sure the proof matches the expectation
 			if c.version == types.BlobSidecarVersion0 {
-				if proofs[j][0] != testBlobProofs[c.start+j-unknown] {
+				if proofs[j][0] != testBlobProofs[testBlobIndex] {
 					t.Errorf("retrieved proof mismatch: item %d, hash %x", j, vhashes[j])
 				}
 			} else {
