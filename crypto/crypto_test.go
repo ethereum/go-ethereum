@@ -60,7 +60,7 @@ func TestToECDSAErrors(t *testing.T) {
 
 func BenchmarkSha3(b *testing.B) {
 	a := []byte("hello world")
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		Keccak256(a)
 	}
 }
@@ -310,7 +310,7 @@ func BenchmarkKeccak256Hash(b *testing.B) {
 	rand.Read(input[:])
 
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		Keccak256Hash(input[:])
 	}
 }
@@ -329,7 +329,7 @@ func BenchmarkHashData(b *testing.B) {
 	rand.Read(input[:])
 
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		HashData(buffer, input[:])
 	}
 }
