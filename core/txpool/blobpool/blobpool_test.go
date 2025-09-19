@@ -88,6 +88,12 @@ type testBlockChain struct {
 	statedb *state.StateDB
 
 	blocks map[uint64]*types.Block
+
+	blockTime *uint64
+}
+
+func (bc *testBlockChain) setHeadTime(time uint64) {
+	bc.blockTime = &time
 }
 
 func (bc *testBlockChain) Config() *params.ChainConfig {
@@ -105,6 +111,10 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 		blockTime   = *bc.config.CancunTime + 1
 		gasLimit    = uint64(30_000_000)
 	)
+	if bc.blockTime != nil {
+		blockTime = *bc.blockTime
+	}
+
 	lo := new(big.Int)
 	hi := new(big.Int).Mul(big.NewInt(5714), new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil))
 
@@ -1800,7 +1810,8 @@ func TestAdd(t *testing.T) {
 	}
 }
 
-// Tests adding transactions with legacy sidecars are correctly rejected.
+// Tests adding transactions with legacy sidecars are correctly rejected
+// after the conversion window has passed.
 func TestAddLegacyBlobTx(t *testing.T) {
 	var (
 		key1, _ = crypto.GenerateKey()
@@ -1821,6 +1832,9 @@ func TestAddLegacyBlobTx(t *testing.T) {
 		blobfee: uint256.NewInt(105),
 		statedb: statedb,
 	}
+	time := *params.MergedTestChainConfig.OsakaTime + uint64(conversionTimeWindow.Seconds()) + 1
+	chain.setHeadTime(time)
+
 	pool := New(Config{Datadir: t.TempDir()}, chain, nil)
 	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
