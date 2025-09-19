@@ -18,6 +18,7 @@ package blobpool
 
 import (
 	"errors"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -130,10 +131,11 @@ func (q *conversionQueue) loop() {
 			if done == nil {
 				done, interrupt = make(chan struct{}), new(atomic.Int32)
 
-				tasks := cTasks
+				tasks := slices.Clone(cTasks)
 				cTasks = cTasks[:0]
 				go q.run(tasks, done, interrupt)
 			}
+
 		case <-done:
 			done, interrupt = nil, nil
 
@@ -142,7 +144,7 @@ func (q *conversionQueue) loop() {
 				return
 			}
 			interrupt.Store(1)
-			log.Info("Waiting background converter to exit")
+			log.Debug("Waiting for blob proof conversion to exit")
 			<-done
 			return
 		}
