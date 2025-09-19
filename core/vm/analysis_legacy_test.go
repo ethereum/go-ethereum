@@ -65,21 +65,17 @@ func BenchmarkJumpdestAnalysis_1200k(bench *testing.B) {
 	// 1.4 ms
 	code := make([]byte, analysisCodeSize)
 	bench.SetBytes(analysisCodeSize)
-	bench.ResetTimer()
-	for i := 0; i < bench.N; i++ {
+	for bench.Loop() {
 		codeBitmap(code)
 	}
-	bench.StopTimer()
 }
 func BenchmarkJumpdestHashing_1200k(bench *testing.B) {
 	// 4 ms
 	code := make([]byte, analysisCodeSize)
 	bench.SetBytes(analysisCodeSize)
-	bench.ResetTimer()
-	for i := 0; i < bench.N; i++ {
+	for bench.Loop() {
 		crypto.Keccak256Hash(code)
 	}
-	bench.StopTimer()
 }
 
 func BenchmarkJumpdestOpAnalysis(bench *testing.B) {
@@ -91,8 +87,7 @@ func BenchmarkJumpdestOpAnalysis(bench *testing.B) {
 			code[i] = byte(op)
 		}
 		bits := make(BitVec, len(code)/8+1+4)
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			clear(bits)
 			codeBitmapInternal(code, bits)
 		}

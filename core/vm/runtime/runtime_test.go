@@ -150,8 +150,7 @@ func BenchmarkCall(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for j := 0; j < 400; j++ {
 			Execute(code, cpurchase, nil)
 			Execute(code, creceived, nil)
@@ -190,11 +189,9 @@ func benchmarkEVM_Create(bench *testing.B, code string) {
 		EVMConfig: vm.Config{},
 	}
 	// Warm up the intpools and stuff
-	bench.ResetTimer()
-	for i := 0; i < bench.N; i++ {
+	for bench.Loop() {
 		Call(receiver, []byte{}, &runtimeConfig)
 	}
-	bench.StopTimer()
 }
 
 func BenchmarkEVM_CREATE_500(bench *testing.B) {
@@ -233,8 +230,7 @@ func BenchmarkEVM_SWAP1(b *testing.B) {
 	b.Run("10k", func(b *testing.B) {
 		contractCode := swapContract(10_000)
 		state.SetCode(contractAddr, contractCode, tracing.CodeChangeUnspecified)
-
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, _, err := Call(contractAddr, []byte{}, &Config{State: state})
 			if err != nil {
 				b.Fatal(err)
@@ -264,8 +260,7 @@ func BenchmarkEVM_RETURN(b *testing.B) {
 
 			contractCode := returnContract(n)
 			state.SetCode(contractAddr, contractCode, tracing.CodeChangeUnspecified)
-
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				ret, _, err := Call(contractAddr, []byte{}, &Config{State: state})
 				if err != nil {
 					b.Fatal(err)
@@ -432,7 +427,7 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode 
 
 	b.Run(name, func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			Call(destination, nil, cfg)
 		}
 	})
