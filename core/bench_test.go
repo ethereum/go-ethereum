@@ -326,7 +326,6 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 	db.Close()
 	options := DefaultConfig().WithArchive(true)
 	b.ReportAllocs()
-	b.ResetTimer()
 	for b.Loop() {
 		pdb, err = pebble.New(dir, 1024, 128, "", false)
 		if err != nil {
