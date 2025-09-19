@@ -223,18 +223,6 @@ func constructDevModeBanner(ctx *cli.Context, cfg gethConfig) string {
 // makeFullNode loads geth configuration and creates the Ethereum backend.
 func makeFullNode(ctx *cli.Context) *node.Node {
 	stack, cfg := makeConfigNode(ctx)
-	if ctx.IsSet(utils.OverrideOsaka.Name) {
-		v := ctx.Uint64(utils.OverrideOsaka.Name)
-		cfg.Eth.OverrideOsaka = &v
-	}
-	if ctx.IsSet(utils.OverrideBPO1.Name) {
-		v := ctx.Uint64(utils.OverrideBPO1.Name)
-		cfg.Eth.OverrideBPO1 = &v
-	}
-	if ctx.IsSet(utils.OverrideBPO2.Name) {
-		v := ctx.Uint64(utils.OverrideBPO2.Name)
-		cfg.Eth.OverrideBPO2 = &v
-	}
 	if ctx.IsSet(utils.OverrideVerkle.Name) {
 		v := ctx.Uint64(utils.OverrideVerkle.Name)
 		cfg.Eth.OverrideVerkle = &v
