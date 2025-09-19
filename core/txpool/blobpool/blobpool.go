@@ -1331,7 +1331,11 @@ func (p *BlobPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 //
 // This is a utility method for the engine API, enabling consensus clients to
 // retrieve blobs from the pools directly instead of the network.
-func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blob, []kzg4844.Commitment, [][]kzg4844.Proof, error) {
+//
+// The version argument specifies the type of proofs to return, either the
+// blob proofs (version 0) or the cell proofs (version 1). Proofs conversion is
+// CPU intensive, so only done if explicitly requested with the convert flag.
+func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte, convert bool) ([]*kzg4844.Blob, []kzg4844.Commitment, [][]kzg4844.Proof, error) {
 	var (
 		blobs       = make([]*kzg4844.Blob, len(vhashes))
 		commitments = make([]kzg4844.Commitment, len(vhashes))
@@ -1343,13 +1347,14 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 	for i, h := range vhashes {
 		indices[h] = append(indices[h], i)
 	}
+
 	for _, vhash := range vhashes {
-		// Skip duplicate vhash that was already resolved in a previous iteration
 		if _, ok := filled[vhash]; ok {
+			// Skip vhash that was already resolved in a previous iteration
 			continue
 		}
-		// Retrieve the corresponding blob tx with the vhash, skip blob resolution
-		// if it's not found locally and place the null instead.
+
+		// Retrieve the corresponding blob tx with the vhash.
 		p.lock.RLock()
 		txID, exists := p.lookup.storeidOfBlob(vhash)
 		p.lock.RUnlock()
@@ -1379,6 +1384,14 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 			if !ok {
 				continue // non-interesting blob
 			}
+			// Mark hash as seen.
+			filled[hash] = struct{}{}
+			if sidecar.Version != version && !convert {
+				// Skip blobs with incompatible version. Note we still track the blob hash
+				// in `filled` here, ensuring that we do not resolve this tx another time.
+				continue
+			}
+			// Get or convert the proof.
 			var pf []kzg4844.Proof
 			switch version {
 			case types.BlobSidecarVersion0:
@@ -1411,7 +1424,6 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 				commitments[index] = sidecar.Commitments[i]
 				proofs[index] = pf
 			}
-			filled[hash] = struct{}{}
 		}
 	}
 	return blobs, commitments, proofs, nil
