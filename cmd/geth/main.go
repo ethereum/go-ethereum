@@ -160,6 +160,7 @@ var (
 		utils.HTTPListenAddrFlag,
 		utils.HTTPPortFlag,
 		utils.HTTPCORSDomainFlag,
+		utils.HTTPHealthEnabledFlag,
 		utils.AuthListenFlag,
 		utils.AuthPortFlag,
 		utils.AuthVirtualHostsFlag,
