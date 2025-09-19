@@ -1810,9 +1810,14 @@ func TestAdd(t *testing.T) {
 	}
 }
 
-// Tests adding transactions with legacy sidecars are correctly rejected
-// after the conversion window has passed.
+// Tests that transactions with legacy sidecars are accepted within the
+// conversion window but rejected after it has passed.
 func TestAddLegacyBlobTx(t *testing.T) {
+	testAddLegacyBlobTx(t, true)  // conversion window has not yet passed
+	testAddLegacyBlobTx(t, false) // conversion window passed
+}
+
+func testAddLegacyBlobTx(t *testing.T, accept bool) {
 	var (
 		key1, _ = crypto.GenerateKey()
 		key2, _ = crypto.GenerateKey()
@@ -1832,7 +1837,13 @@ func TestAddLegacyBlobTx(t *testing.T) {
 		blobfee: uint256.NewInt(105),
 		statedb: statedb,
 	}
-	time := *params.MergedTestChainConfig.OsakaTime + uint64(conversionTimeWindow.Seconds()) + 1
+	var timeDiff uint64
+	if accept {
+		timeDiff = uint64(conversionTimeWindow.Seconds()) - 1
+	} else {
+		timeDiff = uint64(conversionTimeWindow.Seconds()) + 1
+	}
+	time := *params.MergedTestChainConfig.OsakaTime + timeDiff
 	chain.setHeadTime(time)
 
 	pool := New(Config{Datadir: t.TempDir()}, chain, nil)
@@ -1844,12 +1855,15 @@ func TestAddLegacyBlobTx(t *testing.T) {
 	var (
 		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 6, 0, key1, types.BlobSidecarVersion0)
 		tx2 = makeMultiBlobTx(0, 1, 800, 70, 6, 6, key2, types.BlobSidecarVersion0)
-		tx3 = makeMultiBlobTx(1, 1, 800, 70, 6, 12, key2, types.BlobSidecarVersion1)
+		txs = []*types.Transaction{tx1, tx2}
 	)
-	errs := pool.Add([]*types.Transaction{tx1, tx2, tx3}, true)
+	errs := pool.Add(txs, true)
 	for _, err := range errs {
-		if err == nil {
-			t.Fatalf("expected tx add to fail")
+		if accept && err != nil {
+			t.Fatalf("expected tx add to succeed, %v", err)
+		}
+		if !accept && err == nil {
+			t.Fatal("expected tx add to fail")
 		}
 	}
 	verifyPoolInternals(t, pool)

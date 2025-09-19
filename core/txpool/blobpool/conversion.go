@@ -90,8 +90,8 @@ func (q *conversionQueue) run(tasks []*cTask, done chan struct{}, interrupt *ato
 
 	for _, t := range tasks {
 		if interrupt != nil && interrupt.Load() != 0 {
-			log.Info("Legacy blob tx conversion is interrupted")
-			return
+			t.done <- errors.New("conversion is interrupted")
+			continue
 		}
 		sidecar := t.tx.BlobTxSidecar()
 		if sidecar == nil {
