@@ -32,7 +32,7 @@ var (
 	testServer2 = testServer("testServer2")
 
 	testBlock1 = types.NewBeaconBlock(&deneb.BeaconBlock{
-		Slot: 123,
+		Slot: 127,
 		Body: deneb.BeaconBlockBody{
 			ExecutionPayload: deneb.ExecutionPayload{
 				BlockNumber: 456,
@@ -41,13 +41,21 @@ var (
 		},
 	})
 	testBlock2 = types.NewBeaconBlock(&deneb.BeaconBlock{
-		Slot: 124,
+		Slot: 128,
 		Body: deneb.BeaconBlockBody{
 			ExecutionPayload: deneb.ExecutionPayload{
 				BlockNumber: 457,
 				BlockHash:   zrntcommon.Hash32(common.HexToHash("011703f39c664efc1c6cf5f49ca09b595581eec572d4dfddd3d6179a9e63e655")),
 			},
 		},
+	})
+	testFinal1 = types.NewExecutionHeader(&deneb.ExecutionPayloadHeader{
+		BlockNumber: 395,
+		BlockHash:   zrntcommon.Hash32(common.HexToHash("abbe7625624bf8ddd84723709e2758956289465dd23475f02387e0854942666")),
+	})
+	testFinal2 = types.NewExecutionHeader(&deneb.ExecutionPayloadHeader{
+		BlockNumber: 420,
+		BlockHash:   zrntcommon.Hash32(common.HexToHash("9182a6ef8723654de174283750932ccc092378549836bf4873657eeec474598")),
 	})
 )
 
@@ -66,9 +74,10 @@ func TestBlockSync(t *testing.T) {
 	ts.AddServer(testServer1, 1)
 	ts.AddServer(testServer2, 1)
 
-	expHeadBlock := func(expHead *types.BeaconBlock) {
+	expHeadEvent := func(expHead *types.BeaconBlock, expFinal *types.ExecutionHeader) {
 		t.Helper()
 		var expNumber, headNumber uint64
+		var expFinalHash, finalHash common.Hash
 		if expHead != nil {
 			p, err := expHead.ExecutionPayload()
 			if err != nil {
@@ -76,19 +85,26 @@ func TestBlockSync(t *testing.T) {
 			}
 			expNumber = p.NumberU64()
 		}
+		if expFinal != nil {
+			expFinalHash = expFinal.BlockHash()
+		}
 		select {
 		case event := <-headCh:
 			headNumber = event.Block.NumberU64()
+			finalHash = event.Finalized
 		default:
 		}
 		if headNumber != expNumber {
 			t.Errorf("Wrong head block, expected block number %d, got %d)", expNumber, headNumber)
 		}
+		if finalHash != expFinalHash {
+			t.Errorf("Wrong finalized block, expected block hash %064x, got %064x)", expFinalHash[:], finalHash[:])
+		}
 	}
 
 	// no block requests expected until head tracker knows about a head
 	ts.Run(1)
-	expHeadBlock(nil)
+	expHeadEvent(nil, nil)
 
 	// set block 1 as prefetch head, announced by server 2
 	head1 := blockHeadInfo(testBlock1)
@@ -103,12 +119,13 @@ func TestBlockSync(t *testing.T) {
 	ts.AddAllowance(testServer2, 1)
 	ts.Run(3)
 	// head block still not expected as the fetched block is not the validated head yet
-	expHeadBlock(nil)
+	expHeadEvent(nil, nil)
 
 	// set as validated head, expect no further requests but block 1 set as head block
 	ht.validated.Header = testBlock1.Header()
+	ht.finalized, ht.finalizedPayload = testBlock1.Header(), testFinal1
 	ts.Run(4)
-	expHeadBlock(testBlock1)
+	expHeadEvent(testBlock1, testFinal1)
 
 	// set block 2 as prefetch head, announced by server 1
 	head2 := blockHeadInfo(testBlock2)
@@ -126,17 +143,26 @@ func TestBlockSync(t *testing.T) {
 	// expect req2 retry to server 2
 	ts.Run(7, testServer2, sync.ReqBeaconBlock(head2.BlockRoot))
 	// now head block should be unavailable again
-	expHeadBlock(nil)
+	expHeadEvent(nil, nil)
 
 	// valid response, now head block should be block 2 immediately as it is already validated
+	// but head event is still not expected because an epoch boundary was crossed and the
+	// expected finality update has not arrived yet
 	ts.RequestEvent(request.EvResponse, ts.Request(7, 1), testBlock2)
 	ts.Run(8)
-	expHeadBlock(testBlock2)
+	expHeadEvent(nil, nil)
+
+	// expected finality update arrived, now a head event is expected
+	ht.finalized, ht.finalizedPayload = testBlock2.Header(), testFinal2
+	ts.Run(9)
+	expHeadEvent(testBlock2, testFinal2)
 }
 
 type testHeadTracker struct {
-	prefetch  types.HeadInfo
-	validated types.SignedHeader
+	prefetch         types.HeadInfo
+	validated        types.SignedHeader
+	finalized        types.Header
+	finalizedPayload *types.ExecutionHeader
 }
 
 func (h *testHeadTracker) PrefetchHead() types.HeadInfo {
@@ -151,13 +177,14 @@ func (h *testHeadTracker) ValidatedOptimistic() (types.OptimisticUpdate, bool) {
 	}, h.validated.Header != (types.Header{})
 }
 
-// TODO add test case for finality
 func (h *testHeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
-	finalized := types.NewExecutionHeader(new(deneb.ExecutionPayloadHeader))
+	if h.validated.Header == (types.Header{}) || h.finalizedPayload == nil {
+		return types.FinalityUpdate{}, false
+	}
 	return types.FinalityUpdate{
-		Attested:      types.HeaderWithExecProof{Header: h.validated.Header},
-		Finalized:     types.HeaderWithExecProof{PayloadHeader: finalized},
+		Attested:      types.HeaderWithExecProof{Header: h.finalized},
+		Finalized:     types.HeaderWithExecProof{Header: h.finalized, PayloadHeader: h.finalizedPayload},
 		Signature:     h.validated.Signature,
 		SignatureSlot: h.validated.SignatureSlot,
-	}, h.validated.Header != (types.Header{})
+	}, true
 }
