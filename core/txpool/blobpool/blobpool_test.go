@@ -1924,6 +1924,7 @@ func TestGetBlobs(t *testing.T) {
 		limit      int
 		fillRandom bool // Whether to randomly fill some of the requested blobs with unknowns
 		version    byte // Blob sidecar version to request
+		convert    bool // Whether to convert version on retrieval
 	}{
 		{
 			start: 0, limit: 6,
@@ -1989,6 +1990,11 @@ func TestGetBlobs(t *testing.T) {
 			start: 0, limit: 18, fillRandom: true,
 			version: types.BlobSidecarVersion1,
 		},
+		{
+			start: 0, limit: 18, fillRandom: true,
+			version: types.BlobSidecarVersion1,
+			convert: true, // Convert some version 0 blobs to version 1 while retrieving
+		},
 	}
 	for i, c := range cases {
 		var (
@@ -2010,7 +2016,7 @@ func TestGetBlobs(t *testing.T) {
 			filled[len(vhashes)] = struct{}{}
 			vhashes = append(vhashes, testrand.Hash())
 		}
-		blobs, _, proofs, err := pool.GetBlobs(vhashes, c.version, false)
+		blobs, _, proofs, err := pool.GetBlobs(vhashes, c.version, c.convert)
 		if err != nil {
 			t.Errorf("Unexpected error for case %d, %v", i, err)
 		}
@@ -2036,7 +2042,8 @@ func TestGetBlobs(t *testing.T) {
 			// If an item is missing, but shouldn't, error
 			if blobs[j] == nil || proofs[j] == nil {
 				// This is only an error if there was no version mismatch
-				if (c.version == types.BlobSidecarVersion1 && 6 <= testBlobIndex && testBlobIndex < 12) ||
+				if c.convert ||
+					(c.version == types.BlobSidecarVersion1 && 6 <= testBlobIndex && testBlobIndex < 12) ||
 					(c.version == types.BlobSidecarVersion0 && (testBlobIndex < 6 || 12 <= testBlobIndex)) {
 					t.Errorf("tracked blob retrieval failed: item %d, hash %x", j, vhashes[j])
 				}
