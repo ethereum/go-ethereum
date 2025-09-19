@@ -109,11 +109,8 @@ func benchmarkFilters(b *testing.B, history uint64, noHistory bool) {
 	backend.startFilterMaps(history, noHistory, filtermaps.DefaultParams)
 	defer backend.stopFilterMaps()
 
-	b.ResetTimer()
-
 	filter := sys.NewRangeFilter(0, int64(rpc.LatestBlockNumber), []common.Address{addr1, addr2, addr3, addr4}, nil)
-
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		filter.begin = 0
 		logs, _ := filter.Logs(context.Background())
 		if len(logs) != 4 {
