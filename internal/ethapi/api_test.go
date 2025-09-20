@@ -1236,8 +1236,8 @@ func TestCall(t *testing.T) {
 			},
 			overrides: override.StateOverride{
 				randomAccounts[2].addr: override.OverrideAccount{
-					// PUSH1 0x01 PUSH1 0x00 TSTORE PUSH1 0x00 TLOAD PUSH1 0x00 MSTORE PUSH1 0x20 PUSH1 0x00 RETURN
-					Code: hex2Bytes("0x600160005d60005c60005260206000f3"),
+					// PUSH1 0x00 TLOAD PUSH1 0x00 MSTORE PUSH1 0x20 PUSH1 0x00 RETURN
+					Code: hex2Bytes("0x60005c60005260206000f3"),
 					TransientStorage: map[common.Hash]common.Hash{
 						common.Hash{}: common.HexToHash("0xabcd"),
 					},

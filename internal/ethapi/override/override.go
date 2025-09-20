@@ -59,6 +59,20 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 	if diff == nil {
 		return nil
 	}
+
+	// Get transient storage overrides to apply after Prepare()
+	transientOverrides := make(map[common.Address]map[common.Hash]common.Hash)
+	for addr, account := range *diff {
+		if account.TransientStorage != nil && len(account.TransientStorage) > 0 {
+			transientOverrides[addr] = account.TransientStorage
+		}
+	}
+
+	// Store transient storage overrides
+	if len(transientOverrides) > 0 {
+		statedb.SetPendingTransientOverrides(transientOverrides)
+	}
+
 	// Tracks destinations of precompiles that were moved.
 	dirtyAddrs := make(map[common.Address]struct{})
 	for addr, account := range *diff {
@@ -110,12 +124,6 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 		if account.StateDiff != nil {
 			for key, value := range account.StateDiff {
 				statedb.SetState(addr, key, value)
-			}
-		}
-		// Apply transient storage overrides.
-		if account.TransientStorage != nil {
-			for key, value := range account.TransientStorage {
-				statedb.SetTransientState(addr, key, value)
 			}
 		}
 	}
