@@ -232,7 +232,7 @@ func (db *Database) repairHistory() error {
 			// Purge all state history indexing data first
 			batch := db.diskdb.NewBatch()
 			rawdb.DeleteStateHistoryIndexMetadata(batch)
-			rawdb.DeleteStateHistoryIndex(batch)
+			rawdb.DeleteStateHistoryIndexes(batch)
 			if err := batch.Write(); err != nil {
 				log.Crit("Failed to purge state history index", "err", err)
 			}
@@ -426,7 +426,7 @@ func (db *Database) Enable(root common.Hash) error {
 		// Purge all state history indexing data first
 		batch.Reset()
 		rawdb.DeleteStateHistoryIndexMetadata(batch)
-		rawdb.DeleteStateHistoryIndex(batch)
+		rawdb.DeleteStateHistoryIndexes(batch)
 		if err := batch.Write(); err != nil {
 			return err
 		}
