@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -61,11 +62,11 @@ const (
 	// small buffer is added to the proof overhead.
 	txBlobOverhead = uint32(kzg4844.CellProofsPerBlob*len(kzg4844.Proof{}) + 64)
 
-	// txMaxSize is the maximum size a single transaction can have, outside
-	// the included blobs. Since blob transactions are pulled instead of pushed,
-	// and only a small metadata is kept in ram, the rest is on disk, there is
-	// no critical limit that should be enforced. Still, capping it to some sane
-	// limit can never hurt.
+	// txMaxSize is the maximum size a single transaction can have, including the
+	// blobs. Since blob transactions are pulled instead of pushed, and only a
+	// small metadata is kept in ram, the rest is on disk, there is no critical
+	// limit that should be enforced. Still, capping it to some sane limit can
+	// never hurt, which is aligned with maxBlobsPerTx constraint enforced internally.
 	txMaxSize = 1024 * 1024
 
 	// maxBlobsPerTx is the maximum number of blobs that a single transaction can
@@ -93,6 +94,11 @@ const (
 	// storeVersion is the current slotter layout used for the billy.Database
 	// store.
 	storeVersion = 1
+
+	// conversionTimeWindow defines the period after the Osaka fork during which
+	// the pool will still accept and convert legacy blob transactions. After this
+	// window, all legacy blob transactions will be rejected.
+	conversionTimeWindow = time.Hour * 2
 )
 
 // blobTxMeta is the minimal subset of types.BlobTx necessary to validate and
@@ -329,12 +335,13 @@ type BlobPool struct {
 	stored uint64         // Useful data size of all transactions on disk
 	limbo  *limbo         // Persistent data store for the non-finalized blobs
 
-	signer types.Signer // Transaction signer to use for sender recovery
-	chain  BlockChain   // Chain object to access the state through
+	signer types.Signer     // Transaction signer to use for sender recovery
+	chain  BlockChain       // Chain object to access the state through
+	cQueue *conversionQueue // The queue for performing legacy sidecar conversion
 
-	head   *types.Header  // Current head of the chain
-	state  *state.StateDB // Current state at the head of the chain
-	gasTip *uint256.Int   // Currently accepted minimum gas tip
+	head   atomic.Pointer[types.Header] // Current head of the chain
+	state  *state.StateDB               // Current state at the head of the chain
+	gasTip atomic.Pointer[uint256.Int]  // Currently accepted minimum gas tip
 
 	lookup *lookup                          // Lookup table mapping blobs to txs and txs to billy entries
 	index  map[common.Address][]*blobTxMeta // Blob transactions grouped by accounts, sorted by nonce
@@ -359,6 +366,7 @@ func New(config Config, chain BlockChain, hasPendingAuth func(common.Address) bo
 		hasPendingAuth: hasPendingAuth,
 		signer:         types.LatestSigner(chain.Config()),
 		chain:          chain,
+		cQueue:         newConversionQueue(), // Deprecate it after the osaka fork
 		lookup:         newLookup(),
 		index:          make(map[common.Address][]*blobTxMeta),
 		spent:          make(map[common.Address]*uint256.Int),
@@ -400,7 +408,8 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	if err != nil {
 		return err
 	}
-	p.head, p.state = head, state
+	p.head.Store(head)
+	p.state = state
 
 	// Create new slotter for pre-Osaka blob configuration.
 	slotter := newSlotter(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
@@ -440,11 +449,11 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 		p.recheck(addr, nil)
 	}
 	var (
-		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), p.head))
+		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), head))
 		blobfee = uint256.NewInt(params.BlobTxMinBlobGasprice)
 	)
-	if p.head.ExcessBlobGas != nil {
-		blobfee = uint256.MustFromBig(eip4844.CalcBlobFee(p.chain.Config(), p.head))
+	if head.ExcessBlobGas != nil {
+		blobfee = uint256.MustFromBig(eip4844.CalcBlobFee(p.chain.Config(), head))
 	}
 	p.evict = newPriceHeap(basefee, blobfee, p.index)
 
@@ -474,6 +483,9 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 
 // Close closes down the underlying persistent store.
 func (p *BlobPool) Close() error {
+	// Terminate the conversion queue
+	p.cQueue.close()
+
 	var errs []error
 	if p.limbo != nil { // Close might be invoked due to error in constructor, before p,limbo is set
 		if err := p.limbo.Close(); err != nil {
@@ -832,7 +844,7 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 		log.Error("Failed to reset blobpool state", "err", err)
 		return
 	}
-	p.head = newHead
+	p.head.Store(newHead)
 	p.state = statedb
 
 	// Run the reorg between the old and new head and figure out which accounts
@@ -855,7 +867,7 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 		}
 	}
 	// Flush out any blobs from limbo that are older than the latest finality
-	if p.chain.Config().IsCancun(p.head.Number, p.head.Time) {
+	if p.chain.Config().IsCancun(newHead.Number, newHead.Time) {
 		p.limbo.finalize(p.chain.CurrentFinalBlock())
 	}
 	// Reset the price heap for the new set of basefee/blobfee pairs
@@ -1056,14 +1068,15 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 	defer p.lock.Unlock()
 
 	// Store the new minimum gas tip
-	old := p.gasTip
-	p.gasTip = uint256.MustFromBig(tip)
+	old := p.gasTip.Load()
+	newTip := uint256.MustFromBig(tip)
+	p.gasTip.Store(newTip)
 
 	// If the min miner fee increased, remove transactions below the new threshold
-	if old == nil || p.gasTip.Cmp(old) > 0 {
+	if old == nil || newTip.Cmp(old) > 0 {
 		for addr, txs := range p.index {
 			for i, tx := range txs {
-				if tx.execTipCap.Cmp(p.gasTip) < 0 {
+				if tx.execTipCap.Cmp(newTip) < 0 {
 					// Drop the offending transaction
 					var (
 						ids    = []uint64{tx.id}
@@ -1123,10 +1136,10 @@ func (p *BlobPool) ValidateTxBasics(tx *types.Transaction) error {
 		Config:       p.chain.Config(),
 		Accept:       1 << types.BlobTxType,
 		MaxSize:      txMaxSize,
-		MinTip:       p.gasTip.ToBig(),
+		MinTip:       p.gasTip.Load().ToBig(),
 		MaxBlobCount: maxBlobsPerTx,
 	}
-	return txpool.ValidateTransaction(tx, p.head, p.signer, opts)
+	return txpool.ValidateTransaction(tx, p.head.Load(), p.signer, opts)
 }
 
 // checkDelegationLimit determines if the tx sender is delegated or has a
@@ -1164,10 +1177,10 @@ func (p *BlobPool) checkDelegationLimit(tx *types.Transaction) error {
 
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
+//
+// This function assumes the static validation has been performed already and
+// only runs the stateful checks with lock protection.
 func (p *BlobPool) validateTx(tx *types.Transaction) error {
-	if err := p.ValidateTxBasics(tx); err != nil {
-		return err
-	}
 	// Ensure the transaction adheres to the stateful pool filters (nonce, balance)
 	stateOpts := &txpool.ValidationOptionsWithState{
 		State: p.state,
@@ -1444,17 +1457,67 @@ func (p *BlobPool) AvailableBlobs(vhashes []common.Hash) int {
 	return available
 }
 
+// preCheck performs the static validation upon the provided txs and converts
+// the legacy sidecars if Osaka fork has been activated with a short time window.
+//
+// This function is pure static and lock free.
+func (p *BlobPool) preCheck(txs []*types.Transaction) ([]*types.Transaction, []error) {
+	var (
+		head     = p.head.Load()
+		isOsaka  = p.chain.Config().IsOsaka(head.Number, head.Time)
+		deadline time.Time
+	)
+	if isOsaka {
+		deadline = time.Unix(int64(*p.chain.Config().OsakaTime), 0).Add(conversionTimeWindow)
+	}
+	var errs []error
+	for _, tx := range txs {
+		// Validate the transaction statically at first to avoid unnecessary
+		// conversion. This step doesn't require lock protection.
+		if err := p.ValidateTxBasics(tx); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		// Before the Osaka fork, reject the blob txs with cell proofs
+		if !isOsaka {
+			if tx.BlobTxSidecar().Version == types.BlobSidecarVersion0 {
+				errs = append(errs, nil)
+			} else {
+				errs = append(errs, errors.New("cell proof is not supported yet"))
+			}
+			continue
+		}
+		// After the Osaka fork, reject the legacy blob txs if the conversion
+		// time window is passed.
+		if tx.BlobTxSidecar().Version == types.BlobSidecarVersion1 {
+			errs = append(errs, nil)
+			continue
+		}
+		if head.Time > uint64(deadline.Unix()) {
+			errs = append(errs, errors.New("legacy blob tx is not supported"))
+			continue
+		}
+		// Convert the legacy sidecar after Osaka fork. This could be a long
+		// procedure which takes a few seconds, even minutes if there is a long
+		// queue. Fortunately it will only block the routine of the source peer
+		// announcing the tx, without affecting other parts.
+		errs = append(errs, p.cQueue.convert(tx))
+	}
+	return txs, errs
+}
+
 // Add inserts a set of blob transactions into the pool if they pass validation (both
 // consensus validity and pool restrictions).
-//
-// Note, if sync is set the method will block until all internal maintenance
-// related to the add is finished. Only use this during tests for determinism.
 func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 	var (
-		errs = make([]error, len(txs))
+		errs []error
 		adds = make([]*types.Transaction, 0, len(txs))
 	)
+	txs, errs = p.preCheck(txs)
 	for i, tx := range txs {
+		if errs[i] != nil {
+			continue
+		}
 		errs[i] = p.add(tx)
 		if errs[i] == nil {
 			adds = append(adds, tx.WithoutBlobTxSidecar())
@@ -1949,7 +2012,7 @@ func (p *BlobPool) Clear() {
 	p.spent = make(map[common.Address]*uint256.Int)
 
 	var (
-		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), p.head))
+		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), p.head.Load()))
 		blobfee = uint256.NewInt(params.BlobTxMinBlobGasprice)
 	)
 	p.evict = newPriceHeap(basefee, blobfee, p.index)
