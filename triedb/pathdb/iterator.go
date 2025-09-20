@@ -19,7 +19,7 @@ package pathdb
 import (
 	"bytes"
 	"fmt"
-	"sort"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -93,8 +93,8 @@ type diffAccountIterator struct {
 // newDiffAccountIterator creates an account iterator over the given state set.
 func newDiffAccountIterator(seek common.Hash, accountList []common.Hash, fn loadAccount) AccountIterator {
 	// Seek out the requested starting account
-	index := sort.Search(len(accountList), func(i int) bool {
-		return bytes.Compare(seek[:], accountList[i][:]) <= 0
+	index, _ := slices.BinarySearchFunc(accountList, seek, func(a, b common.Hash) int {
+		return bytes.Compare(a[:], b[:])
 	})
 	// Assemble and returned the already seeked iterator
 	return &diffAccountIterator{
@@ -236,8 +236,8 @@ type diffStorageIterator struct {
 
 // newDiffStorageIterator creates a storage iterator over a single diff layer.
 func newDiffStorageIterator(account common.Hash, seek common.Hash, storageList []common.Hash, fn loadStorage) StorageIterator {
-	index := sort.Search(len(storageList), func(i int) bool {
-		return bytes.Compare(seek[:], storageList[i][:]) <= 0
+	index, _ := slices.BinarySearchFunc(storageList, seek, func(a, b common.Hash) int {
+		return bytes.Compare(a[:], b[:])
 	})
 	// Assemble and returned the already seeked iterator
 	return &diffStorageIterator{
