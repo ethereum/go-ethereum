@@ -41,6 +41,7 @@ var activators = map[int]func(*JumpTable){
 	1153: enable1153,
 	4762: enable4762,
 	7702: enable7702,
+	7904: enable7904,
 	7939: enable7939,
 }
 
@@ -555,4 +556,81 @@ func enable7702(jt *JumpTable) {
 	jt[CALLCODE].dynamicGas = gasCallCodeEIP7702
 	jt[STATICCALL].dynamicGas = gasStaticCallEIP7702
 	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP7702
+}
+
+// enable7904 enables the EIP-7907 gas cost changes.
+func enable7904(jt *JumpTable) {
+	jt[ADD].constantGas = GasBaseCost
+	jt[MUL].constantGas = GasBaseCost
+	jt[SUB].constantGas = GasBaseCost
+	jt[DIV].constantGas = GasBaseCost
+	jt[SDIV].constantGas = GasBaseCost
+	jt[MOD].constantGas = GasBaseCost
+	jt[SMOD].constantGas = GasBaseCost
+	jt[ADDMOD].constantGas = GasFastCost
+	jt[MULMOD].constantGas = GasMidCost
+	//jt[EXP].constantGas = GasMidCost
+	jt[SIGNEXTEND].constantGas = GasBaseCost
+	jt[LT].constantGas = GasBaseCost
+	jt[GT].constantGas = GasBaseCost
+	jt[SLT].constantGas = GasBaseCost
+	jt[SGT].constantGas = GasBaseCost
+	jt[EQ].constantGas = GasBaseCost
+	jt[ISZERO].constantGas = GasBaseCost
+	jt[AND].constantGas = GasBaseCost
+	jt[OR].constantGas = GasBaseCost
+	jt[XOR].constantGas = GasBaseCost
+	jt[NOT].constantGas = GasBaseCost
+	jt[BYTE].constantGas = GasBaseCost
+	jt[SHL].constantGas = GasBaseCost
+	jt[SHR].constantGas = GasBaseCost
+	jt[SAR].constantGas = GasBaseCost
+	jt[ADDRESS].constantGas = GasBaseCost
+	//jt[BALANCE].constantGas = GasBaseCost
+
+	jt[ORIGIN].constantGas = GasBaseCost
+	jt[CALLER].constantGas = GasBaseCost
+	jt[CALLVALUE].constantGas = GasBaseCost
+	jt[CALLDATALOAD].constantGas = GasBaseCost
+	jt[CALLDATASIZE].constantGas = GasBaseCost
+	//jt[CALLDATACOPY].constantGas = GasBaseCost
+	jt[CODESIZE].constantGas = GasBaseCost
+	//jt[CODECOPY].constantGas = GasBaseCost
+	jt[GASPRICE].constantGas = GasBaseCost
+	//jt[EXTCODESIZE].constantGas = GasBaseCost
+	//jt[EXTCODECOPY].constantGas = GasBaseCost
+	jt[RETURNDATASIZE].constantGas = GasBaseCost
+	//jt[RETURNDATACOPY].constantGas = GasBaseCost
+	//jt[EXTCODEHASH].constantGas = GasBaseCost
+	jt[COINBASE].constantGas = GasBaseCost
+	jt[TIMESTAMP].constantGas = GasBaseCost
+	jt[NUMBER].constantGas = GasBaseCost
+	jt[GASLIMIT].constantGas = GasBaseCost
+	jt[CHAINID].constantGas = GasBaseCost
+	jt[SELFBALANCE].constantGas = GasBaseCost
+	jt[POP].constantGas = GasBaseCost
+	jt[MLOAD].constantGas = GasBaseCost
+	//jt[MSTORE].constantGas = GasBaseCost
+	//jt[MSTORE8].constantGas = GasBaseCost
+	jt[JUMP].constantGas = GasBaseCost
+	jt[JUMPI].constantGas = GasBaseCost
+	jt[PC].constantGas = GasBaseCost
+	jt[MSIZE].constantGas = GasBaseCost
+	jt[TLOAD].constantGas = GasWarmStorageCost
+	jt[TSTORE].constantGas = GasWarmStorageCost
+	jt[JUMPDEST].constantGas = GasBaseCost
+	//jt[MCOPY].constantGas = GasBaseCost
+	jt[PUSH0].constantGas = GasBaseCost
+	for i := PUSH1; i < PUSH32; i++ {
+		jt[i].constantGas = GasBaseCost
+	}
+	for i := PUSH1; i < PUSH32; i++ {
+		jt[i].constantGas = GasBaseCost
+	}
+	for i := DUP1; i < DUP16; i++ {
+		jt[i].constantGas = GasBaseCost
+	}
+	for i := SWAP1; i < SWAP16; i++ {
+		jt[i].constantGas = GasBaseCost
+	}
 }

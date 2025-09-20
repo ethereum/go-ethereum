@@ -22,13 +22,17 @@ import (
 
 // Gas costs
 const (
-	GasQuickStep   uint64 = 2
-	GasFastestStep uint64 = 3
-	GasFastishStep uint64 = 4
-	GasFastStep    uint64 = 5
-	GasMidStep     uint64 = 8
-	GasSlowStep    uint64 = 10
-	GasExtStep     uint64 = 20
+	GasQuickStep       uint64 = 2
+	GasFastestStep     uint64 = 3
+	GasFastishStep     uint64 = 4
+	GasFastStep        uint64 = 5
+	GasMidStep         uint64 = 8
+	GasSlowStep        uint64 = 10
+	GasExtStep         uint64 = 20
+	GasBaseCost        uint64 = 1
+	GasFastCost        uint64 = 2
+	GasMidCost         uint64 = 3
+	GasWarmStorageCost uint64 = 5
 )
 
 // callGas returns the actual gas cost of the call.
