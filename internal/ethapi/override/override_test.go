@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
@@ -163,6 +164,8 @@ func TestStateOverrideTransientStorage(t *testing.T) {
 	if err := override.Apply(statedb, nil); err != nil {
 		t.Fatalf("failed to apply override: %v", err)
 	}
+
+	statedb.Prepare(params.Rules{}, common.Address{}, common.Address{}, nil, nil, nil)
 
 	// Verify transient storage was set
 	if got := statedb.GetTransientState(addr, key1); got != value1 {
