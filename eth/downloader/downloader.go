@@ -97,8 +97,9 @@ type headerTask struct {
 }
 
 type Downloader struct {
-	mode atomic.Uint32  // Synchronisation mode defining the strategy used (per sync cycle), use d.getMode() to get the SyncMode
-	mux  *event.TypeMux // Event multiplexer to announce sync operation events
+	mode  atomic.Uint32           // Synchronisation mode defining the strategy used (per sync cycle), use d.getMode() to get the SyncMode
+	feed  event.FeedOf[SyncEvent] // Event feed for downloader events
+	scope event.SubscriptionScope
 
 	queue *queue   // Scheduler for selecting the hashes to download
 	peers *peerSet // Set of active peers from which download can proceed
@@ -221,11 +222,10 @@ type BlockChain interface {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, dropPeer peerDropFn, success func()) *Downloader {
+func New(stateDb ethdb.Database, chain BlockChain, dropPeer peerDropFn, success func()) *Downloader {
 	cutoffNumber, cutoffHash := chain.HistoryPruningCutoff()
 	dl := &Downloader{
 		stateDB:           stateDb,
-		mux:               mux,
 		queue:             newQueue(blockCacheMaxItems, blockCacheInitialItems),
 		peers:             newPeerSet(),
 		blockchain:        chain,
@@ -410,17 +410,22 @@ func (d *Downloader) getMode() SyncMode {
 	return SyncMode(d.mode.Load())
 }
 
+// SubscribeSyncEvents creates a subscription for downloader sync events
+func (d *Downloader) SubscribeSyncEvents(ch chan<- SyncEvent) event.Subscription {
+	return d.scope.Track(d.feed.Subscribe(ch))
+}
+
 // syncToHead starts a block synchronization based on the hash chain from
 // the specified head hash.
 func (d *Downloader) syncToHead() (err error) {
-	d.mux.Post(StartEvent{})
+	d.feed.Send(SyncEvent{Type: SyncStarted})
 	defer func() {
 		// reset on error
 		if err != nil {
-			d.mux.Post(FailedEvent{err})
+			d.feed.Send(SyncEvent{Type: SyncFailed, Err: err})
 		} else {
 			latest := d.blockchain.CurrentHeader()
-			d.mux.Post(DoneEvent{latest})
+			d.feed.Send(SyncEvent{Type: SyncCompleted, Latest: latest})
 		}
 	}()
 	mode := d.getMode()
@@ -645,6 +650,9 @@ func (d *Downloader) Cancel() {
 // Terminate interrupts the downloader, canceling all pending operations.
 // The downloader cannot be reused after calling Terminate.
 func (d *Downloader) Terminate() {
+	// Unsubscribe all subscriptions registered from downloader
+	d.scope.Close()
+
 	// Close the termination channel (make sure double close is allowed)
 	d.quitLock.Lock()
 	select {
