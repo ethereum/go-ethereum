@@ -258,7 +258,6 @@ func (e *GenesisMismatchError) Error() string {
 
 // ChainOverrides contains the changes to chain config.
 type ChainOverrides struct {
-	OverrideOsaka  *uint64
 	OverrideVerkle *uint64
 }
 
@@ -266,9 +265,6 @@ type ChainOverrides struct {
 func (o *ChainOverrides) apply(cfg *params.ChainConfig) error {
 	if o == nil || cfg == nil {
 		return nil
-	}
-	if o.OverrideOsaka != nil {
-		cfg.OsakaTime = o.OverrideOsaka
 	}
 	if o.OverrideVerkle != nil {
 		cfg.VerkleTime = o.OverrideVerkle
