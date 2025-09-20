@@ -108,6 +108,7 @@ const (
 	errCodeInvalidParams           = -32602
 	errCodeReverted                = -32000
 	errCodeVMError                 = -32015
+	errCodeTimeout                 = 4
 )
 
 func txValidationError(err error) *invalidTxError {
@@ -168,3 +169,8 @@ type blockGasLimitReachedError struct{ message string }
 
 func (e *blockGasLimitReachedError) Error() string  { return e.message }
 func (e *blockGasLimitReachedError) ErrorCode() int { return errCodeBlockGasLimitReached }
+
+type timeoutError struct{ message string }
+
+func (e *timeoutError) Error() string  { return e.message }
+func (e *timeoutError) ErrorCode() int { return errCodeTimeout }

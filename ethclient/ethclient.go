@@ -696,6 +696,16 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 	return ec.c.CallContext(ctx, nil, "eth_sendRawTransaction", hexutil.Encode(data))
 }
 
+// SendTransactionSync combining transaction submission and receipt retrieval into a single RPC call
+// TODO: testing
+func (ec *Client) SendRawTransactionSync(ctx context.Context, tx *types.Transaction) error {
+	data, err := tx.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	return ec.c.CallContext(ctx, nil, "eth_sendRawTransactionSync", hexutil.Encode(data))
+}
+
 // RevertErrorData returns the 'revert reason' data of a contract call.
 //
 // This can be used with CallContract and EstimateGas, and only when the server is Geth.
