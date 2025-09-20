@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	mrand "math/rand"
+	"slices"
 	"sort"
 	"time"
 
@@ -1014,8 +1015,8 @@ func (f *TxFetcher) forEachAnnounce(announces map[common.Hash]*txMetadataWithSeq
 	for hash, entry := range announces {
 		list = append(list, announcement{hash: hash, meta: entry.txMetadata, seq: entry.seq})
 	}
-	sort.Slice(list, func(i, j int) bool {
-		return list[i].seq < list[j].seq
+	slices.SortFunc(list, func(a, b announcement) int {
+		return int(a.seq) - int(b.seq)
 	})
 	for i := range list {
 		if !do(list[i].hash, list[i].meta) {
