@@ -176,8 +176,6 @@ func truncateFromHead(store ethdb.AncientStore, typ historyType, nhead uint64) (
 	if err != nil {
 		return 0, err
 	}
-	log.Info("Truncating from head", "type", typ.String(), "ohead", ohead, "tail", otail, "nhead", nhead)
-
 	// Ensure that the truncation target falls within the valid range.
 	if ohead < nhead || nhead < otail {
 		return 0, fmt.Errorf("%w, %s, tail: %d, head: %d, target: %d", errHeadTruncationOutOfRange, typ, otail, ohead, nhead)
@@ -186,6 +184,8 @@ func truncateFromHead(store ethdb.AncientStore, typ historyType, nhead uint64) (
 	if ohead == nhead {
 		return 0, nil
 	}
+	log.Info("Truncating from head", "type", typ.String(), "ohead", ohead, "tail", otail, "nhead", nhead)
+
 	ohead, err = store.TruncateHead(nhead)
 	if err != nil {
 		return 0, err
