@@ -523,7 +523,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 
 	// If snapshot is requested, initialize the snapshotter and use it in state.
 	var snaps *snapshot.Tree
-	if snapshotter {
+	if snapshotter && scheme == rawdb.HashScheme {
 		snapconfig := snapshot.Config{
 			CacheSize:  1,
 			Recovery:   false,
