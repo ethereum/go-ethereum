@@ -91,6 +91,7 @@ var (
 		utils.LogNoHistoryFlag,
 		utils.LogExportCheckpointsFlag,
 		utils.StateHistoryFlag,
+		utils.TrienodeHistoryFlag,
 		utils.LightKDFFlag,
 		utils.EthRequiredBlocksFlag,
 		utils.LegacyWhitelistFlag, // deprecated
