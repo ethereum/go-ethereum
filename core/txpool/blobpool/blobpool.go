@@ -1030,6 +1030,21 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 	// TODO: seems like an easy optimization here would be getting the serialized tx
 	// from limbo instead of re-serializing it here.
 
+	// Converts reorged-out legacy blob transactions to the new format to prevent
+	// them from becoming stuck in the pool until eviction.
+	//
+	// Performance note: Conversion takes ~140ms (Mac M1 Pro). Since a maximum of
+	// 9 legacy blob transactions are allowed in a block pre-Osaka, an adversary
+	// could theoretically halt a Geth node for ~1.2s by reorging per block. However,
+	// this attack is financially inefficient to execute.
+	head := p.head.Load()
+	if p.chain.Config().IsOsaka(head.Number, head.Time) && tx.BlobTxSidecar().Version == types.BlobSidecarVersion0 {
+		if err := tx.BlobTxSidecar().ToV1(); err != nil {
+			log.Error("Failed to convert the legacy sidecar", "err", err)
+			return err
+		}
+		log.Info("Legacy blob transaction is reorged", "hash", tx.Hash())
+	}
 	// Serialize the transaction back into the primary datastore.
 	blob, err := rlp.EncodeToBytes(tx)
 	if err != nil {
