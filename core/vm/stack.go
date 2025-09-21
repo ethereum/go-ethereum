@@ -65,52 +65,68 @@ func (st *Stack) len() int {
 }
 
 func (st *Stack) swap1() {
-	st.data[st.len()-2], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-2]
+	length := st.len()
+	st.data[length-2], st.data[length-1] = st.data[length-1], st.data[length-2]
 }
 func (st *Stack) swap2() {
-	st.data[st.len()-3], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-3]
+	length := st.len()
+	st.data[length-3], st.data[length-1] = st.data[length-1], st.data[length-3]
 }
 func (st *Stack) swap3() {
-	st.data[st.len()-4], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-4]
+	length := st.len()
+	st.data[length-4], st.data[length-1] = st.data[length-1], st.data[length-4]
 }
 func (st *Stack) swap4() {
-	st.data[st.len()-5], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-5]
+	length := st.len()
+	st.data[length-5], st.data[length-1] = st.data[length-1], st.data[length-5]
 }
 func (st *Stack) swap5() {
-	st.data[st.len()-6], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-6]
+	length := st.len()
+	st.data[length-6], st.data[length-1] = st.data[length-1], st.data[length-6]
 }
 func (st *Stack) swap6() {
-	st.data[st.len()-7], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-7]
+	length := st.len()
+	st.data[length-7], st.data[length-1] = st.data[length-1], st.data[length-7]
 }
 func (st *Stack) swap7() {
-	st.data[st.len()-8], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-8]
+	length := st.len()
+	st.data[length-8], st.data[length-1] = st.data[length-1], st.data[length-8]
 }
 func (st *Stack) swap8() {
-	st.data[st.len()-9], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-9]
+	length := st.len()
+	st.data[length-9], st.data[length-1] = st.data[length-1], st.data[length-9]
 }
 func (st *Stack) swap9() {
-	st.data[st.len()-10], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-10]
+	length := st.len()
+	st.data[length-10], st.data[length-1] = st.data[length-1], st.data[length-10]
 }
 func (st *Stack) swap10() {
-	st.data[st.len()-11], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-11]
+	length := st.len()
+	st.data[length-11], st.data[length-1] = st.data[length-1], st.data[length-11]
 }
 func (st *Stack) swap11() {
-	st.data[st.len()-12], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-12]
+	length := st.len()
+	st.data[length-12], st.data[length-1] = st.data[length-1], st.data[length-12]
 }
 func (st *Stack) swap12() {
-	st.data[st.len()-13], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-13]
+	length := st.len()
+	st.data[length-13], st.data[length-1] = st.data[length-1], st.data[length-13]
 }
 func (st *Stack) swap13() {
-	st.data[st.len()-14], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-14]
+	length := st.len()
+	st.data[length-14], st.data[length-1] = st.data[length-1], st.data[length-14]
 }
 func (st *Stack) swap14() {
-	st.data[st.len()-15], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-15]
+	length := st.len()
+	st.data[length-15], st.data[length-1] = st.data[length-1], st.data[length-15]
 }
 func (st *Stack) swap15() {
-	st.data[st.len()-16], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-16]
+	length := st.len()
+	st.data[length-16], st.data[length-1] = st.data[length-1], st.data[length-16]
 }
 func (st *Stack) swap16() {
-	st.data[st.len()-17], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-17]
+	length := st.len()
+	st.data[length-17], st.data[length-1] = st.data[length-1], st.data[length-17]
 }
 
 func (st *Stack) dup(n int) {
