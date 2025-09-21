@@ -88,7 +88,6 @@ func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 	var gasLimit uint64 = 10_000_000
 	genesis := core.DeveloperGenesisBlock(gasLimit, &testAddr)
 	node, ethService, mock := startSimulatedBeaconEthService(t, genesis, 1)
-	_ = mock
 	defer node.Close()
 
 	chainHeadCh := make(chan core.ChainHeadEvent, 10)
