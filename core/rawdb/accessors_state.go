@@ -241,6 +241,44 @@ func ReadStateHistory(db ethdb.AncientReaderOp, id uint64) ([]byte, []byte, []by
 	return meta, accountIndex, storageIndex, accountData, storageData, nil
 }
 
+// ReadAccountHistory retrieves account-related data from state history.
+func ReadAccountHistory(db ethdb.AncientReaderOp, id uint64) ([]byte, []byte, []byte, error) {
+	meta, err := db.Ancient(stateHistoryMeta, id-1)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	accountIndex, err := db.Ancient(stateHistoryAccountIndex, id-1)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	accountData, err := db.Ancient(stateHistoryAccountData, id-1)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return meta, accountIndex, accountData, nil
+}
+
+// ReadStorageHistory retrieves storage-related data from state history.
+func ReadStorageHistory(db ethdb.AncientReaderOp, id uint64) ([]byte, []byte, []byte, []byte, error) {
+	meta, err := db.Ancient(stateHistoryMeta, id-1)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	accountIndex, err := db.Ancient(stateHistoryAccountIndex, id-1)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	storageIndex, err := db.Ancient(stateHistoryStorageIndex, id-1)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	storageData, err := db.Ancient(stateHistoryStorageData, id-1)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	return meta, accountIndex, storageIndex, storageData, nil
+}
+
 // ReadStateHistoryList retrieves a list of state histories from database with
 // specific range. Compute the position of state history in freezer by minus one
 // since the id of first state history starts from one(zero for initial state).

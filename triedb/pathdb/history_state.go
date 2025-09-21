@@ -732,7 +732,7 @@ func readStateHistory(reader ethdb.AncientReader, id uint64) (*stateHistory, err
 
 // readAccountHistory reads account state history
 func readAccountHistory(reader ethdb.AncientReader, id uint64, targetAddr common.Address) (*stateHistory, error) {
-	mData, accountIndexes, _, accountData, _, err := rawdb.ReadStateHistory(reader, id)
+	mData, accountIndexes, accountData, err := rawdb.ReadAccountHistory(reader, id)
 	if err != nil {
 		return nil, err
 	}
@@ -749,7 +749,7 @@ func readAccountHistory(reader ethdb.AncientReader, id uint64, targetAddr common
 
 // readSlotHistory reads slot state history
 func readSlotHistory(reader ethdb.AncientReader, id uint64, targetAddr common.Address, targetSlot common.Hash) (*stateHistory, error) {
-	mData, accountIndexes, storageIndexes, _, storageData, err := rawdb.ReadStateHistory(reader, id)
+	mData, accountIndexes, storageIndexes, storageData, err := rawdb.ReadStorageHistory(reader, id)
 	if err != nil {
 		return nil, err
 	}
