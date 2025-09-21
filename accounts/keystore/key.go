@@ -146,21 +146,22 @@ func newKeyFromECDSA(privateKeyECDSA *ecdsa.PrivateKey) *Key {
 // into the Direct ICAP spec. for simplicity and easier compatibility with other libs, we
 // retry until the first byte is 0.
 func NewKeyForDirectICAP(rand io.Reader) *Key {
-	randBytes := make([]byte, 64)
-	_, err := rand.Read(randBytes)
-	if err != nil {
-		panic("key generation: could not read from random source: " + err.Error())
+	for {
+		randBytes := make([]byte, 64)
+		_, err := rand.Read(randBytes)
+		if err != nil {
+			panic("key generation: could not read from random source: " + err.Error())
+		}
+		reader := bytes.NewReader(randBytes)
+		privateKeyECDSA, err := ecdsa.GenerateKey(crypto.S256(), reader)
+		if err != nil {
+			panic("key generation: ecdsa.GenerateKey failed: " + err.Error())
+		}
+		key := newKeyFromECDSA(privateKeyECDSA)
+		if strings.HasPrefix(key.Address.Hex(), "0x00") {
+			return key
+		}
 	}
-	reader := bytes.NewReader(randBytes)
-	privateKeyECDSA, err := ecdsa.GenerateKey(crypto.S256(), reader)
-	if err != nil {
-		panic("key generation: ecdsa.GenerateKey failed: " + err.Error())
-	}
-	key := newKeyFromECDSA(privateKeyECDSA)
-	if !strings.HasPrefix(key.Address.Hex(), "0x00") {
-		return NewKeyForDirectICAP(rand)
-	}
-	return key
 }
 
 func newKey(rand io.Reader) (*Key, error) {
