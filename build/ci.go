@@ -336,7 +336,7 @@ func doTest(cmdline []string) {
 	}
 
 	// No packages specified, run all tests for all modules.
-	gotest.Args = append(gotest.Args, ".")
+	gotest.Args = append(gotest.Args, "./...")
 	for _, mod := range goModules {
 		test := *gotest
 		test.Dir = mod
