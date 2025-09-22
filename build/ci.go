@@ -365,14 +365,7 @@ func doCheckGenerate() {
 		cachedir = flag.String("cachedir", "./build/cache", "directory for caching binaries.")
 		tc       = new(build.GoToolchain)
 	)
-	// Compute the origin hashes of all the files
-	var hashes map[string][32]byte
 
-	var err error
-	hashes, err = build.HashFolder(".", []string{"tests/testdata", "build/cache", ".git"})
-	if err != nil {
-		log.Fatal("Error computing hashes", "err", err)
-	}
 	// Run any go generate steps we might be missing
 	var (
 		protocPath      = downloadProtoc(*cachedir)
@@ -381,6 +374,12 @@ func doCheckGenerate() {
 	pathList := []string{filepath.Join(protocPath, "bin"), protocGenGoPath, os.Getenv("PATH")}
 
 	for _, mod := range goModules {
+		// Compute the origin hashes of all the files
+		hashes, err := build.HashFolder(mod, []string{"tests/testdata", "build/cache", ".git"})
+		if err != nil {
+			log.Fatal("Error computing hashes", "err", err)
+		}
+
 		c := tc.Go("generate", "./...")
 		c.Env = append(c.Env, "PATH="+strings.Join(pathList, string(os.PathListSeparator)))
 		c.Dir = mod
@@ -397,7 +396,6 @@ func doCheckGenerate() {
 		if len(updates) != 0 {
 			log.Fatal("One or more generated files were updated by running 'go generate ./...'")
 		}
-
 	}
 	fmt.Println("No stale files detected.")
 
