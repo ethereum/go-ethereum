@@ -273,11 +273,11 @@ func checkAccumulator(e *era.Era) error {
 	// accumulation across the entire set and are verified at the end.
 	for it.Next() {
 		// 1) next() walks the block index, so we're able to implicitly verify it.
-		if it.Error() != nil {
-			return fmt.Errorf("error reading block %d: %w", it.Number(), err)
+		if itErr := it.Error(); itErr != nil {
+			return fmt.Errorf("error reading block %d: %w", it.Number(), itErr)
 		}
 		block, receipts, err := it.BlockAndReceipts()
-		if it.Error() != nil {
+		if err != nil {
 			return fmt.Errorf("error reading block %d: %w", it.Number(), err)
 		}
 		// 2) recompute tx root and verify against header.
