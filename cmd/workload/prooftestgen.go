@@ -289,7 +289,7 @@ func generateProofTests(clictx *cli.Context) error {
 		outputFile = clictx.String(proofTestFileFlag.Name)
 		outputDir  = clictx.String(proofTestResultOutputFlag.Name)
 		startBlock = clictx.Uint64(proofTestStartBlockFlag.Name)
-		endBlock   = clictx.Uint64(traceTestEndBlockFlag.Name)
+		endBlock   = clictx.Uint64(proofTestEndBlockFlag.Name)
 	)
 	head, err := client.Eth.BlockNumber(ctx)
 	if err != nil {
@@ -298,6 +298,11 @@ func generateProofTests(clictx *cli.Context) error {
 	if startBlock > head || endBlock > head {
 		return fmt.Errorf("chain is out of proof range, head %d, start: %d, limit: %d", head, startBlock, endBlock)
 	}
+	if endBlock == 0 {
+		endBlock = head
+	}
+	log.Info("Generating proof states", "startBlock", startBlock, "endBlock", endBlock, "states", states)
+
 	test, err := genProofRequests(client, startBlock, endBlock, states)
 	if err != nil {
 		exit(err)
