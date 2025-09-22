@@ -30,24 +30,21 @@ func DepositLogToRequest(data []byte) ([]byte, error) {
 	if len(data) != 576 {
 		return nil, fmt.Errorf("wrong length: want 576, have %d", len(data))
 	}
-
-	pubkeyOffset := binary.BigEndian.Uint64(data[24:32])
-	withdrawalOffset := binary.BigEndian.Uint64(data[56:64])
-	amountOffset := binary.BigEndian.Uint64(data[88:96])
-	signatureOffset := binary.BigEndian.Uint64(data[120:128])
-	indexOffset := binary.BigEndian.Uint64(data[152:160])
-
-	if pubkeyOffset != 160 || withdrawalOffset != 256 || amountOffset != 320 ||
-		signatureOffset != 384 || indexOffset != 512 {
+	pubkeyABIOffset := binary.BigEndian.Uint64(data[24:32])
+	withdrawalABIOffset := binary.BigEndian.Uint64(data[56:64])
+	amountABIOffset := binary.BigEndian.Uint64(data[88:96])
+	signatureABIOffset := binary.BigEndian.Uint64(data[120:128])
+	indexABIOffset := binary.BigEndian.Uint64(data[152:160])
+	if pubkeyABIOffset != 160 || withdrawalABIOffset != 256 || amountABIOffset != 320 ||
+		signatureABIOffset != 384 || indexABIOffset != 512 {
 		return nil, fmt.Errorf("invalid offsets")
 	}
 
-	pubkeySize := binary.BigEndian.Uint64(data[pubkeyOffset+24 : pubkeyOffset+32])
-	withdrawalSize := binary.BigEndian.Uint64(data[withdrawalOffset+24 : withdrawalOffset+32])
-	amountSize := binary.BigEndian.Uint64(data[amountOffset+24 : amountOffset+32])
-	signatureSize := binary.BigEndian.Uint64(data[signatureOffset+24 : signatureOffset+32])
-	indexSize := binary.BigEndian.Uint64(data[indexOffset+24 : indexOffset+32])
-
+	pubkeySize := binary.BigEndian.Uint64(data[pubkeyABIOffset+24 : pubkeyABIOffset+32])
+	withdrawalSize := binary.BigEndian.Uint64(data[withdrawalABIOffset+24 : withdrawalABIOffset+32])
+	amountSize := binary.BigEndian.Uint64(data[amountABIOffset+24 : amountABIOffset+32])
+	signatureSize := binary.BigEndian.Uint64(data[signatureABIOffset+24 : signatureABIOffset+32])
+	indexSize := binary.BigEndian.Uint64(data[indexABIOffset+24 : indexABIOffset+32])
 	if pubkeySize != 48 || withdrawalSize != 32 || amountSize != 8 ||
 		signatureSize != 96 || indexSize != 8 {
 		return nil, fmt.Errorf("invalid field sizes")
@@ -55,11 +52,11 @@ func DepositLogToRequest(data []byte) ([]byte, error) {
 
 	request := make([]byte, depositRequestSize)
 	const (
-		pubkeyRequestOffset         = 0
-		withdrawalCredRequestOffset = pubkeyRequestOffset + 48
-		amountRequestOffset         = withdrawalCredRequestOffset + 32
-		signatureRequestOffset      = amountRequestOffset + 8
-		indexRequestOffset          = signatureRequestOffset + 96
+		pubkeyOffset         = 0
+		withdrawalCredOffset = pubkeyOffset + 48
+		amountOffset         = withdrawalCredOffset + 32
+		signatureOffset      = amountOffset + 8
+		indexOffset          = signatureOffset + 96
 	)
 	// The ABI encodes the position of dynamic elements first. Since there are 5
 	// elements, skip over the positional data. The first 32 bytes of dynamic
@@ -68,20 +65,20 @@ func DepositLogToRequest(data []byte) ([]byte, error) {
 	// PublicKey is the first element. ABI encoding pads values to 32 bytes, so
 	// despite BLS public keys being length 48, the value length here is 64. Then
 	// skip over the next length value.
-	copy(request[pubkeyRequestOffset:], data[b:b+48])
+	copy(request[pubkeyOffset:], data[b:b+48])
 	b += 48 + 16 + 32
 	// WithdrawalCredentials is 32 bytes. Read that value then skip over next
 	// length.
-	copy(request[withdrawalCredRequestOffset:], data[b:b+32])
+	copy(request[withdrawalCredOffset:], data[b:b+32])
 	b += 32 + 32
 	// Amount is 8 bytes, but it is padded to 32. Skip over it and the next
 	// length.
-	copy(request[amountRequestOffset:], data[b:b+8])
+	copy(request[amountOffset:], data[b:b+8])
 	b += 8 + 24 + 32
 	// Signature is 96 bytes. Skip over it and the next length.
-	copy(request[signatureRequestOffset:], data[b:b+96])
+	copy(request[signatureOffset:], data[b:b+96])
 	b += 96 + 32
 	// Index is 8 bytes.
-	copy(request[indexRequestOffset:], data[b:b+8])
+	copy(request[indexOffset:], data[b:b+8])
 	return request, nil
 }
