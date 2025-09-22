@@ -20,18 +20,26 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math/rand"
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/testrand"
 )
 
 // randomTrienodes generates a random trienode set.
-func randomTrienodes(n int) map[common.Hash]map[string][]byte {
-	nodes := make(map[common.Hash]map[string][]byte)
+func randomTrienodes(n int) (map[common.Hash]map[string][]byte, common.Hash) {
+	var (
+		root  common.Hash
+		nodes = make(map[common.Hash]map[string][]byte)
+	)
 	for i := 0; i < n; i++ {
 		owner := testrand.Hash()
+		if i == 0 {
+			owner = common.Hash{}
+		}
 		nodes[owner] = make(map[string][]byte)
 
 		for j := 0; j < 10; j++ {
@@ -48,20 +56,29 @@ func randomTrienodes(n int) map[common.Hash]map[string][]byte {
 			nodes[owner][string(path)] = nil
 		}
 		// root node with zero-size path
-		nodes[owner][""] = testrand.Bytes(10)
+		rnode := testrand.Bytes(256)
+		nodes[owner][""] = rnode
+		if owner == (common.Hash{}) {
+			root = crypto.Keccak256Hash(rnode)
+		}
 	}
-	return nodes
+	return nodes, root
 }
 
 func makeTrinodeHistory() *trienodeHistory {
-	return newTrienodeHistory(randomTrienodes(10))
+	nodes, root := randomTrienodes(10)
+	return newTrienodeHistory(root, common.Hash{}, 1, nodes)
 }
 
 func makeTrienodeHistories(n int) []*trienodeHistory {
-	var result []*trienodeHistory
+	var (
+		parent common.Hash
+		result []*trienodeHistory
+	)
 	for i := 0; i < n; i++ {
-		h := makeTrinodeHistory()
-		result = append(result, h)
+		nodes, root := randomTrienodes(10)
+		result = append(result, newTrienodeHistory(root, parent, uint64(i+1), nodes))
+		parent = root
 	}
 	return result
 }
@@ -77,6 +94,10 @@ func TestEncodeDecodeTrienodeHistory(t *testing.T) {
 	}
 	if err := dec.decode(header, keySection, valueSection); err != nil {
 		t.Fatalf("Failed to decode trienode history: %v", err)
+	}
+
+	if !reflect.DeepEqual(obj.meta, dec.meta) {
+		t.Fatal("trienode metadata is mismatched")
 	}
 	if !compareList(dec.owners, obj.owners) {
 		t.Fatal("trie owner list is mismatched")
@@ -120,11 +141,20 @@ func TestTrienodeHistoryReader(t *testing.T) {
 			}
 		}
 	}
+	for i, h := range hs {
+		metadata, err := readTrienodeMetadata(freezer, uint64(i+1))
+		if err != nil {
+			t.Fatalf("Failed to read trienode history metadata: %v", err)
+		}
+		if !reflect.DeepEqual(h.meta, metadata) {
+			t.Fatalf("Unexpected trienode metadata, want: %v, got: %v", h.meta, metadata)
+		}
+	}
 }
 
 // TestEmptyTrienodeHistory tests encoding/decoding of empty trienode history
 func TestEmptyTrienodeHistory(t *testing.T) {
-	h := newTrienodeHistory(make(map[common.Hash]map[string][]byte))
+	h := newTrienodeHistory(common.Hash{}, common.Hash{}, 1, make(map[common.Hash]map[string][]byte))
 
 	// Test encoding empty history
 	header, keySection, valueSection, err := h.encode()
@@ -173,7 +203,7 @@ func TestSingleTrieHistory(t *testing.T) {
 	nodes[owner]["ccc"] = testrand.Bytes(1000) // large value
 	nodes[owner]["dddd"] = testrand.Bytes(0)   // empty value
 
-	h := newTrienodeHistory(nodes)
+	h := newTrienodeHistory(common.Hash{}, common.Hash{}, 1, nodes)
 	testEncodeDecode(t, h)
 }
 
@@ -205,7 +235,7 @@ func TestMultipleTries(t *testing.T) {
 		nodes[owner3][key] = nil
 	}
 
-	h := newTrienodeHistory(nodes)
+	h := newTrienodeHistory(common.Hash{}, common.Hash{}, 1, nodes)
 	testEncodeDecode(t, h)
 }
 
@@ -221,7 +251,7 @@ func TestLargeNodeValues(t *testing.T) {
 		key := string(testrand.Bytes(10))
 		nodes[owner][key] = testrand.Bytes(size)
 
-		h := newTrienodeHistory(nodes)
+		h := newTrienodeHistory(common.Hash{}, common.Hash{}, 1, nodes)
 		testEncodeDecode(t, h)
 		t.Logf("Successfully tested encoding/decoding with %dKB value", size/1024)
 	}
@@ -234,21 +264,16 @@ func TestNilNodeValues(t *testing.T) {
 	nodes[owner] = make(map[string][]byte)
 
 	// Mix of nil and non-nil values
-	nodes[owner]["nil1"] = nil
-	nodes[owner]["nil2"] = nil
+	nodes[owner]["nil"] = nil
 	nodes[owner]["data1"] = []byte("some data")
-	nodes[owner]["nil3"] = nil
 	nodes[owner]["data2"] = []byte("more data")
-	nodes[owner]["nil4"] = nil
 
-	h := newTrienodeHistory(nodes)
+	h := newTrienodeHistory(common.Hash{}, common.Hash{}, 1, nodes)
 	testEncodeDecode(t, h)
 
 	// Verify nil values are preserved
-	if h.nodes[owner]["nil1"] != nil {
-		t.Fatal("Nil value should be preserved")
-	}
-	if h.nodes[owner]["nil3"] != nil {
+	_, ok := h.nodes[owner]["nil"]
+	if !ok {
 		t.Fatal("Nil value should be preserved")
 	}
 }
@@ -275,14 +300,12 @@ func TestCorruptedHeader(t *testing.T) {
 	}
 
 	// Test header with invalid trie header size
-	if len(header) > trienodeVersionSize {
-		invalidHeader := make([]byte, len(header))
-		copy(invalidHeader, header)
-		invalidHeader = invalidHeader[:trienodeVersionSize+5] // Not divisible by trie header size
+	invalidHeader := make([]byte, len(header))
+	copy(invalidHeader, header)
+	invalidHeader = invalidHeader[:trienodeMetadataSize+5] // Not divisible by trie header size
 
-		if err := decoded.decode(invalidHeader, keySection, valueSection); err == nil {
-			t.Fatal("Expected error for invalid header size")
-		}
+	if err := decoded.decode(invalidHeader, keySection, valueSection); err == nil {
+		t.Fatal("Expected error for invalid header size")
 	}
 }
 
@@ -351,7 +374,7 @@ func TestInvalidOffsets(t *testing.T) {
 	// Corrupt key offset in header (make it larger than key section)
 	corruptedHeader := make([]byte, len(header))
 	copy(corruptedHeader, header)
-	corruptedHeader[trienodeVersionSize+common.HashLength] = 0xff
+	corruptedHeader[trienodeMetadataSize+common.HashLength] = 0xff
 
 	var dec1 trienodeHistory
 	if err := dec1.decode(corruptedHeader, keySection, valueSection); err == nil {
@@ -361,7 +384,7 @@ func TestInvalidOffsets(t *testing.T) {
 	// Corrupt value offset in header (make it larger than value section)
 	corruptedHeader = make([]byte, len(header))
 	copy(corruptedHeader, header)
-	corruptedHeader[trienodeVersionSize+common.HashLength+4] = 0xff
+	corruptedHeader[trienodeMetadataSize+common.HashLength+4] = 0xff
 
 	var dec2 trienodeHistory
 	if err := dec2.decode(corruptedHeader, keySection, valueSection); err == nil {
@@ -412,7 +435,7 @@ func TestTrienodeHistoryReaderNilValues(t *testing.T) {
 	nodes[owner]["nil2"] = nil
 	nodes[owner]["data1"] = []byte("some data")
 
-	h := newTrienodeHistory(nodes)
+	h := newTrienodeHistory(common.Hash{}, common.Hash{}, 1, nodes)
 
 	var freezer, _ = rawdb.NewTrienodeFreezer(t.TempDir(), false, false)
 	defer freezer.Close()
@@ -464,7 +487,7 @@ func TestTrienodeHistoryReaderNilKey(t *testing.T) {
 	nodes[owner][""] = []byte("some data")
 	nodes[owner]["data1"] = []byte("some data")
 
-	h := newTrienodeHistory(nodes)
+	h := newTrienodeHistory(common.Hash{}, common.Hash{}, 1, nodes)
 
 	var freezer, _ = rawdb.NewTrienodeFreezer(t.TempDir(), false, false)
 	defer freezer.Close()
@@ -504,8 +527,16 @@ func TestTrienodeHistoryReaderIterator(t *testing.T) {
 
 	// Count expected entries
 	expectedCount := 0
-	for _, nodeList := range h.nodeList {
+	expectedNodes := make(map[stateIdent]bool)
+	for owner, nodeList := range h.nodeList {
 		expectedCount += len(nodeList)
+		for _, node := range nodeList {
+			expectedNodes[stateIdent{
+				typ:         typeTrienode,
+				addressHash: owner,
+				path:        node,
+			}] = true
+		}
 	}
 
 	// Test the iterator
@@ -529,6 +560,10 @@ func TestTrienodeHistoryReaderIterator(t *testing.T) {
 			t.Fatal("Iterator yielded duplicate identifier")
 		}
 		seen[key] = true
+
+		if !expectedNodes[key] {
+			t.Fatalf("Unexpected yielded identifier %v", key)
+		}
 	}
 }
 
@@ -583,7 +618,7 @@ func TestDecodeHeaderCorruptedData(t *testing.T) {
 	header, _, _, _ := h.encode()
 
 	// Test with empty header
-	_, _, _, err := decodeHeader([]byte{})
+	_, _, _, _, err := decodeHeader([]byte{})
 	if err == nil {
 		t.Fatal("Expected error for empty header")
 	}
@@ -592,14 +627,14 @@ func TestDecodeHeaderCorruptedData(t *testing.T) {
 	corruptedVersion := make([]byte, len(header))
 	copy(corruptedVersion, header)
 	corruptedVersion[0] = 0xFF
-	_, _, _, err = decodeHeader(corruptedVersion)
+	_, _, _, _, err = decodeHeader(corruptedVersion)
 	if err == nil {
 		t.Fatal("Expected error for invalid version")
 	}
 
 	// Test with truncated header (not divisible by trie header size)
-	truncated := header[:trienodeVersionSize+5]
-	_, _, _, err = decodeHeader(truncated)
+	truncated := header[:trienodeMetadataSize+5]
+	_, _, _, _, err = decodeHeader(truncated)
 	if err == nil {
 		t.Fatal("Expected error for truncated header")
 	}
@@ -609,8 +644,8 @@ func TestDecodeHeaderCorruptedData(t *testing.T) {
 	copy(unordered, header)
 
 	// Swap two owner hashes to make them unordered
-	hash1Start := trienodeVersionSize
-	hash2Start := trienodeVersionSize + trienodeTrieHeaderSize
+	hash1Start := trienodeMetadataSize
+	hash2Start := trienodeMetadataSize + trienodeTrieHeaderSize
 	hash1 := unordered[hash1Start : hash1Start+common.HashLength]
 	hash2 := unordered[hash2Start : hash2Start+common.HashLength]
 
@@ -618,7 +653,7 @@ func TestDecodeHeaderCorruptedData(t *testing.T) {
 	copy(unordered[hash1Start:hash1Start+common.HashLength], hash2)
 	copy(unordered[hash2Start:hash2Start+common.HashLength], hash1)
 
-	_, _, _, err = decodeHeader(unordered)
+	_, _, _, _, err = decodeHeader(unordered)
 	if err == nil {
 		t.Fatal("Expected error for unordered trie owners")
 	}
