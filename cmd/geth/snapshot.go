@@ -561,17 +561,11 @@ func dumpState(ctx *cli.Context) error {
 	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, true, false)
 	defer triedb.Close()
 
-	snapConfig := snapshot.Config{
-		CacheSize:  256,
-		Recovery:   false,
-		NoBuild:    true,
-		AsyncBuild: false,
-	}
-	snaptree, err := snapshot.New(snapConfig, db, triedb, root)
+	stateIt, err := utils.NewStateIterator(triedb, db, root)
 	if err != nil {
 		return err
 	}
-	accIt, err := snaptree.AccountIterator(root, common.BytesToHash(conf.Start))
+	accIt, err := stateIt.AccountIterator(root, common.BytesToHash(conf.Start))
 	if err != nil {
 		return err
 	}
@@ -605,7 +599,7 @@ func dumpState(ctx *cli.Context) error {
 		if !conf.SkipStorage {
 			da.Storage = make(map[common.Hash]string)
 
-			stIt, err := snaptree.StorageIterator(root, accIt.Hash(), common.Hash{})
+			stIt, err := stateIt.StorageIterator(root, accIt.Hash(), common.Hash{})
 			if err != nil {
 				return err
 			}
@@ -658,17 +652,11 @@ func snapshotExportPreimages(ctx *cli.Context) error {
 		}
 		root = headBlock.Root()
 	}
-	snapConfig := snapshot.Config{
-		CacheSize:  256,
-		Recovery:   false,
-		NoBuild:    true,
-		AsyncBuild: false,
-	}
-	snaptree, err := snapshot.New(snapConfig, chaindb, triedb, root)
+	stateIt, err := utils.NewStateIterator(triedb, chaindb, root)
 	if err != nil {
 		return err
 	}
-	return utils.ExportSnapshotPreimages(chaindb, snaptree, ctx.Args().First(), root)
+	return utils.ExportSnapshotPreimages(chaindb, stateIt, ctx.Args().First(), root)
 }
 
 // checkAccount iterates the snap data layers, and looks up the given account
