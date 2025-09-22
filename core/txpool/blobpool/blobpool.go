@@ -903,57 +903,61 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 		}
 		// Initiate the background conversion thread, the mutex is not required
 		// and won't block any pool operation.
-		go func() {
-			var (
-				start   = time.Now()
-				success int
-				fail    int
-			)
-			for addr, list := range txs {
-				// Transactions evicted from the pool must be contiguous, if in any case,
-				// the transactions are gapped with each other, they will be discarded.
-				nonces := slices.Collect(maps.Keys(list))
-				slices.Sort(nonces)
-
-				// Convert and insert the txs in order
-				for _, nonce := range nonces {
-					id := list[nonce]
-					blob, err := p.store.Get(id)
-					if err != nil {
-						fail++
-						continue
-					}
-					// Remove the blob transaction regardless of conversion succeeds or not
-					if err := p.store.Delete(id); err != nil {
-						log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
-					}
-					var tx types.Transaction
-					if err = rlp.DecodeBytes(blob, &tx); err != nil {
-						log.Error("Blob transaction is corrupted", "id", id, "err", err)
-						fail++
-						continue
-					}
-					if err := tx.BlobTxSidecar().ToV1(); err != nil {
-						log.Error("Failed to convert blob transaction", "hash", tx.Hash(), "err", err)
-						fail++
-						continue
-					}
-					errs := p.Add([]*types.Transaction{&tx}, true)
-					if errs[0] != nil {
-						fail++
-						log.Error("Failed to re-inject the tx", "hash", tx.Hash(), "err", errs[0])
-					} else {
-						success++
-						log.Debug("Reinjected the converted tx", "hash", tx.Hash(), "err", errs[0])
-					}
-				}
-			}
-			if p.sidecarMigrationDoneCh != nil {
-				close(p.sidecarMigrationDoneCh)
-			}
-			log.Info("Completed the blob transaction conversion", "discarded", fail, "injected", success, "elapsed", common.PrettyDuration(time.Since(start)))
-		}()
+		go p.convertLegacySidecars(txs)
 	}
+}
+
+// convertLegacySidecars converts all given transactions to sidecar version 1.
+func (p *BlobPool) convertLegacySidecars(txs map[common.Address]map[uint64]uint64) {
+	var (
+		start   = time.Now()
+		success int
+		fail    int
+	)
+	for addr, list := range txs {
+		// Transactions evicted from the pool must be contiguous, if in any case,
+		// the transactions are gapped with each other, they will be discarded.
+		nonces := slices.Collect(maps.Keys(list))
+		slices.Sort(nonces)
+
+		// Convert and insert the txs in order
+		for _, nonce := range nonces {
+			id := list[nonce]
+			blob, err := p.store.Get(id)
+			if err != nil {
+				fail++
+				continue
+			}
+			// Remove the blob transaction regardless of conversion succeeds or not
+			if err := p.store.Delete(id); err != nil {
+				log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
+			}
+			var tx types.Transaction
+			if err = rlp.DecodeBytes(blob, &tx); err != nil {
+				log.Error("Blob transaction is corrupted", "id", id, "err", err)
+				fail++
+				continue
+			}
+			if err := tx.BlobTxSidecar().ToV1(); err != nil {
+				log.Error("Failed to convert blob transaction", "hash", tx.Hash(), "err", err)
+				fail++
+				continue
+			}
+			errs := p.Add([]*types.Transaction{&tx}, true)
+			if errs[0] != nil {
+				fail++
+				log.Error("Failed to re-inject the tx", "hash", tx.Hash(), "err", errs[0])
+			} else {
+				success++
+				log.Debug("Reinjected the converted tx", "hash", tx.Hash(), "err", errs[0])
+			}
+		}
+	}
+
+	if p.sidecarMigrationDoneCh != nil {
+		close(p.sidecarMigrationDoneCh)
+	}
+	log.Info("Completed the blob transaction conversion", "discarded", fail, "injected", success, "elapsed", common.PrettyDuration(time.Since(start)))
 }
 
 // reorg assembles all the transactors and missing transactions between an old
