@@ -39,6 +39,9 @@ var DryRunFlag = flag.Bool("n", false, "dry run, don't execute commands")
 // MustRun executes the given command and exits the host process for
 // any error.
 func MustRun(cmd *exec.Cmd) {
+	if cmd.Dir != "" && cmd.Dir != "." {
+		fmt.Printf("(in %s) ", cmd.Dir)
+	}
 	fmt.Println(">>>", printArgs(cmd.Args))
 	if !*DryRunFlag {
 		cmd.Stderr = os.Stderr
@@ -71,6 +74,13 @@ func MustRunCommand(cmd string, args ...string) {
 // printed while it runs. This is useful for CI builds where the process will be stopped
 // when there is no output.
 func MustRunCommandWithOutput(cmd string, args ...string) {
+	MustRunWithOutput(exec.Command(cmd, args...))
+}
+
+// MustRunWithOutput runs the given command, and ensures that some output will be printed
+// while it runs. This is useful for CI builds where the process will be stopped when
+// there is no output.
+func MustRunWithOutput(cmd *exec.Cmd) {
 	interval := time.NewTicker(time.Minute)
 	done := make(chan struct{})
 	defer interval.Stop()
@@ -85,7 +95,7 @@ func MustRunCommandWithOutput(cmd string, args ...string) {
 			}
 		}
 	}()
-	MustRun(exec.Command(cmd, args...))
+	MustRun(cmd)
 }
 
 var warnedAboutGit bool
