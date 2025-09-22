@@ -2101,24 +2101,42 @@ func TestGetBlobs(t *testing.T) {
 // TestSidecarConversion will verify that after the Osaka fork, all legacy
 // sidecars in the pool are successfully convert to v1 sidecars.
 func TestSidecarConversion(t *testing.T) {
-	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
+	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
 	// Create a temporary folder for the persistent backend
 	storage := t.TempDir()
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
 
 	var (
-		count      = 10
-		keys       = make([]*ecdsa.PrivateKey, count)
-		addrs      = make([]common.Address, count)
-		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		preOsakaTxs  = make(types.Transactions, 10)
+		postOsakaTxs = make(types.Transactions, 3)
+		keys         = make([]*ecdsa.PrivateKey, len(preOsakaTxs)+len(postOsakaTxs))
+		addrs        = make([]common.Address, len(preOsakaTxs)+len(postOsakaTxs))
+		statedb, _   = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	)
-	for i := 0; i < count; i++ {
+	for i := range keys {
 		keys[i], _ = crypto.GenerateKey()
 		addrs[i] = crypto.PubkeyToAddress(keys[i].PublicKey)
 		statedb.AddBalance(addrs[i], uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 	}
+	for i := range preOsakaTxs {
+		preOsakaTxs[i] = makeMultiBlobTx(0, 1, 1000, 100, 2, 0, keys[i], types.BlobSidecarVersion0)
+	}
+	for i := range postOsakaTxs {
+		if i == 0 {
+			// First has a v0 sidecar.
+			postOsakaTxs[i] = makeMultiBlobTx(0, 1, 1000, 100, 1, 0, keys[len(preOsakaTxs)+i], types.BlobSidecarVersion0)
+		}
+		postOsakaTxs[i] = makeMultiBlobTx(0, 1, 1000, 100, 1, 0, keys[len(preOsakaTxs)+i], types.BlobSidecarVersion1)
+	}
 	statedb.Commit(0, true, false)
+
+	// Test plan:
+	// 1) Create a bunch v0 sidecar txs and add to pool before Osaka.
+	// 2) Pass in new Osaka header to activate the conversion thread.
+	// 3) Continue adding both v0 and v1 transactions to the pool.
+	// 4) Verify that as additional blocks come in, transactions involved in the
+	// migration are correctly discarded.
 
 	config := &params.ChainConfig{
 		ChainID:            big.NewInt(1),
@@ -2134,35 +2152,106 @@ func TestSidecarConversion(t *testing.T) {
 		basefee: uint256.NewInt(1050),
 		blobfee: uint256.NewInt(105),
 		statedb: statedb,
+		blocks:  make(map[uint64]*types.Block),
 	}
 
-	before := chain.CurrentBlock()
-	before.Time = 0
-	after := chain.CurrentBlock()
-	after.Time = 1
+	// Create 3 blocks:
+	//	- the current block, before Osaka
+	//	- the first block after Osaka
+	//	- another post-Osaka block with several transactions in it
+	header0 := chain.CurrentBlock()
+	header0.Time = 0
+	chain.blocks[0] = types.NewBlockWithHeader(header0)
+
+	header1 := chain.CurrentBlock()
+	header1.Number = big.NewInt(1)
+	header1.Time = 1
+	chain.blocks[1] = types.NewBlockWithHeader(header1)
+
+	header2 := chain.CurrentBlock()
+	header2.Time = 2
+	header2.Number = big.NewInt(2)
+
+	// Make a copy of one of the pre-Osaka transactions and convert it to v1 here
+	// so that we can add it to the pool later and ensure a duplicate is not added
+	// by the conversion queue.
+	tx := preOsakaTxs[len(preOsakaTxs)-1]
+	sc := *tx.BlobTxSidecar() // copy sidecar
+	sc.ToV1()
+	tx.WithBlobTxSidecar(&sc)
+
+	block2 := types.NewBlockWithHeader(header2).WithBody(types.Body{Transactions: append(postOsakaTxs, tx)})
+	chain.blocks[2] = block2
 
 	pool := New(Config{Datadir: storage}, chain, nil)
-	if err := pool.Init(1, before, newReserver()); err != nil {
+	if err := pool.Init(1, header0, newReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 
-	for i, key := range keys {
-		tx := makeMultiBlobTx(0, 1, 1000, 100, 2, 0, key, types.BlobSidecarVersion0)
-		if errs := pool.Add([]*types.Transaction{tx}, true); errs[0] != nil {
-			t.Errorf("failed to insert blob tx from %s: %s", addrs[i], errs[0])
+	errs := pool.Add(preOsakaTxs, true)
+	for i, err := range errs {
+		if err != nil {
+			t.Errorf("failed to insert blob tx from %s: %s", addrs[i], errs[i])
 		}
 	}
 
-	// Should kick off migration.
+	// Kick off migration.
 	pool.sidecarMigrationDoneCh = make(chan struct{})
-	pool.Reset(before, after)
+	pool.Reset(header0, header1)
+
+	// Add the v0 sidecar tx, but don't block so we can keep doing other stuff
+	// while it converts the sidecar.
+	addDone := make(chan struct{})
+	go func() {
+		pool.Add(types.Transactions{postOsakaTxs[0]}, false)
+		close(addDone)
+	}()
+
+	// Add the post-Osaka v1 sidecar txs.
+	errs = pool.Add(postOsakaTxs[1:], false)
+	for _, err := range errs {
+		if err != nil {
+			t.Fatalf("expected tx add to succeed: %v", err)
+		}
+	}
+
+	// Wait for the first tx's conversion to complete, then check that all
+	// transactions added after Osaka can be accounted for in the pool.
+	<-addDone
+	pending := pool.Pending(txpool.PendingFilter{BlobTxs: true, BlobVersion: types.BlobSidecarVersion1})
+	for _, tx := range postOsakaTxs {
+		from, _ := pool.signer.Sender(tx)
+		if len(pending[from]) != 1 || pending[from][0].Hash != tx.Hash() {
+			t.Fatalf("expected post-Osaka txs to be pending")
+		}
+	}
+
+	// Now update the pool with the next block. This should cause the pool to
+	// clear out the post-Osaka txs since they were included in block 2. Since the
+	// test blockchain doesn't manage nonces, we'll just do that manually before
+	// the reset is called. Don't forget about the pre-Osaka transaction we also
+	// added to block 2!
+	for i := range postOsakaTxs {
+		statedb.SetNonce(addrs[len(preOsakaTxs)+i], 1, tracing.NonceChangeEoACall)
+	}
+	statedb.SetNonce(addrs[len(preOsakaTxs)-1], 1, tracing.NonceChangeEoACall)
+	pool.Reset(header1, block2.Header())
+
+	// Now verify no post-Osaka transadctions are tracked by the pool.
+	for i, tx := range postOsakaTxs {
+		if pool.Get(tx.Hash()) != nil {
+			t.Fatalf("expected txs added post-osaka to have been placed in limbo due to inclusion in a block: index %d, hash %s", i, tx.Hash())
+		}
+	}
+
+	// Wait for the pool migration to complete.
 	<-pool.sidecarMigrationDoneCh
 
 	// Verify all transactions in the pool were converted and verify the
 	// subsequent cell proofs.
-	pending, _ := pool.Stats()
-	if pending != count {
-		t.Errorf("expected pending count to match initial tx count: pending=%d, expected=%d", pending, count)
+	count, _ := pool.Stats()
+	if count != len(preOsakaTxs)-1 {
+		t.Errorf("expected pending count to match initial tx count: pending=%d, expected=%d", count, len(preOsakaTxs)-1)
 	}
 	for addr, acc := range pool.index {
 		for _, m := range acc {
@@ -2180,13 +2269,7 @@ func TestSidecarConversion(t *testing.T) {
 		}
 	}
 
-	// Verify all the calculated pool internals. Interestingly, this is **not**
-	// a duplication of the above checks, this actually validates the verifier
-	// using the above already hard coded checks.
-	//
-	// Do not remove this, nor alter the above to be generic.
 	verifyPoolInternals(t, pool)
-
 	pool.Close()
 }
 
