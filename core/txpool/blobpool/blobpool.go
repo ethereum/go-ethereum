@@ -337,6 +337,8 @@ type BlobPool struct {
 	stored uint64         // Useful data size of all transactions on disk
 	limbo  *limbo         // Persistent data store for the non-finalized blobs
 
+	gapped map[common.Address][]*types.Transaction // Transactions that are currently gapped (nonce too high)
+
 	signer types.Signer     // Transaction signer to use for sender recovery
 	chain  BlockChain       // Chain object to access the state through
 	cQueue *conversionQueue // The queue for performing legacy sidecar conversion (TODO: remove after Osaka)
@@ -372,6 +374,7 @@ func New(config Config, chain BlockChain, hasPendingAuth func(common.Address) bo
 		lookup:         newLookup(),
 		index:          make(map[common.Address][]*blobTxMeta),
 		spent:          make(map[common.Address]*uint256.Int),
+		gapped:         make(map[common.Address][]*types.Transaction),
 	}
 }
 
@@ -1735,6 +1738,10 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 			addStaleMeter.Mark(1)
 		case errors.Is(err, core.ErrNonceTooHigh):
 			addGappedMeter.Mark(1)
+			// Store the tx in mem and revalidate later
+			from, _ := types.Sender(p.signer, tx)
+			p.gapped[from] = append(p.gapped[from], tx)
+			log.Trace("Blob transaction added to Gapped blob queue", "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
 		case errors.Is(err, core.ErrInsufficientFunds):
 			addOverdraftedMeter.Mark(1)
 		case errors.Is(err, txpool.ErrAccountLimitExceeded):
@@ -1872,6 +1879,34 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	p.updateStorageMetrics()
 
 	addValidMeter.Mark(1)
+
+	//check the gapped queue for this account and try to add any pending transactions
+	if gtxs, ok := p.gapped[from]; ok && len(gtxs) > 0 {
+		// We have to add in nonce order, but we want to stable sort to cater for situations
+		// where transactions are replaced
+		sort.SliceStable(gtxs, func(i, j int) bool {
+			return gtxs[i].Nonce() < gtxs[j].Nonce()
+		})
+		firstgap := p.state.GetNonce(from) + uint64(len(p.index[from]))
+		log.Trace("Gapped blob transactions found", "from", from, "qlen", len(gtxs), "firstNonceGap", firstgap, "nonce0", gtxs[0].Nonce())
+		if firstgap == gtxs[0].Nonce() {
+			// We are under lock. Add the first transaction in a goroutine to avoid blocking.
+			// This might lead to a race beteen new calls to add and the revalidation here,
+			// TODO: revisit if this is a problem, lock on gapped needed?
+			go func() {
+				if err := p.add(gtxs[0]); err == nil {
+					// First transaction accepted, remove it from the gapped queue
+					p.gapped[from] = gtxs[1:]
+					log.Trace("Gapped blob transaction added to pool", "hash", gtxs[0].Hash(), "from", from, "nonce", gtxs[0].Nonce(), "qlen", len(p.gapped[from]))
+				} else {
+					log.Trace("Gapped blob transaction still not accepted", "hash", gtxs[0].Hash(), "from", from, "nonce", gtxs[0].Nonce(), "err", err)
+				}
+			}()
+		}
+		if len(p.gapped[from]) == 0 {
+			delete(p.gapped, from)
+		}
+	}
 	return nil
 }
 
