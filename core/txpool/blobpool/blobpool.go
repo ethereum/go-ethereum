@@ -890,9 +890,7 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 
 	// Perform the conversion logic at the fork boundary
 	if !p.chain.Config().IsOsaka(oldHead.Number, oldHead.Time) && p.chain.Config().IsOsaka(newHead.Number, newHead.Time) {
-		// Evicts all transactions from the pool. The pool should, at this stage,
-		// contain only legacy blob transactions. Evicting any new-format blob
-		// transactions is also safe, as they will be re-injected later.
+		// Deep copy all indexed transaction metadata.
 		all := make(map[common.Address]map[uint64]*blobTxMeta)
 		for sender, txs := range p.index {
 			all[sender] = make(map[uint64]*blobTxMeta)
@@ -900,8 +898,7 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 				all[sender][m.nonce] = m
 			}
 		}
-		// Initiate the background conversion thread, the mutex is not required
-		// and won't block any pool operation.
+		// Initiate the background conversion thread.
 		go p.convertLegacySidecars(all)
 	}
 }
@@ -919,7 +916,7 @@ func (p *BlobPool) convertLegacySidecars(txs map[common.Address]map[uint64]*blob
 		nonces := slices.Collect(maps.Keys(list))
 		slices.Sort(nonces)
 
-		// Convert and insert the txs in order
+		// Convert and insert the txs in order.
 		for _, nonce := range nonces {
 			m := list[nonce]
 			p.lock.RLock()
@@ -929,7 +926,6 @@ func (p *BlobPool) convertLegacySidecars(txs map[common.Address]map[uint64]*blob
 				fail++
 				continue
 			}
-
 			// Use this to remove the blob transaction regardless of if the conversion
 			// succeeds or not.
 			delete := func() {
@@ -939,7 +935,6 @@ func (p *BlobPool) convertLegacySidecars(txs map[common.Address]map[uint64]*blob
 					log.Error("Failed to delete blob transaction", "from", addr, "id", m.id, "err", err)
 				}
 			}
-
 			// Decode the transaction and perform the migration.
 			var tx types.Transaction
 			if err = rlp.DecodeBytes(blob, &tx); err != nil {
@@ -954,7 +949,6 @@ func (p *BlobPool) convertLegacySidecars(txs map[common.Address]map[uint64]*blob
 				fail++
 				continue
 			}
-
 			// Now atomically swap the old sidecar with the converted sidecar.
 			p.lock.Lock()
 			p.remove(m, addr)
