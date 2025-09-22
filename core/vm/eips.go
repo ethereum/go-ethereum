@@ -569,7 +569,7 @@ func enable7904(jt *JumpTable) {
 	jt[SMOD].constantGas = GasBaseCost
 	jt[ADDMOD].constantGas = GasFastCost
 	jt[MULMOD].constantGas = GasMidCost
-	//jt[EXP].constantGas = GasMidCost
+	jt[EXP].dynamicGas = gasExpEIP7904
 	jt[SIGNEXTEND].constantGas = GasBaseCost
 	jt[LT].constantGas = GasBaseCost
 	jt[GT].constantGas = GasBaseCost
@@ -586,22 +586,34 @@ func enable7904(jt *JumpTable) {
 	jt[SHR].constantGas = GasBaseCost
 	jt[SAR].constantGas = GasBaseCost
 	jt[ADDRESS].constantGas = GasBaseCost
-	//jt[BALANCE].constantGas = GasBaseCost
+
+	jt[BALANCE].constantGas = params.WarmStorageReadCostEIP7904
+	jt[BALANCE].dynamicGas = gasEip7904AccountCheck
 
 	jt[ORIGIN].constantGas = GasBaseCost
 	jt[CALLER].constantGas = GasBaseCost
 	jt[CALLVALUE].constantGas = GasBaseCost
 	jt[CALLDATALOAD].constantGas = GasBaseCost
 	jt[CALLDATASIZE].constantGas = GasBaseCost
-	//jt[CALLDATACOPY].constantGas = GasBaseCost
+
+	jt[CALLDATACOPY].constantGas = GasBaseCost
+	jt[CALLDATACOPY].dynamicGas = gasCallDataCopy7904
+
 	jt[CODESIZE].constantGas = GasBaseCost
-	//jt[CODECOPY].constantGas = GasBaseCost
+
+	jt[CODECOPY].constantGas = GasBaseCost
+	jt[CODECOPY].dynamicGas = gasCodeCopy7904
+
 	jt[GASPRICE].constantGas = GasBaseCost
-	//jt[EXTCODESIZE].constantGas = GasBaseCost
-	//jt[EXTCODECOPY].constantGas = GasBaseCost
+	jt[EXTCODESIZE].dynamicGas = gasEip7904AccountCheck
+
+	jt[EXTCODECOPY].dynamicGas = gasExtCodeCopy7904
+
 	jt[RETURNDATASIZE].constantGas = GasBaseCost
-	//jt[RETURNDATACOPY].constantGas = GasBaseCost
-	//jt[EXTCODEHASH].constantGas = GasBaseCost
+	jt[RETURNDATACOPY].dynamicGas = gasReturnDataCopy7904
+
+	jt[EXTCODEHASH].dynamicGas = gasEip7904AccountCheck
+
 	jt[COINBASE].constantGas = GasBaseCost
 	jt[TIMESTAMP].constantGas = GasBaseCost
 	jt[NUMBER].constantGas = GasBaseCost
@@ -610,8 +622,8 @@ func enable7904(jt *JumpTable) {
 	jt[SELFBALANCE].constantGas = GasBaseCost
 	jt[POP].constantGas = GasBaseCost
 	jt[MLOAD].constantGas = GasBaseCost
-	//jt[MSTORE].constantGas = GasBaseCost
-	//jt[MSTORE8].constantGas = GasBaseCost
+	jt[MSTORE].constantGas = GasBaseCost
+	jt[MSTORE8].constantGas = GasBaseCost
 	jt[JUMP].constantGas = GasBaseCost
 	jt[JUMPI].constantGas = GasBaseCost
 	jt[PC].constantGas = GasBaseCost
@@ -619,7 +631,9 @@ func enable7904(jt *JumpTable) {
 	jt[TLOAD].constantGas = GasWarmStorageCost
 	jt[TSTORE].constantGas = GasWarmStorageCost
 	jt[JUMPDEST].constantGas = GasBaseCost
-	//jt[MCOPY].constantGas = GasBaseCost
+
+	jt[MCOPY].dynamicGas = gasMcopy7904
+
 	jt[PUSH0].constantGas = GasBaseCost
 	for i := PUSH1; i < PUSH32; i++ {
 		jt[i].constantGas = GasBaseCost
@@ -633,4 +647,12 @@ func enable7904(jt *JumpTable) {
 	for i := SWAP1; i < SWAP16; i++ {
 		jt[i].constantGas = GasBaseCost
 	}
+
+	jt[SLOAD].dynamicGas = gasSLoadEIP7904
+	jt[SSTORE].dynamicGas = gasSStoreEIP7904
+	jt[CALL].dynamicGas = gasCallEIP7904
+	jt[STATICCALL].dynamicGas = gasStaticCallEIP7904
+	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP7904
+
+	jt[CALLCODE].dynamicGas = gasCallCodeEIP7904
 }

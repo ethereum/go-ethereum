@@ -88,12 +88,49 @@ func memoryCopierGas(stackpos int) gasFunc {
 	}
 }
 
+// memoryCopierGas7904 creates the gas functions for the following opcodes, and takes
+// the stack position of the operand which determines the size of the data to copy
+// as argument:
+// CALLDATACOPY (stack position 2)
+// CODECOPY (stack position 2)
+// MCOPY (stack position 2)
+// EXTCODECOPY (stack position 3)
+// RETURNDATACOPY (stack position 2)
+func memoryCopierGas7904(stackpos int) gasFunc {
+	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+		// Gas for expanding the memory
+		gas, err := memoryGasCost(mem, memorySize)
+		if err != nil {
+			return 0, err
+		}
+		// And gas for copying data, charged per word at param.CopyGas
+		words, overflow := stack.Back(stackpos).Uint64WithOverflow()
+		if overflow {
+			return 0, ErrGasUintOverflow
+		}
+
+		if words, overflow = math.SafeMul(toWordSize(words), params.CopyGasEIP7904); overflow {
+			return 0, ErrGasUintOverflow
+		}
+
+		if gas, overflow = math.SafeAdd(gas, words); overflow {
+			return 0, ErrGasUintOverflow
+		}
+		return gas, nil
+	}
+}
+
 var (
-	gasCallDataCopy   = memoryCopierGas(2)
-	gasCodeCopy       = memoryCopierGas(2)
-	gasMcopy          = memoryCopierGas(2)
-	gasExtCodeCopy    = memoryCopierGas(3)
-	gasReturnDataCopy = memoryCopierGas(2)
+	gasCallDataCopy       = memoryCopierGas(2)
+	gasCodeCopy           = memoryCopierGas(2)
+	gasMcopy              = memoryCopierGas(2)
+	gasExtCodeCopy        = memoryCopierGas(3)
+	gasReturnDataCopy     = memoryCopierGas(2)
+	gasCallDataCopy7904   = memoryCopierGas7904(2)
+	gasCodeCopy7904       = memoryCopierGas7904(2)
+	gasMcopy7904          = memoryCopierGas7904(2)
+	gasExtCodeCopy7904    = memoryCopierGas7904(3)
+	gasReturnDataCopy7904 = memoryCopierGas7904(2)
 )
 
 func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
@@ -363,6 +400,19 @@ func gasExpEIP158(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 		overflow bool
 	)
 	if gas, overflow = math.SafeAdd(gas, params.ExpGas); overflow {
+		return 0, ErrGasUintOverflow
+	}
+	return gas, nil
+}
+
+func gasExpEIP7904(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	expByteLen := uint64((stack.data[stack.len()-2].BitLen() + 7) / 8)
+
+	var (
+		gas      = expByteLen * params.ExpByteEIP7904 // no overflow check required. Max is 256 * ExpByte gas
+		overflow bool
+	)
+	if gas, overflow = math.SafeAdd(gas, params.ExpGasEIP7904); overflow {
 		return 0, ErrGasUintOverflow
 	}
 	return gas, nil

@@ -33,6 +33,8 @@ const (
 	GasFastCost        uint64 = 2
 	GasMidCost         uint64 = 3
 	GasWarmStorageCost uint64 = 5
+	GasExpBaseCost     uint64 = 2
+	GasExpPerByteCost  uint64 = 4
 )
 
 // callGas returns the actual gas cost of the call.

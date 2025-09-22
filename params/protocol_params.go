@@ -69,6 +69,8 @@ const (
 	ColdSloadCostEIP2929         = uint64(2100) // COLD_SLOAD_COST
 	WarmStorageReadCostEIP2929   = uint64(100)  // WARM_STORAGE_READ_COST
 
+	WarmStorageReadCostEIP7904 = uint64(5) // WARM_STORAGE_READ_COST
+
 	// In EIP-2200: SstoreResetGas was 5000.
 	// In EIP-2929: SstoreResetGas was changed to '5000 - COLD_SLOAD_COST'.
 	// In EIP-3529: SSTORE_CLEARS_SCHEDULE is defined as SSTORE_RESET_GAS + ACCESS_LIST_STORAGE_KEY_COST
@@ -119,6 +121,10 @@ const (
 	// EXP has a dynamic portion depending on the size of the exponent
 	ExpByteFrontier uint64 = 10 // was set to 10 in Frontier
 	ExpByteEIP158   uint64 = 50 // was raised to 50 during Eip158 (Spurious Dragon)
+	ExpGasEIP7904   uint64 = 2  // lowered to 2 during EIP7904
+	ExpByteEIP7904  uint64 = 4  // was lowered to 4 during EIP7904
+
+	CopyGasEIP7904 uint64 = 1 // lowered
 
 	// Extcodecopy has a dynamic AND a static cost. This represents only the
 	// static portion of the gas. It was changed during EIP 150 (Tangerine)
