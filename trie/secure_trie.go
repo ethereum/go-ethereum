@@ -19,7 +19,7 @@ package trie
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/platcrypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb/database"
@@ -102,14 +102,14 @@ func NewStateTrie(id *ID, db database.NodeDatabase) (*StateTrie, error) {
 // This function will omit any encountered error but just
 // print out an error message.
 func (t *StateTrie) MustGet(key []byte) []byte {
-	return t.trie.MustGet(crypto.Keccak256(key))
+	return t.trie.MustGet(platcrypto.Keccak256(key))
 }
 
 // GetAccount attempts to retrieve an account with provided account address.
 // If the specified account is not in the trie, nil will be returned.
 // If a trie node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) GetAccount(address common.Address) (*types.StateAccount, error) {
-	res, err := t.trie.Get(crypto.Keccak256(address.Bytes()))
+	res, err := t.trie.Get(platcrypto.Keccak256(address.Bytes()))
 	if res == nil || err != nil {
 		return nil, err
 	}
@@ -136,7 +136,7 @@ func (t *StateTrie) GetAccountByHash(addrHash common.Hash) (*types.StateAccount,
 func (t *StateTrie) PrefetchAccount(addresses []common.Address) error {
 	var keys [][]byte
 	for _, addr := range addresses {
-		keys = append(keys, crypto.Keccak256(addr.Bytes()))
+		keys = append(keys, platcrypto.Keccak256(addr.Bytes()))
 	}
 	return t.trie.Prefetch(keys)
 }
@@ -146,7 +146,7 @@ func (t *StateTrie) PrefetchAccount(addresses []common.Address) error {
 // If the specified storage slot is not in the trie, nil will be returned.
 // If a trie node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) GetStorage(_ common.Address, key []byte) ([]byte, error) {
-	enc, err := t.trie.Get(crypto.Keccak256(key))
+	enc, err := t.trie.Get(platcrypto.Keccak256(key))
 	if err != nil || len(enc) == 0 {
 		return nil, err
 	}
@@ -159,7 +159,7 @@ func (t *StateTrie) GetStorage(_ common.Address, key []byte) ([]byte, error) {
 func (t *StateTrie) PrefetchStorage(_ common.Address, keys [][]byte) error {
 	var keylist [][]byte
 	for _, key := range keys {
-		keylist = append(keylist, crypto.Keccak256(key))
+		keylist = append(keylist, platcrypto.Keccak256(key))
 	}
 	return t.trie.Prefetch(keylist)
 }
@@ -182,7 +182,7 @@ func (t *StateTrie) GetNode(path []byte) ([]byte, int, error) {
 // This function will omit any encountered error but just print out an
 // error message.
 func (t *StateTrie) MustUpdate(key, value []byte) {
-	hk := crypto.Keccak256(key)
+	hk := platcrypto.Keccak256(key)
 	t.trie.MustUpdate(hk, value)
 	if t.preimages != nil {
 		t.secKeyCache[common.Hash(hk)] = common.CopyBytes(key)
@@ -198,7 +198,7 @@ func (t *StateTrie) MustUpdate(key, value []byte) {
 //
 // If a node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) UpdateStorage(_ common.Address, key, value []byte) error {
-	hk := crypto.Keccak256(key)
+	hk := platcrypto.Keccak256(key)
 	v, _ := rlp.EncodeToBytes(value)
 	err := t.trie.Update(hk, v)
 	if err != nil {
@@ -212,7 +212,7 @@ func (t *StateTrie) UpdateStorage(_ common.Address, key, value []byte) error {
 
 // UpdateAccount will abstract the write of an account to the secure trie.
 func (t *StateTrie) UpdateAccount(address common.Address, acc *types.StateAccount, _ int) error {
-	hk := crypto.Keccak256(address.Bytes())
+	hk := platcrypto.Keccak256(address.Bytes())
 	data, err := rlp.EncodeToBytes(acc)
 	if err != nil {
 		return err
@@ -233,7 +233,7 @@ func (t *StateTrie) UpdateContractCode(_ common.Address, _ common.Hash, _ []byte
 // MustDelete removes any existing value for key from the trie. This function
 // will omit any encountered error but just print out an error message.
 func (t *StateTrie) MustDelete(key []byte) {
-	hk := crypto.Keccak256(key)
+	hk := platcrypto.Keccak256(key)
 	if t.preimages != nil {
 		delete(t.secKeyCache, common.Hash(hk))
 	}
@@ -244,7 +244,7 @@ func (t *StateTrie) MustDelete(key []byte) {
 // If the specified trie node is not in the trie, nothing will be changed.
 // If a node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) DeleteStorage(_ common.Address, key []byte) error {
-	hk := crypto.Keccak256(key)
+	hk := platcrypto.Keccak256(key)
 	if t.preimages != nil {
 		delete(t.secKeyCache, common.Hash(hk))
 	}
@@ -253,7 +253,7 @@ func (t *StateTrie) DeleteStorage(_ common.Address, key []byte) error {
 
 // DeleteAccount abstracts an account deletion from the trie.
 func (t *StateTrie) DeleteAccount(address common.Address) error {
-	hk := crypto.Keccak256(address.Bytes())
+	hk := platcrypto.Keccak256(address.Bytes())
 	if t.preimages != nil {
 		delete(t.secKeyCache, common.Hash(hk))
 	}
