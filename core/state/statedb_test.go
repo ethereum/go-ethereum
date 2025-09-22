@@ -772,7 +772,7 @@ func TestCopyCommitCopy(t *testing.T) {
 		t.Fatalf("second copy non-committed storage slot mismatch: have %x, want %x", val, sval)
 	}
 	if val := copyTwo.GetCommittedState(addr, skey); val != (common.Hash{}) {
-		t.Fatalf("second copy committed storage slot mismatch: have %x, want %x", val, sval)
+		t.Fatalf("second copy committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
 	// Commit state, ensure states can be loaded from disk
 	root, _ := state.Commit(0, false, false)
@@ -859,7 +859,7 @@ func TestCopyCopyCommitCopy(t *testing.T) {
 		t.Fatalf("third copy non-committed storage slot mismatch: have %x, want %x", val, sval)
 	}
 	if val := copyThree.GetCommittedState(addr, skey); val != (common.Hash{}) {
-		t.Fatalf("third copy committed storage slot mismatch: have %x, want %x", val, sval)
+		t.Fatalf("third copy committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
 }
 
@@ -912,10 +912,10 @@ func TestCommitCopy(t *testing.T) {
 	}
 	// Slots cached in the stateDB, available after commit
 	if val := copied.GetState(addr, skey2); val != sval2 {
-		t.Fatalf("unexpected storage slot: have %x", sval1)
+		t.Fatalf("unexpected storage slot: have %x, want %x", val, sval2)
 	}
 	if val := copied.GetCommittedState(addr, skey2); val != sval2 {
-		t.Fatalf("unexpected storage slot: have %x", val)
+		t.Fatalf("unexpected storage slot: have %x, want %x", val, sval2)
 	}
 }
 
