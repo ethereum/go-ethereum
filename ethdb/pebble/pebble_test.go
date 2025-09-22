@@ -71,7 +71,9 @@ func TestPebbleLogData(t *testing.T) {
 
 	b := db.NewBatch()
 	b.LogData(nil, nil)
-	db.Apply(b, pebble.Sync)
+	if err := db.Apply(b, pebble.Sync); err != nil {
+		t.Fatal(err)
+	}
 
 	_, _, err = db.Get(nil)
 	if !errors.Is(err, pebble.ErrNotFound) {
