@@ -970,9 +970,7 @@ func (p *BlobPool) convertLegacySidecar(sender common.Address, hash common.Hash,
 	data, err := p.store.Get(id)
 	if err != nil {
 		p.lock.RUnlock()
-
-		// The transaction may have been evicted simultaneously,
-		// safe to skip conversion.
+		// The transaction may have been evicted simultaneously, safe to skip conversion.
 		log.Debug("Blob transaction is missing", "hash", hash, "id", id, "err", err)
 		return false
 	}
@@ -980,8 +978,8 @@ func (p *BlobPool) convertLegacySidecar(sender common.Address, hash common.Hash,
 	p.lock.RUnlock()
 
 	// Decode the transaction, the failure is not expected and report the error
-	// loudly if possible. If The blob transaction in this slot is corrupted.
-	// Leave it in the store, it will be dropped during the next pool
+	// loudly if possible. If the blob transaction in this slot is corrupted,
+	// leave it in the store, it will be dropped during the next pool
 	// initialization.
 	var tx types.Transaction
 	if err = rlp.DecodeBytes(data, &tx); err != nil {
@@ -1016,7 +1014,7 @@ func (p *BlobPool) convertLegacySidecar(sender common.Address, hash common.Hash,
 		log.Error("Failed to replace the legacy transaction", "hash", hash)
 		return false
 	}
-	log.Debug("Converted the legacy transaction", "hash", hash, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Debug("Converted legacy blob transaction", "hash", hash, "elapsed", common.PrettyDuration(time.Since(start)))
 	return true
 }
 
@@ -1049,7 +1047,7 @@ func (p *BlobPool) convertLegacySidecars(ids map[common.Address]map[uint64]uint6
 	if p.sidecarMigrationDoneCh != nil {
 		close(p.sidecarMigrationDoneCh)
 	}
-	log.Info("Completed the blob transaction conversion", "discarded", failure, "injected", success, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Completed blob transaction conversion", "discarded", failure, "injected", success, "elapsed", common.PrettyDuration(time.Since(start)))
 }
 
 // reorg assembles all the transactors and missing transactions between an old
