@@ -136,8 +136,8 @@ func benchmarkMerge(b *testing.B, count int) {
 		addNode(x)
 		addNode(y)
 	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		// Store set x into a backup
 		z := NewNodeSet(common.Hash{})
 		z.Merge(x)

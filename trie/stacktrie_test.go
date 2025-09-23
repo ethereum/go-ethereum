@@ -406,7 +406,7 @@ func BenchmarkInsert100K(b *testing.B) {
 	var val = make([]byte, 20)
 	var hash common.Hash
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		s := NewStackTrie(nil)
 		var k uint64
 		for j := 0; j < num; j++ {

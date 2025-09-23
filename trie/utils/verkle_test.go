@@ -64,9 +64,8 @@ func BenchmarkTreeKey(b *testing.B) {
 	verkle.GetConfig()
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		BasicDataKey([]byte{0x01})
 	}
 }
@@ -85,8 +84,8 @@ func BenchmarkTreeKeyWithEvaluation(b *testing.B) {
 	eval := evaluateAddressPoint(addr)
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		BasicDataKeyWithEvaluatedAddress(eval)
 	}
 }
@@ -102,9 +101,8 @@ func BenchmarkStorageKey(b *testing.B) {
 	verkle.GetConfig()
 
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		StorageSlotKey([]byte{0x01}, bytes.Repeat([]byte{0xff}, 32))
 	}
 }
@@ -123,8 +121,8 @@ func BenchmarkStorageKeyWithEvaluation(b *testing.B) {
 	eval := evaluateAddressPoint(addr)
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		StorageSlotKeyWithEvaluatedAddress(eval, bytes.Repeat([]byte{0xff}, 32))
 	}
 }

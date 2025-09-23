@@ -1164,8 +1164,8 @@ func BenchmarkIterator(b *testing.B) {
 	diskDb, srcDb, tr, _ := makeTestTrie(rawdb.HashScheme)
 	root := tr.Hash()
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		if err := checkTrieConsistency(diskDb, srcDb.Scheme(), root, false); err != nil {
 			b.Fatal(err)
 		}
