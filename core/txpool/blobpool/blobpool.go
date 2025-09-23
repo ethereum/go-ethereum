@@ -1892,19 +1892,19 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 		if firstgap == gtxs[0].Nonce() {
 			// We are under lock. Add the first transaction in a goroutine to avoid blocking.
 			// This might lead to a race beteen new calls to add and the revalidation here,
-			// TODO: revisit if this is a problem, lock on gapped needed?
+			// TODO: revisit if this is a problem, lock on 'from' needed?
+			tx := gtxs[0]
+			p.gapped[from] = gtxs[1:]
+			if len(p.gapped[from]) == 0 {
+				delete(p.gapped, from)
+			}
 			go func() {
-				if err := p.add(gtxs[0]); err == nil {
-					// First transaction accepted, remove it from the gapped queue
-					p.gapped[from] = gtxs[1:]
-					log.Trace("Gapped blob transaction added to pool", "hash", gtxs[0].Hash(), "from", from, "nonce", gtxs[0].Nonce(), "qlen", len(p.gapped[from]))
+				if err := p.add(tx); err == nil {
+					log.Trace("Gapped blob transaction added to pool", "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
 				} else {
-					log.Trace("Gapped blob transaction still not accepted", "hash", gtxs[0].Hash(), "from", from, "nonce", gtxs[0].Nonce(), "err", err)
+					log.Trace("Gapped blob transaction still not accepted", "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "err", err)
 				}
 			}()
-		}
-		if len(p.gapped[from]) == 0 {
-			delete(p.gapped, from)
 		}
 	}
 	return nil
