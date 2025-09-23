@@ -397,10 +397,8 @@ func TestKeccak256PreimageTracerInsufficientStack(t *testing.T) {
 		stack:  stack,
 	}
 
-	// This should panic due to insufficient stack, but we're testing it doesn't crash the test
-	require.Panics(t, func() {
-		tracer.OnOpcode(0, byte(vm.KECCAK256), 0, 0, mockScope, nil, 0, nil)
-	})
+	// This should not panic due to insufficient stack
+	tracer.OnOpcode(0, byte(vm.KECCAK256), 0, 0, mockScope, nil, 0, nil)
 }
 
 func TestKeccak256PreimageTracerLargeData(t *testing.T) {

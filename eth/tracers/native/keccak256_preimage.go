@@ -55,8 +55,14 @@ func newKeccak256preimageTracer(ctx *tracers.Context, cfg json.RawMessage, chain
 
 func (t *keccak256preimageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	if op == byte(vm.KECCAK256) {
-		dataOffset := peepStack(scope.StackData(), 0).Uint64()
-		dataLength := peepStack(scope.StackData(), 1).Uint64()
+		sd := scope.StackData()
+		// it turns out that sometimes the stack is empty, evm will fail in this case, but we should not panic here
+		if len(sd) < 2 {
+			return
+		}
+
+		dataOffset := peepStack(sd, 0).Uint64()
+		dataLength := peepStack(sd, 1).Uint64()
 		preimage, err := internal.GetMemoryCopyPadded(scope.MemoryData(), int64(dataOffset), int64(dataLength))
 		if err != nil {
 			log.Warn("erc7562Tracer: failed to copy keccak preimage from memory", "err", err)
