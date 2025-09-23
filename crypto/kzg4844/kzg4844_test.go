@@ -225,3 +225,31 @@ func testKZGCells(t *testing.T, ckzg bool) {
 		t.Fatalf("failed to verify KZG proof at point: %v", err)
 	}
 }
+
+// goos: darwin
+// goarch: arm64
+// pkg: github.com/ethereum/go-ethereum/crypto/kzg4844
+// cpu: Apple M1 Pro
+// BenchmarkGOKZGComputeCellProofs
+// BenchmarkGOKZGComputeCellProofs-8   	       8	 139012286 ns/op
+func BenchmarkGOKZGComputeCellProofs(b *testing.B) { benchmarkComputeCellProofs(b, false) }
+func BenchmarkCKZGComputeCellProofs(b *testing.B)  { benchmarkComputeCellProofs(b, true) }
+
+func benchmarkComputeCellProofs(b *testing.B, ckzg bool) {
+	if ckzg && !ckzgAvailable {
+		b.Skip("CKZG unavailable in this test build")
+	}
+	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
+	useCKZG.Store(ckzg)
+
+	blob := randBlob()
+	_, _ = ComputeCellProofs(blob) // for kzg initialization
+	b.ResetTimer()
+
+	for b.Loop() {
+		_, err := ComputeCellProofs(blob)
+		if err != nil {
+			b.Fatalf("failed to create KZG proof at point: %v", err)
+		}
+	}
+}
