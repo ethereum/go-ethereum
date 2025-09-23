@@ -151,37 +151,37 @@ func BenchmarkDifficultyCalculator(b *testing.B) {
 	}
 	b.Run("big-frontier", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			calcDifficultyFrontier(1000014, h)
 		}
 	})
 	b.Run("u256-frontier", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			CalcDifficultyFrontierU256(1000014, h)
 		}
 	})
 	b.Run("big-homestead", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			calcDifficultyHomestead(1000014, h)
 		}
 	})
 	b.Run("u256-homestead", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			CalcDifficultyHomesteadU256(1000014, h)
 		}
 	})
 	b.Run("big-generic", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			x1(1000014, h)
 		}
 	})
 	b.Run("u256-generic", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			x2(1000014, h)
 		}
 	})
