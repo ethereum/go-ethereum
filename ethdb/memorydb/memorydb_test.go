@@ -38,7 +38,7 @@ func BenchmarkBatchAllocs(b *testing.B) {
 	var key = make([]byte, 20)
 	var val = make([]byte, 100)
 	// 120 * 1_000 -> 120_000 == 120kB
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		batch := New().NewBatch()
 		for j := uint64(0); j < 1000; j++ {
 			binary.BigEndian.PutUint64(key, j)
