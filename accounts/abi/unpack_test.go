@@ -63,7 +63,7 @@ func BenchmarkUnpack(b *testing.B) {
 			b.ResetTimer()
 
 			var result any
-			for range b.N {
+			for b.Loop() {
 				result, _ = abi.Unpack("method", encb)
 			}
 			_ = result
