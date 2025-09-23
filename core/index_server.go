@@ -27,8 +27,10 @@ import (
 )
 
 const (
-	maxBatchLength = 1 //TODO does batch processing have any benefit in any potential use case?
-	busyDelay      = time.Second
+	busyDelay           = time.Second      // indexer status polling frequency when not ready
+	maxHistoricPrefetch = 16               // size of block data pre-fetch queue
+	logFrequency        = time.Second * 20 // log info frequency during long indexing/unindexing process
+	headLogDelay        = time.Second      // head indexing log info delay (do not log if finished faster)
 )
 
 type Indexer interface {
@@ -39,7 +41,7 @@ type Indexer interface {
 	// Note that the indexer should never block even if it is busy processing.
 	// It is allowed to re-request the delivered blocks later if the indexer could
 	// not process them when first delivered.
-	AddBlockData(headers []*types.Header, receipts []types.Receipts) (ready bool, needBlocks common.Range[uint64])
+	AddBlockData(header *types.Header, receipts types.Receipts) (ready bool, needBlocks common.Range[uint64])
 	// Revert rewinds the index to the given head block number. Subsequent
 	// AddBlockData calls will deliver blocks starting from this point.
 	Revert(blockNumber uint64)
@@ -65,13 +67,12 @@ type Indexer interface {
 	Stop()
 }
 
+// indexServers operates as a part of BlockChain and can serve multiple chain
+// indexers that implement the Indexer interface.
 type indexServers struct {
 	lock    sync.Mutex
 	servers []*indexServer
 	chain   *BlockChain
-
-	headers  []*types.Header  // broadcast head header batch
-	receipts []types.Receipts // broadcast head receipts batch
 
 	lastHead                  *types.Header
 	lastHeadReceipts          types.Receipts
@@ -81,14 +82,17 @@ type indexServers struct {
 	closeWg sync.WaitGroup
 }
 
+// init initializes indexServers.
 func (f *indexServers) init(chain *BlockChain) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
 	f.chain = chain
+	f.lastHead = chain.CurrentBlock()
 	f.closeCh = make(chan struct{})
 }
 
+// stop shuts down all registered Indexers and their serving goroutines.
 func (f *indexServers) stop() {
 	f.lock.Lock()
 	defer f.lock.Unlock()
@@ -98,28 +102,37 @@ func (f *indexServers) stop() {
 	f.servers = nil
 }
 
+// register adds a new Indexer to the chain.
 func (f *indexServers) register(indexer Indexer, name string) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
 	server := &indexServer{
-		parent:    f,
-		indexer:   indexer,
-		sendTimer: time.NewTimer(0),
-		lastHead:  f.lastHead,
-		name:      name,
+		parent:            f,
+		indexer:           indexer,
+		sendTimer:         time.NewTimer(0),
+		lastHead:          f.lastHead,
+		name:              name,
+		statusCh:          make(chan indexerStatus, 1),
+		blockDataCh:       make(chan blockData, maxHistoricPrefetch),
+		suspendCh:         make(chan chan struct{}, 1),
+		releaseCh:         make(chan struct{}),
+		testSuspendHookCh: make(chan struct{}),
 	}
 	f.servers = append(f.servers, server)
-	f.closeWg.Add(1)
+	f.closeWg.Add(2)
 	indexer.SetHistoryCutoff(f.historyCutoff)
 	indexer.SetFinalized(f.finalBlock)
 	if f.lastHead != nil {
-		server.ready, server.needBlocks = indexer.AddBlockData([]*types.Header{f.lastHead}, []types.Receipts{f.lastHeadReceipts})
+		server.status.ready, server.status.needBlocks = indexer.AddBlockData(f.lastHead, f.lastHeadReceipts)
+		server.updateStatus()
 	}
-	go server.eventLoop()
+	go server.historicReadLoop()
+	go server.historicSendLoop()
 }
 
-func (f *indexServers) broadcast(header *types.Header, head bool) {
+// broadcast sends a new head block to all registered Indexer instances.
+func (f *indexServers) broadcast(header *types.Header) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
@@ -129,17 +142,13 @@ func (f *indexServers) broadcast(header *types.Header, head bool) {
 		return
 	}
 	f.lastHead, f.lastHeadReceipts = header, blockReceipts
-	f.headers = append(f.headers, header)
-	f.receipts = append(f.receipts, blockReceipts)
-	if head || len(f.headers) >= maxBatchLength {
-		for _, server := range f.servers {
-			server.sendHeadBlockData(f.headers, f.receipts)
-		}
-		f.headers = f.headers[:0]
-		f.receipts = f.receipts[:0]
+	for _, server := range f.servers {
+		server.sendHeadBlockData(header, blockReceipts)
 	}
 }
 
+// revert notifies all registered Indexer instances about the chain being rolled
+// back to the given head or last common ancestor.
 func (f *indexServers) revert(header *types.Header) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
@@ -149,6 +158,7 @@ func (f *indexServers) revert(header *types.Header) {
 	}
 }
 
+// setFinalBlock notifies all Indexer instances about the latest finalized block.
 func (f *indexServers) setFinalBlock(blockNumber uint64) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
@@ -162,6 +172,9 @@ func (f *indexServers) setFinalBlock(blockNumber uint64) {
 	}
 }
 
+// setHistoryCutoff notifies all Indexer instances about the history cutoff point.
+// The indexers cannot expect any data being delivered if needBlocks.First() is
+// before this point.
 func (f *indexServers) setHistoryCutoff(blockNumber uint64) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
@@ -175,15 +188,22 @@ func (f *indexServers) setHistoryCutoff(blockNumber uint64) {
 	}
 }
 
-func (f *indexServers) suspended() {
+// suspend sets all Indexer instances and their historical data serving loops
+// into a suspended state while block processing is happening. A new head
+// broadcast will reset them to the active state.
+func (f *indexServers) suspend() {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
 	for _, server := range f.servers {
-		server.suspended()
+		server.suspend()
 	}
 }
 
+// indexServer sends updates to a single Indexer instance. It sends all new heads
+// and reorg events, and also sends historical block data upon request.
+// It guarantees that Indexer functions are never called concurrently and also
+// they always present a consistent view of the chain to the indexer.
 type indexServer struct {
 	lock    sync.Mutex
 	parent  *indexServers
@@ -191,9 +211,12 @@ type indexServer struct {
 	stopped bool
 
 	lastHead                          *types.Header
-	ready                             bool
-	suspendCh                         chan struct{}
-	needBlocks, historicBatchRange    common.Range[uint64]
+	status                            indexerStatus
+	statusCh                          chan indexerStatus
+	blockDataCh                       chan blockData
+	suspendCh                         chan chan struct{}
+	releaseCh, testSuspendHookCh      chan struct{}
+	lastRevertBlock                   uint64
 	sendTimer                         *time.Timer
 	historyCutoff, missingBlockCutoff uint64
 
@@ -204,112 +227,54 @@ type indexServer struct {
 	lastHistoryErrorLog     time.Time
 }
 
-func (s *indexServer) eventLoop() {
-loop:
-	for {
+// indexerStatus represents the state of the indexer and also has fields that
+// serve the coordination between historic reader and sender goroutines.
+type indexerStatus struct {
+	ready, suspended, resetQueue bool
+	revertCount                  uint64
+	needBlocks                   common.Range[uint64]
+}
+
+// blockData represents the indexable data of a single block being sent from the
+// reader to the sender goroutine and optionally queued in blockDataCh inbetween.
+// It also returns the latest revertCount known before reading the block data,
+// which allows the sender to guarantee that all sent block data is always
+// consistent with the indexer's canonical chain view while the reading of block
+// data can still happen asynchronously.
+type blockData struct {
+	blockNumber, revertCount uint64
+	header                   *types.Header
+	receipts                 types.Receipts
+}
+
+// sendHeadBlockData immediately sends the latest head block data to the indexer
+// and updates the status of the historical block data serving mechanism
+// accordingly.
+func (s *indexServer) sendHeadBlockData(header *types.Header, receipts types.Receipts) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	if s.stopped {
+		return
+	}
+	if header.Hash() == s.lastHead.Hash() {
+		return
+	}
+	s.lastHead = header
+	s.status.ready, s.status.needBlocks = s.indexer.AddBlockData(header, receipts)
+	if s.status.suspended {
 		select {
 		case <-s.parent.closeCh:
-			s.lock.Lock()
-			s.indexer.Stop()
-			s.stopped = true
-			s.lock.Unlock()
-			s.parent.closeWg.Done()
 			return
-		case <-s.sendTimer.C:
-			var (
-				headers  []*types.Header
-				receipts []types.Receipts
-			)
-			s.lock.Lock()
-			s.historicBatchRange = s.nextHistoricBatchRange()
-			//fmt.Println("needBlocks", s.needBlocks, "historicBatchRange", s.historicBatchRange, "ready", s.ready)
-			if !s.historicBatchRange.IsEmpty() {
-				historicBatchRange := s.historicBatchRange
-				s.lock.Unlock() // do not hold lock that can block BlockChain while reading a historic batch
-				headers, receipts = s.historicBlockData(historicBatchRange)
-				s.lock.Lock()
-				// wait if historic block delivery has been suspended while collecting data
-				if s.suspendCh != nil {
-					ch := s.suspendCh
-					s.lock.Unlock() // do not hold lock that can block BlockChain while reading a historic batch
-					select {
-					case <-ch:
-					case <-s.parent.closeCh:
-						continue loop
-					}
-					s.lock.Lock()
-				}
-				// ensure that the delivered data still matches the latest required range
-				s.historicBatchRange = s.historicBatchRange.Intersection(s.nextHistoricBatchRange())
-				// trim results if historicBatchRange has been shortened while collecting data
-				for len(headers) > 0 && !s.historicBatchRange.Includes(headers[0].Number.Uint64()) {
-					headers, receipts = headers[1:], receipts[1:]
-				}
-				if len(headers) > 0 && s.historicBatchRange.First() != headers[0].Number.Uint64() {
-					headers, receipts = nil, nil
-				}
-				for len(headers) > 0 && !s.historicBatchRange.Includes(headers[len(headers)-1].Number.Uint64()) {
-					headers, receipts = headers[:len(headers)-1], receipts[:len(receipts)-1]
-				}
-			}
-			if len(headers) > 0 {
-				//fmt.Println("AddBlockData", headers[0].Number.Uint64(), len(headers))
-				s.ready, s.needBlocks = s.indexer.AddBlockData(headers, receipts)
-				//fmt.Println(" needBlocks", s.needBlocks, "ready", s.ready)
-				if s.needBlocks.IsEmpty() {
-					s.logDelivered(headers[len(headers)-1].Number.Uint64(), uint64(len(headers)))
-					s.logFinished()
-				} else if s.needBlocks.First() > headers[0].Number.Uint64() && s.needBlocks.First() <= headers[len(headers)-1].Number.Uint64()+1 {
-					s.logDelivered(s.needBlocks.First()-1, s.needBlocks.First()-headers[0].Number.Uint64())
-				}
-			} else {
-				s.ready, s.needBlocks = s.indexer.Status()
-			}
-			s.setTimer()
-			s.lock.Unlock()
+		case s.releaseCh <- struct{}{}:
 		}
+		s.status.suspended = false
 	}
+	s.updateStatus()
 }
 
-func (s *indexServer) logDelivered(position, amount uint64) {
-	if s.processed == 0 {
-		s.startedAt = time.Now()
-	}
-	s.processed += amount
-	if s.logged {
-		if time.Since(s.lastLoggedAt) < time.Second*10 {
-			return
-		}
-	} else {
-		if time.Since(s.startedAt) < time.Second {
-			return
-		}
-		s.logged = true
-	}
-	s.lastLoggedAt = time.Now()
-	log.Info("Generating "+s.name, "block", position, "processed", s.processed, "elapsed", time.Since(s.startedAt))
-}
-
-func (s *indexServer) logFinished() {
-	if s.logged {
-		log.Info("Finished "+s.name, "processed", s.processed, "elapsed", time.Since(s.startedAt))
-	}
-	s.processed = 0
-}
-
-func (s *indexServer) nextHistoricBatchRange() common.Range[uint64] {
-	if !s.ready || s.lastHead == nil {
-		return common.Range[uint64]{}
-	}
-	first := max(s.needBlocks.First(), s.historyCutoff, s.missingBlockCutoff)
-	afterLast := min(first+maxBatchLength, s.needBlocks.AfterLast(), s.lastHead.Number.Uint64()+1)
-	if first < afterLast {
-		return common.NewRange[uint64](first, afterLast-first)
-	} else {
-		return common.Range[uint64]{}
-	}
-}
-
+// revert immediately reverts the indexer to the given block and updates the
+// status of the historical block data serving mechanism accordingly.
 func (s *indexServer) revert(header *types.Header) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -325,12 +290,283 @@ func (s *indexServer) revert(header *types.Header) {
 		panic("invalid indexer revert")
 	}
 	s.lastHead = header
-	if blockNumber+1 < s.historicBatchRange.AfterLast() {
-		s.historicBatchRange.SetLast(blockNumber)
-	}
+	s.status.revertCount++
+	s.lastRevertBlock = blockNumber
+	s.updateStatus()
 	s.indexer.Revert(blockNumber)
 }
 
+// historicSendLoop is the main event loop that interacts with the indexer in
+// case when historical block data is requested. It sends status updates to
+// the reader goroutine through statusCh and feeds the fetched data coming from
+// blockDataCh into the indexer.
+func (s *indexServer) historicSendLoop() {
+	defer func() {
+		s.lock.Lock()
+		s.indexer.Stop()
+		s.stopped = true
+		s.lock.Unlock()
+		s.parent.closeWg.Done()
+	}()
+
+	suspend := func(ch chan struct{}) {
+		close(ch)
+	loop:
+		for {
+			select {
+			case <-s.parent.closeCh:
+				return
+			case <-s.releaseCh:
+				break loop
+			case ch := <-s.suspendCh:
+				close(ch)
+			}
+		}
+	}
+
+	for {
+		// do a separate non-blocking select to ensure that a suspend attempt
+		// during the previous historical AddBlockData will be catched in the
+		// next round.
+		select {
+		case ch := <-s.suspendCh:
+			suspend(ch)
+		default:
+		}
+		select {
+		case <-s.parent.closeCh:
+			return
+		case ch := <-s.suspendCh:
+			suspend(ch)
+		case nextBlockData := <-s.blockDataCh:
+			s.lock.Lock()
+			s.status.resetQueue = true
+			if nextBlockData.header != nil {
+				if !s.status.needBlocks.IsEmpty() && s.status.needBlocks.First() == nextBlockData.blockNumber &&
+					(nextBlockData.revertCount == s.status.revertCount || (nextBlockData.revertCount+1 == s.status.revertCount && nextBlockData.blockNumber <= s.lastRevertBlock)) {
+					s.status.ready, s.status.needBlocks = s.indexer.AddBlockData(nextBlockData.header, nextBlockData.receipts)
+					s.status.resetQueue = false
+					if s.status.needBlocks.IsEmpty() {
+						s.logDelivered(nextBlockData.blockNumber)
+						s.logFinished()
+					} else if s.status.needBlocks.First() == nextBlockData.blockNumber+1 {
+						s.logDelivered(nextBlockData.blockNumber)
+					}
+				}
+			} else {
+				s.missingBlockCutoff = max(s.missingBlockCutoff, nextBlockData.blockNumber+1)
+				s.indexer.SetHistoryCutoff(max(s.historyCutoff, s.missingBlockCutoff))
+				s.status.ready, s.status.needBlocks = s.indexer.Status()
+			}
+			s.updateStatus()
+			s.lock.Unlock()
+		case <-s.sendTimer.C:
+			s.lock.Lock()
+			if !s.status.ready {
+				s.status.ready, s.status.needBlocks = s.indexer.Status()
+				s.updateStatus()
+			}
+			s.lock.Unlock()
+		}
+	}
+}
+
+// updateStatus updates the asynchronous reader goroutine's status based on the
+// latest indexer status. If necessary then it trims the needBlocks range based
+// on the locally available block range. If there is already an unread status
+// update waiting on statusCh then it is replaced by the new one.
+func (s *indexServer) updateStatus() {
+	if s.status.ready || s.status.suspended {
+		s.sendTimer.Stop()
+	} else {
+		s.sendTimer.Reset(busyDelay)
+	}
+	var headNumber uint64
+	if s.lastHead != nil {
+		headNumber = s.lastHead.Number.Uint64()
+	}
+	if headNumber+1 < s.status.needBlocks.AfterLast() {
+		s.status.needBlocks.SetLast(headNumber)
+	}
+	if s.status.needBlocks.IsEmpty() || max(s.historyCutoff, s.missingBlockCutoff) > s.status.needBlocks.First() {
+		s.status.needBlocks = common.Range[uint64]{}
+	}
+	select {
+	case <-s.statusCh:
+	default:
+	}
+	s.statusCh <- s.status
+}
+
+// suspend sets the Indexer instance and its historical data serving loops into
+// a suspended state while block processing is happening. A new head broadcast
+// will reset them to the active state.
+func (s *indexServer) suspend() {
+	ch := make(chan struct{})
+	select {
+	case <-s.parent.closeCh:
+		return
+	case s.suspendCh <- ch:
+	}
+loop:
+	for {
+		select {
+		case <-s.parent.closeCh:
+			return
+		case <-ch:
+			break loop
+		case <-s.testSuspendHookCh:
+		}
+	}
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	if s.stopped || s.status.suspended {
+		return
+	}
+	if s.lastHead != nil && s.status.needBlocks.AfterLast() > s.lastHead.Number.Uint64() {
+		select {
+		case <-s.parent.closeCh:
+		case s.releaseCh <- struct{}{}:
+		}
+		return
+	}
+	s.status.suspended = true
+	s.updateStatus()
+	s.indexer.Suspended()
+}
+
+// historicReadLoop reads requested historical block data asynchronously.
+// It receives indexer status updates on statusCh and sends block data to
+// blockDataCh. If the latest status indicates that there the server is not
+// suspended then it is guaranteed that eventually a corresponding block data
+// response will be sent unless a new status update is received before this
+// happens.
+// Note that blockDataCh can queue multiple block data pre-fetched by
+// historicReadLoop. If the requested range is changed while there is still
+// queued data in the channel that corresponds to the previous requested range
+// then the receiver sends a new status update with the resetQueue flag set to
+// true. In this case historicReadLoop removes all remaining entries from the
+// queue and starts sending block data from the beginning of the new range.
+func (s *indexServer) historicReadLoop() {
+	defer s.parent.closeWg.Done()
+
+	var (
+		status    indexerStatus
+		sendRange common.Range[uint64]
+	)
+
+	statusUpdated := func() {
+		if status.resetQueue {
+			// If the receiver found an item in the queue that is no longer
+			// relevant then we remove all remaining items first.
+		loop:
+			for {
+				select {
+				case <-s.blockDataCh:
+				default:
+					break loop
+				}
+			}
+		}
+		if !status.resetQueue && !sendRange.IsEmpty() && status.needBlocks.Includes(sendRange.First()) {
+			// Here we assume that the block data between needBlocks.First() and
+			// sendRange.First()-1 is already in the queue.
+			r := status.needBlocks
+			r.SetFirst(sendRange.First())
+			sendRange = r
+		} else {
+			sendRange = status.needBlocks
+		}
+		if sendRange.Count() > maxHistoricPrefetch {
+			// Note: in a normal use case where needBlocks.First() is advanced
+			// after reading the previous item from blockDataCh, this check will
+			// prevent reading more data than what fits into the channel capacity.
+			sendRange.SetAfterLast(sendRange.First() + maxHistoricPrefetch)
+		}
+	}
+
+	for {
+		if !sendRange.IsEmpty() && !status.suspended {
+			// Send next item to the queue.
+			bd := blockData{blockNumber: sendRange.First(), revertCount: status.revertCount}
+			if header := s.parent.chain.GetHeaderByNumber(bd.blockNumber); header != nil {
+				if receipts := s.parent.chain.GetReceipts(header.Hash(), bd.blockNumber); receipts != nil {
+					bd.header, bd.receipts = header, receipts
+				} else {
+					log.Error("Historical receipts are missing", "number", bd.blockNumber, "hash", header.Hash())
+				}
+			} else {
+				log.Error("Historical header missing", "number", bd.blockNumber)
+			}
+			// Note that a response with empty block data is still sent in case of
+			// a read error, signaling to the sender logic that something is missing.
+			select {
+			case s.blockDataCh <- bd:
+				sendRange.SetFirst(bd.blockNumber + 1)
+			default:
+				// Note: in extreme corner cases where sendRange.Count() check
+				// does not prevent trying to overfill the channel, we simply
+				// reset sendRange to empty preventing more wasted reads.
+				// Sending the queued data will generate more status updates
+				// which will reinitialize sendRange once the queue is again
+				// below full capacity.
+				sendRange = common.Range[uint64]{}
+			}
+			// Keep checking status updates without blocking as long as there is
+			// something to do.
+			select {
+			case <-s.parent.closeCh:
+				return
+			case status = <-s.statusCh:
+				statusUpdated()
+			default:
+			}
+		} else {
+			// There was nothing to do; wait for a next status update.
+			select {
+			case <-s.parent.closeCh:
+				return
+			case status = <-s.statusCh:
+				statusUpdated()
+			}
+		}
+	}
+}
+
+// logDelivered periodically prints log messages that report the current state
+// of the indexing process. If should be called after processing each new block.
+func (s *indexServer) logDelivered(position uint64) {
+	if s.processed == 0 {
+		s.startedAt = time.Now()
+	}
+	s.processed++
+	if s.logged {
+		if time.Since(s.lastLoggedAt) < logFrequency {
+			return
+		}
+	} else {
+		if time.Since(s.startedAt) < headLogDelay {
+			return
+		}
+		s.logged = true
+	}
+	s.lastLoggedAt = time.Now()
+	log.Info("Generating "+s.name, "block", position, "processed", s.processed, "elapsed", time.Since(s.startedAt))
+}
+
+// logFinished prints a log message that report the end of the indexing process.
+// Note that any log message is only printed if the process took longer than
+// headLogDelay.
+func (s *indexServer) logFinished() {
+	if s.logged {
+		log.Info("Finished "+s.name, "processed", s.processed, "elapsed", time.Since(s.startedAt))
+		s.logged = false
+	}
+	s.processed = 0
+}
+
+// setFinalBlock notifies the Indexer instance about the latest finalized block.
 func (s *indexServer) setFinalBlock(blockNumber uint64) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -341,6 +577,13 @@ func (s *indexServer) setFinalBlock(blockNumber uint64) {
 	s.indexer.SetFinalized(blockNumber)
 }
 
+// setHistoryCutoff notifies the Indexer instance about the history cutoff point.
+// The indexer cannot expect any data being delivered if needBlocks.First() is
+// before this point.
+// Note that if some historical block data could not be loaded from the database
+// then the historical cutoff point reported to the indexer might be modified by
+// missingBlockCutoff. This workaround ensures that the indexing process does not
+// get stuck permanently in case of missing data.
 func (s *indexServer) setHistoryCutoff(blockNumber uint64) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -349,122 +592,7 @@ func (s *indexServer) setHistoryCutoff(blockNumber uint64) {
 		return
 	}
 	s.historyCutoff = blockNumber
-	cutoff := max(s.historyCutoff, s.missingBlockCutoff)
-	if cutoff > s.historicBatchRange.First() {
-		s.historicBatchRange.SetFirst(cutoff)
-	}
-	s.indexer.SetHistoryCutoff(cutoff)
-}
-
-func (s *indexServer) suspended() {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	if s.stopped || s.suspendCh != nil ||
-		(s.lastHead != nil && s.needBlocks.AfterLast() > s.lastHead.Number.Uint64()) {
-		return
-	}
-	s.suspendCh = make(chan struct{})
-	s.indexer.Suspended()
-	s.setTimer()
-}
-
-func (s *indexServer) sendHeadBlockData(headers []*types.Header, receipts []types.Receipts) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	if s.stopped {
-		return
-	}
-	if len(headers) > 0 && headers[0].Hash() == s.lastHead.Hash() {
-		headers = headers[1:]
-		receipts = receipts[1:]
-	}
-	if len(headers) == 0 {
-		return
-	}
-	/*lastHash := s.lastHead.Hash()
-	for _, header := range headers {
-		if header.ParentHash != lastHash {
-			panic("non-continuous head header chain sent to indexer")
-		}
-		lastHash = header.Hash()
-	}*/
-	s.ready, s.needBlocks = s.indexer.AddBlockData(headers, receipts)
-	if s.suspendCh != nil {
-		//fmt.Println("setSuspended false (head)")
-		close(s.suspendCh)
-		s.suspendCh = nil
-	}
-	s.lastHead = headers[len(headers)-1]
-	if s.suspendCh != nil {
-		close(s.suspendCh)
-		s.suspendCh = nil
-	}
-	s.setTimer()
-}
-
-func (s *indexServer) setTimer() {
-	if s.nextHistoricBatchRange().IsEmpty() || s.suspendCh != nil {
-		//fmt.Println("setTimer stop")
-		s.sendTimer.Stop()
-	} else {
-		if s.ready {
-			//fmt.Println("setTimer 0")
-			s.sendTimer.Reset(0)
-		} else {
-			//fmt.Println("setTimer busy")
-			s.sendTimer.Reset(busyDelay)
-		}
-	}
-}
-
-func (s *indexServer) historicBlockData(batchRange common.Range[uint64]) (headers []*types.Header, receipts []types.Receipts) {
-	headers = make([]*types.Header, 0, batchRange.Count())
-	receipts = make([]types.Receipts, 0, batchRange.Count())
-
-	for !batchRange.IsEmpty() {
-		number := batchRange.First()
-		header := s.parent.chain.GetHeaderByNumber(number)
-		var blockReceipts types.Receipts
-		if header != nil {
-			blockReceipts = s.parent.chain.GetReceipts(header.Hash(), number)
-			if blockReceipts != nil {
-				headers = append(headers, header)
-				receipts = append(receipts, blockReceipts)
-				batchRange.SetFirst(number + 1)
-				continue
-			}
-		}
-		// something is missing, update batch range and check if a reorg/pruning has happened
-		s.lock.Lock()
-		batchRange = s.historicBatchRange
-		s.lock.Unlock()
-		if number >= batchRange.AfterLast() {
-			return // end of requested section has been reorged; nothing to do here, deliver what we have
-		}
-		headers, receipts = nil, nil
-		if number < batchRange.First() {
-			continue // beginning of requested section has been pruned; resume with new range
-		}
-		// something is missing in the supposedly available range; print error log,
-		// update missingBlockCutoff, send new cutoff limit to indexer and return
-		// no results (main event loop will also update status based on new cutoff).
-		if time.Since(s.lastHistoryErrorLog) >= time.Second*10 {
-			s.lastHistoryErrorLog = time.Now()
-			if header == nil {
-				log.Error("Historical header missing", "number", number)
-			} else {
-				log.Error("Historical receipts are missing", "number", number, "hash", header.Hash())
-			}
-		}
-		s.lock.Lock()
-		s.missingBlockCutoff = number + 1
-		if s.missingBlockCutoff > s.historyCutoff {
-			s.indexer.SetHistoryCutoff(s.missingBlockCutoff)
-		}
-		s.lock.Unlock()
-		return
-	}
-	return
+	s.indexer.SetHistoryCutoff(max(s.historyCutoff, s.missingBlockCutoff))
+	s.status.ready, s.status.needBlocks = s.indexer.Status()
+	s.updateStatus()
 }
