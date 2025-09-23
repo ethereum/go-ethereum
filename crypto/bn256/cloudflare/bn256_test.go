@@ -107,23 +107,21 @@ func TestG2SelfAddition(t *testing.T) {
 
 func BenchmarkG1(b *testing.B) {
 	x, _ := rand.Int(rand.Reader, Order)
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		new(G1).ScalarBaseMult(x)
 	}
 }
 
 func BenchmarkG2(b *testing.B) {
 	x, _ := rand.Int(rand.Reader, Order)
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		new(G2).ScalarBaseMult(x)
 	}
 }
 func BenchmarkPairing(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		Pair(&G1{curveGen}, &G2{twistGen})
 	}
 }

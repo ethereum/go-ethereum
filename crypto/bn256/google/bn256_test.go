@@ -305,7 +305,7 @@ func TestTripartiteDiffieHellman(t *testing.T) {
 }
 
 func BenchmarkPairing(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		Pair(&G1{curveGen}, &G2{twistGen})
 	}
 }
