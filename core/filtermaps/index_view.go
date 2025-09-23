@@ -95,7 +95,7 @@ func (iv *IndexView) GetBlockLvPointer(blockNumber uint64) (uint64, error) {
 		return iv.headLvPointer, nil
 	}
 	if blockNumber > iv.blockRange.AfterLast() {
-		return 0, errors.New("block number out of range")
+		return 0, ErrOutOfRange
 	}
 	for _, fm := range iv.finishedMaps {
 		if blockNumber >= fm.firstBlock() && blockNumber <= fm.lastBlock.number {
@@ -123,7 +123,7 @@ func (iv *IndexView) GetLastBlockOfMap(mapIndex uint32) (uint64, common.Hash, er
 		return lastNumber, lastHash, err
 	}
 	if mapIndex > iv.headMapIndex {
-		return 0, common.Hash{}, errors.New("map index out of range")
+		return 0, common.Hash{}, ErrOutOfRange
 	}
 	if mapIndex == iv.headMapIndex {
 		return iv.headMap.lastBlock.number, iv.headMap.lastBlock.hash, nil

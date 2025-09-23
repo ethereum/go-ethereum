@@ -142,52 +142,47 @@ func (ix *Indexer) Status() (bool, common.Range[uint64]) {
 // Note that this function also resumes the storage layer background process if
 // it was previously suspended.
 // AddBlockData implements core.Indexer.
-func (ix *Indexer) AddBlockData(headers []*types.Header, receipts []types.Receipts) (ready bool, needBlocks common.Range[uint64]) {
+func (ix *Indexer) AddBlockData(header *types.Header, receipts types.Receipts) (ready bool, needBlocks common.Range[uint64]) {
 	if ix.config.Disabled {
 		return false, common.Range[uint64]{}
-	}
-	if len(headers) == 0 {
-		return ix.Status()
 	}
 	ix.storage.suspendOrResume(false)
 	if !ix.storage.isReady() {
 		return false, ix.needBlocks()
 	}
-	ix.headNumber = max(ix.headNumber, headers[len(headers)-1].Number.Uint64())
-	for i, header := range headers {
-		number, hash := header.Number.Uint64(), header.Hash()
-		if number > ix.headRenderer.nextBlock {
-			ix.tryCheckpointInit(number, hash)
-		}
-		if number == ix.headRenderer.nextBlock {
-			if ix.headRenderer.checkNextHash(hash) {
-				ix.headRenderer.addReceipts(receipts[i])
-				firstMapIndex, finishedMaps := ix.headRenderer.addHeader(header)
-				ix.storeFinishedMaps(firstMapIndex, finishedMaps, i == len(headers)-1, true)
-				if number+maxCanonicalSnapshots > ix.headNumber {
-					ix.storeHeadIndexView(number, hash)
-				}
-			} else {
-				ix.headRenderer = ix.initMapBoundary(max(ix.headRenderer.renderRange.First(), 1)-1, math.MaxUint32)
+	ix.headNumber = max(ix.headNumber, header.Number.Uint64())
+	number, hash := header.Number.Uint64(), header.Hash()
+	if number > ix.headRenderer.nextBlock {
+		ix.tryCheckpointInit(number, hash)
+	}
+	if number == ix.headRenderer.nextBlock {
+		if ix.headRenderer.checkNextHash(hash) {
+			ix.headRenderer.addReceipts(receipts)
+			firstMapIndex, finishedMaps := ix.headRenderer.addHeader(header)
+			ix.storeFinishedMaps(firstMapIndex, finishedMaps, true, true)
+			if number+maxCanonicalSnapshots > ix.headNumber {
+				ix.storeHeadIndexView(number, hash)
 			}
-			ix.updateTailEpoch()
-			ix.updateTailState()
+		} else {
+			ix.headRenderer = ix.initMapBoundary(max(ix.headRenderer.renderRange.First(), 1)-1, math.MaxUint32)
 		}
-		if ix.tailRenderer != nil && number == ix.tailRenderer.nextBlock {
-			if ix.tailRenderer.checkNextHash(hash) {
-				ix.tailRenderer.addReceipts(receipts[i])
-				firstMapIndex, finishedMaps := ix.tailRenderer.addHeader(header)
-				ix.storeFinishedMaps(firstMapIndex, finishedMaps, false, false)
-				if ix.tailRenderer.finished() {
-					ix.tailEpoch--
-					ix.tailRenderer = nil
-					ix.updateTailState()
-				}
-			} else {
-				// Note that if there is a canonical hash mismatch at the tail epoch then we need to revert the head renderer before this point.
-				ix.headRenderer = ix.initMapBoundary(max(ix.tailRenderer.renderRange.First(), 1)-1, math.MaxUint32)
+		ix.updateTailEpoch()
+		ix.updateTailState()
+	}
+	if ix.tailRenderer != nil && number == ix.tailRenderer.nextBlock {
+		if ix.tailRenderer.checkNextHash(hash) {
+			ix.tailRenderer.addReceipts(receipts)
+			firstMapIndex, finishedMaps := ix.tailRenderer.addHeader(header)
+			ix.storeFinishedMaps(firstMapIndex, finishedMaps, false, false)
+			if ix.tailRenderer.finished() {
+				ix.tailEpoch--
 				ix.tailRenderer = nil
+				ix.updateTailState()
 			}
+		} else {
+			// Note that if there is a canonical hash mismatch at the tail epoch then we need to revert the head renderer before this point.
+			ix.headRenderer = ix.initMapBoundary(max(ix.tailRenderer.renderRange.First(), 1)-1, math.MaxUint32)
+			ix.tailRenderer = nil
 		}
 	}
 	return ix.storage.isReady(), ix.needBlocks()
@@ -626,7 +621,9 @@ func (ix *Indexer) storeHeadIndexView(number uint64, hash common.Hash) {
 func (ix *Indexer) exportCheckpoints() {
 	finalLvPtr, err := ix.storage.getBlockLvPointer(ix.finalized + 1)
 	if err != nil {
-		log.Error("Error fetching log value pointer of finalized block", "block", ix.finalized, "error", err)
+		if err != ErrOutOfRange {
+			log.Error("Error fetching log value pointer of finalized block", "block", ix.finalized, "error", err)
+		}
 		return
 	}
 	epochCount := ix.storage.params.mapEpoch(uint32(finalLvPtr >> ix.storage.params.logValuesPerMap))

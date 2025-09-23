@@ -1106,6 +1106,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	bc.receiptsCache.Purge()
 	bc.blockCache.Purge()
 	bc.txLookupCache.Purge()
+	bc.indexServers.revert(bc.CurrentBlock())
 
 	// Clear safe block, finalized block if needed
 	if safe := bc.CurrentSafeBlock(); safe != nil && head < safe.Number.Uint64() {
@@ -1179,7 +1180,7 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 		log.Crit("Failed to write genesis block", "err", err)
 	}
 	bc.writeHeadBlock(genesis)
-	bc.indexServers.broadcast(genesis.Header(), true)
+	bc.indexServers.broadcast(genesis.Header())
 
 	// Last update all in-memory chain markers
 	bc.genesisBlock = genesis
@@ -1598,7 +1599,7 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 		}
 	}
 	bc.writeHeadBlock(block)
-	bc.indexServers.broadcast(block.Header(), true)
+	bc.indexServers.broadcast(block.Header())
 	return nil
 }
 
@@ -1712,7 +1713,7 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 
 	// Set new head.
 	bc.writeHeadBlock(block)
-	bc.indexServers.broadcast(block.Header(), true)
+	bc.indexServers.broadcast(block.Header())
 
 	bc.chainFeed.Send(ChainEvent{Header: block.Header()})
 	if len(logs) > 0 {
@@ -1779,11 +1780,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 	}
 
 	if atomic.AddInt32(&bc.blockProcCounter, 1) == 1 {
-		bc.indexServers.suspended()
+		bc.indexServers.setBlockProcessing(true)
 		bc.blockProcFeed.Send(true)
 	}
 	defer func() {
 		if atomic.AddInt32(&bc.blockProcCounter, -1) == 0 {
+			bc.indexServers.setBlockProcessing(false)
 			bc.blockProcFeed.Send(false)
 		}
 	}()
@@ -2537,7 +2539,7 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 		}
 		// Update the head block
 		bc.writeHeadBlock(block)
-		bc.indexServers.broadcast(block.Header(), false)
+		bc.indexServers.broadcast(block.Header())
 	}
 	if len(rebirthLogs) > 0 {
 		bc.logsFeed.Send(rebirthLogs)
@@ -2613,7 +2615,7 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 		}
 	}
 	bc.writeHeadBlock(head)
-	bc.indexServers.broadcast(head.Header(), true)
+	bc.indexServers.broadcast(head.Header())
 
 	// Emit events
 	logs := bc.collectLogs(head, false)

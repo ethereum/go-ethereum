@@ -27,6 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+var ErrOutOfRange = errors.New("pointer out of indexed range")
+
 // mapStorage implements a filter map storage layer over mapDatabase that ensures
 // efficient database usage while also providing a low latency interface to the
 // indexer. It uses a memory layer over mapDatabase allowing consistently quick
@@ -358,7 +360,7 @@ func (m *mapStorage) getBlockLvPointer(blockNumber uint64) (uint64, error) {
 	if blockNumber < m.knownEpochBlocks || m.validBlocks.includes(blockNumber) {
 		return m.mapDb.getBlockLvPointer(blockNumber)
 	}
-	return 0, errors.New("block log value pointer not found")
+	return 0, ErrOutOfRange
 }
 
 // getLastBlockOfMap returns the number and hash of the block that generated the
@@ -377,7 +379,7 @@ func (m *mapStorage) getLastBlockOfMap(mapIndex uint32) (uint64, common.Hash, er
 	if mapIndex < m.params.firstEpochMap(m.knownEpochs) || m.valid.includes(mapIndex) || m.valid.includes(mapIndex+1) {
 		return m.mapDb.getLastBlockOfMap(mapIndex)
 	}
-	return 0, common.Hash{}, errors.New("last block of map not found")
+	return 0, common.Hash{}, ErrOutOfRange
 }
 
 // getFilterMapRows returns a batch of filter maps rows from the same row index,
