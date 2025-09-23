@@ -2237,7 +2237,7 @@ func TestSidecarConversion(t *testing.T) {
 	statedb.SetNonce(addrs[len(preOsakaTxs)-1], 1, tracing.NonceChangeEoACall)
 	pool.Reset(header1, block2.Header())
 
-	// Now verify no post-Osaka transadctions are tracked by the pool.
+	// Now verify no post-Osaka transactions are tracked by the pool.
 	for i, tx := range postOsakaTxs {
 		if pool.Get(tx.Hash()) != nil {
 			t.Fatalf("expected txs added post-osaka to have been placed in limbo due to inclusion in a block: index %d, hash %s", i, tx.Hash())
