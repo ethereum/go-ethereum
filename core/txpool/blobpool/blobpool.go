@@ -891,24 +891,145 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	// Perform the conversion logic at the fork boundary
 	if !p.chain.Config().IsOsaka(oldHead.Number, oldHead.Time) && p.chain.Config().IsOsaka(newHead.Number, newHead.Time) {
 		// Deep copy all indexed transaction metadata.
-		all := make(map[common.Address]map[uint64]*blobTxMeta)
-		for sender, txs := range p.index {
-			all[sender] = make(map[uint64]*blobTxMeta)
-			for _, m := range txs {
-				all[sender][m.nonce] = m
+		var (
+			ids = make(map[common.Address]map[uint64]uint64)
+			txs = make(map[common.Address]map[uint64]common.Hash)
+		)
+		for sender, list := range p.index {
+			ids[sender] = make(map[uint64]uint64)
+			txs[sender] = make(map[uint64]common.Hash)
+			for _, m := range list {
+				ids[sender][m.nonce] = m.id
+				txs[sender][m.nonce] = m.hash
 			}
 		}
 		// Initiate the background conversion thread.
-		go p.convertLegacySidecars(all)
+		go p.convertLegacySidecars(ids, txs)
 	}
 }
 
+// compareAndSwap checks if the specified transaction is still tracked in the pool
+// and replace the metadata accordingly. It should only be used in the fork boundary
+// bulk conversion. If it fails for some reason, the subsequent txs won't be dropped
+// for simplicity which we assume it's very likely to happen.
+//
+// The returned flag indicates whether the replacement succeeds or not.
+func (p *BlobPool) compareAndSwap(address common.Address, hash common.Hash, blob []byte, oldID uint64, oldStorageSize uint32) bool {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	newId, err := p.store.Put(blob)
+	if err != nil {
+		log.Error("Failed to store transaction", "hash", hash, "err", err)
+		return false
+	}
+	newSize := uint64(len(blob))
+	newStorageSize := p.store.Size(newId)
+
+	// Terminate the procedure if the transaction was already evicted. The
+	// newly added blob should be removed before return.
+	if !p.lookup.update(hash, newId, newSize) {
+		if derr := p.store.Delete(newId); derr != nil {
+			log.Error("Failed to delete the dangling blob tx", "err", derr)
+		} else {
+			log.Warn("Deleted the dangling blob tx", "id", newId)
+		}
+		return false
+	}
+	// Update the metadata of blob transaction
+	for _, meta := range p.index[address] {
+		if meta.hash == hash {
+			meta.id = newId
+			meta.version = types.BlobSidecarVersion1
+			meta.storageSize = newStorageSize
+			meta.size = newSize
+
+			p.stored += uint64(newStorageSize)
+			p.stored -= uint64(oldStorageSize)
+			break
+		}
+	}
+	if err := p.store.Delete(oldID); err != nil {
+		log.Error("Failed to delete the legacy transaction", "hash", hash, "id", oldID, "err", err)
+	}
+	return true
+}
+
+// convertLegacySidecar fetches transaction data from the store, performs an
+// on-the-fly conversion. This function is intended for use only during the
+// Osaka fork transition period.
+//
+// The returned flag indicates whether the replacement succeeds or not.
+func (p *BlobPool) convertLegacySidecar(sender common.Address, hash common.Hash, id uint64) bool {
+	start := time.Now()
+
+	// Retrieves the legacy blob transaction from the underlying store with
+	// read lock held, preventing any potential data race around the slot
+	// specified by the id.
+	p.lock.RLock()
+	data, err := p.store.Get(id)
+	if err != nil {
+		p.lock.RUnlock()
+
+		// The transaction may have been evicted simultaneously,
+		// safe to skip conversion.
+		log.Debug("Blob transaction is missing", "hash", hash, "id", id, "err", err)
+		return false
+	}
+	oldStorageSize := p.store.Size(id)
+	p.lock.RUnlock()
+
+	// Decode the transaction, the failure is not expected and report the error
+	// loudly if possible. If The blob transaction in this slot is corrupted.
+	// Leave it in the store, it will be dropped during the next pool
+	// initialization.
+	var tx types.Transaction
+	if err = rlp.DecodeBytes(data, &tx); err != nil {
+		log.Error("Blob transaction is corrupted", "hash", hash, "id", id, "err", err)
+		return false
+	}
+	// Skip conversion if the transaction does not match the expected hash.
+	// This can occur if the original transaction was evicted from the pool
+	// and the slot was reused by a new one.
+	if tx.Hash() != hash {
+		log.Warn("Blob transaction was replaced", "hash", hash, "id", id, "stored", tx.Hash())
+		return false
+	}
+
+	// Perform the sidecar conversion, the failure is not expected and report
+	// the error loudly if possible.
+	if err := tx.BlobTxSidecar().ToV1(); err != nil {
+		log.Error("Failed to convert blob transaction", "hash", hash, "err", err)
+		return false
+	}
+
+	// Encode the converted transaction, the failure is not expected and report
+	// the error loudly if possible.
+	blob, err := rlp.EncodeToBytes(&tx)
+	if err != nil {
+		log.Error("Failed to encode blob transaction", "hash", tx.Hash(), "err", err)
+		return false
+	}
+
+	// Replace the legacy blob transaction with the converted format.
+	if !p.compareAndSwap(sender, hash, blob, id, oldStorageSize) {
+		log.Error("Failed to replace the legacy transaction", "hash", hash)
+		return false
+	}
+	log.Debug("Converted the legacy transaction", "hash", hash, "elapsed", common.PrettyDuration(time.Since(start)))
+	return true
+}
+
 // convertLegacySidecars converts all given transactions to sidecar version 1.
-func (p *BlobPool) convertLegacySidecars(txs map[common.Address]map[uint64]*blobTxMeta) {
+//
+// If any of them fails to be converted, the subsequent transactions will still
+// be processed, as we assume the failure is very unlikely to happen. If happens,
+// these transactions will be stuck in the pool until eviction.
+func (p *BlobPool) convertLegacySidecars(ids map[common.Address]map[uint64]uint64, txs map[common.Address]map[uint64]common.Hash) {
 	var (
 		start   = time.Now()
 		success int
-		fail    int
+		failure int
 	)
 	for addr, list := range txs {
 		// Transactions evicted from the pool must be contiguous, if in any case,
@@ -916,58 +1037,19 @@ func (p *BlobPool) convertLegacySidecars(txs map[common.Address]map[uint64]*blob
 		nonces := slices.Collect(maps.Keys(list))
 		slices.Sort(nonces)
 
-		// Convert and insert the txs in order.
+		// Convert the txs with nonce order
 		for _, nonce := range nonces {
-			m := list[nonce]
-			p.lock.RLock()
-			blob, err := p.store.Get(m.id)
-			p.lock.RUnlock()
-			if err != nil {
-				fail++
-				continue
+			if p.convertLegacySidecar(addr, list[nonce], ids[addr][nonce]) {
+				success++
+			} else {
+				failure++
 			}
-			// Use this to remove the blob transaction regardless of if the conversion
-			// succeeds or not.
-			delete := func() {
-				p.lock.Lock()
-				defer p.lock.Unlock()
-				if err := p.store.Delete(m.id); err != nil {
-					log.Error("Failed to delete blob transaction", "from", addr, "id", m.id, "err", err)
-				}
-			}
-			// Decode the transaction and perform the migration.
-			var tx types.Transaction
-			if err = rlp.DecodeBytes(blob, &tx); err != nil {
-				log.Error("Blob transaction is corrupted", "id", m.id, "err", err)
-				delete()
-				fail++
-				continue
-			}
-			if err := tx.BlobTxSidecar().ToV1(); err != nil {
-				log.Error("Failed to convert blob transaction", "hash", tx.Hash(), "err", err)
-				delete()
-				fail++
-				continue
-			}
-			// Now atomically swap the old sidecar with the converted sidecar.
-			p.lock.Lock()
-			p.remove(m, addr)
-			err = p.add(&tx)
-			p.lock.Unlock()
-			if err != nil {
-				fail++
-				log.Error("Failed to re-inject the tx", "hash", tx.Hash(), "err", err)
-				continue
-			}
-			success++
-			log.Debug("Reinjected the converted tx", "hash", tx.Hash(), "err", err)
 		}
 	}
-
 	if p.sidecarMigrationDoneCh != nil {
 		close(p.sidecarMigrationDoneCh)
 	}
-	log.Info("Completed the blob transaction conversion", "discarded", fail, "injected", success, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Completed the blob transaction conversion", "discarded", failure, "injected", success, "elapsed", common.PrettyDuration(time.Since(start)))
 }
 
 // reorg assembles all the transactors and missing transactions between an old
@@ -1603,20 +1685,10 @@ func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 		if errs[i] != nil {
 			continue
 		}
-		func() {
-			// The blob pool blocks on adding a transaction. This is because blob txs are
-			// only even pulled from the network, so this method will act as the overload
-			// protection for fetches.
-			waitStart := time.Now()
-			p.lock.Lock()
-			addwaitHist.Update(time.Since(waitStart).Nanoseconds())
-			defer p.lock.Unlock()
-			defer func(start time.Time) { addtimeHist.Update(time.Since(start).Nanoseconds()) }(time.Now())
-			errs[i] = p.add(tx)
-			if errs[i] == nil {
-				adds = append(adds, tx.WithoutBlobTxSidecar())
-			}
-		}()
+		errs[i] = p.add(tx)
+		if errs[i] == nil {
+			adds = append(adds, tx.WithoutBlobTxSidecar())
+		}
 	}
 	if len(adds) > 0 {
 		p.discoverFeed.Send(core.NewTxsEvent{Txs: adds})
@@ -1626,9 +1698,20 @@ func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 }
 
 // add inserts a new blob transaction into the pool if it passes validation (both
-// consensus validity and pool restrictions). It assume the pool lock is already
-// held by the caller.
+// consensus validity and pool restrictions).
 func (p *BlobPool) add(tx *types.Transaction) (err error) {
+	// The blob pool blocks on adding a transaction. This is because blob txs are
+	// only even pulled from the network, so this method will act as the overload
+	// protection for fetches.
+	waitStart := time.Now()
+	p.lock.Lock()
+	addwaitHist.Update(time.Since(waitStart).Nanoseconds())
+	defer p.lock.Unlock()
+
+	defer func(start time.Time) {
+		addtimeHist.Update(time.Since(start).Nanoseconds())
+	}(time.Now())
+
 	// Ensure the transaction is valid from all perspectives
 	if err := p.validateTx(tx); err != nil {
 		log.Trace("Transaction validation failed", "hash", tx.Hash(), "err", err)
@@ -1781,64 +1864,58 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	return nil
 }
 
-// remove will remove the specified transaction from the pool and delete it from
-// the store. It expects the caller to hold the pool lock.
-func (p *BlobPool) remove(tx *blobTxMeta, from common.Address) {
-	// Remove the transaction from the pool's index
+// drop removes the worst transaction from the pool. It is primarily used when a
+// freshly added transaction overflows the pool and needs to evict something. The
+// method is also called on startup if the user resizes their storage, might be an
+// expensive run but it should be fine-ish.
+func (p *BlobPool) drop() {
+	// Peek at the account with the worse transaction set to evict from (Go's heap
+	// stores the minimum at index zero of the heap slice) and retrieve it's last
+	// transaction.
 	var (
+		from = p.evict.addrs[0] // cannot call drop on empty pool
+
 		txs  = p.index[from]
+		drop = txs[len(txs)-1]
 		last = len(txs) == 1
 	)
-	if len(p.index[from]) == 1 {
+	// Remove the transaction from the pool's index
+	if last {
 		delete(p.index, from)
 		delete(p.spent, from)
 		p.reserver.Release(from)
 	} else {
 		txs[len(txs)-1] = nil
 		txs = txs[:len(txs)-1]
+
 		p.index[from] = txs
-		p.spent[from] = new(uint256.Int).Sub(p.spent[from], tx.costCap)
+		p.spent[from] = new(uint256.Int).Sub(p.spent[from], drop.costCap)
 	}
-	p.stored -= uint64(tx.storageSize)
-	p.lookup.untrack(tx)
+	p.stored -= uint64(drop.storageSize)
+	p.lookup.untrack(drop)
 
 	// Remove the transaction from the pool's eviction heap:
 	//   - If the entire account was dropped, pop off the address
 	//   - Otherwise, if the new tail has better eviction caps, fix the heap
 	if last {
-		heap.Remove(p.evict, p.evict.index[from])
+		heap.Pop(p.evict)
 	} else {
 		tail := txs[len(txs)-1] // new tail, surely exists
 
-		evictionExecFeeDiff := tail.evictionExecFeeJumps - tx.evictionExecFeeJumps
-		evictionBlobFeeDiff := tail.evictionBlobFeeJumps - tx.evictionBlobFeeJumps
+		evictionExecFeeDiff := tail.evictionExecFeeJumps - drop.evictionExecFeeJumps
+		evictionBlobFeeDiff := tail.evictionBlobFeeJumps - drop.evictionBlobFeeJumps
 
 		if evictionExecFeeDiff > 0.001 || evictionBlobFeeDiff > 0.001 { // no need for math.Abs, monotonic decreasing
-			heap.Fix(p.evict, p.evict.index[from])
+			heap.Fix(p.evict, 0)
 		}
 	}
-	if err := p.store.Delete(tx.id); err != nil {
-		log.Error("Failed to drop evicted transaction", "id", tx.id, "err", err)
-	}
-}
-
-// drop removes the worst transaction from the pool. It is primarily used when a
-// freshly added transaction overflows the pool and needs to evict something. The
-// method is also called on startup if the user resizes their storage, might be an
-// expensive run but it should be fine-ish.
-func (p *BlobPool) drop() (common.Address, uint64, uint64) {
-	// Peek at the account with the worse transaction set to evict from (Go's heap
-	// stores the minimum at index zero of the heap slice) and retrieve it's last
-	// transaction.
-	var (
-		from = p.evict.addrs[0] // cannot call drop on empty pool
-		txs  = p.index[from]
-		drop = txs[len(txs)-1]
-	)
-	p.remove(drop, from)
+	// Remove the transaction from the data store
 	log.Debug("Evicting overflown blob transaction", "from", from, "evicted", drop.nonce, "id", drop.id)
 	dropOverflownMeter.Mark(1)
-	return from, drop.nonce, drop.id
+
+	if err := p.store.Delete(drop.id); err != nil {
+		log.Error("Failed to drop evicted transaction", "id", drop.id, "err", err)
+	}
 }
 
 // Pending retrieves all currently processable transactions, grouped by origin
