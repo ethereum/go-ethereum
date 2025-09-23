@@ -1738,9 +1738,14 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 			addGappedMeter.Mark(1)
 			// Store the tx in memory, and revalidate later
 			from, _ := types.Sender(p.signer, tx)
-			p.gapped[from] = append(p.gapped[from], tx)
-			log.Trace("Blob transaction added to Gapped blob queue", "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
-			return nil
+			allowance := p.gappedAllowance(from)
+			if allowance >= 1 {
+				p.gapped[from] = append(p.gapped[from], tx)
+				log.Trace("blobpool:add added to Gapped blob queue", "allowance", allowance, "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
+				return nil
+			} else {
+				log.Trace("blobpool:add no Gapped blob queue allowance", "allowance", allowance, "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
+			}
 		case errors.Is(err, core.ErrInsufficientFunds):
 			addOverdraftedMeter.Mark(1)
 		case errors.Is(err, txpool.ErrAccountLimitExceeded):
@@ -2137,6 +2142,19 @@ func (p *BlobPool) Nonce(addr common.Address) uint64 {
 		return txs[len(txs)-1].nonce + 1
 	}
 	return p.state.GetNonce(addr)
+}
+
+// gappedAllowance returns the number of gapped transactions still
+// allowed for the given account. Allowance is based on a slow-start
+// logic, allowing more gaps (resource usage) to accounts with a
+// higher nonce. Can also return negative values.
+func (p *BlobPool) gappedAllowance(addr common.Address) int {
+	// Gaps happen, but we don't want to allow too many.
+	// Use log10(nonce+1) as the allowance, with a minimum of 0.
+	nonce := p.state.GetNonce(addr)
+	allowance := int(math.Log10(float64(nonce + 1)))
+	// Cap the allowance to the remaining pool space
+	return min(allowance, maxTxsPerAccount-len(p.index[addr])) - len(p.gapped[addr])
 }
 
 // Stats retrieves the current pool stats, namely the number of pending and the
