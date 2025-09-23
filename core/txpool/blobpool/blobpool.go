@@ -101,6 +101,10 @@ const (
 	// the pool will still accept and convert legacy blob transactions. After this
 	// window, all legacy blob transactions will be rejected.
 	conversionTimeWindow = time.Hour * 2
+
+	// maxGappedTxs is the maximum number of gapped transactions kept overall.
+	// This is a safety limit to avoid DoS vectors.
+	maxGapped = 128
 )
 
 // blobTxMeta is the minimal subset of types.BlobTx necessary to validate and
@@ -1739,7 +1743,9 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 			// Store the tx in memory, and revalidate later
 			from, _ := types.Sender(p.signer, tx)
 			allowance := p.gappedAllowance(from)
-			if allowance >= 1 {
+			if allowance >= 1 && len(p.gapped) < maxGapped {
+				// if maxGapped is reached, it is better to give time to gapped
+				// transactions by keeping the old and dropping this one
 				p.gapped[from] = append(p.gapped[from], tx)
 				log.Trace("blobpool:add added to Gapped blob queue", "allowance", allowance, "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
 				return nil
