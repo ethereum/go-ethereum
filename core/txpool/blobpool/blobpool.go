@@ -1704,10 +1704,6 @@ func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 			adds = append(adds, tx.WithoutBlobTxSidecar())
 		}
 	}
-	if len(adds) > 0 {
-		p.discoverFeed.Send(core.NewTxsEvent{Txs: adds})
-		p.insertFeed.Send(core.NewTxsEvent{Txs: adds})
-	}
 	return errs
 }
 
@@ -1908,6 +1904,8 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 			}()
 		}
 	}
+	p.discoverFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
+	p.insertFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
 	return nil
 }
 
