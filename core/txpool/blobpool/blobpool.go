@@ -1742,6 +1742,7 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 			from, _ := types.Sender(p.signer, tx)
 			p.gapped[from] = append(p.gapped[from], tx)
 			log.Trace("Blob transaction added to Gapped blob queue", "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
+			return nil
 		case errors.Is(err, core.ErrInsufficientFunds):
 			addOverdraftedMeter.Mark(1)
 		case errors.Is(err, txpool.ErrAccountLimitExceeded):
