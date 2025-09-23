@@ -296,6 +296,14 @@ func TestT8n(t *testing.T) {
 			output: t8nOutput{alloc: true, result: true},
 			expOut: "exp.json",
 		},
+		{ // Osaka test, EIP-7918 blob gas with parent base fee
+			base: "./testdata/34",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "Osaka", "",
+			},
+			output: t8nOutput{alloc: true, result: true},
+			expOut: "exp.json",
+		},
 	} {
 		args := []string{"t8n"}
 		args = append(args, tc.output.get()...)
