@@ -546,6 +546,11 @@ func mergeResults(results []potentialMatches) potentialMatches {
 	if len(results) == 0 {
 		return nil
 	}
+
+	if len(results) == 1 {
+		return results[0]
+	}
+
 	var sumLen int
 	for _, res := range results {
 		if res == nil {
@@ -554,24 +559,130 @@ func mergeResults(results []potentialMatches) potentialMatches {
 		}
 		sumLen += len(res)
 	}
-	merged := make(potentialMatches, 0, sumLen)
+
+	if len(results) == 2 {
+		return mergeTwoSortedLists(results[0], results[1])
+	}
+
+	return mergeMultipleSortedLists(results, sumLen)
+}
+
+// mergeTwoSortedLists merges two sorted slices
+func mergeTwoSortedLists(a, b potentialMatches) potentialMatches {
+	if len(a) == 0 {
+		return b
+	}
+	if len(b) == 0 {
+		return a
+	}
+
+	merged := make(potentialMatches, 0, len(a)+len(b))
+	i, j := 0, 0
+
+	for i < len(a) && j < len(b) {
+		if a[i] < b[j] {
+			merged = append(merged, a[i])
+			i++
+		} else if a[i] > b[j] {
+			merged = append(merged, b[j])
+			j++
+		} else {
+			merged = append(merged, a[i])
+			i++
+			j++
+		}
+	}
+
+	for i < len(a) {
+		merged = append(merged, a[i])
+		i++
+	}
+
+	for j < len(b) {
+		merged = append(merged, b[j])
+		j++
+	}
+
+	return merged
+}
+
+// heapItem represents an element in the min-heap for merging
+type heapItem struct {
+	value   uint64
+	listIdx int
+	itemIdx int
+}
+
+// mergeMultipleSortedLists performs merge operation using a min-heap
+func mergeMultipleSortedLists(results []potentialMatches, estimatedSize int) potentialMatches {
+	heap := make([]heapItem, 0, len(results))
+	for i, res := range results {
+		if len(res) > 0 {
+			heap = append(heap, heapItem{
+				value:   res[0],
+				listIdx: i,
+				itemIdx: 0,
+			})
+		}
+	}
+
+	buildMinHeap(heap)
+
+	merged := make(potentialMatches, 0, estimatedSize)
+
+	for len(heap) > 0 {
+		minItem := heap[0]
+
+		if len(merged) == 0 || merged[len(merged)-1] != minItem.value {
+			merged = append(merged, minItem.value)
+		}
+
+		if minItem.itemIdx+1 < len(results[minItem.listIdx]) {
+			heap[0] = heapItem{
+				value:   results[minItem.listIdx][minItem.itemIdx+1],
+				listIdx: minItem.listIdx,
+				itemIdx: minItem.itemIdx + 1,
+			}
+			heapifyDown(heap, 0)
+		} else {
+			heap[0] = heap[len(heap)-1]
+			heap = heap[:len(heap)-1]
+			if len(heap) > 0 {
+				heapifyDown(heap, 0)
+			}
+		}
+	}
+
+	return merged
+}
+
+// buildMinHeap constructs a min-heap from the given slice
+func buildMinHeap(heap []heapItem) {
+	for i := len(heap)/2 - 1; i >= 0; i-- {
+		heapifyDown(heap, i)
+	}
+}
+
+// heapifyDown maintains heap property by moving element down the tree
+func heapifyDown(heap []heapItem, i int) {
 	for {
-		best := -1
-		for i, res := range results {
-			if len(res) == 0 {
-				continue
-			}
-			if best < 0 || res[0] < results[best][0] {
-				best = i
-			}
+		left := 2*i + 1
+		right := 2*i + 2
+		smallest := i
+
+		if left < len(heap) && heap[left].value < heap[smallest].value {
+			smallest = left
 		}
-		if best < 0 {
-			return merged
+		if right < len(heap) && heap[right].value < heap[smallest].value {
+			smallest = right
 		}
-		if len(merged) == 0 || results[best][0] > merged[len(merged)-1] {
-			merged = append(merged, results[best][0])
+
+		if smallest == i {
+			break
 		}
-		results[best] = results[best][1:]
+
+		heap[i], heap[smallest] = heap[smallest], heap[i]
+		i = smallest
 	}
 }
 
