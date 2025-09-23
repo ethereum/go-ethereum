@@ -1180,9 +1180,8 @@ func BenchmarkDecodeUints(b *testing.B) {
 	enc := encodeTestSlice(90000)
 	b.SetBytes(int64(len(enc)))
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var s []uint
 		r := bytes.NewReader(enc)
 		if err := Decode(r, &s); err != nil {
@@ -1195,10 +1194,9 @@ func BenchmarkDecodeUintsReused(b *testing.B) {
 	enc := encodeTestSlice(100000)
 	b.SetBytes(int64(len(enc)))
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	var s []uint
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		r := bytes.NewReader(enc)
 		if err := Decode(r, &s); err != nil {
 			b.Fatalf("Decode error: %v", err)
@@ -1213,10 +1211,9 @@ func BenchmarkDecodeByteArrayStruct(b *testing.B) {
 	}
 	b.SetBytes(int64(len(enc)))
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	var out byteArrayStruct
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if err := DecodeBytes(enc, &out); err != nil {
 			b.Fatal(err)
 		}
@@ -1234,10 +1231,9 @@ func BenchmarkDecodeBigInts(b *testing.B) {
 	}
 	b.SetBytes(int64(len(enc)))
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	var out []*big.Int
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if err := DecodeBytes(enc, &out); err != nil {
 			b.Fatal(err)
 		}
@@ -1255,10 +1251,9 @@ func BenchmarkDecodeU256Ints(b *testing.B) {
 	}
 	b.SetBytes(int64(len(enc)))
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	var out []*uint256.Int
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if err := DecodeBytes(enc, &out); err != nil {
 			b.Fatal(err)
 		}
