@@ -1377,7 +1377,9 @@ func (p *BlobPool) validateTx(tx *types.Transaction) error {
 		State: p.state,
 
 		FirstNonceGap: func(addr common.Address) uint64 {
-			// Nonce gaps are not permitted in the blob pool, the first gap will
+			// Nonce gaps are permitted in the blob pool, but only as part of the
+			// in-memory 'gapped' buffer. We expose the gap here to validateTx,
+			// then handle the error by adding to the buffer. The first gap will
 			// be the next nonce shifted by however many transactions we already
 			// have pooled.
 			return p.state.GetNonce(addr) + uint64(len(p.index[addr]))
@@ -1734,7 +1736,7 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 			addStaleMeter.Mark(1)
 		case errors.Is(err, core.ErrNonceTooHigh):
 			addGappedMeter.Mark(1)
-			// Store the tx in mem and revalidate later
+			// Store the tx in memory, and revalidate later
 			from, _ := types.Sender(p.signer, tx)
 			p.gapped[from] = append(p.gapped[from], tx)
 			log.Trace("Blob transaction added to Gapped blob queue", "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
