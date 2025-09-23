@@ -1472,11 +1472,11 @@ func (p *BlobPool) AvailableBlobs(vhashes []common.Hash) int {
 	return available
 }
 
-// preCheck performs the static validation upon the provided txs and converts
+// preCheck performs the static validation upon the provided tx and converts
 // the legacy sidecars if Osaka fork has been activated with a short time window.
 //
 // This function is pure static and lock free.
-func (p *BlobPool) preCheck(txs []*types.Transaction) ([]*types.Transaction, []error) {
+func (p *BlobPool) preCheck(tx *types.Transaction) error {
 	var (
 		head     = p.head.Load()
 		isOsaka  = p.chain.Config().IsOsaka(head.Number, head.Time)
@@ -1485,56 +1485,46 @@ func (p *BlobPool) preCheck(txs []*types.Transaction) ([]*types.Transaction, []e
 	if isOsaka {
 		deadline = time.Unix(int64(*p.chain.Config().OsakaTime), 0).Add(conversionTimeWindow)
 	}
-	var errs []error
-	for _, tx := range txs {
-		// Validate the transaction statically at first to avoid unnecessary
-		// conversion. This step doesn't require lock protection.
-		if err := p.ValidateTxBasics(tx); err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		// Before the Osaka fork, reject the blob txs with cell proofs
-		if !isOsaka {
-			if tx.BlobTxSidecar().Version == types.BlobSidecarVersion0 {
-				errs = append(errs, nil)
-			} else {
-				errs = append(errs, errors.New("cell proof is not supported yet"))
-			}
-			continue
-		}
-		// After the Osaka fork, reject the legacy blob txs if the conversion
-		// time window is passed.
-		if tx.BlobTxSidecar().Version == types.BlobSidecarVersion1 {
-			errs = append(errs, nil)
-			continue
-		}
-		if head.Time > uint64(deadline.Unix()) {
-			errs = append(errs, errors.New("legacy blob tx is not supported"))
-			continue
-		}
-		// Convert the legacy sidecar after Osaka fork. This could be a long
-		// procedure which takes a few seconds, even minutes if there is a long
-		// queue. Fortunately it will only block the routine of the source peer
-		// announcing the tx, without affecting other parts.
-		errs = append(errs, p.cQueue.convert(tx))
+	// Validate the transaction statically at first to avoid unnecessary
+	// conversion. This step doesn't require lock protection.
+	if err := p.ValidateTxBasics(tx); err != nil {
+		return err
 	}
-	return txs, errs
+	// Before the Osaka fork, reject the blob txs with cell proofs
+	if !isOsaka {
+		if tx.BlobTxSidecar().Version == types.BlobSidecarVersion0 {
+			return nil
+		} else {
+			return errors.New("cell proof is not supported yet")
+		}
+	}
+	// After the Osaka fork, reject the legacy blob txs if the conversion
+	// time window is passed.
+	if tx.BlobTxSidecar().Version == types.BlobSidecarVersion1 {
+		return nil
+	}
+	if head.Time > uint64(deadline.Unix()) {
+		return errors.New("legacy blob tx is not supported")
+	}
+	// Convert the legacy sidecar after Osaka fork. This could be a long
+	// procedure which takes a few seconds, even minutes if there is a long
+	// queue. Fortunately it will only block the routine of the source peer
+	// announcing the tx, without affecting other parts.
+	return p.cQueue.convert(tx)
 }
 
 // Add inserts a set of blob transactions into the pool if they pass validation (both
 // consensus validity and pool restrictions).
 func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 	var (
-		errs []error
-		adds = make([]*types.Transaction, 0, len(txs))
+		errs []error = make([]error, len(txs))
+		adds         = make([]*types.Transaction, 0, len(txs))
 	)
-	txs, errs = p.preCheck(txs)
 	for i, tx := range txs {
-		if errs[i] != nil {
+		if errs[i] = p.preCheck(tx); errs[i] != nil {
 			continue
 		}
-		errs[i] = p.add(tx)
-		if errs[i] == nil {
+		if errs[i] = p.add(tx); errs[i] == nil {
 			adds = append(adds, tx.WithoutBlobTxSidecar())
 		}
 	}
