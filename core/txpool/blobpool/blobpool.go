@@ -341,7 +341,8 @@ type BlobPool struct {
 	stored uint64         // Useful data size of all transactions on disk
 	limbo  *limbo         // Persistent data store for the non-finalized blobs
 
-	gapped map[common.Address][]*types.Transaction // Transactions that are currently gapped (nonce too high)
+	gapped       map[common.Address][]*types.Transaction // Transactions that are currently gapped (nonce too high)
+	gappedSource map[common.Hash]common.Address          // Source of gapped transactions to allow rechecking on inclusion
 
 	signer types.Signer     // Transaction signer to use for sender recovery
 	chain  BlockChain       // Chain object to access the state through
@@ -379,6 +380,7 @@ func New(config Config, chain BlockChain, hasPendingAuth func(common.Address) bo
 		index:          make(map[common.Address][]*blobTxMeta),
 		spent:          make(map[common.Address]*uint256.Int),
 		gapped:         make(map[common.Address][]*types.Transaction),
+		gappedSource:   make(map[common.Hash]common.Address),
 	}
 }
 
@@ -1462,7 +1464,9 @@ func (p *BlobPool) Has(hash common.Hash) bool {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	return p.lookup.exists(hash)
+	poolHas := p.lookup.exists(hash)
+	_, gapped := p.gappedSource[hash]
+	return poolHas || gapped
 }
 
 func (p *BlobPool) getRLP(hash common.Hash) []byte {
@@ -1747,6 +1751,7 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 				// if maxGapped is reached, it is better to give time to gapped
 				// transactions by keeping the old and dropping this one
 				p.gapped[from] = append(p.gapped[from], tx)
+				p.gappedSource[tx.Hash()] = from
 				log.Trace("blobpool:add added to Gapped blob queue", "allowance", allowance, "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
 				return nil
 			} else {
@@ -1908,6 +1913,7 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 			if len(p.gapped[from]) == 0 {
 				delete(p.gapped, from)
 			}
+			delete(p.gappedSource, tx.Hash())
 			go func() {
 				if err := p.add(tx); err == nil {
 					log.Trace("Gapped blob transaction added to pool", "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
@@ -2197,8 +2203,14 @@ func (p *BlobPool) ContentFrom(addr common.Address) ([]*types.Transaction, []*ty
 // Status returns the known status (unknown/pending/queued) of a transaction
 // identified by their hashes.
 func (p *BlobPool) Status(hash common.Hash) txpool.TxStatus {
-	if p.Has(hash) {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	if p.lookup.exists(hash) {
 		return txpool.TxStatusPending
+	}
+	if _, gapped := p.gappedSource[hash]; gapped {
+		return txpool.TxStatusQueued
 	}
 	return txpool.TxStatusUnknown
 }
