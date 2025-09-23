@@ -619,8 +619,12 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		}
 	}
 
-	// Check if this is a block-level prestate tracing request
+	// Check if this is a block-level prestate tracing request,
+	// currently only the prestate tracer is supported in this mode.
 	if config != nil && config.BlockLevel {
+		if config.Tracer == nil || *config.Tracer != "prestateTracer" {
+			return nil, errors.New("only prestateTracer supports block level tracing")
+		}
 		return api.traceBlockAsWhole(ctx, block, statedb, blockCtx, config)
 	}
 
@@ -649,8 +653,8 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	return results, nil
 }
 
-// traceBlockAsWhole executes all transactions in a block with a single reused prestate tracer
-// to accumulate block-level prestate across all transactions.
+// traceBlockAsWhole executes all transactions in a block with a single reused tracer
+// to accumulate block-level result across all transactions.
 func (api *API) traceBlockAsWhole(ctx context.Context, block *types.Block, statedb *state.StateDB, blockCtx vm.BlockContext, config *TraceConfig) ([]*txTraceResult, error) {
 	var (
 		tracer  *Tracer
@@ -661,22 +665,9 @@ func (api *API) traceBlockAsWhole(ctx context.Context, block *types.Block, state
 		err     error
 	)
 
-	if config == nil {
-		config = &TraceConfig{}
-	}
-	// Default tracer is the struct logger
-	if config.Tracer == nil {
-		logger := logger.NewStructLogger(config.Config)
-		tracer = &Tracer{
-			Hooks:     logger.Hooks(),
-			GetResult: logger.GetResult,
-			Stop:      logger.Stop,
-		}
-	} else {
-		tracer, err = DefaultDirectory.New(*config.Tracer, txCtx, config.TracerConfig, api.backend.ChainConfig())
-		if err != nil {
-			return nil, err
-		}
+	tracer, err = DefaultDirectory.New(*config.Tracer, txCtx, config.TracerConfig, api.backend.ChainConfig())
+	if err != nil {
+		return nil, err
 	}
 
 	// Execute all transactions with the same tracer instance to accumulate state
