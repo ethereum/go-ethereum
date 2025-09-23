@@ -224,8 +224,7 @@ func BenchmarkParseIndexBlock(b *testing.B) {
 	}
 	blob := bw.finish()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _, err := parseIndexBlock(blob)
 		if err != nil {
 			b.Fatalf("parseIndexBlock failed: %v", err)
@@ -236,12 +235,11 @@ func BenchmarkParseIndexBlock(b *testing.B) {
 // BenchmarkBlockWriterAppend benchmarks the performance of indexblock.writer
 func BenchmarkBlockWriterAppend(b *testing.B) {
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	desc := newIndexBlockDesc(0)
 	writer, _ := newBlockWriter(nil, desc)
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if writer.full() {
 			desc = newIndexBlockDesc(0)
 			writer, _ = newBlockWriter(nil, desc)
