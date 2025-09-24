@@ -444,92 +444,10 @@ func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent)
 	}
 
 	// Handle transaction receipts subscriptions when a new block is added
-	es.handleReceiptsEvent(filters, ev)
-}
-
-// ReceiptWithTx contains a receipt and its corresponding transaction for websocket subscription
-type ReceiptWithTx struct {
-	Receipt     *types.Receipt
-	Transaction *types.Transaction
-}
-
-func (es *EventSystem) handleReceiptsEvent(filters filterIndex, ev core.ChainEvent) {
-	// If there are no transaction receipt subscriptions, skip processing
-	if len(filters[TransactionReceiptsSubscription]) == 0 {
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Get receipts for this block
-	receipts, err := es.backend.GetReceipts(ctx, ev.Header.Hash())
-	if err != nil {
-		log.Warn("Failed to get receipts for block", "hash", ev.Header.Hash(), "err", err)
-		return
-	}
-
-	// Get body to retrieve transactions
-	body, err := es.backend.GetBody(ctx, ev.Header.Hash(), rpc.BlockNumber(ev.Header.Number.Int64()))
-	if err != nil {
-		log.Warn("Failed to get block for receipts", "hash", ev.Header.Hash(), "err", err)
-		return
-	}
-
-	txs := body.Transactions
-	if len(txs) != len(receipts) {
-		log.Warn("Transaction count mismatch", "txs", len(txs), "receipts", len(receipts))
-		return
-	}
-
 	for _, f := range filters[TransactionReceiptsSubscription] {
-		var filteredReceipts []*ReceiptWithTx
-
-		if len(f.txHashes) == 0 {
-			// No filter, send all receipts with their transactions.
-			filteredReceipts = make([]*ReceiptWithTx, len(receipts))
-			for i, receipt := range receipts {
-				filteredReceipts[i] = &ReceiptWithTx{
-					Receipt:     receipt,
-					Transaction: txs[i],
-				}
-			}
-		} else if len(f.txHashes) == 1 {
-			// Filter by single transaction hash.
-			// This is a common case, so we distinguish it from filtering by multiple tx hashes and made a small optimization.
-			for i, receipt := range receipts {
-				if receipt.TxHash == f.txHashes[0] {
-					filteredReceipts = append(filteredReceipts, &ReceiptWithTx{
-						Receipt:     receipt,
-						Transaction: txs[i],
-					})
-					break
-				}
-			}
-		} else {
-			// Filter by multiple transaction hashes.
-			txHashMap := make(map[common.Hash]bool, len(f.txHashes))
-			for _, hash := range f.txHashes {
-				txHashMap[hash] = true
-			}
-
-			for i, receipt := range receipts {
-				if txHashMap[receipt.TxHash] {
-					filteredReceipts = append(filteredReceipts, &ReceiptWithTx{
-						Receipt:     receipt,
-						Transaction: txs[i],
-					})
-
-					// Early exit if all receipts are found
-					if len(filteredReceipts) == len(f.txHashes) {
-						break
-					}
-				}
-			}
-		}
-
-		if len(filteredReceipts) > 0 {
-			f.receipts <- filteredReceipts
+		matchedReceipts := filterReceipts(f.txHashes, ev)
+		if len(matchedReceipts) > 0 {
+			f.receipts <- matchedReceipts
 		}
 	}
 }

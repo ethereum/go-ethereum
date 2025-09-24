@@ -1690,7 +1690,12 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	// Set new head.
 	bc.writeHeadBlock(block)
 
-	bc.chainFeed.Send(ChainEvent{Header: block.Header()})
+	bc.chainFeed.Send(ChainEvent{
+		Header:       block.Header(),
+		Receipts:     receipts,
+		Transactions: block.Transactions(),
+	})
+
 	if len(logs) > 0 {
 		bc.logsFeed.Send(logs)
 	}
@@ -2589,7 +2594,13 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 
 	// Emit events
 	logs := bc.collectLogs(head, false)
-	bc.chainFeed.Send(ChainEvent{Header: head.Header()})
+
+	bc.chainFeed.Send(ChainEvent{
+		Header:       head.Header(),
+		Receipts:     bc.GetReceiptsByHash(head.Hash()),
+		Transactions: head.Transactions(),
+	})
+
 	if len(logs) > 0 {
 		bc.logsFeed.Send(logs)
 	}

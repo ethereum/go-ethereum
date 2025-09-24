@@ -318,16 +318,16 @@ func (api *FilterAPI) TransactionReceipts(ctx context.Context, filter *Transacti
 	}
 
 	var (
-		rpcSub           = notifier.CreateSubscription()
-		filteredReceipts = make(chan []*ReceiptWithTx)
-		txHashes         []common.Hash
+		rpcSub          = notifier.CreateSubscription()
+		matchedReceipts = make(chan []*ReceiptWithTx)
+		txHashes        []common.Hash
 	)
 
 	if filter != nil {
 		txHashes = filter.TransactionHashes
 	}
 
-	receiptsSub := api.events.SubscribeTransactionReceipts(txHashes, filteredReceipts)
+	receiptsSub := api.events.SubscribeTransactionReceipts(txHashes, matchedReceipts)
 
 	go func() {
 		defer receiptsSub.Unsubscribe()
@@ -336,11 +336,11 @@ func (api *FilterAPI) TransactionReceipts(ctx context.Context, filter *Transacti
 
 		for {
 			select {
-			case receiptsWithTx := <-filteredReceipts:
-				if len(receiptsWithTx) > 0 {
+			case receiptsWithTxs := <-matchedReceipts:
+				if len(receiptsWithTxs) > 0 {
 					// Convert to the same format as eth_getTransactionReceipt
-					marshaledReceipts := make([]map[string]interface{}, len(receiptsWithTx))
-					for i, receiptWithTx := range receiptsWithTx {
+					marshaledReceipts := make([]map[string]interface{}, len(receiptsWithTxs))
+					for i, receiptWithTx := range receiptsWithTxs {
 						marshaledReceipts[i] = ethapi.MarshalReceipt(
 							receiptWithTx.Receipt,
 							receiptWithTx.Receipt.BlockHash,

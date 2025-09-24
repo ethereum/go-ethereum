@@ -829,7 +829,17 @@ func TestTransactionReceiptsSubscription(t *testing.T) {
 	}
 
 	// Prepare test data
-	chainEvent := core.ChainEvent{Header: chain[0].Header()}
+	receipts := blockchain.GetReceiptsByHash(chain[0].Hash())
+	if receipts == nil {
+		t.Fatalf("failed to get receipts")
+	}
+
+	chainEvent := core.ChainEvent{
+		Header:       chain[0].Header(),
+		Receipts:     receipts,
+		Transactions: chain[0].Transactions(),
+	}
+
 	txHashes := make([]common.Hash, txNum)
 	for i := 0; i < txNum; i++ {
 		txHashes[i] = chain[0].Transactions()[i].Hash()
