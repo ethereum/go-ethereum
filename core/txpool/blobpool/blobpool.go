@@ -25,7 +25,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -560,8 +560,8 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 	if inclusions != nil && txs == nil { // during reorgs, we might find new accounts
 		return
 	}
-	sort.Slice(txs, func(i, j int) bool {
-		return txs[i].nonce < txs[j].nonce
+	slices.SortFunc(txs, func(txsI, txsJ *blobTxMeta) int {
+		return int(txsI.nonce) - int(txsJ.nonce)
 	})
 	// If there is a gap between the chain state and the blob pool, drop
 	// all the transactions as they are non-executable. Similarly, if the
