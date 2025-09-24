@@ -19,6 +19,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -74,6 +75,7 @@ Remove blockchain and state databases`,
 			dbCompactCmd,
 			dbGetCmd,
 			dbDeleteCmd,
+			dbInspectTrieCmd,
 			dbPutCmd,
 			dbGetSlotsCmd,
 			dbDumpFreezerIndex,
@@ -91,6 +93,15 @@ Remove blockchain and state databases`,
 		Flags:       slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Usage:       "Inspect the storage size for each type of data in the database",
 		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
+	}
+	dbInspectTrieCmd = &cli.Command{
+		Action:    inspectTrie,
+		Name:      "inspect-trie",
+		ArgsUsage: "<blocknum>",
+		Flags:     slices.Concat([]cli.Flag{utils.ExcludeStorageFlag, utils.TopFlag}, utils.NetworkFlags, utils.DatabaseFlags),
+		Usage:     "Print detailed trie information about the structure of account trie and storage tries.",
+		Description: `This commands iterates the entrie trie-backed state. If the 'blocknum' is not specified, 
+the latest block number will be used by default.`,
 	}
 	dbCheckStateContentCmd = &cli.Command{
 		Action:    checkStateContent,
@@ -382,6 +393,67 @@ func checkStateContent(ctx *cli.Context) error {
 		return err
 	}
 	log.Info("Iterated the state content", "errors", errs, "items", count)
+	return nil
+}
+
+func inspectTrie(ctx *cli.Context) error {
+	if ctx.NArg() > 1 {
+		return fmt.Errorf("excessive number of arguments: %v", ctx.Command.ArgsUsage)
+	}
+	stack, _ := makeConfigNode(ctx)
+	db := utils.MakeChainDatabase(ctx, stack, false)
+	defer stack.Close()
+	defer db.Close()
+
+	var (
+		trieRoot common.Hash
+		hash     common.Hash
+		number   uint64
+	)
+	switch {
+	case ctx.NArg() == 0 || ctx.Args().Get(0) == "latest":
+		hash := rawdb.ReadHeadHeaderHash(db)
+		n, ok := rawdb.ReadHeaderNumber(db, hash)
+		if !ok {
+			return fmt.Errorf("could not load head block hash")
+		}
+		number = n
+	case ctx.Args().Get(0) == "snapshot":
+		trieRoot = rawdb.ReadSnapshotRoot(db)
+		number = math.MaxUint64
+	default:
+		var err error
+		number, err = strconv.ParseUint(ctx.Args().Get(0), 10, 64)
+		if err != nil {
+			return fmt.Errorf("failed to parse blocknum, Args[0]: %v, err: %v", ctx.Args().Get(0), err)
+		}
+	}
+
+	// Load head block number based on canonical hash, if applicable.
+	if number != math.MaxUint64 {
+		hash = rawdb.ReadCanonicalHash(db, number)
+		if hash == (common.Hash{}) {
+			return fmt.Errorf("canonical hash for block %d not found", number)
+		}
+		blockHeader := rawdb.ReadHeader(db, hash, number)
+		trieRoot = blockHeader.Root
+	}
+	if (trieRoot == common.Hash{}) {
+		log.Error("Empty root hash")
+	}
+
+	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, true, false)
+	defer triedb.Close()
+
+	log.Info("Inspecting trie", "root", trieRoot, "block", number)
+	config := &trie.InspectConfig{
+		NoStorage: ctx.Bool(utils.ExcludeStorageFlag.Name),
+		TopN:      ctx.Int(utils.TopFlag.Name),
+	}
+	err := trie.Inspect(triedb, trieRoot, config)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

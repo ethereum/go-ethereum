@@ -16,7 +16,7 @@
 
 // Naive stub implementation for tablewriter
 
-package rawdb
+package tablewriter
 
 import (
 	"errors"
@@ -37,7 +37,7 @@ type Table struct {
 	rows    [][]string
 }
 
-func NewTableWriter(w io.Writer) *Table {
+func NewWriter(w io.Writer) *Table {
 	return &Table{out: w}
 }
 
