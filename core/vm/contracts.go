@@ -48,7 +48,7 @@ import (
 // requires a deterministic gas count based on the input size of the Run method of the
 // contract.
 type PrecompiledContract interface {
-    RequiredGas(input []byte) uint64  // RequiredGas calculates the contract gas use
+	RequiredGas(input []byte) uint64  // RequiredGas calculates the contract gas use
 	Run(input []byte) ([]byte, error) // Run runs the precompiled contract
 	Name() string
 }
