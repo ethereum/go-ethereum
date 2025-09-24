@@ -21,8 +21,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"go/parser"
-	"go/token"
 	"io"
 	"log"
 	"os"
@@ -219,28 +217,18 @@ func UploadSFTP(identityFile, host, dir string, files []string) error {
 
 // FindMainPackages finds all 'main' packages in the given directory and returns their
 // package paths.
-func FindMainPackages(dir string) []string {
-	var commands []string
-	cmds, err := os.ReadDir(dir)
+func FindMainPackages(tc *GoToolchain, pattern string) []string {
+	list := tc.Go("list", "-f", `{{if eq .Name "main"}}{{.ImportPath}}{{end}}`, pattern)
+	output, err := list.Output()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("go list failed:", err)
 	}
-	for _, cmd := range cmds {
-		pkgdir := filepath.Join(dir, cmd.Name())
-		if !cmd.IsDir() {
-			continue
-		}
-		pkgs, err := parser.ParseDir(token.NewFileSet(), pkgdir, nil, parser.PackageClauseOnly)
-		if err != nil {
-			log.Fatal(err)
-		}
-		for name := range pkgs {
-			if name == "main" {
-				path := "./" + filepath.ToSlash(pkgdir)
-				commands = append(commands, path)
-				break
-			}
+	var result []string
+	for l := range bytes.Lines(output) {
+		l = bytes.TrimSpace(l)
+		if len(l) > 0 {
+			result = append(result, string(l))
 		}
 	}
-	return commands
+	return result
 }
