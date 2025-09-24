@@ -2269,6 +2269,11 @@ func TestSidecarConversion(t *testing.T) {
 	}
 
 	verifyPoolInternals(t, pool)
+
+	// Launch conversion a second time.
+	// This is just a sanity check to ensure we can handle it.
+	pool.Reset(header0, header1)
+
 	pool.Close()
 }
 
