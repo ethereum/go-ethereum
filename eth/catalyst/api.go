@@ -495,7 +495,7 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 	// Check if Osaka fork is active
 	// follow https://github.com/ethereum/execution-apis/blob/main/src/engine/osaka.md#cancun-api
 	if header := api.eth.BlockChain().CurrentHeader(); api.config().IsOsaka(header.Number, header.Time) {
-		return nil, engine.UnsupportedFork.With(fmt.Errorf("engine_getBlobsV1 is not supported after Osaka fork activation"))
+		return nil, unsupportedForkErr("engine_getBlobsV1 is not supported after Osaka fork")
 	}
 
 	if len(hashes) > 128 {
