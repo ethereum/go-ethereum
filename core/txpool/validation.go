@@ -116,6 +116,10 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	if _, err := types.Sender(signer, tx); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidSender, err)
 	}
+	// Limit nonce to 2^64-1 per EIP-2681
+	if tx.Nonce()+1 < tx.Nonce() {
+		return core.ErrNonceMax
+	}
 	// Ensure the transaction has more gas than the bare minimum needed to cover
 	// the transaction metadata
 	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, true, rules.IsIstanbul, rules.IsShanghai)
