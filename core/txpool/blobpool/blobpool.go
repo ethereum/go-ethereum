@@ -904,7 +904,9 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 			}
 		}
 		// Initiate the background conversion thread.
-		go p.convertLegacySidecars(ids, txs)
+		p.cQueue.launchBillyConversion(func() {
+			p.convertLegacySidecars(ids, txs)
+		})
 	}
 }
 
@@ -913,7 +915,7 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 // bulk conversion. If it fails for some reason, the subsequent txs won't be dropped
 // for simplicity which we assume it's very likely to happen.
 //
-// The returned flag indicates whether the replacement succeeds or not.
+// The returned flag indicates whether the replacement succeeded.
 func (p *BlobPool) compareAndSwap(address common.Address, hash common.Hash, blob []byte, oldID uint64, oldStorageSize uint32) bool {
 	p.lock.Lock()
 	defer p.lock.Unlock()
