@@ -21,10 +21,12 @@ import (
 	"container/heap"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -337,7 +339,7 @@ type BlobPool struct {
 
 	signer types.Signer     // Transaction signer to use for sender recovery
 	chain  BlockChain       // Chain object to access the state through
-	cQueue *conversionQueue // The queue for performing legacy sidecar conversion
+	cQueue *conversionQueue // The queue for performing legacy sidecar conversion (TODO: remove after Osaka)
 
 	head   atomic.Pointer[types.Header] // Current head of the chain
 	state  *state.StateDB               // Current state at the head of the chain
@@ -883,6 +885,172 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	basefeeGauge.Update(int64(basefee.Uint64()))
 	blobfeeGauge.Update(int64(blobfee.Uint64()))
 	p.updateStorageMetrics()
+
+	// Perform the conversion logic at the fork boundary
+	if !p.chain.Config().IsOsaka(oldHead.Number, oldHead.Time) && p.chain.Config().IsOsaka(newHead.Number, newHead.Time) {
+		// Deep copy all indexed transaction metadata.
+		var (
+			ids = make(map[common.Address]map[uint64]uint64)
+			txs = make(map[common.Address]map[uint64]common.Hash)
+		)
+		for sender, list := range p.index {
+			ids[sender] = make(map[uint64]uint64)
+			txs[sender] = make(map[uint64]common.Hash)
+			for _, m := range list {
+				ids[sender][m.nonce] = m.id
+				txs[sender][m.nonce] = m.hash
+			}
+		}
+		// Initiate the background conversion thread.
+		p.cQueue.launchBillyConversion(func() {
+			p.convertLegacySidecars(ids, txs)
+		})
+	}
+}
+
+// compareAndSwap checks if the specified transaction is still tracked in the pool
+// and replace the metadata accordingly. It should only be used in the fork boundary
+// bulk conversion. If it fails for some reason, the subsequent txs won't be dropped
+// for simplicity which we assume it's very likely to happen.
+//
+// The returned flag indicates whether the replacement succeeded.
+func (p *BlobPool) compareAndSwap(address common.Address, hash common.Hash, blob []byte, oldID uint64, oldStorageSize uint32) bool {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	newId, err := p.store.Put(blob)
+	if err != nil {
+		log.Error("Failed to store transaction", "hash", hash, "err", err)
+		return false
+	}
+	newSize := uint64(len(blob))
+	newStorageSize := p.store.Size(newId)
+
+	// Terminate the procedure if the transaction was already evicted. The
+	// newly added blob should be removed before return.
+	if !p.lookup.update(hash, newId, newSize) {
+		if derr := p.store.Delete(newId); derr != nil {
+			log.Error("Failed to delete the dangling blob tx", "err", derr)
+		} else {
+			log.Warn("Deleted the dangling blob tx", "id", newId)
+		}
+		return false
+	}
+	// Update the metadata of blob transaction
+	for _, meta := range p.index[address] {
+		if meta.hash == hash {
+			meta.id = newId
+			meta.version = types.BlobSidecarVersion1
+			meta.storageSize = newStorageSize
+			meta.size = newSize
+
+			p.stored += uint64(newStorageSize)
+			p.stored -= uint64(oldStorageSize)
+			break
+		}
+	}
+	if err := p.store.Delete(oldID); err != nil {
+		log.Error("Failed to delete the legacy transaction", "hash", hash, "id", oldID, "err", err)
+	}
+	return true
+}
+
+// convertLegacySidecar fetches transaction data from the store, performs an
+// on-the-fly conversion. This function is intended for use only during the
+// Osaka fork transition period.
+//
+// The returned flag indicates whether the replacement succeeds or not.
+func (p *BlobPool) convertLegacySidecar(sender common.Address, hash common.Hash, id uint64) bool {
+	start := time.Now()
+
+	// Retrieves the legacy blob transaction from the underlying store with
+	// read lock held, preventing any potential data race around the slot
+	// specified by the id.
+	p.lock.RLock()
+	data, err := p.store.Get(id)
+	if err != nil {
+		p.lock.RUnlock()
+		// The transaction may have been evicted simultaneously, safe to skip conversion.
+		log.Debug("Blob transaction is missing", "hash", hash, "id", id, "err", err)
+		return false
+	}
+	oldStorageSize := p.store.Size(id)
+	p.lock.RUnlock()
+
+	// Decode the transaction, the failure is not expected and report the error
+	// loudly if possible. If the blob transaction in this slot is corrupted,
+	// leave it in the store, it will be dropped during the next pool
+	// initialization.
+	var tx types.Transaction
+	if err = rlp.DecodeBytes(data, &tx); err != nil {
+		log.Error("Blob transaction is corrupted", "hash", hash, "id", id, "err", err)
+		return false
+	}
+
+	// Skip conversion if the transaction does not match the expected hash, or if it was
+	// already converted. This can occur if the original transaction was evicted from the
+	// pool and the slot was reused by a new one.
+	if tx.Hash() != hash {
+		log.Warn("Blob transaction was replaced", "hash", hash, "id", id, "stored", tx.Hash())
+		return false
+	}
+	sc := tx.BlobTxSidecar()
+	if sc.Version >= types.BlobSidecarVersion1 {
+		log.Debug("Skipping conversion of blob tx", "hash", hash, "id", id)
+		return false
+	}
+
+	// Perform the sidecar conversion, the failure is not expected and report the error
+	// loudly if possible.
+	if err := tx.BlobTxSidecar().ToV1(); err != nil {
+		log.Error("Failed to convert blob transaction", "hash", hash, "err", err)
+		return false
+	}
+
+	// Encode the converted transaction, the failure is not expected and report
+	// the error loudly if possible.
+	blob, err := rlp.EncodeToBytes(&tx)
+	if err != nil {
+		log.Error("Failed to encode blob transaction", "hash", tx.Hash(), "err", err)
+		return false
+	}
+
+	// Replace the legacy blob transaction with the converted format.
+	if !p.compareAndSwap(sender, hash, blob, id, oldStorageSize) {
+		log.Error("Failed to replace the legacy transaction", "hash", hash)
+		return false
+	}
+	log.Debug("Converted legacy blob transaction", "hash", hash, "elapsed", common.PrettyDuration(time.Since(start)))
+	return true
+}
+
+// convertLegacySidecars converts all given transactions to sidecar version 1.
+//
+// If any of them fails to be converted, the subsequent transactions will still
+// be processed, as we assume the failure is very unlikely to happen. If happens,
+// these transactions will be stuck in the pool until eviction.
+func (p *BlobPool) convertLegacySidecars(ids map[common.Address]map[uint64]uint64, txs map[common.Address]map[uint64]common.Hash) {
+	var (
+		start   = time.Now()
+		success int
+		failure int
+	)
+	for addr, list := range txs {
+		// Transactions evicted from the pool must be contiguous, if in any case,
+		// the transactions are gapped with each other, they will be discarded.
+		nonces := slices.Collect(maps.Keys(list))
+		slices.Sort(nonces)
+
+		// Convert the txs with nonce order
+		for _, nonce := range nonces {
+			if p.convertLegacySidecar(addr, list[nonce], ids[addr][nonce]) {
+				success++
+			} else {
+				failure++
+			}
+		}
+	}
+	log.Info("Completed blob transaction conversion", "discarded", failure, "injected", success, "elapsed", common.PrettyDuration(time.Since(start)))
 }
 
 // reorg assembles all the transactors and missing transactions between an old
