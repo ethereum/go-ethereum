@@ -492,6 +492,12 @@ func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool) (*eng
 // Client software MAY return an array of all null entries if syncing or otherwise
 // unable to serve blob pool data.
 func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProofV1, error) {
+	// Check if Osaka fork is active
+	// follow https://github.com/ethereum/execution-apis/blob/main/src/engine/osaka.md#cancun-api
+	if header := api.eth.BlockChain().CurrentHeader(); api.config().IsOsaka(header.Number, header.Time) {
+		return nil, engine.UnsupportedFork.With(fmt.Errorf("engine_getBlobsV1 is not supported after Osaka fork activation"))
+	}
+
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
