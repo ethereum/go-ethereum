@@ -165,11 +165,12 @@ func (q *conversionQueue) loop() {
 
 		case <-q.quit:
 			if done != nil {
-				interrupt.Store(1)
 				log.Debug("Waiting for blob proof conversion to exit")
+				interrupt.Store(1)
 				<-done
 			}
 			for billyTasks > 0 {
+				log.Debug("Waiting for blobpool billy conversion to exit")
 				<-billyDone
 				billyTasks--
 			}
