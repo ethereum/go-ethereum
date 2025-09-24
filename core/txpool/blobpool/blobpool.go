@@ -102,6 +102,12 @@ const (
 	// window, all legacy blob transactions will be rejected.
 	conversionTimeWindow = time.Hour * 2
 
+	// gappedLifetime is the approximate duration for which nonce-gapped transactions
+	// are kept before being dropped. Since gapped is only a reorder buffer and it
+	// is expected that the original transactions were inserted in the mempool in
+	// nonce order, the duration is kept short to avoid DoS vectors.
+	gappedLifetime = 1 * time.Minute
+
 	// maxGappedTxs is the maximum number of gapped transactions kept overall.
 	// This is a safety limit to avoid DoS vectors.
 	maxGapped = 128
@@ -341,8 +347,8 @@ type BlobPool struct {
 	stored uint64         // Useful data size of all transactions on disk
 	limbo  *limbo         // Persistent data store for the non-finalized blobs
 
-	gapped       map[common.Address][]*types.Transaction // Transactions that are currently gapped (nonce too high)
-	gappedSource map[common.Hash]common.Address          // Source of gapped transactions to allow rechecking on inclusion
+	gapped       map[common.Address][]*gappedTx // Transactions that are currently gapped (nonce too high)
+	gappedSource map[common.Hash]common.Address // Source of gapped transactions to allow rechecking on inclusion
 
 	signer types.Signer     // Transaction signer to use for sender recovery
 	chain  BlockChain       // Chain object to access the state through
@@ -363,6 +369,11 @@ type BlobPool struct {
 	lock sync.RWMutex // Mutex protecting the pool during reorg handling
 }
 
+type gappedTx struct {
+	tx        *types.Transaction
+	timestamp time.Time
+}
+
 // New creates a new blob transaction pool to gather, sort and filter inbound
 // blob transactions from the network.
 func New(config Config, chain BlockChain, hasPendingAuth func(common.Address) bool) *BlobPool {
@@ -379,7 +390,7 @@ func New(config Config, chain BlockChain, hasPendingAuth func(common.Address) bo
 		lookup:         newLookup(),
 		index:          make(map[common.Address][]*blobTxMeta),
 		spent:          make(map[common.Address]*uint256.Int),
-		gapped:         make(map[common.Address][]*types.Transaction),
+		gapped:         make(map[common.Address][]*gappedTx),
 		gappedSource:   make(map[common.Hash]common.Address),
 	}
 }
@@ -854,6 +865,9 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	defer func(start time.Time) {
 		resettimeHist.Update(time.Since(start).Nanoseconds())
 	}(time.Now())
+
+	// Handle reorg buffer timeouts evicting old gapped transactions
+	p.evictGapped()
 
 	statedb, err := p.chain.StateAt(newHead.Root)
 	if err != nil {
@@ -1750,7 +1764,7 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 			if allowance >= 1 && len(p.gapped) < maxGapped {
 				// if maxGapped is reached, it is better to give time to gapped
 				// transactions by keeping the old and dropping this one
-				p.gapped[from] = append(p.gapped[from], tx)
+				p.gapped[from] = append(p.gapped[from], &gappedTx{tx: tx, timestamp: time.Now()})
 				p.gappedSource[tx.Hash()] = from
 				log.Trace("blobpool:add added to Gapped blob queue", "allowance", allowance, "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
 				return nil
@@ -1900,15 +1914,15 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 		// We have to add in nonce order, but we want to stable sort to cater for situations
 		// where transactions are replaced
 		sort.SliceStable(gtxs, func(i, j int) bool {
-			return gtxs[i].Nonce() < gtxs[j].Nonce()
+			return gtxs[i].tx.Nonce() < gtxs[j].tx.Nonce()
 		})
 		firstgap := p.state.GetNonce(from) + uint64(len(p.index[from]))
-		log.Trace("Gapped blob transactions found", "from", from, "qlen", len(gtxs), "firstNonceGap", firstgap, "nonce0", gtxs[0].Nonce())
-		if firstgap == gtxs[0].Nonce() {
+		tx := gtxs[0].tx
+		log.Trace("Gapped blob transactions found", "from", from, "qlen", len(gtxs), "firstNonceGap", firstgap, "nonce0", tx.Nonce())
+		if firstgap == tx.Nonce() {
 			// We are under lock. Add the first transaction in a goroutine to avoid blocking.
 			// This might lead to a race beteen new calls to add and the revalidation here,
 			// TODO: revisit if this is a problem, lock on 'from' needed?
-			tx := gtxs[0]
 			p.gapped[from] = gtxs[1:]
 			if len(p.gapped[from]) == 0 {
 				delete(p.gapped, from)
@@ -2167,6 +2181,34 @@ func (p *BlobPool) gappedAllowance(addr common.Address) int {
 	allowance := int(math.Log10(float64(nonce + 1)))
 	// Cap the allowance to the remaining pool space
 	return min(allowance, maxTxsPerAccount-len(p.index[addr])) - len(p.gapped[addr])
+}
+
+// evictGapped removes the old transactions from the gapped reorder buffer.
+// Concurrency: The caller must hold the pool lock before calling this function.
+func (p *BlobPool) evictGapped() {
+	cutoff := time.Now().Add(-gappedLifetime)
+	for from, txs := range p.gapped {
+		// Reuse the original slice to avoid extra allocations.
+		// This is safe because we only keep references to the original gappedTx objects,
+		// and we overwrite the slice for this account after filtering.
+		keep := txs[:0]
+		for i, gtx := range txs {
+			if gtx.timestamp.Before(cutoff) {
+				delete(p.gappedSource, gtx.tx.Hash())
+				txs[i] = nil // Explicitly nil out evicted element
+			} else {
+				keep = append(keep, gtx)
+			}
+		}
+		if len(keep) < len(txs) {
+			log.Trace("Evicting old gapped blob transactions", "count", len(txs)-len(keep), "from", from)
+		}
+		if len(keep) == 0 {
+			delete(p.gapped, from)
+		} else {
+			p.gapped[from] = keep
+		}
+	}
 }
 
 // Stats retrieves the current pool stats, namely the number of pending and the
