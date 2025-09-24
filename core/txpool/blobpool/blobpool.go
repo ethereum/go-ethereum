@@ -986,16 +986,22 @@ func (p *BlobPool) convertLegacySidecar(sender common.Address, hash common.Hash,
 		log.Error("Blob transaction is corrupted", "hash", hash, "id", id, "err", err)
 		return false
 	}
-	// Skip conversion if the transaction does not match the expected hash.
-	// This can occur if the original transaction was evicted from the pool
-	// and the slot was reused by a new one.
+
+	// Skip conversion if the transaction does not match the expected hash, or if it was
+	// already converted. This can occur if the original transaction was evicted from the
+	// pool and the slot was reused by a new one.
 	if tx.Hash() != hash {
 		log.Warn("Blob transaction was replaced", "hash", hash, "id", id, "stored", tx.Hash())
 		return false
 	}
+	sc := tx.BlobTxSidecar()
+	if sc.Version >= types.BlobSidecarVersion1 {
+		log.Debug("Skipping conversion of blob tx", "hash", hash, "id", id)
+		return false
+	}
 
-	// Perform the sidecar conversion, the failure is not expected and report
-	// the error loudly if possible.
+	// Perform the sidecar conversion, the failure is not expected and report the error
+	// loudly if possible.
 	if err := tx.BlobTxSidecar().ToV1(); err != nil {
 		log.Error("Failed to convert blob transaction", "hash", hash, "err", err)
 		return false
