@@ -1909,34 +1909,44 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 
 	addValidMeter.Mark(1)
 
-	//check the gapped queue for this account and try to add any pending transactions
+	//check the gapped queue for this account and try to promote
 	if gtxs, ok := p.gapped[from]; ok && len(gtxs) > 0 {
 		// We have to add in nonce order, but we want to stable sort to cater for situations
-		// where transactions are replaced
+		// where transactions are replaced, keeping the original receive order for same nonce
 		sort.SliceStable(gtxs, func(i, j int) bool {
 			return gtxs[i].tx.Nonce() < gtxs[j].tx.Nonce()
 		})
 		firstgap := p.state.GetNonce(from) + uint64(len(p.index[from]))
-		tx := gtxs[0].tx
-		log.Trace("Gapped blob transactions found", "from", from, "qlen", len(gtxs), "firstNonceGap", firstgap, "nonce0", tx.Nonce())
-		if firstgap == tx.Nonce() {
-			// We are under lock. Add the first transaction in a goroutine to avoid blocking.
-			// This might lead to a race beteen new calls to add and the revalidation here,
-			// TODO: revisit if this is a problem, lock on 'from' needed?
-			p.gapped[from] = gtxs[1:]
-			if len(p.gapped[from]) == 0 {
-				delete(p.gapped, from)
-			}
-			delete(p.gappedSource, tx.Hash())
-			go func() {
-				if err := p.add(tx); err == nil {
-					log.Trace("Gapped blob transaction added to pool", "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
-				} else {
-					log.Trace("Gapped blob transaction still not accepted", "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "err", err)
+		for len(gtxs) > 0 {
+			if gtxs[0].tx.Nonce() <= firstgap {
+				// Drop any buffered transactions that became stale in themeantime (included in chain or replaced)
+				// If we arrive to the tx at the first gap, we try to add it now (also dropping it from the gapped queue)
+				tx := gtxs[0].tx
+				gtxs[0] = nil
+				gtxs = gtxs[1:]
+				delete(p.gappedSource, tx.Hash())
+				if tx.Nonce() == firstgap {
+					// We are under lock. Add the first transaction in a goroutine to avoid blocking.
+					// This might lead to a race beteen new calls to add and the revalidation here,
+					// we should revisit if this is a potential issue.
+					go func() {
+						if err := p.add(tx); err == nil {
+							log.Trace("Gapped blob transaction added to pool", "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
+						} else {
+							log.Trace("Gapped blob transaction not accepted", "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "err", err)
+						}
+					}()
+					break
 				}
-			}()
+			}
+		}
+		if len(gtxs) == 0 {
+			delete(p.gapped, from)
+		} else {
+			p.gapped[from] = gtxs
 		}
 	}
+	// Notify all listeners of the new arrival
 	p.discoverFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
 	p.insertFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
 	return nil
