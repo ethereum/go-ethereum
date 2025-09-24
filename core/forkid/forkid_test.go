@@ -125,6 +125,36 @@ func TestCreation(t *testing.T) {
 				{123, 2740434112, ID{Hash: checksumToBytes(0x0929e24e), Next: 0}},          // Future Prague block
 			},
 		},
+		// Berachain mainnet test cases
+		{
+			params.BerachainChainConfig,
+			core.DefaultBerachainGenesisBlock().ToBlock(),
+			[]testcase{
+				{0, 0, ID{Hash: checksumToBytes(0xbb6c8bc0), Next: 1749056400}},            // Unsynced, all forks active at genesis except Prague and Prague1/Prague2
+				{100, 1749056399, ID{Hash: checksumToBytes(0xbb6c8bc0), Next: 1749056400}}, // Before Prague fork
+				{100, 1749056400, ID{Hash: checksumToBytes(0x3f78b127), Next: 1756915200}}, // Prague active, before Prague1
+				{100, 1756915199, ID{Hash: checksumToBytes(0x3f78b127), Next: 1756915200}}, // Before Prague1
+				{100, 1756915200, ID{Hash: checksumToBytes(0xd2ebecac), Next: 1759248000}}, // Prague1 active, before Prague2
+				{100, 1759247999, ID{Hash: checksumToBytes(0xd2ebecac), Next: 1759248000}}, // Before Prague2
+				{100, 1759248000, ID{Hash: checksumToBytes(0xcbbf6c9f), Next: 0}},          // Prague2 active
+				{1000, 2000000000, ID{Hash: checksumToBytes(0xcbbf6c9f), Next: 0}},         // Far future
+			},
+		},
+		// Bepolia testnet test cases
+		{
+			params.BepoliaChainConfig,
+			core.DefaultBepoliaGenesisBlock().ToBlock(),
+			[]testcase{
+				{0, 0, ID{Hash: checksumToBytes(0xae79530c), Next: 1746633600}},            // Unsynced, all forks active at genesis except Prague and Prague1/Prague2
+				{100, 1746633599, ID{Hash: checksumToBytes(0xae79530c), Next: 1746633600}}, // Before Prague fork
+				{100, 1746633600, ID{Hash: checksumToBytes(0xd07d9f27), Next: 1754496000}}, // Prague active, before Prague1
+				{100, 1754495999, ID{Hash: checksumToBytes(0xd07d9f27), Next: 1754496000}}, // Before Prague1
+				{100, 1754496000, ID{Hash: checksumToBytes(0x33153c0a), Next: 1758124800}}, // Prague1 active, before Prague2
+				{100, 1758124799, ID{Hash: checksumToBytes(0x33153c0a), Next: 1758124800}}, // Before Prague2
+				{100, 1758124800, ID{Hash: checksumToBytes(0x2edd8d57), Next: 0}},          // Prague2 active
+				{1000, 2000000000, ID{Hash: checksumToBytes(0x2edd8d57), Next: 0}},         // Far future
+			},
+		},
 	}
 	for i, tt := range tests {
 		for j, ttt := range tt.cases {
