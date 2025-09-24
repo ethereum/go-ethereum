@@ -341,8 +341,6 @@ type BlobPool struct {
 	chain  BlockChain       // Chain object to access the state through
 	cQueue *conversionQueue // The queue for performing legacy sidecar conversion (TODO: remove after Osaka)
 
-	sidecarMigrationDoneCh chan struct{} // Channel for signaling when all txs at the boundary have been converted (TODO: remove after Osaka)
-
 	head   atomic.Pointer[types.Header] // Current head of the chain
 	state  *state.StateDB               // Current state at the head of the chain
 	gasTip atomic.Pointer[uint256.Int]  // Currently accepted minimum gas tip
@@ -1045,9 +1043,6 @@ func (p *BlobPool) convertLegacySidecars(ids map[common.Address]map[uint64]uint6
 				failure++
 			}
 		}
-	}
-	if p.sidecarMigrationDoneCh != nil {
-		close(p.sidecarMigrationDoneCh)
 	}
 	log.Info("Completed blob transaction conversion", "discarded", failure, "injected", success, "elapsed", common.PrettyDuration(time.Since(start)))
 }

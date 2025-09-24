@@ -43,19 +43,27 @@ type txConvert struct {
 // it is performed in the background by a single thread, ensuring the main Geth
 // process is not overloaded.
 type conversionQueue struct {
-	tasks  chan *txConvert
-	billy  chan func()
-	quit   chan struct{}
-	closed chan struct{}
+	tasks      chan *txConvert
+	startBilly chan func()
+	quit       chan struct{}
+	closed     chan struct{}
+
+	billyQueue    []func()
+	billyTaskDone chan struct{}
+
+	// This channel will be closed when the first billy conversion finishes.
+	// It's added for unit tests to synchronize with the conversion progress.
+	anyBillyConversionDone chan struct{}
 }
 
 // newConversionQueue constructs the conversion queue.
 func newConversionQueue() *conversionQueue {
 	q := &conversionQueue{
-		tasks:  make(chan *txConvert),
-		billy:  make(chan func()),
-		quit:   make(chan struct{}),
-		closed: make(chan struct{}),
+		tasks:                  make(chan *txConvert),
+		startBilly:             make(chan func()),
+		quit:                   make(chan struct{}),
+		closed:                 make(chan struct{}),
+		anyBillyConversionDone: make(chan struct{}),
 	}
 	go q.loop()
 	return q
@@ -78,7 +86,7 @@ func (q *conversionQueue) convert(tx *types.Transaction) error {
 // launchBillyConversion starts a conversion task in the background.
 func (q *conversionQueue) launchBillyConversion(fn func()) error {
 	select {
-	case q.billy <- fn:
+	case q.startBilly <- fn:
 		return nil
 	case <-q.closed:
 		return errors.New("conversion queue closed")
@@ -122,16 +130,17 @@ func (q *conversionQueue) loop() {
 	defer close(q.closed)
 
 	var (
-		billyDone  = make(chan struct{})
-		billyTasks int           // Count of running billy conversion tasks
-		done       chan struct{} // Non-nil if background routine is active
-		interrupt  *atomic.Int32 // Flag to signal conversion interruption
+		done      chan struct{} // Non-nil if background routine is active
+		interrupt *atomic.Int32 // Flag to signal conversion interruption
 
 		// The pending tasks for sidecar conversion. We assume the number of legacy
 		// blob transactions requiring conversion will not be excessive. However,
 		// a hard cap is applied as a protective measure.
 		txTasks []*txConvert
+
+		firstBilly = true
 	)
+
 	for {
 		select {
 		case t := <-q.tasks:
@@ -150,18 +159,19 @@ func (q *conversionQueue) loop() {
 				go q.run(tasks, done, interrupt)
 			}
 
-		case fn := <-q.billy:
-			billyTasks++
-			go func() {
-				fn()
-				billyDone <- struct{}{}
-			}()
-
 		case <-done:
 			done, interrupt = nil, nil
 
-		case <-billyDone:
-			billyTasks--
+		case fn := <-q.startBilly:
+			q.billyQueue = append(q.billyQueue, fn)
+			q.runNextBillyTask()
+
+		case <-q.billyTaskDone:
+			if firstBilly {
+				close(q.anyBillyConversionDone)
+				firstBilly = false
+			}
+			q.runNextBillyTask()
 
 		case <-q.quit:
 			if done != nil {
@@ -169,12 +179,25 @@ func (q *conversionQueue) loop() {
 				interrupt.Store(1)
 				<-done
 			}
-			for billyTasks > 0 {
+			if q.billyTaskDone != nil {
 				log.Debug("Waiting for blobpool billy conversion to exit")
-				<-billyDone
-				billyTasks--
+				<-q.billyTaskDone
 			}
 			return
 		}
 	}
+}
+
+func (q *conversionQueue) runNextBillyTask() {
+	if len(q.billyQueue) == 0 {
+		q.billyTaskDone = nil
+		return
+	}
+
+	fn := q.billyQueue[0]
+	q.billyQueue = append(q.billyQueue[:0], q.billyQueue[1:]...)
+
+	done := make(chan struct{})
+	go func() { defer close(done); fn() }()
+	q.billyTaskDone = done
 }

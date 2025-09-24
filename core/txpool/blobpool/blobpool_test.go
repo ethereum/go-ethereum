@@ -2196,7 +2196,6 @@ func TestSidecarConversion(t *testing.T) {
 	}
 
 	// Kick off migration.
-	pool.sidecarMigrationDoneCh = make(chan struct{})
 	pool.Reset(header0, header1)
 
 	// Add the v0 sidecar tx, but don't block so we can keep doing other stuff
@@ -2245,7 +2244,7 @@ func TestSidecarConversion(t *testing.T) {
 	}
 
 	// Wait for the pool migration to complete.
-	<-pool.sidecarMigrationDoneCh
+	<-pool.cQueue.anyBillyConversionDone
 
 	// Verify all transactions in the pool were converted and verify the
 	// subsequent cell proofs.
