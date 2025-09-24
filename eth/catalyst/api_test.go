@@ -1991,6 +1991,56 @@ func TestGetBlobsV1(t *testing.T) {
 	}
 }
 
+func TestGetBlobsV1OsakaFork(t *testing.T) {
+	config := *params.AllEthashProtocolChanges
+	time := new(uint64)
+	config.ShanghaiTime = time
+	config.CancunTime = time
+	config.PragueTime = time
+	config.OsakaTime = time
+
+	// Add blob schedule configuration
+	config.BlobScheduleConfig = &params.BlobScheduleConfig{
+		Cancun: params.DefaultCancunBlobConfig,
+		Prague: params.DefaultPragueBlobConfig,
+		Osaka:  params.DefaultOsakaBlobConfig,
+	}
+
+	genesis := &core.Genesis{
+		Config:     &config,
+		Alloc:      types.GenesisAlloc{testAddr: {Balance: testBalance}},
+		Difficulty: common.Big0,
+		Timestamp:  1, // Timestamp > 0 to ensure Osaka fork is active
+	}
+
+	n, ethServ := startEthService(t, genesis, nil)
+	defer n.Close()
+
+	api := newConsensusAPIWithoutHeartbeat(ethServ)
+
+	vhashes := []common.Hash{testrand.Hash(), testrand.Hash()}
+	result, err := api.GetBlobsV1(vhashes)
+
+	if err == nil {
+		t.Fatal("Expected UnsupportedFork error when Osaka fork is active")
+	}
+
+	if engineErr, ok := err.(*engine.EngineAPIError); ok {
+		if engineErr.ErrorCode() != -38005 {
+			t.Fatalf("Expected error code -38005, got %d", engineErr.ErrorCode())
+		}
+		if engineErr.Error() != "Unsupported fork" {
+			t.Fatalf("Expected error message 'Unsupported fork', got '%s'", engineErr.Error())
+		}
+	} else {
+		t.Fatalf("Expected EngineAPIError, got %T", err)
+	}
+
+	if result != nil {
+		t.Fatal("Expected nil result when Osaka fork is active")
+	}
+}
+
 func TestGetBlobsV2(t *testing.T) {
 	n, api := newGetBlobEnv(t, 1)
 	defer n.Close()
