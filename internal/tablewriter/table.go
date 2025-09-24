@@ -17,7 +17,7 @@
 //go:build !tinygo
 // +build !tinygo
 
-package rawdb
+package tablewriter
 
 import (
 	"io"
@@ -28,6 +28,7 @@ import (
 // Re-export the real tablewriter types and functions
 type Table = tablewriter.Table
 
-func newTableWriter(w io.Writer) *Table {
+// Re-export NewWriter.
+func NewWriter(w io.Writer) *Table {
 	return tablewriter.NewWriter(w)
 }

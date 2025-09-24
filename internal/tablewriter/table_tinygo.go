@@ -19,7 +19,7 @@
 //go:build tinygo
 // +build tinygo
 
-package rawdb
+package tablewriter
 
 import (
 	"errors"
