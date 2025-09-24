@@ -21,6 +21,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -30,20 +31,27 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// ChainReader defines methods needed to access the local blockchain during
+// state processing.
+type ChainReader interface {
+	consensus.ChainHeaderReader
+	ChainContext
+}
+
 // StateProcessor is a basic Processor, which takes care of transitioning
 // state from one point to another.
 //
 // StateProcessor implements Processor.
 type StateProcessor struct {
-	config *params.ChainConfig // Chain configuration options
-	chain  *HeaderChain        // Canonical header chain
+	config      *params.ChainConfig // Chain configuration options
+	chainReader ChainReader         // Chain reader interface
 }
 
 // NewStateProcessor initialises a new StateProcessor.
-func NewStateProcessor(config *params.ChainConfig, chain *HeaderChain) *StateProcessor {
+func NewStateProcessor(config *params.ChainConfig, chainReader ChainReader) *StateProcessor {
 	return &StateProcessor{
-		config: config,
-		chain:  chain,
+		config:      config,
+		chainReader: chainReader,
 	}
 }
 
@@ -79,7 +87,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if hooks := cfg.Tracer; hooks != nil {
 		tracingStateDB = state.NewHookedState(statedb, hooks)
 	}
-	context = NewEVMBlockContext(header, p.chain, nil)
+	context = NewEVMBlockContext(header, p.chainReader, nil)
 	evm := vm.NewEVM(context, tracingStateDB, p.config, cfg)
 
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
@@ -123,7 +131,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	p.chain.engine.Finalize(p.chain, header, tracingStateDB, block.Body())
+	p.chainReader.Engine().Finalize(p.chainReader, header, tracingStateDB, block.Body())
 
 	return &ProcessResult{
 		Receipts: receipts,
