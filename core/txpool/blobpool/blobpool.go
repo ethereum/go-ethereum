@@ -2188,12 +2188,15 @@ func (p *BlobPool) gappedAllowance(addr common.Address) int {
 func (p *BlobPool) evictGapped() {
 	cutoff := time.Now().Add(-gappedLifetime)
 	for from, txs := range p.gapped {
+		nonce := p.state.GetNonce(from)
 		// Reuse the original slice to avoid extra allocations.
 		// This is safe because we only keep references to the original gappedTx objects,
 		// and we overwrite the slice for this account after filtering.
 		keep := txs[:0]
 		for i, gtx := range txs {
-			if gtx.timestamp.Before(cutoff) {
+			if gtx.timestamp.Before(cutoff) || gtx.tx.Nonce() < nonce {
+				// Evict old or stale transactions
+				// Should we add stale to limbo here if it would belong?
 				delete(p.gappedSource, gtx.tx.Hash())
 				txs[i] = nil // Explicitly nil out evicted element
 			} else {
