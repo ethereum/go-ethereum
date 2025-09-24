@@ -17,12 +17,10 @@
 package stateless
 
 import (
-	"io"
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // ToExtWitness converts our internal witness representation to the consensus one.
@@ -32,16 +30,6 @@ func (w *Witness) ToExtWitness() *ExtWitness {
 		Codes:   slices.Clone(w.Codes),
 		State:   slices.Clone(w.State),
 	}
-}
-
-// EncodeRLP serializes a witness as RLP.
-func (w *Witness) EncodeRLP(wr io.Writer) error {
-	return rlp.Encode(wr, w)
-}
-
-// DecodeRLP decodes a witness from RLP.
-func (w *Witness) DecodeRLP(s *rlp.Stream) error {
-	return s.Decode(&w)
 }
 
 // ExtWitness is a witness RLP encoding for transferring across clients.
