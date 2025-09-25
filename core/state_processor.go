@@ -43,15 +43,15 @@ type ChainReader interface {
 //
 // StateProcessor implements Processor.
 type StateProcessor struct {
-	config      *params.ChainConfig // Chain configuration options
-	chainReader ChainReader         // Chain reader interface
+	config *params.ChainConfig // Chain configuration options
+	chain  ChainReader         // Chain reader interface
 }
 
 // NewStateProcessor initialises a new StateProcessor.
-func NewStateProcessor(config *params.ChainConfig, chainReader ChainReader) *StateProcessor {
+func NewStateProcessor(config *params.ChainConfig, chain ChainReader) *StateProcessor {
 	return &StateProcessor{
-		config:      config,
-		chainReader: chainReader,
+		config: config,
+		chain:  chain,
 	}
 }
 
@@ -87,7 +87,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if hooks := cfg.Tracer; hooks != nil {
 		tracingStateDB = state.NewHookedState(statedb, hooks)
 	}
-	context = NewEVMBlockContext(header, p.chainReader, nil)
+	context = NewEVMBlockContext(header, p.chain, nil)
 	evm := vm.NewEVM(context, tracingStateDB, p.config, cfg)
 
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
@@ -131,7 +131,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	p.chainReader.Engine().Finalize(p.chainReader, header, tracingStateDB, block.Body())
+	p.chain.Engine().Finalize(p.chain, header, tracingStateDB, block.Body())
 
 	return &ProcessResult{
 		Receipts: receipts,
