@@ -1927,7 +1927,7 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 				delete(p.gappedSource, tx.Hash())
 				if tx.Nonce() == firstgap {
 					// We are under lock. Add the first transaction in a goroutine to avoid blocking.
-					// This might lead to a race beteen new calls to add and the revalidation here,
+					// This might lead to a race between new calls to add and the revalidation here,
 					// we should revisit if this is a potential issue.
 					go func() {
 						if err := p.add(tx); err == nil {
