@@ -100,7 +100,6 @@ func TestWaitDeployed(t *testing.T) {
 }
 
 func TestWaitDeployedCornerCases(t *testing.T) {
-
 	var (
 		backend = simulated.NewBackend(
 			types.GenesisAlloc{
