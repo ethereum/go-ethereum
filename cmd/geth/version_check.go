@@ -25,6 +25,8 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/jedisct1/go-minisign"
@@ -115,14 +117,32 @@ func fetch(url string) ([]byte, error) {
 	if filep := strings.TrimPrefix(url, "file://"); filep != url {
 		return os.ReadFile(filep)
 	}
-	res, err := http.Get(url)
+	const maxBodySize = 2 << 20 // 2 MiB
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+	res, err := client.Get(url)
 	if err != nil {
 		return nil, err
 	}
 	defer res.Body.Close()
-	body, err := io.ReadAll(res.Body)
+	
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return nil, fmt.Errorf("unexpected status: %s", res.Status)
+	}
+	if cl := res.Header.Get("Content-Length"); cl != "" {
+		if n, _ := strconv.ParseInt(cl, 10, 64); n > maxBodySize {
+			return nil, fmt.Errorf("response too large: %d > %d", n, maxBodySize)
+		}
+	}
+	limited := io.LimitReader(res.Body, maxBodySize+1)
+	body, err := io.ReadAll(limited)
 	if err != nil {
 		return nil, err
+	}
+	if int64(len(body)) > maxBodySize {
+		return nil, fmt.Errorf("response exceeds limit: > %d", maxBodySize)
 	}
 	return body, nil
 }
