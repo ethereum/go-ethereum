@@ -28,8 +28,8 @@ import (
 // storageKey returns a key for uniquely identifying the storage slot.
 func storageKey(accountHash common.Hash, slotHash common.Hash) [64]byte {
 	var key [64]byte
-	*(*[32]byte)(key[32:]) = slotHash
 	*(*[32]byte)(key[:32]) = accountHash
+	*(*[32]byte)(key[32:]) = slotHash
 	return key
 }
 
