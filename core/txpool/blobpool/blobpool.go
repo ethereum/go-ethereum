@@ -1746,6 +1746,13 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 		addtimeHist.Update(time.Since(start).Nanoseconds())
 	}(time.Now())
 
+	return p.addLocked(tx, true)
+}
+
+// addLocked inserts a new blob transaction into the pool if it passes validation (both
+// consensus validity and pool restrictions). It must be called with the pool lock held.
+// Only for internal use.
+func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error) {
 	// Ensure the transaction is valid from all perspectives
 	if err := p.validateTx(tx); err != nil {
 		log.Trace("Transaction validation failed", "hash", tx.Hash(), "err", err)
@@ -1909,34 +1916,48 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 
 	addValidMeter.Mark(1)
 
+	// Notify all listeners of the new arrival
+	p.discoverFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
+	p.insertFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
+
 	//check the gapped queue for this account and try to promote
-	if gtxs, ok := p.gapped[from]; ok && len(gtxs) > 0 {
+	if gtxs, ok := p.gapped[from]; checkGapped && ok && len(gtxs) > 0 {
 		// We have to add in nonce order, but we want to stable sort to cater for situations
 		// where transactions are replaced, keeping the original receive order for same nonce
 		sort.SliceStable(gtxs, func(i, j int) bool {
 			return gtxs[i].tx.Nonce() < gtxs[j].tx.Nonce()
 		})
-		firstgap := p.state.GetNonce(from) + uint64(len(p.index[from]))
 		for len(gtxs) > 0 {
-			if gtxs[0].tx.Nonce() <= firstgap {
-				// Drop any buffered transactions that became stale in themeantime (included in chain or replaced)
-				// If we arrive to the tx at the first gap, we try to add it now (also dropping it from the gapped queue)
-				tx := gtxs[0].tx
-				gtxs[0] = nil
-				gtxs = gtxs[1:]
-				delete(p.gappedSource, tx.Hash())
-				if tx.Nonce() == firstgap {
-					// We are under lock. Add the first transaction in a goroutine to avoid blocking.
-					// This might lead to a race between new calls to add and the revalidation here,
-					// we should revisit if this is a potential issue.
-					go func() {
-						if err := p.add(tx); err == nil {
-							log.Trace("Gapped blob transaction added to pool", "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
-						} else {
-							log.Trace("Gapped blob transaction not accepted", "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "err", err)
-						}
-					}()
-					break
+			stateNonce := p.state.GetNonce(from)
+			firstgap := stateNonce + uint64(len(p.index[from]))
+
+			if gtxs[0].tx.Nonce() > firstgap {
+				// Anything beyond the first gap is not addable yet
+				break
+			}
+
+			// Drop any buffered transactions that became stale in the meantime (included in chain or replaced)
+			// If we arrive to the transaction in the pending range (between the state Nonce and first gap, we
+			// try to add them now while removing from here.
+			tx := gtxs[0].tx
+			gtxs[0] = nil
+			gtxs = gtxs[1:]
+			delete(p.gappedSource, tx.Hash())
+
+			if tx.Nonce() < stateNonce {
+				// Stale, drop it. Eventually we could add to limbo here if hash matches.
+				log.Trace("Gapped blob transaction became stale", "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "state", stateNonce, "qlen", len(p.gapped[from]))
+				continue
+			}
+
+			if tx.Nonce() <= firstgap {
+				// If we hit the pending range, including the first gap, add it and continue to try to add more.
+				// We do not recurse here, but continue to loop instead.
+				// We are under lock, so we can add the transaction directly.
+				if err := p.addLocked(tx, false); err == nil {
+					log.Trace("Gapped blob transaction added to pool", "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
+				} else {
+					log.Trace("Gapped blob transaction not accepted", "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "err", err)
 				}
 			}
 		}
@@ -1946,9 +1967,6 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 			p.gapped[from] = gtxs
 		}
 	}
-	// Notify all listeners of the new arrival
-	p.discoverFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
-	p.insertFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
 	return nil
 }
 
