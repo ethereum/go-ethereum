@@ -569,6 +569,11 @@ func filterReceipts(txHashes []common.Hash, ev core.ChainEvent) []*ReceiptWithTx
 	receipts := ev.Receipts
 	txs := ev.Transactions
 
+	if len(receipts) != len(txs) {
+		log.Warn("Receipts and transactions length mismatch", "receipts", len(receipts), "transactions", len(txs))
+		return ret
+	}
+
 	if len(txHashes) == 0 {
 		// No filter, send all receipts with their transactions.
 		ret = make([]*ReceiptWithTx, len(receipts))
@@ -582,7 +587,7 @@ func filterReceipts(txHashes []common.Hash, ev core.ChainEvent) []*ReceiptWithTx
 		// Filter by single transaction hash.
 		// This is a common case, so we distinguish it from filtering by multiple tx hashes and made a small optimization.
 		for i, receipt := range receipts {
-			if receipt.TxHash == (txHashes)[0] {
+			if receipt.TxHash == txHashes[0] {
 				ret = append(ret, &ReceiptWithTx{
 					Receipt:     receipt,
 					Transaction: txs[i],
