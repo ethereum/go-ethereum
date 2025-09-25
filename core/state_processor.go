@@ -21,7 +21,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -31,24 +30,17 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// ChainReader defines methods needed to access the local blockchain data
-// during state processing.
-type ChainReader interface {
-	consensus.ChainHeaderReader
-	ChainContext
-}
-
 // StateProcessor is a basic Processor, which takes care of transitioning
 // state from one point to another.
 //
 // StateProcessor implements Processor.
 type StateProcessor struct {
 	config *params.ChainConfig // Chain configuration options
-	chain  ChainReader         // Chain reader interface
+	chain  ChainContext        // Chain context interface
 }
 
 // NewStateProcessor initialises a new StateProcessor.
-func NewStateProcessor(config *params.ChainConfig, chain ChainReader) *StateProcessor {
+func NewStateProcessor(config *params.ChainConfig, chain ChainContext) *StateProcessor {
 	return &StateProcessor{
 		config: config,
 		chain:  chain,
