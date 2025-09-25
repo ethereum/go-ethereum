@@ -109,7 +109,7 @@ type statefulPrecompileOutput struct {
 	ChainID                 *big.Int
 	Addresses               *libevm.AddressContext
 	StateValue              common.Hash
-	ValueReceived           *uint256.Int
+	CallValue               *uint256.Int
 	ReadOnly                bool
 	BlockNumber, Difficulty *big.Int
 	BlockTime               uint64
@@ -169,7 +169,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			ChainID:          env.ChainConfig().ChainID,
 			Addresses:        env.Addresses(),
 			StateValue:       env.ReadOnlyState().GetState(precompile, slot),
-			ValueReceived:    env.Value(),
+			CallValue:        env.Value(),
 			ReadOnly:         env.ReadOnly(),
 			BlockNumber:      env.BlockNumber(),
 			BlockTime:        env.BlockTime(),
@@ -197,12 +197,13 @@ func TestNewStatefulPrecompile(t *testing.T) {
 	}
 	input := rng.Bytes(8)
 	stateValue := rng.Hash()
-	transferValue := rng.Uint256()
+	callCallerValue := rng.Uint256()
+	callPrecompileValue := rng.Uint256()
 	chainID := rng.BigUint64()
 
 	caller := common.HexToAddress("CA11E12") // caller of the precompile
 	eoa := common.HexToAddress("E0A")        // caller of the precompile-caller
-	callerContract := vm.NewContract(vm.AccountRef(eoa), vm.AccountRef(caller), uint256.NewInt(0), 1e6)
+	callerContract := vm.NewContract(vm.AccountRef(eoa), vm.AccountRef(caller), callCallerValue, 1e6)
 
 	state, evm := ethtest.NewZeroEVM(
 		t,
@@ -225,10 +226,10 @@ func TestNewStatefulPrecompile(t *testing.T) {
 	}
 
 	tests := []struct {
-		name              string
-		call              func() ([]byte, uint64, error)
-		wantAddresses     *libevm.AddressContext
-		wantTransferValue *uint256.Int
+		name          string
+		call          func() ([]byte, uint64, error)
+		wantAddresses *libevm.AddressContext
+		wantCallValue *uint256.Int
 		// Note that this only covers evm.readOnly being true because of the
 		// precompile's call. See TestInheritReadOnly for alternate case.
 		wantReadOnly bool
@@ -237,21 +238,21 @@ func TestNewStatefulPrecompile(t *testing.T) {
 		{
 			name: "EVM.Call()",
 			call: func() ([]byte, uint64, error) {
-				return evm.Call(callerContract, precompile, input, gasLimit, transferValue)
+				return evm.Call(callerContract, precompile, input, gasLimit, callPrecompileValue)
 			},
 			wantAddresses: &libevm.AddressContext{
 				Origin:      eoa,
 				EVMSemantic: rawAddresses,
 				Raw:         &rawAddresses,
 			},
-			wantReadOnly:      false,
-			wantTransferValue: transferValue,
-			wantCallType:      vm.Call,
+			wantReadOnly:  false,
+			wantCallValue: callPrecompileValue,
+			wantCallType:  vm.Call,
 		},
 		{
 			name: "EVM.CallCode()",
 			call: func() ([]byte, uint64, error) {
-				return evm.CallCode(callerContract, precompile, input, gasLimit, transferValue)
+				return evm.CallCode(callerContract, precompile, input, gasLimit, callPrecompileValue)
 			},
 			wantAddresses: &libevm.AddressContext{
 				Origin: eoa,
@@ -261,9 +262,9 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				},
 				Raw: &rawAddresses,
 			},
-			wantReadOnly:      false,
-			wantTransferValue: transferValue,
-			wantCallType:      vm.CallCode,
+			wantReadOnly:  false,
+			wantCallValue: callPrecompileValue,
+			wantCallType:  vm.CallCode,
 		},
 		{
 			name: "EVM.DelegateCall()",
@@ -278,9 +279,9 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				},
 				Raw: &rawAddresses,
 			},
-			wantReadOnly:      false,
-			wantTransferValue: uint256.NewInt(0),
-			wantCallType:      vm.DelegateCall,
+			wantReadOnly:  false,
+			wantCallValue: callCallerValue, // Important difference from [vm.EVM.Call]
+			wantCallType:  vm.DelegateCall,
 		},
 		{
 			name: "EVM.StaticCall()",
@@ -292,9 +293,9 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				EVMSemantic: rawAddresses,
 				Raw:         &rawAddresses,
 			},
-			wantReadOnly:      true,
-			wantTransferValue: uint256.NewInt(0),
-			wantCallType:      vm.StaticCall,
+			wantReadOnly:  true,
+			wantCallValue: uint256.NewInt(0),
+			wantCallType:  vm.StaticCall,
 		},
 	}
 
@@ -304,7 +305,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				ChainID:          chainID,
 				Addresses:        tt.wantAddresses,
 				StateValue:       stateValue,
-				ValueReceived:    tt.wantTransferValue,
+				CallValue:        tt.wantCallValue,
 				ReadOnly:         tt.wantReadOnly,
 				BlockNumber:      header.Number,
 				BlockTime:        header.Time,

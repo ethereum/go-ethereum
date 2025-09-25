@@ -236,7 +236,7 @@ func (args *evmCallArgs) env() *environment {
 		self = args.addr
 
 	case DelegateCall:
-		value = nil
+		value = nil // inherited from `args.caller` inside [Contract.AsDelegate]
 		fallthrough
 	case CallCode:
 		self = args.caller.Address()
