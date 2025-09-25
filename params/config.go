@@ -91,11 +91,17 @@ var (
 		ShanghaiTime:            newUint64(1696000704),
 		CancunTime:              newUint64(1707305664),
 		PragueTime:              newUint64(1740434112),
+		OsakaTime:               newUint64(1759308480),
+		BPO1Time:                newUint64(1759800000),
+		BPO2Time:                newUint64(1760389824),
 		DepositContractAddress:  common.HexToAddress("0x4242424242424242424242424242424242424242"),
 		Ethash:                  new(EthashConfig),
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
+			Osaka:  DefaultOsakaBlobConfig,
+			BPO1:   DefaultBPO1BlobConfig,
+			BPO2:   DefaultBPO2BlobConfig,
 		},
 	}
 	// SepoliaChainConfig contains the chain parameters to run a node on the Sepolia test network.
@@ -121,11 +127,17 @@ var (
 		ShanghaiTime:            newUint64(1677557088),
 		CancunTime:              newUint64(1706655072),
 		PragueTime:              newUint64(1741159776),
+		OsakaTime:               newUint64(1760427360),
+		BPO1Time:                newUint64(1761017184),
+		BPO2Time:                newUint64(1761607008),
 		DepositContractAddress:  common.HexToAddress("0x7f02c3e3c98b133055b8b348b2ac625669ed295d"),
 		Ethash:                  new(EthashConfig),
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
+			Osaka:  DefaultOsakaBlobConfig,
+			BPO1:   DefaultBPO1BlobConfig,
+			BPO2:   DefaultBPO2BlobConfig,
 		},
 	}
 	// HoodiChainConfig contains the chain parameters to run a node on the Hoodi test network.
@@ -151,11 +163,17 @@ var (
 		ShanghaiTime:            newUint64(0),
 		CancunTime:              newUint64(0),
 		PragueTime:              newUint64(1742999832),
+		OsakaTime:               newUint64(1761677592),
+		BPO1Time:                newUint64(1762365720),
+		BPO2Time:                newUint64(1762955544),
 		DepositContractAddress:  common.HexToAddress("0x00000000219ab540356cBB839Cbe05303d7705Fa"),
 		Ethash:                  new(EthashConfig),
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
+			Osaka:  DefaultOsakaBlobConfig,
+			BPO1:   DefaultBPO1BlobConfig,
+			BPO2:   DefaultBPO2BlobConfig,
 		},
 	}
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
@@ -361,15 +379,15 @@ var (
 	}
 	// DefaultBPO1BlobConfig is the default blob configuration for the Osaka fork.
 	DefaultBPO1BlobConfig = &BlobConfig{
-		Target:         9,
-		Max:            14,
-		UpdateFraction: 8832827,
+		Target:         10,
+		Max:            15,
+		UpdateFraction: 8346193,
 	}
 	// DefaultBPO1BlobConfig is the default blob configuration for the Osaka fork.
 	DefaultBPO2BlobConfig = &BlobConfig{
 		Target:         14,
 		Max:            21,
-		UpdateFraction: 13739630,
+		UpdateFraction: 11684671,
 	}
 	// DefaultBPO1BlobConfig is the default blob configuration for the Osaka fork.
 	DefaultBPO3BlobConfig = &BlobConfig{
