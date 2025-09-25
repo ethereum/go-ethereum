@@ -59,6 +59,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		RPCEVMTimeout           time.Duration
 		RPCTxFeeCap             float64
 		OverrideOsaka           *uint64 `toml:",omitempty"`
+		OverrideBPO1            *uint64 `toml:",omitempty"`
+		OverrideBPO2            *uint64 `toml:",omitempty"`
 		OverrideVerkle          *uint64 `toml:",omitempty"`
 	}
 	var enc Config
@@ -104,6 +106,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.RPCEVMTimeout = c.RPCEVMTimeout
 	enc.RPCTxFeeCap = c.RPCTxFeeCap
 	enc.OverrideOsaka = c.OverrideOsaka
+	enc.OverrideBPO1 = c.OverrideBPO1
+	enc.OverrideBPO2 = c.OverrideBPO2
 	enc.OverrideVerkle = c.OverrideVerkle
 	return &enc, nil
 }
@@ -153,6 +157,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		RPCEVMTimeout           *time.Duration
 		RPCTxFeeCap             *float64
 		OverrideOsaka           *uint64 `toml:",omitempty"`
+		OverrideBPO1            *uint64 `toml:",omitempty"`
+		OverrideBPO2            *uint64 `toml:",omitempty"`
 		OverrideVerkle          *uint64 `toml:",omitempty"`
 	}
 	var dec Config
@@ -284,6 +290,12 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.OverrideOsaka != nil {
 		c.OverrideOsaka = dec.OverrideOsaka
+	}
+	if dec.OverrideBPO1 != nil {
+		c.OverrideBPO1 = dec.OverrideBPO1
+	}
+	if dec.OverrideBPO2 != nil {
+		c.OverrideBPO2 = dec.OverrideBPO2
 	}
 	if dec.OverrideVerkle != nil {
 		c.OverrideVerkle = dec.OverrideVerkle

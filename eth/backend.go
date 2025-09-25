@@ -262,6 +262,12 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if config.OverrideOsaka != nil {
 		overrides.OverrideOsaka = config.OverrideOsaka
 	}
+	if config.OverrideBPO1 != nil {
+		overrides.OverrideBPO1 = config.OverrideBPO1
+	}
+	if config.OverrideBPO2 != nil {
+		overrides.OverrideBPO2 = config.OverrideBPO2
+	}
 	if config.OverrideVerkle != nil {
 		overrides.OverrideVerkle = config.OverrideVerkle
 	}
