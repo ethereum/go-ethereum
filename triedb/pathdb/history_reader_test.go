@@ -29,7 +29,7 @@ import (
 
 func waitIndexing(db *Database) {
 	for {
-		metadata := loadIndexMetadata(db.diskdb)
+		metadata := loadIndexMetadata(db.diskdb, typeStateHistory)
 		if metadata != nil && metadata.Last >= db.tree.bottom().stateID() {
 			return
 		}
@@ -144,8 +144,13 @@ func testHistoryReader(t *testing.T, historyLimit uint64) {
 		maxDiffLayers = 128
 	}()
 
-	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
-	env := newTester(t, historyLimit, false, 64, true, "")
+	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
+	config := &testerConfig{
+		stateHistory: historyLimit,
+		layers:       64,
+		enableIndex:  true,
+	}
+	env := newTester(t, config)
 	defer env.release()
 	waitIndexing(env.db)
 
@@ -184,7 +189,12 @@ func TestHistoricalStateReader(t *testing.T) {
 	}()
 
 	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
-	env := newTester(t, 0, false, 64, true, "")
+	config := &testerConfig{
+		stateHistory: 0,
+		layers:       64,
+		enableIndex:  true,
+	}
+	env := newTester(t, config)
 	defer env.release()
 	waitIndexing(env.db)
 

@@ -229,7 +229,7 @@ func (db *Database) loadDiffLayer(parent layer, r *rlp.Stream) (layer, error) {
 		return nil, fmt.Errorf("load block number: %v", err)
 	}
 	// Read in-memory trie nodes from journal
-	var nodes nodeSet
+	var nodes nodeSetWithOrigin
 	if err := nodes.decode(r); err != nil {
 		return nil, err
 	}
@@ -267,7 +267,7 @@ func (dl *diskLayer) journal(w io.Writer) error {
 	if err := dl.buffer.states.encode(w); err != nil {
 		return err
 	}
-	log.Debug("Journaled pathdb disk layer", "root", dl.root)
+	log.Debug("Journaled pathdb disk layer", "root", dl.root, "id", dl.id)
 	return nil
 }
 
@@ -333,7 +333,16 @@ func (db *Database) Journal(root common.Hash) error {
 	if db.readOnly {
 		return errDatabaseReadOnly
 	}
-
+	// Forcibly sync the ancient store before persisting the in-memory layers.
+	// This prevents an edge case where the in-memory layers are persisted
+	// but the ancient store is not properly closed, resulting in recent writes
+	// being lost. After a restart, the ancient store would then be misaligned
+	// with the disk layer, causing data corruption.
+	if db.stateFreezer != nil {
+		if err := db.stateFreezer.SyncAncient(); err != nil {
+			return err
+		}
+	}
 	// Store the journal into the database and return
 	var (
 		file        *os.File

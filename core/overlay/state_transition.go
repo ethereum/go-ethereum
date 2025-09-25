@@ -60,6 +60,7 @@ func (ts *TransitionState) Copy() *TransitionState {
 		CurrentSlotHash:       ts.CurrentSlotHash,
 		CurrentPreimageOffset: ts.CurrentPreimageOffset,
 		StorageProcessed:      ts.StorageProcessed,
+		BaseRoot:              ts.BaseRoot,
 	}
 	if ts.CurrentAccountAddress != nil {
 		addr := *ts.CurrentAccountAddress

@@ -99,9 +99,10 @@ func (ks *KeyStore) init(keydir string) {
 	// TODO: In order for this finalizer to work, there must be no references
 	// to ks. addressCache doesn't keep a reference but unlocked keys do,
 	// so the finalizer will not trigger until all timed unlocks have expired.
-	runtime.SetFinalizer(ks, func(m *KeyStore) {
-		m.cache.close()
-	})
+	runtime.AddCleanup(ks, func(c *accountCache) {
+		c.close()
+	}, ks.cache)
+
 	// Create the initial list of wallets from the cache
 	accs := ks.cache.accounts()
 	ks.wallets = make([]accounts.Wallet, len(accs))
@@ -195,11 +196,14 @@ func (ks *KeyStore) Subscribe(sink chan<- accounts.WalletEvent) event.Subscripti
 // forces a manual refresh (only triggers for systems where the filesystem notifier
 // is not running).
 func (ks *KeyStore) updater() {
+	ticker := time.NewTicker(walletRefreshCycle)
+	defer ticker.Stop()
+
 	for {
 		// Wait for an account update or a refresh timeout
 		select {
 		case <-ks.changes:
-		case <-time.After(walletRefreshCycle):
+		case <-ticker.C:
 		}
 		// Run the wallet refresher
 		ks.refreshWallets()

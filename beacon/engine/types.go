@@ -33,8 +33,22 @@ import (
 type PayloadVersion byte
 
 var (
+	// PayloadV1 is the identifier of ExecutionPayloadV1 introduced in paris fork.
+	// https://github.com/ethereum/execution-apis/blob/main/src/engine/paris.md#executionpayloadv1
 	PayloadV1 PayloadVersion = 0x1
+
+	// PayloadV2 is the identifier of ExecutionPayloadV2 introduced in shanghai fork.
+	//
+	// https://github.com/ethereum/execution-apis/blob/main/src/engine/shanghai.md#executionpayloadv2
+	// ExecutionPayloadV2 has the syntax of ExecutionPayloadV1 and appends a
+	// single field: withdrawals.
 	PayloadV2 PayloadVersion = 0x2
+
+	// PayloadV3 is the identifier of ExecutionPayloadV3 introduced in cancun fork.
+	//
+	// https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#executionpayloadv3
+	// ExecutionPayloadV3 has the syntax of ExecutionPayloadV2 and appends the new
+	// fields: blobGasUsed and excessBlobGas.
 	PayloadV3 PayloadVersion = 0x3
 )
 
@@ -106,13 +120,18 @@ type StatelessPayloadStatusV1 struct {
 type ExecutionPayloadEnvelope struct {
 	ExecutionPayload *ExecutableData `json:"executionPayload"  gencodec:"required"`
 	BlockValue       *big.Int        `json:"blockValue"  gencodec:"required"`
-	BlobsBundle      *BlobsBundleV1  `json:"blobsBundle"`
+	BlobsBundle      *BlobsBundle    `json:"blobsBundle"`
 	Requests         [][]byte        `json:"executionRequests"`
 	Override         bool            `json:"shouldOverrideBuilder"`
 	Witness          *hexutil.Bytes  `json:"witness,omitempty"`
 }
 
-type BlobsBundleV1 struct {
+// BlobsBundle includes the marshalled sidecar data. Note this structure is
+// shared by BlobsBundleV1 and BlobsBundleV2 for the sake of simplicity.
+//
+// - BlobsBundleV1: proofs contain exactly len(blobs) kzg proofs.
+// - BlobsBundleV2: proofs contain exactly CELLS_PER_EXT_BLOB * len(blobs) cell proofs.
+type BlobsBundle struct {
 	Commitments []hexutil.Bytes `json:"commitments"`
 	Proofs      []hexutil.Bytes `json:"proofs"`
 	Blobs       []hexutil.Bytes `json:"blobs"`
@@ -125,7 +144,7 @@ type BlobAndProofV1 struct {
 
 type BlobAndProofV2 struct {
 	Blob       hexutil.Bytes   `json:"blob"`
-	CellProofs []hexutil.Bytes `json:"proofs"`
+	CellProofs []hexutil.Bytes `json:"proofs"` // proofs MUST contain exactly CELLS_PER_EXT_BLOB cell proofs.
 }
 
 // JSON type overrides for ExecutionPayloadEnvelope.
@@ -327,18 +346,27 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 	}
 
 	// Add blobs.
-	bundle := BlobsBundleV1{
+	bundle := BlobsBundle{
 		Commitments: make([]hexutil.Bytes, 0),
 		Blobs:       make([]hexutil.Bytes, 0),
 		Proofs:      make([]hexutil.Bytes, 0),
 	}
 	for _, sidecar := range sidecars {
 		for j := range sidecar.Blobs {
-			bundle.Blobs = append(bundle.Blobs, hexutil.Bytes(sidecar.Blobs[j][:]))
-			bundle.Commitments = append(bundle.Commitments, hexutil.Bytes(sidecar.Commitments[j][:]))
+			bundle.Blobs = append(bundle.Blobs, sidecar.Blobs[j][:])
+			bundle.Commitments = append(bundle.Commitments, sidecar.Commitments[j][:])
 		}
+		// - Before the Osaka fork, only version-0 blob transactions should be packed,
+		//   with the proof length equal to len(blobs).
+		//
+		// - After the Osaka fork, only version-1 blob transactions should be packed,
+		//   with the proof length equal to CELLS_PER_EXT_BLOB * len(blobs).
+		//
+		// Ideally, length validation should be performed based on the bundle version.
+		// In practice, this is unnecessary because blob transaction filtering is
+		// already done during payload construction.
 		for _, proof := range sidecar.Proofs {
-			bundle.Proofs = append(bundle.Proofs, hexutil.Bytes(proof[:]))
+			bundle.Proofs = append(bundle.Proofs, proof[:])
 		}
 	}
 

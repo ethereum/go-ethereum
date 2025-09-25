@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 type testTracer struct {
@@ -53,6 +54,11 @@ func (t *testTracer) OnNonceChangeV2(addr common.Address, prev uint64, new uint6
 
 func (t *testTracer) OnCodeChange(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte) {
 	t.t.Logf("OnCodeChange(%v, %v -> %v)", addr, prevCodeHash, codeHash)
+	t.code = code
+}
+
+func (t *testTracer) OnCodeChangeV2(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte, reason CodeChangeReason) {
+	t.t.Logf("OnCodeChangeV2(%v, %v -> %v, %v)", addr, prevCodeHash, codeHash, reason)
 	t.code = code
 }
 
@@ -232,6 +238,27 @@ func TestOnNonceChangeV2(t *testing.T) {
 	}
 }
 
+func TestOnCodeChangeV2(t *testing.T) {
+	tr := &testTracer{t: t}
+	wr, err := WrapWithJournal(&Hooks{OnCodeChangeV2: tr.OnCodeChangeV2})
+	if err != nil {
+		t.Fatalf("failed to wrap test tracer: %v", err)
+	}
+
+	addr := common.HexToAddress("0x1234")
+	code := []byte{1, 2, 3}
+	{
+		wr.OnEnter(2, 0, addr, addr, nil, 1000, big.NewInt(0))
+		wr.OnCodeChangeV2(addr, common.Hash{}, nil, crypto.Keccak256Hash(code), code, CodeChangeContractCreation)
+		wr.OnExit(2, nil, 100, nil, true)
+	}
+
+	// After revert, code should be nil
+	if tr.code != nil {
+		t.Fatalf("unexpected code after revert: %v", tr.code)
+	}
+}
+
 func TestAllHooksCalled(t *testing.T) {
 	tracer := newTracerAllHooks()
 	hooks := tracer.hooks()
@@ -251,10 +278,6 @@ func TestAllHooksCalled(t *testing.T) {
 
 		// Skip fields that are not function types
 		if field.Type.Kind() != reflect.Func {
-			continue
-		}
-		// Skip non-hooks, i.e. Copy
-		if field.Name == "copy" {
 			continue
 		}
 		// Skip if field is not set
@@ -298,6 +321,7 @@ func newTracerAllHooks() *tracerAllHooks {
 		t.hooksCalled[hooksType.Field(i).Name] = false
 	}
 	delete(t.hooksCalled, "OnNonceChange")
+	delete(t.hooksCalled, "OnCodeChange")
 	return t
 }
 
@@ -322,7 +346,7 @@ func (t *tracerAllHooks) hooks() *Hooks {
 	hooksValue := reflect.ValueOf(h).Elem()
 	for i := 0; i < hooksValue.NumField(); i++ {
 		field := hooksValue.Type().Field(i)
-		if field.Name == "OnNonceChange" {
+		if field.Name == "OnNonceChange" || field.Name == "OnCodeChange" {
 			continue
 		}
 		hookMethod := reflect.MakeFunc(field.Type, func(args []reflect.Value) []reflect.Value {

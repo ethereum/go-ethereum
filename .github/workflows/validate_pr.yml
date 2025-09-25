@@ -13,7 +13,7 @@ jobs:
         with:
           script: |
             const prTitle = context.payload.pull_request.title;
-            const titleRegex = /^(\.?[\w\s,{}/]+): .+/;
+            const titleRegex = /^([\w\s,{}/.]+): .+/;
             
             if (!titleRegex.test(prTitle)) {
               core.setFailed(`PR title "${prTitle}" does not match required format: directory, ...: description`);

@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"math/big"
 	"runtime"
 	"slices"
@@ -168,10 +167,13 @@ type BlockChainConfig struct {
 	TrieNoAsyncFlush     bool          // Whether the asynchronous buffer flushing is disallowed
 	TrieJournalDirectory string        // Directory path to the journal used for persisting trie data across node restarts
 
-	Preimages    bool   // Whether to store preimage of trie key to the disk
-	StateHistory uint64 // Number of blocks from head whose state histories are reserved.
-	StateScheme  string // Scheme used to store ethereum states and merkle tree nodes on top
-	ArchiveMode  bool   // Whether to enable the archive mode
+	Preimages   bool   // Whether to store preimage of trie key to the disk
+	StateScheme string // Scheme used to store ethereum states and merkle tree nodes on top
+	ArchiveMode bool   // Whether to enable the archive mode
+
+	// Number of blocks from the chain head for which state histories are retained.
+	// If set to 0, all state histories across the entire chain will be retained;
+	StateHistory uint64
 
 	// State snapshot related options
 	SnapshotLimit   int  // Memory allowance (MB) to use for caching snapshot entries in memory
@@ -193,6 +195,9 @@ type BlockChainConfig struct {
 	// If the value is zero, all transactions of the entire chain will be indexed.
 	// If the value is -1, indexing is disabled.
 	TxLookupLimit int64
+
+	// StateSizeTracking indicates whether the state size tracking is enabled.
+	StateSizeTracking bool
 }
 
 // DefaultConfig returns the default config.
@@ -330,6 +335,7 @@ type BlockChain struct {
 	prefetcher Prefetcher
 	processor  Processor // Block transaction processor interface
 	logger     *tracing.Hooks
+	stateSizer *state.SizeTracker // State size tracking
 
 	lastForkReadyAlert time.Time // Last time there was a fork readiness print out
 }
@@ -522,6 +528,17 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	// Start tx indexer if it's enabled.
 	if bc.cfg.TxLookupLimit >= 0 {
 		bc.txIndexer = newTxIndexer(uint64(bc.cfg.TxLookupLimit), bc)
+	}
+
+	// Start state size tracker
+	if bc.cfg.StateSizeTracking {
+		stateSizer, err := state.NewSizeTracker(bc.db, bc.triedb)
+		if err == nil {
+			bc.stateSizer = stateSizer
+			log.Info("Enabled state size metrics")
+		} else {
+			log.Info("Failed to setup size tracker", "err", err)
+		}
 	}
 	return bc, nil
 }
@@ -1249,6 +1266,10 @@ func (bc *BlockChain) stopWithoutSaving() {
 	// Signal shutdown to all goroutines.
 	bc.InterruptInsert(true)
 
+	// Stop state size tracker
+	if bc.stateSizer != nil {
+		bc.stateSizer.Stop()
+	}
 	// Now wait for all chain modifications to end and persistent goroutines to exit.
 	//
 	// Note: Close waits for the mutex to become available, i.e. any running chain
@@ -1583,9 +1604,13 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		log.Crit("Failed to write block into disk", "err", err)
 	}
 	// Commit all cached state changes into underlying memory database.
-	root, err := statedb.Commit(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()), bc.chainConfig.IsCancun(block.Number(), block.Time()))
+	root, stateUpdate, err := statedb.CommitWithUpdate(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()), bc.chainConfig.IsCancun(block.Number(), block.Time()))
 	if err != nil {
 		return err
+	}
+	// Emit the state update to the state sizestats if it's active
+	if bc.stateSizer != nil {
+		bc.stateSizer.Notify(stateUpdate)
 	}
 	// If node is running in path mode, skip explicit gc operation
 	// which is unnecessary in this mode.
@@ -1881,7 +1906,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		}
 		// The traced section of block import.
 		start := time.Now()
-		res, err := bc.processBlock(parent.Root, block, setHead, makeWitness && len(chain) == 1)
+		res, err := bc.ProcessBlock(parent.Root, block, setHead, makeWitness && len(chain) == 1)
 		if err != nil {
 			return nil, it.index, err
 		}
@@ -1947,9 +1972,13 @@ type blockProcessingResult struct {
 	witness  *stateless.Witness
 }
 
-// processBlock executes and validates the given block. If there was no error
+func (bpr *blockProcessingResult) Witness() *stateless.Witness {
+	return bpr.witness
+}
+
+// ProcessBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
-func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, setHead bool, makeWitness bool) (_ *blockProcessingResult, blockEndErr error) {
+func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, setHead bool, makeWitness bool) (_ *blockProcessingResult, blockEndErr error) {
 	var (
 		err       error
 		startTime = time.Now()
@@ -2127,7 +2156,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	}
 	// Report the collected witness statistics
 	if witnessStats != nil {
-		witnessStats.ReportMetrics()
+		witnessStats.ReportMetrics(block.NumberU64())
 	}
 
 	// Update the metrics touched during block commit
@@ -2633,13 +2662,11 @@ func (bc *BlockChain) reportBlock(block *types.Block, res *ProcessResult, err er
 // logForkReadiness will write a log when a future fork is scheduled, but not
 // active. This is useful so operators know their client is ready for the fork.
 func (bc *BlockChain) logForkReadiness(block *types.Block) {
-	config := bc.Config()
-	current, last := config.LatestFork(block.Time()), config.LatestFork(math.MaxUint64)
+	current := bc.Config().LatestFork(block.Time())
 
-	// Short circuit if the timestamp of the last fork is undefined,
-	// or if the network has already passed the last configured fork.
-	t := config.Timestamp(last)
-	if t == nil || current >= last {
+	// Short circuit if the timestamp of the last fork is undefined.
+	t := bc.Config().Timestamp(current + 1)
+	if t == nil {
 		return
 	}
 	at := time.Unix(int64(*t), 0)
@@ -2649,7 +2676,7 @@ func (bc *BlockChain) logForkReadiness(block *types.Block) {
 	// - Enough time has passed since last alert
 	now := time.Now()
 	if now.Before(at) && now.After(bc.lastForkReadyAlert.Add(forkReadyInterval)) {
-		log.Info("Ready for fork activation", "fork", last, "date", at.Format(time.RFC822),
+		log.Info("Ready for fork activation", "fork", current+1, "date", at.Format(time.RFC822),
 			"remaining", time.Until(at).Round(time.Second), "timestamp", at.Unix())
 		bc.lastForkReadyAlert = time.Now()
 	}
@@ -2787,4 +2814,9 @@ func (bc *BlockChain) SetTrieFlushInterval(interval time.Duration) {
 // GetTrieFlushInterval gets the in-memory tries flushAlloc interval
 func (bc *BlockChain) GetTrieFlushInterval() time.Duration {
 	return time.Duration(bc.flushInterval.Load())
+}
+
+// StateSizer returns the state size tracker, or nil if it's not initialized
+func (bc *BlockChain) StateSizer() *state.SizeTracker {
+	return bc.stateSizer
 }

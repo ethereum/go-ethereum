@@ -31,35 +31,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-verkle"
-)
-
-const (
-	// defaultTrieCleanSize is the default memory allowance of clean trie cache.
-	defaultTrieCleanSize = 16 * 1024 * 1024
-
-	// defaultStateCleanSize is the default memory allowance of clean state cache.
-	defaultStateCleanSize = 16 * 1024 * 1024
-
-	// maxBufferSize is the maximum memory allowance of node buffer.
-	// Too large buffer will cause the system to pause for a long
-	// time when write happens. Also, the largest batch that pebble can
-	// support is 4GB, node will panic if batch size exceeds this limit.
-	maxBufferSize = 256 * 1024 * 1024
-
-	// defaultBufferSize is the default memory allowance of node buffer
-	// that aggregates the writes from above until it's flushed into the
-	// disk. It's meant to be used once the initial sync is finished.
-	// Do not increase the buffer size arbitrarily, otherwise the system
-	// pause time will increase when the database writes happen.
-	defaultBufferSize = 64 * 1024 * 1024
-)
-
-var (
-	// maxDiffLayers is the maximum diff layers allowed in the layer tree.
-	maxDiffLayers = 128
 )
 
 // layer is the interface implemented by all state layers which includes some
@@ -105,75 +78,13 @@ type layer interface {
 	// the provided dirty trie nodes along with the state change set.
 	//
 	// Note, the maps are retained by the method to avoid copying everything.
-	update(root common.Hash, id uint64, block uint64, nodes *nodeSet, states *StateSetWithOrigin) *diffLayer
+	update(root common.Hash, id uint64, block uint64, nodes *nodeSetWithOrigin, states *StateSetWithOrigin) *diffLayer
 
 	// journal commits an entire diff hierarchy to disk into a single journal entry.
 	// This is meant to be used during shutdown to persist the layer without
 	// flattening everything down (bad for reorgs).
 	journal(w io.Writer) error
 }
-
-// Config contains the settings for database.
-type Config struct {
-	StateHistory        uint64 // Number of recent blocks to maintain state history for
-	EnableStateIndexing bool   // Whether to enable state history indexing for external state access
-	TrieCleanSize       int    // Maximum memory allowance (in bytes) for caching clean trie nodes
-	StateCleanSize      int    // Maximum memory allowance (in bytes) for caching clean state data
-	WriteBufferSize     int    // Maximum memory allowance (in bytes) for write buffer
-	ReadOnly            bool   // Flag whether the database is opened in read only mode
-	JournalDirectory    string // Absolute path of journal directory (null means the journal data is persisted in key-value store)
-
-	// Testing configurations
-	SnapshotNoBuild   bool // Flag Whether the state generation is allowed
-	NoAsyncFlush      bool // Flag whether the background buffer flushing is allowed
-	NoAsyncGeneration bool // Flag whether the background generation is allowed
-}
-
-// sanitize checks the provided user configurations and changes anything that's
-// unreasonable or unworkable.
-func (c *Config) sanitize() *Config {
-	conf := *c
-	if conf.WriteBufferSize > maxBufferSize {
-		log.Warn("Sanitizing invalid node buffer size", "provided", common.StorageSize(conf.WriteBufferSize), "updated", common.StorageSize(maxBufferSize))
-		conf.WriteBufferSize = maxBufferSize
-	}
-	return &conf
-}
-
-// fields returns a list of attributes of config for printing.
-func (c *Config) fields() []interface{} {
-	var list []interface{}
-	if c.ReadOnly {
-		list = append(list, "readonly", true)
-	}
-	if c.SnapshotNoBuild {
-		list = append(list, "snapshot", false)
-	}
-	list = append(list, "triecache", common.StorageSize(c.TrieCleanSize))
-	list = append(list, "statecache", common.StorageSize(c.StateCleanSize))
-	list = append(list, "buffer", common.StorageSize(c.WriteBufferSize))
-
-	if c.StateHistory == 0 {
-		list = append(list, "history", "entire chain")
-	} else {
-		list = append(list, "history", fmt.Sprintf("last %d blocks", c.StateHistory))
-	}
-	if c.JournalDirectory != "" {
-		list = append(list, "journal-dir", c.JournalDirectory)
-	}
-	return list
-}
-
-// Defaults contains default settings for Ethereum mainnet.
-var Defaults = &Config{
-	StateHistory:    params.FullImmutabilityThreshold,
-	TrieCleanSize:   defaultTrieCleanSize,
-	StateCleanSize:  defaultStateCleanSize,
-	WriteBufferSize: defaultBufferSize,
-}
-
-// ReadOnly is the config in order to open database in read only mode.
-var ReadOnly = &Config{ReadOnly: true}
 
 // nodeHasher is the function to compute the hash of supplied node blob.
 type nodeHasher func([]byte) (common.Hash, error)
@@ -278,7 +189,7 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 	}
 	// TODO (rjl493456442) disable the background indexing in read-only mode
 	if db.stateFreezer != nil && db.config.EnableStateIndexing {
-		db.stateIndexer = newHistoryIndexer(db.diskdb, db.stateFreezer, db.tree.bottom().stateID())
+		db.stateIndexer = newHistoryIndexer(db.diskdb, db.stateFreezer, db.tree.bottom().stateID(), typeStateHistory)
 		log.Info("Enabled state history indexing")
 	}
 	fields := config.fields()
@@ -334,7 +245,7 @@ func (db *Database) repairHistory() error {
 	}
 	// Truncate the extra state histories above in freezer in case it's not
 	// aligned with the disk layer. It might happen after a unclean shutdown.
-	pruned, err := truncateFromHead(db.stateFreezer, id)
+	pruned, err := truncateFromHead(db.stateFreezer, typeStateHistory, id)
 	if err != nil {
 		log.Crit("Failed to truncate extra state histories", "err", err)
 	}
@@ -422,7 +333,8 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 	if err := db.modifyAllowed(); err != nil {
 		return err
 	}
-	if err := db.tree.add(root, parentRoot, block, nodes, states); err != nil {
+	// TODO(rjl493456442) tracking the origins in the following PRs.
+	if err := db.tree.add(root, parentRoot, block, NewNodeSetWithOrigin(nodes.Nodes(), nil), states); err != nil {
 		return err
 	}
 	// Keep 128 diff layers in the memory, persistent layer is 129th.
@@ -536,7 +448,7 @@ func (db *Database) Enable(root common.Hash) error {
 	//   2. Re-initialize the indexer so it starts indexing from the new state root.
 	if db.stateIndexer != nil && db.stateFreezer != nil && db.config.EnableStateIndexing {
 		db.stateIndexer.close()
-		db.stateIndexer = newHistoryIndexer(db.diskdb, db.stateFreezer, db.tree.bottom().stateID())
+		db.stateIndexer = newHistoryIndexer(db.diskdb, db.stateFreezer, db.tree.bottom().stateID(), typeStateHistory)
 		log.Info("Re-enabled state history indexing")
 	}
 	log.Info("Rebuilt trie database", "root", root)
@@ -590,7 +502,7 @@ func (db *Database) Recover(root common.Hash) error {
 	if err := db.diskdb.SyncKeyValue(); err != nil {
 		return err
 	}
-	_, err := truncateFromHead(db.stateFreezer, dl.stateID())
+	_, err := truncateFromHead(db.stateFreezer, typeStateHistory, dl.stateID())
 	if err != nil {
 		return err
 	}
@@ -768,4 +680,15 @@ func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek 
 		return nil, errNotConstructed
 	}
 	return newFastStorageIterator(db, root, account, seek)
+}
+
+// SnapshotCompleted returns the flag indicating if the snapshot generation is completed.
+func (db *Database) SnapshotCompleted() bool {
+	db.lock.RLock()
+	wait := db.waitSync
+	db.lock.RUnlock()
+	if wait {
+		return false
+	}
+	return db.tree.bottom().genComplete()
 }

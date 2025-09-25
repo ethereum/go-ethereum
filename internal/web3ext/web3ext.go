@@ -468,6 +468,12 @@ web3._extend({
 			call: 'debug_sync',
 			params: 1
 		}),
+		new web3._extend.Method({
+			name: 'stateSize',
+			call: 'debug_stateSize',
+			params: 1,
+			inputFormatter: [null],
+		}),
 	],
 	properties: []
 });

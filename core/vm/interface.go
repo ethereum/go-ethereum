@@ -43,7 +43,7 @@ type StateDB interface {
 	GetCode(common.Address) []byte
 
 	// SetCode sets the new code for the address, and returns the previous code, if any.
-	SetCode(common.Address, []byte) []byte
+	SetCode(common.Address, []byte, tracing.CodeChangeReason) []byte
 	GetCodeSize(common.Address) int
 
 	AddRefund(uint64)

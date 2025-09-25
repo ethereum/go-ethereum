@@ -64,6 +64,11 @@ import (
 )
 
 var (
+	goModules = []string{
+		".",
+		"./cmd/keeper",
+	}
+
 	// Files that end up in the geth*.zip archive.
 	gethArchiveFiles = []string{
 		"COPYING",
@@ -216,7 +221,7 @@ func doInstall(cmdline []string) {
 	// Default: collect all 'main' packages in cmd/ and build those.
 	packages := flag.Args()
 	if len(packages) == 0 {
-		packages = build.FindMainPackages("./cmd")
+		packages = build.FindMainPackages(&tc, "./cmd/...")
 	}
 
 	// Do the build!
@@ -295,6 +300,7 @@ func doTest(cmdline []string) {
 	if *dlgo {
 		tc.Root = build.DownloadGo(csdb)
 	}
+
 	gotest := tc.Go("test")
 
 	// CI needs a bit more time for the statetests (default 45m).
@@ -322,18 +328,26 @@ func doTest(cmdline []string) {
 		gotest.Args = append(gotest.Args, "-short")
 	}
 
-	packages := []string{"./..."}
-	if len(flag.CommandLine.Args()) > 0 {
-		packages = flag.CommandLine.Args()
+	packages := flag.CommandLine.Args()
+	if len(packages) > 0 {
+		gotest.Args = append(gotest.Args, packages...)
+		build.MustRun(gotest)
+		return
 	}
-	gotest.Args = append(gotest.Args, packages...)
-	build.MustRun(gotest)
+
+	// No packages specified, run all tests for all modules.
+	gotest.Args = append(gotest.Args, "./...")
+	for _, mod := range goModules {
+		test := *gotest
+		test.Dir = mod
+		build.MustRun(&test)
+	}
 }
 
 // downloadSpecTestFixtures downloads and extracts the execution-spec-tests fixtures.
 func downloadSpecTestFixtures(csdb *download.ChecksumDB, cachedir string) string {
 	ext := ".tar.gz"
-	base := "fixtures_fusaka-devnet-3"
+	base := "fixtures_develop"
 	archivePath := filepath.Join(cachedir, base+ext)
 	if err := csdb.DownloadFileFromKnownURL(archivePath); err != nil {
 		log.Fatal(err)
@@ -351,40 +365,46 @@ func doCheckGenerate() {
 		cachedir = flag.String("cachedir", "./build/cache", "directory for caching binaries.")
 		tc       = new(build.GoToolchain)
 	)
-	// Compute the origin hashes of all the files
-	var hashes map[string][32]byte
 
-	var err error
-	hashes, err = build.HashFolder(".", []string{"tests/testdata", "build/cache", ".git"})
-	if err != nil {
-		log.Fatal("Error computing hashes", "err", err)
-	}
 	// Run any go generate steps we might be missing
 	var (
 		protocPath      = downloadProtoc(*cachedir)
 		protocGenGoPath = downloadProtocGenGo(*cachedir)
 	)
-	c := tc.Go("generate", "./...")
 	pathList := []string{filepath.Join(protocPath, "bin"), protocGenGoPath, os.Getenv("PATH")}
-	c.Env = append(c.Env, "PATH="+strings.Join(pathList, string(os.PathListSeparator)))
-	build.MustRun(c)
 
-	// Check if generate file hashes have changed
-	generated, err := build.HashFolder(".", []string{"tests/testdata", "build/cache", ".git"})
-	if err != nil {
-		log.Fatalf("Error re-computing hashes: %v", err)
-	}
-	updates := build.DiffHashes(hashes, generated)
-	for _, file := range updates {
-		log.Printf("File changed: %s", file)
-	}
-	if len(updates) != 0 {
-		log.Fatal("One or more generated files were updated by running 'go generate ./...'")
+	for _, mod := range goModules {
+		// Compute the origin hashes of all the files
+		hashes, err := build.HashFolder(mod, []string{"tests/testdata", "build/cache", ".git"})
+		if err != nil {
+			log.Fatal("Error computing hashes", "err", err)
+		}
+
+		c := tc.Go("generate", "./...")
+		c.Env = append(c.Env, "PATH="+strings.Join(pathList, string(os.PathListSeparator)))
+		c.Dir = mod
+		build.MustRun(c)
+		// Check if generate file hashes have changed
+		generated, err := build.HashFolder(mod, []string{"tests/testdata", "build/cache", ".git"})
+		if err != nil {
+			log.Fatalf("Error re-computing hashes: %v", err)
+		}
+		updates := build.DiffHashes(hashes, generated)
+		for _, file := range updates {
+			log.Printf("File changed: %s", file)
+		}
+		if len(updates) != 0 {
+			log.Fatal("One or more generated files were updated by running 'go generate ./...'")
+		}
 	}
 	fmt.Println("No stale files detected.")
 
 	// Run go mod tidy check.
-	build.MustRun(tc.Go("mod", "tidy", "-diff"))
+	for _, mod := range goModules {
+		tidy := tc.Go("mod", "tidy", "-diff")
+		tidy.Dir = mod
+		build.MustRun(tidy)
+	}
 	fmt.Println("No untidy module files detected.")
 }
 
@@ -424,14 +444,30 @@ func doLint(cmdline []string) {
 		cachedir = flag.String("cachedir", "./build/cache", "directory for caching golangci-lint binary.")
 	)
 	flag.CommandLine.Parse(cmdline)
-	packages := []string{"./..."}
-	if len(flag.CommandLine.Args()) > 0 {
-		packages = flag.CommandLine.Args()
-	}
 
 	linter := downloadLinter(*cachedir)
-	lflags := []string{"run", "--config", ".golangci.yml"}
-	build.MustRunCommandWithOutput(linter, append(lflags, packages...)...)
+	linter, err := filepath.Abs(linter)
+	if err != nil {
+		log.Fatal(err)
+	}
+	config, err := filepath.Abs(".golangci.yml")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	lflags := []string{"run", "--config", config}
+	packages := flag.CommandLine.Args()
+	if len(packages) > 0 {
+		build.MustRunCommandWithOutput(linter, append(lflags, packages...)...)
+	} else {
+		// Run for all modules in workspace.
+		for _, mod := range goModules {
+			args := append(lflags, "./...")
+			lintcmd := exec.Command(linter, args...)
+			lintcmd.Dir = mod
+			build.MustRunWithOutput(lintcmd)
+		}
+	}
 	fmt.Println("You have achieved perfection.")
 }
 

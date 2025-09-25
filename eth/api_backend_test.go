@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"errors"
+	"math"
 	"math/big"
 	"testing"
 	"time"
@@ -128,6 +129,27 @@ func pricedSetCodeTxWithAuth(nonce uint64, gaslimit uint64, gasFee, tip *uint256
 func TestSendTx(t *testing.T) {
 	testSendTx(t, false)
 	testSendTx(t, true)
+}
+
+func TestSendTxEIP2681(t *testing.T) {
+	b := initBackend(false)
+
+	// Test EIP-2681: nonce overflow should be rejected
+	tx := makeTx(uint64(math.MaxUint64), nil, nil, key) // max uint64 nonce
+	err := b.SendTx(context.Background(), tx)
+	if err == nil {
+		t.Fatal("Expected EIP-2681 nonce overflow error, but transaction was accepted")
+	}
+	if !errors.Is(err, core.ErrNonceMax) {
+		t.Errorf("Expected core.ErrNonceMax, got: %v", err)
+	}
+
+	// Test normal case: should succeed
+	normalTx := makeTx(0, nil, nil, key)
+	err = b.SendTx(context.Background(), normalTx)
+	if err != nil {
+		t.Errorf("Normal transaction should succeed, got error: %v", err)
+	}
 }
 
 func testSendTx(t *testing.T, withLocal bool) {
