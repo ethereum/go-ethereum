@@ -59,6 +59,8 @@ var (
 		Flags: slices.Concat([]cli.Flag{
 			utils.CachePreimagesFlag,
 			utils.OverrideOsaka,
+			utils.OverrideBPO1,
+			utils.OverrideBPO2,
 			utils.OverrideVerkle,
 		}, utils.DatabaseFlags),
 		Description: `
