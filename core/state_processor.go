@@ -31,8 +31,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// ChainReader defines methods needed to access the local blockchain during
-// state processing.
+// ChainReader defines methods needed to access the local blockchain data
+// during state processing.
 type ChainReader interface {
 	consensus.ChainHeaderReader
 	ChainContext
