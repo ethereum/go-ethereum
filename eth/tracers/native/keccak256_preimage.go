@@ -31,18 +31,19 @@ import (
 )
 
 func init() {
-	tracers.DefaultDirectory.Register("keccak256PreimageTracer", newKeccak256preimageTracer, false)
+	tracers.DefaultDirectory.Register("keccak256PreimageTracer", newKeccak256PreimageTracer, false)
 }
 
-// keccak256preimageTracer is a native tracer that will collect preimages of all keccak256 calls.
-// It is mostly useful paired with the prestate tracer, enabling users to decypher the access to mappings and arrays.
-type keccak256preimageTracer struct {
+// keccak256PreimageTracer is a native tracer that collects preimages of all KECCAK256 operations.
+// This tracer is particularly useful for analyzing smart contract execution patterns,
+// especially when debugging storage access in Solidity mappings and dynamic arrays.
+type keccak256PreimageTracer struct {
 	computedHashes map[common.Hash]hexutil.Bytes
 }
 
-// newKeccak256preimageTracer returns a new keccak256preimage tracer.
-func newKeccak256preimageTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*tracers.Tracer, error) {
-	t := &keccak256preimageTracer{
+// newKeccak256PreimageTracer returns a new keccak256PreimageTracer instance.
+func newKeccak256PreimageTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*tracers.Tracer, error) {
+	t := &keccak256PreimageTracer{
 		computedHashes: make(map[common.Hash]hexutil.Bytes),
 	}
 	return &tracers.Tracer{
@@ -53,7 +54,7 @@ func newKeccak256preimageTracer(ctx *tracers.Context, cfg json.RawMessage, chain
 	}, nil
 }
 
-func (t *keccak256preimageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *keccak256PreimageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	if op == byte(vm.KECCAK256) {
 		sd := scope.StackData()
 		// it turns out that sometimes the stack is empty, evm will fail in this case, but we should not panic here
@@ -61,11 +62,11 @@ func (t *keccak256preimageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64,
 			return
 		}
 
-		dataOffset := peepStack(sd, 0).Uint64()
-		dataLength := peepStack(sd, 1).Uint64()
+		dataOffset := internal.StackBack(sd, 0).Uint64()
+		dataLength := internal.StackBack(sd, 1).Uint64()
 		preimage, err := internal.GetMemoryCopyPadded(scope.MemoryData(), int64(dataOffset), int64(dataLength))
 		if err != nil {
-			log.Warn("erc7562Tracer: failed to copy keccak preimage from memory", "err", err)
+			log.Warn("keccak256PreimageTracer: failed to copy keccak preimage from memory", "err", err)
 			return
 		}
 
@@ -75,8 +76,8 @@ func (t *keccak256preimageTracer) OnOpcode(pc uint64, op byte, gas, cost uint64,
 	}
 }
 
-// GetResult returns an empty json object.
-func (t *keccak256preimageTracer) GetResult() (json.RawMessage, error) {
+// GetResult returns the collected keccak256 preimages as a JSON object mapping hashes to preimages.
+func (t *keccak256PreimageTracer) GetResult() (json.RawMessage, error) {
 	msg, err := json.Marshal(t.computedHashes)
 	if err != nil {
 		return nil, err
