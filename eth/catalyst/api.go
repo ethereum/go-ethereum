@@ -413,10 +413,6 @@ func (api *ConsensusAPI) GetPayloadV1(payloadID engine.PayloadID) (*engine.Execu
 	if err != nil {
 		return nil, err
 	}
-	// Check if the payload timestamp is greater or equal to Shanghai activation timestamp
-	if data.ExecutionPayload != nil && api.config().LatestFork(data.ExecutionPayload.Timestamp) >= forks.Shanghai {
-		return nil, engine.UnsupportedFork.With(errors.New("engine_getPayloadV1 is not available after Shanghai fork"))
-	}
 	return data.ExecutionPayload, nil
 }
 
@@ -436,9 +432,9 @@ func (api *ConsensusAPI) GetPayloadV2(payloadID engine.PayloadID) (*engine.Execu
 	if err != nil {
 		return nil, err
 	}
-	// Check if the payload timestamp is greater or equal to Cancun activation timestamp
-	if data.ExecutionPayload != nil && api.config().LatestFork(data.ExecutionPayload.Timestamp) >= forks.Cancun {
-		return nil, engine.UnsupportedFork.With(errors.New("engine_getPayloadV2 is not available after Cancun fork"))
+	// Check if the payload timestamp falls within the Shanghai fork timeframe
+	if data.ExecutionPayload != nil && !api.checkFork(data.ExecutionPayload.Timestamp, forks.Shanghai) {
+		return nil, engine.UnsupportedFork
 	}
 	return data, nil
 }
@@ -453,9 +449,9 @@ func (api *ConsensusAPI) GetPayloadV3(payloadID engine.PayloadID) (*engine.Execu
 	if err != nil {
 		return nil, err
 	}
-	// Check if the payload timestamp is greater or equal to Prague activation timestamp
-	if data.ExecutionPayload != nil && api.config().LatestFork(data.ExecutionPayload.Timestamp) >= forks.Prague {
-		return nil, engine.UnsupportedFork.With(errors.New("engine_getPayloadV3 is not available after Prague fork"))
+	// Check if the payload timestamp falls within the Cancun fork timeframe
+	if data.ExecutionPayload != nil && !api.checkFork(data.ExecutionPayload.Timestamp, forks.Cancun) {
+		return nil, engine.UnsupportedFork
 	}
 	return data, nil
 }
@@ -470,9 +466,9 @@ func (api *ConsensusAPI) GetPayloadV4(payloadID engine.PayloadID) (*engine.Execu
 	if err != nil {
 		return nil, err
 	}
-	// Check if the payload timestamp is greater or equal to Osaka activation timestamp
-	if data.ExecutionPayload != nil && api.config().LatestFork(data.ExecutionPayload.Timestamp) >= forks.Osaka {
-		return nil, engine.UnsupportedFork.With(errors.New("engine_getPayloadV4 is not available after Osaka fork"))
+	// Check if the payload timestamp falls within the Prague fork timeframe
+	if data.ExecutionPayload != nil && !api.checkFork(data.ExecutionPayload.Timestamp, forks.Prague) {
+		return nil, engine.UnsupportedFork
 	}
 	return data, nil
 }
@@ -490,9 +486,9 @@ func (api *ConsensusAPI) GetPayloadV5(payloadID engine.PayloadID) (*engine.Execu
 	if err != nil {
 		return nil, err
 	}
-	// Check if the payload timestamp falls within the time frame of the Osaka fork
+	// Check if the payload timestamp falls within the time frame of the Osaka fork or later
 	if data.ExecutionPayload != nil && api.config().LatestFork(data.ExecutionPayload.Timestamp) < forks.Osaka {
-		return nil, engine.UnsupportedFork.With(errors.New("engine_getPayloadV5 is not available before Osaka fork"))
+		return nil, engine.UnsupportedFork
 	}
 	return data, nil
 }
