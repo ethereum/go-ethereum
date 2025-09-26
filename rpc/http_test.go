@@ -111,7 +111,6 @@ func confirmHTTPRequestYieldsStatusCode(t *testing.T, method, contentType, body 
 }
 
 func TestHTTPResponseWithEmptyGet(t *testing.T) {
-	t.Parallel()
 
 	confirmHTTPRequestYieldsStatusCode(t, http.MethodGet, "", "", http.StatusOK)
 }
