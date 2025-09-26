@@ -551,9 +551,12 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 		if hasTerm(key) {
 			key = key[:len(key)-1]
 		}
+		path := make([]byte, len(req.path)+len(key))
+		copy(path, req.path)
+		copy(path[len(req.path):], key)
 		children = []childNode{{
 			node: node.Val,
-			path: append(append([]byte(nil), req.path...), key...),
+			path: path,
 		}}
 		// Mark all internal nodes between shortNode and its **in disk**
 		// child as invalid. This is essential in the case of path mode
@@ -593,9 +596,12 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 	case *fullNode:
 		for i := 0; i < 17; i++ {
 			if node.Children[i] != nil {
+				path := make([]byte, len(req.path)+1)
+				copy(path, req.path)
+				path[len(req.path)] = byte(i)
 				children = append(children, childNode{
 					node: node.Children[i],
-					path: append(append([]byte(nil), req.path...), byte(i)),
+					path: path,
 				})
 			}
 		}
