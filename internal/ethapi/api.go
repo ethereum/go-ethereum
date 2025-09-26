@@ -449,12 +449,12 @@ func decodeHash(s string) (h common.Hash, inputLength int, err error) {
 	if (len(s) & 1) > 0 {
 		s = "0" + s
 	}
+	if len(s) > 64 {
+		return common.Hash{}, len(s) / 2, errors.New("hex string too long, want at most 32 bytes")
+	}
 	b, err := hex.DecodeString(s)
 	if err != nil {
 		return common.Hash{}, 0, errors.New("hex string invalid")
-	}
-	if len(b) > 32 {
-		return common.Hash{}, len(b), errors.New("hex string too long, want at most 32 bytes")
 	}
 	return common.BytesToHash(b), len(b), nil
 }
