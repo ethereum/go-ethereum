@@ -273,7 +273,8 @@ func DecryptDataV3(cryptoJson CryptoJSON, auth string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return plainText, err
+	// Return plainText with nil error since decryption was successful
+	return plainText, nil
 }
 
 func decryptKeyV3(keyProtected *encryptedKeyJSONV3, auth string) (keyBytes []byte, keyId []byte, err error) {
