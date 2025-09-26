@@ -460,10 +460,10 @@ func decodeHash(s string) (h common.Hash, inputLength int, err error) {
 }
 
 // GetHeaderByNumber returns the requested canonical block header.
-//   - When blockNr is -1 the chain pending header is returned.
-//   - When blockNr is -2 the chain latest header is returned.
-//   - When blockNr is -3 the chain finalized header is returned.
-//   - When blockNr is -4 the chain safe header is returned.
+//   - When number is -1 the chain pending header is returned.
+//   - When number is -2 the chain latest header is returned.
+//   - When number is -3 the chain finalized header is returned.
+//   - When number is -4 the chain safe header is returned.
 func (api *BlockChainAPI) GetHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (map[string]interface{}, error) {
 	header, err := api.b.HeaderByNumber(ctx, number)
 	if header != nil && err == nil {
@@ -489,10 +489,10 @@ func (api *BlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.Hash)
 }
 
 // GetBlockByNumber returns the requested canonical block.
-//   - When blockNr is -1 the chain pending block is returned.
-//   - When blockNr is -2 the chain latest block is returned.
-//   - When blockNr is -3 the chain finalized block is returned.
-//   - When blockNr is -4 the chain safe block is returned.
+//   - When number is -1 the chain pending block is returned.
+//   - When number is -2 the chain latest block is returned.
+//   - When number is -3 the chain finalized block is returned.
+//   - When number is -4 the chain safe block is returned.
 //   - When fullTx is true all transactions in the block are returned, otherwise
 //     only the transaction hash is returned.
 func (api *BlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
