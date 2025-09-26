@@ -598,9 +598,9 @@ func (c *ChainConfig) Description() string {
 
 // BlobConfig specifies the target and max blobs per block for the associated fork.
 type BlobConfig struct {
+	UpdateFraction uint64 `json:"baseFeeUpdateFraction"`
 	Target         int    `json:"target"`
 	Max            int    `json:"max"`
-	UpdateFraction uint64 `json:"baseFeeUpdateFraction"`
 }
 
 // BlobScheduleConfig determines target and max number of blobs allow per fork.

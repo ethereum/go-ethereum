@@ -146,7 +146,7 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 		jumpDests:   newMapJumpDests(),
 		hasher:      crypto.NewKeccakState(),
 	}
-	evm.precompiles = activePrecompiledContracts(evm.chainRules)
+	evm.precompiles = ActivePrecompiledContracts(evm.chainRules)
 
 	switch {
 	case evm.chainRules.IsOsaka:
