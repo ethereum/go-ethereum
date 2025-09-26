@@ -446,11 +446,11 @@ func decodeHash(s string) (h common.Hash, inputLength int, err error) {
 	if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
 		s = s[2:]
 	}
-	if len(s) > 64 { // 32 bytes
-		return common.Hash{}, len(s) / 2, errors.New("hex string too long, want at most 32 bytes")
-	}
 	if (len(s) & 1) > 0 {
 		s = "0" + s
+	}
+	if len(s) > 64 {
+		return common.Hash{}, len(s) / 2, errors.New("hex string too long, want at most 32 bytes")
 	}
 	b, err := hex.DecodeString(s)
 	if err != nil {
