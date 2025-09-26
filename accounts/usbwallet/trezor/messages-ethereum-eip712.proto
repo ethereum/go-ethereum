@@ -1,0 +1,99 @@
+// This file originates from the SatoshiLabs Trezor `common` repository at:
+//   https://github.com/trezor/trezor-common/blob/master/protob/messages-ethereum-eip712.proto
+// dated 30.06.2025, commit 421b45d4677f2499234692b0f54010bc45b3ae5f.
+
+syntax = "proto2";
+package hw.trezor.messages.ethereum_eip712;
+
+option go_package  = "github.com/ethereum/go-ethereum/accounts/usbwallet/trezor";
+
+// Sugar for easier handling in Java
+option java_package = "com.satoshilabs.trezor.lib.protobuf";
+option java_outer_classname = "TrezorMessageEthereumEIP712";
+
+import "messages-ethereum.proto";
+
+
+// Separated from messages-ethereum.proto as it is not implemented on T1 side
+// and defining all the messages and fields could be even impossible as recursive
+// messages are used here
+
+
+/**
+ * Request: Ask device to sign typed data
+ * @start
+ * @next EthereumTypedDataStructRequest
+ * @next EthereumTypedDataValueRequest
+ * @next EthereumTypedDataSignature
+ * @next Failure
+ */
+message EthereumSignTypedData {
+  repeated uint32 address_n = 1;                             // BIP-32 path to derive the key from master node
+  required string primary_type = 2;                          // name of the root message struct
+  optional bool metamask_v4_compat = 3 [default=true];       // use MetaMask v4 (see https://github.com/MetaMask/eth-sig-util/issues/106)
+  optional ethereum.EthereumDefinitions definitions = 4;     // network and/or token definitions
+  optional bytes show_message_hash = 5;                      // hash of the typed data to be signed (if set, user will be asked to confirm before signing)
+}
+
+/**
+ * Response: Device asks for type information about a struct.
+ * @next EthereumTypedDataStructAck
+ */
+message EthereumTypedDataStructRequest {
+  required string name = 1; // name of the requested struct
+}
+
+/**
+ * Request: Type information about a struct.
+ * @next EthereumTypedDataStructRequest
+ */
+message EthereumTypedDataStructAck {
+  repeated EthereumStructMember members = 1;
+
+  message EthereumStructMember {
+    required EthereumFieldType type = 1;
+    required string name = 2;
+  }
+
+  message EthereumFieldType {
+    required EthereumDataType data_type = 1;
+    optional uint32 size = 2;                   // for integer types: size in bytes (uint8 has size 1, uint256 has size 32)
+    // for bytes types: size in bytes, or unset for dynamic
+    // for arrays: size in elements, or unset for dynamic
+    // for structs: number of members
+    // for string, bool and address: unset
+    optional EthereumFieldType entry_type = 3;  // for array types, type of single entry
+    optional string struct_name = 4;            // for structs: its name
+  }
+
+  enum EthereumDataType {
+    UINT = 1;
+    INT = 2;
+    BYTES = 3;
+    STRING = 4;
+    BOOL = 5;
+    ADDRESS = 6;
+    ARRAY = 7;
+    STRUCT = 8;
+  }
+}
+
+/**
+ * Response: Device asks for data at the specific member path.
+ * @next EthereumTypedDataValueAck
+ */
+message EthereumTypedDataValueRequest {
+  repeated uint32 member_path = 1; // member path requested by device
+}
+
+/**
+ * Request: Single value of a specific atomic field.
+ * @next EthereumTypedDataValueRequest
+ */
+message EthereumTypedDataValueAck {
+  required bytes value = 1;
+  // * atomic types: value of the member.
+  //   Length must match the `size` of the corresponding field type, unless the size is dynamic.
+  // * array types: number of elements, encoded as uint16.
+  // * struct types: undefined, Trezor will not query a struct field.
+}
