@@ -310,11 +310,11 @@ func TestSignTx(t *testing.T) {
 		t.Fatal(err)
 	}
 	parsedTx2 := &types.Transaction{}
-	rlp.DecodeBytes(res.Raw, parsedTx2)
+	rlp.DecodeBytes(res2.Raw, parsedTx2)
 
 	//The tx should be modified by the UI
-	if parsedTx2.Value().Cmp(tx.Value.ToInt()) != 0 {
-		t.Errorf("Expected value to be unchanged, got %v", parsedTx.Value())
+	if parsedTx2.Value().Cmp(tx.Value.ToInt()) == 0 {
+		t.Errorf("Expected value to be changed, got %v", parsedTx2.Value())
 	}
 	if bytes.Equal(res.Raw, res2.Raw) {
 		t.Error("Expected tx to be modified by UI")
