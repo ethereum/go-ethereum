@@ -96,12 +96,12 @@ func (ui *headlessUi) ApproveNewAccount(request *core.NewAccountRequest) (core.N
 }
 
 func (ui *headlessUi) ShowError(message string) {
-	//stdout is used by communication
+	// stdout is used by communication
 	fmt.Fprintln(os.Stderr, message)
 }
 
 func (ui *headlessUi) ShowInfo(message string) {
-	//stdout is used by communication
+	// stdout is used by communication
 	fmt.Fprintln(os.Stderr, message)
 }
 
@@ -278,14 +278,13 @@ func TestSignTx(t *testing.T) {
 	control.approveCh <- "Y"
 	control.inputCh <- "a_long_password"
 	res, err = api.SignTransaction(t.Context(), tx, &methodSig)
-
 	if err != nil {
 		t.Fatal(err)
 	}
 	parsedTx := &types.Transaction{}
 	rlp.DecodeBytes(res.Raw, parsedTx)
 
-	//The tx should NOT be modified by the UI
+	// The tx should NOT be modified by the UI
 	if parsedTx.Value().Cmp(tx.Value.ToInt()) != 0 {
 		t.Errorf("Expected value to be unchanged, expected %v got %v", tx.Value, parsedTx.Value())
 	}
@@ -300,7 +299,7 @@ func TestSignTx(t *testing.T) {
 		t.Error("Expected tx to be unmodified by UI")
 	}
 
-	//The tx is modified by the UI
+	// The tx is modified by the UI
 	control.approveCh <- "M"
 	control.inputCh <- "a_long_password"
 
@@ -311,7 +310,7 @@ func TestSignTx(t *testing.T) {
 	parsedTx2 := &types.Transaction{}
 	rlp.DecodeBytes(res2.Raw, parsedTx2)
 
-	//The tx should be modified by the UI
+	// The tx should be modified by the UI
 	if parsedTx2.Value().Cmp(tx.Value.ToInt()) == 0 {
 		t.Errorf("Expected value to be changed, got %v", parsedTx2.Value())
 	}
