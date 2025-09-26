@@ -406,10 +406,12 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config engine.Transit
 
 // GetPayloadV1 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV1(payloadID engine.PayloadID) (*engine.ExecutableData, error) {
-	if !payloadID.Is(engine.PayloadV1) {
-		return nil, engine.UnsupportedFork
-	}
-	data, err := api.getPayload(payloadID, false)
+	data, err := api.getPayload(
+		payloadID,
+		false,
+		[]engine.PayloadVersion{engine.PayloadV1},
+		nil,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -418,59 +420,34 @@ func (api *ConsensusAPI) GetPayloadV1(payloadID engine.PayloadID) (*engine.Execu
 
 // GetPayloadV2 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV2(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
-	// executionPayload: ExecutionPayloadV1 | ExecutionPayloadV2 where:
-	//
-	// - ExecutionPayloadV1 MUST be returned if the payload timestamp is lower
-	//   than the Shanghai timestamp
-	//
-	// - ExecutionPayloadV2 MUST be returned if the payload timestamp is greater
-	//   or equal to the Shanghai timestamp
-	if !payloadID.Is(engine.PayloadV1, engine.PayloadV2) {
-		return nil, engine.UnsupportedFork
-	}
-	data, err := api.getPayload(payloadID, false)
-	if err != nil {
-		return nil, err
-	}
-	// Check if the payload timestamp falls within the Shanghai fork timeframe
-	if data.ExecutionPayload != nil && !api.checkFork(data.ExecutionPayload.Timestamp, forks.Shanghai) {
-		return nil, engine.UnsupportedFork
-	}
-	return data, nil
+	return api.getPayload(
+		payloadID,
+		false,
+		[]engine.PayloadVersion{engine.PayloadV1, engine.PayloadV2},
+		[]forks.Fork{forks.Shanghai},
+	)
 }
 
 // GetPayloadV3 returns a cached payload by id. This endpoint should only
 // be used for the Cancun fork.
 func (api *ConsensusAPI) GetPayloadV3(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
-	if !payloadID.Is(engine.PayloadV3) {
-		return nil, engine.UnsupportedFork
-	}
-	data, err := api.getPayload(payloadID, false)
-	if err != nil {
-		return nil, err
-	}
-	// Check if the payload timestamp falls within the Cancun fork timeframe
-	if data.ExecutionPayload != nil && !api.checkFork(data.ExecutionPayload.Timestamp, forks.Cancun) {
-		return nil, engine.UnsupportedFork
-	}
-	return data, nil
+	return api.getPayload(
+		payloadID,
+		false,
+		[]engine.PayloadVersion{engine.PayloadV3},
+		[]forks.Fork{forks.Cancun},
+	)
 }
 
 // GetPayloadV4 returns a cached payload by id. This endpoint should only
 // be used for the Prague fork.
 func (api *ConsensusAPI) GetPayloadV4(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
-	if !payloadID.Is(engine.PayloadV3) {
-		return nil, engine.UnsupportedFork
-	}
-	data, err := api.getPayload(payloadID, false)
-	if err != nil {
-		return nil, err
-	}
-	// Check if the payload timestamp falls within the Prague fork timeframe
-	if data.ExecutionPayload != nil && !api.checkFork(data.ExecutionPayload.Timestamp, forks.Prague) {
-		return nil, engine.UnsupportedFork
-	}
-	return data, nil
+	return api.getPayload(
+		payloadID,
+		false,
+		[]engine.PayloadVersion{engine.PayloadV3},
+		[]forks.Fork{forks.Prague},
+	)
 }
 
 // GetPayloadV5 returns a cached payload by id. This endpoint should only
@@ -479,26 +456,35 @@ func (api *ConsensusAPI) GetPayloadV4(payloadID engine.PayloadID) (*engine.Execu
 // This method follows the same specification as engine_getPayloadV4 with
 // changes of returning BlobsBundleV2 with BlobSidecar version 1.
 func (api *ConsensusAPI) GetPayloadV5(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
-	if !payloadID.Is(engine.PayloadV3) {
-		return nil, engine.UnsupportedFork
-	}
-	data, err := api.getPayload(payloadID, false)
-	if err != nil {
-		return nil, err
-	}
-	// Check if the payload timestamp falls within the time frame of the Osaka fork or later
-	if data.ExecutionPayload != nil && api.config().LatestFork(data.ExecutionPayload.Timestamp) < forks.Osaka {
-		return nil, engine.UnsupportedFork
-	}
-	return data, nil
+	return api.getPayload(
+		payloadID,
+		false,
+		[]engine.PayloadVersion{engine.PayloadV3},
+		[]forks.Fork{
+			forks.Osaka,
+			forks.BPO1,
+			forks.BPO2,
+			forks.BPO3,
+			forks.BPO4,
+			forks.BPO5,
+		})
 }
 
-func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool) (*engine.ExecutionPayloadEnvelope, error) {
+// getPayload will retreive the specified payload and verify it conforms to the
+// endpoint's allowed payload versions and forks.
+func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool, versions []engine.PayloadVersion, forks []forks.Fork) (*engine.ExecutionPayloadEnvelope, error) {
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
+	if !payloadID.Is(versions...) {
+		return nil, engine.UnsupportedFork
+	}
 	data := api.localBlocks.get(payloadID, full)
 	if data == nil {
 		return nil, engine.UnknownPayload
 	}
+	if forks != nil && !api.checkFork(data.ExecutionPayload.Timestamp, forks...) {
+		return nil, engine.UnsupportedFork
+	}
+
 	return data, nil
 }
 
