@@ -446,7 +446,16 @@ func (api *ConsensusAPI) GetPayloadV4(payloadID engine.PayloadID) (*engine.Execu
 	if !payloadID.Is(engine.PayloadV3) {
 		return nil, engine.UnsupportedFork
 	}
-	return api.getPayload(payloadID, false)
+	data, err := api.getPayload(payloadID, false)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if the payload timestamp is greater or equal to Osaka activation timestamp
+	if data.ExecutionPayload != nil && api.config().LatestFork(data.ExecutionPayload.Timestamp) >= forks.Osaka {
+		return nil, engine.UnsupportedFork.With(errors.New("engine_getPayloadV4 is not available after Osaka fork"))
+	}
+	return data, nil
 }
 
 // GetPayloadV5 returns a cached payload by id. This endpoint should only
@@ -458,7 +467,16 @@ func (api *ConsensusAPI) GetPayloadV5(payloadID engine.PayloadID) (*engine.Execu
 	if !payloadID.Is(engine.PayloadV3) {
 		return nil, engine.UnsupportedFork
 	}
-	return api.getPayload(payloadID, false)
+	data, err := api.getPayload(payloadID, false)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if the payload timestamp falls within the time frame of the Osaka fork
+	if data.ExecutionPayload != nil && api.config().LatestFork(data.ExecutionPayload.Timestamp) < forks.Osaka {
+		return nil, engine.UnsupportedFork.With(errors.New("engine_getPayloadV5 is not available after Osaka fork"))
+	}
+	return data, nil
 }
 
 func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool) (*engine.ExecutionPayloadEnvelope, error) {
