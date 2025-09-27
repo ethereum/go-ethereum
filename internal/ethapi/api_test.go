@@ -3885,3 +3885,7 @@ func (b configTimeBackend) HeaderByNumber(_ context.Context, n rpc.BlockNumber) 
 func (b configTimeBackend) CurrentHeader() *types.Header {
 	return &types.Header{Time: b.time}
 }
+
+func TestSendRawTransactionSync(t *testing.T) {
+
+}
