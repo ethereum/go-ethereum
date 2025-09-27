@@ -428,7 +428,15 @@ func (api *ConsensusAPI) GetPayloadV2(payloadID engine.PayloadID) (*engine.Execu
 	if !payloadID.Is(engine.PayloadV1, engine.PayloadV2) {
 		return nil, engine.UnsupportedFork
 	}
-	return api.getPayload(payloadID, false)
+	data, err := api.getPayload(payloadID, false)
+	if err != nil {
+		return nil, err
+	}
+	// Check if the payload timestamp falls within the Shanghai fork timeframe
+	if data.ExecutionPayload != nil && !api.checkFork(data.ExecutionPayload.Timestamp, forks.Shanghai) {
+		return nil, engine.UnsupportedFork
+	}
+	return data, nil
 }
 
 // GetPayloadV3 returns a cached payload by id. This endpoint should only
@@ -437,7 +445,15 @@ func (api *ConsensusAPI) GetPayloadV3(payloadID engine.PayloadID) (*engine.Execu
 	if !payloadID.Is(engine.PayloadV3) {
 		return nil, engine.UnsupportedFork
 	}
-	return api.getPayload(payloadID, false)
+	data, err := api.getPayload(payloadID, false)
+	if err != nil {
+		return nil, err
+	}
+	// Check if the payload timestamp falls within the Cancun fork timeframe
+	if data.ExecutionPayload != nil && !api.checkFork(data.ExecutionPayload.Timestamp, forks.Cancun) {
+		return nil, engine.UnsupportedFork
+	}
+	return data, nil
 }
 
 // GetPayloadV4 returns a cached payload by id. This endpoint should only
@@ -446,7 +462,15 @@ func (api *ConsensusAPI) GetPayloadV4(payloadID engine.PayloadID) (*engine.Execu
 	if !payloadID.Is(engine.PayloadV3) {
 		return nil, engine.UnsupportedFork
 	}
-	return api.getPayload(payloadID, false)
+	data, err := api.getPayload(payloadID, false)
+	if err != nil {
+		return nil, err
+	}
+	// Check if the payload timestamp falls within the Prague fork timeframe
+	if data.ExecutionPayload != nil && !api.checkFork(data.ExecutionPayload.Timestamp, forks.Prague) {
+		return nil, engine.UnsupportedFork
+	}
+	return data, nil
 }
 
 // GetPayloadV5 returns a cached payload by id. This endpoint should only
@@ -458,7 +482,15 @@ func (api *ConsensusAPI) GetPayloadV5(payloadID engine.PayloadID) (*engine.Execu
 	if !payloadID.Is(engine.PayloadV3) {
 		return nil, engine.UnsupportedFork
 	}
-	return api.getPayload(payloadID, false)
+	data, err := api.getPayload(payloadID, false)
+	if err != nil {
+		return nil, err
+	}
+	// Check if the payload timestamp falls within the time frame of the Osaka fork or later
+	if data.ExecutionPayload != nil && api.config().LatestFork(data.ExecutionPayload.Timestamp) < forks.Osaka {
+		return nil, engine.UnsupportedFork
+	}
+	return data, nil
 }
 
 func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool) (*engine.ExecutionPayloadEnvelope, error) {
