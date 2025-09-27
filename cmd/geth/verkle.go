@@ -201,7 +201,7 @@ func expandVerkle(ctx *cli.Context) error {
 	}
 
 	for i, key := range keylist {
-		log.Info("Reading key", "index", i, "key", keylist[0])
+		log.Info("Reading key", "index", i, "key", key)
 		root.Get(key, chaindb.Get)
 	}
 
