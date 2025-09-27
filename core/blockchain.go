@@ -394,7 +394,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	bc.statedb = state.NewDatabase(bc.triedb, nil)
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
-	bc.processor = NewStateProcessor(chainConfig, bc.hc)
+	bc.processor = NewStateProcessor(bc.hc)
 
 	genesisHeader := bc.GetHeaderByNumber(0)
 	if genesisHeader == nil {

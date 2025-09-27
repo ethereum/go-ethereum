@@ -541,3 +541,23 @@ func (b *simBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber)
 func (b *simBackend) ChainConfig() *params.ChainConfig {
 	return b.b.ChainConfig()
 }
+
+func (b *simBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
+	if b.base.Hash() == hash {
+		return b.base, nil
+	}
+	if header, err := b.b.HeaderByHash(ctx, hash); err == nil {
+		return header, nil
+	}
+	// Check simulated headers
+	for _, header := range b.headers {
+		if header.Hash() == hash {
+			return header, nil
+		}
+	}
+	return nil, errors.New("header not found")
+}
+
+func (b *simBackend) CurrentHeader() *types.Header {
+	return b.b.CurrentHeader()
+}

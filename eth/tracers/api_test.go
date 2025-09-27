@@ -142,6 +142,10 @@ func (b *testBackend) ChainDb() ethdb.Database {
 	return b.chaindb
 }
 
+func (b *testBackend) CurrentHeader() *types.Header {
+	return b.chain.CurrentHeader()
+}
+
 // teardown releases the associated resources.
 func (b *testBackend) teardown() {
 	b.chain.Stop()
