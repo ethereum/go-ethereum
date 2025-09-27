@@ -122,7 +122,7 @@ var DefaultHTTPTimeouts = HTTPTimeouts{
 
 // DialHTTP creates a new RPC client that connects to an RPC server over HTTP.
 func DialHTTP(endpoint string) (*Client, error) {
-	return DialHTTPWithClient(endpoint, new(http.Client))
+	return DialHTTPWithClient(endpoint, &http.Client{Timeout: 30 * time.Second})
 }
 
 // DialHTTPWithClient creates a new RPC client that connects to an RPC server over HTTP
@@ -152,7 +152,7 @@ func newClientTransportHTTP(endpoint string, cfg *clientConfig) reconnectFunc {
 
 	client := cfg.httpClient
 	if client == nil {
-		client = new(http.Client)
+		client = &http.Client{Timeout: 30 * time.Second}
 	}
 
 	hc := &httpConn{
