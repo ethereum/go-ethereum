@@ -53,7 +53,8 @@ func memoryCopy(m []byte, offset, size int64) (cpy []byte) {
 		return nil
 	}
 
-	if len(m) > int(offset) {
+	// Check that we have enough data in the slice to safely copy the requested range
+	if len(m) > int(offset) && int(offset+size) <= len(m) {
 		cpy = make([]byte, size)
 		copy(cpy, m[offset:offset+size])
 
