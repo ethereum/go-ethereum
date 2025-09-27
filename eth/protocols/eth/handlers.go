@@ -494,14 +494,26 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(&txs); err != nil {
 		return err
 	}
+	// Deduplicate transactions within the message to avoid redundant processing
+	seen := make(map[common.Hash]struct{})
+	deduped := make([]*types.Transaction, 0, len(txs))
+
 	for i, tx := range txs {
 		// Validate and mark the remote transaction
 		if tx == nil {
 			return fmt.Errorf("Transactions: transaction %d is nil", i)
 		}
-		peer.markTransaction(tx.Hash())
+		hash := tx.Hash()
+		if _, exists := seen[hash]; exists {
+			continue
+		}
+		seen[hash] = struct{}{}
+		deduped = append(deduped, tx)
+		peer.markTransaction(hash)
 	}
-	return backend.Handle(peer, &txs)
+
+	dedupedPacket := TransactionsPacket(deduped)
+	return backend.Handle(peer, &dedupedPacket)
 }
 
 func handlePooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
@@ -514,16 +526,27 @@ func handlePooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(&txs); err != nil {
 		return err
 	}
+	// Deduplicate transactions within the message to avoid redundant processing
+	seen := make(map[common.Hash]struct{})
+	deduped := make([]*types.Transaction, 0, len(txs.PooledTransactionsResponse))
+
 	for i, tx := range txs.PooledTransactionsResponse {
 		// Validate and mark the remote transaction
 		if tx == nil {
 			return fmt.Errorf("PooledTransactions: transaction %d is nil", i)
 		}
-		peer.markTransaction(tx.Hash())
+		hash := tx.Hash()
+		if _, exists := seen[hash]; exists {
+			continue
+		}
+		seen[hash] = struct{}{}
+		deduped = append(deduped, tx)
+		peer.markTransaction(hash)
 	}
 	requestTracker.Fulfil(peer.id, peer.version, PooledTransactionsMsg, txs.RequestId)
 
-	return backend.Handle(peer, &txs.PooledTransactionsResponse)
+	dedupedPacket := PooledTransactionsResponse(deduped)
+	return backend.Handle(peer, &dedupedPacket)
 }
 
 func handleBlockRangeUpdate(backend Backend, msg Decoder, peer *Peer) error {
