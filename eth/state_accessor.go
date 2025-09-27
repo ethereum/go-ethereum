@@ -261,7 +261,10 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 			return tx, context, statedb, release, nil
 		}
 		// Assemble the transaction call message and return if the requested offset
-		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
+		msg, err := core.TransactionToMessage(tx, signer, block.BaseFee())
+		if err != nil {
+			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x invalid: %w", tx.Hash(), err)
+		}
 
 		// Not yet the searched for transaction, execute on top of the current state
 		statedb.SetTxContext(tx.Hash(), idx)
