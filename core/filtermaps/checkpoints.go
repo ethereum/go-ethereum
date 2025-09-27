@@ -33,7 +33,7 @@ type checkpointList []epochCheckpoint
 // be initialized at the epoch boundary.
 type epochCheckpoint struct {
 	BlockNumber uint64 // block that generated the last log value of the given epoch
-	BlockId     common.Hash
+	BlockHash     common.Hash
 	FirstIndex  uint64 // first log value index of the given block
 }
 
