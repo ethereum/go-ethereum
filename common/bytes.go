@@ -20,7 +20,6 @@ package common
 import (
 	"encoding/hex"
 	"errors"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -28,13 +27,18 @@ import (
 // FromHex returns the bytes represented by the hexadecimal string s.
 // s may be prefixed with "0x".
 func FromHex(s string) []byte {
-	if len(s) >= 2 && strings.HasPrefix(strings.ToLower(s), "0x") {
+	if has0xPrefix(s) {
 		s = s[2:]
 	}
 	if len(s)&1 == 1 {
 		s = "0" + s
 	}
 	return Hex2Bytes(s)
+}
+
+// has0xPrefix validates str begins with '0x' or '0X'.
+func has0xPrefix(str string) bool {
+	return len(str) >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X')
 }
 
 // CopyBytes returns an exact copy of the provided bytes.
