@@ -791,6 +791,12 @@ var (
 		Value:    node.DefaultConfig.BatchResponseMaxSize,
 		Category: flags.APICategory,
 	}
+	ShutdownDelay = &cli.DurationFlag{
+		Name:     "shutdown-delay",
+		Usage:    "Sets a delay between receiving SIGTERM and shutting down the node",
+		Value:    node.DefaultConfig.ShutdownDelay,
+		Category: flags.APICategory,
+	}
 
 	// Network Settings
 	MaxPeersFlag = &cli.IntFlag{
@@ -1234,6 +1240,10 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.IsSet(BatchResponseMaxSize.Name) {
 		cfg.BatchResponseMaxSize = ctx.Int(BatchResponseMaxSize.Name)
+	}
+
+	if ctx.IsSet(ShutdownDelay.Name) {
+		cfg.ShutdownDelay = ctx.Duration(ShutdownDelay.Name)
 	}
 }
 
