@@ -52,7 +52,6 @@ func has0xPrefix(str string) bool {
 	return len(str) >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X')
 }
 
-
 // isHex validates whether each byte is valid hexadecimal string.
 func isHex(str string) bool {
 	if len(str)%2 != 0 {
