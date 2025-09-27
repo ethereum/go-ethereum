@@ -33,7 +33,7 @@ import (
 // OverrideAccount indicates the overriding fields of account during the execution
 // of a message call.
 // Note, state and stateDiff can't be specified at the same time. If state is
-// set, message execution will only use the data in the given state. Otherwise
+// set, message execution will only use the data in the given state. Otherwise,
 // if stateDiff is set, all diff will be applied first and then execute the call
 // message.
 type OverrideAccount struct {
@@ -42,6 +42,7 @@ type OverrideAccount struct {
 	Balance          *hexutil.Big                `json:"balance"`
 	State            map[common.Hash]common.Hash `json:"state"`
 	StateDiff        map[common.Hash]common.Hash `json:"stateDiff"`
+	TransientStorage map[common.Hash]common.Hash `json:"transientStorage"`
 	MovePrecompileTo *common.Address             `json:"movePrecompileToAddress"`
 }
 
@@ -58,6 +59,20 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 	if diff == nil {
 		return nil
 	}
+
+	// Get transient storage overrides to apply after Prepare()
+	transientOverrides := make(map[common.Address]map[common.Hash]common.Hash)
+	for addr, account := range *diff {
+		if account.TransientStorage != nil && len(account.TransientStorage) > 0 {
+			transientOverrides[addr] = account.TransientStorage
+		}
+	}
+
+	// Store transient storage overrides
+	if len(transientOverrides) > 0 {
+		statedb.SetPendingTransientOverrides(transientOverrides)
+	}
+
 	// Tracks destinations of precompiles that were moved.
 	dirtyAddrs := make(map[common.Address]struct{})
 	for addr, account := range *diff {

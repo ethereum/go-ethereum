@@ -130,6 +130,8 @@ type StateDB struct {
 
 	// Transient storage
 	transientStorage transientStorage
+	// Overrides to apply after Prepare()
+	pendingTransientOverrides map[common.Address]map[common.Hash]common.Hash
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
@@ -1430,6 +1432,22 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 	}
 	// Reset transient storage at the beginning of transaction execution
 	s.transientStorage = newTransientStorage()
+
+	// Apply any pending transient storage overrides after reset
+	if s.pendingTransientOverrides != nil {
+		for addr, storage := range s.pendingTransientOverrides {
+			for key, value := range storage {
+				s.transientStorage.Set(addr, key, value)
+			}
+		}
+		s.pendingTransientOverrides = nil // Clear after applying
+	}
+}
+
+// SetPendingTransientOverrides stores transient storage overrides to be applied
+// after the next Prepare() call. This ensures overrides are applied to a clean state.
+func (s *StateDB) SetPendingTransientOverrides(overrides map[common.Address]map[common.Hash]common.Hash) {
+	s.pendingTransientOverrides = overrides
 }
 
 // AddAddressToAccessList adds the given address to the access list
