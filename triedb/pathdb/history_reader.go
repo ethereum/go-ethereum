@@ -230,6 +230,15 @@ func (r *historyReader) readStorage(address common.Address, storageKey common.Ha
 	return data[offset : offset+length], nil
 }
 
+// readTrienode retrieves the trienode data from the specified trienode history.
+func (r *historyReader) readTrienode(addrHash common.Hash, path string, historyID uint64) ([]byte, error) {
+	tr, err := newTrienodeHistoryReader(historyID, r.freezer)
+	if err != nil {
+		return nil, err
+	}
+	return tr.read(addrHash, path)
+}
+
 // read retrieves the state element data associated with the stateID.
 // stateID: represents the ID of the state of the specified version;
 // lastID: represents the ID of the latest/newest state history;
@@ -285,5 +294,8 @@ func (r *historyReader) read(state stateIdentQuery, stateID uint64, lastID uint6
 	if state.typ == typeAccount {
 		return r.readAccount(state.address, historyID)
 	}
-	return r.readStorage(state.address, state.storageKey, state.storageHash, historyID)
+	if state.typ == typeStorage {
+		return r.readStorage(state.address, state.storageKey, state.storageHash, historyID)
+	}
+	return r.readTrienode(state.addressHash, state.path, historyID)
 }
