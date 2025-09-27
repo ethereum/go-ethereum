@@ -30,7 +30,7 @@ func FromHex(s string) []byte {
 	if has0xPrefix(s) {
 		s = s[2:]
 	}
-	if len(s)&1 == 1 {
+	if len(s)%2 == 1 {
 		s = "0" + s
 	}
 	return Hex2Bytes(s)
