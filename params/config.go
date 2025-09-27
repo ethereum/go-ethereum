@@ -377,25 +377,25 @@ var (
 		Max:            9,
 		UpdateFraction: 5007716,
 	}
-	// DefaultBPO1BlobConfig is the default blob configuration for the Osaka fork.
+	// DefaultBPO1BlobConfig is the default blob configuration for the BPO1 fork.
 	DefaultBPO1BlobConfig = &BlobConfig{
 		Target:         10,
 		Max:            15,
 		UpdateFraction: 8346193,
 	}
-	// DefaultBPO1BlobConfig is the default blob configuration for the Osaka fork.
+	// DefaultBPO2BlobConfig is the default blob configuration for the BPO2 fork.
 	DefaultBPO2BlobConfig = &BlobConfig{
 		Target:         14,
 		Max:            21,
 		UpdateFraction: 11684671,
 	}
-	// DefaultBPO1BlobConfig is the default blob configuration for the Osaka fork.
+	// DefaultBPO3BlobConfig is the default blob configuration for the BPO3 fork.
 	DefaultBPO3BlobConfig = &BlobConfig{
 		Target:         21,
 		Max:            32,
 		UpdateFraction: 20609697,
 	}
-	// DefaultBPO1BlobConfig is the default blob configuration for the Osaka fork.
+	// DefaultBPO4BlobConfig is the default blob configuration for the BPO4 fork.
 	DefaultBPO4BlobConfig = &BlobConfig{
 		Target:         14,
 		Max:            21,
