@@ -1991,6 +1991,31 @@ func TestGetBlobsV1(t *testing.T) {
 	}
 }
 
+func TestGetBlobsV1AfterOsakaFork(t *testing.T) {
+	genesis := &core.Genesis{
+		Config:     params.MergedTestChainConfig,
+		Alloc:      types.GenesisAlloc{testAddr: {Balance: testBalance}},
+		Difficulty: common.Big0,
+		Timestamp:  1, // Timestamp > 0 to ensure Osaka fork is active
+	}
+	n, ethServ := startEthService(t, genesis, nil)
+	defer n.Close()
+
+	var engineErr *engine.EngineAPIError
+	api := newConsensusAPIWithoutHeartbeat(ethServ)
+	_, err := api.GetBlobsV1([]common.Hash{testrand.Hash()})
+	if !errors.As(err, &engineErr) {
+		t.Fatalf("Unexpected error: %T", err)
+	} else {
+		if engineErr.ErrorCode() != -38005 {
+			t.Fatalf("Expected error code -38005, got %d", engineErr.ErrorCode())
+		}
+		if engineErr.Error() != "Unsupported fork" {
+			t.Fatalf("Expected error message 'Unsupported fork', got '%s'", engineErr.Error())
+		}
+	}
+}
+
 func TestGetBlobsV2(t *testing.T) {
 	n, api := newGetBlobEnv(t, 1)
 	defer n.Close()
