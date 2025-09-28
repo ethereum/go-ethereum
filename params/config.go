@@ -508,7 +508,7 @@ func (c CliqueConfig) String() string {
 // of ChainConfig that shows actual timestamp values instead of pointer addresses.
 func (c *ChainConfig) String() string {
 	result := fmt.Sprintf("ChainConfig{ChainID: %v", c.ChainID)
-	
+
 	// Add block-based forks
 	if c.HomesteadBlock != nil {
 		result += fmt.Sprintf(", HomesteadBlock: %v", c.HomesteadBlock)
@@ -555,7 +555,7 @@ func (c *ChainConfig) String() string {
 	if c.MergeNetsplitBlock != nil {
 		result += fmt.Sprintf(", MergeNetsplitBlock: %v", c.MergeNetsplitBlock)
 	}
-	
+
 	// Add timestamp-based forks with dereferenced values
 	if c.ShanghaiTime != nil {
 		result += fmt.Sprintf(", ShanghaiTime: %v", *c.ShanghaiTime)
@@ -612,11 +612,11 @@ func (c *ChainConfig) String() string {
 	} else {
 		result += ", AmsterdamTime: nil"
 	}
-	
+
 	if c.TerminalTotalDifficulty != nil {
 		result += fmt.Sprintf(", TerminalTotalDifficulty: %v", c.TerminalTotalDifficulty)
 	}
-	
+
 	result += "}"
 	return result
 }
