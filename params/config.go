@@ -1156,7 +1156,7 @@ func configBlockEqual(x, y *big.Int) bool {
 		return y == nil
 	}
 	if y == nil {
-		return x == nil
+		return false
 	}
 	return x.Cmp(y) == 0
 }
@@ -1182,7 +1182,7 @@ func configTimestampEqual(x, y *uint64) bool {
 		return y == nil
 	}
 	if y == nil {
-		return x == nil
+		return false
 	}
 	return *x == *y
 }
