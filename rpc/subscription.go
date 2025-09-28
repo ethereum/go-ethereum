@@ -64,7 +64,8 @@ func randomIDGenerator() func() ID {
 	if _, err := crand.Read(buf); err == nil {
 		seed = int64(binary.BigEndian.Uint64(buf))
 	} else {
-		seed = int64(time.Now().Nanosecond())
+		// Fallback: use UnixNano for higher entropy than Nanosecond-only value
+		seed = time.Now().UnixNano()
 	}
 
 	var (
