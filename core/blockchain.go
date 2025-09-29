@@ -2347,8 +2347,7 @@ func (bc *BlockChain) recoverAncestors(block *types.Block, makeWitness bool) (co
 // collectLogs collects the logs that were generated or removed during the
 // processing of a block. These logs are later announced as deleted or reborn.
 func (bc *BlockChain) collectLogs(b *types.Block, removed bool) []*types.Log {
-	receipts, logs := bc.collectLogsAndReceipts(b, removed)
-	_ = receipts // receipts are not used here, but retrieved for efficiency in other callers
+	_, logs := bc.collectLogsAndReceipts(b, removed)
 	return logs
 }
 
