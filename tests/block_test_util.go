@@ -158,8 +158,8 @@ func (t *BlockTest) createTestBlockChain(config *params.ChainConfig, snapshotter
 			Tracer:                  tracer,
 			StatelessSelfValidation: witness,
 		},
-		NoPrefetch: true,
-		EnableBAL:  createAndVerifyBAL,
+		NoPrefetch:          true,
+		EnableBALForTesting: createAndVerifyBAL,
 	}
 	if snapshotter {
 		options.SnapshotLimit = 1

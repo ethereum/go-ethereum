@@ -210,8 +210,6 @@ type BlockChainConfig struct {
 
 	// StateSizeTracking indicates whether the state size tracking is enabled.
 	StateSizeTracking bool
-	// EnableBAL enables block access list creation and verification for post-Cancun blocks which contain access lists.
-	EnableBAL bool
 }
 
 // DefaultConfig returns the default config.
@@ -1924,7 +1922,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		start := time.Now()
 		// construct or verify block access lists if BALs are enabled and
 		// we are post-selfdestruct removal fork.
-		enableBAL := (bc.cfg.EnableBAL && bc.chainConfig.IsCancun(block.Number(), block.Time())) || bc.chainConfig.IsAmsterdam(block.Number(), block.Time())
+		enableBAL := (bc.cfg.EnableBALForTesting && bc.chainConfig.IsCancun(block.Number(), block.Time())) || bc.chainConfig.IsAmsterdam(block.Number(), block.Time())
 		blockHasAccessList := block.Body().AccessList != nil
 		makeBAL := enableBAL && !blockHasAccessList
 		validateBAL := enableBAL && blockHasAccessList

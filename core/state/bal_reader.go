@@ -168,6 +168,7 @@ func (r *BALReader) ModifiedAccounts() (res []common.Address) {
 }
 
 func (r *BALReader) ValidateStateReads(allReads bal.StateAccesses) error {
+	fmt.Printf("bal is %v\n", r.block.Body().AccessList.String())
 	// 1. remove any slots from 'allReads' which were written
 	// 2. validate that the read set in the BAL matches 'allReads' exactly
 	for addr, reads := range allReads {
@@ -178,6 +179,7 @@ func (r *BALReader) ValidateStateReads(allReads bal.StateAccesses) error {
 			}
 		}
 
+		fmt.Printf("addr is %x\n", addr)
 		expectedReads := r.accesses[addr].StorageReads
 		if len(reads) != len(expectedReads) {
 			return fmt.Errorf("mismatch between the number of computed reads and number of expected reads")
