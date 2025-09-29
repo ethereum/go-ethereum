@@ -505,7 +505,7 @@ func (c CliqueConfig) String() string {
 }
 
 // String implements the fmt.Stringer interface, returning a string representation
-// of ChainConfig that shows actual timestamp values instead of pointer addresses.
+// of ChainConfig.
 func (c *ChainConfig) String() string {
 	result := fmt.Sprintf("ChainConfig{ChainID: %v", c.ChainID)
 
@@ -556,67 +556,40 @@ func (c *ChainConfig) String() string {
 		result += fmt.Sprintf(", MergeNetsplitBlock: %v", c.MergeNetsplitBlock)
 	}
 
-	// Add timestamp-based forks with dereferenced values
+	// Add timestamp-based forks
 	if c.ShanghaiTime != nil {
 		result += fmt.Sprintf(", ShanghaiTime: %v", *c.ShanghaiTime)
-	} else {
-		result += ", ShanghaiTime: nil"
 	}
 	if c.CancunTime != nil {
 		result += fmt.Sprintf(", CancunTime: %v", *c.CancunTime)
-	} else {
-		result += ", CancunTime: nil"
 	}
 	if c.PragueTime != nil {
 		result += fmt.Sprintf(", PragueTime: %v", *c.PragueTime)
-	} else {
-		result += ", PragueTime: nil"
 	}
 	if c.OsakaTime != nil {
 		result += fmt.Sprintf(", OsakaTime: %v", *c.OsakaTime)
-	} else {
-		result += ", OsakaTime: nil"
-	}
-	if c.VerkleTime != nil {
-		result += fmt.Sprintf(", VerkleTime: %v", *c.VerkleTime)
-	} else {
-		result += ", VerkleTime: nil"
 	}
 	if c.BPO1Time != nil {
 		result += fmt.Sprintf(", BPO1Time: %v", *c.BPO1Time)
-	} else {
-		result += ", BPO1Time: nil"
 	}
 	if c.BPO2Time != nil {
 		result += fmt.Sprintf(", BPO2Time: %v", *c.BPO2Time)
-	} else {
-		result += ", BPO2Time: nil"
 	}
 	if c.BPO3Time != nil {
 		result += fmt.Sprintf(", BPO3Time: %v", *c.BPO3Time)
-	} else {
-		result += ", BPO3Time: nil"
 	}
 	if c.BPO4Time != nil {
 		result += fmt.Sprintf(", BPO4Time: %v", *c.BPO4Time)
-	} else {
-		result += ", BPO4Time: nil"
 	}
 	if c.BPO5Time != nil {
 		result += fmt.Sprintf(", BPO5Time: %v", *c.BPO5Time)
-	} else {
-		result += ", BPO5Time: nil"
 	}
 	if c.AmsterdamTime != nil {
 		result += fmt.Sprintf(", AmsterdamTime: %v", *c.AmsterdamTime)
-	} else {
-		result += ", AmsterdamTime: nil"
 	}
-
-	if c.TerminalTotalDifficulty != nil {
-		result += fmt.Sprintf(", TerminalTotalDifficulty: %v", c.TerminalTotalDifficulty)
+	if c.VerkleTime != nil {
+		result += fmt.Sprintf(", VerkleTime: %v", *c.VerkleTime)
 	}
-
 	result += "}"
 	return result
 }
