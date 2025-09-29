@@ -518,9 +518,6 @@ func opSload(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opSstore(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	if evm.readOnly {
-		return nil, ErrWriteProtection
-	}
 	loc := scope.Stack.pop()
 	val := scope.Stack.pop()
 	evm.StateDB.SetState(scope.Contract.Address(), loc.Bytes32(), val.Bytes32())

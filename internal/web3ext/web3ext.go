@@ -474,6 +474,11 @@ web3._extend({
 			params: 1,
 			inputFormatter: [null],
 		}),
+		new web3._extend.Method({
+			name: 'getEncodedBlockAccessList',
+			call: 'debug_getEncodedBlockAccessList',
+			params: 1
+		}),
 	],
 	properties: []
 });
@@ -605,7 +610,17 @@ web3._extend({
 			name: 'config',
 			call: 'eth_config',
 			params: 0,
-		})
+		}),
+		new web3._extend.Method({
+			name: 'getBlockAccessListByBlockNumber',
+			call: 'eth_blockAccessListByBlockNumber',
+			params: 1,
+		}),
+		new web3._extend.Method({
+			name: 'getBlockAccessListByBlockHash',
+			call: 'eth_blockAccessListByBlockHash',
+			params: 1,
+		}),
 	],
 	properties: [
 		new web3._extend.Property({

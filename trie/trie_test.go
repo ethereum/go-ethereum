@@ -1500,82 +1500,56 @@ func testTrieCopyNewTrie(t *testing.T, entries []kv) {
 	}
 }
 
-// goos: darwin
-// goarch: arm64
-// pkg: github.com/ethereum/go-ethereum/trie
-// cpu: Apple M1 Pro
-// BenchmarkTriePrefetch
-// BenchmarkTriePrefetch-8   	    9961	    100706 ns/op
-func BenchmarkTriePrefetch(b *testing.B) {
-	db := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
-	tr := NewEmpty(db)
-	vals := make(map[string]*kv)
-	for i := 0; i < 3000; i++ {
-		value := &kv{
-			k: randBytes(32),
-			v: randBytes(20),
-			t: false,
-		}
-		tr.MustUpdate(value.k, value.v)
-		vals[string(value.k)] = value
-	}
-	root, nodes := tr.Commit(false)
-	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
-	b.ResetTimer()
+func TestUpdateBatch(t *testing.T) {
+	testUpdateBatch(t, []kv{
+		{k: []byte("do"), v: []byte("verb")},
+		{k: []byte("ether"), v: []byte("wookiedoo")},
+		{k: []byte("horse"), v: []byte("stallion")},
+		{k: []byte("shaman"), v: []byte("horse")},
+		{k: []byte("doge"), v: []byte("coin")},
+		{k: []byte("dog"), v: []byte("puppy")},
+	})
 
-	for i := 0; i < b.N; i++ {
-		tr, err := New(TrieID(root), db)
-		if err != nil {
-			b.Fatalf("Failed to open the trie")
-		}
-		var keys [][]byte
-		for k := range vals {
-			keys = append(keys, []byte(k))
-			if len(keys) > 64 {
-				break
-			}
-		}
-		tr.Prefetch(keys)
+	var entries []kv
+	for i := 0; i < 256; i++ {
+		entries = append(entries, kv{k: testrand.Bytes(32), v: testrand.Bytes(32)})
 	}
+	testUpdateBatch(t, entries)
 }
 
-// goos: darwin
-// goarch: arm64
-// pkg: github.com/ethereum/go-ethereum/trie
-// cpu: Apple M1 Pro
-// BenchmarkTrieSeqPrefetch
-// BenchmarkTrieSeqPrefetch-8   	   12879	     96710 ns/op
-func BenchmarkTrieSeqPrefetch(b *testing.B) {
-	db := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
-	tr := NewEmpty(db)
-	vals := make(map[string]*kv)
-	for i := 0; i < 3000; i++ {
-		value := &kv{
-			k: randBytes(32),
-			v: randBytes(20),
-			t: false,
-		}
-		tr.MustUpdate(value.k, value.v)
-		vals[string(value.k)] = value
+func testUpdateBatch(t *testing.T, entries []kv) {
+	var (
+		base = NewEmpty(nil)
+		keys [][]byte
+		vals [][]byte
+	)
+	for _, entry := range entries {
+		base.Update(entry.k, entry.v)
+		keys = append(keys, entry.k)
+		vals = append(vals, entry.v)
 	}
-	root, nodes := tr.Commit(false)
-	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
-	b.ResetTimer()
+	for i := 0; i < 10; i++ {
+		k, v := testrand.Bytes(32), testrand.Bytes(32)
+		base.Update(k, v)
+		keys = append(keys, k)
+		vals = append(vals, v)
+	}
 
-	for i := 0; i < b.N; i++ {
-		tr, err := New(TrieID(root), db)
-		if err != nil {
-			b.Fatalf("Failed to open the trie")
+	cmp := NewEmpty(nil)
+	if err := cmp.UpdateBatch(keys, vals); err != nil {
+		t.Fatalf("Failed to update batch, %v", err)
+	}
+
+	// Traverse the original tree, the changes made on the copy one shouldn't
+	// affect the old one
+	for _, key := range keys {
+		v1, _ := base.Get(key)
+		v2, _ := cmp.Get(key)
+		if !bytes.Equal(v1, v2) {
+			t.Errorf("Unexpected data, key: %v, want: %v, got: %v", key, v1, v2)
 		}
-		var keys [][]byte
-		for k := range vals {
-			keys = append(keys, []byte(k))
-			if len(keys) > 64 {
-				break
-			}
-		}
-		for _, k := range keys {
-			tr.Get(k)
-		}
+	}
+	if base.Hash() != cmp.Hash() {
+		t.Errorf("Hash mismatch: want %x, got %x", base.Hash(), cmp.Hash())
 	}
 }
