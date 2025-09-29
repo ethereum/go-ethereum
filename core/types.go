@@ -18,6 +18,7 @@ package core
 
 import (
 	"context"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/core/state"
@@ -33,7 +34,7 @@ type Validator interface {
 	ValidateBody(block *types.Block) error
 
 	// ValidateState validates the given statedb and optionally the process result.
-	ValidateState(block *types.Block, state *state.StateDB, res *ProcessResult, stateless bool) error
+	ValidateState(block *types.Block, state state.BlockStateTransition, res *ProcessResult, stateless bool) error
 }
 
 // Prefetcher is an interface for pre-caching transaction signatures and state.
@@ -54,8 +55,10 @@ type Processor interface {
 
 // ProcessResult contains the values computed by Process.
 type ProcessResult struct {
-	Receipts types.Receipts
-	Requests [][]byte
-	Logs     []*types.Log
-	GasUsed  uint64
+	AccessList bal.ConstructionBlockAccessList
+	Receipts   types.Receipts
+	Requests   [][]byte
+	Logs       []*types.Log
+	GasUsed    uint64
+	Error      error
 }

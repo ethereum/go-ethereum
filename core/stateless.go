@@ -67,6 +67,10 @@ func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig 
 	processor := NewStateProcessor(chain)
 	validator := NewBlockValidator(config, nil) // No chain, we only validate the state, not the block
 
+	if config.IsAmsterdam(block.Number(), block.Time()) {
+		db = db.WithReader(state.NewReaderWithTracker(db.Reader()))
+	}
+
 	// Run the stateless blocks processing and self-validate certain fields
 	res, err := processor.Process(ctx, block, db, vmconfig)
 	if err != nil {

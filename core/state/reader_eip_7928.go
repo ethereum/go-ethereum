@@ -63,7 +63,7 @@ package state
 //                    └─────────────────────────────┘
 
 import (
-	"maps"
+	"github.com/ethereum/go-ethereum/crypto"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -87,7 +87,7 @@ type prefetchStateReader struct {
 	closeOnce sync.Once
 }
 
-func newPrefetchStateReader(reader StateReader, accessList map[common.Address][]common.Hash, nThreads int) *prefetchStateReader {
+func newPrefetchStateReader(reader StateReader, accessList bal.StorageKeys, nThreads int) *prefetchStateReader {
 	tasks := make([]*fetchTask, 0, len(accessList))
 	for addr, slots := range accessList {
 		tasks = append(tasks, &fetchTask{
@@ -198,104 +198,129 @@ func (r *prefetchStateReader) process(start, limit int) {
 // prior to TxIndex.
 type ReaderWithBlockLevelAccessList struct {
 	Reader
-	AccessList *bal.ConstructionBlockAccessList
+	AccessList bal.AccessListReader
 	TxIndex    int
 }
 
-func NewReaderWithBlockLevelAccessList(base Reader, accessList *bal.ConstructionBlockAccessList, txIndex int) *ReaderWithBlockLevelAccessList {
+func NewReaderWithBlockLevelAccessList(base Reader, accessList bal.BlockAccessList, txIndex int) *ReaderWithBlockLevelAccessList {
 	return &ReaderWithBlockLevelAccessList{
 		Reader:     base,
-		AccessList: accessList,
+		AccessList: bal.NewAccessListReader(accessList),
 		TxIndex:    txIndex,
 	}
 }
 
 // Account implements Reader, returning the account with the specific address.
-func (r *ReaderWithBlockLevelAccessList) Account(addr common.Address) (*types.StateAccount, error) {
-	panic("implement me")
+func (r *ReaderWithBlockLevelAccessList) Account(addr common.Address) (acct *types.StateAccount, err error) {
+	acct, err = r.Reader.Account(addr)
+	if err != nil {
+		return nil, err
+	}
+
+	mut := r.AccessList.AccountMutations(addr, r.TxIndex)
+	if mut == nil {
+		return
+	}
+
+	if acct == nil {
+		acct = types.NewEmptyStateAccount()
+	} else {
+		// the account returned by the underlying reader is a reference
+		// copy it to avoid mutating the reader's instance
+		acct = acct.Copy()
+	}
+
+	if mut.Balance != nil {
+		acct.Balance = mut.Balance
+	}
+	if mut.Code != nil {
+		codeHash := crypto.Keccak256Hash(mut.Code)
+		acct.CodeHash = codeHash[:]
+	}
+	if mut.Nonce != nil {
+		acct.Nonce = *mut.Nonce
+	}
+	return
 }
 
 // Storage implements Reader, returning the storage slot with the specific
 // address and slot key.
 func (r *ReaderWithBlockLevelAccessList) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
-	panic("implement me")
+
+	val := r.AccessList.Storage(addr, slot, r.TxIndex)
+	if val != nil {
+		return *val, nil
+	}
+	return r.Reader.Storage(addr, slot)
 }
 
 // Has implements Reader, returning the flag indicating whether the contract
 // code with specified address and hash exists or not.
 func (r *ReaderWithBlockLevelAccessList) Has(addr common.Address, codeHash common.Hash) bool {
-	panic("implement me")
+	mut := r.AccessList.AccountMutations(addr, r.TxIndex)
+	if mut != nil && mut.Code != nil {
+		return crypto.Keccak256Hash(mut.Code) == codeHash
+	}
+	return r.Reader.Has(addr, codeHash)
 }
 
 // Code implements Reader, returning the contract code with specified address
 // and hash.
 func (r *ReaderWithBlockLevelAccessList) Code(addr common.Address, codeHash common.Hash) ([]byte, error) {
-	panic("implement me")
+	mut := r.AccessList.AccountMutations(addr, r.TxIndex)
+	if mut != nil && mut.Code != nil && crypto.Keccak256Hash(mut.Code) == codeHash {
+		// TODO: need to copy here?
+		return mut.Code, nil
+	}
+	return r.Reader.Code(addr, codeHash)
 }
 
 // CodeSize implements Reader, returning the contract code size with specified
 // address and hash.
 func (r *ReaderWithBlockLevelAccessList) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
-	panic("implement me")
-}
-
-// StorageAccessList represents a set of storage slots accessed within an account.
-type StorageAccessList map[common.Hash]struct{}
-
-// StateAccessList maps account addresses to their respective accessed storage slots.
-type StateAccessList map[common.Address]StorageAccessList
-
-// Merge merges the entries from the other StateAccessList into the receiver.
-func (s StateAccessList) Merge(other StateAccessList) {
-	for addr, otherSlots := range other {
-		slots, exists := s[addr]
-		if !exists {
-			s[addr] = otherSlots
-			continue
-		}
-		maps.Copy(slots, otherSlots)
+	mut := r.AccessList.AccountMutations(addr, r.TxIndex)
+	if mut != nil && mut.Code != nil && crypto.Keccak256Hash(mut.Code) == codeHash {
+		return len(mut.Code), nil
 	}
+	return r.Reader.CodeSize(addr, codeHash)
 }
 
 // StateReaderTracker defines the capability to retrieve the access footprint
 // recorded during state reading operations.
 type StateReaderTracker interface {
-	GetStateAccessList() StateAccessList
+	GetStateAccessList() bal.StateAccesses
+}
+
+func NewReaderWithTracker(r Reader) Reader {
+	return newReaderTracker(r)
 }
 
 type readerTracker struct {
 	Reader
-	access StateAccessList
-	lock   sync.RWMutex
+	access bal.StateAccesses
 }
 
 func newReaderTracker(reader Reader) *readerTracker {
 	return &readerTracker{
 		Reader: reader,
-		access: make(StateAccessList),
+		access: make(bal.StateAccesses),
 	}
 }
 
 // Account implements StateReader, tracking the accessed address locally.
 func (r *readerTracker) Account(addr common.Address) (*types.StateAccount, error) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
 	_, exists := r.access[addr]
 	if !exists {
-		r.access[addr] = make(StorageAccessList)
+		r.access[addr] = make(bal.StorageAccessList)
 	}
 	return r.Reader.Account(addr)
 }
 
 // Storage implements StateReader, tracking the accessed slot identifier locally.
 func (r *readerTracker) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
 	list, exists := r.access[addr]
 	if !exists {
-		list = make(StorageAccessList)
+		list = make(bal.StorageAccessList)
 		r.access[addr] = list
 	}
 	list[slot] = struct{}{}
@@ -304,9 +329,6 @@ func (r *readerTracker) Storage(addr common.Address, slot common.Hash) (common.H
 }
 
 // GetStateAccessList implements StateReaderTracker, returning the access footprint.
-func (r *readerTracker) GetStateAccessList() StateAccessList {
-	r.lock.RLock()
-	defer r.lock.RUnlock()
-
+func (r *readerTracker) GetStateAccessList() bal.StateAccesses {
 	return r.access
 }
