@@ -59,6 +59,7 @@ type simCallResult struct {
 	ReturnValue hexutil.Bytes  `json:"returnData"`
 	Logs        []*types.Log   `json:"logs"`
 	GasUsed     hexutil.Uint64 `json:"gasUsed"`
+	MaxUsedGas  hexutil.Uint64 `json:"maxUsedGas"`
 	Status      hexutil.Uint64 `json:"status"`
 	Error       *callError     `json:"error,omitempty"`
 }
@@ -304,7 +305,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		receipts[i] = core.MakeReceipt(evm, result, sim.state, blockContext.BlockNumber, common.Hash{}, blockContext.Time, tx, gasUsed, root)
 		blobGasUsed += receipts[i].BlobGasUsed
 		logs := tracer.Logs()
-		callRes := simCallResult{ReturnValue: result.Return(), Logs: logs, GasUsed: hexutil.Uint64(result.UsedGas)}
+		callRes := simCallResult{ReturnValue: result.Return(), Logs: logs, GasUsed: hexutil.Uint64(result.UsedGas), MaxUsedGas: *call.Gas}
 		if result.Failed() {
 			callRes.Status = hexutil.Uint64(types.ReceiptStatusFailed)
 			if errors.Is(result.Err, vm.ErrExecutionReverted) {
