@@ -387,8 +387,14 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc) *state.StateDB
 		}
 	}
 	// Commit and re-open to start with a clean state.
-	root, _ := statedb.Commit(0, false, false)
-	statedb, _ = state.New(root, sdb)
+	root, err := statedb.Commit(0, false, false)
+	if err != nil {
+		panic(fmt.Errorf("failed to commit initial state: %v", err))
+	}
+	statedb, err = state.New(root, sdb)
+	if err != nil {
+		panic(fmt.Errorf("failed to reopen state after commit: %v", err))
+	}
 	return statedb
 }
 
