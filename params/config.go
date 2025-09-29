@@ -511,49 +511,49 @@ func (c *ChainConfig) String() string {
 
 	// Add block-based forks
 	if c.HomesteadBlock != nil {
-		result += fmt.Sprintf(", HomesteadBlock: %v", c.HomesteadBlock)
+		result += fmt.Sprintf(", HomesteadBlock: %v", *c.HomesteadBlock)
 	}
 	if c.DAOForkBlock != nil {
-		result += fmt.Sprintf(", DAOForkBlock: %v", c.DAOForkBlock)
+		result += fmt.Sprintf(", DAOForkBlock: %v", *c.DAOForkBlock)
 	}
 	if c.EIP150Block != nil {
-		result += fmt.Sprintf(", EIP150Block: %v", c.EIP150Block)
+		result += fmt.Sprintf(", EIP150Block: %v", *c.EIP150Block)
 	}
 	if c.EIP155Block != nil {
-		result += fmt.Sprintf(", EIP155Block: %v", c.EIP155Block)
+		result += fmt.Sprintf(", EIP155Block: %v", *c.EIP155Block)
 	}
 	if c.EIP158Block != nil {
-		result += fmt.Sprintf(", EIP158Block: %v", c.EIP158Block)
+		result += fmt.Sprintf(", EIP158Block: %v", *c.EIP158Block)
 	}
 	if c.ByzantiumBlock != nil {
-		result += fmt.Sprintf(", ByzantiumBlock: %v", c.ByzantiumBlock)
+		result += fmt.Sprintf(", ByzantiumBlock: %v", *c.ByzantiumBlock)
 	}
 	if c.ConstantinopleBlock != nil {
-		result += fmt.Sprintf(", ConstantinopleBlock: %v", c.ConstantinopleBlock)
+		result += fmt.Sprintf(", ConstantinopleBlock: %v", *c.ConstantinopleBlock)
 	}
 	if c.PetersburgBlock != nil {
-		result += fmt.Sprintf(", PetersburgBlock: %v", c.PetersburgBlock)
+		result += fmt.Sprintf(", PetersburgBlock: %v", *c.PetersburgBlock)
 	}
 	if c.IstanbulBlock != nil {
-		result += fmt.Sprintf(", IstanbulBlock: %v", c.IstanbulBlock)
+		result += fmt.Sprintf(", IstanbulBlock: %v", *c.IstanbulBlock)
 	}
 	if c.MuirGlacierBlock != nil {
-		result += fmt.Sprintf(", MuirGlacierBlock: %v", c.MuirGlacierBlock)
+		result += fmt.Sprintf(", MuirGlacierBlock: %v", *c.MuirGlacierBlock)
 	}
 	if c.BerlinBlock != nil {
-		result += fmt.Sprintf(", BerlinBlock: %v", c.BerlinBlock)
+		result += fmt.Sprintf(", BerlinBlock: %v", *c.BerlinBlock)
 	}
 	if c.LondonBlock != nil {
-		result += fmt.Sprintf(", LondonBlock: %v", c.LondonBlock)
+		result += fmt.Sprintf(", LondonBlock: %v", *c.LondonBlock)
 	}
 	if c.ArrowGlacierBlock != nil {
-		result += fmt.Sprintf(", ArrowGlacierBlock: %v", c.ArrowGlacierBlock)
+		result += fmt.Sprintf(", ArrowGlacierBlock: %v", *c.ArrowGlacierBlock)
 	}
 	if c.GrayGlacierBlock != nil {
-		result += fmt.Sprintf(", GrayGlacierBlock: %v", c.GrayGlacierBlock)
+		result += fmt.Sprintf(", GrayGlacierBlock: %v", *c.GrayGlacierBlock)
 	}
 	if c.MergeNetsplitBlock != nil {
-		result += fmt.Sprintf(", MergeNetsplitBlock: %v", c.MergeNetsplitBlock)
+		result += fmt.Sprintf(", MergeNetsplitBlock: %v", *c.MergeNetsplitBlock)
 	}
 
 	// Add timestamp-based forks
