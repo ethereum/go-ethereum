@@ -239,8 +239,8 @@ type indexerStatus struct {
 }
 
 // blockData represents the indexable data of a single block being sent from the
-// reader to the sender goroutine and optionally queued in blockDataCh inbetween.
-// It also returns the latest revertCount known before reading the block data,
+// reader to the sender goroutine and optionally queued in blockDataCh between.
+// It also includes the latest revertCount known before reading the block data,
 // which allows the sender to guarantee that all sent block data is always
 // consistent with the indexer's canonical chain view while the reading of block
 // data can still happen asynchronously.
@@ -352,10 +352,14 @@ func (s *indexServer) historicSendLoop() {
 		case nextBlockData := <-s.blockDataCh:
 			s.lock.Lock()
 			s.status.resetQueue = true
+			// check if received block data is indeed from the next expected
+			// block and is still guaranteed to be canonical; ignore and request
+			// again otherwise.
 			if !s.status.needBlocks.IsEmpty() && s.status.needBlocks.First() == nextBlockData.blockNumber &&
 				(nextBlockData.revertCount == s.status.revertCount || (nextBlockData.revertCount+1 == s.status.revertCount && nextBlockData.blockNumber <= s.lastRevertBlock)) {
 				s.status.ready, s.status.needBlocks = s.indexer.AddBlockData(nextBlockData.header, nextBlockData.receipts)
-				if nextBlockData.header != nil {
+				// check if the has actually been found in the database
+				if nextBlockData.header != nil && nextBlockData.receipts != nil {
 					s.status.resetQueue = false
 					if s.status.needBlocks.IsEmpty() {
 						s.logDelivered(nextBlockData.blockNumber)
@@ -364,6 +368,16 @@ func (s *indexServer) historicSendLoop() {
 						s.logDelivered(nextBlockData.blockNumber)
 					}
 				} else {
+					// report error and update missingBlockCutoff in order to
+					// avoid spinning forever on the same error.
+					if time.Since(s.lastHistoryErrorLog) >= time.Second*10 {
+						s.lastHistoryErrorLog = time.Now()
+						if nextBlockData.header == nil {
+							log.Error("Historical header is missing", "number", nextBlockData.blockNumber)
+						} else {
+							log.Error("Historical receipts are missing", "number", nextBlockData.blockNumber, "hash", nextBlockData.header.Hash())
+						}
+					}
 					s.missingBlockCutoff = max(s.missingBlockCutoff, nextBlockData.blockNumber+1)
 					s.indexer.SetHistoryCutoff(max(s.historyCutoff, s.missingBlockCutoff))
 					s.status.ready, s.status.needBlocks = s.indexer.Status()
@@ -484,17 +498,12 @@ func (s *indexServer) historicReadLoop() {
 		if !sendRange.IsEmpty() && !status.suspended {
 			// Send next item to the queue.
 			bd := blockData{blockNumber: sendRange.First(), revertCount: status.revertCount}
-			if header := s.parent.chain.GetHeaderByNumber(bd.blockNumber); header != nil {
-				if receipts := s.parent.chain.GetReceipts(header.Hash(), bd.blockNumber); receipts != nil {
-					bd.header, bd.receipts = header, receipts
-				} else {
-					log.Error("Historical receipts are missing", "number", bd.blockNumber, "hash", header.Hash())
-				}
-			} else {
-				log.Error("Historical header missing", "number", bd.blockNumber)
+			if bd.header = s.parent.chain.GetHeaderByNumber(bd.blockNumber); bd.header != nil {
+				bd.receipts = s.parent.chain.GetReceipts(bd.header.Hash(), bd.blockNumber)
 			}
-			// Note that a response with empty block data is still sent in case of
+			// Note that a response with missing block data is still sent in case of
 			// a read error, signaling to the sender logic that something is missing.
+			// This might be either due to a database error or a reorg.
 			select {
 			case s.blockDataCh <- bd:
 				sendRange.SetFirst(bd.blockNumber + 1)
