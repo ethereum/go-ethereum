@@ -504,6 +504,96 @@ func (c CliqueConfig) String() string {
 	return fmt.Sprintf("clique(period: %d, epoch: %d)", c.Period, c.Epoch)
 }
 
+// String implements the fmt.Stringer interface, returning a string representation
+// of ChainConfig.
+func (c *ChainConfig) String() string {
+	result := fmt.Sprintf("ChainConfig{ChainID: %v", c.ChainID)
+
+	// Add block-based forks
+	if c.HomesteadBlock != nil {
+		result += fmt.Sprintf(", HomesteadBlock: %v", c.HomesteadBlock)
+	}
+	if c.DAOForkBlock != nil {
+		result += fmt.Sprintf(", DAOForkBlock: %v", c.DAOForkBlock)
+	}
+	if c.EIP150Block != nil {
+		result += fmt.Sprintf(", EIP150Block: %v", c.EIP150Block)
+	}
+	if c.EIP155Block != nil {
+		result += fmt.Sprintf(", EIP155Block: %v", c.EIP155Block)
+	}
+	if c.EIP158Block != nil {
+		result += fmt.Sprintf(", EIP158Block: %v", c.EIP158Block)
+	}
+	if c.ByzantiumBlock != nil {
+		result += fmt.Sprintf(", ByzantiumBlock: %v", c.ByzantiumBlock)
+	}
+	if c.ConstantinopleBlock != nil {
+		result += fmt.Sprintf(", ConstantinopleBlock: %v", c.ConstantinopleBlock)
+	}
+	if c.PetersburgBlock != nil {
+		result += fmt.Sprintf(", PetersburgBlock: %v", c.PetersburgBlock)
+	}
+	if c.IstanbulBlock != nil {
+		result += fmt.Sprintf(", IstanbulBlock: %v", c.IstanbulBlock)
+	}
+	if c.MuirGlacierBlock != nil {
+		result += fmt.Sprintf(", MuirGlacierBlock: %v", c.MuirGlacierBlock)
+	}
+	if c.BerlinBlock != nil {
+		result += fmt.Sprintf(", BerlinBlock: %v", c.BerlinBlock)
+	}
+	if c.LondonBlock != nil {
+		result += fmt.Sprintf(", LondonBlock: %v", c.LondonBlock)
+	}
+	if c.ArrowGlacierBlock != nil {
+		result += fmt.Sprintf(", ArrowGlacierBlock: %v", c.ArrowGlacierBlock)
+	}
+	if c.GrayGlacierBlock != nil {
+		result += fmt.Sprintf(", GrayGlacierBlock: %v", c.GrayGlacierBlock)
+	}
+	if c.MergeNetsplitBlock != nil {
+		result += fmt.Sprintf(", MergeNetsplitBlock: %v", c.MergeNetsplitBlock)
+	}
+
+	// Add timestamp-based forks
+	if c.ShanghaiTime != nil {
+		result += fmt.Sprintf(", ShanghaiTime: %v", *c.ShanghaiTime)
+	}
+	if c.CancunTime != nil {
+		result += fmt.Sprintf(", CancunTime: %v", *c.CancunTime)
+	}
+	if c.PragueTime != nil {
+		result += fmt.Sprintf(", PragueTime: %v", *c.PragueTime)
+	}
+	if c.OsakaTime != nil {
+		result += fmt.Sprintf(", OsakaTime: %v", *c.OsakaTime)
+	}
+	if c.BPO1Time != nil {
+		result += fmt.Sprintf(", BPO1Time: %v", *c.BPO1Time)
+	}
+	if c.BPO2Time != nil {
+		result += fmt.Sprintf(", BPO2Time: %v", *c.BPO2Time)
+	}
+	if c.BPO3Time != nil {
+		result += fmt.Sprintf(", BPO3Time: %v", *c.BPO3Time)
+	}
+	if c.BPO4Time != nil {
+		result += fmt.Sprintf(", BPO4Time: %v", *c.BPO4Time)
+	}
+	if c.BPO5Time != nil {
+		result += fmt.Sprintf(", BPO5Time: %v", *c.BPO5Time)
+	}
+	if c.AmsterdamTime != nil {
+		result += fmt.Sprintf(", AmsterdamTime: %v", *c.AmsterdamTime)
+	}
+	if c.VerkleTime != nil {
+		result += fmt.Sprintf(", VerkleTime: %v", *c.VerkleTime)
+	}
+	result += "}"
+	return result
+}
+
 // Description returns a human-readable description of ChainConfig.
 func (c *ChainConfig) Description() string {
 	var banner string
