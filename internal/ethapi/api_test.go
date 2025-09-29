@@ -3746,8 +3746,8 @@ func TestCreateAccessListWithStateOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create access list: %v", err)
 	}
-	if err != nil || result == nil {
-		t.Fatalf("Failed to create access list: %v", err)
+	if result == nil {
+		t.Fatalf("Failed to create access list: result is nil")
 	}
 	require.NotNil(t, result.Accesslist)
 
