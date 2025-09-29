@@ -18,6 +18,7 @@ package engine
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"math/big"
 	"slices"
 
@@ -50,6 +51,7 @@ var (
 	// ExecutionPayloadV3 has the syntax of ExecutionPayloadV2 and appends the new
 	// fields: blobGasUsed and excessBlobGas.
 	PayloadV3 PayloadVersion = 0x3
+	PayloadV4 PayloadVersion = 0x4
 )
 
 //go:generate go run github.com/fjl/gencodec -type PayloadAttributes -field-override payloadAttributesMarshaling -out gen_blockparams.go
@@ -90,6 +92,7 @@ type ExecutableData struct {
 	Withdrawals      []*types.Withdrawal     `json:"withdrawals"`
 	BlobGasUsed      *uint64                 `json:"blobGasUsed"`
 	ExcessBlobGas    *uint64                 `json:"excessBlobGas"`
+	BlockAccessList  *bal.BlockAccessList    `json:"blockAccessList"`
 	ExecutionWitness *types.ExecutionWitness `json:"executionWitness,omitempty"`
 }
 
@@ -293,30 +296,39 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 		requestsHash = &h
 	}
 
+	var blockAccessListHash *common.Hash
+	body := types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals}
+	if data.BlockAccessList != nil {
+		body.AccessList = data.BlockAccessList
+		balHash := data.BlockAccessList.Hash()
+		blockAccessListHash = &balHash
+	}
+
 	header := &types.Header{
-		ParentHash:       data.ParentHash,
-		UncleHash:        types.EmptyUncleHash,
-		Coinbase:         data.FeeRecipient,
-		Root:             data.StateRoot,
-		TxHash:           types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash:      data.ReceiptsRoot,
-		Bloom:            types.BytesToBloom(data.LogsBloom),
-		Difficulty:       common.Big0,
-		Number:           new(big.Int).SetUint64(data.Number),
-		GasLimit:         data.GasLimit,
-		GasUsed:          data.GasUsed,
-		Time:             data.Timestamp,
-		BaseFee:          data.BaseFeePerGas,
-		Extra:            data.ExtraData,
-		MixDigest:        data.Random,
-		WithdrawalsHash:  withdrawalsRoot,
-		ExcessBlobGas:    data.ExcessBlobGas,
-		BlobGasUsed:      data.BlobGasUsed,
-		ParentBeaconRoot: beaconRoot,
-		RequestsHash:     requestsHash,
+		ParentHash:          data.ParentHash,
+		UncleHash:           types.EmptyUncleHash,
+		Coinbase:            data.FeeRecipient,
+		Root:                data.StateRoot,
+		TxHash:              types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
+		ReceiptHash:         data.ReceiptsRoot,
+		Bloom:               types.BytesToBloom(data.LogsBloom),
+		Difficulty:          common.Big0,
+		Number:              new(big.Int).SetUint64(data.Number),
+		GasLimit:            data.GasLimit,
+		GasUsed:             data.GasUsed,
+		Time:                data.Timestamp,
+		BaseFee:             data.BaseFeePerGas,
+		Extra:               data.ExtraData,
+		MixDigest:           data.Random,
+		WithdrawalsHash:     withdrawalsRoot,
+		ExcessBlobGas:       data.ExcessBlobGas,
+		BlobGasUsed:         data.BlobGasUsed,
+		ParentBeaconRoot:    beaconRoot,
+		RequestsHash:        requestsHash,
+		BlockAccessListHash: blockAccessListHash,
 	}
 	return types.NewBlockWithHeader(header).
-			WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals}).
+			WithBody(body).
 			WithWitness(data.ExecutionWitness),
 		nil
 }
@@ -343,6 +355,7 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		BlobGasUsed:      block.BlobGasUsed(),
 		ExcessBlobGas:    block.ExcessBlobGas(),
 		ExecutionWitness: block.ExecutionWitness(),
+		BlockAccessList:  block.Body().AccessList,
 	}
 
 	// Add blobs.

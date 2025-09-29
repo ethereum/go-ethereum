@@ -17,8 +17,6 @@
 package state
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -27,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
+	"math/big"
 )
 
 // hookedStateDB represents a statedb which emits calls to tracing-hooks
@@ -241,30 +240,14 @@ func (s *hookedStateDB) SelfDestruct(address common.Address) uint256.Int {
 	return prev
 }
 
-func (s *hookedStateDB) SelfDestruct6780(address common.Address) (uint256.Int, bool) {
-	var prevCode []byte
-	var prevCodeHash common.Hash
-
-	if s.hooks.OnCodeChange != nil {
-		prevCodeHash = s.inner.GetCodeHash(address)
-		prevCode = s.inner.GetCode(address)
-	}
-
-	prev, changed := s.inner.SelfDestruct6780(address)
-
-	if s.hooks.OnBalanceChange != nil && !prev.IsZero() {
-		s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
-	}
-
-	if changed && len(prevCode) > 0 {
-		if s.hooks.OnCodeChangeV2 != nil {
-			s.hooks.OnCodeChangeV2(address, prevCodeHash, prevCode, types.EmptyCodeHash, nil, tracing.CodeChangeSelfDestruct)
-		} else if s.hooks.OnCodeChange != nil {
-			s.hooks.OnCodeChange(address, prevCodeHash, prevCode, types.EmptyCodeHash, nil)
-		}
-	}
+func (s *hookedStateDB) SelfDestruct6780(src common.Address) (uint256.Int, bool) {
+	prev, changed := s.inner.SelfDestruct6780(src)
 
 	return prev, changed
+}
+
+func (s *hookedStateDB) ExistBeforeCurTx(addr common.Address) bool {
+	return s.inner.ExistBeforeCurTx(addr)
 }
 
 func (s *hookedStateDB) AddLog(log *types.Log) {
@@ -277,16 +260,37 @@ func (s *hookedStateDB) AddLog(log *types.Log) {
 
 func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
 	defer s.inner.Finalise(deleteEmptyObjects)
-	if s.hooks.OnBalanceChange == nil {
-		return
-	}
-	for addr := range s.inner.journal.dirties {
-		obj := s.inner.stateObjects[addr]
-		if obj != nil && obj.selfDestructed {
-			// If ether was sent to account post-selfdestruct it is burnt.
-			if bal := obj.Balance(); bal.Sign() != 0 {
-				s.hooks.OnBalanceChange(addr, bal.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestructBurn)
+	if s.hooks.OnSelfDestructChange != nil || s.hooks.OnBalanceChange != nil || s.hooks.OnNonceChangeV2 != nil || s.hooks.OnCodeChangeV2 != nil || s.hooks.OnCodeChange != nil {
+		for addr := range s.inner.journal.dirties {
+			obj := s.inner.stateObjects[addr]
+			if obj != nil && obj.selfDestructed {
+				if obj.selfDestructed && s.hooks.OnSelfDestructChange != nil {
+					// when executing, can we tell the difference between
+					s.hooks.OnSelfDestructChange(obj.address)
+				}
+
+				// If ether was sent to account post-selfdestruct it is burnt.
+				if s.hooks.OnBalanceChange != nil {
+					if bal := obj.Balance(); bal.Sign() != 0 {
+						s.hooks.OnBalanceChange(addr, bal.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestructBurn)
+					}
+				}
+				if s.hooks.OnNonceChangeV2 != nil {
+					prevNonce := obj.Nonce()
+					s.hooks.OnNonceChangeV2(addr, prevNonce, 0, tracing.NonceChangeSelfdestruct)
+				}
+				prevCodeHash := s.inner.GetCodeHash(addr)
+				prevCode := s.inner.GetCode(addr)
+				if s.hooks.OnCodeChangeV2 != nil {
+					s.hooks.OnCodeChangeV2(addr, prevCodeHash, prevCode, types.EmptyCodeHash, nil, tracing.CodeChangeSelfDestruct)
+				} else if s.hooks.OnCodeChange != nil {
+					s.hooks.OnCodeChange(addr, prevCodeHash, prevCode, types.EmptyCodeHash, nil)
+				}
 			}
 		}
 	}
+}
+
+func (s *hookedStateDB) TxIndex() int {
+	return s.inner.TxIndex()
 }

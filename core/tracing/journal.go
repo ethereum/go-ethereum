@@ -147,6 +147,18 @@ func (j *journal) OnExit(depth int, output []byte, gasUsed uint64, err error, re
 	}
 }
 
+func (j *journal) OnColdStorageLoad(address common.Address, key common.Hash) {
+	if j.hooks.OnColdStorageRead != nil {
+		j.hooks.OnColdStorageRead(address, key)
+	}
+}
+
+func (j *journal) OnColdAccountLoad(address common.Address) {
+	if j.hooks.OnColdAccountRead != nil {
+		j.hooks.OnColdAccountRead(address)
+	}
+}
+
 func (j *journal) OnBalanceChange(addr common.Address, prev, new *big.Int, reason BalanceChangeReason) {
 	j.entries = append(j.entries, balanceChange{addr: addr, prev: prev, new: new})
 	if j.hooks.OnBalanceChange != nil {

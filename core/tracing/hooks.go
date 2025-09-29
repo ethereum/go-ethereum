@@ -183,6 +183,14 @@ type (
 	// StorageChangeHook is called when the storage of an account changes.
 	StorageChangeHook = func(addr common.Address, slot common.Hash, prev, new common.Hash)
 
+	// ColdStorageReadHook is called before a previously-unread storage slot is read.
+	ColdStorageReadHook = func(common.Address, common.Hash)
+
+	// ColdAccountReadHook is called before an previously-unread account is read.
+	ColdAccountReadHook = func(address common.Address)
+
+	SelfDestructHook = func(address common.Address)
+
 	// LogHook is called when a log is emitted.
 	LogHook = func(log *types.Log)
 
@@ -209,14 +217,22 @@ type Hooks struct {
 	OnSystemCallStart   OnSystemCallStartHook
 	OnSystemCallStartV2 OnSystemCallStartHookV2
 	OnSystemCallEnd     OnSystemCallEndHook
+
+	OnPreTxExecutionDone func() // called after pre-tx system contracts are invoked
+	OnBlockFinalization  func() // called after post-tx system contracts and consensus finalization are invoked
+
 	// State events
-	OnBalanceChange BalanceChangeHook
-	OnNonceChange   NonceChangeHook
-	OnNonceChangeV2 NonceChangeHookV2
-	OnCodeChange    CodeChangeHook
-	OnCodeChangeV2  CodeChangeHookV2
-	OnStorageChange StorageChangeHook
-	OnLog           LogHook
+	OnBalanceChange      BalanceChangeHook
+	OnNonceChange        NonceChangeHook
+	OnNonceChangeV2      NonceChangeHookV2
+	OnCodeChange         CodeChangeHook
+	OnCodeChangeV2       CodeChangeHookV2
+	OnStorageChange      StorageChangeHook
+	OnLog                LogHook
+	OnSelfDestructChange SelfDestructHook
+	//State read events
+	OnColdStorageRead ColdStorageReadHook
+	OnColdAccountRead ColdAccountReadHook
 	// Block hash read
 	OnBlockHashRead BlockHashReadHook
 }
@@ -375,6 +391,9 @@ const (
 	// NonceChangeRevert is emitted when the nonce is reverted back to a previous value due to call failure.
 	// It is only emitted when the tracer has opted in to use the journaling wrapper (WrapWithJournal).
 	NonceChangeRevert NonceChangeReason = 6
+
+	// NonceChangeSelfdestruct is emitted when the nonce is reset to zero due to a self-destruct
+	NonceChangeSelfdestruct NonceChangeReason = 7
 )
 
 // CodeChangeReason is used to indicate the reason for a code change.

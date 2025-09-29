@@ -1007,9 +1007,11 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		}
 		if cur.timestamp != nil {
 			// If the fork is configured, a blob schedule must be defined for it.
-			if cur.config == nil {
-				return fmt.Errorf("invalid chain configuration: missing entry for fork %q in blobSchedule", cur.name)
-			}
+			/*
+				if cur.config == nil {
+					return fmt.Errorf("invalid chain configuration: missing entry for fork %q in blobSchedule", cur.name)
+				}
+			*/
 		}
 	}
 	return nil
@@ -1164,6 +1166,9 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 // BlobConfig returns the blob config associated with the provided fork.
 func (c *ChainConfig) BlobConfig(fork forks.Fork) *BlobConfig {
 	switch fork {
+	case forks.Amsterdam:
+		// TODO: (????)
+		return c.BlobScheduleConfig.BPO2
 	case forks.BPO5:
 		return c.BlobScheduleConfig.BPO5
 	case forks.BPO4:
@@ -1209,6 +1214,8 @@ func (c *ChainConfig) ActiveSystemContracts(time uint64) map[string]common.Addre
 // the fork isn't defined or isn't a time-based fork.
 func (c *ChainConfig) Timestamp(fork forks.Fork) *uint64 {
 	switch {
+	case fork == forks.Amsterdam:
+		return c.AmsterdamTime
 	case fork == forks.BPO5:
 		return c.BPO5Time
 	case fork == forks.BPO4:

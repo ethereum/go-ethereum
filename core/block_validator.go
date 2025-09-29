@@ -19,7 +19,6 @@ package core
 import (
 	"errors"
 	"fmt"
-
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -111,6 +110,33 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		}
 	}
 
+	// block access lists must be present after the Amsterdam hard fork
+	if v.config.IsAmsterdam(block.Number(), block.Time()) {
+		if block.Body().AccessList == nil {
+			return fmt.Errorf("access list not present in block body")
+		} else if block.Header().BlockAccessListHash == nil {
+			return fmt.Errorf("access list hash not present in block header")
+		} else if *block.Header().BlockAccessListHash != block.Body().AccessList.Hash() {
+			return fmt.Errorf("access list hash mismatch.  local: %x. remote: %x\n", block.Body().AccessList.Hash(), *block.Header().BlockAccessListHash)
+		} else if err := block.Body().AccessList.Validate(); err != nil {
+			return fmt.Errorf("invalid block access list: %v", err)
+		}
+	} else if !v.bc.cfg.EnableBALForTesting {
+		// if --experimental.bal is not enabled, block headers cannot have access list hash and bodies cannot have access lists.
+		if block.Body().AccessList != nil {
+			return fmt.Errorf("access list not allowed in block body if not in amsterdam or --experimental.bal is set")
+		} else if block.Header().BlockAccessListHash != nil {
+			return fmt.Errorf("access list hash in block header not allowed when --experimental.bal is set")
+		}
+	} else {
+		// if --experimental.bal is enabled, the BAL hash is not allowed in the header.
+		// this is in order that Geth can import pre-existing chains augmented with BALs
+		// and not have a hash mismatch.
+		if block.Header().BlockAccessListHash != nil {
+			return fmt.Errorf("access list hash in block header not allowed pre-amsterdam")
+		}
+	}
+
 	// Ancestor block must be known.
 	if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
@@ -123,7 +149,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 
 // ValidateState validates the various changes that happen after a state transition,
 // such as amount of used gas, the receipt roots and the state root itself.
-func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, res *ProcessResult, stateless bool) error {
+func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, res *ProcessResult, validateStateRoot, stateless bool) error {
 	if res == nil {
 		return errors.New("nil ProcessResult value")
 	}
@@ -160,10 +186,13 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	} else if res.Requests != nil {
 		return errors.New("block has requests before prague fork")
 	}
-	// Validate the state root against the received state root and throw
-	// an error if they don't match.
-	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
-		return fmt.Errorf("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, statedb.Error())
+
+	if validateStateRoot {
+		// Validate the state root against the received state root and throw
+		// an error if they don't match.
+		if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
+			return fmt.Errorf("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, statedb.Error())
+		}
 	}
 	return nil
 }

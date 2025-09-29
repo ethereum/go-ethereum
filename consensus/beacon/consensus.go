@@ -272,6 +272,14 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 			return err
 		}
 	}
+
+	if chain.Config().IsAmsterdam(header.Number, header.Time) {
+		if header.BlockAccessListHash == nil {
+			// TODO: (self study).  figure out if any of the header checks here overlap with the
+			// other location that I validate the block access list hash.
+			return fmt.Errorf("block access list hash must be set in header post-Amsterdam")
+		}
+	}
 	return nil
 }
 
@@ -343,9 +351,9 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 
 // FinalizeAndAssemble implements consensus.Engine, setting the final state and
 // assembling the block.
-func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt) (*types.Block, error) {
+func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt, onFinalization func()) (*types.Block, error) {
 	if !beacon.IsPoSHeader(header) {
-		return beacon.ethone.FinalizeAndAssemble(chain, header, state, body, receipts)
+		return beacon.ethone.FinalizeAndAssemble(chain, header, state, body, receipts, onFinalization)
 	}
 	shanghai := chain.Config().IsShanghai(header.Number, header.Time)
 	if shanghai {
@@ -363,6 +371,10 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 
 	// Assign the final state root to header.
 	header.Root = state.IntermediateRoot(true)
+
+	if onFinalization != nil {
+		onFinalization()
+	}
 
 	// Assemble the final block.
 	block := types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))

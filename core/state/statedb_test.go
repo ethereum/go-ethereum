@@ -175,10 +175,10 @@ func TestCopy(t *testing.T) {
 	orig.Finalise(false)
 
 	// Copy the state
-	copy := orig.Copy()
+	copy := orig.Copy().(*StateDB)
 
 	// Copy the copy state
-	ccopy := copy.Copy()
+	ccopy := copy.Copy().(*StateDB)
 
 	// modify all in memory
 	for i := byte(0); i < 255; i++ {
@@ -191,7 +191,7 @@ func TestCopy(t *testing.T) {
 		ccopyObj.AddBalance(uint256.NewInt(4 * uint64(i)))
 	}
 
-	// Finalise the changes on all concurrently
+	// FinaliseIdxChanges the changes on all concurrently
 	finalise := func(wg *sync.WaitGroup, db *StateDB) {
 		defer wg.Done()
 		db.Finalise(true)
@@ -243,7 +243,7 @@ func TestCopyWithDirtyJournal(t *testing.T) {
 		amount := uint256.NewInt(uint64(i))
 		obj.SetBalance(new(uint256.Int).Sub(obj.Balance(), amount))
 	}
-	cpy := orig.Copy()
+	cpy := orig.Copy().(*StateDB)
 
 	orig.Finalise(true)
 	for i := byte(0); i < 255; i++ {
@@ -278,7 +278,7 @@ func TestCopyObjectState(t *testing.T) {
 		obj.data.Root = common.HexToHash("0xdeadbeef")
 	}
 	orig.Finalise(true)
-	cpy := orig.Copy()
+	cpy := orig.Copy().(*StateDB)
 	for _, op := range cpy.mutations {
 		if have, want := op.applied, false; have != want {
 			t.Fatalf("Error in test itself, the 'done' flag should not be set before Commit, have %v want %v", have, want)
@@ -528,7 +528,7 @@ func (test *snapshotTest) run() bool {
 	for i, action := range test.actions {
 		if len(test.snapshots) > sindex && i == test.snapshots[sindex] {
 			snapshotRevs[sindex] = state.Snapshot()
-			checkstates[sindex] = state.Copy()
+			checkstates[sindex] = state.Copy().(*StateDB)
 			sindex++
 		}
 		action.fn(action, state)
@@ -747,7 +747,7 @@ func TestCopyCommitCopy(t *testing.T) {
 		t.Fatalf("initial committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
 	// Copy the non-committed state database and check pre/post commit balance
-	copyOne := state.Copy()
+	copyOne := state.Copy().(*StateDB)
 	if balance := copyOne.GetBalance(addr); balance.Cmp(uint256.NewInt(42)) != 0 {
 		t.Fatalf("first copy pre-commit balance mismatch: have %v, want %v", balance, 42)
 	}
@@ -761,7 +761,7 @@ func TestCopyCommitCopy(t *testing.T) {
 		t.Fatalf("first copy pre-commit committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
 	// Copy the copy and check the balance once more
-	copyTwo := copyOne.Copy()
+	copyTwo := copyOne.Copy().(*StateDB)
 	if balance := copyTwo.GetBalance(addr); balance.Cmp(uint256.NewInt(42)) != 0 {
 		t.Fatalf("second copy balance mismatch: have %v, want %v", balance, 42)
 	}
@@ -820,7 +820,7 @@ func TestCopyCopyCommitCopy(t *testing.T) {
 		t.Fatalf("initial committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
 	// Copy the non-committed state database and check pre/post commit balance
-	copyOne := state.Copy()
+	copyOne := state.Copy().(*StateDB)
 	if balance := copyOne.GetBalance(addr); balance.Cmp(uint256.NewInt(42)) != 0 {
 		t.Fatalf("first copy balance mismatch: have %v, want %v", balance, 42)
 	}
@@ -834,7 +834,7 @@ func TestCopyCopyCommitCopy(t *testing.T) {
 		t.Fatalf("first copy committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
 	// Copy the copy and check the balance once more
-	copyTwo := copyOne.Copy()
+	copyTwo := copyOne.Copy().(*StateDB)
 	if balance := copyTwo.GetBalance(addr); balance.Cmp(uint256.NewInt(42)) != 0 {
 		t.Fatalf("second copy pre-commit balance mismatch: have %v, want %v", balance, 42)
 	}
@@ -848,7 +848,7 @@ func TestCopyCopyCommitCopy(t *testing.T) {
 		t.Fatalf("second copy pre-commit committed storage slot mismatch: have %x, want %x", val, common.Hash{})
 	}
 	// Copy the copy-copy and check the balance once more
-	copyThree := copyTwo.Copy()
+	copyThree := copyTwo.Copy().(*StateDB)
 	if balance := copyThree.GetBalance(addr); balance.Cmp(uint256.NewInt(42)) != 0 {
 		t.Fatalf("third copy balance mismatch: have %v, want %v", balance, 42)
 	}
@@ -896,7 +896,7 @@ func TestCommitCopy(t *testing.T) {
 	state.Commit(1, true, false)
 
 	// Copy the committed state database, the copied one is not fully functional.
-	copied := state.Copy()
+	copied := state.Copy().(*StateDB)
 	if balance := copied.GetBalance(addr); balance.Cmp(uint256.NewInt(42)) != 0 {
 		t.Fatalf("unexpected balance: have %v", balance)
 	}
@@ -1098,7 +1098,7 @@ func TestStateDBAccessList(t *testing.T) {
 	verifySlots("bb", "01", "02")
 
 	// Make a copy
-	stateCopy1 := state.Copy()
+	stateCopy1 := state.Copy().(*StateDB)
 	if exp, got := 4, state.journal.length(); exp != got {
 		t.Fatalf("journal length mismatch: have %d, want %d", got, exp)
 	}

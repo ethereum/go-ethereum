@@ -79,7 +79,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	)
 
 	// Apply pre-execution system calls.
-	var tracingStateDB = vm.StateDB(statedb)
+	var tracingStateDB vm.StateDB = statedb
 	if hooks := cfg.Tracer; hooks != nil {
 		tracingStateDB = state.NewHookedState(statedb, hooks)
 	}
@@ -91,6 +91,10 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	if config.IsPrague(block.Number(), block.Time()) || config.IsVerkle(block.Number(), block.Time()) {
 		ProcessParentBlockHash(block.ParentHash(), evm)
+	}
+
+	if hooks := cfg.Tracer; hooks != nil {
+		hooks.OnPreTxExecutionDone()
 	}
 
 	// Iterate over and process the individual transactions
@@ -108,6 +112,10 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
+
+	// TODO: how do we signal to the BAL tracer that we are computing post-tx state changes here?
+	// if there are no txs in the block, then it will just record these state diffs at idx 0
+
 	// Read requests if Prague is enabled.
 	var requests [][]byte
 	if config.IsPrague(block.Number(), block.Time()) {
@@ -118,16 +126,20 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		}
 		// EIP-7002
 		if err := ProcessWithdrawalQueue(&requests, evm); err != nil {
-			return nil, fmt.Errorf("failed to process withdrawal queue: %w", err)
+			return nil, err
 		}
 		// EIP-7251
 		if err := ProcessConsolidationQueue(&requests, evm); err != nil {
-			return nil, fmt.Errorf("failed to process consolidation queue: %w", err)
+			return nil, err
 		}
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.chain.Engine().Finalize(p.chain, header, tracingStateDB, block.Body())
+
+	if hooks := cfg.Tracer; hooks != nil {
+		hooks.OnBlockFinalization()
+	}
 
 	return &ProcessResult{
 		Receipts: receipts,
@@ -154,6 +166,7 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 	if err != nil {
 		return nil, err
 	}
+
 	// Update the state with pending changes.
 	var root []byte
 	if evm.ChainConfig().IsByzantium(blockNumber) {
@@ -213,7 +226,8 @@ func ApplyTransaction(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *
 		return nil, err
 	}
 	// Create a new context to be used in the EVM environment
-	return ApplyTransactionWithEVM(msg, gp, statedb, header.Number, header.Hash(), header.Time, tx, usedGas, evm)
+	receipts, err := ApplyTransactionWithEVM(msg, gp, statedb, header.Number, header.Hash(), header.Time, tx, usedGas, evm)
+	return receipts, err
 }
 
 // ProcessBeaconBlockRoot applies the EIP-4788 system call to the beacon block root
