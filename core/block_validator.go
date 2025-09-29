@@ -111,6 +111,31 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		}
 	}
 
+	// block access lists must be present after the Amsterdam hard fork
+	if v.config.IsAmsterdam(block.Number(), block.Time()) {
+		if block.Body().AccessList == nil {
+			return fmt.Errorf("access list not present in block body")
+		} else if block.Header().BlockAccessListHash == nil {
+			return fmt.Errorf("access list hash not present in block header")
+		} else if *block.Header().BlockAccessListHash != block.Body().AccessList.Hash() {
+			return fmt.Errorf("access list hash mismatch.  local: %x. remote: %x\n", block.Body().AccessList.Hash(), *block.Header().BlockAccessListHash)
+		}
+	} else if !v.bc.cfg.EnableBALForTesting {
+		// if --experimental.bal is not enabled, block headers cannot have access list hash and bodies cannot have access lists.
+		if block.Body().AccessList != nil {
+			return fmt.Errorf("access list not allowed in block body if not in amsterdam or --experimental.bal is set")
+		} else if block.Header().BlockAccessListHash != nil {
+			return fmt.Errorf("access list hash in block header not allowed when --experimental.bal is set")
+		}
+	} else {
+		// if --experimental.bal is enabled, the BAL hash is not allowed in the header.
+		// this is in order that Geth can import pre-existing chains augmented with BALs
+		// and not have a hash mismatch.
+		if block.Header().BlockAccessListHash != nil {
+			return fmt.Errorf("access list hash in block header not allowed pre-amsterdam")
+		}
+	}
+
 	// Ancestor block must be known.
 	if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {

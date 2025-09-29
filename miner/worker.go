@@ -60,7 +60,8 @@ type environment struct {
 	sidecars []*types.BlobTxSidecar
 	blobs    int
 
-	witness *stateless.Witness
+	witness  *stateless.Witness
+	alTracer *core.BlockAccessListTracer
 }
 
 // txFits reports whether the transaction fits into the block size limit.
@@ -134,6 +135,9 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 		}
 	}
 	body := types.Body{Transactions: work.txs, Withdrawals: genParam.withdrawals}
+	if work.alTracer != nil {
+		body.AccessList = work.alTracer.AccessList().ToEncodingObj()
+	}
 
 	allLogs := make([]*types.Log, 0)
 	for _, r := range work.receipts {
@@ -273,6 +277,11 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 		}
 		state.StartPrefetcher("miner", bundle, nil)
 	}
+	vmConf := vm.Config{}
+	var alTracer *core.BlockAccessListTracer
+	if miner.chainConfig.IsAmsterdam(header.Number, header.Time) {
+		alTracer, vmConf.Tracer = core.NewBlockAccessListTracer()
+	}
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
 		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time),
@@ -281,7 +290,8 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 		coinbase: coinbase,
 		header:   header,
 		witness:  state.Witness(),
-		evm:      vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), state, miner.chainConfig, vm.Config{}),
+		evm:      vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), state, miner.chainConfig, vmConf),
+		alTracer: alTracer,
 	}, nil
 }
 

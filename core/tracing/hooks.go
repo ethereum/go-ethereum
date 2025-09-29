@@ -183,6 +183,12 @@ type (
 	// StorageChangeHook is called when the storage of an account changes.
 	StorageChangeHook = func(addr common.Address, slot common.Hash, prev, new common.Hash)
 
+	// ColdStorageReadHook is called before a previously-unread storage slot is read.
+	ColdStorageReadHook = func(common.Address, common.Hash)
+
+	// ColdAccountReadHook is called before an previously-unread account is read.
+	ColdAccountReadHook = func(address common.Address)
+
 	// LogHook is called when a log is emitted.
 	LogHook = func(log *types.Log)
 
@@ -209,6 +215,7 @@ type Hooks struct {
 	OnSystemCallStart   OnSystemCallStartHook
 	OnSystemCallStartV2 OnSystemCallStartHookV2
 	OnSystemCallEnd     OnSystemCallEndHook
+
 	// State events
 	OnBalanceChange BalanceChangeHook
 	OnNonceChange   NonceChangeHook
@@ -217,6 +224,9 @@ type Hooks struct {
 	OnCodeChangeV2  CodeChangeHookV2
 	OnStorageChange StorageChangeHook
 	OnLog           LogHook
+	//State read events
+	OnColdStorageRead ColdStorageReadHook
+	OnColdAccountRead ColdAccountReadHook
 	// Block hash read
 	OnBlockHashRead BlockHashReadHook
 }
