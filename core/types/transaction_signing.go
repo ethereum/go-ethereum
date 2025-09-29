@@ -31,6 +31,25 @@ import (
 
 var ErrInvalidChainId = errors.New("invalid chain id for signer")
 
+/ SignerFactory abstracts the creation of a Signer for a given
+// chain configuration and fork schedule point (block number/time).
+//
+// The default implementation returns the same Signer as MakeSigner.
+type SignerFactory interface {
+    MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint64) Signer
+}
+
+// StandardSignerFactory is the default SignerFactory which mirrors MakeSigner.
+type StandardSignerFactory struct{}
+
+// NewStandardSignerFactory creates a StandardSignerFactory instance.
+func NewStandardSignerFactory() *StandardSignerFactory { return &StandardSignerFactory{} }
+
+// MakeSigner implements SignerFactory by delegating to types.MakeSigner.
+func (ssf *StandardSignerFactory) MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint64) Signer {
+    return MakeSigner(config, blockNumber, blockTime)
+}
+
 // sigCache is used to cache the derived sender and contains
 // the signer used to derive it.
 type sigCache struct {
