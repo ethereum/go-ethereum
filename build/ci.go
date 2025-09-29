@@ -57,6 +57,7 @@ import (
 	"time"
 
 	"github.com/cespare/cp"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/signify"
 	"github.com/ethereum/go-ethereum/internal/build"
 	"github.com/ethereum/go-ethereum/internal/download"
@@ -148,7 +149,7 @@ func executablePath(name string) string {
 func main() {
 	log.SetFlags(log.Lshortfile)
 
-	if !build.FileExist(filepath.Join("build", "ci.go")) {
+	if !common.FileExist(filepath.Join("build", "ci.go")) {
 		log.Fatal("this script must be run from the root of the repository")
 	}
 	if len(os.Args) < 2 {
@@ -895,7 +896,7 @@ func ppaUpload(workdir, ppa, sshUser string, files []string) {
 	var idfile string
 	if sshkey := getenvBase64("PPA_SSH_KEY"); len(sshkey) > 0 {
 		idfile = filepath.Join(workdir, "sshkey")
-		if !build.FileExist(idfile) {
+		if !common.FileExist(idfile) {
 			os.WriteFile(idfile, sshkey, 0600)
 		}
 	}
