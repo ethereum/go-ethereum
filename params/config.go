@@ -595,7 +595,7 @@ func (c *ChainConfig) Description() string {
 	if c.VerkleTime != nil {
 		banner += fmt.Sprintf(" - Verkle:                      @%-10v blob: (%s)\n", *c.VerkleTime, c.BlobScheduleConfig.Verkle)
 	}
-	banner += fmt.Sprintf("\nAll forks specifications can be found at https://ethereum.github.io/execution-specs/src/ethereum/forks/\n")
+	banner += fmt.Sprintf("\nAll fork specifications can be found at https://ethereum.github.io/execution-specs/src/ethereum/forks/\n")
 	return banner
 }
 
