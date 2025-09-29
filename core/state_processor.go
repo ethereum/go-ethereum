@@ -59,6 +59,7 @@ func (p *StateProcessor) chainConfig() *params.ChainConfig {
 // transactions failed to execute due to insufficient gas it will return an error.
 func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (*ProcessResult, error) {
 	var (
+		config      = p.chainConfig()
 		receipts    types.Receipts
 		usedGas     = new(uint64)
 		header      = block.Header()
@@ -69,12 +70,12 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	)
 
 	// Mutate the block and state according to any hard-fork specs
-	if p.chainConfig().DAOForkSupport && p.chainConfig().DAOForkBlock != nil && p.chainConfig().DAOForkBlock.Cmp(block.Number()) == 0 {
+	if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
 	var (
 		context vm.BlockContext
-		signer  = types.MakeSigner(p.chainConfig(), header.Number, header.Time)
+		signer  = types.MakeSigner(config, header.Number, header.Time)
 	)
 
 	// Apply pre-execution system calls.
@@ -83,12 +84,12 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		tracingStateDB = state.NewHookedState(statedb, hooks)
 	}
 	context = NewEVMBlockContext(header, p.chain, nil)
-	evm := vm.NewEVM(context, tracingStateDB, p.chainConfig(), cfg)
+	evm := vm.NewEVM(context, tracingStateDB, config, cfg)
 
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
-	if p.chainConfig().IsPrague(block.Number(), block.Time()) || p.chainConfig().IsVerkle(block.Number(), block.Time()) {
+	if config.IsPrague(block.Number(), block.Time()) || config.IsVerkle(block.Number(), block.Time()) {
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
@@ -109,10 +110,10 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	// Read requests if Prague is enabled.
 	var requests [][]byte
-	if p.chainConfig().IsPrague(block.Number(), block.Time()) {
+	if config.IsPrague(block.Number(), block.Time()) {
 		requests = [][]byte{}
 		// EIP-6110
-		if err := ParseDepositLogs(&requests, allLogs, p.chainConfig()); err != nil {
+		if err := ParseDepositLogs(&requests, allLogs, config); err != nil {
 			return nil, fmt.Errorf("failed to parse deposit logs: %w", err)
 		}
 		// EIP-7002
