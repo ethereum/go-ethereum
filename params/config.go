@@ -568,34 +568,34 @@ func (c *ChainConfig) Description() string {
 		banner += fmt.Sprintf(" - Shanghai:                    @%-10v (https://ethereum.github.io/execution-specs/src/ethereum/forks/shanghai/__init__.py.html)\n", *c.ShanghaiTime)
 	}
 	if c.CancunTime != nil {
-		banner += fmt.Sprintf(" - Cancun:                      @%-10v (https://ethereum.github.io/execution-specs/src/ethereum/forks/cancun/__init__.py.html)\n", *c.CancunTime)
+		banner += fmt.Sprintf(" - Cancun:                      @%-10v blob: (%s) (https://ethereum.github.io/execution-specs/src/ethereum/forks/cancun/__init__.py.html)\n", *c.CancunTime, c.BlobScheduleConfig.Cancun)
 	}
 	if c.PragueTime != nil {
-		banner += fmt.Sprintf(" - Prague:                      @%-10v (https://ethereum.github.io/execution-specs/src/ethereum/forks/prague/__init__.py.html)\n", *c.PragueTime)
+		banner += fmt.Sprintf(" - Prague:                      @%-10v blob: (%s) (https://ethereum.github.io/execution-specs/src/ethereum/forks/prague/__init__.py.html)\n", *c.PragueTime, c.BlobScheduleConfig.Prague)
 	}
 	if c.OsakaTime != nil {
-		banner += fmt.Sprintf(" - Osaka:                       @%-10v (https://ethereum.github.io/execution-specs/src/ethereum/forks/osaka/__init__.py.html)\n", *c.OsakaTime)
+		banner += fmt.Sprintf(" - Osaka:                       @%-10v blob: (%s) (https://ethereum.github.io/execution-specs/src/ethereum/forks/osaka/__init__.py.html)\n", *c.OsakaTime, c.BlobScheduleConfig.Osaka)
 	}
 	if c.BPO1Time != nil {
-		banner += fmt.Sprintf(" - BPO1:                        @%-10v\n", *c.BPO1Time)
+		banner += fmt.Sprintf(" - BPO1:                        @%-10v blob: (%s)\n", *c.BPO1Time, c.BlobScheduleConfig.BPO1)
 	}
 	if c.BPO2Time != nil {
-		banner += fmt.Sprintf(" - BPO2:                        @%-10v\n", *c.BPO2Time)
+		banner += fmt.Sprintf(" - BPO2:                        @%-10v blob: (%s)\n", *c.BPO2Time, c.BlobScheduleConfig.BPO2)
 	}
 	if c.BPO3Time != nil {
-		banner += fmt.Sprintf(" - BPO3:                        @%-10v\n", *c.BPO3Time)
+		banner += fmt.Sprintf(" - BPO3:                        @%-10v blob: (%s)\n", *c.BPO3Time, c.BlobScheduleConfig.BPO3)
 	}
 	if c.BPO4Time != nil {
-		banner += fmt.Sprintf(" - BPO4:                        @%-10v\n", *c.BPO4Time)
+		banner += fmt.Sprintf(" - BPO4:                        @%-10v blob: (%s)\n", *c.BPO4Time, c.BlobScheduleConfig.BPO4)
 	}
 	if c.BPO5Time != nil {
-		banner += fmt.Sprintf(" - BPO5:                        @%-10v\n", *c.BPO5Time)
+		banner += fmt.Sprintf(" - BPO5:                        @%-10v blob: (%s)\n", *c.BPO5Time, c.BlobScheduleConfig.BPO5)
 	}
 	if c.AmsterdamTime != nil {
-		banner += fmt.Sprintf(" - Amsterdam:									 @%-10v\n", *c.AmsterdamTime)
+		banner += fmt.Sprintf(" - Amsterdam:									 @%-10v blob: (%s)\n", *c.AmsterdamTime, c.BlobScheduleConfig.Amsterdam)
 	}
 	if c.VerkleTime != nil {
-		banner += fmt.Sprintf(" - Verkle:                      @%-10v\n", *c.VerkleTime)
+		banner += fmt.Sprintf(" - Verkle:                      @%-10v blob: (%s)\n", *c.VerkleTime, c.BlobScheduleConfig.Verkle)
 	}
 	return banner
 }
@@ -605,6 +605,14 @@ type BlobConfig struct {
 	Target         int    `json:"target"`
 	Max            int    `json:"max"`
 	UpdateFraction uint64 `json:"baseFeeUpdateFraction"`
+}
+
+// String implement fmt.Stringer, returning string format blob config.
+func (bc *BlobConfig) String() string {
+	if bc == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("target: %d, max: %d, fraction: %d", bc.Target, bc.Max, bc.UpdateFraction)
 }
 
 // BlobScheduleConfig determines target and max number of blobs allow per fork.
