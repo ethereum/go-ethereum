@@ -186,6 +186,14 @@ func Transaction(ctx *cli.Context) error {
 		if chainConfig.IsOsaka(new(big.Int), 0) && tx.Gas() > params.MaxTxGas {
 			r.Error = errors.New("gas limit exceeds maximum")
 		}
+		// Check EIP-7702 authorization list requirements
+		if tx.Type() == types.SetCodeTxType && tx.SetCodeAuthorizations() != nil {
+			if tx.To() == nil {
+				r.Error = fmt.Errorf("%w (sender %v)", core.ErrSetCodeTxCreate, r.Address)
+			} else if len(tx.SetCodeAuthorizations()) == 0 {
+				r.Error = fmt.Errorf("%w (sender %v)", core.ErrEmptyAuthList, r.Address)
+			}
+		}
 		results = append(results, r)
 	}
 	out, err := json.MarshalIndent(results, "", "  ")
