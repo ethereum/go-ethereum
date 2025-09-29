@@ -29,7 +29,7 @@ import (
 
 // nodeIterator is an iterator to traverse the entire state trie post-order,
 // including all of the contract code and contract state tries. Preimage is
-// required in order to resolve the contract address.
+// required in order to schedule the contract address.
 type nodeIterator struct {
 	state *StateDB // State being iterated
 	tr    Trie     // Primary account trie for traversal

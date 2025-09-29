@@ -22,6 +22,7 @@ package downloader
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -72,6 +73,7 @@ type fetchResult struct {
 	Transactions types.Transactions
 	Receipts     rlp.RawValue
 	Withdrawals  types.Withdrawals
+	AccessList   *bal.BlockAccessList
 }
 
 func newFetchResult(header *types.Header, snapSync bool) *fetchResult {
@@ -100,6 +102,7 @@ func (f *fetchResult) body() types.Body {
 		Transactions: f.Transactions,
 		Uncles:       f.Uncles,
 		Withdrawals:  f.Withdrawals,
+		AccessList:   f.AccessList,
 	}
 }
 
@@ -562,6 +565,7 @@ func (q *queue) expire(peer string, pendPool map[string]*fetchRequest, taskQueue
 func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListHashes []common.Hash,
 	uncleLists [][]*types.Header, uncleListHashes []common.Hash,
 	withdrawalLists [][]*types.Withdrawal, withdrawalListHashes []common.Hash,
+	blockAccessLists []*bal.BlockAccessList, accessListHashes []common.Hash,
 ) (int, error) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
@@ -583,6 +587,19 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 				return errInvalidBody
 			}
 			if withdrawalListHashes[index] != *header.WithdrawalsHash {
+				return errInvalidBody
+			}
+		}
+		if header.BlockAccessListHash == nil {
+			// nil hash means that access list should not be present in body
+			if blockAccessLists[index] != nil {
+				return errInvalidBody
+			}
+		} else { // non-nil hash: body must have access list
+			if blockAccessLists[index] == nil {
+				return errInvalidBody
+			}
+			if accessListHashes[index] != *header.BlockAccessListHash {
 				return errInvalidBody
 			}
 		}
@@ -624,6 +641,7 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 		result.Transactions = txLists[index]
 		result.Uncles = uncleLists[index]
 		result.Withdrawals = withdrawalLists[index]
+		result.AccessList = blockAccessLists[index]
 		result.SetBodyDone()
 	}
 	return q.deliver(id, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool,

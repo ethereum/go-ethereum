@@ -194,6 +194,13 @@ type Config struct {
 	// EIP-7966: eth_sendRawTransactionSync timeouts
 	TxSyncDefaultTimeout time.Duration `toml:",omitempty"`
 	TxSyncMaxTimeout     time.Duration `toml:",omitempty"`
+
+	// ExperimentalBAL enables EIP-7928 block access list creation during execution
+	// of post Cancun blocks, and persistence via embedding the BAL in the block body.
+	//
+	// TODO: also note that it will cause execution of blocks with access lists to base
+	// their execution on the BAL.
+	ExperimentalBAL bool `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.

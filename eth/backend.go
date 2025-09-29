@@ -245,6 +245,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			TrieJournalDirectory: stack.ResolvePath("triedb"),
 			StateSizeTracking:    config.EnableStateSizeTracking,
 			SlowBlockThreshold:   config.SlowBlockThreshold,
+			EnableBALForTesting:  config.ExperimentalBAL,
 		}
 	)
 	if config.VMTrace != "" {
