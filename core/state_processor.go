@@ -37,14 +37,25 @@ import (
 type StateProcessor struct {
 	config *params.ChainConfig // Chain configuration options
 	chain  *HeaderChain        // Canonical header chain
+	signerFactory types.SignerFactory
 }
 
 // NewStateProcessor initialises a new StateProcessor.
 func NewStateProcessor(config *params.ChainConfig, chain *HeaderChain) *StateProcessor {
 	return &StateProcessor{
-		config: config,
-		chain:  chain,
+		config:        config,
+        chain:         chain,
+        signerFactory: types.NewStandardSignerFactory(),
 	}
+}
+
+// NewStateProcessorWithSignerFactory initialises a new StateProcessor with a specified signer factory.
+func NewStateProcessorWithSignerFactory(config *params.ChainConfig, chain *HeaderChain, signerFactory types.SignerFactory) *StateProcessor {
+    return &StateProcessor{
+        config:        config,
+        chain:         chain,
+        signerFactory: signerFactory,
+    }
 }
 
 // Process processes the state changes according to the Ethereum rules by running
@@ -70,8 +81,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		misc.ApplyDAOHardFork(statedb)
 	}
 	var (
-		context vm.BlockContext
-		signer  = types.MakeSigner(p.config, header.Number, header.Time)
+        context vm.BlockContext
+        signer  = p.signerFactory.MakeSigner(p.config, header.Number, header.Time)
 	)
 
 	// Apply pre-execution system calls.
