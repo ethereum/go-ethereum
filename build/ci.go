@@ -174,6 +174,9 @@ var (
 
 	// This is where the tests should be unpacked.
 	executionSpecTestsDir = "tests/spec-tests"
+
+	// This is where the bal-specific release of the tests should be unpacked.
+	executionSpecTestsBALDir = "tests/spec-tests-bal"
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -381,7 +384,8 @@ func doTest(cmdline []string) {
 
 	// Get test fixtures.
 	if !*short {
-		downloadSpecTestFixtures(csdb, *cachedir)
+		downloadMainnetTestFixtures(csdb, *cachedir)
+		downloadBALSpecTestFixtures(csdb, *cachedir)
 	}
 
 	// Configure the toolchain.
@@ -433,10 +437,8 @@ func doTest(cmdline []string) {
 	}
 }
 
-// downloadSpecTestFixtures downloads and extracts the execution-spec-tests fixtures.
-func downloadSpecTestFixtures(csdb *download.ChecksumDB, cachedir string) string {
+func downloadTestFixtures(csdb *download.ChecksumDB, cachedir, base string) string {
 	ext := ".tar.gz"
-	base := "fixtures_develop"
 	archivePath := filepath.Join(cachedir, base+ext)
 	if err := csdb.DownloadFileFromKnownURL(archivePath); err != nil {
 		log.Fatal(err)
@@ -445,6 +447,15 @@ func downloadSpecTestFixtures(csdb *download.ChecksumDB, cachedir string) string
 		log.Fatal(err)
 	}
 	return filepath.Join(cachedir, base)
+}
+
+// downloadMainnetTestFixtures downloads and extracts the execution-spec-tests fixtures.
+func downloadMainnetTestFixtures(csdb *download.ChecksumDB, cachedir string) string {
+	return downloadTestFixtures(csdb, cachedir, "fixtures")
+}
+
+func downloadBALSpecTestFixtures(csdb *download.ChecksumDB, cachedir string) string {
+	return downloadTestFixtures(csdb, cachedir, "fixtures_bal")
 }
 
 // doCheckGenerate ensures that re-generating generated files does not cause

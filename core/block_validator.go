@@ -111,6 +111,18 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		}
 	}
 
+	// check that the block access list, if present:
+	// * hashes to the same value reported in the block header
+	// * is well-formed
+	if v.config.IsAmsterdam(block.Number(), block.Time()) {
+		if block.Body().AccessList != nil {
+			if *block.Header().BlockAccessListHash != block.Body().AccessList.Hash() {
+				return fmt.Errorf("access list hash mismatch.  local: %x. remote: %x\n", block.Body().AccessList.Hash(), *block.Header().BlockAccessListHash)
+			} else if err := block.Body().AccessList.Validate(len(block.Transactions())); err != nil {
+				return fmt.Errorf("invalid block access list: %v", err)
+			}
+		}
+	}
 	// Ancestor block must be known.
 	if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {

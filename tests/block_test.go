@@ -74,10 +74,9 @@ func TestBlockchain(t *testing.T) {
 	// which run natively, so there's no reason to run them here.
 }
 
-// TestExecutionSpecBlocktests runs the test fixtures from execution-spec-tests.
-func TestExecutionSpecBlocktests(t *testing.T) {
-	if !common.FileExist(executionSpecBlockchainTestDir) {
-		t.Skipf("directory %s does not exist", executionSpecBlockchainTestDir)
+func testExecutionSpecBlocktests(t *testing.T, testDir string) {
+	if !common.FileExist(testDir) {
+		t.Skipf("directory %s does not exist", testDir)
 	}
 	bt := new(testMatcher)
 
@@ -85,9 +84,19 @@ func TestExecutionSpecBlocktests(t *testing.T) {
 	bt.skipLoad(".*prague/eip7251_consolidations/test_system_contract_deployment.json")
 	bt.skipLoad(".*prague/eip7002_el_triggerable_withdrawals/test_system_contract_deployment.json")
 
-	bt.walk(t, executionSpecBlockchainTestDir, func(t *testing.T, name string, test *BlockTest) {
+	bt.walk(t, testDir, func(t *testing.T, name string, test *BlockTest) {
 		execBlockTest(t, bt, test)
 	})
+}
+
+// TestExecutionSpecBlocktests runs the test fixtures from execution-spec-tests.
+func TestExecutionSpecBlocktests(t *testing.T) {
+	testExecutionSpecBlocktests(t, executionSpecBlockchainTestDir)
+}
+
+// TestExecutionSpecBlocktestsBAL runs the BAL release test fixtures from execution-spec-tests.
+func TestExecutionSpecBlocktestsBAL(t *testing.T) {
+	testExecutionSpecBlocktests(t, executionSpecBALBlockchainTestDir)
 }
 
 func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest) {
