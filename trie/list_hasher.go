@@ -22,11 +22,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// ListHasher is the wrapper of Merkle-Patricia-Trie, implementing the
-// types.ListHasher by always deep-copying the supplied slices.
+// ListHasher is a wrapper of the Merkle-Patricia-Trie, which implements
+// types.ListHasher. Compared to a Trie instance, the Update method of this
+// type always deep-copies its input slices.
 //
-// This implementation is very inefficient in terms of memory allocation
-// compared with StackTrie, only for correctness comparison purpose.
+// This implementation is very inefficient in terms of memory allocation,
+// compared with StackTrie. It exists only for correctness comparison purposes.
 type ListHasher struct {
 	tr *Trie
 }
@@ -38,22 +39,18 @@ func NewListHasher() *ListHasher {
 	}
 }
 
-// Reset implements types.ListHasher, clearing the internal state and prepare
-// it for reuse.
+// Reset clears the internal state prepares the ListHasher for reuse.
 func (h *ListHasher) Reset() {
 	h.tr.reset()
 }
 
-// Update implements types.ListHasher, inserting the given key-value pair into
-// the trie. The supplied key-value pair should be deep-copied to satisfy the
-// interface restriction.
+// Update inserts a key-value pair into the trie.
 func (h *ListHasher) Update(key []byte, value []byte) error {
 	key, value = bytes.Clone(key), bytes.Clone(value)
 	return h.tr.Update(key, value)
 }
 
-// Hash implements types.ListHasher, computing the final hash of all inserted
-// key-value pairs.
+// Hash computes the root hash of all inserted key-value pairs.
 func (h *ListHasher) Hash() common.Hash {
 	return h.tr.Hash()
 }
