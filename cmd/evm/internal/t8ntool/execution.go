@@ -374,7 +374,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 func MakePreState(db ethdb.Database, accounts types.GenesisAlloc) *state.StateDB {
 	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
 	sdb := state.NewDatabase(tdb, nil)
-	statedb, _ := state.New(types.EmptyRootHash, sdb)
+	statedb, err := state.New(types.EmptyRootHash, sdb)
+	if err != nil {
+		panic(fmt.Errorf("failed to create initial state: %v", err))
+	}
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code, tracing.CodeChangeUnspecified)
 		statedb.SetNonce(addr, a.Nonce, tracing.NonceChangeGenesis)
