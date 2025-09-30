@@ -111,11 +111,6 @@ var (
 	errChainStopped         = errors.New("blockchain is stopped")
 	errInvalidOldChain      = errors.New("invalid old chain")
 	errInvalidNewChain      = errors.New("invalid new chain")
-
-	// slowBlockProcessThreshold defines the threshold (10 Mgas per second) for
-	// considering a block execution as slow. Detailed performance metrics will be
-	// printed if debug mode is enabled.
-	slowBlockProcessThreshold = float64(10)
 )
 
 var (
