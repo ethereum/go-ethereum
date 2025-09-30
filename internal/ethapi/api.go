@@ -671,10 +671,8 @@ func (context *ChainContext) Config() *params.ChainConfig {
 
 func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, overrides *override.StateOverride, blockOverrides *override.BlockOverrides, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
 	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
-	if blockOverrides != nil {
-		if err := blockOverrides.Apply(&blockCtx); err != nil {
-			return nil, err
-		}
+	if err := blockOverrides.Apply(&blockCtx); err != nil {
+		return nil, err
 	}
 	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time)
 	precompiles := vm.ActivePrecompiledContracts(rules)
