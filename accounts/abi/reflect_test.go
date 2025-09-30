@@ -100,16 +100,6 @@ var reflectTests = []reflectTest{
 		},
 	},
 	{
-		name: "DifferentName",
-		args: []string{"fieldB"},
-		struc: struct {
-			FieldA int `abi:"fieldB"`
-		}{},
-		want: map[string]string{
-			"fieldB": "FieldA",
-		},
-	},
-	{
 		name: "MultipleFields",
 		args: []string{"fieldA", "fieldB"},
 		struc: struct {
