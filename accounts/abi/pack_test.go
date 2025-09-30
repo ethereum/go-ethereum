@@ -34,6 +34,7 @@ import (
 func TestPack(t *testing.T) {
 	t.Parallel()
 	for i, test := range packUnpackTests {
+		i, test := i, test
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			t.Parallel()
 			encb, err := hex.DecodeString(test.packed)
