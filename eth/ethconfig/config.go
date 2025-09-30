@@ -118,6 +118,10 @@ type Config struct {
 	// presence of these blocks for every new peer connection.
 	RequiredBlocks map[uint64]common.Hash `toml:"-"`
 
+	// SlowBlockThreshold is the block execution speed threshold (Mgas/s)
+	// below which detailed statistics are logged.
+	SlowBlockThreshold uint64 `toml:",omitempty"`
+
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`
 	DatabaseHandles    int  `toml:"-"`
