@@ -128,6 +128,12 @@ func (bt *InternalNode) InsertValuesAtStem(stem []byte, values [][]byte, resolve
 	} else {
 		child = &bt.right
 	}
+
+	// Initialize child to Empty if it's nil
+	if *child == nil {
+		*child = Empty{}
+	}
+
 	*child, err = (*child).InsertValuesAtStem(stem, values, resolver, depth+1)
 	return bt, err
 }

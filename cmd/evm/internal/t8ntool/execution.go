@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
@@ -47,7 +48,7 @@ import (
 type Prestate struct {
 	Env stEnv                         `json:"env"`
 	Pre types.GenesisAlloc            `json:"pre"`
-	VKT map[common.Hash]hexutil.Bytes `json:"vkt,omitempty"`
+	BT  map[common.Hash]hexutil.Bytes `json:"vkt,omitempty"`
 }
 
 //go:generate go run github.com/fjl/gencodec -type ExecutionResult -field-override executionResultMarshaling -out gen_execresult.go
@@ -418,25 +419,28 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		execRs.Requests = requests
 	}
 
-	// Re-create statedb instance with new root upon the updated database
-	// for accessing latest states.
+	// Re-create statedb instance with new root for MPT mode
 	statedb, err = state.New(root, statedb.Database())
 	if err != nil {
 		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not reopen state: %v", err))
 	}
+
 	body, _ := rlp.EncodeToBytes(includedTxs)
 	return statedb, execRs, body, nil
 }
 
-func MakePreState(db ethdb.Database, chainConfig *params.ChainConfig, pre *Prestate, verkle bool) *state.StateDB {
-	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true, IsVerkle: verkle})
+func MakePreState(db ethdb.Database, chainConfig *params.ChainConfig, pre *Prestate, isBintrie bool) *state.StateDB {
+	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true, IsVerkle: isBintrie})
 	sdb := state.NewDatabase(tdb, nil)
 
 	root := types.EmptyRootHash
-	if verkle {
-		root = types.EmptyVerkleHash
+	if isBintrie {
+		root = types.EmptyBinaryHash
 	}
-	statedb, _ := state.New(root, sdb)
+	statedb, err := state.New(root, sdb)
+	if err != nil {
+		panic(fmt.Errorf("failed to create initial statedb: %v", err))
+	}
 	for addr, a := range pre.Pre {
 		statedb.SetCode(addr, a.Code, tracing.CodeChangeUnspecified)
 		statedb.SetNonce(addr, a.Nonce, tracing.NonceChangeGenesis)
@@ -450,13 +454,20 @@ func MakePreState(db ethdb.Database, chainConfig *params.ChainConfig, pre *Prest
 	if err != nil {
 		panic(err)
 	}
-	// If verkle mode started, establish the conversion
-	if verkle {
-		if _, ok := statedb.GetTrie().(*trie.VerkleTrie); ok {
+	// If bintrie mode started, check if conversion happened
+	if isBintrie {
+		if _, ok := statedb.GetTrie().(*bintrie.BinaryTrie); ok {
 			return statedb
 		}
+		//TODO(@CPerezz): Fix this in upstream geth
+		// If we're in bintrie mode but don't have a BinaryTrie, something went wrong
+		panic(fmt.Errorf("binary trie mode enabled but trie is %T, not *bintrie.BinaryTrie", statedb.GetTrie()))
 	}
-	statedb, _ = state.New(mptRoot, sdb)
+	// For MPT mode, reopen the state with the committed root
+	statedb, err = state.New(mptRoot, sdb)
+	if err != nil {
+		panic(fmt.Errorf("failed to re-open statedb after commit with root %x: %v", mptRoot, err))
+	}
 	return statedb
 }
 
