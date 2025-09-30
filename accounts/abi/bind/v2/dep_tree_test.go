@@ -225,7 +225,7 @@ func testLinkCase(tcInput linkTestCaseInput) error {
 	}
 
 	if len(res.Txs) != len(tcInput.expectDeployed) {
-		return fmt.Errorf("got %d deployed contracts. expected %d.\n", len(res.Addresses), len(tcInput.expectDeployed))
+		return fmt.Errorf("got %d deployed contracts. expected %d.\n", len(res.Txs), len(tcInput.expectDeployed))
 	}
 	for contract := range tcInput.expectDeployed {
 		pattern := crypto.Keccak256Hash([]byte(string(contract))).String()[2:36]

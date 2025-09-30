@@ -234,13 +234,13 @@ func TestConvertType(t *testing.T) {
 		t.Errorf("ConvertType failed, got %v want %v", out2[0].X, big.NewInt(1))
 	}
 	if out2[0].Y.Cmp(big.NewInt(2)) != 0 {
-		t.Errorf("ConvertType failed, got %v want %v", out2[1].Y, big.NewInt(2))
+		t.Errorf("ConvertType failed, got %v want %v", out2[0].Y, big.NewInt(2))
 	}
 	if out2[1].X.Cmp(big.NewInt(3)) != 0 {
-		t.Errorf("ConvertType failed, got %v want %v", out2[0].X, big.NewInt(1))
+		t.Errorf("ConvertType failed, got %v want %v", out2[1].X, big.NewInt(3))
 	}
 	if out2[1].Y.Cmp(big.NewInt(4)) != 0 {
-		t.Errorf("ConvertType failed, got %v want %v", out2[1].Y, big.NewInt(2))
+		t.Errorf("ConvertType failed, got %v want %v", out2[1].Y, big.NewInt(4))
 	}
 	// Array Type
 	val3 := reflect.New(reflect.ArrayOf(2, reflect.StructOf(fields)))
@@ -253,12 +253,12 @@ func TestConvertType(t *testing.T) {
 		t.Errorf("ConvertType failed, got %v want %v", out3[0].X, big.NewInt(1))
 	}
 	if out3[0].Y.Cmp(big.NewInt(2)) != 0 {
-		t.Errorf("ConvertType failed, got %v want %v", out3[1].Y, big.NewInt(2))
+		t.Errorf("ConvertType failed, got %v want %v", out3[0].Y, big.NewInt(2))
 	}
 	if out3[1].X.Cmp(big.NewInt(3)) != 0 {
-		t.Errorf("ConvertType failed, got %v want %v", out3[0].X, big.NewInt(1))
+		t.Errorf("ConvertType failed, got %v want %v", out3[1].X, big.NewInt(3))
 	}
 	if out3[1].Y.Cmp(big.NewInt(4)) != 0 {
-		t.Errorf("ConvertType failed, got %v want %v", out3[1].Y, big.NewInt(2))
+		t.Errorf("ConvertType failed, got %v want %v", out3[1].Y, big.NewInt(4))
 	}
 }
