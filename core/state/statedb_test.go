@@ -1190,10 +1190,10 @@ func TestStateDBAccessList(t *testing.T) {
 	verifyAddrs("aa", "bb")
 	verifySlots("bb", "01", "02")
 	if got, exp := len(state.accessList.addresses), 2; got != exp {
-		t.Fatalf("expected empty, got %d", got)
+		t.Fatalf("expected 2, got %d", got)
 	}
 	if got, exp := len(state.accessList.slots), 1; got != exp {
-		t.Fatalf("expected empty, got %d", got)
+		t.Fatalf("expected 1, got %d", got)
 	}
 }
 

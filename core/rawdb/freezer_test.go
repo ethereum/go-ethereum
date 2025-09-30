@@ -389,7 +389,7 @@ func TestFreezerCloseSync(t *testing.T) {
 	if err := f.SyncAncient(); err == nil {
 		t.Fatalf("want error, have nil")
 	} else if have, want := err.Error(), "[closed closed]"; have != want {
-		t.Fatalf("want %v, have %v", have, want)
+		t.Fatalf("want %v, have %v", want, have)
 	}
 }
 

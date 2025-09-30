@@ -1064,7 +1064,7 @@ func TestQueueTimeLimiting(t *testing.T) {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 0)
 	}
 	if queued != 1 {
-		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 1)
 	}
 	if err := validatePoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
@@ -1079,7 +1079,7 @@ func TestQueueTimeLimiting(t *testing.T) {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 0)
 	}
 	if queued != 1 {
-		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 1)
 	}
 	if err := validatePoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
@@ -1904,7 +1904,7 @@ func TestDualHeapEviction(t *testing.T) {
 		}
 		pending, queued := pool.Stats()
 		if pending+queued != 20 {
-			t.Fatalf("transaction count mismatch: have %d, want %d", pending+queued, 10)
+			t.Fatalf("transaction count mismatch: have %d, want %d", pending+queued, 20)
 		}
 	}
 
