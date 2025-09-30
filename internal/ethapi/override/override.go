@@ -42,12 +42,14 @@ type OverrideAccount struct {
 	Balance          *hexutil.Big                `json:"balance"`
 	State            map[common.Hash]common.Hash `json:"state"`
 	StateDiff        map[common.Hash]common.Hash `json:"stateDiff"`
-	TransientStorage map[common.Hash]common.Hash `json:"transientStorage"`
 	MovePrecompileTo *common.Address             `json:"movePrecompileToAddress"`
 }
 
 // StateOverride is the collection of overridden accounts.
 type StateOverride map[common.Address]OverrideAccount
+
+// TransientStorageOverride is the collection of transient storage overrides.
+type TransientStorageOverride map[common.Address]map[common.Hash]common.Hash
 
 func (diff *StateOverride) has(address common.Address) bool {
 	_, ok := (*diff)[address]
@@ -59,20 +61,6 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 	if diff == nil {
 		return nil
 	}
-
-	// Get transient storage overrides to apply after Prepare()
-	transientOverrides := make(map[common.Address]map[common.Hash]common.Hash)
-	for addr, account := range *diff {
-		if account.TransientStorage != nil && len(account.TransientStorage) > 0 {
-			transientOverrides[addr] = account.TransientStorage
-		}
-	}
-
-	// Store transient storage overrides
-	if len(transientOverrides) > 0 {
-		statedb.SetPendingTransientOverrides(transientOverrides)
-	}
-
 	// Tracks destinations of precompiles that were moved.
 	dirtyAddrs := make(map[common.Address]struct{})
 	for addr, account := range *diff {
@@ -132,6 +120,14 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 	// if they were created in a transaction just before the tracing occur.
 	statedb.Finalise(false)
 	return nil
+}
+
+// Apply stores transient storage overrides to be applied after Prepare().
+func (diff *TransientStorageOverride) Apply(statedb *state.StateDB) {
+	if diff == nil || len(*diff) == 0 {
+		return
+	}
+	statedb.SetPendingTransientOverrides(*diff)
 }
 
 // BlockOverrides is a set of header fields to override.

@@ -151,19 +151,15 @@ func TestStateOverrideTransientStorage(t *testing.T) {
 		t.Fatalf("expected initial transient state to be empty, got %s", got.Hex())
 	}
 
-	// Apply override with transient storage
-	override := StateOverride{
-		addr: OverrideAccount{
-			TransientStorage: map[common.Hash]common.Hash{
-				key1: value1,
-				key2: value2,
-			},
+	// Apply transient storage override
+	transientOverride := TransientStorageOverride{
+		addr: map[common.Hash]common.Hash{
+			key1: value1,
+			key2: value2,
 		},
 	}
 
-	if err := override.Apply(statedb, nil); err != nil {
-		t.Fatalf("failed to apply override: %v", err)
-	}
+	transientOverride.Apply(statedb)
 
 	statedb.Prepare(params.Rules{}, common.Address{}, common.Address{}, nil, nil, nil)
 

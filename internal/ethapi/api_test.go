@@ -967,13 +967,14 @@ func TestCall(t *testing.T) {
 	}))
 	randomAccounts := newAccounts(3)
 	var testSuite = []struct {
-		name           string
-		blockNumber    rpc.BlockNumber
-		overrides      override.StateOverride
-		call           TransactionArgs
-		blockOverrides override.BlockOverrides
-		expectErr      error
-		want           string
+		name               string
+		blockNumber        rpc.BlockNumber
+		overrides          override.StateOverride
+		call               TransactionArgs
+		blockOverrides     override.BlockOverrides
+		transientOverrides override.TransientStorageOverride
+		expectErr          error
+		want               string
 	}{
 		// transfer on genesis
 		{
@@ -1238,16 +1239,18 @@ func TestCall(t *testing.T) {
 				randomAccounts[2].addr: override.OverrideAccount{
 					// PUSH1 0x00 TLOAD PUSH1 0x00 MSTORE PUSH1 0x20 PUSH1 0x00 RETURN
 					Code: hex2Bytes("0x60005c60005260206000f3"),
-					TransientStorage: map[common.Hash]common.Hash{
-						common.Hash{}: common.HexToHash("0xabcd"),
-					},
+				},
+			},
+			transientOverrides: override.TransientStorageOverride{
+				randomAccounts[2].addr: map[common.Hash]common.Hash{
+					common.Hash{}: common.HexToHash("0xabcd"),
 				},
 			},
 			want: "0x000000000000000000000000000000000000000000000000000000000000abcd",
 		},
 	}
 	for _, tc := range testSuite {
-		result, err := api.Call(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)
+		result, err := api.Call(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides, &tc.transientOverrides)
 		if tc.expectErr != nil {
 			if err == nil {
 				t.Errorf("test %s: want error %v, have nothing", tc.name, tc.expectErr)
