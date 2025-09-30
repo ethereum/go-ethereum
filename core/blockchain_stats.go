@@ -102,7 +102,7 @@ func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold uint64) {
 	if slowBlockThreshold == 0 || s.MgasPerSecond == 0 {
 		return
 	}
-	if s.MgasPerSecond > slowBlockProcessThreshold {
+	if s.MgasPerSecond > float64(slowBlockThreshold) {
 		return
 	}
 	msg := fmt.Sprintf(`
