@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -51,6 +52,11 @@ func (a *BlockAccessListTracer) AccessList() *bal.ConstructionBlockAccessList {
 	return a.callAccessLists[0]
 }
 
+// StateDiff returns a state diff at the current BAL index
+func (a *BlockAccessListTracer) StateDiff() *bal.StateDiff {
+	return a.callAccessLists[0].
+}
+
 func (a *BlockAccessListTracer) TxEndHook(receipt *types.Receipt, err error) {
 	a.txIdx++
 }
@@ -71,9 +77,14 @@ func (a *BlockAccessListTracer) OnExit(depth int, output []byte, gasUsed uint64,
 	if a.selfdestructedAccount != nil {
 		delete(a.callAccessLists[len(a.callAccessLists)-1].Accounts, *a.selfdestructedAccount)
 	}
-	if !reverted {
-		parentAccessList := a.callAccessLists[len(a.callAccessLists)-2]
-		scopeAccessList := a.callAccessLists[len(a.callAccessLists)-1]
+	parentAccessList := a.callAccessLists[len(a.callAccessLists)-2]
+	scopeAccessList := a.callAccessLists[len(a.callAccessLists)-1]
+	if reverted {
+		fmt.Println("exit reverted")
+		parentAccessList.MergeReads(scopeAccessList)
+	} else {
+		fmt.Println("exit normal")
+		fmt.Printf("scope access list is\n%s\n", scopeAccessList.ToEncodingObj().String())
 		parentAccessList.Merge(scopeAccessList)
 	}
 
@@ -101,6 +112,7 @@ func (a *BlockAccessListTracer) OnColdStorageRead(addr common.Address, key commo
 }
 
 func (a *BlockAccessListTracer) OnColdAccountRead(addr common.Address) {
+	fmt.Printf("cold account read %x\n", addr)
 	a.callAccessLists[len(a.callAccessLists)-1].AccountRead(addr)
 }
 

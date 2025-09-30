@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 	"sync"
 	"time"
@@ -135,10 +134,6 @@ func (s *BALReader) initMutatedObjFromDiff(db *StateDB, addr common.Address, a *
 	return obj
 }
 
-var IgnoredBALAddresses map[common.Address]struct{} = map[common.Address]struct{}{
-	params.SystemAddress: {},
-}
-
 // BALReader provides methods for reading account state from a block access
 // list.  State values returned from the Reader methods must not be modified.
 type BALReader struct {
@@ -168,7 +163,6 @@ func (r *BALReader) ModifiedAccounts() (res []common.Address) {
 }
 
 func (r *BALReader) ValidateStateReads(allReads bal.StateAccesses) error {
-	fmt.Printf("bal is %v\n", r.block.Body().AccessList.String())
 	// 1. remove any slots from 'allReads' which were written
 	// 2. validate that the read set in the BAL matches 'allReads' exactly
 	for addr, reads := range allReads {
@@ -178,8 +172,10 @@ func (r *BALReader) ValidateStateReads(allReads bal.StateAccesses) error {
 				delete(reads, writeSlot)
 			}
 		}
+		if _, ok := r.accesses[addr]; !ok {
+			panic(fmt.Sprintf("%x wasn't in BAL", addr))
+		}
 
-		fmt.Printf("addr is %x\n", addr)
 		expectedReads := r.accesses[addr].StorageReads
 		if len(reads) != len(expectedReads) {
 			return fmt.Errorf("mismatch between the number of computed reads and number of expected reads")

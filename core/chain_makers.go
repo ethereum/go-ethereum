@@ -311,7 +311,7 @@ func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
 		// The system contracts clear themselves on a system-initiated read.
 		// When reading the requests mid-block, we don't want this behavior, so fork
 		// off the statedb before executing the system calls.
-		statedb = statedb.Copy().(*state.StateDB)
+		statedb = statedb.Copy()
 	}
 
 	if b.cm.config.IsPrague(b.header.Number, b.header.Time) {

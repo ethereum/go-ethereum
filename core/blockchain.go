@@ -2161,6 +2161,9 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 		}
 		ptime = time.Since(pstart)
 
+		// unset the BAL-creation tracer (dirty)
+		bc.cfg.VmConfig.Tracer = nil
+
 		vstart := time.Now()
 		if err := bc.validator.ValidateState(block, statedb, res, true, false); err != nil {
 			bc.reportBlock(block, res, err)

@@ -18,7 +18,6 @@ package vm
 
 import (
 	"errors"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -109,6 +108,12 @@ func gasSLoadEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 		// If the caller cannot afford the cost, this change will be rolled back
 		// If he does afford it, we can skip checking the same thing later on, during execution
 		evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
+		if evm.Config.Tracer != nil && evm.Config.Tracer.OnColdStorageRead != nil {
+			// TODO: should these only be called if the cold storage read didn't go OOG?
+			// it's harder to implement, but I lean towards "yes".
+			// need to clarify this in the spec.
+			evm.Config.Tracer.OnColdStorageRead(contract.Address(), slot)
+		}
 		return params.ColdSloadCostEIP2929, nil
 	}
 	return params.WarmStorageReadCostEIP2929, nil
@@ -132,7 +137,7 @@ func gasExtCodeCopyEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 
 		// TODO: same issue as OnColdSStorageRead.  See the TODO above near OnColdStorageRead
 		if evm.Config.Tracer != nil && evm.Config.Tracer.OnColdAccountRead != nil {
-			evm.Config.Tracer.OnColdAccountRead(contract.Address())
+			evm.Config.Tracer.OnColdAccountRead(addr)
 		}
 
 		var overflow bool
@@ -156,6 +161,9 @@ func gasEip2929AccountCheck(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 	addr := common.Address(stack.peek().Bytes20())
 	// Check slot presence in the access list
 	if !evm.StateDB.AddressInAccessList(addr) {
+		if evm.Config.Tracer != nil && evm.Config.Tracer.OnColdAccountRead != nil {
+			evm.Config.Tracer.OnColdAccountRead(addr)
+		}
 		// If the caller cannot afford the cost, this change will be rolled back
 		evm.StateDB.AddAddressToAccessList(addr)
 		// The warm storage read cost is already charged as constantGas
@@ -173,6 +181,9 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc, addressPosition int) g
 		// the cost to charge for cold access, if any, is Cold - Warm
 		coldCost := params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
 		if !warmAccess {
+			if evm.Config.Tracer != nil && evm.Config.Tracer.OnColdAccountRead != nil {
+				evm.Config.Tracer.OnColdAccountRead(addr)
+			}
 			evm.StateDB.AddAddressToAccessList(addr)
 			// Charge the remaining difference here already, to correctly calculate available
 			// gas for call
@@ -239,6 +250,9 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 			address = common.Address(stack.peek().Bytes20())
 		)
 		if !evm.StateDB.AddressInAccessList(address) {
+			if evm.Config.Tracer != nil && evm.Config.Tracer.OnColdAccountRead != nil {
+				evm.Config.Tracer.OnColdAccountRead(address)
+			}
 			// If the caller cannot afford the cost, this change will be rolled back
 			evm.StateDB.AddAddressToAccessList(address)
 			gas = params.ColdAccountAccessCostEIP2929
@@ -271,6 +285,9 @@ func makeCallVariantGasCallEIP7702(oldCalculator gasFunc) gasFunc {
 
 		// Check slot presence in the access list
 		if !evm.StateDB.AddressInAccessList(addr) {
+			if evm.Config.Tracer != nil && evm.Config.Tracer.OnColdAccountRead != nil {
+				evm.Config.Tracer.OnColdAccountRead(addr)
+			}
 			evm.StateDB.AddAddressToAccessList(addr)
 			// The WarmStorageReadCostEIP2929 (100) is already deducted in the form of a constant cost, so
 			// the cost to charge for cold access, if any, is Cold - Warm
@@ -289,6 +306,9 @@ func makeCallVariantGasCallEIP7702(oldCalculator gasFunc) gasFunc {
 			if evm.StateDB.AddressInAccessList(target) {
 				cost = params.WarmStorageReadCostEIP2929
 			} else {
+				if evm.Config.Tracer != nil && evm.Config.Tracer.OnColdAccountRead != nil {
+					evm.Config.Tracer.OnColdAccountRead(target)
+				}
 				evm.StateDB.AddAddressToAccessList(target)
 				cost = params.ColdAccountAccessCostEIP2929
 			}

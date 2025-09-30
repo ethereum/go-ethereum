@@ -19,6 +19,7 @@ package bal
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/ethereum/go-ethereum/params"
 	"maps"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -30,6 +31,27 @@ import (
 type CodeChange struct {
 	TxIdx uint16
 	Code  []byte `json:"code,omitempty"`
+}
+
+var IgnoredBALAddresses map[common.Address]struct{} = map[common.Address]struct{}{
+	params.SystemAddress:                {},
+	common.BytesToAddress([]byte{0x01}): {},
+	common.BytesToAddress([]byte{0x02}): {},
+	common.BytesToAddress([]byte{0x03}): {},
+	common.BytesToAddress([]byte{0x04}): {},
+	common.BytesToAddress([]byte{0x05}): {},
+	common.BytesToAddress([]byte{0x06}): {},
+	common.BytesToAddress([]byte{0x07}): {},
+	common.BytesToAddress([]byte{0x08}): {},
+	common.BytesToAddress([]byte{0x09}): {},
+	common.BytesToAddress([]byte{0x0a}): {},
+	common.BytesToAddress([]byte{0x0b}): {},
+	common.BytesToAddress([]byte{0x0c}): {},
+	common.BytesToAddress([]byte{0x0d}): {},
+	common.BytesToAddress([]byte{0x0e}): {},
+	common.BytesToAddress([]byte{0x0f}): {},
+	common.BytesToAddress([]byte{0x10}): {},
+	common.BytesToAddress([]byte{0x11}): {},
 }
 
 // ConstructionAccountAccess contains post-block account state for mutations as well as
@@ -81,6 +103,36 @@ func NewConstructionBlockAccessList() *ConstructionBlockAccessList {
 	return &ConstructionBlockAccessList{
 		Accounts: make(map[common.Address]*ConstructionAccountAccess),
 	}
+}
+
+func (c *ConstructionBlockAccessList) DiffAt(idx uint16) *StateDiff {
+	res := &StateDiff{make(map[common.Address]*AccountState)}
+
+	for addr, account := range c.Accounts {
+		accountState := &AccountState{}
+		if balance, ok := account.BalanceChanges[idx]; ok {
+			accountState.Balance = balance
+		}
+		if nonce, ok := account.NonceChanges[idx]; ok {
+			accountState.Nonce = &nonce
+		}
+		if code, ok := account.CodeChanges[idx]; ok {
+			accountState.Code = code.Code
+		}
+
+		storageWrites := make(map[common.Hash]common.Hash)
+		for slot, writes := range account.StorageWrites {
+			if val, ok := writes[idx]; ok {
+				storageWrites[slot] = val
+			}
+		}
+		if len(storageWrites) > 0 {
+			accountState.StorageWrites = make(map[common.Hash]common.Hash)
+		}
+
+		res.Mutations[addr] = accountState
+	}
+	return res
 }
 
 // AccountRead records the address of an account that has been read during execution.
@@ -163,8 +215,28 @@ func mergeStorageWrites(cur, next map[common.Hash]map[uint16]common.Hash) map[co
 	return cur
 }
 
-func (c *ConstructionBlockAccessList) Merge(next *ConstructionBlockAccessList) {
-	for addr, accountAccess := range next.Accounts {
+// MergeReads combines the account/storage reads from a completed EVM execution scope
+// into the parent calling scope's access list.
+// It is intended to be called when the child execution scope terminates in a revert
+// which means that only the state reads performed by that execution should be reported
+// in the BAL.
+func (c *ConstructionBlockAccessList) MergeReads(childScope *ConstructionBlockAccessList) {
+	for addr, accountAccess := range childScope.Accounts {
+		if _, ok := c.Accounts[addr]; !ok {
+			c.Accounts[addr] = &ConstructionAccountAccess{StorageReads: accountAccess.StorageReads}
+			continue
+		}
+
+		for storageRead, _ := range childScope.Accounts[addr].StorageReads {
+			c.Accounts[addr].StorageReads[storageRead] = struct{}{}
+		}
+	}
+}
+
+// Merge combines the state changes from a nested execution with the parent context
+// It is meant to be invoked after an EVM call completes (without reverting).
+func (c *ConstructionBlockAccessList) Merge(childScope *ConstructionBlockAccessList) {
+	for addr, accountAccess := range childScope.Accounts {
 		if _, ok := c.Accounts[addr]; !ok {
 			c.Accounts[addr] = accountAccess
 			continue
@@ -172,18 +244,18 @@ func (c *ConstructionBlockAccessList) Merge(next *ConstructionBlockAccessList) {
 
 		// copy the entries from 'next' into 'c' overwriting 'c' entries with
 		// 'next entries when the bal index matches.
-		next.Accounts[addr].StorageWrites = mergeStorageWrites(next.Accounts[addr].StorageWrites, c.Accounts[addr].StorageWrites)
+		c.Accounts[addr].StorageWrites = mergeStorageWrites(c.Accounts[addr].StorageWrites, childScope.Accounts[addr].StorageWrites)
 
-		for storageRead, _ := range c.Accounts[addr].StorageReads {
-			next.Accounts[addr].StorageReads[storageRead] = struct{}{}
+		for storageRead, _ := range childScope.Accounts[addr].StorageReads {
+			c.Accounts[addr].StorageReads[storageRead] = struct{}{}
 		}
-		for idx, nonce := range next.Accounts[addr].NonceChanges {
+		for idx, nonce := range childScope.Accounts[addr].NonceChanges {
 			c.Accounts[addr].NonceChanges[idx] = nonce
 		}
-		for idx, code := range next.Accounts[addr].CodeChanges {
+		for idx, code := range childScope.Accounts[addr].CodeChanges {
 			c.Accounts[addr].CodeChanges[idx] = code
 		}
-		for idx, balance := range next.Accounts[addr].BalanceChanges {
+		for idx, balance := range childScope.Accounts[addr].BalanceChanges {
 			c.Accounts[addr].BalanceChanges[idx] = balance
 		}
 	}
@@ -219,76 +291,6 @@ func (c *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 		res.Accounts[addr] = &aaCopy
 	}
 	return res
-}
-
-// ApplyDiff includes the given changes in the block access list at the given index.
-func (c *ConstructionBlockAccessList) ApplyDiff(i uint, diff *StateDiff) {
-	idx := uint16(i)
-	for addr, acctDiff := range diff.Mutations {
-		if _, ok := c.Accounts[addr]; !ok {
-			c.Accounts[addr] = &ConstructionAccountAccess{}
-		}
-		if acctDiff.Balance != nil {
-			if c.Accounts[addr].BalanceChanges == nil {
-				c.Accounts[addr].BalanceChanges = make(map[uint16]*uint256.Int)
-			}
-			c.Accounts[addr].BalanceChanges[idx] = acctDiff.Balance
-		}
-		if acctDiff.Nonce != nil {
-			if c.Accounts[addr].NonceChanges == nil {
-				c.Accounts[addr].NonceChanges = make(map[uint16]uint64)
-			}
-			c.Accounts[addr].NonceChanges[idx] = *acctDiff.Nonce
-		}
-		if acctDiff.Code != nil {
-			if c.Accounts[addr].CodeChanges == nil {
-				c.Accounts[addr].CodeChanges = make(map[uint16]CodeChange)
-			}
-			// TODO: make the CodeChanges value just be []byte
-			c.Accounts[addr].CodeChanges[idx] = CodeChange{idx, acctDiff.Code}
-		}
-		if acctDiff.StorageWrites != nil {
-			if c.Accounts[addr].StorageWrites == nil {
-				// TODO: can we instantiate all these maps in the constructor?
-				c.Accounts[addr].StorageWrites = make(map[common.Hash]map[uint16]common.Hash)
-			}
-
-			for slot, val := range acctDiff.StorageWrites {
-				if c.Accounts[addr].StorageWrites[slot] == nil {
-					c.Accounts[addr].StorageWrites[slot] = make(map[uint16]common.Hash)
-				}
-
-				c.Accounts[addr].StorageWrites[slot][idx] = val
-
-				delete(c.Accounts[addr].StorageReads, slot)
-			}
-		}
-	}
-}
-
-// ApplyAccesses records the given account/storage accesses in the BAL.
-func (c *ConstructionBlockAccessList) ApplyAccesses(accesses StateAccesses) {
-	for addr, acctAccesses := range accesses {
-		if c.Accounts[addr] == nil {
-			c.Accounts[addr] = &ConstructionAccountAccess{}
-		}
-		if len(acctAccesses) > 0 {
-
-			if c.Accounts[addr].StorageReads == nil {
-				c.Accounts[addr].StorageReads = make(map[common.Hash]struct{})
-			}
-			for key, _ := range acctAccesses {
-				// if any of the accessed keys were previously written, they
-				// appear in the written set only and not also in accesses.
-				if len(c.Accounts[addr].StorageWrites) > 0 {
-					if _, ok := c.Accounts[addr].StorageWrites[key]; ok {
-						continue
-					}
-				}
-				c.Accounts[addr].StorageReads[key] = struct{}{}
-			}
-		}
-	}
 }
 
 type StateDiff struct {

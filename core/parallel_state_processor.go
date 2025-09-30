@@ -122,9 +122,7 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateR
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.chain.engine.Finalize(p.chain, header, tracingStateDB, block.Body())
 	// invoke Finalise so that withdrawals are accounted for in the state diff
-	finalDiff, finalAccesses := postTxState.Finalise(true)
-	computedDiff.Merge(finalDiff)
-	computedAccesses.Merge(*finalAccesses)
+	postTxState.Finalise(true)
 
 	if err := postTxState.BlockAccessList().ValidateStateDiff(len(block.Transactions())+1, computedDiff); err != nil {
 		return &ProcessResultWithMetrics{
@@ -247,10 +245,8 @@ func (p *ParallelStateProcessor) calcAndVerifyRoot(preState *state.StateDB, bloc
 // execTx executes single transaction returning a result which includes state accessed/modified
 func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transaction, idx int, db *state.StateDB, signer types.Signer) *txExecResult {
 	header := block.Header()
-	var tracingStateDB = vm.StateDB(db)
-	if hooks := p.vmCfg.Tracer; hooks != nil {
-		tracingStateDB = state.NewHookedState(db, hooks)
-	}
+	balTracer, hooks := NewBlockAccessListTracer()
+	tracingStateDB := state.NewHookedState(db, hooks)
 	context := NewEVMBlockContext(header, p.chain, nil)
 	evm := vm.NewEVM(context, tracingStateDB, p.config, *p.vmCfg)
 
@@ -274,7 +270,7 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 		return &txExecResult{err: err}
 	}
 
-	if err := db.BlockAccessList().ValidateStateDiff(idx+1, mutatedState); err != nil {
+	if err := db.BlockAccessList().ValidateStateDiff(idx+1, balTracer.AccessList().DiffAt(uint16(idx)+1)); err != nil {
 		return &txExecResult{err: err}
 	}
 
@@ -289,6 +285,7 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 // Process performs EVM execution and state root computation for a block which is known
 // to contain an access list.
 func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (*ProcessResultWithMetrics, error) {
+	fmt.Println("start ParallelProcess")
 	var (
 		header = block.Header()
 		resCh  = make(chan *ProcessResultWithMetrics)
@@ -342,7 +339,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 
 	// compute the post-tx state prestate (before applying final block system calls and eip-4895 withdrawals)
 	// the post-tx state transition is verified by resultHandler
-	postTxState := statedb.Copy().(*state.StateDB)
+	postTxState := statedb.Copy()
 
 	tPreprocess = time.Since(pStart)
 
@@ -356,7 +353,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		tx := tx
 		i := i
 		workers.Go(func() error {
-			res := p.execTx(block, tx, i, startingState.Copy().(*state.StateDB), signer)
+			res := p.execTx(block, tx, i, startingState.Copy(), signer)
 			txResCh <- *res
 			return nil
 		})
