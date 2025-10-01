@@ -1652,6 +1652,62 @@ func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil
 	return SubmitTransaction(ctx, api.b, tx)
 }
 
+// SendRawTransactionSync will add the signed transaction to the transaction pool
+// and wait for the transaction to be mined until the timeout (in milliseconds) is reached.
+func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hexutil.Bytes, timeoutMs *hexutil.Uint64) (map[string]interface{}, error) {
+	tx := new(types.Transaction)
+	if err := tx.UnmarshalBinary(input); err != nil {
+		return nil, err
+	}
+	hash, err := SubmitTransaction(ctx, api.b, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	// compute effective timeout
+	max := api.b.RPCTxSyncMaxTimeout()
+	def := api.b.RPCTxSyncDefaultTimeout()
+
+	eff := def
+	if timeoutMs != nil && *timeoutMs > 0 {
+		req := time.Duration(*timeoutMs) * time.Millisecond
+		if req > max {
+			eff = max
+		} else {
+			eff = req // allow shorter than default
+		}
+	}
+
+	// Wait for receipt until timeout
+	receiptCtx, cancel := context.WithTimeout(ctx, eff)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Millisecond * 100)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			receipt, getErr := api.GetTransactionReceipt(receiptCtx, hash)
+			// If tx-index still building, keep polling
+			if getErr != nil && !errors.Is(getErr, NewTxIndexingError()) {
+				// transient or other error: just keep polling
+			}
+			if receipt != nil {
+				return receipt, nil
+			}
+		case <-receiptCtx.Done():
+			if err := ctx.Err(); err != nil {
+				return nil, err // context canceled / deadline exceeded upstream
+			}
+			return nil, &txSyncTimeoutError{
+				msg:  fmt.Sprintf("The transaction was added to the transaction pool but wasn't processed in %v.", eff),
+				hash: hash,
+			}
+		}
+	}
+}
+
 // Sign calculates an ECDSA signature for:
 // keccak256("\x19Ethereum Signed Message:\n" + len(message) + message).
 //
