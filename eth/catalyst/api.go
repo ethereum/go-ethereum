@@ -515,7 +515,7 @@ func (api *ConsensusAPI) GetPayloadV4(payloadID engine.PayloadID) (*engine.Execu
 // This method follows the same specification as engine_getPayloadV4 with
 // changes of returning BlobsBundleV2 with BlobSidecar version 1.
 func (api *ConsensusAPI) GetPayloadV5(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
-	if !payloadID.Is(engine.PayloadV3) {
+	if !payloadID.Is(engine.PayloadV3, engine.PayloadV4) {
 		return nil, engine.UnsupportedFork
 	}
 	return api.getPayload(payloadID, false)
