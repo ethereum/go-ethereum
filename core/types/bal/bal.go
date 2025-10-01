@@ -105,8 +105,10 @@ func NewConstructionBlockAccessList() *ConstructionBlockAccessList {
 	}
 }
 
-func (c *ConstructionBlockAccessList) DiffAt(idx uint16) *StateDiff {
+func (c *ConstructionBlockAccessList) DiffAt(i int) *StateDiff {
 	res := &StateDiff{make(map[common.Address]*AccountState)}
+
+	idx := uint16(i)
 
 	for addr, account := range c.Accounts {
 		accountState := &AccountState{}
@@ -127,10 +129,26 @@ func (c *ConstructionBlockAccessList) DiffAt(idx uint16) *StateDiff {
 			}
 		}
 		if len(storageWrites) > 0 {
-			accountState.StorageWrites = make(map[common.Hash]common.Hash)
+			accountState.StorageWrites = storageWrites
 		}
 
-		res.Mutations[addr] = accountState
+		if !accountState.Empty() {
+			res.Mutations[addr] = accountState
+		}
+	}
+	return res
+}
+
+func (c *ConstructionBlockAccessList) StateAccesses() StateAccesses {
+	res := make(StateAccesses)
+	for addr, acct := range c.Accounts {
+		if len(acct.StorageReads) > 0 {
+			res[addr] = acct.StorageReads
+			continue
+		}
+		if len(acct.NonceChanges) == 0 && len(acct.BalanceChanges) == 0 && len(acct.StorageWrites) == 0 && len(acct.CodeChanges) == 0 {
+			res[addr] = make(map[common.Hash]struct{})
+		}
 	}
 	return res
 }
@@ -315,6 +333,10 @@ type AccountState struct {
 	Nonce         *uint64                     `json:"Nonce,omitempty"`
 	Code          ContractCode                `json:"Code,omitempty"`
 	StorageWrites map[common.Hash]common.Hash `json:"StorageWrites,omitempty"`
+}
+
+func (a *AccountState) Empty() bool {
+	return a.Balance == nil && a.Nonce == nil && a.Code == nil && len(a.StorageWrites) == 0
 }
 
 func (a *AccountState) String() string {

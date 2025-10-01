@@ -2062,11 +2062,6 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 		}(time.Now(), throwaway, block)
 	}
 
-	// TODO: can remove validateBAL parameter and just look at whether the block has an access list?
-	if constructBALForTesting || validateBAL {
-		statedb.EnableStateDiffRecording()
-	}
-
 	// If we are past Byzantium, enable prefetching to pull in trie node paths
 	// while processing transactions. Before Byzantium the prefetcher is mostly
 	// useless due to the intermediate root hashing after each transaction.
@@ -2150,7 +2145,7 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 		var balTracer *BlockAccessListTracer
 		// Process block using the parent state as reference point
 		if constructBALForTesting {
-			balTracer, bc.cfg.VmConfig.Tracer = NewBlockAccessListTracer()
+			balTracer, bc.cfg.VmConfig.Tracer = NewBlockAccessListTracer(0)
 		}
 		// Process block using the parent state as reference point
 		pstart := time.Now()

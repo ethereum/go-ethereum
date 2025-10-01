@@ -1085,13 +1085,6 @@ func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
 	s.balIndex = ti + 1
 }
 
-// SetAccessListIndex sets the current index that state mutations will
-// be reported as in the BAL.  It is only relevant if this StateDB instance
-// is being used in the BAL construction path.
-func (s *StateDB) SetAccessListIndex(idx int) {
-	s.balIndex = idx
-}
-
 // SetTxSender sets the sender of the currently-executing transaction.
 func (s *StateDB) SetTxSender(sender common.Address) {
 	s.sender = sender

@@ -58,13 +58,20 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateR
 	tPostprocessStart := time.Now()
 	header := block.Header()
 
-	postTxState.SetAccessListIndex(len(block.Transactions()) + 1)
-	var tracingStateDB = vm.StateDB(postTxState)
-	if hooks := p.vmCfg.Tracer; hooks != nil {
-		tracingStateDB = state.NewHookedState(postTxState, hooks)
-	}
+	balTracer, hooks := NewBlockAccessListTracer(len(block.Transactions()) + 1)
+	tracingStateDB := state.NewHookedState(postTxState, hooks)
 	context := NewEVMBlockContext(header, p.chain, nil)
-	evm := vm.NewEVM(context, tracingStateDB, p.config, *p.vmCfg)
+
+	cfg := vm.Config{
+		Tracer:                  hooks,
+		NoBaseFee:               p.vmCfg.NoBaseFee,
+		EnablePreimageRecording: p.vmCfg.EnablePreimageRecording,
+		ExtraEips:               slices.Clone(p.vmCfg.ExtraEips),
+		StatelessSelfValidation: p.vmCfg.StatelessSelfValidation,
+		EnableWitnessStats:      p.vmCfg.EnableWitnessStats,
+	}
+	cfg.Tracer = hooks
+	evm := vm.NewEVM(context, tracingStateDB, p.config, cfg)
 
 	// 1. order the receipts by tx index
 	// 2. correctly calculate the cumulative gas used per receipt, returning bad block error if it goes over the allowed
@@ -85,9 +92,6 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateR
 		allLogs = append(allLogs, receipt.Logs...)
 	}
 
-	computedDiff := &bal.StateDiff{make(map[common.Address]*bal.AccountState)}
-	computedAccesses := make(bal.StateAccesses)
-
 	// Read requests if Prague is enabled.
 	if p.config.IsPrague(block.Number(), block.Time()) {
 		requests = [][]byte{}
@@ -99,38 +103,35 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateR
 		}
 
 		// EIP-7002
-		diff, accesses, err := ProcessWithdrawalQueue(&requests, evm)
+		err := ProcessWithdrawalQueue(&requests, evm)
 		if err != nil {
 			return &ProcessResultWithMetrics{
 				ProcessResult: &ProcessResult{Error: err},
 			}
 		}
-		computedDiff = diff
-		computedAccesses = *accesses
 
 		// EIP-7251
-		diff, accesses, err = ProcessConsolidationQueue(&requests, evm)
+		err = ProcessConsolidationQueue(&requests, evm)
 		if err != nil {
 			return &ProcessResultWithMetrics{
 				ProcessResult: &ProcessResult{Error: err},
 			}
 		}
-		computedDiff.Merge(diff)
-		computedAccesses.Merge(*accesses)
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.chain.engine.Finalize(p.chain, header, tracingStateDB, block.Body())
 	// invoke Finalise so that withdrawals are accounted for in the state diff
 	postTxState.Finalise(true)
+	allStateReads.Merge(balTracer.AccessList().StateAccesses())
 
-	if err := postTxState.BlockAccessList().ValidateStateDiff(len(block.Transactions())+1, computedDiff); err != nil {
+	balIdx := len(block.Transactions()) + 1
+	if err := postTxState.BlockAccessList().ValidateStateDiff(balIdx, balTracer.AccessList().DiffAt(balIdx)); err != nil {
 		return &ProcessResultWithMetrics{
 			ProcessResult: &ProcessResult{Error: err},
 		}
 	}
 
-	allStateReads.Merge(computedAccesses)
 	if err := postTxState.BlockAccessList().ValidateStateReads(*allStateReads); err != nil {
 		return &ProcessResultWithMetrics{
 			ProcessResult: &ProcessResult{Error: err},
@@ -156,13 +157,12 @@ type txExecResult struct {
 	receipt *types.Receipt
 	err     error // non-EVM error which would render the block invalid
 
-	mutations  *bal.StateDiff
-	stateReads *bal.StateAccesses
+	accessList *bal.ConstructionBlockAccessList
 }
 
 // resultHandler polls until all transactions have finished executing and the
 // state root calculation is complete. The result is emitted on resCh.
-func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxStateReads *bal.StateAccesses, postTxState *state.StateDB, tExecStart time.Time, txResCh <-chan txExecResult, stateRootCalcResCh <-chan stateRootCalculationResult, resCh chan *ProcessResultWithMetrics) {
+func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxStateReads bal.StateAccesses, postTxState *state.StateDB, tExecStart time.Time, txResCh <-chan txExecResult, stateRootCalcResCh <-chan stateRootCalculationResult, resCh chan *ProcessResultWithMetrics) {
 	// 1. if the block has transactions, receive the execution results from all of them and return an error on resCh if any txs err'd
 	// 2. once all txs are executed, compute the post-tx state transition and produce the ProcessResult sending it on resCh (or an error if the post-tx state didn't match what is reported in the BAL)
 	var receipts []*types.Receipt
@@ -172,7 +172,7 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxStateRea
 	var numTxComplete int
 
 	allReads := make(bal.StateAccesses)
-	allReads.Merge(*preTxStateReads)
+	allReads.Merge(preTxStateReads)
 	if len(block.Transactions()) > 0 {
 	loop:
 		for {
@@ -186,7 +186,7 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxStateRea
 							execErr = err
 						} else {
 							receipts = append(receipts, res.receipt)
-							allReads.Merge(*res.stateReads)
+							allReads.Merge(res.accessList.StateAccesses())
 						}
 					}
 				}
@@ -243,49 +243,51 @@ func (p *ParallelStateProcessor) calcAndVerifyRoot(preState *state.StateDB, bloc
 }
 
 // execTx executes single transaction returning a result which includes state accessed/modified
-func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transaction, idx int, db *state.StateDB, signer types.Signer) *txExecResult {
+func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transaction, txIdx int, db *state.StateDB, signer types.Signer) *txExecResult {
 	header := block.Header()
-	balTracer, hooks := NewBlockAccessListTracer()
+	balTracer, hooks := NewBlockAccessListTracer(txIdx + 1)
 	tracingStateDB := state.NewHookedState(db, hooks)
 	context := NewEVMBlockContext(header, p.chain, nil)
-	evm := vm.NewEVM(context, tracingStateDB, p.config, *p.vmCfg)
+
+	cfg := vm.Config{
+		Tracer:                  hooks,
+		NoBaseFee:               p.vmCfg.NoBaseFee,
+		EnablePreimageRecording: p.vmCfg.EnablePreimageRecording,
+		ExtraEips:               slices.Clone(p.vmCfg.ExtraEips),
+		StatelessSelfValidation: p.vmCfg.StatelessSelfValidation,
+		EnableWitnessStats:      p.vmCfg.EnableWitnessStats,
+	}
+	cfg.Tracer = hooks
+	evm := vm.NewEVM(context, tracingStateDB, p.config, cfg)
 
 	msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 	if err != nil {
-		err = fmt.Errorf("could not apply tx %d [%v]: %w", idx, tx.Hash().Hex(), err)
+		err = fmt.Errorf("could not apply tx %d [%v]: %w", txIdx, tx.Hash().Hex(), err)
 		return &txExecResult{err: err}
 	}
-	sender, _ := types.Sender(signer, tx)
-	db.SetTxSender(sender)
-	db.SetTxContext(tx.Hash(), idx)
-	db.SetAccessListIndex(idx + 1)
-
-	evm.StateDB = db
 	gp := new(GasPool)
 	gp.SetGas(block.GasLimit())
 	var gasUsed uint64
-	mutatedState, accessedState, receipt, err := ApplyTransactionWithEVM(msg, gp, db, block.Number(), block.Hash(), context.Time, tx, &gasUsed, evm)
+	receipt, err := ApplyTransactionWithEVM(msg, gp, db, block.Number(), block.Hash(), context.Time, tx, &gasUsed, evm)
 	if err != nil {
-		err := fmt.Errorf("could not apply tx %d [%v]: %w", idx, tx.Hash().Hex(), err)
+		err := fmt.Errorf("could not apply tx %d [%v]: %w", txIdx, tx.Hash().Hex(), err)
 		return &txExecResult{err: err}
 	}
 
-	if err := db.BlockAccessList().ValidateStateDiff(idx+1, balTracer.AccessList().DiffAt(uint16(idx)+1)); err != nil {
+	if err := db.BlockAccessList().ValidateStateDiff(txIdx+1, balTracer.AccessList().DiffAt(txIdx+1)); err != nil {
 		return &txExecResult{err: err}
 	}
 
 	return &txExecResult{
-		idx:        idx,
+		idx:        txIdx,
 		receipt:    receipt,
-		mutations:  mutatedState,
-		stateReads: accessedState,
+		accessList: balTracer.AccessList(),
 	}
 }
 
 // Process performs EVM execution and state root computation for a block which is known
 // to contain an access list.
 func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (*ProcessResultWithMetrics, error) {
-	fmt.Println("start ParallelProcess")
 	var (
 		header = block.Header()
 		resCh  = make(chan *ProcessResultWithMetrics)
@@ -310,30 +312,22 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	alReader := state.NewBALReader(block, statedb)
 	statedb.SetBlockAccessList(alReader)
 
-	// Apply pre-execution system calls.
-	var tracingStateDB = vm.StateDB(statedb)
-	if hooks := cfg.Tracer; hooks != nil {
-		tracingStateDB = state.NewHookedState(statedb, hooks)
-	}
+	balTracer, hooks := NewBlockAccessListTracer(0)
+	tracingStateDB := state.NewHookedState(statedb, hooks)
+	// TODO: figure out exactly why we need to set the hooks on the TracingStateDB and the vm.Config
+	cfg.Tracer = hooks
+
 	context = NewEVMBlockContext(header, p.chain, nil)
 	evm := vm.NewEVM(context, tracingStateDB, p.config, cfg)
 
-	// validate the correctness of pre-transaction execution state changes
-	computedPreTxDiff := &bal.StateDiff{make(map[common.Address]*bal.AccountState)}
-	preTxStateReads := make(bal.StateAccesses)
-
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
-		diff, reads := ProcessBeaconBlockRoot(*beaconRoot, evm)
-		computedPreTxDiff.Merge(diff)
-		preTxStateReads.Merge(*reads)
+		ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
 	if p.config.IsPrague(block.Number(), block.Time()) || p.config.IsVerkle(block.Number(), block.Time()) {
-		diff, reads := ProcessParentBlockHash(block.ParentHash(), evm)
-		computedPreTxDiff.Merge(diff)
-		preTxStateReads.Merge(*reads)
+		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
-	if err := statedb.BlockAccessList().ValidateStateDiff(0, computedPreTxDiff); err != nil {
+	if err := statedb.BlockAccessList().ValidateStateDiff(0, balTracer.AccessList().DiffAt(0)); err != nil {
 		return nil, err
 	}
 
@@ -345,8 +339,10 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 
 	// execute transactions and state root calculation in parallel
 
+	// TODO: figure out how to funnel the state reads from the bal tracer through to the post-block-exec state/slot read
+	// validation
 	tExecStart = time.Now()
-	go p.resultHandler(block, &preTxStateReads, postTxState, tExecStart, txResCh, rootCalcResultCh, resCh)
+	go p.resultHandler(block, balTracer.AccessList().StateAccesses(), postTxState, tExecStart, txResCh, rootCalcResultCh, resCh)
 	var workers errgroup.Group
 	startingState := statedb.Copy()
 	for i, tx := range block.Transactions() {

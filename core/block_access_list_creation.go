@@ -1,7 +1,6 @@
 package core
 
 import (
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -27,10 +26,10 @@ type BlockAccessListTracer struct {
 }
 
 // NewBlockAccessListTracer returns an BlockAccessListTracer and a set of hooks
-func NewBlockAccessListTracer() (*BlockAccessListTracer, *tracing.Hooks) {
+func NewBlockAccessListTracer(startIdx int) (*BlockAccessListTracer, *tracing.Hooks) {
 	balTracer := &BlockAccessListTracer{
 		callAccessLists: []*bal.ConstructionBlockAccessList{bal.NewConstructionBlockAccessList()},
-		txIdx:           0,
+		txIdx:           uint16(startIdx),
 	}
 	hooks := &tracing.Hooks{
 		OnTxEnd:           balTracer.TxEndHook,
@@ -50,11 +49,6 @@ func NewBlockAccessListTracer() (*BlockAccessListTracer, *tracing.Hooks) {
 // AccessList returns the constructed access list
 func (a *BlockAccessListTracer) AccessList() *bal.ConstructionBlockAccessList {
 	return a.callAccessLists[0]
-}
-
-// StateDiff returns a state diff at the current BAL index
-func (a *BlockAccessListTracer) StateDiff() *bal.StateDiff {
-	return a.callAccessLists[0].
 }
 
 func (a *BlockAccessListTracer) TxEndHook(receipt *types.Receipt, err error) {
@@ -80,11 +74,8 @@ func (a *BlockAccessListTracer) OnExit(depth int, output []byte, gasUsed uint64,
 	parentAccessList := a.callAccessLists[len(a.callAccessLists)-2]
 	scopeAccessList := a.callAccessLists[len(a.callAccessLists)-1]
 	if reverted {
-		fmt.Println("exit reverted")
 		parentAccessList.MergeReads(scopeAccessList)
 	} else {
-		fmt.Println("exit normal")
-		fmt.Printf("scope access list is\n%s\n", scopeAccessList.ToEncodingObj().String())
 		parentAccessList.Merge(scopeAccessList)
 	}
 
@@ -112,7 +103,6 @@ func (a *BlockAccessListTracer) OnColdStorageRead(addr common.Address, key commo
 }
 
 func (a *BlockAccessListTracer) OnColdAccountRead(addr common.Address) {
-	fmt.Printf("cold account read %x\n", addr)
 	a.callAccessLists[len(a.callAccessLists)-1].AccountRead(addr)
 }
 
