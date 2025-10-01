@@ -66,7 +66,7 @@ type reader struct {
 func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
 	blob, got, loc, err := r.layer.node(owner, path, 0)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to retrieve node for owner %x, path %x: %w", owner, path, err)
 	}
 	// Error out if the local one is inconsistent with the target.
 	if !r.noHashCheck && got != hash {
@@ -102,7 +102,7 @@ func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte,
 func (r *reader) AccountRLP(hash common.Hash) ([]byte, error) {
 	l, err := r.db.tree.lookupAccount(hash, r.state)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to lookup account %x: %w", hash, err)
 	}
 	// If the located layer is stale, fall back to the slow path to retrieve
 	// the account data. This is an edge case where the located layer is the
@@ -129,7 +129,7 @@ func (r *reader) AccountRLP(hash common.Hash) ([]byte, error) {
 func (r *reader) Account(hash common.Hash) (*types.SlimAccount, error) {
 	blob, err := r.AccountRLP(hash)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to retrieve account RLP for %x: %w", hash, err)
 	}
 	if len(blob) == 0 {
 		return nil, nil
@@ -151,7 +151,7 @@ func (r *reader) Account(hash common.Hash) (*types.SlimAccount, error) {
 func (r *reader) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
 	l, err := r.db.tree.lookupStorage(accountHash, storageHash, r.state)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to lookup storage for account %x, storage %x: %w", accountHash, storageHash, err)
 	}
 	// If the located layer is stale, fall back to the slow path to retrieve
 	// the storage data. This is an edge case where the located layer is the
@@ -263,7 +263,7 @@ func (r *HistoricalStateReader) AccountRLP(address common.Address) ([]byte, erro
 	hash := crypto.Keccak256Hash(address.Bytes())
 	latest, err := dl.account(hash, 0)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to retrieve latest account for address %x: %w", address, err)
 	}
 	return r.reader.read(newAccountIdentQuery(address, hash), r.id, dl.stateID(), latest)
 }
@@ -276,7 +276,7 @@ func (r *HistoricalStateReader) AccountRLP(address common.Address) ([]byte, erro
 func (r *HistoricalStateReader) Account(address common.Address) (*types.SlimAccount, error) {
 	blob, err := r.AccountRLP(address)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to retrieve account RLP for address %x: %w", address, err)
 	}
 	if len(blob) == 0 {
 		return nil, nil
@@ -314,7 +314,7 @@ func (r *HistoricalStateReader) Storage(address common.Address, key common.Hash)
 	keyHash := crypto.Keccak256Hash(key.Bytes())
 	latest, err := dl.storage(addrHash, keyHash, 0)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to retrieve latest storage for address %x, key %x: %w", address, key, err)
 	}
 	return r.reader.read(newStorageIdentQuery(address, addrHash, key, keyHash), r.id, dl.stateID(), latest)
 }
