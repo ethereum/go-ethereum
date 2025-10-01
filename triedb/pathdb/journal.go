@@ -97,12 +97,12 @@ func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
 	// Load the disk layer from the journal
 	base, err := db.loadDiskLayer(r)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to load disk layer from journal: %w", err)
 	}
 	// Load all the diff layers from the journal
 	head, err := db.loadDiffLayer(base, r)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to load diff layers from journal: %w", err)
 	}
 	log.Debug("Loaded layer journal", "diskroot", diskRoot, "diffhead", head.rootHash())
 	return head, nil
@@ -202,12 +202,12 @@ func (db *Database) loadDiskLayer(r *rlp.Stream) (layer, error) {
 	// Resolve nodes cached in aggregated buffer
 	var nodes nodeSet
 	if err := nodes.decode(r); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode nodes from journal: %w", err)
 	}
 	// Resolve flat state sets in aggregated buffer
 	var states stateSet
 	if err := states.decode(r); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode states from journal: %w", err)
 	}
 	return newDiskLayer(root, id, db, nil, nil, newBuffer(db.config.WriteBufferSize, &nodes, &states, id-stored), nil), nil
 }
@@ -231,12 +231,12 @@ func (db *Database) loadDiffLayer(parent layer, r *rlp.Stream) (layer, error) {
 	// Read in-memory trie nodes from journal
 	var nodes nodeSetWithOrigin
 	if err := nodes.decode(r); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode nodes with origin from journal: %w", err)
 	}
 	// Read flat states set (with original value attached) from journal
 	var stateSet StateSetWithOrigin
 	if err := stateSet.decode(r); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode state set with origin from journal: %w", err)
 	}
 	return db.loadDiffLayer(newDiffLayer(parent, root, parent.stateID()+1, block, &nodes, &stateSet), r)
 }
