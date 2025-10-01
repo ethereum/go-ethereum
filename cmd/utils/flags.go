@@ -2017,7 +2017,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (*eth.EthAPIBac
 	if err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)
 	}
-	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
+	stack.RegisterRpcAPIs(tracers.APIs(backend.APIBackend))
 	return backend.APIBackend, backend
 }
 
@@ -2042,7 +2042,7 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 		LogCacheSize:  ethcfg.FilterLogCacheSize,
 		LogQueryLimit: ethcfg.LogQueryLimit,
 	})
-	stack.RegisterAPIs([]rpc.API{{
+	stack.RegisterRpcAPIs([]rpc.API{{
 		Namespace: "eth",
 		Service:   filters.NewFilterAPI(filterSystem),
 	}})

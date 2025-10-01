@@ -48,7 +48,7 @@ import (
 // Register adds the engine API to the full node.
 func Register(stack *node.Node, backend *eth.Ethereum) error {
 	log.Warn("Engine API enabled", "protocol", "eth")
-	stack.RegisterAPIs([]rpc.API{
+	stack.RegisterRpcAPIs([]rpc.API{
 		{
 			Namespace:     "engine",
 			Service:       NewConsensusAPI(backend),

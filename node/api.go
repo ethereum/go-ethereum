@@ -178,7 +178,7 @@ func (api *adminAPI) StartHTTP(host *string, port *int, cors *string, apis *stri
 		CorsAllowedOrigins: api.node.config.HTTPCors,
 		Vhosts:             api.node.config.HTTPVirtualHosts,
 		Modules:            api.node.config.HTTPModules,
-		rpcEndpointConfig: rpcEndpointConfig{
+		apiEndpointConfig: apiEndpointConfig{
 			batchItemLimit:         api.node.config.BatchRequestLimit,
 			batchResponseSizeLimit: api.node.config.BatchResponseMaxSize,
 		},
@@ -205,7 +205,7 @@ func (api *adminAPI) StartHTTP(host *string, port *int, cors *string, apis *stri
 	if err := api.node.http.setListenAddr(*host, *port); err != nil {
 		return false, err
 	}
-	if err := api.node.http.enableRPC(api.node.rpcAPIs, config); err != nil {
+	if err := api.node.http.enableHTTP(api.node.rpcAPIs, api.node.restAPIs, config); err != nil {
 		return false, err
 	}
 	if err := api.node.http.start(); err != nil {
@@ -256,7 +256,7 @@ func (api *adminAPI) StartWS(host *string, port *int, allowedOrigins *string, ap
 		Modules: api.node.config.WSModules,
 		Origins: api.node.config.WSOrigins,
 		// ExposeAll: api.node.config.WSExposeAll,
-		rpcEndpointConfig: rpcEndpointConfig{
+		apiEndpointConfig: apiEndpointConfig{
 			batchItemLimit:         api.node.config.BatchRequestLimit,
 			batchResponseSizeLimit: api.node.config.BatchResponseMaxSize,
 		},
@@ -280,7 +280,7 @@ func (api *adminAPI) StartWS(host *string, port *int, allowedOrigins *string, ap
 		return false, err
 	}
 	openApis, _ := api.node.getAPIs()
-	if err := server.enableWS(openApis, config); err != nil {
+	if err := server.enableWS(openApis, api.node.restAPIs, config); err != nil {
 		return false, err
 	}
 	if err := server.start(); err != nil {

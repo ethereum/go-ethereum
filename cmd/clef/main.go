@@ -737,7 +737,7 @@ func signer(c *cli.Context) error {
 
 		srv := rpc.NewServer()
 		srv.SetBatchLimits(node.DefaultConfig.BatchRequestLimit, node.DefaultConfig.BatchResponseMaxSize)
-		err := node.RegisterApis(rpcAPI, []string{"account"}, srv)
+		err := node.RegisterRpcAPIs(rpcAPI, []string{"account"}, srv)
 		if err != nil {
 			utils.Fatalf("Could not register API: %w", err)
 		}

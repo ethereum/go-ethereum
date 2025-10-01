@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rest"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gofrs/flock"
 )
@@ -58,7 +59,8 @@ type Node struct {
 
 	lock          sync.Mutex
 	lifecycles    []Lifecycle // All registered backends, services, and auxiliary services that have a lifecycle
-	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
+	rpcAPIs       []rpc.API   // List of RPC APIs currently provided by the node
+	restAPIs      []rest.API  // List of REST APIs currently provided by the node
 	http          *httpServer //
 	ws            *httpServer //
 	httpAuth      *httpServer //
@@ -74,6 +76,8 @@ const (
 	runningState
 	closedState
 )
+
+var restApiPrefix = "/eth/" //TODO
 
 // New creates a new P2P node, ready for protocol registration.
 func New(conf *Config) (*Node, error) {
@@ -390,7 +394,7 @@ func (n *Node) startRPC() error {
 		openAPIs, allAPIs = n.getAPIs()
 	)
 
-	rpcConfig := rpcEndpointConfig{
+	rpcConfig := apiEndpointConfig{
 		batchItemLimit:         n.config.BatchRequestLimit,
 		batchResponseSizeLimit: n.config.BatchResponseMaxSize,
 	}
@@ -399,12 +403,13 @@ func (n *Node) startRPC() error {
 		if err := server.setListenAddr(n.config.HTTPHost, port); err != nil {
 			return err
 		}
-		if err := server.enableRPC(openAPIs, httpConfig{
+		if err := server.enableHTTP(openAPIs, n.restAPIs, httpConfig{
 			CorsAllowedOrigins: n.config.HTTPCors,
 			Vhosts:             n.config.HTTPVirtualHosts,
 			Modules:            n.config.HTTPModules,
-			prefix:             n.config.HTTPPathPrefix,
-			rpcEndpointConfig:  rpcConfig,
+			rpcPrefix:          n.config.HTTPPathPrefix,
+			restPrefix:         restApiPrefix,
+			apiEndpointConfig:  rpcConfig,
 		}); err != nil {
 			return err
 		}
@@ -417,11 +422,12 @@ func (n *Node) startRPC() error {
 		if err := server.setListenAddr(n.config.WSHost, port); err != nil {
 			return err
 		}
-		if err := server.enableWS(openAPIs, wsConfig{
+		if err := server.enableWS(openAPIs, n.restAPIs, wsConfig{
 			Modules:           n.config.WSModules,
 			Origins:           n.config.WSOrigins,
-			prefix:            n.config.WSPathPrefix,
-			rpcEndpointConfig: rpcConfig,
+			rpcPrefix:         n.config.WSPathPrefix,
+			restPrefix:        restApiPrefix,
+			apiEndpointConfig: rpcConfig,
 		}); err != nil {
 			return err
 		}
@@ -435,18 +441,19 @@ func (n *Node) startRPC() error {
 		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
 			return err
 		}
-		sharedConfig := rpcEndpointConfig{
+		sharedConfig := apiEndpointConfig{
 			jwtSecret:              secret,
 			batchItemLimit:         engineAPIBatchItemLimit,
 			batchResponseSizeLimit: engineAPIBatchResponseSizeLimit,
 			httpBodyLimit:          engineAPIBodyLimit,
 		}
-		err := server.enableRPC(allAPIs, httpConfig{
+		err := server.enableHTTP(allAPIs, n.restAPIs, httpConfig{
 			CorsAllowedOrigins: DefaultAuthCors,
 			Vhosts:             n.config.AuthVirtualHosts,
 			Modules:            DefaultAuthModules,
-			prefix:             DefaultAuthPrefix,
-			rpcEndpointConfig:  sharedConfig,
+			rpcPrefix:          DefaultAuthPrefix,
+			restPrefix:         restApiPrefix,
+			apiEndpointConfig:  sharedConfig,
 		})
 		if err != nil {
 			return err
@@ -458,11 +465,12 @@ func (n *Node) startRPC() error {
 		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
 			return err
 		}
-		if err := server.enableWS(allAPIs, wsConfig{
+		if err := server.enableWS(allAPIs, n.restAPIs, wsConfig{
 			Modules:           DefaultAuthModules,
 			Origins:           DefaultAuthOrigins,
-			prefix:            DefaultAuthPrefix,
-			rpcEndpointConfig: sharedConfig,
+			rpcPrefix:         DefaultAuthPrefix,
+			restPrefix:        restApiPrefix,
+			apiEndpointConfig: sharedConfig,
 		}); err != nil {
 			return err
 		}
@@ -568,8 +576,8 @@ func (n *Node) RegisterProtocols(protocols []p2p.Protocol) {
 	n.server.Protocols = append(n.server.Protocols, protocols...)
 }
 
-// RegisterAPIs registers the APIs a service provides on the node.
-func (n *Node) RegisterAPIs(apis []rpc.API) {
+// RegisterRpcAPIs registers the RPC APIs a service provides on the node.
+func (n *Node) RegisterRpcAPIs(apis []rpc.API) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -577,6 +585,17 @@ func (n *Node) RegisterAPIs(apis []rpc.API) {
 		panic("can't register APIs on running/stopped node")
 	}
 	n.rpcAPIs = append(n.rpcAPIs, apis...)
+}
+
+// RegisterRestAPIs registers the RPC APIs a service provides on the node.
+func (n *Node) RegisterRestAPIs(apis []rest.API) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	if n.state != initializingState {
+		panic("can't register APIs on running/stopped node")
+	}
+	n.restAPIs = append(n.restAPIs, apis...)
 }
 
 // getAPIs return two sets of APIs, both the ones that do not require
@@ -672,9 +691,9 @@ func (n *Node) HTTPEndpoint() string {
 // WSEndpoint returns the current JSON-RPC over WebSocket endpoint.
 func (n *Node) WSEndpoint() string {
 	if n.http.wsAllowed() {
-		return "ws://" + n.http.listenAddr() + n.http.wsConfig.prefix
+		return "ws://" + n.http.listenAddr() + n.http.wsConfig.rpcPrefix //TODO ???
 	}
-	return "ws://" + n.ws.listenAddr() + n.ws.wsConfig.prefix
+	return "ws://" + n.ws.listenAddr() + n.ws.wsConfig.rpcPrefix
 }
 
 // HTTPAuthEndpoint returns the URL of the authenticated HTTP server.
@@ -685,9 +704,9 @@ func (n *Node) HTTPAuthEndpoint() string {
 // WSAuthEndpoint returns the current authenticated JSON-RPC over WebSocket endpoint.
 func (n *Node) WSAuthEndpoint() string {
 	if n.httpAuth.wsAllowed() {
-		return "ws://" + n.httpAuth.listenAddr() + n.httpAuth.wsConfig.prefix
+		return "ws://" + n.httpAuth.listenAddr() + n.httpAuth.wsConfig.rpcPrefix
 	}
-	return "ws://" + n.wsAuth.listenAddr() + n.wsAuth.wsConfig.prefix
+	return "ws://" + n.wsAuth.listenAddr() + n.wsAuth.wsConfig.rpcPrefix
 }
 
 // EventMux retrieves the event multiplexer used by all the network services in

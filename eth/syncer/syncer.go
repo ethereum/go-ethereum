@@ -63,7 +63,7 @@ func Register(stack *node.Node, backend *eth.Ethereum, target common.Hash, exitW
 		closed:         make(chan struct{}),
 		exitWhenSynced: exitWhenSynced,
 	}
-	stack.RegisterAPIs(s.APIs())
+	stack.RegisterRpcAPIs(s.APIs())
 	stack.RegisterLifecycle(s)
 	return s, nil
 }

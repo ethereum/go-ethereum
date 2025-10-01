@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/beacon/blsync"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -50,6 +51,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/internal/restapi"
 	"github.com/ethereum/go-ethereum/internal/shutdowncheck"
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
@@ -59,6 +61,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rest"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	gethversion "github.com/ethereum/go-ethereum/version"
@@ -112,6 +115,8 @@ type Ethereum struct {
 	closeFilterMaps chan chan struct{}
 
 	APIBackend *EthAPIBackend
+
+	Blsync *blsync.Client
 
 	miner    *miner.Miner
 	gasPrice *big.Int
@@ -346,7 +351,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 	eth.miner.SetPrioAddresses(config.TxPool.Locals)
 
-	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
+	eth.APIBackend = &EthAPIBackend{
+		extRPCEnabled:       stack.Config().ExtRPCEnabled(),
+		allowUnprotectedTxs: stack.Config().AllowUnprotectedTxs,
+		eth:                 eth,
+	}
 	if eth.APIBackend.allowUnprotectedTxs {
 		log.Info("Unprotected transactions allowed")
 	}
@@ -356,7 +365,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	eth.netRPCService = ethapi.NewNetAPI(eth.p2pServer, networkID)
 
 	// Register the backend on the node
-	stack.RegisterAPIs(eth.APIs())
+	stack.RegisterRpcAPIs(eth.RpcAPIs())
+	stack.RegisterRestAPIs(eth.RestAPIs())
 	stack.RegisterProtocols(eth.Protocols())
 	stack.RegisterLifecycle(eth)
 
@@ -383,9 +393,9 @@ func makeExtraData(extra []byte) []byte {
 	return extra
 }
 
-// APIs return the collection of RPC services the ethereum package offers.
+// RpcAPIs return the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
-func (s *Ethereum) APIs() []rpc.API {
+func (s *Ethereum) RpcAPIs() []rpc.API {
 	apis := ethapi.GetAPIs(s.APIBackend)
 
 	// Append all the local APIs and return
@@ -407,6 +417,11 @@ func (s *Ethereum) APIs() []rpc.API {
 			Service:   s.netRPCService,
 		},
 	}...)
+}
+
+// RestAPIs return the collection of REST API services the ethereum package offers.
+func (s *Ethereum) RestAPIs() []rest.API {
+	return restapi.GetAPIs(s.APIBackend)
 }
 
 func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {

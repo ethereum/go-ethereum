@@ -359,7 +359,7 @@ func (c *SimulatedBeacon) AdjustTime(adjustment time.Duration) error {
 // stack.
 func RegisterSimulatedBeaconAPIs(stack *node.Node, sim *SimulatedBeacon) {
 	api := newSimulatedBeaconAPI(sim)
-	stack.RegisterAPIs([]rpc.API{
+	stack.RegisterRpcAPIs([]rpc.API{
 		{
 			Namespace: "dev",
 			Service:   api,

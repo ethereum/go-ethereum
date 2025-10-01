@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rest"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -52,9 +53,15 @@ func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.
 // checkModuleAvailability checks that all names given in modules are actually
 // available API services. It assumes that the MetadataApi module ("rpc") is always available;
 // the registration of this "rpc" module happens in NewServer() and is thus common to all endpoints.
-func checkModuleAvailability(modules []string, apis []rpc.API) (bad, available []string) {
+func checkModuleAvailability(modules []string, rpcApis []rpc.API, restApis []rest.API) (bad, available []string) {
 	availableSet := make(map[string]struct{})
-	for _, api := range apis {
+	for _, api := range rpcApis {
+		if _, ok := availableSet[api.Namespace]; !ok {
+			availableSet[api.Namespace] = struct{}{}
+			available = append(available, api.Namespace)
+		}
+	}
+	for _, api := range restApis {
 		if _, ok := availableSet[api.Namespace]; !ok {
 			availableSet[api.Namespace] = struct{}{}
 			available = append(available, api.Namespace)

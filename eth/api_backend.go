@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/beacon/blsync"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
@@ -429,6 +430,10 @@ func (b *EthAPIBackend) BlobBaseFee(ctx context.Context) *big.Int {
 		return eip4844.CalcBlobFee(b.ChainConfig(), b.CurrentHeader())
 	}
 	return nil
+}
+
+func (b *EthAPIBackend) Blsync() *blsync.Client {
+	return b.eth.Blsync
 }
 
 func (b *EthAPIBackend) ChainDb() ethdb.Database {

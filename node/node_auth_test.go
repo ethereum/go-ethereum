@@ -120,7 +120,7 @@ func TestAuthEndpoints(t *testing.T) {
 		t.Fatalf("could not create a new node: %v", err)
 	}
 	// register dummy apis so we can test the modules are available and reachable with authentication
-	node.RegisterAPIs([]rpc.API{
+	node.RegisterRpcAPIs([]rpc.API{
 		{
 			Namespace:     "engine",
 			Version:       "1.0",

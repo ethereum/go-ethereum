@@ -32,38 +32,40 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rest"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/cors"
 )
 
 // httpConfig is the JSON-RPC/HTTP configuration.
 type httpConfig struct {
-	Modules            []string
-	CorsAllowedOrigins []string
-	Vhosts             []string
-	prefix             string // path prefix on which to mount http handler
-	rpcEndpointConfig
+	Modules               []string
+	CorsAllowedOrigins    []string
+	Vhosts                []string
+	rpcPrefix, restPrefix string // path prefix on which to mount http handler
+	apiEndpointConfig
 }
 
 // wsConfig is the JSON-RPC/Websocket configuration
 type wsConfig struct {
-	Origins []string
-	Modules []string
-	prefix  string // path prefix on which to mount ws handler
-	rpcEndpointConfig
+	Origins               []string
+	Modules               []string
+	rpcPrefix, restPrefix string // path prefix on which to mount ws handler
+	apiEndpointConfig
 }
 
-type rpcEndpointConfig struct {
+type apiEndpointConfig struct {
 	jwtSecret              []byte // optional JWT secret
 	batchItemLimit         int
 	batchResponseSizeLimit int
 	httpBodyLimit          int
 }
 
-type rpcHandler struct {
-	http.Handler
-	prefix string
-	server *rpc.Server
+type apiHandler struct {
+	rpcHandler, restHandler http.Handler
+	rpcPrefix, restPrefix   string
+	rpcServer               *rpc.Server
+	restServer              *rest.Server
 }
 
 type httpServer struct {
@@ -78,11 +80,11 @@ type httpServer struct {
 	// HTTP RPC handler things.
 
 	httpConfig  httpConfig
-	httpHandler atomic.Pointer[rpcHandler]
+	httpHandler atomic.Pointer[apiHandler]
 
 	// WebSocket handler things.
 	wsConfig  wsConfig
-	wsHandler atomic.Pointer[rpcHandler]
+	wsHandler atomic.Pointer[apiHandler]
 
 	// These are set by setListenAddr.
 	endpoint string
@@ -151,7 +153,7 @@ func (h *httpServer) start() error {
 	if err != nil {
 		// If the server fails to start, we need to clear out the RPC and WS
 		// configuration so they can be configured another time.
-		h.disableRPC()
+		h.disableHTTP()
 		h.disableWS()
 		return err
 	}
@@ -160,19 +162,17 @@ func (h *httpServer) start() error {
 
 	if h.wsAllowed() {
 		url := fmt.Sprintf("ws://%v", listener.Addr())
-		if h.wsConfig.prefix != "" {
-			url += h.wsConfig.prefix
-		}
-		h.log.Info("WebSocket enabled", "url", url)
+		h.log.Info("WebSocket enabled", "RPC URL", url+h.wsConfig.rpcPrefix, "REST URL", url+h.wsConfig.restPrefix)
 	}
 	// if server is websocket only, return after logging
-	if !h.rpcAllowed() {
+	if !h.httpAllowed() {
 		return nil
 	}
 	// Log http endpoint.
 	h.log.Info("HTTP server started",
 		"endpoint", listener.Addr(), "auth", h.httpConfig.jwtSecret != nil,
-		"prefix", h.httpConfig.prefix,
+		"RPC prefix", h.httpConfig.rpcPrefix,
+		"REST prefix", h.httpConfig.restPrefix,
 		"cors", strings.Join(h.httpConfig.CorsAllowedOrigins, ","),
 		"vhosts", strings.Join(h.httpConfig.Vhosts, ","),
 	)
@@ -198,15 +198,19 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// check if ws request and serve if ws enabled
 	ws := h.wsHandler.Load()
 	if ws != nil && isWebsocket(r) {
-		if checkPath(r, ws.prefix) {
-			ws.ServeHTTP(w, r)
+		if checkPath(r, ws.restPrefix) {
+			ws.restHandler.ServeHTTP(w, r)
+			return //TODO is this in the right place?
 		}
-		return
+		if checkPath(r, ws.rpcPrefix) {
+			ws.rpcHandler.ServeHTTP(w, r)
+			return //TODO is this in the right place?
+		}
 	}
 
 	// if http-rpc is enabled, try to serve request
-	rpc := h.httpHandler.Load()
-	if rpc != nil {
+	api := h.httpHandler.Load()
+	if api != nil {
 		// First try to route in the mux.
 		// Requests to a path below root are handled by the mux,
 		// which has all the handlers registered via Node.RegisterHandler.
@@ -217,8 +221,12 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if checkPath(r, rpc.prefix) {
-			rpc.ServeHTTP(w, r)
+		if checkPath(r, api.restPrefix) {
+			api.restHandler.ServeHTTP(w, r)
+			return
+		}
+		if checkPath(r, api.rpcPrefix) {
+			api.rpcHandler.ServeHTTP(w, r)
 			return
 		}
 	}
@@ -269,11 +277,13 @@ func (h *httpServer) doStop() {
 	wsHandler := h.wsHandler.Load()
 	if httpHandler != nil {
 		h.httpHandler.Store(nil)
-		httpHandler.server.Stop()
+		httpHandler.rpcServer.Stop()
+		httpHandler.restServer.Stop()
 	}
 	if wsHandler != nil {
 		h.wsHandler.Store(nil)
-		wsHandler.server.Stop()
+		wsHandler.rpcServer.Stop()
+		wsHandler.restServer.Stop()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
@@ -292,65 +302,76 @@ func (h *httpServer) doStop() {
 	h.server, h.listener = nil, nil
 }
 
-// enableRPC turns on JSON-RPC over HTTP on the server.
-func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
+// enableHTTP turns on JSON-RPC and REST API over HTTP on the server.
+func (h *httpServer) enableHTTP(rpcApis []rpc.API, restApis []rest.API, config httpConfig) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if h.rpcAllowed() {
+	if h.httpAllowed() {
 		return errors.New("JSON-RPC over HTTP is already enabled")
 	}
 
-	// Create RPC server and handler.
-	srv := rpc.NewServer()
-	srv.SetBatchLimits(config.batchItemLimit, config.batchResponseSizeLimit)
+	// Create servers and handlers.
+	rpcServer := rpc.NewServer()
+	restServer := rest.NewServer()
+	rpcServer.SetBatchLimits(config.batchItemLimit, config.batchResponseSizeLimit)
 	if config.httpBodyLimit > 0 {
-		srv.SetHTTPBodyLimit(config.httpBodyLimit)
+		rpcServer.SetHTTPBodyLimit(config.httpBodyLimit)
 	}
-	if err := RegisterApis(apis, config.Modules, srv); err != nil {
+	//TODO REST server limits
+	if err := RegisterAPIs(rpcApis, restApis, config.Modules, rpcServer, restServer); err != nil {
 		return err
 	}
 	h.httpConfig = config
-	h.httpHandler.Store(&rpcHandler{
-		Handler: NewHTTPHandlerStack(srv, config.CorsAllowedOrigins, config.Vhosts, config.jwtSecret),
-		prefix:  config.prefix,
-		server:  srv,
+	h.httpHandler.Store(&apiHandler{
+		rpcHandler:  NewHTTPHandlerStack(rpcServer, config.CorsAllowedOrigins, config.Vhosts, config.jwtSecret),
+		restHandler: NewHTTPHandlerStack(restServer, config.CorsAllowedOrigins, config.Vhosts, config.jwtSecret),
+		rpcPrefix:   config.rpcPrefix,
+		restPrefix:  config.restPrefix,
+		rpcServer:   rpcServer,
+		restServer:  restServer,
 	})
 	return nil
 }
 
-// disableRPC stops the HTTP RPC handler. This is internal, the caller must hold h.mu.
-func (h *httpServer) disableRPC() bool {
+// disableHTTP stops the HTTP RPC and REST API handlers. This is internal, the caller must hold h.mu.
+func (h *httpServer) disableHTTP() bool {
 	handler := h.httpHandler.Load()
 	if handler != nil {
 		h.httpHandler.Store(nil)
-		handler.server.Stop()
+		handler.rpcServer.Stop()
+		handler.restServer.Stop()
 	}
 	return handler != nil
 }
 
 // enableWS turns on JSON-RPC over WebSocket on the server.
-func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
+func (h *httpServer) enableWS(rpcApis []rpc.API, restApis []rest.API, config wsConfig) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	if h.wsAllowed() {
 		return errors.New("JSON-RPC over WebSocket is already enabled")
 	}
-	// Create RPC server and handler.
-	srv := rpc.NewServer()
-	srv.SetBatchLimits(config.batchItemLimit, config.batchResponseSizeLimit)
+	// Create servers and handlers.
+	rpcServer := rpc.NewServer()
+	restServer := rest.NewServer()
+	rpcServer.SetBatchLimits(config.batchItemLimit, config.batchResponseSizeLimit)
 	if config.httpBodyLimit > 0 {
-		srv.SetHTTPBodyLimit(config.httpBodyLimit)
+		rpcServer.SetHTTPBodyLimit(config.httpBodyLimit)
 	}
-	if err := RegisterApis(apis, config.Modules, srv); err != nil {
+	//TODO REST server limits
+	if err := RegisterAPIs(rpcApis, restApis, config.Modules, rpcServer, restServer); err != nil {
 		return err
 	}
 	h.wsConfig = config
-	h.wsHandler.Store(&rpcHandler{
-		Handler: NewWSHandlerStack(srv.WebsocketHandler(config.Origins), config.jwtSecret),
-		prefix:  config.prefix,
-		server:  srv,
+	h.wsHandler.Store(&apiHandler{
+		rpcHandler: NewWSHandlerStack(rpcServer.WebsocketHandler(config.Origins), config.jwtSecret),
+		//TODO restHandler: NewWSHandlerStack(restServer.WebsocketHandler(config.Origins), config.jwtSecret),
+		rpcPrefix:  config.rpcPrefix,
+		restPrefix: config.restPrefix,
+		rpcServer:  rpcServer,
+		restServer: restServer,
 	})
 	return nil
 }
@@ -361,7 +382,7 @@ func (h *httpServer) stopWS() {
 	defer h.mu.Unlock()
 
 	if h.disableWS() {
-		if !h.rpcAllowed() {
+		if !h.httpAllowed() {
 			h.doStop()
 		}
 	}
@@ -372,13 +393,14 @@ func (h *httpServer) disableWS() bool {
 	ws := h.wsHandler.Load()
 	if ws != nil {
 		h.wsHandler.Store(nil)
-		ws.server.Stop()
+		ws.rpcServer.Stop()
+		ws.restServer.Stop()
 	}
 	return ws != nil
 }
 
 // rpcAllowed returns true when JSON-RPC over HTTP is enabled.
-func (h *httpServer) rpcAllowed() bool {
+func (h *httpServer) httpAllowed() bool {
 	return h.httpHandler.Load() != nil
 }
 
@@ -629,10 +651,10 @@ func (is *ipcServer) stop() error {
 	return err
 }
 
-// RegisterApis checks the given modules' availability, generates an allowlist based on the allowed modules,
+// RegisterRpcAPIs checks the given modules' availability, generates an allowlist based on the allowed modules,
 // and then registers all of the APIs exposed by the services.
-func RegisterApis(apis []rpc.API, modules []string, srv *rpc.Server) error {
-	if bad, available := checkModuleAvailability(modules, apis); len(bad) > 0 {
+func RegisterAPIs(rpcApis []rpc.API, restApis []rest.API, modules []string, rpcServer *rpc.Server, restServer *rest.Server) error {
+	if bad, available := checkModuleAvailability(modules, rpcApis, restApis); len(bad) > 0 {
 		log.Error("Unavailable modules in HTTP API list", "unavailable", bad, "available", available)
 	}
 	// Generate the allow list based on the allowed modules
@@ -641,11 +663,16 @@ func RegisterApis(apis []rpc.API, modules []string, srv *rpc.Server) error {
 		allowList[module] = true
 	}
 	// Register all the APIs exposed by the services
-	for _, api := range apis {
+	for _, api := range rpcApis {
 		if allowList[api.Namespace] || len(allowList) == 0 {
-			if err := srv.RegisterName(api.Namespace, api.Service); err != nil {
+			if err := rpcServer.RegisterName(api.Namespace, api.Service); err != nil {
 				return err
 			}
+		}
+	}
+	for _, api := range restApis {
+		if allowList[api.Namespace] || len(allowList) == 0 {
+			restServer.Register(api)
 		}
 	}
 	return nil
