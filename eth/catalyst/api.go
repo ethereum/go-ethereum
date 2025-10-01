@@ -501,7 +501,7 @@ func (api *ConsensusAPI) GetPayloadV4(payloadID engine.PayloadID) (*engine.Execu
 
 // GetPayloadV5 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV5(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
-	if !payloadID.Is(engine.PayloadV3) {
+	if !payloadID.Is(engine.PayloadV3, engine.PayloadV4) {
 		return nil, engine.UnsupportedFork
 	}
 	return api.getPayload(payloadID, false)
