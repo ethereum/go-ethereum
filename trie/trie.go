@@ -784,8 +784,8 @@ func (t *Trie) Witness() map[string][]byte {
 	return t.prevalueTracer.Values()
 }
 
-// Reset drops the referenced root node and cleans all internal state.
-func (t *Trie) Reset() {
+// reset drops the referenced root node and cleans all internal state.
+func (t *Trie) reset() {
 	t.root = nil
 	t.owner = common.Hash{}
 	t.unhashed = 0
