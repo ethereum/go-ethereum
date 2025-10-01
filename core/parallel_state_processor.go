@@ -61,6 +61,7 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateR
 	balTracer, hooks := NewBlockAccessListTracer(len(block.Transactions()) + 1)
 	tracingStateDB := state.NewHookedState(postTxState, hooks)
 	context := NewEVMBlockContext(header, p.chain, nil)
+	postTxState.SetAccessListIndex(len(block.Transactions()) + 1)
 
 	cfg := vm.Config{
 		Tracer:                  hooks,
@@ -267,6 +268,7 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 	}
 	gp := new(GasPool)
 	gp.SetGas(block.GasLimit())
+	db.SetTxContext(tx.Hash(), txIdx)
 	var gasUsed uint64
 	receipt, err := ApplyTransactionWithEVM(msg, gp, db, block.Number(), block.Hash(), context.Time, tx, &gasUsed, evm)
 	if err != nil {
@@ -288,6 +290,7 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 // Process performs EVM execution and state root computation for a block which is known
 // to contain an access list.
 func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (*ProcessResultWithMetrics, error) {
+	fmt.Printf("process block with bal\n%s\n", block.Body().AccessList.String())
 	var (
 		header = block.Header()
 		resCh  = make(chan *ProcessResultWithMetrics)

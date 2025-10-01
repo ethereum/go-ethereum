@@ -241,7 +241,8 @@ func mergeStorageWrites(cur, next map[common.Hash]map[uint16]common.Hash) map[co
 func (c *ConstructionBlockAccessList) MergeReads(childScope *ConstructionBlockAccessList) {
 	for addr, accountAccess := range childScope.Accounts {
 		if _, ok := c.Accounts[addr]; !ok {
-			c.Accounts[addr] = &ConstructionAccountAccess{StorageReads: accountAccess.StorageReads}
+			c.Accounts[addr] = NewConstructionAccountAccess()
+			c.Accounts[addr].StorageReads = accountAccess.StorageReads
 			continue
 		}
 
