@@ -488,9 +488,9 @@ func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Blo
 }
 
 func (b *EthAPIBackend) RPCTxSyncDefaultTimeout() time.Duration {
-	return 2 * time.Second
+	return b.eth.config.TxSyncDefaultTimeout
 }
 
 func (b *EthAPIBackend) RPCTxSyncMaxTimeout() time.Duration {
-	return 5 * time.Minute
+	return b.eth.config.TxSyncMaxTimeout
 }
