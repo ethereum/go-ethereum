@@ -383,6 +383,47 @@ func (i *indexIniter) remain() uint64 {
 	}
 }
 
+// getHistoryRangeInfo returns a formatted string describing the available history range.
+func (i *indexIniter) getHistoryRangeInfo(lastID uint64) []interface{} {
+	// Get the number of available history ID
+	tail, err := i.freezer.Tail()
+	if err != nil {
+		return []interface{}{"last", lastID, "error", err}
+	}
+	head, err := i.freezer.Ancients()
+	if err != nil {
+		return []interface{}{"last", lastID, "error", err}
+	}
+
+	firstID := tail + 1
+	lastAvailID := head - 1
+	count := uint64(0)
+	if lastAvailID >= firstID {
+		count = lastAvailID - firstID + 1
+	}
+
+	// Get the actual block numbers
+	if count == 0 {
+		return []interface{}{"last", lastID, "count", 0}
+	}
+
+	firstBlock, lastBlock := uint64(0), uint64(0)
+	if i.typ == typeStateHistory {
+		if fh, err := readStateHistory(i.freezer, firstID); err == nil {
+			firstBlock = fh.meta.block
+		}
+		if lh, err := readStateHistory(i.freezer, lastID); err == nil {
+			lastBlock = lh.meta.block
+		}
+	}
+
+	return []interface{}{
+		"last", lastID,
+		"count", count,
+		"blocks", fmt.Sprintf("%d-%d", firstBlock, lastBlock),
+	}
+}
+
 func (i *indexIniter) run(lastID uint64) {
 	defer i.wg.Done()
 
@@ -434,7 +475,7 @@ func (i *indexIniter) run(lastID uint64) {
 				}
 				close(i.done)
 				signal.result <- nil
-				i.log.Info("Histories have been fully indexed", "last", lastID-1)
+				i.log.Info("State histories have been fully indexed", i.getHistoryRangeInfo(lastID-1)...)
 				return
 			}
 			// Adjust the indexing target and relaunch the process
@@ -448,7 +489,7 @@ func (i *indexIniter) run(lastID uint64) {
 		case <-done:
 			if checkDone() {
 				close(i.done)
-				i.log.Info("Histories have been fully indexed", "last", lastID)
+				i.log.Info("State histories have been fully indexed", i.getHistoryRangeInfo(lastID)...)
 				return
 			}
 			// Relaunch the background runner if some tasks are left
