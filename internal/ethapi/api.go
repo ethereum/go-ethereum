@@ -1652,6 +1652,126 @@ func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil
 	return SubmitTransaction(ctx, api.b, tx)
 }
 
+// SendRawTransactionSync will add the signed transaction to the transaction pool
+// and wait until the transaction has been included in a block and return the receipt, or the timeout.
+func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hexutil.Bytes, timeoutMs *hexutil.Uint64) (map[string]interface{}, error) {
+	tx := new(types.Transaction)
+	if err := tx.UnmarshalBinary(input); err != nil {
+		return nil, err
+	}
+	hash, err := SubmitTransaction(ctx, api.b, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	maxTimeout := api.b.RPCTxSyncMaxTimeout()
+	defaultTimeout := api.b.RPCTxSyncDefaultTimeout()
+
+	timeout := defaultTimeout
+	if timeoutMs != nil && *timeoutMs > 0 {
+		req := time.Duration(*timeoutMs) * time.Millisecond
+		if req > maxTimeout {
+			timeout = maxTimeout
+		} else {
+			timeout = req
+		}
+	}
+
+	receiptCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	// Fast path.
+	if r, err := api.GetTransactionReceipt(receiptCtx, hash); err == nil && r != nil {
+		return r, nil
+	}
+
+	// Subscribe to new block events and check the receipt on each new block.
+	heads := make(chan core.ChainHeadEvent, 16)
+	sub := api.b.SubscribeChainHeadEvent(heads)
+	defer sub.Unsubscribe()
+	subErrCh := sub.Err()
+
+	// calculate poll/settle intervals
+	const (
+		pollFraction = 20
+		pollMin      = 25 * time.Millisecond
+		pollMax      = 500 * time.Millisecond
+	)
+	settleInterval := timeout / pollFraction
+	if settleInterval < pollMin {
+		settleInterval = pollMin
+	} else if settleInterval > pollMax {
+		settleInterval = pollMax
+	}
+
+	// Settle: short delay to bridge receipt-indexing lag after a new head.
+	// resetSettle re-arms a single timer safely (stop+drain+reset).
+	// On head: check once immediately, then reset; on timer: re-check; repeat until deadline.
+	var (
+		settle   *time.Timer
+		settleCh <-chan time.Time
+	)
+	resetSettle := func(d time.Duration) {
+		if settle == nil {
+			settle = time.NewTimer(d)
+			settleCh = settle.C
+			return
+		}
+		if !settle.Stop() {
+			select {
+			case <-settle.C:
+			default:
+			}
+		}
+		settle.Reset(d)
+	}
+	defer func() {
+		if settle != nil && !settle.Stop() {
+			select {
+			case <-settle.C:
+			default:
+			}
+		}
+	}()
+
+	// Start a settle cycle immediately to cover a missed-head race.
+	resetSettle(settleInterval)
+
+	for {
+		select {
+		case <-receiptCtx.Done():
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			return nil, &txSyncTimeoutError{
+				msg:  fmt.Sprintf("The transaction was added to the transaction pool but wasn't processed in %v.", timeout),
+				hash: hash,
+			}
+
+		case err, ok := <-subErrCh:
+			if !ok || err == nil {
+				// subscription closed; disable this case and rely on settle timer
+				subErrCh = nil
+				continue
+			}
+			return nil, err
+
+		case <-heads:
+			// Immediate re-check on new head, then grace to bridge indexing lag.
+			if r, err := api.GetTransactionReceipt(receiptCtx, hash); err == nil && r != nil {
+				return r, nil
+			}
+			resetSettle(settleInterval)
+
+		case <-settleCh:
+			if r, err := api.GetTransactionReceipt(receiptCtx, hash); err == nil && r != nil {
+				return r, nil
+			}
+			resetSettle(settleInterval)
+		}
+	}
+}
+
 // Sign calculates an ECDSA signature for:
 // keccak256("\x19Ethereum Signed Message:\n" + len(message) + message).
 //
