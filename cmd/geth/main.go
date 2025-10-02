@@ -188,6 +188,8 @@ var (
 		utils.AllowUnprotectedTxs,
 		utils.BatchRequestLimit,
 		utils.BatchResponseMaxSize,
+		utils.RPCTxSyncDefaultFlag,
+		utils.RPCTxSyncMaxFlag,
 	}
 
 	metricsFlags = []cli.Flag{
