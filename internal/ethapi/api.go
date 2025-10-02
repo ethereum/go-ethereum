@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/gasestimator"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -1653,7 +1654,7 @@ func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil
 }
 
 // SendRawTransactionSync will add the signed transaction to the transaction pool
-// and wait for the transaction to be mined until the timeout (in milliseconds) is reached.
+// and wait until the transaction has been included in a block and return the receipt, or the timeout.
 func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hexutil.Bytes, timeoutMs *hexutil.Uint64) (map[string]interface{}, error) {
 	tx := new(types.Transaction)
 	if err := tx.UnmarshalBinary(input); err != nil {
@@ -1664,7 +1665,7 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 		return nil, err
 	}
 
-	// compute effective timeout
+	// effective timeout: min(requested, max), default if none
 	max := api.b.RPCTxSyncMaxTimeout()
 	def := api.b.RPCTxSyncDefaultTimeout()
 
@@ -1674,38 +1675,61 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 		if req > max {
 			eff = max
 		} else {
-			eff = req // allow shorter than default
+			eff = req
 		}
 	}
 
-	// Wait for receipt until timeout
 	receiptCtx, cancel := context.WithTimeout(ctx, eff)
 	defer cancel()
 
-	ticker := time.NewTicker(time.Millisecond * 100)
-	defer ticker.Stop()
+	// Fast path: maybe already mined/indexed
+	if r, err := api.GetTransactionReceipt(receiptCtx, hash); err == nil && r != nil {
+		return r, nil
+	}
+
+	// Subscribe to head changes and re-check on each new block
+	heads := make(chan core.ChainHeadEvent, 16)
+	var sub event.Subscription = api.b.SubscribeChainHeadEvent(heads)
+	if sub == nil {
+		return nil, errors.New("chain head subscription unavailable")
+	}
+	defer sub.Unsubscribe()
 
 	for {
 		select {
-		case <-ticker.C:
-			receipt, getErr := api.GetTransactionReceipt(receiptCtx, hash)
-			// If tx-index still building, keep polling
-			if getErr != nil && !errors.Is(getErr, NewTxIndexingError()) {
-				// transient or other error: just keep polling
-			}
-			if receipt != nil {
-				return receipt, nil
-			}
 		case <-receiptCtx.Done():
+			// Distinguish upstream cancellation from our timeout
 			if err := ctx.Err(); err != nil {
-				return nil, err // context canceled / deadline exceeded upstream
+				return nil, err
 			}
 			return nil, &txSyncTimeoutError{
 				msg:  fmt.Sprintf("The transaction was added to the transaction pool but wasn't processed in %v.", eff),
 				hash: hash,
 			}
+
+		case err := <-sub.Err():
+			return nil, err
+
+		case <-heads:
+			receipt, getErr := api.GetTransactionReceipt(receiptCtx, hash)
+			// If tx-index still building, keep waiting; ignore transient errors
+			if getErr != nil && !errors.Is(getErr, NewTxIndexingError()) {
+				// ignore and wait for next head
+				continue
+			}
+			if receipt != nil {
+				return receipt, nil
+			}
 		}
 	}
+}
+
+func (api *TransactionAPI) tryGetReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
+	receipt, err := api.GetTransactionReceipt(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	return receipt, nil
 }
 
 // Sign calculates an ECDSA signature for:

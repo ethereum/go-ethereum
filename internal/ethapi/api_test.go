@@ -448,6 +448,7 @@ type testBackend struct {
 	syncMaxTO     time.Duration
 	sentTx        *types.Transaction
 	sentTxHash    common.Hash
+	headFeed      *event.Feed
 }
 
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.Engine, generator func(i int, b *core.BlockGen)) *testBackend {
@@ -474,6 +475,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.E
 		acc:             acc,
 		pending:         blocks[n],
 		pendingReceipts: receipts[n],
+		headFeed:        new(event.Feed),
 	}
 	return backend
 }
@@ -598,7 +600,7 @@ func (b testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscr
 	panic("implement me")
 }
 func (b testBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
-	panic("implement me")
+	return b.headFeed.Subscribe(ch)
 }
 func (b *testBackend) SendTx(ctx context.Context, tx *types.Transaction) error {
 	b.sentTx = tx
@@ -3959,7 +3961,6 @@ func makeSignedRaw(t *testing.T, api *TransactionAPI, from, to common.Address, v
 func makeSelfSignedRaw(t *testing.T, api *TransactionAPI, addr common.Address) (hexutil.Bytes, *types.Transaction) {
 	return makeSignedRaw(t, api, addr, addr, big.NewInt(0))
 }
-
 func TestSendRawTransactionSync_Success(t *testing.T) {
 	t.Parallel()
 	genesis := &core.Genesis{
