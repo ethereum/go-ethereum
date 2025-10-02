@@ -1724,14 +1724,6 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 	}
 }
 
-func (api *TransactionAPI) tryGetReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
-	receipt, err := api.GetTransactionReceipt(ctx, hash)
-	if err != nil {
-		return nil, err
-	}
-	return receipt, nil
-}
-
 // Sign calculates an ECDSA signature for:
 // keccak256("\x19Ethereum Signed Message:\n" + len(message) + message).
 //
