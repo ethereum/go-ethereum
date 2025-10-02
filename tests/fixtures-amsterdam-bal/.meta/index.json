@@ -1,0 +1,254 @@
+{
+  "root_hash": "0x4bbf7997c738c7f87e8d08aa8d2c43bc51daf72c82b9f7b25d36791a6ef48638",
+  "created_at": "2025-09-15T15:45:17.133354",
+  "test_count": 30,
+  "forks": [
+    "Amsterdam"
+  ],
+  "fixture_formats": [
+    "blockchain_test_engine",
+    "blockchain_test"
+  ],
+  "test_cases": [
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_invalid.py::test_bal_invalid_complex_corruption[fork_Amsterdam-blockchain_test_engine]",
+      "fixture_hash": "0x91d4d6d462a761950c83d3b30a947b915cfabf6051078efe014ff8a216477045",
+      "fork": "Amsterdam",
+      "format": "blockchain_test_engine",
+      "pre_hash": null,
+      "json_path": "blockchain_tests_engine/amsterdam/eip7928_block_level_access_lists/block_access_lists_invalid/bal_invalid_complex_corruption.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_invalid.py::test_bal_invalid_duplicate_account[fork_Amsterdam-blockchain_test_engine]",
+      "fixture_hash": "0x8cc2569fedefe68987b7e5e0490c56247dc140c742a4c1eef0876964e122123e",
+      "fork": "Amsterdam",
+      "format": "blockchain_test_engine",
+      "pre_hash": null,
+      "json_path": "blockchain_tests_engine/amsterdam/eip7928_block_level_access_lists/block_access_lists_invalid/bal_invalid_duplicate_account.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_invalid.py::test_bal_invalid_tx_order[fork_Amsterdam-blockchain_test_engine]",
+      "fixture_hash": "0x3edf472ff5b91642ac66276c7993ba31fe53a08b289cd69d92386bf855e73f61",
+      "fork": "Amsterdam",
+      "format": "blockchain_test_engine",
+      "pre_hash": null,
+      "json_path": "blockchain_tests_engine/amsterdam/eip7928_block_level_access_lists/block_access_lists_invalid/bal_invalid_tx_order.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_invalid.py::test_bal_invalid_missing_nonce[fork_Amsterdam-blockchain_test_engine]",
+      "fixture_hash": "0x14c40aa5f07c4252937bffad8a6f7ad196d4c00fddfccca2858fa9ebd00d9cbf",
+      "fork": "Amsterdam",
+      "format": "blockchain_test_engine",
+      "pre_hash": null,
+      "json_path": "blockchain_tests_engine/amsterdam/eip7928_block_level_access_lists/block_access_lists_invalid/bal_invalid_missing_nonce.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_invalid.py::test_bal_invalid_balance_value[fork_Amsterdam-blockchain_test_engine]",
+      "fixture_hash": "0xb6c1da9621633f00db1bd84120283762f020bc0b0f1da9a5eef05c300a07d956",
+      "fork": "Amsterdam",
+      "format": "blockchain_test_engine",
+      "pre_hash": null,
+      "json_path": "blockchain_tests_engine/amsterdam/eip7928_block_level_access_lists/block_access_lists_invalid/bal_invalid_balance_value.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_invalid.py::test_bal_invalid_storage_value[fork_Amsterdam-blockchain_test_engine]",
+      "fixture_hash": "0x60b01e4ace6086973fafdac8cab9cd114c08c9755b0b9894cb4a2a6e4c136fd4",
+      "fork": "Amsterdam",
+      "format": "blockchain_test_engine",
+      "pre_hash": null,
+      "json_path": "blockchain_tests_engine/amsterdam/eip7928_block_level_access_lists/block_access_lists_invalid/bal_invalid_storage_value.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_invalid.py::test_bal_invalid_account[fork_Amsterdam-blockchain_test_engine]",
+      "fixture_hash": "0xd331e205d1f148f873f06bda9adb51245f1f7bb7280ca2274d7cc02c9ade8806",
+      "fork": "Amsterdam",
+      "format": "blockchain_test_engine",
+      "pre_hash": null,
+      "json_path": "blockchain_tests_engine/amsterdam/eip7928_block_level_access_lists/block_access_lists_invalid/bal_invalid_account.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_invalid.py::test_bal_invalid_account_order[fork_Amsterdam-blockchain_test_engine]",
+      "fixture_hash": "0x909b911f94a6162ef47c46398c22852ebacfad49285bef18029b80cc027aac46",
+      "fork": "Amsterdam",
+      "format": "blockchain_test_engine",
+      "pre_hash": null,
+      "json_path": "blockchain_tests_engine/amsterdam/eip7928_block_level_access_lists/block_access_lists_invalid/bal_invalid_account_order.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_invalid.py::test_bal_invalid_nonce_value[fork_Amsterdam-blockchain_test_engine]",
+      "fixture_hash": "0x186280e177e67f5b4de00e9037b64b5eeb27298a82960cc73a0dffa74fd01d4b",
+      "fork": "Amsterdam",
+      "format": "blockchain_test_engine",
+      "pre_hash": null,
+      "json_path": "blockchain_tests_engine/amsterdam/eip7928_block_level_access_lists/block_access_lists_invalid/bal_invalid_nonce_value.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_invalid.py::test_bal_invalid_missing_account[fork_Amsterdam-blockchain_test_engine]",
+      "fixture_hash": "0xd20ae4fc80b9ab084830436f81446fa69cd75e483524fa7b4c686ac1ae726fbf",
+      "fork": "Amsterdam",
+      "format": "blockchain_test_engine",
+      "pre_hash": null,
+      "json_path": "blockchain_tests_engine/amsterdam/eip7928_block_level_access_lists/block_access_lists_invalid/bal_invalid_missing_account.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists.py::test_bal_code_changes[fork_Amsterdam-blockchain_test_engine]",
+      "fixture_hash": "0xd3784eba180519598f28c99a7702e75ef1f395da4a57522acdae9633a3f6222d",
+      "fork": "Amsterdam",
+      "format": "blockchain_test_engine",
+      "pre_hash": null,
+      "json_path": "blockchain_tests_engine/amsterdam/eip7928_block_level_access_lists/block_access_lists/bal_code_changes.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists.py::test_bal_storage_reads[fork_Amsterdam-blockchain_test_engine]",
+      "fixture_hash": "0xf4b38f2a673943b71e12d18102fef37769fc50e16ec6729bd1a4aaf21b38dd27",
+      "fork": "Amsterdam",
+      "format": "blockchain_test_engine",
+      "pre_hash": null,
+      "json_path": "blockchain_tests_engine/amsterdam/eip7928_block_level_access_lists/block_access_lists/bal_storage_reads.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists.py::test_bal_storage_writes[fork_Amsterdam-blockchain_test_engine]",
+      "fixture_hash": "0xa44a63948175b6311a68138cdd79c04728a7f08f8130273f96d7eae2766235c",
+      "fork": "Amsterdam",
+      "format": "blockchain_test_engine",
+      "pre_hash": null,
+      "json_path": "blockchain_tests_engine/amsterdam/eip7928_block_level_access_lists/block_access_lists/bal_storage_writes.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists.py::test_bal_balance_changes[fork_Amsterdam-blockchain_test_engine]",
+      "fixture_hash": "0xb06ec3b0851444b6519080364b182fec83be1a1b084a0445eaea846b2e095443",
+      "fork": "Amsterdam",
+      "format": "blockchain_test_engine",
+      "pre_hash": null,
+      "json_path": "blockchain_tests_engine/amsterdam/eip7928_block_level_access_lists/block_access_lists/bal_balance_changes.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists.py::test_bal_nonce_changes[fork_Amsterdam-blockchain_test_engine]",
+      "fixture_hash": "0x558fec2c1d0d7d544804011044c936bc378262d30b42a7c623c63825df54d10c",
+      "fork": "Amsterdam",
+      "format": "blockchain_test_engine",
+      "pre_hash": null,
+      "json_path": "blockchain_tests_engine/amsterdam/eip7928_block_level_access_lists/block_access_lists/bal_nonce_changes.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_invalid.py::test_bal_invalid_complex_corruption[fork_Amsterdam-blockchain_test]",
+      "fixture_hash": "0x6cbd5ee299221511528f6916c5e6df0369cebd8dceba4225c8eb85dbd24d93ad",
+      "fork": "Amsterdam",
+      "format": "blockchain_test",
+      "pre_hash": null,
+      "json_path": "blockchain_tests/amsterdam/eip7928_block_level_access_lists/block_access_lists_invalid/bal_invalid_complex_corruption.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_invalid.py::test_bal_invalid_duplicate_account[fork_Amsterdam-blockchain_test]",
+      "fixture_hash": "0x684d8557b425f5b73c8bd4573719f5c464519d9783d6b69059381b64415503a8",
+      "fork": "Amsterdam",
+      "format": "blockchain_test",
+      "pre_hash": null,
+      "json_path": "blockchain_tests/amsterdam/eip7928_block_level_access_lists/block_access_lists_invalid/bal_invalid_duplicate_account.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_invalid.py::test_bal_invalid_tx_order[fork_Amsterdam-blockchain_test]",
+      "fixture_hash": "0xf177592b49c585371cb2129b65ce7d992ce9f443cac65e7db44bb268daaf281b",
+      "fork": "Amsterdam",
+      "format": "blockchain_test",
+      "pre_hash": null,
+      "json_path": "blockchain_tests/amsterdam/eip7928_block_level_access_lists/block_access_lists_invalid/bal_invalid_tx_order.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_invalid.py::test_bal_invalid_missing_nonce[fork_Amsterdam-blockchain_test]",
+      "fixture_hash": "0x6602720a2523736926724a6dcb51520fafe13d36fc2c70fffeba8575d2511f57",
+      "fork": "Amsterdam",
+      "format": "blockchain_test",
+      "pre_hash": null,
+      "json_path": "blockchain_tests/amsterdam/eip7928_block_level_access_lists/block_access_lists_invalid/bal_invalid_missing_nonce.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_invalid.py::test_bal_invalid_balance_value[fork_Amsterdam-blockchain_test]",
+      "fixture_hash": "0x5b8c21d88d684e37705f5af59acb6ecc5098c6e4526d172f7670e45f236bc3d9",
+      "fork": "Amsterdam",
+      "format": "blockchain_test",
+      "pre_hash": null,
+      "json_path": "blockchain_tests/amsterdam/eip7928_block_level_access_lists/block_access_lists_invalid/bal_invalid_balance_value.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_invalid.py::test_bal_invalid_storage_value[fork_Amsterdam-blockchain_test]",
+      "fixture_hash": "0x85bea9663f1bf3b20cd80e6e1ca7bbf310ebe2da80cf87ff5b171f612fd05ed4",
+      "fork": "Amsterdam",
+      "format": "blockchain_test",
+      "pre_hash": null,
+      "json_path": "blockchain_tests/amsterdam/eip7928_block_level_access_lists/block_access_lists_invalid/bal_invalid_storage_value.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_invalid.py::test_bal_invalid_account[fork_Amsterdam-blockchain_test]",
+      "fixture_hash": "0xf254712914d6689c42f84940edf1e4eedb621f172f9c5fd25e5a36ca3d7bab57",
+      "fork": "Amsterdam",
+      "format": "blockchain_test",
+      "pre_hash": null,
+      "json_path": "blockchain_tests/amsterdam/eip7928_block_level_access_lists/block_access_lists_invalid/bal_invalid_account.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_invalid.py::test_bal_invalid_account_order[fork_Amsterdam-blockchain_test]",
+      "fixture_hash": "0x58d6e7bebe449d438cf216123b8850a7d20958a41cc11493807b768d18f1608e",
+      "fork": "Amsterdam",
+      "format": "blockchain_test",
+      "pre_hash": null,
+      "json_path": "blockchain_tests/amsterdam/eip7928_block_level_access_lists/block_access_lists_invalid/bal_invalid_account_order.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_invalid.py::test_bal_invalid_nonce_value[fork_Amsterdam-blockchain_test]",
+      "fixture_hash": "0x7e5909fd80c7352b970fde17619b15627c822798ac7dbe712465b484771a754b",
+      "fork": "Amsterdam",
+      "format": "blockchain_test",
+      "pre_hash": null,
+      "json_path": "blockchain_tests/amsterdam/eip7928_block_level_access_lists/block_access_lists_invalid/bal_invalid_nonce_value.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists_invalid.py::test_bal_invalid_missing_account[fork_Amsterdam-blockchain_test]",
+      "fixture_hash": "0x52443eb0df938af8ec0f007e8e54c05004a1cf3e04bace7d666b44c2990779b8",
+      "fork": "Amsterdam",
+      "format": "blockchain_test",
+      "pre_hash": null,
+      "json_path": "blockchain_tests/amsterdam/eip7928_block_level_access_lists/block_access_lists_invalid/bal_invalid_missing_account.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists.py::test_bal_code_changes[fork_Amsterdam-blockchain_test]",
+      "fixture_hash": "0x47353aad1d1868a5a1d7acc4251cd26bef11ac90ff64c0ba63f19800224674c9",
+      "fork": "Amsterdam",
+      "format": "blockchain_test",
+      "pre_hash": null,
+      "json_path": "blockchain_tests/amsterdam/eip7928_block_level_access_lists/block_access_lists/bal_code_changes.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists.py::test_bal_storage_reads[fork_Amsterdam-blockchain_test]",
+      "fixture_hash": "0x89cf1419f76bd33195b33bd5b3012a8216f6c86207f378cecb9e461be2432a9a",
+      "fork": "Amsterdam",
+      "format": "blockchain_test",
+      "pre_hash": null,
+      "json_path": "blockchain_tests/amsterdam/eip7928_block_level_access_lists/block_access_lists/bal_storage_reads.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists.py::test_bal_storage_writes[fork_Amsterdam-blockchain_test]",
+      "fixture_hash": "0x4b103ea30781985f7e1e8bde58b5957499348aeed901f46088ba6d7c3eb9842a",
+      "fork": "Amsterdam",
+      "format": "blockchain_test",
+      "pre_hash": null,
+      "json_path": "blockchain_tests/amsterdam/eip7928_block_level_access_lists/block_access_lists/bal_storage_writes.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists.py::test_bal_balance_changes[fork_Amsterdam-blockchain_test]",
+      "fixture_hash": "0xbb44eb925afd3e3ea06255284950d73820364c366d475a5dc6d040fc8624daa9",
+      "fork": "Amsterdam",
+      "format": "blockchain_test",
+      "pre_hash": null,
+      "json_path": "blockchain_tests/amsterdam/eip7928_block_level_access_lists/block_access_lists/bal_balance_changes.json"
+    },
+    {
+      "id": "tests/amsterdam/eip7928_block_level_access_lists/test_block_access_lists.py::test_bal_nonce_changes[fork_Amsterdam-blockchain_test]",
+      "fixture_hash": "0xb23fd1678ba8f66079f4dd4b3481817f3322562cc3c60aa4d1278d932cbf1165",
+      "fork": "Amsterdam",
+      "format": "blockchain_test",
+      "pre_hash": null,
+      "json_path": "blockchain_tests/amsterdam/eip7928_block_level_access_lists/block_access_lists/bal_nonce_changes.json"
+    }
+  ]
+}

@@ -333,11 +333,11 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			return nil, nil, nil, err
 		}
 		// EIP-7002
-		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
+		if _, _, err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
 			return nil, nil, nil, err
 		}
 		// EIP-7251
-		if err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
+		if _, _, err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
 			return nil, nil, nil, err
 		}
 	}

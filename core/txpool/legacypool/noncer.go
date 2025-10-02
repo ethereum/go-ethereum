@@ -35,7 +35,7 @@ type noncer struct {
 // newNoncer creates a new virtual state database to track the pool nonces.
 func newNoncer(statedb *state.StateDB) *noncer {
 	return &noncer{
-		fallback: statedb.Copy(),
+		fallback: statedb.Copy().(*state.StateDB),
 		nonces:   make(map[common.Address]uint64),
 	}
 }

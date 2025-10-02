@@ -47,10 +47,10 @@ var (
 // information of the sealing block generation.
 type environment struct {
 	signer   types.Signer
-	state    *state.StateDB // apply state changes here
-	tcount   int            // tx count in cycle
-	size     uint64         // size of the block we are building
-	gasPool  *core.GasPool  // available gas used to pack transactions
+	state    state.BlockProcessingDB // apply state changes here
+	tcount   int                     // tx count in cycle
+	size     uint64                  // size of the block we are building
+	gasPool  *core.GasPool           // available gas used to pack transactions
 	coinbase common.Address
 	evm      *vm.EVM
 
@@ -84,12 +84,12 @@ const maxBlockSizeBufferZone = 1_000_000
 type newPayloadResult struct {
 	err      error
 	block    *types.Block
-	fees     *big.Int               // total block fees
-	sidecars []*types.BlobTxSidecar // collected blobs of blob transactions
-	stateDB  *state.StateDB         // StateDB after executing the transactions
-	receipts []*types.Receipt       // Receipts collected during construction
-	requests [][]byte               // Consensus layer requests collected during block construction
-	witness  *stateless.Witness     // Witness is an optional stateless proof
+	fees     *big.Int                // total block fees
+	sidecars []*types.BlobTxSidecar  // collected blobs of blob transactions
+	stateDB  state.BlockProcessingDB // StateDB after executing the transactions
+	receipts []*types.Receipt        // Receipts collected during construction
+	requests [][]byte                // Consensus layer requests collected during block construction
+	witness  *stateless.Witness      // Witness is an optional stateless proof
 }
 
 // generateParams wraps various settings for generating sealing task.
@@ -149,11 +149,11 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 			return &newPayloadResult{err: err}
 		}
 		// EIP-7002
-		if err := core.ProcessWithdrawalQueue(&requests, work.evm); err != nil {
+		if _, _, err := core.ProcessWithdrawalQueue(&requests, work.evm); err != nil {
 			return &newPayloadResult{err: err}
 		}
 		// EIP-7251 consolidations
-		if err := core.ProcessConsolidationQueue(&requests, work.evm); err != nil {
+		if _, _, err := core.ProcessConsolidationQueue(&requests, work.evm); err != nil {
 			return &newPayloadResult{err: err}
 		}
 	}
@@ -163,6 +163,12 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 	}
 
 	block, err := miner.engine.FinalizeAndAssemble(miner.chain, work.header, work.state, &body, work.receipts)
+	if miner.chainConfig.IsAmsterdam(block.Number(), block.Time()) {
+		fmt.Println("embed")
+		body := block.Body()
+		body.AccessList = work.state.(*state.AccessListCreationDB).ConstructedBlockAccessList().ToEncodingObj()
+		block = block.WithBody(*body)
+	}
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
@@ -262,7 +268,7 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 // makeEnv creates a new environment for the sealing block.
 func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase common.Address, witness bool) (*environment, error) {
 	// Retrieve the parent state to execute on top.
-	state, err := miner.chain.StateAt(parent.Root)
+	st, err := miner.chain.StateAt(parent.Root)
 	if err != nil {
 		return nil, err
 	}
@@ -271,17 +277,23 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 		if err != nil {
 			return nil, err
 		}
-		state.StartPrefetcher("miner", bundle, nil)
+		st.StartPrefetcher("miner", bundle, nil)
+	}
+	var sdb state.BlockProcessingDB = st
+	if miner.chainConfig.IsAmsterdam(header.Number, header.Time) {
+		// TODO: if I disable this, the local devnet still works fine with empty BALs... clearly there is some bug afoot
+		st.EnableStateDiffRecording()
+		sdb = state.NewBlockAccessListBuilder(st)
 	}
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
 		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time),
-		state:    state,
+		state:    sdb,
 		size:     uint64(header.Size()),
 		coinbase: coinbase,
 		header:   header,
-		witness:  state.Witness(),
-		evm:      vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), state, miner.chainConfig, vm.Config{}),
+		witness:  sdb.Witness(),
+		evm:      vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), sdb, miner.chainConfig, vm.Config{}),
 	}, nil
 }
 
