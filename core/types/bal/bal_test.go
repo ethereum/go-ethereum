@@ -38,7 +38,7 @@ func equalBALs(a *BlockAccessList, b *BlockAccessList) bool {
 
 func makeTestConstructionBAL() *ConstructionBlockAccessList {
 	return &ConstructionBlockAccessList{
-		map[common.Address]*ConstructionAccountAccess{
+		map[common.Address]*ConstructionAccountAccesses{
 			common.BytesToAddress([]byte{0xff, 0xff}): {
 				StorageWrites: map[common.Hash]map[uint16]common.Hash{
 					common.BytesToHash([]byte{0x01}): {

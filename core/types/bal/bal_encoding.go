@@ -140,7 +140,7 @@ func (e *encodingSlotWrites) validate() error {
 	return errors.New("storage write tx indices not in order")
 }
 
-// AccountAccess is the encoding format of ConstructionAccountAccess.
+// AccountAccess is the encoding format of ConstructionAccountAccesses.
 type AccountAccess struct {
 	Address        common.Address          `json:"address,omitempty"`        // 20-byte Ethereum address
 	StorageChanges []encodingSlotWrites    `json:"storageChanges,omitempty"` // Storage changes (slot -> [tx_index -> new_value])
@@ -227,9 +227,9 @@ func (c *ConstructionBlockAccessList) EncodeRLP(wr io.Writer) error {
 
 var _ rlp.Encoder = &ConstructionBlockAccessList{}
 
-// toEncodingObj creates an instance of the ConstructionAccountAccess of the type that is
+// toEncodingObj creates an instance of the ConstructionAccountAccesses of the type that is
 // used as input for the encoding.
-func (a *ConstructionAccountAccess) toEncodingObj(addr common.Address) AccountAccess {
+func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) AccountAccess {
 	res := AccountAccess{
 		Address:        addr,
 		StorageChanges: make([]encodingSlotWrites, 0),
