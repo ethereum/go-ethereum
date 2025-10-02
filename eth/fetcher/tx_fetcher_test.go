@@ -459,6 +459,7 @@ func TestTransactionFetcherSingletonRequesting(t *testing.T) {
 					{common.Hash{0x06}, types.LegacyTxType, 666},
 				},
 			}),
+			// Step 14
 			isScheduled{
 				tracking: map[string][]announce{
 					"A": {
@@ -2017,6 +2018,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 					t.Errorf("step %d: peer %s extra in announces", i, peer)
 				}
 			}
+
 			// Check that all announces required to be fetching are in the
 			// appropriate sets
 			for peer, hashes := range step.fetching {
@@ -2062,31 +2064,6 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 					t.Errorf("step %d: hash %x extra in fetching", i, hash)
 				}
 			}
-			for _, hashes := range step.fetching {
-				for _, hash := range hashes {
-					alternates := fetcher.alternates[hash]
-					if alternates == nil {
-						t.Errorf("step %d: hash %x missing from alternates", i, hash)
-						continue
-					}
-					for peer := range alternates {
-						if _, ok := fetcher.announces[peer]; !ok {
-							t.Errorf("step %d: peer %s extra in alternates", i, peer)
-							continue
-						}
-						if _, ok := fetcher.announces[peer][hash]; !ok {
-							t.Errorf("step %d, peer %s: hash %x extra in alternates", i, hash, peer)
-							continue
-						}
-					}
-					for p := range fetcher.announced[hash] {
-						if _, ok := alternates[p]; !ok {
-							t.Errorf("step %d, hash %x: peer %s missing from alternates", i, hash, p)
-							continue
-						}
-					}
-				}
-			}
 			for peer, hashes := range step.dangling {
 				request := fetcher.requests[peer]
 				if request == nil {
@@ -2104,34 +2081,6 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 					}
 				}
 			}
-			// Check that all transaction announces that are scheduled for
-			// retrieval but not actively being downloaded are tracked only
-			// in the stage 2 `announced` map.
-			var queued []common.Hash
-			for _, announces := range step.tracking {
-				for _, ann := range announces {
-					var found bool
-					for _, hs := range step.fetching {
-						if slices.Contains(hs, ann.hash) {
-							found = true
-							break
-						}
-					}
-					if !found {
-						queued = append(queued, ann.hash)
-					}
-				}
-			}
-			for _, hash := range queued {
-				if _, ok := fetcher.announced[hash]; !ok {
-					t.Errorf("step %d: hash %x missing from announced", i, hash)
-				}
-			}
-			for hash := range fetcher.announced {
-				if !slices.Contains(queued, hash) {
-					t.Errorf("step %d: hash %x extra in announced", i, hash)
-				}
-			}
 
 		case isUnderpriced:
 			if fetcher.underpriced.Len() != int(step) {
@@ -2144,7 +2093,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 		// After every step, cross validate the internal uniqueness invariants
 		// between stage one and stage two.
 		for hash := range fetcher.waittime {
-			if _, ok := fetcher.announced[hash]; ok {
+			if fetcher.announced(hash) {
 				t.Errorf("step %d: hash %s present in both stage 1 and 2", i, hash)
 			}
 		}
