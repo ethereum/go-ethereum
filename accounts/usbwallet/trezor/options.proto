@@ -1,0 +1,72 @@
+// This file originates from the SatoshiLabs Trezor `common` repository at:
+//   https://github.com/trezor/trezor-common/blob/master/protob/options.proto
+// dated 30.06.2025, commit 421b45d4677f2499234692b0f54010bc45b3ae5f.
+
+syntax = "proto2";
+package hw.trezor.messages;
+
+option go_package  = "github.com/ethereum/go-ethereum/accounts/usbwallet/trezor";
+
+// Sugar for easier handling in Java
+option java_package = "com.satoshilabs.trezor.lib.protobuf";
+option java_outer_classname = "TrezorOptions";
+
+import "google/protobuf/descriptor.proto";
+
+/************************* WARNING ***********************
+Due to the way extensions are accessed in pb2py, there needs to be a globally unique
+name-ID mapping for extensions. That means that two different extensions, e.g. for
+EnumValueOptions and FieldOptions, MUST NOT have the same ID.
+
+Using the same ID indicates the same purpose (protobuf does not allow multiple
+extensions with the same name), such as EnumValueOptions.bitcoin_only and
+FileOptions.include_in_bitcoin_only. pb2py can then find the extension under
+either name.
+
+The convention to achieve this is as follows:
+ - extensions specific to a type have the same prefix:
+   * 50xxx for EnumValueOptions
+   * 51xxx for EnumOptions
+   * 52xxx for MessageOptions
+   * 53xxx for FieldOptions
+ - extensions that might be used across types have the same "global" prefix 60xxx
+*/
+
+/**
+ * Options for specifying message direction and type of wire (normal/debug)
+ */
+extend google.protobuf.EnumValueOptions {
+  optional bool wire_in = 50002;              // message can be transmitted via wire from PC to Trezor
+  optional bool wire_out = 50003;             // message can be transmitted via wire from Trezor to PC
+  optional bool wire_debug_in = 50004;        // message can be transmitted via debug wire from PC to Trezor
+  optional bool wire_debug_out = 50005;       // message can be transmitted via debug wire from Trezor to PC
+  optional bool wire_tiny = 50006;            // message is handled by Trezor when the USB stack is in tiny mode
+  optional bool wire_bootloader = 50007;      // message is only handled by Trezor Bootloader
+  optional bool wire_no_fsm = 50008;          // message is not handled by Trezor unless the USB stack is in tiny mode
+
+  optional bool bitcoin_only = 60000;         // enum value is available on BITCOIN_ONLY build
+  // (messages not marked bitcoin_only will be EXCLUDED)
+}
+
+/** Options for tagging enum types */
+extend google.protobuf.EnumOptions {
+  optional bool has_bitcoin_only_values = 51001;  // indicate that some values should be excluded on BITCOIN_ONLY builds
+}
+
+/** Options for tagging message types */
+extend google.protobuf.MessageOptions {
+  optional bool experimental_message = 52001;  // indicate that a message is intended for development and beta testing only and its definition may change at any time
+  optional uint32 wire_type = 52002;           // override wire type specified in the MessageType enum
+  optional bool internal_only = 52003;         // indicate that a message is intended for internal use only and should not be transmitted via the wire
+}
+
+/** Options for tagging field types */
+extend google.protobuf.FieldOptions {
+  optional bool experimental_field = 53001;   // indicate that a field is intended for development and beta testing only
+}
+
+/** Options for tagging files with protobuf definitions */
+extend google.protobuf.FileOptions {
+  optional bool include_in_bitcoin_only = 60000;  // definitions are available on BITCOIN_ONLY build
+  // intentionally identical to `bitcoin_only` from enum
+}
