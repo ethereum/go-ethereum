@@ -1,4 +1,4 @@
-// Copyright 2024 the libevm authors.
+// Copyright 2024-2025 the libevm authors.
 //
 // The libevm additions to go-ethereum are free software: you can redistribute
 // them and/or modify them under the terms of the GNU Lesser General Public License
@@ -65,4 +65,29 @@ func (o *AtMostOnce[T]) TestOnlyClear() {
 	testonly.OrPanic(func() {
 		o.v = nil
 	})
+}
+
+// TempOverride calls `fn`, overriding any registered `T`, but only for the life
+// of the call. It is not threadsafe.
+//
+// It is valid to call this method with or without a prior call to
+// [AtMostOnce.Register].
+func (o *AtMostOnce[T]) TempOverride(with T, fn func()) {
+	o.temp(&with, fn)
+}
+
+// TempClear calls `fn`, clearing any registered `T`, but only for the life of
+// the call. It is not threadsafe.
+//
+// It is valid to call this method with or without a prior call to
+// [AtMostOnce.Register].
+func (o *AtMostOnce[T]) TempClear(fn func()) {
+	o.temp(nil, fn)
+}
+
+func (o *AtMostOnce[T]) temp(with *T, fn func()) {
+	old := o.v
+	o.v = with
+	fn()
+	o.v = old
 }

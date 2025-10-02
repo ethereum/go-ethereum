@@ -150,6 +150,12 @@ func (highByteFlipper) TransformStateKey(_ common.Address, key common.Hash) comm
 	return flipHighByte(key)
 }
 
+type noopHooks struct{}
+
+func (noopHooks) TransformStateKey(_ common.Address, key common.Hash) common.Hash {
+	return key
+}
+
 func TestTransformStateKey(t *testing.T) {
 	rawdb := rawdb.NewMemoryDatabase()
 	trie := triedb.NewDatabase(rawdb, nil)
@@ -208,6 +214,16 @@ func TestTransformStateKey(t *testing.T) {
 	assertCommittedEq(t, regularKey, regularVal, noTransform)
 	assertCommittedEq(t, flippedKey, regularVal)
 	assertCommittedEq(t, flippedKey, flippedVal, noTransform)
+
+	t.Run("WithTempRegisteredExtras", func(t *testing.T) {
+		WithTempRegisteredExtras(noopHooks{}, func() {
+			// No-op hooks are equivalent to using the `noTransform` option.
+			// NOTE this is NOT the intended usage of [WithTempRegisteredExtras]
+			// and is simply an easy way to test the temporary registration.
+			assertEq(t, regularKey, regularVal)
+			assertEq(t, flippedKey, flippedVal)
+		})
+	})
 
 	updatedVal := common.Hash{'u', 'p', 'd', 'a', 't', 'e', 'd'}
 	sdb.SetState(addr, regularKey, updatedVal)

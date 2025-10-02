@@ -277,3 +277,88 @@ func assertPanics(t *testing.T, fn func(), wantContains string) {
 	}()
 	fn()
 }
+
+func TestTempRegisteredExtras(t *testing.T) {
+	TestOnlyClearRegisteredExtras()
+	t.Cleanup(TestOnlyClearRegisteredExtras)
+
+	type (
+		primaryCC struct {
+			X int
+			NOOPHooks
+		}
+		primaryRules struct {
+			X int
+			NOOPHooks
+		}
+
+		overrideCC struct {
+			X string
+			NOOPHooks
+		}
+		overrideRules struct {
+			X string
+			NOOPHooks
+		}
+	)
+
+	primary := Extras[primaryCC, primaryRules]{
+		NewRules: func(_ *ChainConfig, _ *Rules, cc primaryCC, _ *big.Int, _ bool, _ uint64) primaryRules {
+			return primaryRules{
+				X: cc.X,
+			}
+		},
+	}
+	override := Extras[overrideCC, overrideRules]{
+		NewRules: func(_ *ChainConfig, _ *Rules, cc overrideCC, _ *big.Int, _ bool, _ uint64) overrideRules {
+			return overrideRules{
+				X: cc.X,
+			}
+		},
+	}
+
+	extras := RegisterExtras(primary)
+	testPrimaryExtras := func(t *testing.T) {
+		t.Helper()
+		assertRulesCopiedFromChainConfig(
+			t, extras, 42,
+			func(cc *primaryCC, x int) { cc.X = x },
+			func(r *primaryRules) int { return r.X },
+		)
+	}
+
+	t.Run("before_temp", testPrimaryExtras)
+	t.Run("WithTempRegisteredExtras", func(t *testing.T) {
+		WithTempRegisteredExtras(
+			override,
+			func(extras ExtraPayloads[overrideCC, overrideRules]) { // deliberately shadow `extras`
+				assertRulesCopiedFromChainConfig(
+					t, extras, "hello, world",
+					func(cc *overrideCC, x string) { cc.X = x },
+					func(r *overrideRules) string { return r.X },
+				)
+			},
+		)
+	})
+	t.Run("after_temp", testPrimaryExtras)
+}
+
+func assertRulesCopiedFromChainConfig[C ChainConfigHooks, R RulesHooks, Payload any](
+	t *testing.T,
+	extras ExtraPayloads[C, R],
+	val Payload,
+	setX func(*C, Payload),
+	getX func(*R) Payload,
+) {
+	t.Helper()
+
+	cc := new(ChainConfig)
+	var ccExtra C
+	setX(&ccExtra, val)
+
+	extras.ChainConfig.Set(cc, ccExtra)
+	rules := cc.Rules(nil, false, 0)
+	rulesExtra := extras.Rules.Get(&rules)
+
+	assert.Equalf(t, val, getX(&rulesExtra), "%T.X copied from %T.X", rulesExtra, ccExtra)
+}

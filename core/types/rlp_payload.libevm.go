@@ -44,17 +44,27 @@ import (
 // [Header] or [Block] / [Body] is a non-nil `HPtr` or `BPtr` respectively. The
 // latter guarantee ensures that hooks won't be called on nil-pointer receivers.
 func RegisterExtras[
-	H any, HPtr interface {
-		HeaderHooks
-		*H
-	},
-	B any, BPtr interface {
-		BlockBodyPayload[BPtr]
-		*B
-	},
+	H any, HPtr HeaderHooksPointer[H],
+	B any, BPtr BlockBodyHooksPointer[B, BPtr],
 	SA any,
 ]() ExtraPayloads[HPtr, BPtr, SA] {
-	extra := ExtraPayloads[HPtr, BPtr, SA]{
+	payloads, ctors := payloadsAndConstructors[H, HPtr, B, BPtr, SA]()
+	registeredExtras.MustRegister(ctors)
+	log.Info(
+		"Registered core/types extras",
+		"Header", log.TypeOf(pseudo.Zero[HPtr]().Value.Get()),
+		"Block/Body", log.TypeOf(pseudo.Zero[BPtr]().Value.Get()),
+		"StateAccount", log.TypeOf(pseudo.Zero[SA]().Value.Get()),
+	)
+	return payloads
+}
+
+func payloadsAndConstructors[
+	H any, HPtr HeaderHooksPointer[H],
+	B any, BPtr BlockBodyHooksPointer[B, BPtr],
+	SA any,
+]() (ExtraPayloads[HPtr, BPtr, SA], *extraConstructors) {
+	payloads := ExtraPayloads[HPtr, BPtr, SA]{
 		Header: pseudo.NewAccessor[*Header, HPtr](
 			(*Header).extraPayload,
 			func(h *Header, t *pseudo.Type) { h.extra = t },
@@ -72,7 +82,7 @@ func RegisterExtras[
 			func(a StateOrSlimAccount, t *pseudo.Type) { a.extra().t = t },
 		),
 	}
-	registeredExtras.MustRegister(&extraConstructors{
+	ctors := &extraConstructors{
 		stateAccountType: func() string {
 			var x SA
 			return fmt.Sprintf("%T", x)
@@ -84,23 +94,51 @@ func RegisterExtras[
 		newHeader:       pseudo.NewConstructor[H]().NewPointer, // i.e. non-nil HPtr
 		newBlockOrBody:  pseudo.NewConstructor[B]().NewPointer, // i.e. non-nil BPtr
 		newStateAccount: pseudo.NewConstructor[SA]().Zero,
-		hooks:           extra,
-	})
-	log.Info(
-		"Registered core/types extras",
-		"Header", log.TypeOf(pseudo.Zero[HPtr]().Value.Get()),
-		"Block/Body", log.TypeOf(pseudo.Zero[BPtr]().Value.Get()),
-		"StateAccount", log.TypeOf(pseudo.Zero[SA]().Value.Get()),
-	)
-	return extra
+		hooks:           payloads,
+	}
+	return payloads, ctors
+}
+
+// WithTempRegisteredExtras temporarily registers `HPtr`, `BPtr`, and `SA` as if
+// calling [RegisterExtras] the same type parameters. The [ExtraPayloads] are
+// passed to `fn` instead of being returned; the argument MUST NOT be persisted
+// beyond the life of `fn`. After `fn` returns, the registration is returned to
+// its former state, be that none or the types originally passed to
+// [RegisterExtras].
+//
+// This MUST NOT be used on a live chain. It is solely intended for off-chain
+// consumers that require access to extras. Said consumers SHOULD NOT, however
+// call this function directly. Use the libevm/temporary.WithRegisteredExtras()
+// function instead as it atomically overrides all possible packages.
+func WithTempRegisteredExtras[
+	H, B, SA any,
+	HPtr HeaderHooksPointer[H],
+	BPtr BlockBodyHooksPointer[B, BPtr],
+](fn func(ExtraPayloads[HPtr, BPtr, SA])) {
+	payloads, ctors := payloadsAndConstructors[H, HPtr, B, BPtr, SA]()
+	registeredExtras.TempOverride(ctors, func() { fn(payloads) })
+}
+
+// A HeaderHooksPointer is a type constraint for an implementation of
+// [HeaderHooks] with a pointer receiver.
+type HeaderHooksPointer[H any] interface {
+	HeaderHooks
+	*H
+}
+
+// A BlockBodyHooksPointer is a type constraint for an implementation of
+// [BlockBodyPayload] with a pointer receiver.
+type BlockBodyHooksPointer[B any, Self any] interface {
+	BlockBodyPayload[Self]
+	*B
 }
 
 // A BlockBodyPayload is an implementation of [BlockBodyHooks] that is also able
 // to clone itself. Both [Block.Body] and [Block.WithBody] require this
 // functionality to copy the payload between the types.
-type BlockBodyPayload[BPtr any] interface {
+type BlockBodyPayload[Self any] interface {
 	BlockBodyHooks
-	Copy() BPtr
+	Copy() Self
 }
 
 // TestOnlyClearRegisteredExtras clears the [Extras] previously passed to

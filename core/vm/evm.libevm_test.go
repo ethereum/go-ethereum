@@ -63,9 +63,23 @@ func TestOverrideNewEVMArgs(t *testing.T) {
 	hooks := evmArgOverrider{newEVMchainID: chainID}
 	hooks.register(t)
 
-	evm := NewEVM(BlockContext{}, TxContext{}, nil, nil, Config{})
-	got := evm.ChainConfig().ChainID
-	require.Equalf(t, big.NewInt(chainID), got, "%T.ChainConfig().ChainID set by NewEVM() hook", evm)
+	assertChainID := func(t *testing.T, want int64) {
+		t.Helper()
+		evm := NewEVM(BlockContext{}, TxContext{}, nil, nil, Config{})
+		got := evm.ChainConfig().ChainID
+		require.Equalf(t, big.NewInt(want), got, "%T.ChainConfig().ChainID set by NewEVM() hook", evm)
+	}
+	assertChainID(t, chainID)
+
+	t.Run("WithTempRegisteredHooks", func(t *testing.T) {
+		override := evmArgOverrider{newEVMchainID: 24680}
+		WithTempRegisteredHooks(&override, func() {
+			assertChainID(t, override.newEVMchainID)
+		})
+		t.Run("after", func(t *testing.T) {
+			assertChainID(t, chainID)
+		})
+	})
 }
 
 func TestOverrideEVMResetArgs(t *testing.T) {

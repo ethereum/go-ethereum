@@ -130,7 +130,7 @@ type BlockBodyHooks interface {
 // to no type having been registered.
 type NOOPBlockBodyHooks struct{}
 
-var _ BlockBodyPayload[*NOOPBlockBodyHooks] = NOOPBlockBodyHooks{}
+var _ BlockBodyPayload[*NOOPBlockBodyHooks] = (*NOOPBlockBodyHooks)(nil)
 
 func (NOOPBlockBodyHooks) Copy() *NOOPBlockBodyHooks { return &NOOPBlockBodyHooks{} }
 
