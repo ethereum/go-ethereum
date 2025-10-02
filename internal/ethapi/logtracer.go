@@ -53,7 +53,7 @@ type tracer struct {
 	count          int
 	traceTransfers bool
 	blockNumber    uint64
-    blockTimestamp uint64
+	blockTimestamp uint64
 	blockHash      common.Hash
 	txHash         common.Hash
 	txIdx          uint
@@ -63,7 +63,7 @@ func newTracer(traceTransfers bool, blockNumber uint64, blockTimestamp uint64, b
 	return &tracer{
 		traceTransfers: traceTransfers,
 		blockNumber:    blockNumber,
-        blockTimestamp: blockTimestamp,
+		blockTimestamp: blockTimestamp,
 		blockHash:      blockHash,
 		txHash:         txHash,
 		txIdx:          txIndex,
