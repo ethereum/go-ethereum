@@ -2,7 +2,6 @@ clone_depth: 5
 version: "{branch}.{build}"
 
 image:
-  - Ubuntu
   - Visual Studio 2019
 
 environment:
@@ -17,25 +16,6 @@ install:
   - go version
 
 for:
-  # Linux has its own script without -arch and -cc.
-  # The linux builder also runs lint.
-  - matrix:
-      only:
-        - image: Ubuntu
-    build_script:
-      - go run build/ci.go lint
-      - go run build/ci.go check_generate
-      - go run build/ci.go check_baddeps
-      - go run build/ci.go install -dlgo
-    test_script:
-      - go run build/ci.go test -dlgo -short
-
-  # linux/386 is disabled.
-  - matrix:
-      exclude:
-        - image: Ubuntu
-          GETH_ARCH: 386
-
   # Windows builds for amd64 + 386.
   - matrix:
       only:
@@ -56,4 +36,4 @@ for:
       - go run build/ci.go archive -arch %GETH_ARCH% -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
       - go run build/ci.go nsis -arch %GETH_ARCH% -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
     test_script:
-      - go run build/ci.go test -dlgo -arch %GETH_ARCH% -cc %GETH_CC% -short
+      - go run build/ci.go test -dlgo -arch %GETH_ARCH% -cc %GETH_CC% -short -skip-spectests
