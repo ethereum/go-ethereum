@@ -167,6 +167,31 @@ func (ec *Client) CallContractWithBlockOverrides(ctx context.Context, msg ethere
 	return hex, err
 }
 
+// CallContractWithTransientOverrides executes a message call transaction, which is directly executed
+// in the VM of the node, but never mined into the blockchain.
+//
+// blockNumber selects the block height at which the call runs. It can be nil, in which
+// case the code is taken from the latest known block. Note that state from very old
+// blocks might not be available.
+//
+// overrides specifies a map of contract states that should be overwritten before executing
+// the message call.
+//
+// blockOverrides specifies block fields exposed to the EVM that can be overridden for the call.
+//
+// transientOverrides specifies transient storage slots that should be overwritten before executing
+// the message call. Transient storage is reset at the beginning of each transaction.
+//
+// Please use ethclient.CallContract instead if you don't need the override functionality.
+func (ec *Client) CallContractWithTransientOverrides(ctx context.Context, msg ethereum.CallMsg, blockNumber *big.Int, overrides *map[common.Address]OverrideAccount, blockOverrides *BlockOverrides, transientOverrides *TransientOverrides) ([]byte, error) {
+	var hex hexutil.Bytes
+	err := ec.c.CallContext(
+		ctx, &hex, "eth_call", toCallArg(msg),
+		toBlockNumArg(blockNumber), overrides, blockOverrides, transientOverrides,
+	)
+	return hex, err
+}
+
 // GCStats retrieves the current garbage collection stats from a geth node.
 func (ec *Client) GCStats(ctx context.Context) (*debug.GCStats, error) {
 	var result debug.GCStats
@@ -347,6 +372,10 @@ type BlockOverrides struct {
 	// BaseFee overrides the block base fee.
 	BaseFee *big.Int
 }
+
+// TransientOverrides specifies transient storage slots to override for eth_call.
+// The map key is the contract address, and the value is another map of slot to value.
+type TransientOverrides map[common.Address]map[common.Hash]common.Hash
 
 func (o BlockOverrides) MarshalJSON() ([]byte, error) {
 	type override struct {

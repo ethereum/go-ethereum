@@ -33,7 +33,7 @@ import (
 // OverrideAccount indicates the overriding fields of account during the execution
 // of a message call.
 // Note, state and stateDiff can't be specified at the same time. If state is
-// set, message execution will only use the data in the given state. Otherwise
+// set, message execution will only use the data in the given state. Otherwise,
 // if stateDiff is set, all diff will be applied first and then execute the call
 // message.
 type OverrideAccount struct {
@@ -47,6 +47,9 @@ type OverrideAccount struct {
 
 // StateOverride is the collection of overridden accounts.
 type StateOverride map[common.Address]OverrideAccount
+
+// TransientStorageOverride is the collection of transient storage overrides.
+type TransientStorageOverride map[common.Address]map[common.Hash]common.Hash
 
 func (diff *StateOverride) has(address common.Address) bool {
 	_, ok := (*diff)[address]
@@ -117,6 +120,14 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 	// if they were created in a transaction just before the tracing occur.
 	statedb.Finalise(false)
 	return nil
+}
+
+// Apply stores transient storage overrides to be applied after Prepare().
+func (diff *TransientStorageOverride) Apply(statedb *state.StateDB) {
+	if diff == nil || len(*diff) == 0 {
+		return
+	}
+	statedb.SetPendingTransientOverrides(*diff)
 }
 
 // BlockOverrides is a set of header fields to override.
