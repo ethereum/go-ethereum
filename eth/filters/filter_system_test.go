@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -779,5 +780,145 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 		case <-time.After(1 * time.Second):
 			t.Fatalf("Filter timeout is hanging")
 		}
+	}
+}
+
+// TestTransactionReceiptsSubscription tests the transaction receipts subscription functionality
+func TestTransactionReceiptsSubscription(t *testing.T) {
+	t.Parallel()
+
+	const txNum = 5
+
+	// Setup test environment
+	var (
+		db           = rawdb.NewMemoryDatabase()
+		backend, sys = newTestFilterSystem(db, Config{})
+		api          = NewFilterAPI(sys)
+		key1, _      = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr1        = crypto.PubkeyToAddress(key1.PublicKey)
+		signer       = types.NewLondonSigner(big.NewInt(1))
+		genesis      = &core.Genesis{
+			Alloc:   types.GenesisAlloc{addr1: {Balance: big.NewInt(1000000000000000000)}}, // 1 ETH
+			Config:  params.TestChainConfig,
+			BaseFee: big.NewInt(params.InitialBaseFee),
+		}
+		_, chain, _ = core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 1, func(i int, gen *core.BlockGen) {
+			// Add transactions to the block
+			for j := 0; j < txNum; j++ {
+				toAddr := common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268")
+				tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+					Nonce:    uint64(j),
+					GasPrice: gen.BaseFee(),
+					Gas:      21000,
+					To:       &toAddr,
+					Value:    big.NewInt(1000),
+					Data:     nil,
+				}), signer, key1)
+				gen.AddTx(tx)
+			}
+		})
+	)
+
+	// Insert the blocks into the chain
+	blockchain, err := core.NewBlockChain(db, genesis, ethash.NewFaker(), nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := blockchain.InsertChain(chain); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	// Prepare test data
+	receipts := blockchain.GetReceiptsByHash(chain[0].Hash())
+	if receipts == nil {
+		t.Fatalf("failed to get receipts")
+	}
+
+	chainEvent := core.ChainEvent{
+		Header:       chain[0].Header(),
+		Receipts:     receipts,
+		Transactions: chain[0].Transactions(),
+	}
+
+	txHashes := make([]common.Hash, txNum)
+	for i := 0; i < txNum; i++ {
+		txHashes[i] = chain[0].Transactions()[i].Hash()
+	}
+
+	testCases := []struct {
+		name                    string
+		filterTxHashes          []common.Hash
+		expectedReceiptTxHashes []common.Hash
+		expectError             bool
+	}{
+		{
+			name:                    "no filter - should return all receipts",
+			filterTxHashes:          nil,
+			expectedReceiptTxHashes: txHashes,
+			expectError:             false,
+		},
+		{
+			name:                    "single tx hash filter",
+			filterTxHashes:          []common.Hash{txHashes[0]},
+			expectedReceiptTxHashes: []common.Hash{txHashes[0]},
+			expectError:             false,
+		},
+		{
+			name:                    "multiple tx hashes filter",
+			filterTxHashes:          []common.Hash{txHashes[0], txHashes[1], txHashes[2]},
+			expectedReceiptTxHashes: []common.Hash{txHashes[0], txHashes[1], txHashes[2]},
+			expectError:             false,
+		},
+	}
+
+	// Run test cases
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			receiptsChan := make(chan []*ReceiptWithTx)
+			sub := api.events.SubscribeTransactionReceipts(tc.filterTxHashes, receiptsChan)
+
+			// Send chain event
+			backend.chainFeed.Send(chainEvent)
+
+			// Wait for receipts
+			timeout := time.After(1 * time.Second)
+			var receivedReceipts []*types.Receipt
+			for {
+				select {
+				case receiptsWithTx := <-receiptsChan:
+					for _, receiptWithTx := range receiptsWithTx {
+						receivedReceipts = append(receivedReceipts, receiptWithTx.Receipt)
+					}
+				case <-timeout:
+					t.Fatalf("timeout waiting for receipts")
+				}
+				if len(receivedReceipts) >= len(tc.expectedReceiptTxHashes) {
+					break
+				}
+			}
+
+			// Verify receipt count
+			if len(receivedReceipts) != len(tc.expectedReceiptTxHashes) {
+				t.Errorf("Expected %d receipts, got %d", len(tc.expectedReceiptTxHashes), len(receivedReceipts))
+			}
+
+			// Verify specific transaction hashes are present
+			if tc.expectedReceiptTxHashes != nil {
+				receivedHashes := make(map[common.Hash]bool)
+				for _, receipt := range receivedReceipts {
+					receivedHashes[receipt.TxHash] = true
+				}
+
+				for _, expectedHash := range tc.expectedReceiptTxHashes {
+					if !receivedHashes[expectedHash] {
+						t.Errorf("Expected receipt for tx %x not found", expectedHash)
+					}
+				}
+			}
+
+			// Cleanup
+			sub.Unsubscribe()
+			<-sub.Err()
+		})
 	}
 }
