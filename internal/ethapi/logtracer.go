@@ -121,7 +121,7 @@ func (t *tracer) captureLog(address common.Address, topics []common.Hash, data [
 		Topics:         topics,
 		Data:           data,
 		BlockNumber:    t.blockNumber,
-        BlockTimestamp: t.blockTimestamp,
+		BlockTimestamp: t.blockTimestamp,
 		BlockHash:      t.blockHash,
 		TxHash:         t.txHash,
 		TxIndex:        t.txIdx,
