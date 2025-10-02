@@ -293,9 +293,11 @@ func doTest(cmdline []string) {
 	)
 	flag.CommandLine.Parse(cmdline)
 
+	// Load checksums file (needed for both spec tests and dlgo)
+	csdb := download.MustLoadChecksums("build/checksums.txt")
+
 	// Get test fixtures.
 	if !*skipspectests {
-		csdb := download.MustLoadChecksums("build/checksums.txt")
 		downloadSpecTestFixtures(csdb, *cachedir)
 	}
 
