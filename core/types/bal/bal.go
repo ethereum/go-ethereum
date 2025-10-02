@@ -41,11 +41,37 @@ pending state:
 finalized state:
 	* the ConstructionBlockAccessList type (sans the pending state stuff that I have added there
 
+Verification Path:
+* only validate single "transition" at a time:
+	* only need the component which collects pending state and finalizes it for one step.
+
 TLDR:
 * break the pending state into its own struct, out of ConstructionBlockAccessList
 * create a 'BALBuilder' type that encompasses the 'finalized' ConstructionBlockAccessList and pending state
 * ensure that this new model fits nicely with the BAL validation code path
 */
+
+// TODO: maybe rename this to StateDiffBuilder (?)
+type AccessListBuilder struct {
+	accessesStack []map[common.Address]constructionAccountAccess
+}
+
+func (a *AccessListBuilder) Finalise() (*StateDiff, StateAccesses) {
+
+}
+
+func (c *ConstructionBlockAccessList) Apply(idx uint16, diff *StateDiff, accesses StateAccesses) {
+
+}
+
+// TODO: the BalReader Validation method should accept the computed values as
+// a index/StateDiff/StateAccesses trio.
+
+// BAL tracer maintains a ConstructionBlockAccessList.
+// For each BAL index, it instantiates an AccessListBuilder and
+// appends the result to the access list where appropriate
+
+// ---- below is the actual code written before my idea sketch above ----
 
 // CodeChange contains the runtime bytecode deployed at an address and the
 // transaction index where the deployment took place.
@@ -129,6 +155,12 @@ func (c *ConstructionAccountAccesses) NonceChange(prev, cur uint64) {
 
 // Called at tx boundaries
 func (c *ConstructionAccountAccesses) Finalise() {
+	panic("see TODO below")
+	// TODO: Finalise should determine if the account became non-existent.  two scenarios for deletion:
+	// 1) account was pre-funded (but no preexisting code), some initcode ran at it and executed a SENDALL clearing the account.
+	// 2) account was created and deleted in the same transaction:
+	//		* every account field started empty and ended empty, with the exception of possible net storage changes.
+	//		* all keys that were storage writes should become storage reads
 	c.curIdxChanges.Finalise()
 	if c.curIdxChanges.code != nil {
 		c.CodeChanges[c.curIdx] = CodeChange{c.curIdx, c.curIdxChanges.code}
