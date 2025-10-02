@@ -41,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/gasestimator"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -1665,61 +1664,111 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 		return nil, err
 	}
 
-	// effective timeout: min(requested, max), default if none
-	max := api.b.RPCTxSyncMaxTimeout()
-	def := api.b.RPCTxSyncDefaultTimeout()
+	maxTimeout := api.b.RPCTxSyncMaxTimeout()
+	defaultTimeout := api.b.RPCTxSyncDefaultTimeout()
 
-	eff := def
+	timeout := defaultTimeout
 	if timeoutMs != nil && *timeoutMs > 0 {
 		req := time.Duration(*timeoutMs) * time.Millisecond
-		if req > max {
-			eff = max
+		if req > maxTimeout {
+			timeout = maxTimeout
 		} else {
-			eff = req
+			timeout = req
 		}
 	}
 
-	receiptCtx, cancel := context.WithTimeout(ctx, eff)
+	receiptCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	// Fast path: maybe already mined/indexed
+	// Fast path.
 	if r, err := api.GetTransactionReceipt(receiptCtx, hash); err == nil && r != nil {
 		return r, nil
 	}
 
-	// Subscribe to head changes and re-check on each new block
+	// Subscribe to new block events and check the receipt on each new block.
 	heads := make(chan core.ChainHeadEvent, 16)
-	var sub event.Subscription = api.b.SubscribeChainHeadEvent(heads)
-	if sub == nil {
-		return nil, errors.New("chain head subscription unavailable")
-	}
+	sub := api.b.SubscribeChainHeadEvent(heads)
 	defer sub.Unsubscribe()
+	subErrCh := sub.Err()
+
+	// calculate poll/settle intervals
+	const (
+		pollFraction = 20
+		pollMin      = 25 * time.Millisecond
+		pollMax      = 500 * time.Millisecond
+	)
+	settleInterval := timeout / pollFraction
+	if settleInterval < pollMin {
+		settleInterval = pollMin
+	} else if settleInterval > pollMax {
+		settleInterval = pollMax
+	}
+
+	// Settle: short delay to bridge receipt-indexing lag after a new head.
+	// resetSettle re-arms a single timer safely (stop+drain+reset).
+	// On head: check once immediately, then reset; on timer: re-check; repeat until deadline.
+	var (
+		settle   *time.Timer
+		settleCh <-chan time.Time
+	)
+	resetSettle := func(d time.Duration) {
+		if settle == nil {
+			settle = time.NewTimer(d)
+			settleCh = settle.C
+			return
+		}
+		if !settle.Stop() {
+			select {
+			case <-settle.C:
+			default:
+			}
+		}
+		settle.Reset(d)
+	}
+	defer func() {
+		if settle != nil && !settle.Stop() {
+			select {
+			case <-settle.C:
+			default:
+			}
+		}
+	}()
+
+	// Start a settle cycle immediately to cover a missed-head race.
+	resetSettle(settleInterval)
 
 	for {
 		select {
 		case <-receiptCtx.Done():
-			// Distinguish upstream cancellation from our timeout
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
 			return nil, &txSyncTimeoutError{
-				msg:  fmt.Sprintf("The transaction was added to the transaction pool but wasn't processed in %v.", eff),
+				msg:  fmt.Sprintf("The transaction was added to the transaction pool but wasn't processed in %v.", timeout),
 				hash: hash,
 			}
 
-		case err := <-sub.Err():
+		case err, ok := <-subErrCh:
+			if !ok || err == nil {
+				// subscription closed; disable this case and rely on settle timer
+				subErrCh = nil
+				continue
+			}
 			return nil, err
 
 		case <-heads:
-			receipt, getErr := api.GetTransactionReceipt(receiptCtx, hash)
-			// If tx-index still building, keep waiting; ignore transient errors
-			if getErr != nil && !errors.Is(getErr, NewTxIndexingError()) {
-				// ignore and wait for next head
-				continue
+			// Immediate re-check on new head, then grace to bridge indexing lag.
+			if r, err := api.GetTransactionReceipt(receiptCtx, hash); err == nil && r != nil {
+				return r, nil
 			}
-			if receipt != nil {
-				return receipt, nil
+			resetSettle(settleInterval)
+
+		case <-settleCh:
+			r, getErr := api.GetTransactionReceipt(receiptCtx, hash)
+			if r != nil && getErr == nil {
+				return r, nil
 			}
+			resetSettle(settleInterval)
 		}
 	}
 }
