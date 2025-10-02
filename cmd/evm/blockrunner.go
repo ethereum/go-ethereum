@@ -17,8 +17,8 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -34,7 +34,7 @@ import (
 var blockTestCommand = &cli.Command{
 	Action:    blockTestCmd,
 	Name:      "blocktest",
-	Usage:     "Executes the given blockchain tests",
+	Usage:     "Executes the given blockchain tests. Filenames can be fed via standard input (batch mode) or as an argument (one-off execution).",
 	ArgsUsage: "<path>",
 	Flags: slices.Concat([]cli.Flag{
 		DumpFlag,
@@ -46,21 +46,36 @@ var blockTestCommand = &cli.Command{
 
 func blockTestCmd(ctx *cli.Context) error {
 	path := ctx.Args().First()
-	if len(path) == 0 {
-		return errors.New("path argument required")
+
+	// If path is provided, run the tests at that path.
+	if len(path) != 0 {
+		var (
+			collected = collectFiles(path)
+			results   []testResult
+		)
+		for _, fname := range collected {
+			r, err := runBlockTest(ctx, fname)
+			if err != nil {
+				return err
+			}
+			results = append(results, r...)
+		}
+		report(ctx, results)
+		return nil
 	}
-	var (
-		collected = collectFiles(path)
-		results   []testResult
-	)
-	for _, fname := range collected {
-		r, err := runBlockTest(ctx, fname)
+	// Otherwise, read filenames from stdin and execute back-to-back.
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		fname := scanner.Text()
+		if len(fname) == 0 {
+			return nil
+		}
+		results, err := runBlockTest(ctx, fname)
 		if err != nil {
 			return err
 		}
-		results = append(results, r...)
+		report(ctx, results)
 	}
-	report(ctx, results)
 	return nil
 }
 
