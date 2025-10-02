@@ -1764,8 +1764,7 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 			resetSettle(settleInterval)
 
 		case <-settleCh:
-			r, getErr := api.GetTransactionReceipt(receiptCtx, hash)
-			if r != nil && getErr == nil {
+			if r, err := api.GetTransactionReceipt(receiptCtx, hash); err == nil && r != nil {
 				return r, nil
 			}
 			resetSettle(settleInterval)
