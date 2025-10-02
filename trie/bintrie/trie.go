@@ -47,7 +47,6 @@ type BinaryTrie struct {
 
 // ToDot converts the binary trie to a DOT language representation. Useful for debugging.
 func (t *BinaryTrie) ToDot() string {
-	t.root.Hash()
 	return ToDot(t.root)
 }
 
