@@ -100,12 +100,17 @@ func NewSyncService(ctx context.Context, genesisConfig *params.ChainConfig, node
 
 	ctx, cancel := context.WithCancel(ctx)
 
+	pollInterval := nodeConfig.L1SyncInterval
+	if pollInterval == 0 {
+		pollInterval = DefaultPollInterval
+	}
+
 	service := SyncService{
 		ctx:                  ctx,
 		cancel:               cancel,
 		client:               client,
 		db:                   db,
-		pollInterval:         DefaultPollInterval,
+		pollInterval:         pollInterval,
 		latestProcessedBlock: latestProcessedBlock,
 	}
 

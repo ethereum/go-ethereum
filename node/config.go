@@ -25,6 +25,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/crypto"
@@ -197,6 +198,8 @@ type Config struct {
 	L1Confirmations rpc.BlockNumber `toml:",omitempty"`
 	// L1 bridge deployment block number
 	L1DeploymentBlock uint64 `toml:",omitempty"`
+	// Poll interval for L1 message syncing
+	L1SyncInterval time.Duration `toml:",omitempty"`
 	// Explicitly disable L1 message queue V2 and only query from L1 message queue V1 (before EuclidV2)
 	L1DisableMessageQueueV2 bool `toml:",omitempty"`
 	// Is daSyncingEnabled

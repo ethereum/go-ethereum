@@ -170,6 +170,7 @@ var (
 		utils.L1EndpointFlag,
 		utils.L1ConfirmationsFlag,
 		utils.L1DeploymentBlockFlag,
+		utils.L1SyncIntervalFlag,
 		utils.L1DisableMessageQueueV2Flag,
 		utils.CircuitCapacityCheckEnabledFlag,
 		utils.CircuitCapacityCheckWorkersFlag,
