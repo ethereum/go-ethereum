@@ -39,7 +39,9 @@ func OpenTSDB(r Registry, d time.Duration, prefix string, addr *net.TCPAddr) {
 // OpenTSDBWithConfig is a blocking exporter function just like OpenTSDB,
 // but it takes a OpenTSDBConfig instead.
 func OpenTSDBWithConfig(c OpenTSDBConfig) {
-	for range time.Tick(c.FlushInterval) {
+	ticker := time.NewTicker(c.FlushInterval)
+	defer ticker.Stop() // Use NewTicker to allow explicit stop and avoid leaked timers.
+	for range ticker.C {
 		if err := openTSDB(&c); nil != err {
 			log.Println(err)
 		}
