@@ -65,6 +65,9 @@ func (a *BlockAccessListTracer) AccessList() *bal.ConstructionBlockAccessList {
 
 // TODO: I don't like that AccessList and this do slightly different things,
 // and that they mutate the access list builder (not apparent in the naming of the methods)
+//
+// ^ idea: add Finalize() which returns the diff/accesses, also accumulating them in the BAL.
+// AccessList just returns the constructed BAL.
 func (a *BlockAccessListTracer) IdxChanges() (*bal.StateDiff, bal.StateAccesses) {
 	return a.accessListBuilder.FinaliseIdxChanges()
 }

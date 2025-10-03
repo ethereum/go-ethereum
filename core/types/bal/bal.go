@@ -91,16 +91,46 @@ func (c *AccessListBuilder) StorageWrite(address common.Address, key, prevVal, n
 	acctAccesses.StorageWrite(key, prevVal, newVal)
 }
 
-func (c *AccessListBuilder) BalanceChange(addr common.Address, prev, cur *uint256.Int) {
-	// TODO
+func (c *AccessListBuilder) BalanceChange(address common.Address, prev, cur *uint256.Int) {
+	if _, ok := c.prestates[address]; !ok {
+		c.prestates[address] = &AccountState{}
+	}
+	if c.prestates[address].Balance == nil {
+		c.prestates[address].Balance = prev
+	}
+	if _, ok := c.accessesStack[len(c.accessesStack)-1][address]; !ok {
+		c.accessesStack[len(c.accessesStack)-1][address] = &constructionAccountAccess{}
+	}
+	acctAccesses := c.accessesStack[len(c.accessesStack)-1][address]
+	acctAccesses.BalanceChange(cur)
 }
 
-func (c *AccessListBuilder) CodeChange(addr common.Address, prev, cur []byte) {
-	// TODO
+func (c *AccessListBuilder) CodeChange(address common.Address, prev, cur []byte) {
+	if _, ok := c.prestates[address]; !ok {
+		c.prestates[address] = &AccountState{}
+	}
+	if c.prestates[address].Code == nil {
+		c.prestates[address].Code = prev
+	}
+	if _, ok := c.accessesStack[len(c.accessesStack)-1][address]; !ok {
+		c.accessesStack[len(c.accessesStack)-1][address] = &constructionAccountAccess{}
+	}
+	acctAccesses := c.accessesStack[len(c.accessesStack)-1][address]
+	acctAccesses.CodeChange(cur)
 }
 
-func (c *AccessListBuilder) NonceChange(addr common.Address, prev, cur uint64) {
-	// TODO
+func (c *AccessListBuilder) NonceChange(address common.Address, prev, cur uint64) {
+	if _, ok := c.prestates[address]; !ok {
+		c.prestates[address] = &AccountState{}
+	}
+	if c.prestates[address].Nonce == nil {
+		c.prestates[address].Nonce = &prev
+	}
+	if _, ok := c.accessesStack[len(c.accessesStack)-1][address]; !ok {
+		c.accessesStack[len(c.accessesStack)-1][address] = &constructionAccountAccess{}
+	}
+	acctAccesses := c.accessesStack[len(c.accessesStack)-1][address]
+	acctAccesses.NonceChange(cur)
 }
 
 func (c *AccessListBuilder) EnterScope() {
