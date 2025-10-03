@@ -44,6 +44,12 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 			cost = params.ColdSloadCostEIP2929
 			// If the caller cannot afford the cost, this change will be rolled back
 			evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
+			if evm.Config.Tracer != nil && evm.Config.Tracer.OnColdStorageRead != nil {
+				// TODO: should these only be called if the cold storage read didn't go OOG?
+				// it's harder to implement, but I lean towards "yes".
+				// need to clarify this in the spec.
+				evm.Config.Tracer.OnColdStorageRead(contract.Address(), slot)
+			}
 		}
 		value := common.Hash(y.Bytes32())
 
@@ -123,6 +129,12 @@ func gasExtCodeCopyEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 	// Check slot presence in the access list
 	if !evm.StateDB.AddressInAccessList(addr) {
 		evm.StateDB.AddAddressToAccessList(addr)
+
+		// TODO: same issue as OnColdSStorageRead.  See the TODO above near OnColdStorageRead
+		if evm.Config.Tracer != nil && evm.Config.Tracer.OnColdAccountRead != nil {
+			evm.Config.Tracer.OnColdAccountRead(contract.Address())
+		}
+
 		var overflow bool
 		// We charge (cold-warm), since 'warm' is already charged as constantGas
 		if gas, overflow = math.SafeAdd(gas, params.ColdAccountAccessCostEIP2929-params.WarmStorageReadCostEIP2929); overflow {

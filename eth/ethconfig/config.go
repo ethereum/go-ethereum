@@ -183,6 +183,10 @@ type Config struct {
 
 	// OverrideVerkle (TODO: remove after the fork)
 	OverrideVerkle *uint64 `toml:",omitempty"`
+
+	// ExperimentalBAL enables EIP-7928 block access list creation during execution
+	// of post Cancun blocks, and persistence via embedding the BAL in the block body.
+	ExperimentalBAL bool `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.
