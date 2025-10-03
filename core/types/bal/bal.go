@@ -174,6 +174,44 @@ func (c *ConstructionBlockAccessList) Apply(idx uint16, diff *StateDiff, accesse
 			acctChanges = &ConstructionAccountAccesses{}
 			c.Accounts[addr] = acctChanges
 		}
+
+		if stateDiff.Nonce != nil {
+			if acctChanges.NonceChanges == nil {
+				acctChanges.NonceChanges = make(map[uint16]uint64)
+			}
+			acctChanges.NonceChanges[idx] = *stateDiff.Nonce
+		}
+		if stateDiff.Balance != nil {
+			if acctChanges.BalanceChanges == nil {
+				acctChanges.BalanceChanges = make(map[uint16]*uint256.Int)
+			}
+			acctChanges.BalanceChanges[idx] = stateDiff.Balance
+		}
+		if stateDiff.Code != nil {
+			if acctChanges.CodeChanges == nil {
+				acctChanges.CodeChanges = make(map[uint16]CodeChange)
+			}
+			acctChanges.CodeChanges[idx] = CodeChange{idx, stateDiff.Code}
+		}
+		if stateDiff.StorageWrites != nil {
+			if acctChanges.StorageWrites == nil {
+				acctChanges.StorageWrites = make(map[common.Hash]map[uint16]common.Hash)
+			}
+			for key, val := range stateDiff.StorageWrites {
+				acctChanges.StorageWrites[key][idx] = val
+			}
+		}
+	}
+	for addr, stateAccesses := range accesses {
+		acctAccess, ok := c.Accounts[addr]
+		if !ok {
+			acctAccess = &ConstructionAccountAccesses{}
+			c.Accounts[addr] = acctAccess
+		}
+
+		for key := range stateAccesses {
+			acctAccess.StorageReads[key] = struct{}{}
+		}
 	}
 }
 
