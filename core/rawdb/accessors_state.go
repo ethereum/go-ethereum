@@ -170,9 +170,11 @@ func ReadStateHistoryMetaList(db ethdb.AncientReaderOp, start uint64, count uint
 	return db.AncientRange(stateHistoryMeta, start-1, count, 0)
 }
 
-// ReadStateAccountIndex retrieves the state root corresponding to the specified
-// state history. Compute the position of state history in freezer by minus one
-// since the id of first state history starts from one(zero for initial state).
+// ReadStateAccountIndex retrieves the account index blob for the specified
+// state history. The index contains fixed-size entries with offsets and lengths
+// into the concatenated account data table. Compute the position of state
+// history in freezer by minus one since the id of first state history starts
+// from one (zero for initial state).
 func ReadStateAccountIndex(db ethdb.AncientReaderOp, id uint64) []byte {
 	blob, err := db.Ancient(stateHistoryAccountIndex, id-1)
 	if err != nil {
@@ -181,9 +183,11 @@ func ReadStateAccountIndex(db ethdb.AncientReaderOp, id uint64) []byte {
 	return blob
 }
 
-// ReadStateStorageIndex retrieves the state root corresponding to the specified
-// state history. Compute the position of state history in freezer by minus one
-// since the id of first state history starts from one(zero for initial state).
+// ReadStateStorageIndex retrieves the storage index blob for the specified
+// state history. The index contains fixed-size entries that locate storage slot
+// data in the concatenated storage data table. Compute the position of state
+// history in freezer by minus one since the id of first state history starts
+// from one (zero for initial state).
 func ReadStateStorageIndex(db ethdb.AncientReaderOp, id uint64) []byte {
 	blob, err := db.Ancient(stateHistoryStorageIndex, id-1)
 	if err != nil {
@@ -192,9 +196,10 @@ func ReadStateStorageIndex(db ethdb.AncientReaderOp, id uint64) []byte {
 	return blob
 }
 
-// ReadStateAccountHistory retrieves the state root corresponding to the specified
-// state history. Compute the position of state history in freezer by minus one
-// since the id of first state history starts from one(zero for initial state).
+// ReadStateAccountHistory retrieves the concatenated account data blob for the
+// specified state history. Offsets and lengths are resolved via the account
+// index. Compute the position of state history in freezer by minus one since
+// the id of first state history starts from one (zero for initial state).
 func ReadStateAccountHistory(db ethdb.AncientReaderOp, id uint64) []byte {
 	blob, err := db.Ancient(stateHistoryAccountData, id-1)
 	if err != nil {
@@ -203,9 +208,11 @@ func ReadStateAccountHistory(db ethdb.AncientReaderOp, id uint64) []byte {
 	return blob
 }
 
-// ReadStateStorageHistory retrieves the state root corresponding to the specified
-// state history. Compute the position of state history in freezer by minus one
-// since the id of first state history starts from one(zero for initial state).
+// ReadStateStorageHistory retrieves the concatenated storage slot data blob for
+// the specified state history. Locations are resolved via the account and
+// storage indexes. Compute the position of state history in freezer by minus
+// one since the id of first state history starts from one (zero for initial
+// state).
 func ReadStateStorageHistory(db ethdb.AncientReaderOp, id uint64) []byte {
 	blob, err := db.Ancient(stateHistoryStorageData, id-1)
 	if err != nil {
