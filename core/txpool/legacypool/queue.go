@@ -145,6 +145,12 @@ func (q *queue) add(hash common.Hash, tx *types.Transaction) (*common.Hash, erro
 	return &h, nil
 }
 
+// promoteExecutables iterates over all accounts with queued transactions, selecting
+// for promotion any that are now executable. It also drops any transactions that are
+// deemed too old (nonce too low) or too costly (insufficient funds or over gas limit).
+//
+// Returns two lists: all transactions that were removed from the queue and selected
+// for promotion; all other transactions that were removed from the queue and dropped.
 func (q *queue) promoteExecutables(accounts []common.Address, gasLimit uint64, currentState *state.StateDB, nonces *noncer) ([]*types.Transaction, []common.Hash) {
 	// Track the promoteable transactions to broadcast them at once
 	var promoteable []*types.Transaction

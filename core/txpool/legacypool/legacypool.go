@@ -1413,8 +1413,18 @@ func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.T
 
 	// remove all removable transactions
 	for _, hash := range removeable {
-		pool.removeTx(hash, true, true)
+		pool.all.Remove(hash)
 	}
+
+	// release all accounts that have no more transactions in the pool
+	for _, addr := range accounts {
+		_, hasPending := pool.pending[addr]
+		_, hasQueued := pool.queue.get(addr)
+		if !hasPending && !hasQueued {
+			pool.reserver.Release(addr)
+		}
+	}
+
 	return promoted
 }
 
