@@ -128,7 +128,7 @@ func (c *AccessListBuilder) ExitScope(reverted bool) {
 	c.accessesStack = c.accessesStack[:len(c.accessesStack)-1]
 }
 
-func (a *AccessListBuilder) Finalise() (*StateDiff, StateAccesses) {
+func (a *AccessListBuilder) FinaliseIdxChanges() (*StateDiff, StateAccesses) {
 	diff := &StateDiff{make(map[common.Address]*AccountState)}
 	stateAccesses := make(StateAccesses)
 
@@ -512,9 +512,9 @@ func (c *ConstructionBlockAccessList) BalanceChange(address common.Address, old,
 	c.Accounts[address].BalanceChange(old, new)
 }
 
-func (c *ConstructionBlockAccessList) Finalise() {
+func (c *ConstructionBlockAccessList) FinaliseIdxChanges() {
 	for _, account := range c.Accounts {
-		account.Finalise()
+		account.FinaliseIdxChanges()
 	}
 	c.curIdx++
 }

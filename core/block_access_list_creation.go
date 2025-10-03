@@ -57,14 +57,20 @@ func NewBlockAccessListTracer(startIdx int) (*BlockAccessListTracer, *tracing.Ho
 // It is assumed that this is only called after all the block state changes
 // have been executed and the block has been finalized.
 func (a *BlockAccessListTracer) AccessList() *bal.ConstructionBlockAccessList {
-	diff, reads := a.accessListBuilder.Finalise()
+	diff, reads := a.accessListBuilder.FinaliseIdxChanges()
 	a.accessList.Apply(a.balIdx, diff, reads)
 	a.accessListBuilder = new(bal.AccessListBuilder)
 	return a.accessList
 }
 
+// TODO: I don't like that AccessList and this do slightly different things,
+// and that they mutate the access list builder (not apparent in the naming of the methods)
+func (a *BlockAccessListTracer) IdxChanges() (*bal.StateDiff, bal.StateAccesses) {
+	return a.accessListBuilder.FinaliseIdxChanges()
+}
+
 func (a *BlockAccessListTracer) TxEndHook(receipt *types.Receipt, err error) {
-	diff, reads := a.accessListBuilder.Finalise()
+	diff, reads := a.accessListBuilder.FinaliseIdxChanges()
 	a.accessList.Apply(a.balIdx, diff, reads)
 	a.accessListBuilder = new(bal.AccessListBuilder)
 	a.balIdx++
@@ -72,7 +78,7 @@ func (a *BlockAccessListTracer) TxEndHook(receipt *types.Receipt, err error) {
 
 func (a *BlockAccessListTracer) TxStartHook(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	if a.balIdx == 0 {
-		diff, reads := a.accessListBuilder.Finalise()
+		diff, reads := a.accessListBuilder.FinaliseIdxChanges()
 		a.accessList.Apply(0, diff, reads)
 		a.accessListBuilder = new(bal.AccessListBuilder)
 		a.balIdx++

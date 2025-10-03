@@ -122,12 +122,13 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateR
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.chain.engine.Finalize(p.chain, header, tracingStateDB, block.Body())
-	// invoke Finalise so that withdrawals are accounted for in the state diff
+	// invoke FinaliseIdxChanges so that withdrawals are accounted for in the state diff
 	postTxState.Finalise(true)
-	allStateReads.Merge(balTracer.AccessList().StateAccesses())
+	diff, stateReads := balTracer.IdxChanges()
+	allStateReads.Merge(stateReads)
 
 	balIdx := len(block.Transactions()) + 1
-	if err := postTxState.BlockAccessList().ValidateStateDiff(balIdx, balTracer.AccessList().DiffAt(balIdx)); err != nil {
+	if err := postTxState.BlockAccessList().ValidateStateDiff(balIdx, diff); err != nil {
 		return &ProcessResultWithMetrics{
 			ProcessResult: &ProcessResult{Error: err},
 		}
@@ -158,7 +159,7 @@ type txExecResult struct {
 	receipt *types.Receipt
 	err     error // non-EVM error which would render the block invalid
 
-	accessList *bal.ConstructionBlockAccessList
+	stateReads bal.StateAccesses
 }
 
 // resultHandler polls until all transactions have finished executing and the
@@ -187,7 +188,7 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxStateRea
 							execErr = err
 						} else {
 							receipts = append(receipts, res.receipt)
-							allReads.Merge(res.accessList.StateAccesses())
+							allReads.Merge(res.stateReads)
 						}
 					}
 				}
@@ -276,14 +277,15 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 		return &txExecResult{err: err}
 	}
 
-	if err := db.BlockAccessList().ValidateStateDiff(txIdx+1, balTracer.AccessList().DiffAt(txIdx+1)); err != nil {
+	diff, accesses := balTracer.IdxChanges()
+	if err := db.BlockAccessList().ValidateStateDiff(txIdx+1, diff); err != nil {
 		return &txExecResult{err: err}
 	}
 
 	return &txExecResult{
 		idx:        txIdx,
 		receipt:    receipt,
-		accessList: balTracer.AccessList(),
+		stateReads: accesses,
 	}
 }
 
@@ -330,7 +332,8 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
-	if err := statedb.BlockAccessList().ValidateStateDiff(0, balTracer.AccessList().DiffAt(0)); err != nil {
+	diff, stateReads := balTracer.IdxChanges()
+	if err := statedb.BlockAccessList().ValidateStateDiff(0, diff); err != nil {
 		return nil, err
 	}
 
@@ -345,7 +348,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	// TODO: figure out how to funnel the state reads from the bal tracer through to the post-block-exec state/slot read
 	// validation
 	tExecStart = time.Now()
-	go p.resultHandler(block, balTracer.AccessList().StateAccesses(), postTxState, tExecStart, txResCh, rootCalcResultCh, resCh)
+	go p.resultHandler(block, stateReads, postTxState, tExecStart, txResCh, rootCalcResultCh, resCh)
 	var workers errgroup.Group
 	startingState := statedb.Copy()
 	for i, tx := range block.Transactions() {

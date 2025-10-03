@@ -191,7 +191,7 @@ func TestCopy(t *testing.T) {
 		ccopyObj.AddBalance(uint256.NewInt(4 * uint64(i)))
 	}
 
-	// Finalise the changes on all concurrently
+	// FinaliseIdxChanges the changes on all concurrently
 	finalise := func(wg *sync.WaitGroup, db *StateDB) {
 		defer wg.Done()
 		db.Finalise(true)
