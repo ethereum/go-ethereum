@@ -105,6 +105,23 @@ func inspectFreezers(db ethdb.Database) ([]freezerInfo, error) {
 			}
 			infos = append(infos, info)
 
+		case MerkleTrienodeFreezerName, VerkleTrienodeFreezerName:
+			datadir, err := db.AncientDatadir()
+			if err != nil {
+				return nil, err
+			}
+			f, err := NewTrienodeFreezer(datadir, freezer == VerkleTrienodeFreezerName, true)
+			if err != nil {
+				continue // might be possible the trienode freezer is not existent
+			}
+			defer f.Close()
+
+			info, err := inspect(freezer, trienodeFreezerTableConfigs, f)
+			if err != nil {
+				return nil, err
+			}
+			infos = append(infos, info)
+
 		default:
 			return nil, fmt.Errorf("unknown freezer, supported ones: %v", freezers)
 		}

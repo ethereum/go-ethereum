@@ -202,7 +202,7 @@ func TestHistoricalStateReader(t *testing.T) {
 	fakeRoot := testrand.Hash()
 	rawdb.WriteStateID(env.db.diskdb, fakeRoot, 10)
 
-	_, err := env.db.HistoricReader(fakeRoot)
+	_, err := env.db.HistoricalStateReader(fakeRoot)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -210,7 +210,7 @@ func TestHistoricalStateReader(t *testing.T) {
 
 	// canonical state
 	realRoot := env.roots[9]
-	_, err = env.db.HistoricReader(realRoot)
+	_, err = env.db.HistoricalStateReader(realRoot)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
