@@ -140,7 +140,7 @@
     "description": "The `snap/1` protocol handler contains two vulnerabilities related to the `GetTrieNodes` packet, which can be exploited to crash the node. Full details are available at the Github security [advisory](https://github.com/ethereum/go-ethereum/security/advisories/GHSA-59hh-656j-3p7v)",
     "links": [
       "https://github.com/ethereum/go-ethereum/security/advisories/GHSA-59hh-656j-3p7v",
-      "https://geth.ethereum.org/docs/vulnerabilities/vulnerabilities",
+      "https://geth.ethereum.org/docs/developers/geth-developer/disclosures",
       "https://github.com/ethereum/go-ethereum/pull/23657"
     ],
     "introduced": "v1.10.0",
@@ -157,7 +157,7 @@
     "description": "A vulnerable node, if configured to use high verbosity logging, can be made to crash when handling specially crafted p2p messages sent from an attacker node. Full details are available at the Github security [advisory](https://github.com/ethereum/go-ethereum/security/advisories/GHSA-wjxw-gh3m-7pm5)",
     "links": [
       "https://github.com/ethereum/go-ethereum/security/advisories/GHSA-wjxw-gh3m-7pm5",
-      "https://geth.ethereum.org/docs/vulnerabilities/vulnerabilities",
+      "https://geth.ethereum.org/docs/developers/geth-developer/disclosures",
       "https://github.com/ethereum/go-ethereum/pull/24507"
     ],
     "introduced": "v1.10.0",
@@ -174,7 +174,7 @@
     "description": "The p2p handler spawned a new goroutine to respond to ping requests. By flooding a node with ping requests, an unbounded number of goroutines can be created, leading to resource exhaustion and potentially crash due to OOM.",
     "links": [
       "https://github.com/ethereum/go-ethereum/security/advisories/GHSA-ppjg-v974-84cm",
-      "https://geth.ethereum.org/docs/vulnerabilities/vulnerabilities"
+      "https://geth.ethereum.org/docs/developers/geth-developer/disclosures"
     ],
     "introduced": "v1.10.0",
     "fixed": "v1.12.1",
@@ -190,7 +190,7 @@
     "description": "A vulnerable node can be made to consume very large amounts of memory when handling specially crafted p2p messages sent from an attacker node. Full details will be available at the Github security [advisory](https://github.com/ethereum/go-ethereum/security/advisories/GHSA-4xc9-8hmq-j652)",
     "links": [
       "https://github.com/ethereum/go-ethereum/security/advisories/GHSA-4xc9-8hmq-j652",
-      "https://geth.ethereum.org/docs/vulnerabilities/vulnerabilities"
+      "https://geth.ethereum.org/docs/developers/geth-developer/disclosures"
     ],
     "introduced": "v1.10.0",
     "fixed": "v1.13.15",
