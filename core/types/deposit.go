@@ -17,6 +17,7 @@
 package types
 
 import (
+	"encoding/binary"
 	"fmt"
 )
 
@@ -27,7 +28,26 @@ const (
 // DepositLogToRequest unpacks a serialized DepositEvent.
 func DepositLogToRequest(data []byte) ([]byte, error) {
 	if len(data) != 576 {
-		return nil, fmt.Errorf("deposit wrong length: want 576, have %d", len(data))
+		return nil, fmt.Errorf("wrong length: want 576, have %d", len(data))
+	}
+	pubkeyABIOffset := binary.BigEndian.Uint64(data[24:32])
+	withdrawalABIOffset := binary.BigEndian.Uint64(data[56:64])
+	amountABIOffset := binary.BigEndian.Uint64(data[88:96])
+	signatureABIOffset := binary.BigEndian.Uint64(data[120:128])
+	indexABIOffset := binary.BigEndian.Uint64(data[152:160])
+	if pubkeyABIOffset != 160 || withdrawalABIOffset != 256 || amountABIOffset != 320 ||
+		signatureABIOffset != 384 || indexABIOffset != 512 {
+		return nil, fmt.Errorf("invalid offsets")
+	}
+
+	pubkeySize := binary.BigEndian.Uint64(data[pubkeyABIOffset+24 : pubkeyABIOffset+32])
+	withdrawalSize := binary.BigEndian.Uint64(data[withdrawalABIOffset+24 : withdrawalABIOffset+32])
+	amountSize := binary.BigEndian.Uint64(data[amountABIOffset+24 : amountABIOffset+32])
+	signatureSize := binary.BigEndian.Uint64(data[signatureABIOffset+24 : signatureABIOffset+32])
+	indexSize := binary.BigEndian.Uint64(data[indexABIOffset+24 : indexABIOffset+32])
+	if pubkeySize != 48 || withdrawalSize != 32 || amountSize != 8 ||
+		signatureSize != 96 || indexSize != 8 {
+		return nil, fmt.Errorf("invalid field sizes")
 	}
 
 	request := make([]byte, depositRequestSize)
