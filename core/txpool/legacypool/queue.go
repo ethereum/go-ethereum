@@ -152,9 +152,9 @@ func (q *queue) add(hash common.Hash, tx *types.Transaction) (*common.Hash, erro
 // Returns two lists: all transactions that were removed from the queue and selected
 // for promotion; all other transactions that were removed from the queue and dropped.
 func (q *queue) promoteExecutables(accounts []common.Address, gasLimit uint64, currentState *state.StateDB, nonces *noncer) ([]*types.Transaction, []common.Hash) {
-	// Track the promoteable transactions to broadcast them at once
-	var promoteable []*types.Transaction
-	var removeable []common.Hash
+	// Track the promotable transactions to broadcast them at once
+	var promotable []*types.Transaction
+	var dropped []common.Hash
 
 	// Iterate over all accounts and promote any executable transactions
 	for _, addr := range accounts {
@@ -165,32 +165,32 @@ func (q *queue) promoteExecutables(accounts []common.Address, gasLimit uint64, c
 		// Drop all transactions that are deemed too old (low nonce)
 		forwards := list.Forward(currentState.GetNonce(addr))
 		for _, tx := range forwards {
-			removeable = append(removeable, tx.Hash())
+			dropped = append(dropped, tx.Hash())
 		}
 		log.Trace("Removing old queued transactions", "count", len(forwards))
 		// Drop all transactions that are too costly (low balance or out of gas)
 		drops, _ := list.Filter(currentState.GetBalance(addr), gasLimit)
 		for _, tx := range drops {
-			removeable = append(removeable, tx.Hash())
+			dropped = append(dropped, tx.Hash())
 		}
 		log.Trace("Removing unpayable queued transactions", "count", len(drops))
 		queuedNofundsMeter.Mark(int64(len(drops)))
 
 		// Gather all executable transactions and promote them
 		readies := list.Ready(nonces.get(addr))
-		promoteable = append(promoteable, readies...)
-		log.Trace("Promoting queued transactions", "count", len(promoteable))
+		promotable = append(promotable, readies...)
+		log.Trace("Promoting queued transactions", "count", len(promotable))
 		queuedGauge.Dec(int64(len(readies)))
 
 		// Drop all transactions over the allowed limit
 		var caps = list.Cap(int(q.config.AccountQueue))
 		for _, tx := range caps {
 			hash := tx.Hash()
-			removeable = append(removeable, hash)
+			dropped = append(dropped, hash)
 			log.Trace("Removing cap-exceeding queued transaction", "hash", hash)
 		}
 		queuedRateLimitMeter.Mark(int64(len(caps)))
-		queuedGauge.Dec(int64(len(removeable)))
+		queuedGauge.Dec(int64(len(dropped)))
 
 		// Delete the entire queue entry if it became empty.
 		if list.Empty() {
@@ -198,7 +198,7 @@ func (q *queue) promoteExecutables(accounts []common.Address, gasLimit uint64, c
 			delete(q.beats, addr)
 		}
 	}
-	return promoteable, removeable
+	return promotable, dropped
 }
 
 func (q *queue) truncate() []common.Hash {
