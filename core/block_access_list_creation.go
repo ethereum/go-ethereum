@@ -23,15 +23,16 @@ type BlockAccessListTracer struct {
 	// scopes are in the proceeding indices.
 	// When an execution scope terminates in a non-reverting fashion, the changes are
 	// merged into the access list of the parent scope.
-	accessList *bal.ConstructionBlockAccessList
-	txIdx      uint16
+	accessList        *bal.ConstructionBlockAccessList
+	balIdx            uint16
+	accessListBuilder *bal.AccessListBuilder
 }
 
 // NewBlockAccessListTracer returns an BlockAccessListTracer and a set of hooks
 func NewBlockAccessListTracer(startIdx int) (*BlockAccessListTracer, *tracing.Hooks) {
 	balTracer := &BlockAccessListTracer{
 		accessList: bal.NewConstructionBlockAccessList(),
-		txIdx:      uint16(startIdx),
+		balIdx:     uint16(startIdx),
 	}
 	hooks := &tracing.Hooks{
 		OnTxEnd:           balTracer.TxEndHook,
@@ -52,61 +53,62 @@ func NewBlockAccessListTracer(startIdx int) (*BlockAccessListTracer, *tracing.Ho
 	return balTracer, wrappedHooks
 }
 
-// AccessList returns the constructed access list
+// AccessList returns the constructed access list.
+// It is assumed that this is only called after all the block state changes
+// have been executed and the block has been finalized.
 func (a *BlockAccessListTracer) AccessList() *bal.ConstructionBlockAccessList {
+	diff, reads := a.accessListBuilder.Finalise()
+	a.accessList.Apply(a.balIdx, diff, reads)
+	a.accessListBuilder = new(bal.AccessListBuilder)
 	return a.accessList
 }
 
 func (a *BlockAccessListTracer) TxEndHook(receipt *types.Receipt, err error) {
-	a.txIdx++
+	diff, reads := a.accessListBuilder.Finalise()
+	a.accessList.Apply(a.balIdx, diff, reads)
+	a.accessListBuilder = new(bal.AccessListBuilder)
+	a.balIdx++
 }
 
 func (a *BlockAccessListTracer) TxStartHook(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {
-	if a.txIdx == 0 {
-		a.txIdx++
+	if a.balIdx == 0 {
+		diff, reads := a.accessListBuilder.Finalise()
+		a.accessList.Apply(0, diff, reads)
+		a.accessListBuilder = new(bal.AccessListBuilder)
+		a.balIdx++
 	}
 }
 
 func (a *BlockAccessListTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	a.callAccessLists = append(a.callAccessLists, bal.NewConstructionBlockAccessList())
+	a.accessListBuilder.EnterScope()
 }
 
 func (a *BlockAccessListTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
-	// TODO: handle self-destructed accounts here...
-
-	parentAccessList := a.callAccessLists[len(a.callAccessLists)-2]
-	scopeAccessList := a.callAccessLists[len(a.callAccessLists)-1]
-	if reverted {
-		parentAccessList.MergeReads(scopeAccessList)
-	} else {
-		parentAccessList.Merge(scopeAccessList)
-	}
-
-	a.callAccessLists = a.callAccessLists[:len(a.callAccessLists)-1]
+	a.accessListBuilder.ExitScope(reverted)
 }
 
 func (a *BlockAccessListTracer) OnCodeChange(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte, reason tracing.CodeChangeReason) {
-	a.callAccessLists[len(a.callAccessLists)-1].CodeChange(addr, uint16(a.txIdx), code)
+	a.accessListBuilder.CodeChange(addr, prevCode, code)
 }
 
 func (a *BlockAccessListTracer) OnBalanceChange(addr common.Address, prevBalance, newBalance *big.Int, _ tracing.BalanceChangeReason) {
 	newU256 := new(uint256.Int).SetBytes(newBalance.Bytes())
 	prevU256 := new(uint256.Int).SetBytes(prevBalance.Bytes())
-	a.callAccessLists[len(a.callAccessLists)-1].BalanceChange(addr, prevU256, newU256)
+	a.accessListBuilder.BalanceChange(addr, prevU256, newU256)
 }
 
 func (a *BlockAccessListTracer) OnNonceChange(addr common.Address, prev uint64, new uint64, reason tracing.NonceChangeReason) {
-	a.callAccessLists[len(a.callAccessLists)-1].NonceChange(addr, a.txIdx, new)
+	a.accessListBuilder.NonceChange(addr, prev, new)
 }
 
 func (a *BlockAccessListTracer) OnColdStorageRead(addr common.Address, key common.Hash) {
-	a.callAccessLists[len(a.callAccessLists)-1].StorageRead(addr, key)
+	a.accessListBuilder.StorageRead(addr, key)
 }
 
 func (a *BlockAccessListTracer) OnColdAccountRead(addr common.Address) {
-	a.callAccessLists[len(a.callAccessLists)-1].AccountRead(addr)
+	a.accessListBuilder.AccountRead(addr)
 }
 
 func (a *BlockAccessListTracer) OnStorageChange(addr common.Address, slot common.Hash, prev common.Hash, new common.Hash) {
-	a.callAccessLists[len(a.callAccessLists)-1].StorageWrite(a.txIdx, addr, slot, new)
+	a.accessListBuilder.StorageWrite(addr, slot, prev, new)
 }

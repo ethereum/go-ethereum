@@ -65,8 +65,12 @@ type AccessListBuilder struct {
 	accessesStack []map[common.Address]*constructionAccountAccess
 }
 
-func (c *AccessListBuilder) StorageRead(key common.Hash) {
-	c.curIdxChanges.StorageRead(key)
+func (c *AccessListBuilder) StorageRead(addr common.Address, key common.Hash) {
+	panic("not implemented")
+}
+
+func (c *AccessListBuilder) AccountRead(addr common.Address) {
+	panic("not implemented")
 }
 
 func (c *AccessListBuilder) StorageWrite(address common.Address, key, prevVal, newVal common.Hash) {
@@ -87,15 +91,15 @@ func (c *AccessListBuilder) StorageWrite(address common.Address, key, prevVal, n
 	acctAccesses.StorageWrite(key, prevVal, newVal)
 }
 
-func (c *AccessListBuilder) BalanceChange(prev, cur *uint256.Int) {
+func (c *AccessListBuilder) BalanceChange(addr common.Address, prev, cur *uint256.Int) {
 	// TODO
 }
 
-func (c *AccessListBuilder) CodeChange(prev, cur []byte) {
+func (c *AccessListBuilder) CodeChange(addr common.Address, prev, cur []byte) {
 	// TODO
 }
 
-func (c *AccessListBuilder) NonceChange(prev, cur uint64) {
+func (c *AccessListBuilder) NonceChange(addr common.Address, prev, cur uint64) {
 	// TODO
 }
 
@@ -351,12 +355,6 @@ func (c *constructionAccountAccess) StorageRead(key common.Hash) {
 }
 
 func (c *constructionAccountAccess) StorageWrite(key, prevVal, newVal common.Hash) {
-	if c.prestate.StorageWrites == nil {
-		c.prestate.StorageWrites = make(map[common.Hash]common.Hash)
-	}
-	if _, ok := c.prestate.StorageWrites[key]; !ok {
-		c.prestate.StorageWrites[key] = prevVal
-	}
 	if c.storageMutations == nil {
 		c.storageMutations = make(map[common.Hash]common.Hash)
 	}
@@ -369,24 +367,15 @@ func (c *constructionAccountAccess) StorageWrite(key, prevVal, newVal common.Has
 	delete(c.storageReads, key)
 }
 
-func (c *constructionAccountAccess) BalanceChange(prev, cur *uint256.Int) {
-	if c.prestate.Balance == nil {
-		c.prestate.Balance = prev
-	}
+func (c *constructionAccountAccess) BalanceChange(cur *uint256.Int) {
 	c.balance = cur
 }
 
-func (c *constructionAccountAccess) CodeChange(prev, cur []byte) {
-	if c.prestate.Code == nil {
-		c.prestate.Code = prev
-	}
+func (c *constructionAccountAccess) CodeChange(cur []byte) {
 	c.code = cur
 }
 
-func (c *constructionAccountAccess) NonceChange(prev, cur uint64) {
-	if c.prestate.Nonce == nil {
-		c.prestate.Nonce = &prev
-	}
+func (c *constructionAccountAccess) NonceChange(cur uint64) {
 	c.nonce = &cur
 }
 
@@ -416,6 +405,7 @@ func NewConstructionBlockAccessList() *ConstructionBlockAccessList {
 	}
 }
 
+/*
 // move this to access list builder
 func (c *ConstructionBlockAccessList) DiffAt(i int) *StateDiff {
 	res := &StateDiff{make(map[common.Address]*AccountState)}
@@ -450,6 +440,7 @@ func (c *ConstructionBlockAccessList) DiffAt(i int) *StateDiff {
 	}
 	return res
 }
+
 
 func (c *ConstructionBlockAccessList) StateAccesses() StateAccesses {
 	res := make(StateAccesses)
@@ -528,6 +519,7 @@ func (c *ConstructionBlockAccessList) Finalise() {
 	c.curIdx++
 }
 
+
 func mergeStorageWrites(cur, next map[common.Hash]map[uint16]common.Hash) map[common.Hash]map[uint16]common.Hash {
 	for slot, _ := range next {
 		if _, ok := cur[slot]; !ok {
@@ -589,6 +581,7 @@ func (c *ConstructionBlockAccessList) Merge(childScope *ConstructionBlockAccessL
 		}
 	}
 }
+*/
 
 // Copy returns a deep copy of the access list.
 func (c *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
