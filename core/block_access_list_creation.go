@@ -26,13 +26,17 @@ type BlockAccessListTracer struct {
 	accessList        *bal.ConstructionBlockAccessList
 	balIdx            uint16
 	accessListBuilder *bal.AccessListBuilder
+
+	idxMutations *bal.StateDiff
+	idxReads     bal.StateAccesses
 }
 
 // NewBlockAccessListTracer returns an BlockAccessListTracer and a set of hooks
 func NewBlockAccessListTracer(startIdx int) (*BlockAccessListTracer, *tracing.Hooks) {
 	balTracer := &BlockAccessListTracer{
-		accessList: bal.NewConstructionBlockAccessList(),
-		balIdx:     uint16(startIdx),
+		accessList:        bal.NewConstructionBlockAccessList(),
+		balIdx:            uint16(startIdx),
+		accessListBuilder: bal.NewAccessListBuilder(),
 	}
 	hooks := &tracing.Hooks{
 		OnTxEnd:           balTracer.TxEndHook,
@@ -57,10 +61,13 @@ func NewBlockAccessListTracer(startIdx int) (*BlockAccessListTracer, *tracing.Ho
 // It is assumed that this is only called after all the block state changes
 // have been executed and the block has been finalized.
 func (a *BlockAccessListTracer) AccessList() *bal.ConstructionBlockAccessList {
-	diff, reads := a.accessListBuilder.FinaliseIdxChanges()
-	a.accessList.Apply(a.balIdx, diff, reads)
-	a.accessListBuilder = new(bal.AccessListBuilder)
 	return a.accessList
+}
+
+func (a *BlockAccessListTracer) Finalise() {
+	a.idxMutations, a.idxReads = a.accessListBuilder.FinaliseIdxChanges()
+	a.accessList.Apply(a.balIdx, a.idxMutations, a.idxReads)
+	a.accessListBuilder = new(bal.AccessListBuilder)
 }
 
 // TODO: I don't like that AccessList and this do slightly different things,
@@ -69,13 +76,13 @@ func (a *BlockAccessListTracer) AccessList() *bal.ConstructionBlockAccessList {
 // ^ idea: add Finalize() which returns the diff/accesses, also accumulating them in the BAL.
 // AccessList just returns the constructed BAL.
 func (a *BlockAccessListTracer) IdxChanges() (*bal.StateDiff, bal.StateAccesses) {
-	return a.accessListBuilder.FinaliseIdxChanges()
+	return a.idxMutations, a.idxReads
 }
 
 func (a *BlockAccessListTracer) TxEndHook(receipt *types.Receipt, err error) {
-	diff, reads := a.accessListBuilder.FinaliseIdxChanges()
-	a.accessList.Apply(a.balIdx, diff, reads)
-	a.accessListBuilder = new(bal.AccessListBuilder)
+	a.idxMutations, a.idxReads = a.accessListBuilder.FinaliseIdxChanges()
+	a.accessList.Apply(a.balIdx, a.idxMutations, a.idxReads)
+	a.accessListBuilder = bal.NewAccessListBuilder()
 	a.balIdx++
 }
 
@@ -83,7 +90,7 @@ func (a *BlockAccessListTracer) TxStartHook(vm *tracing.VMContext, tx *types.Tra
 	if a.balIdx == 0 {
 		diff, reads := a.accessListBuilder.FinaliseIdxChanges()
 		a.accessList.Apply(0, diff, reads)
-		a.accessListBuilder = new(bal.AccessListBuilder)
+		a.accessListBuilder = bal.NewAccessListBuilder()
 		a.balIdx++
 	}
 }

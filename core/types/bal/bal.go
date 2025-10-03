@@ -65,12 +65,21 @@ type AccessListBuilder struct {
 	accessesStack []map[common.Address]*constructionAccountAccess
 }
 
+func NewAccessListBuilder() *AccessListBuilder {
+	return &AccessListBuilder{
+		make(map[common.Address]*AccountState),
+		[]map[common.Address]*constructionAccountAccess{
+			make(map[common.Address]*constructionAccountAccess),
+		},
+	}
+}
+
 func (c *AccessListBuilder) StorageRead(addr common.Address, key common.Hash) {
-	panic("not implemented")
+	//panic("not implemented")
 }
 
 func (c *AccessListBuilder) AccountRead(addr common.Address) {
-	panic("not implemented")
+	//panic("not implemented")
 }
 
 func (c *AccessListBuilder) StorageWrite(address common.Address, key, prevVal, newVal common.Hash) {
@@ -232,6 +241,9 @@ func (c *ConstructionBlockAccessList) Apply(idx uint16, diff *StateDiff, accesse
 				acctChanges.StorageWrites = make(map[common.Hash]map[uint16]common.Hash)
 			}
 			for key, val := range stateDiff.StorageWrites {
+				if _, ok := acctChanges.StorageWrites[key]; !ok {
+					acctChanges.StorageWrites[key] = make(map[uint16]common.Hash)
+				}
 				acctChanges.StorageWrites[key][idx] = val
 			}
 		}

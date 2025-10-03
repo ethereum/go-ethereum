@@ -124,6 +124,7 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateR
 	p.chain.engine.Finalize(p.chain, header, tracingStateDB, block.Body())
 	// invoke FinaliseIdxChanges so that withdrawals are accounted for in the state diff
 	postTxState.Finalise(true)
+	balTracer.Finalise()
 	diff, stateReads := balTracer.IdxChanges()
 	allStateReads.Merge(stateReads)
 
@@ -292,7 +293,6 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 // Process performs EVM execution and state root computation for a block which is known
 // to contain an access list.
 func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (*ProcessResultWithMetrics, error) {
-	fmt.Printf("process block with bal\n%s\n", block.Body().AccessList.String())
 	var (
 		header = block.Header()
 		resCh  = make(chan *ProcessResultWithMetrics)
@@ -331,6 +331,9 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	if p.config.IsPrague(block.Number(), block.Time()) || p.config.IsVerkle(block.Number(), block.Time()) {
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
+
+	// TODO: weird that I have to manually call finalize here
+	balTracer.Finalise()
 
 	diff, stateReads := balTracer.IdxChanges()
 	if err := statedb.BlockAccessList().ValidateStateDiff(0, diff); err != nil {
