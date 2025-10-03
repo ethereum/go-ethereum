@@ -18,6 +18,7 @@ package state
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -90,6 +91,11 @@ type ReaderStats struct {
 	AccountMiss int64
 	StorageHit  int64
 	StorageMiss int64
+}
+
+// String implements fmt.Stringer, returning string format statistics.
+func (s ReaderStats) String() string {
+	return fmt.Sprintf("account (hit: %d, miss: %d), storage (hit: %d, miss: %d)", s.AccountHit, s.AccountMiss, s.StorageHit, s.StorageMiss)
 }
 
 // ReaderWithStats wraps the additional method to retrieve the reader statistics from.
