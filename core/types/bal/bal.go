@@ -74,12 +74,18 @@ func NewAccessListBuilder() *AccessListBuilder {
 	}
 }
 
-func (c *AccessListBuilder) StorageRead(addr common.Address, key common.Hash) {
-	//panic("not implemented")
+func (c *AccessListBuilder) StorageRead(address common.Address, key common.Hash) {
+	if _, ok := c.accessesStack[len(c.accessesStack)-1][address]; !ok {
+		c.accessesStack[len(c.accessesStack)-1][address] = &constructionAccountAccess{}
+	}
+	acctAccesses := c.accessesStack[len(c.accessesStack)-1][address]
+	acctAccesses.StorageRead(key)
 }
 
-func (c *AccessListBuilder) AccountRead(addr common.Address) {
-	//panic("not implemented")
+func (c *AccessListBuilder) AccountRead(address common.Address) {
+	if _, ok := c.accessesStack[len(c.accessesStack)-1][address]; !ok {
+		c.accessesStack[len(c.accessesStack)-1][address] = &constructionAccountAccess{}
+	}
 }
 
 func (c *AccessListBuilder) StorageWrite(address common.Address, key, prevVal, newVal common.Hash) {
@@ -172,6 +178,7 @@ func (a *AccessListBuilder) FinaliseIdxChanges() (*StateDiff, StateAccesses) {
 	stateAccesses := make(StateAccesses)
 
 	for addr, access := range a.accessesStack[0] {
+		var createdInTx bool
 		// remove any mutations from the access list with no net difference vs the tx prestate value
 		if access.nonce != nil && *a.prestates[addr].Nonce == *access.nonce {
 			access.nonce = nil
@@ -180,15 +187,11 @@ func (a *AccessListBuilder) FinaliseIdxChanges() (*StateDiff, StateAccesses) {
 			access.balance = nil
 		}
 		if access.code != nil && bytes.Equal(access.code, a.prestates[addr].Code) {
+			if a.prestates[addr].Code != nil {
+				createdInTx = true
+			}
 			access.code = nil
 		}
-		// TODO: if the account was created/deleted in the same transaction
-		// it could register storage mutations, but they should be included
-		// in the BAL as reads
-
-		// two scenarios where an account can become non-existent:
-		// account was created/deleted in the same transaction
-		// account only had balance set (prefunded), was target of create2 initcode which called SENDALL leaving the account empty
 		if access.storageMutations != nil {
 			for key, val := range access.storageMutations {
 				if a.prestates[addr].StorageWrites[key] == val {
@@ -196,6 +199,26 @@ func (a *AccessListBuilder) FinaliseIdxChanges() (*StateDiff, StateAccesses) {
 					access.storageReads[key] = struct{}{}
 				}
 			}
+		}
+
+		// two scenarios where an account can become non-existent:
+		// account was created/deleted in the same transaction
+		// account only had balance set (prefunded), was target of create2 initcode which called SENDALL leaving the account empty
+		if createdInTx && access.code == nil && access.nonce == nil && access.balance == nil {
+			// account was created and self-destructed in the same transaction.
+			// account should be reported as a read in the BAL.  Any storage
+			// slots that were read/written are reported as reads.
+			for key, _ := range access.storageMutations {
+				if access.storageReads == nil {
+					access.storageReads = make(map[common.Hash]struct{})
+				}
+				access.storageReads[key] = struct{}{}
+			}
+			stateAccesses[addr] = make(map[common.Hash]struct{})
+			if len(access.storageReads) > 0 {
+				stateAccesses[addr] = access.storageReads
+			}
+			continue
 		}
 
 		stateAccesses[addr] = access.storageReads
@@ -256,6 +279,9 @@ func (c *ConstructionBlockAccessList) Apply(idx uint16, diff *StateDiff, accesse
 		}
 
 		for key := range stateAccesses {
+			if acctAccess.StorageReads == nil {
+				acctAccess.StorageReads = make(map[common.Hash]struct{})
+			}
 			acctAccess.StorageReads[key] = struct{}{}
 		}
 	}
@@ -355,6 +381,9 @@ func (c *constructionAccountAccess) Merge(other *constructionAccountAccess) {
 		}
 	}
 	if other.storageReads != nil {
+		if c.storageReads == nil {
+			c.storageReads = make(map[common.Hash]struct{})
+		}
 		for key, val := range other.storageReads {
 			c.storageReads[key] = val
 		}
