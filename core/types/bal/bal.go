@@ -53,15 +53,128 @@ TLDR:
 
 // TODO: maybe rename this to StateDiffBuilder (?)
 type AccessListBuilder struct {
-	accessesStack []map[common.Address]constructionAccountAccess
+	// stores the tx-prestate values of any account/storage values which were modified
+	//
+	// TODO: it's a bit unfortunate that the prestate.StorageWrites is reused here to
+	// represent the prestate values of keys which were written and it would be nice to
+	// somehow make it clear that the field can contain both the mutated values or the
+	// prestate depending on the context (or find a cleaner solution entirely, instead
+	// of reusing the field here)
+	prestates map[common.Address]*AccountState
+
+	accessesStack []map[common.Address]*constructionAccountAccess
+}
+
+func (c *AccessListBuilder) StorageRead(key common.Hash) {
+	c.curIdxChanges.StorageRead(key)
+}
+
+func (c *AccessListBuilder) StorageWrite(address common.Address, key, prevVal, newVal common.Hash) {
+	if _, ok := c.prestates[address]; !ok {
+		c.prestates[address] = &AccountState{}
+	}
+	if c.prestates[address].StorageWrites == nil {
+		c.prestates[address].StorageWrites = make(map[common.Hash]common.Hash)
+	}
+	if _, ok := c.prestates[address].StorageWrites[key]; !ok {
+		c.prestates[address].StorageWrites[key] = prevVal
+	}
+
+	if _, ok := c.accessesStack[len(c.accessesStack)-1][address]; !ok {
+		c.accessesStack[len(c.accessesStack)-1][address] = &constructionAccountAccess{}
+	}
+	acctAccesses := c.accessesStack[len(c.accessesStack)-1][address]
+	acctAccesses.StorageWrite(key, prevVal, newVal)
+}
+
+func (c *AccessListBuilder) BalanceChange(prev, cur *uint256.Int) {
+	// TODO
+}
+
+func (c *AccessListBuilder) CodeChange(prev, cur []byte) {
+	// TODO
+}
+
+func (c *AccessListBuilder) NonceChange(prev, cur uint64) {
+	// TODO
+}
+
+func (c *AccessListBuilder) EnterScope() {
+	c.accessesStack = append(c.accessesStack, make(map[common.Address]*constructionAccountAccess))
+}
+
+func (c *AccessListBuilder) ExitScope(reverted bool) {
+	// all storage writes in the child scope are converted into reads
+	// if there were no storage writes, the account is reported in the BAL as a read (if it wasn't already in the BAL and/or mutated previously)
+	childAccessList := c.accessesStack[len(c.accessesStack)-1]
+	parentAccessList := c.accessesStack[len(c.accessesStack)-2]
+
+	for addr, childAccess := range childAccessList {
+		if _, ok := parentAccessList[addr]; ok {
+		} else {
+			parentAccessList[addr] = &constructionAccountAccess{}
+		}
+		if reverted {
+			parentAccessList[addr].MergeReads(childAccess)
+		} else {
+			parentAccessList[addr].Merge(childAccess)
+		}
+	}
+
+	c.accessesStack = c.accessesStack[:len(c.accessesStack)-1]
 }
 
 func (a *AccessListBuilder) Finalise() (*StateDiff, StateAccesses) {
+	diff := &StateDiff{make(map[common.Address]*AccountState)}
+	stateAccesses := make(StateAccesses)
 
+	for addr, access := range a.accessesStack[0] {
+		// remove any mutations from the access list with no net difference vs the tx prestate value
+		if access.nonce != nil && *a.prestates[addr].Nonce == *access.nonce {
+			access.nonce = nil
+		}
+		if access.balance != nil && a.prestates[addr].Balance.Eq(access.balance) {
+			access.balance = nil
+		}
+		if access.code != nil && bytes.Equal(access.code, a.prestates[addr].Code) {
+			access.code = nil
+		}
+		// TODO: if the account was created/deleted in the same transaction
+		// it could register storage mutations, but they should be included
+		// in the BAL as reads
+
+		// two scenarios where an account can become non-existent:
+		// account was created/deleted in the same transaction
+		// account only had balance set (prefunded), was target of create2 initcode which called SENDALL leaving the account empty
+		if access.storageMutations != nil {
+			for key, val := range access.storageMutations {
+				if a.prestates[addr].StorageWrites[key] == val {
+					delete(access.storageMutations, key)
+					access.storageReads[key] = struct{}{}
+				}
+			}
+		}
+
+		stateAccesses[addr] = access.storageReads
+		diff.Mutations[addr] = &AccountState{
+			Balance:       access.balance,
+			Nonce:         access.nonce,
+			Code:          access.code,
+			StorageWrites: access.storageMutations,
+		}
+	}
+
+	return diff, stateAccesses
 }
 
 func (c *ConstructionBlockAccessList) Apply(idx uint16, diff *StateDiff, accesses StateAccesses) {
-
+	for addr, stateDiff := range diff.Mutations {
+		acctChanges, ok := c.Accounts[addr]
+		if !ok {
+			acctChanges = &ConstructionAccountAccesses{}
+			c.Accounts[addr] = acctChanges
+		}
+	}
 }
 
 // TODO: the BalReader Validation method should accept the computed values as
@@ -80,7 +193,8 @@ type CodeChange struct {
 	Code  []byte `json:"code,omitempty"`
 }
 
-var IgnoredBALAddresses map[common.Address]struct{} = map[common.Address]struct{}{
+// TODO: make use of this
+var IgnoredBALAddresses = map[common.Address]struct{}{
 	params.SystemAddress:                {},
 	common.BytesToAddress([]byte{0x01}): {},
 	common.BytesToAddress([]byte{0x02}): {},
@@ -126,84 +240,69 @@ type ConstructionAccountAccesses struct {
 	NonceChanges map[uint16]uint64
 
 	CodeChanges map[uint16]CodeChange
-
-	curIdx uint16
-	// changes are first accumulated in here, and "flushed" to the maps above
-	// via invoking Finalise.
-	curIdxChanges constructionAccountAccess
-}
-
-func (c *ConstructionAccountAccesses) StorageRead(key common.Hash) {
-	c.curIdxChanges.StorageRead(key)
-}
-
-func (c *ConstructionAccountAccesses) StorageWrite(key, prevVal, newVal common.Hash) {
-	c.curIdxChanges.StorageWrite(key, prevVal, newVal)
-}
-
-func (c *ConstructionAccountAccesses) BalanceChange(prev, cur *uint256.Int) {
-	c.curIdxChanges.BalanceChange(prev, cur)
-}
-
-func (c *ConstructionAccountAccesses) CodeChange(prev, cur []byte) {
-	c.curIdxChanges.CodeChange(prev, cur)
-}
-
-func (c *ConstructionAccountAccesses) NonceChange(prev, cur uint64) {
-	c.curIdxChanges.NonceChange(prev, cur)
-}
-
-// Called at tx boundaries
-func (c *ConstructionAccountAccesses) Finalise() {
-	panic("see TODO below")
-	// TODO: Finalise should determine if the account became non-existent.  two scenarios for deletion:
-	// 1) account was pre-funded (but no preexisting code), some initcode ran at it and executed a SENDALL clearing the account.
-	// 2) account was created and deleted in the same transaction:
-	//		* every account field started empty and ended empty, with the exception of possible net storage changes.
-	//		* all keys that were storage writes should become storage reads
-	c.curIdxChanges.Finalise()
-	if c.curIdxChanges.code != nil {
-		c.CodeChanges[c.curIdx] = CodeChange{c.curIdx, c.curIdxChanges.code}
-	}
-	if c.curIdxChanges.nonce != nil {
-		c.NonceChanges[c.curIdx] = *c.curIdxChanges.nonce
-	}
-	if c.curIdxChanges.balance != nil {
-		c.BalanceChanges[c.curIdx] = c.curIdxChanges.balance
-	}
-	if c.curIdxChanges.storageMutations != nil {
-		for key, val := range c.curIdxChanges.storageMutations {
-			if _, ok := c.StorageWrites[key]; !ok {
-				c.StorageWrites[key] = make(map[uint16]common.Hash)
-			}
-
-			c.StorageWrites[key][c.curIdx] = val
-		}
-	}
-	if c.curIdxChanges.storageReads != nil {
-		for key := range c.StorageReads {
-			c.StorageReads[key] = struct{}{}
-		}
-	}
-	c.curIdxChanges = constructionAccountAccess{}
 }
 
 type constructionAccountAccess struct {
-	// stores the tx-prestate values of any account/storage values which were modified
-	//
-	// TODO: it's a bit unfortunate that the prestate.StorageWrites is reused here to
-	// represent the prestate values of keys which were written and it would be nice to
-	// somehow make it clear that the field can contain both the mutated values or the
-	// prestate depending on the context (or find a cleaner solution entirely, instead
-	// of reusing the field here)
-	prestate *AccountState
-
 	code    []byte
 	nonce   *uint64
 	balance *uint256.Int
 
 	storageMutations map[common.Hash]common.Hash
 	storageReads     map[common.Hash]struct{}
+}
+
+func (c *constructionAccountAccess) Merge(other *constructionAccountAccess) {
+	if other.code != nil {
+		c.code = other.code
+	}
+	if other.nonce != nil {
+		c.nonce = other.nonce
+	}
+	if other.balance != nil {
+		c.balance = other.balance
+	}
+	if other.storageMutations != nil {
+		if c.storageMutations == nil {
+			c.storageMutations = make(map[common.Hash]common.Hash)
+		}
+		for key, val := range other.storageMutations {
+			c.storageMutations[key] = val
+			delete(c.storageReads, key)
+		}
+	}
+	if other.storageReads != nil {
+		for key, val := range other.storageReads {
+			c.storageReads[key] = val
+		}
+	}
+}
+
+// MergeReads merges accesses from a reverted execution from:
+// * any reads/writes from the reverted frame which weren't mutated
+// in the current frame, are merged into the current frame as reads.
+func (c *constructionAccountAccess) MergeReads(other *constructionAccountAccess) {
+	if other.storageMutations != nil {
+		if c.storageReads == nil {
+			c.storageReads = make(map[common.Hash]struct{})
+		}
+		for key, _ := range other.storageMutations {
+			if _, ok := c.storageMutations[key]; ok {
+				continue
+			}
+			c.storageReads[key] = struct{}{}
+		}
+	}
+	if other.storageReads != nil {
+		if c.storageReads == nil {
+			c.storageReads = make(map[common.Hash]struct{})
+		}
+		for key := range other.storageReads {
+			if _, ok := c.storageMutations[key]; ok {
+				continue
+			}
+			c.storageReads[key] = struct{}{}
+		}
+	}
 }
 
 func (c *constructionAccountAccess) StorageRead(key common.Hash) {
@@ -253,37 +352,14 @@ func (c *constructionAccountAccess) NonceChange(prev, cur uint64) {
 	c.nonce = &cur
 }
 
-// Finalise clears any fields which had no net mutations compared to their
-// prestate values.
-func (c *constructionAccountAccess) Finalise() {
-	if c.nonce != nil && *c.prestate.Nonce == *c.nonce {
-		c.nonce = nil
-	}
-	if c.balance != nil && c.prestate.Balance.Eq(c.balance) {
-		c.balance = nil
-	}
-	if c.code != nil && bytes.Equal(c.code, c.prestate.Code) {
-		c.code = nil
-	}
-	if c.storageMutations != nil {
-		for key, val := range c.storageMutations {
-			if c.prestate.StorageWrites[key] == val {
-				delete(c.storageMutations, key)
-				c.storageReads[key] = struct{}{}
-			}
-		}
-	}
-}
-
 // NewConstructionAccountAccesses initializes the account access object.
-func NewConstructionAccountAccesses(idx uint16) *ConstructionAccountAccesses {
+func NewConstructionAccountAccesses() *ConstructionAccountAccesses {
 	return &ConstructionAccountAccesses{
 		StorageWrites:  make(map[common.Hash]map[uint16]common.Hash),
 		StorageReads:   make(map[common.Hash]struct{}),
 		BalanceChanges: make(map[uint16]*uint256.Int),
 		NonceChanges:   make(map[uint16]uint64),
 		CodeChanges:    make(map[uint16]CodeChange),
-		curIdx:         idx,
 	}
 }
 
@@ -302,23 +378,7 @@ func NewConstructionBlockAccessList() *ConstructionBlockAccessList {
 	}
 }
 
-// EnterCallScope should be invoked when the EVM execution enters a new call fram
-func (c *ConstructionBlockAccessList) EnterCallScope() {
-}
-
-// ExitCallScope is invoked when the EVM execution exits a call frame.
-// If the call frame reverted, all state changes that occurred within that
-// scope (or any nested calls) are discarded.  Storage reads performed in the
-// nested scope(s) are retained and any storage writes that occurred are denoted
-// as storage reads in the BAL.
-func (c *ConstructionBlockAccessList) ExitCallScope(reverted bool) {
-	if reverted {
-
-	} else {
-
-	}
-}
-
+// move this to access list builder
 func (c *ConstructionBlockAccessList) DiffAt(i int) *StateDiff {
 	res := &StateDiff{make(map[common.Address]*AccountState)}
 
