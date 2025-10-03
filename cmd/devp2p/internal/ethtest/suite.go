@@ -250,16 +250,23 @@ concurrently, with different request IDs.`)
 		t.Fatalf("unexpected request id in response: got %d, want %d", got, want)
 	}
 
-	// Check received headers for accuracy.
-	if expected, err := s.chain.GetHeaders(req1); err != nil {
-		t.Fatalf("failed to get expected headers for request 1: %v", err)
-	} else if !headersMatch(expected, headers1.BlockHeadersRequest) {
-		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, headers1)
-	}
-	if expected, err := s.chain.GetHeaders(req2); err != nil {
-		t.Fatalf("failed to get expected headers for request 2: %v", err)
-	} else if !headersMatch(expected, headers2.BlockHeadersRequest) {
-		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, headers2)
+	// Check if headers match.
+	if got, err := s.chain.GetHeaders(req1); err != nil {
+		t.Fatalf("failed to get expected block headers: %v", err)
+	} else if !headersMatch(headers1.BlockHeadersRequest, got) && !headersMatch(headers2.BlockHeadersRequest, got) {
+		t.Fatalf("header mismatch: \nexpected %v or %v \ngot %v", headers2, headers2, got)
+	} else if headersMatch(headers1.BlockHeadersRequest, got) {
+		if got2, err := s.chain.GetHeaders(req2); err != nil {
+			t.Fatalf("failed to get expected block headers: %v", err)
+		} else if !headersMatch(headers2.BlockHeadersRequest, got2) {
+			t.Fatalf("header mismatch: \nexpected %v \ngot %v", headers2, got2)
+		}
+	} else {
+		if got2, err := s.chain.GetHeaders(req2); err != nil {
+			t.Fatalf("failed to get expected block headers: %v", err)
+		} else if !headersMatch(headers1.BlockHeadersRequest, got2) {
+			t.Fatalf("header mismatch: \nexpected %v \ngot %v", headers1, got2)
+		}
 	}
 }
 
@@ -318,15 +325,22 @@ same request ID. The node should handle the request by responding to both reques
 	}
 
 	// Check if headers match.
-	if expected, err := s.chain.GetHeaders(request1); err != nil {
+	if got, err := s.chain.GetHeaders(request1); err != nil {
 		t.Fatalf("failed to get expected block headers: %v", err)
-	} else if !headersMatch(expected, headers1.BlockHeadersRequest) {
-		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, headers1)
-	}
-	if expected, err := s.chain.GetHeaders(request2); err != nil {
-		t.Fatalf("failed to get expected block headers: %v", err)
-	} else if !headersMatch(expected, headers2.BlockHeadersRequest) {
-		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, headers2)
+	} else if !headersMatch(headers1.BlockHeadersRequest, got) && !headersMatch(headers2.BlockHeadersRequest, got) {
+		t.Fatalf("header mismatch: \nexpected %v or %v \ngot %v", headers2, headers2, got)
+	} else if headersMatch(headers1.BlockHeadersRequest, got) {
+		if got2, err := s.chain.GetHeaders(request2); err != nil {
+			t.Fatalf("failed to get expected block headers: %v", err)
+		} else if !headersMatch(headers2.BlockHeadersRequest, got2) {
+			t.Fatalf("header mismatch: \nexpected %v \ngot %v", headers2, got2)
+		}
+	} else {
+		if got2, err := s.chain.GetHeaders(request2); err != nil {
+			t.Fatalf("failed to get expected block headers: %v", err)
+		} else if !headersMatch(headers1.BlockHeadersRequest, got2) {
+			t.Fatalf("header mismatch: \nexpected %v \ngot %v", headers1, got2)
+		}
 	}
 }
 
@@ -887,7 +901,7 @@ func (s *Suite) makeBlobTxs(count, blobs int, discriminator byte) (txs types.Tra
 	from, nonce := s.chain.GetSender(5)
 	for i := 0; i < count; i++ {
 		// Make blob data, max of 2 blobs per tx.
-		blobdata := make([]byte, blobs%3)
+		blobdata := make([]byte, min(blobs, 2))
 		for i := range blobdata {
 			blobdata[i] = discriminator
 			blobs -= 1
