@@ -188,6 +188,8 @@ func (r *BALReader) ValidateStateReads(allReads bal.StateAccesses) error {
 		}
 	}
 
+	// TODO: where do we validate that the storage read/write sets are distinct?
+
 	return nil
 }
 

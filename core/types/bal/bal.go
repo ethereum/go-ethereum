@@ -19,11 +19,10 @@ package bal
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/params"
-	"maps"
-
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+	"maps"
 )
 
 /*
@@ -278,6 +277,15 @@ func (c *ConstructionBlockAccessList) Apply(idx uint16, diff *StateDiff, accesse
 					acctChanges.StorageWrites[key] = make(map[uint16]common.Hash)
 				}
 				acctChanges.StorageWrites[key][idx] = val
+
+				// TODO: investigate why commenting out the check here, and the corresponding
+				// check under accesses causes GeneralStateTests blockchain tests to fail.
+				// They should only contain one tx per test.
+				//
+				// key could have been read in a previous tx, delete it from the read set here
+				if _, ok := acctChanges.StorageReads[key]; ok {
+					delete(acctChanges.StorageReads, key)
+				}
 			}
 		}
 	}
@@ -289,6 +297,11 @@ func (c *ConstructionBlockAccessList) Apply(idx uint16, diff *StateDiff, accesse
 		}
 
 		for key := range stateAccesses {
+			// if key was written in a previous tx, but only read in this one:
+			// don't include it in the storage reads set
+			if _, ok := acctAccess.StorageWrites[key]; ok {
+				continue
+			}
 			if acctAccess.StorageReads == nil {
 				acctAccess.StorageReads = make(map[common.Hash]struct{})
 			}
@@ -432,6 +445,11 @@ func (c *constructionAccountAccess) StorageRead(key common.Hash) {
 	if c.storageReads == nil {
 		c.storageReads = make(map[common.Hash]struct{})
 	}
+	if _, ok := c.storageMutations[key]; ok {
+		panic("FUCK")
+	}
+	// TODO: if a key is written in tx A, and later on read in tx B, it shoulnd't be in the read set.
+	// ^ same for account.
 	c.storageReads[key] = struct{}{}
 }
 
@@ -485,184 +503,6 @@ func NewConstructionBlockAccessList() *ConstructionBlockAccessList {
 		0,
 	}
 }
-
-/*
-// move this to access list builder
-func (c *ConstructionBlockAccessList) DiffAt(i int) *StateDiff {
-	res := &StateDiff{make(map[common.Address]*AccountState)}
-
-	idx := uint16(i)
-
-	for addr, account := range c.Accounts {
-		accountState := &AccountState{}
-		if balance, ok := account.BalanceChanges[idx]; ok {
-			accountState.Balance = balance
-		}
-		if nonce, ok := account.NonceChanges[idx]; ok {
-			accountState.Nonce = &nonce
-		}
-		if code, ok := account.CodeChanges[idx]; ok {
-			accountState.Code = code.Code
-		}
-
-		storageWrites := make(map[common.Hash]common.Hash)
-		for slot, writes := range account.StorageWrites {
-			if val, ok := writes[idx]; ok {
-				storageWrites[slot] = val
-			}
-		}
-		if len(storageWrites) > 0 {
-			accountState.StorageWrites = storageWrites
-		}
-
-		if !accountState.Empty() {
-			res.Mutations[addr] = accountState
-		}
-	}
-	return res
-}
-
-
-func (c *ConstructionBlockAccessList) StateAccesses() StateAccesses {
-	res := make(StateAccesses)
-	for addr, acct := range c.Accounts {
-		if len(acct.StorageReads) > 0 {
-			res[addr] = acct.StorageReads
-			continue
-		}
-		if len(acct.NonceChanges) == 0 && len(acct.BalanceChanges) == 0 && len(acct.StorageWrites) == 0 && len(acct.CodeChanges) == 0 {
-			res[addr] = make(map[common.Hash]struct{})
-		}
-	}
-	return res
-}
-
-// AccountRead records the address of an account that has been read during execution.
-func (c *ConstructionBlockAccessList) AccountRead(addr common.Address) {
-	if _, ok := c.Accounts[addr]; !ok {
-		c.Accounts[addr] = NewConstructionAccountAccesses(c.curIdx)
-	}
-}
-
-// StorageRead records a storage key read during execution.
-func (c *ConstructionBlockAccessList) StorageRead(address common.Address, key common.Hash) {
-	if _, ok := c.Accounts[address]; !ok {
-		c.Accounts[address] = NewConstructionAccountAccesses(c.curIdx)
-	}
-	if _, ok := c.Accounts[address].StorageWrites[key]; ok {
-		return
-	}
-	c.Accounts[address].StorageRead(key)
-}
-
-// StorageWrite records the post-transaction value of a mutated storage slot.
-// The storage slot is removed from the list of read slots.
-func (c *ConstructionBlockAccessList) StorageWrite(address common.Address, key, prev, cur common.Hash) {
-	if _, ok := c.Accounts[address]; !ok {
-		c.Accounts[address] = NewConstructionAccountAccesses(c.curIdx)
-	}
-	c.Accounts[address].StorageWrite(key, prev, cur)
-}
-
-// CodeChange records the code of a newly-created contract.
-func (c *ConstructionBlockAccessList) CodeChange(address common.Address, txIndex uint16, code []byte) {
-	if _, ok := c.Accounts[address]; !ok {
-		c.Accounts[address] = NewConstructionAccountAccesses(c.curIdx)
-	}
-	c.Accounts[address].CodeChanges[txIndex] = CodeChange{
-		TxIdx: txIndex,
-		Code:  bytes.Clone(code),
-	}
-}
-
-// NonceChange records tx post-state nonce of any contract-like accounts whose
-// nonce was incremented.
-func (c *ConstructionBlockAccessList) NonceChange(address common.Address, pre uint64, cur uint64) {
-	if _, ok := c.Accounts[address]; !ok {
-		c.Accounts[address] = NewConstructionAccountAccesses(c.curIdx)
-	}
-	c.Accounts[address].NonceChange(pre, cur)
-}
-
-// BalanceChange records the post-transaction balance of an account whose
-// balance changed.
-func (c *ConstructionBlockAccessList) BalanceChange(address common.Address, old, new *uint256.Int) {
-	if _, ok := c.Accounts[address]; !ok {
-		c.Accounts[address] = NewConstructionAccountAccesses(c.curIdx)
-	}
-	c.Accounts[address].BalanceChange(old, new)
-}
-
-func (c *ConstructionBlockAccessList) FinaliseIdxChanges() {
-	for _, account := range c.Accounts {
-		account.FinaliseIdxChanges()
-	}
-	c.curIdx++
-}
-
-
-func mergeStorageWrites(cur, next map[common.Hash]map[uint16]common.Hash) map[common.Hash]map[uint16]common.Hash {
-	for slot, _ := range next {
-		if _, ok := cur[slot]; !ok {
-			cur[slot] = next[slot]
-			continue
-		}
-
-		for idx, val := range next[slot] {
-			cur[slot][idx] = val
-		}
-	}
-
-	return cur
-}
-
-// MergeReads combines the account/storage reads from a completed EVM execution scope
-// into the parent calling scope's access list.
-// It is intended to be called when the child execution scope terminates in a revert
-// which means that only the state reads performed by that execution should be reported
-// in the BAL.
-func (c *ConstructionBlockAccessList) MergeReads(childScope *ConstructionBlockAccessList) {
-	for addr, accountAccess := range childScope.Accounts {
-		if _, ok := c.Accounts[addr]; !ok {
-			c.Accounts[addr] = NewConstructionAccountAccesses(c.curIdx)
-			c.Accounts[addr].StorageReads = accountAccess.StorageReads
-			continue
-		}
-
-		for storageRead, _ := range childScope.Accounts[addr].StorageReads {
-			c.Accounts[addr].StorageReads[storageRead] = struct{}{}
-		}
-	}
-}
-
-// Merge combines the state changes from a nested execution with the parent context
-// It is meant to be invoked after an EVM call completes (without reverting).
-func (c *ConstructionBlockAccessList) Merge(childScope *ConstructionBlockAccessList) {
-	for addr, accountAccess := range childScope.Accounts {
-		if _, ok := c.Accounts[addr]; !ok {
-			c.Accounts[addr] = accountAccess
-			continue
-		}
-
-		// copy the entries from 'next' into 'c' overwriting 'c' entries with
-		// 'next entries when the bal index matches.
-		c.Accounts[addr].StorageWrites = mergeStorageWrites(c.Accounts[addr].StorageWrites, childScope.Accounts[addr].StorageWrites)
-
-		for storageRead, _ := range childScope.Accounts[addr].StorageReads {
-			c.Accounts[addr].StorageReads[storageRead] = struct{}{}
-		}
-		for idx, nonce := range childScope.Accounts[addr].NonceChanges {
-			c.Accounts[addr].NonceChanges[idx] = nonce
-		}
-		for idx, code := range childScope.Accounts[addr].CodeChanges {
-			c.Accounts[addr].CodeChanges[idx] = code
-		}
-		for idx, balance := range childScope.Accounts[addr].BalanceChanges {
-			c.Accounts[addr].BalanceChanges[idx] = balance
-		}
-	}
-}
-*/
 
 // Copy returns a deep copy of the access list.
 func (c *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
