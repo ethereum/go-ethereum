@@ -199,6 +199,9 @@ func (a *AccessListBuilder) FinaliseIdxChanges() (*StateDiff, StateAccesses) {
 					access.storageReads[key] = struct{}{}
 				}
 			}
+			if len(access.storageMutations) == 0 {
+				access.storageMutations = nil
+			}
 		}
 
 		// two scenarios where an account can become non-existent:
@@ -218,6 +221,13 @@ func (a *AccessListBuilder) FinaliseIdxChanges() (*StateDiff, StateAccesses) {
 			if len(access.storageReads) > 0 {
 				stateAccesses[addr] = access.storageReads
 			}
+			continue
+		} else if !createdInTx && access.code == nil && access.nonce == nil && access.balance == nil && len(access.storageMutations) == 0 {
+			// TODO: refactor this path
+			// path description: if the net mutations of an account are zero, it ends up as a read.
+
+			// TODO: if I remove this branch, why doesn't the affected tests silently pass?
+			stateAccesses[addr] = access.storageReads
 			continue
 		}
 
