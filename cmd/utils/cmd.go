@@ -537,37 +537,6 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 	return nil
 }
 
-// ExportPreimages exports all known hash preimages into the specified file,
-// truncating any data already present in the file.
-// It's a part of the deprecated functionality, should be removed in the future.
-func ExportPreimages(db ethdb.Database, fn string) error {
-	log.Info("Exporting preimages", "file", fn)
-
-	// Open the file handle and potentially wrap with a gzip stream
-	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
-	if err != nil {
-		return err
-	}
-	defer fh.Close()
-
-	var writer io.Writer = fh
-	if strings.HasSuffix(fn, ".gz") {
-		writer = gzip.NewWriter(writer)
-		defer writer.(*gzip.Writer).Close()
-	}
-	// Iterate over the preimages and export them
-	it := db.NewIterator([]byte("secure-key-"), nil)
-	defer it.Release()
-
-	for it.Next() {
-		if err := rlp.Encode(writer, it.Value()); err != nil {
-			return err
-		}
-	}
-	log.Info("Exported preimages", "file", fn)
-	return nil
-}
-
 // StateIterator is a temporary structure for traversing state in order. It serves
 // as an aggregator for both path scheme and hash scheme implementations and should
 // be removed once the hash scheme is fully deprecated.
