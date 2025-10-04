@@ -241,33 +241,7 @@ func (s *hookedStateDB) SelfDestruct(address common.Address) uint256.Int {
 }
 
 func (s *hookedStateDB) SelfDestruct6780(address common.Address) (uint256.Int, bool) {
-	var prevCode []byte
-	var prevCodeHash common.Hash
-
-	if s.hooks.OnCodeChange != nil {
-		prevCodeHash = s.inner.GetCodeHash(address)
-		prevCode = s.inner.GetCode(address)
-	}
-
-	prev, changed := s.inner.SelfDestruct6780(address)
-
-	/*
-		// TODO: figure out if this can be removed (it's redundant with the tracing invocations in core/vm/instructions.go already)
-		// it's also incorrect if the target/source are the same account
-			if s.hooks.OnBalanceChange != nil && !prev.IsZero() {
-				s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
-			}
-	*/
-
-	if changed && len(prevCode) > 0 {
-		if s.hooks.OnCodeChangeV2 != nil {
-			s.hooks.OnCodeChangeV2(address, prevCodeHash, prevCode, types.EmptyCodeHash, nil, tracing.CodeChangeSelfDestruct)
-		} else if s.hooks.OnCodeChange != nil {
-			s.hooks.OnCodeChange(address, prevCodeHash, prevCode, types.EmptyCodeHash, nil)
-		}
-	}
-
-	return prev, changed
+	return s.inner.SelfDestruct6780(address)
 }
 
 func (s *hookedStateDB) AddLog(log *types.Log) {
@@ -280,13 +254,26 @@ func (s *hookedStateDB) AddLog(log *types.Log) {
 
 func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
 	defer s.inner.Finalise(deleteEmptyObjects)
-	if s.hooks.OnBalanceChange != nil {
+	if s.hooks.OnBalanceChange != nil || s.hooks.OnNonceChangeV2 != nil || s.hooks.OnCodeChangeV2 != nil || s.hooks.OnCodeChange != nil {
 		for addr := range s.inner.journal.dirties {
 			obj := s.inner.stateObjects[addr]
 			if obj != nil && obj.selfDestructed {
 				// If ether was sent to account post-selfdestruct it is burnt.
-				if bal := obj.Balance(); bal.Sign() != 0 {
-					s.hooks.OnBalanceChange(addr, bal.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestructBurn)
+				if s.hooks.OnBalanceChange != nil {
+					if bal := obj.Balance(); bal.Sign() != 0 {
+						s.hooks.OnBalanceChange(addr, bal.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestructBurn)
+					}
+				}
+				if s.hooks.OnNonceChangeV2 != nil {
+					prevNonce := obj.Nonce()
+					s.hooks.OnNonceChangeV2(addr, prevNonce, 0, tracing.NonceChangeSelfdestruct)
+				}
+				prevCodeHash := s.inner.GetCodeHash(addr)
+				prevCode := s.inner.GetCode(addr)
+				if s.hooks.OnCodeChangeV2 != nil {
+					s.hooks.OnCodeChangeV2(addr, prevCodeHash, prevCode, types.EmptyCodeHash, nil, tracing.CodeChangeSelfDestruct)
+				} else if s.hooks.OnCodeChange != nil {
+					s.hooks.OnCodeChange(addr, prevCodeHash, prevCode, types.EmptyCodeHash, nil)
 				}
 			}
 		}

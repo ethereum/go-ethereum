@@ -187,7 +187,7 @@ func (a *AccessListBuilder) FinaliseIdxChanges() (*StateDiff, StateAccesses) {
 			access.balance = nil
 		}
 		if access.code != nil && bytes.Equal(access.code, a.prestates[addr].Code) {
-			if a.prestates[addr].Code != nil {
+			if a.prestates[addr].Code == nil {
 				createdInTx = true
 			}
 			access.code = nil
@@ -207,7 +207,7 @@ func (a *AccessListBuilder) FinaliseIdxChanges() (*StateDiff, StateAccesses) {
 		// two scenarios where an account can become non-existent:
 		// account was created/deleted in the same transaction
 		// account only had balance set (prefunded), was target of create2 initcode which called SENDALL leaving the account empty
-		if createdInTx && access.code == nil && access.nonce == nil && access.balance == nil {
+		if createdInTx && access.code == nil {
 			// account was created and self-destructed in the same transaction.
 			// account should be reported as a read in the BAL.  Any storage
 			// slots that were read/written are reported as reads.
