@@ -226,7 +226,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, createAnd
 		for i := uint64(1); i <= chain.CurrentBlock().Number.Uint64(); i++ {
 			block := chain.GetBlockByNumber(i)
 			if block.Body().AccessList == nil {
-				return fmt.Errorf("block missing BAL")
+				return fmt.Errorf("block %d missing BAL", block.NumberU64())
 			}
 			blocksWithBAL = append(blocksWithBAL, block)
 		}

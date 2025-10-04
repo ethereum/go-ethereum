@@ -2156,6 +2156,10 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 		}
 		ptime = time.Since(pstart)
 
+		// TODO: remove. gross. shouldn't have to manually call Finalise
+		// to pull in post-tx-execution state changes to the BAL here.
+		balTracer.Finalise()
+
 		// unset the BAL-creation tracer (dirty)
 		bc.cfg.VmConfig.Tracer = nil
 
