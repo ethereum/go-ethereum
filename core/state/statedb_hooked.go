@@ -251,9 +251,13 @@ func (s *hookedStateDB) SelfDestruct6780(address common.Address) (uint256.Int, b
 
 	prev, changed := s.inner.SelfDestruct6780(address)
 
-	if s.hooks.OnBalanceChange != nil && !prev.IsZero() {
-		s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
-	}
+	/*
+		// TODO: figure out if this can be removed (it's redundant with the tracing invocations in core/vm/instructions.go already)
+		// it's also incorrect if the target/source are the same account
+			if s.hooks.OnBalanceChange != nil && !prev.IsZero() {
+				s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
+			}
+	*/
 
 	if changed && len(prevCode) > 0 {
 		if s.hooks.OnCodeChangeV2 != nil {
