@@ -1059,9 +1059,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		fmt.Println("state trie")
 		for it.Next(true) {
 			if it.Leaf() {
-				 fmt.Printf("%x: %x\n", it.Path(), it.LeafBlob())
+				fmt.Printf("%x: %x\n", it.Path(), it.LeafBlob())
 			} else {
-				 fmt.Printf("%x: %x\n", it.Path(), it.Hash())
+				fmt.Printf("%x: %x\n", it.Path(), it.Hash())
 			}
 		}
 	*/

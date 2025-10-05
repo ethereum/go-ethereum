@@ -354,7 +354,6 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	)
 	_, size, _ := s.Kind()
 	if err := s.Decode(&eb); err != nil {
-		fmt.Println("error here")
 		return err
 	}
 	b.header, b.uncles, b.transactions, b.withdrawals, b.accessList = eb.Header, eb.Uncles, eb.Txs, eb.Withdrawals, eb.AccessList

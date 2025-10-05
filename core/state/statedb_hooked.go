@@ -257,6 +257,11 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
 	if s.hooks.OnSelfDestructChange != nil || s.hooks.OnBalanceChange != nil || s.hooks.OnNonceChangeV2 != nil || s.hooks.OnCodeChangeV2 != nil || s.hooks.OnCodeChange != nil {
 		for addr := range s.inner.journal.dirties {
 			obj := s.inner.stateObjects[addr]
+			if obj != nil && (obj.selfDestructed || obj.empty()) {
+				if s.hooks.OnSelfDestructChange != nil {
+					s.hooks.OnSelfDestructChange(obj.address)
+				}
+			}
 			if obj != nil && obj.selfDestructed {
 				if s.hooks.OnSelfDestructChange != nil {
 					s.hooks.OnSelfDestructChange(obj.address)

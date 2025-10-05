@@ -120,6 +120,13 @@ func (c *AccessListBuilder) BalanceChange(address common.Address, prev, cur *uin
 }
 
 func (c *AccessListBuilder) CodeChange(address common.Address, prev, cur []byte) {
+	// auth unset and selfdestruct pass code change as 'nil'
+	// however, internally in the access list accumulation of state changes,
+	// a nil field on an account means that it was never modified in the block.
+	if cur == nil {
+		cur = []byte{}
+	}
+
 	if _, ok := c.prestates[address]; !ok {
 		c.prestates[address] = &AccountState{}
 	}
@@ -130,11 +137,31 @@ func (c *AccessListBuilder) CodeChange(address common.Address, prev, cur []byte)
 		c.accessesStack[len(c.accessesStack)-1][address] = &constructionAccountAccess{}
 	}
 	acctAccesses := c.accessesStack[len(c.accessesStack)-1][address]
+
 	acctAccesses.CodeChange(cur)
 }
 
+// TODO: rename this hook to "deleted" (CREATE2 + initcode + CALL empties account case)
 func (c *AccessListBuilder) SelfDestruct(address common.Address) {
-	delete(c.accessesStack[len(c.accessesStack)-1], address)
+	// convert all the account storage writes to reads, preserve the existing reads
+	if _, ok := c.accessesStack[len(c.accessesStack)-1][address]; !ok {
+		// TODO: figure out exactly which situations cause this case
+		// it has to do with an account becoming empty and deleted
+		// but why was it created as a stateObject without also having
+		// any access/modification events on it?
+		return
+	}
+	access := c.accessesStack[len(c.accessesStack)-1][address]
+	for key, _ := range access.storageMutations {
+		if access.storageReads == nil {
+			access.storageReads = make(map[common.Hash]struct{})
+		}
+		access.storageReads[key] = struct{}{}
+	}
+	access.storageMutations = nil
+	access.nonce = nil
+	access.balance = nil
+	access.code = nil
 }
 
 func (c *AccessListBuilder) NonceChange(address common.Address, prev, cur uint64) {
@@ -181,7 +208,6 @@ func (a *AccessListBuilder) FinaliseIdxChanges() (*StateDiff, StateAccesses) {
 	stateAccesses := make(StateAccesses)
 
 	for addr, access := range a.accessesStack[0] {
-		var createdInTx bool
 		// remove any mutations from the access list with no net difference vs the tx prestate value
 		if access.nonce != nil && *a.prestates[addr].Nonce == *access.nonce {
 			access.nonce = nil
@@ -189,10 +215,8 @@ func (a *AccessListBuilder) FinaliseIdxChanges() (*StateDiff, StateAccesses) {
 		if access.balance != nil && a.prestates[addr].Balance.Eq(access.balance) {
 			access.balance = nil
 		}
+
 		if access.code != nil && bytes.Equal(access.code, a.prestates[addr].Code) {
-			if a.prestates[addr].Code == nil {
-				createdInTx = true
-			}
 			access.code = nil
 		}
 		if access.storageMutations != nil {
@@ -207,36 +231,13 @@ func (a *AccessListBuilder) FinaliseIdxChanges() (*StateDiff, StateAccesses) {
 			}
 		}
 
-		// two cases of account being removed:
-		// * initcode runs at address, calls SENDALL (account could be prefunded, but not pre-existing as a contract)
-		//		- if the account makes storage mutations, we have no way to distinguish it from a regular contract that didn't selfdestruct
-		//
-		// * contract created in same tx calls SENDALL
-
-		// two scenarios where an account can become non-existent:
-		// account was created/deleted in the same transaction
-		// account only had balance set (prefunded), was target of create2 initcode which called SENDALL leaving the account empty
-		if createdInTx && access.code == nil {
-			// account was created and self-destructed in the same transaction.
-			// account should be reported as a read in the BAL.  Any storage
-			// slots that were read/written are reported as reads.
-			for key, _ := range access.storageMutations {
-				if access.storageReads == nil {
-					access.storageReads = make(map[common.Hash]struct{})
-				}
-				access.storageReads[key] = struct{}{}
-			}
+		// if the account has no net mutations against the tx prestate, only include
+		// it in the state read set
+		if access.code == nil && access.nonce == nil && access.balance == nil && len(access.storageMutations) == 0 {
 			stateAccesses[addr] = make(map[common.Hash]struct{})
-			if len(access.storageReads) > 0 {
+			if access.storageReads != nil {
 				stateAccesses[addr] = access.storageReads
 			}
-			continue
-		} else if !createdInTx && access.code == nil && access.nonce == nil && access.balance == nil && len(access.storageMutations) == 0 {
-			// TODO: refactor this path
-			// path description: if the net mutations of an account are zero, it ends up as a read.
-
-			// TODO: if I remove this branch, why doesn't the affected tests silently pass?
-			stateAccesses[addr] = access.storageReads
 			continue
 		}
 
