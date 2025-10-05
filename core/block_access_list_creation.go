@@ -27,6 +27,7 @@ type BlockAccessListTracer struct {
 	balIdx            uint16
 	accessListBuilder *bal.AccessListBuilder
 
+	// mutations and state reads from currently-executing bal index
 	idxMutations *bal.StateDiff
 	idxReads     bal.StateAccesses
 }
@@ -39,8 +40,9 @@ func NewBlockAccessListTracer(startIdx int) (*BlockAccessListTracer, *tracing.Ho
 		accessListBuilder: bal.NewAccessListBuilder(),
 	}
 	hooks := &tracing.Hooks{
-		OnTxEnd:              balTracer.TxEndHook,
+		OnTxExecutionEnd:     balTracer.OnTxExecutionEnd,
 		OnTxStart:            balTracer.TxStartHook,
+		OnTxEnd:              balTracer.TxEndHook,
 		OnEnter:              balTracer.OnEnter,
 		OnExit:               balTracer.OnExit,
 		OnCodeChangeV2:       balTracer.OnCodeChange,
@@ -110,6 +112,21 @@ func (a *BlockAccessListTracer) OnCodeChange(addr common.Address, prevCodeHash c
 
 func (a *BlockAccessListTracer) OnSelfDestruct(addr common.Address) {
 	a.accessListBuilder.SelfDestruct(addr)
+}
+
+func (a *BlockAccessListTracer) OnTxExecutionEnd() {
+	// this is a terrible hack:  in the case where the block has zero txs, we need
+	// a way to signal that the post-tx block operations are being executed (set the
+	// bal idx to a correct value).
+	//
+	// if the block had transactions, the end of the last tx would have bumped the balIdx
+	// to the correct value.
+	if a.balIdx == 0 {
+		diff, reads := a.accessListBuilder.FinaliseIdxChanges()
+		a.accessList.Apply(a.balIdx, diff, reads)
+		a.accessListBuilder = bal.NewAccessListBuilder()
+		a.balIdx++
+	}
 }
 
 func (a *BlockAccessListTracer) OnBalanceChange(addr common.Address, prevBalance, newBalance *big.Int, _ tracing.BalanceChangeReason) {

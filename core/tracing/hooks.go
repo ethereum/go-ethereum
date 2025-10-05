@@ -217,6 +217,7 @@ type Hooks struct {
 	OnSystemCallStart   OnSystemCallStartHook
 	OnSystemCallStartV2 OnSystemCallStartHookV2
 	OnSystemCallEnd     OnSystemCallEndHook
+	OnTxExecutionEnd    func()
 
 	// State events
 	OnBalanceChange      BalanceChangeHook

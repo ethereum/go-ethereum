@@ -105,6 +105,12 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs = append(allLogs, receipt.Logs...)
 	}
 
+	if hooks := cfg.Tracer; hooks != nil {
+		hooks.OnTxExecutionEnd()
+	}
+	// TODO: how do we signal to the BAL tracer that we are computing post-tx state changes here?
+	// if there are no txs in the block, then it will just record these state diffs at idx 0
+
 	// Read requests if Prague is enabled.
 	var requests [][]byte
 	if p.config.IsPrague(block.Number(), block.Time()) {
