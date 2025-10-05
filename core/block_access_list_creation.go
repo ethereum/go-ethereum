@@ -107,7 +107,11 @@ func (a *BlockAccessListTracer) OnExit(depth int, output []byte, gasUsed uint64,
 }
 
 func (a *BlockAccessListTracer) OnCodeChange(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte, reason tracing.CodeChangeReason) {
-	a.accessListBuilder.CodeChange(addr, prevCode, code)
+	// TODO: if we don't have this equality check, some tests fail.  should be investigated.
+	// probably the tracer shouldn't invoke code change if the code didn't actually change tho.
+	if prevCodeHash != codeHash {
+		a.accessListBuilder.CodeChange(addr, prevCode, code)
+	}
 }
 
 func (a *BlockAccessListTracer) OnSelfDestruct(addr common.Address) {
