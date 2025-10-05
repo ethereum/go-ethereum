@@ -2156,9 +2156,13 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 		}
 		ptime = time.Since(pstart)
 
-		// TODO: remove. gross. shouldn't have to manually call Finalise
-		// to pull in post-tx-execution state changes to the BAL here.
-		balTracer.Finalise()
+		// TODO: if I remove this check before executing balTracer.Finalise, the following test fails:
+		// ExecutionSpecBlocktests/shanghai/eip3855_push0/push0/push0_storage_overwrite.json
+		if constructBALForTesting {
+			// TODO: remove. gross. shouldn't have to manually call Finalise
+			// to pull in post-tx-execution state changes to the BAL here.
+			balTracer.Finalise()
+		}
 
 		// unset the BAL-creation tracer (dirty)
 		bc.cfg.VmConfig.Tracer = nil
