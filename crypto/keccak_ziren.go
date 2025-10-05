@@ -15,38 +15,40 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 //go:build ziren
-// +build ziren
 
 package crypto
 
 import (
+	"hash"
+
 	"github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime"
 	"github.com/ethereum/go-ethereum/common"
-	originalcrypto "github.com/ethereum/go-ethereum/crypto"
+	"golang.org/x/crypto/sha3"
 )
 
-// Re-export everything from original crypto package except the parts we're overriding
-var (
-	S256                     = originalcrypto.S256
-	PubkeyToAddress         = originalcrypto.PubkeyToAddress
-	Ecrecover               = originalcrypto.Ecrecover
-	SigToPub                = originalcrypto.SigToPub
-	Sign                    = originalcrypto.Sign
-	VerifySignature         = originalcrypto.VerifySignature
-	DecompressPubkey        = originalcrypto.DecompressPubkey
-	CompressPubkey          = originalcrypto.CompressPubkey
-	HexToECDSA              = originalcrypto.HexToECDSA
-	LoadECDSA               = originalcrypto.LoadECDSA
-	SaveECDSA               = originalcrypto.SaveECDSA
-	GenerateKey             = originalcrypto.GenerateKey
-	ValidateSignatureValues = originalcrypto.ValidateSignatureValues
-	Keccak512               = originalcrypto.Keccak512
-)
+// KeccakState wraps sha3.state. In addition to the usual hash methods, it also supports
+// Read to get a variable amount of data from the hash state. Read is faster than Sum
+// because it doesn't copy the internal state, but also modifies the internal state.
+type KeccakState interface {
+	hash.Hash
+	Read([]byte) (int, error)
+}
 
-// Re-export types
-type (
-	KeccakState = originalcrypto.KeccakState
-)
+// NewKeccakState creates a new KeccakState
+// For now, we fallback to the original implementation for the stateful interface.
+// TODO: Implement a stateful wrapper around zkvm_runtime.Keccak256 if needed.
+func NewKeccakState() KeccakState {
+	return sha3.NewLegacyKeccak256().(KeccakState)
+}
+
+// HashData hashes the provided data using the KeccakState and returns a 32 byte hash
+// For now, we fallback to the original implementation for the stateful interface.
+func HashData(kh KeccakState, data []byte) (h common.Hash) {
+	kh.Reset()
+	kh.Write(data)
+	kh.Read(h[:])
+	return h
+}
 
 // Keccak256 calculates and returns the Keccak256 hash using the Ziren zkvm_runtime implementation.
 func Keccak256(data ...[]byte) []byte {
@@ -82,9 +84,8 @@ func Keccak256Hash(data ...[]byte) (h common.Hash) {
 	return h
 }
 
-// NewKeccakState returns a new keccak state hasher.
-// For now, we fallback to the original implementation for the stateful interface.
-// TODO: Implement a stateful wrapper around zkvm_runtime.Keccak256 if needed.
-func NewKeccakState() KeccakState {
-	return originalcrypto.NewKeccakState()
+// Keccak512 calculates and returns the Keccak512 hash of the input data.
+func Keccak512(data ...[]byte) []byte {
+	panic("Keccak512 not implemented in ziren mode")
 }
+
