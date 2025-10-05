@@ -158,8 +158,10 @@ func (c *AccessListBuilder) SelfDestruct(address common.Address) {
 		}
 		access.storageReads[key] = struct{}{}
 	}
+
 	access.storageMutations = nil
 	access.nonce = nil
+	// TODO: should this be set to zero?  the semantics are that nil means unmodified since the prestate of the block.
 	access.balance = nil
 	access.code = nil
 }
