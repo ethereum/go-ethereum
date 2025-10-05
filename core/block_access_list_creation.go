@@ -39,16 +39,17 @@ func NewBlockAccessListTracer(startIdx int) (*BlockAccessListTracer, *tracing.Ho
 		accessListBuilder: bal.NewAccessListBuilder(),
 	}
 	hooks := &tracing.Hooks{
-		OnTxEnd:           balTracer.TxEndHook,
-		OnTxStart:         balTracer.TxStartHook,
-		OnEnter:           balTracer.OnEnter,
-		OnExit:            balTracer.OnExit,
-		OnCodeChangeV2:    balTracer.OnCodeChange,
-		OnBalanceChange:   balTracer.OnBalanceChange,
-		OnNonceChangeV2:   balTracer.OnNonceChange,
-		OnStorageChange:   balTracer.OnStorageChange,
-		OnColdAccountRead: balTracer.OnColdAccountRead,
-		OnColdStorageRead: balTracer.OnColdStorageRead,
+		OnTxEnd:              balTracer.TxEndHook,
+		OnTxStart:            balTracer.TxStartHook,
+		OnEnter:              balTracer.OnEnter,
+		OnExit:               balTracer.OnExit,
+		OnCodeChangeV2:       balTracer.OnCodeChange,
+		OnBalanceChange:      balTracer.OnBalanceChange,
+		OnNonceChangeV2:      balTracer.OnNonceChange,
+		OnStorageChange:      balTracer.OnStorageChange,
+		OnColdAccountRead:    balTracer.OnColdAccountRead,
+		OnColdStorageRead:    balTracer.OnColdStorageRead,
+		OnSelfDestructChange: balTracer.OnSelfDestruct,
 	}
 	wrappedHooks, err := tracing.WrapWithJournal(hooks)
 	if err != nil {
@@ -105,6 +106,10 @@ func (a *BlockAccessListTracer) OnExit(depth int, output []byte, gasUsed uint64,
 
 func (a *BlockAccessListTracer) OnCodeChange(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte, reason tracing.CodeChangeReason) {
 	a.accessListBuilder.CodeChange(addr, prevCode, code)
+}
+
+func (a *BlockAccessListTracer) OnSelfDestruct(addr common.Address) {
+	a.accessListBuilder.SelfDestruct(addr)
 }
 
 func (a *BlockAccessListTracer) OnBalanceChange(addr common.Address, prevBalance, newBalance *big.Int, _ tracing.BalanceChangeReason) {

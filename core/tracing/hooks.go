@@ -189,6 +189,8 @@ type (
 	// ColdAccountReadHook is called before an previously-unread account is read.
 	ColdAccountReadHook = func(address common.Address)
 
+	SelfDestructHook = func(address common.Address)
+
 	// LogHook is called when a log is emitted.
 	LogHook = func(log *types.Log)
 
@@ -217,13 +219,14 @@ type Hooks struct {
 	OnSystemCallEnd     OnSystemCallEndHook
 
 	// State events
-	OnBalanceChange BalanceChangeHook
-	OnNonceChange   NonceChangeHook
-	OnNonceChangeV2 NonceChangeHookV2
-	OnCodeChange    CodeChangeHook
-	OnCodeChangeV2  CodeChangeHookV2
-	OnStorageChange StorageChangeHook
-	OnLog           LogHook
+	OnBalanceChange      BalanceChangeHook
+	OnNonceChange        NonceChangeHook
+	OnNonceChangeV2      NonceChangeHookV2
+	OnCodeChange         CodeChangeHook
+	OnCodeChangeV2       CodeChangeHookV2
+	OnStorageChange      StorageChangeHook
+	OnLog                LogHook
+	OnSelfDestructChange SelfDestructHook
 	//State read events
 	OnColdStorageRead ColdStorageReadHook
 	OnColdAccountRead ColdAccountReadHook

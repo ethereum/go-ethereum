@@ -133,6 +133,10 @@ func (c *AccessListBuilder) CodeChange(address common.Address, prev, cur []byte)
 	acctAccesses.CodeChange(cur)
 }
 
+func (c *AccessListBuilder) SelfDestruct(address common.Address) {
+	delete(c.accessesStack[len(c.accessesStack)-1], address)
+}
+
 func (c *AccessListBuilder) NonceChange(address common.Address, prev, cur uint64) {
 	if _, ok := c.prestates[address]; !ok {
 		c.prestates[address] = &AccountState{}
@@ -202,6 +206,12 @@ func (a *AccessListBuilder) FinaliseIdxChanges() (*StateDiff, StateAccesses) {
 				access.storageMutations = nil
 			}
 		}
+
+		// two cases of account being removed:
+		// * initcode runs at address, calls SENDALL (account could be prefunded, but not pre-existing as a contract)
+		//		- if the account makes storage mutations, we have no way to distinguish it from a regular contract that didn't selfdestruct
+		//
+		// * contract created in same tx calls SENDALL
 
 		// two scenarios where an account can become non-existent:
 		// account was created/deleted in the same transaction

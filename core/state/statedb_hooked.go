@@ -254,10 +254,13 @@ func (s *hookedStateDB) AddLog(log *types.Log) {
 
 func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
 	defer s.inner.Finalise(deleteEmptyObjects)
-	if s.hooks.OnBalanceChange != nil || s.hooks.OnNonceChangeV2 != nil || s.hooks.OnCodeChangeV2 != nil || s.hooks.OnCodeChange != nil {
+	if s.hooks.OnSelfDestructChange != nil || s.hooks.OnBalanceChange != nil || s.hooks.OnNonceChangeV2 != nil || s.hooks.OnCodeChangeV2 != nil || s.hooks.OnCodeChange != nil {
 		for addr := range s.inner.journal.dirties {
 			obj := s.inner.stateObjects[addr]
 			if obj != nil && obj.selfDestructed {
+				if s.hooks.OnSelfDestructChange != nil {
+					s.hooks.OnSelfDestructChange(obj.address)
+				}
 				// If ether was sent to account post-selfdestruct it is burnt.
 				if s.hooks.OnBalanceChange != nil {
 					if bal := obj.Balance(); bal.Sign() != 0 {
