@@ -81,42 +81,6 @@ func blockTestCmd(ctx *cli.Context) error {
 	return nil
 }
 
-// blocktestEndMarker represents the final status of a blocktest execution.
-// It is written as the last line of trace output in JSONL format (single-line JSON).
-type blocktestEndMarker struct {
-	TestEnd blocktestEndDetails `json:"testEnd"`
-}
-
-type blocktestEndDetails struct {
-	Name  string `json:"name"`
-	Pass  bool   `json:"pass"`
-	Fork  string `json:"fork,omitempty"`
-	Root  string `json:"root,omitempty"`
-	Error string `json:"error,omitempty"`
-	V     int    `json:"v"` // Version: 1
-}
-
-// writeEndMarker writes the blocktest end marker to stderr in JSONL format.
-// This marker indicates the final outcome of the test as a single-line JSON object.
-func writeEndMarker(result *testResult, fork string, root *common.Hash) {
-	details := blocktestEndDetails{
-		Name: result.Name,
-		Pass: result.Pass,
-		Fork: fork,
-		V:    1,
-	}
-	if !result.Pass && result.Error != "" {
-		details.Error = result.Error
-	}
-	if root != nil {
-		details.Root = root.Hex()
-	}
-	marker := blocktestEndMarker{TestEnd: details}
-	if data, err := json.Marshal(marker); err == nil {
-		fmt.Fprintf(os.Stderr, "%s\n", data)
-	}
-}
-
 func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 	src, err := os.ReadFile(fname)
 	if err != nil {
@@ -163,13 +127,14 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 		}); err != nil {
 			result.Pass, result.Error = false, err.Error()
 		}
-		results = append(results, *result)
 
-		// Write end marker when tracing is enabled
+		// Write result between transactions when tracing is enabled
 		if tracer != nil {
-			fork := test.Network()
-			writeEndMarker(result, fork, finalRoot)
+			result.Fork = test.Network()
+			result.Root = finalRoot
+			report(ctx, []testResult{*result})
 		}
+		results = append(results, *result)
 	}
 	return results, nil
 }
