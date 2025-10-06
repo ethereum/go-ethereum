@@ -25,8 +25,10 @@ import (
 	"regexp"
 	"slices"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
 )
@@ -79,6 +81,42 @@ func blockTestCmd(ctx *cli.Context) error {
 	return nil
 }
 
+// blocktestEndMarker represents the final status of a blocktest execution.
+// It is written as the last line of trace output in JSONL format (single-line JSON).
+type blocktestEndMarker struct {
+	TestEnd blocktestEndDetails `json:"testEnd"`
+}
+
+type blocktestEndDetails struct {
+	Name  string `json:"name"`
+	Pass  bool   `json:"pass"`
+	Fork  string `json:"fork,omitempty"`
+	Root  string `json:"root,omitempty"`
+	Error string `json:"error,omitempty"`
+	V     int    `json:"v"` // Version: 1
+}
+
+// writeEndMarker writes the blocktest end marker to stderr in JSONL format.
+// This marker indicates the final outcome of the test as a single-line JSON object.
+func writeEndMarker(result *testResult, fork string, root *common.Hash) {
+	details := blocktestEndDetails{
+		Name: result.Name,
+		Pass: result.Pass,
+		Fork: fork,
+		V:    1,
+	}
+	if !result.Pass && result.Error != "" {
+		details.Error = result.Error
+	}
+	if root != nil {
+		details.Root = root.Hex()
+	}
+	marker := blocktestEndMarker{TestEnd: details}
+	if data, err := json.Marshal(marker); err == nil {
+		fmt.Fprintf(os.Stderr, "%s\n", data)
+	}
+}
+
 func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 	src, err := os.ReadFile(fname)
 	if err != nil {
@@ -94,6 +132,11 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 	}
 	tracer := tracerFromFlags(ctx)
 
+	// Suppress INFO logs when tracing to avoid polluting stderr
+	if tracer != nil {
+		log.SetDefault(log.NewLogger(log.DiscardHandler()))
+	}
+
 	// Pull out keys to sort and ensure tests are run in order.
 	keys := slices.Sorted(maps.Keys(tests))
 
@@ -103,17 +146,30 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 		if !re.MatchString(name) {
 			continue
 		}
+		test := tests[name]
 		result := &testResult{Name: name, Pass: true}
-		if err := tests[name].Run(false, rawdb.PathScheme, ctx.Bool(WitnessCrossCheckFlag.Name), tracer, func(res error, chain *core.BlockChain) {
+		var finalRoot *common.Hash
+		if err := test.Run(false, rawdb.PathScheme, ctx.Bool(WitnessCrossCheckFlag.Name), tracer, func(res error, chain *core.BlockChain) {
 			if ctx.Bool(DumpFlag.Name) {
 				if s, _ := chain.State(); s != nil {
 					result.State = dump(s)
 				}
 			}
+			// Capture final state root for end marker
+			if chain != nil {
+				root := chain.CurrentBlock().Root
+				finalRoot = &root
+			}
 		}); err != nil {
 			result.Pass, result.Error = false, err.Error()
 		}
 		results = append(results, *result)
+
+		// Write end marker when tracing is enabled
+		if tracer != nil {
+			fork := test.Network()
+			writeEndMarker(result, fork, finalRoot)
+		}
 	}
 	return results, nil
 }
