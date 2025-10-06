@@ -290,7 +290,7 @@ func doTest(cmdline []string) {
 		short         = flag.Bool("short", false, "Pass the 'short'-flag to go test")
 		cachedir      = flag.String("cachedir", "./build/cache", "directory for caching downloads")
 		skipspectests = flag.Bool("skip-spectests", false, "Skip downloading execution-spec-tests fixtures")
-		threads       = flag.Int("threads", 1, "Number of CPU threads to use for testing")
+		threads       = flag.Int("p", 1, "Number of CPU threads to use for testing")
 	)
 	flag.CommandLine.Parse(cmdline)
 
