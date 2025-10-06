@@ -201,13 +201,17 @@ func (q *queue) promoteExecutables(accounts []common.Address, gasLimit uint64, c
 	return promotable, dropped
 }
 
-func (q *queue) truncate() []common.Hash {
+// truncate drops the oldest transactions from the queue until the total
+// number is below the configured limit.
+// Returns the hashes of all dropped transactions, and the addresses of
+// accounts that became empty due to the truncation.
+func (q *queue) truncate() ([]common.Hash, []common.Address) {
 	queued := uint64(0)
 	for _, list := range q.queued {
 		queued += uint64(list.Len())
 	}
 	if queued <= q.config.GlobalQueue {
-		return nil
+		return nil, nil
 	}
 
 	// Sort all accounts with queued transactions by heartbeat
@@ -217,6 +221,7 @@ func (q *queue) truncate() []common.Hash {
 	}
 	sort.Sort(sort.Reverse(addresses))
 	removed := make([]common.Hash, 0)
+	removedAddresses := make([]common.Address, 0)
 
 	// Drop transactions until the total is below the limit
 	for drop := queued - q.config.GlobalQueue; drop > 0 && len(addresses) > 0; {
@@ -233,6 +238,7 @@ func (q *queue) truncate() []common.Hash {
 			}
 			drop -= size
 			queuedRateLimitMeter.Mark(int64(size))
+			removedAddresses = append(removedAddresses, addr.address)
 			continue
 		}
 		// Otherwise drop only last few transactions
@@ -244,7 +250,9 @@ func (q *queue) truncate() []common.Hash {
 			queuedRateLimitMeter.Mark(1)
 		}
 	}
-	return removed
+
+	// no need to clear empty accounts, removeTx already does that
+	return removed, removedAddresses
 }
 
 // addressByHeartbeat is an account address tagged with its last activity timestamp.

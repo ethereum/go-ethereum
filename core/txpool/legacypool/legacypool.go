@@ -1512,10 +1512,18 @@ func (pool *LegacyPool) truncatePending() {
 
 // truncateQueue drops the oldest transactions in the queue if the pool is above the global queue limit.
 func (pool *LegacyPool) truncateQueue() {
-	removed := pool.queue.truncate()
+	removed, removedAddresses := pool.queue.truncate()
 
+	// remove all removable transactions
 	for _, hash := range removed {
-		pool.removeTx(hash, true, false)
+		pool.all.Remove(hash)
+	}
+
+	for _, addr := range removedAddresses {
+		_, hasPending := pool.pending[addr]
+		if !hasPending {
+			pool.reserver.Release(addr)
+		}
 	}
 }
 
