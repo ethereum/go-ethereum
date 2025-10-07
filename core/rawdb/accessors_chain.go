@@ -674,7 +674,7 @@ type receiptLogs struct {
 // DecodeRLP implements rlp.Decoder.
 func (r *receiptLogs) DecodeRLP(s *rlp.Stream) error {
 	var rs types.ReceiptForStorage
-	if err := s.Decode(&rs); err != nil {
+	if err := rs.DecodeRLP(s); err != nil {
 		return err
 	}
 	r.Logs = rs.Logs
