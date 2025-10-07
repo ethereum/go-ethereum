@@ -190,6 +190,11 @@ var (
 		Usage:    "Exits after block synchronisation completes",
 		Category: flags.EthCategory,
 	}
+	GenesisFlag = &cli.StringFlag{
+		Name:     "genesis",
+		Usage:    "Load genesis block and configuration from file at this path.",
+		Category: flags.EthCategory,
+	}
 
 	// Dump command options.
 	IterativeOutputFlag = &cli.BoolFlag{
@@ -1593,7 +1598,7 @@ func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags, don't allow network id override on preset networks
-	flags.CheckExclusive(ctx, MainnetFlag, DeveloperFlag, SepoliaFlag, HoleskyFlag, HoodiFlag, NetworkIdFlag)
+	flags.CheckExclusive(ctx, MainnetFlag, DeveloperFlag, SepoliaFlag, HoleskyFlag, HoodiFlag, NetworkIdFlag, GenesisFlag)
 	flags.CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 
 	// Set configurations from CLI flags
@@ -1873,6 +1878,18 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		if !ctx.IsSet(MinerGasPriceFlag.Name) {
 			cfg.Miner.GasPrice = big.NewInt(1)
 		}
+	case ctx.String(GenesisFlag.Name) != "":
+		f, err := os.Open(ctx.String(GenesisFlag.Name))
+		if err != nil {
+			Fatalf("Failed to read genesis file: %v", err)
+		}
+		defer f.Close()
+
+		genesis := new(core.Genesis)
+		if err := json.NewDecoder(f).Decode(genesis); err != nil {
+			Fatalf("Invalid genesis file: %v", err)
+		}
+		cfg.Genesis = genesis
 	default:
 		if cfg.NetworkId == 1 {
 			SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
