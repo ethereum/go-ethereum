@@ -965,6 +965,7 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, sync bool) []error {
 	pool.mu.Lock()
 	newErrs, dirtyAddrs := pool.addTxsLocked(news)
 	pool.mu.Unlock()
+	validTxMeter.Mark(int64(len(news)))
 
 	var nilSlot = 0
 	for _, err := range newErrs {
@@ -994,7 +995,6 @@ func (pool *LegacyPool) addTxsLocked(txs []*types.Transaction) ([]error, *accoun
 			dirty.addTx(tx)
 		}
 	}
-	validTxMeter.Mark(int64(len(dirty.accounts)))
 	return errs, dirty
 }
 
