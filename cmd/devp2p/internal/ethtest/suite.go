@@ -196,6 +196,7 @@ to check if the node disconnects after receiving multiple invalid requests.`)
 func (s *Suite) TestSimultaneousRequests(t *utesting.T) {
 	t.Log(`This test requests blocks headers from the node, performing two requests
 concurrently, with different request IDs.`)
+
 	conn, err := s.dialAndPeer(nil)
 	if err != nil {
 		t.Fatalf("peering failed: %v", err)
@@ -235,44 +236,47 @@ concurrently, with different request IDs.`)
 	}
 
 	// Wait for responses.
-	headers1 := new(eth.BlockHeadersPacket)
-	if err := conn.ReadMsg(ethProto, eth.BlockHeadersMsg, &headers1); err != nil {
-		t.Fatalf("error reading block headers msg: %v", err)
-	}
-	if got, want := headers1.RequestId, req1.RequestId; got != want {
-		t.Fatalf("unexpected request id in response: got %d, want %d", got, want)
-	}
-	headers2 := new(eth.BlockHeadersPacket)
-	if err := conn.ReadMsg(ethProto, eth.BlockHeadersMsg, &headers2); err != nil {
-		t.Fatalf("error reading block headers msg: %v", err)
-	}
-	if got, want := headers2.RequestId, req2.RequestId; got != want {
-		t.Fatalf("unexpected request id in response: got %d, want %d", got, want)
+	// Note they can arrive in either order.
+	var resp1 *eth.BlockHeadersPacket
+	var resp2 *eth.BlockHeadersPacket
+	for range 2 {
+		r := new(eth.BlockHeadersPacket)
+		if err := conn.ReadMsg(ethProto, eth.BlockHeadersMsg, &r); err != nil {
+			t.Fatalf("error reading BlockHeaders msg: %v", err)
+		}
+		switch r.RequestId {
+		case req1.RequestId:
+			if resp1 != nil {
+				t.Fatalf("duplicate response for request with ID %v", req1.RequestId)
+			}
+			resp1 = r
+		case req2.RequestId:
+			if resp2 != nil {
+				t.Fatalf("duplicate response for request with ID %v", req2.RequestId)
+			}
+			resp2 = r
+		default:
+			t.Fatalf("unknown request ID in response: %v", r.RequestId)
+		}
 	}
 
 	// Check if headers match.
-	if got, err := s.chain.GetHeaders(req1); err != nil {
-		t.Fatalf("failed to get expected block headers: %v", err)
-	} else if !headersMatch(headers1.BlockHeadersRequest, got) && !headersMatch(headers2.BlockHeadersRequest, got) {
-		t.Fatalf("header mismatch: \nexpected %v or %v \ngot %v", headers2, headers2, got)
-	} else if headersMatch(headers1.BlockHeadersRequest, got) {
-		if got2, err := s.chain.GetHeaders(req2); err != nil {
-			t.Fatalf("failed to get expected block headers: %v", err)
-		} else if !headersMatch(headers2.BlockHeadersRequest, got2) {
-			t.Fatalf("header mismatch: \nexpected %v \ngot %v", headers2, got2)
-		}
-	} else {
-		if got2, err := s.chain.GetHeaders(req2); err != nil {
-			t.Fatalf("failed to get expected block headers: %v", err)
-		} else if !headersMatch(headers1.BlockHeadersRequest, got2) {
-			t.Fatalf("header mismatch: \nexpected %v \ngot %v", headers1, got2)
-		}
+	if expected, err := s.chain.GetHeaders(req1); err != nil {
+		t.Fatalf("failed to get expected headers for request 1: %v", err)
+	} else if !headersMatch(expected, resp1.BlockHeadersRequest) {
+		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, resp1)
+	}
+	if expected, err := s.chain.GetHeaders(req2); err != nil {
+		t.Fatalf("failed to get expected headers for request 2: %v", err)
+	} else if !headersMatch(expected, resp2.BlockHeadersRequest) {
+		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, resp2)
 	}
 }
 
 func (s *Suite) TestSameRequestID(t *utesting.T) {
 	t.Log(`This test requests block headers, performing two concurrent requests with the
 same request ID. The node should handle the request by responding to both requests.`)
+
 	conn, err := s.dialAndPeer(nil)
 	if err != nil {
 		t.Fatalf("peering failed: %v", err)
@@ -296,7 +300,7 @@ same request ID. The node should handle the request by responding to both reques
 			Origin: eth.HashOrNumber{
 				Number: 33,
 			},
-			Amount: 2,
+			Amount: 3,
 		},
 	}
 
@@ -308,39 +312,41 @@ same request ID. The node should handle the request by responding to both reques
 		t.Fatalf("failed to write to connection: %v", err)
 	}
 
-	// Wait for the responses.
-	headers1 := new(eth.BlockHeadersPacket)
-	if err := conn.ReadMsg(ethProto, eth.BlockHeadersMsg, &headers1); err != nil {
-		t.Fatalf("error reading from connection: %v", err)
-	}
-	if got, want := headers1.RequestId, request1.RequestId; got != want {
-		t.Fatalf("unexpected request id: got %d, want %d", got, want)
-	}
-	headers2 := new(eth.BlockHeadersPacket)
-	if err := conn.ReadMsg(ethProto, eth.BlockHeadersMsg, &headers2); err != nil {
-		t.Fatalf("error reading from connection: %v", err)
-	}
-	if got, want := headers2.RequestId, request2.RequestId; got != want {
-		t.Fatalf("unexpected request id: got %d, want %d", got, want)
+	// Wait for the responses. They can arrive in either order, and we can't tell them
+	// apart by their request ID, so use the number of headers instead.
+	var resp1 *eth.BlockHeadersPacket
+	var resp2 *eth.BlockHeadersPacket
+	for range 2 {
+		r := new(eth.BlockHeadersPacket)
+		if err := conn.ReadMsg(ethProto, eth.BlockHeadersMsg, &r); err != nil {
+			t.Fatalf("error reading BlockHeaders msg: %v", err)
+		}
+		switch uint64(len(r.BlockHeadersRequest)) {
+		case request1.GetBlockHeadersRequest.Amount:
+			if resp1 != nil {
+				t.Fatalf("duplicate response with %d headers", request1.GetBlockHeadersRequest.Amount)
+			}
+			resp1 = r
+		case request2.GetBlockHeadersRequest.Amount:
+			if resp2 != nil {
+				t.Fatalf("duplicate response with %d headers", request2.GetBlockHeadersRequest.Amount)
+			}
+			resp2 = r
+		default:
+			t.Fatalf("invalid number of items in response: %d", len(r.BlockHeadersRequest))
+		}
 	}
 
 	// Check if headers match.
-	if got, err := s.chain.GetHeaders(request1); err != nil {
-		t.Fatalf("failed to get expected block headers: %v", err)
-	} else if !headersMatch(headers1.BlockHeadersRequest, got) && !headersMatch(headers2.BlockHeadersRequest, got) {
-		t.Fatalf("header mismatch: \nexpected %v or %v \ngot %v", headers2, headers2, got)
-	} else if headersMatch(headers1.BlockHeadersRequest, got) {
-		if got2, err := s.chain.GetHeaders(request2); err != nil {
-			t.Fatalf("failed to get expected block headers: %v", err)
-		} else if !headersMatch(headers2.BlockHeadersRequest, got2) {
-			t.Fatalf("header mismatch: \nexpected %v \ngot %v", headers2, got2)
-		}
-	} else {
-		if got2, err := s.chain.GetHeaders(request2); err != nil {
-			t.Fatalf("failed to get expected block headers: %v", err)
-		} else if !headersMatch(headers1.BlockHeadersRequest, got2) {
-			t.Fatalf("header mismatch: \nexpected %v \ngot %v", headers1, got2)
-		}
+	if expected, err := s.chain.GetHeaders(request1); err != nil {
+		t.Fatalf("failed to get expected headers for request 1: %v", err)
+	} else if !headersMatch(expected, resp1.BlockHeadersRequest) {
+		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, resp1)
+	}
+	if expected, err := s.chain.GetHeaders(request2); err != nil {
+		t.Fatalf("failed to get expected headers for request 2: %v", err)
+	} else if !headersMatch(expected, resp2.BlockHeadersRequest) {
+		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, resp2)
 	}
 }
 
