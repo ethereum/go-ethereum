@@ -9,6 +9,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
+	"github.com/XinFinOrg/XDPoSChain/consensus/misc"
 	"github.com/XinFinOrg/XDPoSChain/consensus/misc/eip1559"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/log"
@@ -94,6 +95,10 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	// Ensure that the block doesn't contain any uncles which are meaningless in XDPoS_v1
 	if header.UncleHash != utils.UncleHash {
 		return utils.ErrInvalidUncleHash
+	}
+	// Verify that the gas limit remains within allowed bounds
+	if err := misc.VerifyGaslimit(parent.GasLimit, header.GasLimit); err != nil {
+		return err
 	}
 	// Verify the header's EIP-1559 attributes.
 	if err := eip1559.VerifyEip1559Header(chain.Config(), header); err != nil {

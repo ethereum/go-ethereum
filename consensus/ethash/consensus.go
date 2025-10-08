@@ -255,6 +255,10 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainReader, header, parent *
 	if header.GasUsed > header.GasLimit {
 		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
 	}
+	// Verify that the gas limit remains within allowed bounds
+	if err := misc.VerifyGaslimit(parent.GasLimit, header.GasLimit); err != nil {
+		return err
+	}
 	// Verify the header's EIP-1559 attributes.
 	if err := eip1559.VerifyEip1559Header(chain.Config(), header); err != nil {
 		return err
