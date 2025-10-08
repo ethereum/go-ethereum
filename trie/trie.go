@@ -360,7 +360,7 @@ func (t *Trie) getNode(origNode node, path []byte, pos int) (item []byte, newnod
 // MustUpdate is a wrapper of Update and will omit any encountered error but
 // just print out an error message.
 func (t *Trie) MustUpdate(key, value []byte) {
-	if err := t.Update(key, value); err != nil {
+	if _, err := t.Update(key, value); err != nil {
 		log.Error("Unhandled trie error in Trie.Update", "err", err)
 	}
 }
@@ -374,40 +374,43 @@ func (t *Trie) MustUpdate(key, value []byte) {
 //
 // If the requested node is not present in trie, no error will be returned.
 // If the trie is corrupted, a MissingNodeError is returned.
-func (t *Trie) Update(key, value []byte) error {
+// Returns the depth at which the value was inserted.
+func (t *Trie) Update(key, value []byte) (int, error) {
 	// Short circuit if the trie is already committed and not usable.
 	if t.committed {
-		return ErrCommitted
+		return 0, ErrCommitted
 	}
 	return t.update(key, value)
 }
 
-func (t *Trie) update(key, value []byte) error {
+func (t *Trie) update(key, value []byte) (int, error) {
 	t.unhashed++
 	t.uncommitted++
 	k := keybytesToHex(key)
+	var depth int
 	if len(value) != 0 {
-		_, n, err := t.insert(t.root, nil, k, valueNode(value))
+		_, n, d, err := t.insert(t.root, nil, k, valueNode(value), 0)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		t.root = n
+		depth = d
 	} else {
 		_, n, err := t.delete(t.root, nil, k)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		t.root = n
 	}
-	return nil
+	return depth, nil
 }
 
-func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error) {
+func (t *Trie) insert(n node, prefix, key []byte, value node, depth int) (bool, node, int, error) {
 	if len(key) == 0 {
 		if v, ok := n.(valueNode); ok {
-			return !bytes.Equal(v, value.(valueNode)), value, nil
+			return !bytes.Equal(v, value.(valueNode)), value, depth, nil
 		}
-		return true, value, nil
+		return true, value, depth, nil
 	}
 	switch n := n.(type) {
 	case *shortNode:
@@ -415,26 +418,26 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		// If the whole key matches, keep this short node as is
 		// and only update the value.
 		if matchlen == len(n.Key) {
-			dirty, nn, err := t.insert(n.Val, append(prefix, key[:matchlen]...), key[matchlen:], value)
+			dirty, nn, d, err := t.insert(n.Val, append(prefix, key[:matchlen]...), key[matchlen:], value, depth+1)
 			if !dirty || err != nil {
-				return false, n, err
+				return false, n, depth, err
 			}
-			return true, &shortNode{n.Key, nn, t.newFlag()}, nil
+			return true, &shortNode{n.Key, nn, t.newFlag()}, d, nil
 		}
 		// Otherwise branch out at the index where they differ.
 		branch := &fullNode{flags: t.newFlag()}
 		var err error
-		_, branch.Children[n.Key[matchlen]], err = t.insert(nil, append(prefix, n.Key[:matchlen+1]...), n.Key[matchlen+1:], n.Val)
+		_, branch.Children[n.Key[matchlen]], _, err = t.insert(nil, append(prefix, n.Key[:matchlen+1]...), n.Key[matchlen+1:], n.Val, depth+1)
 		if err != nil {
-			return false, nil, err
+			return false, nil, depth, err
 		}
-		_, branch.Children[key[matchlen]], err = t.insert(nil, append(prefix, key[:matchlen+1]...), key[matchlen+1:], value)
+		_, branch.Children[key[matchlen]], _, err = t.insert(nil, append(prefix, key[:matchlen+1]...), key[matchlen+1:], value, depth+1)
 		if err != nil {
-			return false, nil, err
+			return false, nil, depth, err
 		}
 		// Replace this shortNode with the branch if it occurs at index 0.
 		if matchlen == 0 {
-			return true, branch, nil
+			return true, branch, depth+1, nil
 		}
 		// New branch node is created as a child of the original short node.
 		// Track the newly inserted node in the tracer. The node identifier
@@ -442,16 +445,16 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		t.opTracer.onInsert(append(prefix, key[:matchlen]...))
 
 		// Replace it with a short node leading up to the branch.
-		return true, &shortNode{key[:matchlen], branch, t.newFlag()}, nil
+		return true, &shortNode{key[:matchlen], branch, t.newFlag()}, depth+1, nil
 
 	case *fullNode:
-		dirty, nn, err := t.insert(n.Children[key[0]], append(prefix, key[0]), key[1:], value)
+		dirty, nn, d, err := t.insert(n.Children[key[0]], append(prefix, key[0]), key[1:], value, depth+1)
 		if !dirty || err != nil {
-			return false, n, err
+			return false, n, depth, err
 		}
 		n.flags = t.newFlag()
 		n.Children[key[0]] = nn
-		return true, n, nil
+		return true, n, d, nil
 
 	case nil:
 		// New short node is created and track it in the tracer. The node identifier
@@ -459,7 +462,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		// since it's always embedded in its parent.
 		t.opTracer.onInsert(prefix)
 
-		return true, &shortNode{key, value, t.newFlag()}, nil
+		return true, &shortNode{key, value, t.newFlag()}, depth, nil
 
 	case hashNode:
 		// We've hit a part of the trie that isn't loaded yet. Load
@@ -467,13 +470,13 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		// the path to the value in the trie.
 		rn, err := t.resolveAndTrack(n, prefix)
 		if err != nil {
-			return false, nil, err
+			return false, nil, depth, err
 		}
-		dirty, nn, err := t.insert(rn, prefix, key, value)
+		dirty, nn, d, err := t.insert(rn, prefix, key, value, depth)
 		if !dirty || err != nil {
-			return false, rn, err
+			return false, rn, depth, err
 		}
-		return true, nn, nil
+		return true, nn, d, nil
 
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", n, n))

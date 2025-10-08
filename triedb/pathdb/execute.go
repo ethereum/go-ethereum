@@ -123,7 +123,7 @@ func updateAccount(ctx *context, db database.NodeDatabase, addr common.Address) 
 		if len(val) == 0 {
 			deletes = append(deletes, tkey)
 		} else {
-			err := st.Update(tkey.Bytes(), val)
+			_, err := st.Update(tkey.Bytes(), val)
 			if err != nil {
 				return err
 			}
@@ -151,7 +151,8 @@ func updateAccount(ctx *context, db database.NodeDatabase, addr common.Address) 
 	if err != nil {
 		return err
 	}
-	return ctx.accountTrie.Update(addrHash.Bytes(), full)
+	_, err = ctx.accountTrie.Update(addrHash.Bytes(), full)
+	return err
 }
 
 // deleteAccount the account was not present in prev-state, and is expected

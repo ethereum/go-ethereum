@@ -39,6 +39,8 @@ type StateDB interface {
 	GetNonce(common.Address) uint64
 	SetNonce(common.Address, uint64, tracing.NonceChangeReason)
 
+	GetMaxDepth(common.Address) uint64
+
 	GetCodeHash(common.Address) common.Hash
 	GetCode(common.Address) []byte
 

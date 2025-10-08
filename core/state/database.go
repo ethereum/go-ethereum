@@ -103,7 +103,8 @@ type Trie interface {
 	// any existing value is deleted from the trie. The value bytes must not be modified
 	// by the caller while they are stored in the trie. If a node was not found in the
 	// database, a trie.MissingNodeError is returned.
-	UpdateStorage(addr common.Address, key, value []byte) error
+	// Returns the depth at which the value was inserted in the trie.
+	UpdateStorage(addr common.Address, key, value []byte) (int, error)
 
 	// DeleteAccount abstracts an account deletion from the trie.
 	DeleteAccount(address common.Address) error

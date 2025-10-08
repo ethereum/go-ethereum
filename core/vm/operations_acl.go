@@ -42,6 +42,11 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 		// Check slot presence in the access list
 		if _, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
 			cost = params.ColdSloadCostEIP2929
+			// Add MaxDepth cost for cold writes if depth exceeds threshold
+			maxDepth := evm.StateDB.GetMaxDepth(contract.Address())
+			if maxDepth >= params.MaxDepthGasThreshold {
+				cost += params.MaxDepthGasFactor * maxDepth
+			}
 			// If the caller cannot afford the cost, this change will be rolled back
 			evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
 		}

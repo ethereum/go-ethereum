@@ -119,7 +119,8 @@ func (t *TransitionTrie) PrefetchAccount(addresses []common.Address) error {
 // UpdateStorage associates key with value in the trie. If value has length zero, any
 // existing value is deleted from the trie. The value bytes must not be modified
 // by the caller while they are stored in the trie.
-func (t *TransitionTrie) UpdateStorage(address common.Address, key []byte, value []byte) error {
+// Returns the depth at which the value was inserted in the trie.
+func (t *TransitionTrie) UpdateStorage(address common.Address, key []byte, value []byte) (int, error) {
 	var v []byte
 	if len(value) >= 32 {
 		v = value[:32]
