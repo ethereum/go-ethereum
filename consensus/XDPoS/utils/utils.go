@@ -35,7 +35,10 @@ func Hop(len, pre, cur int) int {
 }
 
 // Extract validators from byte array.
-func ExtractValidatorsFromBytes(byteValidators []byte) []int64 {
+func ExtractValidatorsFromBytes(byteValidators []byte) ([]int64, error) {
+	if len(byteValidators)%M2ByteLength != 0 {
+		return []int64{}, fmt.Errorf("invalid byte array length %d for validators", len(byteValidators))
+	}
 	lenValidator := len(byteValidators) / M2ByteLength
 	var validators []int64
 	for i := 0; i < lenValidator; i++ {
@@ -43,12 +46,12 @@ func ExtractValidatorsFromBytes(byteValidators []byte) []int64 {
 		intNumber, err := strconv.Atoi(string(trimByte))
 		if err != nil {
 			log.Error("Can not convert string to integer", "error", err)
-			return []int64{}
+			return []int64{}, fmt.Errorf("can not convert string %s to integer: %v", string(trimByte), err)
 		}
 		validators = append(validators, int64(intNumber))
 	}
 
-	return validators
+	return validators, nil
 }
 
 // compare 2 signers lists
