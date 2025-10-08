@@ -957,11 +957,7 @@ func (fb *filterBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNum
 			return nil, errors.New("only XDPoS v2 supports committed block lookup")
 		}
 		current := fb.bc.CurrentBlock().Header()
-		if fb.bc.Config().XDPoS.BlockConsensusVersion(
-			current.Number,
-			current.Extra,
-			XDPoS.ExtraFieldCheck,
-		) == params.ConsensusEngineVersion2 {
+		if fb.bc.Config().XDPoS.BlockConsensusVersion(current.Number) == params.ConsensusEngineVersion2 {
 			confirmedHash := fb.bc.Engine().(*XDPoS.XDPoS).EngineV2.GetLatestCommittedBlockInfo().Hash
 			return fb.bc.GetHeaderByHash(confirmedHash), nil
 		}

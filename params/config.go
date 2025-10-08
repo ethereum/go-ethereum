@@ -513,7 +513,7 @@ func (c *V2Config) Description(name string, indent int) string {
 	return banner
 }
 
-func (c *XDPoSConfig) BlockConsensusVersion(num *big.Int, extraByte []byte, extraCheck bool) string {
+func (c *XDPoSConfig) BlockConsensusVersion(num *big.Int) string {
 	if c.V2 != nil && c.V2.SwitchBlock != nil && num.Cmp(c.V2.SwitchBlock) > 0 {
 		return ConsensusEngineVersion2
 	}
