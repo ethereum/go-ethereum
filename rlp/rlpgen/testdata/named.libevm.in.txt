@@ -1,0 +1,15 @@
+// -*- mode: go -*-
+
+package test
+
+type (
+    BoolT   bool
+    Uint64T uint64
+    StringT string
+)
+
+type Test struct {
+    BoolNewT BoolT
+    Uint64NewT Uint64T
+    StringNewT StringT
+}

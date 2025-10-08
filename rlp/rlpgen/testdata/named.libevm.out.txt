@@ -1,0 +1,49 @@
+package test
+
+import "github.com/ava-labs/libevm/rlp"
+import "io"
+
+func (obj *Test) EncodeRLP(_w io.Writer) error {
+	w := rlp.NewEncoderBuffer(_w)
+	_tmp0 := w.List()
+	w.WriteBool(bool(obj.BoolNewT))
+	w.WriteUint64(uint64(obj.Uint64NewT))
+	w.WriteString(string(obj.StringNewT))
+	w.ListEnd(_tmp0)
+	return w.Flush()
+}
+
+func (obj *Test) DecodeRLP(dec *rlp.Stream) error {
+	var _tmp0 Test
+	{
+		if _, err := dec.List(); err != nil {
+			return err
+		}
+		// BoolNewT:
+		_tmp1, err := dec.Bool()
+		if err != nil {
+			return err
+		}
+		_tmp2 := BoolT(_tmp1)
+		_tmp0.BoolNewT = _tmp2
+		// Uint64NewT:
+		_tmp3, err := dec.Uint64()
+		if err != nil {
+			return err
+		}
+		_tmp4 := Uint64T(_tmp3)
+		_tmp0.Uint64NewT = _tmp4
+		// StringNewT:
+		_tmp5, err := dec.String()
+		if err != nil {
+			return err
+		}
+		_tmp6 := StringT(_tmp5)
+		_tmp0.StringNewT = _tmp6
+		if err := dec.ListEnd(); err != nil {
+			return err
+		}
+	}
+	*obj = _tmp0
+	return nil
+}
