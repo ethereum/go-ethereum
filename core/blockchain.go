@@ -1107,13 +1107,12 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	return rootNumber, bc.loadLastState()
 }
 
-// SnapSyncCommitHead sets the current head block to the one defined by the hash
+// SnapSyncCommitHead sets the current head block to the one defined by the block
 // irrelevant what the chain contents were prior.
-func (bc *BlockChain) SnapSyncCommitHead(hash common.Hash) error {
+func (bc *BlockChain) SnapSyncCommitHead(block *types.Block) error {
 	// Make sure that both the block as well at its state trie exists
-	block := bc.GetBlockByHash(hash)
 	if block == nil {
-		return fmt.Errorf("non existent block [%x..]", hash[:4])
+		return fmt.Errorf("non existent block")
 	}
 	// Reset the trie database with the fresh snap synced state.
 	root := block.Root()
@@ -1138,7 +1137,7 @@ func (bc *BlockChain) SnapSyncCommitHead(hash common.Hash) error {
 	if bc.snaps != nil {
 		bc.snaps.Rebuild(root)
 	}
-	log.Info("Committed new head block", "number", block.Number(), "hash", hash)
+	log.Info("Committed new head block", "number", block.Number(), "hash", block.Hash())
 	return nil
 }
 
