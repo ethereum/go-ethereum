@@ -217,6 +217,9 @@ func (x *XDPoS_v2) CalculateMissingRounds(chain consensus.ChainReader, header *t
 		return nil, err
 	}
 	masternodes := switchInfo.Masternodes
+	if len(masternodes) == 0 {
+		return nil, fmt.Errorf("masternodes is empty in CalculateMissingRounds, number = %v, hash %#x", header.Number, header.Hash())
+	}
 
 	// Loop through from the epoch switch block to the current "header" block
 	nextHeader := header
