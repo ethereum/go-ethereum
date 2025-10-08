@@ -69,7 +69,7 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	}
 
 	minePeriod := uint64(x.config.V2.Config(uint64(round)).MinePeriod)
-	if parent.Number.Uint64() > x.config.V2.SwitchBlock.Uint64() && parent.Time.Uint64()+minePeriod > header.Time.Uint64() {
+	if parent.Number.Uint64() >= x.config.V2.SwitchBlock.Uint64() && parent.Time.Uint64()+minePeriod > header.Time.Uint64() {
 		log.Warn("[verifyHeader] Fail to verify header due to invalid timestamp", "ParentTime", parent.Time.Uint64(), "MinePeriod", minePeriod, "HeaderTime", header.Time.Uint64(), "Hash", header.Hash().Hex())
 		return utils.ErrInvalidTimestamp
 	}
