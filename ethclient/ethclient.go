@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/ethclient/gethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -831,59 +831,27 @@ type SimulateOptions struct {
 
 // SimulateBlock represents a batch of calls to be simulated.
 type SimulateBlock struct {
-	BlockOverrides *BlockOverrides `json:"blockOverrides,omitempty"`
-	StateOverrides *StateOverride  `json:"stateOverrides,omitempty"`
-	Calls          []CallArgs      `json:"calls"`
+	BlockOverrides *gethclient.BlockOverrides                     `json:"blockOverrides,omitempty"`
+	StateOverrides *map[common.Address]gethclient.OverrideAccount `json:"stateOverrides,omitempty"`
+	Calls          []ethereum.CallMsg                             `json:"calls"`
 }
 
-// BlockOverrides is a set of header fields to override.
-type BlockOverrides struct {
-	Number        *hexutil.Big       `json:"number,omitempty"`
-	Difficulty    *hexutil.Big       `json:"difficulty,omitempty"`
-	Time          *hexutil.Uint64    `json:"time,omitempty"`
-	GasLimit      *hexutil.Uint64    `json:"gasLimit,omitempty"`
-	FeeRecipient  *common.Address    `json:"feeRecipient,omitempty"`
-	PrevRandao    *common.Hash       `json:"prevRandao,omitempty"`
-	BaseFeePerGas *hexutil.Big       `json:"baseFeePerGas,omitempty"`
-	BlobBaseFee   *hexutil.Big       `json:"blobBaseFee,omitempty"`
-	BeaconRoot    *common.Hash       `json:"beaconRoot,omitempty"`
-	Withdrawals   *types.Withdrawals `json:"withdrawals,omitempty"`
-}
-
-// StateOverride is the collection of overridden accounts.
-type StateOverride map[common.Address]OverrideAccount
-
-// OverrideAccount indicates the overriding fields of account during the execution
-// of a message call.
-type OverrideAccount struct {
-	Nonce            *hexutil.Uint64             `json:"nonce,omitempty"`
-	Code             *hexutil.Bytes              `json:"code,omitempty"`
-	Balance          *hexutil.Big                `json:"balance,omitempty"`
-	State            map[common.Hash]common.Hash `json:"state,omitempty"`
-	StateDiff        map[common.Hash]common.Hash `json:"stateDiff,omitempty"`
-	MovePrecompileTo *common.Address             `json:"movePrecompileToAddress,omitempty"`
-}
-
-// CallArgs represents the arguments to construct a transaction call.
-type CallArgs struct {
-	From                 *common.Address              `json:"from,omitempty"`
-	To                   *common.Address              `json:"to,omitempty"`
-	Gas                  *hexutil.Uint64              `json:"gas,omitempty"`
-	GasPrice             *hexutil.Big                 `json:"gasPrice,omitempty"`
-	MaxFeePerGas         *hexutil.Big                 `json:"maxFeePerGas,omitempty"`
-	MaxPriorityFeePerGas *hexutil.Big                 `json:"maxPriorityFeePerGas,omitempty"`
-	Value                *hexutil.Big                 `json:"value,omitempty"`
-	Nonce                *hexutil.Uint64              `json:"nonce,omitempty"`
-	Data                 *hexutil.Bytes               `json:"data,omitempty"`
-	Input                *hexutil.Bytes               `json:"input,omitempty"`
-	AccessList           *types.AccessList            `json:"accessList,omitempty"`
-	ChainID              *hexutil.Big                 `json:"chainId,omitempty"`
-	BlobFeeCap           *hexutil.Big                 `json:"maxFeePerBlobGas,omitempty"`
-	BlobHashes           []common.Hash                `json:"blobVersionedHashes,omitempty"`
-	Blobs                []kzg4844.Blob               `json:"blobs,omitempty"`
-	Commitments          []kzg4844.Commitment         `json:"commitments,omitempty"`
-	Proofs               []kzg4844.Proof              `json:"proofs,omitempty"`
-	AuthorizationList    []types.SetCodeAuthorization `json:"authorizationList,omitempty"`
+// MarshalJSON implements json.Marshaler for SimulateBlock.
+func (s SimulateBlock) MarshalJSON() ([]byte, error) {
+	type Alias struct {
+		BlockOverrides *gethclient.BlockOverrides                     `json:"blockOverrides,omitempty"`
+		StateOverrides *map[common.Address]gethclient.OverrideAccount `json:"stateOverrides,omitempty"`
+		Calls          []interface{}                                  `json:"calls"`
+	}
+	calls := make([]interface{}, len(s.Calls))
+	for i, call := range s.Calls {
+		calls[i] = toCallArg(call)
+	}
+	return json.Marshal(Alias{
+		BlockOverrides: s.BlockOverrides,
+		StateOverrides: s.StateOverrides,
+		Calls:          calls,
+	})
 }
 
 // SimulateCallResult is the result of a simulated call.

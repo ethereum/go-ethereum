@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -38,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/ethclient/gethclient"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -777,20 +777,20 @@ func TestSimulateV1(t *testing.T) {
 	// Simple test: transfer ETH from one account to another
 	from := testAddr
 	to := common.HexToAddress("0x0000000000000000000000000000000000000001")
-	value := hexutil.Big(*big.NewInt(100))
-	gas := hexutil.Uint64(100000)
-	maxFeePerGas := hexutil.Big(*new(big.Int).Mul(header.BaseFee, big.NewInt(2)))
+	value := big.NewInt(100)
+	gas := uint64(100000)
+	maxFeePerGas := new(big.Int).Mul(header.BaseFee, big.NewInt(2))
 
 	opts := ethclient.SimulateOptions{
 		BlockStateCalls: []ethclient.SimulateBlock{
 			{
-				Calls: []ethclient.CallArgs{
+				Calls: []ethereum.CallMsg{
 					{
-						From:         &from,
-						To:           &to,
-						Value:        &value,
-						Gas:          &gas,
-						MaxFeePerGas: &maxFeePerGas,
+						From:      from,
+						To:        &to,
+						Value:     value,
+						Gas:       gas,
+						GasFeeCap: maxFeePerGas,
 					},
 				},
 			},
@@ -841,26 +841,26 @@ func TestSimulateV1WithBlockOverrides(t *testing.T) {
 
 	from := testAddr
 	to := common.HexToAddress("0x0000000000000000000000000000000000000001")
-	value := hexutil.Big(*big.NewInt(100))
-	gas := hexutil.Uint64(100000)
-	maxFeePerGas := hexutil.Big(*new(big.Int).Mul(header.BaseFee, big.NewInt(2)))
+	value := big.NewInt(100)
+	gas := uint64(100000)
+	maxFeePerGas := new(big.Int).Mul(header.BaseFee, big.NewInt(2))
 
 	// Override timestamp only
-	timestamp := hexutil.Uint64(1234567890)
+	timestamp := uint64(1234567890)
 
 	opts := ethclient.SimulateOptions{
 		BlockStateCalls: []ethclient.SimulateBlock{
 			{
-				BlockOverrides: &ethclient.BlockOverrides{
-					Time: &timestamp,
+				BlockOverrides: &gethclient.BlockOverrides{
+					Time: timestamp,
 				},
-				Calls: []ethclient.CallArgs{
+				Calls: []ethereum.CallMsg{
 					{
-						From:         &from,
-						To:           &to,
-						Value:        &value,
-						Gas:          &gas,
-						MaxFeePerGas: &maxFeePerGas,
+						From:      from,
+						To:        &to,
+						Value:     value,
+						Gas:       gas,
+						GasFeeCap: maxFeePerGas,
 					},
 				},
 			},
@@ -878,7 +878,7 @@ func TestSimulateV1WithBlockOverrides(t *testing.T) {
 	}
 
 	// Verify the timestamp was overridden
-	if results[0].Timestamp != timestamp {
+	if uint64(results[0].Timestamp) != timestamp {
 		t.Errorf("expected timestamp %d, got %d", timestamp, results[0].Timestamp)
 	}
 }
@@ -903,30 +903,32 @@ func TestSimulateV1WithStateOverrides(t *testing.T) {
 
 	from := testAddr
 	to := common.HexToAddress("0x0000000000000000000000000000000000000001")
-	value := hexutil.Big(*big.NewInt(1000000000000000000)) // 1 ETH
-	gas := hexutil.Uint64(100000)
-	maxFeePerGas := hexutil.Big(*new(big.Int).Mul(header.BaseFee, big.NewInt(2)))
+	value := big.NewInt(1000000000000000000) // 1 ETH
+	gas := uint64(100000)
+	maxFeePerGas := new(big.Int).Mul(header.BaseFee, big.NewInt(2))
 
 	// Override the balance of the 'from' address
 	balanceStr := "1000000000000000000000"
 	balance := new(big.Int)
 	balance.SetString(balanceStr, 10)
 
+	stateOverrides := map[common.Address]gethclient.OverrideAccount{
+		from: {
+			Balance: balance,
+		},
+	}
+
 	opts := ethclient.SimulateOptions{
 		BlockStateCalls: []ethclient.SimulateBlock{
 			{
-				StateOverrides: &ethclient.StateOverride{
-					from: ethclient.OverrideAccount{
-						Balance: (*hexutil.Big)(balance),
-					},
-				},
-				Calls: []ethclient.CallArgs{
+				StateOverrides: &stateOverrides,
+				Calls: []ethereum.CallMsg{
 					{
-						From:         &from,
-						To:           &to,
-						Value:        &value,
-						Gas:          &gas,
-						MaxFeePerGas: &maxFeePerGas,
+						From:      from,
+						To:        &to,
+						Value:     value,
+						Gas:       gas,
+						GasFeeCap: maxFeePerGas,
 					},
 				},
 			},
@@ -968,20 +970,20 @@ func TestSimulateV1WithBlockNumberOrHash(t *testing.T) {
 
 	from := testAddr
 	to := common.HexToAddress("0x0000000000000000000000000000000000000001")
-	value := hexutil.Big(*big.NewInt(100))
-	gas := hexutil.Uint64(100000)
-	maxFeePerGas := hexutil.Big(*new(big.Int).Mul(header.BaseFee, big.NewInt(2)))
+	value := big.NewInt(100)
+	gas := uint64(100000)
+	maxFeePerGas := new(big.Int).Mul(header.BaseFee, big.NewInt(2))
 
 	opts := ethclient.SimulateOptions{
 		BlockStateCalls: []ethclient.SimulateBlock{
 			{
-				Calls: []ethclient.CallArgs{
+				Calls: []ethereum.CallMsg{
 					{
-						From:         &from,
-						To:           &to,
-						Value:        &value,
-						Gas:          &gas,
-						MaxFeePerGas: &maxFeePerGas,
+						From:      from,
+						To:        &to,
+						Value:     value,
+						Gas:       gas,
+						GasFeeCap: maxFeePerGas,
 					},
 				},
 			},
