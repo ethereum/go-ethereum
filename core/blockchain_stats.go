@@ -111,20 +111,21 @@ Block: %v (%#x) txs: %d, mgasps: %.2f
 
 EVM execution: %v
 Validation: %v
+Account read: %v(%d)
+Storage read: %v(%d)
+State hash: %v
 DB commit: %v
 Block write: %v
-Account read: %v
-Storage read: %v
-State hash: %v
 Total: %v
 
 State read cache: %s
-
 ##############################
 `, block.Number(), block.Hash(), len(block.Transactions()), s.MgasPerSecond,
-		common.PrettyDuration(s.Execution), common.PrettyDuration(s.Validation+s.CrossValidation), common.PrettyDuration(s.TrieDBCommit+s.SnapshotCommit),
-		common.PrettyDuration(s.BlockWrite), common.PrettyDuration(s.AccountReads), common.PrettyDuration(s.StorageReads),
-		common.PrettyDuration(s.AccountHashes+s.AccountCommits+s.AccountUpdates+s.StorageCommits+s.StorageUpdates), common.PrettyDuration(s.TotalTime),
-		s.StateReadCacheStats)
+		common.PrettyDuration(s.Execution), common.PrettyDuration(s.Validation+s.CrossValidation),
+		common.PrettyDuration(s.AccountReads), s.AccountLoaded,
+		common.PrettyDuration(s.StorageReads), s.StorageLoaded,
+		common.PrettyDuration(s.AccountHashes+s.AccountCommits+s.AccountUpdates+s.StorageCommits+s.StorageUpdates),
+		common.PrettyDuration(s.TrieDBCommit+s.SnapshotCommit), common.PrettyDuration(s.BlockWrite),
+		common.PrettyDuration(s.TotalTime), s.StateReadCacheStats)
 	log.Info(msg)
 }
