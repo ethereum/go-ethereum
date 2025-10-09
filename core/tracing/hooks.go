@@ -186,6 +186,12 @@ type (
 	// LogHook is called when a log is emitted.
 	LogHook = func(log *types.Log)
 
+	// AccountReadHook is called when the account is accessed.
+	AccountReadHook = func(addr common.Address)
+
+	// StorageReadHook is called when the storage slot is accessed.
+	StorageReadHook = func(addr common.Address, slot common.Hash)
+
 	// BlockHashReadHook is called when EVM reads the blockhash of a block.
 	BlockHashReadHook = func(blockNumber uint64, hash common.Hash)
 )
@@ -211,7 +217,7 @@ type Hooks struct {
 	OnSystemCallStartV2 OnSystemCallStartHookV2
 	OnSystemCallEnd     OnSystemCallEndHook
 
-	// State events
+	// State mutation events
 	OnBalanceChange BalanceChangeHook
 	OnNonceChange   NonceChangeHook
 	OnNonceChangeV2 NonceChangeHookV2
@@ -219,6 +225,10 @@ type Hooks struct {
 	OnCodeChangeV2  CodeChangeHookV2
 	OnStorageChange StorageChangeHook
 	OnLog           LogHook
+
+	// State access events
+	OnAccountRead AccountReadHook
+	OnStorageRead StorageReadHook
 
 	// Block hash read
 	OnBlockHashRead BlockHashReadHook
