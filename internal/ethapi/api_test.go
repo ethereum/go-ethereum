@@ -443,7 +443,6 @@ type testBackend struct {
 
 	// test-only fields for SendRawTransactionSync
 	receiptsFeed *event.Feed
-	headFeed     *event.Feed // keep if other tests use it; otherwise remove
 	autoMine     bool
 
 	sentTx     *types.Transaction
@@ -481,7 +480,6 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.E
 		acc:             acc,
 		pending:         blocks[n],
 		pendingReceipts: receipts[n],
-		headFeed:        new(event.Feed),
 		receiptsFeed:    new(event.Feed),
 	}
 	return backend
@@ -607,7 +605,7 @@ func (b testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscr
 	panic("implement me")
 }
 func (b testBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
-	return b.headFeed.Subscribe(ch)
+	panic("implement me")
 }
 func (b *testBackend) SendTx(ctx context.Context, tx *types.Transaction) error {
 	b.sentTx = tx

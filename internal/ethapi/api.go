@@ -1691,8 +1691,8 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 	}
 
 	// Subscribe to receipt stream (filtered to this tx)
-	rcpts := make(chan []*ReceiptWithTx, 1)
-	sub := api.b.SubscribeTransactionReceipts([]common.Hash{hash}, rcpts)
+	receipts := make(chan []*ReceiptWithTx, 1)
+	sub := api.b.SubscribeTransactionReceipts([]common.Hash{hash}, receipts)
 	defer sub.Unsubscribe()
 
 	subErrCh := sub.Err()
@@ -1717,7 +1717,7 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 			}
 			return nil, err
 
-		case batch := <-rcpts:
+		case batch := <-receipts:
 			for _, rwt := range batch {
 				if rwt == nil || rwt.Receipt == nil || rwt.Receipt.TxHash != hash {
 					continue
