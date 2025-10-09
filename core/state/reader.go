@@ -95,7 +95,17 @@ type ReaderStats struct {
 
 // String implements fmt.Stringer, returning string format statistics.
 func (s ReaderStats) String() string {
-	return fmt.Sprintf("account (hit: %d, miss: %d), storage (hit: %d, miss: %d)", s.AccountHit, s.AccountMiss, s.StorageHit, s.StorageMiss)
+	var (
+		accountRate float64
+		storageRate float64
+	)
+	if s.AccountHit > 0 {
+		accountRate = float64(s.AccountHit) / float64(s.AccountHit+s.AccountMiss) * 100
+	}
+	if s.StorageHit > 0 {
+		storageRate = float64(s.StorageHit) / float64(s.StorageHit+s.StorageMiss) * 100
+	}
+	return fmt.Sprintf("account (hit: %d, miss: %d, rate: %.2f), storage (hit: %d, miss: %d, rate: %.2f)", s.AccountHit, s.AccountMiss, accountRate, s.StorageHit, s.StorageMiss, storageRate)
 }
 
 // ReaderWithStats wraps the additional method to retrieve the reader statistics from.
