@@ -2260,6 +2260,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		Preimages:      ctx.Bool(CachePreimagesFlag.Name),
 		StateScheme:    scheme,
 		StateHistory:   ctx.Uint64(StateHistoryFlag.Name),
+
 		// Disable transaction indexing/unindexing.
 		TxLookupLimit: -1,
 
@@ -2271,6 +2272,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 
 		// Enable state size tracking if enabled
 		StateSizeTracking: ctx.Bool(StateSizeTrackingFlag.Name),
+
+		// Configure the slow block statistic logger
+		SlowBlockThreshold: ctx.Uint64(LogSlowBlockFlag.Name),
 	}
 	if options.ArchiveMode && !options.Preimages {
 		options.Preimages = true
