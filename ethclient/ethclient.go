@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -818,4 +819,104 @@ func (p *rpcProgress) toSyncProgress() *ethereum.SyncProgress {
 		TxIndexRemainingBlocks: uint64(p.TxIndexRemainingBlocks),
 		StateIndexRemaining:    uint64(p.StateIndexRemaining),
 	}
+}
+
+// SimulateOptions represents the options for eth_simulateV1.
+type SimulateOptions struct {
+	BlockStateCalls        []SimulateBlock `json:"blockStateCalls"`
+	TraceTransfers         bool            `json:"traceTransfers"`
+	Validation             bool            `json:"validation"`
+	ReturnFullTransactions bool            `json:"returnFullTransactions"`
+}
+
+// SimulateBlock represents a batch of calls to be simulated.
+type SimulateBlock struct {
+	BlockOverrides *BlockOverrides `json:"blockOverrides,omitempty"`
+	StateOverrides *StateOverride  `json:"stateOverrides,omitempty"`
+	Calls          []CallArgs      `json:"calls"`
+}
+
+// BlockOverrides is a set of header fields to override.
+type BlockOverrides struct {
+	Number        *hexutil.Big       `json:"number,omitempty"`
+	Difficulty    *hexutil.Big       `json:"difficulty,omitempty"`
+	Time          *hexutil.Uint64    `json:"time,omitempty"`
+	GasLimit      *hexutil.Uint64    `json:"gasLimit,omitempty"`
+	FeeRecipient  *common.Address    `json:"feeRecipient,omitempty"`
+	PrevRandao    *common.Hash       `json:"prevRandao,omitempty"`
+	BaseFeePerGas *hexutil.Big       `json:"baseFeePerGas,omitempty"`
+	BlobBaseFee   *hexutil.Big       `json:"blobBaseFee,omitempty"`
+	BeaconRoot    *common.Hash       `json:"beaconRoot,omitempty"`
+	Withdrawals   *types.Withdrawals `json:"withdrawals,omitempty"`
+}
+
+// StateOverride is the collection of overridden accounts.
+type StateOverride map[common.Address]OverrideAccount
+
+// OverrideAccount indicates the overriding fields of account during the execution
+// of a message call.
+type OverrideAccount struct {
+	Nonce            *hexutil.Uint64             `json:"nonce,omitempty"`
+	Code             *hexutil.Bytes              `json:"code,omitempty"`
+	Balance          *hexutil.Big                `json:"balance,omitempty"`
+	State            map[common.Hash]common.Hash `json:"state,omitempty"`
+	StateDiff        map[common.Hash]common.Hash `json:"stateDiff,omitempty"`
+	MovePrecompileTo *common.Address             `json:"movePrecompileToAddress,omitempty"`
+}
+
+// CallArgs represents the arguments to construct a transaction call.
+type CallArgs struct {
+	From                 *common.Address              `json:"from,omitempty"`
+	To                   *common.Address              `json:"to,omitempty"`
+	Gas                  *hexutil.Uint64              `json:"gas,omitempty"`
+	GasPrice             *hexutil.Big                 `json:"gasPrice,omitempty"`
+	MaxFeePerGas         *hexutil.Big                 `json:"maxFeePerGas,omitempty"`
+	MaxPriorityFeePerGas *hexutil.Big                 `json:"maxPriorityFeePerGas,omitempty"`
+	Value                *hexutil.Big                 `json:"value,omitempty"`
+	Nonce                *hexutil.Uint64              `json:"nonce,omitempty"`
+	Data                 *hexutil.Bytes               `json:"data,omitempty"`
+	Input                *hexutil.Bytes               `json:"input,omitempty"`
+	AccessList           *types.AccessList            `json:"accessList,omitempty"`
+	ChainID              *hexutil.Big                 `json:"chainId,omitempty"`
+	BlobFeeCap           *hexutil.Big                 `json:"maxFeePerBlobGas,omitempty"`
+	BlobHashes           []common.Hash                `json:"blobVersionedHashes,omitempty"`
+	Blobs                []kzg4844.Blob               `json:"blobs,omitempty"`
+	Commitments          []kzg4844.Commitment         `json:"commitments,omitempty"`
+	Proofs               []kzg4844.Proof              `json:"proofs,omitempty"`
+	AuthorizationList    []types.SetCodeAuthorization `json:"authorizationList,omitempty"`
+}
+
+// SimulateCallResult is the result of a simulated call.
+type SimulateCallResult struct {
+	ReturnValue hexutil.Bytes  `json:"returnData"`
+	Logs        []*types.Log   `json:"logs"`
+	GasUsed     hexutil.Uint64 `json:"gasUsed"`
+	Status      hexutil.Uint64 `json:"status"`
+	Error       *CallError     `json:"error,omitempty"`
+}
+
+// CallError represents an error from a simulated call.
+type CallError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    string `json:"data,omitempty"`
+}
+
+// SimulateBlockResult represents the result of a simulated block.
+type SimulateBlockResult struct {
+	Number        hexutil.Uint64       `json:"number"`
+	Hash          common.Hash          `json:"hash"`
+	Timestamp     hexutil.Uint64       `json:"timestamp"`
+	GasLimit      hexutil.Uint64       `json:"gasLimit"`
+	GasUsed       hexutil.Uint64       `json:"gasUsed"`
+	FeeRecipient  common.Address       `json:"miner"`
+	BaseFeePerGas *hexutil.Big         `json:"baseFeePerGas,omitempty"`
+	Calls         []SimulateCallResult `json:"calls"`
+}
+
+// SimulateV1 executes transactions on top of a base state.
+func (ec *Client) SimulateV1(ctx context.Context, opts SimulateOptions, blockNrOrHash *rpc.BlockNumberOrHash) ([]SimulateBlockResult, error) {
+	var result []SimulateBlockResult
+	err := ec.c.CallContext(ctx, &result, "eth_simulateV1", opts, blockNrOrHash)
+	return result, err
 }
