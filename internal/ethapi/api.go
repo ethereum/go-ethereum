@@ -1652,6 +1652,11 @@ func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil
 	return SubmitTransaction(ctx, api.b, tx)
 }
 
+type ReceiptWithTx struct {
+	Receipt *types.Receipt
+	Tx      *types.Transaction
+}
+
 // SendRawTransactionSync will add the signed transaction to the transaction pool
 // and wait until the transaction has been included in a block and return the receipt, or the timeout.
 func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hexutil.Bytes, timeoutMs *hexutil.Uint64) (map[string]interface{}, error) {
@@ -1685,61 +1690,17 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 		return r, nil
 	}
 
-	// Subscribe to new block events and check the receipt on each new block.
-	heads := make(chan core.ChainHeadEvent, 16)
-	sub := api.b.SubscribeChainHeadEvent(heads)
+	// Subscribe to receipt stream (filtered to this tx)
+	rcpts := make(chan []*ReceiptWithTx, 1)
+	sub := api.b.SubscribeTransactionReceipts([]common.Hash{hash}, rcpts)
 	defer sub.Unsubscribe()
+
 	subErrCh := sub.Err()
-
-	// calculate poll/settle intervals
-	const (
-		pollFraction = 20
-		pollMin      = 25 * time.Millisecond
-		pollMax      = 500 * time.Millisecond
-	)
-	settleInterval := timeout / pollFraction
-	if settleInterval < pollMin {
-		settleInterval = pollMin
-	} else if settleInterval > pollMax {
-		settleInterval = pollMax
-	}
-
-	// Settle: short delay to bridge receipt-indexing lag after a new head.
-	// resetSettle re-arms a single timer safely (stop+drain+reset).
-	// On head: check once immediately, then reset; on timer: re-check; repeat until deadline.
-	var (
-		settle   *time.Timer
-		settleCh <-chan time.Time
-	)
-	resetSettle := func(d time.Duration) {
-		if settle == nil {
-			settle = time.NewTimer(d)
-			settleCh = settle.C
-			return
-		}
-		if !settle.Stop() {
-			select {
-			case <-settle.C:
-			default:
-			}
-		}
-		settle.Reset(d)
-	}
-	defer func() {
-		if settle != nil && !settle.Stop() {
-			select {
-			case <-settle.C:
-			default:
-			}
-		}
-	}()
-
-	// Start a settle cycle immediately to cover a missed-head race.
-	resetSettle(settleInterval)
 
 	for {
 		select {
 		case <-receiptCtx.Done():
+			// Upstream cancellation -> bubble it; otherwise emit our timeout error
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
@@ -1750,24 +1711,30 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 
 		case err, ok := <-subErrCh:
 			if !ok || err == nil {
-				// subscription closed; disable this case and rely on settle timer
+				// subscription closed; disable this case
 				subErrCh = nil
 				continue
 			}
 			return nil, err
 
-		case <-heads:
-			// Immediate re-check on new head, then grace to bridge indexing lag.
-			if r, err := api.GetTransactionReceipt(receiptCtx, hash); err == nil && r != nil {
-				return r, nil
-			}
-			resetSettle(settleInterval)
+		case batch := <-rcpts:
+			for _, rwt := range batch {
+				if rwt == nil || rwt.Receipt == nil || rwt.Receipt.TxHash != hash {
+					continue
+				}
 
-		case <-settleCh:
-			if r, err := api.GetTransactionReceipt(receiptCtx, hash); err == nil && r != nil {
-				return r, nil
+				if rwt.Receipt.BlockNumber != nil && rwt.Receipt.BlockHash != (common.Hash{}) {
+					return MarshalReceipt(
+						rwt.Receipt,
+						rwt.Receipt.BlockHash,
+						rwt.Receipt.BlockNumber.Uint64(),
+						api.signer,
+						rwt.Tx,
+						int(rwt.Receipt.TransactionIndex),
+					), nil
+				}
+				return api.GetTransactionReceipt(receiptCtx, hash)
 			}
-			resetSettle(settleInterval)
 		}
 	}
 }

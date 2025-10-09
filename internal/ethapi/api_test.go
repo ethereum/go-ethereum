@@ -442,13 +442,19 @@ type testBackend struct {
 	pendingReceipts types.Receipts
 
 	// test-only fields for SendRawTransactionSync
-	autoMine      bool
-	mined         bool
+	receiptsFeed *event.Feed
+	headFeed     *event.Feed // keep if other tests use it; otherwise remove
+	autoMine     bool
+
+	sentTx     *types.Transaction
+	sentTxHash common.Hash
+
 	syncDefaultTO time.Duration
 	syncMaxTO     time.Duration
-	sentTx        *types.Transaction
-	sentTxHash    common.Hash
-	headFeed      *event.Feed
+}
+
+func fakeBlockHash(txh common.Hash) common.Hash {
+	return crypto.Keccak256Hash([]byte("testblock"), txh.Bytes())
 }
 
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.Engine, generator func(i int, b *core.BlockGen)) *testBackend {
@@ -476,6 +482,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.E
 		pending:         blocks[n],
 		pendingReceipts: receipts[n],
 		headFeed:        new(event.Feed),
+		receiptsFeed:    new(event.Feed),
 	}
 	return backend
 }
@@ -605,23 +612,38 @@ func (b testBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) even
 func (b *testBackend) SendTx(ctx context.Context, tx *types.Transaction) error {
 	b.sentTx = tx
 	b.sentTxHash = tx.Hash()
-	if b.autoMine {
-		b.mined = true
+
+	if b.autoMine && b.receiptsFeed != nil {
+		num := b.chain.CurrentHeader().Number.Uint64() + 1
+		bh := fakeBlockHash(tx.Hash())
+
+		r := &types.Receipt{
+			TxHash:            tx.Hash(),
+			Status:            types.ReceiptStatusSuccessful,
+			BlockHash:         bh,
+			BlockNumber:       new(big.Int).SetUint64(num),
+			TransactionIndex:  0,
+			CumulativeGasUsed: 21000,
+			GasUsed:           21000,
+		}
+		b.receiptsFeed.Send([]*ReceiptWithTx{{Receipt: r, Tx: tx}})
 	}
 	return nil
 }
-func (b testBackend) GetCanonicalTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64) {
-	// in-memory fast path for tests
-	if b.mined && txHash == b.sentTxHash {
-		return true, b.sentTx, common.HexToHash("0x01"), 1, 0
+func (b *testBackend) GetCanonicalTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64) {
+	// Treat the auto-mined tx as canonically placed at head+1.
+	if b.autoMine && txHash == b.sentTxHash {
+		num := b.chain.CurrentHeader().Number.Uint64() + 1
+		return true, b.sentTx, fakeBlockHash(txHash), num, 0
 	}
-	// fallback to existing DB-backed path
 	tx, blockHash, blockNumber, index := rawdb.ReadCanonicalTransaction(b.db, txHash)
 	return tx != nil, tx, blockHash, blockNumber, index
 }
-func (b testBackend) GetCanonicalReceipt(tx *types.Transaction, blockHash common.Hash, blockNumber, blockIndex uint64) (*types.Receipt, error) {
-	// In-memory fast path used by tests
-	if b.mined && tx != nil && tx.Hash() == b.sentTxHash && blockHash == common.HexToHash("0x01") && blockNumber == 1 && blockIndex == 0 {
+func (b *testBackend) GetCanonicalReceipt(tx *types.Transaction, blockHash common.Hash, blockNumber, blockIndex uint64) (*types.Receipt, error) {
+	if b.autoMine && tx != nil && tx.Hash() == b.sentTxHash &&
+		blockHash == fakeBlockHash(tx.Hash()) &&
+		blockIndex == 0 &&
+		blockNumber == b.chain.CurrentHeader().Number.Uint64()+1 {
 		return &types.Receipt{
 			Type:              tx.Type(),
 			Status:            types.ReceiptStatusSuccessful,
@@ -631,9 +653,9 @@ func (b testBackend) GetCanonicalReceipt(tx *types.Transaction, blockHash common
 			BlockHash:         blockHash,
 			BlockNumber:       new(big.Int).SetUint64(blockNumber),
 			TransactionIndex:  0,
+			TxHash:            tx.Hash(),
 		}, nil
 	}
-	// Fallback: use the chain's canonical receipt (DB-backed)
 	return b.chain.GetCanonicalReceipt(tx, blockHash, blockNumber, blockIndex)
 }
 func (b testBackend) TxIndexDone() bool {
@@ -3960,6 +3982,66 @@ func makeSignedRaw(t *testing.T, api *TransactionAPI, from, to common.Address, v
 // makeSelfSignedRaw is a convenience for a 0-ETH self-transfer.
 func makeSelfSignedRaw(t *testing.T, api *TransactionAPI, addr common.Address) (hexutil.Bytes, *types.Transaction) {
 	return makeSignedRaw(t, api, addr, addr, big.NewInt(0))
+}
+
+func (b *testBackend) SubscribeTransactionReceipts(txHashes []common.Hash, ch chan<- []*ReceiptWithTx) event.Subscription {
+	// If no feed is wired for this test, return a no-op subscription
+	if b.receiptsFeed == nil {
+		return event.NewSubscription(func(quit <-chan struct{}) error {
+			<-quit
+			return nil
+		})
+	}
+
+	// No filter => forward batches directly
+	if len(txHashes) == 0 {
+		return b.receiptsFeed.Subscribe(ch)
+	}
+
+	// Filtered: wrap the underlying feed and only forward matching receipts
+	in := make(chan []*ReceiptWithTx, 1)
+	sub := b.receiptsFeed.Subscribe(in)
+
+	// Build a hash set for quick filtering
+	wanted := make(map[common.Hash]struct{}, len(txHashes))
+	for _, h := range txHashes {
+		wanted[h] = struct{}{}
+	}
+
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case batch, ok := <-in:
+				if !ok {
+					return nil
+				}
+				var out []*ReceiptWithTx
+				for _, r := range batch {
+					if r != nil && r.Receipt != nil {
+						if _, ok := wanted[r.Receipt.TxHash]; ok {
+							out = append(out, r)
+						}
+					}
+				}
+				if len(out) == 0 {
+					continue
+				}
+				select {
+				case ch <- out:
+				case <-quit:
+					return nil
+				}
+			case err, ok := <-sub.Err():
+				if !ok || err == nil {
+					return nil
+				}
+				return err
+			case <-quit:
+				return nil
+			}
+		}
+	})
 }
 func TestSendRawTransactionSync_Success(t *testing.T) {
 	t.Parallel()
