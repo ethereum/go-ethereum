@@ -81,7 +81,7 @@ func AzureBlobstoreList(config AzureBlobstoreConfig) ([]*container.BlobItem, err
 
 	var blobs []*container.BlobItem
 	for pager.More() {
-		page, err := pager.NextPage(context.TODO())
+		page, err := pager.NextPage(context.Background())
 		if err != nil {
 			return nil, err
 		}
