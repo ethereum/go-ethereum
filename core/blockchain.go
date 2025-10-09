@@ -1922,7 +1922,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 			return nil, it.index, err
 		}
 		res.stats.reportMetrics()
-		res.stats.logSlow(block, bc.slowBlockThreshold)
+
+		// Log slow block only if a single block is inserted (usually after the
+		// initial sync) to not overwhelm the users.
+		if len(chain) == 1 {
+			res.stats.logSlow(block, bc.slowBlockThreshold)
+		}
 
 		// Report the import stats before returning the various results
 		stats.processed++
