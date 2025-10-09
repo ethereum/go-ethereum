@@ -441,7 +441,6 @@ type testBackend struct {
 	pending         *types.Block
 	pendingReceipts types.Receipts
 
-	// test-only fields for SendRawTransactionSync
 	receiptsFeed *event.Feed
 	autoMine     bool
 
@@ -624,7 +623,7 @@ func (b *testBackend) SendTx(ctx context.Context, tx *types.Transaction) error {
 			CumulativeGasUsed: 21000,
 			GasUsed:           21000,
 		}
-		b.receiptsFeed.Send([]*ReceiptWithTx{{Receipt: r, Tx: tx}})
+		b.receiptsFeed.Send([]*ReceiptWithTx{{Receipt: r, Transaction: tx}})
 	}
 	return nil
 }

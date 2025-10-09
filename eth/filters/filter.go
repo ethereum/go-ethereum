@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -554,16 +555,13 @@ func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]commo
 }
 
 // ReceiptWithTx contains a receipt and its corresponding transaction
-type ReceiptWithTx struct {
-	Receipt     *types.Receipt
-	Transaction *types.Transaction
-}
+type ReceiptWithTx = ethapi.ReceiptWithTx
 
-// filterReceipts returns the receipts matching the given criteria
+// FilterReceipts returns the receipts matching the given criteria
 // In addition to returning receipts, it also returns the corresponding transactions.
 // This is because receipts only contain low-level data, while user-facing data
 // may require additional information from the Transaction.
-func filterReceipts(txHashes []common.Hash, ev core.ChainEvent) []*ReceiptWithTx {
+func FilterReceipts(txHashes []common.Hash, ev core.ChainEvent) []*ReceiptWithTx {
 	var ret []*ReceiptWithTx
 
 	receipts := ev.Receipts

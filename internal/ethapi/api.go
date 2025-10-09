@@ -1653,8 +1653,8 @@ func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil
 }
 
 type ReceiptWithTx struct {
-	Receipt *types.Receipt
-	Tx      *types.Transaction
+	Receipt     *types.Receipt
+	Transaction *types.Transaction
 }
 
 // SendRawTransactionSync will add the signed transaction to the transaction pool
@@ -1729,7 +1729,7 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 						rwt.Receipt.BlockHash,
 						rwt.Receipt.BlockNumber.Uint64(),
 						api.signer,
-						rwt.Tx,
+						rwt.Transaction,
 						int(rwt.Receipt.TransactionIndex),
 					), nil
 				}
