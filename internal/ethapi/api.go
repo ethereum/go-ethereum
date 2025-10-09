@@ -627,7 +627,7 @@ func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rp
 
 	result := make([]map[string]interface{}, len(receipts))
 	for i, receipt := range receipts {
-		result[i] = marshalReceipt(receipt, block.Hash(), block.NumberU64(), signer, txs[i], i)
+		result[i] = MarshalReceipt(receipt, block.Hash(), block.NumberU64(), signer, txs[i], i)
 	}
 	return result, nil
 }
@@ -1488,11 +1488,11 @@ func (api *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash commo
 		return nil, err
 	}
 	// Derive the sender.
-	return marshalReceipt(receipt, blockHash, blockNumber, api.signer, tx, int(index)), nil
+	return MarshalReceipt(receipt, blockHash, blockNumber, api.signer, tx, int(index)), nil
 }
 
-// marshalReceipt marshals a transaction receipt into a JSON object.
-func marshalReceipt(receipt *types.Receipt, blockHash common.Hash, blockNumber uint64, signer types.Signer, tx *types.Transaction, txIndex int) map[string]interface{} {
+// MarshalReceipt marshals a transaction receipt into a JSON object.
+func MarshalReceipt(receipt *types.Receipt, blockHash common.Hash, blockNumber uint64, signer types.Signer, tx *types.Transaction, txIndex int) map[string]interface{} {
 	from, _ := types.Sender(signer, tx)
 
 	fields := map[string]interface{}{
