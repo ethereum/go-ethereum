@@ -281,9 +281,9 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 }
 
 // OverrideAccount is an alias for ethclient/types.OverrideAccount.
-// Deprecated: Use ethclienttypes.OverrideAccount instead.
+// Deprecated: Use clienttypes.OverrideAccount instead.
 type OverrideAccount = clienttypes.OverrideAccount
 
 // BlockOverrides is an alias for ethclient/types.BlockOverrides.
-// Deprecated: Use ethclienttypes.BlockOverrides instead.
+// Deprecated: Use clienttypes.BlockOverrides instead.
 type BlockOverrides = clienttypes.BlockOverrides
