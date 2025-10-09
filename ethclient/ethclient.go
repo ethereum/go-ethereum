@@ -36,6 +36,13 @@ type Client struct {
 	c *rpc.Client
 }
 
+// SimulateV1 calls the eth_simulateV1 RPC method.
+func (ec *Client) SimulateV1(ctx context.Context, opts map[string]interface{}, blockParam string) (map[string]interface{}, error) {
+    var result map[string]interface{}
+    err := ec.c.CallContext(ctx, &result, "eth_simulateV1", opts, blockParam)
+    return result, err
+}
+
 // Dial connects a client to the given URL.
 func Dial(rawurl string) (*Client, error) {
 	return DialContext(context.Background(), rawurl)

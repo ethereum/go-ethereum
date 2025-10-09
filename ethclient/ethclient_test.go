@@ -754,3 +754,28 @@ func ExampleRevertErrorData() {
 	// revert: 08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000a75736572206572726f72
 	// message: user error
 }
+
+// Test for SimulateV1
+func TestSimulateV1(t *testing.T) {
+    client := ethclient.NewClient(rpc.DialContext)
+    opts := map[string]interface{}{
+        "traceTransfers": true,
+        "validation":     true,
+        "blockStateCalls": []interface{}{
+            map[string]interface{}{
+                "calls": []interface{}{
+                    map[string]interface{}{
+                        "from": "0x...",
+                        "to":   "0x...",
+                        "data": "0x...",
+                    },
+                },
+            },
+        },
+    }
+    resp, err := client.SimulateV1(context.Background(), opts, "latest")
+    if err != nil {
+        t.Fatalf("SimulateV1 failed: %v", err)
+    }
+    t.Logf("Response: %+v", resp)
+}
