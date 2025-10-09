@@ -319,7 +319,7 @@ func (st *stateTransition) preCheck() error {
 		} else if stNonce > msgNonce {
 			return fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooLow,
 				msg.From.Hex(), msgNonce, stNonce)
-		} else if stNonce+1 < stNonce {
+		} else if stNonce == math.MaxUint64 {
 			return fmt.Errorf("%w: address %v, nonce: %d", ErrNonceMax,
 				msg.From.Hex(), stNonce)
 		}
