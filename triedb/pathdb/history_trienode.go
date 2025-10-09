@@ -160,10 +160,7 @@ func newTrienodeHistory(root common.Hash, parent common.Hash, block uint64, node
 
 // sharedLen returns the length of the common prefix shared by a and b.
 func sharedLen(a, b []byte) int {
-	n := len(a)
-	if len(b) < n {
-		n = len(b)
-	}
+	n := min(len(a), len(b))
 	for i := 0; i < n; i++ {
 		if a[i] != b[i] {
 			return i
@@ -259,7 +256,8 @@ func (h *trienodeHistory) encode() ([]byte, []byte, []byte, error) {
 			internalValOffset += uint32(len(value))
 		}
 
-		// Encode trailer
+		// Encode trailer, the number of restart sections is len(restarts))/2,
+		// as we track the offsets of both key and value sections.
 		var trailer []byte
 		for _, number := range append(restarts, uint32(len(restarts))/2) {
 			binary.BigEndian.PutUint32(buf[:4], number)
@@ -341,7 +339,7 @@ func decodeSingle(keySection []byte, onValue func([]byte, int, int) error) ([]st
 
 		keys []string
 	)
-	// Decode restarts
+	// Decode the number of restart section
 	if len(keySection) < 4 {
 		return nil, fmt.Errorf("key section too short, size: %d", len(keySection))
 	}

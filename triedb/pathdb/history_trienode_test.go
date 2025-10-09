@@ -43,11 +43,9 @@ func randomTrienodes(n int) (map[common.Hash]map[string][]byte, common.Hash) {
 		nodes[owner] = make(map[string][]byte)
 
 		for j := 0; j < 10; j++ {
-			pathLen := rand.Intn(10)
-			path := testrand.Bytes(pathLen)
+			path := testrand.Bytes(rand.Intn(10))
 			for z := 0; z < len(path); z++ {
-				valLen := rand.Intn(128)
-				nodes[owner][string(path[:z])] = testrand.Bytes(valLen)
+				nodes[owner][string(path[:z])] = testrand.Bytes(rand.Intn(128))
 			}
 		}
 		// zero-size trie node, representing it was non-existent before
@@ -65,7 +63,7 @@ func randomTrienodes(n int) (map[common.Hash]map[string][]byte, common.Hash) {
 	return nodes, root
 }
 
-func makeTrinodeHistory() *trienodeHistory {
+func makeTrienodeHistory() *trienodeHistory {
 	nodes, root := randomTrienodes(10)
 	return newTrienodeHistory(root, common.Hash{}, 1, nodes)
 }
@@ -86,7 +84,7 @@ func makeTrienodeHistories(n int) []*trienodeHistory {
 func TestEncodeDecodeTrienodeHistory(t *testing.T) {
 	var (
 		dec trienodeHistory
-		obj = makeTrinodeHistory()
+		obj = makeTrienodeHistory()
 	)
 	header, keySection, valueSection, err := obj.encode()
 	if err != nil {
@@ -107,6 +105,21 @@ func TestEncodeDecodeTrienodeHistory(t *testing.T) {
 	}
 	if !compareMapSet(dec.nodes, obj.nodes) {
 		t.Fatal("trienode content is mismatched")
+	}
+
+	// Re-encode again, ensuring the encoded blob still match
+	header2, keySection2, valueSection2, err := dec.encode()
+	if err != nil {
+		t.Fatalf("Failed to encode trienode history: %v", err)
+	}
+	if !bytes.Equal(header, header2) {
+		t.Fatal("re-encoded header is mismatched")
+	}
+	if !bytes.Equal(keySection, keySection2) {
+		t.Fatal("re-encoded key section is mismatched")
+	}
+	if !bytes.Equal(valueSection, valueSection2) {
+		t.Fatal("re-encoded value section is mismatched")
 	}
 }
 
@@ -280,7 +293,7 @@ func TestNilNodeValues(t *testing.T) {
 
 // TestCorruptedHeader tests error handling for corrupted header data
 func TestCorruptedHeader(t *testing.T) {
-	h := makeTrinodeHistory()
+	h := makeTrienodeHistory()
 	header, keySection, valueSection, _ := h.encode()
 
 	// Test corrupted version
@@ -311,7 +324,7 @@ func TestCorruptedHeader(t *testing.T) {
 
 // TestCorruptedKeySection tests error handling for corrupted key section data
 func TestCorruptedKeySection(t *testing.T) {
-	h := makeTrinodeHistory()
+	h := makeTrienodeHistory()
 	header, keySection, valueSection, _ := h.encode()
 
 	// Test empty key section when header indicates data
@@ -345,7 +358,7 @@ func TestCorruptedKeySection(t *testing.T) {
 
 // TestCorruptedValueSection tests error handling for corrupted value section data
 func TestCorruptedValueSection(t *testing.T) {
-	h := makeTrinodeHistory()
+	h := makeTrienodeHistory()
 	header, keySection, valueSection, _ := h.encode()
 
 	// Test truncated value section
@@ -368,7 +381,7 @@ func TestCorruptedValueSection(t *testing.T) {
 
 // TestInvalidOffsets tests error handling for invalid offsets in encoded data
 func TestInvalidOffsets(t *testing.T) {
-	h := makeTrinodeHistory()
+	h := makeTrienodeHistory()
 	header, keySection, valueSection, _ := h.encode()
 
 	// Corrupt key offset in header (make it larger than key section)
@@ -395,7 +408,7 @@ func TestInvalidOffsets(t *testing.T) {
 // TestTrienodeHistoryReaderNonExistentPath tests reading non-existent paths
 func TestTrienodeHistoryReaderNonExistentPath(t *testing.T) {
 	var (
-		h          = makeTrinodeHistory()
+		h          = makeTrienodeHistory()
 		freezer, _ = rawdb.NewTrienodeFreezer(t.TempDir(), false, false)
 	)
 	defer freezer.Close()
@@ -523,7 +536,7 @@ func TestTrienodeHistoryReaderNilKey(t *testing.T) {
 
 // TestTrienodeHistoryReaderIterator tests the iterator functionality
 func TestTrienodeHistoryReaderIterator(t *testing.T) {
-	h := makeTrinodeHistory()
+	h := makeTrienodeHistory()
 
 	// Count expected entries
 	expectedCount := 0
@@ -614,7 +627,7 @@ func TestSharedLen(t *testing.T) {
 // TestDecodeHeaderCorruptedData tests decodeHeader with corrupted data
 func TestDecodeHeaderCorruptedData(t *testing.T) {
 	// Create valid header data first
-	h := makeTrinodeHistory()
+	h := makeTrienodeHistory()
 	header, _, _, _ := h.encode()
 
 	// Test with empty header
@@ -661,7 +674,7 @@ func TestDecodeHeaderCorruptedData(t *testing.T) {
 
 // TestDecodeSingleCorruptedData tests decodeSingle with corrupted data
 func TestDecodeSingleCorruptedData(t *testing.T) {
-	h := makeTrinodeHistory()
+	h := makeTrienodeHistory()
 	_, keySection, _, _ := h.encode()
 
 	// Test with empty key section

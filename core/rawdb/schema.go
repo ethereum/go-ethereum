@@ -416,25 +416,19 @@ func trienodeHistoryIndexKey(addressHash common.Hash, path []byte) []byte {
 
 // accountHistoryIndexBlockKey = StateHistoryAccountBlockPrefix + addressHash + blockID
 func accountHistoryIndexBlockKey(addressHash common.Hash, blockID uint32) []byte {
-	var buf4 [4]byte
-	binary.BigEndian.PutUint32(buf4[:], blockID)
-
 	totalLen := len(StateHistoryAccountBlockPrefix) + common.HashLength + 4
 	out := make([]byte, totalLen)
 
 	off := 0
 	off += copy(out[off:], StateHistoryAccountBlockPrefix)
 	off += copy(out[off:], addressHash.Bytes())
-	copy(out[off:], buf4[:])
+	binary.BigEndian.PutUint32(out[off:], blockID)
 
 	return out
 }
 
 // storageHistoryIndexBlockKey = StateHistoryStorageBlockPrefix + addressHash + storageHash + blockID
 func storageHistoryIndexBlockKey(addressHash common.Hash, storageHash common.Hash, blockID uint32) []byte {
-	var buf4 [4]byte
-	binary.BigEndian.PutUint32(buf4[:], blockID)
-
 	totalLen := len(StateHistoryStorageBlockPrefix) + 2*common.HashLength + 4
 	out := make([]byte, totalLen)
 
@@ -442,16 +436,13 @@ func storageHistoryIndexBlockKey(addressHash common.Hash, storageHash common.Has
 	off += copy(out[off:], StateHistoryStorageBlockPrefix)
 	off += copy(out[off:], addressHash.Bytes())
 	off += copy(out[off:], storageHash.Bytes())
-	copy(out[off:], buf4[:])
+	binary.BigEndian.PutUint32(out[off:], blockID)
 
 	return out
 }
 
 // trienodeHistoryIndexBlockKey = TrienodeHistoryBlockPrefix + addressHash + trienode path + blockID
 func trienodeHistoryIndexBlockKey(addressHash common.Hash, path []byte, blockID uint32) []byte {
-	var buf4 [4]byte
-	binary.BigEndian.PutUint32(buf4[:], blockID)
-
 	totalLen := len(TrienodeHistoryBlockPrefix) + common.HashLength + len(path) + 4
 	out := make([]byte, totalLen)
 
@@ -459,7 +450,7 @@ func trienodeHistoryIndexBlockKey(addressHash common.Hash, path []byte, blockID 
 	off += copy(out[off:], TrienodeHistoryBlockPrefix)
 	off += copy(out[off:], addressHash.Bytes())
 	off += copy(out[off:], path)
-	copy(out[off:], buf4[:])
+	binary.BigEndian.PutUint32(out[off:], blockID)
 
 	return out
 }
