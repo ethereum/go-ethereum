@@ -347,26 +347,19 @@ func (db *Database) SyncKeyValue() error {
 // meter periodically retrieves internal leveldb counters and reports them to
 // the metrics subsystem.
 func (db *Database) meter(refresh time.Duration, namespace string) {
-	// Create the counters to store current and previous compaction values
-	compactions := make([][]int64, 2)
-	for i := 0; i < 2; i++ {
-		compactions[i] = make([]int64, 4)
-	}
 	// Create storages for states and warning log tracer.
 	var (
 		errc chan error
 		merr error
 
 		stats           leveldb.DBStats
-		iostats         [2]int64
-		delaystats      [2]int64
 		lastWritePaused time.Time
 	)
 	timer := time.NewTimer(refresh)
 	defer timer.Stop()
 
 	// Iterate ad infinitum and collect the stats
-	for i := 1; errc == nil && merr == nil; i++ {
+	for errc == nil && merr == nil {
 		// Retrieve the database stats
 		// Stats method resets buffers inside therefore it's okay to just pass the struct.
 		err := db.db.Stats(&stats)
@@ -375,44 +368,45 @@ func (db *Database) meter(refresh time.Duration, namespace string) {
 			merr = err
 			continue
 		}
-		// Iterate over all the leveldbTable rows, and accumulate the entries
-		for j := 0; j < len(compactions[i%2]); j++ {
-			compactions[i%2][j] = 0
-		}
-		compactions[i%2][0] = stats.LevelSizes.Sum()
+		// Compute interval values from stats (already per-interval) and update meters
+		var (
+			compTimeDelta  int64
+			compReadDelta  = stats.LevelRead.Sum()
+			compWriteDelta = stats.LevelWrite.Sum()
+			diskSizeTotal  = stats.LevelSizes.Sum()
+		)
 		for _, t := range stats.LevelDurations {
-			compactions[i%2][1] += t.Nanoseconds()
+			compTimeDelta += t.Nanoseconds()
 		}
-		compactions[i%2][2] = stats.LevelRead.Sum()
-		compactions[i%2][3] = stats.LevelWrite.Sum()
-		// Update all the requested meters
-		db.diskSizeGauge.Update(compactions[i%2][0])
-		db.compTimeMeter.Mark(compactions[i%2][1] - compactions[(i-1)%2][1])
-		db.compReadMeter.Mark(compactions[i%2][2] - compactions[(i-1)%2][2])
-		db.compWriteMeter.Mark(compactions[i%2][3] - compactions[(i-1)%2][3])
+
+		db.diskSizeGauge.Update(diskSizeTotal)
+		db.compTimeMeter.Mark(compTimeDelta)
+		db.compReadMeter.Mark(compReadDelta)
+		db.compWriteMeter.Mark(compWriteDelta)
+
+		// Write delay (per-interval already)
 		var (
 			delayN   = int64(stats.WriteDelayCount)
 			duration = stats.WriteDelayDuration
 			paused   = stats.WritePaused
 		)
-		db.writeDelayNMeter.Mark(delayN - delaystats[0])
-		db.writeDelayMeter.Mark(duration.Nanoseconds() - delaystats[1])
+		db.writeDelayNMeter.Mark(delayN)
+		db.writeDelayMeter.Mark(duration.Nanoseconds())
 		// If a warning that db is performing compaction has been displayed, any subsequent
 		// warnings will be withheld for one minute not to overwhelm the user.
-		if paused && delayN-delaystats[0] == 0 && duration.Nanoseconds()-delaystats[1] == 0 &&
+		if paused && delayN == 0 && duration == 0 &&
 			time.Now().After(lastWritePaused.Add(degradationWarnInterval)) {
 			db.log.Warn("Database compacting, degraded performance")
 			lastWritePaused = time.Now()
 		}
-		delaystats[0], delaystats[1] = delayN, duration.Nanoseconds()
 
+		// Disk IO (per-interval already)
 		var (
 			nRead  = int64(stats.IORead)
 			nWrite = int64(stats.IOWrite)
 		)
-		db.diskReadMeter.Mark(nRead - iostats[0])
-		db.diskWriteMeter.Mark(nWrite - iostats[1])
-		iostats[0], iostats[1] = nRead, nWrite
+		db.diskReadMeter.Mark(nRead)
+		db.diskWriteMeter.Mark(nWrite)
 
 		db.memCompGauge.Update(int64(stats.MemComp))
 		db.level0CompGauge.Update(int64(stats.Level0Comp))
