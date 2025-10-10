@@ -28,7 +28,9 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/restapi"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/gorilla/mux"
 )
 
 type Client struct {
