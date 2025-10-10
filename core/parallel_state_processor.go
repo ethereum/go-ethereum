@@ -57,7 +57,7 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateR
 	tPostprocessStart := time.Now()
 	header := block.Header()
 
-	balTracer, hooks := NewBlockAccessListTracer(len(block.Transactions()) + 1)
+	balTracer, hooks := NewBlockAccessListTracer()
 	tracingStateDB := state.NewHookedState(postTxState, hooks)
 	context := NewEVMBlockContext(header, p.chain, nil)
 	postTxState.SetAccessListIndex(len(block.Transactions()) + 1)
@@ -125,7 +125,7 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateR
 	postTxState.Finalise(true)
 
 	balTracer.OnBlockFinalization()
-	diff, stateReads := balTracer.IdxChanges()
+	diff, stateReads := balTracer.accessList.FinalizedIdxChanges()
 	allStateReads.Merge(stateReads)
 
 	balIdx := len(block.Transactions()) + 1
@@ -248,7 +248,7 @@ func (p *ParallelStateProcessor) calcAndVerifyRoot(preState *state.StateDB, bloc
 // execTx executes single transaction returning a result which includes state accessed/modified
 func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transaction, txIdx int, db *state.StateDB, signer types.Signer) *txExecResult {
 	header := block.Header()
-	balTracer, hooks := NewBlockAccessListTracer(txIdx + 1)
+	balTracer, hooks := NewBlockAccessListTracer()
 	tracingStateDB := state.NewHookedState(db, hooks)
 	context := NewEVMBlockContext(header, p.chain, nil)
 
@@ -278,7 +278,7 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 		return &txExecResult{err: err}
 	}
 
-	diff, accesses := balTracer.IdxChanges()
+	diff, accesses := balTracer.accessList.FinalizedIdxChanges()
 	if err := db.BlockAccessList().ValidateStateDiff(txIdx+1, diff); err != nil {
 		return &txExecResult{err: err}
 	}
@@ -317,7 +317,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	alReader := state.NewBALReader(block, statedb)
 	statedb.SetBlockAccessList(alReader)
 
-	balTracer, hooks := NewBlockAccessListTracer(0)
+	balTracer, hooks := NewBlockAccessListTracer()
 	tracingStateDB := state.NewHookedState(statedb, hooks)
 	// TODO: figure out exactly why we need to set the hooks on the TracingStateDB and the vm.Config
 	cfg.Tracer = hooks
@@ -335,7 +335,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	// TODO: weird that I have to manually call finalize here
 	balTracer.OnPreTxExecutionDone()
 
-	diff, stateReads := balTracer.IdxChanges()
+	diff, stateReads := balTracer.accessList.FinalizedIdxChanges()
 	if err := statedb.BlockAccessList().ValidateStateDiff(0, diff); err != nil {
 		return nil, err
 	}

@@ -300,7 +300,7 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 	var hookedState vm.StateDB = sdb
 	var vmConfig vm.Config
 	if miner.chainConfig.IsAmsterdam(header.Number, header.Time) {
-		alTracer, hooks = core.NewBlockAccessListTracer(0)
+		alTracer, hooks = core.NewBlockAccessListTracer()
 		hookedState = state.NewHookedState(sdb, hooks)
 		vmConfig.Tracer = hooks
 	}
