@@ -18,11 +18,13 @@
 package ethclient
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -694,6 +696,44 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 		return err
 	}
 	return ec.c.CallContext(ctx, nil, "eth_sendRawTransaction", hexutil.Encode(data))
+}
+
+// SendRawTransactionSync submits a signed tx and waits for a receipt (or until
+// the optional timeout elapses on the server side). If timeout == 0, the server
+// uses its default.
+func (ec *Client) SendRawTransactionSync(
+	ctx context.Context,
+	tx *types.Transaction,
+	timeout time.Duration,
+) (*types.Receipt, error) {
+
+	var buf bytes.Buffer
+	if err := tx.EncodeRLP(&buf); err != nil {
+		return nil, err
+	}
+	return ec.SendRawTransactionSyncRaw(ctx, buf.Bytes(), timeout)
+}
+
+// SendRawTransactionSyncRaw is the low-level variant that takes the raw RLP.
+func (ec *Client) SendRawTransactionSyncRaw(
+	ctx context.Context,
+	rawTx []byte,
+	timeout time.Duration,
+) (*types.Receipt, error) {
+
+	var out *types.Receipt
+
+	// Build params: raw bytes as hex, plus optional timeout as hexutil.Uint64
+	params := []any{hexutil.Bytes(rawTx)}
+	if timeout > 0 {
+		t := hexutil.Uint64(timeout.Milliseconds())
+		params = append(params, t)
+	}
+
+	if err := ec.c.CallContext(ctx, &out, "eth_sendRawTransactionSync", params...); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // RevertErrorData returns the 'revert reason' data of a contract call.
