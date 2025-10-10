@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/tracers"
-	clienttypes "github.com/ethereum/go-ethereum/ethclient/types"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -280,10 +279,8 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 	return arg
 }
 
-// OverrideAccount is an alias for ethclient/types.OverrideAccount.
-// Deprecated: Use clienttypes.OverrideAccount instead.
-type OverrideAccount = clienttypes.OverrideAccount
+// OverrideAccount is an alias for ethereum.OverrideAccount.
+type OverrideAccount = ethereum.OverrideAccount
 
-// BlockOverrides is an alias for ethclient/types.BlockOverrides.
-// Deprecated: Use clienttypes.BlockOverrides instead.
-type BlockOverrides = clienttypes.BlockOverrides
+// BlockOverrides is an alias for ethereum.BlockOverrides.
+type BlockOverrides = ethereum.BlockOverrides

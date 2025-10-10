@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	clienttypes "github.com/ethereum/go-ethereum/ethclient/types"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -831,17 +830,17 @@ type SimulateOptions struct {
 
 // SimulateBlock represents a batch of calls to be simulated.
 type SimulateBlock struct {
-	BlockOverrides *clienttypes.BlockOverrides                     `json:"blockOverrides,omitempty"`
-	StateOverrides *map[common.Address]clienttypes.OverrideAccount `json:"stateOverrides,omitempty"`
-	Calls          []ethereum.CallMsg                              `json:"calls"`
+	BlockOverrides *ethereum.BlockOverrides                     `json:"blockOverrides,omitempty"`
+	StateOverrides *map[common.Address]ethereum.OverrideAccount `json:"stateOverrides,omitempty"`
+	Calls          []ethereum.CallMsg                           `json:"calls"`
 }
 
 // MarshalJSON implements json.Marshaler for SimulateBlock.
 func (s SimulateBlock) MarshalJSON() ([]byte, error) {
 	type Alias struct {
-		BlockOverrides *clienttypes.BlockOverrides                     `json:"blockOverrides,omitempty"`
-		StateOverrides *map[common.Address]clienttypes.OverrideAccount `json:"stateOverrides,omitempty"`
-		Calls          []interface{}                                   `json:"calls"`
+		BlockOverrides *ethereum.BlockOverrides                     `json:"blockOverrides,omitempty"`
+		StateOverrides *map[common.Address]ethereum.OverrideAccount `json:"stateOverrides,omitempty"`
+		Calls          []interface{}                                `json:"calls"`
 	}
 	calls := make([]interface{}, len(s.Calls))
 	for i, call := range s.Calls {

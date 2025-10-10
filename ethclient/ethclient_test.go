@@ -37,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethclient"
-	clienttypes "github.com/ethereum/go-ethereum/ethclient/types"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -851,7 +850,7 @@ func TestSimulateV1WithBlockOverrides(t *testing.T) {
 	opts := ethclient.SimulateOptions{
 		BlockStateCalls: []ethclient.SimulateBlock{
 			{
-				BlockOverrides: &clienttypes.BlockOverrides{
+				BlockOverrides: &ethereum.BlockOverrides{
 					Time: timestamp,
 				},
 				Calls: []ethereum.CallMsg{
@@ -912,7 +911,7 @@ func TestSimulateV1WithStateOverrides(t *testing.T) {
 	balance := new(big.Int)
 	balance.SetString(balanceStr, 10)
 
-	stateOverrides := map[common.Address]clienttypes.OverrideAccount{
+	stateOverrides := map[common.Address]ethereum.OverrideAccount{
 		from: {
 			Balance: balance,
 		},
