@@ -502,7 +502,7 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	for i, tx := range txs {
 		// Validate and mark the remote transaction
 		if tx == nil {
-			return fmt.Errorf("transactions: transaction %d is nil", i)
+			return fmt.Errorf("Transactions: transaction %d is nil", i)
 		}
 		hash := tx.Hash()
 		if _, exists := seen[hash]; exists {
