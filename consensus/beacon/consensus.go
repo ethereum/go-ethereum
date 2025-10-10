@@ -272,13 +272,8 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 			return err
 		}
 	}
-
-	if chain.Config().IsAmsterdam(header.Number, header.Time) {
-		if header.BlockAccessListHash == nil {
-			// TODO: (self study).  figure out if any of the header checks here overlap with the
-			// other location that I validate the block access list hash.
-			return fmt.Errorf("block access list hash must be set in header post-Amsterdam")
-		}
+	if chain.Config().IsAmsterdam(header.Number, header.Time) && header.BlockAccessListHash == nil {
+		return fmt.Errorf("block access list hash must be set post-Amsterdam")
 	}
 	return nil
 }

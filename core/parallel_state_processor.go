@@ -125,7 +125,7 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateR
 	postTxState.Finalise(true)
 
 	balTracer.OnBlockFinalization()
-	diff, stateReads := balTracer.accessList.FinalizedIdxChanges()
+	diff, stateReads := balTracer.builder.FinalizedIdxChanges()
 	allStateReads.Merge(stateReads)
 
 	balIdx := len(block.Transactions()) + 1
@@ -278,7 +278,7 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 		return &txExecResult{err: err}
 	}
 
-	diff, accesses := balTracer.accessList.FinalizedIdxChanges()
+	diff, accesses := balTracer.builder.FinalizedIdxChanges()
 	if err := db.BlockAccessList().ValidateStateDiff(txIdx+1, diff); err != nil {
 		return &txExecResult{err: err}
 	}
@@ -335,7 +335,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	// TODO: weird that I have to manually call finalize here
 	balTracer.OnPreTxExecutionDone()
 
-	diff, stateReads := balTracer.accessList.FinalizedIdxChanges()
+	diff, stateReads := balTracer.builder.FinalizedIdxChanges()
 	if err := statedb.BlockAccessList().ValidateStateDiff(0, diff); err != nil {
 		return nil, err
 	}

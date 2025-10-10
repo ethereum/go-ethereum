@@ -114,8 +114,6 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	if v.config.IsAmsterdam(block.Number(), block.Time()) {
 		if block.Body().AccessList == nil {
 			return fmt.Errorf("access list not present in block body")
-		} else if block.Header().BlockAccessListHash == nil {
-			return fmt.Errorf("access list hash not present in block header")
 		} else if *block.Header().BlockAccessListHash != block.Body().AccessList.Hash() {
 			return fmt.Errorf("access list hash mismatch.  local: %x. remote: %x\n", block.Body().AccessList.Hash(), *block.Header().BlockAccessListHash)
 		} else if err := block.Body().AccessList.Validate(); err != nil {

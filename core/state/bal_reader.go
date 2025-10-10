@@ -67,7 +67,7 @@ func (p *prestateResolver) account(addr common.Address) *types.StateAccount {
 	return res.(*types.StateAccount)
 }
 
-func (r *BALReader) initObjFromDiff(db *StateDB, addr common.Address, a *types.StateAccount, diff *bal.AccountState) *stateObject {
+func (r *BALReader) initObjFromDiff(db *StateDB, addr common.Address, a *types.StateAccount, diff *bal.AccountMutations) *stateObject {
 	var acct *types.StateAccount
 	if a == nil {
 		acct = &types.StateAccount{
@@ -104,7 +104,7 @@ func (r *BALReader) initObjFromDiff(db *StateDB, addr common.Address, a *types.S
 	return obj
 }
 
-func (s *BALReader) initMutatedObjFromDiff(db *StateDB, addr common.Address, a *types.StateAccount, diff *bal.AccountState) *stateObject {
+func (s *BALReader) initMutatedObjFromDiff(db *StateDB, addr common.Address, a *types.StateAccount, diff *bal.AccountMutations) *stateObject {
 	var acct *types.StateAccount
 	if a == nil {
 		acct = &types.StateAccount{
@@ -231,7 +231,7 @@ func (r *BALReader) StateRoot(prestate *StateDB) (root common.Hash, prestateLoad
 
 // changesAt returns all state changes at the given index.
 func (r *BALReader) changesAt(idx int) *bal.StateDiff {
-	res := &bal.StateDiff{make(map[common.Address]*bal.AccountState)}
+	res := &bal.StateDiff{make(map[common.Address]*bal.AccountMutations)}
 	for addr, _ := range r.accesses {
 		accountChanges := r.accountChangesAt(addr, idx)
 		if accountChanges != nil {
@@ -243,13 +243,13 @@ func (r *BALReader) changesAt(idx int) *bal.StateDiff {
 
 // accountChangesAt returns the state changes of an account at a given index,
 // or nil if there are no changes.
-func (r *BALReader) accountChangesAt(addr common.Address, idx int) *bal.AccountState {
+func (r *BALReader) accountChangesAt(addr common.Address, idx int) *bal.AccountMutations {
 	acct, exist := r.accesses[addr]
 	if !exist {
 		return nil
 	}
 
-	var res bal.AccountState
+	var res bal.AccountMutations
 
 	for i := len(acct.BalanceChanges) - 1; i >= 0; i-- {
 		if acct.BalanceChanges[i].TxIdx == uint16(idx) {
@@ -321,13 +321,13 @@ func (r *BALReader) readAccount(db *StateDB, addr common.Address, idx int) *stat
 }
 
 // readAccountDiff returns the accumulated state changes of an account up through idx.
-func (r *BALReader) readAccountDiff(addr common.Address, idx int) *bal.AccountState {
+func (r *BALReader) readAccountDiff(addr common.Address, idx int) *bal.AccountMutations {
 	diff, exist := r.accesses[addr]
 	if !exist {
 		return nil
 	}
 
-	var res bal.AccountState
+	var res bal.AccountMutations
 
 	for i := 0; i < len(diff.BalanceChanges) && diff.BalanceChanges[i].TxIdx <= uint16(idx); i++ {
 		res.Balance = diff.BalanceChanges[i].Balance

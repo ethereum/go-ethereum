@@ -15,15 +15,11 @@ type accountPrestate struct {
 	code    []byte
 }
 
-// BlockAccessListTracer constructs an EIP-7928 block access list from the
-// execution of a block
+// BlockAccessListTracer is a tracer which gathers state accesses/mutations
+// from the execution of a block.  It is used for constructing and verifying
+// EIP-7928 block access lists.
 type BlockAccessListTracer struct {
-	// this is a set of access lists for each call scope. the overall block access lists
-	// is accrued at index 0, while the access lists of various nested execution
-	// scopes are in the proceeding indices.
-	// When an execution scope terminates in a non-reverting fashion, the changes are
-	// merged into the access list of the parent scope.
-	accessList *bal.ConstructionBlockAccessList
+	builder *bal.BlockAccessListBuilder
 
 	// the access list index that changes are currently being recorded into
 	balIdx uint16
@@ -32,7 +28,7 @@ type BlockAccessListTracer struct {
 // NewBlockAccessListTracer returns an BlockAccessListTracer and a set of hooks
 func NewBlockAccessListTracer() (*BlockAccessListTracer, *tracing.Hooks) {
 	balTracer := &BlockAccessListTracer{
-		accessList: bal.NewConstructionBlockAccessList(),
+		builder: bal.NewConstructionBlockAccessList(),
 	}
 	hooks := &tracing.Hooks{
 		OnBlockFinalization:  balTracer.OnBlockFinalization,
@@ -58,62 +54,62 @@ func NewBlockAccessListTracer() (*BlockAccessListTracer, *tracing.Hooks) {
 // AccessList returns the constructed access list.
 // It is assumed that this is only called after all the block state changes
 // have been executed and the block has been finalized.
-func (a *BlockAccessListTracer) AccessList() *bal.ConstructionBlockAccessList {
-	return a.accessList
+func (a *BlockAccessListTracer) AccessList() *bal.BlockAccessListBuilder {
+	return a.builder
 }
 
 func (a *BlockAccessListTracer) OnPreTxExecutionDone() {
-	a.accessList.FinalisePendingChanges(0)
+	a.builder.FinalisePendingChanges(0)
 	a.balIdx++
 }
 
 func (a *BlockAccessListTracer) TxEndHook(receipt *types.Receipt, err error) {
-	a.accessList.FinalisePendingChanges(a.balIdx)
+	a.builder.FinalisePendingChanges(a.balIdx)
 	a.balIdx++
 }
 
 func (a *BlockAccessListTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	a.accessList.EnterScope()
+	a.builder.EnterScope()
 }
 
 func (a *BlockAccessListTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
-	a.accessList.ExitScope(reverted)
+	a.builder.ExitScope(reverted)
 }
 
 func (a *BlockAccessListTracer) OnCodeChange(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte, reason tracing.CodeChangeReason) {
 	// TODO: if we don't have this equality check, some tests fail.  should be investigated.
 	// probably the tracer shouldn't invoke code change if the code didn't actually change tho.
 	if prevCodeHash != codeHash {
-		a.accessList.CodeChange(addr, prevCode, code)
+		a.builder.CodeChange(addr, prevCode, code)
 	}
 }
 
 func (a *BlockAccessListTracer) OnSelfDestruct(addr common.Address) {
-	a.accessList.SelfDestruct(addr)
+	a.builder.SelfDestruct(addr)
 }
 
 func (a *BlockAccessListTracer) OnBlockFinalization() {
-	a.accessList.FinalisePendingChanges(a.balIdx)
+	a.builder.FinalisePendingChanges(a.balIdx)
 }
 
 func (a *BlockAccessListTracer) OnBalanceChange(addr common.Address, prevBalance, newBalance *big.Int, _ tracing.BalanceChangeReason) {
 	newU256 := new(uint256.Int).SetBytes(newBalance.Bytes())
 	prevU256 := new(uint256.Int).SetBytes(prevBalance.Bytes())
-	a.accessList.BalanceChange(addr, prevU256, newU256)
+	a.builder.BalanceChange(addr, prevU256, newU256)
 }
 
 func (a *BlockAccessListTracer) OnNonceChange(addr common.Address, prev uint64, new uint64, reason tracing.NonceChangeReason) {
-	a.accessList.NonceChange(addr, prev, new)
+	a.builder.NonceChange(addr, prev, new)
 }
 
 func (a *BlockAccessListTracer) OnStorageRead(addr common.Address, key common.Hash) {
-	a.accessList.StorageRead(addr, key)
+	a.builder.StorageRead(addr, key)
 }
 
 func (a *BlockAccessListTracer) OnAcountRead(addr common.Address) {
-	a.accessList.AccountRead(addr)
+	a.builder.AccountRead(addr)
 }
 
 func (a *BlockAccessListTracer) OnStorageChange(addr common.Address, slot common.Hash, prev common.Hash, new common.Hash) {
-	a.accessList.StorageWrite(addr, slot, prev, new)
+	a.builder.StorageWrite(addr, slot, prev, new)
 }

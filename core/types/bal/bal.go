@@ -28,21 +28,21 @@ import (
 // idxAccessListBuilder is responsible for producing the state accesses and
 // reads recorded within the scope of a single index in the access list.
 type idxAccessListBuilder struct {
-	// stores the tx-prestate values of any account/storage values which were modified
-	//
-	// TODO: it's a bit unfortunate that the prestate.StorageWrites is reused here to
-	// represent the prestate values of keys which were written and it would be nice to
-	// somehow make it clear that the field can contain both the mutated values or the
-	// prestate depending on the context (or find a cleaner solution entirely, instead
-	// of reusing the field here)
-	prestates map[common.Address]*AccountState
+	// stores the previous values of any account data that was modified in the
+	// current index.
+	prestates map[common.Address]*partialAccountState
 
+	// a stack which maintains a set of state mutations/reads for each EVM
+	// execution frame.
+	//
+	// <boilerplate for description about how the execution stack mechanics work when call frames end with/without erring/reverting>
+	// TODO: how does this construction handle EVM errors which terminate execution of a transaction entirely.
 	accessesStack []map[common.Address]*constructionAccountAccess
 }
 
 func newAccessListBuilder() *idxAccessListBuilder {
 	return &idxAccessListBuilder{
-		make(map[common.Address]*AccountState),
+		make(map[common.Address]*partialAccountState),
 		[]map[common.Address]*constructionAccountAccess{
 			make(map[common.Address]*constructionAccountAccess),
 		},
@@ -65,7 +65,7 @@ func (c *idxAccessListBuilder) accountRead(address common.Address) {
 
 func (c *idxAccessListBuilder) storageWrite(address common.Address, key, prevVal, newVal common.Hash) {
 	if _, ok := c.prestates[address]; !ok {
-		c.prestates[address] = &AccountState{}
+		c.prestates[address] = &AccountMutations{}
 	}
 	if c.prestates[address].StorageWrites == nil {
 		c.prestates[address].StorageWrites = make(map[common.Hash]common.Hash)
@@ -83,7 +83,7 @@ func (c *idxAccessListBuilder) storageWrite(address common.Address, key, prevVal
 
 func (c *idxAccessListBuilder) balanceChange(address common.Address, prev, cur *uint256.Int) {
 	if _, ok := c.prestates[address]; !ok {
-		c.prestates[address] = &AccountState{}
+		c.prestates[address] = &AccountMutations{}
 	}
 	if c.prestates[address].Balance == nil {
 		c.prestates[address].Balance = prev
@@ -104,7 +104,7 @@ func (c *idxAccessListBuilder) codeChange(address common.Address, prev, cur []by
 	}
 
 	if _, ok := c.prestates[address]; !ok {
-		c.prestates[address] = &AccountState{}
+		c.prestates[address] = &AccountMutations{}
 	}
 	if c.prestates[address].Code == nil {
 		c.prestates[address].Code = prev
@@ -145,7 +145,7 @@ func (c *idxAccessListBuilder) selfDestruct(address common.Address) {
 
 func (c *idxAccessListBuilder) nonceChange(address common.Address, prev, cur uint64) {
 	if _, ok := c.prestates[address]; !ok {
-		c.prestates[address] = &AccountState{}
+		c.prestates[address] = &AccountMutations{}
 	}
 	if c.prestates[address].Nonce == nil {
 		c.prestates[address].Nonce = &prev
@@ -186,7 +186,7 @@ func (c *idxAccessListBuilder) exitScope(reverted bool) {
 // state which was accessed.  The idxAccessListBuilder instance should be discarded
 // after calling finalise.
 func (a *idxAccessListBuilder) finalise() (*StateDiff, StateAccesses) {
-	diff := &StateDiff{make(map[common.Address]*AccountState)}
+	diff := &StateDiff{make(map[common.Address]*AccountMutations)}
 	stateAccesses := make(StateAccesses)
 
 	for addr, access := range a.accessesStack[0] {
@@ -224,7 +224,7 @@ func (a *idxAccessListBuilder) finalise() (*StateDiff, StateAccesses) {
 		}
 
 		stateAccesses[addr] = access.storageReads
-		diff.Mutations[addr] = &AccountState{
+		diff.Mutations[addr] = &AccountMutations{
 			Balance:       access.balance,
 			Nonce:         access.nonce,
 			Code:          access.code,
@@ -235,15 +235,15 @@ func (a *idxAccessListBuilder) finalise() (*StateDiff, StateAccesses) {
 	return diff, stateAccesses
 }
 
-func (c *ConstructionBlockAccessList) FinalisePendingChanges(idx uint16) {
-	diff, accesses := c.nonFinalizedAccessList.finalise()
-	c.nonFinalizedAccessList = newAccessListBuilder()
+func (c *BlockAccessListBuilder) FinalisePendingChanges(idx uint16) {
+	diff, accesses := c.idxBuilder.finalise()
+	c.idxBuilder = newAccessListBuilder()
 
 	for addr, stateDiff := range diff.Mutations {
-		acctChanges, ok := c.Accounts[addr]
+		acctChanges, ok := c.FinalizedAccesses[addr]
 		if !ok {
 			acctChanges = &ConstructionAccountAccesses{}
-			c.Accounts[addr] = acctChanges
+			c.FinalizedAccesses[addr] = acctChanges
 		}
 
 		if stateDiff.Nonce != nil {
@@ -286,10 +286,10 @@ func (c *ConstructionBlockAccessList) FinalisePendingChanges(idx uint16) {
 		}
 	}
 	for addr, stateAccesses := range accesses {
-		acctAccess, ok := c.Accounts[addr]
+		acctAccess, ok := c.FinalizedAccesses[addr]
 		if !ok {
 			acctAccess = &ConstructionAccountAccesses{}
-			c.Accounts[addr] = acctAccess
+			c.FinalizedAccesses[addr] = acctAccess
 		}
 
 		for key := range stateAccesses {
@@ -308,39 +308,39 @@ func (c *ConstructionBlockAccessList) FinalisePendingChanges(idx uint16) {
 	c.lastFinalizedAccesses = accesses
 }
 
-func (c *ConstructionBlockAccessList) StorageRead(address common.Address, key common.Hash) {
-	c.nonFinalizedAccessList.storageRead(address, key)
+func (c *BlockAccessListBuilder) StorageRead(address common.Address, key common.Hash) {
+	c.idxBuilder.storageRead(address, key)
 }
-func (c *ConstructionBlockAccessList) AccountRead(address common.Address) {
-	c.nonFinalizedAccessList.accountRead(address)
+func (c *BlockAccessListBuilder) AccountRead(address common.Address) {
+	c.idxBuilder.accountRead(address)
 }
-func (c *ConstructionBlockAccessList) StorageWrite(address common.Address, key, prevVal, newVal common.Hash) {
-	c.nonFinalizedAccessList.storageWrite(address, key, prevVal, newVal)
+func (c *BlockAccessListBuilder) StorageWrite(address common.Address, key, prevVal, newVal common.Hash) {
+	c.idxBuilder.storageWrite(address, key, prevVal, newVal)
 }
-func (c *ConstructionBlockAccessList) BalanceChange(address common.Address, prev, cur *uint256.Int) {
-	c.nonFinalizedAccessList.balanceChange(address, prev, cur)
+func (c *BlockAccessListBuilder) BalanceChange(address common.Address, prev, cur *uint256.Int) {
+	c.idxBuilder.balanceChange(address, prev, cur)
 }
-func (c *ConstructionBlockAccessList) NonceChange(address common.Address, prev, cur uint64) {
-	c.nonFinalizedAccessList.nonceChange(address, prev, cur)
+func (c *BlockAccessListBuilder) NonceChange(address common.Address, prev, cur uint64) {
+	c.idxBuilder.nonceChange(address, prev, cur)
 }
-func (c *ConstructionBlockAccessList) CodeChange(address common.Address, prev, cur []byte) {
-	c.nonFinalizedAccessList.codeChange(address, prev, cur)
+func (c *BlockAccessListBuilder) CodeChange(address common.Address, prev, cur []byte) {
+	c.idxBuilder.codeChange(address, prev, cur)
 }
-func (c *ConstructionBlockAccessList) SelfDestruct(address common.Address) {
-	c.nonFinalizedAccessList.selfDestruct(address)
+func (c *BlockAccessListBuilder) SelfDestruct(address common.Address) {
+	c.idxBuilder.selfDestruct(address)
 }
 
-func (c *ConstructionBlockAccessList) EnterScope() {
-	c.nonFinalizedAccessList.enterScope()
+func (c *BlockAccessListBuilder) EnterScope() {
+	c.idxBuilder.enterScope()
 }
-func (c *ConstructionBlockAccessList) ExitScope(reverted bool) {
-	c.nonFinalizedAccessList.exitScope(reverted)
+func (c *BlockAccessListBuilder) ExitScope(reverted bool) {
+	c.idxBuilder.exitScope(reverted)
 }
 
 // TODO: the BalReader Validation method should accept the computed values as
 // a index/StateDiff/StateAccesses trio.
 
-// BAL tracer maintains a ConstructionBlockAccessList.
+// BAL tracer maintains a BlockAccessListBuilder.
 // For each BAL index, it instantiates an idxAccessListBuilder and
 // appends the result to the access list where appropriate
 
@@ -505,31 +505,19 @@ func (c *constructionAccountAccess) NonceChange(cur uint64) {
 	c.nonce = &cur
 }
 
-// NewConstructionAccountAccesses initializes the account access object.
-func NewConstructionAccountAccesses() *ConstructionAccountAccesses {
-	return &ConstructionAccountAccesses{
-		StorageWrites:  make(map[common.Hash]map[uint16]common.Hash),
-		StorageReads:   make(map[common.Hash]struct{}),
-		BalanceChanges: make(map[uint16]*uint256.Int),
-		NonceChanges:   make(map[uint16]uint64),
-		CodeChanges:    make(map[uint16]CodeChange),
-	}
-}
+// BlockAccessListBuilder is used to build an EIP-7928 block access list
+type BlockAccessListBuilder struct {
+	FinalizedAccesses map[common.Address]*ConstructionAccountAccesses
 
-// ConstructionBlockAccessList contains post-block modified state and some state accessed
-// in execution (account addresses and storage keys).
-type ConstructionBlockAccessList struct {
-	Accounts map[common.Address]*ConstructionAccountAccesses
-
-	nonFinalizedAccessList *idxAccessListBuilder
+	idxBuilder *idxAccessListBuilder
 
 	lastFinalizedMutations *StateDiff
 	lastFinalizedAccesses  StateAccesses
 }
 
 // NewConstructionBlockAccessList instantiates an empty access list.
-func NewConstructionBlockAccessList() *ConstructionBlockAccessList {
-	return &ConstructionBlockAccessList{
+func NewConstructionBlockAccessList() *BlockAccessListBuilder {
+	return &BlockAccessListBuilder{
 		make(map[common.Address]*ConstructionAccountAccesses),
 		newAccessListBuilder(),
 		nil,
@@ -538,9 +526,9 @@ func NewConstructionBlockAccessList() *ConstructionBlockAccessList {
 }
 
 // Copy returns a deep copy of the access list.
-func (c *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
+func (c *BlockAccessListBuilder) Copy() *BlockAccessListBuilder {
 	res := NewConstructionBlockAccessList()
-	for addr, aa := range c.Accounts {
+	for addr, aa := range c.FinalizedAccesses {
 		var aaCopy ConstructionAccountAccesses
 
 		slotWrites := make(map[common.Hash]map[uint16]common.Hash, len(aa.StorageWrites))
@@ -564,21 +552,28 @@ func (c *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 				Code:  bytes.Clone(codeChange.Code),
 			}
 		}
-		res.Accounts[addr] = &aaCopy
+		res.FinalizedAccesses[addr] = &aaCopy
 	}
 	return res
 }
 
-func (c *ConstructionBlockAccessList) FinalizedIdxChanges() (*StateDiff, StateAccesses) {
+// FinalizedIdxChanges returns the state mutations and accesses recorded in the latest
+// access list index that was finalized.
+func (c *BlockAccessListBuilder) FinalizedIdxChanges() (*StateDiff, StateAccesses) {
 	return c.lastFinalizedMutations, c.lastFinalizedAccesses
 }
 
+// StateDiff contains state mutations occuring over one or more access list
+// index.
 type StateDiff struct {
-	Mutations map[common.Address]*AccountState `json:"Mutations,omitempty"`
+	Mutations map[common.Address]*AccountMutations `json:"Mutations,omitempty"`
 }
 
+// StateAccesses contains a set of accounts/storage that were accessed during the
+// execution of one or more access list indices.
 type StateAccesses map[common.Address]map[common.Hash]struct{}
 
+// Merge combines adds the accesses from other into s.
 func (s *StateAccesses) Merge(other StateAccesses) {
 	for addr, accesses := range other {
 		if _, ok := (*s)[addr]; !ok {
@@ -590,18 +585,24 @@ func (s *StateAccesses) Merge(other StateAccesses) {
 	}
 }
 
-type AccountState struct {
+type partialAccountState struct {
+	balance *uint256.Int                `json:"Balance,omitempty"`
+	nonce   *uint64                     `json:"Nonce,omitempty"`
+	code    ContractCode                `json:"Code,omitempty"`
+	storage map[common.Hash]common.Hash `json:"StorageWrites,omitempty"`
+}
+
+// AccountMutations contains mutations that were made to an account across
+// one or more access list indices.
+type AccountMutations struct {
 	Balance       *uint256.Int                `json:"Balance,omitempty"`
 	Nonce         *uint64                     `json:"Nonce,omitempty"`
 	Code          ContractCode                `json:"Code,omitempty"`
 	StorageWrites map[common.Hash]common.Hash `json:"StorageWrites,omitempty"`
 }
 
-func (a *AccountState) Empty() bool {
-	return a.Balance == nil && a.Nonce == nil && a.Code == nil && len(a.StorageWrites) == 0
-}
-
-func (a *AccountState) String() string {
+// String returns a human-readable JSON representation of the account mutations.
+func (a *AccountMutations) String() string {
 	var res bytes.Buffer
 	enc := json.NewEncoder(&res)
 	enc.SetIndent("", "    ")
@@ -609,39 +610,8 @@ func (a *AccountState) String() string {
 	return res.String()
 }
 
-// Merge the changes of a future AccountState into the caller, resulting in the
-// combined state changes through next.
-func (a *AccountState) Merge(next *AccountState) {
-	if next.Balance != nil {
-		a.Balance = next.Balance
-	}
-	if next.Nonce != nil {
-		a.Nonce = next.Nonce
-	}
-	if next.Code != nil {
-		a.Code = next.Code
-	}
-	if next.StorageWrites != nil {
-		if a.StorageWrites == nil {
-			a.StorageWrites = maps.Clone(next.StorageWrites)
-		} else {
-			for key, val := range next.StorageWrites {
-				a.StorageWrites[key] = val
-			}
-		}
-	}
-}
-
-func NewEmptyAccountState() *AccountState {
-	return &AccountState{
-		nil,
-		nil,
-		nil,
-		nil,
-	}
-}
-
-func (a *AccountState) Eq(other *AccountState) bool {
+// Eq returns whether the calling instance is equal to the provided one.
+func (a *AccountMutations) Eq(other *AccountMutations) bool {
 	if a.Balance != nil || other.Balance != nil {
 		if a.Balance == nil || other.Balance == nil {
 			return false
@@ -678,8 +648,14 @@ func (a *AccountState) Eq(other *AccountState) bool {
 	return true
 }
 
-func (a *AccountState) Copy() *AccountState {
-	res := NewEmptyAccountState()
+// Copy returns a deep-copy of the instance.
+func (a *AccountMutations) Copy() *AccountMutations {
+	res := &AccountMutations{
+		nil,
+		nil,
+		nil,
+		nil,
+	}
 	if a.Nonce != nil {
 		res.Nonce = new(uint64)
 		*res.Nonce = *a.Nonce
@@ -696,6 +672,7 @@ func (a *AccountState) Copy() *AccountState {
 	return res
 }
 
+// String returns the state diff as a formatted JSON string.
 func (s *StateDiff) String() string {
 	var res bytes.Buffer
 	enc := json.NewEncoder(&res)
@@ -733,8 +710,9 @@ func (s *StateDiff) Merge(next *StateDiff) {
 	}
 }
 
+// Copy returns a deep copy of the StateDiff
 func (s *StateDiff) Copy() *StateDiff {
-	res := &StateDiff{make(map[common.Address]*AccountState)}
+	res := &StateDiff{make(map[common.Address]*AccountMutations)}
 	for addr, accountDiff := range s.Mutations {
 		cpy := accountDiff.Copy()
 		res.Mutations[addr] = cpy
