@@ -605,9 +605,9 @@ func writeStateHistory(writer ethdb.AncientWriter, dl *diffLayer) error {
 	if err := rawdb.WriteStateHistory(writer, dl.stateID(), history.meta.encode(), accountIndex, storageIndex, accountData, storageData); err != nil {
 		return err
 	}
-	historyDataBytesMeter.Mark(int64(dataSize))
-	historyIndexBytesMeter.Mark(int64(indexSize))
-	historyBuildTimeMeter.UpdateSince(start)
+	stateHistoryDataBytesMeter.Mark(int64(dataSize))
+	stateHistoryIndexBytesMeter.Mark(int64(indexSize))
+	stateHistoryBuildTimeMeter.UpdateSince(start)
 	log.Debug("Stored state history", "id", dl.stateID(), "block", dl.block, "data", dataSize, "index", indexSize, "elapsed", common.PrettyDuration(time.Since(start)))
 
 	return nil
