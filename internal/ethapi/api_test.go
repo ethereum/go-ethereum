@@ -3981,64 +3981,12 @@ func makeSelfSignedRaw(t *testing.T, api *TransactionAPI, addr common.Address) (
 	return makeSignedRaw(t, api, addr, addr, big.NewInt(0))
 }
 
-func (b *testBackend) SubscribeTransactionReceipts(txHashes []common.Hash, ch chan<- []*ReceiptWithTx) event.Subscription {
-	// If no feed is wired for this test, return a no-op subscription
+func (b *testBackend) SubscribeTransactionReceipts(_ []common.Hash, ch chan<- []*ReceiptWithTx) event.Subscription {
 	if b.receiptsFeed == nil {
-		return event.NewSubscription(func(quit <-chan struct{}) error {
-			<-quit
-			return nil
-		})
+		return event.NewSubscription(func(quit <-chan struct{}) error { <-quit; return nil })
 	}
-
-	// No filter => forward batches directly
-	if len(txHashes) == 0 {
-		return b.receiptsFeed.Subscribe(ch)
-	}
-
-	// Filtered: wrap the underlying feed and only forward matching receipts
-	in := make(chan []*ReceiptWithTx, 1)
-	sub := b.receiptsFeed.Subscribe(in)
-
-	// Build a hash set for quick filtering
-	wanted := make(map[common.Hash]struct{}, len(txHashes))
-	for _, h := range txHashes {
-		wanted[h] = struct{}{}
-	}
-
-	return event.NewSubscription(func(quit <-chan struct{}) error {
-		defer sub.Unsubscribe()
-		for {
-			select {
-			case batch, ok := <-in:
-				if !ok {
-					return nil
-				}
-				var out []*ReceiptWithTx
-				for _, r := range batch {
-					if r != nil && r.Receipt != nil {
-						if _, ok := wanted[r.Receipt.TxHash]; ok {
-							out = append(out, r)
-						}
-					}
-				}
-				if len(out) == 0 {
-					continue
-				}
-				select {
-				case ch <- out:
-				case <-quit:
-					return nil
-				}
-			case err, ok := <-sub.Err():
-				if !ok || err == nil {
-					return nil
-				}
-				return err
-			case <-quit:
-				return nil
-			}
-		}
-	})
+	// Test will only publish the receipts it wants; we just forward.
+	return b.receiptsFeed.Subscribe(ch)
 }
 func TestSendRawTransactionSync_Success(t *testing.T) {
 	t.Parallel()
