@@ -299,3 +299,76 @@ func WriteStateHistory(db ethdb.AncientWriter, id uint64, meta []byte, accountIn
 	})
 	return err
 }
+
+// ReadTrienodeHistory retrieves the trienode history corresponding to the specified id.
+// Compute the position of trienode history in freezer by minus one since the id of first
+// trienode history starts from one(zero for initial state).
+func ReadTrienodeHistory(db ethdb.AncientReaderOp, id uint64) ([]byte, []byte, []byte, error) {
+	header, err := db.Ancient(trienodeHistoryHeaderTable, id-1)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	keySection, err := db.Ancient(trienodeHistoryKeySectionTable, id-1)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	valueSection, err := db.Ancient(trienodeHistoryValueSectionTable, id-1)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return header, keySection, valueSection, nil
+}
+
+// ReadTrienodeHistoryHeader retrieves the header section of trienode history.
+func ReadTrienodeHistoryHeader(db ethdb.AncientReaderOp, id uint64) ([]byte, error) {
+	return db.Ancient(trienodeHistoryHeaderTable, id-1)
+}
+
+// ReadTrienodeHistoryKeySection retrieves the key section of trienode history.
+func ReadTrienodeHistoryKeySection(db ethdb.AncientReaderOp, id uint64) ([]byte, error) {
+	return db.Ancient(trienodeHistoryKeySectionTable, id-1)
+}
+
+// ReadTrienodeHistoryValueSection retrieves the value section of trienode history.
+func ReadTrienodeHistoryValueSection(db ethdb.AncientReaderOp, id uint64) ([]byte, error) {
+	return db.Ancient(trienodeHistoryValueSectionTable, id-1)
+}
+
+// ReadTrienodeHistoryList retrieves the a list of trienode history corresponding
+// to the specified range.
+// Compute the position of trienode history in freezer by minus one since the id
+// of first trienode history starts from one(zero for initial state).
+func ReadTrienodeHistoryList(db ethdb.AncientReaderOp, start uint64, count uint64) ([][]byte, [][]byte, [][]byte, error) {
+	header, err := db.AncientRange(trienodeHistoryHeaderTable, start-1, count, 0)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	keySection, err := db.AncientRange(trienodeHistoryKeySectionTable, start-1, count, 0)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	valueSection, err := db.AncientRange(trienodeHistoryValueSectionTable, start-1, count, 0)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if len(header) != len(keySection) || len(header) != len(valueSection) {
+		return nil, nil, nil, errors.New("trienode history is corrupted")
+	}
+	return header, keySection, valueSection, nil
+}
+
+// WriteTrienodeHistory writes the provided trienode history to database.
+// Compute the position of trienode history in freezer by minus one since
+// the id of first state history starts from one(zero for initial state).
+func WriteTrienodeHistory(db ethdb.AncientWriter, id uint64, header []byte, keySection []byte, valueSection []byte) error {
+	_, err := db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		if err := op.AppendRaw(trienodeHistoryHeaderTable, id-1, header); err != nil {
+			return err
+		}
+		if err := op.AppendRaw(trienodeHistoryKeySectionTable, id-1, keySection); err != nil {
+			return err
+		}
+		return op.AppendRaw(trienodeHistoryValueSectionTable, id-1, valueSection)
+	})
+	return err
+}
