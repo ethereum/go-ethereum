@@ -706,7 +706,6 @@ func (ec *Client) SendRawTransactionSync(
 	tx *types.Transaction,
 	timeout time.Duration,
 ) (*types.Receipt, error) {
-
 	var buf bytes.Buffer
 	if err := tx.EncodeRLP(&buf); err != nil {
 		return nil, err
@@ -720,7 +719,6 @@ func (ec *Client) SendRawTransactionSyncRaw(
 	rawTx []byte,
 	timeout time.Duration,
 ) (*types.Receipt, error) {
-
 	var out *types.Receipt
 
 	// Build params: raw bytes as hex, plus optional timeout as hexutil.Uint64
