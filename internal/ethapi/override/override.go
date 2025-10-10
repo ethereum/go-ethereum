@@ -42,6 +42,7 @@ type OverrideAccount struct {
 	Balance          *hexutil.Big                `json:"balance"`
 	State            map[common.Hash]common.Hash `json:"state"`
 	StateDiff        map[common.Hash]common.Hash `json:"stateDiff"`
+	StateDiffMask    map[common.Hash]common.Hash `json:"stateDiffMask"`
 	MovePrecompileTo *common.Address             `json:"movePrecompileToAddress"`
 }
 
@@ -98,8 +99,8 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 			u256Balance, _ := uint256.FromBig((*big.Int)(account.Balance))
 			statedb.SetBalance(addr, u256Balance, tracing.BalanceChangeUnspecified)
 		}
-		if account.State != nil && account.StateDiff != nil {
-			return fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
+		if account.State != nil && (account.StateDiff != nil || account.StateDiffMask != nil) {
+			return fmt.Errorf("account %s has both 'state' and 'stateDiff' or 'stateDiffMask'", addr.Hex())
 		}
 		// Replace entire state if caller requires.
 		if account.State != nil {
@@ -108,7 +109,15 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 		// Apply state diff into specified accounts.
 		if account.StateDiff != nil {
 			for key, value := range account.StateDiff {
-				statedb.SetState(addr, key, value)
+				if mask, ok := account.StateDiffMask[key]; !ok {
+					statedb.SetState(addr, key, value)
+				} else {
+					curSlotVal := statedb.GetState(addr, key)
+					for i := range curSlotVal {
+						curSlotVal[i] = ^mask[i]&curSlotVal[i] | value[i]
+					}
+					statedb.SetState(addr, key, curSlotVal)
+				}
 			}
 		}
 	}
