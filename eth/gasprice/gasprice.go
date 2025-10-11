@@ -123,6 +123,7 @@ func NewOracle(backend OracleBackend, params Config, startPrice *big.Int) *Oracl
 	sub := backend.SubscribeChainHeadEvent(headEvent)
 	if sub != nil { // the gasprice testBackend doesn't support subscribing to head events
 		go func() {
+			defer sub.Unsubscribe()
 			var lastHead common.Hash
 			for {
 				select {

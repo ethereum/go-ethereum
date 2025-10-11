@@ -103,6 +103,7 @@ func (api *FilterAPI) timeoutLoop(timeout time.Duration) {
 		select {
 		case <-ticker.C:
 		case <-api.events.chainSub.Err():
+			api.events.chainSub.Unsubscribe()
 			return
 		}
 		api.filtersMu.Lock()
@@ -230,6 +231,7 @@ func (api *FilterAPI) NewBlockFilter() rpc.ID {
 				api.filtersMu.Lock()
 				delete(api.filters, headerSub.ID)
 				api.filtersMu.Unlock()
+				headerSub.Unsubscribe()
 				return
 			}
 		}
@@ -415,6 +417,7 @@ func (api *FilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 				api.filtersMu.Lock()
 				delete(api.filters, logsSub.ID)
 				api.filtersMu.Unlock()
+				logsSub.Unsubscribe()
 				return
 			}
 		}
