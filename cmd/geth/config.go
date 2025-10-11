@@ -305,7 +305,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		srv.RegisterName("engine", catalyst.NewConsensusAPI(eth))
 		blsyncer := blsync.NewClient(utils.MakeBeaconLightConfig(ctx))
 		blsyncer.SetEngineRPC(rpc.DialInProc(srv))
-		restServer.Register(blsyncer.RestAPI())
+		restServer.Register(blsyncer.RestAPI(restServer))
 		stack.RegisterLifecycle(blsyncer)
 	} else {
 		// Launch the engine API for interacting with external consensus client.
