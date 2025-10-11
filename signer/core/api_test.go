@@ -264,7 +264,7 @@ func TestSignTx(t *testing.T) {
 		t.Errorf("Expected nil-response, got %v", res)
 	}
 	if err != keystore.ErrDecrypt {
-		t.Errorf("Expected ErrLocked! %v", err)
+		t.Errorf("Expected ErrDecrypt! %v", err)
 	}
 	control.approveCh <- "No way"
 	res, err = api.SignTransaction(t.Context(), tx, &methodSig)

@@ -69,12 +69,21 @@ var (
 	gcStorageMeter       = metrics.NewRegisteredMeter("pathdb/gc/storage/count", nil)
 	gcStorageBytesMeter  = metrics.NewRegisteredMeter("pathdb/gc/storage/bytes", nil)
 
-	historyBuildTimeMeter  = metrics.NewRegisteredResettingTimer("pathdb/history/time", nil)
-	historyDataBytesMeter  = metrics.NewRegisteredMeter("pathdb/history/bytes/data", nil)
-	historyIndexBytesMeter = metrics.NewRegisteredMeter("pathdb/history/bytes/index", nil)
+	stateHistoryBuildTimeMeter  = metrics.NewRegisteredResettingTimer("pathdb/history/state/time", nil)
+	stateHistoryDataBytesMeter  = metrics.NewRegisteredMeter("pathdb/history/state/bytes/data", nil)
+	stateHistoryIndexBytesMeter = metrics.NewRegisteredMeter("pathdb/history/state/bytes/index", nil)
 
-	indexHistoryTimer   = metrics.NewRegisteredResettingTimer("pathdb/history/index/time", nil)
-	unindexHistoryTimer = metrics.NewRegisteredResettingTimer("pathdb/history/unindex/time", nil)
+	//nolint:unused
+	trienodeHistoryBuildTimeMeter = metrics.NewRegisteredResettingTimer("pathdb/history/trienode/time", nil)
+	//nolint:unused
+	trienodeHistoryDataBytesMeter = metrics.NewRegisteredMeter("pathdb/history/trienode/bytes/data", nil)
+	//nolint:unused
+	trienodeHistoryIndexBytesMeter = metrics.NewRegisteredMeter("pathdb/history/trienode/bytes/index", nil)
+
+	stateIndexHistoryTimer      = metrics.NewRegisteredResettingTimer("pathdb/history/state/index/time", nil)
+	stateUnindexHistoryTimer    = metrics.NewRegisteredResettingTimer("pathdb/history/state/unindex/time", nil)
+	trienodeIndexHistoryTimer   = metrics.NewRegisteredResettingTimer("pathdb/history/trienode/index/time", nil)
+	trienodeUnindexHistoryTimer = metrics.NewRegisteredResettingTimer("pathdb/history/trienode/unindex/time", nil)
 
 	lookupAddLayerTimer    = metrics.NewRegisteredResettingTimer("pathdb/lookup/add/time", nil)
 	lookupRemoveLayerTimer = metrics.NewRegisteredResettingTimer("pathdb/lookup/remove/time", nil)

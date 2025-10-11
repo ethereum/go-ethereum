@@ -350,6 +350,15 @@ func (ec *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*
 	return r, err
 }
 
+// SubscribeTransactionReceipts subscribes to notifications about transaction receipts.
+func (ec *Client) SubscribeTransactionReceipts(ctx context.Context, q *ethereum.TransactionReceiptsQuery, ch chan<- []*types.Receipt) (ethereum.Subscription, error) {
+	sub, err := ec.c.EthSubscribe(ctx, ch, "transactionReceipts", q)
+	if err != nil {
+		return nil, err
+	}
+	return sub, nil
+}
+
 // SyncProgress retrieves the current progress of the sync algorithm. If there's
 // no sync currently running, it returns nil.
 func (ec *Client) SyncProgress(ctx context.Context) (*ethereum.SyncProgress, error) {

@@ -984,17 +984,24 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, sync bool) []error {
 
 // addTxsLocked attempts to queue a batch of transactions if they are valid.
 // The transaction pool lock must be held.
+// Returns the error for each tx, and the set of accounts that might became promotable.
 func (pool *LegacyPool) addTxsLocked(txs []*types.Transaction) ([]error, *accountSet) {
-	dirty := newAccountSet(pool.signer)
-	errs := make([]error, len(txs))
+	var (
+		dirty = newAccountSet(pool.signer)
+		errs  = make([]error, len(txs))
+		valid int64
+	)
 	for i, tx := range txs {
 		replaced, err := pool.add(tx)
 		errs[i] = err
-		if err == nil && !replaced {
-			dirty.addTx(tx)
+		if err == nil {
+			if !replaced {
+				dirty.addTx(tx)
+			}
+			valid++
 		}
 	}
-	validTxMeter.Mark(int64(len(dirty.accounts)))
+	validTxMeter.Mark(valid)
 	return errs, dirty
 }
 
