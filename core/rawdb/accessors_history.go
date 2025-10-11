@@ -212,18 +212,6 @@ func DeleteTrienodeHistoryIndexBlock(db ethdb.KeyValueWriter, addressHash common
 	}
 }
 
-// increaseKey increase the input key by one bit. Return nil if the entire
-// addition operation overflows.
-func increaseKey(key []byte) []byte {
-	for i := len(key) - 1; i >= 0; i-- {
-		key[i]++
-		if key[i] != 0x0 {
-			return key
-		}
-	}
-	return nil
-}
-
 // DeleteStateHistoryIndexes completely removes all history indexing data, including
 // indexes for accounts and storages.
 func DeleteStateHistoryIndexes(db ethdb.KeyValueRangeDeleter) {
@@ -243,7 +231,7 @@ func DeleteTrienodeHistoryIndexes(db ethdb.KeyValueRangeDeleter) {
 // Note, this method assumes the space with the given prefix is exclusively occupied!
 func DeleteHistoryByRange(db ethdb.KeyValueRangeDeleter, prefix []byte) {
 	start := prefix
-	limit := increaseKey(bytes.Clone(prefix))
+	limit := common.IncreaseKey(bytes.Clone(prefix))
 
 	// Try to remove the data in the range by a loop, as the leveldb
 	// doesn't support the native range deletion.

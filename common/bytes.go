@@ -149,3 +149,15 @@ func TrimRightZeroes(s []byte) []byte {
 	}
 	return s[:idx]
 }
+
+// IncreaseKey increase the input key by one bit. Return nil if the entire
+// addition operation overflows.
+func IncreaseKey(key []byte) []byte {
+	for i := len(key) - 1; i >= 0; i-- {
+		key[i]++
+		if key[i] != 0x0 {
+			return key
+		}
+	}
+	return nil
+}

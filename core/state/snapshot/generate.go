@@ -545,7 +545,7 @@ func generateStorages(ctx *generatorContext, dl *diskLayer, stateRoot common.Has
 		if exhausted {
 			break
 		}
-		if origin = increaseKey(last); origin == nil {
+		if origin = common.IncreaseKey(last); origin == nil {
 			break // special case, the last is 0xffffffff...fff
 		}
 	}
@@ -631,7 +631,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 		if err != nil {
 			return err // The procedure it aborted, either by external signal or internal error.
 		}
-		origin = increaseKey(last)
+		origin = common.IncreaseKey(last)
 
 		// Last step, cleanup the storages after the last account.
 		// All the left storages should be treated as dangling.
@@ -704,18 +704,6 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	// Someone will be looking for us, wait it out
 	abort = <-dl.genAbort
 	abort <- nil
-}
-
-// increaseKey increase the input key by one bit. Return nil if the entire
-// addition operation overflows.
-func increaseKey(key []byte) []byte {
-	for i := len(key) - 1; i >= 0; i-- {
-		key[i]++
-		if key[i] != 0x0 {
-			return key
-		}
-	}
-	return nil
 }
 
 // abortErr wraps an interruption signal received to represent the
