@@ -35,7 +35,12 @@ func GetMemoryCopyPadded(m []byte, offset, size int64) ([]byte, error) {
 	}
 	length := int64(len(m))
 	if offset+size < length { // slice fully inside memory
-		return memoryCopy(m, offset, size), nil
+		if size == 0 {
+			return nil, nil
+		}
+		cpy := make([]byte, size)
+		copy(cpy, m[offset:offset+size])
+		return cpy, nil
 	}
 	paddingNeeded := offset + size - length
 	if paddingNeeded > memoryPadLimit {
@@ -46,21 +51,6 @@ func GetMemoryCopyPadded(m []byte, offset, size int64) ([]byte, error) {
 		copy(cpy, MemoryPtr(m, offset, overlap))
 	}
 	return cpy, nil
-}
-
-func memoryCopy(m []byte, offset, size int64) (cpy []byte) {
-	if size == 0 {
-		return nil
-	}
-
-	if len(m) > int(offset) {
-		cpy = make([]byte, size)
-		copy(cpy, m[offset:offset+size])
-
-		return
-	}
-
-	return
 }
 
 // MemoryPtr returns a pointer to a slice of memory.
