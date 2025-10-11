@@ -120,6 +120,7 @@ func deleteIndexMetadata(db ethdb.KeyValueWriter, typ historyType) {
 // batchIndexer is responsible for performing batch indexing or unindexing
 // of historical data (e.g., state or trie node changes) atomically.
 type batchIndexer struct {
+	config  historyIndexerConfig    // Configs for history index
 	index   map[stateIdent][]uint64 // List of history IDs for tracked state entry
 	pending int                     // Number of entries processed in the current batch.
 	delete  bool                    // Operation mode: true for unindex, false for index.
@@ -129,8 +130,9 @@ type batchIndexer struct {
 }
 
 // newBatchIndexer constructs the batch indexer with the supplied mode.
-func newBatchIndexer(db ethdb.KeyValueStore, delete bool, typ historyType) *batchIndexer {
+func newBatchIndexer(config historyIndexerConfig, db ethdb.KeyValueStore, delete bool, typ historyType) *batchIndexer {
 	return &batchIndexer{
+		config: config,
 		index:  make(map[stateIdent][]uint64),
 		delete: delete,
 		typ:    typ,
@@ -156,7 +158,7 @@ func (b *batchIndexer) finish(force bool) error {
 	if b.pending == 0 {
 		return nil
 	}
-	if !force && b.pending < historyIndexBatch {
+	if !force && b.pending < b.config.indexBatchSize {
 		return nil
 	}
 	var (
@@ -170,7 +172,7 @@ func (b *batchIndexer) finish(force bool) error {
 	for ident, list := range b.index {
 		eg.Go(func() error {
 			if !b.delete {
-				iw, err := newIndexWriter(b.db, ident)
+				iw, err := newIndexWriter(b.db, ident, b.config.maxEntriesPerBlock)
 				if err != nil {
 					return err
 				}
@@ -183,7 +185,7 @@ func (b *batchIndexer) finish(force bool) error {
 				iw.finish(batch)
 				batchMu.Unlock()
 			} else {
-				id, err := newIndexDeleter(b.db, ident)
+				id, err := newIndexDeleter(b.db, ident, b.config.maxEntriesPerBlock)
 				if err != nil {
 					return err
 				}
@@ -222,7 +224,7 @@ func (b *batchIndexer) finish(force bool) error {
 }
 
 // indexSingle processes the state history with the specified ID for indexing.
-func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.AncientReader, typ historyType) error {
+func indexSingle(config historyIndexerConfig, historyID uint64, db ethdb.KeyValueStore, freezer ethdb.AncientReader, typ historyType) error {
 	start := time.Now()
 	defer func() {
 		if typ == typeStateHistory {
@@ -243,7 +245,7 @@ func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancient
 	var (
 		err error
 		h   history
-		b   = newBatchIndexer(db, false, typ)
+		b   = newBatchIndexer(config, db, false, typ)
 	)
 	if typ == typeStateHistory {
 		h, err = readStateHistory(freezer, historyID)
@@ -264,7 +266,7 @@ func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancient
 }
 
 // unindexSingle processes the state history with the specified ID for unindexing.
-func unindexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.AncientReader, typ historyType) error {
+func unindexSingle(config historyIndexerConfig, historyID uint64, db ethdb.KeyValueStore, freezer ethdb.AncientReader, typ historyType) error {
 	start := time.Now()
 	defer func() {
 		if typ == typeStateHistory {
@@ -286,7 +288,7 @@ func unindexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancie
 		err error
 		h   history
 	)
-	b := newBatchIndexer(db, true, typ)
+	b := newBatchIndexer(config, db, true, typ)
 	if typ == typeStateHistory {
 		h, err = readStateHistory(freezer, historyID)
 	} else {
@@ -319,6 +321,7 @@ type interruptSignal struct {
 // If a state history is removed due to a rollback, the associated indexes should
 // be unmarked accordingly.
 type indexIniter struct {
+	config    historyIndexerConfig
 	disk      ethdb.KeyValueStore
 	freezer   ethdb.AncientStore
 	interrupt chan *interruptSignal
@@ -334,8 +337,9 @@ type indexIniter struct {
 	wg sync.WaitGroup
 }
 
-func newIndexIniter(disk ethdb.KeyValueStore, freezer ethdb.AncientStore, typ historyType, lastID uint64) *indexIniter {
+func newIndexIniter(config historyIndexerConfig, disk ethdb.KeyValueStore, freezer ethdb.AncientStore, typ historyType, lastID uint64) *indexIniter {
 	initer := &indexIniter{
+		config:    config,
 		disk:      disk,
 		freezer:   freezer,
 		interrupt: make(chan *interruptSignal),
@@ -446,7 +450,7 @@ func (i *indexIniter) run(lastID uint64) {
 			// been fully indexed, unindex it here and shut down the initializer.
 			if checkDone() {
 				i.log.Info("Truncate the extra history", "id", lastID)
-				if err := unindexSingle(lastID, i.disk, i.freezer, i.typ); err != nil {
+				if err := unindexSingle(i.config, lastID, i.disk, i.freezer, i.typ); err != nil {
 					signal.result <- err
 					return
 				}
@@ -547,7 +551,7 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 		current = beginID
 		start   = time.Now()
 		logged  = time.Now()
-		batch   = newBatchIndexer(i.disk, false, i.typ)
+		batch   = newBatchIndexer(i.config, i.disk, false, i.typ)
 	)
 	for current <= lastID {
 		count := lastID - current + 1
@@ -653,6 +657,37 @@ func (i *indexIniter) recover(lastID uint64) {
 	}
 }
 
+// historyIndexerConfig defines the configuration parameters used for building
+// history indexes.
+//
+// Each state index maintains a set of index blocks, each grouping multiple history
+// entries. The configuration below controls how these entries are organized,
+// batched, and stored for different types of history data.
+type historyIndexerConfig struct {
+	maxEntriesPerBlock uint16 // Maximum number of entries grouped into a single index block
+	indexBatchSize     int    // Number of history entries processed in a single operation
+}
+
+// indexerConfigs defines the configs for various history indexer.
+var indexerConfigs = map[historyType]historyIndexerConfig{
+	typeStateHistory: {
+		// The average size of each entry is approximately 1–2 bytes. Therefore, a block
+		// size of 2K entries is chosen to roughly limit the storage size to around 4KB.
+		//
+		// Note, this block size was chosen as 4K previously. Changing the block size
+		// won't break the backward compatibility.
+		maxEntriesPerBlock: 2048,
+		indexBatchSize:     512 * 1024,
+	},
+	typeTrienodeHistory: {
+		// The average size of each entry is approximately 1–2 bytes, with an additional
+		// byte reserved for extension. Therefore, a block size of 1K entries is chosen
+		// to roughly limit the storage size to around 4KB.
+		maxEntriesPerBlock: 1024,
+		indexBatchSize:     512 * 1024,
+	},
+}
+
 // historyIndexer manages the indexing and unindexing of state histories,
 // providing access to historical states.
 //
@@ -664,6 +699,7 @@ func (i *indexIniter) recover(lastID uint64) {
 // the history index is created or removed along with the corresponding
 // state history.
 type historyIndexer struct {
+	config  historyIndexerConfig
 	initer  *indexIniter
 	typ     historyType
 	disk    ethdb.KeyValueStore
@@ -718,8 +754,14 @@ func checkVersion(disk ethdb.KeyValueStore, typ historyType) {
 // initer to complete the indexing of any remaining state histories.
 func newHistoryIndexer(disk ethdb.KeyValueStore, freezer ethdb.AncientStore, lastHistoryID uint64, typ historyType) *historyIndexer {
 	checkVersion(disk, typ)
+
+	config, exists := indexerConfigs[typ]
+	if !exists {
+		panic(fmt.Errorf("unknown history type: %v", typ))
+	}
 	return &historyIndexer{
-		initer:  newIndexIniter(disk, freezer, typ, lastHistoryID),
+		config:  config,
+		initer:  newIndexIniter(config, disk, freezer, typ, lastHistoryID),
 		typ:     typ,
 		disk:    disk,
 		freezer: freezer,
@@ -748,7 +790,7 @@ func (i *historyIndexer) extend(historyID uint64) error {
 	case <-i.initer.closed:
 		return errors.New("indexer is closed")
 	case <-i.initer.done:
-		return indexSingle(historyID, i.disk, i.freezer, i.typ)
+		return indexSingle(i.config, historyID, i.disk, i.freezer, i.typ)
 	case i.initer.interrupt <- signal:
 		return <-signal.result
 	}
@@ -765,7 +807,7 @@ func (i *historyIndexer) shorten(historyID uint64) error {
 	case <-i.initer.closed:
 		return errors.New("indexer is closed")
 	case <-i.initer.done:
-		return unindexSingle(historyID, i.disk, i.freezer, i.typ)
+		return unindexSingle(i.config, historyID, i.disk, i.freezer, i.typ)
 	case i.initer.interrupt <- signal:
 		return <-signal.result
 	}

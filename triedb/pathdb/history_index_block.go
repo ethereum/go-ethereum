@@ -25,10 +25,8 @@ import (
 )
 
 const (
-	indexBlockDescSize   = 14        // The size of index block descriptor
-	indexBlockEntriesCap = 4096      // The maximum number of entries can be grouped in a block
-	indexBlockRestartLen = 256       // The restart interval length of index block
-	historyIndexBatch    = 1_000_000 // The number of state history indexes for constructing or deleting as batch
+	indexBlockDescSize   = 14  // The size of index block descriptor
+	indexBlockRestartLen = 256 // The restart interval length of index block
 )
 
 // indexBlockDesc represents a descriptor for an index block, which contains a
@@ -51,8 +49,8 @@ func (d *indexBlockDesc) empty() bool {
 
 // full indicates whether the number of elements in the block exceeds the
 // preconfigured limit.
-func (d *indexBlockDesc) full() bool {
-	return d.entries >= indexBlockEntriesCap
+func (d *indexBlockDesc) full(capacity uint16) bool {
+	return d.entries >= capacity
 }
 
 // encode packs index block descriptor into byte stream.
@@ -222,13 +220,15 @@ type blockWriter struct {
 	desc     *indexBlockDesc // Descriptor of the block
 	restarts []uint16        // Offsets into the data slice, marking the start of each section
 	data     []byte          // Aggregated encoded data slice
+	capacity uint16          // Maximum number of entries grouped into a single block
 }
 
-func newBlockWriter(blob []byte, desc *indexBlockDesc) (*blockWriter, error) {
+func newBlockWriter(blob []byte, desc *indexBlockDesc, capacity uint16) (*blockWriter, error) {
 	if len(blob) == 0 {
 		return &blockWriter{
-			desc: desc,
-			data: make([]byte, 0, 1024),
+			desc:     desc,
+			data:     make([]byte, 0, 1024),
+			capacity: capacity,
 		}, nil
 	}
 	restarts, data, err := parseIndexBlock(blob)
@@ -239,6 +239,7 @@ func newBlockWriter(blob []byte, desc *indexBlockDesc) (*blockWriter, error) {
 		desc:     desc,
 		restarts: restarts,
 		data:     data, // safe to own the slice
+		capacity: capacity,
 	}, nil
 }
 
@@ -372,7 +373,7 @@ func (b *blockWriter) empty() bool {
 }
 
 func (b *blockWriter) full() bool {
-	return b.desc.full()
+	return b.desc.full(b.capacity)
 }
 
 // finish finalizes the index block encoding by appending the encoded restart points

@@ -25,10 +25,11 @@ import (
 )
 
 func TestBlockReaderBasic(t *testing.T) {
+	blockCap := uint16(4096)
 	elements := []uint64{
 		1, 5, 10, 11, 20,
 	}
-	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0))
+	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0), blockCap)
 	for i := 0; i < len(elements); i++ {
 		bw.append(elements[i])
 	}
@@ -60,13 +61,14 @@ func TestBlockReaderBasic(t *testing.T) {
 }
 
 func TestBlockReaderLarge(t *testing.T) {
+	blockCap := uint16(4096)
 	var elements []uint64
 	for i := 0; i < 1000; i++ {
 		elements = append(elements, rand.Uint64())
 	}
 	slices.Sort(elements)
 
-	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0))
+	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0), blockCap)
 	for i := 0; i < len(elements); i++ {
 		bw.append(elements[i])
 	}
@@ -95,7 +97,8 @@ func TestBlockReaderLarge(t *testing.T) {
 }
 
 func TestBlockWriterBasic(t *testing.T) {
-	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0))
+	blockCap := uint16(4096)
+	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0), blockCap)
 	if !bw.empty() {
 		t.Fatal("expected empty block")
 	}
@@ -107,7 +110,7 @@ func TestBlockWriterBasic(t *testing.T) {
 		bw.append(uint64(i + 3))
 	}
 
-	bw, err := newBlockWriter(bw.finish(), newIndexBlockDesc(0))
+	bw, err := newBlockWriter(bw.finish(), newIndexBlockDesc(0), blockCap)
 	if err != nil {
 		t.Fatalf("Failed to construct the block writer, %v", err)
 	}
@@ -120,7 +123,8 @@ func TestBlockWriterBasic(t *testing.T) {
 }
 
 func TestBlockWriterDelete(t *testing.T) {
-	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0))
+	blockCap := uint16(4096)
+	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0), blockCap)
 	for i := 0; i < 10; i++ {
 		bw.append(uint64(i + 1))
 	}
@@ -144,10 +148,11 @@ func TestBlockWriterDelete(t *testing.T) {
 }
 
 func TestBlcokWriterDeleteWithData(t *testing.T) {
+	blockCap := uint16(4096)
 	elements := []uint64{
 		1, 5, 10, 11, 20,
 	}
-	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0))
+	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0), blockCap)
 	for i := 0; i < len(elements); i++ {
 		bw.append(elements[i])
 	}
@@ -158,7 +163,7 @@ func TestBlcokWriterDeleteWithData(t *testing.T) {
 		max:     20,
 		entries: 5,
 	}
-	bw, err := newBlockWriter(bw.finish(), desc)
+	bw, err := newBlockWriter(bw.finish(), desc, blockCap)
 	if err != nil {
 		t.Fatalf("Failed to construct block writer %v", err)
 	}
@@ -201,7 +206,8 @@ func TestBlcokWriterDeleteWithData(t *testing.T) {
 }
 
 func TestCorruptedIndexBlock(t *testing.T) {
-	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0))
+	blockCap := uint16(4096)
+	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0), blockCap)
 	for i := 0; i < 10; i++ {
 		bw.append(uint64(i + 1))
 	}
@@ -209,7 +215,7 @@ func TestCorruptedIndexBlock(t *testing.T) {
 
 	// Mutate the buffer manually
 	buf[len(buf)-1]++
-	_, err := newBlockWriter(buf, newIndexBlockDesc(0))
+	_, err := newBlockWriter(buf, newIndexBlockDesc(0), blockCap)
 	if err == nil {
 		t.Fatal("Corrupted index block data is not detected")
 	}
@@ -218,8 +224,9 @@ func TestCorruptedIndexBlock(t *testing.T) {
 // BenchmarkParseIndexBlock benchmarks the performance of parseIndexBlock.
 func BenchmarkParseIndexBlock(b *testing.B) {
 	// Generate a realistic index block blob
-	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0))
-	for i := 0; i < 4096; i++ {
+	blockCap := uint16(4096)
+	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0), blockCap)
+	for i := 0; i < int(blockCap); i++ {
 		bw.append(uint64(i * 2))
 	}
 	blob := bw.finish()
@@ -238,13 +245,14 @@ func BenchmarkBlockWriterAppend(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
+	blockCap := uint16(4096)
 	desc := newIndexBlockDesc(0)
-	writer, _ := newBlockWriter(nil, desc)
+	writer, _ := newBlockWriter(nil, desc, blockCap)
 
 	for i := 0; i < b.N; i++ {
 		if writer.full() {
 			desc = newIndexBlockDesc(0)
-			writer, _ = newBlockWriter(nil, desc)
+			writer, _ = newBlockWriter(nil, desc, blockCap)
 		}
 		if err := writer.append(writer.desc.max + 1); err != nil {
 			b.Error(err)

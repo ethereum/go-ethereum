@@ -107,9 +107,7 @@ func (r *indexReader) refresh() error {
 	// may have been modified by additional elements written to the disk.
 	if len(r.descList) != 0 {
 		last := r.descList[len(r.descList)-1]
-		if !last.full() {
-			delete(r.readers, last.id)
-		}
+		delete(r.readers, last.id)
 	}
 	descList, err := loadIndexData(r.db, r.state)
 	if err != nil {
@@ -158,19 +156,23 @@ type indexWriter struct {
 	lastID   uint64            // The ID of the latest tracked history
 	state    stateIdent
 	db       ethdb.KeyValueReader
+
+	// configs
+	blockCap uint16 // Maximum number of entries grouped into a single index block
 }
 
 // newIndexWriter constructs the index writer for the specified state.
-func newIndexWriter(db ethdb.KeyValueReader, state stateIdent) (*indexWriter, error) {
+func newIndexWriter(db ethdb.KeyValueReader, state stateIdent, blockCap uint16) (*indexWriter, error) {
 	blob := readStateIndex(state, db)
 	if len(blob) == 0 {
 		desc := newIndexBlockDesc(0)
-		bw, _ := newBlockWriter(nil, desc)
+		bw, _ := newBlockWriter(nil, desc, blockCap)
 		return &indexWriter{
 			descList: []*indexBlockDesc{desc},
 			bw:       bw,
 			state:    state,
 			db:       db,
+			blockCap: blockCap,
 		}, nil
 	}
 	descList, err := parseIndex(blob)
@@ -179,7 +181,7 @@ func newIndexWriter(db ethdb.KeyValueReader, state stateIdent) (*indexWriter, er
 	}
 	lastDesc := descList[len(descList)-1]
 	indexBlock := readStateIndexBlock(state, db, lastDesc.id)
-	bw, err := newBlockWriter(indexBlock, lastDesc)
+	bw, err := newBlockWriter(indexBlock, lastDesc, blockCap)
 	if err != nil {
 		return nil, err
 	}
@@ -189,6 +191,7 @@ func newIndexWriter(db ethdb.KeyValueReader, state stateIdent) (*indexWriter, er
 		bw:       bw,
 		state:    state,
 		db:       db,
+		blockCap: blockCap,
 	}, nil
 }
 
@@ -218,7 +221,7 @@ func (w *indexWriter) rotate() error {
 		desc = newIndexBlockDesc(w.bw.desc.id + 1)
 	)
 	w.frozen = append(w.frozen, w.bw)
-	w.bw, err = newBlockWriter(nil, desc)
+	w.bw, err = newBlockWriter(nil, desc, w.blockCap)
 	if err != nil {
 		return err
 	}
@@ -265,21 +268,25 @@ type indexDeleter struct {
 	lastID   uint64            // The ID of the latest tracked history
 	state    stateIdent
 	db       ethdb.KeyValueReader
+
+	// configs
+	blockCap uint16 // Maximum number of entries grouped into a single index block
 }
 
 // newIndexDeleter constructs the index deleter for the specified state.
-func newIndexDeleter(db ethdb.KeyValueReader, state stateIdent) (*indexDeleter, error) {
+func newIndexDeleter(db ethdb.KeyValueReader, state stateIdent, blockCap uint16) (*indexDeleter, error) {
 	blob := readStateIndex(state, db)
 	if len(blob) == 0 {
 		// TODO(rjl493456442) we can probably return an error here,
 		// deleter with no data is meaningless.
 		desc := newIndexBlockDesc(0)
-		bw, _ := newBlockWriter(nil, desc)
+		bw, _ := newBlockWriter(nil, desc, blockCap)
 		return &indexDeleter{
 			descList: []*indexBlockDesc{desc},
 			bw:       bw,
 			state:    state,
 			db:       db,
+			blockCap: blockCap,
 		}, nil
 	}
 	descList, err := parseIndex(blob)
@@ -288,7 +295,7 @@ func newIndexDeleter(db ethdb.KeyValueReader, state stateIdent) (*indexDeleter, 
 	}
 	lastDesc := descList[len(descList)-1]
 	indexBlock := readStateIndexBlock(state, db, lastDesc.id)
-	bw, err := newBlockWriter(indexBlock, lastDesc)
+	bw, err := newBlockWriter(indexBlock, lastDesc, blockCap)
 	if err != nil {
 		return nil, err
 	}
@@ -334,7 +341,7 @@ func (d *indexDeleter) pop(id uint64) error {
 	// Open the previous block writer for deleting
 	lastDesc := d.descList[len(d.descList)-1]
 	indexBlock := readStateIndexBlock(d.state, d.db, lastDesc.id)
-	bw, err := newBlockWriter(indexBlock, lastDesc)
+	bw, err := newBlockWriter(indexBlock, lastDesc, d.blockCap)
 	if err != nil {
 		return err
 	}
