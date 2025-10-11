@@ -463,7 +463,12 @@ func isString(input []byte) bool {
 	return len(input) >= 2 && input[0] == '"' && input[len(input)-1] == '"'
 }
 
-// UnmarshalJSON parses a hash in hex syntax.
+// MarshalJSON encodes a decimal number into a string.
+func (d *Decimal) MarshalJSON() ([]byte, error) {
+	return []byte("\"" + strconv.FormatUint(uint64(*d), 10) + "\""), nil
+}
+
+// UnmarshalJSON parses a decimal number encoded as a string.
 func (d *Decimal) UnmarshalJSON(input []byte) error {
 	if !isString(input) {
 		return &json.UnmarshalTypeError{Value: "non-string", Type: reflect.TypeFor[uint64]()}

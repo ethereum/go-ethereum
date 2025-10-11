@@ -29,90 +29,27 @@ import (
 	"time"
 
 	"github.com/donovanhide/eventsource"
-	"github.com/ethereum/go-ethereum/beacon/merkle"
-	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 )
 
-var (
-	ErrNotFound = errors.New("404 Not Found")
-	ErrInternal = errors.New("500 Internal Server Error")
-)
-
-type CommitteeUpdate struct {
-	Update            types.LightClientUpdate
-	NextSyncCommittee types.SerializedSyncCommittee
-}
-
-// See data structure definition here:
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientupdate
-type committeeUpdateJson struct {
-	Version string              `json:"version"`
-	Data    committeeUpdateData `json:"data"`
-}
-
-type committeeUpdateData struct {
-	Header                  jsonBeaconHeader              `json:"attested_header"`
-	NextSyncCommittee       types.SerializedSyncCommittee `json:"next_sync_committee"`
-	NextSyncCommitteeBranch merkle.Values                 `json:"next_sync_committee_branch"`
-	FinalizedHeader         *jsonBeaconHeader             `json:"finalized_header,omitempty"`
-	FinalityBranch          merkle.Values                 `json:"finality_branch,omitempty"`
-	SyncAggregate           types.SyncAggregate           `json:"sync_aggregate"`
-	SignatureSlot           common.Decimal                `json:"signature_slot"`
-}
-
-type jsonBeaconHeader struct {
-	Beacon types.Header `json:"beacon"`
-}
-
-type jsonHeaderWithExecProof struct {
-	Beacon          types.Header    `json:"beacon"`
-	Execution       json.RawMessage `json:"execution"`
-	ExecutionBranch merkle.Values   `json:"execution_branch"`
-}
-
-// UnmarshalJSON unmarshals from JSON.
-func (u *CommitteeUpdate) UnmarshalJSON(input []byte) error {
-	var dec committeeUpdateJson
-	if err := json.Unmarshal(input, &dec); err != nil {
-		return err
-	}
-	u.NextSyncCommittee = dec.Data.NextSyncCommittee
-	u.Update = types.LightClientUpdate{
-		Version: dec.Version,
-		AttestedHeader: types.SignedHeader{
-			Header:        dec.Data.Header.Beacon,
-			Signature:     dec.Data.SyncAggregate,
-			SignatureSlot: uint64(dec.Data.SignatureSlot),
-		},
-		NextSyncCommitteeRoot:   u.NextSyncCommittee.Root(),
-		NextSyncCommitteeBranch: dec.Data.NextSyncCommitteeBranch,
-		FinalityBranch:          dec.Data.FinalityBranch,
-	}
-	if dec.Data.FinalizedHeader != nil {
-		u.Update.FinalizedHeader = &dec.Data.FinalizedHeader.Beacon
-	}
-	return nil
-}
-
 // fetcher is an interface useful for debug-harnessing the http api.
 type fetcher interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// BeaconLightApi requests light client information from a beacon node REST API.
+// BeaconApiClient requests light client information from a beacon node REST API.
 // Note: all required API endpoints are currently only implemented by Lodestar.
-type BeaconLightApi struct {
+type BeaconApiClient struct {
 	url           string
 	client        fetcher
 	customHeaders map[string]string
 }
 
-func NewBeaconLightApi(url string, customHeaders map[string]string) *BeaconLightApi {
-	return &BeaconLightApi{
+func NewBeaconApiClient(url string, customHeaders map[string]string) *BeaconApiClient {
+	return &BeaconApiClient{
 		url: url,
 		client: &http.Client{
 			Timeout: time.Second * 10,
@@ -121,7 +58,7 @@ func NewBeaconLightApi(url string, customHeaders map[string]string) *BeaconLight
 	}
 }
 
-func (api *BeaconLightApi) httpGet(path string, params url.Values) ([]byte, error) {
+func (api *BeaconApiClient) httpGet(path string, params url.Values) ([]byte, error) {
 	uri, err := api.buildURL(path, params)
 	if err != nil {
 		return nil, err
@@ -155,7 +92,7 @@ func (api *BeaconLightApi) httpGet(path string, params url.Values) ([]byte, erro
 // equals update.NextSyncCommitteeRoot).
 // Note that the results are validated but the update signature should be verified
 // by the caller as its validity depends on the update chain.
-func (api *BeaconLightApi) GetBestUpdatesAndCommittees(firstPeriod, count uint64) ([]*types.LightClientUpdate, []*types.SerializedSyncCommittee, error) {
+func (api *BeaconApiClient) GetBestUpdatesAndCommittees(firstPeriod, count uint64) ([]*types.LightClientUpdate, []*types.SerializedSyncCommittee, error) {
 	resp, err := api.httpGet("/eth/v1/beacon/light_client/updates", map[string][]string{
 		"start_period": {strconv.FormatUint(firstPeriod, 10)},
 		"count":        {strconv.FormatUint(count, 10)},
@@ -195,7 +132,7 @@ func (api *BeaconLightApi) GetBestUpdatesAndCommittees(firstPeriod, count uint64
 //
 // See data structure definition here:
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientoptimisticupdate
-func (api *BeaconLightApi) GetOptimisticUpdate() (types.OptimisticUpdate, error) {
+func (api *BeaconApiClient) GetOptimisticUpdate() (types.OptimisticUpdate, error) {
 	resp, err := api.httpGet("/eth/v1/beacon/light_client/optimistic_update", nil)
 	if err != nil {
 		return types.OptimisticUpdate{}, err
@@ -203,52 +140,11 @@ func (api *BeaconLightApi) GetOptimisticUpdate() (types.OptimisticUpdate, error)
 	return decodeOptimisticUpdate(resp)
 }
 
-func decodeOptimisticUpdate(enc []byte) (types.OptimisticUpdate, error) {
-	var data struct {
-		Version string `json:"version"`
-		Data    struct {
-			Attested      jsonHeaderWithExecProof `json:"attested_header"`
-			Aggregate     types.SyncAggregate     `json:"sync_aggregate"`
-			SignatureSlot common.Decimal          `json:"signature_slot"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(enc, &data); err != nil {
-		return types.OptimisticUpdate{}, err
-	}
-	// Decode the execution payload headers.
-	attestedExecHeader, err := types.ExecutionHeaderFromJSON(data.Version, data.Data.Attested.Execution)
-	if err != nil {
-		return types.OptimisticUpdate{}, fmt.Errorf("invalid attested header: %v", err)
-	}
-	if data.Data.Attested.Beacon.StateRoot == (common.Hash{}) {
-		// workaround for different event encoding format in Lodestar
-		if err := json.Unmarshal(enc, &data.Data); err != nil {
-			return types.OptimisticUpdate{}, err
-		}
-	}
-
-	if len(data.Data.Aggregate.Signers) != params.SyncCommitteeBitmaskSize {
-		return types.OptimisticUpdate{}, errors.New("invalid sync_committee_bits length")
-	}
-	if len(data.Data.Aggregate.Signature) != params.BLSSignatureSize {
-		return types.OptimisticUpdate{}, errors.New("invalid sync_committee_signature length")
-	}
-	return types.OptimisticUpdate{
-		Attested: types.HeaderWithExecProof{
-			Header:        data.Data.Attested.Beacon,
-			PayloadHeader: attestedExecHeader,
-			PayloadBranch: data.Data.Attested.ExecutionBranch,
-		},
-		Signature:     data.Data.Aggregate,
-		SignatureSlot: uint64(data.Data.SignatureSlot),
-	}, nil
-}
-
 // GetFinalityUpdate fetches the latest available finality update.
 //
 // See data structure definition here:
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientfinalityupdate
-func (api *BeaconLightApi) GetFinalityUpdate() (types.FinalityUpdate, error) {
+func (api *BeaconApiClient) GetFinalityUpdate() (types.FinalityUpdate, error) {
 	resp, err := api.httpGet("/eth/v1/beacon/light_client/finality_update", nil)
 	if err != nil {
 		return types.FinalityUpdate{}, err
@@ -256,60 +152,11 @@ func (api *BeaconLightApi) GetFinalityUpdate() (types.FinalityUpdate, error) {
 	return decodeFinalityUpdate(resp)
 }
 
-func decodeFinalityUpdate(enc []byte) (types.FinalityUpdate, error) {
-	var data struct {
-		Version string `json:"version"`
-		Data    struct {
-			Attested       jsonHeaderWithExecProof `json:"attested_header"`
-			Finalized      jsonHeaderWithExecProof `json:"finalized_header"`
-			FinalityBranch merkle.Values           `json:"finality_branch"`
-			Aggregate      types.SyncAggregate     `json:"sync_aggregate"`
-			SignatureSlot  common.Decimal          `json:"signature_slot"`
-		}
-	}
-	if err := json.Unmarshal(enc, &data); err != nil {
-		return types.FinalityUpdate{}, err
-	}
-	// Decode the execution payload headers.
-	attestedExecHeader, err := types.ExecutionHeaderFromJSON(data.Version, data.Data.Attested.Execution)
-	if err != nil {
-		return types.FinalityUpdate{}, fmt.Errorf("invalid attested header: %v", err)
-	}
-	finalizedExecHeader, err := types.ExecutionHeaderFromJSON(data.Version, data.Data.Finalized.Execution)
-	if err != nil {
-		return types.FinalityUpdate{}, fmt.Errorf("invalid finalized header: %v", err)
-	}
-	// Perform sanity checks.
-	if len(data.Data.Aggregate.Signers) != params.SyncCommitteeBitmaskSize {
-		return types.FinalityUpdate{}, errors.New("invalid sync_committee_bits length")
-	}
-	if len(data.Data.Aggregate.Signature) != params.BLSSignatureSize {
-		return types.FinalityUpdate{}, errors.New("invalid sync_committee_signature length")
-	}
-
-	return types.FinalityUpdate{
-		Version: data.Version,
-		Attested: types.HeaderWithExecProof{
-			Header:        data.Data.Attested.Beacon,
-			PayloadHeader: attestedExecHeader,
-			PayloadBranch: data.Data.Attested.ExecutionBranch,
-		},
-		Finalized: types.HeaderWithExecProof{
-			Header:        data.Data.Finalized.Beacon,
-			PayloadHeader: finalizedExecHeader,
-			PayloadBranch: data.Data.Finalized.ExecutionBranch,
-		},
-		FinalityBranch: data.Data.FinalityBranch,
-		Signature:      data.Data.Aggregate,
-		SignatureSlot:  uint64(data.Data.SignatureSlot),
-	}, nil
-}
-
 // GetHeader fetches and validates the beacon header with the given blockRoot.
 // If blockRoot is null hash then the latest head header is fetched.
 // The values of the canonical and finalized flags are also returned. Note that
 // these flags are not validated.
-func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, bool, bool, error) {
+func (api *BeaconApiClient) GetHeader(blockRoot common.Hash) (types.Header, bool, bool, error) {
 	var blockId string
 	if blockRoot == (common.Hash{}) {
 		blockId = "head"
@@ -346,24 +193,13 @@ func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, bool,
 }
 
 // GetCheckpointData fetches and validates bootstrap data belonging to the given checkpoint.
-func (api *BeaconLightApi) GetCheckpointData(checkpointHash common.Hash) (*types.BootstrapData, error) {
+func (api *BeaconApiClient) GetCheckpointData(checkpointHash common.Hash) (*types.BootstrapData, error) {
 	resp, err := api.httpGet(fmt.Sprintf("/eth/v1/beacon/light_client/bootstrap/0x%x", checkpointHash[:]), nil)
 	if err != nil {
 		return nil, err
 	}
 
-	// See data structure definition here:
-	// https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientbootstrap
-	type bootstrapData struct {
-		Version string `json:"version"`
-		Data    struct {
-			Header          jsonBeaconHeader               `json:"header"`
-			Committee       *types.SerializedSyncCommittee `json:"current_sync_committee"`
-			CommitteeBranch merkle.Values                  `json:"current_sync_committee_branch"`
-		} `json:"data"`
-	}
-
-	var data bootstrapData
+	var data jsonBootstrapData
 	if err := json.Unmarshal(resp, &data); err != nil {
 		return nil, err
 	}
@@ -390,24 +226,15 @@ func (api *BeaconLightApi) GetCheckpointData(checkpointHash common.Hash) (*types
 	return checkpoint, nil
 }
 
-func (api *BeaconLightApi) GetBeaconBlock(blockRoot common.Hash) (*types.BeaconBlock, error) {
+func (api *BeaconApiClient) GetBeaconBlock(blockRoot common.Hash) (*types.BeaconBlock, error) {
 	resp, err := api.httpGet(fmt.Sprintf("/eth/v2/beacon/blocks/0x%x", blockRoot), nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var beaconBlockMessage struct {
-		Version string `json:"version"`
-		Data    struct {
-			Message json.RawMessage `json:"message"`
-		}
-	}
-	if err := json.Unmarshal(resp, &beaconBlockMessage); err != nil {
+	block := new(types.BeaconBlock)
+	if err := json.Unmarshal(resp, block); err != nil {
 		return nil, fmt.Errorf("invalid block json data: %v", err)
-	}
-	block, err := types.BlockFromJSON(beaconBlockMessage.Version, beaconBlockMessage.Data.Message)
-	if err != nil {
-		return nil, err
 	}
 	computedRoot := block.Root()
 	if computedRoot != blockRoot {
@@ -438,7 +265,7 @@ type HeadEventListener struct {
 // head updates and calls the specified callback functions when they are received.
 // The callbacks are also called for the current head and optimistic head at startup.
 // They are never called concurrently.
-func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() {
+func (api *BeaconApiClient) StartHeadListener(listener HeadEventListener) func() {
 	var (
 		ctx, closeCtx = context.WithCancel(context.Background())
 		streamCh      = make(chan *eventsource.Stream, 1)
@@ -550,7 +377,7 @@ func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() 
 
 // startEventStream establishes an event stream. This will keep retrying until the stream has been
 // established. It can only return nil when the context is canceled.
-func (api *BeaconLightApi) startEventStream(ctx context.Context, listener *HeadEventListener) *eventsource.Stream {
+func (api *BeaconApiClient) startEventStream(ctx context.Context, listener *HeadEventListener) *eventsource.Stream {
 	for retry := true; retry; retry = ctxSleep(ctx, 5*time.Second) {
 		log.Trace("Sending event subscription request")
 		uri, err := api.buildURL("/eth/v1/events", map[string][]string{"topics": {"head", "light_client_finality_update", "light_client_optimistic_update"}})
@@ -588,7 +415,7 @@ func ctxSleep(ctx context.Context, timeout time.Duration) (ok bool) {
 	}
 }
 
-func (api *BeaconLightApi) buildURL(path string, params url.Values) (string, error) {
+func (api *BeaconApiClient) buildURL(path string, params url.Values) (string, error) {
 	uri, err := url.Parse(api.url)
 	if err != nil {
 		return "", err

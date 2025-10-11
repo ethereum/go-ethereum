@@ -39,10 +39,11 @@ type committeeChain interface {
 // data belonging to the given checkpoint hash and initializes the committee chain
 // if successful.
 type CheckpointInit struct {
-	chain          committeeChain
-	checkpointHash common.Hash
-	locked         request.ServerAndID
-	initialized    bool
+	chain           committeeChain
+	checkpointHash  common.Hash
+	checkpointStore *light.CheckpointStore
+	locked          request.ServerAndID
+	initialized     bool
 	// per-server state is used to track the state of requesting checkpoint header
 	// info. Part of this info (canonical and finalized state) is not validated
 	// and therefore it is requested from each server separately after it has
@@ -71,11 +72,12 @@ type serverState struct {
 }
 
 // NewCheckpointInit creates a new CheckpointInit.
-func NewCheckpointInit(chain committeeChain, checkpointHash common.Hash) *CheckpointInit {
+func NewCheckpointInit(chain committeeChain, checkpointStore *light.CheckpointStore, checkpointHash common.Hash) *CheckpointInit {
 	return &CheckpointInit{
-		chain:          chain,
-		checkpointHash: checkpointHash,
-		serverState:    make(map[request.Server]serverState),
+		chain:           chain,
+		checkpointHash:  checkpointHash,
+		checkpointStore: checkpointStore,
+		serverState:     make(map[request.Server]serverState),
 	}
 }
 
@@ -100,6 +102,7 @@ func (s *CheckpointInit) Process(requester request.Requester, events []request.E
 				if resp != nil {
 					if checkpoint := resp.(*types.BootstrapData); checkpoint.Header.Hash() == common.Hash(req.(ReqCheckpointData)) {
 						s.chain.CheckpointInit(*checkpoint)
+						s.checkpointStore.Store(checkpoint)
 						s.initialized = true
 						return
 					}
