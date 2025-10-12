@@ -4,8 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"reflect"
-	"sort"
+	"slices"
 	"strconv"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
@@ -57,27 +56,24 @@ func ExtractValidatorsFromBytes(byteValidators []byte) ([]int64, error) {
 // compare 2 signers lists
 // return true if they are same elements, otherwise return false
 func CompareSignersLists(list1 []common.Address, list2 []common.Address) bool {
-	l1 := make([]common.Address, len(list1))
-	l2 := make([]common.Address, len(list2))
-
-	copy(l1, list1)
-	copy(l2, list2)
-
-	if len(l1) == 0 && len(l2) == 0 {
+	if len(list1) != len(list2) {
+		return false
+	}
+	if len(list1) == 0 {
 		return true
 	}
 
-	if len(l1) != len(l2) {
-		return false
-	}
+	l1 := slices.Clone(list1)
+	l2 := slices.Clone(list2)
 
-	sort.Slice(l1, func(i, j int) bool {
-		return bytes.Compare(l1[i][:], l1[j][:]) == -1
+	slices.SortFunc(l1, func(a, b common.Address) int {
+		return bytes.Compare(a[:], b[:])
 	})
-	sort.Slice(l2, func(i, j int) bool {
-		return bytes.Compare(l2[i][:], l2[j][:]) == -1
+	slices.SortFunc(l2, func(a, b common.Address) int {
+		return bytes.Compare(a[:], b[:])
 	})
-	return reflect.DeepEqual(l1, l2)
+
+	return slices.Equal(l1, l2)
 }
 
 // Decode extra fields for consensus version >= 2 (XDPoS 2.0 and future versions)
