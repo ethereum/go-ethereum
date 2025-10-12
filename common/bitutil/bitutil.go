@@ -27,36 +27,32 @@ func XORBytes(dst, a, b []byte) int {
 // fastXORBytes xors in bulk. It only works on architectures that support
 // unaligned read/writes.
 func fastXORBytes(dst, a, b []byte) int {
-	n := min(len(b), len(a))
-
-	w := n / wordSize
-
-	if w > 0 {
-		dw := *(*[]uintptr)(unsafe.Pointer(&dst))
-		aw := *(*[]uintptr)(unsafe.Pointer(&a))
-		bw := *(*[]uintptr)(unsafe.Pointer(&b))
-
-		i := 0
-		for i <= w-4 {
-			dw[i] = aw[i] ^ bw[i]
-			dw[i+1] = aw[i+1] ^ bw[i+1]
-			dw[i+2] = aw[i+2] ^ bw[i+2]
-			dw[i+3] = aw[i+3] ^ bw[i+3]
-			i += 4
-		}
-		// Handle remaining words
-		for i < w {
-			dw[i] = aw[i] ^ bw[i]
-			i++
-		}
-	}
-
-	// Handle remaining bytes
-	start := w * wordSize
-	for i := 0; i < n&(wordSize-1); i++ {
-		dst[start+i] = a[start+i] ^ b[start+i]
-	}
-	return n
+    n := min(len(a), len(b), len(dst))
+    if n == 0 {
+        return 0
+    }
+    wordSize := int(unsafe.Sizeof(uintptr(0)))
+  
+    i := 0
+    for ; i < n && uintptr(unsafe.Pointer(&a[i]))%uintptr(wordSize) != 0; i++ {
+        dst[i] = a[i] ^ b[i]
+    }
+   
+    w := (n - i) / wordSize
+    if w > 0 {
+        ad := unsafe.Slice((*uintptr)(unsafe.Pointer(&a[i])), w)
+        bd := unsafe.Slice((*uintptr)(unsafe.Pointer(&b[i])), w)
+        dd := unsafe.Slice((*uintptr)(unsafe.Pointer(&dst[i])), w)
+        for j := 0; j < w; j++ {
+            dd[j] = ad[j] ^ bd[j]
+        }
+        i += w * wordSize
+    }
+   
+    for ; i < n; i++ {
+        dst[i] = a[i] ^ b[i]
+    }
+    return n
 }
 
 // safeXORBytes xors one by one. It works on all architectures, independent if
@@ -81,35 +77,32 @@ func ANDBytes(dst, a, b []byte) int {
 // fastANDBytes ands in bulk. It only works on architectures that support
 // unaligned read/writes.
 func fastANDBytes(dst, a, b []byte) int {
-	n := min(len(b), len(a))
-	w := n / wordSize
-
-	if w > 0 {
-		dw := *(*[]uintptr)(unsafe.Pointer(&dst))
-		aw := *(*[]uintptr)(unsafe.Pointer(&a))
-		bw := *(*[]uintptr)(unsafe.Pointer(&b))
-
-		i := 0
-		for i <= w-4 {
-			dw[i] = aw[i] & bw[i]
-			dw[i+1] = aw[i+1] & bw[i+1]
-			dw[i+2] = aw[i+2] & bw[i+2]
-			dw[i+3] = aw[i+3] & bw[i+3]
-			i += 4
-		}
-		// Handle remaining words
-		for i < w {
-			dw[i] = aw[i] & bw[i]
-			i++
-		}
-	}
-
-	// Handle remaining bytes
-	start := w * wordSize
-	for i := 0; i < n&(wordSize-1); i++ {
-		dst[start+i] = a[start+i] & b[start+i]
-	}
-	return n
+	    n := min(len(a), len(b), len(dst))
+    if n == 0 {
+        return 0
+    }
+    wordSize := int(unsafe.Sizeof(uintptr(0)))
+  
+    i := 0
+    for ; i < n && uintptr(unsafe.Pointer(&a[i]))%uintptr(wordSize) != 0; i++ {
+        dst[i] = a[i] & b[i]
+    }
+   
+    w := (n - i) / wordSize
+    if w > 0 {
+        ad := unsafe.Slice((*uintptr)(unsafe.Pointer(&a[i])), w)
+        bd := unsafe.Slice((*uintptr)(unsafe.Pointer(&b[i])), w)
+        dd := unsafe.Slice((*uintptr)(unsafe.Pointer(&dst[i])), w)
+        for j := 0; j < w; j++ {
+            dd[j] = ad[j] & bd[j]
+        }
+        i += w * wordSize
+    }
+   
+    for ; i < n; i++ {
+        dst[i] = a[i] & b[i]
+    }
+    return n
 }
 
 // safeANDBytes ands one by one. It works on all architectures, independent if
@@ -134,34 +127,32 @@ func ORBytes(dst, a, b []byte) int {
 // fastORBytes ors in bulk. It only works on architectures that support
 // unaligned read/writes.
 func fastORBytes(dst, a, b []byte) int {
-	n := min(len(b), len(a))
-	w := n / wordSize
-	if w > 0 {
-		dw := *(*[]uintptr)(unsafe.Pointer(&dst))
-		aw := *(*[]uintptr)(unsafe.Pointer(&a))
-		bw := *(*[]uintptr)(unsafe.Pointer(&b))
-
-		i := 0
-		for i <= w-4 {
-			dw[i] = aw[i] | bw[i]
-			dw[i+1] = aw[i+1] | bw[i+1]
-			dw[i+2] = aw[i+2] | bw[i+2]
-			dw[i+3] = aw[i+3] | bw[i+3]
-			i += 4
-		}
-		// Handle remaining words
-		for i < w {
-			dw[i] = aw[i] | bw[i]
-			i++
-		}
-	}
-
-	// Handle remaining bytes
-	start := w * wordSize
-	for i := 0; i < n&(wordSize-1); i++ {
-		dst[start+i] = a[start+i] | b[start+i]
-	}
-	return n
+	    n := min(len(a), len(b), len(dst))
+    if n == 0 {
+        return 0
+    }
+    wordSize := int(unsafe.Sizeof(uintptr(0)))
+  
+    i := 0
+    for ; i < n && uintptr(unsafe.Pointer(&a[i]))%uintptr(wordSize) != 0; i++ {
+        dst[i] = a[i] | b[i]
+    }
+   
+    w := (n - i) / wordSize
+    if w > 0 {
+        ad := unsafe.Slice((*uintptr)(unsafe.Pointer(&a[i])), w)
+        bd := unsafe.Slice((*uintptr)(unsafe.Pointer(&b[i])), w)
+        dd := unsafe.Slice((*uintptr)(unsafe.Pointer(&dst[i])), w)
+        for j := 0; j < w; j++ {
+            dd[j] = ad[j] | bd[j]
+        }
+        i += w * wordSize
+    }
+   
+    for ; i < n; i++ {
+        dst[i] = a[i] | b[i]
+    }
+    return n
 }
 
 // safeORBytes ors one by one. It works on all architectures, independent if
