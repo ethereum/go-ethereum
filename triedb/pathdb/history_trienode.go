@@ -524,7 +524,8 @@ func newSingleTrienodeHistoryReader(id uint64, reader ethdb.AncientReader, keyRa
 	}
 	keyStart := int(keyRange.start)
 	keyLimit := int(keyRange.limit)
-	if keyLimit == math.MaxUint32 {
+	const maxKeyLimit = int(^uint32(0))
+	if keyLimit == maxKeyLimit {
 		keyLimit = len(keyData)
 	}
 	if len(keyData) < keyStart || len(keyData) < keyLimit {
