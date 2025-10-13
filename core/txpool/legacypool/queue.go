@@ -192,7 +192,6 @@ func (q *queue) promoteExecutables(accounts []common.Address, gasLimit uint64, c
 			log.Trace("Removing cap-exceeding queued transaction", "hash", hash)
 		}
 		queuedRateLimitMeter.Mark(int64(len(caps)))
-		queuedGauge.Dec(int64(len(dropped)))
 
 		// Delete the entire queue entry if it became empty.
 		if list.Empty() {
@@ -201,6 +200,7 @@ func (q *queue) promoteExecutables(accounts []common.Address, gasLimit uint64, c
 			removedAddresses = append(removedAddresses, addr)
 		}
 	}
+	queuedGauge.Dec(int64(len(dropped)))
 	return promotable, dropped, removedAddresses
 }
 
