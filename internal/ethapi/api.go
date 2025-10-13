@@ -1694,7 +1694,7 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 	for {
 		select {
 		case <-receiptCtx.Done():
-			// Upstream cancellation -> bubble it; otherwise emit our timeout error
+			// Upstream cancellation -> bubble it; otherwise emit the timeout error
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}

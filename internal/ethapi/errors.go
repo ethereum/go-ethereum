@@ -176,8 +176,6 @@ type blockGasLimitReachedError struct{ message string }
 func (e *blockGasLimitReachedError) Error() string  { return e.message }
 func (e *blockGasLimitReachedError) ErrorCode() int { return errCodeBlockGasLimitReached }
 
-func (e *txSyncTimeoutError) Error() string  { return e.msg }
-func (e *txSyncTimeoutError) ErrorCode() int { return errCodeTxSyncTimeout }
-
-// ErrorData should be JSON-safe; return the 0x-hex string.
+func (e *txSyncTimeoutError) Error() string          { return e.msg }
+func (e *txSyncTimeoutError) ErrorCode() int         { return errCodeTxSyncTimeout }
 func (e *txSyncTimeoutError) ErrorData() interface{} { return e.hash.Hex() }

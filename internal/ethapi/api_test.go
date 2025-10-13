@@ -447,8 +447,8 @@ type testBackend struct {
 	sentTx     *types.Transaction
 	sentTxHash common.Hash
 
-	syncDefaultTO time.Duration
-	syncMaxTO     time.Duration
+	syncDefaultTimeout time.Duration
+	syncMaxTimeout     time.Duration
 }
 
 func fakeBlockHash(txh common.Hash) common.Hash {
@@ -613,24 +613,20 @@ func (b *testBackend) SendTx(ctx context.Context, tx *types.Transaction) error {
 	if b.autoMine {
 		// Synthesize a "mined" receipt at head+1
 		num := b.chain.CurrentHeader().Number.Uint64() + 1
-
-		bh := fakeBlockHash(tx.Hash())
 		receipt := &types.Receipt{
 			TxHash:            tx.Hash(),
 			Status:            types.ReceiptStatusSuccessful,
-			BlockHash:         bh,
+			BlockHash:         fakeBlockHash(tx.Hash()),
 			BlockNumber:       new(big.Int).SetUint64(num),
 			TransactionIndex:  0,
 			CumulativeGasUsed: 21000,
 			GasUsed:           21000,
 		}
-		hdr := &types.Header{
-			Number: new(big.Int).SetUint64(num),
-		}
-
 		// Broadcast a ChainEvent that includes the receipts and txs
 		b.chainFeed.Send(core.ChainEvent{
-			Header:       hdr,
+			Header: &types.Header{
+				Number: new(big.Int).SetUint64(num),
+			},
 			Receipts:     types.Receipts{receipt},
 			Transactions: types.Transactions{tx},
 		})
@@ -3954,14 +3950,14 @@ func (b configTimeBackend) CurrentHeader() *types.Header {
 }
 
 func (b *testBackend) RPCTxSyncDefaultTimeout() time.Duration {
-	if b.syncDefaultTO != 0 {
-		return b.syncDefaultTO
+	if b.syncDefaultTimeout != 0 {
+		return b.syncDefaultTimeout
 	}
 	return 2 * time.Second
 }
 func (b *testBackend) RPCTxSyncMaxTimeout() time.Duration {
-	if b.syncMaxTO != 0 {
-		return b.syncMaxTO
+	if b.syncMaxTimeout != 0 {
+		return b.syncMaxTimeout
 	}
 	return 5 * time.Minute
 }
