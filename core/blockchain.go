@@ -203,9 +203,9 @@ type BlockChainConfig struct {
 	// If the value is -1, indexing is disabled.
 	TxLookupLimit int64
 
-	// If EnableBALForTesting is enabled, block access lists will be created as part of
-	// block processing and embedded in the block body.  The block access list hash will
-	// not be set in the header.
+	// If EnableBALForTesting is enabled, block access lists will be created
+	// from block execution and embedded in the body.  The block access list
+	// hash will not be set in the header.
 	EnableBALForTesting bool
 
 	// StateSizeTracking indicates whether the state size tracking is enabled.
@@ -1922,17 +1922,15 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		if parent == nil {
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
-
 		// The traced section of block import.
 		start := time.Now()
-		// construct or verify block access lists if BALs are enabled and
-		// we are post-selfdestruct removal fork.
+
 		enableBAL := (bc.cfg.EnableBALForTesting && bc.chainConfig.IsCancun(block.Number(), block.Time())) || bc.chainConfig.IsAmsterdam(block.Number(), block.Time())
 		blockHasAccessList := block.Body().AccessList != nil
-		makeBAL := enableBAL && !blockHasAccessList
+		constructBAL := enableBAL && !blockHasAccessList
 		validateBAL := enableBAL && blockHasAccessList
 
-		res, err := bc.ProcessBlock(parent.Root, block, setHead, makeWitness && len(chain) == 1, makeBAL, validateBAL)
+		res, err := bc.ProcessBlock(parent.Root, block, setHead, makeWitness && len(chain) == 1, constructBAL, validateBAL)
 		if err != nil {
 			return nil, it.index, err
 		}
