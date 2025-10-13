@@ -502,14 +502,20 @@ func (s *Ethereum) updateFilterMapsHeads() {
 	}
 	setHead(s.blockchain.CurrentBlock())
 
+	timer := time.NewTimer(time.Second * 10)
+	defer timer.Stop()
+
 	for {
 		select {
 		case ev := <-headEventCh:
 			setHead(ev.Header)
+			timer.Reset(time.Second * 10)
 		case blockProc := <-blockProcCh:
 			s.filterMaps.SetBlockProcessing(blockProc)
-		case <-time.After(time.Second * 10):
+			timer.Reset(time.Second * 10)
+		case <-timer.C:
 			setHead(s.blockchain.CurrentBlock())
+			timer.Reset(time.Second * 10)
 		case ch := <-s.closeFilterMaps:
 			close(ch)
 			return
