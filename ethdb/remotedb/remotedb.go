@@ -140,7 +140,7 @@ func (db *Database) Close() error {
 	return nil
 }
 
-func (db *Database) AncientBytes(kind string, item, offset, length uint64) ([]byte, error) {
+func (db *Database) AncientBytes(kind string, id, offset, length uint64) ([]byte, error) {
 	panic("not supported")
 }
 

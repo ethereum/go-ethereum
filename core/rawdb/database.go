@@ -100,8 +100,9 @@ func (db *nofreezedb) AncientRange(kind string, start, max, maxByteSize uint64) 
 	return nil, errNotSupported
 }
 
-// AncientBytes retrieves a byte range [offset:offset+length] from the specified ancient item.
-func (db *nofreezedb) AncientBytes(kind string, item, offset, length uint64) ([]byte, error) {
+// AncientBytes retrieves the value segment of the element specified by the id
+// and value offsets.
+func (db *nofreezedb) AncientBytes(kind string, id, offset, length uint64) ([]byte, error) {
 	return nil, errNotSupported
 }
 

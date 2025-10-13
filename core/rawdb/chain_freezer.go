@@ -403,8 +403,8 @@ func (f *chainFreezer) AncientRange(kind string, start, count, maxBytes uint64) 
 	return f.ancients.AncientRange(kind, start, count, maxBytes)
 }
 
-func (f *chainFreezer) AncientBytes(kind string, item, offset, length uint64) ([]byte, error) {
-	return f.ancients.AncientBytes(kind, item, offset, length)
+func (f *chainFreezer) AncientBytes(kind string, id, offset, length uint64) ([]byte, error) {
+	return f.ancients.AncientBytes(kind, id, offset, length)
 }
 
 func (f *chainFreezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (int64, error) {

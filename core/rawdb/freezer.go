@@ -202,10 +202,11 @@ func (f *Freezer) AncientRange(kind string, start, count, maxBytes uint64) ([][]
 	return nil, errUnknownTable
 }
 
-// RetrieveBytes retrieves a byte range [offset:offset+length] from the specified ancient item.
-func (f *Freezer) AncientBytes(kind string, number, offset, length uint64) ([]byte, error) {
+// AncientBytes retrieves the value segment of the element specified by the id
+// and value offsets.
+func (f *Freezer) AncientBytes(kind string, id, offset, length uint64) ([]byte, error) {
 	if table := f.tables[kind]; table != nil {
-		return table.RetrieveBytes(number, offset, length)
+		return table.RetrieveBytes(id, offset, length)
 	}
 	return nil, errUnknownTable
 }

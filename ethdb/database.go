@@ -121,8 +121,9 @@ type AncientReaderOp interface {
 	//   - if maxBytes is not specified, 'count' items will be returned if they are present
 	AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error)
 
-	// AncientBytes retrieves a byte range [offset:offset+length] from the specified ancient item.
-	AncientBytes(kind string, number, offset, length uint64) ([]byte, error)
+	// AncientBytes retrieves the value segment of the element specified by the id
+	// and value offsets.
+	AncientBytes(kind string, id, offset, length uint64) ([]byte, error)
 
 	// Ancients returns the ancient item numbers in the ancient store.
 	Ancients() (uint64, error)

@@ -1107,6 +1107,67 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 	return output, sizes, nil
 }
 
+// RetrieveBytes retrieves the value segment of the element specified by the id
+// and value offsets.
+func (t *freezerTable) RetrieveBytes(item, offset, length uint64) ([]byte, error) {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	if t.index == nil || t.head == nil || t.metadata.file == nil {
+		return nil, errClosed
+	}
+	items, hidden := t.items.Load(), t.itemHidden.Load()
+	if items <= item || hidden > item {
+		return nil, errOutOfBounds
+	}
+
+	// Retrieves the index entries for the specified ID and its immediate successor
+	indices, err := t.getIndices(item, 1)
+	if err != nil {
+		return nil, err
+	}
+	index0, index1 := indices[0], indices[1]
+
+	itemStart, endLimit, fileId := index0.bounds(index1)
+	itemSize := endLimit - itemStart
+
+	dataFile, exist := t.files[fileId]
+	if !exist {
+		return nil, fmt.Errorf("missing data file %d", fileId)
+	}
+
+	// Perform the partial read if no-compression was enabled upon
+	if t.config.noSnappy {
+		// Range check before reading
+		if offset > uint64(itemSize) || offset+length > uint64(itemSize) {
+			return nil, fmt.Errorf("requested range out of bounds: item size %d, offset %d, length %d", itemSize, offset, length)
+		}
+		itemStart += uint32(offset)
+
+		buf := make([]byte, length)
+		_, err = dataFile.ReadAt(buf, int64(itemStart))
+		if err != nil {
+			return nil, err
+		}
+		return buf, nil
+	} else {
+		buf := make([]byte, itemSize)
+		_, err = dataFile.ReadAt(buf, int64(itemStart))
+		if err != nil {
+			return nil, err
+		}
+		// If compressed, read the full item, decompress, then slice
+		data, err := snappy.Decode(nil, buf)
+		if err != nil {
+			return nil, err
+		}
+		if offset > uint64(len(data)) || offset+length > uint64(len(data)) {
+			return nil, fmt.Errorf("requested range out of bounds: item size %d, offset %d, length %d", len(data), offset, length)
+		}
+		return data[offset : offset+length], nil
+	}
+}
+
 // size returns the total data size in the freezer table.
 func (t *freezerTable) size() (uint64, error) {
 	t.lock.RLock()
@@ -1234,66 +1295,4 @@ func (t *freezerTable) dumpIndex(w io.Writer, start, stop int64) {
 		}
 	}
 	fmt.Fprintf(w, "|--------------------------|\n")
-}
-
-// RetrieveBytes retrieves a byte range [offset:offset+length] from the specified ancient item.
-func (t *freezerTable) RetrieveBytes(item, offset, length uint64) ([]byte, error) {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-
-	if t.index == nil || t.head == nil || t.metadata.file == nil {
-		return nil, errClosed
-	}
-	items := t.items.Load()
-	hidden := t.itemHidden.Load()
-	if items <= item || hidden > item {
-		return nil, errOutOfBounds
-	}
-
-	// Read the index entries for the item and the next item,
-	// this method will return two indices or an error.
-	indices, err := t.getIndices(item, 1)
-	if err != nil {
-		return nil, err
-	}
-	index0 := indices[0]
-	index1 := indices[1]
-	startOffset, endOffset, fileId := index0.bounds(index1)
-	itemSize := endOffset - startOffset
-
-	dataFile, exist := t.files[fileId]
-	if !exist {
-		return nil, fmt.Errorf("missing data file %d", fileId)
-	}
-
-	readBytes := int(itemSize)
-	if t.config.noSnappy {
-		// Range check before reading
-		if offset > uint64(itemSize) || offset+length > uint64(itemSize) {
-			return nil, fmt.Errorf("requested range out of bounds: item size %d, offset %d, length %d", itemSize, offset, length)
-		}
-		startOffset += uint32(offset)
-		readBytes = int(length)
-	}
-
-	buf := make([]byte, readBytes)
-	_, err = dataFile.ReadAt(buf, int64(startOffset))
-	if err != nil {
-		return nil, err
-	}
-
-	// If not compressed, read only the requested bytes
-	if t.config.noSnappy {
-		return buf, nil
-	}
-
-	// If compressed, read the full item, decompress, then slice
-	data, err := snappy.Decode(nil, buf)
-	if err != nil {
-		return nil, err
-	}
-	if offset > uint64(len(data)) || offset+length > uint64(len(data)) {
-		return nil, fmt.Errorf("requested range out of bounds after decompression: item size %d, offset %d, length %d", len(data), offset, length)
-	}
-	return data[offset : offset+length], nil
 }

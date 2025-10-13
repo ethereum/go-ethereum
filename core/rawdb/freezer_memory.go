@@ -413,8 +413,9 @@ func (f *MemoryFreezer) AncientDatadir() (string, error) {
 	return "", nil
 }
 
-// AncientBytes retrieves a byte range [offset:offset+length] from the specified ancient item in memory.
-func (f *MemoryFreezer) AncientBytes(kind string, item, offset, length uint64) ([]byte, error) {
+// AncientBytes retrieves the value segment of the element specified by the id
+// and value offsets.
+func (f *MemoryFreezer) AncientBytes(kind string, id, offset, length uint64) ([]byte, error) {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
@@ -422,7 +423,7 @@ func (f *MemoryFreezer) AncientBytes(kind string, item, offset, length uint64) (
 	if table == nil {
 		return nil, errUnknownTable
 	}
-	entries, err := table.retrieve(item, 1, 0)
+	entries, err := table.retrieve(id, 1, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -430,6 +431,7 @@ func (f *MemoryFreezer) AncientBytes(kind string, item, offset, length uint64) (
 		return nil, errOutOfBounds
 	}
 	data := entries[0]
+
 	if offset > uint64(len(data)) || offset+length > uint64(len(data)) {
 		return nil, fmt.Errorf("requested range out of bounds: item size %d, offset %d, length %d", len(data), offset, length)
 	}
