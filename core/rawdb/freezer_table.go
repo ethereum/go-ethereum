@@ -1148,6 +1148,7 @@ func (t *freezerTable) RetrieveBytes(item, offset, length uint64) ([]byte, error
 		if err != nil {
 			return nil, err
 		}
+		t.readMeter.Mark(int64(length))
 		return buf, nil
 	} else {
 		// If compressed, read the full item, decompress, then slice.
@@ -1158,6 +1159,8 @@ func (t *freezerTable) RetrieveBytes(item, offset, length uint64) ([]byte, error
 		if err != nil {
 			return nil, err
 		}
+		t.readMeter.Mark(int64(itemSize))
+
 		data, err := snappy.Decode(nil, buf)
 		if err != nil {
 			return nil, err
