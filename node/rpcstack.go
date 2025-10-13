@@ -500,7 +500,7 @@ func (w *gzipResponseWriter) init() {
 	hdr := w.resp.Header()
 	length := hdr.Get("content-length")
 	if len(length) > 0 {
-		if n, err := strconv.ParseUint(length, 10, 64); err != nil {
+		if n, err := strconv.ParseUint(length, 10, 64); err == nil {
 			w.hasLength = true
 			w.contentLength = n
 		}
