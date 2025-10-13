@@ -1694,14 +1694,19 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 	for {
 		select {
 		case <-receiptCtx.Done():
-			// Upstream cancellation -> bubble it; otherwise emit the timeout error
+			// If server-side wait window elapsed, return the structured timeout.
+			if errors.Is(receiptCtx.Err(), context.DeadlineExceeded) {
+				return nil, &txSyncTimeoutError{
+					msg:  fmt.Sprintf("The transaction was added to the transaction pool but wasn't processed in %v.", timeout),
+					hash: hash,
+				}
+			}
+			// Otherwise, bubble the caller's context error (canceled or deadline).
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			return nil, &txSyncTimeoutError{
-				msg:  fmt.Sprintf("The transaction was added to the transaction pool but wasn't processed in %v.", timeout),
-				hash: hash,
-			}
+			// Fallback: return the derived context's error.
+			return nil, receiptCtx.Err()
 
 		case err, ok := <-subErrCh:
 			if !ok || err == nil {
