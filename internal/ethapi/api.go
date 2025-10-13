@@ -1652,11 +1652,6 @@ func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil
 	return SubmitTransaction(ctx, api.b, tx)
 }
 
-type ReceiptWithTx struct {
-	Receipt     *types.Receipt
-	Transaction *types.Transaction
-}
-
 // SendRawTransactionSync will add the signed transaction to the transaction pool
 // and wait until the transaction has been included in a block and return the receipt, or the timeout.
 func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hexutil.Bytes, timeoutMs *hexutil.Uint64) (map[string]interface{}, error) {
@@ -1664,6 +1659,12 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 	if err := tx.UnmarshalBinary(input); err != nil {
 		return nil, err
 	}
+
+	ch := make(chan core.ChainEvent, 128)
+	sub := api.b.SubscribeChainEvent(ch)
+	subErrCh := sub.Err()
+	defer sub.Unsubscribe()
+
 	hash, err := SubmitTransaction(ctx, api.b, tx)
 	if err != nil {
 		return nil, err
@@ -1690,13 +1691,6 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 		return r, nil
 	}
 
-	// Subscribe to receipt stream (filtered to this tx)
-	receipts := make(chan []*ReceiptWithTx, 1)
-	sub := api.b.SubscribeTransactionReceipts([]common.Hash{hash}, receipts)
-	defer sub.Unsubscribe()
-
-	subErrCh := sub.Err()
-
 	for {
 		select {
 		case <-receiptCtx.Done():
@@ -1717,23 +1711,27 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 			}
 			return nil, err
 
-		case batch := <-receipts:
-			for _, rwt := range batch {
-				if rwt == nil || rwt.Receipt == nil || rwt.Receipt.TxHash != hash {
-					continue
+		case ev := <-ch:
+			rs := ev.Receipts
+			txs := ev.Transactions
+			if len(rs) == 0 || len(rs) != len(txs) {
+				continue
+			}
+			for i := range rs {
+				if rs[i].TxHash == hash {
+					if rs[i].BlockNumber != nil && rs[i].BlockHash != (common.Hash{}) {
+						signer := types.LatestSigner(api.b.ChainConfig())
+						return MarshalReceipt(
+							rs[i],
+							rs[i].BlockHash,
+							rs[i].BlockNumber.Uint64(),
+							signer,
+							txs[i],
+							int(rs[i].TransactionIndex),
+						), nil
+					}
+					return api.GetTransactionReceipt(receiptCtx, hash)
 				}
-
-				if rwt.Receipt.BlockNumber != nil && rwt.Receipt.BlockHash != (common.Hash{}) {
-					return MarshalReceipt(
-						rwt.Receipt,
-						rwt.Receipt.BlockHash,
-						rwt.Receipt.BlockNumber.Uint64(),
-						api.signer,
-						rwt.Transaction,
-						int(rwt.Receipt.TransactionIndex),
-					), nil
-				}
-				return api.GetTransactionReceipt(receiptCtx, hash)
 			}
 		}
 	}

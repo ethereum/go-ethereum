@@ -445,7 +445,7 @@ func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent)
 
 	// Handle transaction receipts subscriptions when a new block is added
 	for _, f := range filters[TransactionReceiptsSubscription] {
-		matchedReceipts := FilterReceipts(f.txHashes, ev)
+		matchedReceipts := filterReceipts(f.txHashes, ev)
 		if len(matchedReceipts) > 0 {
 			f.receipts <- matchedReceipts
 		}

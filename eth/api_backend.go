@@ -36,12 +36,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool/locals"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -495,31 +493,4 @@ func (b *EthAPIBackend) RPCTxSyncDefaultTimeout() time.Duration {
 
 func (b *EthAPIBackend) RPCTxSyncMaxTimeout() time.Duration {
 	return b.eth.config.TxSyncMaxTimeout
-}
-
-func (b *EthAPIBackend) SubscribeTransactionReceipts(
-	txHashes []common.Hash,
-	out chan<- []*ethapi.ReceiptWithTx,
-) event.Subscription {
-	ch := make(chan core.ChainEvent, 16)
-	sub := b.eth.blockchain.SubscribeChainEvent(ch)
-
-	go func() {
-		defer sub.Unsubscribe()
-		for {
-			select {
-			case ev, ok := <-ch:
-				if !ok {
-					return
-				}
-				batch := filters.FilterReceipts(txHashes, ev)
-				if len(batch) > 0 {
-					out <- batch
-				}
-			case <-sub.Err():
-				return
-			}
-		}
-	}()
-	return sub
 }

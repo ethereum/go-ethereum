@@ -441,8 +441,8 @@ type testBackend struct {
 	pending         *types.Block
 	pendingReceipts types.Receipts
 
-	receiptsFeed *event.Feed
-	autoMine     bool
+	chainFeed *event.Feed
+	autoMine  bool
 
 	sentTx     *types.Transaction
 	sentTxHash common.Hash
@@ -479,7 +479,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.E
 		acc:             acc,
 		pending:         blocks[n],
 		pendingReceipts: receipts[n],
-		receiptsFeed:    new(event.Feed),
+		chainFeed:       new(event.Feed),
 	}
 	return backend
 }
@@ -601,7 +601,7 @@ func (b testBackend) GetEVM(ctx context.Context, state *state.StateDB, header *t
 	return vm.NewEVM(context, state, b.chain.Config(), *vmConfig)
 }
 func (b testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
-	panic("implement me")
+	return b.chainFeed.Subscribe(ch)
 }
 func (b testBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	panic("implement me")
@@ -610,11 +610,12 @@ func (b *testBackend) SendTx(ctx context.Context, tx *types.Transaction) error {
 	b.sentTx = tx
 	b.sentTxHash = tx.Hash()
 
-	if b.autoMine && b.receiptsFeed != nil {
+	if b.autoMine {
+		// Synthesize a "mined" receipt at head+1
 		num := b.chain.CurrentHeader().Number.Uint64() + 1
-		bh := fakeBlockHash(tx.Hash())
 
-		r := &types.Receipt{
+		bh := fakeBlockHash(tx.Hash())
+		receipt := &types.Receipt{
 			TxHash:            tx.Hash(),
 			Status:            types.ReceiptStatusSuccessful,
 			BlockHash:         bh,
@@ -623,7 +624,16 @@ func (b *testBackend) SendTx(ctx context.Context, tx *types.Transaction) error {
 			CumulativeGasUsed: 21000,
 			GasUsed:           21000,
 		}
-		b.receiptsFeed.Send([]*ReceiptWithTx{{Receipt: r, Transaction: tx}})
+		hdr := &types.Header{
+			Number: new(big.Int).SetUint64(num),
+		}
+
+		// Broadcast a ChainEvent that includes the receipts and txs
+		b.chainFeed.Send(core.ChainEvent{
+			Header:       hdr,
+			Receipts:     types.Receipts{receipt},
+			Transactions: types.Transactions{tx},
+		})
 	}
 	return nil
 }
@@ -3981,13 +3991,6 @@ func makeSelfSignedRaw(t *testing.T, api *TransactionAPI, addr common.Address) (
 	return makeSignedRaw(t, api, addr, addr, big.NewInt(0))
 }
 
-func (b *testBackend) SubscribeTransactionReceipts(_ []common.Hash, ch chan<- []*ReceiptWithTx) event.Subscription {
-	if b.receiptsFeed == nil {
-		return event.NewSubscription(func(quit <-chan struct{}) error { <-quit; return nil })
-	}
-	// Test will only publish the receipts it wants; we just forward.
-	return b.receiptsFeed.Subscribe(ch)
-}
 func TestSendRawTransactionSync_Success(t *testing.T) {
 	t.Parallel()
 	genesis := &core.Genesis{
