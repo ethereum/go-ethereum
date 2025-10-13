@@ -55,6 +55,7 @@ import (
 const estimateGasErrorRatio = 0.015
 
 var errBlobTxNotSupported = errors.New("signing blob transactions not supported")
+var errSubClosed = errors.New("chain subscription closed")
 
 // EthereumAPI provides an API to access Ethereum related information.
 type EthereumAPI struct {
@@ -1710,11 +1711,14 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 
 		case err, ok := <-subErrCh:
 			if !ok {
-				return nil, errors.New("chain subscription closed")
+				return nil, errSubClosed
 			}
 			return nil, err
 
-		case ev := <-ch:
+		case ev, ok := <-ch:
+			if !ok {
+				return nil, errSubClosed
+			}
 			rs := ev.Receipts
 			txs := ev.Transactions
 			if len(rs) == 0 || len(rs) != len(txs) {
