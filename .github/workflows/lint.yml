@@ -43,13 +43,13 @@ jobs:
         # commit of a pull request, and we want to avoid reporting invalid goheader errors.
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.60
+          version: v1.64.8
           only-new-issues: true
           args: --enable-only goheader
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.60
+          version: v1.64.8
 
   yamllint:
     runs-on: ubuntu-latest

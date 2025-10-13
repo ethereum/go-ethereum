@@ -24,8 +24,9 @@ const _tokenType_name = "eoflineStartlineEndinvalidStatementelementlabellabelDef
 var _tokenType_index = [...]uint8{0, 3, 12, 19, 35, 42, 47, 55, 61, 72}
 
 func (i tokenType) String() string {
-	if i < 0 || i >= tokenType(len(_tokenType_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_tokenType_index)-1 {
 		return "tokenType(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _tokenType_name[_tokenType_index[i]:_tokenType_index[i+1]]
+	return _tokenType_name[_tokenType_index[idx]:_tokenType_index[idx+1]]
 }
