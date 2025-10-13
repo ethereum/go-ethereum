@@ -378,6 +378,28 @@ func TestID_logdist(t *testing.T) {
 	}
 }
 
+func makeIDs() (ID, ID) {
+	var a, b ID
+	size := len(a)
+	// last byte differs
+	for i := 0; i < size-1; i++ {
+		a[i] = 0xAA
+		b[i] = 0xAA
+	}
+	a[size-1] = 0xAA
+	b[size-1] = 0xAB
+	return a, b
+}
+
+// Benchmark LogDist
+func BenchmarkLogDist(b *testing.B) {
+	aID, bID := makeIDs() // 256-bit ID
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = LogDist(aID, bID)
+	}
+}
+
 // The random tests is likely to miss the case where a and b are equal,
 // this test checks it explicitly.
 func TestID_logdistEqual(t *testing.T) {
