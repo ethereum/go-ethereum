@@ -19,6 +19,7 @@ package enode
 import (
 	"crypto/ecdsa"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -373,12 +374,14 @@ func DistCmp(target, a, b ID) int {
 // LogDist returns the logarithmic distance between a and b, log2(a ^ b).
 func LogDist(a, b ID) int {
 	lz := 0
-	for i := range a {
-		x := a[i] ^ b[i]
+	for i := 0; i < len(a); i += 8 {
+		ai := binary.BigEndian.Uint64(a[i : i+8])
+		bi := binary.BigEndian.Uint64(b[i : i+8])
+		x := ai ^ bi
 		if x == 0 {
-			lz += 8
+			lz += 64
 		} else {
-			lz += bits.LeadingZeros8(x)
+			lz += bits.LeadingZeros64(x)
 			break
 		}
 	}
