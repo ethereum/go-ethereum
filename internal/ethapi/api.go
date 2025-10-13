@@ -1709,10 +1709,8 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 			return nil, receiptCtx.Err()
 
 		case err, ok := <-subErrCh:
-			if !ok || err == nil {
-				// subscription closed; disable this case
-				subErrCh = nil
-				continue
+			if !ok {
+				return nil, errors.New("chain subscription closed")
 			}
 			return nil, err
 
