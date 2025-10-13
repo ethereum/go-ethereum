@@ -615,14 +615,14 @@ var (
 		Value:    ethconfig.Defaults.LogQueryLimit,
 		Category: flags.APICategory,
 	}
-	RPCTxSyncDefaultFlag = &cli.DurationFlag{
-		Name:     "rpc.txsync.default",
+	RPCTxSyncDefaultTimeoutFlag = &cli.DurationFlag{
+		Name:     "rpc.txsync.defaulttimeout",
 		Usage:    "Default timeout for eth_sendRawTransactionSync (e.g. 2s, 500ms)",
 		Value:    ethconfig.Defaults.TxSyncDefaultTimeout,
 		Category: flags.APICategory,
 	}
-	RPCTxSyncMaxFlag = &cli.DurationFlag{
-		Name:     "rpc.txsync.max",
+	RPCTxSyncMaxTimeoutFlag = &cli.DurationFlag{
+		Name:     "rpc.txsync.maxtimeout",
 		Usage:    "Maximum allowed timeout for eth_sendRawTransactionSync (e.g. 5m)",
 		Value:    ethconfig.Defaults.TxSyncMaxTimeout,
 		Category: flags.APICategory,
@@ -1729,11 +1729,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(RPCGlobalLogQueryLimit.Name) {
 		cfg.LogQueryLimit = ctx.Int(RPCGlobalLogQueryLimit.Name)
 	}
-	if ctx.IsSet(RPCTxSyncDefaultFlag.Name) {
-		cfg.TxSyncDefaultTimeout = ctx.Duration(RPCTxSyncDefaultFlag.Name)
+	if ctx.IsSet(RPCTxSyncDefaultTimeoutFlag.Name) {
+		cfg.TxSyncDefaultTimeout = ctx.Duration(RPCTxSyncDefaultTimeoutFlag.Name)
 	}
-	if ctx.IsSet(RPCTxSyncMaxFlag.Name) {
-		cfg.TxSyncMaxTimeout = ctx.Duration(RPCTxSyncMaxFlag.Name)
+	if ctx.IsSet(RPCTxSyncMaxTimeoutFlag.Name) {
+		cfg.TxSyncMaxTimeout = ctx.Duration(RPCTxSyncMaxTimeoutFlag.Name)
 	}
 	if !ctx.Bool(SnapshotFlag.Name) || cfg.SnapshotCache == 0 {
 		// If snap-sync is requested, this flag is also required
