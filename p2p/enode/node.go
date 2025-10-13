@@ -373,10 +373,8 @@ func DistCmp(target, a, b ID) int {
 
 // LogDist returns the logarithmic distance between a and b, log2(a ^ b).
 func LogDist(a, b ID) int {
-	lenA := len(a)
-	totalBits := lenA * 8
 	lz := 0
-	for i := 0; i < lenA; i += 8 {
+	for i := 0; i < len(a); i += 8 {
 		ai := binary.BigEndian.Uint64(a[i : i+8])
 		bi := binary.BigEndian.Uint64(b[i : i+8])
 		x := ai ^ bi
@@ -387,5 +385,5 @@ func LogDist(a, b ID) int {
 			break
 		}
 	}
-	return totalBits - lz
+	return len(a)*8 - lz
 }
