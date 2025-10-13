@@ -1400,7 +1400,7 @@ func (pool *LegacyPool) reset(oldHead, newHead *types.Header) {
 // invalidated transactions (low nonce, low balance) are deleted.
 func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.Transaction {
 	gasLimit := pool.currentHead.Load().GasLimit
-	promotable, dropped := pool.queue.promoteExecutables(accounts, gasLimit, pool.currentState, pool.pendingNonces)
+	promotable, dropped, removedAddresses := pool.queue.promoteExecutables(accounts, gasLimit, pool.currentState, pool.pendingNonces)
 	promoted := make([]*types.Transaction, 0, len(promotable))
 
 	// promote all promoteable transactions
@@ -1417,7 +1417,7 @@ func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.T
 	}
 
 	// release all accounts that have no more transactions in the pool
-	for _, addr := range accounts {
+	for _, addr := range removedAddresses {
 		_, hasPending := pool.pending[addr]
 		_, hasQueued := pool.queue.get(addr)
 		if !hasPending && !hasQueued {

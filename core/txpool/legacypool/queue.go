@@ -149,12 +149,14 @@ func (q *queue) add(hash common.Hash, tx *types.Transaction) (*common.Hash, erro
 // for promotion any that are now executable. It also drops any transactions that are
 // deemed too old (nonce too low) or too costly (insufficient funds or over gas limit).
 //
-// Returns two lists: all transactions that were removed from the queue and selected
-// for promotion; all other transactions that were removed from the queue and dropped.
-func (q *queue) promoteExecutables(accounts []common.Address, gasLimit uint64, currentState *state.StateDB, nonces *noncer) ([]*types.Transaction, []common.Hash) {
+// Returns three lists: all transactions that were removed from the queue and selected
+// for promotion; all other transactions that were removed from the queue and dropped;
+// the list of addresses removed.
+func (q *queue) promoteExecutables(accounts []common.Address, gasLimit uint64, currentState *state.StateDB, nonces *noncer) ([]*types.Transaction, []common.Hash, []common.Address) {
 	// Track the promotable transactions to broadcast them at once
 	var promotable []*types.Transaction
 	var dropped []common.Hash
+	var removedAddresses []common.Address
 
 	// Iterate over all accounts and promote any executable transactions
 	for _, addr := range accounts {
@@ -196,9 +198,10 @@ func (q *queue) promoteExecutables(accounts []common.Address, gasLimit uint64, c
 		if list.Empty() {
 			delete(q.queued, addr)
 			delete(q.beats, addr)
+			removedAddresses = append(removedAddresses, addr)
 		}
 	}
-	return promotable, dropped
+	return promotable, dropped, removedAddresses
 }
 
 // truncate drops the oldest transactions from the queue until the total
