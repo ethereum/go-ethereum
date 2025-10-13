@@ -1128,8 +1128,8 @@ func (t *freezerTable) RetrieveBytes(item, offset, length uint64) ([]byte, error
 	}
 	index0, index1 := indices[0], indices[1]
 
-	itemStart, endLimit, fileId := index0.bounds(index1)
-	itemSize := endLimit - itemStart
+	itemStart, itemLimit, fileId := index0.bounds(index1)
+	itemSize := itemLimit - itemStart
 
 	dataFile, exist := t.files[fileId]
 	if !exist {
