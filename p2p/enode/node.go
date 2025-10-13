@@ -360,7 +360,7 @@ func ParseID(in string) (ID, error) {
 // and 0 if they are equal.
 func DistCmp(target, a, b ID) int {
 	for i := 0; i < len(target); i += 8 {
-		tn := binary.BigEndian.Uint64(target[i:i+8])
+		tn := binary.BigEndian.Uint64(target[i : i+8])
 		da := tn ^ binary.BigEndian.Uint64(a[i:i+8])
 		db := tn ^ binary.BigEndian.Uint64(b[i:i+8])
 		if da > db {
