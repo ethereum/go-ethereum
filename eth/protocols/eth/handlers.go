@@ -521,7 +521,7 @@ func handlePooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(&txs); err != nil {
 		return err
 	}
-	// Deduplicate transactions within the message to avoid redundant processing
+	// Duplicate transactions are not allowed
 	seen := make(map[common.Hash]struct{})
 	for i, tx := range txs.PooledTransactionsResponse {
 		// Validate and mark the remote transaction
