@@ -1606,6 +1606,12 @@ func TestFreezerAncientBytes(t *testing.T) {
 				if !bytes.Equal(got, full) {
 					t.Fatalf("full read mismatch for entry %d", i)
 				}
+				// Empty read
+				got, err = f.RetrieveBytes(uint64(i), 0, 0)
+				require.NoError(t, err)
+				if !bytes.Equal(got, full[:0]) {
+					t.Fatalf("empty read mismatch for entry %d", i)
+				}
 				// Middle slice
 				got, err = f.RetrieveBytes(uint64(i), 10, 50)
 				require.NoError(t, err)

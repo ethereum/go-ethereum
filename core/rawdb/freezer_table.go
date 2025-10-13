@@ -1138,7 +1138,6 @@ func (t *freezerTable) RetrieveBytes(item, offset, length uint64) ([]byte, error
 
 	// Perform the partial read if no-compression was enabled upon
 	if t.config.noSnappy {
-		// Range check before reading
 		if offset > uint64(itemSize) || offset+length > uint64(itemSize) {
 			return nil, fmt.Errorf("requested range out of bounds: item size %d, offset %d, length %d", itemSize, offset, length)
 		}
@@ -1151,12 +1150,14 @@ func (t *freezerTable) RetrieveBytes(item, offset, length uint64) ([]byte, error
 		}
 		return buf, nil
 	} else {
+		// If compressed, read the full item, decompress, then slice.
+		// Unfortunately, in this case, there is no performance gain
+		// by performing the partial read at all.
 		buf := make([]byte, itemSize)
 		_, err = dataFile.ReadAt(buf, int64(itemStart))
 		if err != nil {
 			return nil, err
 		}
-		// If compressed, read the full item, decompress, then slice
 		data, err := snappy.Decode(nil, buf)
 		if err != nil {
 			return nil, err
