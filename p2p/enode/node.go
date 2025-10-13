@@ -359,11 +359,10 @@ func ParseID(in string) (ID, error) {
 // Returns -1 if a is closer to target, 1 if b is closer to target
 // and 0 if they are equal.
 func DistCmp(target, a, b ID) int {
-	const size = 8
-	n := len(target)
-	for i := 0; i+size <= n; i += size {
-		da := binary.BigEndian.Uint64(a[i:i+size]) ^ binary.BigEndian.Uint64(target[i:i+size])
-		db := binary.BigEndian.Uint64(b[i:i+size]) ^ binary.BigEndian.Uint64(target[i:i+size])
+	for i := 0; i < len(target); i += 8 {
+		tn := binary.BigEndian.Uint64(target[i:i+8])
+		da := tn ^ binary.BigEndian.Uint64(a[i:i+8])
+		db := tn ^ binary.BigEndian.Uint64(b[i:i+8])
 		if da > db {
 			return 1
 		} else if da < db {
