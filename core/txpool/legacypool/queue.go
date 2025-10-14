@@ -27,6 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// queue manages nonce-gapped transactions that have been validated but are
+// not yet processable.
 type queue struct {
 	config Config
 	signer types.Signer
@@ -43,19 +45,17 @@ func newQueue(config Config, signer types.Signer) *queue {
 	}
 }
 
-func (q *queue) evict(force bool) []common.Hash {
-	removed := make([]common.Hash, 0)
+// evictList returns the hashes of transactions that are old enough to be evicted.
+func (q *queue) evictList() []common.Hash {
+	var removed []common.Hash
 	for addr, list := range q.queued {
-		// Any transactions old enough should be removed
-		if force || time.Since(q.beats[addr]) > q.config.Lifetime {
-			list := list.Flatten()
-			for _, tx := range list {
-				q.removeTx(addr, tx)
+		if time.Since(q.beats[addr]) > q.config.Lifetime {
+			for _, tx := range list.Flatten() {
 				removed = append(removed, tx.Hash())
 			}
-			queuedEvictionMeter.Mark(int64(len(list)))
 		}
 	}
+	queuedEvictionMeter.Mark(int64(len(removed)))
 	return removed
 }
 
@@ -100,7 +100,7 @@ func (q *queue) addresses() []common.Address {
 	return addrs
 }
 
-func (q queue) removeTx(addr common.Address, tx *types.Transaction) {
+func (q *queue) remove(addr common.Address, tx *types.Transaction) {
 	if future := q.queued[addr]; future != nil {
 		if txOld := future.txs.Get(tx.Nonce()); txOld != nil && txOld.Hash() != tx.Hash() {
 			// Edge case, a different transaction
@@ -118,7 +118,7 @@ func (q queue) removeTx(addr common.Address, tx *types.Transaction) {
 	}
 }
 
-func (q *queue) add(hash common.Hash, tx *types.Transaction) (*common.Hash, error) {
+func (q *queue) add(tx *types.Transaction) (*common.Hash, error) {
 	// Try to insert the transaction into the future queue
 	from, _ := types.Sender(q.signer, tx) // already validated
 	if q.queued[from] == nil {
@@ -149,15 +149,17 @@ func (q *queue) add(hash common.Hash, tx *types.Transaction) (*common.Hash, erro
 // for promotion any that are now executable. It also drops any transactions that are
 // deemed too old (nonce too low) or too costly (insufficient funds or over gas limit).
 //
-// Returns three lists: all transactions that were removed from the queue and selected
-// for promotion; all other transactions that were removed from the queue and dropped;
-// the list of addresses removed.
+// Returns three lists:
+// - all transactions that were removed from the queue and selected for promotion;
+// - all other transactions that were removed from the queue and dropped;
+// - the list of addresses removed.
 func (q *queue) promoteExecutables(accounts []common.Address, gasLimit uint64, currentState *state.StateDB, nonces *noncer) ([]*types.Transaction, []common.Hash, []common.Address) {
 	// Track the promotable transactions to broadcast them at once
-	var promotable []*types.Transaction
-	var dropped []common.Hash
-	var removedAddresses []common.Address
-
+	var (
+		promotable       []*types.Transaction
+		dropped          []common.Hash
+		removedAddresses []common.Address
+	)
 	// Iterate over all accounts and promote any executable transactions
 	for _, addr := range accounts {
 		list := q.queued[addr]
@@ -170,6 +172,7 @@ func (q *queue) promoteExecutables(accounts []common.Address, gasLimit uint64, c
 			dropped = append(dropped, tx.Hash())
 		}
 		log.Trace("Removing old queued transactions", "count", len(forwards))
+
 		// Drop all transactions that are too costly (low balance or out of gas)
 		drops, _ := list.Filter(currentState.GetBalance(addr), gasLimit)
 		for _, tx := range drops {
@@ -205,9 +208,9 @@ func (q *queue) promoteExecutables(accounts []common.Address, gasLimit uint64, c
 }
 
 // truncate drops the oldest transactions from the queue until the total
-// number is below the configured limit.
-// Returns the hashes of all dropped transactions, and the addresses of
-// accounts that became empty due to the truncation.
+// number is below the configured limit. Returns the hashes of all dropped
+// transactions and the addresses of accounts that became empty due to
+// the truncation.
 func (q *queue) truncate() ([]common.Hash, []common.Address) {
 	queued := uint64(0)
 	for _, list := range q.queued {
@@ -223,10 +226,12 @@ func (q *queue) truncate() ([]common.Hash, []common.Address) {
 		addresses = append(addresses, addressByHeartbeat{addr, q.beats[addr]})
 	}
 	sort.Sort(sort.Reverse(addresses))
-	removed := make([]common.Hash, 0)
-	removedAddresses := make([]common.Address, 0)
 
 	// Drop transactions until the total is below the limit
+	var (
+		removed          = make([]common.Hash, 0)
+		removedAddresses = make([]common.Address, 0)
+	)
 	for drop := queued - q.config.GlobalQueue; drop > 0 && len(addresses) > 0; {
 		addr := addresses[len(addresses)-1]
 		list := q.queued[addr.address]
@@ -236,7 +241,7 @@ func (q *queue) truncate() ([]common.Hash, []common.Address) {
 		// Drop all transactions if they are less than the overflow
 		if size := uint64(list.Len()); size <= drop {
 			for _, tx := range list.Flatten() {
-				q.removeTx(addr.address, tx)
+				q.remove(addr.address, tx)
 				removed = append(removed, tx.Hash())
 			}
 			drop -= size
@@ -247,14 +252,13 @@ func (q *queue) truncate() ([]common.Hash, []common.Address) {
 		// Otherwise drop only last few transactions
 		txs := list.Flatten()
 		for i := len(txs) - 1; i >= 0 && drop > 0; i-- {
-			q.removeTx(addr.address, txs[i])
+			q.remove(addr.address, txs[i])
 			removed = append(removed, txs[i].Hash())
 			drop--
 			queuedRateLimitMeter.Mark(1)
 		}
 	}
-
-	// no need to clear empty accounts, removeTx already does that
+	// No need to clear empty accounts, remove already does that
 	return removed, removedAddresses
 }
 
