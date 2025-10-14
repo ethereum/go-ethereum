@@ -857,6 +857,10 @@ var (
 		Name:  "l1.sync.interval",
 		Usage: "Poll interval for L1 message syncing (e.g., 2s, 10s, 1m)",
 	}
+	L1FetchBlockRangeFlag = cli.Int64Flag{
+		Name:  "l1.sync.fetchblockrange",
+		Usage: "Block range for L1 message fetching in a single eth_getLogs query",
+	}
 	L1DisableMessageQueueV2Flag = &cli.BoolFlag{
 		Name:  "l1.disablemqv2",
 		Usage: "Disable L1 message queue v2",
@@ -1476,6 +1480,9 @@ func setL1(ctx *cli.Context, cfg *node.Config) {
 	}
 	if ctx.GlobalIsSet(L1SyncIntervalFlag.Name) {
 		cfg.L1SyncInterval = ctx.GlobalDuration(L1SyncIntervalFlag.Name)
+	}
+	if ctx.GlobalIsSet(L1FetchBlockRangeFlag.Name) {
+		cfg.L1FetchBlockRange = ctx.GlobalUint64(L1FetchBlockRangeFlag.Name)
 	}
 	if ctx.GlobalIsSet(L1DisableMessageQueueV2Flag.Name) {
 		cfg.L1DisableMessageQueueV2 = ctx.GlobalBool(L1DisableMessageQueueV2Flag.Name)

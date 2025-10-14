@@ -200,6 +200,8 @@ type Config struct {
 	L1DeploymentBlock uint64 `toml:",omitempty"`
 	// Poll interval for L1 message syncing
 	L1SyncInterval time.Duration `toml:",omitempty"`
+	// Block range for L1 message fetching in a single eth_getLogs query
+	L1FetchBlockRange uint64 `toml:",omitempty"`
 	// Explicitly disable L1 message queue V2 and only query from L1 message queue V1 (before EuclidV2)
 	L1DisableMessageQueueV2 bool `toml:",omitempty"`
 	// Is daSyncingEnabled

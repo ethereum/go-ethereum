@@ -51,6 +51,7 @@ type SyncService struct {
 	db                   ethdb.Database
 	msgCountFeed         event.Feed
 	pollInterval         time.Duration
+	fetchBlockRange      uint64
 	latestProcessedBlock uint64
 	scope                event.SubscriptionScope
 	stateMu              sync.Mutex
@@ -105,12 +106,18 @@ func NewSyncService(ctx context.Context, genesisConfig *params.ChainConfig, node
 		pollInterval = DefaultPollInterval
 	}
 
+	fetchBlockRange := nodeConfig.L1FetchBlockRange
+	if fetchBlockRange == 0 {
+		fetchBlockRange = DefaultFetchBlockRange
+	}
+
 	service := SyncService{
 		ctx:                  ctx,
 		cancel:               cancel,
 		client:               client,
 		db:                   db,
 		pollInterval:         pollInterval,
+		fetchBlockRange:      fetchBlockRange,
 		latestProcessedBlock: latestProcessedBlock,
 	}
 
@@ -236,7 +243,7 @@ func (s *SyncService) fetchMessages() {
 	numMsgsCollected := 0
 
 	// query in batches
-	for from := s.latestProcessedBlock + 1; from <= latestConfirmed; from += DefaultFetchBlockRange {
+	for from := s.latestProcessedBlock + 1; from <= latestConfirmed; from += s.fetchBlockRange {
 		select {
 		case <-s.ctx.Done():
 			// flush pending writes to database
@@ -250,7 +257,7 @@ func (s *SyncService) fetchMessages() {
 		default:
 		}
 
-		to := from + DefaultFetchBlockRange - 1
+		to := from + s.fetchBlockRange - 1
 		if to > latestConfirmed {
 			to = latestConfirmed
 		}
