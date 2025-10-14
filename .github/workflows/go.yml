@@ -34,6 +34,53 @@ jobs:
         go run build/ci.go check_generate
         go run build/ci.go check_baddeps
 
+  build-386:
+    name: 32bit build
+    needs: test
+    runs-on: [self-hosted-ghr, size-l-x64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: false
+
+      - name: Run tests
+        run: go build ./cmd/geth
+        env:
+          GOARCH: 386
+
+  keeper-build-ziren:
+    name: Keeper
+    needs: build-386
+    runs-on: [self-hosted-ghr, size-l-x64]
+    strategy:
+      matrix:
+        include:
+          - env:
+              GOARCH: mips
+              GOOS: linux
+              GOMIPS: softfloat
+            tags: "ziren"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: false
+
+      - name: Run tests
+        run: cd cmd/keeper && go build -tags ${{ matrix.tags }} .
+        env: ${{ matrix.env }}
+
   test:
     name: Test
     needs: lint
