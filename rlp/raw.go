@@ -17,6 +17,7 @@
 package rlp
 
 import (
+	"fmt"
 	"io"
 	"reflect"
 )
@@ -150,6 +151,35 @@ func CountValues(b []byte) (int, error) {
 		b = b[tagsize+size:]
 	}
 	return i, nil
+}
+
+// SplitListValues extracts the raw elements from the list RLP-encoding blob.
+func SplitListValues(b []byte) ([][]byte, error) {
+	b, _, err := SplitList(b)
+	if err != nil {
+		return nil, fmt.Errorf("decode error: %v", err)
+	}
+	var elements [][]byte
+	for len(b) > 0 {
+		_, tagsize, size, err := readKind(b)
+		if err != nil {
+			return nil, err
+		}
+		elements = append(elements, b[:tagsize+size])
+		b = b[tagsize+size:]
+	}
+	return elements, nil
+}
+
+// MergeListValues takes a list of raw elements and rlp-encodes them as list.
+func MergeListValues(elems [][]byte) ([]byte, error) {
+	w := NewEncoderBuffer(nil)
+	offset := w.List()
+	for _, elem := range elems {
+		w.Write(elem)
+	}
+	w.ListEnd(offset)
+	return w.ToBytes(), nil
 }
 
 func readKind(buf []byte) (k Kind, tagsize, contentsize uint64, err error) {
