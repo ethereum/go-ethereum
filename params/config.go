@@ -99,7 +99,6 @@ var (
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
-			Osaka:  DefaultOsakaBlobConfig,
 			BPO1:   DefaultBPO1BlobConfig,
 			BPO2:   DefaultBPO2BlobConfig,
 		},
@@ -135,7 +134,6 @@ var (
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
-			Osaka:  DefaultOsakaBlobConfig,
 			BPO1:   DefaultBPO1BlobConfig,
 			BPO2:   DefaultBPO2BlobConfig,
 		},
@@ -171,7 +169,6 @@ var (
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
-			Osaka:  DefaultOsakaBlobConfig,
 			BPO1:   DefaultBPO1BlobConfig,
 			BPO2:   DefaultBPO2BlobConfig,
 		},
@@ -324,7 +321,6 @@ var (
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
-			Osaka:  DefaultOsakaBlobConfig,
 		},
 	}
 
@@ -373,12 +369,6 @@ var (
 		Max:            9,
 		UpdateFraction: 5007716,
 	}
-	// DefaultOsakaBlobConfig is the default blob configuration for the Osaka fork.
-	DefaultOsakaBlobConfig = &BlobConfig{
-		Target:         6,
-		Max:            9,
-		UpdateFraction: 5007716,
-	}
 	// DefaultBPO1BlobConfig is the default blob configuration for the BPO1 fork.
 	DefaultBPO1BlobConfig = &BlobConfig{
 		Target:         10,
@@ -407,7 +397,6 @@ var (
 	DefaultBlobSchedule = &BlobScheduleConfig{
 		Cancun: DefaultCancunBlobConfig,
 		Prague: DefaultPragueBlobConfig,
-		Osaka:  DefaultOsakaBlobConfig,
 	}
 )
 
@@ -664,7 +653,7 @@ func (c *ChainConfig) Description() string {
 		banner += fmt.Sprintf(" - Prague:                      @%-10v blob: (%s)\n", *c.PragueTime, c.BlobScheduleConfig.Prague)
 	}
 	if c.OsakaTime != nil {
-		banner += fmt.Sprintf(" - Osaka:                       @%-10v blob: (%s)\n", *c.OsakaTime, c.BlobScheduleConfig.Osaka)
+		banner += fmt.Sprintf(" - Osaka:                       @%-10v\n", *c.OsakaTime)
 	}
 	if c.BPO1Time != nil {
 		banner += fmt.Sprintf(" - BPO1:                        @%-10v blob: (%s)\n", *c.BPO1Time, c.BlobScheduleConfig.BPO1)
@@ -682,10 +671,10 @@ func (c *ChainConfig) Description() string {
 		banner += fmt.Sprintf(" - BPO5:                        @%-10v blob: (%s)\n", *c.BPO5Time, c.BlobScheduleConfig.BPO5)
 	}
 	if c.AmsterdamTime != nil {
-		banner += fmt.Sprintf(" - Amsterdam:									 @%-10v blob: (%s)\n", *c.AmsterdamTime, c.BlobScheduleConfig.Amsterdam)
+		banner += fmt.Sprintf(" - Amsterdam:									 @%-10v\n", *c.AmsterdamTime)
 	}
 	if c.VerkleTime != nil {
-		banner += fmt.Sprintf(" - Verkle:                      @%-10v blob: (%s)\n", *c.VerkleTime, c.BlobScheduleConfig.Verkle)
+		banner += fmt.Sprintf(" - Verkle:                      @%-10v\n", *c.VerkleTime)
 	}
 	banner += fmt.Sprintf("\nAll fork specifications can be found at https://ethereum.github.io/execution-specs/src/ethereum/forks/\n")
 	return banner
@@ -708,16 +697,13 @@ func (bc *BlobConfig) String() string {
 
 // BlobScheduleConfig determines target and max number of blobs allow per fork.
 type BlobScheduleConfig struct {
-	Cancun    *BlobConfig `json:"cancun,omitempty"`
-	Prague    *BlobConfig `json:"prague,omitempty"`
-	Osaka     *BlobConfig `json:"osaka,omitempty"`
-	Verkle    *BlobConfig `json:"verkle,omitempty"`
-	BPO1      *BlobConfig `json:"bpo1,omitempty"`
-	BPO2      *BlobConfig `json:"bpo2,omitempty"`
-	BPO3      *BlobConfig `json:"bpo3,omitempty"`
-	BPO4      *BlobConfig `json:"bpo4,omitempty"`
-	BPO5      *BlobConfig `json:"bpo5,omitempty"`
-	Amsterdam *BlobConfig `json:"amsterdam,omitempty"`
+	Cancun *BlobConfig `json:"cancun,omitempty"`
+	Prague *BlobConfig `json:"prague,omitempty"`
+	BPO1   *BlobConfig `json:"bpo1,omitempty"`
+	BPO2   *BlobConfig `json:"bpo2,omitempty"`
+	BPO3   *BlobConfig `json:"bpo3,omitempty"`
+	BPO4   *BlobConfig `json:"bpo4,omitempty"`
+	BPO5   *BlobConfig `json:"bpo5,omitempty"`
 }
 
 // IsHomestead returns whether num is either equal to the homestead block or greater.
@@ -982,7 +968,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		}
 	}
 
-	// Check that all forks with blobs explicitly define the blob schedule configuration.
+	// Check that all defined BPOs have valid configurations
 	bsc := c.BlobScheduleConfig
 	if bsc == nil {
 		bsc = new(BlobScheduleConfig)
@@ -994,23 +980,15 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	}{
 		{name: "cancun", timestamp: c.CancunTime, config: bsc.Cancun},
 		{name: "prague", timestamp: c.PragueTime, config: bsc.Prague},
-		{name: "osaka", timestamp: c.OsakaTime, config: bsc.Osaka},
 		{name: "bpo1", timestamp: c.BPO1Time, config: bsc.BPO1},
 		{name: "bpo2", timestamp: c.BPO2Time, config: bsc.BPO2},
 		{name: "bpo3", timestamp: c.BPO3Time, config: bsc.BPO3},
 		{name: "bpo4", timestamp: c.BPO4Time, config: bsc.BPO4},
 		{name: "bpo5", timestamp: c.BPO5Time, config: bsc.BPO5},
-		{name: "amsterdam", timestamp: c.AmsterdamTime, config: bsc.Amsterdam},
 	} {
 		if cur.config != nil {
 			if err := cur.config.validate(); err != nil {
 				return fmt.Errorf("invalid chain configuration in blobSchedule for fork %q: %v", cur.name, err)
-			}
-		}
-		if cur.timestamp != nil {
-			// If the fork is configured, a blob schedule must be defined for it.
-			if cur.config == nil {
-				return fmt.Errorf("invalid chain configuration: missing entry for fork %q in blobSchedule", cur.name)
 			}
 		}
 	}
@@ -1140,16 +1118,6 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 	switch {
 	case c.IsAmsterdam(london, time):
 		return forks.Amsterdam
-	case c.IsBPO5(london, time):
-		return forks.BPO5
-	case c.IsBPO4(london, time):
-		return forks.BPO4
-	case c.IsBPO3(london, time):
-		return forks.BPO3
-	case c.IsBPO2(london, time):
-		return forks.BPO2
-	case c.IsBPO1(london, time):
-		return forks.BPO1
 	case c.IsOsaka(london, time):
 		return forks.Osaka
 	case c.IsPrague(london, time):
@@ -1163,24 +1131,22 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 	}
 }
 
-// BlobConfig returns the blob config associated with the provided fork.
-func (c *ChainConfig) BlobConfig(fork forks.Fork) *BlobConfig {
-	switch fork {
-	case forks.BPO5:
+// BlobConfig returns the blob config associated with the provided timestamp.
+func (c *ChainConfig) BlobConfig(ts uint64) *BlobConfig {
+	switch {
+	case isTimestampForked(c.BPO5Time, ts):
 		return c.BlobScheduleConfig.BPO5
-	case forks.BPO4:
+	case isTimestampForked(c.BPO4Time, ts):
 		return c.BlobScheduleConfig.BPO4
-	case forks.BPO3:
+	case isTimestampForked(c.BPO3Time, ts):
 		return c.BlobScheduleConfig.BPO3
-	case forks.BPO2:
+	case isTimestampForked(c.BPO2Time, ts):
 		return c.BlobScheduleConfig.BPO2
-	case forks.BPO1:
+	case isTimestampForked(c.BPO1Time, ts):
 		return c.BlobScheduleConfig.BPO1
-	case forks.Osaka:
-		return c.BlobScheduleConfig.Osaka
-	case forks.Prague:
+	case isTimestampForked(c.PragueTime, ts):
 		return c.BlobScheduleConfig.Prague
-	case forks.Cancun:
+	case isTimestampForked(c.CancunTime, ts):
 		return c.BlobScheduleConfig.Cancun
 	default:
 		return nil
@@ -1211,6 +1177,8 @@ func (c *ChainConfig) ActiveSystemContracts(time uint64) map[string]common.Addre
 // the fork isn't defined or isn't a time-based fork.
 func (c *ChainConfig) Timestamp(fork forks.Fork) *uint64 {
 	switch {
+	case fork == forks.Amsterdam:
+		return c.AmsterdamTime
 	case fork == forks.BPO5:
 		return c.BPO5Time
 	case fork == forks.BPO4:
