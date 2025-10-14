@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"strings"
@@ -240,6 +241,74 @@ func decodeRef(buf []byte) (node, []byte, error) {
 	default:
 		return nil, nil, fmt.Errorf("invalid RLP string size %d (want 0 or 32)", len(val))
 	}
+}
+
+// decodeNodeElements parses the RLP encoding of a trie node and returns all the
+// elements in raw byte format.
+//
+// For full node, it returns a slice of 17 elements;
+// For short node, it returns a slice of 2 elements;
+func decodeNodeElements(buf []byte) ([][]byte, error) {
+	if len(buf) == 0 {
+		return nil, io.ErrUnexpectedEOF
+	}
+	return rlp.SplitListValues(buf)
+}
+
+// encodeNodeElements encodes the provided node elements into a rlp list.
+func encodeNodeElements(elements [][]byte) ([]byte, error) {
+	if len(elements) != 2 && len(elements) != 17 {
+		return nil, fmt.Errorf("invalid number of elements: %d", len(elements))
+	}
+	return rlp.MergeListValues(elements)
+}
+
+// NodeDifference accepts two RLP-encoding nodes and figures out the difference
+// between them.
+//
+// An error is returned if any of the provided blob is nil, or the type of nodes
+// are different.
+func NodeDifference(oldvalue []byte, newvalue []byte) (int, []int, [][]byte, error) {
+	oldElems, err := decodeNodeElements(oldvalue)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	newElems, err := decodeNodeElements(newvalue)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	if len(oldElems) != len(newElems) {
+		return 0, nil, nil, fmt.Errorf("different node type, old elements: %d, new elements: %d", len(oldElems), len(newElems))
+	}
+	var (
+		indices = make([]int, 0, len(oldElems))
+		diff    = make([][]byte, 0, len(oldElems))
+	)
+	for i := 0; i < len(oldElems); i++ {
+		if !bytes.Equal(oldElems[i], newElems[i]) {
+			indices = append(indices, i)
+			diff = append(diff, oldElems[i])
+		}
+	}
+	return len(oldElems), indices, diff, nil
+}
+
+// ReassembleNode accepts a RLP-encoding node along with a set of mutations,
+// applying the modification diffs according to the indices and re-assemble.
+func ReassembleNode(blob []byte, mutations [][][]byte, indices [][]int) ([]byte, error) {
+	if len(mutations) == 0 && len(indices) == 0 {
+		return blob, nil
+	}
+	elements, err := decodeNodeElements(blob)
+	if err != nil {
+		return nil, err
+	}
+	for i := 0; i < len(mutations); i++ {
+		for j, pos := range indices[i] {
+			elements[pos] = mutations[i][j]
+		}
+	}
+	return encodeNodeElements(elements)
 }
 
 // wraps a decoding error with information about the path to the
