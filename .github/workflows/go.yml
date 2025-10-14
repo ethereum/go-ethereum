@@ -67,6 +67,8 @@ jobs:
               GOMIPS: softfloat
             tags: "ziren"
           - env:
+              GOARCH: amd64
+              GOOS: linux
             tags: "example"
     steps:
       - uses: actions/checkout@v4
