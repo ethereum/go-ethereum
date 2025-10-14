@@ -1619,16 +1619,9 @@ func (api *TransactionAPI) SendTransaction(ctx context.Context, args Transaction
 // processing (signing + broadcast).
 func (api *TransactionAPI) FillTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
 	// Set some sanity defaults and terminate on failure
-	sidecarVersion := types.BlobSidecarVersion0
-	if len(args.Blobs) > 0 {
-		h := api.b.CurrentHeader()
-		if api.b.ChainConfig().IsOsaka(h.Number, h.Time) {
-			sidecarVersion = types.BlobSidecarVersion1
-		}
-	}
 	config := sidecarConfig{
 		blobSidecarAllowed: true,
-		blobSidecarVersion: sidecarVersion,
+		blobSidecarVersion: api.currentBlobSidecarVersion(),
 	}
 	if err := args.setDefaults(ctx, api.b, config); err != nil {
 		return nil, err
@@ -1642,6 +1635,14 @@ func (api *TransactionAPI) FillTransaction(ctx context.Context, args Transaction
 	return &SignTransactionResult{data, tx}, nil
 }
 
+func (api *TransactionAPI) currentBlobSidecarVersion() byte {
+	h := api.b.CurrentHeader()
+	if api.b.ChainConfig().IsOsaka(h.Number, h.Time) {
+		return types.BlobSidecarVersion1
+	}
+	return types.BlobSidecarVersion0
+}
+
 // SendRawTransaction will add the signed transaction to the transaction pool.
 // The sender is responsible for signing the transaction and using the correct nonce.
 func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil.Bytes) (common.Hash, error) {
@@ -1649,6 +1650,19 @@ func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil
 	if err := tx.UnmarshalBinary(input); err != nil {
 		return common.Hash{}, err
 	}
+
+	// Convert legacy blob transaction proofs.
+	// TODO: remove in go-ethereum v1.17.x
+	if sc := tx.BlobTxSidecar(); sc != nil {
+		exp := api.currentBlobSidecarVersion()
+		if sc.Version == types.BlobSidecarVersion0 && exp == types.BlobSidecarVersion1 {
+			if err := sc.ToV1(); err != nil {
+				return common.Hash{}, fmt.Errorf("blob sidecar conversion failed: %v", err)
+			}
+			tx = tx.WithBlobTxSidecar(sc)
+		}
+	}
+
 	return SubmitTransaction(ctx, api.b, tx)
 }
 
