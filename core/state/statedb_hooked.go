@@ -315,9 +315,7 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
 				prevCodeHash := s.inner.GetCodeHash(addr)
 				prevCode := s.inner.GetCode(addr)
 
-				// don't record a code change if its a selfdestructing initcode
-				// ^ TODO: I assume that this is the only case where this can occur but should double-check
-				// just to be totally sure
+				// if an initcode invokes selfdestruct, do not emit a code change.
 				if prevCodeHash == types.EmptyCodeHash {
 					continue
 				}
