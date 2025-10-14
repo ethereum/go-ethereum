@@ -62,10 +62,12 @@ jobs:
       matrix:
         include:
           - env:
-              GOARCH: mips
+              GOARCH: mipsle
               GOOS: linux
               GOMIPS: softfloat
             tags: "ziren"
+          - env:
+            tags: "example"
     steps:
       - uses: actions/checkout@v4
         with:
