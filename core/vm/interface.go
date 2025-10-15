@@ -70,6 +70,9 @@ type StateDB interface {
 	// Exist reports whether the given account exists in state.
 	// Notably this also returns true for self-destructed accounts within the current transaction.
 	Exist(common.Address) bool
+	// ExistBeforeCurTx returns true if a contract exists and was not created
+	// in the current transaction.
+	ContractExistedBeforeCurTx(addr common.Address) bool
 	// Empty returns whether the given account is empty. Empty
 	// is defined according to EIP161 (balance = nonce = code = 0).
 	Empty(common.Address) bool

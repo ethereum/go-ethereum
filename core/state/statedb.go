@@ -425,6 +425,13 @@ func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
 	return false
 }
 
+// ContractExistedBeforeCurTx returns true if a contract exists and was not created
+// in the current transaction.
+func (s *StateDB) ContractExistedBeforeCurTx(addr common.Address) bool {
+	obj := s.getStateObject(addr)
+	return obj != nil && !obj.newContract
+}
+
 /*
  * SETTERS
  */
