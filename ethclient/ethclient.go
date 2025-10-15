@@ -703,24 +703,26 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 func (ec *Client) SendTransactionSync(
 	ctx context.Context,
 	tx *types.Transaction,
-	timeout ...time.Duration,
+	timeout *time.Duration,
 ) (*types.Receipt, error) {
 	raw, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
-	return ec.SendRawTransactionSync(ctx, raw, timeout...)
+	return ec.SendRawTransactionSync(ctx, raw, timeout)
 }
 
 func (ec *Client) SendRawTransactionSync(
 	ctx context.Context,
 	rawTx []byte,
-	timeout ...time.Duration,
+	timeout *time.Duration,
 ) (*types.Receipt, error) {
 	var ms *hexutil.Uint64
-	if len(timeout) > 0 && timeout[0] > 0 {
-		v := hexutil.Uint64(timeout[0] / time.Millisecond)
-		ms = &v
+	if timeout != nil {
+		if d := timeout.Milliseconds(); d > 0 {
+			ms = new(hexutil.Uint64)
+			*ms = hexutil.Uint64(uint64(d))
+		}
 	}
 	var receipt types.Receipt
 	if err := ec.c.CallContext(ctx, &receipt, "eth_sendRawTransactionSync", hexutil.Bytes(rawTx), ms); err != nil {
