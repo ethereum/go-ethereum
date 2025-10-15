@@ -139,7 +139,7 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 			result.Root = finalRoot
 		}
 
-		// When tracing, write end marker to delimit trace output for this test
+		// When fuzzing, write results after every block
 		if ctx.IsSet(FuzzFlag.Name) {
 			report(ctx, []testResult{*result})
 		}
