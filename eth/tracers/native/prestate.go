@@ -186,7 +186,7 @@ func (t *prestateTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction
 
 	// Add accounts with authorizations to the prestate before they get applied.
 	for _, auth := range tx.SetCodeAuthorizations() {
-		addr, err := auth.Authority()
+		addr, err := auth.Authority(true)
 		if err != nil {
 			continue
 		}

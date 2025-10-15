@@ -1296,7 +1296,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 			continue
 		}
 
-		if authority, err := auth.Authority(); err == nil {
+		if authority, err := auth.Authority(true); err == nil {
 			addressesToExclude[authority] = struct{}{}
 		}
 	}

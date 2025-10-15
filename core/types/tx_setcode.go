@@ -115,9 +115,9 @@ func (a *SetCodeAuthorization) SigHash() common.Hash {
 }
 
 // Authority recovers the the authorizing account of an authorization.
-func (a *SetCodeAuthorization) Authority() (common.Address, error) {
+func (a *SetCodeAuthorization) Authority(validateSig bool) (common.Address, error) {
 	sighash := a.SigHash()
-	if !crypto.ValidateSignatureValues(a.V, a.R.ToBig(), a.S.ToBig(), true) {
+	if validateSig && !crypto.ValidateSignatureValues(a.V, a.R.ToBig(), a.S.ToBig(), true) {
 		return common.Address{}, ErrInvalidSig
 	}
 	// encode the signature in uncompressed format

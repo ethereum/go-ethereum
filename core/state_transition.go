@@ -575,16 +575,18 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 // validateAuthorization validates an EIP-7702 authorization against the state.
 func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorization) (authority common.Address, err error) {
+	skipValidation := st.msg.SkipTransactionChecks
+
 	// Verify chain ID is null or equal to current chain ID.
-	if !auth.ChainID.IsZero() && auth.ChainID.CmpBig(st.evm.ChainConfig().ChainID) != 0 {
+	if !skipValidation && !auth.ChainID.IsZero() && auth.ChainID.CmpBig(st.evm.ChainConfig().ChainID) != 0 {
 		return authority, ErrAuthorizationWrongChainID
 	}
 	// Limit nonce to 2^64-1 per EIP-2681.
-	if auth.Nonce+1 < auth.Nonce {
+	if !skipValidation && auth.Nonce+1 < auth.Nonce {
 		return authority, ErrAuthorizationNonceOverflow
 	}
 	// Validate signature values and recover authority.
-	authority, err = auth.Authority()
+	authority, err = auth.Authority(!skipValidation)
 	if err != nil {
 		return authority, fmt.Errorf("%w: %v", ErrAuthorizationInvalidSignature, err)
 	}
@@ -594,12 +596,15 @@ func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorizatio
 	//
 	// Note it is added to the access list even if the authorization is invalid.
 	st.state.AddAddressToAccessList(authority)
-	code := st.state.GetCode(authority)
-	if _, ok := types.ParseDelegation(code); len(code) != 0 && !ok {
-		return authority, ErrAuthorizationDestinationHasCode
-	}
-	if have := st.state.GetNonce(authority); have != auth.Nonce {
-		return authority, ErrAuthorizationNonceMismatch
+	// Skip state checks during gas estimation
+	if !skipValidation {
+		code := st.state.GetCode(authority)
+		if _, ok := types.ParseDelegation(code); len(code) != 0 && !ok {
+			return authority, ErrAuthorizationDestinationHasCode
+		}
+		if have := st.state.GetNonce(authority); have != auth.Nonce {
+			return authority, ErrAuthorizationNonceMismatch
+		}
 	}
 	return authority, nil
 }
