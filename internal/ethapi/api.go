@@ -1702,11 +1702,6 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 					hash: hash,
 				}
 			}
-			// Otherwise, bubble the caller's context error (canceled or deadline).
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			// Fallback: return the derived context's error.
 			return nil, receiptCtx.Err()
 
 		case err, ok := <-subErrCh:
