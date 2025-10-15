@@ -877,7 +877,7 @@ func TestSimulateV1WithBlockOverrides(t *testing.T) {
 	}
 
 	// Verify the timestamp was overridden
-	if uint64(results[0].Timestamp) != timestamp {
+	if results[0].Timestamp != timestamp {
 		t.Errorf("expected timestamp %d, got %d", timestamp, results[0].Timestamp)
 	}
 }
