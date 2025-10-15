@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
 )
@@ -42,6 +43,7 @@ var blockTestCommand = &cli.Command{
 		HumanReadableFlag,
 		RunFlag,
 		WitnessCrossCheckFlag,
+		FuzzFlag,
 	}, traceFlags),
 }
 
@@ -75,44 +77,12 @@ func blockTestCmd(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		report(ctx, results)
+		// During fuzzing, we report the result after every block
+		if !ctx.IsSet(FuzzFlag.Name) {
+			report(ctx, results)
+		}
 	}
 	return nil
-}
-
-// traceEndMarker represents the final status of a blocktest when tracing is enabled.
-// It is written as the last line of trace output in JSONL format to signal completion.
-type traceEndMarker struct {
-	TestEnd traceEndDetails `json:"testEnd"`
-}
-
-type traceEndDetails struct {
-	Name  string `json:"name"`
-	Pass  bool   `json:"pass"`
-	Fork  string `json:"fork"`
-	Root  string `json:"root,omitempty"`
-	Error string `json:"error,omitempty"`
-}
-
-// writeTraceEndMarker writes a blocktest end marker to stderr in JSONL format.
-// This provides a clear delimiter for trace parsers (e.g., goevmlab) to know when
-// the trace output for a specific test is complete, enabling proper batched processing.
-func writeTraceEndMarker(name string, pass bool, fork string, root *common.Hash, errMsg string) {
-	details := traceEndDetails{
-		Name: name,
-		Pass: pass,
-		Fork: fork,
-	}
-	if root != nil {
-		details.Root = root.Hex()
-	}
-	if !pass && errMsg != "" {
-		details.Error = errMsg
-	}
-	marker := traceEndMarker{TestEnd: details}
-	if data, err := json.Marshal(marker); err == nil {
-		fmt.Fprintf(os.Stderr, "%s\n", data)
-	}
 }
 
 func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
@@ -129,6 +99,11 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 		return nil, fmt.Errorf("invalid regex -%s: %v", RunFlag.Name, err)
 	}
 	tracer := tracerFromFlags(ctx)
+
+	// Suppress INFO logs during fuzzing
+	if ctx.IsSet(FuzzFlag.Name) {
+		log.SetDefault(log.NewLogger(log.DiscardHandler()))
+	}
 
 	// Pull out keys to sort and ensure tests are run in order.
 	keys := slices.Sorted(maps.Keys(tests))
@@ -165,10 +140,9 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 		}
 
 		// When tracing, write end marker to delimit trace output for this test
-		if tracer != nil {
-			writeTraceEndMarker(result.Name, result.Pass, result.Fork, finalRoot, result.Error)
+		if ctx.IsSet(FuzzFlag.Name) {
+			report(ctx, []testResult{*result})
 		}
-
 		results = append(results, *result)
 	}
 	return results, nil
