@@ -19,6 +19,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/url"
 	"strconv"
 	"sync/atomic"
@@ -27,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/light"
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/restapi"
@@ -119,9 +121,26 @@ func (s *BeaconApiServer) handleFinalityUpdate(ctx context.Context, values url.V
 func (s *BeaconApiServer) handleHeadHeader(ctx context.Context, values url.Values, vars map[string]string, decodeBody func(*any) error) (any, string, int) {
 	panic("TODO")
 }
+
 func (s *BeaconApiServer) handleBootstrap(ctx context.Context, values url.Values, vars map[string]string, decodeBody func(*any) error) (any, string, int) {
-	panic("TODO")
+	hex, err := hexutil.Decode(vars["checkpointhash"])
+	if err != nil || len(hex) != common.HashLength {
+		return nil, "invalid checkpoint hash", http.StatusBadRequest
+	}
+	var checkpointHash common.Hash
+	copy(checkpointHash[:], hex)
+	checkpoint := s.checkpointStore.Get(checkpointHash)
+	if checkpoint == nil {
+		return nil, "unknown checkpoint", http.StatusNotFound
+	}
+	var response jsonBootstrapData
+	response.Version = checkpoint.Version
+	response.Data.Header.Beacon = checkpoint.Header
+	response.Data.CommitteeBranch = checkpoint.CommitteeBranch
+	response.Data.Committee = checkpoint.Committee
+	return response, "", 0
 }
+
 func (s *BeaconApiServer) handleBlocks(ctx context.Context, values url.Values, vars map[string]string, decodeBody func(*any) error) (any, string, int) {
 	panic("TODO")
 }

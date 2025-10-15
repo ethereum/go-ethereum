@@ -277,8 +277,11 @@ type jsonBeaconBlock struct {
 	} `json:"data"`
 }
 
+// See data structure definition here:
+// https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientbootstrap
 type jsonBootstrapData struct {
-	Data struct {
+	Version string `json:"version"`
+	Data    struct {
 		Header          jsonBeaconHeader               `json:"header"`
 		Committee       *types.SerializedSyncCommittee `json:"current_sync_committee"`
 		CommitteeBranch merkle.Values                  `json:"current_sync_committee_branch"`

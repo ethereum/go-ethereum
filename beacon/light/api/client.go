@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/donovanhide/eventsource"
-	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -203,18 +202,7 @@ func (api *BeaconApiClient) GetCheckpointData(checkpointHash common.Hash) (*type
 		return nil, err
 	}
 
-	// See data structure definition here:
-	// https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientbootstrap
-	type bootstrapData struct {
-		Version string `json:"version"`
-		Data    struct {
-			Header          jsonBeaconHeader               `json:"header"`
-			Committee       *types.SerializedSyncCommittee `json:"current_sync_committee"`
-			CommitteeBranch merkle.Values                  `json:"current_sync_committee_branch"`
-		} `json:"data"`
-	}
-
-	var data bootstrapData
+	var data jsonBootstrapData
 	if err := json.Unmarshal(resp, &data); err != nil {
 		return nil, err
 	}
