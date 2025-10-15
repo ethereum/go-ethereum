@@ -659,7 +659,7 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	var (
 		value        = scope.Stack.pop()
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
-		input        = scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
+		input        = scope.Memory.GetPtr(offset.Uint64(), size.Uint64())
 		gas          = scope.Contract.Gas
 	)
 	if evm.chainRules.IsEIP150 {
@@ -703,7 +703,7 @@ func opCreate2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		endowment    = scope.Stack.pop()
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
 		salt         = scope.Stack.pop()
-		input        = scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
+		input        = scope.Memory.GetPtr(offset.Uint64(), size.Uint64())
 		gas          = scope.Contract.Gas
 	)
 
