@@ -268,17 +268,17 @@ func encodeNodeElements(elements [][]byte) ([]byte, error) {
 //
 // An error is returned if any of the provided blob is nil, or the type of nodes
 // are different.
-func NodeDifference(oldvalue []byte, newvalue []byte) ([]int, [][]byte, error) {
+func NodeDifference(oldvalue []byte, newvalue []byte) (int, []int, [][]byte, error) {
 	oldElems, err := decodeNodeElements(oldvalue)
 	if err != nil {
-		return nil, nil, err
+		return 0, nil, nil, err
 	}
 	newElems, err := decodeNodeElements(newvalue)
 	if err != nil {
-		return nil, nil, err
+		return 0, nil, nil, err
 	}
 	if len(oldElems) != len(newElems) {
-		return nil, nil, fmt.Errorf("different node type, old elements: %d, new elements: %d", len(oldElems), len(newElems))
+		return 0, nil, nil, fmt.Errorf("different node type, old elements: %d, new elements: %d", len(oldElems), len(newElems))
 	}
 	var (
 		indices = make([]int, 0, len(oldElems))
@@ -290,7 +290,7 @@ func NodeDifference(oldvalue []byte, newvalue []byte) ([]int, [][]byte, error) {
 			diff = append(diff, oldElems[i])
 		}
 	}
-	return indices, diff, nil
+	return len(oldElems), indices, diff, nil
 }
 
 // ReassembleNode accepts a RLP-encoding node along with a set of mutations,

@@ -129,7 +129,7 @@ func TestNodeSetWithOriginEncode(t *testing.T) {
 	}
 }
 
-func TestEncodeNodeCompressed(t *testing.T) {
+func TestEncodeFullNodeCompressed(t *testing.T) {
 	var (
 		elements [][]byte
 		indices  []int
@@ -140,7 +140,29 @@ func TestEncodeNodeCompressed(t *testing.T) {
 			indices = append(indices, i)
 		}
 	}
-	enc := encodeNodeCompressed(elements, indices)
+	enc := encodeNodeCompressed(false, elements, indices)
+	decElements, decIndices, err := decodeNodeCompressed(enc)
+	if err != nil {
+		t.Fatalf("Failed to decode node compressed, %v", err)
+	}
+	if !reflect.DeepEqual(elements, decElements) {
+		t.Fatalf("Elements are not matched")
+	}
+	if !reflect.DeepEqual(indices, decIndices) {
+		t.Fatalf("Indices are not matched")
+	}
+}
+
+func TestEncodeShortNodeCompressed(t *testing.T) {
+	var (
+		elements [][]byte
+		indices  []int
+	)
+	for i := 0; i < 2; i++ {
+		elements = append(elements, testrand.Bytes(20))
+		indices = append(indices, i)
+	}
+	enc := encodeNodeCompressed(true, elements, indices)
 	decElements, decIndices, err := decodeNodeCompressed(enc)
 	if err != nil {
 		t.Fatalf("Failed to decode node compressed, %v", err)

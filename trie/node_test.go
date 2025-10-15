@@ -277,7 +277,7 @@ func TestNodeDifference(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		indices, values, err := NodeDifference(test.old, test.new)
+		_, indices, values, err := NodeDifference(test.old, test.new)
 		if test.expErr && err == nil {
 			t.Fatal("Expect error, got nil")
 		}

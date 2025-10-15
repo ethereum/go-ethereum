@@ -428,37 +428,60 @@ func (s *nodeSetWithOrigin) decode(r *rlp.Stream) error {
 	return nil
 }
 
-// nodeWithFlag is a wrapper of encoded node history element, maintaining
-// additional metadata for this node.
-type nodeWithFlag struct {
-	blob []byte
-	typ  nodeHistoryEncodeType
-}
-
-// encodeNodeCompressed encodes the trie node differences into byte stream.
-// The format is as below:
+// encodeNodeCompressed encodes the trie node differences between two consecutive
+// versions into byte stream. The format is as below:
 //
-// - 2 bytes bitmap
-//   - for full node, each bit represents a corresponding child;
-//   - for short node, the lowest bit represents the key, and the second-lowest bit represents the value;
+// - metadata byte layout (1 byte):
 //
+//	┌──── Bits (from MSB to LSB) ───┐
+//	│ 7 │ 6 │ 5 │ 4 │ 3 │ 2 │ 1 │ 0 │
+//	└───────────────────────────────┘
+//	  │   │   │   │   │   │   │   └─ FlagA: marks if value is encoded in compressed format (1 always)
+//	  │   │   │   │   │   │   └───── FlagB: marks if no extended bitmap used after the metadata byte
+//	  │   │   │   │   │   └───────── FlagC: bitmap for node (only used when flagB == 1)
+//	  │   │   │   │   └───────────── FlagD: bitmap for node (only used when flagB == 1)
+//	  │   │   │   └───────────────── FlagE: reserved
+//	  │   │   └───────────────────── FlagF: reserved
+//	  │   └───────────────────────── FlagG: reserved
+//	  └───────────────────────────── FlagH: reserved
+//
+// Example:
+//
+// 0b_0000_1011
+//
+// Bit0=1, Bit1=1 -> node in compressed format, no extended bitmap
+// Bit2=0, Bit3=1 -> the key of a short node is not stored; its value is stored.
+//
+// - 2 bytes extended bitmap (full node only), each bit represents a corresponding child;
 // - concatenation of original value of modified children along with its size
-func encodeNodeCompressed(elements [][]byte, indices []int) []byte {
+func encodeNodeCompressed(addExtension bool, elements [][]byte, indices []int) []byte {
 	var (
-		enc    []byte
-		bitmap = make([]byte, 2) // bitmaps for at most 16 children
+		enc  []byte
+		flag = byte(1)
 	)
-	for _, pos := range indices {
-		// Children[16] is only theoretically possible in the Merkle-Patricia-trie,
-		// in practice this field is never used in the Ethereum case.
-		if pos == 16 {
-			panic(fmt.Sprintf("Unexpected node children index %d", pos))
-		}
-		bitIndex := uint(pos % 8)
-		bitmap[pos/8] |= 1 << bitIndex
-	}
-	enc = append(enc, bitmap...)
+	if !addExtension {
+		flag |= 2
 
+		// Embedded bitmap
+		for _, pos := range indices {
+			flag |= 1 << (pos + 2)
+		}
+		enc = append(enc, flag)
+	} else {
+		// Extended bitmap
+		bitmap := make([]byte, 2) // bitmaps for at most 16 children
+		for _, pos := range indices {
+			// Children[16] is only theoretically possible in the Merkle-Patricia-trie,
+			// in practice this field is never used in the Ethereum case.
+			if pos == 16 {
+				panic(fmt.Sprintf("Unexpected node children index %d", pos))
+			}
+			bitIndex := uint(pos % 8)
+			bitmap[pos/8] |= 1 << bitIndex
+		}
+		enc = append(enc, flag)
+		enc = append(enc, bitmap...)
+	}
 	for _, element := range elements {
 		enc = append(enc, byte(len(element))) // 1 byte is sufficient for element size
 		enc = append(enc, element...)
@@ -466,24 +489,57 @@ func encodeNodeCompressed(elements [][]byte, indices []int) []byte {
 	return enc
 }
 
+// encodeNodeFull encodes the full trie node value into byte stream. The format is
+// as below:
+//
+// - metadata byte layout (1 byte): 0b0
+// - node value
+func encodeNodeFull(value []byte) []byte {
+	enc := make([]byte, len(value)+1)
+	copy(enc[1:], value)
+	return enc
+}
+
 // decodeNodeCompressed decodes the byte stream of compressed trie node
 // back to the original elements and their indices.
+//
+// It assumes the byte stream contains a compressed format node.
 func decodeNodeCompressed(data []byte) ([][]byte, []int, error) {
-	if len(data) < 2 {
+	if len(data) < 1 {
 		return nil, nil, errors.New("invalid data: too short")
 	}
+	flag := data[0]
+	if flag&byte(1) == 0 {
+		return nil, nil, errors.New("invalid data: full node value")
+	}
+	noExtend := flag&byte(2) != 0
+
 	// Reconstruct indices from bitmap
 	var indices []int
-	for index, b := range data[:2] {
-		for bitIdx := 0; bitIdx < 8; bitIdx++ {
-			if b&(1<<uint(bitIdx)) != 0 {
-				pos := index*8 + bitIdx
-				indices = append(indices, pos)
+	if noExtend {
+		if flag&byte(4) != 0 {
+			indices = append(indices, 0)
+		}
+		if flag&byte(8) != 0 {
+			indices = append(indices, 1)
+		}
+		data = data[1:]
+	} else {
+		if len(data) < 3 {
+			return nil, nil, errors.New("invalid data: too short")
+		}
+		bitmap := data[1:3]
+		for index, b := range bitmap {
+			for bitIdx := 0; bitIdx < 8; bitIdx++ {
+				if b&(1<<uint(bitIdx)) != 0 {
+					pos := index*8 + bitIdx
+					indices = append(indices, pos)
+				}
 			}
 		}
+		data = data[3:]
 	}
 	// Reconstruct elements
-	data = data[2:]
 	elements := make([][]byte, 0, len(indices))
 	for i := 0; i < len(indices); i++ {
 		if len(data) == 0 {
@@ -519,17 +575,21 @@ func decodeNodeCompressed(data []byte) ([][]byte, []int, error) {
 	return elements, indices, nil
 }
 
+// decodeNodeFull decodes the byte stream of full value trie node.
+func decodeNodeFull(data []byte) ([]byte, error) {
+	if len(data) < 1 {
+		return nil, errors.New("invalid data: too short")
+	}
+	flag := data[0]
+	if flag != byte(0) {
+		return nil, errors.New("invalid data: compressed node value")
+	}
+	return data[1:], nil
+}
+
 // encodeFullFrequency specifies the frequency (1/16) for encoding node in
 // full format. TODO(rjl493456442) making it configurable.
 const encodeFullFrequency = 16
-
-// elementType represents the category of state element.
-type nodeHistoryEncodeType uint8
-
-const (
-	typePartial nodeHistoryEncodeType = 0 // represents the storage slot data
-	typeFull    nodeHistoryEncodeType = 1 // represents the account data
-)
 
 // encodeNodeHistory encodes the history of a node. Typically, the original values
 // of dirty nodes serve as the history, but this can lead to significant storage
@@ -546,10 +606,10 @@ const (
 // history records, which is computationally and IO intensive. To mitigate this, we
 // periodically record the full value of a node as a checkpoint. The frequency of
 // these checkpoints is a tradeoff between the compression rate and read overhead.
-func (s *nodeSetWithOrigin) encodeNodeHistory(root common.Hash) (map[common.Hash]map[string]nodeWithFlag, error) {
+func (s *nodeSetWithOrigin) encodeNodeHistory(root common.Hash) (map[common.Hash]map[string][]byte, error) {
 	var (
 		// the set of all encoded node history elements
-		nodes = make(map[common.Hash]map[string]nodeWithFlag)
+		nodes = make(map[common.Hash]map[string][]byte)
 
 		// encodeFullValue determines whether a node should be encoded
 		// in full format with a pseudo-random probabilistic algorithm.
@@ -568,7 +628,7 @@ func (s *nodeSetWithOrigin) encodeNodeHistory(root common.Hash) (map[common.Hash
 		} else {
 			posts = s.nodeSet.storageNodes[owner]
 		}
-		nodes[owner] = make(map[string]nodeWithFlag)
+		nodes[owner] = make(map[string][]byte)
 
 		for path, oldvalue := range origins {
 			n, exists := posts[path]
@@ -584,24 +644,18 @@ func (s *nodeSetWithOrigin) encodeNodeHistory(root common.Hash) (map[common.Hash
 				// The partial encoding will be failed in these certain cases:
 				// - the node is deleted or was not-existent;
 				// - the node type has been changed (e.g, from short to full)
-				indices, elements, err := trie.NodeDifference(oldvalue, n.Blob)
+				nElem, indices, diffs, err := trie.NodeDifference(oldvalue, n.Blob)
 				if err != nil {
 					encodeFull = true // fallback to the full node encoding
 				} else {
 					// Encode the node difference as the history element
-					blob := encodeNodeCompressed(elements, indices)
-					nodes[owner][path] = nodeWithFlag{
-						blob: blob,
-						typ:  typePartial,
-					}
+					blob := encodeNodeCompressed(nElem == 2, diffs, indices)
+					nodes[owner][path] = blob
 				}
 			}
 			if encodeFull {
 				// Encode the entire original value as the history element
-				nodes[owner][path] = nodeWithFlag{
-					blob: oldvalue,
-					typ:  typeFull,
-				}
+				nodes[owner][path] = encodeNodeFull(oldvalue)
 			}
 		}
 	}
