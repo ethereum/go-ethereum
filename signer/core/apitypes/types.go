@@ -259,7 +259,7 @@ func (args *SendTxArgs) validateTxSidecar() error {
 	if args.Commitments == nil {
 		// Generate commitment and proof.
 		commitments := make([]kzg4844.Commitment, n)
-		proofs := make([]kzg4844.Proof, n)
+		proofs := make([]kzg4844.Proof, 0, n)
 		for i, b := range args.Blobs {
 			c, err := kzg4844.BlobToCommitment(&b)
 			if err != nil {
@@ -275,14 +275,13 @@ func (args *SendTxArgs) validateTxSidecar() error {
 				}
 				proofs = append(proofs, p...)
 			}
-
 		} else {
 			for i, b := range args.Blobs {
 				p, err := kzg4844.ComputeBlobProof(&b, commitments[i])
 				if err != nil {
 					return fmt.Errorf("blobs[%d]: error computing proof: %v", i, err)
 				}
-				proofs[i] = p
+				proofs = append(proofs, p)
 			}
 		}
 		args.Commitments = commitments
