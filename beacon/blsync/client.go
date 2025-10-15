@@ -17,6 +17,8 @@
 package blsync
 
 import (
+	"encoding/json"
+
 	"github.com/ethereum/go-ethereum/beacon/light"
 	"github.com/ethereum/go-ethereum/beacon/light/api"
 	"github.com/ethereum/go-ethereum/beacon/light/request"
@@ -41,7 +43,7 @@ type Client struct {
 	blockSync    *beaconBlockSync
 	engineRPC    *rpc.Client
 	apiServer    *api.BeaconApiServer
-	recentBlocks *lru.Cache[common.Hash, []byte]
+	recentBlocks *lru.Cache[common.Hash, json.RawMessage]
 
 	chainHeadSub event.Subscription
 	engineClient *engineClient
@@ -74,7 +76,7 @@ func NewClient(config params.ClientConfig) *Client {
 	scheduler.RegisterModule(forwardSync, "forwardSync")
 	scheduler.RegisterModule(headSync, "headSync")
 	scheduler.RegisterModule(beaconBlockSync, "beaconBlockSync")
-	recentBlocks := lru.NewCache[common.Hash, []byte](4)
+	recentBlocks := lru.NewCache[common.Hash, json.RawMessage](4)
 	apiServer := api.NewBeaconApiServer(checkpointStore, committeeChain, headTracker, recentBlocks)
 
 	return &Client{

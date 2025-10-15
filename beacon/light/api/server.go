@@ -39,7 +39,7 @@ type BeaconApiServer struct {
 	checkpointStore *light.CheckpointStore
 	committeeChain  *light.CommitteeChain
 	headTracker     *light.HeadTracker
-	recentBlocks    *lru.Cache[common.Hash, []byte]
+	recentBlocks    *lru.Cache[common.Hash, json.RawMessage]
 	//headValidator   *light.HeadValidator
 	eventServer *eventsource.Server
 	lastEventId uint64
@@ -49,7 +49,7 @@ func NewBeaconApiServer(
 	checkpointStore *light.CheckpointStore,
 	committeeChain *light.CommitteeChain,
 	headTracker *light.HeadTracker,
-	recentBlocks *lru.Cache[common.Hash, []byte]) *BeaconApiServer {
+	recentBlocks *lru.Cache[common.Hash, json.RawMessage]) *BeaconApiServer {
 
 	eventServer := eventsource.NewServer()
 	eventServer.Register("headEvent", eventsource.NewSliceRepository())
@@ -69,7 +69,7 @@ func (s *BeaconApiServer) RestAPI(server *restapi.Server) restapi.API {
 		router.HandleFunc("/eth/v1/beacon/light_client/finality_update", server.WrapHandler(s.handleFinalityUpdate, false, false, false)).Methods("GET")
 		router.HandleFunc("/eth/v1/beacon/headers/head", server.WrapHandler(s.handleHeadHeader, false, false, false)).Methods("GET")
 		router.HandleFunc("/eth/v1/beacon/light_client/bootstrap/{checkpointhash}", server.WrapHandler(s.handleBootstrap, false, false, false)).Methods("GET")
-		router.HandleFunc("/eth/v1/beacon/blocks/{blockid}", server.WrapHandler(s.handleBlocks, false, false, false)).Methods("GET")
+		router.HandleFunc("/eth/v1/beacon/blocks/{blockhash}", server.WrapHandler(s.handleBlocks, false, false, false)).Methods("GET")
 		router.HandleFunc("/eth/v1/events", s.eventServer.Handler("headEvent"))
 	}
 }
@@ -142,5 +142,15 @@ func (s *BeaconApiServer) handleBootstrap(ctx context.Context, values url.Values
 }
 
 func (s *BeaconApiServer) handleBlocks(ctx context.Context, values url.Values, vars map[string]string, decodeBody func(*any) error) (any, string, int) {
-	panic("TODO")
+	hex, err := hexutil.Decode(vars["blockhash"])
+	if err != nil || len(hex) != common.HashLength {
+		return nil, "invalid block hash", http.StatusBadRequest
+	}
+	var blockHash common.Hash
+	copy(blockHash[:], hex)
+	blockJson, ok := s.recentBlocks.Get(blockHash)
+	if !ok {
+		return nil, "unknown beacon block", http.StatusNotFound
+	}
+	return blockJson, "", 0
 }

@@ -47,10 +47,10 @@ type BeaconApiClient struct {
 	url           string
 	client        fetcher
 	customHeaders map[string]string
-	recentBlocks  *lru.Cache[common.Hash, []byte]
+	recentBlocks  *lru.Cache[common.Hash, json.RawMessage]
 }
 
-func NewBeaconApiClient(url string, customHeaders map[string]string, recentBlocks *lru.Cache[common.Hash, []byte]) *BeaconApiClient {
+func NewBeaconApiClient(url string, customHeaders map[string]string, recentBlocks *lru.Cache[common.Hash, json.RawMessage]) *BeaconApiClient {
 	return &BeaconApiClient{
 		url: url,
 		client: &http.Client{
