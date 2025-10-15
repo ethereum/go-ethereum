@@ -19,7 +19,7 @@ type accountPrestate struct {
 // from the execution of a block.  It is used for constructing and verifying
 // EIP-7928 block access lists.
 type BlockAccessListTracer struct {
-	builder *bal.BlockAccessListBuilder
+	builder *bal.AccessListBuilder
 
 	// the access list index that changes are currently being recorded into
 	balIdx uint16
@@ -28,7 +28,7 @@ type BlockAccessListTracer struct {
 // NewBlockAccessListTracer returns an BlockAccessListTracer and a set of hooks
 func NewBlockAccessListTracer() (*BlockAccessListTracer, *tracing.Hooks) {
 	balTracer := &BlockAccessListTracer{
-		builder: bal.NewConstructionBlockAccessList(),
+		builder: bal.NewAccessListBuilder(),
 	}
 	hooks := &tracing.Hooks{
 		OnBlockFinalization:  balTracer.OnBlockFinalization,
@@ -51,17 +51,17 @@ func NewBlockAccessListTracer() (*BlockAccessListTracer, *tracing.Hooks) {
 // AccessList returns the constructed access list.
 // It is assumed that this is only called after all the block state changes
 // have been executed and the block has been finalized.
-func (a *BlockAccessListTracer) AccessList() *bal.BlockAccessListBuilder {
+func (a *BlockAccessListTracer) AccessList() *bal.AccessListBuilder {
 	return a.builder
 }
 
 func (a *BlockAccessListTracer) OnPreTxExecutionDone() {
-	a.builder.FinalisePendingChanges(0)
+	a.builder.FinaliseIdxChanges(0)
 	a.balIdx++
 }
 
 func (a *BlockAccessListTracer) TxEndHook(receipt *types.Receipt, err error) {
-	a.builder.FinalisePendingChanges(a.balIdx)
+	a.builder.FinaliseIdxChanges(a.balIdx)
 	a.balIdx++
 }
 
@@ -82,7 +82,7 @@ func (a *BlockAccessListTracer) OnSelfDestruct(addr common.Address) {
 }
 
 func (a *BlockAccessListTracer) OnBlockFinalization() {
-	a.builder.FinalisePendingChanges(a.balIdx)
+	a.builder.FinaliseIdxChanges(a.balIdx)
 }
 
 func (a *BlockAccessListTracer) OnBalanceChange(addr common.Address, prevBalance, newBalance *big.Int, _ tracing.BalanceChangeReason) {

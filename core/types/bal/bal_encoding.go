@@ -38,7 +38,7 @@ import (
 // These are objects used as input for the access list encoding. They mirror
 // the spec format.
 
-// BlockAccessList is the encoding format of BlockAccessListBuilder.
+// BlockAccessList is the encoding format of AccessListBuilder.
 type BlockAccessList []AccountAccess
 
 func (e BlockAccessList) EncodeRLP(_w io.Writer) error {
@@ -245,11 +245,11 @@ func (e *AccountAccess) Copy() AccountAccess {
 }
 
 // EncodeRLP returns the RLP-encoded access list
-func (c *BlockAccessListBuilder) EncodeRLP(wr io.Writer) error {
+func (c *AccessListBuilder) EncodeRLP(wr io.Writer) error {
 	return c.ToEncodingObj().EncodeRLP(wr)
 }
 
-var _ rlp.Encoder = &BlockAccessListBuilder{}
+var _ rlp.Encoder = &AccessListBuilder{}
 
 // toEncodingObj creates an instance of the ConstructionAccountAccesses of the type that is
 // used as input for the encoding.
@@ -325,7 +325,7 @@ func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) Account
 
 // ToEncodingObj returns an instance of the access list expressed as the type
 // which is used as input for the encoding/decoding.
-func (c *BlockAccessListBuilder) ToEncodingObj() *BlockAccessList {
+func (c *AccessListBuilder) ToEncodingObj() *BlockAccessList {
 	var addresses []common.Address
 	for addr := range c.FinalizedAccesses {
 		addresses = append(addresses, addr)
