@@ -616,7 +616,7 @@ func (st *stateTransition) applyAuthorization(auth *types.SetCodeAuthorization) 
 		st.state.AddRefund(params.CallNewAccountGas - params.TxAuthTupleGas)
 	}
 
-	prevDelegation, isDelegated := types.ParseDelegation(st.state.GetCode(authority))
+	prevAuthority, isDelegated := types.ParseDelegation(st.state.GetCode(authority))
 
 	// Update nonce and account code.
 	st.state.SetNonce(authority, auth.Nonce+1, tracing.NonceChangeAuthorization)
@@ -629,7 +629,7 @@ func (st *stateTransition) applyAuthorization(auth *types.SetCodeAuthorization) 
 	}
 
 	// install delegation to auth.Address if the delegation changed
-	if !isDelegated || auth.Address != prevDelegation {
+	if !isDelegated || auth.Address != prevAuthority {
 		st.state.SetCode(authority, types.AddressToDelegation(auth.Address), tracing.CodeChangeAuthorization)
 	}
 
