@@ -830,17 +830,17 @@ type SimulateOptions struct {
 
 // SimulateBlock represents a batch of calls to be simulated.
 type SimulateBlock struct {
-	BlockOverrides *ethereum.BlockOverrides                     `json:"blockOverrides,omitempty"`
-	StateOverrides *map[common.Address]ethereum.OverrideAccount `json:"stateOverrides,omitempty"`
-	Calls          []ethereum.CallMsg                           `json:"calls"`
+	BlockOverrides *ethereum.BlockOverrides                    `json:"blockOverrides,omitempty"`
+	StateOverrides map[common.Address]ethereum.OverrideAccount `json:"stateOverrides,omitempty"`
+	Calls          []ethereum.CallMsg                          `json:"calls"`
 }
 
 // MarshalJSON implements json.Marshaler for SimulateBlock.
 func (s SimulateBlock) MarshalJSON() ([]byte, error) {
 	type Alias struct {
-		BlockOverrides *ethereum.BlockOverrides                     `json:"blockOverrides,omitempty"`
-		StateOverrides *map[common.Address]ethereum.OverrideAccount `json:"stateOverrides,omitempty"`
-		Calls          []interface{}                                `json:"calls"`
+		BlockOverrides *ethereum.BlockOverrides                    `json:"blockOverrides,omitempty"`
+		StateOverrides map[common.Address]ethereum.OverrideAccount `json:"stateOverrides,omitempty"`
+		Calls          []interface{}                               `json:"calls"`
 	}
 	calls := make([]interface{}, len(s.Calls))
 	for i, call := range s.Calls {

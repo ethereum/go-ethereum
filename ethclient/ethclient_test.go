@@ -920,7 +920,7 @@ func TestSimulateV1WithStateOverrides(t *testing.T) {
 	opts := ethclient.SimulateOptions{
 		BlockStateCalls: []ethclient.SimulateBlock{
 			{
-				StateOverrides: &stateOverrides,
+				StateOverrides: stateOverrides,
 				Calls: []ethereum.CallMsg{
 					{
 						From:      from,
