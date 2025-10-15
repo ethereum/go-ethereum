@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
 )
@@ -81,6 +80,41 @@ func blockTestCmd(ctx *cli.Context) error {
 	return nil
 }
 
+// traceEndMarker represents the final status of a blocktest when tracing is enabled.
+// It is written as the last line of trace output in JSONL format to signal completion.
+type traceEndMarker struct {
+	TestEnd traceEndDetails `json:"testEnd"`
+}
+
+type traceEndDetails struct {
+	Name  string `json:"name"`
+	Pass  bool   `json:"pass"`
+	Fork  string `json:"fork"`
+	Root  string `json:"root,omitempty"`
+	Error string `json:"error,omitempty"`
+}
+
+// writeTraceEndMarker writes a blocktest end marker to stderr in JSONL format.
+// This provides a clear delimiter for trace parsers (e.g., goevmlab) to know when
+// the trace output for a specific test is complete, enabling proper batched processing.
+func writeTraceEndMarker(name string, pass bool, fork string, root *common.Hash, errMsg string) {
+	details := traceEndDetails{
+		Name: name,
+		Pass: pass,
+		Fork: fork,
+	}
+	if root != nil {
+		details.Root = root.Hex()
+	}
+	if !pass && errMsg != "" {
+		details.Error = errMsg
+	}
+	marker := traceEndMarker{TestEnd: details}
+	if data, err := json.Marshal(marker); err == nil {
+		fmt.Fprintf(os.Stderr, "%s\n", data)
+	}
+}
+
 func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 	src, err := os.ReadFile(fname)
 	if err != nil {
@@ -95,11 +129,6 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 		return nil, fmt.Errorf("invalid regex -%s: %v", RunFlag.Name, err)
 	}
 	tracer := tracerFromFlags(ctx)
-
-	// Suppress INFO logs when tracing to avoid polluting stderr
-	if tracer != nil {
-		log.SetDefault(log.NewLogger(log.DiscardHandler()))
-	}
 
 	// Pull out keys to sort and ensure tests are run in order.
 	keys := slices.Sorted(maps.Keys(tests))
@@ -128,12 +157,18 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 			result.Pass, result.Error = false, err.Error()
 		}
 
-		// Write result between transactions when tracing is enabled
-		if tracer != nil {
-			result.Fork = test.Network()
+		// Always assign fork (regardless of pass/fail or tracer)
+		result.Fork = test.Network()
+		// Assign root if test succeeded
+		if result.Pass && finalRoot != nil {
 			result.Root = finalRoot
-			report(ctx, []testResult{*result})
 		}
+
+		// When tracing, write end marker to delimit trace output for this test
+		if tracer != nil {
+			writeTraceEndMarker(result.Name, result.Pass, result.Fork, finalRoot, result.Error)
+		}
+
 		results = append(results, *result)
 	}
 	return results, nil
