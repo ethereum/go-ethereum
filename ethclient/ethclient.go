@@ -853,13 +853,21 @@ func (s SimulateBlock) MarshalJSON() ([]byte, error) {
 	})
 }
 
+//go:generate go run github.com/fjl/gencodec -type SimulateCallResult -field-override simulateCallResultMarshaling -out gen_simulate_call_result.go
+
 // SimulateCallResult is the result of a simulated call.
 type SimulateCallResult struct {
-	ReturnValue hexutil.Bytes  `json:"returnData"`
-	Logs        []*types.Log   `json:"logs"`
-	GasUsed     hexutil.Uint64 `json:"gasUsed"`
-	Status      hexutil.Uint64 `json:"status"`
-	Error       *CallError     `json:"error,omitempty"`
+	ReturnValue []byte       `json:"returnData"`
+	Logs        []*types.Log `json:"logs"`
+	GasUsed     uint64       `json:"gasUsed"`
+	Status      uint64       `json:"status"`
+	Error       *CallError   `json:"error,omitempty"`
+}
+
+type simulateCallResultMarshaling struct {
+	ReturnValue hexutil.Bytes
+	GasUsed     hexutil.Uint64
+	Status      hexutil.Uint64
 }
 
 // CallError represents an error from a simulated call.
@@ -869,16 +877,26 @@ type CallError struct {
 	Data    string `json:"data,omitempty"`
 }
 
+//go:generate go run github.com/fjl/gencodec -type SimulateBlockResult -field-override simulateBlockResultMarshaling -out gen_simulate_block_result.go
+
 // SimulateBlockResult represents the result of a simulated block.
 type SimulateBlockResult struct {
-	Number        hexutil.Uint64       `json:"number"`
+	Number        uint64               `json:"number"`
 	Hash          common.Hash          `json:"hash"`
-	Timestamp     hexutil.Uint64       `json:"timestamp"`
-	GasLimit      hexutil.Uint64       `json:"gasLimit"`
-	GasUsed       hexutil.Uint64       `json:"gasUsed"`
+	Timestamp     uint64               `json:"timestamp"`
+	GasLimit      uint64               `json:"gasLimit"`
+	GasUsed       uint64               `json:"gasUsed"`
 	FeeRecipient  common.Address       `json:"miner"`
-	BaseFeePerGas *hexutil.Big         `json:"baseFeePerGas,omitempty"`
+	BaseFeePerGas *big.Int             `json:"baseFeePerGas,omitempty"`
 	Calls         []SimulateCallResult `json:"calls"`
+}
+
+type simulateBlockResultMarshaling struct {
+	Number        hexutil.Uint64
+	Timestamp     hexutil.Uint64
+	GasLimit      hexutil.Uint64
+	GasUsed       hexutil.Uint64
+	BaseFeePerGas *hexutil.Big
 }
 
 // SimulateV1 executes transactions on top of a base state.
