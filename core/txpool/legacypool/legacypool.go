@@ -492,8 +492,8 @@ func (pool *LegacyPool) Pending(filter txpool.PendingFilter) map[common.Address]
 	if filter.BlobTxs {
 		return nil
 	}
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
 
 	pending := make(map[common.Address][]*txpool.LazyTransaction, len(pool.pending))
 	for addr, list := range pool.pending {
