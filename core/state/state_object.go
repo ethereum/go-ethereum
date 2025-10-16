@@ -498,7 +498,8 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 
 	switch s.trie.(type) {
 	case *trie.VerkleTrie:
-		// In the Verkle case, the stateObject's trie shares the same reference as the StateDB's trie.
+		// Verkle uses only one tree, and the copy has already been
+		// made in mustCopyTrie.
 		obj.trie = db.trie
 	case *trie.StateTrie:
 		obj.trie = mustCopyTrie(s.trie)
