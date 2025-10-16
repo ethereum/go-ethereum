@@ -21,6 +21,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/nat"
@@ -73,6 +74,7 @@ var DefaultConfig = Config{
 		NAT:        nat.Any(),
 	},
 	DBEngine: "", // Use whatever exists, will default to Pebble if non-existent and supported
+	ShutdownDelay: 0 * time.Second,
 }
 
 // DefaultDataDir is the default data directory to use for the databases and other
