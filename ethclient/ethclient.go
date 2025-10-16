@@ -828,3 +828,89 @@ func (p *rpcProgress) toSyncProgress() *ethereum.SyncProgress {
 		StateIndexRemaining:    uint64(p.StateIndexRemaining),
 	}
 }
+
+// SimulateOptions represents the options for eth_simulateV1.
+type SimulateOptions struct {
+	BlockStateCalls        []SimulateBlock `json:"blockStateCalls"`
+	TraceTransfers         bool            `json:"traceTransfers"`
+	Validation             bool            `json:"validation"`
+	ReturnFullTransactions bool            `json:"returnFullTransactions"`
+}
+
+// SimulateBlock represents a batch of calls to be simulated.
+type SimulateBlock struct {
+	BlockOverrides *ethereum.BlockOverrides                    `json:"blockOverrides,omitempty"`
+	StateOverrides map[common.Address]ethereum.OverrideAccount `json:"stateOverrides,omitempty"`
+	Calls          []ethereum.CallMsg                          `json:"calls"`
+}
+
+// MarshalJSON implements json.Marshaler for SimulateBlock.
+func (s SimulateBlock) MarshalJSON() ([]byte, error) {
+	type Alias struct {
+		BlockOverrides *ethereum.BlockOverrides                    `json:"blockOverrides,omitempty"`
+		StateOverrides map[common.Address]ethereum.OverrideAccount `json:"stateOverrides,omitempty"`
+		Calls          []interface{}                               `json:"calls"`
+	}
+	calls := make([]interface{}, len(s.Calls))
+	for i, call := range s.Calls {
+		calls[i] = toCallArg(call)
+	}
+	return json.Marshal(Alias{
+		BlockOverrides: s.BlockOverrides,
+		StateOverrides: s.StateOverrides,
+		Calls:          calls,
+	})
+}
+
+//go:generate go run github.com/fjl/gencodec -type SimulateCallResult -field-override simulateCallResultMarshaling -out gen_simulate_call_result.go
+
+// SimulateCallResult is the result of a simulated call.
+type SimulateCallResult struct {
+	ReturnValue []byte       `json:"returnData"`
+	Logs        []*types.Log `json:"logs"`
+	GasUsed     uint64       `json:"gasUsed"`
+	Status      uint64       `json:"status"`
+	Error       *CallError   `json:"error,omitempty"`
+}
+
+type simulateCallResultMarshaling struct {
+	ReturnValue hexutil.Bytes
+	GasUsed     hexutil.Uint64
+	Status      hexutil.Uint64
+}
+
+// CallError represents an error from a simulated call.
+type CallError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    string `json:"data,omitempty"`
+}
+
+//go:generate go run github.com/fjl/gencodec -type SimulateBlockResult -field-override simulateBlockResultMarshaling -out gen_simulate_block_result.go
+
+// SimulateBlockResult represents the result of a simulated block.
+type SimulateBlockResult struct {
+	Number        *big.Int             `json:"number"`
+	Hash          common.Hash          `json:"hash"`
+	Timestamp     uint64               `json:"timestamp"`
+	GasLimit      uint64               `json:"gasLimit"`
+	GasUsed       uint64               `json:"gasUsed"`
+	FeeRecipient  common.Address       `json:"miner"`
+	BaseFeePerGas *big.Int             `json:"baseFeePerGas,omitempty"`
+	Calls         []SimulateCallResult `json:"calls"`
+}
+
+type simulateBlockResultMarshaling struct {
+	Number        *hexutil.Big
+	Timestamp     hexutil.Uint64
+	GasLimit      hexutil.Uint64
+	GasUsed       hexutil.Uint64
+	BaseFeePerGas *hexutil.Big
+}
+
+// SimulateV1 executes transactions on top of a base state.
+func (ec *Client) SimulateV1(ctx context.Context, opts SimulateOptions, blockNrOrHash *rpc.BlockNumberOrHash) ([]SimulateBlockResult, error) {
+	var result []SimulateBlockResult
+	err := ec.c.CallContext(ctx, &result, "eth_simulateV1", opts, blockNrOrHash)
+	return result, err
+}
