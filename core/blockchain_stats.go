@@ -86,15 +86,15 @@ func (s *ExecuteStats) reportMetrics() {
 	chainMgaspsMeter.Update(time.Duration(s.MgasPerSecond)) // TODO(rjl493456442) generalize the ResettingTimer
 
 	// Cache hit rates
-	accountCacheHitPrefetchMeter.Mark(s.StatePrefetchCacheStats.AccountHit)
-	accountCacheMissPrefetchMeter.Mark(s.StatePrefetchCacheStats.AccountMiss)
-	storageCacheHitPrefetchMeter.Mark(s.StatePrefetchCacheStats.StorageHit)
-	storageCacheMissPrefetchMeter.Mark(s.StatePrefetchCacheStats.StorageMiss)
+	accountCacheHitPrefetchMeter.Mark(s.StatePrefetchCacheStats.AccountCacheHit)
+	accountCacheMissPrefetchMeter.Mark(s.StatePrefetchCacheStats.AccountCacheMiss)
+	storageCacheHitPrefetchMeter.Mark(s.StatePrefetchCacheStats.StorageCacheHit)
+	storageCacheMissPrefetchMeter.Mark(s.StatePrefetchCacheStats.StorageCacheMiss)
 
-	accountCacheHitMeter.Mark(s.StateReadCacheStats.AccountHit)
-	accountCacheMissMeter.Mark(s.StateReadCacheStats.AccountMiss)
-	storageCacheHitMeter.Mark(s.StateReadCacheStats.StorageHit)
-	storageCacheMissMeter.Mark(s.StateReadCacheStats.StorageMiss)
+	accountCacheHitMeter.Mark(s.StateReadCacheStats.AccountCacheHit)
+	accountCacheMissMeter.Mark(s.StateReadCacheStats.AccountCacheMiss)
+	storageCacheHitMeter.Mark(s.StateReadCacheStats.StorageCacheHit)
+	storageCacheMissMeter.Mark(s.StateReadCacheStats.StorageCacheMiss)
 }
 
 // logSlow prints the detailed execution statistics if the block is regarded as slow.
