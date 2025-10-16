@@ -621,9 +621,9 @@ func (r *readerWithCacheStats) Storage(addr common.Address, slot common.Hash) (c
 		// If the slot was read from the underlying storage, count
 		// the presence statistics.
 		if value == (common.Hash{}) {
-			r.accountDiskMiss.Add(1)
+			r.storageDiskMiss.Add(1)
 		} else {
-			r.accountDiskHit.Add(1)
+			r.storageDiskHit.Add(1)
 		}
 	}
 	return value, nil
