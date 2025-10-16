@@ -58,6 +58,8 @@ func newTxJournal(path string) *journal {
 // load parses a transaction journal dump from disk, loading its contents into
 // the specified pool.
 func (journal *journal) load(add func([]*types.Transaction) []error) error {
+	originalWriter := journal.writer
+	
 	// Open the journal for loading any past transactions
 	input, err := os.Open(journal.path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -71,7 +73,7 @@ func (journal *journal) load(add func([]*types.Transaction) []error) error {
 
 	// Temporarily discard any journal additions (don't double add on load)
 	journal.writer = new(devNull)
-	defer func() { journal.writer = nil }()
+	defer func() { journal.writer = originalWriter }()
 
 	// Inject all transactions from the journal into the pool
 	stream := rlp.NewStream(input, 0)
