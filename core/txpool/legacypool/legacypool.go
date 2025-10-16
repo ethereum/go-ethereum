@@ -457,7 +457,7 @@ func (pool *LegacyPool) stats() (int, int) {
 // pending as well as queued transactions, grouped by account and sorted by nonce.
 func (pool *LegacyPool) Content() (map[common.Address][]*types.Transaction, map[common.Address][]*types.Transaction) {
 	pool.mu.RLock()
-	defer pool.mu.Unlock()
+	defer pool.mu.RUnlock()
 
 	pending := make(map[common.Address][]*types.Transaction, len(pool.pending))
 	for addr, list := range pool.pending {
@@ -493,7 +493,7 @@ func (pool *LegacyPool) Pending(filter txpool.PendingFilter) map[common.Address]
 		return nil
 	}
 	pool.mu.RLock()
-	defer pool.mu.Unlock()
+	defer pool.mu.RUnlock()
 
 	pending := make(map[common.Address][]*txpool.LazyTransaction, len(pool.pending))
 	for addr, list := range pool.pending {
