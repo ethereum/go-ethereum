@@ -92,12 +92,6 @@ type ReaderStats struct {
 	AccountCacheMiss int64
 	StorageCacheHit  int64
 	StorageCacheMiss int64
-
-	// Disk stats
-	AccountDiskHit  int64
-	AccountDiskMiss int64
-	StorageDiskHit  int64
-	StorageDiskMiss int64
 }
 
 // String implements fmt.Stringer, returning string format statistics.
@@ -105,26 +99,16 @@ func (s ReaderStats) String() string {
 	var (
 		accountCacheHitRate float64
 		storageCacheHitRate float64
-		accountDiskHitRate  float64
-		storageDiskHitRate  float64
 	)
 	if s.AccountCacheHit > 0 {
 		accountCacheHitRate = float64(s.AccountCacheHit) / float64(s.AccountCacheHit+s.AccountCacheMiss) * 100
 	}
-	if s.AccountDiskHit > 0 {
-		accountDiskHitRate = float64(s.AccountDiskHit) / float64(s.AccountDiskHit+s.AccountDiskMiss) * 100
-	}
 	if s.StorageCacheHit > 0 {
 		storageCacheHitRate = float64(s.StorageCacheHit) / float64(s.StorageCacheHit+s.StorageCacheMiss) * 100
 	}
-	if s.StorageDiskHit > 0 {
-		storageDiskHitRate = float64(s.StorageDiskHit) / float64(s.StorageDiskHit+s.StorageDiskMiss) * 100
-	}
 	msg := fmt.Sprintf("Reader statistics\n")
-	msg += fmt.Sprintf("account: cache (hit: %d, miss: %d, rate: %.2f)\n", s.AccountCacheHit, s.AccountCacheMiss, accountCacheHitRate)
-	msg += fmt.Sprintf("account: disk (hit: %d, miss: %d, rate: %.2f)\n", s.AccountDiskHit, s.AccountDiskMiss, accountDiskHitRate)
-	msg += fmt.Sprintf("storage: cache (hit: %d, miss: %d, rate: %.2f)\n", s.StorageCacheHit, s.StorageCacheMiss, storageCacheHitRate)
-	msg += fmt.Sprintf("storage: disk (hit: %d, miss: %d, rate: %.2f)\n", s.StorageDiskHit, s.StorageDiskMiss, storageDiskHitRate)
+	msg += fmt.Sprintf("account: hit: %d, miss: %d, rate: %.2f\n", s.AccountCacheHit, s.AccountCacheMiss, accountCacheHitRate)
+	msg += fmt.Sprintf("storage: hit: %d, miss: %d, rate: %.2f\n", s.StorageCacheHit, s.StorageCacheMiss, storageCacheHitRate)
 	return msg
 }
 
@@ -564,11 +548,6 @@ type readerWithCacheStats struct {
 	accountCacheMiss atomic.Int64
 	storageCacheHit  atomic.Int64
 	storageCacheMiss atomic.Int64
-
-	accountDiskHit  atomic.Int64
-	accountDiskMiss atomic.Int64
-	storageDiskHit  atomic.Int64
-	storageDiskMiss atomic.Int64
 }
 
 // newReaderWithCacheStats constructs the reader with additional statistics tracked.
@@ -591,14 +570,6 @@ func (r *readerWithCacheStats) Account(addr common.Address) (*types.StateAccount
 		r.accountCacheHit.Add(1)
 	} else {
 		r.accountCacheMiss.Add(1)
-
-		// If the account was read from the underlying storage, count
-		// the presence statistics.
-		if account == nil {
-			r.accountDiskMiss.Add(1)
-		} else {
-			r.accountDiskHit.Add(1)
-		}
 	}
 	return account, nil
 }
@@ -617,14 +588,6 @@ func (r *readerWithCacheStats) Storage(addr common.Address, slot common.Hash) (c
 		r.storageCacheHit.Add(1)
 	} else {
 		r.storageCacheMiss.Add(1)
-
-		// If the slot was read from the underlying storage, count
-		// the presence statistics.
-		if value == (common.Hash{}) {
-			r.storageDiskMiss.Add(1)
-		} else {
-			r.storageDiskHit.Add(1)
-		}
 	}
 	return value, nil
 }
@@ -636,10 +599,5 @@ func (r *readerWithCacheStats) GetStats() ReaderStats {
 		AccountCacheMiss: r.accountCacheMiss.Load(),
 		StorageCacheHit:  r.storageCacheHit.Load(),
 		StorageCacheMiss: r.storageCacheMiss.Load(),
-
-		AccountDiskHit:  r.accountDiskHit.Load(),
-		AccountDiskMiss: r.accountDiskMiss.Load(),
-		StorageDiskHit:  r.storageDiskHit.Load(),
-		StorageDiskMiss: r.storageDiskMiss.Load(),
 	}
 }
