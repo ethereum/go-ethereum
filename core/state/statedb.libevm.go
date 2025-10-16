@@ -21,6 +21,7 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/state/snapshot"
+	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/register"
 	"github.com/ava-labs/libevm/libevm/stateconf"
 )
@@ -91,8 +92,11 @@ func RegisterExtras(s StateDBHooks) {
 // consumers that require access to extras. Said consumers SHOULD NOT, however
 // call this function directly. Use the libevm/temporary.WithRegisteredExtras()
 // function instead as it atomically overrides all possible packages.
-func WithTempRegisteredExtras(s StateDBHooks, fn func()) {
-	registeredExtras.TempOverride(s, fn)
+func WithTempRegisteredExtras(lock libevm.ExtrasLock, s StateDBHooks, fn func() error) error {
+	if err := lock.Verify(); err != nil {
+		return err
+	}
+	return registeredExtras.TempOverride(s, fn)
 }
 
 // TestOnlyClearRegisteredExtras clears the arguments previously passed to

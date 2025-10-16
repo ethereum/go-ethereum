@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"reflect"
 
+	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/pseudo"
 	"github.com/ava-labs/libevm/libevm/register"
 	"github.com/ava-labs/libevm/log"
@@ -106,11 +107,15 @@ func payloadsAndConstructors[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) (
 // call this function directly. Use the libevm/temporary.WithRegisteredExtras()
 // function instead as it atomically overrides all possible packages.
 func WithTempRegisteredExtras[C ChainConfigHooks, R RulesHooks](
+	lock libevm.ExtrasLock,
 	e Extras[C, R],
-	fn func(ExtraPayloads[C, R]),
-) {
+	fn func(ExtraPayloads[C, R]) error,
+) error {
+	if err := lock.Verify(); err != nil {
+		return err
+	}
 	payloads, ctors := payloadsAndConstructors(e)
-	registeredExtras.TempOverride(ctors, func() { fn(payloads) })
+	return registeredExtras.TempOverride(ctors, func() error { return fn(payloads) })
 }
 
 // TestOnlyClearRegisteredExtras clears the [Extras] previously passed to

@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/params"
 )
 
@@ -72,10 +73,14 @@ func TestOverrideNewEVMArgs(t *testing.T) {
 	assertChainID(t, chainID)
 
 	t.Run("WithTempRegisteredHooks", func(t *testing.T) {
-		override := evmArgOverrider{newEVMchainID: 24680}
-		WithTempRegisteredHooks(&override, func() {
-			assertChainID(t, override.newEVMchainID)
+		err := libevm.WithTemporaryExtrasLock(func(lock libevm.ExtrasLock) error {
+			override := evmArgOverrider{newEVMchainID: 24680}
+			return WithTempRegisteredHooks(lock, &override, func() error {
+				assertChainID(t, override.newEVMchainID)
+				return nil
+			})
 		})
+		require.NoError(t, err)
 		t.Run("after", func(t *testing.T) {
 			assertChainID(t, chainID)
 		})

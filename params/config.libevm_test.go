@@ -1,4 +1,4 @@
-// Copyright 2024 the libevm authors.
+// Copyright 2024-2025 the libevm authors.
 //
 // The libevm additions to go-ethereum are free software: you can redistribute
 // them and/or modify them under the terms of the GNU Lesser General Public License
@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see
 // <http://www.gnu.org/licenses/>.
+
 package params
 
 import (
@@ -23,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/pseudo"
 	"github.com/ava-labs/libevm/libevm/register"
 )
@@ -329,16 +331,20 @@ func TestTempRegisteredExtras(t *testing.T) {
 
 	t.Run("before_temp", testPrimaryExtras)
 	t.Run("WithTempRegisteredExtras", func(t *testing.T) {
-		WithTempRegisteredExtras(
-			override,
-			func(extras ExtraPayloads[overrideCC, overrideRules]) { // deliberately shadow `extras`
-				assertRulesCopiedFromChainConfig(
-					t, extras, "hello, world",
-					func(cc *overrideCC, x string) { cc.X = x },
-					func(r *overrideRules) string { return r.X },
-				)
-			},
-		)
+		err := libevm.WithTemporaryExtrasLock(func(lock libevm.ExtrasLock) error {
+			return WithTempRegisteredExtras(
+				lock, override,
+				func(extras ExtraPayloads[overrideCC, overrideRules]) error { // deliberately shadow `extras`
+					assertRulesCopiedFromChainConfig(
+						t, extras, "hello, world",
+						func(cc *overrideCC, x string) { cc.X = x },
+						func(r *overrideRules) string { return r.X },
+					)
+					return nil
+				},
+			)
+		})
+		require.NoError(t, err)
 	})
 	t.Run("after_temp", testPrimaryExtras)
 }

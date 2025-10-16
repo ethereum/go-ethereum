@@ -72,8 +72,8 @@ func (o *AtMostOnce[T]) TestOnlyClear() {
 //
 // It is valid to call this method with or without a prior call to
 // [AtMostOnce.Register].
-func (o *AtMostOnce[T]) TempOverride(with T, fn func()) {
-	o.temp(&with, fn)
+func (o *AtMostOnce[T]) TempOverride(with T, fn func() error) error {
+	return o.temp(&with, fn)
 }
 
 // TempClear calls `fn`, clearing any registered `T`, but only for the life of
@@ -81,13 +81,14 @@ func (o *AtMostOnce[T]) TempOverride(with T, fn func()) {
 //
 // It is valid to call this method with or without a prior call to
 // [AtMostOnce.Register].
-func (o *AtMostOnce[T]) TempClear(fn func()) {
-	o.temp(nil, fn)
+func (o *AtMostOnce[T]) TempClear(fn func() error) error {
+	return o.temp(nil, fn)
 }
 
-func (o *AtMostOnce[T]) temp(with *T, fn func()) {
+func (o *AtMostOnce[T]) temp(with *T, fn func() error) error {
 	old := o.v
 	o.v = with
-	fn()
+	err := fn()
 	o.v = old
+	return err
 }

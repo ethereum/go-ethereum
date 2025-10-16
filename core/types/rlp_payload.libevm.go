@@ -21,6 +21,7 @@ import (
 	"io"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/pseudo"
 	"github.com/ava-labs/libevm/libevm/register"
 	"github.com/ava-labs/libevm/libevm/testonly"
@@ -114,9 +115,12 @@ func WithTempRegisteredExtras[
 	H, B, SA any,
 	HPtr HeaderHooksPointer[H],
 	BPtr BlockBodyHooksPointer[B, BPtr],
-](fn func(ExtraPayloads[HPtr, BPtr, SA])) {
+](lock libevm.ExtrasLock, fn func(ExtraPayloads[HPtr, BPtr, SA]) error) error {
+	if err := lock.Verify(); err != nil {
+		return err
+	}
 	payloads, ctors := payloadsAndConstructors[H, HPtr, B, BPtr, SA]()
-	registeredExtras.TempOverride(ctors, func() { fn(payloads) })
+	return registeredExtras.TempOverride(ctors, func() error { return fn(payloads) })
 }
 
 // A HeaderHooksPointer is a type constraint for an implementation of

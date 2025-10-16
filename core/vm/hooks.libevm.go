@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/register"
 	"github.com/ava-labs/libevm/params"
 )
@@ -36,8 +37,11 @@ func RegisterHooks(h Hooks) {
 // consumers that require access to extras. Said consumers SHOULD NOT, however
 // call this function directly. Use the libevm/temporary.WithRegisteredExtras()
 // function instead as it atomically overrides all possible packages.
-func WithTempRegisteredHooks(h Hooks, fn func()) {
-	libevmHooks.TempOverride(h, fn)
+func WithTempRegisteredHooks(lock libevm.ExtrasLock, h Hooks, fn func() error) error {
+	if err := lock.Verify(); err != nil {
+		return err
+	}
+	return libevmHooks.TempOverride(h, fn)
 }
 
 // TestOnlyClearRegisteredHooks clears the [Hooks] previously passed to

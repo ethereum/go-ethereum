@@ -17,6 +17,7 @@
 package register
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -56,9 +57,10 @@ func TestAtMostOnce(t *testing.T) {
 
 	t.Run("TempOverride", func(t *testing.T) {
 		t.Run("during", func(t *testing.T) {
-			sut.TempOverride(val+1, func() {
+			require.NoError(t, sut.TempOverride(val+1, func() error {
 				assertRegistered(t, val+1)
-			})
+				return nil
+			}))
 		})
 		t.Run("after", func(t *testing.T) {
 			assertRegistered(t, val)
@@ -67,12 +69,20 @@ func TestAtMostOnce(t *testing.T) {
 
 	t.Run("TempClear", func(t *testing.T) {
 		t.Run("during", func(t *testing.T) {
-			sut.TempClear(func() {
+			require.NoError(t, sut.TempClear(func() error {
 				assert.False(t, sut.Registered(), "Registered()")
-			})
+				return nil
+			}))
 		})
 		t.Run("after", func(t *testing.T) {
 			assertRegistered(t, val)
 		})
+	})
+
+	t.Run("error_propagation", func(t *testing.T) {
+		errFoo := errors.New("foo")
+		fn := func() error { return errFoo }
+		assert.ErrorIs(t, sut.TempOverride(0, fn), errFoo, "TempOverride()") //nolint:testifylint // Blindly using require is an anti-pattern!!!
+		assert.ErrorIs(t, sut.TempClear(fn), errFoo, "TempClear()")
 	})
 }

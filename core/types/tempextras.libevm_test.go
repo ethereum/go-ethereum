@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/rlp"
 )
 
@@ -58,19 +59,23 @@ func TestTempRegisteredExtras(t *testing.T) {
 
 	t.Run("before_temp", testPrimaryExtras)
 	t.Run("WithTempRegisteredExtras", func(t *testing.T) {
-		WithTempRegisteredExtras(func(extras ExtraPayloads[*NOOPHeaderHooks, *tempBlockBodyHooks, bool]) {
-			const val = "Hello, world"
-			b := new(Block)
-			payload := &tempBlockBodyHooks{X: val}
-			extras.Block.Set(b, payload)
+		err := libevm.WithTemporaryExtrasLock(func(lock libevm.ExtrasLock) error {
+			return WithTempRegisteredExtras(lock, func(extras ExtraPayloads[*NOOPHeaderHooks, *tempBlockBodyHooks, bool]) error {
+				const val = "Hello, world"
+				b := new(Block)
+				payload := &tempBlockBodyHooks{X: val}
+				extras.Block.Set(b, payload)
 
-			got, err := rlp.EncodeToBytes(b)
-			require.NoErrorf(t, err, "rlp.EncodeToBytes(%T) with %T hooks", b, extras.Block.Get(b))
-			want, err := rlp.EncodeToBytes([]string{val})
-			require.NoErrorf(t, err, "rlp.EncodeToBytes(%T{%[1]v})", []string{val})
+				got, err := rlp.EncodeToBytes(b)
+				require.NoErrorf(t, err, "rlp.EncodeToBytes(%T) with %T hooks", b, extras.Block.Get(b))
+				want, err := rlp.EncodeToBytes([]string{val})
+				require.NoErrorf(t, err, "rlp.EncodeToBytes(%T{%[1]v})", []string{val})
 
-			assert.Equalf(t, want, got, "rlp.EncodeToBytes(%T) with %T hooks", b, payload)
+				assert.Equalf(t, want, got, "rlp.EncodeToBytes(%T) with %T hooks", b, payload)
+				return nil
+			})
 		})
+		require.NoError(t, err)
 	})
 	t.Run("after_temp", testPrimaryExtras)
 }
