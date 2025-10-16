@@ -55,6 +55,7 @@ import (
 const estimateGasErrorRatio = 0.015
 
 var errBlobTxNotSupported = errors.New("signing blob transactions not supported")
+var errSubClosed = errors.New("chain subscription closed")
 
 // EthereumAPI provides an API to access Ethereum related information.
 type EthereumAPI struct {
@@ -1664,6 +1665,92 @@ func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil
 	}
 
 	return SubmitTransaction(ctx, api.b, tx)
+}
+
+// SendRawTransactionSync will add the signed transaction to the transaction pool
+// and wait until the transaction has been included in a block and return the receipt, or the timeout.
+func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hexutil.Bytes, timeoutMs *hexutil.Uint64) (map[string]interface{}, error) {
+	tx := new(types.Transaction)
+	if err := tx.UnmarshalBinary(input); err != nil {
+		return nil, err
+	}
+
+	ch := make(chan core.ChainEvent, 128)
+	sub := api.b.SubscribeChainEvent(ch)
+	subErrCh := sub.Err()
+	defer sub.Unsubscribe()
+
+	hash, err := SubmitTransaction(ctx, api.b, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	maxTimeout := api.b.RPCTxSyncMaxTimeout()
+	defaultTimeout := api.b.RPCTxSyncDefaultTimeout()
+
+	timeout := defaultTimeout
+	if timeoutMs != nil && *timeoutMs > 0 {
+		req := time.Duration(*timeoutMs) * time.Millisecond
+		if req > maxTimeout {
+			timeout = maxTimeout
+		} else {
+			timeout = req
+		}
+	}
+
+	receiptCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	// Fast path.
+	if r, err := api.GetTransactionReceipt(receiptCtx, hash); err == nil && r != nil {
+		return r, nil
+	}
+
+	for {
+		select {
+		case <-receiptCtx.Done():
+			// If server-side wait window elapsed, return the structured timeout.
+			if errors.Is(receiptCtx.Err(), context.DeadlineExceeded) {
+				return nil, &txSyncTimeoutError{
+					msg:  fmt.Sprintf("The transaction was added to the transaction pool but wasn't processed in %v.", timeout),
+					hash: hash,
+				}
+			}
+			return nil, receiptCtx.Err()
+
+		case err, ok := <-subErrCh:
+			if !ok {
+				return nil, errSubClosed
+			}
+			return nil, err
+
+		case ev, ok := <-ch:
+			if !ok {
+				return nil, errSubClosed
+			}
+			rs := ev.Receipts
+			txs := ev.Transactions
+			if len(rs) == 0 || len(rs) != len(txs) {
+				continue
+			}
+			for i := range rs {
+				if rs[i].TxHash == hash {
+					if rs[i].BlockNumber != nil && rs[i].BlockHash != (common.Hash{}) {
+						signer := types.LatestSigner(api.b.ChainConfig())
+						return MarshalReceipt(
+							rs[i],
+							rs[i].BlockHash,
+							rs[i].BlockNumber.Uint64(),
+							signer,
+							txs[i],
+							int(rs[i].TransactionIndex),
+						), nil
+					}
+					return api.GetTransactionReceipt(receiptCtx, hash)
+				}
+			}
+		}
+	}
 }
 
 // Sign calculates an ECDSA signature for:
