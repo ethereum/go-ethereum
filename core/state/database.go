@@ -302,6 +302,8 @@ func mustCopyTrie(t Trie) Trie {
 		return t.Copy()
 	case *trie.VerkleTrie:
 		return t.Copy()
+	case *trie.TransitionTrie:
+		return t.Copy()
 	default:
 		panic(fmt.Errorf("unknown trie type %T", t))
 	}
