@@ -1571,3 +1571,65 @@ func TestTailTruncationCrash(t *testing.T) {
 		t.Fatalf("Unexpected index flush offset, want: %d, got: %d", 26*indexEntrySize, f.metadata.flushOffset)
 	}
 }
+
+func TestFreezerAncientBytes(t *testing.T) {
+	t.Parallel()
+	types := []struct {
+		name   string
+		config freezerTableConfig
+	}{
+		{"uncompressed", freezerTableConfig{noSnappy: true}},
+		{"compressed", freezerTableConfig{noSnappy: false}},
+	}
+	for _, typ := range types {
+		t.Run(typ.name, func(t *testing.T) {
+			f, err := newTable(os.TempDir(), fmt.Sprintf("ancientbytes-%s-%d", typ.name, rand.Uint64()), metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 1000, typ.config, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer f.Close()
+
+			for i := 0; i < 10; i++ {
+				data := getChunk(100, i)
+				batch := f.newBatch()
+				require.NoError(t, batch.AppendRaw(uint64(i), data))
+				require.NoError(t, batch.commit())
+			}
+
+			for i := 0; i < 10; i++ {
+				full, err := f.Retrieve(uint64(i))
+				require.NoError(t, err)
+
+				// Full read
+				got, err := f.RetrieveBytes(uint64(i), 0, uint64(len(full)))
+				require.NoError(t, err)
+				if !bytes.Equal(got, full) {
+					t.Fatalf("full read mismatch for entry %d", i)
+				}
+				// Empty read
+				got, err = f.RetrieveBytes(uint64(i), 0, 0)
+				require.NoError(t, err)
+				if !bytes.Equal(got, full[:0]) {
+					t.Fatalf("empty read mismatch for entry %d", i)
+				}
+				// Middle slice
+				got, err = f.RetrieveBytes(uint64(i), 10, 50)
+				require.NoError(t, err)
+				if !bytes.Equal(got, full[10:60]) {
+					t.Fatalf("middle slice mismatch for entry %d", i)
+				}
+				// Single byte
+				got, err = f.RetrieveBytes(uint64(i), 99, 1)
+				require.NoError(t, err)
+				if !bytes.Equal(got, full[99:100]) {
+					t.Fatalf("single byte mismatch for entry %d", i)
+				}
+				// Out of bounds
+				_, err = f.RetrieveBytes(uint64(i), 100, 1)
+				if err == nil {
+					t.Fatalf("expected error for out-of-bounds read for entry %d", i)
+				}
+			}
+		})
+	}
+}

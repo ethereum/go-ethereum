@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -550,4 +551,71 @@ func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]commo
 		}
 	}
 	return true
+}
+
+// ReceiptWithTx contains a receipt and its corresponding transaction
+type ReceiptWithTx struct {
+	Receipt     *types.Receipt
+	Transaction *types.Transaction
+}
+
+// filterReceipts returns the receipts matching the given criteria
+// In addition to returning receipts, it also returns the corresponding transactions.
+// This is because receipts only contain low-level data, while user-facing data
+// may require additional information from the Transaction.
+func filterReceipts(txHashes []common.Hash, ev core.ChainEvent) []*ReceiptWithTx {
+	var ret []*ReceiptWithTx
+
+	receipts := ev.Receipts
+	txs := ev.Transactions
+
+	if len(receipts) != len(txs) {
+		log.Warn("Receipts and transactions length mismatch", "receipts", len(receipts), "transactions", len(txs))
+		return ret
+	}
+
+	if len(txHashes) == 0 {
+		// No filter, send all receipts with their transactions.
+		ret = make([]*ReceiptWithTx, len(receipts))
+		for i, receipt := range receipts {
+			ret[i] = &ReceiptWithTx{
+				Receipt:     receipt,
+				Transaction: txs[i],
+			}
+		}
+	} else if len(txHashes) == 1 {
+		// Filter by single transaction hash.
+		// This is a common case, so we distinguish it from filtering by multiple tx hashes and made a small optimization.
+		for i, receipt := range receipts {
+			if receipt.TxHash == txHashes[0] {
+				ret = append(ret, &ReceiptWithTx{
+					Receipt:     receipt,
+					Transaction: txs[i],
+				})
+				break
+			}
+		}
+	} else {
+		// Filter by multiple transaction hashes.
+		txHashMap := make(map[common.Hash]bool, len(txHashes))
+		for _, hash := range txHashes {
+			txHashMap[hash] = true
+		}
+
+		for i, receipt := range receipts {
+			if txHashMap[receipt.TxHash] {
+				ret = append(ret, &ReceiptWithTx{
+					Receipt:     receipt,
+					Transaction: txs[i],
+				})
+
+				// Early exit if all receipts are found
+				if len(ret) == len(txHashes) {
+					break
+				}
+			}
+		}
+	}
+
+	return ret
 }

@@ -32,6 +32,9 @@ type historyType uint8
 const (
 	// typeStateHistory indicates history data related to account or storage changes.
 	typeStateHistory historyType = 0
+
+	// typeTrienodeHistory indicates history data related to trie node changes.
+	typeTrienodeHistory historyType = 1
 )
 
 // String returns the string format representation.
@@ -39,6 +42,8 @@ func (h historyType) String() string {
 	switch h {
 	case typeStateHistory:
 		return "state"
+	case typeTrienodeHistory:
+		return "trienode"
 	default:
 		return fmt.Sprintf("unknown type: %d", h)
 	}
@@ -48,8 +53,9 @@ func (h historyType) String() string {
 type elementType uint8
 
 const (
-	typeAccount elementType = 0 // represents the account data
-	typeStorage elementType = 1 // represents the storage slot data
+	typeAccount  elementType = 0 // represents the account data
+	typeStorage  elementType = 1 // represents the storage slot data
+	typeTrienode elementType = 2 // represents the trie node data
 )
 
 // String returns the string format representation.
@@ -59,6 +65,8 @@ func (e elementType) String() string {
 		return "account"
 	case typeStorage:
 		return "storage"
+	case typeTrienode:
+		return "trienode"
 	default:
 		return fmt.Sprintf("unknown element type: %d", e)
 	}
@@ -69,11 +77,14 @@ func toHistoryType(typ elementType) historyType {
 	if typ == typeAccount || typ == typeStorage {
 		return typeStateHistory
 	}
+	if typ == typeTrienode {
+		return typeTrienodeHistory
+	}
 	panic(fmt.Sprintf("unknown element type %v", typ))
 }
 
 // stateIdent represents the identifier of a state element, which can be
-// an account or a storage slot.
+// an account, a storage slot or a trienode.
 type stateIdent struct {
 	typ elementType
 
@@ -91,6 +102,12 @@ type stateIdent struct {
 	//
 	// This field is null if the identifier refers to an account or a trie node.
 	storageHash common.Hash
+
+	// The trie node path within the trie.
+	//
+	// This field is null if the identifier refers to an account or a storage slot.
+	// String type is chosen to make stateIdent comparable.
+	path string
 }
 
 // String returns the string format state identifier.
@@ -98,7 +115,10 @@ func (ident stateIdent) String() string {
 	if ident.typ == typeAccount {
 		return ident.addressHash.Hex()
 	}
-	return ident.addressHash.Hex() + ident.storageHash.Hex()
+	if ident.typ == typeStorage {
+		return ident.addressHash.Hex() + ident.storageHash.Hex()
+	}
+	return ident.addressHash.Hex() + ident.path
 }
 
 // newAccountIdent constructs a state identifier for an account.
@@ -120,8 +140,18 @@ func newStorageIdent(addressHash common.Hash, storageHash common.Hash) stateIden
 	}
 }
 
-// stateIdentQuery is the extension of stateIdent by adding the account address
-// and raw storage key.
+// newTrienodeIdent constructs a state identifier for a trie node.
+// The address denotes the address hash of the associated account;
+// the path denotes the path of the node within the trie;
+func newTrienodeIdent(addressHash common.Hash, path string) stateIdent {
+	return stateIdent{
+		typ:         typeTrienode,
+		addressHash: addressHash,
+		path:        path,
+	}
+}
+
+// stateIdentQuery is the extension of stateIdent by adding the raw storage key.
 type stateIdentQuery struct {
 	stateIdent
 
@@ -150,8 +180,19 @@ func newStorageIdentQuery(address common.Address, addressHash common.Hash, stora
 	}
 }
 
-// history defines the interface of historical data, implemented by stateHistory
-// and trienodeHistory (in the near future).
+// newTrienodeIdentQuery constructs a state identifier for a trie node.
+// the addressHash denotes the address hash of the associated account;
+// the path denotes the path of the node within the trie;
+//
+// nolint:unused
+func newTrienodeIdentQuery(addrHash common.Hash, path []byte) stateIdentQuery {
+	return stateIdentQuery{
+		stateIdent: newTrienodeIdent(addrHash, string(path)),
+	}
+}
+
+// history defines the interface of historical data, shared by stateHistory
+// and trienodeHistory.
 type history interface {
 	// typ returns the historical data type held in the history.
 	typ() historyType

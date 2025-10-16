@@ -100,7 +100,7 @@ type freezerTable struct {
 	// should never be lower than itemOffset.
 	itemHidden atomic.Uint64
 
-	config      freezerTableConfig // if true, disables snappy compression. Note: does not work retroactively
+	config      freezerTableConfig // table configuration (compression, prunability). Note: compression flag does not apply retroactively to existing files
 	readonly    bool
 	maxFileSize uint32 // Max file size for data-files
 	name        string
@@ -1105,6 +1105,71 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 	// Update metrics.
 	t.readMeter.Mark(int64(totalSize))
 	return output, sizes, nil
+}
+
+// RetrieveBytes retrieves the value segment of the element specified by the id
+// and value offsets.
+func (t *freezerTable) RetrieveBytes(item, offset, length uint64) ([]byte, error) {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	if t.index == nil || t.head == nil || t.metadata.file == nil {
+		return nil, errClosed
+	}
+	items, hidden := t.items.Load(), t.itemHidden.Load()
+	if items <= item || hidden > item {
+		return nil, errOutOfBounds
+	}
+
+	// Retrieves the index entries for the specified ID and its immediate successor
+	indices, err := t.getIndices(item, 1)
+	if err != nil {
+		return nil, err
+	}
+	index0, index1 := indices[0], indices[1]
+
+	itemStart, itemLimit, fileId := index0.bounds(index1)
+	itemSize := itemLimit - itemStart
+
+	dataFile, exist := t.files[fileId]
+	if !exist {
+		return nil, fmt.Errorf("missing data file %d", fileId)
+	}
+
+	// Perform the partial read if no-compression was enabled upon
+	if t.config.noSnappy {
+		if offset > uint64(itemSize) || offset+length > uint64(itemSize) {
+			return nil, fmt.Errorf("requested range out of bounds: item size %d, offset %d, length %d", itemSize, offset, length)
+		}
+		itemStart += uint32(offset)
+
+		buf := make([]byte, length)
+		_, err = dataFile.ReadAt(buf, int64(itemStart))
+		if err != nil {
+			return nil, err
+		}
+		t.readMeter.Mark(int64(length))
+		return buf, nil
+	} else {
+		// If compressed, read the full item, decompress, then slice.
+		// Unfortunately, in this case, there is no performance gain
+		// by performing the partial read at all.
+		buf := make([]byte, itemSize)
+		_, err = dataFile.ReadAt(buf, int64(itemStart))
+		if err != nil {
+			return nil, err
+		}
+		t.readMeter.Mark(int64(itemSize))
+
+		data, err := snappy.Decode(nil, buf)
+		if err != nil {
+			return nil, err
+		}
+		if offset > uint64(len(data)) || offset+length > uint64(len(data)) {
+			return nil, fmt.Errorf("requested range out of bounds: item size %d, offset %d, length %d", len(data), offset, length)
+		}
+		return data[offset : offset+length], nil
+	}
 }
 
 // size returns the total data size in the freezer table.

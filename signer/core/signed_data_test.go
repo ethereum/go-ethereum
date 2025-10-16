@@ -202,7 +202,7 @@ func TestSignData(t *testing.T) {
 		t.Errorf("Expected nil-data, got %x", signature)
 	}
 	if err != keystore.ErrDecrypt {
-		t.Errorf("Expected ErrLocked! '%v'", err)
+		t.Errorf("Expected ErrDecrypt! '%v'", err)
 	}
 	control.approveCh <- "No way"
 	signature, err = api.SignData(context.Background(), apitypes.TextPlain.Mime, a, hexutil.Encode([]byte("EHLO world")))

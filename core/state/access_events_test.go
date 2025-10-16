@@ -131,7 +131,7 @@ func TestMessageCallGas(t *testing.T) {
 	}
 	gas = ae.CodeHashGas(testAddr, false, math.MaxUint64, false)
 	if gas != params.WitnessChunkReadCost {
-		t.Fatalf("incorrect gas computed, got %d, want %d", gas, 0)
+		t.Fatalf("incorrect gas computed, got %d, want %d", gas, params.WitnessChunkReadCost)
 	}
 
 	// Check warm read cost

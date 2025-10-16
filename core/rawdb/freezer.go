@@ -76,8 +76,9 @@ type Freezer struct {
 // NewFreezer creates a freezer instance for maintaining immutable ordered
 // data according to the given parameters.
 //
-// The 'tables' argument defines the data tables. If the value of a map
-// entry is true, snappy compression is disabled for the table.
+// The 'tables' argument defines the freezer tables and their configuration.
+// Each value is a freezerTableConfig specifying whether snappy compression is
+// disabled (noSnappy) and whether the table is prunable (prunable).
 func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]freezerTableConfig) (*Freezer, error) {
 	// Create the initial freezer object
 	var (
@@ -197,6 +198,15 @@ func (f *Freezer) Ancient(kind string, number uint64) ([]byte, error) {
 func (f *Freezer) AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
 	if table := f.tables[kind]; table != nil {
 		return table.RetrieveItems(start, count, maxBytes)
+	}
+	return nil, errUnknownTable
+}
+
+// AncientBytes retrieves the value segment of the element specified by the id
+// and value offsets.
+func (f *Freezer) AncientBytes(kind string, id, offset, length uint64) ([]byte, error) {
+	if table := f.tables[kind]; table != nil {
+		return table.RetrieveBytes(id, offset, length)
 	}
 	return nil, errUnknownTable
 }

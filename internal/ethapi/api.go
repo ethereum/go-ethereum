@@ -449,21 +449,21 @@ func decodeHash(s string) (h common.Hash, inputLength int, err error) {
 	if (len(s) & 1) > 0 {
 		s = "0" + s
 	}
+	if len(s) > 64 {
+		return common.Hash{}, len(s) / 2, errors.New("hex string too long, want at most 32 bytes")
+	}
 	b, err := hex.DecodeString(s)
 	if err != nil {
 		return common.Hash{}, 0, errors.New("hex string invalid")
-	}
-	if len(b) > 32 {
-		return common.Hash{}, len(b), errors.New("hex string too long, want at most 32 bytes")
 	}
 	return common.BytesToHash(b), len(b), nil
 }
 
 // GetHeaderByNumber returns the requested canonical block header.
-//   - When blockNr is -1 the chain pending header is returned.
-//   - When blockNr is -2 the chain latest header is returned.
-//   - When blockNr is -3 the chain finalized header is returned.
-//   - When blockNr is -4 the chain safe header is returned.
+//   - When number is -1 the chain pending header is returned.
+//   - When number is -2 the chain latest header is returned.
+//   - When number is -3 the chain finalized header is returned.
+//   - When number is -4 the chain safe header is returned.
 func (api *BlockChainAPI) GetHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (map[string]interface{}, error) {
 	header, err := api.b.HeaderByNumber(ctx, number)
 	if header != nil && err == nil {
@@ -489,10 +489,10 @@ func (api *BlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.Hash)
 }
 
 // GetBlockByNumber returns the requested canonical block.
-//   - When blockNr is -1 the chain pending block is returned.
-//   - When blockNr is -2 the chain latest block is returned.
-//   - When blockNr is -3 the chain finalized block is returned.
-//   - When blockNr is -4 the chain safe block is returned.
+//   - When number is -1 the chain pending block is returned.
+//   - When number is -2 the chain latest block is returned.
+//   - When number is -3 the chain finalized block is returned.
+//   - When number is -4 the chain safe block is returned.
 //   - When fullTx is true all transactions in the block are returned, otherwise
 //     only the transaction hash is returned.
 func (api *BlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
@@ -627,7 +627,7 @@ func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rp
 
 	result := make([]map[string]interface{}, len(receipts))
 	for i, receipt := range receipts {
-		result[i] = marshalReceipt(receipt, block.Hash(), block.NumberU64(), signer, txs[i], i)
+		result[i] = MarshalReceipt(receipt, block.Hash(), block.NumberU64(), signer, txs[i], i)
 	}
 	return result, nil
 }
@@ -636,6 +636,8 @@ func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rp
 type ChainContextBackend interface {
 	Engine() consensus.Engine
 	HeaderByNumber(context.Context, rpc.BlockNumber) (*types.Header, error)
+	HeaderByHash(context.Context, common.Hash) (*types.Header, error)
+	CurrentHeader() *types.Header
 	ChainConfig() *params.ChainConfig
 }
 
@@ -667,6 +669,20 @@ func (context *ChainContext) GetHeader(hash common.Hash, number uint64) *types.H
 
 func (context *ChainContext) Config() *params.ChainConfig {
 	return context.b.ChainConfig()
+}
+
+func (context *ChainContext) CurrentHeader() *types.Header {
+	return context.b.CurrentHeader()
+}
+
+func (context *ChainContext) GetHeaderByNumber(number uint64) *types.Header {
+	header, _ := context.b.HeaderByNumber(context.ctx, rpc.BlockNumber(number))
+	return header
+}
+
+func (context *ChainContext) GetHeaderByHash(hash common.Hash) *types.Header {
+	header, _ := context.b.HeaderByHash(context.ctx, hash)
+	return header
 }
 
 func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, overrides *override.StateOverride, blockOverrides *override.BlockOverrides, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
@@ -1472,11 +1488,11 @@ func (api *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash commo
 		return nil, err
 	}
 	// Derive the sender.
-	return marshalReceipt(receipt, blockHash, blockNumber, api.signer, tx, int(index)), nil
+	return MarshalReceipt(receipt, blockHash, blockNumber, api.signer, tx, int(index)), nil
 }
 
-// marshalReceipt marshals a transaction receipt into a JSON object.
-func marshalReceipt(receipt *types.Receipt, blockHash common.Hash, blockNumber uint64, signer types.Signer, tx *types.Transaction, txIndex int) map[string]interface{} {
+// MarshalReceipt marshals a transaction receipt into a JSON object.
+func MarshalReceipt(receipt *types.Receipt, blockHash common.Hash, blockNumber uint64, signer types.Signer, tx *types.Transaction, txIndex int) map[string]interface{} {
 	from, _ := types.Sender(signer, tx)
 
 	fields := map[string]interface{}{
@@ -1603,16 +1619,9 @@ func (api *TransactionAPI) SendTransaction(ctx context.Context, args Transaction
 // processing (signing + broadcast).
 func (api *TransactionAPI) FillTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
 	// Set some sanity defaults and terminate on failure
-	sidecarVersion := types.BlobSidecarVersion0
-	if len(args.Blobs) > 0 {
-		h := api.b.CurrentHeader()
-		if api.b.ChainConfig().IsOsaka(h.Number, h.Time) {
-			sidecarVersion = types.BlobSidecarVersion1
-		}
-	}
 	config := sidecarConfig{
 		blobSidecarAllowed: true,
-		blobSidecarVersion: sidecarVersion,
+		blobSidecarVersion: api.currentBlobSidecarVersion(),
 	}
 	if err := args.setDefaults(ctx, api.b, config); err != nil {
 		return nil, err
@@ -1626,6 +1635,14 @@ func (api *TransactionAPI) FillTransaction(ctx context.Context, args Transaction
 	return &SignTransactionResult{data, tx}, nil
 }
 
+func (api *TransactionAPI) currentBlobSidecarVersion() byte {
+	h := api.b.CurrentHeader()
+	if api.b.ChainConfig().IsOsaka(h.Number, h.Time) {
+		return types.BlobSidecarVersion1
+	}
+	return types.BlobSidecarVersion0
+}
+
 // SendRawTransaction will add the signed transaction to the transaction pool.
 // The sender is responsible for signing the transaction and using the correct nonce.
 func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil.Bytes) (common.Hash, error) {
@@ -1633,6 +1650,19 @@ func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil
 	if err := tx.UnmarshalBinary(input); err != nil {
 		return common.Hash{}, err
 	}
+
+	// Convert legacy blob transaction proofs.
+	// TODO: remove in go-ethereum v1.17.x
+	if sc := tx.BlobTxSidecar(); sc != nil {
+		exp := api.currentBlobSidecarVersion()
+		if sc.Version == types.BlobSidecarVersion0 && exp == types.BlobSidecarVersion1 {
+			if err := sc.ToV1(); err != nil {
+				return common.Hash{}, fmt.Errorf("blob sidecar conversion failed: %v", err)
+			}
+			tx = tx.WithBlobTxSidecar(sc)
+		}
+	}
+
 	return SubmitTransaction(ctx, api.b, tx)
 }
 

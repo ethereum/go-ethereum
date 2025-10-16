@@ -66,7 +66,7 @@ func TestVerkleTreeReadWrite(t *testing.T) {
 		}
 		for key, val := range storages[addr] {
 			if err := tr.UpdateStorage(addr, key.Bytes(), val); err != nil {
-				t.Fatalf("Failed to update account, %v", err)
+				t.Fatalf("Failed to update storage, %v", err)
 			}
 		}
 	}
@@ -107,7 +107,7 @@ func TestVerkleRollBack(t *testing.T) {
 		}
 		for key, val := range storages[addr] {
 			if err := tr.UpdateStorage(addr, key.Bytes(), val); err != nil {
-				t.Fatalf("Failed to update account, %v", err)
+				t.Fatalf("Failed to update storage, %v", err)
 			}
 		}
 		hash := crypto.Keccak256Hash(code)

@@ -43,6 +43,7 @@ var (
 	errPendingLogsUnsupported = errors.New("pending logs are not supported")
 	errExceedMaxTopics        = errors.New("exceed max topics")
 	errExceedLogQueryLimit    = errors.New("exceed max addresses or topics per search position")
+	errExceedMaxTxHashes      = errors.New("exceed max number of transaction hashes allowed per transactionReceipts subscription")
 )
 
 const (
@@ -50,6 +51,8 @@ const (
 	maxTopics = 4
 	// The maximum number of allowed topics within a topic criteria
 	maxSubTopics = 1000
+	// The maximum number of transaction hash criteria allowed in a single subscription
+	maxTxHashes = 200
 )
 
 // filter is a helper struct that holds meta information over the filter type
@@ -140,6 +143,7 @@ func (api *FilterAPI) NewPendingTransactionFilter(fullTx *bool) rpc.ID {
 	api.filtersMu.Unlock()
 
 	go func() {
+		defer pendingTxSub.Unsubscribe()
 		for {
 			select {
 			case pTx := <-pendingTxs:
@@ -214,6 +218,7 @@ func (api *FilterAPI) NewBlockFilter() rpc.ID {
 	api.filtersMu.Unlock()
 
 	go func() {
+		defer headerSub.Unsubscribe()
 		for {
 			select {
 			case h := <-headers:
@@ -295,6 +300,83 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 	return rpcSub, nil
 }
 
+// TransactionReceiptsQuery defines criteria for transaction receipts subscription.
+// Same as ethereum.TransactionReceiptsQuery but with UnmarshalJSON() method.
+type TransactionReceiptsQuery ethereum.TransactionReceiptsQuery
+
+// UnmarshalJSON sets *args fields with given data.
+func (args *TransactionReceiptsQuery) UnmarshalJSON(data []byte) error {
+	type input struct {
+		TransactionHashes []common.Hash `json:"transactionHashes"`
+	}
+
+	var raw input
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	args.TransactionHashes = raw.TransactionHashes
+	return nil
+}
+
+// TransactionReceipts creates a subscription that fires transaction receipts when transactions are included in blocks.
+func (api *FilterAPI) TransactionReceipts(ctx context.Context, filter *TransactionReceiptsQuery) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	// Validate transaction hashes limit
+	if filter != nil && len(filter.TransactionHashes) > maxTxHashes {
+		return nil, errExceedMaxTxHashes
+	}
+
+	var (
+		rpcSub          = notifier.CreateSubscription()
+		matchedReceipts = make(chan []*ReceiptWithTx)
+		txHashes        []common.Hash
+	)
+
+	if filter != nil {
+		txHashes = filter.TransactionHashes
+	}
+
+	receiptsSub := api.events.SubscribeTransactionReceipts(txHashes, matchedReceipts)
+
+	go func() {
+		defer receiptsSub.Unsubscribe()
+
+		signer := types.LatestSigner(api.sys.backend.ChainConfig())
+
+		for {
+			select {
+			case receiptsWithTxs := <-matchedReceipts:
+				if len(receiptsWithTxs) > 0 {
+					// Convert to the same format as eth_getTransactionReceipt
+					marshaledReceipts := make([]map[string]interface{}, len(receiptsWithTxs))
+					for i, receiptWithTx := range receiptsWithTxs {
+						marshaledReceipts[i] = ethapi.MarshalReceipt(
+							receiptWithTx.Receipt,
+							receiptWithTx.Receipt.BlockHash,
+							receiptWithTx.Receipt.BlockNumber.Uint64(),
+							signer,
+							receiptWithTx.Transaction,
+							int(receiptWithTx.Receipt.TransactionIndex),
+						)
+					}
+
+					// Send a batch of tx receipts in one notification
+					notifier.Notify(rpcSub.ID, marshaledReceipts)
+				}
+			case <-rpcSub.Err():
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
 // FilterCriteria represents a request to create a new filter.
 // Same as ethereum.FilterQuery but with UnmarshalJSON() method.
 type FilterCriteria ethereum.FilterQuery
@@ -322,6 +404,7 @@ func (api *FilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 	api.filtersMu.Unlock()
 
 	go func() {
+		defer logsSub.Unsubscribe()
 		for {
 			select {
 			case l := <-logs:

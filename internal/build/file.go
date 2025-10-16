@@ -25,15 +25,6 @@ import (
 	"strings"
 )
 
-// FileExist checks if a file exists at path.
-func FileExist(path string) bool {
-	_, err := os.Stat(path)
-	if err != nil && os.IsNotExist(err) {
-		return false
-	}
-	return true
-}
-
 // HashFolder iterates all files under the given directory, computing the hash
 // of each.
 func HashFolder(folder string, exlude []string) (map[string][32]byte, error) {

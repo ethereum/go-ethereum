@@ -47,7 +47,6 @@ import (
 
 // Register adds the engine API to the full node.
 func Register(stack *node.Node, backend *eth.Ethereum) error {
-	log.Warn("Engine API enabled", "protocol", "eth")
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace:     "engine",
@@ -492,6 +491,12 @@ func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool) (*eng
 // Client software MAY return an array of all null entries if syncing or otherwise
 // unable to serve blob pool data.
 func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProofV1, error) {
+	// Reject the request if Osaka has been activated.
+	// follow https://github.com/ethereum/execution-apis/blob/main/src/engine/osaka.md#cancun-api
+	head := api.eth.BlockChain().CurrentHeader()
+	if !api.checkFork(head.Time, forks.Cancun, forks.Prague) {
+		return nil, unsupportedForkErr("engine_getBlobsV1 is only available at Cancun/Prague fork")
+	}
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
@@ -532,9 +537,6 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 //   - if the request is [A_versioned_hash_for_blob_with_blob_proof], the response
 //     MUST be null as well.
 //
-//     Note, geth internally make the conversion from old version to new one, so the
-//     data will be returned normally.
-//
 // Client software MUST support request sizes of at least 128 blob versioned
 // hashes. The client MUST return -38004: Too large request error if the number
 // of requested blobs is too large.
@@ -542,6 +544,10 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 // Client software MUST return null if syncing or otherwise unable to serve
 // blob pool data.
 func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProofV2, error) {
+	head := api.eth.BlockChain().CurrentHeader()
+	if api.config().LatestFork(head.Time) < forks.Osaka {
+		return nil, unsupportedForkErr("engine_getBlobsV2 is not available before Osaka fork")
+	}
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
