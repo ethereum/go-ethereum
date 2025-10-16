@@ -881,7 +881,7 @@ type CallError struct {
 
 // SimulateBlockResult represents the result of a simulated block.
 type SimulateBlockResult struct {
-	Number        uint64               `json:"number"`
+	Number        *big.Int             `json:"number"`
 	Hash          common.Hash          `json:"hash"`
 	Timestamp     uint64               `json:"timestamp"`
 	GasLimit      uint64               `json:"gasLimit"`
@@ -892,7 +892,7 @@ type SimulateBlockResult struct {
 }
 
 type simulateBlockResultMarshaling struct {
-	Number        hexutil.Uint64
+	Number        *hexutil.Big
 	Timestamp     hexutil.Uint64
 	GasLimit      hexutil.Uint64
 	GasUsed       hexutil.Uint64

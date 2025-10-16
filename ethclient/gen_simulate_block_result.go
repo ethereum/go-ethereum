@@ -15,7 +15,7 @@ var _ = (*simulateBlockResultMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (s SimulateBlockResult) MarshalJSON() ([]byte, error) {
 	type SimulateBlockResult struct {
-		Number        hexutil.Uint64       `json:"number"`
+		Number        *hexutil.Big         `json:"number"`
 		Hash          common.Hash          `json:"hash"`
 		Timestamp     hexutil.Uint64       `json:"timestamp"`
 		GasLimit      hexutil.Uint64       `json:"gasLimit"`
@@ -25,7 +25,7 @@ func (s SimulateBlockResult) MarshalJSON() ([]byte, error) {
 		Calls         []SimulateCallResult `json:"calls"`
 	}
 	var enc SimulateBlockResult
-	enc.Number = hexutil.Uint64(s.Number)
+	enc.Number = (*hexutil.Big)(s.Number)
 	enc.Hash = s.Hash
 	enc.Timestamp = hexutil.Uint64(s.Timestamp)
 	enc.GasLimit = hexutil.Uint64(s.GasLimit)
@@ -39,7 +39,7 @@ func (s SimulateBlockResult) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals from JSON.
 func (s *SimulateBlockResult) UnmarshalJSON(input []byte) error {
 	type SimulateBlockResult struct {
-		Number        *hexutil.Uint64      `json:"number"`
+		Number        *hexutil.Big         `json:"number"`
 		Hash          *common.Hash         `json:"hash"`
 		Timestamp     *hexutil.Uint64      `json:"timestamp"`
 		GasLimit      *hexutil.Uint64      `json:"gasLimit"`
@@ -53,7 +53,7 @@ func (s *SimulateBlockResult) UnmarshalJSON(input []byte) error {
 		return err
 	}
 	if dec.Number != nil {
-		s.Number = uint64(*dec.Number)
+		s.Number = (*big.Int)(dec.Number)
 	}
 	if dec.Hash != nil {
 		s.Hash = *dec.Hash
