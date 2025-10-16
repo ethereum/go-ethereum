@@ -58,8 +58,6 @@ func newTxJournal(path string) *journal {
 // load parses a transaction journal dump from disk, loading its contents into
 // the specified pool.
 func (journal *journal) load(add func([]*types.Transaction) []error) error {
-	originalWriter := journal.writer
-
 	// Open the journal for loading any past transactions
 	input, err := os.Open(journal.path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -73,7 +71,7 @@ func (journal *journal) load(add func([]*types.Transaction) []error) error {
 
 	// Temporarily discard any journal additions (don't double add on load)
 	journal.writer = new(devNull)
-	defer func() { journal.writer = originalWriter }()
+	defer func() { journal.writer = nil }()
 
 	// Inject all transactions from the journal into the pool
 	stream := rlp.NewStream(input, 0)
@@ -117,6 +115,24 @@ func (journal *journal) load(add func([]*types.Transaction) []error) error {
 	log.Info("Loaded local transaction journal", "transactions", total, "dropped", dropped)
 
 	return failure
+}
+
+// setWriter opens the journal file for writing new transactions.
+func (journal *journal) setWriter() error {
+	// Close the current writer if any
+	if journal.writer != nil {
+		journal.writer.Close()
+		journal.writer = nil
+	}
+
+	// Open the journal file for appending
+	// Use O_APPEND to ensure we always write to the end of the file
+	sink, err := os.OpenFile(journal.path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+	journal.writer = sink
+	return nil
 }
 
 // insert adds the specified transaction to the local disk journal.
