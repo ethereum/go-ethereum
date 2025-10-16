@@ -68,6 +68,19 @@ type SetCodeTx struct {
 
 //go:generate go run github.com/fjl/gencodec -type SetCodeAuthorization -field-override authorizationMarshaling -out gen_authorization.go
 
+// SetCodeAuth is an interface for getting authorization details.
+// It abstracts over signed and unsigned authorizations, enabling
+// gas estimation without valid signatures.
+type SetCodeAuth interface {
+	GetChainID() uint256.Int
+	GetAddress() common.Address
+	GetNonce() uint64
+	GetAuthority() (common.Address, error)
+
+	// AsSetCodeAuthorization returns the underlying SetCodeAuthorization for encoding.
+	AsSetCodeAuthorization() SetCodeAuthorization
+}
+
 // SetCodeAuthorization is an authorization from an account to deploy code at its address.
 type SetCodeAuthorization struct {
 	ChainID uint256.Int    `json:"chainId" gencodec:"required"`
@@ -115,9 +128,9 @@ func (a *SetCodeAuthorization) SigHash() common.Hash {
 }
 
 // Authority recovers the the authorizing account of an authorization.
-func (a *SetCodeAuthorization) Authority(validateSig bool) (common.Address, error) {
+func (a *SetCodeAuthorization) Authority() (common.Address, error) {
 	sighash := a.SigHash()
-	if validateSig && !crypto.ValidateSignatureValues(a.V, a.R.ToBig(), a.S.ToBig(), true) {
+	if !crypto.ValidateSignatureValues(a.V, a.R.ToBig(), a.S.ToBig(), true) {
 		return common.Address{}, ErrInvalidSig
 	}
 	// encode the signature in uncompressed format
@@ -240,4 +253,81 @@ func (tx *SetCodeTx) sigHash(chainID *big.Int) common.Hash {
 			tx.AccessList,
 			tx.AuthList,
 		})
+}
+
+// SignedAuthorization wraps a SetCodeAuthorization and recovers authority from signature.
+type SignedAuthorization struct {
+	auth SetCodeAuthorization
+}
+
+// NewSignedAuthorization creates a new SignedAuthorization.
+func NewSignedAuthorization(auth SetCodeAuthorization) *SignedAuthorization {
+	return &SignedAuthorization{auth: auth}
+}
+
+func (s *SignedAuthorization) GetChainID() uint256.Int {
+	return s.auth.ChainID
+}
+
+func (s *SignedAuthorization) GetAddress() common.Address {
+	return s.auth.Address
+}
+
+func (s *SignedAuthorization) GetNonce() uint64 {
+	return s.auth.Nonce
+}
+
+func (s *SignedAuthorization) GetAuthority() (common.Address, error) {
+	return s.auth.Authority()
+}
+
+func (s *SignedAuthorization) AsSetCodeAuthorization() SetCodeAuthorization {
+	return s.auth
+}
+
+// UnsignedAuthorization represents an authorization with an authority address,
+// used for gas estimation when a valid signature is not available.
+type UnsignedAuthorization struct {
+	chainID   uint256.Int
+	address   common.Address
+	nonce     uint64
+	authority common.Address
+}
+
+// NewUnsignedAuthorization creates a new UnsignedAuthorization.
+func NewUnsignedAuthorization(chainID uint256.Int, address common.Address, nonce uint64, authority common.Address) *UnsignedAuthorization {
+	return &UnsignedAuthorization{
+		chainID:   chainID,
+		address:   address,
+		nonce:     nonce,
+		authority: authority,
+	}
+}
+
+func (u *UnsignedAuthorization) GetChainID() uint256.Int {
+	return u.chainID
+}
+
+func (u *UnsignedAuthorization) GetAddress() common.Address {
+	return u.address
+}
+
+func (u *UnsignedAuthorization) GetNonce() uint64 {
+	return u.nonce
+}
+
+func (u *UnsignedAuthorization) GetAuthority() (common.Address, error) {
+	return u.authority, nil
+}
+
+func (u *UnsignedAuthorization) AsSetCodeAuthorization() SetCodeAuthorization {
+	// Return a zero-valued authorization with basic fields filled in
+	return SetCodeAuthorization{
+		ChainID: u.chainID,
+		Address: u.address,
+		Nonce:   u.nonce,
+		V:       0,
+		R:       uint256.Int{},
+		S:       uint256.Int{},
+	}
 }

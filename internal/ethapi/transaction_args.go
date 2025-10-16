@@ -70,6 +70,9 @@ type TransactionArgs struct {
 
 	// For SetCodeTxType
 	AuthorizationList []types.SetCodeAuthorization `json:"authorizationList"`
+
+	// AuthorityHints provides authority addresses for gas estimation.
+	AuthorityHints []common.Address `json:"authorityHints,omitempty"`
 }
 
 // from retrieves the transaction sender address.
@@ -476,6 +479,24 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck bool) *c
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
+	var authList []types.SetCodeAuth
+	if args.AuthorizationList != nil {
+		authList = make([]types.SetCodeAuth, len(args.AuthorizationList))
+		for i, auth := range args.AuthorizationList {
+			// If authority hints are provided, use unsigned authorization
+			if i < len(args.AuthorityHints) {
+				authList[i] = types.NewUnsignedAuthorization(
+					auth.ChainID,
+					auth.Address,
+					auth.Nonce,
+					args.AuthorityHints[i],
+				)
+			} else {
+				// Otherwise use signed authorization
+				authList[i] = types.NewSignedAuthorization(auth)
+			}
+		}
+	}
 	return &core.Message{
 		From:                  args.from(),
 		To:                    args.To,
@@ -489,7 +510,7 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck bool) *c
 		AccessList:            accessList,
 		BlobGasFeeCap:         (*big.Int)(args.BlobFeeCap),
 		BlobHashes:            args.BlobHashes,
-		SetCodeAuthorizations: args.AuthorizationList,
+		AuthList:              authList,
 		SkipNonceChecks:       skipNonceCheck,
 		SkipTransactionChecks: true,
 	}

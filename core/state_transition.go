@@ -143,19 +143,22 @@ func toWordSize(size uint64) uint64 {
 // A Message contains the data derived from a single transaction that is relevant to state
 // processing.
 type Message struct {
-	To                    *common.Address
-	From                  common.Address
-	Nonce                 uint64
-	Value                 *big.Int
-	GasLimit              uint64
-	GasPrice              *big.Int
-	GasFeeCap             *big.Int
-	GasTipCap             *big.Int
-	Data                  []byte
-	AccessList            types.AccessList
-	BlobGasFeeCap         *big.Int
-	BlobHashes            []common.Hash
-	SetCodeAuthorizations []types.SetCodeAuthorization
+	To            *common.Address
+	From          common.Address
+	Nonce         uint64
+	Value         *big.Int
+	GasLimit      uint64
+	GasPrice      *big.Int
+	GasFeeCap     *big.Int
+	GasTipCap     *big.Int
+	Data          []byte
+	AccessList    types.AccessList
+	BlobGasFeeCap *big.Int
+	BlobHashes    []common.Hash
+
+	// AuthList provides an abstraction over authorization handling.
+	// It handles both signed authorizations and unsigned authorizations
+	AuthList []types.SetCodeAuth
 
 	// When SkipNonceChecks is true, the message nonce is not checked against the
 	// account nonce in state.
@@ -172,8 +175,30 @@ type Message struct {
 	SkipTransactionChecks bool
 }
 
+// getAuthorizationList extracts SetCodeAuthorization list from auth interfaces.
+// This is used for intrinsic gas calculation and validation.
+func (msg *Message) getAuthorizationList() []types.SetCodeAuthorization {
+	if msg.AuthList == nil {
+		return nil
+	}
+	authList := make([]types.SetCodeAuthorization, len(msg.AuthList))
+	for i, auth := range msg.AuthList {
+		authList[i] = auth.AsSetCodeAuthorization()
+	}
+	return authList
+}
+
 // TransactionToMessage converts a transaction into a Message.
 func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
+	// Create authorization interfaces from transaction authorizations
+	var authList []types.SetCodeAuth
+	if auths := tx.SetCodeAuthorizations(); auths != nil {
+		authList = make([]types.SetCodeAuth, len(auths))
+		for i, auth := range auths {
+			authList[i] = types.NewSignedAuthorization(auth)
+		}
+	}
+
 	msg := &Message{
 		Nonce:                 tx.Nonce(),
 		GasLimit:              tx.Gas(),
@@ -184,7 +209,7 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		Value:                 tx.Value(),
 		Data:                  tx.Data(),
 		AccessList:            tx.AccessList(),
-		SetCodeAuthorizations: tx.SetCodeAuthorizations(),
+		AuthList:              authList,
 		SkipNonceChecks:       false,
 		SkipTransactionChecks: false,
 		BlobHashes:            tx.BlobHashes(),
@@ -398,11 +423,11 @@ func (st *stateTransition) preCheck() error {
 		}
 	}
 	// Check that EIP-7702 authorization list signatures are well formed.
-	if msg.SetCodeAuthorizations != nil {
+	if msg.AuthList != nil {
 		if msg.To == nil {
 			return fmt.Errorf("%w (sender %v)", ErrSetCodeTxCreate, msg.From)
 		}
-		if len(msg.SetCodeAuthorizations) == 0 {
+		if len(msg.AuthList) == 0 {
 			return fmt.Errorf("%w (sender %v)", ErrEmptyAuthList, msg.From)
 		}
 	}
@@ -443,7 +468,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	)
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
+	gas, err := IntrinsicGas(msg.Data, msg.AccessList, msg.getAuthorizationList(), contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
 	if err != nil {
 		return nil, err
 	}
@@ -503,10 +528,10 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
 
 		// Apply EIP-7702 authorizations.
-		if msg.SetCodeAuthorizations != nil {
-			for _, auth := range msg.SetCodeAuthorizations {
+		if msg.AuthList != nil {
+			for _, auth := range msg.AuthList {
 				// Note errors are ignored, we simply skip invalid authorizations here.
-				st.applyAuthorization(&auth)
+				st.applyAuthorization(auth)
 			}
 		}
 
@@ -574,19 +599,21 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 }
 
 // validateAuthorization validates an EIP-7702 authorization against the state.
-func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorization) (authority common.Address, err error) {
+func (st *stateTransition) validateAuthorization(auth types.SetCodeAuth) (authority common.Address, err error) {
 	skipValidation := st.msg.SkipTransactionChecks
 
 	// Verify chain ID is null or equal to current chain ID.
-	if !skipValidation && !auth.ChainID.IsZero() && auth.ChainID.CmpBig(st.evm.ChainConfig().ChainID) != 0 {
+	chainID := auth.GetChainID()
+	if !skipValidation && !chainID.IsZero() && chainID.CmpBig(st.evm.ChainConfig().ChainID) != 0 {
 		return authority, ErrAuthorizationWrongChainID
 	}
 	// Limit nonce to 2^64-1 per EIP-2681.
-	if !skipValidation && auth.Nonce+1 < auth.Nonce {
+	nonce := auth.GetNonce()
+	if !skipValidation && nonce+1 < nonce {
 		return authority, ErrAuthorizationNonceOverflow
 	}
-	// Validate signature values and recover authority.
-	authority, err = auth.Authority(!skipValidation)
+	// Get authority from auth (may recover from signature or use explicit address).
+	authority, err = auth.GetAuthority()
 	if err != nil {
 		return authority, fmt.Errorf("%w: %v", ErrAuthorizationInvalidSignature, err)
 	}
@@ -602,7 +629,7 @@ func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorizatio
 		if _, ok := types.ParseDelegation(code); len(code) != 0 && !ok {
 			return authority, ErrAuthorizationDestinationHasCode
 		}
-		if have := st.state.GetNonce(authority); have != auth.Nonce {
+		if have := st.state.GetNonce(authority); have != nonce {
 			return authority, ErrAuthorizationNonceMismatch
 		}
 	}
@@ -610,7 +637,7 @@ func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorizatio
 }
 
 // applyAuthorization applies an EIP-7702 code delegation to the state.
-func (st *stateTransition) applyAuthorization(auth *types.SetCodeAuthorization) error {
+func (st *stateTransition) applyAuthorization(auth types.SetCodeAuth) error {
 	authority, err := st.validateAuthorization(auth)
 	if err != nil {
 		return err
@@ -623,15 +650,17 @@ func (st *stateTransition) applyAuthorization(auth *types.SetCodeAuthorization) 
 	}
 
 	// Update nonce and account code.
-	st.state.SetNonce(authority, auth.Nonce+1, tracing.NonceChangeAuthorization)
-	if auth.Address == (common.Address{}) {
+	nonce := auth.GetNonce()
+	address := auth.GetAddress()
+	st.state.SetNonce(authority, nonce+1, tracing.NonceChangeAuthorization)
+	if address == (common.Address{}) {
 		// Delegation to zero address means clear.
 		st.state.SetCode(authority, nil, tracing.CodeChangeAuthorizationClear)
 		return nil
 	}
 
 	// Otherwise install delegation to auth.Address.
-	st.state.SetCode(authority, types.AddressToDelegation(auth.Address), tracing.CodeChangeAuthorization)
+	st.state.SetCode(authority, types.AddressToDelegation(address), tracing.CodeChangeAuthorization)
 
 	return nil
 }

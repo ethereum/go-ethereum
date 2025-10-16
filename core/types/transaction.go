@@ -525,7 +525,7 @@ func (tx *Transaction) SetCodeAuthorities() []common.Address {
 		auths = make([]common.Address, 0, len(setcodetx.AuthList))
 	)
 	for _, auth := range setcodetx.AuthList {
-		if addr, err := auth.Authority(true); err == nil {
+		if addr, err := auth.Authority(); err == nil {
 			if marks[addr] {
 				continue
 			}
