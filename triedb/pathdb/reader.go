@@ -86,7 +86,6 @@ func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte,
 		if len(blob) > 0 {
 			blobHex = hexutil.Encode(blob)
 		}
-		log.Error("Unexpected trie node", "location", loc.loc, "owner", owner.Hex(), "path", path, "expect", hash.Hex(), "got", got.Hex(), "blob", blobHex)
 		return nil, fmt.Errorf("unexpected node: (%x %v), %x!=%x, %s, blob: %s", owner, path, hash, got, loc.string(), blobHex)
 	}
 	return blob, nil
