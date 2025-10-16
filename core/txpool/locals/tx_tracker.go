@@ -185,10 +185,6 @@ func (tracker *TxTracker) loop() {
 			tracker.TrackAll(transactions)
 			return nil
 		})
-		log.Info("Initializing journal writer after loading transactions")
-		if err := tracker.journal.setWriter(); err != nil {
-			log.Warn("Failed to initialize journal writer", "err", err)
-		}
 		defer tracker.journal.close()
 	}
 	var (
