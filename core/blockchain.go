@@ -2037,16 +2037,16 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 		// Upload the statistics of reader at the end
 		defer func() {
 			pStat := prefetch.GetStats()
-			accountCacheHitPrefetchMeter.Mark(pStat.AccountHit)
-			accountCacheMissPrefetchMeter.Mark(pStat.AccountMiss)
-			storageCacheHitPrefetchMeter.Mark(pStat.StorageHit)
-			storageCacheMissPrefetchMeter.Mark(pStat.StorageMiss)
+			accountCacheHitPrefetchMeter.Mark(pStat.AccountCacheHit)
+			accountCacheMissPrefetchMeter.Mark(pStat.AccountCacheMiss)
+			storageCacheHitPrefetchMeter.Mark(pStat.StorageCacheHit)
+			storageCacheMissPrefetchMeter.Mark(pStat.StorageCacheMiss)
 
 			rStat := process.GetStats()
-			accountCacheHitMeter.Mark(rStat.AccountHit)
-			accountCacheMissMeter.Mark(rStat.AccountMiss)
-			storageCacheHitMeter.Mark(rStat.StorageHit)
-			storageCacheMissMeter.Mark(rStat.StorageMiss)
+			accountCacheHitMeter.Mark(rStat.AccountCacheHit)
+			accountCacheMissMeter.Mark(rStat.AccountCacheMiss)
+			storageCacheHitMeter.Mark(rStat.StorageCacheHit)
+			storageCacheMissMeter.Mark(rStat.StorageCacheMiss)
 
 			if result != nil {
 				result.stats.StatePrefetchCacheStats = pStat
