@@ -501,6 +501,10 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 		// Verkle uses only one tree, and the copy has already been
 		// made in mustCopyTrie.
 		obj.trie = db.trie
+	case *trie.TransitionTrie:
+		// Same thing for the transition tree, since the MPT is
+		// read-only.
+		obj.trie = db.trie
 	case *trie.StateTrie:
 		obj.trie = mustCopyTrie(s.trie)
 	case nil:
