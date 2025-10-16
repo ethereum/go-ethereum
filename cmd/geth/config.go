@@ -303,7 +303,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		// Start blsync mode.
 		srv := rpc.NewServer()
 		srv.RegisterName("engine", catalyst.NewConsensusAPI(eth))
-		blsyncer := blsync.NewClient(utils.MakeBeaconLightConfig(ctx))
+		blsyncer := blsync.NewClient(utils.MakeBeaconLightConfig(ctx), eth.BlockChain())
 		blsyncer.SetEngineRPC(rpc.DialInProc(srv))
 		restServer.Register(blsyncer.RestAPI(restServer))
 		stack.RegisterLifecycle(blsyncer)

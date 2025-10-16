@@ -26,40 +26,79 @@ import (
 
 	"github.com/donovanhide/eventsource"
 	"github.com/ethereum/go-ethereum/beacon/light"
+	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/lru"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/restapi"
 	"github.com/gorilla/mux"
 )
 
 type BeaconApiServer struct {
+	scheduler       *request.Scheduler
 	checkpointStore *light.CheckpointStore
 	committeeChain  *light.CommitteeChain
 	headTracker     *light.HeadTracker
-	recentBlocks    *lru.Cache[common.Hash, json.RawMessage]
-	//headValidator   *light.HeadValidator
-	eventServer *eventsource.Server
-	lastEventId uint64
+	recentBlocks    *lru.Cache[common.Hash, json.RawMessage] // beacon block root -> JSON
+	execBlocks      *lru.Cache[common.Hash, struct{}]        // execution block root -> processed flag
+	eventServer     *eventsource.Server
+	closeCh         chan struct{}
+
+	lastEventId    uint64
+	lastHeadInfo   types.HeadInfo
+	lastOptimistic types.OptimisticUpdate
+	lastFinality   types.FinalityUpdate
+}
+
+type ExecChain interface {
+	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 }
 
 func NewBeaconApiServer(
+	scheduler *request.Scheduler,
 	checkpointStore *light.CheckpointStore,
 	committeeChain *light.CommitteeChain,
 	headTracker *light.HeadTracker,
-	recentBlocks *lru.Cache[common.Hash, json.RawMessage]) *BeaconApiServer {
+	recentBlocks *lru.Cache[common.Hash, json.RawMessage],
+	execChain ExecChain) *BeaconApiServer {
 
 	eventServer := eventsource.NewServer()
 	eventServer.Register("headEvent", eventsource.NewSliceRepository())
-	return &BeaconApiServer{
+	s := &BeaconApiServer{
+		scheduler:       scheduler,
 		checkpointStore: checkpointStore,
 		committeeChain:  committeeChain,
 		headTracker:     headTracker,
 		recentBlocks:    recentBlocks,
 		eventServer:     eventServer,
+		closeCh:         make(chan struct{}),
 	}
+	if execChain != nil {
+		s.execBlocks = lru.NewCache[common.Hash, struct{}](100)
+		ch := make(chan core.ChainEvent, 1)
+		sub := execChain.SubscribeChainEvent(ch)
+		go func() {
+			defer sub.Unsubscribe()
+			for {
+				select {
+				case ev := <-ch:
+					s.execBlocks.Add(ev.Header.Hash(), struct{}{})
+					s.scheduler.Trigger()
+				case <-s.closeCh:
+					return
+				}
+			}
+		}()
+	}
+	return s
+}
+
+func (s *BeaconApiServer) Stop() {
+	close(s.closeCh)
 }
 
 func (s *BeaconApiServer) RestAPI(server *restapi.Server) restapi.API {
@@ -74,8 +113,37 @@ func (s *BeaconApiServer) RestAPI(server *restapi.Server) restapi.API {
 	}
 }
 
-func (s *BeaconApiServer) PublishHeadEvent(slot uint64, blockRoot common.Hash) {
-	enc, err := json.Marshal(&jsonHeadEvent{Slot: common.Decimal(slot), Block: blockRoot})
+func (s *BeaconApiServer) Process(requester request.Requester, events []request.Event) {
+	if head := s.headTracker.PrefetchHead(); head != s.lastHeadInfo {
+		if _, ok := s.recentBlocks.Get(head.BlockRoot); ok && head != s.lastHeadInfo {
+			s.lastHeadInfo = head
+			s.publishHeadEvent(head)
+		}
+	}
+	if vh, ok := s.headTracker.ValidatedOptimistic(); ok && vh.Attested.Header != s.lastOptimistic.Attested.Header && s.canPublish(vh.Attested) {
+		s.lastOptimistic = vh
+		s.publishOptimisticUpdate(vh)
+	}
+	if fh, ok := s.headTracker.ValidatedFinality(); ok && fh.Finalized.Header != s.lastFinality.Finalized.Header && s.canPublish(fh.Attested) {
+		s.lastFinality = fh
+		s.publishFinalityUpdate(fh)
+	}
+}
+
+func (s *BeaconApiServer) canPublish(header types.HeaderWithExecProof) bool {
+	if _, ok := s.recentBlocks.Get(header.Hash()); !ok {
+		return false
+	}
+	if s.execBlocks != nil {
+		if _, ok := s.execBlocks.Get(header.PayloadHeader.BlockHash()); !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *BeaconApiServer) publishHeadEvent(headInfo types.HeadInfo) {
+	enc, err := json.Marshal(&jsonHeadEvent{Slot: common.Decimal(headInfo.Slot), Block: headInfo.BlockRoot})
 	if err != nil {
 		log.Error("Error encoding head event", "error", err)
 		return
@@ -83,13 +151,22 @@ func (s *BeaconApiServer) PublishHeadEvent(slot uint64, blockRoot common.Hash) {
 	s.publishEvent("head", string(enc))
 }
 
-func (s *BeaconApiServer) PublishOptimisticHeadUpdate(head types.OptimisticUpdate) {
-	enc, err := encodeOptimisticUpdate(head)
+func (s *BeaconApiServer) publishOptimisticUpdate(update types.OptimisticUpdate) {
+	enc, err := encodeOptimisticUpdate(update)
 	if err != nil {
 		log.Error("Error encoding optimistic head update", "error", err)
 		return
 	}
 	s.publishEvent("light_client_optimistic_update", string(enc))
+}
+
+func (s *BeaconApiServer) publishFinalityUpdate(update types.FinalityUpdate) {
+	enc, err := encodeFinalityUpdate(update)
+	if err != nil {
+		log.Error("Error encoding optimistic head update", "error", err)
+		return
+	}
+	s.publishEvent("light_client_finality_update", string(enc))
 }
 
 type serverEvent struct {

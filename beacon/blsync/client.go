@@ -49,7 +49,7 @@ type Client struct {
 	engineClient *engineClient
 }
 
-func NewClient(config params.ClientConfig) *Client {
+func NewClient(config params.ClientConfig, execChain api.ExecChain) *Client {
 	// create data structures
 	var (
 		db             = memorydb.New()
@@ -77,7 +77,7 @@ func NewClient(config params.ClientConfig) *Client {
 	scheduler.RegisterModule(headSync, "headSync")
 	scheduler.RegisterModule(beaconBlockSync, "beaconBlockSync")
 	recentBlocks := lru.NewCache[common.Hash, json.RawMessage](4)
-	apiServer := api.NewBeaconApiServer(checkpointStore, committeeChain, headTracker, recentBlocks)
+	apiServer := api.NewBeaconApiServer(scheduler, checkpointStore, committeeChain, headTracker, recentBlocks, execChain)
 
 	return &Client{
 		scheduler:    scheduler,
@@ -112,6 +112,7 @@ func (c *Client) Start() error {
 }
 
 func (c *Client) Stop() error {
+	c.apiServer.Stop()
 	c.engineClient.stop()
 	c.chainHeadSub.Unsubscribe()
 	c.scheduler.Stop()
