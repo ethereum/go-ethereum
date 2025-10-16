@@ -45,7 +45,8 @@ var (
 		AddFork("BELLATRIX", 144896, []byte{2, 0, 0, 0}).
 		AddFork("CAPELLA", 194048, []byte{3, 0, 0, 0}).
 		AddFork("DENEB", 269568, []byte{4, 0, 0, 0}).
-		AddFork("ELECTRA", 364032, []byte{5, 0, 0, 0})
+		AddFork("ELECTRA", 364032, []byte{5, 0, 0, 0}).
+		AddFork("FULU", 18446744073709551615, []byte{6, 0, 0, 0})
 
 	SepoliaLightConfig = (&ChainConfig{
 		GenesisValidatorsRoot: common.HexToHash("0xd8ea171f3c94aea21ebc42a1ed61052acf3f9209c00e4efbaaddac09ed9b8078"),
@@ -57,7 +58,8 @@ var (
 		AddFork("BELLATRIX", 100, []byte{144, 0, 0, 113}).
 		AddFork("CAPELLA", 56832, []byte{144, 0, 0, 114}).
 		AddFork("DENEB", 132608, []byte{144, 0, 0, 115}).
-		AddFork("ELECTRA", 222464, []byte{144, 0, 0, 116})
+		AddFork("ELECTRA", 222464, []byte{144, 0, 0, 116}).
+		AddFork("FULU", 272640, []byte{144, 0, 0, 117})
 
 	HoleskyLightConfig = (&ChainConfig{
 		GenesisValidatorsRoot: common.HexToHash("0x9143aa7c615a7f7115e2b6aac319c03529df8242ae705fba9df39b79c59fa8b1"),
@@ -69,7 +71,8 @@ var (
 		AddFork("BELLATRIX", 0, []byte{3, 1, 112, 0}).
 		AddFork("CAPELLA", 256, []byte{4, 1, 112, 0}).
 		AddFork("DENEB", 29696, []byte{5, 1, 112, 0}).
-		AddFork("ELECTRA", 115968, []byte{6, 1, 112, 0})
+		AddFork("ELECTRA", 115968, []byte{6, 1, 112, 0}).
+		AddFork("FULU", 165120, []byte{7, 1, 112, 0})
 
 	HoodiLightConfig = (&ChainConfig{
 		GenesisValidatorsRoot: common.HexToHash("0x212f13fc4df078b6cb7db228f1c8307566dcecf900867401a92023d7ba99cb5f"),
