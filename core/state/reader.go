@@ -120,7 +120,7 @@ func (s ReaderStats) String() string {
 	if s.StorageDiskHit > 0 {
 		storageDiskHitRate = float64(s.StorageDiskHit) / float64(s.StorageDiskHit+s.StorageDiskMiss) * 100
 	}
-	msg := fmt.Sprintf("=== Reader statistics ===\n")
+	msg := fmt.Sprintf("Reader statistics\n")
 	msg += fmt.Sprintf("account: cache (hit: %d, miss: %d, rate: %.2f)\n", s.AccountCacheHit, s.AccountCacheMiss, accountCacheHitRate)
 	msg += fmt.Sprintf("account: disk (hit: %d, miss: %d, rate: %.2f)\n", s.AccountDiskHit, s.AccountDiskMiss, accountDiskHitRate)
 	msg += fmt.Sprintf("storage: cache (hit: %d, miss: %d, rate: %.2f)\n", s.StorageCacheHit, s.StorageCacheMiss, storageCacheHitRate)

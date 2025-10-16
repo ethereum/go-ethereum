@@ -120,6 +120,7 @@ Block write: %v
 Total: %v
 
 %s
+%s
 ##############################
 `, block.Number(), block.Hash(), len(block.Transactions()), s.MgasPerSecond,
 		common.PrettyDuration(s.Execution), common.PrettyDuration(s.Validation+s.CrossValidation),
@@ -127,11 +128,8 @@ Total: %v
 		common.PrettyDuration(s.StorageReads), s.StorageLoaded,
 		common.PrettyDuration(s.AccountHashes+s.AccountCommits+s.AccountUpdates+s.StorageCommits+s.StorageUpdates),
 		common.PrettyDuration(s.TrieDBCommit+s.SnapshotCommit), common.PrettyDuration(s.BlockWrite),
-		common.PrettyDuration(s.TotalTime), s.StateReadCacheStats)
-
-	log.Info("")
+		common.PrettyDuration(s.TotalTime), s.StateReadCacheStats, s.StatePrefetchCacheStats)
 	for _, line := range strings.Split(msg, "\n") {
 		log.Info(line)
 	}
-	log.Info("")
 }
