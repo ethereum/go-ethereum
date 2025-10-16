@@ -82,5 +82,5 @@ var (
 		AddFork("CAPELLA", 0, common.FromHex("0x40000910")).
 		AddFork("DENEB", 0, common.FromHex("0x50000910")).
 		AddFork("ELECTRA", 2048, common.FromHex("0x60000910")).
-		AddFork("FULU", 18446744073709551615, common.FromHex("0x70000910"))
+		AddFork("FULU", 50688, common.FromHex("0x70000910"))
 )
