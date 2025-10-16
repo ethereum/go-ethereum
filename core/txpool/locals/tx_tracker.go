@@ -190,7 +190,7 @@ func (tracker *TxTracker) loop() {
 		if err := tracker.journal.rotate(make(map[common.Address]types.Transactions)); err != nil {
 			log.Warn("Failed to initialize journal writer", "err", err)
 		}
-		
+
 		defer tracker.journal.close()
 	}
 	var (
