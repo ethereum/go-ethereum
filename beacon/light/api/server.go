@@ -50,6 +50,7 @@ type BeaconApiServer struct {
 
 	lastEventId    uint64
 	lastHeadInfo   types.HeadInfo
+	lastHeader     types.Header
 	lastOptimistic types.OptimisticUpdate
 	lastFinality   types.FinalityUpdate
 }
@@ -115,8 +116,9 @@ func (s *BeaconApiServer) RestAPI(server *restapi.Server) restapi.API {
 
 func (s *BeaconApiServer) Process(requester request.Requester, events []request.Event) {
 	if head := s.headTracker.PrefetchHead(); head != s.lastHeadInfo {
-		if _, ok := s.recentBlocks.Get(head.BlockRoot); ok && head != s.lastHeadInfo {
+		if _ /*block*/, ok := s.recentBlocks.Get(head.BlockRoot); ok && head != s.lastHeadInfo {
 			s.lastHeadInfo = head
+			//TODO s.lastHeader = block.Header()
 			s.publishHeadEvent(head)
 		}
 	}
