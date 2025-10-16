@@ -5,6 +5,7 @@ b49f6cb0f - Wanwiset Peerapatanapokin - consensus: verify header hash is same as
 e0c987f45 - Wanwiset Peerapatanapokin - impose size limit for DecodeBytesExtraFields (#1637)
 53f6a8d6d - Wanwiset Peerapatanapokin - consensus: optimize CompareSignersLists
 6abb4f88d - Wanwiset Peerapatanapokin - consensus: Verify gaslimit bounds when accepting blocks (#1619)
+
 c95d25805 - Wanwiset Peerapatanapokin - separate fullVerifies array into v1fullVerifies and v2fullVerifies (#1618)
 25a70e877 - Wanwiset Peerapatanapokin - consensus: skip gas limit verification for genesis block (#1646)
 da92ad7cc - Wanwiset Peerapatanapokin - update package version: (#1612)

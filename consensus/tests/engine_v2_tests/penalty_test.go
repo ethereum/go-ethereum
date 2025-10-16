@@ -48,7 +48,7 @@ func TestHookPenaltyV2Mining(t *testing.T) {
 	headerMining := &types.Header{
 		ParentHash: header2100.ParentHash,
 		Number:     header2100.Number,
-		GasLimit:   params.TargetGasLimit,
+		GasLimit:   params.V2TestsGasLimit,
 		Time:       header2100.Time,
 		Coinbase:   acc1Addr,
 	}

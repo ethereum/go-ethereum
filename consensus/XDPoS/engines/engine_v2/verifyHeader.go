@@ -66,8 +66,7 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	}
 
 	// Ensure gas limit is consistent with parent
-	err := misc.VerifyGaslimit(parent.GasLimit, header.GasLimit)
-	if err != nil && parent.Number.Uint64() != 0 { // skip genesis block
+	if err := misc.VerifyGaslimit(parent.GasLimit, header.GasLimit); err != nil {
 		return err
 	}
 	// Ensure gas used is less than or equal to gas limit
@@ -112,10 +111,6 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	// Ensure that the block doesn't contain any uncles which are meaningless in XDPoS_v1
 	if header.UncleHash != utils.UncleHash {
 		return utils.ErrInvalidUncleHash
-	}
-	// Verify that the gas limit remains within allowed bounds
-	if err := misc.VerifyGaslimit(parent.GasLimit, header.GasLimit); err != nil {
-		return err
 	}
 	// Verify the header's EIP-1559 attributes.
 	if err := eip1559.VerifyEip1559Header(chain.Config(), header); err != nil {
