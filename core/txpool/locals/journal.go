@@ -59,7 +59,7 @@ func newTxJournal(path string) *journal {
 // the specified pool.
 func (journal *journal) load(add func([]*types.Transaction) []error) error {
 	originalWriter := journal.writer
-	
+
 	// Open the journal for loading any past transactions
 	input, err := os.Open(journal.path)
 	if errors.Is(err, fs.ErrNotExist) {
