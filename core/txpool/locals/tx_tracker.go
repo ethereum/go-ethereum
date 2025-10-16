@@ -181,14 +181,14 @@ func (tracker *TxTracker) loop() {
 	defer tracker.wg.Done()
 
 	if tracker.journal != nil {
-		log.Info("Initializing journal writer")
-		if err := tracker.journal.rotate(make(map[common.Address]types.Transactions)); err != nil {
-			log.Warn("Failed to initialize journal writer", "err", err)
-		}
 		tracker.journal.load(func(transactions []*types.Transaction) []error {
 			tracker.TrackAll(transactions)
 			return nil
 		})
+		log.Info("Initializing journal writer after loading transactions")
+		if err := tracker.journal.setWriter(); err != nil {
+			log.Warn("Failed to initialize journal writer", "err", err)
+		}
 		defer tracker.journal.close()
 	}
 	var (
