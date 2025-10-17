@@ -183,12 +183,6 @@ type (
 	// StorageChangeHook is called when the storage of an account changes.
 	StorageChangeHook = func(addr common.Address, slot common.Hash, prev, new common.Hash)
 
-	// ColdStorageReadHook is called before a previously-unread storage slot is read.
-	ColdStorageReadHook = func(common.Address, common.Hash)
-
-	// ColdAccountReadHook is called before an previously-unread account is read.
-	ColdAccountReadHook = func(address common.Address)
-
 	SelfDestructHook = func(address common.Address)
 
 	// LogHook is called when a log is emitted.

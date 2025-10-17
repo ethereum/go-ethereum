@@ -77,7 +77,6 @@ type TxContext struct {
 	BlobHashes   []common.Hash       // Provides information for BLOBHASH
 	BlobFeeCap   *big.Int            // Is used to zero the blobbasefee if NoBaseFee is set
 	AccessEvents *state.AccessEvents // Capture all state accesses for this tx
-	Index        uint64              // the index of the transaction within the block being executed (0 if executing a standalone call)
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
