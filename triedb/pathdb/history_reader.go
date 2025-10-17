@@ -144,25 +144,17 @@ func (r *historyReader) readAccountMetadata(address common.Address, historyID ui
 // readStorageMetadata resolves the storage slot metadata within the specified
 // state history.
 func (r *historyReader) readStorageMetadata(storageKey common.Hash, storageHash common.Hash, historyID uint64, slotOffset, slotNumber int) ([]byte, error) {
-	// TODO(rj493456442) optimize it with partial read
-	blob := rawdb.ReadStateStorageIndex(r.freezer, historyID)
-	if len(blob) == 0 {
-		return nil, fmt.Errorf("storage index is truncated, historyID: %d", historyID)
+	data, err := rawdb.ReadStateStorageIndex(r.freezer, historyID, slotIndexSize*slotOffset, slotIndexSize*slotNumber)
+	if err != nil {
+		msg := fmt.Sprintf("id: %d, slot-offset: %d, slot-length: %d", historyID, slotOffset, slotNumber)
+		return nil, fmt.Errorf("storage indices corrupted, %s, %w", msg, err)
 	}
-	if len(blob)%slotIndexSize != 0 {
-		return nil, fmt.Errorf("storage indices is corrupted, historyID: %d, size: %d", historyID, len(blob))
-	}
-	if slotIndexSize*(slotOffset+slotNumber) > len(blob) {
-		return nil, fmt.Errorf("storage indices is truncated, historyID: %d, size: %d, offset: %d, length: %d", historyID, len(blob), slotOffset, slotNumber)
-	}
-	subSlice := blob[slotIndexSize*slotOffset : slotIndexSize*(slotOffset+slotNumber)]
-
 	// TODO(rj493456442) get rid of the metadata resolution
 	var (
 		m      meta
 		target common.Hash
 	)
-	blob = rawdb.ReadStateHistoryMeta(r.freezer, historyID)
+	blob := rawdb.ReadStateHistoryMeta(r.freezer, historyID)
 	if err := m.decode(blob); err != nil {
 		return nil, err
 	}
@@ -172,17 +164,17 @@ func (r *historyReader) readStorageMetadata(storageKey common.Hash, storageHash 
 		target = storageKey
 	}
 	pos := sort.Search(slotNumber, func(i int) bool {
-		slotID := subSlice[slotIndexSize*i : slotIndexSize*i+common.HashLength]
+		slotID := data[slotIndexSize*i : slotIndexSize*i+common.HashLength]
 		return bytes.Compare(slotID, target.Bytes()) >= 0
 	})
 	if pos == slotNumber {
 		return nil, fmt.Errorf("storage metadata is not found, slot key: %#x, historyID: %d", storageKey, historyID)
 	}
 	offset := slotIndexSize * pos
-	if target != common.BytesToHash(subSlice[offset:offset+common.HashLength]) {
+	if target != common.BytesToHash(data[offset:offset+common.HashLength]) {
 		return nil, fmt.Errorf("storage metadata is not found, slot key: %#x, historyID: %d", storageKey, historyID)
 	}
-	return subSlice[offset : slotIndexSize*(pos+1)], nil
+	return data[offset : slotIndexSize*(pos+1)], nil
 }
 
 // readAccount retrieves the account data from the specified state history.
@@ -194,12 +186,11 @@ func (r *historyReader) readAccount(address common.Address, historyID uint64) ([
 	length := int(metadata[common.AddressLength])                                                     // one byte for account data length
 	offset := int(binary.BigEndian.Uint32(metadata[common.AddressLength+1 : common.AddressLength+5])) // four bytes for the account data offset
 
-	// TODO(rj493456442) optimize it with partial read
-	data := rawdb.ReadStateAccountHistory(r.freezer, historyID)
-	if len(data) < length+offset {
+	data, err := rawdb.ReadStateAccountHistory(r.freezer, historyID, offset, length)
+	if err != nil {
 		return nil, fmt.Errorf("account data is truncated, address: %#x, historyID: %d, size: %d, offset: %d, len: %d", address, historyID, len(data), offset, length)
 	}
-	return data[offset : offset+length], nil
+	return data, nil
 }
 
 // readStorage retrieves the storage slot data from the specified state history.
@@ -222,12 +213,11 @@ func (r *historyReader) readStorage(address common.Address, storageKey common.Ha
 	length := int(slotMetadata[common.HashLength])                                                  // one byte for slot data length
 	offset := int(binary.BigEndian.Uint32(slotMetadata[common.HashLength+1 : common.HashLength+5])) // four bytes for slot data offset
 
-	// TODO(rj493456442) optimize it with partial read
-	data := rawdb.ReadStateStorageHistory(r.freezer, historyID)
-	if len(data) < offset+length {
+	data, err := rawdb.ReadStateStorageHistory(r.freezer, historyID, offset, length)
+	if err != nil {
 		return nil, fmt.Errorf("storage data is truncated, address: %#x, key: %#x, historyID: %d, size: %d, offset: %d, len: %d", address, storageKey, historyID, len(data), offset, length)
 	}
-	return data[offset : offset+length], nil
+	return data, nil
 }
 
 // read retrieves the state element data associated with the stateID.

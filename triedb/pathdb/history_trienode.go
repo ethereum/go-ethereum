@@ -161,7 +161,7 @@ func newTrienodeHistory(root common.Hash, parent common.Hash, block uint64, node
 // sharedLen returns the length of the common prefix shared by a and b.
 func sharedLen(a, b []byte) int {
 	n := min(len(a), len(b))
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if a[i] != b[i] {
 			return i
 		}
@@ -295,7 +295,7 @@ func decodeHeader(data []byte) (*trienodeMetadata, []common.Hash, []uint32, []ui
 		keyOffsets = make([]uint32, 0, count)
 		valOffsets = make([]uint32, 0, count)
 	)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		n := trienodeMetadataSize + trienodeTrieHeaderSize*i
 		owner := common.BytesToHash(data[n : n+common.HashLength])
 		if i != 0 && bytes.Compare(owner.Bytes(), owners[i-1].Bytes()) <= 0 {
@@ -348,7 +348,7 @@ func decodeSingle(keySection []byte, onValue func([]byte, int, int) error) ([]st
 	if len(keySection) < int(8*nRestarts)+4 {
 		return nil, fmt.Errorf("key section too short, restarts: %d, size: %d", nRestarts, len(keySection))
 	}
-	for i := 0; i < int(nRestarts); i++ {
+	for i := range int(nRestarts) {
 		o := len(keySection) - 4 - (int(nRestarts)-i)*8
 		keyOffset := binary.BigEndian.Uint32(keySection[o : o+4])
 		if i != 0 && keyOffset <= keyOffsets[i-1] {
@@ -469,7 +469,7 @@ func (h *trienodeHistory) decode(header []byte, keySection []byte, valueSection 
 	h.nodeList = make(map[common.Hash][]string)
 	h.nodes = make(map[common.Hash]map[string][]byte)
 
-	for i := 0; i < len(owners); i++ {
+	for i := range len(owners) {
 		// Resolve the boundary of key section
 		keyStart := keyOffsets[i]
 		keyLimit := len(keySection)
@@ -524,7 +524,7 @@ func newSingleTrienodeHistoryReader(id uint64, reader ethdb.AncientReader, keyRa
 	}
 	keyStart := int(keyRange.start)
 	keyLimit := int(keyRange.limit)
-	if keyLimit == math.MaxUint32 {
+	if keyRange.limit == math.MaxUint32 {
 		keyLimit = len(keyData)
 	}
 	if len(keyData) < keyStart || len(keyData) < keyLimit {

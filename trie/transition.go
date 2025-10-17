@@ -211,7 +211,8 @@ func (t *TransitionTrie) UpdateStem(key []byte, values [][]byte) error {
 func (t *TransitionTrie) Copy() *TransitionTrie {
 	return &TransitionTrie{
 		overlay: t.overlay.Copy(),
-		base:    t.base.Copy(),
+		// base in immutable, so there is no need to copy it
+		base:    t.base,
 		storage: t.storage,
 	}
 }
