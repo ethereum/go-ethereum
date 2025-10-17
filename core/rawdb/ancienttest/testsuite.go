@@ -83,7 +83,7 @@ func basicRead(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 		for i := c.start; i < c.limit; i++ {
 			_, err = db.Ancient("a", uint64(i))
 			if err == nil {
-				t.Fatal("Error is expected for non-existent item")
+				t.Fatalf("Expected error for non-existent item at index %d, got nil", i)
 			}
 		}
 	}
@@ -102,7 +102,7 @@ func basicRead(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 	// Test the items in unknown table shouldn't be reachable
 	_, err = db.Ancient("b", uint64(0))
 	if err == nil {
-		t.Fatal("Error is expected for unknown table")
+		t.Fatal("Expected error for unknown table 'b', got nil")
 	}
 }
 
@@ -168,21 +168,21 @@ func batchRead(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 	// Test out-of-range / zero-size retrieval should be rejected
 	_, err := db.AncientRange("a", 0, 1, 0)
 	if err == nil {
-		t.Fatal("Out-of-range retrieval should be rejected")
+		t.Fatal("Expected error for out-of-range retrieval at index 0, got nil")
 	}
 	_, err = db.AncientRange("a", 90, 1, 0)
 	if err == nil {
-		t.Fatal("Out-of-range retrieval should be rejected")
+		t.Fatal("Expected error for out-of-range retrieval at index 90, got nil")
 	}
 	_, err = db.AncientRange("a", 10, 0, 0)
 	if err == nil {
-		t.Fatal("Zero-size retrieval should be rejected")
+		t.Fatal("Expected error for zero-size retrieval, got nil")
 	}
 
 	// Test item in unknown table shouldn't be reachable
 	_, err = db.AncientRange("b", 10, 1, 0)
 	if err == nil {
-		t.Fatal("Item in unknown table shouldn't be found")
+		t.Fatal("Expected error for unknown table 'b' in AncientRange, got nil")
 	}
 }
 
