@@ -9,12 +9,6 @@ import (
 	"math/big"
 )
 
-type accountPrestate struct {
-	balance *uint256.Int
-	nonce   *uint64
-	code    []byte
-}
-
 // BlockAccessListTracer is a tracer which gathers state accesses/mutations
 // from the execution of a block.  It is used for constructing and verifying
 // EIP-7928 block access lists.

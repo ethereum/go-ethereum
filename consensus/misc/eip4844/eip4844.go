@@ -74,7 +74,7 @@ func latestBlobConfig(cfg *params.ChainConfig, time uint64) *BlobConfig {
 	case cfg.IsBPO1(london, time) && s.BPO1 != nil:
 		bc = s.BPO1
 	case cfg.IsAmsterdam(london, time) && s.Amsterdam != nil:
-		bc = s.BPO1
+		bc = s.Amsterdam
 	case cfg.IsOsaka(london, time) && s.Osaka != nil:
 		bc = s.Osaka
 	case cfg.IsPrague(london, time) && s.Prague != nil:
