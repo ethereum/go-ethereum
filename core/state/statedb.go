@@ -1155,6 +1155,7 @@ func (s *StateDB) GetTrie() Trie {
 
 // commit gathers the state mutations accumulated along with the associated
 // trie changes, resetting all internal flags with the new state as the base.
+// Modified to parallelize account trie hashing with storage trie commits.
 func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNumber uint64) (*stateUpdate, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
@@ -1218,13 +1219,23 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 			return nil, err
 		}
 	}
+
+	if s.prefetcher != nil {
+		 // Gather all account addresses with mutations
+		dirtyAccounts := s.getDirtyAccountAddresses()
+		if err := s.prefetcher.PrefetchAccounts(dirtyAccounts); err != nil {
+			log.Warn("Failed to prefetch account trie nodes before parallel hashing", "err", err)
+		}
+	}
+
 	// Handle all state updates afterwards, concurrently to one another to shave
 	// off some milliseconds from the commit operation. Also accumulate the code
 	// writes to run in parallel with the computations.
 	var (
-		start   = time.Now()
-		root    common.Hash
-		workers errgroup.Group
+		start           = time.Now()
+		root            common.Hash
+		workers         errgroup.Group
+		accountTrieHash common.Hash
 	)
 	// Schedule the account trie first since that will be the biggest, so give
 	// it the most time to crunch.
@@ -1246,6 +1257,14 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 		s.AccountCommits = time.Since(start)
 		return nil
 	})
+
+	// Step 2: Launch account trie hashing concurrently (CPU only, no I/O).
+	trieCopy := s.trie
+	workers.Go(func() error {
+		accountTrieHash = trieCopy.Hash()
+		return nil
+	})
+
 	// Schedule each of the storage tries that need to be updated, so they can
 	// run concurrently to one another.
 	//
@@ -1305,9 +1324,13 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 	s.stateObjectsDestruct = make(map[common.Address]*stateObject)
 
 	origin := s.originalRoot
-	s.originalRoot = root
+	if accountTrieHash != (common.Hash{}) {
+		s.originalRoot = accountTrieHash
+	} else {
+		s.originalRoot = root
+	}
 
-	return newStateUpdate(noStorageWiping, origin, root, blockNumber, deletes, updates, nodes), nil
+	return newStateUpdate(noStorageWiping, origin, s.originalRoot, blockNumber, deletes, updates, nodes), nil
 }
 
 // commitAndFlush is a wrapper of commit which also commits the state mutations
@@ -1386,6 +1409,15 @@ func (s *StateDB) CommitWithUpdate(block uint64, deleteEmptyObjects bool, noStor
 		return common.Hash{}, nil, err
 	}
 	return ret.root, ret, nil
+}
+
+// getDirtyAccountAddresses returns the list of addresses of accounts that have pending mutations.
+func (s *StateDB) getDirtyAccountAddresses() []common.Address {
+	addrs := make([]common.Address, 0, len(s.mutations))
+	for addr := range s.mutations {
+		addrs = append(addrs, addr)
+	}
+	return addrs
 }
 
 // Prepare handles the preparatory steps for executing a state transition with.
