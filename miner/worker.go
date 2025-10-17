@@ -162,7 +162,7 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 		work.header.RequestsHash = &reqHash
 	}
 
-	block, err := miner.engine.FinalizeAndAssemble(miner.chain, work.header, work.state, &body, work.receipts)
+	block, err := miner.engine.FinalizeAndAssemble(miner.chain, work.header, work.state, &body, work.receipts, nil)
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}

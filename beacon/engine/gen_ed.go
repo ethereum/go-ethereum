@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 )
 
 var _ = (*executableDataMarshaling)(nil)
@@ -35,7 +34,6 @@ func (e ExecutableData) MarshalJSON() ([]byte, error) {
 		Withdrawals      []*types.Withdrawal     `json:"withdrawals"`
 		BlobGasUsed      *hexutil.Uint64         `json:"blobGasUsed"`
 		ExcessBlobGas    *hexutil.Uint64         `json:"excessBlobGas"`
-		BlockAccessList  *bal.BlockAccessList    `json:"blockAccessList"`
 		ExecutionWitness *types.ExecutionWitness `json:"executionWitness,omitempty"`
 	}
 	var enc ExecutableData
@@ -61,7 +59,6 @@ func (e ExecutableData) MarshalJSON() ([]byte, error) {
 	enc.Withdrawals = e.Withdrawals
 	enc.BlobGasUsed = (*hexutil.Uint64)(e.BlobGasUsed)
 	enc.ExcessBlobGas = (*hexutil.Uint64)(e.ExcessBlobGas)
-	enc.BlockAccessList = e.BlockAccessList
 	enc.ExecutionWitness = e.ExecutionWitness
 	return json.Marshal(&enc)
 }
@@ -86,7 +83,6 @@ func (e *ExecutableData) UnmarshalJSON(input []byte) error {
 		Withdrawals      []*types.Withdrawal     `json:"withdrawals"`
 		BlobGasUsed      *hexutil.Uint64         `json:"blobGasUsed"`
 		ExcessBlobGas    *hexutil.Uint64         `json:"excessBlobGas"`
-		BlockAccessList  *bal.BlockAccessList    `json:"blockAccessList"`
 		ExecutionWitness *types.ExecutionWitness `json:"executionWitness,omitempty"`
 	}
 	var dec ExecutableData
@@ -160,9 +156,6 @@ func (e *ExecutableData) UnmarshalJSON(input []byte) error {
 	}
 	if dec.ExcessBlobGas != nil {
 		e.ExcessBlobGas = (*uint64)(dec.ExcessBlobGas)
-	}
-	if dec.BlockAccessList != nil {
-		e.BlockAccessList = dec.BlockAccessList
 	}
 	if dec.ExecutionWitness != nil {
 		e.ExecutionWitness = dec.ExecutionWitness
