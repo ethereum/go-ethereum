@@ -1675,9 +1675,20 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 		return nil, err
 	}
 
+	// Convert legacy blob transaction proofs.
+	// TODO: remove in go-ethereum v1.17.x
+	if sc := tx.BlobTxSidecar(); sc != nil {
+		exp := api.currentBlobSidecarVersion()
+		if sc.Version == types.BlobSidecarVersion0 && exp == types.BlobSidecarVersion1 {
+			if err := sc.ToV1(); err != nil {
+				return nil, fmt.Errorf("blob sidecar conversion failed: %v", err)
+			}
+			tx = tx.WithBlobTxSidecar(sc)
+		}
+	}
+
 	ch := make(chan core.ChainEvent, 128)
 	sub := api.b.SubscribeChainEvent(ch)
-	subErrCh := sub.Err()
 	defer sub.Unsubscribe()
 
 	hash, err := SubmitTransaction(ctx, api.b, tx)
@@ -1685,10 +1696,11 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 		return nil, err
 	}
 
-	maxTimeout := api.b.RPCTxSyncMaxTimeout()
-	defaultTimeout := api.b.RPCTxSyncDefaultTimeout()
-
-	timeout := defaultTimeout
+	var (
+		maxTimeout     = api.b.RPCTxSyncMaxTimeout()
+		defaultTimeout = api.b.RPCTxSyncDefaultTimeout()
+		timeout        = defaultTimeout
+	)
 	if timeoutMs != nil && *timeoutMs > 0 {
 		req := time.Duration(*timeoutMs) * time.Millisecond
 		if req > maxTimeout {
@@ -1697,7 +1709,6 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 			timeout = req
 		}
 	}
-
 	receiptCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -1706,19 +1717,20 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 		return r, nil
 	}
 
+	// Monitor the receipts
 	for {
 		select {
 		case <-receiptCtx.Done():
 			// If server-side wait window elapsed, return the structured timeout.
 			if errors.Is(receiptCtx.Err(), context.DeadlineExceeded) {
 				return nil, &txSyncTimeoutError{
-					msg:  fmt.Sprintf("The transaction was added to the transaction pool but wasn't processed in %v.", timeout),
+					msg:  fmt.Sprintf("The transaction was added to the transaction pool but wasn't processed in %v", timeout),
 					hash: hash,
 				}
 			}
 			return nil, receiptCtx.Err()
 
-		case err, ok := <-subErrCh:
+		case err, ok := <-sub.Err():
 			if !ok {
 				return nil, errSubClosed
 			}
@@ -1728,8 +1740,7 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 			if !ok {
 				return nil, errSubClosed
 			}
-			rs := ev.Receipts
-			txs := ev.Transactions
+			rs, txs := ev.Receipts, ev.Transactions
 			if len(rs) == 0 || len(rs) != len(txs) {
 				continue
 			}
