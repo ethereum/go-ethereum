@@ -1213,7 +1213,7 @@ func (api *BlockChainAPI) Config(ctx context.Context) (*configResponse, error) {
 		forkid := forkid.NewID(c, types.NewBlockWithHeader(genesis), ^uint64(0), t).Hash
 		return &config{
 			ActivationTime:  activationTime,
-			BlobSchedule:    c.BlobConfig(c.LatestFork(t)),
+			BlobSchedule:    c.BlobConfig(t),
 			ChainId:         (*hexutil.Big)(c.ChainID),
 			ForkId:          forkid[:],
 			Precompiles:     precompiles,
