@@ -80,7 +80,7 @@ func LoadTransitionState(db ethdb.KeyValueReader, root common.Hash, isVerkle boo
 	if len(data) > 0 {
 		var (
 			newts TransitionState
-			buf   = bytes.NewBuffer(data[:])
+			buf   = bytes.NewBuffer(data)
 			dec   = gob.NewDecoder(buf)
 		)
 		// Decode transition state
