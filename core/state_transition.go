@@ -612,7 +612,7 @@ func (st *stateTransition) validateAuthorization(auth types.SetCodeAuth) (author
 	if !skipValidation && nonce+1 < nonce {
 		return authority, ErrAuthorizationNonceOverflow
 	}
-	// Get authority from auth (may recover from signature or use explicit address).
+	// Get authority from auth
 	authority, err = auth.GetAuthority()
 	if err != nil {
 		return authority, fmt.Errorf("%w: %v", ErrAuthorizationInvalidSignature, err)
@@ -623,12 +623,12 @@ func (st *stateTransition) validateAuthorization(auth types.SetCodeAuth) (author
 	//
 	// Note it is added to the access list even if the authorization is invalid.
 	st.state.AddAddressToAccessList(authority)
+	code := st.state.GetCode(authority)
+	if _, ok := types.ParseDelegation(code); len(code) != 0 && !ok {
+		return authority, ErrAuthorizationDestinationHasCode
+	}
 	// Skip state checks during gas estimation
 	if !skipValidation {
-		code := st.state.GetCode(authority)
-		if _, ok := types.ParseDelegation(code); len(code) != 0 && !ok {
-			return authority, ErrAuthorizationDestinationHasCode
-		}
 		if have := st.state.GetNonce(authority); have != nonce {
 			return authority, ErrAuthorizationNonceMismatch
 		}
