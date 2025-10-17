@@ -71,7 +71,6 @@ func (journal *journal) load(add func([]*types.Transaction) []error) error {
 
 	// Temporarily discard any journal additions (don't double add on load)
 	journal.writer = new(devNull)
-	defer func() { journal.writer = nil }()
 
 	// Inject all transactions from the journal into the pool
 	stream := rlp.NewStream(input, 0)
@@ -113,6 +112,14 @@ func (journal *journal) load(add func([]*types.Transaction) []error) error {
 		}
 	}
 	log.Info("Loaded local transaction journal", "transactions", total, "dropped", dropped)
+
+	// Open the journal file for appending
+	// Use O_APPEND to ensure we always write to the end of the file
+	sink, err := os.OpenFile(journal.path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+	journal.writer = sink
 
 	return failure
 }
