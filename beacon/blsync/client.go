@@ -17,8 +17,6 @@
 package blsync
 
 import (
-	"encoding/json"
-
 	"github.com/ethereum/go-ethereum/beacon/light"
 	"github.com/ethereum/go-ethereum/beacon/light/api"
 	"github.com/ethereum/go-ethereum/beacon/light/request"
@@ -26,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/event"
@@ -43,7 +40,6 @@ type Client struct {
 	blockSync    *beaconBlockSync
 	engineRPC    *rpc.Client
 	apiServer    *api.BeaconApiServer
-	recentBlocks *lru.Cache[common.Hash, json.RawMessage]
 
 	chainHeadSub event.Subscription
 	engineClient *engineClient
@@ -76,8 +72,7 @@ func NewClient(config params.ClientConfig, execChain api.ExecChain) *Client {
 	scheduler.RegisterModule(forwardSync, "forwardSync")
 	scheduler.RegisterModule(headSync, "headSync")
 	scheduler.RegisterModule(beaconBlockSync, "beaconBlockSync")
-	recentBlocks := lru.NewCache[common.Hash, json.RawMessage](4)
-	apiServer := api.NewBeaconApiServer(scheduler, checkpointStore, committeeChain, headTracker, recentBlocks, execChain)
+	apiServer := api.NewBeaconApiServer(scheduler, checkpointStore, committeeChain, headTracker, beaconBlockSync.getBlock, execChain)
 
 	return &Client{
 		scheduler:    scheduler,
@@ -86,7 +81,6 @@ func NewClient(config params.ClientConfig, execChain api.ExecChain) *Client {
 		config:       &config,
 		blockSync:    beaconBlockSync,
 		apiServer:    apiServer,
-		recentBlocks: recentBlocks,
 	}
 }
 
@@ -105,7 +99,7 @@ func (c *Client) Start() error {
 
 	c.scheduler.Start()
 	for _, url := range c.urls {
-		beaconApi := api.NewBeaconApiClient(url, c.customHeader, c.recentBlocks)
+		beaconApi := api.NewBeaconApiClient(url, c.customHeader)
 		c.scheduler.RegisterServer(request.NewServer(api.NewSyncServer(beaconApi), &mclock.System{}))
 	}
 	return nil

@@ -43,14 +43,13 @@ type BeaconApiServer struct {
 	checkpointStore *light.CheckpointStore
 	committeeChain  *light.CommitteeChain
 	headTracker     *light.HeadTracker
-	recentBlocks    *lru.Cache[common.Hash, json.RawMessage] // beacon block root -> JSON
-	execBlocks      *lru.Cache[common.Hash, struct{}]        // execution block root -> processed flag
+	getBeaconBlock  func(common.Hash) *types.BeaconBlock
+	execBlocks      *lru.Cache[common.Hash, struct{}] // execution block root -> processed flag
 	eventServer     *eventsource.Server
 	closeCh         chan struct{}
 
 	lastEventId    uint64
 	lastHeadInfo   types.HeadInfo
-	lastHeader     types.Header
 	lastOptimistic types.OptimisticUpdate
 	lastFinality   types.FinalityUpdate
 }
@@ -64,7 +63,7 @@ func NewBeaconApiServer(
 	checkpointStore *light.CheckpointStore,
 	committeeChain *light.CommitteeChain,
 	headTracker *light.HeadTracker,
-	recentBlocks *lru.Cache[common.Hash, json.RawMessage],
+	getBeaconBlock func(common.Hash) *types.BeaconBlock,
 	execChain ExecChain) *BeaconApiServer {
 
 	eventServer := eventsource.NewServer()
@@ -74,7 +73,7 @@ func NewBeaconApiServer(
 		checkpointStore: checkpointStore,
 		committeeChain:  committeeChain,
 		headTracker:     headTracker,
-		recentBlocks:    recentBlocks,
+		getBeaconBlock:  getBeaconBlock,
 		eventServer:     eventServer,
 		closeCh:         make(chan struct{}),
 	}
@@ -116,9 +115,8 @@ func (s *BeaconApiServer) RestAPI(server *restapi.Server) restapi.API {
 
 func (s *BeaconApiServer) Process(requester request.Requester, events []request.Event) {
 	if head := s.headTracker.PrefetchHead(); head != s.lastHeadInfo {
-		if _ /*block*/, ok := s.recentBlocks.Get(head.BlockRoot); ok && head != s.lastHeadInfo {
+		if head != s.lastHeadInfo && s.getBeaconBlock(head.BlockRoot) != nil {
 			s.lastHeadInfo = head
-			//TODO s.lastHeader = block.Header()
 			s.publishHeadEvent(head)
 		}
 	}
@@ -133,7 +131,7 @@ func (s *BeaconApiServer) Process(requester request.Requester, events []request.
 }
 
 func (s *BeaconApiServer) canPublish(header types.HeaderWithExecProof) bool {
-	if _, ok := s.recentBlocks.Get(header.Hash()); !ok {
+	if s.getBeaconBlock(header.Hash()) == nil {
 		return false
 	}
 	if s.execBlocks != nil {
@@ -227,9 +225,9 @@ func (s *BeaconApiServer) handleBlocks(ctx context.Context, values url.Values, v
 	}
 	var blockHash common.Hash
 	copy(blockHash[:], hex)
-	blockJson, ok := s.recentBlocks.Get(blockHash)
-	if !ok {
+	block := s.getBeaconBlock(blockHash)
+	if block == nil {
 		return nil, "unknown beacon block", http.StatusNotFound
 	}
-	return blockJson, "", 0
+	return block, "", 0
 }

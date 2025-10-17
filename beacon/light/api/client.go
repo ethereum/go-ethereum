@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -47,17 +46,15 @@ type BeaconApiClient struct {
 	url           string
 	client        fetcher
 	customHeaders map[string]string
-	recentBlocks  *lru.Cache[common.Hash, json.RawMessage]
 }
 
-func NewBeaconApiClient(url string, customHeaders map[string]string, recentBlocks *lru.Cache[common.Hash, json.RawMessage]) *BeaconApiClient {
+func NewBeaconApiClient(url string, customHeaders map[string]string) *BeaconApiClient {
 	return &BeaconApiClient{
 		url: url,
 		client: &http.Client{
 			Timeout: time.Second * 10,
 		},
 		customHeaders: customHeaders,
-		recentBlocks:  recentBlocks,
 	}
 }
 
@@ -242,9 +239,6 @@ func (api *BeaconApiClient) GetBeaconBlock(blockRoot common.Hash) (*types.Beacon
 	computedRoot := block.Root()
 	if computedRoot != blockRoot {
 		return nil, fmt.Errorf("Beacon block root hash mismatch (expected: %x, got: %x)", blockRoot, computedRoot)
-	}
-	if api.recentBlocks != nil {
-		api.recentBlocks.Add(blockRoot, resp)
 	}
 	return block, nil
 }
