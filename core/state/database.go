@@ -160,21 +160,17 @@ type CachingDB struct {
 	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
 	codeSizeCache *lru.Cache[common.Hash, int]
 	pointCache    *utils.PointCache
-
-	// Transition-specific fields
-	TransitionStatePerRoot *lru.Cache[common.Hash, *overlay.TransitionState]
 }
 
 // NewDatabase creates a state database with the provided data sources.
 func NewDatabase(triedb *triedb.Database, snap *snapshot.Tree) *CachingDB {
 	return &CachingDB{
-		disk:                   triedb.Disk(),
-		triedb:                 triedb,
-		snap:                   snap,
-		codeCache:              lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
-		codeSizeCache:          lru.NewCache[common.Hash, int](codeSizeCacheSize),
-		pointCache:             utils.NewPointCache(pointCacheSize),
-		TransitionStatePerRoot: lru.NewCache[common.Hash, *overlay.TransitionState](1000),
+		disk:          triedb.Disk(),
+		triedb:        triedb,
+		snap:          snap,
+		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
+		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
+		pointCache:    utils.NewPointCache(pointCacheSize),
 	}
 }
 
