@@ -30,14 +30,13 @@ import (
 // ExecuteStats includes all the statistics of a block execution in details.
 type ExecuteStats struct {
 	// State read times
-	AccountReads      time.Duration // Time spent on the account reads
-	StorageReads      time.Duration // Time spent on the storage reads
-	AccountHashes     time.Duration // Time spent on the account trie hash
-	AccountUpdates    time.Duration // Time spent on the account trie update
-	AccountUpdateWait time.Duration // Time spent on waiting the account trie from prefetching
-	AccountCommits    time.Duration // Time spent on the account trie commit
-	StorageUpdates    time.Duration // Time spent on the storage trie update
-	StorageCommits    time.Duration // Time spent on the storage trie commit
+	AccountReads   time.Duration // Time spent on the account reads
+	StorageReads   time.Duration // Time spent on the storage reads
+	AccountHashes  time.Duration // Time spent on the account trie hash
+	AccountUpdates time.Duration // Time spent on the account trie update
+	AccountCommits time.Duration // Time spent on the account trie commit
+	StorageUpdates time.Duration // Time spent on the storage trie update
+	StorageCommits time.Duration // Time spent on the storage trie commit
 
 	AccountLoaded  int // Number of accounts loaded
 	AccountUpdated int // Number of accounts updated
@@ -115,7 +114,7 @@ EVM execution: %v
 Validation: %v
 Account read: %v(%d)
 Storage read: %v(%d)
-Account hash: %v(wait=%v)
+Account hash: %v
 Storage hash: %v
 DB commit: %v
 Block write: %v
@@ -127,7 +126,7 @@ Total: %v
 		common.PrettyDuration(s.Execution), common.PrettyDuration(s.Validation+s.CrossValidation),
 		common.PrettyDuration(s.AccountReads), s.AccountLoaded,
 		common.PrettyDuration(s.StorageReads), s.StorageLoaded,
-		common.PrettyDuration(s.AccountHashes+s.AccountCommits+s.AccountUpdates), common.PrettyDuration(s.AccountUpdateWait),
+		common.PrettyDuration(s.AccountHashes+s.AccountCommits+s.AccountUpdates),
 		common.PrettyDuration(s.StorageCommits+s.StorageUpdates),
 		common.PrettyDuration(s.TrieDBCommit+s.SnapshotCommit), common.PrettyDuration(s.BlockWrite),
 		common.PrettyDuration(s.TotalTime), s.StateReadCacheStats)
