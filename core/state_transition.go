@@ -19,9 +19,6 @@ package core
 import (
 	"bytes"
 	"fmt"
-	"math"
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -29,6 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+	"math"
+	"math/big"
 )
 
 // ExecutionResult includes all output after executing given evm
@@ -617,16 +616,22 @@ func (st *stateTransition) applyAuthorization(auth *types.SetCodeAuthorization) 
 		st.state.AddRefund(params.CallNewAccountGas - params.TxAuthTupleGas)
 	}
 
+	prevDelegation, isDelegated := types.ParseDelegation(st.state.GetCode(authority))
+
 	// Update nonce and account code.
 	st.state.SetNonce(authority, auth.Nonce+1, tracing.NonceChangeAuthorization)
 	if auth.Address == (common.Address{}) {
 		// Delegation to zero address means clear.
-		st.state.SetCode(authority, nil, tracing.CodeChangeAuthorizationClear)
+		if isDelegated {
+			st.state.SetCode(authority, nil, tracing.CodeChangeAuthorizationClear)
+		}
 		return nil
 	}
 
-	// Otherwise install delegation to auth.Address.
-	st.state.SetCode(authority, types.AddressToDelegation(auth.Address), tracing.CodeChangeAuthorization)
+	// install delegation to auth.Address if the delegation changed
+	if !isDelegated || auth.Address != prevDelegation {
+		st.state.SetCode(authority, types.AddressToDelegation(auth.Address), tracing.CodeChangeAuthorization)
+	}
 
 	return nil
 }

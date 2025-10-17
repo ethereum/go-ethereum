@@ -93,6 +93,10 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
+	if hooks := cfg.Tracer; hooks != nil {
+		hooks.OnPreTxExecutionDone()
+	}
+
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
@@ -108,6 +112,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
+
 	// Read requests if Prague is enabled.
 	var requests [][]byte
 	if config.IsPrague(block.Number(), block.Time()) {
@@ -128,6 +133,10 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.chain.Engine().Finalize(p.chain, header, tracingStateDB, block.Body())
+
+	if hooks := cfg.Tracer; hooks != nil {
+		hooks.OnBlockFinalization()
+	}
 
 	return &ProcessResult{
 		Receipts: receipts,
@@ -213,7 +222,8 @@ func ApplyTransaction(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *
 		return nil, err
 	}
 	// Create a new context to be used in the EVM environment
-	return ApplyTransactionWithEVM(msg, gp, statedb, header.Number, header.Hash(), header.Time, tx, usedGas, evm)
+	receipts, err := ApplyTransactionWithEVM(msg, gp, statedb, header.Number, header.Hash(), header.Time, tx, usedGas, evm)
+	return receipts, err
 }
 
 // ProcessBeaconBlockRoot applies the EIP-4788 system call to the beacon block root

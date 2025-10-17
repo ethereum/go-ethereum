@@ -196,6 +196,11 @@ type BlockChainConfig struct {
 	// If the value is -1, indexing is disabled.
 	TxLookupLimit int64
 
+	// If EnableBALForTesting is enabled, block access lists will be created
+	// from block execution and embedded in the body.  The block access list
+	// hash will not be set in the header.
+	EnableBALForTesting bool
+
 	// StateSizeTracking indicates whether the state size tracking is enabled.
 	StateSizeTracking bool
 }
@@ -1911,7 +1916,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		}
 		// The traced section of block import.
 		start := time.Now()
-		res, err := bc.ProcessBlock(parent.Root, block, setHead, makeWitness && len(chain) == 1)
+		enableBAL := (bc.cfg.EnableBALForTesting && bc.chainConfig.IsCancun(block.Number(), block.Time())) || bc.chainConfig.IsAmsterdam(block.Number(), block.Time())
+		blockHasAccessList := block.Body().AccessList != nil
+		constructBAL := enableBAL && !blockHasAccessList
+
+		res, err := bc.ProcessBlock(parent.Root, block, setHead, makeWitness && len(chain) == 1, constructBAL, false)
 		if err != nil {
 			return nil, it.index, err
 		}
@@ -1983,7 +1992,7 @@ func (bpr *blockProcessingResult) Witness() *stateless.Witness {
 
 // ProcessBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
-func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, setHead bool, makeWitness bool) (_ *blockProcessingResult, blockEndErr error) {
+func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, setHead bool, makeWitness bool, constructBALForTesting bool, validateBAL bool) (_ *blockProcessingResult, blockEndErr error) {
 	var (
 		err       error
 		startTime = time.Now()
@@ -2079,6 +2088,14 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 		}()
 	}
 
+	var balTracer *BlockAccessListTracer
+	// Process block using the parent state as reference point
+	if constructBALForTesting {
+		balTracer, bc.cfg.VmConfig.Tracer = NewBlockAccessListTracer()
+		defer func() {
+			bc.cfg.VmConfig.Tracer = nil
+		}()
+	}
 	// Process block using the parent state as reference point
 	pstart := time.Now()
 	res, err := bc.processor.Process(block, statedb, bc.cfg.VmConfig)
@@ -2088,10 +2105,23 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	}
 	ptime := time.Since(pstart)
 
+	if constructBALForTesting {
+		balTracer.OnBlockFinalization()
+	}
+
 	vstart := time.Now()
 	if err := bc.validator.ValidateState(block, statedb, res, false); err != nil {
 		bc.reportBlock(block, res, err)
 		return nil, err
+	}
+	if constructBALForTesting {
+		// very ugly... deep-copy the block body before setting the block access
+		// list on it to prevent mutating the block instance passed by the caller.
+		existingBody := block.Body()
+		block = block.WithBody(*existingBody)
+		existingBody = block.Body()
+		existingBody.AccessList = balTracer.AccessList().ToEncodingObj()
+		block = block.WithBody(*existingBody)
 	}
 	vtime := time.Since(vstart)
 
