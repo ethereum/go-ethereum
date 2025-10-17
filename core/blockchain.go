@@ -2149,6 +2149,10 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 		// Process block using the parent state as reference point
 		if constructBALForTesting {
 			balTracer, bc.cfg.VmConfig.Tracer = NewBlockAccessListTracer()
+			defer func() {
+				bc.cfg.VmConfig.Tracer = nil
+			}()
+
 		}
 		// Process block using the parent state as reference point
 		pstart := time.Now()

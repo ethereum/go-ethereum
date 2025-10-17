@@ -118,7 +118,6 @@ type StateDB struct {
 	// The tx context and all occurred logs in the scope of transaction.
 	thash   common.Hash
 	txIndex int
-	sender  common.Address
 
 	// block access list modifications will be recorded with this index.
 	// 0 - state access before transaction execution
@@ -837,9 +836,6 @@ func (s *StateDB) GetRefund() uint64 {
 // Finalise finalises the state by removing the destructed objects and clears
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
-//
-// If EnableStateDiffRecording has been called, it returns a state diff containing
-// the state which was mutated since the previous invocation of Finalise. Otherwise, nil.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 	addressesToPrefetch := make([]common.Address, 0, len(s.journal.dirties))
 	for addr := range s.journal.dirties {
@@ -865,7 +861,8 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 		} else {
 			obj.finalise()
 			s.markUpdate(addr)
-		} // At this point, also ship the address off to the precacher. The precacher
+		}
+		// At this point, also ship the address off to the precacher. The precacher
 		// will start loading tries, and when the change is eventually committed,
 		// the commit-phase will be a lot faster
 		addressesToPrefetch = append(addressesToPrefetch, addr) // Copy needed for closure
@@ -875,7 +872,6 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			log.Error("Failed to prefetch addresses", "addresses", len(addressesToPrefetch), "err", err)
 		}
 	}
-
 	// Invalidate journal because reverting across transactions is not allowed.
 	s.clearJournalAndRefund()
 }
@@ -884,7 +880,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
 func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
-	// FinaliseIdxChanges all the dirty storage states and write them into the tries
+	// Finalise all the dirty storage states and write them into the tries
 	s.Finalise(deleteEmptyObjects)
 
 	// Initialize the trie if it's not constructed yet. If the prefetch
@@ -1096,11 +1092,6 @@ func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
 // is being used in the BAL construction path.
 func (s *StateDB) SetAccessListIndex(idx int) {
 	s.balIndex = idx
-}
-
-// SetTxSender sets the sender of the currently-executing transaction.
-func (s *StateDB) SetTxSender(sender common.Address) {
-	s.sender = sender
 }
 
 func (s *StateDB) clearJournalAndRefund() {
