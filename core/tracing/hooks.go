@@ -375,6 +375,9 @@ const (
 	// NonceChangeRevert is emitted when the nonce is reverted back to a previous value due to call failure.
 	// It is only emitted when the tracer has opted in to use the journaling wrapper (WrapWithJournal).
 	NonceChangeRevert NonceChangeReason = 6
+
+	// NonceChangeSelfdestruct is emitted when the nonce is reset to zero due to a self-destruct
+	NonceChangeSelfdestruct NonceChangeReason = 7
 )
 
 // CodeChangeReason is used to indicate the reason for a code change.
