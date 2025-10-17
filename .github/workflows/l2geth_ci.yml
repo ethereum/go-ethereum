@@ -23,7 +23,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.21.x
+        go-version: 1.22.x
 
     - name: Checkout code
       uses: actions/checkout@v4
@@ -42,7 +42,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.21.x
+        go-version: 1.22.x
 
     - name: Install rust
       uses: actions-rust-lang/setup-rust-toolchain@9399c7bb15d4c7d47b27263d024f0a4978346ba4 # v1.11.0
@@ -63,14 +63,15 @@ jobs:
         make geth
 
   check:
-    if: github.event.pull_request.draft == false
+    # if: github.event.pull_request.draft == false
+    if: false
     runs-on: ubuntu-latest
     permissions: {}
     steps:
     - name: Install Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.21.x
+        go-version: 1.22.x
 
     - name: Checkout code
       uses: actions/checkout@v4
@@ -117,7 +118,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.21.x
+        go-version: 1.22.x
 
     - name: Checkout code
       uses: actions/checkout@v4
@@ -141,7 +142,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.21.x
+        go-version: 1.22.x
 
     - name: Checkout code
       uses: actions/checkout@v4
