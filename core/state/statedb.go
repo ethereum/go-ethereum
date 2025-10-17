@@ -1221,7 +1221,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 	}
 
 	if s.prefetcher != nil {
-		 // Gather all account addresses with mutations
+		// Gather all account addresses with mutations
 		dirtyAccounts := s.getDirtyAccountAddresses()
 		if err := s.prefetcher.PrefetchAccounts(dirtyAccounts); err != nil {
 			log.Warn("Failed to prefetch account trie nodes before parallel hashing", "err", err)

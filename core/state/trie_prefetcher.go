@@ -220,11 +220,11 @@ func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
 
 // PrefetchAccounts triggers prefetching account trie nodes given a list of accounts.
 func (p *triePrefetcher) PrefetchAccounts(accounts []common.Address) error {
-    if p == nil {
-        return nil
-    }
-    // The account trie owner hash is zero (empty) as per convention.
-    return p.prefetch(common.Hash{}, p.root, common.Address{}, accounts, nil, false)
+	if p == nil {
+		return nil
+	}
+	// The account trie owner hash is zero (empty) as per convention.
+	return p.prefetch(common.Hash{}, p.root, common.Address{}, accounts, nil, false)
 }
 
 // subfetcher is a trie fetcher goroutine responsible for pulling entries for a
