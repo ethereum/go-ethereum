@@ -2158,7 +2158,6 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	stats.AccountReads = statedb.AccountReads     // Account reads are complete(in processing)
 	stats.StorageReads = statedb.StorageReads     // Storage reads are complete(in processing)
 	stats.AccountUpdates = statedb.AccountUpdates // Account updates are complete(in validation)
-	stats.AccountUpdateWait = statedb.AccountUpdateWait
 	stats.StorageUpdates = statedb.StorageUpdates // Storage updates are complete(in validation)
 	stats.AccountHashes = statedb.AccountHashes   // Account hashes are complete(in validation)
 
