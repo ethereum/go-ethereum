@@ -470,25 +470,32 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 
 // create creates a new contract using code as deployment code.
 func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *uint256.Int, address common.Address, typ OpCode) (ret []byte, createAddress common.Address, leftOverGas uint64, err error) {
+	// Depth check execution. Fail if we're trying to execute above the
+	// limit.
+	var nonce uint64
+	if evm.depth > int(params.CallCreateDepth) {
+		err = ErrDepth
+	} else if !evm.Context.CanTransfer(evm.StateDB, caller, value) {
+		err = ErrInsufficientBalance
+	} else {
+		nonce = evm.StateDB.GetNonce(caller)
+		if nonce+1 < nonce {
+			err = ErrNonceUintOverflow
+		}
+	}
+
+	if err == nil {
+		evm.StateDB.SetNonce(caller, nonce+1, tracing.NonceChangeContractCreator)
+	}
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth, typ, caller, address, code, gas, value.ToBig())
 		defer func(startGas uint64) {
 			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
 		}(gas)
 	}
-	// Depth check execution. Fail if we're trying to execute above the
-	// limit.
-	if evm.depth > int(params.CallCreateDepth) {
-		return nil, common.Address{}, gas, ErrDepth
+	if err != nil {
+		return nil, common.Address{}, gas, err
 	}
-	if !evm.Context.CanTransfer(evm.StateDB, caller, value) {
-		return nil, common.Address{}, gas, ErrInsufficientBalance
-	}
-	nonce := evm.StateDB.GetNonce(caller)
-	if nonce+1 < nonce {
-		return nil, common.Address{}, gas, ErrNonceUintOverflow
-	}
-	evm.StateDB.SetNonce(caller, nonce+1, tracing.NonceChangeContractCreator)
 
 	// Charge the contract creation init gas in verkle mode
 	if evm.chainRules.IsEIP4762 {
@@ -514,6 +521,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 	// - the storage is non-empty
 	contractHash := evm.StateDB.GetCodeHash(address)
 	storageRoot := evm.StateDB.GetStorageRoot(address)
+
 	if evm.StateDB.GetNonce(address) != 0 ||
 		(contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) || // non-empty code
 		(storageRoot != (common.Hash{}) && storageRoot != types.EmptyRootHash) { // non-empty storage
@@ -601,7 +609,9 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 		}
 	}
 
-	evm.StateDB.SetCode(address, ret, tracing.CodeChangeContractCreation)
+	if len(ret) > 0 {
+		evm.StateDB.SetCode(address, ret, tracing.CodeChangeContractCreation)
+	}
 	return ret, nil
 }
 

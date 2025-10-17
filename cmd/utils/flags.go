@@ -1009,6 +1009,14 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+	// Block Access List flags
+
+	ExperimentalBALFlag = &cli.BoolFlag{
+		Name:     "experimental.bal",
+		Usage:    "Enable generation of EIP-7928 block access lists when importing post-Cancun blocks which lack them. When this flag is specified, importing blocks containing access lists triggers validation of their correctness and execution based off them. The header block access list field is not set with blocks created when this flag is specified, nor is it validated when importing blocks that contain access lists.  This is used for development purposes only.  Do not enable it otherwise.",
+		Category: flags.MiscCategory,
+	}
 )
 
 var (
@@ -1917,6 +1925,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.VMTraceJsonConfig = ctx.String(VMTraceJsonConfigFlag.Name)
 		}
 	}
+
+	cfg.ExperimentalBAL = ctx.Bool(ExperimentalBALFlag.Name)
 }
 
 // MakeBeaconLightConfig constructs a beacon light client config based on the
@@ -2319,6 +2329,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	}
 	options.VmConfig = vmcfg
 
+	options.EnableBALForTesting = ctx.Bool(ExperimentalBALFlag.Name)
 	chain, err := core.NewBlockChain(chainDb, gspec, engine, options)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
