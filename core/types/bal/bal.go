@@ -449,10 +449,9 @@ func (c *constructionAccountAccess) StorageRead(key common.Hash) {
 	if c.storageReads == nil {
 		c.storageReads = make(map[common.Hash]struct{})
 	}
-	if _, ok := c.storageMutations[key]; ok {
-		panic("FUCK")
+	if _, ok := c.storageMutations[key]; !ok {
+		c.storageReads[key] = struct{}{}
 	}
-	c.storageReads[key] = struct{}{}
 }
 
 func (c *constructionAccountAccess) StorageWrite(key, prevVal, newVal common.Hash) {
