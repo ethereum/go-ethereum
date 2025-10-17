@@ -235,18 +235,9 @@ func (api *BeaconApiClient) GetBeaconBlock(blockRoot common.Hash) (*types.Beacon
 		return nil, err
 	}
 
-	var beaconBlockMessage struct {
-		Version string `json:"version"`
-		Data    struct {
-			Message json.RawMessage `json:"message"`
-		}
-	}
-	if err := json.Unmarshal(resp, &beaconBlockMessage); err != nil {
+	block := new(types.BeaconBlock)
+	if err := json.Unmarshal(resp, block); err != nil {
 		return nil, fmt.Errorf("invalid block json data: %v", err)
-	}
-	block, err := types.BlockFromJSON(beaconBlockMessage.Version, beaconBlockMessage.Data.Message)
-	if err != nil {
-		return nil, err
 	}
 	computedRoot := block.Root()
 	if computedRoot != blockRoot {
