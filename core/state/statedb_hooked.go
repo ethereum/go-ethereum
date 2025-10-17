@@ -248,26 +248,10 @@ func (s *hookedStateDB) SetState(address common.Address, key common.Hash, value 
 }
 
 func (s *hookedStateDB) SelfDestruct(address common.Address) uint256.Int {
-	var prevCode []byte
-	var prevCodeHash common.Hash
-
-	if s.hooks.OnCodeChange != nil {
-		prevCode = s.inner.GetCode(address)
-		prevCodeHash = s.inner.GetCodeHash(address)
-	}
-
 	prev := s.inner.SelfDestruct(address)
 
 	if s.hooks.OnBalanceChange != nil && !prev.IsZero() {
 		s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
-	}
-
-	if len(prevCode) > 0 {
-		if s.hooks.OnCodeChangeV2 != nil {
-			s.hooks.OnCodeChangeV2(address, prevCodeHash, prevCode, types.EmptyCodeHash, nil, tracing.CodeChangeSelfDestruct)
-		} else if s.hooks.OnCodeChange != nil {
-			s.hooks.OnCodeChange(address, prevCodeHash, prevCode, types.EmptyCodeHash, nil)
-		}
 	}
 
 	return prev
