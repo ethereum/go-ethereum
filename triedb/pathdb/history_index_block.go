@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"sort"
 )
 
 const (
@@ -164,58 +163,15 @@ func newBlockReader(blob []byte) (*blockReader, error) {
 // readGreaterThan locates the first element in the block that is greater than
 // the specified value. If no such element is found, MaxUint64 is returned.
 func (br *blockReader) readGreaterThan(id uint64) (uint64, error) {
-	var err error
-	index := sort.Search(len(br.restarts), func(i int) bool {
-		item, n := binary.Uvarint(br.data[br.restarts[i]:])
-		if n <= 0 {
-			err = fmt.Errorf("failed to decode item at restart %d", br.restarts[i])
-		}
-		return item > id
-	})
-	if err != nil {
+	it := newBlockIterator(br.data, br.restarts)
+	found := it.SeekGT(id)
+	if err := it.Error(); err != nil {
 		return 0, err
 	}
-	if index == 0 {
-		item, _ := binary.Uvarint(br.data[br.restarts[0]:])
-		return item, nil
-	}
-	var (
-		start  int
-		limit  int
-		result uint64
-	)
-	if index == len(br.restarts) {
-		// The element being searched falls within the last restart section,
-		// there is no guarantee such element can be found.
-		start = int(br.restarts[len(br.restarts)-1])
-		limit = len(br.data)
-	} else {
-		// The element being searched falls within the non-last restart section,
-		// such element can be found for sure.
-		start = int(br.restarts[index-1])
-		limit = int(br.restarts[index])
-	}
-	pos := start
-	for pos < limit {
-		x, n := binary.Uvarint(br.data[pos:])
-		if pos == start {
-			result = x
-		} else {
-			result += x
-		}
-		if result > id {
-			return result, nil
-		}
-		pos += n
-	}
-	// The element which is greater than specified id is not found.
-	if index == len(br.restarts) {
+	if !found {
 		return math.MaxUint64, nil
 	}
-	// The element which is the first one greater than the specified id
-	// is exactly the one located at the restart point.
-	item, _ := binary.Uvarint(br.data[br.restarts[index]:])
-	return item, nil
+	return it.ID(), nil
 }
 
 type blockWriter struct {
