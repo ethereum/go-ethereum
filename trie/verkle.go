@@ -179,7 +179,8 @@ func (t *VerkleTrie) UpdateAccount(addr common.Address, acc *types.StateAccount,
 
 // UpdateStorage implements state.Trie, writing the provided storage slot into
 // the tree. If the tree is corrupted, an error will be returned.
-func (t *VerkleTrie) UpdateStorage(address common.Address, key, value []byte) error {
+// Returns the depth at which the value was inserted in the trie (always 0 for verkle trees).
+func (t *VerkleTrie) UpdateStorage(address common.Address, key, value []byte) (int, error) {
 	// Left padding the slot value to 32 bytes.
 	var v [32]byte
 	if len(value) >= 32 {
@@ -188,7 +189,9 @@ func (t *VerkleTrie) UpdateStorage(address common.Address, key, value []byte) er
 		copy(v[32-len(value):], value[:])
 	}
 	k := utils.StorageSlotKeyWithEvaluatedAddress(t.cache.Get(address.Bytes()), key)
-	return t.root.Insert(k, v[:], t.nodeResolver)
+	err := t.root.Insert(k, v[:], t.nodeResolver)
+	// TODO: when eip is schedule, also implement this for verkle
+	return 0, err
 }
 
 // DeleteAccount leaves the account untouched, as no account deletion can happen

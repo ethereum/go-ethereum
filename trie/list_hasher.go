@@ -47,7 +47,8 @@ func (h *ListHasher) Reset() {
 // Update inserts a key-value pair into the trie.
 func (h *ListHasher) Update(key []byte, value []byte) error {
 	key, value = bytes.Clone(key), bytes.Clone(value)
-	return h.tr.Update(key, value)
+	_, err := h.tr.Update(key, value)
+	return err
 }
 
 // Hash computes the root hash of all inserted key-value pairs.

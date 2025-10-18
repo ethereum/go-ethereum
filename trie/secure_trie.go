@@ -197,17 +197,18 @@ func (t *StateTrie) MustUpdate(key, value []byte) {
 // stored in the trie.
 //
 // If a node is not found in the database, a MissingNodeError is returned.
-func (t *StateTrie) UpdateStorage(_ common.Address, key, value []byte) error {
+// Returns the depth at which the value was inserted in the trie.
+func (t *StateTrie) UpdateStorage(_ common.Address, key, value []byte) (int, error) {
 	hk := crypto.Keccak256(key)
 	v, _ := rlp.EncodeToBytes(value)
-	err := t.trie.Update(hk, v)
+	depth, err := t.trie.Update(hk, v)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if t.preimages != nil {
 		t.secKeyCache[common.Hash(hk)] = common.CopyBytes(key)
 	}
-	return nil
+	return depth, nil
 }
 
 // UpdateAccount will abstract the write of an account to the secure trie.
@@ -217,7 +218,7 @@ func (t *StateTrie) UpdateAccount(address common.Address, acc *types.StateAccoun
 	if err != nil {
 		return err
 	}
-	if err := t.trie.Update(hk, data); err != nil {
+	if _, err := t.trie.Update(hk, data); err != nil {
 		return err
 	}
 	if t.preimages != nil {
