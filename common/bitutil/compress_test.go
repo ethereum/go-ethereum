@@ -180,7 +180,7 @@ func benchmarkEncoding(b *testing.B, bytes int, fill float64) {
 	// Reset the benchmark and measure encoding/decoding
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for range b.Loop() {
 		bitsetDecodeBytes(bitsetEncodeBytes(data), len(data))
 	}
 }
