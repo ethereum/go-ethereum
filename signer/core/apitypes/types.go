@@ -547,9 +547,9 @@ func parseBytes(encType interface{}) ([]byte, bool) {
 	// Handle array types.
 	val := reflect.ValueOf(encType)
 	if val.Kind() == reflect.Array && val.Type().Elem().Kind() == reflect.Uint8 {
-		v := reflect.ValueOf(make([]byte, val.Len()))
-		reflect.Copy(v, val)
-		return v.Bytes(), true
+		newV := reflect.New(val.Type()).Elem()
+		newV.Set(val)
+		return newV.Bytes(), true
 	}
 
 	switch v := encType.(type) {
