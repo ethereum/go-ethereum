@@ -27,14 +27,18 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"strconv"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 )
 
 // ledgerOpcode is an enumeration encoding the supported Ledger opcodes.
@@ -48,20 +52,59 @@ type ledgerParam1 byte
 // specific opcodes. The same parameter values may be reused between opcodes.
 type ledgerParam2 byte
 
+// ledgerStatus is an enumeration encoding ledger status words.
+type ledgerStatus uint16
+
 const (
-	ledgerOpRetrieveAddress  ledgerOpcode = 0x02 // Returns the public key and Ethereum address for a given BIP 32 path
-	ledgerOpSignTransaction  ledgerOpcode = 0x04 // Signs an Ethereum transaction after having the user validate the parameters
-	ledgerOpGetConfiguration ledgerOpcode = 0x06 // Returns specific wallet application configuration
-	ledgerOpSignTypedMessage ledgerOpcode = 0x0c // Signs an Ethereum message following the EIP 712 specification
+	ledgerOpRetrieveAddress      ledgerOpcode = 0x02 // Returns the public key and Ethereum address for a given BIP 32 path
+	ledgerOpSignTransaction      ledgerOpcode = 0x04 // Signs an Ethereum transaction after having the user validate the parameters
+	ledgerOpGetConfiguration     ledgerOpcode = 0x06 // Returns specific wallet application configuration
+	ledgerOpSignPersonalMessage  ledgerOpcode = 0x08 // Signs a personal message following the EIP 712 specification
+	ledgerOpSignTypedMessage     ledgerOpcode = 0x0c // Signs an Ethereum message following the EIP 712 specification
+	ledgerOpEip712SendStructDef  ledgerOpcode = 0x1a // Sends EIP-712 struct types to the ledger
+	ledgerOpEip712SendStructImpl ledgerOpcode = 0x1c // Sends EIP-712 struct values to the ledger
 
 	ledgerP1DirectlyFetchAddress    ledgerParam1 = 0x00 // Return address directly from the wallet
 	ledgerP1InitTypedMessageData    ledgerParam1 = 0x00 // First chunk of Typed Message data
 	ledgerP1InitTransactionData     ledgerParam1 = 0x00 // First transaction data block for signing
 	ledgerP1ContTransactionData     ledgerParam1 = 0x80 // Subsequent transaction data block for signing
+	ledgerP1CompleteSend            ledgerParam1 = 0x00 // Complete the value (in one go, or after partial)
+	ledgerP1PartialSend             ledgerParam1 = 0x01 // Send partial data
 	ledgerP2DiscardAddressChainCode ledgerParam2 = 0x00 // Do not return the chain code along with the address
+	ledgerP2ProcessAndStartFlow     ledgerParam2 = 0x00 // Process and start transaction signing flow
+	ledgerP2V0Implementation        ledgerParam2 = 0x00 // EIP-712 V0 implementation (hashes only)
+	ledgerP2StructName              ledgerParam2 = 0x00 // Send EIP-712 struct name
+	ledgerP2RootStruct              ledgerParam2 = 0x00 // Send EIP-712 root struct
+	ledgerP2Array                   ledgerParam2 = 0x0f // Send EIP-712 array
+	ledgerP2StructField             ledgerParam2 = 0xff // Send EIP-712 struct field
+	ledgerP2FullImplementation      ledgerParam2 = 0x01 // EIP-712 full implementation (typed data)
 
-	ledgerEip155Size int = 3 // Size of the EIP-155 chain_id,r,s in unsigned transactions
+	ledgerStatusNormalEnd ledgerStatus = 0x9000
+	ledgerEip155Size      int          = 3 // Size of the EIP-155 chain_id,r,s in unsigned transactions
 )
+
+var ledgerStatuses = map[ledgerStatus]string{
+	0x5515: "Device is locked",
+	0x6001: "Mode check fail",
+	0x6501: "TransactionType not supported",
+	0x6502: "Output buffer too small for chainId conversion",
+	0x6511: "Ethereum app not open",
+	//0x68xx: "Internal error (Please report)",
+	0x6982: "Security status not satisfied (Canceled by user)",
+	0x6983: "Wrong Data length",
+	0x6984: "Plugin not installed",
+	0x6985: "Condition not satisfied",
+	0x6A00: "Error without info",
+	0x6A80: "Invalid data",
+	0x6A84: "Insufficient memory",
+	0x6A88: "Data not found",
+	0x6B00: "Incorrect parameter P1 or P2",
+	0x6D00: "Incorrect parameter INS",
+	0x6E00: "Incorrect parameter CLA",
+	0x6F00: "Incorrect parameter CLA",
+	0x6F01: "Technical problem (Internal error, please report)",
+	0x911C: "Command code not supported (i.e. Ledger-PKI not yet available)",
+}
 
 // errLedgerReplyInvalidHeader is the error message returned by a Ledger data exchange
 // if the device replies with a mismatching header. This usually means the device
@@ -71,6 +114,10 @@ var errLedgerReplyInvalidHeader = errors.New("ledger: invalid reply header")
 // errLedgerInvalidVersionReply is the error message returned by a Ledger version retrieval
 // when a response does arrive, but it does not contain the expected data.
 var errLedgerInvalidVersionReply = errors.New("ledger: invalid version reply")
+
+// errLedgerInvalidStatus is the error message returned if the ledger doesn't respond with a
+// 0x9000 status.
+var errLedgerInvalidStatus = errors.New("ledger: invalid status")
 
 // ledgerDriver implements the communication with a Ledger hardware wallet.
 type ledgerDriver struct {
@@ -119,7 +166,7 @@ func (w *ledgerDriver) Open(device io.ReadWriter, passphrase string) error {
 	_, err := w.ledgerDerive(accounts.DefaultBaseDerivationPath)
 	if err != nil {
 		// Ethereum app is not running or in browser mode, nothing more to do, return
-		if err == errLedgerReplyInvalidHeader {
+		if errors.Is(err, errLedgerReplyInvalidHeader) {
 			w.browser = true
 		}
 		return nil
@@ -141,7 +188,7 @@ func (w *ledgerDriver) Close() error {
 // Heartbeat implements usbwallet.driver, performing a sanity check against the
 // Ledger to see if it's still online.
 func (w *ledgerDriver) Heartbeat() error {
-	if _, err := w.ledgerVersion(); err != nil && err != errLedgerInvalidVersionReply {
+	if _, err := w.ledgerVersion(); err != nil && !errors.Is(err, errLedgerInvalidVersionReply) {
 		w.failure = err
 		return err
 	}
@@ -166,7 +213,7 @@ func (w *ledgerDriver) SignTx(path accounts.DerivationPath, tx *types.Transactio
 		return common.Address{}, nil, accounts.ErrWalletClosed
 	}
 	// Ensure the wallet is capable of signing the given transaction
-	if chainID != nil && (w.version[0] < 1 || (w.version[0] == 1 && w.version[1] == 0 && w.version[2] < 3)) {
+	if chainID != nil && w.version[0] <= 1 && w.version[1] <= 0 && w.version[2] <= 2 {
 		//lint:ignore ST1005 brand name displayed on the console
 		return common.Address{}, nil, fmt.Errorf("Ledger v%d.%d.%d doesn't support signing this transaction, please update to v1.0.3 at least", w.version[0], w.version[1], w.version[2])
 	}
@@ -174,11 +221,11 @@ func (w *ledgerDriver) SignTx(path accounts.DerivationPath, tx *types.Transactio
 	return w.ledgerSign(path, tx, chainID)
 }
 
-// SignTypedMessage implements usbwallet.driver, sending the message to the Ledger and
+// SignTypedHash implements usbwallet.driver, sending the message to the Ledger and
 // waiting for the user to sign or deny the transaction.
 //
 // Note: this was introduced in the ledger 1.5.0 firmware
-func (w *ledgerDriver) SignTypedMessage(path accounts.DerivationPath, domainHash []byte, messageHash []byte) ([]byte, error) {
+func (w *ledgerDriver) SignTypedHash(path accounts.DerivationPath, domainHash []byte, messageHash []byte) ([]byte, error) {
 	// If the Ethereum app doesn't run, abort
 	if w.offline() {
 		return nil, accounts.ErrWalletClosed
@@ -189,7 +236,39 @@ func (w *ledgerDriver) SignTypedMessage(path accounts.DerivationPath, domainHash
 		return nil, fmt.Errorf("Ledger version >= 1.5.0 required for EIP-712 signing (found version v%d.%d.%d)", w.version[0], w.version[1], w.version[2])
 	}
 	// All infos gathered and metadata checks out, request signing
-	return w.ledgerSignTypedMessage(path, domainHash, messageHash)
+	return w.ledgerSignTypedHash(path, domainHash, messageHash)
+}
+
+// SignText implements usbwallet.driver, sending the message to the Ledger and
+// waiting for the user to confirm or deny the signature.
+func (w *ledgerDriver) SignText(path accounts.DerivationPath, text []byte) ([]byte, error) {
+	// If the Ethereum app doesn't run, abort
+	if w.offline() {
+		return nil, accounts.ErrWalletClosed
+	}
+	// Ensure the wallet is capable of signing the given transaction
+	if w.version[0] < 1 && w.version[1] < 5 {
+		//lint:ignore ST1005 brand name displayed on the console
+		return nil, fmt.Errorf("Ledger version >= 1.5.0 required for EIP-712 signing (found version v%d.%d.%d)", w.version[0], w.version[1], w.version[2])
+	}
+	// All infos gathered and metadata checks out, request signing
+	return w.ledgerSignPersonalMessage(path, text)
+}
+
+// SignedTypedData implements usbwallet.driver, sending the message to the Ledger and
+// waiting for the user to sign or deny signing an EIP-712 typed data struct.
+func (w *ledgerDriver) SignedTypedData(path accounts.DerivationPath, data apitypes.TypedData) ([]byte, error) {
+	// If the Ethereum app doesn't run, abort
+	if w.offline() {
+		return nil, accounts.ErrWalletClosed
+	}
+	// Ensure the wallet is capable of signing the given transaction
+	if w.version[0] < 1 && w.version[1] < 5 {
+		//lint:ignore ST1005 brand name displayed on the console
+		return nil, fmt.Errorf("Ledger version >= 1.5.0 required for EIP-712 signing (found version v%d.%d.%d)", w.version[0], w.version[1], w.version[2])
+	}
+	// All infos gathered and metadata checks out, request signing
+	return w.ledgerSignTypedData(path, data)
 }
 
 // ledgerVersion retrieves the current version of the Ethereum wallet app running
@@ -360,7 +439,7 @@ func (w *ledgerDriver) ledgerSign(derivationPath []uint32, tx *types.Transaction
 
 	// Send the request and wait for the response
 	var (
-		op    = ledgerP1InitTransactionData
+		p1    = ledgerP1InitTransactionData
 		reply []byte
 	)
 
@@ -378,13 +457,13 @@ func (w *ledgerDriver) ledgerSign(derivationPath []uint32, tx *types.Transaction
 			chunk = len(payload)
 		}
 		// Send the chunk over, ensuring it's processed correctly
-		reply, err = w.ledgerExchange(ledgerOpSignTransaction, op, 0, payload[:chunk])
+		reply, err = w.ledgerExchange(ledgerOpSignTransaction, p1, ledgerP2ProcessAndStartFlow, payload[:chunk])
 		if err != nil {
 			return common.Address{}, nil, err
 		}
 		// Shift the payload and ensure subsequent chunks are marked as such
 		payload = payload[chunk:]
-		op = ledgerP1ContTransactionData
+		p1 = ledgerP1ContTransactionData
 	}
 	// Extract the Ethereum signature and do a sanity validation
 	if len(reply) != crypto.SignatureLength {
@@ -414,7 +493,7 @@ func (w *ledgerDriver) ledgerSign(derivationPath []uint32, tx *types.Transaction
 	return sender, signed, nil
 }
 
-// ledgerSignTypedMessage sends the transaction to the Ledger wallet, and waits for the user
+// ledgerSignTypedHash sends the transaction to the Ledger wallet, and waits for the user
 // to confirm or deny the transaction.
 //
 // The signing protocol is defined as follows:
@@ -441,7 +520,7 @@ func (w *ledgerDriver) ledgerSign(derivationPath []uint32, tx *types.Transaction
 //	signature V | 1 byte
 //	signature R | 32 bytes
 //	signature S | 32 bytes
-func (w *ledgerDriver) ledgerSignTypedMessage(derivationPath []uint32, domainHash []byte, messageHash []byte) ([]byte, error) {
+func (w *ledgerDriver) ledgerSignTypedHash(derivationPath []uint32, domainHash []byte, messageHash []byte) ([]byte, error) {
 	// Flatten the derivation path into the Ledger request
 	path := make([]byte, 1+4*len(derivationPath))
 	path[0] = byte(len(derivationPath))
@@ -454,13 +533,12 @@ func (w *ledgerDriver) ledgerSignTypedMessage(derivationPath []uint32, domainHas
 
 	// Send the request and wait for the response
 	var (
-		op    = ledgerP1InitTypedMessageData
 		reply []byte
 		err   error
 	)
 
 	// Send the message over, ensuring it's processed correctly
-	reply, err = w.ledgerExchange(ledgerOpSignTypedMessage, op, 0, payload)
+	reply, err = w.ledgerExchange(ledgerOpSignTypedMessage, ledgerP1InitTypedMessageData, ledgerP2V0Implementation, payload)
 
 	if err != nil {
 		return nil, err
@@ -469,6 +547,281 @@ func (w *ledgerDriver) ledgerSignTypedMessage(derivationPath []uint32, domainHas
 	// Extract the Ethereum signature and do a sanity validation
 	if len(reply) != crypto.SignatureLength {
 		return nil, errors.New("reply lacks signature")
+	}
+	signature := append(reply[1:], reply[0])
+	return signature, nil
+}
+
+// ledgerSignPersonalMessage sends the transaction to the Ledger wallet, and waits for the user
+// to confirm or deny the transaction.
+//
+// The signing protocol is defined as follows:
+//
+//	CLA | INS | P1 | P2                          | Lc  | Le
+//	----+-----+----+-----------------------------+-----+---
+//	 E0 | 08  | 00 | implementation version : 00 | variable | variable
+//
+// Where the input is:
+//
+//	Description                                      | Length
+//	-------------------------------------------------+----------
+//	Number of BIP 32 derivations to perform (max 10) | 1 byte
+//	First derivation index (big endian)              | 4 bytes
+//	...                                              | 4 bytes
+//	Last derivation index (big endian)               | 4 bytes
+//	text                                             | arbitrary
+//
+// And the output data is:
+//
+//	Description | Length
+//	------------+---------
+//	signature V | 1 byte
+//	signature R | 32 bytes
+//	signature S | 32 bytes
+func (w *ledgerDriver) ledgerSignPersonalMessage(derivationPath []uint32, text []byte) ([]byte, error) {
+	// Flatten the derivation path into the Ledger request
+	path := make([]byte, 5+4*len(derivationPath))
+	path[0] = byte(len(derivationPath))
+	for i, component := range derivationPath {
+		binary.BigEndian.PutUint32(path[1+4*i:], component)
+	}
+	binary.BigEndian.PutUint32(path[1+4*len(derivationPath):], uint32(len(text)))
+	// Create the 712 message
+	payload := append(path, text...)
+
+	// Send the request and wait for the response
+	var (
+		reply []byte
+		err   error
+	)
+
+	// Send the message over, ensuring it's processed correctly
+	reply, err = w.ledgerExchange(ledgerOpSignPersonalMessage, ledgerP1InitTransactionData, 0, payload)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract the Ethereum signature and do a sanity validation
+	if len(reply) != crypto.SignatureLength {
+		return nil, errors.New("reply lacks signature")
+	}
+	signature := append(reply[1:], reply[0])
+	return signature, nil
+}
+
+// ledgerSignTypedData sends the transaction to the Ledger wallet, and waits for the user
+// to confirm or deny the transaction.
+//
+// The typed data struct fields and values need to be sent to the Ledger first.
+// See https://github.com/LedgerHQ/app-ethereum/blob/develop/doc/eip712.md.
+//
+// After the data is sent, the signing protocol is defined as follows:
+//
+//	CLA | INS | P1 | P2                          | Lc  | Le
+//	----+-----+----+-----------------------------+-----+---
+//	 E0 | 0C  | 00 | implementation version : 00 | variable | variable
+//
+// Where the input is:
+//
+//	Description                                      | Length
+//	-------------------------------------------------+----------
+//	Number of BIP 32 derivations to perform (max 10) | 1 byte
+//	First derivation index (big endian)              | 4 bytes
+//	...                                              | 4 bytes
+//	Last derivation index (big endian)               | 4 bytes
+//
+// And the output data is:
+//
+//	Description | Length
+//	------------+---------
+//	signature V | 1 byte
+//	signature R | 32 bytes
+//	signature S | 32 bytes
+func (w *ledgerDriver) ledgerSignTypedData(derivationPath []uint32, data apitypes.TypedData) ([]byte, error) {
+	// Check if the EIP712Domain and primary type are present in the data
+	domainStruct := data.Types["EIP712Domain"]
+	if domainStruct == nil {
+		return nil, fmt.Errorf("EIP712Domain type is required")
+	}
+	primaryType := data.Types[data.PrimaryType]
+	if primaryType == nil {
+		return nil, fmt.Errorf("primary type %s not found in types", data.PrimaryType)
+	}
+
+	// sendField is a function for sending an EIP-712 struct field name + type
+	sendField := func(field apitypes.Type) error {
+		dt, name, byteLength, arrays, err := parseType(data, field)
+		if err != nil {
+			return err
+		}
+
+		typeDesc := byte(dt)
+
+		var typeName []byte
+		var typeSize []byte
+		switch dt {
+		case CustomType:
+			typeName = append([]byte{byte(len(name))}, []byte(name)...)
+		case IntType, UintType, FixedBytesType:
+			typeSize = []byte{byte(byteLength)}
+			typeDesc |= 0x40
+		default:
+		}
+
+		var arrayLevels []byte
+		if len(arrays) > 0 {
+			typeDesc |= 0x80
+			arrayLevels = []byte{byte(len(arrays))}
+			for _, length := range arrays {
+				if length == nil {
+					arrayLevels = append(arrayLevels, 0)
+				} else {
+					arrayLevels = append(arrayLevels, 1, byte(*length))
+				}
+			}
+		}
+
+		payload := []byte{typeDesc}
+		payload = append(payload, typeName...)
+		payload = append(payload, typeSize...)
+		payload = append(payload, arrayLevels...)
+		payload = append(payload, byte(len(field.Name)))
+		payload = append(payload, []byte(field.Name)...)
+		_, err = w.ledgerExchange(ledgerOpEip712SendStructDef, 0, ledgerP2StructField, payload)
+		return err
+	}
+
+	// sendValue is a recursive function that sends the value of a field
+	var sendValue func(t, name string, value interface{}) error
+	sendValue = func(t, name string, value interface{}) error {
+		if value == nil {
+			return fmt.Errorf("nil value for field %s", name)
+		}
+		if strings.HasSuffix(t, "]") {
+			a, ok := value.([]interface{})
+			if !ok {
+				return fmt.Errorf("expected array for field %s, got %T", name, value)
+			}
+			if _, err := w.ledgerExchange(ledgerOpEip712SendStructImpl, ledgerP1CompleteSend, ledgerP2Array, []byte{byte(len(a))}); err != nil {
+				return fmt.Errorf("failed to send array length: %w", err)
+			}
+			t = t[:strings.LastIndex(t, "[")]
+			for _, item := range a {
+				if err := sendValue(t, name, item); err != nil {
+					return fmt.Errorf("failed to send array item: %w", err)
+				}
+			}
+			return nil
+		}
+		s := data.Types[t]
+		if s != nil {
+			m, ok := value.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("expected struct for field %s, got %T", name, value)
+			}
+			for _, field := range s {
+				if err := sendValue(field.Type, field.Name, m[field.Name]); err != nil {
+					return fmt.Errorf("failed to send struct field %s: %w", field.Name, err)
+				}
+			}
+			return nil
+		}
+		var enc []byte
+		var err error
+		switch v := value.(type) {
+		case string:
+			if t == "string" {
+				enc = []byte(v)
+			} else if strings.HasPrefix(v, "0x") {
+				enc, err = hex.DecodeString(v[2:])
+				if err != nil {
+					return fmt.Errorf("failed to decode hex string for field %s: %w", name, err)
+				}
+			} else {
+				return fmt.Errorf("invalid string value for field %s: %s", name, v)
+			}
+		case bool:
+			if v {
+				enc = []byte{1}
+			} else {
+				enc = []byte{0}
+			}
+		case float64:
+			enc = new(big.Int).SetInt64(int64(v)).Bytes()
+		case *math.HexOrDecimal256:
+			if v == nil {
+				return fmt.Errorf("nil value for field %s", name)
+			}
+			h := big.Int(*v)
+			enc = (&h).Bytes()
+
+		default:
+			return fmt.Errorf("unsupported type for field %s: %T", name, value)
+		}
+
+		chunk := 255
+		payload := binary.BigEndian.AppendUint16([]byte{}, uint16(len(enc)))
+		payload = append(payload, enc...)
+		for len(payload) > 0 {
+			p1 := ledgerP1PartialSend
+			if chunk >= len(payload) {
+				chunk = len(payload)
+				p1 = ledgerP1CompleteSend
+			}
+			if _, err := w.ledgerExchange(ledgerOpEip712SendStructImpl, p1, ledgerP2StructField, payload[:chunk]); err != nil {
+				return fmt.Errorf("failed to send field %s: %w", name, err)
+			}
+			payload = payload[chunk:]
+		}
+		return nil
+	}
+
+	// first send all the EIP-712 struct definitions
+	for name, fields := range data.Types {
+		_, err := w.ledgerExchange(ledgerOpEip712SendStructDef, 0, ledgerP2StructName, []byte(name))
+		if err != nil {
+			return nil, fmt.Errorf("failed to send type name %s: %w", name, err)
+		}
+		for _, field := range fields {
+			if err := sendField(field); err != nil {
+				return nil, fmt.Errorf("failed to send field %s: %w", field.Name, err)
+			}
+		}
+	}
+
+	// send the EIP-712 domain field values
+	if _, err := w.ledgerExchange(ledgerOpEip712SendStructImpl, ledgerP1CompleteSend, ledgerP2RootStruct, []byte("EIP712Domain")); err != nil {
+		return nil, fmt.Errorf("failed to send domain type name: %w", err)
+	}
+	if err := sendValue("EIP712Domain", "domain", data.Domain.Map()); err != nil {
+		return nil, fmt.Errorf("failed to send domain fields: %w", err)
+	}
+
+	// send the message field values
+	if _, err := w.ledgerExchange(ledgerOpEip712SendStructImpl, ledgerP1CompleteSend, ledgerP2RootStruct, []byte(data.PrimaryType)); err != nil {
+		return nil, fmt.Errorf("failed to send primary type name: %w", err)
+	}
+	if err := sendValue(data.PrimaryType, "message", data.Message); err != nil {
+		return nil, fmt.Errorf("failed to send primary type fields: %w", err)
+	}
+
+	// Flatten the derivation path into the Ledger request
+	path := make([]byte, 1+4*len(derivationPath))
+	path[0] = byte(len(derivationPath))
+	for i, component := range derivationPath {
+		binary.BigEndian.PutUint32(path[1+4*i:], component)
+	}
+
+	// Send the message over, ensuring it's processed correctly
+	reply, err := w.ledgerExchange(ledgerOpSignTypedMessage, 0, ledgerP2FullImplementation, path)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract the Ethereum signature and do a sanity validation
+	if len(reply) != crypto.SignatureLength {
+		return nil, fmt.Errorf("invalid signature length: %d", len(reply))
 	}
 	signature := append(reply[1:], reply[0])
 	return signature, nil
@@ -508,6 +861,16 @@ func (w *ledgerDriver) ledgerSignTypedMessage(derivationPath []uint32, domainHas
 //	APDU length              | 1 byte
 //	Optional APDU data       | arbitrary
 func (w *ledgerDriver) ledgerExchange(opcode ledgerOpcode, p1 ledgerParam1, p2 ledgerParam2, data []byte) ([]byte, error) {
+	for i := 1; ; i++ {
+		res, err := w._ledgerExchange(opcode, p1, p2, data)
+		// on failure, try the exchange 3 times in total
+		if err == nil || i == 3 {
+			return res, err
+		}
+	}
+}
+
+func (w *ledgerDriver) _ledgerExchange(opcode ledgerOpcode, p1 ledgerParam1, p2 ledgerParam2, data []byte) ([]byte, error) {
 	// Construct the message payload, possibly split into multiple chunks
 	apdu := make([]byte, 2, 7+len(data))
 
@@ -568,6 +931,17 @@ func (w *ledgerDriver) ledgerExchange(opcode ledgerOpcode, p1 ledgerParam1, p2 l
 			reply = append(reply, payload[:left]...)
 			break
 		}
+	}
+	if len(reply) < 2 {
+		return nil, errLedgerInvalidStatus
+	}
+	status := ledgerStatus(binary.BigEndian.Uint16(reply[len(reply)-2:]))
+	if status != ledgerStatusNormalEnd {
+		s := ledgerStatuses[status]
+		if s == "" {
+			s = "unknown error"
+		}
+		return nil, fmt.Errorf("%w: 0x%s (%s)", errLedgerInvalidStatus, strconv.FormatUint(uint64(status), 16), s)
 	}
 	return reply[:len(reply)-2], nil
 }
