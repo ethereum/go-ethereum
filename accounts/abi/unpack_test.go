@@ -1162,3 +1162,190 @@ func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
 		}
 	}
 }
+
+func TestReadFixedBytes(t *testing.T) {
+	word := make([]byte, 33)
+	for i := range word {
+		word[i] = byte(i)
+	}
+
+	tests := []struct {
+		name    string
+		tType   Type
+		word    []byte
+		wantErr bool
+	}{
+		{"size0", Type{T: FixedBytesTy, Size: 0}, word, true},
+		{"size33", Type{T: FixedBytesTy, Size: 33}, word, true},
+	}
+	for size := 1; size <= 32; size++ {
+		tests = append(tests, struct {
+			name    string
+			tType   Type
+			word    []byte
+			wantErr bool
+		}{
+			name:    fmt.Sprintf("size_%d", size),
+			tType:   Type{T: FixedBytesTy, Size: size},
+			word:    word,
+			wantErr: false,
+		})
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ReadFixedBytes(tt.tType, tt.word)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			switch arr := got.(type) {
+			case [1]byte:
+				if !bytes.Equal(arr[:], word[:1]) {
+					t.Errorf("data mismatch")
+				}
+			case [2]byte:
+				if !bytes.Equal(arr[:], word[:2]) {
+					t.Errorf("data mismatch")
+				}
+			case [3]byte:
+				if !bytes.Equal(arr[:], word[:3]) {
+					t.Errorf("data mismatch")
+				}
+			case [4]byte:
+				if !bytes.Equal(arr[:], word[:4]) {
+					t.Errorf("data mismatch")
+				}
+			case [5]byte:
+				if !bytes.Equal(arr[:], word[:5]) {
+					t.Errorf("data mismatch")
+				}
+			case [6]byte:
+				if !bytes.Equal(arr[:], word[:6]) {
+					t.Errorf("data mismatch")
+				}
+			case [7]byte:
+				if !bytes.Equal(arr[:], word[:7]) {
+					t.Errorf("data mismatch")
+				}
+			case [8]byte:
+				if !bytes.Equal(arr[:], word[:8]) {
+					t.Errorf("data mismatch")
+				}
+			case [9]byte:
+				if !bytes.Equal(arr[:], word[:9]) {
+					t.Errorf("data mismatch")
+				}
+			case [10]byte:
+				if !bytes.Equal(arr[:], word[:10]) {
+					t.Errorf("data mismatch")
+				}
+			case [11]byte:
+				if !bytes.Equal(arr[:], word[:11]) {
+					t.Errorf("data mismatch")
+				}
+			case [12]byte:
+				if !bytes.Equal(arr[:], word[:12]) {
+					t.Errorf("data mismatch")
+				}
+			case [13]byte:
+				if !bytes.Equal(arr[:], word[:13]) {
+					t.Errorf("data mismatch")
+				}
+			case [14]byte:
+				if !bytes.Equal(arr[:], word[:14]) {
+					t.Errorf("data mismatch")
+				}
+			case [15]byte:
+				if !bytes.Equal(arr[:], word[:15]) {
+					t.Errorf("data mismatch")
+				}
+			case [16]byte:
+				if !bytes.Equal(arr[:], word[:16]) {
+					t.Errorf("data mismatch")
+				}
+			case [17]byte:
+				if !bytes.Equal(arr[:], word[:17]) {
+					t.Errorf("data mismatch")
+				}
+			case [18]byte:
+				if !bytes.Equal(arr[:], word[:18]) {
+					t.Errorf("data mismatch")
+				}
+			case [19]byte:
+				if !bytes.Equal(arr[:], word[:19]) {
+					t.Errorf("data mismatch")
+				}
+			case [20]byte:
+				if !bytes.Equal(arr[:], word[:20]) {
+					t.Errorf("data mismatch")
+				}
+			case [21]byte:
+				if !bytes.Equal(arr[:], word[:21]) {
+					t.Errorf("data mismatch")
+				}
+			case [22]byte:
+				if !bytes.Equal(arr[:], word[:22]) {
+					t.Errorf("data mismatch")
+				}
+			case [23]byte:
+				if !bytes.Equal(arr[:], word[:23]) {
+					t.Errorf("data mismatch")
+				}
+			case [24]byte:
+				if !bytes.Equal(arr[:], word[:24]) {
+					t.Errorf("data mismatch")
+				}
+			case [25]byte:
+				if !bytes.Equal(arr[:], word[:25]) {
+					t.Errorf("data mismatch")
+				}
+			case [26]byte:
+				if !bytes.Equal(arr[:], word[:26]) {
+					t.Errorf("data mismatch")
+				}
+			case [27]byte:
+				if !bytes.Equal(arr[:], word[:27]) {
+					t.Errorf("data mismatch")
+				}
+			case [28]byte:
+				if !bytes.Equal(arr[:], word[:28]) {
+					t.Errorf("data mismatch")
+				}
+			case [29]byte:
+				if !bytes.Equal(arr[:], word[:29]) {
+					t.Errorf("data mismatch")
+				}
+			case [30]byte:
+				if !bytes.Equal(arr[:], word[:30]) {
+					t.Errorf("data mismatch")
+				}
+			case [31]byte:
+				if !bytes.Equal(arr[:], word[:31]) {
+					t.Errorf("data mismatch")
+				}
+			case [32]byte:
+				if !bytes.Equal(arr[:], word[:32]) {
+					t.Errorf("data mismatch")
+				}
+			default:
+				t.Errorf("unexpected type %T", got)
+			}
+		})
+	}
+}
+
+func BenchmarkReadFixedBytes(b *testing.B) {
+	t := Type{T: FixedBytesTy, Size: 32}
+	word := make([]byte, 32)
+	for i := 0; i < b.N; i++ {
+		_, _ = ReadFixedBytes(t, word)
+	}
+}
