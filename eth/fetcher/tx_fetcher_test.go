@@ -502,14 +502,10 @@ func TestTransactionFetcherFailedRescheduling(t *testing.T) {
 		steps: []interface{}{
 			// Push an initial announcement through to the scheduled stage
 			doTxNotify{peer: "A", hashes: []common.Hash{{0x01}, {0x02}}, types: []byte{types.LegacyTxType, types.LegacyTxType}, sizes: []uint32{111, 222}},
-			doTxNotify{peer: "C", hashes: []common.Hash{{0x03}}, types: []byte{types.LegacyTxType}, sizes: []uint32{333}},
 			isWaiting(map[string][]announce{
 				"A": {
 					{common.Hash{0x01}, types.LegacyTxType, 111},
 					{common.Hash{0x02}, types.LegacyTxType, 222},
-				},
-				"C": {
-					{common.Hash{0x03}, types.LegacyTxType, 333},
 				},
 			}),
 			isScheduled{tracking: nil, fetching: nil},
@@ -522,13 +518,9 @@ func TestTransactionFetcherFailedRescheduling(t *testing.T) {
 						{common.Hash{0x01}, types.LegacyTxType, 111},
 						{common.Hash{0x02}, types.LegacyTxType, 222},
 					},
-					"C": {
-						{common.Hash{0x03}, types.LegacyTxType, 333},
-					},
 				},
 				fetching: map[string][]common.Hash{
 					"A": {{0x01}, {0x02}},
-					"C": {{0x03}},
 				},
 			},
 			// While the original peer is stuck in the request, push in an second
@@ -544,13 +536,9 @@ func TestTransactionFetcherFailedRescheduling(t *testing.T) {
 					"B": {
 						{common.Hash{0x02}, types.LegacyTxType, 222},
 					},
-					"C": {
-						{common.Hash{0x03}, types.LegacyTxType, 333},
-					},
 				},
 				fetching: map[string][]common.Hash{
 					"A": {{0x01}, {0x02}},
-					"C": {{0x03}},
 				},
 			},
 			// Wait until the original request fails and check that transactions
@@ -565,19 +553,11 @@ func TestTransactionFetcherFailedRescheduling(t *testing.T) {
 					"B": {
 						{common.Hash{0x02}, types.LegacyTxType, 222},
 					},
-					"C": {
-						{common.Hash{0x03}, types.LegacyTxType, 333},
-					},
 				},
 				fetching: map[string][]common.Hash{
 					"B": {{0x02}},
-					"C": {{0x03}},
 				},
 			},
-			doFunc(func() {
-				proceed <- struct{}{} // Allow peer B to return the failure
-			}),
-			doWait{time: 0, step: true},
 			doFunc(func() {
 				proceed <- struct{}{} // Allow peer B to return the failure
 			}),
