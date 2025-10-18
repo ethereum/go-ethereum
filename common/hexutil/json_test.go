@@ -100,7 +100,7 @@ func TestUnmarshalBytes(t *testing.T) {
 
 func BenchmarkUnmarshalBytes(b *testing.B) {
 	input := []byte(`"0x123456789abcdef123456789abcdef"`)
-	for i := 0; i < b.N; i++ {
+	for range b.Loop() {
 		var v Bytes
 		if err := v.UnmarshalJSON(input); err != nil {
 			b.Fatal(err)
@@ -239,7 +239,7 @@ func TestUnmarshalU256(t *testing.T) {
 
 func BenchmarkUnmarshalBig(b *testing.B) {
 	input := []byte(`"0x123456789abcdef123456789abcdef"`)
-	for i := 0; i < b.N; i++ {
+	for range b.Loop() {
 		var v Big
 		if err := v.UnmarshalJSON(input); err != nil {
 			b.Fatal(err)
@@ -305,7 +305,7 @@ func TestUnmarshalUint64(t *testing.T) {
 
 func BenchmarkUnmarshalUint64(b *testing.B) {
 	input := []byte(`"0x123456789abcdf"`)
-	for i := 0; i < b.N; i++ {
+	for range b.Loop() {
 		var v Uint64
 		v.UnmarshalJSON(input)
 	}
