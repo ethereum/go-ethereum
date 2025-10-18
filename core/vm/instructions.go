@@ -245,7 +245,7 @@ func opKeccak256(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opAddress(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetBytes(scope.Contract.Address().Bytes()))
+	scope.Stack.push(new(uint256.Int).SetBytes20(scope.Contract.Address().Bytes()))
 	return nil, nil
 }
 
