@@ -1875,7 +1875,6 @@ func TestTransactionFetcherDropAlternates(t *testing.T) {
 			doWait{time: txArriveTimeout, step: true},
 			doTxNotify{peer: "B", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
 
-			// Step 3
 			isScheduled{
 				tracking: map[string][]announce{
 					"A": {
@@ -1891,7 +1890,6 @@ func TestTransactionFetcherDropAlternates(t *testing.T) {
 			},
 			doDrop("B"),
 
-			// Step 5
 			isScheduled{
 				tracking: map[string][]announce{
 					"A": {
@@ -1903,7 +1901,6 @@ func TestTransactionFetcherDropAlternates(t *testing.T) {
 				},
 			},
 			doDrop("A"),
-			// Step 7
 			isScheduled{
 				tracking: nil, fetching: nil,
 			},
