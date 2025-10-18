@@ -275,7 +275,7 @@ func opCallDataLoad(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	x := scope.Stack.peek()
 	if offset, overflow := x.Uint64WithOverflow(); !overflow {
 		data := getData(scope.Contract.Input, offset, 32)
-		x.SetBytes(data)
+		x.SetBytes32(data)
 	} else {
 		x.Clear()
 	}
