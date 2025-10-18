@@ -141,11 +141,143 @@ func ReadFixedBytes(t Type, word []byte) (interface{}, error) {
 	if t.T != FixedBytesTy {
 		return nil, errors.New("abi: invalid type in call to make fixed byte array")
 	}
-	// convert
-	array := reflect.New(t.GetType()).Elem()
 
-	reflect.Copy(array, reflect.ValueOf(word[0:t.Size]))
-	return array.Interface(), nil
+	if t.Size < 1 || t.Size > 32 {
+		return nil, errors.New("abi: invalid size")
+	}
+
+	switch t.Size {
+	case 1:
+		var arr [1]byte
+		copy(arr[:], word[:1])
+		return arr, nil
+	case 2:
+		var arr [2]byte
+		copy(arr[:], word[:2])
+		return arr, nil
+	case 3:
+		var arr [3]byte
+		copy(arr[:], word[:3])
+		return arr, nil
+	case 4:
+		var arr [4]byte
+		copy(arr[:], word[:4])
+		return arr, nil
+	case 5:
+		var arr [5]byte
+		copy(arr[:], word[:5])
+		return arr, nil
+	case 6:
+		var arr [6]byte
+		copy(arr[:], word[:6])
+		return arr, nil
+	case 7:
+		var arr [7]byte
+		copy(arr[:], word[:7])
+		return arr, nil
+	case 8:
+		var arr [8]byte
+		copy(arr[:], word[:8])
+		return arr, nil
+	case 9:
+		var arr [9]byte
+		copy(arr[:], word[:9])
+		return arr, nil
+	case 10:
+		var arr [10]byte
+		copy(arr[:], word[:10])
+		return arr, nil
+	case 11:
+		var arr [11]byte
+		copy(arr[:], word[:11])
+		return arr, nil
+	case 12:
+		var arr [12]byte
+		copy(arr[:], word[:12])
+		return arr, nil
+	case 13:
+		var arr [13]byte
+		copy(arr[:], word[:13])
+		return arr, nil
+	case 14:
+		var arr [14]byte
+		copy(arr[:], word[:14])
+		return arr, nil
+	case 15:
+		var arr [15]byte
+		copy(arr[:], word[:15])
+		return arr, nil
+	case 16:
+		var arr [16]byte
+		copy(arr[:], word[:16])
+		return arr, nil
+	case 17:
+		var arr [17]byte
+		copy(arr[:], word[:17])
+		return arr, nil
+	case 18:
+		var arr [18]byte
+		copy(arr[:], word[:18])
+		return arr, nil
+	case 19:
+		var arr [19]byte
+		copy(arr[:], word[:19])
+		return arr, nil
+	case 20:
+		var arr [20]byte
+		copy(arr[:], word[:20])
+		return arr, nil
+	case 21:
+		var arr [21]byte
+		copy(arr[:], word[:21])
+		return arr, nil
+	case 22:
+		var arr [22]byte
+		copy(arr[:], word[:22])
+		return arr, nil
+	case 23:
+		var arr [23]byte
+		copy(arr[:], word[:23])
+		return arr, nil
+	case 24:
+		var arr [24]byte
+		copy(arr[:], word[:24])
+		return arr, nil
+	case 25:
+		var arr [25]byte
+		copy(arr[:], word[:25])
+		return arr, nil
+	case 26:
+		var arr [26]byte
+		copy(arr[:], word[:26])
+		return arr, nil
+	case 27:
+		var arr [27]byte
+		copy(arr[:], word[:27])
+		return arr, nil
+	case 28:
+		var arr [28]byte
+		copy(arr[:], word[:28])
+		return arr, nil
+	case 29:
+		var arr [29]byte
+		copy(arr[:], word[:29])
+		return arr, nil
+	case 30:
+		var arr [30]byte
+		copy(arr[:], word[:30])
+		return arr, nil
+	case 31:
+		var arr [31]byte
+		copy(arr[:], word[:31])
+		return arr, nil
+	case 32:
+		var arr [32]byte
+		copy(arr[:], word[:32])
+		return arr, nil
+	default:
+		return nil, errors.New("unsupported size")
+	}
 }
 
 // forEachUnpack iteratively unpack elements.
