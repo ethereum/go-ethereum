@@ -56,6 +56,17 @@ func ExecutionHeaderFromJSON(forkName string, data []byte) (*ExecutionHeader, er
 	return &ExecutionHeader{obj: obj}, nil
 }
 
+func ExecutionHeaderToJSON(forkName string, header *ExecutionHeader) ([]byte, error) {
+	switch forkName {
+	case "capella":
+		return json.Marshal(header.obj.(*capella.ExecutionPayloadHeader))
+	case "deneb", "electra": // note: the payload type was not changed in electra
+		return json.Marshal(header.obj.(*deneb.ExecutionPayloadHeader))
+	default:
+		return nil, fmt.Errorf("unsupported fork: %s", forkName)
+	}
+}
+
 func NewExecutionHeader(obj headerObject) *ExecutionHeader {
 	switch obj.(type) {
 	case *capella.ExecutionPayloadHeader:

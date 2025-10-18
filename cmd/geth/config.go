@@ -44,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/restapi"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/naoina/toml"
 	"github.com/urfave/cli/v2"
@@ -259,6 +260,10 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		})
 	}
 
+	// Register REST API.
+	restServer := restapi.NewServer(stack)
+	restServer.Register(restapi.ExecutionAPI(restServer, backend))
+
 	// Configure log filter RPC API.
 	filterSystem := utils.RegisterFilterAPI(stack, backend, &cfg.Eth)
 
@@ -298,8 +303,9 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		// Start blsync mode.
 		srv := rpc.NewServer()
 		srv.RegisterName("engine", catalyst.NewConsensusAPI(eth))
-		blsyncer := blsync.NewClient(utils.MakeBeaconLightConfig(ctx))
+		blsyncer := blsync.NewClient(utils.MakeBeaconLightConfig(ctx), eth.BlockChain())
 		blsyncer.SetEngineRPC(rpc.DialInProc(srv))
+		restServer.Register(blsyncer.RestAPI(restServer))
 		stack.RegisterLifecycle(blsyncer)
 	} else {
 		// Launch the engine API for interacting with external consensus client.

@@ -41,37 +41,40 @@ type blockObject interface {
 
 // BeaconBlock represents a full block in the beacon chain.
 type BeaconBlock struct {
+	Version string `json:"version"`
+	Data    struct {
+		Message json.RawMessage `json:"message"`
+	}
 	blockObj blockObject
 }
 
-// BlockFromJSON decodes a beacon block from JSON.
-func BlockFromJSON(forkName string, data []byte) (*BeaconBlock, error) {
-	var obj blockObject
-	switch forkName {
+// UnmarshalJSON implements json.Marshaler.
+func (b *BeaconBlock) UnmarshalJSON(input []byte) error {
+	if err := json.Unmarshal(input, b); err != nil {
+		return err
+	}
+	switch b.Version {
 	case "capella":
-		obj = new(capella.BeaconBlock)
+		b.blockObj = new(capella.BeaconBlock)
 	case "deneb":
-		obj = new(deneb.BeaconBlock)
+		b.blockObj = new(deneb.BeaconBlock)
 	case "electra":
-		obj = new(electra.BeaconBlock)
+		b.blockObj = new(electra.BeaconBlock)
 	default:
-		return nil, fmt.Errorf("unsupported fork: %s", forkName)
+		return fmt.Errorf("unsupported fork: %s", b.Version)
 	}
-	if err := json.Unmarshal(data, obj); err != nil {
-		return nil, err
-	}
-	return &BeaconBlock{obj}, nil
+	return json.Unmarshal(b.Data.Message, b.blockObj)
 }
 
-// NewBeaconBlock wraps a ZRNT block.
+// NewBeaconBlock wraps a ZRNT block (only used for testing).
 func NewBeaconBlock(obj blockObject) *BeaconBlock {
 	switch obj := obj.(type) {
 	case *capella.BeaconBlock:
-		return &BeaconBlock{obj}
+		return &BeaconBlock{blockObj: obj}
 	case *deneb.BeaconBlock:
-		return &BeaconBlock{obj}
+		return &BeaconBlock{blockObj: obj}
 	case *electra.BeaconBlock:
-		return &BeaconBlock{obj}
+		return &BeaconBlock{blockObj: obj}
 	default:
 		panic(fmt.Errorf("unsupported block type %T", obj))
 	}

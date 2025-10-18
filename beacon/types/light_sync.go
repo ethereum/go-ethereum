@@ -163,6 +163,7 @@ func (h *HeaderWithExecProof) Validate() error {
 // See data structure definition here:
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientoptimisticupdate
 type OptimisticUpdate struct {
+	Version  string
 	Attested HeaderWithExecProof
 	// Sync committee BLS signature aggregate
 	Signature SyncAggregate

@@ -334,6 +334,16 @@ func (s *CommitteeChain) addCommittee(period uint64, committee *types.Serialized
 	return nil
 }
 
+func (s *CommitteeChain) GetCommittee(period uint64) *types.SerializedSyncCommittee {
+	committee, _ := s.committees.get(s.db, period)
+	return committee
+}
+
+func (s *CommitteeChain) GetUpdate(period uint64) *types.LightClientUpdate {
+	update, _ := s.updates.get(s.db, period)
+	return update
+}
+
 // InsertUpdate adds a new update if possible.
 func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommittee *types.SerializedSyncCommittee) error {
 	s.chainmu.Lock()
