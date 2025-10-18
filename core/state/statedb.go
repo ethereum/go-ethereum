@@ -1259,7 +1259,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 	})
 
 	// Step 2: Launch account trie hashing concurrently (CPU only, no I/O).
-	trieCopy := s.trie
+	trieCopy := s.Copy().trie
 	workers.Go(func() error {
 		accountTrieHash = trieCopy.Hash()
 		return nil
