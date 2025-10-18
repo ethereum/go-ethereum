@@ -89,10 +89,11 @@ func reflectIntType(unsigned bool, size int) reflect.Type {
 
 // mustArrayToByteSlice creates a new byte slice with the exact same size as value
 // and copies the bytes in value to the new slice.
-func mustArrayToByteSlice(value reflect.Value) reflect.Value {
-	slice := reflect.ValueOf(make([]byte, value.Len()))
-	reflect.Copy(slice, value)
-	return slice
+func mustArrayToByteSlice(value reflect.Value) []byte {
+	ptr := reflect.New(value.Type())
+	ptr.Elem().Set(value)
+	ret := ptr.Elem().Bytes()
+	return ret
 }
 
 // set attempts to assign src to dst by either setting, copying or otherwise.
