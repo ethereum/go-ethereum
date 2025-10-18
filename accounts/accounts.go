@@ -20,12 +20,13 @@ package accounts
 import (
 	"fmt"
 	"math/big"
+	"unsafe"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
-	"golang.org/x/crypto/sha3"
 )
 
 // Account represents an Ethereum account located at a specific location defined
@@ -196,9 +197,8 @@ func TextHash(data []byte) []byte {
 // This gives context to the signed message and prevents signing of transactions.
 func TextAndHash(data []byte) ([]byte, string) {
 	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
-	hasher := sha3.NewLegacyKeccak256()
-	hasher.Write([]byte(msg))
-	return hasher.Sum(nil), msg
+	hash := crypto.Keccak256(unsafe.Slice(unsafe.StringData(msg), len(msg)))
+	return hash, msg
 }
 
 // WalletEventType represents the different event types that can be fired by
