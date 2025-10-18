@@ -187,16 +187,65 @@ func (s *BeaconApiServer) publishEvent(event, data string) {
 }
 
 func (s *BeaconApiServer) handleUpdates(ctx context.Context, values url.Values, vars map[string]string, decodeBody func(*any) error) (any, string, int) {
-	panic("TODO")
+	startStr, countStr := values.Get("start_period"), values.Get("count")
+	start, err := strconv.ParseUint(startStr, 10, 64)
+	if err != nil {
+		return nil, "invalid start_period parameter", http.StatusBadRequest
+	}
+	var count uint64
+	if countStr != "" {
+		count, err = strconv.ParseUint(countStr, 10, 64)
+		if err != nil {
+			return nil, "invalid count parameter", http.StatusBadRequest
+		}
+	} else {
+		count = 1
+	}
+	var updates []CommitteeUpdate
+	for period := start; period < start+count; period++ {
+		update := s.committeeChain.GetUpdate(period)
+		if update == nil {
+			continue
+		}
+		committee := s.committeeChain.GetCommittee(period + 1)
+		if committee == nil {
+			continue
+		}
+		updates = append(updates, CommitteeUpdate{
+			Update:            *update,
+			NextSyncCommittee: *committee,
+		})
+	}
+	return updates, "", 0
 }
+
 func (s *BeaconApiServer) handleOptimisticUpdate(ctx context.Context, values url.Values, vars map[string]string, decodeBody func(*any) error) (any, string, int) {
-	panic("TODO")
+	update, err := toJsonOptimisticUpdate(s.lastOptimistic)
+	if err != nil {
+		return nil, "error encoding optimistic update", http.StatusInternalServerError
+	}
+	return update, "", 0
 }
+
 func (s *BeaconApiServer) handleFinalityUpdate(ctx context.Context, values url.Values, vars map[string]string, decodeBody func(*any) error) (any, string, int) {
-	panic("TODO")
+	update, err := toJsonFinalityUpdate(s.lastFinality)
+	if err != nil {
+		return nil, "error encoding finality update", http.StatusInternalServerError
+	}
+	return update, "", 0
 }
+
 func (s *BeaconApiServer) handleHeadHeader(ctx context.Context, values url.Values, vars map[string]string, decodeBody func(*any) error) (any, string, int) {
-	panic("TODO")
+	block := s.getBeaconBlock(s.lastHeadInfo.BlockRoot)
+	if block == nil {
+		return nil, "unknown head block", http.StatusNotFound
+	}
+	header := block.Header()
+	var headerData jsonHeaderData
+	headerData.Data.Canonical = true
+	headerData.Data.Header.Message = header
+	headerData.Data.Root = header.Hash()
+	return headerData, "", 0
 }
 
 func (s *BeaconApiServer) handleBootstrap(ctx context.Context, values url.Values, vars map[string]string, decodeBody func(*any) error) (any, string, int) {

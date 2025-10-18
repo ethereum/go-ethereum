@@ -35,7 +35,6 @@ var (
 )
 
 type CommitteeUpdate struct {
-	Version           string
 	Update            types.LightClientUpdate
 	NextSyncCommittee types.SerializedSyncCommittee
 }
@@ -69,15 +68,13 @@ type committeeUpdateData struct {
 
 func (u *CommitteeUpdate) MarshalJSON() ([]byte, error) {
 	enc := committeeUpdateJson{
-		Version: u.Version,
+		Version: u.Update.Version,
 		Data: committeeUpdateData{
 			Header:                  jsonBeaconHeader{Beacon: u.Update.AttestedHeader.Header},
 			NextSyncCommittee:       u.NextSyncCommittee,
 			NextSyncCommitteeBranch: u.Update.NextSyncCommitteeBranch,
-			//FinalizedHeader         *jsonBeaconHeader             `json:"finalized_header,omitempty"`
-			//FinalityBranch          merkle.Values                 `json:"finality_branch,omitempty"`
-			SyncAggregate: u.Update.AttestedHeader.Signature,
-			SignatureSlot: common.Decimal(u.Update.AttestedHeader.SignatureSlot),
+			SyncAggregate:           u.Update.AttestedHeader.Signature,
+			SignatureSlot:           common.Decimal(u.Update.AttestedHeader.SignatureSlot),
 		},
 	}
 	if u.Update.FinalizedHeader != nil {
@@ -93,9 +90,9 @@ func (u *CommitteeUpdate) UnmarshalJSON(input []byte) error {
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
-	u.Version = dec.Version
 	u.NextSyncCommittee = dec.Data.NextSyncCommittee
 	u.Update = types.LightClientUpdate{
+		Version: dec.Version,
 		AttestedHeader: types.SignedHeader{
 			Header:        dec.Data.Header.Beacon,
 			Signature:     dec.Data.SyncAggregate,
