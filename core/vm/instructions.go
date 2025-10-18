@@ -933,7 +933,7 @@ func makeLog(size int) executionFunc {
 		mStart, mSize := stack.pop(), stack.pop()
 		for i := 0; i < size; i++ {
 			addr := stack.pop()
-			topics[i] = addr.Bytes32()
+			addr.WriteToArray32((*[32]byte)(&topics[i]))
 		}
 
 		d := scope.Memory.GetCopy(mStart.Uint64(), mSize.Uint64())

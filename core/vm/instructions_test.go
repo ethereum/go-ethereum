@@ -1008,3 +1008,38 @@ func TestOpCLZ(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkLog3(b *testing.B) {
+	var (
+		statedb, _        = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		evm               = NewEVM(BlockContext{BlockNumber: big.NewInt(1), Time: 1, Random: &common.Hash{}}, statedb, params.MergedTestChainConfig, Config{})
+		startGas   uint64 = 100_000_000
+		value             = uint256.NewInt(0)
+		contract          = NewContract(common.Address{}, common.Address{}, value, startGas, nil)
+		scope             = &ScopeContext{
+			Contract: contract,
+			Memory:   NewMemory(),
+			Stack:    new(Stack),
+		}
+	)
+	// get log3 executor
+	exec := makeLog(3)
+	for b.Loop() {
+		// memory data
+		data := []byte("hello world, this is log data")
+		scope.Memory.Resize(1024)
+		scope.Memory.Set(0, uint64(len(data)), data)
+
+		// LOG3
+		// stack: mStart, mSize, topic1, topic2, topic3
+		scope.Stack.push(uint256.NewInt(1))
+		scope.Stack.push(uint256.NewInt(2))
+		scope.Stack.push(uint256.NewInt(3))
+		scope.Stack.push(uint256.NewInt(uint64(len(data)))) // mSize
+		scope.Stack.push(uint256.NewInt(0))                 // mStart
+		_, err := exec(nil, evm, scope)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
