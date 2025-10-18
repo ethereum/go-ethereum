@@ -262,7 +262,7 @@ func opOrigin(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opCaller(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetBytes(scope.Contract.Caller().Bytes()))
+	scope.Stack.push(new(uint256.Int).SetBytes20(scope.Contract.Caller().Bytes()))
 	return nil, nil
 }
 
