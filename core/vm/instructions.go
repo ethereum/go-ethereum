@@ -453,7 +453,7 @@ func opBlockhash(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opCoinbase(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetBytes(evm.Context.Coinbase.Bytes()))
+	scope.Stack.push(new(uint256.Int).SetBytes20(evm.Context.Coinbase.Bytes()))
 	return nil, nil
 }
 
