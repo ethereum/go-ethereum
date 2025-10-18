@@ -681,7 +681,7 @@ func opCreate(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	} else if suberr != nil && suberr != ErrCodeStoreOutOfGas {
 		stackvalue.Clear()
 	} else {
-		stackvalue.SetBytes(addr.Bytes())
+		stackvalue.SetBytes20(addr.Bytes())
 	}
 	scope.Stack.push(&stackvalue)
 
