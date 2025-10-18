@@ -240,7 +240,7 @@ func opKeccak256(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if evm.Config.EnablePreimageRecording {
 		evm.StateDB.AddPreimage(evm.hasherBuf, data)
 	}
-	size.SetBytes(evm.hasherBuf[:])
+	size.SetBytes32(evm.hasherBuf[:])
 	return nil, nil
 }
 
