@@ -445,7 +445,7 @@ func opBlockhash(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		if tracer := evm.Config.Tracer; tracer != nil && tracer.OnBlockHashRead != nil {
 			tracer.OnBlockHashRead(num64, res)
 		}
-		num.SetBytes(res[:])
+		num.SetBytes32(res[:])
 	} else {
 		num.Clear()
 	}
