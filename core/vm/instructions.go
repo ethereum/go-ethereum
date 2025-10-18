@@ -411,7 +411,7 @@ func opExtCodeHash(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	if evm.StateDB.Empty(address) {
 		slot.Clear()
 	} else {
-		slot.SetBytes(evm.StateDB.GetCodeHash(address).Bytes())
+		slot.SetBytes32(evm.StateDB.GetCodeHash(address).Bytes())
 	}
 	return nil, nil
 }
