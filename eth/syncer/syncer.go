@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -39,6 +40,10 @@ type syncReq struct {
 // Syncer is an auxiliary service that allows Geth to perform full sync
 // alone without consensus-layer attached. Users must specify a valid block hash
 // as the sync target.
+//
+// Additionally, the syncer can be used to monitor state synchronization.
+// It will exit once the specified target has been reached or when the
+// most recent chain head is caught up.
 //
 // This tool can be applied to different networks, no matter it's pre-merge or
 // post-merge, but only for full-sync.
@@ -87,9 +92,15 @@ func (s *Syncer) run() {
 
 	var (
 		target *types.Header
-		ticker = time.NewTicker(time.Second * 5)
+
+		// The additional capacity of channel is allocated to handle edge
+		// cases where multiple downloader events are emitted before they
+		// can be processed here.
+		syncCh = make(chan downloader.SyncEvent, 10)
 	)
-	defer ticker.Stop()
+	sub := s.backend.Downloader().SubscribeSyncEvents(syncCh)
+	defer sub.Unsubscribe()
+
 	for {
 		select {
 		case req := <-s.request:
@@ -132,14 +143,31 @@ func (s *Syncer) run() {
 				req.errc <- s.backend.Downloader().BeaconDevSync(ethconfig.FullSync, target)
 			}
 
-		case <-ticker.C:
-			if target == nil || !s.exitWhenSynced {
+		case ev := <-syncCh:
+			if !s.exitWhenSynced {
 				continue
 			}
-			if block := s.backend.BlockChain().GetBlockByHash(target.Hash()); block != nil {
-				log.Info("Sync target reached", "number", block.NumberU64(), "hash", block.Hash())
-				go s.stack.Close() // async since we need to close ourselves
-				return
+			if ev.Type == downloader.SyncStarted {
+				log.Debug("Synchronization starts")
+				continue
+			}
+			if ev.Type == downloader.SyncFailed {
+				log.Debug("Synchronization fails", "err", ev.Err)
+				continue
+			}
+			if s.target != (common.Hash{}) {
+				if block := s.backend.BlockChain().GetBlockByHash(target.Hash()); block != nil {
+					log.Info("Sync target reached", "number", block.NumberU64(), "hash", block.Hash())
+					go s.stack.Close() // async since we need to close ourselves
+					return
+				}
+			} else {
+				if timestamp := time.Unix(int64(ev.Latest.Time), 0); time.Since(timestamp) < 10*time.Minute {
+					log.Info("Synchronisation completed", "latestnum", ev.Latest.Number, "latesthash", ev.Latest.Hash(),
+						"age", common.PrettyAge(timestamp))
+					go s.stack.Close() // async since we need to close ourselves
+					return
+				}
 			}
 
 		case <-s.closed:
