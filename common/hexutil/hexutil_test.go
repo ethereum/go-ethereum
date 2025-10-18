@@ -207,7 +207,7 @@ func BenchmarkEncodeBig(b *testing.B) {
 		b.Run(bench.want, func(b *testing.B) {
 			b.ReportAllocs()
 			bigint := bench.input.(*big.Int)
-			for i := 0; i < b.N; i++ {
+			for range b.Loop() {
 				EncodeBig(bigint)
 			}
 		})
