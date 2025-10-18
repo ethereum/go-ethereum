@@ -313,13 +313,13 @@ func ReadTrienodeHistoryHeader(db ethdb.AncientReaderOp, id uint64) ([]byte, err
 }
 
 // ReadTrienodeHistoryKeySection retrieves the key section of trienode history.
-func ReadTrienodeHistoryKeySection(db ethdb.AncientReaderOp, id uint64) ([]byte, error) {
-	return db.Ancient(trienodeHistoryKeySectionTable, id-1)
+func ReadTrienodeHistoryKeySection(db ethdb.AncientReaderOp, id uint64, offset uint64, length uint64) ([]byte, error) {
+	return db.AncientBytes(trienodeHistoryKeySectionTable, id-1, offset, length)
 }
 
 // ReadTrienodeHistoryValueSection retrieves the value section of trienode history.
-func ReadTrienodeHistoryValueSection(db ethdb.AncientReaderOp, id uint64) ([]byte, error) {
-	return db.Ancient(trienodeHistoryValueSectionTable, id-1)
+func ReadTrienodeHistoryValueSection(db ethdb.AncientReaderOp, id uint64, offset uint64, length uint64) ([]byte, error) {
+	return db.AncientBytes(trienodeHistoryValueSectionTable, id-1, offset, length)
 }
 
 // ReadTrienodeHistoryList retrieves the a list of trienode history corresponding
