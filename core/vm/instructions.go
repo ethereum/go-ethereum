@@ -257,7 +257,7 @@ func opBalance(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opOrigin(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetBytes(evm.Origin.Bytes()))
+	scope.Stack.push(new(uint256.Int).SetBytes20(evm.Origin.Bytes()))
 	return nil, nil
 }
 
