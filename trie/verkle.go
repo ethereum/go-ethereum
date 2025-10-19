@@ -101,7 +101,7 @@ func (t *VerkleTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	}
 	basicData := values[utils.BasicDataLeafKey]
 	acc.Nonce = binary.BigEndian.Uint64(basicData[utils.BasicDataNonceOffset:])
-	acc.Balance = new(uint256.Int).SetBytes(basicData[utils.BasicDataBalanceOffset : utils.BasicDataBalanceOffset+16])
+	acc.Balance = new(uint256.Int).SetBytes16(basicData[utils.BasicDataBalanceOffset : utils.BasicDataBalanceOffset+16])
 	acc.CodeHash = values[utils.CodeHashLeafKey]
 
 	// TODO account.Root is leave as empty. How should we handle the legacy account?
