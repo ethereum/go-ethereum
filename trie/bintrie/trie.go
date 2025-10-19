@@ -151,7 +151,7 @@ func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	acc.Nonce = binary.BigEndian.Uint64(values[BasicDataLeafKey][BasicDataNonceOffset:])
 	var balance [16]byte
 	copy(balance[:], values[BasicDataLeafKey][BasicDataBalanceOffset:])
-	acc.Balance = new(uint256.Int).SetBytes(balance[:])
+	acc.Balance = new(uint256.Int).SetBytes16(balance[:])
 	acc.CodeHash = values[CodeHashLeafKey]
 
 	return acc, nil
