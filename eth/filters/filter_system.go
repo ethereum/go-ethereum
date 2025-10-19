@@ -439,17 +439,21 @@ func (es *EventSystem) handleTxsEvent(filters filterIndex, ev core.NewTxsEvent) 
 }
 
 func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent) {
-	for _, f := range filters[BlocksSubscription] {
-		f.headers <- ev.Header
-	}
-
-	// Handle transaction receipts subscriptions when a new block is added
-	for _, f := range filters[TransactionReceiptsSubscription] {
-		matchedReceipts := filterReceipts(f.txHashes, ev)
-		if len(matchedReceipts) > 0 {
-			f.receipts <- matchedReceipts
+	go func() {
+		for _, f := range filters[BlocksSubscription] {
+			f.headers <- ev.Header
 		}
-	}
+	}()
+
+	go func() {
+		// Handle transaction receipts subscriptions when a new block is added
+		for _, f := range filters[TransactionReceiptsSubscription] {
+			matchedReceipts := filterReceipts(f.txHashes, ev)
+			if len(matchedReceipts) > 0 {
+				f.receipts <- matchedReceipts
+			}
+		}
+	}()
 }
 
 // eventLoop (un)installs filters and processes mux events.
