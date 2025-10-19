@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"golang.org/x/sync/errgroup"
 )
 
 // Config represents the configuration of the filter system.
@@ -439,13 +440,15 @@ func (es *EventSystem) handleTxsEvent(filters filterIndex, ev core.NewTxsEvent) 
 }
 
 func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent) {
-	go func() {
+	var eg errgroup.Group
+	eg.Go(func() error {
 		for _, f := range filters[BlocksSubscription] {
 			f.headers <- ev.Header
 		}
-	}()
+		return nil
+	})
 
-	go func() {
+	eg.Go(func() error {
 		// Handle transaction receipts subscriptions when a new block is added
 		for _, f := range filters[TransactionReceiptsSubscription] {
 			matchedReceipts := filterReceipts(f.txHashes, ev)
@@ -453,7 +456,9 @@ func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent)
 				f.receipts <- matchedReceipts
 			}
 		}
-	}()
+		return nil
+	})
+	_ = eg.Wait()
 }
 
 // eventLoop (un)installs filters and processes mux events.
