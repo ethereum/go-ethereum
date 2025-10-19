@@ -203,7 +203,7 @@ func opTload(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	loc := scope.Stack.peek()
 	hash := common.Hash(loc.Bytes32())
 	val := evm.StateDB.GetTransientState(scope.Contract.Address(), hash)
-	loc.SetBytes(val.Bytes())
+	loc.SetBytes32(val.Bytes())
 	return nil, nil
 }
 
