@@ -560,9 +560,9 @@ func osakaModexpGas(baseLen, expLen, modLen uint64, expHead uint256.Int) uint64 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	// Parse input lengths
-	baseLenBig := new(uint256.Int).SetBytes(getData(input, 0, 32))
-	expLenBig := new(uint256.Int).SetBytes(getData(input, 32, 32))
-	modLenBig := new(uint256.Int).SetBytes(getData(input, 64, 32))
+	baseLenBig := new(uint256.Int).SetBytes32(getData(input, 0, 32))
+	expLenBig := new(uint256.Int).SetBytes32(getData(input, 32, 32))
+	modLenBig := new(uint256.Int).SetBytes32(getData(input, 64, 32))
 
 	// Convert to uint64, capping at max value
 	baseLen := baseLenBig.Uint64()
@@ -589,7 +589,7 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	var expHead uint256.Int
 	if uint64(len(input)) > baseLen {
 		if expLen > 32 {
-			expHead.SetBytes(getData(input, baseLen, 32))
+			expHead.SetBytes32(getData(input, baseLen, 32))
 		} else {
 			// TODO: Check that if expLen < baseLen, then getData will return an empty slice
 			expHead.SetBytes(getData(input, baseLen, expLen))
