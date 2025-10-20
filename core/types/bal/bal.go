@@ -275,11 +275,9 @@ func (c *AccessListBuilder) FinaliseIdxChanges(idx uint16) {
 				}
 				finalizedAcctChanges.StorageWrites[key][idx] = val
 
-				// TODO: investigate why commenting out the check here, and the corresponding
-				// check under accesses causes GeneralStateTests blockchain tests to fail.
-				// They should only contain one tx per test.
-				//
-				// key could have been read in a previous tx, delete it from the read set here
+				// TODO: commenting this 'if' results in no test failures.
+				// double-check that this edge-case was fixed by a future
+				// release of the eest BAL tests.
 				if _, ok := finalizedAcctChanges.StorageReads[key]; ok {
 					delete(finalizedAcctChanges.StorageReads, key)
 				}
