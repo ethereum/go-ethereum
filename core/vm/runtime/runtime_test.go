@@ -312,18 +312,6 @@ func (d *dummyChain) Config() *params.ChainConfig {
 	return nil
 }
 
-func (d *dummyChain) CurrentHeader() *types.Header {
-	return nil
-}
-
-func (d *dummyChain) GetHeaderByNumber(n uint64) *types.Header {
-	return d.GetHeader(common.Hash{}, n)
-}
-
-func (d *dummyChain) GetHeaderByHash(h common.Hash) *types.Header {
-	return nil
-}
-
 // TestBlockhash tests the blockhash operation. It's a bit special, since it internally
 // requires access to a chain reader.
 func TestBlockhash(t *testing.T) {
@@ -676,7 +664,7 @@ func TestColdAccountAccessCost(t *testing.T) {
 				Tracer: &tracing.Hooks{
 					OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 						// Uncomment to investigate failures:
-						//t.Logf("%d: %v %d", step, vm.OpCode(op).PrettyPrint(), cost)
+						//t.Logf("%d: %v %d", step, vm.OpCode(op).String(), cost)
 						if step == tc.step {
 							have = cost
 						}
