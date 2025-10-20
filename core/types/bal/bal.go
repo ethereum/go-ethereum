@@ -27,14 +27,18 @@ import (
 // idxAccessListBuilder is responsible for producing the state accesses and
 // reads recorded within the scope of a single index in the access list.
 type idxAccessListBuilder struct {
-	// stores the previous values of any account data that was modified in the
+	// stores the pre-index values of any account data that was modified in the
 	// current index.
 	prestates map[common.Address]*accountIdxPrestate
 
-	// a stack which maintains a set of state mutations/reads for each EVM
-	// execution frame.  Entering a frame appends an intermediate access list
-	// and terminating a frame merges the accesses/modifications into the
-	// intermediate access list of the calling frame.
+	// A stack which maintains a state access/modification list for each EVM
+	// execution frame.
+	//
+	// Entering a frame appends an empty access list
+	// and terminating a frame merges it into the intermediate access list
+	// of the calling frame.  If it reverted, any account/storage mutations
+	// are converted to accesses and account mutations are discarded before
+	// merging.
 	accessesStack []map[common.Address]*constructionAccountAccess
 }
 
@@ -71,12 +75,11 @@ func (c *idxAccessListBuilder) storageWrite(address common.Address, key, prevVal
 	if _, ok := c.prestates[address].storage[key]; !ok {
 		c.prestates[address].storage[key] = prevVal
 	}
-
 	if _, ok := c.accessesStack[len(c.accessesStack)-1][address]; !ok {
 		c.accessesStack[len(c.accessesStack)-1][address] = &constructionAccountAccess{}
 	}
 	acctAccesses := c.accessesStack[len(c.accessesStack)-1][address]
-	acctAccesses.StorageWrite(key, prevVal, newVal)
+	acctAccesses.StorageWrite(key, newVal)
 }
 
 func (c *idxAccessListBuilder) balanceChange(address common.Address, prev, cur *uint256.Int) {
@@ -94,9 +97,9 @@ func (c *idxAccessListBuilder) balanceChange(address common.Address, prev, cur *
 }
 
 func (c *idxAccessListBuilder) codeChange(address common.Address, prev, cur []byte) {
-	// auth unset and selfdestruct pass code change as 'nil'
-	// however, internally in the access list accumulation of state changes,
-	// a nil field on an account means that it was never modified in the block.
+	// 7702 delegation clear and selfdestruct pass new code as 'nil'.
+	// However, internally the constructionAccountAccess uses
+	// nil as a sign that an account field was not modified.
 	if cur == nil {
 		cur = []byte{}
 	}
@@ -111,7 +114,6 @@ func (c *idxAccessListBuilder) codeChange(address common.Address, prev, cur []by
 		c.accessesStack[len(c.accessesStack)-1][address] = &constructionAccountAccess{}
 	}
 	acctAccesses := c.accessesStack[len(c.accessesStack)-1][address]
-
 	acctAccesses.CodeChange(cur)
 }
 
@@ -152,24 +154,17 @@ func (c *idxAccessListBuilder) enterScope() {
 	c.accessesStack = append(c.accessesStack, make(map[common.Address]*constructionAccountAccess))
 }
 
-// exitScope is called after an EVM call scope terminates.  If the call scope
-// terminates with an error:
-// * the scope's state accesses are added to the calling scope's access list
-// * mutated accounts/storage are added into the calling scope's access list as state accesses
-// * the state mutations tracked in the parent scope are un-modified
+// exitScope is called after an EVM call scope terminates.
 func (c *idxAccessListBuilder) exitScope(evmErr bool) {
-	// all storage writes in the child scope are converted into reads
-	// if there were no storage writes, the account is reported in the BAL as a read (if it wasn't already in the BAL and/or mutated previously)
 	childAccessList := c.accessesStack[len(c.accessesStack)-1]
 	parentAccessList := c.accessesStack[len(c.accessesStack)-2]
 
 	for addr, childAccess := range childAccessList {
-		if _, ok := parentAccessList[addr]; ok {
-		} else {
+		if _, ok := parentAccessList[addr]; !ok {
 			parentAccessList[addr] = &constructionAccountAccess{}
 		}
 		if evmErr {
-			parentAccessList[addr].MergeReads(childAccess)
+			parentAccessList[addr].MergeRevertedAccess(childAccess)
 		} else {
 			parentAccessList[addr].Merge(childAccess)
 		}
@@ -209,17 +204,19 @@ func (a *idxAccessListBuilder) finalise() (*StateDiff, StateAccesses) {
 			}
 		}
 
-		// if the account has no net mutations against the tx prestate, only include
-		// it in the state read set
+		if access.storageReads != nil {
+			stateAccesses[addr] = access.storageReads
+		}
+
+		// if the account has no net mutations against the tx prestate, it must
+		// be tracked as an account read.
 		if len(access.code) == 0 && access.nonce == nil && access.balance == nil && len(access.storageMutations) == 0 {
-			stateAccesses[addr] = make(map[common.Hash]struct{})
-			if access.storageReads != nil {
-				stateAccesses[addr] = access.storageReads
+			if _, ok := stateAccesses[addr]; !ok {
+				stateAccesses[addr] = make(map[common.Hash]struct{})
 			}
 			continue
 		}
 
-		stateAccesses[addr] = access.storageReads
 		diff.Mutations[addr] = &AccountMutations{
 			Balance:       access.balance,
 			Nonce:         access.nonce,
@@ -232,14 +229,19 @@ func (a *idxAccessListBuilder) finalise() (*StateDiff, StateAccesses) {
 }
 
 // FinaliseIdxChanges records all pending state mutations/accesses in the
-// access list at the given index.  The set of pending state mutations/accesse are
+// access list at the given index.  The set of pending state mutations/accesses are
 // then emptied.
 func (c *AccessListBuilder) FinaliseIdxChanges(idx uint16) {
 	pendingDiff, pendingAccesses := c.idxBuilder.finalise()
 	c.idxBuilder = newAccessListBuilder()
 
-	// if any of the newly-written storage slots were previously
-	// accessed, they must be removed from the accessed state set.
+	// merge the set of state accesses/modifications into the access list:
+	// * any account or storage slot which was already recorded as a read
+	//   in the block access list and modified in the index-being-finalized
+	//   is removed from the set of accessed state in the block access list.
+	// * any account/storage slot which was already recorded as modified
+	//   in the block access list and read in the index-being-finalized is
+	//   not included in the block access list's set of state reads.
 	for addr, pendingAcctDiff := range pendingDiff.Mutations {
 		finalizedAcctChanges, ok := c.FinalizedAccesses[addr]
 		if !ok {
@@ -275,11 +277,6 @@ func (c *AccessListBuilder) FinaliseIdxChanges(idx uint16) {
 				}
 				finalizedAcctChanges.StorageWrites[key][idx] = val
 
-				// TODO: investigate why commenting out the check here, and the corresponding
-				// check under accesses causes GeneralStateTests blockchain tests to fail.
-				// They should only contain one tx per test.
-				//
-				// key could have been read in a previous tx, delete it from the read set here
 				if _, ok := finalizedAcctChanges.StorageReads[key]; ok {
 					delete(finalizedAcctChanges.StorageReads, key)
 				}
@@ -345,37 +342,31 @@ type CodeChange struct {
 	Code  []byte `json:"code,omitempty"`
 }
 
-// ConstructionAccountAccesses contains post-block account state for mutations as well as
-// all storage keys that were read during execution.  It is used when building block
-// access list during execution.
+// ConstructionAccountAccesses contains all state mutations which were applied
+// to a single account during the execution of a block.
+// It contains the final values for the account fields and storage slots which
+// were mutated, indexed by where they occurred:
+// * pre-transaction execution system contracts
+// * each block transaction
+// * post-transaction-execution system contracts, withdrawals and block reward.
+//
+// It also contains a set of storage slot accesses for state which was accessed
+// but not modified.  State accesses are not keyed by an index where they occurred.
 type ConstructionAccountAccesses struct {
-	// StorageWrites is the post-state values of an account's storage slots
-	// that were modified in a block, keyed by the slot key and the tx index
-	// where the modification occurred.
+	// StorageWrites contain mutated storage slots and their values.
+	// It is indexed by storage slot -> access list index -> post-state value
 	StorageWrites map[common.Hash]map[uint16]common.Hash
 
-	// StorageReads is the set of slot keys that were accessed during block
-	// execution.
-	//
-	// Storage slots which are both read and written (with changed values)
-	// appear only in StorageWrites.
-	StorageReads map[common.Hash]struct{}
-
-	// BalanceChanges contains the post-transaction balances of an account,
-	// keyed by transaction indices where it was changed.
+	StorageReads   map[common.Hash]struct{}
 	BalanceChanges map[uint16]*uint256.Int
-
-	// NonceChanges contains the post-state nonce values of an account keyed
-	// by tx index.
-	NonceChanges map[uint16]uint64
-
-	CodeChanges map[uint16]CodeChange
+	NonceChanges   map[uint16]uint64
+	CodeChanges    map[uint16]CodeChange
 }
 
 // constructionAccountAccess contains fields for an account which were modified
 // during execution of the current access list index.
 // It also accumulates a set of storage slots which were accessed but not
-// modified.
+// modified during the execution of the current index.
 type constructionAccountAccess struct {
 	code    []byte
 	nonce   *uint64
@@ -385,7 +376,8 @@ type constructionAccountAccess struct {
 	storageReads     map[common.Hash]struct{}
 }
 
-// Merge adds the accesses/mutations from other into the calling instance. If
+// Merge adds the accesses/mutations from other into the calling instance:
+// c.stateMutations <- c.stateMutations \union other.stateMutations
 func (c *constructionAccountAccess) Merge(other *constructionAccountAccess) {
 	if other.code != nil {
 		c.code = other.code
@@ -417,10 +409,12 @@ func (c *constructionAccountAccess) Merge(other *constructionAccountAccess) {
 	}
 }
 
-// MergeReads merges accesses from a reverted execution from:
-// * any reads/writes from the reverted frame which weren't mutated
-// in the current frame, are merged into the current frame as reads.
-func (c *constructionAccountAccess) MergeReads(other *constructionAccountAccess) {
+// MergeRevertedAccess merges an account's accesses from a reverted execution
+// frame into the caller:
+// * storage reads are merged into the caller
+// * storage mutations are converted into reads and merged into the caller
+// * account field mutations are discarded.  If an account
+func (c *constructionAccountAccess) MergeRevertedAccess(other *constructionAccountAccess) {
 	if other.storageMutations != nil {
 		if c.storageReads == nil {
 			c.storageReads = make(map[common.Hash]struct{})
@@ -445,6 +439,7 @@ func (c *constructionAccountAccess) MergeReads(other *constructionAccountAccess)
 	}
 }
 
+// StorageRead records a storage slot read
 func (c *constructionAccountAccess) StorageRead(key common.Hash) {
 	if c.storageReads == nil {
 		c.storageReads = make(map[common.Hash]struct{})
@@ -454,7 +449,8 @@ func (c *constructionAccountAccess) StorageRead(key common.Hash) {
 	}
 }
 
-func (c *constructionAccountAccess) StorageWrite(key, prevVal, newVal common.Hash) {
+// StorageWrite records a storage slot write
+func (c *constructionAccountAccess) StorageWrite(key, newVal common.Hash) {
 	if c.storageMutations == nil {
 		c.storageMutations = make(map[common.Hash]common.Hash)
 	}
