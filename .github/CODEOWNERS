@@ -19,7 +19,7 @@ eth/tracers/                    @s1na
 ethclient/                      @fjl
 ethdb/                          @rjl493456442
 event/                          @fjl
-trie/                           @rjl493456442
+trie/                           @rjl493456442 @gballet
 triedb/                         @rjl493456442
 core/tracing/                   @s1na
 graphql/                        @s1na
@@ -29,5 +29,5 @@ miner/                          @MariusVanDerWijden @fjl @rjl493456442
 node/                           @fjl
 p2p/                            @fjl @zsfelfoldi
 rlp/                            @fjl
-params/                         @fjl @karalabe @gballet @rjl493456442 @zsfelfoldi
+params/                         @fjl @gballet @rjl493456442 @zsfelfoldi
 rpc/                            @fjl

@@ -168,6 +168,7 @@ func newHelper(scheme string) *testHelper {
 	if scheme == rawdb.PathScheme {
 		config.PathDB = &pathdb.Config{
 			SnapshotNoBuild: true,
+			NoAsyncFlush:    true,
 		} // disable caching
 	} else {
 		config.HashDB = &hashdb.Config{} // disable caching

@@ -19,16 +19,76 @@ package eip4844
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/params/forks"
 )
 
 var (
 	minBlobGasPrice = big.NewInt(params.BlobTxMinBlobGasprice)
 )
+
+// BlobConfig contains the parameters for blob-related formulas.
+// These can be adjusted in a fork.
+type BlobConfig struct {
+	Target         int
+	Max            int
+	UpdateFraction uint64
+}
+
+func (bc *BlobConfig) maxBlobGas() uint64 {
+	return uint64(bc.Max) * params.BlobTxBlobGasPerBlob
+}
+
+// blobBaseFee computes the blob fee.
+func (bc *BlobConfig) blobBaseFee(excessBlobGas uint64) *big.Int {
+	return fakeExponential(minBlobGasPrice, new(big.Int).SetUint64(excessBlobGas), new(big.Int).SetUint64(bc.UpdateFraction))
+}
+
+// blobPrice returns the price of one blob in Wei.
+func (bc *BlobConfig) blobPrice(excessBlobGas uint64) *big.Int {
+	f := bc.blobBaseFee(excessBlobGas)
+	return new(big.Int).Mul(f, big.NewInt(params.BlobTxBlobGasPerBlob))
+}
+
+func latestBlobConfig(cfg *params.ChainConfig, time uint64) *BlobConfig {
+	if cfg.BlobScheduleConfig == nil {
+		return nil
+	}
+	var (
+		london = cfg.LondonBlock
+		s      = cfg.BlobScheduleConfig
+		bc     *params.BlobConfig
+	)
+	switch {
+	case cfg.IsBPO5(london, time) && s.BPO5 != nil:
+		bc = s.BPO5
+	case cfg.IsBPO4(london, time) && s.BPO4 != nil:
+		bc = s.BPO4
+	case cfg.IsBPO3(london, time) && s.BPO3 != nil:
+		bc = s.BPO3
+	case cfg.IsBPO2(london, time) && s.BPO2 != nil:
+		bc = s.BPO2
+	case cfg.IsBPO1(london, time) && s.BPO1 != nil:
+		bc = s.BPO1
+	case cfg.IsOsaka(london, time) && s.Osaka != nil:
+		bc = s.Osaka
+	case cfg.IsPrague(london, time) && s.Prague != nil:
+		bc = s.Prague
+	case cfg.IsCancun(london, time) && s.Cancun != nil:
+		bc = s.Cancun
+	default:
+		return nil
+	}
+
+	return &BlobConfig{
+		Target:         bc.Target,
+		Max:            bc.Max,
+		UpdateFraction: bc.UpdateFraction,
+	}
+}
 
 // VerifyEIP4844Header verifies the presence of the excessBlobGas field and that
 // if the current block contains no transactions, the excessBlobGas is updated
@@ -37,21 +97,27 @@ func VerifyEIP4844Header(config *params.ChainConfig, parent, header *types.Heade
 	if header.Number.Uint64() != parent.Number.Uint64()+1 {
 		panic("bad header pair")
 	}
-	// Verify the header is not malformed
+
+	bcfg := latestBlobConfig(config, header.Time)
+	if bcfg == nil {
+		panic("called before EIP-4844 is active")
+	}
+
 	if header.ExcessBlobGas == nil {
 		return errors.New("header is missing excessBlobGas")
 	}
 	if header.BlobGasUsed == nil {
 		return errors.New("header is missing blobGasUsed")
 	}
+
 	// Verify that the blob gas used remains within reasonable limits.
-	maxBlobGas := MaxBlobGasPerBlock(config, header.Time)
-	if *header.BlobGasUsed > maxBlobGas {
-		return fmt.Errorf("blob gas used %d exceeds maximum allowance %d", *header.BlobGasUsed, maxBlobGas)
+	if *header.BlobGasUsed > bcfg.maxBlobGas() {
+		return fmt.Errorf("blob gas used %d exceeds maximum allowance %d", *header.BlobGasUsed, bcfg.maxBlobGas())
 	}
 	if *header.BlobGasUsed%params.BlobTxBlobGasPerBlob != 0 {
 		return fmt.Errorf("blob gas used %d not a multiple of blob gas per blob %d", header.BlobGasUsed, params.BlobTxBlobGasPerBlob)
 	}
+
 	// Verify the excessBlobGas is correct based on the parent header
 	expectedExcessBlobGas := CalcExcessBlobGas(config, parent, header.Time)
 	if *header.ExcessBlobGas != expectedExcessBlobGas {
@@ -63,60 +129,63 @@ func VerifyEIP4844Header(config *params.ChainConfig, parent, header *types.Heade
 // CalcExcessBlobGas calculates the excess blob gas after applying the set of
 // blobs on top of the excess blob gas.
 func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header, headTimestamp uint64) uint64 {
-	var (
-		parentExcessBlobGas uint64
-		parentBlobGasUsed   uint64
-	)
+	isOsaka := config.IsOsaka(config.LondonBlock, headTimestamp)
+	bcfg := latestBlobConfig(config, headTimestamp)
+	return calcExcessBlobGas(isOsaka, bcfg, parent)
+}
+
+func calcExcessBlobGas(isOsaka bool, bcfg *BlobConfig, parent *types.Header) uint64 {
+	var parentExcessBlobGas, parentBlobGasUsed uint64
 	if parent.ExcessBlobGas != nil {
 		parentExcessBlobGas = *parent.ExcessBlobGas
 		parentBlobGasUsed = *parent.BlobGasUsed
 	}
-	excessBlobGas := parentExcessBlobGas + parentBlobGasUsed
-	targetGas := uint64(targetBlobsPerBlock(config, headTimestamp)) * params.BlobTxBlobGasPerBlob
+
+	var (
+		excessBlobGas = parentExcessBlobGas + parentBlobGasUsed
+		targetGas     = uint64(bcfg.Target) * params.BlobTxBlobGasPerBlob
+	)
 	if excessBlobGas < targetGas {
 		return 0
 	}
+
+	// EIP-7918 (post-Osaka) introduces a different formula for computing excess,
+	// in cases where the price is lower than a 'reserve price'.
+	if isOsaka {
+		var (
+			baseCost     = big.NewInt(params.BlobBaseCost)
+			reservePrice = baseCost.Mul(baseCost, parent.BaseFee)
+			blobPrice    = bcfg.blobPrice(parentExcessBlobGas)
+		)
+		if reservePrice.Cmp(blobPrice) > 0 {
+			scaledExcess := parentBlobGasUsed * uint64(bcfg.Max-bcfg.Target) / uint64(bcfg.Max)
+			return parentExcessBlobGas + scaledExcess
+		}
+	}
+
+	// Original EIP-4844 formula.
 	return excessBlobGas - targetGas
 }
 
 // CalcBlobFee calculates the blobfee from the header's excess blob gas field.
 func CalcBlobFee(config *params.ChainConfig, header *types.Header) *big.Int {
-	var frac uint64
-	switch config.LatestFork(header.Time) {
-	case forks.Osaka:
-		frac = config.BlobScheduleConfig.Osaka.UpdateFraction
-	case forks.Prague:
-		frac = config.BlobScheduleConfig.Prague.UpdateFraction
-	case forks.Cancun:
-		frac = config.BlobScheduleConfig.Cancun.UpdateFraction
-	default:
+	blobConfig := latestBlobConfig(config, header.Time)
+	if blobConfig == nil {
 		panic("calculating blob fee on unsupported fork")
 	}
-	return fakeExponential(minBlobGasPrice, new(big.Int).SetUint64(*header.ExcessBlobGas), new(big.Int).SetUint64(frac))
+	return blobConfig.blobBaseFee(*header.ExcessBlobGas)
 }
 
 // MaxBlobsPerBlock returns the max blobs per block for a block at the given timestamp.
 func MaxBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
-	if cfg.BlobScheduleConfig == nil {
+	blobConfig := latestBlobConfig(cfg, time)
+	if blobConfig == nil {
 		return 0
 	}
-	var (
-		london = cfg.LondonBlock
-		s      = cfg.BlobScheduleConfig
-	)
-	switch {
-	case cfg.IsOsaka(london, time) && s.Osaka != nil:
-		return s.Osaka.Max
-	case cfg.IsPrague(london, time) && s.Prague != nil:
-		return s.Prague.Max
-	case cfg.IsCancun(london, time) && s.Cancun != nil:
-		return s.Cancun.Max
-	default:
-		return 0
-	}
+	return blobConfig.Max
 }
 
-// MaxBlobsPerBlock returns the maximum blob gas that can be spent in a block at the given timestamp.
+// MaxBlobGasPerBlock returns the maximum blob gas that can be spent in a block at the given timestamp.
 func MaxBlobGasPerBlock(cfg *params.ChainConfig, time uint64) uint64 {
 	return uint64(MaxBlobsPerBlock(cfg, time)) * params.BlobTxBlobGasPerBlob
 }
@@ -124,41 +193,11 @@ func MaxBlobGasPerBlock(cfg *params.ChainConfig, time uint64) uint64 {
 // LatestMaxBlobsPerBlock returns the latest max blobs per block defined by the
 // configuration, regardless of the currently active fork.
 func LatestMaxBlobsPerBlock(cfg *params.ChainConfig) int {
-	s := cfg.BlobScheduleConfig
-	if s == nil {
+	bcfg := latestBlobConfig(cfg, math.MaxUint64)
+	if bcfg == nil {
 		return 0
 	}
-	switch {
-	case s.Osaka != nil:
-		return s.Osaka.Max
-	case s.Prague != nil:
-		return s.Prague.Max
-	case s.Cancun != nil:
-		return s.Cancun.Max
-	default:
-		return 0
-	}
-}
-
-// targetBlobsPerBlock returns the target number of blobs in a block at the given timestamp.
-func targetBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
-	if cfg.BlobScheduleConfig == nil {
-		return 0
-	}
-	var (
-		london = cfg.LondonBlock
-		s      = cfg.BlobScheduleConfig
-	)
-	switch {
-	case cfg.IsOsaka(london, time) && s.Osaka != nil:
-		return s.Osaka.Target
-	case cfg.IsPrague(london, time) && s.Prague != nil:
-		return s.Prague.Target
-	case cfg.IsCancun(london, time) && s.Cancun != nil:
-		return s.Cancun.Target
-	default:
-		return 0
-	}
+	return bcfg.Max
 }
 
 // fakeExponential approximates factor * e ** (numerator / denominator) using

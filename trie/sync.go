@@ -19,6 +19,7 @@ package trie
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -553,7 +554,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 		}
 		children = []childNode{{
 			node: node.Val,
-			path: append(append([]byte(nil), req.path...), key...),
+			path: slices.Concat(req.path, key),
 		}}
 		// Mark all internal nodes between shortNode and its **in disk**
 		// child as invalid. This is essential in the case of path mode
@@ -595,7 +596,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 			if node.Children[i] != nil {
 				children = append(children, childNode{
 					node: node.Children[i],
-					path: append(append([]byte(nil), req.path...), byte(i)),
+					path: append(slices.Clone(req.path), byte(i)),
 				})
 			}
 		}

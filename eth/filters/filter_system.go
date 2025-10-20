@@ -41,8 +41,9 @@ import (
 
 // Config represents the configuration of the filter system.
 type Config struct {
-	LogCacheSize int           // maximum number of cached blocks (default: 32)
-	Timeout      time.Duration // how long filters stay active (default: 5min)
+	LogCacheSize  int           // maximum number of cached blocks (default: 32)
+	Timeout       time.Duration // how long filters stay active (default: 5min)
+	LogQueryLimit int           // maximum number of addresses allowed in filter criteria (default: 1000)
 }
 
 func (cfg Config) withDefaults() Config {
@@ -157,6 +158,8 @@ const (
 	PendingTransactionsSubscription
 	// BlocksSubscription queries hashes for blocks that are imported
 	BlocksSubscription
+	// TransactionReceiptsSubscription queries for transaction receipts when transactions are included in blocks
+	TransactionReceiptsSubscription
 	// LastIndexSubscription keeps track of the last index
 	LastIndexSubscription
 )
@@ -181,8 +184,10 @@ type subscription struct {
 	logs      chan []*types.Log
 	txs       chan []*types.Transaction
 	headers   chan *types.Header
-	installed chan struct{} // closed when the filter is installed
-	err       chan error    // closed when the filter is uninstalled
+	receipts  chan []*ReceiptWithTx
+	txHashes  map[common.Hash]bool // contains transaction hashes for transactionReceipts subscription filtering
+	installed chan struct{}        // closed when the filter is installed
+	err       chan error           // closed when the filter is uninstalled
 }
 
 // EventSystem creates subscriptions, processes events and broadcasts them to the
@@ -207,7 +212,7 @@ type EventSystem struct {
 }
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
-// parses and filters them. It uses the all map to retrieve filter changes. The
+// parses and filters them. It uses an internal map to retrieve filter changes. The
 // work loop holds its own index that is used to forward events to filters.
 //
 // The returned manager has a loop that needs to be stopped with the Stop function
@@ -267,6 +272,7 @@ func (sub *Subscription) Unsubscribe() {
 			case <-sub.f.logs:
 			case <-sub.f.txs:
 			case <-sub.f.headers:
+			case <-sub.f.receipts:
 			}
 		}
 
@@ -290,6 +296,16 @@ func (es *EventSystem) subscribe(sub *subscription) *Subscription {
 func (es *EventSystem) SubscribeLogs(crit ethereum.FilterQuery, logs chan []*types.Log) (*Subscription, error) {
 	if len(crit.Topics) > maxTopics {
 		return nil, errExceedMaxTopics
+	}
+	if es.sys.cfg.LogQueryLimit != 0 {
+		if len(crit.Addresses) > es.sys.cfg.LogQueryLimit {
+			return nil, errExceedLogQueryLimit
+		}
+		for _, topics := range crit.Topics {
+			if len(topics) > es.sys.cfg.LogQueryLimit {
+				return nil, errExceedLogQueryLimit
+			}
+		}
 	}
 	var from, to rpc.BlockNumber
 	if crit.FromBlock == nil {
@@ -342,6 +358,7 @@ func (es *EventSystem) subscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 		logs:      logs,
 		txs:       make(chan []*types.Transaction),
 		headers:   make(chan *types.Header),
+		receipts:  make(chan []*ReceiptWithTx),
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -358,6 +375,7 @@ func (es *EventSystem) SubscribeNewHeads(headers chan *types.Header) *Subscripti
 		logs:      make(chan []*types.Log),
 		txs:       make(chan []*types.Transaction),
 		headers:   headers,
+		receipts:  make(chan []*ReceiptWithTx),
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -374,6 +392,30 @@ func (es *EventSystem) SubscribePendingTxs(txs chan []*types.Transaction) *Subsc
 		logs:      make(chan []*types.Log),
 		txs:       txs,
 		headers:   make(chan *types.Header),
+		receipts:  make(chan []*ReceiptWithTx),
+		installed: make(chan struct{}),
+		err:       make(chan error),
+	}
+	return es.subscribe(sub)
+}
+
+// SubscribeTransactionReceipts creates a subscription that writes transaction receipts for
+// transactions when they are included in blocks. If txHashes is provided, only receipts
+// for those specific transaction hashes will be delivered.
+func (es *EventSystem) SubscribeTransactionReceipts(txHashes []common.Hash, receipts chan []*ReceiptWithTx) *Subscription {
+	hashSet := make(map[common.Hash]bool)
+	for _, h := range txHashes {
+		hashSet[h] = true
+	}
+	sub := &subscription{
+		id:        rpc.NewID(),
+		typ:       TransactionReceiptsSubscription,
+		created:   time.Now(),
+		logs:      make(chan []*types.Log),
+		txs:       make(chan []*types.Transaction),
+		headers:   make(chan *types.Header),
+		receipts:  receipts,
+		txHashes:  hashSet,
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -403,6 +445,14 @@ func (es *EventSystem) handleTxsEvent(filters filterIndex, ev core.NewTxsEvent) 
 func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent) {
 	for _, f := range filters[BlocksSubscription] {
 		f.headers <- ev.Header
+	}
+
+	// Handle transaction receipts subscriptions when a new block is added
+	for _, f := range filters[TransactionReceiptsSubscription] {
+		matchedReceipts := filterReceipts(f.txHashes, ev)
+		if len(matchedReceipts) > 0 {
+			f.receipts <- matchedReceipts
+		}
 	}
 }
 

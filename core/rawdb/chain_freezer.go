@@ -104,15 +104,15 @@ func (f *chainFreezer) Close() error {
 func (f *chainFreezer) readHeadNumber(db ethdb.KeyValueReader) uint64 {
 	hash := ReadHeadBlockHash(db)
 	if hash == (common.Hash{}) {
-		log.Error("Head block is not reachable")
+		log.Warn("Head block is not reachable")
 		return 0
 	}
-	number := ReadHeaderNumber(db, hash)
-	if number == nil {
+	number, ok := ReadHeaderNumber(db, hash)
+	if !ok {
 		log.Error("Number of head block is missing")
 		return 0
 	}
-	return *number
+	return number
 }
 
 // readFinalizedNumber returns the number of finalized block. 0 is returned
@@ -122,12 +122,12 @@ func (f *chainFreezer) readFinalizedNumber(db ethdb.KeyValueReader) uint64 {
 	if hash == (common.Hash{}) {
 		return 0
 	}
-	number := ReadHeaderNumber(db, hash)
-	if number == nil {
+	number, ok := ReadHeaderNumber(db, hash)
+	if !ok {
 		log.Error("Number of finalized block is missing")
 		return 0
 	}
-	return *number
+	return number
 }
 
 // freezeThreshold returns the threshold for chain freezing. It's determined
@@ -401,6 +401,10 @@ func (f *chainFreezer) AncientSize(kind string) (uint64, error) {
 
 func (f *chainFreezer) AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
 	return f.ancients.AncientRange(kind, start, count, maxBytes)
+}
+
+func (f *chainFreezer) AncientBytes(kind string, id, offset, length uint64) ([]byte, error) {
+	return f.ancients.AncientBytes(kind, id, offset, length)
 }
 
 func (f *chainFreezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (int64, error) {

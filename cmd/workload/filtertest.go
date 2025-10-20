@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -91,7 +92,7 @@ func (s *filterTestSuite) filterShortRange(t *utesting.T) {
 	}, s.queryAndCheck)
 }
 
-// filterShortRange runs all long-range filter tests.
+// filterLongRange runs all long-range filter tests.
 func (s *filterTestSuite) filterLongRange(t *utesting.T) {
 	s.filterRange(t, func(query *filterQuery) bool {
 		return query.ToBlock+1-query.FromBlock > filterRangeThreshold
@@ -153,7 +154,14 @@ func (s *filterTestSuite) fullRangeQueryAndCheck(t *utesting.T, query *filterQue
 func (s *filterTestSuite) loadQueries() error {
 	file, err := s.cfg.fsys.Open(s.cfg.filterQueryFile)
 	if err != nil {
-		return fmt.Errorf("can't open filterQueryFile: %v", err)
+		// If not found in embedded FS, try to load it from disk
+		if !os.IsNotExist(err) {
+			return err
+		}
+		file, err = os.OpenFile(s.cfg.filterQueryFile, os.O_RDONLY, 0666)
+		if err != nil {
+			return fmt.Errorf("can't open filterQueryFile: %v", err)
+		}
 	}
 	defer file.Close()
 
@@ -174,13 +182,14 @@ func (s *filterTestSuite) loadQueries() error {
 
 // filterQuery is a single query for testing.
 type filterQuery struct {
-	FromBlock  int64            `json:"fromBlock"`
-	ToBlock    int64            `json:"toBlock"`
-	Address    []common.Address `json:"address"`
-	Topics     [][]common.Hash  `json:"topics"`
-	ResultHash *common.Hash     `json:"resultHash,omitempty"`
-	results    []types.Log
-	Err        error `json:"error,omitempty"`
+	FromBlock     int64 `json:"fromBlock"`
+	ToBlock       int64 `json:"toBlock"`
+	lastBlockHash common.Hash
+	Address       []common.Address `json:"address"`
+	Topics        [][]common.Hash  `json:"topics"`
+	ResultHash    *common.Hash     `json:"resultHash,omitempty"`
+	results       []types.Log
+	Err           error `json:"error,omitempty"`
 }
 
 func (fq *filterQuery) isWildcard() bool {

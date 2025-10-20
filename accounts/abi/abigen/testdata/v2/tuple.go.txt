@@ -77,7 +77,8 @@ func (c *Tuple) Instance(backend bind.ContractBackend, addr common.Address) *bin
 }
 
 // PackFunc1 is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x443c79b4.
+// the contract method with ID 0x443c79b4.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function func1((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e) pure returns((uint256,uint256[],(uint256,uint256)[]), (uint256,uint256)[2][], (uint256,uint256)[][2], (uint256,uint256[],(uint256,uint256)[])[], uint256[])
 func (tuple *Tuple) PackFunc1(a TupleS, b [][2]TupleT, c [2][]TupleT, d []TupleS, e []*big.Int) []byte {
@@ -86,6 +87,15 @@ func (tuple *Tuple) PackFunc1(a TupleS, b [][2]TupleT, c [2][]TupleT, d []TupleS
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackFunc1 is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x443c79b4.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function func1((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e) pure returns((uint256,uint256[],(uint256,uint256)[]), (uint256,uint256)[2][], (uint256,uint256)[][2], (uint256,uint256[],(uint256,uint256)[])[], uint256[])
+func (tuple *Tuple) TryPackFunc1(a TupleS, b [][2]TupleT, c [2][]TupleT, d []TupleS, e []*big.Int) ([]byte, error) {
+	return tuple.abi.Pack("func1", a, b, c, d, e)
 }
 
 // Func1Output serves as a container for the return parameters of contract
@@ -113,12 +123,12 @@ func (tuple *Tuple) UnpackFunc1(data []byte) (Func1Output, error) {
 	outstruct.Arg2 = *abi.ConvertType(out[2], new([2][]TupleT)).(*[2][]TupleT)
 	outstruct.Arg3 = *abi.ConvertType(out[3], new([]TupleS)).(*[]TupleS)
 	outstruct.Arg4 = *abi.ConvertType(out[4], new([]*big.Int)).(*[]*big.Int)
-	return *outstruct, err
-
+	return *outstruct, nil
 }
 
 // PackFunc2 is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0xd0062cdd.
+// the contract method with ID 0xd0062cdd.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function func2((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e) returns()
 func (tuple *Tuple) PackFunc2(a TupleS, b [][2]TupleT, c [2][]TupleT, d []TupleS, e []*big.Int) []byte {
@@ -129,8 +139,18 @@ func (tuple *Tuple) PackFunc2(a TupleS, b [][2]TupleT, c [2][]TupleT, d []TupleS
 	return enc
 }
 
+// TryPackFunc2 is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xd0062cdd.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function func2((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e) returns()
+func (tuple *Tuple) TryPackFunc2(a TupleS, b [][2]TupleT, c [2][]TupleT, d []TupleS, e []*big.Int) ([]byte, error) {
+	return tuple.abi.Pack("func2", a, b, c, d, e)
+}
+
 // PackFunc3 is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0xe4d9a43b.
+// the contract method with ID 0xe4d9a43b.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function func3((uint16,uint16)[] ) pure returns()
 func (tuple *Tuple) PackFunc3(arg0 []TupleQ) []byte {
@@ -139,6 +159,15 @@ func (tuple *Tuple) PackFunc3(arg0 []TupleQ) []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackFunc3 is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xe4d9a43b.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function func3((uint16,uint16)[] ) pure returns()
+func (tuple *Tuple) TryPackFunc3(arg0 []TupleQ) ([]byte, error) {
+	return tuple.abi.Pack("func3", arg0)
 }
 
 // TupleTupleEvent represents a TupleEvent event raised by the Tuple contract.
@@ -164,7 +193,7 @@ func (TupleTupleEvent) ContractEventName() string {
 // Solidity: event TupleEvent((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e)
 func (tuple *Tuple) UnpackTupleEventEvent(log *types.Log) (*TupleTupleEvent, error) {
 	event := "TupleEvent"
-	if log.Topics[0] != tuple.abi.Events[event].ID {
+	if len(log.Topics) == 0 || log.Topics[0] != tuple.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(TupleTupleEvent)
@@ -205,7 +234,7 @@ func (TupleTupleEvent2) ContractEventName() string {
 // Solidity: event TupleEvent2((uint8,uint8)[] arg0)
 func (tuple *Tuple) UnpackTupleEvent2Event(log *types.Log) (*TupleTupleEvent2, error) {
 	event := "TupleEvent2"
-	if log.Topics[0] != tuple.abi.Events[event].ID {
+	if len(log.Topics) == 0 || log.Topics[0] != tuple.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(TupleTupleEvent2)

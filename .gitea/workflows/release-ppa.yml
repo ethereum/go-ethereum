@@ -1,10 +1,16 @@
 on:
-  schedule:
-    - cron: '0 15 * * *'
   push:
-    branches:
-      - "release/*"
+    tags:
+      - "v*"
   workflow_dispatch:
+
+  ### Note we cannot use cron-triggered builds right now, Gitea seems to have
+  ### a few bugs in that area. So this workflow is scheduled using an external
+  ### triggering mechanism and workflow_dispatch.
+  #
+  # schedule:
+  #   - cron: '0 16 * * *'
+
 
 jobs:
   ppa:
@@ -12,6 +18,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+
+    - name: Show environment
+      run: |
+        env
 
     - name: Set up Go
       uses: actions/setup-go@v5

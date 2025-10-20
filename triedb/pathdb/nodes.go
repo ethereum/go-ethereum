@@ -18,6 +18,7 @@ package pathdb
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -300,4 +301,126 @@ func (s *nodeSet) dbsize() int {
 		m += len(nodes) * (len(rawdb.TrieNodeStoragePrefix)) // database key prefix
 	}
 	return m + int(s.size)
+}
+
+// nodeSetWithOrigin wraps the node set with additional original values of the
+// mutated trie nodes.
+type nodeSetWithOrigin struct {
+	*nodeSet
+
+	// nodeOrigin represents the trie nodes before the state transition. It's keyed
+	// by the account address hash and node path. The nil value means the trie node
+	// was not present.
+	nodeOrigin map[common.Hash]map[string][]byte
+
+	// memory size of the state data (accountNodeOrigin and storageNodeOrigin)
+	size uint64
+}
+
+// NewNodeSetWithOrigin constructs the state set with the provided data.
+func NewNodeSetWithOrigin(nodes map[common.Hash]map[string]*trienode.Node, origins map[common.Hash]map[string][]byte) *nodeSetWithOrigin {
+	// Don't panic for the lazy callers, initialize the nil maps instead.
+	if origins == nil {
+		origins = make(map[common.Hash]map[string][]byte)
+	}
+	set := &nodeSetWithOrigin{
+		nodeSet:    newNodeSet(nodes),
+		nodeOrigin: origins,
+	}
+	set.computeSize()
+	return set
+}
+
+// computeSize calculates the database size of the held trie nodes.
+func (s *nodeSetWithOrigin) computeSize() {
+	var size int
+	for owner, slots := range s.nodeOrigin {
+		prefixLen := common.HashLength
+		if owner == (common.Hash{}) {
+			prefixLen = 0
+		}
+		for path, data := range slots {
+			size += prefixLen + len(path) + len(data)
+		}
+	}
+	s.size = s.nodeSet.size + uint64(size)
+}
+
+// encode serializes the content of node set into the provided writer.
+func (s *nodeSetWithOrigin) encode(w io.Writer) error {
+	// Encode node set
+	if err := s.nodeSet.encode(w); err != nil {
+		return err
+	}
+	// Short circuit if the origins are not tracked
+	if len(s.nodeOrigin) == 0 {
+		return nil
+	}
+
+	// Encode node origins
+	nodes := make([]journalNodes, 0, len(s.nodeOrigin))
+	for owner, subset := range s.nodeOrigin {
+		entry := journalNodes{
+			Owner: owner,
+			Nodes: make([]journalNode, 0, len(subset)),
+		}
+		for path, node := range subset {
+			entry.Nodes = append(entry.Nodes, journalNode{
+				Path: []byte(path),
+				Blob: node,
+			})
+		}
+		nodes = append(nodes, entry)
+	}
+	return rlp.Encode(w, nodes)
+}
+
+// hasOrigin returns whether the origin data set exists in the rlp stream.
+// It's a workaround for backward compatibility.
+func (s *nodeSetWithOrigin) hasOrigin(r *rlp.Stream) (bool, error) {
+	kind, _, err := r.Kind()
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return false, nil
+		}
+		return false, err
+	}
+	// If the type of next element in the RLP stream is:
+	// - `rlp.List`: represents the original value of trienodes;
+	// - others, like `boolean`: represent a field in the following state data set;
+	return kind == rlp.List, nil
+}
+
+// decode deserializes the content from the rlp stream into the node set.
+func (s *nodeSetWithOrigin) decode(r *rlp.Stream) error {
+	if s.nodeSet == nil {
+		s.nodeSet = &nodeSet{}
+	}
+	if err := s.nodeSet.decode(r); err != nil {
+		return err
+	}
+
+	// Decode node origins
+	s.nodeOrigin = make(map[common.Hash]map[string][]byte)
+	if hasOrigin, err := s.hasOrigin(r); err != nil {
+		return err
+	} else if hasOrigin {
+		var encoded []journalNodes
+		if err := r.Decode(&encoded); err != nil {
+			return fmt.Errorf("load nodes: %v", err)
+		}
+		for _, entry := range encoded {
+			subset := make(map[string][]byte, len(entry.Nodes))
+			for _, n := range entry.Nodes {
+				if len(n.Blob) > 0 {
+					subset[string(n.Path)] = n.Blob
+				} else {
+					subset[string(n.Path)] = nil
+				}
+			}
+			s.nodeOrigin[entry.Owner] = subset
+		}
+	}
+	s.computeSize()
+	return nil
 }

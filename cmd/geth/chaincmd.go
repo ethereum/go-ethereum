@@ -58,7 +58,9 @@ var (
 		ArgsUsage: "<genesisPath>",
 		Flags: slices.Concat([]cli.Flag{
 			utils.CachePreimagesFlag,
-			utils.OverridePrague,
+			utils.OverrideOsaka,
+			utils.OverrideBPO1,
+			utils.OverrideBPO2,
 			utils.OverrideVerkle,
 		}, utils.DatabaseFlags),
 		Description: `
@@ -108,6 +110,7 @@ if one is set.  Otherwise it prints the genesis from the datadir.`,
 			utils.MetricsInfluxDBTokenFlag,
 			utils.MetricsInfluxDBBucketFlag,
 			utils.MetricsInfluxDBOrganizationFlag,
+			utils.StateSizeTrackingFlag,
 			utils.TxLookupLimitFlag,
 			utils.VMTraceFlag,
 			utils.VMTraceJsonConfigFlag,
@@ -269,9 +272,17 @@ func initGenesis(ctx *cli.Context) error {
 	defer stack.Close()
 
 	var overrides core.ChainOverrides
-	if ctx.IsSet(utils.OverridePrague.Name) {
-		v := ctx.Uint64(utils.OverridePrague.Name)
-		overrides.OverridePrague = &v
+	if ctx.IsSet(utils.OverrideOsaka.Name) {
+		v := ctx.Uint64(utils.OverrideOsaka.Name)
+		overrides.OverrideOsaka = &v
+	}
+	if ctx.IsSet(utils.OverrideBPO1.Name) {
+		v := ctx.Uint64(utils.OverrideBPO1.Name)
+		overrides.OverrideBPO1 = &v
+	}
+	if ctx.IsSet(utils.OverrideBPO2.Name) {
+		v := ctx.Uint64(utils.OverrideBPO2.Name)
+		overrides.OverrideBPO2 = &v
 	}
 	if ctx.IsSet(utils.OverrideVerkle.Name) {
 		v := ctx.Uint64(utils.OverrideVerkle.Name)
@@ -281,7 +292,7 @@ func initGenesis(ctx *cli.Context) error {
 	chaindb := utils.MakeChainDatabase(ctx, stack, false)
 	defer chaindb.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
+	triedb := utils.MakeTrieDatabase(ctx, stack, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
 	defer triedb.Close()
 
 	_, hash, compatErr, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides)
@@ -576,8 +587,8 @@ func parseDumpConfig(ctx *cli.Context, db ethdb.Database) (*state.DumpConfig, co
 		arg := ctx.Args().First()
 		if hashish(arg) {
 			hash := common.HexToHash(arg)
-			if number := rawdb.ReadHeaderNumber(db, hash); number != nil {
-				header = rawdb.ReadHeader(db, hash, *number)
+			if number, ok := rawdb.ReadHeaderNumber(db, hash); ok {
+				header = rawdb.ReadHeader(db, hash, number)
 			} else {
 				return nil, common.Hash{}, fmt.Errorf("block %x not found", hash)
 			}
@@ -635,7 +646,7 @@ func dump(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	triedb := utils.MakeTrieDatabase(ctx, db, true, true, false) // always enable preimage lookup
+	triedb := utils.MakeTrieDatabase(ctx, stack, db, true, true, false) // always enable preimage lookup
 	defer triedb.Close()
 
 	state, err := state.New(root, state.NewDatabase(triedb, nil))
@@ -704,7 +715,7 @@ func pruneHistory(ctx *cli.Context) error {
 	return nil
 }
 
-// downladEra is the era1 file downloader tool.
+// downloadEra is the era1 file downloader tool.
 func downloadEra(ctx *cli.Context) error {
 	flags.CheckExclusive(ctx, eraBlockFlag, eraEpochFlag, eraAllFlag)
 
@@ -716,7 +727,7 @@ func downloadEra(ctx *cli.Context) error {
 		case ctx.IsSet(utils.SepoliaFlag.Name):
 			network = "sepolia"
 		default:
-			return fmt.Errorf("unsupported network, no known era1 checksums")
+			return errors.New("unsupported network, no known era1 checksums")
 		}
 	}
 
@@ -765,15 +776,8 @@ func downloadEra(ctx *cli.Context) error {
 }
 
 func parseRange(s string) (start uint64, end uint64, ok bool) {
-	if m, _ := regexp.MatchString("[0-9]+", s); m {
-		start, err := strconv.ParseUint(s, 10, 64)
-		if err != nil {
-			return 0, 0, false
-		}
-		end = start
-		return start, end, true
-	}
-	if m, _ := regexp.MatchString("[0-9]+-[0-9]+", s); m {
+	log.Info("Parsing block range", "input", s)
+	if m, _ := regexp.MatchString("^[0-9]+-[0-9]+$", s); m {
 		s1, s2, _ := strings.Cut(s, "-")
 		start, err := strconv.ParseUint(s1, 10, 64)
 		if err != nil {
@@ -783,6 +787,19 @@ func parseRange(s string) (start uint64, end uint64, ok bool) {
 		if err != nil {
 			return 0, 0, false
 		}
+		if start > end {
+			return 0, 0, false
+		}
+		log.Info("Parsing block range", "start", start, "end", end)
+		return start, end, true
+	}
+	if m, _ := regexp.MatchString("^[0-9]+$", s); m {
+		start, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			return 0, 0, false
+		}
+		end = start
+		log.Info("Parsing single block range", "block", start)
 		return start, end, true
 	}
 	return 0, 0, false

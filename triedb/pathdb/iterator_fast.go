@@ -76,6 +76,11 @@ func newFastIterator(db *Database, root common.Hash, account common.Hash, seek c
 		if accountIterator {
 			switch dl := current.(type) {
 			case *diskLayer:
+				// Ensure no active background buffer flush is in progress, otherwise,
+				// part of the state data may become invisible.
+				if err := dl.waitFlush(); err != nil {
+					return nil, err
+				}
 				// The state set in the disk layer is mutable, hold the lock before obtaining
 				// the account list to prevent concurrent map iteration and write.
 				dl.lock.RLock()
@@ -113,6 +118,11 @@ func newFastIterator(db *Database, root common.Hash, account common.Hash, seek c
 		} else {
 			switch dl := current.(type) {
 			case *diskLayer:
+				// Ensure no active background buffer flush is in progress, otherwise,
+				// part of the state data may become invisible.
+				if err := dl.waitFlush(); err != nil {
+					return nil, err
+				}
 				// The state set in the disk layer is mutable, hold the lock before obtaining
 				// the storage list to prevent concurrent map iteration and write.
 				dl.lock.RLock()

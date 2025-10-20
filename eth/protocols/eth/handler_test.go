@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -120,7 +119,7 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, cancun bool, generat
 		Alloc:      types.GenesisAlloc{testAddr: {Balance: big.NewInt(100_000_000_000_000_000)}},
 		Difficulty: common.Big0,
 	}
-	chain, _ := core.NewBlockChain(db, nil, gspec, nil, engine, vm.Config{}, nil)
+	chain, _ := core.NewBlockChain(db, gspec, engine, nil)
 
 	_, bs, _ := core.GenerateChainWithGenesis(gspec, engine, blocks, generator)
 	if _, err := chain.InsertChain(bs); err != nil {
@@ -662,11 +661,7 @@ func testGetPooledTransaction(t *testing.T, blobTx bool) {
 			To:         testAddr,
 			BlobHashes: []common.Hash{emptyBlobHash},
 			BlobFeeCap: uint256.MustFromBig(common.Big1),
-			Sidecar: &types.BlobTxSidecar{
-				Blobs:       emptyBlobs,
-				Commitments: []kzg4844.Commitment{emptyBlobCommit},
-				Proofs:      []kzg4844.Proof{emptyBlobProof},
-			},
+			Sidecar:    types.NewBlobTxSidecar(types.BlobSidecarVersion0, emptyBlobs, []kzg4844.Commitment{emptyBlobCommit}, []kzg4844.Proof{emptyBlobProof}),
 		})
 		if err != nil {
 			t.Fatal(err)

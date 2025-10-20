@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math/big"
+	"math/bits"
 	"testing"
 
 	"github.com/holiman/uint256"
@@ -384,7 +385,7 @@ func TestUnmarshalUint(t *testing.T) {
 	for _, test := range unmarshalUintTests {
 		var v Uint
 		err := json.Unmarshal([]byte(test.input), &v)
-		if uintBits == 32 && test.wantErr32bit != nil {
+		if bits.UintSize == 32 && test.wantErr32bit != nil {
 			checkError(t, test.input, err, test.wantErr32bit)
 			continue
 		}
@@ -406,7 +407,6 @@ func TestUnmarshalFixedUnprefixedText(t *testing.T) {
 	}{
 		{input: "0x2", wantErr: ErrOddLength},
 		{input: "2", wantErr: ErrOddLength},
-		{input: "4444", wantErr: errors.New("hex string has length 4, want 8 for x")},
 		{input: "4444", wantErr: errors.New("hex string has length 4, want 8 for x")},
 		// check that output is not modified for partially correct input
 		{input: "444444gg", wantErr: ErrSyntax, want: []byte{0, 0, 0, 0}},

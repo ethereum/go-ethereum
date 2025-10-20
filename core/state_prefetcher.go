@@ -57,7 +57,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 		workers errgroup.Group
 		reader  = statedb.Reader()
 	)
-	workers.SetLimit(runtime.NumCPU() / 2)
+	workers.SetLimit(max(1, 4*runtime.NumCPU()/5)) // Aggressively run the prefetching
 
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
@@ -111,12 +111,6 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 				fails.Add(1)
 				return nil // Ugh, something went horribly wrong, bail out
 			}
-			// Pre-load trie nodes for the intermediate root.
-			//
-			// This operation incurs significant memory allocations due to
-			// trie hashing and node decoding. TODO(rjl493456442): investigate
-			// ways to mitigate this overhead.
-			stateCpy.IntermediateRoot(true)
 			return nil
 		})
 	}

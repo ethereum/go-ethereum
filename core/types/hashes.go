@@ -45,4 +45,7 @@ var (
 
 	// EmptyVerkleHash is the known hash of an empty verkle trie.
 	EmptyVerkleHash = common.Hash{}
+
+	// EmptyBinaryHash is the known hash of an empty binary trie.
+	EmptyBinaryHash = common.Hash{}
 )

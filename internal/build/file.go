@@ -25,32 +25,6 @@ import (
 	"strings"
 )
 
-// FileExist checks if a file exists at path.
-func FileExist(path string) bool {
-	_, err := os.Stat(path)
-	if err != nil && os.IsNotExist(err) {
-		return false
-	}
-	return true
-}
-
-// HashFiles iterates the provided set of files, computing the hash of each.
-func HashFiles(files []string) (map[string][32]byte, error) {
-	res := make(map[string][32]byte)
-	for _, filePath := range files {
-		f, err := os.OpenFile(filePath, os.O_RDONLY, 0666)
-		if err != nil {
-			return nil, err
-		}
-		hasher := sha256.New()
-		if _, err := io.Copy(hasher, f); err != nil {
-			return nil, err
-		}
-		res[filePath] = [32]byte(hasher.Sum(nil))
-	}
-	return res, nil
-}
-
 // HashFolder iterates all files under the given directory, computing the hash
 // of each.
 func HashFolder(folder string, exlude []string) (map[string][32]byte, error) {

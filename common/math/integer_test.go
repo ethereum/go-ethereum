@@ -110,7 +110,7 @@ func TestMustParseUint64(t *testing.T) {
 func TestMustParseUint64Panic(t *testing.T) {
 	defer func() {
 		if recover() == nil {
-			t.Error("MustParseBig should've panicked")
+			t.Error("MustParseUint64 should've panicked")
 		}
 	}()
 	MustParseUint64("ggg")
