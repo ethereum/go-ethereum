@@ -176,3 +176,31 @@ func (s *Suite) sendInvalidTxs(t *utesting.T, txs []*types.Transaction) error {
 		}
 	}
 }
+
+// sendDuplicateTxsInOneMsg sends a transaction slice containing duplicates
+// in a single TransactionsMsg and expects the node to disconnect.
+func (s *Suite) sendDuplicateTxsInOneMsg(t *utesting.T, txs []*types.Transaction) error {
+	conn, err := s.dial()
+	if err != nil {
+		return fmt.Errorf("dial failed: %v", err)
+	}
+	defer conn.Close()
+
+	if err = conn.peer(s.chain, nil); err != nil {
+		return fmt.Errorf("peering failed: %v", err)
+	}
+
+	if err = conn.Write(ethProto, eth.TransactionsMsg, eth.TransactionsPacket(txs)); err != nil {
+		return fmt.Errorf("failed to write message to connection: %v", err)
+	}
+
+	// Expect disconnect.
+	code, _, err := conn.Read()
+	if err != nil {
+		return fmt.Errorf("error reading from connection: %v", err)
+	}
+	if code != discMsg {
+		return fmt.Errorf("expected disconnect, got msg code %d", code)
+	}
+	return nil
+}
