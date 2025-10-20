@@ -578,32 +578,37 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 		return ret, err
 	}
 
+	codeSize := len(ret)
+
 	// Check whether the max code size has been exceeded, assign err if the case.
-	if evm.chainRules.IsEIP158 && len(ret) > params.MaxCodeSize {
+	if evm.chainRules.IsEIP158 && codeSize > params.MaxCodeSize {
 		return ret, ErrMaxCodeSizeExceeded
 	}
 
+	if codeSize == 0 {
+		return ret, nil
+	}
+
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
-	if len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsLondon {
+	if codeSize >= 1 && ret[0] == 0xEF && evm.chainRules.IsLondon {
 		return ret, ErrInvalidCode
 	}
 
 	if !evm.chainRules.IsEIP4762 {
-		createDataGas := uint64(len(ret)) * params.CreateDataGas
+		createDataGas := uint64(codeSize) * params.CreateDataGas
 		if !contract.UseGas(createDataGas, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
 			return ret, ErrCodeStoreOutOfGas
 		}
 	} else {
-		consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(address, 0, uint64(len(ret)), uint64(len(ret)), true, contract.Gas)
+		consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(address, 0, uint64(codeSize), uint64(codeSize), true, contract.Gas)
 		contract.UseGas(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
-		if len(ret) > 0 && (consumed < wanted) {
+		if codeSize > 0 && (consumed < wanted) {
 			return ret, ErrCodeStoreOutOfGas
 		}
 	}
 
-	if len(ret) > 0 {
-		evm.StateDB.SetCode(address, ret, tracing.CodeChangeContractCreation)
-	}
+	evm.StateDB.SetCode(address, ret, tracing.CodeChangeContractCreation)
+
 	return ret, nil
 }
 
