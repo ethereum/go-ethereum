@@ -185,7 +185,7 @@ type subscription struct {
 	txs       chan []*types.Transaction
 	headers   chan *types.Header
 	receipts  chan []*ReceiptWithTx
-	hashSet   map[common.Hash]bool // contains transaction hashes for transactionReceipts subscription filtering
+	txHashes  map[common.Hash]bool // contains transaction hashes for transactionReceipts subscription filtering
 	installed chan struct{}        // closed when the filter is installed
 	err       chan error           // closed when the filter is uninstalled
 }
@@ -415,7 +415,7 @@ func (es *EventSystem) SubscribeTransactionReceipts(txHashes []common.Hash, rece
 		txs:       make(chan []*types.Transaction),
 		headers:   make(chan *types.Header),
 		receipts:  receipts,
-		hashSet:   hashSet,
+		txHashes:  hashSet,
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -449,7 +449,7 @@ func (es *EventSystem) handleChainEvent(filters filterIndex, ev core.ChainEvent)
 
 	// Handle transaction receipts subscriptions when a new block is added
 	for _, f := range filters[TransactionReceiptsSubscription] {
-		matchedReceipts := filterReceipts(f.hashSet, ev)
+		matchedReceipts := filterReceipts(f.txHashes, ev)
 		if len(matchedReceipts) > 0 {
 			f.receipts <- matchedReceipts
 		}
