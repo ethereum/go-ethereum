@@ -50,7 +50,7 @@ jobs:
           cache: false
 
       - name: Run tests
-        run: go build ./cmd/geth
+        run: go test ./...
         env:
           GOARCH: 386
 
