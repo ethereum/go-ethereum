@@ -855,8 +855,6 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			continue
 		}
 		obj := s.stateObjects[addr] // closure for the task runner below
-		addr := addr
-		op := op
 		workers.Go(func() error {
 			if s.db.TrieDB().IsVerkle() {
 				obj.updateTrie()
