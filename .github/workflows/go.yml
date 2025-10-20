@@ -54,37 +54,6 @@ jobs:
         env:
           GOARCH: 386
 
-  keeper-build-ziren:
-    name: Keeper
-    needs: build-386
-    runs-on: [self-hosted-ghr, size-l-x64]
-    strategy:
-      matrix:
-        include:
-          - env:
-              GOARCH: mipsle
-              GOOS: linux
-              GOMIPS: softfloat
-            tags: "ziren"
-          - env:
-              GOARCH: amd64
-              GOOS: linux
-            tags: "example"
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-          cache: false
-
-      - name: Run tests
-        run: cd cmd/keeper && go build -tags ${{ matrix.tags }} .
-        env: ${{ matrix.env }}
-
   test:
     name: Test
     needs: lint
