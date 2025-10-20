@@ -204,3 +204,66 @@ func (s *Suite) sendDuplicateTxsInOneMsg(t *utesting.T, txs []*types.Transaction
 	}
 	return nil
 }
+
+// sendDuplicatePooledTxsInOneMsg sends a PooledTransactionsMsg containing duplicates
+// and expects the node to disconnect.
+func (s *Suite) sendDuplicatePooledTxsInOneMsg(t *utesting.T, txs []*types.Transaction) error {
+	// First, announce the transactions so the node will request them.
+	announceConn, err := s.dial()
+	if err != nil {
+		return fmt.Errorf("dial failed: %v", err)
+	}
+	defer announceConn.Close()
+
+	if err = announceConn.peer(s.chain, nil); err != nil {
+		return fmt.Errorf("peering failed: %v", err)
+	}
+
+	// Create announcement for the transactions.
+	var (
+		hashes = make([]common.Hash, len(txs))
+		types  = make([]byte, len(txs))
+		sizes  = make([]uint32, len(txs))
+	)
+	for i, tx := range txs {
+		hashes[i] = tx.Hash()
+		types[i] = tx.Type()
+		sizes[i] = uint32(tx.Size())
+	}
+
+	ann := eth.NewPooledTransactionHashesPacket{
+		Types:  types,
+		Sizes:  sizes,
+		Hashes: hashes,
+	}
+
+	if err := announceConn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+		return fmt.Errorf("failed to announce transactions: %v", err)
+	}
+
+	// Wait for GetPooledTransactions request.
+	req := new(eth.GetPooledTransactionsPacket)
+	if err := announceConn.ReadMsg(ethProto, eth.GetPooledTransactionsMsg, req); err != nil {
+		return fmt.Errorf("failed to read GetPooledTransactions: %v", err)
+	}
+
+	// Send response with duplicate transactions.
+	resp := &eth.PooledTransactionsPacket{
+		RequestId:                  req.RequestId,
+		PooledTransactionsResponse: eth.PooledTransactionsResponse(txs),
+	}
+
+	if err := announceConn.Write(ethProto, eth.PooledTransactionsMsg, resp); err != nil {
+		return fmt.Errorf("failed to send PooledTransactions: %v", err)
+	}
+
+	// Expect disconnect.
+	code, _, err := announceConn.Read()
+	if err != nil {
+		return fmt.Errorf("error reading from connection: %v", err)
+	}
+	if code != discMsg {
+		return fmt.Errorf("expected disconnect, got msg code %d", code)
+	}
+	return nil
+}

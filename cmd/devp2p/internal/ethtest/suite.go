@@ -91,6 +91,7 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "TestBlobTxWithoutSidecar", Fn: s.TestBlobTxWithoutSidecar},
 		{Name: "TestBlobTxWithMismatchedSidecar", Fn: s.TestBlobTxWithMismatchedSidecar},
 		{Name: "DuplicateTxs", Fn: s.TestDuplicateTxs},
+		{Name: "DuplicatePooledTxs", Fn: s.TestDuplicatePooledTxs},
 	}
 }
 
@@ -1214,6 +1215,36 @@ func (s *Suite) TestDuplicateTxs(t *utesting.T) {
 
 	txs := []*types.Transaction{tx, tx}
 	if err := s.sendDuplicateTxsInOneMsg(t, txs); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (s *Suite) TestDuplicatePooledTxs(t *utesting.T) {
+	t.Log(`This test announces transaction hashes to the node, then sends a PooledTransactionsMsg containing duplicate transactions and expects the node to disconnect.`)
+
+	// Nudge client out of syncing mode to accept pending txs.
+	if err := s.engine.sendForkchoiceUpdated(); err != nil {
+		t.Fatalf("failed to send next block: %v", err)
+	}
+
+	from, nonce := s.chain.GetSender(1)
+	inner := &types.DynamicFeeTx{
+		ChainID:   s.chain.config.ChainID,
+		Nonce:     nonce,
+		GasTipCap: common.Big1,
+		GasFeeCap: s.chain.Head().BaseFee(),
+		Gas:       75000,
+		To:        &common.Address{0xbb},
+		Value:     common.Big1,
+	}
+	tx, err := s.chain.SignTx(from, types.NewTx(inner))
+	if err != nil {
+		t.Fatalf("failed to sign tx: %v", err)
+	}
+
+	// Send the same transaction twice in the PooledTransactionsMsg.
+	txs := []*types.Transaction{tx, tx}
+	if err := s.sendDuplicatePooledTxsInOneMsg(t, txs); err != nil {
 		t.Fatal(err)
 	}
 }
