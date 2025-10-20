@@ -52,6 +52,26 @@ const (
 	SetCodeTxType    = 0x04
 )
 
+type TxTypeBitVec [(SetCodeTxType + 1 + 7) / 8]byte
+
+func (v *TxTypeBitVec) Set(txType byte) {
+	if txType >= byte(len(v)*8) {
+		panic("tx type out of range")
+	}
+	v[txType/8] |= 1 << (txType % 8)
+}
+
+func (v *TxTypeBitVec) Has(txType byte) bool {
+	if txType >= byte(len(v)*8) {
+		return false
+	}
+	return v[txType/8]&(1<<(txType%8)) != 0
+}
+
+func (v *TxTypeBitVec) Equals(o *TxTypeBitVec) bool {
+	return *v == *o
+}
+
 // Transaction is an Ethereum transaction.
 type Transaction struct {
 	inner TxData    // Consensus contents of a transaction
