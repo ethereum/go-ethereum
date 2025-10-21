@@ -465,7 +465,7 @@ func inspectTrie(ctx *cli.Context) error {
 	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, true, false)
 	defer triedb.Close()
 
-	if err := trie.InspectTrie(triedb, trieRootHash, accountOnly); err != nil {
+	if err := trie.InspectTrie(triedb, trieRootHash, !accountOnly); err != nil {
 		return err
 	}
 	return nil
