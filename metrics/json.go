@@ -6,10 +6,15 @@ import (
 	"time"
 )
 
+// Shared JSON serialization for registry types to avoid duplication.
+func marshalRegistryJSON(r Registry) ([]byte, error) {
+	return json.Marshal(r.GetAll())
+}
+
 // MarshalJSON returns a byte slice containing a JSON representation of all
 // the metrics in the Registry.
 func (r *StandardRegistry) MarshalJSON() ([]byte, error) {
-	return json.Marshal(r.GetAll())
+	return marshalRegistryJSON(r)
 }
 
 // WriteJSON writes metrics from the given registry  periodically to the
@@ -27,5 +32,5 @@ func WriteJSONOnce(r Registry, w io.Writer) {
 }
 
 func (r *PrefixedRegistry) MarshalJSON() ([]byte, error) {
-	return json.Marshal(r.GetAll())
+	return marshalRegistryJSON(r)
 }
