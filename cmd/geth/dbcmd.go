@@ -23,7 +23,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -409,7 +408,7 @@ func inspectTrie(ctx *cli.Context) error {
 	var (
 		blockNumber  uint64
 		trieRootHash common.Hash
-		jobnum       uint64
+		accountOnly  bool
 	)
 
 	stack, _ := makeConfigNode(ctx)
@@ -438,12 +437,10 @@ func inspectTrie(ctx *cli.Context) error {
 		}
 	}
 
-	// Configure number of threads.
-	if ctx.NArg() <= 1 {
-		jobnum = uint64(runtime.NumCPU())
-	} else {
+	// Default to inspect storage
+	if ctx.NArg() > 1 {
 		var err error
-		jobnum, err = strconv.ParseUint(ctx.Args().Get(1), 10, 64)
+		accountOnly, err = strconv.ParseBool(ctx.Args().Get(1))
 		if err != nil {
 			return fmt.Errorf("failed to parse jobnum, Args[1]: %v, err: %v", ctx.Args().Get(1), err)
 		}
@@ -468,17 +465,9 @@ func inspectTrie(ctx *cli.Context) error {
 	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, true, false)
 	defer triedb.Close()
 
-	theTrie, err := trie.New(trie.TrieID(trieRootHash), triedb)
-	if err != nil {
-		fmt.Printf("fail to new trie tree, err: %v, rootHash: %v\n", err, trieRootHash.String())
+	if err := trie.InspectTrie(triedb, trieRootHash, accountOnly); err != nil {
 		return err
 	}
-	inspector, err := trie.NewInspector(theTrie, triedb, trieRootHash, blockNumber, jobnum)
-	if err != nil {
-		return err
-	}
-	inspector.Run()
-	inspector.DisplayResult()
 	return nil
 }
 
