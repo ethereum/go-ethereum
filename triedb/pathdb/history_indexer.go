@@ -165,6 +165,8 @@ func (b *batchIndexer) makeBatch() ethdb.Batch {
 		size = estimatedStateHistoryIndexSize
 	case typeTrienodeHistory:
 		size = estimatedTrienodeHistoryIndexSize
+	default:
+		panic(fmt.Sprintf("unknown history type %d", b.typ))
 	}
 	return b.db.NewBatchWithSize(size * estimatedIndexBatchSizeFactor * b.pending)
 }
