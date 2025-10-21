@@ -157,8 +157,10 @@ func (tracker *TxTracker) recheck(journalCheck bool) []*types.Transaction {
 		// Rejournal the tracker while holding the lock. No new transactions will
 		// be added to the old journal during this period, preventing any potential
 		// transaction loss.
-		if err := tracker.journal.rotate(rejournal); err != nil {
-			log.Warn("Transaction journal rotation failed", "err", err)
+		if tracker.journal != nil {
+			if err := tracker.journal.rotate(rejournal); err != nil {
+				log.Warn("Transaction journal rotation failed", "err", err)
+			}
 		}
 	}
 	localGauge.Update(int64(len(tracker.all)))
