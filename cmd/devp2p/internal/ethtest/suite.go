@@ -80,10 +80,10 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "GetBlockHeadersWithSkip", Fn: s.TestGetBlockHeadersWithSkip},
 		{Name: "GetBlockHeadersEmpty", Fn: s.TestGetBlockHeadersEmpty},
 		{Name: "GetBlockHeadersMaxLimit", Fn: s.TestGetBlockHeadersMaxLimit},
-		{Name: "GetNonexistentBlockHeaders", Fn: s.TestGetNonexistentBlockHeaders},
-		{Name: "SimultaneousRequests", Fn: s.TestSimultaneousRequests},
-		{Name: "SameRequestID", Fn: s.TestSameRequestID},
-		{Name: "ZeroRequestID", Fn: s.TestZeroRequestID},
+		{Name: "GetBlockHeadersNonexistent", Fn: s.TestGetBlockHeadersNonexistent},
+		{Name: "GetBlockHeadersZeroRequestID", Fn: s.TestGetBlockHeadersZeroRequestID},
+		{Name: "GetBlockHeadersSimultaneousRequests", Fn: s.TestSimultaneousRequests},
+		{Name: "GetBlockHeadersSameRequestID", Fn: s.TestSameRequestID},
 		// get history
 		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
 		{Name: "GetReceipts", Fn: s.TestGetReceipts},
@@ -122,15 +122,33 @@ func headersMatch(expected []*types.Header, headers []*types.Header) bool {
 	return reflect.DeepEqual(expected, headers)
 }
 
-func (s *Suite) TestGetBlockHeadersByHash(t *utesting.T) {
-	t.Log(`This test requests block headers from the node by hash.`)
+// testGetBlockHeaders is a helper function that tests GetBlockHeaders requests.
+func (s *Suite) testGetBlockHeaders(t *utesting.T, req *eth.GetBlockHeadersPacket, checkResponse func(*eth.BlockHeadersPacket) error) {
 	conn, err := s.dialAndPeer(nil)
 	if err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
 	defer conn.Close()
 
-	// Send headers request.
+	if err := conn.Write(ethProto, eth.GetBlockHeadersMsg, req); err != nil {
+		t.Fatalf("could not write to connection: %v", err)
+	}
+	headers := new(eth.BlockHeadersPacket)
+	if err := conn.ReadMsg(ethProto, eth.BlockHeadersMsg, &headers); err != nil {
+		t.Fatalf("error reading msg: %v", err)
+	}
+	if got, want := headers.RequestId, req.RequestId; got != want {
+		t.Fatalf("unexpected request id: got %d, want %d", got, want)
+	}
+	if checkResponse != nil {
+		if err := checkResponse(headers); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func (s *Suite) TestGetBlockHeadersByHash(t *utesting.T) {
+	t.Log(`This test requests block headers from the node by hash.`)
 	req := &eth.GetBlockHeadersPacket{
 		RequestId: 33,
 		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
@@ -140,28 +158,132 @@ func (s *Suite) TestGetBlockHeadersByHash(t *utesting.T) {
 			Reverse: false,
 		},
 	}
-	// Read headers response.
-	if err := conn.Write(ethProto, eth.GetBlockHeadersMsg, req); err != nil {
-		t.Fatalf("could not write to connection: %v", err)
-	}
-	headers := new(eth.BlockHeadersPacket)
-	if err := conn.ReadMsg(ethProto, eth.BlockHeadersMsg, &headers); err != nil {
-		t.Fatalf("error reading msg: %v", err)
-	}
-	if got, want := headers.RequestId, req.RequestId; got != want {
-		t.Fatalf("unexpected request id")
-	}
-	// Check for correct headers.
-	expected, err := s.chain.GetHeaders(req)
-	if err != nil {
-		t.Fatalf("failed to get headers for given request: %v", err)
-	}
-	if !headersMatch(expected, headers.BlockHeadersRequest) {
-		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, headers)
-	}
+	s.testGetBlockHeaders(t, req, func(headers *eth.BlockHeadersPacket) error {
+		expected, err := s.chain.GetHeaders(req)
+		if err != nil {
+			return fmt.Errorf("failed to get headers for given request: %v", err)
+		}
+		if !headersMatch(expected, headers.BlockHeadersRequest) {
+			return fmt.Errorf("header mismatch: \nexpected %v \ngot %v", expected, headers)
+		}
+		return nil
+	})
 }
 
-func (s *Suite) TestGetNonexistentBlockHeaders(t *utesting.T) {
+// TestGetBlockHeadersByNumber tests fetching block headers by number origin.
+func (s *Suite) TestGetBlockHeadersByNumber(t *utesting.T) {
+	t.Log(`This test requests block headers using block number as the origin.`)
+	req := &eth.GetBlockHeadersPacket{
+		RequestId: 11,
+		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
+			Origin:  eth.HashOrNumber{Number: 20},
+			Amount:  5,
+			Skip:    0,
+			Reverse: false,
+		},
+	}
+	s.testGetBlockHeaders(t, req, func(headers *eth.BlockHeadersPacket) error {
+		expected, err := s.chain.GetHeaders(req)
+		if err != nil {
+			return fmt.Errorf("failed to get headers: %v", err)
+		}
+		if !headersMatch(expected, headers.BlockHeadersRequest) {
+			return fmt.Errorf("header mismatch: \nexpected %v \ngot %v", expected, headers)
+		}
+		return nil
+	})
+}
+
+// TestGetBlockHeadersReverse tests fetching block headers in reverse order.
+func (s *Suite) TestGetBlockHeadersReverse(t *utesting.T) {
+	t.Log(`This test requests block headers in reverse order (decreasing block numbers).`)
+	req := &eth.GetBlockHeadersPacket{
+		RequestId: 12,
+		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
+			Origin:  eth.HashOrNumber{Number: 50},
+			Amount:  10,
+			Skip:    0,
+			Reverse: true,
+		},
+	}
+	s.testGetBlockHeaders(t, req, func(headers *eth.BlockHeadersPacket) error {
+		expected, err := s.chain.GetHeaders(req)
+		if err != nil {
+			return fmt.Errorf("failed to get headers: %v", err)
+		}
+		if !headersMatch(expected, headers.BlockHeadersRequest) {
+			return fmt.Errorf("header mismatch: \nexpected %v \ngot %v", expected, headers)
+		}
+		return nil
+	})
+}
+
+// TestGetBlockHeadersWithSkip tests fetching block headers with skip parameter.
+func (s *Suite) TestGetBlockHeadersWithSkip(t *utesting.T) {
+	t.Log(`This test requests block headers with a skip value, fetching every Nth block.`)
+	req := &eth.GetBlockHeadersPacket{
+		RequestId: 13,
+		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
+			Origin:  eth.HashOrNumber{Number: 5},
+			Amount:  5,
+			Skip:    3,
+			Reverse: false,
+		},
+	}
+	s.testGetBlockHeaders(t, req, func(headers *eth.BlockHeadersPacket) error {
+		expected, err := s.chain.GetHeaders(req)
+		if err != nil {
+			return fmt.Errorf("failed to get headers: %v", err)
+		}
+		if !headersMatch(expected, headers.BlockHeadersRequest) {
+			return fmt.Errorf("header mismatch: \nexpected %v \ngot %v", expected, headers)
+		}
+		return nil
+	})
+}
+
+// TestGetBlockHeadersEmpty tests requesting zero block headers.
+func (s *Suite) TestGetBlockHeadersEmpty(t *utesting.T) {
+	t.Log(`This test requests zero block headers to verify the node handles Amount=0 correctly.`)
+	req := &eth.GetBlockHeadersPacket{
+		RequestId: 14,
+		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
+			Origin:  eth.HashOrNumber{Number: 10},
+			Amount:  0,
+			Skip:    0,
+			Reverse: false,
+		},
+	}
+	s.testGetBlockHeaders(t, req, func(headers *eth.BlockHeadersPacket) error {
+		if len(headers.BlockHeadersRequest) != 0 {
+			return fmt.Errorf("expected empty headers, got %d headers", len(headers.BlockHeadersRequest))
+		}
+		return nil
+	})
+}
+
+// TestGetBlockHeadersMaxLimit tests requesting a large number of headers.
+func (s *Suite) TestGetBlockHeadersMaxLimit(t *utesting.T) {
+	t.Log(`This test requests a very large number of block headers to test implementation limits.`)
+	req := &eth.GetBlockHeadersPacket{
+		RequestId: 15,
+		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
+			Origin:  eth.HashOrNumber{Number: 1},
+			Amount:  1024, // Request many headers
+			Skip:    0,
+			Reverse: false,
+		},
+	}
+	s.testGetBlockHeaders(t, req, func(headers *eth.BlockHeadersPacket) error {
+		// Node may return fewer headers than requested due to limits
+		if len(headers.BlockHeadersRequest) == 0 {
+			return fmt.Errorf("expected at least some headers in response")
+		}
+		return nil
+	})
+}
+
+func (s *Suite) TestGetBlockHeadersNonexistent(t *utesting.T) {
 	t.Log(`This test sends GetBlockHeaders requests for nonexistent blocks (using max uint64 value)
 to check if the node disconnects after receiving multiple invalid requests.`)
 	conn, err := s.dialAndPeer(nil)
@@ -352,37 +474,25 @@ func collectResponses[T any, P msgTypePtr[T]](conn *Conn, n int, identity func(P
 	return resp, nil
 }
 
-func (s *Suite) TestZeroRequestID(t *utesting.T) {
+func (s *Suite) TestGetBlockHeadersZeroRequestID(t *utesting.T) {
 	t.Log(`This test sends a GetBlockHeaders message with a request-id of zero,
 and expects a response.`)
-	conn, err := s.dialAndPeer(nil)
-	if err != nil {
-		t.Fatalf("peering failed: %v", err)
-	}
-	defer conn.Close()
-
 	req := &eth.GetBlockHeadersPacket{
 		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
 			Origin: eth.HashOrNumber{Number: 0},
 			Amount: 2,
 		},
 	}
-	// Read headers response.
-	if err := conn.Write(ethProto, eth.GetBlockHeadersMsg, req); err != nil {
-		t.Fatalf("could not write to connection: %v", err)
-	}
-	headers := new(eth.BlockHeadersPacket)
-	if err := conn.ReadMsg(ethProto, eth.BlockHeadersMsg, &headers); err != nil {
-		t.Fatalf("error reading msg: %v", err)
-	}
-	if got, want := headers.RequestId, req.RequestId; got != want {
-		t.Fatalf("unexpected request id")
-	}
-	if expected, err := s.chain.GetHeaders(req); err != nil {
-		t.Fatalf("failed to get expected block headers: %v", err)
-	} else if !headersMatch(expected, headers.BlockHeadersRequest) {
-		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, headers)
-	}
+	s.testGetBlockHeaders(t, req, func(headers *eth.BlockHeadersPacket) error {
+		expected, err := s.chain.GetHeaders(req)
+		if err != nil {
+			return fmt.Errorf("failed to get expected block headers: %v", err)
+		}
+		if !headersMatch(expected, headers.BlockHeadersRequest) {
+			return fmt.Errorf("header mismatch: \nexpected %v \ngot %v", expected, headers)
+		}
+		return nil
+	})
 }
 
 func (s *Suite) TestGetBlockBodies(t *utesting.T) {
@@ -1190,183 +1300,5 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 	err := <-errc
 	if err != nil {
 		t.Fatalf("%v", err)
-	}
-}
-
-// TestGetBlockHeadersByNumber tests fetching block headers by number origin.
-func (s *Suite) TestGetBlockHeadersByNumber(t *utesting.T) {
-	t.Log(`This test requests block headers using block number as the origin.`)
-	conn, err := s.dialAndPeer(nil)
-	if err != nil {
-		t.Fatalf("peering failed: %v", err)
-	}
-	defer conn.Close()
-
-	req := &eth.GetBlockHeadersPacket{
-		RequestId: 11,
-		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
-			Origin:  eth.HashOrNumber{Number: 20},
-			Amount:  5,
-			Skip:    0,
-			Reverse: false,
-		},
-	}
-	if err := conn.Write(ethProto, eth.GetBlockHeadersMsg, req); err != nil {
-		t.Fatalf("could not write to connection: %v", err)
-	}
-	headers := new(eth.BlockHeadersPacket)
-	if err := conn.ReadMsg(ethProto, eth.BlockHeadersMsg, &headers); err != nil {
-		t.Fatalf("error reading msg: %v", err)
-	}
-	if got, want := headers.RequestId, req.RequestId; got != want {
-		t.Fatalf("unexpected request id: got %d, want %d", got, want)
-	}
-	expected, err := s.chain.GetHeaders(req)
-	if err != nil {
-		t.Fatalf("failed to get headers: %v", err)
-	}
-	if !headersMatch(expected, headers.BlockHeadersRequest) {
-		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, headers)
-	}
-}
-
-// TestGetBlockHeadersReverse tests fetching block headers in reverse order.
-func (s *Suite) TestGetBlockHeadersReverse(t *utesting.T) {
-	t.Log(`This test requests block headers in reverse order (decreasing block numbers).`)
-	conn, err := s.dialAndPeer(nil)
-	if err != nil {
-		t.Fatalf("peering failed: %v", err)
-	}
-	defer conn.Close()
-
-	req := &eth.GetBlockHeadersPacket{
-		RequestId: 12,
-		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
-			Origin:  eth.HashOrNumber{Number: 50},
-			Amount:  10,
-			Skip:    0,
-			Reverse: true,
-		},
-	}
-	if err := conn.Write(ethProto, eth.GetBlockHeadersMsg, req); err != nil {
-		t.Fatalf("could not write to connection: %v", err)
-	}
-	headers := new(eth.BlockHeadersPacket)
-	if err := conn.ReadMsg(ethProto, eth.BlockHeadersMsg, &headers); err != nil {
-		t.Fatalf("error reading msg: %v", err)
-	}
-	if got, want := headers.RequestId, req.RequestId; got != want {
-		t.Fatalf("unexpected request id: got %d, want %d", got, want)
-	}
-	expected, err := s.chain.GetHeaders(req)
-	if err != nil {
-		t.Fatalf("failed to get headers: %v", err)
-	}
-	if !headersMatch(expected, headers.BlockHeadersRequest) {
-		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, headers)
-	}
-}
-
-// TestGetBlockHeadersWithSkip tests fetching block headers with skip parameter.
-func (s *Suite) TestGetBlockHeadersWithSkip(t *utesting.T) {
-	t.Log(`This test requests block headers with a skip value, fetching every Nth block.`)
-	conn, err := s.dialAndPeer(nil)
-	if err != nil {
-		t.Fatalf("peering failed: %v", err)
-	}
-	defer conn.Close()
-
-	req := &eth.GetBlockHeadersPacket{
-		RequestId: 13,
-		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
-			Origin:  eth.HashOrNumber{Number: 5},
-			Amount:  5,
-			Skip:    3,
-			Reverse: false,
-		},
-	}
-	if err := conn.Write(ethProto, eth.GetBlockHeadersMsg, req); err != nil {
-		t.Fatalf("could not write to connection: %v", err)
-	}
-	headers := new(eth.BlockHeadersPacket)
-	if err := conn.ReadMsg(ethProto, eth.BlockHeadersMsg, &headers); err != nil {
-		t.Fatalf("error reading msg: %v", err)
-	}
-	if got, want := headers.RequestId, req.RequestId; got != want {
-		t.Fatalf("unexpected request id: got %d, want %d", got, want)
-	}
-	expected, err := s.chain.GetHeaders(req)
-	if err != nil {
-		t.Fatalf("failed to get headers: %v", err)
-	}
-	if !headersMatch(expected, headers.BlockHeadersRequest) {
-		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, headers)
-	}
-}
-
-// TestGetBlockHeadersEmpty tests requesting zero block headers.
-func (s *Suite) TestGetBlockHeadersEmpty(t *utesting.T) {
-	t.Log(`This test requests zero block headers to verify the node handles Amount=0 correctly.`)
-	conn, err := s.dialAndPeer(nil)
-	if err != nil {
-		t.Fatalf("peering failed: %v", err)
-	}
-	defer conn.Close()
-
-	req := &eth.GetBlockHeadersPacket{
-		RequestId: 14,
-		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
-			Origin:  eth.HashOrNumber{Number: 10},
-			Amount:  0,
-			Skip:    0,
-			Reverse: false,
-		},
-	}
-	if err := conn.Write(ethProto, eth.GetBlockHeadersMsg, req); err != nil {
-		t.Fatalf("could not write to connection: %v", err)
-	}
-	headers := new(eth.BlockHeadersPacket)
-	if err := conn.ReadMsg(ethProto, eth.BlockHeadersMsg, &headers); err != nil {
-		t.Fatalf("error reading msg: %v", err)
-	}
-	if got, want := headers.RequestId, req.RequestId; got != want {
-		t.Fatalf("unexpected request id: got %d, want %d", got, want)
-	}
-	if len(headers.BlockHeadersRequest) != 0 {
-		t.Fatalf("expected empty headers, got %d headers", len(headers.BlockHeadersRequest))
-	}
-}
-
-// TestGetBlockHeadersMaxLimit tests requesting a large number of headers.
-func (s *Suite) TestGetBlockHeadersMaxLimit(t *utesting.T) {
-	t.Log(`This test requests a very large number of block headers to test implementation limits.`)
-	conn, err := s.dialAndPeer(nil)
-	if err != nil {
-		t.Fatalf("peering failed: %v", err)
-	}
-	defer conn.Close()
-
-	req := &eth.GetBlockHeadersPacket{
-		RequestId: 15,
-		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
-			Origin:  eth.HashOrNumber{Number: 1},
-			Amount:  1024, // Request many headers
-			Skip:    0,
-			Reverse: false,
-		},
-	}
-	if err := conn.Write(ethProto, eth.GetBlockHeadersMsg, req); err != nil {
-		t.Fatalf("could not write to connection: %v", err)
-	}
-	headers := new(eth.BlockHeadersPacket)
-	if err := conn.ReadMsg(ethProto, eth.BlockHeadersMsg, &headers); err != nil {
-		t.Fatalf("error reading msg: %v", err)
-	}
-	if got, want := headers.RequestId, req.RequestId; got != want {
-		t.Fatalf("unexpected request id: got %d, want %d", got, want)
-	}
-	// Node may return fewer headers than requested due to limits
-	if len(headers.BlockHeadersRequest) == 0 {
-		t.Fatalf("expected at least some headers in response")
 	}
 }
