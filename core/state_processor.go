@@ -92,6 +92,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if config.IsPrague(block.Number(), block.Time()) || config.IsVerkle(block.Number(), block.Time()) {
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
+	if hooks := cfg.Tracer; hooks != nil && hooks.OnPreTxExecutionDone != nil {
+		hooks.OnPreTxExecutionDone()
+	}
 
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
@@ -129,8 +132,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.chain.Engine().Finalize(p.chain, header, tracingStateDB, block.Body())
 
-	if hooks := cfg.Tracer; hooks != nil && hooks.OnPreTxExecutionDone != nil {
-		hooks.OnPreTxExecutionDone()
+	if hooks := cfg.Tracer; hooks != nil && hooks.OnBlockFinalization != nil {
+		hooks.OnBlockFinalization()
 	}
 
 	return &ProcessResult{
