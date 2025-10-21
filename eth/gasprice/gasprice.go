@@ -93,15 +93,15 @@ func NewOracle(backend OracleBackend, params Config, startPrice *big.Int) *Oracl
 		log.Warn("Sanitizing invalid gasprice oracle sample percentile", "provided", params.Percentile, "updated", percent)
 	}
 	maxPrice := params.MaxPrice
-	if maxPrice == nil || maxPrice.Int64() <= 0 {
+	if maxPrice == nil || maxPrice.Sign() <= 0 {
 		maxPrice = DefaultMaxPrice
 		log.Warn("Sanitizing invalid gasprice oracle price cap", "provided", params.MaxPrice, "updated", maxPrice)
 	}
 	ignorePrice := params.IgnorePrice
-	if ignorePrice == nil || ignorePrice.Int64() <= 0 {
+	if ignorePrice == nil || ignorePrice.Sign() <= 0 {
 		ignorePrice = DefaultIgnorePrice
 		log.Warn("Sanitizing invalid gasprice oracle ignore price", "provided", params.IgnorePrice, "updated", ignorePrice)
-	} else if ignorePrice.Int64() > 0 {
+	} else if ignorePrice.Sign() > 0 {
 		log.Info("Gasprice oracle is ignoring threshold set", "threshold", ignorePrice)
 	}
 	maxHeaderHistory := params.MaxHeaderHistory

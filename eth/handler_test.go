@@ -18,6 +18,7 @@ package eth
 
 import (
 	"maps"
+	"math"
 	"math/big"
 	"math/rand"
 	"sort"
@@ -315,5 +316,19 @@ func createTestPeers(rand *rand.Rand, n int) []*ethPeer {
 func closePeers(peers []*ethPeer) {
 	for _, p := range peers {
 		p.Close()
+	}
+}
+
+func BenchmarkBigIntSign(b *testing.B) {
+	bigInt := new(big.Int).SetUint64(math.MaxUint64)
+	for i := 0; i < b.N; i++ {
+		_ = bigInt.Sign()
+	}
+}
+
+func BenchmarkBigIntUint64(b *testing.B) {
+	bigInt := new(big.Int).SetUint64(math.MaxUint64)
+	for i := 0; i < b.N; i++ {
+		_ = bigInt.Uint64()
 	}
 }
