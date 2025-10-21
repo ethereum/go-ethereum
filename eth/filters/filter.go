@@ -492,10 +492,10 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 // filterLogs creates a slice of logs matching the given criteria.
 func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*types.Log {
 	var check = func(log *types.Log) bool {
-		if fromBlock != nil && fromBlock.Int64() >= 0 && fromBlock.Uint64() > log.BlockNumber {
+		if fromBlock != nil && fromBlock.Sign() >= 0 && fromBlock.Uint64() > log.BlockNumber {
 			return false
 		}
-		if toBlock != nil && toBlock.Int64() >= 0 && toBlock.Uint64() < log.BlockNumber {
+		if toBlock != nil && toBlock.Sign() >= 0 && toBlock.Uint64() < log.BlockNumber {
 			return false
 		}
 		if len(addresses) > 0 && !slices.Contains(addresses, log.Address) {

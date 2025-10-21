@@ -424,7 +424,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	// if there is no available state, waiting for state sync.
 	head := bc.CurrentBlock()
 	if !bc.HasState(head.Root) {
-		if head.Number.Uint64() == 0 {
+		if head.Number.Sign() == 0 {
 			// The genesis state is missing, which is only possible in the path-based
 			// scheme. This situation occurs when the initial state sync is not finished
 			// yet, or the chain head is rewound below the pivot point. In both scenarios,
@@ -501,7 +501,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		bc.logger.OnBlockchainInit(chainConfig)
 	}
 	if bc.logger != nil && bc.logger.OnGenesisBlock != nil {
-		if block := bc.CurrentBlock(); block.Number.Uint64() == 0 {
+		if block := bc.CurrentBlock(); block.Number.Sign() == 0 {
 			alloc, err := getGenesisState(bc.db, block.Hash())
 			if err != nil {
 				return nil, fmt.Errorf("failed to get genesis state: %w", err)
@@ -742,7 +742,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 	if block := bc.GetBlock(header.Hash(), header.Number.Uint64()); block == nil {
 		// In a pruned node the genesis block will not exist in the freezer.
 		// It should not happen that we set head to any other pruned block.
-		if header.Number.Uint64() > 0 {
+		if header.Number.Sign() > 0 {
 			// This should never happen. In practice, previously currentBlock
 			// contained the entire block whereas now only a "marker", so there
 			// is an ever so slight chance for a race we should handle.
@@ -767,7 +767,7 @@ func (bc *BlockChain) SetHeadWithTimestamp(timestamp uint64) error {
 	if block := bc.GetBlock(header.Hash(), header.Number.Uint64()); block == nil {
 		// In a pruned node the genesis block will not exist in the freezer.
 		// It should not happen that we set head to any other pruned block.
-		if header.Number.Uint64() > 0 {
+		if header.Number.Sign() > 0 {
 			// This should never happen. In practice, previously currentBlock
 			// contained the entire block whereas now only a "marker", so there
 			// is an ever so slight chance for a race we should handle.
@@ -860,7 +860,7 @@ func (bc *BlockChain) rewindHashHead(head *types.Header, root common.Hash) (*typ
 			head = parent
 
 			// If the genesis block is reached, stop searching.
-			if head.Number.Uint64() == 0 {
+			if head.Number.Sign() == 0 {
 				log.Info("Genesis block reached", "number", head.Number, "hash", head.Hash())
 				return head, rootNumber
 			}
@@ -868,7 +868,7 @@ func (bc *BlockChain) rewindHashHead(head *types.Header, root common.Hash) (*typ
 		}
 		// Once the available state is found, ensure that the requested root
 		// has already been crossed. If not, continue rewinding.
-		if beyondRoot || head.Number.Uint64() == 0 {
+		if beyondRoot || head.Number.Sign() == 0 {
 			log.Info("Rewound to block with state", "number", head.Number, "hash", head.Hash())
 			return head, rootNumber
 		}
@@ -937,7 +937,7 @@ func (bc *BlockChain) rewindPathHead(head *types.Header, root common.Hash) (*typ
 		head = parent
 
 		// If the genesis block is reached, stop searching.
-		if head.Number.Uint64() == 0 {
+		if head.Number.Sign() == 0 {
 			log.Info("Genesis block reached", "number", head.Number, "hash", head.Hash())
 			return head, rootNumber
 		}
@@ -1015,7 +1015,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 			// approach except for rerunning a snap sync. Do nothing here until the
 			// state syncer picks it up.
 			if !bc.HasState(newHeadBlock.Root) {
-				if newHeadBlock.Number.Uint64() != 0 {
+				if newHeadBlock.Number.Sign() != 0 {
 					log.Crit("Chain is stateless at a non-genesis block")
 				}
 				log.Info("Chain is stateless, wait state sync", "number", newHeadBlock.Number, "hash", newHeadBlock.Hash())
