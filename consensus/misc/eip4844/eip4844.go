@@ -200,6 +200,30 @@ func LatestMaxBlobsPerBlock(cfg *params.ChainConfig) int {
 	return bcfg.Max
 }
 
+// TargetBlobsPerBlock returns the target blobs per block for a block at the given timestamp.
+func TargetBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
+	blobConfig := latestBlobConfig(cfg, time)
+	if blobConfig == nil {
+		return 0
+	}
+	return blobConfig.Target
+}
+
+// TargetBlobGasPerBlock returns the target blob gas that can be spent in a block at the given timestamp.
+func TargetBlobGasPerBlock(cfg *params.ChainConfig, time uint64) uint64 {
+	return uint64(TargetBlobsPerBlock(cfg, time)) * params.BlobTxBlobGasPerBlob
+}
+
+// LatestTargetBlobsPerBlock returns the latest target blobs per block defined by the
+// configuration, regardless of the currently active fork.
+func LatestTargetBlobsPerBlock(cfg *params.ChainConfig) int {
+	bcfg := latestBlobConfig(cfg, math.MaxUint64)
+	if bcfg == nil {
+		return 0
+	}
+	return bcfg.Target
+}
+
 // fakeExponential approximates factor * e ** (numerator / denominator) using
 // Taylor expansion.
 func fakeExponential(factor, numerator, denominator *big.Int) *big.Int {
