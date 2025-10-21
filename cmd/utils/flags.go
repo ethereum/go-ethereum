@@ -192,7 +192,7 @@ var (
 	}
 	GenesisFlag = &cli.StringFlag{
 		Name:     "genesis",
-		Usage:    "Load genesis block and configuration from file at this path.",
+		Usage:    "Load genesis block and configuration from file at this path",
 		Category: flags.EthCategory,
 	}
 
