@@ -19,7 +19,6 @@ package bal
 import (
 	"bytes"
 	"cmp"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -65,15 +64,6 @@ func (e *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 	}
 	dec.ListEnd()
 	return nil
-}
-
-func (e *BlockAccessList) String() string {
-	var res bytes.Buffer
-	enc := json.NewEncoder(&res)
-	enc.SetIndent("", "    ")
-	// TODO: check error
-	enc.Encode(e)
-	return res.String()
 }
 
 // Validate returns an error if the contents of the access list are not ordered
@@ -141,7 +131,7 @@ func (e *encodingSlotWrites) validate() error {
 	return errors.New("storage write tx indices not in order")
 }
 
-// AccountAccess is the encoding format of ConstructionAccountAccesses.
+// AccountAccess is the encoding format of constructionAccountAccesses.
 type AccountAccess struct {
 	Address        common.Address          `json:"address,omitempty"`        // 20-byte Ethereum address
 	StorageChanges []encodingSlotWrites    `json:"storageChanges,omitempty"` // Storage changes (slot -> [tx_index -> new_value])
@@ -166,7 +156,6 @@ func (e *AccountAccess) validate() error {
 			return err
 		}
 	}
-	// test case ideas: keys in both read/writes, duplicate keys in either read/writes
 	// ensure that the read and write key sets are distinct
 	readKeys := make(map[common.Hash]struct{})
 	writeKeys := make(map[common.Hash]struct{})
@@ -211,7 +200,6 @@ func (e *AccountAccess) validate() error {
 		return errors.New("nonce changes not in ascending order by tx index")
 	}
 
-	// Convert code change
 	for _, codeChange := range e.CodeChanges {
 		if len(codeChange.Code) > params.MaxCodeSize {
 			return fmt.Errorf("code change contained oversized code")
@@ -244,16 +232,9 @@ func (e *AccountAccess) Copy() AccountAccess {
 	return res
 }
 
-// EncodeRLP returns the RLP-encoded access list
-func (c *AccessListBuilder) EncodeRLP(wr io.Writer) error {
-	return c.ToEncodingObj().EncodeRLP(wr)
-}
-
-var _ rlp.Encoder = &AccessListBuilder{}
-
-// toEncodingObj creates an instance of the ConstructionAccountAccesses of the type that is
+// toEncodingObj creates an instance of the constructionAccountAccesses of the type that is
 // used as input for the encoding.
-func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) AccountAccess {
+func (a *constructionAccountAccesses) toEncodingObj(addr common.Address) AccountAccess {
 	res := AccountAccess{
 		Address:        addr,
 		StorageChanges: make([]encodingSlotWrites, 0),
@@ -264,13 +245,13 @@ func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) Account
 	}
 
 	// Convert write slots
-	writeSlots := slices.Collect(maps.Keys(a.StorageWrites))
+	writeSlots := slices.Collect(maps.Keys(a.storageWrites))
 	slices.SortFunc(writeSlots, common.Hash.Cmp)
 	for _, slot := range writeSlots {
 		var obj encodingSlotWrites
 		obj.Slot = slot
 
-		slotWrites := a.StorageWrites[slot]
+		slotWrites := a.storageWrites[slot]
 		obj.Accesses = make([]encodingStorageWrite, 0, len(slotWrites))
 
 		indices := slices.Collect(maps.Keys(slotWrites))
@@ -285,39 +266,39 @@ func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) Account
 	}
 
 	// Convert read slots
-	readSlots := slices.Collect(maps.Keys(a.StorageReads))
+	readSlots := slices.Collect(maps.Keys(a.storageReads))
 	slices.SortFunc(readSlots, common.Hash.Cmp)
 	for _, slot := range readSlots {
 		res.StorageReads = append(res.StorageReads, slot)
 	}
 
 	// Convert balance changes
-	balanceIndices := slices.Collect(maps.Keys(a.BalanceChanges))
+	balanceIndices := slices.Collect(maps.Keys(a.balanceChanges))
 	slices.SortFunc(balanceIndices, cmp.Compare[uint16])
 	for _, idx := range balanceIndices {
 		res.BalanceChanges = append(res.BalanceChanges, encodingBalanceChange{
 			TxIdx:   idx,
-			Balance: new(uint256.Int).Set(a.BalanceChanges[idx]),
+			Balance: new(uint256.Int).Set(a.balanceChanges[idx]),
 		})
 	}
 
 	// Convert nonce changes
-	nonceIndices := slices.Collect(maps.Keys(a.NonceChanges))
+	nonceIndices := slices.Collect(maps.Keys(a.nonceChanges))
 	slices.SortFunc(nonceIndices, cmp.Compare[uint16])
 	for _, idx := range nonceIndices {
 		res.NonceChanges = append(res.NonceChanges, encodingAccountNonce{
 			TxIdx: idx,
-			Nonce: a.NonceChanges[idx],
+			Nonce: a.nonceChanges[idx],
 		})
 	}
 
 	// Convert code change
-	codeChangeIdxs := slices.Collect(maps.Keys(a.CodeChanges))
+	codeChangeIdxs := slices.Collect(maps.Keys(a.codeChanges))
 	slices.SortFunc(codeChangeIdxs, cmp.Compare[uint16])
 	for _, idx := range codeChangeIdxs {
 		res.CodeChanges = append(res.CodeChanges, CodeChange{
 			idx,
-			bytes.Clone(a.CodeChanges[idx].Code),
+			bytes.Clone(a.codeChanges[idx].Code),
 		})
 	}
 	return res
@@ -325,16 +306,16 @@ func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) Account
 
 // ToEncodingObj returns an instance of the access list expressed as the type
 // which is used as input for the encoding/decoding.
-func (c *AccessListBuilder) ToEncodingObj() *BlockAccessList {
+func (c ConstructionBlockAccessList) ToEncodingObj() *BlockAccessList {
 	var addresses []common.Address
-	for addr := range c.FinalizedAccesses {
+	for addr := range c {
 		addresses = append(addresses, addr)
 	}
 	slices.SortFunc(addresses, common.Address.Cmp)
 
 	var res BlockAccessList
 	for _, addr := range addresses {
-		res = append(res, c.FinalizedAccesses[addr].toEncodingObj(addr))
+		res = append(res, c[addr].toEncodingObj(addr))
 	}
 	return &res
 }

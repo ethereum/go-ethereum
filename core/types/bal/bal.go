@@ -42,7 +42,7 @@ type idxAccessListBuilder struct {
 	accessesStack []map[common.Address]*constructionAccountAccess
 }
 
-func newAccessListBuilder() *idxAccessListBuilder {
+func newIdxAccessListBuilder() *idxAccessListBuilder {
 	return &idxAccessListBuilder{
 		make(map[common.Address]*accountIdxPrestate),
 		[]map[common.Address]*constructionAccountAccess{
@@ -233,7 +233,7 @@ func (a *idxAccessListBuilder) finalise() (*StateDiff, StateAccesses) {
 // then emptied.
 func (c *AccessListBuilder) FinaliseIdxChanges(idx uint16) {
 	pendingDiff, pendingAccesses := c.idxBuilder.finalise()
-	c.idxBuilder = newAccessListBuilder()
+	c.idxBuilder = newIdxAccessListBuilder()
 
 	// merge the set of state accesses/modifications into the access list:
 	// * any account or storage slot which was already recorded as a read
@@ -245,40 +245,40 @@ func (c *AccessListBuilder) FinaliseIdxChanges(idx uint16) {
 	for addr, pendingAcctDiff := range pendingDiff.Mutations {
 		finalizedAcctChanges, ok := c.FinalizedAccesses[addr]
 		if !ok {
-			finalizedAcctChanges = &ConstructionAccountAccesses{}
+			finalizedAcctChanges = &constructionAccountAccesses{}
 			c.FinalizedAccesses[addr] = finalizedAcctChanges
 		}
 
 		if pendingAcctDiff.Nonce != nil {
-			if finalizedAcctChanges.NonceChanges == nil {
-				finalizedAcctChanges.NonceChanges = make(map[uint16]uint64)
+			if finalizedAcctChanges.nonceChanges == nil {
+				finalizedAcctChanges.nonceChanges = make(map[uint16]uint64)
 			}
-			finalizedAcctChanges.NonceChanges[idx] = *pendingAcctDiff.Nonce
+			finalizedAcctChanges.nonceChanges[idx] = *pendingAcctDiff.Nonce
 		}
 		if pendingAcctDiff.Balance != nil {
-			if finalizedAcctChanges.BalanceChanges == nil {
-				finalizedAcctChanges.BalanceChanges = make(map[uint16]*uint256.Int)
+			if finalizedAcctChanges.balanceChanges == nil {
+				finalizedAcctChanges.balanceChanges = make(map[uint16]*uint256.Int)
 			}
-			finalizedAcctChanges.BalanceChanges[idx] = pendingAcctDiff.Balance
+			finalizedAcctChanges.balanceChanges[idx] = pendingAcctDiff.Balance
 		}
 		if pendingAcctDiff.Code != nil {
-			if finalizedAcctChanges.CodeChanges == nil {
-				finalizedAcctChanges.CodeChanges = make(map[uint16]CodeChange)
+			if finalizedAcctChanges.codeChanges == nil {
+				finalizedAcctChanges.codeChanges = make(map[uint16]CodeChange)
 			}
-			finalizedAcctChanges.CodeChanges[idx] = CodeChange{idx, pendingAcctDiff.Code}
+			finalizedAcctChanges.codeChanges[idx] = CodeChange{idx, pendingAcctDiff.Code}
 		}
 		if pendingAcctDiff.StorageWrites != nil {
-			if finalizedAcctChanges.StorageWrites == nil {
-				finalizedAcctChanges.StorageWrites = make(map[common.Hash]map[uint16]common.Hash)
+			if finalizedAcctChanges.storageWrites == nil {
+				finalizedAcctChanges.storageWrites = make(map[common.Hash]map[uint16]common.Hash)
 			}
 			for key, val := range pendingAcctDiff.StorageWrites {
-				if _, ok := finalizedAcctChanges.StorageWrites[key]; !ok {
-					finalizedAcctChanges.StorageWrites[key] = make(map[uint16]common.Hash)
+				if _, ok := finalizedAcctChanges.storageWrites[key]; !ok {
+					finalizedAcctChanges.storageWrites[key] = make(map[uint16]common.Hash)
 				}
-				finalizedAcctChanges.StorageWrites[key][idx] = val
+				finalizedAcctChanges.storageWrites[key][idx] = val
 
-				if _, ok := finalizedAcctChanges.StorageReads[key]; ok {
-					delete(finalizedAcctChanges.StorageReads, key)
+				if _, ok := finalizedAcctChanges.storageReads[key]; ok {
+					delete(finalizedAcctChanges.storageReads, key)
 				}
 			}
 		}
@@ -288,18 +288,18 @@ func (c *AccessListBuilder) FinaliseIdxChanges(idx uint16) {
 	for addr, pendingAccountAccesses := range pendingAccesses {
 		finalizedAcctAccesses, ok := c.FinalizedAccesses[addr]
 		if !ok {
-			finalizedAcctAccesses = &ConstructionAccountAccesses{}
+			finalizedAcctAccesses = &constructionAccountAccesses{}
 			c.FinalizedAccesses[addr] = finalizedAcctAccesses
 		}
 
 		for key := range pendingAccountAccesses {
-			if _, ok := finalizedAcctAccesses.StorageWrites[key]; ok {
+			if _, ok := finalizedAcctAccesses.storageWrites[key]; ok {
 				continue
 			}
-			if finalizedAcctAccesses.StorageReads == nil {
-				finalizedAcctAccesses.StorageReads = make(map[common.Hash]struct{})
+			if finalizedAcctAccesses.storageReads == nil {
+				finalizedAcctAccesses.storageReads = make(map[common.Hash]struct{})
 			}
-			finalizedAcctAccesses.StorageReads[key] = struct{}{}
+			finalizedAcctAccesses.storageReads[key] = struct{}{}
 		}
 	}
 	c.lastFinalizedMutations = pendingDiff
@@ -342,7 +342,7 @@ type CodeChange struct {
 	Code  []byte `json:"code,omitempty"`
 }
 
-// ConstructionAccountAccesses contains all state mutations which were applied
+// constructionAccountAccesses contains all state mutations which were applied
 // to a single account during the execution of a block.
 // It contains the final values for the account fields and storage slots which
 // were mutated, indexed by where they occurred:
@@ -352,16 +352,18 @@ type CodeChange struct {
 //
 // It also contains a set of storage slot accesses for state which was accessed
 // but not modified.  State accesses are not keyed by an index where they occurred.
-type ConstructionAccountAccesses struct {
-	// StorageWrites contain mutated storage slots and their values.
+type constructionAccountAccesses struct {
+	// storageWrites contain mutated storage slots and their values.
 	// It is indexed by storage slot -> access list index -> post-state value
-	StorageWrites map[common.Hash]map[uint16]common.Hash
+	storageWrites map[common.Hash]map[uint16]common.Hash
 
-	StorageReads   map[common.Hash]struct{}
-	BalanceChanges map[uint16]*uint256.Int
-	NonceChanges   map[uint16]uint64
-	CodeChanges    map[uint16]CodeChange
+	storageReads   map[common.Hash]struct{}
+	balanceChanges map[uint16]*uint256.Int
+	nonceChanges   map[uint16]uint64
+	codeChanges    map[uint16]CodeChange
 }
+
+type ConstructionBlockAccessList map[common.Address]*constructionAccountAccesses
 
 // constructionAccountAccess contains fields for an account which were modified
 // during execution of the current access list index.
@@ -477,7 +479,7 @@ func (c *constructionAccountAccess) NonceChange(cur uint64) {
 
 // AccessListBuilder is used to build an EIP-7928 block access list
 type AccessListBuilder struct {
-	FinalizedAccesses map[common.Address]*ConstructionAccountAccesses
+	FinalizedAccesses ConstructionBlockAccessList
 
 	idxBuilder *idxAccessListBuilder
 
@@ -488,8 +490,8 @@ type AccessListBuilder struct {
 // NewAccessListBuilder instantiates an empty access list.
 func NewAccessListBuilder() *AccessListBuilder {
 	return &AccessListBuilder{
-		make(map[common.Address]*ConstructionAccountAccesses),
-		newAccessListBuilder(),
+		make(map[common.Address]*constructionAccountAccesses),
+		newIdxAccessListBuilder(),
 		nil,
 		nil,
 	}
@@ -499,24 +501,24 @@ func NewAccessListBuilder() *AccessListBuilder {
 func (c *AccessListBuilder) Copy() *AccessListBuilder {
 	res := NewAccessListBuilder()
 	for addr, aa := range c.FinalizedAccesses {
-		var aaCopy ConstructionAccountAccesses
+		var aaCopy constructionAccountAccesses
 
-		slotWrites := make(map[common.Hash]map[uint16]common.Hash, len(aa.StorageWrites))
-		for key, m := range aa.StorageWrites {
+		slotWrites := make(map[common.Hash]map[uint16]common.Hash, len(aa.storageWrites))
+		for key, m := range aa.storageWrites {
 			slotWrites[key] = maps.Clone(m)
 		}
-		aaCopy.StorageWrites = slotWrites
-		aaCopy.StorageReads = maps.Clone(aa.StorageReads)
+		aaCopy.storageWrites = slotWrites
+		aaCopy.storageReads = maps.Clone(aa.storageReads)
 
-		balances := make(map[uint16]*uint256.Int, len(aa.BalanceChanges))
-		for index, balance := range aa.BalanceChanges {
+		balances := make(map[uint16]*uint256.Int, len(aa.balanceChanges))
+		for index, balance := range aa.balanceChanges {
 			balances[index] = balance.Clone()
 		}
-		aaCopy.BalanceChanges = balances
-		aaCopy.NonceChanges = maps.Clone(aa.NonceChanges)
+		aaCopy.balanceChanges = balances
+		aaCopy.nonceChanges = maps.Clone(aa.nonceChanges)
 
 		codeChangesCopy := make(map[uint16]CodeChange)
-		for idx, codeChange := range aa.CodeChanges {
+		for idx, codeChange := range aa.codeChanges {
 			codeChangesCopy[idx] = CodeChange{
 				TxIdx: idx,
 				Code:  bytes.Clone(codeChange.Code),

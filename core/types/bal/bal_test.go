@@ -36,55 +36,53 @@ func equalBALs(a *BlockAccessList, b *BlockAccessList) bool {
 	return true
 }
 
-func makeTestConstructionBAL() *AccessListBuilder {
-	return &AccessListBuilder{
-		map[common.Address]*ConstructionAccountAccesses{
-			common.BytesToAddress([]byte{0xff, 0xff}): {
-				StorageWrites: map[common.Hash]map[uint16]common.Hash{
-					common.BytesToHash([]byte{0x01}): {
-						1: common.BytesToHash([]byte{1, 2, 3, 4}),
-						2: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6}),
-					},
-					common.BytesToHash([]byte{0x10}): {
-						20: common.BytesToHash([]byte{1, 2, 3, 4}),
-					},
+func makeTestConstructionBAL() *ConstructionBlockAccessList {
+	return &ConstructionBlockAccessList{
+		common.BytesToAddress([]byte{0xff, 0xff}): {
+			storageWrites: map[common.Hash]map[uint16]common.Hash{
+				common.BytesToHash([]byte{0x01}): {
+					1: common.BytesToHash([]byte{1, 2, 3, 4}),
+					2: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6}),
 				},
-				StorageReads: map[common.Hash]struct{}{
-					common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7}): {},
+				common.BytesToHash([]byte{0x10}): {
+					20: common.BytesToHash([]byte{1, 2, 3, 4}),
 				},
-				BalanceChanges: map[uint16]*uint256.Int{
-					1: uint256.NewInt(100),
-					2: uint256.NewInt(500),
-				},
-				NonceChanges: map[uint16]uint64{
-					1: 2,
-					2: 6,
-				},
-				CodeChanges: map[uint16]CodeChange{0: {
-					TxIdx: 0,
-					Code:  common.Hex2Bytes("deadbeef"),
-				}},
 			},
-			common.BytesToAddress([]byte{0xff, 0xff, 0xff}): {
-				StorageWrites: map[common.Hash]map[uint16]common.Hash{
-					common.BytesToHash([]byte{0x01}): {
-						2: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6}),
-						3: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7, 8}),
-					},
-					common.BytesToHash([]byte{0x10}): {
-						21: common.BytesToHash([]byte{1, 2, 3, 4, 5}),
-					},
+			storageReads: map[common.Hash]struct{}{
+				common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7}): {},
+			},
+			balanceChanges: map[uint16]*uint256.Int{
+				1: uint256.NewInt(100),
+				2: uint256.NewInt(500),
+			},
+			nonceChanges: map[uint16]uint64{
+				1: 2,
+				2: 6,
+			},
+			codeChanges: map[uint16]CodeChange{0: {
+				TxIdx: 0,
+				Code:  common.Hex2Bytes("deadbeef"),
+			}},
+		},
+		common.BytesToAddress([]byte{0xff, 0xff, 0xff}): {
+			storageWrites: map[common.Hash]map[uint16]common.Hash{
+				common.BytesToHash([]byte{0x01}): {
+					2: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6}),
+					3: common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7, 8}),
 				},
-				StorageReads: map[common.Hash]struct{}{
-					common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7, 8}): {},
+				common.BytesToHash([]byte{0x10}): {
+					21: common.BytesToHash([]byte{1, 2, 3, 4, 5}),
 				},
-				BalanceChanges: map[uint16]*uint256.Int{
-					2: uint256.NewInt(100),
-					3: uint256.NewInt(500),
-				},
-				NonceChanges: map[uint16]uint64{
-					1: 2,
-				},
+			},
+			storageReads: map[common.Hash]struct{}{
+				common.BytesToHash([]byte{1, 2, 3, 4, 5, 6, 7, 8}): {},
+			},
+			balanceChanges: map[uint16]*uint256.Int{
+				2: uint256.NewInt(100),
+				3: uint256.NewInt(500),
+			},
+			nonceChanges: map[uint16]uint64{
+				1: 2,
 			},
 		},
 	}
@@ -94,7 +92,7 @@ func makeTestConstructionBAL() *AccessListBuilder {
 func TestBALEncoding(t *testing.T) {
 	var buf bytes.Buffer
 	bal := makeTestConstructionBAL()
-	err := bal.EncodeRLP(&buf)
+	err := bal.ToEncodingObj().EncodeRLP(&buf)
 	if err != nil {
 		t.Fatalf("encoding failed: %v\n", err)
 	}
@@ -250,6 +248,3 @@ func TestBlockAccessListValidation(t *testing.T) {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 }
-
-// BALReader test ideas
-// * BAL which doesn't have any pre-tx system contracts should return an empty state diff at idx 0

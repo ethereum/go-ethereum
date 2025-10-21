@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
 )
 
 func (c *ContractCode) MarshalJSON() ([]byte, error) {
@@ -12,23 +13,21 @@ func (c *ContractCode) MarshalJSON() ([]byte, error) {
 	return json.Marshal(hexStr)
 }
 func (e encodingBalanceChange) MarshalJSON() ([]byte, error) {
-	type Alias encodingBalanceChange
 	return json.Marshal(&struct {
-		TxIdx string `json:"txIndex"`
-		*Alias
+		TxIdx   string `json:"txIndex"`
+		Balance *uint256.Int
 	}{
-		TxIdx: fmt.Sprintf("0x%x", e.TxIdx),
-		Alias: (*Alias)(&e),
+		TxIdx:   fmt.Sprintf("0x%x", e.TxIdx),
+		Balance: e.Balance,
 	})
 }
 
 func (e *encodingBalanceChange) UnmarshalJSON(data []byte) error {
-	type Alias encodingBalanceChange
 	aux := &struct {
-		TxIdx string `json:"txIndex"`
-		*Alias
+		TxIdx   string `json:"txIndex"`
+		Balance *uint256.Int
 	}{
-		Alias: (*Alias)(e),
+		Balance: e.Balance,
 	}
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
@@ -41,27 +40,20 @@ func (e *encodingBalanceChange) UnmarshalJSON(data []byte) error {
 	return nil
 }
 func (e encodingAccountNonce) MarshalJSON() ([]byte, error) {
-	type Alias encodingAccountNonce
 	return json.Marshal(&struct {
 		TxIdx string `json:"txIndex"`
 		Nonce string `json:"nonce"`
-		*Alias
 	}{
 		TxIdx: fmt.Sprintf("0x%x", e.TxIdx),
 		Nonce: fmt.Sprintf("0x%x", e.Nonce),
-		Alias: (*Alias)(&e),
 	})
 }
 
 func (e *encodingAccountNonce) UnmarshalJSON(data []byte) error {
-	type Alias encodingAccountNonce
 	aux := &struct {
 		TxIdx string `json:"txIndex"`
 		Nonce string `json:"nonce"`
-		*Alias
-	}{
-		Alias: (*Alias)(e),
-	}
+	}{}
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
@@ -104,4 +96,18 @@ func (b BlockAccessList) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 	return json.Marshal(hexutil.Bytes(rlpBytes))
+}
+
+func (b BlockAccessList) String() string {
+	aux := []AccountAccess{}
+	for _, access := range b {
+		aux = append(aux, access)
+	}
+
+	res, err := json.MarshalIndent(aux, "", "    ")
+	if err != nil {
+		panic(err)
+	}
+
+	return string(res)
 }
