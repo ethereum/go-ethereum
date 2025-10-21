@@ -293,6 +293,20 @@ func (t *SizeTracker) run() {
 	h := sizeStatsHeap(slices.Collect(maps.Values(stats)))
 	heap.Init(&h)
 
+	// Initialize the 'last' pointer to the newest available stats entry so that
+	// Query(nil) can return the latest chain head immediately after init.
+	{
+		var newestRoot common.Hash
+		var newestBlock uint64
+		for root, st := range stats {
+			if st.BlockNumber >= newestBlock {
+				newestBlock = st.BlockNumber
+				newestRoot = root
+			}
+		}
+		last = newestRoot
+	}
+
 	for {
 		select {
 		case u := <-t.updateCh:
@@ -322,6 +336,20 @@ func (t *SizeTracker) run() {
 				root = *r.root
 			} else {
 				root = last
+				// Lazy-initialize 'last' (and the effective root) if it's not set yet,
+				// by selecting the entry with the highest BlockNumber from current stats.
+				if root == (common.Hash{}) {
+					var newestRoot common.Hash
+					var newestBlock uint64
+					for rt, st := range stats {
+						if st.BlockNumber >= newestBlock {
+							newestBlock = st.BlockNumber
+							newestRoot = rt
+						}
+					}
+					root = newestRoot
+					last = newestRoot
+				}
 			}
 			if s, ok := stats[root]; ok {
 				r.result <- &s
