@@ -112,8 +112,18 @@ func (journal *journal) load(add func([]*types.Transaction) []error) error {
 		}
 	}
 	log.Info("Loaded local transaction journal", "transactions", total, "dropped", dropped)
+	return failure
+}
 
-	// Open the journal file for appending
+func (journal *journal) setupWriter() error {
+	if journal.writer != nil {
+		if err := journal.writer.Close(); err != nil {
+			return err
+		}
+		journal.writer = nil
+	}
+
+	// Re-open the journal file for appending
 	// Use O_APPEND to ensure we always write to the end of the file
 	sink, err := os.OpenFile(journal.path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
@@ -121,7 +131,7 @@ func (journal *journal) load(add func([]*types.Transaction) []error) error {
 	}
 	journal.writer = sink
 
-	return failure
+	return nil
 }
 
 // insert adds the specified transaction to the local disk journal.

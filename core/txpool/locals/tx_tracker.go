@@ -185,6 +185,17 @@ func (tracker *TxTracker) loop() {
 			tracker.TrackAll(transactions)
 			return nil
 		})
+
+		// Setup the writer for the upcoming transactions. Lock to prevent
+		// journal.setupWriter <-> journal.insert (via TrackAll) conflicts.
+		tracker.mu.Lock()
+		if err := tracker.journal.setupWriter(); err != nil {
+			log.Error("Failed to setup the journal writer", "err", err)
+			tracker.mu.Unlock()
+			return
+		}
+		tracker.mu.Unlock()
+
 		defer tracker.journal.close()
 	}
 	var (
