@@ -17,7 +17,11 @@
 package locals
 
 import (
+	"fmt"
+	"maps"
 	"math/big"
+	"math/rand"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -146,20 +150,59 @@ func TestResubmit(t *testing.T) {
 	txsA := txs[:len(txs)/2]
 	txsB := txs[len(txs)/2:]
 	env.pool.Add(txsA, true)
+
 	pending, queued := env.pool.ContentFrom(address)
 	if len(pending) != len(txsA) || len(queued) != 0 {
 		t.Fatalf("Unexpected txpool content: %d, %d", len(pending), len(queued))
 	}
 	env.tracker.TrackAll(txs)
 
-	resubmit, all := env.tracker.recheck(true)
+	resubmit := env.tracker.recheck(true)
 	if len(resubmit) != len(txsB) {
 		t.Fatalf("Unexpected transactions to resubmit, got: %d, want: %d", len(resubmit), len(txsB))
 	}
-	if len(all) == 0 || len(all[address]) == 0 {
-		t.Fatalf("Unexpected transactions being tracked, got: %d, want: %d", 0, len(txs))
+	env.tracker.mu.Lock()
+	allCopy := maps.Clone(env.tracker.all)
+	env.tracker.mu.Unlock()
+
+	if len(allCopy) != len(txs) {
+		t.Fatalf("Unexpected transactions being tracked, got: %d, want: %d", len(allCopy), len(txs))
 	}
-	if len(all[address]) != len(txs) {
-		t.Fatalf("Unexpected transactions being tracked, got: %d, want: %d", len(all[address]), len(txs))
+}
+
+func TestJournal(t *testing.T) {
+	journalPath := filepath.Join(t.TempDir(), fmt.Sprintf("%d", rand.Int63()))
+	env := newTestEnv(t, 10, 0, journalPath)
+	defer env.close()
+
+	env.tracker.Start()
+	defer env.tracker.Stop()
+
+	txs := env.makeTxs(10)
+	txsA := txs[:len(txs)/2]
+	txsB := txs[len(txs)/2:]
+	env.pool.Add(txsA, true)
+
+	pending, queued := env.pool.ContentFrom(address)
+	if len(pending) != len(txsA) || len(queued) != 0 {
+		t.Fatalf("Unexpected txpool content: %d, %d", len(pending), len(queued))
+	}
+	env.tracker.TrackAll(txsA)
+	env.tracker.TrackAll(txsB)
+	env.tracker.recheck(true) // manually rejournal the tracker
+
+	// Make sure all the transactions are properly journalled
+	trackerB := New(journalPath, time.Minute, gspec.Config, env.pool)
+	trackerB.journal.load(func(transactions []*types.Transaction) []error {
+		trackerB.TrackAll(transactions)
+		return nil
+	})
+
+	trackerB.mu.Lock()
+	allCopy := maps.Clone(trackerB.all)
+	trackerB.mu.Unlock()
+
+	if len(allCopy) != len(txs) {
+		t.Fatalf("Unexpected transactions being tracked, got: %d, want: %d", len(allCopy), len(txs))
 	}
 }
