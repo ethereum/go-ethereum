@@ -18,7 +18,10 @@ func LogScaled(r Registry, freq time.Duration, scale time.Duration, l Logger) {
 	du := float64(scale)
 	duSuffix := scale.String()[1:]
 
-	for range time.Tick(freq) {
+	ticker := time.NewTicker(freq)
+	defer ticker.Stop()
+
+	for range ticker.C {
 		r.Each(func(name string, i interface{}) {
 			switch metric := i.(type) {
 			case *Counter:
