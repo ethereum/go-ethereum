@@ -670,6 +670,7 @@ type ChainConfig struct {
 	EuclidTime          *uint64  `json:"euclidTime,omitempty"`          // Euclid switch time (nil = no fork, 0 = already on euclid)
 	EuclidV2Time        *uint64  `json:"euclidv2Time,omitempty"`        // EuclidV2 switch time (nil = no fork, 0 = already on euclidv2)
 	FeynmanTime         *uint64  `json:"feynmanTime,omitempty"`         // Feynman switch time (nil = no fork, 0 = already on feynman)
+	GalileoTime         *uint64  `json:"galileoTime,omitempty"`         // Galileo switch time (nil = no fork, 0 = already on galileo)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -1014,6 +1015,10 @@ func (c *ChainConfig) IsFeynman(now uint64) bool {
 	return isForkedTime(now, c.FeynmanTime)
 }
 
+func (c *ChainConfig) IsGalileo(now uint64) bool {
+	return isForkedTime(now, c.GalileoTime)
+}
+
 // IsFeynmanTransitionBlock returns whether the given block timestamp corresponds to the first Feynman block.
 func (c *ChainConfig) IsFeynmanTransitionBlock(blockTimestamp uint64, parentTimestamp uint64) bool {
 	return isForkedTime(blockTimestamp, c.FeynmanTime) && !isForkedTime(parentTimestamp, c.FeynmanTime)
@@ -1247,7 +1252,7 @@ type Rules struct {
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon, IsArchimedes, IsShanghai            bool
 	IsBernoulli, IsCurie, IsDarwin, IsEuclid, IsEuclidV2    bool
-	IsFeynman                                               bool
+	IsFeynman, IsGalileo                                    bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -1276,5 +1281,6 @@ func (c *ChainConfig) Rules(num *big.Int, time uint64) Rules {
 		IsEuclid:         c.IsEuclid(time),
 		IsEuclidV2:       c.IsEuclidV2(time),
 		IsFeynman:        c.IsFeynman(time),
+		IsGalileo:        c.IsGalileo(time),
 	}
 }

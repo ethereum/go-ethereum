@@ -74,6 +74,8 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	if cfg.JumpTable[STOP] == nil {
 		var jt JumpTable
 		switch {
+		case evm.chainRules.IsGalileo:
+			jt = galileoInstructionSet
 		case evm.chainRules.IsFeynman:
 			jt = feynmanInstructionSet
 		case evm.chainRules.IsEuclidV2:

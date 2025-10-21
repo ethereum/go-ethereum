@@ -63,10 +63,20 @@ var (
 	darwinInstructionSet           = newDarwinInstructionSet()
 	euclidV2InstructionSet         = newEuclidV2InstructionSet()
 	feynmanInstructionSet          = newFeynmanInstructionSet()
+	galileoInstructionSet          = newGalileoInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]*operation
+
+// newGalileoInstructionSet returns the frontier, homestead, byzantium,
+// contantinople, istanbul, petersburg, berlin, london, shanghai, curie, darwin, euclidV2,
+// feynman and galileo instructions.
+func newGalileoInstructionSet() JumpTable {
+	instructionSet := newFeynmanInstructionSet()
+	enable7939(&instructionSet) // EIP-7939 (CLZ opcode)
+	return instructionSet
+}
 
 // newFeynmanInstructionSet returns the frontier, homestead, byzantium,
 // contantinople, istanbul, petersburg, berlin, london, shanghai, curie, darwin, euclidV2,
