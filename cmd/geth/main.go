@@ -66,6 +66,7 @@ var (
 		utils.OverrideBPO1,
 		utils.OverrideBPO2,
 		utils.OverrideVerkle,
+		utils.OverrideGenesisFlag,
 		utils.EnablePersonal, // deprecated
 		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,
@@ -84,7 +85,6 @@ var (
 		utils.SyncModeFlag,
 		utils.SyncTargetFlag,
 		utils.ExitWhenSyncedFlag,
-		utils.GenesisFlag,
 		utils.GCModeFlag,
 		utils.SnapshotFlag,
 		utils.TxLookupLimitFlag, // deprecated

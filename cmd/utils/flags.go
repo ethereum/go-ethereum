@@ -190,11 +190,6 @@ var (
 		Usage:    "Exits after block synchronisation completes",
 		Category: flags.EthCategory,
 	}
-	GenesisFlag = &cli.StringFlag{
-		Name:     "genesis",
-		Usage:    "Load genesis block and configuration from file at this path",
-		Category: flags.EthCategory,
-	}
 
 	// Dump command options.
 	IterativeOutputFlag = &cli.BoolFlag{
@@ -265,6 +260,11 @@ var (
 	OverrideVerkle = &cli.Uint64Flag{
 		Name:     "override.verkle",
 		Usage:    "Manually specify the Verkle fork timestamp, overriding the bundled setting",
+		Category: flags.EthCategory,
+	}
+	OverrideGenesisFlag = &cli.StringFlag{
+		Name:     "override.genesis",
+		Usage:    "Load genesis block and configuration from file at this path",
 		Category: flags.EthCategory,
 	}
 	SyncModeFlag = &cli.StringFlag{
@@ -1598,7 +1598,7 @@ func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags, don't allow network id override on preset networks
-	flags.CheckExclusive(ctx, MainnetFlag, DeveloperFlag, SepoliaFlag, HoleskyFlag, HoodiFlag, NetworkIdFlag, GenesisFlag)
+	flags.CheckExclusive(ctx, MainnetFlag, DeveloperFlag, SepoliaFlag, HoleskyFlag, HoodiFlag, NetworkIdFlag, OverrideGenesisFlag)
 	flags.CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 
 	// Set configurations from CLI flags
@@ -1878,8 +1878,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		if !ctx.IsSet(MinerGasPriceFlag.Name) {
 			cfg.Miner.GasPrice = big.NewInt(1)
 		}
-	case ctx.String(GenesisFlag.Name) != "":
-		f, err := os.Open(ctx.String(GenesisFlag.Name))
+	case ctx.String(OverrideGenesisFlag.Name) != "":
+		f, err := os.Open(ctx.String(OverrideGenesisFlag.Name))
 		if err != nil {
 			Fatalf("Failed to read genesis file: %v", err)
 		}
