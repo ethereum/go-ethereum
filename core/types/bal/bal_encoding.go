@@ -67,6 +67,16 @@ func (e *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 	return nil
 }
 
+// StringableRepresentation returns an instance of the block access list
+// which can be converted to a human-readable JSON representation.
+func (e *BlockAccessList) StringableRepresentation() interface{} {
+	res := []AccountAccess{}
+	for _, aa := range *e {
+		res = append(res, aa)
+	}
+	return &res
+}
+
 func (e *BlockAccessList) String() string {
 	var res bytes.Buffer
 	enc := json.NewEncoder(&res)

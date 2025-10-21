@@ -17,11 +17,9 @@
 package eth
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/types/bal"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -537,7 +535,7 @@ func (api *DebugAPI) ExecutionWitnessByHash(hash common.Hash) (*stateless.ExtWit
 
 // GetBlockAccessList returns a block access list for the given number/hash
 // or nil if one does not exist.
-func (api *DebugAPI) GetBlockAccessList(number rpc.BlockNumberOrHash) (*bal.BlockAccessList, error) {
+func (api *DebugAPI) GetBlockAccessList(number rpc.BlockNumberOrHash) (interface{}, error) {
 	var block *types.Block
 	if num := number.BlockNumber; num != nil {
 		block = api.eth.blockchain.GetBlockByNumber(uint64(num.Int64()))
@@ -548,19 +546,5 @@ func (api *DebugAPI) GetBlockAccessList(number rpc.BlockNumberOrHash) (*bal.Bloc
 	if block == nil {
 		return nil, fmt.Errorf("block not found")
 	}
-	return block.Body().AccessList, nil
-}
-
-// GetEncodedBlockAccessList returns a block access list corresponding to a
-// block number/hash in RLP-encoded form.  It returns nil if one does not exist.
-func (api *DebugAPI) GetEncodedBlockAccessList(number rpc.BlockNumberOrHash) ([]byte, error) {
-	bal, err := api.GetBlockAccessList(number)
-	if err != nil {
-		return nil, err
-	}
-	var enc bytes.Buffer
-	if err = bal.EncodeRLP(&enc); err != nil {
-		return nil, err
-	}
-	return enc.Bytes(), nil
+	return block.Body().AccessList.StringableRepresentation(), nil
 }
