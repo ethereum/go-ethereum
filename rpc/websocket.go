@@ -185,25 +185,6 @@ func parseOriginURL(origin string) (string, string, string, error) {
 	return scheme, hostname, port, nil
 }
 
-// DialWebsocketWithDialer creates a new RPC client using WebSocket.
-//
-// The context is used for the initial connection establishment. It does not
-// affect subsequent interactions with the client.
-//
-// Deprecated: use DialOptions and the WithWebsocketDialer option.
-func DialWebsocketWithDialer(ctx context.Context, endpoint, origin string, dialer websocket.Dialer) (*Client, error) {
-	cfg := new(clientConfig)
-	cfg.wsDialer = &dialer
-	if origin != "" {
-		cfg.setHeader("origin", origin)
-	}
-	connect, err := newClientTransportWS(endpoint, cfg)
-	if err != nil {
-		return nil, err
-	}
-	return newClient(ctx, cfg, connect)
-}
-
 // DialWebsocket creates a new RPC client that communicates with a JSON-RPC server
 // that is listening on the given endpoint.
 //
