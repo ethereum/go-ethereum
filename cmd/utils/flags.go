@@ -1917,6 +1917,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 	}
 	if ctx.IsSet(NetworkIdFlag.Name) {
+		// Typically it's best to automatically set the network id to the chain id,
+		// by not passing the network id flag at all. Emit a warning when set
+		// explicitly in case overriding the network id is not the user's intention.
 		id := ctx.Uint64(NetworkIdFlag.Name)
 		log.Warn("Setting network id with flag", "id", id)
 		cfg.NetworkId = id
