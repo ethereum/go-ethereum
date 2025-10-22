@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -137,6 +138,9 @@ func (t *TransitionTrie) UpdateAccount(addr common.Address, account *types.State
 	// could still work during a replay. This is no longer needed, as OpenStorageTrie
 	// only needs to know what the account trie does now.
 	return t.overlay.UpdateAccount(addr, account, codeLen)
+}
+func (t *TransitionTrie) UpdateAccountAsync(address common.Address, accountResolver func() *types.StateAccount) error {
+	return errors.New("not implemented")
 }
 
 // DeleteStorage removes any existing value for key from the trie. If a node was not

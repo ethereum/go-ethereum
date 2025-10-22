@@ -157,8 +157,8 @@ func (c *committer) store(path []byte, n node) node {
 	// length of leaves should be exactly same.
 	if c.collectLeaf {
 		if sn, ok := n.(*shortNode); ok {
-			if val, ok := sn.Val.(valueNode); ok {
-				c.nodes.AddLeaf(nhash, val)
+			if val, ok := sn.Val.(*valueNode); ok {
+				c.nodes.AddLeaf(nhash, val.resolve())
 			}
 		}
 	}
@@ -182,7 +182,7 @@ func forGatherChildren(n node, onChild func(hash common.Hash)) {
 		}
 	case hashNode:
 		onChild(common.BytesToHash(n))
-	case valueNode, nil:
+	case *valueNode, nil:
 	default:
 		panic(fmt.Sprintf("unknown node type: %T", n))
 	}

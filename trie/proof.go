@@ -128,8 +128,8 @@ func VerifyProof(rootHash common.Hash, key []byte, proofDb ethdb.KeyValueReader)
 		case hashNode:
 			key = keyrest
 			copy(wantHash[:], cld)
-		case valueNode:
-			return cld, nil
+		case *valueNode:
+			return cld.resolve(), nil
 		}
 	}
 }
@@ -191,8 +191,8 @@ func proofToPath(rootHash common.Hash, root node, key []byte, proofDb ethdb.KeyV
 			if err != nil {
 				return nil, nil, err
 			}
-		case valueNode:
-			valnode = cld
+		case *valueNode:
+			valnode = cld.resolve()
 		}
 		// Link the parent and child.
 		switch pnode := parent.(type) {
@@ -298,7 +298,7 @@ findFork:
 		}
 		// Only one proof points to non-existent key.
 		if shortForkRight != 0 {
-			if _, ok := rn.Val.(valueNode); ok {
+			if _, ok := rn.Val.(*valueNode); ok {
 				// The fork point is root node, unset the entire trie
 				if parent == nil {
 					return true, nil
@@ -309,7 +309,7 @@ findFork:
 			return false, unset(rn, rn.Val, left[pos:], len(rn.Key), false)
 		}
 		if shortForkLeft != 0 {
-			if _, ok := rn.Val.(valueNode); ok {
+			if _, ok := rn.Val.(*valueNode); ok {
 				// The fork point is root node, unset the entire trie
 				if parent == nil {
 					return true, nil
@@ -396,7 +396,7 @@ func unset(parent node, child node, key []byte, pos int, removeLeft bool) error 
 			}
 			return nil
 		}
-		if _, ok := cld.Val.(valueNode); ok {
+		if _, ok := cld.Val.(*valueNode); ok {
 			fn := parent.(*fullNode)
 			fn.Children[key[pos-1]] = nil
 			return nil
@@ -432,7 +432,7 @@ func hasRightElement(node node, key []byte) bool {
 				return bytes.Compare(rn.Key, key[pos:]) > 0
 			}
 			node, pos = rn.Val, pos+len(rn.Key)
-		case valueNode:
+		case *valueNode:
 			return false // We have resolved the whole path
 		default:
 			panic(fmt.Sprintf("%T: invalid node: %v", node, node)) // hashnode
@@ -612,7 +612,7 @@ func get(tn node, key []byte, skipResolved bool) ([]byte, node) {
 			return key, n
 		case nil:
 			return key, nil
-		case valueNode:
+		case *valueNode:
 			return nil, n
 		default:
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))

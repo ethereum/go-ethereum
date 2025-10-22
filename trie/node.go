@@ -44,7 +44,10 @@ type (
 		flags nodeFlag
 	}
 	hashNode  []byte
-	valueNode []byte
+	valueNode struct {
+		resolver func() []byte
+		val      []byte
+	}
 
 	// fullnodeEncoder is a type used exclusively for encoding fullNode.
 	// Briefly instantiating a fullnodeEncoder and initializing with
@@ -67,6 +70,19 @@ type (
 		Val []byte
 	}
 )
+
+func newValueNode(resolver func() []byte) *valueNode {
+	return &valueNode{
+		resolver: resolver,
+	}
+}
+
+func (v *valueNode) resolve() []byte {
+	if v.val == nil {
+		v.val = v.resolver()
+	}
+	return v.val
+}
 
 // EncodeRLP encodes a full node into the consensus RLP format.
 func (n *fullNode) EncodeRLP(w io.Writer) error {
@@ -91,13 +107,13 @@ func (n nodeFlag) copy() nodeFlag {
 func (n *fullNode) cache() (hashNode, bool)  { return n.flags.hash, n.flags.dirty }
 func (n *shortNode) cache() (hashNode, bool) { return n.flags.hash, n.flags.dirty }
 func (n hashNode) cache() (hashNode, bool)   { return nil, true }
-func (n valueNode) cache() (hashNode, bool)  { return nil, true }
+func (n *valueNode) cache() (hashNode, bool) { return nil, true }
 
 // Pretty printing.
 func (n *fullNode) String() string  { return n.fstring("") }
 func (n *shortNode) String() string { return n.fstring("") }
 func (n hashNode) String() string   { return n.fstring("") }
-func (n valueNode) String() string  { return n.fstring("") }
+func (n *valueNode) String() string { return n.fstring("") }
 
 func (n *fullNode) fstring(ind string) string {
 	resp := fmt.Sprintf("[\n%s  ", ind)
@@ -117,8 +133,8 @@ func (n *shortNode) fstring(ind string) string {
 func (n hashNode) fstring(ind string) string {
 	return fmt.Sprintf("<%x> ", []byte(n))
 }
-func (n valueNode) fstring(ind string) string {
-	return fmt.Sprintf("%x ", []byte(n))
+func (n *valueNode) fstring(ind string) string {
+	return fmt.Sprintf("%x ", n.resolve())
 }
 
 // mustDecodeNode is a wrapper of decodeNode and panic if any error is encountered.
@@ -185,7 +201,7 @@ func decodeShort(hash, elems []byte) (node, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid value node: %v", err)
 		}
-		return &shortNode{key, valueNode(val), flag}, nil
+		return &shortNode{key, newValueNode(func() []byte { return val }), flag}, nil
 	}
 	r, _, err := decodeRef(rest)
 	if err != nil {
@@ -208,7 +224,7 @@ func decodeFull(hash, elems []byte) (*fullNode, error) {
 		return n, err
 	}
 	if len(val) > 0 {
-		n.Children[16] = valueNode(val)
+		n.Children[16] = newValueNode(func() []byte { return val })
 	}
 	return n, nil
 }

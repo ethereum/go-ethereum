@@ -226,6 +226,25 @@ func (t *StateTrie) UpdateAccount(address common.Address, acc *types.StateAccoun
 	return nil
 }
 
+func (t *StateTrie) UpdateAccountAsync(address common.Address, accountResolve func() *types.StateAccount) error {
+	hk := crypto.Keccak256(address.Bytes())
+	resolve := func() []byte {
+		acc := accountResolve()
+		data, err := rlp.EncodeToBytes(acc)
+		if err != nil {
+			panic(err) // TODO: what do do here?
+		}
+		return data
+	}
+	if err := t.trie.UpdateAsync(hk, resolve); err != nil {
+		return err
+	}
+	if t.preimages != nil {
+		t.secKeyCache[common.Hash(hk)] = address.Bytes()
+	}
+	return nil
+}
+
 func (t *StateTrie) UpdateContractCode(_ common.Address, _ common.Hash, _ []byte) error {
 	return nil
 }

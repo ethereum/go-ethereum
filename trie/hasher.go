@@ -110,7 +110,7 @@ func (h *hasher) encodeShortNode(n *shortNode) []byte {
 	if hasTerm(n.Key) {
 		var ln leafNodeEncoder
 		ln.Key = hexToCompact(n.Key)
-		ln.Val = n.Val.(valueNode)
+		ln.Val = n.Val.(*valueNode).resolve()
 		ln.encode(h.encbuf)
 		return h.encodedBytes()
 	}
@@ -162,7 +162,7 @@ func (h *hasher) encodeFullNode(n *fullNode) []byte {
 		}
 	}
 	if n.Children[16] != nil {
-		fn.Children[16] = n.Children[16].(valueNode)
+		fn.Children[16] = n.Children[16].(*valueNode).resolve()
 	}
 	fn.encode(h.encbuf)
 	fnEncoderPool.Put(fn)
