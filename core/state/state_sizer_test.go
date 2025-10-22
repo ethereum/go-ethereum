@@ -94,6 +94,14 @@ func TestSizeTracker(t *testing.T) {
 	}
 	baselineRoot := currentRoot
 
+	// Close and reopen the trie database so all async flushes triggered by the
+	// baseline commits are written before we measure the baseline snapshot.
+	if err := tdb.Close(); err != nil {
+		t.Fatalf("Failed to close triedb before baseline measurement: %v", err)
+	}
+	tdb = triedb.NewDatabase(db, &triedb.Config{PathDB: pathdb.Defaults})
+	sdb = NewDatabase(tdb, nil)
+
 	// Wait for snapshot completion
 	for !tdb.SnapshotCompleted() {
 		time.Sleep(100 * time.Millisecond)
