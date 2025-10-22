@@ -50,8 +50,9 @@ var allPrecompiles = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{2}):    &sha256hash{},
 	common.BytesToAddress([]byte{3}):    &ripemd160hash{},
 	common.BytesToAddress([]byte{4}):    &dataCopy{},
-	common.BytesToAddress([]byte{5}):    &bigModExp{eip2565: false},
-	common.BytesToAddress([]byte{0xf5}): &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{5}):    &bigModExp{eip2565: false, eip7883: false},
+	common.BytesToAddress([]byte{0xf5}): &bigModExp{eip2565: true, eip7883: false},
+	common.BytesToAddress([]byte{0xf6}): &bigModExp{eip2565: true, eip7883: true},
 	common.BytesToAddress([]byte{6}):    &bn256AddIstanbul{},
 	common.BytesToAddress([]byte{7}):    &bn256ScalarMulIstanbul{},
 	common.BytesToAddress([]byte{8}):    &bn256PairingIstanbul{},
@@ -67,7 +68,8 @@ var allPrecompiles = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{18}):   &bls12381MapG2{},
 	common.BytesToAddress([]byte{0xf8}): &bn256PairingIstanbul{limitInputLength: true},
 
-	common.BytesToAddress([]byte{0x01, 0x00}): &p256Verify{},
+	common.BytesToAddress([]byte{0x01, 0x00}): &p256Verify{eip7951: false},
+	common.BytesToAddress([]byte{0x01, 0x01}): &p256Verify{eip7951: true},
 }
 
 // EIP-152 test vectors
@@ -244,6 +246,9 @@ func BenchmarkPrecompiledModExp(b *testing.B) { benchJson("modexp", "05", b) }
 func TestPrecompiledModExpEip2565(t *testing.T)      { testJson("modexp_eip2565", "f5", t) }
 func BenchmarkPrecompiledModExpEip2565(b *testing.B) { benchJson("modexp_eip2565", "f5", b) }
 
+func TestPrecompiledModExpEip7883(t *testing.T)      { testJson("modexp_eip7883", "f6", t) }
+func BenchmarkPrecompiledModExpEip7883(b *testing.B) { benchJson("modexp_eip7883", "f6", b) }
+
 // Tests the sample inputs from the elliptic curve addition EIP 213.
 func TestPrecompiledBn256Add(t *testing.T)      { testJson("bn256Add", "06", t) }
 func BenchmarkPrecompiledBn256Add(b *testing.B) { benchJson("bn256Add", "06", b) }
@@ -408,9 +413,13 @@ func BenchmarkPrecompiledP256Verify(bench *testing.B) {
 		Expected: "0000000000000000000000000000000000000000000000000000000000000001",
 		Name:     "p256Verify",
 	}
-	benchmarkPrecompiled("100", t, bench)
+	benchmarkPrecompiled("0x0100", t, bench)
 }
 
 func TestPrecompiledP256Verify(t *testing.T) {
-	testJson("p256Verify", "100", t)
+	testJson("p256Verify", "0x0100", t)
+}
+
+func TestPrecompiledP256VerifyGalileo(t *testing.T) {
+	testJson("p256VerifyGalileo", "0x0101", t)
 }
