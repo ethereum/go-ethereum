@@ -21,14 +21,12 @@ package crypto
 import (
 	"github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime"
 	"github.com/ethereum/go-ethereum/common"
-	"golang.org/x/crypto/sha3"
 )
 
 // NewKeccakState creates a new KeccakState
-// For now, we fallback to the original implementation for the stateful interface.
-// TODO: Implement a stateful wrapper around zkvm_runtime.Keccak256 if needed.
+// This uses a Ziren-optimized implementation that leverages the zkvm_runtime.Keccak256 system call.
 func NewKeccakState() KeccakState {
-	return sha3.NewLegacyKeccak256().(KeccakState)
+	return newZirenKeccakState()
 }
 
 // Keccak256 calculates and returns the Keccak256 hash using the Ziren zkvm_runtime implementation.
