@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
@@ -119,57 +118,6 @@ func TestSizeTracker(t *testing.T) {
 		t.Fatal("Timeout waiting for baseline stats")
 	}
 	baseline := baselineResult.stat
-
-	// DEBUG: Check if baseline found all expected accounts
-	if baseline.Accounts != 52 {
-		t.Logf("WARNING: Baseline found %d accounts instead of expected 52", baseline.Accounts)
-
-		// Collect all expected account addresses
-		expectedAddrs := make(map[common.Address]bool)
-		expectedAddrs[addr1] = true
-		expectedAddrs[addr2] = true
-		expectedAddrs[addr3] = true
-		for i := 1; i < 50; i++ {
-			testAddr := common.BigToAddress(uint256.NewInt(uint64(i + 100)).ToBig())
-			expectedAddrs[testAddr] = true
-		}
-
-		// Scan what's actually in the snapshot
-		actualAddrs := make(map[common.Address]bool)
-		iter := db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
-		for iter.Next() {
-			// Key is: prefix + account hash
-			if len(iter.Key()) < len(rawdb.SnapshotAccountPrefix)+common.HashLength {
-				continue
-			}
-			accHash := common.BytesToHash(iter.Key()[len(rawdb.SnapshotAccountPrefix):])
-
-			// Find which address this hash corresponds to
-			for addr := range expectedAddrs {
-				if crypto.Keccak256Hash(addr.Bytes()) == accHash {
-					actualAddrs[addr] = true
-					break
-				}
-			}
-		}
-		iter.Release()
-
-		t.Logf("Serial scan found %d accounts in snapshot", len(actualAddrs))
-
-		// Find missing accounts
-		for addr := range expectedAddrs {
-			if !actualAddrs[addr] {
-				t.Logf("MISSING ACCOUNT: %s (hash: %s)", addr.Hex(), crypto.Keccak256Hash(addr.Bytes()).Hex())
-			}
-		}
-
-		// Find unexpected accounts
-		for addr := range actualAddrs {
-			if !expectedAddrs[addr] {
-				t.Logf("UNEXPECTED ACCOUNT: %s (hash: %s)", addr.Hex(), crypto.Keccak256Hash(addr.Bytes()).Hex())
-			}
-		}
-	}
 
 	// Now start the tracker and notify it of updates that happen AFTER the baseline
 	tracker, err := NewSizeTracker(db, tdb)
