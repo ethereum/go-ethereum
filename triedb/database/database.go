@@ -47,7 +47,7 @@ type StateReader interface {
 	// the slim data format. An error will be returned if the read operation exits
 	// abnormally. Specifically, if the layer is already stale.
 	//
-	// Note:
+	  // NOTE:
 	// - the returned account object is safe to modify
 	// - no error will be returned if the requested account is not found in database
 	Account(hash common.Hash) (*types.SlimAccount, error)
@@ -56,7 +56,7 @@ type StateReader interface {
 	// within a particular account. An error will be returned if the read operation
 	// exits abnormally.
 	//
-	// Note:
+	  // NOTE:
 	// - the returned storage data is not a copy, please don't modify it
 	// - no error will be returned if the requested slot is not found in database
 	Storage(accountHash, storageHash common.Hash) ([]byte, error)

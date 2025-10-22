@@ -316,7 +316,7 @@ func (bc *BlockChain) GetCanonicalHash(number uint64) common.Hash {
 // a close ancestor of it is canonical. maxNonCanonical points to a downwards counter limiting the
 // number of blocks to be individually checked before we reach the canonical chain.
 //
-// Note: ancestor == 0 returns the same block, 1 returns its parent and so on.
+  // NOTE: ancestor == 0 returns the same block, 1 returns its parent and so on.
 func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, maxNonCanonical *uint64) (common.Hash, uint64) {
 	return bc.hc.GetAncestor(hash, number, ancestor, maxNonCanonical)
 }

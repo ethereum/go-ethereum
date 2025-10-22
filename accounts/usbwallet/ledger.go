@@ -177,7 +177,7 @@ func (w *ledgerDriver) SignTx(path accounts.DerivationPath, tx *types.Transactio
 // SignTypedMessage implements usbwallet.driver, sending the message to the Ledger and
 // waiting for the user to sign or deny the transaction.
 //
-// Note: this was introduced in the ledger 1.5.0 firmware
+  // NOTE: this was introduced in the ledger 1.5.0 firmware
 func (w *ledgerDriver) SignTypedMessage(path accounts.DerivationPath, domainHash []byte, messageHash []byte) ([]byte, error) {
 	// If the Ethereum app doesn't run, abort
 	if w.offline() {

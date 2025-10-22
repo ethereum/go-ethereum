@@ -104,7 +104,7 @@ type fetcher interface {
 }
 
 // BeaconLightApi requests light client information from a beacon node REST API.
-// Note: all required API endpoints are currently only implemented by Lodestar.
+  // NOTE: all required API endpoints are currently only implemented by Lodestar.
 type BeaconLightApi struct {
 	url           string
 	client        fetcher

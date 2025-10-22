@@ -584,7 +584,7 @@ func (l *pricedList) Removed(count int) {
 // Underpriced checks whether a transaction is cheaper than (or as cheap as) the
 // lowest priced (remote) transaction currently being tracked.
 func (l *pricedList) Underpriced(tx *types.Transaction) bool {
-	// Note: with two queues, being underpriced is defined as being worse than the worst item
+	  // NOTE: with two queues, being underpriced is defined as being worse than the worst item
 	// in all non-empty queues if there is any. If both queues are empty then nothing is underpriced.
 	return (l.underpricedFor(&l.urgent, tx) || len(l.urgent.list) == 0) &&
 		(l.underpricedFor(&l.floating, tx) || len(l.floating.list) == 0) &&
@@ -669,7 +669,7 @@ func (l *pricedList) Reheap() {
 
 	// balance out the two heaps by moving the worse half of transactions into the
 	// floating heap
-	// Note: Discard would also do this before the first eviction but Reheap can do
+	  // NOTE: Discard would also do this before the first eviction but Reheap can do
 	// is more efficiently. Also, Underpriced would work suboptimally the first time
 	// if the floating queue was empty.
 	floatingCount := len(l.urgent.list) * floatingRatio / (urgentRatio + floatingRatio)

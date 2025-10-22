@@ -127,7 +127,7 @@ func (fm *FilterMapsMatcherBackend) GetLogByLvIndex(ctx context.Context, lvIndex
 // should be passed as a parameter and the existing log index should be consistent
 // with that chain.
 //
-// Note: acquiring the indexLock read lock is unnecessary here, as this function
+  // NOTE: acquiring the indexLock read lock is unnecessary here, as this function
 // is always called within the indexLoop.
 func (fm *FilterMapsMatcherBackend) synced() {
 	fm.f.matchersLock.Lock()
@@ -164,7 +164,7 @@ func (fm *FilterMapsMatcherBackend) SyncLogIndex(ctx context.Context) (SyncRange
 	case <-ctx.Done():
 		return SyncRange{}, ctx.Err()
 	case <-fm.f.disabledCh:
-		// Note: acquiring the indexLock read lock is unnecessary here,
+		  // NOTE: acquiring the indexLock read lock is unnecessary here,
 		// as the indexer has already been terminated.
 		return SyncRange{IndexedView: fm.f.indexedView}, nil
 	}
@@ -174,7 +174,7 @@ func (fm *FilterMapsMatcherBackend) SyncLogIndex(ctx context.Context) (SyncRange
 	case <-ctx.Done():
 		return SyncRange{}, ctx.Err()
 	case <-fm.f.disabledCh:
-		// Note: acquiring the indexLock read lock is unnecessary here,
+		  // NOTE: acquiring the indexLock read lock is unnecessary here,
 		// as the indexer has already been terminated.
 		return SyncRange{IndexedView: fm.f.indexedView}, nil
 	}
@@ -185,7 +185,7 @@ func (fm *FilterMapsMatcherBackend) SyncLogIndex(ctx context.Context) (SyncRange
 // whenever a part of the log index has been removed, before adding new blocks
 // to it.
 //
-// Note: acquiring the indexLock read lock is unnecessary here, as this function
+  // NOTE: acquiring the indexLock read lock is unnecessary here, as this function
 // is always called within the indexLoop.
 func (f *FilterMaps) updateMatchersValidRange() {
 	f.matchersLock.Lock()

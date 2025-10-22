@@ -96,7 +96,7 @@ func EncodeToReader(val interface{}) (size int, r io.Reader, err error) {
 		encBufferPool.Put(buf)
 		return 0, nil, err
 	}
-	// Note: can't put the reader back into the pool here
+	  // NOTE: can't put the reader back into the pool here
 	// because it is held by encReader. The reader puts it
 	// back when it has been fully consumed.
 	return buf.size(), &encReader{buf: buf}, nil

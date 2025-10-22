@@ -113,7 +113,7 @@ type Wallet interface {
 	SignData(account Account, mimeType string, data []byte) ([]byte, error)
 
 	// SignDataWithPassphrase is identical to SignData, but also takes a password
-	// NOTE: there's a chance that an erroneous call might mistake the two strings, and
+	  // NOTE: there's a chance that an erroneous call might mistake the two strings, and
 	// supply password in the mimetype field, or vice versa. Thus, an implementation
 	// should never echo the mimetype or return the mimetype in the error-response
 	SignDataWithPassphrase(account Account, passphrase, mimeType string, data []byte) ([]byte, error)

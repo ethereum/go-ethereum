@@ -1526,7 +1526,7 @@ func (pool *LegacyPool) truncateQueue() {
 // executable/pending queue and any subsequent transactions that become unexecutable
 // are moved back into the future queue.
 //
-// Note: transactions are not marked as removed in the priced list because re-heaping
+  // NOTE: transactions are not marked as removed in the priced list because re-heaping
 // is always explicitly triggered by SetBaseFee and it would be unnecessary and wasteful
 // to trigger a re-heap is this function
 func (pool *LegacyPool) demoteUnexecutables() {

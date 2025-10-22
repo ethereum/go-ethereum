@@ -42,7 +42,7 @@ type Module interface {
 	// Process is always called after an event is received or after a target data
 	// structure has been changed.
 	//
-	// Note: Process functions of different modules are never called concurrently;
+	  // NOTE: Process functions of different modules are never called concurrently;
 	// they are called by Scheduler in the same order of priority as they were
 	// registered in.
 	Process(Requester, []Event)
@@ -89,7 +89,7 @@ type Scheduler struct {
 
 type (
 	// Server identifies a server without allowing any direct interaction.
-	// Note: server interface is used by Scheduler and Tracker but not used by
+	  // NOTE: server interface is used by Scheduler and Tracker but not used by
 	// the modules that do not interact with them directly.
 	// In order to make module testing easier, Server interface is used in
 	// events and modules.
@@ -126,7 +126,7 @@ func NewScheduler() *Scheduler {
 		pending: make(map[ServerAndID]pendingRequest),
 		targets: make(map[targetData]uint64),
 		stopCh:  make(chan chan struct{}),
-		// Note: testWaitCh should not have capacity in order to ensure
+		  // NOTE: testWaitCh should not have capacity in order to ensure
 		// that after a trigger happens testWaitCh will block until the resulting
 		// processing round has been finished
 		triggerCh:  make(chan struct{}, 1),

@@ -239,7 +239,7 @@ func (*HandlerT) SetGCPercent(v int) int {
 }
 
 // SetMemoryLimit sets the GOMEMLIMIT for the process. It returns the previous limit.
-// Note:
+  // NOTE:
 //
 //   - The input limit is provided as bytes. A negative input does not adjust the limit
 //

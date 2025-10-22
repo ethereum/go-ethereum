@@ -160,7 +160,7 @@ func verifySignature(pubkeys []string, data, sigdata []byte) error {
 }
 
 // keyID turns a binary minisign key ID into a hex string.
-// Note: key IDs are printed in reverse byte order.
+  // NOTE: key IDs are printed in reverse byte order.
 func keyID(id [8]byte) string {
 	var rev [8]byte
 	for i := range id {

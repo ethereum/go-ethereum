@@ -182,7 +182,7 @@ func (s *serverWithTimeout) eventCallback(event Event) {
 	case EvResponse, EvFail:
 		id := event.Data.(RequestResponse).ID
 		if timer, ok := s.timeouts[id]; ok {
-			// Note: if stopping the timer is unsuccessful then the resulting AfterFunc
+			  // NOTE: if stopping the timer is unsuccessful then the resulting AfterFunc
 			// call will just do nothing
 			timer.Stop()
 			delete(s.timeouts, id)
@@ -398,7 +398,7 @@ func (s *serverWithLimits) canRequestNow() bool {
 // the given period.
 func (s *serverWithLimits) delay(delay time.Duration) {
 	if s.delayTimer != nil {
-		// Note: if stopping the timer is unsuccessful then the resulting AfterFunc
+		  // NOTE: if stopping the timer is unsuccessful then the resulting AfterFunc
 		// call will just do nothing
 		s.delayTimer.Stop()
 		s.delayTimer = nil

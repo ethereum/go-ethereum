@@ -79,7 +79,7 @@ func TestHexOrDecimal64(t *testing.T) {
 		{"0x12345678", 0x12345678, true},
 		{"0X12345678", 0x12345678, true},
 		// Tests for leading zero behaviour:
-		{"0123456789", 123456789, true}, // note: not octal
+		{"0123456789", 123456789, true},   // NOTE: not octal
 		{"0x00", 0, true},
 		{"0x012345678abc", 0x12345678abc, true},
 		// Invalid syntax:

@@ -156,7 +156,7 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 // resolveBlockRange resolves the specified block range to absolute block numbers while also
 // enforcing backend specific limitations. The pending block and corresponding receipts are
 // also returned if requested and available.
-// Note: an error is only returned if retrieving the head header has failed. If there are no
+  // NOTE: an error is only returned if retrieving the head header has failed. If there are no
 // retrievable blocks in the specified range then zero block count is returned with no error.
 func (oracle *Oracle) resolveBlockRange(ctx context.Context, reqEnd rpc.BlockNumber, blocks uint64) (*types.Block, []*types.Receipt, uint64, uint64, error) {
 	var (
@@ -236,7 +236,7 @@ func (oracle *Oracle) resolveBlockRange(ctx context.Context, reqEnd rpc.BlockNum
 //   - blobBaseFee: the blob base fee per gas in the given block
 //   - blobGasUsedRatio: blobGasUsed/blobGasLimit in the given block
 //
-// Note: baseFee and blobBaseFee both include the next block after the newest of the returned range,
+  // NOTE: baseFee and blobBaseFee both include the next block after the newest of the returned range,
 // because this value can be derived from the newest block.
 func (oracle *Oracle) FeeHistory(ctx context.Context, blocks uint64, unresolvedLastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, []*big.Int, []float64, error) {
 	if blocks < 1 {

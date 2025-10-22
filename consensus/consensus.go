@@ -83,14 +83,14 @@ type Engine interface {
 	// Finalize runs any post-transaction state modifications (e.g. block rewards
 	// or process withdrawals) but does not assemble the block.
 	//
-	// Note: The state database might be updated to reflect any consensus rules
+	  // NOTE: The state database might be updated to reflect any consensus rules
 	// that happen at finalization (e.g. block rewards).
 	Finalize(chain ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body)
 
 	// FinalizeAndAssemble runs any post-transaction state modifications (e.g. block
 	// rewards or process withdrawals) and assembles the final block.
 	//
-	// Note: The block header and state database might be updated to reflect any
+	  // NOTE: The block header and state database might be updated to reflect any
 	// consensus rules that happen at finalization (e.g. block rewards).
 	FinalizeAndAssemble(chain ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt) (*types.Block, error)
 

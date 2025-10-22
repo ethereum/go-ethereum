@@ -263,7 +263,7 @@ func (x *EthereumAddress) GetAddressHex() string {
 // *
 // Request: Ask device to sign transaction
 // All fields are optional from the protocol's point of view. Each field defaults to value `0` if missing.
-// Note: the first at most 1024 bytes of data MUST be transmitted as part of this message.
+  // NOTE: the first at most 1024 bytes of data MUST be transmitted as part of this message.
 // @start
 // @next EthereumTxRequest
 // @next Failure

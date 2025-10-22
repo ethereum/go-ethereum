@@ -49,7 +49,7 @@ var (
 	txFetcherFetchingHashes = metrics.NewRegisteredGauge("eth/fetcher/transaction/fetching/hashes", nil)
 
 	txFetcherSlowPeers = metrics.NewRegisteredGauge("eth/fetcher/transaction/slow/peers", nil)
-	// Note: this metric does not mean that the fetching of a transaction
+	  // NOTE: this metric does not mean that the fetching of a transaction
 	// was blocked by a specific peer during this period, since we request
 	// another peer to fetch the same transaction hash.
 	// The purpose of this metric is to measure how long it takes for a slow peer

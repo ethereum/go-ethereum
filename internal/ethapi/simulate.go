@@ -396,7 +396,7 @@ func (sim *simulator) activePrecompiles(base *types.Header) vm.PrecompiledContra
 // sanitizeChain checks the chain integrity. Specifically it checks that
 // block numbers and timestamp are strictly increasing, setting default values
 // when necessary. Gaps in block numbers are filled with empty blocks.
-// Note: It modifies the block's override object.
+  // NOTE: It modifies the block's override object.
 func (sim *simulator) sanitizeChain(blocks []simBlock) ([]simBlock, error) {
 	var (
 		res           = make([]simBlock, 0, len(blocks))

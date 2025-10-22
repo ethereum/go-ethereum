@@ -337,7 +337,7 @@ func newFreezerForTesting(t *testing.T, tables map[string]freezerTableConfig) (*
 	t.Helper()
 
 	dir := t.TempDir()
-	// note: using low max table size here to ensure the tests actually
+	  // NOTE: using low max table size here to ensure the tests actually
 	// switch between multiple files.
 	f, err := NewFreezer(dir, "", false, 2049, tables)
 	if err != nil {

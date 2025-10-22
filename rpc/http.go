@@ -385,7 +385,7 @@ func ContextRequestTimeout(ctx context.Context) (time.Duration, bool) {
 		// the HTTP server cuts connection. So our internal timeout must be earlier than
 		// the server's true timeout.
 		//
-		// Note: Timeouts are sanitized to be a minimum of 1 second.
+		  // NOTE: Timeouts are sanitized to be a minimum of 1 second.
 		// Also see issue: https://github.com/golang/go/issues/47229
 		wt -= 100 * time.Millisecond
 		setTimeout(wt)

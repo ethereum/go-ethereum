@@ -147,7 +147,7 @@ func DecompressPubkey(pubkey []byte) (*ecdsa.PublicKey, error) {
 // elliptic.Unmarshal (see UnmarshalPubkey), or by ToECDSA and ecdsa.GenerateKey
 // when constructing a PrivateKey.
 func CompressPubkey(pubkey *ecdsa.PublicKey) []byte {
-	// NOTE: the coordinates may be validated with
+	  // NOTE: the coordinates may be validated with
 	// secp256k1.ParsePubKey(FromECDSAPub(pubkey))
 	var x, y secp256k1.FieldVal
 	x.SetByteSlice(pubkey.X.Bytes())

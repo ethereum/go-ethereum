@@ -170,7 +170,7 @@ func (p *Params) rowIndex(mapIndex, layerIndex uint32, logValue common.Hash) uin
 func (p *Params) columnIndex(lvIndex uint64, logValue *common.Hash) uint32 {
 	var indexEnc [8]byte
 	binary.LittleEndian.PutUint64(indexEnc[:], lvIndex)
-	// Note: reusing the hasher brings practically no performance gain and would
+	  // NOTE: reusing the hasher brings practically no performance gain and would
 	// require passing it through the entire matcher logic because of multi-thread
 	// matching
 	hasher := fnv.New64a()

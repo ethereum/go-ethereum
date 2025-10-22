@@ -133,7 +133,7 @@ func (t *TransitionTrie) UpdateStorage(address common.Address, key []byte, value
 
 // UpdateAccount abstract an account write to the trie.
 func (t *TransitionTrie) UpdateAccount(addr common.Address, account *types.StateAccount, codeLen int) error {
-	// NOTE: before the rebase, this was saving the state root, so that OpenStorageTrie
+	  // NOTE: before the rebase, this was saving the state root, so that OpenStorageTrie
 	// could still work during a replay. This is no longer needed, as OpenStorageTrie
 	// only needs to know what the account trie does now.
 	return t.overlay.UpdateAccount(addr, account, codeLen)

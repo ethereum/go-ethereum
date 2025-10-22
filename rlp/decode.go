@@ -1111,7 +1111,7 @@ func (s *Stream) readUint(size byte) (uint64, error) {
 			return 0, err
 		}
 		if buffer[start] == 0 {
-			// Note: readUint is also used to decode integer values.
+			  // NOTE: readUint is also used to decode integer values.
 			// The error needs to be adjusted to become ErrCanonInt in this case.
 			return 0, ErrCanonSize
 		}

@@ -354,7 +354,7 @@ func (tx *Transaction) GasTipCapIntCmp(other *big.Int) int {
 }
 
 // EffectiveGasTip returns the effective miner gasTipCap for the given base fee.
-// Note: if the effective gasTipCap would be negative, this method
+  // NOTE: if the effective gasTipCap would be negative, this method
 // returns ErrGasFeeCapTooLow, and value is undefined.
 func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
 	dst := new(uint256.Int)
@@ -494,7 +494,7 @@ func (tx *Transaction) WithBlobTxSidecar(sideCar *BlobTxSidecar) *Transaction {
 		inner: blobtx.withSidecar(sideCar),
 		time:  tx.time,
 	}
-	// Note: tx.size cache not carried over because the sidecar is included in size!
+	  // NOTE: tx.size cache not carried over because the sidecar is included in size!
 	if h := tx.hash.Load(); h != nil {
 		cpy.hash.Store(h)
 	}

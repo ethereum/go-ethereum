@@ -74,7 +74,7 @@ func convertPayload[T payloadType](payload T, parentRoot *zrntcommon.Root, reque
 }
 
 func convertCapellaHeader(payload *capella.ExecutionPayload, h *types.Header) {
-	// note: h.TxHash is set in convertTransactions
+	  // NOTE: h.TxHash is set in convertTransactions
 	h.ParentHash = common.Hash(payload.ParentHash)
 	h.UncleHash = types.EmptyUncleHash
 	h.Coinbase = common.Address(payload.FeeRecipient)
@@ -93,7 +93,7 @@ func convertCapellaHeader(payload *capella.ExecutionPayload, h *types.Header) {
 }
 
 func convertDenebHeader(payload *deneb.ExecutionPayload, parentRoot common.Hash, h *types.Header) {
-	// note: h.TxHash is set in convertTransactions
+	  // NOTE: h.TxHash is set in convertTransactions
 	h.ParentHash = common.Hash(payload.ParentHash)
 	h.UncleHash = types.EmptyUncleHash
 	h.Coinbase = common.Address(payload.FeeRecipient)

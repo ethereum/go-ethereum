@@ -227,7 +227,7 @@ func TestClientWebsocketPing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client subscribe error: %v", err)
 	}
-	// Note: Unsubscribe is not called on this subscription because the mockup
+	  // NOTE: Unsubscribe is not called on this subscription because the mockup
 	// server can't handle the request.
 
 	// Wait for the context's deadline to be reached before proceeding.

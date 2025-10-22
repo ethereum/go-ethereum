@@ -73,7 +73,7 @@ func (b *Bloom) AddWithBuffer(d []byte, buf *[6]byte) {
 }
 
 // Big converts b to a big integer.
-// Note: Converting a bloom filter to a big.Int and then calling GetBytes
+  // NOTE: Converting a bloom filter to a big.Int and then calling GetBytes
 // does not return the same bytes, since big.Int will trim leading zeroes
 func (b Bloom) Big() *big.Int {
 	return new(big.Int).SetBytes(b[:])

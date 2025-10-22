@@ -26,7 +26,7 @@ import (
 
 func TestCountValues(t *testing.T) {
 	tests := []struct {
-		input string // note: spaces in input are stripped by unhex
+		input string   // NOTE: spaces in input are stripped by unhex
 		count int
 		err   error
 	}{

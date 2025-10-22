@@ -89,14 +89,14 @@ func (t *ResettingTimerSnapshot) Count() int {
 }
 
 // Percentiles returns the boundaries for the input percentiles.
-// note: this method is not thread safe
+  // NOTE: this method is not thread safe
 func (t *ResettingTimerSnapshot) Percentiles(percentiles []float64) []float64 {
 	t.calc(percentiles)
 	return t.thresholdBoundaries
 }
 
 // Mean returns the mean of the snapshotted values
-// note: this method is not thread safe
+  // NOTE: this method is not thread safe
 func (t *ResettingTimerSnapshot) Mean() float64 {
 	if !t.calculated {
 		t.calc(nil)
@@ -106,7 +106,7 @@ func (t *ResettingTimerSnapshot) Mean() float64 {
 }
 
 // Max returns the max of the snapshotted values
-// note: this method is not thread safe
+  // NOTE: this method is not thread safe
 func (t *ResettingTimerSnapshot) Max() int64 {
 	if !t.calculated {
 		t.calc(nil)
@@ -115,7 +115,7 @@ func (t *ResettingTimerSnapshot) Max() int64 {
 }
 
 // Min returns the min of the snapshotted values
-// note: this method is not thread safe
+  // NOTE: this method is not thread safe
 func (t *ResettingTimerSnapshot) Min() int64 {
 	if !t.calculated {
 		t.calc(nil)

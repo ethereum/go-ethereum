@@ -239,7 +239,7 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header) (int, error) {
 // writeHeadersAndSetHead writes a batch of block headers and applies the last
 // header as the chain head.
 //
-// Note: This method is not concurrent-safe with inserting blocks simultaneously
+  // NOTE: This method is not concurrent-safe with inserting blocks simultaneously
 // into the chain, as side effects caused by reorganisations cannot be emulated
 // without the real blocks. Hence, writing headers directly should only be done
 // in two scenarios: pure-header mode of operation (light clients), or properly
@@ -348,7 +348,7 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, start time.Time)
 // a close ancestor of it is canonical. maxNonCanonical points to a downwards counter limiting the
 // number of blocks to be individually checked before we reach the canonical chain.
 //
-// Note: ancestor == 0 returns the same block, 1 returns its parent and so on.
+  // NOTE: ancestor == 0 returns the same block, 1 returns its parent and so on.
 func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, maxNonCanonical *uint64) (common.Hash, uint64) {
 	if ancestor > number {
 		return common.Hash{}, 0

@@ -31,7 +31,7 @@ import (
 // is accounted for.
 // (There is also a higher-level test in eth/tracers: TestSupplySelfDestruct )
 func TestBurn(t *testing.T) {
-	// Note: burn can happen even after EIP-6780, if within one single transaction,
+	  // NOTE: burn can happen even after EIP-6780, if within one single transaction,
 	// the following occur:
 	// 1. contract B creates contract A
 	// 2. contract A is destructed

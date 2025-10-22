@@ -776,7 +776,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	// in order to obtain the state.
 	// Therefore, it's perfectly valid to specify `"futureForkBlock": 0`, to enable `futureFork`
 	if config != nil && config.Overrides != nil {
-		// Note: This copies the config, to not screw up the main config
+		  // NOTE: This copies the config, to not screw up the main config
 		chainConfig, canon = overrideConfig(chainConfig, config.Overrides)
 	}
 
@@ -1075,7 +1075,7 @@ func APIs(backend Backend) []rpc.API {
 
 // overrideConfig returns a copy of original with forks enabled by override enabled,
 // along with a boolean that indicates whether the copy is canonical (equivalent to the original).
-// Note: the Clique-part is _not_ deep copied
+  // NOTE: the Clique-part is _not_ deep copied
 func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) (*params.ChainConfig, bool) {
 	copy := new(params.ChainConfig)
 	*copy = *original

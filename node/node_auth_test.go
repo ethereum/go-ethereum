@@ -176,7 +176,7 @@ func TestAuthEndpoints(t *testing.T) {
 		// claims of 5 seconds or more, older or newer, are not allowed
 		{name: "ws too old", endpoint: node.WSAuthEndpoint(), prov: offsetTimeAuth(secret, -tooLong), expectDialFail: true},
 		{name: "http too old", endpoint: node.HTTPAuthEndpoint(), prov: offsetTimeAuth(secret, -tooLong), expectCall1Fail: true},
-		// note: for it to be too long we need to add a delay, so that once we receive the request, the difference has not dipped below the "tooLong"
+		  // NOTE: for it to be too long we need to add a delay, so that once we receive the request, the difference has not dipped below the "tooLong"
 		{name: "ws too new", endpoint: node.WSAuthEndpoint(), prov: offsetTimeAuth(secret, tooLong+requestDelay), expectDialFail: true},
 		{name: "http too new", endpoint: node.HTTPAuthEndpoint(), prov: offsetTimeAuth(secret, tooLong+requestDelay), expectCall1Fail: true},
 

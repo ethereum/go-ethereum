@@ -142,7 +142,7 @@ func loadGenerator(db ethdb.KeyValueReader, hash nodeHasher) (*journalGenerator,
 	// The state snapshot is inconsistent with the trie data and must
 	// be rebuilt.
 	//
-	// Note: The SnapshotRoot and SnapshotGenerator are always consistent
+	  // NOTE: The SnapshotRoot and SnapshotGenerator are always consistent
 	// with each other, both in the legacy state snapshot and the path database.
 	// Therefore, if the SnapshotRoot does not match the trie root,
 	// the entire generator is considered stale and must be discarded.

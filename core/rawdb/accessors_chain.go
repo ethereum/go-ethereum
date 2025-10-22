@@ -463,7 +463,7 @@ func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64, hash *common.Hash) rlp
 		if hash != nil {
 			data, _ = db.Get(blockBodyKey(number, *hash))
 		} else {
-			// Note: ReadCanonicalHash cannot be used here because it also
+			  // NOTE: ReadCanonicalHash cannot be used here because it also
 			// calls ReadAncients internally.
 			hashBytes, _ := db.Get(headerHashKey(number))
 			data, _ = db.Get(blockBodyKey(number, common.BytesToHash(hashBytes)))
@@ -562,7 +562,7 @@ func ReadCanonicalReceiptsRLP(db ethdb.Reader, number uint64, hash *common.Hash)
 		if hash != nil {
 			data, _ = db.Get(blockReceiptsKey(number, *hash))
 		} else {
-			// Note: ReadCanonicalHash cannot be used here because it also
+			  // NOTE: ReadCanonicalHash cannot be used here because it also
 			// calls ReadAncients internally.
 			hashBytes, _ := db.Get(headerHashKey(number))
 			data, _ = db.Get(blockReceiptsKey(number, common.BytesToHash(hashBytes)))
@@ -683,7 +683,7 @@ func (r *receiptLogs) DecodeRLP(s *rlp.Stream) error {
 
 // ReadLogs retrieves the logs for all transactions in a block. In case
 // receipts is not found, a nil is returned.
-// Note: ReadLogs does not derive unstored log fields.
+  // NOTE: ReadLogs does not derive unstored log fields.
 func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64) [][]*types.Log {
 	// Retrieve the flattened receipt slice
 	data := ReadReceiptsRLP(db, hash, number)
@@ -871,7 +871,7 @@ func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
 		Body:   block.Body(),
 	})
 	slices.SortFunc(badBlocks, func(a, b *badBlock) int {
-		// Note: sorting in descending number order.
+		  // NOTE: sorting in descending number order.
 		return -a.Header.Number.Cmp(b.Header.Number)
 	})
 	if len(badBlocks) > badBlockToKeep {

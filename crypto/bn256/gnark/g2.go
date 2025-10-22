@@ -13,7 +13,7 @@ import (
 // points are not beneficial because there are no intermediate
 // points and G2 in particular is only used for the pairing input.
 //
-// Note: We also use this struct so that we can conform to the existing API
+  // NOTE: We also use this struct so that we can conform to the existing API
 // that the precompiles want.
 type G2 struct {
 	inner bn254.G2Affine

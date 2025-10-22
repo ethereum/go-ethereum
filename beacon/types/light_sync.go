@@ -34,7 +34,7 @@ type HeadInfo struct {
 
 // BootstrapData contains a sync committee where light sync can be started,
 // together with a proof through a beacon header and corresponding state.
-// Note: BootstrapData is fetched from a server based on a known checkpoint hash.
+  // NOTE: BootstrapData is fetched from a server based on a known checkpoint hash.
 type BootstrapData struct {
 	Version         string
 	Header          Header
@@ -92,7 +92,7 @@ func (update *LightClientUpdate) Validate() error {
 }
 
 // Score returns the UpdateScore describing the proof strength of the update
-// Note: thread safety can be ensured by always calling Score on a newly received
+  // NOTE: thread safety can be ensured by always calling Score on a newly received
 // or decoded update before making it potentially available for other threads
 func (update *LightClientUpdate) Score() UpdateScore {
 	if update.score == nil {

@@ -42,7 +42,7 @@ type layer interface {
 	// if the read operation exits abnormally. Specifically, if the layer is
 	// already stale.
 	//
-	// Note:
+	  // NOTE:
 	// - the returned node is not a copy, please don't modify it.
 	// - no error will be returned if the requested node is not found in database.
 	node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, *nodeLoc, error)
@@ -51,7 +51,7 @@ type layer interface {
 	// hash in the slim data format. An error will be returned if the read
 	// operation exits abnormally. Specifically, if the layer is already stale.
 	//
-	// Note:
+	  // NOTE:
 	// - the returned account is not a copy, please don't modify it.
 	// - no error will be returned if the requested account is not found in database.
 	account(hash common.Hash, depth int) ([]byte, error)
@@ -60,7 +60,7 @@ type layer interface {
 	// within a particular account. An error will be returned if the read operation
 	// exits abnormally. Specifically, if the layer is already stale.
 	//
-	// Note:
+	  // NOTE:
 	// - the returned storage data is not a copy, please don't modify it.
 	// - no error will be returned if the requested slot is not found in database.
 	storage(accountHash, storageHash common.Hash, depth int) ([]byte, error)

@@ -183,7 +183,7 @@ func TestMixedcaseAddressMarshal(t *testing.T) {
 
 func TestMixedcaseAccount_Address(t *testing.T) {
 	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-55.md
-	// Note: 0X{checksum_addr} is not valid according to spec above
+	  // NOTE: 0X{checksum_addr} is not valid according to spec above
 
 	var res []struct {
 		A     MixedcaseAddress

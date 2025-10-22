@@ -650,7 +650,7 @@ func (bc *BlockChain) loadLastState() error {
 	}
 
 	// Restore the last known finalized block and safe block
-	// Note: the safe block is not stored on disk and it is set to the last
+	  // NOTE: the safe block is not stored on disk and it is set to the last
 	// known finalized block on startup
 	if head := rawdb.ReadFinalizedBlockHash(bc.db); head != (common.Hash{}) {
 		if block := bc.GetBlockByHash(head); block != nil {
@@ -1272,7 +1272,7 @@ func (bc *BlockChain) stopWithoutSaving() {
 	}
 	// Now wait for all chain modifications to end and persistent goroutines to exit.
 	//
-	// Note: Close waits for the mutex to become available, i.e. any running chain
+	  // NOTE: Close waits for the mutex to become available, i.e. any running chain
 	// modification will have exited when Close returns. Since we also called StopInsert,
 	// the mutex should become available quickly. It cannot be taken again after Close has
 	// returned.
@@ -2001,7 +2001,7 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 		// If prefetching is enabled, run that against the current state to pre-cache
 		// transactions and probabilistically some of the account/storage trie nodes.
 		//
-		// Note: the main processor and prefetcher share the same reader with a local
+		  // NOTE: the main processor and prefetcher share the same reader with a local
 		// cache for mitigating the overhead of state access.
 		prefetch, process, err := bc.statedb.ReadersWithCacheStats(parentRoot)
 		if err != nil {

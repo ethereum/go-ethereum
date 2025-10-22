@@ -74,7 +74,7 @@ const (
 	// maxBlobsPerTx is the maximum number of blobs that a single transaction can
 	// carry. We choose a smaller limit than the protocol-permitted MaxBlobsPerBlock
 	// in order to ensure network and txpool stability.
-	// Note: if you increase this, validation will fail on txMaxSize.
+	  // NOTE: if you increase this, validation will fail on txMaxSize.
 	maxBlobsPerTx = params.BlobTxMaxBlobs
 
 	// maxTxsPerAccount is the maximum number of blob transactions admitted from

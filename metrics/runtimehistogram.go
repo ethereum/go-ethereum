@@ -232,7 +232,7 @@ func (h *runtimeHistogramSnapshot) computePercentiles(thresh []float64) {
 	}
 }
 
-// Note: runtime/metrics.Float64Histogram is a collection of float64s, but the methods
+  // NOTE: runtime/metrics.Float64Histogram is a collection of float64s, but the methods
 // below need to return int64 to satisfy the interface. The histogram provided by runtime
 // also doesn't keep track of individual samples, so results are approximated.
 

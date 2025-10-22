@@ -363,7 +363,7 @@ func (s *Suite) TestSnapGetStorageRanges(t *utesting.T) {
 				"root": "0xe318dff15b33aa7f2f12d5567d58628e3e3f2e8859e46b56981a4083b391da17",
 				"codeHash": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
 				"storage": {
-					// Note: keys below are hashed!!!
+					  // NOTE: keys below are hashed!!!
 					"0x405787fa12a823e0f2b7631cc41b3ba8828b3321ca811111fa75cd3aa3bb5ace": "02",
 					"0xb10e2d527612073b26eecdfd717e6a320cf44b4afac2b0732d9fcbe2b7fa0cf6": "01",
 					"0xc2575a0e9e593c00f959f8c92f12db2869c3395a3b0502d05e2516446f71f85b": "03"

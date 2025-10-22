@@ -97,7 +97,7 @@ func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) {
 			continue
 		}
 		// If it's the hashed child, save the hash value directly.
-		// Note: it's impossible that the child in range [0, 15]
+		  // NOTE: it's impossible that the child in range [0, 15]
 		// is a valueNode.
 		if _, ok := child.(hashNode); ok {
 			continue

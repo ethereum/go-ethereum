@@ -100,7 +100,7 @@ import (
 //    | restart_1 key offset | restart_1 value offset | ... | restart number (4-bytes) |
 //    +----------------------+------------------------+-----+--------------------------+
 //
-// Note: Both the key offset and the value offset are relative to the start of
+  // NOTE: Both the key offset and the value offset are relative to the start of
 // the trie data chunk. To obtain the absolute offset, add the offset of the
 // trie data chunk itself.
 //
@@ -110,7 +110,7 @@ import (
 //    |  node data 1 |  node data 2 |  ...  |  node data n  |
 //    +--------------+--------------+-------+---------------+
 //
-// NOTE: All fixed-length integer are big-endian.
+  // NOTE: All fixed-length integer are big-endian.
 
 const (
 	trienodeHistoryV0           = uint8(0)                    // initial version of node history structure

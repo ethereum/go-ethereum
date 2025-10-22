@@ -846,7 +846,7 @@ func (f *FilterMaps) deleteTailEpoch(epoch uint32) (bool, error) {
 
 // exportCheckpoints exports epoch checkpoints in the format used by checkpoints.go.
 //
-// Note: acquiring the indexLock read lock is unnecessary here, as this function
+  // NOTE: acquiring the indexLock read lock is unnecessary here, as this function
 // is always called within the indexLoop.
 func (f *FilterMaps) exportCheckpoints() {
 	finalLvPtr, err := f.getBlockLvPointer(f.finalBlock + 1)

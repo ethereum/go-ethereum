@@ -55,7 +55,7 @@ func newIndexReaderWithLimitTag(db ethdb.KeyValueReader, state stateIdent, limit
 // readGreaterThan locates the first element that is greater than the specified
 // id. If no such element is found, MaxUint64 is returned.
 //
-// Note: It is possible that additional histories have been indexed since the
+  // NOTE: It is possible that additional histories have been indexed since the
 // reader was created. The reader should be refreshed as needed to load the
 // latest indexed data from disk.
 func (r *indexReaderWithLimitTag) readGreaterThan(id uint64, lastID uint64) (uint64, error) {

@@ -189,7 +189,7 @@ func (s *CommitteeChain) Reset() {
 }
 
 // CheckpointInit initializes a CommitteeChain based on a checkpoint.
-// Note: if the chain is already initialized and the committees proven by the
+  // NOTE: if the chain is already initialized and the committees proven by the
 // checkpoint do match the existing chain then the chain is retained and the
 // new checkpoint becomes fixed.
 func (s *CommitteeChain) CheckpointInit(bootstrap types.BootstrapData) error {
@@ -234,7 +234,7 @@ func (s *CommitteeChain) addFixedCommitteeRoot(period uint64, root common.Hash) 
 	batch := s.db.NewBatch()
 	oldRoot := s.getCommitteeRoot(period)
 	if !s.fixedCommitteeRoots.periods.canExpand(period) {
-		// Note: the fixed committee root range should always be continuous and
+		  // NOTE: the fixed committee root range should always be continuous and
 		// therefore the expected syncing method is to forward sync and optionally
 		// backward sync periods one by one, starting from a checkpoint. The only
 		// case when a root that is not adjacent to the already fixed ones can be
@@ -281,7 +281,7 @@ func (s *CommitteeChain) deleteFixedCommitteeRootsFrom(period uint64) error {
 	batch := s.db.NewBatch()
 	s.fixedCommitteeRoots.deleteFrom(batch, period)
 	if s.updates.periods.isEmpty() || period <= s.updates.periods.Start {
-		// Note: the first period of the update chain should always be fixed so if
+		  // NOTE: the first period of the update chain should always be fixed so if
 		// the fixed root at the first update is removed then the entire update chain
 		// and the proven committees have to be removed. Earlier committees in the
 		// remaining fixed root range can stay.
@@ -515,7 +515,7 @@ func (s *CommitteeChain) verifySignedHeader(head types.SignedHeader) (bool, time
 // fits into the specified constraints (assumes that the update has been
 // successfully validated previously)
 func (s *CommitteeChain) verifyUpdate(update *types.LightClientUpdate) (bool, error) {
-	// Note: SignatureSlot determines the sync period of the committee used for signature
+	  // NOTE: SignatureSlot determines the sync period of the committee used for signature
 	// verification. Though in reality SignatureSlot is always bigger than update.Header.Slot,
 	// setting them as equal here enforces the rule that they have to be in the same sync
 	// period in order for the light client update proof to be meaningful.

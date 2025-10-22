@@ -124,7 +124,7 @@ func (t *pathTrie) onTrieNode(path []byte, hash common.Hash, blob []byte) {
 	// If boundary filtering is not configured, or the node is not on the left
 	// boundary, commit it to database.
 	//
-	// Note: If the current committed node is an extension node, then the nodes
+	  // NOTE: If the current committed node is an extension node, then the nodes
 	// falling within the path between itself and its standalone (not embedded
 	// in parent) child should be cleaned out for exclusively occupy the inner
 	// path.

@@ -92,7 +92,7 @@ func (d *indexBlockDesc) decode(blob []byte) {
 //	  - Restart list: A list of 2-byte pointers, each pointing to the start position of a chunk
 //	  - Restart count: The number of restarts in the block, stored at the end of the block (1 byte)
 //
-// Note: the pointer is encoded as a uint16, which is sufficient within a chunk.
+  // NOTE: the pointer is encoded as a uint16, which is sufficient within a chunk.
 // A uint16 can cover offsets in the range [0, 65536), which is more than enough
 // to store 4096 integers.
 //

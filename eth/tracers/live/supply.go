@@ -197,7 +197,7 @@ func (s *supplyTracer) onGenesisBlock(b *types.Block, alloc types.GenesisAlloc) 
 func (s *supplyTracer) onBalanceChange(a common.Address, prevBalance, newBalance *big.Int, reason tracing.BalanceChangeReason) {
 	diff := new(big.Int).Sub(newBalance, prevBalance)
 
-	// NOTE: don't handle "BalanceIncreaseGenesisBalance" because it is handled in OnGenesisBlock
+	  // NOTE: don't handle "BalanceIncreaseGenesisBalance" because it is handled in OnGenesisBlock
 	switch reason {
 	case tracing.BalanceIncreaseRewardMineBlock, tracing.BalanceIncreaseRewardMineUncle:
 		s.delta.Issuance.Reward.Add(s.delta.Issuance.Reward, diff)

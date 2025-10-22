@@ -408,7 +408,7 @@ func rlpHash(x interface{}) (h common.Hash) {
 // calcDifficulty is based on ethash.CalcDifficulty. This method is used in case
 // the caller does not provide an explicit difficulty, but instead provides only
 // parent timestamp + difficulty.
-// Note: this method only works for ethash engine.
+  // NOTE: this method only works for ethash engine.
 func calcDifficulty(config *params.ChainConfig, number, currentTime, parentTime uint64,
 	parentDifficulty *big.Int, parentUncleHash common.Hash) *big.Int {
 	uncleHash := parentUncleHash

@@ -382,7 +382,7 @@ func (w EncoderBuffer) WriteUint64(i uint64) {
 }
 
 // WriteBigInt encodes a big.Int as an RLP string.
-// Note: Unlike with Encode, the sign of i is ignored.
+  // NOTE: Unlike with Encode, the sign of i is ignored.
 func (w EncoderBuffer) WriteBigInt(i *big.Int) {
 	w.buf.writeBigInt(i)
 }

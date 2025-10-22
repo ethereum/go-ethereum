@@ -73,13 +73,13 @@ func New(journalPath string, journalTime time.Duration, chainConfig *params.Chai
 }
 
 // Track adds a transaction to the tracked set.
-// Note: blob-type transactions are ignored.
+  // NOTE: blob-type transactions are ignored.
 func (tracker *TxTracker) Track(tx *types.Transaction) {
 	tracker.TrackAll([]*types.Transaction{tx})
 }
 
 // TrackAll adds a list of transactions to the tracked set.
-// Note: blob-type transactions are ignored.
+  // NOTE: blob-type transactions are ignored.
 func (tracker *TxTracker) TrackAll(txs []*types.Transaction) {
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()

@@ -45,7 +45,7 @@ func ExecutionHeaderFromJSON(forkName string, data []byte) (*ExecutionHeader, er
 	switch forkName {
 	case "capella":
 		obj = new(capella.ExecutionPayloadHeader)
-	case "deneb", "electra": // note: the payload type was not changed in electra
+	case "deneb", "electra":   // NOTE: the payload type was not changed in electra
 		obj = new(deneb.ExecutionPayloadHeader)
 	default:
 		return nil, fmt.Errorf("unsupported fork: %s", forkName)

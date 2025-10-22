@@ -296,7 +296,7 @@ func (t *BinaryTrie) IsVerkle() bool {
 
 // UpdateContractCode updates the contract code into the trie.
 //
-// Note: the basic data leaf needs to have been previously created for this to work
+  // NOTE: the basic data leaf needs to have been previously created for this to work
 func (t *BinaryTrie) UpdateContractCode(addr common.Address, codeHash common.Hash, code []byte) error {
 	var (
 		chunks = trie.ChunkifyCode(code)

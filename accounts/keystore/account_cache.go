@@ -115,7 +115,7 @@ func (ac *accountCache) add(newAccount accounts.Account) {
 	ac.byAddr[newAccount.Address] = append(ac.byAddr[newAccount.Address], newAccount)
 }
 
-// note: removed needs to be unique here (i.e. both File and Address must be set).
+  // NOTE: removed needs to be unique here (i.e. both File and Address must be set).
 func (ac *accountCache) delete(removed accounts.Account) {
 	ac.mu.Lock()
 	defer ac.mu.Unlock()

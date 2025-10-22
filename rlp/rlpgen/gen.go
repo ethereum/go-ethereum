@@ -291,7 +291,7 @@ func (op basicOp) genDecode(ctx *genContext) (string, string) {
 		method  = op.decMethod
 	)
 	if op.decUseBitSize {
-		// Note: For now, this only works for platform-independent integer
+		  // NOTE: For now, this only works for platform-independent integer
 		// sizes. makeBasicOp forbids the platform-dependent types.
 		var sizes types.StdSizes
 		method = fmt.Sprintf("%s%d", op.decMethod, sizes.Sizeof(op.typ)*8)
@@ -476,7 +476,7 @@ func (bctx *buildContext) makePtrOp(elemTyp types.Type, tags rlpstruct.Tags) (op
 }
 
 func (op ptrOp) genWrite(ctx *genContext, v string) string {
-	// Note: in writer functions, accesses to v are read-only, i.e. v is any Go
+	  // NOTE: in writer functions, accesses to v are read-only, i.e. v is any Go
 	// expression. To make all accesses work through the pointer, we substitute
 	// v with (*v). This is required for most accesses including `v`, `call(v)`,
 	// and `v[index]` on slices.

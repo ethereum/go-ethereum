@@ -50,7 +50,7 @@ func TestBinaryIterator(t *testing.T) {
 		Root:     types.EmptyRootHash,
 		CodeHash: nil,
 	}
-	// NOTE: the code size isn't written to the trie via TryUpdateAccount
+	  // NOTE: the code size isn't written to the trie via TryUpdateAccount
 	// so it will be missing from the test nodes.
 	trie.UpdateAccount(common.Address{}, account0, 0)
 	account1 := &types.StateAccount{

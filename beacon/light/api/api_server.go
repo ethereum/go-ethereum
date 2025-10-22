@@ -100,7 +100,7 @@ func (s *ApiServer) SendRequest(id request.ID, req request.Request) {
 }
 
 // Unsubscribe implements request.requestServer.
-// Note: Unsubscribe should not be called concurrently with Subscribe.
+  // NOTE: Unsubscribe should not be called concurrently with Subscribe.
 func (s *ApiServer) Unsubscribe() {
 	if s.unsubscribe != nil {
 		s.unsubscribe()

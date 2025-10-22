@@ -320,7 +320,7 @@ var depositTopic = common.HexToHash("0x649bbc62d0e31342afea4e5cd82d4049e7e1ee912
 // ParseDepositLogs extracts the EIP-6110 deposit values from logs emitted by
 // BeaconDepositContract.
 func ParseDepositLogs(requests *[][]byte, logs []*types.Log, config *params.ChainConfig) error {
-	deposits := make([]byte, 1) // note: first byte is 0x00 (== deposit request type)
+	deposits := make([]byte, 1)   // NOTE: first byte is 0x00 (== deposit request type)
 	for _, log := range logs {
 		if log.Address == config.DepositContractAddress && len(log.Topics) > 0 && log.Topics[0] == depositTopic {
 			request, err := types.DepositLogToRequest(log.Data)

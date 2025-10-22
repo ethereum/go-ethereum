@@ -29,7 +29,7 @@ func (bitCurve *BitCurve) ScalarMult(Bx, By *big.Int, scalar []byte) (*big.Int, 
 	if len(scalar) > 32 {
 		panic("can't handle scalars > 256 bits")
 	}
-	// NOTE: potential timing issue
+	  // NOTE: potential timing issue
 	padded := make([]byte, 32)
 	copy(padded[32-len(scalar):], scalar)
 	scalar = padded

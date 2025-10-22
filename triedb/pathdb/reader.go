@@ -96,7 +96,7 @@ func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte,
 // An error will be returned if the read operation exits abnormally. Specifically,
 // if the layer is already stale.
 //
-// Note:
+  // NOTE:
 // - the returned account data is not a copy, please don't modify it
 // - no error will be returned if the requested account is not found in database
 func (r *reader) AccountRLP(hash common.Hash) ([]byte, error) {
@@ -123,7 +123,7 @@ func (r *reader) AccountRLP(hash common.Hash) ([]byte, error) {
 // the slim data format. An error will be returned if the read operation exits
 // abnormally. Specifically, if the layer is already stale.
 //
-// Note:
+  // NOTE:
 // - the returned account object is safe to modify
 // - no error will be returned if the requested account is not found in database
 func (r *reader) Account(hash common.Hash) (*types.SlimAccount, error) {
@@ -145,7 +145,7 @@ func (r *reader) Account(hash common.Hash) (*types.SlimAccount, error) {
 // within a particular account. An error will be returned if the read operation
 // exits abnormally. Specifically, if the layer is already stale.
 //
-// Note:
+  // NOTE:
 // - the returned storage data is not a copy, please don't modify it
 // - no error will be returned if the requested slot is not found in database
 func (r *reader) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
@@ -242,7 +242,7 @@ func (db *Database) HistoricReader(root common.Hash) (*HistoricalStateReader, er
 // address in the slim data format. An error will be returned if the read
 // operation exits abnormally. Specifically, if the layer is already stale.
 //
-// Note:
+  // NOTE:
 // - the returned account is not a copy, please don't modify it.
 // - no error will be returned if the requested account is not found in database.
 func (r *HistoricalStateReader) AccountRLP(address common.Address) ([]byte, error) {
@@ -292,7 +292,7 @@ func (r *HistoricalStateReader) Account(address common.Address) (*types.SlimAcco
 // within a particular account. An error will be returned if the read operation
 // exits abnormally. Specifically, if the layer is already stale.
 //
-// Note:
+  // NOTE:
 // - the returned storage data is not a copy, please don't modify it.
 // - no error will be returned if the requested slot is not found in database.
 func (r *HistoricalStateReader) Storage(address common.Address, key common.Hash) ([]byte, error) {

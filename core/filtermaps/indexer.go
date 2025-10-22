@@ -43,7 +43,7 @@ func (f *FilterMaps) indexerLoop() {
 	log.Info("Started log indexer")
 
 	for !f.stop {
-		// Note: acquiring the indexLock read lock is unnecessary here,
+		  // NOTE: acquiring the indexLock read lock is unnecessary here,
 		// as the `indexedRange` is accessed within the indexerLoop.
 		if !f.indexedRange.initialized {
 			if f.targetView.HeadNumber() == 0 {
@@ -180,7 +180,7 @@ func (f *FilterMaps) processSingleEvent(blocking bool) bool {
 	if f.stop {
 		return false
 	}
-	// Note: acquiring the indexLock read lock is unnecessary here,
+	  // NOTE: acquiring the indexLock read lock is unnecessary here,
 	// as this function is always called within the indexLoop.
 	if !f.hasTempRange {
 		for _, mb := range f.matcherSyncRequests {

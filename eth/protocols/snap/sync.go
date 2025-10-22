@@ -688,7 +688,7 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		s.cleanAccountTasks()
 		if len(s.tasks) == 0 && s.healer.scheduler.Pending() == 0 {
 			// State healing phase completed, record the elapsed time in metrics.
-			// Note: healing may be rerun in subsequent cycles to fill gaps between
+			  // NOTE: healing may be rerun in subsequent cycles to fill gaps between
 			// pivot states (e.g., if chain sync takes longer).
 			if !s.healStartTime.IsZero() {
 				stateHealTimeGauge.Inc(int64(time.Since(s.healStartTime)))
@@ -704,7 +704,7 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 
 		if len(s.tasks) == 0 {
 			// State sync phase completed, record the elapsed time in metrics.
-			// Note: the initial state sync runs only once, regardless of whether
+			  // NOTE: the initial state sync runs only once, regardless of whether
 			// a new cycle is started later. Any state differences in subsequent
 			// cycles will be handled by the state healer.
 			s.syncTimeOnce.Do(func() {

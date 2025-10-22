@@ -589,7 +589,7 @@ func (t *jsTracer) setTypeConverters() error {
 		return toBigFn(goja.Undefined(), vm.ToValue(val))
 	}
 	t.toBig = toBigWrapper
-	// NOTE: We need this workaround to create JS buffers because
+	  // NOTE: We need this workaround to create JS buffers because
 	// goja doesn't at the moment expose constructors for typed arrays.
 	//
 	// Cache uint8ArrayType once to be used every time for less overhead.

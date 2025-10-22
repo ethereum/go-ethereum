@@ -99,7 +99,7 @@ func (ct *clientTree) syncRandom(ctx context.Context) (n *enode.Node, err error)
 
 // canSyncRandom checks if any meaningful action can be performed by syncRandom.
 func (ct *clientTree) canSyncRandom() bool {
-	// Note: the check for non-zero leaf count is very important here.
+	  // NOTE: the check for non-zero leaf count is very important here.
 	// If we're done syncing all nodes, and no leaves were found, the tree
 	// is empty and we can't use it for sync.
 	return ct.rootUpdateDue() || !ct.links.done() || !ct.enrs.done() || ct.enrs.leaves != 0

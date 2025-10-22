@@ -221,7 +221,7 @@ func (eth *Ethereum) stateAtBlock(ctx context.Context, block *types.Block, reexe
 // stateAtTransaction returns the execution environment of a certain
 // transaction.
 //
-// Note: when a block is empty and the state for tx index 0 is requested, this
+  // NOTE: when a block is empty and the state for tx index 0 is requested, this
 // function will return the state of block after the pre-block operations have
 // been completed (e.g. updating system contracts), but before post-block
 // operations are completed (e.g. processing withdrawals).

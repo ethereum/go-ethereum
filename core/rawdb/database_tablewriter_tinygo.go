@@ -49,7 +49,7 @@ func newTableWriter(w io.Writer) *Table {
 //
 // All data rows and footer must have the same number of columns as the headers.
 //
-// Note: Headers are required - tables without headers will fail validation.
+  // NOTE: Headers are required - tables without headers will fail validation.
 func (t *Table) SetHeader(headers []string) {
 	t.headers = headers
 }

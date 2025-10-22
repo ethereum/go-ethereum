@@ -28,7 +28,7 @@ import (
 
 // canonicalStore stores instances of the given type in a database and caches
 // them in memory, associated with a continuous range of period numbers.
-// Note: canonicalStore is not thread safe and it is the caller's responsibility
+  // NOTE: canonicalStore is not thread safe and it is the caller's responsibility
 // to avoid concurrent access.
 type canonicalStore[T any] struct {
 	keyPrefix []byte
