@@ -223,13 +223,12 @@ func TestSizeTracker(t *testing.T) {
 	if actualStats.ContractCodeBytes != expectedStats.ContractCodeBytes {
 		t.Errorf("Contract code bytes mismatch: expected %d, got %d", expectedStats.ContractCodeBytes, actualStats.ContractCodeBytes)
 	}
-	// TODO: failed on github actions, need to investigate
-	// if actualStats.AccountTrienodes != expectedStats.AccountTrienodes {
-	// 	t.Errorf("Account trie nodes mismatch: expected %d, got %d", expectedStats.AccountTrienodes, actualStats.AccountTrienodes)
-	// }
-	// if actualStats.AccountTrienodeBytes != expectedStats.AccountTrienodeBytes {
-	// 	t.Errorf("Account trie node bytes mismatch: expected %d, got %d", expectedStats.AccountTrienodeBytes, actualStats.AccountTrienodeBytes)
-	// }
+	if actualStats.AccountTrienodes != expectedStats.AccountTrienodes {
+		t.Errorf("Account trie nodes mismatch: expected %d, got %d", expectedStats.AccountTrienodes, actualStats.AccountTrienodes)
+	}
+	if actualStats.AccountTrienodeBytes != expectedStats.AccountTrienodeBytes {
+		t.Errorf("Account trie node bytes mismatch: expected %d, got %d", expectedStats.AccountTrienodeBytes, actualStats.AccountTrienodeBytes)
+	}
 	if actualStats.StorageTrienodes != expectedStats.StorageTrienodes {
 		t.Errorf("Storage trie nodes mismatch: expected %d, got %d", expectedStats.StorageTrienodes, actualStats.StorageTrienodes)
 	}
