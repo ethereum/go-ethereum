@@ -109,7 +109,7 @@ func (s *BeaconApiServer) RestAPI(server *restapi.Server) restapi.API {
 		router.HandleFunc("/eth/v1/beacon/headers/head", server.WrapHandler(s.handleHeadHeader, false, false, false)).Methods("GET")
 		router.HandleFunc("/eth/v1/beacon/light_client/bootstrap/{checkpointhash}", server.WrapHandler(s.handleBootstrap, false, false, false)).Methods("GET")
 		router.HandleFunc("/eth/v2/beacon/blocks/{blockhash}", server.WrapHandler(s.handleBlocks, false, false, false)).Methods("GET")
-		router.HandleFunc("/eth/v1/events", s.eventServer.Handler("headEvent"))
+		router.HandleFunc("/eth/v1/events", server.WrapEventHandler(s.eventServer.Handler("headEvent")))
 	}
 }
 

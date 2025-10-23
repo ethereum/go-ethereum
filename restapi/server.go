@@ -22,10 +22,12 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/elnormous/contenttype"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -147,5 +149,18 @@ func (s *Server) WrapHandler(handler WrappedHandler, expectBody, allowRlpBody, a
 			resp.Header().Set("content-type", "application/json")
 			resp.Write(respJson)
 		}
+	}
+}
+
+func (s *Server) WrapEventHandler(handler func(resp http.ResponseWriter, req *http.Request)) func(resp http.ResponseWriter, req *http.Request) {
+	return func(resp http.ResponseWriter, req *http.Request) {
+		rc := http.NewResponseController(resp)
+		if err := rc.SetReadDeadline(time.Time{}); err != nil {
+			log.Error("Could not set read deadline for events request", "error", err)
+		}
+		if err := rc.SetWriteDeadline(time.Time{}); err != nil {
+			log.Error("Could not set read deadline for events request", "error", err)
+		}
+		handler(resp, req)
 	}
 }
