@@ -813,8 +813,11 @@ func (srv *Server) listenLoop() {
 				time.Sleep(time.Millisecond * 200)
 				continue
 			} else if err != nil {
-				srv.log.Debug("Read error", "err", err)
 				slots <- struct{}{}
+				if errors.Is(err, net.ErrClosed) {
+					return
+				}
+				srv.log.Debug("Read error", "err", err)
 				return
 			}
 			break
