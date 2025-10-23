@@ -542,7 +542,7 @@ func (t *handshakeTest) close() {
 }
 
 func (n *handshakeTestNode) init(key *ecdsa.PrivateKey, ip net.IP, clock mclock.Clock, protocolID [6]byte) {
-	db, _ := enode.OpenDB("")
+	db, _ := enode.OpenDB("", "")
 	n.ln = enode.NewLocalNode(db, key)
 	n.ln.SetStaticIP(ip)
 	n.c = NewCodec(n.ln, key, clock, nil)

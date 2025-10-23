@@ -26,13 +26,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cockroachdb/pebble"
+	"github.com/cockroachdb/pebble/vfs"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
-	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
@@ -59,44 +61,258 @@ const (
 const (
 	dbNodeExpiration = 24 * time.Hour // Time after which an unseen node should be dropped.
 	dbCleanupCycle   = time.Hour      // Time period for running the expiration task.
-	dbVersion        = 9
+	dbVersion        = 10
 )
 
 var (
 	errInvalidIP = errors.New("invalid IP")
+	errNotFound  = errors.New("not found")
 )
 
 var zeroIP = netip.IPv6Unspecified()
 
+// kvDatabase is an internal interface that abstracts the underlying key-value database.
+// This allows supporting both leveldb and pebble backends.
+type kvDatabase interface {
+	Get(key []byte) ([]byte, error)
+	Put(key, value []byte) error
+	Delete(key []byte) error
+	NewIterator(prefix []byte) dbIterator
+	Close() error
+}
+
+// dbIterator is an internal interface for database iterators.
+type dbIterator interface {
+	Next() bool
+	First() bool
+	Seek(key []byte) bool
+	Valid() bool
+	Key() []byte
+	Value() []byte
+	Release()
+}
+
 // DB is the node database, storing previously seen nodes and any collected metadata about
 // them for QoS purposes.
 type DB struct {
-	lvl    *leveldb.DB   // Interface to the database itself
+	kv     kvDatabase    // Interface to the database itself (leveldb or pebble)
 	runner sync.Once     // Ensures we can start at most one expirer
 	quit   chan struct{} // Channel to signal the expiring thread to stop
 }
 
-// OpenDB opens a node database for storing and retrieving infos about known peers in the
-// network. If no path is given an in-memory, temporary database is constructed.
-func OpenDB(path string) (*DB, error) {
-	if path == "" {
-		return newMemoryDB()
-	}
-	return newPersistentDB(path)
+// levelDB wraps a leveldb database to implement the kvDatabase interface.
+type levelDB struct {
+	db *leveldb.DB
 }
 
-// newMemoryDB creates a new in-memory node database without a persistent backend.
-func newMemoryDB() (*DB, error) {
-	db, err := leveldb.Open(storage.NewMemStorage(), nil)
+func (l *levelDB) Get(key []byte) ([]byte, error) {
+	val, err := l.db.Get(key, nil)
+	if err == leveldb.ErrNotFound {
+		return nil, errNotFound
+	}
+	return val, err
+}
+
+func (l *levelDB) Put(key, value []byte) error {
+	return l.db.Put(key, value, nil)
+}
+
+func (l *levelDB) Delete(key []byte) error {
+	return l.db.Delete(key, nil)
+}
+
+func (l *levelDB) NewIterator(prefix []byte) dbIterator {
+	return &levelDBIterator{
+		iter: l.db.NewIterator(util.BytesPrefix(prefix), nil),
+	}
+}
+
+func (l *levelDB) Close() error {
+	return l.db.Close()
+}
+
+// levelDBIterator wraps a leveldb iterator.
+type levelDBIterator struct {
+	iter iterator.Iterator
+}
+
+func (it *levelDBIterator) Next() bool {
+	return it.iter.Next()
+}
+
+func (it *levelDBIterator) First() bool {
+	return it.iter.First()
+}
+
+func (it *levelDBIterator) Seek(key []byte) bool {
+	return it.iter.Seek(key)
+}
+
+func (it *levelDBIterator) Valid() bool {
+	return it.iter.Valid()
+}
+
+func (it *levelDBIterator) Key() []byte {
+	return it.iter.Key()
+}
+
+func (it *levelDBIterator) Value() []byte {
+	return it.iter.Value()
+}
+
+func (it *levelDBIterator) Release() {
+	it.iter.Release()
+}
+
+// pebbleDB wraps a pebble database to implement the kvDatabase interface.
+type pebbleDB struct {
+	db *pebble.DB
+}
+
+func (p *pebbleDB) Get(key []byte) ([]byte, error) {
+	val, closer, err := p.db.Get(key)
+	if err == pebble.ErrNotFound {
+		return nil, errNotFound
+	}
 	if err != nil {
 		return nil, err
 	}
-	return &DB{lvl: db, quit: make(chan struct{})}, nil
+	defer closer.Close()
+	ret := make([]byte, len(val))
+	copy(ret, val)
+	return ret, nil
 }
 
-// newPersistentDB creates/opens a leveldb backed persistent node database,
-// also flushing its contents in case of a version mismatch.
-func newPersistentDB(path string) (*DB, error) {
+func (p *pebbleDB) Put(key, value []byte) error {
+	return p.db.Set(key, value, pebble.Sync)
+}
+
+func (p *pebbleDB) Delete(key []byte) error {
+	return p.db.Delete(key, pebble.Sync)
+}
+
+func (p *pebbleDB) NewIterator(prefix []byte) dbIterator {
+	iter, _ := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: common.UpperBound(prefix),
+	})
+	return &pebbleDBIterator{iter: iter}
+}
+
+func (p *pebbleDB) Close() error {
+	return p.db.Close()
+}
+
+// pebbleDBIterator wraps a pebble iterator.
+type pebbleDBIterator struct {
+	iter *pebble.Iterator
+}
+
+func (it *pebbleDBIterator) Next() bool {
+	return it.iter.Next()
+}
+
+func (it *pebbleDBIterator) First() bool {
+	return it.iter.First()
+}
+
+func (it *pebbleDBIterator) Seek(key []byte) bool {
+	return it.iter.SeekGE(key)
+}
+
+func (it *pebbleDBIterator) Valid() bool {
+	return it.iter.Valid()
+}
+
+func (it *pebbleDBIterator) Key() []byte {
+	return it.iter.Key()
+}
+
+func (it *pebbleDBIterator) Value() []byte {
+	return it.iter.Value()
+}
+
+func (it *pebbleDBIterator) Release() {
+	it.iter.Close()
+}
+
+// OpenDB opens a node database for storing and retrieving infos about known peers in the
+// network. If no path is given an in-memory, temporary database is constructed.
+// The dbType parameter can be "leveldb", "pebble", or "" for auto-detection.
+func OpenDB(path string, dbType string) (*DB, error) {
+	if path == "" {
+		return newMemoryDB()
+	}
+	return newPersistentDB(path, dbType)
+}
+
+// newMemoryDB creates a new in-memory node database without a persistent backend.
+// Defaults to pebble for new in-memory databases.
+func newMemoryDB() (*DB, error) {
+	db, err := pebble.Open("", &pebble.Options{
+		FS: vfs.NewMem(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &DB{kv: &pebbleDB{db: db}, quit: make(chan struct{})}, nil
+}
+
+// newPersistentDB creates/opens a persistent node database.
+// The dbType parameter can specify "leveldb", "pebble", or "" for auto-detection.
+// When auto-detecting, it checks for existing databases and defaults to pebble for new databases.
+// It also flushes the database contents in case of a version mismatch.
+func newPersistentDB(path string, dbType string) (*DB, error) {
+	if dbType != "" {
+		switch dbType {
+		case common.DBPebble:
+			return openPebbleDB(path)
+		case common.DBLeveldb:
+			return openLevelDB(path)
+		default:
+			return nil, fmt.Errorf("unknown database engine: %s (valid options: leveldb, pebble)", dbType)
+		}
+	}
+	detectedType := common.PreexistingDatabase(path)
+	switch detectedType {
+	case common.DBPebble:
+		return openPebbleDB(path)
+	case common.DBLeveldb:
+		return openLevelDB(path)
+	default:
+		return openPebbleDB(path)
+	}
+}
+
+// checkDBVersion checks the database version and handles version mismatches.
+// If the version doesn't match, it removes the old database and reopens it using reopenFn.
+func checkDBVersion(kv kvDatabase, path string, reopenFn func(string) (*DB, error)) (*DB, error) {
+	currentVer := encodeVarint(int64(dbVersion))
+
+	blob, err := kv.Get([]byte(dbVersionKey))
+	switch err {
+	case errNotFound:
+		// Version not found (i.e. empty cache), insert it
+		if err := kv.Put([]byte(dbVersionKey), currentVer); err != nil {
+			kv.Close()
+			return nil, err
+		}
+
+	case nil:
+		// Version present, flush if different
+		if !bytes.Equal(blob, currentVer) {
+			kv.Close()
+			if err = os.RemoveAll(path); err != nil {
+				return nil, err
+			}
+			return reopenFn(path)
+		}
+	}
+	return &DB{kv: kv, quit: make(chan struct{})}, nil
+}
+
+// openLevelDB opens a leveldb database at the given path.
+func openLevelDB(path string) (*DB, error) {
 	opts := &opt.Options{OpenFilesCacheCapacity: 5}
 	db, err := leveldb.OpenFile(path, opts)
 	if _, iscorrupted := err.(*errors.ErrCorrupted); iscorrupted {
@@ -105,31 +321,17 @@ func newPersistentDB(path string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	// The nodes contained in the cache correspond to a certain protocol version.
-	// Flush all nodes if the version doesn't match.
-	currentVer := make([]byte, binary.MaxVarintLen64)
-	currentVer = currentVer[:binary.PutVarint(currentVer, int64(dbVersion))]
+	return checkDBVersion(&levelDB{db: db}, path, openLevelDB)
+}
 
-	blob, err := db.Get([]byte(dbVersionKey), nil)
-	switch err {
-	case leveldb.ErrNotFound:
-		// Version not found (i.e. empty cache), insert it
-		if err := db.Put([]byte(dbVersionKey), currentVer, nil); err != nil {
-			db.Close()
-			return nil, err
-		}
-
-	case nil:
-		// Version present, flush if different
-		if !bytes.Equal(blob, currentVer) {
-			db.Close()
-			if err = os.RemoveAll(path); err != nil {
-				return nil, err
-			}
-			return newPersistentDB(path)
-		}
+// openPebbleDB opens a pebble database at the given path.
+func openPebbleDB(path string) (*DB, error) {
+	opts := &pebble.Options{MaxOpenFiles: 5}
+	db, err := pebble.Open(path, opts)
+	if err != nil {
+		return nil, err
 	}
-	return &DB{lvl: db, quit: make(chan struct{})}, nil
+	return checkDBVersion(&pebbleDB{db: db}, path, openPebbleDB)
 }
 
 // nodeKey returns the database key for a node record.
@@ -194,9 +396,23 @@ func localItemKey(id ID, field string) []byte {
 	return key
 }
 
+// encodeVarint encodes an int64 as a varint.
+func encodeVarint(n int64) []byte {
+	buf := make([]byte, binary.MaxVarintLen64)
+	buf = buf[:binary.PutVarint(buf, n)]
+	return buf
+}
+
+// encodeUvarint encodes a uint64 as a varint.
+func encodeUvarint(n uint64) []byte {
+	buf := make([]byte, binary.MaxVarintLen64)
+	buf = buf[:binary.PutUvarint(buf, n)]
+	return buf
+}
+
 // fetchInt64 retrieves an integer associated with a particular key.
 func (db *DB) fetchInt64(key []byte) int64 {
-	blob, err := db.lvl.Get(key, nil)
+	blob, err := db.kv.Get(key)
 	if err != nil {
 		return 0
 	}
@@ -209,14 +425,12 @@ func (db *DB) fetchInt64(key []byte) int64 {
 
 // storeInt64 stores an integer in the given key.
 func (db *DB) storeInt64(key []byte, n int64) error {
-	blob := make([]byte, binary.MaxVarintLen64)
-	blob = blob[:binary.PutVarint(blob, n)]
-	return db.lvl.Put(key, blob, nil)
+	return db.kv.Put(key, encodeVarint(n))
 }
 
 // fetchUint64 retrieves an integer associated with a particular key.
 func (db *DB) fetchUint64(key []byte) uint64 {
-	blob, err := db.lvl.Get(key, nil)
+	blob, err := db.kv.Get(key)
 	if err != nil {
 		return 0
 	}
@@ -226,14 +440,12 @@ func (db *DB) fetchUint64(key []byte) uint64 {
 
 // storeUint64 stores an integer in the given key.
 func (db *DB) storeUint64(key []byte, n uint64) error {
-	blob := make([]byte, binary.MaxVarintLen64)
-	blob = blob[:binary.PutUvarint(blob, n)]
-	return db.lvl.Put(key, blob, nil)
+	return db.kv.Put(key, encodeUvarint(n))
 }
 
 // Node retrieves a node with a given id from the database.
 func (db *DB) Node(id ID) *Node {
-	blob, err := db.lvl.Get(nodeKey(id), nil)
+	blob, err := db.kv.Get(nodeKey(id))
 	if err != nil {
 		return nil
 	}
@@ -260,7 +472,7 @@ func (db *DB) UpdateNode(node *Node) error {
 	if err != nil {
 		return err
 	}
-	if err := db.lvl.Put(nodeKey(node.ID()), blob, nil); err != nil {
+	if err := db.kv.Put(nodeKey(node.ID()), blob); err != nil {
 		return err
 	}
 	return db.storeUint64(nodeItemKey(node.ID(), zeroIP, dbNodeSeq), node.Seq())
@@ -282,14 +494,14 @@ func (db *DB) Resolve(n *Node) *Node {
 
 // DeleteNode deletes all information associated with a node.
 func (db *DB) DeleteNode(id ID) {
-	deleteRange(db.lvl, nodeKey(id))
+	deleteRange(db.kv, nodeKey(id))
 }
 
-func deleteRange(db *leveldb.DB, prefix []byte) {
-	it := db.NewIterator(util.BytesPrefix(prefix), nil)
+func deleteRange(kv kvDatabase, prefix []byte) {
+	it := kv.NewIterator(prefix)
 	defer it.Release()
-	for it.Next() {
-		db.Delete(it.Key(), nil)
+	for it.First(); it.Valid(); it.Next() {
+		kv.Delete(it.Key())
 	}
 }
 
@@ -324,9 +536,10 @@ func (db *DB) expirer() {
 // expireNodes iterates over the database and deletes all nodes that have not
 // been seen (i.e. received a pong from) for some time.
 func (db *DB) expireNodes() {
-	it := db.lvl.NewIterator(util.BytesPrefix([]byte(dbNodePrefix)), nil)
+	it := db.kv.NewIterator([]byte(dbNodePrefix))
 	defer it.Release()
-	if !it.Next() {
+
+	if !it.First() {
 		return
 	}
 
@@ -344,7 +557,7 @@ func (db *DB) expireNodes() {
 			}
 			if time < threshold {
 				// Last pong from this IP older than threshold, remove fields belonging to it.
-				deleteRange(db.lvl, nodeItemKey(id, ip, ""))
+				deleteRange(db.kv, nodeItemKey(id, ip, ""))
 			}
 		}
 		atEnd = !it.Next()
@@ -353,7 +566,7 @@ func (db *DB) expireNodes() {
 			// We've moved beyond the last entry of the current ID.
 			// Remove everything if there was no recent enough pong.
 			if youngestPong > 0 && youngestPong < threshold {
-				deleteRange(db.lvl, nodeKey(id))
+				deleteRange(db.kv, nodeKey(id))
 			}
 			youngestPong = 0
 		}
@@ -448,7 +661,7 @@ func (db *DB) QuerySeeds(n int, maxAge time.Duration) []*Node {
 	var (
 		now   = time.Now()
 		nodes = make([]*Node, 0, n)
-		it    = db.lvl.NewIterator(nil, nil)
+		it    = db.kv.NewIterator(nil)
 		id    ID
 	)
 	defer it.Release()
@@ -483,13 +696,15 @@ seek:
 
 // reads the next node record from the iterator, skipping over other
 // database entries.
-func nextNode(it iterator.Iterator) *Node {
-	for end := false; !end; end = !it.Next() {
+func nextNode(it dbIterator) *Node {
+	for it.Valid() {
 		id, rest := splitNodeKey(it.Key())
-		if string(rest) != dbDiscoverRoot {
-			continue
+		if string(rest) == dbDiscoverRoot {
+			return mustDecodeNode(id[:], it.Value())
 		}
-		return mustDecodeNode(id[:], it.Value())
+		if !it.Next() {
+			break
+		}
 	}
 	return nil
 }
@@ -501,5 +716,5 @@ func (db *DB) Close() {
 	default:
 		close(db.quit)
 	}
-	db.lvl.Close()
+	db.kv.Close()
 }

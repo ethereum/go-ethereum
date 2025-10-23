@@ -70,7 +70,7 @@ func newUDPTest(t *testing.T) *udpTest {
 		remoteaddr: netip.MustParseAddrPort("10.0.1.99:30303"),
 	}
 
-	test.db, _ = enode.OpenDB("")
+	test.db, _ = enode.OpenDB("", "")
 	ln := enode.NewLocalNode(test.db, test.localkey)
 	test.udp, _ = ListenV4(test.pipe, ln, Config{
 		PrivateKey: test.localkey,
@@ -556,7 +556,7 @@ func startLocalhostV4(t *testing.T, cfg Config) *UDPv4 {
 	t.Helper()
 
 	cfg.PrivateKey = newkey()
-	db, _ := enode.OpenDB("")
+	db, _ := enode.OpenDB("", "")
 	ln := enode.NewLocalNode(db, cfg.PrivateKey)
 
 	// Prefix logs with node ID.

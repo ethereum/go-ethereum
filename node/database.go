@@ -19,6 +19,7 @@ package node
 import (
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
@@ -79,20 +80,20 @@ func openDatabase(o internalOpenOptions) (ethdb.Database, error) {
 //	db is existent     |  from db         |  specified type (if compatible)
 func openKeyValueDatabase(o internalOpenOptions) (ethdb.KeyValueStore, error) {
 	// Reject any unsupported database type
-	if len(o.dbEngine) != 0 && o.dbEngine != rawdb.DBLeveldb && o.dbEngine != rawdb.DBPebble {
+	if len(o.dbEngine) != 0 && o.dbEngine != common.DBLeveldb && o.dbEngine != common.DBPebble {
 		return nil, fmt.Errorf("unknown db.engine %v", o.dbEngine)
 	}
 	// Retrieve any pre-existing database's type and use that or the requested one
 	// as long as there's no conflict between the two types
-	existingDb := rawdb.PreexistingDatabase(o.directory)
+	existingDb := common.PreexistingDatabase(o.directory)
 	if len(existingDb) != 0 && len(o.dbEngine) != 0 && o.dbEngine != existingDb {
 		return nil, fmt.Errorf("db.engine choice was %v but found pre-existing %v database in specified data directory", o.dbEngine, existingDb)
 	}
-	if o.dbEngine == rawdb.DBPebble || existingDb == rawdb.DBPebble {
+	if o.dbEngine == common.DBPebble || existingDb == common.DBPebble {
 		log.Info("Using pebble as the backing database")
 		return newPebbleDBDatabase(o.directory, o.Cache, o.Handles, o.MetricsNamespace, o.ReadOnly)
 	}
-	if o.dbEngine == rawdb.DBLeveldb || existingDb == rawdb.DBLeveldb {
+	if o.dbEngine == common.DBLeveldb || existingDb == common.DBLeveldb {
 		log.Info("Using leveldb as the backing database")
 		return newLevelDBDatabase(o.directory, o.Cache, o.Handles, o.MetricsNamespace, o.ReadOnly)
 	}

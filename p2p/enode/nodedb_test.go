@@ -90,7 +90,7 @@ var nodeDBInt64Tests = []struct {
 }
 
 func TestDBInt64(t *testing.T) {
-	db, _ := OpenDB("")
+	db, _ := OpenDB("", "")
 	defer db.Close()
 
 	tests := nodeDBInt64Tests
@@ -122,7 +122,7 @@ func TestDBFetchStore(t *testing.T) {
 	inst := time.Now()
 	num := 314
 
-	db, _ := OpenDB("")
+	db, _ := OpenDB("", "")
 	defer db.Close()
 
 	// Check fetch/store operations on a node ping object
@@ -261,7 +261,7 @@ func TestDBSeedQuery(t *testing.T) {
 }
 
 func testSeedQuery() error {
-	db, _ := OpenDB("")
+	db, _ := OpenDB("", "")
 	defer db.Close()
 
 	// Insert a batch of nodes for querying
@@ -309,7 +309,7 @@ func TestDBPersistency(t *testing.T) {
 	)
 
 	// Create a persistent database and store some values
-	db, err := OpenDB(filepath.Join(root, "database"))
+	db, err := OpenDB(filepath.Join(root, "database"), "")
 	if err != nil {
 		t.Fatalf("failed to create persistent database: %v", err)
 	}
@@ -319,7 +319,7 @@ func TestDBPersistency(t *testing.T) {
 	db.Close()
 
 	// Reopen the database and check the value
-	db, err = OpenDB(filepath.Join(root, "database"))
+	db, err = OpenDB(filepath.Join(root, "database"), "")
 	if err != nil {
 		t.Fatalf("failed to open persistent database: %v", err)
 	}
@@ -420,7 +420,7 @@ var nodeDBExpirationNodes = []struct {
 }
 
 func TestDBExpiration(t *testing.T) {
-	db, _ := OpenDB("")
+	db, _ := OpenDB("", "")
 	defer db.Close()
 
 	// Add all the test nodes and set their last pong time.
@@ -463,7 +463,7 @@ func TestDBExpiration(t *testing.T) {
 // This test checks that expiration works when discovery v5 data is present
 // in the database.
 func TestDBExpireV5(t *testing.T) {
-	db, _ := OpenDB("")
+	db, _ := OpenDB("", "")
 	defer db.Close()
 
 	ip := netip.MustParseAddr("127.0.0.1")

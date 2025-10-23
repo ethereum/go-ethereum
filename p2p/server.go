@@ -425,7 +425,7 @@ func (srv *Server) setupLocalNode() error {
 	slices.SortFunc(srv.ourHandshake.Caps, Cap.Cmp)
 
 	// Create the local node.
-	db, err := enode.OpenDB(srv.NodeDatabase)
+	db, err := enode.OpenDB(srv.NodeDatabase, srv.NodeDatabaseEngine)
 	if err != nil {
 		return err
 	}

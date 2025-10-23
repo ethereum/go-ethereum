@@ -30,7 +30,7 @@ import (
 )
 
 func newLocalNodeForTesting() (*LocalNode, *DB) {
-	db, _ := OpenDB("")
+	db, _ := OpenDB("", "")
 	key, _ := crypto.GenerateKey()
 	return NewLocalNode(db, key), db
 }

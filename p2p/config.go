@@ -88,6 +88,10 @@ type Config struct {
 	// live nodes in the network.
 	NodeDatabase string `toml:",omitempty"`
 
+	// NodeDatabaseEngine specifies the database engine to use for the node database.
+	// Valid values are "leveldb" and "pebble". If empty, auto-detection is used.
+	NodeDatabaseEngine string `toml:",omitempty"`
+
 	// Protocols should contain the protocols supported
 	// by the server. Matching protocols are launched for
 	// each peer.
