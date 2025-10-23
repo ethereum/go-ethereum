@@ -143,7 +143,7 @@ func (f *FilterMaps) SetBlockProcessing(blockProcessing bool) {
 // latest targetView.
 func (f *FilterMaps) WaitIdle() {
 	for {
-		ch := make(chan bool)
+		ch := make(chan bool, 1) // buffered so the indexer response can't block
 		select {
 		case f.waitIdleCh <- ch:
 			if <-ch {
