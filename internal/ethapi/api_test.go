@@ -4052,7 +4052,6 @@ func TestSendRawTransactionSync_Timeout(t *testing.T) {
 	}
 	if got, want := de.ErrorData(), tx.Hash().Hex(); got != want {
 		t.Fatalf("expected ErrorData=%s, got %v", want, got)
-
 	}
 }
 
