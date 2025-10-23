@@ -226,7 +226,8 @@ func accountSnapshotKey(hash common.Hash) []byte {
 
 // storageSnapshotKey = SnapshotStoragePrefix + account hash + storage hash
 func storageSnapshotKey(accountHash, storageHash common.Hash) []byte {
-	buf := make([]byte, len(SnapshotStoragePrefix)+common.HashLength+common.HashLength)
+	//len(SnapshotStoragePrefix) == 1
+	buf := make([]byte, 1+common.HashLength+common.HashLength)
 	n := copy(buf, SnapshotStoragePrefix)
 	n += copy(buf[n:], accountHash.Bytes())
 	copy(buf[n:], storageHash.Bytes())
@@ -352,34 +353,32 @@ func IsStorageTrieNode(key []byte) bool {
 	return ok
 }
 
-// filterMapRowKey = filterMapRowPrefix + mapRowIndex (uint64 big endian)
 func filterMapRowKey(mapRowIndex uint64, base bool) []byte {
-	extLen := 8
-	if base {
-		extLen = 9
+	// len(filterMapRowPrefix) + extLen
+	key := make([]byte, 4+9)
+	copy(key[:4], filterMapRowPrefix)
+	binary.BigEndian.PutUint64(key[4:4+8], mapRowIndex)
+	if !base {
+		return key[0 : 4+8]
 	}
-	l := len(filterMapRowPrefix)
-	key := make([]byte, l+extLen)
-	copy(key[:l], filterMapRowPrefix)
-	binary.BigEndian.PutUint64(key[l:l+8], mapRowIndex)
 	return key
 }
 
 // filterMapLastBlockKey = filterMapLastBlockPrefix + mapIndex (uint32 big endian)
 func filterMapLastBlockKey(mapIndex uint32) []byte {
-	l := len(filterMapLastBlockPrefix)
-	key := make([]byte, l+4)
-	copy(key[:l], filterMapLastBlockPrefix)
-	binary.BigEndian.PutUint32(key[l:], mapIndex)
+	// len(filterMapLastBlockPrefix) + len(uint32)
+	key := make([]byte, 4+4)
+	copy(key[:4], filterMapLastBlockPrefix)
+	binary.BigEndian.PutUint32(key[4:], mapIndex)
 	return key
 }
 
 // filterMapBlockLVKey = filterMapBlockLVPrefix + num (uint64 big endian)
 func filterMapBlockLVKey(number uint64) []byte {
-	l := len(filterMapBlockLVPrefix)
-	key := make([]byte, l+8)
-	copy(key[:l], filterMapBlockLVPrefix)
-	binary.BigEndian.PutUint64(key[l:], number)
+	//len(filterMapBlockLVPrefix) + len(uint64)
+	key := make([]byte, 4+8)
+	copy(key[:4], filterMapBlockLVPrefix)
+	binary.BigEndian.PutUint64(key[4:], number)
 	return key
 }
 
@@ -390,8 +389,8 @@ func accountHistoryIndexKey(addressHash common.Hash) []byte {
 
 // storageHistoryIndexKey = StateHistoryStorageMetadataPrefix + addressHash + storageHash
 func storageHistoryIndexKey(addressHash common.Hash, storageHash common.Hash) []byte {
-	totalLen := len(StateHistoryStorageMetadataPrefix) + 2*common.HashLength
-	out := make([]byte, totalLen)
+	// len(StateHistoryStorageMetadataPrefix) == 2
+	out := make([]byte, 2+2*common.HashLength)
 
 	off := 0
 	off += copy(out[off:], StateHistoryStorageMetadataPrefix)
@@ -416,8 +415,8 @@ func trienodeHistoryIndexKey(addressHash common.Hash, path []byte) []byte {
 
 // accountHistoryIndexBlockKey = StateHistoryAccountBlockPrefix + addressHash + blockID
 func accountHistoryIndexBlockKey(addressHash common.Hash, blockID uint32) []byte {
-	totalLen := len(StateHistoryAccountBlockPrefix) + common.HashLength + 4
-	out := make([]byte, totalLen)
+	// len(StateHistoryAccountBlockPrefix) + len(common.Hash) + len(uint32)
+	out := make([]byte, 3+common.HashLength+4)
 
 	off := 0
 	off += copy(out[off:], StateHistoryAccountBlockPrefix)
@@ -429,8 +428,8 @@ func accountHistoryIndexBlockKey(addressHash common.Hash, blockID uint32) []byte
 
 // storageHistoryIndexBlockKey = StateHistoryStorageBlockPrefix + addressHash + storageHash + blockID
 func storageHistoryIndexBlockKey(addressHash common.Hash, storageHash common.Hash, blockID uint32) []byte {
-	totalLen := len(StateHistoryStorageBlockPrefix) + 2*common.HashLength + 4
-	out := make([]byte, totalLen)
+	// len(StateHistoryStorageBlockPrefix) + 2*common.HashLength + len(uint32)
+	out := make([]byte, 3+2*common.HashLength+4)
 
 	off := 0
 	off += copy(out[off:], StateHistoryStorageBlockPrefix)
