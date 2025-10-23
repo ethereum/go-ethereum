@@ -21,14 +21,72 @@ package crypto
 import (
 	"github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime"
 	"github.com/ethereum/go-ethereum/common"
-	"golang.org/x/crypto/sha3"
 )
 
+// zirenKeccakState implements the KeccakState interface using the Ziren zkvm_runtime.
+// It accumulates data written to it and uses the zkvm's Keccak256 system call for hashing.
+type zirenKeccakState struct {
+	buf    []byte // accumulated data
+	result []byte // cached result
+	dirty  bool   // whether new data has been written since last hash
+}
+
+func newZirenKeccakState() KeccakState {
+	return &zirenKeccakState{
+		buf: make([]byte, 0, 512), // pre-allocate reasonable capacity
+	}
+}
+
+func (s *zirenKeccakState) Write(p []byte) (n int, err error) {
+	s.buf = append(s.buf, p...)
+	s.dirty = true
+	return len(p), nil
+}
+
+func (s *zirenKeccakState) Sum(b []byte) []byte {
+	s.computeHashIfNeeded()
+	return append(b, s.result...)
+}
+
+func (s *zirenKeccakState) Reset() {
+	s.buf = s.buf[:0]
+	s.result = nil
+	s.dirty = false
+}
+
+func (s *zirenKeccakState) Size() int {
+	return 32
+}
+
+func (s *zirenKeccakState) BlockSize() int {
+	return 136 // Keccak256 rate
+}
+
+func (s *zirenKeccakState) Read(p []byte) (n int, err error) {
+	s.computeHashIfNeeded()
+
+	if len(p) == 0 {
+		return 0, nil
+	}
+
+	// After computeHashIfNeeded(), s.result is always a 32-byte slice
+	n = copy(p, s.result)
+	return n, nil
+}
+
+func (s *zirenKeccakState) computeHashIfNeeded() {
+	if s.dirty || s.result == nil {
+		// Use the zkvm_runtime Keccak256 which uses SyscallKeccakSponge
+		hashArray := zkvm_runtime.Keccak256(s.buf)
+		s.result = hashArray[:]
+		s.dirty = false
+	}
+}
+
 // NewKeccakState creates a new KeccakState
-// For now, we fallback to the original implementation for the stateful interface.
-// TODO: Implement a stateful wrapper around zkvm_runtime.Keccak256 if needed.
+// This uses a Ziren-optimized implementation that leverages the zkvm_runtime.Keccak256 system call.
 func NewKeccakState() KeccakState {
-	return sha3.NewLegacyKeccak256().(KeccakState)
+	return newZirenKeccakState()
 }
 
 // Keccak256 calculates and returns the Keccak256 hash using the Ziren zkvm_runtime implementation.
