@@ -1,7 +1,6 @@
 package types
 
 import (
-	"errors"
 	"math/bits"
 
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
@@ -10,45 +9,23 @@ import (
 // `CustodyBitmap` is a bitmap to represent which custody index to store (little endian)
 type CustodyBitmap [16]byte
 
-func (b CustodyBitmap) IsSet(i uint) bool {
-	if i >= uint(kzg4844.CellsPerBlob) {
-		return false
-	}
-	index := i / 8
-	offset := i % 8
-	return ((b[index] >> offset) & 1) == 1
-}
+var (
+	CustodyBitmapAll = func() *CustodyBitmap {
+		var result CustodyBitmap
+		for i := 0; i < len(result); i++ {
+			result[i] = 0xFF
+		}
+		return &result
+	}()
 
-// Set ith bit
-func (b *CustodyBitmap) Set(i uint) error {
-	if i >= uint(kzg4844.CellsPerBlob) {
-		return errors.New("bit index out of range")
-	}
-	index := i / 8
-	offset := i % 8
-	b[index] |= 1 << offset
-	return nil
-}
-
-// Clear ith bit
-func (b *CustodyBitmap) Clear(i uint) error {
-	if i >= uint(kzg4844.CellsPerBlob) {
-		return errors.New("bit index out of range")
-	}
-	index := i / 8
-	offset := i % 8
-	b[index] &^= 1 << offset
-	return nil
-}
-
-// Number of bits set to 1
-func (b CustodyBitmap) OneCount() int {
-	total := 0
-	for _, byte := range b {
-		total += bits.OnesCount8(byte)
-	}
-	return total
-}
+	CustodyBitmapData = func() *CustodyBitmap {
+		var result CustodyBitmap
+		for i := 0; i < kzg4844.DataPerBlob/8; i++ {
+			result[i] = 0xFF
+		}
+		return &result
+	}()
+)
 
 // Return bit indices set to 1, ascending order
 func (b CustodyBitmap) Indices() []uint64 {
@@ -56,7 +33,7 @@ func (b CustodyBitmap) Indices() []uint64 {
 	for byteIdx, val := range b {
 		v := val
 		for v != 0 {
-			tz := bits.TrailingZeros8(v) // 0..7
+			tz := bits.TrailingZeros8(v)
 			idx := uint64(byteIdx*8 + tz)
 			out = append(out, idx)
 			v &^= 1 << tz
@@ -65,28 +42,11 @@ func (b CustodyBitmap) Indices() []uint64 {
 	return out
 }
 
-func (b CustodyBitmap) SetIndices(indices []uint64) error {
-	for _, i := range indices {
-		if i >= uint64(kzg4844.CellsPerBlob) {
-			return errors.New("bit index out of range")
-		}
-		byteIdx := i / 8
-		bitOff := i % 8
-		b[byteIdx] |= 1 << bitOff
+// Number of bits set to 1
+func (b CustodyBitmap) OneCount() int {
+	total := 0
+	for _, data := range b {
+		total += bits.OnesCount8(data)
 	}
-	return nil
-}
-
-func (b CustodyBitmap) SetAll() CustodyBitmap {
-	for i := 0; i < len(b); i++ {
-		b[i] = 0xFF
-	}
-	return b
-}
-
-func (b CustodyBitmap) SetData() CustodyBitmap {
-	for i := 0; i < kzg4844.DataPerBlob/8; i++ {
-		b[i] = 0xFF
-	}
-	return b
+	return total
 }

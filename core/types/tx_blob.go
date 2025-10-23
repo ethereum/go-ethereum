@@ -186,7 +186,7 @@ func (sc *BlobTxSidecar) ToBlobTxCellSidecar() (*BlobTxCellSidecar, error) {
 		Cells:       cells,
 		Commitments: sc.Commitments,
 		Proofs:      sc.Proofs,
-		Custody:     CustodyBitmap{}.SetAll(),
+		Custody:     *CustodyBitmapAll,
 	}, nil
 }
 
