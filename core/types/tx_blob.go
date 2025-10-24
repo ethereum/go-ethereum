@@ -176,6 +176,63 @@ func (sc *BlobTxSidecar) Copy() *BlobTxSidecar {
 	}
 }
 
+func (sc *BlobTxSidecar) ToBlobTxCellSidecar() (*BlobTxCellSidecar, error) {
+	cells, err := kzg4844.ComputeCells(sc.Blobs)
+	if err != nil {
+		return nil, err
+	}
+	return &BlobTxCellSidecar{
+		Version:     sc.Version,
+		Cells:       cells,
+		Commitments: sc.Commitments,
+		Proofs:      sc.Proofs,
+		Custody:     *CustodyBitmapAll,
+	}, nil
+}
+
+type BlobTxCellSidecar struct {
+	Version     byte
+	Cells       []kzg4844.Cell
+	Commitments []kzg4844.Commitment
+	Proofs      []kzg4844.Proof
+	Custody     CustodyBitmap
+}
+
+// ValidateBlobCommitmentHashes checks whether the given hashes correspond to the
+// commitments in the sidecar
+func (c *BlobTxCellSidecar) ValidateBlobCommitmentHashes(hashes []common.Hash) error {
+	sc := BlobTxSidecar{
+		Commitments: c.Commitments,
+	}
+	return sc.ValidateBlobCommitmentHashes(hashes)
+}
+
+// ToV1 converts the BlobSidecar to version 1, attaching the cell proofs.
+// This function only available when we can recover the original blob with given cells
+// TODO: duplication
+func (c *BlobTxCellSidecar) ToV1() error {
+	if c.Version == BlobSidecarVersion1 {
+		return nil
+	}
+	blobs, err := kzg4844.RecoverBlobs(c.Cells, c.Custody.Indices())
+	if err != nil {
+		return err
+	}
+	if c.Version == BlobSidecarVersion0 {
+		proofs := make([]kzg4844.Proof, 0, len(blobs)*kzg4844.CellProofsPerBlob)
+		for _, blob := range blobs {
+			cellProofs, err := kzg4844.ComputeCellProofs(&blob)
+			if err != nil {
+				return err
+			}
+			proofs = append(proofs, cellProofs...)
+		}
+		c.Version = BlobSidecarVersion1
+		c.Proofs = proofs
+	}
+	return nil
+}
+
 // blobTxWithBlobs represents blob tx with its corresponding sidecar.
 // This is an interface because sidecars are versioned.
 type blobTxWithBlobs interface {

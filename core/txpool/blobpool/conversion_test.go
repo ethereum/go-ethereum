@@ -30,7 +30,7 @@ import (
 )
 
 // createV1BlobTx creates a blob transaction with version 1 sidecar for testing.
-func createV1BlobTx(nonce uint64, key *ecdsa.PrivateKey) *types.Transaction {
+func createV1BlobTx(nonce uint64, key *ecdsa.PrivateKey) *pooledBlobTx {
 	blob := &kzg4844.Blob{byte(nonce)}
 	commitment, _ := kzg4844.BlobToCommitment(blob)
 	cellProofs, _ := kzg4844.ComputeCellProofs(blob)
@@ -46,7 +46,9 @@ func createV1BlobTx(nonce uint64, key *ecdsa.PrivateKey) *types.Transaction {
 		Value:      uint256.NewInt(100),
 		Sidecar:    types.NewBlobTxSidecar(types.BlobSidecarVersion1, []kzg4844.Blob{*blob}, []kzg4844.Commitment{commitment}, cellProofs),
 	}
-	return types.MustSignNewTx(key, types.LatestSigner(params.MainnetChainConfig), blobtx)
+	tx := types.MustSignNewTx(key, types.LatestSigner(params.MainnetChainConfig), blobtx)
+	pooledTx, _ := newPooledBlobTx(tx)
+	return pooledTx
 }
 
 func TestConversionQueueBasic(t *testing.T) {
@@ -55,11 +57,12 @@ func TestConversionQueueBasic(t *testing.T) {
 
 	key, _ := crypto.GenerateKey()
 	tx := makeTx(0, 1, 1, 1, key)
-	if err := queue.convert(tx); err != nil {
+	pooledTx, _ := newPooledBlobTx(tx)
+	if err := queue.convert(pooledTx); err != nil {
 		t.Fatalf("Expected successful conversion, got error: %v", err)
 	}
-	if tx.BlobTxSidecar().Version != types.BlobSidecarVersion1 {
-		t.Errorf("Expected sidecar version to be %d, got %d", types.BlobSidecarVersion1, tx.BlobTxSidecar().Version)
+	if pooledTx.Sidecar.Version != types.BlobSidecarVersion1 {
+		t.Errorf("Expected sidecar version to be %d, got %d", types.BlobSidecarVersion1, pooledTx.Sidecar.Version)
 	}
 }
 
@@ -69,14 +72,14 @@ func TestConversionQueueV1BlobTx(t *testing.T) {
 
 	key, _ := crypto.GenerateKey()
 	tx := createV1BlobTx(0, key)
-	version := tx.BlobTxSidecar().Version
+	version := tx.Sidecar.Version
 
 	err := queue.convert(tx)
 	if err != nil {
 		t.Fatalf("Expected successful conversion, got error: %v", err)
 	}
-	if tx.BlobTxSidecar().Version != version {
-		t.Errorf("Expected sidecar version to remain %d, got %d", version, tx.BlobTxSidecar().Version)
+	if tx.Sidecar.Version != version {
+		t.Errorf("Expected sidecar version to remain %d, got %d", version, tx.Sidecar.Version)
 	}
 }
 
@@ -88,7 +91,8 @@ func TestConversionQueueClosed(t *testing.T) {
 	key, _ := crypto.GenerateKey()
 	tx := makeTx(0, 1, 1, 1, key)
 
-	err := queue.convert(tx)
+	pooledTx, _ := newPooledBlobTx(tx)
+	err := queue.convert(pooledTx)
 	if err == nil {
 		t.Fatal("Expected error when converting on closed queue, got nil")
 	}
