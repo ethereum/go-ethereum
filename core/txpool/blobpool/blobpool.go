@@ -191,8 +191,9 @@ func (ptx *pooledBlobTx) convert() (*types.Transaction, error) {
 }
 
 // `removeParity` removes parity cells of cellSidecar
-// This is needed to reduce the size of transaction
-// Otherwise, pooledBlobTx will about 2 times bigger than the original tx
+// But in fact, the result of this is just a split of blobs
+// e.g. Blob = [a, b, c] -> Cells = [a], [b], [c]
+// Why do we need to apply EC then?
 func (ptx *pooledBlobTx) removeParity() error {
 	sc := ptx.Sidecar
 	if sc == nil {
@@ -478,9 +479,13 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	}
 	// Index all transactions on disk and delete anything unprocessable
 	var fails []uint64
+	var convertTxs []*types.Transaction
 	index := func(id uint64, size uint32, blob []byte) {
-		if p.parseTransaction(id, size, blob) != nil {
+		if tx, err := p.parseTransaction(id, size, blob); err != nil {
 			fails = append(fails, id)
+		} else if tx != nil {
+			fails = append(fails, id)
+			convertTxs = append(convertTxs, tx)
 		}
 	}
 	store, err := billy.Open(billy.Options{Path: queuedir, Repair: true}, slotter, index)
@@ -489,6 +494,40 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	}
 	p.store = store
 
+	if len(convertTxs) > 0 {
+		log.Trace("Convert plain transaction to pooled transaction", "len", len(convertTxs))
+		for _, tx := range convertTxs {
+			// Note that we skip errors here
+			// Just like parseTransaction failure does not abort the blobpool creation,
+			// conversion process also cannot abort the entire process.
+			pooledTx, err := newPooledBlobTx(tx)
+			if err != nil {
+				continue
+			}
+			if err := pooledTx.removeParity(); err != nil {
+				return err
+			}
+			blob, err := rlp.EncodeToBytes(pooledTx)
+			if err != nil {
+				continue
+			}
+			id, err := p.store.Put(blob)
+			if err != nil {
+				continue
+			}
+			meta := newBlobTxMeta(id, pooledTx.Size, p.store.Size(id), pooledTx)
+
+			sender, err := types.Sender(p.signer, pooledTx.Transaction)
+			if err != nil {
+				fails = append(fails, id)
+				continue
+			}
+			if err := p.trackTransaction(meta, sender); err != nil {
+				fails = append(fails, id)
+				continue
+			}
+		}
+	}
 	if len(fails) > 0 {
 		log.Warn("Dropping invalidated blob transactions", "ids", fails)
 		dropInvalidMeter.Mark(int64(len(fails)))
@@ -561,43 +600,50 @@ func (p *BlobPool) Close() error {
 
 // parseTransaction is a callback method on pool creation that gets called for
 // each transaction on disk to create the in-memory metadata index.
-func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
+// return:
+// - types.Transaction : plain tx if the type of 'blob' is plain tx
+func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) (*types.Transaction, error) {
 	tx := new(types.Transaction)
-
 	pooledTx := new(pooledBlobTx)
+
 	if err := rlp.DecodeBytes(blob, pooledTx); err != nil {
 		// This path is impossible unless the disk data representation changes
 		// across restarts. For that ever improbable case, recover gracefully
 		// by ignoring this data entry.
 		if err := rlp.DecodeBytes(blob, tx); err != nil {
 			log.Error("Failed to decode blob pool entry", "id", id, "err", err)
-			return err
+			return nil, err
 		}
 		if tx.BlobTxSidecar() == nil {
 			log.Error("Missing sidecar in blob pool entry", "id", id, "hash", tx.Hash())
-			return errors.New("missing blob sidecar")
+			return nil, errors.New("missing blob sidecar")
 		}
-		pooledTx, err = newPooledBlobTx(tx)
-		if err != nil {
-			return err
-		}
+		return tx, nil
+	}
+	if pooledTx.Sidecar == nil {
+		log.Error("Missing sidecar in blob pool entry", "id", id, "hash", tx.Hash())
+		return nil, errors.New("missing blob sidecar")
 	}
 	meta := newBlobTxMeta(id, pooledTx.Size, size, pooledTx)
 
-	if p.lookup.exists(meta.hash) {
-		// This path is only possible after a crash, where deleted items are not
-		// removed via the normal shutdown-startup procedure and thus may get
-		// partially resurrected.
-		log.Error("Rejecting duplicate blob pool entry", "id", id, "hash", tx.Hash())
-		return errors.New("duplicate blob entry")
-	}
 	sender, err := types.Sender(p.signer, pooledTx.Transaction)
 	if err != nil {
 		// This path is impossible unless the signature validity changes across
 		// restarts. For that ever improbable case, recover gracefully by ignoring
 		// this data entry.
 		log.Error("Failed to recover blob tx sender", "id", id, "hash", tx.Hash(), "err", err)
-		return err
+		return nil, err
+	}
+	return nil, p.trackTransaction(meta, sender)
+}
+
+func (p *BlobPool) trackTransaction(meta *blobTxMeta, sender common.Address) error {
+	if p.lookup.exists(meta.hash) {
+		// This path is only possible after a crash, where deleted items are not
+		// removed via the normal shutdown-startup procedure and thus may get
+		// partially resurrected.
+		log.Error("Rejecting duplicate blob pool entry", "id", meta.id, "hash", meta.hash)
+		return fmt.Errorf("duplicate blob entry %d, %s", meta.id, meta.hash)
 	}
 	if _, ok := p.index[sender]; !ok {
 		if err := p.reserver.Hold(sender); err != nil {
@@ -1356,30 +1402,10 @@ func (p *BlobPool) getRLP(hash common.Hash) []byte {
 	}
 	data, err := p.store.Get(id)
 	if err != nil {
-		log.Error("Failed to get transaction in blobpool", "hash", hash, "id", id, "err", err)
+		log.Error("Tracked blob transaction missing from store", "hash", hash, "id", id, "err", err)
 		return nil
 	}
-	tx := new(types.Transaction)
-	pooledTx := new(pooledBlobTx)
-	if err := rlp.DecodeBytes(data, pooledTx); err != nil {
-		if err := rlp.DecodeBytes(data, tx); err != nil {
-			log.Error("Failed to decode transaction in blobpool", "hash", hash, "id", id, "err", err)
-			return nil
-		}
-		return data
-	}
-	tx, err = pooledTx.convert()
-	if err != nil {
-		log.Error("Failed to convert transaction in blobpool", "hash", hash, "id", id, "err", err)
-		return nil
-	}
-	encoded, err := rlp.EncodeToBytes(tx)
-	if err != nil {
-		log.Error("Failed to encode transaction in blobpool", "hash", hash, "id", id, "err", err)
-		return nil
-	}
-
-	return encoded
+	return data
 }
 
 // Get returns a transaction if it is contained in the pool, or nil otherwise.
@@ -1388,28 +1414,43 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 	if len(data) == 0 {
 		return nil
 	}
-	tx := new(types.Transaction)
 	pooledTx := new(pooledBlobTx)
 	if err := rlp.DecodeBytes(data, pooledTx); err != nil {
-		if err := rlp.DecodeBytes(data, tx); err != nil {
-			id, _ := p.lookup.storeidOfTx(hash)
+		id, _ := p.lookup.storeidOfTx(hash)
 
-			log.Error("Blobs corrupted for traced transaction",
-				"hash", hash, "id", id, "err", err)
-			return nil
-		}
+		log.Error("Blobs corrupted for traced transaction",
+			"hash", hash, "id", id, "err", err)
+		return nil
+	}
+	if tx, err := pooledTx.convert(); err != nil {
+		return nil
+	} else {
 		return tx
 	}
-	tx, err := pooledTx.convert()
-	if err == nil {
-		return tx
-	}
-	return nil
 }
 
 // GetRLP returns a RLP-encoded transaction if it is contained in the pool.
 func (p *BlobPool) GetRLP(hash common.Hash) []byte {
-	return p.getRLP(hash)
+	data := p.getRLP(hash)
+	pooledTx := new(pooledBlobTx)
+	if err := rlp.DecodeBytes(data, pooledTx); err != nil {
+		id, _ := p.lookup.storeidOfTx(hash)
+
+		log.Error("Blobs corrupted for traced transaction",
+			"hash", hash, "id", id, "err", err)
+		return nil
+	}
+	tx, err := pooledTx.convert()
+	if err != nil {
+		log.Error("Failed to convert pooledTx", "err", err)
+		return nil
+	}
+	blob, err := rlp.EncodeToBytes(tx)
+	if err != nil {
+		log.Error("Failed to encode", "err", err)
+		return nil
+	}
+	return blob
 }
 
 // GetMetadata returns the transaction type and transaction size with the
@@ -1476,10 +1517,8 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash, version byte) ([]*kzg4844.Blo
 		tx := new(types.Transaction)
 		pooledTx := new(pooledBlobTx)
 		if err := rlp.DecodeBytes(data, pooledTx); err != nil {
-			if err := rlp.DecodeBytes(data, tx); err != nil {
-				log.Error("Blobs corrupted for traced transaction", "id", txID, "err", err)
-				continue
-			}
+			log.Error("Blobs corrupted for traced transaction", "id", txID, "err", err)
+			continue
 		} else {
 			tx, err = pooledTx.convert()
 			if err != nil {
