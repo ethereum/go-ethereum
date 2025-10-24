@@ -106,13 +106,13 @@ func BenchmarkHashing(b *testing.B) {
 	}
 	b.Run("old", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			old()
 		}
 	})
 	b.Run("new", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			new()
 		}
 	})
@@ -596,7 +596,6 @@ func testSyncBloatedProof(t *testing.T, scheme string) {
 		// The proofs
 		proof := trienode.NewProofSet()
 		if err := t.accountTrie.Prove(origin[:], proof); err != nil {
-			t.logger.Error("Could not prove origin", "origin", origin, "error", err)
 			t.logger.Error("Could not prove origin", "origin", origin, "error", err)
 		}
 		// The bloat: add proof of every single element

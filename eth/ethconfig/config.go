@@ -49,26 +49,29 @@ var FullNodeGPO = gasprice.Config{
 
 // Defaults contains default settings for use on the Ethereum main net.
 var Defaults = Config{
-	HistoryMode:        history.KeepAll,
-	SyncMode:           SnapSync,
-	NetworkId:          0, // enable auto configuration of networkID == chainID
-	TxLookupLimit:      2350000,
-	TransactionHistory: 2350000,
-	LogHistory:         2350000,
-	StateHistory:       params.FullImmutabilityThreshold,
-	DatabaseCache:      512,
-	TrieCleanCache:     154,
-	TrieDirtyCache:     256,
-	TrieTimeout:        60 * time.Minute,
-	SnapshotCache:      102,
-	FilterLogCacheSize: 32,
-	Miner:              miner.DefaultConfig,
-	TxPool:             legacypool.DefaultConfig,
-	BlobPool:           blobpool.DefaultConfig,
-	RPCGasCap:          50000000,
-	RPCEVMTimeout:      5 * time.Second,
-	GPO:                FullNodeGPO,
-	RPCTxFeeCap:        1, // 1 ether
+	HistoryMode:          history.KeepAll,
+	SyncMode:             SnapSync,
+	NetworkId:            0, // enable auto configuration of networkID == chainID
+	TxLookupLimit:        2350000,
+	TransactionHistory:   2350000,
+	LogHistory:           2350000,
+	StateHistory:         params.FullImmutabilityThreshold,
+	DatabaseCache:        512,
+	TrieCleanCache:       154,
+	TrieDirtyCache:       256,
+	TrieTimeout:          60 * time.Minute,
+	SnapshotCache:        102,
+	FilterLogCacheSize:   32,
+	LogQueryLimit:        1000,
+	Miner:                miner.DefaultConfig,
+	TxPool:               legacypool.DefaultConfig,
+	BlobPool:             blobpool.DefaultConfig,
+	RPCGasCap:            50000000,
+	RPCEVMTimeout:        5 * time.Second,
+	GPO:                  FullNodeGPO,
+	RPCTxFeeCap:          1, // 1 ether
+	TxSyncDefaultTimeout: 20 * time.Second,
+	TxSyncMaxTimeout:     1 * time.Minute,
 }
 
 //go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
@@ -131,6 +134,10 @@ type Config struct {
 	// This is the number of blocks for which logs will be cached in the filter system.
 	FilterLogCacheSize int
 
+	// This is the maximum number of addresses or topics allowed in filter criteria
+	// for eth_getLogs.
+	LogQueryLimit int
+
 	// Mining options
 	Miner miner.Config
 
@@ -170,8 +177,18 @@ type Config struct {
 	// OverrideOsaka (TODO: remove after the fork)
 	OverrideOsaka *uint64 `toml:",omitempty"`
 
+	// OverrideBPO1 (TODO: remove after the fork)
+	OverrideBPO1 *uint64 `toml:",omitempty"`
+
+	// OverrideBPO2 (TODO: remove after the fork)
+	OverrideBPO2 *uint64 `toml:",omitempty"`
+
 	// OverrideVerkle (TODO: remove after the fork)
 	OverrideVerkle *uint64 `toml:",omitempty"`
+
+	// EIP-7966: eth_sendRawTransactionSync timeouts
+	TxSyncDefaultTimeout time.Duration `toml:",omitempty"`
+	TxSyncMaxTimeout     time.Duration `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.

@@ -153,6 +153,7 @@ type lookupIterator struct {
 	cancel        func()
 	lookup        *lookup
 	tabRefreshing <-chan struct{}
+	lastLookup    time.Time
 }
 
 type lookupFunc func(ctx context.Context) *lookup
@@ -185,6 +186,9 @@ func (it *lookupIterator) Next() bool {
 			return false
 		}
 		if it.lookup == nil {
+			// Ensure enough time has passed between lookup creations.
+			it.slowdown()
+
 			it.lookup = it.nextLookup(it.ctx)
 			if it.lookup.empty() {
 				// If the lookup is empty right after creation, it means the local table
@@ -233,6 +237,25 @@ func (it *lookupIterator) lookupFailed(tab *Table, timeout time.Duration) {
 
 	// Wait for the table to fill.
 	tab.waitForNodes(tout, 1)
+}
+
+// slowdown applies a delay between creating lookups. This exists to prevent hot-spinning
+// in some test environments where lookups don't yield any results.
+func (it *lookupIterator) slowdown() {
+	const minInterval = 1 * time.Second
+
+	now := time.Now()
+	diff := now.Sub(it.lastLookup)
+	it.lastLookup = now
+	if diff > minInterval {
+		return
+	}
+	wait := time.NewTimer(diff)
+	defer wait.Stop()
+	select {
+	case <-wait.C:
+	case <-it.ctx.Done():
+	}
 }
 
 // Close ends the iterator.

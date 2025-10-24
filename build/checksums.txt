@@ -1,9 +1,9 @@
 # This file contains sha256 checksums of optional build dependencies.
 
-# version:spec-tests fusaka-devnet-3%40v1.0.0
+# version:spec-tests v5.1.0
 # https://github.com/ethereum/execution-spec-tests/releases
-# https://github.com/ethereum/execution-spec-tests/releases/download/fusaka-devnet-3%40v1.0.0
-576261e1280e5300c458aa9b05eccb2fec5ff80a0005940dc52fa03fdd907249  fixtures_fusaka-devnet-3.tar.gz
+# https://github.com/ethereum/execution-spec-tests/releases/download/v5.1.0
+a3192784375acec7eaec492799d5c5d0c47a2909a3cc40178898e4ecd20cc416  fixtures_develop.tar.gz
 
 # version:golang 1.25.1
 # https://go.dev/dl/

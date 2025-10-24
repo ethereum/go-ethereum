@@ -36,8 +36,15 @@ const (
 	// The batch size for reading state histories
 	historyReadBatch = 1000
 
-	stateIndexV0      = uint8(0)     // initial version of state index structure
-	stateIndexVersion = stateIndexV0 // the current state index version
+	stateHistoryIndexV0         = uint8(0)               // initial version of state index structure
+	stateHistoryIndexVersion    = stateHistoryIndexV0    // the current state index version
+	trienodeHistoryIndexV0      = uint8(0)               // initial version of trienode index structure
+	trienodeHistoryIndexVersion = trienodeHistoryIndexV0 // the current trienode index version
+
+	// estimations for calculating the batch size for atomic database commit
+	estimatedStateHistoryIndexSize    = 3  // The average size of each state history index entry is approximately 2–3 bytes
+	estimatedTrienodeHistoryIndexSize = 3  // The average size of each trienode history index entry is approximately 2-3 bytes
+	estimatedIndexBatchSizeFactor     = 32 // The factor counts for the write amplification for each entry
 )
 
 // indexVersion returns the latest index version for the given history type.
@@ -45,7 +52,9 @@ const (
 func indexVersion(typ historyType) uint8 {
 	switch typ {
 	case typeStateHistory:
-		return stateIndexVersion
+		return stateHistoryIndexVersion
+	case typeTrienodeHistory:
+		return trienodeHistoryIndexVersion
 	default:
 		panic(fmt.Errorf("unknown history type: %d", typ))
 	}
@@ -63,6 +72,8 @@ func loadIndexMetadata(db ethdb.KeyValueReader, typ historyType) *indexMetadata 
 	switch typ {
 	case typeStateHistory:
 		blob = rawdb.ReadStateHistoryIndexMetadata(db)
+	case typeTrienodeHistory:
+		blob = rawdb.ReadTrienodeHistoryIndexMetadata(db)
 	default:
 		panic(fmt.Errorf("unknown history type %d", typ))
 	}
@@ -90,6 +101,8 @@ func storeIndexMetadata(db ethdb.KeyValueWriter, typ historyType, last uint64) {
 	switch typ {
 	case typeStateHistory:
 		rawdb.WriteStateHistoryIndexMetadata(db, blob)
+	case typeTrienodeHistory:
+		rawdb.WriteTrienodeHistoryIndexMetadata(db, blob)
 	default:
 		panic(fmt.Errorf("unknown history type %d", typ))
 	}
@@ -101,6 +114,8 @@ func deleteIndexMetadata(db ethdb.KeyValueWriter, typ historyType) {
 	switch typ {
 	case typeStateHistory:
 		rawdb.DeleteStateHistoryIndexMetadata(db)
+	case typeTrienodeHistory:
+		rawdb.DeleteTrienodeHistoryIndexMetadata(db)
 	default:
 		panic(fmt.Errorf("unknown history type %d", typ))
 	}
@@ -140,6 +155,22 @@ func (b *batchIndexer) process(h history, id uint64) error {
 	return b.finish(false)
 }
 
+// makeBatch constructs a database batch based on the number of pending entries.
+// The batch size is roughly estimated to minimize repeated resizing rounds,
+// as accurately predicting the exact size is technically challenging.
+func (b *batchIndexer) makeBatch() ethdb.Batch {
+	var size int
+	switch b.typ {
+	case typeStateHistory:
+		size = estimatedStateHistoryIndexSize
+	case typeTrienodeHistory:
+		size = estimatedTrienodeHistoryIndexSize
+	default:
+		panic(fmt.Sprintf("unknown history type %d", b.typ))
+	}
+	return b.db.NewBatchWithSize(size * estimatedIndexBatchSizeFactor * b.pending)
+}
+
 // finish writes the accumulated state indexes into the disk if either the
 // memory limitation is reached or it's requested forcibly.
 func (b *batchIndexer) finish(force bool) error {
@@ -150,7 +181,7 @@ func (b *batchIndexer) finish(force bool) error {
 		return nil
 	}
 	var (
-		batch   = b.db.NewBatch()
+		batch   = b.makeBatch()
 		batchMu sync.RWMutex
 		start   = time.Now()
 		eg      errgroup.Group
@@ -215,7 +246,11 @@ func (b *batchIndexer) finish(force bool) error {
 func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.AncientReader, typ historyType) error {
 	start := time.Now()
 	defer func() {
-		indexHistoryTimer.UpdateSince(start)
+		if typ == typeStateHistory {
+			stateIndexHistoryTimer.UpdateSince(start)
+		} else if typ == typeTrienodeHistory {
+			trienodeIndexHistoryTimer.UpdateSince(start)
+		}
 	}()
 
 	metadata := loadIndexMetadata(db, typ)
@@ -234,7 +269,7 @@ func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancient
 	if typ == typeStateHistory {
 		h, err = readStateHistory(freezer, historyID)
 	} else {
-		// h, err = readTrienodeHistory(freezer, historyID)
+		h, err = readTrienodeHistory(freezer, historyID)
 	}
 	if err != nil {
 		return err
@@ -253,7 +288,11 @@ func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancient
 func unindexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.AncientReader, typ historyType) error {
 	start := time.Now()
 	defer func() {
-		unindexHistoryTimer.UpdateSince(start)
+		if typ == typeStateHistory {
+			stateUnindexHistoryTimer.UpdateSince(start)
+		} else if typ == typeTrienodeHistory {
+			trienodeUnindexHistoryTimer.UpdateSince(start)
+		}
 	}()
 
 	metadata := loadIndexMetadata(db, typ)
@@ -272,7 +311,7 @@ func unindexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancie
 	if typ == typeStateHistory {
 		h, err = readStateHistory(freezer, historyID)
 	} else {
-		// h, err = readTrienodeHistory(freezer, historyID)
+		h, err = readTrienodeHistory(freezer, historyID)
 	}
 	if err != nil {
 		return err
@@ -546,13 +585,13 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 				return
 			}
 		} else {
-			// histories, err = readTrienodeHistories(i.freezer, current, count)
-			// if err != nil {
-			//	// The history read might fall if the history is truncated from
-			//	// head due to revert operation.
-			//	i.log.Error("Failed to read history for indexing", "current", current, "count", count, "err", err)
-			//	return
-			// }
+			histories, err = readTrienodeHistories(i.freezer, current, count)
+			if err != nil {
+				// The history read might fall if the history is truncated from
+				// head due to revert operation.
+				i.log.Error("Failed to read history for indexing", "current", current, "count", count, "err", err)
+				return
+			}
 		}
 		for _, h := range histories {
 			if err := batch.process(h, current); err != nil {
@@ -570,7 +609,7 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 					done = current - beginID
 				)
 				eta := common.CalculateETA(done, left, time.Since(start))
-				i.log.Info("Indexing state history", "processed", done, "left", left, "elapsed", common.PrettyDuration(time.Since(start)), "eta", common.PrettyDuration(eta))
+				i.log.Info("Indexing history", "processed", done, "left", left, "elapsed", common.PrettyDuration(time.Since(start)), "eta", common.PrettyDuration(eta))
 			}
 		}
 		i.indexed.Store(current - 1) // update indexing progress
@@ -657,6 +696,8 @@ func checkVersion(disk ethdb.KeyValueStore, typ historyType) {
 	var blob []byte
 	if typ == typeStateHistory {
 		blob = rawdb.ReadStateHistoryIndexMetadata(disk)
+	} else if typ == typeTrienodeHistory {
+		blob = rawdb.ReadTrienodeHistoryIndexMetadata(disk)
 	} else {
 		panic(fmt.Errorf("unknown history type: %v", typ))
 	}
@@ -666,24 +707,32 @@ func checkVersion(disk ethdb.KeyValueStore, typ historyType) {
 		return
 	}
 	// Short circuit if the metadata is found and the version is matched
+	ver := stateHistoryIndexVersion
+	if typ == typeTrienodeHistory {
+		ver = trienodeHistoryIndexVersion
+	}
 	var m indexMetadata
 	err := rlp.DecodeBytes(blob, &m)
-	if err == nil && m.Version == stateIndexVersion {
+	if err == nil && m.Version == ver {
 		return
 	}
 	// Version is not matched, prune the existing data and re-index from scratch
+	batch := disk.NewBatch()
+	if typ == typeStateHistory {
+		rawdb.DeleteStateHistoryIndexMetadata(batch)
+		rawdb.DeleteStateHistoryIndexes(batch)
+	} else {
+		rawdb.DeleteTrienodeHistoryIndexMetadata(batch)
+		rawdb.DeleteTrienodeHistoryIndexes(batch)
+	}
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to purge history index", "type", typ, "err", err)
+	}
 	version := "unknown"
 	if err == nil {
 		version = fmt.Sprintf("%d", m.Version)
 	}
-
-	batch := disk.NewBatch()
-	rawdb.DeleteStateHistoryIndexMetadata(batch)
-	rawdb.DeleteStateHistoryIndex(batch)
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to purge state history index", "err", err)
-	}
-	log.Info("Cleaned up obsolete state history index", "version", version, "want", stateIndexVersion)
+	log.Info("Cleaned up obsolete history index", "type", typ, "version", version, "want", version)
 }
 
 // newHistoryIndexer constructs the history indexer and launches the background

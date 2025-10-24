@@ -523,7 +523,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 
 	// If snapshot is requested, initialize the snapshotter and use it in state.
 	var snaps *snapshot.Tree
-	if snapshotter {
+	if snapshotter && scheme == rawdb.HashScheme {
 		snapconfig := snapshot.Config{
 			CacheSize:  1,
 			Recovery:   false,
@@ -559,3 +559,6 @@ type dummyChain struct {
 func (d *dummyChain) Engine() consensus.Engine                        { return nil }
 func (d *dummyChain) GetHeader(h common.Hash, n uint64) *types.Header { return nil }
 func (d *dummyChain) Config() *params.ChainConfig                     { return d.config }
+func (d *dummyChain) CurrentHeader() *types.Header                    { return nil }
+func (d *dummyChain) GetHeaderByNumber(n uint64) *types.Header        { return nil }
+func (d *dummyChain) GetHeaderByHash(h common.Hash) *types.Header     { return nil }
