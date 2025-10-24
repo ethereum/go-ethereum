@@ -207,6 +207,32 @@ func (c *BlobTxCellSidecar) ValidateBlobCommitmentHashes(hashes []common.Hash) e
 	return sc.ValidateBlobCommitmentHashes(hashes)
 }
 
+// ToV1 converts the BlobSidecar to version 1, attaching the cell proofs.
+// This function only available when we can recover the original blob with given cells
+// TODO: duplication
+func (sc *BlobTxCellSidecar) ToV1() error {
+	if sc.Version == BlobSidecarVersion1 {
+		return nil
+	}
+	blobs, err := kzg4844.RecoverBlobs(sc.Cells, sc.Custody.Indices())
+	if err != nil {
+		return err
+	}
+	if sc.Version == BlobSidecarVersion0 {
+		proofs := make([]kzg4844.Proof, 0, len(blobs)*kzg4844.CellProofsPerBlob)
+		for _, blob := range blobs {
+			cellProofs, err := kzg4844.ComputeCellProofs(&blob)
+			if err != nil {
+				return err
+			}
+			proofs = append(proofs, cellProofs...)
+		}
+		sc.Version = BlobSidecarVersion1
+		sc.Proofs = proofs
+	}
+	return nil
+}
+
 // blobTxWithBlobs represents blob tx with its corresponding sidecar.
 // This is an interface because sidecars are versioned.
 type blobTxWithBlobs interface {

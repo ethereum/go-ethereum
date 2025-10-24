@@ -1101,7 +1101,7 @@ func (p *BlobPool) convertLegacySidecar(sender common.Address, hash common.Hash,
 	// loudly if possible. If the blob transaction in this slot is corrupted,
 	// leave it in the store, it will be dropped during the next pool
 	// initialization.
-	var tx types.Transaction
+	var tx pooledBlobTx
 	if err = rlp.DecodeBytes(data, &tx); err != nil {
 		log.Error("Blob transaction is corrupted", "hash", hash, "id", id, "err", err)
 		return false
@@ -1110,11 +1110,11 @@ func (p *BlobPool) convertLegacySidecar(sender common.Address, hash common.Hash,
 	// Skip conversion if the transaction does not match the expected hash, or if it was
 	// already converted. This can occur if the original transaction was evicted from the
 	// pool and the slot was reused by a new one.
-	if tx.Hash() != hash {
-		log.Warn("Blob transaction was replaced", "hash", hash, "id", id, "stored", tx.Hash())
+	if tx.Transaction.Hash() != hash {
+		log.Warn("Blob transaction was replaced", "hash", hash, "id", id, "stored", tx.Transaction.Hash())
 		return false
 	}
-	sc := tx.BlobTxSidecar()
+	sc := tx.Sidecar
 	if sc.Version >= types.BlobSidecarVersion1 {
 		log.Debug("Skipping conversion of blob tx", "hash", hash, "id", id)
 		return false
@@ -1122,7 +1122,7 @@ func (p *BlobPool) convertLegacySidecar(sender common.Address, hash common.Hash,
 
 	// Perform the sidecar conversion, the failure is not expected and report the error
 	// loudly if possible.
-	if err := tx.BlobTxSidecar().ToV1(); err != nil {
+	if err := tx.Sidecar.ToV1(); err != nil {
 		log.Error("Failed to convert blob transaction", "hash", hash, "err", err)
 		return false
 	}
@@ -1131,7 +1131,7 @@ func (p *BlobPool) convertLegacySidecar(sender common.Address, hash common.Hash,
 	// the error loudly if possible.
 	blob, err := rlp.EncodeToBytes(&tx)
 	if err != nil {
-		log.Error("Failed to encode blob transaction", "hash", tx.Hash(), "err", err)
+		log.Error("Failed to encode blob transaction", "hash", tx.Transaction.Hash(), "err", err)
 		return false
 	}
 
@@ -1327,16 +1327,15 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 	// this attack is financially inefficient to execute.
 	head := p.head.Load()
 	if p.chain.Config().IsOsaka(head.Number, head.Time) && pooledTx.Sidecar.Version == types.BlobSidecarVersion0 {
-		tx, err := pooledTx.convert()
 		if err != nil {
 			log.Error("Failed to convert the pooledTx", "err", err)
 			return err
 		}
-		if err := tx.BlobTxSidecar().ToV1(); err != nil {
+		if err := pooledTx.Sidecar.ToV1(); err != nil {
 			log.Error("Failed to convert the legacy sidecar", "err", err)
 			return err
 		}
-		log.Info("Legacy blob transaction is reorged", "hash", tx.Hash())
+		log.Info("Legacy blob transaction is reorged", "hash", pooledTx.Transaction.Hash())
 	}
 	// Serialize the transaction back into the primary datastore.
 	blob, err := rlp.EncodeToBytes(pooledTx)
@@ -1806,7 +1805,7 @@ func (p *BlobPool) AvailableBlobs(vhashes []common.Hash) int {
 // the legacy sidecars if Osaka fork has been activated with a short time window.
 //
 // This function is pure static and lock free.
-func (p *BlobPool) preCheck(tx *types.Transaction) error {
+func (p *BlobPool) preCheck(tx *pooledBlobTx) error {
 	var (
 		head     = p.head.Load()
 		isOsaka  = p.chain.Config().IsOsaka(head.Number, head.Time)
@@ -1817,12 +1816,12 @@ func (p *BlobPool) preCheck(tx *types.Transaction) error {
 	}
 	// Validate the transaction statically at first to avoid unnecessary
 	// conversion. This step doesn't require lock protection.
-	if err := p.ValidateTxBasics(tx); err != nil {
+	if err := p.ValidateTxBasics(tx.Transaction); err != nil {
 		return err
 	}
 	// Before the Osaka fork, reject the blob txs with cell proofs
 	if !isOsaka {
-		if tx.BlobTxSidecar().Version == types.BlobSidecarVersion0 {
+		if tx.Sidecar.Version == types.BlobSidecarVersion0 {
 			return nil
 		} else {
 			return errors.New("cell proof is not supported yet")
@@ -1830,7 +1829,7 @@ func (p *BlobPool) preCheck(tx *types.Transaction) error {
 	}
 	// After the Osaka fork, reject the legacy blob txs if the conversion
 	// time window is passed.
-	if tx.BlobTxSidecar().Version == types.BlobSidecarVersion1 {
+	if tx.Sidecar.Version == types.BlobSidecarVersion1 {
 		return nil
 	}
 	if head.Time > uint64(deadline.Unix()) {
@@ -1851,11 +1850,11 @@ func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 		adds         = make([]*types.Transaction, 0, len(txs))
 	)
 	for i, tx := range txs {
-		if errs[i] = p.preCheck(tx); errs[i] != nil {
-			continue
-		}
 		pooledTx, err := newPooledBlobTx(tx)
 		if err != nil {
+			continue
+		}
+		if errs[i] = p.preCheck(pooledTx); errs[i] != nil {
 			continue
 		}
 		errs[i] = p.add(pooledTx)
