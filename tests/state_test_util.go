@@ -448,35 +448,35 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Mess
 	if gasPrice == nil {
 		return nil, errors.New("no gas price provided")
 	}
-	var authList []types.SetCodeAuthorization
+	var authList []types.SetCodeAuth
 	if tx.AuthorizationList != nil {
-		authList = make([]types.SetCodeAuthorization, len(tx.AuthorizationList))
+		authList = make([]types.SetCodeAuth, len(tx.AuthorizationList))
 		for i, auth := range tx.AuthorizationList {
-			authList[i] = types.SetCodeAuthorization{
+			authList[i] = types.NewSignedAuthorization(types.SetCodeAuthorization{
 				ChainID: *uint256.MustFromBig(auth.ChainID),
 				Address: auth.Address,
 				Nonce:   auth.Nonce,
 				V:       auth.V,
 				R:       *uint256.MustFromBig(auth.R),
 				S:       *uint256.MustFromBig(auth.S),
-			}
+			})
 		}
 	}
 
 	msg := &core.Message{
-		From:                  from,
-		To:                    to,
-		Nonce:                 tx.Nonce,
-		Value:                 value,
-		GasLimit:              gasLimit,
-		GasPrice:              gasPrice,
-		GasFeeCap:             tx.MaxFeePerGas,
-		GasTipCap:             tx.MaxPriorityFeePerGas,
-		Data:                  data,
-		AccessList:            accessList,
-		BlobHashes:            tx.BlobVersionedHashes,
-		BlobGasFeeCap:         tx.BlobGasFeeCap,
-		SetCodeAuthorizations: authList,
+		From:          from,
+		To:            to,
+		Nonce:         tx.Nonce,
+		Value:         value,
+		GasLimit:      gasLimit,
+		GasPrice:      gasPrice,
+		GasFeeCap:     tx.MaxFeePerGas,
+		GasTipCap:     tx.MaxPriorityFeePerGas,
+		Data:          data,
+		AccessList:    accessList,
+		BlobHashes:    tx.BlobVersionedHashes,
+		BlobGasFeeCap: tx.BlobGasFeeCap,
+		AuthList:      authList,
 	}
 	return msg, nil
 }

@@ -4054,3 +4054,91 @@ func TestSendRawTransactionSync_Timeout(t *testing.T) {
 		t.Fatalf("expected ErrorData=%s, got %v", want, got)
 	}
 }
+
+// TestEstimateGasWithAuthorityHints tests that gas estimation works with the
+// optional authorityHints field in transaction args
+func TestEstimateGasWithAuthorityHints(t *testing.T) {
+	t.Parallel()
+	accounts := newAccounts(3)
+	targetContract := accounts[2].addr
+	genesis := &core.Genesis{
+		Config: params.AllDevChainProtocolChanges,
+		Alloc: types.GenesisAlloc{
+			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+			targetContract:   {Code: []byte{0x60, 0x01, 0x60, 0x00, 0x55}}, // PUSH1 1 PUSH1 0 SSTORE
+		},
+	}
+	api := NewBlockChainAPI(newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	}))
+	tests := []struct {
+		name      string
+		setupArgs func() TransactionArgs
+		expectErr bool
+	}{
+		{
+			name: "Gas estimation without signature)",
+			setupArgs: func() TransactionArgs {
+				auth := types.SetCodeAuthorization{
+					ChainID: *uint256.NewInt(1337),
+					Address: targetContract,
+					Nonce:   0,
+					V:       0,
+					R:       *uint256.NewInt(0),
+					S:       *uint256.NewInt(0),
+				}
+				return TransactionArgs{
+					From:              &accounts[0].addr,
+					To:                &accounts[1].addr,
+					Value:             (*hexutil.Big)(big.NewInt(1000)),
+					AuthorizationList: []types.SetCodeAuthorization{auth},
+					AuthorityHints:    []common.Address{accounts[0].addr}, // Provide authority hint
+				}
+			},
+			expectErr: false,
+		},
+		{
+			name: "Gas estimation with valid signature",
+			setupArgs: func() TransactionArgs {
+				auth, err := types.SignSetCode(accounts[0].key, types.SetCodeAuthorization{
+					ChainID: *uint256.NewInt(1337),
+					Address: targetContract,
+					Nonce:   0,
+				})
+				if err != nil {
+					t.Fatalf("Failed to sign authorization: %v", err)
+				}
+				return TransactionArgs{
+					From:              &accounts[0].addr,
+					To:                &accounts[1].addr,
+					Value:             (*hexutil.Big)(big.NewInt(1000)),
+					AuthorizationList: []types.SetCodeAuthorization{auth},
+				}
+			},
+			expectErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := tt.setupArgs()
+			// Perform gas estimation
+			blockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+			estimate, err := api.EstimateGas(context.Background(), args, &blockNr, nil, nil)
+
+			if tt.expectErr {
+				if err == nil {
+					t.Errorf("Expected error but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+				if estimate == 0 {
+					t.Errorf("Expected non-zero gas estimate")
+				}
+			}
+		})
+	}
+}
