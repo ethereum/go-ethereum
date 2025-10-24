@@ -995,6 +995,10 @@ func (p *BlobPool) convertLegacySidecar(sender common.Address, hash common.Hash,
 		return false
 	}
 	sc := tx.BlobTxSidecar()
+	if sc == nil {
+		log.Error("Missing sidecar in blob transaction", "hash", hash, "id", id)
+		return false
+	}
 	if sc.Version >= types.BlobSidecarVersion1 {
 		log.Debug("Skipping conversion of blob tx", "hash", hash, "id", id)
 		return false
