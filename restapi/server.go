@@ -25,13 +25,9 @@ import (
 	"time"
 
 	"github.com/elnormous/contenttype"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/mux"
 )
 
@@ -40,12 +36,6 @@ type Server struct {
 }
 
 type API func(*mux.Router)
-
-type backend interface {
-	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
-	HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error)
-	ChainConfig() *params.ChainConfig
-}
 
 type WrappedHandler func(ctx context.Context, values url.Values, vars map[string]string, decodeBody func(*any) error) (any, string, int)
 
