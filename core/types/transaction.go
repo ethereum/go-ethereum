@@ -52,23 +52,20 @@ const (
 	SetCodeTxType    = 0x04
 )
 
-type TxTypeBitVec [(SetCodeTxType + 1 + 7) / 8]byte
+type txTypeBitVec [2]uint64
 
-func (v *TxTypeBitVec) Set(txType byte) {
-	if txType >= byte(len(v)*8) {
-		panic("tx type out of range")
-	}
-	v[txType/8] |= 1 << (txType % 8)
+func (v *txTypeBitVec) Set(txType byte) {
+	v[txType/64] |= 1 << (txType % 64)
 }
 
-func (v *TxTypeBitVec) Has(txType byte) bool {
-	if txType >= byte(len(v)*8) {
+func (v *txTypeBitVec) Has(txType byte) bool {
+	if txType >= byte(len(v)*64) {
 		return false
 	}
-	return v[txType/8]&(1<<(txType%8)) != 0
+	return v[txType/64]&(1<<(txType%64)) != 0
 }
 
-func (v *TxTypeBitVec) Equals(o *TxTypeBitVec) bool {
+func (v *txTypeBitVec) Equals(o *txTypeBitVec) bool {
 	return *v == *o
 }
 

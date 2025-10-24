@@ -182,7 +182,7 @@ type Signer interface {
 // modernSigner is the signer implementation that handles non-legacy transaction types.
 // For legacy transactions, it defers to one of the legacy signers (frontier, homestead, eip155).
 type modernSigner struct {
-	txTypeBitVec TxTypeBitVec
+	txTypeBitVec txTypeBitVec
 	chainID      *big.Int
 	legacy       Signer
 }
