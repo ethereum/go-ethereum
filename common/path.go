@@ -17,6 +17,8 @@
 package common
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 )
