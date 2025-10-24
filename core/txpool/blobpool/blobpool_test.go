@@ -1375,6 +1375,7 @@ func TestAdd(t *testing.T) {
 				"bob":    {balance: 21100 + blobSize, nonce: 1},
 				"claire": {balance: 21100 + blobSize},
 				"dave":   {balance: 21100 + blobSize, nonce: 1},
+				"eve":    {balance: 21100 + blobSize, nonce: 10}, // High nonce to test gapped acceptance
 			},
 			adds: []addtx{
 				{ // New account, no previous txs: accept nonce 0
@@ -1401,6 +1402,11 @@ func TestAdd(t *testing.T) {
 					from: "dave",
 					tx:   makeUnsignedTx(2, 1, 1, 1),
 					err:  core.ErrNonceTooHigh,
+				},
+				{ // Old account, 10 txs in chain: 0 pending: accept nonce 11 as gapped
+					from: "eve",
+					tx:   makeUnsignedTx(11, 1, 1, 1),
+					err:  nil,
 				},
 			},
 		},
@@ -1762,13 +1768,20 @@ func TestAdd(t *testing.T) {
 				t.Errorf("test %d, tx %d: adding transaction error mismatch: have %v, want %v", i, j, errs[0], add.err)
 			}
 			if add.err == nil {
-				size, exist := pool.lookup.sizeOfTx(signed.Hash())
-				if !exist {
-					t.Errorf("test %d, tx %d: failed to lookup transaction's size", i, j)
+				// first check if tx is in the queue
+				if !pool.Has(signed.Hash()) {
+					t.Errorf("test %d, tx %d: added transaction not found in pool", i, j)
 				}
-				if size != signed.Size() {
-					t.Errorf("test %d, tx %d: transaction's size mismatches: have %v, want %v",
-						i, j, size, signed.Size())
+				// if it is pending, check if size matches
+				if pool.Status(signed.Hash()) == txpool.TxStatusPending {
+					size, exist := pool.lookup.sizeOfTx(signed.Hash())
+					if !exist {
+						t.Errorf("test %d, tx %d: failed to lookup transaction's size", i, j)
+					}
+					if size != signed.Size() {
+						t.Errorf("test %d, tx %d: transaction's size mismatches: have %v, want %v",
+							i, j, size, signed.Size())
+					}
 				}
 			}
 			verifyPoolInternals(t, pool)
