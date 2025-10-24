@@ -1104,7 +1104,7 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 	if linked {
 		left = 0
 	}
-	if time.Since(s.logged) > 8*time.Second || left == 0 {
+	if time.Since(s.logged) > 8*time.Second {
 		s.logged = time.Now()
 
 		if s.pulled == 0 {
