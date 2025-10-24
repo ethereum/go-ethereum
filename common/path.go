@@ -24,7 +24,7 @@ import (
 // FileExist checks if a file exists at filePath.
 func FileExist(filePath string) bool {
 	_, err := os.Stat(filePath)
-	return !os.IsNotExist(err)
+	return !errors.Is(err, fs.ErrNotExist)
 }
 
 // AbsolutePath returns datadir + filename, or filename if it is absolute.
