@@ -26,20 +26,20 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// ApiServer is a wrapper around BeaconLightApi that implements request.requestServer.
-type ApiServer struct {
-	api           *BeaconLightApi
+// SyncServer is a wrapper around BeaconApiClient that implements request.requestServer.
+type SyncServer struct {
+	api           *BeaconApiClient
 	eventCallback func(event request.Event)
 	unsubscribe   func()
 }
 
-// NewApiServer creates a new ApiServer.
-func NewApiServer(api *BeaconLightApi) *ApiServer {
-	return &ApiServer{api: api}
+// NewSyncServer creates a new SyncServer.
+func NewSyncServer(api *BeaconApiClient) *SyncServer {
+	return &SyncServer{api: api}
 }
 
 // Subscribe implements request.requestServer.
-func (s *ApiServer) Subscribe(eventCallback func(event request.Event)) {
+func (s *SyncServer) Subscribe(eventCallback func(event request.Event)) {
 	s.eventCallback = eventCallback
 	listener := HeadEventListener{
 		OnNewHead: func(slot uint64, blockRoot common.Hash) {
@@ -62,7 +62,7 @@ func (s *ApiServer) Subscribe(eventCallback func(event request.Event)) {
 }
 
 // SendRequest implements request.requestServer.
-func (s *ApiServer) SendRequest(id request.ID, req request.Request) {
+func (s *SyncServer) SendRequest(id request.ID, req request.Request) {
 	go func() {
 		var resp request.Response
 		var err error
@@ -101,7 +101,7 @@ func (s *ApiServer) SendRequest(id request.ID, req request.Request) {
 
 // Unsubscribe implements request.requestServer.
 // Note: Unsubscribe should not be called concurrently with Subscribe.
-func (s *ApiServer) Unsubscribe() {
+func (s *SyncServer) Unsubscribe() {
 	if s.unsubscribe != nil {
 		s.unsubscribe()
 		s.unsubscribe = nil
@@ -109,6 +109,6 @@ func (s *ApiServer) Unsubscribe() {
 }
 
 // Name implements request.Server
-func (s *ApiServer) Name() string {
+func (s *SyncServer) Name() string {
 	return s.api.url
 }
