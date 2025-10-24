@@ -284,6 +284,7 @@ func doInstallKeeper(cmdline []string) {
 		tc.GOOS = target.GOOS
 		tc.CC = target.CC
 		gobuild := tc.Go("build", buildFlags(env, true, []string{target.Tags})...)
+		gobuild.Dir = "./cmd/keeper"
 		gobuild.Args = append(gobuild.Args, "-v")
 
 		for key, value := range target.Env {
@@ -293,7 +294,7 @@ func doInstallKeeper(cmdline []string) {
 
 		args := slices.Clone(gobuild.Args)
 		args = append(args, "-o", executablePath(outputName))
-		args = append(args, "./cmd/keeper")
+		args = append(args, ".")
 		build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: args, Env: gobuild.Env})
 	}
 }
