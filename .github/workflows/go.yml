@@ -52,8 +52,8 @@ jobs:
       - name: Build
         run: go run build/ci.go keeper
 
-  32bit-tests:
-    name: 32bit tests
+  test-32bit:
+    name: "32bit tests"
     needs: test
     runs-on: [self-hosted-ghr, size-l-x64]
     steps:
