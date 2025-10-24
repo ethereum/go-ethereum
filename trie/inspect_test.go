@@ -28,10 +28,16 @@ import (
 	"github.com/holiman/uint256"
 )
 
+// TestInspect inspects a randomly generated account trie. It's useful for
+// quickly verifying changes to the results display.
 func TestInspect(t *testing.T) {
 	db := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
-	trie := NewEmpty(db)
-	addresses, accounts := makeAccountsWithStorage(db, 500, true)
+	trie, err := NewStateTrie(TrieID(types.EmptyRootHash), db)
+	if err != nil {
+		t.Fatalf("failed to create state trie: %v", err)
+	}
+	// Create a realistic looking account trie with storage.
+	addresses, accounts := makeAccountsWithStorage(db, 11, true)
 	for i := 0; i < len(addresses); i++ {
 		trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
@@ -40,7 +46,7 @@ func TestInspect(t *testing.T) {
 	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 	db.Commit(root)
 
-	if err := InspectTrie(db, root, true); err != nil {
+	if err := Inspect(db, root, &InspectConfig{TopN: 1}); err != nil {
 		t.Fatalf("inspect failed: %v", err)
 	}
 }

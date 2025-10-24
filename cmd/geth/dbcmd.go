@@ -98,14 +98,11 @@ Remove blockchain and state databases`,
 	dbInspectTrieCmd = &cli.Command{
 		Action:    inspectTrie,
 		Name:      "inspect-trie",
-		ArgsUsage: "<blocknum> <jobnum>",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
-		},
-		Usage: "Print detailed trie information about the structure of account trie and storage tries.",
+		ArgsUsage: "<blocknum>",
+		Flags:     slices.Concat([]cli.Flag{utils.ExcludeStorageFlag, utils.TopFlag}, utils.NetworkFlags, utils.DatabaseFlags),
+		Usage:     "Print detailed trie information about the structure of account trie and storage tries.",
 		Description: `This commands iterates the entrie trie-backed state. If the 'blocknum' is not specified, 
-the latest block number will be used by default. 'jobnum' indicates the number of coroutines concurrently traversing
-the account and storage trie.`,
+the latest block number will be used by default.`,
 	}
 	dbCheckStateContentCmd = &cli.Command{
 		Action:    checkStateContent,
@@ -401,71 +398,61 @@ func checkStateContent(ctx *cli.Context) error {
 }
 
 func inspectTrie(ctx *cli.Context) error {
-	if ctx.NArg() > 2 {
+	if ctx.NArg() > 1 {
 		return fmt.Errorf("excessive number of arguments: %v", ctx.Command.ArgsUsage)
 	}
-
-	var (
-		blockNumber  uint64
-		trieRootHash common.Hash
-		accountOnly  bool
-	)
-
 	stack, _ := makeConfigNode(ctx)
-	defer stack.Close()
-
 	db := utils.MakeChainDatabase(ctx, stack, false)
+	defer stack.Close()
 	defer db.Close()
 
-	var headerBlockHash common.Hash
+	var (
+		trieRoot common.Hash
+		hash     common.Hash
+		number   uint64
+	)
 	switch {
 	case ctx.NArg() == 0 || ctx.Args().Get(0) == "latest":
-		headerHash := rawdb.ReadHeadHeaderHash(db)
-		n, ok := rawdb.ReadHeaderNumber(db, headerHash)
+		hash := rawdb.ReadHeadHeaderHash(db)
+		n, ok := rawdb.ReadHeaderNumber(db, hash)
 		if !ok {
 			return fmt.Errorf("could not load head block hash")
 		}
-		blockNumber = n
+		number = n
 	case ctx.Args().Get(0) == "snapshot":
-		trieRootHash = rawdb.ReadSnapshotRoot(db)
-		blockNumber = math.MaxUint64
+		trieRoot = rawdb.ReadSnapshotRoot(db)
+		number = math.MaxUint64
 	default:
 		var err error
-		blockNumber, err = strconv.ParseUint(ctx.Args().Get(0), 10, 64)
+		number, err = strconv.ParseUint(ctx.Args().Get(0), 10, 64)
 		if err != nil {
 			return fmt.Errorf("failed to parse blocknum, Args[0]: %v, err: %v", ctx.Args().Get(0), err)
 		}
 	}
 
-	// Default to inspect storage
-	if ctx.NArg() > 1 {
-		var err error
-		accountOnly, err = strconv.ParseBool(ctx.Args().Get(1))
-		if err != nil {
-			return fmt.Errorf("failed to parse jobnum, Args[1]: %v, err: %v", ctx.Args().Get(1), err)
-		}
-	}
-
 	// Load head block number based on canonical hash, if applicable.
-	if blockNumber != math.MaxUint64 {
-		headerBlockHash = rawdb.ReadCanonicalHash(db, blockNumber)
-		if headerBlockHash == (common.Hash{}) {
-			return fmt.Errorf("canonical hash for block %d not found", blockNumber)
+	if number != math.MaxUint64 {
+		hash = rawdb.ReadCanonicalHash(db, number)
+		if hash == (common.Hash{}) {
+			return fmt.Errorf("canonical hash for block %d not found", number)
 		}
-		blockHeader := rawdb.ReadHeader(db, headerBlockHash, blockNumber)
-		trieRootHash = blockHeader.Root
+		blockHeader := rawdb.ReadHeader(db, hash, number)
+		trieRoot = blockHeader.Root
 	}
-
-	if (trieRootHash == common.Hash{}) {
+	if (trieRoot == common.Hash{}) {
 		log.Error("Empty root hash")
 	}
-
-	log.Debug("Inspecting trie", "root", trieRootHash, "block", blockNumber)
 
 	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, true, false)
 	defer triedb.Close()
 
-	if err := trie.InspectTrie(triedb, trieRootHash, !accountOnly); err != nil {
+	log.Info("Inspecting trie", "root", trieRoot, "block", number)
+	config := &trie.InspectConfig{
+		NoStorage: ctx.Bool(utils.ExcludeStorageFlag.Name),
+		TopN:      ctx.Int(utils.TopFlag.Name),
+	}
+	err := trie.Inspect(triedb, trieRoot, config)
+	if err != nil {
 		return err
 	}
 	return nil

@@ -19,7 +19,6 @@ package trie
 import (
 	"bytes"
 	"fmt"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -28,41 +27,187 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/tablewriter"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb/database"
 	"golang.org/x/sync/semaphore"
 )
 
+// inspector is used by the inner inspect function to coordinate across threads.
 type inspector struct {
 	triedb database.NodeDatabase
-	trie   *Trie
 	root   common.Hash
 
-	storage bool
-	stats   map[common.Hash]*triestat
-	m       sync.Mutex
+	config *InspectConfig
+	stats  map[common.Hash]*triestat
+	m      sync.Mutex // protects stats
 
 	sem *semaphore.Weighted
 	wg  sync.WaitGroup
 }
 
-type triestat struct {
-	depth [15]stat
+// InspectConfig is a set of options to control inspection and format the
+// output. TopN will print the deepest min(len(results), N) storage tries.
+type InspectConfig struct {
+	NoStorage bool
+	TopN      int
 }
 
+// Inspect walks the trie with the given root and records the number and type of
+// nodes at each depth. It works by recursively calling the inner inspect
+// function on each child node.
+func Inspect(triedb database.NodeDatabase, root common.Hash, config *InspectConfig) error {
+	trie, err := New(TrieID(root), triedb)
+	if err != nil {
+		return fmt.Errorf("fail to open trie %s: %w", root, err)
+	}
+	if config == nil {
+		config = &InspectConfig{}
+	}
+	in := inspector{
+		triedb: triedb,
+		root:   root,
+		config: config,
+		stats:  make(map[common.Hash]*triestat),
+		sem:    semaphore.NewWeighted(int64(128)),
+	}
+	in.stats[root] = &triestat{}
+
+	in.inspect(trie, trie.root, 0, []byte{}, in.stats[root])
+	in.wg.Wait()
+	in.DisplayResult()
+	return nil
+}
+
+// inspect is called recursively down the trie. At each level it records the
+// node type encountered.
+func (in *inspector) inspect(trie *Trie, n node, height uint32, path []byte, stat *triestat) {
+	if n == nil {
+		return
+	}
+
+	// Four types of nodes can be encountered:
+	// - short: extend path with key, inspect single value.
+	// - full: inspect all 17 children, spin up new threads when possible.
+	// - hash: need to resolve node from disk, retry inspect on result.
+	// - value: if account, begin inspecting storage trie.
+	switch n := (n).(type) {
+	case *shortNode:
+		in.inspect(trie, n.Val, height+1, append(path, n.Key...), stat)
+	case *fullNode:
+		for idx, child := range n.Children {
+			if child == nil {
+				continue
+			}
+			childPath := append(path, byte(idx))
+			if in.sem.TryAcquire(1) {
+				in.wg.Add(1)
+				go func() {
+					in.inspect(trie, child, height+1, childPath, stat)
+					in.wg.Done()
+				}()
+			} else {
+				in.inspect(trie, child, height+1, childPath, stat)
+			}
+		}
+	case hashNode:
+		resolved, err := trie.resolveWithoutTrack(n, path)
+		if err != nil {
+			log.Error("Failed to resolve HashNode", "err", err, "trie", trie.Hash(), "height", height+1, "path", path)
+			return
+		}
+		in.inspect(trie, resolved, height, path, stat)
+
+		// Return early here so this level isn't recorded twice.
+		return
+	case valueNode:
+		if !hasTerm(path) {
+			break
+		}
+		var account types.StateAccount
+		if err := rlp.Decode(bytes.NewReader(n), &account); err != nil {
+			// Not an account value.
+			break
+		}
+		if account.Root == (common.Hash{}) || account.Root == types.EmptyRootHash {
+			// Account is empty, nothing further to inspect.
+			break
+		}
+
+		// Start inspecting storage trie.
+		if !in.config.NoStorage {
+			owner := common.BytesToHash(hexToCompact(path))
+			storage, err := New(StorageTrieID(in.root, owner, account.Root), in.triedb)
+			if err != nil {
+				log.Error("Failed to open account storage trie", "node", n, "error", err, "height", height, "path", common.Bytes2Hex(path))
+				break
+			}
+			stat := &triestat{}
+
+			in.m.Lock()
+			in.stats[owner] = stat
+			in.m.Unlock()
+
+			in.wg.Add(1)
+			go func() {
+				in.inspect(storage, storage.root, 0, []byte{}, stat)
+				in.wg.Done()
+			}()
+		}
+	default:
+		panic(fmt.Sprintf("%T: invalid node: %v", n, n))
+	}
+
+	// Record stats for current height
+	stat.add(n, height)
+}
+
+// Display results prints out the inspect results.
+func (in *inspector) DisplayResult() {
+	fmt.Println("Results for trie", in.root)
+	in.stats[in.root].display("Accounts trie")
+	fmt.Println("===")
+	fmt.Println()
+
+	if !in.config.NoStorage {
+		// Sort stats by max node depth.
+		keys, stats := sortedTriestat(in.stats).sort()
+
+		fmt.Println("Results for top storage tries")
+		for i := range keys[0:min(in.config.TopN, len(keys))] {
+			fmt.Printf("%d: %s\n", i+1, keys[i])
+			stats[i].display("storage trie")
+		}
+	}
+}
+
+// triestat tracks the type and count of trie nodes at each level in the trie.
+//
+// Note: theoretically it is possible to have up to 64 trie level. Since it is
+// unlikely to encounter such a large trie, the stats are capped at 16 levels to
+// avoid substantial unneeded allocation.
+type triestat struct {
+	level [16]stat
+}
+
+// maxDepth iterates each level and finds the deepest level with at least one
+// trie node.
 func (s *triestat) maxDepth() int {
 	depth := 0
-	for i := range s.depth {
-		if s.depth[i].short.Load() != 0 || s.depth[i].full.Load() != 0 || s.depth[i].value.Load() != 0 {
+	for i := range s.level {
+		if s.level[i].short.Load() != 0 || s.level[i].full.Load() != 0 || s.level[i].value.Load() != 0 {
 			depth = i
 		}
 	}
 	return depth
 }
 
-type trieStatByDepth map[common.Hash]*triestat
+// sortedTriestat implements sort().
+type sortedTriestat map[common.Hash]*triestat
 
-func (s trieStatByDepth) sort() ([]common.Hash, []*triestat) {
+// sort returns the keys and triestats in decending order of the maximum trie
+// node depth.
+func (s sortedTriestat) sort() ([]common.Hash, []*triestat) {
 	var (
 		keys  = make([]common.Hash, 0, len(s))
 		stats = make([]*triestat, 0, len(s))
@@ -77,25 +222,28 @@ func (s trieStatByDepth) sort() ([]common.Hash, []*triestat) {
 	return keys, stats
 }
 
+// add increases the node count by one for the specified node type and depth.
 func (s *triestat) add(n node, d uint32) {
 	switch (n).(type) {
 	case *shortNode:
-		s.depth[d].short.Add(1)
+		s.level[d].short.Add(1)
 	case *fullNode:
-		s.depth[d].full.Add(1)
+		s.level[d].full.Add(1)
 	case valueNode:
-		s.depth[d].value.Add(1)
+		s.level[d].value.Add(1)
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", n, n))
 	}
 }
 
+// stat is a specific level's count of each node type.
 type stat struct {
 	short atomic.Uint64
 	full  atomic.Uint64
 	value atomic.Uint64
 }
 
+// empty is a helper that returns whether there are any trie nodes at the level.
 func (s *stat) empty() bool {
 	if s.full.Load() == 0 && s.short.Load() == 0 && s.value.Load() == 0 {
 		return true
@@ -103,10 +251,12 @@ func (s *stat) empty() bool {
 	return false
 }
 
+// load is a helper that loads each node type's value.
 func (s *stat) load() (uint64, uint64, uint64) {
 	return s.short.Load(), s.full.Load(), s.value.Load()
 }
 
+// add is a helper that adds two level's stats together.
 func (s *stat) add(other *stat) *stat {
 	s.short.Add(other.short.Load())
 	s.full.Add(other.full.Load())
@@ -114,109 +264,7 @@ func (s *stat) add(other *stat) *stat {
 	return s
 }
 
-func InspectTrie(triedb database.NodeDatabase, root common.Hash, storage bool) error {
-	return inspectTrie(triedb, root, storage)
-}
-
-func inspectTrie(triedb database.NodeDatabase, root common.Hash, storage bool) error {
-	trie, err := New(TrieID(root), triedb)
-	if err != nil {
-		return fmt.Errorf("fail to open trie %s: %w", root, err)
-	}
-	in := inspector{
-		triedb:  triedb,
-		trie:    trie,
-		root:    root,
-		storage: storage,
-		stats:   make(map[common.Hash]*triestat),
-		sem:     semaphore.NewWeighted(int64(128)),
-	}
-	in.stats[root] = &triestat{}
-
-	in.inspect(trie.root, 0, []byte{}, in.stats[root])
-	in.wg.Wait()
-	in.DisplayResult()
-	return nil
-}
-
-func (in *inspector) inspect(n node, height uint32, path []byte, stat *triestat) {
-	if n == nil {
-		return
-	}
-
-	switch n := (n).(type) {
-	case *shortNode:
-		in.inspect(n.Val, height, append(path, n.Key...), stat)
-	case *fullNode:
-		for idx, child := range n.Children {
-			if child == nil {
-				continue
-			}
-			childPath := append(path, byte(idx))
-			if in.sem.TryAcquire(1) {
-				in.wg.Add(1)
-				go func() {
-					in.inspect(child, height+1, slices.Clone(childPath), stat)
-					in.wg.Done()
-				}()
-			} else {
-				in.inspect(child, height+1, childPath, stat)
-			}
-		}
-	case hashNode:
-		resolved, err := in.trie.resolveWithoutTrack(n, path)
-		if err != nil {
-			fmt.Printf("Resolve HashNode error: %v, TrieRoot: %v, Height: %v, Path: %v\n", err, in.trie.Hash().String(), height+1, path)
-			return
-		}
-		in.inspect(resolved, height, path, stat)
-		return
-	case valueNode:
-		if !hasTerm(path) {
-			break
-		}
-		var account types.StateAccount
-		if err := rlp.Decode(bytes.NewReader(n), &account); err != nil {
-			// Not an account value.
-			break
-		}
-		// TODO: update for 7702
-		// if common.BytesToHash(account.CodeHash) == types.EmptyCodeHash {
-		// 	inspect.eoaAccountNums.Add(1)
-		// }
-		if account.Root == (common.Hash{}) || account.Root == types.EmptyRootHash {
-			break
-		}
-
-		// Start inspecting storage trie.
-		if in.storage {
-			owner := common.BytesToHash(hexToCompact(path))
-			storage, err := New(StorageTrieID(in.root, owner, account.Root), in.triedb)
-			if err != nil {
-				fmt.Printf("New contract trie node: %v, error: %v, Height: %v, Path: %v\n", n, err, height, path)
-				break
-			}
-			// contractTrie.opTracer.reset()
-			stat := &triestat{}
-
-			in.m.Lock()
-			in.stats[owner] = stat
-			in.m.Unlock()
-
-			in.wg.Add(1)
-			go func() {
-				in.inspect(storage.root, 0, []byte{}, stat)
-				in.wg.Done()
-			}()
-		}
-	default:
-		panic(fmt.Sprintf("%T: invalid node: %v", n, n))
-	}
-
-	// Record stats for current height
-	stat.add(n, height)
-}
-
+// display will print a table displaying the trie's node statistics.
 func (s *triestat) display(title string) {
 	// Shorten title if too long.
 	if len(title) > 32 {
@@ -229,13 +277,13 @@ func (s *triestat) display(title string) {
 	table.SetAlignment(1)
 
 	stat := &stat{}
-	for i := range s.depth {
-		if s.depth[i].empty() {
+	for i := range s.level {
+		if s.level[i].empty() {
 			break
 		}
-		short, full, value := s.depth[i].load()
+		short, full, value := s.level[i].load()
 		table.Append([]string{"-", fmt.Sprint(i), fmt.Sprint(short), fmt.Sprint(full), fmt.Sprint(value)})
-		stat.add(&s.depth[i])
+		stat.add(&s.level[i])
 	}
 	short, full, value := stat.load()
 	table.SetFooter([]string{"Total", "", fmt.Sprint(short), fmt.Sprint(full), fmt.Sprint(value)})
@@ -243,20 +291,4 @@ func (s *triestat) display(title string) {
 	fmt.Print(b.String())
 	fmt.Println("Max depth", s.maxDepth())
 	fmt.Println()
-}
-
-func (in *inspector) DisplayResult() {
-	fmt.Println("Results for trie", in.root)
-	in.stats[in.root].display("Accounts trie")
-
-	fmt.Println("===")
-	fmt.Println()
-	if in.storage {
-		fmt.Println("Results for top storage tries")
-		keys, stats := trieStatByDepth(in.stats).sort()
-		for i := range keys[0:min(10, len(keys))] {
-			fmt.Printf("%d: %s\n", i+1, keys[i])
-			stats[i].display("storage trie")
-		}
-	}
 }
