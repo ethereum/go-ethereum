@@ -814,6 +814,41 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			s.prefetcher = nil // Pre-byzantium, unset any used up prefetcher
 		}()
 	}
+	// Now we're about to start to write changes to the trie. The trie is so far
+	// _untouched_. We can check with the prefetcher, if it can give us a trie
+	// which has the same root, but also has some content loaded into it.
+	//
+	// Don't check prefetcher if verkle trie has been used. In the context of verkle,
+	// only a single trie is used for state hashing. Replacing a non-nil verkle tree
+	// here could result in losing uncommitted changes from storage.
+	if s.prefetcher != nil {
+		if trie := s.prefetcher.trie(common.Hash{}, s.originalRoot); trie == nil {
+			log.Error("Failed to retrieve account pre-fetcher trie")
+		} else {
+			s.trie = trie
+		}
+	}
+	// Channel for accounts that have finished storage trie update.
+	type accountReady struct {
+		addr common.Address
+		obj  *stateObject
+	}
+	accountUpdates := make(chan accountReady, len(s.mutations))
+	// Start a goroutine to update the account trie.
+	var accountUpdateDone sync.WaitGroup
+	accountUpdateDone.Add(1)
+	go func() {
+		defer accountUpdateDone.Done()
+		for update := range accountUpdates {
+			start := time.Now()
+			s.updateStateObject(update.obj)
+			s.AccountUpdated += 1
+			if op, ok := s.mutations[update.addr]; ok {
+				op.applied = true
+			}
+			s.AccountUpdates += time.Since(start)
+		}
+	}()
 	// Process all storage updates concurrently. The state object update root
 	// method will internally call a blocking trie fetch from the prefetcher,
 	// so there's no need to explicitly wait for the prefetchers to finish.
@@ -839,12 +874,13 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 				obj.updateTrie()
 			} else {
 				obj.updateRoot()
-
 				// If witness building is enabled and the state object has a trie,
 				// gather the witnesses for its specific storage trie
 				if s.witness != nil && obj.trie != nil {
 					s.witness.AddState(obj.trie.Witness())
 				}
+				// Send the account to be updated in the account trie
+				accountUpdates <- accountReady{addr: addr, obj: obj}
 			}
 			return nil
 		})
@@ -901,22 +937,12 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	workers.Wait()
 	s.StorageUpdates += time.Since(start)
 
-	// Now we're about to start to write changes to the trie. The trie is so far
-	// _untouched_. We can check with the prefetcher, if it can give us a trie
-	// which has the same root, but also has some content loaded into it.
-	//
-	// Don't check prefetcher if verkle trie has been used. In the context of verkle,
-	// only a single trie is used for state hashing. Replacing a non-nil verkle tree
-	// here could result in losing uncommitted changes from storage.
-	start = time.Now()
-	if s.prefetcher != nil {
-		if trie := s.prefetcher.trie(common.Hash{}, s.originalRoot); trie == nil {
-			log.Error("Failed to retrieve account pre-fetcher trie")
-		} else {
-			s.trie = trie
-		}
+	if !s.db.TrieDB().IsVerkle() {
+		close(accountUpdates)
+		accountUpdateDone.Wait()
 	}
-	// Perform updates before deletions.  This prevents resolution of unnecessary trie nodes
+
+	// Perform deletions after updates to prevent resolution of unnecessary trie nodes
 	// in circumstances similar to the following:
 	//
 	// Consider nodes `A` and `B` who share the same full node parent `P` and have no other siblings.
@@ -926,27 +952,20 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// If the self-destruct is handled first, then `P` would be left with only one child, thus collapsed
 	// into a shortnode. This requires `B` to be resolved from disk.
 	// Whereas if the created node is handled first, then the collapse is avoided, and `B` is not resolved.
-	var (
-		usedAddrs    []common.Address
-		deletedAddrs []common.Address
-	)
+	start = time.Now()
+	usedAddrs := make([]common.Address, 0, len(s.mutations))
 	for addr, op := range s.mutations {
-		if op.applied {
-			continue
+		if !op.applied {
+			op.applied = true
+			if op.isDelete() {
+				s.deleteStateObject(addr)
+				s.AccountDeleted += 1
+			} else if s.db.TrieDB().IsVerkle() {
+				s.updateStateObject(s.stateObjects[addr])
+				s.AccountUpdated += 1
+			}
 		}
-		op.applied = true
-
-		if op.isDelete() {
-			deletedAddrs = append(deletedAddrs, addr)
-		} else {
-			s.updateStateObject(s.stateObjects[addr])
-			s.AccountUpdated += 1
-		}
-		usedAddrs = append(usedAddrs, addr) // Copy needed for closure
-	}
-	for _, deletedAddr := range deletedAddrs {
-		s.deleteStateObject(deletedAddr)
-		s.AccountDeleted += 1
+		usedAddrs = append(usedAddrs, addr)
 	}
 	s.AccountUpdates += time.Since(start)
 
