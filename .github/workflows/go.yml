@@ -34,6 +34,42 @@ jobs:
         go run build/ci.go check_generate
         go run build/ci.go check_baddeps
 
+  keeper:
+    name: Keeper Builds
+    needs: test
+    runs-on: [self-hosted-ghr, size-l-x64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: false
+
+      - name: Build
+        run: go run build/ci.go keeper
+
+  test-32bit:
+    name: "32bit tests"
+    needs: test
+    runs-on: [self-hosted-ghr, size-l-x64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: false
+
+      - name: Build
+        run: go run build ci.go test -arch 386
+
   test:
     name: Test
     needs: lint
