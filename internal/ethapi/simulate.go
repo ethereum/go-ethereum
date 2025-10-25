@@ -310,7 +310,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			if errors.Is(result.Err, vm.ErrExecutionReverted) {
 				// If the result contains a revert reason, try to unpack it.
 				revertErr := newRevertError(result.Revert())
-				callRes.Error = &callError{Message: revertErr.Error(), Code: errCodeReverted, Data: revertErr.ErrorData().(string)}
+				callRes.Error = &callError{Message: revertErr.Error(), Code: revertErr.ErrorCode(), Data: revertErr.ErrorData().(string)}
 			} else {
 				callRes.Error = &callError{Message: result.Err.Error(), Code: errCodeVMError}
 			}
