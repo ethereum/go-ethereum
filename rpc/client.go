@@ -32,7 +32,6 @@ import (
 )
 
 var (
-	ErrBadResult                 = errors.New("bad result in JSON-RPC response")
 	ErrClientQuit                = errors.New("client is closed")
 	ErrNoResult                  = errors.New("JSON-RPC response has no result")
 	ErrMissingBatchResponse      = errors.New("response batch did not contain a response to this call")
