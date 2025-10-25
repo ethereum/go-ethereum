@@ -75,12 +75,12 @@ func BenchmarkAddNodes(b *testing.B) {
 			storageNodes := generateRandomStorageNodes(tc.accountNodeCount, tc.nodesPerAccount)
 
 			lookup := &lookup{
-				accountNodes: make(map[string][]common.Hash),
 			}
 
 			// Initialize all 16 storage node shards
-			for i := 0; i < storageNodesShardCount; i++ {
+			for i := 0; i < trienodeShardCount; i++ {
 				lookup.storageNodes[i] = make(map[trienodeKey][]common.Hash)
+				lookup.accountNodes[i] = make(map[string][]common.Hash)
 			}
 
 			var state common.Hash
@@ -91,7 +91,7 @@ func BenchmarkAddNodes(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				// Reset the lookup instance for each benchmark iteration
-				for j := 0; j < storageNodesShardCount; j++ {
+				for j := 0; j < trienodeShardCount; j++ {
 					lookup.storageNodes[j] = make(map[trienodeKey][]common.Hash)
 				}
 
