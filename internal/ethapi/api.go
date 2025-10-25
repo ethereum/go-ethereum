@@ -19,10 +19,12 @@ package ethapi
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	gomath "math"
 	"math/big"
+	"reflect"
 	"strings"
 	"time"
 
@@ -365,20 +367,8 @@ func (n *proofList) Delete(key []byte) error {
 }
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
-func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNrOrHash rpc.BlockNumberOrHash) (*AccountResult, error) {
-	var (
-		keys         = make([]common.Hash, len(storageKeys))
-		keyLengths   = make([]int, len(storageKeys))
-		storageProof = make([]StorageResult, len(storageKeys))
-	)
-	// Deserialize all keys. This prevents state access on invalid input.
-	for i, hexKey := range storageKeys {
-		var err error
-		keys[i], keyLengths[i], err = decodeHash(hexKey)
-		if err != nil {
-			return nil, err
-		}
-	}
+func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, storageKeys []StorageKey, blockNrOrHash rpc.BlockNumberOrHash) (*AccountResult, error) {
+	storageProof := make([]StorageResult, len(storageKeys))
 	statedb, header, err := api.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if statedb == nil || err != nil {
 		return nil, err
@@ -386,7 +376,7 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 	codeHash := statedb.GetCodeHash(address)
 	storageRoot := statedb.GetStorageRoot(address)
 
-	if len(keys) > 0 {
+	if len(storageKeys) > 0 {
 		var storageTrie state.Trie
 		if storageRoot != types.EmptyRootHash && storageRoot != (common.Hash{}) {
 			id := trie.StorageTrieID(header.Root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
@@ -397,13 +387,14 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 			storageTrie = st
 		}
 		// Create the proofs for the storageKeys.
-		for i, key := range keys {
+		for i, storageKey := range storageKeys {
+			key := storageKey.Hash()
 			// Output key encoding is a bit special: if the input was a 32-byte hash, it is
 			// returned as such. Otherwise, we apply the QUANTITY encoding mandated by the
 			// JSON-RPC spec for getProof. This behavior exists to preserve backwards
 			// compatibility with older client versions.
 			var outputKey string
-			if keyLengths[i] != 32 {
+			if storageKey.InputLength() != 32 {
 				outputKey = hexutil.EncodeBig(key.Big())
 			} else {
 				outputKey = hexutil.Encode(key[:])
@@ -581,19 +572,49 @@ func (api *BlockChainAPI) GetCode(ctx context.Context, address common.Address, b
 	return code, state.Error()
 }
 
+// StorageKey represents a storage key that can be unmarshalled from hex strings
+// of varying lengths (up to 32 bytes / 64 hex characters).
+type StorageKey struct {
+	hash   common.Hash
+	length int
+}
+
+// UnmarshalJSON implements json.Unmarshaler for StorageKey.
+func (s *StorageKey) UnmarshalJSON(input []byte) error {
+	// Check if input is a JSON string
+	if len(input) < 2 || input[0] != '"' || input[len(input)-1] != '"' {
+		return &json.UnmarshalTypeError{Value: "non-string", Type: reflect.TypeFor[StorageKey]()}
+	}
+	// Remove quotes from JSON string
+	hexStr := string(input[1 : len(input)-1])
+	hash, length, err := decodeHash(hexStr)
+	if err != nil {
+		return fmt.Errorf("unable to decode storage key: %s", err)
+	}
+	s.hash = hash
+	s.length = length
+	return nil
+}
+
+// Hash returns the underlying common.Hash.
+func (s StorageKey) Hash() common.Hash {
+	return s.hash
+}
+
+// InputLength returns the length in bytes of the original hex input.
+func (s StorageKey) InputLength() int {
+	return s.length
+}
+
 // GetStorageAt returns the storage from the state at the given address, key and
 // block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta block
 // numbers are also allowed.
-func (api *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Address, hexKey string, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
+func (api *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Address, key StorageKey, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
 	state, _, err := api.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
 	}
-	key, _, err := decodeHash(hexKey)
-	if err != nil {
-		return nil, fmt.Errorf("unable to decode storage key: %s", err)
-	}
-	res := state.GetState(address, key)
+	res := state.GetState(address, key.Hash())
 	return res[:], state.Error()
 }
 
