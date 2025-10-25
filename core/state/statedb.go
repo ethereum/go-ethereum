@@ -327,6 +327,15 @@ func (s *StateDB) GetNonce(addr common.Address) uint64 {
 	return 0
 }
 
+// GetMaxDepth retrieves the max depth from the given address or 0 if object not found
+func (s *StateDB) GetMaxDepth(addr common.Address) uint64 {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.MaxDepth()
+	}
+	return 0
+}
+
 // GetStorageRoot retrieves the storage root from the given address or empty
 // if object not found.
 func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {

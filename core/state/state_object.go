@@ -326,6 +326,7 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		deletions []common.Hash
 		used      = make([]common.Hash, 0, len(s.uncommittedStorage))
 	)
+	var maxDepth int
 	for key, origin := range s.uncommittedStorage {
 		// Skip noop changes, persist actual changes
 		value, exist := s.pendingStorage[key]
@@ -338,9 +339,13 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			continue
 		}
 		if (value != common.Hash{}) {
-			if err := tr.UpdateStorage(s.address, key[:], common.TrimLeftZeroes(value[:])); err != nil {
+			depth, err := tr.UpdateStorage(s.address, key[:], common.TrimLeftZeroes(value[:]))
+			if err != nil {
 				s.db.setError(err)
 				return nil, err
+			}
+			if depth > maxDepth {
+				maxDepth = depth
 			}
 			s.db.StorageUpdated.Add(1)
 		} else {
@@ -358,6 +363,9 @@ func (s *stateObject) updateTrie() (Trie, error) {
 	}
 	if s.db.prefetcher != nil {
 		s.db.prefetcher.used(s.addrHash, s.data.Root, nil, used)
+	}
+	if uint64(maxDepth) > s.data.MaxDepth {
+		s.data.MaxDepth = s.data.MaxDepth + 1
 	}
 	s.uncommittedStorage = make(Storage) // empties the commit markers
 	return tr, nil
@@ -597,4 +605,8 @@ func (s *stateObject) Nonce() uint64 {
 
 func (s *stateObject) Root() common.Hash {
 	return s.data.Root
+}
+
+func (s *stateObject) MaxDepth() uint64 {
+	return s.data.MaxDepth
 }

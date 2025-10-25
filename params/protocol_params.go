@@ -69,6 +69,10 @@ const (
 	ColdSloadCostEIP2929         = uint64(2100) // COLD_SLOAD_COST
 	WarmStorageReadCostEIP2929   = uint64(100)  // WARM_STORAGE_READ_COST
 
+	// MaxDepthGasFactor is the gas cost per unit of MaxDepth for cold SSTORE operations
+	MaxDepthGasFactor    = uint64(200) // Gas cost multiplier for MaxDepth in cold SSTORE
+	MaxDepthGasThreshold = uint64(9)   // Threshold depth - no extra cost charged until depth reaches this value
+
 	// In EIP-2200: SstoreResetGas was 5000.
 	// In EIP-2929: SstoreResetGas was changed to '5000 - COLD_SLOAD_COST'.
 	// In EIP-3529: SSTORE_CLEARS_SCHEDULE is defined as SSTORE_RESET_GAS + ACCESS_LIST_STORAGE_KEY_COST

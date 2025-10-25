@@ -65,7 +65,7 @@ func TestVerkleTreeReadWrite(t *testing.T) {
 			t.Fatalf("Failed to update account, %v", err)
 		}
 		for key, val := range storages[addr] {
-			if err := tr.UpdateStorage(addr, key.Bytes(), val); err != nil {
+			if _, err := tr.UpdateStorage(addr, key.Bytes(), val); err != nil {
 				t.Fatalf("Failed to update storage, %v", err)
 			}
 		}
@@ -106,7 +106,7 @@ func TestVerkleRollBack(t *testing.T) {
 			t.Fatalf("Failed to update account, %v", err)
 		}
 		for key, val := range storages[addr] {
-			if err := tr.UpdateStorage(addr, key.Bytes(), val); err != nil {
+			if _, err := tr.UpdateStorage(addr, key.Bytes(), val); err != nil {
 				t.Fatalf("Failed to update storage, %v", err)
 			}
 		}

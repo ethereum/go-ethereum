@@ -120,7 +120,7 @@ func testMissingNode(t *testing.T, memonly bool, scheme string) {
 		t.Errorf("Unexpected error: %v", err)
 	}
 	trie, _ = New(TrieID(root), triedb)
-	err = trie.Update([]byte("120099"), []byte("zxcvzxcvzxcvzxcvzxcvzxcvzxcvzxcv"))
+	_, err = trie.Update([]byte("120099"), []byte("zxcvzxcvzxcvzxcvzxcvzxcvzxcvzxcv"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -159,7 +159,7 @@ func testMissingNode(t *testing.T, memonly bool, scheme string) {
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
-	err = trie.Update([]byte("120099"), []byte("zxcv"))
+	_, err = trie.Update([]byte("120099"), []byte("zxcv"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
