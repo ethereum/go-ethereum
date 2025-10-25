@@ -335,7 +335,6 @@ func (l *lookup) addStorageNodes(state common.Hash, nodes map[common.Hash]map[st
 
 	var (
 		wg    sync.WaitGroup
-		locks [storageNodesShardCount]sync.Mutex
 		tasks = make([][]shardTask, storageNodesShardCount)
 	)
 
@@ -360,9 +359,6 @@ func (l *lookup) addStorageNodes(state common.Hash, nodes map[common.Hash]map[st
 			if len(taskList) == 0 {
 				return
 			}
-
-			locks[shardIdx].Lock()
-			defer locks[shardIdx].Unlock()
 
 			shard := l.storageNodes[shardIdx]
 			for _, task := range taskList {
@@ -477,7 +473,6 @@ func (l *lookup) removeStorageNodes(state common.Hash, nodes map[common.Hash]map
 
 	var (
 		eg    errgroup.Group
-		locks [storageNodesShardCount]sync.Mutex
 		tasks = make([][]shardTask, storageNodesShardCount)
 	)
 
@@ -500,9 +495,6 @@ func (l *lookup) removeStorageNodes(state common.Hash, nodes map[common.Hash]map
 			if len(taskList) == 0 {
 				return nil
 			}
-
-			locks[shardIdx].Lock()
-			defer locks[shardIdx].Unlock()
 
 			shard := l.storageNodes[shardIdx]
 			for _, task := range taskList {
