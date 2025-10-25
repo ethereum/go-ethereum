@@ -22,15 +22,17 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 )
 
 const (
-	busyDelay           = time.Second      // indexer status polling frequency when not ready
-	maxHistoricPrefetch = 16               // size of block data pre-fetch queue
-	logFrequency        = time.Second * 20 // log info frequency during long indexing/unindexing process
-	headLogDelay        = time.Second      // head indexing log info delay (do not log if finished faster)
+	busyDelay            = time.Second // indexer status polling frequency when not ready
+	maxHistoricPrefetch  = 16          // size of block data pre-fetch queue
+	rawReceiptsCacheSize = 8
+	logFrequency         = time.Second * 20 // log info frequency during long indexing/unindexing process
+	headLogDelay         = time.Second      // head indexing log info delay (do not log if finished faster)
 )
 
 type Indexer interface {
@@ -76,9 +78,10 @@ type Indexer interface {
 // indexServers operates as a part of BlockChain and can serve multiple chain
 // indexers that implement the Indexer interface.
 type indexServers struct {
-	lock    sync.Mutex
-	servers []*indexServer
-	chain   *BlockChain
+	lock             sync.Mutex
+	servers          []*indexServer
+	chain            *BlockChain
+	rawReceiptsCache *lru.Cache[common.Hash, []*types.Receipt]
 
 	lastHead                  *types.Header
 	lastHeadReceipts          types.Receipts
@@ -96,6 +99,7 @@ func (f *indexServers) init(chain *BlockChain) {
 	f.chain = chain
 	f.lastHead = chain.CurrentBlock()
 	f.closeCh = make(chan struct{})
+	f.rawReceiptsCache = lru.NewCache[common.Hash, []*types.Receipt](rawReceiptsCacheSize)
 }
 
 // stop shuts down all registered Indexers and their serving goroutines.
@@ -135,15 +139,24 @@ func (f *indexServers) register(indexer Indexer, name string) {
 	go server.historicSendLoop()
 }
 
+func (f *indexServers) cacheRawReceipts(blockHash common.Hash, blockReceipts types.Receipts) {
+	f.rawReceiptsCache.Add(blockHash, blockReceipts)
+}
+
 // broadcast sends a new head block to all registered Indexer instances.
 func (f *indexServers) broadcast(header *types.Header) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
-	blockReceipts := f.chain.GetReceipts(header.Hash(), header.Number.Uint64())
+	blockHash := header.Hash()
+	blockReceipts, _ := f.rawReceiptsCache.Get(blockHash)
 	if blockReceipts == nil {
-		log.Error("Receipts belonging to new head are missing", "number", header.Number, "hash", header.Hash())
-		return
+		blockReceipts = f.chain.GetRawReceipts(blockHash, header.Number.Uint64())
+		if blockReceipts == nil {
+			log.Error("Receipts belonging to new head are missing", "number", header.Number, "hash", header.Hash())
+			return
+		}
+		f.rawReceiptsCache.Add(blockHash, blockReceipts)
 	}
 	f.lastHead, f.lastHeadReceipts = header, blockReceipts
 	for _, server := range f.servers {
@@ -499,7 +512,13 @@ func (s *indexServer) historicReadLoop() {
 			// Send next item to the queue.
 			bd := blockData{blockNumber: sendRange.First(), revertCount: status.revertCount}
 			if bd.header = s.parent.chain.GetHeaderByNumber(bd.blockNumber); bd.header != nil {
-				bd.receipts = s.parent.chain.GetReceipts(bd.header.Hash(), bd.blockNumber)
+				blockHash := bd.header.Hash()
+				bd.receipts, _ = s.parent.rawReceiptsCache.Get(blockHash)
+				if bd.receipts == nil {
+					bd.receipts = s.parent.chain.GetRawReceipts(blockHash, bd.blockNumber)
+					// Note: we do not cache historical receipts because typically
+					// each indexer requests them at different times.
+				}
 			}
 			// Note that a response with missing block data is still sent in case of
 			// a read error, signaling to the sender logic that something is missing.
