@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -186,5 +187,16 @@ func createTestLegacyTxInner() *LegacyTx {
 		Gas:      params.TxGas,
 		GasPrice: big.NewInt(params.GWei),
 		Data:     nil,
+	}
+}
+
+func Benchmark_modernSigner_Equal(b *testing.B) {
+	signer1 := newModernSigner(big.NewInt(1), forks.Amsterdam)
+	signer2 := newModernSigner(big.NewInt(1), forks.Amsterdam)
+
+	for b.Loop() {
+		if !signer1.Equal(signer2) {
+			b.Fatal("expected signers to be equal")
+		}
 	}
 }
