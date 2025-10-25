@@ -53,7 +53,7 @@ func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.
 // available API services. It assumes that the MetadataApi module ("rpc") is always available;
 // the registration of this "rpc" module happens in NewServer() and is thus common to all endpoints.
 func checkModuleAvailability(modules []string, apis []rpc.API) (bad, available []string) {
-	availableSet := make(map[string]struct{})
+	availableSet := make(map[string]struct{}, len(apis))
 	for _, api := range apis {
 		if _, ok := availableSet[api.Namespace]; !ok {
 			availableSet[api.Namespace] = struct{}{}
