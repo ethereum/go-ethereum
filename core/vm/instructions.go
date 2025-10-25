@@ -887,7 +887,9 @@ func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	}
 	beneficiary := scope.Stack.pop()
 	balance := evm.StateDB.GetBalance(scope.Contract.Address())
-	evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
+	if scope.Contract.Address() != common.BytesToAddress(beneficiary.Bytes()) {
+		evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
+	}
 	evm.StateDB.SelfDestruct(scope.Contract.Address())
 	if tracer := evm.Config.Tracer; tracer != nil {
 		if tracer.OnEnter != nil {
@@ -906,8 +908,23 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 	}
 	beneficiary := scope.Stack.pop()
 	balance := evm.StateDB.GetBalance(scope.Contract.Address())
-	evm.StateDB.SubBalance(scope.Contract.Address(), balance, tracing.BalanceDecreaseSelfdestruct)
-	evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
+
+	createdInTx := !evm.StateDB.ExistBeforeCurTx(scope.Contract.Address())
+
+	if createdInTx {
+		// if the contract is not preexisting, the balance is immediately burned on selfdestruct-to-self
+		evm.StateDB.SubBalance(scope.Contract.Address(), balance, tracing.BalanceDecreaseSelfdestruct)
+		if scope.Contract.Address() != common.BytesToAddress(beneficiary.Bytes()) {
+			evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
+		}
+	} else {
+		// if the contract is preexisting, the balance isn't burned on selfdestruct-to-self
+		if scope.Contract.Address() != common.BytesToAddress(beneficiary.Bytes()) {
+			evm.StateDB.SubBalance(scope.Contract.Address(), balance, tracing.BalanceDecreaseSelfdestruct)
+			evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
+		}
+	}
+
 	evm.StateDB.SelfDestruct6780(scope.Contract.Address())
 	if tracer := evm.Config.Tracer; tracer != nil {
 		if tracer.OnEnter != nil {
