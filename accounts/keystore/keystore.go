@@ -69,6 +69,7 @@ type KeyStore struct {
 	updateFeed  event.Feed              // Event feed to notify wallet additions/removals
 	updateScope event.SubscriptionScope // Subscription scope tracking current live listeners
 	updating    bool                    // Whether the event notification loop is running
+	closed      bool                    // Whether the KeyStore has been closed
 
 	mu       sync.RWMutex
 	importMu sync.Mutex // Import Mutex locks the import to prevent two insertions from racing
@@ -96,11 +97,14 @@ func (ks *KeyStore) init(keydir string) {
 	ks.unlocked = make(map[common.Address]*unlocked)
 	ks.cache, ks.changes = newAccountCache(keydir)
 
-	// TODO: In order for this finalizer to work, there must be no references
-	// to ks. addressCache doesn't keep a reference but unlocked keys do,
-	// so the finalizer will not trigger until all timed unlocks have expired.
+	// Set up finalizer to close the account cache when KeyStore is garbage collected.
+	// The finalizer will only trigger when there are no more references to ks.
+	// Unlocked keys with active timers may keep references to ks, so call Close()
+	// explicitly to ensure proper cleanup before the KeyStore is no longer needed.
 	runtime.AddCleanup(ks, func(c *accountCache) {
-		c.close()
+		if c != nil {
+			c.close()
+		}
 	}, ks.cache)
 
 	// Create the initial list of wallets from the cache
@@ -498,6 +502,39 @@ func (ks *KeyStore) isUpdating() bool {
 	ks.mu.RLock()
 	defer ks.mu.RUnlock()
 	return ks.updating
+}
+
+// Close properly shuts down the KeyStore by clearing all unlocked keys
+// and stopping any active timers. This ensures that the finalizer can
+// trigger properly when the KeyStore is no longer referenced.
+func (ks *KeyStore) Close() error {
+	ks.mu.Lock()
+	defer ks.mu.Unlock()
+
+	// Check if already closed
+	if ks.closed {
+		return nil
+	}
+
+	// Clear all unlocked keys and stop their timers
+	for addr, u := range ks.unlocked {
+		if u.abort != nil {
+			select {
+			case <-u.abort:
+				// Channel already closed
+			default:
+				close(u.abort)
+			}
+		}
+		zeroKey(u.PrivateKey)
+		delete(ks.unlocked, addr)
+	}
+
+	// Mark as closed - don't close cache here to avoid double-close
+	// The finalizer will handle cache cleanup
+	ks.closed = true
+
+	return nil
 }
 
 // zeroKey zeroes a private key in memory.
