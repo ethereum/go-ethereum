@@ -1616,24 +1616,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	blockBatch := bc.db.NewBatch()
 	rawdb.WriteBlock(blockBatch, block)
 	blockHash := block.Hash()
-	bc.blockCache.Add(blockHash, block)
 	rawdb.WriteReceipts(blockBatch, blockHash, block.NumberU64(), receipts)
-	if receipts != nil {
-		// ensure that receipts are cached in the exact same format as when reconstructed from database.
-		for _, receipt := range receipts {
-			if receipt.Logs == nil {
-				receipt.Logs = []*types.Log{}
-			}
-		}
-		var blobGasPrice *big.Int
-		if block.ExcessBlobGas() != nil {
-			blobGasPrice = eip4844.CalcBlobFee(bc.chainConfig, block.Header())
-		}
-		types.Receipts(receipts).DeriveFields(bc.chainConfig, blockHash, block.NumberU64(), block.Time(), block.BaseFee(), blobGasPrice, block.Transactions())
-		bc.receiptsCache.Add(blockHash, receipts)
-	} else {
-		bc.receiptsCache.Add(blockHash, []*types.Receipt{})
-	}
+	bc.indexServers.cacheRawReceipts(blockHash, receipts)
 	rawdb.WritePreimages(blockBatch, statedb.Preimages())
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
