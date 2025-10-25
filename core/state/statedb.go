@@ -567,13 +567,9 @@ func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common
 //
 
 // updateStateObject writes the given object to the trie.
-func (s *StateDB) updateStateObject(obj *stateObject) {
-	// Encode the account and update the account trie
-	if err := s.trie.UpdateAccount(obj.Address(), &obj.data, len(obj.code)); err != nil {
-		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", obj.Address(), err))
-	}
-	if obj.dirtyCode {
-		s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code)
+func (s *StateDB) updateStateObject(addr common.Address, resolver func() *types.StateAccount) {
+	if err := s.trie.UpdateAccountAsync(addr, resolver); err != nil {
+		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr, err))
 	}
 }
 
@@ -829,11 +825,14 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		// later time.
 		workers.SetLimit(1)
 	}
+
+	stateObjectsResolve := make(map[common.Address]func() *types.StateAccount)
 	for addr, op := range s.mutations {
 		if op.applied || op.isDelete() {
 			continue
 		}
 		obj := s.stateObjects[addr] // closure for the task runner below
+		complete := make(chan *types.StateAccount)
 		workers.Go(func() error {
 			if s.db.TrieDB().IsVerkle() {
 				obj.updateTrie()
@@ -846,8 +845,13 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 					s.witness.AddState(obj.trie.Witness())
 				}
 			}
+			complete <- &obj.data
 			return nil
 		})
+
+		stateObjectsResolve[addr] = func() *types.StateAccount {
+			return <-complete
+		}
 	}
 	// If witness building is enabled, gather all the read-only accesses.
 	// Skip witness collection in Verkle mode, they will be gathered
@@ -898,7 +902,6 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			}
 		}
 	}
-	workers.Wait()
 	s.StorageUpdates += time.Since(start)
 
 	// Now we're about to start to write changes to the trie. The trie is so far
@@ -939,7 +942,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		if op.isDelete() {
 			deletedAddrs = append(deletedAddrs, addr)
 		} else {
-			s.updateStateObject(s.stateObjects[addr])
+			s.updateStateObject(addr, stateObjectsResolve[addr])
 			s.AccountUpdated += 1
 		}
 		usedAddrs = append(usedAddrs, addr) // Copy needed for closure
@@ -966,6 +969,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			s.witnessStats.Add(witness, common.Hash{})
 		}
 	}
+
 	return hash
 }
 
