@@ -27,8 +27,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// storageNodesShardCount is the number of shards used for storage nodes.
-const storageNodesShardCount = 16
+// trienodeShardCount is the number of shards used for trie nodes.
+const trienodeShardCount = 16
 
 // storageKey returns a key for uniquely identifying the storage slot.
 func storageKey(accountHash common.Hash, slotHash common.Hash) [64]byte {
@@ -71,30 +71,31 @@ type lookup struct {
 	storages map[[64]byte][]common.Hash
 
 	// accountNodes represents the mutation history for specific account
-	// trie nodes. The key is the trie path of the node, and the value is a slice
+	// trie nodes, distributed across 16 shards for efficiency.
+	// The key is the trie path of the node, and the value is a slice
 	// of **diff layer** IDs indicating where the account was modified,
 	// with the order from oldest to newest.
-	accountNodes map[string][]common.Hash
+	accountNodes [trienodeShardCount]map[string][]common.Hash
 
 	// storageNodes represents the mutation history for specific storage
 	// slot trie nodes, distributed across 16 shards for efficiency.
 	// The key is the account address hash and the trie path of the node,
 	// the value is a slice of **diff layer** IDs indicating where the
 	// slot was modified, with the order from oldest to newest.
-	storageNodes [storageNodesShardCount]map[trienodeKey][]common.Hash
+	storageNodes [trienodeShardCount]map[trienodeKey][]common.Hash
 
 	// descendant is the callback indicating whether the layer with
 	// given root is a descendant of the one specified by `ancestor`.
 	descendant func(state common.Hash, ancestor common.Hash) bool
 }
 
-// getStorageShardIndex returns the shard index for a given path
-func getStorageShardIndex(path string) int {
+// getNodeShardIndex returns the shard index for a given path
+func getNodeShardIndex(path string) int {
 	if len(path) == 0 {
 		return 0
 	}
 	// use the first char of the path to determine the shard index
-	return int(path[0]) % storageNodesShardCount
+	return int(path[0]) % trienodeShardCount
 }
 
 // newLookup initializes the lookup structure.
@@ -108,14 +109,14 @@ func newLookup(head layer, descendant func(state common.Hash, ancestor common.Ha
 		current = current.parentLayer()
 	}
 	l := &lookup{
-		accounts:     make(map[common.Hash][]common.Hash),
-		storages:     make(map[[64]byte][]common.Hash),
-		accountNodes: make(map[string][]common.Hash),
-		descendant:   descendant,
+		accounts:   make(map[common.Hash][]common.Hash),
+		storages:   make(map[[64]byte][]common.Hash),
+		descendant: descendant,
 	}
 	// Initialize all 16 storage node shards
-	for i := 0; i < storageNodesShardCount; i++ {
+	for i := 0; i < trienodeShardCount; i++ {
 		l.storageNodes[i] = make(map[trienodeKey][]common.Hash)
+		l.accountNodes[i] = make(map[string][]common.Hash)
 	}
 
 	// Apply the diff layers from bottom to top
@@ -225,9 +226,10 @@ func (l *lookup) storageTip(accountHash common.Hash, slotHash common.Hash, state
 func (l *lookup) nodeTip(accountHash common.Hash, path string, stateID common.Hash, base common.Hash) common.Hash {
 	var list []common.Hash
 	if accountHash == (common.Hash{}) {
-		list = l.accountNodes[path]
+		shardIndex := getNodeShardIndex(path)
+		list = l.accountNodes[shardIndex][path]
 	} else {
-		shardIndex := getStorageShardIndex(path) // Use only path for sharding
+		shardIndex := getNodeShardIndex(path) // Use only path for sharding
 		list = l.storageNodes[shardIndex][makeTrienodeKey(accountHash, path)]
 	}
 	for i := len(list) - 1; i >= 0; i-- {
@@ -297,14 +299,7 @@ func (l *lookup) addLayer(diff *diffLayer) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for path := range diff.nodes.accountNodes {
-			list, exists := l.accountNodes[path]
-			if !exists {
-				list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
-			}
-			list = append(list, state)
-			l.accountNodes[path] = list
-		}
+		l.addAccountNodes(state, diff.nodes.accountNodes)
 	}()
 
 	wg.Add(1)
@@ -335,43 +330,61 @@ func (l *lookup) addStorageNodes(state common.Hash, nodes map[common.Hash]map[st
 
 	var (
 		wg    sync.WaitGroup
-		tasks = make([][]shardTask, storageNodesShardCount)
+		tasks = make([][]shardTask, trienodeShardCount)
 	)
-
-	// Pre-allocate work lists
 	for accountHash, slots := range nodes {
 		for path := range slots {
-			shardIndex := getStorageShardIndex(path)
+			shardIndex := getNodeShardIndex(path)
 			tasks[shardIndex] = append(tasks[shardIndex], shardTask{
 				accountHash: accountHash,
 				path:        path,
 			})
 		}
 	}
-
-	// Start all workers, each handling its own shard
-	wg.Add(storageNodesShardCount)
-	for shardIndex := 0; shardIndex < storageNodesShardCount; shardIndex++ {
-		go func(shardIdx int) {
+	for shardIdx := 0; shardIdx < trienodeShardCount; shardIdx++ {
+		taskList := tasks[shardIdx]
+		if len(taskList) == 0 {
+			continue
+		}
+		wg.Add(1)
+		go func() {
 			defer wg.Done()
-
-			taskList := tasks[shardIdx]
-			if len(taskList) == 0 {
-				return
-			}
-
 			shard := l.storageNodes[shardIdx]
 			for _, task := range taskList {
 				key := makeTrienodeKey(task.accountHash, task.path)
-				list, exists := shard[key]
-				if !exists {
-					list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
-				}
-				list = append(list, state)
-				shard[key] = list
+				shard[key] = append(shard[key], state)
 			}
+		}()
+	}
+	wg.Wait()
+}
 
-		}(shardIndex)
+func (l *lookup) addAccountNodes(state common.Hash, nodes map[string]*trienode.Node) {
+	defer func(start time.Time) {
+		lookupAddTrienodeLayerTimer.UpdateSince(start)
+	}(time.Now())
+
+	var (
+		wg    sync.WaitGroup
+		tasks = make([][]string, trienodeShardCount)
+	)
+	for path := range nodes {
+		shardIndex := getNodeShardIndex(path)
+		tasks[shardIndex] = append(tasks[shardIndex], path)
+	}
+	for shardIdx := 0; shardIdx < trienodeShardCount; shardIdx++ {
+		taskList := tasks[shardIdx]
+		if len(taskList) == 0 {
+			continue
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			shard := l.accountNodes[shardIdx]
+			for _, path := range taskList {
+				shard[path] = append(shard[path], state)
+			}
+		}()
 	}
 	wg.Wait()
 }
@@ -446,18 +459,7 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 	})
 
 	eg.Go(func() error {
-		for path := range diff.nodes.accountNodes {
-			found, list := removeFromList(l.accountNodes[path], state)
-			if !found {
-				return fmt.Errorf("account lookup is not found, %x, state: %x", path, state)
-			}
-			if len(list) != 0 {
-				l.accountNodes[path] = list
-			} else {
-				delete(l.accountNodes, path)
-			}
-		}
-		return nil
+		return l.removeAccountNodes(state, diff.nodes.accountNodes)
 	})
 
 	eg.Go(func() error {
@@ -473,29 +475,23 @@ func (l *lookup) removeStorageNodes(state common.Hash, nodes map[common.Hash]map
 
 	var (
 		eg    errgroup.Group
-		tasks = make([][]shardTask, storageNodesShardCount)
+		tasks = make([][]shardTask, trienodeShardCount)
 	)
-
-	// Pre-allocate work lists
 	for accountHash, slots := range nodes {
 		for path := range slots {
-			shardIndex := getStorageShardIndex(path)
+			shardIndex := getNodeShardIndex(path)
 			tasks[shardIndex] = append(tasks[shardIndex], shardTask{
 				accountHash: accountHash,
 				path:        path,
 			})
 		}
 	}
-
-	// Start all workers, each handling its own shard
-	for shardIndex := 0; shardIndex < storageNodesShardCount; shardIndex++ {
-		shardIdx := shardIndex // Capture the variable
+	for shardIdx := 0; shardIdx < trienodeShardCount; shardIdx++ {
+		taskList := tasks[shardIdx]
+		if len(taskList) == 0 {
+			continue
+		}
 		eg.Go(func() error {
-			taskList := tasks[shardIdx]
-			if len(taskList) == 0 {
-				return nil
-			}
-
 			shard := l.storageNodes[shardIdx]
 			for _, task := range taskList {
 				key := makeTrienodeKey(task.accountHash, task.path)
@@ -507,6 +503,43 @@ func (l *lookup) removeStorageNodes(state common.Hash, nodes map[common.Hash]map
 					shard[key] = list
 				} else {
 					delete(shard, key)
+				}
+			}
+			return nil
+		})
+	}
+	return eg.Wait()
+}
+
+func (l *lookup) removeAccountNodes(state common.Hash, nodes map[string]*trienode.Node) error {
+	defer func(start time.Time) {
+		lookupRemoveTrienodeLayerTimer.UpdateSince(start)
+	}(time.Now())
+
+	var (
+		eg    errgroup.Group
+		tasks = make([][]string, trienodeShardCount)
+	)
+	for path := range nodes {
+		shardIndex := getNodeShardIndex(path)
+		tasks[shardIndex] = append(tasks[shardIndex], path)
+	}
+	for shardIdx := 0; shardIdx < trienodeShardCount; shardIdx++ {
+		taskList := tasks[shardIdx]
+		if len(taskList) == 0 {
+			continue
+		}
+		eg.Go(func() error {
+			shard := l.accountNodes[shardIdx]
+			for _, path := range taskList {
+				found, list := removeFromList(shard[path], state)
+				if !found {
+					return fmt.Errorf("account lookup is not found, %x, state: %x", path, state)
+				}
+				if len(list) != 0 {
+					shard[path] = list
+				} else {
+					delete(shard, path)
 				}
 			}
 			return nil
