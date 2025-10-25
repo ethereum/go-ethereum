@@ -21,6 +21,12 @@ import (
 	"path/filepath"
 )
 
+// Database engine types.
+const (
+	DBPebble  = "pebble"
+	DBLeveldb = "leveldb"
+)
+
 // FileExist checks if a file exists at filePath.
 func FileExist(filePath string) bool {
 	_, err := os.Stat(filePath)
@@ -36,4 +42,25 @@ func AbsolutePath(datadir string, filename string) string {
 		return filename
 	}
 	return filepath.Join(datadir, filename)
+}
+
+// PreexistingDatabase checks the given data directory whether a database is already
+// instantiated at that location, and if so, returns the type of database (or the
+// empty string).
+//
+// The detection logic is based on the presence of specific files:
+//   - Pebble: has both CURRENT and OPTIONS* files
+//   - LevelDB: has CURRENT but no OPTIONS* files
+//   - No database: no CURRENT file
+func PreexistingDatabase(path string) string {
+	if _, err := os.Stat(filepath.Join(path, "CURRENT")); err != nil {
+		return "" // No pre-existing db
+	}
+	if matches, err := filepath.Glob(filepath.Join(path, "OPTIONS*")); len(matches) > 0 || err != nil {
+		if err != nil {
+			panic(err) // only possible if the pattern is malformed
+		}
+		return DBPebble
+	}
+	return DBLeveldb
 }

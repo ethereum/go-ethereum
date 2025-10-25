@@ -314,7 +314,7 @@ func makeDiscoveryConfig(ctx *cli.Context) (*enode.LocalNode, discover.Config) {
 	}
 
 	dbpath := ctx.String(nodedbFlag.Name)
-	db, err := enode.OpenDB(dbpath)
+	db, err := enode.OpenDB(dbpath, "")
 	if err != nil {
 		exit(err)
 	}

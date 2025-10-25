@@ -873,6 +873,11 @@ var (
 		Usage:    "Restricts network communication to the given IP networks (CIDR masks)",
 		Category: flags.NetworkingCategory,
 	}
+	NodeDBEngineFlag = &cli.StringFlag{
+		Name:     "nodedb.engine",
+		Usage:    "Node database implementation to use ('pebble' or 'leveldb', default: auto-detect)",
+		Category: flags.NetworkingCategory,
+	}
 	DNSDiscoveryFlag = &cli.StringFlag{
 		Name:     "discovery.dns",
 		Usage:    "Sets DNS discovery entry points (use \"\" to disable DNS)",
@@ -1377,6 +1382,15 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 			Fatalf("Option %q: %v", NetrestrictFlag.Name, err)
 		}
 		cfg.NetRestrict = list
+	}
+
+	if ctx.IsSet(NodeDBEngineFlag.Name) {
+		dbEngine := ctx.String(NodeDBEngineFlag.Name)
+		if dbEngine != "leveldb" && dbEngine != "pebble" {
+			Fatalf("Invalid choice for nodedb.engine '%s', allowed 'leveldb' or 'pebble'", dbEngine)
+		}
+		log.Info(fmt.Sprintf("Using %s as node database engine", dbEngine))
+		cfg.NodeDatabaseEngine = dbEngine
 	}
 
 	if ctx.Bool(DeveloperFlag.Name) {
@@ -2193,7 +2207,7 @@ func tryMakeReadOnlyDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database 
 	// If the database doesn't exist we need to open it in write-mode to allow
 	// the engine to create files.
 	readonly := true
-	if rawdb.PreexistingDatabase(stack.ResolvePath("chaindata")) == "" {
+	if common.PreexistingDatabase(stack.ResolvePath("chaindata")) == "" {
 		readonly = false
 	}
 	return MakeChainDatabase(ctx, stack, readonly)

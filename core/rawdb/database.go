@@ -342,27 +342,6 @@ func NewMemoryDatabase() ethdb.Database {
 	return NewDatabase(memorydb.New())
 }
 
-const (
-	DBPebble  = "pebble"
-	DBLeveldb = "leveldb"
-)
-
-// PreexistingDatabase checks the given data directory whether a database is already
-// instantiated at that location, and if so, returns the type of database (or the
-// empty string).
-func PreexistingDatabase(path string) string {
-	if _, err := os.Stat(filepath.Join(path, "CURRENT")); err != nil {
-		return "" // No pre-existing db
-	}
-	if matches, err := filepath.Glob(filepath.Join(path, "OPTIONS*")); len(matches) > 0 || err != nil {
-		if err != nil {
-			panic(err) // only possible if the pattern is malformed
-		}
-		return DBPebble
-	}
-	return DBLeveldb
-}
-
 type counter uint64
 
 func (c counter) String() string {
