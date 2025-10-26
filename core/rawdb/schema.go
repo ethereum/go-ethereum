@@ -177,81 +177,115 @@ type LegacyTxLookupEntry struct {
 	Index      uint64
 }
 
-// encodeBlockNumber encodes a block number as big endian uint64
-func encodeBlockNumber(number uint64) []byte {
+// encodeUint64 encodes a block number as big endian uint64
+func encodeUint64(number uint64) []byte {
 	enc := make([]byte, 8)
 	binary.BigEndian.PutUint64(enc, number)
 	return enc
 }
 
+func encodeUint32(number uint32) []byte {
+	enc := make([]byte, 4)
+	binary.BigEndian.PutUint32(enc, number)
+	return enc
+}
+
+func encodeKey(input []byte, values ...[]byte) []byte {
+	off := 0
+	for _, h := range values {
+		off += copy(input[off:], h)
+	}
+	return input
+}
+
 // headerKeyPrefix = headerPrefix + num (uint64 big endian)
 func headerKeyPrefix(number uint64) []byte {
-	return append(headerPrefix, encodeBlockNumber(number)...)
+	// len(headerPrefix) + len(uint64)
+	buf := make([]byte, 1+8)
+	return encodeKey(buf, headerPrefix, encodeUint64(number))
 }
 
 // headerKey = headerPrefix + num (uint64 big endian) + hash
 func headerKey(number uint64, hash common.Hash) []byte {
-	return append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+	// len(headerPrefix) + len(uint64) + len(hash)
+	buf := make([]byte, 1+8+common.HashLength)
+	return encodeKey(buf, headerPrefix, encodeUint64(number), hash.Bytes())
 }
 
 // headerHashKey = headerPrefix + num (uint64 big endian) + headerHashSuffix
 func headerHashKey(number uint64) []byte {
-	return append(append(headerPrefix, encodeBlockNumber(number)...), headerHashSuffix...)
+	// len(headerPrefix) + len(uint64) + len(headerHashSuffix)
+	buf := make([]byte, 1+8+1)
+	return encodeKey(buf, headerPrefix, encodeUint64(number), headerHashSuffix)
 }
 
 // headerNumberKey = headerNumberPrefix + hash
 func headerNumberKey(hash common.Hash) []byte {
-	return append(headerNumberPrefix, hash.Bytes()...)
+	buf := make([]byte, 1+common.HashLength)
+	return encodeKey(buf, headerNumberPrefix, hash.Bytes())
 }
 
 // blockBodyKey = blockBodyPrefix + num (uint64 big endian) + hash
 func blockBodyKey(number uint64, hash common.Hash) []byte {
-	return append(append(blockBodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+	// len(blockBodyPrefix) + len(uint64) + len(hash)
+	buf := make([]byte, 1+8+common.HashLength)
+	return encodeKey(buf, blockBodyPrefix, encodeUint64(number), hash.Bytes())
 }
 
 // blockReceiptsKey = blockReceiptsPrefix + num (uint64 big endian) + hash
 func blockReceiptsKey(number uint64, hash common.Hash) []byte {
-	return append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+	// len(blockReceiptsPrefix) + len(uint64) + len(hash)
+	buf := make([]byte, 1+8+common.HashLength)
+	return encodeKey(buf, blockReceiptsPrefix, encodeUint64(number), hash.Bytes())
 }
 
 // txLookupKey = txLookupPrefix + hash
 func txLookupKey(hash common.Hash) []byte {
-	return append(txLookupPrefix, hash.Bytes()...)
+	// len(txLookupPrefix) + len(hash)
+	buf := make([]byte, 1+common.HashLength)
+	return encodeKey(buf, txLookupPrefix, hash.Bytes())
 }
 
 // accountSnapshotKey = SnapshotAccountPrefix + hash
 func accountSnapshotKey(hash common.Hash) []byte {
-	return append(SnapshotAccountPrefix, hash.Bytes()...)
+	// len(SnapshotAccountPrefix) + len(hash)
+	buf := make([]byte, 1+common.HashLength)
+	return encodeKey(buf, SnapshotAccountPrefix, hash.Bytes())
 }
 
 // storageSnapshotKey = SnapshotStoragePrefix + account hash + storage hash
 func storageSnapshotKey(accountHash, storageHash common.Hash) []byte {
-	//len(SnapshotStoragePrefix) == 1
+	//len(SnapshotStoragePrefix) + len(accountHash) + len(storageHash)
 	buf := make([]byte, 1+common.HashLength+common.HashLength)
-	n := copy(buf, SnapshotStoragePrefix)
-	n += copy(buf[n:], accountHash.Bytes())
-	copy(buf[n:], storageHash.Bytes())
-	return buf
+	return encodeKey(buf, SnapshotStoragePrefix, accountHash.Bytes(), storageHash.Bytes())
 }
 
-// storageSnapshotsKey = SnapshotStoragePrefix + account hash + storage hash
+// storageSnapshotsKey = SnapshotStoragePrefix + account hash
 func storageSnapshotsKey(accountHash common.Hash) []byte {
-	return append(SnapshotStoragePrefix, accountHash.Bytes()...)
+	// len(SnapshotStoragePrefix) + len(accountHash)
+	buf := make([]byte, 1+common.HashLength)
+	return encodeKey(buf, SnapshotStoragePrefix, accountHash.Bytes())
 }
 
 // skeletonHeaderKey = skeletonHeaderPrefix + num (uint64 big endian)
 func skeletonHeaderKey(number uint64) []byte {
-	return append(skeletonHeaderPrefix, encodeBlockNumber(number)...)
+	// len(skeletonHeaderPrefix) + len(uint64)
+	buf := make([]byte, 1+8)
+	return encodeKey(buf, skeletonHeaderPrefix, encodeUint64(number))
 }
 
 // preimageKey = PreimagePrefix + hash
 func preimageKey(hash common.Hash) []byte {
-	return append(PreimagePrefix, hash.Bytes()...)
+	// len(PreimagePrefix) + len(hash)
+	buf := make([]byte, 11+common.HashLength)
+	return encodeKey(buf, PreimagePrefix, hash.Bytes())
 }
 
 // codeKey = CodePrefix + hash
 func codeKey(hash common.Hash) []byte {
-	return append(CodePrefix, hash.Bytes()...)
+	// len(CodePrefix) + len(hash)
+	buf := make([]byte, 1+common.HashLength)
+	return encodeKey(buf, CodePrefix, hash.Bytes())
 }
 
 // IsCodeKey reports whether the given byte slice is the key of contract code,
@@ -265,17 +299,23 @@ func IsCodeKey(key []byte) (bool, []byte) {
 
 // configKey = configPrefix + hash
 func configKey(hash common.Hash) []byte {
-	return append(configPrefix, hash.Bytes()...)
+	// len(configPrefix) + len(hash)
+	buf := make([]byte, 16+common.HashLength)
+	return encodeKey(buf, configPrefix, hash.Bytes())
 }
 
 // genesisStateSpecKey = genesisPrefix + hash
 func genesisStateSpecKey(hash common.Hash) []byte {
-	return append(genesisPrefix, hash.Bytes()...)
+	// len(genesisPrefix) + len(hash)
+	buf := make([]byte, 17+common.HashLength)
+	return encodeKey(buf, genesisPrefix, hash.Bytes())
 }
 
 // stateIDKey = stateIDPrefix + root (32 bytes)
 func stateIDKey(root common.Hash) []byte {
-	return append(stateIDPrefix, root.Bytes()...)
+	// len(stateIDPrefix) + len(root)
+	buf := make([]byte, 1+common.HashLength)
+	return encodeKey(buf, stateIDPrefix, root.Bytes())
 }
 
 // accountTrieNodeKey = TrieNodeAccountPrefix + nodePath.
@@ -356,8 +396,7 @@ func IsStorageTrieNode(key []byte) bool {
 func filterMapRowKey(mapRowIndex uint64, base bool) []byte {
 	// len(filterMapRowPrefix) + extLen
 	key := make([]byte, 4+9)
-	copy(key[:4], filterMapRowPrefix)
-	binary.BigEndian.PutUint64(key[4:4+8], mapRowIndex)
+	key = encodeKey(key, filterMapRowPrefix, encodeUint64(mapRowIndex))
 	if !base {
 		return key[0 : 4+8]
 	}
@@ -368,36 +407,28 @@ func filterMapRowKey(mapRowIndex uint64, base bool) []byte {
 func filterMapLastBlockKey(mapIndex uint32) []byte {
 	// len(filterMapLastBlockPrefix) + len(uint32)
 	key := make([]byte, 4+4)
-	copy(key[:4], filterMapLastBlockPrefix)
-	binary.BigEndian.PutUint32(key[4:], mapIndex)
-	return key
+	return encodeKey(key, filterMapLastBlockPrefix, encodeUint32(mapIndex))
 }
 
 // filterMapBlockLVKey = filterMapBlockLVPrefix + num (uint64 big endian)
 func filterMapBlockLVKey(number uint64) []byte {
 	//len(filterMapBlockLVPrefix) + len(uint64)
 	key := make([]byte, 4+8)
-	copy(key[:4], filterMapBlockLVPrefix)
-	binary.BigEndian.PutUint64(key[4:], number)
-	return key
+	return encodeKey(key, filterMapBlockLVPrefix, encodeUint64(number))
 }
 
 // accountHistoryIndexKey = StateHistoryAccountMetadataPrefix + addressHash
 func accountHistoryIndexKey(addressHash common.Hash) []byte {
-	return append(StateHistoryAccountMetadataPrefix, addressHash.Bytes()...)
+	// len(StateHistoryAccountMetadataPrefix) + len(addressHash)
+	buf := make([]byte, 2+common.HashLength)
+	return encodeKey(buf, StateHistoryAccountMetadataPrefix, addressHash.Bytes())
 }
 
 // storageHistoryIndexKey = StateHistoryStorageMetadataPrefix + addressHash + storageHash
 func storageHistoryIndexKey(addressHash common.Hash, storageHash common.Hash) []byte {
-	// len(StateHistoryStorageMetadataPrefix) == 2
+	// len(StateHistoryStorageMetadataPrefix) + len(addressHash) + len(storageHash)
 	out := make([]byte, 2+2*common.HashLength)
-
-	off := 0
-	off += copy(out[off:], StateHistoryStorageMetadataPrefix)
-	off += copy(out[off:], addressHash.Bytes())
-	copy(out[off:], storageHash.Bytes())
-
-	return out
+	return encodeKey(out, StateHistoryStorageMetadataPrefix, addressHash.Bytes(), storageHash.Bytes())
 }
 
 // trienodeHistoryIndexKey = TrienodeHistoryMetadataPrefix + addressHash + trienode path
@@ -417,27 +448,14 @@ func trienodeHistoryIndexKey(addressHash common.Hash, path []byte) []byte {
 func accountHistoryIndexBlockKey(addressHash common.Hash, blockID uint32) []byte {
 	// len(StateHistoryAccountBlockPrefix) + len(common.Hash) + len(uint32)
 	out := make([]byte, 3+common.HashLength+4)
-
-	off := 0
-	off += copy(out[off:], StateHistoryAccountBlockPrefix)
-	off += copy(out[off:], addressHash.Bytes())
-	binary.BigEndian.PutUint32(out[off:], blockID)
-
-	return out
+	return encodeKey(out, StateHistoryAccountBlockPrefix, addressHash.Bytes(), encodeUint32(blockID))
 }
 
 // storageHistoryIndexBlockKey = StateHistoryStorageBlockPrefix + addressHash + storageHash + blockID
 func storageHistoryIndexBlockKey(addressHash common.Hash, storageHash common.Hash, blockID uint32) []byte {
 	// len(StateHistoryStorageBlockPrefix) + 2*common.HashLength + len(uint32)
 	out := make([]byte, 3+2*common.HashLength+4)
-
-	off := 0
-	off += copy(out[off:], StateHistoryStorageBlockPrefix)
-	off += copy(out[off:], addressHash.Bytes())
-	off += copy(out[off:], storageHash.Bytes())
-	binary.BigEndian.PutUint32(out[off:], blockID)
-
-	return out
+	return encodeKey(out, StateHistoryStorageBlockPrefix, addressHash.Bytes(), storageHash.Bytes(), encodeUint32(blockID))
 }
 
 // trienodeHistoryIndexBlockKey = TrienodeHistoryBlockPrefix + addressHash + trienode path + blockID
@@ -456,5 +474,7 @@ func trienodeHistoryIndexBlockKey(addressHash common.Hash, path []byte, blockID 
 
 // transitionStateKey = transitionStatusKey + hash
 func transitionStateKey(hash common.Hash) []byte {
-	return append(VerkleTransitionStatePrefix, hash.Bytes()...)
+	// len(VerkleTransitionStatePrefix) + len(hash)
+	buf := make([]byte, 24+common.HashLength)
+	return encodeKey(buf, VerkleTransitionStatePrefix, hash.Bytes())
 }
