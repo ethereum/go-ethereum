@@ -61,9 +61,10 @@ func newAccessList() *accessList {
 
 // Copy creates an independent copy of an accessList.
 func (al *accessList) Copy() *accessList {
-	cp := newAccessList()
-	cp.addresses = maps.Clone(al.addresses)
-	cp.slots = make([]map[common.Hash]struct{}, len(al.slots))
+	cp := &accessList{
+		addresses: maps.Clone(al.addresses),
+		slots:     make([]map[common.Hash]struct{}, len(al.slots)),
+	}
 	for i, slotMap := range al.slots {
 		cp.slots[i] = maps.Clone(slotMap)
 	}
