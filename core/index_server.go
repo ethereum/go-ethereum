@@ -18,6 +18,7 @@
 package core
 
 import (
+	"math"
 	"sync"
 	"time"
 
@@ -132,8 +133,8 @@ func (f *indexServers) register(indexer Indexer, name string) {
 	indexer.SetHistoryCutoff(f.historyCutoff)
 	indexer.SetFinalized(f.finalBlock)
 	if f.lastHead != nil {
-		server.status.ready, server.status.needBlocks = indexer.AddBlockData(f.lastHead, f.lastHeadReceipts)
-		server.updateStatus()
+		server.sendStatus.ready, server.sendStatus.needBlocks = indexer.AddBlockData(f.lastHead, f.lastHeadReceipts)
+		server.updateSendStatus()
 	}
 	go server.historicReadLoop()
 	go server.historicSendLoop()
@@ -227,14 +228,16 @@ type indexServer struct {
 	stopped bool
 
 	lastHead                          *types.Header
-	status                            indexerStatus
+	sendStatus                        indexerStatus
 	statusCh                          chan indexerStatus
 	blockDataCh                       chan blockData
 	suspendCh                         chan bool
 	testSuspendHookCh                 chan struct{} // initialized by test, capacity = 1
-	lastRevertBlock                   uint64
 	sendTimer                         *time.Timer
 	historyCutoff, missingBlockCutoff uint64
+
+	readStatus  indexerStatus
+	readPointer uint64 // next block to be queued
 
 	name                    string
 	processed               uint64
@@ -243,12 +246,35 @@ type indexServer struct {
 	lastHistoryErrorLog     time.Time
 }
 
-// indexerStatus represents the state of the indexer and also has fields that
-// serve the coordination between historic reader and sender goroutines.
+// indexerStatus is maintained by the historicSendLoop goroutine and all changes
+// are sent to the historicReadLoop goroutine through statusCh.
 type indexerStatus struct {
-	ready, suspended, resetQueue bool
-	revertCount                  uint64
-	needBlocks                   common.Range[uint64]
+	ready                        bool                 // last feedback received from the indexer
+	needBlocks                   common.Range[uint64] // last feedback received from the indexer
+	suspended                    bool                 // suspend historic block delivery during block processing
+	resetQueueCount              uint64               // total number of queue resets
+	revertCount, lastRevertBlock uint64               // detect entries potentially expired by a revert/reorg
+}
+
+// isNextExpected returns true if the received blockData (potentially based on a
+// previously sent indexerStatus) is still guaranteed to be valid and the one
+// expected by the indexer according to the latest indexerStatus.
+func (s *indexerStatus) isNextExpected(b blockData) bool {
+	if s.needBlocks.IsEmpty() || s.needBlocks.First() != b.blockNumber {
+		return false // not the expected next block number or no historical blocks expected at all
+	}
+	// block number is the expected one; check if a reorg might have invalidated it
+	switch s.revertCount {
+	case b.revertCount:
+		return true // no reorgs happened since the collection of block data
+	case b.revertCount + 1:
+		// one reorg happened to s.lastRevertBlock; b is valid if not newer than this
+		return b.blockNumber <= s.lastRevertBlock
+	default:
+		// multiple reorgs happened; previous revert blocks are not remembered
+		// so we don't know if b is still valid and therefore we have to discard it.
+		return false
+	}
 }
 
 // blockData represents the indexable data of a single block being sent from the
@@ -277,8 +303,22 @@ func (s *indexServer) sendHeadBlockData(header *types.Header, receipts types.Rec
 		return
 	}
 	s.lastHead = header
-	s.status.ready, s.status.needBlocks = s.indexer.AddBlockData(header, receipts)
-	s.updateStatus()
+	ready, needBlocks := s.indexer.AddBlockData(header, receipts)
+	s.updateIndexerStatus(ready, needBlocks, 0)
+	s.updateSendStatus()
+}
+
+// updateIndexerStatus updates the ready / needBlocks fields in the send loop
+// status. The number of historic blocks added since the last update is
+// specified in addedBlocks. During continuous historical block range delivery
+// the starting point of the new needBlocks range is expected to advance with
+// each new block added. If the new range does not match the expectation then
+// a blockDataCh queue reset is requested.
+func (s *indexServer) updateIndexerStatus(ready bool, needBlocks common.Range[uint64], addedBlocks uint64) {
+	if needBlocks.First() != s.sendStatus.needBlocks.First()+addedBlocks {
+		s.sendStatus.resetQueueCount++ // request queue reset
+	}
+	s.sendStatus.ready, s.sendStatus.needBlocks = ready, needBlocks
 }
 
 // revert immediately reverts the indexer to the given block and updates the
@@ -298,10 +338,37 @@ func (s *indexServer) revert(header *types.Header) {
 		panic("invalid indexer revert")
 	}
 	s.lastHead = header
-	s.status.revertCount++
-	s.lastRevertBlock = blockNumber
-	s.updateStatus()
+	s.sendStatus.revertCount++
+	s.sendStatus.lastRevertBlock = blockNumber
+	s.updateSendStatus()
 	s.indexer.Revert(blockNumber)
+}
+
+// suspendOrStop blocks the send loop until it is unsuspended or the parent
+// chain is stopped. It also notifies the indexer by calling Suspend and
+// suspends the read loop through updateStatus.
+func (s *indexServer) suspendOrStop(suspended bool) bool {
+	if !suspended {
+		panic("unexpected 'false' signal on suspendCh")
+	}
+	s.lock.Lock()
+	s.sendStatus.suspended = true
+	s.updateSendStatus()
+	s.indexer.Suspended()
+	s.lock.Unlock()
+	select {
+	case <-s.parent.closeCh:
+		return true
+	case suspended = <-s.suspendCh:
+	}
+	if suspended {
+		panic("unexpected 'true' signal on suspendCh")
+	}
+	s.lock.Lock()
+	s.sendStatus.suspended = false
+	s.updateSendStatus()
+	s.lock.Unlock()
+	return false
 }
 
 // historicSendLoop is the main event loop that interacts with the indexer in
@@ -317,40 +384,13 @@ func (s *indexServer) historicSendLoop() {
 		s.parent.closeWg.Done()
 	}()
 
-	// suspendOrStop blocks the send loop until it is unsuspended or the parent
-	// chain is stopped. It also notifies the indexer by calling Suspend and
-	// suspends the read loop through updateStatus.
-	suspendOrStop := func(suspended bool) bool {
-		if !suspended {
-			panic("unexpected 'false' signal on suspendCh")
-		}
-		s.lock.Lock()
-		s.status.suspended = true
-		s.updateStatus()
-		s.indexer.Suspended()
-		s.lock.Unlock()
-		select {
-		case <-s.parent.closeCh:
-			return true
-		case suspended = <-s.suspendCh:
-		}
-		if suspended {
-			panic("unexpected 'true' signal on suspendCh")
-		}
-		s.lock.Lock()
-		s.status.suspended = false
-		s.updateStatus()
-		s.lock.Unlock()
-		return false
-	}
-
 	for {
 		select {
 		// do a separate non-blocking select to ensure that a suspend attempt
 		// during the previous historical AddBlockData will be catched in the
 		// next round.
-		case ch := <-s.suspendCh:
-			if suspendOrStop(ch) {
+		case suspend := <-s.suspendCh:
+			if s.suspendOrStop(suspend) {
 				return
 			}
 		default:
@@ -358,26 +398,24 @@ func (s *indexServer) historicSendLoop() {
 		select {
 		case <-s.parent.closeCh:
 			return
-		case ch := <-s.suspendCh:
-			if suspendOrStop(ch) {
+		case suspend := <-s.suspendCh:
+			if s.suspendOrStop(suspend) {
 				return
 			}
 		case nextBlockData := <-s.blockDataCh:
 			s.lock.Lock()
-			s.status.resetQueue = true
 			// check if received block data is indeed from the next expected
 			// block and is still guaranteed to be canonical; ignore and request
-			// again otherwise.
-			if !s.status.needBlocks.IsEmpty() && s.status.needBlocks.First() == nextBlockData.blockNumber &&
-				(nextBlockData.revertCount == s.status.revertCount || (nextBlockData.revertCount+1 == s.status.revertCount && nextBlockData.blockNumber <= s.lastRevertBlock)) {
-				s.status.ready, s.status.needBlocks = s.indexer.AddBlockData(nextBlockData.header, nextBlockData.receipts)
+			// a queue reset otherwise.
+			if s.sendStatus.isNextExpected(nextBlockData) {
+				ready, needBlocks := s.indexer.AddBlockData(nextBlockData.header, nextBlockData.receipts)
+				s.updateIndexerStatus(ready, needBlocks, 1)
 				// check if the has actually been found in the database
 				if nextBlockData.header != nil && nextBlockData.receipts != nil {
-					s.status.resetQueue = false
-					if s.status.needBlocks.IsEmpty() {
+					if s.sendStatus.needBlocks.IsEmpty() {
 						s.logDelivered(nextBlockData.blockNumber)
 						s.logFinished()
-					} else if s.status.needBlocks.First() == nextBlockData.blockNumber+1 {
+					} else if s.sendStatus.needBlocks.First() == nextBlockData.blockNumber+1 {
 						s.logDelivered(nextBlockData.blockNumber)
 					}
 				} else {
@@ -393,16 +431,21 @@ func (s *indexServer) historicSendLoop() {
 					}
 					s.missingBlockCutoff = max(s.missingBlockCutoff, nextBlockData.blockNumber+1)
 					s.indexer.SetHistoryCutoff(max(s.historyCutoff, s.missingBlockCutoff))
-					s.status.ready, s.status.needBlocks = s.indexer.Status()
+					ready, needBlocks := s.indexer.Status()
+					s.updateIndexerStatus(ready, needBlocks, 0)
 				}
+			} else {
+				// trigger resetting the queue and sending blockData from needBlocks.First()
+				s.sendStatus.resetQueueCount++
 			}
-			s.updateStatus()
+			s.updateSendStatus()
 			s.lock.Unlock()
 		case <-s.sendTimer.C:
 			s.lock.Lock()
-			if !s.status.ready {
-				s.status.ready, s.status.needBlocks = s.indexer.Status()
-				s.updateStatus()
+			if !s.sendStatus.ready {
+				ready, needBlocks := s.indexer.Status()
+				s.updateIndexerStatus(ready, needBlocks, 0)
+				s.updateSendStatus()
 			}
 			s.lock.Unlock()
 		}
@@ -413,8 +456,8 @@ func (s *indexServer) historicSendLoop() {
 // latest indexer status. If necessary then it trims the needBlocks range based
 // on the locally available block range. If there is already an unread status
 // update waiting on statusCh then it is replaced by the new one.
-func (s *indexServer) updateStatus() {
-	if s.status.ready || s.status.suspended {
+func (s *indexServer) updateSendStatus() {
+	if s.sendStatus.ready || s.sendStatus.suspended {
 		s.sendTimer.Stop()
 	} else {
 		s.sendTimer.Reset(busyDelay)
@@ -423,17 +466,17 @@ func (s *indexServer) updateStatus() {
 	if s.lastHead != nil {
 		headNumber = s.lastHead.Number.Uint64()
 	}
-	if headNumber+1 < s.status.needBlocks.AfterLast() {
-		s.status.needBlocks.SetLast(headNumber)
+	if headNumber+1 < s.sendStatus.needBlocks.AfterLast() {
+		s.sendStatus.needBlocks.SetLast(headNumber)
 	}
-	if s.status.needBlocks.IsEmpty() || max(s.historyCutoff, s.missingBlockCutoff) > s.status.needBlocks.First() {
-		s.status.needBlocks = common.Range[uint64]{}
+	if s.sendStatus.needBlocks.IsEmpty() || max(s.historyCutoff, s.missingBlockCutoff) > s.sendStatus.needBlocks.First() {
+		s.sendStatus.needBlocks = common.Range[uint64]{}
 	}
 	select {
 	case <-s.statusCh:
 	default:
 	}
-	s.statusCh <- s.status
+	s.statusCh <- s.sendStatus
 }
 
 // setBlockProcessing suspends serving historical blocks requested by the indexer
@@ -457,6 +500,41 @@ func (s *indexServer) setBlockProcessing(suspended bool) {
 	}
 }
 
+// clearBlockQueue removes all entries from blockDataCh.
+func (s *indexServer) clearBlockQueue() {
+	for {
+		select {
+		case <-s.blockDataCh:
+		default:
+			return
+		}
+	}
+}
+
+// updateReadStatus updates readStatus and checks whether a queue reset has been
+// requested by the send loop. In that case it empties the queue and resets the
+// readPointer to the first block of the needBlocks range.
+// Note that the blocks betweeen needBlocks.First() and readPointer-1 are assumed
+// to already be queued in blockDataCh. If needBlocks.First() does not advance
+// with each delivered block or an expired blockData is received by the send
+// loop then a queue reset is requested.
+func (s *indexServer) updateReadStatus(newStatus indexerStatus) {
+	if newStatus.resetQueueCount != s.readStatus.resetQueueCount {
+		s.clearBlockQueue()
+		s.readPointer = newStatus.needBlocks.First()
+	}
+	s.readStatus = newStatus
+}
+
+// canQueueNextBlock returns true if there are more blocks to read in the
+// needBlocks range and we have not yet reached the capacity of blockDataCh yet.
+// Note that the latter check assumes that blocks between needBlocks.First() and
+// readPointer-1 are queued.
+func (s *indexServer) canQueueNextBlock() bool {
+	return s.readStatus.needBlocks.Includes(s.readPointer) &&
+		s.readPointer <= s.readStatus.needBlocks.First()+maxHistoricPrefetch
+}
+
 // historicReadLoop reads requested historical block data asynchronously.
 // It receives indexer status updates on statusCh and sends block data to
 // blockDataCh. If the latest status indicates that there the server is not
@@ -466,58 +544,24 @@ func (s *indexServer) setBlockProcessing(suspended bool) {
 // Note that blockDataCh can queue multiple block data pre-fetched by
 // historicReadLoop. If the requested range is changed while there is still
 // queued data in the channel that corresponds to the previous requested range
-// then the receiver sends a new status update with the resetQueue flag set to
-// true. In this case historicReadLoop removes all remaining entries from the
-// queue and starts sending block data from the beginning of the new range.
+// then the receiver sends a new status update with increased resetQueueCount.
+// In this case historicReadLoop removes all remaining entries from the queue
+// and starts sending block data from the beginning of the new range.
 func (s *indexServer) historicReadLoop() {
 	defer s.parent.closeWg.Done()
 
-	var (
-		status    indexerStatus
-		sendRange common.Range[uint64]
-	)
-
-	statusUpdated := func() {
-		if status.resetQueue {
-			// If the receiver found an item in the queue that is no longer
-			// relevant then we remove all remaining items first.
-		loop:
-			for {
-				select {
-				case <-s.blockDataCh:
-				default:
-					break loop
-				}
-			}
-		}
-		if !status.resetQueue && !sendRange.IsEmpty() && status.needBlocks.Includes(sendRange.First()) {
-			// Here we assume that the block data between needBlocks.First() and
-			// sendRange.First()-1 is already in the queue.
-			r := status.needBlocks
-			r.SetFirst(sendRange.First())
-			sendRange = r
-		} else {
-			sendRange = status.needBlocks
-		}
-		if sendRange.Count() > maxHistoricPrefetch {
-			// Note: in a normal use case where needBlocks.First() is advanced
-			// after reading the previous item from blockDataCh, this check will
-			// prevent reading more data than what fits into the channel capacity.
-			sendRange.SetAfterLast(sendRange.First() + maxHistoricPrefetch)
-		}
-	}
-
+	s.readStatus.resetQueueCount = math.MaxUint64
 	for {
-		if !sendRange.IsEmpty() && !status.suspended {
+		if !s.readStatus.suspended && s.canQueueNextBlock() {
 			// Send next item to the queue.
-			bd := blockData{blockNumber: sendRange.First(), revertCount: status.revertCount}
+			bd := blockData{blockNumber: s.readPointer, revertCount: s.readStatus.revertCount}
 			if bd.header = s.parent.chain.GetHeaderByNumber(bd.blockNumber); bd.header != nil {
 				blockHash := bd.header.Hash()
 				bd.receipts, _ = s.parent.rawReceiptsCache.Get(blockHash)
 				if bd.receipts == nil {
-					bd.receipts = s.parent.chain.GetRawReceipts(blockHash, bd.blockNumber)
 					// Note: we do not cache historical receipts because typically
 					// each indexer requests them at different times.
+					bd.receipts = s.parent.chain.GetRawReceipts(blockHash, bd.blockNumber)
 				}
 			}
 			// Note that a response with missing block data is still sent in case of
@@ -525,23 +569,26 @@ func (s *indexServer) historicReadLoop() {
 			// This might be either due to a database error or a reorg.
 			select {
 			case s.blockDataCh <- bd:
-				sendRange.SetFirst(bd.blockNumber + 1)
+				s.readPointer++
 			default:
-				// Note: in extreme corner cases where sendRange.Count() check
-				// does not prevent trying to overfill the channel, we simply
-				// reset sendRange to empty preventing more wasted reads.
-				// Sending the queued data will generate more status updates
-				// which will reinitialize sendRange once the queue is again
-				// below full capacity.
-				sendRange = common.Range[uint64]{}
+				// Note: updateIndexerStatus in the send loop and canQueueNextBlock
+				// in the read loop should ensure that no send is attempted at
+				// blockDataCh when it is filled to full capacity. If it happens
+				// anyway then we print an error and set the suspended flag to
+				// true until the next status update.
+				if time.Since(s.lastHistoryErrorLog) >= time.Second*10 {
+					s.lastHistoryErrorLog = time.Now()
+					log.Error("Historical block queue is full")
+				}
+				s.readStatus.suspended = true
 			}
 			// Keep checking status updates without blocking as long as there is
 			// something to do.
 			select {
 			case <-s.parent.closeCh:
 				return
-			case status = <-s.statusCh:
-				statusUpdated()
+			case status := <-s.statusCh:
+				s.updateReadStatus(status)
 			default:
 			}
 		} else {
@@ -549,8 +596,8 @@ func (s *indexServer) historicReadLoop() {
 			select {
 			case <-s.parent.closeCh:
 				return
-			case status = <-s.statusCh:
-				statusUpdated()
+			case status := <-s.statusCh:
+				s.updateReadStatus(status)
 			}
 		}
 	}
@@ -615,6 +662,7 @@ func (s *indexServer) setHistoryCutoff(blockNumber uint64) {
 	}
 	s.historyCutoff = blockNumber
 	s.indexer.SetHistoryCutoff(max(s.historyCutoff, s.missingBlockCutoff))
-	s.status.ready, s.status.needBlocks = s.indexer.Status()
-	s.updateStatus()
+	ready, needBlocks := s.indexer.Status()
+	s.updateIndexerStatus(ready, needBlocks, 0)
+	s.updateSendStatus()
 }
