@@ -134,12 +134,12 @@ func (m *SortedMap) reheap() {
 
 // filter is identical to Filter, but **does not** regenerate the heap. This method
 // should only be used if followed immediately by a call to Filter or reheap()
-func (m *SortedMap) filter(filter func(*types.Transaction) bool) types.Transactions {
+func (m *SortedMap) filter(filterFun func(*types.Transaction) bool) types.Transactions {
 	var removed types.Transactions
 
 	// Collect all the transactions to filter out
 	for nonce, tx := range m.items {
-		if filter(tx) {
+		if filterFun(tx) {
 			removed = append(removed, tx)
 			delete(m.items, nonce)
 		}
