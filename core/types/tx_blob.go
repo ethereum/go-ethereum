@@ -402,12 +402,14 @@ func (tx *BlobTx) decode(input []byte) error {
 		return err
 	}
 	var payload blobTxWithBlobs
+	var notV0 bool
 	if secondElemKind == rlp.List {
 		// No version byte: blob sidecar v0.
 		payload = new(blobTxWithBlobsV0)
 	} else {
 		// It has a version byte. Decode as v1, version is checked by assign()
 		payload = new(blobTxWithBlobsV1)
+		notV0 = true
 	}
 	if err := rlp.DecodeBytes(input, payload); err != nil {
 		return err
@@ -415,6 +417,9 @@ func (tx *BlobTx) decode(input []byte) error {
 	sc := new(BlobTxSidecar)
 	if err := payload.assign(sc); err != nil {
 		return err
+	}
+	if notV0 && sc.Version == BlobSidecarVersion0 {
+		return errors.New("invalid blob encoding structure for version 0")
 	}
 	*tx = *payload.tx()
 	tx.Sidecar = sc
