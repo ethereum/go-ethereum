@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
@@ -188,8 +189,8 @@ to check if the node disconnects after receiving multiple invalid requests.`)
 
 	// Check if peer disconnects at the end.
 	code, _, err := conn.Read()
-	if err == errDisc || code == discMsg {
-		t.Fatal("peer improperly disconnected")
+	if err != errDisc && code != discMsg {
+		t.Fatal("peer improperly disconnected", err, errDisc, code, discMsg)
 	}
 }
 
@@ -912,8 +913,8 @@ func (s *Suite) makeBlobTxs(count, blobs int, discriminator byte) (txs types.Tra
 		inner := &types.BlobTx{
 			ChainID:    uint256.MustFromBig(s.chain.config.ChainID),
 			Nonce:      nonce + uint64(i),
-			GasTipCap:  uint256.NewInt(1),
-			GasFeeCap:  uint256.MustFromBig(s.chain.Head().BaseFee()),
+			GasTipCap:  uint256.NewInt(params.GWei),
+			GasFeeCap:  new(uint256.Int).Add(uint256.MustFromBig(s.chain.Head().BaseFee()), uint256.NewInt(+params.GWei)),
 			Gas:        100000,
 			BlobFeeCap: uint256.MustFromBig(eip4844.CalcBlobFee(s.chain.config, s.chain.Head().Header())),
 			BlobHashes: makeSidecar(blobdata...).BlobHashes(),
@@ -986,6 +987,12 @@ func (s *Suite) TestBlobViolations(t *utesting.T) {
 			if code == protoOffset(ethProto)+eth.NewPooledTransactionHashesMsg {
 				// sometimes we'll get a blob transaction hashes announcement before the disconnect
 				// because blob transactions are scheduled to be fetched right away.
+				if code, _, err = conn.Read(); err != nil {
+					t.Fatalf("expected disconnect on blob violation, got err on second read: %v", err)
+				}
+			}
+			if code == protoOffset(ethProto)+eth.GetPooledTransactionsMsg {
+				// due to maxTxPacketSize limit there can be two requests for pooled transactions
 				if code, _, err = conn.Read(); err != nil {
 					t.Fatalf("expected disconnect on blob violation, got err on second read: %v", err)
 				}
