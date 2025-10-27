@@ -187,6 +187,7 @@ type modernSigner struct {
 	legacy  Signer
 }
 
+// txtypeSet is a bitmap for transaction types.
 type txtypeSet [2]uint64
 
 func (v *txtypeSet) set(txType byte) {
