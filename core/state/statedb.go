@@ -579,7 +579,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 
 // updateStateObject writes the given object to the trie.  The actual value is
 // only resolved from the provided function when it is needed during trie hashing.
-func (s *StateDB) updateStateObjectAsync(addr common.Address, resolver func() *types.StateAccount) {
+func (s *StateDB) updateStateObjectAsync(addr common.Address, resolver func() (*types.StateAccount, int)) {
 	if err := s.trie.UpdateAccountAsync(addr, resolver); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr, err))
 	}
@@ -838,13 +838,17 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		workers.SetLimit(1)
 	}
 
-	stateObjectsResolve := make(map[common.Address]func() *types.StateAccount)
+	type stateAccountWithCodeLen struct {
+		*types.StateAccount
+		codeLen int
+	}
+	stateObjectsResolve := make(map[common.Address]func() (*types.StateAccount, int))
 	for addr, op := range s.mutations {
 		if op.applied || op.isDelete() {
 			continue
 		}
 		obj := s.stateObjects[addr] // closure for the task runner below
-		complete := make(chan *types.StateAccount)
+		complete := make(chan stateAccountWithCodeLen)
 		workers.Go(func() error {
 			if s.db.TrieDB().IsVerkle() {
 				obj.updateTrie()
@@ -857,12 +861,13 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 					s.witness.AddState(obj.trie.Witness())
 				}
 			}
-			complete <- &obj.data
+			complete <- stateAccountWithCodeLen{&obj.data, 0}
 			return nil
 		})
 
-		stateObjectsResolve[addr] = func() *types.StateAccount {
-			return <-complete
+		stateObjectsResolve[addr] = func() (*types.StateAccount, int) {
+			res := <-complete
+			return res.StateAccount, res.codeLen
 		}
 	}
 	// If witness building is enabled, gather all the read-only accesses.
@@ -914,6 +919,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			}
 		}
 	}
+
 	s.StorageUpdates += time.Since(start)
 
 	// Now we're about to start to write changes to the trie. The trie is so far
@@ -954,11 +960,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		if op.isDelete() {
 			deletedAddrs = append(deletedAddrs, addr)
 		} else {
-			if s.db.TrieDB().IsVerkle() {
-				s.updateStateObject(s.stateObjects[addr])
-			} else {
-				s.updateStateObjectAsync(addr, stateObjectsResolve[addr])
-			}
+			s.updateStateObjectAsync(addr, stateObjectsResolve[addr])
 			s.AccountUpdated += 1
 		}
 		usedAddrs = append(usedAddrs, addr) // Copy needed for closure

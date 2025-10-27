@@ -177,8 +177,9 @@ func (t *VerkleTrie) UpdateAccount(addr common.Address, acc *types.StateAccount,
 	return nil
 }
 
-func (t *VerkleTrie) UpdateAccountAsync(address common.Address, accountResolver func() *types.StateAccount) error {
-	return errors.New("not implemented")
+func (t *VerkleTrie) UpdateAccountAsync(address common.Address, accountResolver func() (*types.StateAccount, int)) error {
+	acct, codeSize := accountResolver()
+	return t.UpdateAccount(address, acct, codeSize)
 }
 
 // UpdateStorage implements state.Trie, writing the provided storage slot into

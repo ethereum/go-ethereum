@@ -17,7 +17,6 @@
 package trie
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -139,8 +138,9 @@ func (t *TransitionTrie) UpdateAccount(addr common.Address, account *types.State
 	// only needs to know what the account trie does now.
 	return t.overlay.UpdateAccount(addr, account, codeLen)
 }
-func (t *TransitionTrie) UpdateAccountAsync(address common.Address, accountResolver func() *types.StateAccount) error {
-	return errors.New("not implemented")
+func (t *TransitionTrie) UpdateAccountAsync(address common.Address, accountResolver func() (*types.StateAccount, int)) error {
+	acct, codeLen := accountResolver()
+	return t.overlay.UpdateAccount(address, acct, codeLen)
 }
 
 // DeleteStorage removes any existing value for key from the trie. If a node was not

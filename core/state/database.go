@@ -102,7 +102,7 @@ type Trie interface {
 	// UpdateAccountAsync will abstract the write of an account to the secure trie.
 	// The actual value of the account is not resolved from the passed function until
 	// it is needed when hashing the trie.
-	UpdateAccountAsync(address common.Address, accountResolver func() *types.StateAccount) error
+	UpdateAccountAsync(address common.Address, accountResolver func() (*types.StateAccount, int)) error
 
 	// UpdateStorage associates key with value in the trie. If value has length zero,
 	// any existing value is deleted from the trie. The value bytes must not be modified

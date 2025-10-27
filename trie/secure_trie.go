@@ -229,10 +229,10 @@ func (t *StateTrie) UpdateAccount(address common.Address, acc *types.StateAccoun
 // UpdateAccountAsync will abstract the write of an account to the secure trie.
 // The actual value of the account is not resolved from the passed function until
 // it is needed when hashing the trie.
-func (t *StateTrie) UpdateAccountAsync(address common.Address, accountResolve func() *types.StateAccount) error {
+func (t *StateTrie) UpdateAccountAsync(address common.Address, accountResolve func() (*types.StateAccount, int)) error {
 	hk := crypto.Keccak256(address.Bytes())
 	resolve := func() []byte {
-		acc := accountResolve()
+		acc, _ := accountResolve()
 		data, err := rlp.EncodeToBytes(acc)
 		if err != nil {
 			panic(err) // TODO: what do do here?
