@@ -182,9 +182,22 @@ type Signer interface {
 // modernSigner is the signer implementation that handles non-legacy transaction types.
 // For legacy transactions, it defers to one of the legacy signers (frontier, homestead, eip155).
 type modernSigner struct {
-	txTypeBitVec txTypeBitVec
-	chainID      *big.Int
-	legacy       Signer
+	txtypes txtypeSet
+	chainID *big.Int
+	legacy  Signer
+}
+
+type txtypeSet [2]uint64
+
+func (v *txtypeSet) set(txType byte) {
+	v[txType/64] |= 1 << (txType % 64)
+}
+
+func (v *txtypeSet) has(txType byte) bool {
+	if txType >= byte(len(v)*64) {
+		return false
+	}
+	return v[txType/64]&(1<<(txType%64)) != 0
 }
 
 func newModernSigner(chainID *big.Int, fork forks.Fork) Signer {
@@ -203,19 +216,19 @@ func newModernSigner(chainID *big.Int, fork forks.Fork) Signer {
 	default:
 		s.legacy = FrontierSigner{}
 	}
-	s.txTypeBitVec.Set(LegacyTxType)
+	s.txtypes.set(LegacyTxType)
 	// configure tx types
 	if fork >= forks.Berlin {
-		s.txTypeBitVec.Set(AccessListTxType)
+		s.txtypes.set(AccessListTxType)
 	}
 	if fork >= forks.London {
-		s.txTypeBitVec.Set(DynamicFeeTxType)
+		s.txtypes.set(DynamicFeeTxType)
 	}
 	if fork >= forks.Cancun {
-		s.txTypeBitVec.Set(BlobTxType)
+		s.txtypes.set(BlobTxType)
 	}
 	if fork >= forks.Prague {
-		s.txTypeBitVec.Set(SetCodeTxType)
+		s.txtypes.set(SetCodeTxType)
 	}
 	return s
 }
@@ -226,7 +239,7 @@ func (s *modernSigner) ChainID() *big.Int {
 
 func (s *modernSigner) Equal(s2 Signer) bool {
 	other, ok := s2.(*modernSigner)
-	return ok && s.chainID.Cmp(other.chainID) == 0 && s.txTypeBitVec.Equals(&other.txTypeBitVec) && s.legacy.Equal(other.legacy)
+	return ok && s.chainID.Cmp(other.chainID) == 0 && s.txtypes == other.txtypes && s.legacy.Equal(other.legacy)
 }
 
 func (s *modernSigner) Hash(tx *Transaction) common.Hash {
@@ -234,7 +247,7 @@ func (s *modernSigner) Hash(tx *Transaction) common.Hash {
 }
 
 func (s *modernSigner) supportsType(txtype byte) bool {
-	return s.txTypeBitVec.Has(txtype)
+	return s.txtypes.has(txtype)
 }
 
 func (s *modernSigner) Sender(tx *Transaction) (common.Address, error) {
