@@ -75,7 +75,7 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &m); err != nil {
 		return err
 	}
-	*ga = make(GenesisAlloc)
+	*ga = make(GenesisAlloc, len(m))
 	for addr, a := range m {
 		(*ga)[common.Address(addr)] = a
 	}
