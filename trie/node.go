@@ -77,11 +77,11 @@ func newValueNode(resolver func() []byte) *valueNode {
 	}
 }
 
-func (v *valueNode) resolve() []byte {
-	if v.val == nil {
-		v.val = v.resolver()
+func (n *valueNode) resolve() []byte {
+	if n.val == nil {
+		n.val = n.resolver()
 	}
-	return v.val
+	return n.val
 }
 
 // EncodeRLP encodes a full node into the consensus RLP format.
