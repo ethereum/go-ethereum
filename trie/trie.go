@@ -382,6 +382,8 @@ func (t *Trie) Update(key, value []byte) error {
 	return t.update(key, value)
 }
 
+// UpdateAsync associates a key with value in the trie.  The actual value is
+// not resolved until needed (by calling Get, or Hash).
 func (t *Trie) UpdateAsync(key []byte, valueResolver func() []byte) error {
 	t.unhashed++
 	t.uncommitted++

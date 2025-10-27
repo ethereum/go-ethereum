@@ -226,6 +226,9 @@ func (t *StateTrie) UpdateAccount(address common.Address, acc *types.StateAccoun
 	return nil
 }
 
+// UpdateAccountAsync will abstract the write of an account to the secure trie.
+// The actual value of the account is not resolved from the passed function until
+// it is needed when hashing the trie.
 func (t *StateTrie) UpdateAccountAsync(address common.Address, accountResolve func() *types.StateAccount) error {
 	hk := crypto.Keccak256(address.Bytes())
 	resolve := func() []byte {

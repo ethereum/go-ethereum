@@ -577,7 +577,8 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	}
 }
 
-// updateStateObject writes the given object to the trie.
+// updateStateObject writes the given object to the trie.  The actual value is
+// only resolved from the provided function when it is needed during trie hashing.
 func (s *StateDB) updateStateObjectAsync(addr common.Address, resolver func() *types.StateAccount) {
 	if err := s.trie.UpdateAccountAsync(addr, resolver); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr, err))
