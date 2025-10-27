@@ -1356,9 +1356,10 @@ func TestAdd(t *testing.T) {
 	}
 	// addtx is a helper sender/tx tuple to represent a new tx addition
 	type addtx struct {
-		from string
-		tx   *types.BlobTx
-		err  error
+		from  string
+		tx    *types.BlobTx
+		err   error
+		check func(*BlobPool, *types.Transaction) bool
 	}
 
 	tests := []struct {
@@ -1407,6 +1408,9 @@ func TestAdd(t *testing.T) {
 					from: "eve",
 					tx:   makeUnsignedTx(11, 1, 1, 1),
 					err:  nil,
+					check: func(pool *BlobPool, tx *types.Transaction) bool {
+						return pool.Status(tx.Hash()) == txpool.TxStatusQueued
+					},
 				},
 			},
 		},
@@ -1768,7 +1772,7 @@ func TestAdd(t *testing.T) {
 				t.Errorf("test %d, tx %d: adding transaction error mismatch: have %v, want %v", i, j, errs[0], add.err)
 			}
 			if add.err == nil {
-				// first check if tx is in the queue
+				// first check if tx is in the pool (reorder queue or pending)
 				if !pool.Has(signed.Hash()) {
 					t.Errorf("test %d, tx %d: added transaction not found in pool", i, j)
 				}
@@ -1784,6 +1788,12 @@ func TestAdd(t *testing.T) {
 					}
 				}
 			}
+			if add.check != nil {
+				if !add.check(pool, signed) {
+					t.Errorf("test %d, tx %d: custom check failed", i, j)
+				}
+			}
+			// Verify the pool internals after each addition
 			verifyPoolInternals(t, pool)
 		}
 		verifyPoolInternals(t, pool)
