@@ -566,20 +566,9 @@ func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common
 // Setting, updating & deleting state object methods.
 //
 
-// updateStateObject writes the given object to the trie.
-func (s *StateDB) updateStateObject(obj *stateObject) {
-	// Encode the account and update the account trie
-	if err := s.trie.UpdateAccount(obj.Address(), &obj.data, len(obj.code)); err != nil {
-		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", obj.Address(), err))
-	}
-	if obj.dirtyCode {
-		s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code)
-	}
-}
-
 // updateStateObject writes the given object to the trie.  The actual value is
 // only resolved from the provided function when it is needed during trie hashing.
-func (s *StateDB) updateStateObjectAsync(addr common.Address, resolver func() (*types.StateAccount, int)) {
+func (s *StateDB) updateStateObject(addr common.Address, resolver func() (*types.StateAccount, int)) {
 	if err := s.trie.UpdateAccountAsync(addr, resolver); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr, err))
 	}
@@ -960,7 +949,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		if op.isDelete() {
 			deletedAddrs = append(deletedAddrs, addr)
 		} else {
-			s.updateStateObjectAsync(addr, stateObjectsResolve[addr])
+			s.updateStateObject(addr, stateObjectsResolve[addr])
 			s.AccountUpdated += 1
 		}
 		usedAddrs = append(usedAddrs, addr) // Copy needed for closure
