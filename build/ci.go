@@ -348,16 +348,15 @@ func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (
 
 func doTest(cmdline []string) {
 	var (
-		dlgo          = flag.Bool("dlgo", false, "Download Go and build with it")
-		arch          = flag.String("arch", "", "Run tests for given architecture")
-		cc            = flag.String("cc", "", "Sets C compiler binary")
-		coverage      = flag.Bool("coverage", false, "Whether to record code coverage")
-		verbose       = flag.Bool("v", false, "Whether to log verbosely")
-		race          = flag.Bool("race", false, "Execute the race detector")
-		short         = flag.Bool("short", false, "Pass the 'short'-flag to go test")
-		cachedir      = flag.String("cachedir", "./build/cache", "directory for caching downloads")
-		skipspectests = flag.Bool("skip-spectests", false, "Skip downloading execution-spec-tests fixtures")
-		threads       = flag.Int("p", 1, "Number of CPU threads to use for testing")
+		dlgo     = flag.Bool("dlgo", false, "Download Go and build with it")
+		arch     = flag.String("arch", "", "Run tests for given architecture")
+		cc       = flag.String("cc", "", "Sets C compiler binary")
+		coverage = flag.Bool("coverage", false, "Whether to record code coverage")
+		verbose  = flag.Bool("v", false, "Whether to log verbosely")
+		race     = flag.Bool("race", false, "Execute the race detector")
+		short    = flag.Bool("short", false, "Pass the 'short'-flag to go test")
+		cachedir = flag.String("cachedir", "./build/cache", "directory for caching downloads")
+		threads  = flag.Int("p", 1, "Number of CPU threads to use for testing")
 	)
 	flag.CommandLine.Parse(cmdline)
 
@@ -365,7 +364,7 @@ func doTest(cmdline []string) {
 	csdb := download.MustLoadChecksums("build/checksums.txt")
 
 	// Get test fixtures.
-	if !*skipspectests {
+	if !*short {
 		downloadSpecTestFixtures(csdb, *cachedir)
 	}
 
