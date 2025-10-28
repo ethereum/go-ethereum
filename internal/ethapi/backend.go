@@ -103,7 +103,7 @@ type Backend interface {
 	NewMatcherBackend() filtermaps.MatcherBackend
 }
 
-func GetAPIs(apiBackend Backend) []rpc.API {
+func APIs(apiBackend Backend) []rpc.API {
 	nonceLock := new(AddrLocker)
 	return []rpc.API{
 		{
