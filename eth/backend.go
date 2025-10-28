@@ -386,7 +386,7 @@ func makeExtraData(extra []byte) []byte {
 // APIs return the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
-	apis := ethapi.GetAPIs(s.APIBackend)
+	apis := ethapi.APIs(s.APIBackend)
 
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{
