@@ -68,7 +68,7 @@ jobs:
           cache: false
 
       - name: Build
-        run: go run build ci.go test -arch 386
+        run: go run build/ci.go test -arch 386
 
   test:
     name: Test
