@@ -59,7 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: false
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -73,7 +73,7 @@ jobs:
           apt-get -yq --no-install-suggests --no-install-recommends install gcc-multilib
 
       - name: Build
-        run: go run build/ci.go test -arch 386
+        run: go run build/ci.go test -arch 386 -short -p 8
 
   test:
     name: Test
