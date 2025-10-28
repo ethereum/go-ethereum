@@ -42,6 +42,10 @@ func (x *XDPoS_v2) getEpochSwitchInfo(chain consensus.ChainReader, header *types
 		if h == nil {
 			return nil, fmt.Errorf("[getEpochSwitchInfo] can not find header from db hash %v", hash.Hex())
 		}
+	} else {
+		if h.Hash() != hash {
+			return nil, fmt.Errorf("[getEpochSwitchInfo] header hash not match, header hash %v, input hash %v", h.Hash().Hex(), hash.Hex())
+		}
 	}
 	isEpochSwitch, _, err := x.IsEpochSwitch(h)
 	if err != nil {
