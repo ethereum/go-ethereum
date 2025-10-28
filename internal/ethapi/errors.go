@@ -42,7 +42,7 @@ type txSyncTimeoutError struct {
 // ErrorCode returns the JSON error code for a revert.
 // See: https://ethereum.org/en/developers/docs/apis/json-rpc/#error-codes
 func (e *revertError) ErrorCode() int {
-	return 3
+	return errCodeReverted
 }
 
 // ErrorData returns the hex encoded revert reason.
@@ -112,7 +112,7 @@ const (
 	errCodeClientLimitExceeded     = -38026
 	errCodeInternalError           = -32603
 	errCodeInvalidParams           = -32602
-	errCodeReverted                = -32000
+	errCodeReverted                = 3
 	errCodeVMError                 = -32015
 	errCodeTxSyncTimeout           = 4
 )
