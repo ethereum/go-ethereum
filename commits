@@ -1,4 +1,15 @@
 I found 50 commits containing the keyword "XFN" in the last 200 commits. Here they are with dates: November 2025:
+
+845137849 - Wanwiset Peerapatanapokin - consensus: change os.Exit to return error (#1653)
+b49f6cb0f - Wanwiset Peerapatanapokin - consensus: verify header hash is same as input hash in getEpochSwitchInfo (#1627)
+e0c987f45 - Wanwiset Peerapatanapokin - impose size limit for DecodeBytesExtraFields (#1637)
+53f6a8d6d - Wanwiset Peerapatanapokin - consensus: optimize CompareSignersLists
+6abb4f88d - Wanwiset Peerapatanapokin - consensus: Verify gaslimit bounds when accepting blocks (#1619)
+c95d25805 - Wanwiset Peerapatanapokin - separate fullVerifies array into v1fullVerifies and v2fullVerifies (#1618)
+25a70e877 - Wanwiset Peerapatanapokin - consensus: skip gas limit verification for genesis block (#1646)
+da92ad7cc - Wanwiset Peerapatanapokin - update package version: (#1612)
+
+
 2025-11-12 - 4bb925258 - params: fix type V2 not equal bug, close XFN-45 (#1737)
 2025-11-10 - 366c99ece - consensus: use signer pubkey to check for unique signatures, close XFN-03 (#1643)
 2025-11-10 - 7aaa541db - consensus: implement DeepCopy() in PoolObj, close XFN-04 (#1723)
