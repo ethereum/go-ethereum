@@ -75,7 +75,9 @@ func TestBodyStorage(t *testing.T) {
 	body := &types.Body{Uncles: []*types.Header{{Extra: []byte("test header")}}}
 
 	hasher := sha3.NewLegacyKeccak256()
-	rlp.Encode(hasher, body)
+	if err := rlp.Encode(hasher, body); err != nil {
+		t.Fatalf("encode body err: %v", err)
+	}
 	hash := common.BytesToHash(hasher.Sum(nil))
 
 	if entry := ReadBody(db, hash, 0); entry != nil {

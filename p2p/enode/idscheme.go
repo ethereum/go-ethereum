@@ -50,7 +50,10 @@ func SignV4(r *enr.Record, privkey *ecdsa.PrivateKey) error {
 	cpy.Set(Secp256k1(privkey.PublicKey))
 
 	h := sha3.NewLegacyKeccak256()
-	rlp.Encode(h, cpy.AppendElements(nil))
+	if err := rlp.Encode(h, cpy.AppendElements(nil)); err != nil {
+		panic("can't encode: " + err.Error())
+	}
+
 	sig, err := crypto.Sign(h.Sum(nil), privkey)
 	if err != nil {
 		return err
@@ -71,7 +74,10 @@ func (V4ID) Verify(r *enr.Record, sig []byte) error {
 	}
 
 	h := sha3.NewLegacyKeccak256()
-	rlp.Encode(h, r.AppendElements(nil))
+	if err := rlp.Encode(h, r.AppendElements(nil)); err != nil {
+		panic("can't encode: " + err.Error())
+	}
+
 	if !crypto.VerifySignature(entry, h.Sum(nil), sig) {
 		return enr.ErrInvalidSig
 	}
