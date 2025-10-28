@@ -67,6 +67,11 @@ jobs:
           go-version: '1.25'
           cache: false
 
+      - name: Install cross toolchain
+        run: |
+          apt-get update
+          apt-get -yq --no-install-suggests --no-install-recommends install gcc-multilib
+
       - name: Build
         run: go run build/ci.go test -arch 386
 
