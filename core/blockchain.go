@@ -365,7 +365,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	}
 	log.Info("")
 	log.Info(strings.Repeat("-", 153))
-	for _, line := range strings.Split(chainConfig.Description(), "\n") {
+	for line := range strings.SplitSeq(chainConfig.Description(), "\n") {
 		log.Info(line)
 	}
 	log.Info(strings.Repeat("-", 153))

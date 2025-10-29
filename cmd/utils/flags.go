@@ -1584,7 +1584,7 @@ func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
 		}
 	}
 	cfg.RequiredBlocks = make(map[uint64]common.Hash)
-	for _, entry := range strings.Split(requiredBlocks, ",") {
+	for entry := range strings.SplitSeq(requiredBlocks, ",") {
 		parts := strings.Split(entry, "=")
 		if len(parts) != 2 {
 			Fatalf("Invalid required block entry: %s", entry)
@@ -2348,7 +2348,7 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 	// Otherwise resolve absolute paths and return them
 	var preloads []string
 
-	for _, file := range strings.Split(ctx.String(PreloadJSFlag.Name), ",") {
+	for file := range strings.SplitSeq(ctx.String(PreloadJSFlag.Name), ",") {
 		preloads = append(preloads, strings.TrimSpace(file))
 	}
 	return preloads

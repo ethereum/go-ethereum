@@ -499,7 +499,7 @@ func doCheckBadDeps() {
 		if err != nil {
 			log.Fatalf("Failed to list '%s' dependencies: %v", rule[0], err)
 		}
-		for _, line := range strings.Split(string(out), "\n") {
+		for line := range strings.SplitSeq(string(out), "\n") {
 			if strings.TrimSpace(line) == rule[1] {
 				log.Printf("Found bad dependency '%s' -> '%s'", rule[0], rule[1])
 				failed = true

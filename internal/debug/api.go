@@ -217,7 +217,7 @@ func (*HandlerT) Stacks(filter *string) string {
 		dump := buf.String()
 		buf.Reset()
 
-		for _, trace := range strings.Split(dump, "\n\n") {
+		for trace := range strings.SplitSeq(dump, "\n\n") {
 			if ok, _ := expr.Evaluate(map[string]string{"Value": trace}); ok {
 				buf.WriteString(trace)
 				buf.WriteString("\n\n")

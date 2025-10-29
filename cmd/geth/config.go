@@ -291,7 +291,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		stack.RegisterLifecycle(simBeacon)
 
 		banner := constructDevModeBanner(ctx, cfg)
-		for _, line := range strings.Split(banner, "\n") {
+		for line := range strings.SplitSeq(banner, "\n") {
 			log.Warn(line)
 		}
 	} else if ctx.IsSet(utils.BeaconApiFlag.Name) {
