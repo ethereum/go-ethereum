@@ -155,8 +155,12 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			if !logged && evm.Config.Tracer.OnOpcode != nil {
 				evm.Config.Tracer.OnOpcode(pcCopy, byte(op), gasCopy, cost, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))
 			}
-			if logged && evm.Config.Tracer.OnFault != nil {
-				evm.Config.Tracer.OnFault(pcCopy, byte(op), gasCopy, cost, callContext, evm.depth, VMErrorFromErr(err))
+			if logged {
+				if evm.Config.Tracer.OnFaultV2 != nil {
+					evm.Config.Tracer.OnFaultV2(pcCopy, byte(op), gasCopy, cost, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))
+				} else if evm.Config.Tracer.OnFault != nil {
+					evm.Config.Tracer.OnFault(pcCopy, byte(op), gasCopy, cost, callContext, evm.depth, VMErrorFromErr(err))
+				}
 			}
 		}()
 	}
