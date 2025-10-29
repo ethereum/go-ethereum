@@ -130,7 +130,6 @@ type Downloader struct {
 
 	// Channels
 	headerProcCh chan *headerTask // Channel to feed the header processor new tasks
-	bodyProcCh   chan *headerTask // Channle to feed the body processor new tasks
 
 	// Skeleton sync
 	skeleton *skeleton // Header skeleton to backfill the chain with (eth2 mode)
@@ -234,7 +233,6 @@ func New(stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, dropPeer 
 		chainCutoffHash:   cutoffHash,
 		dropPeer:          dropPeer,
 		headerProcCh:      make(chan *headerTask, 1),
-		bodyProcCh:        make(chan *headerTask, 1), // todo Is it enough to set this buffer size as 1
 		quitCh:            make(chan struct{}),
 		SnapSyncer:        snap.NewSyncer(stateDb, chain.TrieDB().Scheme()),
 		stateSyncStart:    make(chan *stateSync),
