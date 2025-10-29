@@ -454,14 +454,26 @@ func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 		t.Fatal(err)
 	}
 	// Check that the transaction was sent over the channel
-	hash := <-ch1
-	if hash != signedTx.Hash() {
-		t.Fatalf("Invalid tx hash received, got %v, want %v", hash, signedTx.Hash())
+	select {
+	case hash := <-ch1:
+		if hash != signedTx.Hash() {
+			t.Fatalf("Invalid tx hash received, got %v, want %v", hash, signedTx.Hash())
+		}
+	case err := <-sub1.Err():
+		t.Fatalf("Subscription error: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("Timeout waiting for pending transaction hash")
 	}
 	// Check that the transaction was sent over the channel
-	tx = <-ch2
-	if tx.Hash() != signedTx.Hash() {
-		t.Fatalf("Invalid tx hash received, got %v, want %v", tx.Hash(), signedTx.Hash())
+	select {
+	case tx = <-ch2:
+		if tx.Hash() != signedTx.Hash() {
+			t.Fatalf("Invalid tx hash received, got %v, want %v", tx.Hash(), signedTx.Hash())
+		}
+	case err := <-sub2.Err():
+		t.Fatalf("Subscription error: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("Timeout waiting for full pending transaction")
 	}
 }
 
