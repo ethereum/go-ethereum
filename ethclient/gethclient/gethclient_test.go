@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -413,12 +414,20 @@ func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 
 	// Subscribe to Transactions
 	ch1 := make(chan common.Hash)
-	ec.SubscribePendingTransactions(context.Background(), ch1)
+	sub1, err := ec.SubscribePendingTransactions(context.Background(), ch1)
+	if err != nil {
+		t.Fatalf("Failed to subscribe to pending transactions: %v", err)
+	}
+	defer sub1.Unsubscribe()
 
 	// Subscribe to Transactions
 	ch2 := make(chan *types.Transaction)
-	ec.SubscribeFullPendingTransactions(context.Background(), ch2)
-
+	sub2, err := ec.SubscribeFullPendingTransactions(context.Background(), ch2)
+	if err != nil {
+		t.Fatalf("Failed to subscribe to full pending transactions: %v", err)
+	}
+	defer sub2.Unsubscribe()
+	time.Sleep(100 * time.Millisecond)
 	// Send a transaction
 	chainID, err := ethcl.ChainID(context.Background())
 	if err != nil {
