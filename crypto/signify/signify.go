@@ -79,19 +79,19 @@ func SignFile(input string, output string, key string, untrustedComment string, 
 
 	// Create the main data signature.
 	rawSig := ed25519.Sign(skey, filedata)
-	var dataSig []byte
+	dataSig := make([]byte, 0, len(header)+len(keyNum)+len(rawSig))
 	dataSig = append(dataSig, header...)
 	dataSig = append(dataSig, keyNum...)
 	dataSig = append(dataSig, rawSig...)
 
 	// Create the comment signature.
-	var commentSigInput []byte
+	commentSigInput := make([]byte, 0, len(rawSig)+len(trustedComment))
 	commentSigInput = append(commentSigInput, rawSig...)
 	commentSigInput = append(commentSigInput, []byte(trustedComment)...)
 	commentSig := ed25519.Sign(skey, commentSigInput)
 
 	// Create the output file.
-	var out = new(bytes.Buffer)
+	out := new(bytes.Buffer)
 	fmt.Fprintln(out, "untrusted comment:", untrustedComment)
 	fmt.Fprintln(out, base64.StdEncoding.EncodeToString(dataSig))
 	fmt.Fprintln(out, "trusted comment:", trustedComment)
