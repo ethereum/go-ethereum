@@ -733,8 +733,9 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 		if res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64()); err == nil && !stale {
 			resume := reconstruct(accepted, res)
 			if resume >= 0 {
-				q.receiptTaskPool[header.Hash()] = header
-				q.receiptTaskQueue.Push(header, -int64(header.Number.Uint64()))
+				// TODO: add receipt index in TaskPool
+				taskPool[header.Hash()] = header
+				taskQueue.Push(header, -int64(header.Number.Uint64()))
 			}
 		} else {
 			// else: between here and above, some other peer filled this result,
