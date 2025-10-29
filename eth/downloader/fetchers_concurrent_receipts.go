@@ -20,8 +20,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // receiptQueue implements typedQueue and is a type adapter between the generic
@@ -88,10 +90,20 @@ func (q *receiptQueue) request(peer *peerConnection, req *fetchRequest, resCh ch
 // deliver is responsible for taking a generic response packet from the concurrent
 // fetcher, unpacking the receipt data and delivering it to the downloader's queue.
 func (q *receiptQueue) deliver(peer *peerConnection, packet *eth.Response) (int, error) {
-	receipts := *packet.Res.(*eth.ReceiptsRLPResponse)
+	receiptsRLP := *packet.Res.(*eth.ReceiptsRLPResponse)
 	hashes := packet.Meta.([]common.Hash) // {receipt hashes}
 
-	accepted, err := q.queue.DeliverReceipts(peer.id, receipts, hashes)
+	receipts := make([][]*types.Receipt, len(receiptsRLP))
+	for i, rc := range receiptsRLP {
+		var r []*types.Receipt
+		if err := rlp.DecodeBytes(rc, &r); err != nil {
+			peer.log.Debug("Failed to decode retreived receipts")
+			return 0, err
+		}
+		receipts[i] = r
+	}
+
+	accepted, err := q.queue.DeliverReceipts(peer.id, receipts, hashes, false)
 	switch {
 	case err == nil && len(receipts) == 0:
 		peer.log.Trace("Requested receipts delivered")

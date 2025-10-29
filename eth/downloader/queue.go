@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
@@ -65,12 +64,13 @@ type fetchRequest struct {
 // fetchResult is a struct collecting partial results from data fetchers until
 // all outstanding pieces complete and the result as a whole can be processed.
 type fetchResult struct {
-	pending atomic.Int32 // Flag telling what deliveries are outstanding
+	pending     atomic.Int32 // Flag telling what deliveries are outstanding
+	receiptSize uint64
 
 	Header       *types.Header
 	Uncles       []*types.Header
 	Transactions types.Transactions
-	Receipts     rlp.RawValue
+	Receipts     [][]*types.Receipt
 	Withdrawals  types.Withdrawals
 }
 
@@ -86,7 +86,7 @@ func newFetchResult(header *types.Header, snapSync bool) *fetchResult {
 	if snapSync {
 		if header.EmptyReceipts() {
 			// Ensure the receipts list is valid even if it isn't actively fetched.
-			item.Receipts = rlp.EmptyList
+			item.Receipts = [][]*types.Receipt{}
 		} else {
 			item.pending.Store(item.pending.Load() | (1 << receiptType))
 		}
@@ -622,11 +622,12 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 		return nil
 	}
 
-	reconstruct := func(index int, result *fetchResult) {
+	reconstruct := func(index int, result *fetchResult) int {
 		result.Transactions = txLists[index]
 		result.Uncles = uncleLists[index]
 		result.Withdrawals = withdrawalLists[index]
 		result.SetBodyDone()
+		return -1
 	}
 	return q.deliver(id, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool,
 		bodyReqTimer, bodyInMeter, bodyDropMeter, len(txLists), validate, reconstruct)
@@ -635,7 +636,7 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 // DeliverReceipts injects a receipt retrieval response into the results queue.
 // The method returns the number of transaction receipts accepted from the delivery
 // and also wakes any threads waiting for data delivery.
-func (q *queue) DeliverReceipts(id string, receiptList []rlp.RawValue, receiptListHashes []common.Hash) (int, error) {
+func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt, receiptListHashes []common.Hash, lastBlockIncomplete bool) (int, error) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -645,9 +646,36 @@ func (q *queue) DeliverReceipts(id string, receiptList []rlp.RawValue, receiptLi
 		}
 		return nil
 	}
-	reconstruct := func(index int, result *fetchResult) {
-		result.Receipts = receiptList[index]
+	reconstruct := func(index int, result *fetchResult) int {
+		result.Receipts = append(result.Receipts, receiptList[index])
+		if index == len(receiptList) && lastBlockIncomplete {
+			// 1. Verify the total number of tx delivered
+			if uint64(len(receiptList[index])) > result.Header.GasUsed/21_000 {
+				result.Receipts = [][]*types.Receipt{}
+				return 0
+			}
+			// 2. Verify the size of each receipt against the gas limit of the corresponding transaction
+			for _, rc := range receiptList[index] {
+				var logSize uint64
+				for _, log := range rc.Logs {
+					logSize += uint64(len(log.Data))
+				}
+				if logSize > params.MaxTxGas/params.LogDataGas {
+					result.Receipts = [][]*types.Receipt{}
+					return 0
+				}
+				result.receiptSize += logSize
+			}
+			// 3. Verify the total download receipt size is no longer than allowed by the block gas limit
+			if result.receiptSize > result.Header.GasLimit/params.LogDataGas {
+				result.Receipts = [][]*types.Receipt{}
+				return 0
+			}
+			return len(result.Receipts)
+		}
+		// receipt fetch is done
 		result.SetReceiptsDone()
+		return -1
 	}
 	return q.deliver(id, q.receiptTaskPool, q.receiptTaskQueue, q.receiptPendPool,
 		receiptReqTimer, receiptInMeter, receiptDropMeter, len(receiptList), validate, reconstruct)
@@ -662,7 +690,7 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	taskQueue *prque.Prque[int64, *types.Header], pendPool map[string]*fetchRequest,
 	reqTimer *metrics.Timer, resInMeter, resDropMeter *metrics.Meter,
 	results int, validate func(index int, header *types.Header) error,
-	reconstruct func(index int, result *fetchResult)) (int, error) {
+	reconstruct func(index int, result *fetchResult) int) (int, error) {
 	// Short circuit if the data was never requested
 	request := pendPool[id]
 	if request == nil {
@@ -703,7 +731,11 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 
 	for _, header := range request.Headers[:i] {
 		if res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64()); err == nil && !stale {
-			reconstruct(accepted, res)
+			resume := reconstruct(accepted, res)
+			if resume >= 0 {
+				q.receiptTaskPool[header.Hash()] = header
+				q.receiptTaskQueue.Push(header, -int64(header.Number.Uint64()))
+			}
 		} else {
 			// else: between here and above, some other peer filled this result,
 			// or it was indeed a no-op. This should not happen, but if it does it's
