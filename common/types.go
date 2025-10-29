@@ -459,13 +459,9 @@ func (addr AddressEIP55) MarshalJSON() ([]byte, error) {
 
 type Decimal uint64
 
-func isString(input []byte) bool {
-	return len(input) >= 2 && input[0] == '"' && input[len(input)-1] == '"'
-}
-
 // UnmarshalJSON parses a hash in hex syntax.
 func (d *Decimal) UnmarshalJSON(input []byte) error {
-	if !isString(input) {
+    if !(len(input) >= 2 && input[0] == '"' && input[len(input)-1] == '"') {
 		return &json.UnmarshalTypeError{Value: "non-string", Type: reflect.TypeFor[uint64]()}
 	}
 	if i, err := strconv.ParseUint(string(input[1:len(input)-1]), 10, 64); err == nil {
