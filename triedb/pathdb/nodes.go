@@ -651,7 +651,8 @@ func (s *nodeSetWithOrigin) encodeNodeHistory(root common.Hash) (map[common.Hash
 					encodeFull = true // fallback to the full node encoding
 				} else {
 					// Encode the node difference as the history element
-					blob := encodeNodeCompressed(nElem == 2, diffs, indices)
+					addExt := nElem != 2 // fullNode
+					blob := encodeNodeCompressed(addExt, diffs, indices)
 					nodes[owner][path] = blob
 				}
 			}
