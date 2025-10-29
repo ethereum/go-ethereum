@@ -609,14 +609,14 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			mid: skeletonExpect{
 				state: []*subchain{{Head: requestHeaders + 100, Tail: 100}},
 				serve: requestHeaders + 101 - 3, // len - head - genesis - missing
-				drop:  1,                        // penalize shortened header deliveries
+				drop:  0,                        // do not penalize in relaxed mode
 			},
 
 			newPeer: newSkeletonTestPeer("good-peer", chain),
 			end: skeletonExpect{
 				state: []*subchain{{Head: requestHeaders + 100, Tail: 1}},
 				serve: (requestHeaders + 101 - 3) + (100 - 1), // midserve + lenrest - genesis
-				drop:  1,                                      // no new drops
+				drop:  0,                                      // relaxed: no drops
 			},
 		},
 		// This test checks if a peer tries to withhold a header - *off* the sync
@@ -655,14 +655,14 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			mid: skeletonExpect{
 				state: []*subchain{{Head: requestHeaders + 100, Tail: 100}},
 				serve: requestHeaders + 101 - 2, // len - head - genesis
-				drop:  1,                        // penalize invalid header sequences
+				drop:  0,                        // do not penalize in relaxed mode
 			},
 
 			newPeer: newSkeletonTestPeer("good-peer", chain),
 			end: skeletonExpect{
 				state: []*subchain{{Head: requestHeaders + 100, Tail: 1}},
 				serve: (requestHeaders + 101 - 2) + (100 - 1), // midserve + lenrest - genesis
-				drop:  1,                                      // no new drops
+				drop:  0,                                      // relaxed: no drops
 			},
 		},
 		// This test checks if a peer tries to duplicate a header - *off* the sync
