@@ -144,10 +144,9 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		want := errors.New("context canceled")
 		_, err := bind.WaitDeployed(ctx, backend.Client(), tx.Hash())
-		if err == nil || errors.Is(want, err) {
-			t.Errorf("error mismatch: want %v, got %v", want, err)
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("error mismatch: want %v, got %v", context.Canceled, err)
 		}
 	}()
 
