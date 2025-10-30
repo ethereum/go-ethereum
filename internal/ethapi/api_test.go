@@ -785,7 +785,7 @@ func TestEstimateGas(t *testing.T) {
 			blockNumber: rpc.LatestBlockNumber,
 			call:        TransactionArgs{},
 			overrides: override.StateOverride{
-				randomAccounts[0].addr: override.OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
+			randomAccounts[0].addr: override.OverrideAccount{Balance: newRPCBalance(big.NewInt(params.Ether))},
 			},
 			expectErr: nil,
 			want:      53000,
@@ -1091,7 +1091,7 @@ func TestCall(t *testing.T) {
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 			},
 			overrides: override.StateOverride{
-				randomAccounts[0].addr: override.OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
+			randomAccounts[0].addr: override.OverrideAccount{Balance: newRPCBalance(big.NewInt(params.Ether))},
 			},
 			want: "0x",
 		},
