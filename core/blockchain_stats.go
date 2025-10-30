@@ -99,16 +99,16 @@ func (s *ExecuteStats) reportMetrics() {
 }
 
 // logSlow prints the detailed execution statistics if the block is regarded as slow.
-func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold uint64) {
-	if slowBlockThreshold == 0 || s.MgasPerSecond == 0 {
+func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold time.Duration) {
+	if slowBlockThreshold == 0 {
 		return
 	}
-	if s.MgasPerSecond > float64(slowBlockThreshold) {
+	if s.TotalTime < slowBlockThreshold {
 		return
 	}
 	msg := fmt.Sprintf(`
 ########## SLOW BLOCK #########
-Block: %v (%#x) txs: %d, mgasps: %.2f
+Block: %v (%#x) txs: %d, mgasps: %.2f, elapsed: %v
 
 EVM execution: %v
 Validation: %v
@@ -118,18 +118,17 @@ Account hash: %v
 Storage hash: %v
 DB commit: %v
 Block write: %v
-Total: %v
 
 %s
 ##############################
-`, block.Number(), block.Hash(), len(block.Transactions()), s.MgasPerSecond,
+`, block.Number(), block.Hash(), len(block.Transactions()), s.MgasPerSecond, common.PrettyDuration(s.TotalTime),
 		common.PrettyDuration(s.Execution), common.PrettyDuration(s.Validation+s.CrossValidation),
 		common.PrettyDuration(s.AccountReads), s.AccountLoaded,
 		common.PrettyDuration(s.StorageReads), s.StorageLoaded,
 		common.PrettyDuration(s.AccountHashes+s.AccountCommits+s.AccountUpdates),
 		common.PrettyDuration(s.StorageCommits+s.StorageUpdates),
 		common.PrettyDuration(s.TrieDBCommit+s.SnapshotCommit), common.PrettyDuration(s.BlockWrite),
-		common.PrettyDuration(s.TotalTime), s.StateReadCacheStats)
+		s.StateReadCacheStats)
 	for _, line := range strings.Split(msg, "\n") {
 		if line == "" {
 			continue

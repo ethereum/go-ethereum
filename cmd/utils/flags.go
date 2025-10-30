@@ -667,9 +667,10 @@ var (
 		Usage:    "Disables db compaction after import",
 		Category: flags.LoggingCategory,
 	}
-	LogSlowBlockFlag = &cli.Uint64Flag{
+	LogSlowBlockFlag = &cli.DurationFlag{
 		Name:     "debug.logslowblock",
-		Usage:    "The block execution speed threshold (Mgas/s) below which detailed statistics are logged",
+		Usage:    "Block execution time threshold beyond which detailed statistics will be logged (0 means disable)",
+		Value:    ethconfig.Defaults.SlowBlockThreshold,
 		Category: flags.LoggingCategory,
 	}
 
@@ -1716,7 +1717,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.LogNoHistory = true
 	}
 	if ctx.IsSet(LogSlowBlockFlag.Name) {
-		cfg.SlowBlockThreshold = ctx.Uint64(LogSlowBlockFlag.Name)
+		cfg.SlowBlockThreshold = ctx.Duration(LogSlowBlockFlag.Name)
 	}
 	if ctx.IsSet(LogExportCheckpointsFlag.Name) {
 		cfg.LogExportCheckpoints = ctx.String(LogExportCheckpointsFlag.Name)
@@ -2303,7 +2304,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		StateSizeTracking: ctx.Bool(StateSizeTrackingFlag.Name),
 
 		// Configure the slow block statistic logger
-		SlowBlockThreshold: ctx.Uint64(LogSlowBlockFlag.Name),
+		SlowBlockThreshold: ctx.Duration(LogSlowBlockFlag.Name),
 	}
 	if options.ArchiveMode && !options.Preimages {
 		options.Preimages = true

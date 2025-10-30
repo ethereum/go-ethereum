@@ -199,9 +199,9 @@ type BlockChainConfig struct {
 	// StateSizeTracking indicates whether the state size tracking is enabled.
 	StateSizeTracking bool
 
-	// SlowBlockThreshold is the block execution speed threshold (Mgas/s)
-	// below which detailed statistics are logged.
-	SlowBlockThreshold uint64
+	// SlowBlockThreshold is the block execution time threshold beyond which
+	// detailed statistics will be logged.
+	SlowBlockThreshold time.Duration
 }
 
 // DefaultConfig returns the default config.
@@ -341,8 +341,8 @@ type BlockChain struct {
 	logger     *tracing.Hooks
 	stateSizer *state.SizeTracker // State size tracking
 
-	lastForkReadyAlert time.Time // Last time there was a fork readiness print out
-	slowBlockThreshold uint64    // Block execution speed threshold (Mgas/s) below which detailed statistics are logged
+	lastForkReadyAlert time.Time     // Last time there was a fork readiness print out
+	slowBlockThreshold time.Duration // Block execution time threshold beyond which detailed statistics will be logged
 }
 
 // NewBlockChain returns a fully initialised block chain using information
