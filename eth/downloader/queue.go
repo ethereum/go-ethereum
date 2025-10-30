@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 const (
@@ -59,6 +60,8 @@ type fetchRequest struct {
 	From    uint64          // Requested chain element index (used for skeleton fills only)
 	Headers []*types.Header // Requested headers, sorted by request order
 	Time    time.Time       // Time when the request was made
+
+	FromIndex uint64 // TODO: Can we reuse `From` field here?
 }
 
 // fetchResult is a struct collecting partial results from data fetchers until
@@ -568,7 +571,7 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	validate := func(index int, header *types.Header) error {
+	validate := func(index int, header *types.Header, _ *fetchResult) error {
 		if txListHashes[index] != header.TxHash {
 			return errInvalidBody
 		}
@@ -640,19 +643,18 @@ func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt, recei
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	validate := func(index int, header *types.Header) error {
-		if receiptListHashes[index] != header.ReceiptHash {
-			return errInvalidReceipt
-		}
-		return nil
-	}
-	reconstruct := func(index int, result *fetchResult) int {
-		result.Receipts = append(result.Receipts, receiptList[index]...)
-		if lastBlockIncomplete && index == len(receiptList) {
+	validate := func(index int, header *types.Header, result *fetchResult) error {
+		// Case 1) last block, incomplete
+		if lastBlockIncomplete && index == len(receiptList)-1 {
+			if result == nil {
+				return errInvalidReceipt
+			}
+
 			// 1. Verify the total number of tx delivered
-			if uint64(len(receiptList[index])) > result.Header.GasUsed/21_000 {
+			if uint64(len(result.Receipts)+len(receiptList[index])) > result.Header.GasUsed/21_000 {
 				result.Receipts = []*types.Receipt{}
-				return 0
+				result.receiptSize = 0
+				return errInvalidReceipt
 			}
 			// 2. Verify the size of each receipt against the gas limit of the corresponding transaction
 			for _, rc := range receiptList[index] {
@@ -662,18 +664,46 @@ func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt, recei
 				}
 				if logSize > params.MaxTxGas/params.LogDataGas {
 					result.Receipts = []*types.Receipt{}
-					return 0
+					result.receiptSize = 0
+					return errInvalidReceipt
 				}
 				result.receiptSize += logSize
 			}
 			// 3. Verify the total download receipt size is no longer than allowed by the block gas limit
 			if result.receiptSize > result.Header.GasLimit/params.LogDataGas {
 				result.Receipts = []*types.Receipt{}
-				return 0
+				result.receiptSize = 0
+				return errInvalidReceipt
 			}
+			return nil
+		}
+
+		// Case 2) fist block, partially collected before and completed by this response
+		if index == 0 && len(result.Receipts) != 0 {
+			if result == nil {
+				return errInvalidReceipt
+			}
+
+			var hash common.Hash
+			hasher := trie.NewStackTrie(nil)
+			hash = types.DeriveSha(append(result.Receipts, receiptList[index]...), hasher)
+
+			if hash != header.ReceiptHash {
+				return errInvalidReceipt
+			}
+			return nil
+		}
+
+		if receiptListHashes[index] != header.ReceiptHash {
+			return errInvalidReceipt
+		}
+		return nil
+	}
+	reconstruct := func(index int, result *fetchResult) int {
+		result.Receipts = append(result.Receipts, receiptList[index]...)
+		if lastBlockIncomplete && index == len(receiptList)-1 {
 			return len(result.Receipts)
 		}
-		// receipt fetch is done
 		result.SetReceiptsDone()
 		return -1
 	}
@@ -689,21 +719,21 @@ func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt, recei
 func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	taskQueue *prque.Prque[int64, *types.Header], pendPool map[string]*fetchRequest,
 	reqTimer *metrics.Timer, resInMeter, resDropMeter *metrics.Meter,
-	results int, validate func(index int, header *types.Header) error,
+	resultCount int, validate func(index int, header *types.Header, result *fetchResult) error,
 	reconstruct func(index int, result *fetchResult) int) (int, error) {
 	// Short circuit if the data was never requested
 	request := pendPool[id]
 	if request == nil {
-		resDropMeter.Mark(int64(results))
+		resDropMeter.Mark(int64(resultCount))
 		return 0, errNoFetchesPending
 	}
 	delete(pendPool, id)
 
 	reqTimer.UpdateSince(request.Time)
-	resInMeter.Mark(int64(results))
+	resInMeter.Mark(int64(resultCount))
 
 	// If no data items were retrieved, mark them as unavailable for the origin peer
-	if results == 0 {
+	if resultCount == 0 {
 		for _, header := range request.Headers {
 			request.Peer.MarkLacking(header.Hash())
 		}
@@ -714,30 +744,38 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 		failure  error
 		i        int
 		hashes   []common.Hash
+		results  []*fetchResult
 	)
 	for _, header := range request.Headers {
 		// Short circuit assembly if no more fetch results are found
-		if i >= results {
+		if i >= resultCount {
 			break
 		}
 		// Validate the fields
-		if err := validate(i, header); err != nil {
+		res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64())
+		results = append(results, res)
+
+		// If stale || err != nil, res is set to nil.
+		if err := validate(i, header, res); err != nil {
 			failure = err
 			break
 		}
+		if !stale && err == nil {
+			log.Error("Delivery stale", "stale", stale, "number", header.Number.Uint64(), "err", err)
+		}
+
 		hashes = append(hashes, header.Hash())
 		i++
 	}
 
 	for _, header := range request.Headers[:i] {
 		resume := -1
-		if res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64()); err == nil && !stale {
-			resume = reconstruct(accepted, res)
+		if results[accepted] != nil {
+			resume = reconstruct(accepted, results[accepted])
 		} else {
 			// else: between here and above, some other peer filled this result,
 			// or it was indeed a no-op. This should not happen, but if it does it's
 			// not something to panic about
-			log.Error("Delivery stale", "stale", stale, "number", header.Number.Uint64(), "err", err)
 			failure = errStaleDelivery
 		}
 		// Clean up a successful fetch
@@ -749,7 +787,7 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 		}
 		accepted++
 	}
-	resDropMeter.Mark(int64(results - accepted))
+	resDropMeter.Mark(int64(resultCount - accepted))
 
 	// Return all failed or missing fetches to the queue
 	for _, header := range request.Headers[accepted:] {
