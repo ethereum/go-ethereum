@@ -21,7 +21,6 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"math/big"
-	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -65,9 +64,6 @@ type SetCodeTx struct {
 	V *uint256.Int
 	R *uint256.Int
 	S *uint256.Int
-
-	// caches
-	auths atomic.Pointer[authCache]
 }
 
 type authCache []*common.Address
