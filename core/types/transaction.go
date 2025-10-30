@@ -523,7 +523,7 @@ func (tx *Transaction) SetCodeAuthorities() []*common.Address {
 	if cache := tx.auths.Load(); cache != nil {
 		return *cache
 	}
-	cache := setcodetx.deriveAuthorities()
+	cache := (authCache)(DeriveAuthorities(setcodetx.AuthList))
 	tx.auths.Store(&cache)
 	return cache
 }

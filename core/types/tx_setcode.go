@@ -66,14 +66,16 @@ type SetCodeTx struct {
 	S *uint256.Int
 }
 
+// authCache is an internal helper type used in the Transaction object to cache
+// authorizations.
 type authCache []*common.Address
 
-// deriveAuthorities returns a list of recovered authorization signers. The
+// DeriveAuthorities returns a list of recovered authorization signers. The
 // length is always equal to the number of authorizations. Any authorities that
 // fail to recover are set as nil in the list.
-func (tx *SetCodeTx) deriveAuthorities() authCache {
-	auths := make([]*common.Address, 0, len(tx.AuthList))
-	for _, auth := range tx.AuthList {
+func DeriveAuthorities(authList []SetCodeAuthorization) []*common.Address {
+	auths := make([]*common.Address, 0, len(authList))
+	for _, auth := range authList {
 		if addr, err := auth.Authority(); err == nil {
 			auths = append(auths, &addr)
 		} else {
