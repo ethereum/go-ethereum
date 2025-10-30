@@ -143,20 +143,34 @@ func toWordSize(size uint64) uint64 {
 // A Message contains the data derived from a single transaction that is relevant to state
 // processing.
 type Message struct {
-	To                    *common.Address
-	From                  common.Address
-	Nonce                 uint64
-	Value                 *big.Int
-	GasLimit              uint64
-	GasPrice              *big.Int
-	GasFeeCap             *big.Int
-	GasTipCap             *big.Int
-	Data                  []byte
-	AccessList            types.AccessList
-	BlobGasFeeCap         *big.Int
-	BlobHashes            []common.Hash
+	To            *common.Address
+	From          common.Address
+	Nonce         uint64
+	Value         *big.Int
+	GasLimit      uint64
+	GasPrice      *big.Int
+	GasFeeCap     *big.Int
+	GasTipCap     *big.Int
+	Data          []byte
+	AccessList    types.AccessList
+	BlobGasFeeCap *big.Int
+	BlobHashes    []common.Hash
+
+	// When SetCodeAuthorizations is not nil, it represents the full set of
+	// auths included in the actual transaction.
+	//
+	// To avoid recovering the authority addresses during the state transition,
+	// they are precomputed or retrieved from the Transaction cache and placed
+	// into Authorities below. The authority for any given index will match the
+	// corresponding authorization in SetCodeAuthorizations. Nil is used when the
+	// authorization is invalid to maintain indexes between the two lists.
 	SetCodeAuthorizations []types.SetCodeAuthorization
-	Authorities           []*common.Address // Recovered authority addresses
+
+	// Authorities is the list of recovered authority addresses for the
+	// authorization list. Nil is used to represent an invalid authorization. The
+	// indexes between SetCodeAuthorizations and Authorities match so that the
+	// each authority matches the corresponding authorization.
+	Authorities []*common.Address // Recovered authority addresses
 
 	// When SkipNonceChecks is true, the message nonce is not checked against the
 	// account nonce in state.
