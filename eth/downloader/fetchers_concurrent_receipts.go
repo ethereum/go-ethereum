@@ -95,12 +95,15 @@ func (q *receiptQueue) deliver(peer *peerConnection, packet *eth.Response) (int,
 
 	receipts := make([][]*types.Receipt, len(receiptsRLP))
 	for i, rc := range receiptsRLP {
-		var r []*types.Receipt
-		if err := rlp.DecodeBytes(rc, &r); err != nil {
-			peer.log.Debug("Failed to decode retreived receipts")
+		var rcStorage []*types.ReceiptForStorage
+		if err := rlp.DecodeBytes(rc, &rcStorage); err != nil {
+			peer.log.Error("Failed to decode retreived receipts", "err", err)
 			return 0, err
 		}
-		receipts[i] = r
+		receipts[i] = make([]*types.Receipt, len(rcStorage))
+		for j := range rcStorage {
+			receipts[i][j] = (*types.Receipt)(rcStorage[j])
+		}
 	}
 
 	accepted, err := q.queue.DeliverReceipts(peer.id, receipts, hashes, false)

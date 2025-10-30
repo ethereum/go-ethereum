@@ -70,7 +70,7 @@ type fetchResult struct {
 	Header       *types.Header
 	Uncles       []*types.Header
 	Transactions types.Transactions
-	Receipts     [][]*types.Receipt
+	Receipts     types.Receipts
 	Withdrawals  types.Withdrawals
 }
 
@@ -86,7 +86,7 @@ func newFetchResult(header *types.Header, snapSync bool) *fetchResult {
 	if snapSync {
 		if header.EmptyReceipts() {
 			// Ensure the receipts list is valid even if it isn't actively fetched.
-			item.Receipts = [][]*types.Receipt{}
+			item.Receipts = []*types.Receipt{}
 		} else {
 			item.pending.Store(item.pending.Load() | (1 << receiptType))
 		}
@@ -647,11 +647,11 @@ func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt, recei
 		return nil
 	}
 	reconstruct := func(index int, result *fetchResult) int {
-		result.Receipts = append(result.Receipts, receiptList[index])
-		if index == len(receiptList) && lastBlockIncomplete {
+		result.Receipts = append(result.Receipts, receiptList[index]...)
+		if lastBlockIncomplete && index == len(receiptList) {
 			// 1. Verify the total number of tx delivered
 			if uint64(len(receiptList[index])) > result.Header.GasUsed/21_000 {
-				result.Receipts = [][]*types.Receipt{}
+				result.Receipts = []*types.Receipt{}
 				return 0
 			}
 			// 2. Verify the size of each receipt against the gas limit of the corresponding transaction
@@ -661,14 +661,14 @@ func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt, recei
 					logSize += uint64(len(log.Data))
 				}
 				if logSize > params.MaxTxGas/params.LogDataGas {
-					result.Receipts = [][]*types.Receipt{}
+					result.Receipts = []*types.Receipt{}
 					return 0
 				}
 				result.receiptSize += logSize
 			}
 			// 3. Verify the total download receipt size is no longer than allowed by the block gas limit
 			if result.receiptSize > result.Header.GasLimit/params.LogDataGas {
-				result.Receipts = [][]*types.Receipt{}
+				result.Receipts = []*types.Receipt{}
 				return 0
 			}
 			return len(result.Receipts)
@@ -730,13 +730,9 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	}
 
 	for _, header := range request.Headers[:i] {
+		resume := -1
 		if res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64()); err == nil && !stale {
-			resume := reconstruct(accepted, res)
-			if resume >= 0 {
-				// TODO: add receipt index in TaskPool
-				taskPool[header.Hash()] = header
-				taskQueue.Push(header, -int64(header.Number.Uint64()))
-			}
+			resume = reconstruct(accepted, res)
 		} else {
 			// else: between here and above, some other peer filled this result,
 			// or it was indeed a no-op. This should not happen, but if it does it's
@@ -746,6 +742,11 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 		}
 		// Clean up a successful fetch
 		delete(taskPool, hashes[accepted])
+		if resume >= 0 {
+			// TODO: add receipt index in TaskPool
+			taskPool[header.Hash()] = header
+			taskQueue.Push(header, -int64(header.Number.Uint64()))
+		}
 		accepted++
 	}
 	resDropMeter.Mark(int64(results - accepted))
