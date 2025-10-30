@@ -520,6 +520,10 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 		// Apply EIP-7702 authorizations.
 		if msg.SetCodeAuthorizations != nil {
+			if len(msg.SetCodeAuthorizations) != len(msg.Authorities) {
+				// This is an invariant of Message that cannot be invalidated.
+				panic("Length of authorizations does match authorities")
+			}
 			for i, auth := range msg.SetCodeAuthorizations {
 				addr := msg.Authorities[i]
 				if addr == nil {
