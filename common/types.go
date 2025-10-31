@@ -231,7 +231,7 @@ func HexToAddress(s string) Address { return BytesToAddress(FromHex(s)) }
 // IsHexAddress verifies whether a string can represent a valid hex-encoded
 // Ethereum address or not.
 func IsHexAddress(s string) bool {
-	if has0xPrefix(s) {
+	if hexutil.Has0xPrefix(s) {
 		s = s[2:]
 	}
 	return len(s) == 2*AddressLength && isHex(s)
