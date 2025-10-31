@@ -536,7 +536,10 @@ func ApplyEmptyTransaction(config *params.ChainConfig, statedb *state.StateDB, b
 }
 
 func InitSignerInTransactions(config *params.ChainConfig, header *types.Header, txs types.Transactions) {
-	nWorker := runtime.NumCPU()
+	if txs.Len() == 0 {
+		return
+	}
+	nWorker := min(runtime.NumCPU(), txs.Len())
 	signer := types.MakeSigner(config, header.Number)
 	chunkSize := txs.Len() / nWorker
 	if txs.Len()%nWorker != 0 {
