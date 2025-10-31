@@ -62,8 +62,8 @@ func isHex(str string) bool {
 	if len(str)%2 != 0 {
 		return false
 	}
-	for _, c := range []byte(str) {
-		if !isHexCharacter(c) {
+	for i := 0; i < len(str); i++ {
+		if !isHexCharacter(str[i]) {
 			return false
 		}
 	}
