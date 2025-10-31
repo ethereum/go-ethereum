@@ -873,7 +873,11 @@ func (c *ChainConfig) String() string {
 	if c.FeynmanTime != nil {
 		feynmanTime = fmt.Sprintf("@%v", *c.FeynmanTime)
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Arrow Glacier: %v, Archimedes: %v, Shanghai: %v, Bernoulli: %v, Curie: %v, Darwin: %v, DarwinV2: %v, Euclid: %v, EuclidV2: %v, Feynman: %v, Engine: %v, Scroll config: %v}",
+	galileoTime := "<nil>"
+	if c.GalileoTime != nil {
+		galileoTime = fmt.Sprintf("@%v", *c.GalileoTime)
+	}
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Arrow Glacier: %v, Archimedes: %v, Shanghai: %v, Bernoulli: %v, Curie: %v, Darwin: %v, DarwinV2: %v, Euclid: %v, EuclidV2: %v, Feynman: %v, Galileo: %v, Engine: %v, Scroll config: %v}",
 		c.ChainID,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -898,6 +902,7 @@ func (c *ChainConfig) String() string {
 		euclidTime,
 		euclidV2Time,
 		feynmanTime,
+		galileoTime,
 		engine,
 		c.Scroll,
 	)
