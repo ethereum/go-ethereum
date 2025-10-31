@@ -170,6 +170,9 @@ func (x *XDPoS_v2) SignHash(header *types.Header) (hash common.Hash) {
 
 // Initial V2 related parameters
 func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header) error {
+	x.lock.Lock()
+	defer x.lock.Unlock()
+
 	return x.initial(chain, header)
 }
 
