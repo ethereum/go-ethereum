@@ -597,7 +597,7 @@ func abs(x int64) int64 {
 	return x
 }
 
-func (w *worker) commitNewWork() {
+func (w *worker) checkPreCommitWithLock() (*types.Block, bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.uncleMu.Lock()
@@ -605,8 +605,10 @@ func (w *worker) commitNewWork() {
 	w.currentMu.Lock()
 	defer w.currentMu.Unlock()
 
-	tstart := time.Now()
+	return w.checkPreCommit()
+}
 
+func (w *worker) checkPreCommit() (*types.Block, bool) {
 	c := w.engine.(*XDPoS.XDPoS)
 	var parent *types.Block
 	if c != nil {
@@ -615,12 +617,11 @@ func (w *worker) commitNewWork() {
 		parent = w.chain.CurrentBlock()
 	}
 
-	var signers map[common.Address]struct{}
 	if parent.Hash().Hex() == w.lastParentBlockCommit {
-		return
+		return parent, true
 	}
 	if !w.announceTxs && atomic.LoadInt32(&w.mining) == 0 {
-		return
+		return parent, true
 	}
 
 	// Only try to commit new work if we are mining
@@ -630,14 +631,24 @@ func (w *worker) commitNewWork() {
 			ok, err := c.YourTurn(w.chain, parent.Header(), w.coinbase)
 			if err != nil {
 				log.Warn("Failed when trying to commit new work", "err", err)
-				return
+				return parent, true
 			}
 			if !ok {
 				log.Info("Not my turn to commit block. Waiting...")
-				return
+				return parent, true
 			}
 		}
 	}
+
+	return parent, false
+}
+
+func (w *worker) commitNewWork() {
+	parent, shouldReturn := w.checkPreCommitWithLock()
+	if shouldReturn {
+		return
+	}
+	tstart := time.Now()
 	tstamp := tstart.Unix()
 	if parent.Time().Cmp(new(big.Int).SetInt64(tstamp)) >= 0 {
 		tstamp = parent.Time().Int64() + 1
@@ -647,6 +658,18 @@ func (w *worker) commitNewWork() {
 		wait := time.Duration(tstamp-now) * time.Second
 		log.Info("Mining too far in the future", "wait", common.PrettyDuration(wait))
 		time.Sleep(wait)
+	}
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.uncleMu.Lock()
+	defer w.uncleMu.Unlock()
+	w.currentMu.Lock()
+	defer w.currentMu.Unlock()
+
+	parent, shouldReturn = w.checkPreCommit()
+	if shouldReturn {
+		return
 	}
 
 	num := parent.Number()
@@ -721,6 +744,7 @@ func (w *worker) commitNewWork() {
 			log.Error("[commitNewWork] fail to check if block is epoch switch block when fetching pending transactions", "BlockNum", header.Number, "Hash", header.Hash())
 		}
 		if !isEpochSwitchBlock {
+			var signers map[common.Address]struct{}
 			pending := w.eth.TxPool().Pending(true)
 			txs, specialTxs = types.NewTransactionsByPriceAndNonce(w.current.signer, pending, signers, feeCapacity)
 		}
