@@ -688,7 +688,15 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 	for {
 		kind, k, v, ok, err := reader.Next()
 		if !ok || err != nil {
-			return err
+			// Provide better error context when batch is invalid.
+			// This error typically occurs when trying to read a corrupted batch.
+			if err != nil {
+				if strings.Contains(err.Error(), "invalid batch") {
+					return fmt.Errorf("decoding SET value: %w", err)
+				}
+				return err
+			}
+			return nil
 		}
 		// The (k,v) slices might be overwritten if the batch is reset/reused,
 		// and the receiver should copy them if they are to be retained long-term.
