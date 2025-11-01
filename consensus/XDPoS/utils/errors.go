@@ -88,6 +88,7 @@ var (
 	ErrEmptyEpochSwitchValidators = errors.New("empty validators list on epoch switch block")
 
 	ErrInvalidV2Extra                = errors.New("invalid v2 extra in the block")
+	ErrInvalidQuorumCert             = errors.New("invalid quorum cert")
 	ErrInvalidQC                     = errors.New("invalid QC content")
 	ErrInvalidQCSignatures           = errors.New("invalid QC Signatures")
 	ErrInvalidTC                     = errors.New("invalid TC content")

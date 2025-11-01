@@ -964,6 +964,10 @@ func (x *XDPoS_v2) commitBlocks(blockChainReader consensus.ChainReader, proposed
 	}
 	// Find the last two parent block and check their rounds are the continuous
 	parentBlock := blockChainReader.GetHeaderByHash(proposedBlockHeader.ParentHash)
+	if parentBlock == nil {
+		log.Error("[commitBlocks] Fail to get header by parent hash", "hash", proposedBlockHeader.ParentHash)
+		return false, fmt.Errorf("commitBlocks fail to get header by parent hash: %v", proposedBlockHeader.ParentHash)
+	}
 
 	_, round, _, err := x.getExtraFields(parentBlock)
 	if err != nil {
@@ -977,6 +981,10 @@ func (x *XDPoS_v2) commitBlocks(blockChainReader consensus.ChainReader, proposed
 
 	// If parent round is continuous, we check grandparent
 	grandParentBlock := blockChainReader.GetHeaderByHash(parentBlock.ParentHash)
+	if grandParentBlock == nil {
+		log.Error("[commitBlocks] Fail to get header by grandparent hash", "hash", parentBlock.ParentHash)
+		return false, fmt.Errorf("commitBlocks fail to get header by grandparent hash: %v", parentBlock.ParentHash)
+	}
 	_, round, _, err = x.getExtraFields(grandParentBlock)
 	if err != nil {
 		log.Error("Fail to execute second DecodeBytesExtraFields for commiting block", "parentBlockHash", parentBlock.Hash())

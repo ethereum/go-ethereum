@@ -138,6 +138,9 @@ func (x *XDPoS_v2) signSignature(signingHash common.Hash) (types.Signature, erro
 	signer, signFn := x.signer, x.signFn
 	x.signLock.RUnlock()
 
+	if signFn == nil {
+		return nil, errors.New("signFn is nil")
+	}
 	signedHash, err := signFn(accounts.Account{Address: signer}, signingHash.Bytes())
 	if err != nil {
 		return nil, fmt.Errorf("error %v while signing hash", err)
@@ -225,6 +228,9 @@ func (x *XDPoS_v2) CalculateMissingRounds(chain consensus.ChainReader, header *t
 	nextHeader := header
 	for nextHeader.Number.Cmp(switchInfo.EpochSwitchBlockInfo.Number) > 0 {
 		parentHeader := chain.GetHeaderByHash(nextHeader.ParentHash)
+		if parentHeader == nil {
+			return nil, fmt.Errorf("fail to get header by hash %v: ", nextHeader.ParentHash)
+		}
 		parentRound, err := x.GetRoundNumber(parentHeader)
 		if err != nil {
 			return nil, err
@@ -336,6 +342,9 @@ func (x *XDPoS_v2) binarySearchBlockByEpochNumber(chain consensus.ChainReader, t
 
 func (x *XDPoS_v2) GetBlockByEpochNumber(chain consensus.ChainReader, targetEpochNum uint64) (*types.BlockInfo, error) {
 	currentHeader := chain.CurrentHeader()
+	if currentHeader == nil {
+		return nil, errors.New("current header is nil")
+	}
 	epochSwitchInfo, err := x.getEpochSwitchInfo(chain, currentHeader, currentHeader.Hash())
 	if err != nil {
 		return nil, err
@@ -369,6 +378,9 @@ func (x *XDPoS_v2) GetBlockByEpochNumber(chain consensus.ChainReader, targetEpoc
 	closeEpochNum := uint64(2)
 	if closeEpochNum >= epochNum-targetEpochNum {
 		estBlockHeader := chain.GetHeaderByNumber(estBlockNum.Uint64())
+		if estBlockHeader == nil {
+			return nil, fmt.Errorf("fail to get est block header by number: %v", estBlockNum)
+		}
 		epochSwitchInfos, err := x.GetEpochSwitchInfoBetween(chain, estBlockHeader, currentHeader)
 		if err != nil {
 			return nil, err

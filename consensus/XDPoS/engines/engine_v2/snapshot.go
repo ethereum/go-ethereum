@@ -2,6 +2,7 @@ package engine_v2
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
@@ -84,7 +85,12 @@ func (x *XDPoS_v2) getSnapshot(chain consensus.ChainReader, number uint64, isGap
 		}
 	}
 
-	gapBlockHash := chain.GetHeaderByNumber(gapBlockNum).Hash()
+	gapHeader := chain.GetHeaderByNumber(gapBlockNum)
+	if gapHeader == nil {
+		log.Error("[getSnapshot] Fail to get header", "number", gapBlockNum)
+		return nil, fmt.Errorf("getSnapshot fail to get header by number: %v", gapBlockNum)
+	}
+	gapBlockHash := gapHeader.Hash()
 	log.Debug("get snapshot from gap block", "number", gapBlockNum, "hash", gapBlockHash.Hex())
 
 	// If an in-memory SnapshotV2 was found, use that

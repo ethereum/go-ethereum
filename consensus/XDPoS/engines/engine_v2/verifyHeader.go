@@ -68,6 +68,10 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 		log.Warn("[verifyHeader] decode extra field error", "err", err)
 		return utils.ErrInvalidV2Extra
 	}
+	if quorumCert == nil {
+		log.Warn("[verifyHeader] quorumCert is nil")
+		return utils.ErrInvalidQuorumCert
+	}
 
 	minePeriod := uint64(x.config.V2.Config(uint64(round)).MinePeriod)
 	if parent.Number.Uint64() >= x.config.V2.SwitchBlock.Uint64() && parent.Time.Uint64()+minePeriod > header.Time.Uint64() {

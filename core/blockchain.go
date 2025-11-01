@@ -714,7 +714,11 @@ func (bc *BlockChain) repair(head **types.Block) error {
 			log.Info("Rewound blockchain to past state", "number", (*head).Number(), "hash", (*head).Hash())
 		}
 		// Otherwise rewind one block and recheck state availability there
-		(*head) = bc.GetBlock((*head).ParentHash(), (*head).NumberU64()-1)
+		block := bc.GetBlock((*head).ParentHash(), (*head).NumberU64()-1)
+		if block == nil {
+			panic(fmt.Sprintf("repair fail to get block at number: %v, hash: %v", (*head).NumberU64()-1, (*head).ParentHash()))
+		}
+		(*head) = block
 	}
 }
 
@@ -978,10 +982,16 @@ func (bc *BlockChain) GetBlocksHashCache(number uint64) []common.Hash {
 func (bc *BlockChain) AreTwoBlockSamePath(bh1 common.Hash, bh2 common.Hash) bool {
 	bl1 := bc.GetBlockByHash(bh1)
 	bl2 := bc.GetBlockByHash(bh2)
-	toBlockLevel := bl2.Number().Uint64()
+	if bl1 == nil || bl2 == nil {
+		return false
+	}
 
+	toBlockLevel := bl2.Number().Uint64()
 	for bl1.Number().Uint64() > toBlockLevel {
 		bl1 = bc.GetBlockByHash(bl1.ParentHash())
+		if bl1 == nil {
+			return false
+		}
 	}
 
 	return (bl1.Hash() == bl2.Hash())
@@ -2002,6 +2012,9 @@ func (bc *BlockChain) getResultBlock(block *types.Block, verifiedM2 bool) (*Resu
 		var winner []*types.Block
 
 		parent := bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+		if parent == nil {
+			return nil, fmt.Errorf("fail to get parent block at number: %v, hash: %v", block.NumberU64()-1, block.ParentHash())
+		}
 		for !bc.HasFullState(parent) {
 			winner = append(winner, parent)
 			parent = bc.GetBlock(parent.ParentHash(), parent.NumberU64()-1)

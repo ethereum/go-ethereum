@@ -134,10 +134,17 @@ func (api *API) GetMasternodesByNumber(number *rpc.BlockNumber) MasternodesStatu
 	if number == nil || *number == rpc.LatestBlockNumber {
 		header = api.chain.CurrentHeader()
 	} else if *number == rpc.CommittedBlockNumber {
-		hash := api.XDPoS.EngineV2.GetLatestCommittedBlockInfo().Hash
-		header = api.chain.GetHeaderByHash(hash)
+		if info := api.XDPoS.EngineV2.GetLatestCommittedBlockInfo(); info != nil {
+			header = api.chain.GetHeaderByHash(info.Hash)
+		}
 	} else {
 		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
+	}
+
+	if header == nil {
+		return MasternodesStatus{
+			Error: fmt.Errorf("can not get header by number: %v", number),
+		}
 	}
 
 	round, err := api.XDPoS.EngineV2.GetRoundNumber(header)
@@ -227,14 +234,19 @@ func (api *API) GetV2BlockByHeader(header *types.Header, uncle bool) *V2BlockInf
 func (api *API) GetV2BlockByNumber(number *rpc.BlockNumber) *V2BlockInfo {
 	header := api.getHeaderFromApiBlockNum(number)
 	if header == nil {
-		return &V2BlockInfo{
-			Number: big.NewInt(number.Int64()),
-			Error:  "can not find block from this number",
+		if number == nil {
+			return &V2BlockInfo{
+				Error: "can not find block from nil number",
+			}
+		} else {
+			return &V2BlockInfo{
+				Number: big.NewInt(number.Int64()),
+				Error:  "can not find block from this number",
+			}
 		}
 	}
 
-	uncle := false
-	return api.GetV2BlockByHeader(header, uncle)
+	return api.GetV2BlockByHeader(header, false)
 }
 
 // Confirm V2 Block Committed Status
@@ -249,11 +261,14 @@ func (api *API) GetV2BlockByHash(blockHash common.Hash) *V2BlockInfo {
 
 	// confirm this is on the main chain
 	chainHeader := api.chain.GetHeaderByNumber(header.Number.Uint64())
-	uncle := false
-	if header.Hash() != chainHeader.Hash() {
-		uncle = true
+	if chainHeader == nil {
+		return &V2BlockInfo{
+			Number: header.Number,
+			Error:  "can not find chain header from this number",
+		}
 	}
 
+	uncle := header.Hash() != chainHeader.Hash()
 	return api.GetV2BlockByHeader(header, uncle)
 }
 
@@ -282,8 +297,9 @@ func (api *API) getHeaderFromApiBlockNum(number *rpc.BlockNumber) *types.Header 
 	if number == nil || *number == rpc.LatestBlockNumber {
 		header = api.chain.CurrentHeader()
 	} else if *number == rpc.CommittedBlockNumber {
-		hash := api.XDPoS.EngineV2.GetLatestCommittedBlockInfo().Hash
-		header = api.chain.GetHeaderByHash(hash)
+		if info := api.XDPoS.EngineV2.GetLatestCommittedBlockInfo(); info != nil {
+			header = api.chain.GetHeaderByHash(info.Hash)
+		}
 	} else {
 		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
 	}
