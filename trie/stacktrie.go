@@ -157,6 +157,8 @@ const (
 	hashedNode
 )
 
+var emptyNodes = [16]*stNode{}
+
 func (n *stNode) reset() *stNode {
 	if n.typ == hashedNode {
 		// On hashnodes, we 'own' the val: it is guaranteed to be not held
@@ -166,9 +168,7 @@ func (n *stNode) reset() *stNode {
 	}
 	n.key = n.key[:0]
 	n.val = nil
-	for i := range n.children {
-		n.children[i] = nil
-	}
+	copy(n.children[:], emptyNodes[:])
 	n.typ = emptyNode
 	return n
 }
