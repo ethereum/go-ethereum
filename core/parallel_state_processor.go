@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
@@ -17,18 +16,12 @@ import (
 // ProcessResultWithMetrics wraps ProcessResult with some metrics that are
 // emitted when executing blocks containing access lists.
 type ProcessResultWithMetrics struct {
-	ProcessResult *ProcessResult
-	// the time it took to load modified prestate accounts from disk and instantiate statedbs for execution
-	PreProcessTime time.Duration
-	// the time it took to validate the block post transaction execution and state root calculation
-	PostProcessTime time.Duration
-	// the time it took to hash the state root, including intermediate node reads
-	RootCalcTime time.Duration
-	// the time that it took to load the prestate for accounts that were updated as part of
-	// the state root update
-	PrestateLoadTime time.Duration
+	ProcessResult          *ProcessResult
+	PreProcessTime         time.Duration
+	StateTransitionMetrics *state.BALStateTransitionMetrics
 	// the time it took to execute all txs in the block
-	ExecTime time.Duration
+	ExecTime        time.Duration
+	PostProcessTime time.Duration
 }
 
 // ParallelStateProcessor is used to execute and verify blocks containing
@@ -214,31 +207,31 @@ func (p *ParallelStateProcessor) resultHandler(block *types.Block, preTxStateRea
 	} else if rootCalcRes.err != nil {
 		resCh <- &ProcessResultWithMetrics{ProcessResult: &ProcessResult{Error: rootCalcRes.err}}
 	} else {
-		execResults.RootCalcTime = rootCalcRes.rootCalcTime
-		execResults.PrestateLoadTime = rootCalcRes.prestateLoadTime
+		//  &{20.39677ms 0s 1.149668ms 735.295µs 0s 0s 0s 0s}
+		execResults.StateTransitionMetrics = rootCalcRes.metrics
 		resCh <- execResults
 	}
 }
 
 type stateRootCalculationResult struct {
-	err              error
-	prestateLoadTime time.Duration
-	rootCalcTime     time.Duration
-	root             common.Hash
+	err     error
+	metrics *state.BALStateTransitionMetrics
+	root    common.Hash
 }
 
 // calcAndVerifyRoot performs the post-state root hash calculation, verifying
 // it against what is reported by the block and returning a result on resCh.
-func (p *ParallelStateProcessor) calcAndVerifyRoot(preState *state.StateDB, block *types.Block, resCh chan stateRootCalculationResult) {
+func (p *ParallelStateProcessor) calcAndVerifyRoot(preState *state.StateDB, block *types.Block, stateTransition *state.BALStateTransition, resCh chan stateRootCalculationResult) {
 	// calculate and apply the block state modifications
-	root, prestateLoadTime, rootCalcTime := preState.BlockAccessList().StateRoot(preState)
+	//root, prestateLoadTime, rootCalcTime := preState.BlockAccessList().StateRoot(preState)
+	root := stateTransition.IntermediateRoot(false)
 
 	res := stateRootCalculationResult{
-		root:             root,
-		prestateLoadTime: prestateLoadTime,
-		rootCalcTime:     rootCalcTime,
+		// TODO: I think we can remove the root from this struct
+		metrics: stateTransition.Metrics(),
 	}
 
+	// TODO: validate state root in block validator?
 	if root != block.Root() {
 		res.err = fmt.Errorf("state root mismatch. local: %x. remote: %x", root, block.Root())
 	}
@@ -292,7 +285,8 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 
 // Process performs EVM execution and state root computation for a block which is known
 // to contain an access list.
-func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (*ProcessResultWithMetrics, error) {
+func (p *ParallelStateProcessor) Process(block *types.Block, stateTransition *state.BALStateTransition, statedb *state.StateDB, cfg vm.Config) (*ProcessResultWithMetrics, error) {
+	//fmt.Println("Parallel Process")
 	var (
 		header = block.Header()
 		resCh  = make(chan *ProcessResultWithMetrics)
@@ -305,17 +299,8 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		tPreprocess      time.Duration // time to create a set of prestates for parallel transaction execution
 		tExecStart       time.Time
 		rootCalcResultCh = make(chan stateRootCalculationResult)
+		context          vm.BlockContext
 	)
-
-	// Mutate the block and state according to any hard-fork specs
-	if p.chainConfig().DAOForkSupport && p.chainConfig().DAOForkBlock != nil && p.chainConfig().DAOForkBlock.Cmp(block.Number()) == 0 {
-		misc.ApplyDAOHardFork(statedb)
-	}
-	var (
-		context vm.BlockContext
-	)
-	alReader := state.NewBALReader(block, statedb)
-	statedb.SetBlockAccessList(alReader)
 
 	balTracer, hooks := NewBlockAccessListTracer()
 	tracingStateDB := state.NewHookedState(statedb, hooks)
@@ -364,7 +349,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		})
 	}
 
-	go p.calcAndVerifyRoot(statedb, block, rootCalcResultCh)
+	go p.calcAndVerifyRoot(statedb, block, stateTransition, rootCalcResultCh)
 
 	res := <-resCh
 	if res.ProcessResult.Error != nil {

@@ -221,6 +221,7 @@ func (s *stateObject) SetState(key, value common.Hash) common.Hash {
 	if prev == value {
 		return prev
 	}
+
 	// New value is different, update and journal the change
 	s.db.journal.storageChange(s.address, key, prev, origin)
 	s.setState(key, value, origin)
@@ -296,6 +297,7 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			return s.trie, nil
 		}
 	}
+
 	// Retrieve a pretecher populated trie, or fall back to the database. This will
 	// block until all prefetch tasks are done, which are needed for witnesses even
 	// for unmodified state objects.

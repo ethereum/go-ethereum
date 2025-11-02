@@ -143,12 +143,12 @@ type BALReader struct {
 }
 
 // NewBALReader constructs a new reader from an access list. db is expected to have been instantiated with a reader.
-func NewBALReader(block *types.Block, db *StateDB) *BALReader {
+func NewBALReader(block *types.Block, reader Reader) *BALReader {
 	r := &BALReader{accesses: make(map[common.Address]*bal.AccountAccess), block: block}
 	for _, acctDiff := range *block.Body().AccessList {
 		r.accesses[acctDiff.Address] = &acctDiff
 	}
-	r.prestateReader.resolve(db.Reader(), r.ModifiedAccounts())
+	r.prestateReader.resolve(reader, r.ModifiedAccounts())
 	return r
 }
 
@@ -211,21 +211,8 @@ func (r *BALReader) AccessedState() (res map[common.Address]map[common.Hash]stru
 // TODO: it feels weird that this modifies the prestate instance. However, it's needed because it will
 // subsequently be used in Commit.
 func (r *BALReader) StateRoot(prestate *StateDB) (root common.Hash, prestateLoadTime time.Duration, rootUpdateTime time.Duration) {
-	lastIdx := len(r.block.Transactions()) + 1
-	modifiedAccts := r.ModifiedAccounts()
-	startPrestateLoad := time.Now()
-	for _, addr := range modifiedAccts {
-		diff := r.readAccountDiff(addr, lastIdx)
-		acct := r.prestateReader.account(addr)
-		obj := r.initMutatedObjFromDiff(prestate, addr, acct, diff)
-		if obj != nil {
-			prestate.setStateObject(obj)
-		}
-	}
-	prestateLoadTime = time.Since(startPrestateLoad)
-	rootUpdateStart := time.Now()
 	root = prestate.IntermediateRoot(true)
-	rootUpdateTime = time.Since(rootUpdateStart)
+	// TODO: fix the metrics calculation here
 	return root, prestateLoadTime, rootUpdateTime
 }
 
