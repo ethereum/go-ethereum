@@ -641,7 +641,9 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		{
 			have := state.transientStorage
 			want := checkstate.transientStorage
-			if !maps.EqualFunc(have, want, maps.Equal) {
+			if !maps.EqualFunc(have, want, func(hasStorage Storage, wantStorage Storage) bool {
+				return maps.Equal(hasStorage, wantStorage)
+			}) {
 				return fmt.Errorf("transient storage differs ,have\n%v\nwant\n%v",
 					have.PrettyPrint(),
 					want.PrettyPrint())
