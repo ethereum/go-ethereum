@@ -50,7 +50,7 @@ func newNodeSet(nodes map[common.Hash]map[string]*trienode.Node) *nodeSet {
 	}
 	s := &nodeSet{
 		accountNodes: make(map[string]*trienode.Node),
-		storageNodes: make(map[common.Hash]map[string]*trienode.Node),
+		storageNodes: make(map[common.Hash]map[string]*trienode.Node, len(nodes)),
 	}
 	for owner, subset := range nodes {
 		if owner == (common.Hash{}) {
