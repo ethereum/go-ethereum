@@ -259,7 +259,7 @@ func (s *nodeSet) decode(r *rlp.Stream) error {
 			}
 		} else {
 			// Storage nodes
-			subset := make(map[string]*trienode.Node)
+			subset := make(map[string]*trienode.Node, len(entry.Nodes))
 			for _, n := range entry.Nodes {
 				if len(n.Blob) > 0 {
 					subset[string(n.Path)] = trienode.New(crypto.Keccak256Hash(n.Blob), n.Blob)
@@ -276,13 +276,11 @@ func (s *nodeSet) decode(r *rlp.Stream) error {
 
 // write flushes nodes into the provided database batch as a whole.
 func (s *nodeSet) write(batch ethdb.Batch, clean *fastcache.Cache) int {
-	nodes := make(map[common.Hash]map[string]*trienode.Node)
+	nodes := make(map[common.Hash]map[string]*trienode.Node, len(s.storageNodes)+1)
 	if len(s.accountNodes) > 0 {
 		nodes[common.Hash{}] = s.accountNodes
 	}
-	for owner, subset := range s.storageNodes {
-		nodes[owner] = subset
-	}
+	maps.Copy(nodes, s.storageNodes)
 	return writeNodes(batch, nodes, clean)
 }
 
