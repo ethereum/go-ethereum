@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"maps"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -56,7 +55,7 @@ func NewWitnessStats() *WitnessStats {
 func (s *WitnessStats) Add(nodes map[string][]byte, owner common.Hash) {
 	// Extract paths from the nodes map
 	paths := slices.Collect(maps.Keys(nodes))
-	sort.Strings(paths)
+	slices.Sort(paths)
 
 	for i, path := range paths {
 		// If current path is a prefix of the next path, it's not a leaf.

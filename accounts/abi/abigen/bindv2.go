@@ -23,7 +23,6 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
-	"sort"
 	"strings"
 	"text/template"
 	"unicode"
@@ -280,7 +279,7 @@ func iterSorted[V any](inp map[string]V, onItem func(string, V) error) error {
 	for key := range inp {
 		sortedKeys = append(sortedKeys, key)
 	}
-	sort.Strings(sortedKeys)
+	slices.Sort(sortedKeys)
 
 	for _, key := range sortedKeys {
 		if err := onItem(key, inp[key]); err != nil {

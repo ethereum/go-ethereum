@@ -19,7 +19,7 @@ package tests
 import (
 	"fmt"
 	"math/big"
-	"sort"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -740,7 +740,7 @@ func AvailableForks() []string {
 	for k := range Forks {
 		availableForks = append(availableForks, k)
 	}
-	sort.Strings(availableForks)
+	slices.Sort(availableForks)
 	return availableForks
 }
 

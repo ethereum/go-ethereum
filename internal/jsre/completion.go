@@ -18,7 +18,7 @@ package jsre
 
 import (
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/dop251/goja"
@@ -88,6 +88,6 @@ func getCompletions(vm *goja.Runtime, line string) (results []string) {
 		}
 	}
 
-	sort.Strings(results)
+	slices.Sort(results)
 	return results
 }

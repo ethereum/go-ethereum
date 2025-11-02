@@ -20,7 +20,7 @@ package memorydb
 import (
 	"bytes"
 	"errors"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 
@@ -184,7 +184,7 @@ func (db *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 		}
 	}
 	// Sort the items and retrieve the associated values
-	sort.Strings(keys)
+	slices.Sort(keys)
 	for _, key := range keys {
 		values = append(values, db.db[key])
 	}

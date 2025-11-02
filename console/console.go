@@ -24,7 +24,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -314,7 +314,7 @@ func (c *Console) Welcome() {
 		for api, version := range apis {
 			modules = append(modules, fmt.Sprintf("%s:%s", api, version))
 		}
-		sort.Strings(modules)
+		slices.Sort(modules)
 		message += " modules: " + strings.Join(modules, " ") + "\n"
 	}
 	message += "\nTo exit, press ctrl-d or type exit"

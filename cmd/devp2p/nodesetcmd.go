@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -90,7 +90,7 @@ func showAttributeCounts(ns nodeSet) {
 			maxlength = len(key)
 		}
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	fmt.Println("ENR attribute counts:")
 	for _, key := range keys {
 		fmt.Printf("%s%s: %d\n", strings.Repeat(" ", maxlength-len(key)+1), key, attrcount[key])

@@ -26,7 +26,6 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -417,7 +416,7 @@ func (typedData *TypedData) EncodeType(primaryType string) hexutil.Bytes {
 	deps := typedData.Dependencies(primaryType, []string{})
 	if len(deps) > 0 {
 		slicedDeps := deps[1:]
-		sort.Strings(slicedDeps)
+		slices.Sort(slicedDeps)
 		deps = append([]string{primaryType}, slicedDeps...)
 	}
 

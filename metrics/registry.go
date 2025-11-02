@@ -3,7 +3,7 @@ package metrics
 import (
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -54,7 +54,7 @@ func (r *orderedRegistry) Each(f func(string, interface{})) {
 	for name := range reg {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	for _, name := range names {
 		f(name, reg[name])
 	}

@@ -25,6 +25,7 @@ import (
 	"io"
 	"math/rand"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -1309,7 +1310,7 @@ func printSet(set *trienode.NodeSet) string {
 	for k := range set.Nodes {
 		paths = append(paths, k)
 	}
-	sort.Strings(paths)
+	slices.Sort(paths)
 
 	for _, path := range paths {
 		n := set.Nodes[path]

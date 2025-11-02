@@ -21,7 +21,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -71,6 +71,6 @@ func DiffHashes(a map[string][32]byte, b map[string][32]byte) []string {
 			updates = append(updates, file)
 		}
 	}
-	sort.Strings(updates)
+	slices.Sort(updates)
 	return updates
 }

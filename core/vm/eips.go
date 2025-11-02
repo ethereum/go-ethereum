@@ -19,7 +19,7 @@ package vm
 import (
 	"fmt"
 	"math"
-	"sort"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -65,7 +65,7 @@ func ActivateableEips() []string {
 	for k := range activators {
 		nums = append(nums, fmt.Sprintf("%d", k))
 	}
-	sort.Strings(nums)
+	slices.Sort(nums)
 	return nums
 }
 

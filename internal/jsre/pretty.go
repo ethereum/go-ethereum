@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -221,8 +221,8 @@ func (ctx ppctx) fields(obj *goja.Object) []string {
 		}
 	}
 	iterOwnAndConstructorKeys(ctx.vm, obj, add)
-	sort.Strings(vals)
-	sort.Strings(methods)
+	slices.Sort(vals)
+	slices.Sort(methods)
 	return append(vals, methods...)
 }
 

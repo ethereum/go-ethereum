@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/internal/version"
@@ -277,7 +277,7 @@ func CheckEnvVars(ctx *cli.Context, flags []cli.Flag, prefix string) {
 		}
 	}
 	keyvals := os.Environ()
-	sort.Strings(keyvals)
+	slices.Sort(keyvals)
 
 	for _, keyval := range keyvals {
 		key := strings.Split(keyval, "=")[0]

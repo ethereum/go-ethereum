@@ -24,7 +24,7 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -182,7 +182,7 @@ func (h *httpServer) start() error {
 	for path := range h.handlerNames {
 		paths = append(paths, path)
 	}
-	sort.Strings(paths)
+	slices.Sort(paths)
 	logged := make(map[string]bool, len(paths))
 	for _, path := range paths {
 		name := h.handlerNames[path]

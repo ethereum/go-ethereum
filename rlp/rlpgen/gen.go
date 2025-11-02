@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"go/format"
 	"go/types"
-	"sort"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/rlp/internal/rlpstruct"
 	"golang.org/x/tools/go/packages"
@@ -194,7 +194,7 @@ func (ctx *genContext) importsList() []string {
 			imp = append(imp, fmt.Sprintf("%s %q", p.alias, path))
 		}
 	}
-	sort.Strings(imp)
+	slices.Sort(imp)
 	return imp
 }
 

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	mrand "math/rand"
+	"slices"
 	"sort"
 	"time"
 
@@ -975,7 +976,7 @@ func (f *TxFetcher) forEachPeer(peers map[string]struct{}, do func(peer string))
 	for peer := range peers {
 		list = append(list, peer)
 	}
-	sort.Strings(list)
+	slices.Sort(list)
 	rotateStrings(list, f.rand.Intn(len(list)))
 	for _, peer := range list {
 		do(peer)
