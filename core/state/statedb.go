@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -264,6 +265,10 @@ func (s *StateDB) Logs() []*types.Log {
 	for _, lgs := range s.logs {
 		logs = append(logs, lgs...)
 	}
+	// Due to the map iteration is not stable, we need to sort the logs by TxIndex, then the LogsHash result is stable.
+	sort.Slice(logs, func(i, j int) bool {
+		return logs[i].TxIndex < logs[j].TxIndex
+	})
 	return logs
 }
 
