@@ -307,28 +307,12 @@ func (t *Tree) Snapshots(root common.Hash, limits int, nodisk bool) []Snapshot {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
-	if limits == 0 {
-		return nil
-	}
-	layer := t.layers[root]
-	if layer == nil {
-		return nil
-	}
 	var ret []Snapshot
-	for {
+	for layer := t.layers[root]; layer != nil && limits != 0; layer, limits = layer.Parent(), limits-1 {
 		if _, isdisk := layer.(*diskLayer); isdisk && nodisk {
 			break
 		}
 		ret = append(ret, layer)
-		limits -= 1
-		if limits == 0 {
-			break
-		}
-		parent := layer.Parent()
-		if parent == nil {
-			break
-		}
-		layer = parent
 	}
 	return ret
 }
