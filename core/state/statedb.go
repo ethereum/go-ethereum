@@ -267,7 +267,7 @@ func (s *StateDB) Logs() []*types.Log {
 	}
 	// Because map iteration is not stable, we need to sort the logs by TxIndex, then the LogsHash result is stable.
 	sort.Slice(logs, func(i, j int) bool {
-		return logs[i].TxIndex < logs[j].TxIndex
+		return logs[i].TxIndex < logs[j].TxIndex || (logs[i].TxIndex == logs[j].TxIndex && logs[i].Index < logs[j].Index)
 	})
 	return logs
 }
