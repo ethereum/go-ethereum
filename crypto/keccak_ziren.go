@@ -118,5 +118,5 @@ func Keccak256(data ...[]byte) []byte {
 
 // Keccak256Hash calculates and returns the Keccak256 hash as a Hash using the Ziren zkvm_runtime implementation.
 func Keccak256Hash(data ...[]byte) common.Hash {
-	return common.Hash(Keccak256(data...))
+	return common.BytesToHash(Keccak256(data...))
 }
