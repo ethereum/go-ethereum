@@ -308,7 +308,7 @@ func (t *Tree) Snapshots(root common.Hash, limits int, nodisk bool) []Snapshot {
 	defer t.lock.RUnlock()
 
 	var ret []Snapshot
-	for layer := t.layers[root]; layer != nil && limits != 0; layer, limits = layer.Parent(), limits-1 {
+	for layer := t.layers[root]; layer != nil && limits > 0; layer, limits = layer.Parent(), limits-1 {
 		if _, isdisk := layer.(*diskLayer); isdisk && nodisk {
 			break
 		}
