@@ -157,6 +157,7 @@ const (
 	hashedNode
 )
 
+// emptyNodes is a pre-initialized array of nil pointers used to efficiently clear stNode children arrays during reset operations.
 var emptyNodes = [16]*stNode{}
 
 func (n *stNode) reset() *stNode {
