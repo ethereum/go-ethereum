@@ -284,7 +284,8 @@ func TestPartialReceiptDelivery(t *testing.T) {
 	q := newQueue(10, 10)
 	q.Prepare(1, SnapSync)
 
-	headers := network.headers(1)[:5]
+	headers := network.headers(1)
+	numBlock := len(headers)
 	hashes := make([]common.Hash, len(headers))
 	for i, header := range headers {
 		hashes[i] = header.Hash()
@@ -293,7 +294,7 @@ func TestPartialReceiptDelivery(t *testing.T) {
 	q.Schedule(headers, hashes, 1)
 
 	peer := dummyPeer("peer-1")
-	req, _, _ := q.ReserveReceipts(peer, 5)
+	req, _, _ := q.ReserveReceipts(peer, numBlock)
 
 	t.Logf("request: length %d", len(req.Headers))
 
@@ -304,17 +305,17 @@ func TestPartialReceiptDelivery(t *testing.T) {
 	if err != nil {
 		t.Errorf("delivery failed: %v\n", err)
 	}
-	if pending := q.PendingReceipts(); pending != 5-cutoff {
-		t.Errorf("wrong pending receipt length, got %d, exp %d", pending, 5-cutoff)
+	if pending := q.PendingReceipts(); pending != numBlock-cutoff {
+		t.Errorf("wrong pending receipt length, got %d, exp %d", pending, numBlock-cutoff)
 	}
 
 	t.Logf("receipt delivered: length %d, pending %d", accepted, q.PendingReceipts())
 
 	// Second delivery
-	req, _, _ = q.ReserveReceipts(peer, 5)
+	req, _, _ = q.ReserveReceipts(peer, numBlock)
 	t.Logf("request: length %d", len(req.Headers))
 
-	receiptSets, rcHashes, last = getPartialReceipts(5-cutoff, last, receipts[cutoff:], false)
+	receiptSets, rcHashes, last = getPartialReceipts(numBlock-cutoff, last, receipts[cutoff-1:], false)
 	accepted, err = q.DeliverReceipts(peer.id, receiptSets, rcHashes, true)
 	if err != nil {
 		t.Errorf("delivery failed: %v\n", err)
