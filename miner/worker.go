@@ -530,9 +530,35 @@ func (w *worker) push(work *Work) {
 // copyReceipts makes a deep copy of the given receipts.
 func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
 	result := make([]*types.Receipt, len(receipts))
-	for i, l := range receipts {
-		cpy := *l
-		result[i] = &cpy
+	for i, receipt := range receipts {
+		cpyReceipt := *receipt
+		if len(receipt.PostState) > 0 {
+			cpyReceipt.PostState = make([]byte, len(receipt.PostState))
+			copy(cpyReceipt.PostState, receipt.PostState)
+		}
+		if cpyReceipt.EffectiveGasPrice = new(big.Int); receipt.EffectiveGasPrice != nil {
+			cpyReceipt.EffectiveGasPrice.Set(receipt.EffectiveGasPrice)
+		}
+		if cpyReceipt.BlockNumber = new(big.Int); receipt.BlockNumber != nil {
+			cpyReceipt.BlockNumber.Set(receipt.BlockNumber)
+		}
+		// deep copy logs
+		if len(receipt.Logs) > 0 {
+			cpyReceipt.Logs = make([]*types.Log, len(receipt.Logs))
+			for i, log := range receipt.Logs {
+				cpyLog := *log
+				if len(log.Topics) > 0 {
+					cpyLog.Topics = make([]common.Hash, len(log.Topics))
+					copy(cpyLog.Topics, log.Topics)
+				}
+				if len(log.Data) > 0 {
+					cpyLog.Data = make([]byte, len(log.Data))
+					copy(cpyLog.Data, log.Data)
+				}
+				cpyReceipt.Logs[i] = &cpyLog
+			}
+		}
+		result[i] = &cpyReceipt
 	}
 	return result
 }
