@@ -1019,15 +1019,15 @@ func (w *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Addr
 			continue
 		}
 		logs, tokenFeeUsed, gas, err := w.commitTransaction(balanceFee, tx, bc, coinbase, gp)
-		switch err {
-		case core.ErrNonceTooLow:
+		switch {
+		case errors.Is(err, core.ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
 			log.Trace("Skipping special transaction with low nonce", "sender", from, "nonce", tx.Nonce(), "to", to)
 
-		case core.ErrNonceTooHigh:
+		case errors.Is(err, core.ErrNonceTooHigh):
 			// Reorg notification data race between the transaction pool and miner, skip account =
 			log.Trace("Skipping account with special transaction hight nonce", "sender", from, "nonce", tx.Nonce(), "to", to)
-		case nil:
+		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
 			w.tcount++
