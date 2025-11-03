@@ -104,8 +104,8 @@ func (m *sortedMap) Forward(threshold uint64) types.Transactions {
 // Filter, as opposed to 'filter', re-initialises the heap after the operation is done.
 // If you want to do several consecutive filterings, it's therefore better to first
 // do a .filter(func1) followed by .Filter(func2) or reheap()
-func (m *sortedMap) Filter(filter func(*types.Transaction) bool) types.Transactions {
-	removed := m.filter(filter)
+func (m *sortedMap) Filter(filterFunc func(*types.Transaction) bool) types.Transactions {
+	removed := m.filter(filterFunc)
 	// If transactions were removed, the heap and cache are ruined
 	if len(removed) > 0 {
 		m.reheap()
@@ -124,12 +124,12 @@ func (m *sortedMap) reheap() {
 
 // filter is identical to Filter, but **does not** regenerate the heap. This method
 // should only be used if followed immediately by a call to Filter or reheap()
-func (m *sortedMap) filter(filter func(*types.Transaction) bool) types.Transactions {
+func (m *sortedMap) filter(filterFunc func(*types.Transaction) bool) types.Transactions {
 	var removed types.Transactions
 
 	// Collect all the transactions to filter out
 	for nonce, tx := range m.items {
-		if filter(tx) {
+		if filterFunc(tx) {
 			removed = append(removed, tx)
 			delete(m.items, nonce)
 		}
