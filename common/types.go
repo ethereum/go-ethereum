@@ -401,7 +401,7 @@ func ExtractAddressToBytes(penalties []Address) []byte {
 }
 
 func ExtractAddressFromBytes(bytePenalties []byte) []Address {
-	if bytePenalties != nil && len(bytePenalties) < AddressLength {
+	if len(bytePenalties) < AddressLength {
 		return []Address{}
 	}
 	penalties := make([]Address, len(bytePenalties)/AddressLength)
