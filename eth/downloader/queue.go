@@ -643,6 +643,7 @@ func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt, recei
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
+	// Note that result can be nil here
 	validate := func(index int, header *types.Header, result *fetchResult) error {
 		// Case 1) last block, incomplete
 		if lastBlockIncomplete && index == len(receiptList)-1 {
@@ -679,19 +680,20 @@ func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt, recei
 		}
 
 		// Case 2) fist block, partially collected before and completed by this response
-		if index == 0 && len(result.Receipts) != 0 {
+		if index == 0 {
 			if result == nil {
 				return errInvalidReceipt
 			}
+			if len(result.Receipts) != 0 {
+				var hash common.Hash
+				hasher := trie.NewStackTrie(nil)
+				hash = types.DeriveSha(append(result.Receipts, receiptList[index]...), hasher)
 
-			var hash common.Hash
-			hasher := trie.NewStackTrie(nil)
-			hash = types.DeriveSha(append(result.Receipts, receiptList[index]...), hasher)
-
-			if hash != header.ReceiptHash {
-				return errInvalidReceipt
+				if hash != header.ReceiptHash {
+					return errInvalidReceipt
+				}
+				return nil
 			}
-			return nil
 		}
 
 		if receiptListHashes[index] != header.ReceiptHash {
@@ -752,16 +754,13 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 			break
 		}
 		// Validate the fields
-		res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64())
+		res, _, _ := q.resultCache.GetDeliverySlot(header.Number.Uint64())
 		results = append(results, res)
 
 		// If stale || err != nil, res is set to nil.
 		if err := validate(i, header, res); err != nil {
 			failure = err
 			break
-		}
-		if !stale && err == nil {
-			log.Error("Delivery stale", "stale", stale, "number", header.Number.Uint64(), "err", err)
 		}
 
 		hashes = append(hashes, header.Hash())

@@ -35,29 +35,40 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+type blockConfig struct {
+	txPeriod int
+	txCount  int
+}
+
+var emptyBlock = blockConfig{txPeriod: 0, txCount: 0}
+var defaultBlock = blockConfig{txPeriod: 2, txCount: 1}
+
 // makeChain creates a chain of n blocks starting at and including parent.
 // The returned hash chain is ordered head->parent.
-// If empty is false, every second block (i%2==0) contains one transaction.
+// If config.txCount > 0, every config.txPeriod-th block contains config.txCount transactions.
 // No uncles are added.
-func makeChain(n int, seed byte, parent *types.Block, empty bool) ([]*types.Block, []types.Receipts) {
+func makeChain(n int, seed byte, parent *types.Block, config blockConfig) ([]*types.Block, []types.Receipts) {
 	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), testDB, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
-		// Add one tx to every second block
-		if !empty && i%2 == 0 {
-			signer := types.MakeSigner(params.TestChainConfig, block.Number(), block.Timestamp())
-			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, block.BaseFee(), nil), signer, testKey)
-			if err != nil {
-				panic(err)
+		// Add transactions according to config
+		if config.txCount > 0 && i%config.txPeriod == 0 {
+			for range config.txCount {
+				signer := types.MakeSigner(params.TestChainConfig, block.Number(), block.Timestamp())
+				tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, block.BaseFee(), nil), signer, testKey)
+				if err != nil {
+					panic(err)
+				}
+				block.AddTx(tx)
 			}
-			block.AddTx(tx)
 		}
 	})
 	return blocks, receipts
 }
 
 type chainData struct {
-	blocks []*types.Block
-	offset int
+	blocks   []*types.Block
+	receipts []types.Receipts
+	offset   int
 }
 
 var chain *chainData
@@ -66,11 +77,11 @@ var emptyChain *chainData
 func init() {
 	// Create a chain of blocks to import
 	targetBlocks := 128
-	blocks, _ := makeChain(targetBlocks, 0, testGenesis, false)
-	chain = &chainData{blocks, 0}
+	blocks, receipts := makeChain(targetBlocks, 0, testGenesis, defaultBlock)
+	chain = &chainData{blocks, receipts, 0}
 
-	blocks, _ = makeChain(targetBlocks, 0, testGenesis, true)
-	emptyChain = &chainData{blocks, 0}
+	blocks, receipts = makeChain(targetBlocks, 0, testGenesis, emptyBlock)
+	emptyChain = &chainData{blocks, receipts, 0}
 }
 
 func (chain *chainData) headers() []*types.Header {
@@ -261,13 +272,93 @@ func TestEmptyBlocks(t *testing.T) {
 	}
 }
 
+// TestPartialReceiptDelivery checks that when DeliverReceipts
+// deliveres only subset of last block receipts, the remaining
+// unprocessed headers are correctly re-queued into the receipt task queue.
+func TestPartialReceiptDelivery(t *testing.T) {
+	network := newNetwork()
+	blocks, receipts := makeChain(10, 0, testGenesis, blockConfig{txPeriod: 1, txCount: 5})
+	network.chain = blocks
+	network.receipts = receipts
+
+	q := newQueue(10, 10)
+	q.Prepare(1, SnapSync)
+
+	headers := network.headers(1)[:5]
+	hashes := make([]common.Hash, len(headers))
+	for i, header := range headers {
+		hashes[i] = header.Hash()
+	}
+
+	q.Schedule(headers, hashes, 1)
+
+	peer := dummyPeer("peer-1")
+	req, _, _ := q.ReserveReceipts(peer, 5)
+
+	t.Logf("request: length %d", len(req.Headers))
+
+	// First delivery
+	cutoff := len(req.Headers) / 2
+	receiptSets, rcHashes, last := getPartialReceipts(cutoff, 0, receipts, true)
+	accepted, err := q.DeliverReceipts(peer.id, receiptSets, rcHashes, true)
+	if err != nil {
+		t.Errorf("delivery failed: %v\n", err)
+	}
+	if pending := q.PendingReceipts(); pending != 5-cutoff {
+		t.Errorf("wrong pending receipt length, got %d, exp %d", pending, 5-cutoff)
+	}
+
+	t.Logf("receipt delivered: length %d, pending %d", accepted, q.PendingReceipts())
+
+	// Second delivery
+	req, _, _ = q.ReserveReceipts(peer, 5)
+	t.Logf("request: length %d", len(req.Headers))
+
+	receiptSets, rcHashes, last = getPartialReceipts(5-cutoff, last, receipts[cutoff:], false)
+	accepted, err = q.DeliverReceipts(peer.id, receiptSets, rcHashes, true)
+	if err != nil {
+		t.Errorf("delivery failed: %v\n", err)
+	}
+	if pending := q.PendingReceipts(); pending != 0 {
+		t.Errorf("wrong pending receipt length, got %d, exp %d", pending, 0)
+	}
+	t.Logf("receipt delivered: length %d, pending %d", accepted, q.PendingReceipts())
+}
+
+func getPartialReceipts(cutoff int, prevLastIndex int, receipts []types.Receipts, incomplete bool) ([][]*types.Receipt, []common.Hash, int) {
+	var lastIndex int
+
+	receiptSets := make([][]*types.Receipt, cutoff+1)
+	for i := range receiptSets {
+		if cutoff == i && incomplete {
+			lastIndex = len(receipts[i]) / 2
+			receiptSets[i] = receipts[i][:lastIndex]
+		} else if i == 0 && prevLastIndex > 0 {
+			receiptSets[i] = receipts[i][prevLastIndex:]
+		} else {
+			receiptSets[i] = receipts[i]
+		}
+	}
+
+	hasher := trie.NewStackTrie(nil)
+	rcHashes := make([]common.Hash, len(receiptSets))
+	for i, rc := range receiptSets {
+		if cutoff == i {
+			break
+		}
+		rcHashes[i] = types.DeriveSha(types.Receipts(rc), hasher)
+	}
+
+	return receiptSets, rcHashes, lastIndex
+}
+
 // XTestDelivery does some more extensive testing of events that happen,
 // blocks that become known and peers that make reservations and deliveries.
 // disabled since it's not really a unit-test, but can be executed to test
 // some more advanced scenarios
 func XTestDelivery(t *testing.T) {
 	// the outside network, holding blocks
-	blo, rec := makeChain(128, 0, testGenesis, false)
+	blo, rec := makeChain(128, 0, testGenesis, defaultBlock)
 	world := newNetwork()
 	world.receipts = rec
 	world.chain = blo
@@ -447,7 +538,7 @@ func (n *network) progress(numBlocks int) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	//fmt.Printf("progressing...\n")
-	newBlocks, newR := makeChain(numBlocks, 0, n.chain[len(n.chain)-1], false)
+	newBlocks, newR := makeChain(numBlocks, 0, n.chain[len(n.chain)-1], defaultBlock)
 	n.chain = append(n.chain, newBlocks...)
 	n.receipts = append(n.receipts, newR...)
 	n.cond.Broadcast()
