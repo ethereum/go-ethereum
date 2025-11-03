@@ -36,4 +36,4 @@ for:
       - go run build/ci.go archive -arch %GETH_ARCH% -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
       - go run build/ci.go nsis -arch %GETH_ARCH% -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
     test_script:
-      - go run build/ci.go test -dlgo -arch %GETH_ARCH% -cc %GETH_CC% -short -skip-spectests
+      - go run build/ci.go test -dlgo -arch %GETH_ARCH% -cc %GETH_CC% -short

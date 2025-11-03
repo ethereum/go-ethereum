@@ -19,7 +19,7 @@
 package main
 
 import (
-	zkruntime "github.com/zkMIPS/zkMIPS/crates/go-runtime/zkm_runtime"
+	zkruntime "github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime"
 )
 
 // getInput reads the input payload from the zkVM runtime environment.

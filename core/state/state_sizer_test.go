@@ -94,6 +94,14 @@ func TestSizeTracker(t *testing.T) {
 	}
 	baselineRoot := currentRoot
 
+	// Close and reopen the trie database so all async flushes triggered by the
+	// baseline commits are written before we measure the baseline snapshot.
+	if err := tdb.Close(); err != nil {
+		t.Fatalf("Failed to close triedb before baseline measurement: %v", err)
+	}
+	tdb = triedb.NewDatabase(db, &triedb.Config{PathDB: pathdb.Defaults})
+	sdb = NewDatabase(tdb, nil)
+
 	// Wait for snapshot completion
 	for !tdb.SnapshotCompleted() {
 		time.Sleep(100 * time.Millisecond)
@@ -215,13 +223,12 @@ func TestSizeTracker(t *testing.T) {
 	if actualStats.ContractCodeBytes != expectedStats.ContractCodeBytes {
 		t.Errorf("Contract code bytes mismatch: expected %d, got %d", expectedStats.ContractCodeBytes, actualStats.ContractCodeBytes)
 	}
-	// TODO: failed on github actions, need to investigate
-	// if actualStats.AccountTrienodes != expectedStats.AccountTrienodes {
-	// 	t.Errorf("Account trie nodes mismatch: expected %d, got %d", expectedStats.AccountTrienodes, actualStats.AccountTrienodes)
-	// }
-	// if actualStats.AccountTrienodeBytes != expectedStats.AccountTrienodeBytes {
-	// 	t.Errorf("Account trie node bytes mismatch: expected %d, got %d", expectedStats.AccountTrienodeBytes, actualStats.AccountTrienodeBytes)
-	// }
+	if actualStats.AccountTrienodes != expectedStats.AccountTrienodes {
+		t.Errorf("Account trie nodes mismatch: expected %d, got %d", expectedStats.AccountTrienodes, actualStats.AccountTrienodes)
+	}
+	if actualStats.AccountTrienodeBytes != expectedStats.AccountTrienodeBytes {
+		t.Errorf("Account trie node bytes mismatch: expected %d, got %d", expectedStats.AccountTrienodeBytes, actualStats.AccountTrienodeBytes)
+	}
 	if actualStats.StorageTrienodes != expectedStats.StorageTrienodes {
 		t.Errorf("Storage trie nodes mismatch: expected %d, got %d", expectedStats.StorageTrienodes, actualStats.StorageTrienodes)
 	}

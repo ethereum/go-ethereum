@@ -563,7 +563,7 @@ type ReceiptWithTx struct {
 // In addition to returning receipts, it also returns the corresponding transactions.
 // This is because receipts only contain low-level data, while user-facing data
 // may require additional information from the Transaction.
-func filterReceipts(txHashes []common.Hash, ev core.ChainEvent) []*ReceiptWithTx {
+func filterReceipts(txHashes map[common.Hash]bool, ev core.ChainEvent) []*ReceiptWithTx {
 	var ret []*ReceiptWithTx
 
 	receipts := ev.Receipts
@@ -583,27 +583,9 @@ func filterReceipts(txHashes []common.Hash, ev core.ChainEvent) []*ReceiptWithTx
 				Transaction: txs[i],
 			}
 		}
-	} else if len(txHashes) == 1 {
-		// Filter by single transaction hash.
-		// This is a common case, so we distinguish it from filtering by multiple tx hashes and made a small optimization.
-		for i, receipt := range receipts {
-			if receipt.TxHash == txHashes[0] {
-				ret = append(ret, &ReceiptWithTx{
-					Receipt:     receipt,
-					Transaction: txs[i],
-				})
-				break
-			}
-		}
 	} else {
-		// Filter by multiple transaction hashes.
-		txHashMap := make(map[common.Hash]bool, len(txHashes))
-		for _, hash := range txHashes {
-			txHashMap[hash] = true
-		}
-
 		for i, receipt := range receipts {
-			if txHashMap[receipt.TxHash] {
+			if txHashes[receipt.TxHash] {
 				ret = append(ret, &ReceiptWithTx{
 					Receipt:     receipt,
 					Transaction: txs[i],

@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"iter"
 	"maps"
-	"math"
 	"slices"
 	"sort"
 	"time"
@@ -202,17 +201,6 @@ func (h *trienodeHistory) encode() ([]byte, []byte, []byte, error) {
 	binary.Write(&headerSection, binary.BigEndian, h.meta.block)   // 8 byte
 
 	for _, owner := range h.owners {
-		// Fill the header section with offsets at key and value section
-		headerSection.Write(owner.Bytes())                                       // 32 bytes
-		binary.Write(&headerSection, binary.BigEndian, uint32(keySection.Len())) // 4 bytes
-
-		// The offset to the value section is theoretically unnecessary, since the
-		// individual value offset is already tracked in the key section. However,
-		// we still keep it here for two reasons:
-		// - It's cheap to store (only 4 bytes for each trie).
-		// - It can be useful for decoding the trie data when key is not required (e.g., in hash mode).
-		binary.Write(&headerSection, binary.BigEndian, uint32(valueSection.Len())) // 4 bytes
-
 		// Fill the key section with node index
 		var (
 			prevKey   []byte
@@ -266,6 +254,21 @@ func (h *trienodeHistory) encode() ([]byte, []byte, []byte, error) {
 		if _, err := keySection.Write(trailer); err != nil {
 			return nil, nil, nil, err
 		}
+
+		// Fill the header section with the offsets of the key and value sections.
+		// Note that the key/value offsets are intentionally tracked *after* encoding
+		// them into their respective sections, ensuring each offset refers to the end
+		// position. For n trie chunks, n offset pairs are sufficient to uniquely locate
+		// the corresponding data.
+		headerSection.Write(owner.Bytes())                                       // 32 bytes
+		binary.Write(&headerSection, binary.BigEndian, uint32(keySection.Len())) // 4 bytes
+
+		// The offset to the value section is theoretically unnecessary, since the
+		// individual value offset is already tracked in the key section. However,
+		// we still keep it here for two reasons:
+		// - It's cheap to store (only 4 bytes for each trie).
+		// - It can be useful for decoding the trie data when key is not required (e.g., in hash mode).
+		binary.Write(&headerSection, binary.BigEndian, uint32(valueSection.Len())) // 4 bytes
 	}
 	return headerSection.Bytes(), keySection.Bytes(), valueSection.Bytes(), nil
 }
@@ -370,11 +373,15 @@ func decodeSingle(keySection []byte, onValue func([]byte, int, int) error) ([]st
 	for keyOff < keyLimit {
 		// Validate the key and value offsets within the single trie data chunk
 		if items%trienodeDataBlockRestartLen == 0 {
-			if keyOff != int(keyOffsets[items/trienodeDataBlockRestartLen]) {
-				return nil, fmt.Errorf("key offset is not matched, recorded: %d, want: %d", keyOffsets[items/trienodeDataBlockRestartLen], keyOff)
+			restartIndex := items / trienodeDataBlockRestartLen
+			if restartIndex >= len(keyOffsets) {
+				return nil, fmt.Errorf("restart index out of range: %d, available restarts: %d", restartIndex, len(keyOffsets))
 			}
-			if valOff != int(valOffsets[items/trienodeDataBlockRestartLen]) {
-				return nil, fmt.Errorf("value offset is not matched, recorded: %d, want: %d", valOffsets[items/trienodeDataBlockRestartLen], valOff)
+			if keyOff != int(keyOffsets[restartIndex]) {
+				return nil, fmt.Errorf("key offset is not matched, recorded: %d, want: %d", keyOffsets[restartIndex], keyOff)
+			}
+			if valOff != int(valOffsets[restartIndex]) {
+				return nil, fmt.Errorf("value offset is not matched, recorded: %d, want: %d", valOffsets[restartIndex], valOff)
 			}
 		}
 		// Resolve the entry from key section
@@ -471,22 +478,22 @@ func (h *trienodeHistory) decode(header []byte, keySection []byte, valueSection 
 
 	for i := range len(owners) {
 		// Resolve the boundary of key section
-		keyStart := keyOffsets[i]
-		keyLimit := len(keySection)
-		if i != len(owners)-1 {
-			keyLimit = int(keyOffsets[i+1])
+		var keyStart, keyLimit uint32
+		if i != 0 {
+			keyStart = keyOffsets[i-1]
 		}
-		if int(keyStart) > len(keySection) || keyLimit > len(keySection) {
+		keyLimit = keyOffsets[i]
+		if int(keyStart) > len(keySection) || int(keyLimit) > len(keySection) {
 			return fmt.Errorf("invalid key offsets: keyStart: %d, keyLimit: %d, size: %d", keyStart, keyLimit, len(keySection))
 		}
 
 		// Resolve the boundary of value section
-		valStart := valueOffsets[i]
-		valLimit := len(valueSection)
-		if i != len(owners)-1 {
-			valLimit = int(valueOffsets[i+1])
+		var valStart, valLimit uint32
+		if i != 0 {
+			valStart = valueOffsets[i-1]
 		}
-		if int(valStart) > len(valueSection) || valLimit > len(valueSection) {
+		valLimit = valueOffsets[i]
+		if int(valStart) > len(valueSection) || int(valLimit) > len(valueSection) {
 			return fmt.Errorf("invalid value offsets: valueStart: %d, valueLimit: %d, size: %d", valStart, valLimit, len(valueSection))
 		}
 
@@ -506,33 +513,27 @@ type iRange struct {
 	limit uint32
 }
 
+func (ir iRange) len() uint32 {
+	return ir.limit - ir.start
+}
+
 // singleTrienodeHistoryReader provides read access to a single trie within the
 // trienode history. It stores an offset to the trie's position in the history,
 // along with a set of per-node offsets that can be resolved on demand.
 type singleTrienodeHistoryReader struct {
 	id                   uint64
 	reader               ethdb.AncientReader
-	valueRange           iRange            // value range within the total value section
+	valueRange           iRange            // value range within the global value section
 	valueInternalOffsets map[string]iRange // value offset within the single trie data
 }
 
 func newSingleTrienodeHistoryReader(id uint64, reader ethdb.AncientReader, keyRange iRange, valueRange iRange) (*singleTrienodeHistoryReader, error) {
-	// TODO(rjl493456442) partial freezer read should be supported
-	keyData, err := rawdb.ReadTrienodeHistoryKeySection(reader, id)
+	keyData, err := rawdb.ReadTrienodeHistoryKeySection(reader, id, uint64(keyRange.start), uint64(keyRange.len()))
 	if err != nil {
 		return nil, err
 	}
-	keyStart := int(keyRange.start)
-	keyLimit := int(keyRange.limit)
-	if keyRange.limit == math.MaxUint32 {
-		keyLimit = len(keyData)
-	}
-	if len(keyData) < keyStart || len(keyData) < keyLimit {
-		return nil, fmt.Errorf("key section too short, start: %d, limit: %d, size: %d", keyStart, keyLimit, len(keyData))
-	}
-
 	valueOffsets := make(map[string]iRange)
-	_, err = decodeSingle(keyData[keyStart:keyLimit], func(key []byte, start int, limit int) error {
+	_, err = decodeSingle(keyData, func(key []byte, start int, limit int) error {
 		valueOffsets[string(key)] = iRange{
 			start: uint32(start),
 			limit: uint32(limit),
@@ -556,20 +557,7 @@ func (sr *singleTrienodeHistoryReader) read(path string) ([]byte, error) {
 	if !exists {
 		return nil, fmt.Errorf("trienode %v not found", []byte(path))
 	}
-	// TODO(rjl493456442) partial freezer read should be supported
-	valueData, err := rawdb.ReadTrienodeHistoryValueSection(sr.reader, sr.id)
-	if err != nil {
-		return nil, err
-	}
-	if len(valueData) < int(sr.valueRange.start) {
-		return nil, fmt.Errorf("value section too short, start: %d, size: %d", sr.valueRange.start, len(valueData))
-	}
-	entryStart := sr.valueRange.start + offset.start
-	entryLimit := sr.valueRange.start + offset.limit
-	if len(valueData) < int(entryStart) || len(valueData) < int(entryLimit) {
-		return nil, fmt.Errorf("value section too short, start: %d, limit: %d, size: %d", entryStart, entryLimit, len(valueData))
-	}
-	return valueData[int(entryStart):int(entryLimit)], nil
+	return rawdb.ReadTrienodeHistoryValueSection(sr.reader, sr.id, uint64(sr.valueRange.start+offset.start), uint64(offset.len()))
 }
 
 // trienodeHistoryReader provides read access to node data in the trie node history.
@@ -610,27 +598,23 @@ func (r *trienodeHistoryReader) decodeHeader() error {
 	}
 	for i, owner := range owners {
 		// Decode the key range for this trie chunk
-		var keyLimit uint32
-		if i == len(owners)-1 {
-			keyLimit = math.MaxUint32
-		} else {
-			keyLimit = keyOffsets[i+1]
+		var keyStart uint32
+		if i != 0 {
+			keyStart = keyOffsets[i-1]
 		}
 		r.keyRanges[owner] = iRange{
-			start: keyOffsets[i],
-			limit: keyLimit,
+			start: keyStart,
+			limit: keyOffsets[i],
 		}
 
 		// Decode the value range for this trie chunk
-		var valLimit uint32
-		if i == len(owners)-1 {
-			valLimit = math.MaxUint32
-		} else {
-			valLimit = valOffsets[i+1]
+		var valStart uint32
+		if i != 0 {
+			valStart = valOffsets[i-1]
 		}
 		r.valRanges[owner] = iRange{
-			start: valOffsets[i],
-			limit: valLimit,
+			start: valStart,
+			limit: valOffsets[i],
 		}
 	}
 	return nil

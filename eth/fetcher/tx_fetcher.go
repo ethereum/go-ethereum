@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 )
 
 const (
@@ -78,35 +77,6 @@ var (
 	// txFetchTimeout is the maximum allotted time to return an explicitly
 	// requested transaction.
 	txFetchTimeout = 5 * time.Second
-)
-
-var (
-	txAnnounceInMeter          = metrics.NewRegisteredMeter("eth/fetcher/transaction/announces/in", nil)
-	txAnnounceKnownMeter       = metrics.NewRegisteredMeter("eth/fetcher/transaction/announces/known", nil)
-	txAnnounceUnderpricedMeter = metrics.NewRegisteredMeter("eth/fetcher/transaction/announces/underpriced", nil)
-	txAnnounceDOSMeter         = metrics.NewRegisteredMeter("eth/fetcher/transaction/announces/dos", nil)
-
-	txBroadcastInMeter          = metrics.NewRegisteredMeter("eth/fetcher/transaction/broadcasts/in", nil)
-	txBroadcastKnownMeter       = metrics.NewRegisteredMeter("eth/fetcher/transaction/broadcasts/known", nil)
-	txBroadcastUnderpricedMeter = metrics.NewRegisteredMeter("eth/fetcher/transaction/broadcasts/underpriced", nil)
-	txBroadcastOtherRejectMeter = metrics.NewRegisteredMeter("eth/fetcher/transaction/broadcasts/otherreject", nil)
-
-	txRequestOutMeter     = metrics.NewRegisteredMeter("eth/fetcher/transaction/request/out", nil)
-	txRequestFailMeter    = metrics.NewRegisteredMeter("eth/fetcher/transaction/request/fail", nil)
-	txRequestDoneMeter    = metrics.NewRegisteredMeter("eth/fetcher/transaction/request/done", nil)
-	txRequestTimeoutMeter = metrics.NewRegisteredMeter("eth/fetcher/transaction/request/timeout", nil)
-
-	txReplyInMeter          = metrics.NewRegisteredMeter("eth/fetcher/transaction/replies/in", nil)
-	txReplyKnownMeter       = metrics.NewRegisteredMeter("eth/fetcher/transaction/replies/known", nil)
-	txReplyUnderpricedMeter = metrics.NewRegisteredMeter("eth/fetcher/transaction/replies/underpriced", nil)
-	txReplyOtherRejectMeter = metrics.NewRegisteredMeter("eth/fetcher/transaction/replies/otherreject", nil)
-
-	txFetcherWaitingPeers   = metrics.NewRegisteredGauge("eth/fetcher/transaction/waiting/peers", nil)
-	txFetcherWaitingHashes  = metrics.NewRegisteredGauge("eth/fetcher/transaction/waiting/hashes", nil)
-	txFetcherQueueingPeers  = metrics.NewRegisteredGauge("eth/fetcher/transaction/queueing/peers", nil)
-	txFetcherQueueingHashes = metrics.NewRegisteredGauge("eth/fetcher/transaction/queueing/hashes", nil)
-	txFetcherFetchingPeers  = metrics.NewRegisteredGauge("eth/fetcher/transaction/fetching/peers", nil)
-	txFetcherFetchingHashes = metrics.NewRegisteredGauge("eth/fetcher/transaction/fetching/hashes", nil)
 )
 
 var errTerminated = errors.New("terminated")
@@ -635,6 +605,7 @@ func (f *TxFetcher) loop() {
 					}
 					// Keep track of the request as dangling, but never expire
 					f.requests[peer].hashes = nil
+					txFetcherSlowPeers.Inc(1)
 				}
 			}
 			// Schedule a new transaction retrieval
@@ -728,6 +699,10 @@ func (f *TxFetcher) loop() {
 					log.Warn("Unexpected transaction delivery", "peer", delivery.origin)
 					break
 				}
+				if req.hashes == nil {
+					txFetcherSlowPeers.Dec(1)
+					txFetcherSlowWait.Update(time.Duration(f.clock.Now() - req.time).Nanoseconds())
+				}
 				delete(f.requests, delivery.origin)
 
 				// Anything not delivered should be re-scheduled (with or without
@@ -807,6 +782,10 @@ func (f *TxFetcher) loop() {
 					}
 					delete(f.fetching, hash)
 				}
+				if request.hashes == nil {
+					txFetcherSlowPeers.Dec(1)
+					txFetcherSlowWait.Update(time.Duration(f.clock.Now() - request.time).Nanoseconds())
+				}
 				delete(f.requests, drop.peer)
 			}
 			// Clean up general announcement tracking
@@ -815,6 +794,10 @@ func (f *TxFetcher) loop() {
 					delete(f.announced[hash], drop.peer)
 					if len(f.announced[hash]) == 0 {
 						delete(f.announced, hash)
+					}
+					delete(f.alternates[hash], drop.peer)
+					if len(f.alternates[hash]) == 0 {
+						delete(f.alternates, hash)
 					}
 				}
 				delete(f.announces, drop.peer)
@@ -879,7 +862,7 @@ func (f *TxFetcher) rescheduleWait(timer *mclock.Timer, trigger chan struct{}) {
 // This method is a bit "flaky" "by design". In theory the timeout timer only ever
 // should be rescheduled if some request is pending. In practice, a timeout will
 // cause the timer to be rescheduled every 5 secs (until the peer comes through or
-// disconnects). This is a limitation of the fetcher code because we don't trac
+// disconnects). This is a limitation of the fetcher code because we don't track
 // pending requests and timed out requests separately. Without double tracking, if
 // we simply didn't reschedule the timer on all-timeout then the timer would never
 // be set again since len(request) > 0 => something's running.
