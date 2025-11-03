@@ -79,9 +79,10 @@ func (x *XDPoS_v2) getSnapshot(chain consensus.ChainReader, number uint64, isGap
 	if isGapNumber {
 		gapBlockNum = number
 	} else {
-		gapBlockNum = number - number%x.config.Epoch - x.config.Gap
-		//prevent overflow
-		if number-number%x.config.Epoch < x.config.Gap {
+		gapBlockNum = number - number%x.config.Epoch
+		if gapBlockNum > x.config.Gap {
+			gapBlockNum -= x.config.Gap
+		} else {
 			gapBlockNum = 0
 		}
 	}

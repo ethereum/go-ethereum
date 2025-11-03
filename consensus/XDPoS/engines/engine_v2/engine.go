@@ -221,10 +221,9 @@ func (x *XDPoS_v2) initial(chain consensus.ChainReader, header *types.Header) er
 	}
 
 	// Initial first v2 snapshot
-	lastGapNum := x.config.V2.SwitchBlock.Uint64() - x.config.Gap
-	// prevent overflow
-	if x.config.V2.SwitchBlock.Uint64() < x.config.Gap {
-		lastGapNum = 0
+	lastGapNum := uint64(0)
+	if x.config.V2.SwitchBlock.Uint64() > x.config.Gap {
+		lastGapNum = x.config.V2.SwitchBlock.Uint64() - x.config.Gap
 	}
 	lastGapHeader := chain.GetHeaderByNumber(lastGapNum)
 
@@ -868,9 +867,10 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 		return <-sigErrChan
 	}
 	epochSwitchNumber := epochInfo.EpochSwitchBlockInfo.Number.Uint64()
-	gapNumber := epochSwitchNumber - epochSwitchNumber%x.config.Epoch - x.config.Gap
-	// prevent overflow
-	if epochSwitchNumber-epochSwitchNumber%x.config.Epoch < x.config.Gap {
+	gapNumber := epochSwitchNumber - epochSwitchNumber%x.config.Epoch
+	if gapNumber > x.config.Gap {
+		gapNumber -= x.config.Gap
+	} else {
 		gapNumber = 0
 	}
 	if gapNumber != quorumCert.GapNumber {
