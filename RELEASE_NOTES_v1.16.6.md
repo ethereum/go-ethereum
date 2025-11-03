@@ -50,8 +50,6 @@ This is a maintenance release with bug fixes, performance improvements, and seve
 - Fixed `ChainConfig` logging to display actual timestamp values instead of pointer addresses. (#32766)
 - Removed unused variables and improved code clarity. (#32989)
 
-
-
 For a full rundown of the changes please consult the Geth 1.16.6 [release milestone](https://github.com/ethereum/go-ethereum/milestone/195?closed=1).
 
 As with all our previous releases, you can find the:
