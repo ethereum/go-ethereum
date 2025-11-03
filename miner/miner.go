@@ -145,15 +145,7 @@ func (m *Miner) HashRate() (tot int64) {
 	if pow, ok := m.engine.(consensus.PoW); ok {
 		tot += int64(pow.Hashrate())
 	}
-	// do we care this might race? is it worth we're rewriting some
-	// aspects of the worker/locking up agents so we can get an accurate
-	// hashrate?
-	for agent := range m.worker.agents {
-		if _, ok := agent.(*CpuAgent); !ok {
-			tot += agent.GetHashRate()
-		}
-	}
-	return
+	return tot + m.worker.getHashrate()
 }
 
 func (m *Miner) SetExtra(extra []byte) error {

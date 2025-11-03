@@ -379,6 +379,19 @@ func (w *worker) update() {
 	}
 }
 
+func (w *worker) getHashrate() int64 {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	total := int64(0)
+	for agent := range w.agents {
+		if _, ok := agent.(*CpuAgent); !ok {
+			total += agent.GetHashRate()
+		}
+	}
+	return total
+}
+
 func getResetTime(chain *core.BlockChain, minePeriod int) time.Duration {
 	minePeriodDuration := time.Duration(minePeriod) * time.Second
 	currentBlockTime := chain.CurrentBlock().Time().Int64()
