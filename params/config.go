@@ -493,7 +493,7 @@ func (v2 *V2) Description(indent int) string {
 	banner += fmt.Sprintf("%s- SwitchEpoch: %v\n", prefix, v2.SwitchEpoch)
 	banner += fmt.Sprintf("%s- SwitchBlock: %v\n", prefix, v2.SwitchBlock)
 	banner += fmt.Sprintf("%s- SkipV2Validation: %v\n", prefix, v2.SkipV2Validation)
-	banner += fmt.Sprintf("%s- %s", prefix, v2.CurrentConfig.Description("CurrentConfig", indent+2))
+	banner += fmt.Sprintf("%s- %s", prefix, v2.GetCurrentConfig().Description("CurrentConfig", indent+2))
 	return banner
 }
 
@@ -538,18 +538,32 @@ func (v *V2) UpdateConfig(round uint64) {
 	v.CurrentConfig = v.AllConfigs[index]
 }
 
-func (v *V2) Config(round uint64) *V2Config {
+// GetCurrentConfig returns a opy of the current config, it assumes v2 is not nil
+func (v2 *V2) GetCurrentConfig() *V2Config {
+	v2.lock.RLock()
+	defer v2.lock.RUnlock()
+
+	if v2.CurrentConfig == nil {
+		return nil
+	}
+
+	// avoid CurrentConfig is changed by other goroutines
+	cpyConfig := *v2.CurrentConfig
+	return &cpyConfig
+}
+
+func (v2 *V2) Config(round uint64) *V2Config {
 	configRound := round
 	var index uint64
 
 	//find the right config
-	for i := range v.configIndex {
-		if v.configIndex[i] <= configRound {
-			index = v.configIndex[i]
+	for i := range v2.configIndex {
+		if v2.configIndex[i] <= configRound {
+			index = v2.configIndex[i]
 			break
 		}
 	}
-	return v.AllConfigs[index]
+	return v2.AllConfigs[index]
 }
 
 func (v *V2) BuildConfigIndex() {

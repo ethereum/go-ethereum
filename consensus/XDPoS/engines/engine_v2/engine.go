@@ -142,14 +142,15 @@ func (x *XDPoS_v2) UpdateParams(header *types.Header) {
 	x.config.V2.UpdateConfig(uint64(round))
 
 	// Setup timeoutTimer
-	duration := time.Duration(x.config.V2.CurrentConfig.TimeoutPeriod) * time.Second
-	err = x.timeoutWorker.SetParams(duration, x.config.V2.CurrentConfig.ExpTimeoutConfig.Base, x.config.V2.CurrentConfig.ExpTimeoutConfig.MaxExponent)
+	currentConfig := x.config.V2.GetCurrentConfig()
+	duration := time.Duration(currentConfig.TimeoutPeriod) * time.Second
+	err = x.timeoutWorker.SetParams(duration, currentConfig.ExpTimeoutConfig.Base, currentConfig.ExpTimeoutConfig.MaxExponent)
 	if err != nil {
 		log.Error("[UpdateParams] set params failed", "err", err)
 	}
 	// avoid deadlock
 	go func() {
-		x.minePeriodCh <- x.config.V2.CurrentConfig.MinePeriod
+		x.minePeriodCh <- currentConfig.MinePeriod
 	}()
 }
 
@@ -254,10 +255,11 @@ func (x *XDPoS_v2) initial(chain consensus.ChainReader, header *types.Header) er
 	}
 
 	// Initial timeout
-	log.Warn("[initial] miner wait period", "period", x.config.V2.CurrentConfig.MinePeriod)
+	currentConfig := x.config.V2.GetCurrentConfig()
+	log.Warn("[initial] miner wait period", "period", currentConfig.MinePeriod)
 	// avoid deadlock
 	go func() {
-		x.minePeriodCh <- x.config.V2.CurrentConfig.MinePeriod
+		x.minePeriodCh <- currentConfig.MinePeriod
 	}()
 
 	// Kick-off the countdown timer
