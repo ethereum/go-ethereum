@@ -889,17 +889,14 @@ func confirm(text string) bool {
 	if err != nil {
 		log.Crit("Failed to read user input", "err", err)
 	}
-	if text := strings.TrimSpace(text); text == "ok" {
-		return true
-	}
-	return false
+	return strings.TrimSpace(text) == "ok"
 }
 
 func testExternalUI(api *core.SignerAPI) {
 	ctx := context.WithValue(context.Background(), "remote", "clef binary")
 	ctx = context.WithValue(ctx, "scheme", "in-proc")
 	ctx = context.WithValue(ctx, "local", "main")
-	errs := make([]string, 0)
+	var errs []string
 
 	a := common.HexToAddress("0xdeadbeef000000000000000000000000deadbeef")
 	addErr := func(errStr string) {
