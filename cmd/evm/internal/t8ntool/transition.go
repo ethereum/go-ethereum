@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/database"
 	"github.com/holiman/uint256"
 	"github.com/urfave/cli/v2"
 )
@@ -124,7 +125,6 @@ func Transition(ctx *cli.Context) error {
 			return err
 		}
 	}
-
 	prestate.BT = inputData.BT
 
 	// Set the block environment
@@ -386,9 +386,7 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 	return nil
 }
 
-// The logic for tree key
-// BinKey computes the tree key given an address and an optional
-// slot number.
+// BinKey computes the tree key given an address and an optional slot number.
 func BinKey(ctx *cli.Context) error {
 	if ctx.Args().Len() == 0 || ctx.Args().Len() > 2 {
 		return errors.New("invalid number of arguments: expecting an address and an optional slot number")
@@ -427,8 +425,10 @@ func BinKeys(ctx *cli.Context) error {
 			return err
 		}
 	}
+	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.VerkleDefaults)
+	defer db.Close()
 
-	bt, err := genBinTrieFromAlloc(alloc)
+	bt, err := genBinTrieFromAlloc(alloc, db)
 	if err != nil {
 		return fmt.Errorf("error generating bt: %w", err)
 	}
@@ -469,8 +469,10 @@ func BinTrieRoot(ctx *cli.Context) error {
 			return err
 		}
 	}
+	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.VerkleDefaults)
+	defer db.Close()
 
-	bt, err := genBinTrieFromAlloc(alloc)
+	bt, err := genBinTrieFromAlloc(alloc, db)
 	if err != nil {
 		return fmt.Errorf("error generating bt: %w", err)
 	}
@@ -480,15 +482,11 @@ func BinTrieRoot(ctx *cli.Context) error {
 }
 
 // TODO(@CPerezz): Should this go to `bintrie` module?
-func genBinTrieFromAlloc(alloc core.GenesisAlloc) (*bintrie.BinaryTrie, error) {
-	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, triedb.NewDatabase(rawdb.NewMemoryDatabase(),
-		&triedb.Config{
-			IsVerkle: true,
-		}))
+func genBinTrieFromAlloc(alloc core.GenesisAlloc, db database.NodeDatabase) (*bintrie.BinaryTrie, error) {
+	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, db)
 	if err != nil {
 		return nil, err
 	}
-
 	for addr, acc := range alloc {
 		for slot, value := range acc.Storage {
 			err := bt.UpdateStorage(addr, slot.Bytes(), value.Big().Bytes())

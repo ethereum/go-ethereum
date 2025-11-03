@@ -276,7 +276,6 @@ func newTrieReader(root common.Hash, db *triedb.Database, cache *utils.PointCach
 			// by using TransitionTrie when there's no actual transition happening.
 			tr = transitiontrie.NewTransitionTrie(nil, binTrie, false)
 		}
-		err = binErr
 	}
 	if err != nil {
 		return nil, err
