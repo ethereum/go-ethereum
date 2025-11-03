@@ -181,21 +181,21 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 	default:
 		evm.table = &frontierInstructionSet
 	}
-	var extraEips []int
-	if len(evm.Config.ExtraEips) > 0 {
-		// Deep-copy jumptable to prevent modification of opcodes in other tables
-		evm.table = copyJumpTable(evm.table)
-	}
-	for _, eip := range evm.Config.ExtraEips {
-		if err := EnableEIP(eip, evm.table); err != nil {
-			// Disable it, so caller can check if it's activated or not
-			log.Error("EIP activation failed", "eip", eip, "error", err)
-		} else {
-			extraEips = append(extraEips, eip)
-		}
-	}
-	evm.Config.ExtraEips = extraEips
-	return evm
+if len(evm.Config.ExtraEips) > 0 {
+    // Deep-copy jumptable to prevent modification of opcodes in other tables
+    evm.table = copyJumpTable(evm.table)
+    extraEips := make([]int, 0, len(evm.Config.ExtraEips))
+    for _, eip := range evm.Config.ExtraEips {
+        if err := EnableEIP(eip, evm.table); err != nil {
+            // Disable it, so caller can check if it's activated or not
+            log.Error("EIP activation failed", "eip", eip, "error", err)
+        } else {
+            extraEips = append(extraEips, eip)
+        }
+    }
+    evm.Config.ExtraEips = extraEips
+}
+return evm
 }
 
 // SetPrecompiles sets the precompiled contracts for the EVM.
