@@ -1014,7 +1014,7 @@ func TestOpenCap(t *testing.T) {
 
 		keep = []common.Address{addr1, addr3}
 		drop = []common.Address{addr2}
-		size = uint64(2 * (txAvgSize + blobSize + uint64(txBlobOverhead)))
+		size = 2 * (txAvgSize + blobSize + uint64(txBlobOverhead))
 	)
 	store.Put(blob1)
 	store.Put(blob2)
