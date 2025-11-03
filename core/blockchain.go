@@ -1703,6 +1703,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			var winner []*types.Block
 
 			parent := bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+			if parent == nil {
+				log.Error("[insertChain] fail to get parent block", "number", block.NumberU64()-1, "hash", block.ParentHash())
+				return i, events, coalescedLogs, fmt.Errorf("fail to get parent block, number: %v, hash: %v", block.NumberU64()-1, block.ParentHash())
+			}
 			for !bc.HasFullState(parent) {
 				winner = append(winner, parent)
 				parent = bc.GetBlock(parent.ParentHash(), parent.NumberU64()-1)
