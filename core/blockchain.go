@@ -1164,14 +1164,11 @@ func (bc *BlockChain) procFutureBlocks() {
 			if i == len(blocks)-1 && err == nil {
 				engine, ok := bc.Engine().(*XDPoS.XDPoS)
 				if ok {
-					j := i
-					go func() {
-						header := blocks[j].Header()
-						err = engine.HandleProposedBlock(bc, header)
-						if err != nil {
-							log.Info("[procFutureBlocks] handle proposed block has error", "err", err, "block hash", header.Hash(), "number", header.Number)
-						}
-					}()
+					header := blocks[i].Header()
+					err = engine.HandleProposedBlock(bc, header)
+					if err != nil {
+						log.Info("[procFutureBlocks] handle proposed block has error", "err", err, "block hash", header.Hash(), "number", header.Number)
+					}
 				}
 			}
 		}
