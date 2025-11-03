@@ -147,7 +147,6 @@ var (
 			t8ntool.OutputBasedir,
 			t8ntool.OutputAllocFlag,
 			t8ntool.OutputBTFlag,
-			t8ntool.OutputWitnessFlag,
 			t8ntool.OutputResultFlag,
 			t8ntool.OutputBodyFlag,
 			t8ntool.InputAllocFlag,

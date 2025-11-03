@@ -53,6 +53,10 @@ func (h HashedNode) InsertValuesAtStem(stem []byte, values [][]byte, resolver No
 		return nil, fmt.Errorf("InsertValuesAtStem path generation error: %w", err)
 	}
 
+	if resolver == nil {
+		return nil, errors.New("InsertValuesAtStem resolve error: resolver is nil")
+	}
+
 	// Step 2: Resolve the hashed node to get the actual node data
 	data, err := resolver(path, common.Hash(h))
 	if err != nil {
@@ -77,7 +81,7 @@ func (h HashedNode) toDot(parent string, path string) string {
 }
 
 func (h HashedNode) CollectNodes([]byte, NodeFlushFn) error {
-	return errors.New("collectNodes not implemented for hashed node")
+	return nil
 }
 
 func (h HashedNode) GetHeight() int {
