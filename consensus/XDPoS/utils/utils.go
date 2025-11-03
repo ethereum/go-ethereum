@@ -43,12 +43,12 @@ func ExtractValidatorsFromBytes(byteValidators []byte) ([]int64, error) {
 	var validators []int64
 	for i := 0; i < lenValidator; i++ {
 		trimByte := bytes.Trim(byteValidators[i*M2ByteLength:(i+1)*M2ByteLength], "\x00")
-		intNumber, err := strconv.Atoi(string(trimByte))
+		intNumber, err := strconv.ParseInt(string(trimByte), 10, 64)
 		if err != nil {
 			log.Error("Can not convert string to integer", "error", err)
 			return []int64{}, fmt.Errorf("can not convert string %s to integer: %v", string(trimByte), err)
 		}
-		validators = append(validators, int64(intNumber))
+		validators = append(validators, intNumber)
 	}
 
 	return validators, nil
