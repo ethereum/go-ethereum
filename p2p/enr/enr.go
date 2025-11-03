@@ -244,7 +244,9 @@ func (r *Record) signAndEncode(privkey *ecdsa.PrivateKey) error {
 
 	// Sign the tail of the list.
 	h := sha3.NewLegacyKeccak256()
-	rlp.Encode(h, list[1:])
+	if err := rlp.Encode(h, list[1:]); err != nil {
+		return err
+	}
 	sig, err := crypto.Sign(h.Sum(nil), privkey)
 	if err != nil {
 		return err

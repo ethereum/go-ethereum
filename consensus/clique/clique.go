@@ -168,7 +168,9 @@ func sigHash(header *types.Header) (hash common.Hash) {
 	if header.BaseFee != nil {
 		enc = append(enc, header.BaseFee)
 	}
-	rlp.Encode(hasher, enc)
+	if err := rlp.Encode(hasher, enc); err != nil {
+		panic("rlp.Encode fail: " + err.Error())
+	}
 	hasher.Sum(hash[:0])
 	return hash
 }

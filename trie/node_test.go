@@ -44,8 +44,9 @@ func TestDecodeNestedNode(t *testing.T) {
 	fullNodeData[15] = data
 
 	buf := bytes.NewBuffer([]byte{})
-	rlp.Encode(buf, fullNodeData)
-
+	if err := rlp.Encode(buf, fullNodeData); err != nil {
+		t.Fatalf("rlp.Encode fail: %v", err)
+	}
 	if _, err := decodeNode([]byte("testdecode"), buf.Bytes()); err != nil {
 		t.Fatalf("decode nested full Node err: %v", err)
 	}
@@ -55,8 +56,9 @@ func TestDecodeFullNodeWrongSizeChild(t *testing.T) {
 	fullNodeData := newTestFullNode([]byte("wrongsizechild"))
 	fullNodeData[0] = []byte("00")
 	buf := bytes.NewBuffer([]byte{})
-	rlp.Encode(buf, fullNodeData)
-
+	if err := rlp.Encode(buf, fullNodeData); err != nil {
+		t.Fatalf("rlp.Encode fail: %v", err)
+	}
 	_, err := decodeNode([]byte("testdecode"), buf.Bytes())
 	if _, ok := err.(*decodeError); !ok {
 		t.Fatalf("decodeNode returned wrong err: %v", err)
@@ -74,8 +76,9 @@ func TestDecodeFullNodeWrongNestedFullNode(t *testing.T) {
 	fullNodeData[15] = data
 
 	buf := bytes.NewBuffer([]byte{})
-	rlp.Encode(buf, fullNodeData)
-
+	if err := rlp.Encode(buf, fullNodeData); err != nil {
+		t.Fatalf("rlp.Encode fail: %v", err)
+	}
 	_, err := decodeNode([]byte("testdecode"), buf.Bytes())
 	if _, ok := err.(*decodeError); !ok {
 		t.Fatalf("decodeNode returned wrong err: %v", err)
@@ -85,8 +88,9 @@ func TestDecodeFullNodeWrongNestedFullNode(t *testing.T) {
 func TestDecodeFullNode(t *testing.T) {
 	fullNodeData := newTestFullNode([]byte("decodefullnode"))
 	buf := bytes.NewBuffer([]byte{})
-	rlp.Encode(buf, fullNodeData)
-
+	if err := rlp.Encode(buf, fullNodeData); err != nil {
+		t.Fatalf("rlp.Encode fail: %v", err)
+	}
 	_, err := decodeNode([]byte("testdecode"), buf.Bytes())
 	if err != nil {
 		t.Fatalf("decode full Node err: %v", err)

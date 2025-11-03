@@ -341,7 +341,9 @@ func (s *PublicBlockChainAPI) GetTransactionAndReceiptProof(ctx context.Context,
 	tx_tr := deriveTrie(block.Transactions())
 
 	keybuf := new(bytes.Buffer)
-	rlp.Encode(keybuf, uint(index))
+	if err := rlp.Encode(keybuf, uint(index)); err != nil {
+		return nil, err
+	}
 	var tx_proof proofPairList
 	if err := tx_tr.Prove(keybuf.Bytes(), 0, &tx_proof); err != nil {
 		return nil, err
