@@ -405,7 +405,7 @@ func (x *XDPoS_v1) whoIsCreator(snap *SnapshotV1, header *types.Header) (common.
 	return m, nil
 }
 func (x *XDPoS_v1) YourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (bool, error) {
-	len, preIndex, curIndex, ok, err := x.yourTurn(chain, parent, signer)
+	length, preIndex, curIndex, ok, err := x.yourTurn(chain, parent, signer)
 
 	if err != nil {
 		log.Warn("Failed when trying to commit new work", "err", err)
@@ -421,7 +421,7 @@ func (x *XDPoS_v1) YourTurn(chain consensus.ChainReader, parent *types.Header, s
 			// you're not allowed to create this block
 			return false, nil
 		}
-		h := utils.Hop(len, preIndex, curIndex)
+		h := utils.Hop(length, preIndex, curIndex)
 		gap := minePeriod * int64(h)
 		// Check nearest checkpoint block in hop range.
 		nearest := x.config.Epoch - (parent.Number.Uint64() % x.config.Epoch)
@@ -961,11 +961,11 @@ func (x *XDPoS_v1) calcDifficulty(chain consensus.ChainReader, parent *types.Hea
 	if x.config.SkipV1Validation {
 		return big.NewInt(1)
 	}
-	len, preIndex, curIndex, _, err := x.yourTurn(chain, parent, signer)
+	length, preIndex, curIndex, _, err := x.yourTurn(chain, parent, signer)
 	if err != nil {
-		return big.NewInt(int64(len + curIndex - preIndex))
+		return big.NewInt(int64(length + curIndex - preIndex))
 	}
-	return big.NewInt(int64(len - utils.Hop(len, preIndex, curIndex)))
+	return big.NewInt(int64(length - utils.Hop(length, preIndex, curIndex)))
 }
 
 func (x *XDPoS_v1) RecoverSigner(header *types.Header) (common.Address, error) {

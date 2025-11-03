@@ -23,14 +23,14 @@ func Position(list []common.Address, x common.Address) int {
 	return -1
 }
 
-func Hop(len, pre, cur int) int {
+func Hop(length, preIndex, curIndex int) int {
 	switch {
-	case pre < cur:
-		return cur - (pre + 1)
-	case pre > cur:
-		return (len - pre) + (cur - 1)
+	case preIndex < curIndex:
+		return curIndex - (preIndex + 1)
+	case preIndex > curIndex:
+		return (length - preIndex) + (curIndex - 1)
 	default:
-		return len - 1
+		return length - 1
 	}
 }
 
