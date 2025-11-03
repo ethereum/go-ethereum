@@ -119,6 +119,14 @@ func New(chainConfig *params.ChainConfig, db ethdb.Database) *XDPoS {
 	}
 }
 
+// Stop stops the consensus engine:
+//   - close chanel MinePeriodCh
+//   - close chanel NewRoundCh
+func (x *XDPoS) Stop() {
+	close(x.MinePeriodCh)
+	close(x.NewRoundCh)
+}
+
 // NewFullFaker creates an ethash consensus engine with a full fake scheme that
 // accepts all blocks as valid, without checking any consensus rules whatsoever.
 func NewFaker(db ethdb.Database, chainConfig *params.ChainConfig) *XDPoS {

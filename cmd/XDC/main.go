@@ -254,6 +254,9 @@ func XDC(ctx *cli.Context) error {
 	defer stack.Close()
 	startNode(ctx, stack, backend, cfg)
 	stack.Wait()
+	if engine, ok := backend.Engine().(*XDPoS.XDPoS); ok {
+		engine.Stop()
+	}
 	return nil
 }
 

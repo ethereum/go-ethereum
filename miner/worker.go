@@ -277,9 +277,7 @@ func (w *worker) update() {
 	// timeout waiting for v1 inital value
 	minePeriod := 2
 	MinePeriodCh := w.engine.(*XDPoS.XDPoS).MinePeriodCh
-	defer close(MinePeriodCh)
 	NewRoundCh := w.engine.(*XDPoS.XDPoS).NewRoundCh
-	defer close(NewRoundCh)
 
 	timeout := time.NewTimer(time.Duration(minePeriod) * time.Second)
 	defer timeout.Stop()
