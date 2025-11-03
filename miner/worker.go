@@ -388,7 +388,7 @@ func getResetTime(chain *core.BlockChain, minePeriod int) time.Duration {
 	if resetTime > minePeriodDuration || resetTime <= 0 {
 		resetTime = minePeriodDuration
 	}
-	log.Debug("[update] Miner worker timer reset", "resetMilliseconds", resetTime.Milliseconds(), "minePeriodSec", minePeriod, "currentBlockTimeSec", fmt.Sprintf("%d", currentBlockTime), "currentSystemTimeSec", fmt.Sprintf("%d.%03d", nowTime/1000, nowTime%1000))
+	log.Debug("[update] Miner worker timer reset", "resetTimeSec", resetTime.Seconds(), "minePeriodSec", minePeriod, "currentBlockTimeSec", fmt.Sprintf("%d", currentBlockTime), "currentSystemTimeSec", fmt.Sprintf("%d.%03d", nowTime/1000, nowTime%1000))
 	return resetTime
 }
 
