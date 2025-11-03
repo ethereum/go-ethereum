@@ -28,8 +28,8 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 		}
 	}
 
-	_, check := x.verifiedHeaders.Get(header.Hash())
-	if check {
+	_, ok := x.verifiedHeaders.Get(header.Hash())
+	if ok {
 		return nil
 	}
 

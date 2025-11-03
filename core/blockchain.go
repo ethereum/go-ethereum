@@ -1943,11 +1943,11 @@ func (bc *BlockChain) InsertBlock(block *types.Block) error {
 
 func (bc *BlockChain) PrepareBlock(block *types.Block) (err error) {
 	defer log.Debug("Done prepare block ", "number", block.NumberU64(), "hash", block.Hash(), "validator", block.Header().Validator, "err", err)
-	if _, check := bc.resultProcess.Get(block.Hash()); check {
+	if _, ok := bc.resultProcess.Get(block.Hash()); ok {
 		log.Debug("Stop prepare a block because the result cached", "number", block.NumberU64(), "hash", block.Hash(), "validator", block.Header().Validator)
 		return nil
 	}
-	if _, check := bc.calculatingBlock.Get(block.Hash()); check {
+	if _, ok := bc.calculatingBlock.Get(block.Hash()); ok {
 		log.Debug("Stop prepare a block because inserting", "number", block.NumberU64(), "hash", block.Hash(), "validator", block.Header().Validator)
 		return nil
 	}
@@ -1971,7 +1971,7 @@ func (bc *BlockChain) PrepareBlock(block *types.Block) (err error) {
 func (bc *BlockChain) getResultBlock(block *types.Block, verifiedM2 bool) (*ResultProcessBlock, error) {
 	var calculatedBlock *CalculatedBlock
 	if verifiedM2 {
-		if result, check := bc.resultProcess.Get(block.HashNoValidator()); check {
+		if result, ok := bc.resultProcess.Get(block.HashNoValidator()); ok {
 			log.Debug("Get result block from cache ", "number", block.NumberU64(), "hash", block.Hash(), "hash no validator", block.HashNoValidator())
 			return result, nil
 		}
@@ -2201,7 +2201,7 @@ func (bc *BlockChain) insertBlock(block *types.Block) ([]interface{}, []*types.L
 		events        = make([]interface{}, 0, 1)
 		coalescedLogs []*types.Log
 	)
-	if _, check := bc.downloadingBlock.Get(block.Hash()); check {
+	if _, ok := bc.downloadingBlock.Get(block.Hash()); ok {
 		log.Debug("Stop fetcher a block because downloading", "number", block.NumberU64(), "hash", block.Hash())
 		return events, coalescedLogs, nil
 	}

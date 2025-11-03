@@ -134,8 +134,8 @@ func (x *XDPoS_v1) VerifyHeaders(chain consensus.ChainReader, headers []*types.H
 }
 
 func (x *XDPoS_v1) verifyHeaderWithCache(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool, verifyCheckpoint bool) error {
-	_, check := x.verifiedHeaders.Get(header.Hash())
-	if check {
+	_, ok := x.verifiedHeaders.Get(header.Hash())
+	if ok {
 		return nil
 	}
 	err := x.verifyHeader(chain, header, parents, fullVerify, verifyCheckpoint)
