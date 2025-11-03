@@ -86,7 +86,7 @@ func TestGetMissedRoundsInEpochByBlockNum(t *testing.T) {
 	}
 
 	// Update Signer as there is no previous signer assigned
-	err = UpdateSigner(blockchain)
+	blockchain.UpdateM1()
 	if err != nil {
 		t.Fatal(err)
 	}
