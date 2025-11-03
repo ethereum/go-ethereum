@@ -477,6 +477,7 @@ func (ks *KeyStore) Update(a accounts.Account, passphrase, newPassphrase string)
 	if err != nil {
 		return err
 	}
+	defer zeroKey(key.PrivateKey)
 	return ks.storage.StoreKey(a.URL.Path, key, newPassphrase)
 }
 
