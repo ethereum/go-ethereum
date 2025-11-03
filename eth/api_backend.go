@@ -531,7 +531,7 @@ func (b *EthAPIBackend) GetVotersCap(checkpoint *big.Int, masterAddr common.Addr
 		log.Error("fail to get state in GetVotersCap", "checkpoint", checkpoint, "err", err)
 		return nil
 	}
-	if statedb != nil {
+	if statedb == nil {
 		log.Error("fail to get state in GetVotersCap", "checkpoint", checkpoint)
 		return nil
 	}
