@@ -18,6 +18,7 @@ package state
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -224,17 +225,17 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 
 // DumpBinTrieLeaves collects all binary trie leaf nodes into the provided map.
 func (s *StateDB) DumpBinTrieLeaves(collector map[common.Hash]hexutil.Bytes) error {
-	if s.trie == nil {
-		trie, err := s.db.OpenTrie(s.originalRoot)
-		if err != nil {
-			return err
-		}
-		s.trie = trie
-	}
-
-	it, err := s.trie.(*bintrie.BinaryTrie).NodeIterator(nil)
+	tr, err := s.db.OpenTrie(s.originalRoot)
 	if err != nil {
-		panic(err)
+		return err
+	}
+	btr, ok := tr.(*bintrie.BinaryTrie)
+	if !ok {
+		return errors.New("trie is not a binary trie")
+	}
+	it, err := btr.NodeIterator(nil)
+	if err != nil {
+		return err
 	}
 	for it.Next(true) {
 		if it.Leaf() {

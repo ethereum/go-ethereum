@@ -118,8 +118,8 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 	}
 	// import pre accounts & construct test genesis block & state root
 	// Commit genesis state
-	gspec := t.genesis(config)
 	var (
+		gspec = t.genesis(config)
 		db    = rawdb.NewMemoryDatabase()
 		tconf = &triedb.Config{
 			Preimages: true,

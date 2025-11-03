@@ -118,6 +118,7 @@ func Transition(ctx *cli.Context) error {
 		}
 	}
 	prestate.Pre = inputData.Alloc
+
 	if btStr != stdinSelector && btStr != "" {
 		if err := readFile(btStr, "BT", &inputData.BT); err != nil {
 			return err
@@ -125,6 +126,7 @@ func Transition(ctx *cli.Context) error {
 	}
 
 	prestate.BT = inputData.BT
+
 	// Set the block environment
 	if envStr != stdinSelector {
 		var env stEnv
@@ -195,8 +197,10 @@ func Transition(ctx *cli.Context) error {
 		return err
 	}
 	// Dump the execution result
-	collector := make(Alloc)
-	var btleaves map[common.Hash]hexutil.Bytes
+	var (
+		collector = make(Alloc)
+		btleaves  map[common.Hash]hexutil.Bytes
+	)
 	isBinary := chainConfig.IsVerkle(big.NewInt(int64(prestate.Env.Number)), prestate.Env.Timestamp)
 	if !isBinary {
 		s.DumpToCollector(collector, nil)
@@ -492,7 +496,6 @@ func genBinTrieFromAlloc(alloc core.GenesisAlloc) (*bintrie.BinaryTrie, error) {
 				return nil, fmt.Errorf("error inserting storage: %w", err)
 			}
 		}
-
 		account := &types.StateAccount{
 			Balance:  uint256.MustFromBig(acc.Balance),
 			Nonce:    acc.Nonce,
@@ -503,7 +506,6 @@ func genBinTrieFromAlloc(alloc core.GenesisAlloc) (*bintrie.BinaryTrie, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error inserting account: %w", err)
 		}
-
 		err = bt.UpdateContractCode(addr, common.BytesToHash(account.CodeHash), acc.Code)
 		if err != nil {
 			return nil, fmt.Errorf("error inserting code: %w", err)

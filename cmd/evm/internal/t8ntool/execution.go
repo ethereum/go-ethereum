@@ -194,6 +194,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 				Time:          pre.Env.ParentTimestamp,
 				ExcessBlobGas: pre.Env.ParentExcessBlobGas,
 				BlobGasUsed:   pre.Env.ParentBlobGasUsed,
+				BaseFee:       pre.Env.ParentBaseFee,
 			}
 			header := &types.Header{
 				Time:          pre.Env.Timestamp,
