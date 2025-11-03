@@ -2174,7 +2174,6 @@ func (bc *BlockChain) getResultBlock(block *types.Block, verifiedM2 bool) (*Resu
 
 // UpdateBlocksHashCache update BlocksHashCache by block number
 func (bc *BlockChain) UpdateBlocksHashCache(block *types.Block) []common.Hash {
-	var hashArr []common.Hash
 	blockNumber := block.Number().Uint64()
 	cached, ok := bc.blocksHashCache.Get(blockNumber)
 
@@ -2186,7 +2185,7 @@ func (bc *BlockChain) UpdateBlocksHashCache(block *types.Block) []common.Hash {
 		return hashArr
 	}
 
-	hashArr = []common.Hash{
+	hashArr := []common.Hash{
 		block.Hash(),
 	}
 	bc.blocksHashCache.Add(blockNumber, hashArr)
