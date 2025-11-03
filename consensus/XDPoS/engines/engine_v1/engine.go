@@ -97,10 +97,10 @@ func New(chainConfig *params.ChainConfig, db ethdb.Database) *XDPoS_v1 {
 		config: &conf,
 		db:     db,
 
-		recents:             lru.NewCache[common.Hash, *SnapshotV1](utils.InmemorySnapshots),
-		signatures:          lru.NewCache[common.Hash, common.Address](utils.InmemorySnapshots),
-		verifiedHeaders:     lru.NewCache[common.Hash, struct{}](utils.InmemorySnapshots),
-		validatorSignatures: lru.NewCache[common.Hash, common.Address](utils.InmemorySnapshots),
+		recents:             lru.NewCache[common.Hash, *SnapshotV1](utils.InMemorySnapshots),
+		signatures:          lru.NewCache[common.Hash, common.Address](utils.InMemorySnapshots),
+		verifiedHeaders:     lru.NewCache[common.Hash, struct{}](utils.InMemorySnapshots),
+		validatorSignatures: lru.NewCache[common.Hash, common.Address](utils.InMemorySnapshots),
 		proposals:           make(map[common.Address]bool),
 	}
 }
@@ -1046,10 +1046,10 @@ func NewFaker(db ethdb.Database, chainConfig *params.ChainConfig) *XDPoS_v1 {
 
 		config:              conf,
 		db:                  db,
-		recents:             lru.NewCache[common.Hash, *SnapshotV1](utils.InmemorySnapshots),
-		signatures:          lru.NewCache[common.Hash, common.Address](utils.InmemorySnapshots),
-		verifiedHeaders:     lru.NewCache[common.Hash, struct{}](utils.InmemorySnapshots),
-		validatorSignatures: lru.NewCache[common.Hash, common.Address](utils.InmemorySnapshots),
+		recents:             lru.NewCache[common.Hash, *SnapshotV1](utils.InMemorySnapshots),
+		signatures:          lru.NewCache[common.Hash, common.Address](utils.InMemorySnapshots),
+		verifiedHeaders:     lru.NewCache[common.Hash, struct{}](utils.InMemorySnapshots),
+		validatorSignatures: lru.NewCache[common.Hash, common.Address](utils.InMemorySnapshots),
 		proposals:           make(map[common.Address]bool),
 	}
 	return fakeEngine
