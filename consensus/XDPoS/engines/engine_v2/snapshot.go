@@ -18,6 +18,7 @@ type SnapshotV2 struct {
 	Hash   common.Hash `json:"hash"`   // Block hash where the snapshot was created
 
 	// candidates will get assigned on updateM1
+	// NOTE: must keep JSON tag "masterNodes", ref: PR #517
 	NextEpochCandidates []common.Address `json:"masterNodes"` // Set of authorized candidates nodes at this moment for next epoch
 }
 
