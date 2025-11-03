@@ -30,6 +30,12 @@ var (
 )
 
 func TestFeeTxWithTRC21Token(t *testing.T) {
+	oldTRC21GasPriceBefore := new(big.Int).Set(common.TIPTRC21Fee)
+	defer func() {
+		common.TIPTRC21Fee = oldTRC21GasPriceBefore
+	}()
+	common.TRC21GasPriceBefore = big.NewInt(1)
+
 	// init genesis
 	contractBackend := backends.NewXDCSimulatedBackend(
 		types.GenesisAlloc{

@@ -13,6 +13,8 @@ func GetGasFee(blockNumber, gas uint64) *big.Int {
 		fee = fee.Mul(fee, GasPrice50x)
 	} else if blockNumber > TIPTRC21Fee.Uint64() {
 		fee = fee.Mul(fee, TRC21GasPrice)
+	} else {
+		fee = fee.Mul(fee, TRC21GasPriceBefore)
 	}
 
 	return fee
