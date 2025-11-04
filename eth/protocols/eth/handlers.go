@@ -250,7 +250,7 @@ func ServiceGetBlockBodiesQuery(chain *core.BlockChain, query GetBlockBodiesRequ
 
 func handleGetReceipts68(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the block receipts retrieval message
-	var query GetReceiptsPacket
+	var query GetReceiptsPacket69
 	if err := msg.Decode(&query); err != nil {
 		return err
 	}
@@ -260,7 +260,7 @@ func handleGetReceipts68(backend Backend, msg Decoder, peer *Peer) error {
 
 func handleGetReceipts69(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the block receipts retrieval message
-	var query GetReceiptsPacket
+	var query GetReceiptsPacket69
 	if err := msg.Decode(&query); err != nil {
 		return err
 	}

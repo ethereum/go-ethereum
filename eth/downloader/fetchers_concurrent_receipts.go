@@ -84,7 +84,7 @@ func (q *receiptQueue) request(peer *peerConnection, req *fetchRequest, resCh ch
 	for _, header := range req.Headers {
 		hashes = append(hashes, header.Hash())
 	}
-	return peer.peer.RequestReceipts(hashes, resCh)
+	return peer.peer.RequestReceipts(hashes, req.From, resCh)
 }
 
 // deliver is responsible for taking a generic response packet from the concurrent

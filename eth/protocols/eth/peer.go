@@ -319,19 +319,33 @@ func (p *Peer) RequestBodies(hashes []common.Hash, sink chan *Response) (*Reques
 }
 
 // RequestReceipts fetches a batch of transaction receipts from a remote node.
-func (p *Peer) RequestReceipts(hashes []common.Hash, sink chan *Response) (*Request, error) {
+func (p *Peer) RequestReceipts(hashes []common.Hash, firstBlockReceiptIndex uint64, sink chan *Response) (*Request, error) {
 	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))
 	id := rand.Uint64()
-
-	req := &Request{
-		id:   id,
-		sink: sink,
-		code: GetReceiptsMsg,
-		want: ReceiptsMsg,
-		data: &GetReceiptsPacket{
-			RequestId:          id,
-			GetReceiptsRequest: hashes,
-		},
+	var req *Request
+	if p.version < ETH70 {
+		req = &Request{
+			id:   id,
+			sink: sink,
+			code: GetReceiptsMsg,
+			want: ReceiptsMsg,
+			data: &GetReceiptsPacket69{
+				RequestId:          id,
+				GetReceiptsRequest: hashes,
+			},
+		}
+	} else {
+		req = &Request{
+			id:   id,
+			sink: sink,
+			code: GetReceiptsMsg,
+			want: ReceiptsMsg,
+			data: &GetReceiptsPacket70{
+				RequestId:              id,
+				GetReceiptsRequest:     hashes,
+				FirstBlockReceiptIndex: firstBlockReceiptIndex,
+			},
+		}
 	}
 	if err := p.dispatchRequest(req); err != nil {
 		return nil, err

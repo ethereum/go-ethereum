@@ -32,6 +32,7 @@ import (
 const (
 	ETH68 = 68
 	ETH69 = 69
+	ETH70 = 70
 )
 
 // ProtocolName is the official short name of the `eth` protocol used during
@@ -259,9 +260,16 @@ func (p *BlockBodiesResponse) Unpack() ([][]*types.Transaction, [][]*types.Heade
 type GetReceiptsRequest []common.Hash
 
 // GetReceiptsPacket represents a block receipts query with request ID wrapping.
-type GetReceiptsPacket struct {
+type GetReceiptsPacket69 struct {
 	RequestId uint64
 	GetReceiptsRequest
+}
+
+// GetReceiptsPacket represents a block receipts query with request ID wrapping.
+type GetReceiptsPacket70 struct {
+	RequestId uint64
+	GetReceiptsRequest
+	FirstBlockReceiptIndex uint64
 }
 
 // ReceiptsResponse is the network packet for block receipts distribution.

@@ -538,7 +538,7 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 	}
 
 	// Send the hash request and verify the response
-	p2p.Send(peer.app, GetReceiptsMsg, &GetReceiptsPacket{
+	p2p.Send(peer.app, GetReceiptsMsg, &GetReceiptsPacket69{
 		RequestId:          123,
 		GetReceiptsRequest: hashes,
 	})

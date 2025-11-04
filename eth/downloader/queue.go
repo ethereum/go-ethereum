@@ -57,18 +57,16 @@ var (
 // fetchRequest is a currently running data retrieval operation.
 type fetchRequest struct {
 	Peer    *peerConnection // Peer to which the request was sent
-	From    uint64          // Requested chain element index (used for skeleton fills only)
+	From    uint64          // Requested chain element index (used for skeleton fills and receipt fetching only)
 	Headers []*types.Header // Requested headers, sorted by request order
 	Time    time.Time       // Time when the request was made
-
-	FromIndex uint64 // TODO: Can we reuse `From` field here?
 }
 
 // fetchResult is a struct collecting partial results from data fetchers until
 // all outstanding pieces complete and the result as a whole can be processed.
 type fetchResult struct {
 	pending     atomic.Int32 // Flag telling what deliveries are outstanding
-	receiptSize uint64
+	receiptSize uint64       // Size of log collected
 
 	Header       *types.Header
 	Uncles       []*types.Header
@@ -142,10 +140,11 @@ type queue struct {
 	blockPendPool  map[string]*fetchRequest           // Currently pending block (body) retrieval operations
 	blockWakeCh    chan bool                          // Channel to notify the block fetcher of new tasks
 
-	receiptTaskPool  map[common.Hash]*types.Header      // Pending receipt retrieval tasks, mapping hashes to headers
-	receiptTaskQueue *prque.Prque[int64, *types.Header] // Priority queue of the headers to fetch the receipts for
-	receiptPendPool  map[string]*fetchRequest           // Currently pending receipt retrieval operations
-	receiptWakeCh    chan bool                          // Channel to notify when receipt fetcher of new tasks
+	receiptTaskPool     map[common.Hash]*types.Header      // Pending receipt retrieval tasks, mapping hashes to headers
+	receiptTaskQueue    *prque.Prque[int64, *types.Header] // Priority queue of the headers to fetch the receipts for
+	receiptPendPool     map[string]*fetchRequest           // Currently pending receipt retrieval operations
+	receiptWakeCh       chan bool                          // Channel to notify when receipt fetcher of new tasks
+	partialReceiptQueue *prque.Prque[int64, *types.Header]
 
 	resultCache *resultStore       // Downloaded but not yet delivered fetch results
 	resultSize  common.StorageSize // Approximate size of a block (exponential moving average)
@@ -161,12 +160,13 @@ type queue struct {
 func newQueue(blockCacheLimit int, thresholdInitialSize int) *queue {
 	lock := new(sync.RWMutex)
 	q := &queue{
-		blockTaskQueue:   prque.New[int64, *types.Header](nil),
-		blockWakeCh:      make(chan bool, 1),
-		receiptTaskQueue: prque.New[int64, *types.Header](nil),
-		receiptWakeCh:    make(chan bool, 1),
-		active:           sync.NewCond(lock),
-		lock:             lock,
+		blockTaskQueue:      prque.New[int64, *types.Header](nil),
+		blockWakeCh:         make(chan bool, 1),
+		receiptTaskQueue:    prque.New[int64, *types.Header](nil),
+		receiptWakeCh:       make(chan bool, 1),
+		partialReceiptQueue: prque.New[int64, *types.Header](nil),
+		active:              sync.NewCond(lock),
+		lock:                lock,
 	}
 	q.Reset(blockCacheLimit, thresholdInitialSize)
 	return q
@@ -188,6 +188,7 @@ func (q *queue) Reset(blockCacheLimit int, thresholdInitialSize int) {
 	q.receiptTaskPool = make(map[common.Hash]*types.Header)
 	q.receiptTaskQueue.Reset()
 	q.receiptPendPool = make(map[string]*fetchRequest)
+	q.partialReceiptQueue.Reset()
 
 	q.resultCache = newResultStore(blockCacheLimit)
 	q.resultCache.SetThrottleThreshold(uint64(thresholdInitialSize))
@@ -215,7 +216,7 @@ func (q *queue) PendingReceipts() int {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	return q.receiptTaskQueue.Size()
+	return q.receiptTaskQueue.Size() + q.partialReceiptQueue.Size()
 }
 
 // InFlightBlocks retrieves whether there are block fetch requests currently in
@@ -419,12 +420,22 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 	// Retrieve a batch of tasks, skipping previously failed ones
 	send := make([]*types.Header, 0, count)
 	skip := make([]*types.Header, 0)
+	skipPartial := make(map[*types.Header]bool) // Track which headers came from partialReceiptQueue
 	progress := false
 	throttled := false
 	for proc := 0; len(send) < count && !taskQueue.Empty(); proc++ {
+		var selectedQueue *prque.Prque[int64, *types.Header]
+		partial := false
+		if kind == receiptType && p.version >= 70 && len(send) == 0 && !q.partialReceiptQueue.Empty() {
+			selectedQueue = q.partialReceiptQueue
+			partial = true
+		} else {
+			selectedQueue = taskQueue
+		}
+
 		// the task queue will pop items in order, so the highest prio block
 		// is also the lowest block number.
-		header, _ := taskQueue.Peek()
+		header, _ := selectedQueue.Peek()
 
 		// we can ask the resultcache if this header is within the
 		// "prioritized" segment of blocks. If it is not, we need to throttle
@@ -433,7 +444,7 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 		if stale {
 			// Don't put back in the task queue, this item has already been
 			// delivered upstream
-			taskQueue.PopItem()
+			selectedQueue.PopItem()
 			progress = true
 			delete(taskPool, header.Hash())
 			proc = proc - 1
@@ -457,23 +468,30 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 		if item.Done(kind) {
 			// If it's a noop, we can skip this task
 			delete(taskPool, header.Hash())
-			taskQueue.PopItem()
+			selectedQueue.PopItem()
 			proc = proc - 1
 			progress = true
 			continue
 		}
 		// Remove it from the task queue
-		taskQueue.PopItem()
+		selectedQueue.PopItem()
 		// Otherwise unless the peer is known not to have the data, add to the retrieve list
 		if p.Lacks(header.Hash()) {
 			skip = append(skip, header)
+			if partial {
+				skipPartial[header] = true
+			}
 		} else {
 			send = append(send, header)
 		}
 	}
-	// Merge all the skipped headers back
+	// Merge all the skipped headers back to their original queues
 	for _, header := range skip {
-		taskQueue.Push(header, -int64(header.Number.Uint64()))
+		if skipPartial[header] {
+			q.partialReceiptQueue.Push(header, -int64(header.Number.Uint64()))
+		} else {
+			taskQueue.Push(header, -int64(header.Number.Uint64()))
+		}
 	}
 	if q.resultCache.HasCompletedItems() {
 		// Wake Results, resultCache was modified
@@ -488,6 +506,15 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 		Headers: send,
 		Time:    time.Now(),
 	}
+
+	// If this is a receipt request and the first block has a partial delivery,
+	// set the From field to resume from the last index
+	if kind == receiptType {
+		if result, _, _, _, err := q.resultCache.getFetchResult(send[0].Number.Uint64()); err == nil && result != nil {
+			request.From = uint64(len(result.Receipts))
+		}
+	}
+
 	pendPool[p.id] = request
 	return request, progress, throttled
 }
@@ -632,7 +659,7 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 		result.SetBodyDone()
 		return -1
 	}
-	return q.deliver(id, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool,
+	return q.deliver(id, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool, nil,
 		bodyReqTimer, bodyInMeter, bodyDropMeter, len(txLists), validate, reconstruct)
 }
 
@@ -709,7 +736,7 @@ func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt, recei
 		result.SetReceiptsDone()
 		return -1
 	}
-	return q.deliver(id, q.receiptTaskPool, q.receiptTaskQueue, q.receiptPendPool,
+	return q.deliver(id, q.receiptTaskPool, q.receiptTaskQueue, q.receiptPendPool, q.partialReceiptQueue,
 		receiptReqTimer, receiptInMeter, receiptDropMeter, len(receiptList), validate, reconstruct)
 }
 
@@ -720,6 +747,7 @@ func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt, recei
 // to access the queue, so they already need a lock anyway.
 func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	taskQueue *prque.Prque[int64, *types.Header], pendPool map[string]*fetchRequest,
+	partialQueue *prque.Prque[int64, *types.Header],
 	reqTimer *metrics.Timer, resInMeter, resDropMeter *metrics.Meter,
 	resultCount int, validate func(index int, header *types.Header, result *fetchResult) error,
 	reconstruct func(index int, result *fetchResult) int) (int, error) {
@@ -779,10 +807,9 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 		}
 		// Clean up a successful fetch
 		delete(taskPool, hashes[accepted])
-		if resume >= 0 {
-			// TODO: add receipt index in TaskPool
+		if partialQueue != nil && resume >= 0 {
 			taskPool[header.Hash()] = header
-			taskQueue.Push(header, -int64(header.Number.Uint64()))
+			partialQueue.Push(header, -int64(header.Number.Uint64()))
 		}
 		accepted++
 	}

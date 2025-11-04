@@ -100,6 +100,7 @@ func dummyPeer(id string) *peerConnection {
 	p := &peerConnection{
 		id:      id,
 		lacking: make(map[common.Hash]struct{}),
+		version: 70,
 	}
 	return p
 }

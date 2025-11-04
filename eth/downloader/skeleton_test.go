@@ -201,7 +201,7 @@ func (p *skeletonTestPeer) RequestBodies([]common.Hash, chan *eth.Response) (*et
 	panic("skeleton sync must not request block bodies")
 }
 
-func (p *skeletonTestPeer) RequestReceipts([]common.Hash, chan *eth.Response) (*eth.Request, error) {
+func (p *skeletonTestPeer) RequestReceipts([]common.Hash, uint64, chan *eth.Response) (*eth.Request, error) {
 	panic("skeleton sync must not request receipts")
 }
 

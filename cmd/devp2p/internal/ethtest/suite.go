@@ -434,7 +434,7 @@ func (s *Suite) TestGetReceipts(t *utesting.T) {
 	}
 
 	// Create block bodies request.
-	req := &eth.GetReceiptsPacket{
+	req := &eth.GetReceiptsPacket69{
 		RequestId:          66,
 		GetReceiptsRequest: (eth.GetReceiptsRequest)(hashes),
 	}
