@@ -74,7 +74,6 @@ var (
 	//   - newPayloadV1: if the payload was accepted, but not processed (side chain)
 	ACCEPTED = "ACCEPTED"
 
-	GenericServerError       = &EngineAPIError{code: -32000, msg: "Server error"}
 	UnknownPayload           = &EngineAPIError{code: -38001, msg: "Unknown payload"}
 	InvalidForkChoiceState   = &EngineAPIError{code: -38002, msg: "Invalid forkchoice state"}
 	InvalidPayloadAttributes = &EngineAPIError{code: -38003, msg: "Invalid payload attributes"}
