@@ -20,10 +20,9 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/lru"
+	"github.com/ethereum/go-ethereum/core/state/codedb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
@@ -100,19 +99,15 @@ func (r *historicReader) Storage(addr common.Address, key common.Hash) (common.H
 // HistoricDB is the implementation of Database interface, with the ability to
 // access historical state.
 type HistoricDB struct {
-	disk          ethdb.KeyValueStore
-	triedb        *triedb.Database
-	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
-	codeSizeCache *lru.Cache[common.Hash, int]
+	triedb *triedb.Database
+	codedb *codedb.Database
 }
 
 // NewHistoricDatabase creates a historic state database.
-func NewHistoricDatabase(disk ethdb.KeyValueStore, triedb *triedb.Database) *HistoricDB {
+func NewHistoricDatabase(triedb *triedb.Database, codedb *codedb.Database) *HistoricDB {
 	return &HistoricDB{
-		disk:          disk,
-		triedb:        triedb,
-		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
-		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
+		triedb: triedb,
+		codedb: codedb,
 	}
 }
 
@@ -122,7 +117,7 @@ func (db *HistoricDB) Reader(stateRoot common.Hash) (Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newReader(newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache), newHistoricReader(hr)), nil
+	return newReader(db.codedb.Reader(), newHistoricReader(hr)), nil
 }
 
 // OpenTrie opens the main account trie. It's not supported by historic database.
@@ -144,4 +139,11 @@ func (db *HistoricDB) TrieDB() *triedb.Database {
 // Snapshot returns the underlying state snapshot.
 func (db *HistoricDB) Snapshot() *snapshot.Tree {
 	return nil
+}
+
+// Commit flushes all pending writes and finalizes the state transition,
+// committing the changes to the underlying storage. It returns an error
+// if the commit fails.
+func (db *HistoricDB) Commit(update *stateUpdate) error {
+	return errors.New("not implemented")
 }

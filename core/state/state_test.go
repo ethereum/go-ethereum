@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state/codedb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -41,7 +42,7 @@ func newStateEnv() *stateEnv {
 func TestDump(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	triedb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
-	tdb := NewDatabase(triedb, nil)
+	tdb := NewDatabase(triedb, codedb.New(db))
 	sdb, _ := New(types.EmptyRootHash, tdb)
 	s := &stateEnv{state: sdb}
 
@@ -97,7 +98,7 @@ func TestDump(t *testing.T) {
 func TestIterativeDump(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	triedb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
-	tdb := NewDatabase(triedb, nil)
+	tdb := NewDatabase(triedb, codedb.New(db))
 	sdb, _ := New(types.EmptyRootHash, tdb)
 	s := &stateEnv{state: sdb}
 

@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/codedb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -650,7 +651,7 @@ func dump(ctx *cli.Context) error {
 	triedb := utils.MakeTrieDatabase(ctx, stack, db, true, true, false) // always enable preimage lookup
 	defer triedb.Close()
 
-	state, err := state.New(root, state.NewDatabase(triedb, nil))
+	state, err := state.New(root, state.NewDatabase(triedb, codedb.New(db)))
 	if err != nil {
 		return err
 	}

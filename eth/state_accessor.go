@@ -69,7 +69,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 			// TODO(rjl493456442), clean cache is disabled to prevent memory leak,
 			// please re-enable it for better performance.
 			tdb := triedb.NewDatabase(eth.chainDb, triedb.HashDefaults)
-			database = state.NewDatabase(tdb, nil)
+			database = state.NewDatabase(tdb, eth.blockchain.CodeDB())
 			if statedb, err = state.New(block.Root(), database); err == nil {
 				log.Info("Found disk backend for state trie", "root", block.Root(), "number", block.Number())
 				return statedb, noopReleaser, nil
@@ -87,7 +87,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 		// TODO(rjl493456442), clean cache is disabled to prevent memory leak,
 		// please re-enable it for better performance.
 		tdb = triedb.NewDatabase(eth.chainDb, triedb.HashDefaults)
-		database = state.NewDatabase(tdb, nil)
+		database = state.NewDatabase(tdb, eth.blockchain.CodeDB())
 
 		// If we didn't check the live database, do check state over ephemeral database,
 		// otherwise we would rewind past a persisted block (specific corner case is

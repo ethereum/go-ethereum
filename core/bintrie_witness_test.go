@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/codedb"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -220,7 +221,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 		cacheConfig := DefaultConfig().WithStateScheme(rawdb.PathScheme)
 		cacheConfig.SnapshotLimit = 0
 		triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(true))
-		statedb, _ := state.New(types.EmptyVerkleHash, state.NewDatabase(triedb, nil))
+		statedb, _ := state.New(types.EmptyVerkleHash, state.NewDatabase(triedb, codedb.New(db)))
 		checkBlockHashes(statedb, true)
 	})
 }
