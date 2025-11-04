@@ -1037,10 +1037,9 @@ func TestEIP8024_Execution(t *testing.T) {
 			},
 		},
 		{
-			//NOTE: Spec test seems wrong. Added additional stack item to make it pass.
 			name:     "EXCHANGE",
-			codeHex:  "6000600160026003e801",
-			wantVals: []uint64{3, 2, 0, 1},
+			codeHex:  "600060016002e801",
+			wantVals: []uint64{2, 0, 1},
 		},
 		{
 			name:    "INVALID_SWAPN_LOW",
@@ -1080,18 +1079,17 @@ func TestEIP8024_Execution(t *testing.T) {
 		},
 		{
 			name:    "UNDERFLOW_DUPN",
-			codeHex: "5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5fe600", // (n=17, need 17 items have 16)
+			codeHex: "5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5fe600", // (n=17, need 17 items, have 16)
 			wantErr: true,
 		},
 		{
 			name:    "UNDERFLOW_SWAPN",
-			codeHex: "5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5fe700", // (n=17, need 18 items have 17)
+			codeHex: "5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5fe700", // (n=17, need 18 items, have 17)
 			wantErr: true,
 		},
 		{
-			// Note: This is the spec test case, but we expect it to fail
 			name:    "UNDERFLOW_EXCHANGE",
-			codeHex: "600060016002e801", // (n,m=2,3 need at least 4 items have 3)
+			codeHex: "60016002e801", // (n,m)=(1,2), need 3 items, have 2
 			wantErr: true,
 		},
 		{

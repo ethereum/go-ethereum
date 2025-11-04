@@ -936,9 +936,9 @@ func decodePair(x byte) (int, int) {
 	}
 	q, r := k/16, k%16
 	if q < r {
-		return q + 2, r + 2
+		return q + 1, r + 1
 	}
-	return r + 2, 30 - q
+	return r + 1, 29 - q
 }
 
 func opDupN(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
