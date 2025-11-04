@@ -461,6 +461,38 @@ type ExpTimeoutConfig struct {
 	MaxExponent uint8   `json:"maxExponent"` // max exponent in base^exponent
 }
 
+func XDPoSConfigEqual(a, b *XDPoSConfig) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	if a.Period != b.Period || a.Epoch != b.Epoch || a.Reward != b.Reward || a.RewardCheckpoint != b.RewardCheckpoint || a.Gap != b.Gap || a.FoudationWalletAddr != b.FoudationWalletAddr || a.SkipV1Validation != b.SkipV1Validation {
+		return false
+	}
+	return V2Equal(a.V2, b.V2)
+}
+
+func V2Equal(a, b *V2) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	if a.SwitchEpoch != b.SwitchEpoch || a.SkipV2Validation != b.SkipV2Validation || !configNumEqual(a.SwitchBlock, b.SwitchBlock) || len(a.configIndex) != len(b.configIndex) || len(a.configIndex) != len(a.AllConfigs) || len(b.configIndex) != len(b.AllConfigs) {
+		return false
+	}
+	for i, idx := range a.configIndex {
+		if idx != b.configIndex[i] {
+			return false
+		}
+		if !V2ConfigEqual(a.AllConfigs[idx], b.AllConfigs[idx]) {
+			return false
+		}
+	}
+	return true
+}
+
+func V2ConfigEqual(a, b *V2Config) bool {
+	return a != nil && b != nil && *a == *b
+}
+
 func (c *XDPoSConfig) String() string {
 	return "XDPoS"
 }
@@ -843,10 +875,27 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 		return newCompatError("London fork block", c.LondonBlock, newcfg.LondonBlock)
 	}
 	if isForkIncompatible(c.ShanghaiBlock, newcfg.ShanghaiBlock, head) {
-		return newCompatError("Shanghai fork timestamp", c.ShanghaiBlock, newcfg.ShanghaiBlock)
+		return newCompatError("Shanghai fork block", c.ShanghaiBlock, newcfg.ShanghaiBlock)
+	}
+	if isForkIncompatible(c.Eip1559Block, newcfg.Eip1559Block, head) {
+		return newCompatError("Eip1559 fork block", c.Eip1559Block, newcfg.Eip1559Block)
 	}
 	if isForkIncompatible(c.CancunBlock, newcfg.CancunBlock, head) {
 		return newCompatError("Cancun fork block", c.CancunBlock, newcfg.CancunBlock)
+	}
+	if !XDPoSConfigEqual(c.XDPoS, newcfg.XDPoS) {
+		storedblock := big.NewInt(1)
+		if c.XDPoS != nil && c.XDPoS.V2 != nil && c.XDPoS.V2.SwitchBlock != nil {
+			storedblock = c.XDPoS.V2.SwitchBlock
+		}
+		newblock := big.NewInt(1)
+		if newcfg.XDPoS != nil && newcfg.XDPoS.V2 != nil && newcfg.XDPoS.V2.SwitchBlock != nil {
+			newblock = newcfg.XDPoS.V2.SwitchBlock
+		}
+		return newCompatError("XDPoS not equal", storedblock, newblock)
+	}
+	if c.XDPoS != nil && newcfg.XDPoS != nil && c.XDPoS.V2 != nil && newcfg.XDPoS.V2 != nil && isForkIncompatible(c.XDPoS.V2.SwitchBlock, newcfg.XDPoS.V2.SwitchBlock, head) {
+		return newCompatError("XDPoS.V2.SwitchBlock", c.XDPoS.V2.SwitchBlock, newcfg.XDPoS.V2.SwitchBlock)
 	}
 	return nil
 }
@@ -866,11 +915,8 @@ func isForked(s, head *big.Int) bool {
 }
 
 func configNumEqual(x, y *big.Int) bool {
-	if x == nil {
-		return y == nil
-	}
-	if y == nil {
-		return x == nil
+	if x == nil || y == nil {
+		return x == y
 	}
 	return x.Cmp(y) == 0
 }
