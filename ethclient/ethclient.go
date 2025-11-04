@@ -489,8 +489,8 @@ func (ec *Client) FeeHistory(ctx context.Context, blockCount uint64, lastBlock *
 	reward := make([][]*big.Int, len(res.Reward))
 	for i, r := range res.Reward {
 		reward[i] = make([]*big.Int, len(r))
-		for j, r := range r {
-			reward[i][j] = (*big.Int)(r)
+		for j, v := range r {
+			reward[i][j] = (*big.Int)(v)
 		}
 	}
 	baseFee := make([]*big.Int, len(res.BaseFee))
