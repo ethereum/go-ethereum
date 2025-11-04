@@ -415,10 +415,6 @@ func (w *worker) wait() {
 				continue
 			}
 			block := result.Block
-			if w.config.XDPoS != nil && block.NumberU64() >= w.config.XDPoS.Epoch && len(block.Validator()) == 0 {
-				w.mux.Post(core.NewMinedBlockEvent{Block: block})
-				continue
-			}
 			work := result.Work
 
 			// Different block could share same sealhash, deep copy here to prevent write-write conflict.
