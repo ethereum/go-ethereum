@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/utils"
@@ -58,6 +59,11 @@ type Database interface {
 
 	// Snapshot returns the underlying state snapshot.
 	Snapshot() *snapshot.Tree
+
+	// Commit flushes all pending writes and finalizes the state transition,
+	// committing the changes to the underlying storage. It returns an error
+	// if the commit fails.
+	Commit(update *stateUpdate) error
 }
 
 // Trie is a Ethereum Merkle Patricia trie.
@@ -274,6 +280,40 @@ func (db *CachingDB) PointCache() *utils.PointCache {
 // Snapshot returns the underlying state snapshot.
 func (db *CachingDB) Snapshot() *snapshot.Tree {
 	return db.snap
+}
+
+// Commit flushes all pending writes and finalizes the state transition,
+// committing the changes to the underlying storage. It returns an error
+// if the commit fails.
+func (db *CachingDB) Commit(update *stateUpdate) error {
+	// Short circuit if nothing to commit
+	if update.empty() {
+		return nil
+	}
+	// Commit dirty contract code if any exists
+	if len(update.codes) > 0 {
+		writer := db.codedb.Writer()
+		for _, code := range update.codes {
+			writer.Put(code.hash, code.blob)
+		}
+		if err := writer.Commit(); err != nil {
+			return err
+		}
+	}
+	// If snapshotting is enabled, update the snapshot tree with this new version
+	if db.snap != nil && db.snap.Snapshot(update.originRoot) != nil {
+		if err := db.snap.Update(update.root, update.originRoot, update.accounts, update.storages); err != nil {
+			log.Warn("Failed to update snapshot tree", "from", update.originRoot, "to", update.root, "err", err)
+		}
+		// Keep 128 diff layers in the memory, persistent layer is 129th.
+		// - head layer is paired with HEAD state
+		// - head-1 layer is paired with HEAD-1 state
+		// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
+		if err := db.snap.Cap(update.root, TriesInMemory); err != nil {
+			log.Warn("Failed to cap snapshot tree", "root", update.root, "layers", TriesInMemory, "err", err)
+		}
+	}
+	return db.triedb.Update(update.root, update.originRoot, update.blockNumber, update.nodes, update.stateSet())
 }
 
 // mustCopyTrie returns a deep-copied trie.
