@@ -639,11 +639,11 @@ func snapshotExportPreimages(ctx *cli.Context) error {
 
 	var root common.Hash
 	if ctx.NArg() > 1 {
-		rootBytes := common.FromHex(ctx.Args().Get(1))
-		if len(rootBytes) != common.HashLength {
+		hash := ctx.Args().Get(1)
+		if !common.IsHexHash(hash) {
 			return fmt.Errorf("invalid hash: %s", ctx.Args().Get(1))
 		}
-		root = common.BytesToHash(rootBytes)
+		root = common.HexToHash(hash)
 	} else {
 		headBlock := rawdb.ReadHeadBlock(chaindb)
 		if headBlock == nil {
