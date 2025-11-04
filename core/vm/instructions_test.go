@@ -1094,6 +1094,21 @@ func TestEIP8024_Execution(t *testing.T) {
 			codeHex: "600060016002e801", // (n,m=2,3 need at least 4 items have 3)
 			wantErr: true,
 		},
+		{
+			name:    "MISSING_IMMEDIATE_DUPN",
+			codeHex: "e6", // no operand
+			wantErr: true,
+		},
+		{
+			name:    "MISSING_IMMEDIATE_SWAPN",
+			codeHex: "e7", // no operand
+			wantErr: true,
+		},
+		{
+			name:    "MISSING_IMMEDIATE_EXCHANGE",
+			codeHex: "e8", // no operand
+			wantErr: true,
+		},
 	}
 
 	for _, tc := range tests {
