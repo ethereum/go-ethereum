@@ -456,11 +456,10 @@ func osakaMultComplexity(x uint64) uint64 {
 	}
 	// For x > 32, return 2 * berlinMultComplexity(x)
 	result := berlinMultComplexity(x)
-	carry, result := bits.Mul64(result, 2)
-	if carry != 0 {
+	if result >= (1 << 63) { // overflow check
 		return math.MaxUint64
 	}
-	return result
+	return result << 1
 }
 
 // modexpIterationCount calculates the number of iterations for the modexp precompile.
