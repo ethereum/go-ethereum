@@ -73,9 +73,10 @@ var (
 	accountUpdateTimer = metrics.NewRegisteredResettingTimer("chain/account/updates", nil)
 	accountCommitTimer = metrics.NewRegisteredResettingTimer("chain/account/commits", nil)
 
-	storageReadTimer   = metrics.NewRegisteredResettingTimer("chain/storage/reads", nil)
-	storageUpdateTimer = metrics.NewRegisteredResettingTimer("chain/storage/updates", nil)
-	storageCommitTimer = metrics.NewRegisteredResettingTimer("chain/storage/commits", nil)
+	storageReadTimer    = metrics.NewRegisteredResettingTimer("chain/storage/reads", nil)
+	storageUpdateTimer  = metrics.NewRegisteredResettingTimer("chain/storage/updates", nil)
+	storageCommitTimer  = metrics.NewRegisteredResettingTimer("chain/storage/commits", nil)
+	databaseCommitTimer = metrics.NewRegisteredResettingTimer("chain/database/commits", nil)
 
 	accountCacheHitMeter  = metrics.NewRegisteredMeter("chain/account/reads/cache/process/hit", nil)
 	accountCacheMissMeter = metrics.NewRegisteredMeter("chain/account/reads/cache/process/miss", nil)
@@ -89,9 +90,6 @@ var (
 
 	accountReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/account/single/reads", nil)
 	storageReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/storage/single/reads", nil)
-
-	snapshotCommitTimer = metrics.NewRegisteredResettingTimer("chain/snapshot/commits", nil)
-	triedbCommitTimer   = metrics.NewRegisteredResettingTimer("chain/triedb/commits", nil)
 
 	blockInsertTimer          = metrics.NewRegisteredResettingTimer("chain/inserts", nil)
 	blockValidationTimer      = metrics.NewRegisteredResettingTimer("chain/validation", nil)
@@ -2191,11 +2189,10 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	}
 
 	// Update the metrics touched during block commit
-	stats.AccountCommits = statedb.AccountCommits  // Account commits are complete, we can mark them
-	stats.StorageCommits = statedb.StorageCommits  // Storage commits are complete, we can mark them
-	stats.SnapshotCommit = statedb.SnapshotCommits // Snapshot commits are complete, we can mark them
-	stats.TrieDBCommit = statedb.TrieDBCommits     // Trie database commits are complete, we can mark them
-	stats.BlockWrite = time.Since(wstart) - max(statedb.AccountCommits, statedb.StorageCommits) /* concurrent */ - statedb.SnapshotCommits - statedb.TrieDBCommits
+	stats.AccountCommits = statedb.AccountCommits // Account commits are complete, we can mark them
+	stats.StorageCommits = statedb.StorageCommits // Storage commits are complete, we can mark them
+	stats.DBCommit = statedb.DatabaseCommits      // Trie database commits are complete, we can mark them
+	stats.BlockWrite = time.Since(wstart) - max(statedb.AccountCommits, statedb.StorageCommits) /* concurrent */ - statedb.DatabaseCommits
 
 	elapsed := time.Since(startTime) + 1 // prevent zero division
 	stats.TotalTime = elapsed

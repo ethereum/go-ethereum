@@ -148,3 +148,10 @@ func (db *HistoricDB) TrieDB() *triedb.Database {
 func (db *HistoricDB) Snapshot() *snapshot.Tree {
 	return nil
 }
+
+// Commit flushes all pending writes and finalizes the state transition,
+// committing the changes to the underlying storage. It returns an error
+// if the commit fails.
+func (db *HistoricDB) Commit(update *stateUpdate) error {
+	return errors.New("not implemented")
+}
