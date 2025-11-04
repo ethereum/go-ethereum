@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/codedb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -296,7 +297,7 @@ type BlockChain struct {
 	lastWrite     uint64                           // Last block when the state was flushed
 	flushInterval atomic.Int64                     // Time interval (processing time) after which to flush a state
 	triedb        *triedb.Database                 // The database handler for maintaining trie nodes.
-	statedb       *state.CachingDB                 // State database to reuse between imports (contains state cache)
+	codedb        *codedb.Database                 // The database handler for maintaining contract codes
 	txIndexer     *txIndexer                       // Transaction indexer, might be nil if not enabled
 
 	hc               *HeaderChain
@@ -376,6 +377,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		cfg:           cfg,
 		db:            db,
 		triedb:        triedb,
+		codedb:        codedb.New(db),
 		triegc:        prque.New[int64, common.Hash](nil),
 		chainmu:       syncx.NewClosableMutex(),
 		bodyCache:     lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
@@ -391,7 +393,6 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		return nil, err
 	}
 	bc.flushInterval.Store(int64(cfg.TrieTimeLimit))
-	bc.statedb = state.NewDatabase(bc.triedb, nil)
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
 	bc.processor = NewStateProcessor(bc.hc)
@@ -568,9 +569,6 @@ func (bc *BlockChain) setupSnapshot() {
 			AsyncBuild: !bc.cfg.SnapshotWait,
 		}
 		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.triedb, head.Root)
-
-		// Re-initialize the state database with snapshot
-		bc.statedb = state.NewDatabase(bc.triedb, bc.snaps)
 	}
 }
 
@@ -1989,11 +1987,12 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 		startTime = time.Now()
 		statedb   *state.StateDB
 		interrupt atomic.Bool
+		sdb       = state.NewDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
 	)
 	defer interrupt.Store(true) // terminate the prefetch at the end
 
 	if bc.cfg.NoPrefetch {
-		statedb, err = state.New(parentRoot, bc.statedb)
+		statedb, err = state.New(parentRoot, sdb)
 		if err != nil {
 			return nil, err
 		}
@@ -2003,15 +2002,15 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 		//
 		// Note: the main processor and prefetcher share the same reader with a local
 		// cache for mitigating the overhead of state access.
-		prefetch, process, err := bc.statedb.ReadersWithCacheStats(parentRoot)
+		prefetch, process, err := sdb.ReadersWithCacheStats(parentRoot)
 		if err != nil {
 			return nil, err
 		}
-		throwaway, err := state.NewWithReader(parentRoot, bc.statedb, prefetch)
+		throwaway, err := state.NewWithReader(parentRoot, sdb, prefetch)
 		if err != nil {
 			return nil, err
 		}
-		statedb, err = state.NewWithReader(parentRoot, bc.statedb, process)
+		statedb, err = state.NewWithReader(parentRoot, sdb, process)
 		if err != nil {
 			return nil, err
 		}

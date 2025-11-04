@@ -22,12 +22,9 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/overlay"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/utils"
@@ -37,19 +34,13 @@ import (
 
 // ContractCodeReader defines the interface for accessing contract code.
 type ContractCodeReader interface {
-	// Code retrieves a particular contract's code.
-	//
-	// - Returns nil code along with nil error if the requested contract code
-	//   doesn't exist
-	// - Returns an error only if an unexpected issue occurs
-	Code(addr common.Address, codeHash common.Hash) ([]byte, error)
+	// Code retrieves a particular contract's code. Returns nil code if the
+	// requested contract code doesn't exist
+	Code(addr common.Address, codeHash common.Hash) []byte
 
-	// CodeSize retrieves a particular contracts code's size.
-	//
-	// - Returns zero code size along with nil error if the requested contract code
-	//   doesn't exist
-	// - Returns an error only if an unexpected issue occurs
-	CodeSize(addr common.Address, codeHash common.Hash) (int, error)
+	// CodeSize retrieves a particular contracts code's size. Returns zero
+	// code size if the requested contract code doesn't exist
+	CodeSize(addr common.Address, codeHash common.Hash) int
 }
 
 // StateReader defines the interface for accessing accounts and storage slots
@@ -96,56 +87,6 @@ type ReaderStats struct {
 type ReaderWithStats interface {
 	Reader
 	GetStats() ReaderStats
-}
-
-// cachingCodeReader implements ContractCodeReader, accessing contract code either in
-// local key-value store or the shared code cache.
-//
-// cachingCodeReader is safe for concurrent access.
-type cachingCodeReader struct {
-	db ethdb.KeyValueReader
-
-	// These caches could be shared by multiple code reader instances,
-	// they are natively thread-safe.
-	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
-	codeSizeCache *lru.Cache[common.Hash, int]
-}
-
-// newCachingCodeReader constructs the code reader.
-func newCachingCodeReader(db ethdb.KeyValueReader, codeCache *lru.SizeConstrainedCache[common.Hash, []byte], codeSizeCache *lru.Cache[common.Hash, int]) *cachingCodeReader {
-	return &cachingCodeReader{
-		db:            db,
-		codeCache:     codeCache,
-		codeSizeCache: codeSizeCache,
-	}
-}
-
-// Code implements ContractCodeReader, retrieving a particular contract's code.
-// If the contract code doesn't exist, no error will be returned.
-func (r *cachingCodeReader) Code(addr common.Address, codeHash common.Hash) ([]byte, error) {
-	code, _ := r.codeCache.Get(codeHash)
-	if len(code) > 0 {
-		return code, nil
-	}
-	code = rawdb.ReadCode(r.db, codeHash)
-	if len(code) > 0 {
-		r.codeCache.Add(codeHash, code)
-		r.codeSizeCache.Add(codeHash, len(code))
-	}
-	return code, nil
-}
-
-// CodeSize implements ContractCodeReader, retrieving a particular contracts code's size.
-// If the contract code doesn't exist, no error will be returned.
-func (r *cachingCodeReader) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
-	if cached, ok := r.codeSizeCache.Get(codeHash); ok {
-		return cached, nil
-	}
-	code, err := r.Code(addr, codeHash)
-	if err != nil {
-		return 0, err
-	}
-	return len(code), nil
 }
 
 // flatReader wraps a database state reader and is safe for concurrent access.

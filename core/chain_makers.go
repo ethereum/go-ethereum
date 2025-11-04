@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/codedb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -429,9 +430,10 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	// Forcibly use hash-based state scheme for retaining all nodes in disk.
 	triedb := triedb.NewDatabase(db, triedb.HashDefaults)
 	defer triedb.Close()
+	codedb := codedb.New(db)
 
 	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabase(triedb, nil))
+		statedb, err := state.New(parent.Root(), state.NewDatabase(triedb, codedb))
 		if err != nil {
 			panic(err)
 		}
@@ -540,7 +542,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		return block, b.receipts
 	}
 
-	sdb := state.NewDatabase(trdb, nil)
+	sdb := state.NewDatabase(trdb, codedb.New(db))
 
 	for i := 0; i < n; i++ {
 		statedb, err := state.New(parent.Root(), sdb)

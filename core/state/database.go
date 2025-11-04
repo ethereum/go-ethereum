@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state/codedb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -34,12 +35,6 @@ import (
 )
 
 const (
-	// Number of codehash->size associations to keep.
-	codeSizeCacheSize = 1_000_000 // 4 megabytes in total
-
-	// Cache size granted for caching clean code.
-	codeCacheSize = 256 * 1024 * 1024
-
 	// Number of address->curve point associations to keep.
 	pointCacheSize = 4096
 )
@@ -150,29 +145,23 @@ type Trie interface {
 	IsVerkle() bool
 }
 
-// CachingDB is an implementation of Database interface. It leverages both trie and
-// state snapshot to provide functionalities for state access. It's meant to be a
-// long-live object and has a few caches inside for sharing between blocks.
+// CachingDB is an implementation of Database interface, providing functionalities
+// for state access and update by leveraging configured data storage layers.
 type CachingDB struct {
-	disk          ethdb.KeyValueStore
-	triedb        *triedb.Database
-	snap          *snapshot.Tree
-	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
-	codeSizeCache *lru.Cache[common.Hash, int]
-	pointCache    *utils.PointCache
+	triedb     *triedb.Database
+	codedb     *codedb.Database
+	snap       *snapshot.Tree
+	pointCache *utils.PointCache
 
 	// Transition-specific fields
 	TransitionStatePerRoot *lru.Cache[common.Hash, *overlay.TransitionState]
 }
 
 // NewDatabase creates a state database with the provided data sources.
-func NewDatabase(triedb *triedb.Database, snap *snapshot.Tree) *CachingDB {
+func NewDatabase(triedb *triedb.Database, codedb *codedb.Database) *CachingDB {
 	return &CachingDB{
-		disk:                   triedb.Disk(),
 		triedb:                 triedb,
-		snap:                   snap,
-		codeCache:              lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
-		codeSizeCache:          lru.NewCache[common.Hash, int](codeSizeCacheSize),
+		codedb:                 codedb,
 		pointCache:             utils.NewPointCache(pointCacheSize),
 		TransitionStatePerRoot: lru.NewCache[common.Hash, *overlay.TransitionState](1000),
 	}
@@ -181,7 +170,15 @@ func NewDatabase(triedb *triedb.Database, snap *snapshot.Tree) *CachingDB {
 // NewDatabaseForTesting is similar to NewDatabase, but it initializes the caching
 // db by using an ephemeral memory db with default config for testing.
 func NewDatabaseForTesting() *CachingDB {
-	return NewDatabase(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil), nil)
+	db := rawdb.NewMemoryDatabase()
+	return NewDatabase(triedb.NewDatabase(db, nil), codedb.New(db))
+}
+
+// WithSnapshot configures the provided contract code cache. Note that this
+// registration must be performed before the cachingDB is used.
+func (db *CachingDB) WithSnapshot(snapshot *snapshot.Tree) *CachingDB {
+	db.snap = snapshot
+	return db
 }
 
 // Reader returns a state reader associated with the specified state root.
@@ -219,7 +216,7 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newReader(newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache), combined), nil
+	return newReader(db.codedb.Reader(), combined), nil
 }
 
 // ReadersWithCacheStats creates a pair of state readers sharing the same internal cache and
@@ -262,22 +259,6 @@ func (db *CachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Addre
 		return nil, err
 	}
 	return tr, nil
-}
-
-// ContractCodeWithPrefix retrieves a particular contract's code. If the
-// code can't be found in the cache, then check the existence with **new**
-// db scheme.
-func (db *CachingDB) ContractCodeWithPrefix(address common.Address, codeHash common.Hash) []byte {
-	code, _ := db.codeCache.Get(codeHash)
-	if len(code) > 0 {
-		return code
-	}
-	code = rawdb.ReadCodeWithPrefix(db.disk, codeHash)
-	if len(code) > 0 {
-		db.codeCache.Add(codeHash, code)
-		db.codeSizeCache.Add(codeHash, len(code))
-	}
-	return code
 }
 
 // TrieDB retrieves any intermediate trie-node caching layer.

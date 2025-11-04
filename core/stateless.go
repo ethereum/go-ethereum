@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/codedb"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -51,7 +52,7 @@ func ExecuteStateless(config *params.ChainConfig, vmconfig vm.Config, block *typ
 	}
 	// Create and populate the state database to serve as the stateless backend
 	memdb := witness.MakeHashDB()
-	db, err := state.New(witness.Root(), state.NewDatabase(triedb.NewDatabase(memdb, triedb.HashDefaults), nil))
+	db, err := state.New(witness.Root(), state.NewDatabase(triedb.NewDatabase(memdb, triedb.HashDefaults), codedb.New(memdb)))
 	if err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}

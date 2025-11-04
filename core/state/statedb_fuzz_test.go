@@ -31,6 +31,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state/codedb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -209,7 +210,7 @@ func (test *stateTest) run() bool {
 		if i != 0 {
 			root = roots[len(roots)-1]
 		}
-		state, err := New(root, NewDatabase(tdb, snaps))
+		state, err := New(root, NewDatabase(tdb, codedb.New(disk)).WithSnapshot(snaps))
 		if err != nil {
 			panic(err)
 		}
