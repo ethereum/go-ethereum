@@ -21,7 +21,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state/codedb"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/utils"
@@ -114,6 +113,11 @@ func NewHistoricDatabase(triedb *triedb.Database, codedb *codedb.Database) *Hist
 	}
 }
 
+// Preimage returns the preimage of associated hash.
+func (db *HistoricDB) Preimage(hash common.Hash) []byte {
+	return db.triedb.Preimage(hash)
+}
+
 // Reader implements Database interface, returning a reader of the specific state.
 func (db *HistoricDB) Reader(stateRoot common.Hash) (Reader, error) {
 	hr, err := db.triedb.HistoricReader(stateRoot)
@@ -144,14 +148,15 @@ func (db *HistoricDB) TrieDB() *triedb.Database {
 	return db.triedb
 }
 
-// Snapshot returns the underlying state snapshot.
-func (db *HistoricDB) Snapshot() *snapshot.Tree {
-	return nil
-}
-
 // Commit flushes all pending writes and finalizes the state transition,
 // committing the changes to the underlying storage. It returns an error
 // if the commit fails.
 func (db *HistoricDB) Commit(update *stateUpdate) error {
 	return errors.New("not implemented")
+}
+
+// Iteratee returns a state iteratee associated with the specified state root,
+// through which the account iterator and storage iterator can be created.
+func (db *HistoricDB) Iteratee(root common.Hash) (Iteratee, error) {
+	return nil, errors.New("not implemented")
 }

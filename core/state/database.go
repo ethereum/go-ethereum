@@ -40,10 +40,23 @@ const (
 	pointCacheSize = 4096
 )
 
+// PreimageReader wraps the function Preimage for accessing the preimage of
+// a given hash.
+type PreimageReader interface {
+	// Preimage returns the preimage of associated hash.
+	Preimage(hash common.Hash) []byte
+}
+
 // Database wraps access to tries and contract code.
 type Database interface {
+	PreimageReader
+
 	// Reader returns a state reader associated with the specified state root.
 	Reader(root common.Hash) (Reader, error)
+
+	// Iteratee returns a state iteratee associated with the specified state root,
+	// through which the account iterator and storage iterator can be created.
+	Iteratee(root common.Hash) (Iteratee, error)
 
 	// OpenTrie opens the main account trie.
 	OpenTrie(root common.Hash) (Trie, error)
@@ -56,9 +69,6 @@ type Database interface {
 
 	// TrieDB returns the underlying trie database for managing trie nodes.
 	TrieDB() *triedb.Database
-
-	// Snapshot returns the underlying state snapshot.
-	Snapshot() *snapshot.Tree
 
 	// Commit flushes all pending writes and finalizes the state transition,
 	// committing the changes to the underlying storage. It returns an error
@@ -187,6 +197,11 @@ func (db *CachingDB) WithSnapshot(snapshot *snapshot.Tree) *CachingDB {
 	return db
 }
 
+// Preimage returns the preimage of associated hash.
+func (db *CachingDB) Preimage(hash common.Hash) []byte {
+	return db.triedb.Preimage(hash)
+}
+
 // Reader returns a state reader associated with the specified state root.
 func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	var readers []StateReader
@@ -277,11 +292,6 @@ func (db *CachingDB) PointCache() *utils.PointCache {
 	return db.pointCache
 }
 
-// Snapshot returns the underlying state snapshot.
-func (db *CachingDB) Snapshot() *snapshot.Tree {
-	return db.snap
-}
-
 // Commit flushes all pending writes and finalizes the state transition,
 // committing the changes to the underlying storage. It returns an error
 // if the commit fails.
@@ -314,6 +324,12 @@ func (db *CachingDB) Commit(update *stateUpdate) error {
 		}
 	}
 	return db.triedb.Update(update.root, update.originRoot, update.blockNumber, update.nodes, update.stateSet())
+}
+
+// Iteratee returns a state iteratee associated with the specified state root,
+// through which the account iterator and storage iterator can be created.
+func (db *CachingDB) Iteratee(root common.Hash) (Iteratee, error) {
+	return newStateIteratee(!db.triedb.IsVerkle(), root, db.triedb, db.snap)
 }
 
 // mustCopyTrie returns a deep-copied trie.
