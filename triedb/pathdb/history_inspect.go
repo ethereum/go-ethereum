@@ -50,12 +50,12 @@ func sanitizeRange(start, end uint64, freezer ethdb.AncientReader) (uint64, uint
 	if err != nil {
 		return 0, 0, err
 	}
-	last := head - 1
+	last := head
 	if end != 0 && end < last {
 		last = end
 	}
 	// Make sure the range is valid
-	if first >= last {
+	if first > last {
 		return 0, 0, fmt.Errorf("range is invalid, first: %d, last: %d", first, last)
 	}
 	return first, last, nil
@@ -143,7 +143,11 @@ func historyRange(freezer ethdb.AncientReader) (uint64, uint64, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	last := head - 1
+	// If there is no history available, return an explicit error.
+	if head == tail {
+		return 0, 0, fmt.Errorf("no history available")
+	}
+	last := head
 
 	fh, err := readStateHistory(freezer, first)
 	if err != nil {
