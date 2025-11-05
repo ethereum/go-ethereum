@@ -210,6 +210,33 @@ func estimateTxCompressionRatio(data []byte, blockNumber uint64, blockTime uint6
 	return ratio, nil
 }
 
+// calculateTxCompressedSize calculates the size of `data` after compression using da-codec.
+// We constrain compressed_size so that it cannot exceed the original size:
+//
+//	compressed_size(tx) = min(size(zstd(rlp(tx))), size(rlp(tx)))
+//
+// This provides an upper bound on the rollup fee for a given transaction, regardless
+// what compression algorithm the sequencer/prover uses.
+func calculateTxCompressedSize(data []byte, blockNumber uint64, blockTime uint64, config *params.ChainConfig) (*big.Int, error) {
+	// Compressed size of empty data is 0.
+	// In practice, the rlp-encoded transaction is always non-empty.
+	if len(data) == 0 {
+		return common.Big0, nil
+	}
+
+	// Compress data using da-codec
+	compressed, err := encoding.CompressScrollBatchBytes(data, blockNumber, blockTime, config)
+	if err != nil {
+		log.Error("Transaction compression failed", "error", err, "data size", len(data), "data", common.Bytes2Hex(data), "blockNumber", blockNumber, "blockTime", blockTime, "galileoTime", config.GalileoTime)
+		return nil, fmt.Errorf("transaction compression failed: %w", err)
+	}
+
+	if len(compressed) < len(data) {
+		return new(big.Int).SetUint64(uint64(len(compressed))), nil
+	}
+	return new(big.Int).SetUint64(uint64(len(data))), nil
+}
+
 // calculatePenalty computes the penalty multiplier based on compression ratio
 // penalty(tx) = compression_ratio(tx) >= penalty_threshold ? 1 * PRECISION : penalty_factor
 func calculatePenalty(compressionRatio, penaltyThreshold, penaltyFactor *big.Int) *big.Int {
@@ -290,6 +317,48 @@ func calculateEncodedL1DataFeeFeynman(
 	return l1DataFee
 }
 
+// calculateEncodedL1DataFeeGalileo computes the rollup fee for an RLP-encoded tx, post Galileo
+//
+// Post Galileo rollup fee formula:
+// rollupFee(tx) = feePerByte * compressedSize(tx) * (1 + penalty(tx)) / PRECISION
+//
+// Where:
+// feePerByte = (execScalar * l1BaseFee + blobScalar * l1BlobBaseFee)
+// compressedSize(tx) = min(len(zstd(rlp(tx))), len(rlp(tx)))
+// penalty(tx) = compressedSize(tx) / penaltyFactor
+func calculateEncodedL1DataFeeGalileo(
+	l1BaseFee *big.Int,
+	l1BlobBaseFee *big.Int,
+	execScalar *big.Int,
+	blobScalar *big.Int,
+	penaltyFactor *big.Int,
+	compressedSize *big.Int,
+) *big.Int {
+	// Sanitize penalty factor.
+	if penaltyFactor.Cmp(common.Big0) == 0 {
+		penaltyFactor = common.Big1
+	}
+
+	// feePerByte = (execScalar * l1BaseFee) + (blobScalar * l1BlobBaseFee)
+	execGas := new(big.Int).Mul(execScalar, l1BaseFee)
+	blobGas := new(big.Int).Mul(blobScalar, l1BlobBaseFee)
+	feePerByte := new(big.Int).Add(execGas, blobGas)
+
+	// baseTerm = feePerByte * compressedSize
+	baseTerm := new(big.Int).Mul(feePerByte, compressedSize)
+
+	// penaltyTerm = (baseTerm * compressedSize) / penaltyFactor
+	// Note: We divide by penaltyFactor after multiplication to preserve precision.
+	penaltyTerm := new(big.Int).Mul(baseTerm, compressedSize)
+	penaltyTerm.Div(penaltyTerm, penaltyFactor)
+
+	// rollupFee = (baseTerm + penaltyTerm) / PRECISION
+	rollupFee := new(big.Int).Add(baseTerm, penaltyTerm)
+	rollupFee.Div(rollupFee, rcfg.Precision) // execScalar and blobScalar are scaled by PRECISION
+
+	return rollupFee
+}
+
 // calculateL1GasUsed computes the L1 gas used based on the calldata and
 // constant sized overhead. The overhead can be decreased as the cost of the
 // batch submission goes down via contract optimizations. This will not overflow
@@ -341,7 +410,7 @@ func CalculateL1DataFee(tx *types.Transaction, state StateDB, config *params.Cha
 		l1DataFee = calculateEncodedL1DataFee(raw, gpoState.overhead, gpoState.l1BaseFee, gpoState.scalar)
 	} else if !config.IsFeynman(blockTime) {
 		l1DataFee = calculateEncodedL1DataFeeCurie(raw, gpoState.l1BaseFee, gpoState.l1BlobBaseFee, gpoState.commitScalar, gpoState.blobScalar)
-	} else {
+	} else if !config.IsGalileo(blockTime) {
 		// Calculate compression ratio for Feynman
 		// Note: We compute the transaction ratio on tx.data, not on the full encoded transaction.
 		compressionRatio, err := estimateTxCompressionRatio(tx.Data(), blockNumber.Uint64(), blockTime, config)
@@ -359,6 +428,21 @@ func CalculateL1DataFee(tx *types.Transaction, state StateDB, config *params.Cha
 			gpoState.penaltyThreshold,
 			gpoState.penaltyFactor,
 			compressionRatio,
+		)
+	} else {
+		// Note: In Galileo, we take the compressed size of the full RLP-encoded transaction.
+		compressedSize, err := calculateTxCompressedSize(raw, blockNumber.Uint64(), blockTime, config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to calculate compressed size: tx hash=%s: %w", tx.Hash().Hex(), err)
+		}
+
+		l1DataFee = calculateEncodedL1DataFeeGalileo(
+			gpoState.l1BaseFee,
+			gpoState.l1BlobBaseFee,
+			gpoState.commitScalar, // now represents execScalar
+			gpoState.blobScalar,
+			gpoState.penaltyFactor, // in Galileo, penaltyFactor is repurposed as a coefficient of the blob utilization penalty
+			compressedSize,
 		)
 	}
 
