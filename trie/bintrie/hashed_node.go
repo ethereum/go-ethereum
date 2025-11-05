@@ -81,6 +81,7 @@ func (h HashedNode) toDot(parent string, path string) string {
 }
 
 func (h HashedNode) CollectNodes([]byte, NodeFlushFn) error {
+	// HashedNodes are already persisted in the database and don't need to be collected.
 	return nil
 }
 
