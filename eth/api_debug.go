@@ -236,6 +236,8 @@ func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Add
 	if storageRoot == types.EmptyRootHash || storageRoot == (common.Hash{}) {
 		return StorageRangeResult{}, nil // empty storage
 	}
+	// TODO(rjl493456442) it's problematic for traversing the state with in-memory
+	// state mutations, specifically txIndex != 0.
 	id := trie.StorageTrieID(root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
 	tr, err := trie.NewStateTrie(id, statedb.Database().TrieDB())
 	if err != nil {
