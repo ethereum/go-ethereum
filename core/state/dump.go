@@ -148,18 +148,17 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 				CodeHash:    data.CodeHash,
 				AddressHash: acctIt.Hash().Bytes(),
 			}
-			address   *common.Address
-			addr      common.Address
-			addrBytes = s.db.Preimage(acctIt.Hash())
+			address *common.Address
+			addr    common.Address
 		)
-		if addrBytes == nil {
+		addrBytes, err := acctIt.Address()
+		if err != nil {
 			missingPreimages++
 			if conf.OnlyWithAddresses {
 				continue
 			}
 		} else {
-			addr = common.BytesToAddress(addrBytes)
-			address = &addr
+			address = &addrBytes
 			account.Address = address
 		}
 		obj := newObject(s, addr, &data)
@@ -181,11 +180,11 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 					log.Error("Failed to decode the value returned by iterator", "error", err)
 					continue
 				}
-				key := s.db.Preimage(storageIt.Hash())
-				if key == nil {
+				key, err := storageIt.Key()
+				if err != nil {
 					continue
 				}
-				account.Storage[common.BytesToHash(key)] = common.Bytes2Hex(content)
+				account.Storage[key] = common.Bytes2Hex(content)
 			}
 			storageIt.Release()
 		}

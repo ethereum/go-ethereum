@@ -113,11 +113,6 @@ func NewHistoricDatabase(triedb *triedb.Database, codedb *codedb.Database) *Hist
 	}
 }
 
-// Preimage returns the preimage of associated hash.
-func (db *HistoricDB) Preimage(hash common.Hash) []byte {
-	return db.triedb.Preimage(hash)
-}
-
 // Reader implements Database interface, returning a reader of the specific state.
 func (db *HistoricDB) Reader(stateRoot common.Hash) (Reader, error) {
 	hr, err := db.triedb.HistoricReader(stateRoot)

@@ -40,17 +40,8 @@ const (
 	pointCacheSize = 4096
 )
 
-// PreimageReader wraps the function Preimage for accessing the preimage of
-// a given hash.
-type PreimageReader interface {
-	// Preimage returns the preimage of associated hash.
-	Preimage(hash common.Hash) []byte
-}
-
 // Database wraps access to tries and contract code.
 type Database interface {
-	PreimageReader
-
 	// Reader returns a state reader associated with the specified state root.
 	Reader(root common.Hash) (Reader, error)
 
@@ -195,11 +186,6 @@ func NewDatabaseForTesting() *CachingDB {
 func (db *CachingDB) WithSnapshot(snapshot *snapshot.Tree) *CachingDB {
 	db.snap = snapshot
 	return db
-}
-
-// Preimage returns the preimage of associated hash.
-func (db *CachingDB) Preimage(hash common.Hash) []byte {
-	return db.triedb.Preimage(hash)
 }
 
 // Reader returns a state reader associated with the specified state root.

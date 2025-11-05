@@ -124,7 +124,7 @@ func (it *nodeIterator) step() error {
 		return err
 	}
 	// Lookup the preimage of account hash
-	preimage := it.state.db.Preimage(common.BytesToHash(it.stateIt.LeafKey()))
+	preimage := it.tr.GetKey(it.stateIt.LeafKey())
 	if preimage == nil {
 		return errors.New("account address is not available")
 	}

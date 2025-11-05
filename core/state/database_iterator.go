@@ -52,6 +52,10 @@ type Iterator interface {
 type AccountIterator interface {
 	Iterator
 
+	// Address returns the raw account address the iterator is currently at.
+	// An error will be returned if the preimage is not available.
+	Address() (common.Address, error)
+
 	// Account returns the RLP encoded account the iterator is currently at.
 	// An error will be retained if the iterator becomes invalid.
 	Account() []byte
@@ -61,6 +65,10 @@ type AccountIterator interface {
 // specific state.
 type StorageIterator interface {
 	Iterator
+
+	// Key returns the raw storage slot key the iterator is currently at.
+	// An error will be returned if the preimage is not available.
+	Key() (common.Hash, error)
 
 	// Slot returns the storage slot the iterator is currently at. An error will
 	// be retained if the iterator becomes invalid.
@@ -87,18 +95,26 @@ type Iteratee interface {
 	NewStorageIterator(addressHash common.Hash, storageRoot common.Hash, start common.Hash) (StorageIterator, error)
 }
 
+// PreimageReader wraps the function Preimage for accessing the preimage of
+// a given hash.
+type PreimageReader interface {
+	// Preimage returns the preimage of associated hash.
+	Preimage(hash common.Hash) []byte
+}
+
 // flatAccountIterator is a wrapper around the underlying flat state iterator.
 // Before returning data from the iterator, it performs an additional conversion
 // to bridge the slim encoding with the full encoding format.
 type flatAccountIterator struct {
-	err error
-	it  snapshot.AccountIterator
+	err      error
+	it       snapshot.AccountIterator
+	preimage PreimageReader
 }
 
 // newFlatAccountIterator constructs the account iterator with the provided
 // flat state iterator.
-func newFlatAccountIterator(it snapshot.AccountIterator) *flatAccountIterator {
-	return &flatAccountIterator{it: it}
+func newFlatAccountIterator(it snapshot.AccountIterator, preimage PreimageReader) *flatAccountIterator {
+	return &flatAccountIterator{it: it, preimage: preimage}
 }
 
 // Next steps the iterator forward one element, returning false if exhausted,
@@ -131,6 +147,19 @@ func (ai *flatAccountIterator) Release() {
 	ai.it.Release()
 }
 
+// Address returns the raw account address the iterator is currently at.
+// An error will be returned if the preimage is not available.
+func (ai *flatAccountIterator) Address() (common.Address, error) {
+	if ai.preimage == nil {
+		return common.Address{}, errors.New("account address is not available")
+	}
+	preimage := ai.preimage.Preimage(ai.Hash())
+	if preimage == nil {
+		return common.Address{}, errors.New("account address is not available")
+	}
+	return common.BytesToAddress(preimage), nil
+}
+
 // Account returns the account data the iterator is currently at. The account
 // data is encoded as slim format from the underlying iterator, the conversion
 // is required.
@@ -143,10 +172,65 @@ func (ai *flatAccountIterator) Account() []byte {
 	return data
 }
 
+// flatStorageIterator is a wrapper around the underlying flat state iterator.
+type flatStorageIterator struct {
+	it       snapshot.StorageIterator
+	preimage PreimageReader
+}
+
+// newFlatStorageIterator constructs the storage iterator with the provided
+// flat state iterator.
+func newFlatStorageIterator(it snapshot.StorageIterator, preimage PreimageReader) *flatStorageIterator {
+	return &flatStorageIterator{it: it, preimage: preimage}
+}
+
+// Next steps the iterator forward one element, returning false if exhausted,
+// or an error if iteration failed for some reason.
+func (si *flatStorageIterator) Next() bool {
+	return si.it.Next()
+}
+
+// Error returns any failure that occurred during iteration, which might have
+// caused a premature iteration exit.
+func (si *flatStorageIterator) Error() error {
+	return si.it.Error()
+}
+
+// Hash returns the hash of the account or storage slot the iterator is
+// currently at.
+func (si *flatStorageIterator) Hash() common.Hash {
+	return si.it.Hash()
+}
+
+// Release releases associated resources. Release should always succeed and
+// can be called multiple times without causing error.
+func (si *flatStorageIterator) Release() {
+	si.it.Release()
+}
+
+// Key returns the raw storage slot key the iterator is currently at.
+// An error will be returned if the preimage is not available.
+func (si *flatStorageIterator) Key() (common.Hash, error) {
+	if si.preimage == nil {
+		return common.Hash{}, errors.New("slot key is not available")
+	}
+	preimage := si.preimage.Preimage(si.Hash())
+	if preimage == nil {
+		return common.Hash{}, errors.New("slot key is not available")
+	}
+	return common.BytesToHash(preimage), nil
+}
+
+// Slot returns the storage slot data the iterator is currently at.
+func (si *flatStorageIterator) Slot() []byte {
+	return si.it.Slot()
+}
+
 // merkleIterator implements the Iterator interface, providing functions to traverse
 // the accounts or storages with the manner of Merkle-Patricia-Trie.
 type merkleIterator struct {
 	err     error
+	tr      Trie
 	it      *trie.Iterator
 	account bool
 }
@@ -158,6 +242,7 @@ func newMerkleTrieIterator(tr Trie, start common.Hash, account bool) (*merkleIte
 		return nil, err
 	}
 	return &merkleIterator{
+		tr:      tr,
 		it:      trie.NewIterator(it),
 		account: account,
 	}, nil
@@ -191,6 +276,19 @@ func (ti *merkleIterator) Hash() common.Hash {
 // can be called multiple times without causing error.
 func (ti *merkleIterator) Release() {}
 
+// Address returns the raw account address the iterator is currently at.
+// An error will be returned if the preimage is not available.
+func (ti *merkleIterator) Address() (common.Address, error) {
+	if !ti.account {
+		return common.Address{}, errors.New("account address is not available")
+	}
+	preimage := ti.tr.GetKey(ti.it.Key)
+	if preimage == nil {
+		return common.Address{}, errors.New("account address is not available")
+	}
+	return common.BytesToAddress(preimage), nil
+}
+
 // Account returns the account data the iterator is currently at.
 func (ti *merkleIterator) Account() []byte {
 	if !ti.account {
@@ -198,6 +296,19 @@ func (ti *merkleIterator) Account() []byte {
 		return nil
 	}
 	return ti.it.Value
+}
+
+// Key returns the raw storage slot key the iterator is currently at.
+// An error will be returned if the preimage is not available.
+func (ti *merkleIterator) Key() (common.Hash, error) {
+	if ti.account {
+		return common.Hash{}, errors.New("slot key is not available")
+	}
+	preimage := ti.tr.GetKey(ti.it.Key)
+	if preimage == nil {
+		return common.Hash{}, errors.New("slot key is not available")
+	}
+	return common.BytesToHash(preimage), nil
 }
 
 // Slot returns the storage slot the iterator is currently at.
@@ -239,14 +350,14 @@ func (si *stateIteratee) NewAccountIterator(start common.Hash) (AccountIterator,
 	if si.snap != nil {
 		it, err := si.snap.AccountIterator(si.root, start)
 		if err == nil {
-			return newFlatAccountIterator(it), nil
+			return newFlatAccountIterator(it, si.triedb), nil
 		}
 	}
 	// If the external snapshot is not available, try to initialize the
 	// account iterator from the trie database (path scheme)
 	it, err := si.triedb.AccountIterator(si.root, start)
 	if err == nil {
-		return newFlatAccountIterator(it), nil
+		return newFlatAccountIterator(it, si.triedb), nil
 	}
 	if !si.merkle {
 		return nil, fmt.Errorf("state %x is not available for account traversal", si.root)
@@ -272,14 +383,14 @@ func (si *stateIteratee) NewStorageIterator(addressHash common.Hash, storageRoot
 	if si.snap != nil {
 		it, err := si.snap.StorageIterator(si.root, addressHash, start)
 		if err == nil {
-			return it, nil
+			return newFlatStorageIterator(it, si.triedb), nil
 		}
 	}
 	// If the external snapshot is not available, try to initialize the
 	// storage iterator from the trie database (path scheme)
 	it, err := si.triedb.StorageIterator(si.root, addressHash, start)
 	if err == nil {
-		return it, nil
+		return newFlatStorageIterator(it, si.triedb), nil
 	}
 	if !si.merkle {
 		return nil, fmt.Errorf("state %x is not available for account traversal", si.root)
