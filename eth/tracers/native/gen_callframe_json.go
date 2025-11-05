@@ -17,6 +17,7 @@ var _ = (*callFrameMarshaling)(nil)
 func (c callFrame) MarshalJSON() ([]byte, error) {
 	type callFrame0 struct {
 		Type         vm.OpCode       `json:"-"`
+		Pc           uint64          `json:"pc"`
 		From         common.Address  `json:"from"`
 		Gas          hexutil.Uint64  `json:"gas"`
 		GasUsed      hexutil.Uint64  `json:"gasUsed"`
@@ -44,6 +45,7 @@ func (c callFrame) MarshalJSON() ([]byte, error) {
 	enc.Logs = c.Logs
 	enc.Value = (*hexutil.Big)(c.Value)
 	enc.TypeString = c.TypeString()
+	enc.Pc = c.Pc
 	return json.Marshal(&enc)
 }
 
@@ -51,6 +53,7 @@ func (c callFrame) MarshalJSON() ([]byte, error) {
 func (c *callFrame) UnmarshalJSON(input []byte) error {
 	type callFrame0 struct {
 		Type         *vm.OpCode      `json:"-"`
+		Pc           uint64          `json:"pc"`
 		From         *common.Address `json:"from"`
 		Gas          *hexutil.Uint64 `json:"gas"`
 		GasUsed      *hexutil.Uint64 `json:"gasUsed"`
@@ -70,6 +73,9 @@ func (c *callFrame) UnmarshalJSON(input []byte) error {
 	if dec.Type != nil {
 		c.Type = *dec.Type
 	}
+
+	c.Pc = dec.Pc
+
 	if dec.From != nil {
 		c.From = *dec.From
 	}
