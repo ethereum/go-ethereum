@@ -19,6 +19,7 @@ package core
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/state/codedb"
 	"math/big"
 	"testing"
 
@@ -220,7 +221,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 		cacheConfig := DefaultConfig().WithStateScheme(rawdb.PathScheme)
 		cacheConfig.SnapshotLimit = 0
 		triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(true))
-		statedb, _ := state.New(types.EmptyVerkleHash, state.NewDatabase(triedb, nil))
+		statedb, _ := state.New(types.EmptyVerkleHash, state.NewDatabase(triedb, codedb.New(db)))
 		checkBlockHashes(statedb, true)
 	})
 }
