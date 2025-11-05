@@ -1302,18 +1302,20 @@ func (s *StateDB) commit(deleteEmptyObjects bool, rawStorageKey bool, blockNumbe
 	// Clear all internal flags and update state root at the end.
 	s.mutations = make(map[common.Address]*mutation)
 	s.stateObjectsDestruct = make(map[common.Address]*stateObject)
-	s.reader, _ = s.db.Reader(root)
 
 	origin := s.originalRoot
 	s.originalRoot = root
 
-	update := newStateUpdate(rawStorageKey, origin, root, blockNumber, deletes, updates, nodes)
-
 	start = time.Now()
+	update := newStateUpdate(rawStorageKey, origin, root, blockNumber, deletes, updates, nodes)
 	if err := s.db.Commit(update); err != nil {
 		return nil, err
 	}
 	s.DatabaseCommits = time.Since(start)
+
+	// The reader update must be performed as the final step, otherwise,
+	// the new state would not be visible before db.commit.
+	s.reader, _ = s.db.Reader(root)
 	return update, nil
 }
 
