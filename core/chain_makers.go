@@ -472,7 +472,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 // then generate chain on top.
 func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, gen func(int, *BlockGen)) (ethdb.Database, []*types.Block, []types.Receipts) {
 	db := rawdb.NewMemoryDatabase()
-	triedb := triedb.NewDatabase(db, triedb.VerkleDefaults)
+	triedb := triedb.NewDatabase(db, triedb.HashDefaults)
 	defer triedb.Close()
 	_, err := genesis.Commit(db, triedb)
 	if err != nil {
