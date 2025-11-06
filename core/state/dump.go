@@ -129,7 +129,11 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 	if err != nil {
 		return nil
 	}
-	acctIt, err := iteratee.NewAccountIterator(common.Hash{})
+	var startHash common.Hash
+	if conf.Start != nil {
+		startHash = common.BytesToHash(conf.Start)
+	}
+	acctIt, err := iteratee.NewAccountIterator(startHash)
 	if err != nil {
 		return nil
 	}
