@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/blsync"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -273,11 +272,11 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	// Configure synchronization override service
 	var synctarget common.Hash
 	if ctx.IsSet(utils.SyncTargetFlag.Name) {
-		hex := hexutil.MustDecode(ctx.String(utils.SyncTargetFlag.Name))
-		if len(hex) != common.HashLength {
-			utils.Fatalf("invalid sync target length: have %d, want %d", len(hex), common.HashLength)
+		target := ctx.String(utils.SyncTargetFlag.Name)
+		if !common.IsHexHash(target) {
+			utils.Fatalf("sync target hash is not a valid hex hash: %s", target)
 		}
-		synctarget = common.BytesToHash(hex)
+		synctarget = common.HexToHash(target)
 	}
 	utils.RegisterSyncOverrideService(stack, eth, synctarget, ctx.Bool(utils.ExitWhenSyncedFlag.Name))
 

@@ -76,10 +76,16 @@ func TestCreation(t *testing.T) {
 				{20000000, 1681338454, ID{Hash: checksumToBytes(0xf0afd0e3), Next: 1681338455}}, // Last Gray Glacier block
 				{20000000, 1681338455, ID{Hash: checksumToBytes(0xdce96c2d), Next: 1710338135}}, // First Shanghai block
 				{30000000, 1710338134, ID{Hash: checksumToBytes(0xdce96c2d), Next: 1710338135}}, // Last Shanghai block
-				{40000000, 1710338135, ID{Hash: checksumToBytes(0x9f3d2254), Next: 1746612311}}, // First Cancun block
+				{30000000, 1710338135, ID{Hash: checksumToBytes(0x9f3d2254), Next: 1746612311}}, // First Cancun block
 				{30000000, 1746022486, ID{Hash: checksumToBytes(0x9f3d2254), Next: 1746612311}}, // Last Cancun block
-				{30000000, 1746612311, ID{Hash: checksumToBytes(0xc376cf8b), Next: 0}},          // First Prague block
-				{50000000, 2000000000, ID{Hash: checksumToBytes(0xc376cf8b), Next: 0}},          // Future Prague block
+				{30000000, 1746612311, ID{Hash: checksumToBytes(0xc376cf8b), Next: 1764798551}}, // First Prague block
+				{30000000, 1764798550, ID{Hash: checksumToBytes(0xc376cf8b), Next: 1764798551}}, // Last Prague block
+				{30000000, 1764798551, ID{Hash: checksumToBytes(0x5167e2a6), Next: 1765290071}}, // First Osaka block
+				{30000000, 1765290070, ID{Hash: checksumToBytes(0x5167e2a6), Next: 1765290071}}, // Last Osaka block
+				{30000000, 1765290071, ID{Hash: checksumToBytes(0xcba2a1c0), Next: 1767747671}}, // First BPO1 block
+				{30000000, 1767747670, ID{Hash: checksumToBytes(0xcba2a1c0), Next: 1767747671}}, // Last BPO1 block
+				{30000000, 1767747671, ID{Hash: checksumToBytes(0x07c9462e), Next: 0}},          // First BPO2 block
+				{50000000, 2000000000, ID{Hash: checksumToBytes(0x07c9462e), Next: 0}},          // Future BPO2 block
 			},
 		},
 		// Sepolia test cases
@@ -162,6 +168,9 @@ func TestValidation(t *testing.T) {
 	legacyConfig.ShanghaiTime = nil
 	legacyConfig.CancunTime = nil
 	legacyConfig.PragueTime = nil
+	legacyConfig.OsakaTime = nil
+	legacyConfig.BPO1Time = nil
+	legacyConfig.BPO2Time = nil
 
 	tests := []struct {
 		config *params.ChainConfig
@@ -361,11 +370,11 @@ func TestValidation(t *testing.T) {
 		// Local is mainnet Shanghai, remote is random Shanghai.
 		{params.MainnetChainConfig, 20000000, 1681338455, ID{Hash: checksumToBytes(0x12345678), Next: 0}, ErrLocalIncompatibleOrStale},
 
-		// Local is mainnet Prague, far in the future. Remote announces Gopherium (non existing fork)
+		// Local is mainnet BPO2, far in the future. Remote announces Gopherium (non existing fork)
 		// at some future timestamp 8888888888, for itself, but past block for local. Local is incompatible.
 		//
 		// This case detects non-upgraded nodes with majority hash power (typical Ropsten mess).
-		{params.MainnetChainConfig, 88888888, 8888888888, ID{Hash: checksumToBytes(0xc376cf8b), Next: 8888888888}, ErrLocalIncompatibleOrStale},
+		{params.MainnetChainConfig, 88888888, 8888888888, ID{Hash: checksumToBytes(0x07c9462e), Next: 8888888888}, ErrLocalIncompatibleOrStale},
 
 		// Local is mainnet Shanghai. Remote is also in Shanghai, but announces Gopherium (non existing
 		// fork) at timestamp 1668000000, before Cancun. Local is incompatible.
