@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"iter"
 	"maps"
+	"math"
 	"slices"
 	"sort"
 	"time"
@@ -403,8 +404,7 @@ func decodeSingle(keySection []byte, onValue func([]byte, int, int) error) ([]st
 		keyOff += nn
 
 		// Validate that the values can fit in an int to prevent overflow on 32-bit systems
-		const maxInt = int(^uint(0) >> 1)
-		if nShared > uint64(maxInt) || nUnshared > uint64(maxInt) || nValue > uint64(maxInt) {
+		if nShared > uint64(math.MaxUint32) || nUnshared > uint64(math.MaxUint32) || nValue > uint64(math.MaxUint32) {
 			return nil, errors.New("key size too large")
 		}
 
