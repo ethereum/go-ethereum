@@ -138,26 +138,30 @@ func (s *Syncer) run() {
 				continue
 			}
 
-			// Set the finalized and safe markers relative to the sync target.
-			// The finalized marker is set two epochs behind the target,
-			// and the safe marker is set one epoch behind the target.
-			if header := s.backend.BlockChain().GetHeaderByNumber(target.Number.Uint64() - params.EpochLength*2); header != nil {
-				if final := s.backend.BlockChain().CurrentFinalBlock(); final == nil || final.Number.Cmp(header.Number) < 0 {
-					s.backend.BlockChain().SetFinalized(header)
-				}
-			}
-			if header := s.backend.BlockChain().GetHeaderByNumber(target.Number.Uint64() - params.EpochLength); header != nil {
-				if safe := s.backend.BlockChain().CurrentSafeBlock(); safe == nil || safe.Number.Cmp(header.Number) < 0 {
-					s.backend.BlockChain().SetSafe(header)
-				}
-			}
-
 			// Terminate the node if the target has been reached
 			if s.exitWhenSynced {
 				if block := s.backend.BlockChain().GetBlockByHash(target.Hash()); block != nil {
 					log.Info("Sync target reached", "number", block.NumberU64(), "hash", block.Hash())
 					go s.stack.Close() // async since we need to close ourselves
 					return
+				}
+			}
+
+			// Set the finalized and safe markers relative to the current head.
+			// The finalized marker is set two epochs behind the target,
+			// and the safe marker is set one epoch behind the target.
+			head := s.backend.BlockChain().CurrentHeader()
+			if head == nil {
+				continue
+			}
+			if header := s.backend.BlockChain().GetHeaderByNumber(head.Number.Uint64() - params.EpochLength*2); header != nil {
+				if final := s.backend.BlockChain().CurrentFinalBlock(); final == nil || final.Number.Cmp(header.Number) < 0 {
+					s.backend.BlockChain().SetFinalized(header)
+				}
+			}
+			if header := s.backend.BlockChain().GetHeaderByNumber(head.Number.Uint64() - params.EpochLength); header != nil {
+				if safe := s.backend.BlockChain().CurrentSafeBlock(); safe == nil || safe.Number.Cmp(header.Number) < 0 {
+					s.backend.BlockChain().SetSafe(header)
 				}
 			}
 
