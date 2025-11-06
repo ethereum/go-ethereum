@@ -47,6 +47,8 @@ type (
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	var precompiles map[common.Address]PrecompiledContract
 	switch {
+	case evm.chainRules.IsGalileo:
+		precompiles = PrecompiledContractsGalileo
 	case evm.chainRules.IsFeynman:
 		precompiles = PrecompiledContractsFeynman
 	case evm.chainRules.IsEuclidV2:
