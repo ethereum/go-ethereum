@@ -121,6 +121,7 @@ func ParseDerivationPath(path string) (DerivationPath, error) {
 // to its canonical representation.
 func (path DerivationPath) String() string {
 	result := "m"
+	var resultSb124 strings.Builder
 	for _, component := range path {
 		var hardened bool
 		if component >= 0x80000000 {
@@ -129,9 +130,10 @@ func (path DerivationPath) String() string {
 		}
 		result = fmt.Sprintf("%s/%d", result, component)
 		if hardened {
-			result += "'"
+			resultSb124.WriteString("'")
 		}
 	}
+	result += resultSb124.String()
 	return result
 }
 

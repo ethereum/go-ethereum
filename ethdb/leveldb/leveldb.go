@@ -24,6 +24,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -280,6 +281,7 @@ func (db *Database) Stat() (string, error) {
 	if len(stats.LevelSizes) > 0 {
 		message += " Level |   Tables   |    Size(MB)   |    Time(sec)  |    Read(MB)   |   Write(MB)\n" +
 			"-------+------------+---------------+---------------+---------------+---------------\n"
+		var messageSb283 strings.Builder
 		for level, size := range stats.LevelSizes {
 			read := stats.LevelRead[level]
 			write := stats.LevelWrite[level]
@@ -294,10 +296,11 @@ func (db *Database) Stat() (string, error) {
 			totalRead += read
 			totalWrite += write
 			totalDuration += duration
-			message += fmt.Sprintf(" %3d   | %10d | %13.5f | %13.5f | %13.5f | %13.5f\n",
+			messageSb283.WriteString(fmt.Sprintf(" %3d   | %10d | %13.5f | %13.5f | %13.5f | %13.5f\n",
 				level, tables, float64(size)/1048576.0, duration.Seconds(),
-				float64(read)/1048576.0, float64(write)/1048576.0)
+				float64(read)/1048576.0, float64(write)/1048576.0))
 		}
+		message += messageSb283.String()
 		message += "-------+------------+---------------+---------------+---------------+---------------\n"
 		message += fmt.Sprintf(" Total | %10d | %13.5f | %13.5f | %13.5f | %13.5f\n",
 			totalTables, float64(totalSize)/1048576.0, totalDuration.Seconds(),

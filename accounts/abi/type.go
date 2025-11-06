@@ -171,6 +171,7 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			used       = make(map[string]bool)
 		)
 		expression += "("
+		var expressionSb174 strings.Builder
 		for idx, c := range components {
 			cType, err := NewType(c.Type, c.InternalType, c.Components)
 			if err != nil {
@@ -192,11 +193,12 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			})
 			elems = append(elems, &cType)
 			names = append(names, c.Name)
-			expression += cType.stringKind
+			expressionSb174.WriteString(cType.stringKind)
 			if idx != len(components)-1 {
-				expression += ","
+				expressionSb174.WriteString(",")
 			}
 		}
+		expression += expressionSb174.String()
 		expression += ")"
 
 		typ.TupleType = reflect.StructOf(fields)

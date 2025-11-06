@@ -19,6 +19,7 @@ package abi
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 type SelectorMarshaling struct {
@@ -68,19 +69,23 @@ func parseElementaryType(unescapedSelector string) (string, string, error) {
 		return "", "", fmt.Errorf("failed to parse elementary type: %v", err)
 	}
 	// handle arrays
+	var parsedTypeSb71 strings.Builder
 	for len(rest) > 0 && rest[0] == '[' {
-		parsedType = parsedType + string(rest[0])
+		parsedTypeSb71.WriteString(string(rest[0]))
 		rest = rest[1:]
+		var parsedTypeSb74 strings.Builder
 		for len(rest) > 0 && isDigit(rest[0]) {
-			parsedType = parsedType + string(rest[0])
+			parsedTypeSb74.WriteString(string(rest[0]))
 			rest = rest[1:]
 		}
+		parsedType += parsedTypeSb74.String()
 		if len(rest) == 0 || rest[0] != ']' {
 			return "", "", fmt.Errorf("failed to parse array: expected ']', got %c", unescapedSelector[0])
 		}
-		parsedType = parsedType + string(rest[0])
+		parsedTypeSb71.WriteString(string(rest[0]))
 		rest = rest[1:]
 	}
+	parsedType += parsedTypeSb71.String()
 	return parsedType, rest, nil
 }
 

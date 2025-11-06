@@ -52,12 +52,14 @@ type AmbiguousAddrError struct {
 
 func (err *AmbiguousAddrError) Error() string {
 	files := ""
+	var filesSb55 strings.Builder
 	for i, a := range err.Matches {
-		files += a.URL.Path
+		filesSb55.WriteString(a.URL.Path)
 		if i < len(err.Matches)-1 {
-			files += ", "
+			filesSb55.WriteString(", ")
 		}
 	}
+	files += filesSb55.String()
 	return fmt.Sprintf("multiple keys match address (%s)", files)
 }
 

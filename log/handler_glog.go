@@ -113,13 +113,15 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 		}
 		// Compile the rule pattern into a regular expression
 		matcher := ".*"
+		var matcherSb116 strings.Builder
 		for _, comp := range strings.Split(parts[0], "/") {
 			if comp == "*" {
-				matcher += "(/.*)?"
+				matcherSb116.WriteString("(/.*)?")
 			} else if comp != "" {
 				matcher += "/" + regexp.QuoteMeta(comp)
 			}
 		}
+		matcher += matcherSb116.String()
 		if !strings.HasSuffix(parts[0], ".go") {
 			matcher += "/[^/]+\\.go"
 		}

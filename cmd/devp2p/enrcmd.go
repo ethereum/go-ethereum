@@ -109,22 +109,24 @@ func dumpRecordKV(kv []interface{}, indent int) string {
 		}
 	}
 	// Print the keys, invoking formatters for known keys.
+	var outSb112 strings.Builder
 	for i := 0; i < len(kv); i += 2 {
 		key := kv[i].(string)
 		val := kv[i+1].(rlp.RawValue)
 		pad := longestKey - len(key)
-		out += strings.Repeat(" ", indent) + strconv.Quote(key) + strings.Repeat(" ", pad+1)
+		outSb112.WriteString(strings.Repeat(" ", indent) + strconv.Quote(key) + strings.Repeat(" ", pad+1))
 		formatter := attrFormatters[key]
 		if formatter == nil {
 			formatter = formatAttrRaw
 		}
 		fmtval, ok := formatter(val)
 		if ok {
-			out += fmtval + "\n"
+			outSb112.WriteString(fmtval + "\n")
 		} else {
-			out += hex.EncodeToString(val) + " (!)\n"
+			outSb112.WriteString(hex.EncodeToString(val) + " (!)\n")
 		}
 	}
+	out += outSb112.String()
 	return out
 }
 

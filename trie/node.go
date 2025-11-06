@@ -101,13 +101,15 @@ func (n valueNode) String() string  { return n.fstring("") }
 
 func (n *fullNode) fstring(ind string) string {
 	resp := fmt.Sprintf("[\n%s  ", ind)
+	var respSb104 strings.Builder
 	for i, node := range &n.Children {
 		if node == nil {
-			resp += fmt.Sprintf("%s: <nil> ", indices[i])
+			respSb104.WriteString(fmt.Sprintf("%s: <nil> ", indices[i]))
 		} else {
-			resp += fmt.Sprintf("%s: %v", indices[i], node.fstring(ind+"  "))
+			respSb104.WriteString(fmt.Sprintf("%s: %v", indices[i], node.fstring(ind+"  ")))
 		}
 	}
+	resp += respSb104.String()
 	return resp + fmt.Sprintf("\n%s] ", ind)
 }
 
