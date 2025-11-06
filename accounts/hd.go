@@ -128,7 +128,7 @@ func (path DerivationPath) String() string {
 			component -= 0x80000000
 			hardened = true
 		}
-		result = fmt.Sprintf("%s/%d", result, component)
+		resultSb124.WriteString(fmt.Sprintf("/%d", component))
 		if hardened {
 			resultSb124.WriteString("'")
 		}
