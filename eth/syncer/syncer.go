@@ -22,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	beaconparams "github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
@@ -130,11 +129,7 @@ func (s *Syncer) run() {
 				break
 			}
 			if resync {
-				err := s.backend.Downloader().BeaconDevSync(ethconfig.FullSync, target)
-				if err == nil {
-					s.advanceDevFinality()
-				}
-				req.errc <- err
+				req.errc <- s.backend.Downloader().BeaconDevSync(ethconfig.FullSync, target)
 			}
 
 		case <-ticker.C:
@@ -200,34 +195,4 @@ func NewAPI(s *Syncer) *API {
 // Sync initiates a full sync to the target block hash.
 func (api *API) Sync(target common.Hash) error {
 	return api.s.Sync(target)
-}
-
-// advanceDevFinality synthesizes safe/finalized heads for the dev beacon-sync
-func (s *Syncer) advanceDevFinality() {
-	bc := s.backend.BlockChain()
-
-	head := bc.CurrentBlock()
-	if head == nil {
-		return
-	}
-
-	safeNumber := head.Number.Uint64() - beaconparams.EpochLength
-	safeHeader := bc.GetHeaderByNumber(safeNumber)
-	if safeHeader == nil {
-		log.Warn("Dev sync could not resolve safe header", "number", safeNumber)
-		return
-	}
-	if safe := bc.CurrentSafeBlock(); safe == nil || safe.Hash() != safeHeader.Hash() {
-		bc.SetSafe(safeHeader)
-	}
-
-	finalNumber := safeNumber - beaconparams.EpochLength
-	finalHeader := bc.GetHeaderByNumber(finalNumber)
-	if finalHeader == nil {
-		log.Warn("Dev sync could not resolve finalized header", "number", finalNumber)
-		return
-	}
-	if finalized := bc.CurrentFinalBlock(); finalized == nil || finalized.Hash() != finalHeader.Hash() {
-		bc.SetFinalized(finalHeader)
-	}
 }
