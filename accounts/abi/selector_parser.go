@@ -73,12 +73,10 @@ func parseElementaryType(unescapedSelector string) (string, string, error) {
 	for len(rest) > 0 && rest[0] == '[' {
 		parsedTypeSb71.WriteString(string(rest[0]))
 		rest = rest[1:]
-		var parsedTypeSb74 strings.Builder
 		for len(rest) > 0 && isDigit(rest[0]) {
-			parsedTypeSb74.WriteString(string(rest[0]))
+			parsedTypeSb71.WriteString(string(rest[0]))
 			rest = rest[1:]
 		}
-		parsedType += parsedTypeSb74.String()
 		if len(rest) == 0 || rest[0] != ']' {
 			return "", "", fmt.Errorf("failed to parse array: expected ']', got %c", unescapedSelector[0])
 		}
