@@ -336,3 +336,269 @@ func TestBytesSize(t *testing.T) {
 		}
 	}
 }
+
+func TestSplitListValues(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string   // hex-encoded RLP list
+		want    []string // hex-encoded expected elements
+		wantErr error
+	}{
+		{
+			name:  "empty list",
+			input: "C0",
+			want:  []string{},
+		},
+		{
+			name:  "single byte element",
+			input: "C101",
+			want:  []string{"01"},
+		},
+		{
+			name:  "single empty string",
+			input: "C180",
+			want:  []string{"80"},
+		},
+		{
+			name:  "two byte elements",
+			input: "C20102",
+			want:  []string{"01", "02"},
+		},
+		{
+			name:  "three elements",
+			input: "C3010203",
+			want:  []string{"01", "02", "03"},
+		},
+		{
+			name:  "mixed size elements",
+			input: "C80182020283030303",
+			want:  []string{"01", "820202", "83030303"},
+		},
+		{
+			name:  "string elements",
+			input: "C88363617483646F67",
+			want:  []string{"83636174", "83646F67"}, // cat,dog
+		},
+		{
+			name:  "nested list element",
+			input: "C4C3010203",         // [[1,2,3]]
+			want:  []string{"C3010203"}, // [1,2,3]
+		},
+		{
+			name:  "multiple nested lists",
+			input: "C6C20102C20304",             // [[1,2],[3,4]]
+			want:  []string{"C20102", "C20304"}, // [1,2], [3,4]
+		},
+		{
+			name:  "large list",
+			input: "C6010203040506",
+			want:  []string{"01", "02", "03", "04", "05", "06"},
+		},
+		{
+			name:  "list with empty strings",
+			input: "C3808080",
+			want:  []string{"80", "80", "80"},
+		},
+		// Error cases
+		{
+			name:    "single byte",
+			input:   "01",
+			wantErr: ErrExpectedList,
+		},
+		{
+			name:    "string",
+			input:   "83636174",
+			wantErr: ErrExpectedList,
+		},
+		{
+			name:    "empty input",
+			input:   "",
+			wantErr: io.ErrUnexpectedEOF,
+		},
+		{
+			name:    "invalid list - value too large",
+			input:   "C60102030405",
+			wantErr: ErrValueTooLarge,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := SplitListValues(unhex(tt.input))
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("SplitListValues() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if err != nil {
+				return
+			}
+			if len(got) != len(tt.want) {
+				t.Errorf("SplitListValues() got %d elements, want %d", len(got), len(tt.want))
+				return
+			}
+			for i, elem := range got {
+				want := unhex(tt.want[i])
+				if !bytes.Equal(elem, want) {
+					t.Errorf("SplitListValues() element[%d] = %x, want %x", i, elem, want)
+				}
+			}
+		})
+	}
+}
+
+func TestMergeListValues(t *testing.T) {
+	tests := []struct {
+		name    string
+		elems   []string // hex-encoded RLP elements
+		want    string   // hex-encoded expected result
+		wantErr error
+	}{
+		{
+			name:  "empty list",
+			elems: []string{},
+			want:  "C0",
+		},
+		{
+			name:  "single byte element",
+			elems: []string{"01"},
+			want:  "C101",
+		},
+		{
+			name:  "single empty string",
+			elems: []string{"80"},
+			want:  "C180",
+		},
+		{
+			name:  "two byte elements",
+			elems: []string{"01", "02"},
+			want:  "C20102",
+		},
+		{
+			name:  "three elements",
+			elems: []string{"01", "02", "03"},
+			want:  "C3010203",
+		},
+		{
+			name:  "mixed size elements",
+			elems: []string{"01", "820202", "83030303"},
+			want:  "C80182020283030303",
+		},
+		{
+			name:  "string elements",
+			elems: []string{"83636174", "83646F67"}, // cat, dog
+			want:  "C88363617483646F67",
+		},
+		{
+			name:  "nested list element",
+			elems: []string{"C20102", "03"}, // [[1, 2], 3]
+			want:  "C4C2010203",
+		},
+		{
+			name:  "multiple nested lists",
+			elems: []string{"C20102", "C3030405"}, // [[1,2],[3,4,5]],
+			want:  "C7C20102C3030405",
+		},
+		{
+			name:  "large list",
+			elems: []string{"01", "02", "03", "04", "05", "06"},
+			want:  "C6010203040506",
+		},
+		{
+			name:  "list with empty strings",
+			elems: []string{"80", "80", "80"},
+			want:  "C3808080",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			elems := make([][]byte, len(tt.elems))
+			for i, s := range tt.elems {
+				elems[i] = unhex(s)
+			}
+			got, err := MergeListValues(elems)
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("MergeListValues() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if err != nil {
+				return
+			}
+			want := unhex(tt.want)
+			if !bytes.Equal(got, want) {
+				t.Errorf("MergeListValues() = %x, want %x", got, want)
+			}
+		})
+	}
+}
+
+func TestSplitMergeList(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string // hex-encoded RLP list
+	}{
+		{
+			name:  "empty list",
+			input: "C0",
+		},
+		{
+			name:  "single byte element",
+			input: "C101",
+		},
+		{
+			name:  "two byte elements",
+			input: "C20102",
+		},
+		{
+			name:  "three elements",
+			input: "C3010203",
+		},
+		{
+			name:  "mixed size elements",
+			input: "C80182020283030303",
+		},
+		{
+			name:  "string elements",
+			input: "C88363617483646F67", // [cat, dog]
+		},
+		{
+			name:  "nested list element",
+			input: "C4C2010203", // [[1,2],3]
+		},
+		{
+			name:  "multiple nested lists",
+			input: "C6C20102C20304", // [[1,2],[3,4]]
+		},
+		{
+			name:  "large list",
+			input: "C6010203040506", // [1,2,3,4,5,6]
+		},
+		{
+			name:  "list with empty strings",
+			input: "C3808080", // ["", "", ""]
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			original := unhex(tt.input)
+
+			// Split the list
+			elements, err := SplitListValues(original)
+			if err != nil {
+				t.Fatalf("SplitListValues() error = %v", err)
+			}
+
+			// Merge back
+			merged, err := MergeListValues(elements)
+			if err != nil {
+				t.Fatalf("MergeListValues() error = %v", err)
+			}
+
+			// The merged result should match the original
+			if !bytes.Equal(merged, original) {
+				t.Errorf("Round trip failed: original = %x, merged = %x", original, merged)
+			}
+		})
+	}
+}
