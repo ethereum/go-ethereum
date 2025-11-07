@@ -36,7 +36,7 @@ import (
 // need the other side to explicitly check.
 //
 // This method is a bit of a sore thumb here, but:
-//   - It cannot be placed in core/stateless, because state.New prodces a circular dep
+//   - It cannot be placed in core/stateless, because state.New produces a circular dep
 //   - It cannot be placed outside of core, because it needs to construct a dud headerchain
 //
 // TODO(karalabe): Would be nice to resolve both issues above somehow and move it.

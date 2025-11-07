@@ -21,7 +21,7 @@ import (
 )
 
 type txMetadata struct {
-	id   uint64 // the billy id of transction
+	id   uint64 // the billy id of transaction
 	size uint64 // the RLP encoded size of transaction (blobs are included)
 }
 
