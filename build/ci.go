@@ -108,6 +108,18 @@ var (
 			Env:  map[string]string{"GOMIPS": "softfloat", "CGO_ENABLED": "0"},
 		},
 		{
+			Name:   "wasm-js",
+			GOOS:   "js",
+			GOARCH: "wasm",
+			Tags:   "example",
+		},
+		{
+			Name:   "wasm-wasi",
+			GOOS:   "wasip1",
+			GOARCH: "wasm",
+			Tags:   "example",
+		},
+		{
 			Name: "example",
 			Tags: "example",
 		},
@@ -330,6 +342,9 @@ func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (
 			buildTags = append(buildTags, "osusergo", "netgo")
 		}
 		ld = append(ld, "-extldflags", "'"+strings.Join(extld, " ")+"'")
+	}
+	if runtime.GOARCH == "wasm" {
+		ld = append(ld, "-gcflags=all=-d=softfloat")
 	}
 	if len(ld) > 0 {
 		flags = append(flags, "-ldflags", strings.Join(ld, " "))
