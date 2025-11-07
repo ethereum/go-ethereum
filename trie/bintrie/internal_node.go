@@ -93,6 +93,9 @@ func (bt *InternalNode) Get(key []byte, resolver NodeResolverFn) ([]byte, error)
 	if err != nil {
 		return nil, fmt.Errorf("get error: %w", err)
 	}
+	if values == nil {
+		return nil, nil
+	}
 	return values[key[31]], nil
 }
 

@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-verkle"
 )
@@ -109,6 +110,18 @@ func verkleNodeHasher(blob []byte) (common.Hash, error) {
 	return n.Commit().Bytes(), nil
 }
 
+// binaryNodeHasher computes the hash of the given verkle node.
+func binaryNodeHasher(blob []byte) (common.Hash, error) {
+	if len(blob) == 0 {
+		return types.EmptyVerkleHash, nil
+	}
+	n, err := bintrie.DeserializeNode(blob, 0)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return n.Hash(), nil
+}
+
 // Database is a multiple-layered structure for maintaining in-memory states
 // along with its dirty trie nodes. It consists of one persistent base layer
 // backed by a key-value store, on top of which arbitrarily many in-memory diff
@@ -163,7 +176,7 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 	// compress the shared key prefix.
 	if isVerkle {
 		db.diskdb = rawdb.NewTable(diskdb, string(rawdb.VerklePrefix))
-		db.hasher = verkleNodeHasher
+		db.hasher = binaryNodeHasher
 	}
 	// Construct the layer tree by resolving the in-disk singleton state
 	// and in-memory layer journal.

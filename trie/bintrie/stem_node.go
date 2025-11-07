@@ -141,7 +141,10 @@ func (bt *StemNode) CollectNodes(path []byte, flush NodeFlushFn) error {
 }
 
 // GetValuesAtStem retrieves the group of values located at the given stem key.
-func (bt *StemNode) GetValuesAtStem(_ []byte, _ NodeResolverFn) ([][]byte, error) {
+func (bt *StemNode) GetValuesAtStem(stem []byte, _ NodeResolverFn) ([][]byte, error) {
+	if !bytes.Equal(bt.Stem, stem) {
+		return nil, nil
+	}
 	return bt.Values[:], nil
 }
 

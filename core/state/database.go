@@ -241,7 +241,7 @@ func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	if db.triedb.IsVerkle() {
 		ts := overlay.LoadTransitionState(db.TrieDB().Disk(), root, db.triedb.IsVerkle())
 		if ts.InTransition() {
-			panic("transition isn't supported yet")
+			panic("state tree transition isn't supported yet")
 		}
 		if ts.Transitioned() {
 			// Use BinaryTrie instead of VerkleTrie when IsVerkle is set
