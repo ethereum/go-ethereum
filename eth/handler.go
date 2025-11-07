@@ -179,9 +179,17 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	addTxs := func(txs []*types.Transaction) []error {
 		return h.txpool.Add(txs, false)
 	}
-
+	hasTx := func(hash common.Hash) bool {
+		txpoolHas := h.txpool.Has(hash)
+		// check on chain as well (no need to check limbo separately, as chain checks limbo too)
+		_, tx := h.chain.GetCanonicalTransaction(hash)
+		if !txpoolHas && tx != nil {
+			log.Trace("handler: hasTx found tx on chain", "txhash", hash)
+		}
+		return txpoolHas || tx != nil
+	}
 	validateMeta := func(tx common.Hash, kind byte) error {
-		if h.txpool.Has(tx) {
+		if hasTx(tx) {
 			return txpool.ErrAlreadyKnown
 		}
 		if !h.txpool.FilterType(kind) {
