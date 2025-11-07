@@ -794,9 +794,10 @@ func (n *Node) wrapDatabase(db ethdb.Database) ethdb.Database {
 // closeDatabases closes all open databases.
 func (n *Node) closeDatabases() (errors []error) {
 	for db := range n.databases {
-		delete(n.databases, db)
 		if err := db.Database.Close(); err != nil {
 			errors = append(errors, err)
+		} else {
+			delete(n.databases, db)
 		}
 	}
 	return errors
