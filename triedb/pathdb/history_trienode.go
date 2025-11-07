@@ -19,9 +19,11 @@ package pathdb
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"iter"
 	"maps"
+	"math"
 	"slices"
 	"sort"
 	"time"
@@ -386,11 +388,25 @@ func decodeSingle(keySection []byte, onValue func([]byte, int, int) error) ([]st
 		}
 		// Resolve the entry from key section
 		nShared, nn := binary.Uvarint(keySection[keyOff:]) // key length shared (varint)
+		if nn <= 0 {
+			return nil, fmt.Errorf("corrupted varint encoding for nShared at offset %d", keyOff)
+		}
 		keyOff += nn
 		nUnshared, nn := binary.Uvarint(keySection[keyOff:]) // key length not shared (varint)
+		if nn <= 0 {
+			return nil, fmt.Errorf("corrupted varint encoding for nUnshared at offset %d", keyOff)
+		}
 		keyOff += nn
 		nValue, nn := binary.Uvarint(keySection[keyOff:]) // value length (varint)
+		if nn <= 0 {
+			return nil, fmt.Errorf("corrupted varint encoding for nValue at offset %d", keyOff)
+		}
 		keyOff += nn
+
+		// Validate that the values can fit in an int to prevent overflow on 32-bit systems
+		if nShared > uint64(math.MaxUint32) || nUnshared > uint64(math.MaxUint32) || nValue > uint64(math.MaxUint32) {
+			return nil, errors.New("key size too large")
+		}
 
 		// Resolve unshared key
 		if keyOff+int(nUnshared) > len(keySection) {

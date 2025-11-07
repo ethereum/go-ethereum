@@ -694,7 +694,10 @@ func TestDecodeSingleCorruptedData(t *testing.T) {
 	// Test with corrupted varint in key section
 	corrupted := make([]byte, len(keySection))
 	copy(corrupted, keySection)
-	corrupted[5] = 0xFF // Corrupt varint
+	// Fill first 10 bytes with 0xFF to create a varint overflow (>64 bits)
+	for i := range 10 {
+		corrupted[i] = 0xFF
+	}
 	_, err = decodeSingle(corrupted, nil)
 	if err == nil {
 		t.Fatal("Expected error for corrupted varint")
