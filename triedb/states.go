@@ -42,9 +42,5 @@ func NewStateSet() *StateSet {
 
 // internal returns a state set for path database internal usage.
 func (set *StateSet) internal() *pathdb.StateSetWithOrigin {
-	// the nil state set is possible in tests.
-	if set == nil {
-		return nil
-	}
 	return pathdb.NewStateSetWithOrigin(set.Accounts, set.Storages, set.AccountsOrigin, set.StoragesOrigin, set.RawStorageKey)
 }
