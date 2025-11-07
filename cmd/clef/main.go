@@ -852,7 +852,7 @@ func readMasterKey(ctx *cli.Context, ui core.UIClientAPI) ([]byte, error) {
 		return nil, errors.New("failed to decrypt the master seed of clef")
 	}
 	if len(masterSeed) < 256 {
-		return nil, fmt.Errorf("master seed of insufficient length, expected >255 bytes, got %d", len(masterSeed))
+		return nil, fmt.Errorf("master seed of insufficient length, need at least 256 bytes, got %d", len(masterSeed))
 	}
 	// Create vault location
 	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), masterSeed)[:10]))
