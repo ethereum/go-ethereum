@@ -17,7 +17,6 @@
 package rlp
 
 import (
-	"fmt"
 	"io"
 	"reflect"
 )
@@ -157,7 +156,7 @@ func CountValues(b []byte) (int, error) {
 func SplitListValues(b []byte) ([][]byte, error) {
 	b, _, err := SplitList(b)
 	if err != nil {
-		return nil, fmt.Errorf("decode error: %v", err)
+		return nil, err
 	}
 	var elements [][]byte
 	for len(b) > 0 {
