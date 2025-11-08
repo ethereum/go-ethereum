@@ -399,7 +399,7 @@ func handleBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
 	}, metadata)
 }
 
-func handleReceipts[L ReceiptsList](backend Backend, msg Decoder, peer *Peer) error {
+func handleReceipts69[L ReceiptsList](backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of receipts arrived to one of our previous requests
 	res := new(ReceiptsPacket[L])
 	if err := msg.Decode(res); err != nil {
@@ -429,6 +429,77 @@ func handleReceipts[L ReceiptsList](backend Backend, msg Decoder, peer *Peer) er
 		code: ReceiptsMsg,
 		Res:  &enc,
 	}, metadata)
+}
+
+func handleReceipts70(backend Backend, msg Decoder, peer *Peer) error {
+	res := new(ReceiptsPacket70)
+	if err := msg.Decode(res); err != nil {
+		return err
+	}
+
+	if res.LastBlockIncomplete {
+		return handlePartialReceipts(peer, res)
+	}
+
+	if buf, ok := peer.receiptBuffer[res.RequestId]; ok {
+		res.List = append(buf, res.List...)
+		delete(peer.receiptBuffer, res.RequestId)
+		delete(peer.requestedReceipts, res.RequestId)
+	}
+
+	// Assign buffers shared between list elements
+	buffers := new(receiptListBuffers)
+	for i := range res.List {
+		res.List[i].setBuffers(buffers)
+	}
+
+	metadata := func() interface{} {
+		hasher := trie.NewStackTrie(nil)
+		hashes := make([]common.Hash, len(res.List))
+		for i := range res.List {
+			hashes[i] = types.DeriveSha(res.List[i], hasher)
+		}
+		return hashes
+	}
+
+	var enc ReceiptsRLPResponse
+	for i := range res.List {
+		enc = append(enc, res.List[i].EncodeForStorage())
+	}
+
+	return peer.dispatchResponse(&Response{
+		id:   res.RequestId,
+		code: ReceiptsMsg,
+		Res:  &enc,
+	}, metadata)
+}
+
+func handlePartialReceipts(peer *Peer, res *ReceiptsPacket70) error {
+	id := res.RequestId
+
+	peer.receiptBuffer[id] = append(peer.receiptBuffer[id], res.List...)
+
+	last := res.List[len(res.List)-1]
+	if !validatePartialReceipt(last) {
+		return fmt.Errorf("Receipts: validation error, should drop the peer")
+	}
+
+	req := &Request{
+		id:   id,
+		sink: nil,
+		code: GetReceiptsMsg,
+		want: ReceiptsMsg,
+		data: &GetReceiptsPacket{
+			RequestId:          id,
+			GetReceiptsRequest: peer.requestedReceipts[id][len(res.List)-1:],
+		},
+	}
+	return peer.dispatchRequest(req)
+}
+
+// TODO: position?
+func validatePartialReceipt(receipt *ReceiptList69) bool {
+	return true
 }
 
 func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) error {

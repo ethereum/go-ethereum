@@ -201,7 +201,10 @@ func (p *Peer) dispatcher() {
 			reqOp.fail <- err
 
 			if err == nil {
-				pending[req.id] = req
+				// do not overwrite if it is re-request
+				if _, ok := pending[req.id]; !ok {
+					pending[req.id] = req
+				}
 			}
 
 		case cancelOp := <-p.reqCancel:

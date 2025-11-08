@@ -282,6 +282,12 @@ type ReceiptsPacket[L ReceiptsList] struct {
 	List      []L
 }
 
+type ReceiptsPacket70 struct {
+	RequestId           uint64
+	List                []*ReceiptList69
+	LastBlockIncomplete bool
+}
+
 // ReceiptsRLPResponse is used for receipts, when we already have it encoded
 type ReceiptsRLPResponse []rlp.RawValue
 

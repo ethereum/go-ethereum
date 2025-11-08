@@ -59,6 +59,9 @@ type Peer struct {
 	reqCancel   chan *cancel   // Dispatch channel to cancel pending requests and untrack them
 	resDispatch chan *response // Dispatch channel to fulfil pending requests and untrack them
 
+	requestedReceipts map[uint64][]common.Hash
+	receiptBuffer     map[uint64][]*ReceiptList69
+
 	term chan struct{} // Termination channel to stop the broadcasters
 }
 
@@ -66,18 +69,20 @@ type Peer struct {
 // version.
 func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Peer {
 	peer := &Peer{
-		id:          p.ID().String(),
-		Peer:        p,
-		rw:          rw,
-		version:     version,
-		knownTxs:    newKnownCache(maxKnownTxs),
-		txBroadcast: make(chan []common.Hash),
-		txAnnounce:  make(chan []common.Hash),
-		reqDispatch: make(chan *request),
-		reqCancel:   make(chan *cancel),
-		resDispatch: make(chan *response),
-		txpool:      txpool,
-		term:        make(chan struct{}),
+		id:                p.ID().String(),
+		Peer:              p,
+		rw:                rw,
+		version:           version,
+		knownTxs:          newKnownCache(maxKnownTxs),
+		txBroadcast:       make(chan []common.Hash),
+		txAnnounce:        make(chan []common.Hash),
+		reqDispatch:       make(chan *request),
+		reqCancel:         make(chan *cancel),
+		resDispatch:       make(chan *response),
+		txpool:            txpool,
+		requestedReceipts: make(map[uint64][]common.Hash),
+		receiptBuffer:     make(map[uint64][]*ReceiptList69),
+		term:              make(chan struct{}),
 	}
 	// Start up all the broadcasters
 	go peer.broadcastTransactions()
@@ -336,6 +341,8 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, sink chan *Response) (*Requ
 	if err := p.dispatchRequest(req); err != nil {
 		return nil, err
 	}
+
+	p.requestedReceipts[id] = hashes
 	return req, nil
 }
 
