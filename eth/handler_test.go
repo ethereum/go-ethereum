@@ -54,7 +54,8 @@ var (
 // Its goal is to get around setting up a valid statedb for the balance and nonce
 // checks.
 type testTxPool struct {
-	pool map[common.Hash]*types.Transaction // Hash map of collected transactions
+	pool   map[common.Hash]*types.Transaction // Hash map of collected transactions
+	signer types.Signer                       // Fallback signer that understands modern tx types
 
 	txFeed event.Feed   // Notification feed to allow waiting for inclusion
 	lock   sync.RWMutex // Protects the transaction pool
@@ -63,7 +64,8 @@ type testTxPool struct {
 // newTestTxPool creates a mock transaction pool.
 func newTestTxPool() *testTxPool {
 	return &testTxPool{
-		pool: make(map[common.Hash]*types.Transaction),
+		pool:   make(map[common.Hash]*types.Transaction),
+		signer: types.LatestSigner(params.MergedTestChainConfig),
 	}
 }
 
@@ -134,7 +136,10 @@ func (p *testTxPool) Pending(filter txpool.PendingFilter) map[common.Address][]*
 
 	batches := make(map[common.Address][]*types.Transaction)
 	for _, tx := range p.pool {
-		from, _ := types.Sender(types.HomesteadSigner{}, tx)
+		from, err := p.senderOf(tx)
+		if err != nil {
+			panic(err)
+		}
 		batches[from] = append(batches[from], tx)
 	}
 	for _, batch := range batches {
@@ -155,6 +160,22 @@ func (p *testTxPool) Pending(filter txpool.PendingFilter) map[common.Address][]*
 		}
 	}
 	return pending
+}
+
+// senderOf attempts to recover the sender of any transaction type the tests
+// might place into the pool. It prefers using the tx's explicit chain ID when
+// available and falls back to a permissive signer that enables all modern
+// transaction types.
+func (p *testTxPool) senderOf(tx *types.Transaction) (common.Address, error) {
+	if chainID := tx.ChainId(); chainID != nil && chainID.Sign() > 0 {
+		if from, err := types.Sender(types.LatestSignerForChainID(chainID), tx); err == nil {
+			return from, nil
+		}
+	}
+	if from, err := types.Sender(p.signer, tx); err == nil {
+		return from, nil
+	}
+	return types.Sender(types.HomesteadSigner{}, tx)
 }
 
 // SubscribeTransactions should return an event subscription of NewTxsEvent and
@@ -292,7 +313,7 @@ func benchmarkBroadcastChoice(b *testing.B, npeers int) {
 	choice := newBroadcastChoice(self, [16]byte{1})
 
 	b.ResetTimer()
-	for i := range b.N {
+	for i := 0; i < b.N; i++ {
 		set := choice.choosePeers(peers, txsenders[i])
 		if len(set) == 0 {
 			b.Fatal("empty result")
