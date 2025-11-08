@@ -78,6 +78,14 @@ sync quickly to the current state of the network. To do so:
 $ geth console
 ```
 
+> Note: If you built geth from source, the binary will be located at `./build/bin/geth`.
+> You may run it directly via `./build/bin/geth` or add it to your PATH:
+>
+> ```sh
+> export PATH="$PWD/build/bin:$PATH"
+> ```
+
+
 This command will:
  * Start `geth` in snap sync mode (default, can be changed with the `--syncmode` flag),
    causing it to download more data in exchange for avoiding processing the entire history
