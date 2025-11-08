@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"math"
 	"math/big"
 	"slices"
 
@@ -87,10 +88,21 @@ type NumberHash struct {
 // heights, both canonical and reorged forks included.
 // This method considers both limits to be _inclusive_.
 func ReadAllHashesInRange(db ethdb.Iteratee, first, last uint64) []*NumberHash {
+	// Return empty result for inverted ranges
+	if last < first {
+		return nil
+	}
+	rangeLen := last - first
+	var capHint int
+	if rangeLen >= uint64(math.MaxInt) {
+		capHint = math.MaxInt
+	} else {
+		capHint = int(rangeLen) + 1
+	}
 	var (
 		start     = encodeBlockNumber(first)
 		keyLength = len(headerPrefix) + 8 + 32
-		hashes    = make([]*NumberHash, 0, 1+last-first)
+		hashes    = make([]*NumberHash, 0, capHint)
 		it        = db.NewIterator(headerPrefix, start)
 	)
 	defer it.Release()
