@@ -251,3 +251,132 @@ func BenchmarkBlockWriterAppend(b *testing.B) {
 		}
 	}
 }
+
+// TestBlockReaderCorruptedVarint tests that readGreaterThan properly handles
+// corrupted varint encoding and returns errors instead of hanging or panicking.
+func TestBlockReaderCorruptedVarint(t *testing.T) {
+	// Create a valid block with multiple restart sections
+	elements := []uint64{1, 5, 10, 11, 20, 100, 200, 300, 400, 500}
+	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0))
+	for i := 0; i < len(elements); i++ {
+		bw.append(elements[i])
+	}
+	validBlob := bw.finish()
+
+	t.Run("corrupted varint at first restart", func(t *testing.T) {
+		// Corrupt the first byte of the first restart to create invalid varint
+		blob := slices.Clone(validBlob)
+		restarts, data, _ := parseIndexBlock(blob)
+		if len(restarts) > 0 {
+			// Set the first byte to 0xFF repeatedly to create invalid varint
+			// (varint encoding where all bytes have high bit set is invalid)
+			for i := 0; i < 10 && int(restarts[0])+i < len(data); i++ {
+				data[int(restarts[0])+i] = 0xFF
+			}
+		}
+
+		br, err := newBlockReader(blob)
+		if err != nil {
+			// parseIndexBlock might catch it first, which is also acceptable
+			return
+		}
+		// Try to read, should get error instead of hanging
+		_, err = br.readGreaterThan(0)
+		if err == nil {
+			t.Fatal("Expected error when reading corrupted varint at first restart, got nil")
+		}
+	})
+
+	t.Run("truncated varint in loop", func(t *testing.T) {
+		// Create a block with two values: 5 and then truncated varint
+		// Data: [0x05] (value 5) [0x80] (incomplete varint - truncated delta)
+		// Restart: [0x00, 0x00] (points to offset 0)
+		// Restart count: [0x01] (1 restart)
+		blob := []byte{0x05, 0x80, 0x00, 0x00, 0x01}
+
+		br, err := newBlockReader(blob)
+		if err != nil {
+			return // parseIndexBlock caught it
+		}
+		// Reading value 4 should find 5, then try to iterate and hit truncated varint
+		// Actually, this will find 5 as the answer without hitting truncation.
+		// We need to search for value >= 5 to force iteration
+		_, err = br.readGreaterThan(5)
+		if err == nil {
+			t.Fatal("Expected error when reading truncated varint in loop, got nil")
+		}
+	})
+
+	t.Run("overflow varint at restart", func(t *testing.T) {
+		// Create a block with varint that would overflow uint64
+		// 10 bytes of 0xFF creates an overflow (more than 64 bits)
+		overflowVarint := []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F}
+		// Restart points to this overflow varint
+		blob := append(overflowVarint, 0x00, 0x00, 0x01) // restart at 0, count 1
+
+		br, err := newBlockReader(blob)
+		if err != nil {
+			return // parseIndexBlock might catch it
+		}
+		// Try to read should hit overflow varint
+		_, err = br.readGreaterThan(100)
+		if err == nil {
+			t.Fatal("Expected error when reading overflow varint, got nil")
+		}
+	})
+}
+
+// TestBlockWriterCorruptedVarint tests that scanSection properly handles
+// corrupted varint encoding by breaking out of the loop instead of hanging.
+func TestBlockWriterCorruptedVarint(t *testing.T) {
+	// Create a valid block
+	elements := []uint64{1, 5, 10, 11, 20, 100, 200, 300}
+	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0))
+	for i := 0; i < len(elements); i++ {
+		bw.append(elements[i])
+	}
+	validBlob := bw.finish()
+
+	// Create a new writer with corrupted data
+	desc := &indexBlockDesc{
+		id:      0,
+		max:     300,
+		entries: uint16(len(elements)),
+	}
+
+	// Corrupt the blob
+	blob := slices.Clone(validBlob)
+	restarts, data, _ := parseIndexBlock(blob)
+	if len(restarts) > 0 {
+		// Corrupt data in the first section
+		pos := int(restarts[0]) + 1 // Skip first valid varint
+		if pos < len(data)-10 {
+			for i := 0; i < 10; i++ {
+				data[pos+i] = 0xFF // Invalid varint
+			}
+		}
+	}
+
+	bw, err := newBlockWriter(blob, desc)
+	if err != nil {
+		// parseIndexBlock caught the corruption, which is fine
+		return
+	}
+
+	// Test scanSection with corrupted data - should break instead of hanging
+	callbackCalled := false
+	bw.scanSection(0, func(v uint64, pos int) bool {
+		callbackCalled = true
+		return false // Continue iteration to test the corrupted part
+	})
+	// The callback should have been called at least once for the first valid element
+	// before hitting corruption and breaking
+	if !callbackCalled {
+		t.Log("scanSection didn't call callback - may have hit corruption immediately")
+	}
+
+	// Test sectionLast with corrupted data - should handle gracefully
+	_ = bw.sectionLast(0)
+
+	// If we got here without hanging or panicking, the test passes
+}

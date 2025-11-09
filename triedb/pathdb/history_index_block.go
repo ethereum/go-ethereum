@@ -176,7 +176,10 @@ func (br *blockReader) readGreaterThan(id uint64) (uint64, error) {
 		return 0, err
 	}
 	if index == 0 {
-		item, _ := binary.Uvarint(br.data[br.restarts[0]:])
+		item, n := binary.Uvarint(br.data[br.restarts[0]:])
+		if n <= 0 {
+			return 0, fmt.Errorf("failed to decode item at restart %d", br.restarts[0])
+		}
 		return item, nil
 	}
 	var (
@@ -198,6 +201,9 @@ func (br *blockReader) readGreaterThan(id uint64) (uint64, error) {
 	pos := start
 	for pos < limit {
 		x, n := binary.Uvarint(br.data[pos:])
+		if n <= 0 {
+			return 0, fmt.Errorf("failed to decode varint at position %d", pos)
+		}
 		if pos == start {
 			result = x
 		} else {
@@ -214,7 +220,10 @@ func (br *blockReader) readGreaterThan(id uint64) (uint64, error) {
 	}
 	// The element which is the first one greater than the specified id
 	// is exactly the one located at the restart point.
-	item, _ := binary.Uvarint(br.data[br.restarts[index]:])
+	item, n := binary.Uvarint(br.data[br.restarts[index]:])
+	if n <= 0 {
+		return 0, fmt.Errorf("failed to decode item at restart %d", br.restarts[index])
+	}
 	return item, nil
 }
 
@@ -291,6 +300,10 @@ func (b *blockWriter) scanSection(section int, fn func(uint64, int) bool) {
 	}
 	for pos < limit {
 		x, n := binary.Uvarint(b.data[pos:])
+		if n <= 0 {
+			// Skip corrupted entry
+			break
+		}
 		if pos == start {
 			value = x
 		} else {
