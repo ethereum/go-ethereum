@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.10
 // 	protoc        v6.33.0
-// source: messages-ethereum-2024.proto
+// source: messages-ethereum.proto
 
 package trezor
 
@@ -38,7 +38,7 @@ type EthereumGetAddress struct {
 
 func (x *EthereumGetAddress) Reset() {
 	*x = EthereumGetAddress{}
-	mi := &file_messages_ethereum_2024_proto_msgTypes[0]
+	mi := &file_messages_ethereum_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -50,7 +50,7 @@ func (x *EthereumGetAddress) String() string {
 func (*EthereumGetAddress) ProtoMessage() {}
 
 func (x *EthereumGetAddress) ProtoReflect() protoreflect.Message {
-	mi := &file_messages_ethereum_2024_proto_msgTypes[0]
+	mi := &file_messages_ethereum_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63,7 +63,7 @@ func (x *EthereumGetAddress) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EthereumGetAddress.ProtoReflect.Descriptor instead.
 func (*EthereumGetAddress) Descriptor() ([]byte, []int) {
-	return file_messages_ethereum_2024_proto_rawDescGZIP(), []int{0}
+	return file_messages_ethereum_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *EthereumGetAddress) GetAddressN() []uint32 {
@@ -106,7 +106,7 @@ type EthereumAddress struct {
 
 func (x *EthereumAddress) Reset() {
 	*x = EthereumAddress{}
-	mi := &file_messages_ethereum_2024_proto_msgTypes[1]
+	mi := &file_messages_ethereum_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -118,7 +118,7 @@ func (x *EthereumAddress) String() string {
 func (*EthereumAddress) ProtoMessage() {}
 
 func (x *EthereumAddress) ProtoReflect() protoreflect.Message {
-	mi := &file_messages_ethereum_2024_proto_msgTypes[1]
+	mi := &file_messages_ethereum_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -131,7 +131,7 @@ func (x *EthereumAddress) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EthereumAddress.ProtoReflect.Descriptor instead.
 func (*EthereumAddress) Descriptor() ([]byte, []int) {
-	return file_messages_ethereum_2024_proto_rawDescGZIP(), []int{1}
+	return file_messages_ethereum_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *EthereumAddress) GetAddress() string {
@@ -165,7 +165,7 @@ type EthereumSignTx struct {
 
 func (x *EthereumSignTx) Reset() {
 	*x = EthereumSignTx{}
-	mi := &file_messages_ethereum_2024_proto_msgTypes[2]
+	mi := &file_messages_ethereum_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -177,7 +177,7 @@ func (x *EthereumSignTx) String() string {
 func (*EthereumSignTx) ProtoMessage() {}
 
 func (x *EthereumSignTx) ProtoReflect() protoreflect.Message {
-	mi := &file_messages_ethereum_2024_proto_msgTypes[2]
+	mi := &file_messages_ethereum_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -190,7 +190,7 @@ func (x *EthereumSignTx) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EthereumSignTx.ProtoReflect.Descriptor instead.
 func (*EthereumSignTx) Descriptor() ([]byte, []int) {
-	return file_messages_ethereum_2024_proto_rawDescGZIP(), []int{2}
+	return file_messages_ethereum_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *EthereumSignTx) GetAddressN() []uint32 {
@@ -297,7 +297,7 @@ type EthereumSignTxEIP1559 struct {
 
 func (x *EthereumSignTxEIP1559) Reset() {
 	*x = EthereumSignTxEIP1559{}
-	mi := &file_messages_ethereum_2024_proto_msgTypes[3]
+	mi := &file_messages_ethereum_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -309,7 +309,7 @@ func (x *EthereumSignTxEIP1559) String() string {
 func (*EthereumSignTxEIP1559) ProtoMessage() {}
 
 func (x *EthereumSignTxEIP1559) ProtoReflect() protoreflect.Message {
-	mi := &file_messages_ethereum_2024_proto_msgTypes[3]
+	mi := &file_messages_ethereum_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -322,7 +322,7 @@ func (x *EthereumSignTxEIP1559) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EthereumSignTxEIP1559.ProtoReflect.Descriptor instead.
 func (*EthereumSignTxEIP1559) Descriptor() ([]byte, []int) {
-	return file_messages_ethereum_2024_proto_rawDescGZIP(), []int{3}
+	return file_messages_ethereum_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *EthereumSignTxEIP1559) GetAddressN() []uint32 {
@@ -439,7 +439,7 @@ type EthereumTxRequest struct {
 
 func (x *EthereumTxRequest) Reset() {
 	*x = EthereumTxRequest{}
-	mi := &file_messages_ethereum_2024_proto_msgTypes[4]
+	mi := &file_messages_ethereum_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -451,7 +451,7 @@ func (x *EthereumTxRequest) String() string {
 func (*EthereumTxRequest) ProtoMessage() {}
 
 func (x *EthereumTxRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_messages_ethereum_2024_proto_msgTypes[4]
+	mi := &file_messages_ethereum_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -464,7 +464,7 @@ func (x *EthereumTxRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EthereumTxRequest.ProtoReflect.Descriptor instead.
 func (*EthereumTxRequest) Descriptor() ([]byte, []int) {
-	return file_messages_ethereum_2024_proto_rawDescGZIP(), []int{4}
+	return file_messages_ethereum_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *EthereumTxRequest) GetDataLength() uint32 {
@@ -507,7 +507,7 @@ type EthereumTxAck struct {
 
 func (x *EthereumTxAck) Reset() {
 	*x = EthereumTxAck{}
-	mi := &file_messages_ethereum_2024_proto_msgTypes[5]
+	mi := &file_messages_ethereum_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -519,7 +519,7 @@ func (x *EthereumTxAck) String() string {
 func (*EthereumTxAck) ProtoMessage() {}
 
 func (x *EthereumTxAck) ProtoReflect() protoreflect.Message {
-	mi := &file_messages_ethereum_2024_proto_msgTypes[5]
+	mi := &file_messages_ethereum_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -532,7 +532,7 @@ func (x *EthereumTxAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EthereumTxAck.ProtoReflect.Descriptor instead.
 func (*EthereumTxAck) Descriptor() ([]byte, []int) {
-	return file_messages_ethereum_2024_proto_rawDescGZIP(), []int{5}
+	return file_messages_ethereum_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *EthereumTxAck) GetDataChunk() []byte {
@@ -559,7 +559,7 @@ type EthereumSignMessage struct {
 
 func (x *EthereumSignMessage) Reset() {
 	*x = EthereumSignMessage{}
-	mi := &file_messages_ethereum_2024_proto_msgTypes[6]
+	mi := &file_messages_ethereum_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -571,7 +571,7 @@ func (x *EthereumSignMessage) String() string {
 func (*EthereumSignMessage) ProtoMessage() {}
 
 func (x *EthereumSignMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_messages_ethereum_2024_proto_msgTypes[6]
+	mi := &file_messages_ethereum_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -584,7 +584,7 @@ func (x *EthereumSignMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EthereumSignMessage.ProtoReflect.Descriptor instead.
 func (*EthereumSignMessage) Descriptor() ([]byte, []int) {
-	return file_messages_ethereum_2024_proto_rawDescGZIP(), []int{6}
+	return file_messages_ethereum_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *EthereumSignMessage) GetAddressN() []uint32 {
@@ -628,7 +628,7 @@ type EthereumMessageSignature struct {
 
 func (x *EthereumMessageSignature) Reset() {
 	*x = EthereumMessageSignature{}
-	mi := &file_messages_ethereum_2024_proto_msgTypes[7]
+	mi := &file_messages_ethereum_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -640,7 +640,7 @@ func (x *EthereumMessageSignature) String() string {
 func (*EthereumMessageSignature) ProtoMessage() {}
 
 func (x *EthereumMessageSignature) ProtoReflect() protoreflect.Message {
-	mi := &file_messages_ethereum_2024_proto_msgTypes[7]
+	mi := &file_messages_ethereum_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -653,7 +653,7 @@ func (x *EthereumMessageSignature) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EthereumMessageSignature.ProtoReflect.Descriptor instead.
 func (*EthereumMessageSignature) Descriptor() ([]byte, []int) {
-	return file_messages_ethereum_2024_proto_rawDescGZIP(), []int{7}
+	return file_messages_ethereum_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *EthereumMessageSignature) GetSignature() []byte {
@@ -687,7 +687,7 @@ type EthereumVerifyMessage struct {
 
 func (x *EthereumVerifyMessage) Reset() {
 	*x = EthereumVerifyMessage{}
-	mi := &file_messages_ethereum_2024_proto_msgTypes[8]
+	mi := &file_messages_ethereum_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -699,7 +699,7 @@ func (x *EthereumVerifyMessage) String() string {
 func (*EthereumVerifyMessage) ProtoMessage() {}
 
 func (x *EthereumVerifyMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_messages_ethereum_2024_proto_msgTypes[8]
+	mi := &file_messages_ethereum_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -712,7 +712,7 @@ func (x *EthereumVerifyMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EthereumVerifyMessage.ProtoReflect.Descriptor instead.
 func (*EthereumVerifyMessage) Descriptor() ([]byte, []int) {
-	return file_messages_ethereum_2024_proto_rawDescGZIP(), []int{8}
+	return file_messages_ethereum_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *EthereumVerifyMessage) GetSignature() []byte {
@@ -760,7 +760,7 @@ type EthereumSignTypedHash struct {
 
 func (x *EthereumSignTypedHash) Reset() {
 	*x = EthereumSignTypedHash{}
-	mi := &file_messages_ethereum_2024_proto_msgTypes[9]
+	mi := &file_messages_ethereum_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -772,7 +772,7 @@ func (x *EthereumSignTypedHash) String() string {
 func (*EthereumSignTypedHash) ProtoMessage() {}
 
 func (x *EthereumSignTypedHash) ProtoReflect() protoreflect.Message {
-	mi := &file_messages_ethereum_2024_proto_msgTypes[9]
+	mi := &file_messages_ethereum_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -785,7 +785,7 @@ func (x *EthereumSignTypedHash) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EthereumSignTypedHash.ProtoReflect.Descriptor instead.
 func (*EthereumSignTypedHash) Descriptor() ([]byte, []int) {
-	return file_messages_ethereum_2024_proto_rawDescGZIP(), []int{9}
+	return file_messages_ethereum_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *EthereumSignTypedHash) GetAddressN() []uint32 {
@@ -829,7 +829,7 @@ type EthereumTypedDataSignature struct {
 
 func (x *EthereumTypedDataSignature) Reset() {
 	*x = EthereumTypedDataSignature{}
-	mi := &file_messages_ethereum_2024_proto_msgTypes[10]
+	mi := &file_messages_ethereum_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -841,7 +841,7 @@ func (x *EthereumTypedDataSignature) String() string {
 func (*EthereumTypedDataSignature) ProtoMessage() {}
 
 func (x *EthereumTypedDataSignature) ProtoReflect() protoreflect.Message {
-	mi := &file_messages_ethereum_2024_proto_msgTypes[10]
+	mi := &file_messages_ethereum_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -854,7 +854,7 @@ func (x *EthereumTypedDataSignature) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EthereumTypedDataSignature.ProtoReflect.Descriptor instead.
 func (*EthereumTypedDataSignature) Descriptor() ([]byte, []int) {
-	return file_messages_ethereum_2024_proto_rawDescGZIP(), []int{10}
+	return file_messages_ethereum_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *EthereumTypedDataSignature) GetSignature() []byte {
@@ -881,7 +881,7 @@ type EthereumSignTxEIP1559_EthereumAccessList struct {
 
 func (x *EthereumSignTxEIP1559_EthereumAccessList) Reset() {
 	*x = EthereumSignTxEIP1559_EthereumAccessList{}
-	mi := &file_messages_ethereum_2024_proto_msgTypes[11]
+	mi := &file_messages_ethereum_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -893,7 +893,7 @@ func (x *EthereumSignTxEIP1559_EthereumAccessList) String() string {
 func (*EthereumSignTxEIP1559_EthereumAccessList) ProtoMessage() {}
 
 func (x *EthereumSignTxEIP1559_EthereumAccessList) ProtoReflect() protoreflect.Message {
-	mi := &file_messages_ethereum_2024_proto_msgTypes[11]
+	mi := &file_messages_ethereum_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -906,7 +906,7 @@ func (x *EthereumSignTxEIP1559_EthereumAccessList) ProtoReflect() protoreflect.M
 
 // Deprecated: Use EthereumSignTxEIP1559_EthereumAccessList.ProtoReflect.Descriptor instead.
 func (*EthereumSignTxEIP1559_EthereumAccessList) Descriptor() ([]byte, []int) {
-	return file_messages_ethereum_2024_proto_rawDescGZIP(), []int{3, 0}
+	return file_messages_ethereum_proto_rawDescGZIP(), []int{3, 0}
 }
 
 func (x *EthereumSignTxEIP1559_EthereumAccessList) GetAddress() string {
@@ -923,11 +923,11 @@ func (x *EthereumSignTxEIP1559_EthereumAccessList) GetStorageKeys() [][]byte {
 	return nil
 }
 
-var File_messages_ethereum_2024_proto protoreflect.FileDescriptor
+var File_messages_ethereum_proto protoreflect.FileDescriptor
 
-const file_messages_ethereum_2024_proto_rawDesc = "" +
+const file_messages_ethereum_proto_rawDesc = "" +
 	"\n" +
-	"\x1cmessages-ethereum-2024.proto\x12\x1bhw.trezor.messages.ethereum\"\xda\x01\n" +
+	"\x1cmessages-ethereum.proto\x12\x1bhw.trezor.messages.ethereum\"\xda\x01\n" +
 	"\x12EthereumGetAddress\x12\x1b\n" +
 	"\taddress_n\x18\x01 \x03(\rR\baddressN\x12&\n" +
 	"\fshow_display\x18\x02 \x01(\bH\x00R\vshowDisplay\x88\x01\x01\x12,\n" +
@@ -1066,19 +1066,19 @@ const file_messages_ethereum_2024_proto_rawDesc = "" +
 	"Z\b.;trezorb\x06proto3"
 
 var (
-	file_messages_ethereum_2024_proto_rawDescOnce sync.Once
-	file_messages_ethereum_2024_proto_rawDescData []byte
+	file_messages_ethereum_proto_rawDescOnce sync.Once
+	file_messages_ethereum_proto_rawDescData []byte
 )
 
-func file_messages_ethereum_2024_proto_rawDescGZIP() []byte {
-	file_messages_ethereum_2024_proto_rawDescOnce.Do(func() {
-		file_messages_ethereum_2024_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_messages_ethereum_2024_proto_rawDesc), len(file_messages_ethereum_2024_proto_rawDesc)))
+func file_messages_ethereum_proto_rawDescGZIP() []byte {
+	file_messages_ethereum_proto_rawDescOnce.Do(func() {
+		file_messages_ethereum_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_messages_ethereum_proto_rawDesc), len(file_messages_ethereum_proto_rawDesc)))
 	})
-	return file_messages_ethereum_2024_proto_rawDescData
+	return file_messages_ethereum_proto_rawDescData
 }
 
-var file_messages_ethereum_2024_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
-var file_messages_ethereum_2024_proto_goTypes = []any{
+var file_messages_ethereum_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_messages_ethereum_proto_goTypes = []any{
 	(*EthereumGetAddress)(nil),                       // 0: hw.trezor.messages.ethereum.EthereumGetAddress
 	(*EthereumAddress)(nil),                          // 1: hw.trezor.messages.ethereum.EthereumAddress
 	(*EthereumSignTx)(nil),                           // 2: hw.trezor.messages.ethereum.EthereumSignTx
@@ -1092,7 +1092,7 @@ var file_messages_ethereum_2024_proto_goTypes = []any{
 	(*EthereumTypedDataSignature)(nil),               // 10: hw.trezor.messages.ethereum.EthereumTypedDataSignature
 	(*EthereumSignTxEIP1559_EthereumAccessList)(nil), // 11: hw.trezor.messages.ethereum.EthereumSignTxEIP1559.EthereumAccessList
 }
-var file_messages_ethereum_2024_proto_depIdxs = []int32{
+var file_messages_ethereum_proto_depIdxs = []int32{
 	11, // 0: hw.trezor.messages.ethereum.EthereumSignTxEIP1559.access_list:type_name -> hw.trezor.messages.ethereum.EthereumSignTxEIP1559.EthereumAccessList
 	1,  // [1:1] is the sub-list for method output_type
 	1,  // [1:1] is the sub-list for method input_type
@@ -1101,38 +1101,38 @@ var file_messages_ethereum_2024_proto_depIdxs = []int32{
 	0,  // [0:1] is the sub-list for field type_name
 }
 
-func init() { file_messages_ethereum_2024_proto_init() }
-func file_messages_ethereum_2024_proto_init() {
-	if File_messages_ethereum_2024_proto != nil {
+func init() { file_messages_ethereum_proto_init() }
+func file_messages_ethereum_proto_init() {
+	if File_messages_ethereum_proto != nil {
 		return
 	}
-	file_messages_ethereum_2024_proto_msgTypes[0].OneofWrappers = []any{}
-	file_messages_ethereum_2024_proto_msgTypes[1].OneofWrappers = []any{}
-	file_messages_ethereum_2024_proto_msgTypes[2].OneofWrappers = []any{}
-	file_messages_ethereum_2024_proto_msgTypes[3].OneofWrappers = []any{}
-	file_messages_ethereum_2024_proto_msgTypes[4].OneofWrappers = []any{}
-	file_messages_ethereum_2024_proto_msgTypes[5].OneofWrappers = []any{}
-	file_messages_ethereum_2024_proto_msgTypes[6].OneofWrappers = []any{}
-	file_messages_ethereum_2024_proto_msgTypes[7].OneofWrappers = []any{}
-	file_messages_ethereum_2024_proto_msgTypes[8].OneofWrappers = []any{}
-	file_messages_ethereum_2024_proto_msgTypes[9].OneofWrappers = []any{}
-	file_messages_ethereum_2024_proto_msgTypes[10].OneofWrappers = []any{}
-	file_messages_ethereum_2024_proto_msgTypes[11].OneofWrappers = []any{}
+	file_messages_ethereum_proto_msgTypes[0].OneofWrappers = []any{}
+	file_messages_ethereum_proto_msgTypes[1].OneofWrappers = []any{}
+	file_messages_ethereum_proto_msgTypes[2].OneofWrappers = []any{}
+	file_messages_ethereum_proto_msgTypes[3].OneofWrappers = []any{}
+	file_messages_ethereum_proto_msgTypes[4].OneofWrappers = []any{}
+	file_messages_ethereum_proto_msgTypes[5].OneofWrappers = []any{}
+	file_messages_ethereum_proto_msgTypes[6].OneofWrappers = []any{}
+	file_messages_ethereum_proto_msgTypes[7].OneofWrappers = []any{}
+	file_messages_ethereum_proto_msgTypes[8].OneofWrappers = []any{}
+	file_messages_ethereum_proto_msgTypes[9].OneofWrappers = []any{}
+	file_messages_ethereum_proto_msgTypes[10].OneofWrappers = []any{}
+	file_messages_ethereum_proto_msgTypes[11].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_messages_ethereum_2024_proto_rawDesc), len(file_messages_ethereum_2024_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_messages_ethereum_proto_rawDesc), len(file_messages_ethereum_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_messages_ethereum_2024_proto_goTypes,
-		DependencyIndexes: file_messages_ethereum_2024_proto_depIdxs,
-		MessageInfos:      file_messages_ethereum_2024_proto_msgTypes,
+		GoTypes:           file_messages_ethereum_proto_goTypes,
+		DependencyIndexes: file_messages_ethereum_proto_depIdxs,
+		MessageInfos:      file_messages_ethereum_proto_msgTypes,
 	}.Build()
-	File_messages_ethereum_2024_proto = out.File
-	file_messages_ethereum_2024_proto_goTypes = nil
-	file_messages_ethereum_2024_proto_depIdxs = nil
+	File_messages_ethereum_proto = out.File
+	file_messages_ethereum_proto_goTypes = nil
+	file_messages_ethereum_proto_depIdxs = nil
 }
