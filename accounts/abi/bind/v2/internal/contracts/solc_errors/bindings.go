@@ -104,7 +104,7 @@ func (c *C) UnpackError(raw []byte) (any, error) {
 	if bytes.Equal(raw[:4], c.abi.Errors["BadThing2"].ID.Bytes()[:4]) {
 		return c.UnpackBadThing2Error(raw[4:])
 	}
-	return nil, errors.New("Unknown error")
+	return nil, errors.New("unknown error")
 }
 
 // CBadThing represents a BadThing error raised by the C contract.
@@ -216,7 +216,7 @@ func (c2 *C2) UnpackError(raw []byte) (any, error) {
 	if bytes.Equal(raw[:4], c2.abi.Errors["BadThing"].ID.Bytes()[:4]) {
 		return c2.UnpackBadThingError(raw[4:])
 	}
-	return nil, errors.New("Unknown error")
+	return nil, errors.New("unknown error")
 }
 
 // C2BadThing represents a BadThing error raised by the C2 contract.
