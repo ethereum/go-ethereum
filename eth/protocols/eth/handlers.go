@@ -499,11 +499,11 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	for i, tx := range txs {
 		// Validate and mark the remote transaction
 		if tx == nil {
-			return fmt.Errorf("Transactions: transaction %d is nil", i)
+			return fmt.Errorf("transactions: transaction %d is nil", i)
 		}
 		hash := tx.Hash()
 		if _, exists := seen[hash]; exists {
-			return fmt.Errorf("Transactions: multiple copies of the same hash %v", hash)
+			return fmt.Errorf("transactions: multiple copies of the same hash %v", hash)
 		}
 		seen[hash] = struct{}{}
 		peer.markTransaction(hash)
