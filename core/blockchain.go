@@ -711,7 +711,7 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 			// here, but it'd be a bit dangerous since they may not have intended this
 			// action to happen. So just tell them how to do it.
 			log.Error(fmt.Sprintf("Chain history mode is configured as %q, but database is not pruned.", bc.cfg.ChainHistoryMode.String()))
-			log.Error(fmt.Sprintf("Run 'geth prune-history' to prune pre-merge history."))
+			log.Error("Run 'geth prune-history' to prune pre-merge history.")
 			return errors.New("history pruning requested via configuration")
 		}
 		predefinedPoint := history.PrunePoints[bc.genesisBlock.Hash()]
