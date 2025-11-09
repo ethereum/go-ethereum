@@ -411,7 +411,7 @@ func (api *BeaconLightApi) GetBeaconBlock(blockRoot common.Hash) (*types.BeaconB
 	}
 	computedRoot := block.Root()
 	if computedRoot != blockRoot {
-		return nil, fmt.Errorf("Beacon block root hash mismatch (expected: %x, got: %x)", blockRoot, computedRoot)
+		return nil, fmt.Errorf("beacon block root hash mismatch (expected: %x, got: %x)", blockRoot, computedRoot)
 	}
 	return block, nil
 }
