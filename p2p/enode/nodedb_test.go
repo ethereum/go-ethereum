@@ -470,3 +470,103 @@ func TestDBExpireV5(t *testing.T) {
 	db.UpdateFindFailsV5(ID{}, ip, 4)
 	db.expireNodes()
 }
+
+// TestDBFetchUint64Corrupted tests that fetchUint64 handles corrupted varint
+// encoding gracefully by returning 0 instead of using garbage values.
+func TestDBFetchUint64Corrupted(t *testing.T) {
+	db, _ := OpenDB("")
+	defer db.Close()
+
+	testKey := []byte("test-uint64-key")
+
+	// Test 1: Truncated varint (incomplete encoding)
+	truncatedVarint := []byte{0x80} // High bit set but no following byte
+	if err := db.lvl.Put(testKey, truncatedVarint, nil); err != nil {
+		t.Fatalf("failed to store truncated varint: %v", err)
+	}
+	val := db.fetchUint64(testKey)
+	if val != 0 {
+		t.Errorf("fetchUint64 with truncated varint: expected 0, got %d", val)
+	}
+
+	// Test 2: Overflow varint (> 64 bits)
+	overflowVarint := []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F}
+	if err := db.lvl.Put(testKey, overflowVarint, nil); err != nil {
+		t.Fatalf("failed to store overflow varint: %v", err)
+	}
+	val = db.fetchUint64(testKey)
+	if val != 0 {
+		t.Errorf("fetchUint64 with overflow varint: expected 0, got %d", val)
+	}
+
+	// Test 3: Empty data
+	if err := db.lvl.Put(testKey, []byte{}, nil); err != nil {
+		t.Fatalf("failed to store empty data: %v", err)
+	}
+	val = db.fetchUint64(testKey)
+	if val != 0 {
+		t.Errorf("fetchUint64 with empty data: expected 0, got %d", val)
+	}
+
+	// Test 4: Valid varint should still work
+	if err := db.storeUint64(testKey, 12345); err != nil {
+		t.Fatalf("failed to store valid uint64: %v", err)
+	}
+	val = db.fetchUint64(testKey)
+	if val != 12345 {
+		t.Errorf("fetchUint64 with valid data: expected 12345, got %d", val)
+	}
+}
+
+// TestDBExpireNodesCorrupted tests that expireNodes handles corrupted varint
+// encoding in pong timestamps gracefully by skipping corrupted entries.
+func TestDBExpireNodesCorrupted(t *testing.T) {
+	db, _ := OpenDB("")
+	defer db.Close()
+
+	// Create a node with valid pong time
+	validNode := NewV4(
+		hexPubkey("8d110e2ed4b446d9b5fb50f117e5f37fb7597af455e1dab0e6f045a6eeaa786a6781141659020d38bdc5e698ed3d4d2bafa8b5061810dfa63e8ac038db2e9b67"),
+		net.IP{127, 0, 0, 1},
+		30303,
+		30303,
+	)
+	if err := db.UpdateNode(validNode); err != nil {
+		t.Fatalf("failed to insert valid node: %v", err)
+	}
+	validPongTime := time.Now().Add(-dbNodeExpiration + time.Minute)
+	if err := db.UpdateLastPongReceived(validNode.ID(), validNode.IPAddr(), validPongTime); err != nil {
+		t.Fatalf("failed to update valid pong time: %v", err)
+	}
+
+	// Create a node with corrupted pong time (truncated varint)
+	corruptedNode := NewV4(
+		hexPubkey("913a205579c32425b220dfba999d215066e5bdbf900226b11da1907eae5e93eb40616d47412cf819664e9eacbdfcca6b0c6e07e09847a38472d4be46ab0c3672"),
+		net.IP{127, 0, 0, 2},
+		30303,
+		30303,
+	)
+	if err := db.UpdateNode(corruptedNode); err != nil {
+		t.Fatalf("failed to insert corrupted node: %v", err)
+	}
+	// Manually write corrupted varint for pong time
+	corruptedVarint := []byte{0x80} // Truncated varint
+	corruptedKey := nodeItemKey(corruptedNode.ID(), corruptedNode.IPAddr(), dbNodePong)
+	if err := db.lvl.Put(corruptedKey, corruptedVarint, nil); err != nil {
+		t.Fatalf("failed to store corrupted pong time: %v", err)
+	}
+
+	// Run expireNodes - should not panic or hang
+	db.expireNodes()
+
+	// Valid node should still be present (not expired)
+	node := db.Node(validNode.ID())
+	if node == nil {
+		t.Error("valid node should still be present after expireNodes with corrupted data")
+	}
+
+	// Corrupted node handling: it may be deleted or kept depending on
+	// how the corruption is interpreted. The important thing is that
+	// expireNodes completed without hanging or panicking.
+	// We don't assert on the corrupted node's presence, just that we got here.
+}

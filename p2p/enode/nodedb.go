@@ -220,7 +220,10 @@ func (db *DB) fetchUint64(key []byte) uint64 {
 	if err != nil {
 		return 0
 	}
-	val, _ := binary.Uvarint(blob)
+	val, n := binary.Uvarint(blob)
+	if n <= 0 {
+		return 0
+	}
 	return val
 }
 
@@ -338,7 +341,12 @@ func (db *DB) expireNodes() {
 	for !atEnd {
 		id, ip, field := splitNodeItemKey(it.Key())
 		if field == dbNodePong {
-			time, _ := binary.Varint(it.Value())
+			time, n := binary.Varint(it.Value())
+			if n <= 0 {
+				// Skip corrupted timestamp entry
+				atEnd = !it.Next()
+				continue
+			}
 			if time > youngestPong {
 				youngestPong = time
 			}
