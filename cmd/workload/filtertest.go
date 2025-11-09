@@ -207,7 +207,7 @@ func (fq *filterQuery) isWildcard() bool {
 func (fq *filterQuery) calculateHash() common.Hash {
 	enc, err := rlp.EncodeToBytes(&fq.results)
 	if err != nil {
-		exit(fmt.Errorf("Error encoding logs: %v", err))
+		exit(fmt.Errorf("error encoding logs: %v", err))
 	}
 	return crypto.Keccak256Hash(enc)
 }

@@ -156,7 +156,7 @@ func (st *bucketStats) print(name string) {
 func writeErrors(errorFile string, errors []*filterQuery) {
 	file, err := os.Create(errorFile)
 	if err != nil {
-		exit(fmt.Errorf("Error creating filter error file %s: %v", errorFile, err))
+		exit(fmt.Errorf("error creating filter error file %s: %v", errorFile, err))
 		return
 	}
 	defer file.Close()

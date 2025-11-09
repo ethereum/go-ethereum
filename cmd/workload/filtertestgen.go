@@ -352,7 +352,7 @@ func (s *filterTestGen) randomQuery() *filterQuery {
 func (s *filterTestGen) writeQueries() {
 	file, err := os.Create(s.queryFile)
 	if err != nil {
-		exit(fmt.Errorf("Error creating filter test query file %s: %v", s.queryFile, err))
+		exit(fmt.Errorf("error creating filter test query file %s: %v", s.queryFile, err))
 		return
 	}
 	json.NewEncoder(file).Encode(&s.queries)

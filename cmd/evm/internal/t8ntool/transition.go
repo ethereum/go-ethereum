@@ -213,7 +213,7 @@ func applyShanghaiChecks(env *stEnv, chainConfig *params.ChainConfig) error {
 		return nil
 	}
 	if env.Withdrawals == nil {
-		return NewError(ErrorConfig, errors.New("Shanghai config but missing 'withdrawals' in env section"))
+		return NewError(ErrorConfig, errors.New("shanghai config but missing 'withdrawals' in env section"))
 	}
 	return nil
 }
