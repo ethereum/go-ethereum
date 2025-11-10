@@ -12,6 +12,12 @@ import (
 type Round uint64
 type Signature []byte
 
+func (s Signature) DeepCopy() interface{} {
+	cpy := make([]byte, len(s))
+	copy(cpy, s)
+	return s
+}
+
 // Block Info struct in XDPoS 2.0, used for vote message, etc.
 type BlockInfo struct {
 	Hash   common.Hash `json:"hash"`
@@ -25,6 +31,20 @@ type Vote struct {
 	ProposedBlockInfo *BlockInfo     `json:"proposedBlockInfo"`
 	Signature         Signature      `json:"signature"`
 	GapNumber         uint64         `json:"gapNumber"`
+}
+
+func (v *Vote) DeepCopy() interface{} {
+	proposedBlockInfoCopy := &BlockInfo{
+		Hash:   v.ProposedBlockInfo.Hash,
+		Round:  v.ProposedBlockInfo.Round,
+		Number: new(big.Int).Set(v.ProposedBlockInfo.Number),
+	}
+	return &Vote{
+		signer:            v.signer,
+		ProposedBlockInfo: proposedBlockInfoCopy,
+		Signature:         v.Signature.DeepCopy().(Signature),
+		GapNumber:         v.GapNumber,
+	}
 }
 
 func (v *Vote) Hash() common.Hash {
@@ -52,6 +72,15 @@ type Timeout struct {
 	GapNumber uint64
 }
 
+func (t *Timeout) DeepCopy() interface{} {
+	return &Timeout{
+		signer:    t.signer,
+		Round:     t.Round,
+		Signature: t.Signature.DeepCopy().(Signature),
+		GapNumber: t.GapNumber,
+	}
+}
+
 func (t *Timeout) Hash() common.Hash {
 	return rlpHash(t)
 }
@@ -73,6 +102,42 @@ func (t *Timeout) SetSigner(signer common.Address) {
 type SyncInfo struct {
 	HighestQuorumCert  *QuorumCert
 	HighestTimeoutCert *TimeoutCert
+}
+
+func (s *SyncInfo) DeepCopy() interface{} {
+	var highestQCCopy *QuorumCert
+	if s.HighestQuorumCert != nil {
+		sigsCopy := make([]Signature, len(s.HighestQuorumCert.Signatures))
+		for i, sig := range s.HighestQuorumCert.Signatures {
+			sigsCopy[i] = sig.DeepCopy().(Signature)
+		}
+		highestQCCopy = &QuorumCert{
+			ProposedBlockInfo: &BlockInfo{
+				Hash:   s.HighestQuorumCert.ProposedBlockInfo.Hash,
+				Round:  s.HighestQuorumCert.ProposedBlockInfo.Round,
+				Number: new(big.Int).Set(s.HighestQuorumCert.ProposedBlockInfo.Number),
+			},
+			Signatures: sigsCopy,
+			GapNumber:  s.HighestQuorumCert.GapNumber,
+		}
+	}
+
+	var highestTimeoutCopy *TimeoutCert
+	if s.HighestTimeoutCert != nil {
+		sigsCopy := make([]Signature, len(s.HighestTimeoutCert.Signatures))
+		for i, sig := range s.HighestTimeoutCert.Signatures {
+			sigsCopy[i] = sig.DeepCopy().(Signature)
+		}
+		highestTimeoutCopy = &TimeoutCert{
+			Round:      s.HighestTimeoutCert.Round,
+			Signatures: sigsCopy,
+			GapNumber:  s.HighestTimeoutCert.GapNumber,
+		}
+	}
+	return &SyncInfo{
+		HighestQuorumCert:  highestQCCopy,
+		HighestTimeoutCert: highestTimeoutCopy,
+	}
 }
 
 func (s *SyncInfo) Hash() common.Hash {
