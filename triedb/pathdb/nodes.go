@@ -445,6 +445,15 @@ func (s *nodeSetWithOrigin) decode(r *rlp.Stream) error {
 //	  │   └───────────────────────── FlagG: reserved
 //	  └───────────────────────────── FlagH: reserved
 //
+// Note:
+// - If flagB is 1, the node refers to a shortNode;
+//   - flagC indicates whether the key of the shortNode is recorded.
+//   - flagD indicates whether the value of the shortNode is recorded.
+//
+// - If flagB is 0, the node refers to a fullNode;
+//   - each bit in extended bitmap indicates whether the corresponding
+//     child have been modified.
+//
 // Example:
 //
 // 0b_0000_1011
@@ -475,7 +484,7 @@ func encodeNodeCompressed(addExtension bool, elements [][]byte, indices []int) [
 		for _, pos := range indices {
 			// Children[16] is only theoretically possible in the Merkle-Patricia-trie,
 			// in practice this field is never used in the Ethereum case.
-			if pos == 16 {
+			if pos >= 16 {
 				panic(fmt.Sprintf("Unexpected node children index %d", pos))
 			}
 			bitIndex := uint(pos % 8)
@@ -562,7 +571,7 @@ func decodeNodeCompressed(data []byte) ([][]byte, []int, error) {
 			// The zero-size element is practically unexpected, for node deletion
 			// the rlp.EmptyString is still expected. Log loudly for the potential
 			// programming error.
-			log.Warn("Empty element from compressed node", "raw", data)
+			log.Error("Empty element from compressed node, please open an issue", "raw", data)
 		} else {
 			element := make([]byte, size)
 			copy(element, data[:size])
