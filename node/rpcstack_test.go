@@ -74,8 +74,8 @@ type originTest struct {
 // and trims excessive white space from the substrings.
 // Copied over from flags.go
 func splitAndTrim(input string) (ret []string) {
-	l := strings.Split(input, ",")
-	for _, r := range l {
+	l := strings.SplitSeq(input, ",")
+	for r := range l {
 		r = strings.TrimSpace(r)
 		if len(r) > 0 {
 			ret = append(ret, r)

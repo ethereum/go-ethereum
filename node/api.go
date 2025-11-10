@@ -185,19 +185,19 @@ func (api *adminAPI) StartHTTP(host *string, port *int, cors *string, apis *stri
 	}
 	if cors != nil {
 		config.CorsAllowedOrigins = nil
-		for _, origin := range strings.Split(*cors, ",") {
+		for origin := range strings.SplitSeq(*cors, ",") {
 			config.CorsAllowedOrigins = append(config.CorsAllowedOrigins, strings.TrimSpace(origin))
 		}
 	}
 	if vhosts != nil {
 		config.Vhosts = nil
-		for _, vhost := range strings.Split(*vhosts, ",") {
+		for vhost := range strings.SplitSeq(*vhosts, ",") {
 			config.Vhosts = append(config.Vhosts, strings.TrimSpace(vhost))
 		}
 	}
 	if apis != nil {
 		config.Modules = nil
-		for _, m := range strings.Split(*apis, ",") {
+		for m := range strings.SplitSeq(*apis, ",") {
 			config.Modules = append(config.Modules, strings.TrimSpace(m))
 		}
 	}
@@ -263,13 +263,13 @@ func (api *adminAPI) StartWS(host *string, port *int, allowedOrigins *string, ap
 	}
 	if apis != nil {
 		config.Modules = nil
-		for _, m := range strings.Split(*apis, ",") {
+		for m := range strings.SplitSeq(*apis, ",") {
 			config.Modules = append(config.Modules, strings.TrimSpace(m))
 		}
 	}
 	if allowedOrigins != nil {
 		config.Origins = nil
-		for _, origin := range strings.Split(*allowedOrigins, ",") {
+		for origin := range strings.SplitSeq(*allowedOrigins, ",") {
 			config.Origins = append(config.Origins, strings.TrimSpace(origin))
 		}
 	}

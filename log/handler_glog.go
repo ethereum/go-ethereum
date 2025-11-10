@@ -86,7 +86,7 @@ func (h *GlogHandler) Verbosity(level slog.Level) {
 //	 sets V to 3 in all files of any packages whose import path contains "foo"
 func (h *GlogHandler) Vmodule(ruleset string) error {
 	var filter []pattern
-	for _, rule := range strings.Split(ruleset, ",") {
+	for rule := range strings.SplitSeq(ruleset, ",") {
 		// Empty strings such as from a trailing comma can be ignored
 		if len(rule) == 0 {
 			continue
@@ -113,7 +113,7 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 		}
 		// Compile the rule pattern into a regular expression
 		matcher := ".*"
-		for _, comp := range strings.Split(parts[0], "/") {
+		for comp := range strings.SplitSeq(parts[0], "/") {
 			if comp == "*" {
 				matcher += "(/.*)?"
 			} else if comp != "" {

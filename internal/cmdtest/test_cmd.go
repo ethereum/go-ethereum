@@ -255,8 +255,8 @@ type testlogger struct {
 }
 
 func (tl *testlogger) Write(b []byte) (n int, err error) {
-	lines := bytes.Split(b, []byte("\n"))
-	for _, line := range lines {
+	lines := bytes.SplitSeq(b, []byte("\n"))
+	for line := range lines {
 		if len(line) > 0 {
 			tl.t.Logf("(stderr:%v) %s", tl.name, line)
 		}

@@ -367,7 +367,7 @@ func parseBranch(e string) (entry, error) {
 		return &branchEntry{}, nil // empty entry is OK
 	}
 	hashes := make([]string, 0, strings.Count(e, ","))
-	for _, c := range strings.Split(e, ",") {
+	for c := range strings.SplitSeq(e, ",") {
 		if !isValidHash(c) {
 			return nil, entryError{"branch", errInvalidChild}
 		}

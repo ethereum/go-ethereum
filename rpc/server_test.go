@@ -92,7 +92,7 @@ func runTestScript(t *testing.T, file string) {
 	defer clientConn.Close()
 	go server.ServeCodec(NewCodec(serverConn), 0)
 	readbuf := bufio.NewReader(clientConn)
-	for _, line := range strings.Split(string(content), "\n") {
+	for line := range strings.SplitSeq(string(content), "\n") {
 		line = strings.TrimSpace(line)
 		switch {
 		case len(line) == 0 || strings.HasPrefix(line, "//"):

@@ -148,7 +148,7 @@ func parseTag(field Field, lastPublic int) (Tags, error) {
 	name := field.Name
 	tag := reflect.StructTag(field.Tag)
 	var ts Tags
-	for _, t := range strings.Split(tag.Get("rlp"), ",") {
+	for t := range strings.SplitSeq(tag.Get("rlp"), ",") {
 		switch t = strings.TrimSpace(t); t {
 		case "":
 			// empty tag is allowed for some reason

@@ -620,7 +620,7 @@ func hexFile(file string) []byte {
 
 	// Gather hex data, ignore comments.
 	var text []byte
-	for _, line := range bytes.Split(fileContent, []byte("\n")) {
+	for line := range bytes.SplitSeq(fileContent, []byte("\n")) {
 		line = bytes.TrimSpace(line)
 		if len(line) > 0 && line[0] == '#' {
 			continue
@@ -648,7 +648,7 @@ func writeTestVector(file, comment string, data []byte) {
 	defer fd.Close()
 
 	if len(comment) > 0 {
-		for _, line := range strings.Split(strings.TrimSpace(comment), "\n") {
+		for line := range strings.SplitSeq(strings.TrimSpace(comment), "\n") {
 			fmt.Fprintf(fd, "# %s\n", line)
 		}
 		fmt.Fprintln(fd)
