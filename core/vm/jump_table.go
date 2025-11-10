@@ -63,7 +63,6 @@ var (
 	verkleInstructionSet           = newVerkleInstructionSet()
 	pragueInstructionSet           = newPragueInstructionSet()
 	osakaInstructionSet            = newOsakaInstructionSet()
-	amsterdamInstructionSet        = newAmsterdamInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -90,12 +89,6 @@ func validate(jt JumpTable) JumpTable {
 func newVerkleInstructionSet() JumpTable {
 	instructionSet := newShanghaiInstructionSet()
 	enable4762(&instructionSet)
-	return validate(instructionSet)
-}
-
-func newAmsterdamInstructionSet() JumpTable {
-	instructionSet := newOsakaInstructionSet()
-	enable8024(&instructionSet) // EIP-8024 (DUPN, SWAPN, EXCHANGE)
 	return validate(instructionSet)
 }
 
