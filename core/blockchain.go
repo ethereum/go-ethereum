@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -2793,12 +2792,12 @@ func (bc *BlockChain) UpdateM1() error {
 	// get masternodes information from smart contract
 	client, err := bc.GetClient()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get client: %w", err)
 	}
 	addr := common.MasternodeVotingSMCBinary
 	validator, err := contractValidator.NewXDCValidator(addr, client)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create validator contract: %w", err)
 	}
 	opts := new(bind.CallOpts)
 
@@ -2830,7 +2829,7 @@ func (bc *BlockChain) UpdateM1() error {
 	}
 	if len(ms) == 0 {
 		log.Error("No masternode found. Stopping node")
-		os.Exit(1)
+		return errors.New("no masternode found")
 	} else {
 		sort.Slice(ms, func(i, j int) bool {
 			return ms[i].Stake.Cmp(ms[j].Stake) >= 0
