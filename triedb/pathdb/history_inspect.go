@@ -55,7 +55,7 @@ func sanitizeRange(start, end uint64, freezer ethdb.AncientReader) (uint64, uint
 		last = end
 	}
 	// Make sure the range is valid
-	if first > last {
+	if first >= last {
 		return 0, 0, fmt.Errorf("range is invalid, first: %d, last: %d", first, last)
 	}
 	return first, last, nil
