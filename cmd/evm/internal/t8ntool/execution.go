@@ -44,9 +44,9 @@ import (
 )
 
 type Prestate struct {
-	Env stEnv                         `json:"env"`
-	Pre types.GenesisAlloc            `json:"pre"`
-	BT  map[common.Hash]hexutil.Bytes `json:"vkt,omitempty"`
+	Env        stEnv                         `json:"env"`
+	Pre        types.GenesisAlloc            `json:"pre"`
+	TreeLeaves map[common.Hash]hexutil.Bytes `json:"vkt,omitempty"`
 }
 
 //go:generate go run github.com/fjl/gencodec -type ExecutionResult -field-override executionResultMarshaling -out gen_execresult.go
@@ -398,7 +398,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool
 		}
 	}
 	// Commit and re-open to start with a clean state.
-	mptRoot, err := statedb.Commit(0, false, false)
+	root, err = statedb.Commit(0, false, false)
 	if err != nil {
 		panic(fmt.Errorf("failed to commit initial state: %v", err))
 	}
@@ -407,7 +407,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie bool
 		return statedb
 	}
 	// For MPT mode, reopen the state with the committed root
-	statedb, err = state.New(mptRoot, sdb)
+	statedb, err = state.New(root, sdb)
 	if err != nil {
 		panic(fmt.Errorf("failed to reopen state after commit: %v", err))
 	}

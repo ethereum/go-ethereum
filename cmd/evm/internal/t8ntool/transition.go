@@ -125,7 +125,7 @@ func Transition(ctx *cli.Context) error {
 			return err
 		}
 	}
-	prestate.BT = inputData.BT
+	prestate.TreeLeaves = inputData.BT
 
 	// Set the block environment
 	if envStr != stdinSelector {
