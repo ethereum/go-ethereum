@@ -957,7 +957,7 @@ func opDupN(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	}
 	n := decodeSingle(x)
 
-	// DUPN duplicates the n-th stack item, so the stack must contain at least n elements.
+	// DUPN duplicates the n'th stack item, so the stack must contain at least n elements.
 	if scope.Stack.len() < n {
 		return nil, &ErrStackUnderflow{stackLen: scope.Stack.len(), required: n}
 	}
@@ -1015,7 +1015,7 @@ func opExchange(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	n, m := decodePair(x)
 	need := max(n, m) + 1
 
-	// EXCHANGE operates on the (n+1)-th and (m+1)-th stack items,
+	// EXCHANGE operates on the (n+1)'th and (m+1)'th stack items,
 	// so the stack must contain at least max(n, m)+1 elements.
 	if scope.Stack.len() < need {
 		return nil, &ErrStackUnderflow{stackLen: scope.Stack.len(), required: need}
