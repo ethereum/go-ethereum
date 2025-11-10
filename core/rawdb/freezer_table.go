@@ -1196,8 +1196,7 @@ func (t *freezerTable) sizeNolock() (uint64, error) {
 }
 
 // advanceHead should be called when the current head file would outgrow the file limits,
-// and a new file must be opened. The caller of this method must hold the write-lock
-// before calling this method.
+// and a new file must be opened. This method acquires the write-lock internally.
 func (t *freezerTable) advanceHead() error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -1218,7 +1217,9 @@ func (t *freezerTable) advanceHead() error {
 		return err
 	}
 	t.releaseFile(t.headId)
-	t.openFile(t.headId, openFreezerFileForReadOnly)
+	if _, err := t.openFile(t.headId, openFreezerFileForReadOnly); err != nil {
+		return err
+	}
 
 	// Swap out the current head.
 	t.head = newHead
