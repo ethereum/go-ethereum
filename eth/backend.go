@@ -311,16 +311,7 @@ func New(stack *node.Node, config *ethconfig.Config, XDCXServ *XDCx.XDCX, lendin
 		hooks.AttachConsensusV2Hooks(c, eth.blockchain, chainConfig)
 
 		eth.txPool.IsSigner = func(address common.Address) bool {
-			currentHeader := eth.blockchain.CurrentHeader()
-			header := currentHeader
-			// Sometimes, the latest block hasn't been inserted to chain yet
-			// getSnapshot from parent block if it exists
-			parentHeader := eth.blockchain.GetHeader(currentHeader.ParentHash, currentHeader.Number.Uint64()-1)
-			if parentHeader != nil {
-				// not genesis block
-				header = parentHeader
-			}
-			return c.IsAuthorisedAddress(eth.blockchain, header, address)
+			return c.IsAuthorisedAddress(eth.blockchain, eth.blockchain.CurrentHeader(), address)
 		}
 
 	}
