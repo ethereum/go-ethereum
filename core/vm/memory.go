@@ -44,6 +44,7 @@ func (m *Memory) Free() {
 	// To reduce peak allocation, return only smaller memory instances to the pool.
 	const maxBufferSize = 16 << 10
 	if cap(m.store) <= maxBufferSize {
+		clear(m.store)
 		m.store = m.store[:0]
 		m.lastGasCost = 0
 		memoryPool.Put(m)
