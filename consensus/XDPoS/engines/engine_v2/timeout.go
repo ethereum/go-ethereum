@@ -140,7 +140,16 @@ func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *types.Time
 		return errors.New("empty master node lists from snapshot")
 	}
 
-	signatures, duplicates := UniqueSignatures(timeoutCert.Signatures)
+	signedTimeoutObj := types.TimeoutSigHash(&types.TimeoutForSign{
+		Round:     timeoutCert.Round,
+		GapNumber: timeoutCert.GapNumber,
+	})
+	signatures, duplicates, err := RecoverUniqueSigners(signedTimeoutObj, timeoutCert.Signatures)
+	if err != nil {
+		log.Error("[verifyTC] Error while getting unique signatures", "tcRound", timeoutCert.Round, "tcGapNumber", timeoutCert.GapNumber, "tcSignLen", len(timeoutCert.Signatures), "error", err)
+		return err
+	}
+
 	if len(duplicates) != 0 {
 		for _, d := range duplicates {
 			log.Warn("[verifyQC] duplicated signature in QC", "duplicate", common.Bytes2Hex(d))
@@ -163,11 +172,6 @@ func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *types.Time
 
 	var mutex sync.Mutex
 	var haveError error
-
-	signedTimeoutObj := types.TimeoutSigHash(&types.TimeoutForSign{
-		Round:     timeoutCert.Round,
-		GapNumber: timeoutCert.GapNumber,
-	})
 
 	for _, signature := range signatures {
 		go func(sig types.Signature) {
