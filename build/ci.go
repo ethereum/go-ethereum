@@ -343,6 +343,7 @@ func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (
 		}
 		ld = append(ld, "-extldflags", "'"+strings.Join(extld, " ")+"'")
 	}
+    // TODO(gballet): revisit after the input api has been defined
 	if runtime.GOARCH == "wasm" {
 		ld = append(ld, "-gcflags=all=-d=softfloat")
 	}
