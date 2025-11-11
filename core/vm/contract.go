@@ -44,6 +44,9 @@ type Contract struct {
 
 	Gas   uint64
 	value *uint256.Int
+
+	// Precompile and Code are mutually exclusive
+	Precompile PrecompiledContract
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
@@ -162,4 +165,8 @@ func (c *Contract) Value() *uint256.Int {
 func (c *Contract) SetCallCode(hash common.Hash, code []byte) {
 	c.Code = code
 	c.CodeHash = hash
+}
+
+func (c *Contract) SetPrecompile(precompile PrecompiledContract) {
+	c.Precompile = precompile
 }

@@ -110,6 +110,17 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 	// as every returning call will return new data anyway.
 	evm.returnData = nil
 
+	contract.Input = input
+
+	if contract.Precompile != nil {
+		if stateful, ok := contract.Precompile.(StatefulPrecompiledContract); ok {
+			return stateful.RunWithEVM(evm, contract)
+		}
+
+		ret, contract.Gas, err = RunPrecompiledContract(contract.Precompile, input, contract.Gas, evm.Config.Tracer)
+		return ret, err
+	}
+
 	// Don't bother with the execution if there's no code.
 	if len(contract.Code) == 0 {
 		return nil, nil
@@ -145,7 +156,6 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 		returnStack(stack)
 		mem.Free()
 	}()
-	contract.Input = input
 
 	if debug {
 		defer func() { // this deferred method handles exit-with-error

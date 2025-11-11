@@ -53,6 +53,13 @@ type PrecompiledContract interface {
 	Name() string
 }
 
+// StatefulPrecompiledContract has access to the EVM and Contract context when executed.
+type StatefulPrecompiledContract interface {
+	PrecompiledContract
+
+	RunWithEVM(evm *EVM, contract *Contract) ([]byte, error)
+}
+
 // PrecompiledContracts contains the precompiled contracts supported at the given fork.
 type PrecompiledContracts map[common.Address]PrecompiledContract
 
