@@ -80,8 +80,9 @@ var (
 
 func init() {
 	// Init the bloom offsets in the range [0:24] (requires 8 bytes)
-	bloomAccountHasherOffset = rand.Intn(25)
-	bloomStorageHasherOffset = rand.Intn(25)
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	bloomAccountHasherOffset = rng.Intn(25)
+	bloomStorageHasherOffset = rng.Intn(25)
 }
 
 // diffLayer represents a collection of modifications made to a state snapshot
