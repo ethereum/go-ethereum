@@ -389,7 +389,7 @@ func TestPartialReceiptDelivery(t *testing.T) {
 		}
 	}
 	if q.InFlightReceipts() {
-		t.Fatal("there shouldn't be reamining in flight receipts")
+		t.Fatal("there shouldn't be any remaning in-flight receipts")
 	}
 }
 
