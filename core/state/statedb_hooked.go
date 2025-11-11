@@ -220,7 +220,7 @@ func (s *hookedStateDB) SelfDestruct(address common.Address) uint256.Int {
 	var prevCode []byte
 	var prevCodeHash common.Hash
 
-	if s.hooks.OnCodeChange != nil {
+	if s.hooks.OnCodeChange != nil || s.hooks.OnCodeChangeV2 != nil {
 		prevCode = s.inner.GetCode(address)
 		prevCodeHash = s.inner.GetCodeHash(address)
 	}
@@ -246,7 +246,7 @@ func (s *hookedStateDB) SelfDestruct6780(address common.Address) (uint256.Int, b
 	var prevCode []byte
 	var prevCodeHash common.Hash
 
-	if s.hooks.OnCodeChange != nil {
+	if s.hooks.OnCodeChange != nil || s.hooks.OnCodeChangeV2 != nil {
 		prevCodeHash = s.inner.GetCodeHash(address)
 		prevCode = s.inner.GetCode(address)
 	}
