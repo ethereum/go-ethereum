@@ -32,6 +32,7 @@ import (
 const (
 	ETH68 = 68
 	ETH69 = 69
+	ETH70 = 70
 )
 
 // ProtocolName is the official short name of the `eth` protocol used during
@@ -40,11 +41,11 @@ const ProtocolName = "eth"
 
 // ProtocolVersions are the supported versions of the `eth` protocol (first
 // is primary).
-var ProtocolVersions = []uint{ETH69, ETH68}
+var ProtocolVersions = []uint{ETH69, ETH68, ETH70}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{ETH68: 17, ETH69: 18}
+var protocolLengths = map[uint]uint64{ETH68: 17, ETH69: 18, ETH70: 18}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024
@@ -259,9 +260,16 @@ func (p *BlockBodiesResponse) Unpack() ([][]*types.Transaction, [][]*types.Heade
 type GetReceiptsRequest []common.Hash
 
 // GetReceiptsPacket represents a block receipts query with request ID wrapping.
-type GetReceiptsPacket struct {
+type GetReceiptsPacket69 struct {
 	RequestId uint64
 	GetReceiptsRequest
+}
+
+// GetReceiptsPacket represents a block receipts query with request ID wrapping.
+type GetReceiptsPacket70 struct {
+	RequestId uint64
+	GetReceiptsRequest
+	FirstBlockReceiptIndex uint64
 }
 
 // ReceiptsResponse is the network packet for block receipts distribution.
@@ -292,9 +300,15 @@ type ReceiptsPacket70 struct {
 type ReceiptsRLPResponse []rlp.RawValue
 
 // ReceiptsRLPPacket is ReceiptsRLPResponse with request ID wrapping.
-type ReceiptsRLPPacket struct {
+type ReceiptsRLPPacket69 struct {
 	RequestId uint64
 	ReceiptsRLPResponse
+}
+
+type ReceiptsRLPPacket70 struct {
+	RequestId uint64
+	ReceiptsRLPResponse
+	LastBlockIncomplete bool
 }
 
 // NewPooledTransactionHashesPacket represents a transaction announcement packet on eth/68 and newer.

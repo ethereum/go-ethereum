@@ -41,7 +41,7 @@ func (obj *Test) DecodeRLP(dec *rlp.Stream) error {
 		}
 		_tmp0.A = _tmp1
 		// B:
-		var _tmp2 eth1.GetReceiptsPacket
+		var _tmp2 eth1.GetReceiptsPacket69
 		{
 			if _, err := dec.List(); err != nil {
 				return err
