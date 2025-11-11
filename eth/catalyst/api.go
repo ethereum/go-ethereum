@@ -244,12 +244,9 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		if res := api.checkInvalidAncestor(update.HeadBlockHash, update.HeadBlockHash); res != nil {
 			return engine.ForkChoiceResponse{PayloadStatus: *res, PayloadID: nil}, nil
 		}
-		// If the head hash is unknown (was not given to us in a newPayload request),
-		// we cannot resolve the header, so not much to do. This could be extended in
-		// the future to resolve from the `eth` network, but it's an unexpected case
-		// that should be fixed, not papered over.
 		header := api.remoteBlocks.get(update.HeadBlockHash)
 		if header == nil {
+			// The head hash is unknown locally, try to resolve it from the `eth` network
 			log.Warn("Fetching the unknown forkchoice head from network", "hash", update.HeadBlockHash)
 			retrievedHead, err := api.eth.Downloader().GetHeader(update.HeadBlockHash)
 			if err != nil {
@@ -262,7 +259,9 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		// If the finalized hash is known, we can direct the downloader to move
 		// potentially more data to the freezer from the get go.
 		finalized := api.remoteBlocks.get(update.FinalizedBlockHash)
-
+		if finalized == nil {
+			finalized = api.eth.BlockChain().GetHeaderByHash(update.FinalizedBlockHash)
+		}
 		// Header advertised via a past newPayload request. Start syncing to it.
 		context := []interface{}{"number", header.Number, "hash", header.Hash()}
 		if update.FinalizedBlockHash != (common.Hash{}) {

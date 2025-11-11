@@ -942,29 +942,6 @@ func (d *Downloader) processSnapSyncContent() error {
 		} else { // results already piled up, consume before handling pivot move
 			results = append(append([]*fetchResult{oldPivot}, oldTail...), results...)
 		}
-		// Split around the pivot block and process the two sides via snap/full sync
-		if !d.committed.Load() {
-			latest := results[len(results)-1].Header
-			// If the height is above the pivot block by 2 sets, it means the pivot
-			// became stale in the network, and it was garbage collected, move to a
-			// new pivot.
-			//
-			// Note, we have `reorgProtHeaderDelay` number of blocks withheld, Those
-			// need to be taken into account, otherwise we're detecting the pivot move
-			// late and will drop peers due to unavailable state!!!
-			if height := latest.Number.Uint64(); height >= pivot.Number.Uint64()+2*uint64(fsMinFullBlocks)-uint64(reorgProtHeaderDelay) {
-				log.Warn("Pivot became stale, moving", "old", pivot.Number.Uint64(), "new", height-uint64(fsMinFullBlocks)+uint64(reorgProtHeaderDelay))
-				pivot = results[len(results)-1-fsMinFullBlocks+reorgProtHeaderDelay].Header // must exist as lower old pivot is uncommitted
-
-				d.pivotLock.Lock()
-				d.pivotHeader = pivot
-				d.pivotLock.Unlock()
-
-				// Write out the pivot into the database so a rollback beyond it will
-				// reenable snap sync
-				rawdb.WriteLastPivotNumber(d.stateDB, pivot.Number.Uint64())
-			}
-		}
 		P, beforeP, afterP := splitAroundPivot(pivot.Number.Uint64(), results)
 		if err := d.commitSnapSyncData(beforeP, sync); err != nil {
 			return err
