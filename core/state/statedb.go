@@ -119,6 +119,7 @@ type StateDB struct {
 	// The tx context and all occurred logs in the scope of transaction.
 	thash   common.Hash
 	txIndex int
+
 	logs    map[common.Hash][]*types.Log
 	logSize uint
 
@@ -303,6 +304,13 @@ func (s *StateDB) SubRefund(gas uint64) {
 // Notably this also returns true for self-destructed accounts within the current transaction.
 func (s *StateDB) Exist(addr common.Address) bool {
 	return s.getStateObject(addr) != nil
+}
+
+// ExistBeforeCurTx returns true if a contract exists and was not created
+// in the current transaction.
+func (s *StateDB) ExistBeforeCurTx(addr common.Address) bool {
+	obj := s.getStateObject(addr)
+	return obj != nil && !obj.newContract
 }
 
 // Empty returns whether the state object is either non-existent
