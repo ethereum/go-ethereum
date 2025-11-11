@@ -697,3 +697,18 @@ func (evm *EVM) GetVMContext() *tracing.VMContext {
 		StateDB:     evm.StateDB,
 	}
 }
+
+// ReadOnly returns whether the EVM is in staticcall mode
+func (evm *EVM) ReadOnly() bool {
+	return evm.readOnly
+}
+
+// ReturnData returns the return data from the last call
+func (evm *EVM) ReturnData() []byte {
+	return evm.returnData
+}
+
+// SetReturnData sets the return data for subsequent calls
+func (evm *EVM) SetReturnData(data []byte) {
+	evm.returnData = data
+}
