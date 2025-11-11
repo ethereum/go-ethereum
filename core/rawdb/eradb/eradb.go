@@ -303,6 +303,7 @@ func (db *Store) openEraFile(epoch uint64) (*era.Era, error) {
 	}
 	// Sanity-check start block.
 	if e.Start()%uint64(era.MaxEra1Size) != 0 {
+		e.Close()
 		return nil, fmt.Errorf("pre-merge era1 file has invalid boundary. %d %% %d != 0", e.Start(), era.MaxEra1Size)
 	}
 	log.Debug("Opened era1 file", "epoch", epoch)
