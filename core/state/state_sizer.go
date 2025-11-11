@@ -218,7 +218,7 @@ func calSizeStats(update *stateUpdate) (SizeStats, error) {
 	// this deviation is negligible and acceptable for measurement purposes.
 	for _, code := range update.codes {
 		stats.ContractCodes += 1
-		stats.ContractCodeBytes += codeKeySize + int64(len(code.blob))
+		stats.ContractCodeBytes += codeKeySize + int64(len(code))
 	}
 	return stats, nil
 }
