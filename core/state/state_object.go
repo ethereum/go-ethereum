@@ -83,6 +83,8 @@ type stateObject struct {
 	// the contract is just created within the current transaction, or when the
 	// object was previously existent and is being deployed as a contract within
 	// the current transaction.
+	//
+	// the flag is set upon beginning of contract initcode execution, not when the code is actually deployed to the address.
 	newContract bool
 }
 
@@ -176,6 +178,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	if value, pending := s.pendingStorage[key]; pending {
 		return value
 	}
+
 	if value, cached := s.originStorage[key]; cached {
 		return value
 	}
@@ -244,9 +247,10 @@ func (s *stateObject) finalise() {
 			// The slot is reverted to its original value, delete the entry
 			// to avoid thrashing the data structures.
 			delete(s.uncommittedStorage, key)
+
 		} else if exist {
 			// The slot is modified to another value and the slot has been
-			// tracked for commit, do nothing here.
+			// tracked for commit in uncommittedStorage.
 		} else {
 			// The slot is different from its original value and hasn't been
 			// tracked for commit yet.
@@ -323,8 +327,10 @@ func (s *stateObject) updateTrie() (Trie, error) {
 	// into a shortnode. This requires `B` to be resolved from disk.
 	// Whereas if the created node is handled first, then the collapse is avoided, and `B` is not resolved.
 	var (
-		deletions []common.Hash
-		used      = make([]common.Hash, 0, len(s.uncommittedStorage))
+		deletions    []common.Hash
+		used         = make([]common.Hash, 0, len(s.uncommittedStorage))
+		updateKeys   [][]byte
+		updateValues [][]byte
 	)
 	for key, origin := range s.uncommittedStorage {
 		// Skip noop changes, persist actual changes
@@ -338,16 +344,20 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			continue
 		}
 		if (value != common.Hash{}) {
-			if err := tr.UpdateStorage(s.address, key[:], common.TrimLeftZeroes(value[:])); err != nil {
-				s.db.setError(err)
-				return nil, err
-			}
+			updateKeys = append(updateKeys, key[:])
+			updateValues = append(updateValues, common.TrimLeftZeroes(value[:]))
 			s.db.StorageUpdated.Add(1)
 		} else {
 			deletions = append(deletions, key)
 		}
 		// Cache the items for preloading
 		used = append(used, key) // Copy needed for closure
+	}
+	if len(updateKeys) > 0 {
+		if err := tr.UpdateStorageBatch(common.Address{}, updateKeys, updateValues); err != nil {
+			s.db.setError(err)
+			return nil, err
+		}
 	}
 	for _, key := range deletions {
 		if err := tr.DeleteStorage(s.address, key[:]); err != nil {
@@ -564,13 +574,18 @@ func (s *stateObject) CodeSize() int {
 func (s *stateObject) SetCode(codeHash common.Hash, code []byte) (prev []byte) {
 	prev = slices.Clone(s.code)
 	s.db.journal.setCode(s.address, prev)
-	s.setCode(codeHash, code)
+	s.setCodeModified(codeHash, code)
 	return prev
 }
 
 func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
 	s.code = code
 	s.data.CodeHash = codeHash[:]
+}
+
+// setCodeModified sets the code and hash and dirty markers.
+func (s *stateObject) setCodeModified(codeHash common.Hash, code []byte) {
+	s.setCode(codeHash, code)
 	s.dirtyCode = true
 }
 

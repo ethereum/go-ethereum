@@ -505,7 +505,7 @@ func (api *DebugAPI) ExecutionWitness(bn rpc.BlockNumber) (*stateless.ExtWitness
 		return &stateless.ExtWitness{}, fmt.Errorf("block number %v found, but parent missing", bn)
 	}
 
-	result, err := bc.ProcessBlock(parent.Root, block, false, true)
+	result, err := bc.ProcessBlock(parent.Root, block, false, true, false, false)
 	if err != nil {
 		return nil, err
 	}
@@ -525,10 +525,26 @@ func (api *DebugAPI) ExecutionWitnessByHash(hash common.Hash) (*stateless.ExtWit
 		return &stateless.ExtWitness{}, fmt.Errorf("block number %x found, but parent missing", hash)
 	}
 
-	result, err := bc.ProcessBlock(parent.Root, block, false, true)
+	result, err := bc.ProcessBlock(parent.Root, block, false, true, false, false)
 	if err != nil {
 		return nil, err
 	}
 
 	return result.Witness().ToExtWitness(), nil
+}
+
+// GetBlockAccessList returns a block access list for the given number/hash
+// or nil if one does not exist.
+func (api *DebugAPI) GetBlockAccessList(number rpc.BlockNumberOrHash) (interface{}, error) {
+	var block *types.Block
+	if num := number.BlockNumber; num != nil {
+		block = api.eth.blockchain.GetBlockByNumber(uint64(num.Int64()))
+	} else if hash := number.BlockHash; hash != nil {
+		block = api.eth.blockchain.GetBlockByHash(*hash)
+	}
+
+	if block == nil {
+		return nil, fmt.Errorf("block not found")
+	}
+	return block.Body().AccessList.StringableRepresentation(), nil
 }

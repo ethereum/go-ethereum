@@ -119,6 +119,13 @@ type StateDB struct {
 	// The tx context and all occurred logs in the scope of transaction.
 	thash   common.Hash
 	txIndex int
+
+	// block access list modifications will be recorded with this index.
+	// 0 - state access before transaction execution
+	// 1 -> len(block txs) - state access of each transaction
+	// len(block txs) + 1 - state access after transaction execution.
+	balIndex int
+
 	logs    map[common.Hash][]*types.Log
 	logSize uint
 
@@ -140,6 +147,8 @@ type StateDB struct {
 	witness      *stateless.Witness
 	witnessStats *stateless.WitnessStats
 
+	blockAccessList *BALReader
+
 	// Measurements gathered during execution for debugging purposes
 	AccountReads    time.Duration
 	AccountHashes   time.Duration
@@ -157,6 +166,10 @@ type StateDB struct {
 	StorageLoaded  int          // Number of storage slots retrieved from the database during the state transition
 	StorageUpdated atomic.Int64 // Number of storage slots updated during the state transition
 	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
+}
+
+func (s *StateDB) BlockAccessList() *BALReader {
+	return s.blockAccessList
 }
 
 // New creates a new state from a given trie.
@@ -289,6 +302,38 @@ func (s *StateDB) AddRefund(gas uint64) {
 	s.refund += gas
 }
 
+func (s *StateDB) SetBlockAccessList(al *BALReader) {
+	s.blockAccessList = al
+}
+
+// LoadModifiedPrestate instantiates the live object based on accounts
+// which appeared in the total state diff of a block, and were also preexisting.
+func (s *StateDB) LoadModifiedPrestate(addrs []common.Address) (res map[common.Address]*types.StateAccount) {
+	stateAccounts := new(sync.Map)
+	wg := new(sync.WaitGroup)
+	res = make(map[common.Address]*types.StateAccount)
+
+	for _, addr := range addrs {
+		wg.Add(1)
+		go func(addr common.Address) {
+			acct, err := s.reader.Account(addr)
+			if err == nil && acct != nil { // TODO: what should we do if the error is not nil?
+				stateAccounts.Store(addr, acct)
+			}
+			wg.Done()
+		}(addr)
+	}
+	wg.Wait()
+	stateAccounts.Range(func(addr any, val any) bool {
+		address := addr.(common.Address)
+		stateAccount := val.(*types.StateAccount)
+		res[address] = stateAccount
+		return true
+	})
+
+	return res
+}
+
 // SubRefund removes gas from the refund counter.
 // This method will panic if the refund counter goes below zero
 func (s *StateDB) SubRefund(gas uint64) {
@@ -303,6 +348,11 @@ func (s *StateDB) SubRefund(gas uint64) {
 // Notably this also returns true for self-destructed accounts within the current transaction.
 func (s *StateDB) Exist(addr common.Address) bool {
 	return s.getStateObject(addr) != nil
+}
+
+func (s *StateDB) ExistBeforeCurTx(addr common.Address) bool {
+	obj := s.getStateObject(addr)
+	return obj != nil && !obj.newContract
 }
 
 // Empty returns whether the state object is either non-existent
@@ -580,6 +630,25 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code)
 	}
 }
+func (s *StateDB) updateStateObjects(objs []*stateObject) {
+	var addrs []common.Address
+	var accts []*types.StateAccount
+
+	for _, obj := range objs {
+		addrs = append(addrs, obj.Address())
+		accts = append(accts, &obj.data)
+	}
+
+	if err := s.trie.UpdateAccountBatch(addrs, accts, nil); err != nil {
+		s.setError(fmt.Errorf("updateStateObjects error: %v", err))
+	}
+
+	for _, obj := range objs {
+		if obj.dirtyCode {
+			s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code)
+		}
+	}
+}
 
 // deleteStateObject removes the given object from the state trie.
 func (s *StateDB) deleteStateObject(addr common.Address) {
@@ -599,6 +668,24 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	if _, ok := s.stateObjectsDestruct[addr]; ok {
 		return nil
 	}
+
+	// if we are executing against a block access list, construct the account
+	// state at the current tx index by applying the access-list diff on top
+	// of the prestate value for the account.
+	if s.blockAccessList != nil && s.balIndex != 0 && s.blockAccessList.isModified(addr) {
+		acct := s.blockAccessList.readAccount(s, addr, s.balIndex-1)
+		if acct != nil {
+			s.setStateObject(acct)
+			return acct
+		}
+		return nil
+
+		// if the acct was nil, it might be non-existent or was not explicitly requested for loading from the blockAcccessList object.
+		// try to load it from the snapshot.
+
+		// TODO: if the acct was non-existent because it was deleted, we should just return nil herre.
+	}
+
 	s.AccountLoaded++
 
 	start := time.Now()
@@ -635,6 +722,7 @@ func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
 	if obj == nil {
 		obj = s.createObject(addr)
 	}
+
 	return obj
 }
 
@@ -683,9 +771,13 @@ func (s *StateDB) Copy() *StateDB {
 		refund:               s.refund,
 		thash:                s.thash,
 		txIndex:              s.txIndex,
+		balIndex:             s.txIndex,
 		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
 		logSize:              s.logSize,
 		preimages:            maps.Clone(s.preimages),
+
+		// don't deep-copy these
+		blockAccessList: s.blockAccessList,
 
 		// Do we need to copy the access list and transient storage?
 		// In practice: No. At the start of a transaction, these two lists are empty.
@@ -933,6 +1025,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	var (
 		usedAddrs    []common.Address
 		deletedAddrs []common.Address
+		updatedObjs  []*stateObject
 	)
 	for addr, op := range s.mutations {
 		if op.applied {
@@ -943,10 +1036,13 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		if op.isDelete() {
 			deletedAddrs = append(deletedAddrs, addr)
 		} else {
-			s.updateStateObject(s.stateObjects[addr])
+			updatedObjs = append(updatedObjs, s.stateObjects[addr])
 			s.AccountUpdated += 1
 		}
 		usedAddrs = append(usedAddrs, addr) // Copy needed for closure
+	}
+	if len(updatedObjs) > 0 {
+		s.updateStateObjects(updatedObjs)
 	}
 	for _, deletedAddr := range deletedAddrs {
 		s.deleteStateObject(deletedAddr)
@@ -959,9 +1055,21 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	}
 	// Track the amount of time wasted on hashing the account trie
 	defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())
-
 	hash := s.trie.Hash()
-
+	/*
+		it, err := s.trie.NodeIterator([]byte{})
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println("state trie")
+		for it.Next(true) {
+			if it.Leaf() {
+				fmt.Printf("%x: %x\n", it.Path(), it.LeafBlob())
+			} else {
+				fmt.Printf("%x: %x\n", it.Path(), it.Hash())
+			}
+		}
+	*/
 	// If witness building is enabled, gather the account trie witness
 	if s.witness != nil {
 		witness := s.trie.Witness()
@@ -970,6 +1078,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			s.witnessStats.Add(witness, common.Hash{})
 		}
 	}
+
 	return hash
 }
 
@@ -979,6 +1088,14 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
 	s.thash = thash
 	s.txIndex = ti
+	s.balIndex = ti + 1
+}
+
+// SetAccessListIndex sets the current index that state mutations will
+// be reported as in the BAL.  It is only relevant if this StateDB instance
+// is being used in the BAL construction path.
+func (s *StateDB) SetAccessListIndex(idx int) {
+	s.balIndex = idx
 }
 
 func (s *StateDB) clearJournalAndRefund() {
@@ -1164,6 +1281,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 	if s.dbErr != nil {
 		return nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
+
 	// Finalize any pending changes and merge everything into the tries
 	s.IntermediateRoot(deleteEmptyObjects)
 
