@@ -70,17 +70,13 @@ func (api *ConsensusAPI) ForkchoiceUpdatedWithWitnessV3(update engine.Forkchoice
 	if params != nil {
 		switch {
 		case params.Withdrawals == nil:
-			return engine.STATUS_INVALID, attributesErr("missing withdrawals")
+			return api.forkchoiceHeadUpdateWithError(update, engine.PayloadV3, true, attributesErr("missing withdrawals"))
 		case params.BeaconRoot == nil:
-			return engine.STATUS_INVALID, attributesErr("missing beacon root")
+			return api.forkchoiceHeadUpdateWithError(update, engine.PayloadV3, true, attributesErr("missing beacon root"))
 		case !api.checkFork(params.Timestamp, forks.Cancun, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2, forks.BPO3, forks.BPO4, forks.BPO5):
-			return engine.STATUS_INVALID, unsupportedForkErr("fcuV3 must only be called for cancun/prague/osaka payloads")
+			return api.forkchoiceHeadUpdateWithError(update, engine.PayloadV3, true, unsupportedForkErr("fcuV3 must only be called for cancun/prague/osaka payloads"))
 		}
 	}
-	// TODO(matt): the spec requires that fcu is applied when called on a valid
-	// hash, even if params are wrong. To do this we need to split up
-	// forkchoiceUpdate into a function that only updates the head and then a
-	// function that kicks off block construction.
 	return api.forkchoiceUpdated(update, params, engine.PayloadV3, true)
 }
 

@@ -159,6 +159,17 @@ func newConsensusAPIWithoutHeartbeat(eth *eth.Ethereum) *ConsensusAPI {
 	return api
 }
 
+// forkchoiceHeadUpdateWithError applies the forkchoice update without starting payload
+// building and returns the supplied error. This is used when the payload attributes
+// are invalid but the spec still requires us to process the forkchoice change.
+func (api *ConsensusAPI) forkchoiceHeadUpdateWithError(update engine.ForkchoiceStateV1, payloadVersion engine.PayloadVersion, payloadWitness bool, retErr error) (engine.ForkChoiceResponse, error) {
+	resp, err := api.forkchoiceUpdated(update, nil, payloadVersion, payloadWitness)
+	if err != nil {
+		return resp, err
+	}
+	return resp, retErr
+}
+
 // ForkchoiceUpdatedV1 has several responsibilities:
 //
 // We try to set our blockchain to the headBlock.
@@ -209,17 +220,13 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(update engine.ForkchoiceStateV1, pa
 	if params != nil {
 		switch {
 		case params.Withdrawals == nil:
-			return engine.STATUS_INVALID, attributesErr("missing withdrawals")
+			return api.forkchoiceHeadUpdateWithError(update, engine.PayloadV3, false, attributesErr("missing withdrawals"))
 		case params.BeaconRoot == nil:
-			return engine.STATUS_INVALID, attributesErr("missing beacon root")
+			return api.forkchoiceHeadUpdateWithError(update, engine.PayloadV3, false, attributesErr("missing beacon root"))
 		case !api.checkFork(params.Timestamp, forks.Cancun, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2, forks.BPO3, forks.BPO4, forks.BPO5):
-			return engine.STATUS_INVALID, unsupportedForkErr("fcuV3 must only be called for cancun/prague/osaka payloads")
+			return api.forkchoiceHeadUpdateWithError(update, engine.PayloadV3, false, unsupportedForkErr("fcuV3 must only be called for cancun/prague/osaka payloads"))
 		}
 	}
-	// TODO(matt): the spec requires that fcu is applied when called on a valid
-	// hash, even if params are wrong. To do this we need to split up
-	// forkchoiceUpdate into a function that only updates the head and then a
-	// function that kicks off block construction.
 	return api.forkchoiceUpdated(update, params, engine.PayloadV3, false)
 }
 
@@ -262,6 +269,10 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		// If the finalized hash is known, we can direct the downloader to move
 		// potentially more data to the freezer from the get go.
 		finalized := api.remoteBlocks.get(update.FinalizedBlockHash)
+
+		if finalized == nil {
+			finalized = api.eth.BlockChain().GetHeaderByHash(update.FinalizedBlockHash)
+		}
 
 		// Header advertised via a past newPayload request. Start syncing to it.
 		context := []interface{}{"number", header.Number, "hash", header.Hash()}
