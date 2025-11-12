@@ -2088,6 +2088,8 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 	blockPreprocessingTimer.Update(res.PreProcessTime)
 	txExecutionTimer.Update(res.ExecTime)
 
+	// update the metrics from the block state root update
+	stateTriePrefetchTimer.Update(res.StateTransitionMetrics.StatePrefetch)
 	accountTriesUpdateTimer.Update(res.StateTransitionMetrics.AccountUpdate)
 	stateTrieUpdateTimer.Update(res.StateTransitionMetrics.StateUpdate)
 	stateTrieHashTimer.Update(res.StateTransitionMetrics.StateHash)
