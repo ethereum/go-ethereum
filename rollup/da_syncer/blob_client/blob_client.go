@@ -12,8 +12,7 @@ import (
 )
 
 const (
-	lenBlobBytes     int = 131072
-	lenKZGCommitment int = 48
+	lenBlobBytes int = 131072
 )
 
 type BlobClient interface {

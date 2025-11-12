@@ -2,7 +2,6 @@ package blob_client
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -29,7 +28,7 @@ type BeaconNodeClient struct {
 var (
 	beaconNodeGenesisEndpoint = "/eth/v1/beacon/genesis"
 	beaconNodeSpecEndpoint    = "/eth/v1/config/spec"
-	beaconNodeBlobEndpoint    = "/eth/v1/beacon/blob_sidecars"
+	beaconNodeBlobEndpoint    = "/eth/v1/beacon/blobs"
 )
 
 func NewBeaconNodeClient(apiEndpoint string) (*BeaconNodeClient, error) {
@@ -106,15 +105,31 @@ func NewBeaconNodeClient(apiEndpoint string) (*BeaconNodeClient, error) {
 	}, nil
 }
 
+func (c *BeaconNodeClient) getBlobsPath(slot uint64, versionedHash common.Hash) (string, error) {
+	basePath, err := url.JoinPath(c.apiEndpoint, beaconNodeBlobEndpoint, fmt.Sprintf("%d", slot))
+	if err != nil {
+		return "", fmt.Errorf("failed to join path, err: %w", err)
+	}
+	u, err := url.Parse(basePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse path, err: %w", err)
+	}
+	q := u.Query()
+	q.Set("versioned_hashes", versionedHash.Hex())
+	u.RawQuery = q.Encode()
+	queryPath := u.String()
+	return queryPath, nil
+}
+
 func (c *BeaconNodeClient) GetBlobByVersionedHashAndBlockTime(ctx context.Context, versionedHash common.Hash, blockTime uint64) (*kzg4844.Blob, error) {
 	slot := (blockTime - c.genesisTime) / c.secondsPerSlot
 
-	// get blob sidecar for slot
-	blobSidecarPath, err := url.JoinPath(c.apiEndpoint, beaconNodeBlobEndpoint, fmt.Sprintf("%d", slot))
+	// get blob by slot and versioned hash
+	getBlobsPath, err := c.getBlobsPath(slot, versionedHash)
 	if err != nil {
-		return nil, fmt.Errorf("failed to join path, err: %w", err)
+		return nil, fmt.Errorf("failed to create getBlobs path, err: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, "GET", blobSidecarPath, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", getBlobsPath, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request, err: %w", err)
 	}
@@ -133,35 +148,27 @@ func (c *BeaconNodeClient) GetBlobByVersionedHashAndBlockTime(ctx context.Contex
 		return nil, fmt.Errorf("beacon node request failed, status: %s, body: %s", resp.Status, bodyStr)
 	}
 
-	var blobSidecarResp BlobSidecarResp
-	err = json.NewDecoder(resp.Body).Decode(&blobSidecarResp)
+	var blobsResp BlobsResp
+	err = json.NewDecoder(resp.Body).Decode(&blobsResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode result into struct, err: %w", err)
 	}
 
-	// find blob with desired versionedHash
-	for _, blob := range blobSidecarResp.Data {
-		// calculate blob hash from commitment and check it with desired
-		commitmentBytes := common.FromHex(blob.KzgCommitment)
-		if len(commitmentBytes) != lenKZGCommitment {
-			return nil, fmt.Errorf("len of kzg commitment is not correct, expected: %d, got: %d", lenKZGCommitment, len(commitmentBytes))
-		}
-		commitment := kzg4844.Commitment(commitmentBytes)
-		blobVersionedHash := kzg4844.CalcBlobHashV1(sha256.New(), &commitment)
-
-		if blobVersionedHash == versionedHash {
-			// found desired blob
-			blobBytes := common.FromHex(blob.Blob)
-			if len(blobBytes) != lenBlobBytes {
-				return nil, fmt.Errorf("len of blob data is not correct, expected: %d, got: %d", lenBlobBytes, len(blobBytes))
-			}
-
-			b := kzg4844.Blob(blobBytes)
-			return &b, nil
-		}
+	// sanity check response length
+	if len(blobsResp.Data) == 0 {
+		return nil, fmt.Errorf("missing blob %v in slot %d", versionedHash, slot)
+	}
+	if len(blobsResp.Data) > 1 {
+		return nil, fmt.Errorf("more than 1 blob returned from beacon node for slot %d, requested blob hash: %s, expected 1, got: %d", slot, versionedHash.Hex(), len(blobsResp.Data))
 	}
 
-	return nil, fmt.Errorf("missing blob %v in slot %d", versionedHash, slot)
+	blobBytes := common.FromHex(blobsResp.Data[0])
+	if len(blobBytes) != lenBlobBytes {
+		return nil, fmt.Errorf("len of blob data is not correct, expected: %d, got: %d", lenBlobBytes, len(blobBytes))
+	}
+
+	b := kzg4844.Blob(blobBytes)
+	return &b, nil
 }
 
 type GenesisResp struct {
@@ -176,22 +183,6 @@ type SpecResp struct {
 	} `json:"data"`
 }
 
-type BlobSidecarResp struct {
-	Data []struct {
-		Index             string `json:"index"`
-		Blob              string `json:"blob"`
-		KzgCommitment     string `json:"kzg_commitment"`
-		KzgProof          string `json:"kzg_proof"`
-		SignedBlockHeader struct {
-			Message struct {
-				Slot          string `json:"slot"`
-				ProposerIndex string `json:"proposer_index"`
-				ParentRoot    string `json:"parent_root"`
-				StateRoot     string `json:"state_root"`
-				BodyRoot      string `json:"body_root"`
-			} `json:"message"`
-			Signature string `json:"signature"`
-		} `json:"signed_block_header"`
-		KzgCommitmentInclusionProof []string `json:"kzg_commitment_inclusion_proof"`
-	} `json:"data"`
+type BlobsResp struct {
+	Data []string `json:"data"` // array of blobs as hex strings
 }
