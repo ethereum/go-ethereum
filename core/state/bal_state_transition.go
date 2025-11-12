@@ -15,6 +15,9 @@ import (
 	"time"
 )
 
+// BALStateTransition is responsible for performing the state root update
+// and commit for EIP 7928 access-list-containing blocks.  An instance of
+// this object is only used for a single block.
 type BALStateTransition struct {
 	accessList *BALReader
 	db         Database
@@ -22,13 +25,18 @@ type BALStateTransition struct {
 	stateTrie  Trie
 	parentRoot common.Hash
 
-	rootHash  common.Hash
-	diffs     map[common.Address]*bal.AccountMutations
-	prestates sync.Map //map[common.Address]*types.StateAccount
+	// the state root of the block
+	rootHash common.Hash
+	// the state modifications performed by the block
+	diffs map[common.Address]*bal.AccountMutations
+	// a map of common.Address -> *types.StateAccount containing the block
+	// prestate of all accounts that will be modified
+	prestates sync.Map
 
-	poststates map[common.Address]*types.StateAccount
-	tries      sync.Map //map[common.Address]Trie
-
+	postStates map[common.Address]*types.StateAccount
+	// a map of common.Address -> Trie containing the account tries for all
+	// accounts with mutated storage
+	tries     sync.Map //map[common.Address]Trie
 	deletions map[common.Address]struct{}
 
 	originStorages   map[common.Address]map[common.Hash]common.Hash
@@ -38,8 +46,6 @@ type BALStateTransition struct {
 	accountUpdated int64
 	storageDeleted atomic.Int64
 	storageUpdated atomic.Int64
-
-	// TODO: maybe package these into their own 'CommitMetrics' struct instead of making them public fields
 
 	stateUpdate *stateUpdate
 
@@ -85,7 +91,7 @@ func NewBALStateTransition(accessList *BALReader, db Database, parentRoot common
 		rootHash:         common.Hash{},
 		diffs:            make(map[common.Address]*bal.AccountMutations),
 		prestates:        sync.Map{},
-		poststates:       make(map[common.Address]*types.StateAccount),
+		postStates:       make(map[common.Address]*types.StateAccount),
 		tries:            sync.Map{},
 		deletions:        make(map[common.Address]struct{}),
 		originStorages:   make(map[common.Address]map[common.Hash]common.Hash),
@@ -128,6 +134,8 @@ func isAccountDeleted(prestate *types.StateAccount, mutations *bal.AccountMutati
 	return false
 }
 
+// updateAccount applies the block state mutations to a given account returning
+// the updated state account and new code (if the account code changed)
 func (s *BALStateTransition) updateAccount(addr common.Address) (*types.StateAccount, []byte) {
 	a, _ := s.prestates.Load(addr)
 	acct := a.(*types.StateAccount)
@@ -159,7 +167,7 @@ func (s *BALStateTransition) commitAccount(addr common.Address) (*accountUpdate,
 	)
 	op := &accountUpdate{
 		address: addr,
-		data:    types.SlimAccountRLP(*s.poststates[addr]), // TODO: cache the updated state acocunt somewhere
+		data:    types.SlimAccountRLP(*s.postStates[addr]), // TODO: cache the updated state acocunt somewhere
 	}
 	if prestate, exist := s.prestates.Load(addr); exist {
 		prestate := prestate.(*types.StateAccount)
@@ -190,10 +198,11 @@ func (s *BALStateTransition) commitAccount(addr common.Address) (*accountUpdate,
 	}
 	tr, _ := s.tries.Load(addr)
 	root, nodes := tr.(Trie).Commit(false)
-	s.poststates[addr].Root = root
+	s.postStates[addr].Root = root
 	return op, nodes, nil
 }
 
+// CommitWithUpdate flushes mutated trie nodes and state accounts to disk.
 func (s *BALStateTransition) CommitWithUpdate(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, *stateUpdate, error) {
 	// 1) create a stateUpdate object
 	// Commit objects to the trie, measuring the elapsed time
@@ -342,14 +351,28 @@ func (s *BALStateTransition) CommitWithUpdate(block uint64, deleteEmptyObjects b
 	return root, ret, nil
 }
 
+// IntermediateRoot applies block state mutations and computes the updated state
+// trie root.
 func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 	if s.rootHash != (common.Hash{}) {
 		return s.rootHash
 	}
 
+	// State root calculation proceeds as follows:
+
+	// 1 (a): load the prestate state accounts for addresses which were modified in the block
+	// 1 (b): load the origin storage values for all slots which were modified during the block (this is needed for computing the stateUpdate)
+	// 1 (c): update each mutated account, producing the post-block state object by applying the state mutations to the prestate (retrieved in 1a).
+	// 1 (d): prefetch the intermediate trie nodes of the mutated state set from the account trie.
+	//
+	// 2: compute the post-state root of the account trie
+	//
+	// Steps 1/2 are performed sequentially, with steps 1a-d performed in parallel
+
 	start := time.Now()
 	lastIdx := len(s.accessList.block.Transactions()) + 1
 
+	//1 (b): load the origin storage values for all slots which were modified during the block
 	s.originStoragesWG.Add(1)
 	go func() {
 		defer s.originStoragesWG.Done()
@@ -371,11 +394,6 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 
 	var wg sync.WaitGroup
 
-	// 1. resolve the entire state object for the updated addrs, in parallel prefetch them in the account trie
-	// 1. in parallel:
-	//		* load the prestate of mutated state objects from the snapshot, update their tries.
-	//		* prefetch all mutated account in the account trie
-
 	for _, addr := range s.accessList.ModifiedAccounts() {
 		diff := s.accessList.readAccountDiff(addr, lastIdx)
 		s.diffs[addr] = diff
@@ -385,6 +403,7 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 		wg.Add(1)
 		address := addr
 		go func() {
+			// 1 (c): update each mutated account, producing the post-block state object by applying the state mutations to the prestate (retrieved in 1a).
 			acct := s.accessList.prestateReader.account(address)
 			diff := s.diffs[address]
 			if acct == nil {
@@ -428,21 +447,6 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 				hashStart := time.Now()
 				tr.Hash()
 				s.metrics.StateHash = time.Since(hashStart)
-				/*
-					var objTrieData string
-					it, err := tr.NodeIterator([]byte{})
-					if err != nil {
-						panic(err)
-					}
-					for it.Next(true) {
-						if it.Leaf() {
-							objTrieData += fmt.Sprintf("%x: %x\n", it.Path(), it.LeafBlob())
-						} else {
-							objTrieData += fmt.Sprintf("%x: %x\n", it.Path(), it.Hash())
-						}
-					}
-					fmt.Printf("acct hash %x. hash=%x,  updated storage: %v, deleted storage: %v trie:\n%s\n", crypto.Keccak256Hash(address[:]), tr.Hash(), updateKeys, deleteKeys, objTrieData)
-				*/
 			}
 
 			wg.Done()
@@ -450,7 +454,7 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 	}
 
 	wg.Add(1)
-	// prefetch all modified accounts in the main account trie.
+	// 1 (d): prefetch the intermediate trie nodes of the mutated state set from the account trie.
 	go func() {
 		prefetchStart := time.Now()
 		if err := s.stateTrie.PrefetchAccount(s.accessList.ModifiedAccounts()); err != nil {
@@ -463,8 +467,7 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 	wg.Wait()
 	s.metrics.AccountUpdate = time.Since(start)
 
-	// stage 2: update the main account trie
-
+	// 2: compute the post-state root of the account trie
 	stateUpdateStart := time.Now()
 	for mutatedAddr, _ := range s.diffs {
 		p, _ := s.prestates.Load(mutatedAddr)
@@ -489,7 +492,7 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 			if err := s.stateTrie.UpdateAccount(mutatedAddr, acct, len(code)); err != nil {
 				panic("FUCK4")
 			}
-			s.poststates[mutatedAddr] = acct
+			s.postStates[mutatedAddr] = acct
 		}
 	}
 
@@ -498,21 +501,6 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 	stateTrieHashStart := time.Now()
 	s.rootHash = s.stateTrie.Hash()
 	s.metrics.StateHash = time.Since(stateTrieHashStart)
-
-	/*
-		it, err := s.stateTrie.NodeIterator([]byte{})
-		if err != nil {
-			panic(err)
-		}
-		fmt.Println("state trie")
-		for it.Next(true) {
-			if it.Leaf() {
-				fmt.Printf("%x: %x\n", it.Path(), it.LeafBlob())
-			} else {
-				fmt.Printf("%x: %x\n", it.Path(), it.Hash())
-			}
-		}
-	*/
 	return s.rootHash
 }
 
