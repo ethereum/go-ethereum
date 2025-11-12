@@ -334,7 +334,13 @@ func (q *queue) Results(block bool) []*fetchResult {
 	}
 	// Using the newly calibrated result size, figure out the new throttle limit
 	// on the result cache
-	throttleThreshold := uint64((common.StorageSize(blockCacheMemory) + q.resultSize - 1) / q.resultSize)
+	var throttleThreshold uint64
+	if q.resultSize > 0 {
+		throttleThreshold = uint64((common.StorageSize(blockCacheMemory) + q.resultSize - 1) / q.resultSize)
+	} else {
+		// Fall back to the initial cache size until we have samples to calibrate the average block size.
+		throttleThreshold = uint64(blockCacheInitialItems)
+	}
 	throttleThreshold = q.resultCache.SetThrottleThreshold(throttleThreshold)
 
 	// With results removed from the cache, wake throttled fetchers
