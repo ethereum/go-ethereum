@@ -77,6 +77,7 @@ type FilterAPI struct {
 	filters       map[rpc.ID]*filter
 	timeout       time.Duration
 	logQueryLimit int
+	rangeLimit    uint64
 }
 
 // NewFilterAPI returns a new FilterAPI instance.
@@ -87,6 +88,7 @@ func NewFilterAPI(system *FilterSystem) *FilterAPI {
 		filters:       make(map[rpc.ID]*filter),
 		timeout:       system.cfg.Timeout,
 		logQueryLimit: system.cfg.LogQueryLimit,
+		rangeLimit:    system.cfg.RangeLimit,
 	}
 	go api.timeoutLoop(system.cfg.Timeout)
 
@@ -467,7 +469,7 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 			return nil, &history.PrunedHistoryError{}
 		}
 		// Construct the range filter
-		filter = api.sys.NewRangeFilter(begin, end, crit.Addresses, crit.Topics)
+		filter = api.sys.NewRangeFilter(begin, end, crit.Addresses, crit.Topics, api.rangeLimit)
 	}
 
 	// Run the filter and return all the logs
@@ -519,7 +521,7 @@ func (api *FilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*types.Lo
 			end = f.crit.ToBlock.Int64()
 		}
 		// Construct the range filter
-		filter = api.sys.NewRangeFilter(begin, end, f.crit.Addresses, f.crit.Topics)
+		filter = api.sys.NewRangeFilter(begin, end, f.crit.Addresses, f.crit.Topics, api.rangeLimit)
 	}
 	// Run the filter and return all the logs
 	logs, err := filter.Logs(ctx)
