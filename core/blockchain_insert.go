@@ -131,28 +131,6 @@ func (it *insertIterator) next() (*types.Block, error) {
 	return it.chain[it.index], it.validator.ValidateBody(it.chain[it.index])
 }
 
-// peek returns the next block in the iterator, along with any potential validation
-// error for that block, but does **not** advance the iterator.
-//
-// Both header and body validation errors (nil too) is cached into the iterator
-// to avoid duplicating work on the following next() call.
-// nolint:unused
-func (it *insertIterator) peek() (*types.Block, error) {
-	// If we reached the end of the chain, abort
-	if it.index+1 >= len(it.chain) {
-		return nil, nil
-	}
-	// Wait for verification result if not yet done
-	if len(it.errors) <= it.index+1 {
-		it.errors = append(it.errors, <-it.results)
-	}
-	if it.errors[it.index+1] != nil {
-		return it.chain[it.index+1], it.errors[it.index+1]
-	}
-	// Block header valid, ignore body validation since we don't have a parent anyway
-	return it.chain[it.index+1], nil
-}
-
 // previous returns the previous header that was being processed, or nil.
 func (it *insertIterator) previous() *types.Header {
 	if it.index < 1 {
