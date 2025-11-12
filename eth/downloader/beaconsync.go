@@ -34,7 +34,6 @@ import (
 // directed by the skeleton sync's head/tail events.
 type beaconBackfiller struct {
 	downloader *Downloader   // Downloader to direct via this callback implementation
-	syncMode   SyncMode      // Sync mode to use for backfilling the skeleton chains
 	success    func()        // Callback to run on successful sync cycle completion
 	filling    bool          // Flag whether the downloader is backfilling or not
 	filled     *types.Header // Last header filled by the last terminated sync loop
@@ -92,7 +91,6 @@ func (b *beaconBackfiller) resume() {
 	b.filling = true
 	b.filled = nil
 	b.started = make(chan struct{})
-	mode := b.syncMode
 	b.lock.Unlock()
 
 	// Start the backfilling on its own thread since the downloader does not have
@@ -107,7 +105,7 @@ func (b *beaconBackfiller) resume() {
 		}()
 		// If the downloader fails, report an error as in beacon chain mode there
 		// should be no errors as long as the chain we're syncing to is valid.
-		if err := b.downloader.synchronise(mode, b.started); err != nil {
+		if err := b.downloader.synchronise(b.started); err != nil {
 			log.Error("Beacon backfilling failed", "err", err)
 			return
 		}
@@ -117,27 +115,6 @@ func (b *beaconBackfiller) resume() {
 			b.success()
 		}
 	}()
-}
-
-// setMode updates the sync mode from the current one to the requested one. If
-// there's an active sync in progress, it will be cancelled and restarted.
-func (b *beaconBackfiller) setMode(mode SyncMode) {
-	// Update the old sync mode and track if it was changed
-	b.lock.Lock()
-	oldMode := b.syncMode
-	updated := oldMode != mode
-	filling := b.filling
-	b.syncMode = mode
-	b.lock.Unlock()
-
-	// If the sync mode was changed mid-sync, restart. This should never ever
-	// really happen, we just handle it to detect programming errors.
-	if !updated || !filling {
-		return
-	}
-	log.Error("Downloader sync mode changed mid-run", "old", oldMode.String(), "new", mode.String())
-	b.suspend()
-	b.resume()
 }
 
 // SetBadBlockCallback sets the callback to run when a bad block is hit by the
@@ -153,8 +130,8 @@ func (d *Downloader) SetBadBlockCallback(onBadBlock badBlockFn) {
 //
 // Internally backfilling and state sync is done the same way, but the header
 // retrieval and scheduling is replaced.
-func (d *Downloader) BeaconSync(mode SyncMode, head *types.Header, final *types.Header) error {
-	return d.beaconSync(mode, head, final, true)
+func (d *Downloader) BeaconSync(head *types.Header, final *types.Header) error {
+	return d.beaconSync(head, final, true)
 }
 
 // BeaconExtend is an optimistic version of BeaconSync, where an attempt is made
@@ -163,8 +140,8 @@ func (d *Downloader) BeaconSync(mode SyncMode, head *types.Header, final *types.
 //
 // This is useful if a beacon client is feeding us large chunks of payloads to run,
 // but is not setting the head after each.
-func (d *Downloader) BeaconExtend(mode SyncMode, head *types.Header) error {
-	return d.beaconSync(mode, head, nil, false)
+func (d *Downloader) BeaconExtend(head *types.Header) error {
+	return d.beaconSync(head, nil, false)
 }
 
 // beaconSync is the post-merge version of the chain synchronization, where the
@@ -173,20 +150,9 @@ func (d *Downloader) BeaconExtend(mode SyncMode, head *types.Header) error {
 //
 // Internally backfilling and state sync is done the same way, but the header
 // retrieval and scheduling is replaced.
-func (d *Downloader) beaconSync(mode SyncMode, head *types.Header, final *types.Header, force bool) error {
-	// When the downloader starts a sync cycle, it needs to be aware of the sync
-	// mode to use (full, snap). To keep the skeleton chain oblivious, inject the
-	// mode into the backfiller directly.
-	//
-	// Super crazy dangerous type cast. Should be fine (TM), we're only using a
-	// different backfiller implementation for skeleton tests.
-	d.skeleton.filler.(*beaconBackfiller).setMode(mode)
-
+func (d *Downloader) beaconSync(head *types.Header, final *types.Header, force bool) error {
 	// Signal the skeleton sync to switch to a new head, however it wants
-	if err := d.skeleton.Sync(head, final, force); err != nil {
-		return err
-	}
-	return nil
+	return d.skeleton.Sync(head, final, force)
 }
 
 // findBeaconAncestor tries to locate the common ancestor link of the local chain

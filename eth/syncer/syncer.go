@@ -19,13 +19,13 @@ package syncer
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -129,7 +129,11 @@ func (s *Syncer) run() {
 				break
 			}
 			if resync {
-				req.errc <- s.backend.Downloader().BeaconDevSync(ethconfig.FullSync, target)
+				if mode := s.backend.Downloader().GetSyncMode(); mode != ethconfig.FullSync {
+					req.errc <- fmt.Errorf("unsupported syncmode %v", mode)
+				} else {
+					req.errc <- s.backend.Downloader().BeaconDevSync(target)
+				}
 			}
 
 		case <-ticker.C:

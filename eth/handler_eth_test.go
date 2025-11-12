@@ -232,7 +232,7 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 	t.Parallel()
 
 	// Create a message handler, configure it to accept transactions and watch them
-	handler := newTestHandler()
+	handler := newTestHandler(ethconfig.FullSync)
 	defer handler.close()
 
 	handler.handler.synced.Store(true) // mark synced to accept transactions
@@ -284,7 +284,7 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	t.Parallel()
 
 	// Create a message handler and fill the pool with big transactions
-	handler := newTestHandler()
+	handler := newTestHandler(ethconfig.FullSync)
 	defer handler.close()
 
 	insert := make([]*types.Transaction, 100)
@@ -365,13 +365,12 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 	// Create a source handler to send transactions from and a number of sinks
 	// to receive them. We need multiple sinks since a one-to-one peering would
 	// broadcast all transactions without announcement.
-	source := newTestHandler()
-	source.handler.snapSync.Store(false) // Avoid requiring snap, otherwise some will be dropped below
+	source := newTestHandler(ethconfig.FullSync)
 	defer source.close()
 
 	sinks := make([]*testHandler, 10)
 	for i := 0; i < len(sinks); i++ {
-		sinks[i] = newTestHandler()
+		sinks[i] = newTestHandler(ethconfig.FullSync)
 		defer sinks[i].close()
 
 		sinks[i].handler.synced.Store(true) // mark synced to accept transactions
