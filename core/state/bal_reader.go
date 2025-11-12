@@ -104,36 +104,6 @@ func (r *BALReader) initObjFromDiff(db *StateDB, addr common.Address, a *types.S
 	return obj
 }
 
-func (s *BALReader) initMutatedObjFromDiff(db *StateDB, addr common.Address, a *types.StateAccount, diff *bal.AccountMutations) *stateObject {
-	var acct *types.StateAccount
-	if a == nil {
-		acct = &types.StateAccount{
-			Nonce:    0,
-			Balance:  uint256.NewInt(0),
-			Root:     types.EmptyRootHash,
-			CodeHash: types.EmptyCodeHash[:],
-		}
-	} else {
-		acct = a.Copy()
-	}
-	obj := newObject(db, addr, acct)
-	if diff.Nonce != nil {
-		obj.SetNonce(*diff.Nonce)
-	}
-	if diff.Balance != nil {
-		obj.SetBalance(new(uint256.Int).Set(diff.Balance))
-	}
-	if diff.Code != nil {
-		obj.SetCode(crypto.Keccak256Hash(diff.Code), diff.Code)
-	}
-	if diff.StorageWrites != nil {
-		for key, val := range diff.StorageWrites {
-			obj.SetState(key, val)
-		}
-	}
-	return obj
-}
-
 // BALReader provides methods for reading account state from a block access
 // list.  State values returned from the Reader methods must not be modified.
 type BALReader struct {

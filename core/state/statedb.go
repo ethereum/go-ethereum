@@ -931,31 +931,16 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	}
 	var updatedAddrs []common.Address
 
-	if s.blockAccessList != nil {
-		updatedAddrs = s.blockAccessList.ModifiedAccounts()
-	} else {
-		for addr, op := range s.mutations {
-			if op.applied || op.isDelete() {
-				continue
-			}
-			updatedAddrs = append(updatedAddrs, addr)
+	for addr, op := range s.mutations {
+		if op.applied || op.isDelete() {
+			continue
 		}
+		updatedAddrs = append(updatedAddrs, addr)
 	}
 
-	var m sync.Mutex
 	for _, addr := range updatedAddrs {
 		workers.Go(func() error {
-			var obj *stateObject
-			if s.blockAccessList != nil {
-				lastIdx := len(s.blockAccessList.block.Transactions()) + 1
-				diff := s.blockAccessList.readAccountDiff(addr, lastIdx)
-				acct := s.blockAccessList.prestateReader.account(addr)
-				m.Lock()
-				obj = s.blockAccessList.initMutatedObjFromDiff(s, addr, acct, diff)
-				m.Unlock()
-			} else {
-				obj = s.stateObjects[addr] // closure for the task runner below
-			}
+			obj := s.stateObjects[addr] // closure for the task runner below
 			if s.db.TrieDB().IsVerkle() {
 				obj.updateTrie()
 			} else {
@@ -1081,20 +1066,6 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// Track the amount of time wasted on hashing the account trie
 	defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())
 	hash := s.trie.Hash()
-	/*
-		it, err := s.trie.NodeIterator([]byte{})
-		if err != nil {
-			panic(err)
-		}
-		fmt.Println("state trie")
-		for it.Next(true) {
-			if it.Leaf() {
-				fmt.Printf("%x: %x\n", it.Path(), it.LeafBlob())
-			} else {
-				fmt.Printf("%x: %x\n", it.Path(), it.Hash())
-			}
-		}
-	*/
 	// If witness building is enabled, gather the account trie witness
 	if s.witness != nil {
 		witness := s.trie.Witness()
