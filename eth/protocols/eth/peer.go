@@ -67,8 +67,8 @@ type Peer struct {
 	reqCancel   chan *cancel   // Dispatch channel to cancel pending requests and untrack them
 	resDispatch chan *response // Dispatch channel to fulfil pending requests and untrack them
 
-	requestedReceipts map[uint64][]common.Hash   // requestId -> requested receipts map (can be removed if one peer cannot have more than one request in flight)
-	receiptBuffer     map[uint64]*partialReceipt // requestId -> receiptlist map
+	requestedReceipts map[uint64][]common.Hash   // requested receipts list
+	receiptBuffer     map[uint64]*partialReceipt // requestId to receiptlist map
 
 	term chan struct{} // Termination channel to stop the broadcasters
 }
@@ -345,15 +345,30 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, sink chan *Response) (*Requ
 	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))
 	id := rand.Uint64()
 
-	req := &Request{
-		id:   id,
-		sink: sink,
-		code: GetReceiptsMsg,
-		want: ReceiptsMsg,
-		data: &GetReceiptsPacket69{
-			RequestId:          id,
-			GetReceiptsRequest: hashes,
-		},
+	var req *Request
+	if p.version > ETH69 {
+		req = &Request{
+			id:   id,
+			sink: sink,
+			code: GetReceiptsMsg,
+			want: ReceiptsMsg,
+			data: &GetReceiptsPacket70{
+				RequestId:              id,
+				GetReceiptsRequest:     hashes,
+				FirstBlockReceiptIndex: 0,
+			},
+		}
+	} else {
+		req = &Request{
+			id:   id,
+			sink: sink,
+			code: GetReceiptsMsg,
+			want: ReceiptsMsg,
+			data: &GetReceiptsPacket69{
+				RequestId:          id,
+				GetReceiptsRequest: hashes,
+			},
+		}
 	}
 	if err := p.dispatchRequest(req); err != nil {
 		return nil, err
@@ -364,7 +379,7 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, sink chan *Response) (*Requ
 }
 
 // HandlePartialReceipts re-request partial receipts
-func (p *Peer) HandlePartialReceipts(previousId uint64) error {
+func (p *Peer) RequestPartialReceipts(previousId uint64) error {
 	split := p.receiptBuffer[previousId].idx
 	id := rand.Uint64()
 
@@ -382,16 +397,22 @@ func (p *Peer) HandlePartialReceipts(previousId uint64) error {
 		previous:  previousId,
 	}
 
+	p.receiptBuffer[id] = p.receiptBuffer[previousId]
+	p.requestedReceipts[id] = p.requestedReceipts[previousId]
+
+	delete(p.receiptBuffer, previousId)
+	delete(p.requestedReceipts, previousId)
+
 	return p.dispatchRequest(req)
 }
 
-// ValidateReceipt validates a receipt packet and checks whether a partial request is complete.
+// ReconstructReceiptsPacket validates a receipt packet and checks whether a partial request is complete.
 // It also mutates the packet in place, trimming the partial response or appending previously collected receipts.
-func (p *Peer) ValidateReceipt(packet *ReceiptsPacket70) (int, error) {
+func (p *Peer) ReconstructReceiptsPacket(packet *ReceiptsPacket70) (int, error) {
 	from := 0
 	requestId := packet.RequestId
 	if len(packet.List) == 0 {
-		return 0, fmt.Errorf("receipt list size 0")
+		return 0, nil
 	}
 
 	// Process the first block
@@ -400,11 +421,14 @@ func (p *Peer) ValidateReceipt(packet *ReceiptsPacket70) (int, error) {
 	if firstReceipt == nil {
 		return 0, fmt.Errorf("nil first receipt")
 	}
-	if _, ok := p.receiptBuffer[requestId]; !ok {
+	if _, ok := p.receiptBuffer[requestId]; ok {
 		// complete packet (hash validation will be performed later)
 		firstReceipt.items = append(p.receiptBuffer[requestId].list.items, firstReceipt.items...)
 		from = p.receiptBuffer[requestId].idx
 		delete(p.receiptBuffer, requestId)
+		if !packet.LastBlockIncomplete {
+			delete(p.requestedReceipts, requestId)
+		}
 	}
 
 	// Trim and buffer the last block when the response is incomplete.
