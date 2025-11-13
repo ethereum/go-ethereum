@@ -434,51 +434,63 @@ func (p *Peer) ReconstructReceiptsPacket(packet *ReceiptsPacket70) (int, error) 
 	// Trim and buffer the last block when the response is incomplete.
 	if packet.LastBlockIncomplete {
 		lastReceipts := packet.List[len(packet.List)-1]
-		if lastReceipts == nil {
-			return 0, fmt.Errorf("nil partial receipt")
-		}
 
-		var previousTxs int
-		var previousLog uint64
-		if buffer, ok := p.receiptBuffer[requestId]; ok {
-			previousTxs = len(buffer.list.items)
-			previousLog = buffer.size
-		}
-
-		// 1. Verify that the total number of transactions delivered is under the limit.
-		if uint64(previousTxs+len(lastReceipts.items)) > lastReceipts.items[0].GasUsed/21_000 {
-			// should be dropped, don't clear the buffer
-			return 0, fmt.Errorf("total number of tx exceeded limit")
-		}
-
-		// 2. Verify the size of each receipt against the maximum transaction size.
-		for _, rc := range lastReceipts.items {
-			if uint64(len(rc.Logs)) > params.MaxTxGas/params.LogDataGas {
-				return 0, fmt.Errorf("total size of receipt exceeded limit")
-			}
-			previousLog += uint64(len(rc.Logs))
-		}
-		// 3. Verify that the overall downloaded receipt size does not exceed the block gas limit.
-		if previousLog > params.MaxGasLimit/params.LogDataGas {
-			return 0, fmt.Errorf("total download receipt size exceeded the limit")
+		logSize, err := p.validateLastBlockReceipt(lastReceipts, packet.RequestId)
+		if err != nil {
+			return 0, err
 		}
 
 		// Update the buffered data and trim the packet to exclude the incomplete block.
 		if buffer, ok := p.receiptBuffer[requestId]; ok {
 			buffer.idx = buffer.idx + len(packet.List) - 1
 			buffer.list.items = append(buffer.list.items, lastReceipts.items...)
-			buffer.size = previousLog
+			buffer.size = buffer.size + logSize
 		} else {
 			p.receiptBuffer[requestId] = &partialReceipt{
 				idx:  len(packet.List) - 1,
 				list: lastReceipts,
-				size: previousLog,
+				size: logSize,
 			}
 		}
 		packet.List = packet.List[:len(packet.List)-1]
 	}
 
 	return from, nil
+}
+
+// validateLastBlockReceipt validates receipts and return log size of last block receipt
+func (p *Peer) validateLastBlockReceipt(lastReceipts *ReceiptList69, id uint64) (uint64, error) {
+	if lastReceipts == nil {
+		return 0, fmt.Errorf("nil partial receipt")
+	}
+
+	var previousTxs int
+	var previousLog uint64
+	var log uint64
+	if buffer, ok := p.receiptBuffer[id]; ok {
+		previousTxs = len(buffer.list.items)
+		previousLog = buffer.size
+	}
+
+	// 1. Verify that the total number of transactions delivered is under the limit.
+	if uint64(previousTxs+len(lastReceipts.items)) > lastReceipts.items[0].GasUsed/21_000 {
+		// should be dropped, don't clear the buffer
+		return 0, fmt.Errorf("total number of tx exceeded limit")
+	}
+
+	// 2. Verify the size of each receipt against the maximum transaction size.
+	for _, rc := range lastReceipts.items {
+		if uint64(len(rc.Logs)) > params.MaxTxGas/params.LogDataGas {
+			return 0, fmt.Errorf("total size of receipt exceeded limit")
+		}
+		log += uint64(len(rc.Logs))
+	}
+	// 3. Verify that the overall downloaded receipt size does not exceed the block gas limit.
+	if previousLog+log > params.MaxGasLimit/params.LogDataGas {
+		return 0, fmt.Errorf("total download receipt size exceeded the limit")
+	}
+
+	return log, nil
 }
 
 // RequestTxs fetches a batch of transactions from a remote node.
