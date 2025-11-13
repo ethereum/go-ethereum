@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"sync"
 	"time"
@@ -193,7 +194,9 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	version := payloadVersion(c.eth.BlockChain().Config(), timestamp)
 
 	var random [32]byte
-	rand.Read(random[:])
+	if _, err := io.ReadFull(rand.Reader, random[:]); err != nil {
+		return fmt.Errorf("failed to read randomness: %w", err)
+	}
 	fcResponse, err := c.engineAPI.forkchoiceUpdated(c.curForkchoiceState, &engine.PayloadAttributes{
 		Timestamp:             timestamp,
 		SuggestedFeeRecipient: feeRecipient,
