@@ -130,7 +130,7 @@ func ReadPersistentStateID(db ethdb.KeyValueReader) uint64 {
 
 // WritePersistentStateID stores the id of the persistent state into database.
 func WritePersistentStateID(db ethdb.KeyValueWriter, number uint64) {
-	if err := db.Put(persistentStateIDKey, encodeBlockNumber(number)); err != nil {
+	if err := db.Put(persistentStateIDKey, encodeUint64(number)); err != nil {
 		log.Crit("Failed to store the persistent state ID", "err", err)
 	}
 }
