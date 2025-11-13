@@ -615,7 +615,7 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 				return checkeq("GetState("+key.Hex()+")", checkstate.GetState(addr, key), value)
 			})
 			forEachStorage(checkstate, addr, func(key, value common.Hash) bool {
-				return checkeq("GetState("+key.Hex()+")", checkstate.GetState(addr, key), value)
+				return checkeq("GetState("+key.Hex()+")", state.GetState(addr, key), value)
 			})
 			other := checkstate.getStateObject(addr)
 			// Check dirty storage which is not in trie
