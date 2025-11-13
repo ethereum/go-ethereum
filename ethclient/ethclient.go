@@ -42,28 +42,34 @@ func Dial(rawurl string) (*Client, error) {
 	return DialContext(context.Background(), rawurl)
 }
 
-// DialContext connects a client to the given URL with context.
+// Dial creates a new RPC client and connects to the given URL endpoint.
+func Dial(rawurl string) (*Client, error) {
+        return DialContext(context.Background(), rawurl)
+}
+
+// DialContext creates a new RPC client using the provided context
+// and connects it to the specified URL endpoint.
 func DialContext(ctx context.Context, rawurl string) (*Client, error) {
-	c, err := rpc.DialContext(ctx, rawurl)
-	if err != nil {
-		return nil, err
-	}
-	return NewClient(c), nil
+        c, err := rpc.DialContext(ctx, rawurl)
+        if err != nil {
+                return nil, err
+        }
+        return NewClient(c), nil
 }
 
-// NewClient creates a client that uses the given RPC client.
+// NewClient creates a Client instance that wraps the provided RPC client.
 func NewClient(c *rpc.Client) *Client {
-	return &Client{c}
+        return &Client{c}
 }
 
-// Close closes the underlying RPC connection.
+// Close terminates the underlying RPC connection.
 func (ec *Client) Close() {
-	ec.c.Close()
+        ec.c.Close()
 }
 
-// Client gets the underlying RPC client.
+// Client returns the underlying RPC client instance.
 func (ec *Client) Client() *rpc.Client {
-	return ec.c
+        return ec.c
 }
 
 // Blockchain Access
