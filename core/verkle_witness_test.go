@@ -61,7 +61,7 @@ var (
 		TerminalTotalDifficulty: common.Big0,
 		EnableVerkleAtGenesis:   true,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
-			Verkle: params.DefaultPragueBlobConfig,
+			Prague: params.DefaultPragueBlobConfig,
 		},
 		// TODO uncomment when proof generation is merged
 		// ProofInBlocks:                 true,
@@ -85,7 +85,7 @@ var (
 		TerminalTotalDifficulty: common.Big0,
 		EnableVerkleAtGenesis:   true,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
-			Verkle: params.DefaultPragueBlobConfig,
+			Prague: params.DefaultPragueBlobConfig,
 		},
 	}
 )

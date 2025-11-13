@@ -1234,11 +1234,6 @@ func TestBillyMigration(t *testing.T) {
 					Max:            maxBlobs,
 					UpdateFraction: params.DefaultCancunBlobConfig.UpdateFraction,
 				},
-				Osaka: &params.BlobConfig{
-					Target:         maxBlobs / 2,
-					Max:            maxBlobs,
-					UpdateFraction: params.DefaultCancunBlobConfig.UpdateFraction,
-				},
 			},
 		}
 		chain := &testBlockChain{

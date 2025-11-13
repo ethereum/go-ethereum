@@ -293,8 +293,6 @@ func TestVerkleGenesisCommit(t *testing.T) {
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: params.DefaultCancunBlobConfig,
 			Prague: params.DefaultPragueBlobConfig,
-			Osaka:  params.DefaultOsakaBlobConfig,
-			Verkle: params.DefaultPragueBlobConfig,
 		},
 	}
 
