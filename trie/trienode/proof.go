@@ -85,9 +85,11 @@ func (db *ProofSet) Get(key []byte) ([]byte, error) {
 }
 
 // Has returns true if the node set contains the given key
-func (db *ProofSet) Has(key []byte) (bool, error) {
-	_, err := db.Get(key)
-	return err == nil, nil
+    db.lock.RLock()
+	defer db.lock.RUnlock()
+
+	_, ok := db.nodes[string(key)]
+	return ok, nil
 }
 
 // KeyCount returns the number of nodes in the set
