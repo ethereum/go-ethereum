@@ -26,12 +26,10 @@ import (
 	"math"
 	"slices"
 	"sort"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // Each trie node history entry consists of three parts (stored in three freezer
@@ -656,33 +654,6 @@ func (r *trienodeHistoryReader) read(owner common.Hash, path string) ([]byte, er
 		r.iReaders[owner] = ir
 	}
 	return ir.read(path)
-}
-
-// writeTrienodeHistory persists the trienode history associated with the given diff layer.
-// nolint:unused
-func writeTrienodeHistory(writer ethdb.AncientWriter, dl *diffLayer) error {
-	start := time.Now()
-	h := newTrienodeHistory(dl.rootHash(), dl.parent.rootHash(), dl.block, dl.nodes.nodeOrigin)
-	header, keySection, valueSection, err := h.encode()
-	if err != nil {
-		return err
-	}
-	// Write history data into five freezer table respectively.
-	if err := rawdb.WriteTrienodeHistory(writer, dl.stateID(), header, keySection, valueSection); err != nil {
-		return err
-	}
-	trienodeHistoryDataBytesMeter.Mark(int64(len(valueSection)))
-	trienodeHistoryIndexBytesMeter.Mark(int64(len(header) + len(keySection)))
-	trienodeHistoryBuildTimeMeter.UpdateSince(start)
-
-	log.Debug(
-		"Stored trienode history", "id", dl.stateID(), "block", dl.block,
-		"header", common.StorageSize(len(header)),
-		"keySection", common.StorageSize(len(keySection)),
-		"valueSection", common.StorageSize(len(valueSection)),
-		"elapsed", common.PrettyDuration(time.Since(start)),
-	)
-	return nil
 }
 
 // readTrienodeMetadata resolves the metadata of the specified trienode history.
