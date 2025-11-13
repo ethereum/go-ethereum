@@ -143,10 +143,6 @@ func historyRange(freezer ethdb.AncientReader) (uint64, uint64, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	// If there is no history available, return an explicit error.
-	if head == tail {
-		return 0, 0, fmt.Errorf("no history available")
-	}
 	last := head
 
 	fh, err := readStateHistory(freezer, first)
