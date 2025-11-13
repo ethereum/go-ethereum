@@ -190,7 +190,7 @@ func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database) (common.Hash, e
 		return common.Hash{}, err
 	}
 	// Commit newly generated states into disk if it's not empty.
-	if root != types.EmptyRootHash {
+	if root != emptyRoot {
 		if err := triedb.Commit(root, true); err != nil {
 			return common.Hash{}, err
 		}
