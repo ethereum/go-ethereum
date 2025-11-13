@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -104,6 +105,8 @@ type historyReader struct {
 	disk    ethdb.KeyValueReader
 	freezer ethdb.AncientReader
 	readers map[string]*indexReaderWithLimitTag
+
+	mu sync.RWMutex
 }
 
 // newHistoryReader constructs the history reader with the supplied db.
@@ -248,15 +251,19 @@ func (r *historyReader) read(state stateIdentQuery, stateID uint64, lastID uint6
 		return nil, fmt.Errorf("state history is not fully indexed, requested: %d, indexed: %s", stateID, indexed)
 	}
 
+	r.mu.RLock()
 	// Construct the index reader to locate the corresponding history for
 	// state retrieval
 	ir, ok := r.readers[state.String()]
+	r.mu.RUnlock()
 	if !ok {
 		ir, err = newIndexReaderWithLimitTag(r.disk, state.stateIdent, metadata.Last)
 		if err != nil {
 			return nil, err
 		}
+		r.mu.Lock()
 		r.readers[state.String()] = ir
+		r.mu.Unlock()
 	}
 	historyID, err := ir.readGreaterThan(stateID, lastID)
 	if err != nil {

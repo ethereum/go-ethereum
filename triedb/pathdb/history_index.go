@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -74,6 +75,8 @@ type indexReader struct {
 	descList []*indexBlockDesc
 	readers  map[uint32]*blockReader
 	state    stateIdent
+
+	mu sync.RWMutex
 }
 
 // loadIndexData loads the index data associated with the specified state.
@@ -103,6 +106,9 @@ func newIndexReader(db ethdb.KeyValueReader, state stateIdent) (*indexReader, er
 // refresh reloads the last section of index data to account for any additional
 // elements that may have been written to disk.
 func (r *indexReader) refresh() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	// Release the reader for the last section of index data, as its content
 	// may have been modified by additional elements written to the disk.
 	if len(r.descList) != 0 {
@@ -130,7 +136,9 @@ func (r *indexReader) readGreaterThan(id uint64) (uint64, error) {
 	}
 	desc := r.descList[index]
 
+	r.mu.RLock()
 	br, ok := r.readers[desc.id]
+	r.mu.RUnlock()
 	if !ok {
 		var err error
 		blob := readStateIndexBlock(r.state, r.db, desc.id)
@@ -138,7 +146,9 @@ func (r *indexReader) readGreaterThan(id uint64) (uint64, error) {
 		if err != nil {
 			return 0, err
 		}
+		r.mu.Lock()
 		r.readers[desc.id] = br
+		r.mu.Unlock()
 	}
 	// The supplied ID is not greater than block.max, ensuring that an element
 	// satisfying the condition can be found.
