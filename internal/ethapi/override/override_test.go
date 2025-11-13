@@ -22,11 +22,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/triedb"
 )
 
 type precompileContract struct{}
@@ -40,7 +38,7 @@ func (p *precompileContract) Name() string {
 }
 
 func TestStateOverrideMovePrecompile(t *testing.T) {
-	db := state.NewDatabase(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil), nil)
+	db := state.NewDatabaseForTesting()
 	statedb, err := state.New(types.EmptyRootHash, db)
 	if err != nil {
 		t.Fatalf("failed to create statedb: %v", err)
