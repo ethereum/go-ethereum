@@ -274,9 +274,9 @@ func TestEmptyBlocks(t *testing.T) {
 	}
 }
 
-// TestPartialReceiptDelivery checks two points below
-// 1. Receipts failed validation should be re requested to the other peers
-// 2. Partial delivery should not be expired
+// TestPartialReceiptDelivery checks two points:
+// 1. Receipts that fail validation should be re-requested from other peers.
+// 2. Partial delivery should not expire.
 func TestPartialReceiptDelivery(t *testing.T) {
 	blocks, receipts := makeChain(64, 0, testGenesis, blockConfig{txPeriod: 1, txCount: 5})
 	chain := chainData{blocks: blocks, receipts: receipts, offset: 0}
@@ -305,7 +305,7 @@ func TestPartialReceiptDelivery(t *testing.T) {
 
 	t.Logf("request: length %d", len(req.Headers))
 
-	// 1. Deliver partial receipt: should not clear the remaining receipts from pending list
+	// 1. Deliver a partial receipt: this must not clear the remaining receipts from the pending list
 	firstCutoff := len(req.Headers) / 3
 	receiptRLP, rcHashes := getPartialReceiptsDelivery(0, firstCutoff, receipts)
 	accepted, err := q.DeliverReceipts(peer.id, receiptRLP, rcHashes, true, 0)
@@ -333,7 +333,7 @@ func TestPartialReceiptDelivery(t *testing.T) {
 		t.Fatalf("there should be in flight receipts")
 	}
 
-	// 2. Deliver partial receipt with invalid receipt: should clear invalid receipt from pending list
+	// 2. Deliver a partial receipt containing an invalid entry: the invalid receipt should be removed from the pending list
 	secondCutoff := firstCutoff + len(req.Headers)/3
 	receiptRLP, rcHashes = getPartialReceiptsDelivery(firstCutoff, secondCutoff, receipts)
 	// one invalid receipt
@@ -346,7 +346,7 @@ func TestPartialReceiptDelivery(t *testing.T) {
 		t.Fatalf("delivery should fail")
 	}
 
-	// invalid receipt should returned back to the pending pool
+	// The invalid receipt should be returned to the pending pool
 	if pending := q.PendingReceipts(); pending != numBlock-len(req.Headers)+1 {
 		t.Fatalf("wrong pending receipt length, got %d, exp %d", pending, numBlock-len(req.Headers))
 	}
@@ -364,7 +364,7 @@ func TestPartialReceiptDelivery(t *testing.T) {
 		}
 	}
 
-	// 3. Deliver partial receipt to complete request
+	// 3. Deliver the remaining receipts to complete the request
 	thirdCutoff := len(req.Headers)
 	receiptRLP, rcHashes = getPartialReceiptsDelivery(secondCutoff, thirdCutoff, receipts)
 	accepted, err = q.DeliverReceipts(peer.id, receiptRLP, rcHashes, false, secondCutoff)

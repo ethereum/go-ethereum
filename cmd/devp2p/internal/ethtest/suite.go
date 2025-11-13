@@ -81,7 +81,7 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "ZeroRequestID", Fn: s.TestZeroRequestID},
 		// get history
 		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
-		{Name: "GetReceipts70", Fn: s.TestGetReceipts},
+		{Name: "GetReceipts", Fn: s.TestGetReceipts},
 		// test transactions
 		{Name: "LargeTxRequest", Fn: s.TestLargeTxRequest, Slow: true},
 		{Name: "Transaction", Fn: s.TestTransaction},

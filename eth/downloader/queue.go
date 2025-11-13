@@ -679,7 +679,7 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	// If no data items were retrieved, mark them as unavailable for the origin peer
 	if results == 0 {
 		for _, header := range request.Headers {
-			request.Peer.MarkLacking(header.Hash()) //todo?
+			request.Peer.MarkLacking(header.Hash())
 		}
 	}
 	// Assemble each of the results with their headers and retrieved data parts
@@ -720,7 +720,6 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	resDropMeter.Mark(int64(results - accepted))
 
 	// Return all failed or missing fetches to the queue
-	//todo
 	if incomplete {
 		for _, header := range request.Headers[from+accepted : from+results] {
 			taskQueue.Push(header, -int64(header.Number.Uint64()))

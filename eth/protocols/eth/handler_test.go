@@ -553,7 +553,7 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 func TestGetBlockPartialReceipts(t *testing.T) { testGetBlockPartialReceipts(t, ETH70) }
 
 func testGetBlockPartialReceipts(t *testing.T, protocol int) {
-	// First generate chain and overwrite receipts
+	// First, generate the chain and overwrite the receipts.
 	generator := func(_ int, block *core.BlockGen) {
 		for j := 0; j < 5; j++ {
 			tx, err := types.SignTx(
@@ -573,7 +573,7 @@ func testGetBlockPartialReceipts(t *testing.T, protocol int) {
 	blockCutoff := 2
 	receiptCutoff := 4
 
-	// Replace receipts in DB with larger receipts
+	// Replace the receipts in the database with larger receipts.
 	targetBlock := backend.chain.GetBlockByNumber(uint64(blockCutoff))
 	receipts := backend.chain.GetReceiptsByHash(targetBlock.Hash())
 	receiptSize := params.MaxTxGas / params.LogDataGas // ~2MiB per receipt
@@ -626,7 +626,7 @@ func testGetBlockPartialReceipts(t *testing.T, protocol int) {
 		t.Errorf("receipts mismatch: %v", err)
 	}
 
-	// Simulate re-request
+	// Simulate the continued request
 	partialReceipt = []*ReceiptList69{NewReceiptList69(receipts[receiptCutoff:])}
 
 	p2p.Send(peer.app, GetReceiptsMsg, &GetReceiptsPacket70{
