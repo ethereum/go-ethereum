@@ -65,7 +65,7 @@ var DefaultConfig = Config{
 // Miner is the main object which takes care of submitting new work to consensus
 // engine and gathering the sealing result.
 type Miner struct {
-	confMu      sync.RWMutex // The lock used to protect the config fields: GasCeil, GasTip and Extradata
+	confMu      sync.RWMutex // Protects config fields (GasCeil, GasPrice used as min tip, ExtraData, Recommit) and prio addresses list
 	config      *Config
 	chainConfig *params.ChainConfig
 	engine      consensus.Engine
