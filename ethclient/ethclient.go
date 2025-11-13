@@ -45,7 +45,11 @@ func Dial(rawurl string) (*Client, error) {
 // DialContext creates a new RPC client using the provided context
 // and connects it to the specified URL endpoint.
 func DialContext(ctx context.Context, rawurl string) (*Client, error) {
-    ...
+    c, err := rpc.DialContext(ctx, rawurl)
+    if err != nil {
+        return nil, err
+    }
+    return NewClient(c), nil
 }
 
 // NewClient creates a Client instance that wraps the provided RPC client.
