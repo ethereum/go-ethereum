@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/params"
@@ -2041,7 +2040,6 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 		dbconfig.HashDB = hashdb.Defaults
 	}
 	chain.triedb = triedb.NewDatabase(chain.db, dbconfig)
-	chain.statedb = state.NewDatabase(chain.triedb, chain.snaps)
 
 	// Force run a freeze cycle
 	type freezer interface {

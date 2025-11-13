@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/codedb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -508,7 +509,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		tconf.PathDB = pathdb.Defaults
 	}
 	triedb := triedb.NewDatabase(db, tconf)
-	sdb := state.NewDatabase(triedb, nil)
+	sdb := state.NewDatabase(triedb, codedb.New(db))
 	statedb, _ := state.New(types.EmptyRootHash, sdb)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code, tracing.CodeChangeUnspecified)
@@ -532,7 +533,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		}
 		snaps, _ = snapshot.New(snapconfig, db, triedb, root)
 	}
-	sdb = state.NewDatabase(triedb, snaps)
+	sdb = state.NewDatabase(triedb, codedb.New(db)).WithSnapshot(snaps)
 	statedb, _ = state.New(root, sdb)
 	return StateTestState{statedb, triedb, snaps}
 }

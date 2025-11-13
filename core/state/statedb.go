@@ -28,8 +28,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -149,7 +147,7 @@ type StateDB struct {
 	StorageUpdates  time.Duration
 	StorageCommits  time.Duration
 	SnapshotCommits time.Duration
-	TrieDBCommits   time.Duration
+	DatabaseCommits time.Duration
 
 	AccountLoaded  int          // Number of accounts retrieved from the database during the state transition
 	AccountUpdated int          // Number of accounts updated during the state transition
@@ -986,31 +984,36 @@ func (s *StateDB) clearJournalAndRefund() {
 	s.refund = 0
 }
 
-// fastDeleteStorage is the function that efficiently deletes the storage trie
-// of a specific account. It leverages the associated state snapshot for fast
-// storage iteration and constructs trie node deletion markers by creating
-// stack trie with iterated slots.
-func (s *StateDB) fastDeleteStorage(snaps *snapshot.Tree, addrHash common.Hash, root common.Hash) (map[common.Hash][]byte, map[common.Hash][]byte, *trienode.NodeSet, error) {
-	iter, err := snaps.StorageIterator(s.originalRoot, addrHash, common.Hash{})
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	defer iter.Release()
-
+// deleteStorage is designed to delete the storage trie of a designated account.
+// The function will make an attempt to utilize an efficient strategy if the
+// associated state snapshot is reachable; otherwise, it will resort to a less
+// efficient approach.
+func (s *StateDB) deleteStorage(addrHash common.Hash, root common.Hash) (map[common.Hash][]byte, map[common.Hash][]byte, *trienode.NodeSet, error) {
 	var (
+		err            error
 		nodes          = trienode.NewNodeSet(addrHash) // the set for trie node mutations (value is nil)
 		storages       = make(map[common.Hash][]byte)  // the set for storage mutations (value is nil)
 		storageOrigins = make(map[common.Hash][]byte)  // the set for tracking the original value of slot
 	)
+	iteratee, err := s.db.Iteratee(s.originalRoot)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	it, err := iteratee.NewStorageIterator(addrHash, root, common.Hash{})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	defer it.Release()
+
 	stack := trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
 		nodes.AddNode(path, trienode.NewDeletedWithPrev(blob))
 	})
-	for iter.Next() {
-		slot := common.CopyBytes(iter.Slot())
-		if err := iter.Error(); err != nil { // error might occur after Slot function
+	for it.Next() {
+		slot := common.CopyBytes(it.Slot())
+		if err := it.Error(); err != nil { // error might occur after Slot function
 			return nil, nil, nil, err
 		}
-		key := iter.Hash()
+		key := it.Hash()
 		storages[key] = nil
 		storageOrigins[key] = slot
 
@@ -1018,73 +1021,11 @@ func (s *StateDB) fastDeleteStorage(snaps *snapshot.Tree, addrHash common.Hash, 
 			return nil, nil, nil, err
 		}
 	}
-	if err := iter.Error(); err != nil { // error might occur during iteration
+	if err := it.Error(); err != nil { // error might occur during iteration
 		return nil, nil, nil, err
 	}
 	if stack.Hash() != root {
 		return nil, nil, nil, fmt.Errorf("snapshot is not matched, exp %x, got %x", root, stack.Hash())
-	}
-	return storages, storageOrigins, nodes, nil
-}
-
-// slowDeleteStorage serves as a less-efficient alternative to "fastDeleteStorage,"
-// employed when the associated state snapshot is not available. It iterates the
-// storage slots along with all internal trie nodes via trie directly.
-func (s *StateDB) slowDeleteStorage(addr common.Address, addrHash common.Hash, root common.Hash) (map[common.Hash][]byte, map[common.Hash][]byte, *trienode.NodeSet, error) {
-	tr, err := s.db.OpenStorageTrie(s.originalRoot, addr, root, s.trie)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to open storage trie, err: %w", err)
-	}
-	it, err := tr.NodeIterator(nil)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to open storage iterator, err: %w", err)
-	}
-	var (
-		nodes          = trienode.NewNodeSet(addrHash) // the set for trie node mutations (value is nil)
-		storages       = make(map[common.Hash][]byte)  // the set for storage mutations (value is nil)
-		storageOrigins = make(map[common.Hash][]byte)  // the set for tracking the original value of slot
-	)
-	for it.Next(true) {
-		if it.Leaf() {
-			key := common.BytesToHash(it.LeafKey())
-			storages[key] = nil
-			storageOrigins[key] = common.CopyBytes(it.LeafBlob())
-			continue
-		}
-		if it.Hash() == (common.Hash{}) {
-			continue
-		}
-		nodes.AddNode(it.Path(), trienode.NewDeletedWithPrev(it.NodeBlob()))
-	}
-	if err := it.Error(); err != nil {
-		return nil, nil, nil, err
-	}
-	return storages, storageOrigins, nodes, nil
-}
-
-// deleteStorage is designed to delete the storage trie of a designated account.
-// The function will make an attempt to utilize an efficient strategy if the
-// associated state snapshot is reachable; otherwise, it will resort to a less
-// efficient approach.
-func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root common.Hash) (map[common.Hash][]byte, map[common.Hash][]byte, *trienode.NodeSet, error) {
-	var (
-		err            error
-		nodes          *trienode.NodeSet      // the set for trie node mutations (value is nil)
-		storages       map[common.Hash][]byte // the set for storage mutations (value is nil)
-		storageOrigins map[common.Hash][]byte // the set for tracking the original value of slot
-	)
-	// The fast approach can be failed if the snapshot is not fully
-	// generated, or it's internally corrupted. Fallback to the slow
-	// one just in case.
-	snaps := s.db.Snapshot()
-	if snaps != nil {
-		storages, storageOrigins, nodes, err = s.fastDeleteStorage(snaps, addrHash, root)
-	}
-	if snaps == nil || err != nil {
-		storages, storageOrigins, nodes, err = s.slowDeleteStorage(addr, addrHash, root)
-	}
-	if err != nil {
-		return nil, nil, nil, err
 	}
 	return storages, storageOrigins, nodes, nil
 }
@@ -1139,7 +1080,7 @@ func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*acco
 			return nil, nil, fmt.Errorf("unexpected storage wiping, %x", addr)
 		}
 		// Remove storage slots belonging to the account.
-		storages, storagesOrigin, set, err := s.deleteStorage(addr, addrHash, prev.Root)
+		storages, storagesOrigin, set, err := s.deleteStorage(addrHash, prev.Root)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to delete storage, err: %w", err)
 		}
@@ -1159,7 +1100,7 @@ func (s *StateDB) GetTrie() Trie {
 
 // commit gathers the state mutations accumulated along with the associated
 // trie changes, resetting all internal flags with the new state as the base.
-func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNumber uint64) (*stateUpdate, error) {
+func (s *StateDB) commit(deleteEmptyObjects bool, rawStorageKey bool, blockNumber uint64) (*stateUpdate, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
@@ -1213,7 +1154,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 	// the same block, account deletions must be processed first. This ensures
 	// that the storage trie nodes deleted during destruction and recreated
 	// during subsequent resurrection can be combined correctly.
-	deletes, delNodes, err := s.handleDestruction(noStorageWiping)
+	deletes, delNodes, err := s.handleDestruction(rawStorageKey)
 	if err != nil {
 		return nil, err
 	}
@@ -1311,53 +1252,17 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 	origin := s.originalRoot
 	s.originalRoot = root
 
-	return newStateUpdate(noStorageWiping, origin, root, blockNumber, deletes, updates, nodes), nil
-}
-
-// commitAndFlush is a wrapper of commit which also commits the state mutations
-// to the configured data stores.
-func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (*stateUpdate, error) {
-	ret, err := s.commit(deleteEmptyObjects, noStorageWiping, block)
-	if err != nil {
+	start = time.Now()
+	update := newStateUpdate(rawStorageKey, origin, root, blockNumber, deletes, updates, nodes)
+	if err := s.db.Commit(update); err != nil {
 		return nil, err
 	}
-	// Commit dirty contract code if any exists
-	if db := s.db.TrieDB().Disk(); db != nil && len(ret.codes) > 0 {
-		batch := db.NewBatch()
-		for _, code := range ret.codes {
-			rawdb.WriteCode(batch, code.hash, code.blob)
-		}
-		if err := batch.Write(); err != nil {
-			return nil, err
-		}
-	}
-	if !ret.empty() {
-		// If snapshotting is enabled, update the snapshot tree with this new version
-		if snap := s.db.Snapshot(); snap != nil && snap.Snapshot(ret.originRoot) != nil {
-			start := time.Now()
-			if err := snap.Update(ret.root, ret.originRoot, ret.accounts, ret.storages); err != nil {
-				log.Warn("Failed to update snapshot tree", "from", ret.originRoot, "to", ret.root, "err", err)
-			}
-			// Keep 128 diff layers in the memory, persistent layer is 129th.
-			// - head layer is paired with HEAD state
-			// - head-1 layer is paired with HEAD-1 state
-			// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
-			if err := snap.Cap(ret.root, TriesInMemory); err != nil {
-				log.Warn("Failed to cap snapshot tree", "root", ret.root, "layers", TriesInMemory, "err", err)
-			}
-			s.SnapshotCommits += time.Since(start)
-		}
-		// If trie database is enabled, commit the state update as a new layer
-		if db := s.db.TrieDB(); db != nil {
-			start := time.Now()
-			if err := db.Update(ret.root, ret.originRoot, block, ret.nodes, ret.stateSet()); err != nil {
-				return nil, err
-			}
-			s.TrieDBCommits += time.Since(start)
-		}
-	}
-	s.reader, _ = s.db.Reader(s.originalRoot)
-	return ret, err
+	s.DatabaseCommits = time.Since(start)
+
+	// The reader update must be performed as the final step, otherwise,
+	// the new state would not be visible before db.commit.
+	s.reader, _ = s.db.Reader(root)
+	return update, nil
 }
 
 // Commit writes the state mutations into the configured data stores.
@@ -1374,8 +1279,8 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorag
 // Since self-destruction was deprecated with the Cancun fork and there are
 // no empty accounts left that could be deleted by EIP-158, storage wiping
 // should not occur.
-func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, error) {
-	ret, err := s.commitAndFlush(block, deleteEmptyObjects, noStorageWiping)
+func (s *StateDB) Commit(blockNumber uint64, deleteEmptyObjects bool, rawStorageKey bool) (common.Hash, error) {
+	ret, err := s.commit(deleteEmptyObjects, rawStorageKey, blockNumber)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -1384,8 +1289,8 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, noStorageWiping 
 
 // CommitWithUpdate writes the state mutations and returns both the root hash and the state update.
 // This is useful for tracking state changes at the blockchain level.
-func (s *StateDB) CommitWithUpdate(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, *stateUpdate, error) {
-	ret, err := s.commitAndFlush(block, deleteEmptyObjects, noStorageWiping)
+func (s *StateDB) CommitWithUpdate(blockNumber uint64, deleteEmptyObjects bool, rawStorageKey bool) (common.Hash, *stateUpdate, error) {
+	ret, err := s.commit(deleteEmptyObjects, rawStorageKey, blockNumber)
 	if err != nil {
 		return common.Hash{}, nil, err
 	}

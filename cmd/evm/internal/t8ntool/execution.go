@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/codedb"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -373,7 +374,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 
 func MakePreState(db ethdb.Database, accounts types.GenesisAlloc) *state.StateDB {
 	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
-	sdb := state.NewDatabase(tdb, nil)
+	sdb := state.NewDatabase(tdb, codedb.New(db))
 	statedb, err := state.New(types.EmptyRootHash, sdb)
 	if err != nil {
 		panic(fmt.Errorf("failed to create initial state: %v", err))
