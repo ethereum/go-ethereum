@@ -376,9 +376,6 @@ func generateWitness(blockchain *core.BlockChain, block *types.Block) (*stateles
 		return nil, fmt.Errorf("failed to validate block %d: %w", block.Number(), err)
 	}
 
-	if err = testWitness(blockchain, block, witness); err != nil {
-		return nil, err
-	}
 	return witness, nil
 }
 
