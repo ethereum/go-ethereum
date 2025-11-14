@@ -631,7 +631,7 @@ curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","me
           },
           {
             "type": "WARNING",
-            "message": "Transaction data did not match ABI-interface: WARNING: Supplied data is stuffed with extra data. \nWant 0000000000000002000000000000000000000000000000000000000000000012\nHave 0000000000000000000000000000000000000000000000000000000000000012\nfor method safeSend(address)"
+            "message": "Transaction data did not match ABI-interface: WARNING: Supplied data is stuffed with extra data. \nWant 0000000000000000000000000000000000000000000000000000000000000012\nHave 0000000000000002000000000000000000000000000000000000000000000012\nfor method safeSend(address)"
           }
         ],
       "meta": {
