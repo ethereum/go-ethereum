@@ -131,12 +131,41 @@ func (t *TransitionTrie) UpdateStorage(address common.Address, key []byte, value
 	return t.overlay.UpdateStorage(address, key, v)
 }
 
+// UpdateStorageBatch attempts to update a list storages in the batch manner.
+func (t *TransitionTrie) UpdateStorageBatch(address common.Address, keys [][]byte, values [][]byte) error {
+	if len(keys) != len(values) {
+		return fmt.Errorf("keys and values length mismatch: %d != %d", len(keys), len(values))
+	}
+	for i, key := range keys {
+		if err := t.UpdateStorage(address, key, values[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // UpdateAccount abstract an account write to the trie.
 func (t *TransitionTrie) UpdateAccount(addr common.Address, account *types.StateAccount, codeLen int) error {
 	// NOTE: before the rebase, this was saving the state root, so that OpenStorageTrie
 	// could still work during a replay. This is no longer needed, as OpenStorageTrie
 	// only needs to know what the account trie does now.
 	return t.overlay.UpdateAccount(addr, account, codeLen)
+}
+
+// UpdateAccountBatch attempts to update a list accounts in the batch manner.
+func (t *TransitionTrie) UpdateAccountBatch(addresses []common.Address, accounts []*types.StateAccount, codeLens []int) error {
+	if len(addresses) != len(accounts) {
+		return fmt.Errorf("address and accounts length mismatch: %d != %d", len(addresses), len(accounts))
+	}
+	if len(addresses) != len(codeLens) {
+		return fmt.Errorf("address and code length mismatch: %d != %d", len(addresses), len(codeLens))
+	}
+	for i, addr := range addresses {
+		if err := t.UpdateAccount(addr, accounts[i], codeLens[i]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // DeleteStorage removes any existing value for key from the trie. If a node was not

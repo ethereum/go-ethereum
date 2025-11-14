@@ -177,6 +177,22 @@ func (t *VerkleTrie) UpdateAccount(addr common.Address, acc *types.StateAccount,
 	return nil
 }
 
+// UpdateAccountBatch attempts to update a list accounts in the batch manner.
+func (t *VerkleTrie) UpdateAccountBatch(addresses []common.Address, accounts []*types.StateAccount, codeLens []int) error {
+	if len(addresses) != len(accounts) {
+		return fmt.Errorf("address and accounts length mismatch: %d != %d", len(addresses), len(accounts))
+	}
+	if len(addresses) != len(codeLens) {
+		return fmt.Errorf("address and code length mismatch: %d != %d", len(addresses), len(codeLens))
+	}
+	for i, addr := range addresses {
+		if err := t.UpdateAccount(addr, accounts[i], codeLens[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // UpdateStorage implements state.Trie, writing the provided storage slot into
 // the tree. If the tree is corrupted, an error will be returned.
 func (t *VerkleTrie) UpdateStorage(address common.Address, key, value []byte) error {
@@ -189,6 +205,19 @@ func (t *VerkleTrie) UpdateStorage(address common.Address, key, value []byte) er
 	}
 	k := utils.StorageSlotKeyWithEvaluatedAddress(t.cache.Get(address.Bytes()), key)
 	return t.root.Insert(k, v[:], t.nodeResolver)
+}
+
+// UpdateStorageBatch attempts to update a list storages in the batch manner.
+func (t *VerkleTrie) UpdateStorageBatch(address common.Address, keys [][]byte, values [][]byte) error {
+	if len(keys) != len(values) {
+		return fmt.Errorf("keys and values length mismatch: %d != %d", len(keys), len(values))
+	}
+	for i, key := range keys {
+		if err := t.UpdateStorage(address, key, values[i]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // DeleteAccount leaves the account untouched, as no account deletion can happen
