@@ -39,7 +39,7 @@ type freezerdb struct {
 // Close implements io.Closer, closing both the fast key-value store as well as
 // the slow ancient tables.
 func (frdb *freezerdb) Close() error {
-	var errs []error
+	errs := make([]error, 0, 2)
 	if err := frdb.AncientStore.Close(); err != nil {
 		errs = append(errs, err)
 	}

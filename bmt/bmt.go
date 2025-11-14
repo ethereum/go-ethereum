@@ -218,7 +218,7 @@ func (t *Tree) Draw(hash []byte, d int) string {
 	hashes = append(hashes, []string{"", fmt.Sprintf("%v", hashstr(hash)), ""})
 	total := 60
 	del := "                             "
-	var rows []string
+	rows := make([]string, 0, len(hashes)+2)
 	for i := len(hashes) - 1; i >= 0; i-- {
 		var textlen int
 		hash := hashes[i]

@@ -62,7 +62,7 @@ func (argument *Argument) UnmarshalJSON(data []byte) error {
 
 // NonIndexed returns the arguments with indexed arguments filtered out.
 func (arguments Arguments) NonIndexed() Arguments {
-	var ret []Argument
+	ret := make([]Argument, 0, len(arguments))
 	for _, arg := range arguments {
 		if !arg.Indexed {
 			ret = append(ret, arg)

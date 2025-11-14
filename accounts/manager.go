@@ -65,7 +65,7 @@ type Manager struct {
 // supported backends.
 func NewManager(config *Config, backends ...Backend) *Manager {
 	// Retrieve the initial list of wallets from the backends and sort by URL
-	var wallets []Wallet
+	wallets := make([]Wallet, 0, len(backends))
 	for _, backend := range backends {
 		wallets = merge(wallets, backend.Wallets()...)
 	}

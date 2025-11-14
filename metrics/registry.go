@@ -51,8 +51,8 @@ type orderedRegistry struct {
 
 // Each call the given function for each registered metric.
 func (r *orderedRegistry) Each(f func(string, interface{})) {
-	var names []string
 	reg := r.registered()
+	names := make([]string, 0, len(reg))
 	for name := range reg {
 		names = append(names, name)
 	}

@@ -68,7 +68,7 @@ func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consen
 // transactions failed to execute due to insufficient gas it will return an error.
 func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, tradingState *tradingstate.TradingStateDB, cfg vm.Config, balanceFee map[common.Address]*big.Int) (types.Receipts, []*types.Log, uint64, error) {
 	var (
-		receipts    types.Receipts
+		receipts    = make([]*types.Receipt, 0, len(block.Transactions()))
 		usedGas     = new(uint64)
 		header      = block.Header()
 		blockHash   = block.Hash()

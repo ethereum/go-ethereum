@@ -220,8 +220,8 @@ func (x *XDPoS) VerifyHeaders(chain consensus.ChainReader, headers []*types.Head
 	// Split the headers list into v1 and v2 buckets
 	var v1headers []*types.Header
 	var v2headers []*types.Header
-	var v1fullVerifies []bool
-	var v2fullVerifies []bool
+	v1fullVerifies := make([]bool, 0, len(headers))
+	v2fullVerifies := make([]bool, 0, len(headers))
 
 	for i, header := range headers {
 		switch x.config.BlockConsensusVersion(header.Number) {

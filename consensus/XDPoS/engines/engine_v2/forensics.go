@@ -272,7 +272,7 @@ func (f *Forensics) findQCsInSameRound(quorumCerts1 []types.QuorumCert, quorumCe
 
 // Find the signer list from QC signatures
 func (f *Forensics) getQcSignerAddresses(quorumCert types.QuorumCert) []string {
-	var signerList []string
+	signerList := make([]string, 0, len(quorumCert.Signatures))
 
 	// The QC signatures are signed by votes special struct VoteForSign
 	quorumCertSignedHash := types.VoteSigHash(&types.VoteForSign{

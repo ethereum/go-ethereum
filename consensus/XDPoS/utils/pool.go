@@ -75,7 +75,7 @@ func (p *Pool) PoolObjKeysList() []string {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	var keyList []string
+	keyList := make([]string, 0, len(p.objList))
 	for key := range p.objList {
 		keyList = append(keyList, key)
 	}

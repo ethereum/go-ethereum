@@ -307,7 +307,7 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		},
 	}
 	action := actions[r.Intn(len(actions))]
-	var nameargs []string
+	nameargs := make([]string, 0, 1+len(action.args))
 	if !action.noAddr {
 		nameargs = append(nameargs, addr.Hex())
 	}

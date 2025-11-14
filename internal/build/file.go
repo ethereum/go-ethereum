@@ -85,7 +85,7 @@ func HashFolder(folder string, exlude []string) (map[string][32]byte, error) {
 
 // DiffHashes compares two maps of file hashes and returns the changed files.
 func DiffHashes(a map[string][32]byte, b map[string][32]byte) []string {
-	var updates []string
+	updates := make([]string, 0, len(a)+len(b))
 
 	for file := range a {
 		if _, ok := b[file]; !ok || a[file] != b[file] {

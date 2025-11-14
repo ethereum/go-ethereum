@@ -93,7 +93,7 @@ func DeriveSha(list DerivableList, hasher TrieHasher) common.Hash {
 	// StackTrie requires values to be inserted in increasing hash order, which is not the
 	// order that `list` provides hashes in. This insertion sequence ensures that the
 	// order is correct.
-	var indexBuf []byte
+	indexBuf := make([]byte, 0, list.Len())
 	for i := 1; i < list.Len() && i <= 0x7f; i++ {
 		indexBuf = rlp.AppendUint64(indexBuf[:0], uint64(i))
 		value := encodeForDerive(list, i, valueBuf)

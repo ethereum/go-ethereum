@@ -24,7 +24,7 @@ import (
 func lexAll(src string) []token {
 	ch := Lex("test.asm", []byte(src), false)
 
-	var tokens []token
+	tokens := make([]token, 0, len(ch))
 	for i := range ch {
 		tokens = append(tokens, i)
 	}

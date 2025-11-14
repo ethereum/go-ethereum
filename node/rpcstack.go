@@ -152,7 +152,7 @@ func (h *httpServer) start() error {
 	)
 
 	// Log all handlers mounted on server.
-	var paths []string
+	paths := make([]string, 0, len(h.handlerNames))
 	for path := range h.handlerNames {
 		paths = append(paths, path)
 	}

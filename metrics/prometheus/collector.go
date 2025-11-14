@@ -140,7 +140,7 @@ func (c *collector) writeGaugeInfo(name string, value metrics.GaugeInfoValue) {
 	c.buff.WriteString(fmt.Sprintf(typeGaugeTpl, name))
 	c.buff.WriteString(name)
 	c.buff.WriteString(" ")
-	var kvs []string
+	kvs := make([]string, 0, len(value))
 	for k, v := range value {
 		kvs = append(kvs, fmt.Sprintf("%v=%q", k, v))
 	}

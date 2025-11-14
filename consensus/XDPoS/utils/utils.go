@@ -39,8 +39,8 @@ func ExtractValidatorsFromBytes(byteValidators []byte) ([]int64, error) {
 		return []int64{}, fmt.Errorf("invalid byte array length %d for validators", len(byteValidators))
 	}
 	lenValidator := len(byteValidators) / M2ByteLength
-	var validators []int64
-	for i := 0; i < lenValidator; i++ {
+	validators := make([]int64, 0, lenValidator)
+	for i := range lenValidator {
 		trimByte := bytes.Trim(byteValidators[i*M2ByteLength:(i+1)*M2ByteLength], "\x00")
 		intNumber, err := strconv.ParseInt(string(trimByte), 10, 64)
 		if err != nil {

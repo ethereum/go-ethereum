@@ -276,7 +276,7 @@ func GenM2FromRandomize(randomizes []int64, lenSigners int64) ([]int64, error) {
 
 // Get validators from m2 array integer.
 func BuildValidatorFromM2(listM2 []int64) []byte {
-	var validatorBytes []byte
+	validatorBytes := make([]byte, 0, len(listM2)*utils.M2ByteLength)
 	for _, numberM2 := range listM2 {
 		// Convert number to byte.
 		m2Byte := common.LeftPadBytes([]byte(fmt.Sprintf("%d", numberM2)), utils.M2ByteLength)

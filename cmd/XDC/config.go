@@ -231,7 +231,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend, XDCConfig) {
 
 	// Create gauge with geth system and build information
 	if eth != nil { // The 'eth' backend may be nil in light mode
-		var protos []string
+		protos := make([]string, 0, len(eth.Protocols()))
 		for _, p := range eth.Protocols() {
 			protos = append(protos, fmt.Sprintf("%v/%d", p.Name, p.Version))
 		}

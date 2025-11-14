@@ -232,7 +232,7 @@ func (c *Console) clearHistory() {
 // consoleOutput is an override for the console.log and console.error methods to
 // stream the output into the configured output stream instead of stdout.
 func (c *Console) consoleOutput(call goja.FunctionCall) goja.Value {
-	var output []string
+	output := make([]string, 0, len(call.Arguments))
 	for _, argument := range call.Arguments {
 		output = append(output, fmt.Sprintf("%v", argument))
 	}
