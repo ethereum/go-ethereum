@@ -482,6 +482,7 @@ func opDifficulty(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	return nil, nil
 }
 
+// NOTE: Random is predictable in current implemention, do not use it in real business
 func opRandom(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var v *uint256.Int
 	if interpreter.evm.Context.Random != nil {

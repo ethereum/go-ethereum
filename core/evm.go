@@ -43,6 +43,7 @@ func NewEVMBlockContext(header *types.Header, chain consensus.ChainContext, auth
 		baseFee = new(big.Int).Set(header.BaseFee)
 	}
 	// since xdpos chain do not use difficulty and mixdigest, we use hash of the block number as random
+	// NOTE: random is predictable, do not use it in real business
 	random = crypto.Keccak256Hash(header.Number.Bytes())
 	return vm.BlockContext{
 		CanTransfer: CanTransfer,

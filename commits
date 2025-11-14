@@ -1,5 +1,7 @@
 I found 50 commits containing the keyword "XFN" in the last 200 commits. Here they are with dates: November 2025:
 
+
+
 845137849 - Wanwiset Peerapatanapokin - consensus: change os.Exit to return error (#1653)
 b49f6cb0f - Wanwiset Peerapatanapokin - consensus: verify header hash is same as input hash in getEpochSwitchInfo (#1627)
 e0c987f45 - Wanwiset Peerapatanapokin - impose size limit for DecodeBytesExtraFields (#1637)
@@ -10,6 +12,22 @@ c95d25805 - Wanwiset Peerapatanapokin - separate fullVerifies array into v1fullV
 25a70e877 - Wanwiset Peerapatanapokin - consensus: skip gas limit verification for genesis block (#1646)
 da92ad7cc - Wanwiset Peerapatanapokin - update package version: (#1612)
 
+2025-11-18 - 627d77ae2 - eth/hook: fix parameter mame mismatch in `HookPenalties()`, close XFN-141 (#1741)
+2025-11-18 - f8553d587 - core, miner: fix inconsistent tx blacklist enforcement, close XFN-98 (#1674)
+2025-11-16 - 73061af2c - core/types: fix immutability guarantees in Block #27844, close XFN-82 (#1727)
+2025-11-15 - 07e2609c2 - common: improve variable names for `ExtractAddressFromBytes()`, close XFN-27 (#1726)
+2025-11-15 - 650047c81 - consensus/XDPoS, params: fix some comments, close XFN-125 (#1733)
+2025-11-15 - f24e68b01 - consensus/XDPoS, eth: fix potential rpc.BlockNumber overflow, close XFN-69 (#1735)
+2025-11-15 - 60868c904 - engines/engine_v2: refactor verifyQC by errgroup, close XFN-09 (#1740)
+2025-11-15 - 8cbbc1e83 - consensus, params: remove `SkipV2Validation`, close XFN-151 (#1730)
+2025-11-15 - 7a3ac998a - eth: quick canceling block inserting when debug_setHead is invoked #32067, close XFN-142 (#1728)
+2025-11-14 - eef5242fa - all: pre-allocate memory for slices and maps, close XFN-148 (#1714)
+2025-11-14 - 782a7ff5c - all: fix typos, close XFN-23 (#1725)
+2025-11-14 - bd3d30919 - XDPoS/utils: get pool size by key, close XFN-21 (#1666)
+2025-11-14 - d5a03ab9e - core, eth: fix overuse Of `log.Crit`, close XFN-102 (#1648)
+2025-11-14 - 2c40021f7 - core/state, internal/ethapi: GetAccountInfo handle error properly, close XFN-79 (#1663)
+2025-11-14 - 39b8184f5 - XDPoS/utils: must use `NewPool()` to create Pool, close XFN-13 (#1667)
+2025-11-14 - 956ebb2b0 - core, docs: add solidity document, close XFN-68 (#1670)
 
 2025-11-12 - 4bb925258 - params: fix type V2 not equal bug, close XFN-45 (#1737)
 2025-11-10 - 366c99ece - consensus: use signer pubkey to check for unique signatures, close XFN-03 (#1643)
