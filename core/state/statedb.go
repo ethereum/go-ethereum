@@ -294,14 +294,18 @@ func (s *StateDB) GetAccountInfo(addr common.Address) *AccountInfo {
 
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
-		result.Balance = common.Big0
+		result.Balance = new(big.Int)
 		return &result
 	}
 
 	if stateObject.code != nil {
 		result.CodeSize = len(stateObject.code)
 	} else {
-		result.CodeSize, _ = s.db.ContractCodeSize(stateObject.addrHash, common.BytesToHash(stateObject.CodeHash()))
+		size, err := s.db.ContractCodeSize(stateObject.addrHash, common.BytesToHash(stateObject.CodeHash()))
+		if err != nil {
+			s.setError(err)
+		}
+		result.CodeSize = size
 	}
 	result.Nonce = stateObject.Nonce()
 	result.Balance = stateObject.Balance()
