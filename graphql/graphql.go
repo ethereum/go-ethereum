@@ -575,6 +575,9 @@ func (t *Transaction) getLogs(ctx context.Context, hash common.Hash) (*[]*Log, e
 
 func (t *Transaction) Type(ctx context.Context) *hexutil.Uint64 {
 	tx, _ := t.resolve(ctx)
+	if tx == nil {
+		return nil
+	}
 	txType := hexutil.Uint64(tx.Type())
 	return &txType
 }
