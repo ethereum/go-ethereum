@@ -28,6 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/bintrie"
+	"github.com/ethereum/go-ethereum/trie/transitiontrie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -239,10 +241,12 @@ func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	if db.triedb.IsVerkle() {
 		ts := overlay.LoadTransitionState(db.TrieDB().Disk(), root, db.triedb.IsVerkle())
 		if ts.InTransition() {
-			panic("transition isn't supported yet")
+			panic("state tree transition isn't supported yet")
 		}
 		if ts.Transitioned() {
-			return trie.NewVerkleTrie(root, db.triedb, db.pointCache)
+			// Use BinaryTrie instead of VerkleTrie when IsVerkle is set
+			// (IsVerkle actually means Binary Trie mode in this codebase)
+			return bintrie.NewBinaryTrie(root, db.triedb)
 		}
 	}
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
@@ -302,7 +306,7 @@ func mustCopyTrie(t Trie) Trie {
 		return t.Copy()
 	case *trie.VerkleTrie:
 		return t.Copy()
-	case *trie.TransitionTrie:
+	case *transitiontrie.TransitionTrie:
 		return t.Copy()
 	default:
 		panic(fmt.Errorf("unknown trie type %T", t))
