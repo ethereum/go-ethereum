@@ -489,13 +489,13 @@ func (b *EthAPIBackend) GetVotersRewards(masternodeAddr common.Address) map[comm
 	signers, err := contracts.GetRewardForCheckpoint(engine, chain, lastCheckpointBlock.Header(), rCheckpoint, totalSigner)
 
 	if err != nil {
-		log.Crit("Fail to get signers for reward checkpoint", "error", err)
+		log.Error("Fail to get signers for reward checkpoint", "error", err)
 		return nil
 	}
 
 	rewardSigners, err := contracts.CalculateRewardForSigner(chainReward, signers, *totalSigner)
 	if err != nil {
-		log.Crit("Fail to calculate reward for signers", "error", err)
+		log.Error("Fail to calculate reward for signers", "error", err)
 		return nil
 	}
 
@@ -509,7 +509,7 @@ func (b *EthAPIBackend) GetVotersRewards(masternodeAddr common.Address) map[comm
 		if signer == masternodeAddr {
 			rewards, err := contracts.CalculateRewardForHolders(foundationWalletAddr, state, masternodeAddr, calcReward, number)
 			if err != nil {
-				log.Crit("Fail to calculate reward for holders.", "error", err)
+				log.Error("Fail to calculate reward for holders.", "error", err)
 				return nil
 			}
 			voterResults = rewards
