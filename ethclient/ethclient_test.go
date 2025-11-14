@@ -1001,3 +1001,45 @@ func TestSimulateV1WithBlockNumberOrHash(t *testing.T) {
 		t.Fatalf("expected 1 block result, got %d", len(results))
 	}
 }
+
+func TestBlockReceiptsPreservesRequireCanonical(t *testing.T) {
+	server := rpc.NewServer()
+	service := &testBlockReceiptsService{}
+	if err := server.RegisterName("eth", service); err != nil {
+		t.Fatalf("failed to register test service: %v", err)
+	}
+	defer server.Stop()
+
+	rpcClient := rpc.DialInProc(server)
+	defer rpcClient.Close()
+
+	client := ethclient.NewClient(rpcClient)
+	defer client.Close()
+
+	hash := common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
+	arg := rpc.BlockNumberOrHashWithHash(hash, true)
+
+	if _, err := client.BlockReceipts(context.Background(), arg); err != nil {
+		t.Fatalf("BlockReceipts returned error: %v", err)
+	}
+	if !service.called {
+		t.Fatalf("expected GetBlockReceipts to be called")
+	}
+	if !service.lastArg.RequireCanonical {
+		t.Fatalf("requireCanonical flag was not preserved")
+	}
+	if service.lastArg.BlockHash == nil || *service.lastArg.BlockHash != hash {
+		t.Fatalf("unexpected block hash: %v", service.lastArg.BlockHash)
+	}
+}
+
+type testBlockReceiptsService struct {
+	lastArg rpc.BlockNumberOrHash
+	called  bool
+}
+
+func (s *testBlockReceiptsService) GetBlockReceipts(ctx context.Context, arg rpc.BlockNumberOrHash) ([]*types.Receipt, error) {
+	s.lastArg = arg
+	s.called = true
+	return []*types.Receipt{}, nil
+}
