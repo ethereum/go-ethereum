@@ -230,6 +230,11 @@ func (p *Peer) dispatcher() {
 			}
 			// Stop tracking the request
 			delete(pending, cancelOp.id)
+
+			// Not sure if the request is about the receipt, but removing it anyway
+			delete(p.receiptBuffer, cancelOp.id)
+			delete(p.requestedReceipts, cancelOp.id)
+
 			cancelOp.fail <- nil
 
 		case resOp := <-p.resDispatch:
