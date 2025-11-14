@@ -83,65 +83,6 @@ type NumberHash struct {
 	Hash   common.Hash
 }
 
-// ReadAllHashesInRange retrieves all the hashes assigned to blocks at certain
-// heights, both canonical and reorged forks included.
-// This method considers both limits to be _inclusive_.
-func ReadAllHashesInRange(db ethdb.Iteratee, first, last uint64) []*NumberHash {
-	var (
-		start     = encodeBlockNumber(first)
-		keyLength = len(headerPrefix) + 8 + 32
-		hashes    = make([]*NumberHash, 0, 1+last-first)
-		it        = db.NewIterator(headerPrefix, start)
-	)
-	defer it.Release()
-	for it.Next() {
-		key := it.Key()
-		if len(key) != keyLength {
-			continue
-		}
-		num := binary.BigEndian.Uint64(key[len(headerPrefix) : len(headerPrefix)+8])
-		if num > last {
-			break
-		}
-		hash := common.BytesToHash(key[len(key)-32:])
-		hashes = append(hashes, &NumberHash{num, hash})
-	}
-	return hashes
-}
-
-// ReadAllCanonicalHashes retrieves all canonical number and hash mappings at the
-// certain chain range. If the accumulated entries reaches the given threshold,
-// abort the iteration and return the semi-finish result.
-func ReadAllCanonicalHashes(db ethdb.Iteratee, from uint64, to uint64, limit int) ([]uint64, []common.Hash) {
-	// Short circuit if the limit is 0.
-	if limit == 0 {
-		return nil, nil
-	}
-	var (
-		numbers []uint64
-		hashes  []common.Hash
-	)
-	// Construct the key prefix of start point.
-	start, end := headerHashKey(from), headerHashKey(to)
-	it := db.NewIterator(nil, start)
-	defer it.Release()
-
-	for it.Next() {
-		if bytes.Compare(it.Key(), end) >= 0 {
-			break
-		}
-		if key := it.Key(); len(key) == len(headerPrefix)+8+1 && bytes.Equal(key[len(key)-1:], headerHashSuffix) {
-			numbers = append(numbers, binary.BigEndian.Uint64(key[len(headerPrefix):len(headerPrefix)+8]))
-			hashes = append(hashes, common.BytesToHash(it.Value()))
-			// If the accumulated entries reaches the limit threshold, return.
-			if len(numbers) >= limit {
-				break
-			}
-		}
-	}
-	return numbers, hashes
-}
-
 // ReadHeaderNumber returns the header number assigned to a hash.
 func ReadHeaderNumber(db ethdb.KeyValueReader, hash common.Hash) (uint64, bool) {
 	data, _ := db.Get(headerNumberKey(hash))
@@ -884,40 +825,6 @@ func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
 	if err := db.Put(badBlockKey, data); err != nil {
 		log.Crit("Failed to write bad blocks", "err", err)
 	}
-}
-
-// DeleteBadBlocks deletes all the bad blocks from the database
-func DeleteBadBlocks(db ethdb.KeyValueWriter) {
-	if err := db.Delete(badBlockKey); err != nil {
-		log.Crit("Failed to delete bad blocks", "err", err)
-	}
-}
-
-// FindCommonAncestor returns the last common ancestor of two block headers
-func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
-	for bn := b.Number.Uint64(); a.Number.Uint64() > bn; {
-		a = ReadHeader(db, a.ParentHash, a.Number.Uint64()-1)
-		if a == nil {
-			return nil
-		}
-	}
-	for an := a.Number.Uint64(); an < b.Number.Uint64(); {
-		b = ReadHeader(db, b.ParentHash, b.Number.Uint64()-1)
-		if b == nil {
-			return nil
-		}
-	}
-	for a.Hash() != b.Hash() {
-		a = ReadHeader(db, a.ParentHash, a.Number.Uint64()-1)
-		if a == nil {
-			return nil
-		}
-		b = ReadHeader(db, b.ParentHash, b.Number.Uint64()-1)
-		if b == nil {
-			return nil
-		}
-	}
-	return a
 }
 
 // ReadHeadHeader returns the current canonical head header.
