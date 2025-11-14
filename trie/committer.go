@@ -111,14 +111,10 @@ func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) {
 	}
 
 	// Parallel path: collect all child NodeSets first, then merge without lock contention
-	type childResult struct {
-		index int
-		set   *trienode.NodeSet
-	}
-	results := make([]childResult, 0, 16)
-	resultsMu := sync.Mutex{}
-	var wg sync.WaitGroup
-
+	var (
+		wg      sync.WaitGroup
+		nodeset = make([]*trienode.NodeSet, 16)
+	)
 	for i := 0; i < 16; i++ {
 		child := n.Children[i]
 		if child == nil {
@@ -134,7 +130,7 @@ func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) {
 		}
 
 		wg.Add(1)
-		go func(index int) {
+		go func(index int, child node) {
 			defer wg.Done()
 
 			p := append(path, byte(index))
@@ -142,11 +138,10 @@ func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) {
 			childCommitter := newCommitter(childSet, c.tracer, c.collectLeaf)
 			n.Children[index] = childCommitter.commit(p, child, false)
 
-			// Collect results without merging yet - only lock to append to slice
-			resultsMu.Lock()
-			results = append(results, childResult{index: index, set: childSet})
-			resultsMu.Unlock()
-		}(i)
+			// Store the nodeset at the child's index. No mutex needed since
+			// each goroutine writes to a unique index.
+			nodeset[index] = childSet
+		}(i, child)
 	}
 
 	// Wait for all goroutines to complete
@@ -154,8 +149,11 @@ func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) {
 
 	// Now merge all results sequentially without any lock contention
 	// This is safe because all goroutines have completed
-	for _, result := range results {
-		c.nodes.MergeDisjoint(result.set)
+	for _, set := range nodeset {
+		if set == nil {
+			continue
+		}
+		c.nodes.MergeDisjoint(set)
 	}
 }
 
