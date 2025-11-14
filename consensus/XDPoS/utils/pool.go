@@ -60,10 +60,10 @@ func (p *Pool) Add(obj PoolObj) (int, map[common.Hash]PoolObj) {
 	return numOfItems, dataCopy
 }
 
-func (p *Pool) Size(obj PoolObj) int {
+func (p *Pool) Size(poolKey string) int {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
-	poolKey := obj.PoolKey()
+
 	objListKeyed, ok := p.objList[poolKey]
 	if !ok {
 		return 0
