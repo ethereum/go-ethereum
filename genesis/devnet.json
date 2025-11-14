@@ -35,8 +35,7 @@
             "timeoutPeriod": 10,
             "certificateThreshold": 0.667
           }
-        },
-        "SkipV2Validation": false
+        }
       }
     }
   },

@@ -18,11 +18,6 @@ import (
 
 // Verify individual header
 func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool) error {
-	// If we're running a engine faking, accept any block as valid
-	if x.config.V2.SkipV2Validation {
-		return nil
-	}
-
 	if !x.isInitilised {
 		if err := x.initial(chain, header); err != nil {
 			return err

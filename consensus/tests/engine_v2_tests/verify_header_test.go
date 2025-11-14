@@ -25,8 +25,6 @@ func TestShouldVerifyBlock(t *testing.T) {
 	var config params.ChainConfig
 	err = json.Unmarshal([]byte(configString), &config)
 	assert.Nil(t, err)
-	// Enable verify
-	config.XDPoS.V2.SkipV2Validation = false
 	// Block 901 is the first v2 block with round of 1
 	blockchain, _, _, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 910, &config, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
@@ -176,8 +174,6 @@ func TestConfigSwitchOnDifferentCertThreshold(t *testing.T) {
 	var config params.ChainConfig
 	err = json.Unmarshal([]byte(configString), &config)
 	assert.Nil(t, err)
-	// Enable verify
-	config.XDPoS.V2.SkipV2Validation = false
 	// Block 901 is the first v2 block with round of 1
 	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 915, &config, nil)
 
@@ -274,8 +270,6 @@ func TestConfigSwitchOnDifferentMasternodeCount(t *testing.T) {
 	var config params.ChainConfig
 	err = json.Unmarshal([]byte(configString), &config)
 	assert.Nil(t, err)
-	// Enable verify
-	config.XDPoS.V2.SkipV2Validation = false
 	// Block 901 is the first v2 block with round of 1
 	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch)*2, &config, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
@@ -312,8 +306,6 @@ func TestConfigSwitchOnDifferentMindPeriod(t *testing.T) {
 	var config params.ChainConfig
 	err = json.Unmarshal([]byte(configString), &config)
 	assert.Nil(t, err)
-	// Enable verify
-	config.XDPoS.V2.SkipV2Validation = false
 	// Block 901 is the first v2 block with round of 1
 	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 915, &config, nil)
 
@@ -365,8 +357,6 @@ func TestShouldFailIfNotEnoughQCSignatures(t *testing.T) {
 	var config params.ChainConfig
 	err = json.Unmarshal([]byte(configString), &config)
 	assert.Nil(t, err)
-	// Enable verify
-	config.XDPoS.V2.SkipV2Validation = false
 	// Block 901 is the first v2 block with round of 1
 	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 902, &config, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
@@ -416,8 +406,6 @@ func TestShouldVerifyHeaders(t *testing.T) {
 	var config params.ChainConfig
 	err = json.Unmarshal([]byte(configString), &config)
 	assert.Nil(t, err)
-	// Enable verify
-	config.XDPoS.V2.SkipV2Validation = false
 	// Block 901 is the first v2 block with round of 1
 	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 910, &config, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
@@ -455,8 +443,6 @@ func TestShouldVerifyHeadersEvenIfParentsNotYetWrittenIntoDB(t *testing.T) {
 	var config params.ChainConfig
 	err = json.Unmarshal([]byte(configString), &config)
 	assert.Nil(t, err)
-	// Enable verify
-	config.XDPoS.V2.SkipV2Validation = false
 	// Block 901 is the first v2 block with round of 1
 	blockchain, _, block910, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 910, &config, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
