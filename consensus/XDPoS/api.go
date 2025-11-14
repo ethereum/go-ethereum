@@ -18,6 +18,7 @@ package XDPoS
 import (
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
