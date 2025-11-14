@@ -26,12 +26,24 @@ type (
 )
 
 type (
-	// BlockChainAPI exposes RPC methods for querying chain data.
+	// EthereumAPI provides an API to access Ethereum related information.
+	EthereumAPI = ethapi.EthereumAPI
+	// BlockChainAPI provides an API to access Ethereum blockchain data.
 	BlockChainAPI = ethapi.BlockChainAPI
-	// TransactionAPI exposes RPC methods for querying and creating
-	// transactions.
+	// TransactionAPI exposes methods for reading and creating transaction data.
 	TransactionAPI = ethapi.TransactionAPI
+	// TxPoolAPI offers and API for the transaction pool. It only operates on
+	// data that is non-confidential.
+	TxPoolAPI = ethapi.TxPoolAPI
+	// DebugAPI is the collection of Ethereum APIs exposed over the debugging
+	// namespace.
+	DebugAPI = ethapi.DebugAPI
 )
+
+// NewEthereumAPI is identical to [ethapi.NewEthereumAPI].
+func NewEthereumAPI(b Backend) *EthereumAPI {
+	return ethapi.NewEthereumAPI(b)
+}
 
 // NewBlockChainAPI is identical to [ethapi.NewBlockChainAPI].
 func NewBlockChainAPI(b Backend) *BlockChainAPI {
@@ -41,4 +53,14 @@ func NewBlockChainAPI(b Backend) *BlockChainAPI {
 // NewTransactionAPI is identical to [ethapi.NewTransactionAPI].
 func NewTransactionAPI(b Backend, nonceLock *AddrLocker) *TransactionAPI {
 	return ethapi.NewTransactionAPI(b, nonceLock)
+}
+
+// NewTxPoolAPI is identical to [ethapi.NewTxPoolAPI].
+func NewTxPoolAPI(b Backend) *TxPoolAPI {
+	return ethapi.NewTxPoolAPI(b)
+}
+
+// NewDebugAPI is identical to [ethapi.NewDebugAPI].
+func NewDebugAPI(b Backend) *DebugAPI {
+	return ethapi.NewDebugAPI(b)
 }
