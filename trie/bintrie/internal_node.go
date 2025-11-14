@@ -66,7 +66,6 @@ func (bt *InternalNode) GetValuesAtStem(stem []byte, resolver NodeResolverFn) ([
 			bt.left = node
 		}
 		return bt.left.GetValuesAtStem(stem, resolver)
-
 	}
 
 	if hn, ok := bt.right.(HashedNode); ok {

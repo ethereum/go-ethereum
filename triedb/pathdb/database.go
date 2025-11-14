@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-verkle"
 )
 
 // layer is the interface implemented by all state layers which includes some
@@ -96,18 +95,6 @@ func merkleNodeHasher(blob []byte) (common.Hash, error) {
 		return types.EmptyRootHash, nil
 	}
 	return crypto.Keccak256Hash(blob), nil
-}
-
-// verkleNodeHasher computes the hash of the given verkle node.
-func verkleNodeHasher(blob []byte) (common.Hash, error) {
-	if len(blob) == 0 {
-		return types.EmptyVerkleHash, nil
-	}
-	n, err := verkle.ParseNode(blob, 0)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	return n.Commit().Bytes(), nil
 }
 
 // binaryNodeHasher computes the hash of the given verkle node.
