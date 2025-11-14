@@ -508,6 +508,35 @@ func TestWriteAncientHeaderChain(t *testing.T) {
 	}
 }
 
+func TestHashesInRange(t *testing.T) {
+	mkHeader := func(number, seq int) *types.Header {
+		h := types.Header{
+			Difficulty: new(big.Int),
+			Number:     big.NewInt(int64(number)),
+			GasLimit:   uint64(seq),
+		}
+		return &h
+	}
+	db := NewMemoryDatabase()
+	// For each number, write N versions of that particular number
+	total := 0
+	for i := 0; i < 15; i++ {
+		for ii := 0; ii < i; ii++ {
+			WriteHeader(db, mkHeader(i, ii))
+			total++
+		}
+	}
+	if have, want := len(ReadAllHashes(db, 10)), 10; have != want {
+		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
+	}
+	if have, want := len(ReadAllHashes(db, 16)), 0; have != want {
+		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
+	}
+	if have, want := len(ReadAllHashes(db, 1)), 1; have != want {
+		t.Fatalf("Wrong number of hashes read, want %d, got %d", want, have)
+	}
+}
+
 // This measures the write speed of the WriteAncientBlocks operation.
 func BenchmarkWriteAncientBlocks(b *testing.B) {
 	// Open freezer database.
