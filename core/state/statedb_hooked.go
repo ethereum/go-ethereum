@@ -61,6 +61,10 @@ func (s *hookedStateDB) GetNonce(addr common.Address) uint64 {
 	return s.inner.GetNonce(addr)
 }
 
+func (s *hookedStateDB) GetMaxDepth(addr common.Address) uint64 {
+	return s.inner.GetMaxDepth(addr)
+}
+
 func (s *hookedStateDB) GetCodeHash(addr common.Address) common.Hash {
 	return s.inner.GetCodeHash(addr)
 }

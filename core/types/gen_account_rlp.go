@@ -16,6 +16,10 @@ func (obj *StateAccount) EncodeRLP(_w io.Writer) error {
 	}
 	w.WriteBytes(obj.Root[:])
 	w.WriteBytes(obj.CodeHash)
+	_tmp1 := obj.MaxDepth != 0
+	if _tmp1 {
+		w.WriteUint64(obj.MaxDepth)
+	}
 	w.ListEnd(_tmp0)
 	return w.Flush()
 }

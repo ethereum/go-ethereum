@@ -33,6 +33,7 @@ type StateAccount struct {
 	Balance  *uint256.Int
 	Root     common.Hash // merkle root of the storage trie
 	CodeHash []byte
+	MaxDepth uint64 `rlp:"optional"`
 }
 
 // NewEmptyStateAccount constructs an empty state account.
@@ -55,6 +56,7 @@ func (acct *StateAccount) Copy() *StateAccount {
 		Balance:  balance,
 		Root:     acct.Root,
 		CodeHash: common.CopyBytes(acct.CodeHash),
+		MaxDepth: acct.MaxDepth,
 	}
 }
 
@@ -66,6 +68,7 @@ type SlimAccount struct {
 	Balance  *uint256.Int
 	Root     []byte // Nil if root equals to types.EmptyRootHash
 	CodeHash []byte // Nil if hash equals to types.EmptyCodeHash
+	MaxDepth uint64 `rlp:"optional"`
 }
 
 // SlimAccountRLP encodes the state account in 'slim RLP' format.
@@ -80,6 +83,7 @@ func SlimAccountRLP(account StateAccount) []byte {
 	if !bytes.Equal(account.CodeHash, EmptyCodeHash[:]) {
 		slim.CodeHash = account.CodeHash
 	}
+	slim.MaxDepth = account.MaxDepth
 	data, err := rlp.EncodeToBytes(slim)
 	if err != nil {
 		panic(err)
@@ -108,6 +112,7 @@ func FullAccount(data []byte) (*StateAccount, error) {
 	} else {
 		account.CodeHash = slim.CodeHash
 	}
+	account.MaxDepth = slim.MaxDepth
 	return &account, nil
 }
 
