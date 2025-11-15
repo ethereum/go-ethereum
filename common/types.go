@@ -400,15 +400,15 @@ func ExtractAddressToBytes(penalties []Address) []byte {
 	return data
 }
 
-func ExtractAddressFromBytes(bytePenalties []byte) []Address {
-	if len(bytePenalties) < AddressLength {
+func ExtractAddressFromBytes(rawBytes []byte) []Address {
+	if len(rawBytes) < AddressLength {
 		return []Address{}
 	}
-	penalties := make([]Address, len(bytePenalties)/AddressLength)
-	for i := 0; i < len(penalties); i++ {
-		copy(penalties[i][:], bytePenalties[i*AddressLength:])
+	addresses := make([]Address, len(rawBytes)/AddressLength)
+	for i := 0; i < len(addresses); i++ {
+		copy(addresses[i][:], rawBytes[i*AddressLength:])
 	}
-	return penalties
+	return addresses
 }
 
 // AddressEIP55 is an alias of Address with a customized json marshaller
