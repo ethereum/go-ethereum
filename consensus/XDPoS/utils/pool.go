@@ -39,7 +39,8 @@ func (p *Pool) Get() map[string]map[common.Hash]PoolObj {
 	return dataCopy
 }
 
-// return true if it has reached threshold
+// Add adds the object to the pool, returns the number of items
+// and the map of objects under the same pool key
 func (p *Pool) Add(obj PoolObj) (int, map[common.Hash]PoolObj) {
 	p.lock.Lock()
 	defer p.lock.Unlock()

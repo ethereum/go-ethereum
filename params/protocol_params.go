@@ -19,8 +19,8 @@ package params
 import "math/big"
 
 var (
-	TargetGasLimit uint64 = XDCGenesisGasLimit // The artificial target
-	V2TestsGasLimit uint64 = 1200000000        // The gas limit used in the v2 consensus tests
+	TargetGasLimit  uint64 = XDCGenesisGasLimit // The artificial target
+	V2TestsGasLimit uint64 = 1200000000         // The gas limit used in the v2 consensus tests
 )
 
 const (
@@ -39,7 +39,7 @@ const (
 	TxGasContractCreation uint64 = 53000 // Per transaction that creates a contract. NOTE: Not payable on data of calls between transactions.
 	TxDataZeroGas         uint64 = 4     // Per byte of data attached to a transaction that equals zero. NOTE: Not payable on data of calls between transactions.
 	QuadCoeffDiv          uint64 = 512   // Divisor for the quadratic particle of the memory cost equation.
-	SstoreSetGas          uint64 = 20000 // Once per SLOAD operation.
+	SstoreSetGas          uint64 = 20000 // Once per SSTORE operation.
 	LogDataGas            uint64 = 8     // Per byte in a LOG* operation's data.
 	CallStipend           uint64 = 2300  // Free gas given at beginning of call.
 
@@ -50,7 +50,7 @@ const (
 	SstoreResetGas   uint64 = 5000  // Once per SSTORE operation if the zeroness changes from zero.
 	SstoreClearGas   uint64 = 5000  // Once per SSTORE operation if the zeroness doesn't change.
 	SstoreRefundGas  uint64 = 15000 // Once per SSTORE operation if the zeroness changes to zero.
-	JumpdestGas      uint64 = 1     // Refunded gas, once per SSTORE operation if the zeroness changes to zero.
+	JumpdestGas      uint64 = 1     // Once per JUMPDEST operation.
 	EpochDuration    uint64 = 30000 // Duration between proof-of-work epochs.
 	CallGas          uint64 = 40    // Once per CALL operation & message call transaction.
 	CreateDataGas    uint64 = 200   //
