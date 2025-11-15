@@ -36,14 +36,6 @@ func WriteSkeletonSyncStatus(db ethdb.KeyValueWriter, status []byte) {
 	}
 }
 
-// DeleteSkeletonSyncStatus deletes the serialized sync status saved at the last
-// shutdown
-func DeleteSkeletonSyncStatus(db ethdb.KeyValueWriter) {
-	if err := db.Delete(skeletonSyncStatusKey); err != nil {
-		log.Crit("Failed to remove skeleton sync status", "err", err)
-	}
-}
-
 // ReadSkeletonHeader retrieves a block header from the skeleton sync store,
 func ReadSkeletonHeader(db ethdb.KeyValueReader, number uint64) *types.Header {
 	data, _ := db.Get(skeletonHeaderKey(number))
