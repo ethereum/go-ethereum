@@ -174,13 +174,13 @@ type testHandler struct {
 }
 
 // newTestHandler creates a new handler for testing purposes with no blocks.
-func newTestHandler() *testHandler {
-	return newTestHandlerWithBlocks(0)
+func newTestHandler(mode ethconfig.SyncMode) *testHandler {
+	return newTestHandlerWithBlocks(0, mode)
 }
 
 // newTestHandlerWithBlocks creates a new handler for testing purposes, with a
 // given number of initial blocks.
-func newTestHandlerWithBlocks(blocks int) *testHandler {
+func newTestHandlerWithBlocks(blocks int, mode ethconfig.SyncMode) *testHandler {
 	// Create a database pre-initialize with a genesis block
 	db := rawdb.NewMemoryDatabase()
 	gspec := &core.Genesis{
@@ -200,7 +200,7 @@ func newTestHandlerWithBlocks(blocks int) *testHandler {
 		Chain:      chain,
 		TxPool:     txpool,
 		Network:    1,
-		Sync:       ethconfig.SnapSync,
+		Sync:       mode,
 		BloomCache: 1,
 	})
 	handler.Start(1000)
