@@ -3,7 +3,7 @@ I found 50 commits containing the keyword "XFN" in the last 200 commits. Here th
 845137849 - Wanwiset Peerapatanapokin - consensus: change os.Exit to return error (#1653)
 b49f6cb0f - Wanwiset Peerapatanapokin - consensus: verify header hash is same as input hash in getEpochSwitchInfo (#1627)
 e0c987f45 - Wanwiset Peerapatanapokin - impose size limit for DecodeBytesExtraFields (#1637)
-53f6a8d6d - Wanwiset Peerapatanapokin - consensus: optimize CompareSignersLists
+998153ebb - Wanwiset Peerapatanapokin - consensus: optimize CompareSignersLists
 6abb4f88d - Wanwiset Peerapatanapokin - consensus: Verify gaslimit bounds when accepting blocks (#1619)
 
 c95d25805 - Wanwiset Peerapatanapokin - separate fullVerifies array into v1fullVerifies and v2fullVerifies (#1618)

@@ -1,12 +1,14 @@
 package engine_v2
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -24,6 +26,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/trie"
+	"golang.org/x/sync/errgroup"
 )
 
 type XDPoS_v2 struct {
@@ -864,31 +867,36 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 	}
 	start := time.Now()
 
-	var wg sync.WaitGroup
-	wg.Add(len(signatures))
-	sigErrChan := make(chan error, len(signatures))
-
-	for _, signature := range signatures {
-		go func(sig types.Signature) {
-			defer wg.Done()
-			verified, _, err := x.verifyMsgSignature(signedVoteObj, sig, epochInfo.Masternodes)
-			if err != nil {
-				log.Error("[verifyQC] Error while verfying QC message signatures", "Error", err)
-				sigErrChan <- errors.New("error while verfying QC message signatures")
-				return
+	eg, ctx := errgroup.WithContext(context.Background())
+	eg.SetLimit(runtime.NumCPU())
+	for _, sig := range signatures {
+		eg.Go(func() error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				verified, _, err := x.verifyMsgSignature(types.VoteSigHash(&types.VoteForSign{
+					ProposedBlockInfo: quorumCert.ProposedBlockInfo,
+					GapNumber:         quorumCert.GapNumber,
+				}), sig, epochInfo.Masternodes)
+				if err != nil {
+					log.Error("[verifyQC] Error while verfying QC message signatures", "Error", err)
+					return errors.New("error while verfying QC message signatures")
+				}
+				if !verified {
+					log.Warn("[verifyQC] Signature not verified doing QC verification", "QC", quorumCert)
+					return errors.New("fail to verify QC due to signature mis-match")
+				}
+				return nil
 			}
-			if !verified {
-				log.Warn("[verifyQC] Signature not verified doing QC verification", "QC", quorumCert)
-				sigErrChan <- errors.New("fail to verify QC due to signature mis-match")
-				return
-			}
-		}(signature)
+		})
 	}
-	wg.Wait()
+	err = eg.Wait()
+
 	elapsed := time.Since(start)
 	log.Debug("[verifyQC] time verify message signatures of qc", "elapsed", elapsed)
-	if len(sigErrChan) > 0 {
-		return <-sigErrChan
+	if err != nil {
+		return err
 	}
 	epochSwitchNumber := epochInfo.EpochSwitchBlockInfo.Number.Uint64()
 	gapNumber := epochSwitchNumber - epochSwitchNumber%x.config.Epoch
