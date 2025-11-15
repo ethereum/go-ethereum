@@ -141,6 +141,9 @@ func (api *PrivateDebugAPI) TraceChain(ctx context.Context, start, end rpc.Block
 	case rpc.LatestBlockNumber:
 		from = api.eth.blockchain.CurrentBlock()
 	default:
+		if start.Int64() < 0 {
+			return nil, fmt.Errorf("invalid start block number %d", start.Int64())
+		}
 		from = api.eth.blockchain.GetBlockByNumber(uint64(start))
 	}
 	switch end {
@@ -149,17 +152,20 @@ func (api *PrivateDebugAPI) TraceChain(ctx context.Context, start, end rpc.Block
 	case rpc.LatestBlockNumber:
 		to = api.eth.blockchain.CurrentBlock()
 	default:
+		if end.Int64() < 0 {
+			return nil, fmt.Errorf("invalid end block number %d", end.Int64())
+		}
 		to = api.eth.blockchain.GetBlockByNumber(uint64(end))
 	}
 	// Trace the chain if we've found all our blocks
 	if from == nil {
-		return nil, fmt.Errorf("starting block #%d not found", start)
+		return nil, fmt.Errorf("not find start block %d", start.Int64())
 	}
 	if to == nil {
-		return nil, fmt.Errorf("end block #%d not found", end)
+		return nil, fmt.Errorf("not find end block %d", end.Int64())
 	}
 	if from.Number().Cmp(to.Number()) >= 0 {
-		return nil, fmt.Errorf("end block (#%d) needs to come after start block (#%d)", end, start)
+		return nil, fmt.Errorf("wrong parameter order: start(%d) >= end(%d)", start.Int64(), end.Int64())
 	}
 	return api.traceChain(ctx, from, to, config)
 }
@@ -403,6 +409,9 @@ func (api *PrivateDebugAPI) TraceBlockByNumber(ctx context.Context, number rpc.B
 	case rpc.LatestBlockNumber:
 		block = api.eth.blockchain.CurrentBlock()
 	default:
+		if number.Int64() < 0 {
+			return nil, fmt.Errorf("invalid block number %d", number.Int64())
+		}
 		block = api.eth.blockchain.GetBlockByNumber(uint64(number))
 	}
 	// Trace the block if it was found
