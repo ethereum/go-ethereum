@@ -761,8 +761,8 @@ func showMetaData(ctx *cli.Context) error {
 		data = append(data, []string{"headHeader.Number", fmt.Sprintf("%d (%#x)", h.Number, h.Number)})
 	}
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Field", "Value"})
-	table.AppendBulk(data)
+	table.Header([]string{"Field", "Value"})
+	table.Bulk(data)
 	table.Render()
 	return nil
 }

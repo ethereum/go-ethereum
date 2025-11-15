@@ -651,9 +651,9 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	}
 
 	table := newTableWriter(os.Stdout)
-	table.SetHeader([]string{"Database", "Category", "Size", "Items"})
-	table.SetFooter([]string{"", "Total", common.StorageSize(total.Load()).String(), fmt.Sprintf("%d", count.Load())})
-	table.AppendBulk(stats)
+	table.Header([]string{"Database", "Category", "Size", "Items"})
+	table.Footer([]string{"", "Total", common.StorageSize(total.Load()).String(), fmt.Sprintf("%d", count.Load())})
+	table.Bulk(stats)
 	table.Render()
 
 	if !unaccounted.empty() {
