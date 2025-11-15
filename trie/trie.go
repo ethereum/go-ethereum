@@ -588,7 +588,9 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 			}
 		}
 		if pos >= 0 {
-			if pos != 16 {
+			if pos == 16 {
+				return true, n.Children[16].(valueNode), nil
+			} else {
 				// If the remaining entry is a short node, it replaces
 				// n and its key gets the missing nibble tacked to the
 				// front. This avoids creating an invalid
