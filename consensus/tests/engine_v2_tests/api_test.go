@@ -158,7 +158,7 @@ func TestGetEpochNumbersBetween(t *testing.T) {
 	numbers, err = engine.APIs(bc.BlockChain())[0].Service.(*XDPoS.API).GetEpochNumbersBetween(&begin, &end)
 
 	assert.Nil(t, numbers)
-	assert.EqualError(t, err, "illegal end block number")
+	assert.EqualError(t, err, "illegal end block number 1803")
 
 	// 1803 not exist
 	begin = rpc.BlockNumber(1803)
@@ -166,7 +166,7 @@ func TestGetEpochNumbersBetween(t *testing.T) {
 	numbers, err = engine.APIs(bc.BlockChain())[0].Service.(*XDPoS.API).GetEpochNumbersBetween(&begin, &end)
 
 	assert.Nil(t, numbers)
-	assert.EqualError(t, err, "illegal begin block number")
+	assert.EqualError(t, err, "illegal begin block number 1803")
 }
 func TestGetBlockByEpochNumber(t *testing.T) {
 	blockchain, _, currentBlock, signer, signFn := PrepareXDCTestBlockChainWithPenaltyForV2Engine(t, 1802, params.TestXDPoSMockChainConfig)
