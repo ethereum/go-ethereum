@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"fmt"
 	"math/rand"
 	"sync/atomic"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -40,6 +42,12 @@ const (
 	// before dropping older announcements.
 	maxQueuedTxAnns = 4096
 )
+
+type partialReceipt struct {
+	idx  int            // position in original request
+	list *ReceiptList69 // list of partially collected receipts
+	size uint64         // log size of list
+}
 
 // Peer is a collection of relevant information we have about a `eth` peer.
 type Peer struct {
@@ -59,6 +67,9 @@ type Peer struct {
 	reqCancel   chan *cancel   // Dispatch channel to cancel pending requests and untrack them
 	resDispatch chan *response // Dispatch channel to fulfil pending requests and untrack them
 
+	requestedReceipts map[uint64][]common.Hash   // requested receipts list
+	receiptBuffer     map[uint64]*partialReceipt // requestId to receiptlist map
+
 	term chan struct{} // Termination channel to stop the broadcasters
 }
 
@@ -66,18 +77,20 @@ type Peer struct {
 // version.
 func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Peer {
 	peer := &Peer{
-		id:          p.ID().String(),
-		Peer:        p,
-		rw:          rw,
-		version:     version,
-		knownTxs:    newKnownCache(maxKnownTxs),
-		txBroadcast: make(chan []common.Hash),
-		txAnnounce:  make(chan []common.Hash),
-		reqDispatch: make(chan *request),
-		reqCancel:   make(chan *cancel),
-		resDispatch: make(chan *response),
-		txpool:      txpool,
-		term:        make(chan struct{}),
+		id:                p.ID().String(),
+		Peer:              p,
+		rw:                rw,
+		version:           version,
+		knownTxs:          newKnownCache(maxKnownTxs),
+		txBroadcast:       make(chan []common.Hash),
+		txAnnounce:        make(chan []common.Hash),
+		reqDispatch:       make(chan *request),
+		reqCancel:         make(chan *cancel),
+		resDispatch:       make(chan *response),
+		txpool:            txpool,
+		requestedReceipts: make(map[uint64][]common.Hash),
+		receiptBuffer:     make(map[uint64]*partialReceipt),
+		term:              make(chan struct{}),
 	}
 	// Start up all the broadcasters
 	go peer.broadcastTransactions()
@@ -208,10 +221,19 @@ func (p *Peer) ReplyBlockBodiesRLP(id uint64, bodies []rlp.RawValue) error {
 }
 
 // ReplyReceiptsRLP is the response to GetReceipts.
-func (p *Peer) ReplyReceiptsRLP(id uint64, receipts []rlp.RawValue) error {
-	return p2p.Send(p.rw, ReceiptsMsg, &ReceiptsRLPPacket{
+func (p *Peer) ReplyReceiptsRLP69(id uint64, receipts []rlp.RawValue) error {
+	return p2p.Send(p.rw, ReceiptsMsg, &ReceiptsRLPPacket69{
 		RequestId:           id,
 		ReceiptsRLPResponse: receipts,
+	})
+}
+
+// ReplyReceiptsRLP is the response to GetReceipts.
+func (p *Peer) ReplyReceiptsRLP70(id uint64, receipts []rlp.RawValue, lastBlockIncomplete bool) error {
+	return p2p.Send(p.rw, ReceiptsMsg, &ReceiptsRLPPacket70{
+		RequestId:           id,
+		ReceiptsRLPResponse: receipts,
+		LastBlockIncomplete: lastBlockIncomplete,
 	})
 }
 
@@ -323,20 +345,152 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, sink chan *Response) (*Requ
 	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))
 	id := rand.Uint64()
 
-	req := &Request{
-		id:   id,
-		sink: sink,
-		code: GetReceiptsMsg,
-		want: ReceiptsMsg,
-		data: &GetReceiptsPacket{
-			RequestId:          id,
-			GetReceiptsRequest: hashes,
-		},
+	var req *Request
+	if p.version > ETH69 {
+		req = &Request{
+			id:   id,
+			sink: sink,
+			code: GetReceiptsMsg,
+			want: ReceiptsMsg,
+			data: &GetReceiptsPacket70{
+				RequestId:              id,
+				GetReceiptsRequest:     hashes,
+				FirstBlockReceiptIndex: 0,
+			},
+		}
+	} else {
+		req = &Request{
+			id:   id,
+			sink: sink,
+			code: GetReceiptsMsg,
+			want: ReceiptsMsg,
+			data: &GetReceiptsPacket69{
+				RequestId:          id,
+				GetReceiptsRequest: hashes,
+			},
+		}
 	}
 	if err := p.dispatchRequest(req); err != nil {
 		return nil, err
 	}
+
+	p.requestedReceipts[id] = hashes
 	return req, nil
+}
+
+// HandlePartialReceipts re-request partial receipts
+func (p *Peer) RequestPartialReceipts(previousId uint64) error {
+	split := p.receiptBuffer[previousId].idx
+	id := rand.Uint64()
+
+	req := &Request{
+		id:   id,
+		sink: nil,
+		code: GetReceiptsMsg,
+		want: ReceiptsMsg,
+		data: &GetReceiptsPacket70{
+			RequestId:              id,
+			GetReceiptsRequest:     p.requestedReceipts[previousId][split:],
+			FirstBlockReceiptIndex: uint64(len(p.receiptBuffer[previousId].list.items)),
+		},
+		reRequest: true,
+		previous:  previousId,
+	}
+
+	p.receiptBuffer[id] = p.receiptBuffer[previousId]
+	p.requestedReceipts[id] = p.requestedReceipts[previousId]
+
+	delete(p.receiptBuffer, previousId)
+	delete(p.requestedReceipts, previousId)
+
+	return p.dispatchRequest(req)
+}
+
+// ReconstructReceiptsPacket validates a receipt packet and checks whether a partial request is complete.
+// It also mutates the packet in place, trimming the partial response or appending previously collected receipts.
+func (p *Peer) ReconstructReceiptsPacket(packet *ReceiptsPacket70) (int, error) {
+	from := 0
+	requestId := packet.RequestId
+	if len(packet.List) == 0 {
+		return 0, nil
+	}
+
+	// Process the first block
+	// If the request was partially collected earlier, append the buffered data so this response completes it.
+	firstReceipt := packet.List[0]
+	if firstReceipt == nil {
+		return 0, fmt.Errorf("nil first receipt")
+	}
+	if _, ok := p.receiptBuffer[requestId]; ok {
+		// complete packet (hash validation will be performed later)
+		firstReceipt.items = append(p.receiptBuffer[requestId].list.items, firstReceipt.items...)
+		from = p.receiptBuffer[requestId].idx
+		delete(p.receiptBuffer, requestId)
+		if !packet.LastBlockIncomplete {
+			delete(p.requestedReceipts, requestId)
+		}
+	}
+
+	// Trim and buffer the last block when the response is incomplete.
+	if packet.LastBlockIncomplete {
+		lastReceipts := packet.List[len(packet.List)-1]
+
+		logSize, err := p.validateLastBlockReceipt(lastReceipts, packet.RequestId)
+		if err != nil {
+			return 0, err
+		}
+
+		// Update the buffered data and trim the packet to exclude the incomplete block.
+		if buffer, ok := p.receiptBuffer[requestId]; ok {
+			buffer.idx = buffer.idx + len(packet.List) - 1
+			buffer.list.items = append(buffer.list.items, lastReceipts.items...)
+			buffer.size = buffer.size + logSize
+		} else {
+			p.receiptBuffer[requestId] = &partialReceipt{
+				idx:  len(packet.List) - 1,
+				list: lastReceipts,
+				size: logSize,
+			}
+		}
+		packet.List = packet.List[:len(packet.List)-1]
+	}
+
+	return from, nil
+}
+
+// validateLastBlockReceipt validates receipts and return log size of last block receipt
+func (p *Peer) validateLastBlockReceipt(lastReceipts *ReceiptList69, id uint64) (uint64, error) {
+	if lastReceipts == nil {
+		return 0, fmt.Errorf("nil partial receipt")
+	}
+
+	var previousTxs int
+	var previousLog uint64
+	var log uint64
+	if buffer, ok := p.receiptBuffer[id]; ok {
+		previousTxs = len(buffer.list.items)
+		previousLog = buffer.size
+	}
+
+	// 1. Verify that the total number of transactions delivered is under the limit.
+	if uint64(previousTxs+len(lastReceipts.items)) > lastReceipts.items[0].GasUsed/21_000 {
+		// should be dropped, don't clear the buffer
+		return 0, fmt.Errorf("total number of tx exceeded limit")
+	}
+
+	// 2. Verify the size of each receipt against the maximum transaction size.
+	for _, rc := range lastReceipts.items {
+		if uint64(len(rc.Logs)) > params.MaxTxGas/params.LogDataGas {
+			return 0, fmt.Errorf("total size of receipt exceeded limit")
+		}
+		log += uint64(len(rc.Logs))
+	}
+	// 3. Verify that the overall downloaded receipt size does not exceed the block gas limit.
+	if previousLog+log > params.MaxGasLimit/params.LogDataGas {
+		return 0, fmt.Errorf("total download receipt size exceeded the limit")
+	}
+
+	return log, nil
 }
 
 // RequestTxs fetches a batch of transactions from a remote node.

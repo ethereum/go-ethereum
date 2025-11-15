@@ -434,15 +434,16 @@ func (s *Suite) TestGetReceipts(t *utesting.T) {
 	}
 
 	// Create block bodies request.
-	req := &eth.GetReceiptsPacket{
-		RequestId:          66,
-		GetReceiptsRequest: (eth.GetReceiptsRequest)(hashes),
+	req := &eth.GetReceiptsPacket70{
+		RequestId:              66,
+		GetReceiptsRequest:     (eth.GetReceiptsRequest)(hashes),
+		FirstBlockReceiptIndex: 0,
 	}
 	if err := conn.Write(ethProto, eth.GetReceiptsMsg, req); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
 	}
 	// Wait for response.
-	resp := new(eth.ReceiptsPacket[*eth.ReceiptList69])
+	resp := new(eth.ReceiptsPacket70)
 	if err := conn.ReadMsg(ethProto, eth.ReceiptsMsg, &resp); err != nil {
 		t.Fatalf("error reading block bodies msg: %v", err)
 	}
