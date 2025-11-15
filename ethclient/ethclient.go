@@ -949,4 +949,3 @@ func (ec *Client) SimulateV1(ctx context.Context, opts SimulateOptions, blockNrO
 	err := ec.c.CallContext(ctx, &result, "eth_simulateV1", opts, blockNrOrHash)
 	return result, err
 }
-
