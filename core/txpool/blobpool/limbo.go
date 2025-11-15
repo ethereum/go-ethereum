@@ -34,7 +34,7 @@ import (
 type limboBlob struct {
 	TxHash common.Hash // Owner transaction's hash to support resurrecting reorged txs
 	Block  uint64      // Block in which the blob transaction was included
-	Tx     *types.Transaction
+	Tx     *pooledBlobTx
 }
 
 // limbo is a light, indexed database to temporarily store recently included
@@ -147,15 +147,15 @@ func (l *limbo) finalize(final *types.Header) {
 
 // push stores a new blob transaction into the limbo, waiting until finality for
 // it to be automatically evicted.
-func (l *limbo) push(tx *types.Transaction, block uint64) error {
+func (l *limbo) push(tx *pooledBlobTx, block uint64) error {
 	// If the blobs are already tracked by the limbo, consider it a programming
 	// error. There's not much to do against it, but be loud.
-	if _, ok := l.index[tx.Hash()]; ok {
-		log.Error("Limbo cannot push already tracked blobs", "tx", tx.Hash())
+	if _, ok := l.index[tx.Transaction.Hash()]; ok {
+		log.Error("Limbo cannot push already tracked blobs", "tx", tx.Transaction.Hash())
 		return errors.New("already tracked blob transaction")
 	}
 	if err := l.setAndIndex(tx, block); err != nil {
-		log.Error("Failed to set and index limboed blobs", "tx", tx.Hash(), "err", err)
+		log.Error("Failed to set and index limboed blobs", "tx", tx.Transaction.Hash(), "err", err)
 		return err
 	}
 	return nil
@@ -164,7 +164,7 @@ func (l *limbo) push(tx *types.Transaction, block uint64) error {
 // pull retrieves a previously pushed set of blobs back from the limbo, removing
 // it at the same time. This method should be used when a previously included blob
 // transaction gets reorged out.
-func (l *limbo) pull(tx common.Hash) (*types.Transaction, error) {
+func (l *limbo) pull(tx common.Hash) (*pooledBlobTx, error) {
 	// If the blobs are not tracked by the limbo, there's not much to do. This
 	// can happen for example if a blob transaction is mined without pushing it
 	// into the network first.
@@ -241,8 +241,8 @@ func (l *limbo) getAndDrop(id uint64) (*limboBlob, error) {
 
 // setAndIndex assembles a limbo blob database entry and stores it, also updating
 // the in-memory indices.
-func (l *limbo) setAndIndex(tx *types.Transaction, block uint64) error {
-	txhash := tx.Hash()
+func (l *limbo) setAndIndex(tx *pooledBlobTx, block uint64) error {
+	txhash := tx.Transaction.Hash()
 	item := &limboBlob{
 		TxHash: txhash,
 		Block:  block,

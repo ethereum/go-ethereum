@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -34,8 +33,8 @@ const maxPendingConversionTasks = 2048
 
 // txConvert represents a conversion task with an attached legacy blob transaction.
 type txConvert struct {
-	tx   *types.Transaction // Legacy blob transaction
-	done chan error         // Channel for signaling back if the conversion succeeds
+	tx   *pooledBlobTx // Legacy blob transaction
+	done chan error    // Channel for signaling back if the conversion succeeds
 }
 
 // conversionQueue is a dedicated queue for converting legacy blob transactions
@@ -73,7 +72,7 @@ func newConversionQueue() *conversionQueue {
 // for conversion.
 //
 // This function may block for a long time until the transaction is processed.
-func (q *conversionQueue) convert(tx *types.Transaction) error {
+func (q *conversionQueue) convert(tx *pooledBlobTx) error {
 	done := make(chan error, 1)
 	select {
 	case q.tasks <- &txConvert{tx: tx, done: done}:
@@ -113,7 +112,7 @@ func (q *conversionQueue) run(tasks []*txConvert, done chan struct{}, interrupt 
 			t.done <- errors.New("conversion is interrupted")
 			continue
 		}
-		sidecar := t.tx.BlobTxSidecar()
+		sidecar := t.tx.Sidecar
 		if sidecar == nil {
 			t.done <- errors.New("tx without sidecar")
 			continue
@@ -122,7 +121,7 @@ func (q *conversionQueue) run(tasks []*txConvert, done chan struct{}, interrupt 
 		start := time.Now()
 		err := sidecar.ToV1()
 		t.done <- err
-		log.Trace("Converted legacy blob tx", "hash", t.tx.Hash(), "err", err, "elapsed", common.PrettyDuration(time.Since(start)))
+		log.Trace("Converted legacy blob tx", "hash", t.tx.Transaction.Hash(), "err", err, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
 }
 
