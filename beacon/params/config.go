@@ -103,6 +103,9 @@ func (c *ChainConfig) LoadForks(file []byte) error {
 	epochs["GENESIS"] = 0
 
 	for key, value := range config {
+		if value == nil {
+			continue
+		}
 		if strings.HasSuffix(key, "_FORK_VERSION") {
 			name := key[:len(key)-len("_FORK_VERSION")]
 			switch version := value.(type) {
