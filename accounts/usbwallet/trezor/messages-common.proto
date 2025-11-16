@@ -1,18 +1,26 @@
 // This file originates from the SatoshiLabs Trezor `common` repository at:
 //   https://github.com/trezor/trezor-common/blob/master/protob/messages-common.proto
-// dated 28.05.2019, commit 893fd219d4a01bcffa0cd9cfa631856371ec5aa9.
+// dated 30.06.2025, commit 421b45d4677f2499234692b0f54010bc45b3ae5f.
 
 syntax = "proto2";
 package hw.trezor.messages.common;
 
 option go_package  = "github.com/ethereum/go-ethereum/accounts/usbwallet/trezor";
 
+// Sugar for easier handling in Java
+option java_package = "com.satoshilabs.trezor.lib.protobuf";
+option java_outer_classname = "TrezorMessageCommon";
+
+import "options.proto";
+
+option (include_in_bitcoin_only) = true;
+
 /**
  * Response: Success of the previous request
  * @end
  */
 message Success {
-    optional string message = 1;    // human readable description of action or request-specific payload
+  optional string message = 1 [default=""]; // human readable description of action or request-specific payload
 }
 
 /**
@@ -20,23 +28,29 @@ message Success {
  * @end
  */
 message Failure {
-    optional FailureType code = 1;  // computer-readable definition of the error state
-    optional string message = 2;    // human-readable message of the error state
-    enum FailureType {
-        Failure_UnexpectedMessage = 1;
-        Failure_ButtonExpected = 2;
-        Failure_DataError = 3;
-        Failure_ActionCancelled = 4;
-        Failure_PinExpected = 5;
-        Failure_PinCancelled = 6;
-        Failure_PinInvalid = 7;
-        Failure_InvalidSignature = 8;
-        Failure_ProcessError = 9;
-        Failure_NotEnoughFunds = 10;
-        Failure_NotInitialized = 11;
-        Failure_PinMismatch = 12;
-        Failure_FirmwareError = 99;
-    }
+  optional FailureType code = 1;  // computer-readable definition of the error state
+  optional string message = 2;    // human-readable message of the error state
+  enum FailureType {
+    Failure_UnexpectedMessage = 1;
+    Failure_ButtonExpected = 2;
+    Failure_DataError = 3;
+    Failure_ActionCancelled = 4;
+    Failure_PinExpected = 5;
+    Failure_PinCancelled = 6;
+    Failure_PinInvalid = 7;
+    Failure_InvalidSignature = 8;
+    Failure_ProcessError = 9;
+    Failure_NotEnoughFunds = 10;
+    Failure_NotInitialized = 11;
+    Failure_PinMismatch = 12;
+    Failure_WipeCodeMismatch = 13;
+    Failure_InvalidSession = 14;
+    Failure_Busy = 15;
+    Failure_ThpUnallocatedSession = 16;
+    Failure_InvalidProtocol = 17;
+    Failure_BufferError = 18;
+    Failure_FirmwareError = 99;
+  }
 }
 
 /**
@@ -45,28 +59,39 @@ message Failure {
  * @next ButtonAck
  */
 message ButtonRequest {
-    optional ButtonRequestType code = 1;
-    optional string data = 2;
-    /**
-    * Type of button request
-    */
-    enum ButtonRequestType {
-        ButtonRequest_Other = 1;
-        ButtonRequest_FeeOverThreshold = 2;
-        ButtonRequest_ConfirmOutput = 3;
-        ButtonRequest_ResetDevice = 4;
-        ButtonRequest_ConfirmWord = 5;
-        ButtonRequest_WipeDevice = 6;
-        ButtonRequest_ProtectCall = 7;
-        ButtonRequest_SignTx = 8;
-        ButtonRequest_FirmwareCheck = 9;
-        ButtonRequest_Address = 10;
-        ButtonRequest_PublicKey = 11;
-        ButtonRequest_MnemonicWordCount = 12;
-        ButtonRequest_MnemonicInput = 13;
-        ButtonRequest_PassphraseType = 14;
-        ButtonRequest_UnknownDerivationPath = 15;
-    }
+  optional ButtonRequestType code = 1;  // enum identifier of the screen (deprecated)
+  optional uint32 pages = 2;            // if the screen is paginated, number of pages
+
+  // this existed briefly: https://github.com/trezor/trezor-firmware/commit/1012ee8497b241e8ca559e386d936fa549bc0357
+  reserved 3;
+
+  optional string name = 4;             // name of the screen
+
+  /**
+  * Type of button request
+  */
+  enum ButtonRequestType {
+    ButtonRequest_Other = 1;
+    ButtonRequest_FeeOverThreshold = 2;
+    ButtonRequest_ConfirmOutput = 3;
+    ButtonRequest_ResetDevice = 4;
+    ButtonRequest_ConfirmWord = 5;
+    ButtonRequest_WipeDevice = 6;
+    ButtonRequest_ProtectCall = 7;
+    ButtonRequest_SignTx = 8;
+    ButtonRequest_FirmwareCheck = 9;
+    ButtonRequest_Address = 10;
+    ButtonRequest_PublicKey = 11;
+    ButtonRequest_MnemonicWordCount = 12;
+    ButtonRequest_MnemonicInput = 13;
+    _Deprecated_ButtonRequest_PassphraseType = 14 [deprecated=true];
+    ButtonRequest_UnknownDerivationPath = 15;
+    ButtonRequest_RecoveryHomepage = 16;
+    ButtonRequest_Success = 17;
+    ButtonRequest_Warning = 18;
+    ButtonRequest_PassphraseEntry = 19;
+    ButtonRequest_PinEntry = 20;
+  }
 }
 
 /**
@@ -82,15 +107,17 @@ message ButtonAck {
  * @next PinMatrixAck
  */
 message PinMatrixRequest {
-    optional PinMatrixRequestType type = 1;
-    /**
-    * Type of PIN request
-    */
-    enum PinMatrixRequestType {
-        PinMatrixRequestType_Current = 1;
-        PinMatrixRequestType_NewFirst = 2;
-        PinMatrixRequestType_NewSecond = 3;
-    }
+  optional PinMatrixRequestType type = 1;
+  /**
+  * Type of PIN request
+  */
+  enum PinMatrixRequestType {
+    PinMatrixRequestType_Current = 1;
+    PinMatrixRequestType_NewFirst = 2;
+    PinMatrixRequestType_NewSecond = 3;
+    PinMatrixRequestType_WipeCodeFirst = 4;
+    PinMatrixRequestType_WipeCodeSecond = 5;
+  }
 }
 
 /**
@@ -98,7 +125,7 @@ message PinMatrixRequest {
  * @auxend
  */
 message PinMatrixAck {
-    required string pin = 1;    // matrix encoded PIN entered by user
+  required string pin = 1;    // matrix encoded PIN entered by user
 }
 
 /**
@@ -107,31 +134,36 @@ message PinMatrixAck {
  * @next PassphraseAck
  */
 message PassphraseRequest {
-    optional bool on_device = 1;    // passphrase is being entered on the device
+  optional bool _on_device = 1 [deprecated=true];  // <2.3.0
 }
 
 /**
  * Request: Send passphrase back
- * @next PassphraseStateRequest
+ * @auxend
  */
 message PassphraseAck {
-    optional string passphrase = 1;
-    optional bytes state = 2;       // expected device state
+  optional string passphrase = 1;
+  optional bytes _state = 2 [deprecated=true];  // <2.3.0
+  optional bool on_device = 3;    // user wants to enter passphrase on the device
 }
 
 /**
  * Response: Device awaits passphrase state
- * @next PassphraseStateAck
+ * Deprecated in 2.3.0
+ * @next Deprecated_PassphraseStateAck
  */
-message PassphraseStateRequest {
-    optional bytes state = 1;       // actual device state
+message Deprecated_PassphraseStateRequest {
+  option deprecated = true;
+  optional bytes state = 1;       // actual device state
 }
 
 /**
  * Request: Send passphrase state back
+ * Deprecated in 2.3.0
  * @auxend
  */
-message PassphraseStateAck {
+message Deprecated_PassphraseStateAck {
+  option deprecated = true;
 }
 
 /**
@@ -140,10 +172,10 @@ message PassphraseStateAck {
  * @embed
  */
 message HDNodeType {
-    required uint32 depth = 1;
-    required uint32 fingerprint = 2;
-    required uint32 child_num = 3;
-    required bytes chain_code = 4;
-    optional bytes private_key = 5;
-    optional bytes public_key = 6;
+  required uint32 depth = 1;
+  required uint32 fingerprint = 2;
+  required uint32 child_num = 3;
+  required bytes chain_code = 4;
+  optional bytes private_key = 5;
+  required bytes public_key = 6;
 }
