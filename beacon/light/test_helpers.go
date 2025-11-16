@@ -36,15 +36,16 @@ func GenerateTestCommittee() *types.SerializedSyncCommittee {
 func GenerateTestUpdate(config *params.ChainConfig, period uint64, committee, nextCommittee *types.SerializedSyncCommittee, signerCount int, finalizedHeader bool) *types.LightClientUpdate {
 	update := new(types.LightClientUpdate)
 	update.NextSyncCommitteeRoot = nextCommittee.Root()
-	var attestedHeader types.Header
 	if finalizedHeader {
-		update.FinalizedHeader = new(types.Header)
+		update.FinalizedHeader = new(types.HeaderWithExecProof)
 		*update.FinalizedHeader, update.NextSyncCommitteeBranch = makeTestHeaderWithMerkleProof(types.SyncPeriodStart(period)+100, params.StateIndexNextSyncCommittee(""), merkle.Value(update.NextSyncCommitteeRoot))
-		attestedHeader, update.FinalityBranch = makeTestHeaderWithMerkleProof(types.SyncPeriodStart(period)+200, params.StateIndexFinalBlock(""), merkle.Value(update.FinalizedHeader.Hash()))
+		update.AttestedHeader, update.FinalityBranch = makeTestHeaderWithMerkleProof(types.SyncPeriodStart(period)+200, params.StateIndexFinalBlock(""), merkle.Value(update.FinalizedHeader.Hash()))
 	} else {
-		attestedHeader, update.NextSyncCommitteeBranch = makeTestHeaderWithMerkleProof(types.SyncPeriodStart(period)+2000, params.StateIndexNextSyncCommittee(""), merkle.Value(update.NextSyncCommitteeRoot))
+		update.AttestedHeader, update.NextSyncCommitteeBranch = makeTestHeaderWithMerkleProof(types.SyncPeriodStart(period)+2000, params.StateIndexNextSyncCommittee(""), merkle.Value(update.NextSyncCommitteeRoot))
 	}
-	update.AttestedHeader = GenerateTestSignedHeader(attestedHeader, config, committee, attestedHeader.Slot+1, signerCount)
+	signedHeader := GenerateTestSignedHeader(update.AttestedHeader.Header, config, committee, update.AttestedHeader.Slot+1, signerCount)
+	update.Signature = signedHeader.Signature
+	update.SignatureSlot = signedHeader.SignatureSlot
 	return update
 }
 
@@ -65,7 +66,7 @@ func GenerateTestSignedHeader(header types.Header, config *params.ChainConfig, c
 func GenerateTestCheckpoint(period uint64, committee *types.SerializedSyncCommittee) *types.BootstrapData {
 	header, branch := makeTestHeaderWithMerkleProof(types.SyncPeriodStart(period)+200, params.StateIndexSyncCommittee(""), merkle.Value(committee.Root()))
 	return &types.BootstrapData{
-		Header:          header,
+		Header:          header.Header,
 		Committee:       committee,
 		CommitteeRoot:   committee.Root(),
 		CommitteeBranch: branch,
@@ -82,7 +83,7 @@ func makeBitmask(signerCount int) (bitmask [params.SyncCommitteeBitmaskSize]byte
 	return
 }
 
-func makeTestHeaderWithMerkleProof(slot, index uint64, value merkle.Value) (types.Header, merkle.Values) {
+func makeTestHeaderWithMerkleProof(slot, index uint64, value merkle.Value) (types.HeaderWithExecProof, merkle.Values) {
 	var branch merkle.Values
 	hasher := sha256.New()
 	for index > 1 {
@@ -100,7 +101,7 @@ func makeTestHeaderWithMerkleProof(slot, index uint64, value merkle.Value) (type
 		index >>= 1
 		branch = append(branch, proofHash)
 	}
-	return types.Header{Slot: slot, StateRoot: common.Hash(value)}, branch
+	return types.HeaderWithExecProof{Header: types.Header{Slot: slot, StateRoot: common.Hash(value)}}, branch
 }
 
 // syncCommittee holds either a blsSyncCommittee or a fake dummySyncCommittee used for testing
