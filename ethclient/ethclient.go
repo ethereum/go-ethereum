@@ -948,3 +948,7 @@ func (ec *Client) SimulateV1(ctx context.Context, opts SimulateOptions, blockNrO
 	err := ec.c.CallContext(ctx, &result, "eth_simulateV1", opts, blockNrOrHash)
 	return result, err
 }
+
+// Client provides access to the Ethereum JSON-RPC endpoints.
+// It wraps lower-level RPC calls and offers convenient methods for
+// interacting with Ethereum nodes.

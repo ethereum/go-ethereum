@@ -2,8 +2,11 @@
 
 package bal
 
-import "github.com/ethereum/go-ethereum/rlp"
-import "io"
+import (
+	"io"
+
+	"github.com/ethereum/go-ethereum/rlp"
+)
 
 func (obj *BlockAccessList) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
