@@ -73,11 +73,8 @@ var (
 	stateHistoryDataBytesMeter  = metrics.NewRegisteredMeter("pathdb/history/state/bytes/data", nil)
 	stateHistoryIndexBytesMeter = metrics.NewRegisteredMeter("pathdb/history/state/bytes/index", nil)
 
-	//nolint:unused
-	trienodeHistoryBuildTimeMeter = metrics.NewRegisteredResettingTimer("pathdb/history/trienode/time", nil)
-	//nolint:unused
-	trienodeHistoryDataBytesMeter = metrics.NewRegisteredMeter("pathdb/history/trienode/bytes/data", nil)
-	//nolint:unused
+	trienodeHistoryBuildTimeMeter  = metrics.NewRegisteredResettingTimer("pathdb/history/trienode/time", nil)
+	trienodeHistoryDataBytesMeter  = metrics.NewRegisteredMeter("pathdb/history/trienode/bytes/data", nil)
 	trienodeHistoryIndexBytesMeter = metrics.NewRegisteredMeter("pathdb/history/trienode/bytes/index", nil)
 
 	stateIndexHistoryTimer      = metrics.NewRegisteredResettingTimer("pathdb/history/state/index/time", nil)

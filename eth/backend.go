@@ -230,6 +230,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			SnapshotLimit:    config.SnapshotCache,
 			Preimages:        config.Preimages,
 			StateHistory:     config.StateHistory,
+			TrienodeHistory:  config.TrienodeHistory,
 			StateScheme:      scheme,
 			ChainHistoryMode: config.HistoryMode,
 			TxLookupLimit:    int64(min(config.TransactionHistory, math.MaxInt64)),
