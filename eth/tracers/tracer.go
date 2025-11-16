@@ -44,13 +44,9 @@ const bigIntegerJS = `var bigInt=function(undefined){"use strict";var BASE=1e7,L
 // If those are duktape stack items, popping them off **will** make the slice
 // contents change.
 func makeSlice(ptr unsafe.Pointer, size uint) []byte {
-	var sl = struct {
-		addr uintptr
-		len  int
-		cap  int
-	}{uintptr(ptr), int(size), int(size)}
-
-	return *(*[]byte)(unsafe.Pointer(&sl))
+	// This is the preferred, officially supported, and safer way
+	// to create a slice from a raw pointer in modern Go versions.
+	return unsafe.Slice((*byte)(ptr), int(size))
 }
 
 // popSlice pops a buffer off the JavaScript stack and returns it as a slice.
