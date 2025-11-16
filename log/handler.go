@@ -13,29 +13,6 @@ import (
 	"github.com/holiman/uint256"
 )
 
-type discardHandler struct{}
-
-// DiscardHandler returns a no-op handler
-func DiscardHandler() slog.Handler {
-	return &discardHandler{}
-}
-
-func (h *discardHandler) Handle(_ context.Context, r slog.Record) error {
-	return nil
-}
-
-func (h *discardHandler) Enabled(_ context.Context, level slog.Level) bool {
-	return false
-}
-
-func (h *discardHandler) WithGroup(name string) slog.Handler {
-	panic("not implemented")
-}
-
-func (h *discardHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &discardHandler{}
-}
-
 type TerminalHandler struct {
 	mu       sync.Mutex
 	wr       io.Writer
