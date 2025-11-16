@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"math/big"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -32,6 +33,11 @@ import (
 const (
 	ipcAPIs  = "admin:1.0 debug:1.0 engine:1.0 eth:1.0 miner:1.0 net:1.0 rpc:1.0 txpool:1.0 web3:1.0"
 	httpAPIs = "eth:1.0 net:1.0 rpc:1.0 web3:1.0"
+)
+
+var (
+	httpEndpointRegexp = regexp.MustCompile(`HTTP server started\s+endpoint=([^\s]+)`)
+	wsEndpointRegexp   = regexp.MustCompile(`WebSocket enabled\s+url=(ws://[^\s]+)`)
 )
 
 // spawns geth with the given command line args, using a set of flags to minimise
@@ -83,9 +89,9 @@ To exit, press ctrl-d or type exit
 // Tests that a console can be attached to a running node via various means.
 func TestAttachWelcome(t *testing.T) {
 	var (
-		ipc      string
-		httpPort string
-		wsPort   string
+		ipc     string
+		httpURL string
+		wsURL   string
 	)
 	// Configure the instance for IPC attachment
 	if runtime.GOOS == "windows" {
@@ -94,26 +100,26 @@ func TestAttachWelcome(t *testing.T) {
 		ipc = filepath.Join(t.TempDir(), "geth.ipc")
 	}
 	// And HTTP + WS attachment
-	p := trulyRandInt(1024, 65533) // Yeah, sometimes this will fail, sorry :P
-	httpPort = strconv.Itoa(p)
-	wsPort = strconv.Itoa(p + 1)
 	geth := runMinimalGeth(t, "--miner.etherbase", "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182",
 		"--ipcpath", ipc,
-		"--http", "--http.port", httpPort,
-		"--ws", "--ws.port", wsPort)
+		"--http", "--http.addr", "127.0.0.1", "--http.port", "0",
+		"--ws", "--ws.addr", "127.0.0.1", "--ws.port", "0")
+
+	httpEndpoint := waitForLogMatch(t, geth, httpEndpointRegexp)
+	httpURL = "http://" + httpEndpoint
+	wsURL = waitForLogMatch(t, geth, wsEndpointRegexp)
+
 	t.Run("ipc", func(t *testing.T) {
 		waitForEndpoint(t, ipc, 2*time.Minute)
 		testAttachWelcome(t, geth, "ipc:"+ipc, ipcAPIs)
 	})
 	t.Run("http", func(t *testing.T) {
-		endpoint := "http://127.0.0.1:" + httpPort
-		waitForEndpoint(t, endpoint, 2*time.Minute)
-		testAttachWelcome(t, geth, endpoint, httpAPIs)
+		waitForEndpoint(t, httpURL, 2*time.Minute)
+		testAttachWelcome(t, geth, httpURL, httpAPIs)
 	})
 	t.Run("ws", func(t *testing.T) {
-		endpoint := "ws://127.0.0.1:" + wsPort
-		waitForEndpoint(t, endpoint, 2*time.Minute)
-		testAttachWelcome(t, geth, endpoint, httpAPIs)
+		waitForEndpoint(t, wsURL, 2*time.Minute)
+		testAttachWelcome(t, geth, wsURL, httpAPIs)
 	})
 	geth.Kill()
 }
@@ -151,8 +157,21 @@ To exit, press ctrl-d or type exit
 	attach.ExpectExit()
 }
 
+func waitForLogMatch(t *testing.T, geth *testgeth, re *regexp.Regexp) string {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		if matches := re.FindStringSubmatch(geth.StderrText()); len(matches) > 1 {
+			return matches[1]
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatalf("timeout waiting for log %q\nstderr:\n%s", re.String(), geth.StderrText())
+	return ""
+}
+
 // trulyRandInt generates a crypto random integer used by the console tests to
-// not clash network ports with other tests running concurrently.
+// avoid name collisions (pipe identifiers, ports, etc.) when running concurrently.
 func trulyRandInt(lo, hi int) int {
 	num, _ := rand.Int(rand.Reader, big.NewInt(int64(hi-lo)))
 	return int(num.Int64()) + lo
