@@ -639,10 +639,12 @@ func (srv *Server) run() {
 	defer srv.dialsched.stop()
 
 	var (
-		peers        = make(map[enode.ID]*Peer)
-		inboundCount = 0
-		trusted      = make(map[enode.ID]bool, len(srv.TrustedNodes))
+		peers          = make(map[enode.ID]*Peer)
+		inboundCount   = 0
+		trusted        = make(map[enode.ID]bool, len(srv.TrustedNodes))
+		pendingInbound = make(map[enode.ID]time.Time) // Track in-progress inbound connections
 	)
+
 	// Put trusted nodes into a map to speed up checks.
 	// Trusted peers are loaded on startup or added via AddTrustedPeer RPC.
 	for _, n := range srv.TrustedNodes {
@@ -682,22 +684,65 @@ running:
 		case c := <-srv.checkpointPostHandshake:
 			// A connection has passed the encryption handshake so
 			// the remote identity is known (but hasn't been verified yet).
-			if trusted[c.node.ID()] {
+			nodeID := c.node.ID()
+			if trusted[nodeID] {
 				// Ensure that the trusted flag is set before checking against MaxPeers.
 				c.flags |= trustedConn
 			}
-			// TODO: track in-progress inbound node IDs (pre-Peer) to avoid dialing them.
-			c.cont <- srv.postHandshakeChecks(peers, inboundCount, c)
+
+			// Check for duplicate connections: both active peers and in-progress inbound connections.
+			if c.flags&inboundConn != 0 && c.flags&trustedConn == 0 {
+				// Check if we already have this peer or if there's already an in-progress inbound connection from them.
+				if _, exists := peers[nodeID]; exists {
+					srv.log.Debug("Rejecting duplicate inbound connection (peer exists)", "id", nodeID)
+					c.cont <- DiscAlreadyConnected
+					continue running
+				}
+
+				if startTime, exists := pendingInbound[nodeID]; exists {
+					srv.log.Debug("Rejecting duplicate inbound connection (already pending)",
+						"id", nodeID, "pending_duration", time.Since(startTime))
+					c.cont <- DiscAlreadyConnected
+					continue running
+
+				}
+
+				pendingInbound[nodeID] = time.Now()
+				srv.dialsched.inboundPending(nodeID)
+				srv.log.Trace("Tracking pending inbound connection", "id", nodeID, "pending_count", len(pendingInbound))
+			}
+
+			err := srv.postHandshakeChecks(peers, inboundCount, c)
+			if err != nil && c.flags&inboundConn != 0 && c.flags&trustedConn == 0 {
+				delete(pendingInbound, nodeID)
+				srv.dialsched.inboundCompleted(nodeID)
+				srv.log.Trace("Removed failed pending inbound connection", "id", nodeID, "err", err)
+			}
+			c.cont <- err
 
 		case c := <-srv.checkpointAddPeer:
 			// At this point the connection is past the protocol handshake.
 			// Its capabilities are known and the remote identity is verified.
+			nodeID := c.node.ID()
 			err := srv.addPeerChecks(peers, inboundCount, c)
 			if err == nil {
 				// The handshakes are done and it passed all checks.
 				p := srv.launchPeer(c)
-				peers[c.node.ID()] = p
-				srv.log.Debug("Adding p2p peer", "peercount", len(peers), "id", p.ID(), "conn", c.flags, "addr", p.RemoteAddr(), "name", p.Name())
+				peers[nodeID] = p
+				// Remove from pending tracker as it became promoted to proper peer
+				if c.flags&inboundConn != 0 {
+					if startTime, exists := pendingInbound[nodeID]; exists {
+						duration := time.Since(startTime)
+						delete(pendingInbound, nodeID)
+						srv.dialsched.inboundCompleted(nodeID)
+						srv.log.Trace("Promoted pending inbound to peer", "id", nodeID,
+							"handshake_duration", duration, "pending_count", len(pendingInbound))
+					}
+
+				}
+
+				srv.log.Debug("Adding p2p peer", "peercount", len(peers), "id", p.ID(),
+					"conn", c.flags, "addr", p.RemoteAddr(), "name", p.Name())
 				srv.dialsched.peerAdded(c)
 				if p.Inbound() {
 					inboundCount++
@@ -708,14 +753,34 @@ running:
 					activeOutboundPeerGauge.Inc(1)
 				}
 				activePeerGauge.Inc(1)
+
+			} else {
+				// Failed to add peer. Clean up pending tracking if it was inbound.
+				if c.flags&inboundConn != 0 {
+					delete(pendingInbound, nodeID)
+					srv.dialsched.inboundCompleted(nodeID)
+					srv.log.Trace("Removed failed pending inbound at add peer stage",
+						"id", nodeID, "err", err)
+				}
+
 			}
+
 			c.cont <- err
 
 		case pd := <-srv.delpeer:
 			// A peer disconnected.
 			d := common.PrettyDuration(mclock.Now() - pd.created)
-			delete(peers, pd.ID())
-			srv.log.Debug("Removing p2p peer", "peercount", len(peers), "id", pd.ID(), "duration", d, "req", pd.requested, "err", pd.err)
+			nodeID := pd.ID()
+			delete(peers, nodeID)
+			// Remove from pending tracking if present (defensive cleanup).
+			if _, exists := pendingInbound[nodeID]; exists {
+				delete(pendingInbound, nodeID)
+				srv.dialsched.inboundCompleted(nodeID)
+				srv.log.Trace("Cleaned up pending entry on peer deletion", "id", nodeID)
+			}
+
+			srv.log.Debug("Removing p2p peer", "peercount", len(peers), "id", nodeID,
+				"duration", d, "req", pd.requested, "err", pd.err)
 			srv.dialsched.peerRemoved(pd.rw)
 			if pd.Inbound() {
 				inboundCount--
@@ -747,6 +812,7 @@ running:
 		p := <-srv.delpeer
 		p.log.Trace("<-delpeer (spindown)")
 		delete(peers, p.ID())
+		delete(pendingInbound, p.ID())
 	}
 }
 
