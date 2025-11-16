@@ -393,7 +393,7 @@ func (f *FilterMaps) init() error {
 			bestIdx, bestLen = idx, max
 		}
 	}
-	var initBlockNumber uint64
+	initBlockNumber := f.historyCutoff
 	if bestLen > 0 {
 		initBlockNumber = checkpoints[bestIdx][bestLen-1].BlockNumber
 	}
@@ -503,7 +503,7 @@ func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve last block of map %d containing searched log value index %d: %v", mapIndex, lvIndex, err)
 	}
-	var firstBlockNumber uint64
+	firstBlockNumber := f.historyCutoff
 	if mapIndex > 0 {
 		firstBlockNumber, _, err = f.getLastBlockOfMap(mapIndex - 1)
 		if err != nil {
@@ -763,7 +763,7 @@ func (f *FilterMaps) deleteTailEpoch(epoch uint32) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to retrieve last block of deleted epoch %d: %v", epoch, err)
 	}
-	var firstBlock uint64
+	firstBlock := f.historyCutoff
 	firstMap := f.firstEpochMap(epoch)
 	if epoch > 0 {
 		firstBlock, _, err = f.getLastBlockOfMap(firstMap - 1)

@@ -161,13 +161,13 @@ func (f *FilterMaps) lastCanonicalSnapshotOfMap(mapIndex uint32) *renderedMap {
 // and starting log value pointer of the last block is also returned.
 func (f *FilterMaps) lastCanonicalMapBoundaryBefore(renderBefore uint32) (nextMap uint32, startBlock, startLvPtr uint64, err error) {
 	if !f.indexedRange.initialized {
-		return 0, 0, 0, nil
+		return 0, f.historyCutoff, 0, nil
 	}
 	mapIndex := renderBefore
 	for {
 		var ok bool
 		if mapIndex, ok = f.lastMapBoundaryBefore(mapIndex); !ok {
-			return 0, 0, 0, nil
+			return 0, f.historyCutoff, 0, nil
 		}
 		lastBlock, lastBlockId, err := f.getLastBlockOfMap(mapIndex)
 		if err != nil {
@@ -229,7 +229,7 @@ func (f *FilterMaps) loadHeadSnapshot() error {
 	if err != nil {
 		return fmt.Errorf("failed to retrieve last block of head snapshot map %d: %v", f.indexedRange.maps.Last(), err)
 	}
-	var firstBlock uint64
+	var firstBlock uint64 = f.historyCutoff
 	if f.indexedRange.maps.AfterLast() > 1 {
 		prevLastBlock, _, err := f.getLastBlockOfMap(f.indexedRange.maps.Last() - 1)
 		if err != nil {
