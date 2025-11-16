@@ -49,14 +49,26 @@ func (bt *InternalNode) GetValuesAtStem(stem []byte, resolver NodeResolverFn) ([
 	}
 
 	bit := stem[bt.depth/8] >> (7 - (bt.depth % 8)) & 1
-	var child *BinaryNode
 	if bit == 0 {
-		child = &bt.left
-	} else {
-		child = &bt.right
+		if hn, ok := bt.left.(HashedNode); ok {
+			path, err := keyToPath(bt.depth, stem)
+			if err != nil {
+				return nil, fmt.Errorf("GetValuesAtStem resolve error: %w", err)
+			}
+			data, err := resolver(path, common.Hash(hn))
+			if err != nil {
+				return nil, fmt.Errorf("GetValuesAtStem resolve error: %w", err)
+			}
+			node, err := DeserializeNode(data, bt.depth+1)
+			if err != nil {
+				return nil, fmt.Errorf("GetValuesAtStem node deserialization error: %w", err)
+			}
+			bt.left = node
+		}
+		return bt.left.GetValuesAtStem(stem, resolver)
 	}
 
-	if hn, ok := (*child).(HashedNode); ok {
+	if hn, ok := bt.right.(HashedNode); ok {
 		path, err := keyToPath(bt.depth, stem)
 		if err != nil {
 			return nil, fmt.Errorf("GetValuesAtStem resolve error: %w", err)
@@ -69,9 +81,9 @@ func (bt *InternalNode) GetValuesAtStem(stem []byte, resolver NodeResolverFn) ([
 		if err != nil {
 			return nil, fmt.Errorf("GetValuesAtStem node deserialization error: %w", err)
 		}
-		*child = node
+		bt.right = node
 	}
-	return (*child).GetValuesAtStem(stem, resolver)
+	return bt.right.GetValuesAtStem(stem, resolver)
 }
 
 // Get retrieves the value for the given key.
@@ -79,6 +91,9 @@ func (bt *InternalNode) Get(key []byte, resolver NodeResolverFn) ([]byte, error)
 	values, err := bt.GetValuesAtStem(key[:31], resolver)
 	if err != nil {
 		return nil, fmt.Errorf("get error: %w", err)
+	}
+	if values == nil {
+		return nil, nil
 	}
 	return values[key[31]], nil
 }
@@ -118,17 +133,54 @@ func (bt *InternalNode) Hash() common.Hash {
 // InsertValuesAtStem inserts a full value group at the given stem in the internal node.
 // Already-existing values will be overwritten.
 func (bt *InternalNode) InsertValuesAtStem(stem []byte, values [][]byte, resolver NodeResolverFn, depth int) (BinaryNode, error) {
-	var (
-		child *BinaryNode
-		err   error
-	)
+	var err error
 	bit := stem[bt.depth/8] >> (7 - (bt.depth % 8)) & 1
 	if bit == 0 {
-		child = &bt.left
-	} else {
-		child = &bt.right
+		if bt.left == nil {
+			bt.left = Empty{}
+		}
+
+		if hn, ok := bt.left.(HashedNode); ok {
+			path, err := keyToPath(bt.depth, stem)
+			if err != nil {
+				return nil, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
+			}
+			data, err := resolver(path, common.Hash(hn))
+			if err != nil {
+				return nil, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
+			}
+			node, err := DeserializeNode(data, bt.depth+1)
+			if err != nil {
+				return nil, fmt.Errorf("InsertValuesAtStem node deserialization error: %w", err)
+			}
+			bt.left = node
+		}
+
+		bt.left, err = bt.left.InsertValuesAtStem(stem, values, resolver, depth+1)
+		return bt, err
 	}
-	*child, err = (*child).InsertValuesAtStem(stem, values, resolver, depth+1)
+
+	if bt.right == nil {
+		bt.right = Empty{}
+	}
+
+	if hn, ok := bt.right.(HashedNode); ok {
+		path, err := keyToPath(bt.depth, stem)
+		if err != nil {
+			return nil, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
+		}
+		data, err := resolver(path, common.Hash(hn))
+		if err != nil {
+			return nil, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
+		}
+		node, err := DeserializeNode(data, bt.depth+1)
+		if err != nil {
+			return nil, fmt.Errorf("InsertValuesAtStem node deserialization error: %w", err)
+		}
+		bt.right = node
+	}
+
+	bt.right, err = bt.right.InsertValuesAtStem(stem, values, resolver, depth+1)
 	return bt, err
 }
 
