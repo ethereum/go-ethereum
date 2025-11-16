@@ -708,12 +708,14 @@ running:
 				}
 
 				pendingInbound[nodeID] = time.Now()
+				srv.dialsched.inboundPending(nodeID)
 				srv.log.Trace("Tracking pending inbound connection", "id", nodeID, "pending_count", len(pendingInbound))
 			}
 
 			err := srv.postHandshakeChecks(peers, inboundCount, c)
 			if err != nil && c.flags&inboundConn != 0 && c.flags&trustedConn == 0 {
 				delete(pendingInbound, nodeID)
+				srv.dialsched.inboundCompleted(nodeID)
 				srv.log.Trace("Removed failed pending inbound connection", "id", nodeID, "err", err)
 			}
 			c.cont <- err
@@ -732,6 +734,7 @@ running:
 					if startTime, exists := pendingInbound[nodeID]; exists {
 						duration := time.Since(startTime)
 						delete(pendingInbound, nodeID)
+						srv.dialsched.inboundCompleted(nodeID)
 						srv.log.Trace("Promoted pending inbound to peer", "id", nodeID,
 							"handshake_duration", duration, "pending_count", len(pendingInbound))
 					}
@@ -755,6 +758,7 @@ running:
 				// Failed to add peer. Clean up pending tracking if it was inbound.
 				if c.flags&inboundConn != 0 {
 					delete(pendingInbound, nodeID)
+					srv.dialsched.inboundCompleted(nodeID)
 					srv.log.Trace("Removed failed pending inbound at add peer stage",
 						"id", nodeID, "err", err)
 				}
@@ -771,6 +775,7 @@ running:
 			// Remove from pending tracking if present (defensive cleanup).
 			if _, exists := pendingInbound[nodeID]; exists {
 				delete(pendingInbound, nodeID)
+				srv.dialsched.inboundCompleted(nodeID)
 				srv.log.Trace("Cleaned up pending entry on peer deletion", "id", nodeID)
 			}
 
