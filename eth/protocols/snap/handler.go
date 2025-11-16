@@ -277,6 +277,10 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 	if req.Bytes > softResponseLimit {
 		req.Bytes = softResponseLimit
 	}
+	// Validate the request range
+	if bytes.Compare(req.Origin[:], req.Limit[:]) > 0 {
+		return nil, nil
+	}
 	// Retrieve the requested state and bail out if non existent
 	tr, err := trie.New(trie.StateTrieID(req.Root), chain.TrieDB())
 	if err != nil {
@@ -341,6 +345,10 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesPacket) ([][]*StorageData, [][]byte) {
 	if req.Bytes > softResponseLimit {
 		req.Bytes = softResponseLimit
+	}
+	// Validate the request range
+	if bytes.Compare(req.Origin[:], req.Limit[:]) > 0 {
+		return nil, nil
 	}
 	// TODO(karalabe): Do we want to enforce > 0 accounts and 1 account if origin is set?
 	// TODO(karalabe):   - Logging locally is not ideal as remote faults annoy the local user
