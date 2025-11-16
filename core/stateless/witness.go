@@ -18,11 +18,11 @@ package stateless
 
 import (
 	"errors"
-	"maps"
 	"slices"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -38,9 +38,9 @@ type HeaderReader interface {
 type Witness struct {
 	context *types.Header // Header to which this witness belongs to, with rootHash and receiptHash zeroed out
 
-	Headers []*types.Header     // Past headers in reverse order (0=parent, 1=parent's-parent, etc). First *must* be set.
-	Codes   map[string]struct{} // Set of bytecodes ran or accessed
-	State   map[string]struct{} // Set of MPT state trie nodes (account and storage together)
+	Headers []*types.Header `json:"headers"` // Past headers in reverse order (0=parent, 1=parent's-parent, etc). First *must* be set.
+	Codes   []hexutil.Bytes `json:"codes"`   // Set of bytecodes ran or accessed
+	State   []hexutil.Bytes `json:"state"`   // Set of MPT state trie nodes (account and storage together)
 
 	chain HeaderReader // Chain reader to convert block hash ops to header proofs
 	lock  sync.Mutex   // Lock to allow concurrent state insertions
@@ -62,8 +62,8 @@ func NewWitness(context *types.Header, chain HeaderReader) (*Witness, error) {
 	return &Witness{
 		context: context,
 		Headers: headers,
-		Codes:   make(map[string]struct{}),
-		State:   make(map[string]struct{}),
+		Codes:   []hexutil.Bytes{},
+		State:   []hexutil.Bytes{},
 		chain:   chain,
 	}, nil
 }
@@ -84,7 +84,7 @@ func (w *Witness) AddCode(code []byte) {
 	if len(code) == 0 {
 		return
 	}
-	w.Codes[string(code)] = struct{}{}
+	w.Codes = append(w.Codes, code)
 }
 
 // AddState inserts a batch of MPT trie nodes into the witness.
@@ -96,7 +96,7 @@ func (w *Witness) AddState(nodes map[string][]byte) {
 	defer w.lock.Unlock()
 
 	for _, value := range nodes {
-		w.State[string(value)] = struct{}{}
+		w.State = append(w.State, value)
 	}
 }
 
@@ -109,8 +109,8 @@ func (w *Witness) AddKey() {
 func (w *Witness) Copy() *Witness {
 	cpy := &Witness{
 		Headers: slices.Clone(w.Headers),
-		Codes:   maps.Clone(w.Codes),
-		State:   maps.Clone(w.State),
+		Codes:   slices.Clone(w.Codes),
+		State:   slices.Clone(w.State),
 		chain:   w.chain,
 	}
 	if w.context != nil {
