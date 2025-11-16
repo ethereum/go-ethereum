@@ -463,6 +463,109 @@ func TestServerSetupConn(t *testing.T) {
 	}
 }
 
+// TestServerPendingInboundRejection checks that duplicate inbound connections
+// are rejected when there's already a pending inbound connection from the same peer.
+func TestServerPendingInboundRejection(t *testing.T) {
+	trustedNode := newkey()
+	srv := &Server{
+		Config: Config{
+			PrivateKey:  newkey(),
+			MaxPeers:    10,
+			NoDial:      true,
+			NoDiscovery: true,
+			Logger:      testlog.Logger(t, log.LvlTrace),
+		},
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatalf("could not start: %v", err)
+	}
+	defer srv.Stop()
+
+	newconn := func(id enode.ID) *conn {
+		fd, _ := net.Pipe()
+		tx := newTestTransport(&trustedNode.PublicKey, fd, nil)
+		node := enode.SignNull(new(enr.Record), id)
+		return &conn{fd: fd, transport: tx, flags: inboundConn, node: node, cont: make(chan error)}
+	}
+
+	// Create two connections from the same peer
+	peerID := randomID()
+	c1 := newconn(peerID)
+	c2 := newconn(peerID)
+
+	// First connection enters pendingInbound
+	err1 := srv.checkpoint(c1, srv.checkpointPostHandshake)
+	if err1 != nil {
+		t.Fatalf("first connection failed unexpectedly: %v", err1)
+	}
+
+	// Second connection should be rejected (duplicate pending inbound)
+	err2 := srv.checkpoint(c2, srv.checkpointPostHandshake)
+	if err2 != DiscAlreadyConnected {
+		t.Errorf("expected DiscAlreadyConnected for duplicate pending inbound, got: %v", err2)
+	}
+
+	t.Logf("✅ First connection accepted, second rejected with: %v", err2)
+}
+
+// TestServerPendingInboundCleanup checks that pending inbound state is properly
+// cleaned up when a connection fails or completes.
+func TestServerPendingInboundCleanup(t *testing.T) {
+	// Track when peers connect
+	connected := make(chan *Peer, 2)
+	remid := &newkey().PublicKey
+
+	srv := startTestServer(t, remid, func(p *Peer) {
+		connected <- p
+	})
+	defer close(connected)
+	defer srv.Stop()
+
+	// First connection attempt - will succeed
+	conn1, err := net.DialTimeout("tcp", srv.ListenAddr, 5*time.Second)
+	if err != nil {
+		t.Fatalf("could not dial: %v", err)
+	}
+	defer conn1.Close()
+
+	// Wait for peer to connect
+	select {
+	case peer := <-connected:
+		t.Logf("First connection succeeded, peer: %s", peer.ID())
+
+		// Disconnect the peer to clean up pendingInbound
+		peer.Disconnect(DiscRequested)
+		time.Sleep(100 * time.Millisecond)
+
+		// Verify peer is gone
+		if srv.PeerCount() != 0 {
+			t.Errorf("expected 0 peers after disconnect, got %d", srv.PeerCount())
+		}
+
+	case <-time.After(2 * time.Second):
+		t.Fatal("first connection did not complete within timeout")
+	}
+
+	// Second connection attempt from same peer - should succeed now
+	// because pendingInbound was cleaned up
+	conn2, err := net.DialTimeout("tcp", srv.ListenAddr, 5*time.Second)
+	if err != nil {
+		t.Fatalf("could not dial second time: %v", err)
+	}
+	defer conn2.Close()
+
+	select {
+	case peer := <-connected:
+		t.Logf("Second connection succeeded after cleanup, peer: %s", peer.ID())
+		if peer.ID() != enode.PubkeyToIDV4(remid) {
+			t.Errorf("peer has wrong id")
+		}
+
+	case <-time.After(2 * time.Second):
+		t.Error("second connection did not complete within timeout - pendingInbound may not have been cleaned up")
+	}
+}
+
 type setupTransport struct {
 	pubkey            *ecdsa.PublicKey
 	encHandshakeErr   error
