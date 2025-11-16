@@ -83,3 +83,10 @@ func TestMemoryCopy(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkResize(b *testing.B) {
+	memory := NewMemory()
+	for i := range b.N {
+		memory.Resize(uint64(i))
+	}
+}
