@@ -74,6 +74,7 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.Hooks {
 		OnExit:            l.OnExit,
 		OnOpcode:          l.OnOpcode,
 		OnFault:           l.OnFault,
+		OnFaultV2:         l.OnFaultV2,
 	}
 	return l.hooks
 }
@@ -92,13 +93,17 @@ func NewJSONLoggerWithCallFrames(cfg *Config, writer io.Writer) *tracing.Hooks {
 		OnExit:            l.OnExit,
 		OnOpcode:          l.OnOpcode,
 		OnFault:           l.OnFault,
+		OnFaultV2:         l.OnFaultV2,
 	}
 	return l.hooks
 }
 
 func (l *jsonLogger) OnFault(pc uint64, op byte, gas uint64, cost uint64, scope tracing.OpContext, depth int, err error) {
-	// TODO: Add rData to this interface as well
 	l.OnOpcode(pc, op, gas, cost, scope, nil, depth, err)
+}
+
+func (l *jsonLogger) OnFaultV2(pc uint64, op byte, gas uint64, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+	l.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
 }
 
 func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
