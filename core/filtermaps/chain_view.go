@@ -32,12 +32,11 @@ type blockchain interface {
 	GetRawReceipts(hash common.Hash, number uint64) types.Receipts
 }
 
-// ChainView represents an immutable view of a chain with a block id and a set
+// ChainView represents an immutable view of a chain with a block hash and a set
 // of receipts associated to each block number and a block hash associated with
 // all block numbers except the head block. This is because in the future
 // ChainView might represent a view where the head block is currently being
-// created. Block id is a unique identifier that can also be calculated for the
-// head block.
+// created.
 // Note that the view's head does not have to be the current canonical head
 // of the underlying blockchain, it should only possess the block headers
 // and receipts up until the expected chain view head.
@@ -70,21 +69,6 @@ func (cv *ChainView) HeadNumber() uint64 {
 // Note that the hash of the head block is not returned because ChainView might
 // represent a view where the head block is currently being created.
 func (cv *ChainView) BlockHash(number uint64) common.Hash {
-	cv.lock.Lock()
-	defer cv.lock.Unlock()
-
-	if number > cv.headNumber {
-		panic("invalid block number")
-	}
-	return cv.blockHash(number)
-}
-
-// BlockId returns the unique block id belonging to the given block number.
-// Note that it is currently equal to the block hash. In the future it might
-// be a different id for future blocks if the log index root becomes part of
-// consensus and therefore rendering the index with the new head will happen
-// before the hash of that new head is available.
-func (cv *ChainView) BlockId(number uint64) common.Hash {
 	cv.lock.Lock()
 	defer cv.lock.Unlock()
 
@@ -128,7 +112,7 @@ func (cv *ChainView) SharedRange(cv2 *ChainView) common.Range[uint64] {
 		return common.Range[uint64]{}
 	}
 	sharedLen := min(cv.headNumber, cv2.headNumber) + 1
-	for sharedLen > 0 && cv.BlockId(sharedLen-1) != cv2.BlockId(sharedLen-1) {
+	for sharedLen > 0 && cv.BlockHash(sharedLen-1) != cv2.BlockHash(sharedLen-1) {
 		sharedLen--
 	}
 	return common.NewRange(0, sharedLen)
@@ -139,7 +123,7 @@ func equalViews(cv1, cv2 *ChainView) bool {
 	if cv1 == nil || cv2 == nil {
 		return false
 	}
-	return cv1.headNumber == cv2.headNumber && cv1.BlockId(cv1.headNumber) == cv2.BlockId(cv2.headNumber)
+	return cv1.headNumber == cv2.headNumber && cv1.BlockHash(cv1.headNumber) == cv2.BlockHash(cv2.headNumber)
 }
 
 // matchViews returns true if the two chain views are equivalent up until the
@@ -152,12 +136,7 @@ func matchViews(cv1, cv2 *ChainView, number uint64) bool {
 	if cv1.headNumber < number || cv2.headNumber < number {
 		return false
 	}
-	var h1, h2 common.Hash
-	if number == cv1.headNumber || number == cv2.headNumber {
-		h1, h2 = cv1.BlockId(number), cv2.BlockId(number)
-	} else {
-		h1, h2 = cv1.BlockHash(number), cv2.BlockHash(number)
-	}
+	h1, h2 := cv1.BlockHash(number), cv2.BlockHash(number)
 	return h1 == h2 && h1 != common.Hash{}
 }
 
