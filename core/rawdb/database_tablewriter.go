@@ -14,10 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// TODO: naive stub implementation for tablewriter
-
-//go:build tinygo
-// +build tinygo
+// Naive stub implementation for tablewriter
 
 package rawdb
 
@@ -40,7 +37,7 @@ type Table struct {
 	rows    [][]string
 }
 
-func newTableWriter(w io.Writer) *Table {
+func NewTableWriter(w io.Writer) *Table {
 	return &Table{out: w}
 }
 
