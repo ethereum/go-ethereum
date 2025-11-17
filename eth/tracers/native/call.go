@@ -45,7 +45,7 @@ type callLog struct {
 	// Position of the log relative to subcalls within the same trace
 	// See https://github.com/ethereum/go-ethereum/pull/28389 for details
 	Position hexutil.Uint `json:"position"`
-	Removed  bool          `json:"removed,omitempty"`
+	Removed  bool         `json:"removed,omitempty"`
 }
 
 type callFrame struct {
@@ -121,9 +121,9 @@ type callTracer struct {
 }
 
 type callTracerConfig struct {
-	OnlyTopCall     bool `json:"onlyTopCall"`     // If true, call tracer won't collect any subcalls
-	WithLog         bool `json:"withLog"`         // If true, call tracer will collect event logs
-	WithRemovedLog  bool `json:"withRemovedLog"`  // If true, mark failed logs as removed instead of deleting them
+	OnlyTopCall    bool `json:"onlyTopCall"`    // If true, call tracer won't collect any subcalls
+	WithLog        bool `json:"withLog"`        // If true, call tracer will collect event logs
+	WithRemovedLog bool `json:"withRemovedLog"` // If true, mark failed logs as removed instead of deleting them
 }
 
 // newCallTracer returns a native go tracer which tracks
