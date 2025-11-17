@@ -71,9 +71,6 @@ func ParseDerivationPath(path string) (DerivationPath, error) {
 	// Handle absolute or relative paths
 	components := strings.Split(path, "/")
 	switch {
-	case len(components) == 0:
-		return nil, errors.New("empty derivation path")
-
 	case strings.TrimSpace(components[0]) == "":
 		return nil, errors.New("ambiguous path: use 'm/' prefix for absolute paths, or no leading '/' for relative ones")
 
