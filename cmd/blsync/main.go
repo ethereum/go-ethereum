@@ -51,6 +51,7 @@ func main() {
 		utils.HoodiFlag,
 		utils.BlsyncApiFlag,
 		utils.BlsyncJWTSecretFlag,
+		utils.DeleteAllBadBlocksFlag,
 	},
 		debug.Flags,
 	)

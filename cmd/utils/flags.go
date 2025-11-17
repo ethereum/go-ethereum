@@ -669,6 +669,11 @@ var (
 	}
 
 	// MISC settings
+	DeleteAllBadBlocksFlag = &cli.BoolFlag{
+		Name:     "delete-all-bad-blocks",
+		Usage:    "Delete all bad blocks in the database",
+		Category: flags.MiscCategory,
+	}
 	SyncTargetFlag = &cli.StringFlag{
 		Name:      "synctarget",
 		Usage:     `Hash of the block to full sync to (dev testing feature)`,
@@ -1606,7 +1611,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags, don't allow network id override on preset networks
 	flags.CheckExclusive(ctx, MainnetFlag, DeveloperFlag, SepoliaFlag, HoleskyFlag, HoodiFlag, NetworkIdFlag, OverrideGenesisFlag)
 	flags.CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
-
+	if ctx.Bool(DeleteAllBadBlocksFlag.Name) {
+		cfg.DeleteAllBadBlocks = true
+	}
 	// Set configurations from CLI flags
 	setEtherbase(ctx, cfg)
 	setGPO(ctx, &cfg.GPO)
