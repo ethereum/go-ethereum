@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/holiman/uint256"
 )
 
@@ -145,9 +146,6 @@ func (buf *encBuffer) writeString(s string) {
 	buf.writeBytes([]byte(s))
 }
 
-// wordBytes is the number of bytes in a big.Word
-const wordBytes = (32 << (uint64(^big.Word(0)) >> 63)) / 8
-
 // writeBigInt writes i as an integer.
 func (buf *encBuffer) writeBigInt(i *big.Int) {
 	bitlen := i.BitLen()
@@ -161,15 +159,8 @@ func (buf *encBuffer) writeBigInt(i *big.Int) {
 	length := ((bitlen + 7) & -8) >> 3
 	buf.encodeStringHeader(length)
 	buf.str = append(buf.str, make([]byte, length)...)
-	index := length
 	bytesBuf := buf.str[len(buf.str)-length:]
-	for _, d := range i.Bits() {
-		for j := 0; j < wordBytes && index > 0; j++ {
-			index--
-			bytesBuf[index] = byte(d)
-			d >>= 8
-		}
-	}
+	math.ReadBits(i, bytesBuf)
 }
 
 // writeUint256 writes z as an integer.

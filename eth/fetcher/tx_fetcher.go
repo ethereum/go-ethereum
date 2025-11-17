@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 )
 
 const (
@@ -69,41 +68,15 @@ const (
 	// txGatherSlack is the interval used to collate almost-expired announces
 	// with network fetches.
 	txGatherSlack = 100 * time.Millisecond
+
+	// addTxsBatchSize it the max number of transactions to add in a single batch from a peer.
+	addTxsBatchSize = 128
 )
 
 var (
 	// txFetchTimeout is the maximum allotted time to return an explicitly
 	// requested transaction.
 	txFetchTimeout = 5 * time.Second
-)
-
-var (
-	txAnnounceInMeter          = metrics.NewRegisteredMeter("eth/fetcher/transaction/announces/in", nil)
-	txAnnounceKnownMeter       = metrics.NewRegisteredMeter("eth/fetcher/transaction/announces/known", nil)
-	txAnnounceUnderpricedMeter = metrics.NewRegisteredMeter("eth/fetcher/transaction/announces/underpriced", nil)
-	txAnnounceDOSMeter         = metrics.NewRegisteredMeter("eth/fetcher/transaction/announces/dos", nil)
-
-	txBroadcastInMeter          = metrics.NewRegisteredMeter("eth/fetcher/transaction/broadcasts/in", nil)
-	txBroadcastKnownMeter       = metrics.NewRegisteredMeter("eth/fetcher/transaction/broadcasts/known", nil)
-	txBroadcastUnderpricedMeter = metrics.NewRegisteredMeter("eth/fetcher/transaction/broadcasts/underpriced", nil)
-	txBroadcastOtherRejectMeter = metrics.NewRegisteredMeter("eth/fetcher/transaction/broadcasts/otherreject", nil)
-
-	txRequestOutMeter     = metrics.NewRegisteredMeter("eth/fetcher/transaction/request/out", nil)
-	txRequestFailMeter    = metrics.NewRegisteredMeter("eth/fetcher/transaction/request/fail", nil)
-	txRequestDoneMeter    = metrics.NewRegisteredMeter("eth/fetcher/transaction/request/done", nil)
-	txRequestTimeoutMeter = metrics.NewRegisteredMeter("eth/fetcher/transaction/request/timeout", nil)
-
-	txReplyInMeter          = metrics.NewRegisteredMeter("eth/fetcher/transaction/replies/in", nil)
-	txReplyKnownMeter       = metrics.NewRegisteredMeter("eth/fetcher/transaction/replies/known", nil)
-	txReplyUnderpricedMeter = metrics.NewRegisteredMeter("eth/fetcher/transaction/replies/underpriced", nil)
-	txReplyOtherRejectMeter = metrics.NewRegisteredMeter("eth/fetcher/transaction/replies/otherreject", nil)
-
-	txFetcherWaitingPeers   = metrics.NewRegisteredGauge("eth/fetcher/transaction/waiting/peers", nil)
-	txFetcherWaitingHashes  = metrics.NewRegisteredGauge("eth/fetcher/transaction/waiting/hashes", nil)
-	txFetcherQueueingPeers  = metrics.NewRegisteredGauge("eth/fetcher/transaction/queueing/peers", nil)
-	txFetcherQueueingHashes = metrics.NewRegisteredGauge("eth/fetcher/transaction/queueing/hashes", nil)
-	txFetcherFetchingPeers  = metrics.NewRegisteredGauge("eth/fetcher/transaction/fetching/peers", nil)
-	txFetcherFetchingHashes = metrics.NewRegisteredGauge("eth/fetcher/transaction/fetching/hashes", nil)
 )
 
 var errTerminated = errors.New("terminated")
@@ -202,22 +175,23 @@ type TxFetcher struct {
 	fetchTxs func(string, []common.Hash) error  // Retrieves a set of txs from a remote peer
 	dropPeer func(string)                       // Drops a peer in case of announcement violation
 
-	step  chan struct{} // Notification channel when the fetcher loop iterates
-	clock mclock.Clock  // Time wrapper to simulate in tests
-	rand  *mrand.Rand   // Randomizer to use in tests instead of map range loops (soft-random)
+	step     chan struct{}    // Notification channel when the fetcher loop iterates
+	clock    mclock.Clock     // Monotonic clock or simulated clock for tests
+	realTime func() time.Time // Real system time or simulated time for tests
+	rand     *mrand.Rand      // Randomizer to use in tests instead of map range loops (soft-random)
 }
 
 // NewTxFetcher creates a transaction fetcher to retrieve transaction
 // based on hash announcements.
 func NewTxFetcher(hasTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string)) *TxFetcher {
-	return NewTxFetcherForTests(hasTx, addTxs, fetchTxs, dropPeer, mclock.System{}, nil)
+	return NewTxFetcherForTests(hasTx, addTxs, fetchTxs, dropPeer, mclock.System{}, time.Now, nil)
 }
 
 // NewTxFetcherForTests is a testing method to mock out the realtime clock with
 // a simulated version and the internal randomness with a deterministic one.
 func NewTxFetcherForTests(
 	hasTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string),
-	clock mclock.Clock, rand *mrand.Rand) *TxFetcher {
+	clock mclock.Clock, realTime func() time.Time, rand *mrand.Rand) *TxFetcher {
 	return &TxFetcher{
 		notify:      make(chan *txAnnounce),
 		cleanup:     make(chan *txDelivery),
@@ -237,6 +211,7 @@ func NewTxFetcherForTests(
 		fetchTxs:    fetchTxs,
 		dropPeer:    dropPeer,
 		clock:       clock,
+		realTime:    realTime,
 		rand:        rand,
 	}
 }
@@ -293,7 +268,7 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 // isKnownUnderpriced reports whether a transaction hash was recently found to be underpriced.
 func (f *TxFetcher) isKnownUnderpriced(hash common.Hash) bool {
 	prevTime, ok := f.underpriced.Peek(hash)
-	if ok && prevTime.Before(time.Now().Add(-maxTxUnderpricedTimeout)) {
+	if ok && prevTime.Before(f.realTime().Add(-maxTxUnderpricedTimeout)) {
 		f.underpriced.Remove(hash)
 		return false
 	}
@@ -327,8 +302,8 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		metas = make([]txMetadata, 0, len(txs))
 	)
 	// proceed in batches
-	for i := 0; i < len(txs); i += 128 {
-		end := i + 128
+	for i := 0; i < len(txs); i += addTxsBatchSize {
+		end := i + addTxsBatchSize
 		if end > len(txs) {
 			end = len(txs)
 		}
@@ -343,7 +318,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			// Track the transaction hash if the price is too low for us.
 			// Avoid re-request this transaction when we receive another
 			// announcement.
-			if errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced) {
+			if errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced) || errors.Is(err, txpool.ErrTxGasPriceTooLow) {
 				f.underpriced.Add(batch[j].Hash(), batch[j].Time())
 			}
 			// Track a few interesting failure types
@@ -353,7 +328,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			case errors.Is(err, txpool.ErrAlreadyKnown):
 				duplicate++
 
-			case errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced):
+			case errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced) || errors.Is(err, txpool.ErrTxGasPriceTooLow):
 				underpriced++
 
 			default:
@@ -370,7 +345,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		otherRejectMeter.Mark(otherreject)
 
 		// If 'other reject' is >25% of the deliveries in any batch, sleep a bit.
-		if otherreject > 128/4 {
+		if otherreject > addTxsBatchSize/4 {
 			time.Sleep(200 * time.Millisecond)
 			log.Debug("Peer delivering stale transactions", "peer", peer, "rejected", otherreject)
 		}
@@ -434,8 +409,8 @@ func (f *TxFetcher) loop() {
 			if want > maxTxAnnounces {
 				txAnnounceDOSMeter.Mark(int64(want - maxTxAnnounces))
 
-				ann.hashes = ann.hashes[:want-maxTxAnnounces]
-				ann.metas = ann.metas[:want-maxTxAnnounces]
+				ann.hashes = ann.hashes[:maxTxAnnounces-used]
+				ann.metas = ann.metas[:maxTxAnnounces-used]
 			}
 			// All is well, schedule the remainder of the transactions
 			var (
@@ -630,6 +605,7 @@ func (f *TxFetcher) loop() {
 					}
 					// Keep track of the request as dangling, but never expire
 					f.requests[peer].hashes = nil
+					txFetcherSlowPeers.Inc(1)
 				}
 			}
 			// Schedule a new transaction retrieval
@@ -723,6 +699,10 @@ func (f *TxFetcher) loop() {
 					log.Warn("Unexpected transaction delivery", "peer", delivery.origin)
 					break
 				}
+				if req.hashes == nil {
+					txFetcherSlowPeers.Dec(1)
+					txFetcherSlowWait.Update(time.Duration(f.clock.Now() - req.time).Nanoseconds())
+				}
 				delete(f.requests, delivery.origin)
 
 				// Anything not delivered should be re-scheduled (with or without
@@ -802,6 +782,10 @@ func (f *TxFetcher) loop() {
 					}
 					delete(f.fetching, hash)
 				}
+				if request.hashes == nil {
+					txFetcherSlowPeers.Dec(1)
+					txFetcherSlowWait.Update(time.Duration(f.clock.Now() - request.time).Nanoseconds())
+				}
 				delete(f.requests, drop.peer)
 			}
 			// Clean up general announcement tracking
@@ -810,6 +794,10 @@ func (f *TxFetcher) loop() {
 					delete(f.announced[hash], drop.peer)
 					if len(f.announced[hash]) == 0 {
 						delete(f.announced, hash)
+					}
+					delete(f.alternates[hash], drop.peer)
+					if len(f.alternates[hash]) == 0 {
+						delete(f.alternates, hash)
 					}
 				}
 				delete(f.announces, drop.peer)
@@ -874,7 +862,7 @@ func (f *TxFetcher) rescheduleWait(timer *mclock.Timer, trigger chan struct{}) {
 // This method is a bit "flaky" "by design". In theory the timeout timer only ever
 // should be rescheduled if some request is pending. In practice, a timeout will
 // cause the timer to be rescheduled every 5 secs (until the peer comes through or
-// disconnects). This is a limitation of the fetcher code because we don't trac
+// disconnects). This is a limitation of the fetcher code because we don't track
 // pending requests and timed out requests separately. Without double tracking, if
 // we simply didn't reschedule the timer on all-timeout then the timer would never
 // be set again since len(request) > 0 => something's running.

@@ -24,7 +24,7 @@ const (
 	depositRequestSize = 192
 )
 
-// UnpackIntoDeposit unpacks a serialized DepositEvent.
+// DepositLogToRequest unpacks a serialized DepositEvent.
 func DepositLogToRequest(data []byte) ([]byte, error) {
 	if len(data) != 576 {
 		return nil, fmt.Errorf("deposit wrong length: want 576, have %d", len(data))

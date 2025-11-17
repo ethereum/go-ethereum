@@ -84,7 +84,7 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 
 func (abi ABI) getArguments(name string, data []byte) (Arguments, error) {
 	// since there can't be naming collisions with contracts and events,
-	// we need to decide whether we're calling a method or an event
+	// we need to decide whether we're calling a method, event or an error
 	var args Arguments
 	if method, ok := abi.Methods[name]; ok {
 		if len(data)%32 != 0 {
@@ -95,8 +95,11 @@ func (abi ABI) getArguments(name string, data []byte) (Arguments, error) {
 	if event, ok := abi.Events[name]; ok {
 		args = event.Inputs
 	}
+	if err, ok := abi.Errors[name]; ok {
+		args = err.Inputs
+	}
 	if args == nil {
-		return nil, fmt.Errorf("abi: could not locate named method or event: %s", name)
+		return nil, fmt.Errorf("abi: could not locate named method, event or error: %s", name)
 	}
 	return args, nil
 }

@@ -74,6 +74,7 @@ func TestNodeEndpoints(t *testing.T) {
 		wantUDP  int
 		wantTCP  int
 		wantQUIC int
+		wantDNS  string
 	}
 	tests := []endpointTest{
 		{
@@ -90,6 +91,7 @@ func TestNodeEndpoints(t *testing.T) {
 				r.Set(enr.UDP(9000))
 				return SignNull(&r, id)
 			}(),
+			wantUDP: 9000,
 		},
 		{
 			name: "tcp-only",
@@ -98,6 +100,7 @@ func TestNodeEndpoints(t *testing.T) {
 				r.Set(enr.TCP(9000))
 				return SignNull(&r, id)
 			}(),
+			wantTCP: 9000,
 		},
 		{
 			name: "quic-only",
@@ -268,6 +271,19 @@ func TestNodeEndpoints(t *testing.T) {
 			wantIP:   netip.MustParseAddr("2001::ff00:0042:8329"),
 			wantQUIC: 9001,
 		},
+		{
+			name: "dns-only",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.UDP(30303))
+				r.Set(enr.TCP(30303))
+				n := SignNull(&r, id).WithHostname("example.com")
+				return n
+			}(),
+			wantTCP: 30303,
+			wantUDP: 30303,
+			wantDNS: "example.com",
+		},
 	}
 
 	for _, test := range tests {
@@ -283,6 +299,9 @@ func TestNodeEndpoints(t *testing.T) {
 			}
 			if quic, _ := test.node.QUICEndpoint(); test.wantQUIC != int(quic.Port()) {
 				t.Errorf("node has wrong QUIC port %d, want %d", quic.Port(), test.wantQUIC)
+			}
+			if test.wantDNS != test.node.Hostname() {
+				t.Errorf("node has wrong DNS name %s, want %s", test.node.Hostname(), test.wantDNS)
 			}
 		})
 	}
@@ -349,6 +368,16 @@ func TestID_distcmpEqual(t *testing.T) {
 	}
 }
 
+func BenchmarkDistCmp(b *testing.B) {
+	base := ID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	aID := ID{15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
+	bID := ID{15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 1}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = DistCmp(base, aID, bID)
+	}
+}
+
 func TestID_logdist(t *testing.T) {
 	logdistBig := func(a, b ID) int {
 		abig, bbig := new(big.Int).SetBytes(a[:]), new(big.Int).SetBytes(b[:])
@@ -356,6 +385,28 @@ func TestID_logdist(t *testing.T) {
 	}
 	if err := quick.CheckEqual(LogDist, logdistBig, nil); err != nil {
 		t.Error(err)
+	}
+}
+
+func makeIDs() (ID, ID) {
+	var a, b ID
+	size := len(a)
+	// last byte differs
+	for i := 0; i < size-1; i++ {
+		a[i] = 0xAA
+		b[i] = 0xAA
+	}
+	a[size-1] = 0xAA
+	b[size-1] = 0xAB
+	return a, b
+}
+
+// Benchmark LogDist
+func BenchmarkLogDist(b *testing.B) {
+	aID, bID := makeIDs() // 256-bit ID
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = LogDist(aID, bID)
 	}
 }
 

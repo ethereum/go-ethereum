@@ -4,7 +4,7 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bn254"
 )
 
-// Computes the following relation: ∏ᵢ e(Pᵢ, Qᵢ) =? 1
+// PairingCheck computes the following relation: ∏ᵢ e(Pᵢ, Qᵢ) =? 1
 //
 // To explain why gnark returns a (bool, error):
 //

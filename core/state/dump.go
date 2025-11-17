@@ -18,6 +18,7 @@ package state
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/bintrie"
 )
 
 // DumpConfig is a set of options to control what portions of the state will be
@@ -112,6 +114,9 @@ func (d iterativeDump) OnRoot(root common.Hash) {
 
 // DumpToCollector iterates the state according to the given options and inserts
 // the items into a collector for aggregation or serialization.
+//
+// The state iterator is still trie-based and can be converted to snapshot-based
+// once the state snapshot is fully integrated into database. TODO(rjl493456442).
 func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []byte) {
 	// Sanitize the input to allow nil configs
 	if conf == nil {
@@ -123,15 +128,20 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		start            = time.Now()
 		logged           = time.Now()
 	)
-	log.Info("Trie dumping started", "root", s.trie.Hash())
-	c.OnRoot(s.trie.Hash())
+	log.Info("Trie dumping started", "root", s.originalRoot)
+	c.OnRoot(s.originalRoot)
 
-	trieIt, err := s.trie.NodeIterator(conf.Start)
+	tr, err := s.db.OpenTrie(s.originalRoot)
+	if err != nil {
+		return nil
+	}
+	trieIt, err := tr.NodeIterator(conf.Start)
 	if err != nil {
 		log.Error("Trie dumping error", "err", err)
 		return nil
 	}
 	it := trie.NewIterator(trieIt)
+
 	for it.Next() {
 		var data types.StateAccount
 		if err := rlp.DecodeBytes(it.Value, &data); err != nil {
@@ -147,7 +157,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 			}
 			address   *common.Address
 			addr      common.Address
-			addrBytes = s.trie.GetKey(it.Key)
+			addrBytes = tr.GetKey(it.Key)
 		)
 		if addrBytes == nil {
 			missingPreimages++
@@ -165,12 +175,13 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		}
 		if !conf.SkipStorage {
 			account.Storage = make(map[common.Hash]string)
-			tr, err := obj.getTrie()
+
+			storageTr, err := s.db.OpenStorageTrie(s.originalRoot, addr, obj.Root(), tr)
 			if err != nil {
 				log.Error("Failed to load storage trie", "err", err)
 				continue
 			}
-			trieIt, err := tr.NodeIterator(nil)
+			trieIt, err := storageTr.NodeIterator(nil)
 			if err != nil {
 				log.Error("Failed to create trie iterator", "err", err)
 				continue
@@ -182,13 +193,17 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 					log.Error("Failed to decode the value returned by iterator", "error", err)
 					continue
 				}
-				account.Storage[common.BytesToHash(s.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(content)
+				key := storageTr.GetKey(storageIt.Key)
+				if key == nil {
+					continue
+				}
+				account.Storage[common.BytesToHash(key)] = common.Bytes2Hex(content)
 			}
 		}
 		c.OnAccount(address, account)
 		accounts++
 		if time.Since(logged) > 8*time.Second {
-			log.Info("Trie dumping in progress", "at", it.Key, "accounts", accounts,
+			log.Info("Trie dumping in progress", "at", common.Bytes2Hex(it.Key), "accounts", accounts,
 				"elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
 		}
@@ -206,6 +221,28 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		"elapsed", common.PrettyDuration(time.Since(start)))
 
 	return nextKey
+}
+
+// DumpBinTrieLeaves collects all binary trie leaf nodes into the provided map.
+func (s *StateDB) DumpBinTrieLeaves(collector map[common.Hash]hexutil.Bytes) error {
+	tr, err := s.db.OpenTrie(s.originalRoot)
+	if err != nil {
+		return err
+	}
+	btr, ok := tr.(*bintrie.BinaryTrie)
+	if !ok {
+		return errors.New("trie is not a binary trie")
+	}
+	it, err := btr.NodeIterator(nil)
+	if err != nil {
+		return err
+	}
+	for it.Next(true) {
+		if it.Leaf() {
+			collector[common.BytesToHash(it.LeafKey())] = it.LeafBlob()
+		}
+	}
+	return nil
 }
 
 // RawDump returns the state. If the processing is aborted e.g. due to options

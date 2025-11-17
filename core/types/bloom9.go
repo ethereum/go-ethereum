@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -59,11 +60,12 @@ func (b *Bloom) SetBytes(d []byte) {
 
 // Add adds d to the filter. Future calls of Test(d) will return true.
 func (b *Bloom) Add(d []byte) {
-	b.add(d, make([]byte, 6))
+	var buf [6]byte
+	b.AddWithBuffer(d, &buf)
 }
 
 // add is internal version of Add, which takes a scratch buffer for reuse (needs to be at least 6 bytes)
-func (b *Bloom) add(d []byte, buf []byte) {
+func (b *Bloom) AddWithBuffer(d []byte, buf *[6]byte) {
 	i1, v1, i2, v2, i3, v3 := bloomValues(d, buf)
 	b[i1] |= v1
 	b[i2] |= v2
@@ -84,7 +86,8 @@ func (b Bloom) Bytes() []byte {
 
 // Test checks if the given topic is present in the bloom filter
 func (b Bloom) Test(topic []byte) bool {
-	i1, v1, i2, v2, i3, v3 := bloomValues(topic, make([]byte, 6))
+	var buf [6]byte
+	i1, v1, i2, v2, i3, v3 := bloomValues(topic, &buf)
 	return v1 == v1&b[i1] &&
 		v2 == v2&b[i2] &&
 		v3 == v3&b[i3]
@@ -100,32 +103,33 @@ func (b *Bloom) UnmarshalText(input []byte) error {
 	return hexutil.UnmarshalFixedText("Bloom", input, b[:])
 }
 
-// CreateBloom creates a bloom filter out of the give Receipts (+Logs)
-func CreateBloom(receipts Receipts) Bloom {
-	buf := make([]byte, 6)
-	var bin Bloom
-	for _, receipt := range receipts {
-		for _, log := range receipt.Logs {
-			bin.add(log.Address.Bytes(), buf)
-			for _, b := range log.Topics {
-				bin.add(b[:], buf)
-			}
+// CreateBloom creates a bloom filter out of the give Receipt (+Logs)
+func CreateBloom(receipt *Receipt) Bloom {
+	var (
+		bin Bloom
+		buf [6]byte
+	)
+	for _, log := range receipt.Logs {
+		bin.AddWithBuffer(log.Address.Bytes(), &buf)
+		for _, b := range log.Topics {
+			bin.AddWithBuffer(b[:], &buf)
 		}
 	}
 	return bin
 }
 
-// LogsBloom returns the bloom bytes for the given logs
-func LogsBloom(logs []*Log) []byte {
-	buf := make([]byte, 6)
+// MergeBloom merges the precomputed bloom filters in the Receipts without
+// recalculating them. It assumes that each receipt’s Bloom field is already
+// correctly populated.
+func MergeBloom(receipts Receipts) Bloom {
 	var bin Bloom
-	for _, log := range logs {
-		bin.add(log.Address.Bytes(), buf)
-		for _, b := range log.Topics {
-			bin.add(b[:], buf)
+	for _, receipt := range receipts {
+		if len(receipt.Logs) != 0 {
+			bl := receipt.Bloom.Bytes()
+			bitutil.ORBytes(bin[:], bin[:], bl)
 		}
 	}
-	return bin[:]
+	return bin
 }
 
 // Bloom9 returns the bloom filter for the given data
@@ -136,21 +140,20 @@ func Bloom9(data []byte) []byte {
 }
 
 // bloomValues returns the bytes (index-value pairs) to set for the given data
-func bloomValues(data []byte, hashbuf []byte) (uint, byte, uint, byte, uint, byte) {
+func bloomValues(data []byte, hashbuf *[6]byte) (uint, byte, uint, byte, uint, byte) {
 	sha := hasherPool.Get().(crypto.KeccakState)
 	sha.Reset()
 	sha.Write(data)
-	sha.Read(hashbuf)
+	sha.Read(hashbuf[:])
 	hasherPool.Put(sha)
 	// The actual bits to flip
 	v1 := byte(1 << (hashbuf[1] & 0x7))
 	v2 := byte(1 << (hashbuf[3] & 0x7))
 	v3 := byte(1 << (hashbuf[5] & 0x7))
 	// The indices for the bytes to OR in
-	i1 := BloomByteLength - uint((binary.BigEndian.Uint16(hashbuf)&0x7ff)>>3) - 1
+	i1 := BloomByteLength - uint((binary.BigEndian.Uint16(hashbuf[0:])&0x7ff)>>3) - 1
 	i2 := BloomByteLength - uint((binary.BigEndian.Uint16(hashbuf[2:])&0x7ff)>>3) - 1
 	i3 := BloomByteLength - uint((binary.BigEndian.Uint16(hashbuf[4:])&0x7ff)>>3) - 1
-
 	return i1, v1, i2, v2, i3, v3
 }
 

@@ -140,6 +140,26 @@ func TestUDPv5_unknownPacket(t *testing.T) {
 	test.waitPacketOut(func(p *v5wire.Whoareyou, addr netip.AddrPort, _ v5wire.Nonce) {
 		check(p, 0)
 	})
+}
+
+func TestUDPv5_unknownPacketKnownNode(t *testing.T) {
+	t.Parallel()
+	test := newUDPV5Test(t)
+	defer test.close()
+
+	nonce := v5wire.Nonce{1, 2, 3}
+	check := func(p *v5wire.Whoareyou, wantSeq uint64) {
+		t.Helper()
+		if p.Nonce != nonce {
+			t.Error("wrong nonce in WHOAREYOU:", p.Nonce, nonce)
+		}
+		if p.IDNonce == ([16]byte{}) {
+			t.Error("all zero ID nonce")
+		}
+		if p.RecordSeq != wantSeq {
+			t.Errorf("wrong record seq %d in WHOAREYOU, want %d", p.RecordSeq, wantSeq)
+		}
+	}
 
 	// Make node known.
 	n := test.getNode(test.remotekey, test.remoteaddr).Node()
@@ -148,6 +168,48 @@ func TestUDPv5_unknownPacket(t *testing.T) {
 	test.packetIn(&v5wire.Unknown{Nonce: nonce})
 	test.waitPacketOut(func(p *v5wire.Whoareyou, addr netip.AddrPort, _ v5wire.Nonce) {
 		check(p, n.Seq())
+	})
+}
+
+// This test checks that, when multiple 'unknown' packets are received during a handshake,
+// the node sticks to the first handshake attempt.
+func TestUDPv5_handshakeRepeatChallenge(t *testing.T) {
+	t.Parallel()
+	test := newUDPV5Test(t)
+	defer test.close()
+
+	nonce1 := v5wire.Nonce{1}
+	nonce2 := v5wire.Nonce{2}
+	nonce3 := v5wire.Nonce{3}
+	var firstAuthTag *v5wire.Nonce
+	check := func(p *v5wire.Whoareyou, authTag, wantNonce v5wire.Nonce) {
+		t.Helper()
+		if p.Nonce != wantNonce {
+			t.Error("wrong nonce in WHOAREYOU:", p.Nonce, "want:", wantNonce)
+		}
+		if firstAuthTag == nil {
+			firstAuthTag = &authTag
+		} else if authTag != *firstAuthTag {
+			t.Error("wrong auth tag in WHOAREYOU header:", authTag, "want:", *firstAuthTag)
+		}
+	}
+
+	// Unknown packet from unknown node.
+	test.packetIn(&v5wire.Unknown{Nonce: nonce1})
+	test.waitPacketOut(func(p *v5wire.Whoareyou, addr netip.AddrPort, authTag v5wire.Nonce) {
+		check(p, authTag, nonce1)
+	})
+
+	// Second unknown packet. Here we expect the response to reference the
+	// first unknown packet.
+	test.packetIn(&v5wire.Unknown{Nonce: nonce2})
+	test.waitPacketOut(func(p *v5wire.Whoareyou, addr netip.AddrPort, authTag v5wire.Nonce) {
+		check(p, authTag, nonce1)
+	})
+	// Third unknown packet. This should still return the first nonce.
+	test.packetIn(&v5wire.Unknown{Nonce: nonce3})
+	test.waitPacketOut(func(p *v5wire.Whoareyou, addr netip.AddrPort, authTag v5wire.Nonce) {
+		check(p, authTag, nonce1)
 	})
 }
 
@@ -288,7 +350,7 @@ func TestUDPv5_findnodeCall(t *testing.T) {
 	)
 	go func() {
 		var err error
-		response, err = test.udp.findnode(remote, distances)
+		response, err = test.udp.Findnode(remote, distances)
 		done <- err
 	}()
 
@@ -316,9 +378,93 @@ func TestUDPv5_findnodeCall(t *testing.T) {
 	if !reflect.DeepEqual(response, nodes) {
 		t.Fatalf("wrong nodes in response")
 	}
+}
 
-	// TODO: check invalid IPs
-	// TODO: check invalid/unsigned record
+// BadIdentityScheme mocks an identity scheme not supported by the test node.
+type BadIdentityScheme struct{}
+
+func (s BadIdentityScheme) Verify(r *enr.Record, sig []byte) error { return nil }
+func (s BadIdentityScheme) NodeAddr(r *enr.Record) []byte {
+	var id enode.ID
+	r.Load(enr.WithEntry("badaddr", &id))
+	return id[:]
+}
+
+// This test covers invalid NODES responses for the FINDNODE call in a single table-driven test.
+func TestUDPv5_findnodeCall_InvalidNodes(t *testing.T) {
+	t.Parallel()
+	test := newUDPV5Test(t)
+	defer test.close()
+
+	for i, tt := range []struct {
+		name string
+		ip   enr.Entry
+		port enr.Entry
+		sign func(r *enr.Record, id enode.ID) *enode.Node
+	}{
+		{
+			name: "invalid ip (unspecified 0.0.0.0)",
+			ip:   enr.IP(net.IPv4zero),
+		},
+		{
+			name: "invalid udp port (<=1024)",
+			port: enr.UDP(1024),
+		},
+		{
+			name: "invalid record, no signature",
+			sign: func(r *enr.Record, id enode.ID) *enode.Node {
+				r.Set(enr.ID("bad"))
+				r.Set(enr.WithEntry("badaddr", id))
+				r.SetSig(BadIdentityScheme{}, []byte{})
+				n, _ := enode.New(BadIdentityScheme{}, r)
+				return n
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			// Build ENR node for test.
+			var (
+				distance = 230
+				remote   = test.getNode(test.remotekey, test.remoteaddr).Node()
+				id       = idAtDistance(remote.ID(), distance)
+				r        enr.Record
+			)
+			r.Set(enr.IP(intIP(i)))
+			if tt.ip != nil {
+				r.Set(tt.ip)
+			}
+			r.Set(enr.UDP(30303))
+			if tt.port != nil {
+				r.Set(tt.port)
+			}
+			r = *enode.SignNull(&r, id).Record()
+			if tt.sign != nil {
+				r = *tt.sign(&r, id).Record()
+			}
+
+			// Launch findnode request.
+			var (
+				done = make(chan error, 1)
+				got  []*enode.Node
+			)
+			go func() {
+				var err error
+				got, err = test.udp.Findnode(remote, []uint{uint(distance)})
+				done <- err
+			}()
+
+			// Handle request.
+			test.waitPacketOut(func(p *v5wire.Findnode, _ netip.AddrPort, _ v5wire.Nonce) {
+				test.packetIn(&v5wire.Nodes{ReqID: p.ReqID, RespCount: 1, Nodes: []*enr.Record{&r}})
+			})
+			if err := <-done; err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(got) != 0 {
+				t.Fatalf("expected 0 nodes, got %d", len(got))
+			}
+		})
+	}
 }
 
 // This test checks that pending calls are re-sent when a handshake happens.
@@ -398,7 +544,7 @@ func TestUDPv5_callTimeoutReset(t *testing.T) {
 		done     = make(chan error, 1)
 	)
 	go func() {
-		_, err := test.udp.findnode(remote, []uint{distance})
+		_, err := test.udp.Findnode(remote, []uint{distance})
 		done <- err
 	}()
 
@@ -430,7 +576,7 @@ func TestUDPv5_talkHandling(t *testing.T) {
 	defer test.close()
 
 	var recvMessage []byte
-	test.udp.RegisterTalkHandler("test", func(id enode.ID, addr *net.UDPAddr, message []byte) []byte {
+	test.udp.RegisterTalkHandler("test", func(n *enode.Node, addr *net.UDPAddr, message []byte) []byte {
 		recvMessage = message
 		return []byte("test response")
 	})
@@ -698,6 +844,8 @@ type testCodec struct {
 	test *udpV5Test
 	id   enode.ID
 	ctr  uint64
+
+	sentChallenges map[enode.ID]*v5wire.Whoareyou
 }
 
 type testCodecFrame struct {
@@ -708,13 +856,35 @@ type testCodecFrame struct {
 }
 
 func (c *testCodec) Encode(toID enode.ID, addr string, p v5wire.Packet, _ *v5wire.Whoareyou) ([]byte, v5wire.Nonce, error) {
+	// To match the behavior of v5wire.Codec, we return the cached encoding of
+	// WHOAREYOU challenges.
+	if wp, ok := p.(*v5wire.Whoareyou); ok && len(wp.Encoded) > 0 {
+		return wp.Encoded, wp.Nonce, nil
+	}
+
 	c.ctr++
 	var authTag v5wire.Nonce
 	binary.BigEndian.PutUint64(authTag[:], c.ctr)
-
 	penc, _ := rlp.EncodeToBytes(p)
 	frame, err := rlp.EncodeToBytes(testCodecFrame{c.id, authTag, p.Kind(), penc})
+	if err != nil {
+		return frame, authTag, err
+	}
+
+	// Store recently sent challenges.
+	if w, ok := p.(*v5wire.Whoareyou); ok {
+		w.Nonce = authTag
+		w.Encoded = frame
+		if c.sentChallenges == nil {
+			c.sentChallenges = make(map[enode.ID]*v5wire.Whoareyou)
+		}
+		c.sentChallenges[toID] = w
+	}
 	return frame, authTag, err
+}
+
+func (c *testCodec) CurrentChallenge(id enode.ID, addr string) *v5wire.Whoareyou {
+	return c.sentChallenges[id]
 }
 
 func (c *testCodec) Decode(input []byte, addr string) (enode.ID, *enode.Node, v5wire.Packet, error) {
@@ -723,6 +893,10 @@ func (c *testCodec) Decode(input []byte, addr string) (enode.ID, *enode.Node, v5
 		return enode.ID{}, nil, nil, err
 	}
 	return frame.NodeID, nil, p, nil
+}
+
+func (c *testCodec) SessionNode(id enode.ID, addr string) *enode.Node {
+	return c.test.nodesByID[id].Node()
 }
 
 func (c *testCodec) decodeFrame(input []byte) (frame testCodecFrame, p v5wire.Packet, err error) {

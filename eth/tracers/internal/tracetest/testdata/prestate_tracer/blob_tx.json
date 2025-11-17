@@ -14,8 +14,6 @@
     "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "stateRoot": "0x577f42ab21ccfd946511c57869ace0bdf7c217c36f02b7cd3459df0ed1cffc1a",
     "timestamp": "1709626771",
-    "withdrawals": [],
-    "withdrawalsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
     "alloc": {
       "0x0000000000000000000000000000000000000000": {
         "balance": "0x272e0528"
@@ -41,7 +39,14 @@
       "grayGlacierBlock": 0,
       "shanghaiTime": 0,
       "cancunTime": 0,
-      "terminalTotalDifficulty": 0
+      "terminalTotalDifficulty": 0,
+      "blobSchedule": {
+        "cancun": {
+          "target": 3,
+          "max": 6,
+          "baseFeeUpdateFraction": 3338477
+        }
+      }
     }
   },
   "context": {
@@ -54,7 +59,9 @@
   },
   "input": "0x03f8b1820539806485174876e800825208940c2c51a0990aee1d73c1228de1586883415575088080c083020000f842a00100c9fbdf97f747e85847b4f3fff408f89c26842f77c882858bf2c89923849aa00138e3896f3c27f2389147507f8bcec52028b0efca6ee842ed83c9158873943880a0dbac3f97a532c9b00e6239b29036245a5bfbb96940b9d848634661abee98b945a03eec8525f261c2e79798f7b45a5d6ccaefa24576d53ba5023e919b86841c0675",
   "result": {
-    "0x0000000000000000000000000000000000000000": { "balance": "0x272e0528" },
+    "0x0000000000000000000000000000000000000000": {
+      "balance": "0x272e0528"
+    },
     "0x0c2c51a0990aee1d73c1228de158688341557508": {
       "balance": "0xde0b6b3a7640000"
     }

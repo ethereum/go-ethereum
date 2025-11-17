@@ -85,8 +85,8 @@ func (s *hookedStateDB) GetRefund() uint64 {
 	return s.inner.GetRefund()
 }
 
-func (s *hookedStateDB) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
-	return s.inner.GetCommittedState(addr, hash)
+func (s *hookedStateDB) GetStateAndCommittedState(addr common.Address, hash common.Hash) (common.Hash, common.Hash) {
+	return s.inner.GetStateAndCommittedState(addr, hash)
 }
 
 func (s *hookedStateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
@@ -157,6 +157,10 @@ func (s *hookedStateDB) Witness() *stateless.Witness {
 	return s.inner.Witness()
 }
 
+func (s *hookedStateDB) AccessEvents() *AccessEvents {
+	return s.inner.AccessEvents()
+}
+
 func (s *hookedStateDB) SubBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) uint256.Int {
 	prev := s.inner.SubBalance(addr, amount, reason)
 	if s.hooks.OnBalanceChange != nil && !amount.IsZero() {
@@ -175,18 +179,33 @@ func (s *hookedStateDB) AddBalance(addr common.Address, amount *uint256.Int, rea
 	return prev
 }
 
-func (s *hookedStateDB) SetNonce(address common.Address, nonce uint64) {
-	s.inner.SetNonce(address, nonce)
-	if s.hooks.OnNonceChange != nil {
-		s.hooks.OnNonceChange(address, nonce-1, nonce)
+func (s *hookedStateDB) SetNonce(address common.Address, nonce uint64, reason tracing.NonceChangeReason) {
+	prev := s.inner.GetNonce(address)
+	s.inner.SetNonce(address, nonce, reason)
+	if s.hooks.OnNonceChangeV2 != nil {
+		s.hooks.OnNonceChangeV2(address, prev, nonce, reason)
+	} else if s.hooks.OnNonceChange != nil {
+		s.hooks.OnNonceChange(address, prev, nonce)
 	}
 }
 
-func (s *hookedStateDB) SetCode(address common.Address, code []byte) {
-	s.inner.SetCode(address, code)
-	if s.hooks.OnCodeChange != nil {
-		s.hooks.OnCodeChange(address, types.EmptyCodeHash, nil, crypto.Keccak256Hash(code), code)
+func (s *hookedStateDB) SetCode(address common.Address, code []byte, reason tracing.CodeChangeReason) []byte {
+	prev := s.inner.SetCode(address, code, reason)
+
+	if s.hooks.OnCodeChangeV2 != nil || s.hooks.OnCodeChange != nil {
+		prevHash := crypto.Keccak256Hash(prev)
+		codeHash := crypto.Keccak256Hash(code)
+
+		// Invoke the hooks only if the contract code is changed
+		if prevHash != codeHash {
+			if s.hooks.OnCodeChangeV2 != nil {
+				s.hooks.OnCodeChangeV2(address, prevHash, prev, codeHash, code, reason)
+			} else if s.hooks.OnCodeChange != nil {
+				s.hooks.OnCodeChange(address, prevHash, prev, codeHash, code)
+			}
+		}
 	}
+	return prev
 }
 
 func (s *hookedStateDB) SetState(address common.Address, key common.Hash, value common.Hash) common.Hash {
@@ -201,7 +220,7 @@ func (s *hookedStateDB) SelfDestruct(address common.Address) uint256.Int {
 	var prevCode []byte
 	var prevCodeHash common.Hash
 
-	if s.hooks.OnCodeChange != nil {
+	if s.hooks.OnCodeChange != nil || s.hooks.OnCodeChangeV2 != nil {
 		prevCode = s.inner.GetCode(address)
 		prevCodeHash = s.inner.GetCodeHash(address)
 	}
@@ -212,8 +231,12 @@ func (s *hookedStateDB) SelfDestruct(address common.Address) uint256.Int {
 		s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
 	}
 
-	if s.hooks.OnCodeChange != nil && len(prevCode) > 0 {
-		s.hooks.OnCodeChange(address, prevCodeHash, prevCode, types.EmptyCodeHash, nil)
+	if len(prevCode) > 0 {
+		if s.hooks.OnCodeChangeV2 != nil {
+			s.hooks.OnCodeChangeV2(address, prevCodeHash, prevCode, types.EmptyCodeHash, nil, tracing.CodeChangeSelfDestruct)
+		} else if s.hooks.OnCodeChange != nil {
+			s.hooks.OnCodeChange(address, prevCodeHash, prevCode, types.EmptyCodeHash, nil)
+		}
 	}
 
 	return prev
@@ -223,19 +246,23 @@ func (s *hookedStateDB) SelfDestruct6780(address common.Address) (uint256.Int, b
 	var prevCode []byte
 	var prevCodeHash common.Hash
 
-	if s.hooks.OnCodeChange != nil {
+	if s.hooks.OnCodeChange != nil || s.hooks.OnCodeChangeV2 != nil {
 		prevCodeHash = s.inner.GetCodeHash(address)
 		prevCode = s.inner.GetCode(address)
 	}
 
 	prev, changed := s.inner.SelfDestruct6780(address)
 
-	if s.hooks.OnBalanceChange != nil && changed && !prev.IsZero() {
+	if s.hooks.OnBalanceChange != nil && !prev.IsZero() {
 		s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
 	}
 
-	if s.hooks.OnCodeChange != nil && changed && len(prevCode) > 0 {
-		s.hooks.OnCodeChange(address, prevCodeHash, prevCode, types.EmptyCodeHash, nil)
+	if changed && len(prevCode) > 0 {
+		if s.hooks.OnCodeChangeV2 != nil {
+			s.hooks.OnCodeChangeV2(address, prevCodeHash, prevCode, types.EmptyCodeHash, nil, tracing.CodeChangeSelfDestruct)
+		} else if s.hooks.OnCodeChange != nil {
+			s.hooks.OnCodeChange(address, prevCodeHash, prevCode, types.EmptyCodeHash, nil)
+		}
 	}
 
 	return prev, changed

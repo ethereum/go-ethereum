@@ -27,6 +27,8 @@ type NodeReader interface {
 	// node path and the corresponding node hash. No error will be returned
 	// if the node is not found.
 	//
+	// The returned node content won't be changed after the call.
+	//
 	// Don't modify the returned byte slice since it's not deep-copied and
 	// still be referenced by database.
 	Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error)

@@ -282,7 +282,7 @@ func TestTypedDataArrayValidate(t *testing.T) {
 			messageHash, tErr := td.HashStruct(td.PrimaryType, td.Message)
 			assert.NoError(t, tErr, "failed to hash message: %v", tErr)
 
-			digest := crypto.Keccak256Hash([]byte(fmt.Sprintf("%s%s%s", "\x19\x01", string(domainSeparator), string(messageHash))))
+			digest := crypto.Keccak256Hash(fmt.Appendf(nil, "%s%s%s", "\x19\x01", string(domainSeparator), string(messageHash)))
 			assert.Equal(t, tc.Digest, digest.String(), "digest doesn't not match")
 
 			assert.NoError(t, td.validate(), "validation failed", tErr)

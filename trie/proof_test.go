@@ -109,7 +109,7 @@ func TestOneElementProof(t *testing.T) {
 			t.Fatalf("prover %d: failed to verify proof: %v\nraw proof: %x", i, err, proof)
 		}
 		if !bytes.Equal(val, []byte("v")) {
-			t.Fatalf("prover %d: verified value mismatch: have %x, want 'k'", i, val)
+			t.Fatalf("prover %d: verified value mismatch: have %x, want 'v'", i, val)
 		}
 	}
 }
@@ -998,5 +998,37 @@ func TestRangeProofKeysWithSharedPrefix(t *testing.T) {
 	}
 	if more != false {
 		t.Error("expected more to be false")
+	}
+}
+
+// TestRangeProofErrors tests a few cases where the prover is supposed
+// to exit with errors
+func TestRangeProofErrors(t *testing.T) {
+	// Different number of keys to values
+	_, err := VerifyRangeProof((common.Hash{}), []byte{}, make([][]byte, 5), make([][]byte, 4), nil)
+	if have, want := err.Error(), "inconsistent proof data, keys: 5, values: 4"; have != want {
+		t.Fatalf("wrong error, have %q, want %q", err.Error(), want)
+	}
+	// Non-increasing paths
+	_, err = VerifyRangeProof((common.Hash{}), []byte{},
+		[][]byte{[]byte{2, 1}, []byte{2, 1}}, make([][]byte, 2), nil)
+	if have, want := err.Error(), "range is not monotonically increasing"; have != want {
+		t.Fatalf("wrong error, have %q, want %q", err.Error(), want)
+	}
+	// A prefixed path is never motivated. Inserting the second element will
+	// require rewriting/overwriting the previous value-node, thus can only
+	// happen if the data is corrupt.
+	_, err = VerifyRangeProof((common.Hash{}), []byte{},
+		[][]byte{[]byte{2, 1}, []byte{2, 1, 2}},
+		[][]byte{[]byte{1}, []byte{1}}, nil)
+	if have, want := err.Error(), "range contains path prefixes"; have != want {
+		t.Fatalf("wrong error, have %q, want %q", err.Error(), want)
+	}
+	// Empty values (deletions)
+	_, err = VerifyRangeProof((common.Hash{}), []byte{},
+		[][]byte{[]byte{2, 1}, []byte{2, 2}},
+		[][]byte{[]byte{1}, []byte{}}, nil)
+	if have, want := err.Error(), "range contains deletion"; have != want {
+		t.Fatalf("wrong error, have %q, want %q", err.Error(), want)
 	}
 }

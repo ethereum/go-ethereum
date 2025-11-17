@@ -62,6 +62,7 @@ const (
 	SHL    OpCode = 0x1b
 	SHR    OpCode = 0x1c
 	SAR    OpCode = 0x1d
+	CLZ    OpCode = 0x1e
 )
 
 // 0x20 range - crypto.
@@ -164,7 +165,7 @@ const (
 
 // 0x80 range - dups.
 const (
-	DUP1 = 0x80 + iota
+	DUP1 OpCode = 0x80 + iota
 	DUP2
 	DUP3
 	DUP4
@@ -184,7 +185,7 @@ const (
 
 // 0x90 range - swaps.
 const (
-	SWAP1 = 0x90 + iota
+	SWAP1 OpCode = 0x90 + iota
 	SWAP2
 	SWAP3
 	SWAP4
@@ -282,6 +283,7 @@ var opCodeToString = [256]string{
 	SHL:    "SHL",
 	SHR:    "SHR",
 	SAR:    "SAR",
+	CLZ:    "CLZ",
 	ADDMOD: "ADDMOD",
 	MULMOD: "MULMOD",
 
@@ -484,6 +486,7 @@ var stringToOp = map[string]OpCode{
 	"SHL":             SHL,
 	"SHR":             SHR,
 	"SAR":             SAR,
+	"CLZ":             CLZ,
 	"ADDMOD":          ADDMOD,
 	"MULMOD":          MULMOD,
 	"KECCAK256":       KECCAK256,

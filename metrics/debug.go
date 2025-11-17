@@ -8,13 +8,13 @@ import (
 var (
 	debugMetrics struct {
 		GCStats struct {
-			LastGC Gauge
-			NumGC  Gauge
+			LastGC *Gauge
+			NumGC  *Gauge
 			Pause  Histogram
 			//PauseQuantiles Histogram
-			PauseTotal Gauge
+			PauseTotal *Gauge
 		}
-		ReadGCStats Timer
+		ReadGCStats *Timer
 	}
 	gcStats debug.GCStats
 )

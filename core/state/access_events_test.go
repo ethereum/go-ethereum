@@ -17,6 +17,7 @@
 package state
 
 import (
+	"math"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -40,50 +41,50 @@ func TestAccountHeaderGas(t *testing.T) {
 	ae := NewAccessEvents(utils.NewPointCache(1024))
 
 	// Check cold read cost
-	gas := ae.BasicDataGas(testAddr, false)
+	gas := ae.BasicDataGas(testAddr, false, math.MaxUint64, false)
 	if want := params.WitnessBranchReadCost + params.WitnessChunkReadCost; gas != want {
 		t.Fatalf("incorrect gas computed, got %d, want %d", gas, want)
 	}
 
 	// Check warm read cost
-	gas = ae.BasicDataGas(testAddr, false)
+	gas = ae.BasicDataGas(testAddr, false, math.MaxUint64, false)
 	if gas != 0 {
 		t.Fatalf("incorrect gas computed, got %d, want %d", gas, 0)
 	}
 
 	// Check cold read costs in the same group no longer incur the branch read cost
-	gas = ae.CodeHashGas(testAddr, false)
+	gas = ae.CodeHashGas(testAddr, false, math.MaxUint64, false)
 	if gas != params.WitnessChunkReadCost {
 		t.Fatalf("incorrect gas computed, got %d, want %d", gas, params.WitnessChunkReadCost)
 	}
 
 	// Check cold write cost
-	gas = ae.BasicDataGas(testAddr, true)
+	gas = ae.BasicDataGas(testAddr, true, math.MaxUint64, false)
 	if want := params.WitnessBranchWriteCost + params.WitnessChunkWriteCost; gas != want {
 		t.Fatalf("incorrect gas computed, got %d, want %d", gas, want)
 	}
 
 	// Check warm write cost
-	gas = ae.BasicDataGas(testAddr, true)
+	gas = ae.BasicDataGas(testAddr, true, math.MaxUint64, false)
 	if gas != 0 {
 		t.Fatalf("incorrect gas computed, got %d, want %d", gas, 0)
 	}
 
 	// Check a write without a read charges both read and write costs
-	gas = ae.BasicDataGas(testAddr2, true)
+	gas = ae.BasicDataGas(testAddr2, true, math.MaxUint64, false)
 	if want := params.WitnessBranchReadCost + params.WitnessBranchWriteCost + params.WitnessChunkWriteCost + params.WitnessChunkReadCost; gas != want {
 		t.Fatalf("incorrect gas computed, got %d, want %d", gas, want)
 	}
 
 	// Check that a write followed by a read charges nothing
-	gas = ae.BasicDataGas(testAddr2, false)
+	gas = ae.BasicDataGas(testAddr2, false, math.MaxUint64, false)
 	if gas != 0 {
 		t.Fatalf("incorrect gas computed, got %d, want %d", gas, 0)
 	}
 
 	// Check that reading a slot from the account header only charges the
 	// chunk read cost.
-	gas = ae.SlotGas(testAddr, common.Hash{}, false)
+	gas = ae.SlotGas(testAddr, common.Hash{}, false, math.MaxUint64, false)
 	if gas != params.WitnessChunkReadCost {
 		t.Fatalf("incorrect gas computed, got %d, want %d", gas, params.WitnessChunkReadCost)
 	}
@@ -100,13 +101,13 @@ func TestContractCreateInitGas(t *testing.T) {
 	}
 
 	// Check cold read cost, without a value
-	gas := ae.ContractCreateInitGas(testAddr)
+	gas, _ := ae.ContractCreateInitGas(testAddr, math.MaxUint64)
 	if want := params.WitnessBranchWriteCost + params.WitnessBranchReadCost + 2*params.WitnessChunkWriteCost + 2*params.WitnessChunkReadCost; gas != want {
 		t.Fatalf("incorrect gas computed, got %d, want %d", gas, want)
 	}
 
 	// Check warm read cost
-	gas = ae.ContractCreateInitGas(testAddr)
+	gas, _ = ae.ContractCreateInitGas(testAddr, math.MaxUint64)
 	if gas != 0 {
 		t.Fatalf("incorrect gas computed, got %d, want %d", gas, 0)
 	}
@@ -118,24 +119,24 @@ func TestMessageCallGas(t *testing.T) {
 	ae := NewAccessEvents(utils.NewPointCache(1024))
 
 	// Check cold read cost, without a value
-	gas := ae.MessageCallGas(testAddr)
+	gas := ae.MessageCallGas(testAddr, math.MaxUint64)
 	if want := params.WitnessBranchReadCost + params.WitnessChunkReadCost; gas != want {
 		t.Fatalf("incorrect gas computed, got %d, want %d", gas, want)
 	}
 
 	// Check that reading the basic data and code hash of the same account does not incur the branch read cost
-	gas = ae.BasicDataGas(testAddr, false)
+	gas = ae.BasicDataGas(testAddr, false, math.MaxUint64, false)
 	if gas != 0 {
 		t.Fatalf("incorrect gas computed, got %d, want %d", gas, 0)
 	}
-	gas = ae.CodeHashGas(testAddr, false)
+	gas = ae.CodeHashGas(testAddr, false, math.MaxUint64, false)
 	if gas != params.WitnessChunkReadCost {
-		t.Fatalf("incorrect gas computed, got %d, want %d", gas, 0)
+		t.Fatalf("incorrect gas computed, got %d, want %d", gas, params.WitnessChunkReadCost)
 	}
 
 	// Check warm read cost
-	gas = ae.MessageCallGas(testAddr)
-	if gas != 0 {
-		t.Fatalf("incorrect gas computed, got %d, want %d", gas, 0)
+	gas = ae.MessageCallGas(testAddr, math.MaxUint64)
+	if gas != params.WarmStorageReadCostEIP2929 {
+		t.Fatalf("incorrect gas computed, got %d, want %d", gas, params.WarmStorageReadCostEIP2929)
 	}
 }

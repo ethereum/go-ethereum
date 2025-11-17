@@ -1,6 +1,23 @@
+// Copyright 2022 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package tracetest
 
 import (
+	"encoding/json"
 	"math/big"
 	"strings"
 	"unicode"
@@ -9,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 
 	// Force-load native and js packages, to trigger registration
@@ -25,7 +43,8 @@ func camel(str string) string {
 	return strings.Join(pieces, "")
 }
 
-type callContext struct {
+// traceContext defines a context used to construct the block context
+type traceContext struct {
 	Number     math.HexOrDecimal64   `json:"number"`
 	Difficulty *math.HexOrDecimal256 `json:"difficulty"`
 	Time       math.HexOrDecimal64   `json:"timestamp"`
@@ -34,7 +53,7 @@ type callContext struct {
 	BaseFee    *math.HexOrDecimal256 `json:"baseFeePerGas"`
 }
 
-func (c *callContext) toBlockContext(genesis *core.Genesis) vm.BlockContext {
+func (c *traceContext) toBlockContext(genesis *core.Genesis) vm.BlockContext {
 	context := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
@@ -53,8 +72,18 @@ func (c *callContext) toBlockContext(genesis *core.Genesis) vm.BlockContext {
 	}
 
 	if genesis.ExcessBlobGas != nil && genesis.BlobGasUsed != nil {
-		excessBlobGas := eip4844.CalcExcessBlobGas(*genesis.ExcessBlobGas, *genesis.BlobGasUsed)
-		context.BlobBaseFee = eip4844.CalcBlobFee(excessBlobGas)
+		header := &types.Header{Number: genesis.Config.LondonBlock, Time: *genesis.Config.CancunTime}
+		excess := eip4844.CalcExcessBlobGas(genesis.Config, header, genesis.Timestamp)
+		header.ExcessBlobGas = &excess
+		context.BlobBaseFee = eip4844.CalcBlobFee(genesis.Config, header)
 	}
 	return context
+}
+
+// tracerTestEnv defines a tracer test required fields
+type tracerTestEnv struct {
+	Genesis      *core.Genesis   `json:"genesis"`
+	Context      *traceContext   `json:"context"`
+	Input        string          `json:"input"`
+	TracerConfig json.RawMessage `json:"tracerConfig"`
 }

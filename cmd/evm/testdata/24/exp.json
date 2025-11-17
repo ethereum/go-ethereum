@@ -32,7 +32,8 @@
         "contractAddress": "0x0000000000000000000000000000000000000000",
         "gasUsed": "0xa861",
         "effectiveGasPrice": null,
-        "blockHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "blockHash": "0x1337000000000000000000000000000000000000000000000000000000000000",
+        "blockNumber": "0x1",
         "transactionIndex": "0x0"
       },
       {
@@ -45,12 +46,14 @@
         "contractAddress": "0x0000000000000000000000000000000000000000",
         "gasUsed": "0x5aa5",
         "effectiveGasPrice": null,
-        "blockHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "blockHash": "0x1337000000000000000000000000000000000000000000000000000000000000",
+        "blockNumber": "0x1",
         "transactionIndex": "0x1"
       }
     ],
     "currentDifficulty": null,
     "gasUsed": "0x10306",
-    "currentBaseFee": "0x500"
+    "currentBaseFee": "0x500",
+    "requests": null
   }
 }

@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"math"
+	"math/big"
 	"os"
 	"slices"
 	"sort"
@@ -54,6 +55,7 @@ type ChainConfig struct {
 	GenesisValidatorsRoot common.Hash // Root hash of the genesis validator set, used for signature domain calculation
 	Forks                 Forks
 	Checkpoint            common.Hash
+	CheckpointFile        string
 }
 
 // ForkAtEpoch returns the latest active fork at the given epoch.
@@ -89,12 +91,8 @@ func (c *ChainConfig) AddFork(name string, epoch uint64, version []byte) *ChainC
 
 // LoadForks parses the beacon chain configuration file (config.yaml) and extracts
 // the list of forks.
-func (c *ChainConfig) LoadForks(path string) error {
-	file, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("failed to read beacon chain config file: %v", err)
-	}
-	config := make(map[string]string)
+func (c *ChainConfig) LoadForks(file []byte) error {
+	config := make(map[string]any)
 	if err := yaml.Unmarshal(file, &config); err != nil {
 		return fmt.Errorf("failed to parse beacon chain config file: %v", err)
 	}
@@ -107,18 +105,40 @@ func (c *ChainConfig) LoadForks(path string) error {
 	for key, value := range config {
 		if strings.HasSuffix(key, "_FORK_VERSION") {
 			name := key[:len(key)-len("_FORK_VERSION")]
-			if v, err := hexutil.Decode(value); err == nil {
+			switch version := value.(type) {
+			case int:
+				versions[name] = new(big.Int).SetUint64(uint64(version)).FillBytes(make([]byte, 4))
+			case int64:
+				versions[name] = new(big.Int).SetUint64(uint64(version)).FillBytes(make([]byte, 4))
+			case uint64:
+				versions[name] = new(big.Int).SetUint64(version).FillBytes(make([]byte, 4))
+			case string:
+				v, err := hexutil.Decode(version)
+				if err != nil {
+					return fmt.Errorf("failed to decode hex fork id %q in beacon chain config file: %v", version, err)
+				}
 				versions[name] = v
-			} else {
-				return fmt.Errorf("failed to decode hex fork id %q in beacon chain config file: %v", value, err)
+			default:
+				return fmt.Errorf("invalid fork version %q in beacon chain config file", version)
 			}
 		}
 		if strings.HasSuffix(key, "_FORK_EPOCH") {
 			name := key[:len(key)-len("_FORK_EPOCH")]
-			if v, err := strconv.ParseUint(value, 10, 64); err == nil {
+			switch epoch := value.(type) {
+			case int:
+				epochs[name] = uint64(epoch)
+			case int64:
+				epochs[name] = uint64(epoch)
+			case uint64:
+				epochs[name] = epoch
+			case string:
+				v, err := strconv.ParseUint(epoch, 10, 64)
+				if err != nil {
+					return fmt.Errorf("failed to parse epoch number %q in beacon chain config file: %v", epoch, err)
+				}
 				epochs[name] = v
-			} else {
-				return fmt.Errorf("failed to parse epoch number %q in beacon chain config file: %v", value, err)
+			default:
+				return fmt.Errorf("invalid fork epoch %q in beacon chain config file", epoch)
 			}
 		}
 	}
@@ -210,4 +230,37 @@ func (f Forks) Less(i, j int) bool {
 		return f[i].Epoch < f[j].Epoch
 	}
 	return f[i].knownIndex < f[j].knownIndex
+}
+
+// SetCheckpointFile sets the checkpoint import/export file name and attempts to
+// read the checkpoint from the file if it already exists. It returns true if
+// a checkpoint has been loaded.
+func (c *ChainConfig) SetCheckpointFile(checkpointFile string) (bool, error) {
+	c.CheckpointFile = checkpointFile
+	file, err := os.ReadFile(checkpointFile)
+	if os.IsNotExist(err) {
+		return false, nil // did not load checkpoint
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to read beacon checkpoint file: %v", err)
+	}
+	cp, err := hexutil.Decode(string(file))
+	if err != nil {
+		return false, fmt.Errorf("failed to decode hex string in beacon checkpoint file: %v", err)
+	}
+	if len(cp) != 32 {
+		return false, fmt.Errorf("invalid hex string length in beacon checkpoint file: %d", len(cp))
+	}
+	copy(c.Checkpoint[:len(cp)], cp)
+	return true, nil
+}
+
+// SaveCheckpointToFile saves the given checkpoint to file if a checkpoint
+// import/export file has been specified.
+func (c *ChainConfig) SaveCheckpointToFile(checkpoint common.Hash) (bool, error) {
+	if c.CheckpointFile == "" {
+		return false, nil
+	}
+	err := os.WriteFile(c.CheckpointFile, []byte(checkpoint.Hex()), 0600)
+	return err == nil, err
 }

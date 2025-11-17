@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"math/big"
 	"net/http"
 	"strings"
@@ -29,7 +28,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -432,6 +430,40 @@ func TestWithdrawals(t *testing.T) {
 	}
 }
 
+// TestGraphQLMaxDepth ensures that queries exceeding the configured maximum depth
+// are rejected to prevent resource exhaustion from deeply nested operations.
+func TestGraphQLMaxDepth(t *testing.T) {
+	stack := createNode(t)
+	defer stack.Close()
+
+	h, err := newHandler(stack, nil, nil, []string{}, []string{})
+	if err != nil {
+		t.Fatalf("could not create graphql service: %v", err)
+	}
+
+	var b strings.Builder
+	for i := 0; i < maxQueryDepth+1; i++ {
+		b.WriteString("ommers{")
+	}
+	b.WriteString("number")
+	for i := 0; i < maxQueryDepth+1; i++ {
+		b.WriteString("}")
+	}
+	query := fmt.Sprintf("{block{%s}}", b.String())
+
+	res := h.Schema.Exec(context.Background(), query, "", nil)
+	var found bool
+	for _, err := range res.Errors {
+		if err.Rule == "MaxDepthExceeded" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected max depth exceeded error, got %v", res.Errors)
+	}
+}
+
 func createNode(t *testing.T) *node.Node {
 	stack, err := node.New(&node.Config{
 		HTTPHost:     "127.0.0.1",
@@ -457,18 +489,16 @@ func newGQLService(t *testing.T, stack *node.Node, shanghai bool, gspec *core.Ge
 		RPCGasCap:      1000000,
 		StateScheme:    rawdb.HashScheme,
 	}
-	var engine consensus.Engine = ethash.NewFaker()
+	var engine = beacon.New(ethash.NewFaker())
 	if shanghai {
-		engine = beacon.NewFaker()
 		gspec.Config.TerminalTotalDifficulty = common.Big0
+		gspec.Config.MergeNetsplitBlock = common.Big0
 		// GenerateChain will increment timestamps by 10.
 		// Shanghai upgrade at block 1.
 		shanghaiTime := uint64(5)
 		gspec.Config.ShanghaiTime = &shanghaiTime
-	} else {
-		// set an arbitrary large ttd as chains are required to be known to be merged
-		gspec.Config.TerminalTotalDifficulty = big.NewInt(math.MaxInt64)
 	}
+
 	ethBackend, err := eth.New(stack, ethConf)
 	if err != nil {
 		t.Fatalf("could not create eth backend: %v", err)

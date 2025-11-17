@@ -32,61 +32,35 @@ func BenchmarkCounterFloat64Parallel(b *testing.B) {
 	}
 }
 
-func TestCounterFloat64Clear(t *testing.T) {
+func TestCounterFloat64(t *testing.T) {
 	c := NewCounterFloat64()
-	c.Inc(1.0)
-	c.Clear()
 	if count := c.Snapshot().Count(); count != 0 {
-		t.Errorf("c.Count(): 0 != %v\n", count)
+		t.Errorf("wrong count: %v", count)
 	}
-}
-
-func TestCounterFloat64Dec1(t *testing.T) {
-	c := NewCounterFloat64()
 	c.Dec(1.0)
 	if count := c.Snapshot().Count(); count != -1.0 {
-		t.Errorf("c.Count(): -1.0 != %v\n", count)
+		t.Errorf("wrong count: %v", count)
 	}
-}
-
-func TestCounterFloat64Dec2(t *testing.T) {
-	c := NewCounterFloat64()
-	c.Dec(2.0)
-	if count := c.Snapshot().Count(); count != -2.0 {
-		t.Errorf("c.Count(): -2.0 != %v\n", count)
-	}
-}
-
-func TestCounterFloat64Inc1(t *testing.T) {
-	c := NewCounterFloat64()
-	c.Inc(1.0)
-	if count := c.Snapshot().Count(); count != 1.0 {
-		t.Errorf("c.Count(): 1.0 != %v\n", count)
-	}
-}
-
-func TestCounterFloat64Inc2(t *testing.T) {
-	c := NewCounterFloat64()
-	c.Inc(2.0)
-	if count := c.Snapshot().Count(); count != 2.0 {
-		t.Errorf("c.Count(): 2.0 != %v\n", count)
-	}
-}
-
-func TestCounterFloat64Snapshot(t *testing.T) {
-	c := NewCounterFloat64()
-	c.Inc(1.0)
 	snapshot := c.Snapshot()
-	c.Inc(1.0)
-	if count := snapshot.Count(); count != 1.0 {
-		t.Errorf("c.Count(): 1.0 != %v\n", count)
+	c.Dec(2.0)
+	if count := c.Snapshot().Count(); count != -3.0 {
+		t.Errorf("wrong count: %v", count)
 	}
-}
-
-func TestCounterFloat64Zero(t *testing.T) {
-	c := NewCounterFloat64()
-	if count := c.Snapshot().Count(); count != 0 {
-		t.Errorf("c.Count(): 0 != %v\n", count)
+	c.Inc(1.0)
+	if count := c.Snapshot().Count(); count != -2.0 {
+		t.Errorf("wrong count: %v", count)
+	}
+	c.Inc(2.0)
+	if count := c.Snapshot().Count(); count != 0.0 {
+		t.Errorf("wrong count: %v", count)
+	}
+	if count := snapshot.Count(); count != -1.0 {
+		t.Errorf("snapshot count wrong: %v", count)
+	}
+	c.Inc(1.0)
+	c.Clear()
+	if count := c.Snapshot().Count(); count != 0.0 {
+		t.Errorf("wrong count: %v", count)
 	}
 }
 

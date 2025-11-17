@@ -84,11 +84,9 @@ func BenchmarkTransactionTraceV2(b *testing.B) {
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)
 	}
-	b.ResetTimer()
 	b.ReportAllocs()
-
-	for i := 0; i < b.N; i++ {
-		tracer := logger.NewStructLogger(&logger.Config{Debug: false}).Hooks()
+	for b.Loop() {
+		tracer := logger.NewStructLogger(&logger.Config{}).Hooks()
 		tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		evm.Config.Tracer = tracer
 

@@ -16,11 +16,13 @@
         "contractAddress": "0x0000000000000000000000000000000000000000",
         "gasUsed": "0x520b",
         "effectiveGasPrice": null,
-        "blockHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "blockHash": "0x1337000000000000000000000000000000000000000000000000000000000000",
+        "blockNumber": "0x5",
         "transactionIndex": "0x0"
       }
     ],
     "currentDifficulty": "0x20000",
-    "gasUsed": "0x520b"
+    "gasUsed": "0x520b",
+    "requests": null
   }
 }

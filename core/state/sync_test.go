@@ -46,7 +46,9 @@ func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, c
 	// Create an empty state
 	config := &triedb.Config{Preimages: true}
 	if scheme == rawdb.PathScheme {
-		config.PathDB = pathdb.Defaults
+		pconfig := *pathdb.Defaults
+		pconfig.NoAsyncFlush = true
+		config.PathDB = &pconfig
 	} else {
 		config.HashDB = hashdb.Defaults
 	}
@@ -79,7 +81,7 @@ func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, c
 		}
 		accounts = append(accounts, acc)
 	}
-	root, _ := state.Commit(0, false)
+	root, _ := state.Commit(0, false, false)
 
 	// Return the generated state
 	return db, sdb, nodeDb, root, accounts

@@ -42,6 +42,7 @@ func StartENRUpdater(chain *core.BlockChain, ln *enode.LocalNode) {
 	var newHead = make(chan core.ChainHeadEvent, 10)
 	sub := chain.SubscribeChainHeadEvent(newHead)
 
+	ln.Set(currentENREntry(chain))
 	go func() {
 		defer sub.Unsubscribe()
 		for {
@@ -71,7 +72,7 @@ func NewNodeFilter(chain *core.BlockChain) func(*enode.Node) bool {
 	filter := forkid.NewFilter(chain)
 	return func(n *enode.Node) bool {
 		var entry enrEntry
-		if err := n.Load(entry); err != nil {
+		if err := n.Load(&entry); err != nil {
 			return false
 		}
 		err := filter(entry.ForkID)

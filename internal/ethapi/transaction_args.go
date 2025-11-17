@@ -37,10 +37,6 @@ import (
 	"github.com/holiman/uint256"
 )
 
-var (
-	maxBlobsPerTransaction = params.MaxBlobGasPerBlock / params.BlobTxBlobGasPerBlob
-)
-
 // TransactionArgs represents the arguments to construct a new transaction
 // or a message call.
 type TransactionArgs struct {
@@ -72,8 +68,8 @@ type TransactionArgs struct {
 	Commitments []kzg4844.Commitment `json:"commitments"`
 	Proofs      []kzg4844.Proof      `json:"proofs"`
 
-	// This configures whether blobs are allowed to be passed.
-	blobSidecarAllowed bool
+	// For SetCodeTxType
+	AuthorizationList []types.SetCodeAuthorization `json:"authorizationList"`
 }
 
 // from retrieves the transaction sender address.
@@ -95,9 +91,17 @@ func (args *TransactionArgs) data() []byte {
 	return nil
 }
 
+// sidecarConfig defines the options for deriving missing fields of transactions.
+type sidecarConfig struct {
+	// This configures whether blobs are allowed to be passed and
+	// the associated sidecar version should be attached.
+	blobSidecarAllowed bool
+	blobSidecarVersion byte
+}
+
 // setDefaults fills in default values for unspecified tx fields.
-func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGasEstimation bool) error {
-	if err := args.setBlobTxSidecar(ctx); err != nil {
+func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config sidecarConfig) error {
+	if err := args.setBlobTxSidecar(ctx, config); err != nil {
 		return err
 	}
 	if err := args.setFeeDefaults(ctx, b, b.CurrentHeader()); err != nil {
@@ -120,10 +124,10 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 
 	// BlobTx fields
 	if args.BlobHashes != nil && len(args.BlobHashes) == 0 {
-		return errors.New(`need at least 1 blob for a blob transaction`)
+		return errors.New("need at least 1 blob for a blob transaction")
 	}
-	if args.BlobHashes != nil && len(args.BlobHashes) > maxBlobsPerTransaction {
-		return fmt.Errorf(`too many blobs in transaction (have=%d, max=%d)`, len(args.BlobHashes), maxBlobsPerTransaction)
+	if args.BlobHashes != nil && len(args.BlobHashes) > params.BlobTxMaxBlobs {
+		return fmt.Errorf("too many blobs in transaction (have=%d, max=%d)", len(args.BlobHashes), params.BlobTxMaxBlobs)
 	}
 
 	// create check
@@ -137,36 +141,28 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 	}
 
 	if args.Gas == nil {
-		if skipGasEstimation { // Skip gas usage estimation if a precise gas limit is not critical, e.g., in non-transaction calls.
-			gas := hexutil.Uint64(b.RPCGasCap())
-			if gas == 0 {
-				gas = hexutil.Uint64(math.MaxUint64 / 2)
-			}
-			args.Gas = &gas
-		} else { // Estimate the gas usage otherwise.
-			// These fields are immutable during the estimation, safe to
-			// pass the pointer directly.
-			data := args.data()
-			callArgs := TransactionArgs{
-				From:                 args.From,
-				To:                   args.To,
-				GasPrice:             args.GasPrice,
-				MaxFeePerGas:         args.MaxFeePerGas,
-				MaxPriorityFeePerGas: args.MaxPriorityFeePerGas,
-				Value:                args.Value,
-				Data:                 (*hexutil.Bytes)(&data),
-				AccessList:           args.AccessList,
-				BlobFeeCap:           args.BlobFeeCap,
-				BlobHashes:           args.BlobHashes,
-			}
-			latestBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
-			estimated, err := DoEstimateGas(ctx, b, callArgs, latestBlockNr, nil, b.RPCGasCap())
-			if err != nil {
-				return err
-			}
-			args.Gas = &estimated
-			log.Trace("Estimate gas usage automatically", "gas", args.Gas)
+		// These fields are immutable during the estimation, safe to
+		// pass the pointer directly.
+		data := args.data()
+		callArgs := TransactionArgs{
+			From:                 args.From,
+			To:                   args.To,
+			GasPrice:             args.GasPrice,
+			MaxFeePerGas:         args.MaxFeePerGas,
+			MaxPriorityFeePerGas: args.MaxPriorityFeePerGas,
+			Value:                args.Value,
+			Data:                 (*hexutil.Bytes)(&data),
+			AccessList:           args.AccessList,
+			BlobFeeCap:           args.BlobFeeCap,
+			BlobHashes:           args.BlobHashes,
 		}
+		latestBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+		estimated, err := DoEstimateGas(ctx, b, callArgs, latestBlockNr, nil, nil, b.RPCGasCap())
+		if err != nil {
+			return err
+		}
+		args.Gas = &estimated
+		log.Trace("Estimated gas usage automatically", "gas", args.Gas)
 	}
 
 	// If chain id is provided, ensure it matches the local chain id. Otherwise, set the local
@@ -188,7 +184,9 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend, head
 	if args.BlobFeeCap != nil && args.BlobFeeCap.ToInt().Sign() == 0 {
 		return errors.New("maxFeePerBlobGas, if specified, must be non-zero")
 	}
-	args.setCancunFeeDefaults(head)
+	if b.ChainConfig().IsCancun(head.Number, head.Time) {
+		args.setCancunFeeDefaults(b.ChainConfig(), head)
+	}
 	// If both gasPrice and at least one of the EIP-1559 fee parameters are specified, error.
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
@@ -240,15 +238,10 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend, head
 }
 
 // setCancunFeeDefaults fills in reasonable default fee values for unspecified fields.
-func (args *TransactionArgs) setCancunFeeDefaults(head *types.Header) {
+func (args *TransactionArgs) setCancunFeeDefaults(config *params.ChainConfig, head *types.Header) {
 	// Set maxFeePerBlobGas if it is missing.
 	if args.BlobHashes != nil && args.BlobFeeCap == nil {
-		var excessBlobGas uint64
-		if head.ExcessBlobGas != nil {
-			excessBlobGas = *head.ExcessBlobGas
-		}
-		// ExcessBlobGas must be set for a Cancun block.
-		blobBaseFee := eip4844.CalcBlobFee(excessBlobGas)
+		blobBaseFee := eip4844.CalcBlobFee(config, head)
 		// Set the max fee to be 2 times larger than the previous block's blob base fee.
 		// The additional slack allows the tx to not become invalidated if the base
 		// fee is rising.
@@ -286,18 +279,17 @@ func (args *TransactionArgs) setLondonFeeDefaults(ctx context.Context, head *typ
 }
 
 // setBlobTxSidecar adds the blob tx
-func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context) error {
+func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, config sidecarConfig) error {
 	// No blobs, we're done.
 	if args.Blobs == nil {
 		return nil
 	}
 
 	// Passing blobs is not allowed in all contexts, only in specific methods.
-	if !args.blobSidecarAllowed {
+	if !config.blobSidecarAllowed {
 		return errors.New(`"blobs" is not supported for this RPC method`)
 	}
 
-	n := len(args.Blobs)
 	// Assume user provides either only blobs (w/o hashes), or
 	// blobs together with commitments and proofs.
 	if args.Commitments == nil && args.Proofs != nil {
@@ -306,43 +298,77 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context) error {
 		return errors.New(`blob commitments provided while proofs were not`)
 	}
 
-	// len(blobs) == len(commitments) == len(proofs) == len(hashes)
-	if args.Commitments != nil && len(args.Commitments) != n {
-		return fmt.Errorf("number of blobs and commitments mismatch (have=%d, want=%d)", len(args.Commitments), n)
-	}
-	if args.Proofs != nil && len(args.Proofs) != n {
-		return fmt.Errorf("number of blobs and proofs mismatch (have=%d, want=%d)", len(args.Proofs), n)
-	}
+	// len(blobs) == len(commitments) == len(hashes)
+	n := len(args.Blobs)
 	if args.BlobHashes != nil && len(args.BlobHashes) != n {
 		return fmt.Errorf("number of blobs and hashes mismatch (have=%d, want=%d)", len(args.BlobHashes), n)
 	}
+	if args.Commitments != nil && len(args.Commitments) != n {
+		return fmt.Errorf("number of blobs and commitments mismatch (have=%d, want=%d)", len(args.Commitments), n)
+	}
 
+	// if V0: len(blobs) == len(proofs)
+	// if V1: len(blobs) == len(proofs) * 128
+	proofLen := n
+	if config.blobSidecarVersion == types.BlobSidecarVersion1 {
+		proofLen = n * kzg4844.CellProofsPerBlob
+	}
+	if args.Proofs != nil && len(args.Proofs) != proofLen {
+		if len(args.Proofs) != n {
+			return fmt.Errorf("number of blobs and proofs mismatch (have=%d, want=%d)", len(args.Proofs), proofLen)
+		}
+		// Unset the commitments and proofs, as they may be submitted in the legacy format
+		log.Debug("Unset legacy commitments and proofs", "blobs", n, "proofs", len(args.Proofs))
+		args.Commitments, args.Proofs = nil, nil
+	}
+
+	// Generate commitments and proofs if they are missing, or validate them if they
+	// are provided.
 	if args.Commitments == nil {
-		// Generate commitment and proof.
-		commitments := make([]kzg4844.Commitment, n)
-		proofs := make([]kzg4844.Proof, n)
+		var (
+			commitments = make([]kzg4844.Commitment, n)
+			proofs      = make([]kzg4844.Proof, 0, proofLen)
+		)
 		for i, b := range args.Blobs {
 			c, err := kzg4844.BlobToCommitment(&b)
 			if err != nil {
 				return fmt.Errorf("blobs[%d]: error computing commitment: %v", i, err)
 			}
 			commitments[i] = c
-			p, err := kzg4844.ComputeBlobProof(&b, c)
-			if err != nil {
-				return fmt.Errorf("blobs[%d]: error computing proof: %v", i, err)
+
+			switch config.blobSidecarVersion {
+			case types.BlobSidecarVersion0:
+				p, err := kzg4844.ComputeBlobProof(&b, c)
+				if err != nil {
+					return fmt.Errorf("blobs[%d]: error computing proof: %v", i, err)
+				}
+				proofs = append(proofs, p)
+			case types.BlobSidecarVersion1:
+				ps, err := kzg4844.ComputeCellProofs(&b)
+				if err != nil {
+					return fmt.Errorf("blobs[%d]: error computing proof: %v", i, err)
+				}
+				proofs = append(proofs, ps...)
 			}
-			proofs[i] = p
 		}
 		args.Commitments = commitments
 		args.Proofs = proofs
 	} else {
-		for i, b := range args.Blobs {
-			if err := kzg4844.VerifyBlobProof(&b, args.Commitments[i], args.Proofs[i]); err != nil {
+		switch config.blobSidecarVersion {
+		case types.BlobSidecarVersion0:
+			for i, b := range args.Blobs {
+				if err := kzg4844.VerifyBlobProof(&b, args.Commitments[i], args.Proofs[i]); err != nil {
+					return fmt.Errorf("failed to verify blob proof: %v", err)
+				}
+			}
+		case types.BlobSidecarVersion1:
+			if err := kzg4844.VerifyCellProofs(args.Blobs, args.Commitments, args.Proofs); err != nil {
 				return fmt.Errorf("failed to verify blob proof: %v", err)
 			}
 		}
 	}
 
+	// Generate blob hashes if they are missing, or validate them if they are provided.
 	hashes := make([]common.Hash, n)
 	hasher := sha256.New()
 	for i, c := range args.Commitments {
@@ -417,7 +443,7 @@ func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int,
 // core evm. This method is used in calls and traces that do not require a real
 // live transaction.
 // Assumes that fields are not nil, i.e. setDefaults or CallDefaults has been called.
-func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck, skipEoACheck bool) *core.Message {
+func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck bool) *core.Message {
 	var (
 		gasPrice  *big.Int
 		gasFeeCap *big.Int
@@ -451,20 +477,21 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck, skipEoA
 		accessList = *args.AccessList
 	}
 	return &core.Message{
-		From:             args.from(),
-		To:               args.To,
-		Value:            (*big.Int)(args.Value),
-		Nonce:            uint64(*args.Nonce),
-		GasLimit:         uint64(*args.Gas),
-		GasPrice:         gasPrice,
-		GasFeeCap:        gasFeeCap,
-		GasTipCap:        gasTipCap,
-		Data:             args.data(),
-		AccessList:       accessList,
-		BlobGasFeeCap:    (*big.Int)(args.BlobFeeCap),
-		BlobHashes:       args.BlobHashes,
-		SkipNonceChecks:  skipNonceCheck,
-		SkipFromEOACheck: skipEoACheck,
+		From:                  args.from(),
+		To:                    args.To,
+		Value:                 (*big.Int)(args.Value),
+		Nonce:                 uint64(*args.Nonce),
+		GasLimit:              uint64(*args.Gas),
+		GasPrice:              gasPrice,
+		GasFeeCap:             gasFeeCap,
+		GasTipCap:             gasTipCap,
+		Data:                  args.data(),
+		AccessList:            accessList,
+		BlobGasFeeCap:         (*big.Int)(args.BlobFeeCap),
+		BlobHashes:            args.BlobHashes,
+		SetCodeAuthorizations: args.AuthorizationList,
+		SkipNonceChecks:       skipNonceCheck,
+		SkipTransactionChecks: true,
 	}
 }
 
@@ -473,6 +500,8 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck, skipEoA
 func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
 	usedType := types.LegacyTxType
 	switch {
+	case args.AuthorizationList != nil || defaultType == types.SetCodeTxType:
+		usedType = types.SetCodeTxType
 	case args.BlobHashes != nil || defaultType == types.BlobTxType:
 		usedType = types.BlobTxType
 	case args.MaxFeePerGas != nil || defaultType == types.DynamicFeeTxType:
@@ -486,6 +515,28 @@ func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
 	}
 	var data types.TxData
 	switch usedType {
+	case types.SetCodeTxType:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		authList := []types.SetCodeAuthorization{}
+		if args.AuthorizationList != nil {
+			authList = args.AuthorizationList
+		}
+		data = &types.SetCodeTx{
+			To:         *args.To,
+			ChainID:    uint256.MustFromBig(args.ChainID.ToInt()),
+			Nonce:      uint64(*args.Nonce),
+			Gas:        uint64(*args.Gas),
+			GasFeeCap:  uint256.MustFromBig((*big.Int)(args.MaxFeePerGas)),
+			GasTipCap:  uint256.MustFromBig((*big.Int)(args.MaxPriorityFeePerGas)),
+			Value:      uint256.MustFromBig((*big.Int)(args.Value)),
+			Data:       args.data(),
+			AccessList: al,
+			AuthList:   authList,
+		}
+
 	case types.BlobTxType:
 		al := types.AccessList{}
 		if args.AccessList != nil {
@@ -505,11 +556,11 @@ func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
 			BlobFeeCap: uint256.MustFromBig((*big.Int)(args.BlobFeeCap)),
 		}
 		if args.Blobs != nil {
-			data.(*types.BlobTx).Sidecar = &types.BlobTxSidecar{
-				Blobs:       args.Blobs,
-				Commitments: args.Commitments,
-				Proofs:      args.Proofs,
+			version := types.BlobSidecarVersion0
+			if len(args.Proofs) == len(args.Blobs)*kzg4844.CellProofsPerBlob {
+				version = types.BlobSidecarVersion1
 			}
+			data.(*types.BlobTx).Sidecar = types.NewBlobTxSidecar(version, args.Blobs, args.Commitments, args.Proofs)
 		}
 
 	case types.DynamicFeeTxType:

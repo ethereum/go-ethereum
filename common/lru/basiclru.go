@@ -47,30 +47,37 @@ func NewBasicLRU[K comparable, V any](capacity int) BasicLRU[K, V] {
 
 // Add adds a value to the cache. Returns true if an item was evicted to store the new item.
 func (c *BasicLRU[K, V]) Add(key K, value V) (evicted bool) {
+	_, _, evicted = c.Add3(key, value)
+	return evicted
+}
+
+// Add3 adds a value to the cache. If an item was evicted to store the new one, it returns the evicted item.
+func (c *BasicLRU[K, V]) Add3(key K, value V) (ek K, ev V, evicted bool) {
 	item, ok := c.items[key]
 	if ok {
-		// Already exists in cache.
 		item.value = value
 		c.items[key] = item
 		c.list.moveToFront(item.elem)
-		return false
+		return ek, ev, false
 	}
 
 	var elem *listElem[K]
 	if c.Len() >= c.cap {
 		elem = c.list.removeLast()
-		delete(c.items, elem.v)
 		evicted = true
+		ek = elem.v
+		ev = c.items[ek].value
+		delete(c.items, ek)
 	} else {
 		elem = new(listElem[K])
 	}
 
 	// Store the new item.
-	// Note that, if another item was evicted, we re-use its list element here.
+	// Note that if another item was evicted, we re-use its list element here.
 	elem.v = key
 	c.items[key] = cacheItem[K, V]{elem, value}
 	c.list.pushElem(elem)
-	return evicted
+	return ek, ev, evicted
 }
 
 // Contains reports whether the given key exists in the cache.

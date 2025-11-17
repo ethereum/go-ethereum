@@ -51,8 +51,11 @@ var stateTestCommand = &cli.Command{
 	Usage:     "Executes the given state tests. Filenames can be fed via standard input (batch mode) or as an argument (one-off execution).",
 	ArgsUsage: "<file>",
 	Flags: slices.Concat([]cli.Flag{
+		BenchFlag,
 		DumpFlag,
+		forkFlag,
 		HumanReadableFlag,
+		idxFlag,
 		RunFlag,
 	}, traceFlags),
 }
@@ -63,7 +66,7 @@ func stateTestCmd(ctx *cli.Context) error {
 	// If path is provided, run the tests at that path.
 	if len(path) != 0 {
 		var (
-			collected = collectJSONFiles(path)
+			collected = collectFiles(path)
 			results   []testResult
 		)
 		for _, fname := range collected {

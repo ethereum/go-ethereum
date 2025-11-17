@@ -59,7 +59,7 @@ func TestSubscriptions(t *testing.T) {
 	t.Parallel()
 
 	var (
-		namespaces        = []string{"eth", "bzz"}
+		namespaces        = []string{"eth"}
 		service           = &notificationTestService{}
 		subCount          = len(namespaces)
 		notificationCount = 3

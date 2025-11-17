@@ -23,7 +23,7 @@ import (
 )
 
 type (
-	executionFunc func(pc *uint64, interpreter *EVMInterpreter, callContext *ScopeContext) ([]byte, error)
+	executionFunc func(pc *uint64, evm *EVM, callContext *ScopeContext) ([]byte, error)
 	gasFunc       func(*EVM, *Contract, *Stack, *Memory, uint64) (uint64, error) // last parameter is the requested memory size as a uint64
 	// memorySizeFunc returns the required size, and whether the operation overflowed a uint64
 	memorySizeFunc func(*Stack) (size uint64, overflow bool)
@@ -61,7 +61,8 @@ var (
 	shanghaiInstructionSet         = newShanghaiInstructionSet()
 	cancunInstructionSet           = newCancunInstructionSet()
 	verkleInstructionSet           = newVerkleInstructionSet()
-	pragueEOFInstructionSet        = newPragueEOFInstructionSet()
+	pragueInstructionSet           = newPragueInstructionSet()
+	osakaInstructionSet            = newOsakaInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -86,18 +87,20 @@ func validate(jt JumpTable) JumpTable {
 }
 
 func newVerkleInstructionSet() JumpTable {
-	instructionSet := newCancunInstructionSet()
+	instructionSet := newShanghaiInstructionSet()
 	enable4762(&instructionSet)
 	return validate(instructionSet)
 }
 
-func NewPragueEOFInstructionSetForTesting() JumpTable {
-	return newPragueEOFInstructionSet()
+func newOsakaInstructionSet() JumpTable {
+	instructionSet := newPragueInstructionSet()
+	enable7939(&instructionSet) // EIP-7939 (CLZ opcode)
+	return validate(instructionSet)
 }
 
-func newPragueEOFInstructionSet() JumpTable {
+func newPragueInstructionSet() JumpTable {
 	instructionSet := newCancunInstructionSet()
-	enableEOF(&instructionSet)
+	enable7702(&instructionSet) // EIP-7702 Setcode transaction type
 	return validate(instructionSet)
 }
 
@@ -624,7 +627,7 @@ func newFrontierInstructionSet() JumpTable {
 			maxStack:    maxStack(0, 1),
 		},
 		PUSH2: {
-			execute:     makePush(2, 2),
+			execute:     opPush2,
 			constantGas: GasFastestStep,
 			minStack:    minStack(0, 1),
 			maxStack:    maxStack(0, 1),

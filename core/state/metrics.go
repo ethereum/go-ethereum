@@ -19,7 +19,7 @@ package state
 import "github.com/ethereum/go-ethereum/metrics"
 
 var (
-	accountReadMeters        = metrics.NewRegisteredMeter("state/read/accounts", nil)
+	accountReadMeters        = metrics.NewRegisteredMeter("state/read/account", nil)
 	storageReadMeters        = metrics.NewRegisteredMeter("state/read/storage", nil)
 	accountUpdatedMeter      = metrics.NewRegisteredMeter("state/update/account", nil)
 	storageUpdatedMeter      = metrics.NewRegisteredMeter("state/update/storage", nil)

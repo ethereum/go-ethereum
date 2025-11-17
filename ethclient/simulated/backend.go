@@ -120,7 +120,7 @@ func newWithNode(stack *node.Node, conf *eth.Config, blockPeriod uint64) (*Backe
 		return nil, err
 	}
 	// Set up the simulated beacon
-	beacon, err := catalyst.NewSimulatedBeacon(blockPeriod, backend)
+	beacon, err := catalyst.NewSimulatedBeacon(blockPeriod, common.Address{}, backend)
 	if err != nil {
 		return nil, err
 	}

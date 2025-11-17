@@ -49,8 +49,9 @@ type Config struct {
 	// All remaining settings are optional.
 
 	// Packet handling configuration:
-	NetRestrict *netutil.Netlist  // list of allowed IP networks
-	Unhandled   chan<- ReadPacket // unhandled packets are sent on this channel
+	NetRestrict   *netutil.Netlist  // list of allowed IP networks
+	Unhandled     chan<- ReadPacket // unhandled packets are sent on this channel
+	V5RespTimeout time.Duration     // timeout for v5 queries
 
 	// Node table configuration:
 	Bootnodes               []*enode.Node // list of bootstrap nodes
@@ -72,6 +73,9 @@ func (cfg Config) withDefaults() Config {
 	}
 	if cfg.RefreshInterval == 0 {
 		cfg.RefreshInterval = 30 * time.Minute
+	}
+	if cfg.V5RespTimeout == 0 {
+		cfg.V5RespTimeout = 700 * time.Millisecond
 	}
 
 	// Debug/test settings:

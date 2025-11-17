@@ -27,14 +27,14 @@ import (
 // diffLayer represents a collection of modifications made to the in-memory tries
 // along with associated state changes after running a block on top.
 //
-// The goal of a diff layer is to act as a journal, tracking recent modifications
-// made to the state, that have not yet graduated into a semi-immutable state.
+// The purpose of a diff layer is to serve as a journal, recording recent state modifications
+// that have not yet been committed to a more stable or semi-permanent state.
 type diffLayer struct {
 	// Immutables
 	root   common.Hash         // Root hash to which this layer diff belongs to
 	id     uint64              // Corresponding state id
 	block  uint64              // Associated block number
-	nodes  *nodeSet            // Cached trie nodes indexed by owner and path
+	nodes  *nodeSetWithOrigin  // Cached trie nodes indexed by owner and path
 	states *StateSetWithOrigin // Associated state changes along with origin value
 
 	parent layer        // Parent layer modified by this one, never nil, **can be changed**
@@ -42,7 +42,7 @@ type diffLayer struct {
 }
 
 // newDiffLayer creates a new diff layer on top of an existing layer.
-func newDiffLayer(parent layer, root common.Hash, id uint64, block uint64, nodes *nodeSet, states *StateSetWithOrigin) *diffLayer {
+func newDiffLayer(parent layer, root common.Hash, id uint64, block uint64, nodes *nodeSetWithOrigin, states *StateSetWithOrigin) *diffLayer {
 	dl := &diffLayer{
 		root:   root,
 		id:     id,
@@ -151,12 +151,12 @@ func (dl *diffLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 
 // update implements the layer interface, creating a new layer on top of the
 // existing layer tree with the specified data items.
-func (dl *diffLayer) update(root common.Hash, id uint64, block uint64, nodes *nodeSet, states *StateSetWithOrigin) *diffLayer {
+func (dl *diffLayer) update(root common.Hash, id uint64, block uint64, nodes *nodeSetWithOrigin, states *StateSetWithOrigin) *diffLayer {
 	return newDiffLayer(dl, root, id, block, nodes, states)
 }
 
 // persist flushes the diff layer and all its parent layers to disk layer.
-func (dl *diffLayer) persist(force bool) (layer, error) {
+func (dl *diffLayer) persist(force bool) (*diskLayer, error) {
 	if parent, ok := dl.parentLayer().(*diffLayer); ok {
 		// Hold the lock to prevent any read operation until the new
 		// parent is linked correctly.
@@ -183,7 +183,7 @@ func (dl *diffLayer) size() uint64 {
 
 // diffToDisk merges a bottom-most diff into the persistent disk layer underneath
 // it. The method will panic if called onto a non-bottom-most diff layer.
-func diffToDisk(layer *diffLayer, force bool) (layer, error) {
+func diffToDisk(layer *diffLayer, force bool) (*diskLayer, error) {
 	disk, ok := layer.parentLayer().(*diskLayer)
 	if !ok {
 		panic(fmt.Sprintf("unknown layer type: %T", layer.parentLayer()))

@@ -19,6 +19,7 @@ package enode
 import (
 	"crypto/ecdsa"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -37,6 +38,10 @@ var errMissingPrefix = errors.New("missing 'enr:' prefix for base64-encoded reco
 type Node struct {
 	r  enr.Record
 	id ID
+
+	// hostname tracks the DNS name of the node.
+	hostname string
+
 	// endpoint information
 	ip  netip.Addr
 	udp uint16
@@ -77,6 +82,8 @@ func newNodeWithID(r *enr.Record, id ID) *Node {
 		n.setIP4(ip4)
 	case valid6:
 		n.setIP6(ip6)
+	default:
+		n.setIPv4Ports()
 	}
 	return n
 }
@@ -103,6 +110,10 @@ func localityScore(ip netip.Addr) int {
 
 func (n *Node) setIP4(ip netip.Addr) {
 	n.ip = ip
+	n.setIPv4Ports()
+}
+
+func (n *Node) setIPv4Ports() {
 	n.Load((*enr.UDP)(&n.udp))
 	n.Load((*enr.TCP)(&n.tcp))
 }
@@ -182,6 +193,18 @@ func (n *Node) UDP() int {
 // TCP returns the TCP port of the node.
 func (n *Node) TCP() int {
 	return int(n.tcp)
+}
+
+// WithHostname adds a DNS hostname to the node.
+func (n *Node) WithHostname(hostname string) *Node {
+	cpy := *n
+	cpy.hostname = hostname
+	return &cpy
+}
+
+// Hostname returns the DNS name assigned by WithHostname.
+func (n *Node) Hostname() string {
+	return n.hostname
 }
 
 // UDPEndpoint returns the announced UDP endpoint.
@@ -336,9 +359,10 @@ func ParseID(in string) (ID, error) {
 // Returns -1 if a is closer to target, 1 if b is closer to target
 // and 0 if they are equal.
 func DistCmp(target, a, b ID) int {
-	for i := range target {
-		da := a[i] ^ target[i]
-		db := b[i] ^ target[i]
+	for i := 0; i < len(target); i += 8 {
+		tn := binary.BigEndian.Uint64(target[i : i+8])
+		da := tn ^ binary.BigEndian.Uint64(a[i:i+8])
+		db := tn ^ binary.BigEndian.Uint64(b[i:i+8])
 		if da > db {
 			return 1
 		} else if da < db {
@@ -351,12 +375,14 @@ func DistCmp(target, a, b ID) int {
 // LogDist returns the logarithmic distance between a and b, log2(a ^ b).
 func LogDist(a, b ID) int {
 	lz := 0
-	for i := range a {
-		x := a[i] ^ b[i]
+	for i := 0; i < len(a); i += 8 {
+		ai := binary.BigEndian.Uint64(a[i : i+8])
+		bi := binary.BigEndian.Uint64(b[i : i+8])
+		x := ai ^ bi
 		if x == 0 {
-			lz += 8
+			lz += 64
 		} else {
-			lz += bits.LeadingZeros8(x)
+			lz += bits.LeadingZeros64(x)
 			break
 		}
 	}

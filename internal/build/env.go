@@ -92,6 +92,33 @@ func Env() Environment {
 			IsPullRequest: os.Getenv("APPVEYOR_PULL_REQUEST_NUMBER") != "",
 			IsCronJob:     os.Getenv("APPVEYOR_SCHEDULED_BUILD") == "True",
 		}
+	case os.Getenv("CI") == "true" && os.Getenv("GITHUB_ACTIONS") == "true":
+		commit := os.Getenv("GITHUB_SHA")
+		reftype := os.Getenv("GITHUB_REF_TYPE")
+		isPR := os.Getenv("GITHUB_HEAD_REF") != ""
+		tag := ""
+		branch := ""
+		switch {
+		case isPR:
+			branch = os.Getenv("GITHUB_BASE_REF")
+		case reftype == "branch":
+			branch = os.Getenv("GITHUB_REF_NAME")
+		case reftype == "tag":
+			tag = os.Getenv("GITHUB_REF_NAME")
+		}
+		return Environment{
+			CI:            true,
+			Name:          "github-actions",
+			Repo:          os.Getenv("GITHUB_REPOSITORY"),
+			Commit:        commit,
+			Date:          getDate(commit),
+			Branch:        branch,
+			Tag:           tag,
+			IsPullRequest: isPR,
+			Buildnum:      os.Getenv("GITHUB_RUN_ID"),
+			IsCronJob:     os.Getenv("GITHUB_EVENT_NAME") == "schedule",
+		}
+
 	default:
 		return LocalEnv()
 	}

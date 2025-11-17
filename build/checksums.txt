@@ -1,105 +1,102 @@
 # This file contains sha256 checksums of optional build dependencies.
 
-# version:spec-tests 2.1.0
+# version:spec-tests v5.1.0
 # https://github.com/ethereum/execution-spec-tests/releases
-# https://github.com/ethereum/execution-spec-tests/releases/download/v2.1.0/
-ca89c76851b0900bfcc3cbb9a26cbece1f3d7c64a3bed38723e914713290df6c  fixtures_develop.tar.gz
+# https://github.com/ethereum/execution-spec-tests/releases/download/v5.1.0
+a3192784375acec7eaec492799d5c5d0c47a2909a3cc40178898e4ecd20cc416  fixtures_develop.tar.gz
 
-# version:golang 1.23.3
+# version:golang 1.25.1
 # https://go.dev/dl/
-8d6a77332487557c6afa2421131b50f83db4ae3c579c3bc72e670ee1f6968599  go1.23.3.src.tar.gz
-bdbf2a243ed4a121c9988684e5b15989cb244c1ff9e41ca823d0187b5c859114  go1.23.3.aix-ppc64.tar.gz
-b79c77bbdf61e6e486aa6bea9286f3f7969c28e2ff7686ce10c334f746bfb724  go1.23.3.darwin-amd64.pkg
-c7e024d5c0bc81845070f23598caf02f05b8ae88fd4ad2cd3e236ddbea833ad2  go1.23.3.darwin-amd64.tar.gz
-3e764df0db8f3c7470b9ff641954a380510a4822613c06bd5a195fd083f4731d  go1.23.3.darwin-arm64.pkg
-31e119fe9bde6e105407a32558d5b5fa6ca11e2bd17f8b7b2f8a06aba16a0632  go1.23.3.darwin-arm64.tar.gz
-3872c9a98331050a242afe63fa6abc8fc313aca83dcaefda318e903309ac0c8d  go1.23.3.dragonfly-amd64.tar.gz
-69479fa016ec5b4605885643ce0c2dd5c583e02353978feb6de38c961863b9cc  go1.23.3.freebsd-386.tar.gz
-bf1de22a900646ef4f79480ed88337856d47089cc610f87e6fef46f6b8db0e1f  go1.23.3.freebsd-amd64.tar.gz
-e461f866479bc36bdd4cfec32bfecb1bb243152268a1b3223de109410dec3407  go1.23.3.freebsd-arm.tar.gz
-24154b4018a45540aefeb6b5b9ffdcc8d9a8cdb78cd7fec262787b89fed19997  go1.23.3.freebsd-arm64.tar.gz
-218f3f1532e61dd65c330c2a5fc85bec18cc3690489763e62ffa9bb9fc85a68e  go1.23.3.freebsd-riscv64.tar.gz
-24e3f34858b8687c31f5e5ab9e46d27fb613b0d50a94261c500cebb2d79c0672  go1.23.3.illumos-amd64.tar.gz
-3d7b00191a43c50d28e0903a0c576104bc7e171a8670de419d41111c08dfa299  go1.23.3.linux-386.tar.gz
-a0afb9744c00648bafb1b90b4aba5bdb86f424f02f9275399ce0c20b93a2c3a8  go1.23.3.linux-amd64.tar.gz
-1f7cbd7f668ea32a107ecd41b6488aaee1f5d77a66efd885b175494439d4e1ce  go1.23.3.linux-arm64.tar.gz
-5f0332754beffc65af65a7b2da76e9dd997567d0d81b6f4f71d3588dc7b4cb00  go1.23.3.linux-armv6l.tar.gz
-1d0161a8946c7d99f717bad23631738408511f9f87e78d852224a023d8882ad8  go1.23.3.linux-loong64.tar.gz
-e924a7c9027f521f8a3563541ed0f89a4db3ef005b6b71263415b38e0b46e63a  go1.23.3.linux-mips.tar.gz
-4cdf8c38165627f032c2b17cdd95e4aafff40d75fc873824d4c94914284098ca  go1.23.3.linux-mips64.tar.gz
-5e49347e7325d2e268fb14040529b704e66eed77154cc73a919e9167d8527a2f  go1.23.3.linux-mips64le.tar.gz
-142eabc17cee99403e895383ed7a6b7b40e740e8c2f73b79352bb9d1242fbd98  go1.23.3.linux-mipsle.tar.gz
-96ad61ba6b6cc0f5adfd75e65231c61e7db26d8236f01117023899528164d1b0  go1.23.3.linux-ppc64.tar.gz
-e3b926c81e8099d3cee6e6e270b85b39c3bd44263f8d3df29aacb4d7e00507c8  go1.23.3.linux-ppc64le.tar.gz
-324e03b6f59be841dfbaeabc466224b0f0905f5ad3a225b7c0703090e6c4b1a5  go1.23.3.linux-riscv64.tar.gz
-6bd72fcef72b046b6282c2d1f2c38f31600e4fe9361fcd8341500c754fb09c38  go1.23.3.linux-s390x.tar.gz
-5df382337fe2e4ea6adaafa823da5e083513a97534a38f89d691dd6f599084ca  go1.23.3.netbsd-386.tar.gz
-9ae7cb6095a3e91182ac03547167e230fddd4941ed02dbdb6af663b2a53d9db7  go1.23.3.netbsd-amd64.tar.gz
-4a452c4134a9bea6213d8925d322f26b01c0eccda1330585bb2b241c76a0c3ea  go1.23.3.netbsd-arm.tar.gz
-8ff3b5184d840148dbca061c04dca35a7070dc894255d3b755066bd76a7094dc  go1.23.3.netbsd-arm64.tar.gz
-5b6940922e68ac1162a704a8b583fb4f039f955bfe97c35a56c40269cbcff9b1  go1.23.3.openbsd-386.tar.gz
-6ae4aeb6a88f3754b10ecec90422a30fb8bf86c3187be2be9408d67a5a235ace  go1.23.3.openbsd-amd64.tar.gz
-e5eae226391b60c4d1ea1022663f55b225c6d7bab67f31fbafd5dd7a04684006  go1.23.3.openbsd-arm.tar.gz
-e12b2c04535e0bf5561d54831122b410d708519c1ec2c56b0c2350b15243c331  go1.23.3.openbsd-arm64.tar.gz
-599818e4062166d7a112f6f3fcca2dd4e2cdd3111fe48f9757bd8debf38c7f52  go1.23.3.openbsd-ppc64.tar.gz
-9ca4db8cab2a07d561f5b2a9397793684ab3b22326add1fe8cda8a545a1693db  go1.23.3.openbsd-riscv64.tar.gz
-8fca1ec2aced936e0170605378ee7f0acb38f002490321f67fc83728ee281967  go1.23.3.plan9-386.tar.gz
-22d663692224fc1933a97f61d9fe49815e3b9ef1c2be97046505683fdf2e23c7  go1.23.3.plan9-amd64.tar.gz
-d0417a702d0e776d57e450fa2ce1ce7efa199a636644776862dbf946c409a462  go1.23.3.plan9-arm.tar.gz
-b5d9db1c02e0ca266a142eb687bd7749890c30872b09a4a0ffcd491425039754  go1.23.3.solaris-amd64.tar.gz
-14b7baf4af2046013b74dfac6e9a0a7403f15ee9940a16890bc028dfd32c49ac  go1.23.3.windows-386.msi
-23da9089ea6c5612d718f13c26e9bfc9aaaabe222838075346a8191d48f9dfe5  go1.23.3.windows-386.zip
-614f0e3eed82245dfb4356d4e8d5b96abecca6a4c4f0168c0e389e4dd6284db8  go1.23.3.windows-amd64.msi
-81968b563642096b8a7521171e2be6e77ff6f44032f7493b7bdec9d33f44f31d  go1.23.3.windows-amd64.zip
-c9951eecad732c59dfde6dc4803fa9253eb074663c61035c8d856f4d2eb146cb  go1.23.3.windows-arm.msi
-1a7db02be47deada42082d21d63eba0013f93375cfa0e7768962f1295a469022  go1.23.3.windows-arm.zip
-a74e3e195219af4330b93c71cd4b736b709a5654a07cc37eebe181c4984afb82  go1.23.3.windows-arm64.msi
-dbdfa868b1a3f8c62950373e4975d83f90dd8b869a3907319af8384919bcaffe  go1.23.3.windows-arm64.zip
+d010c109cee94d80efe681eab46bdea491ac906bf46583c32e9f0dbb0bd1a594  go1.25.1.src.tar.gz
+1d622468f767a1b9fe1e1e67bd6ce6744d04e0c68712adc689748bbeccb126bb  go1.25.1.darwin-amd64.tar.gz
+68deebb214f39d542e518ebb0598a406ab1b5a22bba8ec9ade9f55fb4dd94a6c  go1.25.1.darwin-arm64.tar.gz
+d03cdcbc9bd8baf5cf028de390478e9e2b3e4d0afe5a6582dedc19bfe6a263b2  go1.25.1.linux-386.tar.gz
+7716a0d940a0f6ae8e1f3b3f4f36299dc53e31b16840dbd171254312c41ca12e  go1.25.1.linux-amd64.tar.gz
+65a3e34fb2126f55b34e1edfc709121660e1be2dee6bdf405fc399a63a95a87d  go1.25.1.linux-arm64.tar.gz
+eb949be683e82a99e9861dafd7057e31ea40b161eae6c4cd18fdc0e8c4ae6225  go1.25.1.linux-armv6l.tar.gz
+be13d5479b8c75438f2efcaa8c191fba3af684b3228abc9c99c7aa8502f34424  go1.25.1.windows-386.zip
+4a974de310e7ee1d523d2fcedb114ba5fa75408c98eb3652023e55ccf3fa7cab  go1.25.1.windows-amd64.zip
+45ab4290adbd6ee9e7f18f0d57eaa9008fdbef590882778ed93eac3c8cca06c5  go1.25.1.aix-ppc64.tar.gz
+2e3c1549bed3124763774d648f291ac42611232f48320ebbd23517c909c09b81  go1.25.1.dragonfly-amd64.tar.gz
+dc0198dd4ec520e13f26798def8750544edf6448d8e9c43fd2a814e4885932af  go1.25.1.freebsd-386.tar.gz
+c4f1a7e7b258406e6f3b677ecdbd97bbb23ff9c0d44be4eb238a07d360f69ac8  go1.25.1.freebsd-amd64.tar.gz
+7772fc5ff71ed39297ec0c1599fc54e399642c9b848eac989601040923b0de9c  go1.25.1.freebsd-arm.tar.gz
+5bb011d5d5b6218b12189f07aa0be618ab2002662fff1ca40afba7389735c207  go1.25.1.freebsd-arm64.tar.gz
+ccac716240cb049bebfafcb7eebc3758512178a4c51fc26da9cc032035d850c8  go1.25.1.freebsd-riscv64.tar.gz
+cc53910ffb9fcfdd988a9fa25b5423bae1cfa01b19616be646700e1f5453b466  go1.25.1.illumos-amd64.tar.gz
+efe809f923bcedab44bf7be2b3af8d182b512b1bf9c07d302e0c45d26c8f56f3  go1.25.1.linux-loong64.tar.gz
+c0de33679f6ed68991dc42dc4a602e74a666e3e166c1748ee1b5d1a7ea2ffbb2  go1.25.1.linux-mips.tar.gz
+c270f7b0c0bdfbcd54fef4481227c40d41bb518f9ae38ee930870f04a0a6a589  go1.25.1.linux-mips64.tar.gz
+80be871ba9c944f34d1868cdf5047e1cf2e1289fe08cdb90e2453d2f0d6965ae  go1.25.1.linux-mips64le.tar.gz
+9f09defa9bb22ebf2cde76162f40958564e57ce5c2b3649bc063bebcbc9294c1  go1.25.1.linux-mipsle.tar.gz
+2c76b7d278c1d43ad19d478ad3f0f05e7b782b64b90870701b314fa48b5f43c6  go1.25.1.linux-ppc64.tar.gz
+8b0c8d3ee5b1b5c28b6bd63dc4438792012e01d03b4bf7a61d985c87edab7d1f  go1.25.1.linux-ppc64le.tar.gz
+22fe934a9d0c9c57275716c55b92d46ebd887cec3177c9140705efa9f84ba1e2  go1.25.1.linux-riscv64.tar.gz
+9cfe517ba423f59f3738ca5c3d907c103253cffbbcc2987142f79c5de8c1bf93  go1.25.1.linux-s390x.tar.gz
+6af8a08353e76205d5b743dd7a3f0126684f96f62be0a31b75daf9837e512c46  go1.25.1.netbsd-386.tar.gz
+e5d534ff362edb1bd8c8e10892b6a027c4c1482454245d1529167676498684c7  go1.25.1.netbsd-amd64.tar.gz
+88bcf39254fdcea6a199c1c27d787831b652427ce60851ae9e41a3d7eb477f45  go1.25.1.netbsd-arm.tar.gz
+d7c2eabe1d04ee47bcaea2816fdd90dbd25d90d4dfa756faa9786c788e4f3a4e  go1.25.1.netbsd-arm64.tar.gz
+14a2845977eb4dde11d929858c437a043467c427db87899935e90cee04a38d72  go1.25.1.openbsd-386.tar.gz
+d27ac54b38a13a09c81e67c82ac70d387037341c85c3399291c73e13e83fdd8c  go1.25.1.openbsd-amd64.tar.gz
+0f4ab5f02500afa4befd51fed1e8b45e4d07ca050f641cc3acc76eaa4027b2c3  go1.25.1.openbsd-arm.tar.gz
+d46c3bd156843656f7f3cb0dec27ea51cd926ec3f7b80744bf8156e67c1c812f  go1.25.1.openbsd-arm64.tar.gz
+c550514c67f22e409be10e40eace761e2e43069f4ef086ae6e60aac736c2b679  go1.25.1.openbsd-ppc64.tar.gz
+8a09a8714a2556eb13fc1f10b7ce2553fcea4971e3330fc3be0efd24aab45734  go1.25.1.openbsd-riscv64.tar.gz
+b0e1fefaf0c7abd71f139a54eee9767944aff5f0bc9d69c968234804884e552f  go1.25.1.plan9-386.tar.gz
+e94732c94f149690aa0ab11c26090577211b4a988137cb2c03ec0b54e750402e  go1.25.1.plan9-amd64.tar.gz
+7eb80e9de1e817d9089a54e8c7c5c8d8ed9e5fb4d4a012fc0f18fc422a484f0c  go1.25.1.plan9-arm.tar.gz
+1261dfad7c4953c0ab90381bc1242dc54e394db7485c59349428d532b2273343  go1.25.1.solaris-amd64.tar.gz
+04bc3c078e9e904c4d58d6ac2532a5bdd402bd36a9ff0b5949b3c5e6006a05ee  go1.25.1.windows-arm64.zip
 
-# version:golangci 1.61.0
+# version:golangci 2.4.0
 # https://github.com/golangci/golangci-lint/releases/
-# https://github.com/golangci/golangci-lint/releases/download/v1.61.0/
-5c280ef3284f80c54fd90d73dc39ca276953949da1db03eb9dd0fbf868cc6e55  golangci-lint-1.61.0-darwin-amd64.tar.gz
-544334890701e4e04a6e574bc010bea8945205c08c44cced73745a6378012d36  golangci-lint-1.61.0-darwin-arm64.tar.gz
-e885a6f561092055930ebd298914d80e8fd2e10d2b1e9942836c2c6a115301fa  golangci-lint-1.61.0-freebsd-386.tar.gz
-b13f6a3f11f65e7ff66b734d7554df3bbae0f485768848424e7554ed289e19c2  golangci-lint-1.61.0-freebsd-amd64.tar.gz
-cd8e7bbe5b8f33ed1597aa1cc588da96a3b9f22e1b9ae60d93511eae1a0ee8c5  golangci-lint-1.61.0-freebsd-armv6.tar.gz
-7ade524dbd88bd250968f45e190af90e151fa5ee63dd6aa7f7bb90e8155db61d  golangci-lint-1.61.0-freebsd-armv7.tar.gz
-0fe3cd8a1ed8d9f54f48670a5af3df056d6040d94017057f0f4d65c930660ad9  golangci-lint-1.61.0-illumos-amd64.tar.gz
-b463fc5053a612abd26393ebaff1d85d7d56058946f4f0f7bf25ed44ea899415  golangci-lint-1.61.0-linux-386.tar.gz
-77cb0af99379d9a21d5dc8c38364d060e864a01bd2f3e30b5e8cc550c3a54111  golangci-lint-1.61.0-linux-amd64.tar.gz
-af60ac05566d9351615cb31b4cc070185c25bf8cbd9b09c1873aa5ec6f3cc17e  golangci-lint-1.61.0-linux-arm64.tar.gz
-1f307f2fcc5d7d674062a967a0d83a7091e300529aa237ec6ad2b3dd14c897f5  golangci-lint-1.61.0-linux-armv6.tar.gz
-3ad8cbaae75a547450844811300f99c4cd290277398e43d22b9eb1792d15af4c  golangci-lint-1.61.0-linux-armv7.tar.gz
-9be2ca67d961d7699079739cf6f7c8291c5183d57e34d1677de21ca19d0bd3ed  golangci-lint-1.61.0-linux-loong64.tar.gz
-90d005e1648115ebf0861b408eab9c936079a24763e883058b0a227cd3135d31  golangci-lint-1.61.0-linux-mips64.tar.gz
-6d2ed4f49407115460b8c10ccfc40fd177e0887a48864a2879dd16e84ba2a48c  golangci-lint-1.61.0-linux-mips64le.tar.gz
-633089589af5a58b7430afb6eee107d4e9c99e8d91711ddc219eb13a07e8d3b8  golangci-lint-1.61.0-linux-ppc64le.tar.gz
-4c1a097d9e0d1b4a8144dae6a1f5583a38d662f3bdc1498c4e954b6ed856be98  golangci-lint-1.61.0-linux-riscv64.tar.gz
-30581d3c987d287b7064617f1a2694143e10dffc40bc25be6636006ee82d7e1c  golangci-lint-1.61.0-linux-s390x.tar.gz
-42530bf8100bd43c07f5efe6d92148ba6c5a7a712d510c6f24be85af6571d5eb  golangci-lint-1.61.0-netbsd-386.tar.gz
-b8bb07c920f6601edf718d5e82ec0784fd590b0992b42b6ec18da99f26013ed4  golangci-lint-1.61.0-netbsd-amd64.tar.gz
-353a51527c60bd0776b0891b03f247c791986f625fca689d121972c624e54198  golangci-lint-1.61.0-netbsd-arm64.tar.gz
-957a6272c3137910514225704c5dac0723b9c65eb7d9587366a997736e2d7580  golangci-lint-1.61.0-netbsd-armv6.tar.gz
-a89eb28ff7f18f5cd52b914739360fa95cf2f643de4adeca46e26bec3a07e8d8  golangci-lint-1.61.0-netbsd-armv7.tar.gz
-d8d74c43600b271393000717a4ed157d7a15bb85bab7db2efad9b63a694d4634  golangci-lint-1.61.0-windows-386.zip
-e7bc2a81929a50f830244d6d2e657cce4f19a59aff49fa9000176ff34fda64ce  golangci-lint-1.61.0-windows-amd64.zip
-ed97c221596dd771e3dd9344872c140340bee2e819cd7a90afa1de752f1f2e0f  golangci-lint-1.61.0-windows-arm64.zip
-4b365233948b13d02d45928a5c390045e00945e919747b9887b5f260247541ae  golangci-lint-1.61.0-windows-armv6.zip
-595538fb64d152173959d28f6235227f9cd969a828e5af0c4e960d02af4ffd0e  golangci-lint-1.61.0-windows-armv7.zip
+# https://github.com/golangci/golangci-lint/releases/download/v2.4.0/
+7904ce63f79db44934939cf7a063086ea0ea98e9b19eba0a9d52ccdd0d21951c  golangci-lint-2.4.0-darwin-amd64.tar.gz
+cd4dd53fa09b6646baff5fd22b8c64d91db02c21c7496df27992d75d34feec59  golangci-lint-2.4.0-darwin-arm64.tar.gz
+d58f426ebe14cc257e81562b4bf37a488ffb4ffbbb3ec73041eb3b38bb25c0e1  golangci-lint-2.4.0-freebsd-386.tar.gz
+6ec4a6177fc6c0dd541fbcb3a7612845266d020d35cc6fa92959220cdf64ca39  golangci-lint-2.4.0-freebsd-amd64.tar.gz
+4d473e3e71c01feaa915a0604fb35758b41284fb976cdeac3f842118d9ee7e17  golangci-lint-2.4.0-freebsd-armv6.tar.gz
+58727746c6530801a3f9a702a5945556a5eb7e88809222536dd9f9d54cafaeff  golangci-lint-2.4.0-freebsd-armv7.tar.gz
+fbf28c662760e24c32f82f8d16dffdb4a82de7726a52ba1fad94f890c22997ea  golangci-lint-2.4.0-illumos-amd64.tar.gz
+a15a000a8981ef665e971e0f67e2acda9066a9e37a59344393b7351d8fb49c81  golangci-lint-2.4.0-linux-386.tar.gz
+fae792524c04424c0ac369f5b8076f04b45cf29fc945a370e55d369a8dc11840  golangci-lint-2.4.0-linux-amd64.tar.gz
+70ac11f55b80ec78fd3a879249cc9255121b8dfd7f7ed4fc46ed137f4abf17e7  golangci-lint-2.4.0-linux-arm64.tar.gz
+4acdc40e5cebe99e4e7ced358a05b2e71789f409b41cb4f39bbb86ccfa14b1dc  golangci-lint-2.4.0-linux-armv6.tar.gz
+2a68749568fa22b4a97cb88dbea655595563c795076536aa6c087f7968784bf3  golangci-lint-2.4.0-linux-armv7.tar.gz
+9e3369afb023711036dcb0b4f45c9fe2792af962fa1df050c9f6ac101a6c5d73  golangci-lint-2.4.0-linux-loong64.tar.gz
+bb9143d6329be2c4dbfffef9564078e7da7d88e7dde6c829b6263d98e072229e  golangci-lint-2.4.0-linux-mips64.tar.gz
+5ad1765b40d56cd04d4afd805b3ba6f4bfd9b36181da93c31e9b17e483d8608d  golangci-lint-2.4.0-linux-mips64le.tar.gz
+918936fb9c0d5ba96bef03cf4348b03938634cfcced49be1e9bb29cb5094fa73  golangci-lint-2.4.0-linux-ppc64le.tar.gz
+f7474c638e1fb67ebbdc654b55ca0125377ea0bc88e8fee8d964a4f24eacf828  golangci-lint-2.4.0-linux-riscv64.tar.gz
+b617a9543997c8bfceaffa88a75d4e595030c6add69fba800c1e4d8f5fe253dd  golangci-lint-2.4.0-linux-s390x.tar.gz
+7db027b03a9ba328f795215b04f594036837bc7dd0dd7cd16776b02a6167981c  golangci-lint-2.4.0-netbsd-386.tar.gz
+52d8f9393f4313df0a62b752c37775e3af0b818e43e8dd28954351542d7c60bc  golangci-lint-2.4.0-netbsd-amd64.tar.gz
+5c0086027fb5a4af3829e530c8115db4b35d11afe1914322eef528eb8cd38c69  golangci-lint-2.4.0-netbsd-arm64.tar.gz
+6b779d6ed1aed87cefe195cc11759902b97a76551b593312c6833f2635a3488f  golangci-lint-2.4.0-netbsd-armv6.tar.gz
+f00d1f4b7ec3468a0f9fffd0d9ea036248b029b7621cbc9a59c449ef94356d09  golangci-lint-2.4.0-netbsd-armv7.tar.gz
+3ce671b0b42b58e35066493aab75a7e2826c9e079988f1ba5d814a4029faaf87  golangci-lint-2.4.0-windows-386.zip
+003112f7a56746feaabf20b744054bf9acdf900c9e77176383623c4b1d76aaa9  golangci-lint-2.4.0-windows-amd64.zip
+dc0c2092af5d47fc2cd31a1dfe7b4c7e765fab22de98bd21ef2ffcc53ad9f54f  golangci-lint-2.4.0-windows-arm64.zip
+0263d23e20a260cb1592d35e12a388f99efe2c51b3611fdc66fbd9db1fce664d  golangci-lint-2.4.0-windows-armv6.zip
+9403c03bf648e6313036e0273149d44bad1b9ad53889b6d00e4ccb842ba3c058  golangci-lint-2.4.0-windows-armv7.zip
 
 # This is the builder on PPA that will build Go itself (inception-y), don't modify!
 #
 # This version is fine to be old and full of security holes, we just use it
 # to build the latest Go. Don't change it.
 #
-# version:ppa-builder-1 1.19.6
+# version:ppa-builder-1.19 1.19.6
 # https://go.dev/dl/
 d7f0013f82e6d7f862cc6cb5c8cdb48eef5f2e239b35baa97e2f1a7466043767  go1.19.6.src.tar.gz
 
-# version:ppa-builder-2 1.21.9
+# version:ppa-builder-1.21 1.21.9
 # https://go.dev/dl/
 58f0c5ced45a0012bce2ff7a9df03e128abcc8818ebabe5027bb92bafe20e421  go1.21.9.src.tar.gz
+
+# version:ppa-builder-1.23 1.23.6
+# https://go.dev/dl/
+039c5b04e65279daceee8a6f71e70bd05cf5b801782b6f77c6e19e2ed0511222  go1.23.6.src.tar.gz
 
 # version:protoc 27.1
 # https://github.com/protocolbuffers/protobuf/releases/

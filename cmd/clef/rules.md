@@ -2,12 +2,12 @@
 
 The `signer` binary contains a ruleset engine, implemented with [OttoVM](https://github.com/robertkrimen/otto)
 
-It enables usecases like the following:
+It enables use cases like the following:
 
 * I want to auto-approve transactions with contract `CasinoDapp`, with up to `0.05 ether` in value to maximum `1 ether` per 24h period
 * I want to auto-approve transaction to contract `EthAlarmClock` with `data`=`0xdeadbeef`, if `value=0`, `gas < 44k` and `gasPrice < 40Gwei`
 
-The two main features that are required for this to work well are;
+The two main features that are required for this to work well are:
 
 1. Rule Implementation: how to create, manage, and interpret rules in a flexible but secure manner
 2. Credential management and credentials; how to provide auto-unlock without exposing keys unnecessarily.
@@ -29,10 +29,10 @@ function asBig(str) {
 
 // Approve transactions to a certain contract if the value is below a certain limit
 function ApproveTx(req) {
-	var limit = big.Newint("0xb1a2bc2ec50000")
+	var limit = new BigNumber("0xb1a2bc2ec50000")
 	var value = asBig(req.transaction.value);
 
-	if (req.transaction.to.toLowerCase() == "0xae967917c465db8578ca9024c205720b1a3651a9") && value.lt(limit)) {
+	if (req.transaction.to.toLowerCase() == "0xae967917c465db8578ca9024c205720b1a3651a9" && value.lt(limit)) {
 		return "Approve"
 	}
 	// If we return "Reject", it will be rejected.

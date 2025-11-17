@@ -12,22 +12,24 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package pathdb
 
 import (
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 	"sync"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/exp/maps"
 )
 
 // counter helps in tracking items and their corresponding sizes.
@@ -43,7 +45,7 @@ func (c *counter) add(size int) {
 }
 
 // report uploads the cached statistics to meters.
-func (c *counter) report(count metrics.Meter, size metrics.Meter) {
+func (c *counter) report(count, size *metrics.Meter) {
 	count.Mark(int64(c.n))
 	size.Mark(int64(c.size))
 }
@@ -65,6 +67,8 @@ type stateSet struct {
 	accountListSorted []common.Hash                 // List of account for iteration. If it exists, it's sorted, otherwise it's nil
 	storageListSorted map[common.Hash][]common.Hash // List of storage slots for iterated retrievals, one per account. Any existing lists are sorted if non-nil
 
+	rawStorageKey bool // indicates whether the storage set uses the raw slot key or the hash
+
 	// Lock for guarding the two lists above. These lists might be accessed
 	// concurrently and lock protection is essential to avoid concurrent
 	// slice or map read/write.
@@ -72,7 +76,7 @@ type stateSet struct {
 }
 
 // newStates constructs the state set with the provided account and storage data.
-func newStates(accounts map[common.Hash][]byte, storages map[common.Hash]map[common.Hash][]byte) *stateSet {
+func newStates(accounts map[common.Hash][]byte, storages map[common.Hash]map[common.Hash][]byte, rawStorageKey bool) *stateSet {
 	// Don't panic for the lazy callers, initialize the nil maps instead.
 	if accounts == nil {
 		accounts = make(map[common.Hash][]byte)
@@ -83,6 +87,7 @@ func newStates(accounts map[common.Hash][]byte, storages map[common.Hash]map[com
 	s := &stateSet{
 		accountData:       accounts,
 		storageData:       storages,
+		rawStorageKey:     rawStorageKey,
 		storageListSorted: make(map[common.Hash][]common.Hash),
 	}
 	s.size = s.check()
@@ -98,6 +103,17 @@ func (s *stateSet) account(hash common.Hash) ([]byte, bool) {
 	return nil, false // account is unknown in this set
 }
 
+// mustAccount returns the account data associated with the specified address
+// hash. The difference is this function will return an error if the account
+// is not found.
+func (s *stateSet) mustAccount(hash common.Hash) ([]byte, error) {
+	// If the account is known locally, return it
+	if data, ok := s.accountData[hash]; ok {
+		return data, nil
+	}
+	return nil, fmt.Errorf("account is not found, %x", hash)
+}
+
 // storage returns the storage slot associated with the specified address hash
 // and storage key hash.
 func (s *stateSet) storage(accountHash, storageHash common.Hash) ([]byte, bool) {
@@ -108,6 +124,19 @@ func (s *stateSet) storage(accountHash, storageHash common.Hash) ([]byte, bool) 
 		}
 	}
 	return nil, false // storage is unknown in this set
+}
+
+// mustStorage returns the storage slot associated with the specified address
+// hash and storage key hash. The difference is this function will return an
+// error if the storage slot is not found.
+func (s *stateSet) mustStorage(accountHash, storageHash common.Hash) ([]byte, error) {
+	// If the account is known locally, try to resolve the slot locally
+	if storage, ok := s.storageData[accountHash]; ok {
+		if data, ok := storage[storageHash]; ok {
+			return data, nil
+		}
+	}
+	return nil, fmt.Errorf("storage slot is not found, %x %x", accountHash, storageHash)
 }
 
 // check sanitizes accounts and storage slots to ensure the data validity.
@@ -132,8 +161,6 @@ func (s *stateSet) check() uint64 {
 // the deleted ones.
 //
 // Note, the returned slice is not a copy, so do not modify it.
-//
-// nolint:unused
 func (s *stateSet) accountList() []common.Hash {
 	// If an old list already exists, return it
 	s.listLock.RLock()
@@ -149,19 +176,16 @@ func (s *stateSet) accountList() []common.Hash {
 	s.listLock.Lock()
 	defer s.listLock.Unlock()
 
-	list = maps.Keys(s.accountData)
-	slices.SortFunc(list, common.Hash.Cmp)
+	list = slices.SortedFunc(maps.Keys(s.accountData), common.Hash.Cmp)
 	s.accountListSorted = list
 	return list
 }
 
-// StorageList returns a sorted list of all storage slot hashes in this state set
+// storageList returns a sorted list of all storage slot hashes in this state set
 // for the given account. The returned list will include the hash of deleted
 // storage slot.
 //
 // Note, the returned slice is not a copy, so do not modify it.
-//
-// nolint:unused
 func (s *stateSet) storageList(accountHash common.Hash) []common.Hash {
 	s.listLock.RLock()
 	if _, ok := s.storageData[accountHash]; !ok {
@@ -182,8 +206,7 @@ func (s *stateSet) storageList(accountHash common.Hash) []common.Hash {
 	s.listLock.Lock()
 	defer s.listLock.Unlock()
 
-	list := maps.Keys(s.storageData[accountHash])
-	slices.SortFunc(list, common.Hash.Cmp)
+	list := slices.SortedFunc(maps.Keys(s.storageData[accountHash]), common.Hash.Cmp)
 	s.storageListSorted[accountHash] = list
 	return list
 }
@@ -310,6 +333,9 @@ func (s *stateSet) updateSize(delta int) {
 // encode serializes the content of state set into the provided writer.
 func (s *stateSet) encode(w io.Writer) error {
 	// Encode accounts
+	if err := rlp.Encode(w, s.rawStorageKey); err != nil {
+		return err
+	}
 	type accounts struct {
 		AddrHashes []common.Hash
 		Accounts   [][]byte
@@ -347,6 +373,9 @@ func (s *stateSet) encode(w io.Writer) error {
 
 // decode deserializes the content from the rlp stream into the state set.
 func (s *stateSet) decode(r *rlp.Stream) error {
+	if err := r.Decode(&s.rawStorageKey); err != nil {
+		return fmt.Errorf("load diff raw storage key flag: %v", err)
+	}
 	type accounts struct {
 		AddrHashes []common.Hash
 		Accounts   [][]byte
@@ -358,8 +387,8 @@ func (s *stateSet) decode(r *rlp.Stream) error {
 	if err := r.Decode(&dec); err != nil {
 		return fmt.Errorf("load diff accounts: %v", err)
 	}
-	for i := 0; i < len(dec.AddrHashes); i++ {
-		accountSet[dec.AddrHashes[i]] = dec.Accounts[i]
+	for i := range dec.AddrHashes {
+		accountSet[dec.AddrHashes[i]] = empty2nil(dec.Accounts[i])
 	}
 	s.accountData = accountSet
 
@@ -378,8 +407,8 @@ func (s *stateSet) decode(r *rlp.Stream) error {
 	}
 	for _, entry := range storages {
 		storageSet[entry.AddrHash] = make(map[common.Hash][]byte, len(entry.Keys))
-		for i := 0; i < len(entry.Keys); i++ {
-			storageSet[entry.AddrHash][entry.Keys[i]] = entry.Vals[i]
+		for i := range entry.Keys {
+			storageSet[entry.AddrHash][entry.Keys[i]] = empty2nil(entry.Vals[i])
 		}
 	}
 	s.storageData = storageSet
@@ -387,6 +416,11 @@ func (s *stateSet) decode(r *rlp.Stream) error {
 
 	s.size = s.check()
 	return nil
+}
+
+// write flushes state mutations into the provided database batch as a whole.
+func (s *stateSet) write(batch ethdb.Batch, genMarker []byte, clean *fastcache.Cache) (int, int) {
+	return writeStates(batch, genMarker, s.accountData, s.storageData, clean)
 }
 
 // reset clears all cached state data, including any optional sorted lists that
@@ -400,8 +434,6 @@ func (s *stateSet) reset() {
 }
 
 // dbsize returns the approximate size for db write.
-//
-// nolint:unused
 func (s *stateSet) dbsize() int {
 	m := len(s.accountData) * len(rawdb.SnapshotAccountPrefix)
 	for _, slots := range s.storageData {
@@ -415,23 +447,23 @@ func (s *stateSet) dbsize() int {
 type StateSetWithOrigin struct {
 	*stateSet
 
-	// AccountOrigin represents the account data before the state transition,
+	// accountOrigin represents the account data before the state transition,
 	// corresponding to both the accountData and destructSet. It's keyed by the
 	// account address. The nil value means the account was not present before.
 	accountOrigin map[common.Address][]byte
 
-	// StorageOrigin represents the storage data before the state transition,
+	// storageOrigin represents the storage data before the state transition,
 	// corresponding to storageData and deleted slots of destructSet. It's keyed
 	// by the account address and slot key hash. The nil value means the slot was
 	// not present.
 	storageOrigin map[common.Address]map[common.Hash][]byte
 
-	// Memory size of the state data (accountOrigin and storageOrigin)
+	// memory size of the state data (accountOrigin and storageOrigin)
 	size uint64
 }
 
 // NewStateSetWithOrigin constructs the state set with the provided data.
-func NewStateSetWithOrigin(accounts map[common.Hash][]byte, storages map[common.Hash]map[common.Hash][]byte, accountOrigin map[common.Address][]byte, storageOrigin map[common.Address]map[common.Hash][]byte) *StateSetWithOrigin {
+func NewStateSetWithOrigin(accounts map[common.Hash][]byte, storages map[common.Hash]map[common.Hash][]byte, accountOrigin map[common.Address][]byte, storageOrigin map[common.Address]map[common.Hash][]byte, rawStorageKey bool) *StateSetWithOrigin {
 	// Don't panic for the lazy callers, initialize the nil maps instead.
 	if accountOrigin == nil {
 		accountOrigin = make(map[common.Address][]byte)
@@ -451,7 +483,7 @@ func NewStateSetWithOrigin(accounts map[common.Hash][]byte, storages map[common.
 			size += 2*common.HashLength + len(data)
 		}
 	}
-	set := newStates(accounts, storages)
+	set := newStates(accounts, storages, rawStorageKey)
 	return &StateSetWithOrigin{
 		stateSet:      set,
 		accountOrigin: accountOrigin,
@@ -518,8 +550,8 @@ func (s *StateSetWithOrigin) decode(r *rlp.Stream) error {
 	if err := r.Decode(&accounts); err != nil {
 		return fmt.Errorf("load diff account origin set: %v", err)
 	}
-	for i := 0; i < len(accounts.Accounts); i++ {
-		accountSet[accounts.Addresses[i]] = accounts.Accounts[i]
+	for i := range accounts.Accounts {
+		accountSet[accounts.Addresses[i]] = empty2nil(accounts.Accounts[i])
 	}
 	s.accountOrigin = accountSet
 
@@ -538,10 +570,17 @@ func (s *StateSetWithOrigin) decode(r *rlp.Stream) error {
 	}
 	for _, storage := range storages {
 		storageSet[storage.Address] = make(map[common.Hash][]byte)
-		for i := 0; i < len(storage.Keys); i++ {
-			storageSet[storage.Address][storage.Keys[i]] = storage.Vals[i]
+		for i := range storage.Keys {
+			storageSet[storage.Address][storage.Keys[i]] = empty2nil(storage.Vals[i])
 		}
 	}
 	s.storageOrigin = storageSet
 	return nil
+}
+
+func empty2nil(b []byte) []byte {
+	if len(b) == 0 {
+		return nil
+	}
+	return b
 }

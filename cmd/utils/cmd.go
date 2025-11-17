@@ -25,6 +25,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"math/big"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -47,6 +49,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/urfave/cli/v2"
 )
 
@@ -54,13 +57,16 @@ const (
 	importBatchSize = 2500
 )
 
+// ErrImportInterrupted is returned when the user interrupts the import process.
+var ErrImportInterrupted = errors.New("interrupted")
+
 // Fatalf formats a message to standard error and exits the program.
 // The message is also printed to standard output if standard error
 // is redirected to a different file.
 func Fatalf(format string, args ...interface{}) {
 	w := io.MultiWriter(os.Stdout, os.Stderr)
-	if runtime.GOOS == "windows" {
-		// The SameFile check below doesn't work on Windows.
+	if runtime.GOOS == "windows" || runtime.GOOS == "openbsd" {
+		// The SameFile check below doesn't work on Windows neither OpenBSD.
 		// stdout is unlikely to get redirected though, so just print there.
 		w = os.Stdout
 	} else {
@@ -190,7 +196,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	for batch := 0; ; batch++ {
 		// Load a batch of RLP blocks.
 		if checkInterrupt() {
-			return errors.New("interrupted")
+			return ErrImportInterrupted
 		}
 		i := 0
 		for ; i < importBatchSize; i++ {
@@ -242,8 +248,9 @@ func readList(filename string) ([]string, error) {
 }
 
 // ImportHistory imports Era1 files containing historical block information,
-// starting from genesis.
-func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, network string) error {
+// starting from genesis. The assumption is held that the provided chain
+// segment in Era1 file should all be canonical and verified.
+func ImportHistory(chain *core.BlockChain, dir string, network string) error {
 	if chain.CurrentSnapBlock().Number.BitLen() != 0 {
 		return errors.New("history import only supported when starting from genesis")
 	}
@@ -304,12 +311,8 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 				if err != nil {
 					return fmt.Errorf("error reading receipts %d: %w", it.Number(), err)
 				}
-				if status, err := chain.HeaderChain().InsertHeaderChain([]*types.Header{block.Header()}, start); err != nil {
-					return fmt.Errorf("error inserting header %d: %w", it.Number(), err)
-				} else if status != core.CanonStatTy {
-					return fmt.Errorf("error inserting header %d, not canon: %v", it.Number(), status)
-				}
-				if _, err := chain.InsertReceiptChain([]*types.Block{block}, []types.Receipts{receipts}, 2^64-1); err != nil {
+				encReceipts := types.EncodeBlockReceiptLists([]types.Receipts{receipts})
+				if _, err := chain.InsertReceiptChain([]*types.Block{block}, encReceipts, math.MaxUint64); err != nil {
 					return fmt.Errorf("error inserting body %d: %w", it.Number(), err)
 				}
 				imported += 1
@@ -422,6 +425,10 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 		buf       = bytes.NewBuffer(nil)
 		checksums []string
 	)
+	td := new(big.Int)
+	for i := uint64(0); i < first; i++ {
+		td.Add(td, bc.GetHeaderByNumber(i).Difficulty)
+	}
 	for i := first; i <= last; i += step {
 		err := func() error {
 			filename := filepath.Join(dir, era.Filename(network, int(i/step), common.Hash{}))
@@ -444,11 +451,8 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 				if receipts == nil {
 					return fmt.Errorf("export failed on #%d: receipts not found", n)
 				}
-				td := bc.GetTd(block.Hash(), block.NumberU64())
-				if td == nil {
-					return fmt.Errorf("export failed on #%d: total difficulty not found", n)
-				}
-				if err := w.Add(block, receipts, td); err != nil {
+				td.Add(td, block.Difficulty())
+				if err := w.Add(block, receipts, new(big.Int).Set(td)); err != nil {
 					return err
 				}
 			}
@@ -565,9 +569,64 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 	return nil
 }
 
+// StateIterator is a temporary structure for traversing state in order. It serves
+// as an aggregator for both path scheme and hash scheme implementations and should
+// be removed once the hash scheme is fully deprecated.
+type StateIterator struct {
+	scheme    string
+	root      common.Hash
+	triedb    *triedb.Database
+	snapshots *snapshot.Tree
+}
+
+// NewStateIterator constructs the state iterator with the specific root.
+func NewStateIterator(triedb *triedb.Database, db ethdb.Database, root common.Hash) (*StateIterator, error) {
+	if triedb.Scheme() == rawdb.PathScheme {
+		return &StateIterator{
+			scheme: rawdb.PathScheme,
+			root:   root,
+			triedb: triedb,
+		}, nil
+	}
+	config := snapshot.Config{
+		CacheSize:  256,
+		Recovery:   false,
+		NoBuild:    true,
+		AsyncBuild: false,
+	}
+	snapshots, err := snapshot.New(config, db, triedb, root)
+	if err != nil {
+		return nil, err
+	}
+	return &StateIterator{
+		scheme:    rawdb.HashScheme,
+		root:      root,
+		triedb:    triedb,
+		snapshots: snapshots,
+	}, nil
+}
+
+// AccountIterator creates a new account iterator for the specified root hash and
+// seeks to a starting account hash.
+func (it *StateIterator) AccountIterator(root common.Hash, start common.Hash) (snapshot.AccountIterator, error) {
+	if it.scheme == rawdb.PathScheme {
+		return it.triedb.AccountIterator(root, start)
+	}
+	return it.snapshots.AccountIterator(root, start)
+}
+
+// StorageIterator creates a new storage iterator for the specified root hash and
+// account. The iterator will be moved to the specific start position.
+func (it *StateIterator) StorageIterator(root common.Hash, accountHash common.Hash, start common.Hash) (snapshot.StorageIterator, error) {
+	if it.scheme == rawdb.PathScheme {
+		return it.triedb.StorageIterator(root, accountHash, start)
+	}
+	return it.snapshots.StorageIterator(root, accountHash, start)
+}
+
 // ExportSnapshotPreimages exports the preimages corresponding to the enumeration of
 // the snapshot for a given root.
-func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn string, root common.Hash) error {
+func ExportSnapshotPreimages(chaindb ethdb.Database, stateIt *StateIterator, fn string, root common.Hash) error {
 	log.Info("Exporting preimages", "file", fn)
 
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
@@ -600,7 +659,7 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn
 	)
 	go func() {
 		defer close(hashCh)
-		accIt, err := snaptree.AccountIterator(root, common.Hash{})
+		accIt, err := stateIt.AccountIterator(root, common.Hash{})
 		if err != nil {
 			log.Error("Failed to create account iterator", "error", err)
 			return
@@ -617,7 +676,7 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn
 			hashCh <- hashAndPreimageSize{Hash: accIt.Hash(), Size: common.AddressLength}
 
 			if acc.Root != (common.Hash{}) && acc.Root != types.EmptyRootHash {
-				stIt, err := snaptree.StorageIterator(root, accIt.Hash(), common.Hash{})
+				stIt, err := stateIt.StorageIterator(root, accIt.Hash(), common.Hash{})
 				if err != nil {
 					log.Error("Failed to create storage iterator", "error", err)
 					return

@@ -18,19 +18,28 @@ package rawdb
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/olekukonko/tablewriter"
+	"golang.org/x/sync/errgroup"
 )
+
+var ErrDeleteRangeInterrupted = errors.New("safe delete range operation interrupted")
 
 // freezerdb is a database wrapper that enables ancient chain segment freezing.
 type freezerdb struct {
@@ -81,11 +90,6 @@ type nofreezedb struct {
 	ethdb.KeyValueStore
 }
 
-// HasAncient returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) HasAncient(kind string, number uint64) (bool, error) {
-	return false, errNotSupported
-}
-
 // Ancient returns an error as we don't have a backing chain freezer.
 func (db *nofreezedb) Ancient(kind string, number uint64) ([]byte, error) {
 	return nil, errNotSupported
@@ -93,6 +97,12 @@ func (db *nofreezedb) Ancient(kind string, number uint64) ([]byte, error) {
 
 // AncientRange returns an error as we don't have a backing chain freezer.
 func (db *nofreezedb) AncientRange(kind string, start, max, maxByteSize uint64) ([][]byte, error) {
+	return nil, errNotSupported
+}
+
+// AncientBytes retrieves the value segment of the element specified by the id
+// and value offsets.
+func (db *nofreezedb) AncientBytes(kind string, id, offset, length uint64) ([]byte, error) {
 	return nil, errNotSupported
 }
 
@@ -126,8 +136,8 @@ func (db *nofreezedb) TruncateTail(items uint64) (uint64, error) {
 	return 0, errNotSupported
 }
 
-// Sync returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) Sync() error {
+// SyncAncient returns an error as we don't have a backing chain freezer.
+func (db *nofreezedb) SyncAncient() error {
 	return errNotSupported
 }
 
@@ -167,7 +177,7 @@ func resolveChainFreezerDir(ancient string) string {
 	// - chain freezer exists in legacy location (root ancient folder)
 	freezer := filepath.Join(ancient, ChainFreezerName)
 	if !common.FileExist(freezer) {
-		if !common.FileExist(ancient) {
+		if !common.FileExist(ancient) || !common.IsNonEmptyDir(ancient) {
 			// The entire ancient store is not initialized, still use the sub
 			// folder for initialization.
 		} else {
@@ -181,19 +191,49 @@ func resolveChainFreezerDir(ancient string) string {
 	return freezer
 }
 
-// NewDatabaseWithFreezer creates a high level database on top of a given key-
-// value data store with a freezer moving immutable chain segments into cold
-// storage. The passed ancient indicates the path of root ancient directory
-// where the chain freezer can be opened.
+// resolveChainEraDir is a helper function which resolves the absolute path of era database.
+func resolveChainEraDir(chainFreezerDir string, era string) string {
+	switch {
+	case era == "":
+		return filepath.Join(chainFreezerDir, "era")
+	case !filepath.IsAbs(era):
+		return filepath.Join(chainFreezerDir, era)
+	default:
+		return era
+	}
+}
+
+// NewDatabaseWithFreezer creates a high level database on top of a given key-value store.
+// The passed ancient indicates the path of root ancient directory where the chain freezer
+// can be opened.
+//
+// Deprecated: use Open.
 func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
+	return Open(db, OpenOptions{
+		Ancient:          ancient,
+		MetricsNamespace: namespace,
+		ReadOnly:         readonly,
+	})
+}
+
+// OpenOptions specifies options for opening the database.
+type OpenOptions struct {
+	Ancient          string // ancients directory
+	Era              string // era files directory
+	MetricsNamespace string // prefix added to freezer metric names
+	ReadOnly         bool
+}
+
+// Open creates a high-level database wrapper for the given key-value store.
+func Open(db ethdb.KeyValueStore, opts OpenOptions) (ethdb.Database, error) {
 	// Create the idle freezer instance. If the given ancient directory is empty,
 	// in-memory chain freezer is used (e.g. dev mode); otherwise the regular
 	// file-based freezer is created.
-	chainFreezerDir := ancient
+	chainFreezerDir := opts.Ancient
 	if chainFreezerDir != "" {
 		chainFreezerDir = resolveChainFreezerDir(chainFreezerDir)
 	}
-	frdb, err := newChainFreezer(chainFreezerDir, namespace, readonly)
+	frdb, err := newChainFreezer(chainFreezerDir, opts.Era, opts.MetricsNamespace, opts.ReadOnly)
 	if err != nil {
 		printChainMetadata(db)
 		return nil, err
@@ -238,7 +278,12 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 			if kvhash, _ := db.Get(headerHashKey(frozen)); len(kvhash) == 0 {
 				// Subsequent header after the freezer limit is missing from the database.
 				// Reject startup if the database has a more recent head.
-				if head := *ReadHeaderNumber(db, ReadHeadHeaderHash(db)); head > frozen-1 {
+				head, ok := ReadHeaderNumber(db, ReadHeadHeaderHash(db))
+				if !ok {
+					printChainMetadata(db)
+					return nil, fmt.Errorf("could not read header number, hash %v", ReadHeadHeaderHash(db))
+				}
+				if head > frozen-1 {
 					// Find the smallest block stored in the key-value store
 					// in range of [frozen, head]
 					var number uint64
@@ -277,7 +322,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 		}
 	}
 	// Freezer is consistent with the key-value database, permit combining the two
-	if !readonly {
+	if !opts.ReadOnly {
 		frdb.wg.Add(1)
 		go func() {
 			frdb.freeze(db)
@@ -285,7 +330,8 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 		}()
 	}
 	return &freezerdb{
-		ancientRoot:   ancient,
+		readOnly:      opts.ReadOnly,
+		ancientRoot:   opts.Ancient,
 		KeyValueStore: db,
 		chainFreezer:  frdb,
 	}, nil
@@ -328,199 +374,265 @@ func (c counter) Percentage(current uint64) string {
 	return fmt.Sprintf("%d", current*100/uint64(c))
 }
 
-// stat stores sizes and count for a parameter
+// stat provides lock-free statistics aggregation using atomic operations
 type stat struct {
-	size  common.StorageSize
-	count counter
+	size  uint64
+	count uint64
 }
 
-// Add size to the stat and increase the counter by 1
-func (s *stat) Add(size common.StorageSize) {
-	s.size += size
-	s.count++
+func (s *stat) empty() bool {
+	return atomic.LoadUint64(&s.count) == 0
 }
 
-func (s *stat) Size() string {
-	return s.size.String()
+func (s *stat) add(size common.StorageSize) {
+	atomic.AddUint64(&s.size, uint64(size))
+	atomic.AddUint64(&s.count, 1)
 }
 
-func (s *stat) Count() string {
-	return s.count.String()
+func (s *stat) sizeString() string {
+	return common.StorageSize(atomic.LoadUint64(&s.size)).String()
+}
+
+func (s *stat) countString() string {
+	return counter(atomic.LoadUint64(&s.count)).String()
 }
 
 // InspectDatabase traverses the entire database and checks the size
 // of all different categories of data.
 func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
-	it := db.NewIterator(keyPrefix, keyStart)
-	defer it.Release()
-
 	var (
-		count  int64
-		start  = time.Now()
-		logged = time.Now()
+		start = time.Now()
+		count atomic.Int64
+		total atomic.Uint64
 
 		// Key-value store statistics
-		headers         stat
-		bodies          stat
-		receipts        stat
-		tds             stat
-		numHashPairings stat
-		hashNumPairings stat
-		legacyTries     stat
-		stateLookups    stat
-		accountTries    stat
-		storageTries    stat
-		codes           stat
-		txLookups       stat
-		accountSnaps    stat
-		storageSnaps    stat
-		preimages       stat
-		bloomBits       stat
-		beaconHeaders   stat
-		cliqueSnaps     stat
+		headers            stat
+		bodies             stat
+		receipts           stat
+		tds                stat
+		numHashPairings    stat
+		hashNumPairings    stat
+		legacyTries        stat
+		stateLookups       stat
+		accountTries       stat
+		storageTries       stat
+		codes              stat
+		txLookups          stat
+		accountSnaps       stat
+		storageSnaps       stat
+		preimages          stat
+		beaconHeaders      stat
+		cliqueSnaps        stat
+		bloomBits          stat
+		filterMapRows      stat
+		filterMapLastBlock stat
+		filterMapBlockLV   stat
+
+		// Path-mode archive data
+		stateIndex stat
 
 		// Verkle statistics
 		verkleTries        stat
 		verkleStateLookups stat
 
-		// Les statistic
-		chtTrieNodes   stat
-		bloomTrieNodes stat
-
 		// Meta- and unaccounted data
 		metadata    stat
 		unaccounted stat
 
-		// Totals
-		total common.StorageSize
+		// This map tracks example keys for unaccounted data.
+		// For each unique two-byte prefix, the first unaccounted key encountered
+		// by the iterator will be stored.
+		unaccountedKeys = make(map[[2]byte][]byte)
+		unaccountedMu   sync.Mutex
 	)
-	// Inspect key-value database first.
-	for it.Next() {
-		var (
-			key  = it.Key()
-			size = common.StorageSize(len(key) + len(it.Value()))
-		)
-		total += size
-		switch {
-		case bytes.HasPrefix(key, headerPrefix) && len(key) == (len(headerPrefix)+8+common.HashLength):
-			headers.Add(size)
-		case bytes.HasPrefix(key, blockBodyPrefix) && len(key) == (len(blockBodyPrefix)+8+common.HashLength):
-			bodies.Add(size)
-		case bytes.HasPrefix(key, blockReceiptsPrefix) && len(key) == (len(blockReceiptsPrefix)+8+common.HashLength):
-			receipts.Add(size)
-		case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerTDSuffix):
-			tds.Add(size)
-		case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerHashSuffix):
-			numHashPairings.Add(size)
-		case bytes.HasPrefix(key, headerNumberPrefix) && len(key) == (len(headerNumberPrefix)+common.HashLength):
-			hashNumPairings.Add(size)
-		case IsLegacyTrieNode(key, it.Value()):
-			legacyTries.Add(size)
-		case bytes.HasPrefix(key, stateIDPrefix) && len(key) == len(stateIDPrefix)+common.HashLength:
-			stateLookups.Add(size)
-		case IsAccountTrieNode(key):
-			accountTries.Add(size)
-		case IsStorageTrieNode(key):
-			storageTries.Add(size)
-		case bytes.HasPrefix(key, CodePrefix) && len(key) == len(CodePrefix)+common.HashLength:
-			codes.Add(size)
-		case bytes.HasPrefix(key, txLookupPrefix) && len(key) == (len(txLookupPrefix)+common.HashLength):
-			txLookups.Add(size)
-		case bytes.HasPrefix(key, SnapshotAccountPrefix) && len(key) == (len(SnapshotAccountPrefix)+common.HashLength):
-			accountSnaps.Add(size)
-		case bytes.HasPrefix(key, SnapshotStoragePrefix) && len(key) == (len(SnapshotStoragePrefix)+2*common.HashLength):
-			storageSnaps.Add(size)
-		case bytes.HasPrefix(key, PreimagePrefix) && len(key) == (len(PreimagePrefix)+common.HashLength):
-			preimages.Add(size)
-		case bytes.HasPrefix(key, configPrefix) && len(key) == (len(configPrefix)+common.HashLength):
-			metadata.Add(size)
-		case bytes.HasPrefix(key, genesisPrefix) && len(key) == (len(genesisPrefix)+common.HashLength):
-			metadata.Add(size)
-		case bytes.HasPrefix(key, bloomBitsPrefix) && len(key) == (len(bloomBitsPrefix)+10+common.HashLength):
-			bloomBits.Add(size)
-		case bytes.HasPrefix(key, BloomBitsIndexPrefix):
-			bloomBits.Add(size)
-		case bytes.HasPrefix(key, skeletonHeaderPrefix) && len(key) == (len(skeletonHeaderPrefix)+8):
-			beaconHeaders.Add(size)
-		case bytes.HasPrefix(key, CliqueSnapshotPrefix) && len(key) == 7+common.HashLength:
-			cliqueSnaps.Add(size)
-		case bytes.HasPrefix(key, ChtTablePrefix) ||
-			bytes.HasPrefix(key, ChtIndexTablePrefix) ||
-			bytes.HasPrefix(key, ChtPrefix): // Canonical hash trie
-			chtTrieNodes.Add(size)
-		case bytes.HasPrefix(key, BloomTrieTablePrefix) ||
-			bytes.HasPrefix(key, BloomTrieIndexPrefix) ||
-			bytes.HasPrefix(key, BloomTriePrefix): // Bloomtrie sub
-			bloomTrieNodes.Add(size)
 
-		// Verkle trie data is detected, determine the sub-category
-		case bytes.HasPrefix(key, VerklePrefix):
-			remain := key[len(VerklePrefix):]
+	inspectRange := func(ctx context.Context, r byte) error {
+		var s []byte
+		if len(keyStart) > 0 {
 			switch {
-			case IsAccountTrieNode(remain):
-				verkleTries.Add(size)
-			case bytes.HasPrefix(remain, stateIDPrefix) && len(remain) == len(stateIDPrefix)+common.HashLength:
-				verkleStateLookups.Add(size)
-			case bytes.Equal(remain, persistentStateIDKey):
-				metadata.Add(size)
-			case bytes.Equal(remain, trieJournalKey):
-				metadata.Add(size)
-			case bytes.Equal(remain, snapSyncStatusFlagKey):
-				metadata.Add(size)
+			case r < keyStart[0]:
+				return nil
+			case r == keyStart[0]:
+				s = keyStart[1:]
 			default:
-				unaccounted.Add(size)
+				// entire key range is included for inspection
 			}
-		default:
-			var accounted bool
-			for _, meta := range [][]byte{
-				databaseVersionKey, headHeaderKey, headBlockKey, headFastBlockKey, headFinalizedBlockKey,
-				lastPivotKey, fastTrieProgressKey, snapshotDisabledKey, SnapshotRootKey, snapshotJournalKey,
-				snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
-				uncleanShutdownKey, badBlockKey, transitionStatusKey, skeletonSyncStatusKey,
-				persistentStateIDKey, trieJournalKey, snapshotSyncStatusKey, snapSyncStatusFlagKey,
-			} {
-				if bytes.Equal(key, meta) {
-					metadata.Add(size)
-					accounted = true
-					break
+		}
+		it := db.NewIterator(append(keyPrefix, r), s)
+		defer it.Release()
+
+		for it.Next() {
+			var (
+				key  = it.Key()
+				size = common.StorageSize(len(key) + len(it.Value()))
+			)
+			total.Add(uint64(size))
+			count.Add(1)
+
+			switch {
+			case bytes.HasPrefix(key, headerPrefix) && len(key) == (len(headerPrefix)+8+common.HashLength):
+				headers.add(size)
+			case bytes.HasPrefix(key, blockBodyPrefix) && len(key) == (len(blockBodyPrefix)+8+common.HashLength):
+				bodies.add(size)
+			case bytes.HasPrefix(key, blockReceiptsPrefix) && len(key) == (len(blockReceiptsPrefix)+8+common.HashLength):
+				receipts.add(size)
+			case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerTDSuffix):
+				tds.add(size)
+			case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerHashSuffix):
+				numHashPairings.add(size)
+			case bytes.HasPrefix(key, headerNumberPrefix) && len(key) == (len(headerNumberPrefix)+common.HashLength):
+				hashNumPairings.add(size)
+			case IsLegacyTrieNode(key, it.Value()):
+				legacyTries.add(size)
+			case bytes.HasPrefix(key, stateIDPrefix) && len(key) == len(stateIDPrefix)+common.HashLength:
+				stateLookups.add(size)
+			case IsAccountTrieNode(key):
+				accountTries.add(size)
+			case IsStorageTrieNode(key):
+				storageTries.add(size)
+			case bytes.HasPrefix(key, CodePrefix) && len(key) == len(CodePrefix)+common.HashLength:
+				codes.add(size)
+			case bytes.HasPrefix(key, txLookupPrefix) && len(key) == (len(txLookupPrefix)+common.HashLength):
+				txLookups.add(size)
+			case bytes.HasPrefix(key, SnapshotAccountPrefix) && len(key) == (len(SnapshotAccountPrefix)+common.HashLength):
+				accountSnaps.add(size)
+			case bytes.HasPrefix(key, SnapshotStoragePrefix) && len(key) == (len(SnapshotStoragePrefix)+2*common.HashLength):
+				storageSnaps.add(size)
+			case bytes.HasPrefix(key, PreimagePrefix) && len(key) == (len(PreimagePrefix)+common.HashLength):
+				preimages.add(size)
+			case bytes.HasPrefix(key, configPrefix) && len(key) == (len(configPrefix)+common.HashLength):
+				metadata.add(size)
+			case bytes.HasPrefix(key, genesisPrefix) && len(key) == (len(genesisPrefix)+common.HashLength):
+				metadata.add(size)
+			case bytes.HasPrefix(key, skeletonHeaderPrefix) && len(key) == (len(skeletonHeaderPrefix)+8):
+				beaconHeaders.add(size)
+			case bytes.HasPrefix(key, CliqueSnapshotPrefix) && len(key) == 7+common.HashLength:
+				cliqueSnaps.add(size)
+
+			// new log index
+			case bytes.HasPrefix(key, filterMapRowPrefix) && len(key) <= len(filterMapRowPrefix)+9:
+				filterMapRows.add(size)
+			case bytes.HasPrefix(key, filterMapLastBlockPrefix) && len(key) == len(filterMapLastBlockPrefix)+4:
+				filterMapLastBlock.add(size)
+			case bytes.HasPrefix(key, filterMapBlockLVPrefix) && len(key) == len(filterMapBlockLVPrefix)+8:
+				filterMapBlockLV.add(size)
+
+			// old log index (deprecated)
+			case bytes.HasPrefix(key, bloomBitsPrefix) && len(key) == (len(bloomBitsPrefix)+10+common.HashLength):
+				bloomBits.add(size)
+			case bytes.HasPrefix(key, bloomBitsMetaPrefix) && len(key) < len(bloomBitsMetaPrefix)+8:
+				bloomBits.add(size)
+
+			// Path-based historic state indexes
+			case bytes.HasPrefix(key, StateHistoryIndexPrefix) && len(key) >= len(StateHistoryIndexPrefix)+common.HashLength:
+				stateIndex.add(size)
+
+			// Verkle trie data is detected, determine the sub-category
+			case bytes.HasPrefix(key, VerklePrefix):
+				remain := key[len(VerklePrefix):]
+				switch {
+				case IsAccountTrieNode(remain):
+					verkleTries.add(size)
+				case bytes.HasPrefix(remain, stateIDPrefix) && len(remain) == len(stateIDPrefix)+common.HashLength:
+					verkleStateLookups.add(size)
+				case bytes.Equal(remain, persistentStateIDKey):
+					metadata.add(size)
+				case bytes.Equal(remain, trieJournalKey):
+					metadata.add(size)
+				case bytes.Equal(remain, snapSyncStatusFlagKey):
+					metadata.add(size)
+				default:
+					unaccounted.add(size)
+				}
+
+			// Metadata keys
+			case slices.ContainsFunc(knownMetadataKeys, func(x []byte) bool { return bytes.Equal(x, key) }):
+				metadata.add(size)
+
+			default:
+				unaccounted.add(size)
+				if len(key) >= 2 {
+					prefix := [2]byte(key[:2])
+					unaccountedMu.Lock()
+					if _, ok := unaccountedKeys[prefix]; !ok {
+						unaccountedKeys[prefix] = bytes.Clone(key)
+					}
+					unaccountedMu.Unlock()
 				}
 			}
-			if !accounted {
-				unaccounted.Add(size)
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
 			}
 		}
-		count++
-		if count%1000 == 0 && time.Since(logged) > 8*time.Second {
-			log.Info("Inspecting database", "count", count, "elapsed", common.PrettyDuration(time.Since(start)))
-			logged = time.Now()
-		}
+
+		return it.Error()
 	}
+
+	var (
+		eg, ctx = errgroup.WithContext(context.Background())
+		workers = runtime.NumCPU()
+	)
+	eg.SetLimit(workers)
+
+	// Progress reporter
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(8 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				log.Info("Inspecting database", "count", count.Load(), "size", common.StorageSize(total.Load()), "elapsed", common.PrettyDuration(time.Since(start)))
+			case <-done:
+				return
+			}
+		}
+	}()
+
+	// Inspect key-value database in parallel.
+	for i := 0; i < 256; i++ {
+		eg.Go(func() error { return inspectRange(ctx, byte(i)) })
+	}
+
+	if err := eg.Wait(); err != nil {
+		close(done)
+		return err
+	}
+	close(done)
+
 	// Display the database statistic of key-value store.
 	stats := [][]string{
-		{"Key-Value store", "Headers", headers.Size(), headers.Count()},
-		{"Key-Value store", "Bodies", bodies.Size(), bodies.Count()},
-		{"Key-Value store", "Receipt lists", receipts.Size(), receipts.Count()},
-		{"Key-Value store", "Difficulties", tds.Size(), tds.Count()},
-		{"Key-Value store", "Block number->hash", numHashPairings.Size(), numHashPairings.Count()},
-		{"Key-Value store", "Block hash->number", hashNumPairings.Size(), hashNumPairings.Count()},
-		{"Key-Value store", "Transaction index", txLookups.Size(), txLookups.Count()},
-		{"Key-Value store", "Bloombit index", bloomBits.Size(), bloomBits.Count()},
-		{"Key-Value store", "Contract codes", codes.Size(), codes.Count()},
-		{"Key-Value store", "Hash trie nodes", legacyTries.Size(), legacyTries.Count()},
-		{"Key-Value store", "Path trie state lookups", stateLookups.Size(), stateLookups.Count()},
-		{"Key-Value store", "Path trie account nodes", accountTries.Size(), accountTries.Count()},
-		{"Key-Value store", "Path trie storage nodes", storageTries.Size(), storageTries.Count()},
-		{"Key-Value store", "Verkle trie nodes", verkleTries.Size(), verkleTries.Count()},
-		{"Key-Value store", "Verkle trie state lookups", verkleStateLookups.Size(), verkleStateLookups.Count()},
-		{"Key-Value store", "Trie preimages", preimages.Size(), preimages.Count()},
-		{"Key-Value store", "Account snapshot", accountSnaps.Size(), accountSnaps.Count()},
-		{"Key-Value store", "Storage snapshot", storageSnaps.Size(), storageSnaps.Count()},
-		{"Key-Value store", "Beacon sync headers", beaconHeaders.Size(), beaconHeaders.Count()},
-		{"Key-Value store", "Clique snapshots", cliqueSnaps.Size(), cliqueSnaps.Count()},
-		{"Key-Value store", "Singleton metadata", metadata.Size(), metadata.Count()},
-		{"Light client", "CHT trie nodes", chtTrieNodes.Size(), chtTrieNodes.Count()},
-		{"Light client", "Bloom trie nodes", bloomTrieNodes.Size(), bloomTrieNodes.Count()},
+		{"Key-Value store", "Headers", headers.sizeString(), headers.countString()},
+		{"Key-Value store", "Bodies", bodies.sizeString(), bodies.countString()},
+		{"Key-Value store", "Receipt lists", receipts.sizeString(), receipts.countString()},
+		{"Key-Value store", "Difficulties (deprecated)", tds.sizeString(), tds.countString()},
+		{"Key-Value store", "Block number->hash", numHashPairings.sizeString(), numHashPairings.countString()},
+		{"Key-Value store", "Block hash->number", hashNumPairings.sizeString(), hashNumPairings.countString()},
+		{"Key-Value store", "Transaction index", txLookups.sizeString(), txLookups.countString()},
+		{"Key-Value store", "Log index filter-map rows", filterMapRows.sizeString(), filterMapRows.countString()},
+		{"Key-Value store", "Log index last-block-of-map", filterMapLastBlock.sizeString(), filterMapLastBlock.countString()},
+		{"Key-Value store", "Log index block-lv", filterMapBlockLV.sizeString(), filterMapBlockLV.countString()},
+		{"Key-Value store", "Log bloombits (deprecated)", bloomBits.sizeString(), bloomBits.countString()},
+		{"Key-Value store", "Contract codes", codes.sizeString(), codes.countString()},
+		{"Key-Value store", "Hash trie nodes", legacyTries.sizeString(), legacyTries.countString()},
+		{"Key-Value store", "Path trie state lookups", stateLookups.sizeString(), stateLookups.countString()},
+		{"Key-Value store", "Path trie account nodes", accountTries.sizeString(), accountTries.countString()},
+		{"Key-Value store", "Path trie storage nodes", storageTries.sizeString(), storageTries.countString()},
+		{"Key-Value store", "Path state history indexes", stateIndex.sizeString(), stateIndex.countString()},
+		{"Key-Value store", "Verkle trie nodes", verkleTries.sizeString(), verkleTries.countString()},
+		{"Key-Value store", "Verkle trie state lookups", verkleStateLookups.sizeString(), verkleStateLookups.countString()},
+		{"Key-Value store", "Trie preimages", preimages.sizeString(), preimages.countString()},
+		{"Key-Value store", "Account snapshot", accountSnaps.sizeString(), accountSnaps.countString()},
+		{"Key-Value store", "Storage snapshot", storageSnaps.sizeString(), storageSnaps.countString()},
+		{"Key-Value store", "Beacon sync headers", beaconHeaders.sizeString(), beaconHeaders.countString()},
+		{"Key-Value store", "Clique snapshots", cliqueSnaps.sizeString(), cliqueSnaps.countString()},
+		{"Key-Value store", "Singleton metadata", metadata.sizeString(), metadata.countString()},
 	}
+
 	// Inspect all registered append-only file store then.
 	ancients, err := inspectFreezers(db)
 	if err != nil {
@@ -535,18 +647,32 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				fmt.Sprintf("%d", ancient.count()),
 			})
 		}
-		total += ancient.size()
+		total.Add(uint64(ancient.size()))
 	}
-	table := tablewriter.NewWriter(os.Stdout)
+
+	table := newTableWriter(os.Stdout)
 	table.SetHeader([]string{"Database", "Category", "Size", "Items"})
-	table.SetFooter([]string{"", "Total", total.String(), " "})
+	table.SetFooter([]string{"", "Total", common.StorageSize(total.Load()).String(), fmt.Sprintf("%d", count.Load())})
 	table.AppendBulk(stats)
 	table.Render()
 
-	if unaccounted.size > 0 {
-		log.Error("Database contains unaccounted data", "size", unaccounted.size, "count", unaccounted.count)
+	if !unaccounted.empty() {
+		log.Error("Database contains unaccounted data", "size", unaccounted.sizeString(), "count", unaccounted.countString())
+		for _, e := range slices.SortedFunc(maps.Values(unaccountedKeys), bytes.Compare) {
+			log.Error(fmt.Sprintf("   example key: %x", e))
+		}
 	}
 	return nil
+}
+
+// This is the list of known 'metadata' keys stored in the databasse.
+var knownMetadataKeys = [][]byte{
+	databaseVersionKey, headHeaderKey, headBlockKey, headFastBlockKey, headFinalizedBlockKey,
+	lastPivotKey, fastTrieProgressKey, snapshotDisabledKey, SnapshotRootKey, snapshotJournalKey,
+	snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
+	uncleanShutdownKey, badBlockKey, transitionStatusKey, skeletonSyncStatusKey,
+	persistentStateIDKey, trieJournalKey, snapshotSyncStatusKey, snapSyncStatusFlagKey,
+	filterMapsRangeKey, headStateHistoryIndexKey, VerkleTransitionStatePrefix,
 }
 
 // printChainMetadata prints out chain metadata to stderr.
@@ -568,6 +694,7 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 		}
 		return fmt.Sprintf("%d (%#x)", *val, *val)
 	}
+
 	data := [][]string{
 		{"databaseVersion", pp(ReadDatabaseVersion(db))},
 		{"headBlockHash", fmt.Sprintf("%v", ReadHeadBlockHash(db))},
@@ -584,5 +711,77 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 	if b := ReadSkeletonSyncStatus(db); b != nil {
 		data = append(data, []string{"SkeletonSyncStatus", string(b)})
 	}
+	if fmr, ok, _ := ReadFilterMapsRange(db); ok {
+		data = append(data, []string{"filterMapsRange", fmt.Sprintf("%+v", fmr)})
+	}
 	return data
+}
+
+// SafeDeleteRange deletes all of the keys (and values) in the range
+// [start,end) (inclusive on start, exclusive on end).
+// If hashScheme is true then it always uses an iterator and skips hashdb trie
+// node entries. If it is false and the backing db is pebble db then it uses
+// the fast native range delete.
+// In case of fallback mode (hashdb or leveldb) the range deletion might be
+// very slow depending on the number of entries. In this case stopCallback
+// is periodically called and if it returns an error then SafeDeleteRange
+// stops and also returns that error. The callback is not called if native
+// range delete is used or there are a small number of keys only. The bool
+// argument passed to the callback is true if enrties have actually been
+// deleted already.
+func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashScheme bool, stopCallback func(bool) bool) error {
+	if !hashScheme {
+		// delete entire range; use fast native range delete on pebble db
+		for {
+			switch err := db.DeleteRange(start, end); {
+			case err == nil:
+				return nil
+			case errors.Is(err, ethdb.ErrTooManyKeys):
+				if stopCallback(true) {
+					return ErrDeleteRangeInterrupted
+				}
+			default:
+				return err
+			}
+		}
+	}
+
+	var (
+		count, deleted, skipped int
+		startTime               = time.Now()
+	)
+
+	batch := db.NewBatch()
+	it := db.NewIterator(nil, start)
+	defer func() {
+		it.Release() // it might be replaced during the process
+		log.Debug("SafeDeleteRange finished", "deleted", deleted, "skipped", skipped, "elapsed", common.PrettyDuration(time.Since(startTime)))
+	}()
+
+	for it.Next() && bytes.Compare(end, it.Key()) > 0 {
+		// Prevent deletion for trie nodes in hash mode
+		if len(it.Key()) != 32 || crypto.Keccak256Hash(it.Value()) != common.BytesToHash(it.Key()) {
+			if err := batch.Delete(it.Key()); err != nil {
+				return err
+			}
+			deleted++
+		} else {
+			skipped++
+		}
+		count++
+		if count > 10000 { // should not block for more than a second
+			if err := batch.Write(); err != nil {
+				return err
+			}
+			if stopCallback(deleted != 0) {
+				return ErrDeleteRangeInterrupted
+			}
+			start = append(bytes.Clone(it.Key()), 0) // appending a zero gives us the next possible key
+			it.Release()
+			batch = db.NewBatch()
+			it = db.NewIterator(nil, start)
+			count = 0
+		}
+	}
+	return batch.Write()
 }

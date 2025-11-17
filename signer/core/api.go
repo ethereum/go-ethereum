@@ -664,7 +664,7 @@ func (api *SignerAPI) SignGnosisSafeTx(ctx context.Context, signerAddress common
 	return &gnosisTx, nil
 }
 
-// Returns the external api version. This method does not require user acceptance. Available methods are
+// Version returns the external api version. This method does not require user acceptance. Available methods are
 // available via enumeration anyway, and this info does not contain user-specific data
 func (api *SignerAPI) Version(ctx context.Context) (string, error) {
 	return ExternalAPIVersion, nil

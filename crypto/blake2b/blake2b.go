@@ -23,13 +23,13 @@ import (
 )
 
 const (
-	// The blocksize of BLAKE2b in bytes.
+	// BlockSize the blocksize of BLAKE2b in bytes.
 	BlockSize = 128
-	// The hash size of BLAKE2b-512 in bytes.
+	// Size the hash size of BLAKE2b-512 in bytes.
 	Size = 64
-	// The hash size of BLAKE2b-384 in bytes.
+	// Size384 the hash size of BLAKE2b-384 in bytes.
 	Size384 = 48
-	// The hash size of BLAKE2b-256 in bytes.
+	// Size256 the hash size of BLAKE2b-256 in bytes.
 	Size256 = 32
 )
 
@@ -302,7 +302,7 @@ func appendUint64(b []byte, x uint64) []byte {
 	return append(b, a[:]...)
 }
 
-//nolint:unused,deadcode
+//nolint:unused
 func appendUint32(b []byte, x uint32) []byte {
 	var a [4]byte
 	binary.BigEndian.PutUint32(a[:], x)
@@ -314,7 +314,7 @@ func consumeUint64(b []byte) ([]byte, uint64) {
 	return b[8:], x
 }
 
-//nolint:unused,deadcode
+//nolint:unused
 func consumeUint32(b []byte) ([]byte, uint32) {
 	x := binary.BigEndian.Uint32(b)
 	return b[4:], x

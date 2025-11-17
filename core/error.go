@@ -29,7 +29,9 @@ var (
 	// ErrNoGenesis is returned when there is no Genesis Block.
 	ErrNoGenesis = errors.New("genesis not found in chain")
 
-	errSideChainReceipts = errors.New("side blocks can't be accepted as ancient chain data")
+	// ErrBlockOversized is returned if the size of the RLP-encoded block
+	// exceeds the cap established by EIP 7934
+	ErrBlockOversized = errors.New("block RLP-encoded size exceeds maximum")
 )
 
 // List of evm-call-message pre-checking errors. All state transition messages will
@@ -80,6 +82,10 @@ var (
 	// than required to start the invocation.
 	ErrIntrinsicGas = errors.New("intrinsic gas too low")
 
+	// ErrFloorDataGas is returned if the transaction is specified to use less gas
+	// than required for the data floor cost.
+	ErrFloorDataGas = errors.New("insufficient gas for floor data gas cost")
+
 	// ErrTxTypeNotSupported is returned if a transaction is not supported in the
 	// current network configuration.
 	ErrTxTypeNotSupported = types.ErrTxTypeNotSupported
@@ -103,6 +109,8 @@ var (
 	// ErrSenderNoEOA is returned if the sender of a transaction is a contract.
 	ErrSenderNoEOA = errors.New("sender not an eoa")
 
+	// -- EIP-4844 errors --
+
 	// ErrBlobFeeCapTooLow is returned if the transaction fee cap is less than the
 	// blob gas fee of the block.
 	ErrBlobFeeCapTooLow = errors.New("max fee per blob gas less than block blob gas fee")
@@ -110,6 +118,28 @@ var (
 	// ErrMissingBlobHashes is returned if a blob transaction has no blob hashes.
 	ErrMissingBlobHashes = errors.New("blob transaction missing blob hashes")
 
+	// ErrTooManyBlobs is returned if a blob transaction exceeds the maximum number of blobs.
+	ErrTooManyBlobs = errors.New("blob transaction has too many blobs")
+
 	// ErrBlobTxCreate is returned if a blob transaction has no explicit to field.
 	ErrBlobTxCreate = errors.New("blob transaction of type create")
+
+	// -- EIP-7702 errors --
+
+	// Message validation errors:
+	ErrEmptyAuthList   = errors.New("EIP-7702 transaction with empty auth list")
+	ErrSetCodeTxCreate = errors.New("EIP-7702 transaction cannot be used to create contract")
+
+	// -- EIP-7825 errors --
+	ErrGasLimitTooHigh = errors.New("transaction gas limit too high")
+)
+
+// EIP-7702 state transition errors.
+// Note these are just informational, and do not cause tx execution abort.
+var (
+	ErrAuthorizationWrongChainID       = errors.New("EIP-7702 authorization chain ID mismatch")
+	ErrAuthorizationNonceOverflow      = errors.New("EIP-7702 authorization nonce > 64 bit")
+	ErrAuthorizationInvalidSignature   = errors.New("EIP-7702 authorization has invalid signature")
+	ErrAuthorizationDestinationHasCode = errors.New("EIP-7702 authorization destination is a contract")
+	ErrAuthorizationNonceMismatch      = errors.New("EIP-7702 authorization nonce does not match current account nonce")
 )

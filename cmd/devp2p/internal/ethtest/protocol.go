@@ -13,6 +13,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+
 package ethtest
 
 import (
@@ -31,7 +32,7 @@ const (
 // Unexported devp2p protocol lengths from p2p package.
 const (
 	baseProtoLen = 16
-	ethProtoLen  = 17
+	ethProtoLen  = 18
 	snapProtoLen = 8
 )
 
@@ -84,4 +85,10 @@ func protoOffset(proto Proto) uint64 {
 	default:
 		panic("unhandled protocol")
 	}
+}
+
+// msgTypePtr is the constraint for protocol message types.
+type msgTypePtr[U any] interface {
+	*U
+	Kind() byte
 }

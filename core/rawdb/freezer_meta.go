@@ -17,93 +17,173 @@
 package rawdb
 
 import (
+	"errors"
 	"io"
+	"math"
 	"os"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const freezerVersion = 1 // The initial version tag of freezer table metadata
+const (
+	freezerTableV1 = 1              // Initial version of metadata struct
+	freezerTableV2 = 2              // Add field: 'flushOffset'
+	freezerVersion = freezerTableV2 // The current used version
+)
 
-// freezerTableMeta wraps all the metadata of the freezer table.
+// freezerTableMeta is a collection of additional properties that describe the
+// freezer table. These properties are designed with error resilience, allowing
+// them to be automatically corrected after an error occurs without significantly
+// impacting overall correctness.
 type freezerTableMeta struct {
-	// Version is the versioning descriptor of the freezer table.
-	Version uint16
+	file    *os.File // file handler of metadata
+	version uint16   // version descriptor of the freezer table
 
-	// VirtualTail indicates how many items have been marked as deleted.
-	// Its value is equal to the number of items removed from the table
-	// plus the number of items hidden in the table, so it should never
-	// be lower than the "actual tail".
-	VirtualTail uint64
+	// virtualTail represents the number of items marked as deleted. It is
+	// calculated as the sum of items removed from the table and the items
+	// hidden within the table, and should never be less than the "actual
+	// tail".
+	//
+	// If lost due to a crash or other reasons, it will be reset to the number
+	// of items deleted from the table, causing the previously hidden items
+	// to become visible, which is an acceptable consequence.
+	virtualTail uint64
+
+	// flushOffset represents the offset in the index file up to which the index
+	// items along with the corresponding data items in data files has been flushed
+	// (fsync’d) to disk. Beyond this offset, data integrity is not guaranteed,
+	// the extra index items along with the associated data items should be removed
+	// during the startup.
+	//
+	// The principle is that all data items above the flush offset are considered
+	// volatile and should be recoverable if they are discarded after the unclean
+	// shutdown. If data integrity is required, manually force a sync of the
+	// freezer before proceeding with further operations (e.g. do freezer.Sync()
+	// first and then write data to key value store in some circumstances).
+	//
+	// The offset could be moved forward by applying sync operation, or be moved
+	// backward in cases of head/tail truncation, etc.
+	flushOffset int64
 }
 
-// newMetadata initializes the metadata object with the given virtual tail.
-func newMetadata(tail uint64) *freezerTableMeta {
+// decodeV1 attempts to decode the metadata structure in v1 format. If fails or
+// the result is incompatible, nil is returned.
+func decodeV1(file *os.File) *freezerTableMeta {
+	_, err := file.Seek(0, io.SeekStart)
+	if err != nil {
+		return nil
+	}
+	type obj struct {
+		Version uint16
+		Tail    uint64
+	}
+	var o obj
+	if err := rlp.Decode(file, &o); err != nil {
+		return nil
+	}
+	if o.Version != freezerTableV1 {
+		return nil
+	}
 	return &freezerTableMeta{
-		Version:     freezerVersion,
-		VirtualTail: tail,
+		file:        file,
+		version:     o.Version,
+		virtualTail: o.Tail,
 	}
 }
 
-// readMetadata reads the metadata of the freezer table from the
-// given metadata file.
-func readMetadata(file *os.File) (*freezerTableMeta, error) {
+// decodeV2 attempts to decode the metadata structure in v2 format. If fails or
+// the result is incompatible, nil is returned.
+func decodeV2(file *os.File) *freezerTableMeta {
 	_, err := file.Seek(0, io.SeekStart)
 	if err != nil {
-		return nil, err
+		return nil
 	}
-	var meta freezerTableMeta
-	if err := rlp.Decode(file, &meta); err != nil {
-		return nil, err
+	type obj struct {
+		Version uint16
+		Tail    uint64
+		Offset  uint64
 	}
-	return &meta, nil
+	var o obj
+	if err := rlp.Decode(file, &o); err != nil {
+		return nil
+	}
+	if o.Version != freezerTableV2 {
+		return nil
+	}
+	if o.Offset > math.MaxInt64 {
+		log.Error("Invalid flushOffset %d in freezer metadata", o.Offset, "file", file.Name())
+		return nil
+	}
+	return &freezerTableMeta{
+		file:        file,
+		version:     freezerTableV2,
+		virtualTail: o.Tail,
+		flushOffset: int64(o.Offset),
+	}
 }
 
-// writeMetadata writes the metadata of the freezer table into the
-// given metadata file.
-func writeMetadata(file *os.File, meta *freezerTableMeta) error {
-	_, err := file.Seek(0, io.SeekStart)
-	if err != nil {
-		return err
-	}
-	return rlp.Encode(file, meta)
-}
-
-// loadMetadata loads the metadata from the given metadata file.
-// Initializes the metadata file with the given "actual tail" if
-// it's empty.
-func loadMetadata(file *os.File, tail uint64) (*freezerTableMeta, error) {
+// newMetadata initializes the metadata object, either by loading it from the file
+// or by constructing a new one from scratch.
+func newMetadata(file *os.File) (*freezerTableMeta, error) {
 	stat, err := file.Stat()
 	if err != nil {
 		return nil, err
 	}
-	// Write the metadata with the given actual tail into metadata file
-	// if it's non-existent. There are two possible scenarios here:
-	// - the freezer table is empty
-	// - the freezer table is legacy
-	// In both cases, write the meta into the file with the actual tail
-	// as the virtual tail.
 	if stat.Size() == 0 {
-		m := newMetadata(tail)
-		if err := writeMetadata(file, m); err != nil {
+		m := &freezerTableMeta{
+			file:        file,
+			version:     freezerTableV2,
+			virtualTail: 0,
+			flushOffset: 0,
+		}
+		if err := m.write(true); err != nil {
 			return nil, err
 		}
 		return m, nil
 	}
-	m, err := readMetadata(file)
+	if m := decodeV2(file); m != nil {
+		return m, nil
+	}
+	if m := decodeV1(file); m != nil {
+		return m, nil // legacy metadata
+	}
+	return nil, errors.New("failed to decode metadata")
+}
+
+// setVirtualTail sets the virtual tail and flushes the metadata if sync is true.
+func (m *freezerTableMeta) setVirtualTail(tail uint64, sync bool) error {
+	m.virtualTail = tail
+	return m.write(sync)
+}
+
+// setFlushOffset sets the flush offset and flushes the metadata if sync is true.
+func (m *freezerTableMeta) setFlushOffset(offset int64, sync bool) error {
+	m.flushOffset = offset
+	return m.write(sync)
+}
+
+// write flushes the content of metadata into file and performs a fsync if required.
+func (m *freezerTableMeta) write(sync bool) error {
+	type obj struct {
+		Version uint16
+		Tail    uint64
+		Offset  uint64
+	}
+	var o obj
+	o.Version = freezerVersion // forcibly use the current version
+	o.Tail = m.virtualTail
+	o.Offset = uint64(m.flushOffset)
+
+	_, err := m.file.Seek(0, io.SeekStart)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	// Update the virtual tail with the given actual tail if it's even
-	// lower than it. Theoretically it shouldn't happen at all, print
-	// a warning here.
-	if m.VirtualTail < tail {
-		log.Warn("Updated virtual tail", "have", m.VirtualTail, "now", tail)
-		m.VirtualTail = tail
-		if err := writeMetadata(file, m); err != nil {
-			return nil, err
-		}
+	if err := rlp.Encode(m.file, &o); err != nil {
+		return err
 	}
-	return m, nil
+	if !sync {
+		return nil
+	}
+	return m.file.Sync()
 }

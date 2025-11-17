@@ -83,8 +83,8 @@ var (
 	}
 	TraceFormatFlag = &cli.StringFlag{
 		Name:     "trace.format",
-		Usage:    "Trace output format to use (struct|json)",
-		Value:    "struct",
+		Usage:    "Trace output format to use (json|struct|md)",
+		Value:    "json",
 		Category: traceCategory,
 	}
 	TraceDisableMemoryFlag = &cli.BoolFlag{
@@ -146,16 +146,63 @@ var (
 			t8ntool.TraceEnableCallFramesFlag,
 			t8ntool.OutputBasedir,
 			t8ntool.OutputAllocFlag,
+			t8ntool.OutputBTFlag,
 			t8ntool.OutputResultFlag,
 			t8ntool.OutputBodyFlag,
 			t8ntool.InputAllocFlag,
 			t8ntool.InputEnvFlag,
+			t8ntool.InputBTFlag,
 			t8ntool.InputTxsFlag,
 			t8ntool.ForknameFlag,
 			t8ntool.ChainIDFlag,
 			t8ntool.RewardFlag,
 		},
 	}
+
+	verkleCommand = &cli.Command{
+		Name:    "verkle",
+		Aliases: []string{"vkt"},
+		Usage:   "Binary Trie helpers",
+		Subcommands: []*cli.Command{
+			{
+				Name:    "tree-keys",
+				Aliases: []string{"v"},
+				Usage:   "compute a set of binary trie keys, given their source addresses and optional slot numbers",
+				Action:  t8ntool.BinKeys,
+				Flags: []cli.Flag{
+					t8ntool.InputAllocFlag,
+				},
+			},
+			{
+				Name:    "single-key",
+				Aliases: []string{"vk"},
+				Usage:   "compute the binary trie key given an address and optional slot number",
+				Action:  t8ntool.BinKey,
+			},
+			{
+				Name:    "code-chunk-key",
+				Aliases: []string{"vck"},
+				Usage:   "compute the binary trie key given an address and chunk number",
+				Action:  t8ntool.BinaryCodeChunkKey,
+			},
+			{
+				Name:    "chunkify-code",
+				Aliases: []string{"vcc"},
+				Usage:   "chunkify a given bytecode for a binary trie",
+				Action:  t8ntool.BinaryCodeChunkCode,
+			},
+			{
+				Name:    "state-root",
+				Aliases: []string{"vsr"},
+				Usage:   "compute the state-root of a binary trie for the given alloc",
+				Action:  t8ntool.BinTrieRoot,
+				Flags: []cli.Flag{
+					t8ntool.InputAllocFlag,
+				},
+			},
+		},
+	}
+
 	transactionCommand = &cli.Command{
 		Name:    "transaction",
 		Aliases: []string{"t9n"},
@@ -210,8 +257,7 @@ func init() {
 		stateTransitionCommand,
 		transactionCommand,
 		blockBuilderCommand,
-		eofParseCommand,
-		eofDumpCommand,
+		verkleCommand,
 	}
 	app.Before = func(ctx *cli.Context) error {
 		flags.MigrateGlobalFlags(ctx)
@@ -239,10 +285,20 @@ func tracerFromFlags(ctx *cli.Context) *tracing.Hooks {
 		EnableReturnData: !ctx.Bool(TraceDisableReturnDataFlag.Name),
 	}
 	switch {
-	case ctx.Bool(TraceFlag.Name) && ctx.String(TraceFormatFlag.Name) == "struct":
-		return logger.NewStreamingStructLogger(config, os.Stderr).Hooks()
-	case ctx.Bool(TraceFlag.Name) && ctx.String(TraceFormatFlag.Name) == "json":
-		return logger.NewJSONLogger(config, os.Stderr)
+	case ctx.Bool(TraceFlag.Name):
+		switch format := ctx.String(TraceFormatFlag.Name); format {
+		case "struct":
+			return logger.NewStreamingStructLogger(config, os.Stderr).Hooks()
+		case "json":
+			return logger.NewJSONLogger(config, os.Stderr)
+		case "md", "markdown":
+			return logger.NewMarkdownLogger(config, os.Stderr).Hooks()
+		default:
+			fmt.Fprintf(os.Stderr, "unknown trace format: %q\n", format)
+			os.Exit(1)
+			return nil
+		}
+	// Deprecated ways of configuring tracing.
 	case ctx.Bool(MachineFlag.Name):
 		return logger.NewJSONLogger(config, os.Stderr)
 	case ctx.Bool(DebugFlag.Name):
@@ -252,10 +308,15 @@ func tracerFromFlags(ctx *cli.Context) *tracing.Hooks {
 	}
 }
 
-// collectJSONFiles walks the given path and accumulates all files with json
-// extension.
-func collectJSONFiles(path string) []string {
+// collectFiles walks the given path. If the path is a directory, it will
+// return a list of all accumulates all files with json extension.
+// Otherwise (if path points to a file), it will return the path.
+func collectFiles(path string) []string {
 	var out []string
+	if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		// User explicitly pointed out a file, ignore extension.
+		return []string{path}
+	}
 	err := filepath.Walk(path, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
 			return err
