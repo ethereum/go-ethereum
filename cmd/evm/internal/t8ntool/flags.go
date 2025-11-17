@@ -88,6 +88,14 @@ var (
 			"\t<file> - into the file <file> ",
 		Value: "block.json",
 	}
+	OutputBTFlag = &cli.StringFlag{
+		Name: "output.vkt",
+		Usage: "Determines where to put the `BT` of the post-state.\n" +
+			"\t`stdout` - into the stdout output\n" +
+			"\t`stderr` - into the stderr output\n" +
+			"\t<file> - into the file <file> ",
+		Value: "vkt.json",
+	}
 	InputAllocFlag = &cli.StringFlag{
 		Name:  "input.alloc",
 		Usage: "`stdin` or file name of where to find the prestate alloc to use.",
@@ -122,6 +130,11 @@ var (
 		Name:  "input.txs",
 		Usage: "`stdin` or file name of where to find the transactions list in RLP form.",
 		Value: "txs.rlp",
+	}
+	// TODO(@CPerezz): rename `Name` of the file in a follow-up PR (relays on EEST -> https://github.com/ethereum/execution-spec-tests/tree/verkle/main)
+	InputBTFlag = &cli.StringFlag{
+		Name:  "input.vkt",
+		Usage: "`stdin` or file name of where to find the prestate BT.",
 	}
 	SealCliqueFlag = &cli.StringFlag{
 		Name:  "seal.clique",

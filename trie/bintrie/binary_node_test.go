@@ -77,12 +77,12 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 // TestSerializeDeserializeStemNode tests serialization and deserialization of StemNode
 func TestSerializeDeserializeStemNode(t *testing.T) {
 	// Create a stem node with some values
-	stem := make([]byte, 31)
+	stem := make([]byte, StemSize)
 	for i := range stem {
 		stem[i] = byte(i)
 	}
 
-	var values [256][]byte
+	var values [StemNodeWidth][]byte
 	// Add some values at different indices
 	values[0] = common.HexToHash("0x0101010101010101010101010101010101010101010101010101010101010101").Bytes()
 	values[10] = common.HexToHash("0x0202020202020202020202020202020202020202020202020202020202020202").Bytes()
@@ -103,7 +103,7 @@ func TestSerializeDeserializeStemNode(t *testing.T) {
 	}
 
 	// Check the stem is correctly serialized
-	if !bytes.Equal(serialized[1:32], stem) {
+	if !bytes.Equal(serialized[1:1+StemSize], stem) {
 		t.Errorf("Stem mismatch in serialized data")
 	}
 
@@ -136,7 +136,7 @@ func TestSerializeDeserializeStemNode(t *testing.T) {
 	}
 
 	// Check that other values are nil
-	for i := range NodeWidth {
+	for i := range StemNodeWidth {
 		if i == 0 || i == 10 || i == 255 {
 			continue
 		}
@@ -218,15 +218,15 @@ func TestKeyToPath(t *testing.T) {
 		},
 		{
 			name:     "max valid depth",
-			depth:    31 * 8,
-			key:      make([]byte, 32),
-			expected: make([]byte, 31*8+1),
+			depth:    StemSize * 8,
+			key:      make([]byte, HashSize),
+			expected: make([]byte, StemSize*8+1),
 			wantErr:  false,
 		},
 		{
 			name:    "depth too large",
-			depth:   31*8 + 1,
-			key:     make([]byte, 32),
+			depth:   StemSize*8 + 1,
+			key:     make([]byte, HashSize),
 			wantErr: true,
 		},
 	}

@@ -47,6 +47,12 @@ func GetBinaryTreeKey(addr common.Address, key []byte) []byte {
 	return k
 }
 
+func GetBinaryTreeKeyBasicData(addr common.Address) []byte {
+	var k [32]byte
+	k[31] = BasicDataLeafKey
+	return GetBinaryTreeKey(addr, k[:])
+}
+
 func GetBinaryTreeKeyCodeHash(addr common.Address) []byte {
 	var k [32]byte
 	k[31] = CodeHashLeafKey
