@@ -35,15 +35,8 @@ type freezerInfo struct {
 	ancients uint64      // The total number of stored items in the freezer
 	head     uint64      // The number of last stored item in the freezer, valid only if ancients > 0
 	tail     uint64      // The number of first stored item in the freezer
+	count    uint64      // The number of stored items in the freezer
 	sizes    []tableSize // The storage size per table
-}
-
-// count returns the number of stored items in the freezer.
-func (info *freezerInfo) count() uint64 {
-	if info.ancients <= info.tail {
-		return 0
-	}
-	return info.ancients - info.tail
 }
 
 // size returns the storage size of the entire freezer.
@@ -82,6 +75,11 @@ func inspect(name string, order map[string]freezerTableConfig, reader ethdb.Anci
 		return freezerInfo{}, err
 	}
 	info.tail = tail
+	if ancients == 0 {
+		info.count = 0
+	} else {
+		info.count = info.head - info.tail + 1
+	}
 	return info, nil
 }
 

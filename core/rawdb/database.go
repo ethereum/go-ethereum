@@ -644,7 +644,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				fmt.Sprintf("Ancient store (%s)", strings.Title(ancient.name)),
 				strings.Title(table.name),
 				table.size.String(),
-				fmt.Sprintf("%d", ancient.count()),
+				fmt.Sprintf("%d", ancient.count),
 			})
 		}
 		total.Add(uint64(ancient.size()))
