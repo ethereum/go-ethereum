@@ -45,6 +45,7 @@ type callLog struct {
 	// Position of the log relative to subcalls within the same trace
 	// See https://github.com/ethereum/go-ethereum/pull/28389 for details
 	Position hexutil.Uint `json:"position"`
+	Removed  bool          `json:"removed,omitempty"`
 }
 
 type callFrame struct {
@@ -120,8 +121,9 @@ type callTracer struct {
 }
 
 type callTracerConfig struct {
-	OnlyTopCall bool `json:"onlyTopCall"` // If true, call tracer won't collect any subcalls
-	WithLog     bool `json:"withLog"`     // If true, call tracer will collect event logs
+	OnlyTopCall     bool `json:"onlyTopCall"`     // If true, call tracer won't collect any subcalls
+	WithLog         bool `json:"withLog"`         // If true, call tracer will collect event logs
+	WithRemovedLog  bool `json:"withRemovedLog"`  // If true, mark failed logs as removed instead of deleting them
 }
 
 // newCallTracer returns a native go tracer which tracks
@@ -229,7 +231,7 @@ func (t *callTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	}
 	if t.config.WithLog {
 		// Logs are not emitted when the call fails
-		clearFailedLogs(&t.callstack[0], false)
+		clearFailedLogs(&t.callstack[0], false, t.config.WithRemovedLog)
 	}
 }
 
@@ -277,13 +279,19 @@ func (t *callTracer) Stop(err error) {
 
 // clearFailedLogs clears the logs of a callframe and all its children
 // in case of execution failure.
-func clearFailedLogs(cf *callFrame, parentFailed bool) {
+func clearFailedLogs(cf *callFrame, parentFailed bool, withRemovedLog bool) {
 	failed := cf.failed() || parentFailed
 	// Clear own logs
 	if failed {
-		cf.Logs = nil
+		if withRemovedLog {
+			for i := range cf.Logs {
+				cf.Logs[i].Removed = true
+			}
+		} else {
+			cf.Logs = nil
+		}
 	}
 	for i := range cf.Calls {
-		clearFailedLogs(&cf.Calls[i], failed)
+		clearFailedLogs(&cf.Calls[i], failed, withRemovedLog)
 	}
 }
