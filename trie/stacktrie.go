@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 var (
@@ -414,8 +415,7 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 	}
 	// Write the hash to the 'val'. We allocate a new val here to not mutate
 	// input values.
-	st.val = bPool.getWithSize(32)
-	t.h.hashDataTo(st.val, blob)
+	st.val = crypto.Keccak256(blob)
 
 	// Invoke the callback it's provided. Notably, the path and blob slices are
 	// volatile, please deep-copy the slices in callback if the contents need
