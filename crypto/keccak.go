@@ -32,7 +32,7 @@ func NewKeccakState() KeccakState {
 
 var hasherPool = sync.Pool{
 	New: func() any {
-		return sha3.NewLegacyKeccak256().(KeccakState)
+		return NewKeccakState()
 	},
 }
 
