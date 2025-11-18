@@ -2672,15 +2672,10 @@ func (s *Syncer) onByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) error
 
 	// Cross reference the requested bytecodes with the response to find gaps
 	// that the serving node is missing
-	hasher := crypto.NewKeccakState()
-	hash := make([]byte, 32)
-
 	codes := make([][]byte, len(req.hashes))
 	for i, j := 0, 0; i < len(bytecodes); i++ {
 		// Find the next hash that we've been served, leaving misses with nils
-		hasher.Reset()
-		hasher.Write(bytecodes[i])
-		hasher.Read(hash)
+		hash := crypto.Keccak256(bytecodes[i])
 
 		for j < len(req.hashes) && !bytes.Equal(hash, req.hashes[j][:]) {
 			j++
@@ -2920,16 +2915,12 @@ func (s *Syncer) OnTrieNodes(peer SyncPeer, id uint64, trienodes [][]byte) error
 	// Cross reference the requested trienodes with the response to find gaps
 	// that the serving node is missing
 	var (
-		hasher = crypto.NewKeccakState()
-		hash   = make([]byte, 32)
-		nodes  = make([][]byte, len(req.hashes))
-		fills  uint64
+		nodes = make([][]byte, len(req.hashes))
+		fills uint64
 	)
 	for i, j := 0, 0; i < len(trienodes); i++ {
 		// Find the next hash that we've been served, leaving misses with nils
-		hasher.Reset()
-		hasher.Write(trienodes[i])
-		hasher.Read(hash)
+		hash := crypto.Keccak256(trienodes[i])
 
 		for j < len(req.hashes) && !bytes.Equal(hash, req.hashes[j][:]) {
 			j++
@@ -3026,16 +3017,10 @@ func (s *Syncer) onHealByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) e
 
 	// Cross reference the requested bytecodes with the response to find gaps
 	// that the serving node is missing
-	hasher := crypto.NewKeccakState()
-	hash := make([]byte, 32)
-
 	codes := make([][]byte, len(req.hashes))
 	for i, j := 0, 0; i < len(bytecodes); i++ {
 		// Find the next hash that we've been served, leaving misses with nils
-		hasher.Reset()
-		hasher.Write(bytecodes[i])
-		hasher.Read(hash)
-
+		hash := crypto.Keccak256(bytecodes[i])
 		for j < len(req.hashes) && !bytes.Equal(hash, req.hashes[j][:]) {
 			j++
 		}
