@@ -630,13 +630,20 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if uint64(tx.Size()) > txMaxSize {
 		return ErrOversizedData
 	}
-	// check if sender is in black list
-	if common.IsInBlacklist(tx.From()) {
-		return fmt.Errorf("reject transaction with sender in black-list: %v", tx.From().Hex())
+	// Get current block number
+	var number *big.Int = nil
+	if pool.chain.CurrentHeader() != nil {
+		number = pool.chain.CurrentHeader().Number
 	}
-	// check if receiver is in black list
-	if common.IsInBlacklist(tx.To()) {
-		return fmt.Errorf("reject transaction with receiver in black-list: %v", tx.To().Hex())
+	if number == nil || number.Uint64() >= common.BlackListHFNumber {
+		// check if sender is in black list
+		if common.IsInBlacklist(tx.From()) {
+			return fmt.Errorf("reject transaction with sender in black-list: %v", tx.From().Hex())
+		}
+		// check if receiver is in black list
+		if common.IsInBlacklist(tx.To()) {
+			return fmt.Errorf("reject transaction with receiver in black-list: %v", tx.To().Hex())
+		}
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded
 	// transactions but may occur if you create a transaction using the RPC.
@@ -687,10 +694,6 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// cost == V + GP * GL
 	balance := pool.currentState.GetBalance(from)
 	cost := tx.Cost()
-	var number *big.Int = nil
-	if pool.chain.CurrentHeader() != nil {
-		number = pool.chain.CurrentHeader().Number
-	}
 	minGasPrice := common.GetMinGasPrice(number)
 	feeCapacity := big.NewInt(0)
 
