@@ -25,7 +25,7 @@ import (
 	fuzz "github.com/google/gofuzz"
 )
 
-// TestReplicate can be used to replicate crashers from the fuzzing tests.
+// TestReplicate can be used to replicate crashes from the fuzzing tests.
 // Just replace testString with the data in .quoted
 func TestReplicate(t *testing.T) {
 	t.Parallel()
