@@ -20,14 +20,14 @@ import (
 
 func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConfig *params.ChainConfig) {
 	// Hook scans for bad masternodes and decide to penalty them
-	adaptor.EngineV2.HookPenalty = func(chain consensus.ChainReader, number *big.Int, currentHash common.Hash, candidates []common.Address) ([]common.Address, error) {
+	adaptor.EngineV2.HookPenalty = func(chain consensus.ChainReader, number *big.Int, parentHash common.Hash, candidates []common.Address) ([]common.Address, error) {
 		start := time.Now()
 		listBlockHash := []common.Hash{}
 		// get list block hash & stats total created block
 		statMiners := make(map[common.Address]int)
-		listBlockHash = append(listBlockHash, currentHash)
+		listBlockHash = append(listBlockHash, parentHash)
 		parentNumber := number.Uint64() - 1
-		parentHash := currentHash
+		currentHash := parentHash
 
 		// check and wait the latest block is already in the disk
 		// sometimes blocks are yet inserted into block
