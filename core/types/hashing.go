@@ -27,11 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// hasherPool holds LegacyKeccak256 buffer for rlpHash.
-var hasherPool = sync.Pool{
-	New: func() interface{} { return crypto.NewKeccakState() },
-}
-
 // encodeBufferPool holds temporary encoder buffers for DeriveSha and TX encoding.
 var encodeBufferPool = sync.Pool{
 	New: func() interface{} { return new(bytes.Buffer) },
@@ -55,24 +50,15 @@ func getPooledBuffer(size uint64) ([]byte, *bytes.Buffer, error) {
 
 // rlpHash encodes x and hashes the encoded bytes.
 func rlpHash(x interface{}) (h common.Hash) {
-	sha := hasherPool.Get().(crypto.KeccakState)
-	defer hasherPool.Put(sha)
-	sha.Reset()
-	rlp.Encode(sha, x)
-	sha.Read(h[:])
-	return h
+	encoded, _ := rlp.EncodeToBytes(x)
+	return crypto.Keccak256Hash(encoded)
 }
 
 // prefixedRlpHash writes the prefix into the hasher before rlp-encoding x.
 // It's used for typed transactions.
 func prefixedRlpHash(prefix byte, x interface{}) (h common.Hash) {
-	sha := hasherPool.Get().(crypto.KeccakState)
-	defer hasherPool.Put(sha)
-	sha.Reset()
-	sha.Write([]byte{prefix})
-	rlp.Encode(sha, x)
-	sha.Read(h[:])
-	return h
+	encoded, _ := rlp.EncodeToBytes(x)
+	return crypto.Keccak256Hash([]byte{prefix}, encoded)
 }
 
 // ListHasher defines the interface for computing the hash of a derivable list.

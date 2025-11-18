@@ -34,11 +34,7 @@ import (
 //
 // Acceleration structures built would need to explicitly validate the witness.
 func (w *Witness) MakeHashDB() ethdb.Database {
-	var (
-		memdb  = rawdb.NewMemoryDatabase()
-		hasher = crypto.NewKeccakState()
-		hash   = make([]byte, 32)
-	)
+	var memdb = rawdb.NewMemoryDatabase()
 	// Inject all the "block hashes" (i.e. headers) into the ephemeral database
 	for _, header := range w.Headers {
 		rawdb.WriteHeader(memdb, header)
@@ -46,21 +42,13 @@ func (w *Witness) MakeHashDB() ethdb.Database {
 	// Inject all the bytecodes into the ephemeral database
 	for code := range w.Codes {
 		blob := []byte(code)
-
-		hasher.Reset()
-		hasher.Write(blob)
-		hasher.Read(hash)
-
+		hash := crypto.Keccak256(blob)
 		rawdb.WriteCode(memdb, common.BytesToHash(hash), blob)
 	}
 	// Inject all the MPT trie nodes into the ephemeral database
 	for node := range w.State {
 		blob := []byte(node)
-
-		hasher.Reset()
-		hasher.Write(blob)
-		hasher.Read(hash)
-
+		hash := crypto.Keccak256(blob)
 		rawdb.WriteLegacyTrieNode(memdb, common.BytesToHash(hash), blob)
 	}
 	return memdb
