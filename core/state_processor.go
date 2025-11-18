@@ -69,11 +69,11 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		gp          = new(GasPool).AddGas(block.GasLimit())
 	)
 
-// Initialize tracer state before DAO fork
-var tracingStateDB = vm.StateDB(statedb)
-if hooks := cfg.Tracer; hooks != nil {
-    tracingStateDB = state.NewHookedState(statedb, hooks)
-}
+	// Initialize tracer state before DAO fork
+	var tracingStateDB = vm.StateDB(statedb)
+	if hooks := cfg.Tracer; hooks != nil {
+		tracingStateDB = state.NewHookedState(statedb, hooks)
+	}
 	// Mutate the block and state according to any hard-fork specs
 	if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
