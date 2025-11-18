@@ -64,7 +64,7 @@ type EllipticCurve interface {
 // because it doesn't copy the internal state, but also modifies the internal state.
 type KeccakState interface {
 	hash.Hash
-	Read([]byte) (int, error)
+	io.Reader
 }
 
 // CreateAddress creates an ethereum address given the bytes and the nonce
