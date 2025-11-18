@@ -28,7 +28,6 @@ import (
 // hasher is a type used for the trie Hash operation. A hasher has some
 // internal preallocated temp space
 type hasher struct {
-	sha      crypto.KeccakState
 	tmp      []byte
 	encbuf   rlp.EncoderBuffer
 	parallel bool // Whether to use parallel threads when hashing
@@ -39,7 +38,6 @@ var hasherPool = sync.Pool{
 	New: func() any {
 		return &hasher{
 			tmp:    make([]byte, 0, 550), // cap is as large as a full fullNode.
-			sha:    crypto.NewKeccakState(),
 			encbuf: rlp.NewEncoderBuffer(nil),
 		}
 	},
@@ -74,7 +72,7 @@ func (h *hasher) hash(n node, force bool) []byte {
 			copy(buf, enc)
 			return buf
 		}
-		hash := h.hashData(enc)
+		hash := crypto.Keccak256(enc)
 		n.flags.hash = hash
 		return hash
 
@@ -89,7 +87,7 @@ func (h *hasher) hash(n node, force bool) []byte {
 			copy(buf, enc)
 			return buf
 		}
-		hash := h.hashData(enc)
+		hash := crypto.Keccak256(enc)
 		n.flags.hash = hash
 		return hash
 
@@ -184,24 +182,6 @@ func (h *hasher) encodedBytes() []byte {
 	h.tmp = h.encbuf.AppendToBytes(h.tmp[:0])
 	h.encbuf.Reset(nil)
 	return h.tmp
-}
-
-// hashData hashes the provided data. It is safe to modify the returned slice after
-// the function returns.
-func (h *hasher) hashData(data []byte) []byte {
-	n := make([]byte, 32)
-	h.sha.Reset()
-	h.sha.Write(data)
-	h.sha.Read(n)
-	return n
-}
-
-// hashDataTo hashes the provided data to the given destination buffer. The caller
-// must ensure that the dst buffer is of appropriate size.
-func (h *hasher) hashDataTo(dst, data []byte) {
-	h.sha.Reset()
-	h.sha.Write(data)
-	h.sha.Read(dst)
 }
 
 // proofHash is used to construct trie proofs, returning the rlp-encoded node blobs.
