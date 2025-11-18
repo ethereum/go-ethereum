@@ -900,16 +900,12 @@ func (s *Suite) snapGetByteCodes(t *utesting.T, tc *byteCodesTest) error {
 	// that the serving node is missing
 	var (
 		bytecodes = res.Codes
-		hasher    = crypto.NewKeccakState()
-		hash      = make([]byte, 32)
 		codes     = make([][]byte, len(req.Hashes))
 	)
 
 	for i, j := 0, 0; i < len(bytecodes); i++ {
 		// Find the next hash that we've been served, leaving misses with nils
-		hasher.Reset()
-		hasher.Write(bytecodes[i])
-		hasher.Read(hash)
+		hash := crypto.Keccak256(bytecodes[i])
 
 		for j < len(req.Hashes) && !bytes.Equal(hash, req.Hashes[j][:]) {
 			j++
@@ -959,16 +955,12 @@ func (s *Suite) snapGetTrieNodes(t *utesting.T, tc *trieNodesTest) error {
 
 	// Cross reference the requested trienodes with the response to find gaps
 	// that the serving node is missing
-	hasher := crypto.NewKeccakState()
-	hash := make([]byte, 32)
 	trienodes := res.Nodes
 	if got, want := len(trienodes), len(tc.expHashes); got != want {
 		return fmt.Errorf("wrong trienode count, got %d, want %d", got, want)
 	}
 	for i, trienode := range trienodes {
-		hasher.Reset()
-		hasher.Write(trienode)
-		hasher.Read(hash)
+		hash := crypto.Keccak256(trienode[:])
 		if got, want := hash, tc.expHashes[i]; !bytes.Equal(got, want[:]) {
 			t.Logf("  hash %d wrong, got %#x, want %#x\n", i, got, want)
 			err = fmt.Errorf("hash %d wrong, got %#x, want %#x", i, got, want)
