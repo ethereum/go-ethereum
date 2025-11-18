@@ -34,4 +34,5 @@ type ChainEvent struct {
 
 type ChainHeadEvent struct {
 	Header *types.Header
+	Time   uint64
 }
