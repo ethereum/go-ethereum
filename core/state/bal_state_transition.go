@@ -50,6 +50,8 @@ type BALStateTransition struct {
 	stateUpdate *stateUpdate
 
 	metrics BALStateTransitionMetrics
+
+	err error
 }
 
 func (s *BALStateTransition) Metrics() *BALStateTransitionMetrics {
@@ -102,7 +104,13 @@ func NewBALStateTransition(accessList *BALReader, db Database, parentRoot common
 
 // TODO: make use of this method return the error from IntermediateRoot or Commit
 func (s *BALStateTransition) Error() error {
-	return nil
+	return s.err
+}
+
+func (s *BALStateTransition) setError(err error) {
+	if s.err != nil {
+		s.err = err
+	}
 }
 
 // TODO: refresh my knowledge of the storage-clearing EIP and ensure that my assumptions around
@@ -383,7 +391,8 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 				for key := range diff.StorageWrites {
 					val, err := s.reader.Storage(addr, key)
 					if err != nil {
-						panic("TODO: wat do?")
+						s.setError(err)
+						return
 					}
 					s.originStorages[addr][key] = val
 				}
@@ -403,6 +412,8 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 		wg.Add(1)
 		address := addr
 		go func() {
+			defer wg.Done()
+
 			// 1 (c): update each mutated account, producing the post-block state object by applying the state mutations to the prestate (retrieved in 1a).
 			acct := s.accessList.prestateReader.account(address)
 			diff := s.diffs[address]
@@ -414,7 +425,8 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 			if len(diff.StorageWrites) > 0 {
 				tr, err := s.db.OpenStorageTrie(s.parentRoot, address, acct.Root, s.stateTrie)
 				if err != nil {
-					panic("FUCK")
+					s.setError(err)
+					return
 				}
 				s.tries.Store(address, tr)
 
@@ -435,12 +447,14 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 					}
 				}
 				if err := tr.UpdateStorageBatch(address, updateKeys, updateValues); err != nil {
-					panic("FUCK1")
+					s.setError(err)
+					return
 				}
 
 				for _, key := range deleteKeys {
 					if err := tr.DeleteStorage(address, key); err != nil {
-						panic("SHITTT")
+						s.setError(err)
+						return
 					}
 				}
 
@@ -448,20 +462,19 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 				tr.Hash()
 				s.metrics.StateHash = time.Since(hashStart)
 			}
-
-			wg.Done()
 		}()
 	}
 
 	wg.Add(1)
 	// 1 (d): prefetch the intermediate trie nodes of the mutated state set from the account trie.
 	go func() {
+		defer wg.Done()
 		prefetchStart := time.Now()
 		if err := s.stateTrie.PrefetchAccount(s.accessList.ModifiedAccounts()); err != nil {
-			panic("FUCK2")
+			s.setError(err)
+			return
 		}
 		s.metrics.StatePrefetch = time.Since(prefetchStart)
-		wg.Done()
 	}()
 
 	wg.Wait()
@@ -476,7 +489,8 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 		isDeleted := isAccountDeleted(prestate, s.diffs[mutatedAddr])
 		if isDeleted {
 			if err := s.stateTrie.DeleteAccount(mutatedAddr); err != nil {
-				panic("FUCK3")
+				s.setError(err)
+				return common.Hash{}
 			}
 			s.deletions[mutatedAddr] = struct{}{}
 		} else {
@@ -486,11 +500,13 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 				codeHash := crypto.Keccak256Hash(code)
 				acct.CodeHash = codeHash.Bytes()
 				if err := s.stateTrie.UpdateContractCode(mutatedAddr, codeHash, code); err != nil {
-					panic("FUCK4")
+					s.setError(err)
+					return common.Hash{}
 				}
 			}
 			if err := s.stateTrie.UpdateAccount(mutatedAddr, acct, len(code)); err != nil {
-				panic("FUCK4")
+				s.setError(err)
+				return common.Hash{}
 			}
 			s.postStates[mutatedAddr] = acct
 		}
