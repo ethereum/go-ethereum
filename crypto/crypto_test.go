@@ -45,8 +45,7 @@ func TestKeccak256Hash(t *testing.T) {
 func TestKeccak256Hasher(t *testing.T) {
 	msg := []byte("abc")
 	exp, _ := hex.DecodeString("4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45")
-	hasher := NewKeccakState()
-	checkhash(t, "Sha3-256-array", func(in []byte) []byte { h := HashData(hasher, in); return h[:] }, msg, exp)
+	checkhash(t, "Sha3-256-array", func(in []byte) []byte { h := Keccak256Hash(in); return h[:] }, msg, exp)
 }
 
 func TestToECDSAErrors(t *testing.T) {
@@ -312,24 +311,5 @@ func BenchmarkKeccak256Hash(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
 		Keccak256Hash(input[:])
-	}
-}
-
-// goos: darwin
-// goarch: arm64
-// pkg: github.com/ethereum/go-ethereum/crypto
-// cpu: Apple M1 Pro
-// BenchmarkHashData
-// BenchmarkHashData-8   	  793386	      1278 ns/op	      32 B/op	       1 allocs/op
-func BenchmarkHashData(b *testing.B) {
-	var (
-		input  [512]byte
-		buffer = NewKeccakState()
-	)
-	rand.Read(input[:])
-
-	b.ReportAllocs()
-	for b.Loop() {
-		HashData(buffer, input[:])
 	}
 }
