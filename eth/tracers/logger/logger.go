@@ -95,34 +95,77 @@ func (s *StructLog) ErrorString() string {
 }
 
 // WriteTo writes the human-readable log data into the supplied writer.
-func (s *StructLog) WriteTo(writer io.Writer) {
-	fmt.Fprintf(writer, "%-16spc=%08d gas=%v cost=%v", s.Op, s.Pc, s.Gas, s.GasCost)
-	if s.Err != nil {
-		fmt.Fprintf(writer, " ERROR: %v", s.Err)
+func (s *StructLog) WriteTo(writer io.Writer) (int64, error) {
+	var written int64
+
+	writef := func(format string, args ...interface{}) error {
+		n, err := fmt.Fprintf(writer, format, args...)
+		written += int64(n)
+		return err
 	}
-	fmt.Fprintln(writer)
+	write := func(text string) error {
+		n, err := io.WriteString(writer, text)
+		written += int64(n)
+		return err
+	}
+	writeln := func() error {
+		n, err := fmt.Fprintln(writer)
+		written += int64(n)
+		return err
+	}
+
+	if err := writef("%-16spc=%08d gas=%v cost=%v", s.Op, s.Pc, s.Gas, s.GasCost); err != nil {
+		return written, err
+	}
+	if s.Err != nil {
+		if err := writef(" ERROR: %v", s.Err); err != nil {
+			return written, err
+		}
+	}
+	if err := writeln(); err != nil {
+		return written, err
+	}
 
 	if len(s.Stack) > 0 {
-		fmt.Fprintln(writer, "Stack:")
+		if err := write("Stack:\n"); err != nil {
+			return written, err
+		}
 		for i := len(s.Stack) - 1; i >= 0; i-- {
-			fmt.Fprintf(writer, "%08d  %s\n", len(s.Stack)-i-1, s.Stack[i].Hex())
+			if err := writef("%08d  %s\n", len(s.Stack)-i-1, s.Stack[i].Hex()); err != nil {
+				return written, err
+			}
 		}
 	}
 	if len(s.Memory) > 0 {
-		fmt.Fprintln(writer, "Memory:")
-		fmt.Fprint(writer, hex.Dump(s.Memory))
+		if err := write("Memory:\n"); err != nil {
+			return written, err
+		}
+		if err := write(hex.Dump(s.Memory)); err != nil {
+			return written, err
+		}
 	}
 	if len(s.Storage) > 0 {
-		fmt.Fprintln(writer, "Storage:")
+		if err := write("Storage:\n"); err != nil {
+			return written, err
+		}
 		for h, item := range s.Storage {
-			fmt.Fprintf(writer, "%x: %x\n", h, item)
+			if err := writef("%x: %x\n", h, item); err != nil {
+				return written, err
+			}
 		}
 	}
 	if len(s.ReturnData) > 0 {
-		fmt.Fprintln(writer, "ReturnData:")
-		fmt.Fprint(writer, hex.Dump(s.ReturnData))
+		if err := write("ReturnData:\n"); err != nil {
+			return written, err
+		}
+		if err := write(hex.Dump(s.ReturnData)); err != nil {
+			return written, err
+		}
 	}
-	fmt.Fprintln(writer)
+	if err := writeln(); err != nil {
+		return written, err
+	}
+	return written, nil
 }
 
 // structLogLegacy stores a structured log emitted by the EVM while replaying a
@@ -324,7 +367,9 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 		l.logs = append(l.logs, entry)
 		return
 	}
-	log.WriteTo(l.writer)
+	if _, err := log.WriteTo(l.writer); err != nil {
+		l.Stop(err)
+	}
 }
 
 // OnExit is called a call frame finishes processing.
@@ -405,7 +450,9 @@ func (l *StructLogger) Output() []byte { return l.output }
 // @deprecated
 func WriteTrace(writer io.Writer, logs []StructLog) {
 	for _, log := range logs {
-		log.WriteTo(writer)
+		if _, err := log.WriteTo(writer); err != nil {
+			return
+		}
 	}
 }
 
