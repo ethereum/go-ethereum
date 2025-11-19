@@ -42,7 +42,8 @@ RUN cd /go-ethereum && env GO111MODULE=on go run build/ci.go install -buildtags 
 FROM ubuntu:20.04
 
 RUN apt-get -qq update \
-    && apt-get -qq install -y --no-install-recommends ca-certificates
+    && apt-get -qq install -y --no-install-recommends ca-certificates netcat-openbsd curl \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
 
