@@ -19,13 +19,15 @@
 
 package rawdb
 
-import "io"
+import (
+	"io"
 
-// Table is a placeholder struct for manual table rendering.
-type Table struct {
-    w io.Writer
-}
+	"github.com/olekukonko/tablewriter"
+)
 
-func NewTableWriter(w io.Writer) *Table {
-    return &Table{w: w}
+// Re-export the real tablewriter types and functions
+type Table = tablewriter.Table
+
+func newTableWriter(w io.Writer) *Table {
+	return tablewriter.NewWriter(w)
 }

@@ -206,11 +206,3 @@ func (t *Table) printRow(row []string, widths []int) {
 	}
 	fmt.Fprintln(t.out)
 }
-package rawdb
-
-import "io"
-
-// TinyGo doesn't support table formatting; use minimal placeholder.
-type Table struct{}
-
-func NewTableWriter(w io.Writer) *Table { return &Table{} }

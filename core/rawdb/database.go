@@ -650,21 +650,11 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		total.Add(uint64(ancient.size()))
 	}
 
-// Print header
-fmt.Println("Database\tCategory\tSize\tItems")
-
-// Print table rows (stats is [][]string)
-for _, row := range stats {
-    if len(row) == 4 {
-        fmt.Printf("%s\t%s\t%s\t%s\n", row[0], row[1], row[2], row[3])
-    }
-}
-
-// Print footer summary
-fmt.Printf("\nTotal\t\t%s\t%d\n",
-    common.StorageSize(total.Load()).String(),
-    count.Load(),
-)
+	table := newTableWriter(os.Stdout)
+	table.SetHeader([]string{"Database", "Category", "Size", "Items"})
+	table.SetFooter([]string{"", "Total", common.StorageSize(total.Load()).String(), fmt.Sprintf("%d", count.Load())})
+	table.AppendBulk(stats)
+	table.Render()
 
 	if !unaccounted.empty() {
 		log.Error("Database contains unaccounted data", "size", unaccounted.sizeString(), "count", unaccounted.countString())
