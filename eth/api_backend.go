@@ -94,8 +94,8 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNum
 		} else {
 			return nil, errors.New("PoS V1 does not support confirmed block lookup")
 		}
-	} else if number.Int64() < 0 {
-		return nil, fmt.Errorf("invalid block number %d", number.Int64())
+	} else if blockNr.Int64() < 0 {
+		return nil, fmt.Errorf("invalid block number %d", blockNr.Int64())
 	}
 	header := b.eth.blockchain.GetHeaderByNumber(uint64(blockNr))
 	if header == nil {
@@ -146,8 +146,8 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, blockNr rpc.BlockNumb
 		} else {
 			return nil, errors.New("PoS V1 does not support confirmed block lookup")
 		}
-	} else if number.Int64() < 0 {
-		return nil, fmt.Errorf("invalid block number %d", number.Int64())
+	} else if blockNr.Int64() < 0 {
+		return nil, fmt.Errorf("invalid block number %d", blockNr.Int64())
 	}
 	return b.eth.blockchain.GetBlockByNumber(uint64(blockNr)), nil
 }
