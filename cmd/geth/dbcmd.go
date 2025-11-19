@@ -760,11 +760,17 @@ func showMetaData(ctx *cli.Context) error {
 		data = append(data, []string{"headHeader.Root", fmt.Sprintf("%v", h.Root)})
 		data = append(data, []string{"headHeader.Number", fmt.Sprintf("%d (%#x)", h.Number, h.Number)})
 	}
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Field", "Value"})
-	table.AppendBulk(data)
-	table.Render()
-	return nil
+	table.SetHeader([]string{"Key", "Value"})
+
+for key, value := range stats {
+        table.Append([]string{key, fmt.Sprintf("%v", value)})
+}
+
+fmt.Println("Key\tValue")
+for key, value := range stats {
+    fmt.Printf("%s\t%v\n", key, value)
+}
+return nil
 }
 
 func inspectAccount(db *triedb.Database, start uint64, end uint64, address common.Address, raw bool) error {
