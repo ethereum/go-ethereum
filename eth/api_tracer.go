@@ -812,8 +812,6 @@ func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, ree
 		statedb.DeleteAddress(common.BlockSignersBinary)
 	}
 	core.InitSignerInTransactions(api.config, block.Header(), block.Transactions())
-	balanceUpdated := map[common.Address]*big.Int{}
-	totalFeeUsed := big.NewInt(0)
 	gp := new(core.GasPool).AddGas(block.GasLimit())
 	usedGas := new(uint64)
 	// Iterate over and process the individual transactions
@@ -842,8 +840,6 @@ func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, ree
 		if tokenFeeUsed {
 			fee := common.GetGasFee(block.Header().Number.Uint64(), gas)
 			feeCapacity[*tx.To()] = new(big.Int).Sub(feeCapacity[*tx.To()], fee)
-			balanceUpdated[*tx.To()] = feeCapacity[*tx.To()]
-			totalFeeUsed = totalFeeUsed.Add(totalFeeUsed, fee)
 		}
 	}
 	statedb.DeleteSuicides()
