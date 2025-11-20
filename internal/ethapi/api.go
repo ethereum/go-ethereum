@@ -3202,8 +3202,16 @@ func (api *PrivateDebugAPI) ChaindbCompact() error {
 }
 
 // SetHead rewinds the head of the blockchain to a previous block.
-func (api *PrivateDebugAPI) SetHead(number hexutil.Uint64) {
+func (api *PrivateDebugAPI) SetHead(number hexutil.Uint64) error {
+	header := api.b.CurrentHeader()
+	if header == nil {
+		return errors.New("current header is not available")
+	}
+	if header.Number.Uint64() <= uint64(number) {
+		return errors.New("not allowed to rewind to a future block")
+	}
 	api.b.SetHead(uint64(number))
+	return nil
 }
 
 // DbGet returns the raw value of a key stored in the database.

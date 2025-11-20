@@ -198,7 +198,7 @@ type BlockChain struct {
 	wg            sync.WaitGroup
 	quit          chan struct{} // shutdown signal, closed in Stop.
 	running       int32         // 0 if chain is running, 1 when stopped
-	procInterrupt int32         // interrupt signaler for block processing
+	procInterrupt atomic.Bool   // interrupt signaler for block processing
 
 	engine    consensus.Engine
 	processor Processor // block processor interface
@@ -1116,7 +1116,7 @@ func (bc *BlockChain) Stop() {
 
 	// Signal shutdown to all goroutines.
 	close(bc.quit)
-	bc.StopInsert()
+	bc.InterruptInsert(true)
 
 	// Now wait for all chain modifications to end and persistent goroutines to exit.
 	//
@@ -1130,16 +1130,20 @@ func (bc *BlockChain) Stop() {
 	log.Info("Blockchain manager stopped")
 }
 
-// StopInsert interrupts all insertion methods, causing them to return
-// errInsertionInterrupted as soon as possible. Insertion is permanently disabled after
-// calling this method.
-func (bc *BlockChain) StopInsert() {
-	atomic.StoreInt32(&bc.procInterrupt, 1)
+// InterruptInsert interrupts all insertion methods, causing them to return
+// errInsertionInterrupted as soon as possible, or resume the chain insertion
+// if required.
+func (bc *BlockChain) InterruptInsert(on bool) {
+	if on {
+		bc.procInterrupt.Store(true)
+	} else {
+		bc.procInterrupt.Store(false)
+	}
 }
 
 // insertStopped returns true after StopInsert has been called.
 func (bc *BlockChain) insertStopped() bool {
-	return atomic.LoadInt32(&bc.procInterrupt) == 1
+	return bc.procInterrupt.Load()
 }
 
 func (bc *BlockChain) procFutureBlocks() {
@@ -1251,7 +1255,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	for i, block := range blockChain {
 		receipts := receiptChain[i]
 		// Short circuit insertion if shutting down or processing failed
-		if atomic.LoadInt32(&bc.procInterrupt) == 1 {
+		if bc.insertStopped() {
 			return 0, nil
 		}
 		blockHash, blockNumber := block.Hash(), block.NumberU64()
@@ -1646,7 +1650,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	// Iterate over the blocks and insert when the verifier permits
 	for i, block := range chain {
 		// If the chain is terminating, stop processing blocks
-		if atomic.LoadInt32(&bc.procInterrupt) == 1 {
+		if bc.insertStopped() {
 			log.Debug("Premature abort during blocks processing")
 			break
 		}
@@ -1984,7 +1988,7 @@ func (bc *BlockChain) getResultBlock(block *types.Block, verifiedM2 bool) (*Resu
 	bc.calculatingBlock.Add(block.HashNoValidator(), calculatedBlock)
 	// Start the parallel header verifier
 	// If the chain is terminating, stop processing blocks
-	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
+	if bc.insertStopped() {
 		log.Debug("Premature abort during blocks processing")
 		return nil, ErrBlacklistedHash
 	}

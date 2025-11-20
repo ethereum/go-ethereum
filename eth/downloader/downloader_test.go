@@ -317,6 +317,9 @@ func (dl *downloadTester) Config() *params.ChainConfig {
 	return &config
 }
 
+func (bc *downloadTester) InterruptInsert(on bool) {
+}
+
 type downloadTesterPeer struct {
 	dl            *downloadTester
 	id            string
