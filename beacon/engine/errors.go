@@ -74,6 +74,10 @@ var (
 	//   - newPayloadV1: if the payload was accepted, but not processed (side chain)
 	ACCEPTED = "ACCEPTED"
 
+	// INCLUSION_LIST_UNSATISFIED is returned by the engine API in the following calls:
+	//   - newPayloadV5: if the payload failed to satisfy the inclusion list constraints
+	INCLUSION_LIST_UNSATISFIED = "INCLUSION_LIST_UNSATISFIED"
+
 	GenericServerError       = &EngineAPIError{code: -32000, msg: "Server error"}
 	UnknownPayload           = &EngineAPIError{code: -38001, msg: "Unknown payload"}
 	InvalidForkChoiceState   = &EngineAPIError{code: -38002, msg: "Invalid forkchoice state"}
@@ -81,6 +85,7 @@ var (
 	TooLargeRequest          = &EngineAPIError{code: -38004, msg: "Too large request"}
 	InvalidParams            = &EngineAPIError{code: -32602, msg: "Invalid parameters"}
 	UnsupportedFork          = &EngineAPIError{code: -38005, msg: "Unsupported fork"}
+	UnknownParent            = &EngineAPIError{code: -38006, msg: "Unknown parent"}
 
 	STATUS_INVALID         = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: INVALID}, PayloadID: nil}
 	STATUS_SYNCING         = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: SYNCING}, PayloadID: nil}

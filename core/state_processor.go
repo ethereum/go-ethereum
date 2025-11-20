@@ -109,6 +109,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
+
+	isInclusionListSatisfied := ValidateInclusionListTransactions(evm, block, statedb, block.InclusionListTransactions())
+
 	// Read requests if Prague is enabled.
 	var requests [][]byte
 	if config.IsPrague(block.Number(), block.Time()) {
@@ -131,10 +134,11 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	p.chain.Engine().Finalize(p.chain, header, tracingStateDB, block.Body())
 
 	return &ProcessResult{
-		Receipts: receipts,
-		Requests: requests,
-		Logs:     allLogs,
-		GasUsed:  *usedGas,
+		Receipts:               receipts,
+		Requests:               requests,
+		Logs:                   allLogs,
+		GasUsed:                *usedGas,
+		InclusionListSatisfied: &isInclusionListSatisfied,
 	}, nil
 }
 
@@ -314,6 +318,66 @@ func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte
 	copy(requestsData[1:], ret)
 	*requests = append(*requests, requestsData)
 	return nil
+}
+
+// ValidateInclusionListTransactions verifies that all transactions in the inclusion list
+// are either included in the block or cannot be appended at the end of the block.
+// If any appendable transaction is found, the block fails to meet the inclusion list constraints.
+func ValidateInclusionListTransactions(evm *vm.EVM, block *types.Block, statedb *state.StateDB, inclusionListTxs []*types.Transaction) bool {
+	// Create a map of transaction hashes present in the block.
+	isIncludedTx := make(map[common.Hash]bool)
+	for _, tx := range block.Transactions() {
+		isIncludedTx[tx.Hash()] = true
+	}
+
+	// Get the block's gas limit and gas left.
+	gasLimit := block.GasLimit()
+	gasLeft := gasLimit - block.GasUsed()
+
+	// Make a singer to get transaction senders.
+	signer := types.MakeSigner(evm.ChainConfig(), block.Number(), block.Time())
+
+	// Iterate over each transaction in the inclusion list and check if it is either included in the block or cannot be placed at the end of the block.
+	for _, tx := range inclusionListTxs {
+		// Check if the transaction is included in the block.
+		if isIncludedTx[tx.Hash()] {
+			continue
+		}
+
+		// EIP-7805 doesn't support blob transactions in inclusion list
+		if tx.Type() == types.BlobTxType {
+			continue
+		}
+
+		// Check if there is not enough gas left to execute the transaction.
+		if tx.Gas() > gasLeft {
+			continue
+		}
+
+		// Get the transaction sender.
+		from, err := types.Sender(signer, tx)
+		if err != nil {
+			continue
+		}
+
+		// Check if the sender has not enough balance to cover the transaction cost.
+		balance := statedb.GetBalance(from).ToBig()
+		cost := tx.Cost()
+		if balance.Cmp(cost) < 0 {
+			continue
+		}
+
+		// Check if the sender has a nonce that doesn't match with the transaction nonce.
+		nonce := statedb.GetNonce(from)
+		if nonce != tx.Nonce() {
+			continue
+		}
+
+		// This transaction could have been appended at the end of the block. The block fails to satisfy the inclusion list constraints.
+		return false
+	}
+
+	return true
 }
 
 var depositTopic = common.HexToHash("0x649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c5")
