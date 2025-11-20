@@ -463,27 +463,116 @@ type ExpTimeoutConfig struct {
 
 func XDPoSConfigEqual(a, b *XDPoSConfig) bool {
 	if a == nil || b == nil {
+		log.Info("[XDPoSConfigEqual] Nil check", "a", a, "b", b, "equal", a == b)
 		return a == b
 	}
-	if a.Period != b.Period || a.Epoch != b.Epoch || a.Reward != b.Reward || a.RewardCheckpoint != b.RewardCheckpoint || a.Gap != b.Gap || a.FoudationWalletAddr != b.FoudationWalletAddr || a.SkipV1Validation != b.SkipV1Validation {
+
+	if a.Period != b.Period {
+		log.Info("[XDPoSConfigEqual] Period mismatch", "a.Period", a.Period, "b.Period", b.Period)
 		return false
 	}
-	return V2Equal(a.V2, b.V2)
+	if a.Epoch != b.Epoch {
+		log.Info("[XDPoSConfigEqual] Epoch mismatch", "a.Epoch", a.Epoch, "b.Epoch", b.Epoch)
+		return false
+	}
+	if a.Reward != b.Reward {
+		log.Info("[XDPoSConfigEqual] Reward mismatch", "a.Reward", a.Reward, "b.Reward", b.Reward)
+		return false
+	}
+	if a.RewardCheckpoint != b.RewardCheckpoint {
+		log.Info("[XDPoSConfigEqual] RewardCheckpoint mismatch", "a.RewardCheckpoint", a.RewardCheckpoint, "b.RewardCheckpoint", b.RewardCheckpoint)
+		return false
+	}
+	if a.Gap != b.Gap {
+		log.Info("[XDPoSConfigEqual] Gap mismatch", "a.Gap", a.Gap, "b.Gap", b.Gap)
+		return false
+	}
+	if a.FoudationWalletAddr != b.FoudationWalletAddr {
+		log.Info("[XDPoSConfigEqual] FoudationWalletAddr mismatch", "a.FoudationWalletAddr", a.FoudationWalletAddr.Hex(), "b.FoudationWalletAddr", b.FoudationWalletAddr.Hex())
+		return false
+	}
+	if a.SkipV1Validation != b.SkipV1Validation {
+		log.Info("[XDPoSConfigEqual] SkipV1Validation mismatch", "a.SkipV1Validation", a.SkipV1Validation, "b.SkipV1Validation", b.SkipV1Validation)
+		return false
+	}
+
+	v2Equal := V2Equal(a.V2, b.V2)
+	if !v2Equal {
+		log.Info("[XDPoSConfigEqual] V2 configs not equal")
+	}
+	return v2Equal
 }
 
 func V2Equal(a, b *V2) bool {
 	if a == nil || b == nil {
+		log.Info("[V2Equal] Nil check", "a", a, "b", b, "equal", a == b)
 		return a == b
 	}
 
-	return a.SwitchEpoch == b.SwitchEpoch && configNumEqual(a.SwitchBlock, b.SwitchBlock) && slices.Equal(a.configIndex, b.configIndex) && maps.EqualFunc(a.AllConfigs, b.AllConfigs, V2ConfigEqual)
+	if a.SwitchEpoch != b.SwitchEpoch {
+		log.Info("[V2Equal] SwitchEpoch mismatch", "a.SwitchEpoch", a.SwitchEpoch, "b.SwitchEpoch", b.SwitchEpoch)
+		return false
+	}
+
+	if !configNumEqual(a.SwitchBlock, b.SwitchBlock) {
+		aBlock := "<nil>"
+		bBlock := "<nil>"
+		if a.SwitchBlock != nil {
+			aBlock = a.SwitchBlock.String()
+		}
+		if b.SwitchBlock != nil {
+			bBlock = b.SwitchBlock.String()
+		}
+		log.Info("[V2Equal] SwitchBlock mismatch", "a.SwitchBlock", aBlock, "b.SwitchBlock", bBlock)
+		return false
+	}
+
+	if !slices.Equal(a.configIndex, b.configIndex) {
+		log.Info("[V2Equal] configIndex mismatch", "a.configIndex", a.configIndex, "b.configIndex", b.configIndex)
+		return false
+	}
+
+	if !maps.EqualFunc(a.AllConfigs, b.AllConfigs, V2ConfigEqual) {
+		log.Info("[V2Equal] AllConfigs mismatch", "a.AllConfigs.len", len(a.AllConfigs), "b.AllConfigs.len", len(b.AllConfigs))
+		// Log details about which configs differ
+		for key, aConfig := range a.AllConfigs {
+			bConfig, exists := b.AllConfigs[key]
+			if !exists {
+				log.Info("[V2Equal] AllConfigs key missing in b", "key", key)
+			} else if !V2ConfigEqual(aConfig, bConfig) {
+				log.Info("[V2Equal] AllConfigs value mismatch at key", "key", key)
+			}
+		}
+		for key := range b.AllConfigs {
+			if _, exists := a.AllConfigs[key]; !exists {
+				log.Info("[V2Equal] AllConfigs key missing in a", "key", key)
+			}
+		}
+		return false
+	}
+
+	return true
 }
 
 func V2ConfigEqual(a, b *V2Config) bool {
 	if a == nil || b == nil {
+		log.Info("[V2ConfigEqual] Nil check", "a", a, "b", b, "equal", a == b)
 		return a == b
 	}
-	return *a == *b
+
+	equal := *a == *b
+	if !equal {
+		log.Info("[V2ConfigEqual] Config mismatch",
+			"a.MaxMasternodes", a.MaxMasternodes, "b.MaxMasternodes", b.MaxMasternodes,
+			"a.SwitchRound", a.SwitchRound, "b.SwitchRound", b.SwitchRound,
+			"a.MinePeriod", a.MinePeriod, "b.MinePeriod", b.MinePeriod,
+			"a.TimeoutSyncThreshold", a.TimeoutSyncThreshold, "b.TimeoutSyncThreshold", b.TimeoutSyncThreshold,
+			"a.TimeoutPeriod", a.TimeoutPeriod, "b.TimeoutPeriod", b.TimeoutPeriod,
+			"a.CertThreshold", a.CertThreshold, "b.CertThreshold", b.CertThreshold,
+			"a.ExpTimeoutConfig.Base", a.ExpTimeoutConfig.Base, "b.ExpTimeoutConfig.Base", b.ExpTimeoutConfig.Base,
+			"a.ExpTimeoutConfig.MaxExponent", a.ExpTimeoutConfig.MaxExponent, "b.ExpTimeoutConfig.MaxExponent", b.ExpTimeoutConfig.MaxExponent)
+	}
+	return equal
 }
 
 func (c *XDPoSConfig) String() string {
