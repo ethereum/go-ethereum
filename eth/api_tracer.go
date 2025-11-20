@@ -356,12 +356,16 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				break
 			}
 			// Reference the trie twice, once for us, once for the trancer
-			database.TrieDB().Reference(root, common.Hash{})
-			if number >= origin {
+			if number < end.NumberU64() { // Skip the last iteration
 				database.TrieDB().Reference(root, common.Hash{})
+				if number >= origin {
+					database.TrieDB().Reference(root, common.Hash{})
+				}
 			}
 			// Dereference all past tries we ourselves are done working with
-			database.TrieDB().Dereference(proot)
+			if proot != (common.Hash{}) { // Skip the first iteration
+				database.TrieDB().Dereference(proot)
+			}
 			proot = root
 		}
 	}()
