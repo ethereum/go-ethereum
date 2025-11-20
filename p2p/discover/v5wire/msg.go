@@ -47,8 +47,6 @@ const (
 	NodesMsg
 	TalkRequestMsg
 	TalkResponseMsg
-	RequestTicketMsg
-	TicketMsg
 
 	UnknownPacket   = byte(255) // any non-decryptable packet
 	WhoareyouPacket = byte(254) // the WHOAREYOU packet
