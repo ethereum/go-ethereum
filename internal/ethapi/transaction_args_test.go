@@ -449,10 +449,6 @@ func (b *backendMock) LendingService() *XDCxlending.Lending {
 	return nil
 }
 
-func (b *backendMock) OrderStats() (int, int) {
-	return 0, 0
-}
-
 func (b *backendMock) OrderTxPoolContent() (map[common.Address]types.OrderTransactions, map[common.Address]types.OrderTransactions) {
 	return nil, nil
 }

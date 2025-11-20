@@ -17,16 +17,9 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/node"
-	"github.com/XinFinOrg/XDPoSChain/p2p"
-	"github.com/XinFinOrg/XDPoSChain/rpc"
-	"golang.org/x/sync/syncmap"
 )
 
 const (
-	ProtocolName       = "XDCx"
-	ProtocolVersion    = uint64(1)
-	ProtocolVersionStr = "1.0"
-	overflowIdx        // Indicator of message queue overflow
 	defaultCacheLimit  = 1024
 	MaximumTxMatchSize = 1000
 )
@@ -56,24 +49,9 @@ type XDCX struct {
 	Triegc     *prque.Prque[int64, common.Hash] // Priority queue mapping block numbers to tries to gc
 	StateCache tradingstate.Database            // State database to reuse between imports (contains state cache)    *XDCx_state.TradingStateDB
 
-	orderNonce map[common.Address]*big.Int
-
 	sdkNode           bool
-	settings          syncmap.Map // holds configuration settings that can be dynamically changed
 	tokenDecimalCache *lru.Cache[common.Address, *big.Int]
 	orderCache        *lru.Cache[common.Hash, map[common.Hash]tradingstate.OrderHistoryItem]
-}
-
-func (XDCx *XDCX) Protocols() []p2p.Protocol {
-	return []p2p.Protocol{}
-}
-
-func (XDCx *XDCX) Start() error {
-	return nil
-}
-
-func (XDCx *XDCX) Stop() error {
-	return nil
 }
 
 func NewLDBEngine(cfg *Config) *XDCxDAO.BatchDatabase {
@@ -94,7 +72,6 @@ func NewMongoDBEngine(cfg *Config) *XDCxDAO.MongoDatabase {
 
 func New(stack *node.Node, cfg *Config) *XDCX {
 	XDCX := &XDCX{
-		orderNonce:        make(map[common.Address]*big.Int),
 		Triegc:            prque.New[int64, common.Hash](nil),
 		tokenDecimalCache: lru.NewCache[common.Address, *big.Int](defaultCacheLimit),
 		orderCache:        lru.NewCache[common.Hash, map[common.Hash]tradingstate.OrderHistoryItem](tradingstate.OrderCacheLimit),
@@ -110,21 +87,8 @@ func New(stack *node.Node, cfg *Config) *XDCX {
 	}
 
 	XDCX.StateCache = tradingstate.NewDatabase(XDCX.db)
-	XDCX.settings.Store(overflowIdx, false)
 
-	stack.RegisterAPIs(XDCX.APIs())
-	stack.RegisterProtocols(XDCX.Protocols())
-	stack.RegisterLifecycle(XDCX)
 	return XDCX
-}
-
-// Overflow returns an indication if the message queue is full.
-func (XDCx *XDCX) Overflow() bool {
-	val, ok := XDCx.settings.Load(overflowIdx)
-	if !ok {
-		log.Warn("[XDCx-Overflow] fail to load overflow index")
-	}
-	return val.(bool)
 }
 
 func (XDCx *XDCX) IsSDKNode() bool {
@@ -137,23 +101,6 @@ func (XDCx *XDCX) GetLevelDB() XDCxDAO.XDCXDAO {
 
 func (XDCx *XDCX) GetMongoDB() XDCxDAO.XDCXDAO {
 	return XDCx.mongodb
-}
-
-// APIs returns the RPC descriptors the XDCX implementation offers
-func (XDCx *XDCX) APIs() []rpc.API {
-	return []rpc.API{
-		{
-			Namespace: ProtocolName,
-			Version:   ProtocolVersionStr,
-			Service:   NewPublicXDCXAPI(XDCx),
-			Public:    true,
-		},
-	}
-}
-
-// Version returns the XDCX sub-protocols version number.
-func (XDCx *XDCX) Version() uint64 {
-	return ProtocolVersion
 }
 
 func (XDCx *XDCX) ProcessOrderPending(header *types.Header, coinbase common.Address, chain consensus.ChainContext, pending map[common.Address]types.OrderTransactions, statedb *state.StateDB, XDCXstatedb *tradingstate.TradingStateDB) ([]tradingstate.TxDataMatch, map[common.Hash]tradingstate.MatchingResult) {

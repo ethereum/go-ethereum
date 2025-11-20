@@ -330,9 +330,6 @@ func (b *EthAPIBackend) TxPoolContentFrom(addr common.Address) (types.Transactio
 func (b *EthAPIBackend) OrderTxPoolContent() (map[common.Address]types.OrderTransactions, map[common.Address]types.OrderTransactions) {
 	return b.eth.OrderPool().Content()
 }
-func (b *EthAPIBackend) OrderStats() (pending int, queued int) {
-	return b.eth.txPool.Stats()
-}
 
 func (b *EthAPIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
 	return b.eth.TxPool().SubscribeNewTxsEvent(ch)

@@ -28,7 +28,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
-	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
 )
 
@@ -539,27 +538,6 @@ func toBlockNumArg(number *big.Int) string {
 		return "pending"
 	}
 	return hexutil.EncodeBig(number)
-}
-
-// SendOrderTransaction injects a signed transaction into the pending pool for execution.
-//
-// If the transaction was a contract creation use the TransactionReceipt method to get the
-// contract address after the transaction has been mined.
-func (ec *Client) SendOrderTransaction(ctx context.Context, tx *types.OrderTransaction) error {
-	data, err := rlp.EncodeToBytes(tx)
-	if err != nil {
-		return err
-	}
-	return ec.c.CallContext(ctx, nil, "XDCx_sendOrderRawTransaction", hexutil.Encode(data))
-}
-
-// SendLendingTransaction send lending to pool
-func (ec *Client) SendLendingTransaction(ctx context.Context, tx *types.LendingTransaction) error {
-	data, err := rlp.EncodeToBytes(tx)
-	if err != nil {
-		return err
-	}
-	return ec.c.CallContext(ctx, nil, "XDCx_sendLendingRawTransaction", hexutil.Encode(data))
 }
 
 func toCallArg(msg ethereum.CallMsg) interface{} {
