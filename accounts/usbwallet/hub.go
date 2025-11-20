@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/karalabe/hid"
+	"github.com/karalabe/usb"
 )
 
 // LedgerScheme is the protocol scheme prefixing account and wallet URLs.
@@ -105,7 +105,7 @@ func NewTrezorHubWithWebUSB() (*Hub, error) {
 
 // newHub creates a new hardware wallet manager for generic USB devices.
 func newHub(scheme string, vendorID uint16, productIDs []uint16, usageID uint16, endpointID int, makeDriver func(log.Logger) driver) (*Hub, error) {
-	if !hid.Supported() {
+	if !usb.Supported() {
 		return nil, errors.New("unsupported platform")
 	}
 	hub := &Hub{
@@ -151,7 +151,7 @@ func (hub *Hub) refreshWallets() {
 		return
 	}
 	// Retrieve the current list of USB wallet devices
-	var devices []hid.DeviceInfo
+	var devices []usb.DeviceInfo
 
 	if runtime.GOOS == "linux" {
 		// hidapi on Linux opens the device during enumeration to retrieve some infos,
@@ -166,7 +166,7 @@ func (hub *Hub) refreshWallets() {
 			return
 		}
 	}
-	infos, err := hid.Enumerate(hub.vendorID, 0)
+	infos, err := usb.Enumerate(hub.vendorID, 0)
 	if err != nil {
 		failcount := hub.enumFails.Add(1)
 		if runtime.GOOS == "linux" {

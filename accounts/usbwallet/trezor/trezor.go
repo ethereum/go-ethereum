@@ -42,7 +42,7 @@
 //   - Grab the latest Go plugin `go get -u google.golang.org/protobuf/cmd/protoc-gen-go`
 //   - Vendor in the latest Go plugin `govendor fetch google.golang.org/protobuf/...`
 
-//go:generate protoc -I/usr/local/include:. --go_out=paths=source_relative:. messages.proto messages-common.proto messages-management.proto messages-ethereum.proto
+//go:generate protoc -I/usr/local/include:. --go_out=paths=source_relative:. options.proto messages.proto messages-common.proto messages-management.proto messages-ethereum.proto messages-ethereum-eip712.proto
 
 // Package trezor contains the wire protocol.
 package trezor
