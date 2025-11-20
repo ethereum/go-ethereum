@@ -43,7 +43,7 @@ func newLendingTxJournal(path string) *lendingtxJournal {
 // load parses a transaction journal dump from disk, loading its contents into
 // the specified pool.
 func (journal *lendingtxJournal) load(add func(*types.LendingTransaction) error) error {
-	// Skip the parsing if the journal file doens't exist at all
+	// Skip the parsing if the journal file doesn't exist at all
 	if _, err := os.Stat(journal.path); os.IsNotExist(err) {
 		return nil
 	}

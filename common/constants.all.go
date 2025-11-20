@@ -74,35 +74,35 @@ type constant struct {
 
 // variables for specific networks, copy values from maintnet constant to pass tests
 var (
-	BlackListHFNumber = MaintnetConstant.blackListHFNumber
-	MaxMasternodesV2  = MaintnetConstant.maxMasternodesV2 // Last v1 masternodes
+	BlackListHFNumber = MainnetConstant.blackListHFNumber
+	MaxMasternodesV2  = MainnetConstant.maxMasternodesV2 // Last v1 masternodes
 
-	TIP2019Block           = MaintnetConstant.tip2019Block
-	TIPSigning             = MaintnetConstant.tipSigning
-	TIPRandomize           = MaintnetConstant.tipRandomize
-	TIPNoHalvingMNReward   = MaintnetConstant.tipNoHalvingMNReward
-	TIPXDCX                = MaintnetConstant.tipXDCX
-	TIPXDCXLending         = MaintnetConstant.tipXDCXLending
-	TIPXDCXCancellationFee = MaintnetConstant.tipXDCXCancellationFee
-	TIPTRC21Fee            = MaintnetConstant.tipTRC21Fee
-	TIPIncreaseMasternodes = MaintnetConstant.tipIncreaseMasternodes
-	BerlinBlock            = MaintnetConstant.berlinBlock
-	LondonBlock            = MaintnetConstant.londonBlock
-	MergeBlock             = MaintnetConstant.mergeBlock
-	ShanghaiBlock          = MaintnetConstant.shanghaiBlock
-	BlockNumberGas50x      = MaintnetConstant.blockNumberGas50x
-	TIPXDCXMinerDisable    = MaintnetConstant.tipXDCXMinerDisable
-	TIPXDCXReceiverDisable = MaintnetConstant.tipXDCXReceiverDisable
-	Eip1559Block           = MaintnetConstant.eip1559Block
-	CancunBlock            = MaintnetConstant.cancunBlock
+	TIP2019Block           = MainnetConstant.tip2019Block
+	TIPSigning             = MainnetConstant.tipSigning
+	TIPRandomize           = MainnetConstant.tipRandomize
+	TIPNoHalvingMNReward   = MainnetConstant.tipNoHalvingMNReward
+	TIPXDCX                = MainnetConstant.tipXDCX
+	TIPXDCXLending         = MainnetConstant.tipXDCXLending
+	TIPXDCXCancellationFee = MainnetConstant.tipXDCXCancellationFee
+	TIPTRC21Fee            = MainnetConstant.tipTRC21Fee
+	TIPIncreaseMasternodes = MainnetConstant.tipIncreaseMasternodes
+	BerlinBlock            = MainnetConstant.berlinBlock
+	LondonBlock            = MainnetConstant.londonBlock
+	MergeBlock             = MainnetConstant.mergeBlock
+	ShanghaiBlock          = MainnetConstant.shanghaiBlock
+	BlockNumberGas50x      = MainnetConstant.blockNumberGas50x
+	TIPXDCXMinerDisable    = MainnetConstant.tipXDCXMinerDisable
+	TIPXDCXReceiverDisable = MainnetConstant.tipXDCXReceiverDisable
+	Eip1559Block           = MainnetConstant.eip1559Block
+	CancunBlock            = MainnetConstant.cancunBlock
 
-	TRC21IssuerSMC         = MaintnetConstant.trc21IssuerSMC
-	XDCXListingSMC         = MaintnetConstant.xdcxListingSMC
-	RelayerRegistrationSMC = MaintnetConstant.relayerRegistrationSMC
-	LendingRegistrationSMC = MaintnetConstant.lendingRegistrationSMC
+	TRC21IssuerSMC         = MainnetConstant.trc21IssuerSMC
+	XDCXListingSMC         = MainnetConstant.xdcxListingSMC
+	RelayerRegistrationSMC = MainnetConstant.relayerRegistrationSMC
+	LendingRegistrationSMC = MainnetConstant.lendingRegistrationSMC
 
-	ignoreSignerCheckBlockArray = MaintnetConstant.ignoreSignerCheckBlockArray
-	blacklist                   = MaintnetConstant.blacklist
+	ignoreSignerCheckBlockArray = MainnetConstant.ignoreSignerCheckBlockArray
+	blacklist                   = MainnetConstant.blacklist
 )
 
 func IsIgnoreSignerCheckBlock(blockNumber uint64) bool {

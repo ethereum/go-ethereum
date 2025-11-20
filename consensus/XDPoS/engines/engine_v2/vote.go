@@ -286,7 +286,7 @@ func (x *XDPoS_v2) hygieneVotePool() {
 		}
 		// Clean up any votes round that is 10 rounds older
 		if keyedRound < int64(round)-utils.PoolHygieneRound {
-			log.Debug("[hygieneVotePool] Cleaned vote poll at round", "Round", keyedRound, "currentRound", round, "Key", k)
+			log.Debug("[hygieneVotePool] Cleaned vote pool at round", "Round", keyedRound, "currentRound", round, "Key", k)
 			x.votePool.ClearByPoolKey(k)
 		}
 	}

@@ -195,8 +195,8 @@ var (
 			Gap:                 450,
 			FoudationWalletAddr: common.HexToAddress("xdc92a289fe95a85c53b8d0d113cbaef0c1ec98ac65"),
 			V2: &V2{
-				SwitchEpoch:   common.MaintnetConstant.TIPV2SwitchBlock.Uint64() / 900,
-				SwitchBlock:   common.MaintnetConstant.TIPV2SwitchBlock,
+				SwitchEpoch:   common.MainnetConstant.TIPV2SwitchBlock.Uint64() / 900,
+				SwitchBlock:   common.MainnetConstant.TIPV2SwitchBlock,
 				CurrentConfig: MainnetV2Configs[0],
 				AllConfigs:    MainnetV2Configs,
 			},

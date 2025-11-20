@@ -4,7 +4,7 @@ import (
 	"math/big"
 )
 
-var MaintnetConstant = constant{
+var MainnetConstant = constant{
 	chainID:           50,
 	blackListHFNumber: 38383838,
 	maxMasternodesV2:  108,
