@@ -20,14 +20,50 @@
 package rawdb
 
 import (
+	"fmt"
 	"io"
-
-	"github.com/olekukonko/tablewriter"
+	"strings"
+	"text/tabwriter"
 )
 
-// Re-export the real tablewriter types and functions
-type Table = tablewriter.Table
+// Lightweight internal table writer used instead of the external dependency.
+// It provides the small subset of the tablewriter API that the project uses.
+type Table struct {
+	out     io.Writer
+	headers []string
+	footer  []string
+	rows    [][]string
+}
 
 func newTableWriter(w io.Writer) *Table {
-	return tablewriter.NewWriter(w)
+	return &Table{out: w}
+}
+
+func (t *Table) SetHeader(headers []string) {
+	t.headers = headers
+}
+
+func (t *Table) SetFooter(footer []string) {
+	t.footer = footer
+}
+
+func (t *Table) AppendBulk(rows [][]string) {
+	t.rows = rows
+}
+
+// Render prints a simple tab-separated table using text/tabwriter. This
+// intentionally prints a compact, readable table for CLI consumption and
+// fulfils the small API surface used in the codebase.
+func (t *Table) Render() {
+	w := tabwriter.NewWriter(t.out, 0, 0, 2, ' ', 0)
+	if len(t.headers) > 0 {
+		fmt.Fprintln(w, strings.Join(t.headers, "\t"))
+	}
+	for _, row := range t.rows {
+		fmt.Fprintln(w, strings.Join(row, "\t"))
+	}
+	if len(t.footer) > 0 {
+		fmt.Fprintln(w, strings.Join(t.footer, "\t"))
+	}
+	_ = w.Flush()
 }

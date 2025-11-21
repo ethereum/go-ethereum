@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"text/tabwriter"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -41,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli/v2"
 )
 
@@ -760,10 +760,18 @@ func showMetaData(ctx *cli.Context) error {
 		data = append(data, []string{"headHeader.Root", fmt.Sprintf("%v", h.Root)})
 		data = append(data, []string{"headHeader.Number", fmt.Sprintf("%d (%#x)", h.Number, h.Number)})
 	}
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Field", "Value"})
-	table.AppendBulk(data)
-	table.Render()
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	// header
+	fmt.Fprintln(w, "Field\tValue")
+	// rows
+	for _, r := range data {
+		if len(r) >= 2 {
+			fmt.Fprintf(w, "%s\t%s\n", r[0], r[1])
+		} else if len(r) == 1 {
+			fmt.Fprintf(w, "%s\t\n", r[0])
+		}
+	}
+	_ = w.Flush()
 	return nil
 }
 
