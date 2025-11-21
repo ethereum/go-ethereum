@@ -23,11 +23,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
 	"math/big"
 	"math/rand"
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"golang.org/x/crypto/sha3"
@@ -50,6 +52,11 @@ var (
 
 	// MaxHash represents the maximum possible hash value.
 	MaxHash = HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	
+	// keccak256Pool is a pool of Keccak256 hashers for address checksum calculation
+	keccak256Pool = sync.Pool{New: func() any {
+		return sha3.NewLegacyKeccak256()
+	}}
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
@@ -271,8 +278,12 @@ func (a *Address) checksumHex() []byte {
 	buf := a.hex()
 
 	// compute checksum
-	sha := sha3.NewLegacyKeccak256()
-	sha.Write(buf[2:])
+	sha, ok := keccak256Pool.Get().(hash.Hash)
+	if !ok {
+		sha = sha3.NewLegacyKeccak256()
+	}
+	defer keccak256Pool.Put(sha)
+	sha.Reset()
 	hash := sha.Sum(nil)
 	for i := 2; i < len(buf); i++ {
 		hashByte := hash[(i-2)/2]
