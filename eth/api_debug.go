@@ -253,8 +253,8 @@ func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Add
 		}
 		e := storageEntry{Value: common.BytesToHash(content)}
 		if preimage := tr.GetKey(it.Key); preimage != nil {
-			preimage := common.BytesToHash(preimage)
-			e.Key = &preimage
+			hash := common.BytesToHash(preimage)
+			e.Key = &hash
 		}
 		result.Storage[common.BytesToHash(it.Key)] = e
 	}
