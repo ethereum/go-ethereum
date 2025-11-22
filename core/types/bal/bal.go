@@ -21,7 +21,9 @@ import (
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
+	"log/slog"
 	"maps"
+	"os"
 )
 
 // idxAccessListBuilder is responsible for producing the state accesses and
@@ -36,14 +38,18 @@ type idxAccessListBuilder struct {
 	// and terminating a frame merges the accesses/modifications into the
 	// intermediate access list of the calling frame.
 	accessesStack []map[common.Address]*constructionAccountAccess
+
+	// context logger for instrumenting debug logging
+	logger *slog.Logger
 }
 
-func newAccessListBuilder() *idxAccessListBuilder {
+func newAccessListBuilder(logger *slog.Logger) *idxAccessListBuilder {
 	return &idxAccessListBuilder{
 		make(map[common.Address]*accountIdxPrestate),
 		[]map[common.Address]*constructionAccountAccess{
 			make(map[common.Address]*constructionAccountAccess),
 		},
+		logger,
 	}
 }
 
@@ -175,6 +181,8 @@ func (c *idxAccessListBuilder) exitScope(evmErr bool) {
 		}
 	}
 
+	c.logger.Info("parent access list", "depth", len(c.accessesStack), "access list", parentAccessList)
+
 	c.accessesStack = c.accessesStack[:len(c.accessesStack)-1]
 }
 
@@ -194,6 +202,10 @@ func (a *idxAccessListBuilder) finalise() (*StateDiff, StateAccesses) {
 			access.balance = nil
 		}
 
+		if addr == common.HexToAddress("6e2e9c4d90be192a84d25ed58f1a38261cd3bc15") {
+			//fmt.Printf("access code is %x\n", access.code)
+			//fmt.Printf("prestate code is %x\n", a.prestates[addr].code)
+		}
 		if access.code != nil && bytes.Equal(access.code, a.prestates[addr].code) {
 			access.code = nil
 		}
@@ -231,12 +243,20 @@ func (a *idxAccessListBuilder) finalise() (*StateDiff, StateAccesses) {
 	return diff, stateAccesses
 }
 
+func (c *AccessListBuilder) EnterTx(txHash common.Hash) {
+	logger := slog.New(slog.DiscardHandler)
+	if txHash == common.HexToHash("0xf5df8d7a86856fc2e562abd47260237ec01adf2f7b46bc9fcb08485e73b77c14") {
+		logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
+	}
+	c.idxBuilder = newAccessListBuilder(logger)
+}
+
 // FinaliseIdxChanges records all pending state mutations/accesses in the
 // access list at the given index.  The set of pending state mutations/accesse are
 // then emptied.
 func (c *AccessListBuilder) FinaliseIdxChanges(idx uint16) {
 	pendingDiff, pendingAccesses := c.idxBuilder.finalise()
-	c.idxBuilder = newAccessListBuilder()
+	c.idxBuilder = newAccessListBuilder(slog.New(slog.DiscardHandler))
 
 	// if any of the newly-written storage slots were previously
 	// accessed, they must be removed from the accessed state set.
@@ -485,15 +505,18 @@ type AccessListBuilder struct {
 
 	lastFinalizedMutations *StateDiff
 	lastFinalizedAccesses  StateAccesses
+	logger                 *slog.Logger
 }
 
 // NewAccessListBuilder instantiates an empty access list.
 func NewAccessListBuilder() *AccessListBuilder {
+	logger := slog.New(slog.DiscardHandler)
 	return &AccessListBuilder{
 		make(map[common.Address]*ConstructionAccountAccesses),
-		newAccessListBuilder(),
+		newAccessListBuilder(logger),
 		nil,
 		nil,
+		logger,
 	}
 }
 

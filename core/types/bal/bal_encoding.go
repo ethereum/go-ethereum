@@ -176,8 +176,6 @@ func (e *AccountAccess) validate() error {
 			return err
 		}
 	}
-	// test case ideas: keys in both read/writes, duplicate keys in either read/writes
-	// ensure that the read and write key sets are distinct
 	readKeys := make(map[common.Hash]struct{})
 	writeKeys := make(map[common.Hash]struct{})
 	for _, readKey := range e.StorageReads {
@@ -221,7 +219,8 @@ func (e *AccountAccess) validate() error {
 		return errors.New("nonce changes not in ascending order by tx index")
 	}
 
-	// Convert code change
+	// validate that code changes could plausibly be correct (none exceed
+	// max code size of a contract)
 	for _, codeChange := range e.CodeChanges {
 		if len(codeChange.Code) > params.MaxCodeSize {
 			return fmt.Errorf("code change contained oversized code")

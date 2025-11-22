@@ -25,7 +25,7 @@ type BALStateTransition struct {
 	stateTrie  Trie
 	parentRoot common.Hash
 
-	// the state root of the block
+	// the computed state root of the block
 	rootHash common.Hash
 	// the state modifications performed by the block
 	diffs map[common.Address]*bal.AccountMutations
@@ -77,7 +77,7 @@ type BALStateTransitionMetrics struct {
 func NewBALStateTransition(accessList *BALReader, db Database, parentRoot common.Hash) (*BALStateTransition, error) {
 	reader, err := db.Reader(parentRoot)
 	if err != nil {
-		panic("OH FUCK")
+		return nil, err
 	}
 	stateTrie, err := db.OpenTrie(parentRoot)
 	if err != nil {
@@ -102,7 +102,6 @@ func NewBALStateTransition(accessList *BALReader, db Database, parentRoot common
 	}, nil
 }
 
-// TODO: make use of this method return the error from IntermediateRoot or Commit
 func (s *BALStateTransition) Error() error {
 	return s.err
 }

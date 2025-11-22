@@ -315,7 +315,7 @@ func (r *trieReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 			root, ok := r.subRoots[addr]
 
 			// The storage slot is accessed without account caching. It's unexpected
-			// behavior but try to resolve the account first anyway.
+			// behavior but try to schedule the account first anyway.
 			if !ok {
 				_, err := r.account(addr)
 				if err != nil {
@@ -448,14 +448,14 @@ func newReaderWithCache(reader Reader) *readerWithCache {
 //
 // An error will be returned if the state is corrupted in the underlying reader.
 func (r *readerWithCache) account(addr common.Address) (*types.StateAccount, bool, error) {
-	// Try to resolve the requested account in the local cache
+	// Try to schedule the requested account in the local cache
 	r.accountLock.RLock()
 	acct, ok := r.accounts[addr]
 	r.accountLock.RUnlock()
 	if ok {
 		return acct, true, nil
 	}
-	// Try to resolve the requested account from the underlying reader
+	// Try to schedule the requested account from the underlying reader
 	acct, err := r.Reader.Account(addr)
 	if err != nil {
 		return nil, false, err
@@ -484,7 +484,7 @@ func (r *readerWithCache) storage(addr common.Address, slot common.Hash) (common
 		ok     bool
 		bucket = &r.storageBuckets[addr[0]&0x0f]
 	)
-	// Try to resolve the requested storage slot in the local cache
+	// Try to schedule the requested storage slot in the local cache
 	bucket.lock.RLock()
 	slots, ok := bucket.storages[addr]
 	if ok {
@@ -494,7 +494,7 @@ func (r *readerWithCache) storage(addr common.Address, slot common.Hash) (common
 	if ok {
 		return value, true, nil
 	}
-	// Try to resolve the requested storage slot from the underlying reader
+	// Try to schedule the requested storage slot from the underlying reader
 	value, err := r.Reader.Storage(addr, slot)
 	if err != nil {
 		return common.Hash{}, false, err

@@ -81,7 +81,7 @@ type Trie interface {
 	// be returned.
 	GetAccount(address common.Address) (*types.StateAccount, error)
 
-	// PrefetchAccount attempts to resolve specific accounts from the database
+	// PrefetchAccount attempts to schedule specific accounts from the database
 	// to accelerate subsequent trie operations.
 	PrefetchAccount([]common.Address) error
 
@@ -90,7 +90,7 @@ type Trie interface {
 	// a trie.MissingNodeError is returned.
 	GetStorage(addr common.Address, key []byte) ([]byte, error)
 
-	// PrefetchStorage attempts to resolve specific storage slots from the database
+	// PrefetchStorage attempts to schedule specific storage slots from the database
 	// to accelerate subsequent trie operations.
 	PrefetchStorage(addr common.Address, keys [][]byte) error
 

@@ -286,20 +286,17 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 // Process performs EVM execution and state root computation for a block which is known
 // to contain an access list.
 func (p *ParallelStateProcessor) Process(block *types.Block, stateTransition *state.BALStateTransition, statedb *state.StateDB, cfg vm.Config) (*ProcessResultWithMetrics, error) {
-	//fmt.Println("Parallel Process")
 	var (
-		header = block.Header()
-		resCh  = make(chan *ProcessResultWithMetrics)
-		signer = types.MakeSigner(p.chainConfig(), header.Number, header.Time)
-	)
-
-	txResCh := make(chan txExecResult)
-	pStart := time.Now()
-	var (
-		tPreprocess      time.Duration // time to create a set of prestates for parallel transaction execution
-		tExecStart       time.Time
+		header           = block.Header()
+		resCh            = make(chan *ProcessResultWithMetrics)
+		signer           = types.MakeSigner(p.chainConfig(), header.Number, header.Time)
 		rootCalcResultCh = make(chan stateRootCalculationResult)
 		context          vm.BlockContext
+		txResCh          = make(chan txExecResult)
+
+		pStart      = time.Now()
+		tExecStart  time.Time
+		tPreprocess time.Duration // time to create a set of prestates for parallel transaction execution
 	)
 
 	balTracer, hooks := NewBlockAccessListTracer()
@@ -317,7 +314,6 @@ func (p *ParallelStateProcessor) Process(block *types.Block, stateTransition *st
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
-	// TODO: weird that I have to manually call finalize here
 	balTracer.OnPreTxExecutionDone()
 
 	diff, stateReads := balTracer.builder.FinalizedIdxChanges()
@@ -328,13 +324,9 @@ func (p *ParallelStateProcessor) Process(block *types.Block, stateTransition *st
 	// compute the post-tx state prestate (before applying final block system calls and eip-4895 withdrawals)
 	// the post-tx state transition is verified by resultHandler
 	postTxState := statedb.Copy()
-
 	tPreprocess = time.Since(pStart)
 
 	// execute transactions and state root calculation in parallel
-
-	// TODO: figure out how to funnel the state reads from the bal tracer through to the post-block-exec state/slot read
-	// validation
 	tExecStart = time.Now()
 	go p.resultHandler(block, stateReads, postTxState, tExecStart, txResCh, rootCalcResultCh, resCh)
 	var workers errgroup.Group
@@ -355,7 +347,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, stateTransition *st
 	if res.ProcessResult.Error != nil {
 		return nil, res.ProcessResult.Error
 	}
+	// TODO: remove preprocess metric ?
 	res.PreProcessTime = tPreprocess
-	//	res.PreProcessLoadTime = tPreprocessLoad
 	return res, nil
 }

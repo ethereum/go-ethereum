@@ -2020,8 +2020,8 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 		return nil, err
 	}
 
-	accessList := state.NewBALReader(block, reader)
-	stateTransition, err := state.NewBALStateTransition(accessList, bc.statedb, parentRoot)
+	stateReader := state.NewBALReader(block, reader)
+	stateTransition, err := state.NewBALStateTransition(stateReader, bc.statedb, parentRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -2030,7 +2030,7 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 		return nil, err
 	}
 
-	statedb.SetBlockAccessList(accessList)
+	statedb.SetBlockAccessList(stateReader)
 
 	if bc.logger != nil && bc.logger.OnBlockStart != nil {
 		bc.logger.OnBlockStart(tracing.BlockEvent{

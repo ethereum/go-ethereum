@@ -28,6 +28,7 @@ func NewBlockAccessListTracer() (*BlockAccessListTracer, *tracing.Hooks) {
 		OnBlockFinalization:  balTracer.OnBlockFinalization,
 		OnPreTxExecutionDone: balTracer.OnPreTxExecutionDone,
 		OnTxEnd:              balTracer.TxEndHook,
+		OnTxStart:            balTracer.TxStartHook,
 		OnEnter:              balTracer.OnEnter,
 		OnExit:               balTracer.OnExit,
 		OnCodeChangeV2:       balTracer.OnCodeChange,
@@ -52,6 +53,10 @@ func (a *BlockAccessListTracer) AccessList() *bal.AccessListBuilder {
 func (a *BlockAccessListTracer) OnPreTxExecutionDone() {
 	a.builder.FinaliseIdxChanges(0)
 	a.balIdx++
+}
+
+func (a *BlockAccessListTracer) TxStartHook(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	a.builder.EnterTx(tx.Hash())
 }
 
 func (a *BlockAccessListTracer) TxEndHook(receipt *types.Receipt, err error) {

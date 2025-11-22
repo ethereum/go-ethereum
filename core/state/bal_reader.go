@@ -9,11 +9,15 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/holiman/uint256"
 	"sync"
-	"time"
 )
 
 // TODO: probably unnecessary to cache the resolved state object here as it will already be in the db cache?
 // ^ experiment with the performance of keeping this as-is vs just using the db cache.
+
+// prestateResolver asynchronously fetches the prestate state accounts of addresses
+// which are reported as modified in EIP-7928 access lists in order to produce the full
+// updated state account (including fields that weren't modified in the BAL) for the
+// state root update
 type prestateResolver struct {
 	inProgress map[common.Address]chan struct{}
 	resolved   sync.Map
@@ -21,7 +25,9 @@ type prestateResolver struct {
 	cancel     func()
 }
 
-func (p *prestateResolver) resolve(r Reader, addrs []common.Address) {
+// schedule begins the retrieval of a set of state accounts running on
+// a background goroutine.
+func (p *prestateResolver) schedule(r Reader, addrs []common.Address) {
 	p.inProgress = make(map[common.Address]chan struct{})
 	p.ctx, p.cancel = context.WithCancel(context.Background())
 
@@ -29,6 +35,8 @@ func (p *prestateResolver) resolve(r Reader, addrs []common.Address) {
 		p.inProgress[addr] = make(chan struct{})
 	}
 
+	// TODO: probably we can retrieve these on a single go-routine
+	// the transaction execution will also load them
 	for _, addr := range addrs {
 		resolveAddr := addr
 		go func() {
@@ -52,6 +60,8 @@ func (p *prestateResolver) stop() {
 	p.cancel()
 }
 
+// account returns the state account for the given address, blocking if it is
+// still being resolved from disk.
 func (p *prestateResolver) account(addr common.Address) *types.StateAccount {
 	if _, ok := p.inProgress[addr]; !ok {
 		return nil
@@ -118,7 +128,7 @@ func NewBALReader(block *types.Block, reader Reader) *BALReader {
 	for _, acctDiff := range *block.Body().AccessList {
 		r.accesses[acctDiff.Address] = &acctDiff
 	}
-	r.prestateReader.resolve(reader, r.ModifiedAccounts())
+	r.prestateReader.schedule(reader, r.ModifiedAccounts())
 	return r
 }
 
@@ -158,35 +168,10 @@ func (r *BALReader) ValidateStateReads(allReads bal.StateAccesses) error {
 		}
 	}
 
-	// TODO: where do we validate that the storage read/write sets are distinct?
-
 	return nil
 }
 
-func (r *BALReader) AccessedState() (res map[common.Address]map[common.Hash]struct{}) {
-	res = make(map[common.Address]map[common.Hash]struct{})
-	for addr, accesses := range r.accesses {
-		if len(accesses.StorageReads) > 0 {
-			res[addr] = make(map[common.Hash]struct{})
-			for _, slot := range accesses.StorageReads {
-				res[addr][slot] = struct{}{}
-			}
-		} else if len(accesses.BalanceChanges) == 0 && len(accesses.NonceChanges) == 0 && len(accesses.StorageChanges) == 0 && len(accesses.CodeChanges) == 0 {
-			res[addr] = make(map[common.Hash]struct{})
-		}
-	}
-	return
-}
-
-// TODO: it feels weird that this modifies the prestate instance. However, it's needed because it will
-// subsequently be used in Commit.
-func (r *BALReader) StateRoot(prestate *StateDB) (root common.Hash, prestateLoadTime time.Duration, rootUpdateTime time.Duration) {
-	root = prestate.IntermediateRoot(true)
-	// TODO: fix the metrics calculation here
-	return root, prestateLoadTime, rootUpdateTime
-}
-
-// changesAt returns all state changes at the given index.
+// changesAt returns all state changes occurring at the given index.
 func (r *BALReader) changesAt(idx int) *bal.StateDiff {
 	res := &bal.StateDiff{make(map[common.Address]*bal.AccountMutations)}
 	for addr, _ := range r.accesses {
@@ -207,6 +192,8 @@ func (r *BALReader) accountChangesAt(addr common.Address, idx int) *bal.AccountM
 	}
 
 	var res bal.AccountMutations
+
+	// TODO: remove the reverse iteration here to clean the code up
 
 	for i := len(acct.BalanceChanges) - 1; i >= 0; i-- {
 		if acct.BalanceChanges[i].TxIdx == uint16(idx) {
@@ -277,7 +264,8 @@ func (r *BALReader) readAccount(db *StateDB, addr common.Address, idx int) *stat
 	return r.initObjFromDiff(db, addr, prestate, diff)
 }
 
-// readAccountDiff returns the accumulated state changes of an account up through idx.
+// readAccountDiff returns the accumulated state changes of an account up
+// through, and including the given index.
 func (r *BALReader) readAccountDiff(addr common.Address, idx int) *bal.AccountMutations {
 	diff, exist := r.accesses[addr]
 	if !exist {
