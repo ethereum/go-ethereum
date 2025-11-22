@@ -111,6 +111,9 @@ func (c *idxAccessListBuilder) codeChange(address common.Address, prev, cur []by
 		c.prestates[address] = &accountIdxPrestate{}
 	}
 	if c.prestates[address].code == nil {
+		if prev == nil {
+			prev = []byte{}
+		}
 		c.prestates[address].code = prev
 	}
 	if _, ok := c.accessesStack[len(c.accessesStack)-1][address]; !ok {
