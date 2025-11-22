@@ -265,7 +265,7 @@ func (s *modernSigner) Sender(tx *Transaction) (common.Address, error) {
 	// 'modern' txs are defined to use 0 and 1 as their recovery
 	// id, add 27 to become equivalent to unprotected Homestead signatures.
 	V, R, S := tx.RawSignatureValues()
-	V = new(big.Int).Add(V, big.NewInt(27))
+	V = new(big.Int).Add(V, big27)
 	return recoverPlain(s.Hash(tx), R, S, V, true)
 }
 
@@ -349,10 +349,10 @@ func (s EIP155Signer) Equal(s2 Signer) bool {
 	return ok && eip155.chainId.Cmp(s.chainId) == 0
 }
 
-var big8 = big.NewInt(8)
-
-func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
-	if tx.Type() != LegacyTxType {
+var (
+	big27 = big.NewInt(27)
+	big8  = big.NewInt(8)
+)
 		return common.Address{}, ErrTxTypeNotSupported
 	}
 	if !tx.Protected() {
