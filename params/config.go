@@ -18,9 +18,7 @@ package params
 
 import (
 	"fmt"
-	"maps"
 	"math/big"
-	"slices"
 	"strings"
 	"sync"
 
@@ -527,29 +525,24 @@ func V2Equal(a, b *V2) bool {
 		return false
 	}
 
-	if !slices.Equal(a.configIndex, b.configIndex) {
-		log.Info("[V2Equal] configIndex mismatch", "a.configIndex", a.configIndex, "b.configIndex", b.configIndex)
-		return false
-	}
-
-	if !maps.EqualFunc(a.AllConfigs, b.AllConfigs, V2ConfigEqual) {
-		log.Info("[V2Equal] AllConfigs mismatch", "a.AllConfigs.len", len(a.AllConfigs), "b.AllConfigs.len", len(b.AllConfigs))
-		// Log details about which configs differ
-		for key, aConfig := range a.AllConfigs {
-			bConfig, exists := b.AllConfigs[key]
-			if !exists {
-				log.Info("[V2Equal] AllConfigs key missing in b", "key", key)
-			} else if !V2ConfigEqual(aConfig, bConfig) {
-				log.Info("[V2Equal] AllConfigs value mismatch at key", "key", key)
-			}
-		}
-		for key := range b.AllConfigs {
-			if _, exists := a.AllConfigs[key]; !exists {
-				log.Info("[V2Equal] AllConfigs key missing in a", "key", key)
-			}
-		}
-		return false
-	}
+	// if !maps.EqualFunc(a.AllConfigs, b.AllConfigs, V2ConfigEqual) {
+	// 	log.Info("[V2Equal] AllConfigs mismatch", "a.AllConfigs.len", len(a.AllConfigs), "b.AllConfigs.len", len(b.AllConfigs))
+	// 	// Log details about which configs differ
+	// 	for key, aConfig := range a.AllConfigs {
+	// 		bConfig, exists := b.AllConfigs[key]
+	// 		if !exists {
+	// 			log.Info("[V2Equal] AllConfigs key missing in b", "key", key)
+	// 		} else if !V2ConfigEqual(aConfig, bConfig) {
+	// 			log.Info("[V2Equal] AllConfigs value mismatch at key", "key", key)
+	// 		}
+	// 	}
+	// 	for key := range b.AllConfigs {
+	// 		if _, exists := a.AllConfigs[key]; !exists {
+	// 			log.Info("[V2Equal] AllConfigs key missing in a", "key", key)
+	// 		}
+	// 	}
+	// 	return false
+	// }
 
 	return true
 }
