@@ -91,7 +91,7 @@ func (q *receiptQueue) deliver(peer *peerConnection, packet *eth.Response) (int,
 	receipts := *packet.Res.(*eth.ReceiptsRLPResponse)
 	hashes := packet.Meta.([]common.Hash) // {receipt hashes}
 
-	accepted, err := q.queue.DeliverReceipts(peer.id, receipts, hashes, packet.Partial, packet.From)
+	accepted, err := q.queue.DeliverReceipts(peer.id, receipts, hashes)
 	switch {
 	case err == nil && len(receipts) == 0:
 		peer.log.Trace("Requested receipts delivered")

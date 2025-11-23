@@ -32,45 +32,32 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
-
-type blockConfig struct {
-	txPeriod int
-	txCount  int
-}
-
-var emptyBlock = blockConfig{txPeriod: 0, txCount: 0}
-var defaultBlock = blockConfig{txPeriod: 2, txCount: 1}
 
 // makeChain creates a chain of n blocks starting at and including parent.
 // The returned hash chain is ordered head->parent.
 // If empty is false, every second block (i%2==0) contains one transaction.
-// If config.txCount > 0, every config.txPeriod-th block contains config.txCount transactions.
 // No uncles are added.
-func makeChain(n int, seed byte, parent *types.Block, config blockConfig) ([]*types.Block, []types.Receipts) {
+func makeChain(n int, seed byte, parent *types.Block, empty bool) ([]*types.Block, []types.Receipts) {
 	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), testDB, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
-		// Add transactions according to config
-		if config.txCount > 0 && i%config.txPeriod == 0 {
-			for range config.txCount {
-				signer := types.MakeSigner(params.TestChainConfig, block.Number(), block.Timestamp())
-				tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, block.BaseFee(), nil), signer, testKey)
-				if err != nil {
-					panic(err)
-				}
-				block.AddTx(tx)
+		// Add one tx to every second block
+		if !empty && i%2 == 0 {
+			signer := types.MakeSigner(params.TestChainConfig, block.Number(), block.Timestamp())
+			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, block.BaseFee(), nil), signer, testKey)
+			if err != nil {
+				panic(err)
 			}
+			block.AddTx(tx)
 		}
 	})
 	return blocks, receipts
 }
 
 type chainData struct {
-	blocks   []*types.Block
-	receipts []types.Receipts
-	offset   int
+	blocks []*types.Block
+	offset int
 }
 
 var chain *chainData
@@ -79,11 +66,11 @@ var emptyChain *chainData
 func init() {
 	// Create a chain of blocks to import
 	targetBlocks := 128
-	blocks, receipts := makeChain(targetBlocks, 0, testGenesis, defaultBlock)
-	chain = &chainData{blocks, receipts, 0}
+	blocks, _ := makeChain(targetBlocks, 0, testGenesis, false)
+	chain = &chainData{blocks, 0}
 
-	blocks, receipts = makeChain(targetBlocks, 0, testGenesis, emptyBlock)
-	emptyChain = &chainData{blocks, receipts, 0}
+	blocks, _ = makeChain(targetBlocks, 0, testGenesis, true)
+	emptyChain = &chainData{blocks, 0}
 }
 
 func (chain *chainData) headers() []*types.Header {
@@ -274,149 +261,13 @@ func TestEmptyBlocks(t *testing.T) {
 	}
 }
 
-// TestPartialReceiptDelivery checks two points:
-// 1. Receipts that fail validation should be re-requested from other peers.
-// 2. Partial delivery should not expire.
-func TestPartialReceiptDelivery(t *testing.T) {
-	blocks, receipts := makeChain(64, 0, testGenesis, blockConfig{txPeriod: 1, txCount: 5})
-	chain := chainData{blocks: blocks, receipts: receipts, offset: 0}
-
-	numBlock := len(chain.blocks)
-
-	q := newQueue(10, 10)
-	if !q.Idle() {
-		t.Errorf("new queue should be idle")
-	}
-	q.Prepare(1, SnapSync)
-	if res := q.Results(false); len(res) != 0 {
-		t.Fatal("new queue should have 0 results")
-	}
-
-	// Schedule a batch of headers
-	headers := chain.headers()
-	hashes := make([]common.Hash, len(headers))
-	for i, header := range headers {
-		hashes[i] = header.Hash()
-	}
-	q.Schedule(headers, hashes, 1)
-
-	peer := dummyPeer("peer-1")
-	req, _, _ := q.ReserveReceipts(peer, numBlock)
-
-	t.Logf("request: length %d", len(req.Headers))
-
-	// 1. Deliver a partial receipt: this must not clear the remaining receipts from the pending list
-	firstCutoff := len(req.Headers) / 3
-	receiptRLP, rcHashes := getPartialReceiptsDelivery(0, firstCutoff, receipts)
-	accepted, err := q.DeliverReceipts(peer.id, receiptRLP, rcHashes, true, 0)
-	if err != nil || accepted != firstCutoff {
-		t.Fatalf("delivery failed: err %v, accepted %d\n", err, accepted)
-	}
-
-	if pending := q.PendingReceipts(); pending != numBlock-len(req.Headers) {
-		t.Fatalf("wrong pending receipt length, got %d, exp %d", pending, numBlock-len(req.Headers))
-	}
-	for i := range firstCutoff {
-		headerNumber := req.Headers[i].Number.Uint64()
-		res, _, _, _, err := q.resultCache.getFetchResult(headerNumber)
-		if err != nil {
-			t.Fatalf("fetch result get failed: err %v", err)
-		}
-		if res == nil {
-			t.Fatalf("fetch result is nil: header number %d", headerNumber)
-		}
-		if !res.Done(receiptType) {
-			t.Fatalf("wrong result, block %d receipt not done", headerNumber)
-		}
-	}
-	if flight := q.InFlightReceipts(); !flight {
-		t.Fatalf("there should be in flight receipts")
-	}
-
-	// 2. Deliver a partial receipt containing an invalid entry: the invalid receipt should be removed from the pending list
-	secondCutoff := firstCutoff + len(req.Headers)/3
-	receiptRLP, rcHashes = getPartialReceiptsDelivery(firstCutoff, secondCutoff, receipts)
-	// one invalid receipt
-	rcHashes[len(rcHashes)-1] = common.Hash{}
-	accepted, err = q.DeliverReceipts(peer.id, receiptRLP, rcHashes, true, firstCutoff)
-	if accepted != len(rcHashes)-1 {
-		t.Fatalf("wrong accepted, got %d, exp %d", accepted, len(rcHashes)-1)
-	}
-	if err == nil {
-		t.Fatalf("delivery should fail")
-	}
-
-	// The invalid receipt should be returned to the pending pool
-	if pending := q.PendingReceipts(); pending != numBlock-len(req.Headers)+1 {
-		t.Fatalf("wrong pending receipt length, got %d, exp %d", pending, numBlock-len(req.Headers))
-	}
-	for i := range len(rcHashes) - 1 {
-		headerNumber := req.Headers[firstCutoff+i].Number.Uint64()
-		res, _, _, _, err := q.resultCache.getFetchResult(headerNumber)
-		if err != nil {
-			t.Fatalf("fetch result get failed: err %v", err)
-		}
-		if res == nil {
-			t.Fatalf("fetch result is nil: header number %d", headerNumber)
-		}
-		if !res.Done(receiptType) {
-			t.Fatalf("wrong result, block %d receipt not done", headerNumber)
-		}
-	}
-
-	// 3. Deliver the remaining receipts to complete the request
-	thirdCutoff := len(req.Headers)
-	receiptRLP, rcHashes = getPartialReceiptsDelivery(secondCutoff, thirdCutoff, receipts)
-	accepted, err = q.DeliverReceipts(peer.id, receiptRLP, rcHashes, false, secondCutoff)
-	if accepted != len(rcHashes) {
-		t.Fatalf("wrong accepted, got %d, exp %d", accepted, len(rcHashes)-1)
-	}
-	if err != nil || accepted != thirdCutoff-secondCutoff {
-		t.Fatalf("delivery failed: err %v, accepted %d\n", err, accepted)
-	}
-
-	for i := range len(rcHashes) {
-		headerNumber := req.Headers[secondCutoff+i].Number.Uint64()
-		res, _, _, _, err := q.resultCache.getFetchResult(headerNumber)
-		if err != nil {
-			t.Fatalf("fetch result get failed: err %v", err)
-		}
-		if res == nil {
-			t.Fatalf("fetch result is nil: header number %d", headerNumber)
-		}
-		if !res.Done(receiptType) {
-			t.Fatalf("wrong result, block %d receipt not done", headerNumber)
-		}
-	}
-	if q.InFlightReceipts() {
-		t.Fatal("there shouldn't be any remaning in-flight receipts")
-	}
-}
-
-func getPartialReceiptsDelivery(from int, to int, receipts []types.Receipts) ([]rlp.RawValue, []common.Hash) {
-	if from < 0 {
-		from = 0
-	}
-	if to > len(receipts) {
-		to = len(receipts)
-	}
-
-	hasher := trie.NewStackTrie(nil)
-	rcHashes := make([]common.Hash, to-from)
-	for i, rc := range receipts[from:to] {
-		rcHashes[i] = types.DeriveSha(rc, hasher)
-	}
-
-	return types.EncodeBlockReceiptLists(receipts[from:to]), rcHashes
-}
-
 // XTestDelivery does some more extensive testing of events that happen,
 // blocks that become known and peers that make reservations and deliveries.
 // disabled since it's not really a unit-test, but can be executed to test
 // some more advanced scenarios
 func XTestDelivery(t *testing.T) {
 	// the outside network, holding blocks
-	blo, rec := makeChain(128, 0, testGenesis, defaultBlock)
+	blo, rec := makeChain(128, 0, testGenesis, false)
 	world := newNetwork()
 	world.receipts = rec
 	world.chain = blo
@@ -517,7 +368,7 @@ func XTestDelivery(t *testing.T) {
 				for i, receipt := range rcs {
 					hashes[i] = types.DeriveSha(receipt, hasher)
 				}
-				_, err := q.DeliverReceipts(peer.id, types.EncodeBlockReceiptLists(rcs), hashes, false, 0)
+				_, err := q.DeliverReceipts(peer.id, types.EncodeBlockReceiptLists(rcs), hashes)
 				if err != nil {
 					fmt.Printf("delivered %d receipts %v\n", len(rcs), err)
 				}
@@ -593,7 +444,7 @@ func (n *network) progress(numBlocks int) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	//fmt.Printf("progressing...\n")
-	newBlocks, newR := makeChain(numBlocks, 0, n.chain[len(n.chain)-1], emptyBlock)
+	newBlocks, newR := makeChain(numBlocks, 0, n.chain[len(n.chain)-1], false)
 	n.chain = append(n.chain, newBlocks...)
 	n.receipts = append(n.receipts, newR...)
 	n.cond.Broadcast()

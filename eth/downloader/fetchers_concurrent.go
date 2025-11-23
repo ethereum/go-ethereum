@@ -307,15 +307,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			// reschedule the timeout timer.
 			index, live := ordering[res.Req]
 			if live {
-				req := timeouts.Remove(index)
-				delete(ordering, res.Req)
-
-				if res.Partial {
-					ttl := d.peers.rates.TargetTimeout()
-					ordering[req] = timeouts.Size()
-					timeouts.Push(req, -time.Now().Add(ttl).UnixNano())
-				}
-
+				timeouts.Remove(index)
 				if index == 0 {
 					if !timeout.Stop() {
 						<-timeout.C
@@ -325,17 +317,16 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 						timeout.Reset(time.Until(time.Unix(0, -exp)))
 					}
 				}
+				delete(ordering, res.Req)
 			}
-			if !res.Partial {
-				// Delete the pending request (if it still exists) and mark the peer idle
-				delete(pending, res.Req.Peer)
-				delete(stales, res.Req.Peer)
+			// Delete the pending request (if it still exists) and mark the peer idle
+			delete(pending, res.Req.Peer)
+			delete(stales, res.Req.Peer)
 
-				res.Req.Close()
-			}
 			// Signal the dispatcher that the round trip is done. We'll drop the
 			// peer if the data turns out to be junk.
 			res.Done <- nil
+			res.Req.Close()
 
 			// If the peer was previously banned and failed to deliver its pack
 			// in a reasonable time frame, ignore its message.

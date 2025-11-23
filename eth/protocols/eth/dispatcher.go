@@ -54,8 +54,7 @@ type Request struct {
 	Peer string    // Demultiplexer if cross-peer requests are batched together
 	Sent time.Time // Timestamp when the request was sent
 
-	reRequest bool
-	previous  uint64 // id of previous index (to find sink)
+	continued bool
 }
 
 // Close aborts an in-flight request. Although there's no way to notify the
@@ -108,9 +107,6 @@ type Response struct {
 	Meta interface{}   // Metadata generated locally on the receiver thread
 	Time time.Duration // Time it took for the request to be served
 	Done chan error    // Channel to signal message handling to the reader
-
-	From    int
-	Partial bool
 }
 
 // response is a wrapper around a remote Response that has an error channel to
@@ -207,17 +203,10 @@ func (p *Peer) dispatcher() {
 			reqOp.fail <- err
 
 			if err == nil {
-				// reuse sink if it is re-request
-				if req.reRequest {
-					if _, ok := pending[req.previous]; ok {
-						req.sink = pending[req.previous].sink
-					} else {
-						reqOp.fail <- fmt.Errorf("Cannot find previous request index")
-						continue
-					}
-					delete(pending, req.previous)
+				// do not overwrite if it is re-request
+				if _, ok := pending[req.id]; !ok {
+					pending[req.id] = req
 				}
-				pending[req.id] = req
 			}
 
 		case cancelOp := <-p.reqCancel:
@@ -231,7 +220,7 @@ func (p *Peer) dispatcher() {
 			// Stop tracking the request
 			delete(pending, cancelOp.id)
 
-			// Not sure if the request is about the receipt, but removing it anyway
+			// Not sure if the request is about the receipt, but remove it anyway
 			delete(p.receiptBuffer, cancelOp.id)
 			delete(p.requestedReceipts, cancelOp.id)
 
@@ -264,12 +253,6 @@ func (p *Peer) dispatcher() {
 				// it can wait for a handler response and dispatch the data.
 				res.Time = res.recv.Sub(res.Req.Sent)
 				resOp.fail <- nil
-
-				// Stop tracking the request, the response dispatcher will deliver
-				// For partial response, pending should be removed after re-request
-				if res.Partial {
-					delete(pending, res.id)
-				}
 			}
 
 		case <-p.term:

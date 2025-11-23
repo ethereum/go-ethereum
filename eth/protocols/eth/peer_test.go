@@ -154,7 +154,7 @@ func TestPartialReceipt(t *testing.T) {
 			},
 		},
 	}
-	if _, err := peer.ReconstructReceiptsPacket(delivery); err != nil {
+	if err := peer.BufferReceiptsPacket(delivery); err != nil {
 		t.Fatalf("first ReconstructReceiptsPacket failed: %v", err)
 	}
 
@@ -169,19 +169,12 @@ func TestPartialReceipt(t *testing.T) {
 		t.Fatalf("timeout waiting for re-request packet")
 	}
 
-	if _, ok := peer.receiptBuffer[req.id]; ok {
-		t.Fatalf("receiptBuffer has stale request id")
-	}
-	if _, ok := peer.requestedReceipts[req.id]; ok {
-		t.Fatalf("requestedReceipts has stale request id")
-	}
-
 	buffer, ok := peer.receiptBuffer[rereq.RequestId]
 	if !ok {
 		t.Fatalf("receiptBuffer should buffer incomplete receipts")
 	}
-	if rereq.FirstBlockReceiptIndex != uint64(len(buffer.list.items)) {
-		t.Fatalf("unexpected FirstBlockReceiptIndex, got %d want %d", rereq.FirstBlockReceiptIndex, len(buffer.list.items))
+	if rereq.FirstBlockReceiptIndex != uint64(len(buffer.list[len(buffer.list)-1].items)) {
+		t.Fatalf("unexpected FirstBlockReceiptIndex, got %d want %d", rereq.FirstBlockReceiptIndex, len(buffer.list[len(buffer.list)-1].items))
 	}
 	if _, ok := peer.requestedReceipts[rereq.RequestId]; !ok {
 		t.Fatalf("requestedReceipts should buffer receipt hashes")
@@ -208,7 +201,7 @@ func TestPartialReceipt(t *testing.T) {
 			},
 		},
 	}
-	if _, err := peer.ReconstructReceiptsPacket(delivery); err != nil {
+	if err := peer.BufferReceiptsPacket(delivery); err != nil {
 		t.Fatalf("second ReconstructReceiptsPacket failed: %v", err)
 	}
 	if _, ok := peer.receiptBuffer[rereq.RequestId]; ok {
