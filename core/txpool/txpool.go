@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/txpool/fastfeed"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -74,6 +75,9 @@ type TxPool struct {
 	term chan struct{}           // Termination channel to detect a closed pool
 
 	sync chan chan error // Testing / simulator channel to block until internal reset is done
+	
+	// Fast feed for low-latency transaction propagation
+	fastFeed *fastfeed.TxFastFeed
 }
 
 // New creates a new transaction pool to gather, sort and filter inbound
@@ -101,6 +105,7 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 		quit:     make(chan chan error),
 		term:     make(chan struct{}),
 		sync:     make(chan chan error),
+		fastFeed: fastfeed.NewTxFastFeed(),
 	}
 	reserver := NewReservationTracker()
 	for i, subpool := range subpools {
