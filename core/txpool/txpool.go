@@ -355,6 +355,11 @@ func (p *TxPool) Add(txs []*types.Transaction, sync bool) []error {
 		// Find which subpool handled it and pull in the corresponding error
 		errs[i] = errsets[split][0]
 		errsets[split] = errsets[split][1:]
+		
+		// Publish to fast feed if transaction was accepted
+		if errs[i] == nil {
+			p.fastFeed.Publish(txs[i], fastfeed.TxEventAdded)
+		}
 	}
 	return errs
 }

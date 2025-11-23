@@ -102,7 +102,7 @@ func (f *TxFilter) Matches(event *TxEvent) bool {
 	
 	// Check gas price
 	if f.MinGasPrice > 0 {
-		// Simple comparison of first 8 bytes as uint64
+		// Convert last 8 bytes to uint64 (big-endian)
 		gasPrice := uint64(event.GasPrice[24])<<56 | 
 		           uint64(event.GasPrice[25])<<48 | 
 		           uint64(event.GasPrice[26])<<40 | 
@@ -111,7 +111,16 @@ func (f *TxFilter) Matches(event *TxEvent) bool {
 		           uint64(event.GasPrice[29])<<16 | 
 		           uint64(event.GasPrice[30])<<8 | 
 		           uint64(event.GasPrice[31])
-		if gasPrice < f.MinGasPrice {
+		// Only filter if we can reliably compare (if value fits in uint64)
+		// Skip filtering for very large gas prices
+		hasHigherBytes := false
+		for i := 0; i < 24; i++ {
+			if event.GasPrice[i] != 0 {
+				hasHigherBytes = true
+				break
+			}
+		}
+		if !hasHigherBytes && gasPrice < f.MinGasPrice {
 			return false
 		}
 	}
