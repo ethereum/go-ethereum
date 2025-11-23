@@ -1,3 +1,31 @@
+## Mandarin
+
+A Geth for optimized so that 
+
+1. New txs + new blocks hit your bots in microseconds, not milliseconds+JSON.
+
+2. Bots can read/write “intent” (orders, bundles, replacement txs) via shared memory / low-overhead IPC instead of JSON-RPC.
+
+3. You control transaction ordering inside blocks you build or simulate.
+
+## Mandarin
+
+Mandarin is a performance-optimized fork of Go Ethereum designed for low-latency trading operations and MEV workflows. Built on Geth's solid foundation, Mandarin adds specialized features for co-located trading engines while maintaining full compatibility with the Ethereum protocol.
+
+### Key Enhancements
+
+**Bundle Support:** Submit and simulate transaction bundles with microsecond-scale latency. Bundles support timestamp constraints, revertible transactions, and profit simulation.
+
+**Custom Transaction Ordering:** Pluggable ordering strategies allow sophisticated block building beyond simple gas price sorting.
+
+**Low-Latency APIs:** Binary gRPC endpoints alongside traditional JSON-RPC for 10x faster operations including batch storage reads and bundle simulation.
+
+**Backward Compatible:** All Geth features remain unchanged. Enhancements are opt-in and don't affect standard node operation.
+
+See `PHASE1_SUMMARY.md` for detailed implementation notes and `roadmap.md` for future development plans.
+
+---
+
 ## Go Ethereum
 
 Golang execution layer implementation of the Ethereum protocol.

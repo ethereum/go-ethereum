@@ -466,6 +466,7 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 	miner.confMu.RLock()
 	tip := miner.config.GasPrice
 	prio := miner.prio
+	strategy := miner.strategy
 	miner.confMu.RUnlock()
 
 	// Retrieve the pending transactions pre-filtered by the 1559/4844 dynamic fees
@@ -492,6 +493,29 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 	}
 	pendingBlobTxs := miner.txpool.Pending(filter)
 
+	// Merge pending transactions
+	allPending := make(map[common.Address][]*txpool.LazyTransaction)
+	for addr, txs := range pendingPlainTxs {
+		allPending[addr] = txs
+	}
+	for addr, txs := range pendingBlobTxs {
+		allPending[addr] = append(allPending[addr], txs...)
+	}
+
+	// Get valid bundles for this block
+	bundles := miner.GetBundles(env.header.Number.Uint64())
+
+	// Use ordering strategy if not default
+	if _, isDefault := strategy.(*DefaultOrderingStrategy); !isDefault && strategy != nil {
+		orderedTxs, err := strategy.OrderTransactions(allPending, bundles, env.state, env.header)
+		if err != nil {
+			log.Warn("Custom ordering strategy failed, falling back to default", "err", err)
+		} else {
+			return miner.commitOrderedTransactions(env, orderedTxs, interrupt)
+		}
+	}
+
+	// Default ordering: priority transactions first, then bundles, then normal transactions
 	// Split the pending transactions into locals and remotes.
 	prioPlainTxs, normalPlainTxs := make(map[common.Address][]*txpool.LazyTransaction), pendingPlainTxs
 	prioBlobTxs, normalBlobTxs := make(map[common.Address][]*txpool.LazyTransaction), pendingBlobTxs
@@ -515,12 +539,108 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 			return err
 		}
 	}
+	
+	// Commit valid bundles
+	if err := miner.commitBundles(env, bundles, interrupt); err != nil {
+		log.Debug("Bundle commitment failed", "err", err)
+	}
+	
 	if len(normalPlainTxs) > 0 || len(normalBlobTxs) > 0 {
 		plainTxs := newTransactionsByPriceAndNonce(env.signer, normalPlainTxs, env.header.BaseFee)
 		blobTxs := newTransactionsByPriceAndNonce(env.signer, normalBlobTxs, env.header.BaseFee)
 
 		if err := miner.commitTransactions(env, plainTxs, blobTxs, interrupt); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// commitBundles attempts to commit bundles to the block.
+func (miner *Miner) commitBundles(env *environment, bundles []*Bundle, interrupt *atomic.Int32) error {
+	for _, bundle := range bundles {
+		// Validate bundle timestamp
+		if err := bundle.ValidateTimestamp(env.header.Time); err != nil {
+			continue
+		}
+		
+		// Simulate bundle to check if it will succeed
+		snapshot := env.state.Snapshot()
+		simResult, err := miner.simulator.SimulateBundle(bundle, env.header, env.state, env.coinbase)
+		if err != nil || !simResult.Success {
+			env.state.RevertToSnapshot(snapshot)
+			continue
+		}
+		
+		// Bundle simulation succeeded, commit each transaction
+		bundleSuccess := true
+		for i, tx := range bundle.Txs {
+			// Check interruption
+			if interrupt != nil {
+				if signal := interrupt.Load(); signal != commitInterruptNone {
+					env.state.RevertToSnapshot(snapshot)
+					return signalToErr(signal)
+				}
+			}
+			
+			// Check gas limit
+			if env.gasPool.Gas() < tx.Gas() {
+				bundleSuccess = false
+				break
+			}
+			
+			// Check block size
+			if !env.txFitsSize(tx) {
+				bundleSuccess = false
+				break
+			}
+			
+			// Commit transaction
+			env.state.SetTxContext(tx.Hash(), env.tcount)
+			err := miner.commitTransaction(env, tx)
+			
+			// Check if transaction failed and is not allowed to revert
+			if err != nil && !bundle.CanRevert(i) {
+				bundleSuccess = false
+				break
+			}
+		}
+		
+		// If bundle failed, revert state
+		if !bundleSuccess {
+			env.state.RevertToSnapshot(snapshot)
+		}
+	}
+	return nil
+}
+
+// commitOrderedTransactions commits pre-ordered transactions to the block.
+func (miner *Miner) commitOrderedTransactions(env *environment, txs []*types.Transaction, interrupt *atomic.Int32) error {
+	for _, tx := range txs {
+		// Check interruption signal
+		if interrupt != nil {
+			if signal := interrupt.Load(); signal != commitInterruptNone {
+				return signalToErr(signal)
+			}
+		}
+		
+		// Check gas and size constraints
+		if env.gasPool.Gas() < tx.Gas() {
+			log.Trace("Not enough gas left for transaction", "hash", tx.Hash(), "left", env.gasPool.Gas(), "needed", tx.Gas())
+			continue
+		}
+		
+		if !env.txFitsSize(tx) {
+			break
+		}
+		
+		// Commit transaction
+		env.state.SetTxContext(tx.Hash(), env.tcount)
+		err := miner.commitTransaction(env, tx)
+		if err != nil {
+			from, _ := types.Sender(env.signer, tx)
+			log.Debug("Transaction failed in ordered execution", "hash", tx.Hash(), "from", from, "err", err)
+			continue
 		}
 	}
 	return nil

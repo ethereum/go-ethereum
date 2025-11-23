@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+package grpc;
+
+option go_package = "github.com/ethereum/go-ethereum/api/grpc";
+
+// TraderService provides low-latency APIs for trading operations.
+service TraderService {
+  // SimulateBundle simulates bundle execution and returns results
+  rpc SimulateBundle(SimulateBundleRequest) returns (SimulateBundleResponse);
+  
+  // SubmitBundle submits a bundle for inclusion in future blocks
+  rpc SubmitBundle(SubmitBundleRequest) returns (SubmitBundleResponse);
+  
+  // GetStorageBatch retrieves multiple storage slots in a single call
+  rpc GetStorageBatch(GetStorageBatchRequest) returns (GetStorageBatchResponse);
+  
+  // GetPendingTransactions returns currently pending transactions
+  rpc GetPendingTransactions(GetPendingTransactionsRequest) returns (GetPendingTransactionsResponse);
+  
+  // CallContract executes a contract call
+  rpc CallContract(CallContractRequest) returns (CallContractResponse);
+}
+
+message SimulateBundleRequest {
+  repeated bytes transactions = 1;
+  optional uint64 min_timestamp = 2;
+  optional uint64 max_timestamp = 3;
+  repeated int32 reverting_txs = 4;
+  optional uint64 target_block = 5;
+}
+
+message SimulateBundleResponse {
+  bool success = 1;
+  uint64 gas_used = 2;
+  bytes profit = 3;
+  bytes coinbase_balance = 4;
+  int32 failed_tx_index = 5;
+  string failed_tx_error = 6;
+  repeated TxSimulationResult tx_results = 7;
+}
+
+message TxSimulationResult {
+  bool success = 1;
+  uint64 gas_used = 2;
+  string error = 3;
+  bytes return_value = 4;
+}
+
+message SubmitBundleRequest {
+  repeated bytes transactions = 1;
+  optional uint64 min_timestamp = 2;
+  optional uint64 max_timestamp = 3;
+  repeated int32 reverting_txs = 4;
+  optional uint64 target_block = 5;
+}
+
+message SubmitBundleResponse {
+  bytes bundle_hash = 1;
+}
+
+message GetStorageBatchRequest {
+  bytes contract = 1;
+  repeated bytes slots = 2;
+  optional uint64 block_number = 3;
+}
+
+message GetStorageBatchResponse {
+  repeated bytes values = 1;
+}
+
+message GetPendingTransactionsRequest {
+  optional uint64 min_gas_price = 1;
+}
+
+message GetPendingTransactionsResponse {
+  repeated bytes transactions = 1;
+}
+
+message CallContractRequest {
+  bytes from = 1;
+  bytes to = 2;
+  bytes data = 3;
+  optional uint64 gas = 4;
+  optional uint64 gas_price = 5;
+  optional bytes value = 6;
+  optional uint64 block_number = 7;
+}
+
+message CallContractResponse {
+  bytes return_data = 1;
+  uint64 gas_used = 2;
+  bool success = 3;
+  string error = 4;
+}
+

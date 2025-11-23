@@ -74,17 +74,27 @@ type Miner struct {
 	chain       *core.BlockChain
 	pending     *pending
 	pendingMu   sync.Mutex // Lock protects the pending block
+	
+	// Bundle and ordering support
+	bundlesMu sync.RWMutex
+	bundles   []*Bundle
+	strategy  OrderingStrategy
+	simulator *BundleSimulator
 }
 
 // New creates a new miner with provided config.
 func New(eth Backend, config Config, engine consensus.Engine) *Miner {
+	chain := eth.BlockChain()
 	return &Miner{
 		config:      &config,
-		chainConfig: eth.BlockChain().Config(),
+		chainConfig: chain.Config(),
 		engine:      engine,
 		txpool:      eth.TxPool(),
-		chain:       eth.BlockChain(),
+		chain:       chain,
 		pending:     &pending{},
+		bundles:     make([]*Bundle, 0),
+		strategy:    &DefaultOrderingStrategy{},
+		simulator:   NewBundleSimulator(chain),
 	}
 }
 
@@ -131,6 +141,64 @@ func (miner *Miner) SetGasTip(tip *big.Int) error {
 	miner.config.GasPrice = tip
 	miner.confMu.Unlock()
 	return nil
+}
+
+// SetOrderingStrategy sets a custom transaction ordering strategy.
+func (miner *Miner) SetOrderingStrategy(strategy OrderingStrategy) {
+	miner.confMu.Lock()
+	miner.strategy = strategy
+	miner.confMu.Unlock()
+}
+
+// AddBundle adds a bundle to be considered for inclusion in future blocks.
+func (miner *Miner) AddBundle(bundle *Bundle) error {
+	miner.bundlesMu.Lock()
+	defer miner.bundlesMu.Unlock()
+	
+	miner.bundles = append(miner.bundles, bundle)
+	return nil
+}
+
+// GetBundles returns the current bundles for the given block number.
+func (miner *Miner) GetBundles(blockNumber uint64) []*Bundle {
+	miner.bundlesMu.RLock()
+	defer miner.bundlesMu.RUnlock()
+	
+	validBundles := make([]*Bundle, 0)
+	for _, bundle := range miner.bundles {
+		if bundle.TargetBlock == 0 || bundle.TargetBlock == blockNumber {
+			validBundles = append(validBundles, bundle)
+		}
+	}
+	return validBundles
+}
+
+// ClearExpiredBundles removes bundles that are no longer valid for the given block number.
+func (miner *Miner) ClearExpiredBundles(blockNumber uint64) {
+	miner.bundlesMu.Lock()
+	defer miner.bundlesMu.Unlock()
+	
+	validBundles := make([]*Bundle, 0)
+	for _, bundle := range miner.bundles {
+		if bundle.TargetBlock == 0 || bundle.TargetBlock >= blockNumber {
+			validBundles = append(validBundles, bundle)
+		}
+	}
+	miner.bundles = validBundles
+}
+
+// SimulateBundle simulates a bundle and returns the result.
+func (miner *Miner) SimulateBundle(bundle *Bundle, header *types.Header) (*BundleSimulationResult, error) {
+	// Get current state
+	stateDB, err := miner.chain.StateAt(miner.chain.CurrentBlock().Root)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Copy state for simulation
+	simState := stateDB.Copy()
+	
+	return miner.simulator.SimulateBundle(bundle, header, simState, miner.config.PendingFeeRecipient)
 }
 
 // BuildPayload builds the payload according to the provided parameters.
