@@ -43,7 +43,11 @@ func WaitMined(ctx context.Context, b DeployBackend, txHash common.Hash) (*types
 		if errors.Is(err, ethereum.NotFound) {
 			logger.Trace("Transaction not yet mined")
 		} else {
-			logger.Trace("Receipt retrieval failed", "err", err)
+			logger.Warn("Receipt retrieval failed", "err", err)
+			// For context cancellation, return immediately
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return nil, err
+			}
 		}
 
 		// Wait for the next round.
