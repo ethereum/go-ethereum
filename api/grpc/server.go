@@ -19,321 +19,329 @@ package grpc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/holiman/uint256"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
-// Backend defines the interface for accessing blockchain data.
+// Backend defines the necessary methods from the Ethereum backend for the gRPC server.
 type Backend interface {
-	BlockChain() *core.BlockChain
-	TxPool() *core.TxPool
-	Miner() *miner.Miner
 	ChainConfig() *params.ChainConfig
-	CurrentHeader() *types.Header
-	StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error)
-	RPCGasCap() uint64
+	BlockChain() *core.BlockChain
+	StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error)
+	Miner() *miner.Miner
 }
 
-// TraderServer implements the gRPC trader service.
+// TraderServer implements the TraderServiceServer interface.
 type TraderServer struct {
+	UnimplementedTraderServiceServer
 	backend Backend
-	config  *params.ChainConfig
 }
 
-// NewTraderServer creates a new gRPC trader server.
-func NewTraderServer(eth *eth.Ethereum) *TraderServer {
-	return &TraderServer{
-		backend: eth,
-		config:  eth.BlockChain().Config(),
-	}
+// NewTraderServer creates a new TraderServer instance.
+func NewTraderServer(backend Backend) *TraderServer {
+	return &TraderServer{backend: backend}
 }
 
-// SimulateBundle simulates a bundle and returns detailed results.
+// SimulateBundle simulates bundle execution and returns results.
 func (s *TraderServer) SimulateBundle(ctx context.Context, req *SimulateBundleRequest) (*SimulateBundleResponse, error) {
 	if len(req.Transactions) == 0 {
-		return nil, errors.New("bundle must contain at least one transaction")
+		return nil, errors.New("bundle cannot be empty")
 	}
 
-	// Decode transactions
+	// Convert protobuf transactions to types.Transaction
 	txs := make([]*types.Transaction, len(req.Transactions))
-	for i, encodedTx := range req.Transactions {
-		var tx types.Transaction
-		if err := tx.UnmarshalBinary(encodedTx); err != nil {
-			return nil, err
+	for i, rawTx := range req.Transactions {
+		tx := new(types.Transaction)
+		if err := tx.UnmarshalBinary(rawTx); err != nil {
+			return nil, fmt.Errorf("failed to decode transaction %d: %w", i, err)
 		}
-		txs[i] = &tx
+		txs[i] = tx
 	}
 
 	// Create bundle
-	bundle := &miner.Bundle{
-		Txs:          txs,
-		RevertingTxs: make([]int, len(req.RevertingTxs)),
+	var targetBlock uint64 = 0
+	if req.TargetBlock != nil {
+		targetBlock = *req.TargetBlock
 	}
-
-	for i, idx := range req.RevertingTxs {
-		bundle.RevertingTxs[i] = int(idx)
-	}
-
+	
+	var minTs, maxTs uint64
 	if req.MinTimestamp != nil {
-		bundle.MinTimestamp = *req.MinTimestamp
+		minTs = *req.MinTimestamp
 	}
 	if req.MaxTimestamp != nil {
-		bundle.MaxTimestamp = *req.MaxTimestamp
+		maxTs = *req.MaxTimestamp
+	}
+	
+	revertingIndices := make([]int, len(req.RevertingTxs))
+	for i, idx := range req.RevertingTxs {
+		revertingIndices[i] = int(idx)
+	}
+	
+	bundle := &miner.Bundle{
+		Txs:          txs,
+		MinTimestamp: minTs,
+		MaxTimestamp: maxTs,
+		RevertingTxs: revertingIndices,
+		TargetBlock:  targetBlock,
 	}
 
-	// Get simulation header
-	currentHeader := s.backend.CurrentHeader()
-	simHeader := &types.Header{
-		ParentHash: currentHeader.Hash(),
-		Number:     new(big.Int).Add(currentHeader.Number, big.NewInt(1)),
-		GasLimit:   currentHeader.GasLimit,
-		Time:       currentHeader.Time + 12,
-		BaseFee:    currentHeader.BaseFee,
+	// Get current block header for simulation
+	header := s.backend.BlockChain().CurrentBlock()
+	if header == nil {
+		return nil, errors.New("current block not found")
 	}
 
-	// Simulate
-	result, err := s.backend.Miner().SimulateBundle(bundle, simHeader)
+	// Simulate bundle  
+	result, err := s.backend.Miner().SimulateBundle(bundle, header)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("bundle simulation failed: %w", err)
 	}
 
-	// Convert to protobuf response
-	response := &SimulateBundleResponse{
+	// Convert result to protobuf
+	pbResult := &SimulateBundleResponse{
 		Success:         result.Success,
 		GasUsed:         result.GasUsed,
 		Profit:          result.Profit.Bytes(),
 		CoinbaseBalance: result.CoinbaseBalance.Bytes(),
-		FailedTxIndex:   int32(result.FailedTxIndex),
 		TxResults:       make([]*TxSimulationResult, len(result.TxResults)),
 	}
 
-	if result.FailedTxError != nil {
-		response.FailedTxError = result.FailedTxError.Error()
+	for i, txRes := range result.TxResults {
+		errStr := ""
+		if txRes.Error != nil {
+			errStr = txRes.Error.Error()
+		}
+		
+		pbResult.TxResults[i] = &TxSimulationResult{
+			Success:     txRes.Success,
+			GasUsed:     txRes.GasUsed,
+			Error:       errStr,
+			ReturnValue: txRes.ReturnValue,
+		}
+		
+		if !txRes.Success {
+			pbResult.FailedTxIndex = int32(i)
+			pbResult.FailedTxError = errStr
+		}
 	}
 
-	for i, txResult := range result.TxResults {
-		pbResult := &TxSimulationResult{
-			Success: txResult.Success,
-			GasUsed: txResult.GasUsed,
-		}
-		if txResult.Error != nil {
-			pbResult.Error = txResult.Error.Error()
-		}
-		if txResult.ReturnValue != nil {
-			pbResult.ReturnValue = txResult.ReturnValue
-		}
-		response.TxResults[i] = pbResult
-	}
-
-	return response, nil
+	return pbResult, nil
 }
 
 // SubmitBundle submits a bundle for inclusion in future blocks.
 func (s *TraderServer) SubmitBundle(ctx context.Context, req *SubmitBundleRequest) (*SubmitBundleResponse, error) {
 	if len(req.Transactions) == 0 {
-		return nil, errors.New("bundle must contain at least one transaction")
+		return nil, errors.New("bundle cannot be empty")
 	}
 
-	// Decode transactions
+	// Convert protobuf transactions to types.Transaction
 	txs := make([]*types.Transaction, len(req.Transactions))
-	for i, encodedTx := range req.Transactions {
-		var tx types.Transaction
-		if err := tx.UnmarshalBinary(encodedTx); err != nil {
-			return nil, err
+	for i, rawTx := range req.Transactions {
+		tx := new(types.Transaction)
+		if err := tx.UnmarshalBinary(rawTx); err != nil {
+			return nil, fmt.Errorf("failed to decode transaction %d: %w", i, err)
 		}
-		txs[i] = &tx
+		txs[i] = tx
 	}
 
 	// Create bundle
-	bundle := &miner.Bundle{
-		Txs:          txs,
-		RevertingTxs: make([]int, len(req.RevertingTxs)),
+	var targetBlock uint64 = 0
+	if req.TargetBlock != nil {
+		targetBlock = *req.TargetBlock
 	}
-
-	for i, idx := range req.RevertingTxs {
-		bundle.RevertingTxs[i] = int(idx)
-	}
-
+	
+	var minTs, maxTs uint64
 	if req.MinTimestamp != nil {
-		bundle.MinTimestamp = *req.MinTimestamp
+		minTs = *req.MinTimestamp
 	}
 	if req.MaxTimestamp != nil {
-		bundle.MaxTimestamp = *req.MaxTimestamp
+		maxTs = *req.MaxTimestamp
 	}
-	if req.TargetBlock != nil {
-		bundle.TargetBlock = *req.TargetBlock
+	
+	revertingIndices := make([]int, len(req.RevertingTxs))
+	for i, idx := range req.RevertingTxs {
+		revertingIndices[i] = int(idx)
+	}
+	
+	bundle := &miner.Bundle{
+		Txs:          txs,
+		MinTimestamp: minTs,
+		MaxTimestamp: maxTs,
+		RevertingTxs: revertingIndices,
+		TargetBlock:  targetBlock,
 	}
 
-	// Add bundle
+	// Add bundle to miner
 	if err := s.backend.Miner().AddBundle(bundle); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to add bundle to miner: %w", err)
 	}
 
+	// Create hash from bundle transactions
+	bundleHash := types.DeriveSha(types.Transactions(bundle.Txs), trie.NewStackTrie(nil))
+	
 	return &SubmitBundleResponse{
-		BundleHash: txs[0].Hash().Bytes(),
+		BundleHash: bundleHash.Bytes(),
 	}, nil
 }
 
-// GetStorageBatch retrieves multiple storage slots efficiently.
+// GetStorageBatch retrieves multiple storage slots in a single call.
 func (s *TraderServer) GetStorageBatch(ctx context.Context, req *GetStorageBatchRequest) (*GetStorageBatchResponse, error) {
-	if len(req.Contract) != 20 {
+	if len(req.Contract) != common.AddressLength {
 		return nil, errors.New("invalid contract address")
 	}
+	if len(req.Slots) == 0 {
+		return nil, errors.New("no storage slots provided")
+	}
 
-	contract := common.BytesToAddress(req.Contract)
-	blockNr := rpc.LatestBlockNumber
+	addr := common.BytesToAddress(req.Contract)
+
+	// Get state at specified block
+	var blockNrOrHash rpc.BlockNumberOrHash
 	if req.BlockNumber != nil {
-		blockNr = rpc.BlockNumber(*req.BlockNumber)
+		blockNrOrHash = rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(*req.BlockNumber))
+	} else {
+		blockNrOrHash = rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 	}
 
-	// Get state
-	stateDB, _, err := s.backend.StateAndHeaderByNumber(ctx, blockNr)
+	stateDB, _, err := s.backend.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get state for block: %w", err)
+	}
+	if stateDB == nil {
+		return nil, errors.New("state not found for block")
 	}
 
-	// Batch read storage
+	// Batch read storage slots
 	values := make([][]byte, len(req.Slots))
-	for i, slotBytes := range req.Slots {
-		if len(slotBytes) != 32 {
-			return nil, errors.New("invalid slot size")
+	for i, keyBytes := range req.Slots {
+		if len(keyBytes) != common.HashLength {
+			return nil, fmt.Errorf("invalid storage key length at index %d: %d", i, len(keyBytes))
 		}
-		slot := common.BytesToHash(slotBytes)
-		value := stateDB.GetState(contract, slot)
+		key := common.BytesToHash(keyBytes)
+		value := stateDB.GetState(addr, key)
 		values[i] = value.Bytes()
 	}
 
-	return &GetStorageBatchResponse{
-		Values: values,
-	}, nil
+	return &GetStorageBatchResponse{Values: values}, nil
 }
 
-// GetPendingTransactions returns pending transactions.
+// GetPendingTransactions returns currently pending transactions.
 func (s *TraderServer) GetPendingTransactions(ctx context.Context, req *GetPendingTransactionsRequest) (*GetPendingTransactionsResponse, error) {
-	// Get pending from txpool
-	pending := s.backend.TxPool().Pending(core.PendingFilter{})
-
-	var txs [][]byte
-	for _, accountTxs := range pending {
-		for _, ltx := range accountTxs {
-			tx := ltx.Resolve()
-			if tx == nil {
-				continue
-			}
-			
-			// Filter by min gas price if specified
-			if req.MinGasPrice != nil {
-				gasPrice := tx.GasPrice()
-				if tx.Type() == types.DynamicFeeTxType {
-					gasPrice = tx.GasFeeCap()
-				}
-				if gasPrice.Cmp(new(big.Int).SetUint64(*req.MinGasPrice)) < 0 {
-					continue
-				}
-			}
-			
-			encoded, err := tx.MarshalBinary()
-			if err != nil {
-				log.Warn("Failed to encode transaction", "hash", tx.Hash(), "err", err)
-				continue
-			}
-			txs = append(txs, encoded)
-		}
+	// Get pending transactions from miner
+	pending, _, _ := s.backend.Miner().Pending()
+	if pending == nil {
+		return &GetPendingTransactionsResponse{Transactions: [][]byte{}}, nil
 	}
 
-	return &GetPendingTransactionsResponse{
-		Transactions: txs,
-	}, nil
+	// Filter by gas price if requested
+	var minGasPrice *big.Int
+	if req.MinGasPrice != nil {
+		minGasPrice = new(big.Int).SetUint64(*req.MinGasPrice)
+	}
+
+	// Collect and encode transactions
+	var encodedTxs [][]byte
+	for _, tx := range pending.Transactions() {
+		if minGasPrice != nil && tx.GasPrice().Cmp(minGasPrice) < 0 {
+			continue
+		}
+		
+		encoded, err := tx.MarshalBinary()
+		if err != nil {
+			log.Warn("Failed to encode pending transaction", "hash", tx.Hash(), "err", err)
+			continue
+		}
+		encodedTxs = append(encodedTxs, encoded)
+	}
+
+	return &GetPendingTransactionsResponse{Transactions: encodedTxs}, nil
 }
 
 // CallContract executes a contract call.
 func (s *TraderServer) CallContract(ctx context.Context, req *CallContractRequest) (*CallContractResponse, error) {
-	if len(req.To) != 20 {
-		return nil, errors.New("invalid contract address")
-	}
-
-	blockNr := rpc.LatestBlockNumber
-	if req.BlockNumber != nil {
-		blockNr = rpc.BlockNumber(*req.BlockNumber)
-	}
-
-	stateDB, header, err := s.backend.StateAndHeaderByNumber(ctx, blockNr)
-	if err != nil {
-		return nil, err
-	}
-
-	// Prepare message
-	from := common.Address{}
-	if len(req.From) == 20 {
+	var (
+		from common.Address
+		to   *common.Address
+	)
+	if len(req.From) > 0 {
 		from = common.BytesToAddress(req.From)
 	}
-	to := common.BytesToAddress(req.To)
+	if len(req.To) > 0 {
+		t := common.BytesToAddress(req.To)
+		to = &t
+	}
 
-	gas := s.backend.RPCGasCap()
-	if req.Gas != nil && *req.Gas > 0 {
-		gas = *req.Gas
+	value := new(big.Int)
+	if len(req.Value) > 0 {
+		value.SetBytes(req.Value)
 	}
 
 	gasPrice := new(big.Int)
 	if req.GasPrice != nil {
-		gasPrice = new(big.Int).SetUint64(*req.GasPrice)
-	} else if header.BaseFee != nil {
-		gasPrice = header.BaseFee
+		gasPrice.SetUint64(*req.GasPrice)
 	}
 
-	value := new(big.Int)
-	if req.Value != nil {
-		value = new(big.Int).SetBytes(req.Value)
+	gas := uint64(100000000) // Default gas limit
+	if req.Gas != nil {
+		gas = *req.Gas
 	}
 
 	msg := &core.Message{
-		From:              from,
-		To:                &to,
-		Value:             value,
-		GasLimit:          gas,
-		GasPrice:          gasPrice,
-		GasFeeCap:         gasPrice,
-		GasTipCap:         gasPrice,
-		Data:              req.Data,
-		SkipAccountChecks: true,
+		From:     from,
+		To:       to,
+		Value:    value,
+		GasLimit: gas,
+		GasPrice: gasPrice,
+		Data:     req.Data,
 	}
 
-	// Create EVM
-	blockContext := core.NewEVMBlockContext(header, s.backend.BlockChain(), nil)
-	txContext := core.NewEVMTxContext(msg)
-	evm := vm.NewEVM(blockContext, txContext, stateDB, s.config, vm.Config{})
+	// Get state at specified block
+	var blockNrOrHash rpc.BlockNumberOrHash
+	if req.BlockNumber != nil {
+		blockNrOrHash = rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(*req.BlockNumber))
+	} else {
+		blockNrOrHash = rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+	}
 
-	// Execute
-	result, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(gas))
+	stateDB, header, err := s.backend.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if err != nil {
-		return &CallContractResponse{
-			Success: false,
-			Error:   err.Error(),
-		}, nil
+		return nil, fmt.Errorf("failed to get state and header: %w", err)
+	}
+	if stateDB == nil || header == nil {
+		return nil, errors.New("state or header not found")
 	}
 
-	response := &CallContractResponse{
-		ReturnData: result.ReturnData,
-		GasUsed:    result.UsedGas,
-		Success:    !result.Failed(),
+	// Create EVM and execute call
+	blockContext := core.NewEVMBlockContext(header, s.backend.BlockChain(), nil)
+	vmConfig := vm.Config{}
+
+	evm := vm.NewEVM(blockContext, stateDB, s.backend.ChainConfig(), vmConfig)
+
+	gasPool := new(core.GasPool).AddGas(gas)
+	execResult, err := core.ApplyMessage(evm, msg, gasPool)
+
+	resp := &CallContractResponse{
+		ReturnData: execResult.ReturnData,
+		GasUsed:    execResult.UsedGas,
+		Success:    !execResult.Failed(),
+	}
+	if err != nil {
+		resp.Error = err.Error()
+	} else if execResult.Failed() {
+		resp.Error = execResult.Err.Error()
 	}
 
-	if result.Failed() {
-		response.Error = result.Err.Error()
-	}
-
-	return response, nil
+	return resp, nil
 }
 
