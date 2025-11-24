@@ -739,15 +739,17 @@ func (bc *BlockChain) SetHead(head uint64) error {
 	}
 	// Send chain head event to update the transaction pool
 	header := bc.CurrentBlock()
-	if block := bc.GetBlock(header.Hash(), header.Number.Uint64()); block == nil {
+	hash := header.Hash()
+	number := header.Number.Uint64()
+	if block := bc.GetBlock(hash, number); block == nil {
 		// In a pruned node the genesis block will not exist in the freezer.
 		// It should not happen that we set head to any other pruned block.
-		if header.Number.Uint64() > 0 {
+		if number > 0 {
 			// This should never happen. In practice, previously currentBlock
 			// contained the entire block whereas now only a "marker", so there
 			// is an ever so slight chance for a race we should handle.
-			log.Error("Current block not found in database", "block", header.Number, "hash", header.Hash())
-			return fmt.Errorf("current block missing: #%d [%x..]", header.Number, header.Hash().Bytes()[:4])
+			log.Error("Current block not found in database", "block", header.Number, "hash", hash)
+			return fmt.Errorf("current block missing: #%d [%x..]", header.Number, hash.Bytes()[:4])
 		}
 	}
 	bc.chainHeadFeed.Send(ChainHeadEvent{Header: header})
@@ -764,15 +766,17 @@ func (bc *BlockChain) SetHeadWithTimestamp(timestamp uint64) error {
 	}
 	// Send chain head event to update the transaction pool
 	header := bc.CurrentBlock()
-	if block := bc.GetBlock(header.Hash(), header.Number.Uint64()); block == nil {
+	hash := header.Hash()
+	number := header.Number.Uint64()
+	if block := bc.GetBlock(hash, number); block == nil {
 		// In a pruned node the genesis block will not exist in the freezer.
 		// It should not happen that we set head to any other pruned block.
-		if header.Number.Uint64() > 0 {
+		if number > 0 {
 			// This should never happen. In practice, previously currentBlock
 			// contained the entire block whereas now only a "marker", so there
 			// is an ever so slight chance for a race we should handle.
-			log.Error("Current block not found in database", "block", header.Number, "hash", header.Hash())
-			return fmt.Errorf("current block missing: #%d [%x..]", header.Number, header.Hash().Bytes()[:4])
+			log.Error("Current block not found in database", "block", header.Number, "hash", hash)
+			return fmt.Errorf("current block missing: #%d [%x..]", header.Number, hash.Bytes()[:4])
 		}
 	}
 	bc.chainHeadFeed.Send(ChainHeadEvent{Header: header})
