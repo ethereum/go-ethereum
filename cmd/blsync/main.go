@@ -44,7 +44,6 @@ func main() {
 		utils.BeaconGenesisTimeFlag,
 		utils.BeaconCheckpointFlag,
 		utils.BeaconCheckpointFileFlag,
-		//TODO datadir for optional permanent database
 		utils.MainnetFlag,
 		utils.SepoliaFlag,
 		utils.HoleskyFlag,
@@ -88,7 +87,7 @@ func makeRPCClient(ctx *cli.Context) *rpc.Client {
 		return nil
 	}
 	if !ctx.IsSet(utils.BlsyncJWTSecretFlag.Name) {
-		utils.Fatalf("JWT secret parameter missing") //TODO use default if datadir is specified
+		utils.Fatalf("JWT secret parameter missing")
 	}
 
 	engineApiUrl, jwtFileName := ctx.String(utils.BlsyncApiFlag.Name), ctx.String(utils.BlsyncJWTSecretFlag.Name)
