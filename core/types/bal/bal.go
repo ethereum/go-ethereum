@@ -184,8 +184,6 @@ func (c *idxAccessListBuilder) exitScope(evmErr bool) {
 		}
 	}
 
-	c.logger.Info("parent access list", "depth", len(c.accessesStack), "access list", parentAccessList)
-
 	c.accessesStack = c.accessesStack[:len(c.accessesStack)-1]
 }
 
