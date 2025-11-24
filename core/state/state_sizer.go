@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/triedb"
 	"golang.org/x/sync/errgroup"
 )
@@ -46,6 +47,21 @@ var (
 	accountTrienodePrefixSize = int64(len(rawdb.TrieNodeAccountPrefix))
 	storageTrienodePrefixSize = int64(len(rawdb.TrieNodeStoragePrefix) + common.HashLength)
 	codeKeySize               = int64(len(rawdb.CodePrefix) + common.HashLength)
+)
+
+// State size metrics
+var (
+	stateSizeMetadataGaugeInfo          = metrics.NewRegisteredGaugeInfo("state/metadata", nil)
+	stateSizeAccountsCountGauge         = metrics.NewRegisteredGauge("state/accounts/count", nil)
+	stateSizeAccountsBytesGauge         = metrics.NewRegisteredGauge("state/accounts/bytes", nil)
+	stateSizeStoragesCountGauge         = metrics.NewRegisteredGauge("state/storages/count", nil)
+	stateSizeStoragesBytesGauge         = metrics.NewRegisteredGauge("state/storages/bytes", nil)
+	stateSizeAccountTrieNodesCountGauge = metrics.NewRegisteredGauge("state/trienodes/account/count", nil)
+	stateSizeAccountTrieNodesBytesGauge = metrics.NewRegisteredGauge("state/trienodes/account/bytes", nil)
+	stateSizeStorageTrieNodesCountGauge = metrics.NewRegisteredGauge("state/trienodes/storage/count", nil)
+	stateSizeStorageTrieNodesBytesGauge = metrics.NewRegisteredGauge("state/trienodes/storage/bytes", nil)
+	stateSizeContractsCountGauge        = metrics.NewRegisteredGauge("state/contracts/count", nil)
+	stateSizeContractsBytesGauge        = metrics.NewRegisteredGauge("state/contracts/bytes", nil)
 )
 
 // SizeStats represents either the current state size statistics or the size
@@ -74,6 +90,23 @@ func (s SizeStats) String() string {
 		s.StorageTrienodes, common.StorageSize(s.StorageTrienodeBytes),
 		s.ContractCodes, common.StorageSize(s.ContractCodeBytes),
 	)
+}
+
+func (s SizeStats) publish() {
+	stateSizeMetadataGaugeInfo.Update(metrics.GaugeInfoValue{
+		"number": fmt.Sprintf("%d", s.BlockNumber),
+		"hash":   s.StateRoot.Hex(),
+	})
+	stateSizeAccountsCountGauge.Update(s.Accounts)
+	stateSizeAccountsBytesGauge.Update(s.AccountBytes)
+	stateSizeStoragesCountGauge.Update(s.Storages)
+	stateSizeStoragesBytesGauge.Update(s.StorageBytes)
+	stateSizeAccountTrieNodesCountGauge.Update(s.AccountTrienodes)
+	stateSizeAccountTrieNodesBytesGauge.Update(s.AccountTrienodeBytes)
+	stateSizeStorageTrieNodesCountGauge.Update(s.StorageTrienodes)
+	stateSizeStorageTrieNodesBytesGauge.Update(s.StorageTrienodeBytes)
+	stateSizeContractsCountGauge.Update(s.ContractCodes)
+	stateSizeContractsBytesGauge.Update(s.ContractCodeBytes)
 }
 
 // add applies the given state diffs and produces a new version of the statistics.
@@ -309,6 +342,10 @@ func (t *SizeTracker) run() {
 			stats[u.root] = stat
 			last = u.root
 
+			// Publish statistics to metric system
+			stat.publish()
+
+			// Evict the stale statistics
 			heap.Push(&h, stats[u.root])
 			for u.blockNumber-h[0].BlockNumber > statEvictThreshold {
 				delete(stats, h[0].StateRoot)
