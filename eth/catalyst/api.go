@@ -163,9 +163,6 @@ func newConsensusAPIWithoutHeartbeat(eth *eth.Ethereum) *ConsensusAPI {
 //
 // We try to set our blockchain to the headBlock.
 //
-// If the method is called with an empty head block: we return success, which can be used
-// to check if the engine API is enabled.
-//
 // If the total difficulty was not reached: we return INVALID.
 //
 // If the finalizedBlockHash is set: we check if we have the finalizedBlockHash in our db,
