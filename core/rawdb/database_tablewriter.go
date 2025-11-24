@@ -14,10 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// TODO: naive stub implementation for tablewriter
-
-//go:build tinygo
-// +build tinygo
+// Naive stub implementation for tablewriter
 
 package rawdb
 
@@ -40,7 +37,7 @@ type Table struct {
 	rows    [][]string
 }
 
-func newTableWriter(w io.Writer) *Table {
+func NewTableWriter(w io.Writer) *Table {
 	return &Table{out: w}
 }
 
@@ -89,6 +86,7 @@ func (t *Table) render() error {
 	rowSeparator := t.buildRowSeparator(widths)
 
 	if len(t.headers) > 0 {
+		fmt.Fprintln(t.out, rowSeparator)
 		t.printRow(t.headers, widths)
 		fmt.Fprintln(t.out, rowSeparator)
 	}
@@ -100,6 +98,7 @@ func (t *Table) render() error {
 	if len(t.footer) > 0 {
 		fmt.Fprintln(t.out, rowSeparator)
 		t.printRow(t.footer, widths)
+		fmt.Fprintln(t.out, rowSeparator)
 	}
 
 	return nil
@@ -172,21 +171,22 @@ func (t *Table) calculateColumnWidths() []int {
 //
 // It generates a string with dashes (-) for each column width, joined by plus signs (+).
 //
-// Example output: "----------+--------+-----------"
+// Example output: "+----------+--------+-----------+"
 func (t *Table) buildRowSeparator(widths []int) string {
 	parts := make([]string, len(widths))
 	for i, w := range widths {
 		parts[i] = strings.Repeat("-", w)
 	}
-	return strings.Join(parts, "+")
+	return "+" + strings.Join(parts, "+") + "+"
 }
 
 // printRow outputs a single row to the table writer.
 //
 // Each cell is padded with spaces and separated by pipe characters (|).
 //
-// Example output: " Database |  Size  |  Items  "
+// Example output: "| Database |  Size  |  Items  |"
 func (t *Table) printRow(row []string, widths []int) {
+	fmt.Fprintf(t.out, "|")
 	for i, cell := range row {
 		if i > 0 {
 			fmt.Fprint(t.out, "|")
@@ -204,5 +204,6 @@ func (t *Table) printRow(row []string, widths []int) {
 
 		fmt.Fprintf(t.out, "%s%s%s", leftPadding, cell, rightPadding)
 	}
+	fmt.Fprintf(t.out, "|")
 	fmt.Fprintln(t.out)
 }
