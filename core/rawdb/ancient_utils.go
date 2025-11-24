@@ -31,11 +31,11 @@ type tableSize struct {
 
 // freezerInfo contains the basic information of the freezer.
 type freezerInfo struct {
-	name     string      // The identifier of freezer
-	head     uint64      // The number of last stored item in the freezer
-	tail     uint64      // The number of first stored item in the freezer
-	count    uint64      // The number of stored items in the freezer
-	sizes    []tableSize // The storage size per table
+	name  string      // The identifier of freezer
+	head  uint64      // The number of last stored item in the freezer
+	tail  uint64      // The number of first stored item in the freezer
+	count uint64      // The number of stored items in the freezer
+	sizes []tableSize // The storage size per table
 }
 
 // size returns the storage size of the entire freezer.
