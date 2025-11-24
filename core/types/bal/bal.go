@@ -23,7 +23,6 @@ import (
 	"github.com/holiman/uint256"
 	"log/slog"
 	"maps"
-	"os"
 )
 
 // idxAccessListBuilder is responsible for producing the state accesses and
@@ -128,17 +127,15 @@ func (c *idxAccessListBuilder) codeChange(address common.Address, prev, cur []by
 // SENDALL in the same transaction is removed as part of transaction finalization.
 //
 // Any storage accesses/modifications performed at the contract during execution
-// are retained in the block access list as state reads.
+// of the current call are retained in the block access list as state reads.
 func (c *idxAccessListBuilder) selfDestruct(address common.Address) {
-	// convert all the account storage writes to reads, preserve the existing reads
 	access := c.accessesStack[len(c.accessesStack)-1][address]
+	if len(access.storageMutations) != 0 && access.storageReads == nil {
+		access.storageReads = make(map[common.Hash]struct{})
+	}
 	for key, _ := range access.storageMutations {
-		if access.storageReads == nil {
-			access.storageReads = make(map[common.Hash]struct{})
-		}
 		access.storageReads[key] = struct{}{}
 	}
-
 	access.storageMutations = nil
 }
 
@@ -156,7 +153,7 @@ func (c *idxAccessListBuilder) nonceChange(address common.Address, prev, cur uin
 	acctAccesses.NonceChange(cur)
 }
 
-// enterScope is called after a new EVM frame has been entered.
+// enterScope is called after a new EVM call frame has been entered.
 func (c *idxAccessListBuilder) enterScope() {
 	c.accessesStack = append(c.accessesStack, make(map[common.Address]*constructionAccountAccess))
 }
@@ -165,10 +162,7 @@ func (c *idxAccessListBuilder) enterScope() {
 // terminates with an error:
 // * the scope's state accesses are added to the calling scope's access list
 // * mutated accounts/storage are added into the calling scope's access list as state accesses
-// * the state mutations tracked in the parent scope are un-modified
 func (c *idxAccessListBuilder) exitScope(evmErr bool) {
-	// all storage writes in the child scope are converted into reads
-	// if there were no storage writes, the account is reported in the BAL as a read (if it wasn't already in the BAL and/or mutated previously)
 	childAccessList := c.accessesStack[len(c.accessesStack)-1]
 	parentAccessList := c.accessesStack[len(c.accessesStack)-2]
 
@@ -178,6 +172,8 @@ func (c *idxAccessListBuilder) exitScope(evmErr bool) {
 			parentAccessList[addr] = &constructionAccountAccess{}
 		}
 		if evmErr {
+			// all storage writes in the child scope are converted into reads
+			// if there were no storage writes, the account is reported in the BAL as a read (if it wasn't already in the BAL and/or mutated previously)
 			parentAccessList[addr].MergeReads(childAccess)
 		} else {
 			parentAccessList[addr].Merge(childAccess)
@@ -195,17 +191,12 @@ func (a *idxAccessListBuilder) finalise() (*StateDiff, StateAccesses) {
 	stateAccesses := make(StateAccesses)
 
 	for addr, access := range a.accessesStack[0] {
-		// remove any mutations from the access list with no net difference vs the tx prestate value
+		// remove any reported mutations from the access list with no net difference vs the index prestate value
 		if access.nonce != nil && *a.prestates[addr].nonce == *access.nonce {
 			access.nonce = nil
 		}
 		if access.balance != nil && a.prestates[addr].balance.Eq(access.balance) {
 			access.balance = nil
-		}
-
-		if addr == common.HexToAddress("6e2e9c4d90be192a84d25ed58f1a38261cd3bc15") {
-			//fmt.Printf("access code is %x\n", access.code)
-			//fmt.Printf("prestate code is %x\n", a.prestates[addr].code)
 		}
 		if access.code != nil && bytes.Equal(access.code, a.prestates[addr].code) {
 			access.code = nil
@@ -222,7 +213,7 @@ func (a *idxAccessListBuilder) finalise() (*StateDiff, StateAccesses) {
 			}
 		}
 
-		// if the account has no net mutations against the tx prestate, only include
+		// if the account has no net mutations against the index prestate, only include
 		// it in the state read set
 		if len(access.code) == 0 && access.nonce == nil && access.balance == nil && len(access.storageMutations) == 0 {
 			stateAccesses[addr] = make(map[common.Hash]struct{})
@@ -245,11 +236,7 @@ func (a *idxAccessListBuilder) finalise() (*StateDiff, StateAccesses) {
 }
 
 func (c *AccessListBuilder) EnterTx(txHash common.Hash) {
-	logger := slog.New(slog.DiscardHandler)
-	if txHash == common.HexToHash("0xf5df8d7a86856fc2e562abd47260237ec01adf2f7b46bc9fcb08485e73b77c14") {
-		logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
-	}
-	c.idxBuilder = newAccessListBuilder(logger)
+	c.idxBuilder = newAccessListBuilder(slog.New(slog.DiscardHandler))
 }
 
 // FinaliseIdxChanges records all pending state mutations/accesses in the
@@ -259,8 +246,6 @@ func (c *AccessListBuilder) FinaliseIdxChanges(idx uint16) {
 	pendingDiff, pendingAccesses := c.idxBuilder.finalise()
 	c.idxBuilder = newAccessListBuilder(slog.New(slog.DiscardHandler))
 
-	// if any of the newly-written storage slots were previously
-	// accessed, they must be removed from the accessed state set.
 	for addr, pendingAcctDiff := range pendingDiff.Mutations {
 		finalizedAcctChanges, ok := c.FinalizedAccesses[addr]
 		if !ok {
@@ -295,6 +280,9 @@ func (c *AccessListBuilder) FinaliseIdxChanges(idx uint16) {
 					finalizedAcctChanges.StorageWrites[key] = make(map[uint16]common.Hash)
 				}
 				finalizedAcctChanges.StorageWrites[key][idx] = val
+
+				// if any of the newly-written storage slots were previously
+				// accessed, they must be removed from the accessed state set.
 
 				// TODO: commenting this 'if' results in no test failures.
 				// double-check that this edge-case was fixed by a future
