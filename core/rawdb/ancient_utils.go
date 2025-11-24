@@ -73,7 +73,7 @@ func inspect(name string, order map[string]freezerTableConfig, reader ethdb.Anci
 		return freezerInfo{}, err
 	}
 	info.tail = tail
-	
+
 	if ancients == 0 {
 		info.count = 0
 	} else {
