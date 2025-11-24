@@ -140,6 +140,18 @@ var (
 		Usage:    "Write Go execution trace to the given file",
 		Category: flags.LoggingCategory,
 	}
+	pyroscopeFlag = &cli.BoolFlag{
+		Name:     "pyroscope",
+		Usage:    "Enable Pyroscope profiling",
+		Value:    false,
+		Category: flags.LoggingCategory,
+	}
+	pyroscopeServerFlag = &cli.StringFlag{
+		Name:     "pyroscope.server",
+		Usage:    "Pyroscope server URL to push profiling data to",
+		Value:    "http://localhost:4040",
+		Category: flags.LoggingCategory,
+	}
 )
 
 // Flags holds all command-line flags required for debugging.
@@ -162,6 +174,8 @@ var Flags = []cli.Flag{
 	blockprofilerateFlag,
 	cpuprofileFlag,
 	traceFlag,
+	pyroscopeFlag,
+	pyroscopeServerFlag,
 }
 
 var (
@@ -298,6 +312,14 @@ func Setup(ctx *cli.Context) error {
 		// It cannot be imported because it will cause a cyclical dependency.
 		StartPProf(address, !ctx.IsSet("metrics.addr"))
 	}
+
+	// Pyroscope profiling
+	if ctx.Bool(pyroscopeFlag.Name) {
+		pyroscopeServer := ctx.String(pyroscopeServerFlag.Name)
+
+		Handler.StartPyroscopeProfiler(pyroscopeServer)
+	}
+
 	if len(logFile) > 0 || rotation {
 		log.Info("Logging configured", context...)
 	}
@@ -321,6 +343,7 @@ func StartPProf(address string, withMetrics bool) {
 // Exit stops all running profiles, flushing their output to the
 // respective file.
 func Exit() {
+	Handler.StopPyroscopeProfiler()
 	Handler.StopCPUProfile()
 	Handler.StopGoTrace()
 	if logOutputFile != nil {
