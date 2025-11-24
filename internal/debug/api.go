@@ -148,7 +148,10 @@ func (l *pyroscopeLogger) Errorf(format string, v ...interface{}) {
 }
 
 // StartPyroscopeProfiler starts the Pyroscope profiler for later use
-func (h *HandlerT) StartPyroscopeProfiler(server string) error {
+func (h *HandlerT) StartPyroscopeProfiler(
+	server string,
+	tags map[string]string,
+) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.profiler != nil {
@@ -160,7 +163,7 @@ func (h *HandlerT) StartPyroscopeProfiler(server string) error {
 			ApplicationName: "geth",
 			ServerAddress:   server,
 			Logger:          &pyroscopeLogger{Logger: log.Root().With("module", "pyroscope")},
-			// Tags: nil,
+			Tags:            tags,
 			ProfileTypes: []pyroscope.ProfileType{
 				// Enabling all profile types
 				pyroscope.ProfileCPU,

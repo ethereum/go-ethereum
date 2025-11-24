@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
@@ -150,6 +151,12 @@ var (
 		Name:     "pyroscope.server",
 		Usage:    "Pyroscope server URL to push profiling data to",
 		Value:    "http://localhost:4040",
+		Category: flags.LoggingCategory,
+	}
+	pyroscopeTagsFlag = &cli.StringFlag{
+		Name:     "pyroscope.tags",
+		Usage:    "Comma separated list of key=value tags to add to profiling data",
+		Value:    "",
 		Category: flags.LoggingCategory,
 	}
 )
@@ -317,7 +324,17 @@ func Setup(ctx *cli.Context) error {
 	if ctx.Bool(pyroscopeFlag.Name) {
 		pyroscopeServer := ctx.String(pyroscopeServerFlag.Name)
 
-		Handler.StartPyroscopeProfiler(pyroscopeServer)
+		rawTags := ctx.String(pyroscopeTagsFlag.Name)
+		tags := make(map[string]string)
+		for _, tag := range strings.Split(rawTags, ",") {
+			kv := strings.Split(tag, "=")
+			// Ignore invalid tags
+			if len(kv) == 2 {
+				tags[kv[0]] = kv[1]
+			}
+		}
+
+		Handler.StartPyroscopeProfiler(pyroscopeServer, tags)
 	}
 
 	if len(logFile) > 0 || rotation {
