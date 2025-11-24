@@ -183,6 +183,7 @@ var Flags = []cli.Flag{
 	traceFlag,
 	pyroscopeFlag,
 	pyroscopeServerFlag,
+	pyroscopeTagsFlag,
 }
 
 var (
