@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	grpcapi "github.com/ethereum/go-ethereum/api/grpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -120,6 +121,8 @@ type Ethereum struct {
 	netRPCService *ethapi.NetAPI
 
 	p2pServer *p2p.Server
+
+	grpcService *grpcapi.Service // Low-latency gRPC API for trading operations
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 
@@ -354,6 +357,13 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	// Start the RPC service
 	eth.netRPCService = ethapi.NewNetAPI(eth.p2pServer, networkID)
+
+	// Initialize gRPC service if enabled
+	if config.EnableGRPC {
+		eth.grpcService = grpcapi.NewService(eth.APIBackend, config.GRPCHost, config.GRPCPort)
+		stack.RegisterLifecycle(eth.grpcService)
+		log.Info("gRPC service initialized", "host", config.GRPCHost, "port", config.GRPCPort)
+	}
 
 	// Register the backend on the node
 	stack.RegisterAPIs(eth.APIs())

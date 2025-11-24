@@ -72,6 +72,9 @@ var Defaults = Config{
 	RPCTxFeeCap:          1, // 1 ether
 	TxSyncDefaultTimeout: 20 * time.Second,
 	TxSyncMaxTimeout:     1 * time.Minute,
+	EnableGRPC:           false, // Disabled by default
+	GRPCHost:             "localhost",
+	GRPCPort:             9090,
 }
 
 //go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
@@ -189,6 +192,11 @@ type Config struct {
 	// EIP-7966: eth_sendRawTransactionSync timeouts
 	TxSyncDefaultTimeout time.Duration `toml:",omitempty"`
 	TxSyncMaxTimeout     time.Duration `toml:",omitempty"`
+
+	// gRPC options for low-latency trading operations
+	EnableGRPC bool   // Whether to enable the gRPC server
+	GRPCHost   string // gRPC server host (default: localhost)
+	GRPCPort   int    // gRPC server port (default: 9090)
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.

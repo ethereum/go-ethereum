@@ -37,7 +37,7 @@ import (
 // Backend defines the necessary methods from the Ethereum backend for the gRPC server.
 type Backend interface {
 	ChainConfig() *params.ChainConfig
-	BlockChain() *core.BlockChain
+	CurrentBlock() *types.Header
 	StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error)
 	Miner() *miner.Miner
 }
@@ -97,7 +97,7 @@ func (s *TraderServer) SimulateBundle(ctx context.Context, req *SimulateBundleRe
 	}
 
 	// Get current block header for simulation
-	header := s.backend.BlockChain().CurrentBlock()
+	header := s.backend.CurrentBlock()
 	if header == nil {
 		return nil, errors.New("current block not found")
 	}
@@ -323,7 +323,8 @@ func (s *TraderServer) CallContract(ctx context.Context, req *CallContractReques
 	}
 
 	// Create EVM and execute call
-	blockContext := core.NewEVMBlockContext(header, s.backend.BlockChain(), nil)
+	// Note: Using nil for chain reader as we only need basic block context for eth_call
+	blockContext := core.NewEVMBlockContext(header, nil, nil)
 	vmConfig := vm.Config{}
 
 	evm := vm.NewEVM(blockContext, stateDB, s.backend.ChainConfig(), vmConfig)
