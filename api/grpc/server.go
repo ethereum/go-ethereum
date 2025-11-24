@@ -345,3 +345,4 @@ func (s *TraderServer) CallContract(ctx context.Context, req *CallContractReques
 	return resp, nil
 }
 
+
