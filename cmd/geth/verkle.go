@@ -76,10 +76,10 @@ func checkChildren(root verkle.VerkleNode, resolver verkle.NodeResolverFn) error
 		for i, child := range node.Children() {
 			childC := child.Commit().Bytes()
 
-			childS, err := resolver(childC[:])
 			if bytes.Equal(childC[:], zero[:]) {
 				continue
 			}
+			childS, err := resolver(childC[:])
 			if err != nil {
 				return fmt.Errorf("could not find child %x in db: %w", childC, err)
 			}
