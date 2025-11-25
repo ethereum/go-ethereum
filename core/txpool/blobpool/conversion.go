@@ -183,6 +183,15 @@ func (q *conversionQueue) loop() {
 				log.Debug("Waiting for blobpool billy conversion to exit")
 				<-q.billyTaskDone
 			}
+			// Signal any tasks that were queued for the next batch but never started
+			// so callers blocked in convert() receive an error instead of hanging.
+			for _, t := range txTasks {
+				// Best-effort notify; t.done is a buffered channel of size 1
+				// created by convert(), and we send exactly once per task.
+				t.done <- errors.New("conversion queue closed")
+			}
+			// Drop references to allow GC of the backing array.
+			txTasks = txTasks[:0]
 			return
 		}
 	}
