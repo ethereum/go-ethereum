@@ -110,7 +110,8 @@ func (h Hash) String() string {
 // Hash supports the %v, %s, %q, %x, %X and %d format verbs.
 func (h Hash) Format(s fmt.State, c rune) {
 	hexb := make([]byte, 2+len(h)*2)
-	copy(hexb, "0x")
+	hexb[0] = '0'
+	hexb[1] = 'x'
 	hex.Encode(hexb[2:], h[:])
 
 	switch c {
@@ -290,7 +291,8 @@ func (a *Address) checksumHex() []byte {
 
 func (a Address) hex() []byte {
 	var buf [len(a)*2 + 2]byte
-	copy(buf[:2], "0x")
+	buf[0] = '0'
+	buf[1] = 'x'
 	hex.Encode(buf[2:], a[:])
 	return buf[:]
 }
