@@ -42,7 +42,8 @@ type Bytes []byte
 // MarshalText implements encoding.TextMarshaler
 func (b Bytes) MarshalText() ([]byte, error) {
 	result := make([]byte, len(b)*2+2)
-	copy(result, `0x`)
+	result[0] = '0'
+	result[1] = 'x'
 	hex.Encode(result[2:], b)
 	return result, nil
 }
@@ -277,7 +278,8 @@ type Uint64 uint64
 // MarshalText implements encoding.TextMarshaler.
 func (b Uint64) MarshalText() ([]byte, error) {
 	buf := make([]byte, 2, 10)
-	copy(buf, `0x`)
+	buf[0] = '0'
+	buf[1] = 'x'
 	buf = strconv.AppendUint(buf, uint64(b), 16)
 	return buf, nil
 }
