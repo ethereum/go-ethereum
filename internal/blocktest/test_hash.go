@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package utesting provides a standalone replacement for package testing.
+// Package blocktest provides utilities for hashing transaction and receipt lists.
 //
-// This package exists because package testing cannot easily be embedded into a
-// standalone go program. It provides an API that mirrors the standard library
-// testing API.
+// This package implements a simple hasher for testing block processing.
+// The hasher avoids import cycles by providing a lightweight alternative to
+// the main trie hasher.
 
 package blocktest
 
