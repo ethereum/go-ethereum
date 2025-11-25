@@ -56,6 +56,15 @@ var SepoliaBootnodes = []string{
 	"enode://9e9492e2e8836114cc75f5b929784f4f46c324ad01daf87d956f98b3b6c5fcba95524d6e5cf9861dc96a2c8a171ea7105bb554a197455058de185fa870970c7c@138.68.123.152:30303", // sepolia-bootnode-1-ams3
 }
 
+
+// V5Bootnodes lists discv5 bootnodes for the Ethereum Execution Layer (EL).
+// These nodes are used by Geth for peer discovery on the EL network only.
+// Do NOT include Consensus Layer (CL) bootnodes (e.g., Teku, Prysm, Lighthouse, Nimbus).
+// Execution Layer (EL) clients such as Geth use `enode://` or `enr:` addresses
+// for discovering other EL peers. Consensus Layer (CL) bootnodes are unrelated
+// and should not be hardcoded here. CL nodes are used by beacon chain clients
+// for validator and consensus communications.
+
 var V5Bootnodes = []string{
 	// Teku team's bootnode
 	"enr:-KG4QMOEswP62yzDjSwWS4YEjtTZ5PO6r65CPqYBkgTTkrpaedQ8uEUo1uMALtJIvb2w_WWEVmg5yt1UAuK1ftxUU7QDhGV0aDKQu6TalgMAAAD__________4JpZIJ2NIJpcIQEnfA2iXNlY3AyNTZrMaEDfol8oLr6XJ7FsdAYE7lpJhKMls4G_v6qQOGKJUWGb_uDdGNwgiMog3VkcIIjKA", // # 4.157.240.54 | azure-us-east-virginia
