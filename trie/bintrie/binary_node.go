@@ -101,10 +101,17 @@ func DeserializeNode(serialized []byte, depth int) (BinaryNode, error) {
 		if len(serialized) != 65 {
 			return nil, invalidSerializedLength
 		}
+		var left, right BinaryNode = Empty{}, Empty{}
+		if leftHash := common.BytesToHash(serialized[1:33]); leftHash != (common.Hash{}) {
+			left = HashedNode(leftHash)
+		}
+		if rightHash := common.BytesToHash(serialized[33:65]); rightHash != (common.Hash{}) {
+			right = HashedNode(rightHash)
+		}
 		return &InternalNode{
 			depth: depth,
-			left:  HashedNode(common.BytesToHash(serialized[1:33])),
-			right: HashedNode(common.BytesToHash(serialized[33:65])),
+			left:  left,
+			right: right,
 		}, nil
 	case nodeTypeStem:
 		if len(serialized) < 64 {
