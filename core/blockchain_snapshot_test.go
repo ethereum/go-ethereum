@@ -20,7 +20,6 @@
 package core
 
 import (
-	"bytes"
 	"fmt"
 	"math/big"
 	"os"
@@ -110,7 +109,7 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 			// will be persisted atomically.
 			chain.snaps.Cap(blocks[point-1].Root(), 0)
 			diskRoot, blockRoot := chain.snaps.DiskRoot(), blocks[point-1].Root()
-			if !bytes.Equal(diskRoot.Bytes(), blockRoot.Bytes()) {
+			if diskRoot != blockRoot {
 				t.Fatalf("Failed to flush disk layer change, want %x, got %x", blockRoot, diskRoot)
 			}
 		}
@@ -149,7 +148,7 @@ func (basic *snapshotTestBasic) verify(t *testing.T, chain *BlockChain, blocks [
 	if block == nil {
 		t.Errorf("The corresponding block[%d] of snapshot disk layer is missing", basic.expSnapshotBottom)
 	} else if basic.scheme == rawdb.HashScheme {
-		if !bytes.Equal(chain.snaps.DiskRoot().Bytes(), block.Root().Bytes()) {
+		if chain.snaps.DiskRoot() != block.Root() {
 			t.Errorf("The snapshot disk layer root is incorrect, want %x, get %x", block.Root(), chain.snaps.DiskRoot())
 		}
 	}

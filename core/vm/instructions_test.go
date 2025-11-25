@@ -680,7 +680,7 @@ func TestCreate2Addresses(t *testing.T) {
 			fmt.Printf("Example %d\n* address `0x%x`\n* salt `0x%x`\n* init_code `0x%x`\n* gas (assuming no mem expansion): `%v`\n* result: `%s`\n\n", i,origin, salt, code, gas, address.String())
 		*/
 		expected := common.BytesToAddress(common.FromHex(tt.expected))
-		if !bytes.Equal(expected.Bytes(), address.Bytes()) {
+		if expected != address {
 			t.Errorf("test %d: expected %s, got %s", i, expected.String(), address.String())
 		}
 	}

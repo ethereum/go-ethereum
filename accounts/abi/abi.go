@@ -219,7 +219,7 @@ func (abi *ABI) MethodById(sigdata []byte) (*Method, error) {
 // ABI and returns nil if none found.
 func (abi *ABI) EventByID(topic common.Hash) (*Event, error) {
 	for _, event := range abi.Events {
-		if bytes.Equal(event.ID.Bytes(), topic.Bytes()) {
+		if event.ID == topic {
 			return &event, nil
 		}
 	}

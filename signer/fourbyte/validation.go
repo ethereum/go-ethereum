@@ -74,7 +74,7 @@ func (db *Database) ValidateTransaction(selector *string, tx *apitypes.SendTxArg
 	if !tx.To.ValidChecksum() {
 		messages.Warn("Invalid checksum on recipient address")
 	}
-	if bytes.Equal(tx.To.Address().Bytes(), common.Address{}.Bytes()) {
+	if tx.To.Address() == (common.Address{}) {
 		messages.Crit("Transaction recipient is the zero address")
 	}
 	switch {
