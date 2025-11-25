@@ -36,7 +36,7 @@ import (
 func consoleOutput(call goja.FunctionCall) goja.Value {
 	output := []string{"JS:> "}
 	for _, argument := range call.Arguments {
-		output = append(output, fmt.Sprintf("%v", argument))
+		output = append(output, fmt.Sprint(argument))
 	}
 	fmt.Fprintln(os.Stderr, strings.Join(output, " "))
 	return goja.Undefined()
