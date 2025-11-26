@@ -222,7 +222,6 @@ func (p *Peer) dispatcher() {
 
 			// Not sure if the request is about the receipt, but remove it anyway
 			delete(p.receiptBuffer, cancelOp.id)
-			delete(p.requestedReceipts, cancelOp.id)
 
 			cancelOp.fail <- nil
 

@@ -154,27 +154,31 @@ func TestPartialReceipt(t *testing.T) {
 		t.Fatalf("timeout waiting for request packet")
 	}
 
+	receipts := []Receipt{
+		{GasUsed: 21_000, Logs: rlp.RawValue(make([]byte, 1))},
+	}
+	logReceipts := []Receipt{
+		{GasUsed: 21_000, Logs: rlp.RawValue(make([]byte, 1))},
+		{GasUsed: 21_000, Logs: rlp.RawValue(make([]byte, 1))},
+		{GasUsed: 21_000, Logs: rlp.RawValue(make([]byte, 1))},
+	}
 	delivery := &ReceiptsPacket70{
 		RequestId:           req.id,
 		LastBlockIncomplete: true,
 		List: []*ReceiptList69{
 			{
-				items: []Receipt{
-					{GasUsed: 21_000, Logs: rlp.RawValue(make([]byte, 1))},
-				},
+				items: receipts,
 			},
 			{
-				items: []Receipt{
-					{GasUsed: 21_000, Logs: rlp.RawValue(make([]byte, 2))},
-				},
+				items: receipts,
 			},
 		},
 	}
-	if err := peer.BufferReceiptsPacket(delivery, backend); err != nil {
+	if err := peer.bufferReceiptsPacket(delivery, backend); err != nil {
 		t.Fatalf("first ReconstructReceiptsPacket failed: %v", err)
 	}
 
-	if err := peer.RequestPartialReceipts(req.id); err != nil {
+	if err := peer.requestPartialReceipts(req.id); err != nil {
 		t.Fatalf("RequestPartialReceipts failed: %v", err)
 	}
 
@@ -192,8 +196,39 @@ func TestPartialReceipt(t *testing.T) {
 	if rereq.FirstBlockReceiptIndex != uint64(len(buffer.list[len(buffer.list)-1].items)) {
 		t.Fatalf("unexpected FirstBlockReceiptIndex, got %d want %d", rereq.FirstBlockReceiptIndex, len(buffer.list[len(buffer.list)-1].items))
 	}
-	if _, ok := peer.requestedReceipts[rereq.RequestId]; !ok {
-		t.Fatalf("requestedReceipts should buffer receipt hashes")
+
+	delivery = &ReceiptsPacket70{
+		RequestId:           req.id,
+		LastBlockIncomplete: true,
+		List: []*ReceiptList69{
+			{
+				items: receipts,
+			},
+		},
+	}
+	if err := peer.bufferReceiptsPacket(delivery, backend); err != nil {
+		t.Fatalf("first ReconstructReceiptsPacket failed: %v", err)
+	}
+
+	if err := peer.requestPartialReceipts(req.id); err != nil {
+		t.Fatalf("RequestPartialReceipts failed: %v", err)
+	}
+
+	select {
+	case rereq = <-packetCh:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timeout waiting for re-request packet")
+	}
+
+	buffer, ok = peer.receiptBuffer[rereq.RequestId]
+	if !ok {
+		t.Fatalf("receiptBuffer should buffer incomplete receipts")
+	}
+	if rereq.FirstBlockReceiptIndex != uint64(len(buffer.list[len(buffer.list)-1].items)) {
+		t.Fatalf("unexpected FirstBlockReceiptIndex, got %d want %d", rereq.FirstBlockReceiptIndex, len(buffer.list[len(buffer.list)-1].items))
+	}
+	if len(rereq.GetReceiptsRequest) != 3 {
+		t.Fatalf("wrong partial request range, got %d want %d", len(rereq.GetReceiptsRequest), 3)
 	}
 
 	delivery = &ReceiptsPacket70{
@@ -201,30 +236,32 @@ func TestPartialReceipt(t *testing.T) {
 		LastBlockIncomplete: false,
 		List: []*ReceiptList69{
 			{
-				items: []Receipt{
-					{GasUsed: 21_000, Logs: rlp.RawValue(make([]byte, 1))},
-				},
+				items: receipts,
 			},
 			{
-				items: []Receipt{
-					{GasUsed: 21_000, Logs: rlp.RawValue(make([]byte, 1))},
-				},
+				items: receipts,
 			},
 			{
-				items: []Receipt{
-					{GasUsed: 21_000, Logs: rlp.RawValue(make([]byte, 1))},
-				},
+				items: receipts,
 			},
 		},
 	}
-	if err := peer.BufferReceiptsPacket(delivery, backend); err != nil {
+	if err := peer.bufferReceiptsPacket(delivery, backend); err != nil {
 		t.Fatalf("second ReconstructReceiptsPacket failed: %v", err)
 	}
 	if _, ok := peer.receiptBuffer[rereq.RequestId]; ok {
 		t.Fatalf("receiptBuffer should be cleared after delivery")
 	}
-	if _, ok := peer.requestedReceipts[rereq.RequestId]; ok {
-		t.Fatalf("requestedReceipts should be cleared after delivery")
+	for i, list := range delivery.List {
+		if i == 1 {
+			if len(list.items) != len(logReceipts) {
+				t.Fatalf("wrong response buffering, got %d want %d", len(list.items), len(logReceipts))
+			}
+		} else {
+			if len(list.items) != len(receipts) {
+				t.Fatalf("wrong response buffering, got %d want %d", len(list.items), len(receipts))
+			}
+		}
 	}
 }
 
@@ -286,7 +323,7 @@ func TestPartialReceiptFailure(t *testing.T) {
 			},
 		},
 	}
-	err := peer.BufferReceiptsPacket(delivery, backend)
+	err := peer.bufferReceiptsPacket(delivery, backend)
 	if err == nil {
 		t.Fatal("Unknown response should be dropped")
 	}
@@ -324,7 +361,7 @@ func TestPartialReceiptFailure(t *testing.T) {
 	for range maxTxCount {
 		delivery.List[0].items = append(delivery.List[0].items, Receipt{Logs: rlp.RawValue(make([]byte, 1))})
 	}
-	err = peer.BufferReceiptsPacket(delivery, backend)
+	err = peer.bufferReceiptsPacket(delivery, backend)
 	if err == nil {
 		t.Fatal("Response with the excessive number of receipts should fail the validation")
 	}
@@ -349,7 +386,7 @@ func TestPartialReceiptFailure(t *testing.T) {
 			},
 		}},
 	}
-	err = peer.BufferReceiptsPacket(delivery, backend)
+	err = peer.bufferReceiptsPacket(delivery, backend)
 	if err == nil {
 		t.Fatal("Response with the excessive number of receipts should fail the validation")
 	}
@@ -374,7 +411,7 @@ func TestPartialReceiptFailure(t *testing.T) {
 			},
 		}},
 	}
-	err = peer.BufferReceiptsPacket(delivery, backend)
+	err = peer.bufferReceiptsPacket(delivery, backend)
 	if err == nil {
 		t.Fatal("Response with the excessive number of receipts should fail the validation")
 	}

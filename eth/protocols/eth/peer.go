@@ -44,6 +44,7 @@ const (
 )
 
 type partialReceipt struct {
+	request     []common.Hash
 	list        []*ReceiptList69 // list of partially collected receipts
 	lastLogSize uint64           // log size of last receipt list
 }
@@ -66,8 +67,7 @@ type Peer struct {
 	reqCancel   chan *cancel   // Dispatch channel to cancel pending requests and untrack them
 	resDispatch chan *response // Dispatch channel to fulfil pending requests and untrack them
 
-	requestedReceipts map[uint64][]common.Hash   // requested receipts list
-	receiptBuffer     map[uint64]*partialReceipt // requestId to receiptlist map
+	receiptBuffer map[uint64]*partialReceipt // requestId to receiptlist map
 
 	term chan struct{} // Termination channel to stop the broadcasters
 }
@@ -76,20 +76,19 @@ type Peer struct {
 // version.
 func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Peer {
 	peer := &Peer{
-		id:                p.ID().String(),
-		Peer:              p,
-		rw:                rw,
-		version:           version,
-		knownTxs:          newKnownCache(maxKnownTxs),
-		txBroadcast:       make(chan []common.Hash),
-		txAnnounce:        make(chan []common.Hash),
-		reqDispatch:       make(chan *request),
-		reqCancel:         make(chan *cancel),
-		resDispatch:       make(chan *response),
-		txpool:            txpool,
-		requestedReceipts: make(map[uint64][]common.Hash),
-		receiptBuffer:     make(map[uint64]*partialReceipt),
-		term:              make(chan struct{}),
+		id:            p.ID().String(),
+		Peer:          p,
+		rw:            rw,
+		version:       version,
+		knownTxs:      newKnownCache(maxKnownTxs),
+		txBroadcast:   make(chan []common.Hash),
+		txAnnounce:    make(chan []common.Hash),
+		reqDispatch:   make(chan *request),
+		reqCancel:     make(chan *cancel),
+		resDispatch:   make(chan *response),
+		txpool:        txpool,
+		receiptBuffer: make(map[uint64]*partialReceipt),
+		term:          make(chan struct{}),
 	}
 	// Start up all the broadcasters
 	go peer.broadcastTransactions()
@@ -357,7 +356,7 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, sink chan *Response) (*Requ
 				FirstBlockReceiptIndex: 0,
 			},
 		}
-		p.requestedReceipts[id] = hashes
+		p.receiptBuffer[id] = &partialReceipt{request: hashes}
 	} else {
 		req = &Request{
 			id:   id,
@@ -378,7 +377,7 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, sink chan *Response) (*Requ
 }
 
 // HandlePartialReceipts re-request partial receipts
-func (p *Peer) RequestPartialReceipts(id uint64) error {
+func (p *Peer) requestPartialReceipts(id uint64) error {
 	if _, ok := p.receiptBuffer[id]; !ok {
 		return fmt.Errorf("No partial receipt retreival in progress with id %d", id)
 	}
@@ -393,7 +392,7 @@ func (p *Peer) RequestPartialReceipts(id uint64) error {
 		want: ReceiptsMsg,
 		data: &GetReceiptsPacket70{
 			RequestId:              id,
-			GetReceiptsRequest:     p.requestedReceipts[id][lastBlock:],
+			GetReceiptsRequest:     p.receiptBuffer[id].request[lastBlock:],
 			FirstBlockReceiptIndex: uint64(lastReceipt),
 		},
 		continued: true,
@@ -402,58 +401,56 @@ func (p *Peer) RequestPartialReceipts(id uint64) error {
 	return p.dispatchRequest(req)
 }
 
-// BufferReceiptsPacket validates a receipt packet and buffer the incomplete packet.
+// bufferReceiptsPacket validates a receipt packet and buffer the incomplete packet.
 // If the request is completed, it appends previously collected receipts.
-func (p *Peer) BufferReceiptsPacket(packet *ReceiptsPacket70, backend Backend) error {
+func (p *Peer) bufferReceiptsPacket(packet *ReceiptsPacket70, backend Backend) error {
 	requestId := packet.RequestId
+	buffer := p.receiptBuffer[requestId]
 
 	// Do not assign buffer to the response not requested
-	if _, ok := p.requestedReceipts[requestId]; !ok {
+	if buffer == nil {
 		return fmt.Errorf("No partial receipt retreival in progress with id %d", requestId)
 	}
 
 	if len(packet.List) == 0 {
 		delete(p.receiptBuffer, requestId)
-		delete(p.requestedReceipts, requestId)
 		return nil
 	}
 
 	// Buffer the last block when the response is incomplete.
 	if packet.LastBlockIncomplete {
 		lastBlock := len(packet.List) - 1
-		if _, ok := p.receiptBuffer[requestId]; ok {
-			lastBlock += len(p.receiptBuffer[requestId].list) - 1
+		if len(buffer.list) > 0 {
+			lastBlock += len(buffer.list) - 1
 		}
-		header := backend.Chain().GetHeaderByHash(p.requestedReceipts[requestId][lastBlock])
+		header := backend.Chain().GetHeaderByHash(buffer.request[lastBlock])
 		logSize, err := p.validateLastBlockReceipt(packet.List, requestId, header)
 		if err != nil {
 			return err
 		}
 
 		// Update the buffered data and trim the packet to exclude the incomplete block.
-		if buffer, ok := p.receiptBuffer[requestId]; ok {
+		if len(buffer.list) > 0 {
 			// If the buffer is already allocated, it means that the previous response was incomplete
 			// Append the first block receipts
 			buffer.list[len(buffer.list)-1].Append(packet.List[0])
 			buffer.list = append(buffer.list, packet.List[1:]...)
 			buffer.lastLogSize = logSize
 		} else {
-			p.receiptBuffer[requestId] = &partialReceipt{
-				list:        packet.List,
-				lastLogSize: logSize,
-			}
+			buffer.list = packet.List
+			buffer.lastLogSize = logSize
 		}
 		return nil
 	}
 
-	// Request completed
-	if buffer, ok := p.receiptBuffer[requestId]; ok {
-		// If the request is completed, append previously collected receipts
-		// to the packet and remove the buffered receipts.
-		packet.List = append(buffer.list, packet.List...)
-		delete(p.receiptBuffer, requestId)
+	// If the request is completed, append previously collected receipts
+	// to the packet and remove the buffered receipts.
+	if len(buffer.list) > 0 {
+		buffer.list[len(buffer.list)-1].Append(packet.List[0])
+		packet.List = packet.List[1:]
 	}
-	delete(p.requestedReceipts, requestId)
+	packet.List = append(buffer.list, packet.List...)
+	delete(p.receiptBuffer, requestId)
 
 	return nil
 }
@@ -473,7 +470,7 @@ func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList69, id uint64
 	var previousTxs int
 	var previousLog uint64
 	var log uint64
-	if buffer, ok := p.receiptBuffer[id]; ok && len(receiptLists) == 1 {
+	if buffer, ok := p.receiptBuffer[id]; ok && len(buffer.list) > 0 && len(receiptLists) == 1 {
 		previousTxs = len(buffer.list[len(buffer.list)-1].items)
 		previousLog = buffer.lastLogSize
 	}
