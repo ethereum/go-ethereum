@@ -21,12 +21,16 @@ package eth
 
 import (
 	"crypto/rand"
+	"math/big"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -92,6 +96,18 @@ func TestPeerSet(t *testing.T) {
 }
 
 func TestPartialReceipt(t *testing.T) {
+	gen := func(_ int, g *core.BlockGen) {
+		signer := types.HomesteadSigner{}
+
+		for range 4 {
+			tx, _ := types.SignTx(types.NewTransaction(g.TxNonce(testAddr), testAddr, big.NewInt(10), params.TxGas, g.BaseFee(), nil), signer, testKey)
+			g.AddTx(tx)
+		}
+	}
+
+	backend := newTestBackendWithGenerator(4, true, true, gen)
+	defer backend.close()
+
 	app, net := p2p.MsgPipe()
 	var id enode.ID
 	if _, err := rand.Read(id[:]); err != nil {
@@ -121,10 +137,10 @@ func TestPartialReceipt(t *testing.T) {
 	}()
 
 	hashes := []common.Hash{
-		common.HexToHash("0xaa"),
-		common.HexToHash("0xbb"),
-		common.HexToHash("0xcc"),
-		common.HexToHash("0xdd"),
+		backend.chain.GetBlockByNumber(1).Hash(),
+		backend.chain.GetBlockByNumber(2).Hash(),
+		backend.chain.GetBlockByNumber(3).Hash(),
+		backend.chain.GetBlockByNumber(4).Hash(),
 	}
 
 	sink := make(chan *Response, 1)
@@ -154,7 +170,7 @@ func TestPartialReceipt(t *testing.T) {
 			},
 		},
 	}
-	if err := peer.BufferReceiptsPacket(delivery); err != nil {
+	if err := peer.BufferReceiptsPacket(delivery, backend); err != nil {
 		t.Fatalf("first ReconstructReceiptsPacket failed: %v", err)
 	}
 
@@ -201,7 +217,7 @@ func TestPartialReceipt(t *testing.T) {
 			},
 		},
 	}
-	if err := peer.BufferReceiptsPacket(delivery); err != nil {
+	if err := peer.BufferReceiptsPacket(delivery, backend); err != nil {
 		t.Fatalf("second ReconstructReceiptsPacket failed: %v", err)
 	}
 	if _, ok := peer.receiptBuffer[rereq.RequestId]; ok {
@@ -213,6 +229,18 @@ func TestPartialReceipt(t *testing.T) {
 }
 
 func TestPartialReceiptFailure(t *testing.T) {
+	gen := func(_ int, g *core.BlockGen) {
+		signer := types.HomesteadSigner{}
+
+		for range 4 {
+			tx, _ := types.SignTx(types.NewTransaction(g.TxNonce(testAddr), testAddr, big.NewInt(10), params.TxGas, g.BaseFee(), nil), signer, testKey)
+			g.AddTx(tx)
+		}
+	}
+
+	backend := newTestBackendWithGenerator(4, true, true, gen)
+	defer backend.close()
+
 	app, net := p2p.MsgPipe()
 	var id enode.ID
 	if _, err := rand.Read(id[:]); err != nil {
@@ -258,8 +286,96 @@ func TestPartialReceiptFailure(t *testing.T) {
 			},
 		},
 	}
-	err := peer.BufferReceiptsPacket(delivery)
+	err := peer.BufferReceiptsPacket(delivery, backend)
 	if err == nil {
 		t.Fatal("Unknown response should be dropped")
+	}
+
+	// If a peer deliverse excessive amount of receipts, it should also fail the validation
+	hashes := []common.Hash{
+		backend.chain.GetBlockByNumber(1).Hash(),
+		backend.chain.GetBlockByNumber(2).Hash(),
+		backend.chain.GetBlockByNumber(3).Hash(),
+		backend.chain.GetBlockByNumber(4).Hash(),
+	}
+
+	// Case 1 ) The number of receipts exceeds maximum tx count
+	sink := make(chan *Response, 1)
+	req, err := peer.RequestReceipts(hashes, sink)
+	if err != nil {
+		t.Fatalf("RequestReceipts failed: %v", err)
+	}
+	select {
+	case _ = <-packetCh:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timeout waiting for request packet")
+	}
+
+	maxTxCount := backend.chain.GetBlockByNumber(1).GasUsed() / 21_000
+	delivery = &ReceiptsPacket70{
+		RequestId:           req.id,
+		LastBlockIncomplete: true,
+		List: []*ReceiptList69{{
+			items: []Receipt{
+				{Logs: rlp.RawValue(make([]byte, 1))},
+			},
+		}},
+	}
+	for range maxTxCount {
+		delivery.List[0].items = append(delivery.List[0].items, Receipt{Logs: rlp.RawValue(make([]byte, 1))})
+	}
+	err = peer.BufferReceiptsPacket(delivery, backend)
+	if err == nil {
+		t.Fatal("Response with the excessive number of receipts should fail the validation")
+	}
+
+	// Case 2 ) The size of each receipt exceeds maximum log size against the max tx size
+	req, err = peer.RequestReceipts(hashes, sink)
+	if err != nil {
+		t.Fatalf("RequestReceipts failed: %v", err)
+	}
+	select {
+	case _ = <-packetCh:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timeout waiting for request packet")
+	}
+	maxLogSize := params.MaxTxGas / params.LogDataGas
+	delivery = &ReceiptsPacket70{
+		RequestId:           req.id,
+		LastBlockIncomplete: true,
+		List: []*ReceiptList69{{
+			items: []Receipt{
+				{Logs: rlp.RawValue(make([]byte, maxLogSize+1))},
+			},
+		}},
+	}
+	err = peer.BufferReceiptsPacket(delivery, backend)
+	if err == nil {
+		t.Fatal("Response with the excessive number of receipts should fail the validation")
+	}
+
+	// Case 3 ) Total receipt size exceeds the block gas limit
+	req, err = peer.RequestReceipts(hashes, sink)
+	if err != nil {
+		t.Fatalf("RequestReceipts failed: %v", err)
+	}
+	select {
+	case _ = <-packetCh:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timeout waiting for request packet")
+	}
+	maxReceiptSize := backend.chain.GetBlockByNumber(1).GasUsed() / params.LogDataGas
+	delivery = &ReceiptsPacket70{
+		RequestId:           req.id,
+		LastBlockIncomplete: true,
+		List: []*ReceiptList69{{
+			items: []Receipt{
+				{Logs: rlp.RawValue(make([]byte, maxReceiptSize+1))},
+			},
+		}},
+	}
+	err = peer.BufferReceiptsPacket(delivery, backend)
+	if err == nil {
+		t.Fatal("Response with the excessive number of receipts should fail the validation")
 	}
 }

@@ -527,7 +527,7 @@ func handleReceipts70(backend Backend, msg Decoder, peer *Peer) error {
 		return err
 	}
 
-	if err := peer.BufferReceiptsPacket(res); err != nil {
+	if err := peer.BufferReceiptsPacket(res, backend); err != nil {
 		return err
 	}
 	if res.LastBlockIncomplete {

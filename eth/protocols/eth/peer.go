@@ -404,7 +404,7 @@ func (p *Peer) RequestPartialReceipts(id uint64) error {
 
 // BufferReceiptsPacket validates a receipt packet and buffer the incomplete packet.
 // If the request is completed, it appends previously collected receipts.
-func (p *Peer) BufferReceiptsPacket(packet *ReceiptsPacket70) error {
+func (p *Peer) BufferReceiptsPacket(packet *ReceiptsPacket70, backend Backend) error {
 	requestId := packet.RequestId
 
 	// Do not assign buffer to the response not requested
@@ -418,14 +418,22 @@ func (p *Peer) BufferReceiptsPacket(packet *ReceiptsPacket70) error {
 
 	// Buffer the last block when the response is incomplete.
 	if packet.LastBlockIncomplete {
-		logSize, err := p.validateLastBlockReceipt(packet.List, requestId)
+		lastBlock := len(packet.List) - 1
+		if _, ok := p.receiptBuffer[requestId]; ok {
+			lastBlock += len(p.receiptBuffer[requestId].list) - 1
+		}
+		header := backend.Chain().GetHeaderByHash(p.requestedReceipts[requestId][lastBlock])
+		logSize, err := p.validateLastBlockReceipt(packet.List, requestId, header)
 		if err != nil {
 			return err
 		}
 
 		// Update the buffered data and trim the packet to exclude the incomplete block.
 		if buffer, ok := p.receiptBuffer[requestId]; ok {
-			buffer.list = append(buffer.list, packet.List...)
+			// If the buffer is already allocated, it means that the previous response was incomplete
+			// Append the first block receipts
+			buffer.list[len(buffer.list)-1].Append(packet.List[0])
+			buffer.list = append(buffer.list, packet.List[1:]...)
 			buffer.lastLogSize = logSize
 		} else {
 			p.receiptBuffer[requestId] = &partialReceipt{
@@ -451,7 +459,7 @@ func (p *Peer) BufferReceiptsPacket(packet *ReceiptsPacket70) error {
 // This function is called only when the `lastBlockincomplete == true`.
 // Note that the last receipt response (which completes receiptLists of a pending block) is not verified here.
 // Those response doesn't need hueristics below since they can be verified by its trie root.
-func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList69, id uint64) (uint64, error) {
+func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList69, id uint64, header *types.Header) (uint64, error) {
 	lastReceipts := receiptLists[len(receiptLists)-1]
 
 	// If the receipt is in the middle of retreival, use the buffered data.
@@ -468,7 +476,7 @@ func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList69, id uint64
 	}
 
 	// 1. Verify that the total number of transactions delivered is under the limit.
-	if uint64(previousTxs+len(lastReceipts.items)) > params.MaxGasLimit/21_000 {
+	if uint64(previousTxs+len(lastReceipts.items)) > header.GasUsed/21_000 {
 		// should be dropped, don't clear the buffer
 		return 0, fmt.Errorf("total number of tx exceeded limit")
 	}
@@ -481,7 +489,7 @@ func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList69, id uint64
 		log += uint64(len(rc.Logs))
 	}
 	// 3. Verify that the overall downloaded receipt size does not exceed the block gas limit.
-	if previousLog+log > params.MaxGasLimit/params.LogDataGas {
+	if previousLog+log > header.GasUsed/params.LogDataGas {
 		return 0, fmt.Errorf("total download receipt size exceeded the limit")
 	}
 
