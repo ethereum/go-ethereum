@@ -1644,6 +1644,19 @@ func (api *TransactionAPI) currentBlobSidecarVersion() byte {
 	return types.BlobSidecarVersion0
 }
 
+func (api *TransactionAPI) convertLegacyBlobSidecar(tx *types.Transaction) (*types.Transaction, error) {
+	if sc := tx.BlobTxSidecar(); sc != nil {
+		exp := api.currentBlobSidecarVersion()
+		if sc.Version == types.BlobSidecarVersion0 && exp == types.BlobSidecarVersion1 {
+			if err := sc.ToV1(); err != nil {
+				return nil, fmt.Errorf("blob sidecar conversion failed: %v", err)
+			}
+			tx = tx.WithBlobTxSidecar(sc)
+		}
+	}
+	return tx, nil
+}
+
 // SendRawTransaction will add the signed transaction to the transaction pool.
 // The sender is responsible for signing the transaction and using the correct nonce.
 func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil.Bytes) (common.Hash, error) {
@@ -1654,14 +1667,9 @@ func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil
 
 	// Convert legacy blob transaction proofs.
 	// TODO: remove in go-ethereum v1.17.x
-	if sc := tx.BlobTxSidecar(); sc != nil {
-		exp := api.currentBlobSidecarVersion()
-		if sc.Version == types.BlobSidecarVersion0 && exp == types.BlobSidecarVersion1 {
-			if err := sc.ToV1(); err != nil {
-				return common.Hash{}, fmt.Errorf("blob sidecar conversion failed: %v", err)
-			}
-			tx = tx.WithBlobTxSidecar(sc)
-		}
+	tx, err := api.convertLegacyBlobSidecar(tx)
+	if err != nil {
+		return common.Hash{}, err
 	}
 
 	return SubmitTransaction(ctx, api.b, tx)
