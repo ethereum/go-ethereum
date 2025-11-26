@@ -17,8 +17,8 @@
 package common
 
 import (
-	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -66,11 +66,15 @@ func (t PrettyAge) String() string {
 		return "0"
 	}
 	// Accumulate a precision of 3 components before returning
-	result, prec := "", 0
+	var (
+		builder strings.Builder
+		prec    int
+	)
 
 	for _, unit := range ageUnits {
 		if diff >= unit.Size {
-			result = fmt.Sprintf("%s%d%s", result, diff/unit.Size, unit.Symbol)
+			builder.WriteString(strconv.FormatInt(int64(diff/unit.Size), 10))
+			builder.WriteString(unit.Symbol)
 			diff %= unit.Size
 
 			if prec += 1; prec >= 3 {
@@ -78,5 +82,5 @@ func (t PrettyAge) String() string {
 			}
 		}
 	}
-	return result
+	return builder.String()
 }
