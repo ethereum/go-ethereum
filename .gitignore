@@ -41,6 +41,10 @@ profile.cov
 
 # VS Code
 .vscode
+# Vim swap files
+*.swp
+*.swo
+*.swx
 
 tests/spec-tests/
 
