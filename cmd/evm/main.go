@@ -57,7 +57,7 @@ var (
 	}
 	FuzzFlag = &cli.BoolFlag{
 		Name:     "fuzz",
-		Usage:    "adepts output format for fuzzing",
+		Usage:    "adapts output format for fuzzing",
 		Category: flags.VMCategory,
 	}
 	WitnessCrossCheckFlag = &cli.BoolFlag{
