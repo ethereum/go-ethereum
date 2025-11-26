@@ -4,13 +4,16 @@ Low-latency binary API for high-frequency trading and MEV operations on Mandarin
 
 ## Overview
 
-This package provides a Protocol Buffer-based gRPC API that replaces slow JSON-RPC for performance-critical operations. Key features:
+This package provides a Protocol Buffer-based gRPC API that **runs alongside JSON-RPC** for performance-critical operations. Key features:
 
 - **Binary protocol**: 10x performance improvement over JSON-RPC
 - **Bundle operations**: Submit and simulate transaction bundles with profit calculation
 - **Batch operations**: Read multiple storage slots in a single call
 - **Low latency**: Direct integration with miner and state database
 - **Type safety**: Strongly-typed interfaces via Protocol Buffers
+- **Additive**: JSON-RPC continues to work for all standard operations
+
+**Note:** gRPC is **disabled by default** and must be explicitly enabled.
 
 ## Architecture
 
@@ -22,7 +25,20 @@ This package provides a Protocol Buffer-based gRPC API that replaces slow JSON-R
 
 ## Configuration
 
-Enable gRPC in your node configuration:
+**Important:** gRPC is **disabled by default**. You must explicitly enable it to use these high-performance trading APIs.
+
+### Via Command-Line Flags (Recommended)
+
+```bash
+# Enable gRPC alongside standard JSON-RPC
+geth --http --http.port 8545 \
+     --grpc --grpc.addr localhost --grpc.port 9090
+
+# JSON-RPC will run on port 8545 (standard Ethereum API)
+# gRPC will run on port 9090 (low-latency trading API)
+```
+
+### Via Configuration File
 
 ```toml
 [Eth]
@@ -31,11 +47,12 @@ GRPCHost = "localhost"
 GRPCPort = 9090
 ```
 
-Or via command-line flags:
+### What This Enables
 
-```bash
-geth --grpc --grpc.addr localhost --grpc.port 9090
-```
+When you add the `--grpc` flag:
+- ✅ **JSON-RPC continues to work** on port 8545 (eth_*, debug_*, etc.)
+- ✅ **gRPC becomes available** on port 9090 (bundle, batch operations)
+- ✅ **Both run simultaneously** - use each for its strengths
 
 ## Usage Example
 
@@ -193,8 +210,3 @@ go test -bench=. -benchtime=10s ./api/grpc/...
 5. **Shared memory**: Zero-copy data sharing for co-located bots
 6. **Authentication**: mTLS, JWT, or API key support
 7. **Metrics**: Prometheus integration for latency and throughput monitoring
-
-## License
-
-LGPL-3.0-or-later (same as go-ethereum)
-
