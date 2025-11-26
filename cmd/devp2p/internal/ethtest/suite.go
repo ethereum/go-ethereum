@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
 )
 
@@ -82,6 +83,7 @@ func (s *Suite) EthTests() []utesting.Test {
 		// get history
 		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
 		{Name: "GetReceipts", Fn: s.TestGetReceipts},
+		{Name: "GetLargeReceipts", Fn: s.TestGetLargeReceipts},
 		// test transactions
 		{Name: "LargeTxRequest", Fn: s.TestLargeTxRequest, Slow: true},
 		{Name: "Transaction", Fn: s.TestTransaction},
@@ -452,6 +454,86 @@ func (s *Suite) TestGetReceipts(t *utesting.T) {
 	}
 	if len(resp.List) != len(req.GetReceiptsRequest) {
 		t.Fatalf("wrong bodies in response: expected %d bodies, got %d", len(req.GetReceiptsRequest), len(resp.List))
+	}
+}
+
+func (s *Suite) TestGetLargeReceipts(t *utesting.T) {
+	t.Log(`This test sends GetReceipts requests to the node for large receipt (>10MiB) in the test chain.`)
+	conn, err := s.dialAndPeer(nil)
+	if err != nil {
+		t.Fatalf("peering failed: %v", err)
+	}
+	defer conn.Close()
+
+	// Find block with large receipt.
+	// Place the large receipt block hash in the middle of the query
+	start := max(s.chain.txInfo.LargeReceiptBlock-2, 0)
+	end := min(s.chain.txInfo.LargeReceiptBlock+2, uint64(len(s.chain.blocks)))
+
+	var blocks []common.Hash
+	var receiptHashes []common.Hash
+
+	for i := start; i < end; i++ {
+		block := s.chain.GetBlock(int(i))
+		blocks = append(blocks, block.Hash())
+		receiptHashes = append(receiptHashes, block.Header().ReceiptHash)
+	}
+
+	// Query recursively until we collect every receipt
+	var loopLimit = 6
+
+	incomplete := false
+	lastBlock := 0
+	receipts := make([]*eth.ReceiptList69, len(blocks))
+	for i := range receipts {
+		receipts[i] = &eth.ReceiptList69{}
+	}
+
+	for incomplete || loopLimit > 0 {
+		// Create get receipt request.
+		req := &eth.GetReceiptsPacket70{
+			RequestId:              66,
+			GetReceiptsRequest:     blocks[lastBlock:],
+			FirstBlockReceiptIndex: uint64(receipts[lastBlock].Len()),
+		}
+		if err := conn.Write(ethProto, eth.GetReceiptsMsg, req); err != nil {
+			t.Fatalf("could not write to connection: %v", err)
+		}
+		// Wait for response.
+		resp := new(eth.ReceiptsPacket70)
+		if err := conn.ReadMsg(ethProto, eth.ReceiptsMsg, &resp); err != nil {
+			t.Fatalf("error reading block receipts msg: %v", err)
+		}
+		if got, want := resp.RequestId, req.RequestId; got != want {
+			t.Fatalf("unexpected request id in respond", got, want)
+		}
+
+		for i, rc := range resp.List {
+			receipts[lastBlock+i].Append(rc)
+		}
+		lastBlock += len(resp.List) - 1
+
+		incomplete = resp.LastBlockIncomplete
+		loopLimit -= 1
+	}
+	if incomplete {
+		t.Fatal("loop terminated before the completion of request")
+	}
+
+	if len(receipts) != len(receiptHashes) {
+		t.Fatalf("wrong total response length: want %d, got %d", len(receiptHashes), len(receipts))
+	}
+
+	hasher := trie.NewStackTrie(nil)
+	hashes := make([]common.Hash, len(receipts))
+	for i := range receipts {
+		hashes[i] = types.DeriveSha(receipts[i], hasher)
+	}
+
+	for i, hash := range hashes {
+		if receiptHashes[i] != hash {
+			t.Fatalf("wrong receipt root: want %x, got %x", receiptHashes[i], hash)
+		}
 	}
 }
 
