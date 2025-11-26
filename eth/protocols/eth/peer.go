@@ -357,6 +357,7 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, sink chan *Response) (*Requ
 				FirstBlockReceiptIndex: 0,
 			},
 		}
+		p.requestedReceipts[id] = hashes
 	} else {
 		req = &Request{
 			id:   id,
@@ -373,7 +374,6 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, sink chan *Response) (*Requ
 		return nil, err
 	}
 
-	p.requestedReceipts[id] = hashes
 	return req, nil
 }
 
@@ -406,6 +406,12 @@ func (p *Peer) RequestPartialReceipts(id uint64) error {
 // If the request is completed, it appends previously collected receipts.
 func (p *Peer) BufferReceiptsPacket(packet *ReceiptsPacket70) error {
 	requestId := packet.RequestId
+
+	// Do not assign buffer to the response not requested
+	if _, ok := p.requestedReceipts[requestId]; !ok {
+		return fmt.Errorf("No partial receipt retreival in progress with id %d", requestId)
+	}
+
 	if len(packet.List) == 0 {
 		return nil
 	}

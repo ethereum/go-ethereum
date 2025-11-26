@@ -403,6 +403,11 @@ func (rl *ReceiptList69) EncodeRLP(_w io.Writer) error {
 	return w.Flush()
 }
 
+// Append appends all items from another ReceiptList69 to this list.
+func (rl *ReceiptList69) Append(other *ReceiptList69) {
+	rl.items = append(rl.items, other.items...)
+}
+
 // blockReceiptsToNetwork69 takes a slice of rlp-encoded receipts, and transactions,
 // and applies the type-encoding on the receipts (for non-legacy receipts).
 // e.g. for non-legacy receipts: receipt-data -> {tx-type || receipt-data}

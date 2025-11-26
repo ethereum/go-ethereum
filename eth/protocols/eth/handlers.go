@@ -531,10 +531,7 @@ func handleReceipts70(backend Backend, msg Decoder, peer *Peer) error {
 		return err
 	}
 	if res.LastBlockIncomplete {
-		if err := peer.RequestPartialReceipts(res.RequestId); err != nil {
-			return err
-		}
-		return nil
+		return peer.RequestPartialReceipts(res.RequestId)
 	}
 
 	// Assign buffers shared between list elements

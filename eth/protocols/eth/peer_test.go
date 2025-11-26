@@ -211,3 +211,55 @@ func TestPartialReceipt(t *testing.T) {
 		t.Fatalf("requestedReceipts should be cleared after delivery")
 	}
 }
+
+func TestPartialReceiptDisconnectRequestId(t *testing.T) {
+	app, net := p2p.MsgPipe()
+	var id enode.ID
+	if _, err := rand.Read(id[:]); err != nil {
+		t.Fatalf("failed to create random peer: %v", err)
+	}
+
+	peer := NewPeer(ETH70, p2p.NewPeer(id, "peer", nil), net, nil)
+
+	packetCh := make(chan *GetReceiptsPacket70, 1)
+	go func() {
+		for {
+			msg, err := app.ReadMsg()
+			if err != nil {
+				return
+			}
+			if msg.Code == GetReceiptsMsg {
+				var pkt GetReceiptsPacket70
+				if err := msg.Decode(&pkt); err == nil {
+					select {
+					case packetCh <- &pkt:
+					default:
+					}
+				}
+			}
+			msg.Discard()
+		}
+	}()
+
+	// If a peer delivers response which is never requested, it should fail the validation
+	delivery := &ReceiptsPacket70{
+		RequestId:           66,
+		LastBlockIncomplete: true,
+		List: []*ReceiptList69{
+			{
+				items: []Receipt{
+					{GasUsed: 21_000, Logs: rlp.RawValue(make([]byte, 1))},
+				},
+			},
+			{
+				items: []Receipt{
+					{GasUsed: 21_000, Logs: rlp.RawValue(make([]byte, 2))},
+				},
+			},
+		},
+	}
+	err := peer.BufferReceiptsPacket(delivery)
+	if err == nil {
+		t.Fatal("Unknown response should be dropped")
+	}
+}
