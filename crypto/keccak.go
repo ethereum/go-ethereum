@@ -41,8 +41,8 @@ func Keccak256(data ...[]byte) []byte {
 	b := make([]byte, 32)
 	d := hasherPool.Get().(KeccakState)
 	d.Reset()
-	for _, b := range data {
-		d.Write(b)
+	for _, chunk := range data {
+		d.Write(chunk)
 	}
 	d.Read(b)
 	hasherPool.Put(d)
@@ -54,8 +54,8 @@ func Keccak256(data ...[]byte) []byte {
 func Keccak256Hash(data ...[]byte) (h common.Hash) {
 	d := hasherPool.Get().(KeccakState)
 	d.Reset()
-	for _, b := range data {
-		d.Write(b)
+	for _, chunk := range data {
+		d.Write(chunk)
 	}
 	d.Read(h[:])
 	hasherPool.Put(d)
