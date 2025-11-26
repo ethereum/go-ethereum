@@ -87,3 +87,54 @@ func subscribeBlocks(client *rpc.Client, subch chan Block) {
 	// the connection.
 	fmt.Println("connection lost: ", <-sub.Err())
 }
+
+// This example demonstrates how to use request interceptors for rate limiting
+// and response interceptors for logging errors.
+func ExampleWithRequestInterceptor_rateLimiting() {
+	// Create a simple rate limiter (allows 10 requests per second).
+	// In production, you might use golang.org/x/time/rate or another package.
+	limiter := make(chan struct{}, 10)
+	for i := 0; i < 10; i++ {
+		limiter <- struct{}{}
+	}
+	go func() {
+		ticker := time.NewTicker(time.Second / 10)
+		defer ticker.Stop()
+		for range ticker.C {
+			select {
+			case limiter <- struct{}{}:
+			default:
+			}
+		}
+	}()
+
+	// Create client with rate limiting interceptor.
+	client, err := rpc.DialOptions(
+		context.Background(),
+		"ws://127.0.0.1:8545",
+		rpc.WithRequestInterceptor(func(ctx context.Context, method string, args []interface{}) error {
+			// Wait for rate limit token (or until context is cancelled).
+			select {
+			case <-limiter:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}),
+		rpc.WithResponseInterceptor(func(ctx context.Context, method string, err error) error {
+			// Log any errors.
+			if err != nil {
+				fmt.Printf("RPC error for method %s: %v\n", method, err)
+			}
+			return err
+		}),
+	)
+	if err != nil {
+		panic(err)
+	}
+	defer client.Close()
+
+	// All calls through this client will now be rate limited.
+	var result string
+	_ = client.CallContext(context.Background(), &result, "eth_blockNumber")
+}

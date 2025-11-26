@@ -17,6 +17,7 @@
 package rpc
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -41,6 +42,10 @@ type clientConfig struct {
 	idgen              func() ID
 	batchItemLimit     int
 	batchResponseLimit int
+
+	// Interceptors
+	requestInterceptors  []RequestInterceptor
+	responseInterceptors []ResponseInterceptor
 }
 
 func (cfg *clientConfig) initHeaders() {
@@ -140,5 +145,102 @@ func WithBatchItemLimit(limit int) ClientOption {
 func WithBatchResponseSizeLimit(sizeLimit int) ClientOption {
 	return optionFunc(func(cfg *clientConfig) {
 		cfg.batchResponseLimit = sizeLimit
+	})
+}
+
+// RequestInterceptor is called before sending RPC requests.
+//
+// The interceptor is invoked with the request context, method name, and arguments.
+// For batch requests, method is empty string and args is nil; the interceptor runs
+// once per batch, not per item.
+//
+// Request interceptors run in order. If an interceptor returns an error, the request
+// is not sent and the error is returned to the caller immediately.
+//
+// The context passed to the interceptor is the same context passed to CallContext.
+// Interceptors can use the context for rate limiting (e.g., limiter.Wait(ctx)) or
+// checking cancellation.
+//
+// IMPORTANT: Interceptors MUST NOT modify the args slice. Doing so results in
+// undefined behavior and may break retries or reconnections.
+type RequestInterceptor func(ctx context.Context, method string, args []interface{}) error
+
+// ResponseInterceptor is called after receiving RPC responses.
+//
+// The interceptor is invoked with the request context, method name, and the final error
+// (which may be nil on success, or an I/O error, RPC error, or unmarshal error).
+//
+// For batch requests, method is empty string and the interceptor runs once per batch.
+// The error represents the transport-level error (usually nil if the batch request
+// succeeded). Per-item RPC errors within the batch are not passed to interceptors;
+// they remain in BatchElem.Error and should be checked by the caller.
+//
+// Response interceptors run in order. Each interceptor receives the error returned by
+// the previous interceptor (or the original error for the first interceptor).
+// The error returned by the last interceptor is returned to the caller.
+//
+// Interceptors can suppress errors by returning nil, wrap errors for additional context,
+// or return a different error entirely.
+type ResponseInterceptor func(ctx context.Context, method string, err error) error
+
+// WithRequestInterceptor adds a request interceptor to the client.
+//
+// Request interceptors are called before sending RPC requests. Multiple interceptors
+// can be added and will run in the order they were added. If any interceptor returns
+// an error, the request is not sent.
+//
+// Example - rate limiting:
+//
+//	limiter := rate.NewLimiter(rate.Every(time.Second), 10)
+//	client, _ := rpc.DialOptions(ctx, url,
+//	    rpc.WithRequestInterceptor(func(ctx context.Context, method string, args []interface{}) error {
+//	        return limiter.Wait(ctx)
+//	    }),
+//	)
+//
+// Example - logging:
+//
+//	client, _ := rpc.DialOptions(ctx, url,
+//	    rpc.WithRequestInterceptor(func(ctx context.Context, method string, args []interface{}) error {
+//	        log.Printf("RPC call: %s", method)
+//	        return nil
+//	    }),
+//	)
+func WithRequestInterceptor(interceptor RequestInterceptor) ClientOption {
+	return optionFunc(func(cfg *clientConfig) {
+		cfg.requestInterceptors = append(cfg.requestInterceptors, interceptor)
+	})
+}
+
+// WithResponseInterceptor adds a response interceptor to the client.
+//
+// Response interceptors are called after receiving RPC responses. Multiple interceptors
+// can be added and will run in the order they were added. Each interceptor receives
+// the error from the previous interceptor.
+//
+// Example - error logging:
+//
+//	client, _ := rpc.DialOptions(ctx, url,
+//	    rpc.WithResponseInterceptor(func(ctx context.Context, method string, err error) error {
+//	        if err != nil {
+//	            log.Printf("RPC error for %s: %v", method, err)
+//	        }
+//	        return err
+//	    }),
+//	)
+//
+// For batch requests, if you need per-item error observability, check BatchElem.Error
+// after the call returns:
+//
+//	batch := []rpc.BatchElem{...}
+//	err := client.BatchCallContext(ctx, batch)
+//	for i, elem := range batch {
+//	    if elem.Error != nil {
+//	        log.Printf("Batch[%d] %s failed: %v", i, elem.Method, elem.Error)
+//	    }
+//	}
+func WithResponseInterceptor(interceptor ResponseInterceptor) ClientOption {
+	return optionFunc(func(cfg *clientConfig) {
+		cfg.responseInterceptors = append(cfg.responseInterceptors, interceptor)
 	})
 }

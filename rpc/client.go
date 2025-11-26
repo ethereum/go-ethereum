@@ -90,6 +90,10 @@ type Client struct {
 	batchItemLimit       int
 	batchResponseMaxSize int
 
+	// interceptors
+	requestInterceptors  []RequestInterceptor
+	responseInterceptors []ResponseInterceptor
+
 	// writeConn is used for writing to the connection on the caller's goroutine. It should
 	// only be accessed outside of dispatch, with the write lock held. The write lock is
 	// taken by sending on reqInit and released by sending on reqSent.
@@ -248,6 +252,8 @@ func initClient(conn ServerCodec, services *serviceRegistry, cfg *clientConfig) 
 		idgen:                cfg.idgen,
 		batchItemLimit:       cfg.batchItemLimit,
 		batchResponseMaxSize: cfg.batchResponseLimit,
+		requestInterceptors:  cfg.requestInterceptors,
+		responseInterceptors: cfg.responseInterceptors,
 		writeConn:            conn,
 		close:                make(chan struct{}),
 		closing:              make(chan struct{}),
@@ -339,6 +345,12 @@ func (c *Client) CallContext(ctx context.Context, result interface{}, method str
 	if result != nil && reflect.TypeOf(result).Kind() != reflect.Ptr {
 		return fmt.Errorf("call result parameter must be pointer or nil interface: %v", result)
 	}
+
+	// Call request interceptors before sending.
+	if err := c.callRequestInterceptors(ctx, method, args); err != nil {
+		return err
+	}
+
 	msg, err := c.newMessage(method, args...)
 	if err != nil {
 		return err
@@ -354,25 +366,26 @@ func (c *Client) CallContext(ctx context.Context, result interface{}, method str
 		err = c.send(ctx, op, msg)
 	}
 	if err != nil {
-		return err
+		return c.callResponseInterceptors(ctx, method, err)
 	}
 
 	// dispatch has accepted the request and will close the channel when it quits.
 	batchresp, err := op.wait(ctx, c)
 	if err != nil {
-		return err
+		return c.callResponseInterceptors(ctx, method, err)
 	}
 	resp := batchresp[0]
 	switch {
 	case resp.Error != nil:
-		return resp.Error
+		return c.callResponseInterceptors(ctx, method, resp.Error)
 	case len(resp.Result) == 0:
-		return ErrNoResult
+		return c.callResponseInterceptors(ctx, method, ErrNoResult)
 	default:
 		if result == nil {
-			return nil
+			return c.callResponseInterceptors(ctx, method, nil)
 		}
-		return json.Unmarshal(resp.Result, result)
+		err = json.Unmarshal(resp.Result, result)
+		return c.callResponseInterceptors(ctx, method, err)
 	}
 }
 
@@ -398,6 +411,11 @@ func (c *Client) BatchCall(b []BatchElem) error {
 //
 // Note that batch calls may not be executed atomically on the server side.
 func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
+	// Call request interceptors for the batch (method="" for batch).
+	if err := c.callRequestInterceptors(ctx, "", nil); err != nil {
+		return err
+	}
+
 	var (
 		msgs = make([]*jsonrpcMessage, len(b))
 		byID = make(map[string]int, len(b))
@@ -423,12 +441,12 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 		err = c.send(ctx, op, msgs)
 	}
 	if err != nil {
-		return err
+		return c.callResponseInterceptors(ctx, "", err)
 	}
 
 	batchresp, err := op.wait(ctx, c)
 	if err != nil {
-		return err
+		return c.callResponseInterceptors(ctx, "", err)
 	}
 
 	// Wait for all responses to come back.
@@ -464,11 +482,18 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 		elem.Error = ErrMissingBatchResponse
 	}
 
-	return err
+	// Call response interceptors for the batch (method="" for batch).
+	// err here is the I/O error, not per-item errors (those are in BatchElem.Error).
+	return c.callResponseInterceptors(ctx, "", err)
 }
 
 // Notify sends a notification, i.e. a method call that doesn't expect a response.
 func (c *Client) Notify(ctx context.Context, method string, args ...interface{}) error {
+	// Call request interceptors before sending notification.
+	if err := c.callRequestInterceptors(ctx, method, args); err != nil {
+		return err
+	}
+
 	op := new(requestOp)
 	msg, err := c.newMessage(method, args...)
 	if err != nil {
@@ -518,7 +543,14 @@ func (c *Client) Subscribe(ctx context.Context, namespace string, channel interf
 		return nil, ErrNotificationsUnsupported
 	}
 
-	msg, err := c.newMessage(namespace+subscribeMethodSuffix, args...)
+	method := namespace + subscribeMethodSuffix
+
+	// Call request interceptors before sending subscription request.
+	if err := c.callRequestInterceptors(ctx, method, args); err != nil {
+		return nil, err
+	}
+
+	msg, err := c.newMessage(method, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -531,12 +563,12 @@ func (c *Client) Subscribe(ctx context.Context, namespace string, channel interf
 	// Send the subscription request.
 	// The arrival and validity of the response is signaled on sub.quit.
 	if err := c.send(ctx, op, msg); err != nil {
-		return nil, err
+		return nil, c.callResponseInterceptors(ctx, method, err)
 	}
 	if _, err := op.wait(ctx, c); err != nil {
-		return nil, err
+		return nil, c.callResponseInterceptors(ctx, method, err)
 	}
-	return op.sub, nil
+	return op.sub, c.callResponseInterceptors(ctx, method, nil)
 }
 
 // SupportsSubscriptions reports whether subscriptions are supported by the client
@@ -614,6 +646,26 @@ func (c *Client) reconnect(ctx context.Context) error {
 		newconn.close()
 		return ErrClientQuit
 	}
+}
+
+// callRequestInterceptors calls all request interceptors in order.
+// Returns the first error encountered, or nil if all succeed.
+func (c *Client) callRequestInterceptors(ctx context.Context, method string, args []interface{}) error {
+	for _, interceptor := range c.requestInterceptors {
+		if err := interceptor(ctx, method, args); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// callResponseInterceptors calls all response interceptors in order.
+// Each interceptor receives the error from the previous one.
+func (c *Client) callResponseInterceptors(ctx context.Context, method string, err error) error {
+	for _, interceptor := range c.responseInterceptors {
+		err = interceptor(ctx, method, err)
+	}
+	return err
 }
 
 // dispatch is the main loop of the client.
