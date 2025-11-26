@@ -135,13 +135,13 @@ type blobTxMeta struct {
 // newBlobTxMeta retrieves the indexed metadata fields from a blob transaction
 // and assembles a helper struct to track in memory.
 // Requires the transaction to have a sidecar (or that we introduce a special version tag for no-sidecar).
-func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transaction) *blobTxMeta {
+func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transaction, hash common.Hash) *blobTxMeta {
 	if tx.BlobTxSidecar() == nil {
 		// This should never happen, as the pool only admits blob transactions with a sidecar
 		panic("missing blob tx sidecar")
 	}
 	meta := &blobTxMeta{
-		hash:        tx.Hash(),
+		hash:        hash,
 		vhashes:     tx.BlobHashes(),
 		version:     tx.BlobTxSidecar().Version,
 		id:          id,
@@ -518,17 +518,18 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 		log.Error("Failed to decode blob pool entry", "id", id, "err", err)
 		return err
 	}
+	hash := tx.Hash()
 	if tx.BlobTxSidecar() == nil {
-		log.Error("Missing sidecar in blob pool entry", "id", id, "hash", tx.Hash())
+		log.Error("Missing sidecar in blob pool entry", "id", id, "hash", hash)
 		return errors.New("missing blob sidecar")
 	}
 
-	meta := newBlobTxMeta(id, tx.Size(), size, tx)
+	meta := newBlobTxMeta(id, tx.Size(), size, tx, hash)
 	if p.lookup.exists(meta.hash) {
 		// This path is only possible after a crash, where deleted items are not
 		// removed via the normal shutdown-startup procedure and thus may get
 		// partially resurrected.
-		log.Error("Rejecting duplicate blob pool entry", "id", id, "hash", tx.Hash())
+		log.Error("Rejecting duplicate blob pool entry", "id", id, "hash", hash)
 		return errors.New("duplicate blob entry")
 	}
 	sender, err := types.Sender(p.signer, tx)
@@ -536,7 +537,7 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 		// This path is impossible unless the signature validity changes across
 		// restarts. For that ever improbable case, recover gracefully by ignoring
 		// this data entry.
-		log.Error("Failed to recover blob tx sender", "id", id, "hash", tx.Hash(), "err", err)
+		log.Error("Failed to recover blob tx sender", "id", id, "hash", hash, "err", err)
 		return err
 	}
 	if _, ok := p.index[sender]; !ok {
@@ -1125,7 +1126,8 @@ func (p *BlobPool) reorg(oldHead, newHead *types.Header) (map[common.Address][]*
 			from, _ := types.Sender(p.signer, tx)
 
 			included[from] = append(included[from], tx)
-			inclusions[tx.Hash()] = add.NumberU64()
+			hash := tx.Hash()
+			inclusions[hash] = add.NumberU64()
 			transactors[from] = struct{}{}
 		}
 		if add = p.chain.GetBlock(add.ParentHash(), add.NumberU64()-1); add == nil {
@@ -1148,7 +1150,8 @@ func (p *BlobPool) reorg(oldHead, newHead *types.Header) (map[common.Address][]*
 			from, _ := types.Sender(p.signer, tx)
 
 			included[from] = append(included[from], tx)
-			inclusions[tx.Hash()] = add.NumberU64()
+			hash := tx.Hash()
+			inclusions[hash] = add.NumberU64()
 			transactors[from] = struct{}{}
 		}
 		if add = p.chain.GetBlock(add.ParentHash(), add.NumberU64()-1); add == nil {
@@ -1172,7 +1175,8 @@ func (p *BlobPool) reorg(oldHead, newHead *types.Header) (map[common.Address][]*
 		// Update the set that was already reincluded to track the blocks in limbo
 		for _, tx := range types.TxDifference(included[addr], discarded[addr]) {
 			if p.Filter(tx) {
-				p.limbo.update(tx.Hash(), inclusions[tx.Hash()])
+				hash := tx.Hash()
+				p.limbo.update(hash, inclusions[hash])
 			}
 		}
 	}
@@ -1205,31 +1209,32 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 	// 9 legacy blob transactions are allowed in a block pre-Osaka, an adversary
 	// could theoretically halt a Geth node for ~1.2s by reorging per block. However,
 	// this attack is financially inefficient to execute.
+	hash := tx.Hash()
 	head := p.head.Load()
 	if p.chain.Config().IsOsaka(head.Number, head.Time) && tx.BlobTxSidecar().Version == types.BlobSidecarVersion0 {
 		if err := tx.BlobTxSidecar().ToV1(); err != nil {
 			log.Error("Failed to convert the legacy sidecar", "err", err)
 			return err
 		}
-		log.Info("Legacy blob transaction is reorged", "hash", tx.Hash())
+		log.Info("Legacy blob transaction is reorged", "hash", hash)
 	}
 	// Serialize the transaction back into the primary datastore.
 	blob, err := rlp.EncodeToBytes(tx)
 	if err != nil {
-		log.Error("Failed to encode transaction for storage", "hash", tx.Hash(), "err", err)
+		log.Error("Failed to encode transaction for storage", "hash", hash, "err", err)
 		return err
 	}
 	id, err := p.store.Put(blob)
 	if err != nil {
-		log.Error("Failed to write transaction into storage", "hash", tx.Hash(), "err", err)
+		log.Error("Failed to write transaction into storage", "hash", hash, "err", err)
 		return err
 	}
 
 	// Update the indices and metrics
-	meta := newBlobTxMeta(id, tx.Size(), p.store.Size(id), tx)
+	meta := newBlobTxMeta(id, tx.Size(), p.store.Size(id), tx, hash)
 	if _, ok := p.index[addr]; !ok {
 		if err := p.reserver.Hold(addr); err != nil {
-			log.Warn("Failed to reserve account for blob pool", "tx", tx.Hash(), "from", addr, "err", err)
+			log.Warn("Failed to reserve account for blob pool", "tx", hash, "from", addr, "err", err)
 			return err
 		}
 		p.index[addr] = []*blobTxMeta{meta}
@@ -1718,9 +1723,10 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 		addtimeHist.Update(time.Since(start).Nanoseconds())
 	}(time.Now())
 
+	hash := tx.Hash()
 	// Ensure the transaction is valid from all perspectives
 	if err := p.validateTx(tx); err != nil {
-		log.Trace("Transaction validation failed", "hash", tx.Hash(), "err", err)
+		log.Trace("Transaction validation failed", "hash", hash, "err", err)
 		switch {
 		case errors.Is(err, txpool.ErrUnderpriced):
 			addUnderpricedMeter.Mark(1)
@@ -1765,14 +1771,14 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	// insert it into the database and update the indices
 	blob, err := rlp.EncodeToBytes(tx)
 	if err != nil {
-		log.Error("Failed to encode transaction for storage", "hash", tx.Hash(), "err", err)
+		log.Error("Failed to encode transaction for storage", "hash", hash, "err", err)
 		return err
 	}
 	id, err := p.store.Put(blob)
 	if err != nil {
 		return err
 	}
-	meta := newBlobTxMeta(id, tx.Size(), p.store.Size(id), tx)
+	meta := newBlobTxMeta(id, tx.Size(), p.store.Size(id), tx, hash)
 
 	var (
 		next   = p.state.GetNonce(from)
