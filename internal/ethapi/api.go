@@ -376,7 +376,7 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 		var err error
 		keys[i], keyLengths[i], err = decodeHash(hexKey)
 		if err != nil {
-			return nil, err
+			return nil, &invalidParamsError{fmt.Sprintf("invalid storage key %q", hexKey)}
 		}
 	}
 	statedb, header, err := api.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
@@ -591,7 +591,7 @@ func (api *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Addre
 	}
 	key, _, err := decodeHash(hexKey)
 	if err != nil {
-		return nil, fmt.Errorf("unable to decode storage key: %s", err)
+		return nil, &invalidParamsError{fmt.Sprintf("invalid storage key: %q", hexKey)}
 	}
 	res := state.GetState(address, key)
 	return res[:], state.Error()
