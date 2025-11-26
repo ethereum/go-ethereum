@@ -826,10 +826,10 @@ func formatPrimitiveValue(encType string, encValue interface{}) (string, error) 
 			return fmt.Sprintf("%t", boolValue), nil
 		}
 	case "bytes", "string":
-		return fmt.Sprintf("%s", encValue), nil
+		return stringifyPrimitive(encType, encValue)
 	}
 	if strings.HasPrefix(encType, "bytes") {
-		return fmt.Sprintf("%s", encValue), nil
+		return stringifyPrimitive(encType, encValue)
 	}
 	if strings.HasPrefix(encType, "uint") || strings.HasPrefix(encType, "int") {
 		if b, err := parseInteger(encType, encValue); err != nil {
@@ -839,6 +839,21 @@ func formatPrimitiveValue(encType string, encValue interface{}) (string, error) 
 		}
 	}
 	return "", fmt.Errorf("unhandled type %v", encType)
+}
+
+func stringifyPrimitive(encType string, encValue interface{}) (string, error) {
+	switch v := encValue.(type) {
+	case string:
+		return v, nil
+	case []byte:
+		return string(v), nil
+	case hexutil.Bytes:
+		return v.String(), nil
+	case fmt.Stringer:
+		return v.String(), nil
+	default:
+		return "", fmt.Errorf("could not format value %v as %s", encValue, encType)
+	}
 }
 
 // validate checks if the types object is conformant to the specs
