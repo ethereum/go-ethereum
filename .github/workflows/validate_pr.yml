@@ -1,4 +1,4 @@
-name: PR Format Validatio
+name: PR Format Validation
 
 on:
   pull_request:
