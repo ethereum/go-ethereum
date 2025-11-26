@@ -212,7 +212,7 @@ func TestPartialReceipt(t *testing.T) {
 	}
 }
 
-func TestPartialReceiptDisconnectRequestId(t *testing.T) {
+func TestPartialReceiptFailure(t *testing.T) {
 	app, net := p2p.MsgPipe()
 	var id enode.ID
 	if _, err := rand.Read(id[:]); err != nil {
