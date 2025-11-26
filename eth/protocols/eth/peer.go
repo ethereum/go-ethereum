@@ -413,6 +413,8 @@ func (p *Peer) BufferReceiptsPacket(packet *ReceiptsPacket70, backend Backend) e
 	}
 
 	if len(packet.List) == 0 {
+		delete(p.receiptBuffer, requestId)
+		delete(p.requestedReceipts, requestId)
 		return nil
 	}
 
@@ -444,13 +446,14 @@ func (p *Peer) BufferReceiptsPacket(packet *ReceiptsPacket70, backend Backend) e
 		return nil
 	}
 
-	// If the request is completed, append previously collected receipts
-	// to the packet and remove the buffered receipts.
+	// Request completed
 	if buffer, ok := p.receiptBuffer[requestId]; ok {
+		// If the request is completed, append previously collected receipts
+		// to the packet and remove the buffered receipts.
 		packet.List = append(buffer.list, packet.List...)
 		delete(p.receiptBuffer, requestId)
-		delete(p.requestedReceipts, requestId)
 	}
+	delete(p.requestedReceipts, requestId)
 
 	return nil
 }
