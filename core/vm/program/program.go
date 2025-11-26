@@ -42,9 +42,7 @@ type Program struct {
 
 // New creates a new Program
 func New() *Program {
-	return &Program{
-		code: make([]byte, 0),
-	}
+	return &Program{}
 }
 
 // add adds the op to the code.
