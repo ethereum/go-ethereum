@@ -374,6 +374,22 @@ You should treat 'masterseed.json' with utmost secrecy and make a backup of it!
 	return nil
 }
 
+const (
+	vaultDomain       = "vault"
+	configDomain      = "config"
+	credentialsDomain = "credentials"
+	jsStorageDomain   = "jsstorage"
+)
+
+func deriveStorageKey(domain string, stretchedKey []byte) []byte {
+	return crypto.Keccak256([]byte(domain), stretchedKey)
+}
+
+func deriveVaultLocation(configDir string, stretchedKey []byte) string {
+	vaultHash := deriveStorageKey(vaultDomain, stretchedKey)
+	return filepath.Join(configDir, common.Bytes2Hex(vaultHash[:10]))
+}
+
 func attestFile(ctx *cli.Context) error {
 	if ctx.NArg() < 1 {
 		utils.Fatalf("This command requires an argument.")
@@ -387,8 +403,8 @@ func attestFile(ctx *cli.Context) error {
 		utils.Fatalf(err.Error())
 	}
 	configDir := ctx.String(configdirFlag.Name)
-	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
-	confKey := crypto.Keccak256([]byte("config"), stretchedKey)
+	vaultLocation := deriveVaultLocation(configDir, stretchedKey)
+	confKey := deriveStorageKey(configDomain, stretchedKey)
 
 	// Initialize the encrypted storages
 	configStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "config.json"), confKey)
@@ -434,8 +450,8 @@ func setCredential(ctx *cli.Context) error {
 		utils.Fatalf(err.Error())
 	}
 	configDir := ctx.String(configdirFlag.Name)
-	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
-	pwkey := crypto.Keccak256([]byte("credentials"), stretchedKey)
+	vaultLocation := deriveVaultLocation(configDir, stretchedKey)
+	pwkey := deriveStorageKey(credentialsDomain, stretchedKey)
 
 	pwStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
 	pwStorage.Put(address.Hex(), password)
@@ -462,8 +478,8 @@ func removeCredential(ctx *cli.Context) error {
 		utils.Fatalf(err.Error())
 	}
 	configDir := ctx.String(configdirFlag.Name)
-	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
-	pwkey := crypto.Keccak256([]byte("credentials"), stretchedKey)
+	vaultLocation := deriveVaultLocation(configDir, stretchedKey)
+	pwkey := deriveStorageKey(credentialsDomain, stretchedKey)
 
 	pwStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
 	pwStorage.Del(address.Hex())
@@ -657,12 +673,12 @@ func signer(c *cli.Context) error {
 	if stretchedKey, err := readMasterKey(c, ui); err != nil {
 		log.Warn("Failed to open master, rules disabled", "err", err)
 	} else {
-		vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
+		vaultLocation := deriveVaultLocation(configDir, stretchedKey)
 
 		// Generate domain specific keys
-		pwkey := crypto.Keccak256([]byte("credentials"), stretchedKey)
-		jskey := crypto.Keccak256([]byte("jsstorage"), stretchedKey)
-		confkey := crypto.Keccak256([]byte("config"), stretchedKey)
+		pwkey := deriveStorageKey(credentialsDomain, stretchedKey)
+		jskey := deriveStorageKey(jsStorageDomain, stretchedKey)
+		confkey := deriveStorageKey(configDomain, stretchedKey)
 
 		// Initialize the encrypted storages
 		pwStorage = storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
