@@ -338,14 +338,15 @@ func (w *wallet) selfDerive() {
 		}
 		// Device lock obtained, derive the next batch of accounts
 		var (
-			accs  []accounts.Account
-			paths []accounts.DerivationPath
-
-			nextPaths = append([]accounts.DerivationPath{}, w.deriveNextPaths...)
-			nextAddrs = append([]common.Address{}, w.deriveNextAddrs...)
-
+			accs    []accounts.Account
+			paths   []accounts.DerivationPath
 			context = context.Background()
+			nextAddrs = append([]common.Address{}, w.deriveNextAddrs...)
 		)
+		nextPaths := make([]accounts.DerivationPath, len(w.deriveNextPaths))
+		for i, path := range w.deriveNextPaths {
+			nextPaths[i] = append(accounts.DerivationPath(nil), path...)
+		}
 		for i := 0; i < len(nextAddrs); i++ {
 			for empty := false; !empty; {
 				// Retrieve the next derived Ethereum account
@@ -632,7 +633,7 @@ func (w *wallet) SignTx(account accounts.Account, tx *types.Transaction, chainID
 // data is not supported for Ledger wallets, so this method will always return
 // an error.
 func (w *wallet) SignTextWithPassphrase(account accounts.Account, passphrase string, text []byte) ([]byte, error) {
-	return w.SignText(account, text)
+	return w.SignText(account, accounts.TextHash(text))
 }
 
 // SignTxWithPassphrase implements accounts.Wallet, attempting to sign the given
