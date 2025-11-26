@@ -343,6 +343,8 @@ func (w *wallet) selfDerive() {
 			context = context.Background()
 			nextAddrs = append([]common.Address{}, w.deriveNextAddrs...)
 		)
+		// Deep-copy derivation paths so updates inside this section don't mutate
+		// w.deriveNextPaths while we only hold stateLock.RLock.
 		nextPaths := make([]accounts.DerivationPath, len(w.deriveNextPaths))
 		for i, path := range w.deriveNextPaths {
 			nextPaths[i] = append(accounts.DerivationPath(nil), path...)
