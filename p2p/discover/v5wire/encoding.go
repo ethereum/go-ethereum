@@ -326,7 +326,6 @@ func (c *Codec) encodeWhoareyou(toID enode.ID, packet *Whoareyou) (Header, error
 
 	// Create header.
 	head := c.makeHeader(toID, flagWhoareyou, 0)
-	head.AuthData = slices.Clone(c.buf.Bytes())
 	head.Nonce = packet.Nonce
 
 	// Encode auth data.
