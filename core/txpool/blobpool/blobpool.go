@@ -1795,8 +1795,8 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 		}
 		// Update the transaction index
 		p.index[from][offset] = meta
-		p.spent[from] = new(uint256.Int).Sub(p.spent[from], prev.costCap)
-		p.spent[from] = new(uint256.Int).Add(p.spent[from], meta.costCap)
+		spent := new(uint256.Int).Sub(p.spent[from], prev.costCap)
+		p.spent[from] = spent.Add(spent, meta.costCap)
 
 		p.lookup.untrack(prev)
 		p.lookup.track(meta)
