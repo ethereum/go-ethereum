@@ -608,8 +608,9 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 					left = lastID - current + 1
 					done = current - beginID
 				)
-				eta := common.CalculateETA(done, left, time.Since(start))
-				i.log.Info("Indexing history", "processed", done, "left", left, "elapsed", common.PrettyDuration(time.Since(start)), "eta", common.PrettyDuration(eta))
+				elapsed := time.Since(start)
+				eta := common.CalculateETA(done, left, elapsed)
+				i.log.Info("Indexing history", "processed", done, "left", left, "elapsed", common.PrettyDuration(elapsed), "eta", common.PrettyDuration(eta))
 			}
 		}
 		i.indexed.Store(current - 1) // update indexing progress
