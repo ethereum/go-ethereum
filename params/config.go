@@ -19,6 +19,7 @@ package params
 import (
 	"fmt"
 	"math/big"
+	"slices"
 	"strings"
 	"sync"
 
@@ -506,44 +507,20 @@ func V2Equal(a, b *V2) bool {
 		log.Info("[V2Equal] Nil check", "a", a, "b", b, "equal", a == b)
 		return a == b
 	}
-
-	if a.SwitchEpoch != b.SwitchEpoch {
-		log.Info("[V2Equal] SwitchEpoch mismatch", "a.SwitchEpoch", a.SwitchEpoch, "b.SwitchEpoch", b.SwitchEpoch)
+	if a.SwitchEpoch != b.SwitchEpoch || !configNumEqual(a.SwitchBlock, b.SwitchBlock) || !slices.Equal(a.configIndex, b.configIndex) {
 		return false
 	}
-
-	if !configNumEqual(a.SwitchBlock, b.SwitchBlock) {
-		aBlock := "<nil>"
-		bBlock := "<nil>"
-		if a.SwitchBlock != nil {
-			aBlock = a.SwitchBlock.String()
-		}
-		if b.SwitchBlock != nil {
-			bBlock = b.SwitchBlock.String()
-		}
-		log.Info("[V2Equal] SwitchBlock mismatch", "a.SwitchBlock", aBlock, "b.SwitchBlock", bBlock)
-		return false
+	// compare AllConfigs according to smaller map
+	smallerMap, largerMap := a.AllConfigs, b.AllConfigs
+	if len(smallerMap) > len(largerMap) {
+		smallerMap, largerMap = largerMap, smallerMap
 	}
-
-	// if !maps.EqualFunc(a.AllConfigs, b.AllConfigs, V2ConfigEqual) {
-	// 	log.Info("[V2Equal] AllConfigs mismatch", "a.AllConfigs.len", len(a.AllConfigs), "b.AllConfigs.len", len(b.AllConfigs))
-	// 	// Log details about which configs differ
-	// 	for key, aConfig := range a.AllConfigs {
-	// 		bConfig, exists := b.AllConfigs[key]
-	// 		if !exists {
-	// 			log.Info("[V2Equal] AllConfigs key missing in b", "key", key)
-	// 		} else if !V2ConfigEqual(aConfig, bConfig) {
-	// 			log.Info("[V2Equal] AllConfigs value mismatch at key", "key", key)
-	// 		}
-	// 	}
-	// 	for key := range b.AllConfigs {
-	// 		if _, exists := a.AllConfigs[key]; !exists {
-	// 			log.Info("[V2Equal] AllConfigs key missing in a", "key", key)
-	// 		}
-	// 	}
-	// 	return false
-	// }
-
+	for key, cfg1 := range smallerMap {
+		cfg2, ok := largerMap[key]
+		if !ok || !V2ConfigEqual(cfg1, cfg2) {
+			return false
+		}
+	}
 	return true
 }
 
@@ -552,20 +529,7 @@ func V2ConfigEqual(a, b *V2Config) bool {
 		log.Info("[V2ConfigEqual] Nil check", "a", a, "b", b, "equal", a == b)
 		return a == b
 	}
-
-	equal := *a == *b
-	if !equal {
-		log.Info("[V2ConfigEqual] Config mismatch",
-			"a.MaxMasternodes", a.MaxMasternodes, "b.MaxMasternodes", b.MaxMasternodes,
-			"a.SwitchRound", a.SwitchRound, "b.SwitchRound", b.SwitchRound,
-			"a.MinePeriod", a.MinePeriod, "b.MinePeriod", b.MinePeriod,
-			"a.TimeoutSyncThreshold", a.TimeoutSyncThreshold, "b.TimeoutSyncThreshold", b.TimeoutSyncThreshold,
-			"a.TimeoutPeriod", a.TimeoutPeriod, "b.TimeoutPeriod", b.TimeoutPeriod,
-			"a.CertThreshold", a.CertThreshold, "b.CertThreshold", b.CertThreshold,
-			"a.ExpTimeoutConfig.Base", a.ExpTimeoutConfig.Base, "b.ExpTimeoutConfig.Base", b.ExpTimeoutConfig.Base,
-			"a.ExpTimeoutConfig.MaxExponent", a.ExpTimeoutConfig.MaxExponent, "b.ExpTimeoutConfig.MaxExponent", b.ExpTimeoutConfig.MaxExponent)
-	}
-	return equal
+	return a.MaxMasternodes == b.MaxMasternodes && a.SwitchRound == b.SwitchRound && a.CertThreshold == b.CertThreshold
 }
 
 func (c *XDPoSConfig) String() string {
