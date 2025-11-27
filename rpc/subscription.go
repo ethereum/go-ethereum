@@ -24,10 +24,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"math/rand"
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -47,7 +47,10 @@ var (
 	ErrSubscriptionNotFound = errors.New("subscription not found")
 )
 
-var globalGen = randomIDGenerator()
+var (
+	globalGen       = randomIDGenerator()
+	fallbackIDCount uint64
+)
 
 // ID defines a pseudo random number that is used to identify RPC subscriptions.
 type ID string
@@ -59,23 +62,13 @@ func NewID() ID {
 
 // randomIDGenerator returns a function generates a random IDs.
 func randomIDGenerator() func() ID {
-	var buf = make([]byte, 8)
-	var seed int64
-	if _, err := crand.Read(buf); err == nil {
-		seed = int64(binary.BigEndian.Uint64(buf))
-	} else {
-		seed = int64(time.Now().Nanosecond())
-	}
-
-	var (
-		mu  sync.Mutex
-		rng = rand.New(rand.NewSource(seed))
-	)
 	return func() ID {
-		mu.Lock()
-		defer mu.Unlock()
 		id := make([]byte, 16)
-		rng.Read(id)
+		if _, err := crand.Read(id); err != nil {
+			// Fallback uses timestamp and counter to remain unique if crypto rng fails.
+			binary.BigEndian.PutUint64(id[:8], uint64(time.Now().UnixNano()))
+			binary.BigEndian.PutUint64(id[8:], atomic.AddUint64(&fallbackIDCount, 1))
+		}
 		return encodeID(id)
 	}
 }
