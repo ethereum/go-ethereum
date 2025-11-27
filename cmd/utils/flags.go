@@ -1577,8 +1577,7 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 		cfg.Recommit = ctx.Duration(MinerNewPayloadTimeoutFlag.Name)
 	}
 	if ctx.IsSet(MinerMaxBlobsFlag.Name) {
-		maxBlobs := ctx.Int(MinerMaxBlobsFlag.Name)
-		cfg.MaxBlobsPerBlock = &maxBlobs
+		cfg.MaxBlobsPerBlock = ctx.Int(MinerMaxBlobsFlag.Name)
 	}
 }
 
