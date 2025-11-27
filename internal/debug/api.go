@@ -150,6 +150,8 @@ func (l *pyroscopeLogger) Errorf(format string, v ...interface{}) {
 // StartPyroscopeProfiler starts the Pyroscope profiler for later use
 func (h *HandlerT) StartPyroscopeProfiler(
 	server string,
+	authUsername string,
+	authPassword string,
 	tags map[string]string,
 ) error {
 	h.mu.Lock()
@@ -160,10 +162,12 @@ func (h *HandlerT) StartPyroscopeProfiler(
 	}
 	profiler, err := pyroscope.Start(
 		pyroscope.Config{
-			ApplicationName: "geth",
-			ServerAddress:   server,
-			Logger:          &pyroscopeLogger{Logger: log.Root().With("module", "pyroscope")},
-			Tags:            tags,
+			ApplicationName:   "geth",
+			ServerAddress:     server,
+			BasicAuthUser:     authUsername,
+			BasicAuthPassword: authPassword,
+			Logger:            &pyroscopeLogger{Logger: log.Root().With("module", "pyroscope")},
+			Tags:              tags,
 			ProfileTypes: []pyroscope.ProfileType{
 				// Enabling all profile types
 				pyroscope.ProfileCPU,

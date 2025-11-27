@@ -153,6 +153,18 @@ var (
 		Value:    "http://localhost:4040",
 		Category: flags.LoggingCategory,
 	}
+	pyroscopeAuthUsernameFlag = &cli.StringFlag{
+		Name:     "pyroscope.username",
+		Usage:    "Pyroscope basic authentication username",
+		Value:    "",
+		Category: flags.LoggingCategory,
+	}
+	pyroscopeAuthPasswordFlag = &cli.StringFlag{
+		Name:     "pyroscope.password",
+		Usage:    "Pyroscope basic authentication password",
+		Value:    "",
+		Category: flags.LoggingCategory,
+	}
 	pyroscopeTagsFlag = &cli.StringFlag{
 		Name:     "pyroscope.tags",
 		Usage:    "Comma separated list of key=value tags to add to profiling data",
@@ -183,6 +195,8 @@ var Flags = []cli.Flag{
 	traceFlag,
 	pyroscopeFlag,
 	pyroscopeServerFlag,
+	pyroscopeAuthUsernameFlag,
+	pyroscopeAuthPasswordFlag,
 	pyroscopeTagsFlag,
 }
 
@@ -324,6 +338,8 @@ func Setup(ctx *cli.Context) error {
 	// Pyroscope profiling
 	if ctx.Bool(pyroscopeFlag.Name) {
 		pyroscopeServer := ctx.String(pyroscopeServerFlag.Name)
+		pyroscopeAuthUsername := ctx.String(pyroscopeAuthUsernameFlag.Name)
+		pyroscopeAuthPassword := ctx.String(pyroscopeAuthPasswordFlag.Name)
 
 		rawTags := ctx.String(pyroscopeTagsFlag.Name)
 		tags := make(map[string]string)
@@ -335,7 +351,12 @@ func Setup(ctx *cli.Context) error {
 			}
 		}
 
-		Handler.StartPyroscopeProfiler(pyroscopeServer, tags)
+		Handler.StartPyroscopeProfiler(
+			pyroscopeServer,
+			pyroscopeAuthUsername,
+			pyroscopeAuthPassword,
+			tags,
+		)
 	}
 
 	if len(logFile) > 0 || rotation {
