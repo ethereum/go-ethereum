@@ -43,6 +43,36 @@ const refreshCycle = time.Second
 // trashing.
 const refreshThrottling = 500 * time.Millisecond
 
+const (
+	// deviceUsagePage identifies Ledger devices by HID usage page (0xffa0) on Windows and macOS.
+	// See: https://github.com/LedgerHQ/ledger-live/blob/05a2980e838955a11a1418da638ef8ac3df4fb74/libs/ledgerjs/packages/hw-transport-node-hid-noevents/src/TransportNodeHid.ts
+	deviceUsagePage = 0xffa0
+	// deviceInterface identifies Ledger devices by USB interface number (0) on Linux.
+	deviceInterface = 0
+)
+
+// ledgerProductIDs contains all supported Ledger USB product IDs (legacy and WebUSB).
+// Device definitions taken from
+// https://github.com/LedgerHQ/ledger-live/blob/05a2980e838955a11a1418da638ef8ac3df4fb74/libs/ledgerjs/packages/devices/src/index.ts
+var ledgerProductIDs = []uint16{
+	// Original product IDs
+	0x0000, /* Ledger Blue */
+	0x0001, /* Ledger Nano S */
+	0x0004, /* Ledger Nano X */
+	0x0005, /* Ledger Nano S Plus */
+	0x0006, /* Ledger Nano FTS */
+	0x0007, /* Ledger Flex */
+	0x0008, /* Ledger Nano Gen5 */
+
+	0x0000, /* WebUSB Ledger Blue */
+	0x1000, /* WebUSB Ledger Nano S */
+	0x4000, /* WebUSB Ledger Nano X */
+	0x5000, /* WebUSB Ledger Nano S Plus */
+	0x6000, /* WebUSB Ledger Nano FTS */
+	0x7000, /* WebUSB Ledger Flex */
+	0x8000, /* WebUSB Ledger Nano Gen5 */
+}
+
 // Hub is a accounts.Backend that can find and handle generic USB hardware wallets.
 type Hub struct {
 	scheme     string                  // Protocol scheme prefixing account and wallet URLs.
@@ -70,28 +100,7 @@ type Hub struct {
 
 // NewLedgerHub creates a new hardware wallet manager for Ledger devices.
 func NewLedgerHub() (*Hub, error) {
-	return newHub(LedgerScheme, 0x2c97, []uint16{
-
-		// Device definitions taken from
-		// https://github.com/LedgerHQ/ledger-live/blob/595cb73b7e6622dbbcfc11867082ddc886f1bf01/libs/ledgerjs/packages/devices/src/index.ts
-
-		// Original product IDs
-		0x0000, /* Ledger Blue */
-		0x0001, /* Ledger Nano S */
-		0x0004, /* Ledger Nano X */
-		0x0005, /* Ledger Nano S Plus */
-		0x0006, /* Ledger Nano FTS */
-		0x0007, /* Ledger Flex */
-		0x0008, /* Ledger Nano Gen5 */
-
-		0x0000, /* WebUSB Ledger Blue */
-		0x1000, /* WebUSB Ledger Nano S */
-		0x4000, /* WebUSB Ledger Nano X */
-		0x5000, /* WebUSB Ledger Nano S Plus */
-		0x6000, /* WebUSB Ledger Nano FTS */
-		0x7000, /* WebUSB Ledger Flex */
-		0x8000, /* WebUSB Ledger Nano Gen5 */
-	}, 0xffa0, 0, newLedgerDriver)
+	return newHub(LedgerScheme, 0x2c97, ledgerProductIDs, deviceUsagePage, deviceInterface, newLedgerDriver)
 }
 
 // NewTrezorHubWithHID creates a new hardware wallet manager for Trezor devices.
@@ -168,7 +177,7 @@ func (hub *Hub) refreshWallets() {
 			return
 		}
 	}
-	infos, err := hid.Enumerate(hub.vendorID, 0)
+	infos, err := usbEnumerate(hub.vendorID, 0)
 	if err != nil {
 		failcount := hub.enumFails.Add(1)
 		if runtime.GOOS == "linux" {
@@ -288,3 +297,6 @@ func (hub *Hub) updater() {
 		hub.stateLock.Unlock()
 	}
 }
+
+// usbEnumerate is an alias for hid.Enumerate, allowing for easier mocking/testing.
+var usbEnumerate = hid.Enumerate
