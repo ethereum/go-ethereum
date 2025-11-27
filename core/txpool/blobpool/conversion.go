@@ -161,6 +161,12 @@ func (q *conversionQueue) loop() {
 
 		case <-done:
 			done, interrupt = nil, nil
+			if len(txTasks) > 0 {
+				done, interrupt = make(chan struct{}), new(atomic.Int32)
+				tasks := slices.Clone(txTasks)
+				txTasks = txTasks[:0]
+				go q.run(tasks, done, interrupt)
+			}
 
 		case fn := <-q.startBilly:
 			q.billyQueue = append(q.billyQueue, fn)
