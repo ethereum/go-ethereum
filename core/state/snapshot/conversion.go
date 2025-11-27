@@ -298,23 +298,26 @@ func generateTrieRoot(db ethdb.KeyValueWriter, scheme string, it Iterator, accou
 					return stop(err)
 				}
 				// Fetch the next account and process it concurrently
-				account, err := types.FullAccount(it.(AccountIterator).Account())
+				acc, err := types.FullAccount(it.(AccountIterator).Account())
 				if err != nil {
 					return stop(err)
 				}
-				go func(hash common.Hash) {
-					subroot, err := leafCallback(db, hash, common.BytesToHash(account.CodeHash), stats)
+				h := it.Hash()
+				ch := common.BytesToHash(acc.CodeHash)
+				wr := acc.Root
+				go func(hash common.Hash, codeHash common.Hash, wantRoot common.Hash) {
+					subroot, err := leafCallback(db, hash, codeHash, stats)
 					if err != nil {
 						results <- err
 						return
 					}
-					if account.Root != subroot {
-						results <- fmt.Errorf("invalid subroot(path %x), want %x, have %x", hash, account.Root, subroot)
+					if wantRoot != subroot {
+						results <- fmt.Errorf("invalid subroot(path %x), want %x, have %x", hash, wantRoot, subroot)
 						return
 					}
 					results <- nil
-				}(it.Hash())
-				fullData, err = rlp.EncodeToBytes(account)
+				}(h, ch, wr)
+				fullData, err = rlp.EncodeToBytes(acc)
 				if err != nil {
 					return stop(err)
 				}
