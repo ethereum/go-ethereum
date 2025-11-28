@@ -208,22 +208,3 @@ func BenchmarkPermutationFunction(b *testing.B) {
 		keccakF1600(&lanes)
 	}
 }
-
-// benchmarkHash tests the speed to hash num buffers of buflen each.
-func benchmarkHash(b *testing.B, h hash.Hash, size, num int) {
-	b.StopTimer()
-	h.Reset()
-	data := sequentialBytes(size)
-	b.SetBytes(int64(size * num))
-	b.StartTimer()
-
-	var state []byte
-	for i := 0; i < b.N; i++ {
-		for j := 0; j < num; j++ {
-			h.Write(data)
-		}
-		state = h.Sum(state[:0])
-	}
-	b.StopTimer()
-	h.Reset()
-}
