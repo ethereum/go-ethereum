@@ -466,11 +466,13 @@ func (api *ConsensusAPI) GetPayloadV5(payloadID engine.PayloadID) (*engine.Execu
 		})
 }
 
-// getPayload will retreive the specified payload and verify it conforms to the
+// getPayload will retrieve the specified payload and verify it conforms to the
 // endpoint's allowed payload versions and forks.
+//
+// Note passing nil `forks`, `versions` disables the respective check.
 func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool, versions []engine.PayloadVersion, forks []forks.Fork) (*engine.ExecutionPayloadEnvelope, error) {
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
-	if !payloadID.Is(versions...) {
+	if versions != nil && !payloadID.Is(versions...) {
 		return nil, engine.UnsupportedFork
 	}
 	data := api.localBlocks.get(payloadID, full)
