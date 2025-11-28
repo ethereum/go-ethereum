@@ -353,8 +353,9 @@ func serviceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest)
 }
 
 // serviceGetReceiptsQuery70 assembles the response to a receipt query.
-// If the receipts exceed 10 MiB, it trims them and sets the lastBlockIncomplete flag.
-// Indices smaller than firstBlockReceiptIndex are omitted from the first block receipt list.
+// If the receipts exceed 10 MiB, it trims them and sets the
+// lastBlockIncomplete flag. Indices smaller than firstBlockReceiptIndex
+// are omitted from the first block receipt list.
 func serviceGetReceiptsQuery70(chain *core.BlockChain, query GetReceiptsRequest, firstBlockReceiptIndex uint64) ([]rlp.RawValue, bool) {
 	var (
 		bytes               int

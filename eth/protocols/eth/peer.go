@@ -43,7 +43,7 @@ const (
 	maxQueuedTxAnns = 4096
 )
 
-type partialReceipt struct {
+type receiptRequest struct {
 	request     []common.Hash
 	list        []*ReceiptList69 // list of partially collected receipts
 	lastLogSize uint64           // log size of last receipt list
@@ -67,7 +67,7 @@ type Peer struct {
 	reqCancel   chan *cancel   // Dispatch channel to cancel pending requests and untrack them
 	resDispatch chan *response // Dispatch channel to fulfil pending requests and untrack them
 
-	receiptBuffer map[uint64]*partialReceipt // requestId to receiptlist map
+	receiptBuffer map[uint64]*receiptRequest // Previously requested receipts to buffer partial receipts
 
 	term chan struct{} // Termination channel to stop the broadcasters
 }
@@ -87,7 +87,7 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Pe
 		reqCancel:     make(chan *cancel),
 		resDispatch:   make(chan *response),
 		txpool:        txpool,
-		receiptBuffer: make(map[uint64]*partialReceipt),
+		receiptBuffer: make(map[uint64]*receiptRequest),
 		term:          make(chan struct{}),
 	}
 	// Start up all the broadcasters
@@ -356,7 +356,7 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, sink chan *Response) (*Requ
 				FirstBlockReceiptIndex: 0,
 			},
 		}
-		p.receiptBuffer[id] = &partialReceipt{request: hashes}
+		p.receiptBuffer[id] = &receiptRequest{request: hashes}
 	} else {
 		req = &Request{
 			id:   id,

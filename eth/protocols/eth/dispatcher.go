@@ -53,8 +53,6 @@ type Request struct {
 
 	Peer string    // Demultiplexer if cross-peer requests are batched together
 	Sent time.Time // Timestamp when the request was sent
-
-	continued bool
 }
 
 // Close aborts an in-flight request. Although there's no way to notify the
