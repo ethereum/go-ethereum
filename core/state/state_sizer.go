@@ -51,7 +51,7 @@ var (
 
 // State size metrics
 var (
-	stateSizeMetadataGaugeInfo          = metrics.NewRegisteredGaugeInfo("state/metadata", nil)
+	stateSizeChainHeightGauge           = metrics.NewRegisteredGauge("state/height", nil)
 	stateSizeAccountsCountGauge         = metrics.NewRegisteredGauge("state/accounts/count", nil)
 	stateSizeAccountsBytesGauge         = metrics.NewRegisteredGauge("state/accounts/bytes", nil)
 	stateSizeStoragesCountGauge         = metrics.NewRegisteredGauge("state/storages/count", nil)
@@ -93,10 +93,7 @@ func (s SizeStats) String() string {
 }
 
 func (s SizeStats) publish() {
-	stateSizeMetadataGaugeInfo.Update(metrics.GaugeInfoValue{
-		"number": fmt.Sprintf("%d", s.BlockNumber),
-		"hash":   s.StateRoot.Hex(),
-	})
+	stateSizeChainHeightGauge.Update(int64(s.BlockNumber))
 	stateSizeAccountsCountGauge.Update(s.Accounts)
 	stateSizeAccountsBytesGauge.Update(s.AccountBytes)
 	stateSizeStoragesCountGauge.Update(s.Storages)
