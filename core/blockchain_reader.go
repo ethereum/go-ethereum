@@ -325,7 +325,9 @@ func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, max
 // in the indexed part of the canonical chain without retrieving the transaction itself.
 // It's view is limited to the indexed part of the chain, so very old transactions
 // might fail the check if the indexer was constrained, or indexing is still in progress.
-func (bc *BlockChain) HasCanonicalTransaction(hash common.Hash) bool {
+// The cacheOnly flag restricts the check to the in-memory cache, avoiding database
+// access altogether.
+func (bc *BlockChain) HasCanonicalTransaction(hash common.Hash, cacheOnly bool) bool {
 	bc.txLookupLock.RLock()
 	defer bc.txLookupLock.RUnlock()
 
@@ -334,7 +336,7 @@ func (bc *BlockChain) HasCanonicalTransaction(hash common.Hash) bool {
 		return true
 	}
 	// Fallback to database lookup, without reading the transaction itself
-	if rawdb.HasCanonicalTransaction(bc.db, hash) {
+	if !cacheOnly && rawdb.HasCanonicalTransaction(bc.db, hash) {
 		return true
 	}
 	return false
