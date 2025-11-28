@@ -180,13 +180,15 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return h.txpool.Add(txs, false)
 	}
 	hasTx := func(hash common.Hash) bool {
-		txpoolHas := h.txpool.Has(hash)
-		// check on chain as well (no need to check limbo separately, as chain checks limbo too)
-		_, tx := h.chain.GetCanonicalTransaction(hash)
-		if !txpoolHas && tx != nil {
-			log.Trace("handler: hasTx found tx on chain", "txhash", hash)
+		if h.txpool.Has(hash) {
+			return true
 		}
-		return txpoolHas || tx != nil
+		// check on chain as well (no need to check limbo separately, as chain checks limbo too)
+		if h.chain.HasCanonicalTransaction(hash, false) {
+			return true
+		}
+		// tx not found
+		return false
 	}
 	validateMeta := func(tx common.Hash, kind byte) error {
 		if hasTx(tx) {
