@@ -466,7 +466,7 @@ func (api *ConsensusAPI) GetPayloadV5(payloadID engine.PayloadID) (*engine.Execu
 		})
 }
 
-// getPayload will retreive the specified payload and verify it conforms to the
+// getPayload will retrieve the specified payload and verify it conforms to the
 // endpoint's allowed payload versions and forks.
 //
 // Note passing nil `forks`, `versions` disables the respective check.
