@@ -21,10 +21,11 @@ import "time"
 // CalculateETA calculates the estimated remaining time based on the
 // number of finished task, remaining task, and the time cost for finished task.
 func CalculateETA(done, left uint64, elapsed time.Duration) time.Duration {
-	if done == 0 || elapsed.Milliseconds() == 0 {
+	ms := elapsed.Milliseconds()
+	if done == 0 || ms == 0 {
 		return 0
 	}
 
-	speed := float64(done) / float64(elapsed.Milliseconds())
+	speed := float64(done) / float64(ms)
 	return time.Duration(float64(left)/speed) * time.Millisecond
 }
