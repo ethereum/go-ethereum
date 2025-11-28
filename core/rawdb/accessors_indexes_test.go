@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -39,9 +40,18 @@ func TestLookupStorage(t *testing.T) {
 		writeTxLookupEntriesByBlock func(ethdb.KeyValueWriter, *types.Block)
 	}{
 		{
-			"DatabaseV6",
+			"DatabaseV7",
 			func(db ethdb.KeyValueWriter, block *types.Block) {
 				WriteTxLookupEntriesByBlock(db, block)
+			},
+		},
+		{
+			"DatabaseV6",
+			func(db ethdb.KeyValueWriter, block *types.Block) {
+				number := block.Number().Bytes()
+				for _, tx := range block.Transactions() {
+					db.Put(txLookupKey(tx.Hash()), number)
+				}
 			},
 		},
 		{
@@ -295,5 +305,324 @@ func TestExtractReceiptFields(t *testing.T) {
 				t.Fatalf("Unexpected logs, want %d, got %d", c.expLogs, logs)
 			}
 		}
+	}
+}
+
+// TestExtractTransactionAtIndex tests the extractTransactionAtIndex function
+// which is the core optimization for v7 database format.
+func TestExtractTransactionAtIndex(t *testing.T) {
+	tx1 := types.NewTx(&types.LegacyTx{
+		Nonce:    1,
+		GasPrice: big.NewInt(1),
+		Gas:      1,
+		To:       new(common.Address),
+		Value:    big.NewInt(5),
+		Data:     []byte{0x11, 0x11, 0x11},
+	})
+	tx2 := types.NewTx(&types.AccessListTx{
+		ChainID:  big.NewInt(1),
+		Nonce:    2,
+		GasPrice: big.NewInt(2),
+		Gas:      2,
+		To:       new(common.Address),
+		Value:    big.NewInt(10),
+		Data:     []byte{0x22, 0x22, 0x22},
+	})
+	tx3 := types.NewTx(&types.DynamicFeeTx{
+		ChainID:   big.NewInt(1),
+		Nonce:     3,
+		Gas:       3,
+		To:        new(common.Address),
+		Value:     big.NewInt(15),
+		Data:      []byte{0x33, 0x33, 0x33},
+		GasTipCap: big.NewInt(55),
+		GasFeeCap: big.NewInt(1055),
+	})
+
+	txs := []*types.Transaction{tx1, tx2, tx3}
+	block := types.NewBlock(&types.Header{Number: big.NewInt(100)}, &types.Body{Transactions: txs}, nil, newTestHasher())
+	db := NewMemoryDatabase()
+	WriteBlock(db, block)
+
+	bodyRLP := ReadBodyRLP(db, block.Hash(), block.NumberU64())
+
+	for i, expectedTx := range txs {
+		extractedTx, err := extractTransactionAtIndex(bodyRLP, uint64(i))
+		if err != nil {
+			t.Fatalf("Failed to extract transaction at index %d: %v", i, err)
+		}
+		if extractedTx.Hash() != expectedTx.Hash() {
+			t.Fatalf("Transaction mismatch at index %d: got %x, want %x", i, extractedTx.Hash(), expectedTx.Hash())
+		}
+	}
+
+	_, err := extractTransactionAtIndex(bodyRLP, uint64(len(txs)))
+	if err == nil {
+		t.Fatal("Expected error for out of bounds index, got nil")
+	}
+
+	singleTx := types.NewTransaction(100, common.BytesToAddress([]byte{0xaa}), big.NewInt(1000), 21000, big.NewInt(1), nil)
+	singleBlock := types.NewBlock(&types.Header{Number: big.NewInt(200)}, &types.Body{Transactions: []*types.Transaction{singleTx}}, nil, newTestHasher())
+	WriteBlock(db, singleBlock)
+	singleBodyRLP := ReadBodyRLP(db, singleBlock.Hash(), singleBlock.NumberU64())
+
+	extractedTx, err := extractTransactionAtIndex(singleBodyRLP, 0)
+	if err != nil {
+		t.Fatalf("Failed to extract single transaction: %v", err)
+	}
+	if extractedTx.Hash() != singleTx.Hash() {
+		t.Fatalf("Single transaction mismatch: got %x, want %x", extractedTx.Hash(), singleTx.Hash())
+	}
+}
+
+// TestTxLookupV7Encoding tests the v7 database format encoding and decoding.
+func TestTxLookupV7Encoding(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	testCases := []struct {
+		blockNumber uint64
+		txIndex     uint64
+		txHash      common.Hash
+	}{
+		{0, 0, common.BytesToHash([]byte{0x01})},
+		{1, 0, common.BytesToHash([]byte{0x02})},
+		{100, 5, common.BytesToHash([]byte{0x03})},
+		{999999, 199, common.BytesToHash([]byte{0x04})},
+		{18446744073709551615, 255, common.BytesToHash([]byte{0x05})}, // max uint64
+	}
+
+	for _, tc := range testCases {
+		writeTxLookupEntryV7(db, tc.txHash, tc.blockNumber, tc.txIndex)
+
+		blockNum, txIdx := ReadTxLookupEntry(db, tc.txHash)
+		if blockNum == nil {
+			t.Fatalf("Failed to read block number for hash %x", tc.txHash)
+		}
+		if *blockNum != tc.blockNumber {
+			t.Fatalf("Block number mismatch: got %d, want %d", *blockNum, tc.blockNumber)
+		}
+		if txIdx == nil {
+			t.Fatalf("Failed to read tx index for hash %x", tc.txHash)
+		}
+		if *txIdx != tc.txIndex {
+			t.Fatalf("Tx index mismatch: got %d, want %d", *txIdx, tc.txIndex)
+		}
+	}
+}
+
+// TestTxLookupBackwardCompatibility tests that all database versions can be read correctly.
+func TestTxLookupBackwardCompatibility(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	tx := types.NewTransaction(1, common.BytesToAddress([]byte{0x11}), big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11})
+	txHash := tx.Hash()
+	blockNumber := uint64(314)
+	txIndex := uint64(2)
+
+	writeTxLookupEntryV7(db, txHash, blockNumber, txIndex)
+	num, idx := ReadTxLookupEntry(db, txHash)
+	if num == nil || *num != blockNumber {
+		t.Fatalf("V7: block number mismatch, got %v, want %d", num, blockNumber)
+	}
+	if idx == nil || *idx != txIndex {
+		t.Fatalf("V7: tx index mismatch, got %v, want %d", idx, txIndex)
+	}
+
+	v6Hash := common.BytesToHash([]byte{0x02})
+	db.Put(txLookupKey(v6Hash), big.NewInt(int64(blockNumber)).Bytes())
+	num, idx = ReadTxLookupEntry(db, v6Hash)
+	if num == nil || *num != blockNumber {
+		t.Fatalf("V6: block number mismatch, got %v, want %d", num, blockNumber)
+	}
+	if idx != nil {
+		t.Fatalf("V6: expected nil tx index, got %d", *idx)
+	}
+
+	v4Hash := common.BytesToHash([]byte{0x03})
+	blockHash := common.BytesToHash([]byte{0xaa, 0xbb, 0xcc})
+	db.Put(txLookupKey(v4Hash), blockHash.Bytes())
+	WriteCanonicalHash(db, blockHash, blockNumber)
+	WriteHeaderNumber(db, blockHash, blockNumber)
+	num, idx = ReadTxLookupEntry(db, v4Hash)
+	if num == nil || *num != blockNumber {
+		t.Fatalf("V4-V5: block number mismatch, got %v, want %d", num, blockNumber)
+	}
+	if idx != nil {
+		t.Fatalf("V4-V5: expected nil tx index, got %d", *idx)
+	}
+
+	v3Hash := common.BytesToHash([]byte{0x04})
+	entry := LegacyTxLookupEntry{
+		BlockHash:  blockHash,
+		BlockIndex: blockNumber,
+		Index:      txIndex,
+	}
+	data, _ := rlp.EncodeToBytes(entry)
+	db.Put(txLookupKey(v3Hash), data)
+	num, idx = ReadTxLookupEntry(db, v3Hash)
+	if num == nil || *num != blockNumber {
+		t.Fatalf("V3: block number mismatch, got %v, want %d", num, blockNumber)
+	}
+	if idx != nil {
+		t.Fatalf("V3: expected nil tx index for legacy format, got %d", *idx)
+	}
+}
+
+// TestReadCanonicalTransactionV7FastPath tests that v7 entries use the fast path
+// which skips hashing all transactions.
+func TestReadCanonicalTransactionV7FastPath(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	var txs []*types.Transaction
+	for i := 0; i < 50; i++ {
+		tx := types.NewTransaction(uint64(i), common.BytesToAddress([]byte{byte(i)}), big.NewInt(int64(i)), 21000, big.NewInt(1), nil)
+		txs = append(txs, tx)
+	}
+
+	block := types.NewBlock(&types.Header{Number: big.NewInt(500)}, &types.Body{Transactions: txs}, nil, newTestHasher())
+	WriteCanonicalHash(db, block.Hash(), block.NumberU64())
+	WriteBlock(db, block)
+	WriteTxLookupEntriesByBlock(db, block)
+
+	for i, tx := range txs {
+		readTx, hash, number, index := ReadCanonicalTransaction(db, tx.Hash())
+		if readTx == nil {
+			t.Fatalf("Transaction %d not found", i)
+		}
+		if readTx.Hash() != tx.Hash() {
+			t.Fatalf("Transaction hash mismatch at index %d", i)
+		}
+		if hash != block.Hash() {
+			t.Fatalf("Block hash mismatch at index %d", i)
+		}
+		if number != block.NumberU64() {
+			t.Fatalf("Block number mismatch at index %d", i)
+		}
+		if index != uint64(i) {
+			t.Fatalf("Transaction index mismatch: got %d, want %d", index, i)
+		}
+	}
+}
+
+func createBenchmarkBlock(numTxs int, blockNum uint64) (*types.Block, []*types.Transaction) {
+	var txs []*types.Transaction
+	for i := 0; i < numTxs; i++ {
+		tx := types.NewTransaction(
+			uint64(i),
+			common.BytesToAddress([]byte{byte(i), byte(i >> 8)}),
+			big.NewInt(int64(i)*1000),
+			21000,
+			big.NewInt(int64(i+1)*1e9),
+			nil,
+		)
+		txs = append(txs, tx)
+	}
+	return types.NewBlock(&types.Header{Number: big.NewInt(int64(blockNum))}, &types.Body{Transactions: txs}, nil, newTestHasher()), txs
+}
+
+// BenchmarkReadCanonicalTransactionV6 benchmarks v6 format without tx index.
+func BenchmarkReadCanonicalTransactionV6(b *testing.B) {
+	sizes := []int{10, 50, 100, 200}
+
+	for _, size := range sizes {
+		b.Run(fmt.Sprintf("Size%d", size), func(b *testing.B) {
+			db := NewMemoryDatabase()
+			block, txs := createBenchmarkBlock(size, 1000)
+
+			WriteCanonicalHash(db, block.Hash(), block.NumberU64())
+			WriteBlock(db, block)
+
+			number := block.Number().Bytes()
+			for _, tx := range txs {
+				db.Put(txLookupKey(tx.Hash()), number)
+			}
+
+			targetTx := txs[len(txs)-1]
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				tx, _, _, _ := ReadCanonicalTransaction(db, targetTx.Hash())
+				if tx == nil {
+					b.Fatal("Transaction not found")
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkReadCanonicalTransactionV7 benchmarks v7 format with tx index.
+func BenchmarkReadCanonicalTransactionV7(b *testing.B) {
+	sizes := []int{10, 50, 100, 200}
+
+	for _, size := range sizes {
+		b.Run(fmt.Sprintf("Size%d", size), func(b *testing.B) {
+			db := NewMemoryDatabase()
+			block, txs := createBenchmarkBlock(size, 1000)
+
+			WriteCanonicalHash(db, block.Hash(), block.NumberU64())
+			WriteBlock(db, block)
+			WriteTxLookupEntriesByBlock(db, block)
+
+			targetTx := txs[len(txs)-1]
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				tx, _, _, _ := ReadCanonicalTransaction(db, targetTx.Hash())
+				if tx == nil {
+					b.Fatal("Transaction not found")
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkExtractTransactionAtIndex benchmarks extracting by index vs searching by hash.
+func BenchmarkExtractTransactionAtIndex(b *testing.B) {
+	sizes := []int{10, 50, 100, 200}
+
+	for _, size := range sizes {
+		b.Run(fmt.Sprintf("ByIndex_Size%d", size), func(b *testing.B) {
+			db := NewMemoryDatabase()
+			block, _ := createBenchmarkBlock(size, 1000)
+			WriteBlock(db, block)
+			bodyRLP := ReadBodyRLP(db, block.Hash(), block.NumberU64())
+
+			targetIndex := uint64(size - 1)
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				tx, err := extractTransactionAtIndex(bodyRLP, targetIndex)
+				if err != nil {
+					b.Fatal(err)
+				}
+				if tx == nil {
+					b.Fatal("Transaction is nil")
+				}
+			}
+		})
+
+		b.Run(fmt.Sprintf("ByHash_Size%d", size), func(b *testing.B) {
+			db := NewMemoryDatabase()
+			block, txs := createBenchmarkBlock(size, 1000)
+			WriteBlock(db, block)
+			bodyRLP := ReadBodyRLP(db, block.Hash(), block.NumberU64())
+
+			targetHash := txs[len(txs)-1].Hash()
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				tx, _, err := findTxInBlockBody(bodyRLP, targetHash)
+				if err != nil {
+					b.Fatal(err)
+				}
+				if tx == nil {
+					b.Fatal("Transaction is nil")
+				}
+			}
+		})
 	}
 }
