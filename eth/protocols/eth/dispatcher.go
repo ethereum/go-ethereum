@@ -201,7 +201,10 @@ func (p *Peer) dispatcher() {
 			reqOp.fail <- err
 
 			if err == nil {
-				pending[req.id] = req
+				// do not overwrite if it is re-request
+				if _, ok := pending[req.id]; !ok {
+					pending[req.id] = req
+				}
 			}
 
 		case cancelOp := <-p.reqCancel:
@@ -214,6 +217,10 @@ func (p *Peer) dispatcher() {
 			}
 			// Stop tracking the request
 			delete(pending, cancelOp.id)
+
+			// Not sure if the request is about the receipt, but remove it anyway
+			delete(p.receiptBuffer, cancelOp.id)
+
 			cancelOp.fail <- nil
 
 		case resOp := <-p.resDispatch:
@@ -243,9 +250,6 @@ func (p *Peer) dispatcher() {
 				// it can wait for a handler response and dispatch the data.
 				res.Time = res.recv.Sub(res.Req.Sent)
 				resOp.fail <- nil
-
-				// Stop tracking the request, the response dispatcher will deliver
-				delete(pending, res.id)
 			}
 
 		case <-p.term:
