@@ -395,7 +395,6 @@ func (p *Peer) requestPartialReceipts(id uint64) error {
 			GetReceiptsRequest:     p.receiptBuffer[id].request[lastBlock:],
 			FirstBlockReceiptIndex: uint64(lastReceipt),
 		},
-		continued: true,
 	}
 
 	return p.dispatchRequest(req)
@@ -480,7 +479,9 @@ func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList69, id uint64
 		// should be dropped, don't clear the buffer
 		return 0, fmt.Errorf("total number of tx exceeded limit")
 	}
-
+	for _, rc := range lastReceipts.items {
+		log += uint64(len(rc.Logs))
+	}
 	// Verify that the overall downloaded receipt size does not exceed the block gas limit.
 	if previousLog+log > header.GasUsed/params.LogDataGas {
 		return 0, fmt.Errorf("total download receipt size exceeded the limit")

@@ -366,32 +366,7 @@ func TestPartialReceiptFailure(t *testing.T) {
 		t.Fatal("Response with the excessive number of receipts should fail the validation")
 	}
 
-	// Case 2 ) The size of each receipt exceeds maximum log size against the max tx size
-	req, err = peer.RequestReceipts(hashes, sink)
-	if err != nil {
-		t.Fatalf("RequestReceipts failed: %v", err)
-	}
-	select {
-	case _ = <-packetCh:
-	case <-time.After(2 * time.Second):
-		t.Fatalf("timeout waiting for request packet")
-	}
-	maxLogSize := params.MaxTxGas / params.LogDataGas
-	delivery = &ReceiptsPacket70{
-		RequestId:           req.id,
-		LastBlockIncomplete: true,
-		List: []*ReceiptList69{{
-			items: []Receipt{
-				{Logs: rlp.RawValue(make([]byte, maxLogSize+1))},
-			},
-		}},
-	}
-	err = peer.bufferReceiptsPacket(delivery, backend)
-	if err == nil {
-		t.Fatal("Response with the excessive number of receipts should fail the validation")
-	}
-
-	// Case 3 ) Total receipt size exceeds the block gas limit
+	// Case 2 ) Total receipt size exceeds the block gas limit
 	req, err = peer.RequestReceipts(hashes, sink)
 	if err != nil {
 		t.Fatalf("RequestReceipts failed: %v", err)
@@ -413,6 +388,6 @@ func TestPartialReceiptFailure(t *testing.T) {
 	}
 	err = peer.bufferReceiptsPacket(delivery, backend)
 	if err == nil {
-		t.Fatal("Response with the excessive number of receipts should fail the validation")
+		t.Fatal("Response with the large log size should fail the validation")
 	}
 }
