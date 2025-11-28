@@ -94,6 +94,7 @@ func TestTransactionFetcherWaiting(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
+				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
 				nil,
@@ -296,6 +297,7 @@ func TestTransactionFetcherSkipWaiting(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
+				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
 				nil,
@@ -385,6 +387,7 @@ func TestTransactionFetcherSingletonRequesting(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			return NewTxFetcher(
+				func(common.Hash) bool { return false },
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
@@ -491,6 +494,7 @@ func TestTransactionFetcherFailedRescheduling(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
+				func(common.Hash) bool { return false },
 				nil,
 				func(origin string, hashes []common.Hash) error {
 					<-proceed
@@ -575,6 +579,7 @@ func TestTransactionFetcherCleanup(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
+				func(common.Hash) bool { return false },
 				func(txs []*types.Transaction) []error {
 					return make([]error, len(txs))
 				},
@@ -619,6 +624,7 @@ func TestTransactionFetcherCleanupEmpty(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
+				func(common.Hash) bool { return false },
 				func(txs []*types.Transaction) []error {
 					return make([]error, len(txs))
 				},
@@ -661,6 +667,7 @@ func TestTransactionFetcherMissingRescheduling(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			return NewTxFetcher(
+				func(common.Hash) bool { return false },
 				func(common.Hash) bool { return false },
 				func(txs []*types.Transaction) []error {
 					return make([]error, len(txs))
@@ -723,6 +730,7 @@ func TestTransactionFetcherMissingCleanup(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
+				func(common.Hash) bool { return false },
 				func(txs []*types.Transaction) []error {
 					return make([]error, len(txs))
 				},
@@ -771,6 +779,7 @@ func TestTransactionFetcherBroadcasts(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			return NewTxFetcher(
+				func(common.Hash) bool { return false },
 				func(common.Hash) bool { return false },
 				func(txs []*types.Transaction) []error {
 					return make([]error, len(txs))
@@ -827,6 +836,7 @@ func TestTransactionFetcherWaitTimerResets(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			return NewTxFetcher(
+				func(common.Hash) bool { return false },
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
@@ -897,6 +907,7 @@ func TestTransactionFetcherTimeoutRescheduling(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			return NewTxFetcher(
+				func(common.Hash) bool { return false },
 				func(common.Hash) bool { return false },
 				func(txs []*types.Transaction) []error {
 					return make([]error, len(txs))
@@ -976,6 +987,7 @@ func TestTransactionFetcherTimeoutTimerResets(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
+				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
 				nil,
@@ -1054,6 +1066,7 @@ func TestTransactionFetcherRateLimiting(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
+				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
 				nil,
@@ -1083,6 +1096,7 @@ func TestTransactionFetcherBandwidthLimiting(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			return NewTxFetcher(
+				func(common.Hash) bool { return false },
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
@@ -1201,6 +1215,7 @@ func TestTransactionFetcherDoSProtection(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
+				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
 				nil,
@@ -1267,6 +1282,7 @@ func TestTransactionFetcherUnderpricedDedup(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			return NewTxFetcher(
+				func(common.Hash) bool { return false },
 				func(common.Hash) bool { return false },
 				func(txs []*types.Transaction) []error {
 					errs := make([]error, len(txs))
@@ -1369,6 +1385,7 @@ func TestTransactionFetcherUnderpricedDoSProtection(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
+				func(common.Hash) bool { return false },
 				func(txs []*types.Transaction) []error {
 					errs := make([]error, len(txs))
 					for i := 0; i < len(errs); i++ {
@@ -1400,6 +1417,7 @@ func TestTransactionFetcherOutOfBoundDeliveries(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			return NewTxFetcher(
+				func(common.Hash) bool { return false },
 				func(common.Hash) bool { return false },
 				func(txs []*types.Transaction) []error {
 					return make([]error, len(txs))
@@ -1459,6 +1477,7 @@ func TestTransactionFetcherDrop(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			return NewTxFetcher(
+				func(common.Hash) bool { return false },
 				func(common.Hash) bool { return false },
 				func(txs []*types.Transaction) []error {
 					return make([]error, len(txs))
@@ -1534,6 +1553,7 @@ func TestTransactionFetcherDropRescheduling(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
+				func(common.Hash) bool { return false },
 				func(txs []*types.Transaction) []error {
 					return make([]error, len(txs))
 				},
@@ -1579,6 +1599,7 @@ func TestInvalidAnnounceMetadata(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			return NewTxFetcher(
+				func(common.Hash) bool { return false },
 				func(common.Hash) bool { return false },
 				func(txs []*types.Transaction) []error {
 					return make([]error, len(txs))
@@ -1663,6 +1684,7 @@ func TestTransactionFetcherFuzzCrash01(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
+				func(common.Hash) bool { return false },
 				func(txs []*types.Transaction) []error {
 					return make([]error, len(txs))
 				},
@@ -1690,6 +1712,7 @@ func TestTransactionFetcherFuzzCrash02(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			return NewTxFetcher(
+				func(common.Hash) bool { return false },
 				func(common.Hash) bool { return false },
 				func(txs []*types.Transaction) []error {
 					return make([]error, len(txs))
@@ -1720,6 +1743,7 @@ func TestTransactionFetcherFuzzCrash03(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			return NewTxFetcher(
+				func(common.Hash) bool { return false },
 				func(common.Hash) bool { return false },
 				func(txs []*types.Transaction) []error {
 					return make([]error, len(txs))
@@ -1760,6 +1784,7 @@ func TestTransactionFetcherFuzzCrash04(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
+				func(common.Hash) bool { return false },
 				func(txs []*types.Transaction) []error {
 					return make([]error, len(txs))
 				},
@@ -1794,6 +1819,7 @@ func TestBlobTransactionAnnounce(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			return NewTxFetcher(
+				func(common.Hash) bool { return false },
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
@@ -1862,6 +1888,7 @@ func TestTransactionFetcherDropAlternates(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			return NewTxFetcher(
+				func(common.Hash) bool { return false },
 				func(common.Hash) bool { return false },
 				func(txs []*types.Transaction) []error {
 					return make([]error, len(txs))
@@ -2245,6 +2272,7 @@ func TestTransactionForgotten(t *testing.T) {
 	}
 
 	fetcher := NewTxFetcherForTests(
+		func(common.Hash) bool { return false },
 		func(common.Hash) bool { return false },
 		func(txs []*types.Transaction) []error {
 			errs := make([]error, len(txs))

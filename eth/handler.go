@@ -206,17 +206,13 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return h.txpool.Add(txs, false)
 	}
 	hasTx := func(hash common.Hash) bool {
-		if h.txpool.Has(hash) {
-			return true
-		}
-		// check on chain as well (no need to check limbo separately, as chain checks limbo too)
-		if h.chain.HasCanonicalTransaction(hash, false) {
-			return true
-		}
-		// tx not found
-		return false
+		return h.txpool.Has(hash)
 	}
-	h.txFetcher = fetcher.NewTxFetcher(hasTx, addTxs, fetchTx, h.removePeer)
+	chainTx := func(hash common.Hash) bool {
+		// check on chain (no need to check limbo separately, as chain checks limbo too)
+		return h.chain.HasCanonicalTransaction(hash, false)
+	}
+	h.txFetcher = fetcher.NewTxFetcher(hasTx, chainTx, addTxs, fetchTx, h.removePeer)
 	return h, nil
 }
 

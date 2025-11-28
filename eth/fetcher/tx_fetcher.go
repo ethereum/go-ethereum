@@ -170,7 +170,8 @@ type TxFetcher struct {
 	alternates map[common.Hash]map[string]struct{} // In-flight transaction alternate origins if retrieval fails
 
 	// Callbacks
-	hasTx    func(common.Hash) bool             // Retrieves a tx from the local txpool
+	hasTx    func(common.Hash) bool             // Checks for tx in the local txpool
+	chainTx  func(common.Hash) bool             // Check for tx on chain
 	addTxs   func([]*types.Transaction) []error // Insert a batch of transactions into local txpool
 	fetchTxs func(string, []common.Hash) error  // Retrieves a set of txs from a remote peer
 	dropPeer func(string)                       // Drops a peer in case of announcement violation
@@ -183,14 +184,14 @@ type TxFetcher struct {
 
 // NewTxFetcher creates a transaction fetcher to retrieve transaction
 // based on hash announcements.
-func NewTxFetcher(hasTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string)) *TxFetcher {
-	return NewTxFetcherForTests(hasTx, addTxs, fetchTxs, dropPeer, mclock.System{}, time.Now, nil)
+func NewTxFetcher(hasTx func(common.Hash) bool, chainTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string)) *TxFetcher {
+	return NewTxFetcherForTests(hasTx, chainTx, addTxs, fetchTxs, dropPeer, mclock.System{}, time.Now, nil)
 }
 
 // NewTxFetcherForTests is a testing method to mock out the realtime clock with
 // a simulated version and the internal randomness with a deterministic one.
 func NewTxFetcherForTests(
-	hasTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string),
+	hasTx func(common.Hash) bool, chainTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string),
 	clock mclock.Clock, realTime func() time.Time, rand *mrand.Rand) *TxFetcher {
 	return &TxFetcher{
 		notify:      make(chan *txAnnounce),
@@ -207,6 +208,7 @@ func NewTxFetcherForTests(
 		alternates:  make(map[common.Hash]map[string]struct{}),
 		underpriced: lru.NewCache[common.Hash, time.Time](maxTxUnderpricedSetSize),
 		hasTx:       hasTx,
+		chainTx:     chainTx,
 		addTxs:      addTxs,
 		fetchTxs:    fetchTxs,
 		dropPeer:    dropPeer,
@@ -237,6 +239,9 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 	for i, hash := range hashes {
 		switch {
 		case f.hasTx(hash):
+			duplicate++
+		case f.chainTx(hash):
+			// we might count these per peer separately to detect spammer/stale peers
 			duplicate++
 		case f.isKnownUnderpriced(hash):
 			underpriced++
@@ -313,7 +318,6 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			otherreject int64
 		)
 		batch := txs[i:end]
-
 		for j, err := range f.addTxs(batch) {
 			// Track the transaction hash if the price is too low for us.
 			// Avoid re-request this transaction when we receive another
