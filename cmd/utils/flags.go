@@ -137,7 +137,7 @@ var (
 	}
 	NetworkIdFlag = &cli.Uint64Flag{
 		Name:     "networkid",
-		Usage:    "Explicitly set network id (integer)(For testnets: use --sepolia, --holesky, --hoodi instead)",
+		Usage:    "Explicitly set network ID (integer)(For testnets: use --sepolia, --holesky, --hoodi instead)",
 		Value:    ethconfig.Defaults.NetworkId,
 		Category: flags.EthCategory,
 	}
@@ -1917,11 +1917,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 	}
 	if ctx.IsSet(NetworkIdFlag.Name) {
-		// Typically it's best to automatically set the network id to the chain id,
-		// by not passing the network id flag at all. Emit a warning when set
-		// explicitly in case overriding the network id is not the user's intention.
+		// Typically it's best to automatically set the network ID to the chainID,
+		// by not passing the --networkid flag at all. Emit a warning when set
+		// explicitly in case overriding the network ID is not the user's intention.
 		id := ctx.Uint64(NetworkIdFlag.Name)
-		log.Warn("Setting network id with flag", "id", id)
+		log.Warn("Setting network ID with command-line flag", "id", id)
 		cfg.NetworkId = id
 	}
 	// Set any dangling config values
