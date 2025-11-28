@@ -97,6 +97,15 @@ type feeHistoryResult struct {
 	BlobGasUsedRatio []float64        `json:"blobGasUsedRatio,omitempty"`
 }
 
+// convertBigIntSlice converts a slice of *big.Int to a slice of *hexutil.Big.
+func convertBigIntSlice(values []*big.Int) []*hexutil.Big {
+	result := make([]*hexutil.Big, len(values))
+	for i, v := range values {
+		result[i] = (*hexutil.Big)(v)
+	}
+	return result
+}
+
 // FeeHistory returns the fee market history.
 func (api *EthereumAPI) FeeHistory(ctx context.Context, blockCount math.HexOrDecimal64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*feeHistoryResult, error) {
 	oldest, reward, baseFee, gasUsed, blobBaseFee, blobGasUsed, err := api.b.FeeHistory(ctx, uint64(blockCount), lastBlock, rewardPercentiles)
@@ -110,23 +119,14 @@ func (api *EthereumAPI) FeeHistory(ctx context.Context, blockCount math.HexOrDec
 	if reward != nil {
 		results.Reward = make([][]*hexutil.Big, len(reward))
 		for i, w := range reward {
-			results.Reward[i] = make([]*hexutil.Big, len(w))
-			for j, v := range w {
-				results.Reward[i][j] = (*hexutil.Big)(v)
-			}
+			results.Reward[i] = convertBigIntSlice(w)
 		}
 	}
 	if baseFee != nil {
-		results.BaseFee = make([]*hexutil.Big, len(baseFee))
-		for i, v := range baseFee {
-			results.BaseFee[i] = (*hexutil.Big)(v)
-		}
+		results.BaseFee = convertBigIntSlice(baseFee)
 	}
 	if blobBaseFee != nil {
-		results.BlobBaseFee = make([]*hexutil.Big, len(blobBaseFee))
-		for i, v := range blobBaseFee {
-			results.BlobBaseFee[i] = (*hexutil.Big)(v)
-		}
+		results.BlobBaseFee = convertBigIntSlice(blobBaseFee)
 	}
 	if blobGasUsed != nil {
 		results.BlobGasUsedRatio = blobGasUsed
@@ -1645,6 +1645,24 @@ func (api *TransactionAPI) currentBlobSidecarVersion() byte {
 	return types.BlobSidecarVersion0
 }
 
+// convertLegacyBlobTxSidecar converts legacy blob transaction proofs to the
+// current version if necessary.
+// TODO: remove in go-ethereum v1.17.x
+func (api *TransactionAPI) convertLegacyBlobTxSidecar(tx *types.Transaction) (*types.Transaction, error) {
+	sc := tx.BlobTxSidecar()
+	if sc == nil {
+		return tx, nil
+	}
+	exp := api.currentBlobSidecarVersion()
+	if sc.Version == types.BlobSidecarVersion0 && exp == types.BlobSidecarVersion1 {
+		if err := sc.ToV1(); err != nil {
+			return nil, fmt.Errorf("blob sidecar conversion failed: %v", err)
+		}
+		tx = tx.WithBlobTxSidecar(sc)
+	}
+	return tx, nil
+}
+
 // SendRawTransaction will add the signed transaction to the transaction pool.
 // The sender is responsible for signing the transaction and using the correct nonce.
 func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil.Bytes) (common.Hash, error) {
@@ -1653,16 +1671,10 @@ func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil
 		return common.Hash{}, err
 	}
 
-	// Convert legacy blob transaction proofs.
-	// TODO: remove in go-ethereum v1.17.x
-	if sc := tx.BlobTxSidecar(); sc != nil {
-		exp := api.currentBlobSidecarVersion()
-		if sc.Version == types.BlobSidecarVersion0 && exp == types.BlobSidecarVersion1 {
-			if err := sc.ToV1(); err != nil {
-				return common.Hash{}, fmt.Errorf("blob sidecar conversion failed: %v", err)
-			}
-			tx = tx.WithBlobTxSidecar(sc)
-		}
+	var err error
+	tx, err = api.convertLegacyBlobTxSidecar(tx)
+	if err != nil {
+		return common.Hash{}, err
 	}
 
 	return SubmitTransaction(ctx, api.b, tx)
@@ -1676,16 +1688,10 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 		return nil, err
 	}
 
-	// Convert legacy blob transaction proofs.
-	// TODO: remove in go-ethereum v1.17.x
-	if sc := tx.BlobTxSidecar(); sc != nil {
-		exp := api.currentBlobSidecarVersion()
-		if sc.Version == types.BlobSidecarVersion0 && exp == types.BlobSidecarVersion1 {
-			if err := sc.ToV1(); err != nil {
-				return nil, fmt.Errorf("blob sidecar conversion failed: %v", err)
-			}
-			tx = tx.WithBlobTxSidecar(sc)
-		}
+	var err error
+	tx, err = api.convertLegacyBlobTxSidecar(tx)
+	if err != nil {
+		return nil, err
 	}
 
 	ch := make(chan core.ChainEvent, 128)
