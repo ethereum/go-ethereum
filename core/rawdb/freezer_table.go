@@ -771,8 +771,9 @@ func (t *freezerTable) truncateTail(items uint64) error {
 		deleted    = t.itemOffset.Load()
 	)
 	// Hidden items exceed the current tail file, drop the relevant data files.
-	for current := items - 1; current >= deleted; current -= 1 {
-		if _, err := t.index.ReadAt(buffer, int64((current-deleted+1)*indexEntrySize)); err != nil {
+	for current := items; current > deleted; current-- {
+		idx := current - 1
+		if _, err := t.index.ReadAt(buffer, int64((idx-deleted+1)*indexEntrySize)); err != nil {
 			return err
 		}
 		var pre indexEntry
@@ -780,7 +781,7 @@ func (t *freezerTable) truncateTail(items uint64) error {
 		if pre.filenum != newTailId {
 			break
 		}
-		newDeleted = current
+		newDeleted = idx
 	}
 	// Close the index file before shorten it.
 	if err := t.index.Close(); err != nil {
