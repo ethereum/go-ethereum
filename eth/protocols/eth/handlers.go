@@ -386,7 +386,6 @@ func serviceGetReceiptsQuery70(chain *core.BlockChain, query GetReceiptsRequest,
 			}
 		}
 
-		// todo: buffer
 		if firstBlockReceiptIndex > 0 && lookups == 0 {
 			results, lastBlockIncomplete = trimReceiptsRLP(results, int(firstBlockReceiptIndex))
 		} else if bytes+len(results) > maxPacketSize {

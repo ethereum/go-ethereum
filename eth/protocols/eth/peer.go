@@ -475,20 +475,13 @@ func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList69, id uint64
 		previousLog = buffer.lastLogSize
 	}
 
-	// 1. Verify that the total number of transactions delivered is under the limit.
+	// Verify that the total number of transactions delivered is under the limit.
 	if uint64(previousTxs+len(lastReceipts.items)) > header.GasUsed/21_000 {
 		// should be dropped, don't clear the buffer
 		return 0, fmt.Errorf("total number of tx exceeded limit")
 	}
 
-	// 2. Verify the size of each receipt against the maximum transaction size.
-	for _, rc := range lastReceipts.items {
-		if uint64(len(rc.Logs)) > params.MaxTxGas/params.LogDataGas {
-			return 0, fmt.Errorf("total size of receipt exceeded limit")
-		}
-		log += uint64(len(rc.Logs))
-	}
-	// 3. Verify that the overall downloaded receipt size does not exceed the block gas limit.
+	// Verify that the overall downloaded receipt size does not exceed the block gas limit.
 	if previousLog+log > header.GasUsed/params.LogDataGas {
 		return 0, fmt.Errorf("total download receipt size exceeded the limit")
 	}
