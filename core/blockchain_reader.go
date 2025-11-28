@@ -321,6 +321,25 @@ func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, max
 	return bc.hc.GetAncestor(hash, number, ancestor, maxNonCanonical)
 }
 
+// HasCanonicalTransaction is a lightweight check to see if a transaction is present
+// in the indexed part of the canonical chain without retrieving the transaction itself.
+// It's view is limited to the indexed part of the chain, so very old transactions
+// might fail the check if the indexer was constrained, or indexing is still in progress.
+func (bc *BlockChain) HasCanonicalTransaction(hash common.Hash) bool {
+	bc.txLookupLock.RLock()
+	defer bc.txLookupLock.RUnlock()
+
+	// Check in memory cache first
+	if _, exist := bc.txLookupCache.Get(hash); exist {
+		return true
+	}
+	// Fallback to database lookup, without reading the transaction itself
+	if rawdb.HasCanonicalTransaction(bc.db, hash) {
+		return true
+	}
+	return false
+}
+
 // GetCanonicalTransaction retrieves the lookup along with the transaction
 // itself associate with the given transaction hash.
 //
