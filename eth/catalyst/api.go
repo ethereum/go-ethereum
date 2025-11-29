@@ -765,7 +765,11 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	// into the database directly will conflict with the assumptions of snap sync
 	// that it has an empty db that it can fill itself.
 	if api.eth.SyncMode() != ethconfig.FullSync {
-		return api.delayPayloadImport(block), nil
+		// If the client is started at genesis of a test network with snap sync
+		// enabled, just try to import the block since there is nothing to sync.
+		if block.NumberU64() != 1 {
+			return api.delayPayloadImport(block), nil
+		}
 	}
 	if !api.eth.BlockChain().HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		api.remoteBlocks.put(block.Hash(), block.Header())
