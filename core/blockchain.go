@@ -198,6 +198,10 @@ type BlockChainConfig struct {
 
 	// StateSizeTracking indicates whether the state size tracking is enabled.
 	StateSizeTracking bool
+
+	// SlowBlockThreshold is the block execution time threshold beyond which
+	// detailed statistics will be logged.
+	SlowBlockThreshold time.Duration
 }
 
 // DefaultConfig returns the default config.
@@ -337,7 +341,8 @@ type BlockChain struct {
 	logger     *tracing.Hooks
 	stateSizer *state.SizeTracker // State size tracking
 
-	lastForkReadyAlert time.Time // Last time there was a fork readiness print out
+	lastForkReadyAlert time.Time     // Last time there was a fork readiness print out
+	slowBlockThreshold time.Duration // Block execution time threshold beyond which detailed statistics will be logged
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -372,19 +377,20 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	log.Info("")
 
 	bc := &BlockChain{
-		chainConfig:   chainConfig,
-		cfg:           cfg,
-		db:            db,
-		triedb:        triedb,
-		triegc:        prque.New[int64, common.Hash](nil),
-		chainmu:       syncx.NewClosableMutex(),
-		bodyCache:     lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
-		bodyRLPCache:  lru.NewCache[common.Hash, rlp.RawValue](bodyCacheLimit),
-		receiptsCache: lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
-		blockCache:    lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
-		txLookupCache: lru.NewCache[common.Hash, txLookup](txLookupCacheLimit),
-		engine:        engine,
-		logger:        cfg.VmConfig.Tracer,
+		chainConfig:        chainConfig,
+		cfg:                cfg,
+		db:                 db,
+		triedb:             triedb,
+		triegc:             prque.New[int64, common.Hash](nil),
+		chainmu:            syncx.NewClosableMutex(),
+		bodyCache:          lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
+		bodyRLPCache:       lru.NewCache[common.Hash, rlp.RawValue](bodyCacheLimit),
+		receiptsCache:      lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
+		blockCache:         lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
+		txLookupCache:      lru.NewCache[common.Hash, txLookup](txLookupCacheLimit),
+		engine:             engine,
+		logger:             cfg.VmConfig.Tracer,
+		slowBlockThreshold: cfg.SlowBlockThreshold,
 	}
 	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.insertStopped)
 	if err != nil {
@@ -1847,7 +1853,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 	// still need re-execution to generate snapshots that are missing
 	case err != nil && !errors.Is(err, ErrKnownBlock):
 		stats.ignored += len(it.chain)
-		bc.reportBlock(block, nil, err)
+		bc.reportBadBlock(block, nil, err)
 		return nil, it.index, err
 	}
 	// Track the singleton witness from this chain insertion (if any)
@@ -1915,6 +1921,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		if err != nil {
 			return nil, it.index, err
 		}
+		res.stats.reportMetrics()
+
+		// Log slow block only if a single block is inserted (usually after the
+		// initial sync) to not overwhelm the users.
+		if len(chain) == 1 {
+			res.stats.logSlow(block, bc.slowBlockThreshold)
+		}
+
 		// Report the import stats before returning the various results
 		stats.processed++
 		stats.usedGas += res.usedGas
@@ -1975,15 +1989,20 @@ type blockProcessingResult struct {
 	procTime time.Duration
 	status   WriteStatus
 	witness  *stateless.Witness
+	stats    *ExecuteStats
 }
 
 func (bpr *blockProcessingResult) Witness() *stateless.Witness {
 	return bpr.witness
 }
 
+func (bpr *blockProcessingResult) Stats() *ExecuteStats {
+	return bpr.stats
+}
+
 // ProcessBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
-func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, setHead bool, makeWitness bool) (_ *blockProcessingResult, blockEndErr error) {
+func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, setHead bool, makeWitness bool) (result *blockProcessingResult, blockEndErr error) {
 	var (
 		err       error
 		startTime = time.Now()
@@ -2017,16 +2036,22 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 		}
 		// Upload the statistics of reader at the end
 		defer func() {
-			stats := prefetch.GetStats()
-			accountCacheHitPrefetchMeter.Mark(stats.AccountHit)
-			accountCacheMissPrefetchMeter.Mark(stats.AccountMiss)
-			storageCacheHitPrefetchMeter.Mark(stats.StorageHit)
-			storageCacheMissPrefetchMeter.Mark(stats.StorageMiss)
-			stats = process.GetStats()
-			accountCacheHitMeter.Mark(stats.AccountHit)
-			accountCacheMissMeter.Mark(stats.AccountMiss)
-			storageCacheHitMeter.Mark(stats.StorageHit)
-			storageCacheMissMeter.Mark(stats.StorageMiss)
+			pStat := prefetch.GetStats()
+			accountCacheHitPrefetchMeter.Mark(pStat.AccountCacheHit)
+			accountCacheMissPrefetchMeter.Mark(pStat.AccountCacheMiss)
+			storageCacheHitPrefetchMeter.Mark(pStat.StorageCacheHit)
+			storageCacheMissPrefetchMeter.Mark(pStat.StorageCacheMiss)
+
+			rStat := process.GetStats()
+			accountCacheHitMeter.Mark(rStat.AccountCacheHit)
+			accountCacheMissMeter.Mark(rStat.AccountCacheMiss)
+			storageCacheHitMeter.Mark(rStat.StorageCacheHit)
+			storageCacheMissMeter.Mark(rStat.StorageCacheMiss)
+
+			if result != nil {
+				result.stats.StatePrefetchCacheStats = pStat
+				result.stats.StateReadCacheStats = rStat
+			}
 		}()
 
 		go func(start time.Time, throwaway *state.StateDB, block *types.Block) {
@@ -2083,14 +2108,14 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	pstart := time.Now()
 	res, err := bc.processor.Process(block, statedb, bc.cfg.VmConfig)
 	if err != nil {
-		bc.reportBlock(block, res, err)
+		bc.reportBadBlock(block, res, err)
 		return nil, err
 	}
 	ptime := time.Since(pstart)
 
 	vstart := time.Now()
 	if err := bc.validator.ValidateState(block, statedb, res, false); err != nil {
-		bc.reportBlock(block, res, err)
+		bc.reportBadBlock(block, res, err)
 		return nil, err
 	}
 	vtime := time.Since(vstart)
@@ -2124,26 +2149,28 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 		}
 	}
 
-	xvtime := time.Since(xvstart)
-	proctime := time.Since(startTime) // processing + validation + cross validation
-
+	var (
+		xvtime   = time.Since(xvstart)
+		proctime = time.Since(startTime) // processing + validation + cross validation
+		stats    = &ExecuteStats{}
+	)
 	// Update the metrics touched during block processing and validation
-	accountReadTimer.Update(statedb.AccountReads) // Account reads are complete(in processing)
-	storageReadTimer.Update(statedb.StorageReads) // Storage reads are complete(in processing)
-	if statedb.AccountLoaded != 0 {
-		accountReadSingleTimer.Update(statedb.AccountReads / time.Duration(statedb.AccountLoaded))
-	}
-	if statedb.StorageLoaded != 0 {
-		storageReadSingleTimer.Update(statedb.StorageReads / time.Duration(statedb.StorageLoaded))
-	}
-	accountUpdateTimer.Update(statedb.AccountUpdates)                                 // Account updates are complete(in validation)
-	storageUpdateTimer.Update(statedb.StorageUpdates)                                 // Storage updates are complete(in validation)
-	accountHashTimer.Update(statedb.AccountHashes)                                    // Account hashes are complete(in validation)
-	triehash := statedb.AccountHashes                                                 // The time spent on tries hashing
-	trieUpdate := statedb.AccountUpdates + statedb.StorageUpdates                     // The time spent on tries update
-	blockExecutionTimer.Update(ptime - (statedb.AccountReads + statedb.StorageReads)) // The time spent on EVM processing
-	blockValidationTimer.Update(vtime - (triehash + trieUpdate))                      // The time spent on block validation
-	blockCrossValidationTimer.Update(xvtime)                                          // The time spent on stateless cross validation
+	stats.AccountReads = statedb.AccountReads     // Account reads are complete(in processing)
+	stats.StorageReads = statedb.StorageReads     // Storage reads are complete(in processing)
+	stats.AccountUpdates = statedb.AccountUpdates // Account updates are complete(in validation)
+	stats.StorageUpdates = statedb.StorageUpdates // Storage updates are complete(in validation)
+	stats.AccountHashes = statedb.AccountHashes   // Account hashes are complete(in validation)
+
+	stats.AccountLoaded = statedb.AccountLoaded
+	stats.AccountUpdated = statedb.AccountUpdated
+	stats.AccountDeleted = statedb.AccountDeleted
+	stats.StorageLoaded = statedb.StorageLoaded
+	stats.StorageUpdated = int(statedb.StorageUpdated.Load())
+	stats.StorageDeleted = int(statedb.StorageDeleted.Load())
+
+	stats.Execution = ptime - (statedb.AccountReads + statedb.StorageReads)                              // The time spent on EVM processing
+	stats.Validation = vtime - (statedb.AccountHashes + statedb.AccountUpdates + statedb.StorageUpdates) // The time spent on block validation
+	stats.CrossValidation = xvtime                                                                       // The time spent on stateless cross validation
 
 	// Write the block to the chain and get the status.
 	var (
@@ -2165,24 +2192,22 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	}
 
 	// Update the metrics touched during block commit
-	accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
-	storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them
-	snapshotCommitTimer.Update(statedb.SnapshotCommits) // Snapshot commits are complete, we can mark them
-	triedbCommitTimer.Update(statedb.TrieDBCommits)     // Trie database commits are complete, we can mark them
+	stats.AccountCommits = statedb.AccountCommits  // Account commits are complete, we can mark them
+	stats.StorageCommits = statedb.StorageCommits  // Storage commits are complete, we can mark them
+	stats.SnapshotCommit = statedb.SnapshotCommits // Snapshot commits are complete, we can mark them
+	stats.TrieDBCommit = statedb.TrieDBCommits     // Trie database commits are complete, we can mark them
+	stats.BlockWrite = time.Since(wstart) - max(statedb.AccountCommits, statedb.StorageCommits) /* concurrent */ - statedb.SnapshotCommits - statedb.TrieDBCommits
 
-	blockWriteTimer.Update(time.Since(wstart) - max(statedb.AccountCommits, statedb.StorageCommits) /* concurrent */ - statedb.SnapshotCommits - statedb.TrieDBCommits)
 	elapsed := time.Since(startTime) + 1 // prevent zero division
-	blockInsertTimer.Update(elapsed)
-
-	// TODO(rjl493456442) generalize the ResettingTimer
-	mgasps := float64(res.GasUsed) * 1000 / float64(elapsed)
-	chainMgaspsMeter.Update(time.Duration(mgasps))
+	stats.TotalTime = elapsed
+	stats.MgasPerSecond = float64(res.GasUsed) * 1000 / float64(elapsed)
 
 	return &blockProcessingResult{
 		usedGas:  res.GasUsed,
 		procTime: proctime,
 		status:   status,
 		witness:  witness,
+		stats:    stats,
 	}, nil
 }
 
@@ -2667,8 +2692,8 @@ func (bc *BlockChain) skipBlock(err error, it *insertIterator) bool {
 	return false
 }
 
-// reportBlock logs a bad block error.
-func (bc *BlockChain) reportBlock(block *types.Block, res *ProcessResult, err error) {
+// reportBadBlock logs a bad block error.
+func (bc *BlockChain) reportBadBlock(block *types.Block, res *ProcessResult, err error) {
 	var receipts types.Receipts
 	if res != nil {
 		receipts = res.Receipts
