@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -386,6 +387,41 @@ func (dl *diskLayer) writeStateHistory(diff *diffLayer) (bool, error) {
 	return false, nil
 }
 
+// writeTrienodeHistory stores the trienode history and indexes if indexing is
+// permitted.
+func (dl *diskLayer) writeTrienodeHistory(diff *diffLayer) error {
+	// Short circuit if trienode history is not permitted
+	if dl.db.trienodeFreezer == nil {
+		return nil
+	}
+	// Bail out with an error if writing the trienode history fails.
+	// This can happen, for example, if the device is full.
+	err := writeTrienodeHistory(dl.db.trienodeFreezer, diff)
+	if err != nil {
+		return err
+	}
+	// Notify the trienode history indexer for newly created history
+	if dl.db.trienodeIndexer != nil {
+		if err := dl.db.trienodeIndexer.extend(diff.stateID()); err != nil {
+			return err
+		}
+	}
+	// Determine if the persisted history object has exceeded the
+	// configured limitation.
+	limit := dl.db.config.TrienodeHistory
+	if limit == 0 {
+		return nil
+	}
+	newFirst := diff.stateID() - uint64(limit) + 1 // the id of first history **after truncation**
+
+	pruned, err := truncateFromTail(dl.db.trienodeFreezer, typeTrienodeHistory, newFirst-1)
+	if err != nil {
+		return err
+	}
+	log.Debug("Pruned trienode history", "items", pruned, "tailid", newFirst)
+	return nil
+}
+
 // commit merges the given bottom-most diff layer into the node buffer
 // and returns a newly constructed disk layer. Note the current disk
 // layer must be tagged as stale first to prevent re-access.
@@ -398,6 +434,13 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	// the stored state history will be truncated from head in the next restart.
 	flush, err := dl.writeStateHistory(bottom)
 	if err != nil {
+		return nil, err
+	}
+	// Construct and store the trienode history first. If crash happens after
+	// storing the trienode history but without flushing the corresponding
+	// states(journal), the stored trienode history will be truncated from head
+	// in the next restart.
+	if err := dl.writeTrienodeHistory(bottom); err != nil {
 		return nil, err
 	}
 	// Mark the diskLayer as stale before applying any mutations on top.
@@ -448,7 +491,7 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 
 		// Freeze the live buffer and schedule background flushing
 		dl.frozen = combined
-		dl.frozen.flush(bottom.root, dl.db.diskdb, dl.db.stateFreezer, progress, dl.nodes, dl.states, bottom.stateID(), func() {
+		dl.frozen.flush(bottom.root, dl.db.diskdb, []ethdb.AncientWriter{dl.db.stateFreezer, dl.db.trienodeFreezer}, progress, dl.nodes, dl.states, bottom.stateID(), func() {
 			// Resume the background generation if it's not completed yet.
 			// The generator is assumed to be available if the progress is
 			// not nil.
@@ -504,9 +547,14 @@ func (dl *diskLayer) revert(h *stateHistory) (*diskLayer, error) {
 
 	dl.stale = true
 
-	// Unindex the corresponding state history
+	// Unindex the corresponding history
 	if dl.db.stateIndexer != nil {
 		if err := dl.db.stateIndexer.shorten(dl.id); err != nil {
+			return nil, err
+		}
+	}
+	if dl.db.trienodeIndexer != nil {
+		if err := dl.db.trienodeIndexer.shorten(dl.id); err != nil {
 			return nil, err
 		}
 	}
