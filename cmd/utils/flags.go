@@ -114,7 +114,7 @@ var (
 		Usage:    "Root directory for era1 history (default = inside ancient/chain)",
 		Category: flags.EthCategory,
 	}
-	MinFreeDiskSpaceFlag = &flags.DirectoryFlag{
+	MinFreeDiskSpaceFlag = &cli.IntFlag{
 		Name:     "datadir.minfreedisk",
 		Usage:    "Minimum free disk space in MB, once reached triggers auto shut down (default = --cache.gc converted to MB, 0 = disabled)",
 		Category: flags.EthCategory,
@@ -137,7 +137,7 @@ var (
 	}
 	NetworkIdFlag = &cli.Uint64Flag{
 		Name:     "networkid",
-		Usage:    "Explicitly set network id (integer)(For testnets: use --sepolia, --holesky, --hoodi instead)",
+		Usage:    "Explicitly set network ID (integer)(For testnets: use --sepolia, --holesky, --hoodi instead)",
 		Value:    ethconfig.Defaults.NetworkId,
 		Category: flags.EthCategory,
 	}
@@ -553,6 +553,11 @@ var (
 		Usage:    "0x prefixed public address for the pending block producer (not used for actual block production)",
 		Category: flags.MinerCategory,
 	}
+	MinerMaxBlobsFlag = &cli.IntFlag{
+		Name:     "miner.maxblobs",
+		Usage:    "Maximum number of blobs per block (falls back to protocol maximum if unspecified)",
+		Category: flags.MinerCategory,
+	}
 
 	// Account settings
 	PasswordFileFlag = &cli.PathFlag{
@@ -859,14 +864,14 @@ var (
 		Aliases:  []string{"discv4"},
 		Usage:    "Enables the V4 discovery mechanism",
 		Category: flags.NetworkingCategory,
-		Value:    true,
+		Value:    node.DefaultConfig.P2P.DiscoveryV4,
 	}
 	DiscoveryV5Flag = &cli.BoolFlag{
 		Name:     "discovery.v5",
 		Aliases:  []string{"discv5"},
 		Usage:    "Enables the V5 discovery mechanism",
 		Category: flags.NetworkingCategory,
-		Value:    true,
+		Value:    node.DefaultConfig.P2P.DiscoveryV5,
 	}
 	NetrestrictFlag = &cli.StringFlag{
 		Name:     "netrestrict",
@@ -1368,8 +1373,12 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 
 	flags.CheckExclusive(ctx, DiscoveryV4Flag, NoDiscoverFlag)
 	flags.CheckExclusive(ctx, DiscoveryV5Flag, NoDiscoverFlag)
-	cfg.DiscoveryV4 = ctx.Bool(DiscoveryV4Flag.Name)
-	cfg.DiscoveryV5 = ctx.Bool(DiscoveryV5Flag.Name)
+	if ctx.IsSet(DiscoveryV4Flag.Name) {
+		cfg.DiscoveryV4 = ctx.Bool(DiscoveryV4Flag.Name)
+	}
+	if ctx.IsSet(DiscoveryV5Flag.Name) {
+		cfg.DiscoveryV5 = ctx.Bool(DiscoveryV5Flag.Name)
+	}
 
 	if netrestrict := ctx.String(NetrestrictFlag.Name); netrestrict != "" {
 		list, err := netutil.ParseNetlist(netrestrict)
@@ -1571,6 +1580,9 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 		log.Warn("The flag --miner.newpayload-timeout is deprecated and will be removed, please use --miner.recommit")
 		cfg.Recommit = ctx.Duration(MinerNewPayloadTimeoutFlag.Name)
 	}
+	if ctx.IsSet(MinerMaxBlobsFlag.Name) {
+		cfg.MaxBlobsPerBlock = ctx.Int(MinerMaxBlobsFlag.Name)
+	}
 }
 
 func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
@@ -1603,8 +1615,8 @@ func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
 
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
-	// Avoid conflicting network flags, don't allow network id override on preset networks
-	flags.CheckExclusive(ctx, MainnetFlag, DeveloperFlag, SepoliaFlag, HoleskyFlag, HoodiFlag, NetworkIdFlag, OverrideGenesisFlag)
+	// Avoid conflicting network flags
+	flags.CheckExclusive(ctx, MainnetFlag, DeveloperFlag, SepoliaFlag, HoleskyFlag, HoodiFlag, OverrideGenesisFlag)
 	flags.CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 
 	// Set configurations from CLI flags
@@ -1651,9 +1663,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 	}
 
-	if ctx.IsSet(NetworkIdFlag.Name) {
-		cfg.NetworkId = ctx.Uint64(NetworkIdFlag.Name)
-	}
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheDatabaseFlag.Name) {
 		cfg.DatabaseCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheDatabaseFlag.Name) / 100
 	}
@@ -1903,9 +1912,17 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = genesis
 	default:
-		if cfg.NetworkId == 1 {
+		if ctx.Uint64(NetworkIdFlag.Name) == 1 {
 			SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
 		}
+	}
+	if ctx.IsSet(NetworkIdFlag.Name) {
+		// Typically it's best to automatically set the network ID to the chainID,
+		// by not passing the --networkid flag at all. Emit a warning when set
+		// explicitly in case overriding the network ID is not the user's intention.
+		id := ctx.Uint64(NetworkIdFlag.Name)
+		log.Warn("Setting network ID with command-line flag", "id", id)
+		cfg.NetworkId = id
 	}
 	// Set any dangling config values
 	if ctx.String(CryptoKZGFlag.Name) != "gokzg" && ctx.String(CryptoKZGFlag.Name) != "ckzg" {

@@ -203,7 +203,7 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 		BeaconRoot:   blockParams.BeaconRoot,
 		Version:      engine.PayloadV1,
 	}).Id()
-	execData, err := api.getPayload(payloadID, true)
+	execData, err := api.getPayload(payloadID, true, nil, nil)
 	if err != nil {
 		t.Fatalf("error getting payload, err=%v", err)
 	}
@@ -636,7 +636,7 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 				t.Fatalf("error preparing payload, invalid status: %v", resp.PayloadStatus.Status)
 			}
 			// give the payload some time to be built
-			if payload, err = api.getPayload(*resp.PayloadID, true); err != nil {
+			if payload, err = api.getPayload(*resp.PayloadID, true, nil, nil); err != nil {
 				t.Fatalf("can't get payload: %v", err)
 			}
 			if len(payload.ExecutionPayload.Transactions) > 0 {
@@ -1219,7 +1219,7 @@ func TestNilWithdrawals(t *testing.T) {
 			Random:       test.blockParams.Random,
 			Version:      payloadVersion,
 		}).Id()
-		execData, err := api.GetPayloadV2(payloadID)
+		execData, err := api.getPayload(payloadID, false, nil, nil)
 		if err != nil {
 			t.Fatalf("error getting payload, err=%v", err)
 		}
@@ -1674,7 +1674,7 @@ func TestWitnessCreationAndConsumption(t *testing.T) {
 		BeaconRoot:   blockParams.BeaconRoot,
 		Version:      engine.PayloadV3,
 	}).Id()
-	envelope, err := api.getPayload(payloadID, true)
+	envelope, err := api.getPayload(payloadID, true, nil, nil)
 	if err != nil {
 		t.Fatalf("error getting payload, err=%v", err)
 	}

@@ -278,11 +278,11 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	// Verify the non-existence of cancun-specific header fields
 	switch {
 	case header.ExcessBlobGas != nil:
-		return fmt.Errorf("invalid excessBlobGas: have %d, expected nil", header.ExcessBlobGas)
+		return fmt.Errorf("invalid excessBlobGas: have %d, expected nil", *header.ExcessBlobGas)
 	case header.BlobGasUsed != nil:
-		return fmt.Errorf("invalid blobGasUsed: have %d, expected nil", header.BlobGasUsed)
+		return fmt.Errorf("invalid blobGasUsed: have %d, expected nil", *header.BlobGasUsed)
 	case header.ParentBeaconRoot != nil:
-		return fmt.Errorf("invalid parentBeaconRoot, have %#x, expected nil", header.ParentBeaconRoot)
+		return fmt.Errorf("invalid parentBeaconRoot, have %#x, expected nil", *header.ParentBeaconRoot)
 	}
 	// Add some fake checks for tests
 	if ethash.fakeDelay != nil {

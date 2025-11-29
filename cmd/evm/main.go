@@ -55,6 +55,11 @@ var (
 		Usage:    "benchmark the execution",
 		Category: flags.VMCategory,
 	}
+	FuzzFlag = &cli.BoolFlag{
+		Name:     "fuzz",
+		Usage:    "adapts output format for fuzzing",
+		Category: flags.VMCategory,
+	}
 	WitnessCrossCheckFlag = &cli.BoolFlag{
 		Name:    "cross-check",
 		Aliases: []string{"xc"},

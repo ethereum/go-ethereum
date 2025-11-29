@@ -101,7 +101,16 @@ func (ec *engineClient) callNewPayload(fork string, event types.ChainHeadEvent) 
 		params = []any{execData}
 	)
 	switch fork {
-	case "electra":
+	case "altair", "bellatrix":
+		method = "engine_newPayloadV1"
+	case "capella":
+		method = "engine_newPayloadV2"
+	case "deneb":
+		method = "engine_newPayloadV3"
+		parentBeaconRoot := event.BeaconHead.ParentRoot
+		blobHashes := collectBlobHashes(event.Block)
+		params = append(params, blobHashes, parentBeaconRoot)
+	default: // electra, fulu and above
 		method = "engine_newPayloadV4"
 		parentBeaconRoot := event.BeaconHead.ParentRoot
 		blobHashes := collectBlobHashes(event.Block)
@@ -110,15 +119,6 @@ func (ec *engineClient) callNewPayload(fork string, event types.ChainHeadEvent) 
 			hexRequests[i] = hexutil.Bytes(event.ExecRequests[i])
 		}
 		params = append(params, blobHashes, parentBeaconRoot, hexRequests)
-	case "deneb":
-		method = "engine_newPayloadV3"
-		parentBeaconRoot := event.BeaconHead.ParentRoot
-		blobHashes := collectBlobHashes(event.Block)
-		params = append(params, blobHashes, parentBeaconRoot)
-	case "capella":
-		method = "engine_newPayloadV2"
-	default:
-		method = "engine_newPayloadV1"
 	}
 
 	ctx, cancel := context.WithTimeout(ec.rootCtx, time.Second*5)
@@ -145,12 +145,12 @@ func (ec *engineClient) callForkchoiceUpdated(fork string, event types.ChainHead
 
 	var method string
 	switch fork {
-	case "deneb", "electra":
-		method = "engine_forkchoiceUpdatedV3"
+	case "altair", "bellatrix":
+		method = "engine_forkchoiceUpdatedV1"
 	case "capella":
 		method = "engine_forkchoiceUpdatedV2"
-	default:
-		method = "engine_forkchoiceUpdatedV1"
+	default: // deneb, electra, fulu and above
+		method = "engine_forkchoiceUpdatedV3"
 	}
 
 	ctx, cancel := context.WithTimeout(ec.rootCtx, time.Second*5)

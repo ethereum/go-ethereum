@@ -42,6 +42,7 @@ var activators = map[int]func(*JumpTable){
 	4762: enable4762,
 	7702: enable7702,
 	7939: enable7939,
+	8024: enable8024,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -339,6 +340,28 @@ func enable6780(jt *JumpTable) {
 		constantGas: params.SelfdestructGasEIP150,
 		minStack:    minStack(1, 0),
 		maxStack:    maxStack(1, 0),
+	}
+}
+
+// enable8024 applies EIP-8024 (DUPN, SWAPN, EXCHANGE)
+func enable8024(jt *JumpTable) {
+	jt[DUPN] = &operation{
+		execute:     opDupN,
+		constantGas: GasFastestStep,
+		minStack:    minStack(1, 0),
+		maxStack:    maxStack(0, 1),
+	}
+	jt[SWAPN] = &operation{
+		execute:     opSwapN,
+		constantGas: GasFastestStep,
+		minStack:    minStack(2, 0),
+		maxStack:    maxStack(0, 0),
+	}
+	jt[EXCHANGE] = &operation{
+		execute:     opExchange,
+		constantGas: GasFastestStep,
+		minStack:    minStack(2, 0),
+		maxStack:    maxStack(0, 0),
 	}
 }
 

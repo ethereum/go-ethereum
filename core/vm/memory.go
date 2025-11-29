@@ -44,6 +44,7 @@ func (m *Memory) Free() {
 	// To reduce peak allocation, return only smaller memory instances to the pool.
 	const maxBufferSize = 16 << 10
 	if cap(m.store) <= maxBufferSize {
+		clear(m.store)
 		m.store = m.store[:0]
 		m.lastGasCost = 0
 		memoryPool.Put(m)
@@ -76,10 +77,14 @@ func (m *Memory) Set32(offset uint64, val *uint256.Int) {
 	val.PutUint256(m.store[offset:])
 }
 
-// Resize resizes the memory to size
+// Resize grows the memory to the requested size.
 func (m *Memory) Resize(size uint64) {
-	if uint64(m.Len()) < size {
-		m.store = append(m.store, make([]byte, size-uint64(m.Len()))...)
+	if uint64(len(m.store)) < size {
+		if uint64(cap(m.store)) >= size {
+			m.store = m.store[:size]
+		} else {
+			m.store = append(m.store, make([]byte, size-uint64(len(m.store)))...)
+		}
 	}
 }
 

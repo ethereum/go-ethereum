@@ -37,15 +37,24 @@ func NewListIterator(data RawValue) (*listIterator, error) {
 	return it, nil
 }
 
-// Next forwards the iterator one step, returns true if it was not at end yet
+// Next forwards the iterator one step.
+// Returns true if there is a next item or an error occurred on this step (check Err()).
+// On parse error, the iterator is marked finished and subsequent calls return false.
 func (it *listIterator) Next() bool {
 	if len(it.data) == 0 {
 		return false
 	}
 	_, t, c, err := readKind(it.data)
+	if err != nil {
+		it.next = nil
+		it.err = err
+		// Mark iteration as finished to avoid potential infinite loops on subsequent Next calls.
+		it.data = nil
+		return true
+	}
 	it.next = it.data[:t+c]
 	it.data = it.data[t+c:]
-	it.err = err
+	it.err = nil
 	return true
 }
 

@@ -13,7 +13,7 @@ require (
 	github.com/cespare/cp v0.1.0
 	github.com/cloudflare/cloudflare-go v0.114.0
 	github.com/cockroachdb/pebble v1.1.5
-	github.com/consensys/gnark-crypto v0.18.0
+	github.com/consensys/gnark-crypto v0.18.1
 	github.com/crate-crypto/go-eth-kzg v1.4.0
 	github.com/crate-crypto/go-ipa v0.0.0-20240724233137-53bbb0ceb27a
 	github.com/davecgh/go-spew v1.1.1
@@ -50,7 +50,6 @@ require (
 	github.com/mattn/go-colorable v0.1.13
 	github.com/mattn/go-isatty v0.0.20
 	github.com/naoina/toml v0.1.2-0.20170918210437-9fafd6967416
-	github.com/olekukonko/tablewriter v0.0.5
 	github.com/peterh/liner v1.1.1-0.20190123174540-a2c9a5303de7
 	github.com/pion/stun/v2 v2.0.0
 	github.com/protolambda/bls12-381-util v0.1.0

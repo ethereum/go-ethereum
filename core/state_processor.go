@@ -69,9 +69,14 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		gp          = new(GasPool).AddGas(block.GasLimit())
 	)
 
+	var tracingStateDB = vm.StateDB(statedb)
+	if hooks := cfg.Tracer; hooks != nil {
+		tracingStateDB = state.NewHookedState(statedb, hooks)
+	}
+
 	// Mutate the block and state according to any hard-fork specs
 	if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(block.Number()) == 0 {
-		misc.ApplyDAOHardFork(statedb)
+		misc.ApplyDAOHardFork(tracingStateDB)
 	}
 	var (
 		context vm.BlockContext
@@ -79,10 +84,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	)
 
 	// Apply pre-execution system calls.
-	var tracingStateDB = vm.StateDB(statedb)
-	if hooks := cfg.Tracer; hooks != nil {
-		tracingStateDB = state.NewHookedState(statedb, hooks)
-	}
 	context = NewEVMBlockContext(header, p.chain, nil)
 	evm := vm.NewEVM(context, tracingStateDB, config, cfg)
 
