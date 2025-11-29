@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/restapi"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -38,12 +39,13 @@ type Client struct {
 	scheduler    *request.Scheduler
 	blockSync    *beaconBlockSync
 	engineRPC    *rpc.Client
+	apiServer    *api.BeaconApiServer
 
 	chainHeadSub event.Subscription
 	engineClient *engineClient
 }
 
-func NewClient(config params.ClientConfig) *Client {
+func NewClient(config params.ClientConfig, execChain api.ExecChain) *Client {
 	// create data structures
 	var (
 		db             = memorydb.New()
@@ -55,12 +57,13 @@ func NewClient(config params.ClientConfig) *Client {
 				log.Error("Failed to save beacon checkpoint", "file", config.CheckpointFile, "checkpoint", checkpoint, "error", err)
 			}
 		})
+		checkpointStore = light.NewCheckpointStore(db, committeeChain)
 	)
 	headSync := sync.NewHeadSync(headTracker, committeeChain)
 
 	// set up scheduler and sync modules
 	scheduler := request.NewScheduler()
-	checkpointInit := sync.NewCheckpointInit(committeeChain, config.Checkpoint)
+	checkpointInit := sync.NewCheckpointInit(committeeChain, checkpointStore, config.Checkpoint)
 	forwardSync := sync.NewForwardUpdateSync(committeeChain)
 	beaconBlockSync := newBeaconBlockSync(headTracker)
 	scheduler.RegisterTarget(headTracker)
@@ -69,6 +72,8 @@ func NewClient(config params.ClientConfig) *Client {
 	scheduler.RegisterModule(forwardSync, "forwardSync")
 	scheduler.RegisterModule(headSync, "headSync")
 	scheduler.RegisterModule(beaconBlockSync, "beaconBlockSync")
+	apiServer := api.NewBeaconApiServer(scheduler, checkpointStore, committeeChain, headTracker, beaconBlockSync.getBlock, execChain)
+	scheduler.RegisterModule(apiServer, "apiServer")
 
 	return &Client{
 		scheduler:    scheduler,
@@ -76,11 +81,16 @@ func NewClient(config params.ClientConfig) *Client {
 		customHeader: config.CustomHeader,
 		config:       &config,
 		blockSync:    beaconBlockSync,
+		apiServer:    apiServer,
 	}
 }
 
 func (c *Client) SetEngineRPC(engine *rpc.Client) {
 	c.engineRPC = engine
+}
+
+func (c *Client) RestAPI(server *restapi.Server) restapi.API {
+	return c.apiServer.RestAPI(server)
 }
 
 func (c *Client) Start() error {
@@ -90,13 +100,14 @@ func (c *Client) Start() error {
 
 	c.scheduler.Start()
 	for _, url := range c.urls {
-		beaconApi := api.NewBeaconLightApi(url, c.customHeader)
-		c.scheduler.RegisterServer(request.NewServer(api.NewApiServer(beaconApi), &mclock.System{}))
+		beaconApi := api.NewBeaconApiClient(url, c.customHeader)
+		c.scheduler.RegisterServer(request.NewServer(api.NewSyncServer(beaconApi), &mclock.System{}))
 	}
 	return nil
 }
 
 func (c *Client) Stop() error {
+	c.apiServer.Stop()
 	c.engineClient.stop()
 	c.chainHeadSub.Unsubscribe()
 	c.scheduler.Stop()

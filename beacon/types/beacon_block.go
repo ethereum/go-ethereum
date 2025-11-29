@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	zrntcommon "github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/protolambda/zrnt/eth2/configs"
@@ -41,37 +42,55 @@ type blockObject interface {
 
 // BeaconBlock represents a full block in the beacon chain.
 type BeaconBlock struct {
+	jsonBeaconBlock
 	blockObj blockObject
 }
 
-// BlockFromJSON decodes a beacon block from JSON.
-func BlockFromJSON(forkName string, data []byte) (*BeaconBlock, error) {
-	var obj blockObject
-	switch forkName {
-	case "capella":
-		obj = new(capella.BeaconBlock)
-	case "deneb":
-		obj = new(deneb.BeaconBlock)
-	case "electra":
-		obj = new(electra.BeaconBlock)
-	default:
-		return nil, fmt.Errorf("unsupported fork: %s", forkName)
-	}
-	if err := json.Unmarshal(data, obj); err != nil {
-		return nil, err
-	}
-	return &BeaconBlock{obj}, nil
+type jsonBeaconBlock struct {
+	Version             string `json:"version"`
+	ExecutionOptimistic bool   `json:"execution_optimistic"`
+	Finalized           bool   `json:"finalized"`
+	Data                struct {
+		Message   json.RawMessage `json:"message"`
+		Signature hexutil.Bytes   `json:"signature"`
+	} `json:"data"`
 }
 
-// NewBeaconBlock wraps a ZRNT block.
+// UnmarshalJSON implements json.Marshaler.
+func (b *BeaconBlock) UnmarshalJSON(input []byte) error {
+	if err := json.Unmarshal(input, &b.jsonBeaconBlock); err != nil {
+		return err
+	}
+	switch b.Version {
+	case "capella":
+		b.blockObj = new(capella.BeaconBlock)
+	case "deneb":
+		b.blockObj = new(deneb.BeaconBlock)
+	case "electra":
+		b.blockObj = new(electra.BeaconBlock)
+	default:
+		return fmt.Errorf("unsupported fork: %s", b.Version)
+	}
+	return json.Unmarshal(b.Data.Message, b.blockObj)
+}
+
+// MarshalJSON implements json.Marshaler.
+/*func (b *BeaconBlock) MarshalJSON() ([]byte, error) {
+	var bb jsonBeaconBlock
+	bb.Version = b.version
+	bb.Data.Message = b.json
+	return json.Marshal(&bb)
+}*/
+
+// NewBeaconBlock wraps a ZRNT block (only used for testing).
 func NewBeaconBlock(obj blockObject) *BeaconBlock {
 	switch obj := obj.(type) {
 	case *capella.BeaconBlock:
-		return &BeaconBlock{obj}
+		return &BeaconBlock{blockObj: obj}
 	case *deneb.BeaconBlock:
-		return &BeaconBlock{obj}
+		return &BeaconBlock{blockObj: obj}
 	case *electra.BeaconBlock:
-		return &BeaconBlock{obj}
+		return &BeaconBlock{blockObj: obj}
 	default:
 		panic(fmt.Errorf("unsupported block type %T", obj))
 	}
