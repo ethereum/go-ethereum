@@ -17,6 +17,7 @@
 package main
 
 import (
+	"log/slog"
 	"os"
 
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v4test"
@@ -86,7 +87,7 @@ func runTests(ctx *cli.Context, tests []utesting.Test) error {
 	}
 	// Disable logging unless explicitly enabled.
 	if !ctx.IsSet("verbosity") && !ctx.IsSet("vmodule") {
-		log.SetDefault(log.NewLogger(log.DiscardHandler()))
+		log.SetDefault(log.NewLogger(slog.DiscardHandler))
 	}
 	// Run the tests.
 	var run = utesting.RunTests
