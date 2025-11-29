@@ -250,7 +250,7 @@ type accountBinaryIterator struct {
 // newBinaryAccountIterator creates a simplistic account iterator to step over
 // all the accounts in a slow, but easily verifiable way.
 //
-// nolint:all
+//nolint:all
 func (dl *diskLayer) newBinaryAccountIterator(seek common.Hash) AccountIterator {
 	return &accountBinaryIterator{
 		binaryIterator: dl.initBinaryAccountIterator(seek),
@@ -317,7 +317,7 @@ type storageBinaryIterator struct {
 // newBinaryStorageIterator creates a simplistic account iterator to step over
 // all the storage slots in a slow, but easily verifiable way.
 //
-// nolint:all
+//nolint:all
 func (dl *diskLayer) newBinaryStorageIterator(account common.Hash, seek common.Hash) StorageIterator {
 	return &storageBinaryIterator{
 		binaryIterator: dl.initBinaryStorageIterator(account, seek),
