@@ -328,13 +328,14 @@ func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, max
 // The cacheOnly flag restricts the check to the in-memory cache, avoiding database
 // access altogether.
 func (bc *BlockChain) HasCanonicalTransaction(hash common.Hash, cacheOnly bool) bool {
-	bc.txLookupLock.RLock()
-	defer bc.txLookupLock.RUnlock()
-
 	// Check in memory cache first
+	bc.txLookupLock.RLock()
 	if _, exist := bc.txLookupCache.Get(hash); exist {
+		bc.txLookupLock.RUnlock()
 		return true
 	}
+	bc.txLookupLock.RUnlock()
+
 	// Fallback to database lookup, without reading the transaction itself
 	if !cacheOnly && rawdb.HasCanonicalTransaction(bc.db, hash) {
 		return true
