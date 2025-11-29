@@ -44,9 +44,7 @@ func (w *Witness) MakeHashDB() ethdb.Database {
 		rawdb.WriteHeader(memdb, header)
 	}
 	// Inject all the bytecodes into the ephemeral database
-	for code := range w.Codes {
-		blob := []byte(code)
-
+	for _, blob := range w.Codes {
 		hasher.Reset()
 		hasher.Write(blob)
 		hasher.Read(hash)
@@ -54,9 +52,7 @@ func (w *Witness) MakeHashDB() ethdb.Database {
 		rawdb.WriteCode(memdb, common.BytesToHash(hash), blob)
 	}
 	// Inject all the MPT trie nodes into the ephemeral database
-	for node := range w.State {
-		blob := []byte(node)
-
+	for _, blob := range w.State {
 		hasher.Reset()
 		hasher.Write(blob)
 		hasher.Read(hash)
