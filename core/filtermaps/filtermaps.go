@@ -434,7 +434,7 @@ func (f *FilterMaps) safeDeleteWithLogs(deleteFn func(db ethdb.KeyValueStore, ha
 		lastLogPrinted = start
 	)
 	switch err := deleteFn(f.db, f.hashScheme, func(deleted bool) bool {
-		if deleted && !logPrinted || time.Since(lastLogPrinted) > time.Second*10 {
+		if deleted && (!logPrinted || time.Since(lastLogPrinted) > time.Second*10) {
 			log.Info(action+" in progress...", "elapsed", common.PrettyDuration(time.Since(start)))
 			logPrinted, lastLogPrinted = true, time.Now()
 		}
