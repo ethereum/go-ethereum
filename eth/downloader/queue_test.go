@@ -272,9 +272,6 @@ func XTestDelivery(t *testing.T) {
 	world.receipts = rec
 	world.chain = blo
 	world.progress(10)
-	if false {
-		log.SetDefault(log.NewLogger(slog.NewTextHandler(os.Stdout, nil)))
-	}
 	q := newQueue(10, 10)
 	var wg sync.WaitGroup
 	q.Prepare(1, SnapSync)
