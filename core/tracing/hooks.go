@@ -161,6 +161,13 @@ type (
 	// beacon block root.
 	OnSystemCallEndHook = func()
 
+	// OnPreTxExecutionDoneHook is called immediately prior to executing the first
+	// transaction in the block.
+	OnPreTxExecutionDoneHook func()
+
+	// OnBlockFinalizationHook is called immediately after block rewards are applied
+	OnBlockFinalizationHook func()
+
 	/*
 		- State events -
 	*/
@@ -209,6 +216,10 @@ type Hooks struct {
 	OnSystemCallStart   OnSystemCallStartHook
 	OnSystemCallStartV2 OnSystemCallStartHookV2
 	OnSystemCallEnd     OnSystemCallEndHook
+
+	OnPreTxExecutionDone OnPreTxExecutionDoneHook
+	OnBlockFinalization  OnBlockFinalizationHook
+
 	// State events
 	OnBalanceChange BalanceChangeHook
 	OnNonceChange   NonceChangeHook
