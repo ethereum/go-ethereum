@@ -77,32 +77,7 @@ func safeANDBytes(dst, a, b []byte) int {
 // ORBytes ors the bytes in a and b. The destination is assumed to have enough
 // space. Returns the number of bytes or'd.
 func ORBytes(dst, a, b []byte) int {
-	if supportsUnaligned {
-		return fastORBytes(dst, a, b)
-	}
-	return safeORBytes(dst, a, b)
-}
-
-// fastORBytes ors in bulk. It only works on architectures that support
-// unaligned read/writes.
-func fastORBytes(dst, a, b []byte) int {
-	n := len(a)
-	if len(b) < n {
-		n = len(b)
-	}
-	w := n / wordSize
-	if w > 0 {
-		dw := *(*[]uintptr)(unsafe.Pointer(&dst))
-		aw := *(*[]uintptr)(unsafe.Pointer(&a))
-		bw := *(*[]uintptr)(unsafe.Pointer(&b))
-		for i := 0; i < w; i++ {
-			dw[i] = aw[i] | bw[i]
-		}
-	}
-	for i := n - n%wordSize; i < n; i++ {
-		dst[i] = a[i] | b[i]
-	}
-	return n
+	return orBytes(dst, a, b)
 }
 
 // safeORBytes ors one by one. It works on all architectures, independent if
