@@ -80,11 +80,11 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 func NewEVMTxContext(msg *Message) vm.TxContext {
 	ctx := vm.TxContext{
 		Origin:     msg.From,
-		GasPrice:   new(big.Int).Set(msg.GasPrice),
+		GasPrice:   uint256.MustFromBig(msg.GasPrice),
 		BlobHashes: msg.BlobHashes,
 	}
 	if msg.BlobGasFeeCap != nil {
-		ctx.BlobFeeCap = new(big.Int).Set(msg.BlobGasFeeCap)
+		ctx.BlobFeeCap = uint256.MustFromBig(msg.BlobGasFeeCap)
 	}
 	return ctx
 }

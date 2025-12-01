@@ -417,8 +417,7 @@ func opExtCodeHash(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opGasprice(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	v, _ := uint256.FromBig(evm.GasPrice)
-	scope.Stack.push(v)
+	scope.Stack.push(evm.GasPrice.Clone())
 	return nil, nil
 }
 
