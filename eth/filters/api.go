@@ -361,7 +361,7 @@ func (api *FilterAPI) TransactionReceipts(ctx context.Context, filter *Transacti
 							receiptWithTx.Receipt.BlockNumber.Uint64(),
 							signer,
 							receiptWithTx.Transaction,
-							int(receiptWithTx.Receipt.TransactionIndex),
+							receiptWithTx.Receipt.TransactionIndex,
 						)
 					}
 
