@@ -251,7 +251,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return errors.New("missing withdrawalsHash")
 	}
 	if !shanghai && header.WithdrawalsHash != nil {
-		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
+		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", *header.WithdrawalsHash)
 	}
 	// Verify the existence / non-existence of cancun-specific header fields
 	cancun := chain.Config().IsCancun(header.Number, header.Time)

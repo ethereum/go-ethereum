@@ -252,7 +252,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if !chain.Config().IsLondon(header.Number) {
 		// Verify BaseFee not present before EIP-1559 fork.
 		if header.BaseFee != nil {
-			return fmt.Errorf("invalid baseFee before fork: have %d, expected 'nil'", header.BaseFee)
+			return fmt.Errorf("invalid baseFee before fork: have %s, expected 'nil'", header.BaseFee)
 		}
 		if err := misc.VerifyGaslimit(parent.GasLimit, header.GasLimit); err != nil {
 			return err
@@ -270,7 +270,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	}
 	// Verify the non-existence of withdrawalsHash.
 	if header.WithdrawalsHash != nil {
-		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
+		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", *header.WithdrawalsHash)
 	}
 	if chain.Config().IsCancun(header.Number, header.Time) {
 		return errors.New("ethash does not support cancun fork")
