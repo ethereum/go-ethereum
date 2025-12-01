@@ -147,7 +147,9 @@ func (r *cachingCodeReader) CodeSize(addr common.Address, codeHash common.Hash) 
 	if err != nil {
 		return 0, err
 	}
-	return len(code), nil
+	n := len(code)
+	r.codeSizeCache.Add(codeHash, n)
+	return n, nil
 }
 
 // flatReader wraps a database state reader and is safe for concurrent access.
