@@ -1368,7 +1368,7 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 		cfg.MaxPendingPeers = ctx.Int(MaxPendingPeersFlag.Name)
 	}
 	if ctx.IsSet(NoDiscoverFlag.Name) {
-		cfg.NoDiscovery = true
+		cfg.NoDiscovery = ctx.Bool(NoDiscoverFlag.Name)
 	}
 
 	flags.CheckExclusive(ctx, DiscoveryV4Flag, NoDiscoverFlag)
@@ -1718,7 +1718,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.LogHistory = ctx.Uint64(LogHistoryFlag.Name)
 	}
 	if ctx.IsSet(LogNoHistoryFlag.Name) {
-		cfg.LogNoHistory = true
+		cfg.LogNoHistory = ctx.Bool(LogNoHistoryFlag.Name)
 	}
 	if ctx.IsSet(LogExportCheckpointsFlag.Name) {
 		cfg.LogExportCheckpoints = ctx.String(LogExportCheckpointsFlag.Name)
