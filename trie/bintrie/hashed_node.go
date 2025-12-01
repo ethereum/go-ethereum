@@ -47,6 +47,9 @@ func (h HashedNode) GetValuesAtStem(_ []byte, _ NodeResolverFn) ([][]byte, error
 }
 
 func (h HashedNode) InsertValuesAtStem(stem []byte, values [][]byte, resolver NodeResolverFn, depth int) (BinaryNode, error) {
+	if depth >= StemSize*8 {
+		return nil, errors.New("InsertValuesAtStem resolve error: node too deep")
+	}
 	// Step 1: Generate the path for this node's position in the tree
 	path, err := keyToPath(depth, stem)
 	if err != nil {

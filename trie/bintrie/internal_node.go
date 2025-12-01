@@ -44,7 +44,7 @@ type InternalNode struct {
 
 // GetValuesAtStem retrieves the group of values located at the given stem key.
 func (bt *InternalNode) GetValuesAtStem(stem []byte, resolver NodeResolverFn) ([][]byte, error) {
-	if bt.depth > 31*8 {
+	if bt.depth >= StemSize*8 {
 		return nil, errors.New("node too deep")
 	}
 
@@ -134,6 +134,9 @@ func (bt *InternalNode) Hash() common.Hash {
 // Already-existing values will be overwritten.
 func (bt *InternalNode) InsertValuesAtStem(stem []byte, values [][]byte, resolver NodeResolverFn, depth int) (BinaryNode, error) {
 	var err error
+	if bt.depth >= StemSize*8 {
+		return nil, errors.New("node too deep")
+	}
 	bit := stem[bt.depth/8] >> (7 - (bt.depth % 8)) & 1
 	if bit == 0 {
 		if bt.left == nil {
