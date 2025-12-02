@@ -45,11 +45,13 @@ type callLog struct {
 	// Position of the log relative to subcalls within the same trace
 	// See https://github.com/ethereum/go-ethereum/pull/28389 for details
 	Position hexutil.Uint `json:"position"`
-	Pc       uint64       `json:"pc"`
+	// Program counter (bytecode offset) of the instruction that created the log
+	Pc uint64 `json:"pc"`
 }
 
 type callFrame struct {
-	Type         vm.OpCode       `json:"-"`
+	Type vm.OpCode `json:"-"`
+	// Program counter (bytecode offset) of the instruction that created the callframe
 	Pc           uint64          `json:"pc"`
 	From         common.Address  `json:"from"`
 	Gas          uint64          `json:"gas"`
@@ -119,7 +121,7 @@ type callTracer struct {
 	depth     int
 	interrupt atomic.Bool // Atomic flag to signal execution interruption
 	reason    error       // Textual reason for the interruption
-	lastPc    uint64
+	lastPc    uint64      // Stores the program counter of the last executed command
 }
 
 type callTracerConfig struct {
