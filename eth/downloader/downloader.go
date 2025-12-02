@@ -940,7 +940,11 @@ func (d *Downloader) processSnapSyncContent() error {
 				}
 			}
 		} else { // results already piled up, consume before handling pivot move
-			results = append(append([]*fetchResult{oldPivot}, oldTail...), results...)
+			newResults := make([]*fetchResult, 1+len(oldTail)+len(results))
+			newResults[0] = oldPivot
+			copy(newResults[1:], oldTail)
+			copy(newResults[1+len(oldTail):], results)
+			results = newResults
 		}
 		// Split around the pivot block and process the two sides via snap/full sync
 		if !d.committed.Load() {
