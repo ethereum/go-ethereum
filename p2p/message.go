@@ -68,7 +68,7 @@ func (msg Msg) String() string {
 func (msg Msg) Discard() {
 	_, err := io.Copy(io.Discard, msg.Payload)
 	if err != nil {
-			log.Error("[p2p] discard msg", "code", msg.Code, "size", msg.Size, "err", err)
+		log.Error("[p2p] discard msg", "code", msg.Code, "size", msg.Size, "err", err)
 	}
 }
 
