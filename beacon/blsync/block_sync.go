@@ -162,3 +162,8 @@ func (s *beaconBlockSync) updateEventFeed() {
 		Finalized:    finalizedHash,
 	})
 }
+
+func (s *beaconBlockSync) getBlock(blockRoot common.Hash) *types.BeaconBlock {
+	block, _ := s.recentBlocks.Get(blockRoot)
+	return block
+}

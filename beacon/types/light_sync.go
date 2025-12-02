@@ -61,23 +61,39 @@ func (c *BootstrapData) Validate() error {
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientupdate
 type LightClientUpdate struct {
 	Version                 string
-	AttestedHeader          SignedHeader  // Arbitrary header out of the period signed by the sync committee
+	AttestedHeader          HeaderWithExecProof // Arbitrary header out of the period signed by the sync committee
+	Signature               SyncAggregate
+	SignatureSlot           uint64
 	NextSyncCommitteeRoot   common.Hash   // Sync committee of the next period advertised in the current one
 	NextSyncCommitteeBranch merkle.Values // Proof for the next period's sync committee
 
-	FinalizedHeader *Header       `rlp:"nil"` // Optional header to announce a point of finality
-	FinalityBranch  merkle.Values // Proof for the announced finality
+	FinalizedHeader *HeaderWithExecProof `rlp:"nil"` // Optional header to announce a point of finality
+	FinalityBranch  merkle.Values        // Proof for the announced finality
 
 	score *UpdateScore // Weight of the update to compare between competing ones
 }
 
+func (update *LightClientUpdate) SignedHeader() SignedHeader {
+	return SignedHeader{
+		Header:        update.AttestedHeader.Header,
+		Signature:     update.Signature,
+		SignatureSlot: update.SignatureSlot,
+	}
+}
+
 // Validate verifies the validity of the update.
 func (update *LightClientUpdate) Validate() error {
+	if err := update.AttestedHeader.Validate(); err != nil {
+		return fmt.Errorf("invalid attested header: %w", err)
+	}
 	period := update.AttestedHeader.Header.SyncPeriod()
-	if SyncPeriod(update.AttestedHeader.SignatureSlot) != period {
+	if SyncPeriod(update.SignatureSlot) != period {
 		return errors.New("signature slot and signed header are from different periods")
 	}
 	if update.FinalizedHeader != nil {
+		if err := update.FinalizedHeader.Validate(); err != nil {
+			return fmt.Errorf("invalid finalized header: %w", err)
+		}
 		if update.FinalizedHeader.SyncPeriod() != period {
 			return errors.New("finalized header is from different period")
 		}
@@ -97,7 +113,7 @@ func (update *LightClientUpdate) Validate() error {
 func (update *LightClientUpdate) Score() UpdateScore {
 	if update.score == nil {
 		update.score = &UpdateScore{
-			SignerCount:     uint32(update.AttestedHeader.Signature.SignerCount()),
+			SignerCount:     uint32(update.Signature.SignerCount()),
 			SubPeriodIndex:  uint32(update.AttestedHeader.Header.Slot & 0x1fff),
 			FinalizedHeader: update.FinalizedHeader != nil,
 		}
@@ -163,6 +179,7 @@ func (h *HeaderWithExecProof) Validate() error {
 // See data structure definition here:
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientoptimisticupdate
 type OptimisticUpdate struct {
+	Version  string
 	Attested HeaderWithExecProof
 	// Sync committee BLS signature aggregate
 	Signature SyncAggregate

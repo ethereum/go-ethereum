@@ -34,6 +34,11 @@ type Values []Value
 
 var valueT = reflect.TypeFor[Value]()
 
+// MarshalJSON encodes a merkle value in hex syntax.
+func (m *Value) MarshalJSON() ([]byte, error) {
+	return []byte("\"" + hexutil.Encode((*m)[:]) + "\""), nil
+}
+
 // UnmarshalJSON parses a merkle value in hex syntax.
 func (m *Value) UnmarshalJSON(input []byte) error {
 	return hexutil.UnmarshalFixedJSON(valueT, input, m[:])
