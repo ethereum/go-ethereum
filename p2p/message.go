@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -64,9 +65,11 @@ func (msg Msg) String() string {
 }
 
 // Discard reads any remaining payload data into a black hole.
-func (msg Msg) Discard() error {
+func (msg Msg) Discard() {
 	_, err := io.Copy(io.Discard, msg.Payload)
-	return err
+	if err != nil {
+			log.Error("[p2p] discard msg", "code", msg.Code, "size", msg.Size, "err", err)
+	}
 }
 
 func (msg Msg) Time() time.Time {
@@ -233,7 +236,8 @@ func ExpectMsg(r MsgReader, code uint64, content interface{}) error {
 		return fmt.Errorf("message code mismatch: got %d, expected %d", msg.Code, code)
 	}
 	if content == nil {
-		return msg.Discard()
+		msg.Discard()
+		return nil
 	}
 	contentEnc, err := rlp.EncodeToBytes(content)
 	if err != nil {
