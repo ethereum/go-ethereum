@@ -141,10 +141,11 @@ type StateDB struct {
 	witnessStats *stateless.WitnessStats
 
 	// Measurements gathered during execution for debugging purposes
-	AccountReads    time.Duration
-	AccountHashes   time.Duration
-	AccountUpdates  time.Duration
-	AccountCommits  time.Duration
+	AccountReads   time.Duration
+	AccountHashes  time.Duration
+	AccountUpdates time.Duration
+	AccountCommits time.Duration
+
 	StorageReads    time.Duration
 	StorageUpdates  time.Duration
 	StorageCommits  time.Duration
