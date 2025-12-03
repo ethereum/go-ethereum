@@ -368,12 +368,35 @@ func gasExpEIP158(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 	return gas, nil
 }
 
-func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+func gasCallStateless(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	var (
+		gas            uint64
+		transfersValue = !stack.Back(2).IsZero()
+	)
+
+	if transfersValue && !evm.chainRules.IsEIP4762 {
+		gas += params.CallValueTransferGas
+	}
+
+	memoryGas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	var overflow bool
+	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
+		return 0, ErrGasUintOverflow
+	}
+
+	return gas, nil
+}
+
+func gasCallStateful(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var (
 		gas            uint64
 		transfersValue = !stack.Back(2).IsZero()
 		address        = common.Address(stack.Back(1).Bytes20())
 	)
+
 	if evm.chainRules.IsEIP158 {
 		if transfersValue && evm.StateDB.Empty(address) {
 			gas += params.CallNewAccountGas
@@ -381,15 +404,22 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	} else if !evm.StateDB.Exist(address) {
 		gas += params.CallNewAccountGas
 	}
-	if transfersValue && !evm.chainRules.IsEIP4762 {
-		gas += params.CallValueTransferGas
-	}
-	memoryGas, err := memoryGasCost(mem, memorySize)
+
+	return gas, nil
+}
+func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	stateless, err := gasCallStateless(evm, contract, stack, mem, memorySize)
 	if err != nil {
 		return 0, err
 	}
-	var overflow bool
-	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
+
+	stateful, err := gasCallStateful(evm, contract, stack, mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+
+	gas, overflow := math.SafeAdd(stateless, stateful)
+	if overflow {
 		return 0, ErrGasUintOverflow
 	}
 
@@ -404,7 +434,11 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	return gas, nil
 }
 
-func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+func gasCallCodeStateful(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return 0, nil
+}
+
+func gasCallCodeStateless(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	memoryGas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
 		return 0, err
@@ -419,6 +453,16 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
 		return 0, ErrGasUintOverflow
 	}
+	return gas, nil
+}
+
+func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	var overflow bool
+	gas, err := gasCallCodeStateless(evm, contract, stack, mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+
 	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, gas, stack.Back(0))
 	if err != nil {
 		return 0, err
@@ -430,10 +474,16 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 }
 
 func gasDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	gas, err := memoryGasCost(mem, memorySize)
+	var (
+		err error
+		gas uint64
+	)
+
+	gas, err = gasDelegateCallStateless(evm, contract, stack, mem, memorySize)
 	if err != nil {
 		return 0, err
 	}
+
 	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, gas, stack.Back(0))
 	if err != nil {
 		return 0, err
@@ -445,11 +495,36 @@ func gasDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	return gas, nil
 }
 
-func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+func gasDelegateCallStateful(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return 0, nil
+}
+
+func gasDelegateCallStateless(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	gas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
 		return 0, err
 	}
+	return gas, nil
+}
+
+func gasStaticCallStateless(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	return gas, nil
+}
+
+func gasStaticCallStateful(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return 0, nil
+}
+
+func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	gas, err := gasStaticCallStateless(evm, contract, stack, mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+
 	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, gas, stack.Back(0))
 	if err != nil {
 		return 0, err
