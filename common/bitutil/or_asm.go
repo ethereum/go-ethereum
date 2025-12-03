@@ -8,12 +8,8 @@
 package bitutil
 
 func orBytes(dst, a, b []byte) int {
-	n := min(len(a), len(b))
-	if n == 0 {
-		return 0
-	}
-	orBytesASM(&dst[0], &a[0], &b[0], n)
-	return n
+	orBytesASM(&dst[0], &a[0], &b[0], len(a))
+	return len(a)
 }
 
 //go:noescape
