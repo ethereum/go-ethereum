@@ -18,6 +18,7 @@ package vm
 
 import (
 	"errors"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -27,9 +28,6 @@ import (
 
 func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-		if evm.readOnly {
-			return 0, ErrWriteProtection
-		}
 		// If we fail the minimum gas availability invariant, fail (0)
 		if contract.Gas <= params.SstoreSentryGasEIP2200 {
 			return 0, errors.New("not enough gas for reentrancy sentry")
@@ -154,80 +152,12 @@ func gasEip2929AccountCheck(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 	return 0, nil
 }
 
-func makeCallVariantGasCallEIP2929(oldCalculatorStateful, oldCalculatorStateless gasFunc, addressPosition int) gasFunc {
-	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-		addr := common.Address(stack.Back(addressPosition).Bytes20())
-		// Check slot presence in the access list
-		warmAccess := evm.StateDB.AddressInAccessList(addr)
-		// The WarmStorageReadCostEIP2929 (100) is already deducted in the form of a constant cost, so
-		// the cost to charge for cold access, if any, is Cold - Warm
-		coldCost := params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
-		var (
-			eip2929Cost uint64
-			overflow    bool
-		)
-		if !warmAccess {
-			evm.StateDB.AddAddressToAccessList(addr)
-			// Charge the remaining difference here already, to correctly calculate available
-			// gas for call
-			if !contract.UseGas(coldCost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
-				return 0, ErrOutOfGas
-			}
-			eip2929Cost = coldCost
-		}
-		// Now call the old calculator, which takes into account
-		// - create new account
-		// - transfer value
-		// - memory expansion
-		// - 63/64ths rule
-
-		eip150BaseGas, err := oldCalculatorStateless(evm, contract, stack, mem, memorySize)
-		if err != nil {
-			return 0, err
-		}
-
-		// ensure the portion of the call cost which doesn't depend on state lookups
-		// is covered by the provided gas
-		if contract.Gas < eip150BaseGas {
-			return 0, ErrOutOfGas
-		}
-
-		oldStateful, err := oldCalculatorStateful(evm, contract, stack, mem, memorySize)
-		if err != nil {
-			return oldStateful, err
-		}
-
-		if eip150BaseGas, overflow = math.SafeAdd(eip150BaseGas, oldStateful); overflow {
-			return 0, ErrGasUintOverflow
-		}
-
-		evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, eip150BaseGas, stack.Back(0))
-		if err != nil {
-			return 0, err
-		}
-
-		// In case of a cold access, we temporarily add the cold charge back, and also
-		// add it to the returned gas. By adding it to the return, it will be charged
-		// outside of this function, as part of the dynamic gas, and that will make it
-		// also become correctly reported to tracers.
-		contract.Gas += eip2929Cost
-		var total uint64
-		if total, overflow = math.SafeAdd(evm.callGasTemp, eip150BaseGas); overflow {
-			return 0, ErrGasUintOverflow
-		}
-		if total, overflow = math.SafeAdd(total, eip2929Cost); overflow {
-			return 0, ErrGasUintOverflow
-		}
-
-		return total, nil
-	}
-}
-
 var (
-	gasCallEIP2929         = makeCallVariantGasCallEIP2929(gasCallStateless, gasCallStateful, 1)
-	gasDelegateCallEIP2929 = makeCallVariantGasCallEIP2929(gasDelegateCallStateless, gasDelegateCallStateful, 1)
-	gasStaticCallEIP2929   = makeCallVariantGasCallEIP2929(gasStaticCallStateless, gasStaticCallStateful, 1)
-	gasCallCodeEIP2929     = makeCallVariantGasCallEIP2929(gasCallCodeStateless, gasCallCodeStateful, 1)
+	// TODO: we can use the same functions already defined above for the 7702 gas handlers
+	gasCallEIP2929         = makeCallVariantGasCall(gasCallStateless, gasCallStateful)
+	gasDelegateCallEIP2929 = makeCallVariantGasCall(gasDelegateCallStateless, gasDelegateCallStateful)
+	gasStaticCallEIP2929   = makeCallVariantGasCall(gasStaticCallStateless, gasStaticCallStateful)
+	gasCallCodeEIP2929     = makeCallVariantGasCall(gasCallCodeStateless, gasCallCodeStateful)
 	gasSelfdestructEIP2929 = makeSelfdestructGasFn(true)
 	// gasSelfdestructEIP3529 implements the changes in EIP-3529 (no refunds)
 	gasSelfdestructEIP3529 = makeSelfdestructGasFn(false)
@@ -258,16 +188,10 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 			gas     uint64
 			address = common.Address(stack.peek().Bytes20())
 		)
-		if evm.readOnly {
-			return 0, ErrWriteProtection
-		}
 		if !evm.StateDB.AddressInAccessList(address) {
 			// If the caller cannot afford the cost, this change will be rolled back
 			evm.StateDB.AddAddressToAccessList(address)
 			gas = params.ColdAccountAccessCostEIP2929
-		}
-		if contract.Gas < gas {
-			return gas, nil
 		}
 		// if empty and transfers value
 		if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
@@ -282,13 +206,13 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 }
 
 var (
-	gasCallEIP7702         = makeCallVariantGasCallEIP7702(gasCallStateful, gasCallStateless)
-	gasDelegateCallEIP7702 = makeCallVariantGasCallEIP7702(gasDelegateCallStateful, gasDelegateCallStateless)
-	gasStaticCallEIP7702   = makeCallVariantGasCallEIP7702(gasStaticCallStateful, gasStaticCallStateless)
-	gasCallCodeEIP7702     = makeCallVariantGasCallEIP7702(gasCallCodeStateful, gasCallCodeStateless)
+	gasCallEIP7702         = makeCallVariantGasCall(gasCallStateful, gasCallStateless)
+	gasDelegateCallEIP7702 = makeCallVariantGasCall(gasDelegateCallStateful, gasDelegateCallStateless)
+	gasStaticCallEIP7702   = makeCallVariantGasCall(gasStaticCallStateful, gasStaticCallStateless)
+	gasCallCodeEIP7702     = makeCallVariantGasCall(gasCallCodeStateful, gasCallCodeStateless)
 )
 
-func makeCallVariantGasCallEIP7702(oldCalculatorStateful, oldCalculatorStateless gasFunc) gasFunc {
+func makeCallVariantGasCall(oldCalculatorStateful, oldCalculatorStateless gasFunc) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 		var (
 			eip150BaseGas uint64 // gas used for memory expansion, transfer costs -> input to the 63/64 bounding
@@ -300,7 +224,7 @@ func makeCallVariantGasCallEIP7702(oldCalculatorStateful, oldCalculatorStateless
 		)
 
 		// Check slot presence in the access list
-		if !evm.StateDB.AddressInAccessList(addr) {
+		if evm.chainRules.IsEIP2929 && !evm.StateDB.AddressInAccessList(addr) {
 			evm.StateDB.AddAddressToAccessList(addr)
 			// The WarmStorageReadCostEIP2929 (100) is already deducted in the form of a constant cost, so
 			// the cost to charge for cold access, if any, is Cold - Warm
@@ -323,27 +247,35 @@ func makeCallVariantGasCallEIP7702(oldCalculatorStateful, oldCalculatorStateless
 			return 0, ErrOutOfGas
 		}
 
-		// ^ TODO: I'm not totally sure this is compatible with the 63/64 gas reduction rule
-
 		oldStateful, err := oldCalculatorStateful(evm, contract, stack, mem, memorySize)
 		if err != nil {
 			return oldStateful, err
+		}
+
+		// this should cause BAL test failures if uncommented
+		baseCost, overflow := math.SafeAdd(eip150BaseGas, oldStateful)
+		if overflow {
+			return 0, ErrGasUintOverflow
+		} else if contract.Gas < baseCost {
+			return 0, ErrOutOfGas
 		}
 
 		if eip150BaseGas, overflow = math.SafeAdd(eip150BaseGas, oldStateful); overflow {
 			return 0, ErrOutOfGas
 		}
 
-		// Check if code is a delegation and if so, charge for resolution.
-		if target, ok := types.ParseDelegation(evm.StateDB.GetCode(addr)); ok {
-			if evm.StateDB.AddressInAccessList(target) {
-				eip7702Gas = params.WarmStorageReadCostEIP2929
-			} else {
-				evm.StateDB.AddAddressToAccessList(target)
-				eip7702Gas = params.ColdAccountAccessCostEIP2929
-			}
-			if !contract.UseGas(eip7702Gas, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
-				return 0, ErrOutOfGas
+		if evm.chainRules.IsPrague {
+			// Check if code is a delegation and if so, charge for resolution.
+			if target, ok := types.ParseDelegation(evm.StateDB.GetCode(addr)); ok {
+				if evm.StateDB.AddressInAccessList(target) {
+					eip7702Gas = params.WarmStorageReadCostEIP2929
+				} else {
+					evm.StateDB.AddAddressToAccessList(target)
+					eip7702Gas = params.ColdAccountAccessCostEIP2929
+				}
+				if !contract.UseGas(eip7702Gas, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
+					return 0, ErrOutOfGas
+				}
 			}
 		}
 
@@ -351,13 +283,6 @@ func makeCallVariantGasCallEIP7702(oldCalculatorStateful, oldCalculatorStateless
 		if err != nil {
 			return 0, err
 		}
-
-		// TODO: this check is probably not necessary (?)
-		/*
-			if contract.Gas < evm.callGasTemp {
-				return 0, ErrOutOfGas
-			}
-		*/
 
 		// TODO: it's not clear what happens if there is enough gas to cover the stateless component
 		// but not enough to cover the whole call:  do all the state reads happen in this case, and
@@ -385,7 +310,6 @@ func makeCallVariantGasCallEIP7702(oldCalculatorStateful, oldCalculatorStateless
 		if overflow {
 			return 0, ErrGasUintOverflow
 		}
-
 		totalCost, overflow = math.SafeAdd(totalCost, eip150BaseGas)
 		if overflow {
 			return 0, ErrGasUintOverflow
