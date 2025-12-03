@@ -8,7 +8,8 @@
 package bitutil
 
 func orBytes(dst, a, b []byte) int {
-	orBytesASM(&dst[0], &a[0], &b[0], len(a))
+	n := min(len(a), len(b))
+	orBytesASM(&dst[0], &a[0], &b[0], n)
 	return len(a)
 }
 
