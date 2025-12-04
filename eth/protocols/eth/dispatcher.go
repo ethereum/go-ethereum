@@ -250,6 +250,9 @@ func (p *Peer) dispatcher() {
 				// it can wait for a handler response and dispatch the data.
 				res.Time = res.recv.Sub(res.Req.Sent)
 				resOp.fail <- nil
+
+				// Stop tracking the request, the response dispatcher will deliver
+				delete(pending, res.id)
 			}
 
 		case <-p.term:
