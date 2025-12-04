@@ -362,9 +362,14 @@ func (db *Database) Journal(root common.Hash) error {
 		}
 		defer func() {
 			if file != nil {
-				file.Close()
-				os.Remove(tmp) // Clean up temp file if we didn't successfully rename it
-				log.Warn("Removed leftover temporary journal file", "path", tmp)
+				if err := file.Close(); err != nil {
+					log.Warn("Failed to close temporary journal file", "path", tmp, "err", err)
+				}
+				if err := os.Remove(tmp); err != nil {
+					log.Warn("Failed to remove leftover temporary journal file", "path", tmp, "err", err)
+				} else {
+					log.Warn("Removed leftover temporary journal file", "path", tmp)
+				}
 			}
 		}()
 		journal = file
