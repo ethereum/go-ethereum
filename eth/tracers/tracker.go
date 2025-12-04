@@ -52,10 +52,26 @@ func (t *stateTracker) releaseState(number uint64, release StateReleaseFunc) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
+	// Validate that the state number is within the expected range
+	if number < t.oldest {
+		// This should not happen in normal operation, but handle gracefully
+		// by just appending the release function without updating the used array
+		t.releases = append(t.releases, release)
+		return
+	}
+	
+	// Calculate the index and ensure it's within bounds
+	index := int(number - t.oldest)
+	if index < 0 || index >= len(t.used) {
+		// State is outside the tracking window, just append the release function
+		t.releases = append(t.releases, release)
+		return
+	}
+	
 	// Set the state as used, the corresponding flag is indexed by
 	// the distance between the specified state and the oldest state
 	// which is still using for trace.
-	t.used[int(number-t.oldest)] = true
+	t.used[index] = true
 
 	// If the oldest state is used up, update the oldest marker by moving
 	// it to the next state which is not used up.

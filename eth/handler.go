@@ -316,6 +316,11 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	defer close(dead)
 
 	// If we have any explicit peer required block hashes, request them
+	// Capture peer ID and logger to avoid race conditions in goroutines
+	peerID := peer.ID()
+	peerLogger := peer.Log()
+	peerAddr := peer.RemoteAddr()
+	peerName := peer.Name()
 	for number, hash := range h.requiredBlocks {
 		resCh := make(chan *eth.Response)
 
@@ -323,7 +328,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		if err != nil {
 			return err
 		}
-		go func(number uint64, hash common.Hash, req *eth.Request) {
+		go func(number uint64, hash common.Hash, req *eth.Request, id string, logger log.Logger, addr string, name string) {
 			// Ensure the request gets cancelled in case of error/drop
 			defer req.Close()
 
@@ -345,19 +350,19 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 					return
 				}
 				if headers[0].Number.Uint64() != number || headers[0].Hash() != hash {
-					peer.Log().Info("Required block mismatch, dropping peer", "number", number, "hash", headers[0].Hash(), "want", hash)
+					logger.Info("Required block mismatch, dropping peer", "number", number, "hash", headers[0].Hash(), "want", hash)
 					res.Done <- errors.New("required block mismatch")
 					return
 				}
-				peer.Log().Debug("Peer required block verified", "number", number, "hash", hash)
+				logger.Debug("Peer required block verified", "number", number, "hash", hash)
 				res.Done <- nil
 			case <-timeout.C:
-				peer.Log().Warn("Required block challenge timed out, dropping", "addr", peer.RemoteAddr(), "type", peer.Name())
-				h.removePeer(peer.ID())
+				logger.Warn("Required block challenge timed out, dropping", "addr", addr, "type", name)
+				h.removePeer(id)
 			case <-dead:
 				// Peer handler terminated, abort all goroutines
 			}
-		}(number, hash, req)
+		}(number, hash, req, peerID, peerLogger, peerAddr, peerName)
 	}
 	// Handle incoming messages until the connection is torn down
 	return handler(peer)
