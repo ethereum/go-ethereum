@@ -319,7 +319,10 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	// Capture peer ID and logger to avoid race conditions in goroutines
 	peerID := peer.ID()
 	peerLogger := peer.Log()
-	peerAddr := peer.RemoteAddr()
+	peerAddr := ""
+	if addr := peer.RemoteAddr(); addr != nil {
+		peerAddr = addr.String()
+	}
 	peerName := peer.Name()
 	for number, hash := range h.requiredBlocks {
 		resCh := make(chan *eth.Response)
