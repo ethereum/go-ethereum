@@ -26,10 +26,9 @@ import (
 )
 
 const (
-	indexBlockDescSize   = 14              // The size of index block descriptor
-	indexBlockEntriesCap = 4096            // The maximum number of entries can be grouped in a block
-	indexBlockRestartLen = 256             // The restart interval length of index block
-	historyIndexBatch    = 8 * 1024 * 1024 // The number of state history indexes for constructing or deleting as batch
+	indexBlockDescSize   = 14   // The size of index block descriptor
+	indexBlockEntriesCap = 4096 // The maximum number of entries can be grouped in a block
+	indexBlockRestartLen = 256  // The restart interval length of index block
 )
 
 // indexBlockDesc represents a descriptor for an index block, which contains a

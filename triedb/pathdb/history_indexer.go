@@ -117,24 +117,51 @@ func deleteIndexMetadata(db ethdb.KeyValueWriter, typ historyType) {
 	log.Debug("Deleted index metadata", "type", typ)
 }
 
+const (
+	// historyIndexLimit defines the maximum amount of pending (in-memory) history
+	// index data allowed before a partial flush is triggered. This protects against
+	// excessive memory growth during index construction.
+	historyIndexLimit = 8 * 1024 * 1024
+
+	// historyIndexFlushThreshold defines a hard upper bound for processed history
+	// index data. Once the total processed amount exceeds this threshold, *all*
+	// cached history indexes are fully flushed to storage. This ensures that
+	// long-running or high-throughput indexing workloads do not accumulate
+	// unbounded in-memory state.
+	historyIndexFlushThreshold = 2 * historyIndexLimit
+)
+
+type indexElem struct {
+	last    uint64   // The id of the last written index element
+	pending []uint64 // The id list of index elements waiting for flushing
+}
+
 // batchIndexer is responsible for performing batch indexing or unindexing
 // of historical data (e.g., state or trie node changes) atomically.
 type batchIndexer struct {
-	index   map[stateIdent][]uint64 // List of history IDs for tracked state entry
-	pending int                     // Number of entries processed in the current batch
-	delete  bool                    // Operation mode: true for unindex, false for index
-	lastID  uint64                  // ID of the most recently processed history
-	typ     historyType             // Type of history being processed (e.g., state or trienode)
-	db      ethdb.KeyValueStore     // Key-value database used to store or delete index data
+	index   map[stateIdent]*indexElem // List of history IDs for tracked state entry
+	pending int                       // Number of entries processed in the current batch
+	delete  bool                      // Operation mode: true for unindex, false for index
+
+	lastProcessed uint64 // ID of the most recently processed history
+	lastWritten   uint64 // ID of the most recently written history
+
+	typ historyType         // Type of history being processed (e.g., state or trienode)
+	db  ethdb.KeyValueStore // Key-value database used to store or delete index data
 }
 
 // newBatchIndexer constructs the batch indexer with the supplied mode.
 func newBatchIndexer(db ethdb.KeyValueStore, delete bool, typ historyType) *batchIndexer {
+	var lastWritten uint64
+	if metadata := loadIndexMetadata(db, typ); metadata != nil {
+		lastWritten = metadata.Last
+	}
 	return &batchIndexer{
-		index:  make(map[stateIdent][]uint64),
-		delete: delete,
-		typ:    typ,
-		db:     db,
+		index:       make(map[stateIdent]*indexElem),
+		delete:      delete,
+		lastWritten: lastWritten,
+		typ:         typ,
+		db:          db,
 	}
 }
 
@@ -142,26 +169,57 @@ func newBatchIndexer(db ethdb.KeyValueStore, delete bool, typ historyType) *batc
 // records for them.
 func (b *batchIndexer) process(h history, id uint64) error {
 	for ident := range h.forEach() {
-		b.index[ident] = append(b.index[ident], id)
+		if b.index[ident] == nil {
+			b.index[ident] = &indexElem{
+				last: b.lastWritten,
+			}
+		}
+		b.index[ident].pending = append(b.index[ident].pending, id)
 		b.pending++
 	}
-	b.lastID = id
+	b.lastProcessed = id
 
 	return b.finish(false)
 }
 
-// finish writes the accumulated state indexes into the disk if either the
-// memory limitation is reached or it's requested forcibly.
-func (b *batchIndexer) finish(force bool) error {
-	if b.pending == 0 {
-		return nil
+func (b *batchIndexer) cap() error {
+	return b.forEach(func(elem *indexElem) bool {
+		return len(elem.pending) > 0
+	})
+}
+
+func (b *batchIndexer) flush() error {
+	if err := b.forEach(nil); err != nil {
+		return err
 	}
-	if !force && b.pending < historyIndexBatch {
-		return nil
+	// Update the position of last indexed state history
+	batch := b.db.NewBatch()
+	if !b.delete {
+		storeIndexMetadata(batch, b.typ, b.lastProcessed)
+	} else {
+		if b.lastProcessed == 1 {
+			deleteIndexMetadata(batch, b.typ)
+		} else {
+			storeIndexMetadata(batch, b.typ, b.lastProcessed-1)
+		}
 	}
+	if err := batch.Write(); err != nil {
+		return err
+	}
+	b.pending = 0
+	b.index = make(map[stateIdent]*indexElem)
+	b.lastWritten = b.lastProcessed
+	return nil
+}
+
+func (b *batchIndexer) forEach(onElem func(elem *indexElem) bool) error {
 	var (
-		start = time.Now()
-		eg    errgroup.Group
+		eg errgroup.Group
+
+		// statistics
+		entries int
+		states  int
+		start   = time.Now()
 
 		batch     = b.db.NewBatchWithSize(ethdb.IdealBatchSize)
 		batchSize int
@@ -184,18 +242,23 @@ func (b *batchIndexer) finish(force bool) error {
 	)
 	eg.SetLimit(runtime.NumCPU())
 
-	var indexed uint64
-	if metadata := loadIndexMetadata(b.db, b.typ); metadata != nil {
-		indexed = metadata.Last
-	}
-	for ident, list := range b.index {
+	for ident, elem := range b.index {
+		if onElem != nil && !onElem(elem) {
+			continue
+		}
+		lastWritten := elem.last
+
+		elem.last = elem.pending[len(elem.pending)-1]
+		entries, states = entries+len(elem.pending), states+1
+		elem.pending = elem.pending[:0]
+
 		eg.Go(func() error {
 			if !b.delete {
-				iw, err := newIndexWriter(b.db, ident, indexed)
+				iw, err := newIndexWriter(b.db, ident, lastWritten)
 				if err != nil {
 					return err
 				}
-				for _, n := range list {
+				for _, n := range elem.pending {
 					if err := iw.append(n); err != nil {
 						return err
 					}
@@ -204,11 +267,11 @@ func (b *batchIndexer) finish(force bool) error {
 					iw.finish(batch)
 				})
 			} else {
-				id, err := newIndexDeleter(b.db, ident, indexed)
+				id, err := newIndexDeleter(b.db, ident, lastWritten)
 				if err != nil {
 					return err
 				}
-				for _, n := range list {
+				for _, n := range elem.pending {
 					if err := id.pop(n); err != nil {
 						return err
 					}
@@ -222,25 +285,29 @@ func (b *batchIndexer) finish(force bool) error {
 	if err := eg.Wait(); err != nil {
 		return err
 	}
-	// Update the position of last indexed state history
-	if !b.delete {
-		storeIndexMetadata(batch, b.typ, b.lastID)
-	} else {
-		if b.lastID == 1 {
-			deleteIndexMetadata(batch, b.typ)
-		} else {
-			storeIndexMetadata(batch, b.typ, b.lastID-1)
-		}
-	}
 	batchSize += batch.ValueSize()
-
 	if err := batch.Write(); err != nil {
 		return err
 	}
-	log.Debug("Committed batch indexer", "type", b.typ, "entries", len(b.index), "records", b.pending, "size", common.StorageSize(batchSize), "elapsed", common.PrettyDuration(time.Since(start)))
-	b.pending = 0
-	b.index = make(map[stateIdent][]uint64)
+	b.pending -= entries
+	log.Debug("Committed batch indexer", "type", b.typ, "entries", entries, "left", b.pending, "states", states, "size", common.StorageSize(batchSize), "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
+}
+
+// finish writes the accumulated state indexes into the disk if either the
+// memory limitation is reached or it's requested forcibly.
+func (b *batchIndexer) finish(force bool) error {
+	if b.pending == 0 {
+		return nil
+	}
+	switch {
+	case !force && b.pending < historyIndexLimit:
+		return nil
+	case force || b.pending > historyIndexFlushThreshold:
+		return b.flush()
+	default:
+		return b.cap()
+	}
 }
 
 // indexSingle processes the state history with the specified ID for indexing.
