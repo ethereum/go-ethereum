@@ -404,7 +404,7 @@ func decodeSingle(keySection []byte, onValue func([]byte, int, int) error) ([]st
 		keyOff += nn
 
 		// Validate that the values can fit in an int to prevent overflow on 32-bit systems
-		if nShared > uint64(math.MaxUint32) || nUnshared > uint64(math.MaxUint32) || nValue > uint64(math.MaxUint32) {
+		if nShared > uint64(math.MaxInt) || nUnshared > uint64(math.MaxInt) || nValue > uint64(math.MaxInt) {
 			return nil, errors.New("key size too large")
 		}
 
