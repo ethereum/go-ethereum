@@ -77,13 +77,25 @@ func Bytes2Hex(d []byte) string {
 
 // Hex2Bytes returns the bytes represented by the hexadecimal string str.
 func Hex2Bytes(str string) []byte {
-	h, _ := hex.DecodeString(str)
+	if !isHex(str) {
+		return nil
+	}
+	h, err := hex.DecodeString(str)
+	if err != nil {
+		return nil
+	}
 	return h
 }
 
 // Hex2BytesFixed returns bytes of a specified fixed length flen.
 func Hex2BytesFixed(str string, flen int) []byte {
-	h, _ := hex.DecodeString(str)
+	if !isHex(str) {
+		return make([]byte, flen)
+	}
+	h, err := hex.DecodeString(str)
+	if err != nil {
+		return make([]byte, flen)
+	}
 	if len(h) == flen {
 		return h
 	}

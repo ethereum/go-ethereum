@@ -44,6 +44,9 @@ func IsNonEmptyDir(dir string) bool {
 		return false
 	}
 	defer f.Close()
-	names, _ := f.Readdirnames(1)
+	names, err := f.Readdirnames(1)
+	if err != nil {
+		return false
+	}
 	return len(names) > 0
 }
