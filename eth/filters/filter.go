@@ -221,8 +221,11 @@ func (s *searchSession) updateChainView() error {
 	if lastBlock == math.MaxUint64 {
 		lastBlock = head
 	}
-	if firstBlock > lastBlock || lastBlock > head {
+	if firstBlock > lastBlock {
 		return errInvalidBlockRange
+	}
+	if lastBlock > head {
+		return errBlockRangeIntoFuture
 	}
 	s.searchRange = common.NewRange(firstBlock, lastBlock+1-firstBlock)
 
