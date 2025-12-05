@@ -1,0 +1,14 @@
+This PR fixes a few small typos and improves clarity in the
+consensus-related documentation.
+
+### Changes
+- Fixed minor spelling mistakes ("recieve" → "receive", "enviroment" → "environment")
+- Improved punctuation in several sentences
+- Rephrased unclear sentences for readability
+- Removed extra trailing spaces
+
+### Why
+These are small but relevant improvements that make the documentation more readable
+for new contributors and developers. No code logic was changed.
+
+Thanks!
