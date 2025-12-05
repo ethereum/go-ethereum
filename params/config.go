@@ -990,6 +990,12 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 				return fmt.Errorf("invalid chain configuration in blobSchedule for fork %q: %v", cur.name, err)
 			}
 		}
+		if cur.timestamp != nil {
+			// If cancun/prague or BPO is configured, a blob schedule must be defined
+			if cur.config == nil {
+				return fmt.Errorf("invalid chain configuration: missing entry for fork/bpo %q in blobSchedule", cur.name)
+			}
+		}
 	}
 	return nil
 }
