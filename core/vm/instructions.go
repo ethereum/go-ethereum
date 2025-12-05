@@ -964,7 +964,7 @@ func opDupN(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 	//The n‘th stack item is duplicated at the top of the stack.
 	scope.Stack.push(scope.Stack.Back(n - 1))
-	*pc += 2
+	*pc += 1
 	return nil, nil
 }
 
@@ -993,7 +993,7 @@ func opSwapN(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	indexTop := scope.Stack.len() - 1
 	indexN := scope.Stack.len() - 1 - n
 	scope.Stack.data[indexTop], scope.Stack.data[indexN] = scope.Stack.data[indexN], scope.Stack.data[indexTop]
-	*pc += 2
+	*pc += 1
 	return nil, nil
 }
 
@@ -1025,7 +1025,7 @@ func opExchange(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	indexN := scope.Stack.len() - 1 - n
 	indexM := scope.Stack.len() - 1 - m
 	scope.Stack.data[indexN], scope.Stack.data[indexM] = scope.Stack.data[indexM], scope.Stack.data[indexN]
-	*pc += 2
+	*pc += 1
 	return nil, nil
 }
 
