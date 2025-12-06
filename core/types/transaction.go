@@ -58,9 +58,10 @@ type Transaction struct {
 	time  time.Time // Time first seen locally (spam avoidance)
 
 	// caches
-	hash atomic.Pointer[common.Hash]
-	size atomic.Uint64
-	from atomic.Pointer[sigCache]
+	hash  atomic.Pointer[common.Hash]
+	size  atomic.Uint64
+	from  atomic.Pointer[sigCache]
+	auths atomic.Pointer[authCache]
 }
 
 // NewTx creates a new transaction.
@@ -512,27 +513,36 @@ func (tx *Transaction) SetCodeAuthorizations() []SetCodeAuthorization {
 	return setcodetx.AuthList
 }
 
-// SetCodeAuthorities returns a list of unique authorities from the
-// authorization list.
-func (tx *Transaction) SetCodeAuthorities() []common.Address {
+// SetCodeAuthorities returns a list of authorities from the authorization list.
+// Nil is used to represent authorizations that fail derivation.
+func (tx *Transaction) SetCodeAuthorities() []*common.Address {
 	setcodetx, ok := tx.inner.(*SetCodeTx)
 	if !ok {
 		return nil
 	}
+	if cache := tx.auths.Load(); cache != nil {
+		return *cache
+	}
+	cache := (authCache)(DeriveAuthorities(setcodetx.AuthList))
+	tx.auths.Store(&cache)
+	return cache
+}
+
+// UniqueSetCodeAuthorities returns a list of unique authorities from the
+// authorization list.
+func (tx *Transaction) UniqueSetCodeAuthorities() []common.Address {
 	var (
-		marks = make(map[common.Address]bool)
-		auths = make([]common.Address, 0, len(setcodetx.AuthList))
+		auths   = tx.SetCodeAuthorities()
+		marks   = make(map[common.Address]bool)
+		uniques []common.Address
 	)
-	for _, auth := range setcodetx.AuthList {
-		if addr, err := auth.Authority(); err == nil {
-			if marks[addr] {
-				continue
-			}
-			marks[addr] = true
-			auths = append(auths, addr)
+	for _, auth := range auths {
+		if auth != nil && !marks[*auth] {
+			marks[*auth] = true
+			uniques = append(uniques, *auth)
 		}
 	}
-	return auths
+	return uniques
 }
 
 // SetTime sets the decoding time of a transaction. This is used by tests to set

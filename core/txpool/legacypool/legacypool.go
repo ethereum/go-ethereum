@@ -619,7 +619,7 @@ func (pool *LegacyPool) validateAuth(tx *types.Transaction) error {
 	}
 	// For symmetry, allow at most one in-flight tx for any authority with a
 	// pending transaction.
-	if auths := tx.SetCodeAuthorities(); len(auths) > 0 {
+	if auths := tx.UniqueSetCodeAuthorities(); len(auths) > 0 {
 		for _, auth := range auths {
 			var count int
 			if pending := pool.pending[auth]; pending != nil {
@@ -1748,7 +1748,7 @@ func (t *lookup) TxsBelowTip(threshold *big.Int) types.Transactions {
 // addAuthorities tracks the supplied tx in relation to each authority it
 // specifies.
 func (t *lookup) addAuthorities(tx *types.Transaction) {
-	for _, addr := range tx.SetCodeAuthorities() {
+	for _, addr := range tx.UniqueSetCodeAuthorities() {
 		list, ok := t.auths[addr]
 		if !ok {
 			list = []common.Hash{}
@@ -1766,7 +1766,7 @@ func (t *lookup) addAuthorities(tx *types.Transaction) {
 // authorities.
 func (t *lookup) removeAuthorities(tx *types.Transaction) {
 	hash := tx.Hash()
-	for _, addr := range tx.SetCodeAuthorities() {
+	for _, addr := range tx.UniqueSetCodeAuthorities() {
 		list := t.auths[addr]
 		// Remove tx from tracker.
 		if i := slices.Index(list, hash); i >= 0 {
