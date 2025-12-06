@@ -91,7 +91,15 @@ func (t *memoryTable) truncateHead(items uint64) error {
 	if items < t.offset {
 		return errors.New("truncation below tail")
 	}
-	t.data = t.data[:items-t.offset]
+	removeFrom := items - t.offset
+	for i := int(removeFrom); i < len(t.data); i++ {
+		if t.size > uint64(len(t.data[i])) {
+			t.size -= uint64(len(t.data[i]))
+		} else {
+			t.size = 0
+		}
+	}
+	t.data = t.data[:removeFrom]
 	t.items = items
 	return nil
 }
@@ -108,8 +116,25 @@ func (t *memoryTable) truncateTail(items uint64) error {
 	if t.items < items {
 		return errors.New("truncation above head")
 	}
-	t.data = t.data[items-t.offset:]
+	drop := items - t.offset
+	var removed uint64
+	for i := uint64(0); i < drop; i++ {
+		removed += uint64(len(t.data[i]))
+	}
+	newLen := uint64(len(t.data)) - drop
+	if newLen == 0 {
+		t.data = nil
+	} else {
+		newData := make([][]byte, newLen)
+		copy(newData, t.data[drop:])
+		t.data = newData
+	}
 	t.offset = items
+	if removed >= t.size {
+		t.size = 0
+	} else {
+		t.size -= removed
+	}
 	return nil
 }
 
