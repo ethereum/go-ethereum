@@ -113,6 +113,12 @@ type (
 	// FaultHook is invoked when an error occurs during the execution of an opcode.
 	FaultHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, depth int, err error)
 
+	// FaultHookV2 is invoked when an error occurs during the execution of an opcode.
+	// It includes the return data (e.g. revert reason) available at the time of the fault.
+	// This mirrors the signature of OpcodeHook by including rData and allows tracers to
+	// capture revert data directly at fault time.
+	FaultHookV2 = func(pc uint64, op byte, gas, cost uint64, scope OpContext, rData []byte, depth int, err error)
+
 	// GasChangeHook is invoked when the gas changes.
 	GasChangeHook = func(old, new uint64, reason GasChangeReason)
 
@@ -198,6 +204,7 @@ type Hooks struct {
 	OnExit      ExitHook
 	OnOpcode    OpcodeHook
 	OnFault     FaultHook
+	OnFaultV2   FaultHookV2
 	OnGasChange GasChangeHook
 	// Chain events
 	OnBlockchainInit    BlockchainInitHook
