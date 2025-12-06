@@ -33,7 +33,7 @@ func makeTestIndexBlock(count int) ([]byte, []uint64) {
 		marks    = make(map[uint64]bool)
 		elements []uint64
 	)
-	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0))
+	bw, _ := newBlockWriter(nil, newIndexBlockDesc(0), 0)
 	for i := 0; i < count; i++ {
 		n := uint64(rand.Uint32())
 		if marks[n] {
@@ -67,7 +67,7 @@ func makeTestIndexBlocks(db ethdb.KeyValueStore, stateIdent stateIdent, count in
 	}
 	sort.Slice(elements, func(i, j int) bool { return elements[i] < elements[j] })
 
-	iw, _ := newIndexWriter(db, stateIdent)
+	iw, _ := newIndexWriter(db, stateIdent, 0)
 	for i := 0; i < len(elements); i++ {
 		iw.append(elements[i])
 	}
