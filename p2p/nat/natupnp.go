@@ -107,30 +107,30 @@ func (n *upnp) addAnyPortMapping(protocol string, extport, intport int, ip net.I
 		})
 	}
 	// For IGDv1 and v1 services we should first try to add with extport.
+	var lastErr error
 	for i := 0; i < retryCount+1; i++ {
-		err := n.withRateLimit(func() error {
+		lastErr = n.withRateLimit(func() error {
 			return n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
 		})
-		if err == nil {
+		if lastErr == nil {
 			return uint16(extport), nil
 		}
-		log.Debug("Failed to add port mapping", "protocol", protocol, "extport", extport, "intport", intport, "err", err)
+		log.Debug("Failed to add port mapping", "protocol", protocol, "extport", extport, "intport", intport, "err", lastErr)
 	}
 
 	// If above fails, we retry with a random port.
 	// We retry several times because of possible port conflicts.
-	var err error
 	for i := 0; i < randomCount; i++ {
 		extport = n.randomPort()
-		err := n.withRateLimit(func() error {
+		lastErr = n.withRateLimit(func() error {
 			return n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
 		})
-		if err == nil {
+		if lastErr == nil {
 			return uint16(extport), nil
 		}
-		log.Debug("Failed to add random port mapping", "protocol", protocol, "extport", extport, "intport", intport, "err", err)
+		log.Debug("Failed to add random port mapping", "protocol", protocol, "extport", extport, "intport", intport, "err", lastErr)
 	}
-	return 0, err
+	return 0, lastErr
 }
 
 func (n *upnp) randomPort() int {
