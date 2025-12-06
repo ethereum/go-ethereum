@@ -20,6 +20,7 @@ import (
 	"embed"
 	"errors"
 	"io/fs"
+	"log/slog"
 	"os"
 
 	"github.com/ethereum/go-ethereum/core/history"
@@ -240,7 +241,7 @@ func runTestCmd(ctx *cli.Context) error {
 
 	// Disable logging unless explicitly enabled.
 	if !ctx.IsSet("verbosity") && !ctx.IsSet("vmodule") {
-		log.SetDefault(log.NewLogger(log.DiscardHandler()))
+		log.SetDefault(log.NewLogger(slog.DiscardHandler))
 	}
 
 	// Run the tests.
