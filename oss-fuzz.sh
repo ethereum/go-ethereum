@@ -22,10 +22,10 @@ function coverbuild {
   path=$1
   function=$2
   fuzzer=$3
-  tags=""
+  coverage_package=$coverpkg
 
   if [[ $#  -eq 4 ]]; then
-    tags="-tags $4"
+    coverage_package=$4
   fi
   cd $path
   fuzzed_package=`pwd | rev | cut -d'/' -f 1 | rev`
@@ -38,7 +38,7 @@ cat << DOG > $OUT/$fuzzer
 #/bin/sh
 
   cd $OUT/$path
-  go test -run Test${function}Corpus -v $tags -coverprofile \$1 -coverpkg $coverpkg
+  go test -run Test${function}Corpus -v -coverprofile \$1 -coverpkg $coverage_package
 
 DOG
 
@@ -64,7 +64,7 @@ function compile_fuzzer() {
   go get github.com/holiman/gofuzz-shim/testing
 
 	if [[ $SANITIZER == *coverage* ]]; then
-		coverbuild $path $function $fuzzer $coverpkg
+		coverbuild $path $function $fuzzer
 	else
 	  gofuzz-shim --func $function --package $package -f $file -o $fuzzer.a
 		$CXX $CXXFLAGS $LIB_FUZZING_ENGINE $fuzzer.a -o $OUT/$fuzzer
