@@ -218,7 +218,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core
 	// Start a goroutine that exhausts the subscriptions to avoid events piling up
 	var (
 		quitCh = make(chan struct{})
-		headCh = make(chan *types.Header, 1)
+		headCh = make(chan core.ChainHeadEvent, 1)
 		txCh   = make(chan struct{}, 1)
 	)
 	go func() {
@@ -230,7 +230,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core
 			// Notify of chain head events, but drop if too frequent
 			case head := <-chainHeadCh:
 				select {
-				case headCh <- head.Header:
+				case headCh <- head:
 				default:
 				}
 
@@ -330,7 +330,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core
 						log.Warn("Requested history report failed", "err", err)
 					}
 				case head := <-headCh:
-					if err = s.reportBlock(conn, head); err != nil {
+					if err = s.reportBlock(conn, &head); err != nil {
 						log.Warn("Block stats report failed", "err", err)
 					}
 					if err = s.reportPending(conn); err != nil {
@@ -569,19 +569,20 @@ func (s *Service) reportLatency(conn *connWrapper) error {
 
 // blockStats is the information to report about individual blocks.
 type blockStats struct {
-	Number     *big.Int       `json:"number"`
-	Hash       common.Hash    `json:"hash"`
-	ParentHash common.Hash    `json:"parentHash"`
-	Timestamp  *big.Int       `json:"timestamp"`
-	Miner      common.Address `json:"miner"`
-	GasUsed    uint64         `json:"gasUsed"`
-	GasLimit   uint64         `json:"gasLimit"`
-	Diff       string         `json:"difficulty"`
-	TotalDiff  string         `json:"totalDifficulty"`
-	Txs        []txStats      `json:"transactions"`
-	TxHash     common.Hash    `json:"transactionsRoot"`
-	Root       common.Hash    `json:"stateRoot"`
-	Uncles     uncleStats     `json:"uncles"`
+	Number         *big.Int       `json:"number"`
+	Hash           common.Hash    `json:"hash"`
+	ParentHash     common.Hash    `json:"parentHash"`
+	Timestamp      *big.Int       `json:"timestamp"`
+	Miner          common.Address `json:"miner"`
+	GasUsed        uint64         `json:"gasUsed"`
+	GasLimit       uint64         `json:"gasLimit"`
+	Diff           string         `json:"difficulty"`
+	TotalDiff      string         `json:"totalDifficulty"`
+	Txs            []txStats      `json:"transactions"`
+	TxHash         common.Hash    `json:"transactionsRoot"`
+	Root           common.Hash    `json:"stateRoot"`
+	Uncles         uncleStats     `json:"uncles"`
+	ProcessingTime uint64         `json:"processingTime"`
 }
 
 // txStats is the information to report about individual transactions.
@@ -601,9 +602,9 @@ func (s uncleStats) MarshalJSON() ([]byte, error) {
 }
 
 // reportBlock retrieves the current chain head and reports it to the stats server.
-func (s *Service) reportBlock(conn *connWrapper, header *types.Header) error {
+func (s *Service) reportBlock(conn *connWrapper, header *core.ChainHeadEvent) error {
 	// Gather the block details from the header or block chain
-	details := s.assembleBlockStats(header)
+	details := s.assembleBlockStats(header.Header, header.Time)
 
 	// Short circuit if the block detail is not available.
 	if details == nil {
@@ -624,7 +625,7 @@ func (s *Service) reportBlock(conn *connWrapper, header *types.Header) error {
 
 // assembleBlockStats retrieves any required metadata to report a single block
 // and assembles the block stats. If block is nil, the current head is processed.
-func (s *Service) assembleBlockStats(header *types.Header) *blockStats {
+func (s *Service) assembleBlockStats(header *types.Header, time uint64) *blockStats {
 	// Gather the block infos from the local blockchain
 	var (
 		txs    []txStats
@@ -658,19 +659,20 @@ func (s *Service) assembleBlockStats(header *types.Header) *blockStats {
 	author, _ := s.engine.Author(header)
 
 	return &blockStats{
-		Number:     header.Number,
-		Hash:       header.Hash(),
-		ParentHash: header.ParentHash,
-		Timestamp:  new(big.Int).SetUint64(header.Time),
-		Miner:      author,
-		GasUsed:    header.GasUsed,
-		GasLimit:   header.GasLimit,
-		Diff:       header.Difficulty.String(),
-		TotalDiff:  "0", // unknown post-merge with pruned chain tail
-		Txs:        txs,
-		TxHash:     header.TxHash,
-		Root:       header.Root,
-		Uncles:     uncles,
+		Number:         header.Number,
+		Hash:           header.Hash(),
+		ParentHash:     header.ParentHash,
+		Timestamp:      new(big.Int).SetUint64(header.Time),
+		Miner:          author,
+		GasUsed:        header.GasUsed,
+		GasLimit:       header.GasLimit,
+		Diff:           header.Difficulty.String(),
+		TotalDiff:      "0", // unknown post-merge with pruned chain tail
+		Txs:            txs,
+		TxHash:         header.TxHash,
+		Root:           header.Root,
+		Uncles:         uncles,
+		ProcessingTime: time,
 	}
 }
 
@@ -699,7 +701,7 @@ func (s *Service) reportHistory(conn *connWrapper, list []uint64) error {
 		// Retrieve the next block if it's known to us
 		header, _ := s.backend.HeaderByNumber(context.Background(), rpc.BlockNumber(number))
 		if header != nil {
-			history[len(history)-1-i] = s.assembleBlockStats(header)
+			history[len(history)-1-i] = s.assembleBlockStats(header, 0)
 			continue
 		}
 		// Ran out of blocks, cut the report short and send
