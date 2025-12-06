@@ -141,3 +141,15 @@ func (api *AdminAPI) ImportChain(file string) (bool, error) {
 	}
 	return true, nil
 }
+
+// ClearTxpool clears all transactions from the transaction pool.
+// This method removes all pending and queued transactions from both the
+// legacy transaction pool and the blob transaction pool.
+//
+// Note: This operation invokes Sync() internally and should be used with
+// caution as it can be susceptible to DoS vectors. It's primarily intended
+// for testing and administrative purposes.
+func (api *AdminAPI) ClearTxpool() error {
+	api.eth.TxPool().Clear()
+	return nil
+}
