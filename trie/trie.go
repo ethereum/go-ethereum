@@ -31,6 +31,10 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// maxUnhashedNodesForSingleThread is the threshold of unhashed nodes to trigger
+// parallel hashing or committing.
+const maxUnhashedNodesForSingleThread = 100
+
 // Trie represents a Merkle Patricia Trie. Use New to create a trie that operates
 // on top of a node database. During a commit operation, the trie collects all
 // modified nodes into a set for return. After committing, the trie becomes
@@ -760,7 +764,7 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 		nodes.AddNode(path, trienode.NewDeletedWithPrev(t.prevalueTracer.Get(path)))
 	}
 	// If the number of changes is below 100, we let one thread handle it
-	t.root = newCommitter(nodes, t.prevalueTracer, collectLeaf).Commit(t.root, t.uncommitted > 100)
+	t.root = newCommitter(nodes, t.prevalueTracer, collectLeaf).Commit(t.root, t.uncommitted > maxUnhashedNodesForSingleThread)
 	t.uncommitted = 0
 	return rootHash, nodes
 }
@@ -771,7 +775,7 @@ func (t *Trie) hashRoot() []byte {
 		return types.EmptyRootHash.Bytes()
 	}
 	// If the number of changes is below 100, we let one thread handle it
-	h := newHasher(t.unhashed >= 100)
+	h := newHasher(t.unhashed >= maxUnhashedNodesForSingleThread)
 	defer func() {
 		returnHasherToPool(h)
 		t.unhashed = 0

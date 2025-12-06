@@ -83,22 +83,39 @@ func compactToHex(compact []byte) []byte {
 	if len(compact) == 0 {
 		return compact
 	}
-	base := keybytesToHex(compact)
-	// delete terminator flag
-	if base[0] < 2 {
-		base = base[:len(base)-1]
+	baseLen := len(compact) * 2
+	first := compact[0]
+	// Add terminator length if it's a leaf (flag >= 2)
+	if first>>4 >= 2 {
+		baseLen += 1
 	}
-	// apply odd flag
-	chop := 2 - base[0]&1
-	return base[chop:]
+	// Calculate chop: 2 if even (flag&1 == 0), 1 if odd (flag&1 == 1)
+	chop := 2 - int(first>>4&1)
+
+	hex := make([]byte, baseLen-chop)
+
+	idx := 0
+	if chop == 1 {
+		hex[0] = first & 0x0f
+		idx = 1
+	}
+	for i := 1; i < len(compact); i++ {
+		hex[idx] = compact[i] >> 4
+		hex[idx+1] = compact[i] & 0x0f
+		idx += 2
+	}
+	if first>>4 >= 2 {
+		hex[len(hex)-1] = 16
+	}
+	return hex
 }
 
 func keybytesToHex(str []byte) []byte {
 	l := len(str)*2 + 1
 	var nibbles = make([]byte, l)
 	for i, b := range str {
-		nibbles[i*2] = b / 16
-		nibbles[i*2+1] = b % 16
+		nibbles[i*2] = b >> 4
+		nibbles[i*2+1] = b & 0x0f
 	}
 	nibbles[l-1] = 16
 	return nibbles
@@ -110,8 +127,8 @@ func keybytesToHex(str []byte) []byte {
 func writeHexKey(dst []byte, key []byte) []byte {
 	_ = dst[2*len(key)-1]
 	for i, b := range key {
-		dst[i*2] = b / 16
-		dst[i*2+1] = b % 16
+		dst[i*2] = b >> 4
+		dst[i*2+1] = b & 0x0f
 	}
 	return dst[:2*len(key)]
 }
