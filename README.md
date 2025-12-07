@@ -29,7 +29,17 @@ or, to build the full suite of utilities:
 ```shell
 make all
 ```
+### Quick build and test
 
+For a minimal local verification of your build:
+
+```bash
+# Build the main geth binary
+make geth
+
+# Run the basic Go test suite
+go test ./...
+```
 ## Executables
 
 The go-ethereum project comes with several wrappers/executables found in the `cmd`
