@@ -149,6 +149,20 @@ docker run -d --name ethereum-node -v /Users/alice/ethereum:/root \
            -p 8545:8545 -p 30303:30303 \
            ethereum/client-go
 ```
+When running via Docker, it is a good idea to:
+
+* Mount the data directory from a fast SSD.
+* Keep the volume path stable across container recreations, so the node does not need to resync from scratch.
+
+For example, on Linux:
+
+```bash
+mkdir -p /data/geth
+docker run -d --name ethereum-node \
+  -v /data/geth:/root/.ethereum \
+  -p 8545:8545 -p 30303:30303 \
+  ethereum/client-go
+```
 
 This will start `geth` in snap-sync mode with a DB memory allowance of 1GB, as the
 above command does.  It will also create a persistent volume in your home directory for
