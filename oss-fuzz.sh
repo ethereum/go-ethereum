@@ -1,3 +1,9 @@
+#!/usr/bin/env bash
+# This script is used by the OSS-Fuzz integration to build and run fuzzing
+# targets for go-ethereum. It is not intended for everyday development use.
+# If you need to update it, please keep the Google OSS-Fuzz project in mind
+# and coordinate changes with the fuzzing maintainers.
+
 #!/bin/bash -eu
 # Copyright 2022 Google LLC
 #
