@@ -388,9 +388,9 @@ func serviceGetReceiptsQuery70(chain *core.BlockChain, query GetReceiptsRequest,
 		}
 
 		if firstBlockReceiptIndex > 0 && lookups == 0 {
-			results, lastBlockIncomplete = trimReceiptsRLP(results, int(firstBlockReceiptIndex))
+			results, lastBlockIncomplete = trimReceiptsRLP(results, int(firstBlockReceiptIndex), maxPacketSize)
 		} else if bytes+len(results) > maxPacketSize {
-			results, lastBlockIncomplete = trimReceiptsRLP(results, 0)
+			results, lastBlockIncomplete = trimReceiptsRLP(results, 0, maxPacketSize-bytes)
 		}
 
 		receipts = append(receipts, results)
@@ -401,7 +401,7 @@ func serviceGetReceiptsQuery70(chain *core.BlockChain, query GetReceiptsRequest,
 }
 
 // trimReceiptsRLP trims raw value from `from` index until it exceeds limit
-func trimReceiptsRLP(receiptsRLP rlp.RawValue, from int) (rlp.RawValue, bool) {
+func trimReceiptsRLP(receiptsRLP rlp.RawValue, from int, limit int) (rlp.RawValue, bool) {
 	var (
 		out      bytes.Buffer
 		buffer   = rlp.NewEncoderBuffer(&out)
@@ -418,7 +418,7 @@ func trimReceiptsRLP(receiptsRLP rlp.RawValue, from int) (rlp.RawValue, bool) {
 			continue
 		}
 		receipt := iter.Value()
-		if bytes+len(receipt) > maxPacketSize {
+		if bytes+len(receipt) > limit {
 			overflow = true
 			break
 		}
