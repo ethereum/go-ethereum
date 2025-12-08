@@ -25,17 +25,17 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// moder is responsible for managing the downloader's sync mode. It takes the
+// syncModer is responsible for managing the downloader's sync mode. It takes the
 // user's preference at startup and then determines the appropriate sync mode
 // based on the current chain status.
-type moder struct {
+type syncModer struct {
 	mode  ethconfig.SyncMode
 	chain BlockChain
 	disk  ethdb.KeyValueReader
 	lock  sync.Mutex
 }
 
-func newSyncModer(mode ethconfig.SyncMode, chain BlockChain, disk ethdb.KeyValueReader) *moder {
+func newSyncModer(mode ethconfig.SyncMode, chain BlockChain, disk ethdb.KeyValueReader) *syncModer {
 	if mode == ethconfig.FullSync {
 		// The database seems empty as the current block is the genesis. Yet the snap
 		// block is ahead, so snap sync was enabled for this node at a certain point.
@@ -66,16 +66,16 @@ func newSyncModer(mode ethconfig.SyncMode, chain BlockChain, disk ethdb.KeyValue
 			log.Info("Enabled snap-sync", "head", head.Number, "hash", head.Hash())
 		}
 	}
-	return &moder{
+	return &syncModer{
 		mode:  mode,
 		chain: chain,
 		disk:  disk,
 	}
 }
 
-// getMode retrieves the current sync mode, either explicitly set, or derived
+// get retrieves the current sync mode, either explicitly set, or derived
 // from the chain status.
-func (m *moder) getMode() ethconfig.SyncMode {
+func (m *syncModer) get() ethconfig.SyncMode {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -104,7 +104,7 @@ func (m *moder) getMode() ethconfig.SyncMode {
 }
 
 // disableSnap disables the snap sync mode, usually it's called after a successful snap sync.
-func (m *moder) disableSnap() {
+func (m *syncModer) disableSnap() {
 	m.lock.Lock()
 	m.mode = ethconfig.FullSync
 	m.lock.Unlock()

@@ -98,7 +98,7 @@ type headerTask struct {
 
 type Downloader struct {
 	mode  atomic.Uint32  // Synchronisation mode defining the strategy used (per sync cycle), use d.getMode() to get the SyncMode
-	moder *moder         // Sync mode management, deliver the appropriate sync mode choice for each cycle
+	moder *syncModer     // Sync mode management, deliver the appropriate sync mode choice for each cycle
 	mux   *event.TypeMux // Event multiplexer to announce sync operation events
 
 	queue *queue   // Scheduler for selecting the hashes to download
@@ -361,7 +361,7 @@ func (d *Downloader) synchronise(beaconPing chan struct{}) (err error) {
 	if d.notified.CompareAndSwap(false, true) {
 		log.Info("Block synchronisation started")
 	}
-	mode := d.moder.getMode()
+	mode := d.moder.get()
 	defer func() {
 		if err == nil && mode == ethconfig.SnapSync {
 			d.moder.disableSnap()
@@ -427,7 +427,7 @@ func (d *Downloader) getMode() SyncMode {
 // ConfigSyncMode returns the sync mode configured for the node.
 // The actual running sync mode can differ from this.
 func (d *Downloader) ConfigSyncMode() SyncMode {
-	return d.moder.getMode()
+	return d.moder.get()
 }
 
 // syncToHead starts a block synchronization based on the hash chain from
