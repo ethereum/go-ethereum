@@ -48,22 +48,22 @@ func newSyncModer(mode ethconfig.SyncMode, chain BlockChain, disk ethdb.KeyValue
 		fullBlock, snapBlock := chain.CurrentBlock(), chain.CurrentSnapBlock()
 		if fullBlock.Number.Uint64() == 0 && snapBlock.Number.Uint64() > 0 {
 			mode = ethconfig.SnapSync
-			log.Warn("Switch sync mode from full sync to snap sync", "reason", "snap sync incomplete")
+			log.Warn("Switching from full-sync to snap-sync", "reason", "snap-sync incomplete")
 		} else if !chain.HasState(fullBlock.Root) {
 			mode = ethconfig.SnapSync
-			log.Warn("Switch sync mode from full sync to snap sync", "reason", "head state missing")
+			log.Warn("Switching from full-sync to snap-sync", "reason", "head state missing")
 		} else {
 			// Grant the full sync mode
-			log.Info("Enabled full sync", "head", fullBlock.Number, "hash", fullBlock.Hash())
+			log.Info("Enabled full-sync", "head", fullBlock.Number, "hash", fullBlock.Hash())
 		}
 	} else {
 		head := chain.CurrentBlock()
 		if head.Number.Uint64() > 0 && chain.HasState(head.Root) {
 			mode = ethconfig.FullSync
-			log.Info("Switch sync mode from snap sync to full sync", "reason", "snap sync complete")
+			log.Info("Switching from snap-sync to full-sync", "reason", "snap-sync complete")
 		} else {
 			// If snap sync was requested and our database is empty, grant it
-			log.Info("Enabled snap sync", "head", head.Number, "hash", head.Hash())
+			log.Info("Enabled snap-sync", "head", head.Number, "hash", head.Hash())
 		}
 	}
 	return &moder{
@@ -88,7 +88,7 @@ func (m *moder) getMode() ethconfig.SyncMode {
 	head := m.chain.CurrentBlock()
 	if pivot := rawdb.ReadLastPivotNumber(m.disk); pivot != nil {
 		if head.Number.Uint64() < *pivot {
-			log.Info("Reenabled snap sync as chain is lagging behind the pivot", "head", head.Number, "pivot", pivot)
+			log.Info("Reenabled snap-sync as chain is lagging behind the pivot", "head", head.Number, "pivot", pivot)
 			return ethconfig.SnapSync
 		}
 	}
@@ -96,7 +96,7 @@ func (m *moder) getMode() ethconfig.SyncMode {
 	// the head state, forcefully rerun the snap sync. Note it doesn't mean the
 	// persistent state is corrupted, just mismatch with the head block.
 	if !m.chain.HasState(head.Root) {
-		log.Info("Reenabled snap sync as chain is stateless")
+		log.Info("Reenabled snap-sync as chain is stateless")
 		return ethconfig.SnapSync
 	}
 	// Nope, we're really full syncing
