@@ -424,8 +424,9 @@ func (d *Downloader) getMode() SyncMode {
 	return SyncMode(d.mode.Load())
 }
 
-// GetSyncMode returns the suggested sync mode.
-func (d *Downloader) GetSyncMode() SyncMode {
+// ConfigSyncMode returns the sync mode configured for the node.
+// The actual running sync mode can differ from this.
+func (d *Downloader) ConfigSyncMode() SyncMode {
 	return d.moder.getMode()
 }
 

@@ -90,7 +90,7 @@ func testSnapSyncDisabling(t *testing.T, ethVer uint, snapVer uint) {
 		case <-timeout:
 			t.Fatalf("snap sync not disabled after successful synchronisation")
 		case <-time.After(100 * time.Millisecond):
-			if empty.handler.downloader.GetSyncMode() == ethconfig.FullSync {
+			if empty.handler.downloader.ConfigSyncMode() == ethconfig.FullSync {
 				return
 			}
 		}

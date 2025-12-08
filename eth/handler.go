@@ -163,7 +163,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	h.downloader = downloader.New(config.Database, config.Sync, h.eventMux, h.chain, h.removePeer, h.enableSyncedFeatures)
 
 	// If snap sync is requested but snapshots are disabled, fail loudly
-	if h.downloader.GetSyncMode() == ethconfig.SnapSync && (config.Chain.Snapshots() == nil && config.Chain.TrieDB().Scheme() == rawdb.HashScheme) {
+	if h.downloader.ConfigSyncMode() == ethconfig.SnapSync && (config.Chain.Snapshots() == nil && config.Chain.TrieDB().Scheme() == rawdb.HashScheme) {
 		return nil, errors.New("snap sync not supported with snapshots disabled")
 	}
 	fetchTx := func(peer string, hashes []common.Hash) error {
@@ -238,7 +238,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		return err
 	}
 	reject := false // reserved peer slots
-	if h.downloader.GetSyncMode() == ethconfig.SnapSync {
+	if h.downloader.ConfigSyncMode() == ethconfig.SnapSync {
 		if snap == nil {
 			// If we are running snap-sync, we want to reserve roughly half the peer
 			// slots for peers supporting the snap protocol.
@@ -553,7 +553,7 @@ func (h *handler) blockRangeLoop(st *blockRangeState) {
 			if ev == nil {
 				continue
 			}
-			if _, ok := ev.Data.(downloader.StartEvent); ok && h.downloader.GetSyncMode() == ethconfig.SnapSync {
+			if _, ok := ev.Data.(downloader.StartEvent); ok && h.downloader.ConfigSyncMode() == ethconfig.SnapSync {
 				h.blockRangeWhileSnapSyncing(st)
 			}
 		case <-st.headCh:
