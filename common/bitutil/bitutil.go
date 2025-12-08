@@ -24,6 +24,8 @@ const supportsUnaligned = runtime.GOARCH == "386" || runtime.GOARCH == "amd64" |
 //
 // dst and x or y may overlap exactly or not at all,
 // otherwise XORBytes may panic.
+//
+// Deprecated: use crypto/subtle.XORBytes
 func XORBytes(dst, a, b []byte) int {
 	return subtle.XORBytes(dst, a, b)
 }
