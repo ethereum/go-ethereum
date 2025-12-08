@@ -365,7 +365,7 @@ func (d *Downloader) synchronise(beaconPing chan struct{}) (err error) {
 	defer func() {
 		if err == nil && mode == ethconfig.SnapSync {
 			d.moder.disableSnap()
-			log.Info("Disabled the snap sync after the initial sync cycle")
+			log.Info("Disabled snap-sync after the initial sync cycle")
 		}
 	}()
 	if mode == ethconfig.SnapSync {
