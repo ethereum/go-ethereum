@@ -22,19 +22,6 @@ func XORBytes(dst, a, b []byte) int {
 	return subtle.XORBytes(dst, a, b)
 }
 
-// safeXORBytes xors one by one. It works on all architectures, independent if
-// it supports unaligned read/writes or not.
-func safeXORBytes(dst, a, b []byte) int {
-	n := len(a)
-	if len(b) < n {
-		n = len(b)
-	}
-	for i := 0; i < n; i++ {
-		dst[i] = a[i] ^ b[i]
-	}
-	return n
-}
-
 // ANDBytes ands the bytes in a and b. The destination is assumed to have enough
 // space. Returns the number of bytes and'd.
 func ANDBytes(dst, a, b []byte) int {
