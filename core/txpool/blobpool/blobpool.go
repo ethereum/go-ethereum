@@ -377,7 +377,12 @@ func New(config Config, chain BlockChain, hasPendingAuth func(common.Address) bo
 
 // Filter returns whether the given transaction can be consumed by the blob pool.
 func (p *BlobPool) Filter(tx *types.Transaction) bool {
-	return tx.Type() == types.BlobTxType
+	return p.FilterType(tx.Type())
+}
+
+// FilterType returns whether the blob pool supports the given transaction type.
+func (p *BlobPool) FilterType(kind byte) bool {
+	return kind == types.BlobTxType
 }
 
 // Init sets the gas price needed to keep a transaction in the pool and the chain
