@@ -46,9 +46,9 @@ const (
 
 	// We keep buckets for the upper 1/15 of distances because
 	// it's very unlikely we'll ever encounter a node that's closer.
-	hashBits          = len(common.Hash{}) * 8
-	nBuckets          = hashBits / 15       // Number of buckets
-	bucketMinDistance = hashBits - nBuckets // Log distance of closest bucket
+	hashBits          = uint(len(common.Hash{}) * 8)
+	nBuckets          = int(hashBits / 15)       // Number of buckets
+	bucketMinDistance = int(hashBits) - nBuckets // Log distance of closest bucket
 
 	// IP address limits.
 	bucketIPLimit, bucketSubnet = 2, 24 // at most 2 addresses from the same /24
@@ -272,7 +272,7 @@ func (tab *Table) findnodeByID(target enode.ID, nresults int, preferLive bool) *
 // appendBucketNodes adds nodes at the given distance to the result slice.
 // This is used by the FINDNODE/v5 handler.
 func (tab *Table) appendBucketNodes(dist uint, result []*enode.Node, checkLive bool) []*enode.Node {
-	if dist > 256 {
+	if dist > hashBits {
 		return result
 	}
 	if dist == 0 {

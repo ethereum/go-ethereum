@@ -926,7 +926,7 @@ func (t *UDPv5) collectTableNodes(rip netip.Addr, distances []uint, limit int) [
 	for _, dist := range distances {
 		// Reject duplicate / invalid distances.
 		_, seen := processed[dist]
-		if seen || dist > 256 {
+		if seen || dist > hashBits {
 			continue
 		}
 		processed[dist] = struct{}{}
