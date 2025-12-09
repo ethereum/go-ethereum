@@ -479,9 +479,6 @@ func (s *Suite) TestGetLargeReceipts(t *utesting.T) {
 		receiptHashes = append(receiptHashes, block.Header().ReceiptHash)
 	}
 
-	// Query recursively until we collect every receipt
-	var loopLimit = 6
-
 	incomplete := false
 	lastBlock := 0
 	receipts := make([]*eth.ReceiptList69, len(blocks))
@@ -489,7 +486,7 @@ func (s *Suite) TestGetLargeReceipts(t *utesting.T) {
 		receipts[i] = &eth.ReceiptList69{}
 	}
 
-	for incomplete || loopLimit > 0 {
+	for incomplete || lastBlock != len(blocks)-1 {
 		// Create get receipt request.
 		req := &eth.GetReceiptsPacket70{
 			RequestId:              66,
@@ -514,14 +511,6 @@ func (s *Suite) TestGetLargeReceipts(t *utesting.T) {
 		lastBlock += len(resp.List) - 1
 
 		incomplete = resp.LastBlockIncomplete
-		loopLimit -= 1
-	}
-	if incomplete {
-		t.Fatal("loop terminated before the completion of request")
-	}
-
-	if len(receipts) != len(receiptHashes) {
-		t.Fatalf("wrong total response length: want %d, got %d", len(receiptHashes), len(receipts))
 	}
 
 	hasher := trie.NewStackTrie(nil)
