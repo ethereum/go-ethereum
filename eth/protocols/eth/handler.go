@@ -35,6 +35,10 @@ const (
 	// softResponseLimit is the target maximum size of replies to data retrievals.
 	softResponseLimit = 2 * 1024 * 1024
 
+	// maxPacketSize is the devp2p message size limit commonly enforced by clients.
+	// Any packet exceeding this limit must be rejected.
+	maxPacketSize = 10 * 1024 * 1024
+
 	// maxHeadersServe is the maximum number of block headers to serve. This number
 	// is there to limit the number of disk lookups.
 	maxHeadersServe = 1024
@@ -49,8 +53,6 @@ const (
 	// containing 200+ transactions nowadays, the practical limit will always
 	// be softResponseLimit.
 	maxReceiptsServe = 1024
-
-	maxPacketSize = 10 * 1024 * 1024
 )
 
 // Handler is a callback to invoke from an outside runner after the boilerplate

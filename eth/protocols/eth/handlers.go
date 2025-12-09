@@ -286,9 +286,8 @@ func ServiceGetReceiptsQuery68(chain *core.BlockChain, query GetReceiptsRequest)
 		bytes    int
 		receipts []rlp.RawValue
 	)
-	for lookups, hash := range query {
-		if bytes >= softResponseLimit || len(receipts) >= maxReceiptsServe ||
-			lookups >= 2*maxReceiptsServe {
+	for _, hash := range query {
+		if bytes >= softResponseLimit || len(receipts) >= maxReceiptsServe {
 			break
 		}
 		// Retrieve the requested block's receipts
@@ -323,9 +322,8 @@ func serviceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest)
 		bytes    int
 		receipts []rlp.RawValue
 	)
-	for lookups, hash := range query {
-		if bytes >= softResponseLimit || len(receipts) >= maxReceiptsServe ||
-			lookups >= 2*maxReceiptsServe {
+	for _, hash := range query {
+		if bytes >= softResponseLimit || len(receipts) >= maxReceiptsServe {
 			break
 		}
 		// Retrieve the requested block's receipts
@@ -362,13 +360,10 @@ func serviceGetReceiptsQuery70(chain *core.BlockChain, query GetReceiptsRequest,
 		receipts            []rlp.RawValue
 		lastBlockIncomplete bool
 	)
-
-	for lookups, hash := range query {
-		if bytes >= softResponseLimit || len(receipts) >= maxReceiptsServe ||
-			lookups >= 2*maxReceiptsServe {
+	for i, hash := range query {
+		if bytes >= softResponseLimit || len(receipts) >= maxReceiptsServe {
 			break
 		}
-
 		results := chain.GetReceiptsRLP(hash)
 		if results == nil {
 			if header := chain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
@@ -387,7 +382,7 @@ func serviceGetReceiptsQuery70(chain *core.BlockChain, query GetReceiptsRequest,
 			}
 		}
 
-		if firstBlockReceiptIndex > 0 && lookups == 0 {
+		if firstBlockReceiptIndex > 0 && i == 0 {
 			results, lastBlockIncomplete = trimReceiptsRLP(results, int(firstBlockReceiptIndex), maxPacketSize)
 		} else if bytes+len(results) > maxPacketSize {
 			results, lastBlockIncomplete = trimReceiptsRLP(results, 0, maxPacketSize-bytes)

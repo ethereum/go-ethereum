@@ -218,7 +218,8 @@ func (p *Peer) dispatcher() {
 			// Stop tracking the request
 			delete(pending, cancelOp.id)
 
-			// Not sure if the request is about the receipt, but remove it anyway
+			// Not sure if the request is about the receipt, but remove it anyway.
+			// TODO(rjl493456442, bosul): investigate whether we can avoid leaking peer fields here.
 			p.receiptBufferLock.Lock()
 			delete(p.receiptBuffer, cancelOp.id)
 			p.receiptBufferLock.Unlock()
