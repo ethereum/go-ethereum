@@ -682,8 +682,7 @@ running:
 		case c := <-srv.checkpointPostHandshake:
 			// A connection has passed the encryption handshake so
 			// the remote identity is known (but hasn't been verified yet).
-			nodeID := c.node.ID()
-			if trusted[nodeID] {
+			if trusted[c.node.ID()] {
 				// Ensure that the trusted flag is set before checking against MaxPeers.
 				c.flags |= trustedConn
 			}
@@ -696,14 +695,12 @@ running:
 		case c := <-srv.checkpointAddPeer:
 			// At this point the connection is past the protocol handshake.
 			// Its capabilities are known and the remote identity is verified.
-			nodeID := c.node.ID()
 			err := srv.addPeerChecks(peers, inboundCount, c)
 			if err == nil {
 				// The handshakes are done and it passed all checks.
 				p := srv.launchPeer(c)
-				peers[nodeID] = p
-				srv.log.Debug("Adding p2p peer", "peercount", len(peers), "id", p.ID(),
-					"conn", c.flags, "addr", p.RemoteAddr(), "name", p.Name())
+				peers[c.node.ID()] = p
+				srv.log.Debug("Adding p2p peer", "peercount", len(peers), "id", p.ID(), "conn", c.flags, "addr", p.RemoteAddr(), "name", p.Name())
 				srv.dialsched.peerAdded(c)
 				if p.Inbound() {
 					inboundCount++
@@ -720,10 +717,8 @@ running:
 		case pd := <-srv.delpeer:
 			// A peer disconnected.
 			d := common.PrettyDuration(mclock.Now() - pd.created)
-			nodeID := pd.ID()
-			delete(peers, nodeID)
-			srv.log.Debug("Removing p2p peer", "peercount", len(peers), "id", nodeID,
-				"duration", d, "req", pd.requested, "err", pd.err)
+			delete(peers, pd.ID())
+			srv.log.Debug("Removing p2p peer", "peercount", len(peers), "id", pd.ID(), "duration", d, "req", pd.requested, "err", pd.err)
 			srv.dialsched.peerRemoved(pd.rw)
 			if pd.Inbound() {
 				inboundCount--
