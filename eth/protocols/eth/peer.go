@@ -459,15 +459,19 @@ func (p *Peer) bufferReceiptsPacket(packet *ReceiptsPacket70, backend Backend) e
 		}
 		return nil
 	}
-	// If the request is completed, append previously collected receipts
-	// to the packet and remove the buffered receipts.
-	if len(buffer.list) > 0 {
-		buffer.list[len(buffer.list)-1].Append(packet.List[0])
-		packet.List = packet.List[1:]
-	}
-	packet.List = append(buffer.list, packet.List...)
-
+	// If the request is complete, append the previously collected receipts to the
+	// packet and discard the buffered receipts. Also clear the cached buffer used
+	// for storing partial responses.
 	delete(p.receiptBuffer, requestId)
+
+	// Short circuit if there is nothing cached previously
+	if len(buffer.list) == 0 {
+		return nil
+	}
+	// Aggregate the cached result into the packet
+	buffer.list[len(buffer.list)-1].Append(packet.List[0])
+	packet.List = packet.List[1:]
+	packet.List = append(buffer.list, packet.List...)
 	return nil
 }
 
