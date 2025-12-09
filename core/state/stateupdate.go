@@ -26,8 +26,9 @@ import (
 
 // contractCode represents a contract code with associated metadata.
 type contractCode struct {
-	hash common.Hash // hash is the cryptographic hash of the contract code.
-	blob []byte      // blob is the binary representation of the contract code.
+	hash   common.Hash // hash is the cryptographic hash of the contract code.
+	blob   []byte      // blob is the binary representation of the contract code.
+	exists bool        // flag whether the code has been existent
 }
 
 // accountDelete represents an operation for deleting an Ethereum account.
@@ -188,5 +189,24 @@ func (sc *stateUpdate) stateSet() *triedb.StateSet {
 		Storages:       sc.storages,
 		StoragesOrigin: sc.storagesOrigin,
 		RawStorageKey:  sc.rawStorageKey,
+	}
+}
+
+// markCodeExistence determines whether each piece of contract code referenced
+// in this state update actually exists.
+//
+// Note: This operation is expensive and not needed during normal state transitions.
+// It is only required when SizeTracker is enabled to produce accurate state
+// statistics.
+func (sc *stateUpdate) markCodeExistence(reader ContractCodeReader) {
+	cache := make(map[common.Hash]bool)
+	for addr, code := range sc.codes {
+		if exists, ok := cache[code.hash]; ok {
+			code.exists = exists
+			continue
+		}
+		res := reader.Has(addr, code.hash)
+		cache[code.hash] = res
+		code.exists = res
 	}
 }

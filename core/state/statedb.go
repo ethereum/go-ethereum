@@ -1317,15 +1317,23 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 
 // commitAndFlush is a wrapper of commit which also commits the state mutations
 // to the configured data stores.
-func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (*stateUpdate, error) {
+func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorageWiping bool, dedupCode bool) (*stateUpdate, error) {
 	ret, err := s.commit(deleteEmptyObjects, noStorageWiping, block)
 	if err != nil {
 		return nil, err
 	}
+
+	if dedupCode {
+		ret.markCodeExistence(s.reader)
+	}
+
 	// Commit dirty contract code if any exists
 	if db := s.db.TrieDB().Disk(); db != nil && len(ret.codes) > 0 {
 		batch := db.NewBatch()
 		for _, code := range ret.codes {
+			if code.exists {
+				continue
+			}
 			rawdb.WriteCode(batch, code.hash, code.blob)
 		}
 		if err := batch.Write(); err != nil {
@@ -1376,21 +1384,21 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorag
 // no empty accounts left that could be deleted by EIP-158, storage wiping
 // should not occur.
 func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, error) {
-	ret, err := s.commitAndFlush(block, deleteEmptyObjects, noStorageWiping)
+	ret, err := s.commitAndFlush(block, deleteEmptyObjects, noStorageWiping, false)
 	if err != nil {
 		return common.Hash{}, err
 	}
 	return ret.root, nil
 }
 
-// CommitWithUpdate writes the state mutations and returns both the root hash and the state update.
-// This is useful for tracking state changes at the blockchain level.
-func (s *StateDB) CommitWithUpdate(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, *stateUpdate, error) {
-	ret, err := s.commitAndFlush(block, deleteEmptyObjects, noStorageWiping)
+// CommitAndTrack writes the state mutations and notifies the size tracker of the state changes.
+func (s *StateDB) CommitAndTrack(block uint64, deleteEmptyObjects bool, noStorageWiping bool, sizer *SizeTracker) (common.Hash, error) {
+	ret, err := s.commitAndFlush(block, deleteEmptyObjects, noStorageWiping, true)
 	if err != nil {
-		return common.Hash{}, nil, err
+		return common.Hash{}, err
 	}
-	return ret.root, ret, nil
+	sizer.Notify(ret)
+	return ret.root, nil
 }
 
 // Prepare handles the preparatory steps for executing a state transition with.
