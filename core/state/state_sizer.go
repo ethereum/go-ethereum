@@ -243,12 +243,14 @@ func calSizeStats(update *stateUpdate) (SizeStats, error) {
 		}
 	}
 
-	// Measure code changes. Note that the reported contract code size may be slightly
-	// inaccurate due to database deduplication (code is stored by its hash). However,
-	// this deviation is negligible and acceptable for measurement purposes.
+	codeFlag := make(map[common.Hash]bool)
 	for _, code := range update.codes {
+		if code.exists || codeFlag[code.hash] {
+			continue
+		}
 		stats.ContractCodes += 1
 		stats.ContractCodeBytes += codeKeySize + int64(len(code.blob))
+		codeFlag[code.hash] = true
 	}
 	return stats, nil
 }

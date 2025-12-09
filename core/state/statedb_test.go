@@ -32,6 +32,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state/codedb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -52,7 +53,7 @@ func TestUpdateLeaks(t *testing.T) {
 	var (
 		db  = rawdb.NewMemoryDatabase()
 		tdb = triedb.NewDatabase(db, nil)
-		sdb = NewDatabase(tdb, nil)
+		sdb = NewDatabase(tdb, codedb.New(db))
 	)
 	state, _ := New(types.EmptyRootHash, sdb)
 
@@ -90,8 +91,8 @@ func TestIntermediateLeaks(t *testing.T) {
 	finalDb := rawdb.NewMemoryDatabase()
 	transNdb := triedb.NewDatabase(transDb, nil)
 	finalNdb := triedb.NewDatabase(finalDb, nil)
-	transState, _ := New(types.EmptyRootHash, NewDatabase(transNdb, nil))
-	finalState, _ := New(types.EmptyRootHash, NewDatabase(finalNdb, nil))
+	transState, _ := New(types.EmptyRootHash, NewDatabase(transNdb, codedb.New(transDb)))
+	finalState, _ := New(types.EmptyRootHash, NewDatabase(finalNdb, codedb.New(finalDb)))
 
 	modify := func(state *StateDB, addr common.Address, i, tweak byte) {
 		state.SetBalance(addr, uint256.NewInt(uint64(11*i)+uint64(tweak)), tracing.BalanceChangeUnspecified)
@@ -980,7 +981,7 @@ func testMissingTrieNodes(t *testing.T, scheme string) {
 			CleanCacheSize: 0,
 		}}) // disable caching
 	}
-	db := NewDatabase(tdb, nil)
+	db := NewDatabase(tdb, codedb.New(memDb))
 
 	var root common.Hash
 	state, _ := New(types.EmptyRootHash, db)
@@ -1204,7 +1205,7 @@ func TestFlushOrderDataLoss(t *testing.T) {
 	var (
 		memdb    = rawdb.NewMemoryDatabase()
 		tdb      = triedb.NewDatabase(memdb, triedb.HashDefaults)
-		statedb  = NewDatabase(tdb, nil)
+		statedb  = NewDatabase(tdb, codedb.New(memdb))
 		state, _ = New(types.EmptyRootHash, statedb)
 	)
 	for a := byte(0); a < 10; a++ {
@@ -1225,7 +1226,7 @@ func TestFlushOrderDataLoss(t *testing.T) {
 		t.Fatalf("failed to commit state trie: %v", err)
 	}
 	// Reopen the state trie from flushed disk and verify it
-	state, err = New(root, NewDatabase(triedb.NewDatabase(memdb, triedb.HashDefaults), nil))
+	state, err = New(root, NewDatabase(triedb.NewDatabase(memdb, triedb.HashDefaults), codedb.New(memdb)))
 	if err != nil {
 		t.Fatalf("failed to reopen state trie: %v", err)
 	}
@@ -1276,7 +1277,7 @@ func TestDeleteStorage(t *testing.T) {
 		disk     = rawdb.NewMemoryDatabase()
 		tdb      = triedb.NewDatabase(disk, nil)
 		snaps, _ = snapshot.New(snapshot.Config{CacheSize: 10}, disk, tdb, types.EmptyRootHash)
-		db       = NewDatabase(tdb, snaps)
+		db       = NewDatabase(tdb, codedb.New(disk)).WithSnapshot(snaps)
 		state, _ = New(types.EmptyRootHash, db)
 		addr     = common.HexToAddress("0x1")
 	)
@@ -1289,9 +1290,10 @@ func TestDeleteStorage(t *testing.T) {
 		state.SetState(addr, slot, value)
 	}
 	root, _ := state.Commit(0, true, false)
+
 	// Init phase done, create two states, one with snap and one without
-	fastState, _ := New(root, NewDatabase(tdb, snaps))
-	slowState, _ := New(root, NewDatabase(tdb, nil))
+	fastState, _ := New(root, NewDatabase(tdb, codedb.New(disk)).WithSnapshot(snaps))
+	slowState, _ := New(root, NewDatabase(tdb, codedb.New(disk)))
 
 	obj := fastState.getOrNewStateObject(addr)
 	storageRoot := obj.data.Root
@@ -1329,7 +1331,7 @@ func TestStorageDirtiness(t *testing.T) {
 	var (
 		disk       = rawdb.NewMemoryDatabase()
 		tdb        = triedb.NewDatabase(disk, nil)
-		db         = NewDatabase(tdb, nil)
+		db         = NewDatabase(tdb, codedb.New(disk))
 		state, _   = New(types.EmptyRootHash, db)
 		addr       = common.HexToAddress("0x1")
 		checkDirty = func(key common.Hash, value common.Hash, dirty bool) {
