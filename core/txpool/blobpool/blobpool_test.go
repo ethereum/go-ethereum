@@ -92,10 +92,6 @@ type testBlockChain struct {
 	blockTime *uint64
 }
 
-func (bc *testBlockChain) setHeadTime(time uint64) {
-	bc.blockTime = &time
-}
-
 func (bc *testBlockChain) Config() *params.ChainConfig {
 	return bc.config
 }

@@ -94,11 +94,6 @@ const (
 	// storeVersion is the current slotter layout used for the billy.Database
 	// store.
 	storeVersion = 1
-
-	// conversionTimeWindow defines the period after the Osaka fork during which
-	// the pool will still accept and convert legacy blob transactions. After this
-	// window, all legacy blob transactions will be rejected.
-	conversionTimeWindow = time.Hour * 2
 )
 
 // blobTxMeta is the minimal subset of types.BlobTx necessary to validate and
@@ -1451,37 +1446,15 @@ func (p *BlobPool) AvailableBlobs(vhashes []common.Hash) int {
 	return available
 }
 
-// preCheck performs the static validation upon the provided tx.
-//
-// This function is pure static and lock free.
-func (p *BlobPool) preCheck(tx *types.Transaction) error {
-	var (
-		head    = p.head.Load()
-		version = types.BlobSidecarVersion0
-	)
-	if p.chain.Config().IsOsaka(head.Number, head.Time) {
-		version = types.BlobSidecarVersion1
-	}
-	// Validate the transaction statically at first to avoid unnecessary
-	// conversion. This step doesn't require lock protection.
-	if err := p.ValidateTxBasics(tx); err != nil {
-		return err
-	}
-	if tx.BlobTxSidecar().Version != version {
-		return fmt.Errorf("sidecar version is not supported, got: %d, want: %d", tx.BlobTxSidecar().Version, version)
-	}
-	return nil
-}
-
 // Add inserts a set of blob transactions into the pool if they pass validation (both
 // consensus validity and pool restrictions).
 func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 	var (
-		errs []error = make([]error, len(txs))
-		adds         = make([]*types.Transaction, 0, len(txs))
+		errs = make([]error, len(txs))
+		adds = make([]*types.Transaction, 0, len(txs))
 	)
 	for i, tx := range txs {
-		if errs[i] = p.preCheck(tx); errs[i] != nil {
+		if errs[i] = p.ValidateTxBasics(tx); errs[i] != nil {
 			continue
 		}
 		if errs[i] = p.add(tx); errs[i] == nil {
