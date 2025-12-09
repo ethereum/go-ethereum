@@ -928,15 +928,17 @@ func (s *Suite) TestInvalidMetadata(t *utesting.T) {
 	if err != nil && !errors.Is(err, os.ErrDeadlineExceeded) {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	switch msg := msg.(type) {
-	case *eth.GetPooledTransactionsPacket:
-		t.Fatalf("Transaction announcements with invalid metadata should be ignored")
-	case *eth.NewPooledTransactionHashesPacket:
-		return
-	case *eth.TransactionsPacket:
-		return
-	default:
-		t.Fatalf("unexpected %s", pretty.Sdump(msg))
+	if err == nil {
+		switch msg := msg.(type) {
+		case *eth.GetPooledTransactionsPacket:
+			t.Fatalf("Transaction announcements with invalid metadata should be ignored")
+		case *eth.NewPooledTransactionHashesPacket:
+			return
+		case *eth.TransactionsPacket:
+			return
+		default:
+			t.Fatalf("unexpected %s", pretty.Sdump(msg))
+		}
 	}
 }
 
