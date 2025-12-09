@@ -526,20 +526,17 @@ func handleReceipts70(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(res); err != nil {
 		return err
 	}
-
 	if err := peer.bufferReceiptsPacket(res, backend); err != nil {
 		return err
 	}
 	if res.LastBlockIncomplete {
 		return peer.requestPartialReceipts(res.RequestId)
 	}
-
 	// Assign buffers shared between list elements
 	buffers := new(receiptListBuffers)
 	for i := range res.List {
 		res.List[i].setBuffers(buffers)
 	}
-
 	metadata := func() interface{} {
 		hasher := trie.NewStackTrie(nil)
 		hashes := make([]common.Hash, len(res.List))
@@ -548,12 +545,10 @@ func handleReceipts70(backend Backend, msg Decoder, peer *Peer) error {
 		}
 		return hashes
 	}
-
 	var enc ReceiptsRLPResponse
 	for i := range res.List {
 		enc = append(enc, res.List[i].EncodeForStorage())
 	}
-
 	return peer.dispatchResponse(&Response{
 		id:   res.RequestId,
 		code: ReceiptsMsg,

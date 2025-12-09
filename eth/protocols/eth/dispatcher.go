@@ -219,7 +219,9 @@ func (p *Peer) dispatcher() {
 			delete(pending, cancelOp.id)
 
 			// Not sure if the request is about the receipt, but remove it anyway
+			p.receiptBufferLock.Lock()
 			delete(p.receiptBuffer, cancelOp.id)
+			p.receiptBufferLock.Unlock()
 
 			cancelOp.fail <- nil
 

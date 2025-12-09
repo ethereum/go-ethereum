@@ -259,13 +259,14 @@ func (p *BlockBodiesResponse) Unpack() ([][]*types.Transaction, [][]*types.Heade
 // GetReceiptsRequest represents a block receipts query.
 type GetReceiptsRequest []common.Hash
 
-// GetReceiptsPacket represents a block receipts query with request ID wrapping.
+// GetReceiptsPacket69 represents a block receipts query with request ID wrapping.
 type GetReceiptsPacket69 struct {
 	RequestId uint64
 	GetReceiptsRequest
 }
 
-// GetReceiptsPacket represents a block receipts query with request ID wrapping.
+// GetReceiptsPacket70 represents a block receipts query with request ID and
+// FirstBlockReceiptIndex wrapping.
 type GetReceiptsPacket70 struct {
 	RequestId uint64
 	GetReceiptsRequest
@@ -299,12 +300,14 @@ type ReceiptsPacket70 struct {
 // ReceiptsRLPResponse is used for receipts, when we already have it encoded
 type ReceiptsRLPResponse []rlp.RawValue
 
-// ReceiptsRLPPacket is ReceiptsRLPResponse with request ID wrapping.
+// ReceiptsRLPPacket69 is ReceiptsRLPResponse with request ID wrapping.
 type ReceiptsRLPPacket69 struct {
 	RequestId uint64
 	ReceiptsRLPResponse
 }
 
+// ReceiptsRLPPacket70 is ReceiptsRLPResponse with request ID and
+// LastBlockIncomplete wrapping.
 type ReceiptsRLPPacket70 struct {
 	RequestId uint64
 	ReceiptsRLPResponse
