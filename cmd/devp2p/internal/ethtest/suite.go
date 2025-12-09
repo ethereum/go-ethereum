@@ -505,7 +505,7 @@ func (s *Suite) TestGetLargeReceipts(t *utesting.T) {
 			t.Fatalf("error reading block receipts msg: %v", err)
 		}
 		if got, want := resp.RequestId, req.RequestId; got != want {
-			t.Fatalf("unexpected request id in respond", got, want)
+			t.Fatalf("unexpected request id in respond, want: %d, got: %d", got, want)
 		}
 
 		for i, rc := range resp.List {

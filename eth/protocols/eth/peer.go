@@ -482,7 +482,7 @@ func (p *Peer) bufferReceiptsPacket(packet *ReceiptsPacket70, backend Backend) e
 func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList69, id uint64, header *types.Header) (uint64, error) {
 	lastReceipts := receiptLists[len(receiptLists)-1]
 
-	// If the receipt is in the middle of retreival, use the buffered data.
+	// If the receipt is in the middle of retrieval, use the buffered data.
 	// e.g. [[receipt1], [receipt1, receipt2], incomplete = true]
 	//      [[receipt3, receipt4], incomplete = true] <<--
 	//      [[receipt5], [receipt1], incomplete = false]
@@ -507,7 +507,6 @@ func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList69, id uint64
 	if previousLog+log > header.GasUsed/params.LogDataGas {
 		return 0, fmt.Errorf("total download receipt size exceeded the limit")
 	}
-
 	return previousLog + log, nil
 }
 
