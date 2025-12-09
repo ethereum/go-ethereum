@@ -19,7 +19,6 @@ package core
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/state/codedb"
 	"math/big"
 	"testing"
 
@@ -28,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/codedb"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"

@@ -1606,13 +1606,19 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		log.Crit("Failed to write block into disk", "err", err)
 	}
 	// Commit all cached state changes into underlying memory database.
-	root, stateUpdate, err := statedb.CommitWithUpdate(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()), bc.chainConfig.IsCancun(block.Number(), block.Time()))
+	var (
+		err      error
+		root     common.Hash
+		isEIP158 = bc.chainConfig.IsEIP158(block.Number())
+		isCancun = bc.chainConfig.IsCancun(block.Number(), block.Time())
+	)
+	if bc.stateSizer == nil {
+		root, err = statedb.Commit(block.NumberU64(), isEIP158, isCancun)
+	} else {
+		root, err = statedb.CommitWithUpdate(block.NumberU64(), isEIP158, isCancun, bc.stateSizer)
+	}
 	if err != nil {
 		return err
-	}
-	// Emit the state update to the state sizestats if it's active
-	if bc.stateSizer != nil {
-		bc.stateSizer.Notify(stateUpdate)
 	}
 	// If node is running in path mode, skip explicit gc operation
 	// which is unnecessary in this mode.

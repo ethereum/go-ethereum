@@ -1158,7 +1158,7 @@ func (s *StateDB) GetTrie() Trie {
 
 // commit gathers the state mutations accumulated along with the associated
 // trie changes, resetting all internal flags with the new state as the base.
-func (s *StateDB) commit(deleteEmptyObjects bool, rawStorageKey bool, blockNumber uint64) (*stateUpdate, error) {
+func (s *StateDB) commit(deleteEmptyObjects bool, rawStorageKey bool, blockNumber uint64, dedupCode bool) (*stateUpdate, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
@@ -1312,6 +1312,9 @@ func (s *StateDB) commit(deleteEmptyObjects bool, rawStorageKey bool, blockNumbe
 
 	start = time.Now()
 	update := newStateUpdate(rawStorageKey, origin, root, blockNumber, deletes, updates, nodes)
+	if dedupCode {
+		update.markCodeExistence(s.reader)
+	}
 	if err := s.db.Commit(update); err != nil {
 		return nil, err
 	}
@@ -1338,7 +1341,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool, rawStorageKey bool, blockNumbe
 // no empty accounts left that could be deleted by EIP-158, storage wiping
 // should not occur.
 func (s *StateDB) Commit(blockNumber uint64, deleteEmptyObjects bool, rawStorageKey bool) (common.Hash, error) {
-	ret, err := s.commit(deleteEmptyObjects, rawStorageKey, blockNumber)
+	ret, err := s.commit(deleteEmptyObjects, rawStorageKey, blockNumber, false)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -1347,12 +1350,13 @@ func (s *StateDB) Commit(blockNumber uint64, deleteEmptyObjects bool, rawStorage
 
 // CommitWithUpdate writes the state mutations and returns both the root hash and the state update.
 // This is useful for tracking state changes at the blockchain level.
-func (s *StateDB) CommitWithUpdate(blockNumber uint64, deleteEmptyObjects bool, rawStorageKey bool) (common.Hash, *stateUpdate, error) {
-	ret, err := s.commit(deleteEmptyObjects, rawStorageKey, blockNumber)
+func (s *StateDB) CommitWithUpdate(blockNumber uint64, deleteEmptyObjects bool, rawStorageKey bool, sizer *SizeTracker) (common.Hash, error) {
+	ret, err := s.commit(deleteEmptyObjects, rawStorageKey, blockNumber, true)
 	if err != nil {
-		return common.Hash{}, nil, err
+		return common.Hash{}, err
 	}
-	return ret.root, ret, nil
+	sizer.Notify(ret)
+	return ret.root, nil
 }
 
 // Prepare handles the preparatory steps for executing a state transition with.

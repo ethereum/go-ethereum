@@ -81,6 +81,13 @@ func newReader(db ethdb.KeyValueReader, cache *Cache) *Reader {
 	}
 }
 
+// Has returns the flag indicating whether the contract code with
+// specified address and hash exists or not.
+func (r *Reader) Has(addr common.Address, codeHash common.Hash) bool {
+	code := r.Code(addr, codeHash)
+	return len(code) > 0
+}
+
 // Code implements state.ContractCodeReader, retrieving a particular contract's code.
 // Null is returned if the contract code is not present.
 func (r *Reader) Code(addr common.Address, codeHash common.Hash) []byte {

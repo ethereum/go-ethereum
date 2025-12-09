@@ -37,6 +37,10 @@ import (
 
 // ContractCodeReader defines the interface for accessing contract code.
 type ContractCodeReader interface {
+	// Has returns the flag indicating whether the contract code with
+	// specified address and hash exists or not.
+	Has(addr common.Address, codeHash common.Hash) bool
+
 	// Code retrieves a particular contract's code. Returns nil code if the
 	// requested contract code doesn't exist
 	Code(addr common.Address, codeHash common.Hash) []byte
