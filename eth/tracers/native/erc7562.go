@@ -516,6 +516,7 @@ func defaultIgnoredOpcodes() []hexutil.Uint64 {
 	for op := vm.PUSH0; op < vm.SWAP16; op++ {
 		ignored = append(ignored, hexutil.Uint64(op))
 	}
+	ignored = append(ignored, hexutil.Uint64(vm.SWAP16))
 
 	for _, op := range []vm.OpCode{
 		vm.POP, vm.ADD, vm.SUB, vm.MUL,
