@@ -278,6 +278,8 @@ type PendingContractCaller interface {
 // it should provide a basis for setting a reasonable default.
 type GasEstimator interface {
 	EstimateGas(ctx context.Context, call CallMsg) (uint64, error)
+	EstimateGasAtBlock(ctx context.Context, call CallMsg, blockNumber *big.Int) (uint64, error)
+	EstimateGasAtBlockHash(ctx context.Context, call CallMsg, blockHash common.Hash) (uint64, error)
 }
 
 // A PendingStateEventer provides access to real time notifications about changes to the
