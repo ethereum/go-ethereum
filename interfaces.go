@@ -298,6 +298,11 @@ type ChainIDReader interface {
 	ChainID(ctx context.Context) (*big.Int, error)
 }
 
+// NetworkIDReader provides access to the network ID.
+type NetworkIDReader interface {
+	NetworkID(ctx context.Context) (*big.Int, error)
+}
+
 // OverrideAccount specifies the state of an account to be overridden.
 type OverrideAccount struct {
 	// Nonce sets nonce of the account. Note: the nonce override will only
