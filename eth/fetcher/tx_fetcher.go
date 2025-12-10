@@ -22,6 +22,7 @@ import (
 	"math"
 	mrand "math/rand"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -169,6 +170,11 @@ type TxFetcher struct {
 	requests   map[string]*txRequest               // In-flight transaction retrievals
 	alternates map[common.Hash]map[string]struct{} // In-flight transaction alternate origins if retrieval fails
 
+	// txFromPeer stores where we received a transaction from
+	txFromPeer map[common.Hash]string
+	// should be protected by mutex
+	txFromPeerMutex sync.RWMutex
+
 	// Callbacks
 	hasTx    func(common.Hash) bool             // Retrieves a tx from the local txpool
 	addTxs   func([]*types.Transaction) []error // Insert a batch of transactions into local txpool
@@ -205,6 +211,7 @@ func NewTxFetcherForTests(
 		fetching:    make(map[common.Hash]string),
 		requests:    make(map[string]*txRequest),
 		alternates:  make(map[common.Hash]map[string]struct{}),
+		txFromPeer:  make(map[common.Hash]string),
 		underpriced: lru.NewCache[common.Hash, time.Time](maxTxUnderpricedSetSize),
 		hasTx:       hasTx,
 		addTxs:      addTxs,
@@ -323,7 +330,11 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			}
 			// Track a few interesting failure types
 			switch {
-			case err == nil: // Noop, but need to handle to not count these
+			case err == nil:
+				// protect against concurrent access to the map
+				f.txFromPeerMutex.Lock()
+				f.txFromPeer[batch[j].Hash()] = peer
+				f.txFromPeerMutex.Unlock()
 
 			case errors.Is(err, txpool.ErrAlreadyKnown):
 				duplicate++
@@ -1016,4 +1027,11 @@ func rotateStrings(slice []string, n int) {
 	for i := 0; i < len(orig); i++ {
 		slice[i] = orig[(i+n)%len(orig)]
 	}
+}
+
+func (f *TxFetcher) TxFromPeer(hash common.Hash) (string, bool) {
+	f.txFromPeerMutex.RLock()
+	defer f.txFromPeerMutex.RUnlock()
+	provenance, ok := f.txFromPeer[hash]
+	return provenance, ok
 }
