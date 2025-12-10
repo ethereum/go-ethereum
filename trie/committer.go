@@ -87,33 +87,9 @@ func (c *committer) commit(path []byte, n node, parallel bool) node {
 
 // commitChildren commits the children of the given fullnode
 func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) {
-	if !parallel {
-		// Sequential path: process children one by one
-		for i := 0; i < 16; i++ {
-			child := n.Children[i]
-			if child == nil {
-				continue
-			}
-			// If it's the hashed child, save the hash value directly.
-			// Note: it's impossible that the child in range [0, 15]
-			// is a valueNode. Values are only stored in Children[16]
-			// (the 17th slot) when a key terminates at a branch node.
-			// Children[0-15] are structural slots for hex digit routing.
-			if _, ok := child.(hashNode); ok {
-				continue
-			}
-			// Commit the child recursively and store the "hashed" value.
-			// Note the returned node can be some embedded nodes, so it's
-			// possible the type is not hashNode.
-			n.Children[i] = c.commit(append(path, byte(i)), child, false)
-		}
-		return
-	}
-
-	// Parallel path: collect all child NodeSets first, then merge without lock contention
 	var (
 		wg      sync.WaitGroup
-		nodeset = make([]*trienode.NodeSet, 16)
+		subsets = make([]*trienode.NodeSet, 16)
 	)
 	for i := 0; i < 16; i++ {
 		child := n.Children[i]
@@ -122,38 +98,36 @@ func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) {
 		}
 		// If it's the hashed child, save the hash value directly.
 		// Note: it's impossible that the child in range [0, 15]
-		// is a valueNode. Values are only stored in Children[16]
-		// (the 17th slot) when a key terminates at a branch node.
-		// Children[0-15] are structural slots for hex digit routing.
+		// is a valueNode.
 		if _, ok := child.(hashNode); ok {
 			continue
 		}
+		// Commit the child recursively and store the "hashed" value.
+		// Note the returned node can be some embedded nodes, so it's
+		// possible the type is not hashNode.
+		if !parallel {
+			n.Children[i] = c.commit(append(path, byte(i)), child, false)
+		} else {
+			wg.Add(1)
+			go func(index int) {
+				defer wg.Done()
 
-		wg.Add(1)
-		go func(index int, child node) {
-			defer wg.Done()
-
-			p := append(path, byte(index))
-			childSet := trienode.NewNodeSet(c.nodes.Owner)
-			childCommitter := newCommitter(childSet, c.tracer, c.collectLeaf)
-			n.Children[index] = childCommitter.commit(p, child, false)
-
-			// Store the nodeset at the child's index. No mutex needed since
-			// each goroutine writes to a unique index.
-			nodeset[index] = childSet
-		}(i, child)
-	}
-
-	// Wait for all goroutines to complete
-	wg.Wait()
-
-	// Now merge all results sequentially without any lock contention
-	// This is safe because all goroutines have completed
-	for _, set := range nodeset {
-		if set == nil {
-			continue
+				subset := trienode.NewNodeSet(c.nodes.Owner)
+				subCom := newCommitter(subset, c.tracer, c.collectLeaf)
+				n.Children[index] = subCom.commit(append(path, byte(index)), child, false)
+				subsets[index] = subset
+			}(i)
 		}
-		c.nodes.MergeDisjoint(set)
+	}
+	if parallel {
+		wg.Wait()
+
+		for _, set := range subsets {
+			if set == nil {
+				continue
+			}
+			c.nodes.MergeDisjoint(set)
+		}
 	}
 }
 
