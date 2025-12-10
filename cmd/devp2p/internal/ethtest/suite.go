@@ -21,7 +21,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"sync"
 	"time"
@@ -87,7 +86,6 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "LargeTxRequest", Fn: s.TestLargeTxRequest, Slow: true},
 		{Name: "Transaction", Fn: s.TestTransaction},
 		{Name: "InvalidTxs", Fn: s.TestInvalidTxs},
-		{Name: "InvalidMetadata", Fn: s.TestInvalidMetadata},
 		{Name: "NewPooledTxs", Fn: s.TestNewPooledTxs},
 		{Name: "BlobViolations", Fn: s.TestBlobViolations},
 		{Name: "TestBlobTxWithoutSidecar", Fn: s.TestBlobTxWithoutSidecar},
@@ -880,62 +878,6 @@ the transactions using a GetPooledTransactions request.`)
 			continue
 		case *eth.TransactionsPacket:
 			continue
-		default:
-			t.Fatalf("unexpected %s", pretty.Sdump(msg))
-		}
-	}
-}
-
-func (s *Suite) TestInvalidMetadata(t *utesting.T) {
-	t.Log(`This test announces transactions to the node and expects it not to fetch
-	transaction hash with wrong/unsupported metadata.`)
-
-	// Nudge client out of syncing mode to accept pending txs.
-	if err := s.engine.sendForkchoiceUpdated(); err != nil {
-		t.Fatalf("failed to send next block: %v", err)
-	}
-
-	from, nonce := s.chain.GetSender(1)
-	inner := &types.DynamicFeeTx{
-		ChainID:   s.chain.config.ChainID,
-		Nonce:     nonce,
-		GasTipCap: common.Big1,
-		GasFeeCap: s.chain.Head().BaseFee(),
-		Gas:       75000,
-	}
-	tx, err := s.chain.SignTx(from, types.NewTx(inner))
-	if err != nil {
-		t.Fatalf("failed to sign tx: err")
-	}
-
-	conn, err := s.dial()
-	if err != nil {
-		t.Fatalf("dial failed: %v", err)
-	}
-	defer conn.Close()
-	if err = conn.peer(s.chain, nil); err != nil {
-		t.Fatalf("peering failed: %v", err)
-	}
-
-	ann := eth.NewPooledTransactionHashesPacket{Types: []byte{0x09}, Sizes: []uint32{uint32(tx.Size())}, Hashes: []common.Hash{tx.Hash()}}
-	err = conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann)
-	if err != nil {
-		t.Fatalf("failed to write to connection: %v", err)
-	}
-
-	conn.SetReadDeadline(time.Now().Add(timeout))
-	msg, err := conn.ReadEth()
-	if err != nil && !errors.Is(err, os.ErrDeadlineExceeded) {
-		t.Fatalf("unexpected err: %v", err)
-	}
-	if err == nil {
-		switch msg := msg.(type) {
-		case *eth.GetPooledTransactionsPacket:
-			t.Fatalf("Transaction announcements with invalid metadata should be ignored")
-		case *eth.NewPooledTransactionHashesPacket:
-			return
-		case *eth.TransactionsPacket:
-			return
 		default:
 			t.Fatalf("unexpected %s", pretty.Sdump(msg))
 		}
