@@ -98,7 +98,9 @@ func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) {
 		}
 		// If it's the hashed child, save the hash value directly.
 		// Note: it's impossible that the child in range [0, 15]
-		// is a valueNode.
+		// is a valueNode. Values are only stored in Children[16]
+		// (the 17th slot) when a key terminates at a branch node.
+		// Children[0-15] are structural slots for hex digit routing.
 		if _, ok := child.(hashNode); ok {
 			continue
 		}
@@ -109,14 +111,14 @@ func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) {
 			n.Children[i] = c.commit(append(path, byte(i)), child, false)
 		} else {
 			wg.Add(1)
-			go func(index int) {
+			go func(index int, child node) {
 				defer wg.Done()
 
 				subset := trienode.NewNodeSet(c.nodes.Owner)
 				subCom := newCommitter(subset, c.tracer, c.collectLeaf)
 				n.Children[index] = subCom.commit(append(path, byte(index)), child, false)
 				subsets[index] = subset
-			}(i)
+			}(i, child)
 		}
 	}
 	if parallel {
