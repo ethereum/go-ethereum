@@ -223,7 +223,7 @@ func genStorageProof(cli *client, startBlock uint64, endBlock uint64, number int
 				log.Error("Failed to marshal data", "err", err)
 				continue
 			}
-			var accounts map[common.Address]*native.PrestateAccount
+			var accounts map[common.Address]*types.Account
 			if err := json.Unmarshal(blob, &accounts); err != nil {
 				log.Error("Failed to decode trace result", "blockNumber", blockNumber, "hash", tx.Hash(), "err", err)
 				continue

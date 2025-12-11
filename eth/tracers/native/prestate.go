@@ -35,15 +35,15 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-//go:generate go run github.com/fjl/gencodec -type PrestateAccount -field-override accountMarshaling -out gen_account_json.go
+//go:generate go run github.com/fjl/gencodec -type account -field-override accountMarshaling -out gen_account_json.go
 
 func init() {
 	tracers.DefaultDirectory.Register("prestateTracer", newPrestateTracer, false)
 }
 
-type stateMap = map[common.Address]*PrestateAccount
+type stateMap = map[common.Address]*account
 
-type PrestateAccount struct {
+type account struct {
 	Balance  *big.Int                    `json:"balance,omitempty"`
 	Code     []byte                      `json:"code,omitempty"`
 	CodeHash *common.Hash                `json:"codeHash,omitempty"`
@@ -52,7 +52,7 @@ type PrestateAccount struct {
 	empty    bool
 }
 
-func (a *PrestateAccount) exists() bool {
+func (a *account) exists() bool {
 	return a.Nonce > 0 || len(a.Code) > 0 || len(a.Storage) > 0 || (a.Balance != nil && a.Balance.Sign() != 0)
 }
 
@@ -253,7 +253,7 @@ func (t *prestateTracer) processDiffState() {
 			continue
 		}
 		modified := false
-		postAccount := &PrestateAccount{Storage: make(map[common.Hash]common.Hash)}
+		postAccount := &account{Storage: make(map[common.Hash]common.Hash)}
 		newBalance := t.env.StateDB.GetBalance(addr).ToBig()
 		newNonce := t.env.StateDB.GetNonce(addr)
 		newCodeHash := t.env.StateDB.GetCodeHash(addr)
@@ -323,7 +323,7 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 		return
 	}
 
-	acc := &PrestateAccount{
+	acc := &account{
 		Balance: t.env.StateDB.GetBalance(addr).ToBig(),
 		Nonce:   t.env.StateDB.GetNonce(addr),
 		Code:    t.env.StateDB.GetCode(addr),
