@@ -1778,7 +1778,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 	// Fire a single chain head event if we've progressed the chain
 	defer func() {
 		if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
-			bc.chainHeadFeed.Send(ChainHeadEvent{Header: lastCanon.Header(), Time: uint64(mclock.Now().Sub(stats.startTime))})
+			bc.chainHeadFeed.Send(ChainHeadEvent{Header: lastCanon.Header(), ProcessingTime: mclock.Now().Sub(stats.startTime)})
 		}
 	}()
 	// Start the parallel header verifier

@@ -604,7 +604,7 @@ func (s uncleStats) MarshalJSON() ([]byte, error) {
 // reportBlock retrieves the current chain head and reports it to the stats server.
 func (s *Service) reportBlock(conn *connWrapper, header *core.ChainHeadEvent) error {
 	// Gather the block details from the header or block chain
-	details := s.assembleBlockStats(header.Header, header.Time)
+	details := s.assembleBlockStats(header.Header, header.ProcessingTime)
 
 	// Short circuit if the block detail is not available.
 	if details == nil {
@@ -625,7 +625,7 @@ func (s *Service) reportBlock(conn *connWrapper, header *core.ChainHeadEvent) er
 
 // assembleBlockStats retrieves any required metadata to report a single block
 // and assembles the block stats. If block is nil, the current head is processed.
-func (s *Service) assembleBlockStats(header *types.Header, time uint64) *blockStats {
+func (s *Service) assembleBlockStats(header *types.Header, processingTime time.Duration) *blockStats {
 	// Gather the block infos from the local blockchain
 	var (
 		txs    []txStats
@@ -672,7 +672,7 @@ func (s *Service) assembleBlockStats(header *types.Header, time uint64) *blockSt
 		TxHash:         header.TxHash,
 		Root:           header.Root,
 		Uncles:         uncles,
-		ProcessingTime: time,
+		ProcessingTime: uint64(processingTime),
 	}
 }
 
