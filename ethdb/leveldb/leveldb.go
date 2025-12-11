@@ -542,20 +542,6 @@ func (r *replayer) Delete(key []byte) {
 	r.failure = r.writer.Delete(key)
 }
 
-// DeleteRange removes all keys in the range [start, end) from the key-value data store.
-func (r *replayer) DeleteRange(start, end []byte) {
-	// If the replay already failed, stop executing ops
-	if r.failure != nil {
-		return
-	}
-	// Check if the writer also supports range deletion
-	if rangeDeleter, ok := r.writer.(ethdb.KeyValueRangeDeleter); ok {
-		r.failure = rangeDeleter.DeleteRange(start, end)
-	} else {
-		r.failure = errors.New("ethdb.KeyValueWriter does not implement DeleteRange")
-	}
-}
-
 // bytesPrefixRange returns key range that satisfy
 // - the given prefix, and
 // - the given seek position
