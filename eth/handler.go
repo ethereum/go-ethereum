@@ -92,6 +92,9 @@ type txPool interface {
 	// can decide whether to receive notifications only for newly seen transactions
 	// or also for reorged out ones.
 	SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription
+
+	// FilterType returns whether the given tx type is supported by the txPool.
+	FilterType(kind byte) bool
 }
 
 // handlerConfig is the collection of initialization parameters to create a full
@@ -176,7 +179,18 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	addTxs := func(txs []*types.Transaction) []error {
 		return h.txpool.Add(txs, false)
 	}
-	h.txFetcher = fetcher.NewTxFetcher(h.txpool.Has, addTxs, fetchTx, h.removePeer)
+
+	validateMeta := func(tx common.Hash, kind byte) error {
+		if h.txpool.Has(tx) {
+			return txpool.ErrAlreadyKnown
+		}
+		if !h.txpool.FilterType(kind) {
+			return types.ErrTxTypeNotSupported
+		}
+		return nil
+	}
+
+	h.txFetcher = fetcher.NewTxFetcher(validateMeta, addTxs, fetchTx, h.removePeer)
 	return h, nil
 }
 

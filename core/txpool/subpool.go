@@ -100,6 +100,9 @@ type SubPool interface {
 	// to this particular subpool.
 	Filter(tx *types.Transaction) bool
 
+	// FilterType returns whether the subpool supports the given transaction type.
+	FilterType(kind byte) bool
+
 	// Init sets the base parameters of the subpool, allowing it to load any saved
 	// transactions from disk and also permitting internal maintenance routines to
 	// start up.
