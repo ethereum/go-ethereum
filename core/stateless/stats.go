@@ -63,12 +63,15 @@ func (s *WitnessStats) Add(nodes map[string][]byte, owner common.Hash) {
 		// The last path is always a leaf.
 		if i == len(paths)-1 || !strings.HasPrefix(paths[i+1], paths[i]) {
 			depth := len(path)
-			if depth >= len(s.accountTrieLeaves) {
-				depth = len(s.accountTrieLeaves) - 1
-			}
 			if owner == (common.Hash{}) {
+				if depth >= len(s.accountTrieLeaves) {
+					depth = len(s.accountTrieLeaves) - 1
+				}
 				s.accountTrieLeaves[depth] += 1
 			} else {
+				if depth >= len(s.storageTrieLeaves) {
+					depth = len(s.storageTrieLeaves) - 1
+				}
 				s.storageTrieLeaves[depth] += 1
 			}
 		}
