@@ -738,7 +738,7 @@ func testSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 // TestSkeletonResetAfterSetHead tests that the skeleton syncer is properly reset
 // when the chain is rewound using SetHead, preventing data inconsistency issues.
 func TestSkeletonResetAfterSetHead(t *testing.T) {
-	tester := newTester(t)
+	tester := newTester(t, ethconfig.SnapSync)
 	defer tester.terminate()
 
 	chain := testChainBase.shorten(800)
@@ -749,7 +749,8 @@ func TestSkeletonResetAfterSetHead(t *testing.T) {
 	}
 
 	// Start beacon sync to populate the skeleton
-	if err := tester.downloader.BeaconSync(SnapSync, chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
+	header := chain.blocks[400].Header()
+	if err := tester.downloader.BeaconSync(header, header); err != nil {
 		t.Fatalf("Failed to start beacon sync: %v", err)
 	}
 
@@ -772,7 +773,7 @@ func TestSkeletonResetAfterSetHead(t *testing.T) {
 	}
 
 	// Verify we can start a new sync after reset
-	if err := tester.downloader.BeaconSync(SnapSync, chain.blocks[400].Header(), nil); err != nil {
+	if err := tester.downloader.BeaconSync(header, header); err != nil {
 		t.Fatalf("Failed to start beacon sync after reset: %v", err)
 	}
 }
