@@ -426,6 +426,9 @@ func (s *Suite) TestGetReceipts(t *utesting.T) {
 	// Find some blocks containing receipts.
 	var hashes = make([]common.Hash, 0, 3)
 	for i := range s.chain.Len() {
+		if uint64(i) == s.chain.txInfo.LargeReceiptBlock && conn.negotiatedProtoVersion < eth.ETH70 {
+			continue
+		}
 		block := s.chain.GetBlock(i)
 		if len(block.Transactions()) > 0 {
 			hashes = append(hashes, block.Hash())
@@ -435,35 +438,62 @@ func (s *Suite) TestGetReceipts(t *utesting.T) {
 		}
 	}
 
-	// Create block bodies request.
-	req := &eth.GetReceiptsPacket70{
-		RequestId:              66,
-		GetReceiptsRequest:     (eth.GetReceiptsRequest)(hashes),
-		FirstBlockReceiptIndex: 0,
-	}
-	if err := conn.Write(ethProto, eth.GetReceiptsMsg, req); err != nil {
-		t.Fatalf("could not write to connection: %v", err)
-	}
-	// Wait for response.
-	resp := new(eth.ReceiptsPacket70)
-	if err := conn.ReadMsg(ethProto, eth.ReceiptsMsg, &resp); err != nil {
-		t.Fatalf("error reading block bodies msg: %v", err)
-	}
-	if got, want := resp.RequestId, req.RequestId; got != want {
-		t.Fatalf("unexpected request id in respond", got, want)
-	}
-	if len(resp.List) != len(req.GetReceiptsRequest) {
-		t.Fatalf("wrong bodies in response: expected %d bodies, got %d", len(req.GetReceiptsRequest), len(resp.List))
+	if conn.negotiatedProtoVersion < eth.ETH70 {
+		// Create block bodies request.
+		req := &eth.GetReceiptsPacket69{
+			RequestId:          66,
+			GetReceiptsRequest: (eth.GetReceiptsRequest)(hashes),
+		}
+		if err := conn.Write(ethProto, eth.GetReceiptsMsg, req); err != nil {
+			t.Fatalf("could not write to connection: %v", err)
+		}
+		// Wait for response.
+		resp := new(eth.ReceiptsPacket[*eth.ReceiptList69])
+		if err := conn.ReadMsg(ethProto, eth.ReceiptsMsg, &resp); err != nil {
+			t.Fatalf("error reading block receipts msg: %v", err)
+		}
+		if got, want := resp.RequestId, req.RequestId; got != want {
+			t.Fatalf("unexpected request id in respond", got, want)
+		}
+		if len(resp.List) != len(req.GetReceiptsRequest) {
+			t.Fatalf("wrong receipts in response: expected %d receipts, got %d", len(req.GetReceiptsRequest), len(resp.List))
+		}
+	} else {
+		// Create block bodies request.
+		req := &eth.GetReceiptsPacket70{
+			RequestId:              66,
+			GetReceiptsRequest:     (eth.GetReceiptsRequest)(hashes),
+			FirstBlockReceiptIndex: 0,
+		}
+		if err := conn.Write(ethProto, eth.GetReceiptsMsg, req); err != nil {
+			t.Fatalf("could not write to connection: %v", err)
+		}
+		// Wait for response.
+		resp := new(eth.ReceiptsPacket70)
+		if err := conn.ReadMsg(ethProto, eth.ReceiptsMsg, &resp); err != nil {
+			t.Fatalf("error reading block receipts msg: %v", err)
+		}
+		if got, want := resp.RequestId, req.RequestId; got != want {
+			t.Fatalf("unexpected request id in respond", got, want)
+		}
+		if len(resp.List) != len(req.GetReceiptsRequest) {
+			t.Fatalf("wrong receipts in response: expected %d receipts, got %d", len(req.GetReceiptsRequest), len(resp.List))
+		}
 	}
 }
 
 func (s *Suite) TestGetLargeReceipts(t *utesting.T) {
-	t.Log(`This test sends GetReceipts requests to the node for large receipt (>10MiB) in the test chain.`)
+	t.Log(`This test sends GetReceipts requests to the node for large receipt (>10MiB) in the test chain.
+	This test is meaningful only if the client supports protocol version greater than or equal to ETH70.`)
 	conn, err := s.dialAndPeer(nil)
 	if err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
 	defer conn.Close()
+
+	if conn.negotiatedProtoVersion < eth.ETH70 {
+		return
+	}
 
 	// Find block with large receipt.
 	// Place the large receipt block hash in the middle of the query
