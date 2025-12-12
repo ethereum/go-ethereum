@@ -30,8 +30,8 @@ import (
 
 	. "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/internal/libevm/pseudo"
 	"github.com/ava-labs/libevm/libevm/ethtest"
-	"github.com/ava-labs/libevm/libevm/pseudo"
 	"github.com/ava-labs/libevm/rlp"
 )
 

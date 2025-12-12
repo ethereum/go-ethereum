@@ -21,8 +21,8 @@ import (
 	"math/big"
 	"reflect"
 
+	"github.com/ava-labs/libevm/internal/libevm/pseudo"
 	"github.com/ava-labs/libevm/libevm"
-	"github.com/ava-labs/libevm/libevm/pseudo"
 	"github.com/ava-labs/libevm/libevm/register"
 	"github.com/ava-labs/libevm/log"
 )

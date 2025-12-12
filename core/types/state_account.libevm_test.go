@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/libevm/pseudo"
+	"github.com/ava-labs/libevm/internal/libevm/pseudo"
 	"github.com/ava-labs/libevm/rlp"
 )
 
