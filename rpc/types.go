@@ -78,8 +78,8 @@ const (
 // - an out of range error when the given block number is either too little or too large
 func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	input := strings.TrimSpace(string(data))
-	if len(input) >= 2 && input[0] == '"' && input[len(input)-1] == '"' {
-		input = input[1 : len(input)-1]
+	if n := len(input); n >= 2 && input[0] == '"' && input[n-1] == '"' {
+		input = input[1 : n-1]
 	}
 
 	switch input {
