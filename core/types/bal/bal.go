@@ -19,10 +19,13 @@ package bal
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
 	"log/slog"
 	"maps"
+	"slices"
 )
 
 // idxAccessListBuilder is responsible for producing the state accesses and
@@ -594,6 +597,54 @@ func (a *AccountMutations) String() string {
 	enc.SetIndent("", "    ")
 	enc.Encode(a)
 	return res.String()
+}
+
+func (a *AccountMutations) LogDiff(other *AccountMutations) {
+	var diff []interface{}
+
+	if a.Balance != nil || other.Balance != nil {
+		if a.Balance == nil || other.Balance == nil || !a.Balance.Eq(other.Balance) {
+			diff = append(diff, "local balance", a.Balance, "remote balance", other.Balance)
+		}
+	}
+	if (len(a.Code) != 0 || len(other.Code) != 0) && !bytes.Equal(a.Code, other.Code) {
+		diff = append(diff, "local code", a.Code, "remote code", other.Code)
+	}
+	if a.Nonce != nil || other.Nonce != nil {
+		if a.Nonce == nil || other.Nonce == nil || *a.Nonce != *other.Nonce {
+			diff = append(diff, "local nonce", a.Nonce, "remote nonce", other.Nonce)
+		}
+	}
+
+	if a.StorageWrites != nil || other.StorageWrites != nil {
+		if !maps.Equal(a.StorageWrites, other.StorageWrites) {
+			union := make(map[common.Hash]struct{})
+			for slot, _ := range a.StorageWrites {
+				union[slot] = struct{}{}
+			}
+			for slot, _ := range other.StorageWrites {
+				union[slot] = struct{}{}
+			}
+
+			orderedKeys := slices.SortedFunc(maps.Keys(union), func(hash common.Hash, hash2 common.Hash) int {
+				return bytes.Compare(hash[:], hash2[:])
+			})
+
+			for _, key := range orderedKeys {
+				aVal, inA := a.StorageWrites[key]
+				otherVal, inOther := other.StorageWrites[key]
+
+				if (inA && !inOther) || (!inA && inOther) || !bytes.Equal(aVal[:], otherVal[:]) {
+					diff = append(diff, fmt.Sprintf("storageLocal%x", key), aVal)
+					diff = append(diff, fmt.Sprintf("storageLocal%x", key), otherVal)
+				}
+			}
+		}
+	}
+
+	if len(diff) > 0 {
+		log.Error("diff between remote/local BAL", diff...)
+	}
 }
 
 // Eq returns whether the calling instance is equal to the provided one.
