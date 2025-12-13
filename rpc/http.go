@@ -177,35 +177,33 @@ func cleanlyCloseBody(body io.ReadCloser) error {
 }
 
 func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) error {
-	hc := c.writeConn.(*httpConn)
-	respBody, err := hc.doRequest(ctx, msg)
-	if err != nil {
-		return err
-	}
-	defer cleanlyCloseBody(respBody)
-
-	var resp jsonrpcMessage
-	batch := [1]*jsonrpcMessage{&resp}
-	if err := json.NewDecoder(respBody).Decode(&resp); err != nil {
-		return err
-	}
-	op.resp <- batch[:]
-	return nil
+	return c.sendHTTPWithDecoder(ctx, op, msg, func(dec *json.Decoder) ([]*jsonrpcMessage, error) {
+		var resp jsonrpcMessage
+		return []*jsonrpcMessage{&resp}, dec.Decode(&resp)
+	})
 }
 
 func (c *Client) sendBatchHTTP(ctx context.Context, op *requestOp, msgs []*jsonrpcMessage) error {
+	return c.sendHTTPWithDecoder(ctx, op, msgs, func(dec *json.Decoder) ([]*jsonrpcMessage, error) {
+		var respmsgs []*jsonrpcMessage
+		return respmsgs, dec.Decode(&respmsgs)
+	})
+}
+
+// sendHTTPWithDecoder performs an HTTP request and delegates response decoding to the provided function.
+func (c *Client) sendHTTPWithDecoder(ctx context.Context, op *requestOp, payload interface{}, decode func(*json.Decoder) ([]*jsonrpcMessage, error)) error {
 	hc := c.writeConn.(*httpConn)
-	respBody, err := hc.doRequest(ctx, msgs)
+	respBody, err := hc.doRequest(ctx, payload)
 	if err != nil {
 		return err
 	}
 	defer cleanlyCloseBody(respBody)
 
-	var respmsgs []*jsonrpcMessage
-	if err := json.NewDecoder(respBody).Decode(&respmsgs); err != nil {
+	resp, err := decode(json.NewDecoder(respBody))
+	if err != nil {
 		return err
 	}
-	op.resp <- respmsgs
+	op.resp <- resp
 	return nil
 }
 
