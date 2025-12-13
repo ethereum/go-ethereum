@@ -246,13 +246,17 @@ func (t *callTracer) OnLog(log *types.Log) {
 	if t.interrupt.Load() {
 		return
 	}
+
+	// Cache the index of the current frame to avoid repeated calculations
+	lastIdx := len(t.callstack) - 1
+
 	l := callLog{
 		Address:  log.Address,
 		Topics:   log.Topics,
 		Data:     log.Data,
-		Position: hexutil.Uint(len(t.callstack[len(t.callstack)-1].Calls)),
+		Position: hexutil.Uint(len(t.callstack[lastIdx].Calls)),
 	}
-	t.callstack[len(t.callstack)-1].Logs = append(t.callstack[len(t.callstack)-1].Logs, l)
+	t.callstack[lastIdx].Logs = append(t.callstack[lastIdx].Logs, l)
 }
 
 // GetResult returns the json-encoded nested list of call traces, and any
