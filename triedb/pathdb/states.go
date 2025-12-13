@@ -299,8 +299,8 @@ func (s *stateSet) revertTo(accountOrigin map[common.Hash][]byte, storageOrigin 
 	}
 	// Overwrite the storage data with original value blindly
 	for addrHash, storage := range storageOrigin {
-		slots := s.storageData[addrHash]
-		if len(slots) == 0 {
+		slots, ok := s.storageData[addrHash]
+		if !ok {
 			panic(fmt.Sprintf("non-existent storage set for reverting, %x", addrHash))
 		}
 		for storageHash, blob := range storage {
