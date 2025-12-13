@@ -93,6 +93,12 @@ var (
 
 	// Number of times getBlobsV2 responded with “miss”
 	getBlobsV2RequestMiss = metrics.NewRegisteredCounter("engine/getblobs/miss", nil)
+
+	// Number of blobs getBlobsV3 could return
+	getBlobsV3RequestHit = metrics.NewRegisteredCounter("engine/getblobsV3/hit", nil)
+
+	// Number of blobs getBlobsV3 could not return
+	getBlobsV3RequestMiss = metrics.NewRegisteredCounter("engine/getblobsV3/miss", nil)
 )
 
 type ConsensusAPI struct {
@@ -594,6 +600,41 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 
 	res := make([]*engine.BlobAndProofV2, len(hashes))
 	for i := 0; i < len(blobs); i++ {
+		var cellProofs []hexutil.Bytes
+		for _, proof := range proofs[i] {
+			cellProofs = append(cellProofs, proof[:])
+		}
+		res[i] = &engine.BlobAndProofV2{
+			Blob:       blobs[i][:],
+			CellProofs: cellProofs,
+		}
+	}
+	return res, nil
+}
+
+// GetBlobsV3 returns a set of blobs from the transaction pool. Same as
+// GetBlobsV2, except will return partial responses in case there is a missing
+// blob.
+func (api *ConsensusAPI) GetBlobsV3(hashes []common.Hash) ([]*engine.BlobAndProofV2, error) {
+	if len(hashes) > 128 {
+		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
+	}
+	available := api.eth.BlobTxPool().AvailableBlobs(hashes)
+	getBlobsRequestedCounter.Inc(int64(len(hashes)))
+	getBlobsAvailableCounter.Inc(int64(available))
+
+	blobs, _, proofs, err := api.eth.BlobTxPool().GetBlobs(hashes, types.BlobSidecarVersion1, false)
+	if err != nil {
+		return nil, engine.InvalidParams.With(err)
+	}
+
+	res := make([]*engine.BlobAndProofV2, len(hashes))
+	for i := range blobs {
+		if blobs[i] == nil {
+			getBlobsV3RequestMiss.Inc(1)
+			continue
+		}
+		getBlobsV3RequestHit.Inc(1)
 		var cellProofs []hexutil.Bytes
 		for _, proof := range proofs[i] {
 			cellProofs = append(cellProofs, proof[:])
