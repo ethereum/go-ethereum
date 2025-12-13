@@ -184,7 +184,7 @@ func fuzzUnmarshalG1(input []byte) int {
 		}
 		return 1
 	} else {
-		panic(fmt.Sprintf("error missmatch: cf: %v g: %v gn: %v", errC, errG, errS))
+		panic(fmt.Sprintf("error mismatch: cf: %v g: %v gn: %v", errC, errG, errS))
 	}
 }
 
@@ -211,7 +211,7 @@ func fuzzUnmarshalG2(input []byte) int {
 		}
 		return 1
 	} else {
-		panic(fmt.Sprintf("error missmatch: cf: %v g: %v gn: %v", errC, errG, errS))
+		panic(fmt.Sprintf("error mismatch: cf: %v g: %v gn: %v", errC, errG, errS))
 	}
 }
 
