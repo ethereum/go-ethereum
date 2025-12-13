@@ -124,6 +124,8 @@ type Ethereum struct {
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 
 	shutdownTracker *shutdowncheck.ShutdownTracker // Tracks if and when the node has shutdown ungracefully
+
+	newPayloadFeed event.Feed // Feed for engine API newPayload events
 }
 
 // New creates a new Ethereum object (including the initialisation of the common Ethereum object),
@@ -427,6 +429,16 @@ func (s *Ethereum) Downloader() *downloader.Downloader { return s.handler.downlo
 func (s *Ethereum) Synced() bool                       { return s.handler.synced.Load() }
 func (s *Ethereum) SetSynced()                         { s.handler.enableSyncedFeatures() }
 func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
+
+// SubscribeNewPayloadEvent registers a subscription for NewPayloadEvent.
+func (s *Ethereum) SubscribeNewPayloadEvent(ch chan<- core.NewPayloadEvent) event.Subscription {
+	return s.newPayloadFeed.Subscribe(ch)
+}
+
+// SendNewPayloadEvent sends a NewPayloadEvent to subscribers.
+func (s *Ethereum) SendNewPayloadEvent(ev core.NewPayloadEvent) {
+	s.newPayloadFeed.Send(ev)
+}
 
 // Protocols returns all the currently configured
 // network protocols to start.
