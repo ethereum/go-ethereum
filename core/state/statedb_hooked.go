@@ -227,7 +227,7 @@ func (s *hookedStateDB) SelfDestruct(address common.Address) uint256.Int {
 
 	prev := s.inner.SelfDestruct(address)
 
-	if s.hooks.OnBalanceChange != nil && !prev.IsZero() {
+	if s.hooks.OnBalanceChange != nil {
 		s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
 	}
 
@@ -253,7 +253,7 @@ func (s *hookedStateDB) SelfDestruct6780(address common.Address) (uint256.Int, b
 
 	prev, changed := s.inner.SelfDestruct6780(address)
 
-	if s.hooks.OnBalanceChange != nil && !prev.IsZero() {
+	if s.hooks.OnBalanceChange != nil {
 		s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
 	}
 
