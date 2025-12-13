@@ -401,7 +401,7 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 					// We also set some code here, to prevent the
 					// CreateContract action from being performed twice in a row,
 					// which would cause a difference in state when unrolling
-					// the journal. (CreateContact assumes created was false prior to
+					// the journal. (CreateContract assumes created was false prior to
 					// invocation, and the journal rollback sets it to false).
 					s.SetCode(addr, []byte{1}, tracing.CodeChangeUnspecified)
 				}
