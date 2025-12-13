@@ -179,9 +179,18 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	addTxs := func(txs []*types.Transaction) []error {
 		return h.txpool.Add(txs, false)
 	}
-
+	hasTx := func(hash common.Hash) bool {
+		return h.txpool.Has(hash)
+	}
+	chainTx := func(hash common.Hash) bool {
+		// check on chain (no need to check limbo separately, as chain checks limbo too)
+		return h.chain.HasCanonicalTransaction(hash, false)
+	}
 	validateMeta := func(tx common.Hash, kind byte) error {
-		if h.txpool.Has(tx) {
+		if hasTx(tx) {
+			return txpool.ErrAlreadyKnown
+		}
+		if chainTx(tx) {
 			return txpool.ErrAlreadyKnown
 		}
 		if !h.txpool.FilterType(kind) {
@@ -189,7 +198,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return nil
 	}
-
 	h.txFetcher = fetcher.NewTxFetcher(validateMeta, addTxs, fetchTx, h.removePeer)
 	return h, nil
 }
