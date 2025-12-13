@@ -17,7 +17,7 @@ jobs:
         submodules: false
 
     # Cache build tools to avoid downloading them each time
-    - uses: actions/cache@v4
+    - uses: actions/cache@v5
       with:
         path: build/cache
         key: ${{ runner.os }}-build-tools-cache-${{ hashFiles('build/checksums.txt') }}
@@ -97,3 +97,4 @@ jobs:
 
       - name: Run tests
         run: go run build/ci.go test -p 8
+
