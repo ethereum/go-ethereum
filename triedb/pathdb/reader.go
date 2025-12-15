@@ -200,7 +200,7 @@ func (db *Database) StateReader(root common.Hash) (database.StateReader, error) 
 // historical state.
 type HistoricalStateReader struct {
 	db     *Database
-	reader *historyReader
+	reader *stateHistoryReader
 	id     uint64
 }
 
@@ -234,7 +234,7 @@ func (db *Database) HistoricReader(root common.Hash) (*HistoricalStateReader, er
 	return &HistoricalStateReader{
 		id:     *id,
 		db:     db,
-		reader: newHistoryReader(db.diskdb, db.stateFreezer),
+		reader: newStateHistoryReader(db.diskdb, db.stateFreezer),
 	}, nil
 }
 

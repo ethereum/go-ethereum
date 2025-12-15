@@ -121,6 +121,20 @@ func (ident stateIdent) String() string {
 	return ident.addressHash.Hex() + ident.path
 }
 
+func (ident stateIdent) bloomSize() int {
+	if ident.typ == typeAccount {
+		return 0
+	}
+	if ident.typ == typeStorage {
+		return 0
+	}
+	scheme := accountIndexScheme
+	if ident.addressHash != (common.Hash{}) {
+		scheme = storageIndexScheme
+	}
+	return scheme.getBitmapSize(len(ident.path))
+}
+
 // newAccountIdent constructs a state identifier for an account.
 func newAccountIdent(addressHash common.Hash) stateIdent {
 	return stateIdent{
@@ -143,6 +157,8 @@ func newStorageIdent(addressHash common.Hash, storageHash common.Hash) stateIden
 // newTrienodeIdent constructs a state identifier for a trie node.
 // The address denotes the address hash of the associated account;
 // the path denotes the path of the node within the trie;
+//
+// nolint:unused
 func newTrienodeIdent(addressHash common.Hash, path string) stateIdent {
 	return stateIdent{
 		typ:         typeTrienode,
@@ -180,15 +196,60 @@ func newStorageIdentQuery(address common.Address, addressHash common.Hash, stora
 	}
 }
 
-// newTrienodeIdentQuery constructs a state identifier for a trie node.
-// the addressHash denotes the address hash of the associated account;
-// the path denotes the path of the node within the trie;
-//
-// nolint:unused
-func newTrienodeIdentQuery(addrHash common.Hash, path []byte) stateIdentQuery {
-	return stateIdentQuery{
-		stateIdent: newTrienodeIdent(addrHash, string(path)),
+// indexElem defines the element for indexing.
+type indexElem interface {
+	key() stateIdent
+	ext() []uint16
+}
+
+type accountIndexElem struct {
+	addressHash common.Hash
+}
+
+func (a accountIndexElem) key() stateIdent {
+	return stateIdent{
+		typ:         typeAccount,
+		addressHash: a.addressHash,
 	}
+}
+
+func (a accountIndexElem) ext() []uint16 {
+	return nil
+}
+
+type storageIndexElem struct {
+	addressHash common.Hash
+	storageHash common.Hash
+}
+
+func (a storageIndexElem) key() stateIdent {
+	return stateIdent{
+		typ:         typeStorage,
+		addressHash: a.addressHash,
+		storageHash: a.storageHash,
+	}
+}
+
+func (a storageIndexElem) ext() []uint16 {
+	return nil
+}
+
+type trienodeIndexElem struct {
+	owner common.Hash
+	path  string
+	data  []uint16
+}
+
+func (a trienodeIndexElem) key() stateIdent {
+	return stateIdent{
+		typ:         typeTrienode,
+		addressHash: a.owner,
+		path:        a.path,
+	}
+}
+
+func (a trienodeIndexElem) ext() []uint16 {
+	return a.data
 }
 
 // history defines the interface of historical data, shared by stateHistory
@@ -198,7 +259,7 @@ type history interface {
 	typ() historyType
 
 	// forEach returns an iterator to traverse the state entries in the history.
-	forEach() iter.Seq[stateIdent]
+	forEach() iter.Seq[indexElem]
 }
 
 var (
