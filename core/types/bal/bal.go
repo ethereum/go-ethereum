@@ -599,7 +599,7 @@ func (a *AccountMutations) String() string {
 	return res.String()
 }
 
-func (a *AccountMutations) LogDiff(other *AccountMutations) {
+func (a *AccountMutations) LogDiff(addr common.Address, other *AccountMutations) {
 	var diff []interface{}
 
 	if a.Balance != nil || other.Balance != nil {
@@ -635,15 +635,15 @@ func (a *AccountMutations) LogDiff(other *AccountMutations) {
 				otherVal, inOther := other.StorageWrites[key]
 
 				if (inA && !inOther) || (!inA && inOther) || !bytes.Equal(aVal[:], otherVal[:]) {
-					diff = append(diff, fmt.Sprintf("storageLocal%x", key), aVal)
-					diff = append(diff, fmt.Sprintf("storageLocal%x", key), otherVal)
+					diff = append(diff, fmt.Sprintf("storage-local-%x", key), aVal)
+					diff = append(diff, fmt.Sprintf("storage-remote-%x", key), otherVal)
 				}
 			}
 		}
 	}
 
 	if len(diff) > 0 {
-		log.Error("diff between remote/local BAL", diff...)
+		log.Error(fmt.Sprintf("diff between remote/local BAL for address %x", addr), diff...)
 	}
 }
 

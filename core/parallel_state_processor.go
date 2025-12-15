@@ -122,9 +122,9 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateR
 	allStateReads.Merge(stateReads)
 
 	balIdx := len(block.Transactions()) + 1
-	if err := postTxState.BlockAccessList().ValidateStateDiff(balIdx, diff); err != nil {
+	if !postTxState.BlockAccessList().ValidateStateDiff(balIdx, diff) {
 		return &ProcessResultWithMetrics{
-			ProcessResult: &ProcessResult{Error: err},
+			ProcessResult: &ProcessResult{Error: fmt.Errorf("BAL validation failure")},
 		}
 	}
 
@@ -272,8 +272,8 @@ func (p *ParallelStateProcessor) execTx(block *types.Block, tx *types.Transactio
 	}
 
 	diff, accesses := balTracer.builder.FinalizedIdxChanges()
-	if err := db.BlockAccessList().ValidateStateDiff(txIdx+1, diff); err != nil {
-		return &txExecResult{err: err}
+	if !db.BlockAccessList().ValidateStateDiff(txIdx+1, diff) {
+		return &txExecResult{err: fmt.Errorf("bal validation failure")}
 	}
 
 	return &txExecResult{
@@ -317,8 +317,8 @@ func (p *ParallelStateProcessor) Process(block *types.Block, stateTransition *st
 	balTracer.OnPreTxExecutionDone()
 
 	diff, stateReads := balTracer.builder.FinalizedIdxChanges()
-	if err := statedb.BlockAccessList().ValidateStateDiff(0, diff); err != nil {
-		return nil, err
+	if !statedb.BlockAccessList().ValidateStateDiff(0, diff) {
+		return nil, fmt.Errorf("BAL validation failure")
 	}
 
 	// compute the post-tx state prestate (before applying final block system calls and eip-4895 withdrawals)

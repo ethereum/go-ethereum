@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
 	"sync"
 )
@@ -298,24 +299,70 @@ func (r *BALReader) readAccountDiff(addr common.Address, idx int) *bal.AccountMu
 	return &res
 }
 
+func mutationsLogfmt(prefix string, mutations *bal.AccountMutations) (logs []interface{}) {
+	if mutations.Code != nil {
+		logs = append(logs, fmt.Sprintf("%s-code", prefix), fmt.Sprintf("%x", mutations.Code))
+	}
+	if mutations.Balance != nil {
+		logs = append(logs, fmt.Sprintf("%s-balance", prefix), mutations.Balance.String())
+	}
+	if mutations.Nonce != nil {
+		logs = append(logs, fmt.Sprintf("%s-nonce", prefix), mutations.Nonce)
+	}
+	if mutations.StorageWrites != nil {
+		for key, val := range mutations.StorageWrites {
+			logs = append(logs, fmt.Sprintf("%s-storage-write-key"), key, fmt.Sprintf("%s-storage-write-value"), val)
+		}
+	}
+	return logs
+}
+
+func logfmtMutationsDiff(local, remote map[common.Address]*bal.AccountMutations) (logs []interface{}) {
+	keys := make(map[common.Address]struct{})
+
+	for addr, _ := range local {
+		keys[addr] = struct{}{}
+	}
+	for addr, _ := range remote {
+		keys[addr] = struct{}{}
+	}
+
+	for addr := range keys {
+		_, hasLocal := local[addr]
+		_, hasRemote := remote[addr]
+
+		if hasLocal && !hasRemote {
+			logs = append(logs, mutationsLogfmt(fmt.Sprintf("local-%x", addr), local[addr])...)
+		}
+		if !hasLocal && hasRemote {
+			logs = append(logs, mutationsLogfmt(fmt.Sprintf("remote-%x", addr), remote[addr])...)
+		}
+	}
+	return logs
+}
+
 // ValidateStateDiff returns an error if the computed state diff is not equal to
 // diff reported from the access list at the given index.
-func (r *BALReader) ValidateStateDiff(idx int, computedDiff *bal.StateDiff) error {
+func (r *BALReader) ValidateStateDiff(idx int, computedDiff *bal.StateDiff) bool {
 	balChanges := r.changesAt(idx)
 	for addr, state := range balChanges.Mutations {
 		computedAccountDiff, ok := computedDiff.Mutations[addr]
 		if !ok {
-			return fmt.Errorf("BAL contained account %x which wasn't present in computed state diff", addr)
+			// TODO: print out the full fields here
+			log.Error("BAL contained account which wasn't present in computed state diff", "address", addr)
+			return false
 		}
 
 		if !state.Eq(computedAccountDiff) {
-			return fmt.Errorf("difference between computed state diff and BAL entry for account %x", addr)
+			state.LogDiff(addr, computedAccountDiff)
+			return false
 		}
 	}
 
 	if len(balChanges.Mutations) != len(computedDiff.Mutations) {
-		return fmt.Errorf("computed state diff contained mutated accounts which weren't reported in BAL")
+		log.Error("computed state diff contained accounts that weren't reported in BAL", logfmtMutationsDiff(computedDiff.Mutations, balChanges.Mutations))
+		return false
 	}
 
-	return nil
+	return true
 }
