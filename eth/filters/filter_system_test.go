@@ -169,7 +169,7 @@ func (b *testBackend) NewMatcherBackend() filtermaps.MatcherBackend {
 	return b.fm.NewMatcherBackend()
 }
 
-func (b *testBackend) startFilterMaps(history uint64, disabled bool, params filtermaps.Params) {
+func (b *testBackend) startFilterMaps(history uint64, disabled bool, params filtermaps.Params) error {
 	head := b.CurrentBlock()
 	chainView := filtermaps.NewChainView(b, head.Number.Uint64(), head.Hash())
 	config := filtermaps.Config{
@@ -177,9 +177,14 @@ func (b *testBackend) startFilterMaps(history uint64, disabled bool, params filt
 		Disabled:       disabled,
 		ExportFileName: "",
 	}
-	b.fm, _ = filtermaps.NewFilterMaps(b.db, chainView, 0, 0, params, config)
+	fm, err := filtermaps.NewFilterMaps(b.db, chainView, 0, 0, params, config)
+	if err != nil {
+		return err
+	}
+	b.fm = fm
 	b.fm.Start()
 	b.fm.WaitIdle()
+	return nil
 }
 
 func (b *testBackend) stopFilterMaps() {
@@ -563,7 +568,9 @@ func TestExceedLogQueryLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	backend.startFilterMaps(200, false, filtermaps.RangeTestParams)
+	if err := backend.startFilterMaps(200, false, filtermaps.RangeTestParams); err != nil {
+		t.Fatalf("failed to start filter maps: %v", err)
+	}
 	defer backend.stopFilterMaps()
 
 	addresses := make([]common.Address, 6)
