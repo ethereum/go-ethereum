@@ -36,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -81,20 +80,6 @@ const (
 	beaconUpdateWarnFrequency = 5 * time.Minute
 )
 
-var (
-	// Number of blobs requested via getBlobsV2
-	getBlobsRequestedCounter = metrics.NewRegisteredCounter("engine/getblobs/requested", nil)
-
-	// Number of blobs requested via getBlobsV2 that are present in the blobpool
-	getBlobsAvailableCounter = metrics.NewRegisteredCounter("engine/getblobs/available", nil)
-
-	// Number of times getBlobsV2 responded with “hit”
-	getBlobsV2RequestHit = metrics.NewRegisteredCounter("engine/getblobs/hit", nil)
-
-	// Number of times getBlobsV2 responded with “miss”
-	getBlobsV2RequestMiss = metrics.NewRegisteredCounter("engine/getblobs/miss", nil)
-)
-
 type ConsensusAPI struct {
 	eth *eth.Ethereum
 
@@ -137,6 +122,9 @@ type ConsensusAPI struct {
 
 // NewConsensusAPI creates a new consensus api for the given backend.
 // The underlying blockchain needs to have a valid terminal total difficulty set.
+//
+// This function creates a long-lived object with an attached background thread.
+// For testing or other short-term use cases, please use newConsensusAPIWithoutHeartbeat.
 func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 	api := newConsensusAPIWithoutHeartbeat(eth)
 	go api.heartbeat()
@@ -818,7 +806,7 @@ func (api *ConsensusAPI) delayPayloadImport(block *types.Block) engine.PayloadSt
 		return engine.PayloadStatusV1{Status: engine.SYNCING}
 	}
 	// Either no beacon sync was started yet, or it rejected the delivered
-	// payload as non-integratable on top of the existing sync. We'll just
+	// payload as non-integrate on top of the existing sync. We'll just
 	// have to rely on the beacon client to forcefully update the head with
 	// a forkchoice update request.
 	if api.eth.Downloader().ConfigSyncMode() == ethconfig.FullSync {
@@ -916,8 +904,6 @@ func (api *ConsensusAPI) invalid(err error, latestValid *types.Header) engine.Pa
 // heartbeat loops indefinitely, and checks if there have been beacon client updates
 // received in the last while. If not - or if they but strange ones - it warns the
 // user that something might be off with their consensus node.
-//
-// TODO(karalabe): Spin this goroutine down somehow
 func (api *ConsensusAPI) heartbeat() {
 	// Sleep a bit on startup since there's obviously no beacon client yet
 	// attached, so no need to print scary warnings to the user.
