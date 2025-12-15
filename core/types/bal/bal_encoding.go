@@ -95,6 +95,16 @@ func (e BlockAccessList) Validate() error {
 	}) {
 		return errors.New("block access list accounts not in lexicographic order")
 	}
+	// check that the accounts are unique
+	addrs := make(map[common.Address]struct{})
+	for _, acct := range e {
+		addr := acct.Address
+		if _, ok := addrs[addr]; ok {
+			return fmt.Errorf("duplicate account in block access list: %x", addr)
+		}
+		addrs[addr] = struct{}{}
+	}
+
 	for _, entry := range e {
 		if err := entry.validate(); err != nil {
 			return err
