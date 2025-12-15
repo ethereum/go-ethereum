@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/register"
 	"github.com/ava-labs/libevm/params"
@@ -57,6 +58,14 @@ var libevmHooks register.AtMostOnce[Hooks]
 type Hooks interface {
 	OverrideNewEVMArgs(*NewEVMArgs) *NewEVMArgs
 	OverrideEVMResetArgs(params.Rules, *EVMResetArgs) *EVMResetArgs
+	Preprocessor
+}
+
+// A Preprocessor performs computation on a transaction before the
+// [EVMInterpreter] is invoked and reports its gas charge for spending at the
+// beginning of [EVM.Call] or [EVM.Create].
+type Preprocessor interface {
+	PreprocessingGasCharge(tx common.Hash) (uint64, error)
 }
 
 // NewEVMArgs are the arguments received by [NewEVM], available for override
@@ -96,4 +105,24 @@ func (evm *EVM) overrideEVMResetArgs(txCtx TxContext, statedb StateDB) (TxContex
 	}
 	args := libevmHooks.Get().OverrideEVMResetArgs(evm.chainRules, &EVMResetArgs{txCtx, statedb})
 	return args.TxContext, args.StateDB
+}
+
+// NOOPHooks implements [Hooks] such that every method is a noop.
+type NOOPHooks struct{}
+
+var _ Hooks = NOOPHooks{}
+
+// OverrideNewEVMArgs returns the args unchanged.
+func (NOOPHooks) OverrideNewEVMArgs(a *NewEVMArgs) *NewEVMArgs {
+	return a
+}
+
+// OverrideEVMResetArgs returns the args unchanged.
+func (NOOPHooks) OverrideEVMResetArgs(_ params.Rules, a *EVMResetArgs) *EVMResetArgs {
+	return a
+}
+
+// PreprocessingGasCharge returns (0, nil).
+func (NOOPHooks) PreprocessingGasCharge(common.Hash) (uint64, error) {
+	return 0, nil
 }
