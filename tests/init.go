@@ -521,8 +521,8 @@ var Forks = map[string]*params.ChainConfig{
 			Cancun: params.DefaultCancunBlobConfig,
 			Prague: params.DefaultPragueBlobConfig,
 			Osaka:  params.DefaultOsakaBlobConfig,
-			BPO1:   bpo1BlobConfig,
-			BPO2:   bpo2BlobConfig,
+			//BPO1:   bpo1BlobConfig,
+			//BPO2:   bpo2BlobConfig,
 		},
 	},
 	"OsakaToBPO1AtTime15k": {
