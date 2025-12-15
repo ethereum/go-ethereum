@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"golang.org/x/sync/errgroup"
+	"runtime"
 	"slices"
 	"time"
 )
@@ -330,6 +331,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, stateTransition *st
 	tExecStart = time.Now()
 	go p.resultHandler(block, stateReads, postTxState, tExecStart, txResCh, rootCalcResultCh, resCh)
 	var workers errgroup.Group
+	workers.SetLimit(runtime.NumCPU())
 	startingState := statedb.Copy()
 	for i, tx := range block.Transactions() {
 		tx := tx
