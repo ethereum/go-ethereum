@@ -177,11 +177,13 @@ export const getStaticProps: GetStaticProps = async () => {
           LATEST_RELEASES_DATA,
           // linux
           ALL_LINUX_STABLE_RELEASES: getSortedReleases(
-            LINUX_STABLE_RELEASES_DATA.concat(LINUX_ARM64_STABLE_RELEASES_DATA),
+            LINUX_STABLE_RELEASES_DATA,
+            LINUX_ARM64_STABLE_RELEASES_DATA,
             LINUX_ALLTOOLS_STABLE_RELEASES_DATA
           ),
           ALL_LINUX_DEV_BUILDS: getSortedReleases(
-            LINUX_DEV_BUILDS_DATA.concat(LINUX_ARM64_DEV_BUILDS_DATA),
+            LINUX_DEV_BUILDS_DATA,
+            LINUX_ARM64_DEV_BUILDS_DATA,
             LINUX_ALLTOOLS_DEV_BUILDS_DATA
           ),
           // windows
