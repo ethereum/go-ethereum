@@ -69,6 +69,7 @@ export const getStaticProps: GetStaticProps = async () => {
   try {
     const [
       ALL_LINUX_RELEASES_XML_DATA,
+      ALL_LINUX_ARM64_RELEASES_XML_DATA,
       ALL_LINUX_ALL_TOOLS_RELEASES_XML_DATA,
       ALL_WINDOWS_RELEASES_XML_DATA,
       ALL_WINDOWS_ALL_TOOLS_RELEASES_XML_DATA,
@@ -82,6 +83,9 @@ export const getStaticProps: GetStaticProps = async () => {
     // linux
     const linuxJson = parser.parse(ALL_LINUX_RELEASES_XML_DATA);
     const ALL_LINUX_BLOBS_JSON_DATA = linuxJson.EnumerationResults.Blobs.Blob;
+
+    const linuxArm64Json = parser.parse(ALL_LINUX_ARM64_RELEASES_XML_DATA);
+    const ALL_LINUX_ARM64_BLOBS_JSON_DATA = linuxArm64Json.EnumerationResults.Blobs.Blob;
 
     const linuxAllToolsJson = parser.parse(ALL_LINUX_ALL_TOOLS_RELEASES_XML_DATA);
     const ALL_LINUX_ALL_TOOLS_BLOBS_JSON_DATA = linuxAllToolsJson.EnumerationResults.Blobs.Blob;
@@ -107,12 +111,20 @@ export const getStaticProps: GetStaticProps = async () => {
       blobsList: ALL_LINUX_BLOBS_JSON_DATA,
       isStableRelease: true
     });
+    const LINUX_ARM64_STABLE_RELEASES_DATA = mapReleasesData({
+      blobsList: ALL_LINUX_ARM64_BLOBS_JSON_DATA,
+      isStableRelease: true
+    });
     const LINUX_ALLTOOLS_STABLE_RELEASES_DATA = mapReleasesData({
       blobsList: ALL_LINUX_ALL_TOOLS_BLOBS_JSON_DATA,
       isStableRelease: true
     });
     const LINUX_DEV_BUILDS_DATA = mapReleasesData({
       blobsList: ALL_LINUX_BLOBS_JSON_DATA,
+      isStableRelease: false
+    });
+    const LINUX_ARM64_DEV_BUILDS_DATA = mapReleasesData({
+      blobsList: ALL_LINUX_ARM64_BLOBS_JSON_DATA,
       isStableRelease: false
     });
     const LINUX_ALLTOOLS_DEV_BUILDS_DATA = mapReleasesData({
@@ -165,11 +177,11 @@ export const getStaticProps: GetStaticProps = async () => {
           LATEST_RELEASES_DATA,
           // linux
           ALL_LINUX_STABLE_RELEASES: getSortedReleases(
-            LINUX_STABLE_RELEASES_DATA,
+            LINUX_STABLE_RELEASES_DATA.concat(LINUX_ARM64_STABLE_RELEASES_DATA),
             LINUX_ALLTOOLS_STABLE_RELEASES_DATA
           ),
           ALL_LINUX_DEV_BUILDS: getSortedReleases(
-            LINUX_DEV_BUILDS_DATA,
+            LINUX_DEV_BUILDS_DATA.concat(LINUX_ARM64_DEV_BUILDS_DATA),
             LINUX_ALLTOOLS_DEV_BUILDS_DATA
           ),
           // windows

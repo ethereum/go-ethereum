@@ -175,6 +175,8 @@ export const WINDOWS_BINARY_BASE_URL =
 // linux
 export const ALL_LINUX_GETH_RELEASES_URL =
   'https://gethstore.blob.core.windows.net/builds?restype=container&comp=list&prefix=geth-linux';
+export const ALL_LINUX_ARM64_GETH_RELEASES_URL =
+  'https://gethstore.blob.core.windows.net/builds?restype=container&comp=list&prefix=geth-linux-arm64';
 export const ALL_LINUX_ALLTOOLS_GETH_RELEASES_URL =
   'https://gethstore.blob.core.windows.net/builds?restype=container&comp=list&prefix=geth-alltools-linux';
 
