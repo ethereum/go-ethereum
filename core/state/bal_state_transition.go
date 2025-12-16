@@ -358,6 +358,54 @@ func (s *BALStateTransition) CommitWithUpdate(block uint64, deleteEmptyObjects b
 	return root, ret, nil
 }
 
+func (s *BALStateTransition) loadOriginStorages() {
+	lastIdx := len(s.accessList.block.Transactions()) + 1
+
+	type originStorage struct {
+		address common.Address
+		key     common.Hash
+		value   common.Hash
+	}
+
+	originStoragesCh := make(chan *originStorage)
+	var pendingStorageCount int
+
+	for _, addr := range s.accessList.ModifiedAccounts() {
+		diff := s.accessList.readAccountDiff(addr, lastIdx)
+		pendingStorageCount += len(diff.StorageWrites)
+		s.originStorages[addr] = make(map[common.Hash]common.Hash)
+		for key := range diff.StorageWrites {
+			storageKey := key
+			go func() {
+				val, err := s.reader.Storage(addr, storageKey)
+				if err != nil {
+					s.setError(err)
+					return
+				}
+				originStoragesCh <- &originStorage{
+					addr,
+					storageKey,
+					val,
+				}
+			}()
+		}
+	}
+
+	if pendingStorageCount == 0 {
+		return
+	}
+	for {
+		select {
+		case acctStorage := <-originStoragesCh:
+			s.originStorages[acctStorage.address][acctStorage.key] = acctStorage.value
+			pendingStorageCount--
+			if pendingStorageCount == 0 {
+				return
+			}
+		}
+	}
+}
+
 // IntermediateRoot applies block state mutations and computes the updated state
 // trie root.
 func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
@@ -383,20 +431,7 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 	s.originStoragesWG.Add(1)
 	go func() {
 		defer s.originStoragesWG.Done()
-		for _, addr := range s.accessList.ModifiedAccounts() {
-			diff := s.accessList.readAccountDiff(addr, lastIdx)
-			if len(diff.StorageWrites) > 0 {
-				s.originStorages[addr] = make(map[common.Hash]common.Hash)
-				for key := range diff.StorageWrites {
-					val, err := s.reader.Storage(addr, key)
-					if err != nil {
-						s.setError(err)
-						return
-					}
-					s.originStorages[addr][key] = val
-				}
-			}
-		}
+		s.loadOriginStorages()
 		s.metrics.OriginStorageLoadTime = time.Since(start)
 	}()
 
