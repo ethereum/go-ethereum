@@ -379,8 +379,8 @@ func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
 			log.Info("Pruning tx index", "count", count, "removed", removed)
 		}
 		var bn uint64
-		// Database v7: block number (8 bytes) + tx index (8 bytes) = 16 bytes
-		if len(v) == 16 {
+		// Database v7: block number (8 bytes) + tx index (4 bytes) = 12 bytes
+		if len(v) == 12 {
 			bn = binary.BigEndian.Uint64(v[:8])
 		} else if len(v) <= 8 {
 			// Database v6 or earlier

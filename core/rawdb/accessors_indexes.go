@@ -35,11 +35,11 @@ import (
 // DecodeTxLookupEntry decodes the supplied tx lookup data. It returns the block
 // number and optionally the transaction index within the block. The transaction
 // index is only available in database v7+ format; for older formats it returns nil.
-func DecodeTxLookupEntry(data []byte, db ethdb.Reader) (*uint64, *uint64) {
-	// Database v7 tx lookup stores block number (8 bytes) + tx index (8 bytes) = 16 bytes
-	if len(data) == 16 {
+func DecodeTxLookupEntry(data []byte, db ethdb.Reader) (*uint64, *uint32) {
+	// Database v7 tx lookup stores block number (8 bytes) + tx index (4 bytes) = 12 bytes
+	if len(data) == 12 {
 		number := binary.BigEndian.Uint64(data[:8])
-		txIndex := binary.BigEndian.Uint64(data[8:16])
+		txIndex := binary.BigEndian.Uint32(data[8:12])
 		return &number, &txIndex
 	}
 	// Database v6 tx lookup just stores the block number
@@ -68,7 +68,7 @@ func DecodeTxLookupEntry(data []byte, db ethdb.Reader) (*uint64, *uint64) {
 // hash to allow retrieving the transaction or receipt by hash. It returns the block
 // number and optionally the transaction index within the block (if available in the
 // database format).
-func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) (*uint64, *uint64) {
+func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) (*uint64, *uint32) {
 	data, _ := db.Get(txLookupKey(hash))
 	if len(data) == 0 {
 		return nil, nil
@@ -78,10 +78,10 @@ func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) (*uint64, *uint64) {
 
 // writeTxLookupEntryV7 stores a positional metadata for a transaction in database
 // v7 format, which includes both the block number and transaction index.
-func writeTxLookupEntryV7(db ethdb.KeyValueWriter, hash common.Hash, blockNumber uint64, txIndex uint64) {
-	var data [16]byte
+func writeTxLookupEntryV7(db ethdb.KeyValueWriter, hash common.Hash, blockNumber uint64, txIndex uint32) {
+	var data [12]byte
 	binary.BigEndian.PutUint64(data[:8], blockNumber)
-	binary.BigEndian.PutUint64(data[8:16], txIndex)
+	binary.BigEndian.PutUint32(data[8:12], txIndex)
 	if err := db.Put(txLookupKey(hash), data[:]); err != nil {
 		log.Crit("Failed to store transaction lookup entry", "err", err)
 	}
@@ -91,7 +91,7 @@ func writeTxLookupEntryV7(db ethdb.KeyValueWriter, hash common.Hash, blockNumber
 // hashes list, using the new database v7 format that includes transaction indices.
 func WriteTxLookupEntries(db ethdb.KeyValueWriter, number uint64, hashes []common.Hash) {
 	for i, hash := range hashes {
-		writeTxLookupEntryV7(db, hash, number, uint64(i))
+		writeTxLookupEntryV7(db, hash, number, uint32(i))
 	}
 }
 
@@ -100,7 +100,7 @@ func WriteTxLookupEntries(db ethdb.KeyValueWriter, number uint64, hashes []commo
 func WriteTxLookupEntriesByBlock(db ethdb.KeyValueWriter, block *types.Block) {
 	number := block.Number().Uint64()
 	for i, tx := range block.Transactions() {
-		writeTxLookupEntryV7(db, tx.Hash(), number, uint64(i))
+		writeTxLookupEntryV7(db, tx.Hash(), number, uint32(i))
 	}
 }
 
@@ -149,7 +149,7 @@ func DeleteAllTxLookupEntries(db ethdb.KeyValueStore, condition func(common.Hash
 // extractTransactionAtIndex extracts a single transaction from the RLP-encoded
 // block body at the specified index. This is more efficient than findTxInBlockBody
 // when the transaction index is known, as it avoids hashing all transactions.
-func extractTransactionAtIndex(blockbody rlp.RawValue, targetIndex uint64) (*types.Transaction, error) {
+func extractTransactionAtIndex(blockbody rlp.RawValue, targetIndex uint32) (*types.Transaction, error) {
 	txnListRLP, _, err := rlp.SplitList(blockbody)
 	if err != nil {
 		return nil, err
@@ -158,7 +158,7 @@ func extractTransactionAtIndex(blockbody rlp.RawValue, targetIndex uint64) (*typ
 	if err != nil {
 		return nil, err
 	}
-	for i := uint64(0); i < targetIndex; i++ {
+	for i := uint32(0); i < targetIndex; i++ {
 		if !iter.Next() {
 			return nil, fmt.Errorf("transaction index %d out of bounds", targetIndex)
 		}
@@ -190,7 +190,7 @@ func findTxInBlockBody(blockbody rlp.RawValue, target common.Hash) (*types.Trans
 	if err != nil {
 		return nil, 0, err
 	}
-	txIndex := uint64(0)
+	txIndex := uint32(0)
 	for iter.Next() {
 		if iter.Err() != nil {
 			return nil, 0, iter.Err()
@@ -212,7 +212,7 @@ func findTxInBlockBody(blockbody rlp.RawValue, target common.Hash) (*types.Trans
 			if err := rlp.DecodeBytes(txRLP, &tx); err != nil {
 				return nil, 0, err
 			}
-			return &tx, txIndex, nil
+			return &tx, uint64(txIndex), nil
 		}
 		txIndex++
 	}
@@ -242,7 +242,7 @@ func ReadCanonicalTransaction(db ethdb.Reader, hash common.Hash) (*types.Transac
 			log.Error("Transaction not found at index", "number", *blockNumber, "hash", blockHash, "txhash", hash, "index", *txIndex, "err", err)
 			return nil, common.Hash{}, 0, 0
 		}
-		return tx, blockHash, *blockNumber, *txIndex
+		return tx, blockHash, *blockNumber, uint64(*txIndex)
 	}
 	tx, foundIndex, err := findTxInBlockBody(bodyRLP, hash)
 	if err != nil {
@@ -271,8 +271,8 @@ func ReadCanonicalReceipt(db ethdb.Reader, hash common.Hash, config *params.Chai
 	}
 	if txIndex != nil {
 		receipts := ReadReceipts(db, blockHash, *blockNumber, blockHeader.Time, config)
-		if *txIndex < uint64(len(receipts)) {
-			return receipts[*txIndex], blockHash, *blockNumber, *txIndex
+		if uint64(*txIndex) < uint64(len(receipts)) {
+			return receipts[*txIndex], blockHash, *blockNumber, uint64(*txIndex)
 		}
 		log.Error("Receipt index out of bounds", "number", *blockNumber, "hash", blockHash, "txhash", hash, "index", *txIndex)
 		return nil, common.Hash{}, 0, 0

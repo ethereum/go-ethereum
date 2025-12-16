@@ -347,7 +347,7 @@ func TestExtractTransactionAtIndex(t *testing.T) {
 	bodyRLP := ReadBodyRLP(db, block.Hash(), block.NumberU64())
 
 	for i, expectedTx := range txs {
-		extractedTx, err := extractTransactionAtIndex(bodyRLP, uint64(i))
+		extractedTx, err := extractTransactionAtIndex(bodyRLP, uint32(i))
 		if err != nil {
 			t.Fatalf("Failed to extract transaction at index %d: %v", i, err)
 		}
@@ -356,7 +356,7 @@ func TestExtractTransactionAtIndex(t *testing.T) {
 		}
 	}
 
-	_, err := extractTransactionAtIndex(bodyRLP, uint64(len(txs)))
+	_, err := extractTransactionAtIndex(bodyRLP, uint32(len(txs)))
 	if err == nil {
 		t.Fatal("Expected error for out of bounds index, got nil")
 	}
@@ -381,14 +381,14 @@ func TestTxLookupV7Encoding(t *testing.T) {
 
 	testCases := []struct {
 		blockNumber uint64
-		txIndex     uint64
+		txIndex     uint32
 		txHash      common.Hash
 	}{
 		{0, 0, common.BytesToHash([]byte{0x01})},
 		{1, 0, common.BytesToHash([]byte{0x02})},
 		{100, 5, common.BytesToHash([]byte{0x03})},
 		{999999, 199, common.BytesToHash([]byte{0x04})},
-		{18446744073709551615, 255, common.BytesToHash([]byte{0x05})}, // max uint64
+		{18446744073709551615, 4294967295, common.BytesToHash([]byte{0x05})}, // max uint32
 	}
 
 	for _, tc := range testCases {
@@ -417,7 +417,7 @@ func TestTxLookupBackwardCompatibility(t *testing.T) {
 	tx := types.NewTransaction(1, common.BytesToAddress([]byte{0x11}), big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11})
 	txHash := tx.Hash()
 	blockNumber := uint64(314)
-	txIndex := uint64(2)
+	txIndex := uint32(2)
 
 	writeTxLookupEntryV7(db, txHash, blockNumber, txIndex)
 	num, idx := ReadTxLookupEntry(db, txHash)
@@ -455,7 +455,7 @@ func TestTxLookupBackwardCompatibility(t *testing.T) {
 	entry := LegacyTxLookupEntry{
 		BlockHash:  blockHash,
 		BlockIndex: blockNumber,
-		Index:      txIndex,
+		Index:      uint64(txIndex),
 	}
 	data, _ := rlp.EncodeToBytes(entry)
 	db.Put(txLookupKey(v3Hash), data)
@@ -589,7 +589,7 @@ func BenchmarkExtractTransactionAtIndex(b *testing.B) {
 			WriteBlock(db, block)
 			bodyRLP := ReadBodyRLP(db, block.Hash(), block.NumberU64())
 
-			targetIndex := uint64(size - 1)
+			targetIndex := uint32(size - 1)
 
 			b.ResetTimer()
 			b.ReportAllocs()
