@@ -222,7 +222,15 @@ func headerNumberKey(hash common.Hash) []byte {
 
 // blockBodyKey = blockBodyPrefix + num (uint64 big endian) + hash
 func blockBodyKey(number uint64, hash common.Hash) []byte {
-	return append(append(blockBodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+	totalLen := len(blockBodyPrefix) + 8 + common.HashLength
+	out := make([]byte, totalLen)
+
+	off := 0
+	off += copy(out[off:], blockBodyPrefix)
+	off += copy(out[off:], encodeBlockNumber(number))
+	copy(out[off:], hash.Bytes())
+
+	return out
 }
 
 // blockReceiptsKey = blockReceiptsPrefix + num (uint64 big endian) + hash
