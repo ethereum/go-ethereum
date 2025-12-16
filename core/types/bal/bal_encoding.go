@@ -19,12 +19,14 @@ package bal
 import (
 	"bytes"
 	"cmp"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -140,13 +142,67 @@ type encodingAccountNonce struct {
 
 // encodingStorageWrite is the encoding format of StorageWrites.
 type encodingStorageWrite struct {
-	TxIdx      uint16      `json:"txIndex"`
-	ValueAfter common.Hash `json:"valueAfter"`
+	TxIdx      uint16  `json:"txIndex"`
+	ValueAfter Storage `json:"valueAfter"`
+}
+
+// Storage can represent either a storage key or value
+type Storage common.Hash
+
+// Cmp compares two hashes.
+func (h Storage) Cmp(other Storage) int {
+	return bytes.Compare(h[:], other[:])
+}
+
+func (s *Storage) UnmarshalJSON(b []byte) error {
+	var str string
+	if err := json.Unmarshal(b, &str); err != nil {
+		return err
+	}
+
+	str = strings.TrimLeft(str, "0x")
+	if len(str) == 0 {
+		return nil
+	}
+
+	if len(str)%2 == 1 {
+		str = "0" + str
+	}
+
+	val, err := hex.DecodeString(str)
+	if err != nil {
+		return err
+	}
+
+	if len(val) > 32 {
+		return fmt.Errorf("storage key/value cannot be greater than 32 bytes")
+	}
+	copy((*s)[:len(val)-1], val[:])
+	return nil
+}
+
+func (s Storage) MarshalJSON() ([]byte, error) {
+	trimmed := bytes.TrimLeft(s[:], "\x00")
+	return json.Marshal(trimmed)
+}
+
+func (s *Storage) EncodeRLP(_w io.Writer) error {
+	var obj Storage
+	if s != nil {
+		obj = *s
+	}
+	trimmed := bytes.TrimLeft(obj[:], "\x00")
+	return rlp.Encode(_w, trimmed)
+}
+
+func (s *Storage) DecodeRLP(dec *rlp.Stream) error {
+	err := dec.ReadBytes((*s)[:])
+	return err
 }
 
 // encodingStorageWrite is the encoding format of SlotWrites.
 type encodingSlotWrites struct {
-	Slot     common.Hash            `json:"slot"`
+	Slot     Storage                `json:"slot"`
 	Accesses []encodingStorageWrite `json:"accesses"`
 }
 
@@ -165,7 +221,7 @@ func (e *encodingSlotWrites) validate() error {
 type AccountAccess struct {
 	Address        common.Address          `json:"address,omitempty"`        // 20-byte Ethereum address
 	StorageChanges []encodingSlotWrites    `json:"storageChanges,omitempty"` // Storage changes (slot -> [tx_index -> new_value])
-	StorageReads   []common.Hash           `json:"storageReads,omitempty"`   // Read-only storage keys
+	StorageReads   []Storage               `json:"storageReads,omitempty"`   // Read-only storage keys
 	BalanceChanges []encodingBalanceChange `json:"balanceChanges,omitempty"` // Balance changes ([tx_index -> post_balance])
 	NonceChanges   []encodingAccountNonce  `json:"nonceChanges,omitempty"`   // Nonce changes ([tx_index -> new_nonce])
 	CodeChanges    []CodeChange            `json:"code,omitempty"`           // CodeChanges changes ([tx_index -> new_code])
@@ -186,8 +242,8 @@ func (e *AccountAccess) validate() error {
 			return err
 		}
 	}
-	readKeys := make(map[common.Hash]struct{})
-	writeKeys := make(map[common.Hash]struct{})
+	readKeys := make(map[Storage]struct{})
+	writeKeys := make(map[Storage]struct{})
 	for _, readKey := range e.StorageReads {
 		if _, ok := readKeys[readKey]; ok {
 			return errors.New("duplicate read key")
@@ -209,7 +265,7 @@ func (e *AccountAccess) validate() error {
 	}
 
 	// Check the storage read slots are sorted in order
-	if !slices.IsSortedFunc(e.StorageReads, func(a, b common.Hash) int {
+	if !slices.IsSortedFunc(e.StorageReads, func(a, b Storage) int {
 		return bytes.Compare(a[:], b[:])
 	}) {
 		return errors.New("storage read slots not in lexicographic order")
@@ -276,7 +332,7 @@ func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) Account
 	res := AccountAccess{
 		Address:        addr,
 		StorageChanges: make([]encodingSlotWrites, 0),
-		StorageReads:   make([]common.Hash, 0),
+		StorageReads:   make([]Storage, 0),
 		BalanceChanges: make([]encodingBalanceChange, 0),
 		NonceChanges:   make([]encodingAccountNonce, 0),
 		CodeChanges:    make([]CodeChange, 0),
@@ -284,10 +340,10 @@ func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) Account
 
 	// Convert write slots
 	writeSlots := slices.Collect(maps.Keys(a.StorageWrites))
-	slices.SortFunc(writeSlots, common.Hash.Cmp)
+	slices.SortFunc(writeSlots, Storage.Cmp)
 	for _, slot := range writeSlots {
 		var obj encodingSlotWrites
-		obj.Slot = slot
+		obj.Slot = Storage(slot)
 
 		slotWrites := a.StorageWrites[slot]
 		obj.Accesses = make([]encodingStorageWrite, 0, len(slotWrites))
@@ -297,7 +353,7 @@ func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) Account
 		for _, index := range indices {
 			obj.Accesses = append(obj.Accesses, encodingStorageWrite{
 				TxIdx:      index,
-				ValueAfter: slotWrites[index],
+				ValueAfter: Storage(slotWrites[index]),
 			})
 		}
 		res.StorageChanges = append(res.StorageChanges, obj)
@@ -305,7 +361,7 @@ func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) Account
 
 	// Convert read slots
 	readSlots := slices.Collect(maps.Keys(a.StorageReads))
-	slices.SortFunc(readSlots, common.Hash.Cmp)
+	slices.SortFunc(readSlots, Storage.Cmp)
 	for _, slot := range readSlots {
 		res.StorageReads = append(res.StorageReads, slot)
 	}

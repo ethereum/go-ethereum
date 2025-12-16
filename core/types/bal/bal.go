@@ -55,7 +55,7 @@ func newAccessListBuilder(logger *slog.Logger) *idxAccessListBuilder {
 	}
 }
 
-func (c *idxAccessListBuilder) storageRead(address common.Address, key common.Hash) {
+func (c *idxAccessListBuilder) storageRead(address common.Address, key Storage) {
 	if _, ok := c.accessesStack[len(c.accessesStack)-1][address]; !ok {
 		c.accessesStack[len(c.accessesStack)-1][address] = &constructionAccountAccess{}
 	}
@@ -69,12 +69,12 @@ func (c *idxAccessListBuilder) accountRead(address common.Address) {
 	}
 }
 
-func (c *idxAccessListBuilder) storageWrite(address common.Address, key, prevVal, newVal common.Hash) {
+func (c *idxAccessListBuilder) storageWrite(address common.Address, key, prevVal, newVal Storage) {
 	if _, ok := c.prestates[address]; !ok {
 		c.prestates[address] = &accountIdxPrestate{}
 	}
 	if c.prestates[address].storage == nil {
-		c.prestates[address].storage = make(map[common.Hash]common.Hash)
+		c.prestates[address].storage = make(map[Storage]Storage)
 	}
 	if _, ok := c.prestates[address].storage[key]; !ok {
 		c.prestates[address].storage[key] = prevVal
@@ -134,7 +134,7 @@ func (c *idxAccessListBuilder) codeChange(address common.Address, prev, cur []by
 func (c *idxAccessListBuilder) selfDestruct(address common.Address) {
 	access := c.accessesStack[len(c.accessesStack)-1][address]
 	if len(access.storageMutations) != 0 && access.storageReads == nil {
-		access.storageReads = make(map[common.Hash]struct{})
+		access.storageReads = make(map[Storage]struct{})
 	}
 	for key, _ := range access.storageMutations {
 		access.storageReads[key] = struct{}{}
@@ -219,7 +219,7 @@ func (a *idxAccessListBuilder) finalise() (*StateDiff, StateAccesses) {
 		// if the account has no net mutations against the index prestate, only include
 		// it in the state read set
 		if len(access.code) == 0 && access.nonce == nil && access.balance == nil && len(access.storageMutations) == 0 {
-			stateAccesses[addr] = make(map[common.Hash]struct{})
+			stateAccesses[addr] = make(map[Storage]struct{})
 			if access.storageReads != nil {
 				stateAccesses[addr] = access.storageReads
 			}
@@ -276,11 +276,11 @@ func (c *AccessListBuilder) FinaliseIdxChanges(idx uint16) {
 		}
 		if pendingAcctDiff.StorageWrites != nil {
 			if finalizedAcctChanges.StorageWrites == nil {
-				finalizedAcctChanges.StorageWrites = make(map[common.Hash]map[uint16]common.Hash)
+				finalizedAcctChanges.StorageWrites = make(map[Storage]map[uint16]Storage)
 			}
 			for key, val := range pendingAcctDiff.StorageWrites {
 				if _, ok := finalizedAcctChanges.StorageWrites[key]; !ok {
-					finalizedAcctChanges.StorageWrites[key] = make(map[uint16]common.Hash)
+					finalizedAcctChanges.StorageWrites[key] = make(map[uint16]Storage)
 				}
 				finalizedAcctChanges.StorageWrites[key][idx] = val
 
@@ -310,7 +310,7 @@ func (c *AccessListBuilder) FinaliseIdxChanges(idx uint16) {
 				continue
 			}
 			if finalizedAcctAccesses.StorageReads == nil {
-				finalizedAcctAccesses.StorageReads = make(map[common.Hash]struct{})
+				finalizedAcctAccesses.StorageReads = make(map[Storage]struct{})
 			}
 			finalizedAcctAccesses.StorageReads[key] = struct{}{}
 		}
@@ -319,13 +319,13 @@ func (c *AccessListBuilder) FinaliseIdxChanges(idx uint16) {
 	c.lastFinalizedAccesses = pendingAccesses
 }
 
-func (c *AccessListBuilder) StorageRead(address common.Address, key common.Hash) {
+func (c *AccessListBuilder) StorageRead(address common.Address, key Storage) {
 	c.idxBuilder.storageRead(address, key)
 }
 func (c *AccessListBuilder) AccountRead(address common.Address) {
 	c.idxBuilder.accountRead(address)
 }
-func (c *AccessListBuilder) StorageWrite(address common.Address, key, prevVal, newVal common.Hash) {
+func (c *AccessListBuilder) StorageWrite(address common.Address, key, prevVal, newVal Storage) {
 	c.idxBuilder.storageWrite(address, key, prevVal, newVal)
 }
 func (c *AccessListBuilder) BalanceChange(address common.Address, prev, cur *uint256.Int) {
@@ -362,14 +362,14 @@ type ConstructionAccountAccesses struct {
 	// StorageWrites is the post-state values of an account's storage slots
 	// that were modified in a block, keyed by the slot key and the tx index
 	// where the modification occurred.
-	StorageWrites map[common.Hash]map[uint16]common.Hash
+	StorageWrites map[Storage]map[uint16]Storage
 
 	// StorageReads is the set of slot keys that were accessed during block
 	// execution.
 	//
 	// Storage slots which are both read and written (with changed values)
 	// appear only in StorageWrites.
-	StorageReads map[common.Hash]struct{}
+	StorageReads map[Storage]struct{}
 
 	// BalanceChanges contains the post-transaction balances of an account,
 	// keyed by transaction indices where it was changed.
@@ -391,8 +391,8 @@ type constructionAccountAccess struct {
 	nonce   *uint64
 	balance *uint256.Int
 
-	storageMutations map[common.Hash]common.Hash
-	storageReads     map[common.Hash]struct{}
+	storageMutations map[Storage]Storage
+	storageReads     map[Storage]struct{}
 }
 
 // Merge adds the accesses/mutations from other into the calling instance. If
@@ -408,7 +408,7 @@ func (c *constructionAccountAccess) Merge(other *constructionAccountAccess) {
 	}
 	if other.storageMutations != nil {
 		if c.storageMutations == nil {
-			c.storageMutations = make(map[common.Hash]common.Hash)
+			c.storageMutations = make(map[Storage]Storage)
 		}
 		for key, val := range other.storageMutations {
 			c.storageMutations[key] = val
@@ -417,7 +417,7 @@ func (c *constructionAccountAccess) Merge(other *constructionAccountAccess) {
 	}
 	if other.storageReads != nil {
 		if c.storageReads == nil {
-			c.storageReads = make(map[common.Hash]struct{})
+			c.storageReads = make(map[Storage]struct{})
 		}
 		// TODO: if the state was mutated in the caller, don't add it to the caller's reads.
 		// need to have a test case for this, verify it fails in the current state, and then fix this bug.
@@ -433,7 +433,7 @@ func (c *constructionAccountAccess) Merge(other *constructionAccountAccess) {
 func (c *constructionAccountAccess) MergeReads(other *constructionAccountAccess) {
 	if other.storageMutations != nil {
 		if c.storageReads == nil {
-			c.storageReads = make(map[common.Hash]struct{})
+			c.storageReads = make(map[Storage]struct{})
 		}
 		for key, _ := range other.storageMutations {
 			if _, ok := c.storageMutations[key]; ok {
@@ -444,7 +444,7 @@ func (c *constructionAccountAccess) MergeReads(other *constructionAccountAccess)
 	}
 	if other.storageReads != nil {
 		if c.storageReads == nil {
-			c.storageReads = make(map[common.Hash]struct{})
+			c.storageReads = make(map[Storage]struct{})
 		}
 		for key := range other.storageReads {
 			if _, ok := c.storageMutations[key]; ok {
@@ -455,18 +455,18 @@ func (c *constructionAccountAccess) MergeReads(other *constructionAccountAccess)
 	}
 }
 
-func (c *constructionAccountAccess) StorageRead(key common.Hash) {
+func (c *constructionAccountAccess) StorageRead(key Storage) {
 	if c.storageReads == nil {
-		c.storageReads = make(map[common.Hash]struct{})
+		c.storageReads = make(map[Storage]struct{})
 	}
 	if _, ok := c.storageMutations[key]; !ok {
 		c.storageReads[key] = struct{}{}
 	}
 }
 
-func (c *constructionAccountAccess) StorageWrite(key, prevVal, newVal common.Hash) {
+func (c *constructionAccountAccess) StorageWrite(key, prevVal, newVal Storage) {
 	if c.storageMutations == nil {
-		c.storageMutations = make(map[common.Hash]common.Hash)
+		c.storageMutations = make(map[Storage]Storage)
 	}
 	c.storageMutations[key] = newVal
 	// a key can be first read and later written, but it must only show up
@@ -518,7 +518,7 @@ func (c *AccessListBuilder) Copy() *AccessListBuilder {
 	for addr, aa := range c.FinalizedAccesses {
 		var aaCopy ConstructionAccountAccesses
 
-		slotWrites := make(map[common.Hash]map[uint16]common.Hash, len(aa.StorageWrites))
+		slotWrites := make(map[Storage]map[uint16]Storage, len(aa.StorageWrites))
 		for key, m := range aa.StorageWrites {
 			slotWrites[key] = maps.Clone(m)
 		}
@@ -558,13 +558,13 @@ type StateDiff struct {
 
 // StateAccesses contains a set of accounts/storage that were accessed during the
 // execution of one or more access list indices.
-type StateAccesses map[common.Address]map[common.Hash]struct{}
+type StateAccesses map[common.Address]map[Storage]struct{}
 
 // Merge combines adds the accesses from other into s.
 func (s *StateAccesses) Merge(other StateAccesses) {
 	for addr, accesses := range other {
 		if _, ok := (*s)[addr]; !ok {
-			(*s)[addr] = make(map[common.Hash]struct{})
+			(*s)[addr] = make(map[Storage]struct{})
 		}
 		for slot := range accesses {
 			(*s)[addr][slot] = struct{}{}
@@ -578,16 +578,16 @@ type accountIdxPrestate struct {
 	balance *uint256.Int
 	nonce   *uint64
 	code    ContractCode
-	storage map[common.Hash]common.Hash
+	storage map[Storage]Storage
 }
 
 // AccountMutations contains mutations that were made to an account across
 // one or more access list indices.
 type AccountMutations struct {
-	Balance       *uint256.Int                `json:"Balance,omitempty"`
-	Nonce         *uint64                     `json:"Nonce,omitempty"`
-	Code          ContractCode                `json:"Code,omitempty"`
-	StorageWrites map[common.Hash]common.Hash `json:"StorageWrites,omitempty"`
+	Balance       *uint256.Int        `json:"Balance,omitempty"`
+	Nonce         *uint64             `json:"Nonce,omitempty"`
+	Code          ContractCode        `json:"Code,omitempty"`
+	StorageWrites map[Storage]Storage `json:"StorageWrites,omitempty"`
 }
 
 // String returns a human-readable JSON representation of the account mutations.
@@ -618,7 +618,7 @@ func (a *AccountMutations) LogDiff(addr common.Address, other *AccountMutations)
 
 	if a.StorageWrites != nil || other.StorageWrites != nil {
 		if !maps.Equal(a.StorageWrites, other.StorageWrites) {
-			union := make(map[common.Hash]struct{})
+			union := make(map[Storage]struct{})
 			for slot, _ := range a.StorageWrites {
 				union[slot] = struct{}{}
 			}
@@ -626,7 +626,7 @@ func (a *AccountMutations) LogDiff(addr common.Address, other *AccountMutations)
 				union[slot] = struct{}{}
 			}
 
-			orderedKeys := slices.SortedFunc(maps.Keys(union), func(hash common.Hash, hash2 common.Hash) int {
+			orderedKeys := slices.SortedFunc(maps.Keys(union), func(hash Storage, hash2 Storage) int {
 				return bytes.Compare(hash[:], hash2[:])
 			})
 

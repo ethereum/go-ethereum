@@ -197,11 +197,11 @@ func (s *BALStateTransition) commitAccount(addr common.Address) (*accountUpdate,
 	op.storagesOriginByKey = make(map[common.Hash][]byte)
 
 	for key, value := range s.diffs[addr].StorageWrites {
-		hash := crypto.Keccak256Hash(key.Bytes())
-		op.storages[hash] = encode(value)
-		origin := encode(s.originStorages[addr][key])
+		hash := crypto.Keccak256Hash(key[:])
+		op.storages[hash] = encode(common.Hash(value))
+		origin := encode(s.originStorages[addr][common.Hash(key)])
 		op.storagesOriginByHash[hash] = origin
-		op.storagesOriginByKey[key] = origin
+		op.storagesOriginByKey[common.Hash(key)] = origin
 	}
 	tr, _ := s.tries.Load(addr)
 	root, nodes := tr.(Trie).Commit(false)
@@ -377,14 +377,14 @@ func (s *BALStateTransition) loadOriginStorages() {
 		for key := range diff.StorageWrites {
 			storageKey := key
 			go func() {
-				val, err := s.reader.Storage(addr, storageKey)
+				val, err := s.reader.Storage(addr, common.Hash(storageKey))
 				if err != nil {
 					s.setError(err)
 					return
 				}
 				originStoragesCh <- &originStorage{
 					addr,
-					storageKey,
+					common.Hash(storageKey),
 					val,
 				}
 			}()
@@ -469,7 +469,7 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 					deleteKeys               [][]byte
 				)
 				for key, val := range diff.StorageWrites {
-					if val != (common.Hash{}) {
+					if val != (bal.Storage{}) {
 						updateKeys = append(updateKeys, key[:])
 						updateValues = append(updateValues, common.TrimLeftZeroes(val[:]))
 

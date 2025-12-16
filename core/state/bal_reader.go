@@ -106,7 +106,7 @@ func (r *BALReader) initObjFromDiff(db *StateDB, addr common.Address, a *types.S
 	}
 	if diff.StorageWrites != nil {
 		for key, val := range diff.StorageWrites {
-			obj.pendingStorage[key] = val
+			obj.pendingStorage[common.Hash(key)] = common.Hash(val)
 		}
 	}
 	if obj.empty() {
@@ -227,7 +227,7 @@ func (r *BALReader) accountChangesAt(addr common.Address, idx int) *bal.AccountM
 
 	for i := len(acct.StorageChanges) - 1; i >= 0; i-- {
 		if res.StorageWrites == nil {
-			res.StorageWrites = make(map[common.Hash]common.Hash)
+			res.StorageWrites = make(map[bal.Storage]bal.Storage)
 		}
 		slotWrites := acct.StorageChanges[i]
 
@@ -288,7 +288,7 @@ func (r *BALReader) readAccountDiff(addr common.Address, idx int) *bal.AccountMu
 	}
 
 	if len(diff.StorageChanges) > 0 {
-		res.StorageWrites = make(map[common.Hash]common.Hash)
+		res.StorageWrites = make(map[bal.Storage]bal.Storage)
 		for _, slotWrites := range diff.StorageChanges {
 			for i := 0; i < len(slotWrites.Accesses) && slotWrites.Accesses[i].TxIdx <= uint16(idx); i++ {
 				res.StorageWrites[slotWrites.Slot] = slotWrites.Accesses[i].ValueAfter

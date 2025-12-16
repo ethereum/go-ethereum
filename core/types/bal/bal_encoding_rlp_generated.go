@@ -87,7 +87,7 @@ func (obj *AccountAccess) DecodeRLP(dec *rlp.Stream) error {
 					return err
 				}
 				// Slot:
-				var _tmp4 common.Hash
+				var _tmp4 Storage
 				if err := dec.ReadBytes(_tmp4[:]); err != nil {
 					return err
 				}
@@ -110,7 +110,7 @@ func (obj *AccountAccess) DecodeRLP(dec *rlp.Stream) error {
 						}
 						_tmp6.TxIdx = _tmp7
 						// ValueAfter:
-						var _tmp8 common.Hash
+						var _tmp8 Storage
 						if err := dec.ReadBytes(_tmp8[:]); err != nil {
 							return err
 						}
@@ -136,12 +136,12 @@ func (obj *AccountAccess) DecodeRLP(dec *rlp.Stream) error {
 		}
 		_tmp0.StorageChanges = _tmp2
 		// StorageReads:
-		var _tmp9 []common.Hash
+		var _tmp9 []Storage
 		if _, err := dec.List(); err != nil {
 			return err
 		}
 		for dec.MoreDataInList() {
-			var _tmp10 common.Hash
+			var _tmp10 Storage
 			if err := dec.ReadBytes(_tmp10[:]); err != nil {
 				return err
 			}
