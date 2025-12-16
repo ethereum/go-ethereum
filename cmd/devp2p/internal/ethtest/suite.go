@@ -426,7 +426,7 @@ func (s *Suite) TestGetReceipts(t *utesting.T) {
 	// Find some blocks containing receipts.
 	var hashes = make([]common.Hash, 0, 3)
 	for i := range s.chain.Len() {
-		if uint64(i) == s.chain.txInfo.LargeReceiptBlock && conn.negotiatedProtoVersion < eth.ETH70 {
+		if s.chain.txInfo.LargeReceiptBlock != nil && uint64(i) == *s.chain.txInfo.LargeReceiptBlock {
 			continue
 		}
 		block := s.chain.GetBlock(i)
@@ -484,37 +484,36 @@ func (s *Suite) TestGetReceipts(t *utesting.T) {
 
 func (s *Suite) TestGetLargeReceipts(t *utesting.T) {
 	t.Log(`This test sends GetReceipts requests to the node for large receipt (>10MiB) in the test chain.
-	This test is meaningful only if the client supports protocol version greater than or equal to ETH70.`)
+	This test is meaningful only if the client supports protocol version ETH70 or higher 
+	and LargeReceiptBlock is configured in txInfo.json.`)
 	conn, err := s.dialAndPeer(nil)
 	if err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
 	defer conn.Close()
 
-	if conn.negotiatedProtoVersion < eth.ETH70 {
+	if conn.negotiatedProtoVersion < eth.ETH70 || s.chain.txInfo.LargeReceiptBlock == nil {
 		return
 	}
 
 	// Find block with large receipt.
 	// Place the large receipt block hash in the middle of the query
-	start := max(s.chain.txInfo.LargeReceiptBlock-2, 0)
-	end := min(s.chain.txInfo.LargeReceiptBlock+2, uint64(len(s.chain.blocks)))
+	start := max(int(*s.chain.txInfo.LargeReceiptBlock)-2, 0)
+	end := min(*s.chain.txInfo.LargeReceiptBlock+2, uint64(len(s.chain.blocks)))
 
 	var blocks []common.Hash
 	var receiptHashes []common.Hash
+	var receipts []*eth.ReceiptList69
 
-	for i := start; i < end; i++ {
+	for i := uint64(start); i < end; i++ {
 		block := s.chain.GetBlock(int(i))
 		blocks = append(blocks, block.Hash())
 		receiptHashes = append(receiptHashes, block.Header().ReceiptHash)
+		receipts = append(receipts, &eth.ReceiptList69{})
 	}
 
 	incomplete := false
 	lastBlock := 0
-	receipts := make([]*eth.ReceiptList69, len(blocks))
-	for i := range receipts {
-		receipts[i] = &eth.ReceiptList69{}
-	}
 
 	for incomplete || lastBlock != len(blocks)-1 {
 		// Create get receipt request.

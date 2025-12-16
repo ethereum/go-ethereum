@@ -56,7 +56,7 @@ type Chain struct {
 }
 
 type txInfo struct {
-	LargeReceiptBlock uint64 `json:"tx-largereceipt"`
+	LargeReceiptBlock *uint64 `json:"tx-largereceipt"`
 }
 
 // NewChain takes the given chain.rlp file, and decodes and returns
