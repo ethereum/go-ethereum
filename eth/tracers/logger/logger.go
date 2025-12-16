@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -42,11 +43,12 @@ type Storage map[common.Hash]common.Hash
 
 // Config are the configuration options for structured logger the EVM
 type Config struct {
-	EnableMemory     bool // enable memory capture
-	DisableStack     bool // disable stack capture
-	DisableStorage   bool // disable storage capture
-	EnableReturnData bool // enable return data capture
-	Limit            int  // maximum size of output, but zero means unlimited
+	EnableMemory        bool // enable memory capture
+	DisableStack        bool // disable stack capture
+	DisableStorage      bool // disable storage capture
+	EnableReturnData    bool // enable return data capture
+	EnableActualGasCost bool // enable actual gas cost computation from consecutive gas values (non-streaming mode only)
+	Limit               int  // maximum size of output, but zero means unlimited
 	// Chain overrides, can be used to execute a trace using future fork rules
 	Overrides *params.ChainConfig `json:"overrides,omitempty"`
 }
@@ -216,9 +218,11 @@ type StructLogger struct {
 	err     error
 	usedGas uint64
 
-	writer     io.Writer         // If set, the logger will stream instead of store logs
-	logs       []json.RawMessage // buffer of json-encoded logs
-	resultSize int
+	writer        io.Writer         // If set, the logger will stream instead of store logs
+	jsonLogs      []json.RawMessage // buffer of json-encoded logs (when EnableActualGasCost is false)
+	logs          []*StructLog      // buffer of logs for deferred JSON encoding (when EnableActualGasCost is true)
+	pendingGasIdx []int             // index into logs for pending gas update at each depth
+	resultSize    int
 
 	interrupt atomic.Bool // Atomic flag to signal execution interruption
 	reason    error       // Textual reason for the interruption
@@ -229,17 +233,26 @@ type StructLogger struct {
 func NewStreamingStructLogger(cfg *Config, writer io.Writer) *StructLogger {
 	l := NewStructLogger(cfg)
 	l.writer = writer
+	if cfg != nil && cfg.EnableActualGasCost {
+		log.Warn("EnableActualGasCost is not supported in streaming mode, ignoring")
+		l.cfg.EnableActualGasCost = false
+		l.pendingGasIdx = nil
+	}
 	return l
 }
 
 // NewStructLogger construct a new (non-streaming) struct logger.
 func NewStructLogger(cfg *Config) *StructLogger {
 	logger := &StructLogger{
-		storage: make(map[common.Address]Storage),
-		logs:    make([]json.RawMessage, 0),
+		storage:  make(map[common.Address]Storage),
+		jsonLogs: make([]json.RawMessage, 0),
 	}
 	if cfg != nil {
 		logger.cfg = *cfg
+		if cfg.EnableActualGasCost {
+			logger.logs = make([]*StructLog, 0)
+			logger.pendingGasIdx = make([]int, 0, 16)
+		}
 	}
 	return logger
 }
@@ -278,15 +291,15 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 		stack        = scope.StackData()
 		stackLen     = len(stack)
 	)
-	log := StructLog{pc, op, gas, cost, nil, len(memory), nil, nil, nil, depth, l.env.StateDB.GetRefund(), err}
+	slog := StructLog{pc, op, gas, cost, nil, len(memory), nil, nil, nil, depth, l.env.StateDB.GetRefund(), err}
 	if l.cfg.EnableMemory {
-		log.Memory = memory
+		slog.Memory = memory
 	}
 	if !l.cfg.DisableStack {
-		log.Stack = scope.StackData()
+		slog.Stack = scope.StackData()
 	}
 	if l.cfg.EnableReturnData {
-		log.ReturnData = rData
+		slog.ReturnData = rData
 	}
 
 	// Copy a snapshot of the current storage to a new container
@@ -315,16 +328,44 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 			storage = maps.Clone(l.storage[contractAddr])
 		}
 	}
-	log.Storage = storage
+	slog.Storage = storage
 
 	// create a log
 	if l.writer == nil {
-		entry := log.toLegacyJSON()
-		l.resultSize += len(entry)
-		l.logs = append(l.logs, entry)
+		if l.cfg.EnableActualGasCost {
+			// Store struct for later GasCost modification and deferred JSON encoding
+			l.logs = append(l.logs, &slog)
+			// Approximate size for limit checking. This intentionally overestimates
+			// since exact JSON size is only known after final encoding with updated
+			// gas costs. Constants: ~100 bytes base, 66 per stack item (hex u256),
+			// 2 per memory byte (hex), 132 per storage entry (two hex hashes).
+			l.resultSize += 100 + len(slog.Stack)*66 + len(slog.Memory)*2 + len(slog.ReturnData)*2 + len(slog.Storage)*132
+
+			// Ensure pendingGasIdx slice is large enough for this depth
+			for len(l.pendingGasIdx) <= depth {
+				l.pendingGasIdx = append(l.pendingGasIdx, -1)
+			}
+			// Clear pending indices from deeper levels (we've returned from calls).
+			// These are the last opcodes in child call contexts - we cannot compute
+			// actual gas cost across call boundaries, so keep the pre-calculated cost.
+			for d := len(l.pendingGasIdx) - 1; d > depth; d-- {
+				l.pendingGasIdx[d] = -1
+			}
+			// Update gas cost for pending log at current depth
+			if l.pendingGasIdx[depth] >= 0 {
+				l.logs[l.pendingGasIdx[depth]].GasCost = l.logs[l.pendingGasIdx[depth]].Gas - gas
+			}
+			// Store current log's index as pending at this depth
+			l.pendingGasIdx[depth] = len(l.logs) - 1
+		} else {
+			// Original behavior: encode to JSON immediately with exact size tracking
+			entry := slog.toLegacyJSON()
+			l.resultSize += len(entry)
+			l.jsonLogs = append(l.jsonLogs, entry)
+		}
 		return
 	}
-	log.Write(l.writer)
+	slog.Write(l.writer)
 }
 
 // OnExit is called a call frame finishes processing.
@@ -357,11 +398,25 @@ func (l *StructLogger) GetResult() (json.RawMessage, error) {
 	if failed && !errors.Is(l.err, vm.ErrExecutionReverted) {
 		returnData = []byte{}
 	}
+
+	// Get the appropriate logs based on mode
+	var structLogs []json.RawMessage
+	if l.cfg.EnableActualGasCost {
+		// Convert deferred logs to JSON
+		structLogs = make([]json.RawMessage, 0, len(l.logs))
+		for _, slog := range l.logs {
+			structLogs = append(structLogs, slog.toLegacyJSON())
+		}
+	} else {
+		// Use pre-encoded JSON logs
+		structLogs = l.jsonLogs
+	}
+
 	return json.Marshal(&ExecutionResult{
 		Gas:         l.usedGas,
 		Failed:      failed,
 		ReturnValue: returnData,
-		StructLogs:  l.logs,
+		StructLogs:  structLogs,
 	})
 }
 
