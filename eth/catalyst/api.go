@@ -981,10 +981,22 @@ func (api *ConsensusAPI) checkFork(timestamp uint64, forks ...forks.Fork) bool {
 func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
 	valueT := reflect.TypeOf(api)
 	caps := make([]string, 0, valueT.NumMethod())
+	restrictions := map[string]func() bool{
+		"GetBlobsV2": func() bool {
+			cfg := api.config()
+			return cfg.OsakaTime != nil && uint64(time.Now().Unix()) >= *cfg.OsakaTime
+		},
+	}
 	for i := 0; i < valueT.NumMethod(); i++ {
-		name := []rune(valueT.Method(i).Name)
+		methodName := valueT.Method(i).Name
+		name := []rune(methodName)
 		if string(name) == "ExchangeCapabilities" {
 			continue
+		}
+		if isAllowed, exists := restrictions[methodName]; exists {
+			if !isAllowed() {
+				continue
+			}
 		}
 		caps = append(caps, "engine_"+string(unicode.ToLower(name[0]))+string(name[1:]))
 	}
