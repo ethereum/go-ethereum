@@ -235,7 +235,15 @@ func blockBodyKey(number uint64, hash common.Hash) []byte {
 
 // blockReceiptsKey = blockReceiptsPrefix + num (uint64 big endian) + hash
 func blockReceiptsKey(number uint64, hash common.Hash) []byte {
-	return append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+	totalLen := len(blockReceiptsPrefix) + 8 + common.HashLength
+	out := make([]byte, totalLen)
+
+	off := 0
+	off += copy(out[off:], blockReceiptsPrefix)
+	off += copy(out[off:], encodeBlockNumber(number))
+	copy(out[off:], hash.Bytes())
+
+	return out
 }
 
 // txLookupKey = txLookupPrefix + hash
