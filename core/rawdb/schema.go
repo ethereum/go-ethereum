@@ -191,7 +191,15 @@ func headerKeyPrefix(number uint64) []byte {
 
 // headerKey = headerPrefix + num (uint64 big endian) + hash
 func headerKey(number uint64, hash common.Hash) []byte {
-	return append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+	totalLen := len(headerPrefix) + 8 + common.HashLength
+	out := make([]byte, totalLen)
+
+	off := 0
+	off += copy(out[off:], headerPrefix)
+	off += copy(out[off:], encodeBlockNumber(number))
+	copy(out[off:], hash.Bytes())
+
+	return out
 }
 
 // headerHashKey = headerPrefix + num (uint64 big endian) + headerHashSuffix
