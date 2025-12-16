@@ -469,7 +469,7 @@ func (s *BALStateTransition) IntermediateRoot(_ bool) common.Hash {
 					deleteKeys               [][]byte
 				)
 				for key, val := range diff.StorageWrites {
-					if val != (bal.Storage{}) {
+					if val != (common.Hash{}) {
 						updateKeys = append(updateKeys, key[:])
 						updateValues = append(updateValues, common.TrimLeftZeroes(val[:]))
 

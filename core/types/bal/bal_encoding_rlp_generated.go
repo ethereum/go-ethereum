@@ -14,12 +14,12 @@ func (obj *AccountAccess) EncodeRLP(_w io.Writer) error {
 	_tmp1 := w.List()
 	for _, _tmp2 := range obj.StorageChanges {
 		_tmp3 := w.List()
-		w.WriteBytes(_tmp2.Slot[:])
+		w.WriteBytes(_tmp2.Slot)
 		_tmp4 := w.List()
 		for _, _tmp5 := range _tmp2.Accesses {
 			_tmp6 := w.List()
 			w.WriteUint64(uint64(_tmp5.TxIdx))
-			w.WriteBytes(_tmp5.ValueAfter[:])
+			w.WriteBytes(_tmp5.ValueAfter)
 			w.ListEnd(_tmp6)
 		}
 		w.ListEnd(_tmp4)
@@ -28,7 +28,7 @@ func (obj *AccountAccess) EncodeRLP(_w io.Writer) error {
 	w.ListEnd(_tmp1)
 	_tmp7 := w.List()
 	for _, _tmp8 := range obj.StorageReads {
-		w.WriteBytes(_tmp8[:])
+		w.WriteBytes(_tmp8)
 	}
 	w.ListEnd(_tmp7)
 	_tmp9 := w.List()
@@ -87,8 +87,8 @@ func (obj *AccountAccess) DecodeRLP(dec *rlp.Stream) error {
 					return err
 				}
 				// Slot:
-				var _tmp4 Storage
-				if err := dec.ReadBytes(_tmp4[:]); err != nil {
+				_tmp4, err := dec.Bytes()
+				if err != nil {
 					return err
 				}
 				_tmp3.Slot = _tmp4
@@ -110,8 +110,8 @@ func (obj *AccountAccess) DecodeRLP(dec *rlp.Stream) error {
 						}
 						_tmp6.TxIdx = _tmp7
 						// ValueAfter:
-						var _tmp8 Storage
-						if err := dec.ReadBytes(_tmp8[:]); err != nil {
+						_tmp8, err := dec.Bytes()
+						if err != nil {
 							return err
 						}
 						_tmp6.ValueAfter = _tmp8
@@ -136,13 +136,13 @@ func (obj *AccountAccess) DecodeRLP(dec *rlp.Stream) error {
 		}
 		_tmp0.StorageChanges = _tmp2
 		// StorageReads:
-		var _tmp9 []Storage
+		var _tmp9 []encodedStorage
 		if _, err := dec.List(); err != nil {
 			return err
 		}
 		for dec.MoreDataInList() {
-			var _tmp10 Storage
-			if err := dec.ReadBytes(_tmp10[:]); err != nil {
+			_tmp10, err := dec.Bytes()
+			if err != nil {
 				return err
 			}
 			_tmp9 = append(_tmp9, _tmp10)

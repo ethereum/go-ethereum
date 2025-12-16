@@ -163,7 +163,7 @@ func (r *BALReader) ValidateStateReads(allReads bal.StateAccesses) error {
 		}
 
 		for _, slot := range expectedReads {
-			if _, ok := reads[slot]; !ok {
+			if _, ok := reads[slot.ToHash()]; !ok {
 				return fmt.Errorf("expected read is missing from BAL")
 			}
 		}
@@ -227,13 +227,13 @@ func (r *BALReader) accountChangesAt(addr common.Address, idx int) *bal.AccountM
 
 	for i := len(acct.StorageChanges) - 1; i >= 0; i-- {
 		if res.StorageWrites == nil {
-			res.StorageWrites = make(map[bal.Storage]bal.Storage)
+			res.StorageWrites = make(map[common.Hash]common.Hash)
 		}
 		slotWrites := acct.StorageChanges[i]
 
 		for j := len(slotWrites.Accesses) - 1; j >= 0; j-- {
 			if slotWrites.Accesses[j].TxIdx == uint16(idx) {
-				res.StorageWrites[slotWrites.Slot] = slotWrites.Accesses[j].ValueAfter
+				res.StorageWrites[slotWrites.Slot.ToHash()] = slotWrites.Accesses[j].ValueAfter.ToHash()
 				break
 			}
 			if slotWrites.Accesses[j].TxIdx < uint16(idx) {
@@ -288,10 +288,10 @@ func (r *BALReader) readAccountDiff(addr common.Address, idx int) *bal.AccountMu
 	}
 
 	if len(diff.StorageChanges) > 0 {
-		res.StorageWrites = make(map[bal.Storage]bal.Storage)
+		res.StorageWrites = make(map[common.Hash]common.Hash)
 		for _, slotWrites := range diff.StorageChanges {
 			for i := 0; i < len(slotWrites.Accesses) && slotWrites.Accesses[i].TxIdx <= uint16(idx); i++ {
-				res.StorageWrites[slotWrites.Slot] = slotWrites.Accesses[i].ValueAfter
+				res.StorageWrites[slotWrites.Slot.ToHash()] = slotWrites.Accesses[i].ValueAfter.ToHash()
 			}
 		}
 	}

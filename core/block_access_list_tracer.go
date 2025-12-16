@@ -95,7 +95,7 @@ func (a *BlockAccessListTracer) OnNonceChange(addr common.Address, prev uint64, 
 }
 
 func (a *BlockAccessListTracer) OnStorageRead(addr common.Address, key common.Hash) {
-	a.builder.StorageRead(addr, bal.Storage(key))
+	a.builder.StorageRead(addr, key)
 }
 
 func (a *BlockAccessListTracer) OnAcountRead(addr common.Address) {
@@ -103,5 +103,5 @@ func (a *BlockAccessListTracer) OnAcountRead(addr common.Address) {
 }
 
 func (a *BlockAccessListTracer) OnStorageChange(addr common.Address, slot common.Hash, prev common.Hash, new common.Hash) {
-	a.builder.StorageWrite(addr, bal.Storage(slot), bal.Storage(prev), bal.Storage(new))
+	a.builder.StorageWrite(addr, slot, prev, new)
 }
