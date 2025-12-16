@@ -18,7 +18,6 @@ package vm
 
 import (
 	"errors"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -268,6 +267,9 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 			// If the caller cannot afford the cost, this change will be rolled back
 			evm.StateDB.AddAddressToAccessList(address)
 			gas = params.ColdAccountAccessCostEIP2929
+		}
+		if contract.Gas < gas {
+			return gas, nil
 		}
 		// if empty and transfers value
 		if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {

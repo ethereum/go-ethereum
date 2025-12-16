@@ -143,10 +143,10 @@ func (r *BALReader) ModifiedAccounts() (res []common.Address) {
 	return res
 }
 
-func (r *BALReader) ValidateStateReads(allReads bal.StateAccesses) error {
+func (r *BALReader) ValidateStateReads(computedReads bal.StateAccesses) error {
 	// 1. remove any slots from 'allReads' which were written
 	// 2. validate that the read set in the BAL matches 'allReads' exactly
-	for addr, reads := range allReads {
+	for addr, reads := range computedReads {
 		balAcctDiff := r.readAccountDiff(addr, len(r.block.Transactions())+2)
 		if balAcctDiff != nil {
 			for writeSlot := range balAcctDiff.StorageWrites {
@@ -154,7 +154,7 @@ func (r *BALReader) ValidateStateReads(allReads bal.StateAccesses) error {
 			}
 		}
 		if _, ok := r.accesses[addr]; !ok {
-			return fmt.Errorf("%x wasn't in BAL", addr)
+			return fmt.Errorf("account %x was accessed during execution but is not present in the access list", addr)
 		}
 
 		expectedReads := r.accesses[addr].StorageReads
