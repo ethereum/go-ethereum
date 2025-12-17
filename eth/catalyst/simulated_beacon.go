@@ -255,7 +255,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		requests = envelope.Requests
 	}
 
-	method := newPayloadV1
+	var method newPayloadMethod
 	switch version {
 	case engine.PayloadV1:
 		method = newPayloadV1

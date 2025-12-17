@@ -26,7 +26,6 @@ var (
 
 // initEngineTelemetry initializes the OpenTelemetry tracing for the engine API.
 func initEngineTelemetry() {
-
 	// TODO(jrhea): allow caller to provide init context once lifecycle plumbing exists.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
