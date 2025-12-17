@@ -143,7 +143,42 @@ func (r *BALReader) ModifiedAccounts() (res []common.Address) {
 	return res
 }
 
-func (r *BALReader) ValidateStateReads(computedReads bal.StateAccesses) error {
+func logReadsDiff(idx int, address common.Address, computedReads map[common.Hash]struct{}, expectedReads []*bal.EncodedStorage) {
+	expectedReadsMap := make(map[common.Hash]struct{})
+	for _, er := range expectedReads {
+		expectedReadsMap[er.ToHash()] = struct{}{}
+	}
+
+	allReads := make(map[common.Hash]struct{})
+
+	for er := range expectedReadsMap {
+		allReads[er] = struct{}{}
+	}
+	for cr := range computedReads {
+		allReads[cr] = struct{}{}
+	}
+
+	var missingExpected, missingComputed []common.Hash
+
+	for storage := range allReads {
+		_, hasComputed := computedReads[storage]
+		_, hasExpected := expectedReadsMap[storage]
+		if hasComputed && !hasExpected {
+			missingExpected = append(missingExpected, storage)
+		}
+		if !hasComputed && hasExpected {
+			missingComputed = append(missingComputed, storage)
+		}
+	}
+	if len(missingExpected) > 0 {
+		log.Error("read storage slots which were not reported in the BAL", "index", idx, "address", address, missingExpected)
+	}
+	if len(missingComputed) > 0 {
+		log.Error("did not read storage slots which were reported in the BAL", "index", idx, "address", address, missingComputed)
+	}
+}
+
+func (r *BALReader) ValidateStateReads(idx int, computedReads bal.StateAccesses) bool {
 	// 1. remove any slots from 'allReads' which were written
 	// 2. validate that the read set in the BAL matches 'allReads' exactly
 	for addr, reads := range computedReads {
@@ -154,22 +189,25 @@ func (r *BALReader) ValidateStateReads(computedReads bal.StateAccesses) error {
 			}
 		}
 		if _, ok := r.accesses[addr]; !ok {
-			return fmt.Errorf("account %x was accessed during execution but is not present in the access list", addr)
+			log.Error(fmt.Sprintf("account %x was accessed during execution but is not present in the access list", addr))
+			return false
 		}
 
 		expectedReads := r.accesses[addr].StorageReads
 		if len(reads) != len(expectedReads) {
-			return fmt.Errorf("mismatch between the number of computed reads and number of expected reads")
+			logReadsDiff(idx, addr, reads, expectedReads)
+			return false
 		}
 
 		for _, slot := range expectedReads {
 			if _, ok := reads[slot.ToHash()]; !ok {
-				return fmt.Errorf("expected read is missing from BAL")
+				log.Error("expected read is missing from BAL")
+				return false
 			}
 		}
 	}
 
-	return nil
+	return true
 }
 
 // changesAt returns all state changes occurring at the given index.

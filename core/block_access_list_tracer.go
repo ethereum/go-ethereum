@@ -17,6 +17,18 @@ type BlockAccessListTracer struct {
 
 	// the access list index that changes are currently being recorded into
 	balIdx uint16
+
+	// the number of system calls that have been invoked, used when building
+	// an access list to determine if the system calls being executed are
+	// before/after the block transactions.
+	sysCallCount int
+
+	// true if the tracer is processing post-tx state changes.  in this case
+	// we won't record the final index after the end of the second post-tx
+	// system contract but after the finalization of the block.
+	// This is because we have EIP-4895 withdrawals which are processed after the
+	// last system contracts execute and must be included in the BAL.
+	isPostTx bool
 }
 
 // NewBlockAccessListTracer returns an BlockAccessListTracer and a set of hooks
@@ -26,7 +38,6 @@ func NewBlockAccessListTracer() (*BlockAccessListTracer, *tracing.Hooks) {
 	}
 	hooks := &tracing.Hooks{
 		OnBlockFinalization:  balTracer.OnBlockFinalization,
-		OnPreTxExecutionDone: balTracer.OnPreTxExecutionDone,
 		OnTxEnd:              balTracer.TxEndHook,
 		OnTxStart:            balTracer.TxStartHook,
 		OnEnter:              balTracer.OnEnter,
@@ -38,9 +49,14 @@ func NewBlockAccessListTracer() (*BlockAccessListTracer, *tracing.Hooks) {
 		OnStorageRead:        balTracer.OnStorageRead,
 		OnAccountRead:        balTracer.OnAcountRead,
 		OnSelfDestructChange: balTracer.OnSelfDestruct,
+		OnSystemCallEnd:      balTracer.OnSystemCallEnd,
 	}
 	wrappedHooks, _ := tracing.WrapWithJournal(hooks)
 	return balTracer, wrappedHooks
+}
+
+func (a *BlockAccessListTracer) SetPostTx() {
+	a.isPostTx = true
 }
 
 // AccessList returns the constructed access list.
@@ -50,9 +66,15 @@ func (a *BlockAccessListTracer) AccessList() *bal.AccessListBuilder {
 	return a.builder
 }
 
-func (a *BlockAccessListTracer) OnPreTxExecutionDone() {
-	a.builder.FinaliseIdxChanges(0)
-	a.balIdx++
+func (a *BlockAccessListTracer) OnSystemCallEnd() {
+	if a.isPostTx {
+		return
+	}
+	a.sysCallCount++
+	if a.sysCallCount == 2 {
+		a.builder.FinaliseIdxChanges(a.balIdx)
+		a.balIdx++
+	}
 }
 
 func (a *BlockAccessListTracer) TxStartHook(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {

@@ -52,9 +52,12 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateR
 	header := block.Header()
 
 	balTracer, hooks := NewBlockAccessListTracer()
+	balTracer.SetPostTx()
+
 	tracingStateDB := state.NewHookedState(postTxState, hooks)
 	context := NewEVMBlockContext(header, p.chain, nil)
-	postTxState.SetAccessListIndex(len(block.Transactions()) + 1)
+	lastBALIdx := len(block.Transactions()) + 1
+	postTxState.SetAccessListIndex(lastBALIdx)
 
 	cfg := vm.Config{
 		Tracer:                  hooks,
@@ -122,6 +125,8 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateR
 	diff, stateReads := balTracer.builder.FinalizedIdxChanges()
 	allStateReads.Merge(stateReads)
 
+	// TODO: if there is a failure, we need to print out the detailed logs explaining why the BAL validation failed
+	// but logs are disabled when we are running tests to prevent a ton of output
 	balIdx := len(block.Transactions()) + 1
 	if !postTxState.BlockAccessList().ValidateStateDiff(balIdx, diff) {
 		return &ProcessResultWithMetrics{
@@ -129,9 +134,9 @@ func (p *ParallelStateProcessor) prepareExecResult(block *types.Block, allStateR
 		}
 	}
 
-	if err := postTxState.BlockAccessList().ValidateStateReads(*allStateReads); err != nil {
+	if !postTxState.BlockAccessList().ValidateStateReads(lastBALIdx, *allStateReads) {
 		return &ProcessResultWithMetrics{
-			ProcessResult: &ProcessResult{Error: err},
+			ProcessResult: &ProcessResult{Error: fmt.Errorf("BAL validation failure")},
 		}
 	}
 
@@ -314,8 +319,6 @@ func (p *ParallelStateProcessor) Process(block *types.Block, stateTransition *st
 	if p.chainConfig().IsPrague(block.Number(), block.Time()) || p.chainConfig().IsVerkle(block.Number(), block.Time()) {
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
-
-	balTracer.OnPreTxExecutionDone()
 
 	diff, stateReads := balTracer.builder.FinalizedIdxChanges()
 	if !statedb.BlockAccessList().ValidateStateDiff(0, diff) {

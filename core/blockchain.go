@@ -2231,7 +2231,6 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 		defer func() {
 			bc.cfg.VmConfig.Tracer = nil
 		}()
-
 	}
 	// Process block using the parent state as reference point
 	pstart := time.Now()

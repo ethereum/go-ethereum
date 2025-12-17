@@ -214,7 +214,6 @@ func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest, buildAndVerif
 
 	for _, snapshot := range snapshotConf {
 		for _, dbscheme := range dbschemeConf {
-			//tracer := logger.NewJSONLogger(&logger.Config{}, os.Stdout)
 			if err := bt.checkFailure(t, test.Run(snapshot, dbscheme, false, buildAndVerifyBAL, nil, nil)); err != nil {
 				t.Errorf("test with config {snapshotter:%v, scheme:%v} failed: %v", snapshot, dbscheme, err)
 				return

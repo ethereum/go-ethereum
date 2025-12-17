@@ -546,5 +546,8 @@ func (api *DebugAPI) GetBlockAccessList(number rpc.BlockNumberOrHash) (interface
 	if block == nil {
 		return nil, fmt.Errorf("block not found")
 	}
+	if block.Body().AccessList == nil {
+		return nil, nil
+	}
 	return block.Body().AccessList.StringableRepresentation(), nil
 }
