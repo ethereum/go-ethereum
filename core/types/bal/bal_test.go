@@ -119,12 +119,12 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 	)
 	for i := 0; i < 5; i++ {
 		slot := encodingSlotWrites{
-			Slot: testrand.Hash(),
+			Slot: newEncodedStorageFromHash(testrand.Hash()),
 		}
 		for j := 0; j < 3; j++ {
 			slot.Accesses = append(slot.Accesses, encodingStorageWrite{
 				TxIdx:      uint16(2 * j),
-				ValueAfter: testrand.Hash(),
+				ValueAfter: newEncodedStorageFromHash(testrand.Hash()),
 			})
 		}
 		if sort {
@@ -173,10 +173,14 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 		})
 	}
 
+	var encodedStorageReads []EncodedStorage
+	for _, slot := range storageReads {
+		encodedStorageReads = append(encodedStorageReads, newEncodedStorageFromHash(slot))
+	}
 	return AccountAccess{
 		Address:        [20]byte(testrand.Bytes(20)),
 		StorageChanges: storageWrites,
-		StorageReads:   storageReads,
+		StorageReads:   encodedStorageReads,
 		BalanceChanges: balances,
 		NonceChanges:   nonces,
 		CodeChanges: []CodeChange{
@@ -216,7 +220,7 @@ func TestBlockAccessListCopy(t *testing.T) {
 	// Make sure the mutations on copy won't affect the origin
 	for _, aa := range cpyCpy {
 		for i := 0; i < len(aa.StorageReads); i++ {
-			aa.StorageReads[i] = [32]byte(testrand.Bytes(32))
+			aa.StorageReads[i] = testrand.Bytes(32)
 		}
 	}
 	if !reflect.DeepEqual(list, cpy) {

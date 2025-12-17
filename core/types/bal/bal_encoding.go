@@ -125,6 +125,12 @@ func (e *BlockAccessList) Hash() common.Hash {
 		// under reasonable conditions.
 		panic(err)
 	}
+	/*
+		bal, err := json.MarshalIndent(e.StringableRepresentation(), "", "    ")
+		if err != nil {
+			panic(err)
+		}
+	*/
 	return crypto.Keccak256Hash(enc.Bytes())
 }
 
@@ -142,29 +148,32 @@ type encodingAccountNonce struct {
 
 // encodingStorageWrite is the encoding format of StorageWrites.
 type encodingStorageWrite struct {
-	TxIdx      uint16         `json:"txIndex"`
-	ValueAfter encodedStorage `json:"valueAfter"`
+	TxIdx      uint16          `json:"txIndex"`
+	ValueAfter *EncodedStorage `json:"valueAfter"`
 }
 
-// encodedStorage can represent either a storage key or value
-type encodedStorage []byte
+// EncodedStorage can represent either a storage key or value
+type EncodedStorage struct {
+	inner *uint256.Int
+}
 
-func (e *encodedStorage) ToHash() common.Hash {
+var _ rlp.Encoder = &EncodedStorage{}
+var _ rlp.Decoder = &EncodedStorage{}
+
+func (e *EncodedStorage) ToHash() common.Hash {
 	if e == nil {
 		return common.Hash{}
 	}
-	return common.BytesToHash(*e)
+	return e.inner.Bytes32()
 }
 
-func newEncodedStorageFromHash(hash common.Hash) encodedStorage {
-	return bytes.TrimLeft(hash[:], "\x00")
+func newEncodedStorageFromHash(hash common.Hash) *EncodedStorage {
+	return &EncodedStorage{
+		new(uint256.Int).SetBytes(hash[:]),
+	}
 }
 
-func (e *encodedStorage) FromHash(hash common.Hash) {
-	*e = hash[:]
-}
-
-func (s *encodedStorage) UnmarshalJSON(b []byte) error {
+func (s *EncodedStorage) UnmarshalJSON(b []byte) error {
 	var str string
 	if err := json.Unmarshal(b, &str); err != nil {
 		return err
@@ -190,34 +199,31 @@ func (s *encodedStorage) UnmarshalJSON(b []byte) error {
 
 	// TODO: check is s == nil ?? should be programmer error
 
-	*s = make([]byte, len(val)-1)
-	copy((*s)[:len(val)-1], val[:])
+	*s = EncodedStorage{
+		inner: new(uint256.Int).SetBytes(val),
+	}
 	return nil
 }
 
-func (s encodedStorage) MarshalJSON() ([]byte, error) {
-	trimmed := bytes.TrimLeft(s[:], "\x00")
-	return json.Marshal("0x" + common.Bytes2Hex(trimmed))
+func (s EncodedStorage) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.inner.Hex())
 }
 
-func (s *encodedStorage) EncodeRLP(_w io.Writer) error {
-	var obj encodedStorage
-	if s != nil {
-		obj = *s
+func (s *EncodedStorage) EncodeRLP(_w io.Writer) error {
+	return s.inner.EncodeRLP(_w)
+}
+
+func (s *EncodedStorage) DecodeRLP(dec *rlp.Stream) error {
+	if s == nil {
+		*s = EncodedStorage{}
 	}
-	trimmed := bytes.TrimLeft(obj[:], "\x00")
-	fmt.Println("here")
-	return rlp.Encode(_w, trimmed)
-}
-
-func (s *encodedStorage) DecodeRLP(dec *rlp.Stream) error {
-	err := dec.ReadBytes((*s)[:])
-	return err
+	s.inner = uint256.NewInt(0)
+	return dec.ReadUint256(s.inner)
 }
 
 // encodingStorageWrite is the encoding format of SlotWrites.
 type encodingSlotWrites struct {
-	Slot     encodedStorage         `json:"slot"`
+	Slot     *EncodedStorage        `json:"slot"`
 	Accesses []encodingStorageWrite `json:"accesses"`
 }
 
@@ -237,8 +243,8 @@ func (e *encodingSlotWrites) validate() error {
 // AccountAccess is the encoding format of ConstructionAccountAccesses.
 type AccountAccess struct {
 	Address        common.Address          `json:"address,omitempty"`        // 20-byte Ethereum address
-	StorageChanges []encodingSlotWrites    `json:"storageChanges,omitempty"` // encodedStorage changes (slot -> [tx_index -> new_value])
-	StorageReads   []encodedStorage        `json:"storageReads,omitempty"`   // Read-only storage keys
+	StorageChanges []encodingSlotWrites    `json:"storageChanges,omitempty"` // EncodedStorage changes (slot -> [tx_index -> new_value])
+	StorageReads   []*EncodedStorage       `json:"storageReads,omitempty"`   // Read-only storage keys
 	BalanceChanges []encodingBalanceChange `json:"balanceChanges,omitempty"` // Balance changes ([tx_index -> post_balance])
 	NonceChanges   []encodingAccountNonce  `json:"nonceChanges,omitempty"`   // Nonce changes ([tx_index -> new_nonce])
 	CodeChanges    []CodeChange            `json:"code,omitempty"`           // CodeChanges changes ([tx_index -> new_code])
@@ -283,7 +289,7 @@ func (e *AccountAccess) validate() error {
 	}
 
 	// Check the storage read slots are sorted in order
-	if !slices.IsSortedFunc(e.StorageReads, func(a, b encodedStorage) int {
+	if !slices.IsSortedFunc(e.StorageReads, func(a, b *EncodedStorage) int {
 		aHash, bHash := a.ToHash(), b.ToHash()
 		return bytes.Compare(aHash[:], bHash[:])
 	}) {
@@ -351,7 +357,7 @@ func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) Account
 	res := AccountAccess{
 		Address:        addr,
 		StorageChanges: make([]encodingSlotWrites, 0),
-		StorageReads:   make([]encodedStorage, 0),
+		StorageReads:   make([]*EncodedStorage, 0),
 		BalanceChanges: make([]encodingBalanceChange, 0),
 		NonceChanges:   make([]encodingAccountNonce, 0),
 		CodeChanges:    make([]CodeChange, 0),

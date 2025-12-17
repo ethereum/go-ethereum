@@ -22,12 +22,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/types/bal"
-	stdmath "math"
-	"math/big"
-	"os"
-	"reflect"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -38,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -45,6 +40,11 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
+	stdmath "math"
+	"math/big"
+	"os"
+	"reflect"
+	"strings"
 )
 
 // A BlockTest checks handling of entire blocks.
@@ -304,6 +304,16 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error)
 			} else {
 				return nil, fmt.Errorf("block RLP decoding failed when expected to succeed: %v", err)
 			}
+		}
+
+		// check that if we encode the same block, it will result in the same RLP
+		var enc bytes.Buffer
+		if err := rlp.Encode(&enc, cb); err != nil {
+			return nil, err
+		}
+		expected := common.Hex2Bytes(strings.TrimLeft(b.Rlp, "0x"))
+		if !bytes.Equal(enc.Bytes(), expected) {
+			return nil, fmt.Errorf("mismatch. expected\n%s\ngot\n%x\n", expected, enc.Bytes())
 		}
 		// RLP decoding worked, try to insert into chain:
 		blocks := types.Blocks{cb}
