@@ -790,7 +790,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	hash := block.Hash()
 
 	// Emit NewPayloadEvent for ethstats reporting
-	api.eth.SendNewPayloadEvent(core.NewPayloadEvent{
+	api.eth.BlockChain().SendNewPayloadEvent(core.NewPayloadEvent{
 		Hash:           hash,
 		Number:         block.NumberU64(),
 		ProcessingTime: processingTime,
