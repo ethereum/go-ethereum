@@ -255,8 +255,20 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		requests = envelope.Requests
 	}
 
+	method := newPayloadV1
+	switch version {
+	case engine.PayloadV1:
+		method = newPayloadV1
+	case engine.PayloadV2:
+		method = newPayloadV2
+	case engine.PayloadV3:
+		method = newPayloadV3
+	default:
+		method = newPayloadV4
+	}
+
 	// Mark the payload as canon
-	_, err = c.engineAPI.newPayload(*payload, blobHashes, beaconRoot, requests, false)
+	_, err = c.engineAPI.newPayload(method, *payload, blobHashes, beaconRoot, requests, false)
 	if err != nil {
 		return err
 	}
