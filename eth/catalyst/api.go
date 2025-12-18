@@ -563,7 +563,7 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProofV2, error) {
 	head := api.eth.BlockChain().CurrentHeader()
 	if api.config().LatestFork(head.Time) < forks.Osaka {
-		return nil, unsupportedForkErr("engine_getBlobsV2 is not available before Osaka fork")
+		return nil, nil
 	}
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
