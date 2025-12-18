@@ -47,6 +47,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Register adds the engine API to the full node.
@@ -613,25 +614,33 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 // Helper for NewPayload* methods.
 var invalidStatus = engine.PayloadStatusV1{Status: engine.INVALID}
 
-type newPayloadMethod string
-
-const (
-	newPayloadV1 newPayloadMethod = "engine.newPayloadV1"
-	newPayloadV2 newPayloadMethod = "engine.newPayloadV2"
-	newPayloadV3 newPayloadMethod = "engine.newPayloadV3"
-	newPayloadV4 newPayloadMethod = "engine.newPayloadV4"
-)
+func startNewPayloadSpan(ctx context.Context, name string, params engine.ExecutableData) (context.Context, trace.Span) {
+	tracer := getEngineTracer()
+	ctx, span := tracer.Start(ctx, name)
+	span.SetAttributes(
+		attribute.Int64("block.number", int64(params.Number)),
+		attribute.String("block.hash", params.BlockHash.Hex()),
+		attribute.Int("tx.count", len(params.Transactions)),
+	)
+	return ctx, span
+}
 
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV1(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
+	// TODO(jrhea): Decide whether validation errors should be recorded as span errors.
+	ctx, span := startNewPayloadSpan(context.Background(), "engine.newPayloadV1", params)
+	defer span.End()
 	if params.Withdrawals != nil {
 		return invalidStatus, paramsErr("withdrawals not supported in V1")
 	}
-	return api.newPayload(newPayloadV1, params, nil, nil, nil, false)
+	return api.newPayload(ctx, params, nil, nil, nil, false)
 }
 
 // NewPayloadV2 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV2(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
+	// TODO(jrhea): Decide whether validation errors should be recorded as span errors.
+	ctx, span := startNewPayloadSpan(context.Background(), "engine.newPayloadV2", params)
+	defer span.End()
 	var (
 		cancun   = api.config().IsCancun(api.config().LondonBlock, params.Timestamp)
 		shanghai = api.config().IsShanghai(api.config().LondonBlock, params.Timestamp)
@@ -648,11 +657,14 @@ func (api *ConsensusAPI) NewPayloadV2(params engine.ExecutableData) (engine.Payl
 	case params.BlobGasUsed != nil:
 		return invalidStatus, paramsErr("non-nil blobGasUsed pre-cancun")
 	}
-	return api.newPayload(newPayloadV2, params, nil, nil, nil, false)
+	return api.newPayload(ctx, params, nil, nil, nil, false)
 }
 
 // NewPayloadV3 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV3(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (engine.PayloadStatusV1, error) {
+	// TODO(jrhea): Decide whether validation errors should be recorded as span errors.
+	ctx, span := startNewPayloadSpan(context.Background(), "engine.newPayloadV3", params)
+	defer span.End()
 	switch {
 	case params.Withdrawals == nil:
 		return invalidStatus, paramsErr("nil withdrawals post-shanghai")
@@ -667,11 +679,14 @@ func (api *ConsensusAPI) NewPayloadV3(params engine.ExecutableData, versionedHas
 	case !api.checkFork(params.Timestamp, forks.Cancun):
 		return invalidStatus, unsupportedForkErr("newPayloadV3 must only be called for cancun payloads")
 	}
-	return api.newPayload(newPayloadV3, params, versionedHashes, beaconRoot, nil, false)
+	return api.newPayload(ctx, params, versionedHashes, beaconRoot, nil, false)
 }
 
 // NewPayloadV4 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV4(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes) (engine.PayloadStatusV1, error) {
+	// TODO(jrhea): Decide whether validation errors should be recorded as span errors.
+	ctx, span := startNewPayloadSpan(context.Background(), "engine.newPayloadV4", params)
+	defer span.End()
 	switch {
 	case params.Withdrawals == nil:
 		return invalidStatus, paramsErr("nil withdrawals post-shanghai")
@@ -692,10 +707,10 @@ func (api *ConsensusAPI) NewPayloadV4(params engine.ExecutableData, versionedHas
 	if err := validateRequests(requests); err != nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(err)
 	}
-	return api.newPayload(newPayloadV4, params, versionedHashes, beaconRoot, requests, false)
+	return api.newPayload(ctx, params, versionedHashes, beaconRoot, requests, false)
 }
 
-func (api *ConsensusAPI) newPayload(method newPayloadMethod, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, witness bool) (engine.PayloadStatusV1, error) {
+func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, witness bool) (engine.PayloadStatusV1, error) {
 	// The locking here is, strictly, not required. Without these locks, this can happen:
 	//
 	// 1. NewPayload( execdata-N ) is invoked from the CL. It goes all the way down to
@@ -712,24 +727,16 @@ func (api *ConsensusAPI) newPayload(method newPayloadMethod, params engine.Execu
 	api.newPayloadLock.Lock()
 	defer api.newPayloadLock.Unlock()
 
-	// TODO(jrhea): Propagate context from RPC.
-	tracer := getEngineTracer()
-	ctx, span := tracer.Start(context.Background(), string(method))
-	defer span.End()
-
-	span.SetAttributes(
-		attribute.Int64("block.number", int64(params.Number)),
-		attribute.String("block.hash", params.BlockHash.Hex()),
-		attribute.Int("tx.count", len(params.Transactions)),
-	)
-
 	log.Trace("Engine API request received", "method", "NewPayload", "number", params.Number, "hash", params.BlockHash)
+
+	tracer := getEngineTracer()
+	rootSpan := trace.SpanFromContext(ctx)
 	_, decodeSpan := tracer.Start(ctx, "payload.decode")
 	block, err := engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot, requests)
 	if err != nil {
 		decodeSpan.RecordError(err)
 		decodeSpan.SetStatus(codes.Error, err.Error())
-		span.SetStatus(codes.Error, err.Error())
+		rootSpan.SetStatus(codes.Error, err.Error())
 	}
 	decodeSpan.End()
 	if err != nil {
@@ -809,7 +816,7 @@ func (api *ConsensusAPI) newPayload(method newPayloadMethod, params engine.Execu
 	if err != nil {
 		importSpan.RecordError(err)
 		importSpan.SetStatus(codes.Error, err.Error())
-		span.SetStatus(codes.Error, err.Error())
+		rootSpan.SetStatus(codes.Error, err.Error())
 	}
 	importSpan.End()
 	if err != nil {

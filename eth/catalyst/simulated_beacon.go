@@ -17,6 +17,7 @@
 package catalyst
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
@@ -255,20 +256,13 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		requests = envelope.Requests
 	}
 
-	var method newPayloadMethod
-	switch version {
-	case engine.PayloadV1:
-		method = newPayloadV1
-	case engine.PayloadV2:
-		method = newPayloadV2
-	case engine.PayloadV3:
-		method = newPayloadV3
-	default:
-		method = newPayloadV4
-	}
-
-	// Mark the payload as canon
-	_, err = c.engineAPI.newPayload(method, *payload, blobHashes, beaconRoot, requests, false)
+	// NOTE: This span is for the simulated beacon harness only. It is intentionally
+	// named differently from engine.newPayload* to avoid double-rooting or
+	// mislabeling Engine RPC spans. Real tracing of engine_newPayload* is
+	// performed at the Engine API entrypoints.
+	ctx, span := startNewPayloadSpan(context.Background(), "engine.simulatedBeacon.sealBlock", *payload)
+	defer span.End()
+	_, err = c.engineAPI.newPayload(ctx, *payload, blobHashes, beaconRoot, requests, false)
 	if err != nil {
 		return err
 	}
