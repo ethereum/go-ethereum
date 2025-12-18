@@ -257,6 +257,17 @@ func (p *TxPool) loop(head *types.Header) {
 // SetGasTip updates the minimum gas tip required by the transaction pool for a
 // new transaction, and drops all transactions below this threshold.
 func (p *TxPool) SetGasTip(tip *big.Int) {
+	if tip == nil {
+		log.Warn("SetGasTip called with nil tip")
+		return
+	}
+	if tip.Sign() <= 0 {
+		log.Warn("SetGasTip called with non-positive tip", "tip", tip)
+		return
+	}
+	if tip.Cmp(big.NewInt(1_000_000_000_000_000)) > 0 {
+		log.Warn("SetGasTip called with very high tip", "tip", tip)
+	}
 	for _, subpool := range p.subpools {
 		subpool.SetGasTip(tip)
 	}
