@@ -642,6 +642,12 @@ func (s *nodeSetWithOrigin) encodeNodeHistory(root common.Hash) (map[common.Hash
 		// encodeFullValue determines whether a node should be encoded
 		// in full format with a pseudo-random probabilistic algorithm.
 		encodeFullValue = func(owner common.Hash, path string) bool {
+			// For trie nodes at the first two levels of the account trie, it is very
+			// likely that all children are modified within a single state transition.
+			// In such cases, do not use diff mode.
+			if owner == (common.Hash{}) && len(path) < 2 {
+				return true
+			}
 			h := fnv.New32a()
 			h.Write(root.Bytes())
 			h.Write(owner.Bytes())
