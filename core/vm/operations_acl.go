@@ -229,8 +229,6 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 			gas     uint64
 			address = common.Address(stack.peek().Bytes20())
 		)
-		// TODO: EEST test that performs selfdestruct within a static context.  no reads should be reported
-		// This is probably covered in the converted blockchain tests but need to double-check
 		if evm.readOnly {
 			return 0, ErrWriteProtection
 		}
