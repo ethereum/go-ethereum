@@ -41,13 +41,13 @@ const (
 
 	// heavyTransactionPriority defines the probability with which the heavy
 	// transactions will be scheduled first for prefetching.
-	heavyTransactionPriority = 30
+	heavyTransactionPriority = 40
 )
 
 // isHeavyTransaction returns an indicator whether the transaction is regarded
 // as heavy or not.
 func isHeavyTransaction(txGasLimit uint64, blockGasUsed uint64) bool {
-	threshold := blockGasUsed * heavyTransactionThreshold / 100
+	threshold := min(blockGasUsed*heavyTransactionThreshold/100, params.MaxTxGas/2)
 	return txGasLimit >= threshold
 }
 
@@ -87,13 +87,16 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 		normalTxs = make(chan *types.Transaction, len(block.Transactions()))
 	)
 	for _, tx := range block.Transactions() {
-		// Note, the gasLimit is not equivalent with the gasUsed. Theoretically
-		// we should measure the transaction heaviness based on the gasUsed.
-		// Unfortunately this field is still unknown without execution, so use
-		// gasLimit instead.
+		// Note: gasLimit is not equivalent to gasUsed. Ideally, transaction heaviness
+		// should be measured using gasUsed. However, gasUsed is unknown prior to
+		// execution, so gasLimit is used as the indicator instead. This allows transaction
+		// senders to inflate gasLimit to gain higher prefetch priority, but this
+		// trade-off is unavoidable.
 		if isHeavyTransaction(tx.Gas(), block.GasUsed()) {
 			heavyTxs <- tx
 		}
+		// The heavy transaction will also be emitted with the normal prefetching
+		// ordering, depends on in which track it will be selected first.
 		normalTxs <- tx
 	}
 	blockPrefetchHeavyTxsMeter.Mark(int64(len(heavyTxs)))
@@ -125,6 +128,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 			continue
 		}
 		stateCpy := statedb.Copy() // closure
+
 		workers.Go(func() error {
 			// If block precaching was interrupted, abort
 			if interrupt != nil && interrupt.Load() {
