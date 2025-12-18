@@ -436,11 +436,11 @@ func (s *nodeSetWithOrigin) decode(r *rlp.Stream) error {
 //	┌──── Bits (from MSB to LSB) ───┐
 //	│ 7 │ 6 │ 5 │ 4 │ 3 │ 2 │ 1 │ 0 │
 //	└───────────────────────────────┘
-//	  │   │   │   │   │   │   │   └─ FlagA: marks if value is encoded in compressed format (1 always)
-//	  │   │   │   │   │   │   └───── FlagB: marks if no extended bitmap used after the metadata byte
+//	  │   │   │   │   │   │   │   └─ FlagA: set if value is encoded in compressed format
+//	  │   │   │   │   │   │   └───── FlagB: set if no extended bitmap is present after the metadata byte
 //	  │   │   │   │   │   └───────── FlagC: bitmap for node (only used when flagB == 1)
 //	  │   │   │   │   └───────────── FlagD: bitmap for node (only used when flagB == 1)
-//	  │   │   │   └───────────────── FlagE: reserved
+//	  │   │   │   └───────────────── FlagE: reserved (marks the presence of the 16th child in a full node)
 //	  │   │   └───────────────────── FlagF: reserved
 //	  │   └───────────────────────── FlagG: reserved
 //	  └───────────────────────────── FlagH: reserved
@@ -468,14 +468,24 @@ func (s *nodeSetWithOrigin) decode(r *rlp.Stream) error {
 func encodeNodeCompressed(addExtension bool, elements [][]byte, indices []int) []byte {
 	var (
 		enc  []byte
-		flag = byte(1) // flagA
+		flag = byte(1) // The compression format indicator
 	)
+	// Pre-allocate the byte slice for the node encoder
+	size := 1
+	if addExtension {
+		size += 2
+	}
+	for _, element := range elements {
+		size += len(element) + 1
+	}
+	enc = make([]byte, 0, size)
+
 	if !addExtension {
-		flag |= 2 // flagB
+		flag |= 2 // The embedded bitmap indicator
 
 		// Embedded bitmap
 		for _, pos := range indices {
-			flag |= 1 << (pos + 2) // flagC and flagD
+			flag |= 1 << (pos + 2)
 		}
 		enc = append(enc, flag)
 	} else {
@@ -483,9 +493,12 @@ func encodeNodeCompressed(addExtension bool, elements [][]byte, indices []int) [
 		bitmap := make([]byte, 2) // bitmaps for at most 16 children
 		for _, pos := range indices {
 			// Children[16] is only theoretically possible in the Merkle-Patricia-trie,
-			// in practice this field is never used in the Ethereum case.
+			// in practice this field is never used in the Ethereum case. If it occurs,
+			// use the FlagE for marking the presence.
 			if pos >= 16 {
-				panic(fmt.Sprintf("Unexpected node children index %d", pos))
+				log.Warn("Unexpected 16th child encountered in a full node")
+				flag |= 1 << 4 // Use the reserved flagE
+				continue
 			}
 			bitIndex := uint(pos % 8)
 			bitmap[pos/8] |= 1 << bitIndex
@@ -523,7 +536,7 @@ func decodeNodeCompressed(data []byte) ([][]byte, []int, error) {
 	if flag&byte(1) == 0 {
 		return nil, nil, errors.New("invalid data: full node value")
 	}
-	noExtend := flag&byte(2) != 0 // flagB
+	noExtend := flag&byte(2) != 0
 
 	// Reconstruct indices from bitmap
 	var indices []int
@@ -547,6 +560,10 @@ func decodeNodeCompressed(data []byte) ([][]byte, []int, error) {
 					indices = append(indices, pos)
 				}
 			}
+		}
+		if flag&byte(16) != 0 { // flagE
+			indices = append(indices, 16)
+			log.Info("Unexpected 16th child encountered in a full node")
 		}
 		data = data[3:]
 	}

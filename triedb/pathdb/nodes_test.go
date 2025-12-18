@@ -134,7 +134,7 @@ func TestEncodeFullNodeCompressed(t *testing.T) {
 		elements [][]byte
 		indices  []int
 	)
-	for i := 0; i < 16; i++ {
+	for i := 0; i <= 16; i++ {
 		if rand.Intn(2) == 0 {
 			elements = append(elements, testrand.Bytes(20))
 			indices = append(indices, i)
