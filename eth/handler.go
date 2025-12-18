@@ -184,7 +184,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	}
 	chainTx := func(hash common.Hash) bool {
 		// check on chain (no need to check limbo separately, as chain checks limbo too)
-		return h.chain.HasCanonicalTransaction(hash, false)
+		return h.chain.HasCanonicalTransaction(hash, true)
 	}
 	validateMeta := func(tx common.Hash, kind byte) error {
 		if hasTx(tx) {
