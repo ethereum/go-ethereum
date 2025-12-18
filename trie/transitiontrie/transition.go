@@ -207,15 +207,6 @@ func (t *TransitionTrie) IsVerkle() bool {
 	// For all intents and purposes, the calling code should treat this as a verkle trie
 	return true
 }
-
-// UpdateStem updates a group of values, given the stem they are using. If
-// a value already exists, it is overwritten.
-// TODO: This is Verkle-specific and requires access to private fields.
-// Not currently used in the codebase.
-func (t *TransitionTrie) UpdateStem(key []byte, values [][]byte) error {
-	panic("UpdateStem is not implemented for TransitionTrie")
-}
-
 // Copy creates a deep copy of the transition trie.
 func (t *TransitionTrie) Copy() *TransitionTrie {
 	return &TransitionTrie{
