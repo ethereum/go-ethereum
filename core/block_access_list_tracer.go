@@ -67,6 +67,9 @@ func (a *BlockAccessListTracer) AccessList() *bal.AccessListBuilder {
 }
 
 func (a *BlockAccessListTracer) OnSystemCallEnd() {
+	// finalize the post-block changes in OnBlockFinalization to account for
+	// the EIP-4895 withdrawals which occur after the last system contracts
+	// are executed.
 	if a.isPostTx {
 		return
 	}

@@ -275,9 +275,8 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 	if miner.chainConfig.IsPrague(header.Number, header.Time) {
 		core.ProcessParentBlockHash(header.ParentHash, env.evm)
 	}
-	if miner.chainConfig.IsAmsterdam(header.Number, header.Time) {
-		env.alTracer.OnPreTxExecutionDone()
-	}
+	// TODO: verify that we can make blocks that correctly record the pre-tx system calls
+	// TODO ^ comprehensive miner unit tests
 	return env, nil
 }
 
