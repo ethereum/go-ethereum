@@ -1645,24 +1645,37 @@ func (api *TransactionAPI) currentBlobSidecarVersion() byte {
 	return types.BlobSidecarVersion0
 }
 
+// convertLegacyBlobSidecar upgrades legacy blob sidecar proofs to the current version.
+func (api *TransactionAPI) convertLegacyBlobSidecar(tx *types.Transaction) (*types.Transaction, error) {
+	sc := tx.BlobTxSidecar()
+	if sc == nil {
+		return tx, nil
+	}
+
+	if sc.Version != types.BlobSidecarVersion0 || api.currentBlobSidecarVersion() != types.BlobSidecarVersion1 {
+		return tx, nil
+	}
+	if err := sc.ToV1(); err != nil {
+		return nil, fmt.Errorf("blob sidecar conversion failed: %v", err)
+	}
+	return tx.WithBlobTxSidecar(sc), nil
+}
+
+// decodeRawTransaction unmarshals the binary transaction and upgrades any legacy blob sidecars.
+func (api *TransactionAPI) decodeRawTransaction(input hexutil.Bytes) (*types.Transaction, error) {
+	tx := new(types.Transaction)
+	if err := tx.UnmarshalBinary(input); err != nil {
+		return nil, err
+	}
+	return api.convertLegacyBlobSidecar(tx)
+}
+
 // SendRawTransaction will add the signed transaction to the transaction pool.
 // The sender is responsible for signing the transaction and using the correct nonce.
 func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil.Bytes) (common.Hash, error) {
-	tx := new(types.Transaction)
-	if err := tx.UnmarshalBinary(input); err != nil {
+	tx, err := api.decodeRawTransaction(input)
+	if err != nil {
 		return common.Hash{}, err
-	}
-
-	// Convert legacy blob transaction proofs.
-	// TODO: remove in go-ethereum v1.17.x
-	if sc := tx.BlobTxSidecar(); sc != nil {
-		exp := api.currentBlobSidecarVersion()
-		if sc.Version == types.BlobSidecarVersion0 && exp == types.BlobSidecarVersion1 {
-			if err := sc.ToV1(); err != nil {
-				return common.Hash{}, fmt.Errorf("blob sidecar conversion failed: %v", err)
-			}
-			tx = tx.WithBlobTxSidecar(sc)
-		}
 	}
 
 	return SubmitTransaction(ctx, api.b, tx)
@@ -1671,21 +1684,9 @@ func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil
 // SendRawTransactionSync will add the signed transaction to the transaction pool
 // and wait until the transaction has been included in a block and return the receipt, or the timeout.
 func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hexutil.Bytes, timeoutMs *hexutil.Uint64) (map[string]interface{}, error) {
-	tx := new(types.Transaction)
-	if err := tx.UnmarshalBinary(input); err != nil {
+	tx, err := api.decodeRawTransaction(input)
+	if err != nil {
 		return nil, err
-	}
-
-	// Convert legacy blob transaction proofs.
-	// TODO: remove in go-ethereum v1.17.x
-	if sc := tx.BlobTxSidecar(); sc != nil {
-		exp := api.currentBlobSidecarVersion()
-		if sc.Version == types.BlobSidecarVersion0 && exp == types.BlobSidecarVersion1 {
-			if err := sc.ToV1(); err != nil {
-				return nil, fmt.Errorf("blob sidecar conversion failed: %v", err)
-			}
-			tx = tx.WithBlobTxSidecar(sc)
-		}
 	}
 
 	ch := make(chan core.ChainEvent, 128)
