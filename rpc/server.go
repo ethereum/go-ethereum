@@ -24,11 +24,15 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
+
 	"github.com/ethereum/go-ethereum/log"
 )
 
 const MetadataApi = "rpc"
 const EngineApi = "engine"
+const tracerName = "github.com/ethereum/go-ethereum/rpc"
 
 // CodecOption specifies which type of messages a codec supports.
 //
@@ -47,6 +51,7 @@ const (
 type Server struct {
 	services serviceRegistry
 	idgen    func() ID
+	tracer   trace.Tracer
 
 	mutex              sync.Mutex
 	codecs             map[ServerCodec]struct{}
@@ -64,6 +69,7 @@ func NewServer() *Server {
 		codecs:        make(map[ServerCodec]struct{}),
 		httpBodyLimit: defaultBodyLimit,
 		wsReadLimit:   wsDefaultReadLimit,
+		tracer:        noop.NewTracerProvider().Tracer(tracerName),
 	}
 	server.run.Store(true)
 	// Register the default service providing meta information about the RPC service such
@@ -98,6 +104,15 @@ func (s *Server) SetWebsocketReadLimit(limit int64) {
 	s.wsReadLimit = limit
 }
 
+// SetTracerProvider configures the OpenTelemetry TracerProvider for RPC call tracing.
+func (s *Server) SetTracerProvider(tp trace.TracerProvider) {
+	if tp == nil {
+		s.tracer = noop.NewTracerProvider().Tracer(tracerName)
+		return
+	}
+	s.tracer = tp.Tracer(tracerName)
+}
+
 // RegisterName creates a service for the given receiver type under the given name. When no
 // methods on the given receiver match the criteria to be either an RPC method or a
 // subscription an error is returned. Otherwise a new service is created and added to the
@@ -123,6 +138,7 @@ func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 		idgen:              s.idgen,
 		batchItemLimit:     s.batchItemLimit,
 		batchResponseLimit: s.batchResponseLimit,
+		tracer:             s.tracer,
 	}
 	c := initClient(codec, &s.services, cfg)
 	<-codec.closed()
@@ -156,7 +172,7 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 		return
 	}
 
-	h := newHandler(ctx, codec, s.idgen, &s.services, s.batchItemLimit, s.batchResponseLimit)
+	h := newHandler(ctx, codec, s.idgen, &s.services, s.batchItemLimit, s.batchResponseLimit, s.tracer)
 	h.allowSubscribe = false
 	defer h.close(io.EOF, nil)
 

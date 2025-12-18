@@ -28,6 +28,11 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -65,6 +70,7 @@ type handler struct {
 	allowSubscribe       bool
 	batchRequestLimit    int
 	batchResponseMaxSize int
+	tracer               trace.Tracer // for RPC call tracing
 
 	subLock    sync.Mutex
 	serverSubs map[ID]*Subscription
@@ -73,9 +79,10 @@ type handler struct {
 type callProc struct {
 	ctx       context.Context
 	notifiers []*Notifier
+	isBatch   bool // true if this call is part of a batch request
 }
 
-func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry, batchRequestLimit, batchResponseMaxSize int) *handler {
+func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry, batchRequestLimit, batchResponseMaxSize int, tracer trace.Tracer) *handler {
 	rootCtx, cancelRoot := context.WithCancel(connCtx)
 	h := &handler{
 		reg:                  reg,
@@ -90,6 +97,7 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 		log:                  log.Root(),
 		batchRequestLimit:    batchRequestLimit,
 		batchResponseMaxSize: batchResponseMaxSize,
+		tracer:               tracer,
 	}
 	if conn.remoteAddr() != "" {
 		h.log = h.log.New("conn", conn.remoteAddr())
@@ -197,6 +205,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 
 	// Process calls on a goroutine because they may block indefinitely:
 	h.startCallProc(func(cp *callProc) {
+		cp.isBatch = true
 		var (
 			timer      *time.Timer
 			cancel     context.CancelFunc
@@ -515,8 +524,20 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 	if err != nil {
 		return msg.errorResponse(&invalidParamsError{err.Error()})
 	}
+
+	// Start tracing span before invoking the method.
+	ctx, span := h.startRPCSpan(cp.ctx, msg, cp.isBatch)
+	defer span.End()
+
 	start := time.Now()
-	answer := h.runMethod(cp.ctx, msg, callb, args)
+	answer := h.runMethod(ctx, msg, callb, args)
+
+	// Record error on span if method failed.
+	if answer.Error != nil {
+		err := errors.New(answer.Error.Message)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+	}
 
 	// Collect the statistics for RPC calls if metrics is enabled.
 	// We only care about pure rpc call. Filter out subscription.
@@ -564,12 +585,41 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 	}
 	args = args[1:]
 
+	// Start tracing span before invoking the subscription method.
+	ctx, span := h.startRPCSpan(cp.ctx, msg, cp.isBatch)
+	defer span.End()
+
 	// Install notifier in context so the subscription handler can find it.
 	n := &Notifier{h: h, namespace: namespace}
 	cp.notifiers = append(cp.notifiers, n)
-	ctx := context.WithValue(cp.ctx, notifierKey{}, n)
+	ctx = context.WithValue(ctx, notifierKey{}, n)
 
-	return h.runMethod(ctx, msg, callb, args)
+	answer := h.runMethod(ctx, msg, callb, args)
+
+	// Record error on span if method failed.
+	if answer.Error != nil {
+		err := errors.New(answer.Error.Message)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+	}
+
+	return answer
+}
+
+// startRPCSpan starts a tracing span for an RPC call.
+func (h *handler) startRPCSpan(ctx context.Context, msg *jsonrpcMessage, isBatch bool) (context.Context, trace.Span) {
+	ctx, span := h.tracer.Start(ctx, "rpc.call")
+	span.SetAttributes(
+		semconv.RPCSystemKey.String("jsonrpc"),
+		semconv.RPCMethodKey.String(msg.Method),
+		attribute.Bool("rpc.batch", isBatch),
+	)
+	// Request id
+	id := strings.TrimSpace(string(msg.ID))
+	if id != "" && id != "null" {
+		span.SetAttributes(attribute.String("rpc.id", id))
+	}
+	return ctx, span
 }
 
 // runMethod runs the Go callback for an RPC method.
