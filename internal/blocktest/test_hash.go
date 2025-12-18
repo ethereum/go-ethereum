@@ -23,7 +23,6 @@
 package blocktest
 
 import (
-	"bytes"
 	"hash"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -49,8 +48,9 @@ func (h *testHasher) Reset() {
 
 // Update updates the hash state with the given key and value.
 func (h *testHasher) Update(key, val []byte) error {
-	h.hasher.Write(bytes.Clone(key))
-	h.hasher.Write(bytes.Clone(val))
+	// The hasher copies input data, so avoid redundant Clone allocations.
+	h.hasher.Write(key)
+	h.hasher.Write(val)
 	return nil
 }
 
