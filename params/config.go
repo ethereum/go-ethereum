@@ -107,6 +107,15 @@ var (
 			MinePeriod:           2,
 			ExpTimeoutConfig:     ExpTimeoutConfig{Base: 1.0, MaxExponent: 0},
 		},
+		20277000: {
+			MaxMasternodes:       108,
+			SwitchRound:          20277000,
+			CertThreshold:        0.667,
+			TimeoutSyncThreshold: 3,
+			TimeoutPeriod:        10,
+			MinePeriod:           2,
+			ExpTimeoutConfig:     ExpTimeoutConfig{Base: 1.0, MaxExponent: 0},
+		},
 	}
 
 	DevnetV2Configs = map[uint64]*V2Config{
