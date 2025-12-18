@@ -235,7 +235,6 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 				return gas, nil
 			}
 		}
-
 		// if empty and transfers value
 		if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
 			gas += params.CreateBySelfdestructGas
