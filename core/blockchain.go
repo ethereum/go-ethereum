@@ -118,10 +118,11 @@ var (
 )
 
 const (
-	bodyCacheLimit     = 256
-	blockCacheLimit    = 256
-	receiptsCacheLimit = 32
-	txLookupCacheLimit = 1024
+	bodyCacheLimit      = 256
+	blockCacheLimit     = 256
+	receiptsCacheLimit  = 32
+	txLookupCacheLimit  = 1024
+	txOnChainCacheLimit = txLookupCacheLimit * 16
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -328,8 +329,9 @@ type BlockChain struct {
 	receiptsCache *lru.Cache[common.Hash, []*types.Receipt] // Receipts cache with all fields derived
 	blockCache    *lru.Cache[common.Hash, *types.Block]
 
-	txLookupLock  sync.RWMutex
-	txLookupCache *lru.Cache[common.Hash, txLookup]
+	txLookupLock   sync.RWMutex
+	txLookupCache  *lru.Cache[common.Hash, txLookup]
+	txOnChainCache *lru.Cache[common.Hash, struct{}] // For filtering incoming tx announcements
 
 	stopping      atomic.Bool // false if chain is running, true when stopped
 	procInterrupt atomic.Bool // interrupt signaler for block processing
@@ -388,6 +390,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		receiptsCache:      lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
 		blockCache:         lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
 		txLookupCache:      lru.NewCache[common.Hash, txLookup](txLookupCacheLimit),
+		txOnChainCache:     lru.NewCache[common.Hash, struct{}](txOnChainCacheLimit),
 		engine:             engine,
 		logger:             cfg.VmConfig.Tracer,
 		slowBlockThreshold: cfg.SlowBlockThreshold,
@@ -1100,6 +1103,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	bc.receiptsCache.Purge()
 	bc.blockCache.Purge()
 	bc.txLookupCache.Purge()
+	bc.txOnChainCache.Purge()
 
 	// Clear safe block, finalized block if needed
 	if safe := bc.CurrentSafeBlock(); safe != nil && head < safe.Number.Uint64() {
@@ -1230,6 +1234,11 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 //
 // Note, this function assumes that the `mu` mutex is held!
 func (bc *BlockChain) writeHeadBlock(block *types.Block) {
+	// Add transaction hashes to the in-memory cache
+	for _, tx := range block.Transactions() {
+		bc.txOnChainCache.Add(tx.Hash(), struct{}{})
+	}
+
 	// Add the block to the canonical chain number scheme and mark as the head
 	batch := bc.db.NewBatch()
 	rawdb.WriteHeadHeaderHash(batch, block.Hash())
@@ -2584,6 +2593,7 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 	}
 	// Reset the tx lookup cache to clear stale txlookup cache.
 	bc.txLookupCache.Purge()
+	bc.txOnChainCache.Purge()
 
 	// Release the tx-lookup lock after mutation.
 	bc.txLookupLock.Unlock()

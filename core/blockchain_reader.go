@@ -329,7 +329,12 @@ func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, max
 // access altogether.
 func (bc *BlockChain) HasCanonicalTransaction(hash common.Hash, cacheOnly bool) bool {
 	// Check in memory cache first
-	if _, exist := bc.txLookupCache.Get(hash); exist {
+	if _, exist := bc.txOnChainCache.Get(hash); exist {
+		return true
+	}
+
+	// Check in memory tx cache next, without bumping the LRU
+	if bc.txLookupCache.Contains(hash) {
 		return true
 	}
 
