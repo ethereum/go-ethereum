@@ -75,6 +75,7 @@ var (
 	storageReadTimer   = metrics.NewRegisteredResettingTimer("chain/storage/reads", nil)
 	storageUpdateTimer = metrics.NewRegisteredResettingTimer("chain/storage/updates", nil)
 	storageCommitTimer = metrics.NewRegisteredResettingTimer("chain/storage/commits", nil)
+	codeReadTimer      = metrics.NewRegisteredResettingTimer("chain/code/reads", nil)
 
 	accountCacheHitMeter  = metrics.NewRegisteredMeter("chain/account/reads/cache/process/hit", nil)
 	accountCacheMissMeter = metrics.NewRegisteredMeter("chain/account/reads/cache/process/miss", nil)
@@ -88,6 +89,7 @@ var (
 
 	accountReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/account/single/reads", nil)
 	storageReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/storage/single/reads", nil)
+	codeReadSingleTimer    = metrics.NewRegisteredResettingTimer("chain/code/single/reads", nil)
 
 	snapshotCommitTimer = metrics.NewRegisteredResettingTimer("chain/snapshot/commits", nil)
 	triedbCommitTimer   = metrics.NewRegisteredResettingTimer("chain/triedb/commits", nil)
@@ -1602,13 +1604,17 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	//
 	// Note all the components of block(hash->number map, header, body, receipts)
 	// should be written atomically. BlockBatch is used for containing all components.
-	blockBatch := bc.db.NewBatch()
-	rawdb.WriteBlock(blockBatch, block)
-	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
-	rawdb.WritePreimages(blockBatch, statedb.Preimages())
-	if err := blockBatch.Write(); err != nil {
+	var (
+		batch = bc.db.NewBatch()
+		start = time.Now()
+	)
+	rawdb.WriteBlock(batch, block)
+	rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receipts)
+	rawdb.WritePreimages(batch, statedb.Preimages())
+	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
 	}
+	log.Debug("Committed block data", "size", common.StorageSize(batch.ValueSize()), "elapsed", common.PrettyDuration(time.Since(start)))
 
 	var (
 		err      error
@@ -2167,6 +2173,7 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	stats.AccountUpdates = statedb.AccountUpdates // Account updates are complete(in validation)
 	stats.StorageUpdates = statedb.StorageUpdates // Storage updates are complete(in validation)
 	stats.AccountHashes = statedb.AccountHashes   // Account hashes are complete(in validation)
+	stats.CodeReads = statedb.CodeReads
 
 	stats.AccountLoaded = statedb.AccountLoaded
 	stats.AccountUpdated = statedb.AccountUpdated
@@ -2174,8 +2181,9 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	stats.StorageLoaded = statedb.StorageLoaded
 	stats.StorageUpdated = int(statedb.StorageUpdated.Load())
 	stats.StorageDeleted = int(statedb.StorageDeleted.Load())
+	stats.CodeLoaded = statedb.CodeLoaded
 
-	stats.Execution = ptime - (statedb.AccountReads + statedb.StorageReads)                              // The time spent on EVM processing
+	stats.Execution = ptime - (statedb.AccountReads + statedb.StorageReads + statedb.CodeReads)          // The time spent on EVM processing
 	stats.Validation = vtime - (statedb.AccountHashes + statedb.AccountUpdates + statedb.StorageUpdates) // The time spent on block validation
 	stats.CrossValidation = xvtime                                                                       // The time spent on stateless cross validation
 
