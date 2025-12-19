@@ -630,7 +630,7 @@ func TestRangeLimit(t *testing.T) {
 	backend.startFilterMaps(0, false, filtermaps.DefaultParams)
 	defer backend.stopFilterMaps()
 
-	// Set rangeLimit to 5, but request 10 blocks
+	// Set rangeLimit to 5, but request a range of 9 (end - begin = 9, from 0 to 9)
 	filter := sys.NewRangeFilter(0, 9, nil, nil, 5)
 	_, err = filter.Logs(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "exceed maximum block range") {
