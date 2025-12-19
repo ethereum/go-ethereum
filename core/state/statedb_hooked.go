@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
 
@@ -131,10 +130,6 @@ func (s *hookedStateDB) AddAddressToAccessList(addr common.Address) {
 
 func (s *hookedStateDB) AddSlotToAccessList(addr common.Address, slot common.Hash) {
 	s.inner.AddSlotToAccessList(addr, slot)
-}
-
-func (s *hookedStateDB) PointCache() *utils.PointCache {
-	return s.inner.PointCache()
 }
 
 func (s *hookedStateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList) {

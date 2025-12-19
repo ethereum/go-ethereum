@@ -214,7 +214,7 @@ func (evm *EVM) SetJumpDestCache(jumpDests JumpDestCache) {
 // This is not threadsafe and should only be done very cautiously.
 func (evm *EVM) SetTxContext(txCtx TxContext) {
 	if evm.chainRules.IsEIP4762 {
-		txCtx.AccessEvents = state.NewAccessEvents(evm.StateDB.PointCache())
+		txCtx.AccessEvents = state.NewAccessEvents()
 	}
 	evm.TxContext = txCtx
 }
