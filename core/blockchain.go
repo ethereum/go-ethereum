@@ -2573,6 +2573,8 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 	batch := bc.db.NewBatch()
 	for _, tx := range types.HashDifference(deletedTxs, rebirthTxs) {
 		rawdb.DeleteTxLookupEntry(batch, tx)
+		// Handle cache as well (new ones were added in writeHeadBlock).
+		bc.txOnChainCache.Remove(tx)
 	}
 	// Delete all hash markers that are not part of the new canonical chain.
 	// Because the reorg function does not handle new chain head, all hash
@@ -2593,7 +2595,6 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 	}
 	// Reset the tx lookup cache to clear stale txlookup cache.
 	bc.txLookupCache.Purge()
-	bc.txOnChainCache.Purge()
 
 	// Release the tx-lookup lock after mutation.
 	bc.txLookupLock.Unlock()
