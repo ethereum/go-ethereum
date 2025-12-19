@@ -53,13 +53,8 @@ func memoryCopy(m []byte, offset, size int64) (cpy []byte) {
 		return nil
 	}
 
-	if len(m) > int(offset) {
-		cpy = make([]byte, size)
-		copy(cpy, m[offset:offset+size])
-
-		return
-	}
-
+	cpy = make([]byte, size)
+	copy(cpy, m[offset:offset+size])
 	return
 }
 
