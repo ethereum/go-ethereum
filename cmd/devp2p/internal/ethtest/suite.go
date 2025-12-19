@@ -405,7 +405,7 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 		t.Fatalf("error reading block bodies msg: %v", err)
 	}
 	if got, want := resp.RequestId, req.RequestId; got != want {
-		t.Fatalf("unexpected request id in respond", got, want)
+		t.Fatalf("unexpected request id in response: got %d, want %d", got, want)
 	}
 	bodies := resp.BlockBodiesResponse
 	if len(bodies) != len(req.GetBlockBodiesRequest) {
@@ -447,7 +447,7 @@ func (s *Suite) TestGetReceipts(t *utesting.T) {
 		t.Fatalf("error reading block bodies msg: %v", err)
 	}
 	if got, want := resp.RequestId, req.RequestId; got != want {
-		t.Fatalf("unexpected request id in respond", got, want)
+		t.Fatalf("unexpected request id in response: got %d, want %d", got, want)
 	}
 	if len(resp.List) != len(req.GetReceiptsRequest) {
 		t.Fatalf("wrong bodies in response: expected %d bodies, got %d", len(req.GetReceiptsRequest), len(resp.List))
