@@ -193,7 +193,7 @@ func TestTracingBatchHTTP(t *testing.T) {
 		t.Fatalf("batch RPC call failed: %v", err)
 	}
 
-	// Flush and verify we emitted at least one rpc.call span with batch=true.
+	// Flush and verify we emitted the rpc.call spans with batch=true.
 	if err := tracer.ForceFlush(context.Background()); err != nil {
 		t.Fatalf("failed to flush: %v", err)
 	}

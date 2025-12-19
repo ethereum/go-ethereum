@@ -70,7 +70,7 @@ type handler struct {
 	allowSubscribe       bool
 	batchRequestLimit    int
 	batchResponseMaxSize int
-	tracer               trace.Tracer // for RPC call tracing
+	tracer               trace.Tracer
 
 	subLock    sync.Mutex
 	serverSubs map[ID]*Subscription
@@ -79,7 +79,7 @@ type handler struct {
 type callProc struct {
 	ctx       context.Context
 	notifiers []*Notifier
-	isBatch   bool // true if this call is part of a batch request
+	isBatch   bool
 }
 
 func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry, batchRequestLimit, batchResponseMaxSize int, tracer trace.Tracer) *handler {
