@@ -122,7 +122,7 @@ const (
 	blockCacheLimit     = 256
 	receiptsCacheLimit  = 32
 	txLookupCacheLimit  = 1024
-	txOnChainCacheLimit = txLookupCacheLimit * 16
+	txOnChainCacheLimit = 32768 // Approx 1MB for 30 minutes of transactions at 18 tps
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
