@@ -675,9 +675,19 @@ func (s *skeleton) processNewHead(head *types.Header, final *types.Header) error
 		// Not a noop / double head announce, abort with a reorg
 		return fmt.Errorf("%w, tail: %d, head: %d, newHead: %d", errChainReorged, lastchain.Tail, lastchain.Head, number)
 	}
+	// Terminate the sync if the chain head is gapped
 	if lastchain.Head+1 < number {
 		return fmt.Errorf("%w, head: %d, newHead: %d", errChainGapped, lastchain.Head, number)
 	}
+	// Ignore the duplicated beacon header announcement
+	if lastchain.Head == number {
+		local := rawdb.ReadSkeletonHeader(s.db, number)
+		if local != nil && local.Hash() == head.Hash() {
+			log.Debug("Ignored the identical beacon header", "number", number, "hash", local.Hash())
+			return nil
+		}
+	}
+	// Terminate the sync if the chain head is forked
 	if parent := rawdb.ReadSkeletonHeader(s.db, number-1); parent.Hash() != head.ParentHash {
 		return fmt.Errorf("%w, ancestor: %d, hash: %s, want: %s", errChainForked, number-1, parent.Hash(), head.ParentHash)
 	}
