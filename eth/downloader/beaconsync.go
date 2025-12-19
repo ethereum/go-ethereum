@@ -52,53 +52,41 @@ func newBeaconBackfiller(dl *Downloader, success func()) backfiller {
 // suspend cancels any background downloader threads and returns the last header
 // that has been successfully backfilled (potentially in a previous run), or the
 // genesis.
+// suspend cancels any background downloader threads and returns the last header
+// that has been successfully backfilled (potentially in a previous run), or the
+// genesis.
 func (b *beaconBackfiller) suspend() *types.Header {
-	// If no filling is running, don't waste cycles
 	b.lock.Lock()
-	filling := b.filling
-	filled := b.filled
-	started := b.started
-	b.lock.Unlock()
+	defer b.lock.Unlock()
 
-	if !filling {
-		log.Debug("Backfiller was inactive")
-		return filled // Return the filled header on the previous sync completion
+	if !b.filling {
+		return b.filled
 	}
-	// A previous filling should be running, though it may happen that it hasn't
-	// yet started (being done on a new goroutine). Many concurrent beacon head
-	// announcements can lead to sync start/stop thrashing. In that case we need
-	// to wait for initialization before we can safely cancel it. It is safe to
-	// read this channel multiple times, it gets closed on startup.
-	<-started
-
-	// Now that we're sure the downloader successfully started up, we can cancel
-	// it safely without running the risk of data races.
+	// Stop the downloader. It is safe to call Cancel concurrently with synchronise
+	// (which might be running in resume's goroutine), as Cancel is thread-safe.
 	b.downloader.Cancel()
-	log.Debug("Backfiller has been suspended")
+	b.filling = false
 
-	// Sync cycle was just terminated, retrieve and return the last filled header.
-	// Can't use `filled` as that contains a stale value from before cancellation.
+	// Wait for the sync routine to finish to ensure no zombie processes
+	<-b.started
+
+	log.Debug("Backfiller suspended")
 	return b.downloader.blockchain.CurrentSnapBlock()
 }
 
 // resume starts the downloader threads for backfilling state and chain data.
 func (b *beaconBackfiller) resume() {
 	b.lock.Lock()
+	defer b.lock.Unlock()
+
 	if b.filling {
-		// If a previous filling cycle is still running, just ignore this start
-		// request. // TODO(karalabe): We should make this channel driven
-		b.lock.Unlock()
-		log.Debug("Backfiller is running")
 		return
 	}
 	b.filling = true
 	b.filled = nil
 	b.started = make(chan struct{})
-	b.lock.Unlock()
 
-	// Start the backfilling on its own thread since the downloader does not have
-	// its own lifecycle runloop.
-	go func() {
+	go func(started chan struct{}) {
 		// Set the backfiller to non-filling when download completes
 		defer func() {
 			b.lock.Lock()
@@ -108,7 +96,7 @@ func (b *beaconBackfiller) resume() {
 		}()
 		// If the downloader fails, report an error as in beacon chain mode there
 		// should be no errors as long as the chain we're syncing to is valid.
-		if err := b.downloader.synchronise(b.started); err != nil {
+		if err := b.downloader.synchronise(started); err != nil {
 			log.Error("Beacon backfilling failed", "err", err)
 			return
 		}
@@ -118,7 +106,8 @@ func (b *beaconBackfiller) resume() {
 			b.success()
 		}
 		log.Debug("Backfilling completed")
-	}()
+	}(b.started)
+
 	log.Debug("Backfilling started")
 }
 

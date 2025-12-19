@@ -1156,27 +1156,28 @@ func (bc *BlockChain) SnapSyncComplete(hash common.Hash) error {
 	if !bc.chainmu.TryLock() {
 		return errChainStopped
 	}
-	defer bc.chainmu.Unlock()
-
 	// Reset the trie database with the fresh snap synced state.
 	root := block.Root()
 	if bc.triedb.Scheme() == rawdb.PathScheme {
 		if err := bc.triedb.Enable(root); err != nil {
+			bc.chainmu.Unlock()
 			return err
 		}
 	}
 	if !bc.HasState(root) {
+		bc.chainmu.Unlock()
 		return fmt.Errorf("non existent state [%x..]", root[:4])
 	}
+	// If all checks out, manually set the head block.
+	bc.currentBlock.Store(block.Header())
+	headBlockGauge.Update(int64(block.NumberU64()))
+	bc.chainmu.Unlock() // Unlock specificly before Rebuild to avoid deadlock
+
 	// Destroy any existing state snapshot and regenerate it in the background,
 	// also resuming the normal maintenance of any previously paused snapshot.
 	if bc.snaps != nil {
 		bc.snaps.Rebuild(root)
 	}
-
-	// If all checks out, manually set the head block.
-	bc.currentBlock.Store(block.Header())
-	headBlockGauge.Update(int64(block.NumberU64()))
 
 	log.Info("Committed new head block", "number", block.Number(), "hash", hash)
 	return nil
