@@ -367,7 +367,7 @@ func (d *Downloader) synchronise(beaconPing chan struct{}) (err error) {
 	}
 
 	// Obtain the synchronized used in this cycle
-	mode := d.moder.get()
+	mode := d.moder.get(true)
 	defer func() {
 		if err == nil && mode == ethconfig.SnapSync {
 			d.moder.disableSnap()
@@ -424,7 +424,7 @@ func (d *Downloader) getMode() SyncMode {
 // ConfigSyncMode returns the sync mode configured for the node.
 // The actual running sync mode can differ from this.
 func (d *Downloader) ConfigSyncMode() SyncMode {
-	return d.moder.get()
+	return d.moder.get(false)
 }
 
 // syncToHead starts a block synchronization based on the hash chain from

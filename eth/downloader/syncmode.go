@@ -75,7 +75,7 @@ func newSyncModer(mode ethconfig.SyncMode, chain BlockChain, disk ethdb.KeyValue
 
 // get retrieves the current sync mode, either explicitly set, or derived
 // from the chain status.
-func (m *syncModer) get() ethconfig.SyncMode {
+func (m *syncModer) get(report bool) ethconfig.SyncMode {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -83,12 +83,16 @@ func (m *syncModer) get() ethconfig.SyncMode {
 	if m.mode == ethconfig.SnapSync {
 		return ethconfig.SnapSync
 	}
+	logger := log.Debug
+	if report {
+		logger = log.Info
+	}
 	// We are probably in full sync, but we might have rewound to before the
 	// snap sync pivot, check if we should re-enable snap sync.
 	head := m.chain.CurrentBlock()
 	if pivot := rawdb.ReadLastPivotNumber(m.disk); pivot != nil {
 		if head.Number.Uint64() < *pivot {
-			log.Info("Reenabled snap-sync as chain is lagging behind the pivot", "head", head.Number, "pivot", pivot)
+			logger("Reenabled snap-sync as chain is lagging behind the pivot", "head", head.Number, "pivot", pivot)
 			return ethconfig.SnapSync
 		}
 	}
@@ -96,7 +100,7 @@ func (m *syncModer) get() ethconfig.SyncMode {
 	// the head state, forcefully rerun the snap sync. Note it doesn't mean the
 	// persistent state is corrupted, just mismatch with the head block.
 	if !m.chain.HasState(head.Root) {
-		log.Info("Reenabled snap-sync as chain is stateless")
+		logger("Reenabled snap-sync as chain is stateless")
 		return ethconfig.SnapSync
 	}
 	// Nope, we're really full syncing

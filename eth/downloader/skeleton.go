@@ -510,6 +510,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 					// The skeleton chain is no longer linked to the local chain for some reason
 					// (e.g. debug_setHead was used to trim the local chain). Re-schedule the
 					// skeleton sync to fill the chain gap.
+					log.Warn("Local chain has been trimmed", "tailnumber", s.scratchHead, "tailhash", s.progress.Subchains[0].Next)
 					return nil, errSyncTrimmed
 				}
 			}

@@ -114,7 +114,9 @@ func (b *beaconBackfiller) resume() {
 		if b.success != nil {
 			b.success()
 		}
+		log.Debug("Backfilling completed")
 	}()
+	log.Debug("Backfilling started")
 }
 
 // SetBadBlockCallback sets the callback to run when a bad block is hit by the
