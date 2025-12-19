@@ -418,6 +418,7 @@ func (ks *KeyStore) Export(a accounts.Account, passphrase, newPassphrase string)
 	if err != nil {
 		return nil, err
 	}
+	defer zeroKey(key.PrivateKey)
 	var N, P int
 	if store, ok := ks.storage.(*keyStorePassphrase); ok {
 		N, P = store.scryptN, store.scryptP
@@ -477,6 +478,7 @@ func (ks *KeyStore) Update(a accounts.Account, passphrase, newPassphrase string)
 	if err != nil {
 		return err
 	}
+	defer zeroKey(key.PrivateKey)
 	return ks.storage.StoreKey(a.URL.Path, key, newPassphrase)
 }
 

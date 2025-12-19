@@ -116,15 +116,16 @@ func writeStates(batch ethdb.Batch, genMarker []byte, accountData map[common.Has
 				continue
 			}
 			slots += 1
+			key := storageKeySlice(addrHash, storageHash)
 			if len(blob) == 0 {
 				rawdb.DeleteStorageSnapshot(batch, addrHash, storageHash)
 				if clean != nil {
-					clean.Set(append(addrHash[:], storageHash[:]...), nil)
+					clean.Set(key, nil)
 				}
 			} else {
 				rawdb.WriteStorageSnapshot(batch, addrHash, storageHash, blob)
 				if clean != nil {
-					clean.Set(append(addrHash[:], storageHash[:]...), blob)
+					clean.Set(key, blob)
 				}
 			}
 		}

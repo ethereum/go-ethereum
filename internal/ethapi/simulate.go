@@ -233,7 +233,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if block.BlockOverrides.BlobBaseFee != nil {
 		blockContext.BlobBaseFee = block.BlockOverrides.BlobBaseFee.ToInt()
 	}
-	precompiles := sim.activePrecompiles(sim.base)
+	precompiles := sim.activePrecompiles(header)
 	// State overrides are applied prior to execution of a block
 	if err := block.StateOverrides.Apply(sim.state, precompiles); err != nil {
 		return nil, nil, nil, err
@@ -377,7 +377,7 @@ func (sim *simulator) sanitizeCall(call *TransactionArgs, state vm.StateDB, head
 		call.Gas = (*hexutil.Uint64)(&remaining)
 	}
 	if *gasUsed+uint64(*call.Gas) > blockContext.GasLimit {
-		return &blockGasLimitReachedError{fmt.Sprintf("block gas limit reached: %d >= %d", gasUsed, blockContext.GasLimit)}
+		return &blockGasLimitReachedError{fmt.Sprintf("block gas limit reached: %d >= %d", *gasUsed, blockContext.GasLimit)}
 	}
 	if err := call.CallDefaults(sim.gp.Gas(), header.BaseFee, sim.chainConfig.ChainID); err != nil {
 		return err

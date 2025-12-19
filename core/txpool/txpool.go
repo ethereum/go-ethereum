@@ -489,3 +489,14 @@ func (p *TxPool) Clear() {
 		subpool.Clear()
 	}
 }
+
+// FilterType returns whether a transaction with the given type is supported
+// (can be added) by the pool.
+func (p *TxPool) FilterType(kind byte) bool {
+	for _, subpool := range p.subpools {
+		if subpool.FilterType(kind) {
+			return true
+		}
+	}
+	return false
+}

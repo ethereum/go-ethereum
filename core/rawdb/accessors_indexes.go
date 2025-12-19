@@ -148,7 +148,7 @@ func findTxInBlockBody(blockbody rlp.RawValue, target common.Hash) (*types.Trans
 	txIndex := uint64(0)
 	for iter.Next() {
 		if iter.Err() != nil {
-			return nil, 0, err
+			return nil, 0, iter.Err()
 		}
 		// The preimage for the hash calculation of legacy transactions
 		// is just their RLP encoding. For typed (EIP-2718) transactions,

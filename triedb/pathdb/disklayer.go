@@ -275,7 +275,7 @@ func (dl *diskLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 
 	// If the layer is being generated, ensure the requested storage slot
 	// has already been covered by the generator.
-	key := append(accountHash[:], storageHash[:]...)
+	key := storageKeySlice(accountHash, storageHash)
 	marker := dl.genMarker()
 	if marker != nil && bytes.Compare(key, marker) > 0 {
 		return nil, errNotCoveredYet

@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/transitiontrie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
 )
@@ -501,7 +502,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 		// Verkle uses only one tree, and the copy has already been
 		// made in mustCopyTrie.
 		obj.trie = db.trie
-	case *trie.TransitionTrie:
+	case *transitiontrie.TransitionTrie:
 		// Same thing for the transition tree, since the MPT is
 		// read-only.
 		obj.trie = db.trie
@@ -530,6 +531,11 @@ func (s *stateObject) Code() []byte {
 	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
 		return nil
 	}
+	defer func(start time.Time) {
+		s.db.CodeLoaded += 1
+		s.db.CodeReads += time.Since(start)
+	}(time.Now())
+
 	code, err := s.db.reader.Code(s.address, common.BytesToHash(s.CodeHash()))
 	if err != nil {
 		s.db.setError(fmt.Errorf("can't load code hash %x: %v", s.CodeHash(), err))
@@ -551,6 +557,11 @@ func (s *stateObject) CodeSize() int {
 	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
 		return 0
 	}
+	defer func(start time.Time) {
+		s.db.CodeLoaded += 1
+		s.db.CodeReads += time.Since(start)
+	}(time.Now())
+
 	size, err := s.db.reader.CodeSize(s.address, common.BytesToHash(s.CodeHash()))
 	if err != nil {
 		s.db.setError(fmt.Errorf("can't load code size %x: %v", s.CodeHash(), err))

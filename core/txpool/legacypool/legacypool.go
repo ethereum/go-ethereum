@@ -288,7 +288,12 @@ func New(config Config, chain BlockChain) *LegacyPool {
 // Filter returns whether the given transaction can be consumed by the legacy
 // pool, specifically, whether it is a Legacy, AccessList or Dynamic transaction.
 func (pool *LegacyPool) Filter(tx *types.Transaction) bool {
-	switch tx.Type() {
+	return pool.FilterType(tx.Type())
+}
+
+// FilterType returns whether the legacy pool supports the given transaction type.
+func (pool *LegacyPool) FilterType(kind byte) bool {
+	switch kind {
 	case types.LegacyTxType, types.AccessListTxType, types.DynamicFeeTxType, types.SetCodeTxType:
 		return true
 	default:

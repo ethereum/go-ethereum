@@ -25,7 +25,7 @@ import (
 )
 
 var (
-	zeroKey  = [32]byte{}
+	zeroKey  = [HashSize]byte{}
 	oneKey   = common.HexToHash("0101010101010101010101010101010101010101010101010101010101010101")
 	twoKey   = common.HexToHash("0202020202020202020202020202020202020202020202020202020202020202")
 	threeKey = common.HexToHash("0303030303030303030303030303030303030303030303030303030303030303")
@@ -158,8 +158,8 @@ func TestInsertDuplicateKey(t *testing.T) {
 func TestLargeNumberOfEntries(t *testing.T) {
 	var err error
 	tree := NewBinaryNode()
-	for i := range 256 {
-		var key [32]byte
+	for i := range StemNodeWidth {
+		var key [HashSize]byte
 		key[0] = byte(i)
 		tree, err = tree.Insert(key[:], ffKey[:], nil, 0)
 		if err != nil {
@@ -182,7 +182,7 @@ func TestMerkleizeMultipleEntries(t *testing.T) {
 		common.HexToHash("8100000000000000000000000000000000000000000000000000000000000000").Bytes(),
 	}
 	for i, key := range keys {
-		var v [32]byte
+		var v [HashSize]byte
 		binary.LittleEndian.PutUint64(v[:8], uint64(i))
 		tree, err = tree.Insert(key, v[:], nil, 0)
 		if err != nil {

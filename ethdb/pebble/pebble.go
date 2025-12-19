@@ -205,8 +205,8 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	// limit unchanged allows writes to be flushed more smoothly. This helps
 	// avoid compaction spikes and mitigates write stalls caused by heavy
 	// compaction workloads.
-	memTableLimit := 4
-	memTableSize := cache * 1024 * 1024 / 2 / memTableLimit
+	memTableNumber := 4
+	memTableSize := cache * 1024 * 1024 / 2 / memTableNumber
 
 	// The memory table size is currently capped at maxMemTableSize-1 due to a
 	// known bug in the pebble where maxMemTableSize is not recognized as a
@@ -243,12 +243,16 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		// Note, there may have more than two memory tables in the system.
 		MemTableSize: uint64(memTableSize),
 
-		// MemTableStopWritesThreshold places a hard limit on the size
+		// MemTableStopWritesThreshold places a hard limit on the number
 		// of the existent MemTables(including the frozen one).
+		//
 		// Note, this must be the number of tables not the size of all memtables
 		// according to https://github.com/cockroachdb/pebble/blob/master/options.go#L738-L742
 		// and to https://github.com/cockroachdb/pebble/blob/master/db.go#L1892-L1903.
-		MemTableStopWritesThreshold: memTableLimit,
+		//
+		// MemTableStopWritesThreshold is set to twice the maximum number of
+		// allowed memtables to accommodate temporary spikes.
+		MemTableStopWritesThreshold: memTableNumber * 2,
 
 		// The default compaction concurrency(1 thread),
 		// Here use all available CPUs for faster compaction.
@@ -263,7 +267,9 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 			{TargetFileSize: 16 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
 			{TargetFileSize: 32 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
 			{TargetFileSize: 64 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 128 * 1024 * 1024, FilterPolicy: bloom.FilterPolicy(10)},
+
+			// Pebble doesn't use the Bloom filter at level6 for read efficiency.
+			{TargetFileSize: 128 * 1024 * 1024},
 		},
 		ReadOnly: readonly,
 		EventListener: &pebble.EventListener{
@@ -294,9 +300,15 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		// debt will be less than 1GB, but with more frequent compactions scheduled.
 		L0CompactionThreshold: 2,
 	}
-	// Disable seek compaction explicitly. Check https://github.com/ethereum/go-ethereum/pull/20130
-	// for more details.
-	opt.Experimental.ReadSamplingMultiplier = -1
+	// These two settings define the conditions under which compaction concurrency
+	// is increased. Specifically, one additional compaction job will be enabled when:
+	// - there is one more overlapping sub-level0;
+	// - there is an additional 512 MB of compaction debt;
+	//
+	// The maximum concurrency is still capped by MaxConcurrentCompactions, but with
+	// these settings compactions can scale up more readily.
+	opt.Experimental.L0CompactionConcurrency = 1
+	opt.Experimental.CompactionDebtConcurrency = 1 << 28 // 256MB
 
 	// Open the db and recover any potential corruptions
 	innerDB, err := pebble.Open(file, opt)

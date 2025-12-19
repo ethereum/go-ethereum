@@ -58,7 +58,7 @@ func TestSizeTracker(t *testing.T) {
 	state.AddBalance(addr3, uint256.NewInt(3000), tracing.BalanceChangeUnspecified)
 	state.SetNonce(addr3, 3, tracing.NonceChangeUnspecified)
 
-	currentRoot, _, err := state.CommitWithUpdate(1, true, false)
+	currentRoot, err := state.Commit(1, true, false)
 	if err != nil {
 		t.Fatalf("Failed to commit initial state: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestSizeTracker(t *testing.T) {
 		if i%3 == 0 {
 			newState.SetCode(testAddr, []byte{byte(i), 0x60, 0x80, byte(i + 1), 0x52}, tracing.CodeChangeUnspecified)
 		}
-		root, _, err := newState.CommitWithUpdate(blockNum, true, false)
+		root, err := newState.Commit(blockNum, true, false)
 		if err != nil {
 			t.Fatalf("Failed to commit state at block %d: %v", blockNum, err)
 		}
@@ -154,21 +154,22 @@ func TestSizeTracker(t *testing.T) {
 		if i%3 == 0 {
 			newState.SetCode(testAddr, []byte{byte(i), 0x60, 0x80, byte(i + 1), 0x52}, tracing.CodeChangeUnspecified)
 		}
-		root, update, err := newState.CommitWithUpdate(blockNum, true, false)
+		ret, err := newState.commitAndFlush(blockNum, true, false, true)
 		if err != nil {
 			t.Fatalf("Failed to commit state at block %d: %v", blockNum, err)
 		}
-		if err := tdb.Commit(root, false); err != nil {
+		tracker.Notify(ret)
+
+		if err := tdb.Commit(ret.root, false); err != nil {
 			t.Fatalf("Failed to commit trie at block %d: %v", blockNum, err)
 		}
 
-		diff, err := calSizeStats(update)
+		diff, err := calSizeStats(ret)
 		if err != nil {
 			t.Fatalf("Failed to calculate size stats for block %d: %v", blockNum, err)
 		}
 		trackedUpdates = append(trackedUpdates, diff)
-		tracker.Notify(update)
-		currentRoot = root
+		currentRoot = ret.root
 	}
 	finalRoot := rawdb.ReadSnapshotRoot(db)
 

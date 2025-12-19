@@ -35,16 +35,28 @@ import (
 )
 
 var (
-	errInvalidTopic           = errors.New("invalid topic(s)")
-	errFilterNotFound         = errors.New("filter not found")
-	errInvalidBlockRange      = errors.New("invalid block range params")
+	errInvalidTopic           = invalidParamsErr("invalid topic(s)")
+	errInvalidBlockRange      = invalidParamsErr("invalid block range params")
+	errBlockRangeIntoFuture   = invalidParamsErr("block range extends beyond current head block")
+	errBlockHashWithRange     = invalidParamsErr("can't specify fromBlock/toBlock with blockHash")
+	errPendingLogsUnsupported = invalidParamsErr("pending logs are not supported")
 	errUnknownBlock           = errors.New("unknown block")
-	errBlockHashWithRange     = errors.New("can't specify fromBlock/toBlock with blockHash")
-	errPendingLogsUnsupported = errors.New("pending logs are not supported")
+	errFilterNotFound         = errors.New("filter not found")
 	errExceedMaxTopics        = errors.New("exceed max topics")
 	errExceedLogQueryLimit    = errors.New("exceed max addresses or topics per search position")
 	errExceedMaxTxHashes      = errors.New("exceed max number of transaction hashes allowed per transactionReceipts subscription")
 )
+
+type invalidParamsError struct {
+	err error
+}
+
+func (e invalidParamsError) Error() string  { return e.err.Error() }
+func (e invalidParamsError) ErrorCode() int { return -32602 }
+
+func invalidParamsErr(format string, args ...any) error {
+	return invalidParamsError{fmt.Errorf(format, args...)}
+}
 
 const (
 	// The maximum number of topic criteria allowed, vm.LOG4 - vm.LOG0

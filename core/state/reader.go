@@ -18,6 +18,7 @@ package state
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -30,6 +31,8 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/bintrie"
+	"github.com/ethereum/go-ethereum/trie/transitiontrie"
 	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/database"
@@ -37,6 +40,10 @@ import (
 
 // ContractCodeReader defines the interface for accessing contract code.
 type ContractCodeReader interface {
+	// Has returns the flag indicating whether the contract code with
+	// specified address and hash exists or not.
+	Has(addr common.Address, codeHash common.Hash) bool
+
 	// Code retrieves a particular contract's code.
 	//
 	// - Returns nil code along with nil error if the requested contract code
@@ -86,10 +93,29 @@ type Reader interface {
 
 // ReaderStats wraps the statistics of reader.
 type ReaderStats struct {
-	AccountHit  int64
-	AccountMiss int64
-	StorageHit  int64
-	StorageMiss int64
+	// Cache stats
+	AccountCacheHit  int64
+	AccountCacheMiss int64
+	StorageCacheHit  int64
+	StorageCacheMiss int64
+}
+
+// String implements fmt.Stringer, returning string format statistics.
+func (s ReaderStats) String() string {
+	var (
+		accountCacheHitRate float64
+		storageCacheHitRate float64
+	)
+	if s.AccountCacheHit > 0 {
+		accountCacheHitRate = float64(s.AccountCacheHit) / float64(s.AccountCacheHit+s.AccountCacheMiss) * 100
+	}
+	if s.StorageCacheHit > 0 {
+		storageCacheHitRate = float64(s.StorageCacheHit) / float64(s.StorageCacheHit+s.StorageCacheMiss) * 100
+	}
+	msg := fmt.Sprintf("Reader statistics\n")
+	msg += fmt.Sprintf("account: hit: %d, miss: %d, rate: %.2f\n", s.AccountCacheHit, s.AccountCacheMiss, accountCacheHitRate)
+	msg += fmt.Sprintf("storage: hit: %d, miss: %d, rate: %.2f\n", s.StorageCacheHit, s.StorageCacheMiss, storageCacheHitRate)
+	return msg
 }
 
 // ReaderWithStats wraps the additional method to retrieve the reader statistics from.
@@ -146,6 +172,13 @@ func (r *cachingCodeReader) CodeSize(addr common.Address, codeHash common.Hash) 
 		return 0, err
 	}
 	return len(code), nil
+}
+
+// Has returns the flag indicating whether the contract code with
+// specified address and hash exists or not.
+func (r *cachingCodeReader) Has(addr common.Address, codeHash common.Hash) bool {
+	code, _ := r.Code(addr, codeHash)
+	return len(code) > 0
 }
 
 // flatReader wraps a database state reader and is safe for concurrent access.
@@ -242,7 +275,11 @@ func newTrieReader(root common.Hash, db *triedb.Database, cache *utils.PointCach
 	if !db.IsVerkle() {
 		tr, err = trie.NewStateTrie(trie.StateTrieID(root), db)
 	} else {
-		tr, err = trie.NewVerkleTrie(root, db, cache)
+		// When IsVerkle() is true, create a BinaryTrie wrapped in TransitionTrie
+		binTrie, binErr := bintrie.NewBinaryTrie(root, db)
+		if binErr != nil {
+			return nil, binErr
+		}
 
 		// Based on the transition status, determine if the overlay
 		// tree needs to be created, or if a single, target tree is
@@ -253,7 +290,22 @@ func newTrieReader(root common.Hash, db *triedb.Database, cache *utils.PointCach
 			if err != nil {
 				return nil, err
 			}
-			tr = trie.NewTransitionTrie(mpt, tr.(*trie.VerkleTrie), false)
+			tr = transitiontrie.NewTransitionTrie(mpt, binTrie, false)
+		} else {
+			// HACK: Use TransitionTrie with nil base as a wrapper to make BinaryTrie
+			// satisfy the Trie interface. This works around the import cycle between
+			// trie and trie/bintrie packages.
+			//
+			// TODO: In future PRs, refactor the package structure to avoid this hack:
+			// - Option 1: Move common interfaces (Trie, NodeIterator) to a separate
+			//   package that both trie and trie/bintrie can import
+			// - Option 2: Create a factory function in the trie package that returns
+			//   BinaryTrie as a Trie interface without direct import
+			// - Option 3: Move BinaryTrie to the main trie package
+			//
+			// The current approach works but adds unnecessary overhead and complexity
+			// by using TransitionTrie when there's no actual transition happening.
+			tr = transitiontrie.NewTransitionTrie(nil, binTrie, false)
 		}
 	}
 	if err != nil {
@@ -523,10 +575,11 @@ func (r *readerWithCache) Storage(addr common.Address, slot common.Hash) (common
 
 type readerWithCacheStats struct {
 	*readerWithCache
-	accountHit  atomic.Int64
-	accountMiss atomic.Int64
-	storageHit  atomic.Int64
-	storageMiss atomic.Int64
+
+	accountCacheHit  atomic.Int64
+	accountCacheMiss atomic.Int64
+	storageCacheHit  atomic.Int64
+	storageCacheMiss atomic.Int64
 }
 
 // newReaderWithCacheStats constructs the reader with additional statistics tracked.
@@ -546,9 +599,9 @@ func (r *readerWithCacheStats) Account(addr common.Address) (*types.StateAccount
 		return nil, err
 	}
 	if incache {
-		r.accountHit.Add(1)
+		r.accountCacheHit.Add(1)
 	} else {
-		r.accountMiss.Add(1)
+		r.accountCacheMiss.Add(1)
 	}
 	return account, nil
 }
@@ -564,9 +617,9 @@ func (r *readerWithCacheStats) Storage(addr common.Address, slot common.Hash) (c
 		return common.Hash{}, err
 	}
 	if incache {
-		r.storageHit.Add(1)
+		r.storageCacheHit.Add(1)
 	} else {
-		r.storageMiss.Add(1)
+		r.storageCacheMiss.Add(1)
 	}
 	return value, nil
 }
@@ -574,9 +627,9 @@ func (r *readerWithCacheStats) Storage(addr common.Address, slot common.Hash) (c
 // GetStats implements ReaderWithStats, returning the statistics of state reader.
 func (r *readerWithCacheStats) GetStats() ReaderStats {
 	return ReaderStats{
-		AccountHit:  r.accountHit.Load(),
-		AccountMiss: r.accountMiss.Load(),
-		StorageHit:  r.storageHit.Load(),
-		StorageMiss: r.storageMiss.Load(),
+		AccountCacheHit:  r.accountCacheHit.Load(),
+		AccountCacheMiss: r.accountCacheMiss.Load(),
+		StorageCacheHit:  r.storageCacheHit.Load(),
+		StorageCacheMiss: r.storageCacheMiss.Load(),
 	}
 }

@@ -46,8 +46,31 @@ func (h HashedNode) GetValuesAtStem(_ []byte, _ NodeResolverFn) ([][]byte, error
 	return nil, errors.New("attempted to get values from an unresolved node")
 }
 
-func (h HashedNode) InsertValuesAtStem(key []byte, values [][]byte, resolver NodeResolverFn, depth int) (BinaryNode, error) {
-	return nil, errors.New("insertValuesAtStem not implemented for hashed node")
+func (h HashedNode) InsertValuesAtStem(stem []byte, values [][]byte, resolver NodeResolverFn, depth int) (BinaryNode, error) {
+	// Step 1: Generate the path for this node's position in the tree
+	path, err := keyToPath(depth, stem)
+	if err != nil {
+		return nil, fmt.Errorf("InsertValuesAtStem path generation error: %w", err)
+	}
+
+	if resolver == nil {
+		return nil, errors.New("InsertValuesAtStem resolve error: resolver is nil")
+	}
+
+	// Step 2: Resolve the hashed node to get the actual node data
+	data, err := resolver(path, common.Hash(h))
+	if err != nil {
+		return nil, fmt.Errorf("InsertValuesAtStem resolve error: %w", err)
+	}
+
+	// Step 3: Deserialize the resolved data into a concrete node
+	node, err := DeserializeNode(data, depth)
+	if err != nil {
+		return nil, fmt.Errorf("InsertValuesAtStem node deserialization error: %w", err)
+	}
+
+	// Step 4: Call InsertValuesAtStem on the resolved concrete node
+	return node.InsertValuesAtStem(stem, values, resolver, depth)
 }
 
 func (h HashedNode) toDot(parent string, path string) string {
@@ -58,7 +81,8 @@ func (h HashedNode) toDot(parent string, path string) string {
 }
 
 func (h HashedNode) CollectNodes([]byte, NodeFlushFn) error {
-	return errors.New("collectNodes not implemented for hashed node")
+	// HashedNodes are already persisted in the database and don't need to be collected.
+	return nil
 }
 
 func (h HashedNode) GetHeight() int {

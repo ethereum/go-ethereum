@@ -108,6 +108,11 @@ func (it *binaryNodeIterator) Next(descend bool) bool {
 		}
 
 		// go back to parent to get the next leaf
+		// Check if we're at the root before popping
+		if len(it.stack) == 1 {
+			it.lastErr = errIteratorEnd
+			return false
+		}
 		it.stack = it.stack[:len(it.stack)-1]
 		it.current = it.stack[len(it.stack)-1].Node
 		it.stack[len(it.stack)-1].Index++
@@ -183,9 +188,31 @@ func (it *binaryNodeIterator) NodeBlob() []byte {
 }
 
 // Leaf returns true iff the current node is a leaf node.
+// In a Binary Trie, a StemNode contains up to 256 leaf values.
+// The iterator is only considered to be "at a leaf" when it's positioned
+// at a specific non-nil value within the StemNode, not just at the StemNode itself.
 func (it *binaryNodeIterator) Leaf() bool {
-	_, ok := it.current.(*StemNode)
-	return ok
+	sn, ok := it.current.(*StemNode)
+	if !ok {
+		return false
+	}
+
+	// Check if we have a valid stack position
+	if len(it.stack) == 0 {
+		return false
+	}
+
+	// The Index in the stack state points to the NEXT position after the current value.
+	// So if Index is 0, we haven't started iterating through the values yet.
+	// If Index is 5, we're currently at value[4] (the 5th value, 0-indexed).
+	idx := it.stack[len(it.stack)-1].Index
+	if idx == 0 || idx > 256 {
+		return false
+	}
+
+	// Check if there's actually a value at the current position
+	currentValueIndex := idx - 1
+	return sn.Values[currentValueIndex] != nil
 }
 
 // LeafKey returns the key of the leaf. The method panics if the iterator is not
@@ -219,7 +246,7 @@ func (it *binaryNodeIterator) LeafProof() [][]byte {
 		panic("LeafProof() called on an binary node iterator not at a leaf location")
 	}
 
-	proof := make([][]byte, 0, len(it.stack)+NodeWidth)
+	proof := make([][]byte, 0, len(it.stack)+StemNodeWidth)
 
 	// Build proof by walking up the stack and collecting sibling hashes
 	for i := range it.stack[:len(it.stack)-2] {

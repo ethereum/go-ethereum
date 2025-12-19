@@ -203,7 +203,7 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 		BeaconRoot:   blockParams.BeaconRoot,
 		Version:      engine.PayloadV1,
 	}).Id()
-	execData, err := api.getPayload(payloadID, true)
+	execData, err := api.getPayload(payloadID, true, nil, nil)
 	if err != nil {
 		t.Fatalf("error getting payload, err=%v", err)
 	}
@@ -426,7 +426,7 @@ func TestEth2DeepReorg(t *testing.T) {
 }
 
 // startEthService creates a full node instance for testing.
-func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block) (*node.Node, *eth.Ethereum) {
+func startEthService(t testing.TB, genesis *core.Genesis, blocks []*types.Block) (*node.Node, *eth.Ethereum) {
 	t.Helper()
 
 	n, err := node.New(&node.Config{
@@ -636,7 +636,7 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 				t.Fatalf("error preparing payload, invalid status: %v", resp.PayloadStatus.Status)
 			}
 			// give the payload some time to be built
-			if payload, err = api.getPayload(*resp.PayloadID, true); err != nil {
+			if payload, err = api.getPayload(*resp.PayloadID, true, nil, nil); err != nil {
 				t.Fatalf("can't get payload: %v", err)
 			}
 			if len(payload.ExecutionPayload.Transactions) > 0 {
@@ -1219,7 +1219,7 @@ func TestNilWithdrawals(t *testing.T) {
 			Random:       test.blockParams.Random,
 			Version:      payloadVersion,
 		}).Id()
-		execData, err := api.GetPayloadV2(payloadID)
+		execData, err := api.getPayload(payloadID, false, nil, nil)
 		if err != nil {
 			t.Fatalf("error getting payload, err=%v", err)
 		}
@@ -1674,7 +1674,7 @@ func TestWitnessCreationAndConsumption(t *testing.T) {
 		BeaconRoot:   blockParams.BeaconRoot,
 		Version:      engine.PayloadV3,
 	}).Id()
-	envelope, err := api.getPayload(payloadID, true)
+	envelope, err := api.getPayload(payloadID, true, nil, nil)
 	if err != nil {
 		t.Fatalf("error getting payload, err=%v", err)
 	}
@@ -1873,7 +1873,7 @@ func makeMultiBlobTx(chainConfig *params.ChainConfig, nonce uint64, blobCount in
 	return types.MustSignNewTx(key, types.LatestSigner(chainConfig), blobtx)
 }
 
-func newGetBlobEnv(t *testing.T, version byte) (*node.Node, *ConsensusAPI) {
+func newGetBlobEnv(t testing.TB, version byte) (*node.Node, *ConsensusAPI) {
 	var (
 		// Create a database pre-initialize with a genesis block
 		config = *params.MergedTestChainConfig
@@ -2045,36 +2045,57 @@ func TestGetBlobsV2(t *testing.T) {
 		},
 	}
 	for i, suite := range suites {
-		// Fill the request for retrieving blobs
-		var (
-			vhashes []common.Hash
-			expect  []*engine.BlobAndProofV2
-		)
-		// fill missing blob
-		if suite.fillRandom {
-			vhashes = append(vhashes, testrand.Hash())
-		}
-		for j := suite.start; j < suite.limit; j++ {
-			vhashes = append(vhashes, testBlobVHashes[j])
-			var cellProofs []hexutil.Bytes
-			for _, proof := range testBlobCellProofs[j] {
-				cellProofs = append(cellProofs, proof[:])
+		runGetBlobsV2(t, api, suite.start, suite.limit, suite.fillRandom, fmt.Sprintf("suite=%d", i))
+	}
+}
+
+// Benchmark GetBlobsV2 internals
+// Note that this is not an RPC-level benchmark, so JSON-RPC overhead is not included.
+func BenchmarkGetBlobsV2(b *testing.B) {
+	n, api := newGetBlobEnv(b, 1)
+	defer n.Close()
+
+	// for blobs in [1, 2, 4, 6], print string and run benchmark
+	for _, blobs := range []int{1, 2, 4, 6} {
+		name := fmt.Sprintf("blobs=%d", blobs)
+		b.Run(name, func(b *testing.B) {
+			for b.Loop() {
+				runGetBlobsV2(b, api, 0, blobs, false, name)
 			}
-			expect = append(expect, &engine.BlobAndProofV2{
-				Blob:       testBlobs[j][:],
-				CellProofs: cellProofs,
-			})
+		})
+	}
+}
+
+func runGetBlobsV2(t testing.TB, api *ConsensusAPI, start, limit int, fillRandom bool, name string) {
+	// Fill the request for retrieving blobs
+	var (
+		vhashes []common.Hash
+		expect  []*engine.BlobAndProofV2
+	)
+	// fill missing blob
+	if fillRandom {
+		vhashes = append(vhashes, testrand.Hash())
+	}
+	for j := start; j < limit; j++ {
+		vhashes = append(vhashes, testBlobVHashes[j])
+		var cellProofs []hexutil.Bytes
+		for _, proof := range testBlobCellProofs[j] {
+			cellProofs = append(cellProofs, proof[:])
 		}
-		result, err := api.GetBlobsV2(vhashes)
-		if err != nil {
-			t.Errorf("Unexpected error for case %d, %v", i, err)
-		}
-		// null is responded if any blob is missing
-		if suite.fillRandom {
-			expect = nil
-		}
-		if !reflect.DeepEqual(result, expect) {
-			t.Fatalf("Unexpected result for case %d", i)
-		}
+		expect = append(expect, &engine.BlobAndProofV2{
+			Blob:       testBlobs[j][:],
+			CellProofs: cellProofs,
+		})
+	}
+	result, err := api.GetBlobsV2(vhashes)
+	if err != nil {
+		t.Errorf("Unexpected error for case %s, %v", name, err)
+	}
+	// null is responded if any blob is missing
+	if fillRandom {
+		expect = nil
+	}
+	if !reflect.DeepEqual(result, expect) {
+		t.Fatalf("Unexpected result for case %s", name)
 	}
 }

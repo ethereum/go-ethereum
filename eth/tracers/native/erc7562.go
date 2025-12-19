@@ -513,7 +513,7 @@ func defaultIgnoredOpcodes() []hexutil.Uint64 {
 	ignored := make([]hexutil.Uint64, 0, 64)
 
 	// Allow all PUSHx, DUPx and SWAPx opcodes as they have sequential codes
-	for op := vm.PUSH0; op < vm.SWAP16; op++ {
+	for op := vm.PUSH0; op <= vm.SWAP16; op++ {
 		ignored = append(ignored, hexutil.Uint64(op))
 	}
 

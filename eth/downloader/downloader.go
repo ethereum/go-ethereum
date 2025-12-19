@@ -97,8 +97,9 @@ type headerTask struct {
 }
 
 type Downloader struct {
-	mode atomic.Uint32  // Synchronisation mode defining the strategy used (per sync cycle), use d.getMode() to get the SyncMode
-	mux  *event.TypeMux // Event multiplexer to announce sync operation events
+	mode  atomic.Uint32  // Synchronisation mode defining the strategy used (per sync cycle), use d.getMode() to get the SyncMode
+	moder *syncModer     // Sync mode management, deliver the appropriate sync mode choice for each cycle
+	mux   *event.TypeMux // Event multiplexer to announce sync operation events
 
 	queue *queue   // Scheduler for selecting the hashes to download
 	peers *peerSet // Set of active peers from which download can proceed
@@ -165,6 +166,9 @@ type BlockChain interface {
 	// HasHeader verifies a header's presence in the local chain.
 	HasHeader(common.Hash, uint64) bool
 
+	// HasState checks if state trie is fully present in the database or not.
+	HasState(root common.Hash) bool
+
 	// GetHeaderByHash retrieves a header from the local chain.
 	GetHeaderByHash(common.Hash) *types.Header
 
@@ -221,10 +225,11 @@ type BlockChain interface {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, dropPeer peerDropFn, success func()) *Downloader {
+func New(stateDb ethdb.Database, mode ethconfig.SyncMode, mux *event.TypeMux, chain BlockChain, dropPeer peerDropFn, success func()) *Downloader {
 	cutoffNumber, cutoffHash := chain.HistoryPruningCutoff()
 	dl := &Downloader{
 		stateDB:           stateDb,
+		moder:             newSyncModer(mode, chain, stateDb),
 		mux:               mux,
 		queue:             newQueue(blockCacheMaxItems, blockCacheInitialItems),
 		peers:             newPeerSet(),
@@ -331,7 +336,7 @@ func (d *Downloader) UnregisterPeer(id string) error {
 // synchronise will select the peer and use it for synchronising. If an empty string is given
 // it will use the best peer possible and synchronize if its TD is higher than our own. If any of the
 // checks fail an error will be returned. This method is synchronous
-func (d *Downloader) synchronise(mode SyncMode, beaconPing chan struct{}) error {
+func (d *Downloader) synchronise(beaconPing chan struct{}) (err error) {
 	// The beacon header syncer is async. It will start this synchronization and
 	// will continue doing other tasks. However, if synchronization needs to be
 	// cancelled, the syncer needs to know if we reached the startup point (and
@@ -356,6 +361,13 @@ func (d *Downloader) synchronise(mode SyncMode, beaconPing chan struct{}) error 
 	if d.notified.CompareAndSwap(false, true) {
 		log.Info("Block synchronisation started")
 	}
+	mode := d.moder.get()
+	defer func() {
+		if err == nil && mode == ethconfig.SnapSync {
+			d.moder.disableSnap()
+			log.Info("Disabled snap-sync after the initial sync cycle")
+		}
+	}()
 	if mode == ethconfig.SnapSync {
 		// Snap sync will directly modify the persistent state, making the entire
 		// trie database unusable until the state is fully synced. To prevent any
@@ -399,6 +411,7 @@ func (d *Downloader) synchronise(mode SyncMode, beaconPing chan struct{}) error 
 
 	// Atomically set the requested sync mode
 	d.mode.Store(uint32(mode))
+	defer d.mode.Store(0)
 
 	if beaconPing != nil {
 		close(beaconPing)
@@ -406,8 +419,15 @@ func (d *Downloader) synchronise(mode SyncMode, beaconPing chan struct{}) error 
 	return d.syncToHead()
 }
 
+// getMode returns the sync mode used within current cycle.
 func (d *Downloader) getMode() SyncMode {
 	return SyncMode(d.mode.Load())
+}
+
+// ConfigSyncMode returns the sync mode configured for the node.
+// The actual running sync mode can differ from this.
+func (d *Downloader) ConfigSyncMode() SyncMode {
+	return d.moder.get()
 }
 
 // syncToHead starts a block synchronization based on the hash chain from

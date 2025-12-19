@@ -163,9 +163,6 @@ func newConsensusAPIWithoutHeartbeat(eth *eth.Ethereum) *ConsensusAPI {
 //
 // We try to set our blockchain to the headBlock.
 //
-// If the method is called with an empty head block: we return success, which can be used
-// to check if the engine API is enabled.
-//
 // If the total difficulty was not reached: we return INVALID.
 //
 // If the finalizedBlockHash is set: we check if we have the finalizedBlockHash in our db,
@@ -273,7 +270,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 			}
 		}
 		log.Info("Forkchoice requested sync to new head", context...)
-		if err := api.eth.Downloader().BeaconSync(api.eth.SyncMode(), header, finalized); err != nil {
+		if err := api.eth.Downloader().BeaconSync(header, finalized); err != nil {
 			return engine.STATUS_SYNCING, err
 		}
 		return engine.STATUS_SYNCING, nil
@@ -405,10 +402,12 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config engine.Transit
 
 // GetPayloadV1 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV1(payloadID engine.PayloadID) (*engine.ExecutableData, error) {
-	if !payloadID.Is(engine.PayloadV1) {
-		return nil, engine.UnsupportedFork
-	}
-	data, err := api.getPayload(payloadID, false)
+	data, err := api.getPayload(
+		payloadID,
+		false,
+		[]engine.PayloadVersion{engine.PayloadV1},
+		nil,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -417,35 +416,34 @@ func (api *ConsensusAPI) GetPayloadV1(payloadID engine.PayloadID) (*engine.Execu
 
 // GetPayloadV2 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV2(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
-	// executionPayload: ExecutionPayloadV1 | ExecutionPayloadV2 where:
-	//
-	// - ExecutionPayloadV1 MUST be returned if the payload timestamp is lower
-	//   than the Shanghai timestamp
-	//
-	// - ExecutionPayloadV2 MUST be returned if the payload timestamp is greater
-	//   or equal to the Shanghai timestamp
-	if !payloadID.Is(engine.PayloadV1, engine.PayloadV2) {
-		return nil, engine.UnsupportedFork
-	}
-	return api.getPayload(payloadID, false)
+	return api.getPayload(
+		payloadID,
+		false,
+		[]engine.PayloadVersion{engine.PayloadV1, engine.PayloadV2},
+		[]forks.Fork{forks.Shanghai},
+	)
 }
 
 // GetPayloadV3 returns a cached payload by id. This endpoint should only
 // be used for the Cancun fork.
 func (api *ConsensusAPI) GetPayloadV3(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
-	if !payloadID.Is(engine.PayloadV3) {
-		return nil, engine.UnsupportedFork
-	}
-	return api.getPayload(payloadID, false)
+	return api.getPayload(
+		payloadID,
+		false,
+		[]engine.PayloadVersion{engine.PayloadV3},
+		[]forks.Fork{forks.Cancun},
+	)
 }
 
 // GetPayloadV4 returns a cached payload by id. This endpoint should only
 // be used for the Prague fork.
 func (api *ConsensusAPI) GetPayloadV4(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
-	if !payloadID.Is(engine.PayloadV3) {
-		return nil, engine.UnsupportedFork
-	}
-	return api.getPayload(payloadID, false)
+	return api.getPayload(
+		payloadID,
+		false,
+		[]engine.PayloadVersion{engine.PayloadV3},
+		[]forks.Fork{forks.Prague},
+	)
 }
 
 // GetPayloadV5 returns a cached payload by id. This endpoint should only
@@ -454,18 +452,37 @@ func (api *ConsensusAPI) GetPayloadV4(payloadID engine.PayloadID) (*engine.Execu
 // This method follows the same specification as engine_getPayloadV4 with
 // changes of returning BlobsBundleV2 with BlobSidecar version 1.
 func (api *ConsensusAPI) GetPayloadV5(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
-	if !payloadID.Is(engine.PayloadV3) {
-		return nil, engine.UnsupportedFork
-	}
-	return api.getPayload(payloadID, false)
+	return api.getPayload(
+		payloadID,
+		false,
+		[]engine.PayloadVersion{engine.PayloadV3},
+		[]forks.Fork{
+			forks.Osaka,
+			forks.BPO1,
+			forks.BPO2,
+			forks.BPO3,
+			forks.BPO4,
+			forks.BPO5,
+		})
 }
 
-func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool) (*engine.ExecutionPayloadEnvelope, error) {
+// getPayload will retrieve the specified payload and verify it conforms to the
+// endpoint's allowed payload versions and forks.
+//
+// Note passing nil `forks`, `versions` disables the respective check.
+func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool, versions []engine.PayloadVersion, forks []forks.Fork) (*engine.ExecutionPayloadEnvelope, error) {
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
+	if versions != nil && !payloadID.Is(versions...) {
+		return nil, engine.UnsupportedFork
+	}
 	data := api.localBlocks.get(payloadID, full)
 	if data == nil {
 		return nil, engine.UnknownPayload
 	}
+	if forks != nil && !api.checkFork(data.ExecutionPayload.Timestamp, forks...) {
+		return nil, engine.UnsupportedFork
+	}
+
 	return data, nil
 }
 
@@ -500,7 +517,7 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
-	blobs, _, proofs, err := api.eth.BlobTxPool().GetBlobs(hashes, types.BlobSidecarVersion0, false)
+	blobs, _, proofs, err := api.eth.BlobTxPool().GetBlobs(hashes, types.BlobSidecarVersion0)
 	if err != nil {
 		return nil, engine.InvalidParams.With(err)
 	}
@@ -546,7 +563,7 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProofV2, error) {
 	head := api.eth.BlockChain().CurrentHeader()
 	if api.config().LatestFork(head.Time) < forks.Osaka {
-		return nil, unsupportedForkErr("engine_getBlobsV2 is not available before Osaka fork")
+		return nil, nil
 	}
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
@@ -561,7 +578,7 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 		return nil, nil
 	}
 
-	blobs, _, proofs, err := api.eth.BlobTxPool().GetBlobs(hashes, types.BlobSidecarVersion1, false)
+	blobs, _, proofs, err := api.eth.BlobTxPool().GetBlobs(hashes, types.BlobSidecarVersion1)
 	if err != nil {
 		return nil, engine.InvalidParams.With(err)
 	}
@@ -740,14 +757,14 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		return api.delayPayloadImport(block), nil
 	}
 	if block.Time() <= parent.Time() {
-		log.Warn("Invalid timestamp", "parent", block.Time(), "block", block.Time())
+		log.Warn("Invalid timestamp", "parent", parent.Time(), "block", block.Time())
 		return api.invalid(errors.New("invalid timestamp"), parent.Header()), nil
 	}
 	// Another corner case: if the node is in snap sync mode, but the CL client
 	// tries to make it import a block. That should be denied as pushing something
 	// into the database directly will conflict with the assumptions of snap sync
 	// that it has an empty db that it can fill itself.
-	if api.eth.SyncMode() != ethconfig.FullSync {
+	if api.eth.Downloader().ConfigSyncMode() == ethconfig.SnapSync {
 		return api.delayPayloadImport(block), nil
 	}
 	if !api.eth.BlockChain().HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
@@ -795,7 +812,7 @@ func (api *ConsensusAPI) delayPayloadImport(block *types.Block) engine.PayloadSt
 	// Although we don't want to trigger a sync, if there is one already in
 	// progress, try to extend it with the current payload request to relieve
 	// some strain from the forkchoice update.
-	err := api.eth.Downloader().BeaconExtend(api.eth.SyncMode(), block.Header())
+	err := api.eth.Downloader().BeaconExtend(block.Header())
 	if err == nil {
 		log.Debug("Payload accepted for sync extension", "number", block.NumberU64(), "hash", block.Hash())
 		return engine.PayloadStatusV1{Status: engine.SYNCING}
@@ -804,7 +821,7 @@ func (api *ConsensusAPI) delayPayloadImport(block *types.Block) engine.PayloadSt
 	// payload as non-integratable on top of the existing sync. We'll just
 	// have to rely on the beacon client to forcefully update the head with
 	// a forkchoice update request.
-	if api.eth.SyncMode() == ethconfig.FullSync {
+	if api.eth.Downloader().ConfigSyncMode() == ethconfig.FullSync {
 		// In full sync mode, failure to import a well-formed block can only mean
 		// that the parent state is missing and the syncer rejected extending the
 		// current cycle with the new payload.

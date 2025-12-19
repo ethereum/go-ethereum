@@ -33,6 +33,13 @@ func storageKey(accountHash common.Hash, slotHash common.Hash) [64]byte {
 	return key
 }
 
+// storageKeySlice returns a key for uniquely identifying the storage slot in
+// the slice format.
+func storageKeySlice(accountHash common.Hash, slotHash common.Hash) []byte {
+	key := storageKey(accountHash, slotHash)
+	return key[:]
+}
+
 // lookup is an internal structure used to efficiently determine the layer in
 // which a state entry resides.
 type lookup struct {
