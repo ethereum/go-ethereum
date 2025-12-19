@@ -72,7 +72,11 @@ func (ae *AccessEvents) Keys() [][]byte {
 	// TODO: consider if parallelizing this is worth it, probably depending on len(ae.chunks).
 	keys := make([][]byte, 0, len(ae.chunks))
 	for chunk := range ae.chunks {
-		key := bintrie.GetBinaryTreeKey(chunk.addr, &chunk.treeIndex, chunk.leafKey)
+		var offset [32]byte
+		treeIndexBytes := chunk.treeIndex.Bytes32()
+		copy(offset[:31], treeIndexBytes[1:])
+		offset[31] = chunk.leafKey
+		key := bintrie.GetBinaryTreeKey(chunk.addr, offset[:])
 		keys = append(keys, key)
 	}
 	return keys
