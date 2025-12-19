@@ -193,8 +193,12 @@ type BlockChain interface {
 	// CurrentSnapBlock retrieves the head snap block from the local chain.
 	CurrentSnapBlock() *types.Header
 
-	// SnapSyncCommitHead directly commits the head block to a certain entity.
-	SnapSyncCommitHead(common.Hash) error
+	// SnapSyncStart explicitly notifies the chain that snap sync is scheduled and
+	// marks chain mutations as disallowed.
+	SnapSyncStart() error
+
+	// SnapSyncComplete directly commits the head block to a certain entity.
+	SnapSyncComplete(common.Hash) error
 
 	// InsertHeadersBeforeCutoff inserts a batch of headers before the configured
 	// chain cutoff into the ancient store.
@@ -361,28 +365,21 @@ func (d *Downloader) synchronise(beaconPing chan struct{}) (err error) {
 	if d.notified.CompareAndSwap(false, true) {
 		log.Info("Block synchronisation started")
 	}
-	mode := d.moder.get()
+
+	// Obtain the synchronized used in this cycle
+	mode := d.moder.get(true)
 	defer func() {
 		if err == nil && mode == ethconfig.SnapSync {
 			d.moder.disableSnap()
 			log.Info("Disabled snap-sync after the initial sync cycle")
 		}
 	}()
+
+	// Disable chain mutations when snap sync is selected, ensuring the
+	// downloader is the sole mutator.
 	if mode == ethconfig.SnapSync {
-		// Snap sync will directly modify the persistent state, making the entire
-		// trie database unusable until the state is fully synced. To prevent any
-		// subsequent state reads, explicitly disable the trie database and state
-		// syncer is responsible to address and correct any state missing.
-		if d.blockchain.TrieDB().Scheme() == rawdb.PathScheme {
-			if err := d.blockchain.TrieDB().Disable(); err != nil {
-				return err
-			}
-		}
-		// Snap sync uses the snapshot namespace to store potentially flaky data until
-		// sync completely heals and finishes. Pause snapshot maintenance in the mean-
-		// time to prevent access.
-		if snapshots := d.blockchain.Snapshots(); snapshots != nil { // Only nil in tests
-			snapshots.Disable()
+		if err := d.blockchain.SnapSyncStart(); err != nil {
+			return err
 		}
 	}
 	// Reset the queue, peer set and wake channels to clean any internal leftover state
@@ -427,7 +424,7 @@ func (d *Downloader) getMode() SyncMode {
 // ConfigSyncMode returns the sync mode configured for the node.
 // The actual running sync mode can differ from this.
 func (d *Downloader) ConfigSyncMode() SyncMode {
-	return d.moder.get()
+	return d.moder.get(false)
 }
 
 // syncToHead starts a block synchronization based on the hash chain from
@@ -1086,7 +1083,7 @@ func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 	if _, err := d.blockchain.InsertReceiptChain([]*types.Block{block}, []rlp.RawValue{result.Receipts}, d.ancientLimit); err != nil {
 		return err
 	}
-	if err := d.blockchain.SnapSyncCommitHead(block.Hash()); err != nil {
+	if err := d.blockchain.SnapSyncComplete(block.Hash()); err != nil {
 		return err
 	}
 	d.committed.Store(true)

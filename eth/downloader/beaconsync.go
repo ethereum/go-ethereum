@@ -61,6 +61,7 @@ func (b *beaconBackfiller) suspend() *types.Header {
 	b.lock.Unlock()
 
 	if !filling {
+		log.Debug("Backfiller was inactive")
 		return filled // Return the filled header on the previous sync completion
 	}
 	// A previous filling should be running, though it may happen that it hasn't
@@ -73,6 +74,7 @@ func (b *beaconBackfiller) suspend() *types.Header {
 	// Now that we're sure the downloader successfully started up, we can cancel
 	// it safely without running the risk of data races.
 	b.downloader.Cancel()
+	log.Debug("Backfiller has been suspended")
 
 	// Sync cycle was just terminated, retrieve and return the last filled header.
 	// Can't use `filled` as that contains a stale value from before cancellation.
@@ -86,6 +88,7 @@ func (b *beaconBackfiller) resume() {
 		// If a previous filling cycle is still running, just ignore this start
 		// request. // TODO(karalabe): We should make this channel driven
 		b.lock.Unlock()
+		log.Debug("Backfiller is running")
 		return
 	}
 	b.filling = true
@@ -114,7 +117,9 @@ func (b *beaconBackfiller) resume() {
 		if b.success != nil {
 			b.success()
 		}
+		log.Debug("Backfilling completed")
 	}()
+	log.Debug("Backfilling started")
 }
 
 // SetBadBlockCallback sets the callback to run when a bad block is hit by the

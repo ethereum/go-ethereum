@@ -64,6 +64,12 @@ var errSyncMerged = errors.New("sync merged")
 // should abort and restart with the new state.
 var errSyncReorged = errors.New("sync reorged")
 
+// errSyncTrimmed is an internal helper error to signal that the local chain
+// has been trimmed (e.g, via debug_setHead explicitly) and the skeleton chain
+// is no longer linked with the local chain. In this case, the skeleton sync
+// should be re-scheduled again.
+var errSyncTrimmed = errors.New("sync trimmed")
+
 // errTerminated is returned if the sync mechanism was terminated for this run of
 // the process. This is usually the case when Geth is shutting down and some events
 // might still be propagating.
@@ -296,6 +302,11 @@ func (s *skeleton) startup() {
 					// head to force a cleanup.
 					head = newhead
 
+				case err == errSyncTrimmed:
+					// The skeleton chain is not linked with the local chain anymore,
+					// restart the sync.
+					head = nil
+
 				case err == errTerminated:
 					// Sync was requested to be terminated from within, stop and
 					// return (no need to pass a message, was already done internally)
@@ -486,7 +497,22 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 			// is still running, it will pick it up. If it already terminated,
 			// a new cycle needs to be spun up.
 			if linked {
-				s.filler.resume()
+				linked = len(s.progress.Subchains) == 1 &&
+					rawdb.HasHeader(s.db, s.progress.Subchains[0].Next, s.scratchHead) &&
+					rawdb.HasBody(s.db, s.progress.Subchains[0].Next, s.scratchHead) &&
+					rawdb.HasReceipts(s.db, s.progress.Subchains[0].Next, s.scratchHead)
+
+				if linked {
+					// The skeleton chain has been extended and is still linked with the local
+					// chain, try to re-schedule the backfiller if it's already terminated.
+					s.filler.resume()
+				} else {
+					// The skeleton chain is no longer linked to the local chain for some reason
+					// (e.g. debug_setHead was used to trim the local chain). Re-schedule the
+					// skeleton sync to fill the chain gap.
+					log.Warn("Local chain has been trimmed", "tailnumber", s.scratchHead, "tailhash", s.progress.Subchains[0].Next)
+					return nil, errSyncTrimmed
+				}
 			}
 
 		case req := <-requestFails:
@@ -649,9 +675,19 @@ func (s *skeleton) processNewHead(head *types.Header, final *types.Header) error
 		// Not a noop / double head announce, abort with a reorg
 		return fmt.Errorf("%w, tail: %d, head: %d, newHead: %d", errChainReorged, lastchain.Tail, lastchain.Head, number)
 	}
+	// Terminate the sync if the chain head is gapped
 	if lastchain.Head+1 < number {
 		return fmt.Errorf("%w, head: %d, newHead: %d", errChainGapped, lastchain.Head, number)
 	}
+	// Ignore the duplicated beacon header announcement
+	if lastchain.Head == number {
+		local := rawdb.ReadSkeletonHeader(s.db, number)
+		if local != nil && local.Hash() == head.Hash() {
+			log.Debug("Ignored the identical beacon header", "number", number, "hash", local.Hash())
+			return nil
+		}
+	}
+	// Terminate the sync if the chain head is forked
 	if parent := rawdb.ReadSkeletonHeader(s.db, number-1); parent.Hash() != head.ParentHash {
 		return fmt.Errorf("%w, ancestor: %d, hash: %s, want: %s", errChainForked, number-1, parent.Hash(), head.ParentHash)
 	}
@@ -669,6 +705,7 @@ func (s *skeleton) processNewHead(head *types.Header, final *types.Header) error
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write skeleton sync status", "err", err)
 	}
+	log.Debug("Extended beacon header chain", "number", head.Number, "hash", head.Hash())
 	return nil
 }
 
@@ -1206,6 +1243,7 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write beacon trim data", "err", err)
 	}
+	log.Debug("Cleaned stale beacon headers", "start", start, "end", end)
 	return nil
 }
 
