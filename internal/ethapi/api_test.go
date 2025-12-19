@@ -175,6 +175,23 @@ func (m *mockBackend) EVM(ctx context.Context, msg Message, state *state.StateDB
 }
 
 func TestDoCall_ApplyMessageReturnsNil(t *testing.T) {
-	backend := &mockBackend{
-		evmResult: nil,
-		evmError:
+    backend := &mockBackend{
+        evmResult: nil,
+        evmError:  nil,
+    }
+
+    api := NewPublicEthereumAPI(backend)
+    ctx := context.Background()
+
+    // Викликаємо DoCall
+    result, err := api.DoCall(ctx, CallArgs{}, rpc.BlockNumberOrHash{})
+
+    if err == nil {
+        t.Error("expected error when ApplyMessage returns nil, got nil")
+    }
+
+    if result != (hexutil.Bytes{}) {
+        t.Errorf("expected empty result, got %v", result)
+    }
+}
+
