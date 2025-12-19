@@ -287,11 +287,21 @@ func (b *batch) Write() error {
 				delete(b.db.db, entry.key)
 			} else {
 				// Range deletion (inclusive of start, exclusive of end)
+				var (
+					rangeFrom string
+					rangeTo   string
+				)
+				if entry.rangeFrom != nil {
+					rangeFrom = string(entry.rangeFrom)
+				}
+				if entry.rangeTo != nil {
+					rangeTo = string(entry.rangeTo)
+				}
 				for key := range b.db.db {
-					if entry.rangeFrom != nil && key < string(entry.rangeFrom) {
+					if entry.rangeFrom != nil && key < rangeFrom {
 						continue
 					}
-					if entry.rangeTo != nil && key >= string(entry.rangeTo) {
+					if entry.rangeTo != nil && key >= rangeTo {
 						continue
 					}
 					delete(b.db.db, key)
