@@ -157,3 +157,24 @@ func allTransactionTypes(addr common.Address, config *params.ChainConfig) []type
 		},
 	}
 }
+type mockBackend struct {
+	evmResult *ExecutionResult
+	evmError  error
+}
+
+func (m *mockBackend) StateAndHeaderByNumberOrHash(_ context.Context, _ rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
+	return &state.StateDB{}, &types.Header{}, nil
+}
+
+func (m *mockBackend) Apply(_ *state.StateDB) error {
+	return nil
+}
+
+func (m *mockBackend) EVM(ctx context.Context, msg Message, state *state.StateDB, header *types.Header, cfg vm.Config) (*ExecutionResult, error) {
+	return m.evmResult, m.evmError
+}
+
+func TestDoCall_ApplyMessageReturnsNil(t *testing.T) {
+	backend := &mockBackend{
+		evmResult: nil,
+		evmError:

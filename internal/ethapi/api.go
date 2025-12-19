@@ -1002,9 +1002,12 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	// Execute the message.
 	gp := new(core.GasPool).AddGas(math.MaxUint64)
 	result, err := core.ApplyMessage(evm, msg, gp)
+	if result == nil && err == nil {
+		return nil, errors.New("EVM ApplyMessage returned nil result without error")
+	}
 	if err := vmError(); err != nil {
 		return nil, err
-	}
+	}	
 
 	// If the timer caused an abort, return an appropriate error message
 	if evm.Cancelled() {
