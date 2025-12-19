@@ -1243,6 +1243,7 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write beacon trim data", "err", err)
 	}
+	log.Debug("Cleaned stale beacon headers", "start", start, "end", end)
 	return nil
 }
 
