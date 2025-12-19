@@ -185,7 +185,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		// check on chain as well (no need to check limbo separately, as chain checks limbo too)
 		if h.chain.HasCanonicalTransaction(hash, true) {
-			return txpool.ErrAlreadyKnown
+			return core.ErrNonceTooLow
 		}
 		if !h.txpool.FilterType(kind) {
 			return types.ErrTxTypeNotSupported
