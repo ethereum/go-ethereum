@@ -181,6 +181,13 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 	default:
 		evm.table = &frontierInstructionSet
 	}
+
+	// Apply EIP-8032 if active
+	if evm.chainRules.IsEIP8032 {
+		evm.table = copyJumpTable(evm.table)
+		enable8032(evm.table)
+	}
+
 	var extraEips []int
 	if len(evm.Config.ExtraEips) > 0 {
 		// Deep-copy jumptable to prevent modification of opcodes in other tables

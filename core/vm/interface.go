@@ -54,6 +54,11 @@ type StateDB interface {
 	GetState(common.Address, common.Hash) common.Hash
 	SetState(common.Address, common.Hash, common.Hash) common.Hash
 	GetStorageRoot(addr common.Address) common.Hash
+	GetStorageCount(addr common.Address) uint64
+	CountStorageSlots(addr common.Address) uint64
+	IsEIP8032TransitionComplete() bool
+	IsSlotInEIP8032ConvertedStorage(addr common.Address, slotnr common.Hash) bool
+	ProcessEIP8032Transition(maxSlots uint64)
 
 	GetTransientState(addr common.Address, key common.Hash) common.Hash
 	SetTransientState(addr common.Address, key, value common.Hash)

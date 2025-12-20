@@ -342,6 +342,223 @@ func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
 	return common.Hash{}
 }
 
+// GetStorageCount returns the storage count for EIP-8032.
+func (s *StateDB) GetStorageCount(addr common.Address) uint64 {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.getStorageCount()
+	}
+	return 0
+}
+
+// SetStorageCount sets the storage count for EIP-8032 (mainly for testing).
+func (s *StateDB) SetStorageCount(addr common.Address, count uint64) {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		stateObject.setStorageCount(count)
+	}
+}
+
+// CountStorageSlots counts storage slots for an account on-demand (used during transition).
+func (s *StateDB) CountStorageSlots(addr common.Address) uint64 {
+	stateObject := s.getStateObject(addr)
+	if stateObject == nil {
+		return 0
+	}
+
+	// Get the storage trie for this account
+	tr, err := stateObject.getTrie()
+	if err != nil {
+		return 0
+	}
+
+	// Count non-zero storage slots
+	count := uint64(0)
+	it, _ := tr.NodeIterator(nil)
+	for it.Next(true) {
+		if it.Leaf() && len(it.LeafBlob()) > 0 {
+			// Check if the value is non-zero
+			value := it.LeafBlob()
+			isZero := true
+			for _, b := range value {
+				if b != 0 {
+					isZero = false
+					break
+				}
+			}
+			if !isZero {
+				count++
+			}
+		}
+	}
+
+	return count
+}
+
+var (
+	conversionProgressAddressKey = common.Hash{1}
+	conversionProgressSlotKey    = common.Hash{2}
+)
+
+// IsEIP8032TransitionComplete checks if the EIP-8032 storage counting transition is complete.
+func (s *StateDB) IsEIP8032TransitionComplete() bool {
+	completeKey := common.Hash{} // slot 0 for completion flag
+	completeValue := s.GetState(params.EIP8032TransitionRegistryAddress, completeKey)
+	return completeValue != (common.Hash{})
+}
+
+// IsSlotInEIP8032ConvertedStorage checks if the specified account and storage slot
+// have been processed by the EIP-8032 transition counting. Returns true if:
+//   - The transition is completely finished, OR
+//   - This account has already been fully processed, OR
+//   - This account is currently being processed and the given slot has already
+//     been counted by the transition iterator.
+func (s *StateDB) IsSlotInEIP8032ConvertedStorage(addr common.Address, slotnr common.Hash) bool {
+	if s.IsEIP8032TransitionComplete() {
+		return true
+	}
+
+	lastAccountHash := s.GetState(params.EIP8032TransitionRegistryAddress, conversionProgressAddressKey)
+	lastSlotNrHash := s.GetState(params.EIP8032TransitionRegistryAddress, conversionProgressSlotKey)
+
+	// If no progress has been made yet, no accounts are processed
+	if lastAccountHash == (common.Hash{}) {
+		return false
+	}
+
+	currentAddrHash := crypto.Keccak256Hash(addr.Bytes())
+	currentSlotNrHash := crypto.Keccak256Hash(slotnr.Bytes())
+	return currentAddrHash.Hex() < lastAccountHash.Hex() || (currentAddrHash.Hex() == lastAccountHash.Hex() && lastSlotNrHash.Hex() < currentSlotNrHash.Hex())
+}
+
+// ProcessEIP8032Transition processes a batch of accounts for EIP-8032 storage counting.
+// Returns the number of slots processed and whether more work remains.
+func (s *StateDB) ProcessEIP8032Transition(maxSlots uint64) {
+	// Check if transition is already complete
+	completeKey := common.Hash{} // slot 0 for completion flag
+	completeValue := s.GetState(params.EIP8032TransitionRegistryAddress, completeKey)
+	if completeValue != (common.Hash{}) {
+		log.Debug("EIP-8032 transition is complete")
+		return
+	}
+
+	// Get last processed account address (slot 1)
+	lastAccount := s.GetState(params.EIP8032TransitionRegistryAddress, conversionProgressAddressKey)
+	lastSlot := s.GetState(params.EIP8032TransitionRegistryAddress, conversionProgressSlotKey)
+
+	// Create iterator for accounts starting from lastAccount
+	if s.trie == nil {
+		tr, err := s.db.OpenTrie(s.originalRoot)
+		if err != nil {
+			s.setError(err)
+			return
+		}
+		s.trie = tr
+	}
+	it, err := s.trie.NodeIterator(lastAccount[:])
+	if err != nil {
+		s.setError(err)
+		return
+	}
+
+	stepCount := uint64(0)
+	var currentAccount common.Address
+	var currentSlotHash common.Hash
+
+	// Process accounts until we hit the slot limit or run out of accounts
+	// Note that the count check is performed before advancing the iterator,
+	// as the iterator will unconditionnaly progress.
+	var hasMoreAccounts bool
+	for stepCount < maxSlots {
+		hasMoreAccounts = it.Next(true)
+		if !hasMoreAccounts {
+			break
+		}
+		if it.Leaf() {
+			// This is an account
+			copy(currentAccount[:], it.Hash().Bytes())
+
+			// Get the account object
+			if stateObj := s.getStateObject(currentAccount); stateObj != nil && stateObj.Root() != types.EmptyRootHash {
+				// Count storage slots for this account
+				storageCount, done, last := s.countAccountStorage(stateObj, lastSlot, maxSlots-stepCount)
+
+				if done {
+					copy(currentSlotHash[:], common.Hash{}.Bytes())
+					stateObj.incrementStorageCount(int64(storageCount))
+				} else {
+					copy(currentSlotHash[:], last[:])
+				}
+
+				stepCount += storageCount
+			}
+		}
+	}
+
+	// Save progress
+	s.SetState(params.EIP8032TransitionRegistryAddress, conversionProgressAddressKey, common.BytesToHash(currentAccount[:]))
+	s.SetState(params.EIP8032TransitionRegistryAddress, conversionProgressSlotKey, currentSlotHash)
+
+	// Mark transition complete if no more accounts
+	if !hasMoreAccounts {
+		s.SetState(params.EIP8032TransitionRegistryAddress, completeKey, common.Hash{1}) // mark complete
+	}
+	log.Debug("EIP-8032 Transition", "account", currentAccount, "slot", currentSlotHash, "processed", stepCount, "done", !hasMoreAccounts)
+}
+
+// countAccountStorage counts non-zero storage slots for a single account
+func (s *StateDB) countAccountStorage(stateObj *stateObject, start common.Hash, left uint64) (uint64, bool, common.Hash) {
+	tr, err := stateObj.getTrie()
+	if err != nil {
+		log.Error("Error enumerating account trie", "root", stateObj.Root(), "err", err)
+		return 0, true, common.Hash{}
+	}
+
+	count := uint64(0)
+	it, err := tr.NodeIterator(start[:])
+	if err != nil {
+		log.Error("Error getting data", "err", err, "addrHash", stateObj.addrHash)
+		return 0, true, common.Hash{}
+	}
+
+	// note that the boundary is checked before moving the iterator
+	var last common.Hash
+	for count < left {
+		notdone := it.Next(true)
+		if !notdone {
+			// the whole storage has been enumerated, bail
+			// and indicate that the enumeration is over and
+			// that the next slot to consider is the first of
+			// the next account.
+			return count, true, common.Hash{}
+		}
+		if it.Leaf() {
+			count++
+			copy(last[:], it.Hash().Bytes())
+		}
+	}
+
+	// check if the last slot has been reached, or
+	// if there are more slots to enumerate.
+	done := !it.Next(true)
+
+	// if there is at least a further storage slot in
+	// that tree, iterate to it because it is needed
+	// for resuming the conversion at the next block.
+	if !done {
+		for it.Next(true) && !it.Leaf() {
+		}
+
+		copy(last[:], it.Hash().Bytes())
+	}
+
+	// At this point, count == left and maybe the last
+	// storage slot was enumerated just as the limit was
+	// hit. In this case, done == true.
+
+	return count, done, last
+}
+
 // TxIndex returns the current transaction index set by SetTxContext.
 func (s *StateDB) TxIndex() int {
 	return s.txIndex

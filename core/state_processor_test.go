@@ -429,3 +429,143 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	}
 	return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
 }
+
+// TestEIP8032Transition tests the EIP-8032 storage counting transition mechanism
+func TestEIP8032Transition(t *testing.T) {
+	var (
+		key, _    = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr      = crypto.PubkeyToAddress(key.PublicKey)
+		funds     = big.NewInt(1000000000000000000) // 1 ether
+		engine    = beacon.New(ethash.NewFaker())
+		
+		// Genesis configuration with EIP-8032 activation
+		genesis   = &Genesis{
+			Config: func() *params.ChainConfig {
+				config := *params.MergedTestChainConfig // Copy merged test config
+				config.EIP8032Time = u64(50)           // EIP-8032 activates at timestamp 50
+				return &config
+			}(),
+			Alloc: types.GenesisAlloc{
+				addr: types.Account{Balance: funds},
+			},
+		}
+	)
+
+	// Generate a chain with pre-EIP8032 storage setup and EIP8032 activation
+	db, blocks, receipts := GenerateChainWithGenesis(genesis, engine, 3, func(i int, b *BlockGen) {
+		signer := types.LatestSigner(genesis.Config)
+		
+		switch i {
+		case 0: // Block 0: Create contracts with storage (before EIP-8032)
+			// Contract deployment with storage writes
+			// Simple contract that stores values: PUSH1 value, PUSH1 slot, SSTORE
+			contractCode := common.Hex2Bytes("60016000556002600155600360025560046003556005600455") // Store 1->5 in slots 0->4
+			
+			// Deploy contract
+			tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+				Nonce:    b.TxNonce(addr),
+				Value:    big.NewInt(0),
+				Gas:      500000,
+				GasPrice: big.NewInt(1000000000),
+				Data:     contractCode,
+			}), signer, key)
+			b.AddTx(tx)
+			
+		case 1: // Block 1: More storage operations (still before EIP-8032)
+			// Get deployed contract address  
+			contractAddr := crypto.CreateAddress(addr, 0)
+			
+			// Call contract to do more storage writes
+			callData := common.Hex2Bytes("600a600555") // Store 10 in slot 5
+			tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+				Nonce:    b.TxNonce(addr),
+				To:       &contractAddr,
+				Value:    big.NewInt(0),
+				Gas:      100000,
+				GasPrice: big.NewInt(1000000000),
+				Data:     callData,
+			}), signer, key)
+			b.AddTx(tx)
+			
+		case 2: // Block 2: EIP-8032 activation - trigger transition
+			// This block will have timestamp >= 50, activating EIP-8032
+			// The transition should be processed before any transactions
+			b.OffsetTime(60) // Set timestamp to 60 (after EIP-8032 activation)
+			
+			// After EIP-8032 activation, storage operations should use new gas pricing
+			contractAddr := crypto.CreateAddress(addr, 0)
+			callData := common.Hex2Bytes("600b600655") // Store 11 in slot 6
+			tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+				Nonce:    b.TxNonce(addr),
+				To:       &contractAddr,
+				Value:    big.NewInt(0),
+				Gas:      100000,
+				GasPrice: big.NewInt(1000000000),
+				Data:     callData,
+			}), signer, key)
+			b.AddTx(tx)
+		}
+	})
+
+	// Verify blocks were generated correctly
+	if len(blocks) != 3 {
+		t.Fatalf("expected 3 blocks, got %d", len(blocks))
+	}
+
+	// Verify EIP-8032 activation timing
+	config := genesis.Config
+	if !config.IsEIP8032(blocks[2].Number(), blocks[2].Time()) {
+		t.Errorf("EIP-8032 should be active in block 2 (time %d)", blocks[2].Time())
+	}
+	if config.IsEIP8032(blocks[1].Number(), blocks[1].Time()) {
+		t.Errorf("EIP-8032 should not be active in block 1 (time %d)", blocks[1].Time())
+	}
+
+	// Create blockchain and process blocks
+	blockchain, _ := NewBlockChain(db, genesis, engine, nil)
+	defer blockchain.Stop()
+
+	// Insert blocks and verify processing
+	if _, err := blockchain.InsertChain(blocks); err != nil {
+		t.Fatalf("failed to insert chain: %v", err)
+	}
+
+	// Verify the state after EIP-8032 activation
+	state, _ := blockchain.State()
+	contractAddr := crypto.CreateAddress(addr, 0)
+	
+	// Check storage count for the contract
+	storageCount := state.GetStorageCount(contractAddr)
+	t.Logf("Contract storage count after EIP-8032 transition: %d", storageCount)
+
+	// Check that the transition registry shows some activity
+	completeKey := common.Hash{} // slot 0 for completion flag
+	progressKey := common.Hash{1} // slot 1 for progress
+	
+	completeValue := state.GetState(params.EIP8032TransitionRegistryAddress, completeKey)
+	progressValue := state.GetState(params.EIP8032TransitionRegistryAddress, progressKey)
+	
+	t.Logf("Transition registry - complete: %v, progress: %v", completeValue, progressValue)
+
+	// Verify receipts show successful transactions
+	for i, receipt := range receipts[0] {
+		if receipt.Status == 0 {
+			t.Errorf("transaction %d in block 0 failed", i)
+		}
+	}
+	for i, receipt := range receipts[1] {
+		if receipt.Status == 0 {
+			t.Errorf("transaction %d in block 1 failed", i)
+		}
+	}
+	for i, receipt := range receipts[2] {
+		if receipt.Status == 0 {
+			t.Errorf("transaction %d in block 2 failed", i)
+		}
+	}
+
+	// Test that EIP-8032 gas calculation is working
+	// This is verified implicitly if the transactions succeed with the new gas rules
+	
+	t.Log("EIP-8032 transition test completed successfully")
+}

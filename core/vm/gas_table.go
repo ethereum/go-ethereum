@@ -483,3 +483,43 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	}
 	return gas, nil
 }
+
+// ceilLog16 calculates the ceiling of log base 16 of n.
+func ceilLog16(n uint64) uint64 {
+	if n == 0 {
+		return 0
+	}
+	if n == 1 {
+		return 1
+	}
+	result := uint64(0)
+	temp := n - 1
+	for temp > 0 {
+		temp >>= 4 // divide by 16
+		result++
+	}
+	return result
+}
+
+// gasSStoreEIP8032 implements the EIP-8032 size-based storage gas pricing.
+func gasSStoreEIP8032(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	// Start with the base EIP-2200 gas calculation
+	baseGas, err := gasSStoreEIP2200(evm, contract, stack, mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+
+	// Get storage count for size-based pricing
+	storageCount := evm.StateDB.GetStorageCount(contract.Address())
+
+	// Apply size-based pricing: baseGas + LIN_FACTOR * ceil_log16(storageCount) / ACTIVATION_THRESHOLD
+	if storageCount >= params.EIP8032ActivationThreshold {
+		sizeFactor := params.EIP8032LinFactor * ceilLog16(storageCount) / params.EIP8032ActivationThreshold
+		var overflow bool
+		if baseGas, overflow = math.SafeAdd(baseGas, sizeFactor); overflow {
+			return 0, ErrGasUintOverflow
+		}
+	}
+
+	return baseGas, nil
+}

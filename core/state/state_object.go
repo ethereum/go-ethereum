@@ -219,6 +219,7 @@ func (s *stateObject) SetState(key, value common.Hash) common.Hash {
 	if prev == value {
 		return prev
 	}
+
 	// New value is different, update and journal the change
 	s.db.journal.storageChange(s.address, key, prev, origin)
 	s.setState(key, value, origin)
@@ -343,6 +344,9 @@ func (s *stateObject) updateTrie() (Trie, error) {
 				s.db.setError(err)
 				return nil, err
 			}
+			if s.originStorage[key] == (common.Hash{}) && s.db.IsSlotInEIP8032ConvertedStorage(s.address, key) {
+				s.incrementStorageCount(1)
+			}
 			s.db.StorageUpdated.Add(1)
 		} else {
 			deletions = append(deletions, key)
@@ -355,6 +359,8 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			s.db.setError(err)
 			return nil, err
 		}
+		s.incrementStorageCount(-1)
+
 		s.db.StorageDeleted.Add(1)
 	}
 	if s.db.prefetcher != nil {
@@ -598,4 +604,33 @@ func (s *stateObject) Nonce() uint64 {
 
 func (s *stateObject) Root() common.Hash {
 	return s.data.Root
+}
+
+// getStorageCount returns the current storage count for EIP-8032.
+func (s *stateObject) getStorageCount() uint64 {
+	if s.data.StorageCount == nil {
+		return 0
+	}
+	return *s.data.StorageCount
+}
+
+// setStorageCount sets the storage count for EIP-8032.
+func (s *stateObject) setStorageCount(count uint64) {
+	if s.data.StorageCount == nil {
+		s.data.StorageCount = new(uint64)
+	}
+	*s.data.StorageCount = count
+}
+
+// incrementStorageCount increments the storage count by delta for EIP-8032.
+func (s *stateObject) incrementStorageCount(delta int64) {
+	current := s.getStorageCount()
+	if delta < 0 && current < uint64(-delta) {
+		// Prevent underflow
+		s.setStorageCount(0)
+	} else if delta > 0 {
+		s.setStorageCount(current + uint64(delta))
+	} else if delta < 0 {
+		s.setStorageCount(current - uint64(-delta))
+	}
 }

@@ -97,6 +97,26 @@ func (s *hookedStateDB) GetStorageRoot(addr common.Address) common.Hash {
 	return s.inner.GetStorageRoot(addr)
 }
 
+func (s *hookedStateDB) GetStorageCount(addr common.Address) uint64 {
+	return s.inner.GetStorageCount(addr)
+}
+
+func (s *hookedStateDB) CountStorageSlots(addr common.Address) uint64 {
+	return s.inner.CountStorageSlots(addr)
+}
+
+func (s *hookedStateDB) IsEIP8032TransitionComplete() bool {
+	return s.inner.IsEIP8032TransitionComplete()
+}
+
+func (s *hookedStateDB) IsSlotInEIP8032ConvertedStorage(addr common.Address, slotnr common.Hash) bool {
+	return s.inner.IsSlotInEIP8032ConvertedStorage(addr, slotnr)
+}
+
+func (s *hookedStateDB) ProcessEIP8032Transition(maxSlots uint64) {
+	s.inner.ProcessEIP8032Transition(maxSlots)
+}
+
 func (s *hookedStateDB) GetTransientState(addr common.Address, key common.Hash) common.Hash {
 	return s.inner.GetTransientState(addr, key)
 }
