@@ -22,10 +22,10 @@ function coverbuild {
   path=$1
   function=$2
   fuzzer=$3
-  coverage_package=$coverpkg
+  tags=""
 
   if [[ $#  -eq 4 ]]; then
-    coverage_package=$4
+    tags="-tags $4"
   fi
   cd $path
   fuzzed_package=`pwd | rev | cut -d'/' -f 1 | rev`
@@ -38,7 +38,7 @@ cat << DOG > $OUT/$fuzzer
 #/bin/sh
 
   cd $OUT/$path
-  go test -run Test${function}Corpus -v -coverprofile \$1 -coverpkg $coverage_package
+  go test -run Test${function}Corpus -v $tags -coverprofile \$1 -coverpkg $coverpkg
 
 DOG
 
@@ -227,5 +227,4 @@ compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/secp256k1 \
 compile_fuzzer github.com/ethereum/go-ethereum/eth/protocols/eth \
   FuzzEthProtocolHandlers fuzz_eth_protocol_handlers \
   $repo/eth/protocols/eth/handler_test.go,$repo/eth/protocols/eth/peer_test.go
-
 
