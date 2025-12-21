@@ -347,8 +347,8 @@ type BlobPool struct {
 	stored uint64         // Useful data size of all transactions on disk
 	limbo  *limbo         // Persistent data store for the non-finalized blobs
 
-	gapped       map[common.Address][]*gappedTx // Transactions that are currently gapped (nonce too high)
-	gappedSource map[common.Hash]common.Address // Source of gapped transactions to allow rechecking on inclusion
+	gapped       map[common.Address][]*types.Transaction // Transactions that are currently gapped (nonce too high)
+	gappedSource map[common.Hash]common.Address          // Source of gapped transactions to allow rechecking on inclusion
 
 	signer types.Signer     // Transaction signer to use for sender recovery
 	chain  BlockChain       // Chain object to access the state through
@@ -390,7 +390,7 @@ func New(config Config, chain BlockChain, hasPendingAuth func(common.Address) bo
 		lookup:         newLookup(),
 		index:          make(map[common.Address][]*blobTxMeta),
 		spent:          make(map[common.Address]*uint256.Int),
-		gapped:         make(map[common.Address][]*gappedTx),
+		gapped:         make(map[common.Address][]*types.Transaction),
 		gappedSource:   make(map[common.Hash]common.Address),
 	}
 }
@@ -1771,7 +1771,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 			if allowance >= 1 && len(p.gapped) < maxGapped {
 				// if maxGapped is reached, it is better to give time to gapped
 				// transactions by keeping the old and dropping this one
-				p.gapped[from] = append(p.gapped[from], &gappedTx{tx: tx, timestamp: time.Now()})
+				p.gapped[from] = append(p.gapped[from], tx)
 				p.gappedSource[tx.Hash()] = from
 				log.Trace("blobpool:add added to Gapped blob queue", "allowance", allowance, "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
 				return nil
@@ -1925,13 +1925,13 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 		// We have to add in nonce order, but we want to stable sort to cater for situations
 		// where transactions are replaced, keeping the original receive order for same nonce
 		sort.SliceStable(gtxs, func(i, j int) bool {
-			return gtxs[i].tx.Nonce() < gtxs[j].tx.Nonce()
+			return gtxs[i].Nonce() < gtxs[j].Nonce()
 		})
 		for len(gtxs) > 0 {
 			stateNonce := p.state.GetNonce(from)
 			firstgap := stateNonce + uint64(len(p.index[from]))
 
-			if gtxs[0].tx.Nonce() > firstgap {
+			if gtxs[0].Nonce() > firstgap {
 				// Anything beyond the first gap is not addable yet
 				break
 			}
@@ -1939,7 +1939,7 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 			// Drop any buffered transactions that became stale in the meantime (included in chain or replaced)
 			// If we arrive to the transaction in the pending range (between the state Nonce and first gap, we
 			// try to add them now while removing from here.
-			tx := gtxs[0].tx
+			tx := gtxs[0]
 			gtxs[0] = nil
 			gtxs = gtxs[1:]
 			delete(p.gappedSource, tx.Hash())
@@ -2222,10 +2222,10 @@ func (p *BlobPool) evictGapped() {
 		// and we overwrite the slice for this account after filtering.
 		keep := txs[:0]
 		for i, gtx := range txs {
-			if gtx.timestamp.Before(cutoff) || gtx.tx.Nonce() < nonce {
+			if gtx.Time().Before(cutoff) || gtx.Nonce() < nonce {
 				// Evict old or stale transactions
 				// Should we add stale to limbo here if it would belong?
-				delete(p.gappedSource, gtx.tx.Hash())
+				delete(p.gappedSource, gtx.Hash())
 				txs[i] = nil // Explicitly nil out evicted element
 			} else {
 				keep = append(keep, gtx)
