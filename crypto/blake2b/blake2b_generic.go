@@ -4,10 +4,7 @@
 
 package blake2b
 
-import (
-	"encoding/binary"
-	"math/bits"
-)
+import "math/bits"
 
 // the precomputed values for BLAKE2b
 // there are 10 16-byte arrays - one for each round
@@ -23,25 +20,6 @@ var precomputed = [10][16]byte{
 	{13, 7, 12, 3, 11, 14, 1, 9, 5, 15, 8, 2, 0, 4, 6, 10},
 	{6, 14, 11, 0, 15, 9, 3, 8, 12, 13, 1, 10, 2, 7, 4, 5},
 	{10, 8, 7, 1, 2, 4, 6, 5, 15, 9, 3, 13, 11, 14, 12, 0},
-}
-
-// nolint:unused
-func hashBlocksGeneric(h *[8]uint64, c *[2]uint64, flag uint64, blocks []byte) {
-	var m [16]uint64
-	c0, c1 := c[0], c[1]
-
-	for i := 0; i < len(blocks); {
-		c0 += BlockSize
-		if c0 < BlockSize {
-			c1++
-		}
-		for j := range m {
-			m[j] = binary.LittleEndian.Uint64(blocks[i:])
-			i += 8
-		}
-		fGeneric(h, &m, c0, c1, flag, 12)
-	}
-	c[0], c[1] = c0, c1
 }
 
 func fGeneric(h *[8]uint64, m *[16]uint64, c0, c1 uint64, flag uint64, rounds uint64) {
