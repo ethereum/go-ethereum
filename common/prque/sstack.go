@@ -52,6 +52,7 @@ func newSstack[P cmp.Ordered, V any](setIndex SetIndexCallback[V]) *sstack[P, V]
 // Push a value onto the stack, expanding it if necessary. Required by
 // heap.Interface.
 func (s *sstack[P, V]) Push(data any) {
+	item := data.(*item[P, V])
 	if s.size == s.capacity {
 		s.active = make([]*item[P, V], blockSize)
 		s.blocks = append(s.blocks, s.active)
@@ -62,9 +63,9 @@ func (s *sstack[P, V]) Push(data any) {
 		s.offset = 0
 	}
 	if s.setIndex != nil {
-		s.setIndex(data.(*item[P, V]).value, s.size)
+		s.setIndex(item.value, s.size)
 	}
-	s.active[s.offset] = data.(*item[P, V])
+	s.active[s.offset] = item
 	s.offset++
 	s.size++
 }
