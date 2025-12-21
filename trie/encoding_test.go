@@ -99,7 +99,7 @@ func TestHexToCompactInPlaceRandom(t *testing.T) {
 		key := make([]byte, l)
 		crand.Read(key)
 		hexBytes := keybytesToHex(key)
-		hexOrig := []byte(string(hexBytes))
+		hexOrig := append([]byte(nil), hexBytes...) // copy without extra string alloc
 		exp := hexToCompact(hexBytes)
 		got := hexToCompactInPlace(hexBytes)
 
