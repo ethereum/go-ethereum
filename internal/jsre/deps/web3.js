@@ -1070,7 +1070,7 @@ var formatOutputUReal = function (param) {
  * @returns {Boolean} right-aligned input bytes formatted to bool
  */
 var formatOutputBool = function (param) {
-    return param.staticPart() === '0000000000000000000000000000000000000000000000000000000000000001' ? true : false;
+    return param.staticPart() === '0000000000000000000000000000000000000000000000000000000000000001';
 };
 
 /**
