@@ -425,11 +425,11 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 		r.f.setRange(batch, r.f.indexedView, tempRange, true)
 	}
 	// add or update filter rows
+	// Pre-allocate slices to avoid repeated allocations during append
+	finishedCount := r.finished.Count()
 	for rowIndex := uint32(0); rowIndex < r.f.mapHeight; rowIndex++ {
-		var (
-			mapIndices []uint32
-			rows       []FilterRow
-		)
+		mapIndices := make([]uint32, 0, finishedCount)
+		rows := make([]FilterRow, 0, finishedCount)
 		for mapIndex := range r.finished.Iter() {
 			row := r.finishedMaps[mapIndex].filterMap[rowIndex]
 			if fm, _ := r.f.filterMapCache.Get(mapIndex); fm != nil && row.Equal(fm[rowIndex]) {
