@@ -40,8 +40,9 @@ var (
 )
 
 func init() {
+	bucketsCounter = make([]*metrics.Counter, nBuckets)
 	for i := 0; i < nBuckets; i++ {
-		bucketsCounter = append(bucketsCounter, metrics.NewRegisteredCounter(fmt.Sprintf("%s/bucket/%d/count", moduleName, i), nil))
+		bucketsCounter[i] = metrics.NewRegisteredCounter(fmt.Sprintf("%s/bucket/%d/count", moduleName, i), nil)
 	}
 }
 
