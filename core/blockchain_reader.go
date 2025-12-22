@@ -523,9 +523,9 @@ func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscr
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
 }
 
-// / SubscribeNewPayloadEvent registers a subscription for NewPayloadEvent.
+// SubscribeNewPayloadEvent registers a subscription for NewPayloadEvent.
 func (bc *BlockChain) SubscribeNewPayloadEvent(ch chan<- NewPayloadEvent) event.Subscription {
-	return bc.newPayloadFeed.Subscribe(ch)
+	return bc.scope.Track(bc.newPayloadFeed.Subscribe(ch))
 }
 
 // SendNewPayloadEvent sends a NewPayloadEvent to subscribers.
