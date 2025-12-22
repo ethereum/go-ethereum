@@ -287,9 +287,12 @@ func NewSizeTracker(db ethdb.Database, triedb *triedb.Database) (*SizeTracker, e
 	}
 
 	// Load the existing stats if they exist
+	var headNum uint64
 	stats := make(map[common.Hash]SizeStats, statEvictThreshold)
 	header := rawdb.ReadHeadHeader(t.db)
-	headNumber := header.Number.Uint64()
+	if header != nil {
+		headNum = header.Number.Uint64()
+	}
 	for i := 0; header != nil && i < statEvictThreshold; i++ {
 		if enc := rawdb.ReadStateSizeStats(t.db, header.Root); len(enc) > 0 {
 			stats[header.Root] = decodeSizeStats(enc)
@@ -301,7 +304,7 @@ func NewSizeTracker(db ethdb.Database, triedb *triedb.Database) (*SizeTracker, e
 	if len(stats) > 0 {
 		h = sizeStatsHeap(slices.Collect(maps.Values(stats)))
 		heap.Init(&h)
-		log.Info("Loaded state size stats from db", "headNumber", headNumber, "count", len(stats))
+		log.Info("Loaded state size stats from db", "headNumber", headNum, "count", len(stats))
 	}
 
 	go t.run(stats, h)
