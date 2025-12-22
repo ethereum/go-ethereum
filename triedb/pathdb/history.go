@@ -180,17 +180,6 @@ func newStorageIdentQuery(address common.Address, addressHash common.Hash, stora
 	}
 }
 
-// newTrienodeIdentQuery constructs a state identifier for a trie node.
-// the addressHash denotes the address hash of the associated account;
-// the path denotes the path of the node within the trie;
-//
-// nolint:unused
-func newTrienodeIdentQuery(addrHash common.Hash, path []byte) stateIdentQuery {
-	return stateIdentQuery{
-		stateIdent: newTrienodeIdent(addrHash, string(path)),
-	}
-}
-
 // history defines the interface of historical data, shared by stateHistory
 // and trienodeHistory.
 type history interface {
