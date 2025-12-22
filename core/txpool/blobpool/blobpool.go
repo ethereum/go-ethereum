@@ -419,7 +419,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	p.state = state
 
 	// Create new slotter for pre-Osaka blob configuration.
-	slotter := newSlotter(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
+	slotter := newSlotter(params.BlobTxMaxBlobs)
 
 	// See if we need to migrate the queue blob store after fusaka
 	slotter, err = tryMigrate(p.chain.Config(), slotter, queuedir)
