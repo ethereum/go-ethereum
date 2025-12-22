@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
 	"golang.org/x/sync/errgroup"
 )
@@ -263,7 +264,7 @@ type stateSizeQuery struct {
 
 // SizeTracker handles the state size initialization and tracks of state size metrics.
 type SizeTracker struct {
-	db       ethdb.KeyValueStore
+	db       ethdb.Database
 	triedb   *triedb.Database
 	abort    chan struct{}
 	aborted  chan struct{}
@@ -272,7 +273,7 @@ type SizeTracker struct {
 }
 
 // NewSizeTracker creates a new state size tracker and starts it automatically
-func NewSizeTracker(db ethdb.KeyValueStore, triedb *triedb.Database) (*SizeTracker, error) {
+func NewSizeTracker(db ethdb.Database, triedb *triedb.Database) (*SizeTracker, error) {
 	if triedb.Scheme() != rawdb.PathScheme {
 		return nil, errors.New("state size tracker is not compatible with hash mode")
 	}
@@ -284,7 +285,26 @@ func NewSizeTracker(db ethdb.KeyValueStore, triedb *triedb.Database) (*SizeTrack
 		updateCh: make(chan *stateUpdate),
 		queryCh:  make(chan *stateSizeQuery),
 	}
-	go t.run()
+
+	// Load the existing stats if they exist
+	stats := make(map[common.Hash]SizeStats, statEvictThreshold)
+	header := rawdb.ReadHeadHeader(t.db)
+	headNumber := header.Number.Uint64()
+	for i := 0; header != nil && i < statEvictThreshold; i++ {
+		if enc := rawdb.ReadStateSizeStats(t.db, header.Root); len(enc) > 0 {
+			stats[header.Root] = decodeSizeStats(enc)
+		}
+		header = rawdb.ReadHeader(t.db, header.ParentHash, header.Number.Uint64()-1)
+	}
+
+	var h sizeStatsHeap
+	if len(stats) > 0 {
+		h = sizeStatsHeap(slices.Collect(maps.Values(stats)))
+		heap.Init(&h)
+		log.Info("Loaded state size stats from db", "headNumber", headNumber, "count", len(stats))
+	}
+
+	go t.run(stats, h)
 	return t, nil
 }
 
@@ -314,17 +334,22 @@ func (h *sizeStatsHeap) Pop() any {
 }
 
 // run performs the state size initialization and handles updates
-func (t *SizeTracker) run() {
+func (t *SizeTracker) run(stats map[common.Hash]SizeStats, h sizeStatsHeap) {
 	defer close(t.aborted)
 
-	var last common.Hash
-	stats, err := t.init() // launch background thread for state size init
-	if err != nil {
-		return
-	}
-	h := sizeStatsHeap(slices.Collect(maps.Values(stats)))
-	heap.Init(&h)
+	var err error
+	if len(stats) == 0 { // if no stats from db, launch background thread for state size init
+		stats, err = t.init()
+		if err != nil {
+			log.Error("Failed to init state size tracker", "err", err)
+			return
+		}
 
+		h = sizeStatsHeap(slices.Collect(maps.Values(stats)))
+		heap.Init(&h)
+	}
+
+	var last common.Hash
 	for {
 		select {
 		case u := <-t.updateCh:
@@ -340,6 +365,8 @@ func (t *SizeTracker) run() {
 			stat := base.add(diff)
 			stats[u.root] = stat
 			last = u.root
+
+			rawdb.WriteStateSizeStats(t.db, u.root, encodeSizeStats(stat))
 
 			// Publish statistics to metric system
 			stat.publish()
@@ -359,12 +386,23 @@ func (t *SizeTracker) run() {
 			} else {
 				root = last
 			}
-			if s, ok := stats[root]; ok {
+
+			// Check in-memory stats first
+			s, ok := stats[root]
+			if ok {
 				r.result <- &s
-			} else {
-				r.result <- nil
+				continue
 			}
 
+			// Load from db if exist
+			if enc := rawdb.ReadStateSizeStats(t.db, root); len(enc) > 0 {
+				s := decodeSizeStats(enc)
+				r.result <- &s
+				continue
+			}
+
+			// Does not exist, return nil result
+			r.result <- nil
 		case <-t.abort:
 			return
 		}
@@ -381,23 +419,25 @@ type buildResult struct {
 
 func (t *SizeTracker) init() (map[common.Hash]SizeStats, error) {
 	// Wait for snapshot completion and then init
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
-wait:
-	for {
-		select {
-		case <-ticker.C:
-			if t.triedb.SnapshotCompleted() {
-				break wait
+	if !t.triedb.SnapshotCompleted() {
+	wait:
+		for {
+			select {
+			case <-ticker.C:
+				if t.triedb.SnapshotCompleted() {
+					break wait
+				}
+			case <-t.updateCh:
+				continue
+			case r := <-t.queryCh:
+				r.err = errors.New("state size is not initialized yet")
+				r.result <- nil
+			case <-t.abort:
+				return nil, errors.New("size tracker closed")
 			}
-		case <-t.updateCh:
-			continue
-		case r := <-t.queryCh:
-			r.err = errors.New("state size is not initialized yet")
-			r.result <- nil
-		case <-t.abort:
-			return nil, errors.New("size tracker closed")
 		}
 	}
 
@@ -413,7 +453,6 @@ wait:
 			updates[u.root] = u
 			children[u.originRoot] = append(children[u.originRoot], u.root)
 			log.Debug("Received state update", "root", u.root, "blockNumber", u.blockNumber)
-
 		case r := <-t.queryCh:
 			r.err = errors.New("state size is not initialized yet")
 			r.result <- nil
@@ -453,7 +492,11 @@ wait:
 					if err != nil {
 						return err
 					}
-					stats[child] = base.add(diff)
+					stat := base.add(diff)
+					stats[child] = stat
+
+					rawdb.WriteStateSizeStats(t.db, child, encodeSizeStats(stat))
+
 					if err := apply(child, stats[child]); err != nil {
 						return err
 					}
@@ -466,6 +509,7 @@ wait:
 
 			// Set initial latest stats
 			stats[result.root] = result.stat
+			rawdb.WriteStateSizeStats(t.db, result.root, encodeSizeStats(result.stat))
 			log.Info("Measured persistent state size", "root", result.root, "number", result.blockNumber, "stat", result.stat, "elapsed", common.PrettyDuration(result.elapsed))
 			return stats, nil
 
@@ -670,5 +714,66 @@ func (t *SizeTracker) Query(root *common.Hash) (*SizeStats, error) {
 		return nil, errors.New("state sizer has been closed")
 	case t.queryCh <- r:
 		return <-r.result, r.err
+	}
+}
+
+// sizeStatsRLP is the RLP-encodable version of SizeStats.
+// RLP only supports unsigned integers, so we use uint64 for persistence.
+// Cumulative stats are always non-negative, so this is safe for storage.
+type sizeStatsRLP struct {
+	StateRoot            common.Hash
+	BlockNumber          uint64
+	Accounts             uint64
+	AccountBytes         uint64
+	Storages             uint64
+	StorageBytes         uint64
+	AccountTrienodes     uint64
+	AccountTrienodeBytes uint64
+	StorageTrienodes     uint64
+	StorageTrienodeBytes uint64
+	ContractCodes        uint64
+	ContractCodeBytes    uint64
+}
+
+func encodeSizeStats(stat SizeStats) []byte {
+	rlpStat := sizeStatsRLP{
+		StateRoot:            stat.StateRoot,
+		BlockNumber:          stat.BlockNumber,
+		Accounts:             uint64(stat.Accounts),
+		AccountBytes:         uint64(stat.AccountBytes),
+		Storages:             uint64(stat.Storages),
+		StorageBytes:         uint64(stat.StorageBytes),
+		AccountTrienodes:     uint64(stat.AccountTrienodes),
+		AccountTrienodeBytes: uint64(stat.AccountTrienodeBytes),
+		StorageTrienodes:     uint64(stat.StorageTrienodes),
+		StorageTrienodeBytes: uint64(stat.StorageTrienodeBytes),
+		ContractCodes:        uint64(stat.ContractCodes),
+		ContractCodeBytes:    uint64(stat.ContractCodeBytes),
+	}
+	data, err := rlp.EncodeToBytes(&rlpStat)
+	if err != nil {
+		log.Crit("Failed to encode state size stats", "err", err)
+	}
+	return data
+}
+
+func decodeSizeStats(data []byte) SizeStats {
+	var rlpStat sizeStatsRLP
+	if err := rlp.DecodeBytes(data, &rlpStat); err != nil {
+		log.Crit("Failed to decode state size stats", "err", err)
+	}
+	return SizeStats{
+		StateRoot:            rlpStat.StateRoot,
+		BlockNumber:          rlpStat.BlockNumber,
+		Accounts:             int64(rlpStat.Accounts),
+		AccountBytes:         int64(rlpStat.AccountBytes),
+		Storages:             int64(rlpStat.Storages),
+		StorageBytes:         int64(rlpStat.StorageBytes),
+		AccountTrienodes:     int64(rlpStat.AccountTrienodes),
+		AccountTrienodeBytes: int64(rlpStat.AccountTrienodeBytes),
+		StorageTrienodes:     int64(rlpStat.StorageTrienodes),
+		StorageTrienodeBytes: int64(rlpStat.StorageTrienodeBytes),
+		ContractCodes:        int64(rlpStat.ContractCodes),
+		ContractCodeBytes:    int64(rlpStat.ContractCodeBytes),
 	}
 }

@@ -427,6 +427,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		filterMapRows      stat
 		filterMapLastBlock stat
 		filterMapBlockLV   stat
+		stateSizeStats     stat
 
 		// Path-mode archive data
 		stateIndex stat
@@ -526,6 +527,10 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			// Path-based historic state indexes
 			case bytes.HasPrefix(key, StateHistoryIndexPrefix) && len(key) >= len(StateHistoryIndexPrefix)+common.HashLength:
 				stateIndex.add(size)
+
+			// State size stats
+			case bytes.HasPrefix(key, stateSizeStatsPrefix):
+				stateSizeStats.add(size)
 
 			// Verkle trie data is detected, determine the sub-category
 			case bytes.HasPrefix(key, VerklePrefix):
@@ -631,6 +636,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Beacon sync headers", beaconHeaders.sizeString(), beaconHeaders.countString()},
 		{"Key-Value store", "Clique snapshots", cliqueSnaps.sizeString(), cliqueSnaps.countString()},
 		{"Key-Value store", "Singleton metadata", metadata.sizeString(), metadata.countString()},
+		{"Key-Value store", "State size stats", stateSizeStats.sizeString(), stateSizeStats.countString()},
 	}
 
 	// Inspect all registered append-only file store then.

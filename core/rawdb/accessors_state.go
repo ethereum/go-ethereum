@@ -360,3 +360,22 @@ func WriteTrienodeHistory(db ethdb.AncientWriter, id uint64, header []byte, keyS
 	})
 	return err
 }
+
+// HasStateSizeStats checks if the state size stats for the specified state root is present in the database.
+func HasStateSizeStats(db ethdb.KeyValueReader, root common.Hash) bool {
+	ok, _ := db.Has(stateSizeStatsKey(root))
+	return ok
+}
+
+// ReadStateSizeStats retrieves the state size stats for the specified state root.
+func ReadStateSizeStats(db ethdb.KeyValueReader, root common.Hash) []byte {
+	data, _ := db.Get(stateSizeStatsKey(root))
+	return data
+}
+
+// WriteStateSizeStats stores the state size stats for the specified state root.
+func WriteStateSizeStats(db ethdb.KeyValueWriter, root common.Hash, stats []byte) {
+	if err := db.Put(stateSizeStatsKey(root), stats); err != nil {
+		log.Crit("Failed to store state size stats", "err", err)
+	}
+}

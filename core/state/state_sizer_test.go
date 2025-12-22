@@ -237,3 +237,78 @@ func TestSizeTracker(t *testing.T) {
 		t.Errorf("Storage trie node bytes mismatch: expected %d, got %d", expectedStats.StorageTrienodeBytes, actualStats.StorageTrienodeBytes)
 	}
 }
+
+func TestSizeStatsPersistence(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	defer db.Close()
+
+	root := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+
+	originalStats := SizeStats{
+		StateRoot:            root,
+		BlockNumber:          12345,
+		Accounts:             1000,
+		AccountBytes:         50000,
+		Storages:             5000,
+		StorageBytes:         200000,
+		AccountTrienodes:     300,
+		AccountTrienodeBytes: 15000,
+		StorageTrienodes:     1500,
+		StorageTrienodeBytes: 75000,
+		ContractCodes:        100,
+		ContractCodeBytes:    500000,
+	}
+
+	// Verify no stats exist initially
+	if rawdb.HasStateSizeStats(db, root) {
+		t.Fatal("Stats should not exist initially")
+	}
+
+	rawdb.WriteStateSizeStats(db, root, encodeSizeStats(originalStats))
+
+	// Verify stats exist
+	if !rawdb.HasStateSizeStats(db, root) {
+		t.Fatal("Stats should exist after write")
+	}
+
+	data := rawdb.ReadStateSizeStats(db, root)
+	loadedStats := decodeSizeStats(data)
+
+	// Verify all fields match
+	if loadedStats.StateRoot != originalStats.StateRoot {
+		t.Errorf("StateRoot mismatch: have %x, want %x", loadedStats.StateRoot, originalStats.StateRoot)
+	}
+	if loadedStats.BlockNumber != originalStats.BlockNumber {
+		t.Errorf("BlockNumber mismatch: have %d, want %d", loadedStats.BlockNumber, originalStats.BlockNumber)
+	}
+	if loadedStats.Accounts != originalStats.Accounts {
+		t.Errorf("Accounts mismatch: have %d, want %d", loadedStats.Accounts, originalStats.Accounts)
+	}
+	if loadedStats.AccountBytes != originalStats.AccountBytes {
+		t.Errorf("AccountBytes mismatch: have %d, want %d", loadedStats.AccountBytes, originalStats.AccountBytes)
+	}
+	if loadedStats.Storages != originalStats.Storages {
+		t.Errorf("Storages mismatch: have %d, want %d", loadedStats.Storages, originalStats.Storages)
+	}
+	if loadedStats.StorageBytes != originalStats.StorageBytes {
+		t.Errorf("StorageBytes mismatch: have %d, want %d", loadedStats.StorageBytes, originalStats.StorageBytes)
+	}
+	if loadedStats.AccountTrienodes != originalStats.AccountTrienodes {
+		t.Errorf("AccountTrienodes mismatch: have %d, want %d", loadedStats.AccountTrienodes, originalStats.AccountTrienodes)
+	}
+	if loadedStats.AccountTrienodeBytes != originalStats.AccountTrienodeBytes {
+		t.Errorf("AccountTrienodeBytes mismatch: have %d, want %d", loadedStats.AccountTrienodeBytes, originalStats.AccountTrienodeBytes)
+	}
+	if loadedStats.StorageTrienodes != originalStats.StorageTrienodes {
+		t.Errorf("StorageTrienodes mismatch: have %d, want %d", loadedStats.StorageTrienodes, originalStats.StorageTrienodes)
+	}
+	if loadedStats.StorageTrienodeBytes != originalStats.StorageTrienodeBytes {
+		t.Errorf("StorageTrienodeBytes mismatch: have %d, want %d", loadedStats.StorageTrienodeBytes, originalStats.StorageTrienodeBytes)
+	}
+	if loadedStats.ContractCodes != originalStats.ContractCodes {
+		t.Errorf("ContractCodes mismatch: have %d, want %d", loadedStats.ContractCodes, originalStats.ContractCodes)
+	}
+	if loadedStats.ContractCodeBytes != originalStats.ContractCodeBytes {
+		t.Errorf("ContractCodeBytes mismatch: have %d, want %d", loadedStats.ContractCodeBytes, originalStats.ContractCodeBytes)
+	}
+}

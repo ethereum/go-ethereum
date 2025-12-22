@@ -167,6 +167,9 @@ var (
 
 	// Verkle transition information
 	VerkleTransitionStatePrefix = []byte("verkle-transition-state-")
+
+	// State size metrics
+	stateSizeStatsPrefix = []byte("st") // stateSizeStatsPrefix + root -> stat (rlp)
 )
 
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary
@@ -458,4 +461,11 @@ func trienodeHistoryIndexBlockKey(addressHash common.Hash, path []byte, blockID 
 // transitionStateKey = transitionStatusKey + hash
 func transitionStateKey(hash common.Hash) []byte {
 	return append(VerkleTransitionStatePrefix, hash.Bytes()...)
+}
+
+func stateSizeStatsKey(root common.Hash) []byte {
+	result := make([]byte, len(stateSizeStatsPrefix)+common.HashLength)
+	copy(result, stateSizeStatsPrefix)
+	copy(result[len(stateSizeStatsPrefix):], root.Bytes())
+	return result
 }
