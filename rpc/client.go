@@ -29,8 +29,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
-	"go.opentelemetry.io/otel/trace/noop"
 )
 
 var (
@@ -268,7 +268,7 @@ func initClient(conn ServerCodec, services *serviceRegistry, cfg *clientConfig) 
 		c.idgen = randomIDGenerator()
 	}
 	if c.tracer == nil {
-		c.tracer = noop.NewTracerProvider().Tracer(tracerName)
+		c.tracer = otel.GetTracerProvider().Tracer(tracerName)
 	}
 
 	// Launch the main loop.

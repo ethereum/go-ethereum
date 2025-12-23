@@ -24,8 +24,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
-	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -69,7 +69,7 @@ func NewServer() *Server {
 		codecs:        make(map[ServerCodec]struct{}),
 		httpBodyLimit: defaultBodyLimit,
 		wsReadLimit:   wsDefaultReadLimit,
-		tracer:        noop.NewTracerProvider().Tracer(tracerName),
+		tracer:        otel.GetTracerProvider().Tracer(tracerName),
 	}
 	server.run.Store(true)
 	// Register the default service providing meta information about the RPC service such
@@ -107,7 +107,8 @@ func (s *Server) SetWebsocketReadLimit(limit int64) {
 // SetTracerProvider configures the OpenTelemetry TracerProvider for RPC call tracing.
 func (s *Server) SetTracerProvider(tp trace.TracerProvider) {
 	if tp == nil {
-		s.tracer = noop.NewTracerProvider().Tracer(tracerName)
+		// Reset to the global provider (which is noop unless configured elsewhere).
+		s.tracer = otel.GetTracerProvider().Tracer(tracerName)
 		return
 	}
 	s.tracer = tp.Tracer(tracerName)
