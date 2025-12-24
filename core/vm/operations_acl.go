@@ -252,13 +252,25 @@ func makeCallVariantGasCall(oldCalculatorStateful, oldCalculatorStateless gasFun
 			return oldStateful, err
 		}
 
-		// this should cause BAL test failures if uncommented
-		baseCost, overflow := math.SafeAdd(eip150BaseGas, oldStateful)
-		if overflow {
-			return 0, ErrGasUintOverflow
-		} else if contract.Gas < baseCost {
-			return 0, ErrOutOfGas
-		}
+		// this should cause BAL test failures if uncommented... but it doesn't.
+		// TODO: it's currently unspecified in EIP-7928 what happens if the provided
+		// gas covers the stateless component, but less than the entire amount needed
+		// to cover the rest.
+		// e.g. should the 7702 delegation code resolution still happen even if
+		// there is only 1 gas on top of what is needed to cover the stateless cost?
+		//
+		// I want to clarify in the spec that the 7702 resolution is performed
+		// immediately before the input to the 63/64 and that the state lookup
+		// will not happen if there isn't sufficient gas to cover everything
+		// before it.
+		/*
+			baseCost, overflow := math.SafeAdd(eip150BaseGas, oldStateful)
+			if overflow {
+				return 0, ErrGasUintOverflow
+			} else if contract.Gas < baseCost {
+				return 0, ErrOutOfGas
+			}
+		*/
 
 		if eip150BaseGas, overflow = math.SafeAdd(eip150BaseGas, oldStateful); overflow {
 			return 0, ErrOutOfGas
