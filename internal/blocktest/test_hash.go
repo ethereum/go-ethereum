@@ -27,7 +27,7 @@ import (
 	"hash"
 
 	"github.com/ethereum/go-ethereum/common"
-	"golang.org/x/crypto/sha3"
+	"github.com/ethereum/go-ethereum/crypto/keccak"
 )
 
 // testHasher is the helper tool for transaction/receipt list hashing.
@@ -39,7 +39,7 @@ type testHasher struct {
 
 // NewHasher returns a new testHasher instance.
 func NewHasher() *testHasher {
-	return &testHasher{hasher: sha3.NewLegacyKeccak256()}
+	return &testHasher{hasher: keccak.NewLegacyKeccak256()}
 }
 
 // Reset resets the hash state.

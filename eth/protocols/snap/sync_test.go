@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/keccak"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/log"
@@ -41,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
-	"golang.org/x/crypto/sha3"
 )
 
 func TestHashing(t *testing.T) {
@@ -55,7 +55,7 @@ func TestHashing(t *testing.T) {
 	}
 	var want, got string
 	var old = func() {
-		hasher := sha3.NewLegacyKeccak256()
+		hasher := keccak.NewLegacyKeccak256()
 		for i := 0; i < len(bytecodes); i++ {
 			hasher.Reset()
 			hasher.Write(bytecodes[i])
@@ -88,7 +88,7 @@ func BenchmarkHashing(b *testing.B) {
 		bytecodes[i] = buf
 	}
 	var old = func() {
-		hasher := sha3.NewLegacyKeccak256()
+		hasher := keccak.NewLegacyKeccak256()
 		for i := 0; i < len(bytecodes); i++ {
 			hasher.Reset()
 			hasher.Write(bytecodes[i])
