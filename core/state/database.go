@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/transitiontrie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
@@ -56,9 +55,6 @@ type Database interface {
 
 	// OpenStorageTrie opens the storage trie of an account.
 	OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, trie Trie) (Trie, error)
-
-	// PointCache returns the cache holding points used in verkle tree key computation
-	PointCache() *utils.PointCache
 
 	// TrieDB returns the underlying trie database for managing trie nodes.
 	TrieDB() *triedb.Database
@@ -161,7 +157,6 @@ type CachingDB struct {
 	snap          *snapshot.Tree
 	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
 	codeSizeCache *lru.Cache[common.Hash, int]
-	pointCache    *utils.PointCache
 
 	// Transition-specific fields
 	TransitionStatePerRoot *lru.Cache[common.Hash, *overlay.TransitionState]
@@ -175,7 +170,6 @@ func NewDatabase(triedb *triedb.Database, snap *snapshot.Tree) *CachingDB {
 		snap:                   snap,
 		codeCache:              lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
 		codeSizeCache:          lru.NewCache[common.Hash, int](codeSizeCacheSize),
-		pointCache:             utils.NewPointCache(pointCacheSize),
 		TransitionStatePerRoot: lru.NewCache[common.Hash, *overlay.TransitionState](1000),
 	}
 }
@@ -211,7 +205,7 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	}
 	// Configure the trie reader, which is expected to be available as the
 	// gatekeeper unless the state is corrupted.
-	tr, err := newTrieReader(stateRoot, db.triedb, db.pointCache)
+	tr, err := newTrieReader(stateRoot, db.triedb)
 	if err != nil {
 		return nil, err
 	}
@@ -289,11 +283,6 @@ func (db *CachingDB) TrieDB() *triedb.Database {
 	return db.triedb
 }
 
-// PointCache returns the cache of evaluated curve points.
-func (db *CachingDB) PointCache() *utils.PointCache {
-	return db.pointCache
-}
-
 // Snapshot returns the underlying state snapshot.
 func (db *CachingDB) Snapshot() *snapshot.Tree {
 	return db.snap
@@ -303,8 +292,6 @@ func (db *CachingDB) Snapshot() *snapshot.Tree {
 func mustCopyTrie(t Trie) Trie {
 	switch t := t.(type) {
 	case *trie.StateTrie:
-		return t.Copy()
-	case *trie.VerkleTrie:
 		return t.Copy()
 	case *transitiontrie.TransitionTrie:
 		return t.Copy()
