@@ -1932,7 +1932,36 @@ type DebugAPI struct {
 
 // NewDebugAPI creates a new instance of DebugAPI.
 func NewDebugAPI(b Backend) *DebugAPI {
-	return &DebugAPI{b: b}
+    return &DebugAPI{b: b}
+}
+
+// BatchGetStorage returns multiple storage slots for multiple accounts at the given block.
+// Params: {address: [hexKey, ...], ...}, blockNrOrHash
+// Returns a map {address: [value,...]} preserving the order within each key list.
+func (api *DebugAPI) BatchGetStorage(ctx context.Context, req map[common.Address][]string, blockNrOrHash rpc.BlockNumberOrHash) (map[common.Address][]hexutil.Bytes, error) {
+	state, _, err := api.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+	out := make(map[common.Address][]hexutil.Bytes, len(req))
+	for addr, keys := range req {
+		vals := make([]hexutil.Bytes, len(keys))
+		for i, k := range keys {
+			key, _, err := decodeHash(k)
+			if err != nil {
+				return nil, fmt.Errorf("unable to decode storage key for %s at index %d: %w", addr.Hex(), i, err)
+			}
+			v := state.GetState(addr, key)
+			vv := make([]byte, len(v))
+			copy(vv, v[:])
+			vals[i] = vv
+		}
+		out[addr] = vals
+	}
+	if err := state.Error(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // GetRawHeader retrieves the RLP encoding for a single header.
