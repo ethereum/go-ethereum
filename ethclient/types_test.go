@@ -42,6 +42,18 @@ func TestToFilterArg(t *testing.T) {
 		err    error
 	}{
 		{
+			"without addresses",
+			ethereum.FilterQuery{
+				FromBlock: big.NewInt(1),
+				ToBlock:   big.NewInt(2),
+			},
+			map[string]interface{}{
+				"fromBlock": "0x1",
+				"toBlock":   "0x2",
+			},
+			nil,
+		},
+		{
 			"without BlockHash",
 			ethereum.FilterQuery{
 				Addresses: addresses,
