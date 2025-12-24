@@ -4515,3 +4515,45 @@ func TestGetCanonicalReceipt(t *testing.T) {
 		}
 	}
 }
+
+// TestSetHeadBeyondRootFinalizedBug tests the issue where the finalized block
+// is not cleared when rewinding past it using setHeadBeyondRoot.
+func TestSetHeadBeyondRootFinalizedBug(t *testing.T) {
+	// Create a clean blockchain with 100 blocks using PathScheme (PBSS)
+	_, _, blockchain, err := newCanonical(ethash.NewFaker(), 100, true, rawdb.PathScheme)
+	if err != nil {
+		t.Fatalf("failed to create pristine chain: %v", err)
+	}
+	defer blockchain.Stop()
+
+	//  Set the "Finalized" marker to the current Head (Block 100)
+	headBlock := blockchain.CurrentBlock()
+	if headBlock.Number.Uint64() != 100 {
+		t.Fatalf("Setup failed: expected head 100, got %d", headBlock.Number.Uint64())
+	}
+	blockchain.SetFinalized(headBlock)
+
+	// Verify setup
+	if blockchain.CurrentFinalBlock().Number.Uint64() != 100 {
+		t.Fatalf("Setup failed: Finalized block should be 100")
+	}
+	targetBlock := blockchain.GetBlockByNumber(50)
+
+	// Call setHeadBeyondRoot with:
+	// head = 100
+	// repair = true
+	if _, err := blockchain.setHeadBeyondRoot(100, 0, targetBlock.Root(), true); err != nil {
+		t.Fatalf("Failed to rewind: %v", err)
+	}
+
+	currentFinal := blockchain.CurrentFinalBlock()
+	currentHead := blockchain.CurrentBlock().Number.Uint64()
+
+	// The previous finalized block (100) is now invalid because we rewound to 50.
+	// The function should have cleared the finalized marker (set to nil).
+	if currentFinal != nil && currentFinal.Number.Uint64() > currentHead {
+		t.Errorf("Chain Head: %d , Finalized Block: %d , Finalized block was >= head block.",
+			currentHead,
+			currentFinal.Number.Uint64())
+	}
+}
