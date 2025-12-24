@@ -248,7 +248,7 @@ func New(stateDb ethdb.Database, mode ethconfig.SyncMode, mux *event.TypeMux, ch
 		syncStartBlock:    chain.CurrentSnapBlock().Number.Uint64(),
 	}
 	// Create the post-merge skeleton syncer and start the process
-	dl.skeleton = newSkeleton(stateDb, dl.peers, dropPeer, newBeaconBackfiller(dl, success))
+	dl.skeleton = newSkeleton(stateDb, dl.peers, dropPeer, newBeaconBackfiller(dl, success), chain)
 
 	go dl.stateFetcher()
 	return dl
