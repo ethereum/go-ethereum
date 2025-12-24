@@ -21,13 +21,15 @@ import (
 	"errors"
 	"fmt"
 	"math"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 const (
-	indexBlockDescSize   = 14         // The size of index block descriptor
-	indexBlockEntriesCap = 4096       // The maximum number of entries can be grouped in a block
-	indexBlockRestartLen = 256        // The restart interval length of index block
-	historyIndexBatch    = 512 * 1024 // The number of state history indexes for constructing or deleting as batch
+	indexBlockDescSize   = 14              // The size of index block descriptor
+	indexBlockEntriesCap = 4096            // The maximum number of entries can be grouped in a block
+	indexBlockRestartLen = 256             // The restart interval length of index block
+	historyIndexBatch    = 8 * 1024 * 1024 // The number of state history indexes for constructing or deleting as batch
 )
 
 // indexBlockDesc represents a descriptor for an index block, which contains a
@@ -180,7 +182,11 @@ type blockWriter struct {
 	data     []byte          // Aggregated encoded data slice
 }
 
-func newBlockWriter(blob []byte, desc *indexBlockDesc) (*blockWriter, error) {
+// newBlockWriter constructs a block writer. In addition to the existing data
+// and block description, it takes an element ID and prunes all existing elements
+// above that ID. It's essential as the recovery mechanism after unclean shutdown
+// during the history indexing.
+func newBlockWriter(blob []byte, desc *indexBlockDesc, limit uint64) (*blockWriter, error) {
 	if len(blob) == 0 {
 		return &blockWriter{
 			desc: desc,
@@ -191,11 +197,22 @@ func newBlockWriter(blob []byte, desc *indexBlockDesc) (*blockWriter, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &blockWriter{
+	writer := &blockWriter{
 		desc:     desc,
 		restarts: restarts,
 		data:     data, // safe to own the slice
-	}, nil
+	}
+	var trimmed int
+	for !writer.empty() && writer.last() > limit {
+		if err := writer.pop(writer.last()); err != nil {
+			return nil, err
+		}
+		trimmed += 1
+	}
+	if trimmed > 0 {
+		log.Debug("Truncated extraneous elements", "count", trimmed, "limit", limit)
+	}
+	return writer, nil
 }
 
 // append adds a new element to the block. The new element must be greater than
@@ -271,6 +288,7 @@ func (b *blockWriter) sectionLast(section int) uint64 {
 
 // sectionSearch looks up the specified value in the given section,
 // the position and the preceding value will be returned if found.
+// It assumes that the preceding element exists in the section.
 func (b *blockWriter) sectionSearch(section int, n uint64) (found bool, prev uint64, pos int) {
 	b.scanSection(section, func(v uint64, p int) bool {
 		if n == v {
@@ -295,7 +313,6 @@ func (b *blockWriter) pop(id uint64) error {
 	}
 	// If there is only one entry left, the entire block should be reset
 	if b.desc.entries == 1 {
-		//b.desc.min = 0
 		b.desc.max = 0
 		b.desc.entries = 0
 		b.restarts = nil
@@ -329,6 +346,15 @@ func (b *blockWriter) empty() bool {
 
 func (b *blockWriter) full() bool {
 	return b.desc.full()
+}
+
+// last returns the last element in the block. It should only be called when
+// writer is not empty, otherwise the returned data is meaningless.
+func (b *blockWriter) last() uint64 {
+	if b.empty() {
+		return 0
+	}
+	return b.desc.max
 }
 
 // finish finalizes the index block encoding by appending the encoded restart points
