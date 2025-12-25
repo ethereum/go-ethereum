@@ -1077,11 +1077,9 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 			// removed by the hc.SetHead function.
 			if body := rawdb.ReadBody(bc.db, hash, num); body != nil {
 				for _, tx := range body.Transactions {
-
 					rawdb.DeleteTxLookupEntry(db, tx.Hash())
 				}
 			}
-
 			rawdb.DeleteBody(db, hash, num)
 			rawdb.DeleteReceipts(db, hash, num)
 		}
