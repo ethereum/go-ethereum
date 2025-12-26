@@ -205,7 +205,7 @@ func testFilters(t *testing.T, history uint64, noHistory bool) {
 
 	// Hack: GenerateChainWithGenesis creates a new db.
 	// Commit the genesis manually and use GenerateChain.
-	_, err = gspec.Commit(db, triedb.NewDatabase(db, nil))
+	_, err = gspec.Commit(db, triedb.NewDatabase(db, nil), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -426,7 +426,7 @@ func TestRangeLogs(t *testing.T) {
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 	)
-	_, err := gspec.Commit(db, triedb.NewDatabase(db, nil))
+	_, err := gspec.Commit(db, triedb.NewDatabase(db, nil), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

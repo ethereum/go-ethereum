@@ -1390,14 +1390,14 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, noStorageWiping 
 	return ret.root, nil
 }
 
-// CommitAndTrack writes the state mutations and notifies the size tracker of the state changes.
-func (s *StateDB) CommitAndTrack(block uint64, deleteEmptyObjects bool, noStorageWiping bool, sizer *SizeTracker) (common.Hash, error) {
+// CommitWithUpdate writes the state mutations and returns the state update for
+// external processing (e.g., live tracing hooks or size tracker).
+func (s *StateDB) CommitWithUpdate(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, *stateUpdate, error) {
 	ret, err := s.commitAndFlush(block, deleteEmptyObjects, noStorageWiping, true)
 	if err != nil {
-		return common.Hash{}, err
+		return common.Hash{}, nil, err
 	}
-	sizer.Notify(ret)
-	return ret.root, nil
+	return ret.root, ret, nil
 }
 
 // Prepare handles the preparatory steps for executing a state transition with.
