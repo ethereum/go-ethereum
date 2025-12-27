@@ -269,7 +269,7 @@ func init() {
 		configdirFlag,
 		chainIdFlag,
 		utils.LightKDFFlag,
-		utils.NoUSBFlag,
+		utils.USBFlag,
 		utils.SmartCardDaemonPathFlag,
 		utils.HTTPListenAddrFlag,
 		utils.HTTPVirtualHostsFlag,
@@ -698,14 +698,14 @@ func signer(c *cli.Context) error {
 		ksLoc    = c.String(keystoreFlag.Name)
 		lightKdf = c.Bool(utils.LightKDFFlag.Name)
 		advanced = c.Bool(advancedMode.Name)
-		nousb    = c.Bool(utils.NoUSBFlag.Name)
+		usb = c.Bool(utils.USBFlag.Name)
 		scpath   = c.String(utils.SmartCardDaemonPathFlag.Name)
 	)
 	log.Info("Starting signer", "chainid", chainId, "keystore", ksLoc,
 		"light-kdf", lightKdf, "advanced", advanced)
-	am := core.StartClefAccountManager(ksLoc, nousb, lightKdf, scpath)
+	am := core.StartClefAccountManager(ksLoc, usb, lightKdf, scpath)
 	defer am.Close()
-	apiImpl := core.NewSignerAPI(am, chainId, nousb, ui, db, advanced, pwStorage)
+	apiImpl := core.NewSignerAPI(am, chainId, usb, ui, db, advanced, pwStorage)
 
 	// Establish the bidirectional communication, by creating a new UI backend and registering
 	// it with the UI.
