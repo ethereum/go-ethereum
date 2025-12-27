@@ -798,3 +798,141 @@ func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashScheme bool,
 	}
 	return batch.Write()
 }
+
+// InspectTrieDepth traverses all path-based trie nodes in the database
+// and calculates the depth distribution of nodes in the account trie
+// and storage tries. Uses a streaming algorithm that processes nodes
+// in lexicographic order without loading all paths into memory.
+func InspectTrieDepth(db ethdb.Database) error {
+	var (
+		start = time.Now()
+
+		accountDepths   [65]int64
+		storageDepths   [65]int64
+		accountCount    int64
+		storageCount    int64
+		storageTriesCnt int64
+		nodeCount       int64
+	)
+
+	log.Info("Calculating trie depth distribution (streaming)...")
+
+	// Process account trie nodes (prefix "A")
+	// Keys are already in lexicographic order from the database iterator
+	accountStack := make([]string, 0, 65)
+
+	it := db.NewIterator(TrieNodeAccountPrefix, nil)
+	for it.Next() {
+		ok, path := ResolveAccountTrieNodeKey(it.Key())
+		if !ok {
+			continue
+		}
+		pathStr := string(path)
+
+		// Pop until stack top is a strict prefix of current path
+		for len(accountStack) > 0 {
+			top := accountStack[len(accountStack)-1]
+			if len(top) < len(pathStr) && pathStr[:len(top)] == top {
+				break
+			}
+			accountStack = accountStack[:len(accountStack)-1]
+		}
+
+		depth := len(accountStack)
+		accountDepths[depth]++
+		accountCount++
+		nodeCount++
+
+		accountStack = append(accountStack, pathStr)
+
+		if nodeCount%10000000 == 0 {
+			log.Info("Processing nodes", "count", nodeCount, "elapsed", common.PrettyDuration(time.Since(start)))
+		}
+	}
+	it.Release()
+	if err := it.Error(); err != nil {
+		return err
+	}
+
+	log.Info("Finished account trie", "nodes", accountCount, "elapsed", common.PrettyDuration(time.Since(start)))
+
+	// Process storage trie nodes (prefix "O")
+	// Keys are ordered by (accountHash, path), so when accountHash changes,
+	// we're starting a new trie and need to reset the stack
+	var (
+		storageStack       = make([]string, 0, 65)
+		currentAccountHash common.Hash
+		firstStorageTrie   = true
+	)
+
+	it = db.NewIterator(TrieNodeStoragePrefix, nil)
+	for it.Next() {
+		ok, accountHash, path := ResolveStorageTrieNode(it.Key())
+		if !ok {
+			continue
+		}
+
+		// Check if we're starting a new storage trie
+		if accountHash != currentAccountHash {
+			if !firstStorageTrie {
+				storageTriesCnt++
+			}
+			firstStorageTrie = false
+			currentAccountHash = accountHash
+			storageStack = storageStack[:0] // Reset stack for new trie
+		}
+
+		pathStr := string(path)
+
+		// Pop until stack top is a strict prefix of current path
+		for len(storageStack) > 0 {
+			top := storageStack[len(storageStack)-1]
+			if len(top) < len(pathStr) && pathStr[:len(top)] == top {
+				break
+			}
+			storageStack = storageStack[:len(storageStack)-1]
+		}
+
+		depth := len(storageStack)
+		storageDepths[depth]++
+		storageCount++
+		nodeCount++
+
+		storageStack = append(storageStack, pathStr)
+
+		if nodeCount%10000000 == 0 {
+			log.Info("Processing nodes", "count", nodeCount, "elapsed", common.PrettyDuration(time.Since(start)))
+		}
+	}
+	it.Release()
+	if err := it.Error(); err != nil {
+		return err
+	}
+
+	// Count the last storage trie if we processed any
+	if !firstStorageTrie {
+		storageTriesCnt++
+	}
+
+	log.Info("Depth calculation complete",
+		"accountNodes", accountCount,
+		"storageNodes", storageCount,
+		"storageTries", storageTriesCnt,
+		"elapsed", common.PrettyDuration(time.Since(start)))
+
+	// Print results
+	fmt.Println("\n=== Trie Depth Distribution ===")
+	fmt.Printf("\nAccount Trie: %d nodes\n", accountCount)
+	fmt.Printf("Storage Tries: %d nodes across %d tries\n\n", storageCount, storageTriesCnt)
+
+	fmt.Println("Depth | Account Nodes | Storage Nodes")
+	fmt.Println("------|---------------|---------------")
+	for i := 0; i < 65; i++ {
+		if accountDepths[i] > 0 || storageDepths[i] > 0 {
+			fmt.Printf("%5d | %13d | %13d\n", i, accountDepths[i], storageDepths[i])
+		}
+	}
+	fmt.Println()
+
+	return nil
+}

@@ -70,6 +70,7 @@ Remove blockchain and state databases`,
 		ArgsUsage: "",
 		Subcommands: []*cli.Command{
 			dbInspectCmd,
+			dbInspectTrieDepthCmd,
 			dbStatCmd,
 			dbCompactCmd,
 			dbGetCmd,
@@ -91,6 +92,14 @@ Remove blockchain and state databases`,
 		Flags:       slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Usage:       "Inspect the storage size for each type of data in the database",
 		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
+	}
+	dbInspectTrieDepthCmd = &cli.Command{
+		Action:      inspectTrieDepth,
+		Name:        "inspect-trie-depth",
+		Usage:       "Inspect the depth of the trie",
+		ArgsUsage:   "<start> <end>",
+		Flags:       slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
+		Description: "This command inspects the depth of the trie",
 	}
 	dbCheckStateContentCmd = &cli.Command{
 		Action:    checkStateContent,
@@ -329,6 +338,16 @@ func inspect(ctx *cli.Context) error {
 	defer db.Close()
 
 	return rawdb.InspectDatabase(db, prefix, start)
+}
+
+func inspectTrieDepth(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	defer db.Close()
+
+	return rawdb.InspectTrieDepth(db)
 }
 
 func checkStateContent(ctx *cli.Context) error {
