@@ -33,7 +33,6 @@ var ShowDeprecated = &cli.Command{
 }
 
 var DeprecatedFlags = []cli.Flag{
-	NoUSBFlag,
 	LegacyWhitelistFlag,
 	CacheTrieJournalFlag,
 	CacheTrieRejournalFlag,
@@ -51,13 +50,6 @@ var DeprecatedFlags = []cli.Flag{
 }
 
 var (
-	// Deprecated May 2020, shown in aliased flags section
-	NoUSBFlag = &cli.BoolFlag{
-		Name:     "nousb",
-		Hidden:   true,
-		Usage:    "Disables monitoring for and managing USB hardware wallets (deprecated)",
-		Category: flags.DeprecatedCategory,
-	}
 	// Deprecated March 2022
 	LegacyWhitelistFlag = &cli.StringFlag{
 		Name:     "whitelist",

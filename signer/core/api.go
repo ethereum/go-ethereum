@@ -130,7 +130,7 @@ type Metadata struct {
 	Origin    string `json:"Origin"`
 }
 
-func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath string) *accounts.Manager {
+func StartClefAccountManager(ksLocation string, usb, lightKDF bool, scpath string) *accounts.Manager {
 	var (
 		backends []accounts.Backend
 		n, p     = keystore.StandardScryptN, keystore.StandardScryptP
@@ -142,7 +142,7 @@ func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath str
 	if len(ksLocation) > 0 {
 		backends = append(backends, keystore.NewKeyStore(ksLocation, n, p))
 	}
-	if !nousb {
+	if usb {
 		// Start a USB hub for Ledger hardware wallets
 		if ledgerhub, err := usbwallet.NewLedgerHub(); err != nil {
 			log.Warn(fmt.Sprintf("Failed to start Ledger hub, disabling: %v", err))
@@ -279,14 +279,12 @@ var ErrRequestDenied = errors.New("request denied")
 // NewSignerAPI creates a new API that can be used for Account management.
 // ksLocation specifies the directory where to store the password protected private
 // key that is generated when a new Account is created.
-// noUSB disables USB support that is required to support hardware devices such as
-// ledger and trezor.
-func NewSignerAPI(am *accounts.Manager, chainID int64, noUSB bool, ui UIClientAPI, validator Validator, advancedMode bool, credentials storage.Storage) *SignerAPI {
+func NewSignerAPI(am *accounts.Manager, chainID int64, usb bool, ui UIClientAPI, validator Validator, advancedMode bool, credentials storage.Storage) *SignerAPI {
 	if advancedMode {
 		log.Info("Clef is in advanced mode: will warn instead of reject")
 	}
 	signer := &SignerAPI{big.NewInt(chainID), am, ui, validator, !advancedMode, credentials}
-	if !noUSB {
+	if usb {
 		signer.startUSBListener()
 	}
 	return signer

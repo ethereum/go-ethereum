@@ -31,7 +31,7 @@ GLOBAL OPTIONS:
    --configdir value       Directory for Clef configuration (default: "$HOME/.clef")
    --chainid value         Chain id to use for signing (1=mainnet, 17000=Holesky) (default: 1)
    --lightkdf              Reduce key-derivation RAM & CPU usage at some expense of KDF strength
-   --nousb                 Disables monitoring for and managing USB hardware wallets
+   --usb                   USB enables hardware wallet monitoring and connectivity.
    --pcscdpath value       Path to the smartcard daemon (pcscd) socket file (default: "/run/pcscd/pcscd.comm")
    --http.addr value       HTTP-RPC server listening interface (default: "localhost")
    --http.vhosts value     Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (default: "localhost")
