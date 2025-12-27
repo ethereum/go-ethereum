@@ -851,7 +851,7 @@ func TestPostponing(t *testing.T) {
 	if list, ok := pool.queue.get(accs[0]); ok && list.Len() > 0 {
 		t.Errorf("account 0: out-of-fund transaction present in queue")
 	}
-	
+
 	// Account 1 (balance: 50099): transaction cost 20100 should remain (sufficient funds)
 	if pool.pending[accs[1]] == nil || pool.pending[accs[1]].Len() != 1 {
 		t.Errorf("account 1: valid and funded transaction missing from pending pool")
@@ -859,7 +859,7 @@ func TestPostponing(t *testing.T) {
 	if _, ok := pool.pending[accs[1]].txs.items[txs[1].Nonce()]; !ok {
 		t.Errorf("account 1: valid and funded transaction missing from pending pool: %v", txs[1])
 	}
-	
+
 	// Total transaction count should be 1 (only account 1's transaction remains)
 	if pool.all.Count() != 1 {
 		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 1)
