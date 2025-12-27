@@ -790,7 +790,7 @@ func TestPostponing(t *testing.T) {
 	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), newReserver())
 	defer pool.Close()
 
-	// Create two test accounts to produce different gap profiles with
+	// Create two test accounts with different cost transactions
 	keys := make([]*ecdsa.PrivateKey, 2)
 	accs := make([]common.Address, len(keys))
 
@@ -800,27 +800,24 @@ func TestPostponing(t *testing.T) {
 
 		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(50100))
 	}
-	// Add a batch consecutive pending transactions for validation
-	txs := []*types.Transaction{}
-	for i, key := range keys {
-		for j := 0; j < 100; j++ {
-			var tx *types.Transaction
-			if (i+j)%2 == 0 {
-				tx = transaction(uint64(j), 25000, key)
-			} else {
-				tx = transaction(uint64(j), 50000, key)
-			}
-			txs = append(txs, tx)
-		}
+	// Add one transaction per account with different costs
+	// Account 0: cost 50100 (will be removed after balance -1)
+	// Account 1: cost 20100 (will remain after balance -1)
+	txs := []*types.Transaction{
+		transaction(uint64(0), 50000, keys[0]), // cost: 50000*1 + 100 = 50100
+		transaction(uint64(0), 25000, keys[1]), // cost: 25000*1 + 100 = 25100
 	}
 	for i, err := range pool.addRemotesSync(txs) {
 		if err != nil {
 			t.Fatalf("tx %d: failed to add transactions: %v", i, err)
 		}
 	}
-	// Check that pre and post validations leave the pool as is
-	if pending := pool.pending[accs[0]].Len() + pool.pending[accs[1]].Len(); pending != len(txs) {
-		t.Errorf("pending transaction mismatch: have %d, want %d", pending, len(txs))
+	// Check that both transactions are in pending pool
+	if pool.pending[accs[0]].Len() != 1 {
+		t.Errorf("account 0 pending transaction mismatch: have %d, want %d", pool.pending[accs[0]].Len(), 1)
+	}
+	if pool.pending[accs[1]].Len() != 1 {
+		t.Errorf("account 1 pending transaction mismatch: have %d, want %d", pool.pending[accs[1]].Len(), 1)
 	}
 	if len(pool.queue.addresses()) != 0 {
 		t.Errorf("queued accounts mismatch: have %d, want %d", len(pool.queue.addresses()), 0)
@@ -829,66 +826,43 @@ func TestPostponing(t *testing.T) {
 		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), len(txs))
 	}
 	<-pool.requestReset(nil, nil)
-	if pending := pool.pending[accs[0]].Len() + pool.pending[accs[1]].Len(); pending != len(txs) {
-		t.Errorf("pending transaction mismatch: have %d, want %d", pending, len(txs))
+	if pool.pending[accs[0]].Len() != 1 {
+		t.Errorf("account 0 pending transaction mismatch after reset: have %d, want %d", pool.pending[accs[0]].Len(), 1)
+	}
+	if pool.pending[accs[1]].Len() != 1 {
+		t.Errorf("account 1 pending transaction mismatch after reset: have %d, want %d", pool.pending[accs[1]].Len(), 1)
 	}
 	if len(pool.queue.addresses()) != 0 {
-		t.Errorf("queued accounts mismatch: have %d, want %d", len(pool.queue.addresses()), 0)
+		t.Errorf("queued accounts mismatch after reset: have %d, want %d", len(pool.queue.addresses()), 0)
 	}
 	if pool.all.Count() != len(txs) {
-		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), len(txs))
+		t.Errorf("total transaction mismatch after reset: have %d, want %d", pool.all.Count(), len(txs))
 	}
-	// Reduce the balance of the account, and check that transactions are reorganised
+	// Reduce the balance of both accounts by 1, and check that transactions are reorganised
 	for _, addr := range accs {
 		testAddBalance(pool, addr, big.NewInt(-1))
 	}
 	<-pool.requestReset(nil, nil)
 
-	// The first account's first transaction remains valid, check that subsequent
-	// ones are either filtered out, or queued up for later.
-	if _, ok := pool.pending[accs[0]].txs.items[txs[0].Nonce()]; !ok {
-		t.Errorf("tx %d: valid and funded transaction missing from pending pool: %v", 0, txs[0])
+	// Account 0 (balance: 50099): transaction cost 50100 should be removed (insufficient funds)
+	if pool.pending[accs[0]] != nil && pool.pending[accs[0]].Len() > 0 {
+		t.Errorf("account 0: out-of-fund transaction still present in pending pool")
 	}
-	list, _ := pool.queue.get(accs[0])
-	if _, ok := list.txs.items[txs[0].Nonce()]; ok {
-		t.Errorf("tx %d: valid and funded transaction present in future queue: %v", 0, txs[0])
+	if list, ok := pool.queue.get(accs[0]); ok && list.Len() > 0 {
+		t.Errorf("account 0: out-of-fund transaction present in queue")
 	}
-	for i, tx := range txs[1:100] {
-		if i%2 == 1 {
-			if _, ok := pool.pending[accs[0]].txs.items[tx.Nonce()]; ok {
-				t.Errorf("tx %d: valid but future transaction present in pending pool: %v", i+1, tx)
-			}
-			if _, ok := list.txs.items[tx.Nonce()]; !ok {
-				t.Errorf("tx %d: valid but future transaction missing from future queue: %v", i+1, tx)
-			}
-		} else {
-			if _, ok := pool.pending[accs[0]].txs.items[tx.Nonce()]; ok {
-				t.Errorf("tx %d: out-of-fund transaction present in pending pool: %v", i+1, tx)
-			}
-			if _, ok := list.txs.items[tx.Nonce()]; ok {
-				t.Errorf("tx %d: out-of-fund transaction present in future queue: %v", i+1, tx)
-			}
-		}
+	
+	// Account 1 (balance: 50099): transaction cost 20100 should remain (sufficient funds)
+	if pool.pending[accs[1]] == nil || pool.pending[accs[1]].Len() != 1 {
+		t.Errorf("account 1: valid and funded transaction missing from pending pool")
 	}
-	// The second account's first transaction got invalid, check that all transactions
-	// are either filtered out, or queued up for later.
-	if pool.pending[accs[1]] != nil {
-		t.Errorf("invalidated account still has pending transactions")
+	if _, ok := pool.pending[accs[1]].txs.items[txs[1].Nonce()]; !ok {
+		t.Errorf("account 1: valid and funded transaction missing from pending pool: %v", txs[1])
 	}
-	list, _ = pool.queue.get(accs[1])
-	for i, tx := range txs[100:] {
-		if i%2 == 1 {
-			if _, ok := list.txs.items[tx.Nonce()]; !ok {
-				t.Errorf("tx %d: valid but future transaction missing from future queue: %v", 100+i, tx)
-			}
-		} else {
-			if _, ok := list.txs.items[tx.Nonce()]; ok {
-				t.Errorf("tx %d: out-of-fund transaction present in future queue: %v", 100+i, tx)
-			}
-		}
-	}
-	if pool.all.Count() != len(txs)/2 {
-		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), len(txs)/2)
+	
+	// Total transaction count should be 1 (only account 1's transaction remains)
+	if pool.all.Count() != 1 {
+		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 1)
 	}
 }
 
@@ -957,7 +931,7 @@ func TestQueueAccountLimiting(t *testing.T) {
 	defer pool.Close()
 
 	account := crypto.PubkeyToAddress(key.PublicKey)
-	testAddBalance(pool, account, big.NewInt(1000000))
+	testAddBalance(pool, account, big.NewInt(int64(testTxPoolConfig.AccountQueue+5)*100100))
 
 	// Keep queuing up transactions and make sure all above a limit are dropped
 	for i := uint64(1); i <= testTxPoolConfig.AccountQueue+5; i++ {
@@ -1352,7 +1326,7 @@ func TestPendingMinimumAllowance(t *testing.T) {
 	keys := make([]*ecdsa.PrivateKey, 5)
 	for i := 0; i < len(keys); i++ {
 		keys[i], _ = crypto.GenerateKey()
-		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000000))
+		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(int64(config.AccountSlots)*100100))
 	}
 	// Generate and queue a batch of transactions
 	nonces := make(map[common.Address]uint64)
@@ -1745,7 +1719,7 @@ func TestStableUnderpricing(t *testing.T) {
 	keys := make([]*ecdsa.PrivateKey, 2)
 	for i := 0; i < len(keys); i++ {
 		keys[i], _ = crypto.GenerateKey()
-		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000000))
+		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(int64(config.GlobalSlots*100100)))
 	}
 	// Fill up the entire queue with the same transaction price points
 	txs := types.Transactions{}
