@@ -746,12 +746,6 @@ func archiveBasename(arch string, archiveVersion string) string {
 	if arch == "arm" {
 		platform += os.Getenv("GOARM")
 	}
-	if arch == "android" {
-		platform = "android-all"
-	}
-	if arch == "ios" {
-		platform = "ios-all"
-	}
 	return platform + "-" + archiveVersion
 }
 
