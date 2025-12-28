@@ -20,7 +20,9 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"strings"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/urfave/cli/v2"
@@ -71,7 +73,7 @@ and displays information about any security vulnerabilities that affect the curr
 func printVersion(ctx *cli.Context) error {
 	git, _ := version.VCS()
 
-	fmt.Println(strings.Title(clientIdentifier))
+	fmt.Println(cases.Title(language.Und).String(clientIdentifier))
 	fmt.Println("Version:", version.WithMeta)
 	if git.Commit != "" {
 		fmt.Println("Git Commit:", git.Commit)
