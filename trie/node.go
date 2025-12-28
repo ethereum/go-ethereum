@@ -30,7 +30,7 @@ var indices = []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b
 type node interface {
 	cache() (hashNode, bool)
 	encode(w rlp.EncoderBuffer)
-	fstring(string) string
+	fstring(string, *strings.Builder)
 }
 
 type (
@@ -94,31 +94,52 @@ func (n hashNode) cache() (hashNode, bool)   { return nil, true }
 func (n valueNode) cache() (hashNode, bool)  { return nil, true }
 
 // Pretty printing.
-func (n *fullNode) String() string  { return n.fstring("") }
-func (n *shortNode) String() string { return n.fstring("") }
-func (n hashNode) String() string   { return n.fstring("") }
-func (n valueNode) String() string  { return n.fstring("") }
+func (n *fullNode) String() string {
+	var b strings.Builder
+	n.fstring("", &b)
+	return b.String()
+}
+func (n *shortNode) String() string {
+	var b strings.Builder
+	n.fstring("", &b)
+	return b.String()
+}
+func (n hashNode) String() string {
+	var b strings.Builder
+	n.fstring("", &b)
+	return b.String()
+}
+func (n valueNode) String() string {
+	var b strings.Builder
+	n.fstring("", &b)
+	return b.String()
+}
 
-func (n *fullNode) fstring(ind string) string {
-	resp := fmt.Sprintf("[\n%s  ", ind)
+func (n *fullNode) fstring(ind string, b *strings.Builder) {
+	fmt.Fprintf(b, "[\n%s  ", ind)
 	for i, node := range &n.Children {
 		if node == nil {
-			resp += fmt.Sprintf("%s: <nil> ", indices[i])
+			fmt.Fprintf(b, "%s: <nil> ", indices[i])
 		} else {
-			resp += fmt.Sprintf("%s: %v", indices[i], node.fstring(ind+"  "))
+			fmt.Fprintf(b, "%s: ", indices[i])
+			node.fstring(ind+"  ", b)
 		}
 	}
-	return resp + fmt.Sprintf("\n%s] ", ind)
+	fmt.Fprintf(b, "\n%s] ", ind)
 }
 
-func (n *shortNode) fstring(ind string) string {
-	return fmt.Sprintf("{%x: %v} ", n.Key, n.Val.fstring(ind+"  "))
+func (n *shortNode) fstring(ind string, b *strings.Builder) {
+	fmt.Fprintf(b, "{%x: ", n.Key)
+	n.Val.fstring(ind+"  ", b)
+	b.WriteString("} ")
 }
-func (n hashNode) fstring(ind string) string {
-	return fmt.Sprintf("<%x> ", []byte(n))
+
+func (n hashNode) fstring(ind string, b *strings.Builder) {
+	fmt.Fprintf(b, "<%x> ", []byte(n))
 }
-func (n valueNode) fstring(ind string) string {
-	return fmt.Sprintf("%x ", []byte(n))
+
+func (n valueNode) fstring(ind string, b *strings.Builder) {
+	fmt.Fprintf(b, "%x ", []byte(n))
 }
 
 // mustDecodeNode is a wrapper of decodeNode and panic if any error is encountered.
