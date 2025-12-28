@@ -698,7 +698,7 @@ func signer(c *cli.Context) error {
 		ksLoc    = c.String(keystoreFlag.Name)
 		lightKdf = c.Bool(utils.LightKDFFlag.Name)
 		advanced = c.Bool(advancedMode.Name)
-		usb = c.Bool(utils.USBFlag.Name)
+		usb      = c.Bool(utils.USBFlag.Name)
 		scpath   = c.String(utils.SmartCardDaemonPathFlag.Name)
 	)
 	log.Info("Starting signer", "chainid", chainId, "keystore", ksLoc,
