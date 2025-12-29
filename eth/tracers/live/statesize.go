@@ -121,6 +121,10 @@ type stateSizeTracer struct {
 
 	// Map from state root to cumulative stats (for handling forks)
 	stats map[common.Hash]stateSizeStats
+
+	// initialized is set to true after the first state update processes
+	// and loads the parent stats from the CSV file
+	initialized bool
 }
 
 type stateSizeTracerConfig struct {
@@ -150,11 +154,6 @@ func newStateSizeTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
 		depthCreatedFilePath: depthCreatedFilePath,
 		depthDeletedFilePath: depthDeletedFilePath,
 		stats:                make(map[common.Hash]stateSizeStats),
-	}
-
-	// Load existing data if file exists
-	if err := t.loadExisting(); err != nil {
-		return nil, fmt.Errorf("failed to load existing statesize data: %v", err)
 	}
 
 	// Open statesize file for appending
@@ -238,14 +237,12 @@ func newStateSizeTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
 	}, nil
 }
 
-// loadExisting reads the existing CSV file and loads the latest records by block number.
-func (s *stateSizeTracer) loadExisting() error {
+// loadStatsForRoot searches the CSV file for a record with the given root hash
+// and returns its stats. Returns zero stats if not found.
+func (s *stateSizeTracer) loadStatsForRoot(root common.Hash) (stateSizeStats, bool) {
 	file, err := os.Open(s.filePath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil // File doesn't exist, nothing to load
-		}
-		return err
+		return stateSizeStats{}, false
 	}
 	defer file.Close()
 
@@ -253,16 +250,14 @@ func (s *stateSizeTracer) loadExisting() error {
 
 	// Read and skip header
 	if _, err := reader.Read(); err != nil {
-		if err == io.EOF {
-			return nil // Empty file
-		}
-		return fmt.Errorf("failed to read CSV header: %v", err)
+		return stateSizeStats{}, false
 	}
 
-	// Read all records to find the latest block number
+	// Search for the root in the CSV file (read backwards would be more efficient,
+	// but CSV doesn't support that easily, so we just remember the last match)
 	var (
-		latestBlockNum uint64
-		latestRecords  = make(map[common.Hash]stateSizeStats)
+		found     bool
+		lastStats stateSizeStats
 	)
 
 	for {
@@ -271,40 +266,28 @@ func (s *stateSizeTracer) loadExisting() error {
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("failed to read CSV record: %v", err)
+			return stateSizeStats{}, false
 		}
 		if len(record) < len(csvHeaders) {
-			continue // Skip malformed records
-		}
-
-		blockNum, err := strconv.ParseUint(record[0], 10, 64)
-		if err != nil {
 			continue
 		}
 
-		// If we found a new latest block, clear the map
-		if blockNum > latestBlockNum {
-			latestBlockNum = blockNum
-			latestRecords = make(map[common.Hash]stateSizeStats)
-		}
-
-		// Only store records from the latest block
-		if blockNum == latestBlockNum {
-			root := common.HexToHash(record[1])
+		recordRoot := common.HexToHash(record[1])
+		if recordRoot == root {
 			stats, err := parseStats(record)
 			if err != nil {
-				log.Warn("Failed to parse statesize record", "error", err)
 				continue
 			}
-			latestRecords[root] = stats
+			lastStats = stats
+			found = true
+			// Don't break - keep searching for the latest occurrence
 		}
 	}
 
-	s.stats = latestRecords
-	if len(latestRecords) > 0 {
-		log.Info("Loaded statesize tracer state", "block", latestBlockNum, "roots", len(latestRecords))
+	if found {
+		log.Info("Loaded initial stats from CSV", "root", root.Hex())
 	}
-	return nil
+	return lastStats, found
 }
 
 // parseStats extracts cumulative statistics from a CSV record.
@@ -365,6 +348,19 @@ func (s *stateSizeTracer) onStateUpdate(update *tracing.StateUpdate) {
 	if update == nil {
 		return
 	}
+
+	// On first update, try to load parent stats from the CSV file
+	s.mu.Lock()
+	if !s.initialized && update.OriginRoot != (types.EmptyRootHash) {
+		s.initialized = true
+		stats, found := s.loadStatsForRoot(update.OriginRoot)
+		if !found {
+			log.Crit("Failed to load parent stats from CSV", "root", update.OriginRoot.Hex())
+			return
+		}
+		s.stats[update.OriginRoot] = stats
+	}
+	s.mu.Unlock()
 
 	// Calculate deltas
 	var (
