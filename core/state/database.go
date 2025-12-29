@@ -40,9 +40,6 @@ const (
 
 	// Cache size granted for caching clean code.
 	codeCacheSize = 256 * 1024 * 1024
-
-	// Number of address->curve point associations to keep.
-	pointCacheSize = 4096
 )
 
 // Database wraps access to tries and contract code.
