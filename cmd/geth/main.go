@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/internal/otel"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"go.uber.org/automaxprocs/maxprocs"
@@ -218,10 +217,8 @@ var (
 	}
 
 	otelFlags = []cli.Flag{
-		utils.OTELTracingFlag,
+		utils.OTELEnabledFlag,
 		utils.OTELEndpointFlag,
-		utils.OTELProtocolFlag,
-		utils.OTELInsecureFlag,
 		utils.OTELServiceNameFlag,
 	}
 )
@@ -284,14 +281,10 @@ func init() {
 		if err := debug.Setup(ctx); err != nil {
 			return err
 		}
-		if err := otel.Setup(ctx); err != nil {
-			return err
-		}
 		flags.CheckEnvVars(ctx, app.Flags, "GETH")
 		return nil
 	}
 	app.After = func(ctx *cli.Context) error {
-		otel.Exit()
 		debug.Exit()
 		prompt.Stdin.Close() // Resets terminal mode.
 		return nil
