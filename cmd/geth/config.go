@@ -242,6 +242,15 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	// Start metrics export if enabled
 	utils.SetupMetrics(&cfg.Metrics)
 
+	// Setup OpenTelemetry tracing if enabled
+	otelService, err := utils.SetupOTEL(ctx)
+	if err != nil {
+		utils.Fatalf("failed to setup OpenTelemetry: %v", err)
+	}
+	if otelService != nil {
+		utils.RegisterOTELService(otelService, stack)
+	}
+
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
 
 	// Create gauge with geth system and build information
