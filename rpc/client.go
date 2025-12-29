@@ -29,8 +29,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 )
 
 var (
@@ -90,7 +88,6 @@ type Client struct {
 	// config fields
 	batchItemLimit       int
 	batchResponseMaxSize int
-	tracer               trace.Tracer
 
 	// writeConn is used for writing to the connection on the caller's goroutine. It should
 	// only be accessed outside of dispatch, with the write lock held. The write lock is
@@ -122,7 +119,7 @@ func (c *Client) newClientConn(conn ServerCodec) *clientConn {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, clientContextKey{}, c)
 	ctx = context.WithValue(ctx, peerInfoContextKey{}, conn.peerInfo())
-	handler := newHandler(ctx, conn, c.idgen, c.services, c.batchItemLimit, c.batchResponseMaxSize, c.tracer)
+	handler := newHandler(ctx, conn, c.idgen, c.services, c.batchItemLimit, c.batchResponseMaxSize, nil)
 	return &clientConn{conn, handler}
 }
 
@@ -250,7 +247,6 @@ func initClient(conn ServerCodec, services *serviceRegistry, cfg *clientConfig) 
 		idgen:                cfg.idgen,
 		batchItemLimit:       cfg.batchItemLimit,
 		batchResponseMaxSize: cfg.batchResponseLimit,
-		tracer:               cfg.tracer,
 		writeConn:            conn,
 		close:                make(chan struct{}),
 		closing:              make(chan struct{}),
@@ -266,9 +262,6 @@ func initClient(conn ServerCodec, services *serviceRegistry, cfg *clientConfig) 
 	// Set defaults.
 	if c.idgen == nil {
 		c.idgen = randomIDGenerator()
-	}
-	if c.tracer == nil {
-		c.tracer = otel.GetTracerProvider().Tracer(tracerName)
 	}
 
 	// Launch the main loop.

@@ -20,7 +20,6 @@ import (
 	"net/http"
 
 	"github.com/gorilla/websocket"
-	"go.opentelemetry.io/otel/trace"
 )
 
 // ClientOption is a configuration option for the RPC client.
@@ -42,9 +41,6 @@ type clientConfig struct {
 	idgen              func() ID
 	batchItemLimit     int
 	batchResponseLimit int
-
-	// Tracing
-	tracer trace.Tracer
 }
 
 func (cfg *clientConfig) initHeaders() {

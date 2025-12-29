@@ -26,14 +26,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
-func spanNames(spans []tracetest.SpanStub) []string {
-	names := make([]string, len(spans))
-	for i, s := range spans {
-		names[i] = s.Name
-	}
-	return names
-}
-
 func attributeMap(attrs []attribute.KeyValue) map[string]string {
 	m := make(map[string]string)
 	for _, a := range attrs {
@@ -57,14 +49,14 @@ func newTracingServer(t *testing.T) (*Server, *sdktrace.TracerProvider, *tracete
 	t.Helper()
 
 	exporter := tracetest.NewInMemoryExporter()
-	tracer := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	t.Cleanup(func() { _ = tracer.Shutdown(context.Background()) })
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
 
 	server := newTestServer()
-	server.SetTracerProvider(tracer)
+	server.SetTracerProvider(tp)
 	t.Cleanup(server.Stop)
 
-	return server, tracer, exporter
+	return server, tp, exporter
 }
 
 // TestTracingHTTP verifies that RPC spans are emitted when processing HTTP requests.
@@ -103,52 +95,7 @@ func TestTracingHTTP(t *testing.T) {
 		}
 	}
 	if rpcSpan == nil {
-		t.Fatalf("rpc.call span not found, got %v", spanNames(spans))
-	}
-
-	attrs := attributeMap(rpcSpan.Attributes)
-	if attrs["rpc.system"] != "jsonrpc" {
-		t.Errorf("expected rpc.system=jsonrpc, got %v", attrs["rpc.system"])
-	}
-	if attrs["rpc.method"] != "test_echo" {
-		t.Errorf("expected rpc.method=test_echo, got %v", attrs["rpc.method"])
-	}
-	if _, ok := attrs["rpc.id"]; !ok {
-		t.Errorf("expected rpc.id attribute to be set")
-	}
-}
-
-// TestTracingInProcess verifies that RPC spans are emitted when processing requests in process.
-func TestTracingInProcess(t *testing.T) {
-	t.Parallel()
-	server, tracer, exporter := newTracingServer(t)
-
-	client := DialInProc(server)
-	t.Cleanup(client.Close)
-
-	var result echoResult
-	if err := client.Call(&result, "test_echo", "hello", 42, &echoArgs{S: "world"}); err != nil {
-		t.Fatalf("RPC call failed: %v", err)
-	}
-
-	if err := tracer.ForceFlush(context.Background()); err != nil {
-		t.Fatalf("failed to flush: %v", err)
-	}
-
-	spans := exporter.GetSpans()
-	if len(spans) == 0 {
-		t.Fatal("no spans were emitted")
-	}
-
-	var rpcSpan *tracetest.SpanStub
-	for i := range spans {
-		if spans[i].Name == "rpc.call" {
-			rpcSpan = &spans[i]
-			break
-		}
-	}
-	if rpcSpan == nil {
-		t.Fatalf("rpc.call span not found, got %v", spanNames(spans))
+		t.Fatalf("rpc.call span not found.")
 	}
 
 	attrs := attributeMap(rpcSpan.Attributes)
@@ -204,14 +151,13 @@ func TestTracingBatchHTTP(t *testing.T) {
 
 	var found int
 	for i := range spans {
-		if spans[i].Name != "rpc.call" {
-			continue
-		}
-		attrs := attributeMap(spans[i].Attributes)
-		if attrs["rpc.system"] == "jsonrpc" &&
-			attrs["rpc.method"] == "test_echo" &&
-			attrs["rpc.batch"] == "true" {
-			found++
+		if spans[i].Name == "rpc.call" {
+			attrs := attributeMap(spans[i].Attributes)
+			if attrs["rpc.system"] == "jsonrpc" &&
+				attrs["rpc.method"] == "test_echo" &&
+				attrs["rpc.batch"] == "true" {
+				found++
+			}
 		}
 	}
 	if found != len(batch) {

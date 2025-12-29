@@ -28,12 +28,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 	"go.opentelemetry.io/otel/trace"
-
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // handler handles JSON-RPC messages. There is one handler per connection. Note that
@@ -70,7 +70,7 @@ type handler struct {
 	allowSubscribe       bool
 	batchRequestLimit    int
 	batchResponseMaxSize int
-	tracer               trace.Tracer
+	tracerProvider       trace.TracerProvider
 
 	subLock    sync.Mutex
 	serverSubs map[ID]*Subscription
@@ -82,7 +82,7 @@ type callProc struct {
 	isBatch   bool
 }
 
-func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry, batchRequestLimit, batchResponseMaxSize int, tracer trace.Tracer) *handler {
+func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry, batchRequestLimit, batchResponseMaxSize int, tracerProvider trace.TracerProvider) *handler {
 	rootCtx, cancelRoot := context.WithCancel(connCtx)
 	h := &handler{
 		reg:                  reg,
@@ -97,7 +97,7 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 		log:                  log.Root(),
 		batchRequestLimit:    batchRequestLimit,
 		batchResponseMaxSize: batchResponseMaxSize,
-		tracer:               tracer,
+		tracerProvider:       tracerProvider,
 	}
 	if conn.remoteAddr() != "" {
 		h.log = h.log.New("conn", conn.remoteAddr())
@@ -608,7 +608,7 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 
 // startRPCSpan starts a tracing span for an RPC call.
 func (h *handler) startRPCSpan(ctx context.Context, msg *jsonrpcMessage, isBatch bool) (context.Context, trace.Span) {
-	ctx, span := h.tracer.Start(ctx, "rpc.call")
+	ctx, span := h.tracer().Start(ctx, "rpc.call")
 	span.SetAttributes(
 		semconv.RPCSystemKey.String("jsonrpc"),
 		semconv.RPCMethodKey.String(msg.Method),
@@ -620,6 +620,17 @@ func (h *handler) startRPCSpan(ctx context.Context, msg *jsonrpcMessage, isBatch
 		span.SetAttributes(attribute.String("rpc.id", id))
 	}
 	return ctx, span
+}
+
+// tracer returns the OpenTelemetry Tracer for RPC call tracing.
+func (h *handler) tracer() trace.Tracer {
+	if h.tracerProvider == nil {
+		// Default to global TracerProvider if none is set.
+		// Note: If no TracerProvider is set, the default is a no-op TracerProvider.
+		// See https://pkg.go.dev/go.opentelemetry.io/otel#GetTracerProvider
+		return otel.Tracer("")
+	}
+	return h.tracerProvider.Tracer("")
 }
 
 // runMethod runs the Go callback for an RPC method.
