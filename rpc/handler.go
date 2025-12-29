@@ -526,7 +526,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 	}
 
 	// Start tracing span before invoking the method.
-	ctx, span := h.startRPCSpan(cp.ctx, msg, cp.isBatch)
+	ctx, span := h.startSpan(cp.ctx, msg, cp.isBatch)
 	defer span.End()
 
 	start := time.Now()
@@ -586,7 +586,7 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 	args = args[1:]
 
 	// Start tracing span before invoking the subscription method.
-	ctx, span := h.startRPCSpan(cp.ctx, msg, cp.isBatch)
+	ctx, span := h.startSpan(cp.ctx, msg, cp.isBatch)
 	defer span.End()
 
 	// Install notifier in context so the subscription handler can find it.
@@ -606,15 +606,21 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 	return answer
 }
 
-// startRPCSpan starts a tracing span for an RPC call.
-func (h *handler) startRPCSpan(ctx context.Context, msg *jsonrpcMessage, isBatch bool) (context.Context, trace.Span) {
+// startSpan starts a tracing span for an RPC call.
+func (h *handler) startSpan(ctx context.Context, msg *jsonrpcMessage, isBatch bool) (context.Context, trace.Span) {
 	ctx, span := h.tracer().Start(ctx, "rpc.call")
+
+	// Fast path: noop provider or span not sampled
+	if !span.IsRecording() {
+		return ctx, span
+	}
+
+	// Set span attributes.
 	span.SetAttributes(
 		semconv.RPCSystemKey.String("jsonrpc"),
 		semconv.RPCMethodKey.String(msg.Method),
 		attribute.Bool("rpc.batch", isBatch),
 	)
-	// Request id
 	id := strings.TrimSpace(string(msg.ID))
 	if id != "" && id != "null" {
 		span.SetAttributes(attribute.String("rpc.id", id))
