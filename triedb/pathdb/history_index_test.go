@@ -33,7 +33,7 @@ func TestIndexReaderBasic(t *testing.T) {
 		1, 5, 10, 11, 20,
 	}
 	db := rawdb.NewMemoryDatabase()
-	bw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}))
+	bw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), 0)
 	for i := 0; i < len(elements); i++ {
 		bw.append(elements[i])
 	}
@@ -75,7 +75,7 @@ func TestIndexReaderLarge(t *testing.T) {
 	slices.Sort(elements)
 
 	db := rawdb.NewMemoryDatabase()
-	bw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}))
+	bw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), 0)
 	for i := 0; i < len(elements); i++ {
 		bw.append(elements[i])
 	}
@@ -122,19 +122,21 @@ func TestEmptyIndexReader(t *testing.T) {
 
 func TestIndexWriterBasic(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}))
+	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), 0)
 	iw.append(2)
 	if err := iw.append(1); err == nil {
 		t.Fatal("out-of-order insertion is not expected")
 	}
+	var maxElem uint64
 	for i := 0; i < 10; i++ {
 		iw.append(uint64(i + 3))
+		maxElem = uint64(i + 3)
 	}
 	batch := db.NewBatch()
 	iw.finish(batch)
 	batch.Write()
 
-	iw, err := newIndexWriter(db, newAccountIdent(common.Hash{0xa}))
+	iw, err := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), maxElem)
 	if err != nil {
 		t.Fatalf("Failed to construct the block writer, %v", err)
 	}
@@ -146,18 +148,87 @@ func TestIndexWriterBasic(t *testing.T) {
 	iw.finish(db.NewBatch())
 }
 
-func TestIndexWriterDelete(t *testing.T) {
+func TestIndexWriterWithLimit(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}))
+	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), 0)
+
+	var maxElem uint64
+	for i := 0; i < indexBlockEntriesCap*2; i++ {
+		iw.append(uint64(i + 1))
+		maxElem = uint64(i + 1)
+	}
+	batch := db.NewBatch()
+	iw.finish(batch)
+	batch.Write()
+
+	suites := []struct {
+		limit  uint64
+		expMax uint64
+	}{
+		// nothing to truncate
+		{
+			maxElem, maxElem,
+		},
+		// truncate the last element
+		{
+			maxElem - 1, maxElem - 1,
+		},
+		// truncation around the block boundary
+		{
+			uint64(indexBlockEntriesCap + 1),
+			uint64(indexBlockEntriesCap + 1),
+		},
+		// truncation around the block boundary
+		{
+			uint64(indexBlockEntriesCap),
+			uint64(indexBlockEntriesCap),
+		},
+		{
+			uint64(1), uint64(1),
+		},
+		// truncate the entire index, it's in theory invalid
+		{
+			uint64(0), uint64(0),
+		},
+	}
+	for i, suite := range suites {
+		iw, err := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), suite.limit)
+		if err != nil {
+			t.Fatalf("Failed to construct the index writer, %v", err)
+		}
+		if iw.lastID != suite.expMax {
+			t.Fatalf("Test %d, unexpected max value, got %d, want %d", i, iw.lastID, suite.expMax)
+		}
+
+		// Re-fill the elements
+		var maxElem uint64
+		for elem := suite.limit + 1; elem < indexBlockEntriesCap*4; elem++ {
+			if err := iw.append(elem); err != nil {
+				t.Fatalf("Failed to append value %d: %v", elem, err)
+			}
+			maxElem = elem
+		}
+		if iw.lastID != maxElem {
+			t.Fatalf("Test %d, unexpected max value, got %d, want %d", i, iw.lastID, maxElem)
+		}
+	}
+}
+
+func TestIndexDeleterBasic(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), 0)
+
+	var maxElem uint64
 	for i := 0; i < indexBlockEntriesCap*4; i++ {
 		iw.append(uint64(i + 1))
+		maxElem = uint64(i + 1)
 	}
 	batch := db.NewBatch()
 	iw.finish(batch)
 	batch.Write()
 
 	// Delete unknown id, the request should be rejected
-	id, _ := newIndexDeleter(db, newAccountIdent(common.Hash{0xa}))
+	id, _ := newIndexDeleter(db, newAccountIdent(common.Hash{0xa}), maxElem)
 	if err := id.pop(indexBlockEntriesCap * 5); err == nil {
 		t.Fatal("Expect error to occur for unknown id")
 	}
@@ -168,10 +239,66 @@ func TestIndexWriterDelete(t *testing.T) {
 		if id.lastID != uint64(i-1) {
 			t.Fatalf("Unexpected lastID, want: %d, got: %d", uint64(i-1), iw.lastID)
 		}
-		if rand.Intn(10) == 0 {
-			batch := db.NewBatch()
-			id.finish(batch)
-			batch.Write()
+	}
+}
+
+func TestIndexDeleterWithLimit(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), 0)
+
+	var maxElem uint64
+	for i := 0; i < indexBlockEntriesCap*2; i++ {
+		iw.append(uint64(i + 1))
+		maxElem = uint64(i + 1)
+	}
+	batch := db.NewBatch()
+	iw.finish(batch)
+	batch.Write()
+
+	suites := []struct {
+		limit  uint64
+		expMax uint64
+	}{
+		// nothing to truncate
+		{
+			maxElem, maxElem,
+		},
+		// truncate the last element
+		{
+			maxElem - 1, maxElem - 1,
+		},
+		// truncation around the block boundary
+		{
+			uint64(indexBlockEntriesCap + 1),
+			uint64(indexBlockEntriesCap + 1),
+		},
+		// truncation around the block boundary
+		{
+			uint64(indexBlockEntriesCap),
+			uint64(indexBlockEntriesCap),
+		},
+		{
+			uint64(1), uint64(1),
+		},
+		// truncate the entire index, it's in theory invalid
+		{
+			uint64(0), uint64(0),
+		},
+	}
+	for i, suite := range suites {
+		id, err := newIndexDeleter(db, newAccountIdent(common.Hash{0xa}), suite.limit)
+		if err != nil {
+			t.Fatalf("Failed to construct the index writer, %v", err)
+		}
+		if id.lastID != suite.expMax {
+			t.Fatalf("Test %d, unexpected max value, got %d, want %d", i, id.lastID, suite.expMax)
+		}
+
+		// Keep removing elements
+		for elem := id.lastID; elem > 0; elem-- {
+			if err := id.pop(elem); err != nil {
+				t.Fatalf("Failed to pop value %d: %v", elem, err)
+			}
 		}
 	}
 }
