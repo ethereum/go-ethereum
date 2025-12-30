@@ -19,6 +19,7 @@
 package hookstest
 
 import (
+	"encoding/json"
 	"math/big"
 	"testing"
 
@@ -61,6 +62,14 @@ func (s *Stub) Register(tb testing.TB) params.ExtraPayloads[*Stub, *Stub] {
 		},
 	})
 }
+
+// MarshalJSON implements [json.Marshaler] and always returns the JSON null
+// object. This avoids errors due to incompatible field types.
+func (Stub) MarshalJSON() ([]byte, error) { return []byte(`null`), nil }
+
+// UnmarshalJSON implements [json.Unmarshaler] and always returns nil, ignoring
+// its input.
+func (Stub) UnmarshalJSON([]byte) error { return nil }
 
 // PrecompileOverride uses the s.PrecompileOverrides map, if non-empty, as the
 // canonical source of all overrides. If the map is empty then no precompiles
@@ -135,4 +144,6 @@ func (s Stub) MinimumGasConsumption(limit uint64) uint64 {
 var _ interface {
 	params.ChainConfigHooks
 	params.RulesHooks
+	json.Marshaler
+	json.Unmarshaler
 } = Stub{}
