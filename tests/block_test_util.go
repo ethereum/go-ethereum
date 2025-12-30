@@ -116,15 +116,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
 	}
-	return t.run(config, snapshotter, scheme, witness, tracer, postCheck)
-}
 
-// Network returns the network/fork name for this test.
-func (t *BlockTest) Network() string {
-	return t.json.Network
-}
-
-func (t *BlockTest) run(config *params.ChainConfig, snapshotter bool, scheme string, witness bool, tracer *tracing.Hooks, postCheck func(error, *core.BlockChain)) (result error) {
 	// import pre accounts & construct test genesis block & state root
 	// Commit genesis state
 	var (
@@ -210,6 +202,11 @@ func (t *BlockTest) run(config *params.ChainConfig, snapshotter bool, scheme str
 		}
 	}
 	return t.validateImportedHeaders(chain, validBlocks)
+}
+
+// Network returns the network/fork name for this test.
+func (t *BlockTest) Network() string {
+	return t.json.Network
 }
 
 func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {

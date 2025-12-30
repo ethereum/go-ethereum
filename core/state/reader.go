@@ -33,13 +33,16 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/transitiontrie"
-	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
 // ContractCodeReader defines the interface for accessing contract code.
 type ContractCodeReader interface {
+	// Has returns the flag indicating whether the contract code with
+	// specified address and hash exists or not.
+	Has(addr common.Address, codeHash common.Hash) bool
+
 	// Code retrieves a particular contract's code.
 	//
 	// - Returns nil code along with nil error if the requested contract code
@@ -170,6 +173,13 @@ func (r *cachingCodeReader) CodeSize(addr common.Address, codeHash common.Hash) 
 	return len(code), nil
 }
 
+// Has returns the flag indicating whether the contract code with
+// specified address and hash exists or not.
+func (r *cachingCodeReader) Has(addr common.Address, codeHash common.Hash) bool {
+	code, _ := r.Code(addr, codeHash)
+	return len(code) > 0
+}
+
 // flatReader wraps a database state reader and is safe for concurrent access.
 type flatReader struct {
 	reader database.StateReader
@@ -256,7 +266,7 @@ type trieReader struct {
 
 // newTrieReader constructs a trie reader of the specific state. An error will be
 // returned if the associated trie specified by root is not existent.
-func newTrieReader(root common.Hash, db *triedb.Database, cache *utils.PointCache) (*trieReader, error) {
+func newTrieReader(root common.Hash, db *triedb.Database) (*trieReader, error) {
 	var (
 		tr  Trie
 		err error
