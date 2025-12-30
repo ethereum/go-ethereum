@@ -1,7 +1,0 @@
-goos: linux
-goarch: amd64
-pkg: github.com/ethereum/go-ethereum/core/vm
-cpu: Intel(R) Core(TM) i7-8565U CPU @ 1.80GHz
-BenchmarkResize-8   	  876326	     89800 ns/op	  442142 B/op	       1 allocs/op
-BenchmarkResize-8   	signal: interrupt
-FAIL	github.com/ethereum/go-ethereum/core/vm	154.281s
