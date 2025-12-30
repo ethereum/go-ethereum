@@ -164,8 +164,8 @@ type indexWriter struct {
 }
 
 // newIndexWriter constructs the index writer for the specified state. Additionally,
-// it takes an element ID and prunes all existing elements above that ID. It's
-// essential as the recovery mechanism after unclean shutdown during the history
+// it takes an integer as the limit and prunes all existing elements above that ID.
+// It's essential as the recovery mechanism after unclean shutdown during the history
 // indexing.
 func newIndexWriter(db ethdb.KeyValueReader, state stateIdent, limit uint64) (*indexWriter, error) {
 	blob := readStateIndex(state, db)
@@ -184,10 +184,7 @@ func newIndexWriter(db ethdb.KeyValueReader, state stateIdent, limit uint64) (*i
 		return nil, err
 	}
 	// Trim trailing blocks whose elements all exceed the limit.
-	for i := len(descList) - 1; i > 0; i-- {
-		if descList[i].max <= limit {
-			break
-		}
+	for i := len(descList) - 1; i > 0 && descList[i].max > limit; i-- {
 		// The previous block has the elements that exceed the limit,
 		// therefore the current block can be entirely dropped.
 		if descList[i-1].max >= limit {
@@ -308,10 +305,7 @@ func newIndexDeleter(db ethdb.KeyValueReader, state stateIdent, limit uint64) (*
 		return nil, err
 	}
 	// Trim trailing blocks whose elements all exceed the limit.
-	for i := len(descList) - 1; i > 0; i-- {
-		if descList[i].max <= limit {
-			break
-		}
+	for i := len(descList) - 1; i > 0 && descList[i].max > limit; i-- {
 		// The previous block has the elements that exceed the limit,
 		// therefore the current block can be entirely dropped.
 		if descList[i-1].max >= limit {
@@ -337,7 +331,7 @@ func newIndexDeleter(db ethdb.KeyValueReader, state stateIdent, limit uint64) (*
 	}, nil
 }
 
-// empty returns a flag indicating whether the state index is empty.
+// empty returns whether the state index is empty.
 func (d *indexDeleter) empty() bool {
 	return d.bw.empty() && len(d.descList) == 1
 }

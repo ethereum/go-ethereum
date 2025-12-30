@@ -121,11 +121,11 @@ func deleteIndexMetadata(db ethdb.KeyValueWriter, typ historyType) {
 // of historical data (e.g., state or trie node changes) atomically.
 type batchIndexer struct {
 	index   map[stateIdent][]uint64 // List of history IDs for tracked state entry
-	pending int                     // Number of entries processed in the current batch
-	delete  bool                    // Operation mode: true for unindex, false for index
-	lastID  uint64                  // ID of the most recently processed history
-	typ     historyType             // Type of history being processed (e.g., state or trienode)
-	db      ethdb.KeyValueStore     // Key-value database used to store or delete index data
+	pending int                     // Number of entries processed in the current batch.
+	delete  bool                    // Operation mode: true for unindex, false for index.
+	lastID  uint64                  // ID of the most recently processed history.
+	typ     historyType             // Type of history being processed (e.g., state or trienode).
+	db      ethdb.KeyValueStore     // Key-value database used to store or delete index data.
 }
 
 // newBatchIndexer constructs the batch indexer with the supplied mode.
