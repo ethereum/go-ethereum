@@ -120,15 +120,19 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 		}
 	}
 	for {
-		tx, done := fetchTx()
+		next, done := fetchTx()
 		if done {
 			break
 		}
-		if _, exists := processed[tx.Hash()]; exists {
+		if _, exists := processed[next.Hash()]; exists {
 			continue
 		}
-		stateCpy := statedb.Copy() // closure
+		processed[next.Hash()] = struct{}{}
 
+		var (
+			stateCpy = statedb.Copy() // closure
+			tx       = next           // closure
+		)
 		workers.Go(func() error {
 			// If block precaching was interrupted, abort
 			if interrupt != nil && interrupt.Load() {
