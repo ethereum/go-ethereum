@@ -452,7 +452,6 @@ func (s *stateObject) commit(resolveCode bool) (*accountUpdate, *trienode.NodeSe
 				exists: true, // the code exists before the update
 			}
 		}
-
 	}
 	// Commit storage changes and the associated storage trie
 	s.commitStorage(op)
