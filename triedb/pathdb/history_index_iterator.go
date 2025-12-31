@@ -105,13 +105,16 @@ func (f extFilter) contains(bitmap []byte) (bool, error) {
 
 	switch len(bitmap) {
 	case 0:
+		// Bitmap is not available, return "false positive"
 		return true, nil
 	case bitmapBytesTwoLevels:
+		// Bitmap for 2-level trie with at most 16 elements inside
 		if n >= bitmapElementThresholdTwoLevels {
 			return false, fmt.Errorf("invalid extension filter %d for 2 bytes bitmap", id)
 		}
 		return isBitSet(bitmap, n), nil
 	case bitmapBytesThreeLevels:
+		// Bitmap for 3-level trie with at most 16+16*16 elements inside
 		if n >= bitmapElementThresholdThreeLevels {
 			return false, fmt.Errorf("invalid extension filter %d for 34 bytes bitmap", id)
 		} else if n >= bitmapElementThresholdTwoLevels {
@@ -123,12 +126,7 @@ func (f extFilter) contains(bitmap []byte) (bool, error) {
 			}
 			// Check descendants: the presence of any descendant implicitly
 			// represents a mutation of its ancestor.
-			for m := 16 + n*16; m < 32+n*16; m++ {
-				if isBitSet(bitmap, m) {
-					return true, nil
-				}
-			}
-			return false, nil
+			return isByteSet(bitmap, 2+2*n) || isByteSet(bitmap, 3+2*n), nil
 		}
 	default:
 		return false, fmt.Errorf("unsupported bitmap size %d", len(bitmap))
@@ -232,17 +230,20 @@ func (it *blockIterator) seekGT(id uint64) bool {
 		return false
 	}
 	if index == 0 {
-		item, n := binary.Uvarint(it.data[it.restarts[0]:])
+		pos := int(it.restarts[0])
+		item, n := binary.Uvarint(it.data[pos:])
 		if n <= 0 {
 			it.setErr(fmt.Errorf("failed to decode item at pos %d", it.restarts[0]))
 			return false
 		}
-		ext, shift, err := it.resolveExt(int(it.restarts[0]) + n)
+		pos = pos + n
+
+		ext, shift, err := it.resolveExt(pos)
 		if err != nil {
 			it.setErr(err)
 			return false
 		}
-		it.set(int(it.restarts[0])+n+shift, 0, item, ext)
+		it.set(pos+shift, 0, item, ext)
 		return true
 	}
 	var (
@@ -303,17 +304,20 @@ func (it *blockIterator) seekGT(id uint64) bool {
 	}
 	// The element which is the first one greater than the specified id
 	// is exactly the one located at the restart point.
-	item, n := binary.Uvarint(it.data[it.restarts[index]:])
+	pos = int(it.restarts[index])
+	item, n := binary.Uvarint(it.data[pos:])
 	if n <= 0 {
 		it.setErr(fmt.Errorf("failed to decode item at pos %d", it.restarts[index]))
 		return false
 	}
-	ext, shift, err := it.resolveExt(int(it.restarts[index]) + n)
+	pos = pos + n
+
+	ext, shift, err := it.resolveExt(pos)
 	if err != nil {
 		it.setErr(err)
 		return false
 	}
-	it.set(int(it.restarts[index])+n+shift, index, item, ext)
+	it.set(pos+shift, index, item, ext)
 	return true
 }
 
@@ -498,12 +502,11 @@ func (it *indexIterator) applyFilter(index int) (int, error) {
 		return index, nil
 	}
 	for index < len(it.descList) {
-		contain, err := it.filter.contains(it.descList[index].extBitmap)
+		found, err := it.filter.contains(it.descList[index].extBitmap)
 		if err != nil {
-			it.setErr(err)
-			break
+			return 0, err
 		}
-		if contain {
+		if found {
 			break
 		}
 		index++

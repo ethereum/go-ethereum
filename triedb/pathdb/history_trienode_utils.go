@@ -63,9 +63,6 @@ func decodeIDs(buf []byte) ([]uint16, error) {
 
 // isAncestor reports whether node x is the ancestor of node y.
 func isAncestor(x, y uint16) bool {
-	if y <= x {
-		return false
-	}
 	for y > x {
 		y = (y - 1) / 16 // parentID(y) = (y - 1) / 16
 		if y == x {
@@ -78,6 +75,11 @@ func isAncestor(x, y uint16) bool {
 // isBitSet reports whether the bit at `index` in the byte slice `b` is set.
 func isBitSet(b []byte, index int) bool {
 	return b[index/8]&(1<<(index%8)) != 0
+}
+
+// isByteSet reports whether the byte at `index` in the byte slice `b` is set.
+func isByteSet(b []byte, index int) bool {
+	return b[index] != 0
 }
 
 // setBit sets the bit at `index` in the byte slice `b` to 1.
