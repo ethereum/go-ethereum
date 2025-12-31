@@ -553,6 +553,23 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 	if api.config().LatestFork(head.Time) < forks.Osaka {
 		return nil, nil
 	}
+	return api.getBlobs(hashes, true)
+}
+
+// GetBlobsV3 returns a set of blobs from the transaction pool. Same as
+// GetBlobsV2, except will return partial responses in case there is a missing
+// blob.
+func (api *ConsensusAPI) GetBlobsV3(hashes []common.Hash) ([]*engine.BlobAndProofV2, error) {
+	head := api.eth.BlockChain().CurrentHeader()
+	if api.config().LatestFork(head.Time) < forks.Osaka {
+		return nil, nil
+	}
+	return api.getBlobs(hashes, false)
+}
+
+// getBlobs returns all available blobs. In v2, partial responses are not allowed,
+// while v3 supports partial responses.
+func (api *ConsensusAPI) getBlobs(hashes []common.Hash, v2 bool) ([]*engine.BlobAndProofV2, error) {
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
@@ -560,28 +577,30 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 	getBlobsRequestedCounter.Inc(int64(len(hashes)))
 	getBlobsAvailableCounter.Inc(int64(available))
 
-	// Optimization: check first if all blobs are available, if not, return empty response
-	if available != len(hashes) {
-		getBlobsV2RequestMiss.Inc(1)
+	// Short circuit if partial response is not allowed
+	if v2 && available != len(hashes) {
+		getBlobsRequestMiss.Inc(1)
 		return nil, nil
 	}
-
+	// Retrieve blobs from the pool. This operation is expensive and may involve
+	// heavy disk I/O.
 	blobs, _, proofs, err := api.eth.BlobTxPool().GetBlobs(hashes, types.BlobSidecarVersion1)
 	if err != nil {
 		return nil, engine.InvalidParams.With(err)
 	}
-
-	// To comply with API spec, check again that we really got all data needed
-	for _, blob := range blobs {
-		if blob == nil {
-			getBlobsV2RequestMiss.Inc(1)
-			return nil, nil
-		}
-	}
-	getBlobsV2RequestHit.Inc(1)
-
+	// Validate the blobs from the pool and assemble the response
 	res := make([]*engine.BlobAndProofV2, len(hashes))
-	for i := 0; i < len(blobs); i++ {
+	for i := range blobs {
+		// The blob has been evicted since the last AvailableBlobs call.
+		// Return null if partial response is not allowed.
+		if blobs[i] == nil {
+			if !v2 {
+				continue
+			} else {
+				getBlobsRequestMiss.Inc(1)
+				return nil, nil
+			}
+		}
 		var cellProofs []hexutil.Bytes
 		for _, proof := range proofs[i] {
 			cellProofs = append(cellProofs, proof[:])
@@ -590,6 +609,13 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 			Blob:       blobs[i][:],
 			CellProofs: cellProofs,
 		}
+	}
+	if len(res) == len(hashes) {
+		getBlobsRequestCompleteHit.Inc(1)
+	} else if len(res) > 0 {
+		getBlobsRequestPartialHit.Inc(1)
+	} else {
+		getBlobsRequestMiss.Inc(1)
 	}
 	return res, nil
 }
