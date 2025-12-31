@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/transitiontrie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
@@ -498,8 +499,8 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	}
 
 	switch s.trie.(type) {
-	case *trie.VerkleTrie:
-		// Verkle uses only one tree, and the copy has already been
+	case *bintrie.BinaryTrie:
+		// UBT uses only one tree, and the copy has already been
 		// made in mustCopyTrie.
 		obj.trie = db.trie
 	case *transitiontrie.TransitionTrie:

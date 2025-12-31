@@ -142,7 +142,7 @@ func (p *terminalPrompter) PromptPassword(prompt string) (passwd string, err err
 // PromptConfirm displays the given prompt to the user and requests a boolean
 // choice to be made, returning that choice.
 func (p *terminalPrompter) PromptConfirm(prompt string) (bool, error) {
-	input, err := p.Prompt(prompt + " [y/n] ")
+	input, err := p.PromptInput(prompt + " [y/n] ")
 	if len(input) > 0 && strings.EqualFold(input[:1], "y") {
 		return true, nil
 	}

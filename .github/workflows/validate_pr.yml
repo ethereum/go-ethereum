@@ -8,6 +8,45 @@ jobs:
   validate-pr:
     runs-on: ubuntu-latest
     steps:
+      - name: Check for Spam PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prTitle = context.payload.pull_request.title;
+            const spamRegex = /^(feat|chore|fix)(\(.*\))?\s*:/i;
+
+            if (spamRegex.test(prTitle)) {
+              // Leave a comment explaining why
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: `## PR Closed as Spam
+
+            This PR was automatically closed because the title format \`feat:\`, \`fix:\`, or \`chore:\` is commonly associated with spam contributions.
+
+            If this is a legitimate contribution, please:
+            1. Review our contribution guidelines
+            2. Use the correct PR title format: \`directory, ...: description\`
+            3. Open a new PR with the proper title format
+
+            Thank you for your understanding.`
+              });
+
+              // Close the PR
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number,
+                state: 'closed'
+              });
+
+              core.setFailed('PR closed as spam due to suspicious title format');
+              return;
+            }
+
+            console.log('✅ PR passed spam check');
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
