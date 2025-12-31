@@ -109,11 +109,16 @@ type StorageChange struct {
 	New  common.Hash // new value (zero if slot was deleted)
 }
 
-// CodeChange represents a contract code deployment or change.
-type CodeChange struct {
+type ContractCode struct {
 	Hash   common.Hash
 	Code   []byte
-	Exists bool // true if the code already deployed before
+	Exists bool // true if the code was existent
+}
+
+// CodeChange represents a change in contract code of an account.
+type CodeChange struct {
+	Prev *ContractCode // nil if no code existed before
+	New  *ContractCode
 }
 
 type TrieNodeChange struct {
