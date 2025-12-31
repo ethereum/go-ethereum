@@ -467,6 +467,7 @@ type ChainConfig struct {
 	BPO5Time      *uint64 `json:"bpo5Time,omitempty"`      // BPO5 switch time (nil = no fork, 0 = already on bpo5)
 	AmsterdamTime *uint64 `json:"amsterdamTime,omitempty"` // Amsterdam switch time (nil = no fork, 0 = already on amsterdam)
 	VerkleTime    *uint64 `json:"verkleTime,omitempty"`    // Verkle switch time (nil = no fork, 0 = already on verkle)
+	EIP8032Time   *uint64 `json:"eip8032Time,omitempty"`   // EIP-8032 switch time (nil = no fork, 0 = already on eip8032)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -883,6 +884,11 @@ func (c *ChainConfig) IsVerkle(num *big.Int, time uint64) bool {
 // those cases.
 func (c *ChainConfig) IsVerkleGenesis() bool {
 	return c.EnableVerkleAtGenesis
+}
+
+// IsEIP8032 returns whether time is either equal to the EIP-8032 fork time or greater.
+func (c *ChainConfig) IsEIP8032(num *big.Int, time uint64) bool {
+	return c.IsLondon(num) && isTimestampForked(c.EIP8032Time, time)
 }
 
 // IsEIP4762 returns whether eip 4762 has been activated at given block.
@@ -1381,7 +1387,7 @@ type Rules struct {
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
 	IsMerge, IsShanghai, IsCancun, IsPrague, IsOsaka        bool
-	IsAmsterdam, IsVerkle                                   bool
+	IsAmsterdam, IsVerkle, IsEIP8032                        bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -1414,5 +1420,6 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsAmsterdam:      isMerge && c.IsAmsterdam(num, timestamp),
 		IsVerkle:         isVerkle,
 		IsEIP4762:        isVerkle,
+		IsEIP8032:        isMerge && c.IsEIP8032(num, timestamp),
 	}
 }
