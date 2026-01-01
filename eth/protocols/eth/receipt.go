@@ -120,7 +120,7 @@ func (r *Receipt) decodeInnerList(s *rlp.Stream, readTxType, readBloom bool) err
 	return s.ListEnd()
 }
 
-// encodeForStorage produces the the storage encoding, i.e. the result matches
+// encodeForStorage produces the storage encoding, i.e. the result matches
 // the RLP encoding of types.ReceiptForStorage.
 func (r *Receipt) encodeForStorage(w *rlp.EncoderBuffer) {
 	list := w.List()

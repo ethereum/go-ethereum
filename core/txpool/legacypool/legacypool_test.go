@@ -2435,7 +2435,7 @@ func TestSetCodeTransactions(t *testing.T) {
 			},
 		},
 		{
-			// This test is analogous to the previous one, but the the replaced
+			// This test is analogous to the previous one, but the replaced
 			// transaction is self-sponsored.
 			name:    "allow-tx-from-replaced-self-sponsor-authority",
 			pending: 3,
