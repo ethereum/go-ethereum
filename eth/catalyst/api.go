@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
@@ -787,7 +788,9 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		return engine.PayloadStatusV1{Status: engine.ACCEPTED}, nil
 	}
 	log.Trace("Inserting block without sethead", "hash", block.Hash(), "number", block.Number())
+	start := time.Now()
 	proofs, err := api.eth.BlockChain().InsertBlockWithoutSetHead(block, witness)
+	processingTime := time.Since(start)
 	if err != nil {
 		log.Warn("NewPayload: inserting block failed", "error", err)
 
@@ -799,6 +802,13 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		return api.invalid(err, parent.Header()), nil
 	}
 	hash := block.Hash()
+
+	// Emit NewPayloadEvent for ethstats reporting
+	api.eth.BlockChain().SendNewPayloadEvent(core.NewPayloadEvent{
+		Hash:           hash,
+		Number:         block.NumberU64(),
+		ProcessingTime: processingTime,
+	})
 
 	// If witness collection was requested, inject that into the result too
 	var ow *hexutil.Bytes
