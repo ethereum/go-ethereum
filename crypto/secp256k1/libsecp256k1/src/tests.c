@@ -3889,7 +3889,7 @@ static void test_ge(void) {
     free(gej);
 }
 
-static void test_intialized_inf(void) {
+static void test_initialized_inf(void) {
     secp256k1_ge p;
     secp256k1_gej pj, npj, infj1, infj2, infj3;
     secp256k1_fe zinv;
@@ -4015,7 +4015,7 @@ static void run_ge(void) {
         test_ge();
     }
     test_add_neg_y_diff_x();
-    test_intialized_inf();
+    test_initialized_inf();
     test_ge_bytes();
 }
 
