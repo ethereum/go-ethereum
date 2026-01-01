@@ -60,12 +60,10 @@ func SetupOTEL(ctx *cli.Context) (*otelService, error) {
 	if !ctx.Bool(OTELEnabledFlag.Name) {
 		return nil, nil
 	}
-
 	endpoint := ctx.String(OTELEndpointFlag.Name)
 	if endpoint == "" {
 		return nil, nil
 	}
-
 	serviceName := ctx.String(OTELServiceNameFlag.Name)
 	setupCtx := ctx.Context
 	if setupCtx == nil {
@@ -82,10 +80,13 @@ func SetupOTEL(ctx *cli.Context) (*otelService, error) {
 	switch u.Scheme {
 	case "http", "https":
 		opts := []otlptracehttp.Option{
-			otlptracehttp.WithEndpoint(endpoint),
+			otlptracehttp.WithEndpoint(u.Host),
 		}
 		if u.Scheme == "http" {
 			opts = append(opts, otlptracehttp.WithInsecure())
+		}
+		if u.Path != "" && u.Path != "/" {
+			opts = append(opts, otlptracehttp.WithURLPath(u.Path))
 		}
 		exporter, err = otlptracehttp.New(setupCtx, opts...)
 	default:
