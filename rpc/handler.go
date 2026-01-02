@@ -29,6 +29,11 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // handler handles JSON-RPC messages. There is one handler per connection. Note that
@@ -65,6 +70,7 @@ type handler struct {
 	allowSubscribe       bool
 	batchRequestLimit    int
 	batchResponseMaxSize int
+	tracerProvider       trace.TracerProvider
 
 	subLock    sync.Mutex
 	serverSubs map[ID]*Subscription
@@ -73,9 +79,10 @@ type handler struct {
 type callProc struct {
 	ctx       context.Context
 	notifiers []*Notifier
+	isBatch   bool
 }
 
-func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry, batchRequestLimit, batchResponseMaxSize int) *handler {
+func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry, batchRequestLimit, batchResponseMaxSize int, tracerProvider trace.TracerProvider) *handler {
 	rootCtx, cancelRoot := context.WithCancel(connCtx)
 	h := &handler{
 		reg:                  reg,
@@ -90,6 +97,7 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 		log:                  log.Root(),
 		batchRequestLimit:    batchRequestLimit,
 		batchResponseMaxSize: batchResponseMaxSize,
+		tracerProvider:       tracerProvider,
 	}
 	if conn.remoteAddr() != "" {
 		h.log = h.log.New("conn", conn.remoteAddr())
@@ -197,6 +205,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 
 	// Process calls on a goroutine because they may block indefinitely:
 	h.startCallProc(func(cp *callProc) {
+		cp.isBatch = true
 		var (
 			timer      *time.Timer
 			cancel     context.CancelFunc
@@ -497,39 +506,58 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 	if msg.isSubscribe() {
 		return h.handleSubscribe(cp, msg)
 	}
-	var callb *callback
 	if msg.isUnsubscribe() {
-		callb = h.unsubscribeCb
-	} else {
-		// Check method name length
-		if len(msg.Method) > maxMethodNameLength {
-			return msg.errorResponse(&invalidRequestError{fmt.Sprintf("method name too long: %d > %d", len(msg.Method), maxMethodNameLength)})
+		args, err := parsePositionalArguments(msg.Params, h.unsubscribeCb.argTypes)
+		if err != nil {
+			return msg.errorResponse(&invalidParamsError{err.Error()})
 		}
-		callb = h.reg.callback(msg.Method)
+		return h.runMethod(cp.ctx, msg, h.unsubscribeCb, args, cp.isBatch)
 	}
+
+	// Check method name length
+	if len(msg.Method) > maxMethodNameLength {
+		return msg.errorResponse(&invalidRequestError{fmt.Sprintf("method name too long: %d > %d", len(msg.Method), maxMethodNameLength)})
+	}
+	callb := h.reg.callback(msg.Method)
 	if callb == nil {
 		return msg.errorResponse(&methodNotFoundError{method: msg.Method})
 	}
 
+	// Start root span for the request.
+	ctx, rootSpan := h.startSpan(cp.ctx, msg, "rpc.handleCall", cp.isBatch)
+	defer rootSpan.End()
+
+	// Start tracing span before parsing arguments.
+	_, pspan := h.startSpan(ctx, msg, "rpc.parsePositionalArguments", cp.isBatch)
 	args, err := parsePositionalArguments(msg.Params, callb.argTypes)
 	if err != nil {
+		pspan.RecordError(err)
+		pspan.SetStatus(codes.Error, err.Error())
+		rootSpan.SetStatus(codes.Error, err.Error())
+		pspan.End()
 		return msg.errorResponse(&invalidParamsError{err.Error()})
 	}
+	pspan.End()
 	start := time.Now()
-	answer := h.runMethod(cp.ctx, msg, callb, args)
+
+	// Start tracing span before running the method.
+	rctx, rspan := h.startSpan(ctx, msg, "rpc.runMethod", cp.isBatch)
+	answer := h.runMethod(rctx, msg, callb, args, cp.isBatch)
+	if answer.Error != nil {
+		err := errors.New(answer.Error.Message)
+		rootSpan.SetStatus(codes.Error, err.Error())
+	}
+	rspan.End()
 
 	// Collect the statistics for RPC calls if metrics is enabled.
-	// We only care about pure rpc call. Filter out subscription.
-	if callb != h.unsubscribeCb {
-		rpcRequestGauge.Inc(1)
-		if answer.Error != nil {
-			failedRequestGauge.Inc(1)
-		} else {
-			successfulRequestGauge.Inc(1)
-		}
-		rpcServingTimer.UpdateSince(start)
-		updateServeTimeHistogram(msg.Method, answer.Error == nil, time.Since(start))
+	rpcRequestGauge.Inc(1)
+	if answer.Error != nil {
+		failedRequestGauge.Inc(1)
+	} else {
+		successfulRequestGauge.Inc(1)
 	}
+	rpcServingTimer.UpdateSince(start)
+	updateServeTimeHistogram(msg.Method, answer.Error == nil, time.Since(start))
 
 	return answer
 }
@@ -568,15 +596,65 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 	n := &Notifier{h: h, namespace: namespace}
 	cp.notifiers = append(cp.notifiers, n)
 	ctx := context.WithValue(cp.ctx, notifierKey{}, n)
+	return h.runMethod(ctx, msg, callb, args, cp.isBatch)
+}
 
-	return h.runMethod(ctx, msg, callb, args)
+// startSpan starts a tracing span for an RPC call.
+func (h *handler) startSpan(ctx context.Context, msg *jsonrpcMessage, spanName string, isBatch bool) (context.Context, trace.Span) {
+	ctx, span := h.tracer().Start(ctx, spanName)
+
+	// Fast path: noop provider or span not sampled
+	if !span.IsRecording() {
+		return ctx, span
+	}
+
+	// Set span attributes.
+	span.SetAttributes(
+		semconv.RPCSystemKey.String("jsonrpc"),
+		semconv.RPCMethodKey.String(msg.Method),
+		attribute.Bool("rpc.batch", isBatch),
+	)
+	id := strings.TrimSpace(string(msg.ID))
+	if id != "" && id != "null" {
+		span.SetAttributes(attribute.String("rpc.id", id))
+	}
+	return ctx, span
+}
+
+// tracer returns the OpenTelemetry Tracer for RPC call tracing.
+func (h *handler) tracer() trace.Tracer {
+	if h.tracerProvider == nil {
+		// Default to global TracerProvider if none is set.
+		// Note: If no TracerProvider is set, the default is a no-op TracerProvider.
+		// See https://pkg.go.dev/go.opentelemetry.io/otel#GetTracerProvider
+		return otel.Tracer("")
+	}
+	return h.tracerProvider.Tracer("")
 }
 
 // runMethod runs the Go callback for an RPC method.
-func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *callback, args []reflect.Value) *jsonrpcMessage {
+func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *callback, args []reflect.Value, isBatch bool) *jsonrpcMessage {
+	parentSpan := trace.SpanFromContext(ctx)
 	result, err := callb.call(ctx, msg.Method, args)
 	if err != nil {
+		parentSpan.SetStatus(codes.Error, err.Error())
 		return msg.errorResponse(err)
+	}
+
+	// If parent span is recording, start a span for the response.
+	// Note: This prevents msg.response spans from being created when
+	// the parent span is not recording (e.g. subscription tracing disabled).
+	if parentSpan.IsRecording() {
+		_, span := h.startSpan(ctx, msg, "rpc.msg.response", isBatch)
+		defer span.End()
+		response := msg.response(result)
+		if response.Error != nil {
+			err := errors.New(response.Error.Message)
+			span.RecordError(errors.New(response.Error.Message))
+			span.SetStatus(codes.Error, err.Error())
+			parentSpan.SetStatus(codes.Error, err.Error())
+		}
+		return response
 	}
 	return msg.response(result)
 }
