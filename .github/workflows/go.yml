@@ -22,14 +22,26 @@ jobs:
 
   go_test_short:
     env:
+      # See build/checksums.txt for the latest version and checksum
+      EXECUTION_SPEC_TESTS_VERSION: v2.1.0
+      EXECUTION_SPEC_TESTS_FILE: fixtures_develop.tar.gz
       FLAKY_REGEX: "ava-labs/libevm/(triedb/pathdb|eth|eth/tracers/js|eth/tracers/logger|eth/tracers/internal/tracetest|accounts/abi/bind|accounts/keystore|eth/downloader|miner|ethclient|ethclient/gethclient|eth/catalyst)$"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version-file: "go.mod"
+      - name: Download spec tests
+        run: curl -o "${EXECUTION_SPEC_TESTS_FILE}" -L "https://github.com/ethereum/execution-spec-tests/releases/download/${EXECUTION_SPEC_TESTS_VERSION}/${EXECUTION_SPEC_TESTS_FILE}"
+      - name: Verify spec tests
+        run: |
+            sha256sum --ignore-missing --check build/checksums.txt | grep "${EXECUTION_SPEC_TESTS_FILE}: OK"
+      - name: Extract spec tests
+        run: mkdir -p tests/spec-tests && tar -xz -f "${EXECUTION_SPEC_TESTS_FILE}" -C tests/spec-tests
       - name: Run flaky tests sequentially
         run:
           | # Upstream flakes are race conditions exacerbated by concurrent tests
