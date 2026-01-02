@@ -46,14 +46,69 @@ func TestCalculateETA(t *testing.T) {
 			name: "@Jolly23 's case",
 			args: args{done: 16858580, left: 41802252, elapsed: 66179848 * time.Millisecond},
 			want: 164098440 * time.Millisecond,
-			// wrong msg: msg="Indexing state history" processed=16858580 left=41802252 elapsed=18h22m59.848s eta=11h36m42.252s
-			// should be around 45.58 hours
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := CalculateETA(tt.args.done, tt.args.left, tt.args.elapsed); got != tt.want {
-				t.Errorf("CalculateETA() = %v ms, want %v ms", got.Milliseconds(), tt.want)
+			got := CalculateETA(tt.args.done, tt.args.left, tt.args.elapsed)
+			// Allow 1ms tolerance for rounding differences
+			diff := got - tt.want
+			if diff < 0 {
+				diff = -diff
+			}
+			if diff > time.Millisecond {
+				t.Errorf("CalculateETA() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestCalculateETA_SubMillisecond verifies that CalculateETA correctly handles
+// operations completing in less than 1ms without returning zero or panicking.
+func TestCalculateETA_SubMillisecond(t *testing.T) {
+	// Simulate processing 1000 items in 500 microseconds
+	done := uint64(1000)
+	left := uint64(1000)
+	elapsed := 500 * time.Microsecond
+	
+	eta := CalculateETA(done, left, elapsed)
+	
+	if eta == 0 {
+		t.Fatalf("CalculateETA returned 0 for sub-millisecond elapsed time, expected non-zero ETA")
+	}
+	
+	// At the same rate, processing another 1000 items should take ~500µs
+	expectedETA := 500 * time.Microsecond
+	tolerance := 100 * time.Microsecond
+	
+	if eta < expectedETA-tolerance || eta > expectedETA+tolerance {
+		t.Errorf("CalculateETA = %v, expected approximately %v (within %v)", eta, expectedETA, tolerance)
+	}
+}
+
+// TestCalculateETA_EdgeCases verifies correct behavior for boundary conditions
+func TestCalculateETA_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		done     uint64
+		left     uint64
+		elapsed  time.Duration
+		expected time.Duration
+	}{
+		{"zero done", 0, 100, time.Second, 0},
+		{"zero elapsed", 100, 100, 0, 0},
+		{"zero left", 100, 0, time.Second, 0},
+		{"instant completion", 1000, 1000, 1 * time.Nanosecond, time.Nanosecond},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := CalculateETA(tt.done, tt.left, tt.elapsed)
+			if tt.expected == 0 && result != 0 {
+				t.Errorf("expected 0, got %v", result)
+			}
+			if tt.expected != 0 && result == 0 {
+				t.Errorf("expected non-zero, got 0")
 			}
 		})
 	}
