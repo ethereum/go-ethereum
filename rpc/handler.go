@@ -503,25 +503,29 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 
 // handleCall processes method calls.
 func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage {
-	// Start root span for the request.
-	ctx, rootSpan := h.startSpan(cp.ctx, msg, "rpc.handleCall", cp.isBatch)
-	defer rootSpan.End()
 	if msg.isSubscribe() {
 		return h.handleSubscribe(cp, msg)
 	}
-	var callb *callback
 	if msg.isUnsubscribe() {
-		callb = h.unsubscribeCb
-	} else {
-		// Check method name length
-		if len(msg.Method) > maxMethodNameLength {
-			return msg.errorResponse(&invalidRequestError{fmt.Sprintf("method name too long: %d > %d", len(msg.Method), maxMethodNameLength)})
+		args, err := parsePositionalArguments(msg.Params, h.unsubscribeCb.argTypes)
+		if err != nil {
+			return msg.errorResponse(&invalidParamsError{err.Error()})
 		}
-		callb = h.reg.callback(msg.Method)
+		return h.runMethod(cp.ctx, msg, h.unsubscribeCb, args, cp.isBatch)
 	}
+
+	// Check method name length
+	if len(msg.Method) > maxMethodNameLength {
+		return msg.errorResponse(&invalidRequestError{fmt.Sprintf("method name too long: %d > %d", len(msg.Method), maxMethodNameLength)})
+	}
+	callb := h.reg.callback(msg.Method)
 	if callb == nil {
 		return msg.errorResponse(&methodNotFoundError{method: msg.Method})
 	}
+
+	// Start root span for the request.
+	ctx, rootSpan := h.startSpan(cp.ctx, msg, "rpc.handleCall", cp.isBatch)
+	defer rootSpan.End()
 
 	// Start tracing span before parsing arguments.
 	_, pspan := h.startSpan(ctx, msg, "rpc.parsePositionalArguments", cp.isBatch)
@@ -530,6 +534,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 		pspan.RecordError(err)
 		pspan.SetStatus(codes.Error, err.Error())
 		rootSpan.SetStatus(codes.Error, err.Error())
+		pspan.End()
 		return msg.errorResponse(&invalidParamsError{err.Error()})
 	}
 	pspan.End()
@@ -545,17 +550,14 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 	rspan.End()
 
 	// Collect the statistics for RPC calls if metrics is enabled.
-	// We only care about pure rpc call. Filter out subscription.
-	if callb != h.unsubscribeCb {
-		rpcRequestGauge.Inc(1)
-		if answer.Error != nil {
-			failedRequestGauge.Inc(1)
-		} else {
-			successfulRequestGauge.Inc(1)
-		}
-		rpcServingTimer.UpdateSince(start)
-		updateServeTimeHistogram(msg.Method, answer.Error == nil, time.Since(start))
+	rpcRequestGauge.Inc(1)
+	if answer.Error != nil {
+		failedRequestGauge.Inc(1)
+	} else {
+		successfulRequestGauge.Inc(1)
 	}
+	rpcServingTimer.UpdateSince(start)
+	updateServeTimeHistogram(msg.Method, answer.Error == nil, time.Since(start))
 
 	return answer
 }
@@ -632,22 +634,29 @@ func (h *handler) tracer() trace.Tracer {
 
 // runMethod runs the Go callback for an RPC method.
 func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *callback, args []reflect.Value, isBatch bool) *jsonrpcMessage {
-	result, err := callb.call(ctx, msg.Method, args)
 	parentSpan := trace.SpanFromContext(ctx)
+	result, err := callb.call(ctx, msg.Method, args)
 	if err != nil {
 		parentSpan.SetStatus(codes.Error, err.Error())
 		return msg.errorResponse(err)
 	}
-	_, span := h.startSpan(ctx, msg, "rpc.response", isBatch)
-	response := msg.response(result)
-	if response.Error != nil {
-		err := errors.New(response.Error.Message)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		parentSpan.SetStatus(codes.Error, err.Error())
+
+	// If parent span is recording, start a span for the response.
+	// Note: This prevents msg.response spans from being created when
+	// the parent span is not recording (e.g. subscription tracing disabled).
+	if parentSpan.IsRecording() {
+		_, span := h.startSpan(ctx, msg, "rpc.msg.response", isBatch)
+		defer span.End()
+		response := msg.response(result)
+		if response.Error != nil {
+			err := errors.New(response.Error.Message)
+			span.RecordError(errors.New(response.Error.Message))
+			span.SetStatus(codes.Error, err.Error())
+			parentSpan.SetStatus(codes.Error, err.Error())
+		}
+		return response
 	}
-	span.End()
-	return response
+	return msg.response(result)
 }
 
 // unsubscribe is the callback function for all *_unsubscribe calls.

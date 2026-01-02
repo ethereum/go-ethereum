@@ -63,10 +63,8 @@ func newTracingServer(t *testing.T) (*Server, *sdktrace.TracerProvider, *tracete
 func TestTracingHTTP(t *testing.T) {
 	t.Parallel()
 	server, tracer, exporter := newTracingServer(t)
-
 	httpsrv := httptest.NewServer(server)
 	t.Cleanup(httpsrv.Close)
-
 	client, err := DialHTTP(httpsrv.URL)
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
@@ -114,10 +112,8 @@ func TestTracingHTTP(t *testing.T) {
 func TestTracingBatchHTTP(t *testing.T) {
 	t.Parallel()
 	server, tracer, exporter := newTracingServer(t)
-
 	httpsrv := httptest.NewServer(server)
 	t.Cleanup(httpsrv.Close)
-
 	client, err := DialHTTP(httpsrv.URL)
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
@@ -162,5 +158,32 @@ func TestTracingBatchHTTP(t *testing.T) {
 	}
 	if found != len(batch) {
 		t.Fatalf("expected %d matching batch spans, got %d", len(batch), found)
+	}
+}
+
+// TestTracingSubscribeUnsubscribe verifies that subscribe and unsubscribe calls
+// do not emit any spans.
+func TestTracingSubscribeUnsubscribe(t *testing.T) {
+	t.Parallel()
+	server, tracer, exporter := newTracingServer(t)
+	client := DialInProc(server)
+	t.Cleanup(client.Close)
+
+	// Subscribe to notifications.
+	sub, err := client.Subscribe(context.Background(), "nftest", make(chan int), "someSubscription", 1, 1)
+	if err != nil {
+		t.Fatalf("subscribe failed: %v", err)
+	}
+
+	// Unsubscribe.
+	sub.Unsubscribe()
+
+	// Flush and check that no spans were emitted.
+	if err := tracer.ForceFlush(context.Background()); err != nil {
+		t.Fatalf("failed to flush: %v", err)
+	}
+	spans := exporter.GetSpans()
+	if len(spans) != 0 {
+		t.Errorf("expected no spans for subscribe/unsubscribe, got %d", len(spans))
 	}
 }
