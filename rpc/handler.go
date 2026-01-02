@@ -504,8 +504,8 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 // handleCall processes method calls.
 func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage {
 	// Start root span for the request.
-	ctx, cspan := h.startSpan(cp.ctx, msg, "rpc.handleCall", cp.isBatch)
-	defer cspan.End()
+	ctx, rootSpan := h.startSpan(cp.ctx, msg, "rpc.handleCall", cp.isBatch)
+	defer rootSpan.End()
 	if msg.isSubscribe() {
 		return h.handleSubscribe(cp, msg)
 	}
@@ -529,6 +529,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 	if err != nil {
 		pspan.RecordError(err)
 		pspan.SetStatus(codes.Error, err.Error())
+		rootSpan.SetStatus(codes.Error, err.Error())
 		return msg.errorResponse(&invalidParamsError{err.Error()})
 	}
 	pspan.End()
@@ -536,11 +537,10 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 
 	// Start tracing span before running the method.
 	rctx, rspan := h.startSpan(ctx, msg, "rpc.runMethod", cp.isBatch)
-	answer := h.runMethod(rctx, msg, callb, args)
+	answer := h.runMethod(rctx, msg, callb, args, cp.isBatch)
 	if answer.Error != nil {
 		err := errors.New(answer.Error.Message)
-		rspan.RecordError(err)
-		rspan.SetStatus(codes.Error, err.Error())
+		rootSpan.SetStatus(codes.Error, err.Error())
 	}
 	rspan.End()
 
@@ -594,7 +594,7 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 	n := &Notifier{h: h, namespace: namespace}
 	cp.notifiers = append(cp.notifiers, n)
 	ctx := context.WithValue(cp.ctx, notifierKey{}, n)
-	return h.runMethod(ctx, msg, callb, args)
+	return h.runMethod(ctx, msg, callb, args, cp.isBatch)
 }
 
 // startSpan starts a tracing span for an RPC call.
@@ -631,12 +631,23 @@ func (h *handler) tracer() trace.Tracer {
 }
 
 // runMethod runs the Go callback for an RPC method.
-func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *callback, args []reflect.Value) *jsonrpcMessage {
+func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *callback, args []reflect.Value, isBatch bool) *jsonrpcMessage {
 	result, err := callb.call(ctx, msg.Method, args)
+	parentSpan := trace.SpanFromContext(ctx)
 	if err != nil {
+		parentSpan.SetStatus(codes.Error, err.Error())
 		return msg.errorResponse(err)
 	}
-	return msg.response(result)
+	_, span := h.startSpan(ctx, msg, "rpc.response", isBatch)
+	response := msg.response(result)
+	if response.Error != nil {
+		err := errors.New(response.Error.Message)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		parentSpan.SetStatus(codes.Error, err.Error())
+	}
+	span.End()
+	return response
 }
 
 // unsubscribe is the callback function for all *_unsubscribe calls.
