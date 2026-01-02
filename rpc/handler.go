@@ -503,6 +503,9 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 
 // handleCall processes method calls.
 func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage {
+	// Start root span for the request.
+	ctx, cspan := h.startSpan(cp.ctx, msg, "rpc.handleCall", cp.isBatch)
+	defer cspan.End()
 	if msg.isSubscribe() {
 		return h.handleSubscribe(cp, msg)
 	}
@@ -520,24 +523,26 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 		return msg.errorResponse(&methodNotFoundError{method: msg.Method})
 	}
 
+	// Start tracing span before parsing arguments.
+	_, pspan := h.startSpan(ctx, msg, "rpc.parsePositionalArguments", cp.isBatch)
 	args, err := parsePositionalArguments(msg.Params, callb.argTypes)
 	if err != nil {
+		pspan.RecordError(err)
+		pspan.SetStatus(codes.Error, err.Error())
 		return msg.errorResponse(&invalidParamsError{err.Error()})
 	}
-
-	// Start tracing span before invoking the method.
-	ctx, span := h.startSpan(cp.ctx, msg, cp.isBatch)
-	defer span.End()
-
+	pspan.End()
 	start := time.Now()
-	answer := h.runMethod(ctx, msg, callb, args)
 
-	// Record error on span if method failed.
+	// Start tracing span before running the method.
+	rctx, rspan := h.startSpan(ctx, msg, "rpc.runMethod", cp.isBatch)
+	answer := h.runMethod(rctx, msg, callb, args)
 	if answer.Error != nil {
 		err := errors.New(answer.Error.Message)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		rspan.RecordError(err)
+		rspan.SetStatus(codes.Error, err.Error())
 	}
+	rspan.End()
 
 	// Collect the statistics for RPC calls if metrics is enabled.
 	// We only care about pure rpc call. Filter out subscription.
@@ -585,30 +590,16 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 	}
 	args = args[1:]
 
-	// Start tracing span before invoking the subscription method.
-	ctx, span := h.startSpan(cp.ctx, msg, cp.isBatch)
-	defer span.End()
-
 	// Install notifier in context so the subscription handler can find it.
 	n := &Notifier{h: h, namespace: namespace}
 	cp.notifiers = append(cp.notifiers, n)
-	ctx = context.WithValue(ctx, notifierKey{}, n)
-
-	answer := h.runMethod(ctx, msg, callb, args)
-
-	// Record error on span if method failed.
-	if answer.Error != nil {
-		err := errors.New(answer.Error.Message)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-	}
-
-	return answer
+	ctx := context.WithValue(cp.ctx, notifierKey{}, n)
+	return h.runMethod(ctx, msg, callb, args)
 }
 
 // startSpan starts a tracing span for an RPC call.
-func (h *handler) startSpan(ctx context.Context, msg *jsonrpcMessage, isBatch bool) (context.Context, trace.Span) {
-	ctx, span := h.tracer().Start(ctx, "rpc.call")
+func (h *handler) startSpan(ctx context.Context, msg *jsonrpcMessage, spanName string, isBatch bool) (context.Context, trace.Span) {
+	ctx, span := h.tracer().Start(ctx, spanName)
 
 	// Fast path: noop provider or span not sampled
 	if !span.IsRecording() {

@@ -89,13 +89,13 @@ func TestTracingHTTP(t *testing.T) {
 
 	var rpcSpan *tracetest.SpanStub
 	for i := range spans {
-		if spans[i].Name == "rpc.call" {
+		if spans[i].Name == "rpc.handleCall" {
 			rpcSpan = &spans[i]
 			break
 		}
 	}
 	if rpcSpan == nil {
-		t.Fatalf("rpc.call span not found.")
+		t.Fatalf("rpc.handleCall span not found.")
 	}
 
 	attrs := attributeMap(rpcSpan.Attributes)
@@ -140,7 +140,7 @@ func TestTracingBatchHTTP(t *testing.T) {
 		t.Fatalf("batch RPC call failed: %v", err)
 	}
 
-	// Flush and verify we emitted the rpc.call spans with batch=true.
+	// Flush and verify we emitted the rpc.handleCall spans with batch=true.
 	if err := tracer.ForceFlush(context.Background()); err != nil {
 		t.Fatalf("failed to flush: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestTracingBatchHTTP(t *testing.T) {
 
 	var found int
 	for i := range spans {
-		if spans[i].Name == "rpc.call" {
+		if spans[i].Name == "rpc.handleCall" {
 			attrs := attributeMap(spans[i].Attributes)
 			if attrs["rpc.system"] == "jsonrpc" &&
 				attrs["rpc.method"] == "test_echo" &&
