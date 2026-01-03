@@ -64,6 +64,8 @@ type FilterAPI struct {
 	filtersMu sync.Mutex
 	filters   map[rpc.ID]*filter
 	timeout   time.Duration
+
+	quit chan struct{}
 }
 
 // NewFilterAPI returns a new FilterAPI instance.
@@ -73,6 +75,7 @@ func NewFilterAPI(system *FilterSystem, lightMode bool) *FilterAPI {
 		events:  NewEventSystem(system, lightMode),
 		filters: make(map[rpc.ID]*filter),
 		timeout: system.cfg.Timeout,
+		quit:    make(chan struct{}),
 	}
 	go api.timeoutLoop(system.cfg.Timeout)
 
@@ -86,7 +89,11 @@ func (api *FilterAPI) timeoutLoop(timeout time.Duration) {
 	ticker := time.NewTicker(timeout)
 	defer ticker.Stop()
 	for {
-		<-ticker.C
+		select {
+		case <-ticker.C:
+		case <-api.quit:
+			return
+		}
 		api.filtersMu.Lock()
 		for id, f := range api.filters {
 			select {
