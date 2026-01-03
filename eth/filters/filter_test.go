@@ -357,7 +357,12 @@ func testFilters(t *testing.T, history uint64, noHistory bool) {
 			want: `[{"address":"0xff00000000000000000000000000000000000000","topics":["0x0000000000000000000000000000000000000000000000000000746f70696333"],"data":"0x","blockNumber":"0x3e7","transactionHash":"0x53e3675800c6908424b61b35a44e51ca4c73ca603e58a65b32c67968b4f42200","transactionIndex":"0x0","blockHash":"0x2e4620a2b426b0612ec6cad9603f466723edaed87f98c9137405dd4f7a2409ff","blockTimestamp":"0x2706","logIndex":"0x0","removed":false}]`,
 		},
 		{
-			f: sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.FinalizedBlockNumber), nil, nil),
+			f:   sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.FinalizedBlockNumber), nil, nil),
+			err: "invalid block range params",
+		},
+		{
+			f:   sys.NewRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.EarliestBlockNumber), nil, nil),
+			err: "invalid block range params",
 		},
 		{
 			f:   sys.NewRangeFilter(int64(rpc.SafeBlockNumber), int64(rpc.LatestBlockNumber), nil, nil),
