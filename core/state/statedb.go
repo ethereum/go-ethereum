@@ -163,7 +163,8 @@ type StateDB struct {
 	CodeBytesRead  int64        // Total bytes of contract code read during the state transition
 
 	// Unique contracts executed tracking (set of code hashes executed during the state transition)
-	executedCodes map[common.Hash]struct{}
+	executedCodes       map[common.Hash]struct{}
+	systemExecutedCodes map[common.Hash]struct{} // Subset of executedCodes that are system calls
 }
 
 // New creates a new state from a given trie.
@@ -191,6 +192,7 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
 		executedCodes:        make(map[common.Hash]struct{}),
+		systemExecutedCodes:  make(map[common.Hash]struct{}),
 	}
 	if db.TrieDB().IsVerkle() {
 		sdb.accessEvents = NewAccessEvents(db.PointCache())
@@ -386,7 +388,8 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 
 // MarkCodeExecuted records that a contract's code was executed.
 // This is used for metrics tracking to count unique contracts executed.
-func (s *StateDB) MarkCodeExecuted(codeHash common.Hash) {
+// The isSystem parameter indicates if this is a system call (e.g., EIP-4788 beacon root).
+func (s *StateDB) MarkCodeExecuted(codeHash common.Hash, isSystem bool) {
 	if codeHash == types.EmptyCodeHash || codeHash == (common.Hash{}) {
 		return
 	}
@@ -394,11 +397,20 @@ func (s *StateDB) MarkCodeExecuted(codeHash common.Hash) {
 		return // Skip tracking for state copies (e.g., prefetcher)
 	}
 	s.executedCodes[codeHash] = struct{}{}
+	if isSystem {
+		s.systemExecutedCodes[codeHash] = struct{}{}
+	}
 }
 
 // UniqueCodeExecuted returns the number of unique contract codes executed.
 func (s *StateDB) UniqueCodeExecuted() int {
 	return len(s.executedCodes)
+}
+
+// SystemCodeExecuted returns the number of unique system contract codes executed
+// (e.g., EIP-4788 beacon root, EIP-2935 history storage, etc.).
+func (s *StateDB) SystemCodeExecuted() int {
+	return len(s.systemExecutedCodes)
 }
 
 // UniqueAccountsAccessed returns the number of unique accounts accessed during the state transition.

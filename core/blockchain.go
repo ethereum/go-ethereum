@@ -2192,6 +2192,7 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	stats.UniqueAccountsAccessed = statedb.UniqueAccountsAccessed()
 	stats.UniqueStorageAccessed = statedb.UniqueStorageAccessed()
 	stats.UniqueCodeExecuted = statedb.UniqueCodeExecuted()
+	stats.SystemCodeExecuted = statedb.SystemCodeExecuted()
 
 	stats.Execution = ptime - (statedb.AccountReads + statedb.StorageReads + statedb.CodeReads)          // The time spent on EVM processing
 	stats.Validation = vtime - (statedb.AccountHashes + statedb.AccountUpdates + statedb.StorageUpdates) // The time spent on block validation

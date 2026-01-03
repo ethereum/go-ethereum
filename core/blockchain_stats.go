@@ -52,6 +52,7 @@ type ExecuteStats struct {
 	UniqueAccountsAccessed int // Number of unique accounts accessed
 	UniqueStorageAccessed  int // Number of unique storage slots accessed
 	UniqueCodeExecuted     int // Number of unique contracts executed
+	SystemCodeExecuted     int // Number of unique system contracts executed (subset of UniqueCodeExecuted)
 
 	Execution       time.Duration // Time spent on the EVM execution
 	Validation      time.Duration // Time spent on the block validation
@@ -132,7 +133,7 @@ State read: %v
 Unique state access:
     Accounts: %d
     Storage slots: %d
-    Contracts executed: %d
+    Contracts executed: %d (%d system)
 
 State hash: %v
     Account hash: %v
@@ -158,7 +159,7 @@ DB write: %v
 		// Unique state access
 		s.UniqueAccountsAccessed,
 		s.UniqueStorageAccessed,
-		s.UniqueCodeExecuted,
+		s.UniqueCodeExecuted, s.SystemCodeExecuted,
 
 		// State hash
 		common.PrettyDuration(s.AccountHashes+s.AccountUpdates+s.StorageUpdates+max(s.AccountCommits, s.StorageCommits)),

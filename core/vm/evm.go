@@ -296,7 +296,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			codeHash := evm.resolveCodeHash(addr)
 			contract.SetCallCode(codeHash, code)
 			// Track unique contract execution for metrics
-			evm.StateDB.MarkCodeExecuted(codeHash)
+			evm.StateDB.MarkCodeExecuted(codeHash, contract.IsSystemCall)
 			ret, err = evm.Run(contract, input, false)
 			gas = contract.Gas
 		}
@@ -358,7 +358,7 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 		codeHash := evm.resolveCodeHash(addr)
 		contract.SetCallCode(codeHash, evm.resolveCode(addr))
 		// Track unique contract execution for metrics
-		evm.StateDB.MarkCodeExecuted(codeHash)
+		evm.StateDB.MarkCodeExecuted(codeHash, isSystemCall(caller))
 		ret, err = evm.Run(contract, input, false)
 		gas = contract.Gas
 	}
@@ -405,7 +405,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 		codeHash := evm.resolveCodeHash(addr)
 		contract.SetCallCode(codeHash, evm.resolveCode(addr))
 		// Track unique contract execution for metrics
-		evm.StateDB.MarkCodeExecuted(codeHash)
+		evm.StateDB.MarkCodeExecuted(codeHash, isSystemCall(originCaller))
 		ret, err = evm.Run(contract, input, false)
 		gas = contract.Gas
 	}
@@ -459,7 +459,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 		codeHash := evm.resolveCodeHash(addr)
 		contract.SetCallCode(codeHash, evm.resolveCode(addr))
 		// Track unique contract execution for metrics
-		evm.StateDB.MarkCodeExecuted(codeHash)
+		evm.StateDB.MarkCodeExecuted(codeHash, isSystemCall(caller))
 
 		// When an error was returned by the EVM or when setting the creation code
 		// above we revert to the snapshot and consume any gas remaining. Additionally

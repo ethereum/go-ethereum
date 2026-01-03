@@ -298,6 +298,6 @@ func (s *hookedStateDB) Inner() *StateDB {
 }
 
 // MarkCodeExecuted records that a contract's code was executed.
-func (s *hookedStateDB) MarkCodeExecuted(codeHash common.Hash) {
-	s.inner.MarkCodeExecuted(codeHash)
+func (s *hookedStateDB) MarkCodeExecuted(codeHash common.Hash, isSystem bool) {
+	s.inner.MarkCodeExecuted(codeHash, isSystem)
 }
