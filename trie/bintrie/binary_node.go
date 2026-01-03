@@ -18,6 +18,7 @@ package bintrie
 
 import (
 	"errors"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -119,12 +120,12 @@ func DeserializeNode(serialized []byte, depth int) (BinaryNode, error) {
 				if len(serialized) < offset+HashSize {
 					return nil, invalidSerializedLength
 				}
-				values[i] = serialized[offset : offset+HashSize]
+				values[i] = slices.Clone(serialized[offset : offset+HashSize])
 				offset += HashSize
 			}
 		}
 		return &StemNode{
-			Stem:   serialized[NodeTypeBytes : NodeTypeBytes+StemSize],
+			Stem:   slices.Clone(serialized[NodeTypeBytes : NodeTypeBytes+StemSize]),
 			Values: values[:],
 			depth:  depth,
 		}, nil
