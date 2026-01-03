@@ -35,38 +35,37 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 )
 
-// otelService wraps the OpenTelemetry TracerProvider to implement node.Lifecycle.
-type otelService struct {
+// rpcTracingService wraps the OpenTelemetry TracerProvider to implement node.Lifecycle.
+type rpcTracingService struct {
 	tracerProvider *sdktrace.TracerProvider
 }
 
 // Start implements node.Lifecycle.
-func (o *otelService) Start() error {
+func (r *rpcTracingService) Start() error {
 	return nil // Provider is already started during setup
 }
 
 // Stop implements node.Lifecycle
-func (o *otelService) Stop() error {
+func (r *rpcTracingService) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := o.tracerProvider.Shutdown(ctx); err != nil {
-		log.Error("Failed to stop OTEL Service", "err", err)
+	if err := r.tracerProvider.Shutdown(ctx); err != nil {
+		log.Error("Failed to stop RPC Tracing Service", "err", err)
 		return err
 	}
-	log.Info("OTEL Service stopped")
+	log.Info("RPC Tracing Service stopped")
 	return nil
 }
 
-// SetupOTEL initializes OpenTelemetry tracing based on CLI flags.
-func SetupOTEL(ctx *cli.Context) (*otelService, error) {
-	if !ctx.Bool(OTELEnabledFlag.Name) {
+// SetupRPCTracing initializes OpenTelemetry tracing based on CLI flags.
+func SetupRPCTracing(ctx *cli.Context) (*rpcTracingService, error) {
+	if !ctx.Bool(RPCTracingFlag.Name) {
 		return nil, nil
 	}
-	endpoint := ctx.String(OTELEndpointFlag.Name)
+	endpoint := ctx.String(RPCTracingEndpointFlag.Name)
 	if endpoint == "" {
 		return nil, nil
 	}
-	serviceName := ctx.String(OTELServiceNameFlag.Name)
 	setupCtx := ctx.Context
 	if setupCtx == nil {
 		setupCtx = context.Background()
@@ -75,7 +74,7 @@ func SetupOTEL(ctx *cli.Context) (*otelService, error) {
 	// Create exporter based on endpoint URL
 	u, err := url.Parse(endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("invalid otel endpoint URL: %w", err)
+		return nil, fmt.Errorf("invalid rpc tracing endpoint URL: %w", err)
 	}
 
 	var exporter sdktrace.SpanExporter
@@ -92,17 +91,17 @@ func SetupOTEL(ctx *cli.Context) (*otelService, error) {
 		}
 		exporter, err = otlptracehttp.New(setupCtx, opts...)
 	default:
-		return nil, fmt.Errorf("unsupported otel url scheme: %s", u.Scheme)
+		return nil, fmt.Errorf("unsupported rpc tracing url scheme: %s", u.Scheme)
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to create otel exporter: %w", err)
+		return nil, fmt.Errorf("failed to create rpc tracing exporter: %w", err)
 	}
 
 	// Create resource with service information
 	res := resource.NewWithAttributes(
 		semconv.SchemaURL,
-		semconv.ServiceName(serviceName),
+		semconv.ServiceName("geth"),
 		attribute.String("client.name", version.ClientName("geth")),
 	)
 
@@ -122,11 +121,12 @@ func SetupOTEL(ctx *cli.Context) (*otelService, error) {
 		propagation.Baggage{},
 	))
 
-	log.Info("OpenTelemetry tracing enabled", "endpoint", endpoint, "service", serviceName)
-	return &otelService{tracerProvider: tp}, nil
+	log.Info("RPC tracing enabled", "endpoint", endpoint)
+	return &rpcTracingService{tracerProvider: tp}, nil
 }
 
-// RegisterOTELService registers the otelService with the node so its lifecycle is managed by the node.
-func RegisterOTELService(otelService *otelService, stack *node.Node) {
-	stack.RegisterLifecycle(otelService)
+// RegisterRPCTracingService registers the rpcTracingService with the node
+// so its lifecycle is managed by the node.
+func RegisterRPCTracingService(rpcTracingService *rpcTracingService, stack *node.Node) {
+	stack.RegisterLifecycle(rpcTracingService)
 }

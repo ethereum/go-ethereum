@@ -196,6 +196,8 @@ var (
 		utils.RPCTxSyncDefaultTimeoutFlag,
 		utils.RPCTxSyncMaxTimeoutFlag,
 		utils.RPCGlobalRangeLimitFlag,
+		utils.RPCTracingFlag,
+		utils.RPCTracingEndpointFlag,
 	}
 
 	metricsFlags = []cli.Flag{
@@ -214,12 +216,6 @@ var (
 		utils.MetricsInfluxDBBucketFlag,
 		utils.MetricsInfluxDBOrganizationFlag,
 		utils.StateSizeTrackingFlag,
-	}
-
-	otelFlags = []cli.Flag{
-		utils.OTELEnabledFlag,
-		utils.OTELEndpointFlag,
-		utils.OTELServiceNameFlag,
 	}
 )
 
@@ -271,7 +267,6 @@ func init() {
 		consoleFlags,
 		debug.Flags,
 		metricsFlags,
-		otelFlags,
 	)
 	flags.AutoEnvVars(app.Flags, "GETH")
 

@@ -1043,23 +1043,17 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Category: flags.MetricsCategory,
 	}
 
-	OTELEnabledFlag = &cli.BoolFlag{
-		Name:     "otel.enabled",
-		Usage:    "Enable OpenTelemetry tracing",
-		Category: flags.LoggingCategory,
+	// RPC Tracing
+	RPCTracingFlag = &cli.BoolFlag{
+		Name:     "rpc.tracing",
+		Usage:    "Enable RPC tracing",
+		Category: flags.APICategory,
 	}
 
-	OTELEndpointFlag = &cli.StringFlag{
-		Name:     "otel.endpoint",
-		Usage:    "Defines where OpenTelemetry traces are sent (e.g., http://localhost:4318)",
-		Category: flags.LoggingCategory,
-	}
-
-	OTELServiceNameFlag = &cli.StringFlag{
-		Name:     "otel.service-name",
-		Usage:    "Service name for OpenTelemetry traces",
-		Value:    "geth",
-		Category: flags.LoggingCategory,
+	RPCTracingEndpointFlag = &cli.StringFlag{
+		Name:     "rpc.tracing.endpoint",
+		Usage:    "Defines where RPC traces are sent (e.g., http://localhost:4318)",
+		Category: flags.APICategory,
 	}
 )
 
