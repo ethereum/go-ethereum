@@ -103,7 +103,7 @@ func SetupOTEL(ctx *cli.Context) (*otelService, error) {
 	res := resource.NewWithAttributes(
 		semconv.SchemaURL,
 		semconv.ServiceName(serviceName),
-		attribute.String("ClientName", version.ClientName("geth")),
+		attribute.String("client.name", version.ClientName("geth")),
 	)
 
 	// Create TracerProvider
