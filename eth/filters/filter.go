@@ -143,6 +143,9 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	if err != nil {
 		return nil, err
 	}
+	if begin > end {
+		return nil, errInvalidBlockRange
+	}
 	return f.rangeLogs(ctx, begin, end)
 }
 
@@ -383,9 +386,6 @@ func (f *Filter) rangeLogs(ctx context.Context, firstBlock, lastBlock uint64) ([
 		}()
 	}
 
-	if firstBlock > lastBlock {
-		return nil, nil
-	}
 	mb := f.sys.backend.NewMatcherBackend()
 	defer mb.Close()
 
