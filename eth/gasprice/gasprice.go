@@ -189,7 +189,6 @@ func findKthBigInt(values []*big.Int, k int) *big.Int {
 		} else {
 			right = pivotPos - 1
 		}
-
 	}
 	return values[left]
 }
