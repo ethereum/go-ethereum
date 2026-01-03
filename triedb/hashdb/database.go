@@ -165,7 +165,12 @@ func (db *Database) insert(hash common.Hash, node []byte) {
 	if db.oldest == (common.Hash{}) {
 		db.oldest, db.newest = hash, hash
 	} else {
-		db.dirties[db.newest].flushNext, db.newest = hash, hash
+		if newestNode, ok := db.dirties[db.newest]; ok {
+			newestNode.flushNext, db.newest = hash, hash
+		} else {
+			// Flush-list is corrupted, reset it
+			db.oldest, db.newest = hash, hash
+		}
 	}
 	db.dirtiesSize += common.StorageSize(common.HashLength + len(node))
 }
@@ -238,10 +243,15 @@ func (db *Database) reference(child common.Hash, parent common.Hash) {
 	}
 	// The reference is for external storage trie, don't duplicate if
 	// the reference is already existent.
-	if db.dirties[parent].external == nil {
-		db.dirties[parent].external = make(map[common.Hash]struct{})
+	parentNode, ok := db.dirties[parent]
+	if !ok {
+		// Parent node doesn't exist in dirties, skip
+		return
 	}
-	if _, ok := db.dirties[parent].external[child]; ok {
+	if parentNode.external == nil {
+		parentNode.external = make(map[common.Hash]struct{})
+	}
+	if _, ok := parentNode.external[child]; ok {
 		return
 	}
 	node.parents++
@@ -303,8 +313,13 @@ func (db *Database) dereference(hash common.Hash) {
 				db.dirties[node.flushPrev].flushNext = common.Hash{}
 			}
 		default:
-			db.dirties[node.flushPrev].flushNext = node.flushNext
-			db.dirties[node.flushNext].flushPrev = node.flushPrev
+			// Verify that adjacent nodes exist before updating flush-list
+			if prevNode, ok := db.dirties[node.flushPrev]; ok {
+				prevNode.flushNext = node.flushNext
+			}
+			if nextNode, ok := db.dirties[node.flushNext]; ok {
+				nextNode.flushPrev = node.flushPrev
+			}
 		}
 		// Dereference all children and delete the node
 		node.forChildren(func(child common.Hash) {
@@ -511,8 +526,13 @@ func (c *cleaner) Put(key []byte, rlp []byte) error {
 			c.db.dirties[node.flushPrev].flushNext = common.Hash{}
 		}
 	default:
-		c.db.dirties[node.flushPrev].flushNext = node.flushNext
-		c.db.dirties[node.flushNext].flushPrev = node.flushPrev
+		// Verify that adjacent nodes exist before updating flush-list
+		if prevNode, ok := c.db.dirties[node.flushPrev]; ok {
+			prevNode.flushNext = node.flushNext
+		}
+		if nextNode, ok := c.db.dirties[node.flushNext]; ok {
+			nextNode.flushPrev = node.flushPrev
+		}
 	}
 	// Remove the node from the dirty cache
 	delete(c.db.dirties, hash)
