@@ -19,6 +19,7 @@ package gasprice
 import (
 	"context"
 	"math/big"
+	"math/rand"
 	"slices"
 	"sync"
 
@@ -151,6 +152,54 @@ func NewOracle(backend OracleBackend, params Config, startPrice *big.Int) *Oracl
 	}
 }
 
+// partition partitions the slice around a pivot using Lomuto partition scheme
+// Returns the final position of the pivot
+func partition(values []*big.Int, left, right int) int {
+	pivot := values[right]
+	i := left
+	for j := left; j < right; j++ {
+		if values[j].Cmp(pivot) < 0 {
+			values[i], values[j] = values[j], values[i]
+			i++
+		}
+	}
+	values[i], values[right] = values[right], values[i]
+	return i
+}
+
+// findKthBigInt finds the k-th smallest element using QuickSelect algorithm
+// k is 0-indexed (k=0 returns the smallest element)
+// This is an in-place algorithm that modifies the input slice
+func findKthBigInt(values []*big.Int, k int) *big.Int {
+	if k < 0 || k >= len(values) {
+		return nil
+	}
+
+	left, right := 0, len(values)-1
+	for left < right {
+		// Randomize pivot selection to avoid worst-case O(n²)
+		pivotIndex := left + rand.Intn(right-left+1)
+		values[pivotIndex], values[right] = values[right], values[pivotIndex]
+
+		pivotPos := partition(values, left, right)
+		if pivotPos == k {
+			return values[k]
+		} else if pivotPos < k {
+			left = pivotPos + 1
+		} else {
+			right = pivotPos - 1
+		}
+
+	}
+	return values[left]
+}
+
+// findPercentileByKth finds the k-th percentile element using QuickSelect
+func findPercentileByKth(values []*big.Int, percentile int) *big.Int {
+	index := (len(values) - 1) * percentile / 100
+	return findKthBigInt(values, index)
+}
+
 // SuggestTipCap returns a tip cap so that newly created transaction can have a
 // very high chance to be included in the following blocks.
 //
@@ -218,8 +267,7 @@ func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 	}
 	price := lastPrice
 	if len(results) > 0 {
-		slices.SortFunc(results, func(a, b *big.Int) int { return a.Cmp(b) })
-		price = results[(len(results)-1)*oracle.percentile/100]
+		price = findPercentileByKth(results, oracle.percentile)
 	}
 	if price.Cmp(oracle.maxPrice) > 0 {
 		price = new(big.Int).Set(oracle.maxPrice)
