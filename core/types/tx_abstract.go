@@ -25,6 +25,8 @@ import (
 	"github.com/holiman/uint256"
 )
 
+// AbstractAuthorization is the input used to abstractly validate
+// authorizations.
 type AbstractAuthorization struct {
 	Target common.Address
 	Data   []byte
@@ -42,6 +44,8 @@ func (a *AbstractAuthorization) copy() *AbstractAuthorization {
 	}
 }
 
+// PaymasterAuthorization includes the neccessary data to validate an
+// authorization from a paymaster to sponsor the transaction.
 type PaymasterAuthorization struct {
 	Target    common.Address
 	Data      []byte
@@ -61,6 +65,8 @@ func (a *PaymasterAuthorization) copy() *PaymasterAuthorization {
 	}
 }
 
+// AbstractTx implements the EIP-7701 transaction type that allows arbitrary
+// implementation of sender validation and paymaster validation.
 type AbstractTx struct {
 	ChainID *uint256.Int
 	Nonce   uint64
