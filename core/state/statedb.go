@@ -160,6 +160,10 @@ type StateDB struct {
 	StorageUpdated atomic.Int64 // Number of storage slots updated during the state transition
 	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
 	CodeLoaded     int          // Number of contract code loaded during the state transition
+	CodeBytesRead  int64        // Total bytes of contract code read during the state transition
+
+	// Unique contracts executed tracking (set of code hashes executed during the state transition)
+	executedCodes map[common.Hash]struct{}
 }
 
 // New creates a new state from a given trie.
@@ -186,6 +190,7 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 		journal:              newJournal(),
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
+		executedCodes:        make(map[common.Hash]struct{}),
 	}
 	if db.TrieDB().IsVerkle() {
 		sdb.accessEvents = NewAccessEvents(db.PointCache())
@@ -377,6 +382,37 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 		return common.BytesToHash(stateObject.CodeHash())
 	}
 	return common.Hash{}
+}
+
+// MarkCodeExecuted records that a contract's code was executed.
+// This is used for metrics tracking to count unique contracts executed.
+func (s *StateDB) MarkCodeExecuted(codeHash common.Hash) {
+	if codeHash == types.EmptyCodeHash || codeHash == (common.Hash{}) {
+		return
+	}
+	if s.executedCodes == nil {
+		return // Skip tracking for state copies (e.g., prefetcher)
+	}
+	s.executedCodes[codeHash] = struct{}{}
+}
+
+// UniqueCodeExecuted returns the number of unique contract codes executed.
+func (s *StateDB) UniqueCodeExecuted() int {
+	return len(s.executedCodes)
+}
+
+// UniqueAccountsAccessed returns the number of unique accounts accessed during the state transition.
+func (s *StateDB) UniqueAccountsAccessed() int {
+	return len(s.stateObjects)
+}
+
+// UniqueStorageAccessed returns the number of unique storage slots accessed during the state transition.
+func (s *StateDB) UniqueStorageAccessed() int {
+	count := 0
+	for _, obj := range s.stateObjects {
+		count += len(obj.originStorage)
+	}
+	return count
 }
 
 // GetState retrieves the value associated with the specific key.

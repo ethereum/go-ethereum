@@ -543,6 +543,7 @@ func (s *stateObject) Code() []byte {
 	if len(code) == 0 {
 		s.db.setError(fmt.Errorf("code is not found %x", s.CodeHash()))
 	}
+	s.db.CodeBytesRead += int64(len(code))
 	s.code = code
 	return code
 }

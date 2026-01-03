@@ -98,6 +98,8 @@ type ReaderStats struct {
 	AccountCacheMiss int64
 	StorageCacheHit  int64
 	StorageCacheMiss int64
+	CodeCacheHit     int64
+	CodeCacheMiss    int64
 }
 
 // String implements fmt.Stringer, returning string format statistics.
@@ -105,6 +107,7 @@ func (s ReaderStats) String() string {
 	var (
 		accountCacheHitRate float64
 		storageCacheHitRate float64
+		codeCacheHitRate    float64
 	)
 	if s.AccountCacheHit > 0 {
 		accountCacheHitRate = float64(s.AccountCacheHit) / float64(s.AccountCacheHit+s.AccountCacheMiss) * 100
@@ -112,9 +115,13 @@ func (s ReaderStats) String() string {
 	if s.StorageCacheHit > 0 {
 		storageCacheHitRate = float64(s.StorageCacheHit) / float64(s.StorageCacheHit+s.StorageCacheMiss) * 100
 	}
+	if s.CodeCacheHit > 0 {
+		codeCacheHitRate = float64(s.CodeCacheHit) / float64(s.CodeCacheHit+s.CodeCacheMiss) * 100
+	}
 	msg := fmt.Sprintf("Reader statistics\n")
 	msg += fmt.Sprintf("account: hit: %d, miss: %d, rate: %.2f\n", s.AccountCacheHit, s.AccountCacheMiss, accountCacheHitRate)
 	msg += fmt.Sprintf("storage: hit: %d, miss: %d, rate: %.2f\n", s.StorageCacheHit, s.StorageCacheMiss, storageCacheHitRate)
+	msg += fmt.Sprintf("code: hit: %d, miss: %d, rate: %.2f\n", s.CodeCacheHit, s.CodeCacheMiss, codeCacheHitRate)
 	return msg
 }
 
@@ -146,32 +153,46 @@ func newCachingCodeReader(db ethdb.KeyValueReader, codeCache *lru.SizeConstraine
 	}
 }
 
-// Code implements ContractCodeReader, retrieving a particular contract's code.
-// If the contract code doesn't exist, no error will be returned.
-func (r *cachingCodeReader) Code(addr common.Address, codeHash common.Hash) ([]byte, error) {
-	code, _ := r.codeCache.Get(codeHash)
-	if len(code) > 0 {
-		return code, nil
+// code retrieves a particular contract's code along with a flag indicating
+// whether it was found in the cache.
+func (r *cachingCodeReader) code(addr common.Address, codeHash common.Hash) ([]byte, bool, error) {
+	code, found := r.codeCache.Get(codeHash)
+	if found && len(code) > 0 {
+		return code, true, nil
 	}
 	code = rawdb.ReadCode(r.db, codeHash)
 	if len(code) > 0 {
 		r.codeCache.Add(codeHash, code)
 		r.codeSizeCache.Add(codeHash, len(code))
 	}
-	return code, nil
+	return code, false, nil
+}
+
+// Code implements ContractCodeReader, retrieving a particular contract's code.
+// If the contract code doesn't exist, no error will be returned.
+func (r *cachingCodeReader) Code(addr common.Address, codeHash common.Hash) ([]byte, error) {
+	code, _, err := r.code(addr, codeHash)
+	return code, err
+}
+
+// codeSize retrieves a particular contract's code size along with a flag indicating
+// whether it was found in the cache.
+func (r *cachingCodeReader) codeSize(addr common.Address, codeHash common.Hash) (int, bool, error) {
+	if cached, ok := r.codeSizeCache.Get(codeHash); ok {
+		return cached, true, nil
+	}
+	code, _, err := r.code(addr, codeHash)
+	if err != nil {
+		return 0, false, err
+	}
+	return len(code), false, nil
 }
 
 // CodeSize implements ContractCodeReader, retrieving a particular contracts code's size.
 // If the contract code doesn't exist, no error will be returned.
 func (r *cachingCodeReader) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
-	if cached, ok := r.codeSizeCache.Get(codeHash); ok {
-		return cached, nil
-	}
-	code, err := r.Code(addr, codeHash)
-	if err != nil {
-		return 0, err
-	}
-	return len(code), nil
+	size, _, err := r.codeSize(addr, codeHash)
+	return size, err
 }
 
 // Has returns the flag indicating whether the contract code with
@@ -463,6 +484,28 @@ func newReader(codeReader ContractCodeReader, stateReader StateReader) *reader {
 	}
 }
 
+// code retrieves contract code with a flag indicating cache hit status.
+// Returns (code, incache, error). If the underlying code reader doesn't
+// support cache tracking, incache is always false.
+func (r *reader) code(addr common.Address, codeHash common.Hash) ([]byte, bool, error) {
+	if cr, ok := r.ContractCodeReader.(*cachingCodeReader); ok {
+		return cr.code(addr, codeHash)
+	}
+	code, err := r.ContractCodeReader.Code(addr, codeHash)
+	return code, false, err
+}
+
+// codeSize retrieves contract code size with a flag indicating cache hit status.
+// Returns (size, incache, error). If the underlying code reader doesn't
+// support cache tracking, incache is always false.
+func (r *reader) codeSize(addr common.Address, codeHash common.Hash) (int, bool, error) {
+	if cr, ok := r.ContractCodeReader.(*cachingCodeReader); ok {
+		return cr.codeSize(addr, codeHash)
+	}
+	size, err := r.ContractCodeReader.CodeSize(addr, codeHash)
+	return size, false, err
+}
+
 // readerWithCache is a wrapper around Reader that maintains additional state caches
 // to support concurrent state access.
 type readerWithCache struct {
@@ -573,6 +616,24 @@ func (r *readerWithCache) Storage(addr common.Address, slot common.Hash) (common
 	return value, err
 }
 
+// code retrieves contract code with a flag indicating cache hit status.
+func (r *readerWithCache) code(addr common.Address, codeHash common.Hash) ([]byte, bool, error) {
+	if rr, ok := r.Reader.(*reader); ok {
+		return rr.code(addr, codeHash)
+	}
+	code, err := r.Reader.Code(addr, codeHash)
+	return code, false, err
+}
+
+// codeSize retrieves contract code size with a flag indicating cache hit status.
+func (r *readerWithCache) codeSize(addr common.Address, codeHash common.Hash) (int, bool, error) {
+	if rr, ok := r.Reader.(*reader); ok {
+		return rr.codeSize(addr, codeHash)
+	}
+	size, err := r.Reader.CodeSize(addr, codeHash)
+	return size, false, err
+}
+
 type readerWithCacheStats struct {
 	*readerWithCache
 
@@ -580,6 +641,8 @@ type readerWithCacheStats struct {
 	accountCacheMiss atomic.Int64
 	storageCacheHit  atomic.Int64
 	storageCacheMiss atomic.Int64
+	codeCacheHit     atomic.Int64
+	codeCacheMiss    atomic.Int64
 }
 
 // newReaderWithCacheStats constructs the reader with additional statistics tracked.
@@ -624,6 +687,34 @@ func (r *readerWithCacheStats) Storage(addr common.Address, slot common.Hash) (c
 	return value, nil
 }
 
+// Code implements ContractCodeReader, retrieving a particular contract's code.
+func (r *readerWithCacheStats) Code(addr common.Address, codeHash common.Hash) ([]byte, error) {
+	code, incache, err := r.readerWithCache.code(addr, codeHash)
+	if err != nil {
+		return nil, err
+	}
+	if incache {
+		r.codeCacheHit.Add(1)
+	} else {
+		r.codeCacheMiss.Add(1)
+	}
+	return code, nil
+}
+
+// CodeSize implements ContractCodeReader, retrieving a particular contract's code size.
+func (r *readerWithCacheStats) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
+	size, incache, err := r.readerWithCache.codeSize(addr, codeHash)
+	if err != nil {
+		return 0, err
+	}
+	if incache {
+		r.codeCacheHit.Add(1)
+	} else {
+		r.codeCacheMiss.Add(1)
+	}
+	return size, nil
+}
+
 // GetStats implements ReaderWithStats, returning the statistics of state reader.
 func (r *readerWithCacheStats) GetStats() ReaderStats {
 	return ReaderStats{
@@ -631,5 +722,7 @@ func (r *readerWithCacheStats) GetStats() ReaderStats {
 		AccountCacheMiss: r.accountCacheMiss.Load(),
 		StorageCacheHit:  r.storageCacheHit.Load(),
 		StorageCacheMiss: r.storageCacheMiss.Load(),
+		CodeCacheHit:     r.codeCacheHit.Load(),
+		CodeCacheMiss:    r.codeCacheMiss.Load(),
 	}
 }

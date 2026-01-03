@@ -87,6 +87,9 @@ var (
 	storageCacheHitPrefetchMeter  = metrics.NewRegisteredMeter("chain/storage/reads/cache/prefetch/hit", nil)
 	storageCacheMissPrefetchMeter = metrics.NewRegisteredMeter("chain/storage/reads/cache/prefetch/miss", nil)
 
+	codeCacheHitMeter  = metrics.NewRegisteredMeter("chain/code/reads/cache/hit", nil)
+	codeCacheMissMeter = metrics.NewRegisteredMeter("chain/code/reads/cache/miss", nil)
+
 	accountReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/account/single/reads", nil)
 	storageReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/storage/single/reads", nil)
 	codeReadSingleTimer    = metrics.NewRegisteredResettingTimer("chain/code/single/reads", nil)
@@ -2060,6 +2063,8 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 			accountCacheMissMeter.Mark(rStat.AccountCacheMiss)
 			storageCacheHitMeter.Mark(rStat.StorageCacheHit)
 			storageCacheMissMeter.Mark(rStat.StorageCacheMiss)
+			codeCacheHitMeter.Mark(rStat.CodeCacheHit)
+			codeCacheMissMeter.Mark(rStat.CodeCacheMiss)
 
 			if result != nil {
 				result.stats.StatePrefetchCacheStats = pStat
@@ -2182,6 +2187,11 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	stats.StorageUpdated = int(statedb.StorageUpdated.Load())
 	stats.StorageDeleted = int(statedb.StorageDeleted.Load())
 	stats.CodeLoaded = statedb.CodeLoaded
+	stats.CodeBytesRead = statedb.CodeBytesRead
+
+	stats.UniqueAccountsAccessed = statedb.UniqueAccountsAccessed()
+	stats.UniqueStorageAccessed = statedb.UniqueStorageAccessed()
+	stats.UniqueCodeExecuted = statedb.UniqueCodeExecuted()
 
 	stats.Execution = ptime - (statedb.AccountReads + statedb.StorageReads + statedb.CodeReads)          // The time spent on EVM processing
 	stats.Validation = vtime - (statedb.AccountHashes + statedb.AccountUpdates + statedb.StorageUpdates) // The time spent on block validation
