@@ -19,6 +19,7 @@ package vm
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/vm/roles"
 	"github.com/holiman/uint256"
 )
 
@@ -42,6 +43,8 @@ type Contract struct {
 	IsDeployment bool
 	IsSystemCall bool
 
+	Role roles.Role
+
 	Gas   uint64
 	value *uint256.Int
 }
@@ -58,6 +61,7 @@ func NewContract(caller common.Address, address common.Address, value *uint256.I
 		jumpDests: jumpDests,
 		Gas:       gas,
 		value:     value,
+		Role:      roles.SenderExecution,
 	}
 }
 

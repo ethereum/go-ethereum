@@ -231,6 +231,9 @@ func newModernSigner(chainID *big.Int, fork forks.Fork) Signer {
 	if fork >= forks.Prague {
 		s.txtypes.set(SetCodeTxType)
 	}
+	if fork >= forks.Bogota {
+		s.txtypes.set(AbstractTxType)
+	}
 	return s
 }
 
@@ -262,6 +265,9 @@ func (s *modernSigner) Sender(tx *Transaction) (common.Address, error) {
 	if tx.ChainId().Cmp(s.chainID) != 0 {
 		return common.Address{}, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, tx.ChainId(), s.chainID)
 	}
+	if tt == AbstractTxType {
+		return tx.SenderAuthorization().Target, nil
+	}
 	// 'modern' txs are defined to use 0 and 1 as their recovery
 	// id, add 27 to become equivalent to unprotected Homestead signatures.
 	V, R, S := tx.RawSignatureValues()
@@ -285,6 +291,18 @@ func (s *modernSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 	R, S, _ = decodeSignature(sig)
 	V = big.NewInt(int64(sig[64]))
 	return R, S, V, nil
+}
+
+// NewBogotaSigner returns a signer that accepts
+// - EIP-7701 abstraction transactions
+// - EIP-7702 set code transactions
+// - EIP-4844 blob transactions
+// - EIP-1559 dynamic fee transactions
+// - EIP-2930 access list transactions,
+// - EIP-155 replay protected transactions, and
+// - legacy Homestead transactions.
+func NewBogotaSigner(chainId *big.Int) Signer {
+	return newModernSigner(chainId, forks.Bogota)
 }
 
 // NewPragueSigner returns a signer that accepts

@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/core/vm/roles"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -68,11 +69,13 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation, isHomestead, isEIP2028, isEIP3860 bool) (uint64, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation, isHomestead, isEIP2028, isEIP3860 bool, isAbstract bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
 	if isContractCreation && isHomestead {
 		gas = params.TxGasContractCreation
+	} else if isAbstract {
+		gas = params.TxGasAbstract
 	} else {
 		gas = params.TxGas
 	}
@@ -157,6 +160,15 @@ type Message struct {
 	BlobHashes            []common.Hash
 	SetCodeAuthorizations []types.SetCodeAuthorization
 
+	Abstract  bool
+	Sender    *types.AbstractAuthorization
+	Deployer  *types.AbstractAuthorization
+	Paymaster *types.PaymasterAuthorization
+	Payer     common.Address
+
+	AllData       []byte
+	TotalGasLimit uint64
+
 	// When SkipNonceChecks is true, the message nonce is not checked against the
 	// account nonce in state.
 	//
@@ -189,6 +201,14 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		SkipTransactionChecks: false,
 		BlobHashes:            tx.BlobHashes(),
 		BlobGasFeeCap:         tx.BlobGasFeeCap(),
+
+		Abstract:  tx.SenderAuthorization() != nil,
+		Sender:    tx.SenderAuthorization(),
+		Deployer:  tx.DeployerAuthorization(),
+		Paymaster: tx.PaymasterAuthorization(),
+
+		AllData:       common.CopyBytes(tx.Data()),
+		TotalGasLimit: tx.Gas(),
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -199,6 +219,27 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 	}
 	var err error
 	msg.From, err = types.Sender(s, tx)
+
+	msg.Payer = msg.From
+	if msg.Abstract {
+		msg.Payer = msg.Paymaster.Target
+		msg.SkipNonceChecks = true
+	}
+
+	// Sum all gas limits if AA.
+	if msg.Abstract {
+		msg.AllData = append(msg.AllData, msg.Sender.Data...)
+		msg.TotalGasLimit += msg.Sender.Gas
+		if msg.Deployer != nil {
+			msg.AllData = append(msg.AllData, msg.Deployer.Data...)
+			msg.TotalGasLimit += msg.Deployer.Gas
+		}
+		if msg.Paymaster != nil {
+			msg.AllData = append(msg.AllData, msg.Paymaster.Data...)
+			msg.TotalGasLimit += msg.Paymaster.Gas
+		}
+	}
+
 	return msg, err
 }
 
@@ -264,11 +305,11 @@ func (st *stateTransition) to() common.Address {
 }
 
 func (st *stateTransition) buyGas() error {
-	mgval := new(big.Int).SetUint64(st.msg.GasLimit)
+	mgval := new(big.Int).SetUint64(st.msg.TotalGasLimit)
 	mgval.Mul(mgval, st.msg.GasPrice)
 	balanceCheck := new(big.Int).Set(mgval)
 	if st.msg.GasFeeCap != nil {
-		balanceCheck.SetUint64(st.msg.GasLimit)
+		balanceCheck.SetUint64(st.msg.TotalGasLimit)
 		balanceCheck = balanceCheck.Mul(balanceCheck, st.msg.GasFeeCap)
 	}
 	balanceCheck.Add(balanceCheck, st.msg.Value)
@@ -289,21 +330,21 @@ func (st *stateTransition) buyGas() error {
 	if overflow {
 		return fmt.Errorf("%w: address %v required balance exceeds 256 bits", ErrInsufficientFunds, st.msg.From.Hex())
 	}
-	if have, want := st.state.GetBalance(st.msg.From), balanceCheckU256; have.Cmp(want) < 0 {
-		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have, want)
+	if have, want := st.state.GetBalance(st.msg.Payer), balanceCheckU256; have.Cmp(want) < 0 {
+		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.Payer.Hex(), have, want)
 	}
-	if err := st.gp.SubGas(st.msg.GasLimit); err != nil {
+	if err := st.gp.SubGas(st.msg.TotalGasLimit); err != nil {
 		return err
 	}
 
 	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil {
-		st.evm.Config.Tracer.OnGasChange(0, st.msg.GasLimit, tracing.GasChangeTxInitialBalance)
+		st.evm.Config.Tracer.OnGasChange(0, st.msg.TotalGasLimit, tracing.GasChangeTxInitialBalance)
 	}
-	st.gasRemaining = st.msg.GasLimit
+	st.gasRemaining = st.msg.TotalGasLimit
 
-	st.initialGas = st.msg.GasLimit
+	st.initialGas = st.msg.TotalGasLimit
 	mgvalU256, _ := uint256.FromBig(mgval)
-	st.state.SubBalance(st.msg.From, mgvalU256, tracing.BalanceDecreaseGasBuy)
+	st.state.SubBalance(st.msg.Payer, mgvalU256, tracing.BalanceDecreaseGasBuy)
 	return nil
 }
 
@@ -327,8 +368,8 @@ func (st *stateTransition) preCheck() error {
 	isOsaka := st.evm.ChainConfig().IsOsaka(st.evm.Context.BlockNumber, st.evm.Context.Time)
 	if !msg.SkipTransactionChecks {
 		// Verify tx gas limit does not exceed EIP-7825 cap.
-		if isOsaka && msg.GasLimit > params.MaxTxGas {
-			return fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxGas, msg.GasLimit)
+		if isOsaka && msg.TotalGasLimit > params.MaxTxGas {
+			return fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxGas, msg.TotalGasLimit)
 		}
 		// Make sure the sender is an EOA
 		code := st.state.GetCode(msg.From)
@@ -443,7 +484,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	)
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
+	gas, err := IntrinsicGas(msg.AllData, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai, msg.Abstract)
 	if err != nil {
 		return nil, err
 	}
@@ -452,11 +493,11 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	}
 	// Gas limit suffices for the floor data cost (EIP-7623)
 	if rules.IsPrague {
-		floorDataGas, err = FloorDataGas(msg.Data)
+		floorDataGas, err = FloorDataGas(msg.AllData)
 		if err != nil {
 			return nil, err
 		}
-		if msg.GasLimit < floorDataGas {
+		if msg.TotalGasLimit < floorDataGas {
 			return nil, fmt.Errorf("%w: have %d, want %d", ErrFloorDataGas, msg.GasLimit, floorDataGas)
 		}
 	}
@@ -470,6 +511,14 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 		if targetAddr := msg.To; targetAddr != nil {
 			st.evm.AccessEvents.AddTxDestination(*targetAddr, msg.Value.Sign() != 0, !st.state.Exist(*targetAddr))
+		}
+		if msg.Deployer != nil {
+			target := msg.Deployer.Target
+			st.evm.AccessEvents.AddTxDestination(target, false, !st.state.Exist(target))
+		}
+		if msg.Paymaster != nil {
+			target := msg.Paymaster.Target
+			st.evm.AccessEvents.AddTxDestination(target, false, !st.state.Exist(target))
 		}
 	}
 
@@ -492,12 +541,44 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// - reset transient storage(eip 1153)
 	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 
+	// Run the abstract validations:
+	// - account deployment, in case the user's account does not yet exist
+	// - standard validation, i.e. nonce and authorization checks
+	// - paymaster validation, when the user operation is sponsored
+	if msg.Abstract {
+		// Attempt to deploy user's smart account.
+		if msg.Deployer != nil && len(st.state.GetCode(msg.From)) != 0 {
+			remaining, err := st.evm.CallWithRole(msg.Deployer.Target, msg.Deployer.Gas, roles.SenderDeployment)
+			if err != nil {
+				return nil, fmt.Errorf("deployer failed: %v", err)
+			}
+			st.gasRemaining += remaining
+		}
+
+		// Validate abstract tx.
+		remaining, err := st.evm.CallWithRole(msg.Sender.Target, msg.Sender.Gas, roles.SenderValidation)
+		if err != nil {
+			return nil, fmt.Errorf("sender validation failed: %v", err)
+		}
+		st.gasRemaining += remaining
+
+		// Validate paymaster promise to sponsor.
+		if msg.Paymaster != nil {
+			remaining, err := st.evm.CallWithRole(msg.Paymaster.Target, msg.Paymaster.Gas, roles.PaymasterValidation)
+			if err != nil {
+				return nil, fmt.Errorf("paymaster failed: %v", err)
+			}
+			st.gasRemaining += remaining
+		}
+	}
+
 	var (
-		ret   []byte
-		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
+		ret       []byte
+		vmerr     error // vm errors do not effect consensus and are therefore not assigned to err
+		remaining uint64
 	)
 	if contractCreation {
-		ret, _, st.gasRemaining, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining, value)
+		ret, _, remaining, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining, value)
 	} else {
 		// Increment the nonce for the next transaction.
 		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
@@ -520,8 +601,10 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 
 		// Execute the transaction's call.
-		ret, st.gasRemaining, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining, value)
+		ret, remaining, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining, value)
 	}
+
+	st.gasRemaining += remaining
 
 	// Record the gas used excluding gas refunds. This value represents the actual
 	// gas allowance required to complete execution.
