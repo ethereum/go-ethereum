@@ -22,10 +22,12 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/urfave/cli/v2"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -48,10 +50,10 @@ func (o *otelService) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := o.tracerProvider.Shutdown(ctx); err != nil {
-		log.Error("Failed to stop otelService", "err", err)
+		log.Error("Failed to stop OTEL Service", "err", err)
 		return err
 	}
-	log.Info("otelService stopped")
+	log.Info("OTEL Service stopped")
 	return nil
 }
 
@@ -98,14 +100,11 @@ func SetupOTEL(ctx *cli.Context) (*otelService, error) {
 	}
 
 	// Create resource with service information
-	res, err := resource.New(setupCtx,
-		resource.WithAttributes(
-			semconv.ServiceName(serviceName),
-		),
+	res := resource.NewWithAttributes(
+		semconv.SchemaURL,
+		semconv.ServiceName(serviceName),
+		attribute.String("ClientName", version.ClientName("geth")),
 	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create otel resource: %w", err)
-	}
 
 	// Create TracerProvider
 	tp := sdktrace.NewTracerProvider(
@@ -117,6 +116,7 @@ func SetupOTEL(ctx *cli.Context) (*otelService, error) {
 	otel.SetTracerProvider(tp)
 
 	// Set global propagator for context propagation
+	// Note: This should enable distributed tracing
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
 		propagation.Baggage{},
