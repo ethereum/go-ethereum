@@ -193,6 +193,8 @@ var (
 		utils.BatchResponseMaxSize,
 		utils.RPCTxSyncDefaultTimeoutFlag,
 		utils.RPCTxSyncMaxTimeoutFlag,
+		utils.RPCTracingFlag,
+		utils.RPCTracingEndpointFlag,
 	}
 
 	metricsFlags = []cli.Flag{

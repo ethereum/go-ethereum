@@ -1024,6 +1024,19 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+	// RPC Tracing
+	RPCTracingFlag = &cli.BoolFlag{
+		Name:     "rpc.tracing",
+		Usage:    "Enable RPC tracing",
+		Category: flags.APICategory,
+	}
+
+	RPCTracingEndpointFlag = &cli.StringFlag{
+		Name:     "rpc.tracing.endpoint",
+		Usage:    "Defines where RPC traces are sent (e.g., http://localhost:4318)",
+		Category: flags.APICategory,
+	}
 )
 
 var (

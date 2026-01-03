@@ -242,6 +242,15 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	// Start metrics export if enabled
 	utils.SetupMetrics(&cfg.Metrics)
 
+	// Setup RPC tracing if enabled
+	rpcTracingService, err := utils.SetupRPCTracing(ctx)
+	if err != nil {
+		utils.Fatalf("failed to setup rpc tracing: %v", err)
+	}
+	if rpcTracingService != nil {
+		utils.RegisterRPCTracingService(rpcTracingService, stack)
+	}
+
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
 
 	// Create gauge with geth system and build information
