@@ -72,6 +72,7 @@ var Defaults = Config{
 	RPCTxFeeCap:          1, // 1 ether
 	TxSyncDefaultTimeout: 20 * time.Second,
 	TxSyncMaxTimeout:     1 * time.Minute,
+	SlowBlockThreshold:   time.Second * 2,
 }
 
 //go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
@@ -117,6 +118,10 @@ type Config struct {
 	// canonical chain of all remote peers. Setting the option makes geth verify the
 	// presence of these blocks for every new peer connection.
 	RequiredBlocks map[uint64]common.Hash `toml:"-"`
+
+	// SlowBlockThreshold is the block execution speed threshold (Mgas/s)
+	// below which detailed statistics are logged.
+	SlowBlockThreshold time.Duration `toml:",omitempty"`
 
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`

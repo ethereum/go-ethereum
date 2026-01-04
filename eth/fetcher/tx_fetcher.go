@@ -170,10 +170,10 @@ type TxFetcher struct {
 	alternates map[common.Hash]map[string]struct{} // In-flight transaction alternate origins if retrieval fails
 
 	// Callbacks
-	hasTx    func(common.Hash) bool             // Retrieves a tx from the local txpool
-	addTxs   func([]*types.Transaction) []error // Insert a batch of transactions into local txpool
-	fetchTxs func(string, []common.Hash) error  // Retrieves a set of txs from a remote peer
-	dropPeer func(string)                       // Drops a peer in case of announcement violation
+	validateMeta func(common.Hash, byte) error      // Validate a tx metadata based on the local txpool
+	addTxs       func([]*types.Transaction) []error // Insert a batch of transactions into local txpool
+	fetchTxs     func(string, []common.Hash) error  // Retrieves a set of txs from a remote peer
+	dropPeer     func(string)                       // Drops a peer in case of announcement violation
 
 	step     chan struct{}    // Notification channel when the fetcher loop iterates
 	clock    mclock.Clock     // Monotonic clock or simulated clock for tests
@@ -183,36 +183,36 @@ type TxFetcher struct {
 
 // NewTxFetcher creates a transaction fetcher to retrieve transaction
 // based on hash announcements.
-func NewTxFetcher(hasTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string)) *TxFetcher {
-	return NewTxFetcherForTests(hasTx, addTxs, fetchTxs, dropPeer, mclock.System{}, time.Now, nil)
+func NewTxFetcher(validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string)) *TxFetcher {
+	return NewTxFetcherForTests(validateMeta, addTxs, fetchTxs, dropPeer, mclock.System{}, time.Now, nil)
 }
 
 // NewTxFetcherForTests is a testing method to mock out the realtime clock with
 // a simulated version and the internal randomness with a deterministic one.
 func NewTxFetcherForTests(
-	hasTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string),
+	validateMeta func(common.Hash, byte) error, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string),
 	clock mclock.Clock, realTime func() time.Time, rand *mrand.Rand) *TxFetcher {
 	return &TxFetcher{
-		notify:      make(chan *txAnnounce),
-		cleanup:     make(chan *txDelivery),
-		drop:        make(chan *txDrop),
-		quit:        make(chan struct{}),
-		waitlist:    make(map[common.Hash]map[string]struct{}),
-		waittime:    make(map[common.Hash]mclock.AbsTime),
-		waitslots:   make(map[string]map[common.Hash]*txMetadataWithSeq),
-		announces:   make(map[string]map[common.Hash]*txMetadataWithSeq),
-		announced:   make(map[common.Hash]map[string]struct{}),
-		fetching:    make(map[common.Hash]string),
-		requests:    make(map[string]*txRequest),
-		alternates:  make(map[common.Hash]map[string]struct{}),
-		underpriced: lru.NewCache[common.Hash, time.Time](maxTxUnderpricedSetSize),
-		hasTx:       hasTx,
-		addTxs:      addTxs,
-		fetchTxs:    fetchTxs,
-		dropPeer:    dropPeer,
-		clock:       clock,
-		realTime:    realTime,
-		rand:        rand,
+		notify:       make(chan *txAnnounce),
+		cleanup:      make(chan *txDelivery),
+		drop:         make(chan *txDrop),
+		quit:         make(chan struct{}),
+		waitlist:     make(map[common.Hash]map[string]struct{}),
+		waittime:     make(map[common.Hash]mclock.AbsTime),
+		waitslots:    make(map[string]map[common.Hash]*txMetadataWithSeq),
+		announces:    make(map[string]map[common.Hash]*txMetadataWithSeq),
+		announced:    make(map[common.Hash]map[string]struct{}),
+		fetching:     make(map[common.Hash]string),
+		requests:     make(map[string]*txRequest),
+		alternates:   make(map[common.Hash]map[string]struct{}),
+		underpriced:  lru.NewCache[common.Hash, time.Time](maxTxUnderpricedSetSize),
+		validateMeta: validateMeta,
+		addTxs:       addTxs,
+		fetchTxs:     fetchTxs,
+		dropPeer:     dropPeer,
+		clock:        clock,
+		realTime:     realTime,
+		rand:         rand,
 	}
 }
 
@@ -235,19 +235,26 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 		underpriced int64
 	)
 	for i, hash := range hashes {
-		switch {
-		case f.hasTx(hash):
+		err := f.validateMeta(hash, types[i])
+		if errors.Is(err, txpool.ErrAlreadyKnown) {
 			duplicate++
-		case f.isKnownUnderpriced(hash):
-			underpriced++
-		default:
-			unknownHashes = append(unknownHashes, hash)
-
-			// Transaction metadata has been available since eth68, and all
-			// legacy eth protocols (prior to eth68) have been deprecated.
-			// Therefore, metadata is always expected in the announcement.
-			unknownMetas = append(unknownMetas, txMetadata{kind: types[i], size: sizes[i]})
+			continue
 		}
+		if err != nil {
+			continue
+		}
+
+		if f.isKnownUnderpriced(hash) {
+			underpriced++
+			continue
+		}
+
+		unknownHashes = append(unknownHashes, hash)
+
+		// Transaction metadata has been available since eth68, and all
+		// legacy eth protocols (prior to eth68) have been deprecated.
+		// Therefore, metadata is always expected in the announcement.
+		unknownMetas = append(unknownMetas, txMetadata{kind: types[i], size: sizes[i]})
 	}
 	txAnnounceKnownMeter.Mark(duplicate)
 	txAnnounceUnderpricedMeter.Mark(underpriced)
@@ -345,9 +352,9 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		otherRejectMeter.Mark(otherreject)
 
 		// If 'other reject' is >25% of the deliveries in any batch, sleep a bit.
-		if otherreject > addTxsBatchSize/4 {
+		if otherreject > int64((len(batch)+3)/4) {
+			log.Debug("Peer delivering stale or invalid transactions", "peer", peer, "rejected", otherreject)
 			time.Sleep(200 * time.Millisecond)
-			log.Debug("Peer delivering stale transactions", "peer", peer, "rejected", otherreject)
 		}
 	}
 	select {

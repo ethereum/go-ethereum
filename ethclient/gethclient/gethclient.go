@@ -104,7 +104,10 @@ func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []s
 
 	var res accountResult
 	err := ec.c.CallContext(ctx, &res, "eth_getProof", account, keys, toBlockNumArg(blockNumber))
-	// Turn hexutils back to normal datatypes
+	if err != nil {
+		return nil, err
+	}
+	// Turn hexutils back to normal data types
 	storageResults := make([]StorageResult, 0, len(res.StorageProof))
 	for _, st := range res.StorageProof {
 		storageResults = append(storageResults, StorageResult{
@@ -122,7 +125,7 @@ func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []s
 		StorageHash:  res.StorageHash,
 		StorageProof: storageResults,
 	}
-	return &result, err
+	return &result, nil
 }
 
 // CallContract executes a message call transaction, which is directly executed in the VM

@@ -163,12 +163,15 @@ type indexWriter struct {
 	db       ethdb.KeyValueReader
 }
 
-// newIndexWriter constructs the index writer for the specified state.
-func newIndexWriter(db ethdb.KeyValueReader, state stateIdent) (*indexWriter, error) {
+// newIndexWriter constructs the index writer for the specified state. Additionally,
+// it takes an integer as the limit and prunes all existing elements above that ID.
+// It's essential as the recovery mechanism after unclean shutdown during the history
+// indexing.
+func newIndexWriter(db ethdb.KeyValueReader, state stateIdent, limit uint64) (*indexWriter, error) {
 	blob := readStateIndex(state, db)
 	if len(blob) == 0 {
 		desc := newIndexBlockDesc(0)
-		bw, _ := newBlockWriter(nil, desc)
+		bw, _ := newBlockWriter(nil, desc, 0 /* useless if the block is empty */)
 		return &indexWriter{
 			descList: []*indexBlockDesc{desc},
 			bw:       bw,
@@ -180,15 +183,27 @@ func newIndexWriter(db ethdb.KeyValueReader, state stateIdent) (*indexWriter, er
 	if err != nil {
 		return nil, err
 	}
+	// Trim trailing blocks whose elements all exceed the limit.
+	for i := len(descList) - 1; i > 0 && descList[i].max > limit; i-- {
+		// The previous block has the elements that exceed the limit,
+		// therefore the current block can be entirely dropped.
+		if descList[i-1].max >= limit {
+			descList = descList[:i]
+		}
+	}
+	// Take the last block for appending new elements
 	lastDesc := descList[len(descList)-1]
 	indexBlock := readStateIndexBlock(state, db, lastDesc.id)
-	bw, err := newBlockWriter(indexBlock, lastDesc)
+
+	// Construct the writer for the last block. All elements in this block
+	// that exceed the limit will be truncated.
+	bw, err := newBlockWriter(indexBlock, lastDesc, limit)
 	if err != nil {
 		return nil, err
 	}
 	return &indexWriter{
 		descList: descList,
-		lastID:   lastDesc.max,
+		lastID:   bw.last(),
 		bw:       bw,
 		state:    state,
 		db:       db,
@@ -221,7 +236,7 @@ func (w *indexWriter) rotate() error {
 		desc = newIndexBlockDesc(w.bw.desc.id + 1)
 	)
 	w.frozen = append(w.frozen, w.bw)
-	w.bw, err = newBlockWriter(nil, desc)
+	w.bw, err = newBlockWriter(nil, desc, 0 /* useless if the block is empty */)
 	if err != nil {
 		return err
 	}
@@ -271,13 +286,13 @@ type indexDeleter struct {
 }
 
 // newIndexDeleter constructs the index deleter for the specified state.
-func newIndexDeleter(db ethdb.KeyValueReader, state stateIdent) (*indexDeleter, error) {
+func newIndexDeleter(db ethdb.KeyValueReader, state stateIdent, limit uint64) (*indexDeleter, error) {
 	blob := readStateIndex(state, db)
 	if len(blob) == 0 {
 		// TODO(rjl493456442) we can probably return an error here,
 		// deleter with no data is meaningless.
 		desc := newIndexBlockDesc(0)
-		bw, _ := newBlockWriter(nil, desc)
+		bw, _ := newBlockWriter(nil, desc, 0 /* useless if the block is empty */)
 		return &indexDeleter{
 			descList: []*indexBlockDesc{desc},
 			bw:       bw,
@@ -289,22 +304,34 @@ func newIndexDeleter(db ethdb.KeyValueReader, state stateIdent) (*indexDeleter, 
 	if err != nil {
 		return nil, err
 	}
+	// Trim trailing blocks whose elements all exceed the limit.
+	for i := len(descList) - 1; i > 0 && descList[i].max > limit; i-- {
+		// The previous block has the elements that exceed the limit,
+		// therefore the current block can be entirely dropped.
+		if descList[i-1].max >= limit {
+			descList = descList[:i]
+		}
+	}
+	// Take the block for deleting element from
 	lastDesc := descList[len(descList)-1]
 	indexBlock := readStateIndexBlock(state, db, lastDesc.id)
-	bw, err := newBlockWriter(indexBlock, lastDesc)
+
+	// Construct the writer for the last block. All elements in this block
+	// that exceed the limit will be truncated.
+	bw, err := newBlockWriter(indexBlock, lastDesc, limit)
 	if err != nil {
 		return nil, err
 	}
 	return &indexDeleter{
 		descList: descList,
-		lastID:   lastDesc.max,
+		lastID:   bw.last(),
 		bw:       bw,
 		state:    state,
 		db:       db,
 	}, nil
 }
 
-// empty returns an flag indicating whether the state index is empty.
+// empty returns whether the state index is empty.
 func (d *indexDeleter) empty() bool {
 	return d.bw.empty() && len(d.descList) == 1
 }
@@ -337,7 +364,7 @@ func (d *indexDeleter) pop(id uint64) error {
 	// Open the previous block writer for deleting
 	lastDesc := d.descList[len(d.descList)-1]
 	indexBlock := readStateIndexBlock(d.state, d.db, lastDesc.id)
-	bw, err := newBlockWriter(indexBlock, lastDesc)
+	bw, err := newBlockWriter(indexBlock, lastDesc, lastDesc.max)
 	if err != nil {
 		return err
 	}

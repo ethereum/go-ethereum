@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
@@ -105,7 +104,6 @@ type HistoricDB struct {
 	triedb        *triedb.Database
 	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
 	codeSizeCache *lru.Cache[common.Hash, int]
-	pointCache    *utils.PointCache
 }
 
 // NewHistoricDatabase creates a historic state database.
@@ -115,7 +113,6 @@ func NewHistoricDatabase(disk ethdb.KeyValueStore, triedb *triedb.Database) *His
 		triedb:        triedb,
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
-		pointCache:    utils.NewPointCache(pointCacheSize),
 	}
 }
 
@@ -137,11 +134,6 @@ func (db *HistoricDB) OpenTrie(root common.Hash) (Trie, error) {
 // historic database.
 func (db *HistoricDB) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, trie Trie) (Trie, error) {
 	return nil, errors.New("not implemented")
-}
-
-// PointCache returns the cache holding points used in verkle tree key computation
-func (db *HistoricDB) PointCache() *utils.PointCache {
-	return db.pointCache
 }
 
 // TrieDB returns the underlying trie database for managing trie nodes.

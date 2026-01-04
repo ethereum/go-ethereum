@@ -38,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 	"golang.org/x/sync/errgroup"
 )
@@ -141,15 +140,17 @@ type StateDB struct {
 	witnessStats *stateless.WitnessStats
 
 	// Measurements gathered during execution for debugging purposes
-	AccountReads    time.Duration
-	AccountHashes   time.Duration
-	AccountUpdates  time.Duration
-	AccountCommits  time.Duration
+	AccountReads   time.Duration
+	AccountHashes  time.Duration
+	AccountUpdates time.Duration
+	AccountCommits time.Duration
+
 	StorageReads    time.Duration
 	StorageUpdates  time.Duration
 	StorageCommits  time.Duration
 	SnapshotCommits time.Duration
 	TrieDBCommits   time.Duration
+	CodeReads       time.Duration
 
 	AccountLoaded  int          // Number of accounts retrieved from the database during the state transition
 	AccountUpdated int          // Number of accounts updated during the state transition
@@ -157,6 +158,7 @@ type StateDB struct {
 	StorageLoaded  int          // Number of storage slots retrieved from the database during the state transition
 	StorageUpdated atomic.Int64 // Number of storage slots updated during the state transition
 	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
+	CodeLoaded     int          // Number of contract code loaded during the state transition
 }
 
 // New creates a new state from a given trie.
@@ -185,7 +187,7 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 		transientStorage:     newTransientStorage(),
 	}
 	if db.TrieDB().IsVerkle() {
-		sdb.accessEvents = NewAccessEvents(db.PointCache())
+		sdb.accessEvents = NewAccessEvents()
 	}
 	return sdb, nil
 }
@@ -1316,11 +1318,16 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 
 // commitAndFlush is a wrapper of commit which also commits the state mutations
 // to the configured data stores.
-func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (*stateUpdate, error) {
+func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorageWiping bool, dedupCode bool) (*stateUpdate, error) {
 	ret, err := s.commit(deleteEmptyObjects, noStorageWiping, block)
 	if err != nil {
 		return nil, err
 	}
+
+	if dedupCode {
+		ret.markCodeExistence(s.reader)
+	}
+
 	// Commit dirty contract code if any exists
 	if db := s.db.TrieDB().Disk(); db != nil && len(ret.codes) > 0 {
 		batch := db.NewBatch()
@@ -1375,21 +1382,21 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorag
 // no empty accounts left that could be deleted by EIP-158, storage wiping
 // should not occur.
 func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, error) {
-	ret, err := s.commitAndFlush(block, deleteEmptyObjects, noStorageWiping)
+	ret, err := s.commitAndFlush(block, deleteEmptyObjects, noStorageWiping, false)
 	if err != nil {
 		return common.Hash{}, err
 	}
 	return ret.root, nil
 }
 
-// CommitWithUpdate writes the state mutations and returns both the root hash and the state update.
-// This is useful for tracking state changes at the blockchain level.
-func (s *StateDB) CommitWithUpdate(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, *stateUpdate, error) {
-	ret, err := s.commitAndFlush(block, deleteEmptyObjects, noStorageWiping)
+// CommitAndTrack writes the state mutations and notifies the size tracker of the state changes.
+func (s *StateDB) CommitAndTrack(block uint64, deleteEmptyObjects bool, noStorageWiping bool, sizer *SizeTracker) (common.Hash, error) {
+	ret, err := s.commitAndFlush(block, deleteEmptyObjects, noStorageWiping, true)
 	if err != nil {
-		return common.Hash{}, nil, err
+		return common.Hash{}, err
 	}
-	return ret.root, ret, nil
+	sizer.Notify(ret)
+	return ret.root, nil
 }
 
 // Prepare handles the preparatory steps for executing a state transition with.
@@ -1485,11 +1492,6 @@ func (s *StateDB) markUpdate(addr common.Address) {
 	}
 	s.mutations[addr].applied = false
 	s.mutations[addr].typ = update
-}
-
-// PointCache returns the point cache used by verkle tree.
-func (s *StateDB) PointCache() *utils.PointCache {
-	return s.db.PointCache()
 }
 
 // Witness retrieves the current state witness being collected.
