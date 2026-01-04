@@ -47,15 +47,12 @@ func attributeMap(attrs []attribute.KeyValue) map[string]string {
 
 func newTracingServer(t *testing.T) (*Server, *sdktrace.TracerProvider, *tracetest.InMemoryExporter) {
 	t.Helper()
-
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
-
 	server := newTestServer()
 	server.SetTracerProvider(tp)
 	t.Cleanup(server.Stop)
-
 	return server, tp, exporter
 }
 
@@ -97,9 +94,6 @@ func TestTracingHTTP(t *testing.T) {
 	}
 
 	attrs := attributeMap(rpcSpan.Attributes)
-	if attrs["rpc.system"] != "jsonrpc" {
-		t.Errorf("expected rpc.system=jsonrpc, got %v", attrs["rpc.system"])
-	}
 	if attrs["rpc.method"] != "test_echo" {
 		t.Errorf("expected rpc.method=test_echo, got %v", attrs["rpc.method"])
 	}
@@ -149,8 +143,7 @@ func TestTracingBatchHTTP(t *testing.T) {
 	for i := range spans {
 		if spans[i].Name == "rpc.handleCall" {
 			attrs := attributeMap(spans[i].Attributes)
-			if attrs["rpc.system"] == "jsonrpc" &&
-				attrs["rpc.method"] == "test_echo" &&
+			if attrs["rpc.method"] == "test_echo" &&
 				attrs["rpc.batch"] == "true" {
 				found++
 			}

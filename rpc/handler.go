@@ -524,30 +524,26 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 	}
 
 	// Start root span for the request.
-	ctx, rootSpan := h.startSpan(cp.ctx, msg, "rpc.handleCall", cp.isBatch)
-	defer rootSpan.End()
+	var err error
+	ctx, done := h.startSpan(cp.ctx, msg, "rpc.handleCall", cp.isBatch)
+	defer done(&err)
 
 	// Start tracing span before parsing arguments.
-	_, pspan := h.startSpan(ctx, msg, "rpc.parsePositionalArguments", cp.isBatch)
+	_, pDone := h.startSpan(ctx, msg, "rpc.parsePositionalArguments", cp.isBatch)
 	args, err := parsePositionalArguments(msg.Params, callb.argTypes)
+	pDone(&err)
 	if err != nil {
-		pspan.RecordError(err)
-		pspan.SetStatus(codes.Error, err.Error())
-		rootSpan.SetStatus(codes.Error, err.Error())
-		pspan.End()
 		return msg.errorResponse(&invalidParamsError{err.Error()})
 	}
-	pspan.End()
 	start := time.Now()
 
 	// Start tracing span before running the method.
-	rctx, rspan := h.startSpan(ctx, msg, "rpc.runMethod", cp.isBatch)
+	rctx, rDone := h.startSpan(ctx, msg, "rpc.runMethod", cp.isBatch)
 	answer := h.runMethod(rctx, msg, callb, args, cp.isBatch)
 	if answer.Error != nil {
-		err := errors.New(answer.Error.Message)
-		rootSpan.SetStatus(codes.Error, err.Error())
+		err = errors.New(answer.Error.Message)
 	}
-	rspan.End()
+	rDone(&err)
 
 	// Collect the statistics for RPC calls if metrics is enabled.
 	rpcRequestGauge.Inc(1)
@@ -599,18 +595,20 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 	return h.runMethod(ctx, msg, callb, args, cp.isBatch)
 }
 
-// startSpan starts a tracing span for an RPC call.
-func (h *handler) startSpan(ctx context.Context, msg *jsonrpcMessage, spanName string, isBatch bool) (context.Context, trace.Span) {
+// startSpan starts a tracing span for an RPC call and returns a function to
+// end the span. The function will record errors and set span status based on
+// the error value.
+func (h *handler) startSpan(ctx context.Context, msg *jsonrpcMessage, spanName string, isBatch bool) (context.Context, func(*error)) {
+	parentSpan := trace.SpanFromContext(ctx)
 	ctx, span := h.tracer().Start(ctx, spanName)
 
 	// Fast path: noop provider or span not sampled
 	if !span.IsRecording() {
-		return ctx, span
+		return ctx, func(*error) { span.End() }
 	}
 
 	// Set span attributes.
 	span.SetAttributes(
-		semconv.RPCSystemKey.String("jsonrpc"),
 		semconv.RPCMethodKey.String(msg.Method),
 		attribute.Bool("rpc.batch", isBatch),
 	)
@@ -618,7 +616,19 @@ func (h *handler) startSpan(ctx context.Context, msg *jsonrpcMessage, spanName s
 	if id != "" && id != "null" {
 		span.SetAttributes(attribute.String("rpc.id", id))
 	}
-	return ctx, span
+
+	// Define the function to end the span and handle error recording
+	done := func(err *error) {
+		if *err != nil {
+			span.RecordError(*err)
+			span.SetStatus(codes.Error, (*err).Error())
+			parentSpan.SetStatus(codes.Error, (*err).Error())
+		} else {
+			span.SetStatus(codes.Ok, "")
+		}
+		span.End()
+	}
+	return ctx, done
 }
 
 // tracer returns the OpenTelemetry Tracer for RPC call tracing.
@@ -634,26 +644,22 @@ func (h *handler) tracer() trace.Tracer {
 
 // runMethod runs the Go callback for an RPC method.
 func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *callback, args []reflect.Value, isBatch bool) *jsonrpcMessage {
-	parentSpan := trace.SpanFromContext(ctx)
 	result, err := callb.call(ctx, msg.Method, args)
 	if err != nil {
-		parentSpan.SetStatus(codes.Error, err.Error())
 		return msg.errorResponse(err)
 	}
 
 	// If parent span is recording, start a span for the response.
 	// Note: This prevents msg.response spans from being created when
 	// the parent span is not recording (e.g. subscription tracing disabled).
+	parentSpan := trace.SpanFromContext(ctx)
 	if parentSpan.IsRecording() {
-		_, span := h.startSpan(ctx, msg, "rpc.msg.response", isBatch)
-		defer span.End()
+		_, done := h.startSpan(ctx, msg, "rpc.msg.response", isBatch)
 		response := msg.response(result)
 		if response.Error != nil {
-			err := errors.New(response.Error.Message)
-			span.RecordError(errors.New(response.Error.Message))
-			span.SetStatus(codes.Error, err.Error())
-			parentSpan.SetStatus(codes.Error, err.Error())
+			err = errors.New(response.Error.Message)
 		}
+		done(&err)
 		return response
 	}
 	return msg.response(result)
