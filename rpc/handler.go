@@ -523,25 +523,25 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 
 	// Start root span for the request.
 	var err error
-	ctx, done := h.startSpan(cp.ctx, msg, "rpc.handleCall")
-	defer done(&err)
+	ctx, spanEnd := h.startSpan(cp.ctx, msg, "rpc.handleCall")
+	defer spanEnd(&err)
 
 	// Start tracing span before parsing arguments.
-	_, pDone := h.startSpan(ctx, msg, "rpc.parsePositionalArguments")
+	_, pSpanEnd := h.startSpan(ctx, msg, "rpc.parsePositionalArguments")
 	args, err := parsePositionalArguments(msg.Params, callb.argTypes)
-	pDone(&err)
+	pSpanEnd(&err)
 	if err != nil {
 		return msg.errorResponse(&invalidParamsError{err.Error()})
 	}
 	start := time.Now()
 
 	// Start tracing span before running the method.
-	rctx, rDone := h.startSpan(ctx, msg, "rpc.runMethod")
+	rctx, rSpanEnd := h.startSpan(ctx, msg, "rpc.runMethod")
 	answer := h.runMethod(rctx, msg, callb, args)
 	if answer.Error != nil {
 		err = errors.New(answer.Error.Message)
 	}
-	rDone(&err)
+	rSpanEnd(&err)
 
 	// Collect the statistics for RPC calls if metrics is enabled.
 	rpcRequestGauge.Inc(1)
@@ -613,7 +613,7 @@ func (h *handler) startSpan(ctx context.Context, msg *jsonrpcMessage, spanName s
 	}
 
 	// Define the function to end the span and handle error recording
-	done := func(err *error) {
+	spanEnd := func(err *error) {
 		if *err != nil {
 			span.RecordError(*err)
 			span.SetStatus(codes.Error, (*err).Error())
@@ -623,7 +623,7 @@ func (h *handler) startSpan(ctx context.Context, msg *jsonrpcMessage, spanName s
 		}
 		span.End()
 	}
-	return ctx, done
+	return ctx, spanEnd
 }
 
 // tracer returns the OpenTelemetry Tracer for RPC call tracing.
@@ -649,12 +649,12 @@ func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *cal
 	// the parent span is not recording (e.g. subscription tracing disabled).
 	parentSpan := trace.SpanFromContext(ctx)
 	if parentSpan.IsRecording() {
-		_, done := h.startSpan(ctx, msg, "rpc.msg.response")
+		_, spanEnd := h.startSpan(ctx, msg, "rpc.msg.response")
 		response := msg.response(result)
 		if response.Error != nil {
 			err = errors.New(response.Error.Message)
 		}
-		done(&err)
+		spanEnd(&err)
 		return response
 	}
 	return msg.response(result)
