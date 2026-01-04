@@ -286,3 +286,13 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
 		}
 	}
 }
+
+// Inner returns the underlying StateDB.
+func (s *hookedStateDB) Inner() *StateDB {
+	return s.inner
+}
+
+// MarkCodeExecuted records that a contract's code was executed.
+func (s *hookedStateDB) MarkCodeExecuted(codeHash common.Hash, isSystem bool) {
+	s.inner.MarkCodeExecuted(codeHash, isSystem)
+}

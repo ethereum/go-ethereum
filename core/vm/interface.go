@@ -97,4 +97,9 @@ type StateDB interface {
 
 	// Finalise must be invoked at the end of a transaction
 	Finalise(bool)
+
+	// MarkCodeExecuted records that a contract's code was executed.
+	// Used for metrics tracking to count unique contracts executed.
+	// The isSystem parameter indicates if this is a system call (e.g., EIP-4788).
+	MarkCodeExecuted(codeHash common.Hash, isSystem bool)
 }
