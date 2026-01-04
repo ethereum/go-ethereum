@@ -44,13 +44,6 @@ const (
 	heavyTransactionPriority = 40
 )
 
-// isHeavyTransaction returns an indicator whether the transaction is regarded
-// as heavy or not.
-func isHeavyTransaction(txGasLimit uint64, blockGasUsed uint64) bool {
-	threshold := min(blockGasUsed*heavyTransactionThreshold/100, params.MaxTxGas/2)
-	return txGasLimit >= threshold
-}
-
 // statePrefetcher is a basic Prefetcher that executes transactions from a block
 // on top of the parent state, aiming to prefetch potentially useful state data
 // from disk. Transactions are executed in parallel to fully leverage the
@@ -85,6 +78,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 		processed = make(map[common.Hash]struct{}, len(block.Transactions()))
 		heavyTxs  = make(chan *types.Transaction, len(block.Transactions()))
 		normalTxs = make(chan *types.Transaction, len(block.Transactions()))
+		threshold = min(block.GasUsed()*heavyTransactionThreshold/100, params.MaxTxGas/2)
 	)
 	for _, tx := range block.Transactions() {
 		// Note: gasLimit is not equivalent to gasUsed. Ideally, transaction heaviness
@@ -92,7 +86,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 		// execution, so gasLimit is used as the indicator instead. This allows transaction
 		// senders to inflate gasLimit to gain higher prefetch priority, but this
 		// trade-off is unavoidable.
-		if isHeavyTransaction(tx.Gas(), block.GasUsed()) {
+		if tx.Gas() > threshold {
 			heavyTxs <- tx
 		}
 		// The heavy transaction will also be emitted with the normal prefetching
