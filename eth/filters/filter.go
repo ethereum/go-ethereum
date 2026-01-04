@@ -139,9 +139,14 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	if err != nil {
 		return nil, err
 	}
-	end, err := resolveSpecial(f.end)
-	if err != nil {
-		return nil, err
+	var end uint64
+	if f.begin != f.end {
+		end, err = resolveSpecial(f.end)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		end = begin
 	}
 	if begin > end {
 		return nil, errInvalidBlockRange
