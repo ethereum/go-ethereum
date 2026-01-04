@@ -159,17 +159,6 @@ func newTrienodeHistory(root common.Hash, parent common.Hash, block uint64, node
 	}
 }
 
-// sharedLen returns the length of the common prefix shared by a and b.
-func sharedLen(a, b []byte) int {
-	n := min(len(a), len(b))
-	for i := range n {
-		if a[i] != b[i] {
-			return i
-		}
-	}
-	return n
-}
-
 // typ implements the history interface, returning the historical data type held.
 func (h *trienodeHistory) typ() historyType {
 	return typeTrienodeHistory
