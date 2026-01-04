@@ -255,9 +255,9 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash, sink chan *et
 // peer in the download tester. The returned function can be used to retrieve
 // batches of block receipts from the particularly requested peer.
 func (dlp *downloadTesterPeer) RequestReceipts(hashes []common.Hash, sink chan *eth.Response) (*eth.Request, error) {
-	blobs := eth.ServiceGetReceiptsQuery68(dlp.chain, hashes)
+	blobs := eth.ServiceGetReceiptsQuery(dlp.chain, hashes)
 
-	receipts := make([]types.Receipts, len(blobs))
+	receipts := make([]*eth.ReceiptList, len(blobs))
 	for i, blob := range blobs {
 		rlp.DecodeBytes(blob, &receipts[i])
 	}
@@ -269,7 +269,12 @@ func (dlp *downloadTesterPeer) RequestReceipts(hashes []common.Hash, sink chan *
 	req := &eth.Request{
 		Peer: dlp.id,
 	}
-	resp := eth.ReceiptsRLPResponse(types.EncodeBlockReceiptLists(receipts))
+
+	var resp eth.ReceiptsRLPResponse
+	for i := range receipts {
+		resp = append(resp, receipts[i].EncodeForStorage())
+	}
+
 	res := &eth.Response{
 		Req:  req,
 		Res:  &resp,
@@ -390,7 +395,7 @@ func assertOwnChain(t *testing.T, tester *downloadTester, length int) {
 }
 
 func TestCanonicalSynchronisation68Full(t *testing.T) { testCanonSync(t, eth.ETH68, FullSync) }
-func TestCanonicalSynchronisation68Snap(t *testing.T) { testCanonSync(t, eth.ETH68, SnapSync) }
+func TestCanonicalSynchronisation69Snap(t *testing.T) { testCanonSync(t, eth.ETH69, SnapSync) }
 
 func testCanonSync(t *testing.T, protocol uint, mode SyncMode) {
 	success := make(chan struct{})

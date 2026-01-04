@@ -478,7 +478,7 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 }
 
 // Tests that the transaction receipts can be retrieved based on hashes.
-func TestGetBlockReceipts68(t *testing.T) { testGetBlockReceipts(t, ETH68) }
+func TestGetBlockReceipts(t *testing.T) { testGetBlockReceipts(t, ETH69) }
 
 func testGetBlockReceipts(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -528,13 +528,16 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 	// Collect the hashes to request, and the response to expect
 	var (
 		hashes   []common.Hash
-		receipts []*ReceiptList68
+		receipts []rlp.RawValue
 	)
 	for i := uint64(0); i <= backend.chain.CurrentBlock().Number.Uint64(); i++ {
 		block := backend.chain.GetBlockByNumber(i)
 		hashes = append(hashes, block.Hash())
-		trs := backend.chain.GetReceiptsByHash(block.Hash())
-		receipts = append(receipts, NewReceiptList68(trs))
+
+		receiptsRLP := backend.chain.GetReceiptsRLP(block.Hash())
+		bodyRLP := backend.chain.GetBodyRLP(block.Hash())
+		tr, _ := encodeTypes(receiptsRLP, bodyRLP)
+		receipts = append(receipts, tr)
 	}
 
 	// Send the hash request and verify the response
@@ -542,9 +545,9 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 		RequestId:          123,
 		GetReceiptsRequest: hashes,
 	})
-	if err := p2p.ExpectMsg(peer.app, ReceiptsMsg, &ReceiptsPacket[*ReceiptList68]{
-		RequestId: 123,
-		List:      receipts,
+	if err := p2p.ExpectMsg(peer.app, ReceiptsMsg, &ReceiptsRLPPacket{
+		RequestId:           123,
+		ReceiptsRLPResponse: receipts,
 	}); err != nil {
 		t.Errorf("receipts mismatch: %v", err)
 	}
