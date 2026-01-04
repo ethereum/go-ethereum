@@ -503,11 +503,11 @@ func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.He
 
 		envelope := getNewEnvelope(t, api, parent, w, h)
 
-		// NOTE: This span is for the test harness only. Engine oot spans are created
+		// NOTE: This span is for the test harness only. Engine root spans are created
 		// in NewPayloadV* entrypoints. This test calls newPayload() directly.
-		ctx, span := startNewPayloadSpan(context.Background(), "engine.api_test.setupBlocks", *envelope.ExecutionPayload)
-		defer span.End()
+		ctx, spanEnd := startNewPayloadSpan(context.Background(), "engine.api_test.setupBlocks", *envelope.ExecutionPayload)
 		execResp, err := api.newPayload(ctx, *envelope.ExecutionPayload, []common.Hash{}, h, envelope.Requests, false)
+		spanEnd(&err)
 		if err != nil {
 			t.Fatalf("can't execute payload: %v", err)
 		}

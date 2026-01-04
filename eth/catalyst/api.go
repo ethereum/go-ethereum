@@ -630,8 +630,11 @@ func (api *ConsensusAPI) getBlobs(hashes []common.Hash, v2 bool) ([]*engine.Blob
 // Helper for NewPayload* methods.
 var invalidStatus = engine.PayloadStatusV1{Status: engine.INVALID}
 
-// startNewPayloadSpan starts a tracing span for a new payload.
-func startNewPayloadSpan(ctx context.Context, name string, params engine.ExecutableData) (context.Context, trace.Span) {
+// startNewPayloadSpan starts a tracing span for an RPC call and returns a function to
+// end the span. The function will record errors and set span status based on
+// the error value.
+func startNewPayloadSpan(ctx context.Context, name string, params engine.ExecutableData) (context.Context, func(*error)) {
+	parentSpan := trace.SpanFromContext(ctx)
 	tracer := otel.Tracer("")
 	ctx, span := tracer.Start(ctx, name)
 	span.SetAttributes(
@@ -639,13 +642,23 @@ func startNewPayloadSpan(ctx context.Context, name string, params engine.Executa
 		attribute.String("block.hash", params.BlockHash.Hex()),
 		attribute.Int("tx.count", len(params.Transactions)),
 	)
-	return ctx, span
+	spanEnd := func(err *error) {
+		if *err != nil {
+			span.RecordError(*err)
+			span.SetStatus(codes.Error, (*err).Error())
+			parentSpan.SetStatus(codes.Error, (*err).Error())
+		} else {
+			span.SetStatus(codes.Ok, "")
+		}
+		span.End()
+	}
+	return ctx, spanEnd
 }
 
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) NewPayloadV1(ctx context.Context, params engine.ExecutableData) (engine.PayloadStatusV1, error) {
-	ctx, span := startNewPayloadSpan(ctx, "engine.newPayloadV1", params)
-	defer span.End()
+func (api *ConsensusAPI) NewPayloadV1(ctx context.Context, params engine.ExecutableData) (result engine.PayloadStatusV1, err error) {
+	ctx, spanEnd := startNewPayloadSpan(ctx, "engine.newPayloadV1", params)
+	defer spanEnd(&err)
 	if params.Withdrawals != nil {
 		return invalidStatus, paramsErr("withdrawals not supported in V1")
 	}
@@ -653,9 +666,9 @@ func (api *ConsensusAPI) NewPayloadV1(ctx context.Context, params engine.Executa
 }
 
 // NewPayloadV2 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) NewPayloadV2(ctx context.Context, params engine.ExecutableData) (engine.PayloadStatusV1, error) {
-	ctx, span := startNewPayloadSpan(ctx, "engine.newPayloadV2", params)
-	defer span.End()
+func (api *ConsensusAPI) NewPayloadV2(ctx context.Context, params engine.ExecutableData) (result engine.PayloadStatusV1, err error) {
+	ctx, spanEnd := startNewPayloadSpan(ctx, "engine.newPayloadV2", params)
+	defer spanEnd(&err)
 	var (
 		cancun   = api.config().IsCancun(api.config().LondonBlock, params.Timestamp)
 		shanghai = api.config().IsShanghai(api.config().LondonBlock, params.Timestamp)
@@ -676,9 +689,9 @@ func (api *ConsensusAPI) NewPayloadV2(ctx context.Context, params engine.Executa
 }
 
 // NewPayloadV3 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) NewPayloadV3(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (engine.PayloadStatusV1, error) {
-	ctx, span := startNewPayloadSpan(ctx, "engine.newPayloadV3", params)
-	defer span.End()
+func (api *ConsensusAPI) NewPayloadV3(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (result engine.PayloadStatusV1, err error) {
+	ctx, spanEnd := startNewPayloadSpan(ctx, "engine.newPayloadV3", params)
+	defer spanEnd(&err)
 	switch {
 	case params.Withdrawals == nil:
 		return invalidStatus, paramsErr("nil withdrawals post-shanghai")
@@ -697,9 +710,9 @@ func (api *ConsensusAPI) NewPayloadV3(ctx context.Context, params engine.Executa
 }
 
 // NewPayloadV4 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) NewPayloadV4(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes) (engine.PayloadStatusV1, error) {
-	ctx, span := startNewPayloadSpan(ctx, "engine.newPayloadV4", params)
-	defer span.End()
+func (api *ConsensusAPI) NewPayloadV4(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes) (result engine.PayloadStatusV1, err error) {
+	ctx, spanEnd := startNewPayloadSpan(ctx, "engine.newPayloadV4", params)
+	defer spanEnd(&err)
 	switch {
 	case params.Withdrawals == nil:
 		return invalidStatus, paramsErr("nil withdrawals post-shanghai")
@@ -717,7 +730,7 @@ func (api *ConsensusAPI) NewPayloadV4(ctx context.Context, params engine.Executa
 		return invalidStatus, unsupportedForkErr("newPayloadV4 must only be called for prague/osaka payloads")
 	}
 	requests := convertRequests(executionRequests)
-	if err := validateRequests(requests); err != nil {
+	if err = validateRequests(requests); err != nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(err)
 	}
 	return api.newPayload(ctx, params, versionedHashes, beaconRoot, requests, false)
