@@ -79,7 +79,6 @@ type handler struct {
 type callProc struct {
 	ctx       context.Context
 	notifiers []*Notifier
-	isBatch   bool
 }
 
 func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry, batchRequestLimit, batchResponseMaxSize int, tracerProvider trace.TracerProvider) *handler {
@@ -205,7 +204,6 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 
 	// Process calls on a goroutine because they may block indefinitely:
 	h.startCallProc(func(cp *callProc) {
-		cp.isBatch = true
 		var (
 			timer      *time.Timer
 			cancel     context.CancelFunc
@@ -511,7 +509,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 		if err != nil {
 			return msg.errorResponse(&invalidParamsError{err.Error()})
 		}
-		return h.runMethod(cp.ctx, msg, h.unsubscribeCb, args, cp.isBatch)
+		return h.runMethod(cp.ctx, msg, h.unsubscribeCb, args)
 	}
 
 	// Check method name length
@@ -525,11 +523,11 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 
 	// Start root span for the request.
 	var err error
-	ctx, done := h.startSpan(cp.ctx, msg, "rpc.handleCall", cp.isBatch)
+	ctx, done := h.startSpan(cp.ctx, msg, "rpc.handleCall")
 	defer done(&err)
 
 	// Start tracing span before parsing arguments.
-	_, pDone := h.startSpan(ctx, msg, "rpc.parsePositionalArguments", cp.isBatch)
+	_, pDone := h.startSpan(ctx, msg, "rpc.parsePositionalArguments")
 	args, err := parsePositionalArguments(msg.Params, callb.argTypes)
 	pDone(&err)
 	if err != nil {
@@ -538,8 +536,8 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 	start := time.Now()
 
 	// Start tracing span before running the method.
-	rctx, rDone := h.startSpan(ctx, msg, "rpc.runMethod", cp.isBatch)
-	answer := h.runMethod(rctx, msg, callb, args, cp.isBatch)
+	rctx, rDone := h.startSpan(ctx, msg, "rpc.runMethod")
+	answer := h.runMethod(rctx, msg, callb, args)
 	if answer.Error != nil {
 		err = errors.New(answer.Error.Message)
 	}
@@ -592,13 +590,13 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 	n := &Notifier{h: h, namespace: namespace}
 	cp.notifiers = append(cp.notifiers, n)
 	ctx := context.WithValue(cp.ctx, notifierKey{}, n)
-	return h.runMethod(ctx, msg, callb, args, cp.isBatch)
+	return h.runMethod(ctx, msg, callb, args)
 }
 
 // startSpan starts a tracing span for an RPC call and returns a function to
 // end the span. The function will record errors and set span status based on
 // the error value.
-func (h *handler) startSpan(ctx context.Context, msg *jsonrpcMessage, spanName string, isBatch bool) (context.Context, func(*error)) {
+func (h *handler) startSpan(ctx context.Context, msg *jsonrpcMessage, spanName string) (context.Context, func(*error)) {
 	parentSpan := trace.SpanFromContext(ctx)
 	ctx, span := h.tracer().Start(ctx, spanName)
 
@@ -608,10 +606,7 @@ func (h *handler) startSpan(ctx context.Context, msg *jsonrpcMessage, spanName s
 	}
 
 	// Set span attributes.
-	span.SetAttributes(
-		semconv.RPCMethodKey.String(msg.Method),
-		attribute.Bool("rpc.batch", isBatch),
-	)
+	span.SetAttributes(semconv.RPCMethodKey.String(msg.Method))
 	id := strings.TrimSpace(string(msg.ID))
 	if id != "" && id != "null" {
 		span.SetAttributes(attribute.String("rpc.id", id))
@@ -643,7 +638,7 @@ func (h *handler) tracer() trace.Tracer {
 }
 
 // runMethod runs the Go callback for an RPC method.
-func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *callback, args []reflect.Value, isBatch bool) *jsonrpcMessage {
+func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *callback, args []reflect.Value) *jsonrpcMessage {
 	result, err := callb.call(ctx, msg.Method, args)
 	if err != nil {
 		return msg.errorResponse(err)
@@ -654,7 +649,7 @@ func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *cal
 	// the parent span is not recording (e.g. subscription tracing disabled).
 	parentSpan := trace.SpanFromContext(ctx)
 	if parentSpan.IsRecording() {
-		_, done := h.startSpan(ctx, msg, "rpc.msg.response", isBatch)
+		_, done := h.startSpan(ctx, msg, "rpc.msg.response")
 		response := msg.response(result)
 		if response.Error != nil {
 			err = errors.New(response.Error.Message)
