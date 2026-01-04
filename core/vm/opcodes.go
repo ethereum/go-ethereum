@@ -220,6 +220,15 @@ const (
 	DATACOPY  OpCode = 0xd3
 )
 
+// EIP-7701 operations.
+const (
+	TXPARAMLOAD OpCode = 0xdb
+	TXPARAMSIZE OpCode = 0xdc
+	TXPARAMCOPY OpCode = 0xdd
+	CURRENTROLE OpCode = 0xde
+	ACCEPTROLE  OpCode = 0xdf
+)
+
 // 0xe0 range - eof operations.
 const (
 	RJUMP          OpCode = 0xe0
@@ -422,6 +431,10 @@ var opCodeToString = [256]string{
 	DATASIZE:  "DATASIZE",
 	DATACOPY:  "DATACOPY",
 
+	// EIP-7701 ops.
+	CURRENTROLE: "CURRENTROLE",
+	ACCEPTROLE:  "ACCEPTROLE",
+
 	// 0xe0 range.
 	RJUMP:          "RJUMP",
 	RJUMPI:         "RJUMPI",
@@ -608,6 +621,8 @@ var stringToOp = map[string]OpCode{
 	"DATALOADN":       DATALOADN,
 	"DATASIZE":        DATASIZE,
 	"DATACOPY":        DATACOPY,
+	"CURRENTROLE":     CURRENTROLE,
+	"ACCEPTROLE":      ACCEPTROLE,
 	"RJUMP":           RJUMP,
 	"RJUMPI":          RJUMPI,
 	"RJUMPV":          RJUMPV,
