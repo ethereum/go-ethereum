@@ -869,7 +869,7 @@ func TestOpMCopy(t *testing.T) {
 			t.Errorf("overflow")
 		} else {
 			var overflow bool
-			if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
+			if memorySize, overflow = math.SafeMul(ToWordSize(memSize), 32); overflow {
 				t.Error(ErrGasUintOverflow)
 			}
 		}

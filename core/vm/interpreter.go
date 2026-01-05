@@ -214,7 +214,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 				}
 				// memory is expanded in words of 32 bytes. Gas
 				// is also calculated in words.
-				if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
+				if memorySize, overflow = math.SafeMul(ToWordSize(memSize), 32); overflow {
 					return nil, ErrGasUintOverflow
 				}
 			}
