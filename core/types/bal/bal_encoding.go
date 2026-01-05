@@ -91,7 +91,7 @@ func (e *BlockAccessList) String() string {
 // Validate returns an error if the contents of the access list are not ordered
 // according to the spec or any code changes are contained which exceed protocol
 // max code size.
-func (e BlockAccessList) Validate() error {
+func (e BlockAccessList) Validate(blockTxCount int) error {
 	if !slices.IsSortedFunc(e, func(a, b AccountAccess) int {
 		return bytes.Compare(a.Address[:], b.Address[:])
 	}) {
@@ -108,7 +108,7 @@ func (e BlockAccessList) Validate() error {
 	}
 
 	for _, entry := range e {
-		if err := entry.validate(); err != nil {
+		if err := entry.validate(blockTxCount); err != nil {
 			return err
 		}
 	}
@@ -229,16 +229,21 @@ type encodingSlotWrites struct {
 
 // validate returns an instance of the encoding-representation slot writes in
 // working representation.
-func (e *encodingSlotWrites) validate() error {
-	if slices.IsSortedFunc(e.Accesses, func(a, b encodingStorageWrite) int {
+func (e *encodingSlotWrites) validate(blockTxCount int) error {
+	if !slices.IsSortedFunc(e.Accesses, func(a, b encodingStorageWrite) int {
 		return cmp.Compare[uint16](a.TxIdx, b.TxIdx)
 	}) {
-		return nil
+		return errors.New("storage write tx indices not in order")
 	}
-	return errors.New("storage write tx indices not in order")
+	// TODO: add test that covers there are actually storage modifications here
+	// if there aren't, it should be a bad block
+	if len(e.Accesses) == 0 {
+		return fmt.Errorf("empty storage writes")
+	} else if int(e.Accesses[len(e.Accesses)-1].TxIdx) >= blockTxCount+2 {
+		return fmt.Errorf("storage access reported index higher than allowed")
+	}
+	return nil
 }
-
-// TODO: represent storage keys as common.Hash.  convert them at the time of decoding the BAL
 
 // AccountAccess is the encoding format of ConstructionAccountAccesses.
 type AccountAccess struct {
@@ -253,7 +258,7 @@ type AccountAccess struct {
 // validate converts the account accesses out of encoding format.
 // If any of the keys in the encoding object are not ordered according to the
 // spec, an error is returned.
-func (e *AccountAccess) validate() error {
+func (e *AccountAccess) validate(blockTxCount int) error {
 	// Check the storage write slots are sorted in order
 	if !slices.IsSortedFunc(e.StorageChanges, func(a, b encodingSlotWrites) int {
 		aHash, bHash := a.Slot.ToHash(), b.Slot.ToHash()
@@ -262,7 +267,7 @@ func (e *AccountAccess) validate() error {
 		return errors.New("storage writes slots not in lexicographic order")
 	}
 	for _, write := range e.StorageChanges {
-		if err := write.validate(); err != nil {
+		if err := write.validate(blockTxCount); err != nil {
 			return err
 		}
 	}
@@ -297,17 +302,36 @@ func (e *AccountAccess) validate() error {
 	}
 
 	// Check the balance changes are sorted in order
+	// and that none of them report an index above what is allowed
 	if !slices.IsSortedFunc(e.BalanceChanges, func(a, b encodingBalanceChange) int {
 		return cmp.Compare[uint16](a.TxIdx, b.TxIdx)
 	}) {
 		return errors.New("balance changes not in ascending order by tx index")
 	}
 
+	if len(e.BalanceChanges) > 0 && int(e.BalanceChanges[len(e.BalanceChanges)-1].TxIdx) > blockTxCount+2 {
+		return errors.New("highest balance change index beyond what is allowed")
+	}
 	// Check the nonce changes are sorted in order
+	// and that none of them report an index above what is allowed
 	if !slices.IsSortedFunc(e.NonceChanges, func(a, b encodingAccountNonce) int {
 		return cmp.Compare[uint16](a.TxIdx, b.TxIdx)
 	}) {
 		return errors.New("nonce changes not in ascending order by tx index")
+	}
+	if len(e.CodeChanges) > 0 && int(e.NonceChanges[len(e.NonceChanges)-1].TxIdx) >= blockTxCount+2 {
+		return errors.New("highest nonce change index beyond what is allowed")
+	}
+
+	// TODO: contact testing team to add a test case which has the code changes out of order,
+	// as it wasn't checked here previously
+	if !slices.IsSortedFunc(e.CodeChanges, func(a, b CodeChange) int {
+		return cmp.Compare[uint16](a.TxIdx, b.TxIdx)
+	}) {
+		return errors.New("code changes not in ascending order")
+	}
+	if len(e.CodeChanges) > 0 && int(e.CodeChanges[len(e.CodeChanges)-1].TxIdx) >= blockTxCount+2 {
+		return errors.New("highest code change index beyond what is allowed")
 	}
 
 	// validate that code changes could plausibly be correct (none exceed

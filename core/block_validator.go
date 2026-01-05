@@ -116,7 +116,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 			return fmt.Errorf("access list not present in block body")
 		} else if *block.Header().BlockAccessListHash != block.Body().AccessList.Hash() {
 			return fmt.Errorf("access list hash mismatch.  local: %x. remote: %x\n", block.Body().AccessList.Hash(), *block.Header().BlockAccessListHash)
-		} else if err := block.Body().AccessList.Validate(); err != nil {
+		} else if err := block.Body().AccessList.Validate(len(block.Transactions())); err != nil {
 			return fmt.Errorf("invalid block access list: %v", err)
 		}
 	} else if !v.bc.cfg.EnableBALForTesting {
