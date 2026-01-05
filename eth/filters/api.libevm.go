@@ -16,7 +16,9 @@
 
 package filters
 
-// Close releases resources held by the API.
-func (api *FilterAPI) Close() {
+// CloseAPI releases resources held by the API.
+//
+// This is not implemented as a method to avoid exposing it via RPC.
+func CloseAPI(api *FilterAPI) {
 	close(api.quit)
 }

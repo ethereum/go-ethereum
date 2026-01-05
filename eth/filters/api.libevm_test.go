@@ -53,5 +53,5 @@ func TestClose(t *testing.T) {
 	defer backend.Close()
 	sys := NewFilterSystem(backend, Config{})
 	api := NewFilterAPI(sys, false)
-	api.Close()
+	CloseAPI(api)
 }
