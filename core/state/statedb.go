@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -263,13 +262,12 @@ func (s *StateDB) GetLogs(hash common.Hash, blockNumber uint64, blockHash common
 }
 
 func (s *StateDB) Logs() []*types.Log {
-	logs := make([]*types.Log, 0, s.logSize)
+	logs := make([]*types.Log, s.logSize)
 	for _, lgs := range s.logs {
-		logs = append(logs, lgs...)
+		for _, l := range lgs {
+			logs[l.Index] = l
+		}
 	}
-	sort.Slice(logs, func(i, j int) bool {
-		return logs[i].Index < logs[j].Index
-	})
 	return logs
 }
 
