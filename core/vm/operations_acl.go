@@ -274,18 +274,6 @@ func makeCallVariantGasCallEIP7702(oldCalculatorStateful, oldCalculatorStateless
 			return oldStateful, err
 		}
 
-		// this should cause BAL test failures if uncommented but it doesn't.
-		// It's currently an unspecified edge-case of BAL where it's not clear
-		// whether we should perform the state read of the delegated account
-		// if it can be known that we wouldn't have enough gas to cover only
-		// that portion of the call cost.
-		baseCost, overflow := math.SafeAdd(eip150BaseGas, oldStateful)
-		if overflow {
-			return 0, ErrGasUintOverflow
-		} else if contract.Gas < baseCost {
-			return 0, ErrOutOfGas
-		}
-
 		if eip150BaseGas, overflow = math.SafeAdd(eip150BaseGas, oldStateful); overflow {
 			return 0, ErrOutOfGas
 		}
