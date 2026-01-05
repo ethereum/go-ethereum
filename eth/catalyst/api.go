@@ -48,6 +48,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -643,11 +644,18 @@ func startNewPayloadSpan(ctx context.Context, name string, params engine.Executa
 		attribute.Int("tx.count", len(params.Transactions)),
 	)
 	spanEnd := func(err *error) {
+		ro, _ := span.(sdktrace.ReadOnlySpan)
 		if *err != nil {
+			// Error occurred, record it and set status on span and parent
 			span.RecordError(*err)
 			span.SetStatus(codes.Error, (*err).Error())
 			parentSpan.SetStatus(codes.Error, (*err).Error())
-		} else {
+		} else if ro.Status().Code == codes.Error {
+			// Span's child had an error, propagate it to parent
+			// Note: Span's status was already set in the child
+			parentSpan.SetStatus(codes.Error, ro.Status().Description)
+		} else if ro.Status().Code == codes.Unset {
+			// No error and no status set, mark as success
 			span.SetStatus(codes.Ok, "")
 		}
 		span.End()
@@ -755,16 +763,10 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 
 	log.Trace("Engine API request received", "method", "NewPayload", "number", params.Number, "hash", params.BlockHash)
 
-	tracer := otel.Tracer("")
-	rootSpan := trace.SpanFromContext(ctx)
-	_, span := tracer.Start(ctx, "engine.newPayload.ExecutableDataToBlock")
+	_, spanEnd := startNewPayloadSpan(ctx, "engine.newPayload.ExecutableDataToBlock", params)
 	block, err := engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot, requests)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		rootSpan.SetStatus(codes.Error, err.Error())
-	}
-	span.End()
+	spanEnd(&err)
+
 	if err != nil {
 		bgu := "nil"
 		if params.BlobGasUsed != nil {
@@ -837,16 +839,11 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 		return engine.PayloadStatusV1{Status: engine.ACCEPTED}, nil
 	}
 	log.Trace("Inserting block without sethead", "hash", block.Hash(), "number", block.Number())
+	_, spanEnd = startNewPayloadSpan(ctx, "engine.newPayload.InsertBlockWithoutSetHead", params)
 	start := time.Now()
-	_, span = tracer.Start(ctx, "engine.newPayload.InsertBlockWithoutSetHead")
 	proofs, err := api.eth.BlockChain().InsertBlockWithoutSetHead(block, witness)
 	processingTime := time.Since(start)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		rootSpan.SetStatus(codes.Error, err.Error())
-	}
-	span.End()
+	spanEnd(&err)
 	if err != nil {
 		log.Warn("NewPayload: inserting block failed", "error", err)
 
