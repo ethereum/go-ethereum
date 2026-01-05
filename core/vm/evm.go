@@ -80,7 +80,29 @@ type TxContext struct {
 	BlobFeeCap   *big.Int            // Is used to zero the blobbasefee if NoBaseFee is set
 	AccessEvents *state.AccessEvents // Capture all state accesses for this tx
 
-	// TODO: add EIP-7701 fields
+	// EIP-7701: Transaction parameters for TXPARAM* opcodes
+	TxType uint8  // 0x00: transaction type
+	Nonce  uint64 // 0x01: transaction nonce
+	// Origin is sender (0x02)
+
+	// AA authorization structs (nil for non-AA txs)
+	Sender    *types.AbstractAuthorization  // 0x03: Data, 0x0D: Gas
+	Deployer  *types.AbstractAuthorization  // 0x04: Target, 0x05: Data
+	Paymaster *types.PaymasterAuthorization // 0x06: Target, 0x07: Data, 0x0E: Gas, 0x10: PostOpGas
+
+	SenderExecutionData  []byte   // 0x08: execution calldata
+	SenderExecutionGas   uint64   // 0x0F: execution gas limit
+	MaxPriorityFeePerGas *big.Int // 0x0B: max priority fee per gas
+	MaxFeePerGas         *big.Int // 0x0C: max fee per gas
+
+	// Hashes (computed when creating TxContext)
+	AccessListHash        common.Hash  // 0x11: hash of access list
+	AuthorizationListHash common.Hash  // 0x12: hash of authorization list
+	TxHashForSignature    *common.Hash // 0xff: hash for signature (nil for AA txs)
+
+	// Mutable execution state (set during AA tx processing)
+	ExecutionStatus  uint64 // 0xf1: execution result status
+	ExecutionGasUsed uint64 // 0xf2: gas used during execution
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides

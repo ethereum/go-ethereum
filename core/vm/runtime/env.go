@@ -27,6 +27,12 @@ func NewEnv(cfg *Config) *vm.EVM {
 		GasPrice:   cfg.GasPrice,
 		BlobHashes: cfg.BlobHashes,
 		BlobFeeCap: cfg.BlobFeeCap,
+
+		// EIP-7701: Set basic fields for non-AA transactions
+		// AA-specific fields (Sender, Deployer, Paymaster) remain nil
+		MaxPriorityFeePerGas: cfg.GasPrice,
+		MaxFeePerGas:         cfg.GasPrice,
+		SenderExecutionGas:   cfg.GasLimit,
 	}
 	blockContext := vm.BlockContext{
 		CanTransfer: core.CanTransfer,

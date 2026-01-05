@@ -599,82 +599,128 @@ func opAcceptRole(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 type paramLoader func(*EVM, uint64) []byte
 
+// uint64ToBytes32 converts a uint64 to a 32-byte big-endian slice.
+func uint64ToBytes32(v uint64) []byte {
+	return common.LeftPadBytes(new(uint256.Int).SetUint64(v).Bytes(), 32)
+}
+
 func loadType(evm *EVM, id uint64) []byte {
-	// TODO: plumb in type to TxContext
-	return nil
+	return uint64ToBytes32(uint64(evm.TxContext.TxType))
 }
 
 func loadNonce(evm *EVM, id uint64) []byte {
-	// TODO: plumb in nonce to TxContext
-	return nil
+	return uint64ToBytes32(evm.TxContext.Nonce)
 }
 
 func loadSender(evm *EVM, id uint64) []byte {
-	return nil
+	return common.LeftPadBytes(evm.TxContext.Origin.Bytes(), 32)
 }
 
 func loadSenderValidationData(evm *EVM, id uint64) []byte {
-	return nil
+	if evm.TxContext.Sender == nil {
+		return nil
+	}
+	return evm.TxContext.Sender.Data
 }
 
 func loadDeployer(evm *EVM, id uint64) []byte {
-	return nil
+	// 0 or 32 bytes: return nil when not set
+	if evm.TxContext.Deployer == nil {
+		return nil
+	}
+	return common.LeftPadBytes(evm.TxContext.Deployer.Target.Bytes(), 32)
 }
 
 func loadDeployerData(evm *EVM, id uint64) []byte {
-	return nil
+	// dynamic, default empty array
+	if evm.TxContext.Deployer == nil {
+		return nil
+	}
+	return evm.TxContext.Deployer.Data
 }
 
 func loadPaymaster(evm *EVM, id uint64) []byte {
-	return nil
+	// 0 or 32 bytes: return nil when not set
+	if evm.TxContext.Paymaster == nil {
+		return nil
+	}
+	return common.LeftPadBytes(evm.TxContext.Paymaster.Target.Bytes(), 32)
 }
 
 func loadPaymasterData(evm *EVM, id uint64) []byte {
-	return nil
+	// dynamic, default empty array
+	if evm.TxContext.Paymaster == nil {
+		return nil
+	}
+	return evm.TxContext.Paymaster.Data
 }
 
 func loadSenderExecutionData(evm *EVM, id uint64) []byte {
-	return nil
+	return evm.TxContext.SenderExecutionData
 }
 
 func loadMaxPriorityFeePerGas(evm *EVM, id uint64) []byte {
-	return nil
+	if evm.TxContext.MaxPriorityFeePerGas == nil {
+		return make([]byte, 32)
+	}
+	return common.LeftPadBytes(evm.TxContext.MaxPriorityFeePerGas.Bytes(), 32)
 }
 
 func loadMaxFeePerGas(evm *EVM, id uint64) []byte {
-	return nil
+	if evm.TxContext.MaxFeePerGas == nil {
+		return make([]byte, 32)
+	}
+	return common.LeftPadBytes(evm.TxContext.MaxFeePerGas.Bytes(), 32)
+}
+
+func loadSenderValidationGas(evm *EVM, id uint64) []byte {
+	if evm.TxContext.Sender == nil {
+		return uint64ToBytes32(0)
+	}
+	return uint64ToBytes32(evm.TxContext.Sender.Gas)
 }
 
 func loadPaymasterValidationGas(evm *EVM, id uint64) []byte {
-	return nil
+	// 32 bytes, default 0
+	if evm.TxContext.Paymaster == nil {
+		return uint64ToBytes32(0)
+	}
+	return uint64ToBytes32(evm.TxContext.Paymaster.Gas)
 }
 
 func loadSenderExecutionGas(evm *EVM, id uint64) []byte {
-	return nil
+	return uint64ToBytes32(evm.TxContext.SenderExecutionGas)
 }
 
 func loadPaymasterPostOpGas(evm *EVM, id uint64) []byte {
-	return nil
+	// 32 bytes, default 0
+	if evm.TxContext.Paymaster == nil {
+		return uint64ToBytes32(0)
+	}
+	return uint64ToBytes32(evm.TxContext.Paymaster.PostOpGas)
 }
 
 func loadAccessListHash(evm *EVM, id uint64) []byte {
-	return nil
+	return evm.TxContext.AccessListHash[:]
 }
 
 func loadAuthorizationListHash(evm *EVM, id uint64) []byte {
-	return nil
+	return evm.TxContext.AuthorizationListHash[:]
 }
 
 func loadExecutionStatus(evm *EVM, id uint64) []byte {
-	return nil
+	return uint64ToBytes32(evm.TxContext.ExecutionStatus)
 }
 
 func loadExecutionGasUsed(evm *EVM, id uint64) []byte {
-	return nil
+	return uint64ToBytes32(evm.TxContext.ExecutionGasUsed)
 }
 
 func loadTxHashForSignature(evm *EVM, id uint64) []byte {
-	return nil
+	if evm.TxContext.TxHashForSignature == nil {
+		return nil
+	}
+	return evm.TxContext.TxHashForSignature[:]
 }
 
 // idToParam is a map of identifier to transaction parameter loader.
@@ -690,7 +736,7 @@ var idToParam = map[uint64]paramLoader{
 	0x08: loadSenderExecutionData,
 	0x0B: loadMaxPriorityFeePerGas,
 	0x0C: loadMaxFeePerGas,
-	0x0D: loadSenderValidationData,
+	0x0D: loadSenderValidationGas,
 	0x0E: loadPaymasterValidationGas,
 	0x0F: loadSenderExecutionGas,
 	0x10: loadPaymasterPostOpGas,

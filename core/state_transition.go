@@ -146,6 +146,7 @@ func toWordSize(size uint64) uint64 {
 // A Message contains the data derived from a single transaction that is relevant to state
 // processing.
 type Message struct {
+	TxType                uint8
 	To                    *common.Address
 	From                  common.Address
 	Nonce                 uint64
@@ -187,6 +188,7 @@ type Message struct {
 // TransactionToMessage converts a transaction into a Message.
 func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
 	msg := &Message{
+		TxType:                tx.Type(),
 		Nonce:                 tx.Nonce(),
 		GasLimit:              tx.Gas(),
 		GasPrice:              new(big.Int).Set(tx.GasPrice()),
