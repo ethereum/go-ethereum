@@ -237,12 +237,12 @@ func gasCallEIP7702(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 func makeCallVariantGasCallEIP7702(oldCalculatorStateful, oldCalculatorStateless gasFunc) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 		var (
-			eip150BaseGas uint64 // gas used for memory expansion, transfer costs -> input to the 63/64 bounding
-			eip7702Gas    uint64
-			eip2929Gas    uint64
-			addr          = common.Address(stack.Back(1).Bytes20())
-			overflow      bool
-			err           error
+			oldStateless uint64 // gas used for memory expansion, transfer costs -> input to the 63/64 bounding
+			eip7702Gas   uint64
+			eip2929Gas   uint64
+			addr         = common.Address(stack.Back(1).Bytes20())
+			overflow     bool
+			err          error
 		)
 
 		// Check slot presence in the access list
@@ -258,14 +258,13 @@ func makeCallVariantGasCallEIP7702(oldCalculatorStateful, oldCalculatorStateless
 			}
 			eip2929Gas = coldCost
 		}
-		eip150BaseGas, err = oldCalculatorStateless(evm, contract, stack, mem, memorySize)
+		// ensure the portion of the call cost which doesn't depend on state lookups
+		// is covered by the provided gas.  Namely, the memory expansion and value transfer costs.
+		oldStateless, err = oldCalculatorStateless(evm, contract, stack, mem, memorySize)
 		if err != nil {
 			return 0, err
 		}
-
-		// ensure the portion of the call cost which doesn't depend on state lookups
-		// is covered by the provided gas
-		if contract.Gas < eip150BaseGas {
+		if contract.Gas < oldStateless {
 			return 0, ErrOutOfGas
 		}
 
@@ -274,7 +273,7 @@ func makeCallVariantGasCallEIP7702(oldCalculatorStateful, oldCalculatorStateless
 			return oldStateful, err
 		}
 
-		if eip150BaseGas, overflow = math.SafeAdd(eip150BaseGas, oldStateful); overflow {
+		if oldStateless, overflow = math.SafeAdd(oldStateless, oldStateful); overflow {
 			return 0, ErrOutOfGas
 		}
 
@@ -293,7 +292,7 @@ func makeCallVariantGasCallEIP7702(oldCalculatorStateful, oldCalculatorStateless
 			}
 		}
 
-		evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, eip150BaseGas, stack.Back(0))
+		evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, oldStateless, stack.Back(0))
 		if err != nil {
 			return 0, err
 		}
@@ -320,7 +319,7 @@ func makeCallVariantGasCallEIP7702(oldCalculatorStateful, oldCalculatorStateless
 		if overflow {
 			return 0, ErrGasUintOverflow
 		}
-		totalCost, overflow = math.SafeAdd(totalCost, eip150BaseGas)
+		totalCost, overflow = math.SafeAdd(totalCost, oldStateless)
 		if overflow {
 			return 0, ErrGasUintOverflow
 		}
