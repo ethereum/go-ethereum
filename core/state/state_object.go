@@ -423,7 +423,7 @@ func (s *stateObject) commitStorage(op *accountUpdate) {
 //
 // Note, commit may run concurrently across all the state objects. Do not assume
 // thread-safe access to the statedb.
-func (s *stateObject) commit(resolveCode bool) (*accountUpdate, *trienode.NodeSet, error) {
+func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, error) {
 	// commit the account metadata changes
 	op := &accountUpdate{
 		address: s.address,
@@ -440,17 +440,10 @@ func (s *stateObject) commit(resolveCode bool) (*accountUpdate, *trienode.NodeSe
 		}
 		s.dirtyCode = false // reset the dirty flag
 
-		// retrieve the original code if requested and the code was not empty
-		if resolveCode && s.origin != nil && !bytes.Equal(s.origin.CodeHash, types.EmptyCodeHash.Bytes()) {
-			code, err := s.db.reader.Code(s.address, common.BytesToHash(s.origin.CodeHash))
-			if err != nil {
-				return nil, nil, err
-			}
-			op.codeOrigin = &contractCode{
-				hash:   common.BytesToHash(s.origin.CodeHash),
-				blob:   code,
-				exists: true, // the code exists before the update
-			}
+		if s.origin == nil {
+			op.code.originHash = types.EmptyCodeHash
+		} else {
+			op.code.originHash = common.BytesToHash(s.origin.CodeHash)
 		}
 	}
 	// Commit storage changes and the associated storage trie

@@ -29,11 +29,15 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
-// contractCode represents a contract code with associated metadata.
+// contractCode represents contract bytecode along with its associated metadata.
 type contractCode struct {
-	hash   common.Hash // hash is the cryptographic hash of the contract code.
-	blob   []byte      // blob is the binary representation of the contract code.
-	exists bool        // flag whether the code has been existent
+	hash       common.Hash // hash is the cryptographic hash of the current contract code.
+	blob       []byte      // blob is the binary representation of the current contract code.
+	originHash common.Hash // originHash is the cryptographic hash of the code before mutation.
+
+	// Derived fields, populated only when state tracking is enabled.
+	duplicate  bool   // duplicate indicates whether the updated code already exists.
+	originBlob []byte // originBlob is the original binary representation of the contract code.
 }
 
 // accountDelete represents an operation for deleting an Ethereum account.
@@ -52,12 +56,11 @@ type accountDelete struct {
 
 // accountUpdate represents an operation for updating an Ethereum account.
 type accountUpdate struct {
-	address    common.Address         // address is the unique account identifier
-	data       []byte                 // data is the slim-RLP encoded account data.
-	origin     []byte                 // origin is the original value of account data in slim-RLP encoding.
-	code       *contractCode          // code represents mutated contract code; nil means it's not modified.
-	codeOrigin *contractCode          // codeOrigin is the original value of contract code; nil means it does not exist before the update.
-	storages   map[common.Hash][]byte // storages stores mutated slots in prefix-zero-trimmed RLP format.
+	address  common.Address         // address is the unique account identifier
+	data     []byte                 // data is the slim-RLP encoded account data.
+	origin   []byte                 // origin is the original value of account data in slim-RLP encoding.
+	code     *contractCode          // code represents mutated contract code; nil means it's not modified.
+	storages map[common.Hash][]byte // storages stores mutated slots in prefix-zero-trimmed RLP format.
 
 	// storagesOriginByKey and storagesOriginByHash both store the original values
 	// of mutated slots in prefix-zero-trimmed RLP format. The difference is that
@@ -89,9 +92,8 @@ type stateUpdate struct {
 	storagesOrigin map[common.Address]map[common.Hash][]byte
 	rawStorageKey  bool
 
-	codes       map[common.Address]*contractCode // codes contains the set of dirty codes
-	codesOrigin map[common.Address]*contractCode // codesOrigin contains the original code data of the mutated accounts
-	nodes       *trienode.MergedNodeSet          // Aggregated dirty nodes caused by state changes
+	codes map[common.Address]*contractCode // codes contains the set of dirty codes
+	nodes *trienode.MergedNodeSet          // Aggregated dirty nodes caused by state changes
 }
 
 // empty returns a flag indicating the state transition is empty or not.
@@ -112,7 +114,6 @@ func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash
 		storages       = make(map[common.Hash]map[common.Hash][]byte)
 		storagesOrigin = make(map[common.Address]map[common.Hash][]byte)
 		codes          = make(map[common.Address]*contractCode)
-		codesOrigin    = make(map[common.Address]*contractCode)
 	)
 	// Since some accounts might be destroyed and recreated within the same
 	// block, deletions must be aggregated first.
@@ -135,9 +136,6 @@ func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash
 		addr := op.address
 		if op.code != nil {
 			codes[addr] = op.code
-		}
-		if op.codeOrigin != nil {
-			codesOrigin[addr] = op.codeOrigin
 		}
 		accounts[addrHash] = op.data
 
@@ -185,7 +183,6 @@ func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash
 		storagesOrigin: storagesOrigin,
 		rawStorageKey:  rawStorageKey,
 		codes:          codes,
-		codesOrigin:    codesOrigin,
 		nodes:          nodes,
 	}
 }
@@ -204,23 +201,31 @@ func (sc *stateUpdate) stateSet() *triedb.StateSet {
 	}
 }
 
-// markCodeExistence determines whether each piece of contract code referenced
-// in this state update actually exists.
+// deriveCodeFields derives the missing fields of contract code changes
+// such as original code value.
 //
-// Note: This operation is expensive and not needed during normal state transitions.
-// It is only required when SizeTracker is enabled to produce accurate state
-// statistics.
-func (sc *stateUpdate) markCodeExistence(reader ContractCodeReader) {
+// Note: This operation is expensive and not needed during normal state
+// transitions. It is only required when SizeTracker or StateUpdate hook
+// is enabled to produce accurate state statistics.
+func (sc *stateUpdate) deriveCodeFields(reader ContractCodeReader) error {
 	cache := make(map[common.Hash]bool)
 	for addr, code := range sc.codes {
+		if code.originHash != types.EmptyCodeHash {
+			blob, err := reader.Code(addr, code.originHash)
+			if err != nil {
+				return err
+			}
+			code.originBlob = blob
+		}
 		if exists, ok := cache[code.hash]; ok {
-			code.exists = exists
+			code.duplicate = exists
 			continue
 		}
 		res := reader.Has(addr, code.hash)
 		cache[code.hash] = res
-		code.exists = res
+		code.duplicate = res
 	}
+	return nil
 }
 
 // ToTracingUpdate converts the internal stateUpdate to an exported tracing.StateUpdate.
@@ -234,49 +239,51 @@ func (sc *stateUpdate) ToTracingUpdate() (*tracing.StateUpdate, error) {
 		CodeChanges:    make(map[common.Address]*tracing.CodeChange, len(sc.codes)),
 		TrieChanges:    make(map[common.Hash]map[string]*tracing.TrieNodeChange),
 	}
-
-	for addr, prev := range sc.accountsOrigin {
+	// Gather all account changes
+	for addr, oldData := range sc.accountsOrigin {
 		addrHash := crypto.Keccak256Hash(addr.Bytes())
-		new, exists := sc.accounts[addrHash]
+		newData, exists := sc.accounts[addrHash]
 		if !exists {
 			return nil, fmt.Errorf("account %x not found", addr)
 		}
-
 		change := &tracing.AccountChange{}
 
-		if len(prev) > 0 {
-			if acct, err := types.FullAccount(prev); err == nil {
-				change.Prev = &types.StateAccount{
-					Nonce:    acct.Nonce,
-					Balance:  acct.Balance,
-					Root:     acct.Root,
-					CodeHash: acct.CodeHash,
-				}
+		if len(oldData) > 0 {
+			acct, err := types.FullAccount(oldData)
+			if err != nil {
+				return nil, err
+			}
+			change.Prev = &types.StateAccount{
+				Nonce:    acct.Nonce,
+				Balance:  acct.Balance,
+				Root:     acct.Root,
+				CodeHash: acct.CodeHash,
 			}
 		}
-
-		if len(new) > 0 {
-			if acct, err := types.FullAccount(new); err == nil {
-				change.New = &types.StateAccount{
-					Nonce:    acct.Nonce,
-					Balance:  acct.Balance,
-					Root:     acct.Root,
-					CodeHash: acct.CodeHash,
-				}
+		if len(newData) > 0 {
+			acct, err := types.FullAccount(newData)
+			if err != nil {
+				return nil, err
+			}
+			change.New = &types.StateAccount{
+				Nonce:    acct.Nonce,
+				Balance:  acct.Balance,
+				Root:     acct.Root,
+				CodeHash: acct.CodeHash,
 			}
 		}
-
 		update.AccountChanges[addr] = change
 	}
 
+	// Gather all storage slot changes
 	for addr, slots := range sc.storagesOrigin {
 		addrHash := crypto.Keccak256Hash(addr.Bytes())
 		subset, exists := sc.storages[addrHash]
 		if !exists {
 			return nil, fmt.Errorf("storage %x not found", addr)
 		}
+		storageChanges := make(map[common.Hash]*tracing.StorageChange, len(slots))
 
-		storageMap := make(map[common.Hash]*tracing.StorageChange, len(slots))
 		for key, encPrev := range slots {
 			// Get new value - handle both raw and hashed key formats
 			var (
@@ -308,42 +315,43 @@ func (sc *stateUpdate) ToTracingUpdate() (*tracing.StateUpdate, error) {
 					return nil, fmt.Errorf("failed to decode newValue: %v", err)
 				}
 			}
-
-			storageMap[key] = &tracing.StorageChange{
+			storageChanges[key] = &tracing.StorageChange{
 				Prev: common.BytesToHash(decPrev),
 				New:  common.BytesToHash(decNew),
 			}
 		}
-		update.StorageChanges[addr] = storageMap
+		update.StorageChanges[addr] = storageChanges
 	}
 
+	// Gather all contract code changes
 	for addr, code := range sc.codes {
 		change := &tracing.CodeChange{
 			New: &tracing.ContractCode{
 				Hash:   code.hash,
 				Code:   code.blob,
-				Exists: code.exists,
+				Exists: code.duplicate,
 			},
 		}
-		if origin, ok := sc.codesOrigin[addr]; ok {
+		if code.originHash != types.EmptyCodeHash {
 			change.Prev = &tracing.ContractCode{
-				Hash:   origin.hash,
-				Code:   origin.blob,
-				Exists: origin.exists,
+				Hash:   code.originHash,
+				Code:   code.originBlob,
+				Exists: true,
 			}
 		}
 		update.CodeChanges[addr] = change
 	}
 
+	// Gather all trie node changes
 	if sc.nodes != nil {
 		for owner, subset := range sc.nodes.Sets {
-			nodeMap := make(map[string]*tracing.TrieNodeChange, len(subset.Origins))
+			nodeChanges := make(map[string]*tracing.TrieNodeChange, len(subset.Origins))
 			for path, oldNode := range subset.Origins {
 				newNode, exists := subset.Nodes[path]
 				if !exists {
 					return nil, fmt.Errorf("node %x-%v not found", owner, path)
 				}
-				nodeMap[path] = &tracing.TrieNodeChange{
+				nodeChanges[path] = &tracing.TrieNodeChange{
 					Prev: &trienode.Node{
 						Hash: crypto.Keccak256Hash(oldNode),
 						Blob: oldNode,
@@ -354,9 +362,8 @@ func (sc *stateUpdate) ToTracingUpdate() (*tracing.StateUpdate, error) {
 					},
 				}
 			}
-			update.TrieChanges[owner] = nodeMap
+			update.TrieChanges[owner] = nodeChanges
 		}
 	}
-
 	return update, nil
 }

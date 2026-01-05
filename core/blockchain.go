@@ -1649,36 +1649,35 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	log.Debug("Committed block data", "size", common.StorageSize(batch.ValueSize()), "elapsed", common.PrettyDuration(time.Since(start)))
 
 	var (
-		err             error
-		root            common.Hash
-		isEIP158        = bc.chainConfig.IsEIP158(block.Number())
-		isCancun        = bc.chainConfig.IsCancun(block.Number(), block.Time())
-		hasStateHook    = bc.logger != nil && bc.logger.OnStateUpdate != nil
-		hasStateSizer   = bc.stateSizer != nil
-		needStateUpdate = hasStateHook || hasStateSizer
+		err           error
+		root          common.Hash
+		isEIP158      = bc.chainConfig.IsEIP158(block.Number())
+		isCancun      = bc.chainConfig.IsCancun(block.Number(), block.Time())
+		hasStateHook  = bc.logger != nil && bc.logger.OnStateUpdate != nil
+		hasStateSizer = bc.stateSizer != nil
 	)
-	if needStateUpdate {
+	if hasStateHook || hasStateSizer {
 		r, update, err := statedb.CommitWithUpdate(block.NumberU64(), isEIP158, isCancun)
-		if err == nil && update != nil {
-			if hasStateHook {
-				trUpdate, err := update.ToTracingUpdate()
-				if err != nil {
-					return err
-				}
-				bc.logger.OnStateUpdate(trUpdate)
+		if err != nil {
+			return err
+		}
+		if hasStateHook {
+			trUpdate, err := update.ToTracingUpdate()
+			if err != nil {
+				return err
 			}
-			if hasStateSizer {
-				bc.stateSizer.Notify(update)
-			}
+			bc.logger.OnStateUpdate(trUpdate)
+		}
+		if hasStateSizer {
+			bc.stateSizer.Notify(update)
 		}
 		root = r
 	} else {
 		root, err = statedb.Commit(block.NumberU64(), isEIP158, isCancun)
+		if err != nil {
+			return err
+		}
 	}
-	if err != nil {
-		return err
-	}
-
 	// If node is running in path mode, skip explicit gc operation
 	// which is unnecessary in this mode.
 	if bc.triedb.Scheme() == rawdb.PathScheme {
