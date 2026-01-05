@@ -522,3 +522,13 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
 }
+
+// SubscribeNewPayloadEvent registers a subscription for NewPayloadEvent.
+func (bc *BlockChain) SubscribeNewPayloadEvent(ch chan<- NewPayloadEvent) event.Subscription {
+	return bc.scope.Track(bc.newPayloadFeed.Subscribe(ch))
+}
+
+// SendNewPayloadEvent sends a NewPayloadEvent to subscribers.
+func (bc *BlockChain) SendNewPayloadEvent(ev NewPayloadEvent) {
+	bc.newPayloadFeed.Send(ev)
+}
