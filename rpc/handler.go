@@ -32,6 +32,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -614,11 +615,18 @@ func (h *handler) startSpan(ctx context.Context, msg *jsonrpcMessage, spanName s
 
 	// Define the function to end the span and handle error recording
 	spanEnd := func(err *error) {
+		ro, _ := span.(sdktrace.ReadOnlySpan)
 		if *err != nil {
+			// Error occurred, record it and set status on span and parent
 			span.RecordError(*err)
 			span.SetStatus(codes.Error, (*err).Error())
 			parentSpan.SetStatus(codes.Error, (*err).Error())
-		} else {
+		} else if ro.Status().Code == codes.Error {
+			// Span's child had an error, propagate it to parent
+			// Note: Span's status was already set in the child
+			parentSpan.SetStatus(codes.Error, ro.Status().Description)
+		} else if ro.Status().Code == codes.Unset {
+			// No error and no status set, mark as success
 			span.SetStatus(codes.Ok, "")
 		}
 		span.End()
