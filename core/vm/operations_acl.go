@@ -268,6 +268,8 @@ func makeCallVariantGasCallEIP7702(oldCalculatorStateful, oldCalculatorStateless
 			return 0, ErrOutOfGas
 		}
 
+		// calculate the remaining call cost component: a cost paid for the creation of
+		// a new account if the target was empty.
 		oldStateful, err := oldCalculatorStateful(evm, contract, stack, mem, memorySize)
 		if err != nil {
 			return oldStateful, err
