@@ -115,26 +115,31 @@ func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold time.Durat
 Block: %v (%#x) txs: %d, mgasps: %.2f, elapsed: %v
 
 EVM execution: %v
+
 Validation: %v
+    Account hash: %v
+    Storage hash: %v
+
 State read: %v
     Account read: %v(%d)
     Storage read: %v(%d)
     Code read: %v(%d)
 
-State hash: %v
-    Account hash: %v
-    Storage hash: %v
+State write: %v
     Trie commit: %v
-
-DB write: %v
     State write: %v
     Block write: %v
 
 %s
 ##############################
 `, block.Number(), block.Hash(), len(block.Transactions()), s.MgasPerSecond, common.PrettyDuration(s.TotalTime),
+		// EVM execution
 		common.PrettyDuration(s.Execution),
-		common.PrettyDuration(s.Validation+s.CrossValidation),
+
+		// Block validation
+		common.PrettyDuration(s.Validation+s.CrossValidation+s.AccountHashes+s.AccountUpdates+s.StorageUpdates),
+		common.PrettyDuration(s.AccountHashes+s.AccountUpdates),
+		common.PrettyDuration(s.StorageUpdates),
 
 		// State read
 		common.PrettyDuration(s.AccountReads+s.StorageReads+s.CodeReads),
@@ -142,19 +147,15 @@ DB write: %v
 		common.PrettyDuration(s.StorageReads), s.StorageLoaded,
 		common.PrettyDuration(s.CodeReads), s.CodeLoaded,
 
-		// State hash
-		common.PrettyDuration(s.AccountHashes+s.AccountUpdates+s.StorageUpdates+max(s.AccountCommits, s.StorageCommits)),
-		common.PrettyDuration(s.AccountHashes+s.AccountUpdates),
-		common.PrettyDuration(s.StorageUpdates),
+		// State write
+		common.PrettyDuration(max(s.AccountCommits, s.StorageCommits)+s.TrieDBCommit+s.SnapshotCommit+s.BlockWrite),
 		common.PrettyDuration(max(s.AccountCommits, s.StorageCommits)),
-
-		// Database commit
-		common.PrettyDuration(s.TrieDBCommit+s.SnapshotCommit+s.BlockWrite),
 		common.PrettyDuration(s.TrieDBCommit+s.SnapshotCommit),
 		common.PrettyDuration(s.BlockWrite),
 
 		// cache statistics
-		s.StateReadCacheStats)
+		s.StateReadCacheStats,
+	)
 	for _, line := range strings.Split(msg, "\n") {
 		if line == "" {
 			continue
