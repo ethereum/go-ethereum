@@ -72,16 +72,13 @@ func TestTracingHTTP(t *testing.T) {
 	if err := client.Call(&result, "test_echo", "hello", 42, &echoArgs{S: "world"}); err != nil {
 		t.Fatalf("RPC call failed: %v", err)
 	}
-
 	if err := tracer.ForceFlush(context.Background()); err != nil {
 		t.Fatalf("failed to flush: %v", err)
 	}
-
 	spans := exporter.GetSpans()
 	if len(spans) == 0 {
 		t.Fatal("no spans were emitted")
 	}
-
 	var rpcSpan *tracetest.SpanStub
 	for i := range spans {
 		if spans[i].Name == "rpc.handleCall" {
@@ -92,7 +89,6 @@ func TestTracingHTTP(t *testing.T) {
 	if rpcSpan == nil {
 		t.Fatalf("rpc.handleCall span not found.")
 	}
-
 	attrs := attributeMap(rpcSpan.Attributes)
 	if attrs["rpc.method"] != "test_echo" {
 		t.Errorf("expected rpc.method=test_echo, got %v", attrs["rpc.method"])
@@ -102,8 +98,50 @@ func TestTracingHTTP(t *testing.T) {
 	}
 }
 
+func TestTracingHTTPShouldFail(t *testing.T) {
+	t.Parallel()
+	server, tracer, exporter := newTracingServer(t)
+	httpsrv := httptest.NewServer(server)
+	t.Cleanup(httpsrv.Close)
+	client, err := DialHTTP(httpsrv.URL)
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	t.Cleanup(client.Close)
+
+	var result echoResult
+	if err := client.Call(&result, "testnonexistent", "hello", 42, &echoArgs{S: "world"}); err == nil {
+		t.Fatalf("RPC call should have failed")
+	}
+	if err := tracer.ForceFlush(context.Background()); err != nil {
+		t.Fatalf("failed to flush: %v", err)
+	}
+	spans := exporter.GetSpans()
+	if len(spans) == 0 {
+		t.Fatal("no spans were emitted")
+	}
+	var rpcSpan *tracetest.SpanStub
+	for i := range spans {
+		if spans[i].Name == "rpc.handleCall" {
+			rpcSpan = &spans[i]
+			break
+		}
+	}
+	if rpcSpan == nil {
+		t.Fatalf("rpc.handleCall span not found.")
+	}
+	attrs := attributeMap(rpcSpan.Attributes)
+	if attrs["rpc.method"] != "testnonexistent" {
+		t.Errorf("expected rpc.method=testnonexistent, got %v", attrs["rpc.method"])
+	}
+	if _, ok := attrs["rpc.id"]; !ok {
+		t.Errorf("expected rpc.id attribute to be set")
+	}
+}
+
 // TestTracingSubscribeUnsubscribe verifies that subscribe and unsubscribe calls
 // do not emit any spans.
+// Note: This works because client.newClientConn() does not set a tracer provider.
 func TestTracingSubscribeUnsubscribe(t *testing.T) {
 	t.Parallel()
 	server, tracer, exporter := newTracingServer(t)

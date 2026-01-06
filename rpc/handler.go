@@ -28,11 +28,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -512,22 +510,31 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 		return h.runMethod(cp.ctx, msg, h.unsubscribeCb, args)
 	}
 
+	// Start root span for the request.
+	var err error
+	attributes := []telemetry.Attribute{
+		telemetry.StringAttribute("rpc.method", msg.Method),
+		telemetry.StringAttribute("rpc.id", string(msg.ID)),
+	}
+	ctx, spanEnd := telemetry.StartSpanWithTracer(cp.ctx, h.tracer(), "rpc.handleCall", attributes...)
+	defer spanEnd(&err)
+
 	// Check method name length
 	if len(msg.Method) > maxMethodNameLength {
-		return msg.errorResponse(&invalidRequestError{fmt.Sprintf("method name too long: %d > %d", len(msg.Method), maxMethodNameLength)})
+		errMessage := fmt.Sprintf("method name too long: %d > %d", len(msg.Method), maxMethodNameLength)
+		invalidRequestError := &invalidRequestError{errMessage}
+		err = errors.New(invalidRequestError.Error())
+		return msg.errorResponse(invalidRequestError)
 	}
 	callb := h.reg.callback(msg.Method)
 	if callb == nil {
-		return msg.errorResponse(&methodNotFoundError{method: msg.Method})
+		methodNotFoundError := &methodNotFoundError{method: msg.Method}
+		err = errors.New(methodNotFoundError.Error())
+		return msg.errorResponse(methodNotFoundError)
 	}
 
-	// Start root span for the request.
-	var err error
-	ctx, spanEnd := h.startSpan(cp.ctx, msg, "rpc.handleCall")
-	defer spanEnd(&err)
-
 	// Start tracing span before parsing arguments.
-	_, pSpanEnd := h.startSpan(ctx, msg, "rpc.parsePositionalArguments")
+	_, pSpanEnd := telemetry.StartSpanWithTracer(ctx, h.tracer(), "rpc.parsePositionalArguments", attributes...)
 	args, err := parsePositionalArguments(msg.Params, callb.argTypes)
 	pSpanEnd(&err)
 	if err != nil {
@@ -536,7 +543,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 	start := time.Now()
 
 	// Start tracing span before running the method.
-	rctx, rSpanEnd := h.startSpan(ctx, msg, "rpc.runMethod")
+	rctx, rSpanEnd := telemetry.StartSpanWithTracer(ctx, h.tracer(), "rpc.runMethod", attributes...)
 	answer := h.runMethod(rctx, msg, callb, args)
 	if answer.Error != nil {
 		err = errors.New(answer.Error.Message)
@@ -552,7 +559,6 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 	}
 	rpcServingTimer.UpdateSince(start)
 	updateServeTimeHistogram(msg.Method, answer.Error == nil, time.Since(start))
-
 	return answer
 }
 
@@ -593,36 +599,6 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 	return h.runMethod(ctx, msg, callb, args)
 }
 
-// startSpan starts a tracing span for an RPC call and returns a function to
-// end the span. The function will record errors and set span status based on
-// the error value.
-func (h *handler) startSpan(ctx context.Context, msg *jsonrpcMessage, spanName string) (context.Context, func(*error)) {
-	ctx, span := h.tracer().Start(ctx, spanName)
-
-	// Fast path: noop provider or span not sampled
-	if !span.IsRecording() {
-		return ctx, func(*error) { span.End() }
-	}
-
-	// Set span attributes.
-	span.SetAttributes(semconv.RPCMethodKey.String(msg.Method))
-	id := strings.TrimSpace(string(msg.ID))
-	if id != "" && id != "null" {
-		span.SetAttributes(attribute.String("rpc.id", id))
-	}
-
-	// Define the function to end the span and handle error recording
-	spanEnd := func(err *error) {
-		if *err != nil {
-			// Error occurred, record it and set status on span and parent
-			span.RecordError(*err)
-			span.SetStatus(codes.Error, (*err).Error())
-		}
-		span.End()
-	}
-	return ctx, spanEnd
-}
-
 // tracer returns the OpenTelemetry Tracer for RPC call tracing.
 func (h *handler) tracer() trace.Tracer {
 	if h.tracerProvider == nil {
@@ -635,28 +611,18 @@ func (h *handler) tracer() trace.Tracer {
 }
 
 // runMethod runs the Go callback for an RPC method.
-func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *callback, args []reflect.Value) *jsonrpcMessage {
+func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *callback, args []reflect.Value, attributes ...telemetry.Attribute) *jsonrpcMessage {
 	result, err := callb.call(ctx, msg.Method, args)
 	if err != nil {
 		return msg.errorResponse(err)
 	}
-
-	// If parent span is recording, start a span for the response.
-	// Note: This prevents msg.response spans from being created when
-	// the parent span is not recording. This is needed bc we aren't
-	// currently recording spans for subscriptions, but we do record spans
-	// for other RPC methods and this is called for both.
-	parentSpan := trace.SpanFromContext(ctx)
-	if parentSpan.IsRecording() {
-		_, spanEnd := h.startSpan(ctx, msg, "rpc.msg.response")
-		response := msg.response(result)
-		if response.Error != nil {
-			err = errors.New(response.Error.Message)
-		}
-		spanEnd(&err)
-		return response
+	_, spanEnd := telemetry.StartSpanWithTracer(ctx, h.tracer(), "rpc.msg.response", attributes...)
+	response := msg.response(result)
+	if response.Error != nil {
+		err = errors.New(response.Error.Message)
 	}
-	return msg.response(result)
+	spanEnd(&err)
+	return response
 }
 
 // unsubscribe is the callback function for all *_unsubscribe calls.
