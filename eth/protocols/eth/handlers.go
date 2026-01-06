@@ -18,7 +18,6 @@ package eth
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
@@ -293,14 +292,6 @@ func ServiceGetReceiptsQuery(chain *core.BlockChain, query GetReceiptsRequest) [
 		bytes += len(results)
 	}
 	return receipts
-}
-
-func handleNewBlockhashes(backend Backend, msg Decoder, peer *Peer) error {
-	return errors.New("block announcements disallowed") // We dropped support for non-merge networks
-}
-
-func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
-	return errors.New("block broadcasts disallowed") // We dropped support for non-merge networks
 }
 
 func handleBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {

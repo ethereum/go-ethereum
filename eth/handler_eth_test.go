@@ -74,7 +74,7 @@ func (h *testEthHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 
 // Tests that peers are correctly accepted (or rejected) based on the advertised
 // fork IDs in the protocol handshake.
-func TestForkIDSplit68(t *testing.T) { testForkIDSplit(t, eth.ETH68) }
+func TestForkIDSplit69(t *testing.T) { testForkIDSplit(t, eth.ETH69) }
 
 func testForkIDSplit(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -226,7 +226,7 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 }
 
 // Tests that received transactions are added to the local pool.
-func TestRecvTransactions68(t *testing.T) { testRecvTransactions(t, eth.ETH68) }
+func TestRecvTransactions69(t *testing.T) { testRecvTransactions(t, eth.ETH69) }
 
 func testRecvTransactions(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -254,8 +254,9 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 	go handler.handler.runEthPeer(sink, func(peer *eth.Peer) error {
 		return eth.Handle((*ethHandler)(handler.handler), peer)
 	})
+	head := handler.chain.CurrentBlock()
 	// Run the handshake locally to avoid spinning up a source handler
-	if err := src.Handshake(1, handler.chain, eth.BlockRangeUpdatePacket{}); err != nil {
+	if err := src.Handshake(1, handler.chain, eth.BlockRangeUpdatePacket{EarliestBlock: 0, LatestBlock: head.Number.Uint64(), LatestBlockHash: head.Hash()}); err != nil {
 		t.Fatalf("failed to run protocol handshake")
 	}
 	// Send the transaction to the sink and verify that it's added to the tx pool
@@ -278,7 +279,7 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 }
 
 // This test checks that pending transactions are sent.
-func TestSendTransactions68(t *testing.T) { testSendTransactions(t, eth.ETH68) }
+func TestSendTransactions69(t *testing.T) { testSendTransactions(t, eth.ETH69) }
 
 func testSendTransactions(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -309,8 +310,9 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	go handler.handler.runEthPeer(src, func(peer *eth.Peer) error {
 		return eth.Handle((*ethHandler)(handler.handler), peer)
 	})
+	head := handler.chain.CurrentBlock()
 	// Run the handshake locally to avoid spinning up a source handler
-	if err := sink.Handshake(1, handler.chain, eth.BlockRangeUpdatePacket{}); err != nil {
+	if err := sink.Handshake(1, handler.chain, eth.BlockRangeUpdatePacket{EarliestBlock: 0, LatestBlock: head.Number.Uint64(), LatestBlockHash: head.Hash()}); err != nil {
 		t.Fatalf("failed to run protocol handshake")
 	}
 	// After the handshake completes, the source handler should stream the sink
@@ -330,22 +332,16 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	// Make sure we get all the transactions on the correct channels
 	seen := make(map[common.Hash]struct{})
 	for len(seen) < len(insert) {
-		switch protocol {
-		case 68:
-			select {
-			case hashes := <-anns:
-				for _, hash := range hashes {
-					if _, ok := seen[hash]; ok {
-						t.Errorf("duplicate transaction announced: %x", hash)
-					}
-					seen[hash] = struct{}{}
+		select {
+		case hashes := <-anns:
+			for _, hash := range hashes {
+				if _, ok := seen[hash]; ok {
+					t.Errorf("duplicate transaction announced: %x", hash)
 				}
-			case <-bcasts:
-				t.Errorf("initial tx broadcast received on post eth/66")
+				seen[hash] = struct{}{}
 			}
-
-		default:
-			panic("unsupported protocol, please extend test")
+		case <-bcasts:
+			t.Errorf("initial tx broadcast received on post eth/66")
 		}
 	}
 	for _, tx := range insert {
@@ -357,7 +353,7 @@ func testSendTransactions(t *testing.T, protocol uint) {
 
 // Tests that transactions get propagated to all attached peers, either via direct
 // broadcasts or via announcements/retrievals.
-func TestTransactionPropagation68(t *testing.T) { testTransactionPropagation(t, eth.ETH68) }
+func TestTransactionPropagation69(t *testing.T) { testTransactionPropagation(t, eth.ETH69) }
 
 func testTransactionPropagation(t *testing.T, protocol uint) {
 	t.Parallel()

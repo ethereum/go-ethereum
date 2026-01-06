@@ -171,7 +171,7 @@ func (b *testBackend) Handle(*Peer, Packet) error {
 }
 
 // Tests that block headers can be retrieved from a remote chain based on user queries.
-func TestGetBlockHeaders68(t *testing.T) { testGetBlockHeaders(t, ETH68) }
+func TestGetBlockHeaders69(t *testing.T) { testGetBlockHeaders(t, ETH69) }
 
 func testGetBlockHeaders(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -384,7 +384,7 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 }
 
 // Tests that block contents can be retrieved from a remote chain based on their hashes.
-func TestGetBlockBodies68(t *testing.T) { testGetBlockBodies(t, ETH68) }
+func TestGetBlockBodies69(t *testing.T) { testGetBlockBodies(t, ETH69) }
 
 func testGetBlockBodies(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -601,7 +601,7 @@ func setup() (*testBackend, *testPeer) {
 		}
 	}
 	backend := newTestBackendWithGenerator(maxBodiesServe+15, true, false, gen)
-	peer, _ := newTestPeer("peer", ETH68, backend)
+	peer, _ := newTestPeer("peer", ETH69, backend)
 	// Discard all messages
 	go func() {
 		for {
@@ -646,7 +646,7 @@ func testGetPooledTransaction(t *testing.T, blobTx bool) {
 	backend := newTestBackendWithGenerator(0, true, true, nil)
 	defer backend.close()
 
-	peer, _ := newTestPeer("peer", ETH68, backend)
+	peer, _ := newTestPeer("peer", ETH69, backend)
 	defer peer.close()
 
 	var (
