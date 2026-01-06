@@ -1,3 +1,19 @@
+// Copyright 2026 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package telemetry
 
 import (
@@ -9,12 +25,15 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// Attribute is an alias for attribute.KeyValue.
 type Attribute = attribute.KeyValue
 
+// StringAttribute creates an attribute with a string value.
 func StringAttribute(key, val string) Attribute {
 	return attribute.String(key, val)
 }
 
+// Int64Attribute creates an attribute with an int64 value.
 func Int64Attribute(key string, val int64) Attribute {
 	return attribute.Int64(key, val)
 }
@@ -45,7 +64,7 @@ func StartSpanWithTracer(ctx context.Context, tracer trace.Tracer, spanName stri
 	// Define the function to end the span and handle error recording
 	spanEnd := func(err *error) {
 		if *err != nil {
-			// Error occurred, record it and set status on span and parent
+			// Error occurred, record it and set status on span
 			span.RecordError(*err)
 			span.SetStatus(codes.Error, (*err).Error())
 		}

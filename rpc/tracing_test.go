@@ -68,13 +68,18 @@ func TestTracingHTTP(t *testing.T) {
 	}
 	t.Cleanup(client.Close)
 
+	// Make a successful RPC call.
 	var result echoResult
 	if err := client.Call(&result, "test_echo", "hello", 42, &echoArgs{S: "world"}); err != nil {
 		t.Fatalf("RPC call failed: %v", err)
 	}
+
+	// Flush spans.
 	if err := tracer.ForceFlush(context.Background()); err != nil {
 		t.Fatalf("failed to flush: %v", err)
 	}
+
+	// Check spans.
 	spans := exporter.GetSpans()
 	if len(spans) == 0 {
 		t.Fatal("no spans were emitted")
@@ -98,7 +103,8 @@ func TestTracingHTTP(t *testing.T) {
 	}
 }
 
-func TestTracingHTTPShouldFail(t *testing.T) {
+// TestTracingHTTPMethodNotFound verifies that a span is emitted when rpc method does not exist.
+func TestTracingHTTPMethodNotFound(t *testing.T) {
 	t.Parallel()
 	server, tracer, exporter := newTracingServer(t)
 	httpsrv := httptest.NewServer(server)
@@ -109,13 +115,18 @@ func TestTracingHTTPShouldFail(t *testing.T) {
 	}
 	t.Cleanup(client.Close)
 
+	// Make a RPC call that should fail.
 	var result echoResult
 	if err := client.Call(&result, "testnonexistent", "hello", 42, &echoArgs{S: "world"}); err == nil {
 		t.Fatalf("RPC call should have failed")
 	}
+
+	// Flush spans.
 	if err := tracer.ForceFlush(context.Background()); err != nil {
 		t.Fatalf("failed to flush: %v", err)
 	}
+
+	// Check spans.
 	spans := exporter.GetSpans()
 	if len(spans) == 0 {
 		t.Fatal("no spans were emitted")
