@@ -46,6 +46,12 @@ type txSenderCacherRequest struct {
 	inc    int
 }
 
+var txSenderCacherRequestPool = sync.Pool{
+	New: func() any {
+		return &txSenderCacherRequest{}
+	},
+}
+
 // txSenderCacher is a helper structure to concurrently ecrecover transaction
 // senders from digital signatures on background threads.
 type txSenderCacher struct {
@@ -73,6 +79,7 @@ func (cacher *txSenderCacher) cache() {
 		for i := 0; i < len(task.txs); i += task.inc {
 			types.Sender(task.signer, task.txs[i])
 		}
+		txSenderCacherRequestPool.Put(task)
 	}
 }
 
@@ -90,11 +97,13 @@ func (cacher *txSenderCacher) Recover(signer types.Signer, txs []*types.Transact
 		tasks = (len(txs) + 3) / 4
 	}
 	for i := 0; i < tasks; i++ {
-		cacher.tasks <- &txSenderCacherRequest{
+		req := txSenderCacherRequestPool.Get().(*txSenderCacherRequest)
+		*req = txSenderCacherRequest{
 			signer: signer,
 			txs:    txs[i:],
 			inc:    tasks,
 		}
+		cacher.tasks <- req
 	}
 }
 
