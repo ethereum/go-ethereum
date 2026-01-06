@@ -49,6 +49,10 @@ type diskLayer struct {
 // Reset() in order to not leak memory.
 // OBS: It does not invoke Close on the diskdb
 func (dl *diskLayer) Release() error {
+	// Stop any ongoing snapshot generation to prevent it from accessing
+	// the database after it's closed during shutdown
+	dl.stopGeneration()
+
 	if dl.cache != nil {
 		dl.cache.Reset()
 	}
@@ -186,12 +190,9 @@ func (dl *diskLayer) Update(blockHash common.Hash, accounts map[common.Hash][]by
 
 // stopGeneration aborts the state snapshot generation if it is currently running.
 func (dl *diskLayer) stopGeneration() {
-	dl.lock.RLock()
-	generating := dl.genMarker != nil
-	dl.lock.RUnlock()
-	if !generating {
-		return
-	}
+	// Check if generation goroutine is running by checking if genAbort channel exists.
+	// Note: genMarker can be nil even when the generator is still running (waiting
+	// for abort signal after completing generation), so we check genAbort instead.
 	if dl.genAbort != nil {
 		abort := make(chan *generatorStats)
 		dl.genAbort <- abort

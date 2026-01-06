@@ -986,3 +986,48 @@ func testGenerateBrokenSnapshotWithDanglingStorage(t *testing.T, scheme string) 
 	snap.genAbort <- stop
 	<-stop
 }
+
+// TestReleaseStopsGeneration verifies that Release() properly stops ongoing
+// snapshot generation without hanging. This prevents a race condition during
+// shutdown where the generator could access the database after it's closed.
+//
+// The generator goroutine waits for an abort signal even after completing
+// generation successfully. Without calling stopGeneration(), Release() would
+// leave the generator hanging forever, which could prevent clean shutdown.
+func TestReleaseStopsGeneration(t *testing.T) {
+	testReleaseStopsGeneration(t, rawdb.HashScheme)
+	testReleaseStopsGeneration(t, rawdb.PathScheme)
+}
+
+func testReleaseStopsGeneration(t *testing.T, scheme string) {
+	var helper = newHelper(scheme)
+	stRoot := helper.makeStorageTrie("", []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, false)
+
+	helper.addTrieAccount("acc-1", &types.StateAccount{Balance: uint256.NewInt(1), Root: stRoot, CodeHash: types.EmptyCodeHash.Bytes()})
+	helper.addTrieAccount("acc-2", &types.StateAccount{Balance: uint256.NewInt(2), Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash.Bytes()})
+	helper.addTrieAccount("acc-3", &types.StateAccount{Balance: uint256.NewInt(3), Root: stRoot, CodeHash: types.EmptyCodeHash.Bytes()})
+
+	helper.makeStorageTrie("acc-1", []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
+	helper.makeStorageTrie("acc-3", []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
+
+	_, snap := helper.CommitAndGenerate()
+
+	select {
+	case <-snap.genPending:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Snapshot generation failed")
+	}
+
+	// Call Release() - this should stop generation gracefully without hanging
+	done := make(chan struct{})
+	go func() {
+		snap.Release()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Release() hung - stopGeneration() was likely not called")
+	}
+}
