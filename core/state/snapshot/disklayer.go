@@ -193,9 +193,21 @@ func (dl *diskLayer) stopGeneration() {
 	// Check if generation goroutine is running by checking if genAbort channel exists.
 	// Note: genMarker can be nil even when the generator is still running (waiting
 	// for abort signal after completing generation), so we check genAbort instead.
-	if dl.genAbort != nil {
-		abort := make(chan *generatorStats)
-		dl.genAbort <- abort
-		<-abort
+	//
+	// Use write lock to ensure only one stop can proceed at a time and to safely
+	// clear genAbort after the generator exits.
+	dl.lock.Lock()
+	defer dl.lock.Unlock()
+
+	if dl.genAbort == nil {
+		return
 	}
+
+	abort := make(chan *generatorStats)
+	dl.genAbort <- abort
+	<-abort
+
+	// Clear genAbort to prevent subsequent calls from trying to send to a channel
+	// that no longer has a listener, which would block forever.
+	dl.genAbort = nil
 }
