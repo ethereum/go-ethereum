@@ -32,7 +32,6 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -598,7 +597,6 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 // end the span. The function will record errors and set span status based on
 // the error value.
 func (h *handler) startSpan(ctx context.Context, msg *jsonrpcMessage, spanName string) (context.Context, func(*error)) {
-	parentSpan := trace.SpanFromContext(ctx)
 	ctx, span := h.tracer().Start(ctx, spanName)
 
 	// Fast path: noop provider or span not sampled
@@ -615,19 +613,10 @@ func (h *handler) startSpan(ctx context.Context, msg *jsonrpcMessage, spanName s
 
 	// Define the function to end the span and handle error recording
 	spanEnd := func(err *error) {
-		ro, _ := span.(sdktrace.ReadOnlySpan)
 		if *err != nil {
 			// Error occurred, record it and set status on span and parent
 			span.RecordError(*err)
 			span.SetStatus(codes.Error, (*err).Error())
-			parentSpan.SetStatus(codes.Error, (*err).Error())
-		} else if ro.Status().Code == codes.Error {
-			// Span's child had an error, propagate it to parent
-			// Note: Span's status was already set in the child
-			parentSpan.SetStatus(codes.Error, ro.Status().Description)
-		} else if ro.Status().Code == codes.Unset {
-			// No error and no status set, mark as success
-			span.SetStatus(codes.Ok, "")
 		}
 		span.End()
 	}
@@ -654,7 +643,9 @@ func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *cal
 
 	// If parent span is recording, start a span for the response.
 	// Note: This prevents msg.response spans from being created when
-	// the parent span is not recording (e.g. subscription tracing disabled).
+	// the parent span is not recording. This is needed bc we aren't
+	// currently recording spans for subscriptions, but we do record spans
+	// for other RPC methods and this is called for both.
 	parentSpan := trace.SpanFromContext(ctx)
 	if parentSpan.IsRecording() {
 		_, spanEnd := h.startSpan(ctx, msg, "rpc.msg.response")

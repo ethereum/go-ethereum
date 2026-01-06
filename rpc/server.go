@@ -102,6 +102,10 @@ func (s *Server) SetWebsocketReadLimit(limit int64) {
 }
 
 // SetTracerProvider configures the OpenTelemetry TracerProvider for RPC call tracing.
+// Note: This method (and the TracerProvider field in the Server/Handler struct) is
+// primarily intended for testing. In particular, it allows tests to configure an
+// isolated TracerProvider without changing the global provider, avoiding
+// interference between tests running in parallel.
 func (s *Server) SetTracerProvider(tp trace.TracerProvider) {
 	s.tracerProvider = tp
 }
