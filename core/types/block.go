@@ -172,10 +172,8 @@ func (h *Header) SanityCheck() error {
 // EmptyBody returns true if there is no additional 'body' to complete the header
 // that is: no transactions, no uncles and no withdrawals.
 func (h *Header) EmptyBody() bool {
-	var (
-		emptyWithdrawals = h.WithdrawalsHash == nil || *h.WithdrawalsHash == EmptyWithdrawalsHash
-	)
-	return h.TxHash == EmptyTxsHash && h.UncleHash == EmptyUncleHash && emptyWithdrawals
+	// quick hack to ensure that we download bodies for empty blocks so that we receive the BALs
+	return false
 }
 
 // EmptyReceipts returns true if there are no receipts for this header/block.
