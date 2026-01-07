@@ -35,18 +35,20 @@ func newTransientStorage() transientStorage {
 
 // Set sets the transient-storage `value` for `key` at the given `addr`.
 func (t transientStorage) Set(addr common.Address, key, value common.Hash) {
+	storage, ok := t[addr]
 	if value == (common.Hash{}) { // this is a 'delete'
-		if _, ok := t[addr]; ok {
-			delete(t[addr], key)
-			if len(t[addr]) == 0 {
+		if ok {
+			delete(storage, key)
+			if len(storage) == 0 {
 				delete(t, addr)
 			}
 		}
 	} else {
-		if _, ok := t[addr]; !ok {
-			t[addr] = make(Storage)
+		if !ok {
+			storage = make(Storage)
+			t[addr] = storage
 		}
-		t[addr][key] = value
+		storage[key] = value
 	}
 }
 
