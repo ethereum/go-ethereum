@@ -155,23 +155,29 @@ func (stat *generateStats) finishContract(account common.Hash, done uint64) {
 // report prints the cumulative progress statistic smartly.
 func (stat *generateStats) report() {
 	stat.lock.RLock()
-	defer stat.lock.RUnlock()
+	accounts := stat.accounts
+	slots := stat.slots
+	start := stat.start
+	head := stat.head
+	slotsHead := stat.slotsHead
+	slotsStart := stat.slotsStart
+	stat.lock.RUnlock()
 
 	ctx := []interface{}{
-		"accounts", stat.accounts,
-		"slots", stat.slots,
-		"elapsed", common.PrettyDuration(time.Since(stat.start)),
+		"accounts", accounts,
+		"slots", slots,
+		"elapsed", common.PrettyDuration(time.Since(start)),
 	}
-	if stat.accounts > 0 {
+	if accounts > 0 {
 		// If there's progress on the account trie, estimate the time to finish crawling it
-		if done := binary.BigEndian.Uint64(stat.head[:8]) / stat.accounts; done > 0 {
+		if done := binary.BigEndian.Uint64(head[:8]) / accounts; done > 0 {
 			var (
-				left = (math.MaxUint64 - binary.BigEndian.Uint64(stat.head[:8])) / stat.accounts
-				eta  = common.CalculateETA(done, left, time.Since(stat.start))
+				left = (math.MaxUint64 - binary.BigEndian.Uint64(head[:8])) / accounts
+				eta  = common.CalculateETA(done, left, time.Since(start))
 			)
 			// If there are large contract crawls in progress, estimate their finish time
-			for acc, head := range stat.slotsHead {
-				start := stat.slotsStart[acc]
+			for acc, head := range slotsHead {
+				start := slotsStart[acc]
 				if done := binary.BigEndian.Uint64(head[:8]); done > 0 {
 					left := math.MaxUint64 - binary.BigEndian.Uint64(head[:8])
 
@@ -192,14 +198,17 @@ func (stat *generateStats) report() {
 // reportDone prints the last log when the whole generation is finished.
 func (stat *generateStats) reportDone() {
 	stat.lock.RLock()
-	defer stat.lock.RUnlock()
+	accounts := stat.accounts
+	slots := stat.slots
+	start := stat.start
+	stat.lock.RUnlock()
 
 	var ctx []interface{}
-	ctx = append(ctx, []interface{}{"accounts", stat.accounts}...)
-	if stat.slots != 0 {
-		ctx = append(ctx, []interface{}{"slots", stat.slots}...)
+	ctx = append(ctx, []interface{}{"accounts", accounts}...)
+	if slots != 0 {
+		ctx = append(ctx, []interface{}{"slots", slots}...)
 	}
-	ctx = append(ctx, []interface{}{"elapsed", common.PrettyDuration(time.Since(stat.start))}...)
+	ctx = append(ctx, []interface{}{"elapsed", common.PrettyDuration(time.Since(start))}...)
 	log.Info("Iterated snapshot", ctx...)
 }
 
