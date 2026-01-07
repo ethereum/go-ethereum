@@ -19,12 +19,14 @@ package snapshot
 import (
 	"bytes"
 	"sync"
+	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
 )
@@ -194,20 +196,28 @@ func (dl *diskLayer) stopGeneration() {
 	// Note: genMarker can be nil even when the generator is still running (waiting
 	// for abort signal after completing generation), so we check genAbort instead.
 	//
-	// Use write lock to ensure only one stop can proceed at a time and to safely
-	// clear genAbort after the generator exits.
+	// Use write lock to ensure only one goroutine can stop generation at a time,
+	// preventing a race where multiple callers might try to send abort signals.
 	dl.lock.Lock()
-	defer dl.lock.Unlock()
-
-	if dl.genAbort == nil {
+	genAbort := dl.genAbort
+	if genAbort == nil {
+		dl.lock.Unlock()
 		return
 	}
-
-	abort := make(chan *generatorStats)
-	dl.genAbort <- abort
-	<-abort
-
-	// Clear genAbort to prevent subsequent calls from trying to send to a channel
-	// that no longer has a listener, which would block forever.
+	// Clear genAbort immediately while holding the lock to prevent other callers
+	// from attempting to use the same channel
 	dl.genAbort = nil
+	dl.lock.Unlock()
+
+	// Perform the channel handshake without holding the lock to avoid deadlocks.
+	// Use a timeout to handle cases where the generator goroutine may have exited
+	// unexpectedly (e.g., due to panic or other runtime errors).
+	abort := make(chan *generatorStats)
+	select {
+	case genAbort <- abort:
+		// Generator received the abort signal, wait for it to respond
+		<-abort
+	case <-time.After(5 * time.Second):
+		log.Warn("Snapshot generator did not respond to stop signal, it may have crashed")
+	}
 }
