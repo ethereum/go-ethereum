@@ -327,9 +327,7 @@ func (it *diffStorageIterator) Release() {}
 // diskStorageIterator is a storage iterator that steps over the live storage
 // contained within a disk layer.
 type diskStorageIterator struct {
-	layer   *diskLayer
-	account common.Hash
-	it      ethdb.Iterator
+	it ethdb.Iterator
 }
 
 // StorageIterator creates a storage iterator over a disk layer.
@@ -339,9 +337,7 @@ type diskStorageIterator struct {
 func (dl *diskLayer) StorageIterator(account common.Hash, seek common.Hash) StorageIterator {
 	pos := common.TrimRightZeroes(seek[:])
 	return &diskStorageIterator{
-		layer:   dl,
-		account: account,
-		it:      dl.diskdb.NewIterator(append(rawdb.SnapshotStoragePrefix, account.Bytes()...), pos),
+		it: dl.diskdb.NewIterator(append(rawdb.SnapshotStoragePrefix, account.Bytes()...), pos),
 	}
 }
 
