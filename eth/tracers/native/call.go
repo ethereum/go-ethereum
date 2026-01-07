@@ -46,7 +46,7 @@ type callLog struct {
 	// See https://github.com/ethereum/go-ethereum/pull/28389 for details
 	Position hexutil.Uint `json:"position"`
 	// Program counter (bytecode offset) of the instruction that created the log
-	Pc uint64 `json:"pc"`
+	Pc hexutil.Uint64 `json:"pc"`
 }
 
 type callFrame struct {
@@ -262,7 +262,7 @@ func (t *callTracer) OnLog(log *types.Log) {
 		Topics:   log.Topics,
 		Data:     log.Data,
 		Position: hexutil.Uint(len(t.callstack[len(t.callstack)-1].Calls)),
-		Pc:       t.lastPc,
+		Pc:       hexutil.Uint64(t.lastPc),
 	}
 	t.callstack[len(t.callstack)-1].Logs = append(t.callstack[len(t.callstack)-1].Logs, l)
 }
