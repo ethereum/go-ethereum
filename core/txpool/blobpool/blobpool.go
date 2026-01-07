@@ -95,11 +95,6 @@ const (
 	// store.
 	storeVersion = 1
 
-	// conversionTimeWindow defines the period after the Osaka fork during which
-	// the pool will still accept and convert legacy blob transactions. After this
-	// window, all legacy blob transactions will be rejected.
-	conversionTimeWindow = time.Hour * 2
-
 	// gappedLifetime is the approximate duration for which nonce-gapped transactions
 	// are kept before being dropped. Since gapped is only a reorder buffer and it
 	// is expected that the original transactions were inserted in the mempool in
@@ -348,9 +343,8 @@ type BlobPool struct {
 	gapped       map[common.Address][]*types.Transaction // Transactions that are currently gapped (nonce too high)
 	gappedSource map[common.Hash]common.Address          // Source of gapped transactions to allow rechecking on inclusion
 
-	signer types.Signer     // Transaction signer to use for sender recovery
-	chain  BlockChain       // Chain object to access the state through
-	cQueue *conversionQueue // The queue for performing legacy sidecar conversion (TODO: remove after Osaka)
+	signer types.Signer // Transaction signer to use for sender recovery
+	chain  BlockChain   // Chain object to access the state through
 
 	head   atomic.Pointer[types.Header] // Current head of the chain
 	state  *state.StateDB               // Current state at the head of the chain
