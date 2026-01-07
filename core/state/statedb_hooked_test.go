@@ -129,7 +129,7 @@ func TestHooks(t *testing.T) {
 
 	for i, want := range wants {
 		if have := result[i]; have != want {
-			t.Fatalf("error event %d, have\n%v\nwant%v\n", i, have, want)
+			t.Fatalf("error event %d\nhave: %v\nwant: %v", i, have, want)
 		}
 	}
 }
@@ -165,7 +165,7 @@ func TestHooks_OnCodeChangeV2(t *testing.T) {
 
 	for i, want := range wants {
 		if have := result[i]; have != want {
-			t.Fatalf("error event %d, have\n%v\nwant%v\n", i, have, want)
+			t.Fatalf("error event %d\nhave: %v\nwant: %v", i, have, want)
 		}
 	}
 }

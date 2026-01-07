@@ -37,6 +37,7 @@ type ExecuteStats struct {
 	AccountCommits time.Duration // Time spent on the account trie commit
 	StorageUpdates time.Duration // Time spent on the storage trie update
 	StorageCommits time.Duration // Time spent on the storage trie commit
+	CodeReads      time.Duration // Time spent on the contract code read
 
 	AccountLoaded  int // Number of accounts loaded
 	AccountUpdated int // Number of accounts updated
@@ -44,6 +45,7 @@ type ExecuteStats struct {
 	StorageLoaded  int // Number of storage slots loaded
 	StorageUpdated int // Number of storage slots updated
 	StorageDeleted int // Number of storage slots deleted
+	CodeLoaded     int // Number of contract code loaded
 
 	Execution       time.Duration // Time spent on the EVM execution
 	Validation      time.Duration // Time spent on the block validation
@@ -61,19 +63,21 @@ type ExecuteStats struct {
 
 // reportMetrics uploads execution statistics to the metrics system.
 func (s *ExecuteStats) reportMetrics() {
-	accountReadTimer.Update(s.AccountReads) // Account reads are complete(in processing)
-	storageReadTimer.Update(s.StorageReads) // Storage reads are complete(in processing)
 	if s.AccountLoaded != 0 {
+		accountReadTimer.Update(s.AccountReads)
 		accountReadSingleTimer.Update(s.AccountReads / time.Duration(s.AccountLoaded))
 	}
 	if s.StorageLoaded != 0 {
+		storageReadTimer.Update(s.StorageReads)
 		storageReadSingleTimer.Update(s.StorageReads / time.Duration(s.StorageLoaded))
 	}
-
+	if s.CodeLoaded != 0 {
+		codeReadTimer.Update(s.CodeReads)
+		codeReadSingleTimer.Update(s.CodeReads / time.Duration(s.CodeLoaded))
+	}
 	accountUpdateTimer.Update(s.AccountUpdates) // Account updates are complete(in validation)
 	storageUpdateTimer.Update(s.StorageUpdates) // Storage updates are complete(in validation)
 	accountHashTimer.Update(s.AccountHashes)    // Account hashes are complete(in validation)
-
 	accountCommitTimer.Update(s.AccountCommits) // Account commits are complete, we can mark them
 	storageCommitTimer.Update(s.StorageCommits) // Storage commits are complete, we can mark them
 
@@ -111,24 +115,47 @@ func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold time.Durat
 Block: %v (%#x) txs: %d, mgasps: %.2f, elapsed: %v
 
 EVM execution: %v
+
 Validation: %v
-Account read: %v(%d)
-Storage read: %v(%d)
-Account hash: %v
-Storage hash: %v
-DB commit: %v
-Block write: %v
+    Account hash: %v
+    Storage hash: %v
+
+State read: %v
+    Account read: %v(%d)
+    Storage read: %v(%d)
+    Code read: %v(%d)
+
+State write: %v
+    Trie commit: %v
+    State write: %v
+    Block write: %v
 
 %s
 ##############################
 `, block.Number(), block.Hash(), len(block.Transactions()), s.MgasPerSecond, common.PrettyDuration(s.TotalTime),
-		common.PrettyDuration(s.Execution), common.PrettyDuration(s.Validation+s.CrossValidation),
+		// EVM execution
+		common.PrettyDuration(s.Execution),
+
+		// Block validation
+		common.PrettyDuration(s.Validation+s.CrossValidation+s.AccountHashes+s.AccountUpdates+s.StorageUpdates),
+		common.PrettyDuration(s.AccountHashes+s.AccountUpdates),
+		common.PrettyDuration(s.StorageUpdates),
+
+		// State read
+		common.PrettyDuration(s.AccountReads+s.StorageReads+s.CodeReads),
 		common.PrettyDuration(s.AccountReads), s.AccountLoaded,
 		common.PrettyDuration(s.StorageReads), s.StorageLoaded,
-		common.PrettyDuration(s.AccountHashes+s.AccountCommits+s.AccountUpdates),
-		common.PrettyDuration(s.StorageCommits+s.StorageUpdates),
-		common.PrettyDuration(s.TrieDBCommit+s.SnapshotCommit), common.PrettyDuration(s.BlockWrite),
-		s.StateReadCacheStats)
+		common.PrettyDuration(s.CodeReads), s.CodeLoaded,
+
+		// State write
+		common.PrettyDuration(max(s.AccountCommits, s.StorageCommits)+s.TrieDBCommit+s.SnapshotCommit+s.BlockWrite),
+		common.PrettyDuration(max(s.AccountCommits, s.StorageCommits)),
+		common.PrettyDuration(s.TrieDBCommit+s.SnapshotCommit),
+		common.PrettyDuration(s.BlockWrite),
+
+		// cache statistics
+		s.StateReadCacheStats,
+	)
 	for _, line := range strings.Split(msg, "\n") {
 		if line == "" {
 			continue

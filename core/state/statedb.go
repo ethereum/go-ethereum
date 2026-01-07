@@ -38,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 	"golang.org/x/sync/errgroup"
 )
@@ -151,6 +150,7 @@ type StateDB struct {
 	StorageCommits  time.Duration
 	SnapshotCommits time.Duration
 	TrieDBCommits   time.Duration
+	CodeReads       time.Duration
 
 	AccountLoaded  int          // Number of accounts retrieved from the database during the state transition
 	AccountUpdated int          // Number of accounts updated during the state transition
@@ -158,6 +158,7 @@ type StateDB struct {
 	StorageLoaded  int          // Number of storage slots retrieved from the database during the state transition
 	StorageUpdated atomic.Int64 // Number of storage slots updated during the state transition
 	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
+	CodeLoaded     int          // Number of contract code loaded during the state transition
 }
 
 // New creates a new state from a given trie.
@@ -186,7 +187,7 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 		transientStorage:     newTransientStorage(),
 	}
 	if db.TrieDB().IsVerkle() {
-		sdb.accessEvents = NewAccessEvents(db.PointCache())
+		sdb.accessEvents = NewAccessEvents()
 	}
 	return sdb, nil
 }
@@ -1491,11 +1492,6 @@ func (s *StateDB) markUpdate(addr common.Address) {
 	}
 	s.mutations[addr].applied = false
 	s.mutations[addr].typ = update
-}
-
-// PointCache returns the point cache used by verkle tree.
-func (s *StateDB) PointCache() *utils.PointCache {
-	return s.db.PointCache()
 }
 
 // Witness retrieves the current state witness being collected.

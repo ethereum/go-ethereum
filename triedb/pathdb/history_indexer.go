@@ -40,11 +40,6 @@ const (
 	stateHistoryIndexVersion    = stateHistoryIndexV0    // the current state index version
 	trienodeHistoryIndexV0      = uint8(0)               // initial version of trienode index structure
 	trienodeHistoryIndexVersion = trienodeHistoryIndexV0 // the current trienode index version
-
-	// estimations for calculating the batch size for atomic database commit
-	estimatedStateHistoryIndexSize    = 3  // The average size of each state history index entry is approximately 2–3 bytes
-	estimatedTrienodeHistoryIndexSize = 3  // The average size of each trienode history index entry is approximately 2-3 bytes
-	estimatedIndexBatchSizeFactor     = 32 // The factor counts for the write amplification for each entry
 )
 
 // indexVersion returns the latest index version for the given history type.
@@ -155,22 +150,6 @@ func (b *batchIndexer) process(h history, id uint64) error {
 	return b.finish(false)
 }
 
-// makeBatch constructs a database batch based on the number of pending entries.
-// The batch size is roughly estimated to minimize repeated resizing rounds,
-// as accurately predicting the exact size is technically challenging.
-func (b *batchIndexer) makeBatch() ethdb.Batch {
-	var size int
-	switch b.typ {
-	case typeStateHistory:
-		size = estimatedStateHistoryIndexSize
-	case typeTrienodeHistory:
-		size = estimatedTrienodeHistoryIndexSize
-	default:
-		panic(fmt.Sprintf("unknown history type %d", b.typ))
-	}
-	return b.db.NewBatchWithSize(size * estimatedIndexBatchSizeFactor * b.pending)
-}
-
 // finish writes the accumulated state indexes into the disk if either the
 // memory limitation is reached or it's requested forcibly.
 func (b *batchIndexer) finish(force bool) error {
@@ -181,17 +160,38 @@ func (b *batchIndexer) finish(force bool) error {
 		return nil
 	}
 	var (
-		batch   = b.makeBatch()
-		batchMu sync.RWMutex
-		start   = time.Now()
-		eg      errgroup.Group
+		start = time.Now()
+		eg    errgroup.Group
+
+		batch     = b.db.NewBatchWithSize(ethdb.IdealBatchSize)
+		batchSize int
+		batchMu   sync.RWMutex
+
+		writeBatch = func(fn func(batch ethdb.Batch)) error {
+			batchMu.Lock()
+			defer batchMu.Unlock()
+
+			fn(batch)
+			if batch.ValueSize() >= ethdb.IdealBatchSize {
+				batchSize += batch.ValueSize()
+				if err := batch.Write(); err != nil {
+					return err
+				}
+				batch.Reset()
+			}
+			return nil
+		}
 	)
 	eg.SetLimit(runtime.NumCPU())
 
+	var indexed uint64
+	if metadata := loadIndexMetadata(b.db, b.typ); metadata != nil {
+		indexed = metadata.Last
+	}
 	for ident, list := range b.index {
 		eg.Go(func() error {
 			if !b.delete {
-				iw, err := newIndexWriter(b.db, ident)
+				iw, err := newIndexWriter(b.db, ident, indexed)
 				if err != nil {
 					return err
 				}
@@ -200,11 +200,11 @@ func (b *batchIndexer) finish(force bool) error {
 						return err
 					}
 				}
-				batchMu.Lock()
-				iw.finish(batch)
-				batchMu.Unlock()
+				return writeBatch(func(batch ethdb.Batch) {
+					iw.finish(batch)
+				})
 			} else {
-				id, err := newIndexDeleter(b.db, ident)
+				id, err := newIndexDeleter(b.db, ident, indexed)
 				if err != nil {
 					return err
 				}
@@ -213,11 +213,10 @@ func (b *batchIndexer) finish(force bool) error {
 						return err
 					}
 				}
-				batchMu.Lock()
-				id.finish(batch)
-				batchMu.Unlock()
+				return writeBatch(func(batch ethdb.Batch) {
+					id.finish(batch)
+				})
 			}
-			return nil
 		})
 	}
 	if err := eg.Wait(); err != nil {
@@ -233,10 +232,12 @@ func (b *batchIndexer) finish(force bool) error {
 			storeIndexMetadata(batch, b.typ, b.lastID-1)
 		}
 	}
+	batchSize += batch.ValueSize()
+
 	if err := batch.Write(); err != nil {
 		return err
 	}
-	log.Debug("Committed batch indexer", "type", b.typ, "entries", len(b.index), "records", b.pending, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Debug("Committed batch indexer", "type", b.typ, "entries", len(b.index), "records", b.pending, "size", common.StorageSize(batchSize), "elapsed", common.PrettyDuration(time.Since(start)))
 	b.pending = 0
 	b.index = make(map[stateIdent][]uint64)
 	return nil

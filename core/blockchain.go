@@ -75,6 +75,7 @@ var (
 	storageReadTimer   = metrics.NewRegisteredResettingTimer("chain/storage/reads", nil)
 	storageUpdateTimer = metrics.NewRegisteredResettingTimer("chain/storage/updates", nil)
 	storageCommitTimer = metrics.NewRegisteredResettingTimer("chain/storage/commits", nil)
+	codeReadTimer      = metrics.NewRegisteredResettingTimer("chain/code/reads", nil)
 
 	accountCacheHitMeter  = metrics.NewRegisteredMeter("chain/account/reads/cache/process/hit", nil)
 	accountCacheMissMeter = metrics.NewRegisteredMeter("chain/account/reads/cache/process/miss", nil)
@@ -88,6 +89,7 @@ var (
 
 	accountReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/account/single/reads", nil)
 	storageReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/storage/single/reads", nil)
+	codeReadSingleTimer    = metrics.NewRegisteredResettingTimer("chain/code/single/reads", nil)
 
 	snapshotCommitTimer = metrics.NewRegisteredResettingTimer("chain/snapshot/commits", nil)
 	triedbCommitTimer   = metrics.NewRegisteredResettingTimer("chain/triedb/commits", nil)
@@ -309,6 +311,7 @@ type BlockChain struct {
 	chainHeadFeed    event.Feed
 	logsFeed         event.Feed
 	blockProcFeed    event.Feed
+	newPayloadFeed   event.Feed // Feed for engine API newPayload events
 	blockProcCounter int32
 	scope            event.SubscriptionScope
 	genesisBlock     *types.Block
@@ -951,7 +954,8 @@ func (bc *BlockChain) rewindPathHead(head *types.Header, root common.Hash) (*typ
 	// Recover if the target state if it's not available yet.
 	if !bc.HasState(head.Root) {
 		if err := bc.triedb.Recover(head.Root); err != nil {
-			log.Crit("Failed to rollback state", "err", err)
+			log.Error("Failed to rollback state, resetting to genesis", "err", err)
+			return bc.genesisBlock.Header(), rootNumber
 		}
 	}
 	log.Info("Rewound to block with state", "number", head.Number, "hash", head.Hash())
@@ -1102,25 +1106,60 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 	bc.txLookupCache.Purge()
 
 	// Clear safe block, finalized block if needed
-	if safe := bc.CurrentSafeBlock(); safe != nil && head < safe.Number.Uint64() {
+	headBlock := bc.CurrentBlock()
+	if safe := bc.CurrentSafeBlock(); safe != nil && headBlock.Number.Uint64() < safe.Number.Uint64() {
 		log.Warn("SetHead invalidated safe block")
 		bc.SetSafe(nil)
 	}
-	if finalized := bc.CurrentFinalBlock(); finalized != nil && head < finalized.Number.Uint64() {
+	if finalized := bc.CurrentFinalBlock(); finalized != nil && headBlock.Number.Uint64() < finalized.Number.Uint64() {
 		log.Error("SetHead invalidated finalized block")
 		bc.SetFinalized(nil)
 	}
 	return rootNumber, bc.loadLastState()
 }
 
-// SnapSyncCommitHead sets the current head block to the one defined by the hash
-// irrelevant what the chain contents were prior.
-func (bc *BlockChain) SnapSyncCommitHead(hash common.Hash) error {
+// SnapSyncStart disables the underlying databases (such as the trie DB and the
+// optional state snapshot) to prevent potential concurrent mutations between
+// snap sync and other chain operations.
+func (bc *BlockChain) SnapSyncStart() error {
+	if !bc.chainmu.TryLock() {
+		return errChainStopped
+	}
+	defer bc.chainmu.Unlock()
+
+	// Snap sync will directly modify the persistent state, making the entire
+	// trie database unusable until the state is fully synced. To prevent any
+	// subsequent state reads, explicitly disable the trie database and state
+	// syncer is responsible to address and correct any state missing.
+	if bc.TrieDB().Scheme() == rawdb.PathScheme {
+		if err := bc.TrieDB().Disable(); err != nil {
+			return err
+		}
+	}
+	// Snap sync uses the snapshot namespace to store potentially flaky data until
+	// sync completely heals and finishes. Pause snapshot maintenance in the mean-
+	// time to prevent access.
+	if snapshots := bc.Snapshots(); snapshots != nil { // Only nil in tests
+		snapshots.Disable()
+	}
+	return nil
+}
+
+// SnapSyncComplete sets the current head block to the block identified by the
+// given hash, regardless of the chain contents prior to snap sync. It is
+// invoked once snap sync completes and assumes that SnapSyncStart was called
+// previously.
+func (bc *BlockChain) SnapSyncComplete(hash common.Hash) error {
 	// Make sure that both the block as well at its state trie exists
 	block := bc.GetBlockByHash(hash)
 	if block == nil {
 		return fmt.Errorf("non existent block [%x..]", hash[:4])
 	}
+	if !bc.chainmu.TryLock() {
+		return errChainStopped
+	}
+	defer bc.chainmu.Unlock()
+
 	// Reset the trie database with the fresh snap synced state.
 	root := block.Root()
 	if bc.triedb.Scheme() == rawdb.PathScheme {
@@ -1131,19 +1170,16 @@ func (bc *BlockChain) SnapSyncCommitHead(hash common.Hash) error {
 	if !bc.HasState(root) {
 		return fmt.Errorf("non existent state [%x..]", root[:4])
 	}
-	// If all checks out, manually set the head block.
-	if !bc.chainmu.TryLock() {
-		return errChainStopped
-	}
-	bc.currentBlock.Store(block.Header())
-	headBlockGauge.Update(int64(block.NumberU64()))
-	bc.chainmu.Unlock()
-
 	// Destroy any existing state snapshot and regenerate it in the background,
 	// also resuming the normal maintenance of any previously paused snapshot.
 	if bc.snaps != nil {
 		bc.snaps.Rebuild(root)
 	}
+
+	// If all checks out, manually set the head block.
+	bc.currentBlock.Store(block.Header())
+	headBlockGauge.Update(int64(block.NumberU64()))
+
 	log.Info("Committed new head block", "number", block.Number(), "hash", hash)
 	return nil
 }
@@ -1602,13 +1638,17 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	//
 	// Note all the components of block(hash->number map, header, body, receipts)
 	// should be written atomically. BlockBatch is used for containing all components.
-	blockBatch := bc.db.NewBatch()
-	rawdb.WriteBlock(blockBatch, block)
-	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
-	rawdb.WritePreimages(blockBatch, statedb.Preimages())
-	if err := blockBatch.Write(); err != nil {
+	var (
+		batch = bc.db.NewBatch()
+		start = time.Now()
+	)
+	rawdb.WriteBlock(batch, block)
+	rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receipts)
+	rawdb.WritePreimages(batch, statedb.Preimages())
+	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
 	}
+	log.Debug("Committed block data", "size", common.StorageSize(batch.ValueSize()), "elapsed", common.PrettyDuration(time.Since(start)))
 
 	var (
 		err      error
@@ -2167,6 +2207,7 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	stats.AccountUpdates = statedb.AccountUpdates // Account updates are complete(in validation)
 	stats.StorageUpdates = statedb.StorageUpdates // Storage updates are complete(in validation)
 	stats.AccountHashes = statedb.AccountHashes   // Account hashes are complete(in validation)
+	stats.CodeReads = statedb.CodeReads
 
 	stats.AccountLoaded = statedb.AccountLoaded
 	stats.AccountUpdated = statedb.AccountUpdated
@@ -2174,8 +2215,9 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	stats.StorageLoaded = statedb.StorageLoaded
 	stats.StorageUpdated = int(statedb.StorageUpdated.Load())
 	stats.StorageDeleted = int(statedb.StorageDeleted.Load())
+	stats.CodeLoaded = statedb.CodeLoaded
 
-	stats.Execution = ptime - (statedb.AccountReads + statedb.StorageReads)                              // The time spent on EVM processing
+	stats.Execution = ptime - (statedb.AccountReads + statedb.StorageReads + statedb.CodeReads)          // The time spent on EVM processing
 	stats.Validation = vtime - (statedb.AccountHashes + statedb.AccountUpdates + statedb.StorageUpdates) // The time spent on block validation
 	stats.CrossValidation = xvtime                                                                       // The time spent on stateless cross validation
 

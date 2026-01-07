@@ -83,8 +83,8 @@ type stateUpdate struct {
 	storagesOrigin map[common.Address]map[common.Hash][]byte
 	rawStorageKey  bool
 
-	codes map[common.Address]contractCode // codes contains the set of dirty codes
-	nodes *trienode.MergedNodeSet         // Aggregated dirty nodes caused by state changes
+	codes map[common.Address]*contractCode // codes contains the set of dirty codes
+	nodes *trienode.MergedNodeSet          // Aggregated dirty nodes caused by state changes
 }
 
 // empty returns a flag indicating the state transition is empty or not.
@@ -104,7 +104,7 @@ func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash
 		accountsOrigin = make(map[common.Address][]byte)
 		storages       = make(map[common.Hash]map[common.Hash][]byte)
 		storagesOrigin = make(map[common.Address]map[common.Hash][]byte)
-		codes          = make(map[common.Address]contractCode)
+		codes          = make(map[common.Address]*contractCode)
 	)
 	// Since some accounts might be destroyed and recreated within the same
 	// block, deletions must be aggregated first.
@@ -126,7 +126,7 @@ func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash
 		// Aggregate dirty contract codes if they are available.
 		addr := op.address
 		if op.code != nil {
-			codes[addr] = *op.code
+			codes[addr] = op.code
 		}
 		accounts[addrHash] = op.data
 

@@ -299,11 +299,11 @@ func (c *ecrecover) Run(input []byte) ([]byte, error) {
 	}
 	// We must make sure not to modify the 'input', so placing the 'v' along with
 	// the signature needs to be done on a new allocation
-	sig := make([]byte, 65)
-	copy(sig, input[64:128])
+	var sig [65]byte
+	copy(sig[:], input[64:128])
 	sig[64] = v
 	// v needs to be at the end for libsecp256k1
-	pubKey, err := crypto.Ecrecover(input[:32], sig)
+	pubKey, err := crypto.Ecrecover(input[:32], sig[:])
 	// make sure the public key is a valid one
 	if err != nil {
 		return nil, nil
