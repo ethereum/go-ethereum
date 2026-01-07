@@ -18,7 +18,9 @@ package trie
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -48,9 +50,11 @@ type inspector struct {
 
 // InspectConfig is a set of options to control inspection and format the
 // output. TopN will print the deepest min(len(results), N) storage tries.
+// If path is set, a JSON version of the data will be written to a file at this path.
 type InspectConfig struct {
 	NoStorage bool
 	TopN      int
+	Path      string
 }
 
 // Inspect walks the trie with the given root and records the number and type of
@@ -75,7 +79,13 @@ func Inspect(triedb database.NodeDatabase, root common.Hash, config *InspectConf
 
 	in.inspect(trie, trie.root, 0, []byte{}, in.stats[root])
 	in.wg.Wait()
-	in.DisplayResult()
+	if len(config.Path) > 0 {
+		if err := in.writeJSON(); err != nil {
+			log.Crit("Error during json encodeing", "error", err)
+		}
+	} else {
+		in.displayResult()
+	}
 	return nil
 }
 
@@ -163,7 +173,7 @@ func (in *inspector) inspect(trie *Trie, n node, height uint32, path []byte, sta
 }
 
 // Display results prints out the inspect results.
-func (in *inspector) DisplayResult() {
+func (in *inspector) displayResult() {
 	fmt.Println("Results for trie", in.root)
 	in.stats[in.root].display("Accounts trie")
 	fmt.Println("===")
@@ -179,6 +189,30 @@ func (in *inspector) DisplayResult() {
 			stats[i].display("storage trie")
 		}
 	}
+}
+
+func (in *inspector) writeJSON() error {
+	file, err := os.OpenFile(in.config.Path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
+	if err != nil {
+		return err
+	}
+	enc := json.NewEncoder(file)
+
+	accountTrie := newJsonStat(in.stats[in.root], "account trie")
+	if err := enc.Encode(accountTrie); err != nil {
+		return err
+	}
+	if !in.config.NoStorage {
+		// Sort stats by max node depth.
+		keys, stats := sortedTriestat(in.stats).sort()
+		for i := range keys[0:min(in.config.TopN, len(keys))] {
+			storageTrie := newJsonStat(stats[i], fmt.Sprintf("%x", keys[i]))
+			if err := enc.Encode(storageTrie); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // triestat tracks the type and count of trie nodes at each level in the trie.
@@ -268,13 +302,12 @@ func (s *stat) add(other *stat) *stat {
 func (s *triestat) display(title string) {
 	// Shorten title if too long.
 	if len(title) > 32 {
-		title = title[0:8] + "..." + title[len(title)-8:len(title)]
+		title = title[0:8] + "..." + title[len(title)-8:]
 	}
 
 	b := new(strings.Builder)
 	table := tablewriter.NewWriter(b)
 	table.SetHeader([]string{title, "Level", "Short Nodes", "Full Node", "Value Node"})
-	table.SetAlignment(1)
 
 	stat := &stat{}
 	for i := range s.level {
@@ -282,7 +315,7 @@ func (s *triestat) display(title string) {
 			break
 		}
 		short, full, value := s.level[i].load()
-		table.Append([]string{"-", fmt.Sprint(i), fmt.Sprint(short), fmt.Sprint(full), fmt.Sprint(value)})
+		table.AppendBulk([][]string{{"-", fmt.Sprint(i), fmt.Sprint(short), fmt.Sprint(full), fmt.Sprint(value)}})
 		stat.add(&s.level[i])
 	}
 	short, full, value := stat.load()
@@ -291,4 +324,36 @@ func (s *triestat) display(title string) {
 	fmt.Print(b.String())
 	fmt.Println("Max depth", s.maxDepth())
 	fmt.Println()
+}
+
+type jsonLevel struct {
+	Short uint64
+	Full  uint64
+	Value uint64
+}
+
+type jsonStat struct {
+	Name    string
+	Levels  []jsonLevel
+	Summary jsonLevel
+}
+
+func newJsonStat(s *triestat, name string) *jsonStat {
+	ret := jsonStat{Name: name, Summary: jsonLevel{}}
+	for i := 0; i < len(s.level); i++ {
+		// only count non-empty levels
+		if s.level[i].empty() {
+			continue
+		}
+		level := jsonLevel{
+			Short: s.level[i].short.Load(),
+			Full:  s.level[i].full.Load(),
+			Value: s.level[i].value.Load(),
+		}
+		ret.Summary.Full += level.Full
+		ret.Summary.Short += level.Short
+		ret.Summary.Value += level.Value
+		ret.Levels = append(ret.Levels, level)
+	}
+	return &ret
 }

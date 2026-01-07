@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/internal/tablewriter"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -98,7 +99,7 @@ Remove blockchain and state databases`,
 		Action:    inspectTrie,
 		Name:      "inspect-trie",
 		ArgsUsage: "<blocknum>",
-		Flags:     slices.Concat([]cli.Flag{utils.ExcludeStorageFlag, utils.TopFlag}, utils.NetworkFlags, utils.DatabaseFlags),
+		Flags:     slices.Concat([]cli.Flag{utils.ExcludeStorageFlag, utils.TopFlag, utils.OutputFileFlag}, utils.NetworkFlags, utils.DatabaseFlags),
 		Usage:     "Print detailed trie information about the structure of account trie and storage tries.",
 		Description: `This commands iterates the entrie trie-backed state. If the 'blocknum' is not specified, 
 the latest block number will be used by default.`,
@@ -449,6 +450,7 @@ func inspectTrie(ctx *cli.Context) error {
 	config := &trie.InspectConfig{
 		NoStorage: ctx.Bool(utils.ExcludeStorageFlag.Name),
 		TopN:      ctx.Int(utils.TopFlag.Name),
+		Path:      ctx.String(utils.OutputFileFlag.Name),
 	}
 	err := trie.Inspect(triedb, trieRoot, config)
 	if err != nil {
@@ -831,7 +833,7 @@ func showMetaData(ctx *cli.Context) error {
 		data = append(data, []string{"headHeader.Root", fmt.Sprintf("%v", h.Root)})
 		data = append(data, []string{"headHeader.Number", fmt.Sprintf("%d (%#x)", h.Number, h.Number)})
 	}
-	table := rawdb.NewTableWriter(os.Stdout)
+	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Field", "Value"})
 	table.AppendBulk(data)
 	table.Render()
