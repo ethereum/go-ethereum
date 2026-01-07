@@ -305,16 +305,14 @@ func (it *diffStorageIterator) Release() {}
 // aggregated buffer and the persistent disk layer as the data sources. The
 // staleness of the diff iterator is sufficient to invalidate the iterator pair.
 type diskStorageIterator struct {
-	account common.Hash
-	it      ethdb.Iterator
+	it ethdb.Iterator
 }
 
 // newDiskStorageIterator creates a storage iterator over the persistent state.
 func newDiskStorageIterator(db ethdb.KeyValueStore, account common.Hash, seek common.Hash) StorageIterator {
 	pos := common.TrimRightZeroes(seek[:])
 	return &diskStorageIterator{
-		account: account,
-		it:      db.NewIterator(append(rawdb.SnapshotStoragePrefix, account.Bytes()...), pos),
+		it: db.NewIterator(append(rawdb.SnapshotStoragePrefix, account.Bytes()...), pos),
 	}
 }
 
