@@ -18,10 +18,12 @@ package telemetry
 
 import (
 	"context"
+	"fmt"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -38,37 +40,96 @@ func Int64Attribute(key string, val int64) Attribute {
 	return attribute.Int64(key, val)
 }
 
-// StartSpan starts a tracing span on the default tracer and returns a function
-// to end the span. The function will record errors and set span status based
-// on the error value.
-func StartSpan(ctx context.Context, spanName string, attributes ...Attribute) (context.Context, func(*error)) {
-	return StartSpanWithTracer(ctx, otel.Tracer(""), spanName, attributes...)
-}
-
-// StartSpanWithTracer starts a tracing span on the supplied tracer and returns
-// a function to end the span. The function will record errors and set span
-// status based on the error value.
-func StartSpanWithTracer(ctx context.Context, tracer trace.Tracer, spanName string, attributes ...Attribute) (context.Context, func(*error)) {
-	ctx, span := tracer.Start(ctx, spanName)
+// StartServerSpan creates a SpanKind=SERVER span at the JSON-RPC boundary.
+// The span name is formatted as $rpcSystem.$rpcService/$rpcMethod
+// (e.g. "jsonrpc.engine/newPayloadV4").
+func StartServerSpan(
+	ctx context.Context,
+	tracer trace.Tracer,
+	rpcSystem string,
+	rpcService string,
+	rpcMethod string,
+	requestID string,
+	additionalAttributes ...Attribute,
+) (context.Context, func(error)) {
+	spanName := fmt.Sprintf("%s.%s/%s", rpcSystem, rpcService, rpcMethod)
+	ctx, span := tracer.Start(
+		ctx,
+		spanName,
+		trace.WithSpanKind(trace.SpanKindServer),
+	)
 
 	// Fast path: noop provider or span not sampled
 	if !span.IsRecording() {
-		return ctx, func(*error) { span.End() }
+		return ctx, func(error) { span.End() }
 	}
 
-	// Set span attributes.
+	// Define required attributes
+	attrs := []Attribute{
+		semconv.RPCSystemKey.String(rpcSystem),
+		semconv.RPCServiceKey.String(rpcService),
+		semconv.RPCMethodKey.String(rpcMethod),
+		semconv.RPCJSONRPCRequestID(requestID),
+	}
+
+	// Add any additional attributes provided
+	if len(additionalAttributes) > 0 {
+		attrs = append(attrs, additionalAttributes...)
+	}
+	span.SetAttributes(attrs...)
+	return ctx, endSpan(span)
+}
+
+// StartInternalSpan creates a SpanKind=INTERNAL span.
+func StartInternalSpan(
+	ctx context.Context,
+	spanName string,
+	attributes ...Attribute,
+) (context.Context, func(error)) {
+	return StartInternalSpanWithTracer(ctx, otel.Tracer(""), spanName, attributes...)
+}
+
+// StartInternalSpanWithTracer requires a tracer to be passed in and creates a SpanKind=INTERNAL span.
+func StartInternalSpanWithTracer(
+	ctx context.Context,
+	tracer trace.Tracer,
+	spanName string,
+	attributes ...Attribute,
+) (context.Context, func(error)) {
+	return startInternalSpan(ctx, tracer, spanName, attributes...)
+}
+
+// startInternalSpan creates a SpanKind=INTERNAL span.
+func startInternalSpan(
+	ctx context.Context,
+	tracer trace.Tracer,
+	spanName string,
+	attributes ...Attribute,
+) (context.Context, func(error)) {
+	ctx, span := tracer.Start(
+		ctx,
+		spanName,
+		trace.WithSpanKind(trace.SpanKindInternal),
+	)
+
+	// Fast path
+	if !span.IsRecording() {
+		return ctx, func(error) { span.End() }
+	}
+
 	if len(attributes) > 0 {
 		span.SetAttributes(attributes...)
 	}
+	return ctx, endSpan(span)
+}
 
-	// Define the function to end the span and handle error recording
-	spanEnd := func(err *error) {
-		if *err != nil {
-			// Error occurred, record it and set status on span
-			span.RecordError(*err)
-			span.SetStatus(codes.Error, (*err).Error())
+// endSpan ends the span and handles error recording.
+func endSpan(span trace.Span) func(error) {
+	return func(err error) {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 		}
 		span.End()
 	}
-	return ctx, spanEnd
 }

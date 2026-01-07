@@ -86,67 +86,26 @@ func TestTracingHTTP(t *testing.T) {
 	}
 	var rpcSpan *tracetest.SpanStub
 	for i := range spans {
-		if spans[i].Name == "rpc.handleCall" {
+		if spans[i].Name == "jsonrpc.test/echo" {
 			rpcSpan = &spans[i]
 			break
 		}
 	}
 	if rpcSpan == nil {
-		t.Fatalf("rpc.handleCall span not found.")
+		t.Fatalf("jsonrpc.test/echo span not found.")
 	}
 	attrs := attributeMap(rpcSpan.Attributes)
-	if attrs["rpc.method"] != "test_echo" {
-		t.Errorf("expected rpc.method=test_echo, got %v", attrs["rpc.method"])
+	if attrs["rpc.system"] != "jsonrpc" {
+		t.Errorf("expected rpc.system=jsonrpc, got %v", attrs["rpc.system"])
 	}
-	if _, ok := attrs["rpc.id"]; !ok {
-		t.Errorf("expected rpc.id attribute to be set")
+	if attrs["rpc.service"] != "test" {
+		t.Errorf("expected rpc.service=test, got %v", attrs["rpc.service"])
 	}
-}
-
-// TestTracingHTTPMethodNotFound verifies that a span is emitted when rpc method does not exist.
-func TestTracingHTTPMethodNotFound(t *testing.T) {
-	t.Parallel()
-	server, tracer, exporter := newTracingServer(t)
-	httpsrv := httptest.NewServer(server)
-	t.Cleanup(httpsrv.Close)
-	client, err := DialHTTP(httpsrv.URL)
-	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
+	if attrs["rpc.method"] != "echo" {
+		t.Errorf("expected rpc.method=echo, got %v", attrs["rpc.method"])
 	}
-	t.Cleanup(client.Close)
-
-	// Make a RPC call that should fail.
-	var result echoResult
-	if err := client.Call(&result, "testnonexistent", "hello", 42, &echoArgs{S: "world"}); err == nil {
-		t.Fatalf("RPC call should have failed")
-	}
-
-	// Flush spans.
-	if err := tracer.ForceFlush(context.Background()); err != nil {
-		t.Fatalf("failed to flush: %v", err)
-	}
-
-	// Check spans.
-	spans := exporter.GetSpans()
-	if len(spans) == 0 {
-		t.Fatal("no spans were emitted")
-	}
-	var rpcSpan *tracetest.SpanStub
-	for i := range spans {
-		if spans[i].Name == "rpc.handleCall" {
-			rpcSpan = &spans[i]
-			break
-		}
-	}
-	if rpcSpan == nil {
-		t.Fatalf("rpc.handleCall span not found.")
-	}
-	attrs := attributeMap(rpcSpan.Attributes)
-	if attrs["rpc.method"] != "testnonexistent" {
-		t.Errorf("expected rpc.method=testnonexistent, got %v", attrs["rpc.method"])
-	}
-	if _, ok := attrs["rpc.id"]; !ok {
-		t.Errorf("expected rpc.id attribute to be set")
+	if _, ok := attrs["rpc.jsonrpc.request_id"]; !ok {
+		t.Errorf("expected rpc.jsonrpc.request_id attribute to be set")
 	}
 }
 

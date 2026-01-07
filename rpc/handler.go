@@ -510,45 +510,38 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 		return h.runMethod(cp.ctx, msg, h.unsubscribeCb, args)
 	}
 
-	// Start root span for the request.
-	var err error
-	attributes := []telemetry.Attribute{
-		telemetry.StringAttribute("rpc.method", msg.Method),
-		telemetry.StringAttribute("rpc.id", string(msg.ID)),
-	}
-	ctx, spanEnd := telemetry.StartSpanWithTracer(cp.ctx, h.tracer(), "rpc.handleCall", attributes...)
-	defer spanEnd(&err)
-
 	// Check method name length
 	if len(msg.Method) > maxMethodNameLength {
-		errMessage := fmt.Sprintf("method name too long: %d > %d", len(msg.Method), maxMethodNameLength)
-		invalidRequestError := &invalidRequestError{errMessage}
-		err = errors.New(invalidRequestError.Error())
-		return msg.errorResponse(invalidRequestError)
+		return msg.errorResponse(&invalidRequestError{fmt.Sprintf("method name too long: %d > %d", len(msg.Method), maxMethodNameLength)})
 	}
-	callb := h.reg.callback(msg.Method)
+	callb, rpcService, rpcMethod := h.reg.callback(msg.Method)
+
+	// If the method is not found, return an error.
 	if callb == nil {
-		methodNotFoundError := &methodNotFoundError{method: msg.Method}
-		err = errors.New(methodNotFoundError.Error())
-		return msg.errorResponse(methodNotFoundError)
+		return msg.errorResponse(&methodNotFoundError{method: msg.Method})
 	}
 
+	// Start root span for the request.
+	var err error
+	ctx, spanEnd := telemetry.StartServerSpan(cp.ctx, h.tracer(), "jsonrpc", rpcService, rpcMethod, string(msg.ID))
+	defer spanEnd(err)
+
 	// Start tracing span before parsing arguments.
-	_, pSpanEnd := telemetry.StartSpanWithTracer(ctx, h.tracer(), "rpc.parsePositionalArguments", attributes...)
+	_, pSpanEnd := telemetry.StartInternalSpanWithTracer(ctx, h.tracer(), "rpc.parsePositionalArguments")
 	args, err := parsePositionalArguments(msg.Params, callb.argTypes)
-	pSpanEnd(&err)
+	pSpanEnd(err)
 	if err != nil {
 		return msg.errorResponse(&invalidParamsError{err.Error()})
 	}
 	start := time.Now()
 
 	// Start tracing span before running the method.
-	rctx, rSpanEnd := telemetry.StartSpanWithTracer(ctx, h.tracer(), "rpc.runMethod", attributes...)
+	rctx, rSpanEnd := telemetry.StartInternalSpanWithTracer(ctx, h.tracer(), "rpc.runMethod")
 	answer := h.runMethod(rctx, msg, callb, args)
 	if answer.Error != nil {
 		err = errors.New(answer.Error.Message)
 	}
-	rSpanEnd(&err)
+	rSpanEnd(err)
 
 	// Collect the statistics for RPC calls if metrics is enabled.
 	rpcRequestGauge.Inc(1)
@@ -616,12 +609,12 @@ func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *cal
 	if err != nil {
 		return msg.errorResponse(err)
 	}
-	_, spanEnd := telemetry.StartSpanWithTracer(ctx, h.tracer(), "rpc.msg.response", attributes...)
+	_, spanEnd := telemetry.StartInternalSpanWithTracer(ctx, h.tracer(), "rpc.encodeJSONResponse", attributes...)
 	response := msg.response(result)
 	if response.Error != nil {
 		err = errors.New(response.Error.Message)
 	}
-	spanEnd(&err)
+	spanEnd(err)
 	return response
 }
 
