@@ -369,11 +369,6 @@ type BlobPool struct {
 	lock sync.RWMutex // Mutex protecting the pool during reorg handling
 }
 
-type gappedTx struct {
-	tx        *types.Transaction
-	timestamp time.Time
-}
-
 // New creates a new blob transaction pool to gather, sort and filter inbound
 // blob transactions from the network.
 func New(config Config, chain BlockChain, hasPendingAuth func(common.Address) bool) *BlobPool {
@@ -1769,14 +1764,16 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 			from, _ := types.Sender(p.signer, tx)
 			allowance := p.gappedAllowance(from)
 			if allowance >= 1 && len(p.gapped) < maxGapped {
-				// if maxGapped is reached, it is better to give time to gapped
-				// transactions by keeping the old and dropping this one
 				p.gapped[from] = append(p.gapped[from], tx)
 				p.gappedSource[tx.Hash()] = from
-				log.Trace("blobpool:add added to Gapped blob queue", "allowance", allowance, "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
+				log.Trace("added tx to gapped blob queue", "allowance", allowance, "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
 				return nil
 			} else {
-				log.Trace("blobpool:add no Gapped blob queue allowance", "allowance", allowance, "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
+				// if maxGapped is reached, it is better to give time to gapped
+				// transactions by keeping the old and dropping this one.
+				// Thus replacing a gapped transaction with another gapped transaction
+				// is discouraged.
+				log.Trace("no gapped blob queue allowance", "allowance", allowance, "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
 			}
 		case errors.Is(err, core.ErrInsufficientFunds):
 			addOverdraftedMeter.Mark(1)
