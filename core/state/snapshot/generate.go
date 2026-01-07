@@ -648,6 +648,9 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 // gathering and logging, since the method surfs the blocks as they arrive, often
 // being restarted.
 func (dl *diskLayer) generate(stats *generatorStats) {
+	dl.genRunning.Store(true)
+	defer dl.genRunning.Store(false)
+
 	var (
 		accMarker []byte
 		abort     chan *generatorStats
