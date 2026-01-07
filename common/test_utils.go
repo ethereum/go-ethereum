@@ -23,7 +23,7 @@ import (
 )
 
 // LoadJSON reads the given file and unmarshals its content.
-func LoadJSON(file string, val interface{}) error {
+func LoadJSON(file string, val any) error {
 	content, err := os.ReadFile(file)
 	if err != nil {
 		return err

@@ -287,11 +287,11 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		}
 
 		// Log something friendly for the user
-		context := []interface{}{
+		context := []any{
 			"blocks", frozen - first, "elapsed", common.PrettyDuration(time.Since(start)), "number", frozen - 1,
 		}
 		if n := len(ancients); n > 0 {
-			context = append(context, []interface{}{"hash", ancients[n-1]}...)
+			context = append(context, []any{"hash", ancients[n-1]}...)
 		}
 		log.Debug("Deep froze chain segment", context...)
 

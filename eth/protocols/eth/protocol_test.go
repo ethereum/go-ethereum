@@ -199,7 +199,7 @@ func TestMessages(t *testing.T) {
 	}
 
 	for i, tc := range []struct {
-		message interface{}
+		message any
 		want    []byte
 	}{
 		{

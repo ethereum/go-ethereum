@@ -46,7 +46,7 @@ func (e *revertError) ErrorCode() int {
 }
 
 // ErrorData returns the hex encoded revert reason.
-func (e *revertError) ErrorData() interface{} {
+func (e *revertError) ErrorData() any {
 	return e.reason
 }
 
@@ -83,7 +83,7 @@ func (e *TxIndexingError) ErrorCode() int {
 }
 
 // ErrorData returns the hex encoded revert reason.
-func (e *TxIndexingError) ErrorData() interface{} { return "transaction indexing is in progress" }
+func (e *TxIndexingError) ErrorData() any { return "transaction indexing is in progress" }
 
 type callError struct {
 	Message string `json:"message"`
@@ -176,6 +176,6 @@ type blockGasLimitReachedError struct{ message string }
 func (e *blockGasLimitReachedError) Error() string  { return e.message }
 func (e *blockGasLimitReachedError) ErrorCode() int { return errCodeBlockGasLimitReached }
 
-func (e *txSyncTimeoutError) Error() string          { return e.msg }
-func (e *txSyncTimeoutError) ErrorCode() int         { return errCodeTxSyncTimeout }
-func (e *txSyncTimeoutError) ErrorData() interface{} { return e.hash.Hex() }
+func (e *txSyncTimeoutError) Error() string  { return e.msg }
+func (e *txSyncTimeoutError) ErrorCode() int { return errCodeTxSyncTimeout }
+func (e *txSyncTimeoutError) ErrorData() any { return e.hash.Hex() }

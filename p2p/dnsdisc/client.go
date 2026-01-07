@@ -134,7 +134,7 @@ func (c *Client) NewIterator(urls ...string) (enode.Iterator, error) {
 
 // resolveRoot retrieves a root entry via DNS.
 func (c *Client) resolveRoot(ctx context.Context, loc *linkEntry) (rootEntry, error) {
-	e, err, _ := c.singleflight.Do(loc.str, func() (interface{}, error) {
+	e, err, _ := c.singleflight.Do(loc.str, func() (any, error) {
 		txts, err := c.cfg.Resolver.LookupTXT(ctx, loc.domain)
 		c.cfg.Logger.Trace("Updating DNS discovery root", "tree", loc.domain, "err", err)
 		if err != nil {
@@ -175,7 +175,7 @@ func (c *Client) resolveEntry(ctx context.Context, domain, hash string) (entry, 
 		return e, nil
 	}
 
-	ei, err, _ := c.singleflight.Do(cacheKey, func() (interface{}, error) {
+	ei, err, _ := c.singleflight.Do(cacheKey, func() (any, error) {
 		e, err := c.doResolveEntry(ctx, domain, hash)
 		if err != nil {
 			return nil, err

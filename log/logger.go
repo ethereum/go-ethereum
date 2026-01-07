@@ -105,31 +105,31 @@ func LevelString(l slog.Level) string {
 // A Logger writes key/value pairs to a Handler
 type Logger interface {
 	// With returns a new Logger that has this logger's attributes plus the given attributes
-	With(ctx ...interface{}) Logger
+	With(ctx ...any) Logger
 
 	// New returns a new Logger that has this logger's attributes plus the given attributes. Identical to 'With'.
-	New(ctx ...interface{}) Logger
+	New(ctx ...any) Logger
 
 	// Log logs a message at the specified level with context key/value pairs
-	Log(level slog.Level, msg string, ctx ...interface{})
+	Log(level slog.Level, msg string, ctx ...any)
 
 	// Trace log a message at the trace level with context key/value pairs
-	Trace(msg string, ctx ...interface{})
+	Trace(msg string, ctx ...any)
 
 	// Debug logs a message at the debug level with context key/value pairs
-	Debug(msg string, ctx ...interface{})
+	Debug(msg string, ctx ...any)
 
 	// Info logs a message at the info level with context key/value pairs
-	Info(msg string, ctx ...interface{})
+	Info(msg string, ctx ...any)
 
 	// Warn logs a message at the warn level with context key/value pairs
-	Warn(msg string, ctx ...interface{})
+	Warn(msg string, ctx ...any)
 
 	// Error logs a message at the error level with context key/value pairs
-	Error(msg string, ctx ...interface{})
+	Error(msg string, ctx ...any)
 
 	// Crit logs a message at the crit level with context key/value pairs, and exits
-	Crit(msg string, ctx ...interface{})
+	Crit(msg string, ctx ...any)
 
 	// Write logs a message at the specified level
 	Write(level slog.Level, msg string, attrs ...any)
@@ -177,11 +177,11 @@ func (l *logger) Log(level slog.Level, msg string, attrs ...any) {
 	l.Write(level, msg, attrs...)
 }
 
-func (l *logger) With(ctx ...interface{}) Logger {
+func (l *logger) With(ctx ...any) Logger {
 	return &logger{l.inner.With(ctx...)}
 }
 
-func (l *logger) New(ctx ...interface{}) Logger {
+func (l *logger) New(ctx ...any) Logger {
 	return l.With(ctx...)
 }
 
@@ -190,15 +190,15 @@ func (l *logger) Enabled(ctx context.Context, level slog.Level) bool {
 	return l.inner.Enabled(ctx, level)
 }
 
-func (l *logger) Trace(msg string, ctx ...interface{}) {
+func (l *logger) Trace(msg string, ctx ...any) {
 	l.Write(LevelTrace, msg, ctx...)
 }
 
-func (l *logger) Debug(msg string, ctx ...interface{}) {
+func (l *logger) Debug(msg string, ctx ...any) {
 	l.Write(slog.LevelDebug, msg, ctx...)
 }
 
-func (l *logger) Info(msg string, ctx ...interface{}) {
+func (l *logger) Info(msg string, ctx ...any) {
 	l.Write(slog.LevelInfo, msg, ctx...)
 }
 
@@ -206,11 +206,11 @@ func (l *logger) Warn(msg string, ctx ...any) {
 	l.Write(slog.LevelWarn, msg, ctx...)
 }
 
-func (l *logger) Error(msg string, ctx ...interface{}) {
+func (l *logger) Error(msg string, ctx ...any) {
 	l.Write(slog.LevelError, msg, ctx...)
 }
 
-func (l *logger) Crit(msg string, ctx ...interface{}) {
+func (l *logger) Crit(msg string, ctx ...any) {
 	l.Write(LevelCrit, msg, ctx...)
 	os.Exit(1)
 }

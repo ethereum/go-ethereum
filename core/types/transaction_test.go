@@ -491,7 +491,7 @@ func TestTransactionSizes(t *testing.T) {
 }
 
 func TestYParityJSONUnmarshalling(t *testing.T) {
-	baseJson := map[string]interface{}{
+	baseJson := map[string]any{
 		// type is filled in by the test
 		"chainId":              "0x7",
 		"nonce":                "0x0",
@@ -503,7 +503,7 @@ func TestYParityJSONUnmarshalling(t *testing.T) {
 		"maxFeePerBlobGas":     "0x3b9aca00",
 		"value":                "0x0",
 		"input":                "0x",
-		"accessList":           []interface{}{},
+		"accessList":           []any{},
 		"blobVersionedHashes": []string{
 			"0x010657f37554c781402a22917dee2f75def7ab966d7b770905398eba3c444014",
 		},

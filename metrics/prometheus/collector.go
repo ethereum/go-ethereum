@@ -148,19 +148,19 @@ func (c *collector) writeGaugeInfo(name string, value metrics.GaugeInfoValue) {
 	c.buff.WriteString(fmt.Sprintf("{%v} 1\n\n", strings.Join(kvs, ", ")))
 }
 
-func (c *collector) writeGaugeCounter(name string, value interface{}) {
+func (c *collector) writeGaugeCounter(name string, value any) {
 	name = mutateKey(name)
 	c.buff.WriteString(fmt.Sprintf(typeGaugeTpl, name))
 	c.buff.WriteString(fmt.Sprintf(keyValueTpl, name, value))
 }
 
-func (c *collector) writeSummaryCounter(name string, value interface{}) {
+func (c *collector) writeSummaryCounter(name string, value any) {
 	name = mutateKey(name + "_count")
 	c.buff.WriteString(fmt.Sprintf(typeCounterTpl, name))
 	c.buff.WriteString(fmt.Sprintf(keyValueTpl, name, value))
 }
 
-func (c *collector) writeSummaryPercentile(name, p string, value interface{}) {
+func (c *collector) writeSummaryPercentile(name, p string, value any) {
 	name = mutateKey(name)
 	c.buff.WriteString(fmt.Sprintf(keyQuantileTagValueTpl, name, p, value))
 }

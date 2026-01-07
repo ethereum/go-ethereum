@@ -297,7 +297,7 @@ func (t *T) Failed() bool {
 
 // Log formats its arguments using default formatting, analogous to Println, and records
 // the text in the error log.
-func (t *T) Log(vs ...interface{}) {
+func (t *T) Log(vs ...any) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	fmt.Fprintln(t.output, vs...)
@@ -305,7 +305,7 @@ func (t *T) Log(vs ...interface{}) {
 
 // Logf formats its arguments according to the format, analogous to Printf, and records
 // the text in the error log. A final newline is added if not provided.
-func (t *T) Logf(format string, vs ...interface{}) {
+func (t *T) Logf(format string, vs ...any) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if len(format) == 0 || format[len(format)-1] != '\n' {
@@ -315,25 +315,25 @@ func (t *T) Logf(format string, vs ...interface{}) {
 }
 
 // Error is equivalent to Log followed by Fail.
-func (t *T) Error(vs ...interface{}) {
+func (t *T) Error(vs ...any) {
 	t.Log(vs...)
 	t.Fail()
 }
 
 // Errorf is equivalent to Logf followed by Fail.
-func (t *T) Errorf(format string, vs ...interface{}) {
+func (t *T) Errorf(format string, vs ...any) {
 	t.Logf(format, vs...)
 	t.Fail()
 }
 
 // Fatal is equivalent to Log followed by FailNow.
-func (t *T) Fatal(vs ...interface{}) {
+func (t *T) Fatal(vs ...any) {
 	t.Log(vs...)
 	t.FailNow()
 }
 
 // Fatalf is equivalent to Logf followed by FailNow.
-func (t *T) Fatalf(format string, vs ...interface{}) {
+func (t *T) Fatalf(format string, vs ...any) {
 	t.Logf(format, vs...)
 	t.FailNow()
 }

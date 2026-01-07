@@ -324,7 +324,7 @@ func (a OverrideAccount) MarshalJSON() ([]byte, error) {
 		Nonce     hexutil.Uint64              `json:"nonce,omitempty"`
 		Code      string                      `json:"code,omitempty"`
 		Balance   *hexutil.Big                `json:"balance,omitempty"`
-		State     interface{}                 `json:"state,omitempty"`
+		State     any                         `json:"state,omitempty"`
 		StateDiff map[common.Hash]common.Hash `json:"stateDiff,omitempty"`
 	}
 

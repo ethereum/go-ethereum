@@ -348,7 +348,7 @@ type TypePriority struct {
 	Value uint
 }
 
-type TypedDataMessage = map[string]interface{}
+type TypedDataMessage = map[string]any
 
 // TypedDataDomain represents the domain part of an EIP-712 message.
 type TypedDataDomain struct {
@@ -447,7 +447,7 @@ func (typedData *TypedData) TypeHash(primaryType string) hexutil.Bytes {
 // `enc(value₁) ‖ enc(value₂) ‖ … ‖ enc(valueₙ)`
 //
 // each encoded member is 32-byte long
-func (typedData *TypedData) EncodeData(primaryType string, data map[string]interface{}, depth int) (hexutil.Bytes, error) {
+func (typedData *TypedData) EncodeData(primaryType string, data map[string]any, depth int) (hexutil.Bytes, error) {
 	if err := typedData.validate(); err != nil {
 		return nil, err
 	}
@@ -473,7 +473,7 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 			}
 			buffer.Write(encodedData)
 		} else if typedData.Types[field.Type] != nil {
-			mapValue, ok := encValue.(map[string]interface{})
+			mapValue, ok := encValue.(map[string]any)
 			if !ok {
 				return nil, dataMismatchError(encType, encValue)
 			}
@@ -493,7 +493,7 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 	return buffer.Bytes(), nil
 }
 
-func (typedData *TypedData) encodeArrayValue(encValue interface{}, encType string, depth int) (hexutil.Bytes, error) {
+func (typedData *TypedData) encodeArrayValue(encValue any, encType string, depth int) (hexutil.Bytes, error) {
 	arrayValue, err := convertDataToSlice(encValue)
 	if err != nil {
 		return nil, dataMismatchError(encType, encValue)
@@ -520,7 +520,7 @@ func (typedData *TypedData) encodeArrayValue(encValue interface{}, encType strin
 			arrayBuffer.Write(encodedData)
 		} else {
 			if typedData.Types[parsedType] != nil {
-				mapValue, ok := item.(map[string]interface{})
+				mapValue, ok := item.(map[string]any)
 				if !ok {
 					return nil, dataMismatchError(parsedType, item)
 				}
@@ -543,7 +543,7 @@ func (typedData *TypedData) encodeArrayValue(encValue interface{}, encType strin
 }
 
 // Attempt to parse bytes in different formats: byte array, hex string, hexutil.Bytes.
-func parseBytes(encType interface{}) ([]byte, bool) {
+func parseBytes(encType any) ([]byte, bool) {
 	// Handle array types.
 	val := reflect.ValueOf(encType)
 	if val.Kind() == reflect.Array && val.Type().Elem().Kind() == reflect.Uint8 {
@@ -568,7 +568,7 @@ func parseBytes(encType interface{}) ([]byte, bool) {
 	}
 }
 
-func parseInteger(encType string, encValue interface{}) (*big.Int, error) {
+func parseInteger(encType string, encValue any) (*big.Int, error) {
 	var (
 		length int
 		signed = strings.HasPrefix(encType, "int")
@@ -623,7 +623,7 @@ func parseInteger(encType string, encValue interface{}) (*big.Int, error) {
 
 // EncodePrimitiveValue deals with the primitive values found
 // while searching through the typed data
-func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interface{}, depth int) ([]byte, error) {
+func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue any, depth int) ([]byte, error) {
 	switch encType {
 	case "address":
 		retval := make([]byte, 32)
@@ -695,12 +695,12 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 
 // dataMismatchError generates an error for a mismatch between
 // the provided type and data
-func dataMismatchError(encType string, encValue interface{}) error {
+func dataMismatchError(encType string, encValue any) error {
 	return fmt.Errorf("provided data '%v' doesn't match type '%s'", encValue, encType)
 }
 
-func convertDataToSlice(encValue interface{}) ([]interface{}, error) {
-	var outEncValue []interface{}
+func convertDataToSlice(encValue any) ([]any, error) {
+	var outEncValue []any
 	rv := reflect.ValueOf(encValue)
 	if rv.Kind() == reflect.Slice {
 		for i := 0; i < rv.Len(); i++ {
@@ -724,8 +724,8 @@ func (typedData *TypedData) validate() error {
 }
 
 // Map generates a map version of the typed data
-func (typedData *TypedData) Map() map[string]interface{} {
-	dataMap := map[string]interface{}{
+func (typedData *TypedData) Map() map[string]any {
+	dataMap := map[string]any{
 		"types":       typedData.Types,
 		"domain":      typedData.Domain.Map(),
 		"primaryType": typedData.PrimaryType,
@@ -759,7 +759,7 @@ func (typedData *TypedData) Format() ([]*NameValueType, error) {
 	return nvts, nil
 }
 
-func (typedData *TypedData) formatData(primaryType string, data map[string]interface{}) ([]*NameValueType, error) {
+func (typedData *TypedData) formatData(primaryType string, data map[string]any) ([]*NameValueType, error) {
 	var output []*NameValueType
 
 	// Add field contents. Structs and arrays have special handlers.
@@ -775,7 +775,7 @@ func (typedData *TypedData) formatData(primaryType string, data map[string]inter
 			parsedType := field.typeName()
 			for _, v := range arrayValue {
 				if typedData.Types[parsedType] != nil {
-					mapValue, _ := v.(map[string]interface{})
+					mapValue, _ := v.(map[string]any)
 					mapOutput, err := typedData.formatData(parsedType, mapValue)
 					if err != nil {
 						return nil, err
@@ -790,7 +790,7 @@ func (typedData *TypedData) formatData(primaryType string, data map[string]inter
 				}
 			}
 		} else if typedData.Types[field.Type] != nil {
-			if mapValue, ok := encValue.(map[string]interface{}); ok {
+			if mapValue, ok := encValue.(map[string]any); ok {
 				mapOutput, err := typedData.formatData(field.Type, mapValue)
 				if err != nil {
 					return nil, err
@@ -811,7 +811,7 @@ func (typedData *TypedData) formatData(primaryType string, data map[string]inter
 	return output, nil
 }
 
-func formatPrimitiveValue(encType string, encValue interface{}) (string, error) {
+func formatPrimitiveValue(encType string, encValue any) (string, error) {
 	switch encType {
 	case "address":
 		if stringValue, ok := encValue.(string); !ok {
@@ -915,8 +915,8 @@ func (domain *TypedDataDomain) validate() error {
 }
 
 // Map is a helper function to generate a map version of the domain
-func (domain *TypedDataDomain) Map() map[string]interface{} {
-	dataMap := map[string]interface{}{}
+func (domain *TypedDataDomain) Map() map[string]any {
+	dataMap := map[string]any{}
 
 	if domain.ChainId != nil {
 		dataMap["chainId"] = domain.ChainId
@@ -943,9 +943,9 @@ func (domain *TypedDataDomain) Map() map[string]interface{} {
 // NameValueType is a very simple struct with Name, Value and Type. It's meant for simple
 // json structures used to communicate signing-info about typed data with the UI
 type NameValueType struct {
-	Name  string      `json:"name"`
-	Value interface{} `json:"value"`
-	Typ   string      `json:"type"`
+	Name  string `json:"name"`
+	Value any    `json:"value"`
+	Typ   string `json:"type"`
 }
 
 // Pprint returns a pretty-printed version of nvt

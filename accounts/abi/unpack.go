@@ -35,7 +35,7 @@ var (
 )
 
 // ReadInteger reads the integer based on its kind and returns the appropriate value.
-func ReadInteger(typ Type, b []byte) (interface{}, error) {
+func ReadInteger(typ Type, b []byte) (any, error) {
 	ret := new(big.Int).SetBytes(b)
 
 	if typ.T == UintTy {
@@ -137,7 +137,7 @@ func readFunctionType(t Type, word []byte) (funcTy [24]byte, err error) {
 }
 
 // ReadFixedBytes uses reflection to create a fixed array to be read from.
-func ReadFixedBytes(t Type, word []byte) (interface{}, error) {
+func ReadFixedBytes(t Type, word []byte) (any, error) {
 	if t.T != FixedBytesTy {
 		return nil, errors.New("abi: invalid type in call to make fixed byte array")
 	}
@@ -149,7 +149,7 @@ func ReadFixedBytes(t Type, word []byte) (interface{}, error) {
 }
 
 // forEachUnpack iteratively unpack elements.
-func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) {
+func forEachUnpack(t Type, output []byte, start, size int) (any, error) {
 	if size < 0 {
 		return nil, fmt.Errorf("cannot marshal input to array, size is negative (%d)", size)
 	}
@@ -189,7 +189,7 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 	return refSlice.Interface(), nil
 }
 
-func forTupleUnpack(t Type, output []byte) (interface{}, error) {
+func forTupleUnpack(t Type, output []byte) (any, error) {
 	retval := reflect.New(t.GetType()).Elem()
 	virtualArgs := 0
 	for index, elem := range t.TupleElems {
@@ -221,7 +221,7 @@ func forTupleUnpack(t Type, output []byte) (interface{}, error) {
 
 // toGoType parses the output bytes and recursively assigns the value of these bytes
 // into a go type with accordance with the ABI spec.
-func toGoType(index int, t Type, output []byte) (interface{}, error) {
+func toGoType(index int, t Type, output []byte) (any, error) {
 	if index+32 > len(output) {
 		return nil, fmt.Errorf("abi: cannot marshal in to go type: length insufficient %d require %d", len(output), index+32)
 	}

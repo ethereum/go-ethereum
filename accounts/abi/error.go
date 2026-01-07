@@ -81,7 +81,7 @@ func (e Error) String() string {
 	return e.str
 }
 
-func (e *Error) Unpack(data []byte) (interface{}, error) {
+func (e *Error) Unpack(data []byte) (any, error) {
 	if len(data) < 4 {
 		return "", fmt.Errorf("insufficient data for unpacking: have %d, want at least 4", len(data))
 	}

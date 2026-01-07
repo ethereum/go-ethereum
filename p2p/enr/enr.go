@@ -313,7 +313,7 @@ func (r *Record) SetSig(s IdentityScheme, sig []byte) error {
 }
 
 // AppendElements appends the sequence number and entries to the given slice.
-func (r *Record) AppendElements(list []interface{}) []interface{} {
+func (r *Record) AppendElements(list []any) []any {
 	list = append(list, r.seq)
 	for _, p := range r.pairs {
 		list = append(list, p.k, p.v)
@@ -322,7 +322,7 @@ func (r *Record) AppendElements(list []interface{}) []interface{} {
 }
 
 func (r *Record) encode(sig []byte) (raw []byte, err error) {
-	list := make([]interface{}, 1, 2*len(r.pairs)+2)
+	list := make([]any, 1, 2*len(r.pairs)+2)
 	list[0] = sig
 	list = r.AppendElements(list)
 	if raw, err = rlp.EncodeToBytes(list); err != nil {

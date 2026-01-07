@@ -44,10 +44,10 @@ func (p *readError) Unwrap() error       { return p.err }
 func (p *readError) RequestID() []byte   { return nil }
 func (p *readError) SetRequestID([]byte) {}
 
-func (p *readError) AppendLogInfo(ctx []interface{}) []interface{} { return ctx }
+func (p *readError) AppendLogInfo(ctx []any) []any { return ctx }
 
 // readErrorf creates a readError with the given text.
-func readErrorf(format string, args ...interface{}) *readError {
+func readErrorf(format string, args ...any) *readError {
 	return &readError{fmt.Errorf(format, args...)}
 }
 
@@ -68,7 +68,7 @@ type conn struct {
 }
 
 type logger interface {
-	Logf(string, ...interface{})
+	Logf(string, ...any)
 }
 
 // newConn sets up a connection to the given node.
@@ -231,7 +231,7 @@ func (tc *conn) read(c net.PacketConn) v5wire.Packet {
 }
 
 // logf prints to the test log.
-func (tc *conn) logf(format string, args ...interface{}) {
+func (tc *conn) logf(format string, args ...any) {
 	if tc.log != nil {
 		tc.log.Logf("(%s) %s", tc.localNode.ID().TerminalString(), fmt.Sprintf(format, args...))
 	}

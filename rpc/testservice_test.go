@@ -66,9 +66,9 @@ type echoResult struct {
 
 type testError struct{}
 
-func (testError) Error() string          { return "testError" }
-func (testError) ErrorCode() int         { return 444 }
-func (testError) ErrorData() interface{} { return "testError data" }
+func (testError) Error() string  { return "testError" }
+func (testError) ErrorCode() int { return 444 }
+func (testError) ErrorData() any { return "testError data" }
 
 type MarshalErrObj struct{}
 
@@ -136,24 +136,24 @@ func (s *testService) Panic() string {
 	panic("service panic")
 }
 
-func (s *testService) CallMeBack(ctx context.Context, method string, args []interface{}) (interface{}, error) {
+func (s *testService) CallMeBack(ctx context.Context, method string, args []any) (any, error) {
 	c, ok := ClientFromContext(ctx)
 	if !ok {
 		return nil, errors.New("no client")
 	}
-	var result interface{}
+	var result any
 	err := c.Call(&result, method, args...)
 	return result, err
 }
 
-func (s *testService) CallMeBackLater(ctx context.Context, method string, args []interface{}) error {
+func (s *testService) CallMeBackLater(ctx context.Context, method string, args []any) error {
 	c, ok := ClientFromContext(ctx)
 	if !ok {
 		return errors.New("no client")
 	}
 	go func() {
 		<-ctx.Done()
-		var result interface{}
+		var result any
 		c.Call(&result, method, args...)
 	}()
 	return nil

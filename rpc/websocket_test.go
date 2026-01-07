@@ -406,35 +406,35 @@ func TestWebsocketMethodNameLengthLimit(t *testing.T) {
 	tests := []struct {
 		name           string
 		method         string
-		params         []interface{}
+		params         []any
 		expectedError  string
 		isSubscription bool
 	}{
 		{
 			name:           "valid method name",
 			method:         "test_echo",
-			params:         []interface{}{"test", 1},
+			params:         []any{"test", 1},
 			expectedError:  "",
 			isSubscription: false,
 		},
 		{
 			name:           "method name too long",
 			method:         "test_" + string(make([]byte, maxMethodNameLength+1)),
-			params:         []interface{}{"test", 1},
+			params:         []any{"test", 1},
 			expectedError:  "method name too long",
 			isSubscription: false,
 		},
 		{
 			name:           "valid subscription",
 			method:         "nftest_subscribe",
-			params:         []interface{}{"someSubscription", 1, 2},
+			params:         []any{"someSubscription", 1, 2},
 			expectedError:  "",
 			isSubscription: true,
 		},
 		{
 			name:           "subscription name too long",
 			method:         string(make([]byte, maxMethodNameLength+1)) + "_subscribe",
-			params:         []interface{}{"newHeads"},
+			params:         []any{"newHeads"},
 			expectedError:  "subscription name too long",
 			isSubscription: true,
 		},
@@ -442,7 +442,7 @@ func TestWebsocketMethodNameLengthLimit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var result interface{}
+			var result any
 			err := client.Call(&result, tt.method, tt.params...)
 			if tt.expectedError == "" {
 				if err != nil {

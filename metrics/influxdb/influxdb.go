@@ -6,36 +6,36 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 )
 
-func readMeter(namespace, name string, i interface{}) (string, map[string]interface{}) {
+func readMeter(namespace, name string, i any) (string, map[string]any) {
 	switch metric := i.(type) {
 	case *metrics.Counter:
 		measurement := fmt.Sprintf("%s%s.count", namespace, name)
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"value": metric.Snapshot().Count(),
 		}
 		return measurement, fields
 	case *metrics.CounterFloat64:
 		measurement := fmt.Sprintf("%s%s.count", namespace, name)
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"value": metric.Snapshot().Count(),
 		}
 		return measurement, fields
 	case *metrics.Gauge:
 		measurement := fmt.Sprintf("%s%s.gauge", namespace, name)
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"value": metric.Snapshot().Value(),
 		}
 		return measurement, fields
 	case *metrics.GaugeFloat64:
 		measurement := fmt.Sprintf("%s%s.gauge", namespace, name)
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"value": metric.Snapshot().Value(),
 		}
 		return measurement, fields
 	case *metrics.GaugeInfo:
 		ms := metric.Snapshot()
 		measurement := fmt.Sprintf("%s%s.gauge", namespace, name)
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"value": ms.Value().String(),
 		}
 		return measurement, fields
@@ -46,7 +46,7 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 		}
 		ps := ms.Percentiles([]float64{0.25, 0.5, 0.75, 0.95, 0.99, 0.999, 0.9999})
 		measurement := fmt.Sprintf("%s%s.histogram", namespace, name)
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"count":    ms.Count(),
 			"max":      ms.Max(),
 			"mean":     ms.Mean(),
@@ -65,7 +65,7 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 	case *metrics.Meter:
 		ms := metric.Snapshot()
 		measurement := fmt.Sprintf("%s%s.meter", namespace, name)
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"count": ms.Count(),
 			"m1":    ms.Rate1(),
 			"m5":    ms.Rate5(),
@@ -78,7 +78,7 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 		ps := ms.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999})
 
 		measurement := fmt.Sprintf("%s%s.timer", namespace, name)
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"count":    ms.Count(),
 			"max":      ms.Max(),
 			"mean":     ms.Mean(),
@@ -104,7 +104,7 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 		}
 		ps := ms.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999})
 		measurement := fmt.Sprintf("%s%s.timer", namespace, name)
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"count": ms.Count(),
 			"max":   ms.Max(),
 			"mean":  ms.Mean(),

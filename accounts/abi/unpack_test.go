@@ -99,10 +99,10 @@ func TestUnpack(t *testing.T) {
 }
 
 type unpackTest struct {
-	def  string      // ABI definition JSON
-	enc  string      // evm return data
-	want interface{} // the expected output
-	err  string      // empty or error if expected
+	def  string // ABI definition JSON
+	enc  string // evm return data
+	want any    // the expected output
+	err  string // empty or error if expected
 }
 
 func (test unpackTest) checkError(err error) error {
@@ -370,16 +370,16 @@ func TestMethodMultiReturn(t *testing.T) {
 		Int    *big.Int
 	}
 
-	newInterfaceSlice := func(len int) interface{} {
-		slice := make([]interface{}, len)
+	newInterfaceSlice := func(len int) any {
+		slice := make([]any, len)
 		return &slice
 	}
 
 	abi, data, expected := methodMultiReturn(require.New(t))
 	bigint := new(big.Int)
 	var testCases = []struct {
-		dest     interface{}
-		expected interface{}
+		dest     any
+		expected any
 		error    string
 		name     string
 	}{{
@@ -393,38 +393,38 @@ func TestMethodMultiReturn(t *testing.T) {
 		"",
 		"Can unpack into reversed structure",
 	}, {
-		&[]interface{}{&bigint, new(string)},
-		&[]interface{}{&expected.Int, &expected.String},
+		&[]any{&bigint, new(string)},
+		&[]any{&expected.Int, &expected.String},
 		"",
 		"Can unpack into a slice",
 	}, {
-		&[]interface{}{&bigint, ""},
-		&[]interface{}{&expected.Int, expected.String},
+		&[]any{&bigint, ""},
+		&[]any{&expected.Int, expected.String},
 		"",
 		"Can unpack into a slice without indirection",
 	}, {
-		&[2]interface{}{&bigint, new(string)},
-		&[2]interface{}{&expected.Int, &expected.String},
+		&[2]any{&bigint, new(string)},
+		&[2]any{&expected.Int, &expected.String},
 		"",
 		"Can unpack into an array",
 	}, {
-		&[2]interface{}{},
-		&[2]interface{}{expected.Int, expected.String},
+		&[2]any{},
+		&[2]any{expected.Int, expected.String},
 		"",
 		"Can unpack into interface array",
 	}, {
 		newInterfaceSlice(2),
-		&[]interface{}{expected.Int, expected.String},
+		&[]any{expected.Int, expected.String},
 		"",
 		"Can unpack into interface slice",
 	}, {
-		&[]interface{}{new(int), new(int)},
-		&[]interface{}{&expected.Int, &expected.String},
+		&[]any{new(int), new(int)},
+		&[]any{&expected.Int, &expected.String},
 		"abi: cannot unmarshal *big.Int in to int",
 		"Can not unpack into a slice with wrong types",
 	}, {
-		&[]interface{}{new(int)},
-		&[]interface{}{},
+		&[]any{new(int)},
+		&[]any{},
 		"abi: insufficient number of arguments for unpack, want 2, got 1",
 		"Can not unpack into a slice with wrong types",
 	}}
@@ -455,7 +455,7 @@ func TestMultiReturnWithArray(t *testing.T) {
 
 	ret1, ret1Exp := new([3]uint64), [3]uint64{9, 9, 9}
 	ret2, ret2Exp := new(uint64), uint64(8)
-	if err := abi.UnpackIntoInterface(&[]interface{}{ret1, ret2}, "multi", buff.Bytes()); err != nil {
+	if err := abi.UnpackIntoInterface(&[]any{ret1, ret2}, "multi", buff.Bytes()); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(*ret1, ret1Exp) {
@@ -480,7 +480,7 @@ func TestMultiReturnWithStringArray(t *testing.T) {
 	ret2, ret2Exp := new(common.Address), common.HexToAddress("ab1257528b3782fb40d7ed5f72e624b744dffb2f")
 	ret3, ret3Exp := new([2]string), [2]string{"Ethereum", "Hello, Ethereum!"}
 	ret4, ret4Exp := new(bool), false
-	if err := abi.UnpackIntoInterface(&[]interface{}{ret1, ret2, ret3, ret4}, "multi", buff.Bytes()); err != nil {
+	if err := abi.UnpackIntoInterface(&[]any{ret1, ret2, ret3, ret4}, "multi", buff.Bytes()); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(*ret1, ret1Exp) {
@@ -519,7 +519,7 @@ func TestMultiReturnWithStringSlice(t *testing.T) {
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000065")) // output[1][1] value
 	ret1, ret1Exp := new([]string), []string{"ethereum", "go-ethereum"}
 	ret2, ret2Exp := new([]*big.Int), []*big.Int{big.NewInt(100), big.NewInt(101)}
-	if err := abi.UnpackIntoInterface(&[]interface{}{ret1, ret2}, "multi", buff.Bytes()); err != nil {
+	if err := abi.UnpackIntoInterface(&[]any{ret1, ret2}, "multi", buff.Bytes()); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(*ret1, ret1Exp) {
@@ -560,7 +560,7 @@ func TestMultiReturnWithDeeplyNestedArray(t *testing.T) {
 		{{0x411, 0x412, 0x413}, {0x421, 0x422, 0x423}},
 	}
 	ret2, ret2Exp := new(uint64), uint64(0x9876)
-	if err := abi.UnpackIntoInterface(&[]interface{}{ret1, ret2}, "multi", buff.Bytes()); err != nil {
+	if err := abi.UnpackIntoInterface(&[]any{ret1, ret2}, "multi", buff.Bytes()); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(*ret1, ret1Exp) {
@@ -593,7 +593,7 @@ func TestUnmarshal(t *testing.T) {
 	// marshall mixed bytes (mixedBytes)
 	p0, p0Exp := []byte{}, common.Hex2Bytes("01020000000000000000")
 	p1, p1Exp := [32]byte{}, common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000ddeeff")
-	mixedBytes := []interface{}{&p0, &p1}
+	mixedBytes := []any{&p0, &p1}
 
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000040"))
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000ddeeff"))
@@ -1016,7 +1016,7 @@ func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
 		inputValue  *big.Int
 		unpackErr   error
 		packErr     error
-		expectValue interface{}
+		expectValue any
 	}{
 		{
 			decodeType: "uint8",

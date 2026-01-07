@@ -39,11 +39,11 @@ func (h nonceHeap) Len() int           { return len(h) }
 func (h nonceHeap) Less(i, j int) bool { return h[i] < h[j] }
 func (h nonceHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
 
-func (h *nonceHeap) Push(x interface{}) {
+func (h *nonceHeap) Push(x any) {
 	*h = append(*h, x.(uint64))
 }
 
-func (h *nonceHeap) Pop() interface{} {
+func (h *nonceHeap) Pop() any {
 	old := *h
 	n := len(old)
 	x := old[n-1]
@@ -515,12 +515,12 @@ func (h *priceHeap) cmp(a, b *types.Transaction) int {
 	return a.GasTipCapCmp(b)
 }
 
-func (h *priceHeap) Push(x interface{}) {
+func (h *priceHeap) Push(x any) {
 	tx := x.(*types.Transaction)
 	h.list = append(h.list, tx)
 }
 
-func (h *priceHeap) Pop() interface{} {
+func (h *priceHeap) Pop() any {
 	old := h.list
 	n := len(old)
 	x := old[n-1]

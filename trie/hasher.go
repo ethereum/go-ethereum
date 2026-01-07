@@ -125,7 +125,7 @@ func (h *hasher) encodeShortNode(n *shortNode) []byte {
 // fnEncoderPool is the pool for storing shared fullNode encoder to mitigate
 // the significant memory allocation overhead.
 var fnEncoderPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		var enc fullnodeEncoder
 		return &enc
 	},

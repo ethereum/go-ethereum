@@ -104,7 +104,7 @@ func makeTestHeaderWithMerkleProof(slot, index uint64, value merkle.Value) (type
 }
 
 // syncCommittee holds either a blsSyncCommittee or a fake dummySyncCommittee used for testing
-type syncCommittee interface{}
+type syncCommittee any
 
 // committeeSigVerifier verifies sync committee signatures (either proper BLS
 // signatures or fake signatures used for testing)

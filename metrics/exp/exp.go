@@ -187,7 +187,7 @@ func (exp *exp) publishResettingTimer(name string, metric *metrics.ResettingTime
 }
 
 func (exp *exp) syncToExpvar() {
-	exp.registry.Each(func(name string, i interface{}) {
+	exp.registry.Each(func(name string, i any) {
 		switch i := i.(type) {
 		case *metrics.Counter:
 			exp.publishCounter(name, i.Snapshot())

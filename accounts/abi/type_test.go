@@ -122,7 +122,7 @@ func TestTypeCheck(t *testing.T) {
 	for i, test := range []struct {
 		typ        string
 		components []ArgumentMarshaling
-		input      interface{}
+		input      any
 		err        string
 	}{
 		{"uint", nil, big.NewInt(1), "unsupported arg type: uint"},

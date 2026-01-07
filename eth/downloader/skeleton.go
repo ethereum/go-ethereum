@@ -1125,7 +1125,7 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 				// the syncer's internal state is corrupted. Do try to fix it, but
 				// be very vocal about the fault.
 				default:
-					var context []interface{}
+					var context []any
 
 					for i := range s.progress.Subchains[1:] {
 						context = append(context, fmt.Sprintf("stale_head_%d", i+1))

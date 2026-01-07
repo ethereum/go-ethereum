@@ -163,12 +163,12 @@ var domainStandard = apitypes.TypedDataDomain{
 	Salt:              "",
 }
 
-var messageStandard = map[string]interface{}{
-	"from": map[string]interface{}{
+var messageStandard = map[string]any{
+	"from": map[string]any{
 		"name":   "Cow",
 		"wallet": "0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826",
 	},
-	"to": map[string]interface{}{
+	"to": map[string]any{
 		"name":   "Bob",
 		"wallet": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
 	},
@@ -1042,7 +1042,7 @@ var recursiveBytesTypesStandard = apitypes.Types{
 	},
 }
 
-var recursiveBytesMessageStandard = map[string]interface{}{
+var recursiveBytesMessageStandard = map[string]any{
 	"field": [][][]byte{{{1}, {2}}, {{3}, {4}}},
 }
 

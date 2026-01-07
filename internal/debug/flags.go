@@ -191,7 +191,7 @@ func Setup(ctx *cli.Context) error {
 			return fmt.Errorf("failed to initiatilize file logger: %v", err)
 		}
 	}
-	context := []interface{}{"rotate", rotation}
+	context := []any{"rotate", rotation}
 	if len(logFmtFlag) > 0 {
 		context = append(context, "format", logFmtFlag)
 	} else {

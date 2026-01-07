@@ -327,18 +327,18 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, start time.Time)
 		return 0, err
 	}
 	// Report some public statistics so the user has a clue what's going on
-	context := []interface{}{
+	context := []any{
 		"count", res.imported,
 		"elapsed", common.PrettyDuration(time.Since(start)),
 	}
 	if last := res.lastHeader; last != nil {
 		context = append(context, "number", last.Number, "hash", res.lastHash)
 		if timestamp := time.Unix(int64(last.Time), 0); time.Since(timestamp) > time.Minute {
-			context = append(context, []interface{}{"age", common.PrettyAge(timestamp)}...)
+			context = append(context, []any{"age", common.PrettyAge(timestamp)}...)
 		}
 	}
 	if res.ignored > 0 {
-		context = append(context, []interface{}{"ignored", res.ignored}...)
+		context = append(context, []any{"ignored", res.ignored}...)
 	}
 	log.Debug("Imported new block headers", context...)
 	return res.status, err

@@ -84,7 +84,7 @@ func parseElementaryType(unescapedSelector string) (string, string, error) {
 	return parsedType, rest, nil
 }
 
-func parseCompositeType(unescapedSelector string) ([]interface{}, string, error) {
+func parseCompositeType(unescapedSelector string) ([]any, string, error) {
 	if len(unescapedSelector) == 0 || unescapedSelector[0] != '(' {
 		return nil, "", fmt.Errorf("expected '(', got %c", unescapedSelector[0])
 	}
@@ -92,7 +92,7 @@ func parseCompositeType(unescapedSelector string) ([]interface{}, string, error)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to parse type: %v", err)
 	}
-	result := []interface{}{parsedType}
+	result := []any{parsedType}
 	for len(rest) > 0 && rest[0] != ')' {
 		parsedType, rest, err = parseType(rest[1:])
 		if err != nil {
@@ -109,7 +109,7 @@ func parseCompositeType(unescapedSelector string) ([]interface{}, string, error)
 	return result, rest[1:], nil
 }
 
-func parseType(unescapedSelector string) (interface{}, string, error) {
+func parseType(unescapedSelector string) (any, string, error) {
 	if len(unescapedSelector) == 0 {
 		return nil, "", errors.New("empty type")
 	}
@@ -120,14 +120,14 @@ func parseType(unescapedSelector string) (interface{}, string, error) {
 	}
 }
 
-func assembleArgs(args []interface{}) ([]ArgumentMarshaling, error) {
+func assembleArgs(args []any) ([]ArgumentMarshaling, error) {
 	arguments := make([]ArgumentMarshaling, 0)
 	for i, arg := range args {
 		// generate dummy name to avoid unmarshal issues
 		name := fmt.Sprintf("name%d", i)
 		if s, ok := arg.(string); ok {
 			arguments = append(arguments, ArgumentMarshaling{name, s, s, nil, false})
-		} else if components, ok := arg.([]interface{}); ok {
+		} else if components, ok := arg.([]any); ok {
 			subArgs, err := assembleArgs(components)
 			if err != nil {
 				return nil, fmt.Errorf("failed to assemble components: %v", err)
@@ -154,7 +154,7 @@ func ParseSelector(unescapedSelector string) (SelectorMarshaling, error) {
 	if err != nil {
 		return SelectorMarshaling{}, fmt.Errorf("failed to parse selector '%s': %v", unescapedSelector, err)
 	}
-	args := []interface{}{}
+	args := []any{}
 	if len(rest) >= 2 && rest[0] == '(' && rest[1] == ')' {
 		rest = rest[2:]
 	} else {

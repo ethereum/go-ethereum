@@ -60,7 +60,7 @@ func FuzzTrieNodes(f *testing.F) {
 	})
 }
 
-func doFuzz(input []byte, obj interface{}, code int) {
+func doFuzz(input []byte, obj any, code int) {
 	bc := getChain()
 	defer bc.Stop()
 	fuzz.NewFromGoFuzz(input).Fuzz(obj)
@@ -136,10 +136,10 @@ type dummyBackend struct {
 	chain *core.BlockChain
 }
 
-func (d *dummyBackend) Chain() *core.BlockChain       { return d.chain }
-func (d *dummyBackend) RunPeer(*Peer, Handler) error  { return nil }
-func (d *dummyBackend) PeerInfo(enode.ID) interface{} { return "Foo" }
-func (d *dummyBackend) Handle(*Peer, Packet) error    { return nil }
+func (d *dummyBackend) Chain() *core.BlockChain      { return d.chain }
+func (d *dummyBackend) RunPeer(*Peer, Handler) error { return nil }
+func (d *dummyBackend) PeerInfo(enode.ID) any        { return "Foo" }
+func (d *dummyBackend) Handle(*Peer, Packet) error   { return nil }
 
 type dummyRW struct {
 	code       uint64

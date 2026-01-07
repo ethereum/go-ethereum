@@ -159,7 +159,7 @@ func (b *testBackend) RunPeer(peer *Peer, handler Handler) error {
 	// is omitted and we will just give control back to the handler.
 	return handler(peer)
 }
-func (b *testBackend) PeerInfo(enode.ID) interface{} { panic("not implemented") }
+func (b *testBackend) PeerInfo(enode.ID) any { panic("not implemented") }
 
 func (b *testBackend) AcceptTxs() bool {
 	return true
@@ -554,7 +554,7 @@ type decoder struct {
 	msg []byte
 }
 
-func (d decoder) Decode(val interface{}) error {
+func (d decoder) Decode(val any) error {
 	buffer := bytes.NewBuffer(d.msg)
 	s := rlp.NewStream(buffer, uint64(len(d.msg)))
 	return s.Decode(val)

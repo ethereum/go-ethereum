@@ -104,13 +104,13 @@ func (l *logger) Handler() slog.Handler {
 	return l.l.Handler()
 }
 
-func (l *logger) Write(level slog.Level, msg string, ctx ...interface{}) {}
+func (l *logger) Write(level slog.Level, msg string, ctx ...any) {}
 
 func (l *logger) Enabled(ctx context.Context, level slog.Level) bool {
 	return l.l.Enabled(ctx, level)
 }
 
-func (l *logger) Trace(msg string, ctx ...interface{}) {
+func (l *logger) Trace(msg string, ctx ...any) {
 	l.t.Helper()
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -118,7 +118,7 @@ func (l *logger) Trace(msg string, ctx ...interface{}) {
 	l.flush()
 }
 
-func (l *logger) Log(level slog.Level, msg string, ctx ...interface{}) {
+func (l *logger) Log(level slog.Level, msg string, ctx ...any) {
 	l.t.Helper()
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -126,7 +126,7 @@ func (l *logger) Log(level slog.Level, msg string, ctx ...interface{}) {
 	l.flush()
 }
 
-func (l *logger) Debug(msg string, ctx ...interface{}) {
+func (l *logger) Debug(msg string, ctx ...any) {
 	l.t.Helper()
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -134,7 +134,7 @@ func (l *logger) Debug(msg string, ctx ...interface{}) {
 	l.flush()
 }
 
-func (l *logger) Info(msg string, ctx ...interface{}) {
+func (l *logger) Info(msg string, ctx ...any) {
 	l.t.Helper()
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -142,7 +142,7 @@ func (l *logger) Info(msg string, ctx ...interface{}) {
 	l.flush()
 }
 
-func (l *logger) Warn(msg string, ctx ...interface{}) {
+func (l *logger) Warn(msg string, ctx ...any) {
 	l.t.Helper()
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -150,7 +150,7 @@ func (l *logger) Warn(msg string, ctx ...interface{}) {
 	l.flush()
 }
 
-func (l *logger) Error(msg string, ctx ...interface{}) {
+func (l *logger) Error(msg string, ctx ...any) {
 	l.t.Helper()
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -158,7 +158,7 @@ func (l *logger) Error(msg string, ctx ...interface{}) {
 	l.flush()
 }
 
-func (l *logger) Crit(msg string, ctx ...interface{}) {
+func (l *logger) Crit(msg string, ctx ...any) {
 	l.t.Helper()
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -166,12 +166,12 @@ func (l *logger) Crit(msg string, ctx ...interface{}) {
 	l.flush()
 }
 
-func (l *logger) With(ctx ...interface{}) log.Logger {
+func (l *logger) With(ctx ...any) log.Logger {
 	newLogger := l.l.With(ctx...)
 	return &logger{l.t, newLogger, l.mu, newLogger.Handler().(*bufHandler)}
 }
 
-func (l *logger) New(ctx ...interface{}) log.Logger {
+func (l *logger) New(ctx ...any) log.Logger {
 	return l.With(ctx...)
 }
 

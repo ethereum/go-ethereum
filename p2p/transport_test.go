@@ -107,7 +107,7 @@ func TestProtocolHandshake(t *testing.T) {
 func TestProtocolHandshakeErrors(t *testing.T) {
 	tests := []struct {
 		code uint64
-		msg  interface{}
+		msg  any
 		err  error
 	}{
 		{

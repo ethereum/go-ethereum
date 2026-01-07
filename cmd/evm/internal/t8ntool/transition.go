@@ -318,7 +318,7 @@ func (g Alloc) OnAccount(addr *common.Address, dumpAccount state.DumpAccount) {
 }
 
 // saveFile marshals the object to the given file
-func saveFile(baseDir, filename string, data interface{}) error {
+func saveFile(baseDir, filename string, data any) error {
 	b, err := json.MarshalIndent(data, "", " ")
 	if err != nil {
 		return NewError(ErrorJson, fmt.Errorf("failed marshalling output: %v", err))
@@ -334,9 +334,9 @@ func saveFile(baseDir, filename string, data interface{}) error {
 // dispatchOutput writes the output data to either stderr or stdout, or to the specified
 // files
 func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, alloc Alloc, body hexutil.Bytes, bt map[common.Hash]hexutil.Bytes) error {
-	stdOutObject := make(map[string]interface{})
-	stdErrObject := make(map[string]interface{})
-	dispatch := func(baseDir, fName, name string, obj interface{}) error {
+	stdOutObject := make(map[string]any)
+	stdErrObject := make(map[string]any)
+	dispatch := func(baseDir, fName, name string, obj any) error {
 		switch fName {
 		case "stdout":
 			stdOutObject[name] = obj

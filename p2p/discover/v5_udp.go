@@ -84,7 +84,7 @@ type UDPv5 struct {
 	respTimeout  time.Duration
 
 	// misc buffers used during message handling
-	logcontext []interface{}
+	logcontext []any
 
 	// talkreq handler registry
 	talk *talkSystem

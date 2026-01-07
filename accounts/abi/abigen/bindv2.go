@@ -352,7 +352,7 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 		}
 	}
 	buffer := new(bytes.Buffer)
-	funcs := map[string]interface{}{
+	funcs := map[string]any{
 		"bindtype":           bindType,
 		"bindtopictype":      bindTopicType,
 		"capitalise":         abi.ToCamelCase,

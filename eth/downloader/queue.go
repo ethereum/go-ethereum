@@ -355,15 +355,15 @@ func (q *queue) Results(block bool) []*fetchResult {
 	return results
 }
 
-func (q *queue) Stats() []interface{} {
+func (q *queue) Stats() []any {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
 	return q.stats()
 }
 
-func (q *queue) stats() []interface{} {
-	return []interface{}{
+func (q *queue) stats() []any {
+	return []any{
 		"receiptTasks", q.receiptTaskQueue.Size(),
 		"blockTasks", q.blockTaskQueue.Size(),
 		"itemSize", q.resultSize,
@@ -536,7 +536,7 @@ func (q *queue) ExpireReceipts(peer string) int {
 // Note, this method expects the queue lock to be already held. The reason the
 // lock is not obtained in here is that the parameters already need to access
 // the queue, so they already need a lock anyway.
-func (q *queue) expire(peer string, pendPool map[string]*fetchRequest, taskQueue interface{}) int {
+func (q *queue) expire(peer string, pendPool map[string]*fetchRequest, taskQueue any) int {
 	// Retrieve the request being expired and log an error if it's non-existent,
 	// as there's no order of events that should lead to such expirations.
 	req := pendPool[peer]

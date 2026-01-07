@@ -356,7 +356,7 @@ func TestGraphQLConcurrentResolvers(t *testing.T) {
 			want: `{"block":{"account":{"balance":"0x0","transactionCount":"0x0","code":"0x"}}}`,
 		},
 	} {
-		res := handler.Schema.Exec(context.Background(), tt.body, "", map[string]interface{}{})
+		res := handler.Schema.Exec(context.Background(), tt.body, "", map[string]any{})
 		if res.Errors != nil {
 			t.Fatalf("failed to execute query for testcase #%d: %v", i, res.Errors)
 		}
@@ -416,7 +416,7 @@ func TestWithdrawals(t *testing.T) {
 			want: `{"block":{"withdrawalsRoot":"0x8418fc1a48818928f6692f148e9b10e99a88edc093b095cb8ca97950284b553d","withdrawals":[{"validator":"0x5","amount":"0xa"}]}}`,
 		},
 	} {
-		res := handler.Schema.Exec(context.Background(), tt.body, "", map[string]interface{}{})
+		res := handler.Schema.Exec(context.Background(), tt.body, "", map[string]any{})
 		if res.Errors != nil {
 			t.Fatalf("failed to execute query for testcase #%d: %v", i, res.Errors)
 		}

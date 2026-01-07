@@ -174,7 +174,7 @@ func ws(n int) string {
 	return strings.Repeat("  ", n)
 }
 
-func die(args ...interface{}) {
+func die(args ...any) {
 	fmt.Fprintln(os.Stderr, args...)
 	os.Exit(1)
 }
@@ -187,7 +187,7 @@ func textToRlp(r io.Reader) ([]byte, error) {
 	// - an element is either hex-encoded bytes OR a quoted string
 	var (
 		scanner = bufio.NewScanner(r)
-		obj     []interface{}
+		obj     []any
 		stack   = list.New()
 	)
 	for scanner.Scan() {
@@ -198,12 +198,12 @@ func textToRlp(r io.Reader) ([]byte, error) {
 		switch t {
 		case "[": // list start
 			stack.PushFront(obj)
-			obj = make([]interface{}, 0)
+			obj = make([]any, 0)
 		case "]", "],": // list end
-			parent := stack.Remove(stack.Front()).([]interface{})
+			parent := stack.Remove(stack.Front()).([]any)
 			obj = append(parent, obj)
 		case "[],": // empty list
-			obj = append(obj, make([]interface{}, 0))
+			obj = append(obj, make([]any, 0))
 		default: // element
 			data := []byte(t)[:len(t)-1] // cut off comma
 			if data[0] == '"' {          // ascii string

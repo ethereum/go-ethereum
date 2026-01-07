@@ -253,7 +253,7 @@ func iterOwnKeys(vm *goja.Runtime, obj *goja.Object, f func(string)) {
 	}
 	gv := rv.Export()
 	switch gv := gv.(type) {
-	case []interface{}:
+	case []any:
 		for _, v := range gv {
 			f(v.(string))
 		}

@@ -77,7 +77,7 @@ func (r *v2Reporter) run() {
 // send sends the measurements. If provided tstamp is >0, it is used. Otherwise,
 // a 'fresh' timestamp is used.
 func (r *v2Reporter) send(tstamp int64) {
-	r.reg.Each(func(name string, i interface{}) {
+	r.reg.Each(func(name string, i any) {
 		var now time.Time
 		if tstamp <= 0 {
 			now = time.Now()

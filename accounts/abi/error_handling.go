@@ -85,6 +85,6 @@ func typeCheck(t Type, value reflect.Value) error {
 }
 
 // typeErr returns a formatted type casting error.
-func typeErr(expected, got interface{}) error {
+func typeErr(expected, got any) error {
 	return fmt.Errorf("abi: cannot use %v as type %v as argument", got, expected)
 }

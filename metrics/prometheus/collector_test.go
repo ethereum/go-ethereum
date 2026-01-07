@@ -36,7 +36,7 @@ func TestCollector(t *testing.T) {
 		c    = newCollector()
 		want string
 	)
-	internal.ExampleMetrics().Each(func(name string, i interface{}) {
+	internal.ExampleMetrics().Each(func(name string, i any) {
 		c.Add(name, i)
 	})
 	if wantB, err := os.ReadFile("./testdata/prometheus.want"); err != nil {

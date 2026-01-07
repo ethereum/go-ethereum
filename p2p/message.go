@@ -51,7 +51,7 @@ type Msg struct {
 // the given value, which must be a pointer.
 //
 // For the decoding rules, please see package rlp.
-func (msg Msg) Decode(val interface{}) error {
+func (msg Msg) Decode(val any) error {
 	s := rlp.NewStream(msg.Payload, uint64(msg.Size))
 	if err := s.Decode(val); err != nil {
 		return newPeerError(errInvalidMsg, "(code %x) (size %d) %v", msg.Code, msg.Size, err)
@@ -96,7 +96,7 @@ type MsgReadWriter interface {
 
 // Send writes an RLP-encoded message with the given code.
 // data should encode as an RLP list.
-func Send(w MsgWriter, msgcode uint64, data interface{}) error {
+func Send(w MsgWriter, msgcode uint64, data any) error {
 	size, r, err := rlp.EncodeToReader(data)
 	if err != nil {
 		return err
@@ -112,7 +112,7 @@ func Send(w MsgWriter, msgcode uint64, data interface{}) error {
 // the message payload will be an RLP list containing the items:
 //
 //	[e1, e2, e3]
-func SendItems(w MsgWriter, msgcode uint64, elems ...interface{}) error {
+func SendItems(w MsgWriter, msgcode uint64, elems ...any) error {
 	return Send(w, msgcode, elems)
 }
 
@@ -224,7 +224,7 @@ func (p *MsgPipeRW) Close() error {
 // ExpectMsg reads a message from r and verifies that its
 // code and encoded RLP content match the provided values.
 // If content is nil, the payload is discarded and not verified.
-func ExpectMsg(r MsgReader, code uint64, content interface{}) error {
+func ExpectMsg(r MsgReader, code uint64, content any) error {
 	msg, err := r.ReadMsg()
 	if err != nil {
 		return err

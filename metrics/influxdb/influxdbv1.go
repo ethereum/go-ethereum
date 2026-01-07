@@ -133,7 +133,7 @@ func (r *reporter) send(tstamp int64) error {
 	if err != nil {
 		return err
 	}
-	r.reg.Each(func(name string, i interface{}) {
+	r.reg.Each(func(name string, i any) {
 		var now time.Time
 		if tstamp <= 0 {
 			now = time.Now()

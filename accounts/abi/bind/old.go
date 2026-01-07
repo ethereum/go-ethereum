@@ -226,7 +226,7 @@ func NewBoundContract(address common.Address, abi abi.ABI, caller ContractCaller
 	return bind2.NewBoundContract(address, abi, caller, transactor, filterer)
 }
 
-func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend ContractBackend, params ...interface{}) (common.Address, *types.Transaction, *BoundContract, error) {
+func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend ContractBackend, params ...any) (common.Address, *types.Transaction, *BoundContract, error) {
 	packed, err := abi.Pack("", params...)
 	if err != nil {
 		return common.Address{}, nil, nil, err

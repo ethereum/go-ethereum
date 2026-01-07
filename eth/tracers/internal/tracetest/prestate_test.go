@@ -46,7 +46,7 @@ type account struct {
 // prestateTracerTest defines a single test to check the stateDiff tracer against.
 type prestateTracerTest struct {
 	tracerTestEnv
-	Result interface{} `json:"result"`
+	Result any `json:"result"`
 }
 
 func TestPrestateTracerLegacy(t *testing.T) {

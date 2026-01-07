@@ -126,7 +126,7 @@ func newConnectionWrapper(conn *websocket.Conn) *connWrapper {
 }
 
 // WriteJSON wraps corresponding method on the websocket but is safe for concurrent calling
-func (w *connWrapper) WriteJSON(v interface{}) error {
+func (w *connWrapper) WriteJSON(v any) error {
 	w.wlock.Lock()
 	defer w.wlock.Unlock()
 
@@ -134,7 +134,7 @@ func (w *connWrapper) WriteJSON(v interface{}) error {
 }
 
 // ReadJSON wraps corresponding method on the websocket but is safe for concurrent calling
-func (w *connWrapper) ReadJSON(v interface{}) error {
+func (w *connWrapper) ReadJSON(v any) error {
 	w.rlock.Lock()
 	defer w.rlock.Unlock()
 
@@ -395,7 +395,7 @@ func (s *Service) readLoop(conn *connWrapper) {
 			continue
 		}
 		// Not a system ping, try to decode an actual state message
-		var msg map[string][]interface{}
+		var msg map[string][]any
 		if err := json.Unmarshal(blob, &msg); err != nil {
 			log.Warn("Failed to decode stats server message", "err", err)
 			return
@@ -425,7 +425,7 @@ func (s *Service) readLoop(conn *connWrapper) {
 		// If the message is a history request, forward to the event processor
 		if len(msg["emit"]) == 2 && command == "history" {
 			// Make sure the request is valid and doesn't crash us
-			request, ok := msg["emit"][1].(map[string]interface{})
+			request, ok := msg["emit"][1].(map[string]any)
 			if !ok {
 				log.Warn("Invalid stats history request", "msg", msg["emit"][1])
 				select {
@@ -434,7 +434,7 @@ func (s *Service) readLoop(conn *connWrapper) {
 				}
 				continue
 			}
-			list, ok := request["list"].([]interface{})
+			list, ok := request["list"].([]any)
 			if !ok {
 				log.Warn("Invalid stats history block list", "list", request["list"])
 				return
@@ -513,7 +513,7 @@ func (s *Service) login(conn *connWrapper) error {
 		},
 		Secret: s.pass,
 	}
-	login := map[string][]interface{}{
+	login := map[string][]any{
 		"emit": {"hello", auth},
 	}
 	if err := conn.WriteJSON(login); err != nil {
@@ -552,7 +552,7 @@ func (s *Service) reportLatency(conn *connWrapper) error {
 	// Send the current time to the ethstats server
 	start := time.Now()
 
-	ping := map[string][]interface{}{
+	ping := map[string][]any{
 		"emit": {"node-ping", map[string]string{
 			"id":         s.node,
 			"clientTime": start.String(),
@@ -577,7 +577,7 @@ func (s *Service) reportLatency(conn *connWrapper) error {
 	// Send back the measured latency
 	log.Trace("Sending measured latency to ethstats", "latency", latency)
 
-	stats := map[string][]interface{}{
+	stats := map[string][]any{
 		"emit": {"latency", map[string]string{
 			"id":      s.node,
 			"latency": latency,
@@ -636,11 +636,11 @@ func (s *Service) reportNewPayload(conn *connWrapper, ev core.NewPayloadEvent) e
 
 	log.Trace("Sending new payload to ethstats", "number", details.Number, "hash", details.Hash)
 
-	stats := map[string]interface{}{
+	stats := map[string]any{
 		"id":    s.node,
 		"block": details,
 	}
-	report := map[string][]interface{}{
+	report := map[string][]any{
 		"emit": {"block_new_payload", stats},
 	}
 	return conn.WriteJSON(report)
@@ -658,11 +658,11 @@ func (s *Service) reportBlock(conn *connWrapper, header *types.Header) error {
 	// Assemble the block report and send it to the server
 	log.Trace("Sending new block to ethstats", "number", details.Number, "hash", details.Hash)
 
-	stats := map[string]interface{}{
+	stats := map[string]any{
 		"id":    s.node,
 		"block": details,
 	}
-	report := map[string][]interface{}{
+	report := map[string][]any{
 		"emit": {"block", stats},
 	}
 	return conn.WriteJSON(report)
@@ -758,11 +758,11 @@ func (s *Service) reportHistory(conn *connWrapper, list []uint64) error {
 	} else {
 		log.Trace("No history to send to stats server")
 	}
-	stats := map[string]interface{}{
+	stats := map[string]any{
 		"id":      s.node,
 		"history": history,
 	}
-	report := map[string][]interface{}{
+	report := map[string][]any{
 		"emit": {"history", stats},
 	}
 	return conn.WriteJSON(report)
@@ -781,13 +781,13 @@ func (s *Service) reportPending(conn *connWrapper) error {
 	// Assemble the transaction stats and send it to the server
 	log.Trace("Sending pending transactions to ethstats", "count", pending)
 
-	stats := map[string]interface{}{
+	stats := map[string]any{
 		"id": s.node,
 		"stats": &pendStats{
 			Pending: pending,
 		},
 	}
-	report := map[string][]interface{}{
+	report := map[string][]any{
 		"emit": {"pending", stats},
 	}
 	return conn.WriteJSON(report)
@@ -827,7 +827,7 @@ func (s *Service) reportStats(conn *connWrapper) error {
 	// Assemble the node stats and send it to the server
 	log.Trace("Sending node details to ethstats")
 
-	stats := map[string]interface{}{
+	stats := map[string]any{
 		"id": s.node,
 		"stats": &nodeStats{
 			Active:   true,
@@ -837,7 +837,7 @@ func (s *Service) reportStats(conn *connWrapper) error {
 			Uptime:   100,
 		},
 	}
-	report := map[string][]interface{}{
+	report := map[string][]any{
 		"emit": {"stats", stats},
 	}
 	return conn.WriteJSON(report)

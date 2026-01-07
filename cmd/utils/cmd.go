@@ -63,7 +63,7 @@ var ErrImportInterrupted = errors.New("interrupted")
 // Fatalf formats a message to standard error and exits the program.
 // The message is also printed to standard output if standard error
 // is redirected to a different file.
-func Fatalf(format string, args ...interface{}) {
+func Fatalf(format string, args ...any) {
 	w := io.MultiWriter(os.Stdout, os.Stderr)
 	if runtime.GOOS == "windows" || runtime.GOOS == "openbsd" {
 		// The SameFile check below doesn't work on Windows neither OpenBSD.

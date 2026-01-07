@@ -199,7 +199,7 @@ func TestUnpackIndexedStringTyLogIntoMap(t *testing.T) {
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
 	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
 
-	expectedReceivedMap := map[string]interface{}{
+	expectedReceivedMap := map[string]any{
 		"name":   hash,
 		"sender": common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
 		"amount": big.NewInt(1),
@@ -216,7 +216,7 @@ func TestUnpackAnonymousLogIntoMap(t *testing.T) {
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
 	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
 
-	var received map[string]interface{}
+	var received map[string]any
 	err := bc.UnpackLogIntoMap(received, "received", mockLog)
 	if err == nil {
 		t.Error("unpacking anonymous event is not supported")
@@ -243,7 +243,7 @@ func TestUnpackIndexedSliceTyLogIntoMap(t *testing.T) {
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
 	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
 
-	expectedReceivedMap := map[string]interface{}{
+	expectedReceivedMap := map[string]any{
 		"names":  hash,
 		"sender": common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
 		"amount": big.NewInt(1),
@@ -269,7 +269,7 @@ func TestUnpackIndexedArrayTyLogIntoMap(t *testing.T) {
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
 	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
 
-	expectedReceivedMap := map[string]interface{}{
+	expectedReceivedMap := map[string]any{
 		"addresses": hash,
 		"sender":    common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
 		"amount":    big.NewInt(1),
@@ -296,7 +296,7 @@ func TestUnpackIndexedFuncTyLogIntoMap(t *testing.T) {
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
 	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
 
-	expectedReceivedMap := map[string]interface{}{
+	expectedReceivedMap := map[string]any{
 		"function": functionTy,
 		"sender":   common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
 		"amount":   big.NewInt(1),
@@ -319,7 +319,7 @@ func TestUnpackIndexedBytesTyLogIntoMap(t *testing.T) {
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
 	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
 
-	expectedReceivedMap := map[string]interface{}{
+	expectedReceivedMap := map[string]any{
 		"content": hash,
 		"sender":  common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
 		"amount":  big.NewInt(1),
@@ -374,8 +374,8 @@ func TestTransactGasFee(t *testing.T) {
 	assert.True(mt.suggestGasPriceCalled)
 }
 
-func unpackAndCheck(t *testing.T, bc *bind.BoundContract, expected map[string]interface{}, mockLog types.Log) {
-	received := make(map[string]interface{})
+func unpackAndCheck(t *testing.T, bc *bind.BoundContract, expected map[string]any, mockLog types.Log) {
+	received := make(map[string]any)
 	if err := bc.UnpackLogIntoMap(received, "received", mockLog); err != nil {
 		t.Error(err)
 	}
@@ -411,7 +411,7 @@ func TestCall(t *testing.T) {
 		name, method string
 		opts         *bind.CallOpts
 		mc           bind.ContractCaller
-		results      *[]interface{}
+		results      *[]any
 		wantErr      bool
 		wantErrExact error
 	}{{
@@ -547,7 +547,7 @@ func TestCall(t *testing.T) {
 			codeAtBytes: []byte{0},
 		},
 		method:  method,
-		results: &[]interface{}{0},
+		results: &[]any{0},
 		wantErr: true,
 	}}
 	for _, test := range tests {

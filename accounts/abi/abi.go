@@ -60,7 +60,7 @@ func JSON(reader io.Reader) (ABI, error) {
 // of 4 bytes and arguments are all 32 bytes.
 // Method ids are created from the first 4 bytes of the hash of the
 // methods string signature. (signature = baz(uint32,string32))
-func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
+func (abi ABI) Pack(name string, args ...any) ([]byte, error) {
 	// Fetch the ABI of the requested method
 	if name == "" {
 		// constructor
@@ -105,7 +105,7 @@ func (abi ABI) getArguments(name string, data []byte) (Arguments, error) {
 }
 
 // Unpack unpacks the output according to the abi specification.
-func (abi ABI) Unpack(name string, data []byte) ([]interface{}, error) {
+func (abi ABI) Unpack(name string, data []byte) ([]any, error) {
 	args, err := abi.getArguments(name, data)
 	if err != nil {
 		return nil, err
@@ -116,7 +116,7 @@ func (abi ABI) Unpack(name string, data []byte) ([]interface{}, error) {
 // UnpackIntoInterface unpacks the output in v according to the abi specification.
 // It performs an additional copy. Please only use, if you want to unpack into a
 // structure that does not strictly conform to the abi structure (e.g. has additional arguments)
-func (abi ABI) UnpackIntoInterface(v interface{}, name string, data []byte) error {
+func (abi ABI) UnpackIntoInterface(v any, name string, data []byte) error {
 	args, err := abi.getArguments(name, data)
 	if err != nil {
 		return err
@@ -129,7 +129,7 @@ func (abi ABI) UnpackIntoInterface(v interface{}, name string, data []byte) erro
 }
 
 // UnpackIntoMap unpacks a log into the provided map[string]interface{}.
-func (abi ABI) UnpackIntoMap(v map[string]interface{}, name string, data []byte) (err error) {
+func (abi ABI) UnpackIntoMap(v map[string]any, name string, data []byte) (err error) {
 	args, err := abi.getArguments(name, data)
 	if err != nil {
 		return err

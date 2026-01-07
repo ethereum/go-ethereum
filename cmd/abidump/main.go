@@ -68,7 +68,7 @@ func main() {
 	}
 }
 
-func die(args ...interface{}) {
+func die(args ...any) {
 	fmt.Fprintln(os.Stderr, args...)
 	os.Exit(1)
 }

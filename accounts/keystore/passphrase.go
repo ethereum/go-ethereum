@@ -158,7 +158,7 @@ func EncryptDataV3(data, auth []byte, scryptN, scryptP int) (CryptoJSON, error) 
 	}
 	mac := crypto.Keccak256(derivedKey[16:32], cipherText)
 
-	scryptParamsJSON := make(map[string]interface{}, 5)
+	scryptParamsJSON := make(map[string]any, 5)
 	scryptParamsJSON["n"] = scryptN
 	scryptParamsJSON["r"] = scryptR
 	scryptParamsJSON["p"] = scryptP
@@ -199,7 +199,7 @@ func EncryptKey(key *Key, auth string, scryptN, scryptP int) ([]byte, error) {
 // DecryptKey decrypts a key from a json blob, returning the private key itself.
 func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 	// Parse the json into a simple map to fetch the key version
-	m := make(map[string]interface{})
+	m := make(map[string]any)
 	if err := json.Unmarshal(keyjson, &m); err != nil {
 		return nil, err
 	}
@@ -359,7 +359,7 @@ func getKDFKey(cryptoJSON CryptoJSON, auth string) ([]byte, error) {
 // TODO: can we do without this when unmarshalling dynamic JSON?
 // why do integers in KDF params end up as float64 and not int after
 // unmarshal?
-func ensureInt(x interface{}) int {
+func ensureInt(x any) int {
 	res, ok := x.(int)
 	if !ok {
 		res = int(x.(float64))

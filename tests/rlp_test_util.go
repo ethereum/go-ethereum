@@ -36,7 +36,7 @@ type RLPTest struct {
 	// For other JSON values, In is treated as a driver for
 	// calls to rlp.Stream. The test also verifies that encoding
 	// In produces the bytes in Out.
-	In interface{}
+	In any
 
 	// Out is a hex-encoded RLP value.
 	Out string
@@ -82,7 +82,7 @@ func (t *RLPTest) Run() error {
 }
 
 func checkDecodeInterface(b []byte, isValid bool) error {
-	err := rlp.DecodeBytes(b, new(interface{}))
+	err := rlp.DecodeBytes(b, new(any))
 	switch {
 	case isValid && err != nil:
 		return fmt.Errorf("decoding failed: %v", err)
@@ -93,7 +93,7 @@ func checkDecodeInterface(b []byte, isValid bool) error {
 }
 
 // translateJSON makes test json values encodable with RLP.
-func translateJSON(v interface{}) interface{} {
+func translateJSON(v any) any {
 	switch v := v.(type) {
 	case float64:
 		return uint64(v)
@@ -106,8 +106,8 @@ func translateJSON(v interface{}) interface{} {
 			return big
 		}
 		return []byte(v)
-	case []interface{}:
-		new := make([]interface{}, len(v))
+	case []any:
+		new := make([]any, len(v))
 		for i := range v {
 			new[i] = translateJSON(v[i])
 		}
@@ -121,7 +121,7 @@ func translateJSON(v interface{}) interface{} {
 // Stream by invoking decoding operations (Uint, Big, List, ...) based
 // on the type of each value. The value decoded from the RLP stream
 // must match the JSON value.
-func checkDecodeFromJSON(s *rlp.Stream, exp interface{}) error {
+func checkDecodeFromJSON(s *rlp.Stream, exp any) error {
 	switch exp := exp.(type) {
 	case uint64:
 		i, err := s.Uint64()
@@ -147,7 +147,7 @@ func checkDecodeFromJSON(s *rlp.Stream, exp interface{}) error {
 		if !bytes.Equal(b, exp) {
 			return addStack("Bytes", exp, fmt.Errorf("result mismatch: got %x", b))
 		}
-	case []interface{}:
+	case []any:
 		if _, err := s.List(); err != nil {
 			return addStack("List", exp, err)
 		}
@@ -165,7 +165,7 @@ func checkDecodeFromJSON(s *rlp.Stream, exp interface{}) error {
 	return nil
 }
 
-func addStack(op string, val interface{}, err error) error {
+func addStack(op string, val any, err error) error {
 	lines := strings.Split(err.Error(), "\n")
 	lines = append(lines, fmt.Sprintf("\t%s: %v", op, val))
 	return errors.New(strings.Join(lines, "\n"))

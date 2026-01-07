@@ -30,11 +30,11 @@ import (
 
 // API describes the set of methods offered over the RPC interface
 type API struct {
-	Namespace     string      // namespace under which the rpc methods of Service are exposed
-	Version       string      // deprecated - this field is no longer used, but retained for compatibility
-	Service       interface{} // receiver instance which holds the methods
-	Public        bool        // deprecated - this field is no longer used, but retained for compatibility
-	Authenticated bool        // whether the api should only be available behind authentication.
+	Namespace     string // namespace under which the rpc methods of Service are exposed
+	Version       string // deprecated - this field is no longer used, but retained for compatibility
+	Service       any    // receiver instance which holds the methods
+	Public        bool   // deprecated - this field is no longer used, but retained for compatibility
+	Authenticated bool   // whether the api should only be available behind authentication.
 }
 
 // ServerCodec implements reading, parsing and writing RPC messages for the server side of
@@ -52,10 +52,10 @@ type ServerCodec interface {
 // Implementations must be safe for concurrent use.
 type jsonWriter interface {
 	// writeJSON writes a message to the connection.
-	writeJSON(ctx context.Context, msg interface{}, isError bool) error
+	writeJSON(ctx context.Context, msg any, isError bool) error
 
 	// Closed returns a channel which is closed when the connection is closed.
-	closed() <-chan interface{}
+	closed() <-chan any
 	// RemoteAddr returns the peer address of the connection.
 	remoteAddr() string
 }

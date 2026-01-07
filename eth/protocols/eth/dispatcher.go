@@ -47,9 +47,9 @@ type Request struct {
 	sink   chan *Response // Channel to deliver the response on
 	cancel chan struct{}  // Channel to cancel requests ahead of time
 
-	code uint64      // Message code of the request packet
-	want uint64      // Message code of the response packet
-	data interface{} // Data content of the request packet
+	code uint64 // Message code of the request packet
+	want uint64 // Message code of the response packet
+	data any    // Data content of the request packet
 
 	Peer string    // Demultiplexer if cross-peer requests are batched together
 	Sent time.Time // Timestamp when the request was sent
@@ -101,8 +101,8 @@ type Response struct {
 	code uint64    // Response packet type to cross validate with request
 
 	Req  *Request      // Original request to cross-reference with
-	Res  interface{}   // Remote response for the request query
-	Meta interface{}   // Metadata generated locally on the receiver thread
+	Res  any           // Remote response for the request query
+	Meta any           // Metadata generated locally on the receiver thread
 	Time time.Duration // Time it took for the request to be served
 	Done chan error    // Channel to signal message handling to the reader
 }
@@ -138,7 +138,7 @@ func (p *Peer) dispatchRequest(req *Request) error {
 
 // dispatchResponse fulfils a pending request and delivers it to the requested
 // sink.
-func (p *Peer) dispatchResponse(res *Response, metadata func() interface{}) error {
+func (p *Peer) dispatchResponse(res *Response, metadata func() any) error {
 	resOp := &response{
 		res:  res,
 		fail: make(chan error),

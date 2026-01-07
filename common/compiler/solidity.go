@@ -39,9 +39,9 @@ type solcOutputV8 struct {
 		BinRuntime            string `json:"bin-runtime"`
 		SrcMapRuntime         string `json:"srcmap-runtime"`
 		Bin, SrcMap, Metadata string
-		Abi                   interface{}
-		Devdoc                interface{}
-		Userdoc               interface{}
+		Abi                   any
+		Devdoc                any
+		Userdoc               any
 		Hashes                map[string]string
 	}
 	Version string
@@ -66,7 +66,7 @@ func ParseCombinedJSON(combinedJSON []byte, source string, languageVersion strin
 	contracts := make(map[string]*Contract)
 	for name, info := range output.Contracts {
 		// Parse the individual compilation results.
-		var abi, userdoc, devdoc interface{}
+		var abi, userdoc, devdoc any
 		if err := json.Unmarshal([]byte(info.Abi), &abi); err != nil {
 			return nil, fmt.Errorf("solc: error reading abi definition (%v)", err)
 		}

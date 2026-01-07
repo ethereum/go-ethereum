@@ -70,11 +70,11 @@ func (s txByPriceAndTime) Less(i, j int) bool {
 }
 func (s txByPriceAndTime) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
-func (s *txByPriceAndTime) Push(x interface{}) {
+func (s *txByPriceAndTime) Push(x any) {
 	*s = append(*s, x.(*txWithMinerFee))
 }
 
-func (s *txByPriceAndTime) Pop() interface{} {
+func (s *txByPriceAndTime) Pop() any {
 	old := *s
 	n := len(old)
 	x := old[n-1]

@@ -186,15 +186,15 @@ loop:
 		select {
 		case timer := <-ready:
 			// execute callback, remove/reschedule the timer
-			var arguments []interface{}
+			var arguments []any
 			if len(timer.call.Arguments) > 2 {
 				tmp := timer.call.Arguments[2:]
-				arguments = make([]interface{}, 2+len(tmp))
+				arguments = make([]any, 2+len(tmp))
 				for i, value := range tmp {
 					arguments[i+2] = value
 				}
 			} else {
-				arguments = make([]interface{}, 1)
+				arguments = make([]any, 1)
 			}
 			arguments[0] = timer.call.Arguments[0]
 			call, isFunc := goja.AssertFunction(timer.call.Arguments[0])
@@ -287,7 +287,7 @@ func (re *JSRE) Run(code string) (v goja.Value, err error) {
 }
 
 // Set assigns value v to a variable in the JS environment.
-func (re *JSRE) Set(ns string, v interface{}) (err error) {
+func (re *JSRE) Set(ns string, v any) (err error) {
 	re.Do(func(vm *goja.Runtime) { vm.Set(ns, v) })
 	return err
 }
@@ -317,7 +317,7 @@ func (re *JSRE) Evaluate(code string, w io.Writer) {
 }
 
 // Interrupt stops the current JS evaluation.
-func (re *JSRE) Interrupt(v interface{}) {
+func (re *JSRE) Interrupt(v any) {
 	done := make(chan bool)
 	noop := func(*goja.Runtime) {}
 

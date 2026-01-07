@@ -1578,14 +1578,14 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	}
 	var (
 		head    = blockChain[len(blockChain)-1]
-		context = []interface{}{
+		context = []any{
 			"count", stats.processed, "elapsed", common.PrettyDuration(time.Since(start)),
 			"number", head.Number(), "hash", head.Hash(), "age", common.PrettyAge(time.Unix(int64(head.Time()), 0)),
 			"size", common.StorageSize(size),
 		}
 	)
 	if stats.ignored > 0 {
-		context = append(context, []interface{}{"ignored", stats.ignored}...)
+		context = append(context, []any{"ignored", stats.ignored}...)
 	}
 	log.Debug("Imported new block receipts", context...)
 	return 0, nil
@@ -2693,14 +2693,14 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 	}
 	bc.chainHeadFeed.Send(ChainHeadEvent{Header: head.Header()})
 
-	context := []interface{}{
+	context := []any{
 		"number", head.Number(),
 		"hash", head.Hash(),
 		"root", head.Root(),
 		"elapsed", time.Since(start),
 	}
 	if timestamp := time.Unix(int64(head.Time()), 0); time.Since(timestamp) > time.Minute {
-		context = append(context, []interface{}{"age", common.PrettyAge(timestamp)}...)
+		context = append(context, []any{"age", common.PrettyAge(timestamp)}...)
 	}
 	log.Info("Chain head was updated", context...)
 	return head.Hash(), nil

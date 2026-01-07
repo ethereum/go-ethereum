@@ -31,7 +31,7 @@ func Handler(reg metrics.Registry) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Gather and pre-sort the metrics to avoid random listings
 		var names []string
-		reg.Each(func(name string, i interface{}) {
+		reg.Each(func(name string, i any) {
 			names = append(names, name)
 		})
 		sort.Strings(names)

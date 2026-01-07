@@ -94,8 +94,8 @@ func (c *Config) sanitize() *Config {
 }
 
 // fields returns a list of attributes of config for printing.
-func (c *Config) fields() []interface{} {
-	var list []interface{}
+func (c *Config) fields() []any {
+	var list []any
 	if c.ReadOnly {
 		list = append(list, "readonly", true)
 	}

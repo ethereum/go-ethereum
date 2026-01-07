@@ -98,9 +98,9 @@ func (api *DebugAPI) Preimage(ctx context.Context, hash common.Hash) (hexutil.By
 
 // BadBlockArgs represents the entries in the list returned when bad blocks are queried.
 type BadBlockArgs struct {
-	Hash  common.Hash            `json:"hash"`
-	Block map[string]interface{} `json:"block"`
-	RLP   string                 `json:"rlp"`
+	Hash  common.Hash    `json:"hash"`
+	Block map[string]any `json:"block"`
+	RLP   string         `json:"rlp"`
 }
 
 // GetBadBlocks returns a list of the last 'bad blocks' that the client has seen on the network
@@ -113,7 +113,7 @@ func (api *DebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) 
 	for _, block := range blocks {
 		var (
 			blockRlp  string
-			blockJSON map[string]interface{}
+			blockJSON map[string]any
 		)
 		if rlpBytes, err := rlp.EncodeToBytes(block); err != nil {
 			blockRlp = err.Error() // Hacky, but hey, it works
@@ -447,7 +447,7 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 
 // StateSize returns the current state size statistics from the state size tracker.
 // Returns an error if the state size tracker is not initialized or if stats are not ready.
-func (api *DebugAPI) StateSize(blockHashOrNumber *rpc.BlockNumberOrHash) (interface{}, error) {
+func (api *DebugAPI) StateSize(blockHashOrNumber *rpc.BlockNumberOrHash) (any, error) {
 	sizer := api.eth.blockchain.StateSizer()
 	if sizer == nil {
 		return nil, errors.New("state size tracker is not enabled")
@@ -477,7 +477,7 @@ func (api *DebugAPI) StateSize(blockHashOrNumber *rpc.BlockNumberOrHash) (interf
 		}
 		return nil, fmt.Errorf("state size of %s is not available", s)
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"stateRoot":            stats.StateRoot,
 		"blockNumber":          hexutil.Uint64(stats.BlockNumber),
 		"accounts":             hexutil.Uint64(stats.Accounts),

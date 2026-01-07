@@ -104,7 +104,7 @@ func TestClientErrorData(t *testing.T) {
 	client := DialInProc(server)
 	defer client.Close()
 
-	var resp interface{}
+	var resp any
 	err := client.Call(&resp, "test_returnError")
 	if err == nil {
 		t.Fatal("expected error")
@@ -139,17 +139,17 @@ func TestClientBatchRequest(t *testing.T) {
 	batch := []BatchElem{
 		{
 			Method: "test_echo",
-			Args:   []interface{}{"hello", 10, &echoArgs{"world"}},
+			Args:   []any{"hello", 10, &echoArgs{"world"}},
 			Result: new(echoResult),
 		},
 		{
 			Method: "test_echo",
-			Args:   []interface{}{"hello2", 11, &echoArgs{"world"}},
+			Args:   []any{"hello2", 11, &echoArgs{"world"}},
 			Result: new(echoResult),
 		},
 		{
 			Method: "no_such_method",
-			Args:   []interface{}{1, 2, 3},
+			Args:   []any{1, 2, 3},
 			Result: new(int),
 		},
 	}
@@ -159,17 +159,17 @@ func TestClientBatchRequest(t *testing.T) {
 	wantResult := []BatchElem{
 		{
 			Method: "test_echo",
-			Args:   []interface{}{"hello", 10, &echoArgs{"world"}},
+			Args:   []any{"hello", 10, &echoArgs{"world"}},
 			Result: &echoResult{"hello", 10, &echoArgs{"world"}},
 		},
 		{
 			Method: "test_echo",
-			Args:   []interface{}{"hello2", 11, &echoArgs{"world"}},
+			Args:   []any{"hello2", 11, &echoArgs{"world"}},
 			Result: &echoResult{"hello2", 11, &echoArgs{"world"}},
 		},
 		{
 			Method: "no_such_method",
-			Args:   []interface{}{1, 2, 3},
+			Args:   []any{1, 2, 3},
 			Result: new(int),
 			Error:  &jsonError{Code: -32601, Message: "the method no_such_method does not exist/is not available"},
 		},
@@ -419,7 +419,7 @@ func TestClientSubscribeInvalidArg(t *testing.T) {
 	client := DialInProc(server)
 	defer client.Close()
 
-	check := func(shouldPanic bool, arg interface{}) {
+	check := func(shouldPanic bool, arg any) {
 		defer func() {
 			err := recover()
 			if shouldPanic && err == nil {

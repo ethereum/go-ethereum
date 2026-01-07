@@ -37,7 +37,7 @@ type Entry interface {
 
 type generic struct {
 	key   string
-	value interface{}
+	value any
 }
 
 func (g generic) ENRKey() string { return g.key }
@@ -53,7 +53,7 @@ func (g *generic) DecodeRLP(s *rlp.Stream) error {
 // WithEntry wraps any value with a key name. It can be used to set and load arbitrary values
 // in a record. The value v must be supported by rlp. To use WithEntry with Load, the value
 // must be a pointer.
-func WithEntry(k string, v interface{}) Entry {
+func WithEntry(k string, v any) Entry {
 	return &generic{key: k, value: v}
 }
 

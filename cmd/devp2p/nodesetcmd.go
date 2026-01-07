@@ -72,7 +72,7 @@ func nodesetInfo(ctx *cli.Context) error {
 // showAttributeCounts prints the distribution of ENR attributes in a node set.
 func showAttributeCounts(ns nodeSet) {
 	attrcount := make(map[string]int)
-	var attrlist []interface{}
+	var attrlist []any
 	for _, n := range ns {
 		r := n.N.Record()
 		attrlist = r.AppendElements(attrlist[:0])[1:]

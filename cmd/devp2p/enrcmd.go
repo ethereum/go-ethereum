@@ -98,7 +98,7 @@ func dumpNodeURL(out io.Writer, n *enode.Node) {
 	fmt.Fprintf(out, "URLv4:   %s\n", n.URLv4())
 }
 
-func dumpRecordKV(kv []interface{}, indent int) string {
+func dumpRecordKV(kv []any, indent int) string {
 	// Determine the longest key name for alignment.
 	var out string
 	var longestKey = 0

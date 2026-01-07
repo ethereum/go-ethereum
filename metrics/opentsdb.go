@@ -62,7 +62,7 @@ func getShortHostname() string {
 func (c *OpenTSDBConfig) writeRegistry(w io.Writer, now int64, shortHostname string) {
 	du := float64(c.DurationUnit)
 
-	c.Registry.Each(func(name string, i interface{}) {
+	c.Registry.Each(func(name string, i any) {
 		switch metric := i.(type) {
 		case *Counter:
 			fmt.Fprintf(w, "put %s.%s.count %d %d host=%s\n", c.Prefix, name, now, metric.Snapshot().Count(), shortHostname)

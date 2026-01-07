@@ -356,8 +356,8 @@ func TestDecodeErrors(t *testing.T) {
 
 type decodeTest struct {
 	input string
-	ptr   interface{}
-	value interface{}
+	ptr   any
+	value any
 	error string
 }
 
@@ -686,7 +686,7 @@ var decodeTests = []decodeTest{
 	{
 		input: "C103",
 		ptr:   new(nilListUint),
-		value: func() interface{} {
+		value: func() any {
 			v := uint(3)
 			return nilListUint{X: &v}
 		}(),
@@ -856,12 +856,12 @@ var decodeTests = []decodeTest{
 	{input: "C3808005", ptr: new([]*uint), value: []*uint{uintp(0), uintp(0), uintp(5)}},
 
 	// interface{}
-	{input: "00", ptr: new(interface{}), value: []byte{0}},
-	{input: "01", ptr: new(interface{}), value: []byte{1}},
-	{input: "80", ptr: new(interface{}), value: []byte{}},
-	{input: "850505050505", ptr: new(interface{}), value: []byte{5, 5, 5, 5, 5}},
-	{input: "C0", ptr: new(interface{}), value: []interface{}{}},
-	{input: "C50183040404", ptr: new(interface{}), value: []interface{}{[]byte{1}, []byte{4, 4, 4}}},
+	{input: "00", ptr: new(any), value: []byte{0}},
+	{input: "01", ptr: new(any), value: []byte{1}},
+	{input: "80", ptr: new(any), value: []byte{}},
+	{input: "850505050505", ptr: new(any), value: []byte{5, 5, 5, 5, 5}},
+	{input: "C0", ptr: new(any), value: []any{}},
+	{input: "C50183040404", ptr: new(any), value: []any{[]byte{1}, []byte{4, 4, 4}}},
 	{
 		input: "C3010203",
 		ptr:   new([]io.Reader),
@@ -871,14 +871,14 @@ var decodeTests = []decodeTest{
 	// fuzzer crashes
 	{
 		input: "c330f9c030f93030ce3030303030303030bd303030303030",
-		ptr:   new(interface{}),
+		ptr:   new(any),
 		error: "rlp: element is larger than containing list",
 	},
 }
 
 func uintp(i uint) *uint { return &i }
 
-func runTests(t *testing.T, decode func([]byte, interface{}) error) {
+func runTests(t *testing.T, decode func([]byte, any) error) {
 	for i, test := range decodeTests {
 		input, err := hex.DecodeString(test.input)
 		if err != nil {
@@ -905,7 +905,7 @@ func runTests(t *testing.T, decode func([]byte, interface{}) error) {
 }
 
 func TestDecodeWithByteReader(t *testing.T) {
-	runTests(t, func(input []byte, into interface{}) error {
+	runTests(t, func(input []byte, into any) error {
 		return Decode(bytes.NewReader(input), into)
 	})
 }
@@ -950,14 +950,14 @@ func (r *plainReader) Read(buf []byte) (n int, err error) {
 }
 
 func TestDecodeWithNonByteReader(t *testing.T) {
-	runTests(t, func(input []byte, into interface{}) error {
+	runTests(t, func(input []byte, into any) error {
 		return Decode(newPlainReader(input), into)
 	})
 }
 
 func TestDecodeStreamReset(t *testing.T) {
 	s := NewStream(nil, 0)
-	runTests(t, func(input []byte, into interface{}) error {
+	runTests(t, func(input []byte, into any) error {
 		s.Reset(bytes.NewReader(input), 0)
 		return s.Decode(into)
 	})
@@ -1083,7 +1083,7 @@ func TestInvalidOptionalField(t *testing.T) {
 	)
 
 	tests := []struct {
-		v   interface{}
+		v   any
 		err string
 	}{
 		{v: new(invalid1), err: `rlp: invalid struct tag "" for rlp.invalid1.B (must be optional because preceding field "A" is optional)`},

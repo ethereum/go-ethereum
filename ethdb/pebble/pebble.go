@@ -165,13 +165,13 @@ func (d *Database) onWriteStallEnd() {
 // TODO(karalabe): Remove when Pebble sets this as the default.
 type panicLogger struct{}
 
-func (l panicLogger) Infof(format string, args ...interface{}) {
+func (l panicLogger) Infof(format string, args ...any) {
 }
 
-func (l panicLogger) Errorf(format string, args ...interface{}) {
+func (l panicLogger) Errorf(format string, args ...any) {
 }
 
-func (l panicLogger) Fatalf(format string, args ...interface{}) {
+func (l panicLogger) Fatalf(format string, args ...any) {
 	panic(fmt.Errorf("fatal: "+format, args...))
 }
 

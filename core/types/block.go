@@ -208,7 +208,7 @@ type Block struct {
 	// These fields are used by package eth to track
 	// inter-peer block relay.
 	ReceivedAt   time.Time
-	ReceivedFrom interface{}
+	ReceivedFrom any
 }
 
 // "external" block encoding. used for eth protocol, etc.

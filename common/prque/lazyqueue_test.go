@@ -40,18 +40,18 @@ type lazyItem struct {
 	index   int
 }
 
-func testPriority(a interface{}) int64 {
+func testPriority(a any) int64 {
 	return a.(*lazyItem).p
 }
 
-func testMaxPriority(a interface{}, until mclock.AbsTime) int64 {
+func testMaxPriority(a any, until mclock.AbsTime) int64 {
 	i := a.(*lazyItem)
 	dt := until - i.last
 	i.maxp = i.p + int64(float64(dt)*testAvgRate)
 	return i.maxp
 }
 
-func testSetIndex(a interface{}, i int) {
+func testSetIndex(a any, i int) {
 	a.(*lazyItem).index = i
 }
 

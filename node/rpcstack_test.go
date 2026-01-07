@@ -324,7 +324,7 @@ func baseRpcRequest(t *testing.T, url, bodyStr string, extraHeaders ...string) *
 	return resp
 }
 
-type testClaim map[string]interface{}
+type testClaim map[string]any
 
 func (testClaim) Valid() error {
 	return nil
@@ -332,7 +332,7 @@ func (testClaim) Valid() error {
 
 func TestJWT(t *testing.T) {
 	var secret = []byte("secret")
-	issueToken := func(secret []byte, method jwt.SigningMethod, input map[string]interface{}) string {
+	issueToken := func(secret []byte, method jwt.SigningMethod, input map[string]any) string {
 		if method == nil {
 			method = jwt.SigningMethodHS256
 		}

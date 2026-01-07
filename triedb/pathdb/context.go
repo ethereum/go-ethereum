@@ -51,22 +51,22 @@ type generatorStats struct {
 // log creates a contextual log with the given message and the context pulled
 // from the internally maintained statistics.
 func (gs *generatorStats) log(msg string, root common.Hash, marker []byte) {
-	var ctx []interface{}
+	var ctx []any
 	if root != (common.Hash{}) {
-		ctx = append(ctx, []interface{}{"root", root}...)
+		ctx = append(ctx, []any{"root", root}...)
 	}
 	// Figure out whether we're after or within an account
 	switch len(marker) {
 	case common.HashLength:
-		ctx = append(ctx, []interface{}{"at", common.BytesToHash(marker)}...)
+		ctx = append(ctx, []any{"at", common.BytesToHash(marker)}...)
 	case 2 * common.HashLength:
-		ctx = append(ctx, []interface{}{
+		ctx = append(ctx, []any{
 			"in", common.BytesToHash(marker[:common.HashLength]),
 			"at", common.BytesToHash(marker[common.HashLength:]),
 		}...)
 	}
 	// Add the usual measurements
-	ctx = append(ctx, []interface{}{
+	ctx = append(ctx, []any{
 		"accounts", gs.accounts,
 		"slots", gs.slots,
 		"storage", gs.storage,
@@ -79,7 +79,7 @@ func (gs *generatorStats) log(msg string, root common.Hash, marker []byte) {
 			left := math.MaxUint64 - binary.BigEndian.Uint64(marker[:8])
 
 			speed := done/uint64(time.Since(gs.start)/time.Millisecond+1) + 1 // +1s to avoid division by zero
-			ctx = append(ctx, []interface{}{
+			ctx = append(ctx, []any{
 				"eta", common.PrettyDuration(time.Duration(left/speed) * time.Millisecond),
 			}...)
 		}

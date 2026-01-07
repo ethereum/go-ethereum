@@ -167,7 +167,7 @@ func (b *memoryBatch) reset(freezer *MemoryFreezer) {
 }
 
 // Append adds an RLP-encoded item.
-func (b *memoryBatch) Append(kind string, number uint64, item interface{}) error {
+func (b *memoryBatch) Append(kind string, number uint64, item any) error {
 	if b.next[kind] != number {
 		return errOutOrderInsertion
 	}

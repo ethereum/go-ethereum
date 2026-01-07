@@ -779,7 +779,7 @@ func signer(c *cli.Context) error {
 		go testExternalUI(apiImpl)
 	}
 	ui.OnSignerStartup(core.StartupInfo{
-		Info: map[string]interface{}{
+		Info: map[string]any{
 			"intapi_version": core.InternalAPIVersion,
 			"extapi_version": core.ExternalAPIVersion,
 			"extapi_http":    extapiURL,
@@ -1084,7 +1084,7 @@ func GenDoc(ctx *cli.Context) error {
 			UserAgent: "Firefox 3.2",
 		}
 		output []string
-		add    = func(name, desc string, v interface{}) {
+		add    = func(name, desc string, v any) {
 			if data, err := json.MarshalIndent(v, "", "  "); err == nil {
 				output = append(output, fmt.Sprintf("### %s\n\n%s\n\nExample:\n```json\n%s\n```", name, desc, data))
 			} else {

@@ -429,7 +429,7 @@ func (g *generator) generateRange(ctx *generatorContext, trieId *trie.ID, prefix
 	last := result.last()
 
 	// Construct contextual logger
-	logCtx := []interface{}{"kind", kind, "prefix", hexutil.Encode(prefix)}
+	logCtx := []any{"kind", kind, "prefix", hexutil.Encode(prefix)}
 	if len(origin) > 0 {
 		logCtx = append(logCtx, "origin", hexutil.Encode(origin))
 	}

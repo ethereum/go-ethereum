@@ -49,12 +49,12 @@ type Protocol struct {
 
 	// NodeInfo is an optional helper method to retrieve protocol specific metadata
 	// about the host node.
-	NodeInfo func() interface{}
+	NodeInfo func() any
 
 	// PeerInfo is an optional helper method to retrieve protocol specific metadata
 	// about a certain peer in the network. If an info retrieval function is set,
 	// but returns nil, it is assumed that the protocol handshake is still running.
-	PeerInfo func(id enode.ID) interface{}
+	PeerInfo func(id enode.ID) any
 
 	// DialCandidates, if non-nil, is a way to tell Server about protocol-specific nodes
 	// that should be dialed. The server continuously reads nodes from the iterator and

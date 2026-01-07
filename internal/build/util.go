@@ -127,18 +127,18 @@ func readGitFile(file string) string {
 }
 
 // Render renders the given template file into outputFile.
-func Render(templateFile, outputFile string, outputPerm os.FileMode, x interface{}) {
+func Render(templateFile, outputFile string, outputPerm os.FileMode, x any) {
 	tpl := template.Must(template.ParseFiles(templateFile))
 	render(tpl, outputFile, outputPerm, x)
 }
 
 // RenderString renders the given template string into outputFile.
-func RenderString(templateContent, outputFile string, outputPerm os.FileMode, x interface{}) {
+func RenderString(templateContent, outputFile string, outputPerm os.FileMode, x any) {
 	tpl := template.Must(template.New("").Parse(templateContent))
 	render(tpl, outputFile, outputPerm, x)
 }
 
-func render(tpl *template.Template, outputFile string, outputPerm os.FileMode, x interface{}) {
+func render(tpl *template.Template, outputFile string, outputPerm os.FileMode, x any) {
 	if err := os.MkdirAll(filepath.Dir(outputFile), 0755); err != nil {
 		log.Fatal(err)
 	}

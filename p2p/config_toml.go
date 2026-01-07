@@ -14,7 +14,7 @@ import (
 var _ = (*configMarshaling)(nil)
 
 // MarshalTOML marshals as TOML.
-func (c Config) MarshalTOML() (interface{}, error) {
+func (c Config) MarshalTOML() (any, error) {
 	type Config struct {
 		PrivateKey       *ecdsa.PrivateKey `toml:"-"`
 		MaxPeers         int
@@ -66,7 +66,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 }
 
 // UnmarshalTOML unmarshals from TOML.
-func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
+func (c *Config) UnmarshalTOML(unmarshal func(any) error) error {
 	type Config struct {
 		PrivateKey       *ecdsa.PrivateKey `toml:"-"`
 		MaxPeers         *int

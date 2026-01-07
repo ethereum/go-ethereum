@@ -34,7 +34,7 @@ func (h *snapHandler) RunPeer(peer *snap.Peer, hand snap.Handler) error {
 }
 
 // PeerInfo retrieves all known `snap` information about a peer.
-func (h *snapHandler) PeerInfo(id enode.ID) interface{} {
+func (h *snapHandler) PeerInfo(id enode.ID) any {
 	if p := h.peers.peer(id.String()); p != nil {
 		if p.snapExt != nil {
 			return p.snapExt.info()
