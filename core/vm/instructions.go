@@ -879,10 +879,15 @@ func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	beneficiary := scope.Stack.pop()
 	balance := evm.StateDB.GetBalance(scope.Contract.Address())
 
-	if common.BytesToAddress(beneficiary.Bytes()) != scope.Contract.Address() {
+	// The funds are burned immediately if the beneficiary is the caller itself,
+	// in this case, the beneficiary's balance is not increased.
+	if beneficiary.Bytes20() != scope.Contract.Address() {
 		evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
 	}
+	// Clear any leftover funds for the account being destructed.
+	evm.StateDB.SubBalance(scope.Contract.Address(), balance, tracing.BalanceDecreaseSelfdestruct)
 	evm.StateDB.SelfDestruct(scope.Contract.Address())
+
 	if tracer := evm.Config.Tracer; tracer != nil {
 		if tracer.OnEnter != nil {
 			tracer.OnEnter(evm.depth, byte(SELFDESTRUCT), scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance.ToBig())
@@ -897,21 +902,23 @@ func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	beneficiary := scope.Stack.pop()
 	balance := evm.StateDB.GetBalance(scope.Contract.Address())
-	createdInTx := !evm.StateDB.ContractExistedBeforeCurTx(scope.Contract.Address())
-	targetIsSelf := scope.Contract.Address() == common.BytesToAddress(beneficiary.Bytes())
 
-	if createdInTx {
-		// if the contract is not preexisting, the balance is immediately burned on selfdestruct-to-self
-		evm.StateDB.SubBalance(scope.Contract.Address(), balance, tracing.BalanceDecreaseSelfdestruct)
-		if !targetIsSelf {
+	if evm.StateDB.IsNewContract(scope.Contract.Address()) {
+		// If the contract is not preexisting, the balance is immediately burned
+		// on selfdestruct-to-self. In this case, the beneficiary's balance is
+		// not increased.
+		if scope.Contract.Address() != beneficiary.Bytes20() {
 			evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
 		}
-	} else if !targetIsSelf {
-		// if the contract is preexisting, the balance isn't burned on selfdestruct-to-self
+		evm.StateDB.SubBalance(scope.Contract.Address(), balance, tracing.BalanceDecreaseSelfdestruct)
+	} else {
+		// If the contract is preexisting, send all Ether in the account to the
+		// target. Note the balance isn't burned on selfdestruct-to-self.
 		evm.StateDB.SubBalance(scope.Contract.Address(), balance, tracing.BalanceDecreaseSelfdestruct)
 		evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
 	}
 	evm.StateDB.SelfDestruct6780(scope.Contract.Address())
+
 	if tracer := evm.Config.Tracer; tracer != nil {
 		if tracer.OnEnter != nil {
 			tracer.OnEnter(evm.depth, byte(SELFDESTRUCT), scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance.ToBig())

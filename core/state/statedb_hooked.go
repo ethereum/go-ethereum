@@ -52,6 +52,10 @@ func (s *hookedStateDB) CreateContract(addr common.Address) {
 	s.inner.CreateContract(addr)
 }
 
+func (s *hookedStateDB) IsNewContract(addr common.Address) bool {
+	return s.inner.IsNewContract(addr)
+}
+
 func (s *hookedStateDB) GetBalance(addr common.Address) *uint256.Int {
 	return s.inner.GetBalance(addr)
 }
@@ -211,22 +215,12 @@ func (s *hookedStateDB) SetState(address common.Address, key common.Hash, value 
 	return prev
 }
 
-func (s *hookedStateDB) SelfDestruct(address common.Address) uint256.Int {
-	prev := s.inner.SelfDestruct(address)
-
-	if s.hooks.OnBalanceChange != nil && !prev.IsZero() {
-		s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
-	}
-
-	return prev
+func (s *hookedStateDB) SelfDestruct(address common.Address) {
+	s.inner.SelfDestruct(address)
 }
 
-func (s *hookedStateDB) SelfDestruct6780(address common.Address) (uint256.Int, bool) {
-	return s.inner.SelfDestruct6780(address)
-}
-
-func (s *hookedStateDB) ContractExistedBeforeCurTx(address common.Address) bool {
-	return s.inner.ContractExistedBeforeCurTx(address)
+func (s *hookedStateDB) SelfDestruct6780(address common.Address) {
+	s.inner.SelfDestruct6780(address)
 }
 
 func (s *hookedStateDB) AddLog(log *types.Log) {
@@ -238,8 +232,11 @@ func (s *hookedStateDB) AddLog(log *types.Log) {
 }
 
 func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
-	defer s.inner.Finalise(deleteEmptyObjects)
-	if s.hooks.OnBalanceChange != nil || s.hooks.OnNonceChangeV2 != nil || s.hooks.OnNonceChange != nil || s.hooks.OnCodeChangeV2 != nil || s.hooks.OnCodeChange != nil {
+	callHooks := s.hooks.OnBalanceChange != nil ||
+		s.hooks.OnNonceChangeV2 != nil || s.hooks.OnNonceChange != nil ||
+		s.hooks.OnCodeChangeV2 != nil || s.hooks.OnCodeChange != nil
+
+	if callHooks {
 		for addr := range s.inner.journal.dirties {
 			obj := s.inner.stateObjects[addr]
 			if obj != nil && obj.selfDestructed {
@@ -250,25 +247,23 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
 					}
 				}
 				if s.hooks.OnNonceChangeV2 != nil {
-					prevNonce := obj.Nonce()
-					s.hooks.OnNonceChangeV2(addr, prevNonce, 0, tracing.NonceChangeSelfdestruct)
+					s.hooks.OnNonceChangeV2(addr, obj.Nonce(), 0, tracing.NonceChangeSelfdestruct)
 				} else if s.hooks.OnNonceChange != nil {
-					prevNonce := obj.Nonce()
-					s.hooks.OnNonceChange(addr, prevNonce, 0)
+					s.hooks.OnNonceChange(addr, obj.Nonce(), 0)
 				}
-				prevCodeHash := s.inner.GetCodeHash(addr)
-				prevCode := s.inner.GetCode(addr)
 
-				// if an initcode invokes selfdestruct, do not emit a code change.
+				// If an initcode invokes selfdestruct, do not emit a code change.
+				prevCodeHash := s.inner.GetCodeHash(addr)
 				if prevCodeHash == types.EmptyCodeHash {
 					continue
 				}
 				if s.hooks.OnCodeChangeV2 != nil {
-					s.hooks.OnCodeChangeV2(addr, prevCodeHash, prevCode, types.EmptyCodeHash, nil, tracing.CodeChangeSelfDestruct)
+					s.hooks.OnCodeChangeV2(addr, prevCodeHash, s.inner.GetCode(addr), types.EmptyCodeHash, nil, tracing.CodeChangeSelfDestruct)
 				} else if s.hooks.OnCodeChange != nil {
-					s.hooks.OnCodeChange(addr, prevCodeHash, prevCode, types.EmptyCodeHash, nil)
+					s.hooks.OnCodeChange(addr, prevCodeHash, s.inner.GetCode(addr), types.EmptyCodeHash, nil)
 				}
 			}
 		}
 	}
+	s.inner.Finalise(deleteEmptyObjects)
 }

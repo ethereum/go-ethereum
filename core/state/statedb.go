@@ -425,13 +425,6 @@ func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
 	return false
 }
 
-// ContractExistedBeforeCurTx returns true if a contract exists and was not created
-// in the current transaction.
-func (s *StateDB) ContractExistedBeforeCurTx(addr common.Address) bool {
-	obj := s.getStateObject(addr)
-	return obj != nil && !obj.newContract
-}
-
 /*
  * SETTERS
  */
@@ -516,21 +509,13 @@ func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common
 }
 
 // SelfDestruct marks the given account as selfdestructed.
-// This clears the account balance.
 //
 // The account's state object is still available until the state is committed,
 // getStateObject will return a non-nil account after SelfDestruct.
-func (s *StateDB) SelfDestruct(addr common.Address) uint256.Int {
+func (s *StateDB) SelfDestruct(addr common.Address) {
 	stateObject := s.getStateObject(addr)
-	var prevBalance uint256.Int
 	if stateObject == nil {
-		return prevBalance
-	}
-	prevBalance = *(stateObject.Balance())
-	// Regardless of whether it is already destructed or not, we do have to
-	// journal the balance-change, if we set it to zero here.
-	if !stateObject.Balance().IsZero() {
-		stateObject.SetBalance(new(uint256.Int))
+		return
 	}
 	// If it is already marked as self-destructed, we do not need to add it
 	// for journalling a second time.
@@ -538,18 +523,16 @@ func (s *StateDB) SelfDestruct(addr common.Address) uint256.Int {
 		s.journal.destruct(addr)
 		stateObject.markSelfdestructed()
 	}
-	return prevBalance
 }
 
-func (s *StateDB) SelfDestruct6780(addr common.Address) (uint256.Int, bool) {
+func (s *StateDB) SelfDestruct6780(addr common.Address) {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
-		return uint256.Int{}, false
+		return
 	}
 	if stateObject.newContract {
-		return s.SelfDestruct(addr), true
+		s.SelfDestruct(addr)
 	}
-	return *(stateObject.Balance()), false
 }
 
 // SetTransientState sets transient storage for a given account. It
@@ -675,6 +658,16 @@ func (s *StateDB) CreateContract(addr common.Address) {
 		obj.newContract = true
 		s.journal.createContract(addr)
 	}
+}
+
+// IsNewContract reports whether the contract at the given address was deployed
+// during the current transaction.
+func (s *StateDB) IsNewContract(addr common.Address) bool {
+	obj := s.getStateObject(addr)
+	if obj == nil {
+		return false
+	}
+	return obj.newContract
 }
 
 // Copy creates a deep, independent copy of the state.
