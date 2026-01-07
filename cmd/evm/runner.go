@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/codedb"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -226,8 +227,9 @@ func runCmd(ctx *cli.Context) error {
 		HashDB:    hashdb.Defaults,
 	})
 	defer triedb.Close()
+
 	genesis := genesisConfig.MustCommit(db, triedb)
-	sdb := state.NewDatabase(triedb, nil)
+	sdb := state.NewDatabase(triedb, codedb.New(db))
 	prestate, _ = state.New(genesis.Root(), sdb)
 	chainConfig = genesisConfig.Config
 

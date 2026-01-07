@@ -23,23 +23,17 @@ import (
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state/codedb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/transitiontrie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb"
-)
-
-const (
-	// Number of codehash->size associations to keep.
-	codeSizeCacheSize = 1_000_000 // 4 megabytes in total
-
-	// Cache size granted for caching clean code.
-	codeCacheSize = 256 * 1024 * 1024
 )
 
 // Database wraps access to tries and contract code.
@@ -58,6 +52,11 @@ type Database interface {
 
 	// Snapshot returns the underlying state snapshot.
 	Snapshot() *snapshot.Tree
+
+	// Commit flushes all pending writes and finalizes the state transition,
+	// committing the changes to the underlying storage. It returns an error
+	// if the commit fails.
+	Commit(update *stateUpdate) error
 }
 
 // Trie is a Ethereum Merkle Patricia trie.
@@ -145,28 +144,22 @@ type Trie interface {
 	IsVerkle() bool
 }
 
-// CachingDB is an implementation of Database interface. It leverages both trie and
-// state snapshot to provide functionalities for state access. It's meant to be a
-// long-live object and has a few caches inside for sharing between blocks.
+// CachingDB is an implementation of Database interface, providing functionalities
+// for state access and update by leveraging configured data storage layers.
 type CachingDB struct {
-	disk          ethdb.KeyValueStore
-	triedb        *triedb.Database
-	snap          *snapshot.Tree
-	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
-	codeSizeCache *lru.Cache[common.Hash, int]
+	triedb *triedb.Database
+	codedb *codedb.Database
+	snap   *snapshot.Tree
 
 	// Transition-specific fields
 	TransitionStatePerRoot *lru.Cache[common.Hash, *overlay.TransitionState]
 }
 
 // NewDatabase creates a state database with the provided data sources.
-func NewDatabase(triedb *triedb.Database, snap *snapshot.Tree) *CachingDB {
+func NewDatabase(triedb *triedb.Database, codedb *codedb.Database) *CachingDB {
 	return &CachingDB{
-		disk:                   triedb.Disk(),
 		triedb:                 triedb,
-		snap:                   snap,
-		codeCache:              lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
-		codeSizeCache:          lru.NewCache[common.Hash, int](codeSizeCacheSize),
+		codedb:                 codedb,
 		TransitionStatePerRoot: lru.NewCache[common.Hash, *overlay.TransitionState](1000),
 	}
 }
@@ -174,7 +167,15 @@ func NewDatabase(triedb *triedb.Database, snap *snapshot.Tree) *CachingDB {
 // NewDatabaseForTesting is similar to NewDatabase, but it initializes the caching
 // db by using an ephemeral memory db with default config for testing.
 func NewDatabaseForTesting() *CachingDB {
-	return NewDatabase(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil), nil)
+	db := rawdb.NewMemoryDatabase()
+	return NewDatabase(triedb.NewDatabase(db, nil), codedb.New(db))
+}
+
+// WithSnapshot configures the provided contract code cache. Note that this
+// registration must be performed before the cachingDB is used.
+func (db *CachingDB) WithSnapshot(snapshot *snapshot.Tree) *CachingDB {
+	db.snap = snapshot
+	return db
 }
 
 // Reader returns a state reader associated with the specified state root.
@@ -212,7 +213,7 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newReader(newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache), combined), nil
+	return newReader(db.codedb.Reader(), combined), nil
 }
 
 // ReadersWithCacheStats creates a pair of state readers sharing the same internal cache and
@@ -259,22 +260,6 @@ func (db *CachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Addre
 	return tr, nil
 }
 
-// ContractCodeWithPrefix retrieves a particular contract's code. If the
-// code can't be found in the cache, then check the existence with **new**
-// db scheme.
-func (db *CachingDB) ContractCodeWithPrefix(address common.Address, codeHash common.Hash) []byte {
-	code, _ := db.codeCache.Get(codeHash)
-	if len(code) > 0 {
-		return code
-	}
-	code = rawdb.ReadCodeWithPrefix(db.disk, codeHash)
-	if len(code) > 0 {
-		db.codeCache.Add(codeHash, code)
-		db.codeSizeCache.Add(codeHash, len(code))
-	}
-	return code
-}
-
 // TrieDB retrieves any intermediate trie-node caching layer.
 func (db *CachingDB) TrieDB() *triedb.Database {
 	return db.triedb
@@ -283,6 +268,40 @@ func (db *CachingDB) TrieDB() *triedb.Database {
 // Snapshot returns the underlying state snapshot.
 func (db *CachingDB) Snapshot() *snapshot.Tree {
 	return db.snap
+}
+
+// Commit flushes all pending writes and finalizes the state transition,
+// committing the changes to the underlying storage. It returns an error
+// if the commit fails.
+func (db *CachingDB) Commit(update *stateUpdate) error {
+	// Short circuit if nothing to commit
+	if update.empty() {
+		return nil
+	}
+	// Commit dirty contract code if any exists
+	if len(update.codes) > 0 {
+		writer := db.codedb.Writer()
+		for _, code := range update.codes {
+			writer.Put(code.hash, code.blob)
+		}
+		if err := writer.Commit(); err != nil {
+			return err
+		}
+	}
+	// If snapshotting is enabled, update the snapshot tree with this new version
+	if db.snap != nil && db.snap.Snapshot(update.originRoot) != nil {
+		if err := db.snap.Update(update.root, update.originRoot, update.accounts, update.storages); err != nil {
+			log.Warn("Failed to update snapshot tree", "from", update.originRoot, "to", update.root, "err", err)
+		}
+		// Keep 128 diff layers in the memory, persistent layer is 129th.
+		// - head layer is paired with HEAD state
+		// - head-1 layer is paired with HEAD-1 state
+		// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
+		if err := db.snap.Cap(update.root, TriesInMemory); err != nil {
+			log.Warn("Failed to cap snapshot tree", "root", update.root, "layers", TriesInMemory, "err", err)
+		}
+	}
+	return db.triedb.Update(update.root, update.originRoot, update.blockNumber, update.nodes, update.stateSet())
 }
 
 // mustCopyTrie returns a deep-copied trie.
