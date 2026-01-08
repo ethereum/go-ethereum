@@ -1318,16 +1318,16 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool, blockNum
 
 // commitAndFlush is a wrapper of commit which also commits the state mutations
 // to the configured data stores.
-func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorageWiping bool, dedupCode bool) (*stateUpdate, error) {
+func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorageWiping bool, deriveCodeFields bool) (*stateUpdate, error) {
 	ret, err := s.commit(deleteEmptyObjects, noStorageWiping, block)
 	if err != nil {
 		return nil, err
 	}
-
-	if dedupCode {
-		ret.markCodeExistence(s.reader)
+	if deriveCodeFields {
+		if err := ret.deriveCodeFields(s.reader); err != nil {
+			return nil, err
+		}
 	}
-
 	// Commit dirty contract code if any exists
 	if db := s.db.TrieDB().Disk(); db != nil && len(ret.codes) > 0 {
 		batch := db.NewBatch()
@@ -1389,14 +1389,14 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, noStorageWiping 
 	return ret.root, nil
 }
 
-// CommitAndTrack writes the state mutations and notifies the size tracker of the state changes.
-func (s *StateDB) CommitAndTrack(block uint64, deleteEmptyObjects bool, noStorageWiping bool, sizer *SizeTracker) (common.Hash, error) {
+// CommitWithUpdate writes the state mutations and returns the state update for
+// external processing (e.g., live tracing hooks or size tracker).
+func (s *StateDB) CommitWithUpdate(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, *stateUpdate, error) {
 	ret, err := s.commitAndFlush(block, deleteEmptyObjects, noStorageWiping, true)
 	if err != nil {
-		return common.Hash{}, err
+		return common.Hash{}, nil, err
 	}
-	sizer.Notify(ret)
-	return ret.root, nil
+	return ret.root, ret, nil
 }
 
 // Prepare handles the preparatory steps for executing a state transition with.
