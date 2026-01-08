@@ -165,7 +165,10 @@ func SplitListValues(b []byte) ([][]byte, error) {
 	var elements = make([][]byte, 0, n)
 
 	for len(b) > 0 {
-		_, tagsize, size, _ := readKind(b)
+		_, tagsize, size, err := readKind(b)
+		if err != nil {
+			return nil, err
+		}
 		elements = append(elements, b[:tagsize+size])
 		b = b[tagsize+size:]
 	}
