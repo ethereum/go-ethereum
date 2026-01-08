@@ -89,10 +89,6 @@ func TestLookupStorage(t *testing.T) {
 
 			// Check that no transactions entries are in a pristine database
 			for i, tx := range txs {
-				// Sometimes (but not always) check HasCanonicalTransaction as well
-				if i%2 == 0 && HasCanonicalTransaction(db, tx.Hash()) {
-					t.Fatalf("tx #%d [%x]: non existent transaction found", i, tx.Hash())
-				}
 				if txn, _, _, _ := ReadCanonicalTransaction(db, tx.Hash()); txn != nil {
 					t.Fatalf("tx #%d [%x]: non existent transaction returned: %v", i, tx.Hash(), txn)
 				}
@@ -103,9 +99,6 @@ func TestLookupStorage(t *testing.T) {
 			tc.writeTxLookupEntriesByBlock(db, block)
 
 			for i, tx := range txs {
-				if i%2 == 0 && !HasCanonicalTransaction(db, tx.Hash()) {
-					t.Fatalf("tx #%d [%x]: transaction not found", i, tx.Hash())
-				}
 				if txn, hash, number, index := ReadCanonicalTransaction(db, tx.Hash()); txn == nil {
 					t.Fatalf("tx #%d [%x]: transaction not found", i, tx.Hash())
 				} else {
@@ -120,24 +113,8 @@ func TestLookupStorage(t *testing.T) {
 			// Delete the transactions and check purge
 			for i, tx := range txs {
 				DeleteTxLookupEntry(db, tx.Hash())
-				if i%2 == 0 && HasCanonicalTransaction(db, tx.Hash()) {
-					t.Fatalf("tx #%d [%x]: deleted transaction found", i, tx.Hash())
-				}
 				if txn, _, _, _ := ReadCanonicalTransaction(db, tx.Hash()); txn != nil {
 					t.Fatalf("tx #%d [%x]: deleted transaction returned: %v", i, tx.Hash(), txn)
-				}
-			}
-			// Check some random hashes as well
-			for i := 0; i < 10; i++ {
-				var hash common.Hash
-				for j := 0; j < len(hash); j++ {
-					hash[j] = byte(i*13 + j*7)
-				}
-				if i%2 == 0 && HasCanonicalTransaction(db, hash) {
-					t.Fatalf("random tx %d [%x]: non existent transaction found", i, hash)
-				}
-				if txn, _, _, _ := ReadCanonicalTransaction(db, hash); txn != nil {
-					t.Fatalf("random tx %d [%x]: non existent transaction returned: %v", i, hash, txn)
 				}
 			}
 		})

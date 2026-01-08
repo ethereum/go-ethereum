@@ -174,11 +174,6 @@ func findTxInBlockBody(blockbody rlp.RawValue, target common.Hash) (*types.Trans
 	return nil, 0, errors.New("transaction not found")
 }
 
-// HasCanonicalTransaction checks whether a specific transaction is in the database.
-func HasCanonicalTransaction(db ethdb.Reader, hash common.Hash) bool {
-	return ReadTxLookupEntry(db, hash) != nil
-}
-
 // ReadCanonicalTransaction retrieves a specific transaction from the database, along
 // with its added positional metadata. Notably, only the transaction in the canonical
 // chain is visible.
