@@ -27,14 +27,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// RPCInfo contains information about the RPC request.
-type RPCInfo struct {
-	System    string
-	Service   string
-	Method    string
-	RequestID string
-}
-
 // Attribute is an alias for attribute.KeyValue.
 type Attribute = attribute.KeyValue
 
@@ -48,66 +40,46 @@ func Int64Attribute(key string, val int64) Attribute {
 	return attribute.Int64(key, val)
 }
 
-// StartServerSpan creates a SpanKind=SERVER span at the JSON-RPC boundary.
-// The span name is formatted as $rpcSystem.$rpcService/$rpcMethod
-// (e.g. "jsonrpc.engine/newPayloadV4").
-func StartServerSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, others ...Attribute) (context.Context, func(error)) {
-	spanName := fmt.Sprintf("%s.%s/%s", rpc.System, rpc.Service, rpc.Method)
-	ctx, span := tracer.Start(
-		ctx,
-		spanName,
-		trace.WithSpanKind(trace.SpanKindServer),
-	)
-
-	// Define required attributes
-	attrs := []Attribute{
-		semconv.RPCSystemKey.String(rpc.System),
-		semconv.RPCServiceKey.String(rpc.Service),
-		semconv.RPCMethodKey.String(rpc.Method),
-		semconv.RPCJSONRPCRequestID(rpc.RequestID),
-	}
-
-	// Add any additional attributes provided
-	if len(others) > 0 {
-		attrs = append(attrs, others...)
-	}
-	span.SetAttributes(attrs...)
-	return ctx, endSpan(span)
-}
-
-// StartSpan creates a SpanKind=INTERNAL span.
-func StartSpan(
-	ctx context.Context,
-	spanName string,
-	attributes ...Attribute,
-) (context.Context, trace.Span, func(error)) {
+// StartSpan creates an internal span.
+func StartSpan(ctx context.Context, spanName string, attributes ...Attribute) (context.Context, trace.Span, func(error)) {
 	return StartSpanWithTracer(ctx, otel.Tracer(""), spanName, attributes...)
 }
 
 // StartSpanWithTracer requires a tracer to be passed in and creates a SpanKind=INTERNAL span.
-func StartSpanWithTracer(
-	ctx context.Context,
-	tracer trace.Tracer,
-	spanName string,
-	attributes ...Attribute,
-) (context.Context, trace.Span, func(error)) {
-	return startSpan(ctx, tracer, spanName, attributes...)
+func StartSpanWithTracer(ctx context.Context, tracer trace.Tracer, name string, attributes ...Attribute) (context.Context, trace.Span, func(error)) {
+	return startSpan(ctx, tracer, name, attributes...)
 }
 
-// startSpan creates a SpanKind=INTERNAL span.
-func startSpan(
-	ctx context.Context,
-	tracer trace.Tracer,
-	spanName string,
-	attributes ...Attribute,
-) (context.Context, trace.Span, func(error)) {
-	ctx, span := tracer.Start(
-		ctx,
-		spanName,
-		trace.WithSpanKind(trace.SpanKindInternal),
-	)
+// RPCInfo contains information about the RPC request.
+type RPCInfo struct {
+	System    string
+	Service   string
+	Method    string
+	RequestID string
+}
 
-	// Set attributes if any are provided
+// StartServerSpan creates a SpanKind=SERVER span at the JSON-RPC boundary.
+// The span name is formatted as $rpcSystem.$rpcService/$rpcMethod
+// (e.g. "jsonrpc.engine/newPayloadV4") which follows the Open Telemetry
+// semantic convensions: https://opentelemetry.io/docs/specs/semconv/rpc/rpc-spans/#span-name.
+func StartServerSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, others ...Attribute) (context.Context, func(error)) {
+	var (
+		name  = fmt.Sprintf("%s.%s/%s", rpc.System, rpc.Service, rpc.Method)
+		attrs = []Attribute{
+			semconv.RPCSystemKey.String(rpc.System),
+			semconv.RPCServiceKey.String(rpc.Service),
+			semconv.RPCMethodKey.String(rpc.Method),
+			semconv.RPCJSONRPCRequestID(rpc.RequestID),
+		}
+	)
+	ctx, _, end := startSpan(ctx, tracer, name, append(attrs, others...)...)
+	return ctx, end
+}
+
+// startSpan creates an internal span.
+func startSpan(ctx context.Context, tracer trace.Tracer, spanName string, attributes ...Attribute) (context.Context, trace.Span, func(error)) {
+	ctx, span := tracer.Start(ctx, spanName, trace.WithSpanKind(trace.SpanKindInternal))
+
 	if len(attributes) > 0 {
 		span.SetAttributes(attributes...)
 	}
