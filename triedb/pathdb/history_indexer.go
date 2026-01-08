@@ -34,7 +34,8 @@ import (
 
 const (
 	// The batch size for reading state histories
-	historyReadBatch = 1000
+	historyReadBatch  = 1000
+	historyIndexBatch = 8 * 1024 * 1024 // The number of state history indexes for constructing or deleting as batch
 
 	stateHistoryIndexV0         = uint8(0)               // initial version of state index structure
 	stateHistoryIndexVersion    = stateHistoryIndexV0    // the current state index version
@@ -191,12 +192,12 @@ func (b *batchIndexer) finish(force bool) error {
 	for ident, list := range b.index {
 		eg.Go(func() error {
 			if !b.delete {
-				iw, err := newIndexWriter(b.db, ident, indexed)
+				iw, err := newIndexWriter(b.db, ident, indexed, 0)
 				if err != nil {
 					return err
 				}
 				for _, n := range list {
-					if err := iw.append(n); err != nil {
+					if err := iw.append(n, nil); err != nil {
 						return err
 					}
 				}
@@ -204,7 +205,7 @@ func (b *batchIndexer) finish(force bool) error {
 					iw.finish(batch)
 				})
 			} else {
-				id, err := newIndexDeleter(b.db, ident, indexed)
+				id, err := newIndexDeleter(b.db, ident, indexed, 0)
 				if err != nil {
 					return err
 				}
