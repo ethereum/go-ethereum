@@ -174,8 +174,8 @@ func (c *callTrace) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-func (f callTrace) TypeString() string {
-	return f.Type.String()
+func (c callTrace) TypeString() string {
+	return c.Type.String()
 }
 
 // Iterates over all the input-output datasets in the tracer test harness and
