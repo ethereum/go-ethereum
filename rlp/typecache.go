@@ -126,7 +126,7 @@ type field struct {
 func structFields(typ reflect.Type) ([]field, error) {
 	// Convert fields to rlpstruct.Field.
 	n := typ.NumField()
-	allStructFields := make([]rlpstruct.Field, n)
+	allStructFields := make([]rlpstruct.Field, 0, n)
 	for i := 0; i < n; i++ {
 		rf := typ.Field(i)
 		allStructFields = append(allStructFields, rlpstruct.Field{
