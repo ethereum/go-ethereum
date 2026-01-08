@@ -128,17 +128,30 @@ func (tx *AccessListTx) decode(input []byte) error {
 	return rlp.DecodeBytes(input, tx)
 }
 
+// accessListTxSigHash represents the fields used for computing the signature hash
+// of an AccessListTx transaction.
+type accessListTxSigHash struct {
+	ChainID    *big.Int
+	Nonce      uint64
+	GasPrice   *big.Int
+	Gas        uint64
+	To         *common.Address `rlp:"nil"`
+	Value      *big.Int
+	Data       []byte
+	AccessList AccessList
+}
+
 func (tx *AccessListTx) sigHash(chainID *big.Int) common.Hash {
 	return prefixedRlpHash(
 		AccessListTxType,
-		[]any{
-			chainID,
-			tx.Nonce,
-			tx.GasPrice,
-			tx.Gas,
-			tx.To,
-			tx.Value,
-			tx.Data,
-			tx.AccessList,
+		&accessListTxSigHash{
+			ChainID:    chainID,
+			Nonce:      tx.Nonce,
+			GasPrice:   tx.GasPrice,
+			Gas:        tx.Gas,
+			To:         tx.To,
+			Value:      tx.Value,
+			Data:       tx.Data,
+			AccessList: tx.AccessList,
 		})
 }

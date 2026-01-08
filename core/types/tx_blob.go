@@ -421,20 +421,36 @@ func (tx *BlobTx) decode(input []byte) error {
 	return nil
 }
 
+// blobTxSigHash represents the fields used for computing the signature hash
+// of a BlobTx transaction.
+type blobTxSigHash struct {
+	ChainID    *big.Int
+	Nonce      uint64
+	GasTipCap  *uint256.Int
+	GasFeeCap  *uint256.Int
+	Gas        uint64
+	To         common.Address
+	Value      *uint256.Int
+	Data       []byte
+	AccessList AccessList
+	BlobFeeCap *uint256.Int
+	BlobHashes []common.Hash
+}
+
 func (tx *BlobTx) sigHash(chainID *big.Int) common.Hash {
 	return prefixedRlpHash(
 		BlobTxType,
-		[]any{
-			chainID,
-			tx.Nonce,
-			tx.GasTipCap,
-			tx.GasFeeCap,
-			tx.Gas,
-			tx.To,
-			tx.Value,
-			tx.Data,
-			tx.AccessList,
-			tx.BlobFeeCap,
-			tx.BlobHashes,
+		&blobTxSigHash{
+			ChainID:    chainID,
+			Nonce:      tx.Nonce,
+			GasTipCap:  tx.GasTipCap,
+			GasFeeCap:  tx.GasFeeCap,
+			Gas:        tx.Gas,
+			To:         tx.To,
+			Value:      tx.Value,
+			Data:       tx.Data,
+			AccessList: tx.AccessList,
+			BlobFeeCap: tx.BlobFeeCap,
+			BlobHashes: tx.BlobHashes,
 		})
 }

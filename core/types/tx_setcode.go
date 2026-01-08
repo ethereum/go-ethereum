@@ -225,19 +225,34 @@ func (tx *SetCodeTx) decode(input []byte) error {
 	return rlp.DecodeBytes(input, tx)
 }
 
+// setCodeTxSigHash represents the fields used for computing the signature hash
+// of a SetCodeTx transaction.
+type setCodeTxSigHash struct {
+	ChainID    *big.Int
+	Nonce      uint64
+	GasTipCap  *uint256.Int
+	GasFeeCap  *uint256.Int
+	Gas        uint64
+	To         common.Address
+	Value      *uint256.Int
+	Data       []byte
+	AccessList AccessList
+	AuthList   []SetCodeAuthorization
+}
+
 func (tx *SetCodeTx) sigHash(chainID *big.Int) common.Hash {
 	return prefixedRlpHash(
 		SetCodeTxType,
-		[]any{
-			chainID,
-			tx.Nonce,
-			tx.GasTipCap,
-			tx.GasFeeCap,
-			tx.Gas,
-			tx.To,
-			tx.Value,
-			tx.Data,
-			tx.AccessList,
-			tx.AuthList,
+		&setCodeTxSigHash{
+			ChainID:    chainID,
+			Nonce:      tx.Nonce,
+			GasTipCap:  tx.GasTipCap,
+			GasFeeCap:  tx.GasFeeCap,
+			Gas:        tx.Gas,
+			To:         tx.To,
+			Value:      tx.Value,
+			Data:       tx.Data,
+			AccessList: tx.AccessList,
+			AuthList:   tx.AuthList,
 		})
 }

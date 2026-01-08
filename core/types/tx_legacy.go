@@ -124,15 +124,31 @@ func (tx *LegacyTx) decode([]byte) error {
 	panic("decode called on LegacyTx)")
 }
 
+// legacyTxSigHash represents the fields used for computing the signature hash
+// of a LegacyTx transaction (post-EIP155).
+type legacyTxSigHash struct {
+	Nonce    uint64
+	GasPrice *big.Int
+	Gas      uint64
+	To       *common.Address `rlp:"nil"`
+	Value    *big.Int
+	Data     []byte
+	ChainID  *big.Int
+	V        uint
+	R        uint
+}
+
 // OBS: This is the post-EIP155 hash, the pre-EIP155 does not contain a chainID.
 func (tx *LegacyTx) sigHash(chainID *big.Int) common.Hash {
-	return rlpHash([]any{
-		tx.Nonce,
-		tx.GasPrice,
-		tx.Gas,
-		tx.To,
-		tx.Value,
-		tx.Data,
-		chainID, uint(0), uint(0),
+	return rlpHash(&legacyTxSigHash{
+		Nonce:    tx.Nonce,
+		GasPrice: tx.GasPrice,
+		Gas:      tx.Gas,
+		To:       tx.To,
+		Value:    tx.Value,
+		Data:     tx.Data,
+		ChainID:  chainID,
+		V:        uint(0),
+		R:        uint(0),
 	})
 }

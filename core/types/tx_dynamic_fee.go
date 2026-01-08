@@ -124,18 +124,32 @@ func (tx *DynamicFeeTx) decode(input []byte) error {
 	return rlp.DecodeBytes(input, tx)
 }
 
+// dynamicFeeTxSigHash represents the fields used for computing the signature hash
+// of a DynamicFeeTx transaction.
+type dynamicFeeTxSigHash struct {
+	ChainID    *big.Int
+	Nonce      uint64
+	GasTipCap  *big.Int
+	GasFeeCap  *big.Int
+	Gas        uint64
+	To         *common.Address `rlp:"nil"`
+	Value      *big.Int
+	Data       []byte
+	AccessList AccessList
+}
+
 func (tx *DynamicFeeTx) sigHash(chainID *big.Int) common.Hash {
 	return prefixedRlpHash(
 		DynamicFeeTxType,
-		[]any{
-			chainID,
-			tx.Nonce,
-			tx.GasTipCap,
-			tx.GasFeeCap,
-			tx.Gas,
-			tx.To,
-			tx.Value,
-			tx.Data,
-			tx.AccessList,
+		&dynamicFeeTxSigHash{
+			ChainID:    chainID,
+			Nonce:      tx.Nonce,
+			GasTipCap:  tx.GasTipCap,
+			GasFeeCap:  tx.GasFeeCap,
+			Gas:        tx.Gas,
+			To:         tx.To,
+			Value:      tx.Value,
+			Data:       tx.Data,
+			AccessList: tx.AccessList,
 		})
 }
