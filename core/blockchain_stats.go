@@ -39,13 +39,20 @@ type ExecuteStats struct {
 	StorageCommits time.Duration // Time spent on the storage trie commit
 	CodeReads      time.Duration // Time spent on the contract code read
 
-	AccountLoaded  int // Number of accounts loaded
-	AccountUpdated int // Number of accounts updated
-	AccountDeleted int // Number of accounts deleted
-	StorageLoaded  int // Number of storage slots loaded
-	StorageUpdated int // Number of storage slots updated
-	StorageDeleted int // Number of storage slots deleted
-	CodeLoaded     int // Number of contract code loaded
+	AccountLoaded  int   // Number of accounts loaded
+	AccountUpdated int   // Number of accounts updated
+	AccountDeleted int   // Number of accounts deleted
+	StorageLoaded  int   // Number of storage slots loaded
+	StorageUpdated int   // Number of storage slots updated
+	StorageDeleted int   // Number of storage slots deleted
+	CodeLoaded     int   // Number of contract code loaded
+	CodeBytesRead  int64 // Total bytes of contract code read
+
+	// Unique access metrics
+	UniqueAccountsAccessed int // Number of unique accounts accessed
+	UniqueStorageAccessed  int // Number of unique storage slots accessed
+	UniqueCodeExecuted     int // Number of unique contracts executed
+	SystemCodeExecuted     int // Number of unique system contracts executed (subset of UniqueCodeExecuted)
 
 	Execution       time.Duration // Time spent on the EVM execution
 	Validation      time.Duration // Time spent on the block validation
@@ -100,6 +107,8 @@ func (s *ExecuteStats) reportMetrics() {
 	accountCacheMissMeter.Mark(s.StateReadCacheStats.AccountCacheMiss)
 	storageCacheHitMeter.Mark(s.StateReadCacheStats.StorageCacheHit)
 	storageCacheMissMeter.Mark(s.StateReadCacheStats.StorageCacheMiss)
+	codeCacheHitMeter.Mark(s.StateReadCacheStats.CodeCacheHit)
+	codeCacheMissMeter.Mark(s.StateReadCacheStats.CodeCacheMiss)
 }
 
 // logSlow prints the detailed execution statistics if the block is regarded as slow.
@@ -123,7 +132,12 @@ Validation: %v
 State read: %v
     Account read: %v(%d)
     Storage read: %v(%d)
-    Code read: %v(%d)
+    Code read: %v(%d, %s)
+
+Unique state access:
+    Accounts: %d
+    Storage slots: %d
+    Contracts executed: %d (%d system)
 
 State write: %v
     Trie commit: %v
@@ -145,7 +159,12 @@ State write: %v
 		common.PrettyDuration(s.AccountReads+s.StorageReads+s.CodeReads),
 		common.PrettyDuration(s.AccountReads), s.AccountLoaded,
 		common.PrettyDuration(s.StorageReads), s.StorageLoaded,
-		common.PrettyDuration(s.CodeReads), s.CodeLoaded,
+		common.PrettyDuration(s.CodeReads), s.CodeLoaded, common.StorageSize(s.CodeBytesRead),
+
+		// Unique state access
+		s.UniqueAccountsAccessed,
+		s.UniqueStorageAccessed,
+		s.UniqueCodeExecuted, s.SystemCodeExecuted,
 
 		// State write
 		common.PrettyDuration(max(s.AccountCommits, s.StorageCommits)+s.TrieDBCommit+s.SnapshotCommit+s.BlockWrite),
