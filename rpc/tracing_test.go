@@ -51,7 +51,7 @@ func newTracingServer(t *testing.T) (*Server, *sdktrace.TracerProvider, *tracete
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
 	server := newTestServer()
-	server.SetTracerProvider(tp)
+	server.setTracerProvider(tp)
 	t.Cleanup(server.Stop)
 	return server, tp, exporter
 }

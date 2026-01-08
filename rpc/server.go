@@ -101,15 +101,6 @@ func (s *Server) SetWebsocketReadLimit(limit int64) {
 	s.wsReadLimit = limit
 }
 
-// SetTracerProvider configures the OpenTelemetry TracerProvider for RPC call tracing.
-// Note: This method (and the TracerProvider field in the Server/Handler struct) is
-// primarily intended for testing. In particular, it allows tests to configure an
-// isolated TracerProvider without changing the global provider, avoiding
-// interference between tests running in parallel.
-func (s *Server) SetTracerProvider(tp trace.TracerProvider) {
-	s.tracerProvider = tp
-}
-
 // RegisterName creates a service for the given receiver type under the given name. When no
 // methods on the given receiver match the criteria to be either an RPC method or a
 // subscription an error is returned. Otherwise a new service is created and added to the
@@ -139,6 +130,15 @@ func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 	c := initClient(codec, &s.services, cfg)
 	<-codec.closed()
 	c.Close()
+}
+
+// setTracerProvider configures the OpenTelemetry TracerProvider for RPC call tracing.
+// Note: This method (and the TracerProvider field in the Server/Handler struct) is
+// primarily intended for testing. In particular, it allows tests to configure an
+// isolated TracerProvider without changing the global provider, avoiding
+// interference between tests running in parallel.
+func (s *Server) setTracerProvider(tp trace.TracerProvider) {
+	s.tracerProvider = tp
 }
 
 func (s *Server) trackCodec(codec ServerCodec) bool {

@@ -514,7 +514,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 	if len(msg.Method) > maxMethodNameLength {
 		return msg.errorResponse(&invalidRequestError{fmt.Sprintf("method name too long: %d > %d", len(msg.Method), maxMethodNameLength)})
 	}
-	callb, rpcService, rpcMethod := h.reg.callback(msg.Method)
+	callb, service, method := h.reg.callback(msg.Method)
 
 	// If the method is not found, return an error.
 	if callb == nil {
@@ -523,11 +523,17 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 
 	// Start root span for the request.
 	var err error
-	ctx, spanEnd := telemetry.StartServerSpan(cp.ctx, h.tracer(), "jsonrpc", rpcService, rpcMethod, string(msg.ID))
+	rpcInfo := telemetry.RPCInfo{
+		System:    "jsonrpc",
+		Service:   service,
+		Method:    method,
+		RequestID: string(msg.ID),
+	}
+	ctx, spanEnd := telemetry.StartServerSpan(cp.ctx, h.tracer(), rpcInfo)
 	defer spanEnd(err)
 
 	// Start tracing span before parsing arguments.
-	_, pSpanEnd := telemetry.StartInternalSpanWithTracer(ctx, h.tracer(), "rpc.parsePositionalArguments")
+	_, _, pSpanEnd := telemetry.StartSpanWithTracer(ctx, h.tracer(), "rpc.parsePositionalArguments")
 	args, err := parsePositionalArguments(msg.Params, callb.argTypes)
 	pSpanEnd(err)
 	if err != nil {
@@ -536,7 +542,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 	start := time.Now()
 
 	// Start tracing span before running the method.
-	rctx, rSpanEnd := telemetry.StartInternalSpanWithTracer(ctx, h.tracer(), "rpc.runMethod")
+	rctx, _, rSpanEnd := telemetry.StartSpanWithTracer(ctx, h.tracer(), "rpc.runMethod")
 	answer := h.runMethod(rctx, msg, callb, args)
 	if answer.Error != nil {
 		err = errors.New(answer.Error.Message)
@@ -609,7 +615,7 @@ func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *cal
 	if err != nil {
 		return msg.errorResponse(err)
 	}
-	_, spanEnd := telemetry.StartInternalSpanWithTracer(ctx, h.tracer(), "rpc.encodeJSONResponse", attributes...)
+	_, _, spanEnd := telemetry.StartSpanWithTracer(ctx, h.tracer(), "rpc.encodeJSONResponse", attributes...)
 	response := msg.response(result)
 	if response.Error != nil {
 		err = errors.New(response.Error.Message)

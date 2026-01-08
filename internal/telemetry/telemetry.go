@@ -27,6 +27,14 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// RPCInfo contains information about the RPC request.
+type RPCInfo struct {
+	System    string
+	Service   string
+	Method    string
+	RequestID string
+}
+
 // Attribute is an alias for attribute.KeyValue.
 type Attribute = attribute.KeyValue
 
@@ -43,16 +51,8 @@ func Int64Attribute(key string, val int64) Attribute {
 // StartServerSpan creates a SpanKind=SERVER span at the JSON-RPC boundary.
 // The span name is formatted as $rpcSystem.$rpcService/$rpcMethod
 // (e.g. "jsonrpc.engine/newPayloadV4").
-func StartServerSpan(
-	ctx context.Context,
-	tracer trace.Tracer,
-	rpcSystem string,
-	rpcService string,
-	rpcMethod string,
-	requestID string,
-	additionalAttributes ...Attribute,
-) (context.Context, func(error)) {
-	spanName := fmt.Sprintf("%s.%s/%s", rpcSystem, rpcService, rpcMethod)
+func StartServerSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, others ...Attribute) (context.Context, func(error)) {
+	spanName := fmt.Sprintf("%s.%s/%s", rpc.System, rpc.Service, rpc.Method)
 	ctx, span := tracer.Start(
 		ctx,
 		spanName,
@@ -66,46 +66,46 @@ func StartServerSpan(
 
 	// Define required attributes
 	attrs := []Attribute{
-		semconv.RPCSystemKey.String(rpcSystem),
-		semconv.RPCServiceKey.String(rpcService),
-		semconv.RPCMethodKey.String(rpcMethod),
-		semconv.RPCJSONRPCRequestID(requestID),
+		semconv.RPCSystemKey.String(rpc.System),
+		semconv.RPCServiceKey.String(rpc.Service),
+		semconv.RPCMethodKey.String(rpc.Method),
+		semconv.RPCJSONRPCRequestID(rpc.RequestID),
 	}
 
 	// Add any additional attributes provided
-	if len(additionalAttributes) > 0 {
-		attrs = append(attrs, additionalAttributes...)
+	if len(others) > 0 {
+		attrs = append(attrs, others...)
 	}
 	span.SetAttributes(attrs...)
 	return ctx, endSpan(span)
 }
 
-// StartInternalSpan creates a SpanKind=INTERNAL span.
-func StartInternalSpan(
+// StartSpan creates a SpanKind=INTERNAL span.
+func StartSpan(
 	ctx context.Context,
 	spanName string,
 	attributes ...Attribute,
-) (context.Context, func(error)) {
-	return StartInternalSpanWithTracer(ctx, otel.Tracer(""), spanName, attributes...)
+) (context.Context, trace.Span, func(error)) {
+	return StartSpanWithTracer(ctx, otel.Tracer(""), spanName, attributes...)
 }
 
-// StartInternalSpanWithTracer requires a tracer to be passed in and creates a SpanKind=INTERNAL span.
-func StartInternalSpanWithTracer(
+// StartSpanWithTracer requires a tracer to be passed in and creates a SpanKind=INTERNAL span.
+func StartSpanWithTracer(
 	ctx context.Context,
 	tracer trace.Tracer,
 	spanName string,
 	attributes ...Attribute,
-) (context.Context, func(error)) {
-	return startInternalSpan(ctx, tracer, spanName, attributes...)
+) (context.Context, trace.Span, func(error)) {
+	return startSpan(ctx, tracer, spanName, attributes...)
 }
 
-// startInternalSpan creates a SpanKind=INTERNAL span.
-func startInternalSpan(
+// startSpan creates a SpanKind=INTERNAL span.
+func startSpan(
 	ctx context.Context,
 	tracer trace.Tracer,
 	spanName string,
 	attributes ...Attribute,
-) (context.Context, func(error)) {
+) (context.Context, trace.Span, func(error)) {
 	ctx, span := tracer.Start(
 		ctx,
 		spanName,
@@ -114,13 +114,13 @@ func startInternalSpan(
 
 	// Fast path
 	if !span.IsRecording() {
-		return ctx, func(error) { span.End() }
+		return ctx, span, func(error) { span.End() }
 	}
 
 	if len(attributes) > 0 {
 		span.SetAttributes(attributes...)
 	}
-	return ctx, endSpan(span)
+	return ctx, span, endSpan(span)
 }
 
 // endSpan ends the span and handles error recording.
