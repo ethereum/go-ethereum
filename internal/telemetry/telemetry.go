@@ -59,11 +59,6 @@ func StartServerSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, othe
 		trace.WithSpanKind(trace.SpanKindServer),
 	)
 
-	// Fast path: noop provider or span not sampled
-	if !span.IsRecording() {
-		return ctx, func(error) { span.End() }
-	}
-
 	// Define required attributes
 	attrs := []Attribute{
 		semconv.RPCSystemKey.String(rpc.System),
@@ -112,11 +107,7 @@ func startSpan(
 		trace.WithSpanKind(trace.SpanKindInternal),
 	)
 
-	// Fast path
-	if !span.IsRecording() {
-		return ctx, span, func(error) { span.End() }
-	}
-
+	// Set attributes if any are provided
 	if len(attributes) > 0 {
 		span.SetAttributes(attributes...)
 	}
