@@ -64,16 +64,22 @@ type RPCInfo struct {
 // semantic convensions: https://opentelemetry.io/docs/specs/semconv/rpc/rpc-spans/#span-name.
 func StartServerSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, others ...Attribute) (context.Context, func(error)) {
 	var (
-		name  = fmt.Sprintf("%s.%s/%s", rpc.System, rpc.Service, rpc.Method)
-		attrs = []Attribute{
+		name       = fmt.Sprintf("%s.%s/%s", rpc.System, rpc.Service, rpc.Method)
+		attributes = append([]Attribute{
 			semconv.RPCSystemKey.String(rpc.System),
 			semconv.RPCServiceKey.String(rpc.Service),
 			semconv.RPCMethodKey.String(rpc.Method),
 			semconv.RPCJSONRPCRequestID(rpc.RequestID),
-		}
+		},
+			others...,
+		)
 	)
-	ctx, _, end := startSpan(ctx, tracer, name, append(attrs, others...)...)
-	return ctx, end
+	ctx, span := tracer.Start(ctx, name, trace.WithSpanKind(trace.SpanKindInternal))
+
+	if len(attributes) > 0 {
+		span.SetAttributes(attributes...)
+	}
+	return ctx, endSpan(span)
 }
 
 // startSpan creates an internal span.
