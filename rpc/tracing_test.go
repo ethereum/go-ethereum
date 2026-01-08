@@ -26,6 +26,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
+// attributeMap converts a slice of attributes to a map.
 func attributeMap(attrs []attribute.KeyValue) map[string]string {
 	m := make(map[string]string)
 	for _, a := range attrs {
@@ -45,6 +46,7 @@ func attributeMap(attrs []attribute.KeyValue) map[string]string {
 	return m
 }
 
+// newTracingServer creates a new server with tracing enabled.
 func newTracingServer(t *testing.T) (*Server, *sdktrace.TracerProvider, *tracetest.InMemoryExporter) {
 	t.Helper()
 	exporter := tracetest.NewInMemoryExporter()
@@ -163,7 +165,7 @@ func TestTracingBatchHTTP(t *testing.T) {
 
 // TestTracingSubscribeUnsubscribe verifies that subscribe and unsubscribe calls
 // do not emit any spans.
-// Note: This works because client.newClientConn() does not set a tracer provider.
+// Note: This works because client.newClientConn() passes nil as the tracer provider.
 func TestTracingSubscribeUnsubscribe(t *testing.T) {
 	t.Parallel()
 	server, tracer, exporter := newTracingServer(t)
