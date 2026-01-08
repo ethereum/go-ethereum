@@ -74,12 +74,10 @@ func TestTracingHTTP(t *testing.T) {
 		t.Fatalf("RPC call failed: %v", err)
 	}
 
-	// Flush spans.
+	// Flush and verify that we emitted the expected span.
 	if err := tracer.ForceFlush(context.Background()); err != nil {
 		t.Fatalf("failed to flush: %v", err)
 	}
-
-	// Check spans.
 	spans := exporter.GetSpans()
 	if len(spans) == 0 {
 		t.Fatal("no spans were emitted")
@@ -106,6 +104,60 @@ func TestTracingHTTP(t *testing.T) {
 	}
 	if _, ok := attrs["rpc.jsonrpc.request_id"]; !ok {
 		t.Errorf("expected rpc.jsonrpc.request_id attribute to be set")
+	}
+}
+
+// TestTracingBatchHTTP verifies that RPC spans are emitted for batched JSON-RPC calls over HTTP.
+func TestTracingBatchHTTP(t *testing.T) {
+	t.Parallel()
+	server, tracer, exporter := newTracingServer(t)
+	httpsrv := httptest.NewServer(server)
+	t.Cleanup(httpsrv.Close)
+	client, err := DialHTTP(httpsrv.URL)
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	t.Cleanup(client.Close)
+
+	// Make a successful batch RPC call.
+	batch := []BatchElem{
+		{
+			Method: "test_echo",
+			Args:   []any{"hello", 42, &echoArgs{S: "world"}},
+			Result: new(echoResult),
+		},
+		{
+			Method: "test_echo",
+			Args:   []any{"your", 7, &echoArgs{S: "mom"}},
+			Result: new(echoResult),
+		},
+	}
+	if err := client.BatchCall(batch); err != nil {
+		t.Fatalf("batch RPC call failed: %v", err)
+	}
+
+	// Flush and verify we emitted spans for each batch element.
+	if err := tracer.ForceFlush(context.Background()); err != nil {
+		t.Fatalf("failed to flush: %v", err)
+	}
+	spans := exporter.GetSpans()
+	if len(spans) == 0 {
+		t.Fatal("no spans were emitted")
+	}
+	var found int
+	for i := range spans {
+		if spans[i].Name == "jsonrpc.test/echo" {
+			attrs := attributeMap(spans[i].Attributes)
+			if attrs["rpc.system"] == "jsonrpc" &&
+				attrs["rpc.service"] == "test" &&
+				attrs["rpc.method"] == "echo" &&
+				attrs["rpc.batch"] == "true" {
+				found++
+			}
+		}
+	}
+	if found != len(batch) {
+		t.Fatalf("expected %d matching batch spans, got %d", len(batch), found)
 	}
 }
 

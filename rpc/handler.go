@@ -77,6 +77,7 @@ type handler struct {
 type callProc struct {
 	ctx       context.Context
 	notifiers []*Notifier
+	isBatch   bool
 }
 
 func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry, batchRequestLimit, batchResponseMaxSize int, tracerProvider trace.TracerProvider) *handler {
@@ -202,6 +203,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 
 	// Process calls on a goroutine because they may block indefinitely:
 	h.startCallProc(func(cp *callProc) {
+		cp.isBatch = true
 		var (
 			timer      *time.Timer
 			cancel     context.CancelFunc
@@ -529,7 +531,10 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 		Method:    method,
 		RequestID: string(msg.ID),
 	}
-	ctx, spanEnd := telemetry.StartServerSpan(cp.ctx, h.tracer(), rpcInfo)
+	attrib := []telemetry.Attribute{
+		telemetry.BoolAttribute("rpc.batch", cp.isBatch),
+	}
+	ctx, spanEnd := telemetry.StartServerSpan(cp.ctx, h.tracer(), rpcInfo, attrib...)
 	defer spanEnd(err)
 
 	// Start tracing span before parsing arguments.

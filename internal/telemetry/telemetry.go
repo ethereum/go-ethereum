@@ -40,6 +40,11 @@ func Int64Attribute(key string, val int64) Attribute {
 	return attribute.Int64(key, val)
 }
 
+// BoolAttribute creates an attribute with a bool value.
+func BoolAttribute(key string, val bool) Attribute {
+	return attribute.Bool(key, val)
+}
+
 // StartSpan creates a SpanKind=INTERNAL span.
 func StartSpan(ctx context.Context, spanName string, attributes ...Attribute) (context.Context, trace.Span, func(error)) {
 	return StartSpanWithTracer(ctx, otel.Tracer(""), spanName, attributes...)
