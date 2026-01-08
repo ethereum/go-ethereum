@@ -107,6 +107,7 @@ func (f *callFrame) processOutput(output []byte, err error, reverted bool) {
 
 type callFrameMarshaling struct {
 	TypeString string `json:"type"`
+	Pc         hexutil.Uint64
 	Gas        hexutil.Uint64
 	GasUsed    hexutil.Uint64
 	Value      *hexutil.Big
