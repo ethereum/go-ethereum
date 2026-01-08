@@ -40,14 +40,14 @@ func Int64Attribute(key string, val int64) Attribute {
 	return attribute.Int64(key, val)
 }
 
-// StartSpan creates an internal span.
+// StartSpan creates a SpanKind=INTERNAL span.
 func StartSpan(ctx context.Context, spanName string, attributes ...Attribute) (context.Context, trace.Span, func(error)) {
 	return StartSpanWithTracer(ctx, otel.Tracer(""), spanName, attributes...)
 }
 
 // StartSpanWithTracer requires a tracer to be passed in and creates a SpanKind=INTERNAL span.
 func StartSpanWithTracer(ctx context.Context, tracer trace.Tracer, name string, attributes ...Attribute) (context.Context, trace.Span, func(error)) {
-	return startSpan(ctx, tracer, name, attributes...)
+	return startSpan(ctx, tracer, trace.SpanKindInternal, name, attributes...)
 }
 
 // RPCInfo contains information about the RPC request.
@@ -74,18 +74,13 @@ func StartServerSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, othe
 			others...,
 		)
 	)
-	ctx, span := tracer.Start(ctx, name, trace.WithSpanKind(trace.SpanKindInternal))
-
-	if len(attributes) > 0 {
-		span.SetAttributes(attributes...)
-	}
-	return ctx, endSpan(span)
+	ctx, _, end := startSpan(ctx, tracer, trace.SpanKindServer, name, attributes...)
+	return ctx, end
 }
 
-// startSpan creates an internal span.
-func startSpan(ctx context.Context, tracer trace.Tracer, spanName string, attributes ...Attribute) (context.Context, trace.Span, func(error)) {
-	ctx, span := tracer.Start(ctx, spanName, trace.WithSpanKind(trace.SpanKindInternal))
-
+// startSpan creates a span with the given kind.
+func startSpan(ctx context.Context, tracer trace.Tracer, kind trace.SpanKind, spanName string, attributes ...Attribute) (context.Context, trace.Span, func(error)) {
+	ctx, span := tracer.Start(ctx, spanName, trace.WithSpanKind(kind))
 	if len(attributes) > 0 {
 		span.SetAttributes(attributes...)
 	}
