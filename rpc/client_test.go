@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -496,7 +497,7 @@ func TestClientSubscribeClose(t *testing.T) {
 	var (
 		nc   = make(chan int)
 		errc = make(chan error, 1)
-		sub  *ClientSubscription
+		sub  ethereum.Subscription
 		err  error
 	)
 	go func() {
@@ -665,7 +666,12 @@ func TestClientSubscriptionUnsubscribeServer(t *testing.T) {
 
 	// Unsubscribe and check that unsubscribe was called.
 	sub.Unsubscribe()
-	if !recorder.unsubscribes[sub.subid] {
+
+	clientSub, ok := sub.(*ClientSubscription)
+	if !ok {
+		t.Fatal("subscription is not a ClientSubscription")
+	}
+	if !recorder.unsubscribes[clientSub.subid] {
 		t.Fatal("client did not call unsubscribe method")
 	}
 	if _, open := <-sub.Err(); open {

@@ -32,9 +32,16 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+type RPCClient interface {
+	CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error
+	BatchCallContext(ctx context.Context, b []rpc.BatchElem) error
+	EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (ethereum.Subscription, error)
+	Close()
+}
+
 // Client defines typed wrappers for the Ethereum RPC API.
 type Client struct {
-	c *rpc.Client
+	c RPCClient
 }
 
 // Dial connects a client to the given URL.
@@ -52,7 +59,7 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 }
 
 // NewClient creates a client that uses the given RPC client.
-func NewClient(c *rpc.Client) *Client {
+func NewClient(c RPCClient) *Client {
 	return &Client{c}
 }
 
@@ -62,7 +69,7 @@ func (ec *Client) Close() {
 }
 
 // Client gets the underlying RPC client.
-func (ec *Client) Client() *rpc.Client {
+func (ec *Client) Client() RPCClient {
 	return ec.c
 }
 
