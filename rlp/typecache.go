@@ -123,10 +123,11 @@ type field struct {
 }
 
 // structFields resolves the typeinfo of all public fields in a struct type.
-func structFields(typ reflect.Type) (fields []field, err error) {
+func structFields(typ reflect.Type) ([]field, error) {
 	// Convert fields to rlpstruct.Field.
-	var allStructFields []rlpstruct.Field
-	for i := 0; i < typ.NumField(); i++ {
+	n := typ.NumField()
+	allStructFields := make([]rlpstruct.Field, n)
+	for i := 0; i < n; i++ {
 		rf := typ.Field(i)
 		allStructFields = append(allStructFields, rlpstruct.Field{
 			Name:     rf.Name,
@@ -148,6 +149,7 @@ func structFields(typ reflect.Type) (fields []field, err error) {
 	}
 
 	// Resolve typeinfo.
+	fields := make([]field, 0, len(structFields))
 	for i, sf := range structFields {
 		typ := typ.Field(sf.Index).Type
 		tags := structTags[i]
