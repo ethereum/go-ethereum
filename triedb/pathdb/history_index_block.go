@@ -28,7 +28,7 @@ import (
 
 const (
 	indexBlockDescSize   = 14   // The size of index block descriptor
-	indexBlockSizeCap    = 4096 // The maximum size of a single index block
+	indexBlockMaxSize    = 4096 // The maximum size of a single index block
 	indexBlockRestartLen = 256  // The restart interval length of index block
 )
 
@@ -457,7 +457,7 @@ func (b *blockWriter) empty() bool {
 
 func (b *blockWriter) estimateFull(ext []uint16) bool {
 	size := 8 + 2*len(ext)
-	return len(b.data)+size > indexBlockSizeCap
+	return len(b.data)+size > indexBlockMaxSize
 }
 
 // last returns the last element in the block. It should only be called when

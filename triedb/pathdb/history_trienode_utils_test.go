@@ -17,6 +17,7 @@
 package pathdb
 
 import (
+	"bytes"
 	"testing"
 )
 
@@ -41,6 +42,40 @@ func TestIsAncestor(t *testing.T) {
 		result := isAncestor(tc.x, tc.y)
 		if result != tc.want {
 			t.Fatalf("isAncestor(%d, %d) = %v, want %v", tc.x, tc.y, result, tc.want)
+		}
+	}
+}
+
+func TestBitmapSet(t *testing.T) {
+	suites := []struct {
+		index  int
+		expect []byte
+	}{
+		{
+			0, []byte{0b10000000, 0x0},
+		},
+		{
+			1, []byte{0b01000000, 0x0},
+		},
+		{
+			7, []byte{0b00000001, 0x0},
+		},
+		{
+			8, []byte{0b00000000, 0b10000000},
+		},
+		{
+			15, []byte{0b00000000, 0b00000001},
+		},
+	}
+	for _, tc := range suites {
+		var buf [2]byte
+		setBit(buf[:], tc.index)
+
+		if !bytes.Equal(buf[:], tc.expect) {
+			t.Fatalf("bitmap = %v, want %v", buf, tc.expect)
+		}
+		if !isBitSet(buf[:], tc.index) {
+			t.Fatal("bit is not set")
 		}
 	}
 }

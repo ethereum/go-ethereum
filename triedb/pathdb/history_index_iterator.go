@@ -126,7 +126,7 @@ func (f extFilter) contains(bitmap []byte) (bool, error) {
 			}
 			// Check descendants: the presence of any descendant implicitly
 			// represents a mutation of its ancestor.
-			return isByteSet(bitmap, 2+2*n) || isByteSet(bitmap, 3+2*n), nil
+			return bitmap[2+2*n] != 0 || bitmap[3+2*n] != 0, nil
 		}
 	default:
 		return false, fmt.Errorf("unsupported bitmap size %d", len(bitmap))

@@ -22,8 +22,8 @@ import (
 	"slices"
 )
 
-// sharedLen returns the length of the common prefix shared by a and b.
-func sharedLen(a, b []byte) int {
+// commonPrefixLen returns the length of the common prefix shared by a and b.
+func commonPrefixLen(a, b []byte) int {
 	n := min(len(a), len(b))
 	for i := range n {
 		if a[i] != b[i] {
@@ -74,15 +74,10 @@ func isAncestor(x, y uint16) bool {
 
 // isBitSet reports whether the bit at `index` in the byte slice `b` is set.
 func isBitSet(b []byte, index int) bool {
-	return b[index/8]&(1<<(index%8)) != 0
-}
-
-// isByteSet reports whether the byte at `index` in the byte slice `b` is set.
-func isByteSet(b []byte, index int) bool {
-	return b[index] != 0
+	return b[index/8]&(1<<(7-index%8)) != 0
 }
 
 // setBit sets the bit at `index` in the byte slice `b` to 1.
 func setBit(b []byte, index int) {
-	b[index/8] |= 1 << (index % 8)
+	b[index/8] |= 1 << (7 - index%8)
 }

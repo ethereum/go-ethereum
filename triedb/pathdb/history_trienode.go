@@ -208,7 +208,7 @@ func (h *trienodeHistory) encode() ([]byte, []byte, []byte, error) {
 				restarts = append(restarts, internalValOffset)
 				prefixLen = 0
 			} else {
-				prefixLen = sharedLen(prevKey, key)
+				prefixLen = commonPrefixLen(prevKey, key)
 			}
 			value := h.nodes[owner][path]
 

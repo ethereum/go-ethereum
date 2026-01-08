@@ -580,8 +580,8 @@ func TestTrienodeHistoryReaderIterator(t *testing.T) {
 	}
 }
 
-// TestSharedLen tests the sharedLen helper function
-func TestSharedLen(t *testing.T) {
+// TestCommonPrefixLen tests the commonPrefixLen helper function
+func TestCommonPrefixLen(t *testing.T) {
 	tests := []struct {
 		a, b     []byte
 		expected int
@@ -610,13 +610,13 @@ func TestSharedLen(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		result := sharedLen(test.a, test.b)
+		result := commonPrefixLen(test.a, test.b)
 		if result != test.expected {
 			t.Errorf("Test %d: sharedLen(%q, %q) = %d, expected %d",
 				i, test.a, test.b, result, test.expected)
 		}
 		// Test commutativity
-		resultReverse := sharedLen(test.b, test.a)
+		resultReverse := commonPrefixLen(test.b, test.a)
 		if result != resultReverse {
 			t.Errorf("Test %d: sharedLen is not commutative: sharedLen(a,b)=%d, sharedLen(b,a)=%d",
 				i, result, resultReverse)
