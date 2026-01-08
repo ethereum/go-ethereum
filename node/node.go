@@ -92,6 +92,10 @@ func New(conf *Config) (*Node, error) {
 		conf.Logger = log.New()
 	}
 
+	if conf.HTTPProto == "" {
+		conf.HTTPProto = "tcp"
+	}
+
 	// Ensure that the instance name doesn't cause weird conflicts with
 	// other files in the data directory.
 	if strings.ContainsAny(conf.Name, `/\`) {
@@ -396,7 +400,7 @@ func (n *Node) startRPC() error {
 	}
 
 	initHttp := func(server *httpServer, port int) error {
-		if err := server.setListenAddr(n.config.HTTPHost, port); err != nil {
+		if err := server.setListenAddr(n.config.HTTPProto, n.config.HTTPHost, port); err != nil {
 			return err
 		}
 		if err := server.enableRPC(openAPIs, httpConfig{
@@ -414,7 +418,7 @@ func (n *Node) startRPC() error {
 
 	initWS := func(port int) error {
 		server := n.wsServerForPort(port, false)
-		if err := server.setListenAddr(n.config.WSHost, port); err != nil {
+		if err := server.setListenAddr(n.config.HTTPProto, n.config.WSHost, port); err != nil {
 			return err
 		}
 		if err := server.enableWS(openAPIs, wsConfig{
@@ -432,7 +436,7 @@ func (n *Node) startRPC() error {
 	initAuth := func(port int, secret []byte) error {
 		// Enable auth via HTTP
 		server := n.httpAuth
-		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
+		if err := server.setListenAddr(n.config.HTTPProto, n.config.AuthAddr, port); err != nil {
 			return err
 		}
 		sharedConfig := rpcEndpointConfig{
@@ -455,7 +459,7 @@ func (n *Node) startRPC() error {
 
 		// Enable auth via WS
 		server = n.wsServerForPort(port, true)
-		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
+		if err := server.setListenAddr(n.config.HTTPProto, n.config.AuthAddr, port); err != nil {
 			return err
 		}
 		if err := server.enableWS(allAPIs, wsConfig{
