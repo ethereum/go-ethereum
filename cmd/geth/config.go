@@ -242,13 +242,13 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	// Start metrics export if enabled
 	utils.SetupMetrics(&cfg.Metrics)
 
-	// Setup RPC tracing if enabled
-	rpcTracingService, err := utils.SetupRPCTracing(ctx)
+	// Setup telemetry if enabled
+	telemetryService, err := utils.SetupTelemetry(ctx)
 	if err != nil {
-		utils.Fatalf("failed to setup rpc tracing: %v", err)
+		utils.Fatalf("failed to setup telemetry: %v", err)
 	}
-	if rpcTracingService != nil {
-		utils.RegisterRPCTracingService(rpcTracingService, stack)
+	if telemetryService != nil {
+		utils.RegisterTelemetryService(telemetryService, stack)
 	}
 
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
