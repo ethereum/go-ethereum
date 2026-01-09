@@ -687,6 +687,49 @@ func testTransactionSender(t *testing.T, client *rpc.Client) {
 	}
 }
 
+func TestBlockReceiptsPreservesCanonicalFlag(t *testing.T) {
+	srv := rpc.NewServer()
+	service := &blockReceiptsTestService{calls: make(chan rpc.BlockNumberOrHash, 1)}
+	if err := srv.RegisterName("eth", service); err != nil {
+		t.Fatalf("failed to register service: %v", err)
+	}
+	defer srv.Stop()
+
+	client := rpc.DialInProc(srv)
+	defer client.Close()
+
+	ec := ethclient.NewClient(client)
+	defer ec.Close()
+
+	hash := common.HexToHash("0x01")
+	ref := rpc.BlockNumberOrHashWithHash(hash, true)
+
+	if _, err := ec.BlockReceipts(context.Background(), ref); err != nil {
+		t.Fatalf("BlockReceipts returned error: %v", err)
+	}
+
+	select {
+	case call := <-service.calls:
+		if call.BlockHash == nil || *call.BlockHash != hash {
+			t.Fatalf("unexpected block hash: got %v, want %v", call.BlockHash, hash)
+		}
+		if !call.RequireCanonical {
+			t.Fatalf("requireCanonical flag was lost: %+v", call)
+		}
+	default:
+		t.Fatal("service was not called")
+	}
+}
+
+type blockReceiptsTestService struct {
+	calls chan rpc.BlockNumberOrHash
+}
+
+func (s *blockReceiptsTestService) GetBlockReceipts(ctx context.Context, block rpc.BlockNumberOrHash) ([]*types.Receipt, error) {
+	s.calls <- block
+	return []*types.Receipt{}, nil
+}
+
 func newCanceledContext() context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
