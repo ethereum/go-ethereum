@@ -346,7 +346,9 @@ func ObtainJWTSecret(fileName string) ([]byte, error) {
 	}
 	// Need to generate one
 	jwtSecret := make([]byte, 32)
-	crand.Read(jwtSecret)
+	if _, err := crand.Read(jwtSecret); err != nil {
+		return nil, fmt.Errorf("failed to generate JWT secret: %w", err)
+	}
 	// if we're in --dev mode, don't bother saving, just show it
 	if fileName == "" {
 		log.Info("Generated ephemeral JWT secret", "secret", hexutil.Encode(jwtSecret))
