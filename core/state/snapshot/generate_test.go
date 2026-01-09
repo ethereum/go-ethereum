@@ -631,9 +631,6 @@ func TestGenerateWithManyExtraAccounts(t *testing.T) {
 }
 
 func testGenerateWithManyExtraAccounts(t *testing.T, scheme string) {
-	if false {
-		enableLogging()
-	}
 	helper := newHelper(scheme)
 	{
 		// Account one in the trie
