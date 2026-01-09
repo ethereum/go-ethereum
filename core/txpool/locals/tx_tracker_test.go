@@ -93,25 +93,6 @@ func (env *testEnv) close() {
 	env.chain.Stop()
 }
 
-// nolint:unused
-func (env *testEnv) setGasTip(gasTip uint64) {
-	env.pool.SetGasTip(new(big.Int).SetUint64(gasTip))
-}
-
-// nolint:unused
-func (env *testEnv) makeTx(nonce uint64, gasPrice *big.Int) *types.Transaction {
-	if nonce == 0 {
-		head := env.chain.CurrentHeader()
-		state, _ := env.chain.StateAt(head.Root)
-		nonce = state.GetNonce(address)
-	}
-	if gasPrice == nil {
-		gasPrice = big.NewInt(params.GWei)
-	}
-	tx, _ := types.SignTx(types.NewTransaction(nonce, common.Address{0x00}, big.NewInt(1000), params.TxGas, gasPrice, nil), signer, key)
-	return tx
-}
-
 func (env *testEnv) makeTxs(n int) []*types.Transaction {
 	head := env.chain.CurrentHeader()
 	state, _ := env.chain.StateAt(head.Root)
@@ -123,23 +104,6 @@ func (env *testEnv) makeTxs(n int) []*types.Transaction {
 		txs = append(txs, tx)
 	}
 	return txs
-}
-
-// nolint:unused
-func (env *testEnv) commit() {
-	head := env.chain.CurrentBlock()
-	block := env.chain.GetBlock(head.Hash(), head.Number.Uint64())
-	blocks, _ := core.GenerateChain(env.chain.Config(), block, ethash.NewFaker(), env.genDb, 1, func(i int, gen *core.BlockGen) {
-		tx, err := types.SignTx(types.NewTransaction(gen.TxNonce(address), common.Address{0x00}, big.NewInt(1000), params.TxGas, gen.BaseFee(), nil), signer, key)
-		if err != nil {
-			panic(err)
-		}
-		gen.AddTx(tx)
-	})
-	env.chain.InsertChain(blocks)
-	if err := env.pool.Sync(); err != nil {
-		panic(err)
-	}
 }
 
 func TestResubmit(t *testing.T) {
