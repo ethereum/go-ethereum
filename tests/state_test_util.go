@@ -245,7 +245,7 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bo
 			}
 			root = st.StateDB.IntermediateRoot(config.IsEIP158(new(big.Int).SetUint64(t.json.Env.Number)))
 			if root != common.Hash(post.Root) {
-				return fmt.Errorf("post state root mismatch: got %x, want %x", root, post.Root)
+				return fmt.Errorf("Post-state root does not match the pre-state root, indicates an error in the test: got %x, want %x", root, post.Root)
 			}
 		}
 		return nil
