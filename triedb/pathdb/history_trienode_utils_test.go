@@ -18,6 +18,7 @@ package pathdb
 
 import (
 	"bytes"
+	"reflect"
 	"testing"
 )
 
@@ -76,6 +77,50 @@ func TestBitmapSet(t *testing.T) {
 		}
 		if !isBitSet(buf[:], tc.index) {
 			t.Fatal("bit is not set")
+		}
+	}
+}
+
+func TestBitPositions(t *testing.T) {
+	suites := []struct {
+		input  []byte
+		expect []int
+	}{
+		{
+			[]byte{0b10000000, 0x0}, []int{0},
+		},
+		{
+			[]byte{0b01000000, 0x0}, []int{1},
+		},
+		{
+			[]byte{0b00000001, 0x0}, []int{7},
+		},
+		{
+			[]byte{0b00000000, 0b10000000}, []int{8},
+		},
+		{
+			[]byte{0b00000000, 0b00000001}, []int{15},
+		},
+		{
+			[]byte{0b10000000, 0b00000001}, []int{0, 15},
+		},
+		{
+			[]byte{0b10000001, 0b00000001}, []int{0, 7, 15},
+		},
+		{
+			[]byte{0b10000001, 0b10000001}, []int{0, 7, 8, 15},
+		},
+		{
+			[]byte{0b11111111, 0b11111111}, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+		},
+		{
+			[]byte{0x0, 0x0}, nil,
+		},
+	}
+	for _, tc := range suites {
+		got := bitPosTwoBytes(tc.input)
+		if !reflect.DeepEqual(got, tc.expect) {
+			t.Fatalf("Unexpected position set, want: %v, got: %v", tc.expect, got)
 		}
 	}
 }

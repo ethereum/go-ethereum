@@ -19,6 +19,7 @@ package pathdb
 import (
 	"encoding/binary"
 	"fmt"
+	"math/bits"
 	"slices"
 )
 
@@ -80,4 +81,26 @@ func isBitSet(b []byte, index int) bool {
 // setBit sets the bit at `index` in the byte slice `b` to 1.
 func setBit(b []byte, index int) {
 	b[index/8] |= 1 << (7 - index%8)
+}
+
+// bitPosTwoBytes returns the positions of set bits in a 2-byte bitmap.
+//
+// The bitmap is interpreted as a big-endian uint16. Bit positions are
+// numbered from 0 to 15, where position 0 corresponds to the most
+// significant bit of b[0], and position 15 corresponds to the least
+// significant bit of b[1].
+func bitPosTwoBytes(b []byte) []int {
+	if len(b) != 2 {
+		panic("expect 2 bytes")
+	}
+	var (
+		pos  []int
+		mask = binary.BigEndian.Uint16(b)
+	)
+	for mask != 0 {
+		p := bits.LeadingZeros16(mask)
+		pos = append(pos, p)
+		mask &^= 1 << (15 - p)
+	}
+	return pos
 }

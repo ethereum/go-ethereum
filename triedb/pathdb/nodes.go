@@ -500,8 +500,7 @@ func encodeNodeCompressed(addExtension bool, elements [][]byte, indices []int) [
 				flag |= 1 << 4 // Use the reserved flagE
 				continue
 			}
-			bitIndex := uint(pos % 8)
-			bitmap[pos/8] |= 1 << bitIndex
+			setBit(bitmap, pos)
 		}
 		enc = append(enc, flag)
 		enc = append(enc, bitmap...)
@@ -553,14 +552,7 @@ func decodeNodeCompressed(data []byte) ([][]byte, []int, error) {
 			return nil, nil, errors.New("invalid data: too short")
 		}
 		bitmap := data[1:3]
-		for index, b := range bitmap {
-			for bitIdx := 0; bitIdx < 8; bitIdx++ {
-				if b&(1<<uint(bitIdx)) != 0 {
-					pos := index*8 + bitIdx
-					indices = append(indices, pos)
-				}
-			}
-		}
+		indices = bitPosTwoBytes(bitmap)
 		if flag&byte(16) != 0 { // flagE
 			indices = append(indices, 16)
 			log.Info("Unexpected 16th child encountered in a full node")
