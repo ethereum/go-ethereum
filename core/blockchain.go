@@ -2234,7 +2234,10 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	)
 	if !setHead {
 		// Don't set the head, only insert the block
-		err = bc.writeBlockWithState(block, res.Receipts, statedb)
+		// Do not write block and state if it already exists
+		if !bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
+			err = bc.writeBlockWithState(block, res.Receipts, statedb)
+		}
 	} else {
 		status, err = bc.writeBlockAndSetHead(block, res.Receipts, res.Logs, statedb, false)
 	}
