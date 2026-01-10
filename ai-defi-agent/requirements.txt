@@ -1,0 +1,23 @@
+# AI DeFi Trading Agent Dependencies
+
+# Blockchain interaction
+web3>=6.0.0
+eth-account>=0.10.0
+eth-typing>=3.0.0
+
+# Machine Learning
+torch>=2.0.0
+numpy>=1.24.0
+
+# Utilities
+python-dotenv>=1.0.0
+requests>=2.31.0
+
+# Development and Testing (optional)
+pytest>=7.4.0
+pytest-cov>=4.1.0
+black>=23.0.0
+pylint>=2.17.0
+
+# Deployment tools (optional)
+eth-brownie>=1.19.0
