@@ -49,6 +49,11 @@ func TestUDPv5_lookupE2E(t *testing.T) {
 		var cfg Config
 		if len(nodes) > 0 {
 			bn := nodes[0].Self()
+			// Wait for bootnode to have a valid UDP port (fix for flaky test)
+			for j := 0; j < 50 && bn.UDP() == 0; j++ {
+				time.Sleep(10 * time.Millisecond)
+				bn = nodes[0].Self()
+			}
 			cfg.Bootnodes = []*enode.Node{bn}
 		}
 		node := startLocalhostV5(t, cfg)
