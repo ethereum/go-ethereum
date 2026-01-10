@@ -66,6 +66,10 @@ jobs:
 
             const match = prTitle.match(titleRegex);
             const dirPart = match[1];
+            if(dirPart == "all") {
+                console.log('✅ PR title format is valid for "all" directories');
+                return;
+            }
             const directories = dirPart.split(',').map(d => d.trim());
             const missingDirs = [];
             for (const dir of directories) {
