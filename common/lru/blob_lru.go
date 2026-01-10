@@ -42,7 +42,6 @@ type SizeConstrainedCache[K comparable, V blobType] struct {
 // NewSizeConstrainedCache creates a new size-constrained LRU cache.
 func NewSizeConstrainedCache[K comparable, V blobType](maxSize uint64) *SizeConstrainedCache[K, V] {
 	return &SizeConstrainedCache[K, V]{
-		size:    0,
 		maxSize: maxSize,
 		lru:     NewBasicLRU[K, V](math.MaxInt),
 	}
