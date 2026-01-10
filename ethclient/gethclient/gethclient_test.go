@@ -413,11 +413,19 @@ func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 
 	// Subscribe to Transactions
 	ch1 := make(chan common.Hash)
-	ec.SubscribePendingTransactions(context.Background(), ch1)
+	sub1, err := ec.SubscribePendingTransactions(context.Background(), ch1)
+	if err != nil {
+		t.Fatalf("subscribe pending txs failed: %v", err)
+	}
+	defer sub1.Unsubscribe()
 
 	// Subscribe to Transactions
 	ch2 := make(chan *types.Transaction)
-	ec.SubscribeFullPendingTransactions(context.Background(), ch2)
+	sub2, err := ec.SubscribeFullPendingTransactions(context.Background(), ch2)
+	if err != nil {
+		t.Fatalf("subscribe full pending txs failed: %v", err)
+	}
+	defer sub2.Unsubscribe()
 
 	// Send a transaction
 	chainID, err := ethcl.ChainID(context.Background())
@@ -445,14 +453,23 @@ func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 		t.Fatal(err)
 	}
 	// Check that the transaction was sent over the channel
-	hash := <-ch1
-	if hash != signedTx.Hash() {
-		t.Fatalf("Invalid tx hash received, got %v, want %v", hash, signedTx.Hash())
+	select {
+	case hash := <-ch1:
+		if hash != signedTx.Hash() {
+			t.Fatalf("Invalid tx hash received, got %v, want %v", hash, signedTx.Hash())
+		}
+	case err := <-sub1.Err():
+		t.Fatalf("subscription 1 error: %v", err)
 	}
+
 	// Check that the transaction was sent over the channel
-	tx = <-ch2
-	if tx.Hash() != signedTx.Hash() {
-		t.Fatalf("Invalid tx hash received, got %v, want %v", tx.Hash(), signedTx.Hash())
+	select {
+	case tx := <-ch2:
+		if tx.Hash() != signedTx.Hash() {
+			t.Fatalf("Invalid tx hash received, got %v, want %v", tx.Hash(), signedTx.Hash())
+		}
+	case err := <-sub2.Err():
+		t.Fatalf("subscription 2 error: %v", err)
 	}
 }
 
