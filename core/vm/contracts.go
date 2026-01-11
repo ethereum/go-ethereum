@@ -898,12 +898,12 @@ func (c *blake2F) Run(input []byte) ([]byte, error) {
 	// Execute the compression function, extract and return the result
 	blake2b.F(&h, m, t, final, rounds)
 
-	output := make([]byte, 64)
+	var output [64]byte
 	for i := 0; i < 8; i++ {
 		offset := i * 8
 		binary.LittleEndian.PutUint64(output[offset:offset+8], h[i])
 	}
-	return output, nil
+	return output[:], nil
 }
 
 func (c *blake2F) Name() string {
@@ -1179,14 +1179,14 @@ func (c *bls12381Pairing) Run(input []byte) ([]byte, error) {
 		q = append(q, *p2)
 	}
 	// Prepare 32 byte output
-	out := make([]byte, 32)
+	var out [32]byte
 
 	// Compute pairing and set the result
 	ok, err := bls12381.PairingCheck(p, q)
 	if err == nil && ok {
 		out[31] = 1
 	}
-	return out, nil
+	return out[:], nil
 }
 
 func (c *bls12381Pairing) Name() string {
@@ -1264,22 +1264,22 @@ func decodeBLS12381FieldElement(in []byte) (fp.Element, error) {
 
 // encodePointG1 encodes a point into 128 bytes.
 func encodePointG1(p *bls12381.G1Affine) []byte {
-	out := make([]byte, 128)
+	var out [128]byte
 	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[16:]), p.X)
 	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[64+16:]), p.Y)
-	return out
+	return out[:]
 }
 
 // encodePointG2 encodes a point into 256 bytes.
 func encodePointG2(p *bls12381.G2Affine) []byte {
-	out := make([]byte, 256)
+	var out [256]byte
 	// encode x
 	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[16:16+48]), p.X.A0)
 	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[80:80+48]), p.X.A1)
 	// encode y
 	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[144:144+48]), p.Y.A0)
 	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[208:208+48]), p.Y.A1)
-	return out
+	return out[:]
 }
 
 // bls12381MapG1 implements EIP-2537 MapG1 precompile.
