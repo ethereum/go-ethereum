@@ -1479,19 +1479,23 @@ func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addre
 // not yet committed. The pending mutation is cached and will be applied
 // all together
 func (s *StateDB) markDelete(addr common.Address) {
-	if _, ok := s.mutations[addr]; !ok {
-		s.mutations[addr] = &mutation{}
+	v, ok := s.mutations[addr]
+	if !ok {
+		v = &mutation{}
+		s.mutations[addr] = v
 	}
-	s.mutations[addr].applied = false
-	s.mutations[addr].typ = deletion
+	v.applied = false
+	v.typ = deletion
 }
 
 func (s *StateDB) markUpdate(addr common.Address) {
-	if _, ok := s.mutations[addr]; !ok {
-		s.mutations[addr] = &mutation{}
+	v, ok := s.mutations[addr]
+	if !ok {
+		v = &mutation{}
+		s.mutations[addr] = v
 	}
-	s.mutations[addr].applied = false
-	s.mutations[addr].typ = update
+	v.applied = false
+	v.typ = update
 }
 
 // Witness retrieves the current state witness being collected.
