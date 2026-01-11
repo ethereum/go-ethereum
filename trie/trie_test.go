@@ -1356,8 +1356,10 @@ func testTrieCopy(t *testing.T, entries []kv) {
 	}
 	trCpy := tr.Copy()
 
-	if tr.Hash() != trCpy.Hash() {
-		t.Errorf("Hash mismatch: old %v, copy %v", tr.Hash(), trCpy.Hash())
+	trHash := tr.Hash()
+	copyHash := trCpy.Hash()
+	if trHash != copyHash {
+		t.Errorf("Hash mismatch: old %v, copy %v", trHash, copyHash)
 	}
 
 	// Check iterator
