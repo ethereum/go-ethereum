@@ -1780,6 +1780,11 @@ func TestAdd(t *testing.T) {
 		}
 		verifyPoolInternals(t, pool)
 
+		// subscibe to pool events to verify they are emitted correctly
+		txsCh := make(chan core.NewTxsEvent, 1)
+		txsSub := pool.SubscribeTransactions(txsCh, false)
+		defer txsSub.Unsubscribe()
+
 		// Add each transaction one by one, verifying the pool internals in between
 		for j, add := range tt.adds {
 			signed, _ := types.SignNewTx(keys[add.from], types.LatestSigner(params.MainnetChainConfig), add.tx)
@@ -1810,6 +1815,26 @@ func TestAdd(t *testing.T) {
 			}
 			// Verify the pool internals after each addition
 			verifyPoolInternals(t, pool)
+			// verify that if the tx was added, an event was emitted
+			if add.err == nil {
+				select {
+				case ev := <-txsCh:
+					if len(ev.Txs) != 1 {
+						t.Errorf("test %d, tx %d: event txs length mismatch: have %d, want 1", i, j, len(ev.Txs))
+					}
+					if ev.Txs[0].Hash() != signed.Hash() {
+						t.Errorf("test %d, tx %d: event tx mismatch: have %v, want %v", i, j, ev.Txs[0].Hash(), signed.Hash())
+					}
+				default:
+					t.Errorf("test %d, tx %d: expected new tx event, none received", i, j)
+				}
+			} else {
+				select {
+				case ev := <-txsCh:
+					t.Errorf("test %d, tx %d: unexpected new tx event with %d txs", i, j, len(ev.Txs))
+				default:
+				}
+			}
 		}
 		verifyPoolInternals(t, pool)
 
