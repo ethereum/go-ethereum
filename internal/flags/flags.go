@@ -157,21 +157,25 @@ func (f *BigFlag) String() string  { return cli.FlagStringer(f) }
 
 func (f *BigFlag) Apply(set *flag.FlagSet) error {
 	// Set default value so that environment wont be able to overwrite it
-	if f.Value != nil {
+	if f.Value != nil && f.defaultValue == nil {
 		f.defaultValue = new(big.Int).Set(f.Value)
+	}
+	if f.Value == nil {
+		f.Value = new(big.Int)
 	}
 	for _, envVar := range f.EnvVars {
 		envVar = strings.TrimSpace(envVar)
 		if value, found := syscall.Getenv(envVar); found {
-			if _, ok := f.Value.SetString(value, 10); !ok {
+			intVal, ok := math.ParseBig256(value)
+			if !ok {
 				return fmt.Errorf("could not parse %q from environment variable %q for flag %s", value, envVar, f.Name)
 			}
+			f.Value.Set(intVal)
 			f.HasBeenSet = true
 			break
 		}
 	}
 	eachName(f, func(name string) {
-		f.Value = new(big.Int)
 		set.Var((*bigValue)(f.Value), name, f.Usage)
 	})
 	return nil
