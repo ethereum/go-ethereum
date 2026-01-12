@@ -23,6 +23,8 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func ExampleMsgPipe() {
@@ -137,5 +139,31 @@ func TestEOFSignal(t *testing.T) {
 	case <-eof:
 		t.Error("unexpected EOF signal")
 	default:
+	}
+}
+
+type msgReaderFunc func() (Msg, error)
+
+func (f msgReaderFunc) ReadMsg() (Msg, error) { return f() }
+
+func TestExpectMsgRejectsOverlongPayload(t *testing.T) {
+	content := []uint{1, 2, 3}
+	contentEnc, err := rlp.EncodeToBytes(content)
+	if err != nil {
+		t.Fatalf("rlp.EncodeToBytes failed: %v", err)
+	}
+
+	r := msgReaderFunc(func() (Msg, error) {
+		// Payload is one byte longer than declared size.
+		payload := append(append([]byte(nil), contentEnc...), 0x00)
+		return Msg{
+			Code:    7,
+			Size:    uint32(len(contentEnc)),
+			Payload: bytes.NewReader(payload),
+		}, nil
+	})
+
+	if err := ExpectMsg(r, 7, content); err == nil {
+		t.Fatal("expected error for overlong payload, got nil")
 	}
 }
