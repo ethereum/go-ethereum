@@ -44,6 +44,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		baseFee     *big.Int
 		blobBaseFee *big.Int
 		random      *common.Hash
+		slotnum     uint64
 	)
 
 	// If we don't have an explicit author (i.e. not mining), extract from the header
@@ -61,6 +62,10 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	if header.Difficulty.Sign() == 0 {
 		random = &header.MixDigest
 	}
+	if header.SlotNumber != nil {
+		slotnum = *header.SlotNumber
+	}
+
 	return vm.BlockContext{
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
@@ -73,6 +78,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		BlobBaseFee: blobBaseFee,
 		GasLimit:    header.GasLimit,
 		Random:      random,
+		Slotnum:     slotnum,
 	}
 }
 
