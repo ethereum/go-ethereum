@@ -1,4 +1,4 @@
-// Copyright 2025 The go-ethereum Authors
+// Copyright 2026 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package utils
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/internal/telemetry/config"
@@ -26,21 +27,21 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-// telemetryService wraps the telemetry Provider to implement node.Lifecycle.
+// telemetryService wraps the TelemetryProvider to implement node.Lifecycle.
 type telemetryService struct {
-	provider *config.Provider
+	telemetryProvider *config.TelemetryProvider
 }
 
 // Start implements node.Lifecycle.
 func (t *telemetryService) Start() error {
-	return nil // Provider is already started during setup
+	return nil // TelemetryProvider is already started during setup
 }
 
 // Stop implements node.Lifecycle.
 func (t *telemetryService) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := t.provider.Shutdown(ctx); err != nil {
+	if err := t.telemetryProvider.Shutdown(ctx); err != nil {
 		log.Error("Failed to stop telemetry service", "err", err)
 		return err
 	}
@@ -50,12 +51,16 @@ func (t *telemetryService) Stop() error {
 
 // SetupTelemetry initializes OpenTelemetry tracing based on CLI flags.
 func SetupTelemetry(ctx *cli.Context) (*telemetryService, error) {
-	if !ctx.Bool(RPCTracingFlag.Name) {
+	if !ctx.Bool(RPCTelemetryFlag.Name) {
 		return nil, nil
 	}
-	endpoint := ctx.String(RPCTracingEndpointFlag.Name)
+	endpoint := ctx.String(RPCTelemetryEndpointFlag.Name)
 	if endpoint == "" {
 		return nil, nil
+	}
+	sampleRatio := ctx.Float64(RPCTelemetrySampleRatioFlag.Name)
+	if sampleRatio < 0 || sampleRatio > 1 {
+		return nil, fmt.Errorf("invalid sample ratio: %f", sampleRatio)
 	}
 	setupCtx := ctx.Context
 	if setupCtx == nil {
@@ -66,12 +71,13 @@ func SetupTelemetry(ctx *cli.Context) (*telemetryService, error) {
 	handle, err := config.Setup(
 		setupCtx,
 		endpoint,
+		sampleRatio,
 	)
 	if err != nil {
 		return nil, err
 	}
 	log.Info("Telemetry enabled", "endpoint", endpoint)
-	return &telemetryService{provider: handle}, nil
+	return &telemetryService{telemetryProvider: handle}, nil
 }
 
 // RegisterTelemetryService registers the telemetryService with the node.
