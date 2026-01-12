@@ -45,7 +45,6 @@ import (
 )
 
 var (
-	ErrImport                     = errors.New("ecies: failed to import key")
 	ErrInvalidCurve               = errors.New("ecies: invalid elliptic curve")
 	ErrInvalidPublicKey           = errors.New("ecies: invalid public key")
 	ErrSharedKeyIsPointAtInfinity = errors.New("ecies: shared key is point at infinity")
@@ -140,7 +139,6 @@ func (prv *PrivateKey) GenerateShared(pub *PublicKey, skLen, macLen int) (sk []b
 }
 
 var (
-	ErrSharedTooLong  = errors.New("ecies: shared secret is too long")
 	ErrInvalidMessage = errors.New("ecies: invalid message")
 )
 
