@@ -152,7 +152,9 @@ func (b *ConstructionBlockAccessList) PrettyPrint() string {
 
 // Copy returns a deep copy of the access list.
 func (b *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
-	res := NewConstructionBlockAccessList()
+	res := ConstructionBlockAccessList{
+		Accounts: make(map[common.Address]*ConstructionAccountAccess, len(b.Accounts)),
+	}
 	for addr, aa := range b.Accounts {
 		var aaCopy ConstructionAccountAccess
 
