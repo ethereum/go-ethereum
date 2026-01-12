@@ -74,6 +74,7 @@ type Genesis struct {
 	ExcessBlobGas       *uint64      `json:"excessBlobGas"`                 // EIP-4844
 	BlobGasUsed         *uint64      `json:"blobGasUsed"`                   // EIP-4844
 	BlockAccessListHash *common.Hash `json:"blockAccessListHash,omitempty"` // EIP-7928
+	SlotNumber    *uint64     `json:"slotNumber"`    // EIP-7843
 }
 
 // copy copies the genesis.
@@ -123,7 +124,11 @@ func ReadGenesis(db ethdb.Database) (*Genesis, error) {
 	genesis.BaseFee = genesisHeader.BaseFee
 	genesis.ExcessBlobGas = genesisHeader.ExcessBlobGas
 	genesis.BlobGasUsed = genesisHeader.BlobGasUsed
+<<<<<<< HEAD
 	genesis.BlockAccessListHash = genesisHeader.BlockAccessListHash
+=======
+	genesis.SlotNumber = genesisHeader.SlotNumber
+>>>>>>> 06c09385b5 (core/vm: implement eip-7843)
 
 	return &genesis, nil
 }
@@ -549,6 +554,12 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 		}
 		if conf.IsPrague(num, g.Timestamp) {
 			head.RequestsHash = &types.EmptyRequestsHash
+		}
+		if conf.IsAmsterdam(num, g.Timestamp) {
+			head.SlotNumber = g.SlotNumber
+			if head.SlotNumber == nil {
+				head.SlotNumber = new(uint64)
+			}
 		}
 	}
 	return types.NewBlock(head, &types.Body{Withdrawals: withdrawals}, nil, trie.NewStackTrie(nil))
