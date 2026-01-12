@@ -1,4 +1,4 @@
-// Copyright 2025 The go-ethereum Authors
+// Copyright 2026 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -31,18 +31,18 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.38.0"
 )
 
-// Provider wraps a TracerProvider and exposes a Shutdown method.
-type Provider struct {
+// TelemetryProvider wraps a TracerProvider and exposes the Shutdown method.
+type TelemetryProvider struct {
 	tracerProvider *sdktrace.TracerProvider
 }
 
-// Shutdown shuts down the tracer provider.
-func (p *Provider) Shutdown(ctx context.Context) error {
-	return p.tracerProvider.Shutdown(ctx)
+// Shutdown shuts down the TracerProvider.
+func (t *TelemetryProvider) Shutdown(ctx context.Context) error {
+	return t.tracerProvider.Shutdown(ctx)
 }
 
-// Setup initializes OpenTelemetry tracing with the given parameters.
-func Setup(ctx context.Context, endpoint string) (*Provider, error) {
+// Setup initializes telemetry with the given parameters.
+func Setup(ctx context.Context, endpoint string, sampleRatio float64) (*TelemetryProvider, error) {
 	// Create exporter based on endpoint URL
 	u, err := url.Parse(endpoint)
 	if err != nil {
@@ -68,6 +68,10 @@ func Setup(ctx context.Context, endpoint string) (*Provider, error) {
 		return nil, fmt.Errorf("failed to create telemetry exporter: %w", err)
 	}
 
+	// If no parent span is available, then sampleRatio of traces are sampled;
+	// otherwise, inherit the parent's sampling decision.
+	sampler := sdktrace.ParentBased(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(sampleRatio)))
+
 	// Create resource with service and client information
 	res := resource.NewWithAttributes(
 		semconv.SchemaURL,
@@ -77,6 +81,7 @@ func Setup(ctx context.Context, endpoint string) (*Provider, error) {
 
 	// Create TracerProvider
 	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithSampler(sampler),
 		sdktrace.WithBatcher(exporter),
 		sdktrace.WithResource(res),
 	)
@@ -91,5 +96,5 @@ func Setup(ctx context.Context, endpoint string) (*Provider, error) {
 		propagation.Baggage{},
 	))
 
-	return &Provider{tracerProvider: tp}, nil
+	return &TelemetryProvider{tracerProvider: tp}, nil
 }

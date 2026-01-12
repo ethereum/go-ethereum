@@ -1043,16 +1043,23 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Category: flags.MetricsCategory,
 	}
 
-	// RPC Tracing
-	RPCTracingFlag = &cli.BoolFlag{
-		Name:     "rpc.tracing",
-		Usage:    "Enable RPC tracing",
+	// RPC Telemetry
+	RPCTelemetryFlag = &cli.BoolFlag{
+		Name:     "rpc.telemetry",
+		Usage:    "Enable RPC telemetry",
 		Category: flags.APICategory,
 	}
 
-	RPCTracingEndpointFlag = &cli.StringFlag{
-		Name:     "rpc.tracing.endpoint",
-		Usage:    "Defines where RPC traces are sent (e.g., http://localhost:4318)",
+	RPCTelemetryEndpointFlag = &cli.StringFlag{
+		Name:     "rpc.telemetry.endpoint",
+		Usage:    "Defines where RPC telemetry is sent (e.g., http://localhost:4318)",
+		Category: flags.APICategory,
+	}
+
+	RPCTelemetrySampleRatioFlag = &cli.Float64Flag{
+		Name:     "rpc.telemetry.sample-ratio",
+		Usage:    "Defines the sampling ratio for RPC telemetry (0.0 to 1.0)",
+		Value:    1.0,
 		Category: flags.APICategory,
 	}
 )
