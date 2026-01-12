@@ -1676,6 +1676,14 @@ func (p *BlobPool) addLocked(tx *types.Transaction, checkGapped bool) (err error
 	}
 	p.updateStorageMetrics()
 
+	// If we've just dropped the added transaction, it was clearly underpriced.
+	// We could also try to check for this earlier, but it is compex because
+	// of the rolling fee caculations.
+	if !p.lookup.exists(tx.Hash()) {
+		addUnderpricedMeter.Mark(1)
+		return txpool.ErrUnderpriced
+	}
+
 	addValidMeter.Mark(1)
 
 	// Notify all listeners of the new arrival
