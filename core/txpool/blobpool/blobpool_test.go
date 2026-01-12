@@ -1359,9 +1359,10 @@ func TestAdd(t *testing.T) {
 	}
 
 	tests := []struct {
-		seeds map[string]seed
-		adds  []addtx
-		block []addtx
+		seeds   map[string]seed
+		adds    []addtx
+		block   []addtx
+		datacap uint64
 	}{
 		// Transactions from new accounts should be accepted if their initial
 		// nonce matches the expected one from the statedb. Higher or lower must
@@ -1715,6 +1716,24 @@ func TestAdd(t *testing.T) {
 				},
 			},
 		},
+		// Transactions above the Datacap should be rejected
+		{
+			seeds: map[string]seed{
+				"alice": {balance: 10000000},
+			},
+			datacap: 1 * (txAvgSize + blobSize + uint64(txBlobOverhead)), // only allow 1 blob
+			adds: []addtx{
+				{ // Fits in capacity
+					from: "alice",
+					tx:   makeUnsignedTx(0, 1, 1, 1),
+				},
+				{ // Beyond capacity
+					from: "alice",
+					tx:   makeUnsignedTx(1, 1, 1, 1),
+					err:  txpool.ErrUnderpriced,
+				},
+			},
+		},
 	}
 	for i, tt := range tests {
 		// Create a temporary folder for the persistent backend
@@ -1755,7 +1774,7 @@ func TestAdd(t *testing.T) {
 			blobfee: uint256.NewInt(105),
 			statedb: statedb,
 		}
-		pool := New(Config{Datadir: storage}, chain, nil)
+		pool := New(Config{Datadir: storage, Datacap: tt.datacap}, chain, nil)
 		if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 			t.Fatalf("test %d: failed to create blob pool: %v", i, err)
 		}
