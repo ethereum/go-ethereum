@@ -51,6 +51,12 @@ var (
 	// ExecutionPayloadV3 has the syntax of ExecutionPayloadV2 and appends the new
 	// fields: blobGasUsed and excessBlobGas.
 	PayloadV3 PayloadVersion = 0x3
+
+	// PayloadV4 is the identifier of ExecutionPayloadV3 introduced in amsterdam fork.
+	//
+	// https://github.com/ethereum/execution-apis/blob/main/src/engine/amsterdam.md#executionpayloadv4
+	// ExecutionPayloadV3 has the syntax of ExecutionPayloadV3 and appends the new
+	// field slotNumber.
 	PayloadV4 PayloadVersion = 0x4
 )
 
@@ -64,11 +70,13 @@ type PayloadAttributes struct {
 	SuggestedFeeRecipient common.Address      `json:"suggestedFeeRecipient" gencodec:"required"`
 	Withdrawals           []*types.Withdrawal `json:"withdrawals"`
 	BeaconRoot            *common.Hash        `json:"parentBeaconBlockRoot"`
+	SlotNumber            *uint64             `json:"slotNumber"`
 }
 
 // JSON type overrides for PayloadAttributes.
 type payloadAttributesMarshaling struct {
-	Timestamp hexutil.Uint64
+	Timestamp  hexutil.Uint64
+	SlotNumber *hexutil.Uint64
 }
 
 //go:generate go run github.com/fjl/gencodec -type ExecutableData -field-override executableDataMarshaling -out gen_ed.go
