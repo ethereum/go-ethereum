@@ -17,8 +17,12 @@
 package flags
 
 import (
+	"flag"
+	"math/big"
 	"runtime"
 	"testing"
+
+	"github.com/urfave/cli/v2"
 )
 
 func TestPathExpansion(t *testing.T) {
@@ -59,5 +63,41 @@ func TestPathExpansion(t *testing.T) {
 				t.Errorf(`test %s, got %s, expected %s\n`, test, got, expected)
 			}
 		})
+	}
+}
+
+func TestBigFlagEnvValuePreserved(t *testing.T) {
+	// Prepare a BigFlag with a non-zero default and an environment override.
+	const envVar = "GETH_TEST_BIGFLAG"
+	initialDefault := big.NewInt(123)
+	bf := &BigFlag{
+		Name:    "test.bigflag",
+		Value:   new(big.Int).Set(initialDefault),
+		EnvVars: []string{envVar},
+	}
+
+	t.Setenv(envVar, "0x10")
+
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	if err := bf.Apply(fs); err != nil {
+		t.Fatalf("Apply failed: %v", err)
+	}
+
+	app := cli.NewApp()
+	ctx := cli.NewContext(app, fs, nil)
+
+	got := GlobalBig(ctx, bf.Name)
+	if got == nil {
+		t.Fatalf("GlobalBig returned nil")
+	}
+	expected := big.NewInt(16)
+	if got.Cmp(expected) != 0 {
+		t.Fatalf("GlobalBig = %v, want %v", got, expected)
+	}
+	if !bf.HasBeenSet {
+		t.Fatalf("BigFlag.HasBeenSet = false, want true")
+	}
+	if bf.defaultValue == nil || bf.defaultValue.Cmp(initialDefault) != 0 {
+		t.Fatalf("defaultValue = %v, want %v", bf.defaultValue, initialDefault)
 	}
 }
