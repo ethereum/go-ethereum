@@ -19,7 +19,6 @@ package snapshot
 import (
 	"bytes"
 	"sync"
-	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
@@ -49,8 +48,7 @@ type diskLayer struct {
 	done       chan struct{}
 	cancelOnce sync.Once
 
-	genStats     *generatorStats // Stats for snapshot generation (generation aborted/finished if non-nil)
-	abortStarted time.Time       // Timestamp when abort was first requested
+	genStats *generatorStats // Stats for snapshot generation (generation aborted/finished if non-nil)
 
 	lock sync.RWMutex
 }
@@ -215,14 +213,6 @@ func (dl *diskLayer) stopGeneration() {
 	done := dl.done
 	if cancel == nil || done == nil {
 		return
-	}
-
-	// Store ideal time for abort to get better estimate of load
-	//
-	// Note that we set this time regardless if abortion was skipped otherwise we
-	// will never restart generation (age will always be negative).
-	if dl.abortStarted.IsZero() {
-		dl.abortStarted = time.Now()
 	}
 
 	dl.cancelOnce.Do(func() {
