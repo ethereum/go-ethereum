@@ -43,6 +43,7 @@ var activators = map[int]func(*JumpTable){
 	7702: enable7702,
 	7939: enable7939,
 	8024: enable8024,
+	7843: enable7843,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -578,4 +579,20 @@ func enable7702(jt *JumpTable) {
 	jt[CALLCODE].dynamicGas = gasCallCodeEIP7702
 	jt[STATICCALL].dynamicGas = gasStaticCallEIP7702
 	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP7702
+}
+
+// opSlotnum enables the SLOTNUM opcode
+func opSlotnum(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.push(uint256.NewInt(evm.Context.Slotnum))
+	return nil, nil
+}
+
+// enable7843 enables the SLOTNUM opcode as specified in EIP-7843.
+func enable7843(jt *JumpTable) {
+	jt[SLOTNUM] = &operation{
+		execute:     opSlotnum,
+		constantGas: GasQuickStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
 }
