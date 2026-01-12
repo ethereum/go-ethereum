@@ -19,7 +19,6 @@ package snapshot
 import (
 	"bytes"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -27,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
 )
@@ -41,10 +39,18 @@ type diskLayer struct {
 	root  common.Hash // Root hash of the base snapshot
 	stale bool        // Signals that the layer became stale (state progressed)
 
-	genMarker  []byte                    // Marker for the state that's indexed during initial layer generation
-	genPending chan struct{}             // Notification channel when generation is done (test synchronicity)
-	genAbort   chan chan *generatorStats // Notification channel to abort generating the snapshot in this layer
-	genRunning atomic.Bool               // Tracks whether the generator goroutine is actually running
+	genMarker  []byte        // Marker for the state that's indexed during initial layer generation
+	genPending chan struct{} // Notification channel when generation is done (test synchronicity)
+
+	// Generator lifecycle management:
+	// - [cancel] is closed to request termination (broadcast).
+	// - [done] is closed by the generator goroutine on exit.
+	cancel     chan struct{}
+	done       chan struct{}
+	cancelOnce sync.Once
+
+	genStats     *generatorStats // Stats for snapshot generation (generation aborted/finished if non-nil)
+	abortStarted time.Time       // Timestamp when abort was first requested
 
 	lock sync.RWMutex
 }
@@ -192,36 +198,35 @@ func (dl *diskLayer) Update(blockHash common.Hash, accounts map[common.Hash][]by
 	return newDiffLayer(dl, blockHash, accounts, storage)
 }
 
-// stopGeneration aborts the state snapshot generation if it is currently running.
+// stopGeneration requests cancellation of any running snapshot generation and
+// blocks until the generator goroutine (if running) has fully terminated.
+//
+// Concurrency guarantees:
+//   - Thread-safe: May be called concurrently from multiple goroutines
+//   - Idempotent: Safe to call multiple times; subsequent calls have no effect
+//   - Blocking: Returns only after the generator goroutine (if any) has exited
+//   - Safe to call at any time, including when no generation is running
+//
+// After return, it is **guaranteed** that:
+//   - The generator goroutine has terminated
+//   - It is safe to proceed with cleanup operations (e.g. closing databases)
 func (dl *diskLayer) stopGeneration() {
-	// Check if generation goroutine is actually running
+	cancel := dl.cancel
+	done := dl.done
+	if cancel == nil || done == nil {
+		return
+	}
+
+	// Store ideal time for abort to get better estimate of load
 	//
-	// Note: genMarker can be nil even when the generator is still running (waiting
-	// for abort signal after completing generation), so we can't rely on genMarker.
-	if !dl.genRunning.Load() {
-		return
+	// Note that we set this time regardless if abortion was skipped otherwise we
+	// will never restart generation (age will always be negative).
+	if dl.abortStarted.IsZero() {
+		dl.abortStarted = time.Now()
 	}
 
-	// Use write lock to ensure only one goroutine can stop generation at a time,
-	// preventing a race where multiple callers might try to send abort signals.
-	dl.lock.Lock()
-	genAbort := dl.genAbort
-	if genAbort == nil {
-		dl.lock.Unlock()
-		return
-	}
-	// Clear genAbort immediately while holding the lock to prevent other callers
-	// from attempting to use the same channel
-	dl.genAbort = nil
-	dl.lock.Unlock()
-
-	// Perform the channel handshake without holding the lock to avoid deadlocks.
-	abort := make(chan *generatorStats)
-	select {
-	case genAbort <- abort:
-		// Generator received the abort signal, wait for it to respond
-		<-abort
-	case <-time.After(5 * time.Second):
-		log.Error("Snapshot generator did not respond despite being marked as running")
-	}
+	dl.cancelOnce.Do(func() {
+		close(cancel)
+	})
+	<-done
 }
