@@ -242,9 +242,17 @@ func ExpectMsg(r MsgReader, code uint64, content interface{}) error {
 	if int(msg.Size) != len(contentEnc) {
 		return fmt.Errorf("message size mismatch: got %d, want %d", msg.Size, len(contentEnc))
 	}
-	actualContent, err := io.ReadAll(msg.Payload)
+	// Read only up to the declared message size (+1 to detect overlong payloads).
+	limit := int64(msg.Size)
+	actualContent, err := io.ReadAll(io.LimitReader(msg.Payload, limit+1))
 	if err != nil {
 		return err
+	}
+	if int64(len(actualContent)) > limit {
+		return fmt.Errorf("message payload longer than declared size: got at least %d bytes, declared %d", len(actualContent), msg.Size)
+	}
+	if int64(len(actualContent)) < limit {
+		return fmt.Errorf("message payload shorter than declared size: got %d bytes, declared %d", len(actualContent), msg.Size)
 	}
 	if !bytes.Equal(actualContent, contentEnc) {
 		return fmt.Errorf("message payload mismatch:\ngot:  %x\nwant: %x", actualContent, contentEnc)
