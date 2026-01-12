@@ -70,7 +70,7 @@ func Setup(ctx context.Context, endpoint string, sampleRatio float64) (*Telemetr
 
 	// If no parent span is available, then sampleRatio of traces are sampled;
 	// otherwise, inherit the parent's sampling decision.
-	sampler := sdktrace.ParentBased(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(sampleRatio)))
+	sampler := sdktrace.ParentBased(sdktrace.TraceIDRatioBased(sampleRatio))
 
 	// Create resource with service and client information
 	res := resource.NewWithAttributes(
