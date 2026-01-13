@@ -581,8 +581,8 @@ func enable7702(jt *JumpTable) {
 	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP7702
 }
 
-// opSlotnum enables the SLOTNUM opcode
-func opSlotnum(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+// opSlotNum enables the SLOTNUM opcode
+func opSlotNum(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	scope.Stack.push(uint256.NewInt(evm.Context.Slotnum))
 	return nil, nil
 }
@@ -590,7 +590,7 @@ func opSlotnum(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 // enable7843 enables the SLOTNUM opcode as specified in EIP-7843.
 func enable7843(jt *JumpTable) {
 	jt[SLOTNUM] = &operation{
-		execute:     opSlotnum,
+		execute:     opSlotNum,
 		constantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
