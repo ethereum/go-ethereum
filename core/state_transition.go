@@ -542,7 +542,14 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 			peakGasUsed = floorDataGas
 		}
 	}
+	// Return gas to the user
 	st.returnGas()
+	// Return gas to the gas pool
+	if rules.IsAmsterdam {
+		st.gp.AddGas(st.initialGas - peakGasUsed)
+	} else {
+		st.gp.AddGas(st.gasRemaining)
+	}
 
 	effectiveTip := msg.GasPrice
 	if rules.IsLondon {
@@ -660,10 +667,6 @@ func (st *stateTransition) returnGas() {
 	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil && st.gasRemaining > 0 {
 		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, 0, tracing.GasChangeTxLeftOverReturned)
 	}
-
-	// Also return remaining gas to the block gas counter so it is
-	// available for the next transaction.
-	st.gp.AddGas(st.gasRemaining)
 }
 
 // gasUsed returns the amount of gas used up by the state transition.

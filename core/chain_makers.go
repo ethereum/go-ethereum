@@ -38,11 +38,12 @@ import (
 // BlockGen creates blocks for testing.
 // See GenerateChain for a detailed explanation.
 type BlockGen struct {
-	i       int
-	cm      *chainMaker
-	parent  *types.Block
-	header  *types.Header
-	statedb *state.StateDB
+	i             int
+	cumulativeGas uint64
+	cm            *chainMaker
+	parent        *types.Block
+	header        *types.Header
+	statedb       *state.StateDB
 
 	gasPool     *GasPool
 	txs         []*types.Transaction
@@ -115,12 +116,15 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 	var (
 		blockContext = NewEVMBlockContext(b.header, bc, &b.header.Coinbase)
 		evm          = vm.NewEVM(blockContext, b.statedb, b.cm.config, vmConfig)
+		receipt      *types.Receipt
+		err          error
 	)
 	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(evm, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed)
+	receipt, b.cumulativeGas, err = ApplyTransaction(evm, b.gasPool, b.statedb, b.header, tx, b.cumulativeGas)
 	if err != nil {
 		panic(err)
 	}
+	b.header.GasUsed += receipt.GasUsed
 	// Merge the tx-local access event into the "block-local" one, in order to collect
 	// all values, so that the witness can be built.
 	if b.statedb.Database().TrieDB().IsVerkle() {
