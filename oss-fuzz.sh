@@ -59,10 +59,6 @@ function compile_fuzzer() {
   echo "Building $fuzzer"
   cd $path
 
-  # Install build dependencies
-  go mod tidy
-  go get github.com/holiman/gofuzz-shim/testing
-
 	if [[ $SANITIZER == *coverage* ]]; then
 		coverbuild $path $function $fuzzer
 	else
@@ -82,6 +78,13 @@ function compile_fuzzer() {
 
 go install github.com/holiman/gofuzz-shim@latest
 repo=$GOPATH/src/github.com/ethereum/go-ethereum
+
+# Install build dependencies once for all fuzzers
+pushd $repo >/dev/null
+go mod tidy
+go get github.com/holiman/gofuzz-shim/testing
+popd >/dev/null
+
 compile_fuzzer github.com/ethereum/go-ethereum/accounts/abi \
   FuzzABI fuzzAbi \
   $repo/accounts/abi/abifuzzer_test.go
