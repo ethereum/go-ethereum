@@ -79,13 +79,20 @@ func (m *Memory) Set32(offset uint64, val *uint256.Int) {
 
 // Resize grows the memory to the requested size.
 func (m *Memory) Resize(size uint64) {
-	if uint64(len(m.store)) < size {
-		if uint64(cap(m.store)) >= size {
-			m.store = m.store[:size]
-		} else {
-			m.store = append(m.store, make([]byte, size-uint64(len(m.store)))...)
-		}
+		if size <= uint64(len(m.store)) {
+		return
 	}
+
+	if size <= uint64(cap(m.store)) {
+		prevLen := len(m.store)
+		m.store = m.store[:size]
+		clear(m.store[prevLen:])
+		return
+	}
+
+	store := make([]byte, size)
+	copy(store, m.store)
+	m.store = store
 }
 
 // GetCopy returns offset + size as a new slice
