@@ -42,12 +42,12 @@ type Contract struct {
 	IsDeployment bool
 	IsSystemCall bool
 
-	Gas   uint64
+	Gas   GasCosts
 	value *uint256.Int
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
-func NewContract(caller common.Address, address common.Address, value *uint256.Int, gas uint64, jumpDests JumpDestCache) *Contract {
+func NewContract(caller common.Address, address common.Address, value *uint256.Int, gas GasCosts, jumpDests JumpDestCache) *Contract {
 	// Initialize the jump analysis cache if it's nil, mostly for tests
 	if jumpDests == nil {
 		jumpDests = newMapJumpDests()
@@ -126,26 +126,26 @@ func (c *Contract) Caller() common.Address {
 }
 
 // UseGas attempts the use gas and subtracts it and returns true on success
-func (c *Contract) UseGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
-	if c.Gas < gas {
+func (c *Contract) UseGas(gas GasCosts, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
+	if c.Gas.Underflow(gas) {
 		return false
 	}
 	if logger != nil && logger.OnGasChange != nil && reason != tracing.GasChangeIgnored {
-		logger.OnGasChange(c.Gas, c.Gas-gas, reason)
+		logger.OnGasChange(c.Gas.RegularGas, c.Gas.RegularGas-gas.RegularGas, reason)
 	}
-	c.Gas -= gas
+	c.Gas.Sub(gas)
 	return true
 }
 
 // RefundGas refunds gas to the contract
-func (c *Contract) RefundGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) {
-	if gas == 0 {
+func (c *Contract) RefundGas(gas GasCosts, logger *tracing.Hooks, reason tracing.GasChangeReason) {
+	if gas.Max() == 0 {
 		return
 	}
 	if logger != nil && logger.OnGasChange != nil && reason != tracing.GasChangeIgnored {
-		logger.OnGasChange(c.Gas, c.Gas+gas, reason)
+		logger.OnGasChange(c.Gas.RegularGas, c.Gas.RegularGas+gas.RegularGas, reason)
 	}
-	c.Gas += gas
+	c.Gas.Add(gas)
 }
 
 // Address returns the contracts address

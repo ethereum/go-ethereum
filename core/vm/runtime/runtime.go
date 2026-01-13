@@ -146,11 +146,11 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		cfg.Origin,
 		common.BytesToAddress([]byte("contract")),
 		input,
-		cfg.GasLimit,
+		vm.GasCosts{RegularGas: cfg.GasLimit},
 		uint256.MustFromBig(cfg.Value),
 	)
 	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxEnd != nil {
-		cfg.EVMConfig.Tracer.OnTxEnd(&types.Receipt{GasUsed: cfg.GasLimit - leftOverGas}, err)
+		cfg.EVMConfig.Tracer.OnTxEnd(&types.Receipt{GasUsed: cfg.GasLimit - leftOverGas.RegularGas}, err)
 	}
 	return ret, cfg.State, err
 }
@@ -180,13 +180,13 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	code, address, leftOverGas, err := vmenv.Create(
 		cfg.Origin,
 		input,
-		cfg.GasLimit,
+		vm.GasCosts{RegularGas: cfg.GasLimit},
 		uint256.MustFromBig(cfg.Value),
 	)
 	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxEnd != nil {
-		cfg.EVMConfig.Tracer.OnTxEnd(&types.Receipt{GasUsed: cfg.GasLimit - leftOverGas}, err)
+		cfg.EVMConfig.Tracer.OnTxEnd(&types.Receipt{GasUsed: cfg.GasLimit - leftOverGas.RegularGas}, err)
 	}
-	return code, address, leftOverGas, err
+	return code, address, leftOverGas.RegularGas, err
 }
 
 // Call executes the code given by the contract's address. It will return the
@@ -215,11 +215,11 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 		cfg.Origin,
 		address,
 		input,
-		cfg.GasLimit,
+		vm.GasCosts{RegularGas: cfg.GasLimit},
 		uint256.MustFromBig(cfg.Value),
 	)
 	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxEnd != nil {
-		cfg.EVMConfig.Tracer.OnTxEnd(&types.Receipt{GasUsed: cfg.GasLimit - leftOverGas}, err)
+		cfg.EVMConfig.Tracer.OnTxEnd(&types.Receipt{GasUsed: cfg.GasLimit - leftOverGas.RegularGas}, err)
 	}
-	return ret, leftOverGas, err
+	return ret, leftOverGas.RegularGas, err
 }

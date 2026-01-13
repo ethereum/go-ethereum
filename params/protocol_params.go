@@ -99,6 +99,7 @@ const (
 	TxAccessListAddressGas    uint64 = 2400  // Per address specified in EIP 2930 access list
 	TxAccessListStorageKeyGas uint64 = 1900  // Per storage key specified in EIP 2930 access list
 	TxAuthTupleGas            uint64 = 12500 // Per auth tuple code specified in EIP-7702
+	TxAuthTupleRegularGas     uint64 = 7500  // Per auth tuple regular gas specified in EIP-8037
 
 	// These have been changed during the course of the chain
 	CallGasFrontier              uint64 = 40  // Once per CALL operation & message call transaction.
@@ -183,6 +184,11 @@ const (
 	HistoryServeWindow = 8191 // Number of blocks to serve historical block hashes for, EIP-2935.
 
 	MaxBlockSize = 8_388_608 // maximum size of an RLP-encoded block
+
+	TargetStateGrowthPerYear  = 100 * 1024 * 1024 * 1024 // 100GB
+	AccountCreationSize       = 112
+	StorageCreationSize       = 32
+	AuthorizationCreationSize = 23
 )
 
 // Bls12381G1MultiExpDiscountTable is the gas discount table for BLS12-381 G1 multi exponentiation operation
