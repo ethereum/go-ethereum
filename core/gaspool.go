@@ -27,6 +27,11 @@ type GasPool struct {
 	remaining      uint64
 	initial        uint64
 	cumulativeUsed uint64
+
+	// EIP-8037: per-dimension cumulative sums for Amsterdam.
+	// Block gas used = max(cumulativeRegular, cumulativeState).
+	cumulativeRegular uint64
+	cumulativeState   uint64
 }
 
 // NewGasPool initializes the gasPool with the given amount.
@@ -68,20 +73,37 @@ func (gp *GasPool) ReturnGas(returned uint64, gasUsed uint64) error {
 	return nil
 }
 
+// ReturnGasAmsterdam returns unused gas to the pool using two-dimensional
+// gas accounting (EIP-8037).
+func (gp *GasPool) ReturnGasAmsterdam(txGasLimit, txRegular, txState uint64) error {
+	txBlockGas := max(txRegular, txState)
+	gp.cumulativeRegular += txRegular
+	gp.cumulativeState += txState
+	return gp.ReturnGas(txGasLimit-txBlockGas, txBlockGas)
+}
+
 // Gas returns the amount of gas remaining in the pool.
 func (gp *GasPool) Gas() uint64 {
 	return gp.remaining
 }
 
 // CumulativeUsed returns the amount of cumulative consumed gas (refunded included).
+// For Amsterdam blocks with 2D gas accounting, returns max(sum_regular, sum_state).
 func (gp *GasPool) CumulativeUsed() uint64 {
+	if gp.cumulativeRegular > 0 || gp.cumulativeState > 0 {
+		return max(gp.cumulativeRegular, gp.cumulativeState)
+	}
 	return gp.cumulativeUsed
 }
 
-// Used returns the amount of consumed gas.
+// Used returns the amount of consumed gas. For Amsterdam blocks with
+// 2D gas accounting (EIP-8037), returns max(sum_regular, sum_state).
 func (gp *GasPool) Used() uint64 {
+	if gp.cumulativeRegular > 0 || gp.cumulativeState > 0 {
+		return max(gp.cumulativeRegular, gp.cumulativeState)
+	}
 	if gp.initial < gp.remaining {
-		panic("gas used underflow")
+		panic(fmt.Sprintf("gas used underflow: %v %v", gp.initial, gp.remaining))
 	}
 	return gp.initial - gp.remaining
 }
@@ -89,9 +111,11 @@ func (gp *GasPool) Used() uint64 {
 // Snapshot returns the deep-copied object as the snapshot.
 func (gp *GasPool) Snapshot() *GasPool {
 	return &GasPool{
-		initial:        gp.initial,
-		remaining:      gp.remaining,
-		cumulativeUsed: gp.cumulativeUsed,
+		initial:           gp.initial,
+		remaining:         gp.remaining,
+		cumulativeUsed:    gp.cumulativeUsed,
+		cumulativeRegular: gp.cumulativeRegular,
+		cumulativeState:   gp.cumulativeState,
 	}
 }
 
@@ -100,6 +124,8 @@ func (gp *GasPool) Set(other *GasPool) {
 	gp.initial = other.initial
 	gp.remaining = other.remaining
 	gp.cumulativeUsed = other.cumulativeUsed
+	gp.cumulativeRegular = other.cumulativeRegular
+	gp.cumulativeState = other.cumulativeState
 }
 
 func (gp *GasPool) String() string {
