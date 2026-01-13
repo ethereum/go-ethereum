@@ -51,10 +51,10 @@ var (
 	// fields: blobGasUsed and excessBlobGas.
 	PayloadV3 PayloadVersion = 0x3
 
-	// PayloadV4 is the identifier of ExecutionPayloadV3 introduced in amsterdam fork.
+	// PayloadV4 is the identifier of ExecutionPayloadV4 introduced in amsterdam fork.
 	//
 	// https://github.com/ethereum/execution-apis/blob/main/src/engine/amsterdam.md#executionpayloadv4
-	// ExecutionPayloadV3 has the syntax of ExecutionPayloadV3 and appends the new
+	// ExecutionPayloadV4 has the syntax of ExecutionPayloadV3 and appends the new
 	// field slotNumber.
 	PayloadV4 PayloadVersion = 0x4
 )
