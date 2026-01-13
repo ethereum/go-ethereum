@@ -322,6 +322,7 @@ func gasCreateEip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	}
 	return gas, nil
 }
+
 func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	gas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
@@ -482,4 +483,159 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 		evm.StateDB.AddRefund(params.SelfdestructRefundGas)
 	}
 	return gas, nil
+}
+
+func gasCreateEip8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	size, overflow := stack.Back(2).Uint64WithOverflow()
+	if overflow {
+		return 0, ErrGasUintOverflow
+	}
+	if size > params.MaxInitCodeSize {
+		return 0, fmt.Errorf("%w: size %d", ErrMaxInitCodeSizeExceeded, size)
+	}
+	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
+	moreGas := params.AccountCreationSize * evm.Context.CostPerGasByte * ((size + 31) / 32)
+	if gas, overflow = math.SafeAdd(gas, moreGas); overflow {
+		return 0, ErrGasUintOverflow
+	}
+	return gas, nil
+}
+
+func gasCreate2Eip8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	size, overflow := stack.Back(2).Uint64WithOverflow()
+	if overflow {
+		return 0, ErrGasUintOverflow
+	}
+	if size > params.MaxInitCodeSize {
+		return 0, fmt.Errorf("%w: size %d", ErrMaxInitCodeSizeExceeded, size)
+	}
+	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
+	moreGas := (params.AccountCreationSize*evm.Context.CostPerGasByte + params.Keccak256WordGas) * ((size + 31) / 32)
+	if gas, overflow = math.SafeAdd(gas, moreGas); overflow {
+		return 0, ErrGasUintOverflow
+	}
+	return gas, nil
+}
+
+func gasCall8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	var (
+		gas            uint64
+		transfersValue = !stack.Back(2).IsZero()
+		address        = common.Address(stack.Back(1).Bytes20())
+	)
+	if evm.chainRules.IsEIP158 {
+		if transfersValue && evm.StateDB.Empty(address) {
+			gas += params.AccountCreationSize * evm.Context.CostPerGasByte
+		}
+	} else if !evm.StateDB.Exist(address) {
+		gas += params.AccountCreationSize * evm.Context.CostPerGasByte
+	}
+	if transfersValue && !evm.chainRules.IsEIP4762 {
+		gas += params.CallValueTransferGas
+	}
+	memoryGas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	var overflow bool
+	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
+		return 0, ErrGasUintOverflow
+	}
+
+	evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, gas, stack.Back(0))
+	if err != nil {
+		return 0, err
+	}
+	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
+		return 0, ErrGasUintOverflow
+	}
+
+	return gas, nil
+}
+
+func gasSelfdestruct8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	var (
+		gas     uint64
+		address = common.Address(stack.peek().Bytes20())
+	)
+	if !evm.StateDB.AddressInAccessList(address) {
+		// If the caller cannot afford the cost, this change will be rolled back
+		evm.StateDB.AddAddressToAccessList(address)
+		gas = params.ColdAccountAccessCostEIP2929
+	}
+	// if empty and transfers value
+	if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
+		gas += params.AccountCreationSize * evm.Context.CostPerGasByte
+	}
+	return gas, nil
+}
+
+func gasSStore8037(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	// If we fail the minimum gas availability invariant, fail (0)
+	if contract.Gas <= params.SstoreSentryGasEIP2200 {
+		return 0, errors.New("not enough gas for reentrancy sentry")
+	}
+	// Gas sentry honoured, do the actual gas calculation based on the stored value
+	var (
+		y, x              = stack.Back(1), stack.peek()
+		slot              = common.Hash(x.Bytes32())
+		current, original = evm.StateDB.GetStateAndCommittedState(contract.Address(), slot)
+		cost              = uint64(0)
+	)
+	// Check slot presence in the access list
+	if _, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
+		cost = params.ColdSloadCostEIP2929
+		// If the caller cannot afford the cost, this change will be rolled back
+		evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
+	}
+	value := common.Hash(y.Bytes32())
+
+	if current == value { // noop (1)
+		// EIP 2200 original clause:
+		//		return params.SloadGasEIP2200, nil
+		return cost + params.WarmStorageReadCostEIP2929, nil // SLOAD_GAS
+	}
+	if original == current {
+		if original == (common.Hash{}) { // create slot (2.1.1)
+			return cost + params.StorageCreationSize*evm.Context.CostPerGasByte, nil
+		}
+		if value == (common.Hash{}) { // delete slot (2.1.2b)
+			evm.StateDB.AddRefund(params.SstoreClearsScheduleRefundEIP3529)
+		}
+		// EIP-2200 original clause:
+		//		return params.SstoreResetGasEIP2200, nil // write existing slot (2.1.2)
+		return cost + (params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929), nil // write existing slot (2.1.2)
+	}
+	if original != (common.Hash{}) {
+		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
+			evm.StateDB.SubRefund(params.SstoreClearsScheduleRefundEIP3529)
+		} else if value == (common.Hash{}) { // delete slot (2.2.1.2)
+			evm.StateDB.AddRefund(params.SstoreClearsScheduleRefundEIP3529)
+		}
+	}
+	if original == value {
+		if original == (common.Hash{}) { // reset to original inexistent slot (2.2.2.1)
+			// EIP 2200 Original clause:
+			//evm.StateDB.AddRefund(params.SstoreSetGasEIP2200 - params.SloadGasEIP2200)
+			evm.StateDB.AddRefund(params.StorageCreationSize*evm.Context.CostPerGasByte - params.WarmStorageReadCostEIP2929)
+		} else { // reset to original existing slot (2.2.2.2)
+			// EIP 2200 Original clause:
+			//	evm.StateDB.AddRefund(params.SstoreResetGasEIP2200 - params.SloadGasEIP2200)
+			// - SSTORE_RESET_GAS redefined as (5000 - COLD_SLOAD_COST)
+			// - SLOAD_GAS redefined as WARM_STORAGE_READ_COST
+			// Final: (5000 - COLD_SLOAD_COST) - WARM_STORAGE_READ_COST
+			evm.StateDB.AddRefund((params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929) - params.WarmStorageReadCostEIP2929)
+		}
+	}
+	// EIP-2200 original clause:
+	//return params.SloadGasEIP2200, nil // dirty update (2.2)
+	return cost + params.WarmStorageReadCostEIP2929, nil // dirty update (2.2)
 }
