@@ -196,6 +196,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			return nil, ErrOutOfGas
 		} else {
 			contract.Gas.RegularGas -= cost
+			contract.GasUsed.RegularGas += cost // EIP-8037: track constant gas
 		}
 
 		// All ops with a dynamic memory usage also has a dynamic gas cost.
@@ -225,10 +226,24 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
 			}
 			// for tracing: this gas consumption event is emitted below in the debug section.
-			if contract.Gas.RegularGas < dynamicCost.RegularGas {
-				return nil, ErrOutOfGas
-			} else {
+			if evm.chainRules.IsAmsterdam && dynamicCost.StateGas > 0 {
+				// EIP-8037: charge regular gas before state gas.
+				if contract.Gas.RegularGas < dynamicCost.RegularGas {
+					return nil, ErrOutOfGas
+				}
 				contract.Gas.RegularGas -= dynamicCost.RegularGas
+				contract.GasUsed.RegularGas += dynamicCost.RegularGas
+				// Then charge state gas.
+				stateOnly := GasCosts{StateGas: dynamicCost.StateGas}
+				if _, ok := contract.Gas.Charge(stateOnly); !ok {
+					return nil, ErrOutOfGas
+				}
+				contract.GasUsed.Add(stateOnly)
+			} else {
+				if _, ok := contract.Gas.Charge(dynamicCost); !ok {
+					return nil, ErrOutOfGas
+				}
+				contract.GasUsed.Add(dynamicCost)
 			}
 		}
 

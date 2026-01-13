@@ -18,6 +18,13 @@ package vm
 
 import "fmt"
 
+type GasUsed = GasCosts
+
+func (g *GasUsed) Add(costs GasCosts) {
+	g.RegularGas += costs.RegularGas
+	g.StateGas += costs.StateGas
+}
+
 // GasCosts denotes a vector of gas costs in the
 // multidimensional metering paradigm. It represents the cost
 // charged by an individual operation.
@@ -45,14 +52,18 @@ type GasBudget struct {
 	StateGas   uint64 // The state gas reservoir
 }
 
-// NewGasBudget creates a GasBudget with the given initial regular gas allowance.
-func NewGasBudget(gas uint64) GasBudget {
+// NewGasBudgetReg creates a GasBudget with the given initial regular gas allowance.
+func NewGasBudgetReg(gas uint64) GasBudget {
 	return GasBudget{RegularGas: gas}
 }
 
-// Used returns the amount of regular gas consumed so far.
+func NewGasBudget(regular, state uint64) GasBudget {
+	return GasBudget{RegularGas: regular, StateGas: state}
+}
+
+// Used returns the total amount of gas consumed so far (regular + state).
 func (g GasBudget) Used(initial GasBudget) uint64 {
-	return initial.RegularGas - g.RegularGas
+	return (initial.RegularGas + initial.StateGas) - (g.RegularGas + g.StateGas)
 }
 
 // Exhaust sets all remaining gas to zero, preserving the initial amount
@@ -72,26 +83,44 @@ func (g GasBudget) String() string {
 }
 
 // CanAfford reports whether the budget has sufficient gas to cover the cost.
+// When state gas exceeds the reservoir, the excess spills to regular gas.
 func (g GasBudget) CanAfford(cost GasCosts) bool {
-	return g.RegularGas >= cost.RegularGas
+	if g.RegularGas < cost.RegularGas {
+		return false
+	}
+	if cost.StateGas > g.StateGas {
+		spillover := cost.StateGas - g.StateGas
+		if spillover > g.RegularGas-cost.RegularGas {
+			return false
+		}
+	}
+	return true
 }
 
 // Charge deducts the given gas cost from the budget. It returns the
-// pre-charge gas value and false if the budget does not have sufficient
-// gas to cover the cost.
+// pre-charge regular gas value and false if the budget does not have
+// sufficient gas to cover the cost.
 func (g *GasBudget) Charge(cost GasCosts) (uint64, bool) {
 	prior := g.RegularGas
-	if prior < cost.RegularGas {
+	if !g.CanAfford(cost) {
 		return prior, false
 	}
 	g.RegularGas -= cost.RegularGas
+	if cost.StateGas > g.StateGas {
+		spillover := cost.StateGas - g.StateGas
+		g.StateGas = 0
+		g.RegularGas -= spillover
+	} else {
+		g.StateGas -= cost.StateGas
+	}
 	return prior, true
 }
 
-// Refund adds the given gas budget back. It returns the pre-refund gas
+// Refund adds the given gas budget back. It returns the pre-refund regular gas
 // value and whether the budget was actually changed.
 func (g *GasBudget) Refund(other GasBudget) (uint64, bool) {
 	prior := g.RegularGas
 	g.RegularGas += other.RegularGas
-	return prior, g.RegularGas != prior
+	g.StateGas += other.StateGas
+	return prior, other.RegularGas != 0 || other.StateGas != 0
 }

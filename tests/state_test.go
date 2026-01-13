@@ -326,10 +326,10 @@ func runBenchmark(b *testing.B, t *StateTest) {
 				b.StartTimer()
 				start := time.Now()
 
-				initialGas := vm.NewGasBudget(msg.GasLimit)
+				initialGas := vm.NewGasBudgetReg(msg.GasLimit)
 
 				// Execute the message.
-				_, leftOverGas, err := evm.Call(sender.Address(), *msg.To, msg.Data, initialGas.Copy(), uint256.MustFromBig(msg.Value))
+				_, leftOverGas, _, err := evm.Call(sender.Address(), *msg.To, msg.Data, initialGas.Copy(), uint256.MustFromBig(msg.Value))
 				if err != nil {
 					b.Error(err)
 					return

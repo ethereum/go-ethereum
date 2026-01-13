@@ -55,7 +55,7 @@ func runTrace(tracer *tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCo
 		gasLimit uint64 = 31000
 		startGas uint64 = 10000
 		value           = uint256.NewInt(0)
-		contract        = vm.NewContract(common.Address{}, common.Address{}, value, vm.NewGasBudget(startGas), nil)
+		contract        = vm.NewContract(common.Address{}, common.Address{}, value, vm.NewGasBudgetReg(startGas), nil)
 	)
 	evm.SetTxContext(vmctx.txCtx)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
