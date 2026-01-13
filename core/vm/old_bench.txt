@@ -1,0 +1,16 @@
+goos: linux
+goarch: amd64
+pkg: github.com/ethereum/go-ethereum/core/vm
+cpu: Intel(R) Core(TM) i7-8565U CPU @ 1.80GHz
+BenchmarkResize-8   	513681400	         4.756 ns/op	       5 B/op	       0 allocs/op
+BenchmarkResize-8   	747650196	         2.313 ns/op	       6 B/op	       0 allocs/op
+BenchmarkResize-8   	907757728	         1.302 ns/op	       5 B/op	       0 allocs/op
+BenchmarkResize-8   	906696679	         1.356 ns/op	       5 B/op	       0 allocs/op
+BenchmarkResize-8   	832139062	         2.823 ns/op	       5 B/op	       0 allocs/op
+BenchmarkResize-8   	943258486	         2.120 ns/op	       6 B/op	       0 allocs/op
+BenchmarkResize-8   	1000000000	         1.619 ns/op	       5 B/op	       0 allocs/op
+BenchmarkResize-8   	982619973	         1.388 ns/op	       5 B/op	       0 allocs/op
+BenchmarkResize-8   	761129438	         1.351 ns/op	       6 B/op	       0 allocs/op
+BenchmarkResize-8   	943591894	         1.643 ns/op	       6 B/op	       0 allocs/op
+PASS
+ok  	github.com/ethereum/go-ethereum/core/vm	37.469s
