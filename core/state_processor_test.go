@@ -20,6 +20,7 @@ import (
 	"crypto/ecdsa"
 	"math"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -431,4 +432,106 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		body.Withdrawals = []*types.Withdrawal{}
 	}
 	return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
+}
+
+// TestEIP8037MaxRegularGasValidation tests that transactions with floor data gas
+// exceeding MaxTxGas are rejected in Amsterdam.
+func TestEIP8037MaxRegularGasValidation(t *testing.T) {
+	var (
+		// Create an Amsterdam-enabled chain config
+		config = &params.ChainConfig{
+			ChainID:                 big.NewInt(1),
+			HomesteadBlock:          big.NewInt(0),
+			EIP150Block:             big.NewInt(0),
+			EIP155Block:             big.NewInt(0),
+			EIP158Block:             big.NewInt(0),
+			ByzantiumBlock:          big.NewInt(0),
+			ConstantinopleBlock:     big.NewInt(0),
+			PetersburgBlock:         big.NewInt(0),
+			IstanbulBlock:           big.NewInt(0),
+			MuirGlacierBlock:        big.NewInt(0),
+			BerlinBlock:             big.NewInt(0),
+			LondonBlock:             big.NewInt(0),
+			ArrowGlacierBlock:       big.NewInt(0),
+			GrayGlacierBlock:        big.NewInt(0),
+			MergeNetsplitBlock:      big.NewInt(0),
+			ShanghaiTime:            u64(0),
+			CancunTime:              u64(0),
+			PragueTime:              u64(0),
+			OsakaTime:               u64(0),
+			AmsterdamTime:           u64(0),
+			TerminalTotalDifficulty: big.NewInt(0),
+			Ethash:                  new(params.EthashConfig),
+			BlobScheduleConfig: &params.BlobScheduleConfig{
+				Cancun:    params.DefaultCancunBlobConfig,
+				Prague:    params.DefaultPragueBlobConfig,
+				Osaka:     params.DefaultOsakaBlobConfig,
+				Amsterdam: params.DefaultOsakaBlobConfig,
+			},
+		}
+		signer  = types.LatestSigner(config)
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	)
+
+	// Calculate how much data is needed to exceed MaxTxGas with floor data gas.
+	// FloorDataGas = TxGas + tokens * TxCostFloorPerToken
+	// For non-zero bytes: tokens = 4 per byte, so cost = 40 gas per byte
+	// MaxTxGas = 16,777,216
+	// To exceed: tokens * 10 > MaxTxGas - TxGas = 16,756,216
+	// For non-zero bytes: bytes * 4 * 10 > 16,756,216 → bytes > 418,905
+	dataSize := 420000 // This should exceed MaxTxGas
+	largeData := make([]byte, dataSize)
+	for i := range largeData {
+		largeData[i] = 0xFF // Non-zero bytes have higher token cost
+	}
+
+	// Verify that floor data gas exceeds MaxTxGas
+	floorGas, err := FloorDataGas(largeData)
+	if err != nil {
+		t.Fatalf("Failed to calculate floor data gas: %v", err)
+	}
+	if floorGas <= params.MaxTxGas {
+		t.Fatalf("Test setup error: floor data gas %d should exceed MaxTxGas %d", floorGas, params.MaxTxGas)
+	}
+	t.Logf("Floor data gas: %d, MaxTxGas: %d", floorGas, params.MaxTxGas)
+
+	// Create a transaction with large calldata. The gas limit is set high enough
+	// to cover the floor data gas, but since floor data gas > MaxTxGas,
+	// this should be rejected in Amsterdam.
+	tx, _ := types.SignTx(types.NewTx(&types.DynamicFeeTx{
+		Nonce:     0,
+		GasTipCap: big.NewInt(params.InitialBaseFee),
+		GasFeeCap: big.NewInt(params.InitialBaseFee),
+		Gas:       floorGas + 1000000, // Enough gas to cover floor + state gas
+		To:        &common.Address{},
+		Value:     big.NewInt(0),
+		Data:      largeData,
+	}), signer, key1)
+
+	var (
+		db    = rawdb.NewMemoryDatabase()
+		gspec = &Genesis{
+			Config:   config,
+			GasLimit: 100_000_000, // High block gas limit to not interfere with the test
+			Alloc: types.GenesisAlloc{
+				common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): types.Account{
+					Balance: new(big.Int).Mul(big.NewInt(1000000), big.NewInt(params.Ether)), // Lots of ether
+					Nonce:   0,
+				},
+			},
+		}
+		blockchain, _ = NewBlockChain(db, gspec, beacon.New(ethash.NewFaker()), nil)
+	)
+	defer blockchain.Stop()
+
+	block := GenerateBadBlock(gspec.ToBlock(), beacon.New(ethash.NewFaker()), types.Transactions{tx}, config, false)
+	_, err = blockchain.InsertChain(types.Blocks{block})
+	if err == nil {
+		t.Fatal("block with floor data gas > MaxTxGas should have been rejected")
+	}
+	// The error should indicate that max regular gas exceeds the limit
+	if !strings.Contains(err.Error(), "max regular gas") || !strings.Contains(err.Error(), "exceeds limit") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+	t.Logf("Got expected error: %v", err)
 }

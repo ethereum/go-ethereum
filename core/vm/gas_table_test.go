@@ -98,11 +98,11 @@ func TestEIP2200(t *testing.T) {
 		}
 		evm := NewEVM(vmctx, statedb, params.AllEthashProtocolChanges, Config{ExtraEips: []int{2200}})
 
-		_, gas, err := evm.Call(common.Address{}, address, nil, tt.gaspool, new(uint256.Int))
+		_, gas, _, err := evm.Call(common.Address{}, address, nil, GasCosts{RegularGas: tt.gaspool}, new(uint256.Int))
 		if !errors.Is(err, tt.failure) {
 			t.Errorf("test %d: failure mismatch: have %v, want %v", i, err, tt.failure)
 		}
-		if used := tt.gaspool - gas; used != tt.used {
+		if used := tt.gaspool - gas.RegularGas; used != tt.used {
 			t.Errorf("test %d: gas used mismatch: have %v, want %v", i, used, tt.used)
 		}
 		if refund := evm.StateDB.GetRefund(); refund != tt.refund {
@@ -158,11 +158,11 @@ func TestCreateGas(t *testing.T) {
 
 			evm := NewEVM(vmctx, statedb, chainConfig, config)
 			var startGas = uint64(testGas)
-			ret, gas, err := evm.Call(common.Address{}, address, nil, startGas, new(uint256.Int))
+			ret, gas, _, err := evm.Call(common.Address{}, address, nil, GasCosts{RegularGas: startGas}, new(uint256.Int))
 			if err != nil {
 				return false
 			}
-			gasUsed = startGas - gas
+			gasUsed = startGas - gas.RegularGas
 			if len(ret) != 32 {
 				t.Fatalf("test %d: expected 32 bytes returned, have %d", i, len(ret))
 			}

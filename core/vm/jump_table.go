@@ -23,8 +23,9 @@ import (
 )
 
 type (
-	executionFunc func(pc *uint64, evm *EVM, callContext *ScopeContext) ([]byte, error)
-	gasFunc       func(*EVM, *Contract, *Stack, *Memory, uint64) (uint64, error) // last parameter is the requested memory size as a uint64
+	executionFunc    func(pc *uint64, evm *EVM, callContext *ScopeContext) ([]byte, error)
+	gasFunc          func(*EVM, *Contract, *Stack, *Memory, uint64) (GasCosts, error) // last parameter is the requested memory size as a uint64
+	intrinsicGasFunc func(*EVM, *Contract, *Stack, *Memory, uint64) (uint64, error)   // last parameter is the requested memory size as a uint64
 	// memorySizeFunc returns the required size, and whether the operation overflowed a uint64
 	memorySizeFunc func(*Stack) (size uint64, overflow bool)
 )
@@ -97,6 +98,7 @@ func newAmsterdamInstructionSet() JumpTable {
 	instructionSet := newOsakaInstructionSet()
 	enable7843(&instructionSet) // EIP-7843 (SLOTNUM opcode)
 	enable8024(&instructionSet) // EIP-8024 (Backward compatible SWAPN, DUPN, EXCHANGE)
+	enable8037(&instructionSet) // EIP-8037 (State creation gas cost increase)
 	return validate(instructionSet)
 }
 

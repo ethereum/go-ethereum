@@ -166,15 +166,15 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 	for {
 		if debug {
 			// Capture pre-execution values for tracing.
-			logged, pcCopy, gasCopy = false, pc, contract.Gas
+			logged, pcCopy, gasCopy = false, pc, contract.Gas.RegularGas
 		}
 
 		if isEIP4762 && !contract.IsDeployment && !contract.IsSystemCall {
 			// if the PC ends up in a new "chunk" of verkleized code, charge the
 			// associated costs.
 			contractAddr := contract.Address()
-			consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas)
-			contract.UseGas(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
+			consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas.RegularGas)
+			contract.UseGas(GasCosts{RegularGas: consumed}, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
 			if consumed < wanted {
 				return nil, ErrOutOfGas
 			}
@@ -192,10 +192,11 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
 		// for tracing: this gas consumption event is emitted below in the debug section.
-		if contract.Gas < cost {
+		if contract.Gas.RegularGas < cost {
 			return nil, ErrOutOfGas
 		} else {
-			contract.Gas -= cost
+			contract.Gas.RegularGas -= cost
+			contract.GasUsed.RegularGasUsed += cost // EIP-8037: track constant gas
 		}
 
 		// All ops with a dynamic memory usage also has a dynamic gas cost.
@@ -218,17 +219,18 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 			}
 			// Consume the gas and return an error if not enough gas is available.
 			// cost is explicitly set so that the capture state defer method can get the proper cost
-			var dynamicCost uint64
+			var dynamicCost GasCosts
 			dynamicCost, err = operation.dynamicGas(evm, contract, stack, mem, memorySize)
-			cost += dynamicCost // for tracing
+			cost += dynamicCost.RegularGas // for tracing
 			if err != nil {
 				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
 			}
 			// for tracing: this gas consumption event is emitted below in the debug section.
-			if contract.Gas < dynamicCost {
+			if contract.Gas.Underflow(dynamicCost) {
 				return nil, ErrOutOfGas
 			} else {
-				contract.Gas -= dynamicCost
+				contract.GasUsed.Add(dynamicCost)
+				contract.Gas.Sub(dynamicCost)
 			}
 		}
 
