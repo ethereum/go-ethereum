@@ -68,6 +68,7 @@ func (m *mutation) isDelete() bool {
 
 type BlockStateTransition interface {
 	CommitWithUpdate(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, *stateUpdate, error)
+	Commit(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, error)
 	IntermediateRoot(deleteEmpty bool) common.Hash
 	Error() error
 	Preimages() map[common.Hash][]byte

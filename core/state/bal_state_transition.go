@@ -182,10 +182,16 @@ func (s *BALStateTransition) commitAccount(addr common.Address) (*accountUpdate,
 	}
 
 	if s.diffs[addr].Code != nil {
-		op.code = &contractCode{
-			crypto.Keccak256Hash(s.diffs[addr].Code),
-			s.diffs[addr].Code,
+		code := contractCode{
+			hash: crypto.Keccak256Hash(s.diffs[addr].Code),
+			blob: s.diffs[addr].Code,
 		}
+		if op.origin == nil {
+			code.originHash = types.EmptyCodeHash
+		} else {
+			code.originHash = crypto.Keccak256Hash(op.origin)
+		}
+		op.code = &code
 	}
 
 	if len(s.diffs[addr].StorageWrites) == 0 {
@@ -356,6 +362,10 @@ func (s *BALStateTransition) CommitWithUpdate(block uint64, deleteEmptyObjects b
 	s.metrics.SnapshotCommits, s.metrics.TrieDBCommits = snapshotCommits, trieDBCommits
 	s.metrics.TotalCommitTime = time.Since(commitStart)
 	return root, ret, nil
+}
+func (s *BALStateTransition) Commit(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, error) {
+	root, _, err := s.CommitWithUpdate(block, deleteEmptyObjects, noStorageWiping)
+	return root, err
 }
 
 func (s *BALStateTransition) loadOriginStorages() {

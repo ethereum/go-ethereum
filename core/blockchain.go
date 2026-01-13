@@ -2346,7 +2346,7 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	if constructBAL {
 		if verifyBALHeader && *block.Header().BlockAccessListHash != balTracer.AccessList().ToEncodingObj().Hash() {
 			err := fmt.Errorf("block access list hash mismatch (reported=%x, computed=%x)", *block.Header().BlockAccessListHash, balTracer.AccessList().ToEncodingObj().Hash())
-			bc.reportBlock(block, res, err)
+			bc.reportBadBlock(block, res, err)
 			return nil, err
 		}
 		// very ugly... deepcopy the block body before setting the block access
