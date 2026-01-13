@@ -133,15 +133,16 @@ func Transaction(ctx *cli.Context) error {
 		}
 		// Check intrinsic gas
 		rules := chainConfig.Rules(common.Big0, true, 0)
-		gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
+		gasCostPerStateByte := core.CostPerStateByte(&types.Header{}, chainConfig)
+		gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules, gasCostPerStateByte)
 		if err != nil {
 			r.Error = err
 			results = append(results, r)
 			continue
 		}
-		r.IntrinsicGas = gas
-		if tx.Gas() < gas {
-			r.Error = fmt.Errorf("%w: have %d, want %d", core.ErrIntrinsicGas, tx.Gas(), gas)
+		r.IntrinsicGas = gas.RegularGas
+		if tx.Gas() < gas.RegularGas {
+			r.Error = fmt.Errorf("%w: have %d, want %d", core.ErrIntrinsicGas, tx.Gas(), gas.RegularGas)
 			results = append(results, r)
 			continue
 		}
