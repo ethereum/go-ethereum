@@ -72,7 +72,7 @@ var DefaultConfig = Config{
 		ListenAddr:  ":30303",
 		MaxPeers:    50,
 		NAT:         nat.Any(),
-		DiscoveryV4: true,
+		DiscoveryV4: false,
 		DiscoveryV5: true,
 	},
 	DBEngine: "", // Use whatever exists, will default to Pebble if non-existent and supported
