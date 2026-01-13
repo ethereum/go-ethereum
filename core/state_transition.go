@@ -541,7 +541,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 			peakGasUsed = floorDataGas
 		}
 	}
-	st.returnGas()
+	st.returnGas(rules)
 
 	effectiveTip := msg.GasPrice
 	if rules.IsLondon {
@@ -661,7 +661,7 @@ func (st *stateTransition) calcRefund() uint64 {
 
 // returnGas returns ETH for remaining gas,
 // exchanged at the original rate.
-func (st *stateTransition) returnGas() {
+func (st *stateTransition) returnGas(rules params.Rules) {
 	remaining := uint256.NewInt(st.gasRemaining)
 	remaining.Mul(remaining, uint256.MustFromBig(st.msg.GasPrice))
 	st.state.AddBalance(st.msg.From, remaining, tracing.BalanceIncreaseGasReturn)
@@ -670,9 +670,11 @@ func (st *stateTransition) returnGas() {
 		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, 0, tracing.GasChangeTxLeftOverReturned)
 	}
 
-	// Also return remaining gas to the block gas counter so it is
-	// available for the next transaction.
-	st.gp.AddGas(st.gasRemaining)
+	if !rules.IsAmsterdam {
+		// Pre-Amsterdam return remaining gas to the block gas counter so it is
+		// available for the next transaction.
+		st.gp.AddGas(st.gasRemaining)
+	}
 }
 
 // gasUsed returns the amount of gas used up by the state transition.
