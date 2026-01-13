@@ -795,7 +795,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		if params.ExcessBlobGas != nil {
 			ebg = strconv.Itoa(int(*params.ExcessBlobGas))
 		}
-		slotnum := "nil"
+		slotNum := "nil"
 		if params.SlotNumber != nil {
 			slotnum = strconv.Itoa(int(*params.SlotNumber))
 		}
@@ -814,7 +814,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 			"params.BaseFeePerGas", params.BaseFeePerGas,
 			"params.BlobGasUsed", bgu,
 			"params.ExcessBlobGas", ebg,
-			"params.SlotNumber", slotnum,
+			"params.SlotNumber", slotNum,
 			"len(params.Transactions)", len(params.Transactions),
 			"len(params.Withdrawals)", len(params.Withdrawals),
 			"beaconRoot", beaconRoot,
