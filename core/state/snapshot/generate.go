@@ -488,7 +488,6 @@ func (dl *diskLayer) checkAndFlush(ctx *generatorContext, current []byte) error 
 		journalProgress(ctx.batch, current, ctx.stats)
 
 		if err := ctx.batch.Write(); err != nil {
-			log.Error("Failed to flush batch", "err", err)
 			return err
 		}
 		ctx.batch.Reset()
