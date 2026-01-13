@@ -2170,6 +2170,7 @@ func (bc *BlockChain) processBlockWithAccessList(parentRoot common.Hash, block *
 		procTime: procTime,
 		status:   status,
 		witness:  nil,
+		stats:    &ExecuteStats{}, // TODO: actually implement this in the future
 	}, nil
 }
 
