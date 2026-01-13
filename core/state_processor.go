@@ -63,12 +63,17 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	var (
 		config      = p.chainConfig()
 		receipts    types.Receipts
-		usedGas     = new(uint64)
 		header      = block.Header()
 		blockHash   = block.Hash()
 		blockNumber = block.Number()
 		allLogs     []*types.Log
 		gp          = new(GasPool).AddGas(block.GasLimit())
+		// We are maintaining two counters here:
+		// one counts all the cumulativeGas which includes refunds
+		// while the other counts only the usedGas which excludes refunds after Amsterdam
+		// We need the cumulativeGas for receipts and the usedGas for the block gas limit
+		cumulativeGas = uint64(0)
+		usedGas       = uint64(0)
 	)
 
 	var tracingStateDB = vm.StateDB(statedb)
@@ -107,13 +112,17 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 			telemetry.StringAttribute("tx.hash", tx.Hash().Hex()),
 			telemetry.Int64Attribute("tx.index", int64(i)),
 		)
-		receipt, err := ApplyTransactionWithEVM(msg, gp, statedb, blockNumber, blockHash, context.Time, tx, usedGas, evm)
-		spanEnd(&err)
+
+		var receipt *types.Receipt
+		receipt, cumulativeGas, err = ApplyTransactionWithEVM(msg, gp, statedb, blockNumber, blockHash, context.Time, tx, cumulativeGas, evm)
 		if err != nil {
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
+		usedGas += receipt.GasUsed
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
+
+		spanEnd(&err)
 	}
 	requests, err := postExecution(ctx, config, block, allLogs, evm)
 	if err != nil {
@@ -127,7 +136,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		Receipts: receipts,
 		Requests: requests,
 		Logs:     allLogs,
-		GasUsed:  *usedGas,
+		GasUsed:  usedGas,
 	}, nil
 }
 
@@ -159,7 +168,7 @@ func postExecution(ctx context.Context, config *params.ChainConfig, block *types
 // ApplyTransactionWithEVM attempts to apply a transaction to the given state database
 // and uses the input parameters for its environment similar to ApplyTransaction. However,
 // this method takes an already created EVM instance as input.
-func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, blockTime uint64, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (receipt *types.Receipt, err error) {
+func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, blockTime uint64, tx *types.Transaction, cumulativeGas uint64, evm *vm.EVM) (receipt *types.Receipt, cGas uint64, err error) {
 	if hooks := evm.Config.Tracer; hooks != nil {
 		if hooks.OnTxStart != nil {
 			hooks.OnTxStart(evm.GetVMContext(), tx, msg.From)
@@ -171,7 +180,7 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 	// Apply the transaction to the current state (included in the env).
 	result, err := ApplyMessage(evm, msg, gp)
 	if err != nil {
-		return nil, err
+		return nil, cumulativeGas, err
 	}
 	// Update the state with pending changes.
 	var root []byte
@@ -180,28 +189,32 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 	} else {
 		root = statedb.IntermediateRoot(evm.ChainConfig().IsEIP158(blockNumber)).Bytes()
 	}
-	*usedGas += result.UsedGas
+	cGas = cumulativeGas + result.UsedGas
 
 	// Merge the tx-local access event into the "block-local" one, in order to collect
 	// all values, so that the witness can be built.
 	if statedb.Database().TrieDB().IsVerkle() {
 		statedb.AccessEvents().Merge(evm.AccessEvents)
 	}
-	return MakeReceipt(evm, result, statedb, blockNumber, blockHash, blockTime, tx, *usedGas, root), nil
+	return MakeReceipt(evm, result, statedb, blockNumber, blockHash, blockTime, tx, cGas, root), cGas, nil
 }
 
 // MakeReceipt generates the receipt object for a transaction given its execution result.
-func MakeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, blockTime uint64, tx *types.Transaction, usedGas uint64, root []byte) *types.Receipt {
+func MakeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, blockTime uint64, tx *types.Transaction, cumulativeGas uint64, root []byte) *types.Receipt {
 	// Create a new receipt for the transaction, storing the intermediate root and gas used
 	// by the tx.
-	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: usedGas}
+	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: cumulativeGas}
 	if result.Failed() {
 		receipt.Status = types.ReceiptStatusFailed
 	} else {
 		receipt.Status = types.ReceiptStatusSuccessful
 	}
 	receipt.TxHash = tx.Hash()
-	receipt.GasUsed = result.UsedGas
+	if evm.ChainConfig().IsAmsterdam(blockNumber, blockTime) {
+		receipt.GasUsed = result.MaxUsedGas
+	} else {
+		receipt.GasUsed = result.UsedGas
+	}
 
 	if tx.Type() == types.BlobTxType {
 		receipt.BlobGasUsed = uint64(len(tx.BlobHashes()) * params.BlobTxBlobGasPerBlob)
@@ -224,15 +237,15 @@ func MakeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, b
 
 // ApplyTransaction attempts to apply a transaction to the given state database
 // and uses the input parameters for its environment. It returns the receipt
-// for the transaction, gas used and an error if the transaction failed,
+// for the transaction and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64) (*types.Receipt, error) {
+func ApplyTransaction(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, cumulativeGas uint64) (*types.Receipt, uint64, error) {
 	msg, err := TransactionToMessage(tx, types.MakeSigner(evm.ChainConfig(), header.Number, header.Time), header.BaseFee)
 	if err != nil {
-		return nil, err
+		return nil, cumulativeGas, err
 	}
 	// Create a new context to be used in the EVM environment
-	return ApplyTransactionWithEVM(msg, gp, statedb, header.Number, header.Hash(), header.Time, tx, usedGas, evm)
+	return ApplyTransactionWithEVM(msg, gp, statedb, header.Number, header.Hash(), header.Time, tx, cumulativeGas, evm)
 }
 
 // ProcessBeaconBlockRoot applies the EIP-4788 system call to the beacon block root
