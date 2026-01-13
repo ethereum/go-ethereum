@@ -155,8 +155,6 @@ type StateDB struct {
 	witness      *stateless.Witness
 	witnessStats *stateless.WitnessStats
 
-	blockAccessList *BALReader
-
 	// Measurements gathered during execution for debugging purposes
 	AccountReads   time.Duration
 	AccountHashes  time.Duration
@@ -177,10 +175,6 @@ type StateDB struct {
 	StorageUpdated atomic.Int64 // Number of storage slots updated during the state transition
 	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
 	CodeLoaded     int          // Number of contract code loaded during the state transition
-}
-
-func (s *StateDB) BlockAccessList() *BALReader {
-	return s.blockAccessList
 }
 
 // New creates a new state from a given trie.
@@ -311,10 +305,6 @@ func (s *StateDB) Preimages() map[common.Hash][]byte {
 func (s *StateDB) AddRefund(gas uint64) {
 	s.journal.refundChange(s.refund)
 	s.refund += gas
-}
-
-func (s *StateDB) SetBlockAccessList(al *BALReader) {
-	s.blockAccessList = al
 }
 
 // LoadModifiedPrestate instantiates the live object based on accounts
@@ -680,23 +670,6 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 		return nil
 	}
 
-	// if we are executing against a block access list, construct the account
-	// state at the current tx index by applying the access-list diff on top
-	// of the prestate value for the account.
-	if s.blockAccessList != nil && s.balIndex != 0 && s.blockAccessList.isModified(addr) {
-		acct := s.blockAccessList.readAccount(s, addr, s.balIndex-1)
-		if acct != nil {
-			s.setStateObject(acct)
-			return acct
-		}
-		return nil
-
-		// if the acct was nil, it might be non-existent or was not explicitly requested for loading from the blockAcccessList object.
-		// try to load it from the snapshot.
-
-		// TODO: if the acct was non-existent because it was deleted, we should just return nil herre.
-	}
-
 	s.AccountLoaded++
 
 	start := time.Now()
@@ -786,9 +759,6 @@ func (s *StateDB) Copy() *StateDB {
 		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
 		logSize:              s.logSize,
 		preimages:            maps.Clone(s.preimages),
-
-		// don't deep-copy these
-		blockAccessList: s.blockAccessList,
 
 		// Do we need to copy the access list and transient storage?
 		// In practice: No. At the start of a transaction, these two lists are empty.
