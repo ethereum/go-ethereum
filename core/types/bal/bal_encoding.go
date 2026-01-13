@@ -23,11 +23,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/log"
 	"io"
 	"maps"
 	"slices"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -127,6 +128,31 @@ func (e BlockAccessList) Validate(blockTxCount int) error {
 		if err := entry.validate(blockTxCount); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// ValidateGasLimit checks that the total number of BAL items (addresses +
+// unique storage keys) does not exceed block_gas_limit / GasBlockAccessListItem.
+// See EIP-7928 validate_block_access_list_gas_limit.
+func (e BlockAccessList) ValidateGasLimit(blockGasLimit uint64) error {
+	var balItems uint64
+	for _, account := range e {
+		// Count each address as one item
+		balItems++
+		// Count unique storage keys across both reads and writes
+		uniqueSlots := make(map[common.Hash]struct{})
+		for _, sc := range account.StorageChanges {
+			uniqueSlots[sc.Slot.ToHash()] = struct{}{}
+		}
+		for _, sr := range account.StorageReads {
+			uniqueSlots[sr.ToHash()] = struct{}{}
+		}
+		balItems += uint64(len(uniqueSlots))
+	}
+	limit := blockGasLimit / params.GasBlockAccessListItem
+	if balItems > limit {
+		return fmt.Errorf("block access list exceeds gas limit: %d items exceeds limit of %d", balItems, limit)
 	}
 	return nil
 }
@@ -388,10 +414,10 @@ func (e *AccountAccess) validate(blockTxCount int) error {
 		}
 	}
 
-	// validate that code changes could plausibly be correct (none exceed
-	// max code size of a contract)
+	// validate that code changes could plausibly be correct
+	// (none exceed max code size of a contract)
 	for _, codeChange := range e.CodeChanges {
-		if len(codeChange.Code) > params.MaxCodeSize {
+		if len(codeChange.Code) > params.MaxCodeSizeAmsterdam {
 			return fmt.Errorf("code change contained oversized code")
 		}
 	}

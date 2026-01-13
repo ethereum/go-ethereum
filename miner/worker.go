@@ -200,8 +200,10 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 		}
 		postMut.Merge(mut)
 
-		work.accessList.AccumulateMutations(postMut, uint16(work.tcount)+1)
-		work.accessList.AccumulateReads(work.state.Reader().(state.StateReaderTracker).GetStateAccessList())
+		if work.accessList != nil {
+			work.accessList.AccumulateMutations(postMut, uint16(work.tcount)+1)
+			work.accessList.AccumulateReads(work.state.Reader().(state.StateReaderTracker).GetStateAccessList())
+		}
 	}
 	if requests != nil {
 		reqHash := types.CalcRequestsHash(requests)
@@ -222,6 +224,10 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 			return work.accessList.ToEncodingObj()
 		}
 	}
+
+	// EIP-8037: set header.GasUsed before FinalizeAndAssemble so the block
+	// header reflects the correct 2D gas metric max(sum_regular, sum_state).
+	work.header.GasUsed = work.gasPool.Used()
 
 	block, err := miner.engine.FinalizeAndAssemble(miner.chain, work.header, work.state, &body, work.receipts, onBlockFinalization)
 	if err != nil {
@@ -329,7 +335,9 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 	if miner.chainConfig.IsPrague(header.Number, header.Time) {
 		mut.Merge(core.ProcessParentBlockHash(header.ParentHash, env.evm))
 	}
-	env.accessList.AccumulateMutations(mut, 0)
+	if env.accessList != nil {
+		env.accessList.AccumulateMutations(mut, 0)
+	}
 	return env, nil
 }
 
@@ -430,6 +438,8 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 		prevReader = env.state.Reader()
 		stateCopy = env.state.WithReader(state.NewReaderWithTracker(env.state.Reader()))
 		env.evm.StateDB = stateCopy
+	} else {
+		stateCopy = env.state
 	}
 
 	mutations, receipt, err := core.ApplyTransaction(env.evm, env.gasPool, stateCopy, env.header, tx)
