@@ -259,6 +259,11 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, createAnd
 	return nil
 }
 
+// Network returns the network/fork name for this test.
+func (t *BlockTest) Network() string {
+	return t.json.Network
+}
+
 func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 	return &core.Genesis{
 		Config:              config,
