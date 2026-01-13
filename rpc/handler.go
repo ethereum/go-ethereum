@@ -612,8 +612,11 @@ type limitedBuffer struct {
 }
 
 func (buf *limitedBuffer) Write(data []byte) (int, error) {
-	avail := max(buf.limit, len(buf.output))
-	if len(data) < avail {
+	avail := buf.limit - len(buf.output)
+	if avail <= 0 {
+		return 0, errTruncatedOutput
+	}
+	if len(data) <= avail {
 		buf.output = append(buf.output, data...)
 		return len(data), nil
 	}
