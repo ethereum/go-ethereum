@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"time"
 
 	"github.com/ethereum/go-ethereum/internal/version"
 	"go.opentelemetry.io/otel"
@@ -68,25 +69,36 @@ func Setup(ctx context.Context, endpoint string, sampleRatio float64) (*Telemetr
 		return nil, fmt.Errorf("failed to create telemetry exporter: %w", err)
 	}
 
-	// If no parent span is available, then sampleRatio of traces are sampled;
-	// otherwise, inherit the parent's sampling decision.
+	// Define sampler such that if no parent span is available,
+	// then sampleRatio of traces are sampled; otherwise, inherit
+	// the parent's sampling decision.
 	sampler := sdktrace.ParentBased(sdktrace.TraceIDRatioBased(sampleRatio))
 
-	// Create resource with service and client information
+	// Define batch span processor options
+	batchOpts := []sdktrace.BatchSpanProcessorOption{
+		// The maximum number of spans that can be queued before dropping
+		sdktrace.WithMaxQueueSize(sdktrace.DefaultMaxExportBatchSize),
+		// The maximum number of spans to export in a single batch
+		sdktrace.WithMaxExportBatchSize(sdktrace.DefaultMaxExportBatchSize),
+		// How long an export operation can take before timing out
+		sdktrace.WithExportTimeout(sdktrace.DefaultExportTimeout),
+		// How often to export, even if the batch isn't full
+		sdktrace.WithBatchTimeout(5 * time.Second), // SDK default is 5s
+	}
+
+	// Define resource with service and client information
 	res := resource.NewWithAttributes(
 		semconv.SchemaURL,
 		semconv.ServiceName("geth"),
 		attribute.String("client.name", version.ClientName("geth")),
 	)
 
-	// Create TracerProvider
+	// Configure TracerProvider and set it as the global tracer provider
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sampler),
-		sdktrace.WithBatcher(exporter),
+		sdktrace.WithBatcher(exporter, batchOpts...),
 		sdktrace.WithResource(res),
 	)
-
-	// Set as global provider
 	otel.SetTracerProvider(tp)
 
 	// Set global propagator for context propagation
