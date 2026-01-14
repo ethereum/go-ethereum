@@ -29,6 +29,7 @@ import (
 
 	"github.com/dchest/siphash"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
@@ -58,6 +59,11 @@ const (
 	// All transactions with a higher size will be announced and need to be fetched
 	// by the peer.
 	txMaxBroadcastSize = 4096
+
+	// txOnChainCacheLimit is number of on-chain transactions to keep in a cache to avoid
+	// re-fetching them soon after they are mined.
+	// Approx 1MB for 30 minutes of transactions at 18 tps
+	txOnChainCacheLimit = 32768
 )
 
 var syncChallengeTimeout = 15 * time.Second // Time allowance for a node to reply to the sync progress challenge
@@ -126,6 +132,9 @@ type handler struct {
 	peers          *peerSet
 	txBroadcastKey [16]byte
 
+	// cache of on-chain transactions to avoid fetching once the tx gets on chain
+	txOnChainCache *lru.Cache[common.Hash, struct{}]
+
 	eventMux   *event.TypeMux
 	txsCh      chan core.NewTxsEvent
 	txsSub     event.Subscription
@@ -179,17 +188,19 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	addTxs := func(txs []*types.Transaction) []error {
 		return h.txpool.Add(txs, false)
 	}
-
 	validateMeta := func(tx common.Hash, kind byte) error {
 		if h.txpool.Has(tx) {
 			return txpool.ErrAlreadyKnown
+		}
+		// check on chain as well (no need to check limbo separately, as chain checks limbo too)
+		if _, exist := h.txOnChainCache.Get(tx); exist {
+			return core.ErrNonceTooLow
 		}
 		if !h.txpool.FilterType(kind) {
 			return types.ErrTxTypeNotSupported
 		}
 		return nil
 	}
-
 	h.txFetcher = fetcher.NewTxFetcher(validateMeta, addTxs, fetchTx, h.removePeer)
 	return h, nil
 }
@@ -424,6 +435,10 @@ func (h *handler) Start(maxPeers int) {
 	h.wg.Add(1)
 	h.blockRange = newBlockRangeState(h.chain, h.eventMux)
 	go h.blockRangeLoop(h.blockRange)
+
+	h.wg.Add(1)
+	h.txOnChainCache = lru.NewCache[common.Hash, struct{}](txOnChainCacheLimit)
+	go h.txOnChainCacheLoop()
 
 	// start sync handlers
 	h.txFetcher.Start()
@@ -715,4 +730,38 @@ func (bc *broadcastChoice) choosePeers(peers []*ethPeer, txSender common.Address
 		bc.buffer[bc.tmp[i].p] = struct{}{}
 	}
 	return bc.buffer
+}
+
+// txOnChainCacheLoop listens to new chain events and updates the on-chain tx cache,
+// used as part of the filter on incoming tx announcements. In case of a reorg, the
+// cache is reset.
+func (h *handler) txOnChainCacheLoop() {
+	defer h.wg.Done()
+	//Subscribe to chain events to know when transactions are added to chain
+	headEventCh := make(chan core.ChainEvent, 10)
+	sub := h.chain.SubscribeChainEvent(headEventCh)
+	defer sub.Unsubscribe()
+
+	var oldHead *types.Header
+	for {
+		select {
+		case ev := <-headEventCh:
+			// New head(s) added
+			newHead := ev.Header
+			if oldHead != nil && newHead.ParentHash != oldHead.Hash() {
+				// Reorg or setHead detected, clear the cache. We could be smarter here and
+				// only remove/add the diff, but this is simpler and not being exact here
+				// only results in a few more fetches.
+				h.txOnChainCache.Purge()
+			}
+			oldHead = newHead
+			// Add all transactions from the new block to the on-chain cache
+			for _, tx := range ev.Transactions {
+				h.txOnChainCache.Add(tx.Hash(), struct{}{})
+			}
+		// exit when the subscription ends
+		case <-sub.Err():
+			return
+		}
+	}
 }
