@@ -43,6 +43,7 @@ var activators = map[int]func(*JumpTable){
 	7702: enable7702,
 	7939: enable7939,
 	8024: enable8024,
+	8037: enable8037,
 }
 
 // EnableEIP enables the given EIP on the config.
