@@ -69,6 +69,8 @@ func newBlobTx(sim *Backend, key *ecdsa.PrivateKey, nonce uint64) (*types.Transa
 	chainid, _ := client.ChainID(context.Background())
 	chainidU256, _ := uint256.FromBig(chainid)
 
+	sidecar := types.NewBlobTxSidecar(types.BlobSidecarVersion0, []kzg4844.Blob{*testBlob}, []kzg4844.Commitment{testBlobCommit}, []kzg4844.Proof{testBlobProof})
+	sidecar.ToV1()
 	tx := types.NewTx(&types.BlobTx{
 		ChainID:    chainidU256,
 		GasTipCap:  gasTipCapU256,
@@ -79,7 +81,7 @@ func newBlobTx(sim *Backend, key *ecdsa.PrivateKey, nonce uint64) (*types.Transa
 		To:         addr,
 		AccessList: nil,
 		BlobHashes: []common.Hash{testBlobVHash},
-		Sidecar:    types.NewBlobTxSidecar(types.BlobSidecarVersion0, []kzg4844.Blob{*testBlob}, []kzg4844.Commitment{testBlobCommit}, []kzg4844.Proof{testBlobProof}),
+		Sidecar:    sidecar,
 	})
 	return types.SignTx(tx, types.LatestSignerForChainID(chainid), key)
 }
