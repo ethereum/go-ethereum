@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
@@ -44,12 +45,6 @@ import (
 	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/trace"
 )
 
 // Register adds the engine API to the full node.
@@ -631,42 +626,15 @@ func (api *ConsensusAPI) getBlobs(hashes []common.Hash, v2 bool) ([]*engine.Blob
 // Helper for NewPayload* methods.
 var invalidStatus = engine.PayloadStatusV1{Status: engine.INVALID}
 
-// startNewPayloadSpan starts a tracing span for an RPC call and returns a function to
-// end the span. The function will record errors and set span status based on
-// the error value.
-func startNewPayloadSpan(ctx context.Context, name string, params engine.ExecutableData) (context.Context, func(*error)) {
-	parentSpan := trace.SpanFromContext(ctx)
-	tracer := otel.Tracer("")
-	ctx, span := tracer.Start(ctx, name)
-	span.SetAttributes(
-		attribute.Int64("block.number", int64(params.Number)),
-		attribute.String("block.hash", params.BlockHash.Hex()),
-		attribute.Int("tx.count", len(params.Transactions)),
-	)
-	spanEnd := func(err *error) {
-		ro, _ := span.(sdktrace.ReadOnlySpan)
-		if *err != nil {
-			// Error occurred, record it and set status on span and parent
-			span.RecordError(*err)
-			span.SetStatus(codes.Error, (*err).Error())
-			parentSpan.SetStatus(codes.Error, (*err).Error())
-		} else if ro.Status().Code == codes.Error {
-			// Span's child had an error, propagate it to parent
-			// Note: Span's status was already set in the child
-			parentSpan.SetStatus(codes.Error, ro.Status().Description)
-		} else if ro.Status().Code == codes.Unset {
-			// No error and no status set, mark as success
-			span.SetStatus(codes.Ok, "")
-		}
-		span.End()
-	}
-	return ctx, spanEnd
-}
-
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV1(ctx context.Context, params engine.ExecutableData) (result engine.PayloadStatusV1, err error) {
-	ctx, spanEnd := startNewPayloadSpan(ctx, "engine.newPayloadV1", params)
-	defer spanEnd(&err)
+	attrs := []telemetry.Attribute{
+		telemetry.Int64Attribute("block.number", int64(params.Number)),
+		telemetry.StringAttribute("block.hash", params.BlockHash.Hex()),
+		telemetry.Int64Attribute("tx.count", int64(len(params.Transactions))),
+	}
+	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadV1", attrs...)
+	defer spanEnd(err)
 	if params.Withdrawals != nil {
 		return invalidStatus, paramsErr("withdrawals not supported in V1")
 	}
@@ -675,8 +643,13 @@ func (api *ConsensusAPI) NewPayloadV1(ctx context.Context, params engine.Executa
 
 // NewPayloadV2 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV2(ctx context.Context, params engine.ExecutableData) (result engine.PayloadStatusV1, err error) {
-	ctx, spanEnd := startNewPayloadSpan(ctx, "engine.newPayloadV2", params)
-	defer spanEnd(&err)
+	attrs := []telemetry.Attribute{
+		telemetry.Int64Attribute("block.number", int64(params.Number)),
+		telemetry.StringAttribute("block.hash", params.BlockHash.Hex()),
+		telemetry.Int64Attribute("tx.count", int64(len(params.Transactions))),
+	}
+	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadV2", attrs...)
+	defer spanEnd(err)
 	var (
 		cancun   = api.config().IsCancun(api.config().LondonBlock, params.Timestamp)
 		shanghai = api.config().IsShanghai(api.config().LondonBlock, params.Timestamp)
@@ -698,8 +671,13 @@ func (api *ConsensusAPI) NewPayloadV2(ctx context.Context, params engine.Executa
 
 // NewPayloadV3 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV3(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (result engine.PayloadStatusV1, err error) {
-	ctx, spanEnd := startNewPayloadSpan(ctx, "engine.newPayloadV3", params)
-	defer spanEnd(&err)
+	attrs := []telemetry.Attribute{
+		telemetry.Int64Attribute("block.number", int64(params.Number)),
+		telemetry.StringAttribute("block.hash", params.BlockHash.Hex()),
+		telemetry.Int64Attribute("tx.count", int64(len(params.Transactions))),
+	}
+	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadV3", attrs...)
+	defer spanEnd(err)
 	switch {
 	case params.Withdrawals == nil:
 		return invalidStatus, paramsErr("nil withdrawals post-shanghai")
@@ -719,8 +697,13 @@ func (api *ConsensusAPI) NewPayloadV3(ctx context.Context, params engine.Executa
 
 // NewPayloadV4 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV4(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes) (result engine.PayloadStatusV1, err error) {
-	ctx, spanEnd := startNewPayloadSpan(ctx, "engine.newPayloadV4", params)
-	defer spanEnd(&err)
+	attrs := []telemetry.Attribute{
+		telemetry.Int64Attribute("block.number", int64(params.Number)),
+		telemetry.StringAttribute("block.hash", params.BlockHash.Hex()),
+		telemetry.Int64Attribute("tx.count", int64(len(params.Transactions))),
+	}
+	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadV4", attrs...)
+	defer spanEnd(err)
 	switch {
 	case params.Withdrawals == nil:
 		return invalidStatus, paramsErr("nil withdrawals post-shanghai")
@@ -763,9 +746,14 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 
 	log.Trace("Engine API request received", "method", "NewPayload", "number", params.Number, "hash", params.BlockHash)
 
-	_, spanEnd := startNewPayloadSpan(ctx, "engine.newPayload.ExecutableDataToBlock", params)
+	attrs := []telemetry.Attribute{
+		telemetry.Int64Attribute("block.number", int64(params.Number)),
+		telemetry.StringAttribute("block.hash", params.BlockHash.Hex()),
+		telemetry.Int64Attribute("tx.count", int64(len(params.Transactions))),
+	}
+	_, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayload.ExecutableDataToBlock", attrs...)
 	block, err := engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot, requests)
-	spanEnd(&err)
+	spanEnd(err)
 
 	if err != nil {
 		bgu := "nil"
@@ -839,11 +827,11 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 		return engine.PayloadStatusV1{Status: engine.ACCEPTED}, nil
 	}
 	log.Trace("Inserting block without sethead", "hash", block.Hash(), "number", block.Number())
-	_, spanEnd = startNewPayloadSpan(ctx, "engine.newPayload.InsertBlockWithoutSetHead", params)
+	_, _, spanEnd = telemetry.StartSpan(ctx, "engine.newPayload.InsertBlockWithoutSetHead", attrs...)
 	start := time.Now()
 	proofs, err := api.eth.BlockChain().InsertBlockWithoutSetHead(block, witness)
 	processingTime := time.Since(start)
-	spanEnd(&err)
+	spanEnd(err)
 	if err != nil {
 		log.Warn("NewPayload: inserting block failed", "error", err)
 

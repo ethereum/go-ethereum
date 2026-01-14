@@ -502,12 +502,7 @@ func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.He
 		}
 
 		envelope := getNewEnvelope(t, api, parent, w, h)
-
-		// NOTE: This span is for the test harness only. Engine root spans are created
-		// in NewPayloadV* entrypoints. This test calls newPayload() directly.
-		ctx, spanEnd := startNewPayloadSpan(context.Background(), "engine.api_test.setupBlocks", *envelope.ExecutionPayload)
-		execResp, err := api.newPayload(ctx, *envelope.ExecutionPayload, []common.Hash{}, h, envelope.Requests, false)
-		spanEnd(&err)
+		execResp, err := api.newPayload(context.Background(), *envelope.ExecutionPayload, []common.Hash{}, h, envelope.Requests, false)
 		if err != nil {
 			t.Fatalf("can't execute payload: %v", err)
 		}
@@ -1710,7 +1705,7 @@ func TestWitnessCreationAndConsumption(t *testing.T) {
 	envelope.ExecutionPayload.StateRoot = wantStateRoot
 	envelope.ExecutionPayload.ReceiptsRoot = wantReceiptRoot
 
-	res2, err := api.NewPayloadWithWitnessV3(*envelope.ExecutionPayload, []common.Hash{}, &common.Hash{42})
+	res2, err := api.NewPayloadWithWitnessV3(context.Background(), *envelope.ExecutionPayload, []common.Hash{}, &common.Hash{42})
 	if err != nil {
 		t.Fatalf("error executing stateless payload witness: %v", err)
 	}

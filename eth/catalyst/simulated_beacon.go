@@ -256,13 +256,8 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		requests = envelope.Requests
 	}
 
-	// NOTE: This span is for the simulated beacon harness only. Normal tracing
-	// of engine_newPayload* is performed at the Engine API entrypoints.
-	ctx, spanEnd := startNewPayloadSpan(context.Background(), "engine.simulatedBeacon.sealBlock", *payload)
-
 	// Mark the payload as canon
-	_, err = c.engineAPI.newPayload(ctx, *payload, blobHashes, beaconRoot, requests, false)
-	spanEnd(&err)
+	_, err = c.engineAPI.newPayload(context.Background(), *payload, blobHashes, beaconRoot, requests, false)
 	if err != nil {
 		return err
 	}
