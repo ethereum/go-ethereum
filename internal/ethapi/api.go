@@ -1653,18 +1653,6 @@ func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil
 		return common.Hash{}, err
 	}
 
-	// Convert legacy blob transaction proofs.
-	// TODO: remove in go-ethereum v1.17.x
-	if sc := tx.BlobTxSidecar(); sc != nil {
-		exp := api.currentBlobSidecarVersion()
-		if sc.Version == types.BlobSidecarVersion0 && exp == types.BlobSidecarVersion1 {
-			if err := sc.ToV1(); err != nil {
-				return common.Hash{}, fmt.Errorf("blob sidecar conversion failed: %v", err)
-			}
-			tx = tx.WithBlobTxSidecar(sc)
-		}
-	}
-
 	return SubmitTransaction(ctx, api.b, tx)
 }
 
@@ -1674,18 +1662,6 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 	tx := new(types.Transaction)
 	if err := tx.UnmarshalBinary(input); err != nil {
 		return nil, err
-	}
-
-	// Convert legacy blob transaction proofs.
-	// TODO: remove in go-ethereum v1.17.x
-	if sc := tx.BlobTxSidecar(); sc != nil {
-		exp := api.currentBlobSidecarVersion()
-		if sc.Version == types.BlobSidecarVersion0 && exp == types.BlobSidecarVersion1 {
-			if err := sc.ToV1(); err != nil {
-				return nil, fmt.Errorf("blob sidecar conversion failed: %v", err)
-			}
-			tx = tx.WithBlobTxSidecar(sc)
-		}
 	}
 
 	ch := make(chan core.ChainEvent, 128)
