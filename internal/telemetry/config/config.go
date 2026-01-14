@@ -81,9 +81,9 @@ func Setup(ctx context.Context, endpoint string, sampleRatio float64) (*Telemetr
 		// The maximum number of spans to export in a single batch
 		sdktrace.WithMaxExportBatchSize(sdktrace.DefaultMaxExportBatchSize),
 		// How long an export operation can take before timing out
-		sdktrace.WithExportTimeout(sdktrace.DefaultExportTimeout),
+		sdktrace.WithExportTimeout(time.Duration(sdktrace.DefaultExportTimeout) * time.Millisecond),
 		// How often to export, even if the batch isn't full
-		sdktrace.WithBatchTimeout(5 * time.Second), // SDK default is 5s
+		sdktrace.WithBatchTimeout(time.Duration(sdktrace.DefaultScheduleDelay) * time.Millisecond),
 	}
 
 	// Define resource with service and client information
