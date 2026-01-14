@@ -22,13 +22,6 @@ type BlockAccessListTracer struct {
 	// an access list to determine if the system calls being executed are
 	// before/after the block transactions.
 	sysCallCount int
-
-	// true if the tracer is processing post-tx state changes.  in this case
-	// we won't record the final index after the end of the second post-tx
-	// system contract but after the finalization of the block.
-	// This is because we have EIP-4895 withdrawals which are processed after the
-	// last system contracts execute and must be included in the BAL.
-	isPostTx bool
 }
 
 // NewBlockAccessListTracer returns an BlockAccessListTracer and a set of hooks
@@ -55,24 +48,17 @@ func NewBlockAccessListTracer() (*BlockAccessListTracer, *tracing.Hooks) {
 	return balTracer, wrappedHooks
 }
 
-func (a *BlockAccessListTracer) SetPostTx() {
-	a.isPostTx = true
-}
-
 // AccessList returns the constructed access list.
 // It is assumed that this is only called after all the block state changes
 // have been executed and the block has been finalized.
-func (a *BlockAccessListTracer) AccessList() *bal.AccessListBuilder {
-	return a.builder
+func (a *BlockAccessListTracer) AccessList() *bal.ConstructionBlockAccessList {
+	return &a.builder.FinalizedAccesses
 }
 
 func (a *BlockAccessListTracer) OnSystemCallEnd() {
 	// finalize the post-block changes in OnBlockFinalization to account for
 	// the EIP-4895 withdrawals which occur after the last system contracts
 	// are executed.
-	if a.isPostTx {
-		return
-	}
 	a.sysCallCount++
 	if a.sysCallCount == 2 {
 		a.builder.FinaliseIdxChanges(a.balIdx)

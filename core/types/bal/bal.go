@@ -489,9 +489,11 @@ func (c *constructionAccountAccess) NonceChange(cur uint64) {
 	c.nonce = &cur
 }
 
+type ConstructionBlockAccessList map[common.Address]*ConstructionAccountAccesses
+
 // AccessListBuilder is used to build an EIP-7928 block access list
 type AccessListBuilder struct {
-	FinalizedAccesses map[common.Address]*ConstructionAccountAccesses
+	FinalizedAccesses ConstructionBlockAccessList
 
 	idxBuilder *idxAccessListBuilder
 
@@ -645,44 +647,6 @@ func (a *AccountMutations) LogDiff(addr common.Address, other *AccountMutations)
 	if len(diff) > 0 {
 		log.Error(fmt.Sprintf("diff between remote/local BAL for address %x", addr), diff...)
 	}
-}
-
-// Eq returns whether the calling instance is equal to the provided one.
-func (a *AccountMutations) Eq(other *AccountMutations) bool {
-	if a.Balance != nil || other.Balance != nil {
-		if a.Balance == nil || other.Balance == nil {
-			return false
-		}
-
-		if !a.Balance.Eq(other.Balance) {
-			return false
-		}
-	}
-
-	if (len(a.Code) != 0 || len(other.Code) != 0) && !bytes.Equal(a.Code, other.Code) {
-		return false
-	}
-
-	if a.Nonce != nil || other.Nonce != nil {
-		if a.Nonce == nil || other.Nonce == nil {
-			return false
-		}
-
-		if *a.Nonce != *other.Nonce {
-			return false
-		}
-	}
-
-	if a.StorageWrites != nil || other.StorageWrites != nil {
-		if a.StorageWrites == nil || other.StorageWrites == nil {
-			return false
-		}
-
-		if !maps.Equal(a.StorageWrites, other.StorageWrites) {
-			return false
-		}
-	}
-	return true
 }
 
 // Copy returns a deep-copy of the instance.

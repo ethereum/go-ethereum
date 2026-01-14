@@ -119,20 +119,6 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		} else if err := block.Body().AccessList.Validate(len(block.Transactions())); err != nil {
 			return fmt.Errorf("invalid block access list: %v", err)
 		}
-	} else if !v.bc.cfg.EnableBALForTesting {
-		// if --experimental.bal is not enabled, block headers cannot have access list hash and bodies cannot have access lists.
-		if block.Body().AccessList != nil {
-			return fmt.Errorf("access list not allowed in block body if not in amsterdam or --experimental.bal is set")
-		} else if block.Header().BlockAccessListHash != nil {
-			return fmt.Errorf("access list hash in block header not allowed when --experimental.bal is set")
-		}
-	} else {
-		// if --experimental.bal is enabled, the BAL hash is not allowed in the header.
-		// this is in order that Geth can import pre-existing chains augmented with BALs
-		// and not have a hash mismatch.
-		if block.Header().BlockAccessListHash != nil {
-			return fmt.Errorf("access list hash in block header not allowed pre-amsterdam")
-		}
 	}
 
 	// Ancestor block must be known.

@@ -537,16 +537,13 @@ func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 
 func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var gas uint64
-	fmt.Println("gasSelfdestruct")
 
 	// EIP150 homestead gas reprice fork:
 	if evm.chainRules.IsEIP150 {
 		gas = params.SelfdestructGasEIP150
 		var address = common.Address(stack.Back(0).Bytes20())
 
-		fmt.Println("okay we're")
 		if gas > contract.Gas {
-			fmt.Println("here")
 			return gas, nil
 		}
 

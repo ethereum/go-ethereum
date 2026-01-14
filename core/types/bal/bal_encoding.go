@@ -88,6 +88,7 @@ func (e *BlockAccessList) String() string {
 	return res.String()
 }
 
+// TODO: check that no fields are nil in Validate (unless it's valid for them to be nil)
 // Validate returns an error if the contents of the access list are not ordered
 // according to the spec or any code changes are contained which exceed protocol
 // max code size.
@@ -369,11 +370,11 @@ func (e *AccountAccess) Copy() AccountAccess {
 }
 
 // EncodeRLP returns the RLP-encoded access list
-func (c *AccessListBuilder) EncodeRLP(wr io.Writer) error {
+func (c ConstructionBlockAccessList) EncodeRLP(wr io.Writer) error {
 	return c.ToEncodingObj().EncodeRLP(wr)
 }
 
-var _ rlp.Encoder = &AccessListBuilder{}
+var _ rlp.Encoder = &ConstructionBlockAccessList{}
 
 // toEncodingObj creates an instance of the ConstructionAccountAccesses of the type that is
 // used as input for the encoding.
@@ -449,16 +450,16 @@ func (a *ConstructionAccountAccesses) toEncodingObj(addr common.Address) Account
 
 // ToEncodingObj returns an instance of the access list expressed as the type
 // which is used as input for the encoding/decoding.
-func (c *AccessListBuilder) ToEncodingObj() *BlockAccessList {
+func (c ConstructionBlockAccessList) ToEncodingObj() *BlockAccessList {
 	var addresses []common.Address
-	for addr := range c.FinalizedAccesses {
+	for addr := range c {
 		addresses = append(addresses, addr)
 	}
 	slices.SortFunc(addresses, common.Address.Cmp)
 
 	var res BlockAccessList
 	for _, addr := range addresses {
-		res = append(res, c.FinalizedAccesses[addr].toEncodingObj(addr))
+		res = append(res, c[addr].toEncodingObj(addr))
 	}
 	return &res
 }

@@ -219,10 +219,6 @@ type BlockChainConfig struct {
 	// SlowBlockThreshold is the block execution time threshold beyond which
 	// detailed statistics will be logged.
 	SlowBlockThreshold time.Duration
-	// If EnableBALForTesting is enabled, block access lists will be created
-	// from block execution and embedded in the body.  The block access list
-	// hash will not be set in the header.
-	EnableBALForTesting bool
 }
 
 // DefaultConfig returns the default config.
@@ -1990,7 +1986,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		// The traced section of block import.
 		start := time.Now()
 
-		res, err := bc.ProcessBlock(parent.Root, block, setHead, makeWitness && len(chain) == 1, bc.cfg.EnableBALForTesting)
+		res, err := bc.ProcessBlock(parent.Root, block, setHead, makeWitness && len(chain) == 1)
 		if err != nil {
 			return nil, it.index, err
 		}
@@ -2075,26 +2071,8 @@ func (bpr *blockProcessingResult) Stats() *ExecuteStats {
 
 // ProcessBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
-func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, setHead bool, makeWitness bool, constructBALForTesting bool) (result *blockProcessingResult, blockEndErr error) {
+func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, setHead bool, makeWitness bool) (result *blockProcessingResult, blockEndErr error) {
 	enableBALFork := bc.chainConfig.IsAmsterdam(block.Number(), block.Time())
-	if enableBALFork || !bc.chainConfig.IsCancun(block.Number(), block.Time()) {
-		// disable test-mode construction of BALs if we are not in the range [cancun, amsterdam)
-		constructBALForTesting = false
-	}
-	// TODO: need to check that the block is also post-cancun if it contained an access list?
-	// this should be checked during decoding (?)
-	blockHasAccessList := block.Body().AccessList != nil
-	// only construct and embed BALs in the block if:
-	// * it has been enabled for testing purposes (pre-Amsterdam/post-Cancun blocks with --experimental.bal)
-	// * we are after Amsterdam and the block was provided with bal omitted
-	//   (importing any historical block not near the chain head)
-	constructBAL := constructBALForTesting || (enableBALFork && !blockHasAccessList)
-	// do not verify the integrity of the BAL hash wrt the header-reported value
-	// for any non-Amsterdam blocks:  if the block being imported has been created
-	// via --experimental.bal, the block access list hash is unset in the header
-	// to keep the block hash unchanged (allow for importing historical blocks
-	// with BALs for testing purposes).
-	verifyBALHeader := enableBALFork
 
 	var (
 		err       error
@@ -2209,7 +2187,7 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	var balTracer *BlockAccessListTracer
 
 	// Process block using the parent state as reference point
-	if constructBAL {
+	if enableBALFork {
 		balTracer, bc.cfg.VmConfig.Tracer = NewBlockAccessListTracer()
 		defer func() {
 			bc.cfg.VmConfig.Tracer = nil
@@ -2224,7 +2202,7 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	}
 	ptime = time.Since(pstart)
 
-	if constructBAL {
+	if enableBALFork {
 		balTracer.OnBlockFinalization()
 	}
 
@@ -2238,23 +2216,19 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	}
 	vtime = time.Since(vstart)
 
-	if constructBAL {
-		if verifyBALHeader && *block.Header().BlockAccessListHash != balTracer.AccessList().ToEncodingObj().Hash() {
-			err := fmt.Errorf("block access list hash mismatch (reported=%x, computed=%x)", *block.Header().BlockAccessListHash, balTracer.AccessList().ToEncodingObj().Hash())
+	if enableBALFork {
+		computedAccessListHash := balTracer.AccessList().ToEncodingObj().Hash()
+
+		if *block.Header().BlockAccessListHash != computedAccessListHash {
+			err := fmt.Errorf("block header access list hash mismatch with computed (header=%x computed=%x)", *block.Header().BlockAccessListHash, computedAccessListHash)
 			bc.reportBadBlock(block, res, err)
 			return nil, err
-		} else if block.Body().AccessList != nil {
-			// TODO: assert that the
-		} else {
-			// very ugly... deepcopy the block body before setting the block access
-			// list on it to prevent mutating the block instance passed by the caller.
-			existingBody := block.Body()
-			block = block.WithBody(*existingBody)
-			existingBody = block.Body()
-			existingBody.AccessList = balTracer.AccessList().ToEncodingObj()
-			block = block.WithBody(*existingBody)
 		}
-
+		if block.Body().AccessList != nil && block.Body().AccessList.Hash() != computedAccessListHash {
+			err := fmt.Errorf("block access list hash mismatch (remote=%x computed=%x)", block.Body().AccessList.Hash(), computedAccessListHash)
+			bc.reportBadBlock(block, res, err)
+			return nil, err
+		}
 	}
 
 	// If witnesses was generated and stateless self-validation requested, do

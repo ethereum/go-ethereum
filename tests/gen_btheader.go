@@ -62,7 +62,6 @@ func (b btHeader) MarshalJSON() ([]byte, error) {
 	enc.BlobGasUsed = (*math.HexOrDecimal64)(b.BlobGasUsed)
 	enc.ExcessBlobGas = (*math.HexOrDecimal64)(b.ExcessBlobGas)
 	enc.ParentBeaconBlockRoot = b.ParentBeaconBlockRoot
-	enc.BlockAccessListHash = b.BlockAccessListHash
 	return json.Marshal(&enc)
 }
 
@@ -158,9 +157,6 @@ func (b *btHeader) UnmarshalJSON(input []byte) error {
 	}
 	if dec.ParentBeaconBlockRoot != nil {
 		b.ParentBeaconBlockRoot = dec.ParentBeaconBlockRoot
-	}
-	if dec.BlockAccessListHash != nil {
-		b.BlockAccessListHash = dec.BlockAccessListHash
 	}
 	return nil
 }
