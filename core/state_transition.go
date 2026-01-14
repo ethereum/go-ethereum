@@ -68,13 +68,14 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation bool, rules params.Rules) (uint64, error) {
+// costPerStateByte needs to be set post-Amsterdam.
+func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation bool, rules params.Rules, costPerStateByte uint64) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
 	if isContractCreation && rules.IsHomestead {
 		if rules.IsAmsterdam {
 			// TODO fix EIP-8037
-			gas = params.AccountCreationSize //* evm.GasCostPerStateByte
+			gas = params.AccountCreationSize * costPerStateByte
 		} else {
 			gas = params.TxGasContractCreation
 		}
@@ -117,7 +118,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 	}
 	if authList != nil {
 		if rules.IsAmsterdam {
-			gas += uint64(len(authList)) // * evm.GasCostPerStateByte
+			gas += uint64(len(authList)) * costPerStateByte
 		} else {
 			gas += uint64(len(authList)) * params.CallNewAccountGas
 		}
@@ -452,7 +453,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	)
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules)
+	gas, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules, st.evm.Context.CostPerGasByte)
 	if err != nil {
 		return nil, err
 	}

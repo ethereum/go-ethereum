@@ -74,12 +74,14 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		BlobBaseFee:    blobBaseFee,
 		GasLimit:       header.GasLimit,
 		Random:         random,
-		CostPerGasByte: costPerStateByte(header, chain),
+		CostPerGasByte: CostPerStateByte(header, chain.Config()),
 	}
 }
 
-func costPerStateByte(header *types.Header, chain ChainContext) uint64 {
-	if chain.Config().IsAmsterdam(header.Number, header.Time) {
+// CostPerStateByte computes the cost per one byte of state creation
+// after EIP-8037
+func CostPerStateByte(header *types.Header, config *params.ChainConfig) uint64 {
+	if config.IsAmsterdam(header.Number, header.Time) {
 		return ((header.GasLimit / 2) * 7200 * 365) / params.TargetStateGrowthPerYear
 	}
 	return 0

@@ -81,7 +81,8 @@ func (tt *TransactionTest) Run() error {
 			return
 		}
 		// Intrinsic gas
-		requiredGas, err = core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, *rules)
+		// TODO (MariusVanDerWijden): correctly set this for post-amsterdam tests.
+		requiredGas, err = core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, *rules, 0)
 		if err != nil {
 			return
 		}

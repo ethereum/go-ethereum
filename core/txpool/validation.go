@@ -122,13 +122,23 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	}
 	// Ensure the transaction has more gas than the bare minimum needed to cover
 	// the transaction metadata
-	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules)
+	gasCostPerStateByte := core.CostPerStateByte(head, opts.Config)
+	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules, gasCostPerStateByte)
 	if err != nil {
 		return err
+	}
+	if gasCostPerStateByte != 0 {
+		// We require transactions to pay for 110% of intrinsic gas in order to
+		// prevent situations where a change in gas limit invalidates a lot
+		// of transactions in the txpool
+		if tx.Gas() < (intrGas*10)/9 {
+			return fmt.Errorf("%w: gas %v, minimum needed %v", core.ErrIntrinsicGas, tx.Gas(), intrGas)
+		}
 	}
 	if tx.Gas() < intrGas {
 		return fmt.Errorf("%w: gas %v, minimum needed %v", core.ErrIntrinsicGas, tx.Gas(), intrGas)
 	}
+
 	// Ensure the transaction can cover floor data gas.
 	if rules.IsPrague {
 		floorDataGas, err := core.FloorDataGas(tx.Data())
