@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/stateless"
@@ -52,17 +51,6 @@ const (
 	update mutationType = iota
 	deletion
 )
-
-var addressHashCache = lru.NewCache[common.Address, common.Hash](10240)
-
-func getAddressHash(addr common.Address) common.Hash {
-	if hash, ok := addressHashCache.Get(addr); ok {
-		return hash
-	}
-	hash := crypto.Keccak256Hash(addr.Bytes())
-	addressHashCache.Add(addr, hash)
-	return hash
-}
 
 type mutation struct {
 	typ     mutationType
