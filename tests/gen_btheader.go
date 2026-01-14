@@ -158,5 +158,8 @@ func (b *btHeader) UnmarshalJSON(input []byte) error {
 	if dec.ParentBeaconBlockRoot != nil {
 		b.ParentBeaconBlockRoot = dec.ParentBeaconBlockRoot
 	}
+	if dec.BlockAccessListHash != nil {
+		b.BlockAccessListHash = dec.BlockAccessListHash
+	}
 	return nil
 }
