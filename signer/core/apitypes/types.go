@@ -338,7 +338,8 @@ func (t *Type) isArray() bool {
 // typeName returns the canonical name of the type. If the type is 'Person[]' or 'Person[2]', then
 // this method returns 'Person'
 func (t *Type) typeName() string {
-	return strings.Split(t.Type, "[")[0]
+	name, _, _ := strings.Cut(t.Type, "[")
+	return name
 }
 
 type Types map[string][]Type
@@ -389,7 +390,7 @@ func (typedData *TypedData) HashStruct(primaryType string, data TypedDataMessage
 
 // Dependencies returns an array of custom types ordered by their hierarchical reference tree
 func (typedData *TypedData) Dependencies(primaryType string, found []string) []string {
-	primaryType = strings.Split(primaryType, "[")[0]
+	primaryType, _, _ = strings.Cut(primaryType, "[")
 
 	if slices.Contains(found, primaryType) {
 		return found
@@ -500,7 +501,7 @@ func (typedData *TypedData) encodeArrayValue(encValue interface{}, encType strin
 	}
 
 	arrayBuffer := new(bytes.Buffer)
-	parsedType := strings.Split(encType, "[")[0]
+	parsedType, _, _ := strings.Cut(encType, "[")
 	for _, item := range arrayValue {
 		if reflect.TypeOf(item).Kind() == reflect.Slice ||
 			reflect.TypeOf(item).Kind() == reflect.Array {
@@ -899,7 +900,7 @@ func init() {
 
 // Checks if the primitive value is valid
 func isPrimitiveTypeValid(primitiveType string) bool {
-	input := strings.Split(primitiveType, "[")[0]
+	input, _, _ := strings.Cut(primitiveType, "[")
 	_, ok := validPrimitiveTypes[input]
 	return ok
 }

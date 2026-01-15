@@ -775,10 +775,11 @@ func archiveUpload(archive string, blobstore string, signer string, signifyVar s
 	}
 	// If uploading to Azure was requested, push the archive possibly with its signature
 	if blobstore != "" {
+		account, container, _ := strings.Cut(blobstore, "/")
 		auth := build.AzureBlobstoreConfig{
-			Account:   strings.Split(blobstore, "/")[0],
+			Account:   account,
 			Token:     os.Getenv("AZURE_BLOBSTORE_TOKEN"),
-			Container: strings.SplitN(blobstore, "/", 2)[1],
+			Container: container,
 		}
 		if err := build.AzureBlobstoreUpload(archive, filepath.Base(archive), auth); err != nil {
 			return err
@@ -1282,10 +1283,11 @@ func doPurge(cmdline []string) {
 		os.Exit(0)
 	}
 	// Create the azure authentication and list the current archives
+	account, container, _ := strings.Cut(*store, "/")
 	auth := build.AzureBlobstoreConfig{
-		Account:   strings.Split(*store, "/")[0],
+		Account:   account,
 		Token:     os.Getenv("AZURE_BLOBSTORE_TOKEN"),
-		Container: strings.SplitN(*store, "/", 2)[1],
+		Container: container,
 	}
 	blobs, err := build.AzureBlobstoreList(auth)
 	if err != nil {

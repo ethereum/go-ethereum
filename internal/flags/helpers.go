@@ -280,7 +280,7 @@ func CheckEnvVars(ctx *cli.Context, flags []cli.Flag, prefix string) {
 	sort.Strings(keyvals)
 
 	for _, keyval := range keyvals {
-		key := strings.Split(keyval, "=")[0]
+		key, _, _ := strings.Cut(keyval, "=")
 		if !strings.HasPrefix(key, prefix) {
 			continue
 		}
