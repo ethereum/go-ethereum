@@ -202,76 +202,110 @@ func parseElementaryType(unescapedSelector string) (string, string, error) {
 	return parsedType, rest, nil
 }
 
-func parseCompositeType(unescapedSelector string) ([]interface{}, string, error) {
-	if len(unescapedSelector) == 0 || unescapedSelector[0] != '(' {
-		return nil, "", fmt.Errorf("expected '(', got %c", unescapedSelector[0])
+// parseTupleType parses inline tuple syntax like (string denom, uint256 amount)[]
+func parseTupleType(params string) ([]ArgumentMarshaling, string, string, error) {
+	if params == "" || params[0] != '(' {
+		return nil, "", params, fmt.Errorf("expected '(' at start of tuple")
 	}
-	parsedType, rest, err := parseType(unescapedSelector[1:])
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to parse type: %v", err)
-	}
-	result := []interface{}{parsedType}
-	for len(rest) > 0 && rest[0] != ')' {
-		parsedType, rest, err = parseType(rest[1:])
-		if err != nil {
-			return nil, "", fmt.Errorf("failed to parse type: %v", err)
+
+	rest := params[1:]
+	rest = skipWhitespace(rest)
+
+	if rest[0] == ')' {
+		rest = rest[1:]
+		arraySuffix := ""
+		for len(rest) > 0 && rest[0] == '[' {
+			endBracket := 1
+			for endBracket < len(rest) && rest[endBracket] != ']' {
+				endBracket++
+			}
+			if endBracket >= len(rest) {
+				return nil, "", rest, fmt.Errorf("unclosed array bracket")
+			}
+			arraySuffix += rest[:endBracket+1]
+			rest = rest[endBracket+1:]
 		}
-		result = append(result, parsedType)
+		return []ArgumentMarshaling{}, arraySuffix, rest, nil
 	}
-	if len(rest) == 0 || rest[0] != ')' {
-		return nil, "", fmt.Errorf("expected ')', got '%s'", rest)
-	}
-	if len(rest) >= 3 && rest[1] == '[' && rest[2] == ']' {
-		return append(result, "[]"), rest[3:], nil
-	}
-	return result, rest[1:], nil
-}
 
-func parseType(unescapedSelector string) (interface{}, string, error) {
-	if len(unescapedSelector) == 0 {
-		return nil, "", errors.New("empty type")
-	}
-	if unescapedSelector[0] == '(' {
-		return parseCompositeType(unescapedSelector)
-	} else {
-		return parseElementaryType(unescapedSelector)
-	}
-}
+	var components []ArgumentMarshaling
+	paramIndex := 0
 
-func assembleArgs(args []interface{}) ([]ArgumentMarshaling, error) {
-	arguments := make([]ArgumentMarshaling, 0)
-	for i, arg := range args {
-		name := fmt.Sprintf("name%d", i)
-		if s, ok := arg.(string); ok {
-			arguments = append(arguments, ArgumentMarshaling{
-				Name:         name,
-				Type:         s,
-				InternalType: s,
-				Components:   nil,
-				Indexed:      false,
-			})
-		} else if components, ok := arg.([]interface{}); ok {
-			subArgs, err := assembleArgs(components)
-			if err != nil {
-				return nil, fmt.Errorf("failed to assemble components: %v", err)
+	for {
+		rest = skipWhitespace(rest)
+
+		var component ArgumentMarshaling
+		var err error
+
+		if rest[0] == '(' {
+			subComponents, subArraySuffix, newRest, subErr := parseTupleType(rest)
+			if subErr != nil {
+				return nil, "", rest, fmt.Errorf("failed to parse nested tuple: %v", subErr)
 			}
-			tupleType := "tuple"
-			if len(subArgs) != 0 && subArgs[len(subArgs)-1].Type == "[]" {
-				subArgs = subArgs[:len(subArgs)-1]
-				tupleType = "tuple[]"
+			rest = newRest
+			rest = skipWhitespace(rest)
+
+			paramName := fmt.Sprintf("param%d", paramIndex)
+			if len(rest) > 0 && (isAlpha(rest[0]) || isIdentifierSymbol(rest[0])) {
+				paramName, rest, err = parseIdentifier(rest)
+				if err != nil {
+					return nil, "", rest, err
+				}
 			}
-			arguments = append(arguments, ArgumentMarshaling{
-				Name:         name,
-				Type:         tupleType,
-				InternalType: tupleType,
-				Components:   subArgs,
-				Indexed:      false,
-			})
+
+			component = ArgumentMarshaling{
+				Name:       paramName,
+				Type:       "tuple" + subArraySuffix,
+				Components: subComponents,
+			}
 		} else {
-			return nil, fmt.Errorf("failed to assemble args: unexpected type %T", arg)
+			var typeName string
+			typeName, rest, err = parseElementaryType(rest)
+			if err != nil {
+				return nil, "", rest, fmt.Errorf("failed to parse type: %v", err)
+			}
+
+			rest = skipWhitespace(rest)
+
+			paramName := fmt.Sprintf("param%d", paramIndex)
+			if len(rest) > 0 && (isAlpha(rest[0]) || isIdentifierSymbol(rest[0])) {
+				paramName, rest, err = parseIdentifier(rest)
+				if err != nil {
+					return nil, "", rest, err
+				}
+			}
+
+			component = ArgumentMarshaling{
+				Name: paramName,
+				Type: typeName,
+			}
+		}
+
+		components = append(components, component)
+		rest = skipWhitespace(rest)
+
+		if rest[0] == ')' {
+			rest = rest[1:]
+			arraySuffix := ""
+			for len(rest) > 0 && rest[0] == '[' {
+				endBracket := 1
+				for endBracket < len(rest) && rest[endBracket] != ']' {
+					endBracket++
+				}
+				if endBracket >= len(rest) {
+					return nil, "", rest, fmt.Errorf("unclosed array bracket")
+				}
+				arraySuffix += rest[:endBracket+1]
+				rest = rest[endBracket+1:]
+			}
+			return components, arraySuffix, rest, nil
+		} else if rest[0] == ',' {
+			rest = rest[1:]
+			paramIndex++
+		} else {
+			return nil, "", rest, fmt.Errorf("expected ',' or ')' in tuple, got '%c'", rest[0])
 		}
 	}
-	return arguments, nil
 }
 
 // parseParameterList parses a parameter list with optional indexed flags
@@ -287,61 +321,69 @@ func parseParameterList(params string, allowIndexed bool) ([]ArgumentMarshaling,
 	for params != "" {
 		params = skipWhitespace(params)
 
-		var typeStr interface{}
+		var arg ArgumentMarshaling
 		var rest string
 		var err error
 
 		if params[0] == '(' {
-			typeStr, rest, err = parseCompositeType(params)
-		} else {
-			typeStr, rest, err = parseElementaryType(params)
-		}
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse parameter type: %v", err)
-		}
-
-		rest = skipWhitespace(rest)
-
-		indexed := false
-		if allowIndexed {
-			rest, indexed = parseKeyword(rest, "indexed")
+			components, arraySuffix, newRest, tupleErr := parseTupleType(params)
+			if tupleErr != nil {
+				return nil, fmt.Errorf("failed to parse tuple: %v", tupleErr)
+			}
+			rest = newRest
 			rest = skipWhitespace(rest)
-		}
 
-		paramName := fmt.Sprintf("param%d", paramIndex)
-		if len(rest) > 0 && (isAlpha(rest[0]) || isIdentifierSymbol(rest[0])) {
-			var name string
-			name, rest, err = parseIdentifier(rest)
-			if err == nil {
-				paramName = name
+			indexed := false
+			if allowIndexed {
+				rest, indexed = parseKeyword(rest, "indexed")
+				rest = skipWhitespace(rest)
 			}
-		}
 
-		if s, ok := typeStr.(string); ok {
-			arguments = append(arguments, ArgumentMarshaling{
-				Name:    paramName,
-				Type:    s,
-				Indexed: indexed,
-			})
-		} else if components, ok := typeStr.([]interface{}); ok {
-			subArgs, err := assembleArgs(components)
-			if err != nil {
-				return nil, fmt.Errorf("failed to assemble tuple components: %v", err)
+			paramName := fmt.Sprintf("param%d", paramIndex)
+			if len(rest) > 0 && (isAlpha(rest[0]) || isIdentifierSymbol(rest[0])) {
+				paramName, rest, err = parseIdentifier(rest)
+				if err != nil {
+					return nil, err
+				}
 			}
-			tupleType := "tuple"
-			if len(subArgs) != 0 && subArgs[len(subArgs)-1].Type == "[]" {
-				subArgs = subArgs[:len(subArgs)-1]
-				tupleType = "tuple[]"
-			}
-			arguments = append(arguments, ArgumentMarshaling{
+
+			arg = ArgumentMarshaling{
 				Name:       paramName,
-				Type:       tupleType,
-				Components: subArgs,
+				Type:       "tuple" + arraySuffix,
+				Components: components,
 				Indexed:    indexed,
-			})
+			}
+		} else {
+			var typeName string
+			typeName, rest, err = parseElementaryType(params)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse parameter type: %v", err)
+			}
+
+			rest = skipWhitespace(rest)
+
+			indexed := false
+			if allowIndexed {
+				rest, indexed = parseKeyword(rest, "indexed")
+				rest = skipWhitespace(rest)
+			}
+
+			paramName := fmt.Sprintf("param%d", paramIndex)
+			if len(rest) > 0 && (isAlpha(rest[0]) || isIdentifierSymbol(rest[0])) {
+				paramName, rest, err = parseIdentifier(rest)
+				if err == nil && paramName != "" {
+					rest = skipWhitespace(rest)
+				}
+			}
+
+			arg = ArgumentMarshaling{
+				Name:    paramName,
+				Type:    typeName,
+				Indexed: indexed,
+			}
 		}
 
+		arguments = append(arguments, arg)
 		rest = skipWhitespace(rest)
 
 		if rest == "" {

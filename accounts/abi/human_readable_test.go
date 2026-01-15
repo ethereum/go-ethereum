@@ -2,6 +2,7 @@ package abi
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -45,9 +46,113 @@ func normalizeArgument(arg ArgumentMarshaling, isEvent bool) map[string]interfac
 	return result
 }
 
+// parseStructDefinitions extracts and parses struct definitions from signatures
+func parseStructDefinitions(signatures []string) (map[string][]ArgumentMarshaling, error) {
+	structs := make(map[string][]ArgumentMarshaling)
+
+	for _, sig := range signatures {
+		sig = skipWhitespace(sig)
+		if !strings.HasPrefix(sig, "struct ") {
+			continue
+		}
+
+		rest := sig[7:]
+		rest = skipWhitespace(rest)
+
+		nameEnd := 0
+		for nameEnd < len(rest) && (isAlpha(rest[nameEnd]) || isDigit(rest[nameEnd]) || rest[nameEnd] == '_') {
+			nameEnd++
+		}
+		if nameEnd == 0 {
+			return nil, fmt.Errorf("invalid struct definition: missing name")
+		}
+
+		structName := rest[:nameEnd]
+		rest = skipWhitespace(rest[nameEnd:])
+
+		if len(rest) == 0 || rest[0] != '{' {
+			return nil, fmt.Errorf("invalid struct definition: expected '{'")
+		}
+		rest = rest[1:]
+
+		closeBrace := strings.Index(rest, "}")
+		if closeBrace == -1 {
+			return nil, fmt.Errorf("invalid struct definition: missing '}'")
+		}
+
+		fieldsStr := rest[:closeBrace]
+		fields := strings.Split(fieldsStr, ";")
+
+		var components []ArgumentMarshaling
+		for _, field := range fields {
+			field = skipWhitespace(field)
+			if field == "" {
+				continue
+			}
+
+			parts := strings.Fields(field)
+			if len(parts) < 2 {
+				return nil, fmt.Errorf("invalid struct field: %s", field)
+			}
+
+			typeName := parts[0]
+			fieldName := parts[1]
+
+			components = append(components, ArgumentMarshaling{
+				Name: fieldName,
+				Type: typeName,
+			})
+		}
+
+		structs[structName] = components
+	}
+
+	return structs, nil
+}
+
+// expandStructReferences replaces struct references with tuple types
+func expandStructReferences(args []ArgumentMarshaling, structs map[string][]ArgumentMarshaling) error {
+	for i := range args {
+		baseType := args[i].Type
+		arraySuffix := ""
+
+		for strings.HasSuffix(baseType, "]") {
+			bracketIdx := strings.LastIndex(baseType, "[")
+			if bracketIdx == -1 {
+				break
+			}
+			arraySuffix = baseType[bracketIdx:] + arraySuffix
+			baseType = baseType[:bracketIdx]
+		}
+
+		if structComponents, ok := structs[baseType]; ok {
+			expandedComponents := make([]ArgumentMarshaling, len(structComponents))
+			copy(expandedComponents, structComponents)
+
+			if err := expandStructReferences(expandedComponents, structs); err != nil {
+				return err
+			}
+
+			args[i].Type = "tuple" + arraySuffix
+			args[i].InternalType = "struct " + baseType + arraySuffix
+			args[i].Components = expandedComponents
+		} else if len(args[i].Components) > 0 {
+			if err := expandStructReferences(args[i].Components, structs); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // parseHumanReadableABIArray processes multiple human-readable ABI signatures
 // and returns a JSON array. Comments and empty lines are skipped.
 func parseHumanReadableABIArray(signatures []string) ([]byte, error) {
+	structs, err := parseStructDefinitions(signatures)
+	if err != nil {
+		return nil, err
+	}
+
 	var results []map[string]interface{}
 	for _, sig := range signatures {
 		sig = skipWhitespace(sig)
@@ -78,6 +183,9 @@ func parseHumanReadableABIArray(signatures []string) ([]byte, error) {
 			}
 		}
 		if inputs, ok := result["inputs"].([]ArgumentMarshaling); ok {
+			if err := expandStructReferences(inputs, structs); err != nil {
+				return nil, err
+			}
 			normInputs := make([]map[string]interface{}, len(inputs))
 			for i, inp := range inputs {
 				normInputs[i] = normalizeArgument(inp, isEvent)
@@ -85,6 +193,9 @@ func parseHumanReadableABIArray(signatures []string) ([]byte, error) {
 			normalized["inputs"] = normInputs
 		}
 		if outputs, ok := result["outputs"].([]ArgumentMarshaling); ok {
+			if err := expandStructReferences(outputs, structs); err != nil {
+				return nil, err
+			}
 			normOutputs := make([]map[string]interface{}, len(outputs))
 			for i, out := range outputs {
 				normOutputs[i] = normalizeArgument(out, false)
@@ -472,6 +583,65 @@ func TestParseHumanReadableABI(t *testing.T) {
 						{"name": "value2", "type": "uint256"},
 						{"name": "value3", "type": "int8"},
 						{"name": "value4", "type": "uint256"}
+					],
+					"outputs": [],
+					"stateMutability": "nonpayable"
+				}
+			]`,
+		},
+		{
+			name: "nested tuple in return",
+			input: []string{
+				"function communityPool() view returns ((string denom, uint256 amount)[] coins)",
+			},
+			expected: `[
+				{
+					"type": "function",
+					"name": "communityPool",
+					"inputs": [],
+					"outputs": [
+						{
+							"name": "coins",
+							"type": "tuple[]",
+							"components": [
+								{"name": "denom", "type": "string"},
+								{"name": "amount", "type": "uint256"}
+							]
+						}
+					],
+					"stateMutability": "view"
+				}
+			]`,
+		},
+		{
+			name: "function with struct arrays and nested arrays",
+			input: []string{
+				"struct DataPoint { uint256 value; string label; }",
+				"function processData(DataPoint[][] dataMatrix, DataPoint[5][] fixedDataArray)",
+			},
+			expected: `[
+				{
+					"type": "function",
+					"name": "processData",
+					"inputs": [
+						{
+							"name": "dataMatrix",
+							"type": "tuple[][]",
+							"internalType": "struct DataPoint[][]",
+							"components": [
+								{"name": "value", "type": "uint256"},
+								{"name": "label", "type": "string"}
+							]
+						},
+						{
+							"name": "fixedDataArray",
+							"type": "tuple[5][]",
+							"internalType": "struct DataPoint[5][]",
+							"components": [
+								{"name": "value", "type": "uint256"},
+								{"name": "label", "type": "string"}
+							]
+						}
 					],
 					"outputs": [],
 					"stateMutability": "nonpayable"
