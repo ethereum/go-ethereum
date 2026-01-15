@@ -1729,20 +1729,15 @@ func TestTransactionFetcherDropAlternates(t *testing.T) {
 func TestTransactionFetcherWrongMetadata(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
-			return NewTxFetcher(
-				func(_ common.Hash, kind byte) error {
-					switch kind {
-					case types.LegacyTxType, types.AccessListTxType, types.DynamicFeeTxType, types.BlobTxType, types.SetCodeTxType:
-						return nil
-					}
-					return types.ErrTxTypeNotSupported
-				},
-				func(txs []*types.Transaction) []error {
-					return make([]error, len(txs))
-				},
-				func(string, []common.Hash) error { return nil },
-				nil,
-			)
+			f := newTestTxFetcher()
+			f.validateMeta = func(name common.Hash, kind byte) error {
+				switch kind {
+				case types.LegacyTxType, types.AccessListTxType, types.DynamicFeeTxType, types.BlobTxType, types.SetCodeTxType:
+					return nil
+				}
+				return types.ErrTxTypeNotSupported
+			}
+			return f
 		},
 		steps: []interface{}{
 			doTxNotify{peer: "A", hashes: []common.Hash{{0x01}, {0x02}}, types: []byte{0xff, types.LegacyTxType}, sizes: []uint32{111, 222}},
@@ -1790,20 +1785,16 @@ func TestTransactionProtocolViolation(t *testing.T) {
 	)
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
-			return NewTxFetcher(
-				func(common.Hash, byte) error { return nil },
-				func(txs []*types.Transaction) []error {
-					var errs []error
-					for range txs {
-						errs = append(errs, txpool.ErrKZGVerificationError)
-					}
-					return errs
-				},
-				func(a string, b []common.Hash) error {
-					return nil
-				},
-				func(peer string) { drop <- struct{}{} },
-			)
+			f := newTestTxFetcher()
+			f.addTxs = func(txs []*types.Transaction) []error {
+				var errs []error
+				for range txs {
+					errs = append(errs, txpool.ErrKZGVerificationError)
+				}
+				return errs
+			}
+			f.dropPeer = func(string) { drop <- struct{}{} }
+			return f
 		},
 		steps: []interface{}{
 			// Initial announcement to get something into the waitlist
