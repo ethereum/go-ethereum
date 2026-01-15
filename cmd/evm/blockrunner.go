@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"maps"
 	"os"
 	"regexp"
@@ -118,7 +117,7 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 		test := tests[name]
 		result := &testResult{Name: name, Pass: true}
 		var finalRoot *common.Hash
-		if err := test.Run(false, rawdb.PathScheme, ctx.Bool(WitnessCrossCheckFlag.Name), ctx.Bool(utils.ExperimentalBALFlag.Name), tracer, func(res error, chain *core.BlockChain) {
+		if err := test.Run(false, rawdb.PathScheme, ctx.Bool(WitnessCrossCheckFlag.Name), tracer, func(res error, chain *core.BlockChain) {
 			if ctx.Bool(DumpFlag.Name) {
 				if s, _ := chain.State(); s != nil {
 					result.State = dump(s)

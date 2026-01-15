@@ -236,6 +236,8 @@ var (
 			Cancun: DefaultCancunBlobConfig,
 			Prague: DefaultPragueBlobConfig,
 			Osaka:  DefaultOsakaBlobConfig,
+			BPO1:   DefaultBPO1BlobConfig,
+			BPO2:   DefaultBPO2BlobConfig,
 		},
 	}
 

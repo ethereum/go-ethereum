@@ -2211,7 +2211,15 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 			bc.reportBadBlock(block, res, err)
 			return nil, err
 		}
-		if block.Body().AccessList != nil && block.Body().AccessList.Hash() != computedAccessListHash {
+		if block.Body().AccessList == nil {
+			// very ugly... deep copy the block body before setting the block access
+			// list on it to prevent mutating the block instance passed by the caller.
+			existingBody := block.Body()
+			block = block.WithBody(*existingBody)
+			existingBody = block.Body()
+			existingBody.AccessList = computedAccessList
+			block = block.WithBody(*existingBody)
+		} else if block.Body().AccessList.Hash() != computedAccessListHash {
 			err := fmt.Errorf("block access list hash mismatch (remote=%x computed=%x)", block.Body().AccessList.Hash(), computedAccessListHash)
 			bc.reportBadBlock(block, res, err)
 			return nil, err

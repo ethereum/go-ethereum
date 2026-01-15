@@ -112,12 +112,16 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 
 	// block access lists must be present after the Amsterdam hard fork
 	if v.config.IsAmsterdam(block.Number(), block.Time()) {
-		if block.Body().AccessList == nil {
-			return fmt.Errorf("access list not present in block body")
-		} else if *block.Header().BlockAccessListHash != block.Body().AccessList.Hash() {
-			return fmt.Errorf("access list hash mismatch.  local: %x. remote: %x\n", block.Body().AccessList.Hash(), *block.Header().BlockAccessListHash)
-		} else if err := block.Body().AccessList.Validate(len(block.Transactions())); err != nil {
-			return fmt.Errorf("invalid block access list: %v", err)
+		if block.Header().BlockAccessListHash == nil {
+			// TODO: verify that this check isn't also done elsewhere
+			return fmt.Errorf("block access list hash not set in header")
+		}
+		if block.Body().AccessList != nil {
+			if *block.Header().BlockAccessListHash != block.Body().AccessList.Hash() {
+				return fmt.Errorf("access list hash mismatch.  local: %x. remote: %x\n", block.Body().AccessList.Hash(), *block.Header().BlockAccessListHash)
+			} else if err := block.Body().AccessList.Validate(len(block.Transactions())); err != nil {
+				return fmt.Errorf("invalid block access list: %v", err)
+			}
 		}
 	}
 
