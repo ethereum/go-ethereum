@@ -249,6 +249,9 @@ func newClientTransportWS(endpoint string, cfg *clientConfig) (reconnectFunc, er
 		}
 		conn, resp, err := dialer.DialContext(ctx, dialURL, header)
 		if err != nil {
+			if resp != nil {
+				resp.Body.Close()
+			}
 			hErr := wsHandshakeError{err: err}
 			if resp != nil {
 				hErr.status = resp.Status
