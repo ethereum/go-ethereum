@@ -740,7 +740,17 @@ func (h *handler) txOnChainCacheLoop() {
 	//Subscribe to chain events to know when transactions are added to chain
 	headEventCh := make(chan core.ChainEvent, 10)
 	sub := h.chain.SubscribeChainEvent(headEventCh)
-	defer sub.Unsubscribe()
+	defer func() {
+		sub.Unsubscribe()
+		// drain channel
+		for {
+			select {
+			case <-headEventCh:
+			default:
+				return
+			}
+		}
+	}()
 
 	var oldHead *types.Header
 	for {
@@ -761,6 +771,8 @@ func (h *handler) txOnChainCacheLoop() {
 			}
 		// exit when the subscription ends
 		case <-sub.Err():
+			return
+		case <-h.quitSync:
 			return
 		}
 	}
