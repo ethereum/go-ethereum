@@ -22,6 +22,7 @@ import (
 	"strings"
 )
 
+// SelectorMarshaling represents a parsed function signature with its components.
 type SelectorMarshaling struct {
 	Name            string               `json:"name"`
 	Type            string               `json:"type"`
@@ -31,6 +32,7 @@ type SelectorMarshaling struct {
 	Anonymous       bool                 `json:"anonymous,omitempty"`
 }
 
+// EventMarshaling represents a parsed event signature.
 type EventMarshaling struct {
 	Name      string               `json:"name"`
 	Type      string               `json:"type"`
@@ -38,16 +40,27 @@ type EventMarshaling struct {
 	Anonymous bool                 `json:"anonymous"`
 }
 
+// ErrorMarshaling represents a parsed error signature.
 type ErrorMarshaling struct {
 	Name   string               `json:"name"`
 	Type   string               `json:"type"`
 	Inputs []ArgumentMarshaling `json:"inputs"`
 }
 
-// ABIMarshaling is a union type that can represent any ABI element
-type ABIMarshaling map[string]interface{}
+// ABIMarshaling is a union type that can represent any ABI element.
+// It stores the parsed ABI fields such as "name", "type", "inputs", "outputs",
+// "stateMutability", and "anonymous" as key-value pairs.
+type ABIMarshaling map[string]any
 
-// ParseHumanReadableABI parses a human-readable ABI signature into a JSON-compatible map
+// ParseHumanReadableABI parses a human-readable ABI signature into a JSON-compatible map.
+// It supports functions, events, errors, constructors, fallback, and receive functions.
+//
+// Examples:
+//
+//	"function transfer(address to, uint256 amount)"
+//	"function balanceOf(address) view returns (uint256)"
+//	"event Transfer(address indexed from, address indexed to, uint256 value)"
+//	"constructor(address owner) payable"
 func ParseHumanReadableABI(signature string) (ABIMarshaling, error) {
 	signature = skipWhitespace(signature)
 
@@ -284,7 +297,8 @@ func parseTupleType(params string) ([]ArgumentMarshaling, string, string, error)
 		components = append(components, component)
 		rest = skipWhitespace(rest)
 
-		if rest[0] == ')' {
+		switch rest[0] {
+		case ')':
 			rest = rest[1:]
 			arraySuffix := ""
 			for len(rest) > 0 && rest[0] == '[' {
@@ -299,10 +313,10 @@ func parseTupleType(params string) ([]ArgumentMarshaling, string, string, error)
 				rest = rest[endBracket+1:]
 			}
 			return components, arraySuffix, rest, nil
-		} else if rest[0] == ',' {
+		case ',':
 			rest = rest[1:]
 			paramIndex++
-		} else {
+		default:
 			return nil, "", rest, fmt.Errorf("expected ',' or ')' in tuple, got '%c'", rest[0])
 		}
 	}
@@ -318,6 +332,7 @@ func parseParameterList(params string, allowIndexed bool) ([]ArgumentMarshaling,
 	var arguments []ArgumentMarshaling
 	paramIndex := 0
 
+loop:
 	for params != "" {
 		params = skipWhitespace(params)
 
@@ -389,12 +404,13 @@ func parseParameterList(params string, allowIndexed bool) ([]ArgumentMarshaling,
 		if rest == "" {
 			break
 		}
-		if rest[0] == ',' {
+		switch rest[0] {
+		case ',':
 			rest = rest[1:]
 			params = rest
 			paramIndex++
-		} else {
-			break
+		default:
+			break loop
 		}
 	}
 
@@ -554,8 +570,7 @@ func ParseConstructor(signature string) (ABIMarshaling, error) {
 	return result, nil
 }
 
-// ParseFallback parses a fallback function signature
-// ParseFallback parses a fallback function signature (no parameters allowed)
+// ParseFallback parses a fallback function signature (no parameters allowed).
 func ParseFallback(signature string) (ABIMarshaling, error) {
 	signature = skipWhitespace(signature)
 
