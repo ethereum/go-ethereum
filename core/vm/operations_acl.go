@@ -257,6 +257,10 @@ var (
 )
 
 func gasCallEIP7702(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	// Return early if this call attempts to transfer value in a static context.
+	// Although it's checked in `gasCall`, EIP-7702 loads the target's code before
+	// to determine if it is resolving a delegation. This could incorrectly record
+	// the target in the block access list (BAL) if the call later fails.
 	transfersValue := !stack.Back(2).IsZero()
 	if evm.readOnly && transfersValue {
 		return 0, ErrWriteProtection
