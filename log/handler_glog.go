@@ -213,9 +213,20 @@ func (h *GlogHandler) Handle(ctx context.Context, r slog.Record) error {
 		lvl = slog.Level(h.level.Load())
 	}
 
-	// Store only if patterns are still the same slice (avoid caching stale results).
+	// Check if we should cache this result
 	h.lock.Lock()
-	if len(h.patterns) > 0 && len(curPatterns) > 0 && &h.patterns[0] == &curPatterns[0] {
+	shouldCache := false
+	switch {
+	case len(curPatterns) == 0 && len(h.patterns) == 0:
+		// Cache the default/global level to avoid re-evaluating the callsite each time.
+		shouldCache = true
+	case len(h.patterns) > 0 && len(curPatterns) > 0:
+		// Only cache the result if the vmodule patterns have not changed since we
+		// snapshotted them. This avoids inserting stale entries if Vmodule() updates
+		// the pattern list concurrently with Handle().
+		shouldCache = (&h.patterns[0] == &curPatterns[0])
+	}
+	if shouldCache {
 		cache.Store(r.PC, lvl)
 	}
 	h.lock.Unlock()
