@@ -68,9 +68,14 @@ func parseHumanReadableABIArray(signatures []string) ([]byte, error) {
 		}
 		isEvent := resultType == "event"
 		isFunction := resultType == "function"
+		isConstructor := resultType == "constructor"
+		isFallback := resultType == "fallback"
+		isReceive := resultType == "receive"
 
-		if name, ok := result["name"]; ok {
-			normalized["name"] = name
+		if !isConstructor && !isFallback && !isReceive {
+			if name, ok := result["name"]; ok {
+				normalized["name"] = name
+			}
 		}
 		if inputs, ok := result["inputs"].([]ArgumentMarshaling); ok {
 			normInputs := make([]map[string]interface{}, len(inputs))
@@ -166,6 +171,53 @@ func TestParseHumanReadableABI(t *testing.T) {
 						{"name": "value", "type": "uint256", "indexed": false}
 					],
 					"anonymous": false
+				}
+			]`,
+		},
+		{
+			name:  "constructor",
+			input: []string{"constructor(address owner, uint256 initialSupply)"},
+			expected: `[
+				{
+					"type": "constructor",
+					"inputs": [
+						{"name": "owner", "type": "address"},
+						{"name": "initialSupply", "type": "uint256"}
+					],
+					"stateMutability": "nonpayable"
+				}
+			]`,
+		},
+		{
+			name:  "constructor payable",
+			input: []string{"constructor(address owner) payable"},
+			expected: `[
+				{
+					"type": "constructor",
+					"inputs": [
+						{"name": "owner", "type": "address"}
+					],
+					"stateMutability": "payable"
+				}
+			]`,
+		},
+		{
+			name:  "fallback function",
+			input: []string{"fallback()"},
+			expected: `[
+				{
+					"type": "fallback",
+					"stateMutability": "nonpayable"
+				}
+			]`,
+		},
+		{
+			name:  "receive function",
+			input: []string{"receive() payable"},
+			expected: `[
+				{
+					"type": "receive",
+					"stateMutability": "payable"
 				}
 			]`,
 		},
@@ -378,6 +430,48 @@ func TestParseHumanReadableABI(t *testing.T) {
 					"inputs": [
 						{"name": "complexArray", "type": "uint256[][]"},
 						{"name": "mixedArray", "type": "address[][]"}
+					],
+					"outputs": [],
+					"stateMutability": "nonpayable"
+				}
+			]`,
+		},
+		{
+			name: "int and uint without explicit sizes normalize to 256 bits",
+			input: []string{
+				"function testIntUint(int value1, uint value2)",
+				"function testArrays(int[] values1, uint[10] values2)",
+				"function testMixed(int value1, uint value2, int8 value3, uint256 value4)",
+			},
+			expected: `[
+				{
+					"type": "function",
+					"name": "testIntUint",
+					"inputs": [
+						{"name": "value1", "type": "int256"},
+						{"name": "value2", "type": "uint256"}
+					],
+					"outputs": [],
+					"stateMutability": "nonpayable"
+				},
+				{
+					"type": "function",
+					"name": "testArrays",
+					"inputs": [
+						{"name": "values1", "type": "int256[]"},
+						{"name": "values2", "type": "uint256[10]"}
+					],
+					"outputs": [],
+					"stateMutability": "nonpayable"
+				},
+				{
+					"type": "function",
+					"name": "testMixed",
+					"inputs": [
+						{"name": "value1", "type": "int256"},
+						{"name": "value2", "type": "uint256"},
+						{"name": "value3", "type": "int8"},
+						{"name": "value4", "type": "uint256"}
 					],
 					"outputs": [],
 					"stateMutability": "nonpayable"

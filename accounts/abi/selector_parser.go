@@ -51,6 +51,18 @@ type ABIMarshaling map[string]interface{}
 func ParseHumanReadableABI(signature string) (ABIMarshaling, error) {
 	signature = skipWhitespace(signature)
 
+	if strings.HasPrefix(signature, "constructor") {
+		return ParseConstructor(signature)
+	}
+
+	if strings.HasPrefix(signature, "fallback") {
+		return ParseFallback(signature)
+	}
+
+	if strings.HasPrefix(signature, "receive") {
+		return ParseReceive(signature)
+	}
+
 	if strings.HasPrefix(signature, "event ") || (strings.Contains(signature, "(") && strings.Contains(signature, "indexed")) {
 		event, err := ParseEvent(signature)
 		if err != nil {
@@ -151,6 +163,23 @@ func parseKeyword(s string, keyword string) (string, bool) {
 	return skipWhitespace(rest), true
 }
 
+// normalizeType normalizes bare int/uint to int256/uint256, including arrays
+func normalizeType(typeName string) string {
+	if typeName == "int" {
+		return "int256"
+	}
+	if typeName == "uint" {
+		return "uint256"
+	}
+	if strings.HasPrefix(typeName, "int[") {
+		return "int256" + typeName[3:]
+	}
+	if strings.HasPrefix(typeName, "uint[") {
+		return "uint256" + typeName[4:]
+	}
+	return typeName
+}
+
 func parseElementaryType(unescapedSelector string) (string, string, error) {
 	parsedType, rest, err := parseToken(unescapedSelector, false)
 	if err != nil {
@@ -169,6 +198,7 @@ func parseElementaryType(unescapedSelector string) (string, string, error) {
 		parsedType = parsedType + string(rest[0])
 		rest = rest[1:]
 	}
+	parsedType = normalizeType(parsedType)
 	return parsedType, rest, nil
 }
 
@@ -429,6 +459,115 @@ func ParseError(unescapedSelector string) (ErrorMarshaling, error) {
 		Type:   "error",
 		Inputs: arguments,
 	}, nil
+}
+
+// ParseConstructor parses a constructor signature
+func ParseConstructor(signature string) (ABIMarshaling, error) {
+	signature = skipWhitespace(signature)
+
+	rest, _ := parseKeyword(signature, "constructor")
+	rest = skipWhitespace(rest)
+
+	if len(rest) == 0 || rest[0] != '(' {
+		return nil, fmt.Errorf("expected '(' after constructor keyword")
+	}
+	rest = rest[1:]
+
+	parenCount := 1
+	paramEnd := 0
+	for i := 0; i < len(rest); i++ {
+		if rest[i] == '(' {
+			parenCount++
+		} else if rest[i] == ')' {
+			parenCount--
+			if parenCount == 0 {
+				paramEnd = i
+				break
+			}
+		}
+	}
+
+	if parenCount != 0 {
+		return nil, fmt.Errorf("unbalanced parentheses in constructor signature")
+	}
+
+	paramsStr := rest[:paramEnd]
+	arguments, err := parseParameterList(paramsStr, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse constructor parameters: %v", err)
+	}
+
+	rest = skipWhitespace(rest[paramEnd+1:])
+
+	stateMutability := "nonpayable"
+	if newRest, found := parseKeyword(rest, "payable"); found {
+		stateMutability = "payable"
+		rest = newRest
+	}
+
+	result := make(ABIMarshaling)
+	result["type"] = "constructor"
+	result["inputs"] = arguments
+	result["stateMutability"] = stateMutability
+	return result, nil
+}
+
+// ParseFallback parses a fallback function signature
+// ParseFallback parses a fallback function signature (no parameters allowed)
+func ParseFallback(signature string) (ABIMarshaling, error) {
+	signature = skipWhitespace(signature)
+
+	rest, _ := parseKeyword(signature, "fallback")
+	rest = skipWhitespace(rest)
+
+	if len(rest) == 0 || rest[0] != '(' {
+		return nil, fmt.Errorf("expected '(' after fallback keyword")
+	}
+	rest = rest[1:]
+
+	if len(rest) == 0 || rest[0] != ')' {
+		return nil, fmt.Errorf("fallback function cannot have parameters")
+	}
+	rest = skipWhitespace(rest[1:])
+
+	stateMutability := "nonpayable"
+	if newRest, found := parseKeyword(rest, "payable"); found {
+		stateMutability = "payable"
+		rest = newRest
+	}
+
+	result := make(ABIMarshaling)
+	result["type"] = "fallback"
+	result["stateMutability"] = stateMutability
+	return result, nil
+}
+
+// ParseReceive parses a receive function signature (no parameters, always payable)
+func ParseReceive(signature string) (ABIMarshaling, error) {
+	signature = skipWhitespace(signature)
+
+	rest, _ := parseKeyword(signature, "receive")
+	rest = skipWhitespace(rest)
+
+	if len(rest) == 0 || rest[0] != '(' {
+		return nil, fmt.Errorf("expected '(' after receive keyword")
+	}
+	rest = rest[1:]
+
+	if len(rest) == 0 || rest[0] != ')' {
+		return nil, fmt.Errorf("receive function cannot have parameters")
+	}
+	rest = skipWhitespace(rest[1:])
+
+	stateMutability := "payable"
+	if newRest, found := parseKeyword(rest, "payable"); found {
+		rest = newRest
+	}
+
+	result := make(ABIMarshaling)
+	result["type"] = "receive"
+	result["stateMutability"] = stateMutability
+	return result, nil
 }
 
 func ParseSelector(unescapedSelector string) (SelectorMarshaling, error) {
