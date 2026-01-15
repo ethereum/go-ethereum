@@ -279,8 +279,12 @@ func TestStateHooks(t *testing.T) {
 		t.Fatalf("failed to trace call: %v", err)
 	}
 	expected := `{"Balance":{"0x00000000000000000000000000000000deadbeef":"0x3e8","0x71562b71999873db5b286df957af199ec94617f7":"0xde0975924ed6f90"},"Nonce":{"0x71562b71999873db5b286df957af199ec94617f7":"0x3"},"Storage":{"0x00000000000000000000000000000000deadbeef":{"0x0000000000000000000000000000000000000000000000000000000000000000":"0x000000000000000000000000000000000000000000000000000000000000002a"}}}`
-	if expected != fmt.Sprintf("%s", res) {
-		t.Fatalf("unexpected trace result: have %s want %s", res, expected)
+	result, ok := res.(json.RawMessage)
+	if !ok {
+		t.Fatalf("unexpected result type %T", res)
+	}
+	if expected != string(result) {
+		t.Fatalf("unexpected trace result: have %s want %s", result, expected)
 	}
 }
 
