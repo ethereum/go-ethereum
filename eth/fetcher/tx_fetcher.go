@@ -246,6 +246,7 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 		unknownMetas  = make([]txMetadata, 0, len(hashes))
 
 		duplicate   int64
+		onchain     int64
 		underpriced int64
 	)
 	for i, hash := range hashes {
@@ -260,7 +261,7 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 
 		// check on chain as well (no need to check limbo separately, as chain checks limbo too)
 		if _, exist := f.txOnChainCache.Get(hash); exist {
-			duplicate++ //TODO
+			onchain++
 			continue
 		}
 
@@ -278,6 +279,7 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 	}
 	txAnnounceKnownMeter.Mark(duplicate)
 	txAnnounceUnderpricedMeter.Mark(underpriced)
+	txAnnounceOnchainMeter.Mark(onchain)
 
 	// If anything's left to announce, push it into the internal loop
 	if len(unknownHashes) == 0 {
