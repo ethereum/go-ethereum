@@ -69,6 +69,11 @@ func (e *BlockAccessList) DecodeRLP(dec *rlp.Stream) error {
 	return nil
 }
 
+func (e *BlockAccessList) JSONString() string {
+	res, _ := json.MarshalIndent(e.StringableRepresentation(), "", "    ")
+	return string(res)
+}
+
 // StringableRepresentation returns an instance of the block access list
 // which can be converted to a human-readable JSON representation.
 func (e *BlockAccessList) StringableRepresentation() interface{} {

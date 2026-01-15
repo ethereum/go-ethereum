@@ -100,21 +100,6 @@ var (
 	blockExecutionTimer       = metrics.NewRegisteredResettingTimer("chain/execution", nil)
 	blockWriteTimer           = metrics.NewRegisteredResettingTimer("chain/write", nil)
 
-	// BAL-specific timers
-	blockPreprocessingTimer = metrics.NewRegisteredResettingTimer("chain/preprocess", nil)
-	txExecutionTimer        = metrics.NewRegisteredResettingTimer("chain/txexecution", nil)
-
-	stateTrieHashTimer      = metrics.NewRegisteredResettingTimer("chain/statetriehash", nil)
-	accountTriesUpdateTimer = metrics.NewRegisteredResettingTimer("chain/accounttriesupdate", nil)
-	stateTriePrefetchTimer  = metrics.NewRegisteredResettingTimer("chain/statetrieprefetch", nil)
-	stateTrieUpdateTimer    = metrics.NewRegisteredResettingTimer("chain/statetrieupdate", nil)
-	originStorageLoadTimer  = metrics.NewRegisteredResettingTimer("chain/originstorageload", nil)
-
-	stateRootComputeTimer = metrics.NewRegisteredResettingTimer("chain/staterootcompute", nil)
-	stateCommitTimer      = metrics.NewRegisteredResettingTimer("chain/statetriecommit", nil)
-
-	blockPostprocessingTimer = metrics.NewRegisteredResettingTimer("chain/postprocess", nil)
-
 	blockReorgMeter     = metrics.NewRegisteredMeter("chain/reorg/executes", nil)
 	blockReorgAddMeter  = metrics.NewRegisteredMeter("chain/reorg/add", nil)
 	blockReorgDropMeter = metrics.NewRegisteredMeter("chain/reorg/drop", nil)
@@ -2217,9 +2202,11 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	vtime = time.Since(vstart)
 
 	if enableBALFork {
-		computedAccessListHash := balTracer.AccessList().ToEncodingObj().Hash()
+		computedAccessList := balTracer.AccessList().ToEncodingObj()
+		computedAccessListHash := computedAccessList.Hash()
 
 		if *block.Header().BlockAccessListHash != computedAccessListHash {
+			//fmt.Printf("remote:\n%s\nlocal:\n%s\n", block.Body().AccessList.JSONString(), computedAccessList.JSONString())
 			err := fmt.Errorf("block header access list hash mismatch with computed (header=%x computed=%x)", *block.Header().BlockAccessListHash, computedAccessListHash)
 			bc.reportBadBlock(block, res, err)
 			return nil, err
