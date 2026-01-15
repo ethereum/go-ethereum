@@ -436,6 +436,7 @@ func decodeSingle(keySection []byte, onValue func([]byte, int, int) error) ([]st
 			}
 			key = unsharedKey
 		} else {
+			// TODO(rjl493456442) mitigate the allocation pressure.
 			if int(nShared) > len(prevKey) {
 				return nil, fmt.Errorf("unexpected shared key prefix: %d, prefix key length: %d", nShared, len(prevKey))
 			}
@@ -556,7 +557,11 @@ type singleTrienodeHistoryReader struct {
 	valueInternalOffsets map[string]iRange // value offset within the single trie data
 }
 
+// TODO(rjl493456442): This function performs a large number of allocations.
+// Given the large data size, a byte pool could be used to mitigate this.
 func newSingleTrienodeHistoryReader(id uint64, reader ethdb.AncientReader, keyRange iRange, valueRange iRange) (*singleTrienodeHistoryReader, error) {
+	// TODO(rjl493456442) the data size is known in advance, allocating the
+	// dedicated byte slices from the pool.
 	keyData, err := rawdb.ReadTrienodeHistoryKeySection(reader, id, uint64(keyRange.start), uint64(keyRange.len()))
 	if err != nil {
 		return nil, err
@@ -672,9 +677,13 @@ func (r *trienodeHistoryReader) read(owner common.Hash, path string) ([]byte, er
 }
 
 // writeTrienodeHistory persists the trienode history associated with the given diff layer.
-func writeTrienodeHistory(writer ethdb.AncientWriter, dl *diffLayer) error {
+func writeTrienodeHistory(writer ethdb.AncientWriter, dl *diffLayer, rate uint32) error {
 	start := time.Now()
-	h := newTrienodeHistory(dl.rootHash(), dl.parent.rootHash(), dl.block, dl.nodes.nodeOrigin)
+	nodes, err := dl.nodes.encodeNodeHistory(dl.root, rate)
+	if err != nil {
+		return err
+	}
+	h := newTrienodeHistory(dl.rootHash(), dl.parent.rootHash(), dl.block, nodes)
 	header, keySection, valueSection, err := h.encode()
 	if err != nil {
 		return err

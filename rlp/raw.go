@@ -153,6 +153,11 @@ func CountValues(b []byte) (int, error) {
 }
 
 // SplitListValues extracts the raw elements from the list RLP-encoding blob.
+//
+// Note: the returned slice must not be modified, as it shares the same
+// backing array as the original slice. It's acceptable to deep-copy the elements
+// out if necessary, but let's stick with this approach for less allocation
+// overhead.
 func SplitListValues(b []byte) ([][]byte, error) {
 	b, _, err := SplitList(b)
 	if err != nil {

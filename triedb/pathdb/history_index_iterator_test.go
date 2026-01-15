@@ -313,3 +313,49 @@ func TestIndexIteratorTraversal(t *testing.T) {
 		}
 	}
 }
+
+func TestSeqIterBasicIteration(t *testing.T) {
+	it := newSeqIter(5) // iterates over [1..5]
+	it.SeekGT(0)
+
+	var (
+		got      []uint64
+		expected = []uint64{1, 2, 3, 4, 5}
+	)
+	got = append(got, it.ID())
+	for it.Next() {
+		got = append(got, it.ID())
+	}
+	if len(got) != len(expected) {
+		t.Fatalf("iteration length mismatch: got %v, expected %v", got, expected)
+	}
+	for i := range expected {
+		if got[i] != expected[i] {
+			t.Fatalf("element mismatch at %d: got %d, expected %d", i, got[i], expected[i])
+		}
+	}
+}
+
+func TestSeqIterSeekGT(t *testing.T) {
+	it := newSeqIter(5)
+
+	tests := []struct {
+		input    uint64
+		ok       bool
+		expected uint64
+	}{
+		{0, true, 1},
+		{1, true, 2},
+		{4, true, 5},
+		{5, false, 0}, // 6 is out of range
+	}
+	for _, tt := range tests {
+		ok := it.SeekGT(tt.input)
+		if ok != tt.ok {
+			t.Fatalf("SeekGT(%d) ok mismatch: got %v, expected %v", tt.input, ok, tt.ok)
+		}
+		if ok && it.ID() != tt.expected {
+			t.Fatalf("SeekGT(%d) positioned at %d, expected %d", tt.input, it.ID(), tt.expected)
+		}
+	}
+}

@@ -22,11 +22,17 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
+	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/sync/errgroup"
 )
 
 // indexReaderWithLimitTag is a wrapper around indexReader that includes an
@@ -260,9 +266,204 @@ func (r *stateHistoryReader) read(state stateIdentQuery, stateID uint64, lastID 
 	return r.readStorage(state.address, state.storageKey, state.storageHash, historyID)
 }
 
+// trienodeReader is the structure to access historical trienode data.
+type trienodeReader struct {
+	disk            ethdb.KeyValueReader
+	freezer         ethdb.AncientReader
+	readConcurrency int // The concurrency used to load trie node data from history
+}
+
+// newTrienodeReader constructs the history reader with the supplied db
+// for accessing historical trie nodes.
+func newTrienodeReader(disk ethdb.KeyValueReader, freezer ethdb.AncientReader, readConcurrency int) *trienodeReader {
+	return &trienodeReader{
+		disk:            disk,
+		freezer:         freezer,
+		readConcurrency: readConcurrency,
+	}
+}
+
+// readTrienode retrieves the trienode data from the specified trienode history.
+func (r *trienodeReader) readTrienode(addrHash common.Hash, path string, historyID uint64) ([]byte, error) {
+	tr, err := newTrienodeHistoryReader(historyID, r.freezer)
+	if err != nil {
+		return nil, err
+	}
+	return tr.read(addrHash, path)
+}
+
+// assembleNode takes a complete node value as the base and applies a list of
+// mutation records to assemble the final node value accordingly.
+func assembleNode(blob []byte, elements [][][]byte, indices [][]int) ([]byte, error) {
+	if len(elements) == 0 && len(indices) == 0 {
+		return blob, nil
+	}
+	children, err := rlp.SplitListValues(blob)
+	if err != nil {
+		return nil, err
+	}
+	for i := 0; i < len(elements); i++ {
+		for j, pos := range indices[i] {
+			children[pos] = elements[i][j]
+		}
+	}
+	return rlp.MergeListValues(children)
+}
+
+type resultQueue struct {
+	data [][]byte
+	lock sync.Mutex
+}
+
+func newResultQueue(size int) *resultQueue {
+	return &resultQueue{
+		data: make([][]byte, size, size*2),
+	}
+}
+
+func (q *resultQueue) set(data []byte, pos int) {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	if pos >= len(q.data) {
+		newSize := pos + 1
+		if cap(q.data) < newSize {
+			newData := make([][]byte, newSize, newSize*2)
+			copy(newData, q.data)
+			q.data = newData
+		}
+		q.data = q.data[:newSize]
+	}
+	q.data[pos] = data
+}
+
+func (r *trienodeReader) readOptimized(state stateIdent, it HistoryIndexIterator, latestValue []byte) ([]byte, error) {
+	var (
+		elements [][][]byte
+		indices  [][]int
+		blob     = latestValue
+
+		eg    errgroup.Group
+		seq   int
+		term  atomic.Bool
+		queue = newResultQueue(r.readConcurrency * 2)
+	)
+	eg.SetLimit(r.readConcurrency)
+
+	for {
+		id, pos := it.ID(), seq
+		seq += 1
+
+		eg.Go(func() error {
+			// In optimistic readahead mode, it is theoretically possible to encounter a
+			// NotFound error, where the trie node does not actually exist and the iterator
+			// reports a false-positive mutation record. Terminate the iterator if so, as
+			// all the necessary data (checkpoints and all diffs) required has already been
+			// fetching.
+			data, err := r.readTrienode(state.addressHash, state.path, id)
+			if err != nil {
+				term.Store(true)
+				log.Debug("Failed to read the trienode", "err", err)
+				return nil
+			}
+			full, _, err := decodeNodeFull(data)
+			if err != nil {
+				term.Store(true)
+				return err
+			}
+			if full {
+				term.Store(true)
+			}
+			queue.set(data, pos)
+			return nil
+		})
+		if term.Load() || !it.Next() {
+			break
+		}
+	}
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+	if err := it.Error(); err != nil {
+		return nil, err
+	}
+	for i := 0; i < seq; i++ {
+		isComplete, fullBlob, err := decodeNodeFull(queue.data[i])
+		if err != nil {
+			return nil, err
+		}
+		// Terminate the loop is the node with full value has been found
+		if isComplete {
+			blob = fullBlob
+			break
+		}
+		// Decode the partial encoded node and keep iterating the node history
+		// until the node with full value being reached.
+		element, index, err := decodeNodeCompressed(queue.data[i])
+		if err != nil {
+			return nil, err
+		}
+		elements, indices = append(elements, element), append(indices, index)
+	}
+	slices.Reverse(elements)
+	slices.Reverse(indices)
+	return assembleNode(blob, elements, indices)
+}
+
+// read retrieves the trie node data associated with the stateID.
+// stateID: represents the ID of the state of the specified version;
+// lastID: represents the ID of the latest/newest trie node history;
+// latestValue: represents the trie node value at the current disk layer with ID == lastID;
+func (r *trienodeReader) read(state stateIdent, stateID uint64, lastID uint64, latestValue []byte) ([]byte, error) {
+	_, err := checkStateAvail(state, typeTrienodeHistory, r.freezer, stateID, lastID, r.disk)
+	if err != nil {
+		return nil, err
+	}
+	// Construct the index iterator to traverse the trienode history
+	var (
+		scheme *indexScheme
+		it     HistoryIndexIterator
+	)
+	if state.addressHash == (common.Hash{}) {
+		scheme = accountIndexScheme
+	} else {
+		scheme = storageIndexScheme
+	}
+	if state.addressHash == (common.Hash{}) && state.path == "" {
+		it = newSeqIter(lastID)
+	} else {
+		chunkID, nodeID := scheme.splitPathLast(state.path)
+
+		queryIdent := state
+		queryIdent.path = chunkID
+		ir, err := newIndexReader(r.disk, queryIdent, scheme.getBitmapSize(len(chunkID)))
+		if err != nil {
+			return nil, err
+		}
+		filter := extFilter(nodeID)
+		it = ir.newIterator(&filter)
+	}
+	// Move the iterator to the first element whose id is greater than
+	// the given number.
+	found := it.SeekGT(stateID)
+	if err := it.Error(); err != nil {
+		return nil, err
+	}
+	// The state was not found in the trie node histories, as it has not been
+	// modified since stateID. Use the data from the associated disk layer
+	// instead (full value node as always)
+	if !found {
+		return latestValue, nil
+	}
+	return r.readOptimized(state, it, latestValue)
+}
+
 // checkStateAvail determines whether the requested historical state is available
 // for accessing. What's more, it also returns the ID of the latest indexed history
 // entry for subsequent usage.
+//
+// TODO(rjl493456442) it's really expensive to perform the check for every state
+// retrieval, please rework this later.
 func checkStateAvail(state stateIdent, exptyp historyType, freezer ethdb.AncientReader, stateID uint64, lastID uint64, db ethdb.KeyValueReader) (uint64, error) {
 	if toHistoryType(state.typ) != exptyp {
 		return 0, fmt.Errorf("unsupported history type: %d, want: %v", toHistoryType(state.typ), exptyp)
