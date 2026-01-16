@@ -626,14 +626,18 @@ func (api *ConsensusAPI) getBlobs(hashes []common.Hash, v2 bool) ([]*engine.Blob
 // Helper for NewPayload* methods.
 var invalidStatus = engine.PayloadStatusV1{Status: engine.INVALID}
 
-// NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) NewPayloadV1(ctx context.Context, params engine.ExecutableData) (result engine.PayloadStatusV1, err error) {
-	attrs := []telemetry.Attribute{
+// executableDataAttrs returns telemetry attributes for an ExecutableData payload.
+func executableDataAttrs(params engine.ExecutableData) []telemetry.Attribute {
+	return []telemetry.Attribute{
 		telemetry.Int64Attribute("block.number", int64(params.Number)),
 		telemetry.StringAttribute("block.hash", params.BlockHash.Hex()),
 		telemetry.Int64Attribute("tx.count", int64(len(params.Transactions))),
 	}
-	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadV1", attrs...)
+}
+
+// NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
+func (api *ConsensusAPI) NewPayloadV1(ctx context.Context, params engine.ExecutableData) (result engine.PayloadStatusV1, err error) {
+	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadV1", executableDataAttrs(params)...)
 	defer spanEnd(err)
 	if params.Withdrawals != nil {
 		return invalidStatus, paramsErr("withdrawals not supported in V1")
@@ -643,12 +647,7 @@ func (api *ConsensusAPI) NewPayloadV1(ctx context.Context, params engine.Executa
 
 // NewPayloadV2 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV2(ctx context.Context, params engine.ExecutableData) (result engine.PayloadStatusV1, err error) {
-	attrs := []telemetry.Attribute{
-		telemetry.Int64Attribute("block.number", int64(params.Number)),
-		telemetry.StringAttribute("block.hash", params.BlockHash.Hex()),
-		telemetry.Int64Attribute("tx.count", int64(len(params.Transactions))),
-	}
-	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadV2", attrs...)
+	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadV2", executableDataAttrs(params)...)
 	defer spanEnd(err)
 	var (
 		cancun   = api.config().IsCancun(api.config().LondonBlock, params.Timestamp)
@@ -671,12 +670,7 @@ func (api *ConsensusAPI) NewPayloadV2(ctx context.Context, params engine.Executa
 
 // NewPayloadV3 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV3(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (result engine.PayloadStatusV1, err error) {
-	attrs := []telemetry.Attribute{
-		telemetry.Int64Attribute("block.number", int64(params.Number)),
-		telemetry.StringAttribute("block.hash", params.BlockHash.Hex()),
-		telemetry.Int64Attribute("tx.count", int64(len(params.Transactions))),
-	}
-	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadV3", attrs...)
+	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadV3", executableDataAttrs(params)...)
 	defer spanEnd(err)
 	switch {
 	case params.Withdrawals == nil:
@@ -697,12 +691,7 @@ func (api *ConsensusAPI) NewPayloadV3(ctx context.Context, params engine.Executa
 
 // NewPayloadV4 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV4(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes) (result engine.PayloadStatusV1, err error) {
-	attrs := []telemetry.Attribute{
-		telemetry.Int64Attribute("block.number", int64(params.Number)),
-		telemetry.StringAttribute("block.hash", params.BlockHash.Hex()),
-		telemetry.Int64Attribute("tx.count", int64(len(params.Transactions))),
-	}
-	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadV4", attrs...)
+	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadV4", executableDataAttrs(params)...)
 	defer spanEnd(err)
 	switch {
 	case params.Withdrawals == nil:
@@ -745,16 +734,10 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 	defer api.newPayloadLock.Unlock()
 
 	log.Trace("Engine API request received", "method", "NewPayload", "number", params.Number, "hash", params.BlockHash)
-
-	attrs := []telemetry.Attribute{
-		telemetry.Int64Attribute("block.number", int64(params.Number)),
-		telemetry.StringAttribute("block.hash", params.BlockHash.Hex()),
-		telemetry.Int64Attribute("tx.count", int64(len(params.Transactions))),
-	}
+	attrs := executableDataAttrs(params)
 	_, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayload.ExecutableDataToBlock", attrs...)
 	block, err := engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot, requests)
 	spanEnd(err)
-
 	if err != nil {
 		bgu := "nil"
 		if params.BlobGasUsed != nil {

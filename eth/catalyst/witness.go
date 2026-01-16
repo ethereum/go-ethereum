@@ -89,12 +89,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedWithWitnessV3(update engine.Forkchoice
 // NewPayloadWithWitnessV1 is analogous to NewPayloadV1, only it also generates
 // and returns a stateless witness after running the payload.
 func (api *ConsensusAPI) NewPayloadWithWitnessV1(ctx context.Context, params engine.ExecutableData) (result engine.PayloadStatusV1, err error) {
-	attrs := []telemetry.Attribute{
-		telemetry.Int64Attribute("block.number", int64(params.Number)),
-		telemetry.StringAttribute("block.hash", params.BlockHash.Hex()),
-		telemetry.Int64Attribute("tx.count", int64(len(params.Transactions))),
-	}
-	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadWithWitnessV1", attrs...)
+	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadWithWitnessV1", executableDataAttrs(params)...)
 	defer spanEnd(err)
 	if params.Withdrawals != nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("withdrawals not supported in V1"))
@@ -105,12 +100,7 @@ func (api *ConsensusAPI) NewPayloadWithWitnessV1(ctx context.Context, params eng
 // NewPayloadWithWitnessV2 is analogous to NewPayloadV2, only it also generates
 // and returns a stateless witness after running the payload.
 func (api *ConsensusAPI) NewPayloadWithWitnessV2(ctx context.Context, params engine.ExecutableData) (result engine.PayloadStatusV1, err error) {
-	attrs := []telemetry.Attribute{
-		telemetry.Int64Attribute("block.number", int64(params.Number)),
-		telemetry.StringAttribute("block.hash", params.BlockHash.Hex()),
-		telemetry.Int64Attribute("tx.count", int64(len(params.Transactions))),
-	}
-	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadWithWitnessV2", attrs...)
+	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadWithWitnessV2", executableDataAttrs(params)...)
 	defer spanEnd(err)
 	var (
 		cancun   = api.config().IsCancun(api.config().LondonBlock, params.Timestamp)
@@ -134,12 +124,7 @@ func (api *ConsensusAPI) NewPayloadWithWitnessV2(ctx context.Context, params eng
 // NewPayloadWithWitnessV3 is analogous to NewPayloadV3, only it also generates
 // and returns a stateless witness after running the payload.
 func (api *ConsensusAPI) NewPayloadWithWitnessV3(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (result engine.PayloadStatusV1, err error) {
-	attrs := []telemetry.Attribute{
-		telemetry.Int64Attribute("block.number", int64(params.Number)),
-		telemetry.StringAttribute("block.hash", params.BlockHash.Hex()),
-		telemetry.Int64Attribute("tx.count", int64(len(params.Transactions))),
-	}
-	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadWithWitnessV3", attrs...)
+	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadWithWitnessV3", executableDataAttrs(params)...)
 	defer spanEnd(err)
 	switch {
 	case params.Withdrawals == nil:
@@ -161,12 +146,7 @@ func (api *ConsensusAPI) NewPayloadWithWitnessV3(ctx context.Context, params eng
 // NewPayloadWithWitnessV4 is analogous to NewPayloadV4, only it also generates
 // and returns a stateless witness after running the payload.
 func (api *ConsensusAPI) NewPayloadWithWitnessV4(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes) (result engine.PayloadStatusV1, err error) {
-	attrs := []telemetry.Attribute{
-		telemetry.Int64Attribute("block.number", int64(params.Number)),
-		telemetry.StringAttribute("block.hash", params.BlockHash.Hex()),
-		telemetry.Int64Attribute("tx.count", int64(len(params.Transactions))),
-	}
-	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadWithWitnessV4", attrs...)
+	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayloadWithWitnessV4", executableDataAttrs(params)...)
 	defer spanEnd(err)
 	switch {
 	case params.Withdrawals == nil:
