@@ -23,7 +23,6 @@ package debug
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"os/user"
@@ -38,7 +37,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/grafana/pyroscope-go"
 	"github.com/hashicorp/go-bexpr"
 )
 
@@ -54,7 +52,6 @@ type HandlerT struct {
 	cpuFile   string
 	traceW    io.WriteCloser
 	traceFile string
-	profiler  *pyroscope.Profiler
 }
 
 // Verbosity sets the log verbosity ceiling. The verbosity of individual packages
@@ -127,80 +124,6 @@ func (h *HandlerT) StopCPUProfile() error {
 	h.cpuW.Close()
 	h.cpuW = nil
 	h.cpuFile = ""
-	return nil
-}
-
-// Small wrapper for log.Logger to satisfy pyroscope.Logger interface
-type pyroscopeLogger struct {
-	Logger log.Logger
-}
-
-func (l *pyroscopeLogger) Infof(format string, v ...interface{}) {
-	l.Logger.Info(fmt.Sprintf(format, v...))
-}
-
-func (l *pyroscopeLogger) Debugf(format string, v ...interface{}) {
-	l.Logger.Debug(fmt.Sprintf(format, v...))
-}
-
-func (l *pyroscopeLogger) Errorf(format string, v ...interface{}) {
-	l.Logger.Error(fmt.Sprintf(format, v...))
-}
-
-// StartPyroscopeProfiler starts the Pyroscope profiler for later use
-func (h *HandlerT) StartPyroscopeProfiler(
-	server string,
-	authUsername string,
-	authPassword string,
-	tags map[string]string,
-) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.profiler != nil {
-		log.Info("Pyroscope profiling already started")
-		return nil
-	}
-	profiler, err := pyroscope.Start(
-		pyroscope.Config{
-			ApplicationName:   "geth",
-			ServerAddress:     server,
-			BasicAuthUser:     authUsername,
-			BasicAuthPassword: authPassword,
-			Logger:            &pyroscopeLogger{Logger: log.Root().With("module", "pyroscope")},
-			Tags:              tags,
-			ProfileTypes: []pyroscope.ProfileType{
-				// Enabling all profile types
-				pyroscope.ProfileCPU,
-				pyroscope.ProfileAllocObjects,
-				pyroscope.ProfileAllocSpace,
-				pyroscope.ProfileInuseObjects,
-				pyroscope.ProfileInuseSpace,
-				pyroscope.ProfileGoroutines,
-				pyroscope.ProfileMutexCount,
-				pyroscope.ProfileMutexDuration,
-				pyroscope.ProfileBlockCount,
-				pyroscope.ProfileBlockDuration,
-			},
-		},
-	)
-	if err != nil {
-		return err
-	}
-	h.profiler = profiler
-	log.Info("Pyroscope profiling started")
-	return nil
-}
-
-// StopPyroscopeProfiler stops the Pyroscope profiler and returns the error
-func (h *HandlerT) StopPyroscopeProfiler() error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.profiler != nil {
-		err := h.profiler.Stop()
-		h.profiler = nil
-		return err
-	}
-	log.Info("Pyroscope profiling stopped")
 	return nil
 }
 

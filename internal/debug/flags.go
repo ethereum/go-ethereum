@@ -26,7 +26,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
@@ -139,36 +138,6 @@ var (
 	traceFlag = &cli.StringFlag{
 		Name:     "go-execution-trace",
 		Usage:    "Write Go execution trace to the given file",
-		Category: flags.LoggingCategory,
-	}
-	pyroscopeFlag = &cli.BoolFlag{
-		Name:     "pyroscope",
-		Usage:    "Enable Pyroscope profiling",
-		Value:    false,
-		Category: flags.LoggingCategory,
-	}
-	pyroscopeServerFlag = &cli.StringFlag{
-		Name:     "pyroscope.server",
-		Usage:    "Pyroscope server URL to push profiling data to",
-		Value:    "http://localhost:4040",
-		Category: flags.LoggingCategory,
-	}
-	pyroscopeAuthUsernameFlag = &cli.StringFlag{
-		Name:     "pyroscope.username",
-		Usage:    "Pyroscope basic authentication username",
-		Value:    "",
-		Category: flags.LoggingCategory,
-	}
-	pyroscopeAuthPasswordFlag = &cli.StringFlag{
-		Name:     "pyroscope.password",
-		Usage:    "Pyroscope basic authentication password",
-		Value:    "",
-		Category: flags.LoggingCategory,
-	}
-	pyroscopeTagsFlag = &cli.StringFlag{
-		Name:     "pyroscope.tags",
-		Usage:    "Comma separated list of key=value tags to add to profiling data",
-		Value:    "",
 		Category: flags.LoggingCategory,
 	}
 )
@@ -337,26 +306,9 @@ func Setup(ctx *cli.Context) error {
 
 	// Pyroscope profiling
 	if ctx.Bool(pyroscopeFlag.Name) {
-		pyroscopeServer := ctx.String(pyroscopeServerFlag.Name)
-		pyroscopeAuthUsername := ctx.String(pyroscopeAuthUsernameFlag.Name)
-		pyroscopeAuthPassword := ctx.String(pyroscopeAuthPasswordFlag.Name)
-
-		rawTags := ctx.String(pyroscopeTagsFlag.Name)
-		tags := make(map[string]string)
-		for _, tag := range strings.Split(rawTags, ",") {
-			kv := strings.Split(tag, "=")
-			// Ignore invalid tags
-			if len(kv) == 2 {
-				tags[kv[0]] = kv[1]
-			}
+		if err := startPyroscope(ctx); err != nil {
+			return err
 		}
-
-		Handler.StartPyroscopeProfiler(
-			pyroscopeServer,
-			pyroscopeAuthUsername,
-			pyroscopeAuthPassword,
-			tags,
-		)
 	}
 
 	if len(logFile) > 0 || rotation {
@@ -382,7 +334,7 @@ func StartPProf(address string, withMetrics bool) {
 // Exit stops all running profiles, flushing their output to the
 // respective file.
 func Exit() {
-	Handler.StopPyroscopeProfiler()
+	stopPyroscope()
 	Handler.StopCPUProfile()
 	Handler.StopGoTrace()
 	if logOutputFile != nil {
@@ -402,4 +354,21 @@ func validateLogLocation(path string) error {
 		f.Close()
 	}
 	return os.Remove(tmp)
+}
+
+// Small wrapper for log.Logger to satisfy pyroscope.Logger interface
+type pyroscopeLogger struct {
+	Logger log.Logger
+}
+
+func (l *pyroscopeLogger) Infof(format string, v ...any) {
+	l.Logger.Info(fmt.Sprintf("Pyroscope: "+format, v...))
+}
+
+func (l *pyroscopeLogger) Debugf(format string, v ...any) {
+	l.Logger.Debug(fmt.Sprintf("Pyroscope: "+format, v...))
+}
+
+func (l *pyroscopeLogger) Errorf(format string, v ...any) {
+	l.Logger.Error(fmt.Sprintf("Pyroscope: "+format, v...))
 }
