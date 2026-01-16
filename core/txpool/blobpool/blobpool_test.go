@@ -1816,23 +1816,30 @@ func TestAdd(t *testing.T) {
 			// Verify the pool internals after each addition
 			verifyPoolInternals(t, pool)
 			// verify that if the tx was added, an event was emitted
-			if add.err == nil {
-				select {
-				case ev := <-txsCh:
+			txStatus := pool.Status(signed.Hash())
+			select {
+			case ev := <-txsCh:
+				switch {
+				case add.err == nil && txStatus == txpool.TxStatusPending:
 					if len(ev.Txs) != 1 {
 						t.Errorf("test %d, tx %d: event txs length mismatch: have %d, want 1", i, j, len(ev.Txs))
 					}
 					if ev.Txs[0].Hash() != signed.Hash() {
 						t.Errorf("test %d, tx %d: event tx mismatch: have %v, want %v", i, j, ev.Txs[0].Hash(), signed.Hash())
 					}
+				case add.err == nil && txStatus == txpool.TxStatusQueued:
+					t.Errorf("test %d, tx %d: unexpected new tx event for queued tx", i, j)
+				case add.err != nil:
+					t.Errorf("test %d, tx %d: unexpected new tx event for failed tx", i, j)
 				default:
-					t.Errorf("test %d, tx %d: expected new tx event, none received", i, j)
+					t.Errorf("test %d, tx %d: unexpected test result", i, j)
 				}
-			} else {
-				select {
-				case ev := <-txsCh:
-					t.Errorf("test %d, tx %d: unexpected new tx event with %d txs", i, j, len(ev.Txs))
+			default:
+				switch {
+				case add.err == nil && txStatus == txpool.TxStatusPending:
+					t.Errorf("test %d, tx %d: expected new tx event, none received", i, j)
 				default:
+					// expected no event
 				}
 			}
 		}
