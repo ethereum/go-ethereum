@@ -232,38 +232,47 @@ func (s *hookedStateDB) AddLog(log *types.Log) {
 }
 
 func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
-	callHooks := s.hooks.OnBalanceChange != nil ||
-		s.hooks.OnNonceChangeV2 != nil || s.hooks.OnNonceChange != nil ||
-		s.hooks.OnCodeChangeV2 != nil || s.hooks.OnCodeChange != nil
+	if s.hooks.OnBalanceChange == nil && s.hooks.OnNonceChangeV2 == nil && s.hooks.OnNonceChange == nil && s.hooks.OnCodeChangeV2 == nil && s.hooks.OnCodeChange == nil {
+		// Short circuit if no relevant hooks are set.
+		s.inner.Finalise(deleteEmptyObjects)
+		return
+	}
 
-	if callHooks {
-		for addr := range s.inner.journal.dirties {
-			obj := s.inner.stateObjects[addr]
-			if obj != nil && obj.selfDestructed {
-				// If ether was sent to account post-selfdestruct it is burnt.
-				if s.hooks.OnBalanceChange != nil {
-					if bal := obj.Balance(); bal.Sign() != 0 {
-						s.hooks.OnBalanceChange(addr, bal.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestructBurn)
-					}
-				}
-				if s.hooks.OnNonceChangeV2 != nil {
-					s.hooks.OnNonceChangeV2(addr, obj.Nonce(), 0, tracing.NonceChangeSelfdestruct)
-				} else if s.hooks.OnNonceChange != nil {
-					s.hooks.OnNonceChange(addr, obj.Nonce(), 0)
-				}
+	// Iterate all dirty addresses and record self-destructs.
+	for addr := range s.inner.journal.dirties {
+		obj := s.inner.stateObjects[addr]
+		if obj == nil || !obj.selfDestructed {
+			// Not self-destructed, keep searching.
+			continue
+		}
+		// Bingo: state object was self-destructed, call relevant hooks.
 
-				// If an initcode invokes selfdestruct, do not emit a code change.
-				prevCodeHash := s.inner.GetCodeHash(addr)
-				if prevCodeHash == types.EmptyCodeHash {
-					continue
-				}
-				if s.hooks.OnCodeChangeV2 != nil {
-					s.hooks.OnCodeChangeV2(addr, prevCodeHash, s.inner.GetCode(addr), types.EmptyCodeHash, nil, tracing.CodeChangeSelfDestruct)
-				} else if s.hooks.OnCodeChange != nil {
-					s.hooks.OnCodeChange(addr, prevCodeHash, s.inner.GetCode(addr), types.EmptyCodeHash, nil)
-				}
+		// If ether was sent to account post-selfdestruct, record as burnt.
+		if s.hooks.OnBalanceChange != nil {
+			if bal := obj.Balance(); bal.Sign() != 0 {
+				s.hooks.OnBalanceChange(addr, bal.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestructBurn)
 			}
 		}
+
+		// Nonce is set to reset on self-destruct.
+		if s.hooks.OnNonceChangeV2 != nil {
+			s.hooks.OnNonceChangeV2(addr, obj.Nonce(), 0, tracing.NonceChangeSelfdestruct)
+		} else if s.hooks.OnNonceChange != nil {
+			s.hooks.OnNonceChange(addr, obj.Nonce(), 0)
+		}
+
+		// If an initcode invokes selfdestruct, do not emit a code change.
+		prevCodeHash := s.inner.GetCodeHash(addr)
+		if prevCodeHash == types.EmptyCodeHash {
+			continue
+		}
+		// Otherwise, trace the change.
+		if s.hooks.OnCodeChangeV2 != nil {
+			s.hooks.OnCodeChangeV2(addr, prevCodeHash, s.inner.GetCode(addr), types.EmptyCodeHash, nil, tracing.CodeChangeSelfDestruct)
+		} else if s.hooks.OnCodeChange != nil {
+			s.hooks.OnCodeChange(addr, prevCodeHash, s.inner.GetCode(addr), types.EmptyCodeHash, nil)
+		}
 	}
+
 	s.inner.Finalise(deleteEmptyObjects)
 }
