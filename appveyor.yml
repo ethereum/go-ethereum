@@ -4,6 +4,10 @@ version: "{branch}.{build}"
 image:
   - Visual Studio 2019
 
+cache:
+  - '%LOCALAPPDATA%\go-build'
+  - '%GOPATH%\pkg\mod' -> appveyor.yml
+
 environment:
   matrix:
     - GETH_ARCH: amd64
