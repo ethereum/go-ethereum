@@ -49,6 +49,8 @@ func TestBurn(t *testing.T) {
 	createAndDestroy := func(addr common.Address) {
 		hooked.AddBalance(addr, uint256.NewInt(100), tracing.BalanceChangeUnspecified)
 		hooked.CreateContract(addr)
+		// Simulate what the opcode handler does: clear balance before selfdestruct
+		hooked.SubBalance(addr, hooked.GetBalance(addr), tracing.BalanceDecreaseSelfdestruct)
 		hooked.SelfDestruct(addr)
 		// sanity-check that balance is now 0
 		if have, want := hooked.GetBalance(addr), new(uint256.Int); !have.Eq(want) {
@@ -140,8 +142,8 @@ func TestHooks_OnCodeChangeV2(t *testing.T) {
 	var result []string
 	var wants = []string{
 		"0xaa00000000000000000000000000000000000000.code:  (0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470) ->0x1325 (0xa12ae05590de0c93a00bc7ac773c2fdb621e44f814985e72194f921c0050f728) ContractCreation",
-		"0xaa00000000000000000000000000000000000000.code: 0x1325 (0xa12ae05590de0c93a00bc7ac773c2fdb621e44f814985e72194f921c0050f728) -> (0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470) SelfDestruct",
 		"0xbb00000000000000000000000000000000000000.code:  (0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470) ->0x1326 (0x3c54516221d604e623f358bc95996ca3242aaa109bddabcebda13db9b3f90dcb) ContractCreation",
+		"0xaa00000000000000000000000000000000000000.code: 0x1325 (0xa12ae05590de0c93a00bc7ac773c2fdb621e44f814985e72194f921c0050f728) -> (0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470) SelfDestruct",
 		"0xbb00000000000000000000000000000000000000.code: 0x1326 (0x3c54516221d604e623f358bc95996ca3242aaa109bddabcebda13db9b3f90dcb) -> (0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470) SelfDestruct",
 	}
 	emitF := func(format string, a ...any) {
@@ -157,7 +159,8 @@ func TestHooks_OnCodeChangeV2(t *testing.T) {
 
 	sdb.SetCode(common.Address{0xbb}, []byte{0x13, 38}, tracing.CodeChangeContractCreation)
 	sdb.CreateContract(common.Address{0xbb})
-	sdb.SelfDestruct6780(common.Address{0xbb})
+	sdb.SelfDestruct(common.Address{0xbb})
+	sdb.Finalise(true)
 
 	if len(result) != len(wants) {
 		t.Fatalf("number of tracing events wrong, have %d want %d", len(result), len(wants))
