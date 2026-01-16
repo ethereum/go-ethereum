@@ -62,7 +62,7 @@ func makeTestIndexBlock(count int, bitmapSize int) ([]byte, []uint64, [][]uint16
 		marks[n] = true
 		elements = append(elements, n)
 	}
-	sort.Slice(elements, func(i, j int) bool { return elements[i] < elements[j] })
+	slices.Sort(elements)
 
 	for i := 0; i < len(elements); i++ {
 		ext := randomExt(bitmapSize, 5)
@@ -88,7 +88,7 @@ func makeTestIndexBlocks(db ethdb.KeyValueStore, stateIdent stateIdent, count in
 		marks[n] = true
 		elements = append(elements, n)
 	}
-	sort.Slice(elements, func(i, j int) bool { return elements[i] < elements[j] })
+	slices.Sort(elements)
 
 	iw, _ := newIndexWriter(db, stateIdent, 0, bitmapSize)
 	for i := 0; i < len(elements); i++ {
