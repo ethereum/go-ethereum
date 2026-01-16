@@ -26,7 +26,7 @@ object "FactorySelfDestructBalanceCheck" {
             pop(call(gas(), contractAddr, 50, 0, 0, 0, 0))
 
             // Check balance again after sending funds
-            // Store in slot 1 to verify it's 50 (new funds not burnt)
+            // Store in slot 1 to verify it's 0 (funds sent to destroyed contract are burnt)
             sstore(1, balance(contractAddr))
 
             stop()
