@@ -93,12 +93,12 @@ func (env *testEnv) close() {
 	env.chain.Stop()
 }
 
-// nolint:unused
+//nolint:unused
 func (env *testEnv) setGasTip(gasTip uint64) {
 	env.pool.SetGasTip(new(big.Int).SetUint64(gasTip))
 }
 
-// nolint:unused
+//nolint:unused
 func (env *testEnv) makeTx(nonce uint64, gasPrice *big.Int) *types.Transaction {
 	if nonce == 0 {
 		head := env.chain.CurrentHeader()
@@ -125,7 +125,7 @@ func (env *testEnv) makeTxs(n int) []*types.Transaction {
 	return txs
 }
 
-// nolint:unused
+//nolint:unused
 func (env *testEnv) commit() {
 	head := env.chain.CurrentBlock()
 	block := env.chain.GetBlock(head.Hash(), head.Number.Uint64())

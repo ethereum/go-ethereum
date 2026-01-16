@@ -648,7 +648,7 @@ func (r *trienodeHistoryReader) read(owner common.Hash, path string) ([]byte, er
 }
 
 // writeTrienodeHistory persists the trienode history associated with the given diff layer.
-// nolint:unused
+//nolint:unused
 func writeTrienodeHistory(writer ethdb.AncientWriter, dl *diffLayer) error {
 	start := time.Now()
 	h := newTrienodeHistory(dl.rootHash(), dl.parent.rootHash(), dl.block, dl.nodes.nodeOrigin)
@@ -675,7 +675,7 @@ func writeTrienodeHistory(writer ethdb.AncientWriter, dl *diffLayer) error {
 }
 
 // readTrienodeMetadata resolves the metadata of the specified trienode history.
-// nolint:unused
+//nolint:unused
 func readTrienodeMetadata(reader ethdb.AncientReader, id uint64) (*trienodeMetadata, error) {
 	header, err := rawdb.ReadTrienodeHistoryHeader(reader, id)
 	if err != nil {

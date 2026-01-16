@@ -66,7 +66,7 @@ func (g *GoToolchain) goTool(command string, args ...string) *exec.Cmd {
 	if g.Root == "" {
 		g.Root = runtime.GOROOT()
 	}
-	tool := exec.Command(filepath.Join(g.Root, "bin", "go"), command) // nolint: gosec
+	tool := exec.Command(filepath.Join(g.Root, "bin", "go"), command) //nolint:gosec
 	tool.Args = append(tool.Args, args...)
 	tool.Env = append(tool.Env, "GOROOT="+g.Root)
 
