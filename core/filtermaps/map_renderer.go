@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math"
 	"slices"
-	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -616,7 +615,15 @@ func (fmr *filterMapsRange) addRenderedRange(firstRendered, afterLastRendered, a
 	if fmr.tailPartialEpoch > 0 {
 		endpoints = append(endpoints, []endpoint{{fmr.maps.First() - mapsPerEpoch, 1}, {fmr.maps.First() - mapsPerEpoch + fmr.tailPartialEpoch, -1}}...)
 	}
-	sort.Slice(endpoints, func(i, j int) bool { return endpoints[i].m < endpoints[j].m })
+	slices.SortFunc(endpoints, func(a, b endpoint) int {
+		if a.m < b.m {
+			return -1
+		}
+		if a.m > b.m {
+			return 1
+		}
+		return 0
+	})
 	var (
 		sum    int
 		merged []uint32
