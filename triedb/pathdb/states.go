@@ -176,6 +176,11 @@ func (s *stateSet) accountList() []common.Hash {
 	s.listLock.Lock()
 	defer s.listLock.Unlock()
 
+	//double check after acquiring the write lock
+	if list = s.accountListSorted; list != nil {
+		return list
+	}
+
 	list = slices.SortedFunc(maps.Keys(s.accountData), common.Hash.Cmp)
 	s.accountListSorted = list
 	return list
@@ -205,6 +210,11 @@ func (s *stateSet) storageList(accountHash common.Hash) []common.Hash {
 	// multiple times, which is acceptable.
 	s.listLock.Lock()
 	defer s.listLock.Unlock()
+
+	//double check after acquiring the write lock
+	if list := s.storageListSorted[accountHash]; list != nil {
+		return list
+	}
 
 	list := slices.SortedFunc(maps.Keys(s.storageData[accountHash]), common.Hash.Cmp)
 	s.storageListSorted[accountHash] = list
