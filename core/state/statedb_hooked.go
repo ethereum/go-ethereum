@@ -219,10 +219,6 @@ func (s *hookedStateDB) SelfDestruct(address common.Address) {
 	s.inner.SelfDestruct(address)
 }
 
-func (s *hookedStateDB) SelfDestruct6780(address common.Address) {
-	s.inner.SelfDestruct6780(address)
-}
-
 func (s *hookedStateDB) AddLog(log *types.Log) {
 	// The inner will modify the log (add fields), so invoke that first
 	s.inner.AddLog(log)

@@ -60,11 +60,6 @@ type StateDB interface {
 	SelfDestruct(common.Address)
 	HasSelfDestructed(common.Address) bool
 
-	// SelfDestruct6780 is post-EIP6780 selfdestruct, which means that it's a
-	// send-all-to-beneficiary, unless the contract was created in this same
-	// transaction, in which case it will be destructed.
-	SelfDestruct6780(common.Address)
-
 	// Exist reports whether the given account exists in state.
 	// Notably this also returns true for self-destructed accounts within the current transaction.
 	Exist(common.Address) bool

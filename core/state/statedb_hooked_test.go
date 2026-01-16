@@ -159,7 +159,7 @@ func TestHooks_OnCodeChangeV2(t *testing.T) {
 
 	sdb.SetCode(common.Address{0xbb}, []byte{0x13, 38}, tracing.CodeChangeContractCreation)
 	sdb.CreateContract(common.Address{0xbb})
-	sdb.SelfDestruct6780(common.Address{0xbb})
+	sdb.SelfDestruct(common.Address{0xbb})
 	sdb.Finalise(true)
 
 	if len(result) != len(wants) {

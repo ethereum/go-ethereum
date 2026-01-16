@@ -885,7 +885,7 @@ func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 	// The funds are burned immediately if the beneficiary is the caller itself,
 	// in this case, the beneficiary's balance is not increased.
-	if beneficiary != this {
+	if this != beneficiary {
 		evm.StateDB.AddBalance(beneficiary, balance, tracing.BalanceIncreaseSelfdestruct)
 	}
 	// Clear any leftover funds for the account being destructed.
@@ -909,26 +909,24 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 		balance     = evm.StateDB.GetBalance(this)
 		top         = scope.Stack.pop()
 		beneficiary = common.Address(top.Bytes20())
+
+		newContract = evm.StateDB.IsNewContract(this)
 	)
 
-	if evm.StateDB.IsNewContract(this) {
-		// Contract is newly created in this transaction, so it will be actually
-		// deleted from the state.
-		if this == beneficiary {
-			// Since the contract will be deleted from state, it isn't necessary to
-			// also subtract the balance beforehand as it will affect the tracing.
-		} else {
-			// Otherwise, we can proceed with transfer.
+	// Contract is new and will actually be deleted.
+	if newContract {
+		if this != beneficiary { // Skip no-op transfer when self-destructing to self.
 			evm.StateDB.AddBalance(beneficiary, balance, tracing.BalanceIncreaseSelfdestruct)
 		}
 		evm.StateDB.SubBalance(this, balance, tracing.BalanceDecreaseSelfdestruct)
-	} else {
-		// Contract already exists in the state, therefore it will send it's full
-		// balance and remain in the state.
+		evm.StateDB.SelfDestruct(this)
+	}
+
+	// Contract already exists, only do transfer if beneficiary is not self.
+	if !newContract && this != beneficiary {
 		evm.StateDB.SubBalance(this, balance, tracing.BalanceDecreaseSelfdestruct)
 		evm.StateDB.AddBalance(beneficiary, balance, tracing.BalanceIncreaseSelfdestruct)
 	}
-	evm.StateDB.SelfDestruct6780(this)
 
 	if tracer := evm.Config.Tracer; tracer != nil {
 		if tracer.OnEnter != nil {

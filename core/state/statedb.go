@@ -525,16 +525,6 @@ func (s *StateDB) SelfDestruct(addr common.Address) {
 	}
 }
 
-func (s *StateDB) SelfDestruct6780(addr common.Address) {
-	stateObject := s.getStateObject(addr)
-	if stateObject == nil {
-		return
-	}
-	if stateObject.newContract {
-		s.SelfDestruct(addr)
-	}
-}
-
 // SetTransientState sets transient storage for a given account. It
 // adds the change to the journal so that it can be rolled back
 // to its previous value if there is a revert.
