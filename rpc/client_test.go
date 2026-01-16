@@ -529,7 +529,7 @@ func TestClientCloseUnsubscribeRace(t *testing.T) {
 	server := newTestServer()
 	defer server.Stop()
 
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		client := DialInProc(server)
 		nc := make(chan int)
 		sub, err := client.Subscribe(context.Background(), "nftest", nc, "someSubscription", 3, 1)
@@ -690,7 +690,7 @@ func TestClientSubscriptionChannelClose(t *testing.T) {
 	client, _ := Dial(wsURL)
 	defer client.Close()
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		ch := make(chan int, 100)
 		sub, err := client.Subscribe(context.Background(), "nftest", ch, "someSubscription", 100, 1)
 		if err != nil {
