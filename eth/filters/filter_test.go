@@ -612,7 +612,7 @@ func TestRangeLimit(t *testing.T) {
 		Alloc:   types.GenesisAlloc{},
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
-	_, err := gspec.Commit(db, triedb.NewDatabase(db, nil))
+	_, err := gspec.Commit(db, triedb.NewDatabase(db, nil), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
