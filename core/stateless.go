@@ -42,7 +42,7 @@ import (
 //   - It cannot be placed outside of core, because it needs to construct a dud headerchain
 //
 // TODO(karalabe): Would be nice to resolve both issues above somehow and move it.
-func ExecuteStateless(config *params.ChainConfig, vmconfig vm.Config, block *types.Block, witness *stateless.Witness) (common.Hash, common.Hash, error) {
+func ExecuteStateless(ctx context.Context, config *params.ChainConfig, vmconfig vm.Config, block *types.Block, witness *stateless.Witness) (common.Hash, common.Hash, error) {
 	// Sanity check if the supplied block accidentally contains a set root or
 	// receipt hash. If so, be very loud, but still continue.
 	if block.Root() != (common.Hash{}) {
@@ -68,7 +68,7 @@ func ExecuteStateless(config *params.ChainConfig, vmconfig vm.Config, block *typ
 	validator := NewBlockValidator(config, nil) // No chain, we only validate the state, not the block
 
 	// Run the stateless blocks processing and self-validate certain fields
-	res, err := processor.Process(context.Background(), block, db, vmconfig)
+	res, err := processor.Process(ctx, block, db, vmconfig)
 	if err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}
