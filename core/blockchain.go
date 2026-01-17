@@ -48,6 +48,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/syncx"
+	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -2160,7 +2161,9 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 
 	// Process block using the parent state as reference point
 	pstart := time.Now()
-	res, err := bc.processor.Process(ctx, block, statedb, bc.cfg.VmConfig)
+	pctx, _, spanEnd := telemetry.StartSpan(ctx, "core.Process")
+	res, err := bc.processor.Process(pctx, block, statedb, bc.cfg.VmConfig)
+	spanEnd(err)
 	if err != nil {
 		bc.reportBadBlock(block, res, err)
 		return nil, err
@@ -2168,7 +2171,10 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	ptime := time.Since(pstart)
 
 	vstart := time.Now()
-	if err := bc.validator.ValidateState(block, statedb, res, false); err != nil {
+	_, _, spanEnd = telemetry.StartSpan(ctx, "core.ValidateState")
+	err = bc.validator.ValidateState(block, statedb, res, false)
+	spanEnd(err)
+	if err != nil {
 		bc.reportBadBlock(block, res, err)
 		return nil, err
 	}
