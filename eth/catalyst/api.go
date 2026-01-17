@@ -812,7 +812,7 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 	log.Trace("Inserting block without sethead", "hash", block.Hash(), "number", block.Number())
 	_, _, spanEnd = telemetry.StartSpan(ctx, "engine.newPayload.InsertBlockWithoutSetHead", attrs...)
 	start := time.Now()
-	proofs, err := api.eth.BlockChain().InsertBlockWithoutSetHead(block, witness)
+	proofs, err := api.eth.BlockChain().InsertBlockWithoutSetHead(ctx, block, witness)
 	processingTime := time.Since(start)
 	spanEnd(err)
 	if err != nil {

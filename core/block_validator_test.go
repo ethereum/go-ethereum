@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"math/big"
 	"testing"
 	"time"
@@ -210,7 +211,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 			t.Fatalf("post-block %d: unexpected result returned: %v", i, result)
 		case <-time.After(25 * time.Millisecond):
 		}
-		chain.InsertBlockWithoutSetHead(postBlocks[i], false)
+		chain.InsertBlockWithoutSetHead(context.Background(), postBlocks[i], false)
 	}
 
 	// Verify the blocks with pre-merge blocks and post-merge blocks

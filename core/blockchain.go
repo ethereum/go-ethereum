@@ -18,6 +18,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -1800,7 +1801,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	}
 	defer bc.chainmu.Unlock()
 
-	_, n, err := bc.insertChain(chain, true, false) // No witness collection for mass inserts (would get super large)
+	_, n, err := bc.insertChain(context.Background(), chain, true, false) // No witness collection for mass inserts (would get super large)
 	return n, err
 }
 
@@ -1812,7 +1813,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 // racey behaviour. If a sidechain import is in progress, and the historic state
 // is imported, but then new canon-head is added before the actual sidechain
 // completes, then the historic state could be pruned again
-func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness bool) (*stateless.Witness, int, error) {
+func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHead bool, makeWitness bool) (*stateless.Witness, int, error) {
 	// If the chain is terminating, don't even bother starting up.
 	if bc.insertStopped() {
 		return nil, 0, nil
@@ -1970,7 +1971,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		}
 		// The traced section of block import.
 		start := time.Now()
-		res, err := bc.ProcessBlock(parent.Root, block, setHead, makeWitness && len(chain) == 1)
+		res, err := bc.ProcessBlock(ctx, parent.Root, block, setHead, makeWitness && len(chain) == 1)
 		if err != nil {
 			return nil, it.index, err
 		}
@@ -2055,7 +2056,7 @@ func (bpr *blockProcessingResult) Stats() *ExecuteStats {
 
 // ProcessBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
-func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, setHead bool, makeWitness bool) (result *blockProcessingResult, blockEndErr error) {
+func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, block *types.Block, setHead bool, makeWitness bool) (result *blockProcessingResult, blockEndErr error) {
 	var (
 		err       error
 		startTime = time.Now()
@@ -2159,7 +2160,7 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 
 	// Process block using the parent state as reference point
 	pstart := time.Now()
-	res, err := bc.processor.Process(block, statedb, bc.cfg.VmConfig)
+	res, err := bc.processor.Process(ctx, block, statedb, bc.cfg.VmConfig)
 	if err != nil {
 		bc.reportBadBlock(block, res, err)
 		return nil, err
@@ -2354,7 +2355,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator, ma
 		// memory here.
 		if len(blocks) >= 2048 || memory > 64*1024*1024 {
 			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].NumberU64(), "end", block.NumberU64())
-			if _, _, err := bc.insertChain(blocks, true, false); err != nil {
+			if _, _, err := bc.insertChain(context.Background(), blocks, true, false); err != nil {
 				return nil, 0, err
 			}
 			blocks, memory = blocks[:0], 0
@@ -2368,7 +2369,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator, ma
 	}
 	if len(blocks) > 0 {
 		log.Info("Importing sidechain segment", "start", blocks[0].NumberU64(), "end", blocks[len(blocks)-1].NumberU64())
-		return bc.insertChain(blocks, true, makeWitness)
+		return bc.insertChain(context.Background(), blocks, true, makeWitness)
 	}
 	return nil, 0, nil
 }
@@ -2417,7 +2418,7 @@ func (bc *BlockChain) recoverAncestors(block *types.Block, makeWitness bool) (co
 		} else {
 			b = bc.GetBlock(hashes[i], numbers[i])
 		}
-		if _, _, err := bc.insertChain(types.Blocks{b}, false, makeWitness && i == 0); err != nil {
+		if _, _, err := bc.insertChain(context.Background(), types.Blocks{b}, false, makeWitness && i == 0); err != nil {
 			return b.ParentHash(), err
 		}
 	}
@@ -2644,13 +2645,13 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 // The key difference between the InsertChain is it won't do the canonical chain
 // updating. It relies on the additional SetCanonical call to finalize the entire
 // procedure.
-func (bc *BlockChain) InsertBlockWithoutSetHead(block *types.Block, makeWitness bool) (*stateless.Witness, error) {
+func (bc *BlockChain) InsertBlockWithoutSetHead(ctx context.Context, block *types.Block, makeWitness bool) (*stateless.Witness, error) {
 	if !bc.chainmu.TryLock() {
 		return nil, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
 
-	witness, _, err := bc.insertChain(types.Blocks{block}, false, makeWitness)
+	witness, _, err := bc.insertChain(ctx, types.Blocks{block}, false, makeWitness)
 	return witness, err
 }
 
