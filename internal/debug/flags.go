@@ -355,20 +355,3 @@ func validateLogLocation(path string) error {
 	}
 	return os.Remove(tmp)
 }
-
-// Small wrapper for log.Logger to satisfy pyroscope.Logger interface
-type pyroscopeLogger struct {
-	Logger log.Logger
-}
-
-func (l *pyroscopeLogger) Infof(format string, v ...any) {
-	l.Logger.Info(fmt.Sprintf("Pyroscope: "+format, v...))
-}
-
-func (l *pyroscopeLogger) Debugf(format string, v ...any) {
-	l.Logger.Debug(fmt.Sprintf("Pyroscope: "+format, v...))
-}
-
-func (l *pyroscopeLogger) Errorf(format string, v ...any) {
-	l.Logger.Error(fmt.Sprintf("Pyroscope: "+format, v...))
-}
