@@ -283,11 +283,11 @@ func (h *stateHistory) typ() historyType {
 
 // forEach implements the history interface, returning an iterator to traverse the
 // state entries in the history.
-func (h *stateHistory) forEach() iter.Seq[stateIdent] {
-	return func(yield func(stateIdent) bool) {
+func (h *stateHistory) forEach() iter.Seq[indexElem] {
+	return func(yield func(indexElem) bool) {
 		for _, addr := range h.accountList {
 			addrHash := crypto.Keccak256Hash(addr.Bytes())
-			if !yield(newAccountIdent(addrHash)) {
+			if !yield(accountIndexElem{addrHash}) {
 				return
 			}
 			for _, slotKey := range h.storageList[addr] {
@@ -298,7 +298,7 @@ func (h *stateHistory) forEach() iter.Seq[stateIdent] {
 				if h.meta.version != stateHistoryV0 {
 					slotHash = crypto.Keccak256Hash(slotKey.Bytes())
 				}
-				if !yield(newStorageIdent(addrHash, slotHash)) {
+				if !yield(storageIndexElem{addrHash, slotHash}) {
 					return
 				}
 			}
