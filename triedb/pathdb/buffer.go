@@ -132,7 +132,7 @@ func (b *buffer) size() uint64 {
 
 // flush persists the in-memory dirty trie node into the disk if the configured
 // memory threshold is reached. Note, all data must be written atomically.
-func (b *buffer) flush(root common.Hash, db ethdb.KeyValueStore, freezer ethdb.AncientWriter, progress []byte, nodesCache, statesCache *fastcache.Cache, id uint64, postFlush func()) {
+func (b *buffer) flush(root common.Hash, db ethdb.KeyValueStore, freezers []ethdb.AncientWriter, progress []byte, nodesCache, statesCache *fastcache.Cache, id uint64, postFlush func()) {
 	if b.done != nil {
 		panic("duplicated flush operation")
 	}
@@ -165,11 +165,9 @@ func (b *buffer) flush(root common.Hash, db ethdb.KeyValueStore, freezer ethdb.A
 		//
 		// This step is crucial to guarantee that the corresponding state history remains
 		// available for state rollback.
-		if freezer != nil {
-			if err := freezer.SyncAncient(); err != nil {
-				b.flushErr = err
-				return
-			}
+		if err := syncHistory(freezers...); err != nil {
+			b.flushErr = err
+			return
 		}
 		nodes := b.nodes.write(batch, nodesCache)
 		accounts, slots := b.states.write(batch, progress, statesCache)
