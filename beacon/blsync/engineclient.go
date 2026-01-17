@@ -89,7 +89,7 @@ func (ec *engineClient) updateLoop(headCh <-chan types.ChainHeadEvent) {
 			} else {
 				if err.Error() == "beacon syncer reorging" {
 					log.Debug("Failed ForkchoiceUpdated", "head", event.Block.Hash(), "error", err)
-					continue // ignore beacon syncer reorging errors, this error can occurr if the blsync is skipping a block
+					continue // ignore beacon syncer reorging errors, this error can occur if the blsync is skipping a block
 				}
 				log.Error("Failed ForkchoiceUpdated", "head", event.Block.Hash(), "error", err)
 			}
