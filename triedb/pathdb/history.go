@@ -442,7 +442,7 @@ func repairHistory(db ethdb.Database, isVerkle bool, readOnly bool, stateID uint
 		if store == nil {
 			return
 		}
-		pruned, err := truncateFromHead(store, typ, head)
+		pruned, err := truncateFromHead(store, typ, nhead)
 		if err != nil {
 			log.Crit("Failed to truncate extra histories", "typ", typ, "err", err)
 		}
