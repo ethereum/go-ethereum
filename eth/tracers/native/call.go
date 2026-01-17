@@ -44,6 +44,7 @@ type callLog struct {
 	Data    hexutil.Bytes  `json:"data"`
 	// Position of the log relative to subcalls within the same trace
 	// See https://github.com/ethereum/go-ethereum/pull/28389 for details
+	Index    hexutil.Uint `json:"index"`
 	Position hexutil.Uint `json:"position"`
 }
 
@@ -250,6 +251,7 @@ func (t *callTracer) OnLog(log *types.Log) {
 		Address:  log.Address,
 		Topics:   log.Topics,
 		Data:     log.Data,
+		Index:    hexutil.Uint(log.Index),
 		Position: hexutil.Uint(len(t.callstack[len(t.callstack)-1].Calls)),
 	}
 	t.callstack[len(t.callstack)-1].Logs = append(t.callstack[len(t.callstack)-1].Logs, l)
