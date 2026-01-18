@@ -46,6 +46,7 @@ const (
 	BPO4
 	BPO5
 	Amsterdam
+	Bogota
 )
 
 // String implements fmt.Stringer.

@@ -25,6 +25,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
 
@@ -82,11 +84,53 @@ func NewEVMTxContext(msg *Message) vm.TxContext {
 		Origin:     msg.From,
 		GasPrice:   new(big.Int).Set(msg.GasPrice),
 		BlobHashes: msg.BlobHashes,
+
+		// EIP-7701 fields
+		TxType:              msg.TxType,
+		Nonce:               msg.Nonce,
+		Sender:              msg.Sender,
+		Deployer:            msg.Deployer,
+		Paymaster:           msg.Paymaster,
+		SenderExecutionData: msg.Data,
+		SenderExecutionGas:  msg.GasLimit,
 	}
 	if msg.BlobGasFeeCap != nil {
 		ctx.BlobFeeCap = new(big.Int).Set(msg.BlobGasFeeCap)
 	}
+	if msg.GasTipCap != nil {
+		ctx.MaxPriorityFeePerGas = new(big.Int).Set(msg.GasTipCap)
+	}
+	if msg.GasFeeCap != nil {
+		ctx.MaxFeePerGas = new(big.Int).Set(msg.GasFeeCap)
+	}
+
+	// Compute AccessListHash
+	if len(msg.AccessList) > 0 {
+		ctx.AccessListHash = rlpHash(msg.AccessList)
+	}
+
+	// Compute AuthorizationListHash
+	if len(msg.SetCodeAuthorizations) > 0 {
+		ctx.AuthorizationListHash = rlpHash(msg.SetCodeAuthorizations)
+	}
+
+	// TxHashForSignature is nil for AA transactions
+	// For non-AA transactions, we leave it nil as we don't have access to the
+	// original transaction here. If needed, this should be set by the caller.
+	if !msg.Abstract {
+		// TODO: compute TxHashForSignature for non-AA transactions if needed
+	}
+
 	return ctx
+}
+
+// rlpHash computes the keccak256 hash of the RLP encoding of x.
+func rlpHash(x interface{}) common.Hash {
+	encoded, err := rlp.EncodeToBytes(x)
+	if err != nil {
+		return common.Hash{}
+	}
+	return crypto.Keccak256Hash(encoded)
 }
 
 // GetHashFn returns a GetHashFunc which retrieves header hashes by number
