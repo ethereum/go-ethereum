@@ -276,7 +276,7 @@ func parseLibraryDeps(unlinkedCode string) (res []string) {
 // onItem on each. If the callback returns an error, iteration is halted and
 // the error is returned from iterSorted.
 func iterSorted[V any](inp map[string]V, onItem func(string, V) error) error {
-	var sortedKeys []string
+	sortedKeys := make([]string, 0, len(inp))
 	for key := range inp {
 		sortedKeys = append(sortedKeys, key)
 	}
