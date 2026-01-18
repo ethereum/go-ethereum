@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
@@ -62,18 +63,28 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		random = &header.MixDigest
 	}
 	return vm.BlockContext{
-		CanTransfer: CanTransfer,
-		Transfer:    Transfer,
-		GetHash:     GetHashFn(header, chain),
-		Coinbase:    beneficiary,
-		BlockNumber: new(big.Int).Set(header.Number),
-		Time:        header.Time,
-		Difficulty:  new(big.Int).Set(header.Difficulty),
-		BaseFee:     baseFee,
-		BlobBaseFee: blobBaseFee,
-		GasLimit:    header.GasLimit,
-		Random:      random,
+		CanTransfer:    CanTransfer,
+		Transfer:       Transfer,
+		GetHash:        GetHashFn(header, chain),
+		Coinbase:       beneficiary,
+		BlockNumber:    new(big.Int).Set(header.Number),
+		Time:           header.Time,
+		Difficulty:     new(big.Int).Set(header.Difficulty),
+		BaseFee:        baseFee,
+		BlobBaseFee:    blobBaseFee,
+		GasLimit:       header.GasLimit,
+		Random:         random,
+		CostPerGasByte: CostPerStateByte(header, chain.Config()),
 	}
+}
+
+// CostPerStateByte computes the cost per one byte of state creation
+// after EIP-8037
+func CostPerStateByte(header *types.Header, config *params.ChainConfig) uint64 {
+	if config.IsAmsterdam(header.Number, header.Time) {
+		return ((header.GasLimit / 2) * 7200 * 365) / params.TargetStateGrowthPerYear
+	}
+	return 0
 }
 
 // NewEVMTxContext creates a new transaction context for a single transaction.
