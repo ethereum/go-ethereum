@@ -97,10 +97,8 @@ func newStates(accounts map[common.Hash][]byte, storages map[common.Hash]map[com
 // account returns the account data associated with the specified address hash.
 func (s *stateSet) account(hash common.Hash) ([]byte, bool) {
 	// If the account is known locally, return it
-	if data, ok := s.accountData[hash]; ok {
-		return data, true
-	}
-	return nil, false // account is unknown in this set
+	data, ok := s.accountData[hash]
+	return data, ok
 }
 
 // mustAccount returns the account data associated with the specified address
