@@ -186,17 +186,6 @@ loop:
 		select {
 		case timer := <-ready:
 			// execute callback, remove/reschedule the timer
-			var arguments []interface{}
-			if len(timer.call.Arguments) > 2 {
-				tmp := timer.call.Arguments[2:]
-				arguments = make([]interface{}, 2+len(tmp))
-				for i, value := range tmp {
-					arguments[i+2] = value
-				}
-			} else {
-				arguments = make([]interface{}, 1)
-			}
-			arguments[0] = timer.call.Arguments[0]
 			call, isFunc := goja.AssertFunction(timer.call.Arguments[0])
 			if !isFunc {
 				panic(re.vm.ToValue("js error: timer/timeout callback is not a function"))
