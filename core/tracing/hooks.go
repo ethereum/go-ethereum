@@ -26,6 +26,7 @@ package tracing
 
 import (
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -56,6 +57,21 @@ type StateDB interface {
 	GetTransientState(common.Address, common.Hash) common.Hash
 	Exist(common.Address) bool
 	GetRefund() uint64
+	GetAccumulatedIOMeasurements() *IOMeasurements
+}
+
+// IOMeasurements is a struct that contains the measurements of
+// the I/O operations performed by the statedb.
+type IOMeasurements struct {
+	AccountReads    time.Duration
+	AccountHashes   time.Duration
+	AccountUpdates  time.Duration
+	AccountCommits  time.Duration
+	StorageReads    time.Duration
+	StorageUpdates  time.Duration
+	StorageCommits  time.Duration
+	SnapshotCommits time.Duration
+	TrieDBCommits   time.Duration
 }
 
 // VMContext provides the context for the EVM execution.
