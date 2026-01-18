@@ -48,6 +48,8 @@ var (
 	secp256k1halfN = new(big.Int).Div(secp256k1N, big.NewInt(2))
 )
 
+var createAddress2Prefix = []byte{0xff}
+
 var errInvalidPubkey = errors.New("invalid secp256k1 public key")
 
 // EllipticCurve contains curve operations.
@@ -84,7 +86,7 @@ func CreateAddress(b common.Address, nonce uint64) common.Address {
 // CreateAddress2 creates an ethereum address given the address bytes, initial
 // contract code hash and a salt.
 func CreateAddress2(b common.Address, salt [32]byte, inithash []byte) common.Address {
-	return common.BytesToAddress(Keccak256([]byte{0xff}, b.Bytes(), salt[:], inithash)[12:])
+	return common.BytesToAddress(Keccak256(createAddress2Prefix, b.Bytes(), salt[:], inithash)[12:])
 }
 
 // ToECDSA creates a private key with the given D value.
