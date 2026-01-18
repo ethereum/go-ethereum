@@ -1028,8 +1028,26 @@ func TestEIP8024_Execution(t *testing.T) {
 			},
 		},
 		{
+			name:    "DUPN_MISSING_IMMEDIATE",
+			codeHex: "60016000808080808080808080808080808080e6",
+			wantVals: []uint64{
+				1,
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				1,
+			},
+		},
+		{
 			name:    "SWAPN",
 			codeHex: "600160008080808080808080808080808080806002e700",
+			wantVals: []uint64{
+				1,
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				2,
+			},
+		},
+		{
+			name:    "SWAPN_MISSING_IMMEDIATE",
+			codeHex: "600160008080808080808080808080808080806002e7",
 			wantVals: []uint64{
 				1,
 				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -1040,6 +1058,15 @@ func TestEIP8024_Execution(t *testing.T) {
 			name:     "EXCHANGE",
 			codeHex:  "600060016002e801",
 			wantVals: []uint64{2, 0, 1},
+		},
+		{
+			name:    "EXCHANGE_MISSING_IMMEDIATE",
+			codeHex: "600060006000600060006000600060006000600060006000600060006000600060006000600060006000600060006000600060006000600060016002e8",
+			wantVals: []uint64{
+				2,
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				1,
+			},
 		},
 		{
 			name:    "INVALID_SWAPN_LOW",
@@ -1090,21 +1117,6 @@ func TestEIP8024_Execution(t *testing.T) {
 		{
 			name:    "UNDERFLOW_EXCHANGE",
 			codeHex: "60016002e801", // (n,m)=(1,2), need 3 items, have 2
-			wantErr: true,
-		},
-		{
-			name:    "MISSING_IMMEDIATE_DUPN",
-			codeHex: "e6", // no operand
-			wantErr: true,
-		},
-		{
-			name:    "MISSING_IMMEDIATE_SWAPN",
-			codeHex: "e7", // no operand
-			wantErr: true,
-		},
-		{
-			name:    "MISSING_IMMEDIATE_EXCHANGE",
-			codeHex: "e8", // no operand
 			wantErr: true,
 		},
 		{
