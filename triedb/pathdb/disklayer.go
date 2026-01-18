@@ -346,8 +346,9 @@ func (dl *diskLayer) writeHistory(typ historyType, diff *diffLayer) (bool, error
 	case typeTrienodeHistory:
 		freezer = dl.db.trienodeFreezer
 		indexer = dl.db.trienodeIndexer
-		writeFunc = writeTrienodeHistory
-
+		writeFunc = func(writer ethdb.AncientWriter, diff *diffLayer) error {
+			return writeTrienodeHistory(writer, diff, dl.db.config.FullValueCheckpoint)
+		}
 		// Skip the history commit if the trienode history is not permitted
 		if dl.db.config.TrienodeHistory < 0 {
 			return false, nil

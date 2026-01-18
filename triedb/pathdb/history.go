@@ -158,8 +158,6 @@ func newStorageIdent(addressHash common.Hash, storageHash common.Hash) stateIden
 // newTrienodeIdent constructs a state identifier for a trie node.
 // The address denotes the address hash of the associated account;
 // the path denotes the path of the node within the trie;
-//
-// nolint:unused
 func newTrienodeIdent(addressHash common.Hash, path string) stateIdent {
 	return stateIdent{
 		typ:         typeTrienode,

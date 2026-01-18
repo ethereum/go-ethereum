@@ -609,3 +609,48 @@ func (it *indexIterator) Error() error {
 func (it *indexIterator) ID() uint64 {
 	return it.blockIt.ID()
 }
+
+// seqIter provides a simple iterator over a contiguous sequence of
+// unsigned integers, ending at end (end is included).
+type seqIter struct {
+	cur  uint64 // current position
+	end  uint64 // iteration stops at end-1
+	done bool   // true when iteration is exhausted
+}
+
+func newSeqIter(last uint64) *seqIter {
+	return &seqIter{end: last + 1}
+}
+
+// SeekGT positions the iterator at the smallest element > id.
+// Returns false if no such element exists.
+func (it *seqIter) SeekGT(id uint64) bool {
+	if id+1 >= it.end {
+		it.done = true
+		return false
+	}
+	it.cur = id + 1
+	it.done = false
+	return true
+}
+
+// Next advances the iterator. Returns false if exhausted.
+func (it *seqIter) Next() bool {
+	if it.done {
+		return false
+	}
+	if it.cur+1 < it.end {
+		it.cur++
+		return true
+	}
+	// this was the last element
+	it.done = true
+	return false
+}
+
+// ID returns the id of the element where the iterator is positioned at.
+func (it *seqIter) ID() uint64 { return it.cur }
+
+// Error returns any accumulated error. Exhausting all the elements is not
+// considered to be an error.
+func (it *seqIter) Error() error { return nil }

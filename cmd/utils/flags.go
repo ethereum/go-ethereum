@@ -301,6 +301,12 @@ var (
 		Value:    ethconfig.Defaults.TrienodeHistory,
 		Category: flags.StateCategory,
 	}
+	TrienodeHistoryFullValueCheckpointFlag = &cli.UintFlag{
+		Name:     "history.trienode.full-value-checkpoint",
+		Usage:    "The frequency of full-value encoding. Every n-th node is stored in full-value format; all other nodes are stored as diffs relative to their predecessor",
+		Value:    uint(ethconfig.Defaults.NodeFullValueCheckpoint),
+		Category: flags.StateCategory,
+	}
 	TransactionHistoryFlag = &cli.Uint64Flag{
 		Name:     "history.transactions",
 		Usage:    "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain)",
@@ -1714,6 +1720,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(TrienodeHistoryFlag.Name) {
 		cfg.TrienodeHistory = ctx.Int64(TrienodeHistoryFlag.Name)
 	}
+	if ctx.IsSet(TrienodeHistoryFullValueCheckpointFlag.Name) {
+		cfg.NodeFullValueCheckpoint = uint32(ctx.Uint(TrienodeHistoryFullValueCheckpointFlag.Name))
+	}
 	if ctx.IsSet(StateSchemeFlag.Name) {
 		cfg.StateScheme = ctx.String(StateSchemeFlag.Name)
 	}
@@ -2318,16 +2327,17 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		Fatalf("%v", err)
 	}
 	options := &core.BlockChainConfig{
-		TrieCleanLimit:  ethconfig.Defaults.TrieCleanCache,
-		NoPrefetch:      ctx.Bool(CacheNoPrefetchFlag.Name),
-		TrieDirtyLimit:  ethconfig.Defaults.TrieDirtyCache,
-		ArchiveMode:     ctx.String(GCModeFlag.Name) == "archive",
-		TrieTimeLimit:   ethconfig.Defaults.TrieTimeout,
-		SnapshotLimit:   ethconfig.Defaults.SnapshotCache,
-		Preimages:       ctx.Bool(CachePreimagesFlag.Name),
-		StateScheme:     scheme,
-		StateHistory:    ctx.Uint64(StateHistoryFlag.Name),
-		TrienodeHistory: ctx.Int64(TrienodeHistoryFlag.Name),
+		TrieCleanLimit:          ethconfig.Defaults.TrieCleanCache,
+		NoPrefetch:              ctx.Bool(CacheNoPrefetchFlag.Name),
+		TrieDirtyLimit:          ethconfig.Defaults.TrieDirtyCache,
+		ArchiveMode:             ctx.String(GCModeFlag.Name) == "archive",
+		TrieTimeLimit:           ethconfig.Defaults.TrieTimeout,
+		SnapshotLimit:           ethconfig.Defaults.SnapshotCache,
+		Preimages:               ctx.Bool(CachePreimagesFlag.Name),
+		StateScheme:             scheme,
+		StateHistory:            ctx.Uint64(StateHistoryFlag.Name),
+		TrienodeHistory:         ctx.Int64(TrienodeHistoryFlag.Name),
+		NodeFullValueCheckpoint: uint32(ctx.Uint(TrienodeHistoryFullValueCheckpointFlag.Name)),
 
 		// Disable transaction indexing/unindexing.
 		TxLookupLimit: -1,
