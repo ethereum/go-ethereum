@@ -374,8 +374,12 @@ func gasCallStateless(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 		transfersValue = !stack.Back(2).IsZero()
 	)
 
-	if transfersValue && !evm.chainRules.IsEIP4762 {
-		gas += params.CallValueTransferGas
+	if transfersValue {
+		if evm.readOnly {
+			return 0, ErrWriteProtection
+		} else if !evm.chainRules.IsEIP4762 {
+			gas += params.CallValueTransferGas
+		}
 	}
 
 	memoryGas, err := memoryGasCost(mem, memorySize)
@@ -443,11 +447,16 @@ func gasCallCodeStateless(evm *EVM, contract *Contract, stack *Stack, mem *Memor
 		return 0, err
 	}
 	var (
-		gas      uint64
-		overflow bool
+		gas            uint64
+		overflow       bool
+		transfersValue = !stack.Back(2).IsZero()
 	)
-	if stack.Back(2).Sign() != 0 && !evm.chainRules.IsEIP4762 {
-		gas += params.CallValueTransferGas
+	if transfersValue {
+		if evm.readOnly {
+			return 0, ErrWriteProtection
+		} else if !evm.chainRules.IsEIP4762 {
+			gas += params.CallValueTransferGas
+		}
 	}
 	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
 		return 0, ErrGasUintOverflow
