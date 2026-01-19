@@ -205,7 +205,7 @@ func (h *GlogHandler) Handle(ctx context.Context, r slog.Record) error {
 	for _, rule := range curPatterns {
 		if rule.pattern.MatchString("+" + file) {
 			lvl, ok = rule.level, true
-			// TODO: Not breaking allows the last match to win. Is this what we want?
+			// Not breaking allows the last match to win.
 		}
 	}
 	if !ok {
