@@ -114,6 +114,8 @@ var (
 	queuedGauge  = metrics.NewRegisteredGauge("txpool/queued", nil)
 	slotsGauge   = metrics.NewRegisteredGauge("txpool/slots", nil)
 
+	pendingAddrsGauge = metrics.NewRegisteredGauge("txpool/pending/accounts", nil)
+
 	reheapTimer = metrics.NewRegisteredTimer("txpool/reheap", nil)
 )
 
@@ -844,6 +846,7 @@ func (pool *LegacyPool) promoteTx(addr common.Address, hash common.Hash, tx *typ
 	// Try to insert the transaction into the pending queue
 	if pool.pending[addr] == nil {
 		pool.pending[addr] = newList(true)
+		pendingAddrsGauge.Inc(1)
 	}
 	list := pool.pending[addr]
 
@@ -1083,6 +1086,7 @@ func (pool *LegacyPool) removeTx(hash common.Hash, outofbound bool, unreserve bo
 			// If no more pending transactions are left, remove the list
 			if pending.Empty() {
 				delete(pool.pending, addr)
+				pendingAddrsGauge.Dec(1)
 			}
 			// Postpone any invalidated transactions
 			for _, tx := range invalids {
@@ -1580,6 +1584,7 @@ func (pool *LegacyPool) demoteUnexecutables() {
 		// Delete the entire pending entry if it became empty.
 		if list.Empty() {
 			delete(pool.pending, addr)
+			pendingAddrsGauge.Dec(1)
 			if _, ok := pool.queue.get(addr); !ok {
 				pool.reserver.Release(addr)
 			}
