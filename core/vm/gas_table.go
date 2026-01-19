@@ -451,12 +451,8 @@ func gasCallCodeStateless(evm *EVM, contract *Contract, stack *Stack, mem *Memor
 		overflow       bool
 		transfersValue = !stack.Back(2).IsZero()
 	)
-	if transfersValue {
-		if evm.readOnly {
-			return 0, ErrWriteProtection
-		} else if !evm.chainRules.IsEIP4762 {
-			gas += params.CallValueTransferGas
-		}
+	if transfersValue && !evm.chainRules.IsEIP4762 {
+		gas += params.CallValueTransferGas
 	}
 	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
 		return 0, ErrGasUintOverflow
