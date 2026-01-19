@@ -50,7 +50,7 @@ func stateAvail(id uint64, env *tester) bool {
 	return id+1 >= firstID
 }
 
-func checkHistoricalState(env *tester, root common.Hash, id uint64, hr *historyReader) error {
+func checkHistoricalState(env *tester, root common.Hash, id uint64, hr *stateHistoryReader) error {
 	if !stateAvail(id, env) {
 		return nil
 	}
@@ -157,7 +157,7 @@ func testHistoryReader(t *testing.T, historyLimit uint64) {
 	var (
 		roots = env.roots
 		dl    = env.db.tree.bottom()
-		hr    = newHistoryReader(env.db.diskdb, env.db.stateFreezer)
+		hr    = newStateHistoryReader(env.db.diskdb, env.db.stateFreezer)
 	)
 	for i, root := range roots {
 		if root == dl.rootHash() {

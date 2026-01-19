@@ -950,7 +950,7 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 	var (
 		dIndex int
 		roots  = env.roots
-		hr     = newHistoryReader(env.db.diskdb, env.db.stateFreezer)
+		hr     = newStateHistoryReader(env.db.diskdb, env.db.stateFreezer)
 	)
 	for i, root := range roots {
 		if root == dRoot {
@@ -1011,7 +1011,7 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 
 	// Ensure the truncated state histories become accessible
 	bRoot = env.db.tree.bottom().rootHash()
-	hr = newHistoryReader(env.db.diskdb, env.db.stateFreezer)
+	hr = newStateHistoryReader(env.db.diskdb, env.db.stateFreezer)
 	for i, root := range roots {
 		if root == bRoot {
 			break

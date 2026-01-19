@@ -158,7 +158,12 @@ func SplitListValues(b []byte) ([][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	var elements [][]byte
+	n, err := CountValues(b)
+	if err != nil {
+		return nil, err
+	}
+	var elements = make([][]byte, 0, n)
+
 	for len(b) > 0 {
 		_, tagsize, size, err := readKind(b)
 		if err != nil {
