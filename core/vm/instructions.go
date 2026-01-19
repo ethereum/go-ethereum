@@ -518,6 +518,9 @@ func opSload(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opSstore(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	if evm.readOnly {
+		return nil, ErrWriteProtection
+	}
 	loc := scope.Stack.pop()
 	val := scope.Stack.pop()
 	evm.StateDB.SetState(scope.Contract.Address(), loc.Bytes32(), val.Bytes32())
@@ -740,6 +743,9 @@ func opCall(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	// Get the arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
+	if evm.readOnly && !value.IsZero() {
+		return nil, ErrWriteProtection
+	}
 	if !value.IsZero() {
 		gas += params.CallStipend
 	}
@@ -876,13 +882,15 @@ func opStop(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	if evm.readOnly {
+		return nil, ErrWriteProtection
+	}
 	var (
 		this        = scope.Contract.Address()
 		balance     = evm.StateDB.GetBalance(this)
 		top         = scope.Stack.pop()
 		beneficiary = common.Address(top.Bytes20())
 	)
-
 	// The funds are burned immediately if the beneficiary is the caller itself,
 	// in this case, the beneficiary's balance is not increased.
 	if this != beneficiary {
@@ -904,15 +912,16 @@ func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
+	if evm.readOnly {
+		return nil, ErrWriteProtection
+	}
 	var (
 		this        = scope.Contract.Address()
 		balance     = evm.StateDB.GetBalance(this)
 		top         = scope.Stack.pop()
 		beneficiary = common.Address(top.Bytes20())
-
 		newContract = evm.StateDB.IsNewContract(this)
 	)
-
 	// Contract is new and will actually be deleted.
 	if newContract {
 		if this != beneficiary { // Skip no-op transfer when self-destructing to self.
