@@ -27,7 +27,11 @@ type Range[T uint32 | uint64] struct {
 
 // NewRange creates a new range based of first element and number of elements.
 func NewRange[T uint32 | uint64](first, count T) Range[T] {
-	return Range[T]{first, first + count}
+	afterLast := first + count
+	if afterLast < first {
+		panic("range overflow")
+	}
+	return Range[T]{first, afterLast}
 }
 
 // First returns the first element of the range.
@@ -97,6 +101,12 @@ func (r Range[T]) Intersection(q Range[T]) Range[T] {
 
 // Union returns the union of two ranges. Panics for gapped ranges.
 func (r Range[T]) Union(q Range[T]) Range[T] {
+	if r.IsEmpty() {
+		return q
+	}
+	if q.IsEmpty() {
+		return r
+	}
 	if max(r.first, q.first) > min(r.afterLast, q.afterLast) {
 		panic("cannot create union; gap between ranges")
 	}
