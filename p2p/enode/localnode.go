@@ -208,6 +208,11 @@ func (ln *LocalNode) SetFallbackUDP(port int) {
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
 
+	if port < 0 || port > 0xFFFF {
+		log.Warn("Ignoring invalid fallback UDP port", "port", port)
+		return
+	}
+
 	ln.endpoint4.fallbackUDP = uint16(port)
 	ln.endpoint6.fallbackUDP = uint16(port)
 	ln.updateEndpoints()
