@@ -35,7 +35,7 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 		ExcessBlobGas       *math.HexOrDecimal64                       `json:"excessBlobGas"`
 		BlobGasUsed         *math.HexOrDecimal64                       `json:"blobGasUsed"`
 		BlockAccessListHash *common.Hash                               `json:"blockAccessListHash,omitempty"`
-		SlotNumber          *uint64                                    `json:"slotNumber"`
+		SlotNumber          *math.HexOrDecimal64                       `json:"slotNumber"`
 	}
 	var enc Genesis
 	enc.Config = g.Config
@@ -59,7 +59,7 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 	enc.ExcessBlobGas = (*math.HexOrDecimal64)(g.ExcessBlobGas)
 	enc.BlobGasUsed = (*math.HexOrDecimal64)(g.BlobGasUsed)
 	enc.BlockAccessListHash = g.BlockAccessListHash
-	enc.SlotNumber = g.SlotNumber
+	enc.SlotNumber = (*math.HexOrDecimal64)(g.SlotNumber)
 	return json.Marshal(&enc)
 }
 
@@ -82,7 +82,7 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 		ExcessBlobGas       *math.HexOrDecimal64                       `json:"excessBlobGas"`
 		BlobGasUsed         *math.HexOrDecimal64                       `json:"blobGasUsed"`
 		BlockAccessListHash *common.Hash                               `json:"blockAccessListHash,omitempty"`
-		SlotNumber          *uint64                                    `json:"slotNumber"`
+		SlotNumber          *math.HexOrDecimal64                       `json:"slotNumber"`
 	}
 	var dec Genesis
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -143,7 +143,7 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 		g.BlockAccessListHash = dec.BlockAccessListHash
 	}
 	if dec.SlotNumber != nil {
-		g.SlotNumber = dec.SlotNumber
+		g.SlotNumber = (*uint64)(dec.SlotNumber)
 	}
 	return nil
 }
