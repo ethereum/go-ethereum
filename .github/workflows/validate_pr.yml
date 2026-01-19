@@ -1,6 +1,6 @@
 name: PR Format Validation
 
-on:
+on:[![PR Format Validation](https://github.com/ethereum/go-ethereum/actions/workflows/validate_pr.yml/badge.svg)](https://github.com/ethereum/go-ethereum/actions/workflows/validate_pr.yml)
   pull_request:
     types: [opened, edited, synchronize]
 
