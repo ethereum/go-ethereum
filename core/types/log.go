@@ -17,8 +17,11 @@
 package types
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/holiman/uint256"
 )
 
 //go:generate go run ../../rlp/rlpgen -type Log -out gen_log_rlp.go
@@ -61,4 +64,31 @@ type logMarshaling struct {
 	TxIndex        hexutil.Uint
 	BlockTimestamp hexutil.Uint64
 	Index          hexutil.Uint
+}
+
+var (
+	// system contract address
+	EthTransferLogAddress = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
+	// keccak256('Transfer(address,address,uint256)')
+	EthTransferLogTopic0 = common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
+)
+
+// EthTransferLog creates and ETH transfer log according to EIP-7708.
+// Specification: https://eips.ethereum.org/EIPS/eip-7708
+func EthTransferLog(blockNumber *big.Int, from, to common.Address, amount *uint256.Int) *Log {
+	topics := make([]common.Hash, 3)
+	topics[0] = EthTransferLogTopic0
+	copy(topics[1][common.HashLength-common.AddressLength:], from[:])
+	copy(topics[2][common.HashLength-common.AddressLength:], to[:])
+	amount32 := amount.Bytes32()
+	data := make([]byte, 32)
+	copy(data, amount32[:])
+	return &Log{
+		Address: EthTransferLogAddress,
+		Topics:  topics,
+		Data:    data,
+		// This is a non-consensus field, but assigned here because
+		// core/state doesn't know the current block number.
+		BlockNumber: blockNumber.Uint64(),
+	}
 }

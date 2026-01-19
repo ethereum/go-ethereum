@@ -895,6 +895,13 @@ func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	}
 	// Clear any leftover funds for the account being destructed.
 	evm.StateDB.SubBalance(this, balance, tracing.BalanceDecreaseSelfdestruct)
+	if evm.chainRules.IsAmsterdam && !balance.IsZero() {
+		if this != beneficiary {
+			evm.StateDB.AddLog(types.EthTransferLog(evm.Context.BlockNumber, this, beneficiary, balance))
+		} else {
+			evm.StateDB.AddLog(types.EthTransferLog(evm.Context.BlockNumber, this, common.Address{}, balance))
+		}
+	}
 	evm.StateDB.SelfDestruct(this)
 
 	if tracer := evm.Config.Tracer; tracer != nil {
@@ -932,6 +939,13 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 	if !newContract && this != beneficiary {
 		evm.StateDB.SubBalance(this, balance, tracing.BalanceDecreaseSelfdestruct)
 		evm.StateDB.AddBalance(beneficiary, balance, tracing.BalanceIncreaseSelfdestruct)
+	}
+	if evm.chainRules.IsAmsterdam && !balance.IsZero() {
+		if this != beneficiary {
+			evm.StateDB.AddLog(types.EthTransferLog(evm.Context.BlockNumber, this, beneficiary, balance))
+		} else if newContract {
+			evm.StateDB.AddLog(types.EthTransferLog(evm.Context.BlockNumber, this, common.Address{}, balance))
+		}
 	}
 
 	if tracer := evm.Config.Tracer; tracer != nil {
