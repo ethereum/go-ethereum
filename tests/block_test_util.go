@@ -98,6 +98,7 @@ type btHeader struct {
 	ExcessBlobGas         *uint64
 	ParentBeaconBlockRoot *common.Hash
 	BlockAccessListHash   *common.Hash
+	SlotNumber            *uint64
 }
 
 type btHeaderMarshaling struct {
@@ -110,6 +111,7 @@ type btHeaderMarshaling struct {
 	BaseFeePerGas *math.HexOrDecimal256
 	BlobGasUsed   *math.HexOrDecimal64
 	ExcessBlobGas *math.HexOrDecimal64
+	SlotNumber    *math.HexOrDecimal64
 }
 
 func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *tracing.Hooks, postCheck func(error, *core.BlockChain)) (result error) {
@@ -344,6 +346,9 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	}
 	if !reflect.DeepEqual(h.ParentBeaconBlockRoot, h2.ParentBeaconRoot) {
 		return fmt.Errorf("parentBeaconBlockRoot: want: %v have: %v", h.ParentBeaconBlockRoot, h2.ParentBeaconRoot)
+	}
+	if !reflect.DeepEqual(h.SlotNumber, h2.SlotNumber) {
+		return fmt.Errorf("slotNumber: want: %v have: %v", h.SlotNumber, h2.SlotNumber)
 	}
 	return nil
 }

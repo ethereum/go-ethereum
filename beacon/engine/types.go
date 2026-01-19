@@ -51,6 +51,12 @@ var (
 	// ExecutionPayloadV3 has the syntax of ExecutionPayloadV2 and appends the new
 	// fields: blobGasUsed and excessBlobGas.
 	PayloadV3 PayloadVersion = 0x3
+
+	// PayloadV4 is the identifier of ExecutionPayloadV4 introduced in amsterdam fork.
+	//
+	// https://github.com/ethereum/execution-apis/blob/main/src/engine/amsterdam.md#executionpayloadv4
+	// ExecutionPayloadV4 has the syntax of ExecutionPayloadV3 and appends the new
+	// field slotNumber.
 	PayloadV4 PayloadVersion = 0x4
 )
 
@@ -64,11 +70,13 @@ type PayloadAttributes struct {
 	SuggestedFeeRecipient common.Address      `json:"suggestedFeeRecipient" gencodec:"required"`
 	Withdrawals           []*types.Withdrawal `json:"withdrawals"`
 	BeaconRoot            *common.Hash        `json:"parentBeaconBlockRoot"`
+	SlotNumber            *uint64             `json:"slotNumber"`
 }
 
 // JSON type overrides for PayloadAttributes.
 type payloadAttributesMarshaling struct {
-	Timestamp hexutil.Uint64
+	Timestamp  hexutil.Uint64
+	SlotNumber *hexutil.Uint64
 }
 
 //go:generate go run github.com/fjl/gencodec -type ExecutableData -field-override executableDataMarshaling -out gen_ed.go
@@ -93,6 +101,7 @@ type ExecutableData struct {
 	BlobGasUsed     *uint64              `json:"blobGasUsed"`
 	ExcessBlobGas   *uint64              `json:"excessBlobGas"`
 	BlockAccessList *bal.BlockAccessList `json:"blockAccessList"`
+	SlotNumber      *uint64              `json:"slotNumber"`
 }
 
 // JSON type overrides for executableData.
@@ -107,6 +116,7 @@ type executableDataMarshaling struct {
 	Transactions  []hexutil.Bytes
 	BlobGasUsed   *hexutil.Uint64
 	ExcessBlobGas *hexutil.Uint64
+	SlotNumber    *hexutil.Uint64
 }
 
 // StatelessPayloadStatusV1 is the result of a stateless payload execution.
@@ -302,7 +312,6 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 		balHash := data.BlockAccessList.Hash()
 		blockAccessListHash = &balHash
 	}
-
 	header := &types.Header{
 		ParentHash:          data.ParentHash,
 		UncleHash:           types.EmptyUncleHash,
@@ -325,6 +334,7 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 		ParentBeaconRoot:    beaconRoot,
 		RequestsHash:        requestsHash,
 		BlockAccessListHash: blockAccessListHash,
+		SlotNumber:          data.SlotNumber,
 	}
 	return types.NewBlockWithHeader(header).WithBody(body), nil
 }
@@ -351,6 +361,7 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		BlobGasUsed:     block.BlobGasUsed(),
 		ExcessBlobGas:   block.ExcessBlobGas(),
 		BlockAccessList: block.Body().AccessList,
+		SlotNumber:      block.SlotNumber(),
 	}
 
 	// Add blobs.

@@ -283,6 +283,8 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return fmt.Errorf("invalid blobGasUsed: have %d, expected nil", *header.BlobGasUsed)
 	case header.ParentBeaconRoot != nil:
 		return fmt.Errorf("invalid parentBeaconRoot, have %#x, expected nil", *header.ParentBeaconRoot)
+	case header.SlotNumber != nil:
+		return fmt.Errorf("invalid slotNumber, have %#x, expected nil", *header.SlotNumber)
 	}
 	// Add some fake checks for tests
 	if ethash.fakeDelay != nil {
@@ -561,6 +563,9 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 	}
 	if header.ParentBeaconRoot != nil {
 		panic("parent beacon root set on ethash")
+	}
+	if header.SlotNumber != nil {
+		panic("slot number set on ethash")
 	}
 	rlp.Encode(hasher, enc)
 	hasher.Sum(hash[:0])

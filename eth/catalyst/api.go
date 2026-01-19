@@ -213,6 +213,28 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(update engine.ForkchoiceStateV1, pa
 	return api.forkchoiceUpdated(update, params, engine.PayloadV3, false)
 }
 
+// ForkchoiceUpdatedV4 is equivalent to V3 with the addition of slot number
+// in the payload attributes. It supports only PayloadAttributesV4.
+func (api *ConsensusAPI) ForkchoiceUpdatedV4(update engine.ForkchoiceStateV1, params *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
+	if params != nil {
+		switch {
+		case params.Withdrawals == nil:
+			return engine.STATUS_INVALID, attributesErr("missing withdrawals")
+		case params.BeaconRoot == nil:
+			return engine.STATUS_INVALID, attributesErr("missing beacon root")
+		case params.SlotNumber == nil:
+			return engine.STATUS_INVALID, attributesErr("missing slot number")
+		case !api.checkFork(params.Timestamp, forks.Amsterdam):
+			return engine.STATUS_INVALID, unsupportedForkErr("fcuV4 must only be called for amsterdam payloads")
+		}
+	}
+	// TODO(matt): the spec requires that fcu is applied when called on a valid
+	// hash, even if params are wrong. To do this we need to split up
+	// forkchoiceUpdate into a function that only updates the head and then a
+	// function that kicks off block construction.
+	return api.forkchoiceUpdated(update, params, engine.PayloadV4, false)
+}
+
 func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes, payloadVersion engine.PayloadVersion, payloadWitness bool) (engine.ForkChoiceResponse, error) {
 	api.forkchoiceLock.Lock()
 	defer api.forkchoiceLock.Unlock()
@@ -346,6 +368,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 			Random:       payloadAttributes.Random,
 			Withdrawals:  payloadAttributes.Withdrawals,
 			BeaconRoot:   payloadAttributes.BeaconRoot,
+			SlotNum:      payloadAttributes.SlotNumber,
 			Version:      payloadVersion,
 		}
 		id := args.Id()
@@ -459,15 +482,16 @@ func (api *ConsensusAPI) GetPayloadV5(payloadID engine.PayloadID) (*engine.Execu
 		})
 }
 
-// GetPayloadV6 returns a cached payload by id.
+// GetPayloadV6 returns a cached payload by id. This endpoint should only
+// be used after the Amsterdam fork.
 func (api *ConsensusAPI) GetPayloadV6(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
-	if !payloadID.Is(engine.PayloadV4) {
-		return nil, engine.UnsupportedFork
-	}
-	return api.getPayload(payloadID,
+	return api.getPayload(
+		payloadID,
 		false,
 		[]engine.PayloadVersion{engine.PayloadV4},
-		nil)
+		[]forks.Fork{
+			forks.Amsterdam,
+		})
 }
 
 // getPayload will retrieve the specified payload and verify it conforms to the
@@ -728,9 +752,12 @@ func (api *ConsensusAPI) NewPayloadV5(params engine.ExecutableData, versionedHas
 		return invalidStatus, paramsErr("nil beaconRoot post-cancun")
 	case executionRequests == nil:
 		return invalidStatus, paramsErr("nil executionRequests post-prague")
+	case !api.checkFork(params.Timestamp, forks.Prague, forks.Osaka, forks.Amsterdam):
 	case params.BlockAccessList == nil:
 		return invalidStatus, paramsErr("nil block access list post-amsterdam")
-	case !api.checkFork(params.Timestamp, forks.Prague, forks.Osaka, forks.Amsterdam):
+	case params.SlotNumber == nil:
+		return invalidStatus, paramsErr("nil slotnumber post-amsterdam")
+	case !api.checkFork(params.Timestamp, forks.Amsterdam):
 		return invalidStatus, unsupportedForkErr("newPayloadV5 must only be called for amsterdam payloads")
 	}
 	requests := convertRequests(executionRequests)
@@ -768,6 +795,10 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		if params.ExcessBlobGas != nil {
 			ebg = strconv.Itoa(int(*params.ExcessBlobGas))
 		}
+		slotNum := "nil"
+		if params.SlotNumber != nil {
+			slotNum = strconv.Itoa(int(*params.SlotNumber))
+		}
 		log.Warn("Invalid NewPayload params",
 			"params.Number", params.Number,
 			"params.ParentHash", params.ParentHash,
@@ -783,6 +814,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 			"params.BaseFeePerGas", params.BaseFeePerGas,
 			"params.BlobGasUsed", bgu,
 			"params.ExcessBlobGas", ebg,
+			"params.SlotNumber", slotNum,
 			"len(params.Transactions)", len(params.Transactions),
 			"len(params.Withdrawals)", len(params.Withdrawals),
 			"beaconRoot", beaconRoot,
