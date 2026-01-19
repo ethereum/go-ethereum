@@ -735,7 +735,7 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 
 	log.Trace("Engine API request received", "method", "NewPayload", "number", params.Number, "hash", params.BlockHash)
 	attrs := executableDataAttrs(params)
-	_, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayload.ExecutableDataToBlock", attrs...)
+	_, _, spanEnd := telemetry.StartSpan(ctx, "engine.ExecutableDataToBlock", attrs...)
 	block, err := engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot, requests)
 	spanEnd(err)
 	if err != nil {
@@ -810,7 +810,7 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 		return engine.PayloadStatusV1{Status: engine.ACCEPTED}, nil
 	}
 	log.Trace("Inserting block without sethead", "hash", block.Hash(), "number", block.Number())
-	sctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.newPayload.InsertBlockWithoutSetHead", attrs...)
+	sctx, _, spanEnd := telemetry.StartSpan(ctx, "api.eth.Blockchain().InsertBlockWithoutSetHead", attrs...)
 	start := time.Now()
 	proofs, err := api.eth.BlockChain().InsertBlockWithoutSetHead(sctx, block, witness)
 	processingTime := time.Since(start)

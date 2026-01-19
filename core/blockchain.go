@@ -2161,7 +2161,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 
 	// Process block using the parent state as reference point
 	pstart := time.Now()
-	pctx, _, spanEnd := telemetry.StartSpan(ctx, "core.Process")
+	pctx, _, spanEnd := telemetry.StartSpan(ctx, "bc.processor.Process")
 	res, err := bc.processor.Process(pctx, block, statedb, bc.cfg.VmConfig)
 	spanEnd(err)
 	if err != nil {
@@ -2171,7 +2171,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 	ptime := time.Since(pstart)
 
 	vstart := time.Now()
-	_, _, spanEnd = telemetry.StartSpan(ctx, "core.ValidateState")
+	_, _, spanEnd = telemetry.StartSpan(ctx, "bc.validator.ValidateState")
 	err = bc.validator.ValidateState(block, statedb, res, false)
 	spanEnd(err)
 	if err != nil {
