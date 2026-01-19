@@ -797,7 +797,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		}
 		slotNum := "nil"
 		if params.SlotNumber != nil {
-			slotnum = strconv.Itoa(int(*params.SlotNumber))
+			slotNum = strconv.Itoa(int(*params.SlotNumber))
 		}
 		log.Warn("Invalid NewPayload params",
 			"params.Number", params.Number,
