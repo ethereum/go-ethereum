@@ -115,6 +115,7 @@ var (
 	slotsGauge   = metrics.NewRegisteredGauge("txpool/slots", nil)
 
 	pendingAddrsGauge = metrics.NewRegisteredGauge("txpool/pending/accounts", nil)
+	queuedAddrsGauge  = metrics.NewRegisteredGauge("txpool/queued/accounts", nil)
 
 	reheapTimer = metrics.NewRegisteredTimer("txpool/reheap", nil)
 )
