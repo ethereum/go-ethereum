@@ -173,23 +173,15 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 // the target if the baseline gas is lower.
 func CalcGasLimit(parentGasLimit, desiredLimit uint64) uint64 {
 	delta := parentGasLimit/params.GasLimitBoundDivisor - 1
-	limit := parentGasLimit
 	if desiredLimit < params.MinGasLimit {
 		desiredLimit = params.MinGasLimit
 	}
 	// If we're outside our allowed gas range, we try to hone towards them
-	if limit < desiredLimit {
-		limit = parentGasLimit + delta
-		if limit > desiredLimit {
-			limit = desiredLimit
-		}
-		return limit
+	if parentGasLimit < desiredLimit {
+		return min(parentGasLimit+delta, desiredLimit)
 	}
-	if limit > desiredLimit {
-		limit = parentGasLimit - delta
-		if limit < desiredLimit {
-			limit = desiredLimit
-		}
+	if parentGasLimit > desiredLimit {
+		return max(parentGasLimit-delta, desiredLimit)
 	}
-	return limit
+	return parentGasLimit
 }
