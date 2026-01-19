@@ -392,19 +392,9 @@ func (s EIP155Signer) Hash(tx *Transaction) common.Hash {
 // replay-protected.
 type HomesteadSigner struct{ FrontierSigner }
 
-func (hs HomesteadSigner) ChainID() *big.Int {
-	return nil
-}
-
 func (hs HomesteadSigner) Equal(s2 Signer) bool {
 	_, ok := s2.(HomesteadSigner)
 	return ok
-}
-
-// SignatureValues returns signature values. This signature
-// needs to be in the [R || S || V] format where V is 0 or 1.
-func (hs HomesteadSigner) SignatureValues(tx *Transaction, sig []byte) (r, s, v *big.Int, err error) {
-	return hs.FrontierSigner.SignatureValues(tx, sig)
 }
 
 func (hs HomesteadSigner) Sender(tx *Transaction) (common.Address, error) {
