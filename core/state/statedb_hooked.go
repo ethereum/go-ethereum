@@ -247,7 +247,6 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
 		}
 		selfDestructedAddrs = append(selfDestructedAddrs, addr)
 	}
-	// Sort addresses to ensure deterministic hook emission order.
 	sort.Slice(selfDestructedAddrs, func(i, j int) bool {
 		return bytes.Compare(selfDestructedAddrs[i][:], selfDestructedAddrs[j][:]) < 0
 	})
