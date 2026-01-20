@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"strings"
@@ -25,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie/archive"
 )
 
 var indices = []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f", "[17]"}
@@ -157,6 +159,14 @@ func decodeNode(hash, buf []byte) (node, error) {
 func decodeNodeUnsafe(hash, buf []byte) (node, error) {
 	if len(buf) == 0 {
 		return nil, io.ErrUnexpectedEOF
+	}
+	if buf[0] == expiredNodeMarker {
+		if len(buf) != 1+2*archive.OffsetSize {
+			return nil, fmt.Errorf("invalid expired node length: %d", len(buf))
+		}
+		offset := binary.BigEndian.Uint64(buf[1:])
+		size := binary.BigEndian.Uint64(buf[1+archive.OffsetSize:])
+		return &expiredNode{offset: offset, size: size, archiveResolver: archive.ArchivedNodeResolver}, nil
 	}
 	elems, _, err := rlp.SplitList(buf)
 	if err != nil {
