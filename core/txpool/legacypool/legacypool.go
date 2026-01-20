@@ -1845,6 +1845,9 @@ func (pool *LegacyPool) Clear() {
 	pool.pending = make(map[common.Address]*list)
 	pool.queue = newQueue(pool.config, pool.signer)
 	pool.pendingNonces = newNoncer(pool.currentState)
+
+	pendingAddrsGauge.Update(0)
+	queuedAddrsGauge.Update(0)
 }
 
 // HasPendingAuth returns a flag indicating whether there are pending
