@@ -356,8 +356,8 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, sink chan *Response) (*Requ
 			want: ReceiptsMsg,
 			data: &GetReceiptsPacket70{
 				RequestId:              id,
-				GetReceiptsRequest:     hashes,
 				FirstBlockReceiptIndex: 0,
+				GetReceiptsRequest:     hashes,
 			},
 		}
 		p.receiptBufferLock.Lock()
@@ -401,8 +401,8 @@ func (p *Peer) requestPartialReceipts(id uint64) error {
 		want: ReceiptsMsg,
 		data: &GetReceiptsPacket70{
 			RequestId:              id,
-			GetReceiptsRequest:     p.receiptBuffer[id].request[lastBlock:],
 			FirstBlockReceiptIndex: uint64(lastReceipt),
+			GetReceiptsRequest:     p.receiptBuffer[id].request[lastBlock:],
 		},
 	}
 	return p.dispatchRequest(req)

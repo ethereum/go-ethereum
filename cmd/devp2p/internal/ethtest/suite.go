@@ -462,8 +462,8 @@ func (s *Suite) TestGetReceipts(t *utesting.T) {
 		// Create block bodies request.
 		req := &eth.GetReceiptsPacket70{
 			RequestId:              66,
-			GetReceiptsRequest:     (eth.GetReceiptsRequest)(hashes),
 			FirstBlockReceiptIndex: 0,
+			GetReceiptsRequest:     (eth.GetReceiptsRequest)(hashes),
 		}
 		if err := conn.Write(ethProto, eth.GetReceiptsMsg, req); err != nil {
 			t.Fatalf("could not write to connection: %v", err)
@@ -519,8 +519,8 @@ func (s *Suite) TestGetLargeReceipts(t *utesting.T) {
 		// Create get receipt request.
 		req := &eth.GetReceiptsPacket70{
 			RequestId:              66,
-			GetReceiptsRequest:     blocks[lastBlock:],
 			FirstBlockReceiptIndex: uint64(receipts[lastBlock].Len()),
+			GetReceiptsRequest:     blocks[lastBlock:],
 		}
 		if err := conn.Write(ethProto, eth.GetReceiptsMsg, req); err != nil {
 			t.Fatalf("could not write to connection: %v", err)

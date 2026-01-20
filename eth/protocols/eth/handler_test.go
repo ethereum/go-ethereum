@@ -615,13 +615,13 @@ func testGetBlockPartialReceipts(t *testing.T, protocol int) {
 
 	p2p.Send(peer.app, GetReceiptsMsg, &GetReceiptsPacket70{
 		RequestId:              123,
-		GetReceiptsRequest:     hashes,
 		FirstBlockReceiptIndex: 0,
+		GetReceiptsRequest:     hashes,
 	})
 	if err := p2p.ExpectMsg(peer.app, ReceiptsMsg, &ReceiptsPacket70{
 		RequestId:           123,
-		List:                partialReceipt,
 		LastBlockIncomplete: true,
+		List:                partialReceipt,
 	}); err != nil {
 		t.Errorf("receipts mismatch: %v", err)
 	}
@@ -631,14 +631,14 @@ func testGetBlockPartialReceipts(t *testing.T, protocol int) {
 
 	p2p.Send(peer.app, GetReceiptsMsg, &GetReceiptsPacket70{
 		RequestId:              123,
-		GetReceiptsRequest:     []common.Hash{hashes[blockCutoff]},
 		FirstBlockReceiptIndex: uint64(receiptCutoff),
+		GetReceiptsRequest:     []common.Hash{hashes[blockCutoff]},
 	})
 
 	if err := p2p.ExpectMsg(peer.app, ReceiptsMsg, &ReceiptsPacket70{
 		RequestId:           123,
-		List:                partialReceipt,
 		LastBlockIncomplete: false,
+		List:                partialReceipt,
 	}); err != nil {
 		t.Errorf("receipts mismatch: %v", err)
 	}

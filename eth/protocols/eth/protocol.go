@@ -268,9 +268,9 @@ type GetReceiptsPacket69 struct {
 // GetReceiptsPacket70 represents a block receipts query with request ID and
 // FirstBlockReceiptIndex wrapping.
 type GetReceiptsPacket70 struct {
-	RequestId uint64
-	GetReceiptsRequest
+	RequestId              uint64
 	FirstBlockReceiptIndex uint64
+	GetReceiptsRequest
 }
 
 // ReceiptsResponse is the network packet for block receipts distribution.
@@ -293,8 +293,8 @@ type ReceiptsPacket[L ReceiptsList] struct {
 
 type ReceiptsPacket70 struct {
 	RequestId           uint64
-	List                []*ReceiptList69
 	LastBlockIncomplete bool
+	List                []*ReceiptList69
 }
 
 // ReceiptsRLPResponse is used for receipts, when we already have it encoded
@@ -309,9 +309,9 @@ type ReceiptsRLPPacket69 struct {
 // ReceiptsRLPPacket70 is ReceiptsRLPResponse with request ID and
 // LastBlockIncomplete wrapping.
 type ReceiptsRLPPacket70 struct {
-	RequestId uint64
-	ReceiptsRLPResponse
+	RequestId           uint64
 	LastBlockIncomplete bool
+	ReceiptsRLPResponse
 }
 
 // NewPooledTransactionHashesPacket represents a transaction announcement packet on eth/68 and newer.
