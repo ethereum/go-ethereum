@@ -17,9 +17,11 @@
 package bintrie
 
 import (
+	"encoding/binary"
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/trie/archive"
 )
 
 type (
@@ -41,6 +43,7 @@ const (
 const (
 	nodeTypeStem = iota + 1 // Stem node, contains a stem and a bitmap of values
 	nodeTypeInternal
+	nodeTypeExpired // Expired node, contains only a file offset
 )
 
 // BinaryNode is an interface for a binary trie node.
@@ -83,6 +86,13 @@ func SerializeNode(node BinaryNode) []byte {
 		}
 		// Only return the actual data, not the entire array
 		return serialized[:offset]
+	case *expiredNode:
+		// ExpiredNode: 1 byte type + 8 bytes offset + 8 bytes size
+		var serialized [NodeTypeBytes + 2*archive.OffsetSize]byte
+		serialized[0] = nodeTypeExpired
+		binary.BigEndian.PutUint64(serialized[1:], n.Offset)
+		binary.BigEndian.PutUint64(serialized[1+archive.OffsetSize:], n.Size)
+		return serialized[:]
 	default:
 		panic("invalid node type")
 	}
@@ -127,6 +137,16 @@ func DeserializeNode(serialized []byte, depth int) (BinaryNode, error) {
 			Stem:   serialized[NodeTypeBytes : NodeTypeBytes+StemSize],
 			Values: values[:],
 			depth:  depth,
+		}, nil
+	case nodeTypeExpired:
+		if len(serialized) != NodeTypeBytes+2*archive.OffsetSize {
+			return nil, invalidSerializedLength
+		}
+		return &expiredNode{
+			Offset:          binary.BigEndian.Uint64(serialized[1:9]),
+			Size:            binary.BigEndian.Uint64(serialized[9:17]),
+			depth:           depth,
+			archiveResolver: archive.ArchivedNodeResolver,
 		}, nil
 	default:
 		return nil, errors.New("invalid node type")
