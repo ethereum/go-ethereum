@@ -1839,6 +1839,11 @@ func (pool *LegacyPool) Clear() {
 	pool.pending = make(map[common.Address]*list)
 	pool.queue = newQueue(pool.config, pool.signer)
 	pool.pendingNonces = newNoncer(pool.currentState)
+
+	// Reset gauges
+	pendingGauge.Update(0)
+	queuedGauge.Update(0)
+	slotsGauge.Update(0)
 }
 
 // HasPendingAuth returns a flag indicating whether there are pending
