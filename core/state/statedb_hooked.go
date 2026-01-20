@@ -237,7 +237,8 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
 	}
 
 	// Collect all self-destructed addresses first, then sort them to ensure
-	// deterministic ordering when emitting hooks.
+	// that state change hooks will be invoked in deterministic
+	// order when the accounts are deleted below
 	var selfDestructedAddrs []common.Address
 	for addr := range s.inner.journal.dirties {
 		obj := s.inner.stateObjects[addr]
