@@ -264,7 +264,6 @@ type genesisSpecMarshaling struct {
 	BaseFee       *math.HexOrDecimal256
 	ExcessBlobGas *math.HexOrDecimal64
 	BlobGasUsed   *math.HexOrDecimal64
-	SlotNumber    *math.HexOrDecimal64
 }
 
 // GenesisMismatchError is raised when trying to overwrite an existing
