@@ -702,8 +702,12 @@ func (bc *BlockChain) loadLastState() error {
 
 // initializeHistoryPruning sets bc.historyPrunePoint.
 func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
-	freezerTail, _ := bc.db.Tail()
-
+	var (
+		freezerTail, _ = bc.db.Tail()
+		genesisHash    = bc.genesisBlock.Hash()
+		mergePoint     = history.MergePrunePoints[genesisHash]
+		cancunPoint    = history.CancunPrunePoints[genesisHash]
+	)
 	switch bc.cfg.ChainHistoryMode {
 	case history.KeepAll:
 		if freezerTail == 0 {
@@ -711,33 +715,65 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 		}
 		// The database was pruned somehow, so we need to figure out if it's a known
 		// configuration or an error.
-		predefinedPoint := history.PrunePoints[bc.genesisBlock.Hash()]
-		if predefinedPoint == nil || freezerTail != predefinedPoint.BlockNumber {
-			log.Error("Chain history database is pruned with unknown configuration", "tail", freezerTail)
-			return errors.New("unexpected database tail")
+		if mergePoint != nil && freezerTail == mergePoint.BlockNumber {
+			bc.historyPrunePoint.Store(mergePoint)
+			return nil
 		}
-		bc.historyPrunePoint.Store(predefinedPoint)
-		return nil
+		if cancunPoint != nil && freezerTail == cancunPoint.BlockNumber {
+			bc.historyPrunePoint.Store(cancunPoint)
+			return nil
+		}
+		log.Error("Chain history database is pruned with unknown configuration", "tail", freezerTail)
+		return errors.New("unexpected database tail")
 
 	case history.KeepPostMerge:
+		if mergePoint == nil {
+			return errors.New("history pruning requested for unknown network")
+		}
 		if freezerTail == 0 && latest != 0 {
-			// This is the case where a user is trying to run with --history.chain
-			// postmerge directly on an existing DB. We could just trigger the pruning
-			// here, but it'd be a bit dangerous since they may not have intended this
-			// action to happen. So just tell them how to do it.
 			log.Error(fmt.Sprintf("Chain history mode is configured as %q, but database is not pruned.", bc.cfg.ChainHistoryMode.String()))
-			log.Error(fmt.Sprintf("Run 'geth prune-history' to prune pre-merge history."))
+			log.Error("Run 'geth prune-history --history.chain postmerge' to prune pre-merge history.")
 			return errors.New("history pruning requested via configuration")
 		}
-		predefinedPoint := history.PrunePoints[bc.genesisBlock.Hash()]
-		if predefinedPoint == nil {
-			log.Error("Chain history pruning is not supported for this network", "genesis", bc.genesisBlock.Hash())
+		// Check if DB is pruned further than requested (to Cancun).
+		if cancunPoint != nil && freezerTail == cancunPoint.BlockNumber {
+			log.Error("Chain history database is pruned to Cancun block, but postmerge mode was requested.")
+			log.Error("History cannot be unpruned. To restore history, use 'geth import-history'.")
+			log.Error("If you intended to keep post-Cancun history, use '--history.chain postcancun' instead.")
+			return errors.New("database pruned beyond requested history mode")
+		}
+		if freezerTail > 0 && freezerTail != mergePoint.BlockNumber {
+			return errors.New("chain history database pruned to unknown block")
+		}
+		bc.historyPrunePoint.Store(mergePoint)
+		return nil
+
+	case history.KeepPostCancun:
+		if cancunPoint == nil {
 			return errors.New("history pruning requested for unknown network")
-		} else if freezerTail > 0 && freezerTail != predefinedPoint.BlockNumber {
+		}
+		// Check if already at the cancun prune point.
+		if freezerTail == cancunPoint.BlockNumber {
+			bc.historyPrunePoint.Store(cancunPoint)
+			return nil
+		}
+		// Check if database needs pruning.
+		if latest != 0 {
+			if freezerTail == 0 {
+				log.Error(fmt.Sprintf("Chain history mode is configured as %q, but database is not pruned.", bc.cfg.ChainHistoryMode.String()))
+				log.Error("Run 'geth prune-history --history.chain postcancun' to prune pre-Cancun history.")
+				return errors.New("history pruning requested via configuration")
+			}
+			if mergePoint != nil && freezerTail == mergePoint.BlockNumber {
+				log.Error(fmt.Sprintf("Chain history mode is configured as %q, but database is only pruned to merge block.", bc.cfg.ChainHistoryMode.String()))
+				log.Error("Run 'geth prune-history --history.chain postcancun' to prune pre-Cancun history.")
+				return errors.New("history pruning requested via configuration")
+			}
 			log.Error("Chain history database is pruned to unknown block", "tail", freezerTail)
 			return errors.New("unexpected database tail")
 		}
-		bc.historyPrunePoint.Store(predefinedPoint)
+		// Fresh database (latest == 0), will sync from cancun point.
+		bc.historyPrunePoint.Store(cancunPoint)
 		return nil
 
 	default:

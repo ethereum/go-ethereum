@@ -203,13 +203,19 @@ This command dumps out the state for a given block (or latest, if none provided)
 	pruneHistoryCommand = &cli.Command{
 		Action:    pruneHistory,
 		Name:      "prune-history",
-		Usage:     "Prune blockchain history (block bodies and receipts) up to the merge block",
+		Usage:     "Prune blockchain history (block bodies and receipts) up to a specified point",
 		ArgsUsage: "",
-		Flags:     utils.DatabaseFlags,
+		Flags: slices.Concat(utils.DatabaseFlags, []cli.Flag{
+			utils.ChainHistoryFlag,
+		}),
 		Description: `
 The prune-history command removes historical block bodies and receipts from the
-blockchain database up to the merge block, while preserving block headers. This
-helps reduce storage requirements for nodes that don't need full historical data.`,
+blockchain database up to a specified point, while preserving block headers. This
+helps reduce storage requirements for nodes that don't need full historical data.
+
+The --history.chain flag is required to specify the pruning target:
+  - postmerge:  Prune up to the merge block
+  - postcancun: Prune up to the Cancun (Dencun) upgrade block`,
 	}
 
 	downloadEraCommand = &cli.Command{
@@ -670,47 +676,74 @@ func hashish(x string) bool {
 }
 
 func pruneHistory(ctx *cli.Context) error {
+	// Parse and validate the history mode flag.
+	if !ctx.IsSet(utils.ChainHistoryFlag.Name) {
+		return errors.New("--history.chain flag is required (use 'postmerge' or 'postcancun')")
+	}
+	var mode history.HistoryMode
+	if err := mode.UnmarshalText([]byte(ctx.String(utils.ChainHistoryFlag.Name))); err != nil {
+		return err
+	}
+	if mode == history.KeepAll {
+		return errors.New("--history.chain=all is not valid for pruning. To restore history, use 'geth import-history'")
+	}
+
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	// Open the chain database
+	// Open the chain database.
 	chain, chaindb := utils.MakeChain(ctx, stack, false)
 	defer chaindb.Close()
 	defer chain.Stop()
 
-	// Determine the prune point. This will be the first PoS block.
-	prunePoint, ok := history.PrunePoints[chain.Genesis().Hash()]
-	if !ok || prunePoint == nil {
-		return errors.New("prune point not found")
+	// Determine the prune point based on the history mode.
+	genesisHash := chain.Genesis().Hash()
+	prunePoint := history.GetPrunePoint(genesisHash, mode)
+	if prunePoint == nil {
+		return fmt.Errorf("prune point for %q not found for this network", mode.String())
 	}
 	var (
-		mergeBlock     = prunePoint.BlockNumber
-		mergeBlockHash = prunePoint.BlockHash.Hex()
+		targetBlock     = prunePoint.BlockNumber
+		targetBlockHash = prunePoint.BlockHash
 	)
 
-	// Check we're far enough past merge to ensure all data is in freezer
+	// Check the current freezer tail to see if pruning is needed/possible.
+	freezerTail, _ := chaindb.Tail()
+	if freezerTail > 0 {
+		if freezerTail == targetBlock {
+			log.Info("Database already pruned to target block", "tail", freezerTail)
+			return nil
+		}
+		if freezerTail > targetBlock {
+			// Database is pruned beyond the target - can't unprune.
+			return fmt.Errorf("database is already pruned to block %d, which is beyond target %d. Cannot unprune. To restore history, use 'geth import-history'", freezerTail, targetBlock)
+		}
+		// freezerTail < targetBlock: we can prune further, continue below.
+	}
+
+	// Check we're far enough past the target to ensure all data is in freezer.
 	currentHeader := chain.CurrentHeader()
 	if currentHeader == nil {
 		return errors.New("current header not found")
 	}
-	if currentHeader.Number.Uint64() < mergeBlock+params.FullImmutabilityThreshold {
-		return fmt.Errorf("chain not far enough past merge block, need %d more blocks",
-			mergeBlock+params.FullImmutabilityThreshold-currentHeader.Number.Uint64())
+	if currentHeader.Number.Uint64() < targetBlock+params.FullImmutabilityThreshold {
+		return fmt.Errorf("chain not far enough past target block %d, need %d more blocks",
+			targetBlock, targetBlock+params.FullImmutabilityThreshold-currentHeader.Number.Uint64())
 	}
 
-	// Double-check the prune block in db has the expected hash.
-	hash := rawdb.ReadCanonicalHash(chaindb, mergeBlock)
-	if hash != common.HexToHash(mergeBlockHash) {
-		return fmt.Errorf("merge block hash mismatch: got %s, want %s", hash.Hex(), mergeBlockHash)
+	// Double-check the target block in db has the expected hash.
+	hash := rawdb.ReadCanonicalHash(chaindb, targetBlock)
+	if hash != targetBlockHash {
+		return fmt.Errorf("target block hash mismatch: got %s, want %s", hash.Hex(), targetBlockHash.Hex())
 	}
 
-	log.Info("Starting history pruning", "head", currentHeader.Number, "tail", mergeBlock, "tailHash", mergeBlockHash)
+	log.Info("Starting history pruning", "head", currentHeader.Number, "target", targetBlock, "targetHash", targetBlockHash.Hex())
 	start := time.Now()
-	rawdb.PruneTransactionIndex(chaindb, mergeBlock)
-	if _, err := chaindb.TruncateTail(mergeBlock); err != nil {
+	rawdb.PruneTransactionIndex(chaindb, targetBlock)
+	if _, err := chaindb.TruncateTail(targetBlock); err != nil {
 		return fmt.Errorf("failed to truncate ancient data: %v", err)
 	}
-	log.Info("History pruning completed", "tail", mergeBlock, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("History pruning completed", "tail", targetBlock, "elapsed", common.PrettyDuration(time.Since(start)))
 
 	// TODO(s1na): what if there is a crash between the two prune operations?
 
