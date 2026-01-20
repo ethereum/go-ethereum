@@ -512,7 +512,7 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 	stream := rlp.NewStream(reader, 0)
 
 	// Import the preimages in batches to prevent disk thrashing
-	preimages := make(map[common.Hash][]byte)
+	preimages := make(map[common.Hash][]byte, 1024)
 
 	for {
 		// Read the next entry and ensure it's not junk
@@ -528,7 +528,7 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 		preimages[crypto.Keccak256Hash(blob)] = common.CopyBytes(blob)
 		if len(preimages) > 1024 {
 			rawdb.WritePreimages(db, preimages)
-			preimages = make(map[common.Hash][]byte)
+			clear(preimages)
 		}
 	}
 	// Flush the last batch preimage data
