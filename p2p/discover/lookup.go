@@ -33,7 +33,7 @@ type lookup struct {
 	queryfunc   queryFunc
 	replyCh     chan []*enode.Node
 	cancelCh    <-chan struct{}
-	asked, seen map[enode.ID]bool
+	asked, seen map[enode.ID]struct{}
 	result      nodesByDistance
 	replyBuffer []*enode.Node
 	queries     int
@@ -45,16 +45,16 @@ func newLookup(ctx context.Context, tab *Table, target enode.ID, q queryFunc) *l
 	it := &lookup{
 		tab:       tab,
 		queryfunc: q,
-		asked:     make(map[enode.ID]bool),
-		seen:      make(map[enode.ID]bool),
+		asked:     make(map[enode.ID]struct{}),
+		seen:      make(map[enode.ID]struct{}),
 		result:    nodesByDistance{target: target},
 		replyCh:   make(chan []*enode.Node, alpha),
 		cancelCh:  ctx.Done(),
 	}
 	// Don't query further if we hit ourself.
 	// Unlikely to happen often in practice.
-	it.asked[tab.self().ID()] = true
-	it.seen[tab.self().ID()] = true
+	it.asked[tab.self().ID()] = struct{}{}
+	it.seen[tab.self().ID()] = struct{}{}
 
 	// Initialize the lookup with nodes from table.
 	closest := it.tab.findnodeByID(it.result.target, bucketSize, false)
@@ -94,8 +94,8 @@ func (it *lookup) advance() bool {
 func (it *lookup) addNodes(nodes []*enode.Node) {
 	it.replyBuffer = it.replyBuffer[:0]
 	for _, n := range nodes {
-		if n != nil && !it.seen[n.ID()] {
-			it.seen[n.ID()] = true
+		if _, ok := it.seen[n.ID()]; n != nil && !ok {
+			it.seen[n.ID()] = struct{}{}
 			it.result.push(n, bucketSize)
 			it.replyBuffer = append(it.replyBuffer, n)
 		}
@@ -119,8 +119,8 @@ func (it *lookup) startQueries() bool {
 	// Ask the closest nodes that we haven't asked yet.
 	for i := 0; i < len(it.result.entries) && it.queries < alpha; i++ {
 		n := it.result.entries[i]
-		if !it.asked[n.ID()] {
-			it.asked[n.ID()] = true
+		if _, ok := it.asked[n.ID()]; ok {
+			it.asked[n.ID()] = struct{}{}
 			it.queries++
 			go it.query(n, it.replyCh)
 		}
