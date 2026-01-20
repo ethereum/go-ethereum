@@ -251,7 +251,6 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
 		return bytes.Compare(selfDestructedAddrs[i][:], selfDestructedAddrs[j][:]) < 0
 	})
 
-	// Iterate over sorted addresses and record self-destructs.
 	for _, addr := range selfDestructedAddrs {
 		obj := s.inner.stateObjects[addr]
 		// Bingo: state object was self-destructed, call relevant hooks.
