@@ -440,6 +440,12 @@ func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, error) {
 			blob: s.code,
 		}
 		s.dirtyCode = false // reset the dirty flag
+
+		if s.origin == nil {
+			op.code.originHash = types.EmptyCodeHash
+		} else {
+			op.code.originHash = common.BytesToHash(s.origin.CodeHash)
+		}
 	}
 	// Commit storage changes and the associated storage trie
 	s.commitStorage(op)

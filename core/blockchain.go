@@ -177,6 +177,11 @@ type BlockChainConfig struct {
 	// If set to 0, all state histories across the entire chain will be retained;
 	StateHistory uint64
 
+	// Number of blocks from the chain head for which trienode histories are retained.
+	// If set to 0, all trienode histories across the entire chain will be retained;
+	// If set to -1, no trienode history will be retained;
+	TrienodeHistory int64
+
 	// State snapshot related options
 	SnapshotLimit   int  // Memory allowance (MB) to use for caching snapshot entries in memory
 	SnapshotNoBuild bool // Whether the background generation is allowed
@@ -255,6 +260,7 @@ func (cfg *BlockChainConfig) triedbConfig(isVerkle bool) *triedb.Config {
 	if cfg.StateScheme == rawdb.PathScheme {
 		config.PathDB = &pathdb.Config{
 			StateHistory:        cfg.StateHistory,
+			TrienodeHistory:     cfg.TrienodeHistory,
 			EnableStateIndexing: cfg.ArchiveMode,
 			TrieCleanSize:       cfg.TrieCleanLimit * 1024 * 1024,
 			StateCleanSize:      cfg.SnapshotLimit * 1024 * 1024,
@@ -311,6 +317,7 @@ type BlockChain struct {
 	chainHeadFeed    event.Feed
 	logsFeed         event.Feed
 	blockProcFeed    event.Feed
+	newPayloadFeed   event.Feed // Feed for engine API newPayload events
 	blockProcCounter int32
 	scope            event.SubscriptionScope
 	genesisBlock     *types.Block
@@ -366,7 +373,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	// yet. The corresponding chain config will be returned, either from the
 	// provided genesis or from the locally stored configuration if the genesis
 	// has already been initialized.
-	chainConfig, genesisHash, compatErr, err := SetupGenesisBlockWithOverride(db, triedb, genesis, cfg.Overrides)
+	chainConfig, genesisHash, compatErr, err := SetupGenesisBlockWithOverride(db, triedb, genesis, cfg.Overrides, cfg.VmConfig.Tracer)
 	if err != nil {
 		return nil, err
 	}
@@ -745,21 +752,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 	if _, err := bc.setHeadBeyondRoot(head, 0, common.Hash{}, false); err != nil {
 		return err
 	}
-	// Send chain head event to update the transaction pool
-	header := bc.CurrentBlock()
-	if block := bc.GetBlock(header.Hash(), header.Number.Uint64()); block == nil {
-		// In a pruned node the genesis block will not exist in the freezer.
-		// It should not happen that we set head to any other pruned block.
-		if header.Number.Uint64() > 0 {
-			// This should never happen. In practice, previously currentBlock
-			// contained the entire block whereas now only a "marker", so there
-			// is an ever so slight chance for a race we should handle.
-			log.Error("Current block not found in database", "block", header.Number, "hash", header.Hash())
-			return fmt.Errorf("current block missing: #%d [%x..]", header.Number, header.Hash().Bytes()[:4])
-		}
-	}
-	bc.chainHeadFeed.Send(ChainHeadEvent{Header: header})
-	return nil
+	return bc.sendChainHeadEvent()
 }
 
 // SetHeadWithTimestamp rewinds the local chain to a new head that has at max
@@ -770,7 +763,12 @@ func (bc *BlockChain) SetHeadWithTimestamp(timestamp uint64) error {
 	if _, err := bc.setHeadBeyondRoot(0, timestamp, common.Hash{}, false); err != nil {
 		return err
 	}
-	// Send chain head event to update the transaction pool
+	return bc.sendChainHeadEvent()
+}
+
+// sendChainHeadEvent notifies all subscribers about the new chain head,
+// checking first that the current block is actually available.
+func (bc *BlockChain) sendChainHeadEvent() error {
 	header := bc.CurrentBlock()
 	if block := bc.GetBlock(header.Hash(), header.Number.Uint64()); block == nil {
 		// In a pruned node the genesis block will not exist in the freezer.
@@ -1650,20 +1648,35 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	log.Debug("Committed block data", "size", common.StorageSize(batch.ValueSize()), "elapsed", common.PrettyDuration(time.Since(start)))
 
 	var (
-		err      error
-		root     common.Hash
-		isEIP158 = bc.chainConfig.IsEIP158(block.Number())
-		isCancun = bc.chainConfig.IsCancun(block.Number(), block.Time())
+		err           error
+		root          common.Hash
+		isEIP158      = bc.chainConfig.IsEIP158(block.Number())
+		isCancun      = bc.chainConfig.IsCancun(block.Number(), block.Time())
+		hasStateHook  = bc.logger != nil && bc.logger.OnStateUpdate != nil
+		hasStateSizer = bc.stateSizer != nil
 	)
-	if bc.stateSizer == nil {
-		root, err = statedb.Commit(block.NumberU64(), isEIP158, isCancun)
+	if hasStateHook || hasStateSizer {
+		r, update, err := statedb.CommitWithUpdate(block.NumberU64(), isEIP158, isCancun)
+		if err != nil {
+			return err
+		}
+		if hasStateHook {
+			trUpdate, err := update.ToTracingUpdate()
+			if err != nil {
+				return err
+			}
+			bc.logger.OnStateUpdate(trUpdate)
+		}
+		if hasStateSizer {
+			bc.stateSizer.Notify(update)
+		}
+		root = r
 	} else {
-		root, err = statedb.CommitAndTrack(block.NumberU64(), isEIP158, isCancun, bc.stateSizer)
+		root, err = statedb.Commit(block.NumberU64(), isEIP158, isCancun)
+		if err != nil {
+			return err
+		}
 	}
-	if err != nil {
-		return err
-	}
-
 	// If node is running in path mode, skip explicit gc operation
 	// which is unnecessary in this mode.
 	if bc.triedb.Scheme() == rawdb.PathScheme {

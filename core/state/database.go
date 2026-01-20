@@ -177,8 +177,8 @@ func NewDatabaseForTesting() *CachingDB {
 	return NewDatabase(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil), nil)
 }
 
-// Reader returns a state reader associated with the specified state root.
-func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
+// StateReader returns a state reader associated with the specified state root.
+func (db *CachingDB) StateReader(stateRoot common.Hash) (StateReader, error) {
 	var readers []StateReader
 
 	// Configure the state reader using the standalone snapshot in hash mode.
@@ -208,23 +208,32 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	}
 	readers = append(readers, tr)
 
-	combined, err := newMultiStateReader(readers...)
+	return newMultiStateReader(readers...)
+}
+
+// Reader implements Database, returning a reader associated with the specified
+// state root.
+func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
+	sr, err := db.StateReader(stateRoot)
 	if err != nil {
 		return nil, err
 	}
-	return newReader(newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache), combined), nil
+	return newReader(newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache), sr), nil
 }
 
-// ReadersWithCacheStats creates a pair of state readers sharing the same internal cache and
-// same backing Reader, but exposing separate statistics.
-// and statistics.
+// ReadersWithCacheStats creates a pair of state readers that share the same
+// underlying state reader and internal state cache, while maintaining separate
+// statistics respectively.
 func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (ReaderWithStats, ReaderWithStats, error) {
-	reader, err := db.Reader(stateRoot)
+	r, err := db.StateReader(stateRoot)
 	if err != nil {
 		return nil, nil, err
 	}
-	shared := newReaderWithCache(reader)
-	return newReaderWithCacheStats(shared), newReaderWithCacheStats(shared), nil
+	sr := newStateReaderWithCache(r)
+
+	ra := newReaderWithStats(sr, newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache))
+	rb := newReaderWithStats(sr, newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache))
+	return ra, rb, nil
 }
 
 // OpenTrie opens the main account trie at a specific root hash.

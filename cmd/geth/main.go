@@ -94,6 +94,7 @@ var (
 		utils.LogNoHistoryFlag,
 		utils.LogExportCheckpointsFlag,
 		utils.StateHistoryFlag,
+		utils.TrienodeHistoryFlag,
 		utils.LightKDFFlag,
 		utils.EthRequiredBlocksFlag,
 		utils.LegacyWhitelistFlag, // deprecated
@@ -193,6 +194,7 @@ var (
 		utils.BatchResponseMaxSize,
 		utils.RPCTxSyncDefaultTimeoutFlag,
 		utils.RPCTxSyncMaxTimeoutFlag,
+		utils.RPCGlobalRangeLimitFlag,
 	}
 
 	metricsFlags = []cli.Flag{

@@ -159,17 +159,6 @@ func newTrienodeHistory(root common.Hash, parent common.Hash, block uint64, node
 	}
 }
 
-// sharedLen returns the length of the common prefix shared by a and b.
-func sharedLen(a, b []byte) int {
-	n := min(len(a), len(b))
-	for i := range n {
-		if a[i] != b[i] {
-			return i
-		}
-	}
-	return n
-}
-
 // typ implements the history interface, returning the historical data type held.
 func (h *trienodeHistory) typ() historyType {
 	return typeTrienodeHistory
@@ -177,11 +166,35 @@ func (h *trienodeHistory) typ() historyType {
 
 // forEach implements the history interface, returning an iterator to traverse the
 // state entries in the history.
-func (h *trienodeHistory) forEach() iter.Seq[stateIdent] {
-	return func(yield func(stateIdent) bool) {
+func (h *trienodeHistory) forEach() iter.Seq[indexElem] {
+	return func(yield func(indexElem) bool) {
 		for _, owner := range h.owners {
-			for _, path := range h.nodeList[owner] {
-				if !yield(newTrienodeIdent(owner, path)) {
+			var (
+				scheme  *indexScheme
+				paths   = h.nodeList[owner]
+				indexes = make(map[string]map[uint16]struct{})
+			)
+			if owner == (common.Hash{}) {
+				scheme = accountIndexScheme
+			} else {
+				scheme = storageIndexScheme
+			}
+			for _, leaf := range findLeafPaths(paths) {
+				chunks, ids := scheme.splitPath(leaf)
+				for i := 0; i < len(chunks); i++ {
+					if _, exists := indexes[chunks[i]]; !exists {
+						indexes[chunks[i]] = make(map[uint16]struct{})
+					}
+					indexes[chunks[i]][ids[i]] = struct{}{}
+				}
+			}
+			for chunk, ids := range indexes {
+				elem := trienodeIndexElem{
+					owner: owner,
+					path:  chunk,
+					data:  slices.Collect(maps.Keys(ids)),
+				}
+				if !yield(elem) {
 					return
 				}
 			}
@@ -219,7 +232,7 @@ func (h *trienodeHistory) encode() ([]byte, []byte, []byte, error) {
 				restarts = append(restarts, internalValOffset)
 				prefixLen = 0
 			} else {
-				prefixLen = sharedLen(prevKey, key)
+				prefixLen = commonPrefixLen(prevKey, key)
 			}
 			value := h.nodes[owner][path]
 
@@ -659,7 +672,6 @@ func (r *trienodeHistoryReader) read(owner common.Hash, path string) ([]byte, er
 }
 
 // writeTrienodeHistory persists the trienode history associated with the given diff layer.
-// nolint:unused
 func writeTrienodeHistory(writer ethdb.AncientWriter, dl *diffLayer) error {
 	start := time.Now()
 	h := newTrienodeHistory(dl.rootHash(), dl.parent.rootHash(), dl.block, dl.nodes.nodeOrigin)

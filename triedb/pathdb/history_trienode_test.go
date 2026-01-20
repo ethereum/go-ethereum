@@ -534,54 +534,8 @@ func TestTrienodeHistoryReaderNilKey(t *testing.T) {
 	}
 }
 
-// TestTrienodeHistoryReaderIterator tests the iterator functionality
-func TestTrienodeHistoryReaderIterator(t *testing.T) {
-	h := makeTrienodeHistory()
-
-	// Count expected entries
-	expectedCount := 0
-	expectedNodes := make(map[stateIdent]bool)
-	for owner, nodeList := range h.nodeList {
-		expectedCount += len(nodeList)
-		for _, node := range nodeList {
-			expectedNodes[stateIdent{
-				typ:         typeTrienode,
-				addressHash: owner,
-				path:        node,
-			}] = true
-		}
-	}
-
-	// Test the iterator
-	actualCount := 0
-	for x := range h.forEach() {
-		_ = x
-		actualCount++
-	}
-	if actualCount != expectedCount {
-		t.Fatalf("Iterator count mismatch: expected %d, got %d", expectedCount, actualCount)
-	}
-
-	// Test that iterator yields expected state identifiers
-	seen := make(map[stateIdent]bool)
-	for ident := range h.forEach() {
-		if ident.typ != typeTrienode {
-			t.Fatal("Iterator should only yield trienode history identifiers")
-		}
-		key := stateIdent{typ: ident.typ, addressHash: ident.addressHash, path: ident.path}
-		if seen[key] {
-			t.Fatal("Iterator yielded duplicate identifier")
-		}
-		seen[key] = true
-
-		if !expectedNodes[key] {
-			t.Fatalf("Unexpected yielded identifier %v", key)
-		}
-	}
-}
-
-// TestSharedLen tests the sharedLen helper function
-func TestSharedLen(t *testing.T) {
+// TestCommonPrefixLen tests the commonPrefixLen helper function
+func TestCommonPrefixLen(t *testing.T) {
 	tests := []struct {
 		a, b     []byte
 		expected int
@@ -610,13 +564,13 @@ func TestSharedLen(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		result := sharedLen(test.a, test.b)
+		result := commonPrefixLen(test.a, test.b)
 		if result != test.expected {
 			t.Errorf("Test %d: sharedLen(%q, %q) = %d, expected %d",
 				i, test.a, test.b, result, test.expected)
 		}
 		// Test commutativity
-		resultReverse := sharedLen(test.b, test.a)
+		resultReverse := commonPrefixLen(test.b, test.a)
 		if result != resultReverse {
 			t.Errorf("Test %d: sharedLen is not commutative: sharedLen(a,b)=%d, sharedLen(b,a)=%d",
 				i, result, resultReverse)

@@ -40,8 +40,8 @@ type indexReaderWithLimitTag struct {
 }
 
 // newIndexReaderWithLimitTag constructs a index reader with indexing position.
-func newIndexReaderWithLimitTag(db ethdb.KeyValueReader, state stateIdent, limit uint64) (*indexReaderWithLimitTag, error) {
-	r, err := newIndexReader(db, state)
+func newIndexReaderWithLimitTag(db ethdb.KeyValueReader, state stateIdent, limit uint64, bitmapSize int) (*indexReaderWithLimitTag, error) {
+	r, err := newIndexReader(db, state, bitmapSize)
 	if err != nil {
 		return nil, err
 	}
@@ -99,16 +99,17 @@ func (r *indexReaderWithLimitTag) readGreaterThan(id uint64, lastID uint64) (uin
 	return r.reader.readGreaterThan(id)
 }
 
-// historyReader is the structure to access historic state data.
-type historyReader struct {
+// stateHistoryReader is the structure to access historic state data.
+type stateHistoryReader struct {
 	disk    ethdb.KeyValueReader
 	freezer ethdb.AncientReader
 	readers map[string]*indexReaderWithLimitTag
 }
 
-// newHistoryReader constructs the history reader with the supplied db.
-func newHistoryReader(disk ethdb.KeyValueReader, freezer ethdb.AncientReader) *historyReader {
-	return &historyReader{
+// newStateHistoryReader constructs the history reader with the supplied db
+// for accessing historical states.
+func newStateHistoryReader(disk ethdb.KeyValueReader, freezer ethdb.AncientReader) *stateHistoryReader {
+	return &stateHistoryReader{
 		disk:    disk,
 		freezer: freezer,
 		readers: make(map[string]*indexReaderWithLimitTag),
@@ -117,7 +118,7 @@ func newHistoryReader(disk ethdb.KeyValueReader, freezer ethdb.AncientReader) *h
 
 // readAccountMetadata resolves the account metadata within the specified
 // state history.
-func (r *historyReader) readAccountMetadata(address common.Address, historyID uint64) ([]byte, error) {
+func (r *stateHistoryReader) readAccountMetadata(address common.Address, historyID uint64) ([]byte, error) {
 	blob := rawdb.ReadStateAccountIndex(r.freezer, historyID)
 	if len(blob) == 0 {
 		return nil, fmt.Errorf("account index is truncated, historyID: %d", historyID)
@@ -143,7 +144,7 @@ func (r *historyReader) readAccountMetadata(address common.Address, historyID ui
 
 // readStorageMetadata resolves the storage slot metadata within the specified
 // state history.
-func (r *historyReader) readStorageMetadata(storageKey common.Hash, storageHash common.Hash, historyID uint64, slotOffset, slotNumber int) ([]byte, error) {
+func (r *stateHistoryReader) readStorageMetadata(storageKey common.Hash, storageHash common.Hash, historyID uint64, slotOffset, slotNumber int) ([]byte, error) {
 	data, err := rawdb.ReadStateStorageIndex(r.freezer, historyID, slotIndexSize*slotOffset, slotIndexSize*slotNumber)
 	if err != nil {
 		msg := fmt.Sprintf("id: %d, slot-offset: %d, slot-length: %d", historyID, slotOffset, slotNumber)
@@ -178,7 +179,7 @@ func (r *historyReader) readStorageMetadata(storageKey common.Hash, storageHash 
 }
 
 // readAccount retrieves the account data from the specified state history.
-func (r *historyReader) readAccount(address common.Address, historyID uint64) ([]byte, error) {
+func (r *stateHistoryReader) readAccount(address common.Address, historyID uint64) ([]byte, error) {
 	metadata, err := r.readAccountMetadata(address, historyID)
 	if err != nil {
 		return nil, err
@@ -194,7 +195,7 @@ func (r *historyReader) readAccount(address common.Address, historyID uint64) ([
 }
 
 // readStorage retrieves the storage slot data from the specified state history.
-func (r *historyReader) readStorage(address common.Address, storageKey common.Hash, storageHash common.Hash, historyID uint64) ([]byte, error) {
+func (r *stateHistoryReader) readStorage(address common.Address, storageKey common.Hash, storageHash common.Hash, historyID uint64) ([]byte, error) {
 	metadata, err := r.readAccountMetadata(address, historyID)
 	if err != nil {
 		return nil, err
@@ -224,35 +225,16 @@ func (r *historyReader) readStorage(address common.Address, storageKey common.Ha
 // stateID: represents the ID of the state of the specified version;
 // lastID: represents the ID of the latest/newest state history;
 // latestValue: represents the state value at the current disk layer with ID == lastID;
-func (r *historyReader) read(state stateIdentQuery, stateID uint64, lastID uint64, latestValue []byte) ([]byte, error) {
-	tail, err := r.freezer.Tail()
+func (r *stateHistoryReader) read(state stateIdentQuery, stateID uint64, lastID uint64, latestValue []byte) ([]byte, error) {
+	lastIndexed, err := checkStateAvail(state.stateIdent, typeStateHistory, r.freezer, stateID, lastID, r.disk)
 	if err != nil {
 		return nil, err
-	} // firstID = tail+1
-
-	// stateID+1 == firstID is allowed, as all the subsequent state histories
-	// are present with no gap inside.
-	if stateID < tail {
-		return nil, fmt.Errorf("historical state has been pruned, first: %d, state: %d", tail+1, stateID)
 	}
-
-	// To serve the request, all state histories from stateID+1 to lastID
-	// must be indexed. It's not supposed to happen unless system is very
-	// wrong.
-	metadata := loadIndexMetadata(r.disk, toHistoryType(state.typ))
-	if metadata == nil || metadata.Last < lastID {
-		indexed := "null"
-		if metadata != nil {
-			indexed = fmt.Sprintf("%d", metadata.Last)
-		}
-		return nil, fmt.Errorf("state history is not fully indexed, requested: %d, indexed: %s", stateID, indexed)
-	}
-
 	// Construct the index reader to locate the corresponding history for
 	// state retrieval
 	ir, ok := r.readers[state.String()]
 	if !ok {
-		ir, err = newIndexReaderWithLimitTag(r.disk, state.stateIdent, metadata.Last)
+		ir, err = newIndexReaderWithLimitTag(r.disk, state.stateIdent, lastIndexed, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -276,4 +258,35 @@ func (r *historyReader) read(state stateIdentQuery, stateID uint64, lastID uint6
 		return r.readAccount(state.address, historyID)
 	}
 	return r.readStorage(state.address, state.storageKey, state.storageHash, historyID)
+}
+
+// checkStateAvail determines whether the requested historical state is available
+// for accessing. What's more, it also returns the ID of the latest indexed history
+// entry for subsequent usage.
+func checkStateAvail(state stateIdent, exptyp historyType, freezer ethdb.AncientReader, stateID uint64, lastID uint64, db ethdb.KeyValueReader) (uint64, error) {
+	if toHistoryType(state.typ) != exptyp {
+		return 0, fmt.Errorf("unsupported history type: %d, want: %v", toHistoryType(state.typ), exptyp)
+	}
+	// firstID = tail+1
+	tail, err := freezer.Tail()
+	if err != nil {
+		return 0, err
+	}
+	// stateID+1 == firstID is allowed, as all the subsequent history entries
+	// are present with no gap inside.
+	if stateID < tail {
+		return 0, fmt.Errorf("historical state has been pruned, first: %d, state: %d", tail+1, stateID)
+	}
+	// To serve the request, all history entries from stateID+1 to lastID
+	// must be indexed. It's not supposed to happen unless system is very
+	// wrong.
+	metadata := loadIndexMetadata(db, exptyp)
+	if metadata == nil || metadata.Last < lastID {
+		indexed := "null"
+		if metadata != nil {
+			indexed = fmt.Sprintf("%d", metadata.Last)
+		}
+		return 0, fmt.Errorf("history is not fully indexed, requested: %d, indexed: %s", stateID, indexed)
+	}
+	return metadata.Last, nil
 }

@@ -124,7 +124,7 @@ func (ec *Client) PeerCount(ctx context.Context) (uint64, error) {
 // BlockReceipts returns the receipts of a given block number or hash.
 func (ec *Client) BlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]*types.Receipt, error) {
 	var r []*types.Receipt
-	err := ec.c.CallContext(ctx, &r, "eth_getBlockReceipts", blockNrOrHash.String())
+	err := ec.c.CallContext(ctx, &r, "eth_getBlockReceipts", blockNrOrHash)
 	if err == nil && r == nil {
 		return nil, ethereum.NotFound
 	}
@@ -497,9 +497,12 @@ func (ec *Client) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuer
 }
 
 func toFilterArg(q ethereum.FilterQuery) (interface{}, error) {
-	arg := map[string]interface{}{
-		"address": q.Addresses,
-		"topics":  q.Topics,
+	arg := map[string]interface{}{}
+	if q.Addresses != nil {
+		arg["address"] = q.Addresses
+	}
+	if q.Topics != nil {
+		arg["topics"] = q.Topics
 	}
 	if q.BlockHash != nil {
 		arg["blockHash"] = *q.BlockHash

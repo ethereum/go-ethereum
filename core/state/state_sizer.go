@@ -245,7 +245,7 @@ func calSizeStats(update *stateUpdate) (SizeStats, error) {
 
 	codeExists := make(map[common.Hash]struct{})
 	for _, code := range update.codes {
-		if _, ok := codeExists[code.hash]; ok || code.exists {
+		if _, ok := codeExists[code.hash]; ok || code.duplicate {
 			continue
 		}
 		stats.ContractCodes += 1

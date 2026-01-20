@@ -29,12 +29,14 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 )
 
 const (
 	// The batch size for reading state histories
-	historyReadBatch = 1000
+	historyReadBatch  = 1000
+	historyIndexBatch = 8 * 1024 * 1024 // The number of state history indexes for constructing or deleting as batch
 
 	stateHistoryIndexV0         = uint8(0)               // initial version of state index structure
 	stateHistoryIndexVersion    = stateHistoryIndexV0    // the current state index version
@@ -120,18 +122,20 @@ func deleteIndexMetadata(db ethdb.KeyValueWriter, typ historyType) {
 // batchIndexer is responsible for performing batch indexing or unindexing
 // of historical data (e.g., state or trie node changes) atomically.
 type batchIndexer struct {
-	index   map[stateIdent][]uint64 // List of history IDs for tracked state entry
-	pending int                     // Number of entries processed in the current batch.
-	delete  bool                    // Operation mode: true for unindex, false for index.
-	lastID  uint64                  // ID of the most recently processed history.
-	typ     historyType             // Type of history being processed (e.g., state or trienode).
-	db      ethdb.KeyValueStore     // Key-value database used to store or delete index data.
+	index   map[stateIdent][]uint64   // List of history IDs for tracked state entry
+	ext     map[stateIdent][][]uint16 // List of extension for each state element
+	pending int                       // Number of entries processed in the current batch.
+	delete  bool                      // Operation mode: true for unindex, false for index.
+	lastID  uint64                    // ID of the most recently processed history.
+	typ     historyType               // Type of history being processed (e.g., state or trienode).
+	db      ethdb.KeyValueStore       // Key-value database used to store or delete index data.
 }
 
 // newBatchIndexer constructs the batch indexer with the supplied mode.
 func newBatchIndexer(db ethdb.KeyValueStore, delete bool, typ historyType) *batchIndexer {
 	return &batchIndexer{
 		index:  make(map[stateIdent][]uint64),
+		ext:    make(map[stateIdent][][]uint16),
 		delete: delete,
 		typ:    typ,
 		db:     db,
@@ -141,8 +145,10 @@ func newBatchIndexer(db ethdb.KeyValueStore, delete bool, typ historyType) *batc
 // process traverses the state entries within the provided history and tracks the mutation
 // records for them.
 func (b *batchIndexer) process(h history, id uint64) error {
-	for ident := range h.forEach() {
-		b.index[ident] = append(b.index[ident], id)
+	for elem := range h.forEach() {
+		key := elem.key()
+		b.index[key] = append(b.index[key], id)
+		b.ext[key] = append(b.ext[key], elem.ext())
 		b.pending++
 	}
 	b.lastID = id
@@ -189,14 +195,15 @@ func (b *batchIndexer) finish(force bool) error {
 		indexed = metadata.Last
 	}
 	for ident, list := range b.index {
+		ext := b.ext[ident]
 		eg.Go(func() error {
 			if !b.delete {
-				iw, err := newIndexWriter(b.db, ident, indexed)
+				iw, err := newIndexWriter(b.db, ident, indexed, ident.bloomSize())
 				if err != nil {
 					return err
 				}
-				for _, n := range list {
-					if err := iw.append(n); err != nil {
+				for i, n := range list {
+					if err := iw.append(n, ext[i]); err != nil {
 						return err
 					}
 				}
@@ -204,7 +211,7 @@ func (b *batchIndexer) finish(force bool) error {
 					iw.finish(batch)
 				})
 			} else {
-				id, err := newIndexDeleter(b.db, ident, indexed)
+				id, err := newIndexDeleter(b.db, ident, indexed, ident.bloomSize())
 				if err != nil {
 					return err
 				}
@@ -238,8 +245,10 @@ func (b *batchIndexer) finish(force bool) error {
 		return err
 	}
 	log.Debug("Committed batch indexer", "type", b.typ, "entries", len(b.index), "records", b.pending, "size", common.StorageSize(batchSize), "elapsed", common.PrettyDuration(time.Since(start)))
+
 	b.pending = 0
-	b.index = make(map[stateIdent][]uint64)
+	maps.Clear(b.index)
+	maps.Clear(b.ext)
 	return nil
 }
 
