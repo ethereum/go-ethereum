@@ -431,6 +431,10 @@ func (dl *diffLayer) AccountList() []common.Hash {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
+	// Double check after acquiring the write lock
+	if dl.accountList != nil {
+		return dl.accountList
+	}
 	dl.accountList = slices.SortedFunc(maps.Keys(dl.accountData), common.Hash.Cmp)
 	dl.memory += uint64(len(dl.accountList) * common.HashLength)
 	return dl.accountList
@@ -463,6 +467,10 @@ func (dl *diffLayer) StorageList(accountHash common.Hash) []common.Hash {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
+	// Double check after acquiring the write lock
+	if list, exist := dl.storageList[accountHash]; exist {
+		return list
+	}
 	storageList := slices.SortedFunc(maps.Keys(dl.storageData[accountHash]), common.Hash.Cmp)
 	dl.storageList[accountHash] = storageList
 	dl.memory += uint64(len(storageList)*common.HashLength + common.HashLength)
