@@ -27,16 +27,6 @@ except ImportError:
     import urllib as urlparse
 
 
-class StdIOTransport(ServerTransport):
-    """Uses std input/output for RPC"""
-
-    def receive_message(self):
-        return None, urlparse.unquote(sys.stdin.readline())
-
-    def send_reply(self, context, reply):
-        print(reply)
-
-
 class PipeTransport(ServerTransport):
     """Uses std a pipe for RPC"""
 
