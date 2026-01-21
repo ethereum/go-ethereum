@@ -16,31 +16,40 @@
 
 package execdb
 
+// EraE file format specification.
+//
 // The format can be summarized with the following expression:
-//    eraE := Version | CompressedHeader* | CompressedBody* | CompressedReceipts* | TotalDifficulty* | Proofs* | other-entries* | Accumulator | BlockIndex
+//
+//	eraE := Version | CompressedHeader* | CompressedBody* | CompressedSlimReceipts* | TotalDifficulty* | other-entries* | Accumulator? | ComponentIndex
+//
 // Each basic element is its own e2store entry:
-
-//    Version            = { type: 0x3265, data: nil }
-//    CompressedHeader   = { type: 0x03,   data: snappyFramed(rlp(header)) }
-//    CompressedBody     = { type: 0x04,   data: snappyFramed(rlp(body)) }
-//    CompressedReceipts = { type: 0x05,   data: snappyFramed(rlp([tx-type, post-state-or-status, cumulative-gas, logs])) }
-//    TotalDifficulty    = { type: 0x06,   data: uint256(header.total_difficulty) }
-//    Proofs             = { type: 0x07    data: snappyFramed(rlp([BlockProofHistoricalHashesAccumulator, BlockProofHistoricalRoots, BlockProofHistoricalSummaries]))}
-//    AccumulatorRoot    = { type: 0x08,   data: hash_tree_root(List(HeaderRecord, 8192)) }
-//    BlockIndex         = { type: 0x3266, data: block-index }
-// TotalDifficulty is little-endian encoded.
-
-// AccumulatorRoot is only defined for epochs with pre-merge data.
-// HeaderRecord is defined in the Portal Network specification[^5].
-
-// BlockIndex stores relative offsets to each compressed block entry. The format is:
-
-//    block-index := starting-number | index | index | index ... | count
-// All values in the block index are little-endian uint64.
-
-// starting-number is the first block number in the archive. Every index is a defined relative to index's location in the file. The total number of block entries in the file is recorded in count.
-
-// Due to the accumulator size limit of 8192, the maximum number of blocks in an Era batch is also 8192. This is also the value of SLOTS_PER_HISTORICAL_ROOT[^6] on the Beacon chain, so it is nice to align on the value.
+//
+//	Version              = { type: 0x3265, data: nil }
+//	CompressedHeader     = { type: 0x03,   data: snappyFramed(rlp(header)) }
+//	CompressedBody       = { type: 0x04,   data: snappyFramed(rlp(body)) }
+//	CompressedSlimReceipts = { type: 0x08, data: snappyFramed(rlp([tx-type, post-state-or-status, cumulative-gas, logs])) }
+//	TotalDifficulty      = { type: 0x06,   data: uint256 (header.total_difficulty) }
+//	AccumulatorRoot      = { type: 0x07,   data: hash_tree_root(List(HeaderRecord, 8192)) }
+//	ComponentIndex       = { type: 0x3267, data: component-index }
+//
+// Notes:
+//   - TotalDifficulty is present for pre-merge and merge transition epochs.
+//     For pure post-merge epochs, TotalDifficulty is omitted entirely.
+//   - In merge transition epochs, post-merge blocks store the final total
+//     difficulty (the TD at which the merge occurred).
+//   - AccumulatorRoot is only written for pre-merge epochs.
+//   - HeaderRecord is defined in the Portal Network specification.
+//   - Proofs (type 0x09) are defined in the spec but not yet supported in this implementation.
+//
+// ComponentIndex stores relative offsets to each block's components:
+//
+//	component-index := starting-number | indexes | indexes | ... | component-count | count
+//	indexes := header-offset | body-offset | receipts-offset | td-offset?
+//
+// All values are little-endian uint64.
+//
+// Due to the accumulator size limit of 8192, the maximum number of blocks in an
+// EraE file is also 8192.
 
 import (
 	"bytes"
@@ -58,20 +67,23 @@ import (
 	"github.com/golang/snappy"
 )
 
-// Builder is used to build an Era2 e2store file. It collects block entries and writes them to the underlying e2store.Writer.
+// Builder is used to build an EraE e2store file. It collects block entries and
+// writes them to the underlying e2store.Writer.
 type Builder struct {
 	w *e2store.Writer
 
 	headers  [][]byte
-	hashes   []common.Hash
+	hashes   []common.Hash // only pre-merge block hashes, for accumulator
 	bodies   [][]byte
 	receipts [][]byte
-	proofs   [][]byte
 	tds      []*big.Int
 
-	startNum *uint64
-	merged   bool
-	written  uint64
+	startNum    *uint64
+	ttd         *big.Int     // terminal total difficulty
+	last        common.Hash  // hash of last block added
+	accumulator *common.Hash // accumulator root, set by Finalize (nil for post-merge)
+
+	written uint64
 
 	buf    *bytes.Buffer
 	snappy *snappy.Writer
@@ -84,8 +96,8 @@ func NewBuilder(w io.Writer) era.Builder {
 	}
 }
 
-// Add writes a block entry, its reciepts, and optionally its proofs as well into the e2store file.
-func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, proof era.Proof) error {
+// Add writes a block entry and its receipts into the e2store file.
+func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int) error {
 	eh, err := rlp.EncodeToBytes(block.Header())
 	if err != nil {
 		return fmt.Errorf("encode header: %w", err)
@@ -104,59 +116,59 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, 
 		return fmt.Errorf("encode receipts: %w", err)
 	}
 
-	var ep []byte
-	if proof != nil {
-		ep, err = rlp.EncodeToBytes(ep)
-		if err != nil {
-			return fmt.Errorf("encode proof: %w", err)
-		}
-	}
-	var difficulty *big.Int
-	if !b.merged {
-		difficulty = block.Difficulty()
-	}
-
-	return b.AddRLP(eh, eb, er, ep, block.Number().Uint64(), block.Hash(), td, difficulty)
+	return b.AddRLP(eh, eb, er, block.Number().Uint64(), block.Hash(), td, block.Difficulty())
 }
 
 // AddRLP takes the RLP encoded block components and writes them to the underlying e2store file.
-func (b *Builder) AddRLP(header []byte, body []byte, receipts []byte, proof []byte, number uint64, blockHash common.Hash, td, difficulty *big.Int) error {
-	if b.startNum == nil {
-		b.startNum = new(uint64)
-		*b.startNum = number
-		b.merged = difficulty.Sign() == 0
-	}
+// The builder automatically handles transition epochs where both pre and post-merge blocks exist.
+func (b *Builder) AddRLP(header, body, receipts []byte, number uint64, blockHash common.Hash, td, difficulty *big.Int) error {
 	if len(b.headers) >= era.MaxSize {
 		return fmt.Errorf("exceeds max size %d", era.MaxSize)
 	}
-	if !b.merged && (td == nil || difficulty == nil || difficulty.Sign() == 0) {
-		return fmt.Errorf("era pre-merge, but difficulty values not supplied")
-	}
-	if b.merged && (td != nil || difficulty != nil) {
-		return fmt.Errorf("era already merged, but given non-nil difficulty values")
-	}
-	if len(b.headers) != 0 && len(b.proofs) == 0 && proof != nil {
-		return fmt.Errorf("unexpected proof for block %d: first block had none", number)
-	}
-	if len(b.headers) != 0 && len(b.proofs) != 0 && proof == nil {
-		return fmt.Errorf("block %d missing proof: proofs required for every block", number)
+	// Set starting block number on first add.
+	if b.startNum == nil {
+		b.startNum = new(uint64)
+		*b.startNum = number
 	}
 
+	// After the merge, difficulty must be nil.
+	post := (b.tds == nil && len(b.headers) > 0) || b.ttd != nil
+	if post && difficulty != nil {
+		return fmt.Errorf("post-merge epoch: cannot accept total difficulty for block %d", number)
+	}
+
+	// If this marks the start of the transition, record final total
+	// difficulty value.
+	if len(b.tds) > 0 && difficulty == nil {
+		b.ttd = new(big.Int).Set(b.tds[len(b.tds)-1])
+	}
+
+	// Record block data.
 	b.headers = append(b.headers, header)
 	b.bodies = append(b.bodies, body)
 	b.receipts = append(b.receipts, receipts)
+	b.last = blockHash
 
-	if !b.merged {
-		if difficulty.Sign() != 0 {
-			b.hashes = append(b.hashes, blockHash)
-		}
+	// Conditionally write the total difficulty and block hashes.
+	//   - Pre-merge: store total difficulty and block hashes.
+	//   - Transition: only store total difficulty.
+	//   - Post-merge: store neither.
+	if difficulty != nil {
+		b.hashes = append(b.hashes, blockHash)
 		b.tds = append(b.tds, new(big.Int).Set(td))
+	} else if b.ttd != nil {
+		b.tds = append(b.tds, new(big.Int).Set(b.ttd))
+	} else {
+		// Post-merge: no TD or block hashes stored.
 	}
 
-	if proof != nil {
-		b.proofs = append(b.proofs, proof)
-	}
 	return nil
+}
+
+// Accumulator returns the accumulator root after Finalize has been called.
+// Returns nil for post-merge epochs where no accumulator exists.
+func (b *Builder) Accumulator() *common.Hash {
+	return b.accumulator
 }
 
 type offsets struct {
@@ -164,23 +176,24 @@ type offsets struct {
 	bodies   []uint64
 	receipts []uint64
 	tds      []uint64
-	proofs   []uint64
 }
 
-// Finalize writes all collected block entries to the e2store file and returns the accumulator root hash.
-// It also writes the index table at the end of the file, which contains offsets to each block entry.
+// Finalize writes all collected block entries to the e2store file.
+// For pre-merge or transition epochs, the accumulator root is computed over
+// pre-merge blocks and written. For pure post-merge epochs, no accumulator
+// is written. Always returns the last block hash as the epoch identifier.
 func (b *Builder) Finalize() (common.Hash, error) {
 	if b.startNum == nil {
 		return common.Hash{}, errors.New("no blocks added, cannot finalize")
 	}
-	// Write Era2 version before writing any blocks.
+	// Write version before writing any blocks.
 	if n, err := b.w.Write(era.TypeVersion, nil); err != nil {
 		return common.Hash{}, fmt.Errorf("write version entry: %w", err)
 	} else {
 		b.written += uint64(n)
 	}
 
-	// Convert int values to byte-level LE representation.
+	// Convert TD values to byte-level LE representation.
 	var tds [][]byte
 	for _, td := range b.tds {
 		tds = append(tds, uint256LE(td))
@@ -201,7 +214,6 @@ func (b *Builder) Finalize() (common.Hash, error) {
 		{era.TypeCompressedBody, b.bodies, true, &o.bodies},
 		{era.TypeCompressedSlimReceipts, b.receipts, true, &o.receipts},
 		{era.TypeTotalDifficulty, tds, false, &o.tds},
-		{era.TypeProof, b.proofs, true, &o.proofs},
 	} {
 		for _, data := range section.data {
 			*section.offsets = append(*section.offsets, b.written)
@@ -221,12 +233,11 @@ func (b *Builder) Finalize() (common.Hash, error) {
 		}
 	}
 
-	// Compute and write accumlator root only when the first block the epoch is
-	// pre-merge, otherwise omit.
-	var accRoot common.Hash
-	if !b.merged {
-		var err error
-		accRoot, err = era.ComputeAccumulator(b.hashes, b.tds[:len(b.hashes)])
+	// Compute and write accumulator root only for epochs that started pre-merge.
+	// The accumulator is computed over only the pre-merge blocks (b.hashes).
+	// Pure post-merge epochs have no accumulator.
+	if len(b.tds) > 0 {
+		accRoot, err := era.ComputeAccumulator(b.hashes, b.tds[:len(b.hashes)])
 		if err != nil {
 			return common.Hash{}, fmt.Errorf("compute accumulator: %w", err)
 		}
@@ -235,11 +246,18 @@ func (b *Builder) Finalize() (common.Hash, error) {
 		} else {
 			b.written += uint64(n)
 		}
+		b.accumulator = &accRoot
+		if err := b.writeIndex(&o); err != nil {
+			return common.Hash{}, err
+		}
+		return b.last, nil
 	}
 
-	// TODO: accumulator root should only be returned when it's relevant
-	// (pre-merge)?
-	return accRoot, b.writeIndex(&o)
+	// Pure post-merge epoch: no accumulator.
+	if err := b.writeIndex(&o); err != nil {
+		return common.Hash{}, err
+	}
+	return b.last, nil
 }
 
 // uin256LE writes 32 byte big integers to little endian.
@@ -269,45 +287,37 @@ func (b *Builder) snappyWrite(typ uint16, in []byte) error {
 	return nil
 }
 
-// writeIndex takes all the offset table and writes it to the file. The index table contains all offsets to specific block entries
+// writeIndex writes the component index to the file.
 func (b *Builder) writeIndex(o *offsets) error {
-	count := uint64(len(o.headers))
-	componentCount := uint64(3)
+	count := len(o.headers)
+
+	// Post-merge, we only index headers, bodies, and receipts. Pre-merge, we also
+	// need to index the total difficulties.
+	componentCount := 3
 	if len(o.tds) > 0 {
 		componentCount++
 	}
-	if len(o.proofs) > 0 {
-		componentCount++
-	}
 
-	index := make([]byte, 8+count*8*componentCount+16) // 8 for start block, 8 per property per block, 16 for the number of properties and the number of blocks
-	binary.LittleEndian.PutUint64(index, *b.startNum)
+	// Offsets are stored relative to the index position (negative, stored as uint64).
 	base := int64(b.written)
 	rel := func(abs uint64) uint64 { return uint64(int64(abs) - base) }
-	for i := uint64(0); i < count; i++ {
-		basePosition := 8 + i*componentCount*8
 
-		binary.LittleEndian.PutUint64(index[basePosition:], rel(o.headers[i]))
-		binary.LittleEndian.PutUint64(index[basePosition+8:], rel(o.bodies[i]))
-		binary.LittleEndian.PutUint64(index[basePosition+16:], rel(o.receipts[i]))
+	var buf bytes.Buffer
+	write := func(v uint64) { binary.Write(&buf, binary.LittleEndian, v) }
 
-		pos := uint64(24)
+	write(*b.startNum)
+	for i := range o.headers {
+		write(rel(o.headers[i]))
+		write(rel(o.bodies[i]))
+		write(rel(o.receipts[i]))
 		if len(o.tds) > 0 {
-			binary.LittleEndian.PutUint64(index[basePosition+pos:], rel(o.tds[i]))
-			pos += 8
-		}
-		if len(o.proofs) > 0 {
-			binary.LittleEndian.PutUint64(index[basePosition+pos:], rel(o.proofs[i]))
+			write(rel(o.tds[i]))
 		}
 	}
-	end := 8 + count*componentCount*8
+	write(uint64(componentCount))
+	write(uint64(count))
 
-	binary.LittleEndian.PutUint64(index[end+0:], componentCount)
-	binary.LittleEndian.PutUint64(index[end+8:], count)
-	if n, err := b.w.Write(era.TypeComponentIndex, index); err != nil {
-		return err
-	} else {
-		b.written += uint64(n)
-	}
-	return nil
+	n, err := b.w.Write(era.TypeComponentIndex, buf.Bytes())
+	b.written += uint64(n)
+	return err
 }

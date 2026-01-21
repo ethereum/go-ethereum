@@ -67,7 +67,7 @@ func TestEra1Builder(t *testing.T) {
 			hash     = common.Hash{byte(i)}
 			td       = chain.tds[i]
 		)
-		if err = builder.AddRLP(header, body, receipts, nil, uint64(i), hash, td, big.NewInt(1)); err != nil {
+		if err = builder.AddRLP(header, body, receipts, uint64(i), hash, td, big.NewInt(1)); err != nil {
 			t.Fatalf("error adding entry: %v", err)
 		}
 	}

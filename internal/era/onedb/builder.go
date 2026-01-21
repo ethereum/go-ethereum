@@ -73,13 +73,15 @@ import (
 // Due to the accumulator size limit of 8192, the maximum number of blocks in
 // an Era1 batch is also 8192.
 type Builder struct {
-	w        *e2store.Writer
-	startNum *uint64
-	startTd  *big.Int
-	indexes  []uint64
-	hashes   []common.Hash
-	tds      []*big.Int
-	written  int
+	w           *e2store.Writer
+	startNum    *uint64
+	startTd     *big.Int
+	indexes     []uint64
+	hashes      []common.Hash
+	tds         []*big.Int
+	accumulator *common.Hash // accumulator root, set by Finalize
+
+	written int
 
 	buf    *bytes.Buffer
 	snappy *snappy.Writer
@@ -97,10 +99,7 @@ func NewBuilder(w io.Writer) era.Builder {
 
 // Add writes a compressed block entry and compressed receipts entry to the
 // underlying e2store file.
-func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, proof era.Proof) error {
-	if proof != nil {
-		return fmt.Errorf("proof not allowed in era1 format")
-	}
+func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int) error {
 	eh, err := rlp.EncodeToBytes(block.Header())
 	if err != nil {
 		return err
@@ -113,15 +112,12 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int, 
 	if err != nil {
 		return err
 	}
-	return b.AddRLP(eh, eb, er, nil, block.NumberU64(), block.Hash(), td, block.Difficulty())
+	return b.AddRLP(eh, eb, er, block.NumberU64(), block.Hash(), td, block.Difficulty())
 }
 
 // AddRLP writes a compressed block entry and compressed receipts entry to the
 // underlying e2store file.
-func (b *Builder) AddRLP(header, body, receipts, proof []byte, number uint64, hash common.Hash, td, difficulty *big.Int) error {
-	if proof != nil {
-		return fmt.Errorf("proof not allowed in era1 format")
-	}
+func (b *Builder) AddRLP(header, body, receipts []byte, number uint64, hash common.Hash, td, difficulty *big.Int) error {
 	// Write Era1 version entry before first block.
 	if b.startNum == nil {
 		n, err := b.w.Write(era.TypeVersion, nil)
@@ -164,7 +160,8 @@ func (b *Builder) AddRLP(header, body, receipts, proof []byte, number uint64, ha
 }
 
 // Finalize computes the accumulator and block index values, then writes the
-// corresponding e2store entries.
+// corresponding e2store entries. Era1 always has an accumulator, so this
+// always returns a valid hash.
 func (b *Builder) Finalize() (common.Hash, error) {
 	if b.startNum == nil {
 		return common.Hash{}, errors.New("finalize called on empty builder")
@@ -179,6 +176,8 @@ func (b *Builder) Finalize() (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("error writing accumulator: %w", err)
 	}
+	b.accumulator = &root
+
 	// Get beginning of index entry to calculate block relative offset.
 	base := int64(b.written)
 
@@ -208,6 +207,12 @@ func (b *Builder) Finalize() (common.Hash, error) {
 	}
 
 	return root, nil
+}
+
+// Accumulator returns the accumulator root after Finalize has been called.
+// For Era1, this always returns a non-nil value since all blocks are pre-merge.
+func (b *Builder) Accumulator() *common.Hash {
+	return b.accumulator
 }
 
 // snappyWrite is a small helper to take care snappy encoding and writing an e2store entry.

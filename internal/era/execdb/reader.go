@@ -39,9 +39,10 @@ type Era struct {
 	m metadata // metadata for the Era file
 }
 
-// Filename returns a recognizable filename for era file.
-func Filename(network string, epoch int, root common.Hash) string {
-	return fmt.Sprintf("%s-%05d-%s.erae", network, epoch, root.Hex()[2:10])
+// Filename returns a recognizable filename for an EraE file.
+// The filename uses the last block hash to uniquely identify the epoch's content.
+func Filename(network string, epoch int, lastBlockHash common.Hash) string {
+	return fmt.Sprintf("%s-%05d-%s.erae", network, epoch, lastBlockHash.Hex()[2:10])
 }
 
 // Open accesses the era file.
@@ -185,46 +186,28 @@ func (e *Era) GetRawReceiptsByNumber(blockNum uint64) ([]byte, error) {
 }
 
 // InitialTD returns initial total difficulty before the difficulty of the
-// first block of the Era is applied.
+// first block of the Era is applied. Returns an error if TD is not available
+// (e.g., post-merge epoch).
 func (e *Era) InitialTD() (*big.Int, error) {
-	var (
-		r      io.Reader
-		header types.Header
-		rawTd  []byte
-		n      int64
-		off    int64
-		err    error
-	)
+	// Check if TD component exists.
+	if int(td) >= int(e.m.components) {
+		return nil, fmt.Errorf("total difficulty not available in this epoch")
+	}
 
-	// Read first header.
-	if off, err = e.headerOff(e.m.start); err != nil {
-		return nil, err
-	}
-	if r, n, err = newSnappyReader(e.s, era.TypeCompressedHeader, off); err != nil {
-		return nil, err
-	}
-	if err := rlp.Decode(r, &header); err != nil {
-		return nil, err
-	}
-	off += n
-
-	// Skip over header and body.
-	off, err = e.s.SkipN(off, 2)
+	// Get first header to read its difficulty.
+	header, err := e.GetHeader(e.m.start)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read first header: %w", err)
 	}
 
-	// Read total difficulty after first block.
-	if r, _, err = e.s.ReaderAt(era.TypeTotalDifficulty, off); err != nil {
-		return nil, err
-	}
-	rawTd, err = io.ReadAll(r)
+	// Get TD after first block using the index.
+	firstTD, err := e.GetTD(e.m.start)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read first TD: %w", err)
 	}
-	slices.Reverse(rawTd)
-	td := new(big.Int).SetBytes(rawTd)
-	return td.Sub(td, header.Difficulty), nil
+
+	// Initial TD = TD[0] - Difficulty[0]
+	return new(big.Int).Sub(firstTD, header.Difficulty), nil
 }
 
 // Accumulator reads the accumulator entry in the EraE file if it exists.

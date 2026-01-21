@@ -580,7 +580,7 @@ func exportHistory(ctx *cli.Context) error {
 	default:
 		return fmt.Errorf("unknown archive format %q (use 'era1' or 'erae')", format)
 	}
-	if err := utils.ExportHistory(chain, dir, uint64(first), uint64(last), uint64(era.MaxSize), newBuilder, filename); err != nil {
+	if err := utils.ExportHistory(chain, dir, uint64(first), uint64(last), newBuilder, filename); err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}
 

@@ -416,7 +416,7 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 
 // ExportHistory exports blockchain history into the specified directory,
 // following the Era format.
-func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64, newBuilder func(io.Writer) era.Builder, filename func(network string, epoch int, root common.Hash) string) error {
+func ExportHistory(bc *core.BlockChain, dir string, first, last uint64, newBuilder func(io.Writer) era.Builder, filename func(network string, epoch int, lastBlockHash common.Hash) string) error {
 	log.Info("Exporting blockchain history", "dir", dir)
 	if head := bc.CurrentBlock().Number.Uint64(); head < last {
 		log.Warn("Last block beyond head, setting last = head", "head", head, "last", last)
@@ -435,12 +435,31 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64, ne
 		reported  = time.Now()
 		h         = sha256.New()
 		buf       = bytes.NewBuffer(nil)
-		td        = new(big.Int) // TODO: should disallow non-zero "first" since we need to compute td from genesis now that we don't store it
+		td        = new(big.Int)
 		checksums []string
 	)
 
-	for batch := first; batch <= last; batch += step {
-		idx := int(batch / step)
+	// Compute initial TD by accumulating difficulty from genesis to first-1.
+	// This is necessary because TD is no longer stored in the database. Only
+	// compute if a segment of the export is pre-merge.
+	b := bc.GetBlockByNumber(first)
+	if b == nil {
+		return fmt.Errorf("block #%d not found", first)
+	}
+	if first > 0 && b.Difficulty().Sign() != 0 {
+		log.Info("Computing initial total difficulty", "from", 0, "to", first-1)
+		for i := uint64(0); i < first; i++ {
+			b := bc.GetBlockByNumber(i)
+			if b == nil {
+				return fmt.Errorf("block #%d not found while computing initial TD", i)
+			}
+			td.Add(td, b.Difficulty())
+		}
+		log.Info("Initial total difficulty computed", "td", td)
+	}
+
+	for batch := first; batch <= last; batch += uint64(era.MaxSize) {
+		idx := int(batch / uint64(era.MaxSize))
 		tmpPath := filepath.Join(dir, filename(network, idx, common.Hash{}))
 
 		if err := func() error {
@@ -452,28 +471,34 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64, ne
 
 			builder := newBuilder(f)
 
-			for j := uint64(0); j < step && batch+j <= last; j++ {
+			for j := uint64(0); j < uint64(era.MaxSize) && batch+j <= last; j++ {
 				n := batch + j
-				blk := bc.GetBlockByNumber(n)
-				if blk == nil {
+				block := bc.GetBlockByNumber(n)
+				if block == nil {
 					return fmt.Errorf("block #%d not found", n)
 				}
-				rcpt := bc.GetReceiptsByHash(blk.Hash())
-				if rcpt == nil {
+				receipt := bc.GetReceiptsByHash(block.Hash())
+				if receipt == nil {
 					return fmt.Errorf("receipts for #%d missing", n)
 				}
-				td.Add(td, blk.Difficulty())
 
-				if err := builder.Add(blk, rcpt, new(big.Int).Set(td), nil); err != nil {
+				// For pre-merge blocks, pass accumulated TD.
+				// For post-merge blocks (difficulty == 0), pass nil TD.
+				var blockTD *big.Int
+				if block.Difficulty().Sign() != 0 {
+					td.Add(td, block.Difficulty())
+					blockTD = new(big.Int).Set(td)
+				}
+
+				if err := builder.Add(block, receipt, blockTD); err != nil {
 					return err
 				}
 			}
-			root, err := builder.Finalize()
+			id, err := builder.Finalize()
 			if err != nil {
 				return err
 			}
-			// TODO: this root shouldn't be used post merge!
-			final := filepath.Join(dir, filename(network, idx, root))
+			final := filepath.Join(dir, filename(network, idx, id))
 			if err := os.Rename(tmpPath, final); err != nil {
 				return err
 			}

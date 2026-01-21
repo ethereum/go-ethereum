@@ -18,95 +18,19 @@ package era
 import (
 	"io"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-type variant uint16
+type ProofVariant uint16
 
 const (
-	proofNone variant = iota
-	proofHistoricalHashesAccumulator
-	proofHistoricalRoots
-	proofCapella
-	proofDeneb
+	ProofNone ProofVariant = iota
 )
 
-type BlockProofHistoricalHashesAccumulator [15]common.Hash // 15 * 32 = 480 bytes
-
-// BlockProofHistoricalRoots – Altair / Bellatrix historical_roots branch.
-type BlockProofHistoricalRoots struct {
-	BeaconBlockProof    [14]common.Hash // 448
-	BeaconBlockRoot     common.Hash     // 32
-	ExecutionBlockProof [11]common.Hash // 352
-	Slot                uint64          // 8  => 840 bytes
-}
-
-// BlockProofHistoricalSummariesCapella – Capella historical_summaries branch.
-type BlockProofHistoricalSummariesCapella struct {
-	BeaconBlockProof    [13]common.Hash // 416
-	BeaconBlockRoot     common.Hash     // 32
-	ExecutionBlockProof [11]common.Hash // 352
-	Slot                uint64          // 8  => 808 bytes
-}
-
-// BlockProofHistoricalSummariesDeneb – Deneb historical_summaries branch.
-type BlockProofHistoricalSummariesDeneb struct {
-	BeaconBlockProof    [13]common.Hash // 416
-	BeaconBlockRoot     common.Hash     // 32
-	ExecutionBlockProof [12]common.Hash // 384
-	Slot                uint64          // 8  => 840 bytes
-}
-
-// Proof is the interface for all block proof types in the era2 package.
+// Proof is the interface for all block proof types in the  package.
+// It's a stub for later integration into Era.
 type Proof interface {
 	EncodeRLP(w io.Writer) error
 	DecodeRlP(s *rlp.Stream) error
-	Variant() variant
+	Variant() ProofVariant
 }
-
-type hhaAlias BlockProofHistoricalHashesAccumulator
-
-// EncodeRLP encodes the BlockProofHistoricalHashesAccumulator into RLP format.
-func (p *BlockProofHistoricalHashesAccumulator) EncodeRLP(w io.Writer) error {
-	payload := []interface{}{uint16(proofHistoricalHashesAccumulator), hhaAlias(*p)}
-	return rlp.Encode(w, payload)
-}
-
-// Variant returns the variant type of the BlockProofHistoricalHashesAccumulator.
-func (p *BlockProofHistoricalHashesAccumulator) Variant() variant {
-	return proofHistoricalHashesAccumulator
-}
-
-type rootsAlias BlockProofHistoricalRoots
-
-// EncodeRLP encodes the BlockProofHistoricalRoots into RLP format.
-func (p *BlockProofHistoricalRoots) EncodeRLP(w io.Writer) error {
-	payload := []interface{}{uint16(proofHistoricalRoots), rootsAlias(*p)}
-	return rlp.Encode(w, payload)
-}
-
-// Variant returns the variant type of the BlockProofHistoricalRoots.
-func (*BlockProofHistoricalRoots) Variant() variant { return proofHistoricalRoots }
-
-type capellaAlias BlockProofHistoricalSummariesCapella
-
-// EncodeRLP encodes the BlockProofHistoricalSummariesCapella into RLP format.
-func (p *BlockProofHistoricalSummariesCapella) EncodeRLP(w io.Writer) error {
-	payload := []interface{}{uint16(proofCapella), capellaAlias(*p)}
-	return rlp.Encode(w, payload)
-}
-
-// Variant returns the variant type of the BlockProofHistoricalSummariesCapella.
-func (*BlockProofHistoricalSummariesCapella) Variant() variant { return proofCapella }
-
-type denebAlias BlockProofHistoricalSummariesDeneb
-
-// EncodeRLP encodes the BlockProofHistoricalSummariesDeneb into RLP format.
-func (p *BlockProofHistoricalSummariesDeneb) EncodeRLP(w io.Writer) error {
-	payload := []interface{}{uint16(proofDeneb), denebAlias(*p)}
-	return rlp.Encode(w, payload)
-}
-
-// Variant returns the variant type of the BlockProofHistoricalSummariesDeneb.
-func (*BlockProofHistoricalSummariesDeneb) Variant() variant { return proofDeneb }

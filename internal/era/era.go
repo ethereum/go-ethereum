@@ -37,21 +37,53 @@ type ReadAtSeekCloser interface {
 	io.Closer
 }
 
-// Iterator represents the iterator interface for various types of era stores.
+// Iterator provides sequential access to blocks in an era file.
 type Iterator interface {
+	// Next advances to the next block. Returns true if a block is available,
+	// false when iteration is complete or an error occurred.
 	Next() bool
+
+	// Number returns the block number of the current block.
 	Number() uint64
+
+	// Block returns the current block.
 	Block() (*types.Block, error)
+
+	// BlockAndReceipts returns the current block and its receipts.
 	BlockAndReceipts() (*types.Block, types.Receipts, error)
+
+	// Receipts returns the receipts for the current block.
 	Receipts() (types.Receipts, error)
+
+	// Error returns any error encountered during iteration.
 	Error() error
 }
 
-// Builder represents the interface for various types of era formats.
+// Builder constructs era files from blocks and receipts.
+//
+// Builders handle three epoch types automatically:
+//   - Pre-merge: all blocks have difficulty > 0, TD is stored for each block
+//   - Transition: starts pre-merge, ends post-merge; TD stored for all blocks
+//   - Post-merge: all blocks have difficulty == 0, no TD stored
 type Builder interface {
-	Add(block *types.Block, receipts types.Receipts, td *big.Int, proof Proof) error
-	AddRLP(header, body, receipts, proof []byte, number uint64, hash common.Hash, td, difficulty *big.Int) error
+	// Add appends a block and its receipts to the era file.
+	// For pre-merge blocks, td must be provided.
+	// For post-merge blocks, td should be nil.
+	Add(block *types.Block, receipts types.Receipts, td *big.Int) error
+
+	// AddRLP appends RLP-encoded block components to the era file.
+	// For pre-merge blocks, td and difficulty must be provided.
+	// For post-merge blocks, td and difficulty should be nil.
+	AddRLP(header, body, receipts []byte, number uint64, hash common.Hash, td, difficulty *big.Int) error
+
+	// Finalize writes all collected entries and returns the epoch identifier.
+	// For Era1 (onedb): returns the accumulator root.
+	// For EraE (execdb): returns the last block hash.
 	Finalize() (common.Hash, error)
+
+	// Accumulator returns the accumulator root after Finalize has been called.
+	// Returns nil for post-merge epochs where no accumulator exists.
+	Accumulator() *common.Hash
 }
 
 // Era represents the interface for reading era data.
