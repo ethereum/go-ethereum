@@ -54,12 +54,12 @@ func TestLogSlowBlockJSON(t *testing.T) {
 		AccountUpdated: 50,
 		StorageUpdated: 200,
 		StateReadCacheStats: state.ReaderStats{
-			AccountCacheHit:   4,
-			AccountCacheMiss:  6,
-			StorageCacheHit:   0,
-			StorageCacheMiss:  11,
-			ContractCodeHit:   4,
-			ContractCodeMiss:  0,
+			AccountCacheHit:  4,
+			AccountCacheMiss: 6,
+			StorageCacheHit:  0,
+			StorageCacheMiss: 11,
+			ContractCodeHit:  4,
+			ContractCodeMiss: 0,
 		},
 	}
 
