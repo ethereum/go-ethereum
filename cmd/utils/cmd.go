@@ -317,11 +317,11 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 				if block.Number().BitLen() == 0 {
 					continue // skip genesis
 				}
-				rcpts, err := it.Receipts()
+				receipts, err := it.Receipts()
 				if err != nil {
 					return fmt.Errorf("error reading receipts %d: %w", it.Number(), err)
 				}
-				enc := types.EncodeBlockReceiptLists([]types.Receipts{rcpts})
+				enc := types.EncodeBlockReceiptLists([]types.Receipts{receipts})
 				if _, err := chain.InsertReceiptChain([]*types.Block{block}, enc, math.MaxUint64); err != nil {
 					return fmt.Errorf("error inserting body %d: %w", it.Number(), err)
 				}
