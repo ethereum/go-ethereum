@@ -58,8 +58,12 @@ func TestLogSlowBlockJSON(t *testing.T) {
 			AccountCacheMiss: 6,
 			StorageCacheHit:  0,
 			StorageCacheMiss: 11,
-			ContractCodeHit:  4,
-			ContractCodeMiss: 0,
+			CodeStats: state.ContractCodeReaderStats{
+				CacheHit:       4,
+				CacheMiss:      0,
+				CacheHitBytes:  102400, // ~100KB served from cache
+				CacheMissBytes: 0,
+			},
 		},
 	}
 
@@ -110,11 +114,11 @@ func TestLogSlowBlockJSON(t *testing.T) {
 	if logEntry.Block.GasUsed != 21000000 {
 		t.Errorf("Expected gas used 21000000, got %d", logEntry.Block.GasUsed)
 	}
-	if logEntry.Timing.ExecutionMs != 500 {
-		t.Errorf("Expected execution_ms 500, got %d", logEntry.Timing.ExecutionMs)
+	if logEntry.Timing.ExecutionMs != 500.0 {
+		t.Errorf("Expected execution_ms 500.0, got %v", logEntry.Timing.ExecutionMs)
 	}
-	if logEntry.Timing.TotalMs != 1200 {
-		t.Errorf("Expected total_ms 1200, got %d", logEntry.Timing.TotalMs)
+	if logEntry.Timing.TotalMs != 1200.0 {
+		t.Errorf("Expected total_ms 1200.0, got %v", logEntry.Timing.TotalMs)
 	}
 	if logEntry.StateReads.Accounts != 100 {
 		t.Errorf("Expected accounts 100, got %d", logEntry.StateReads.Accounts)
@@ -156,6 +160,13 @@ func TestLogSlowBlockJSON(t *testing.T) {
 	// 4/(4+0) = 100%
 	if logEntry.Cache.Code.HitRate != 100.0 {
 		t.Errorf("Expected code cache hit_rate 100.0, got %f", logEntry.Cache.Code.HitRate)
+	}
+	// Verify new byte-level cache statistics
+	if logEntry.Cache.Code.HitBytes != 102400 {
+		t.Errorf("Expected code cache hit_bytes 102400, got %d", logEntry.Cache.Code.HitBytes)
+	}
+	if logEntry.Cache.Code.MissBytes != 0 {
+		t.Errorf("Expected code cache miss_bytes 0, got %d", logEntry.Cache.Code.MissBytes)
 	}
 
 	t.Logf("Parsed JSON:\n%+v", logEntry)
