@@ -520,6 +520,9 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 
 	// If the method is not found, return an error.
 	if callb == nil {
+		for name := range h.reg.services {
+			fmt.Println(name)
+		}
 		return msg.errorResponse(&methodNotFoundError{method: msg.Method})
 	}
 

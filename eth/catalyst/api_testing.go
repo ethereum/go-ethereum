@@ -9,6 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 type TestingAPI struct {
@@ -19,6 +21,16 @@ func NewTestingAPI(eth *eth.Ethereum) *TestingAPI {
 	return &TestingAPI{
 		eth: eth,
 	}
+}
+
+func RegisterTestingAPI(stack *node.Node, backend *eth.Ethereum) error {
+	stack.RegisterAPIs([]rpc.API{{
+		Namespace:     "testing",
+		Service:       NewTestingAPI(backend),
+		Authenticated: false,
+	},
+	})
+	return nil
 }
 
 func (api *TestingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes engine.PayloadAttributes, transactions []*types.Transaction, extraData []byte) (*engine.ExecutionPayloadEnvelope, error) {

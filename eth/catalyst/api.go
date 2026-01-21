@@ -53,11 +53,6 @@ func Register(stack *node.Node, backend *eth.Ethereum) error {
 			Service:       NewConsensusAPI(backend),
 			Authenticated: true,
 		},
-		{
-			Namespace:     "testing",
-			Service:       NewTestingAPI(backend),
-			Authenticated: true,
-		},
 	})
 	return nil
 }
