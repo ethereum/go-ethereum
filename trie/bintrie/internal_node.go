@@ -184,15 +184,18 @@ func (bt *InternalNode) InsertValuesAtStem(stem []byte, values [][]byte, resolve
 	return bt, err
 }
 
-// CollectNodes collects all child nodes at group boundaries (every GroupDepth levels),
-// and flushes them into the provided node collector. Each flush serializes an 8-level
+// CollectNodes collects all child nodes at group boundaries (every groupDepth levels),
+// and flushes them into the provided node collector. Each flush serializes a groupDepth-level
 // subtree group. Nodes within a group are not flushed individually.
-func (bt *InternalNode) CollectNodes(path []byte, flushfn NodeFlushFn) error {
-	// Only flush at group boundaries (depth % GroupDepth == 0)
-	if bt.depth%GroupDepth == 0 {
+func (bt *InternalNode) CollectNodes(path []byte, flushfn NodeFlushFn, groupDepth int) error {
+	if groupDepth < 1 || groupDepth > MaxGroupDepth {
+		return errors.New("groupDepth must be between 1 and 8")
+	}
+	// Only flush at group boundaries (depth % groupDepth == 0)
+	if bt.depth%groupDepth == 0 {
 		// We're at a group boundary - first collect any nodes in deeper groups,
 		// then flush this group
-		if err := bt.collectChildGroups(path, flushfn, GroupDepth-1); err != nil {
+		if err := bt.collectChildGroups(path, flushfn, groupDepth, groupDepth-1); err != nil {
 			return err
 		}
 		flushfn(path, bt)
@@ -200,22 +203,22 @@ func (bt *InternalNode) CollectNodes(path []byte, flushfn NodeFlushFn) error {
 	}
 	// Not at a group boundary - this shouldn't happen if we're called correctly from root
 	// but handle it by continuing to traverse
-	return bt.collectChildGroups(path, flushfn, GroupDepth-(bt.depth%GroupDepth)-1)
+	return bt.collectChildGroups(path, flushfn, groupDepth, groupDepth-(bt.depth%groupDepth)-1)
 }
 
 // collectChildGroups traverses within a group to find and collect nodes in the next group.
 // remainingLevels is how many more levels below the current node until we reach the group boundary.
 // When remainingLevels=0, the current node's children are at the next group boundary.
-func (bt *InternalNode) collectChildGroups(path []byte, flushfn NodeFlushFn, remainingLevels int) error {
+func (bt *InternalNode) collectChildGroups(path []byte, flushfn NodeFlushFn, groupDepth int, remainingLevels int) error {
 	if remainingLevels == 0 {
 		// Current node is at depth (groupBoundary - 1), its children are at the next group boundary
 		if bt.left != nil {
-			if err := bt.left.CollectNodes(appendBit(path, 0), flushfn); err != nil {
+			if err := bt.left.CollectNodes(appendBit(path, 0), flushfn, groupDepth); err != nil {
 				return err
 			}
 		}
 		if bt.right != nil {
-			if err := bt.right.CollectNodes(appendBit(path, 1), flushfn); err != nil {
+			if err := bt.right.CollectNodes(appendBit(path, 1), flushfn, groupDepth); err != nil {
 				return err
 			}
 		}
@@ -226,12 +229,12 @@ func (bt *InternalNode) collectChildGroups(path []byte, flushfn NodeFlushFn, rem
 	if bt.left != nil {
 		switch n := bt.left.(type) {
 		case *InternalNode:
-			if err := n.collectChildGroups(appendBit(path, 0), flushfn, remainingLevels-1); err != nil {
+			if err := n.collectChildGroups(appendBit(path, 0), flushfn, groupDepth, remainingLevels-1); err != nil {
 				return err
 			}
 		default:
 			// StemNode, HashedNode, or Empty - they handle their own collection
-			if err := bt.left.CollectNodes(appendBit(path, 0), flushfn); err != nil {
+			if err := bt.left.CollectNodes(appendBit(path, 0), flushfn, groupDepth); err != nil {
 				return err
 			}
 		}
@@ -239,12 +242,12 @@ func (bt *InternalNode) collectChildGroups(path []byte, flushfn NodeFlushFn, rem
 	if bt.right != nil {
 		switch n := bt.right.(type) {
 		case *InternalNode:
-			if err := n.collectChildGroups(appendBit(path, 1), flushfn, remainingLevels-1); err != nil {
+			if err := n.collectChildGroups(appendBit(path, 1), flushfn, groupDepth, remainingLevels-1); err != nil {
 				return err
 			}
 		default:
 			// StemNode, HashedNode, or Empty - they handle their own collection
-			if err := bt.right.CollectNodes(appendBit(path, 1), flushfn); err != nil {
+			if err := bt.right.CollectNodes(appendBit(path, 1), flushfn, groupDepth); err != nil {
 				return err
 			}
 		}
