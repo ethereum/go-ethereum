@@ -902,7 +902,7 @@ func opSelfdestruct(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 		if this != beneficiary {
 			evm.StateDB.AddLog(types.EthTransferLog(evm.Context.BlockNumber, this, beneficiary, balance))
 		} else {
-			evm.StateDB.AddLog(types.EthTransferLog(evm.Context.BlockNumber, this, common.Address{}, balance))
+			evm.StateDB.AddLog(types.EthBurnLog(evm.Context.BlockNumber, this, balance))
 		}
 	}
 	evm.StateDB.SelfDestruct(this)
@@ -947,7 +947,7 @@ func opSelfdestruct6780(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, erro
 		if this != beneficiary {
 			evm.StateDB.AddLog(types.EthTransferLog(evm.Context.BlockNumber, this, beneficiary, balance))
 		} else if newContract {
-			evm.StateDB.AddLog(types.EthTransferLog(evm.Context.BlockNumber, this, common.Address{}, balance))
+			evm.StateDB.AddLog(types.EthBurnLog(evm.Context.BlockNumber, this, balance))
 		}
 	}
 

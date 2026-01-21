@@ -120,7 +120,7 @@ func testEthTransferLogs(t *testing.T, value uint64) {
 
 	var expLogs = []*types.Log{
 		{
-			Address: types.EthTransferLogAddress,
+			Address: types.EthSystemLogAddress,
 			Topics:  []common.Hash{types.EthTransferLogTopic0, addr2hash(addr1), addr2hash(addr2)},
 			Data:    u256(value),
 		},
@@ -130,7 +130,7 @@ func testEthTransferLogs(t *testing.T, value uint64) {
 			Data:    nil,
 		},
 		{
-			Address: types.EthTransferLogAddress,
+			Address: types.EthSystemLogAddress,
 			Topics:  []common.Hash{types.EthTransferLogTopic0, addr2hash(addr2), addr2hash(addr3)},
 			Data:    u256(value / 2),
 		},
@@ -140,7 +140,7 @@ func testEthTransferLogs(t *testing.T, value uint64) {
 			Data:    nil,
 		},
 		{
-			Address: types.EthTransferLogAddress,
+			Address: types.EthSystemLogAddress,
 			Topics:  []common.Hash{types.EthTransferLogTopic0, addr2hash(addr3), addr2hash(addr4)},
 			Data:    u256(value / 2),
 		},
