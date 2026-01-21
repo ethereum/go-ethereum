@@ -242,6 +242,15 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	// Start metrics export if enabled
 	utils.SetupMetrics(&cfg.Metrics)
 
+	// Setup telemetry if enabled
+	telemetryService, err := utils.SetupTelemetry(ctx)
+	if err != nil {
+		utils.Fatalf("failed to setup telemetry: %v", err)
+	}
+	if telemetryService != nil {
+		utils.RegisterTelemetryService(telemetryService, stack)
+	}
+
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
 
 	// Create gauge with geth system and build information
