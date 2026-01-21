@@ -68,25 +68,42 @@ type logMarshaling struct {
 
 var (
 	// system contract address
-	EthTransferLogAddress = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
+	EthSystemLogAddress = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
 	// keccak256('Transfer(address,address,uint256)')
 	EthTransferLogTopic0 = common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
+	// keccak256('Selfdestruct(address,uint256)')
+	EthBurnLogTopic0 = common.HexToHash("0x4bfaba3443c1a1836cd362418edc679fc96cae8449cbefccb6457cdf2c943083")
 )
 
 // EthTransferLog creates and ETH transfer log according to EIP-7708.
 // Specification: https://eips.ethereum.org/EIPS/eip-7708
 func EthTransferLog(blockNumber *big.Int, from, to common.Address, amount *uint256.Int) *Log {
-	topics := make([]common.Hash, 3)
-	topics[0] = EthTransferLogTopic0
-	copy(topics[1][common.HashLength-common.AddressLength:], from[:])
-	copy(topics[2][common.HashLength-common.AddressLength:], to[:])
 	amount32 := amount.Bytes32()
-	data := make([]byte, 32)
-	copy(data, amount32[:])
 	return &Log{
-		Address: EthTransferLogAddress,
-		Topics:  topics,
-		Data:    data,
+		Address: EthSystemLogAddress,
+		Topics: []common.Hash{
+			EthTransferLogTopic0,
+			common.BytesToHash(from.Bytes()),
+			common.BytesToHash(to.Bytes()),
+		},
+		Data: amount32[:],
+		// This is a non-consensus field, but assigned here because
+		// core/state doesn't know the current block number.
+		BlockNumber: blockNumber.Uint64(),
+	}
+}
+
+// EthBurnLog creates and ETH self-destruct burn log according to EIP-7708.
+// Specification: https://eips.ethereum.org/EIPS/eip-7708
+func EthBurnLog(blockNumber *big.Int, from common.Address, amount *uint256.Int) *Log {
+	amount32 := amount.Bytes32()
+	return &Log{
+		Address: EthSystemLogAddress,
+		Topics: []common.Hash{
+			EthBurnLogTopic0,
+			common.BytesToHash(from.Bytes()),
+		},
+		Data: amount32[:],
 		// This is a non-consensus field, but assigned here because
 		// core/state doesn't know the current block number.
 		BlockNumber: blockNumber.Uint64(),
