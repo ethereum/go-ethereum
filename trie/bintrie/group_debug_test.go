@@ -18,11 +18,12 @@ func TestGroupedSerializationDebug(t *testing.T) {
 		right: HashedNode(rightHash),
 	}
 
-	serialized := SerializeNode(node)
+	serialized := SerializeNode(node, MaxGroupDepth)
 	t.Logf("Serialized length: %d", len(serialized))
 	t.Logf("Type: %d, GroupDepth: %d", serialized[0], serialized[1])
 
-	bitmap := serialized[2 : 2+BitmapSize]
+	bitmapSize := BitmapSizeForDepth(MaxGroupDepth)
+	bitmap := serialized[2 : 2+bitmapSize]
 	t.Logf("Bitmap: %x", bitmap)
 
 	// Count and show set bits
@@ -69,12 +70,13 @@ func TestFullDepth8Tree(t *testing.T) {
 	// Build a full 8-level tree
 	root := buildFullTree(0, 8)
 
-	serialized := SerializeNode(root)
+	serialized := SerializeNode(root, MaxGroupDepth)
 	t.Logf("Full tree serialized length: %d", len(serialized))
 	t.Logf("Expected: 1 + 1 + 32 + 256*32 = %d", 1+1+32+256*32)
 
 	// Count set bits in bitmap
-	bitmap := serialized[2 : 2+BitmapSize]
+	bitmapSize := BitmapSizeForDepth(MaxGroupDepth)
+	bitmap := serialized[2 : 2+bitmapSize]
 	count := 0
 	for i := 0; i < 256; i++ {
 		if bitmap[i/8]>>(7-(i%8))&1 == 1 {
@@ -146,7 +148,7 @@ func TestRoundTripPreservesHashes(t *testing.T) {
 
 	root := buildTreeWithHashes(0, 8, 0, hashes)
 
-	serialized := SerializeNode(root)
+	serialized := SerializeNode(root, MaxGroupDepth)
 	deserialized, err := DeserializeNode(serialized, 0)
 	if err != nil {
 		t.Fatalf("Error: %v", err)
@@ -205,9 +207,9 @@ func TestCollectNodesGrouping(t *testing.T) {
 		}{pathCopy, node})
 
 		// Serialize and store by hash
-		serialized := SerializeNode(node)
+		serialized := SerializeNode(node, MaxGroupDepth)
 		serializedNodes[node.Hash()] = serialized
-	})
+	}, MaxGroupDepth)
 	if err != nil {
 		t.Fatalf("CollectNodes failed: %v", err)
 	}
@@ -360,5 +362,66 @@ func buildDeepTreeUnique(depth, maxDepth, position int) BinaryNode {
 		depth: depth,
 		left:  buildDeepTreeUnique(depth+1, maxDepth, position*2),
 		right: buildDeepTreeUnique(depth+1, maxDepth, position*2+1),
+	}
+}
+
+// TestVariableGroupDepth tests serialization with different group depths (1-8)
+func TestVariableGroupDepth(t *testing.T) {
+	for groupDepth := 1; groupDepth <= MaxGroupDepth; groupDepth++ {
+		t.Run(fmt.Sprintf("groupDepth=%d", groupDepth), func(t *testing.T) {
+			// Build a tree with depth equal to groupDepth * 2 (two full groups)
+			treeDepth := groupDepth * 2
+			root := buildDeepTreeUnique(0, treeDepth, 0)
+			originalHash := root.Hash()
+
+			// Serialize with this group depth
+			serialized := SerializeNode(root, groupDepth)
+
+			// Verify header
+			if serialized[0] != nodeTypeInternal {
+				t.Errorf("Expected type byte %d, got %d", nodeTypeInternal, serialized[0])
+			}
+			if int(serialized[1]) != groupDepth {
+				t.Errorf("Expected group depth %d, got %d", groupDepth, serialized[1])
+			}
+
+			// Verify bitmap size
+			expectedBitmapSize := BitmapSizeForDepth(groupDepth)
+			expectedMinLen := 1 + 1 + expectedBitmapSize // type + depth + bitmap
+			if len(serialized) < expectedMinLen {
+				t.Errorf("Serialized data too short: got %d, expected at least %d", len(serialized), expectedMinLen)
+			}
+
+			// Deserialize and verify hash matches
+			deserialized, err := DeserializeNode(serialized, 0)
+			if err != nil {
+				t.Fatalf("DeserializeNode failed: %v", err)
+			}
+
+			if deserialized.Hash() != originalHash {
+				t.Errorf("Hash mismatch after round-trip: expected %x, got %x", originalHash, deserialized.Hash())
+			}
+
+			// Collect nodes and verify correct grouping
+			var collectedDepths []int
+			err = root.CollectNodes(nil, func(path []byte, node BinaryNode) {
+				if in, ok := node.(*InternalNode); ok {
+					collectedDepths = append(collectedDepths, in.depth)
+				}
+			}, groupDepth)
+			if err != nil {
+				t.Fatalf("CollectNodes failed: %v", err)
+			}
+
+			// Verify all collected nodes are at group boundaries
+			for _, depth := range collectedDepths {
+				if depth%groupDepth != 0 {
+					t.Errorf("Collected node at depth %d, but groupDepth is %d (not a boundary)", depth, groupDepth)
+				}
+			}
+
+			t.Logf("groupDepth=%d: serialized=%d bytes, collected=%d nodes at depths %v",
+				groupDepth, len(serialized), len(collectedDepths), collectedDepths)
+		})
 	}
 }
