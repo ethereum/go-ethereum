@@ -273,3 +273,24 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 	}()
 	return payload, nil
 }
+
+func (miner *Miner) BuildTestingPayload(args *BuildPayloadArgs, transactions []*types.Transaction, extraData []byte) (*engine.ExecutionPayloadEnvelope, error) {
+	fullParams := &generateParams{
+		timestamp:         args.Timestamp,
+		forceTime:         true,
+		parentHash:        args.Parent,
+		coinbase:          args.FeeRecipient,
+		random:            args.Random,
+		withdrawals:       args.Withdrawals,
+		beaconRoot:        args.BeaconRoot,
+		noTxs:             false,
+		forceOverrides:    true,
+		overrideExtraData: extraData,
+		overrideTxs:       transactions,
+	}
+	res := miner.generateWork(fullParams, false)
+	if res.err != nil {
+		return nil, res.err
+	}
+	return engine.BlockToExecutableData(res.block, new(big.Int), res.sidecars, res.requests), nil
+}

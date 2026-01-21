@@ -213,7 +213,7 @@ func encodeTransactions(txs []*types.Transaction) [][]byte {
 	return enc
 }
 
-func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
+func DecodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 	var txs = make([]*types.Transaction, len(enc))
 	for i, encTx := range enc {
 		var tx types.Transaction
@@ -251,7 +251,7 @@ func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, b
 // for stateless execution, so it skips checking if the executable data hashes to
 // the requested hash (stateless has to *compute* the root hash, it's not given).
 func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
-	txs, err := decodeTransactions(data.Transactions)
+	txs, err := DecodeTransactions(data.Transactions)
 	if err != nil {
 		return nil, err
 	}

@@ -280,6 +280,8 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	}
 	utils.RegisterSyncOverrideService(stack, eth, synctarget, ctx.Bool(utils.ExitWhenSyncedFlag.Name))
 
+	catalyst.RegisterTestingAPI(stack, eth)
+
 	if ctx.IsSet(utils.DeveloperFlag.Name) {
 		// Start dev mode.
 		simBeacon, err := catalyst.NewSimulatedBeacon(ctx.Uint64(utils.DeveloperPeriodFlag.Name), cfg.Eth.Miner.PendingFeeRecipient, eth)
