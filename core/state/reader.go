@@ -302,7 +302,7 @@ func newTrieReader(root common.Hash, db *triedb.Database) (*trieReader, error) {
 		tr, err = trie.NewStateTrie(trie.StateTrieID(root), db)
 	} else {
 		// When IsVerkle() is true, create a BinaryTrie wrapped in TransitionTrie
-		binTrie, binErr := bintrie.NewBinaryTrie(root, db)
+		binTrie, binErr := bintrie.NewBinaryTrie(root, db, db.BinTrieGroupDepth())
 		if binErr != nil {
 			return nil, binErr
 		}

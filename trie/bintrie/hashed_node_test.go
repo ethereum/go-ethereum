@@ -135,7 +135,7 @@ func TestHashedNodeInsertValuesAtStem(t *testing.T) {
 	}
 
 	// Serialize the node
-	serialized := SerializeNode(originalNode)
+	serialized := SerializeNode(originalNode, MaxGroupDepth)
 
 	// Create a mock resolver that returns the serialized node
 	validResolver := func(path []byte, hash common.Hash) ([]byte, error) {

@@ -31,20 +31,29 @@ type (
 var zero [32]byte
 
 const (
-	StemNodeWidth = 256 // Number of child per leaf node
-	StemSize      = 31  // Number of bytes to travel before reaching a group of leaves
-	NodeTypeBytes = 1   // Size of node type prefix in serialization
-	HashSize      = 32  // Size of a hash in bytes
-	BitmapSize    = 32  // Size of the bitmap in a stem node
+	StemNodeWidth  = 256 // Number of child per leaf node
+	StemSize       = 31  // Number of bytes to travel before reaching a group of leaves
+	NodeTypeBytes  = 1   // Size of node type prefix in serialization
+	HashSize       = 32  // Size of a hash in bytes
+	StemBitmapSize = 32  // Size of the bitmap in a stem node (256 values = 32 bytes)
 
-	// GroupDepth is the number of levels in a grouped subtree serialization.
-	// Groups are byte-aligned (depth % 8 == 0). This may become configurable later.
+	// MaxGroupDepth is the maximum allowed group depth for InternalNode serialization.
+	// Valid group depths are 1-8, where depth N means 2^N bottom-layer positions.
 	// Serialization format for InternalNode groups:
-	//   [1 byte type] [1 byte group depth (1-8)] [32 byte bitmap] [N × 32 byte hashes]
-	// The bitmap has 2^groupDepth bits, indicating which bottom-layer children are present.
-	// Only present children's hashes are stored, in order.
-	GroupDepth = 8
+	//   [1 byte type] [1 byte group depth (1-8)] [variable bitmap] [N × 32 byte hashes]
+	// The bitmap has 2^groupDepth bits (BitmapSizeForDepth bytes), indicating which
+	// bottom-layer children are present. Only present children's hashes are stored.
+	MaxGroupDepth = 8
 )
+
+// BitmapSizeForDepth returns the bitmap size in bytes for a given group depth.
+// For depths 1-3, returns 1 byte. For depths 4-8, returns 2^(depth-3) bytes.
+func BitmapSizeForDepth(groupDepth int) int {
+	if groupDepth <= 3 {
+		return 1
+	}
+	return 1 << (groupDepth - 3)
+}
 
 const (
 	nodeTypeStem = iota + 1 // Stem node, contains a stem and a bitmap of values
@@ -59,7 +68,7 @@ type BinaryNode interface {
 	Hash() common.Hash
 	GetValuesAtStem([]byte, NodeResolverFn) ([][]byte, error)
 	InsertValuesAtStem([]byte, [][]byte, NodeResolverFn, int) (BinaryNode, error)
-	CollectNodes([]byte, NodeFlushFn) error
+	CollectNodes([]byte, NodeFlushFn, int) error // groupDepth parameter for serialization
 
 	toDot(parent, path string) string
 	GetHeight() int
@@ -106,25 +115,28 @@ func serializeSubtree(node BinaryNode, remainingDepth int, position int, bitmap 
 }
 
 // SerializeNode serializes a binary trie node into a byte slice.
-func SerializeNode(node BinaryNode) []byte {
+// groupDepth specifies how many levels to include in an InternalNode group (1-8).
+func SerializeNode(node BinaryNode, groupDepth int) []byte {
+	if groupDepth < 1 || groupDepth > MaxGroupDepth {
+		panic("groupDepth must be between 1 and 8")
+	}
 	switch n := (node).(type) {
 	case *InternalNode:
-		// InternalNode group: 1 byte type + 1 byte group depth + 32 byte bitmap + N×32 byte hashes
-		groupDepth := GroupDepth
-
-		var bitmap [BitmapSize]byte
+		// InternalNode group: 1 byte type + 1 byte group depth + variable bitmap + N×32 byte hashes
+		bitmapSize := BitmapSizeForDepth(groupDepth)
+		bitmap := make([]byte, bitmapSize)
 		var hashes []common.Hash
 
-		serializeSubtree(n, groupDepth, 0, bitmap[:], &hashes)
+		serializeSubtree(n, groupDepth, 0, bitmap, &hashes)
 
 		// Build serialized output
-		serializedLen := NodeTypeBytes + 1 + BitmapSize + len(hashes)*HashSize
+		serializedLen := NodeTypeBytes + 1 + bitmapSize + len(hashes)*HashSize
 		serialized := make([]byte, serializedLen)
 		serialized[0] = nodeTypeInternal
 		serialized[1] = byte(groupDepth)
-		copy(serialized[2:2+BitmapSize], bitmap[:])
+		copy(serialized[2:2+bitmapSize], bitmap)
 
-		offset := NodeTypeBytes + 1 + BitmapSize
+		offset := NodeTypeBytes + 1 + bitmapSize
 		for _, h := range hashes {
 			copy(serialized[offset:offset+HashSize], h.Bytes())
 			offset += HashSize
@@ -207,16 +219,20 @@ func DeserializeNode(serialized []byte, depth int) (BinaryNode, error) {
 
 	switch serialized[0] {
 	case nodeTypeInternal:
-		// Grouped format: 1 byte type + 1 byte group depth + 32 byte bitmap + N×32 byte hashes
-		if len(serialized) < NodeTypeBytes+1+BitmapSize {
+		// Grouped format: 1 byte type + 1 byte group depth + variable bitmap + N×32 byte hashes
+		if len(serialized) < NodeTypeBytes+1 {
 			return nil, invalidSerializedLength
 		}
 		groupDepth := int(serialized[1])
-		if groupDepth < 1 || groupDepth > GroupDepth {
+		if groupDepth < 1 || groupDepth > MaxGroupDepth {
 			return nil, errors.New("invalid group depth")
 		}
-		bitmap := serialized[2 : 2+BitmapSize]
-		hashData := serialized[2+BitmapSize:]
+		bitmapSize := BitmapSizeForDepth(groupDepth)
+		if len(serialized) < NodeTypeBytes+1+bitmapSize {
+			return nil, invalidSerializedLength
+		}
+		bitmap := serialized[2 : 2+bitmapSize]
+		hashData := serialized[2+bitmapSize:]
 
 		// Count present children from bitmap
 		hashIdx := 0

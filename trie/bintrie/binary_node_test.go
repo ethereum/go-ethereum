@@ -37,27 +37,28 @@ func TestSerializeDeserializeInternalNode(t *testing.T) {
 		right: HashedNode(rightHash),
 	}
 
-	// Serialize the node
-	serialized := SerializeNode(node)
+	// Serialize the node with default group depth of 8
+	serialized := SerializeNode(node, MaxGroupDepth)
 
 	// Check the serialized format: type byte + group depth byte + 32 byte bitmap + N*32 byte hashes
 	if serialized[0] != nodeTypeInternal {
 		t.Errorf("Expected type byte to be %d, got %d", nodeTypeInternal, serialized[0])
 	}
 
-	if serialized[1] != GroupDepth {
-		t.Errorf("Expected group depth to be %d, got %d", GroupDepth, serialized[1])
+	if serialized[1] != MaxGroupDepth {
+		t.Errorf("Expected group depth to be %d, got %d", MaxGroupDepth, serialized[1])
 	}
 
 	// Expected length: 1 (type) + 1 (group depth) + 32 (bitmap) + 2*32 (two hashes) = 98 bytes
-	expectedLen := NodeTypeBytes + 1 + BitmapSize + 2*HashSize
+	bitmapSize := BitmapSizeForDepth(MaxGroupDepth)
+	expectedLen := NodeTypeBytes + 1 + bitmapSize + 2*HashSize
 	if len(serialized) != expectedLen {
 		t.Errorf("Expected serialized length to be %d, got %d", expectedLen, len(serialized))
 	}
 
 	// The left child (HashedNode) terminates at remainingDepth=7, so it's placed at position 0<<7 = 0
 	// The right child (HashedNode) terminates at remainingDepth=7, so it's placed at position 1<<7 = 128
-	bitmap := serialized[2 : 2+BitmapSize]
+	bitmap := serialized[2 : 2+bitmapSize]
 	if bitmap[0]&0x80 == 0 { // bit 0 (MSB of byte 0)
 		t.Error("Expected bit 0 to be set in bitmap (left child)")
 	}
@@ -135,8 +136,8 @@ func TestSerializeDeserializeStemNode(t *testing.T) {
 		depth:  10,
 	}
 
-	// Serialize the node
-	serialized := SerializeNode(node)
+	// Serialize the node (groupDepth doesn't affect StemNode serialization)
+	serialized := SerializeNode(node, MaxGroupDepth)
 
 	// Check the serialized format
 	if serialized[0] != nodeTypeStem {
@@ -214,8 +215,8 @@ func TestDeserializeInvalidType(t *testing.T) {
 
 // TestDeserializeInvalidLength tests deserialization with invalid data length
 func TestDeserializeInvalidLength(t *testing.T) {
-	// InternalNode with type byte 1 but wrong length
-	invalidData := []byte{nodeTypeInternal, 0, 0} // Too short for internal node
+	// InternalNode with valid type byte and group depth but too short for bitmap
+	invalidData := []byte{nodeTypeInternal, 8, 0, 0} // Too short for bitmap (needs 32 bytes)
 
 	_, err := DeserializeNode(invalidData, 0)
 	if err == nil {

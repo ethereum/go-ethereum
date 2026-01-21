@@ -246,7 +246,7 @@ func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 		if ts.Transitioned() {
 			// Use BinaryTrie instead of VerkleTrie when IsVerkle is set
 			// (IsVerkle actually means Binary Trie mode in this codebase)
-			return bintrie.NewBinaryTrie(root, db.triedb)
+			return bintrie.NewBinaryTrie(root, db.triedb, db.triedb.BinTrieGroupDepth())
 		}
 	}
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)

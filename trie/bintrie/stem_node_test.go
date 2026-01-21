@@ -347,7 +347,7 @@ func TestStemNodeCollectNodes(t *testing.T) {
 		collectedNodes = append(collectedNodes, n)
 	}
 
-	err := node.CollectNodes([]byte{0, 1, 0}, flushFn)
+	err := node.CollectNodes([]byte{0, 1, 0}, flushFn, MaxGroupDepth)
 	if err != nil {
 		t.Fatalf("Failed to collect nodes: %v", err)
 	}
