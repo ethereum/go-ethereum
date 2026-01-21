@@ -17,7 +17,9 @@
 package state
 
 import (
+	"bytes"
 	"math/big"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/stateless"
@@ -234,13 +236,24 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
 		return
 	}
 
-	// Iterate all dirty addresses and record self-destructs.
+	// Collect all self-destructed addresses first, then sort them to ensure
+	// that state change hooks will be invoked in deterministic
+	// order when the accounts are deleted below
+	var selfDestructedAddrs []common.Address
 	for addr := range s.inner.journal.dirties {
 		obj := s.inner.stateObjects[addr]
 		if obj == nil || !obj.selfDestructed {
 			// Not self-destructed, keep searching.
 			continue
 		}
+		selfDestructedAddrs = append(selfDestructedAddrs, addr)
+	}
+	sort.Slice(selfDestructedAddrs, func(i, j int) bool {
+		return bytes.Compare(selfDestructedAddrs[i][:], selfDestructedAddrs[j][:]) < 0
+	})
+
+	for _, addr := range selfDestructedAddrs {
+		obj := s.inner.stateObjects[addr]
 		// Bingo: state object was self-destructed, call relevant hooks.
 
 		// If ether was sent to account post-selfdestruct, record as burnt.
