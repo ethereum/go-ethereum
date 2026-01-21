@@ -184,29 +184,80 @@ func (bt *InternalNode) InsertValuesAtStem(stem []byte, values [][]byte, resolve
 	return bt, err
 }
 
-// CollectNodes collects all child nodes at a given path, and flushes it
-// into the provided node collector.
+// CollectNodes collects all child nodes at group boundaries (every GroupDepth levels),
+// and flushes them into the provided node collector. Each flush serializes an 8-level
+// subtree group. Nodes within a group are not flushed individually.
 func (bt *InternalNode) CollectNodes(path []byte, flushfn NodeFlushFn) error {
-	if bt.left != nil {
-		var p [256]byte
-		copy(p[:], path)
-		childpath := p[:len(path)]
-		childpath = append(childpath, 0)
-		if err := bt.left.CollectNodes(childpath, flushfn); err != nil {
+	// Only flush at group boundaries (depth % GroupDepth == 0)
+	if bt.depth%GroupDepth == 0 {
+		// We're at a group boundary - first collect any nodes in deeper groups,
+		// then flush this group
+		if err := bt.collectChildGroups(path, flushfn, GroupDepth-1); err != nil {
 			return err
+		}
+		flushfn(path, bt)
+		return nil
+	}
+	// Not at a group boundary - this shouldn't happen if we're called correctly from root
+	// but handle it by continuing to traverse
+	return bt.collectChildGroups(path, flushfn, GroupDepth-(bt.depth%GroupDepth)-1)
+}
+
+// collectChildGroups traverses within a group to find and collect nodes in the next group.
+// remainingLevels is how many more levels below the current node until we reach the group boundary.
+// When remainingLevels=0, the current node's children are at the next group boundary.
+func (bt *InternalNode) collectChildGroups(path []byte, flushfn NodeFlushFn, remainingLevels int) error {
+	if remainingLevels == 0 {
+		// Current node is at depth (groupBoundary - 1), its children are at the next group boundary
+		if bt.left != nil {
+			if err := bt.left.CollectNodes(appendBit(path, 0), flushfn); err != nil {
+				return err
+			}
+		}
+		if bt.right != nil {
+			if err := bt.right.CollectNodes(appendBit(path, 1), flushfn); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// Continue traversing within the group
+	if bt.left != nil {
+		switch n := bt.left.(type) {
+		case *InternalNode:
+			if err := n.collectChildGroups(appendBit(path, 0), flushfn, remainingLevels-1); err != nil {
+				return err
+			}
+		default:
+			// StemNode, HashedNode, or Empty - they handle their own collection
+			if err := bt.left.CollectNodes(appendBit(path, 0), flushfn); err != nil {
+				return err
+			}
 		}
 	}
 	if bt.right != nil {
-		var p [256]byte
-		copy(p[:], path)
-		childpath := p[:len(path)]
-		childpath = append(childpath, 1)
-		if err := bt.right.CollectNodes(childpath, flushfn); err != nil {
-			return err
+		switch n := bt.right.(type) {
+		case *InternalNode:
+			if err := n.collectChildGroups(appendBit(path, 1), flushfn, remainingLevels-1); err != nil {
+				return err
+			}
+		default:
+			// StemNode, HashedNode, or Empty - they handle their own collection
+			if err := bt.right.CollectNodes(appendBit(path, 1), flushfn); err != nil {
+				return err
+			}
 		}
 	}
-	flushfn(path, bt)
 	return nil
+}
+
+// appendBit appends a bit to a path, returning a new slice
+func appendBit(path []byte, bit byte) []byte {
+	var p [256]byte
+	copy(p[:], path)
+	result := p[:len(path)]
+	return append(result, bit)
 }
 
 // GetHeight returns the height of the node.
