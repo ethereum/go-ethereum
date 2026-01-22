@@ -5,7 +5,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
@@ -33,9 +32,13 @@ func RegisterTestingAPI(stack *node.Node, backend *eth.Ethereum) error {
 	return nil
 }
 
-func (api *TestingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes engine.PayloadAttributes, transactions []*types.Transaction, extraData []byte) (*engine.ExecutionPayloadEnvelope, error) {
+func (api *TestingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes engine.PayloadAttributes, transactions [][]byte, extraData []byte) (*engine.ExecutionPayloadEnvelope, error) {
 	if api.eth.BlockChain().CurrentBlock().Hash() != parentHash {
 		return nil, errors.New("parentHash is not current head")
+	}
+	txs, err := engine.DecodeTransactions(transactions)
+	if err != nil {
+		return nil, err
 	}
 	args := &miner.BuildPayloadArgs{
 		Parent:       parentHash,
@@ -44,7 +47,7 @@ func (api *TestingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes en
 		Random:       payloadAttributes.Random,
 		Withdrawals:  payloadAttributes.Withdrawals,
 		BeaconRoot:   payloadAttributes.BeaconRoot,
-		Transactions: transactions,
+		Transactions: txs,
 		ExtraData:    extraData,
 	}
 	payload, err := api.eth.Miner().BuildPayload(args, false)
