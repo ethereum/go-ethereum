@@ -5,6 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
@@ -32,11 +33,15 @@ func RegisterTestingAPI(stack *node.Node, backend *eth.Ethereum) error {
 	return nil
 }
 
-func (api *TestingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes engine.PayloadAttributes, transactions [][]byte, extraData []byte) (*engine.ExecutionPayloadEnvelope, error) {
+func (api *TestingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes engine.PayloadAttributes, transactions []hexutil.Bytes, extraData []byte) (*engine.ExecutionPayloadEnvelope, error) {
 	if api.eth.BlockChain().CurrentBlock().Hash() != parentHash {
 		return nil, errors.New("parentHash is not current head")
 	}
-	txs, err := engine.DecodeTransactions(transactions)
+	dec := make([][]byte, 0, len(transactions))
+	for _, tx := range transactions {
+		dec = append(dec, tx)
+	}
+	txs, err := engine.DecodeTransactions(dec)
 	if err != nil {
 		return nil, err
 	}
