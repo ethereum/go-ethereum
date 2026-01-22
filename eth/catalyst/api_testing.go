@@ -33,7 +33,7 @@ func RegisterTestingAPI(stack *node.Node, backend *eth.Ethereum) error {
 	return nil
 }
 
-func (api *TestingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes engine.PayloadAttributes, transactions []hexutil.Bytes, extraData []byte) (*engine.ExecutionPayloadEnvelope, error) {
+func (api *TestingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes engine.PayloadAttributes, transactions []hexutil.Bytes, extraData hexutil.Bytes) (*engine.ExecutionPayloadEnvelope, error) {
 	if api.eth.BlockChain().CurrentBlock().Hash() != parentHash {
 		return nil, errors.New("parentHash is not current head")
 	}
