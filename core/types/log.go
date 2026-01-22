@@ -72,7 +72,7 @@ var (
 	// keccak256('Transfer(address,address,uint256)')
 	EthTransferLogTopic0 = common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
 	// keccak256('Selfdestruct(address,uint256)')
-	EthBurnLogTopic0 = common.HexToHash("0x4bfaba3443c1a1836cd362418edc679fc96cae8449cbefccb6457cdf2c943083")
+	EthSelfDestructLogTopic0 = common.HexToHash("0x4bfaba3443c1a1836cd362418edc679fc96cae8449cbefccb6457cdf2c943083")
 )
 
 // EthTransferLog creates and ETH transfer log according to EIP-7708.
@@ -93,14 +93,14 @@ func EthTransferLog(blockNumber *big.Int, from, to common.Address, amount *uint2
 	}
 }
 
-// EthBurnLog creates and ETH self-destruct burn log according to EIP-7708.
+// EthSelfDestructLog creates and ETH self-destruct burn log according to EIP-7708.
 // Specification: https://eips.ethereum.org/EIPS/eip-7708
-func EthBurnLog(blockNumber *big.Int, from common.Address, amount *uint256.Int) *Log {
+func EthSelfDestructLog(blockNumber *big.Int, from common.Address, amount *uint256.Int) *Log {
 	amount32 := amount.Bytes32()
 	return &Log{
 		Address: EthSystemLogAddress,
 		Topics: []common.Hash{
-			EthBurnLogTopic0,
+			EthSelfDestructLogTopic0,
 			common.BytesToHash(from.Bytes()),
 		},
 		Data: amount32[:],
