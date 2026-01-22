@@ -18,6 +18,7 @@ package blsync
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ctypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -87,7 +89,7 @@ func (ec *engineClient) updateLoop(headCh <-chan types.ChainHeadEvent) {
 			if status, err := ec.callForkchoiceUpdated(forkName, event); err == nil {
 				log.Info("Successful ForkchoiceUpdated", "head", event.Block.Hash(), "status", status)
 			} else {
-				if err.Error() == "beacon syncer reorging" {
+				if errors.Is(err, downloader.ErrBeaconSyncerReorging) {
 					log.Debug("Failed ForkchoiceUpdated", "head", event.Block.Hash(), "error", err)
 					continue // ignore beacon syncer reorging errors, this error can occur if the blsync is skipping a block
 				}
