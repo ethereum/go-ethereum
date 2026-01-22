@@ -236,11 +236,13 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 		GasLimit:   core.CalcGasLimit(parent.GasLimit, miner.config.GasCeil),
 		Time:       timestamp,
 		Coinbase:   genParams.coinbase,
-		Extra:      genParams.extraData,
 	}
 	// Set the extra field.
 	if len(miner.config.ExtraData) != 0 {
 		header.Extra = miner.config.ExtraData
+	}
+	if len(genParams.extraData) != 0 {
+		header.Extra = genParams.extraData
 	}
 	// Set the randomness field from the beacon chain if it's available.
 	if genParams.random != (common.Hash{}) {
