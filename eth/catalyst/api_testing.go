@@ -33,7 +33,7 @@ func RegisterTestingAPI(stack *node.Node, backend *eth.Ethereum) error {
 	return nil
 }
 
-func (api *TestingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes engine.PayloadAttributes, transactions []hexutil.Bytes, extraData hexutil.Bytes) (*engine.ExecutionPayloadEnvelope, error) {
+func (api *TestingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes engine.PayloadAttributes, transactions []hexutil.Bytes, extraData *hexutil.Bytes) (*engine.ExecutionPayloadEnvelope, error) {
 	if api.eth.BlockChain().CurrentBlock().Hash() != parentHash {
 		return nil, errors.New("parentHash is not current head")
 	}
@@ -45,6 +45,10 @@ func (api *TestingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes en
 	if err != nil {
 		return nil, err
 	}
+	extra := []byte{}
+	if extraData != nil {
+		extra = *extraData
+	}
 	args := &miner.BuildPayloadArgs{
 		Parent:       parentHash,
 		Timestamp:    payloadAttributes.Timestamp,
@@ -53,7 +57,7 @@ func (api *TestingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes en
 		Withdrawals:  payloadAttributes.Withdrawals,
 		BeaconRoot:   payloadAttributes.BeaconRoot,
 		Transactions: txs,
-		ExtraData:    extraData,
+		ExtraData:    extra,
 	}
 	payload, err := api.eth.Miner().BuildPayload(args, false)
 	if err != nil {

@@ -246,15 +246,16 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 		endTimer := time.NewTimer(time.Second * 12)
 
 		fullParams := &generateParams{
-			timestamp:   args.Timestamp,
-			forceTime:   true,
-			parentHash:  args.Parent,
-			coinbase:    args.FeeRecipient,
-			random:      args.Random,
-			withdrawals: args.Withdrawals,
-			beaconRoot:  args.BeaconRoot,
-			noTxs:       false,
-			extraData:   args.ExtraData,
+			timestamp:    args.Timestamp,
+			forceTime:    true,
+			parentHash:   args.Parent,
+			coinbase:     args.FeeRecipient,
+			random:       args.Random,
+			withdrawals:  args.Withdrawals,
+			beaconRoot:   args.BeaconRoot,
+			noTxs:        false,
+			extraData:    args.ExtraData,
+			transactions: args.Transactions,
 		}
 
 		for {
