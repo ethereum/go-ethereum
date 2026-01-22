@@ -566,7 +566,7 @@ func exportHistory(ctx *cli.Context) error {
 	}
 
 	var (
-		format     = ctx.String(utils.EraFormatFlag.Get(ctx))
+		format     = ctx.String(utils.EraFormatFlag.Name)
 		filename   func(network string, epoch int, root common.Hash) string
 		newBuilder func(w io.Writer) era.Builder
 	)
