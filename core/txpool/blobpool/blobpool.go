@@ -540,7 +540,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 		return err
 	}
 
-	// If still exit blob txs in limbo, delete the old reset a new one without tx content.
+	// If blob txs still exist in limbo, delete the old ones and reset with new ones without tx content.
 	if err = p.limbo.setTxMeta(p.store); err != nil {
 		return err
 	}
