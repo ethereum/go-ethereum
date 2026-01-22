@@ -19,6 +19,7 @@ package vm
 import (
 	"errors"
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
@@ -420,7 +421,11 @@ func gasCallIntrinsic(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	if gas, overflow = math.SafeAdd(memoryGas, transferGas); overflow {
 		return 0, ErrGasUintOverflow
 	}
-
+	// Terminate the gas measurement if the leftover gas is not sufficient,
+	// it can effectively prevent accessing the states in the following steps.
+	if contract.Gas < gas {
+		return 0, ErrOutOfGas
+	}
 	// Stateful check
 	var stateGas uint64
 	if evm.chainRules.IsEIP158 {

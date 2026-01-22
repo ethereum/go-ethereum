@@ -308,7 +308,8 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc gasFunc) gasFunc {
 			return 0, err
 		}
 		// Terminate the gas measurement if the leftover gas is not sufficient,
-		// it can effectively prevent accessing the states in the following steps
+		// it can effectively prevent accessing the states in the following steps.
+		// It's an essential safeguard before any stateful check.
 		if contract.Gas < intrinsicCost {
 			return 0, ErrOutOfGas
 		}
@@ -325,7 +326,8 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc gasFunc) gasFunc {
 				return 0, ErrOutOfGas
 			}
 		}
-
+		// Calculate the gas budget for the nested call. The costs defined by
+		// EIP-2929 and EIP-7702 have already been applied.
 		evm.callGasTemp, err = callGas(evm.chainRules.IsEIP150, contract.Gas, intrinsicCost, stack.Back(0))
 		if err != nil {
 			return 0, err
