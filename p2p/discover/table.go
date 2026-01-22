@@ -462,7 +462,6 @@ func (tab *Table) loadSeedNodes() {
 		tab.mutex.Unlock()
 
 		// Send notification outside of mutex to avoid deadlock.
-		// See: goroutine_deadlock_analysis_97c19bb9.plan.md
 		if addedNode != nil {
 			tab.nodeFeed.Send(addedNode)
 		}
@@ -590,7 +589,6 @@ func (tab *Table) nodeAdded(b *bucket, n *tableNode) *enode.Node {
 
 	// NOTE: nodeFeed.Send() is NOT called here to avoid deadlock.
 	// The caller must send the notification after releasing the mutex.
-	// See: goroutine_deadlock_analysis_97c19bb9.plan.md
 
 	if tab.nodeAddedHook != nil {
 		tab.nodeAddedHook(b, n)
