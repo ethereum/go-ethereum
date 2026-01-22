@@ -158,7 +158,6 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 				miner.commitTransaction(work, tx)
 			}
 		}
-
 	}
 	body := types.Body{Transactions: work.txs, Withdrawals: genParam.withdrawals}
 
