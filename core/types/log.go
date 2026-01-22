@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
@@ -66,23 +67,14 @@ type logMarshaling struct {
 	Index          hexutil.Uint
 }
 
-var (
-	// system contract address
-	EthSystemLogAddress = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
-	// keccak256('Transfer(address,address,uint256)')
-	EthTransferLogTopic0 = common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
-	// keccak256('Selfdestruct(address,uint256)')
-	EthSelfDestructLogTopic0 = common.HexToHash("0x4bfaba3443c1a1836cd362418edc679fc96cae8449cbefccb6457cdf2c943083")
-)
-
 // EthTransferLog creates and ETH transfer log according to EIP-7708.
 // Specification: https://eips.ethereum.org/EIPS/eip-7708
 func EthTransferLog(blockNumber *big.Int, from, to common.Address, amount *uint256.Int) *Log {
 	amount32 := amount.Bytes32()
 	return &Log{
-		Address: EthSystemLogAddress,
+		Address: params.SystemAddress,
 		Topics: []common.Hash{
-			EthTransferLogTopic0,
+			params.EthTransferLogEvent,
 			common.BytesToHash(from.Bytes()),
 			common.BytesToHash(to.Bytes()),
 		},
@@ -98,9 +90,9 @@ func EthTransferLog(blockNumber *big.Int, from, to common.Address, amount *uint2
 func EthSelfDestructLog(blockNumber *big.Int, from common.Address, amount *uint256.Int) *Log {
 	amount32 := amount.Bytes32()
 	return &Log{
-		Address: EthSystemLogAddress,
+		Address: params.SystemAddress,
 		Topics: []common.Hash{
-			EthSelfDestructLogTopic0,
+			params.EthSelfDestructLogEvent,
 			common.BytesToHash(from.Bytes()),
 		},
 		Data: amount32[:],
