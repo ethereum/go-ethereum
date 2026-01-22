@@ -172,6 +172,77 @@ func TestLogSlowBlockJSON(t *testing.T) {
 	t.Logf("Parsed JSON:\n%+v", logEntry)
 }
 
+// TestLogSlowBlockEIP7702 tests that EIP-7702 delegation fields are properly serialized.
+func TestLogSlowBlockEIP7702(t *testing.T) {
+	var buf bytes.Buffer
+	handler := log.NewTerminalHandler(&buf, false)
+	log.SetDefault(log.NewLogger(handler))
+
+	header := &types.Header{
+		Number:   common.Big1,
+		GasUsed:  21000000,
+		GasLimit: 30000000,
+	}
+	block := types.NewBlockWithHeader(header)
+
+	// Create test stats with EIP-7702 delegation data
+	stats := &ExecuteStats{
+		Execution:                 500 * time.Millisecond,
+		TotalTime:                 1200 * time.Millisecond,
+		MgasPerSecond:             17.5,
+		AccountLoaded:             100,
+		StorageLoaded:             500,
+		CodeLoaded:                20,
+		CodeBytesRead:             4096,
+		AccountUpdated:            50,
+		StorageUpdated:            200,
+		CodeUpdated:               5,
+		CodeBytesWrite:            2048,
+		Eip7702DelegationsSet:     3,
+		Eip7702DelegationsCleared: 1,
+		StateReadCacheStats: state.ReaderStats{
+			AccountCacheHit:  4,
+			AccountCacheMiss: 6,
+		},
+	}
+
+	stats.logSlow(block, 1*time.Second)
+
+	// Find and parse the JSON
+	jsonStart := bytes.Index(buf.Bytes(), []byte(`{"level"`))
+	if jsonStart == -1 {
+		t.Fatal("Could not find JSON in log output")
+	}
+	jsonBytes := buf.Bytes()[jsonStart:]
+	if jsonEnd := bytes.IndexByte(jsonBytes, '\n'); jsonEnd != -1 {
+		jsonBytes = jsonBytes[:jsonEnd]
+	}
+
+	var logEntry slowBlockLog
+	if err := json.Unmarshal(jsonBytes, &logEntry); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	// Verify EIP-7702 fields
+	if logEntry.StateWrites.Eip7702DelegationsSet != 3 {
+		t.Errorf("Expected eip7702_delegations_set 3, got %d", logEntry.StateWrites.Eip7702DelegationsSet)
+	}
+	if logEntry.StateWrites.Eip7702DelegationsCleared != 1 {
+		t.Errorf("Expected eip7702_delegations_cleared 1, got %d", logEntry.StateWrites.Eip7702DelegationsCleared)
+	}
+
+	// Verify code bytes fields
+	if logEntry.StateReads.CodeBytes != 4096 {
+		t.Errorf("Expected code_bytes read 4096, got %d", logEntry.StateReads.CodeBytes)
+	}
+	if logEntry.StateWrites.CodeBytes != 2048 {
+		t.Errorf("Expected code_bytes write 2048, got %d", logEntry.StateWrites.CodeBytes)
+	}
+	if logEntry.StateWrites.Code != 5 {
+		t.Errorf("Expected code writes 5, got %d", logEntry.StateWrites.Code)
+	}
+}
+
 // TestLogSlowBlockThreshold tests that logSlow respects the threshold.
 func TestLogSlowBlockThreshold(t *testing.T) {
 	var buf bytes.Buffer
