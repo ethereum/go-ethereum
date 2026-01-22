@@ -159,7 +159,12 @@ type StateDB struct {
 	StorageUpdated atomic.Int64 // Number of storage slots updated during the state transition
 	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
 	CodeLoaded     int          // Number of contract code loaded during the state transition
-	CodeLoadBytes  int          // Total number of bytes read from contract code
+
+	// CodeLoadBytes is the total number of bytes read from contract code.
+	// This value may be smaller than the actual number of bytes read, since
+	// some APIs (e.g. CodeSize) may load the entire code from either the
+	// cache or the database when the size is not available in the cache.
+	CodeLoadBytes int
 }
 
 // New creates a new state from a given trie.

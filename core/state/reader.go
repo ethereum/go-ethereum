@@ -201,7 +201,6 @@ func (r *cachingCodeReader) Code(addr common.Address, codeHash common.Hash) ([]b
 func (r *cachingCodeReader) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
 	if cached, ok := r.codeSizeCache.Get(codeHash); ok {
 		r.hit.Add(1)
-		r.hitBytes.Add(int64(cached))
 		return cached, nil
 	}
 	code, err := r.Code(addr, codeHash)
