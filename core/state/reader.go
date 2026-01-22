@@ -58,11 +58,28 @@ type ContractCodeReader interface {
 	CodeSize(addr common.Address, codeHash common.Hash) (int, error)
 }
 
+// ContractCodeReaderStats aggregates statistics for the contract code reader.
+type ContractCodeReaderStats struct {
+	CacheHit       int64 // Number of cache hits
+	CacheMiss      int64 // Number of cache misses
+	CacheHitBytes  int64 // Total bytes served from cache
+	CacheMissBytes int64 // Total bytes read on cache misses
+}
+
+// HitRate returns the cache hit rate.
+func (s ContractCodeReaderStats) HitRate() float64 {
+	if s.CacheHit == 0 {
+		return 0
+	}
+	return float64(s.CacheHit) / float64(s.CacheHit+s.CacheMiss)
+}
+
 // ContractCodeReaderWithStats extends ContractCodeReader by adding GetStats to
 // expose statistics of code reader.
 type ContractCodeReaderWithStats interface {
 	ContractCodeReader
-	GetStats() (int64, int64)
+
+	GetStats() ContractCodeReaderStats
 }
 
 // StateReader defines the interface for accessing accounts and storage slots
@@ -99,13 +116,11 @@ type Reader interface {
 
 // ReaderStats wraps the statistics of reader.
 type ReaderStats struct {
-	// Cache stats
 	AccountCacheHit  int64
 	AccountCacheMiss int64
 	StorageCacheHit  int64
 	StorageCacheMiss int64
-	ContractCodeHit  int64
-	ContractCodeMiss int64
+	CodeStats        ContractCodeReaderStats
 }
 
 // String implements fmt.Stringer, returning string format statistics.
@@ -113,7 +128,6 @@ func (s ReaderStats) String() string {
 	var (
 		accountCacheHitRate float64
 		storageCacheHitRate float64
-		contractCodeHitRate float64
 	)
 	if s.AccountCacheHit > 0 {
 		accountCacheHitRate = float64(s.AccountCacheHit) / float64(s.AccountCacheHit+s.AccountCacheMiss) * 100
@@ -121,13 +135,10 @@ func (s ReaderStats) String() string {
 	if s.StorageCacheHit > 0 {
 		storageCacheHitRate = float64(s.StorageCacheHit) / float64(s.StorageCacheHit+s.StorageCacheMiss) * 100
 	}
-	if s.ContractCodeHit > 0 {
-		contractCodeHitRate = float64(s.ContractCodeHit) / float64(s.ContractCodeHit+s.ContractCodeMiss) * 100
-	}
 	msg := fmt.Sprintf("Reader statistics\n")
 	msg += fmt.Sprintf("account: hit: %d, miss: %d, rate: %.2f\n", s.AccountCacheHit, s.AccountCacheMiss, accountCacheHitRate)
 	msg += fmt.Sprintf("storage: hit: %d, miss: %d, rate: %.2f\n", s.StorageCacheHit, s.StorageCacheMiss, storageCacheHitRate)
-	msg += fmt.Sprintf("code: hit: %d, miss: %d, rate: %.2f\n", s.ContractCodeHit, s.ContractCodeMiss, contractCodeHitRate)
+	msg += fmt.Sprintf("code: hit: %d(%v), miss: %d(%v), rate: %.2f\n", s.CodeStats.CacheHit, common.StorageSize(s.CodeStats.CacheHitBytes), s.CodeStats.CacheMiss, common.StorageSize(s.CodeStats.CacheMissBytes), s.CodeStats.HitRate())
 	return msg
 }
 
@@ -150,8 +161,10 @@ type cachingCodeReader struct {
 	codeSizeCache *lru.Cache[common.Hash, int]
 
 	// Cache statistics
-	hit  atomic.Int64 // Number of code lookups found in the cache.
-	miss atomic.Int64 // Number of code lookups not found in the cache.
+	hit       atomic.Int64 // Number of code lookups found in the cache
+	miss      atomic.Int64 // Number of code lookups not found in the cache
+	hitBytes  atomic.Int64 // Total number of bytes read from cache
+	missBytes atomic.Int64 // Total number of bytes read from database
 }
 
 // newCachingCodeReader constructs the code reader.
@@ -169,6 +182,7 @@ func (r *cachingCodeReader) Code(addr common.Address, codeHash common.Hash) ([]b
 	code, _ := r.codeCache.Get(codeHash)
 	if len(code) > 0 {
 		r.hit.Add(1)
+		r.hitBytes.Add(int64(len(code)))
 		return code, nil
 	}
 	r.miss.Add(1)
@@ -177,6 +191,7 @@ func (r *cachingCodeReader) Code(addr common.Address, codeHash common.Hash) ([]b
 	if len(code) > 0 {
 		r.codeCache.Add(codeHash, code)
 		r.codeSizeCache.Add(codeHash, len(code))
+		r.missBytes.Add(int64(len(code)))
 	}
 	return code, nil
 }
@@ -186,6 +201,7 @@ func (r *cachingCodeReader) Code(addr common.Address, codeHash common.Hash) ([]b
 func (r *cachingCodeReader) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
 	if cached, ok := r.codeSizeCache.Get(codeHash); ok {
 		r.hit.Add(1)
+		r.hitBytes.Add(int64(cached))
 		return cached, nil
 	}
 	code, err := r.Code(addr, codeHash)
@@ -202,9 +218,14 @@ func (r *cachingCodeReader) Has(addr common.Address, codeHash common.Hash) bool 
 	return len(code) > 0
 }
 
-// GetStats returns the cache statistics fo the code reader.
-func (r *cachingCodeReader) GetStats() (int64, int64) {
-	return r.hit.Load(), r.miss.Load()
+// GetStats returns the statistics of the code reader.
+func (r *cachingCodeReader) GetStats() ContractCodeReaderStats {
+	return ContractCodeReaderStats{
+		CacheHit:       r.hit.Load(),
+		CacheMiss:      r.miss.Load(),
+		CacheHitBytes:  r.hitBytes.Load(),
+		CacheMissBytes: r.missBytes.Load(),
+	}
 }
 
 // flatReader wraps a database state reader and is safe for concurrent access.
@@ -654,13 +675,11 @@ func (r *readerWithStats) Storage(addr common.Address, slot common.Hash) (common
 
 // GetStats implements ReaderWithStats, returning the statistics of state reader.
 func (r *readerWithStats) GetStats() ReaderStats {
-	codeHit, codeMiss := r.ContractCodeReaderWithStats.GetStats()
 	return ReaderStats{
 		AccountCacheHit:  r.accountCacheHit.Load(),
 		AccountCacheMiss: r.accountCacheMiss.Load(),
 		StorageCacheHit:  r.storageCacheHit.Load(),
 		StorageCacheMiss: r.storageCacheMiss.Load(),
-		ContractCodeHit:  codeHit,
-		ContractCodeMiss: codeMiss,
+		CodeStats:        r.ContractCodeReaderWithStats.GetStats(),
 	}
 }

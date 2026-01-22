@@ -541,6 +541,7 @@ func (s *stateObject) Code() []byte {
 	defer func(start time.Time) {
 		s.db.CodeLoaded += 1
 		s.db.CodeReads += time.Since(start)
+		s.db.CodeLoadBytes += len(s.code)
 	}(time.Now())
 
 	code, err := s.db.reader.Code(s.address, common.BytesToHash(s.CodeHash()))
@@ -567,6 +568,7 @@ func (s *stateObject) CodeSize() int {
 	defer func(start time.Time) {
 		s.db.CodeLoaded += 1
 		s.db.CodeReads += time.Since(start)
+		s.db.CodeLoadBytes += len(s.code)
 	}(time.Now())
 
 	size, err := s.db.reader.CodeSize(s.address, common.BytesToHash(s.CodeHash()))
