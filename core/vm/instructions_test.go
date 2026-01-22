@@ -1028,8 +1028,26 @@ func TestEIP8024_Execution(t *testing.T) {
 			},
 		},
 		{
+			name:    "DUPN_MISSING_IMMEDIATE",
+			codeHex: "60016000808080808080808080808080808080e6",
+			wantVals: []uint64{
+				1,
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				1,
+			},
+		},
+		{
 			name:    "SWAPN",
 			codeHex: "600160008080808080808080808080808080806002e700",
+			wantVals: []uint64{
+				1,
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				2,
+			},
+		},
+		{
+			name:    "SWAPN_MISSING_IMMEDIATE",
+			codeHex: "600160008080808080808080808080808080806002e7",
 			wantVals: []uint64{
 				1,
 				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -1040,6 +1058,15 @@ func TestEIP8024_Execution(t *testing.T) {
 			name:     "EXCHANGE",
 			codeHex:  "600060016002e801",
 			wantVals: []uint64{2, 0, 1},
+		},
+		{
+			name:    "EXCHANGE_MISSING_IMMEDIATE",
+			codeHex: "600060006000600060006000600060006000600060006000600060006000600060006000600060006000600060006000600060006000600060016002e8",
+			wantVals: []uint64{
+				2,
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				1,
+			},
 		},
 		{
 			name:    "INVALID_SWAPN_LOW",
@@ -1093,21 +1120,6 @@ func TestEIP8024_Execution(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "MISSING_IMMEDIATE_DUPN",
-			codeHex: "e6", // no operand
-			wantErr: true,
-		},
-		{
-			name:    "MISSING_IMMEDIATE_SWAPN",
-			codeHex: "e7", // no operand
-			wantErr: true,
-		},
-		{
-			name:    "MISSING_IMMEDIATE_EXCHANGE",
-			codeHex: "e8", // no operand
-			wantErr: true,
-		},
-		{
 			name:     "PC_INCREMENT",
 			codeHex:  "600060006000e80115",
 			wantVals: []uint64{1, 0, 0},
@@ -1123,25 +1135,25 @@ func TestEIP8024_Execution(t *testing.T) {
 			var err error
 			for pc < uint64(len(code)) && err == nil {
 				op := code[pc]
-				switch op {
-				case 0x00:
+				switch OpCode(op) {
+				case STOP:
 					return
-				case 0x60:
+				case PUSH1:
 					_, err = opPush1(&pc, evm, scope)
-				case 0x80:
+				case DUP1:
 					dup1 := makeDup(1)
 					_, err = dup1(&pc, evm, scope)
-				case 0x56:
+				case JUMP:
 					_, err = opJump(&pc, evm, scope)
-				case 0x5b:
+				case JUMPDEST:
 					_, err = opJumpdest(&pc, evm, scope)
-				case 0x15:
+				case ISZERO:
 					_, err = opIszero(&pc, evm, scope)
-				case 0xe6:
+				case DUPN:
 					_, err = opDupN(&pc, evm, scope)
-				case 0xe7:
+				case SWAPN:
 					_, err = opSwapN(&pc, evm, scope)
-				case 0xe8:
+				case EXCHANGE:
 					_, err = opExchange(&pc, evm, scope)
 				default:
 					err = &ErrInvalidOpCode{opcode: OpCode(op)}

@@ -973,11 +973,11 @@ func opDupN(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	code := scope.Contract.Code
 	i := *pc + 1
 
-	// Ensure an immediate byte exists after DUPN
-	if i >= uint64(len(code)) {
-		return nil, &ErrInvalidOpCode{opcode: INVALID}
+	// If the immediate byte is missing, treat as 0x00 (same convention as PUSHn).
+	var x byte
+	if i < uint64(len(code)) {
+		x = code[i]
 	}
-	x := code[i]
 
 	// This range is excluded to preserve compatibility with existing opcodes.
 	if x > 90 && x < 128 {
@@ -1000,11 +1000,11 @@ func opSwapN(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	code := scope.Contract.Code
 	i := *pc + 1
 
-	// Ensure an immediate byte exists after SWAPN
-	if i >= uint64(len(code)) {
-		return nil, &ErrInvalidOpCode{opcode: INVALID}
+	// If the immediate byte is missing, treat as 0x00 (same convention as PUSHn).
+	var x byte
+	if i < uint64(len(code)) {
+		x = code[i]
 	}
-	x := code[i]
 
 	// This range is excluded to preserve compatibility with existing opcodes.
 	if x > 90 && x < 128 {
@@ -1029,11 +1029,11 @@ func opExchange(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	code := scope.Contract.Code
 	i := *pc + 1
 
-	// Ensure an immediate byte exists after EXCHANGE
-	if i >= uint64(len(code)) {
-		return nil, &ErrInvalidOpCode{opcode: INVALID}
+	// If the immediate byte is missing, treat as 0x00 (same convention as PUSHn).
+	var x byte
+	if i < uint64(len(code)) {
+		x = code[i]
 	}
-	x := code[i]
 
 	// This range is excluded both to preserve compatibility with existing opcodes
 	// and to keep decode_pair’s 16-aligned arithmetic mapping valid (0–79, 128–255).
