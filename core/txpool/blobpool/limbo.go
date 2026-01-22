@@ -233,24 +233,6 @@ func (l *limbo) update(txhash common.Hash, block uint64) {
 	log.Trace("Blob transaction updated in limbo", "tx", txhash, "old-block", item.Block, "new-block", block)
 }
 
-// getAndDrop retrieves a blob item from the limbo store and deletes it both from
-// the store and indices.
-func (l *limbo) getAndDrop(id uint64) (*limboBlob, error) {
-	data, err := l.store.Get(id)
-	if err != nil {
-		return nil, err
-	}
-	item := new(limboBlob)
-	if err = rlp.DecodeBytes(data, item); err != nil {
-		return nil, err
-	}
-	delete(l.index, item.TxHash)
-	if err := l.store.Delete(id); err != nil {
-		return nil, err
-	}
-	return item, nil
-}
-
 // drop removes the blob metadata from the limbo.
 func (l *limbo) drop(txhash common.Hash) error {
 	if item, ok := l.index[txhash]; ok {
