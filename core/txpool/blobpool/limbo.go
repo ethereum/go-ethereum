@@ -261,8 +261,8 @@ func (l *limbo) getAndDrop(id uint64) (*limboBlob, error) {
 // drop removes the blob metadata from the limbo.
 func (l *limbo) drop(txhash common.Hash) error {
 	if item, ok := l.index[txhash]; ok {
-		// Retrieve the old blobs from the data store and write them back with a new
-		// block number. IF anything fails, there's not much to do, go on.
+		// Remove the blob metadata entry from the limbo store. If anything fails,
+		// there's not much to do besides logging the error and returning.
 		if err := l.store.Delete(item.id); err != nil {
 			log.Error("Failed to drop old limboed blobs", "tx", txhash, "err", err)
 			return err
