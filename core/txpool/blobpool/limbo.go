@@ -139,7 +139,7 @@ func (l *limbo) setTxMeta(store billy.Database) error {
 			return err
 		}
 		meta := newBlobTxMeta(id, tx.Size(), store.Size(id), tx)
-		// Delete the old item which hash blob tx content.
+		// Delete the old item which has blob tx content.
 		if err := l.drop(meta.hash); err != nil {
 			return err
 		}
