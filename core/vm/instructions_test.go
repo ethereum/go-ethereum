@@ -1135,25 +1135,25 @@ func TestEIP8024_Execution(t *testing.T) {
 			var err error
 			for pc < uint64(len(code)) && err == nil {
 				op := code[pc]
-				switch op {
-				case 0x00:
+				switch OpCode(op) {
+				case STOP:
 					return
-				case 0x60:
+				case PUSH1:
 					_, err = opPush1(&pc, evm, scope)
-				case 0x80:
+				case DUP1:
 					dup1 := makeDup(1)
 					_, err = dup1(&pc, evm, scope)
-				case 0x56:
+				case JUMP:
 					_, err = opJump(&pc, evm, scope)
-				case 0x5b:
+				case JUMPDEST:
 					_, err = opJumpdest(&pc, evm, scope)
-				case 0x15:
+				case ISZERO:
 					_, err = opIszero(&pc, evm, scope)
-				case 0xe6:
+				case DUPN:
 					_, err = opDupN(&pc, evm, scope)
-				case 0xe7:
+				case SWAPN:
 					_, err = opSwapN(&pc, evm, scope)
-				case 0xe8:
+				case EXCHANGE:
 					_, err = opExchange(&pc, evm, scope)
 				default:
 					err = &ErrInvalidOpCode{opcode: OpCode(op)}
