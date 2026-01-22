@@ -52,8 +52,10 @@ func newLimbo(config *params.ChainConfig, datadir string) (*limbo, error) {
 		index: make(map[common.Hash]*limboBlob),
 	}
 
-	// Create new slotter for pre-Osaka blob configuration.
-	slotter := newSlotter(params.BlobTxMaxBlobs)
+	// The limbo won't store full blobs, just metadata, so use a fixed size 4KB is big enough.
+	slotter := func() (size uint32, done bool) {
+		return 4096, true
+	}
 
 	// See if we need to migrate the limbo after fusaka.
 	slotter, err := tryMigrate(config, slotter, datadir)
@@ -83,6 +85,14 @@ func newLimbo(config *params.ChainConfig, datadir string) (*limbo, error) {
 			}
 		}
 	}
+
+	// Migrate any old-style limbo entries which stored full blob transactions
+	// instead of just the metadata.
+	if err = l.cleanTxStorage(); err != nil {
+		l.Close()
+		return nil, err
+	}
+
 	return l, nil
 }
 
@@ -115,36 +125,19 @@ func (l *limbo) parseBlob(id uint64, data []byte) error {
 	return nil
 }
 
-// setTxMeta attempts to repair the limbo by re-encoding all transactions that are
-// currently in the limbo, but not yet stored in the database. This is useful
-// when the limbo is created from a previous state, and the transactions are not
-// yet stored in the database. The method will re-encode all transactions and
-// store them in the database, updating the in-memory indices at the same time.
-func (l *limbo) setTxMeta(store billy.Database) error {
+// cleanTxStorage migrates any old-style limbo entries which stored the full
+// blob transaction instead of just the metadata.
+func (l *limbo) cleanTxStorage() error {
 	for _, item := range l.index {
 		if item.Tx == nil {
 			continue
 		}
-		tx := item.Tx
-		item.Tx = nil // Clear the in-memory tx
-		// Transaction permitted into the pool from a nonce and cost perspective,
-		// insert it into the database and update the indices
-		blob, err := rlp.EncodeToBytes(tx)
-		if err != nil {
-			log.Error("Failed to encode transaction for storage", "hash", tx.Hash(), "err", err)
-			return err
-		}
-		id, err := store.Put(blob)
-		if err != nil {
-			return err
-		}
-		meta := newBlobTxMeta(id, tx.Size(), store.Size(id), tx)
-		// Delete the old item which has blob tx content.
-		if err := l.drop(meta.hash); err != nil {
+		// Delete the old item which hash blob tx content.
+		if err := l.drop(item.TxMeta.hash); err != nil {
 			return err
 		}
 		// Set the new one which has blob tx metadata.
-		if err := l.push(meta, item.Block); err != nil {
+		if err := l.push(item.TxMeta, item.Block); err != nil {
 			return err
 		}
 	}

@@ -540,11 +540,6 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 		return err
 	}
 
-	// If blob txs still exist in limbo, delete the old ones and reset with new ones without tx content.
-	if err = p.limbo.setTxMeta(p.store); err != nil {
-		return err
-	}
-
 	// Set the configured gas tip, triggering a filtering of anything just loaded
 	basefeeGauge.Update(int64(basefee.Uint64()))
 	blobfeeGauge.Update(int64(blobfee.Uint64()))
