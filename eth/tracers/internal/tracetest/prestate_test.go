@@ -109,6 +109,9 @@ func testPrestateTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}
+			if vmRet.Failed() {
+				t.Logf("(warn) transaction failed: %v", vmRet.Err)
+			}
 			tracer.OnTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, nil)
 			// Retrieve the trace result and compare against the expected
 			res, err := tracer.GetResult()

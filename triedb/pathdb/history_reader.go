@@ -22,94 +22,18 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
+	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/sync/errgroup"
 )
-
-// stateIdent represents the identifier of a state element, which can be
-// either an account or a storage slot.
-type stateIdent struct {
-	account bool
-
-	// The hash of the account address. This is used instead of the raw account
-	// address is to align the traversal order with the Merkle-Patricia-Trie.
-	addressHash common.Hash
-
-	// The hash of the storage slot key. This is used instead of the raw slot key
-	// because, in legacy state histories (prior to the Cancun fork), the slot
-	// identifier is the hash of the key, and the original key (preimage) cannot
-	// be recovered. To maintain backward compatibility, the key hash is used.
-	//
-	// Meanwhile, using the storage key hash also preserve the traversal order
-	// with Merkle-Patricia-Trie.
-	//
-	// This field is null if the identifier refers to account data.
-	storageHash common.Hash
-}
-
-// String returns the string format state identifier.
-func (ident stateIdent) String() string {
-	if ident.account {
-		return ident.addressHash.Hex()
-	}
-	return ident.addressHash.Hex() + ident.storageHash.Hex()
-}
-
-// newAccountIdent constructs a state identifier for an account.
-func newAccountIdent(addressHash common.Hash) stateIdent {
-	return stateIdent{
-		account:     true,
-		addressHash: addressHash,
-	}
-}
-
-// newStorageIdent constructs a state identifier for a storage slot.
-// The address denotes the address of the associated account;
-// the storageHash denotes the hash of the raw storage slot key;
-func newStorageIdent(addressHash common.Hash, storageHash common.Hash) stateIdent {
-	return stateIdent{
-		addressHash: addressHash,
-		storageHash: storageHash,
-	}
-}
-
-// stateIdentQuery is the extension of stateIdent by adding the raw storage key.
-type stateIdentQuery struct {
-	stateIdent
-
-	address    common.Address
-	storageKey common.Hash
-}
-
-// newAccountIdentQuery constructs a state identifier for an account.
-func newAccountIdentQuery(address common.Address, addressHash common.Hash) stateIdentQuery {
-	return stateIdentQuery{
-		stateIdent: stateIdent{
-			account:     true,
-			addressHash: addressHash,
-		},
-		address: address,
-	}
-}
-
-// newStorageIdentQuery constructs a state identifier for a storage slot.
-// the address denotes the address of the associated account;
-// the addressHash denotes the address hash of the associated account;
-// the storageKey denotes the raw storage slot key;
-// the storageHash denotes the hash of the raw storage slot key;
-func newStorageIdentQuery(address common.Address, addressHash common.Hash, storageKey common.Hash, storageHash common.Hash) stateIdentQuery {
-	return stateIdentQuery{
-		stateIdent: stateIdent{
-			addressHash: addressHash,
-			storageHash: storageHash,
-		},
-		address:    address,
-		storageKey: storageKey,
-	}
-}
 
 // indexReaderWithLimitTag is a wrapper around indexReader that includes an
 // additional index position. This position represents the ID of the last
@@ -122,8 +46,8 @@ type indexReaderWithLimitTag struct {
 }
 
 // newIndexReaderWithLimitTag constructs a index reader with indexing position.
-func newIndexReaderWithLimitTag(db ethdb.KeyValueReader, state stateIdent, limit uint64) (*indexReaderWithLimitTag, error) {
-	r, err := newIndexReader(db, state)
+func newIndexReaderWithLimitTag(db ethdb.KeyValueReader, state stateIdent, limit uint64, bitmapSize int) (*indexReaderWithLimitTag, error) {
+	r, err := newIndexReader(db, state, bitmapSize)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +93,7 @@ func (r *indexReaderWithLimitTag) readGreaterThan(id uint64, lastID uint64) (uin
 	// Given that it's very unlikely to occur and users try to perform historical
 	// state queries while reverting the states at the same time. Simply returning
 	// an error should be sufficient for now.
-	metadata := loadIndexMetadata(r.db)
+	metadata := loadIndexMetadata(r.db, toHistoryType(r.reader.state.typ))
 	if metadata == nil || metadata.Last < lastID {
 		return 0, errors.New("state history hasn't been indexed yet")
 	}
@@ -181,16 +105,17 @@ func (r *indexReaderWithLimitTag) readGreaterThan(id uint64, lastID uint64) (uin
 	return r.reader.readGreaterThan(id)
 }
 
-// historyReader is the structure to access historic state data.
-type historyReader struct {
+// stateHistoryReader is the structure to access historic state data.
+type stateHistoryReader struct {
 	disk    ethdb.KeyValueReader
 	freezer ethdb.AncientReader
 	readers map[string]*indexReaderWithLimitTag
 }
 
-// newHistoryReader constructs the history reader with the supplied db.
-func newHistoryReader(disk ethdb.KeyValueReader, freezer ethdb.AncientReader) *historyReader {
-	return &historyReader{
+// newStateHistoryReader constructs the history reader with the supplied db
+// for accessing historical states.
+func newStateHistoryReader(disk ethdb.KeyValueReader, freezer ethdb.AncientReader) *stateHistoryReader {
+	return &stateHistoryReader{
 		disk:    disk,
 		freezer: freezer,
 		readers: make(map[string]*indexReaderWithLimitTag),
@@ -199,7 +124,7 @@ func newHistoryReader(disk ethdb.KeyValueReader, freezer ethdb.AncientReader) *h
 
 // readAccountMetadata resolves the account metadata within the specified
 // state history.
-func (r *historyReader) readAccountMetadata(address common.Address, historyID uint64) ([]byte, error) {
+func (r *stateHistoryReader) readAccountMetadata(address common.Address, historyID uint64) ([]byte, error) {
 	blob := rawdb.ReadStateAccountIndex(r.freezer, historyID)
 	if len(blob) == 0 {
 		return nil, fmt.Errorf("account index is truncated, historyID: %d", historyID)
@@ -225,26 +150,18 @@ func (r *historyReader) readAccountMetadata(address common.Address, historyID ui
 
 // readStorageMetadata resolves the storage slot metadata within the specified
 // state history.
-func (r *historyReader) readStorageMetadata(storageKey common.Hash, storageHash common.Hash, historyID uint64, slotOffset, slotNumber int) ([]byte, error) {
-	// TODO(rj493456442) optimize it with partial read
-	blob := rawdb.ReadStateStorageIndex(r.freezer, historyID)
-	if len(blob) == 0 {
-		return nil, fmt.Errorf("storage index is truncated, historyID: %d", historyID)
+func (r *stateHistoryReader) readStorageMetadata(storageKey common.Hash, storageHash common.Hash, historyID uint64, slotOffset, slotNumber int) ([]byte, error) {
+	data, err := rawdb.ReadStateStorageIndex(r.freezer, historyID, slotIndexSize*slotOffset, slotIndexSize*slotNumber)
+	if err != nil {
+		msg := fmt.Sprintf("id: %d, slot-offset: %d, slot-length: %d", historyID, slotOffset, slotNumber)
+		return nil, fmt.Errorf("storage indices corrupted, %s, %w", msg, err)
 	}
-	if len(blob)%slotIndexSize != 0 {
-		return nil, fmt.Errorf("storage indices is corrupted, historyID: %d, size: %d", historyID, len(blob))
-	}
-	if slotIndexSize*(slotOffset+slotNumber) > len(blob) {
-		return nil, fmt.Errorf("storage indices is truncated, historyID: %d, size: %d, offset: %d, length: %d", historyID, len(blob), slotOffset, slotNumber)
-	}
-	subSlice := blob[slotIndexSize*slotOffset : slotIndexSize*(slotOffset+slotNumber)]
-
 	// TODO(rj493456442) get rid of the metadata resolution
 	var (
 		m      meta
 		target common.Hash
 	)
-	blob = rawdb.ReadStateHistoryMeta(r.freezer, historyID)
+	blob := rawdb.ReadStateHistoryMeta(r.freezer, historyID)
 	if err := m.decode(blob); err != nil {
 		return nil, err
 	}
@@ -254,21 +171,21 @@ func (r *historyReader) readStorageMetadata(storageKey common.Hash, storageHash 
 		target = storageKey
 	}
 	pos := sort.Search(slotNumber, func(i int) bool {
-		slotID := subSlice[slotIndexSize*i : slotIndexSize*i+common.HashLength]
+		slotID := data[slotIndexSize*i : slotIndexSize*i+common.HashLength]
 		return bytes.Compare(slotID, target.Bytes()) >= 0
 	})
 	if pos == slotNumber {
 		return nil, fmt.Errorf("storage metadata is not found, slot key: %#x, historyID: %d", storageKey, historyID)
 	}
 	offset := slotIndexSize * pos
-	if target != common.BytesToHash(subSlice[offset:offset+common.HashLength]) {
+	if target != common.BytesToHash(data[offset:offset+common.HashLength]) {
 		return nil, fmt.Errorf("storage metadata is not found, slot key: %#x, historyID: %d", storageKey, historyID)
 	}
-	return subSlice[offset : slotIndexSize*(pos+1)], nil
+	return data[offset : slotIndexSize*(pos+1)], nil
 }
 
 // readAccount retrieves the account data from the specified state history.
-func (r *historyReader) readAccount(address common.Address, historyID uint64) ([]byte, error) {
+func (r *stateHistoryReader) readAccount(address common.Address, historyID uint64) ([]byte, error) {
 	metadata, err := r.readAccountMetadata(address, historyID)
 	if err != nil {
 		return nil, err
@@ -276,16 +193,15 @@ func (r *historyReader) readAccount(address common.Address, historyID uint64) ([
 	length := int(metadata[common.AddressLength])                                                     // one byte for account data length
 	offset := int(binary.BigEndian.Uint32(metadata[common.AddressLength+1 : common.AddressLength+5])) // four bytes for the account data offset
 
-	// TODO(rj493456442) optimize it with partial read
-	data := rawdb.ReadStateAccountHistory(r.freezer, historyID)
-	if len(data) < length+offset {
+	data, err := rawdb.ReadStateAccountHistory(r.freezer, historyID, offset, length)
+	if err != nil {
 		return nil, fmt.Errorf("account data is truncated, address: %#x, historyID: %d, size: %d, offset: %d, len: %d", address, historyID, len(data), offset, length)
 	}
-	return data[offset : offset+length], nil
+	return data, nil
 }
 
 // readStorage retrieves the storage slot data from the specified state history.
-func (r *historyReader) readStorage(address common.Address, storageKey common.Hash, storageHash common.Hash, historyID uint64) ([]byte, error) {
+func (r *stateHistoryReader) readStorage(address common.Address, storageKey common.Hash, storageHash common.Hash, historyID uint64) ([]byte, error) {
 	metadata, err := r.readAccountMetadata(address, historyID)
 	if err != nil {
 		return nil, err
@@ -304,46 +220,27 @@ func (r *historyReader) readStorage(address common.Address, storageKey common.Ha
 	length := int(slotMetadata[common.HashLength])                                                  // one byte for slot data length
 	offset := int(binary.BigEndian.Uint32(slotMetadata[common.HashLength+1 : common.HashLength+5])) // four bytes for slot data offset
 
-	// TODO(rj493456442) optimize it with partial read
-	data := rawdb.ReadStateStorageHistory(r.freezer, historyID)
-	if len(data) < offset+length {
+	data, err := rawdb.ReadStateStorageHistory(r.freezer, historyID, offset, length)
+	if err != nil {
 		return nil, fmt.Errorf("storage data is truncated, address: %#x, key: %#x, historyID: %d, size: %d, offset: %d, len: %d", address, storageKey, historyID, len(data), offset, length)
 	}
-	return data[offset : offset+length], nil
+	return data, nil
 }
 
 // read retrieves the state element data associated with the stateID.
 // stateID: represents the ID of the state of the specified version;
 // lastID: represents the ID of the latest/newest state history;
 // latestValue: represents the state value at the current disk layer with ID == lastID;
-func (r *historyReader) read(state stateIdentQuery, stateID uint64, lastID uint64, latestValue []byte) ([]byte, error) {
-	tail, err := r.freezer.Tail()
+func (r *stateHistoryReader) read(state stateIdentQuery, stateID uint64, lastID uint64, latestValue []byte) ([]byte, error) {
+	lastIndexed, err := checkStateAvail(state.stateIdent, typeStateHistory, r.freezer, stateID, lastID, r.disk)
 	if err != nil {
 		return nil, err
 	}
-	// stateID == tail is allowed, as the first history object preserved
-	// is tail+1
-	if stateID < tail {
-		return nil, errors.New("historical state has been pruned")
-	}
-
-	// To serve the request, all state histories from stateID+1 to lastID
-	// must be indexed. It's not supposed to happen unless system is very
-	// wrong.
-	metadata := loadIndexMetadata(r.disk)
-	if metadata == nil || metadata.Last < lastID {
-		indexed := "null"
-		if metadata != nil {
-			indexed = fmt.Sprintf("%d", metadata.Last)
-		}
-		return nil, fmt.Errorf("state history is not fully indexed, requested: %d, indexed: %s", stateID, indexed)
-	}
-
 	// Construct the index reader to locate the corresponding history for
 	// state retrieval
 	ir, ok := r.readers[state.String()]
 	if !ok {
-		ir, err = newIndexReaderWithLimitTag(r.disk, state.stateIdent, metadata.Last)
+		ir, err = newIndexReaderWithLimitTag(r.disk, state.stateIdent, lastIndexed, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -363,8 +260,234 @@ func (r *historyReader) read(state stateIdentQuery, stateID uint64, lastID uint6
 	// that the associated state histories are no longer available due to a rollback.
 	// Such truncation should be captured by the state resolver below, rather than returning
 	// invalid data.
-	if state.account {
+	if state.typ == typeAccount {
 		return r.readAccount(state.address, historyID)
 	}
 	return r.readStorage(state.address, state.storageKey, state.storageHash, historyID)
+}
+
+// trienodeReader is the structure to access historical trienode data.
+type trienodeReader struct {
+	disk            ethdb.KeyValueReader
+	freezer         ethdb.AncientReader
+	readConcurrency int // The concurrency used to load trie node data from history
+}
+
+// newTrienodeReader constructs the history reader with the supplied db
+// for accessing historical trie nodes.
+func newTrienodeReader(disk ethdb.KeyValueReader, freezer ethdb.AncientReader, readConcurrency int) *trienodeReader {
+	return &trienodeReader{
+		disk:            disk,
+		freezer:         freezer,
+		readConcurrency: readConcurrency,
+	}
+}
+
+// readTrienode retrieves the trienode data from the specified trienode history.
+func (r *trienodeReader) readTrienode(addrHash common.Hash, path string, historyID uint64) ([]byte, error) {
+	tr, err := newTrienodeHistoryReader(historyID, r.freezer)
+	if err != nil {
+		return nil, err
+	}
+	return tr.read(addrHash, path)
+}
+
+// assembleNode takes a complete node value as the base and applies a list of
+// mutation records to assemble the final node value accordingly.
+func assembleNode(blob []byte, elements [][][]byte, indices [][]int) ([]byte, error) {
+	if len(elements) == 0 && len(indices) == 0 {
+		return blob, nil
+	}
+	children, err := rlp.SplitListValues(blob)
+	if err != nil {
+		return nil, err
+	}
+	for i := 0; i < len(elements); i++ {
+		for j, pos := range indices[i] {
+			children[pos] = elements[i][j]
+		}
+	}
+	return rlp.MergeListValues(children)
+}
+
+type resultQueue struct {
+	data [][]byte
+	lock sync.Mutex
+}
+
+func newResultQueue(size int) *resultQueue {
+	return &resultQueue{
+		data: make([][]byte, size, size*2),
+	}
+}
+
+func (q *resultQueue) set(data []byte, pos int) {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	if pos >= len(q.data) {
+		newSize := pos + 1
+		if cap(q.data) < newSize {
+			newData := make([][]byte, newSize, newSize*2)
+			copy(newData, q.data)
+			q.data = newData
+		}
+		q.data = q.data[:newSize]
+	}
+	q.data[pos] = data
+}
+
+func (r *trienodeReader) readOptimized(state stateIdent, it HistoryIndexIterator, latestValue []byte) ([]byte, error) {
+	var (
+		elements [][][]byte
+		indices  [][]int
+		blob     = latestValue
+
+		eg    errgroup.Group
+		seq   int
+		term  atomic.Bool
+		queue = newResultQueue(r.readConcurrency * 2)
+	)
+	eg.SetLimit(r.readConcurrency)
+
+	for {
+		id, pos := it.ID(), seq
+		seq += 1
+
+		eg.Go(func() error {
+			// In optimistic readahead mode, it is theoretically possible to encounter a
+			// NotFound error, where the trie node does not actually exist and the iterator
+			// reports a false-positive mutation record. Terminate the iterator if so, as
+			// all the necessary data (checkpoints and all diffs) required has already been
+			// fetching.
+			data, err := r.readTrienode(state.addressHash, state.path, id)
+			if err != nil {
+				term.Store(true)
+				log.Debug("Failed to read the trienode", "err", err)
+				return nil
+			}
+			full, _, err := decodeNodeFull(data)
+			if err != nil {
+				term.Store(true)
+				return err
+			}
+			if full {
+				term.Store(true)
+			}
+			queue.set(data, pos)
+			return nil
+		})
+		if term.Load() || !it.Next() {
+			break
+		}
+	}
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+	if err := it.Error(); err != nil {
+		return nil, err
+	}
+	for i := 0; i < seq; i++ {
+		isComplete, fullBlob, err := decodeNodeFull(queue.data[i])
+		if err != nil {
+			return nil, err
+		}
+		// Terminate the loop is the node with full value has been found
+		if isComplete {
+			blob = fullBlob
+			break
+		}
+		// Decode the partial encoded node and keep iterating the node history
+		// until the node with full value being reached.
+		element, index, err := decodeNodeCompressed(queue.data[i])
+		if err != nil {
+			return nil, err
+		}
+		elements, indices = append(elements, element), append(indices, index)
+	}
+	slices.Reverse(elements)
+	slices.Reverse(indices)
+	return assembleNode(blob, elements, indices)
+}
+
+// read retrieves the trie node data associated with the stateID.
+// stateID: represents the ID of the state of the specified version;
+// lastID: represents the ID of the latest/newest trie node history;
+// latestValue: represents the trie node value at the current disk layer with ID == lastID;
+func (r *trienodeReader) read(state stateIdent, stateID uint64, lastID uint64, latestValue []byte) ([]byte, error) {
+	_, err := checkStateAvail(state, typeTrienodeHistory, r.freezer, stateID, lastID, r.disk)
+	if err != nil {
+		return nil, err
+	}
+	// Construct the index iterator to traverse the trienode history
+	var (
+		scheme *indexScheme
+		it     HistoryIndexIterator
+	)
+	if state.addressHash == (common.Hash{}) {
+		scheme = accountIndexScheme
+	} else {
+		scheme = storageIndexScheme
+	}
+	if state.addressHash == (common.Hash{}) && state.path == "" {
+		it = newSeqIter(lastID)
+	} else {
+		chunkID, nodeID := scheme.splitPathLast(state.path)
+
+		queryIdent := state
+		queryIdent.path = chunkID
+		ir, err := newIndexReader(r.disk, queryIdent, scheme.getBitmapSize(len(chunkID)))
+		if err != nil {
+			return nil, err
+		}
+		filter := extFilter(nodeID)
+		it = ir.newIterator(&filter)
+	}
+	// Move the iterator to the first element whose id is greater than
+	// the given number.
+	found := it.SeekGT(stateID)
+	if err := it.Error(); err != nil {
+		return nil, err
+	}
+	// The state was not found in the trie node histories, as it has not been
+	// modified since stateID. Use the data from the associated disk layer
+	// instead (full value node as always)
+	if !found {
+		return latestValue, nil
+	}
+	return r.readOptimized(state, it, latestValue)
+}
+
+// checkStateAvail determines whether the requested historical state is available
+// for accessing. What's more, it also returns the ID of the latest indexed history
+// entry for subsequent usage.
+//
+// TODO(rjl493456442) it's really expensive to perform the check for every state
+// retrieval, please rework this later.
+func checkStateAvail(state stateIdent, exptyp historyType, freezer ethdb.AncientReader, stateID uint64, lastID uint64, db ethdb.KeyValueReader) (uint64, error) {
+	if toHistoryType(state.typ) != exptyp {
+		return 0, fmt.Errorf("unsupported history type: %d, want: %v", toHistoryType(state.typ), exptyp)
+	}
+	// firstID = tail+1
+	tail, err := freezer.Tail()
+	if err != nil {
+		return 0, err
+	}
+	// stateID+1 == firstID is allowed, as all the subsequent history entries
+	// are present with no gap inside.
+	if stateID < tail {
+		return 0, fmt.Errorf("historical state has been pruned, first: %d, state: %d", tail+1, stateID)
+	}
+	// To serve the request, all history entries from stateID+1 to lastID
+	// must be indexed. It's not supposed to happen unless system is very
+	// wrong.
+	metadata := loadIndexMetadata(db, exptyp)
+	if metadata == nil || metadata.Last < lastID {
+		indexed := "null"
+		if metadata != nil {
+			indexed = fmt.Sprintf("%d", metadata.Last)
+		}
+		return 0, fmt.Errorf("history is not fully indexed, requested: %d, indexed: %s", stateID, indexed)
+	}
+	return metadata.Last, nil
 }

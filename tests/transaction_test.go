@@ -70,7 +70,7 @@ func TestExecutionSpecTransaction(t *testing.T) {
 	st := new(testMatcher)
 
 	// Emptiness of authorization list is only validated during the tx precheck
-	st.skipLoad("^prague/eip7702_set_code_tx/invalid_tx/empty_authorization_list.json")
+	st.skipLoad("^prague/eip7702_set_code_tx/test_empty_authorization_list.json")
 
 	st.walk(t, executionSpecTransactionTestDir, func(t *testing.T, name string, test *TransactionTest) {
 		if err := st.checkFailure(t, test.Run()); err != nil {

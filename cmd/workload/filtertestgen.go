@@ -32,6 +32,17 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+const (
+	// Parameter of the random filter query generator.
+	maxFilterRangeForTestGen = 100000000000
+	maxFilterResultSize      = 1000
+	filterBuckets            = 10
+	maxFilterBucketSize      = 100
+	filterSeedChance         = 10
+	filterMergeChance        = 45
+	filterExtendChance       = 50
+)
+
 var (
 	filterGenerateCommand = &cli.Command{
 		Name:      "filtergen",
@@ -58,7 +69,7 @@ var (
 
 // filterGenCmd is the main function of the filter tests generator.
 func filterGenCmd(ctx *cli.Context) error {
-	f := newFilterTestGen(ctx)
+	f := newFilterTestGen(ctx, maxFilterRangeForTestGen)
 	lastWrite := time.Now()
 	for {
 		select {
@@ -67,7 +78,7 @@ func filterGenCmd(ctx *cli.Context) error {
 		default:
 		}
 
-		f.updateFinalizedBlock()
+		f.setLimitToFinalizedBlock()
 		query := f.newQuery()
 		query.run(f.client, nil)
 		if query.Err != nil {
@@ -75,7 +86,7 @@ func filterGenCmd(ctx *cli.Context) error {
 			exit("filter query failed")
 		}
 		if len(query.results) > 0 && len(query.results) <= maxFilterResultSize {
-			for {
+			for rand.Intn(100) < filterExtendChance {
 				extQuery := f.extendRange(query)
 				if extQuery == nil {
 					break
@@ -108,39 +119,32 @@ func filterGenCmd(ctx *cli.Context) error {
 
 // filterTestGen is the filter query test generator.
 type filterTestGen struct {
-	client    *client
-	queryFile string
+	client         *client
+	queryFile      string
+	maxFilterRange int64
 
-	finalizedBlock int64
-	queries        [filterBuckets][]*filterQuery
+	blockLimit int64
+	queries    [filterBuckets][]*filterQuery
 }
 
-func newFilterTestGen(ctx *cli.Context) *filterTestGen {
+func newFilterTestGen(ctx *cli.Context, maxFilterRange int64) *filterTestGen {
 	return &filterTestGen{
-		client:    makeClient(ctx),
-		queryFile: ctx.String(filterQueryFileFlag.Name),
+		client:         makeClient(ctx),
+		queryFile:      ctx.String(filterQueryFileFlag.Name),
+		maxFilterRange: maxFilterRange,
 	}
 }
 
-func (s *filterTestGen) updateFinalizedBlock() {
-	s.finalizedBlock = mustGetFinalizedBlock(s.client)
+func (s *filterTestGen) setLimitToFinalizedBlock() {
+	s.blockLimit = mustGetFinalizedBlock(s.client)
 }
-
-const (
-	// Parameter of the random filter query generator.
-	maxFilterRange      = 10000000
-	maxFilterResultSize = 300
-	filterBuckets       = 10
-	maxFilterBucketSize = 100
-	filterSeedChance    = 10
-	filterMergeChance   = 45
-)
 
 // storeQuery adds a filter query to the output file.
 func (s *filterTestGen) storeQuery(query *filterQuery) {
 	query.ResultHash = new(common.Hash)
 	*query.ResultHash = query.calculateHash()
-	logRatio := math.Log(float64(len(query.results))*float64(s.finalizedBlock)/float64(query.ToBlock+1-query.FromBlock)) / math.Log(float64(s.finalizedBlock)*maxFilterResultSize)
+	maxFilterRange := min(s.maxFilterRange, s.blockLimit)
+	logRatio := math.Log(float64(len(query.results))*float64(maxFilterRange)/float64(query.ToBlock+1-query.FromBlock)) / math.Log(float64(maxFilterRange)*maxFilterResultSize)
 	bucket := int(math.Floor(logRatio * filterBuckets))
 	if bucket >= filterBuckets {
 		bucket = filterBuckets - 1
@@ -160,13 +164,13 @@ func (s *filterTestGen) storeQuery(query *filterQuery) {
 func (s *filterTestGen) extendRange(q *filterQuery) *filterQuery {
 	rangeLen := q.ToBlock + 1 - q.FromBlock
 	extLen := rand.Int63n(rangeLen) + 1
-	if rangeLen+extLen > s.finalizedBlock {
+	if rangeLen+extLen > min(s.maxFilterRange, s.blockLimit) {
 		return nil
 	}
 	extBefore := min(rand.Int63n(extLen+1), q.FromBlock)
 	extAfter := extLen - extBefore
-	if q.ToBlock+extAfter > s.finalizedBlock {
-		d := q.ToBlock + extAfter - s.finalizedBlock
+	if q.ToBlock+extAfter > s.blockLimit {
+		d := q.ToBlock + extAfter - s.blockLimit
 		extAfter -= d
 		if extBefore+d <= q.FromBlock {
 			extBefore += d
@@ -203,7 +207,7 @@ func (s *filterTestGen) newQuery() *filterQuery {
 
 // newSeedQuery creates a query that gets all logs in a random non-finalized block.
 func (s *filterTestGen) newSeedQuery() *filterQuery {
-	block := rand.Int63n(s.finalizedBlock + 1)
+	block := rand.Int63n(s.blockLimit + 1)
 	return &filterQuery{
 		FromBlock: block,
 		ToBlock:   block,
@@ -358,6 +362,7 @@ func (s *filterTestGen) writeQueries() {
 func mustGetFinalizedBlock(client *client) int64 {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
+
 	header, err := client.Eth.HeaderByNumber(ctx, big.NewInt(int64(rpc.FinalizedBlockNumber)))
 	if err != nil {
 		exit(fmt.Errorf("could not fetch finalized header (error: %v)", err))

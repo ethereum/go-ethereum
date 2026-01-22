@@ -18,6 +18,7 @@ package state
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/bintrie"
 )
 
 // DumpConfig is a set of options to control what portions of the state will be
@@ -219,6 +221,28 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		"elapsed", common.PrettyDuration(time.Since(start)))
 
 	return nextKey
+}
+
+// DumpBinTrieLeaves collects all binary trie leaf nodes into the provided map.
+func (s *StateDB) DumpBinTrieLeaves(collector map[common.Hash]hexutil.Bytes) error {
+	tr, err := s.db.OpenTrie(s.originalRoot)
+	if err != nil {
+		return err
+	}
+	btr, ok := tr.(*bintrie.BinaryTrie)
+	if !ok {
+		return errors.New("trie is not a binary trie")
+	}
+	it, err := btr.NodeIterator(nil)
+	if err != nil {
+		return err
+	}
+	for it.Next(true) {
+		if it.Leaf() {
+			collector[common.BytesToHash(it.LeafKey())] = it.LeafBlob()
+		}
+	}
+	return nil
 }
 
 // RawDump returns the state. If the processing is aborted e.g. due to options

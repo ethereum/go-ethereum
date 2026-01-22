@@ -43,6 +43,16 @@ var (
 	errBlockInterruptedByTimeout  = errors.New("timeout while building block")
 )
 
+// maxBlobsPerBlock returns the maximum number of blobs per block.
+// Users can specify the maximum number of blobs per block if necessary.
+func (miner *Miner) maxBlobsPerBlock(time uint64) int {
+	maxBlobs := eip4844.MaxBlobsPerBlock(miner.chainConfig, time)
+	if miner.config.MaxBlobsPerBlock != 0 {
+		maxBlobs = miner.config.MaxBlobsPerBlock
+	}
+	return maxBlobs
+}
+
 // environment is the worker's current environment and holds all
 // information of the sealing block generation.
 type environment struct {
@@ -271,7 +281,7 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 		if err != nil {
 			return nil, err
 		}
-		state.StartPrefetcher("miner", bundle)
+		state.StartPrefetcher("miner", bundle, nil)
 	}
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
@@ -309,7 +319,7 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 	// isn't really a better place right now. The blob gas limit is checked at block validation time
 	// and not during execution. This means core.ApplyTransaction will not return an error if the
 	// tx has too many blobs. So we have to explicitly check it here.
-	maxBlobs := eip4844.MaxBlobsPerBlock(miner.chainConfig, env.header.Time)
+	maxBlobs := miner.maxBlobsPerBlock(env.header.Time)
 	if env.blobs+len(sc.Blobs) > maxBlobs {
 		return errors.New("max data blobs reached")
 	}
@@ -344,7 +354,6 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 
 func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32) error {
 	var (
-		isOsaka  = miner.chainConfig.IsOsaka(env.header.Number, env.header.Time)
 		isCancun = miner.chainConfig.IsCancun(env.header.Number, env.header.Time)
 		gasLimit = env.header.GasLimit
 	)
@@ -365,7 +374,7 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 		}
 		// If we don't have enough blob space for any further blob transactions,
 		// skip that list altogether
-		if !blobTxs.Empty() && env.blobs >= eip4844.MaxBlobsPerBlock(miner.chainConfig, env.header.Time) {
+		if !blobTxs.Empty() && env.blobs >= miner.maxBlobsPerBlock(env.header.Time) {
 			log.Trace("Not enough blob space for further blob transactions")
 			blobTxs.Clear()
 			// Fall though to pick up any plain txs
@@ -404,7 +413,7 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 		// blobs or not, however the max check panics when called on a chain without
 		// a defined schedule, so we need to verify it's safe to call.
 		if isCancun {
-			left := eip4844.MaxBlobsPerBlock(miner.chainConfig, env.header.Time) - env.blobs
+			left := miner.maxBlobsPerBlock(env.header.Time) - env.blobs
 			if left < int(ltx.BlobGas/params.BlobTxBlobGasPerBlob) {
 				log.Trace("Not enough blob space left for transaction", "hash", ltx.Hash, "left", left, "needed", ltx.BlobGas/params.BlobTxBlobGasPerBlob)
 				txs.Pop()
@@ -425,21 +434,6 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 		if !env.txFitsSize(tx) {
 			break
 		}
-
-		// Make sure all transactions after osaka have cell proofs
-		if isOsaka {
-			if sidecar := tx.BlobTxSidecar(); sidecar != nil {
-				if sidecar.Version == types.BlobSidecarVersion0 {
-					log.Info("Including blob tx with v0 sidecar, recomputing proofs", "hash", ltx.Hash)
-					if err := sidecar.ToV1(); err != nil {
-						txs.Pop()
-						log.Warn("Failed to recompute cell proofs", "hash", ltx.Hash, "err", err)
-						continue
-					}
-				}
-			}
-		}
-
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance in the transaction pool.
 		from, _ := types.Sender(env.signer, tx)
@@ -497,10 +491,15 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 	if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) {
 		filter.GasLimitCap = params.MaxTxGas
 	}
-	filter.OnlyPlainTxs, filter.OnlyBlobTxs = true, false
+	filter.BlobTxs = false
 	pendingPlainTxs := miner.txpool.Pending(filter)
 
-	filter.OnlyPlainTxs, filter.OnlyBlobTxs = false, true
+	filter.BlobTxs = true
+	if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) {
+		filter.BlobVersion = types.BlobSidecarVersion1
+	} else {
+		filter.BlobVersion = types.BlobSidecarVersion0
+	}
 	pendingBlobTxs := miner.txpool.Pending(filter)
 
 	// Split the pending transactions into locals and remotes.
@@ -543,7 +542,6 @@ func totalFees(block *types.Block, receipts []*types.Receipt) *big.Int {
 	for i, tx := range block.Transactions() {
 		minerFee, _ := tx.EffectiveGasTip(block.BaseFee())
 		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
-		// TODO (MariusVanDerWijden) add blob fees
 	}
 	return feesWei
 }

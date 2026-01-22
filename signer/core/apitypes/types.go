@@ -167,8 +167,11 @@ func (args *SendTxArgs) ToTransaction() (*types.Transaction, error) {
 			BlobFeeCap: uint256.MustFromBig((*big.Int)(args.BlobFeeCap)),
 		}
 		if args.Blobs != nil {
-			// TODO(rjl493456442, marius) support V1
-			data.(*types.BlobTx).Sidecar = types.NewBlobTxSidecar(types.BlobSidecarVersion0, args.Blobs, args.Commitments, args.Proofs)
+			version := types.BlobSidecarVersion0
+			if len(args.Proofs) == len(args.Blobs)*kzg4844.CellProofsPerBlob {
+				version = types.BlobSidecarVersion1
+			}
+			data.(*types.BlobTx).Sidecar = types.NewBlobTxSidecar(version, args.Blobs, args.Commitments, args.Proofs)
 		}
 
 	case args.MaxFeePerGas != nil:

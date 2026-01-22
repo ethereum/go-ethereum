@@ -21,46 +21,21 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
+	"slices"
 )
-
-// FileExist checks if a file exists at path.
-func FileExist(path string) bool {
-	_, err := os.Stat(path)
-	if err != nil && os.IsNotExist(err) {
-		return false
-	}
-	return true
-}
-
-// HashFiles iterates the provided set of files, computing the hash of each.
-func HashFiles(files []string) (map[string][32]byte, error) {
-	res := make(map[string][32]byte)
-	for _, filePath := range files {
-		f, err := os.OpenFile(filePath, os.O_RDONLY, 0666)
-		if err != nil {
-			return nil, err
-		}
-		hasher := sha256.New()
-		if _, err := io.Copy(hasher, f); err != nil {
-			return nil, err
-		}
-		res[filePath] = [32]byte(hasher.Sum(nil))
-	}
-	return res, nil
-}
 
 // HashFolder iterates all files under the given directory, computing the hash
 // of each.
-func HashFolder(folder string, exlude []string) (map[string][32]byte, error) {
+func HashFolder(folder string, excludes []string) (map[string][32]byte, error) {
 	res := make(map[string][32]byte)
 	err := filepath.WalkDir(folder, func(path string, d os.DirEntry, _ error) error {
 		// Skip anything that's exluded or not a regular file
-		for _, skip := range exlude {
-			if strings.HasPrefix(path, filepath.FromSlash(skip)) {
+		// Skip anything that's excluded or not a regular file
+		if slices.Contains(excludes, path) {
+			if d.IsDir() {
 				return filepath.SkipDir
 			}
+			return nil
 		}
 		if !d.Type().IsRegular() {
 			return nil
@@ -97,6 +72,6 @@ func DiffHashes(a map[string][32]byte, b map[string][32]byte) []string {
 			updates = append(updates, file)
 		}
 	}
-	sort.Strings(updates)
+	slices.Sort(updates)
 	return updates
 }

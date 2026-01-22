@@ -274,10 +274,10 @@ func checkAccumulator(e *era.Era) error {
 	for it.Next() {
 		// 1) next() walks the block index, so we're able to implicitly verify it.
 		if it.Error() != nil {
-			return fmt.Errorf("error reading block %d: %w", it.Number(), err)
+			return fmt.Errorf("error reading block %d: %w", it.Number(), it.Error())
 		}
 		block, receipts, err := it.BlockAndReceipts()
-		if it.Error() != nil {
+		if err != nil {
 			return fmt.Errorf("error reading block %d: %w", it.Number(), err)
 		}
 		// 2) recompute tx root and verify against header.
@@ -293,6 +293,9 @@ func checkAccumulator(e *era.Era) error {
 		hashes = append(hashes, block.Hash())
 		td.Add(td, block.Difficulty())
 		tds = append(tds, new(big.Int).Set(td))
+	}
+	if it.Error() != nil {
+		return fmt.Errorf("error reading block %d: %w", it.Number(), it.Error())
 	}
 	// 4+5) Verify accumulator and total difficulty.
 	got, err := era.ComputeAccumulator(hashes, tds)

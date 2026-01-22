@@ -52,15 +52,15 @@ var (
 	}
 )
 
-func TestTrieTracer(t *testing.T) {
-	testTrieTracer(t, tiny)
-	testTrieTracer(t, nonAligned)
-	testTrieTracer(t, standard)
+func TestTrieOpTracer(t *testing.T) {
+	testTrieOpTracer(t, tiny)
+	testTrieOpTracer(t, nonAligned)
+	testTrieOpTracer(t, standard)
 }
 
 // Tests if the trie diffs are tracked correctly. Tracer should capture
 // all non-leaf dirty nodes, no matter the node is embedded or not.
-func testTrieTracer(t *testing.T, vals []struct{ k, v string }) {
+func testTrieOpTracer(t *testing.T, vals []struct{ k, v string }) {
 	db := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
 	trie := NewEmpty(db)
 
@@ -68,8 +68,8 @@ func testTrieTracer(t *testing.T, vals []struct{ k, v string }) {
 	for _, val := range vals {
 		trie.MustUpdate([]byte(val.k), []byte(val.v))
 	}
-	insertSet := copySet(trie.tracer.inserts) // copy before commit
-	deleteSet := copySet(trie.tracer.deletes) // copy before commit
+	insertSet := copySet(trie.opTracer.inserts) // copy before commit
+	deleteSet := copySet(trie.opTracer.deletes) // copy before commit
 	root, nodes := trie.Commit(false)
 	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 
@@ -86,7 +86,7 @@ func testTrieTracer(t *testing.T, vals []struct{ k, v string }) {
 	for _, val := range vals {
 		trie.MustDelete([]byte(val.k))
 	}
-	insertSet, deleteSet = copySet(trie.tracer.inserts), copySet(trie.tracer.deletes)
+	insertSet, deleteSet = copySet(trie.opTracer.inserts), copySet(trie.opTracer.deletes)
 	if !compareSet(insertSet, nil) {
 		t.Fatal("Unexpected insertion set")
 	}
@@ -97,13 +97,13 @@ func testTrieTracer(t *testing.T, vals []struct{ k, v string }) {
 
 // Test that after inserting a new batch of nodes and deleting them immediately,
 // the trie tracer should be cleared normally as no operation happened.
-func TestTrieTracerNoop(t *testing.T) {
-	testTrieTracerNoop(t, tiny)
-	testTrieTracerNoop(t, nonAligned)
-	testTrieTracerNoop(t, standard)
+func TestTrieOpTracerNoop(t *testing.T) {
+	testTrieOpTracerNoop(t, tiny)
+	testTrieOpTracerNoop(t, nonAligned)
+	testTrieOpTracerNoop(t, standard)
 }
 
-func testTrieTracerNoop(t *testing.T, vals []struct{ k, v string }) {
+func testTrieOpTracerNoop(t *testing.T, vals []struct{ k, v string }) {
 	db := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
 	trie := NewEmpty(db)
 	for _, val := range vals {
@@ -112,22 +112,22 @@ func testTrieTracerNoop(t *testing.T, vals []struct{ k, v string }) {
 	for _, val := range vals {
 		trie.MustDelete([]byte(val.k))
 	}
-	if len(trie.tracer.inserts) != 0 {
+	if len(trie.opTracer.inserts) != 0 {
 		t.Fatal("Unexpected insertion set")
 	}
-	if len(trie.tracer.deletes) != 0 {
+	if len(trie.opTracer.deletes) != 0 {
 		t.Fatal("Unexpected deletion set")
 	}
 }
 
-// Tests if the accessList is correctly tracked.
-func TestAccessList(t *testing.T) {
-	testAccessList(t, tiny)
-	testAccessList(t, nonAligned)
-	testAccessList(t, standard)
+// Tests if the original value of trie nodes are correctly tracked.
+func TestPrevalueTracer(t *testing.T) {
+	testPrevalueTracer(t, tiny)
+	testPrevalueTracer(t, nonAligned)
+	testPrevalueTracer(t, standard)
 }
 
-func testAccessList(t *testing.T, vals []struct{ k, v string }) {
+func testPrevalueTracer(t *testing.T, vals []struct{ k, v string }) {
 	var (
 		db   = newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
 		trie = NewEmpty(db)
@@ -210,7 +210,7 @@ func testAccessList(t *testing.T, vals []struct{ k, v string }) {
 }
 
 // Tests origin values won't be tracked in Iterator or Prover
-func TestAccessListLeak(t *testing.T) {
+func TestPrevalueTracerLeak(t *testing.T) {
 	var (
 		db   = newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
 		trie = NewEmpty(db)
@@ -249,9 +249,9 @@ func TestAccessListLeak(t *testing.T) {
 	}
 	for _, c := range cases {
 		trie, _ = New(TrieID(root), db)
-		n1 := len(trie.tracer.accessList)
+		n1 := len(trie.prevalueTracer.data)
 		c.op(trie)
-		n2 := len(trie.tracer.accessList)
+		n2 := len(trie.prevalueTracer.data)
 
 		if n1 != n2 {
 			t.Fatalf("AccessList is leaked, prev %d after %d", n1, n2)

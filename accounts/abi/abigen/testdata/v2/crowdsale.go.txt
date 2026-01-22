@@ -360,7 +360,7 @@ func (CrowdsaleFundTransfer) ContractEventName() string {
 // Solidity: event FundTransfer(address backer, uint256 amount, bool isContribution)
 func (crowdsale *Crowdsale) UnpackFundTransferEvent(log *types.Log) (*CrowdsaleFundTransfer, error) {
 	event := "FundTransfer"
-	if log.Topics[0] != crowdsale.abi.Events[event].ID {
+	if len(log.Topics) == 0 || log.Topics[0] != crowdsale.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(CrowdsaleFundTransfer)

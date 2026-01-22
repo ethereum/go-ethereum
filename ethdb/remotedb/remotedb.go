@@ -140,6 +140,10 @@ func (db *Database) Close() error {
 	return nil
 }
 
+func (db *Database) AncientBytes(kind string, id, offset, length uint64) ([]byte, error) {
+	panic("not supported")
+}
+
 func New(client *rpc.Client) ethdb.Database {
 	if client == nil {
 		return nil

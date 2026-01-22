@@ -233,6 +233,9 @@ func (db *Database) DeleteRange(start, end []byte) error {
 			return err
 		}
 	}
+	if err := it.Error(); err != nil {
+		return err
+	}
 	return batch.Write()
 }
 

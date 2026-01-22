@@ -114,7 +114,7 @@ func TestCall(t *testing.T) {
 		byte(vm.PUSH1), 32,
 		byte(vm.PUSH1), 0,
 		byte(vm.RETURN),
-	})
+	}, tracing.CodeChangeUnspecified)
 
 	ret, _, err := Call(address, nil, &Config{State: state})
 	if err != nil {
@@ -150,8 +150,7 @@ func BenchmarkCall(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for j := 0; j < 400; j++ {
 			Execute(code, cpurchase, nil)
 			Execute(code, creceived, nil)
@@ -167,7 +166,7 @@ func benchmarkEVM_Create(bench *testing.B, code string) {
 	)
 
 	statedb.CreateAccount(sender)
-	statedb.SetCode(receiver, common.FromHex(code))
+	statedb.SetCode(receiver, common.FromHex(code), tracing.CodeChangeUnspecified)
 	runtimeConfig := Config{
 		Origin:      sender,
 		State:       statedb,
@@ -190,11 +189,9 @@ func benchmarkEVM_Create(bench *testing.B, code string) {
 		EVMConfig: vm.Config{},
 	}
 	// Warm up the intpools and stuff
-	bench.ResetTimer()
-	for i := 0; i < bench.N; i++ {
+	for bench.Loop() {
 		Call(receiver, []byte{}, &runtimeConfig)
 	}
-	bench.StopTimer()
 }
 
 func BenchmarkEVM_CREATE_500(bench *testing.B) {
@@ -232,9 +229,8 @@ func BenchmarkEVM_SWAP1(b *testing.B) {
 
 	b.Run("10k", func(b *testing.B) {
 		contractCode := swapContract(10_000)
-		state.SetCode(contractAddr, contractCode)
-
-		for i := 0; i < b.N; i++ {
+		state.SetCode(contractAddr, contractCode, tracing.CodeChangeUnspecified)
+		for b.Loop() {
 			_, _, err := Call(contractAddr, []byte{}, &Config{State: state})
 			if err != nil {
 				b.Fatal(err)
@@ -263,9 +259,8 @@ func BenchmarkEVM_RETURN(b *testing.B) {
 			b.ReportAllocs()
 
 			contractCode := returnContract(n)
-			state.SetCode(contractAddr, contractCode)
-
-			for i := 0; i < b.N; i++ {
+			state.SetCode(contractAddr, contractCode, tracing.CodeChangeUnspecified)
+			for b.Loop() {
 				ret, _, err := Call(contractAddr, []byte{}, &Config{State: state})
 				if err != nil {
 					b.Fatal(err)
@@ -314,6 +309,18 @@ func (d *dummyChain) GetHeader(h common.Hash, n uint64) *types.Header {
 }
 
 func (d *dummyChain) Config() *params.ChainConfig {
+	return nil
+}
+
+func (d *dummyChain) CurrentHeader() *types.Header {
+	return nil
+}
+
+func (d *dummyChain) GetHeaderByNumber(n uint64) *types.Header {
+	return d.GetHeader(common.Hash{}, n)
+}
+
+func (d *dummyChain) GetHeaderByHash(h common.Hash) *types.Header {
 	return nil
 }
 
@@ -422,17 +429,17 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode 
 			byte(vm.PUSH1), 0x00,
 			byte(vm.PUSH1), 0x00,
 			byte(vm.REVERT),
-		})
+		}, tracing.CodeChangeUnspecified)
 	}
 
 	//cfg.State.CreateAccount(cfg.Origin)
 	// set the receiver's (the executing contract) code for execution.
-	cfg.State.SetCode(destination, code)
+	cfg.State.SetCode(destination, code, tracing.CodeChangeUnspecified)
 	Call(destination, nil, cfg)
 
 	b.Run(name, func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			Call(destination, nil, cfg)
 		}
 	})
@@ -772,12 +779,12 @@ func TestRuntimeJSTracer(t *testing.T) {
 	for i, jsTracer := range jsTracers {
 		for j, tc := range tests {
 			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
-			statedb.SetCode(main, tc.code)
-			statedb.SetCode(common.HexToAddress("0xbb"), calleeCode)
-			statedb.SetCode(common.HexToAddress("0xcc"), calleeCode)
-			statedb.SetCode(common.HexToAddress("0xdd"), calleeCode)
-			statedb.SetCode(common.HexToAddress("0xee"), calleeCode)
-			statedb.SetCode(common.HexToAddress("0xff"), suicideCode)
+			statedb.SetCode(main, tc.code, tracing.CodeChangeUnspecified)
+			statedb.SetCode(common.HexToAddress("0xbb"), calleeCode, tracing.CodeChangeUnspecified)
+			statedb.SetCode(common.HexToAddress("0xcc"), calleeCode, tracing.CodeChangeUnspecified)
+			statedb.SetCode(common.HexToAddress("0xdd"), calleeCode, tracing.CodeChangeUnspecified)
+			statedb.SetCode(common.HexToAddress("0xee"), calleeCode, tracing.CodeChangeUnspecified)
+			statedb.SetCode(common.HexToAddress("0xff"), suicideCode, tracing.CodeChangeUnspecified)
 
 			tracer, err := tracers.DefaultDirectory.New(jsTracer, new(tracers.Context), nil, params.MergedTestChainConfig)
 			if err != nil {
@@ -862,8 +869,8 @@ func BenchmarkTracerStepVsCallFrame(b *testing.B) {
 // delegation designator incurs the correct amount of gas based on the tracer.
 func TestDelegatedAccountAccessCost(t *testing.T) {
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
-	statedb.SetCode(common.HexToAddress("0xff"), types.AddressToDelegation(common.HexToAddress("0xaa")))
-	statedb.SetCode(common.HexToAddress("0xaa"), program.New().Return(0, 0).Bytes())
+	statedb.SetCode(common.HexToAddress("0xff"), types.AddressToDelegation(common.HexToAddress("0xaa")), tracing.CodeChangeUnspecified)
+	statedb.SetCode(common.HexToAddress("0xaa"), program.New().Return(0, 0).Bytes(), tracing.CodeChangeUnspecified)
 
 	for i, tc := range []struct {
 		code []byte

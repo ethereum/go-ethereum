@@ -17,6 +17,9 @@
 package core
 
 import (
+	"time"
+
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -27,9 +30,18 @@ type NewTxsEvent struct{ Txs []*types.Transaction }
 type RemovedLogsEvent struct{ Logs []*types.Log }
 
 type ChainEvent struct {
-	Header *types.Header
+	Header       *types.Header
+	Receipts     []*types.Receipt
+	Transactions []*types.Transaction
 }
 
 type ChainHeadEvent struct {
 	Header *types.Header
+}
+
+// NewPayloadEvent is posted when engine_newPayloadVX processes a block.
+type NewPayloadEvent struct {
+	Hash           common.Hash
+	Number         uint64
+	ProcessingTime time.Duration
 }

@@ -170,18 +170,19 @@ func (s *stateSet) accountList() []common.Hash {
 	if list != nil {
 		return list
 	}
-	// No old sorted account list exists, generate a new one. It's possible that
-	// multiple threads waiting for the write lock may regenerate the list
-	// multiple times, which is acceptable.
 	s.listLock.Lock()
 	defer s.listLock.Unlock()
 
+	// Double check after acquiring the write lock
+	if list = s.accountListSorted; list != nil {
+		return list
+	}
 	list = slices.SortedFunc(maps.Keys(s.accountData), common.Hash.Cmp)
 	s.accountListSorted = list
 	return list
 }
 
-// StorageList returns a sorted list of all storage slot hashes in this state set
+// storageList returns a sorted list of all storage slot hashes in this state set
 // for the given account. The returned list will include the hash of deleted
 // storage slot.
 //
@@ -200,12 +201,13 @@ func (s *stateSet) storageList(accountHash common.Hash) []common.Hash {
 	}
 	s.listLock.RUnlock()
 
-	// No old sorted account list exists, generate a new one. It's possible that
-	// multiple threads waiting for the write lock may regenerate the list
-	// multiple times, which is acceptable.
 	s.listLock.Lock()
 	defer s.listLock.Unlock()
 
+	// Double check after acquiring the write lock
+	if list := s.storageListSorted[accountHash]; list != nil {
+		return list
+	}
 	list := slices.SortedFunc(maps.Keys(s.storageData[accountHash]), common.Hash.Cmp)
 	s.storageListSorted[accountHash] = list
 	return list

@@ -33,14 +33,14 @@ import (
 // Note, this must not be used in live code. If the forkchcoice endpoint where
 // to use this instead of giving us the payload first, then essentially nobody
 // in the network would have the block yet that we'd attempt to retrieve.
-func (d *Downloader) BeaconDevSync(mode SyncMode, header *types.Header) error {
+func (d *Downloader) BeaconDevSync(header *types.Header) error {
 	// Be very loud that this code should not be used in a live node
 	log.Warn("----------------------------------")
 	log.Warn("Beacon syncing with hash as target", "number", header.Number, "hash", header.Hash())
 	log.Warn("This is unhealthy for a live node!")
 	log.Warn("This is incompatible with the consensus layer!")
 	log.Warn("----------------------------------")
-	return d.BeaconSync(mode, header, header)
+	return d.BeaconSync(header, header)
 }
 
 // GetHeader tries to retrieve the header with a given hash from a random peer.
@@ -52,7 +52,8 @@ func (d *Downloader) GetHeader(hash common.Hash) (*types.Header, error) {
 
 	for _, peer := range d.peers.peers {
 		if peer == nil {
-			return nil, errors.New("could not find peer")
+			log.Warn("Encountered nil peer while retrieving sync target", "hash", hash)
+			continue
 		}
 		// Found a peer, attempt to retrieve the header whilst blocking and
 		// retry if it fails for whatever reason

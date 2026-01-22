@@ -17,9 +17,12 @@
 package eth
 
 import (
+	"maps"
 	"math/big"
+	"math/rand"
 	"sort"
 	"sync"
+	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -29,8 +32,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
@@ -157,6 +163,15 @@ func (p *testTxPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bo
 	return p.txFeed.Subscribe(ch)
 }
 
+// FilterType should check whether the pool supports the given type of transactions.
+func (p *testTxPool) FilterType(kind byte) bool {
+	switch kind {
+	case types.LegacyTxType, types.AccessListTxType, types.DynamicFeeTxType, types.BlobTxType, types.SetCodeTxType:
+		return true
+	}
+	return false
+}
+
 // testHandler is a live implementation of the Ethereum protocol handler, just
 // preinitialized with some sane testing defaults and the transaction pool mocked
 // out.
@@ -168,13 +183,13 @@ type testHandler struct {
 }
 
 // newTestHandler creates a new handler for testing purposes with no blocks.
-func newTestHandler() *testHandler {
-	return newTestHandlerWithBlocks(0)
+func newTestHandler(mode ethconfig.SyncMode) *testHandler {
+	return newTestHandlerWithBlocks(0, mode)
 }
 
 // newTestHandlerWithBlocks creates a new handler for testing purposes, with a
 // given number of initial blocks.
-func newTestHandlerWithBlocks(blocks int) *testHandler {
+func newTestHandlerWithBlocks(blocks int, mode ethconfig.SyncMode) *testHandler {
 	// Create a database pre-initialize with a genesis block
 	db := rawdb.NewMemoryDatabase()
 	gspec := &core.Genesis{
@@ -194,7 +209,7 @@ func newTestHandlerWithBlocks(blocks int) *testHandler {
 		Chain:      chain,
 		TxPool:     txpool,
 		Network:    1,
-		Sync:       ethconfig.SnapSync,
+		Sync:       mode,
 		BloomCache: 1,
 	})
 	handler.Start(1000)
@@ -211,4 +226,103 @@ func newTestHandlerWithBlocks(blocks int) *testHandler {
 func (b *testHandler) close() {
 	b.handler.Stop()
 	b.chain.Stop()
+}
+
+func TestBroadcastChoice(t *testing.T) {
+	self := enode.HexID("1111111111111111111111111111111111111111111111111111111111111111")
+	choice49 := newBroadcastChoice(self, [16]byte{1})
+	choice50 := newBroadcastChoice(self, [16]byte{1})
+
+	// Create test peers and random tx sender addresses.
+	rand := rand.New(rand.NewSource(33))
+	txsenders := make([]common.Address, 400)
+	for i := range txsenders {
+		rand.Read(txsenders[i][:])
+	}
+	peers := createTestPeers(rand, 50)
+	defer closePeers(peers)
+
+	// Evaluate choice49 first.
+	expectedCount := 7 // sqrt(49)
+	var chosen49 = make([]map[*ethPeer]struct{}, len(txsenders))
+	for i, txSender := range txsenders {
+		set := choice49.choosePeers(peers[:49], txSender)
+		chosen49[i] = maps.Clone(set)
+
+		// Sanity check choices. Here we check that the function selects different peers
+		// for different transaction senders.
+		if len(set) != expectedCount {
+			t.Fatalf("choice49 produced wrong count %d, want %d", len(set), expectedCount)
+		}
+		if i > 0 && maps.Equal(set, chosen49[i-1]) {
+			t.Errorf("choice49 for tx %d is equal to tx %d", i, i-1)
+		}
+	}
+
+	// Evaluate choice50 for the same peers and transactions. It should always yield more
+	// peers than choice49, and the chosen set should be a superset of choice49's.
+	for i, txSender := range txsenders {
+		set := choice50.choosePeers(peers[:50], txSender)
+		if len(set) < len(chosen49[i]) {
+			t.Errorf("for tx %d, choice50 has less peers than choice49", i)
+		}
+		for p := range chosen49[i] {
+			if _, ok := set[p]; !ok {
+				t.Errorf("for tx %d, choice50 did not choose peer %v, but choice49 did", i, p.ID())
+			}
+		}
+	}
+}
+
+func BenchmarkBroadcastChoice(b *testing.B) {
+	b.Run("50", func(b *testing.B) {
+		benchmarkBroadcastChoice(b, 50)
+	})
+	b.Run("200", func(b *testing.B) {
+		benchmarkBroadcastChoice(b, 200)
+	})
+	b.Run("500", func(b *testing.B) {
+		benchmarkBroadcastChoice(b, 500)
+	})
+}
+
+// This measures the overhead of sending one transaction to N peers.
+func benchmarkBroadcastChoice(b *testing.B, npeers int) {
+	rand := rand.New(rand.NewSource(33))
+	peers := createTestPeers(rand, npeers)
+	defer closePeers(peers)
+
+	txsenders := make([]common.Address, b.N)
+	for i := range txsenders {
+		rand.Read(txsenders[i][:])
+	}
+
+	self := enode.HexID("1111111111111111111111111111111111111111111111111111111111111111")
+	choice := newBroadcastChoice(self, [16]byte{1})
+
+	b.ResetTimer()
+	for i := range b.N {
+		set := choice.choosePeers(peers, txsenders[i])
+		if len(set) == 0 {
+			b.Fatal("empty result")
+		}
+	}
+}
+
+func createTestPeers(rand *rand.Rand, n int) []*ethPeer {
+	peers := make([]*ethPeer, n)
+	for i := range peers {
+		var id enode.ID
+		rand.Read(id[:])
+		p2pPeer := p2p.NewPeer(id, "test", nil)
+		ep := eth.NewPeer(eth.ETH69, p2pPeer, nil, nil)
+		peers[i] = &ethPeer{Peer: ep}
+	}
+	return peers
+}
+
+func closePeers(peers []*ethPeer) {
+	for _, p := range peers {
+		p.Close()
+	}
 }

@@ -33,7 +33,10 @@
         "contractAddress": "0x0000000000000000000000000000000000000000",
         "gasUsed": "0xa865",
         "effectiveGasPrice": null,
-        "blockHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "blobGasUsed": "0x20000",
+        "blobGasPrice": "0x1",
+        "blockHash": "0x1337000000000000000000000000000000000000000000000000000000000000",
+        "blockNumber": "0x1",
         "transactionIndex": "0x0"
       }
     ],

@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -187,4 +188,40 @@ func createTestLegacyTxInner() *LegacyTx {
 		GasPrice: big.NewInt(params.GWei),
 		Data:     nil,
 	}
+}
+
+func Benchmark_modernSigner_Equal(b *testing.B) {
+	signer1 := newModernSigner(big.NewInt(1), forks.Amsterdam)
+	signer2 := newModernSigner(big.NewInt(1), forks.Amsterdam)
+
+	for b.Loop() {
+		if !signer1.Equal(signer2) {
+			b.Fatal("expected signers to be equal")
+		}
+	}
+}
+
+func TestSignatureValuesError(t *testing.T) {
+	// 1. Setup a valid transaction
+	tx := NewTransaction(0, common.Address{}, big.NewInt(0), 0, big.NewInt(0), nil)
+	signer := HomesteadSigner{}
+
+	// 2. Call WithSignature with invalid length sig (not 65 bytes)
+	invalidSig := make([]byte, 64)
+
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("Panicked for invalid signature length, expected error: %v", r)
+			}
+		}()
+		_, err := tx.WithSignature(signer, invalidSig)
+		if err == nil {
+			t.Fatal("Expected error for invalid signature length, got nil")
+		} else {
+			// This is just a sanity check to ensure we got an error,
+			// the exact error message is verified in unit tests elsewhere if needed.
+			t.Logf("Got expected error: %v", err)
+		}
+	}()
 }

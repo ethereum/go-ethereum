@@ -105,8 +105,7 @@ func benchmarkBlobToCommitment(b *testing.B, ckzg bool) {
 
 	blob := randBlob()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		BlobToCommitment(blob)
 	}
 }
@@ -125,8 +124,7 @@ func benchmarkComputeProof(b *testing.B, ckzg bool) {
 		point = randFieldElement()
 	)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ComputeProof(blob, point)
 	}
 }
@@ -147,8 +145,7 @@ func benchmarkVerifyProof(b *testing.B, ckzg bool) {
 		proof, claim, _ = ComputeProof(blob, point)
 	)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		VerifyProof(commitment, point, claim, proof)
 	}
 }
@@ -167,8 +164,7 @@ func benchmarkComputeBlobProof(b *testing.B, ckzg bool) {
 		commitment, _ = BlobToCommitment(blob)
 	)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ComputeBlobProof(blob, commitment)
 	}
 }
@@ -188,8 +184,7 @@ func benchmarkVerifyBlobProof(b *testing.B, ckzg bool) {
 		proof, _      = ComputeBlobProof(blob, commitment)
 	)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		VerifyBlobProof(blob, commitment, proof)
 	}
 }
@@ -228,5 +223,33 @@ func testKZGCells(t *testing.T, ckzg bool) {
 	blobs := []Blob{*blob1, *blob2}
 	if err := VerifyCellProofs(blobs, []Commitment{commitment1, commitment2}, proofs); err != nil {
 		t.Fatalf("failed to verify KZG proof at point: %v", err)
+	}
+}
+
+// goos: darwin
+// goarch: arm64
+// pkg: github.com/ethereum/go-ethereum/crypto/kzg4844
+// cpu: Apple M1 Pro
+// BenchmarkGOKZGComputeCellProofs
+// BenchmarkGOKZGComputeCellProofs-8   	       8	 139012286 ns/op
+func BenchmarkGOKZGComputeCellProofs(b *testing.B) { benchmarkComputeCellProofs(b, false) }
+func BenchmarkCKZGComputeCellProofs(b *testing.B)  { benchmarkComputeCellProofs(b, true) }
+
+func benchmarkComputeCellProofs(b *testing.B, ckzg bool) {
+	if ckzg && !ckzgAvailable {
+		b.Skip("CKZG unavailable in this test build")
+	}
+	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
+	useCKZG.Store(ckzg)
+
+	blob := randBlob()
+	_, _ = ComputeCellProofs(blob) // for kzg initialization
+	b.ResetTimer()
+
+	for b.Loop() {
+		_, err := ComputeCellProofs(blob)
+		if err != nil {
+			b.Fatalf("failed to create KZG proof at point: %v", err)
+		}
 	}
 }

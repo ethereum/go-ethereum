@@ -88,7 +88,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 			name: "custom block in DB, genesis == nil",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
 				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
-				customg.Commit(db, tdb)
+				customg.Commit(db, tdb, nil)
 				return SetupGenesisBlock(db, tdb, nil)
 			},
 			wantHash:   customghash,
@@ -98,7 +98,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 			name: "custom block in DB, genesis == sepolia",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
 				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
-				customg.Commit(db, tdb)
+				customg.Commit(db, tdb, nil)
 				return SetupGenesisBlock(db, tdb, DefaultSepoliaGenesisBlock())
 			},
 			wantErr: &GenesisMismatchError{Stored: customghash, New: params.SepoliaGenesisHash},
@@ -107,7 +107,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 			name: "custom block in DB, genesis == hoodi",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
 				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
-				customg.Commit(db, tdb)
+				customg.Commit(db, tdb, nil)
 				return SetupGenesisBlock(db, tdb, DefaultHoodiGenesisBlock())
 			},
 			wantErr: &GenesisMismatchError{Stored: customghash, New: params.HoodiGenesisHash},
@@ -116,7 +116,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 			name: "compatible config in DB",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
 				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
-				oldcustomg.Commit(db, tdb)
+				oldcustomg.Commit(db, tdb, nil)
 				return SetupGenesisBlock(db, tdb, &customg)
 			},
 			wantHash:   customghash,
@@ -128,7 +128,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 				// Commit the 'old' genesis block with Homestead transition at #2.
 				// Advance to block #4, past the homestead transition block of customg.
 				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
-				oldcustomg.Commit(db, tdb)
+				oldcustomg.Commit(db, tdb, nil)
 
 				bc, _ := NewBlockChain(db, &oldcustomg, ethash.NewFullFaker(), DefaultConfig().WithStateScheme(scheme))
 				defer bc.Stop()
@@ -308,7 +308,7 @@ func TestVerkleGenesisCommit(t *testing.T) {
 		},
 	}
 
-	expected := common.FromHex("018d20eebb130b5e2b796465fe36aafab650650729a92435aec071bf2386f080")
+	expected := common.FromHex("19056b480530799a4fdaa9fd9407043b965a3a5c37b4d2a1a9a4f3395a327561")
 	got := genesis.ToBlock().Root().Bytes()
 	if !bytes.Equal(got, expected) {
 		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, got)

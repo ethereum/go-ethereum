@@ -328,12 +328,6 @@ func (t *UDPv5) TalkRequestToID(id enode.ID, addr netip.AddrPort, protocol strin
 
 // RandomNodes returns an iterator that finds random nodes in the DHT.
 func (t *UDPv5) RandomNodes() enode.Iterator {
-	if t.tab.len() == 0 {
-		// All nodes were dropped, refresh. The very first query will hit this
-		// case and run the bootstrapping logic.
-		<-t.tab.refresh()
-	}
-
 	return newLookupIterator(t.closeCtx, t.newRandomLookup)
 }
 

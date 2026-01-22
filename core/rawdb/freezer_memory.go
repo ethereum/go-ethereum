@@ -91,6 +91,13 @@ func (t *memoryTable) truncateHead(items uint64) error {
 	if items < t.offset {
 		return errors.New("truncation below tail")
 	}
+	for i := int(items - t.offset); i < len(t.data); i++ {
+		if t.size > uint64(len(t.data[i])) {
+			t.size -= uint64(len(t.data[i]))
+		} else {
+			t.size = 0
+		}
+	}
 	t.data = t.data[:items-t.offset]
 	t.items = items
 	return nil
@@ -107,6 +114,13 @@ func (t *memoryTable) truncateTail(items uint64) error {
 	}
 	if t.items < items {
 		return errors.New("truncation above head")
+	}
+	for i := uint64(0); i < items-t.offset; i++ {
+		if t.size > uint64(len(t.data[i])) {
+			t.size -= uint64(len(t.data[i]))
+		} else {
+			t.size = 0
+		}
 	}
 	t.data = t.data[items-t.offset:]
 	t.offset = items
@@ -411,4 +425,29 @@ func (f *MemoryFreezer) Reset() error {
 // Since the memory freezer is ephemeral, an empty string is returned.
 func (f *MemoryFreezer) AncientDatadir() (string, error) {
 	return "", nil
+}
+
+// AncientBytes retrieves the value segment of the element specified by the id
+// and value offsets.
+func (f *MemoryFreezer) AncientBytes(kind string, id, offset, length uint64) ([]byte, error) {
+	f.lock.RLock()
+	defer f.lock.RUnlock()
+
+	table := f.tables[kind]
+	if table == nil {
+		return nil, errUnknownTable
+	}
+	entries, err := table.retrieve(id, 1, 0)
+	if err != nil {
+		return nil, err
+	}
+	if len(entries) == 0 {
+		return nil, errOutOfBounds
+	}
+	data := entries[0]
+
+	if offset > uint64(len(data)) || offset+length > uint64(len(data)) {
+		return nil, fmt.Errorf("requested range out of bounds: item size %d, offset %d, length %d", len(data), offset, length)
+	}
+	return data[offset : offset+length], nil
 }

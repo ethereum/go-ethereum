@@ -59,6 +59,8 @@ var (
 		Flags: slices.Concat([]cli.Flag{
 			utils.CachePreimagesFlag,
 			utils.OverrideOsaka,
+			utils.OverrideBPO1,
+			utils.OverrideBPO2,
 			utils.OverrideVerkle,
 		}, utils.DatabaseFlags),
 		Description: `
@@ -94,6 +96,7 @@ if one is set.  Otherwise it prints the genesis from the datadir.`,
 			utils.CacheNoPrefetchFlag,
 			utils.CachePreimagesFlag,
 			utils.NoCompactionFlag,
+			utils.LogSlowBlockFlag,
 			utils.MetricsEnabledFlag,
 			utils.MetricsEnabledExpensiveFlag,
 			utils.MetricsHTTPFlag,
@@ -108,6 +111,7 @@ if one is set.  Otherwise it prints the genesis from the datadir.`,
 			utils.MetricsInfluxDBTokenFlag,
 			utils.MetricsInfluxDBBucketFlag,
 			utils.MetricsInfluxDBOrganizationFlag,
+			utils.StateSizeTrackingFlag,
 			utils.TxLookupLimitFlag,
 			utils.VMTraceFlag,
 			utils.VMTraceJsonConfigFlag,
@@ -116,6 +120,8 @@ if one is set.  Otherwise it prints the genesis from the datadir.`,
 			utils.LogNoHistoryFlag,
 			utils.LogExportCheckpointsFlag,
 			utils.StateHistoryFlag,
+			utils.TrienodeHistoryFlag,
+			utils.TrienodeHistoryFullValueCheckpointFlag,
 		}, utils.DatabaseFlags, debug.Flags),
 		Before: func(ctx *cli.Context) error {
 			flags.MigrateGlobalFlags(ctx)
@@ -273,6 +279,14 @@ func initGenesis(ctx *cli.Context) error {
 		v := ctx.Uint64(utils.OverrideOsaka.Name)
 		overrides.OverrideOsaka = &v
 	}
+	if ctx.IsSet(utils.OverrideBPO1.Name) {
+		v := ctx.Uint64(utils.OverrideBPO1.Name)
+		overrides.OverrideBPO1 = &v
+	}
+	if ctx.IsSet(utils.OverrideBPO2.Name) {
+		v := ctx.Uint64(utils.OverrideBPO2.Name)
+		overrides.OverrideBPO2 = &v
+	}
 	if ctx.IsSet(utils.OverrideVerkle.Name) {
 		v := ctx.Uint64(utils.OverrideVerkle.Name)
 		overrides.OverrideVerkle = &v
@@ -281,10 +295,10 @@ func initGenesis(ctx *cli.Context) error {
 	chaindb := utils.MakeChainDatabase(ctx, stack, false)
 	defer chaindb.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
+	triedb := utils.MakeTrieDatabase(ctx, stack, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
 	defer triedb.Close()
 
-	_, hash, compatErr, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides)
+	_, hash, compatErr, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides, nil)
 	if err != nil {
 		utils.Fatalf("Failed to write genesis block: %v", err)
 	}
@@ -635,7 +649,7 @@ func dump(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	triedb := utils.MakeTrieDatabase(ctx, db, true, true, false) // always enable preimage lookup
+	triedb := utils.MakeTrieDatabase(ctx, stack, db, true, true, false) // always enable preimage lookup
 	defer triedb.Close()
 
 	state, err := state.New(root, state.NewDatabase(triedb, nil))
@@ -704,7 +718,7 @@ func pruneHistory(ctx *cli.Context) error {
 	return nil
 }
 
-// downladEra is the era1 file downloader tool.
+// downloadEra is the era1 file downloader tool.
 func downloadEra(ctx *cli.Context) error {
 	flags.CheckExclusive(ctx, eraBlockFlag, eraEpochFlag, eraAllFlag)
 

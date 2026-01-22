@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/blsync"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -209,7 +208,7 @@ func constructDevModeBanner(ctx *cli.Context, cfg gethConfig) string {
        0x%x (10^49 ETH)
 `, cfg.Eth.Miner.PendingFeeRecipient)
 		if cfg.Eth.Miner.PendingFeeRecipient == utils.DeveloperAddr {
-			devModeBanner += fmt.Sprintf(` 
+			devModeBanner += fmt.Sprintf(`
        Private Key
        ------------------
        0x%x
@@ -226,6 +225,14 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	if ctx.IsSet(utils.OverrideOsaka.Name) {
 		v := ctx.Uint64(utils.OverrideOsaka.Name)
 		cfg.Eth.OverrideOsaka = &v
+	}
+	if ctx.IsSet(utils.OverrideBPO1.Name) {
+		v := ctx.Uint64(utils.OverrideBPO1.Name)
+		cfg.Eth.OverrideBPO1 = &v
+	}
+	if ctx.IsSet(utils.OverrideBPO2.Name) {
+		v := ctx.Uint64(utils.OverrideBPO2.Name)
+		cfg.Eth.OverrideBPO2 = &v
 	}
 	if ctx.IsSet(utils.OverrideVerkle.Name) {
 		v := ctx.Uint64(utils.OverrideVerkle.Name)
@@ -265,11 +272,11 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	// Configure synchronization override service
 	var synctarget common.Hash
 	if ctx.IsSet(utils.SyncTargetFlag.Name) {
-		hex := hexutil.MustDecode(ctx.String(utils.SyncTargetFlag.Name))
-		if len(hex) != common.HashLength {
-			utils.Fatalf("invalid sync target length: have %d, want %d", len(hex), common.HashLength)
+		target := ctx.String(utils.SyncTargetFlag.Name)
+		if !common.IsHexHash(target) {
+			utils.Fatalf("sync target hash is not a valid hex hash: %s", target)
 		}
-		synctarget = common.BytesToHash(hex)
+		synctarget = common.HexToHash(target)
 	}
 	utils.RegisterSyncOverrideService(stack, eth, synctarget, ctx.Bool(utils.ExitWhenSyncedFlag.Name))
 

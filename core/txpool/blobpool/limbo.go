@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/billy"
 )
@@ -30,11 +31,11 @@ import (
 // to which it belongs as well as the block number in which it was included for
 // finality eviction.
 type limboBlob struct {
-	TxHash common.Hash        // Owner transaction's hash to support resurrecting reorged txs
-	Block  uint64             // Block in which the blob transaction was included
-	Tx     *types.Transaction `rlp:"omitempty"` // After this commitment the Tx field is optional, as the TxMeta contains the tx metadata.
-	TxMeta *blobTxMeta        `rlp:"omitempty"` // Optional blob transaction metadata.
-	id     uint64             // the billy id of limboBlob
+	TxHash common.Hash // Owner transaction's hash to support resurrecting reorged txs
+	Block  uint64      // Block in which the blob transaction was included
+	Tx     *types.Transaction
+	TxMeta *blobTxMeta `rlp:"omitempty"` // Optional blob transaction metadata.
+	id     uint64      // the billy id of limboBlob
 }
 
 // limbo is a light, indexed database to temporarily store recently included
@@ -46,10 +47,20 @@ type limbo struct {
 }
 
 // newLimbo opens and indexes a set of limboed blob transactions.
-func newLimbo(datadir string, maxBlobsPerTransaction int) (*limbo, error) {
+func newLimbo(config *params.ChainConfig, datadir string) (*limbo, error) {
 	l := &limbo{
 		index: make(map[common.Hash]*limboBlob),
 	}
+
+	// Create new slotter for pre-Osaka blob configuration.
+	slotter := newSlotter(params.BlobTxMaxBlobs)
+
+	// See if we need to migrate the limbo after fusaka.
+	slotter, err := tryMigrate(config, slotter, datadir)
+	if err != nil {
+		return nil, err
+	}
+
 	// Index all limboed blobs on disk and delete anything unprocessable
 	var fails []uint64
 	index := func(id uint64, size uint32, data []byte) {
@@ -57,13 +68,7 @@ func newLimbo(datadir string, maxBlobsPerTransaction int) (*limbo, error) {
 			fails = append(fails, id)
 		}
 	}
-	store, err := billy.Open(billy.Options{Path: datadir, Repair: true}, func() (size uint32, done bool) {
-		// 8*6: Total size of uint64.
-		// 4: The size of uint32.
-		// 32*4: The max total size of big.Int.
-		// 32*(maxBlobsPerTransaction+2): The total size of hashes.
-		return 8*6 + 4 + 32*4 + 32*uint32(maxBlobsPerTransaction+2), true
-	}, index)
+	store, err := billy.Open(billy.Options{Path: datadir, Repair: true}, slotter, index)
 	if err != nil {
 		return nil, err
 	}
@@ -104,22 +109,10 @@ func (l *limbo) parseBlob(id uint64, data []byte) error {
 		log.Error("Dropping duplicate blob limbo entry", "owner", item.TxHash, "id", id)
 		return errors.New("duplicate blob")
 	}
-	// Delete tx and set id.
 	item.id = id
 	l.index[item.TxHash] = item
 
 	return nil
-}
-
-// existsAndSet checks whether a blob transaction is already tracked by the limbo.
-func (l *limbo) existsAndSet(meta *blobTxMeta) bool {
-	if item := l.index[meta.hash]; item != nil {
-		if item.TxMeta == nil {
-			item.TxMeta, item.Tx = meta, nil
-		}
-		return true
-	}
-	return false
 }
 
 // setTxMeta attempts to repair the limbo by re-encoding all transactions that are
@@ -133,6 +126,7 @@ func (l *limbo) setTxMeta(store billy.Database) error {
 			continue
 		}
 		tx := item.Tx
+		item.Tx = nil // Clear the in-memory tx
 		// Transaction permitted into the pool from a nonce and cost perspective,
 		// insert it into the database and update the indices
 		blob, err := rlp.EncodeToBytes(tx)
@@ -198,13 +192,13 @@ func (l *limbo) push(meta *blobTxMeta, block uint64) error {
 // pull retrieves a previously pushed set of blobs back from the limbo, removing
 // it at the same time. This method should be used when a previously included blob
 // transaction gets reorged out.
-func (l *limbo) pull(txhash common.Hash) (*blobTxMeta, error) {
+func (l *limbo) pull(tx common.Hash) (*blobTxMeta, error) {
 	// If the blobs are not tracked by the limbo, there's not much to do. This
 	// can happen for example if a blob transaction is mined without pushing it
 	// into the network first.
-	item, ok := l.index[txhash]
+	item, ok := l.index[tx]
 	if !ok {
-		log.Trace("Limbo cannot pull non-tracked blobs", "tx", txhash)
+		log.Trace("Limbo cannot pull non-tracked blobs", "tx", tx)
 		return nil, errors.New("unseen blob transaction")
 	}
 	if err := l.drop(item.TxHash); err != nil {
@@ -246,6 +240,24 @@ func (l *limbo) update(txhash common.Hash, block uint64) {
 	log.Trace("Blob transaction updated in limbo", "tx", txhash, "old-block", item.Block, "new-block", block)
 }
 
+// getAndDrop retrieves a blob item from the limbo store and deletes it both from
+// the store and indices.
+func (l *limbo) getAndDrop(id uint64) (*limboBlob, error) {
+	data, err := l.store.Get(id)
+	if err != nil {
+		return nil, err
+	}
+	item := new(limboBlob)
+	if err = rlp.DecodeBytes(data, item); err != nil {
+		return nil, err
+	}
+	delete(l.index, item.TxHash)
+	if err := l.store.Delete(id); err != nil {
+		return nil, err
+	}
+	return item, nil
+}
+
 // drop removes the blob metadata from the limbo.
 func (l *limbo) drop(txhash common.Hash) error {
 	if item, ok := l.index[txhash]; ok {
@@ -278,7 +290,7 @@ func (l *limbo) setAndIndex(meta *blobTxMeta, block uint64) error {
 	if err != nil {
 		return err
 	}
-	// Delete tx and set id.
+	// Set the in-memory index
 	item.id = id
 	l.index[txhash] = item
 

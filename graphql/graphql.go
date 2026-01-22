@@ -272,7 +272,7 @@ func (t *Transaction) GasPrice(ctx context.Context) hexutil.Big {
 		return hexutil.Big{}
 	}
 	switch tx.Type() {
-	case types.DynamicFeeTxType:
+	case types.DynamicFeeTxType, types.BlobTxType, types.SetCodeTxType:
 		if block != nil {
 			if baseFee, _ := block.BaseFeePerGas(ctx); baseFee != nil {
 				// price = min(gasTipCap + baseFee, gasFeeCap)
@@ -575,6 +575,9 @@ func (t *Transaction) getLogs(ctx context.Context, hash common.Hash) (*[]*Log, e
 
 func (t *Transaction) Type(ctx context.Context) *hexutil.Uint64 {
 	tx, _ := t.resolve(ctx)
+	if tx == nil {
+		return nil
+	}
 	txType := hexutil.Uint64(tx.Type())
 	return &txType
 }
@@ -703,6 +706,9 @@ func (b *Block) resolveHeader(ctx context.Context) (*types.Header, error) {
 	b.header, err = b.r.backend.HeaderByNumberOrHash(ctx, *b.numberOrHash)
 	if err != nil {
 		return nil, err
+	}
+	if b.header == nil {
+		return nil, nil
 	}
 	if b.hash == (common.Hash{}) {
 		b.hash = b.header.Hash()
@@ -1427,7 +1433,7 @@ func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria 
 		topics = *args.Filter.Topics
 	}
 	// Construct the range filter
-	filter := r.filterSystem.NewRangeFilter(begin, end, addresses, topics)
+	filter := r.filterSystem.NewRangeFilter(begin, end, addresses, topics, 0)
 	return runFilter(ctx, r, filter)
 }
 

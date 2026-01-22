@@ -114,13 +114,14 @@ func (tracker *TxTracker) TrackAll(txs []*types.Transaction) {
 }
 
 // recheck checks and returns any transactions that needs to be resubmitted.
-func (tracker *TxTracker) recheck(journalCheck bool) (resubmits []*types.Transaction, rejournal map[common.Address]types.Transactions) {
+func (tracker *TxTracker) recheck(journalCheck bool) []*types.Transaction {
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 
 	var (
 		numStales = 0
 		numOk     = 0
+		resubmits []*types.Transaction
 	)
 	for sender, txs := range tracker.byAddr {
 		// Wipe the stales
@@ -141,7 +142,7 @@ func (tracker *TxTracker) recheck(journalCheck bool) (resubmits []*types.Transac
 	}
 
 	if journalCheck { // rejournal
-		rejournal = make(map[common.Address]types.Transactions)
+		rejournal := make(map[common.Address]types.Transactions)
 		for _, tx := range tracker.all {
 			addr, _ := types.Sender(tracker.signer, tx)
 			rejournal[addr] = append(rejournal[addr], tx)
@@ -153,10 +154,18 @@ func (tracker *TxTracker) recheck(journalCheck bool) (resubmits []*types.Transac
 				return int(a.Nonce() - b.Nonce())
 			})
 		}
+		// Rejournal the tracker while holding the lock. No new transactions will
+		// be added to the old journal during this period, preventing any potential
+		// transaction loss.
+		if tracker.journal != nil {
+			if err := tracker.journal.rotate(rejournal); err != nil {
+				log.Warn("Transaction journal rotation failed", "err", err)
+			}
+		}
 	}
 	localGauge.Update(int64(len(tracker.all)))
 	log.Debug("Tx tracker status", "need-resubmit", len(resubmits), "stale", numStales, "ok", numOk)
-	return resubmits, rejournal
+	return resubmits
 }
 
 // Start implements node.Lifecycle interface
@@ -185,6 +194,12 @@ func (tracker *TxTracker) loop() {
 			tracker.TrackAll(transactions)
 			return nil
 		})
+
+		// Setup the writer for the upcoming transactions
+		if err := tracker.journal.setupWriter(); err != nil {
+			log.Error("Failed to setup the journal writer", "err", err)
+			return
+		}
 		defer tracker.journal.close()
 	}
 	var (
@@ -196,19 +211,14 @@ func (tracker *TxTracker) loop() {
 		case <-tracker.shutdownCh:
 			return
 		case <-timer.C:
-			checkJournal := tracker.journal != nil && time.Since(lastJournal) > tracker.rejournal
-			resubmits, rejournal := tracker.recheck(checkJournal)
+			var rejournal bool
+			if tracker.journal != nil && time.Since(lastJournal) > tracker.rejournal {
+				rejournal, lastJournal = true, time.Now()
+				log.Debug("Rejournal the transaction tracker")
+			}
+			resubmits := tracker.recheck(rejournal)
 			if len(resubmits) > 0 {
 				tracker.pool.Add(resubmits, false)
-			}
-			if checkJournal {
-				// Lock to prevent journal.rotate <-> journal.insert (via TrackAll) conflicts
-				tracker.mu.Lock()
-				lastJournal = time.Now()
-				if err := tracker.journal.rotate(rejournal); err != nil {
-					log.Warn("Transaction journal rotation failed", "err", err)
-				}
-				tracker.mu.Unlock()
 			}
 			timer.Reset(recheckInterval)
 		}

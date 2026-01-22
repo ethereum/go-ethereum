@@ -143,9 +143,6 @@ type testParams struct {
 
 func cliTestParams(ctx *cli.Context) *testParams {
 	nodeStr := ctx.String(testNodeFlag.Name)
-	if nodeStr == "" {
-		exit(fmt.Errorf("missing -%s", testNodeFlag.Name))
-	}
 	node, err := parseNode(nodeStr)
 	if err != nil {
 		exit(err)
@@ -155,15 +152,6 @@ func cliTestParams(ctx *cli.Context) *testParams {
 		engineAPI: ctx.String(testNodeEngineFlag.Name),
 		jwt:       ctx.String(testNodeJWTFlag.Name),
 		chainDir:  ctx.String(testChainDirFlag.Name),
-	}
-	if p.engineAPI == "" {
-		exit(fmt.Errorf("missing -%s", testNodeEngineFlag.Name))
-	}
-	if p.jwt == "" {
-		exit(fmt.Errorf("missing -%s", testNodeJWTFlag.Name))
-	}
-	if p.chainDir == "" {
-		exit(fmt.Errorf("missing -%s", testChainDirFlag.Name))
 	}
 	return &p
 }

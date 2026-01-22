@@ -238,9 +238,9 @@ func (t Type) GetType() reflect.Type {
 	case UintTy:
 		return reflectIntType(true, t.Size)
 	case BoolTy:
-		return reflect.TypeOf(false)
+		return reflect.TypeFor[bool]()
 	case StringTy:
-		return reflect.TypeOf("")
+		return reflect.TypeFor[string]()
 	case SliceTy:
 		return reflect.SliceOf(t.Elem.GetType())
 	case ArrayTy:
@@ -248,19 +248,15 @@ func (t Type) GetType() reflect.Type {
 	case TupleTy:
 		return t.TupleType
 	case AddressTy:
-		return reflect.TypeOf(common.Address{})
+		return reflect.TypeFor[common.Address]()
 	case FixedBytesTy:
-		return reflect.ArrayOf(t.Size, reflect.TypeOf(byte(0)))
+		return reflect.ArrayOf(t.Size, reflect.TypeFor[byte]())
 	case BytesTy:
-		return reflect.SliceOf(reflect.TypeOf(byte(0)))
-	case HashTy:
-		// hashtype currently not used
-		return reflect.ArrayOf(32, reflect.TypeOf(byte(0)))
-	case FixedPointTy:
-		// fixedpoint type currently not used
-		return reflect.ArrayOf(32, reflect.TypeOf(byte(0)))
+		return reflect.TypeFor[[]byte]()
+	case HashTy, FixedPointTy: // currently not used
+		return reflect.TypeFor[[32]byte]()
 	case FunctionTy:
-		return reflect.ArrayOf(24, reflect.TypeOf(byte(0)))
+		return reflect.TypeFor[[24]byte]()
 	default:
 		panic("Invalid type")
 	}

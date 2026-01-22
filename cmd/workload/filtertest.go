@@ -92,7 +92,7 @@ func (s *filterTestSuite) filterShortRange(t *utesting.T) {
 	}, s.queryAndCheck)
 }
 
-// filterShortRange runs all long-range filter tests.
+// filterLongRange runs all long-range filter tests.
 func (s *filterTestSuite) filterLongRange(t *utesting.T) {
 	s.filterRange(t, func(query *filterQuery) bool {
 		return query.ToBlock+1-query.FromBlock > filterRangeThreshold
@@ -182,13 +182,14 @@ func (s *filterTestSuite) loadQueries() error {
 
 // filterQuery is a single query for testing.
 type filterQuery struct {
-	FromBlock  int64            `json:"fromBlock"`
-	ToBlock    int64            `json:"toBlock"`
-	Address    []common.Address `json:"address"`
-	Topics     [][]common.Hash  `json:"topics"`
-	ResultHash *common.Hash     `json:"resultHash,omitempty"`
-	results    []types.Log
-	Err        error `json:"error,omitempty"`
+	FromBlock     int64 `json:"fromBlock"`
+	ToBlock       int64 `json:"toBlock"`
+	lastBlockHash common.Hash
+	Address       []common.Address `json:"address"`
+	Topics        [][]common.Hash  `json:"topics"`
+	ResultHash    *common.Hash     `json:"resultHash,omitempty"`
+	results       []types.Log
+	Err           error `json:"error,omitempty"`
 }
 
 func (fq *filterQuery) isWildcard() bool {
