@@ -130,7 +130,9 @@ type Metadata struct {
 	Origin    string `json:"Origin"`
 }
 
-func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath string) *accounts.Manager {
+// StartClefAccountManager creates an account manager for Clef with the specified keystore type.
+// ksType can be "file" (default) for file-based keystore or "db" for database-backed keystore.
+func StartClefAccountManager(ksLocation, ksType string, nousb, lightKDF bool, scpath string) (*accounts.Manager, error) {
 	var (
 		backends []accounts.Backend
 		n, p     = keystore.StandardScryptN, keystore.StandardScryptP
@@ -140,7 +142,22 @@ func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath str
 	}
 	// support password based accounts
 	if len(ksLocation) > 0 {
-		backends = append(backends, keystore.NewKeyStore(ksLocation, n, p))
+		switch ksType {
+		case "db":
+			// Use database-backed keystore for scalability
+			dbks, err := keystore.NewDBKeyStore(ksLocation, n, p)
+			if err != nil {
+				return nil, fmt.Errorf("failed to open DB keystore: %w", err)
+			}
+			backends = append(backends, dbks)
+			log.Info("Using database-backed keystore", "path", ksLocation)
+		case "file", "":
+			// Use traditional file-based keystore (default)
+			backends = append(backends, keystore.NewKeyStore(ksLocation, n, p))
+			log.Info("Using file-based keystore", "path", ksLocation)
+		default:
+			return nil, fmt.Errorf("unknown keystore type: %s (supported: file, db)", ksType)
+		}
 	}
 	if !nousb {
 		// Start a USB hub for Ledger hardware wallets
@@ -184,7 +201,7 @@ func StartClefAccountManager(ksLocation string, nousb, lightKDF bool, scpath str
 			}
 		}
 	}
-	return accounts.NewManager(nil, backends...)
+	return accounts.NewManager(nil, backends...), nil
 }
 
 // MetadataFromContext extracts Metadata from a given context.Context

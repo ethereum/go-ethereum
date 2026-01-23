@@ -90,7 +90,12 @@ var (
 	keystoreFlag = &cli.StringFlag{
 		Name:  "keystore",
 		Value: filepath.Join(node.DefaultDataDir(), "keystore"),
-		Usage: "Directory for the keystore",
+		Usage: "Directory for the keystore (file mode) or path to the keystore database (db mode)",
+	}
+	keystoreTypeFlag = &cli.StringFlag{
+		Name:  "keystore-type",
+		Value: "file",
+		Usage: "Keystore backend type: file (default) or db",
 	}
 	configdirFlag = &cli.StringFlag{
 		Name:  "configdir",
@@ -200,6 +205,7 @@ The delpw command removes a password for a given address (keyfile).
 		Flags: []cli.Flag{
 			logLevelFlag,
 			keystoreFlag,
+			keystoreTypeFlag,
 			utils.LightKDFFlag,
 			acceptFlag,
 		},
@@ -221,6 +227,7 @@ The gendoc generates example structures of the json-rpc communication types.
 		Flags: []cli.Flag{
 			logLevelFlag,
 			keystoreFlag,
+			keystoreTypeFlag,
 			utils.LightKDFFlag,
 			acceptFlag,
 		},
@@ -234,6 +241,7 @@ The gendoc generates example structures of the json-rpc communication types.
 		Flags: []cli.Flag{
 			logLevelFlag,
 			keystoreFlag,
+			keystoreTypeFlag,
 			utils.LightKDFFlag,
 			acceptFlag,
 		},
@@ -248,6 +256,7 @@ The gendoc generates example structures of the json-rpc communication types.
 		Flags: []cli.Flag{
 			logLevelFlag,
 			keystoreFlag,
+			keystoreTypeFlag,
 			utils.LightKDFFlag,
 			acceptFlag,
 		},
@@ -266,6 +275,7 @@ func init() {
 	app.Flags = []cli.Flag{
 		logLevelFlag,
 		keystoreFlag,
+		keystoreTypeFlag,
 		configdirFlag,
 		chainIdFlag,
 		utils.LightKDFFlag,
@@ -406,9 +416,13 @@ func initInternalApi(c *cli.Context) (*core.UIServerAPI, core.UIClientAPI, error
 		ui                        = core.NewCommandlineUI()
 		pwStorage storage.Storage = &storage.NoStorage{}
 		ksLoc                     = c.String(keystoreFlag.Name)
+		ksType                    = c.String(keystoreTypeFlag.Name)
 		lightKdf                  = c.Bool(utils.LightKDFFlag.Name)
 	)
-	am := core.StartClefAccountManager(ksLoc, true, lightKdf, "")
+	am, err := core.StartClefAccountManager(ksLoc, ksType, true, lightKdf, "")
+	if err != nil {
+		return nil, nil, err
+	}
 	api := core.NewSignerAPI(am, 0, true, ui, nil, false, pwStorage)
 	internalApi := core.NewUIServerAPI(api)
 	return internalApi, ui, nil
@@ -696,14 +710,18 @@ func signer(c *cli.Context) error {
 	var (
 		chainId  = c.Int64(chainIdFlag.Name)
 		ksLoc    = c.String(keystoreFlag.Name)
+		ksType   = c.String(keystoreTypeFlag.Name)
 		lightKdf = c.Bool(utils.LightKDFFlag.Name)
 		advanced = c.Bool(advancedMode.Name)
 		nousb    = c.Bool(utils.NoUSBFlag.Name)
 		scpath   = c.String(utils.SmartCardDaemonPathFlag.Name)
 	)
 	log.Info("Starting signer", "chainid", chainId, "keystore", ksLoc,
-		"light-kdf", lightKdf, "advanced", advanced)
-	am := core.StartClefAccountManager(ksLoc, nousb, lightKdf, scpath)
+		"keystore-type", ksType, "light-kdf", lightKdf, "advanced", advanced)
+	am, err := core.StartClefAccountManager(ksLoc, ksType, nousb, lightKdf, scpath)
+	if err != nil {
+		utils.Fatalf("Failed to start account manager: %v", err)
+	}
 	defer am.Close()
 	apiImpl := core.NewSignerAPI(am, chainId, nousb, ui, db, advanced, pwStorage)
 
