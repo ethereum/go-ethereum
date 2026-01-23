@@ -40,6 +40,11 @@ type (
 	DebugAPI = ethapi.DebugAPI
 )
 
+// Type aliases for types used as arguments or responses to the APIs.
+type (
+	RPCTransaction = ethapi.RPCTransaction
+)
+
 // NewEthereumAPI is identical to [ethapi.NewEthereumAPI].
 func NewEthereumAPI(b Backend) *EthereumAPI {
 	return ethapi.NewEthereumAPI(b)
