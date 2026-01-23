@@ -47,8 +47,9 @@ var (
 	}
 	pyroscopeAuthPasswordFlag = &cli.StringFlag{
 		Name:     "pyroscope.password",
-		Usage:    "Pyroscope basic authentication password",
+		Usage:    "Pyroscope basic authentication password (prefer setting PYROSCOPE_PASSWORD env var instead of CLI flag)",
 		Value:    "",
+		EnvVars:  []string{"PYROSCOPE_PASSWORD"},
 		Category: flags.LoggingCategory,
 	}
 	pyroscopeTagsFlag = &cli.StringFlag{
@@ -74,7 +75,11 @@ func startPyroscope(ctx *cli.Context) error {
 		if tag == "" {
 			continue
 		}
-		k, v, _ := strings.Cut(tag, "=")
+		k, v, ok := strings.Cut(tag, "=")
+		if !ok || k == "" {
+			// Skip tags that do not conform to the expected key=value format
+			continue
+		}
 		tags[k] = v
 	}
 
@@ -105,7 +110,7 @@ func startPyroscope(ctx *cli.Context) error {
 		return err
 	}
 	pyroscopeProfiler = profiler
-	log.Info("Enabled Pyroscope")
+	log.Info("Enabled Pyroscope", "server", server)
 	return nil
 }
 
