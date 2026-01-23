@@ -31,11 +31,11 @@ import (
 
 // Config defines all necessary options for database.
 type Config struct {
-	Preimages        bool           // Flag whether the preimage of node key is recorded
-	IsVerkle         bool           // Flag whether the db is holding a verkle tree
-	BinTrieGroupDepth int           // Number of levels per serialized group in binary trie (1-8, default 8)
-	HashDB           *hashdb.Config // Configs for hash-based scheme
-	PathDB           *pathdb.Config // Configs for experimental path-based scheme
+	Preimages         bool           // Flag whether the preimage of node key is recorded
+	IsVerkle          bool           // Flag whether the db is holding a verkle tree
+	BinTrieGroupDepth int            // Number of levels per serialized group in binary trie (1-8, default 8)
+	HashDB            *hashdb.Config // Configs for hash-based scheme
+	PathDB            *pathdb.Config // Configs for experimental path-based scheme
 }
 
 // HashDefaults represents a config for using hash-based scheme with
@@ -49,10 +49,10 @@ var HashDefaults = &Config{
 // VerkleDefaults represents a config for holding verkle trie data
 // using path-based scheme with default settings.
 var VerkleDefaults = &Config{
-	Preimages:        false,
-	IsVerkle:         true,
+	Preimages:         false,
+	IsVerkle:          true,
 	BinTrieGroupDepth: 8, // Default to byte-aligned groups
-	PathDB:           pathdb.Defaults,
+	PathDB:            pathdb.Defaults,
 }
 
 // backend defines the methods needed to access/update trie nodes in different

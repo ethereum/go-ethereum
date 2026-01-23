@@ -332,21 +332,6 @@ func compareTreesWithResolver(t *testing.T, original, deserialized BinaryNode, r
 	return nil
 }
 
-func buildDeepTree(depth, maxDepth int) BinaryNode {
-	if depth == maxDepth {
-		// Create a unique hash for this leaf position
-		var h common.Hash
-		h[0] = byte(depth)
-		h[1] = byte(depth >> 8)
-		return HashedNode(h)
-	}
-	return &InternalNode{
-		depth: depth,
-		left:  buildDeepTree(depth+1, maxDepth),
-		right: buildDeepTree(depth+1, maxDepth),
-	}
-}
-
 // buildDeepTreeUnique builds a tree where each leaf has a unique hash based on its position
 func buildDeepTreeUnique(depth, maxDepth, position int) BinaryNode {
 	if depth == maxDepth {
