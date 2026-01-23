@@ -165,6 +165,14 @@ type StateDB struct {
 	// some APIs (e.g. CodeSize) may load the entire code from either the
 	// cache or the database when the size is not available in the cache.
 	CodeLoadBytes int
+
+	// EIP-7702 delegation tracking for cross-client execution metrics
+	Eip7702DelegationsSet     int // Number of EIP-7702 delegations set
+	Eip7702DelegationsCleared int // Number of EIP-7702 delegations cleared
+
+	// Code write tracking for cross-client execution metrics
+	CodeUpdated    int // Number of contracts deployed (CREATE/CREATE2)
+	CodeBytesWrite int // Total bytes of code written during deployments
 }
 
 // New creates a new state from a given trie.
@@ -473,6 +481,18 @@ func (s *StateDB) SetNonce(addr common.Address, nonce uint64, reason tracing.Non
 func (s *StateDB) SetCode(addr common.Address, code []byte, reason tracing.CodeChangeReason) (prev []byte) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
+		// Track code write and EIP-7702 delegation metrics
+		switch reason {
+		case tracing.CodeChangeContractCreation:
+			s.CodeUpdated++
+			s.CodeBytesWrite += len(code)
+		case tracing.CodeChangeAuthorization:
+			s.CodeUpdated++
+			s.CodeBytesWrite += len(code)
+			s.Eip7702DelegationsSet++
+		case tracing.CodeChangeAuthorizationClear:
+			s.Eip7702DelegationsCleared++
+		}
 		return stateObject.SetCode(crypto.Keccak256Hash(code), code)
 	}
 	return nil
