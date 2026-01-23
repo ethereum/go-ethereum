@@ -1726,6 +1726,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(TrienodeHistoryFlag.Name) {
 		cfg.TrienodeHistory = ctx.Int64(TrienodeHistoryFlag.Name)
 	}
+	if ctx.IsSet(TrienodeHistoryFullValueCheckpointFlag.Name) {
+		cfg.TrienodeHistory = ctx.Int64(TrienodeHistoryFullValueCheckpointFlag.Name)
+	}
 	if ctx.IsSet(StateSchemeFlag.Name) {
 		cfg.StateScheme = ctx.String(StateSchemeFlag.Name)
 	}
