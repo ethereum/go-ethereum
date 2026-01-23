@@ -1568,6 +1568,7 @@ func (pool *LegacyPool) demoteUnexecutables() {
 			// Internal shuffle shouldn't touch the lookup set.
 			pool.enqueueTx(hash, tx, false)
 		}
+		pool.priced.Removed(len(olds) + len(drops))
 		pendingGauge.Dec(int64(len(olds) + len(drops) + len(invalids)))
 
 		// If there's a gap in front, alert (should never happen) and postpone all transactions
