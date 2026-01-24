@@ -31,11 +31,11 @@ import (
 // to which it belongs as well as the block number in which it was included for
 // finality eviction.
 type limboBlob struct {
-	TxHash common.Hash // Owner transaction's hash to support resurrecting reorged txs
-	Block  uint64      // Block in which the blob transaction was included
-	Tx     *types.Transaction
-	TxMeta *blobTxMeta `rlp:"omitempty"` // Optional blob transaction metadata.
-	id     uint64      // the billy id of limboBlob
+	TxHash common.Hash        // Owner transaction's hash to support resurrecting reorged txs
+	Block  uint64             // Block in which the blob transaction was included
+	Tx     *types.Transaction `rlp:"nil"` // Optional full blob transaction (old storage style)
+	TxMeta *blobTxMeta        // the blob transaction metadata.
+	id     uint64             // the billy id of limboBlob
 }
 
 // limbo is a light, indexed database to temporarily store recently included
@@ -86,13 +86,6 @@ func newLimbo(config *params.ChainConfig, datadir string) (*limbo, error) {
 		}
 	}
 
-	// Migrate any old-style limbo entries which stored full blob transactions
-	// instead of just the metadata.
-	if err = l.cleanTxStorage(); err != nil {
-		l.Close()
-		return nil, err
-	}
-
 	return l, nil
 }
 
@@ -122,25 +115,6 @@ func (l *limbo) parseBlob(id uint64, data []byte) error {
 	item.id = id
 	l.index[item.TxHash] = item
 
-	return nil
-}
-
-// cleanTxStorage migrates any old-style limbo entries which stored the full
-// blob transaction instead of just the metadata.
-func (l *limbo) cleanTxStorage() error {
-	for _, item := range l.index {
-		if item.Tx == nil {
-			continue
-		}
-		// Delete the old item which hash blob tx content.
-		if err := l.drop(item.TxMeta.hash); err != nil {
-			return err
-		}
-		// Set the new one which has blob tx metadata.
-		if err := l.push(item.TxMeta, item.Block); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
