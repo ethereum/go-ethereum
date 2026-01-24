@@ -119,16 +119,6 @@ func (tm *testMatcher) skipLoad(pattern string) {
 	tm.skiploadpat = append(tm.skiploadpat, regexp.MustCompile(pattern))
 }
 
-// fails adds an expected failure for tests matching the pattern.
-//
-//nolint:unused
-func (tm *testMatcher) fails(pattern string, reason string) {
-	if reason == "" {
-		panic("empty fail reason")
-	}
-	tm.failpat = append(tm.failpat, testFailure{regexp.MustCompile(pattern), reason})
-}
-
 func (tm *testMatcher) runonly(pattern string) {
 	tm.runonlylistpat = regexp.MustCompile(pattern)
 }
