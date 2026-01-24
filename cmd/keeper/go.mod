@@ -39,3 +39,5 @@ require (
 )
 
 replace github.com/ethereum/go-ethereum => ../../
+
+replace github.com/VictoriaMetrics/fastcache => ./dummy_fastcache
