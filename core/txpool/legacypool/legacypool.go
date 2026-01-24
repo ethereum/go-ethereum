@@ -1639,7 +1639,7 @@ func (as *accountSet) flatten() []common.Address {
 
 // merge adds all addresses from the 'other' set into 'as'.
 func (as *accountSet) merge(other *accountSet) {
-	maps.Copy(as.accounts, other.accounts)
+	as.accounts = other.accounts
 	as.cache = nil
 }
 
