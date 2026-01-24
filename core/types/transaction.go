@@ -524,14 +524,14 @@ func (tx *Transaction) SetCodeAuthorities() []common.Address {
 		marks = make(map[common.Address]bool)
 		auths = make([]common.Address, 0, len(setcodetx.AuthList))
 	)
-	for _, auth := range setcodetx.AuthList {
+	for idx, auth := range setcodetx.AuthList {
 		addr, err := auth.Authority()
 		if err != nil {
-			log.Error("SetCodeTx authorization has invalid signature", "tx", tx.Hash(), "address", addr, "err", err)
+			log.Error("SetCodeTx authorization has invalid signature", "tx", tx.Hash(), "index", idx, "err", err)
 			continue
 		}
 		if marks[addr] {
-			log.Warn("SetCodeTx authorization has duplicate authority", "tx", tx.Hash(), "address", addr)
+			log.Warn("SetCodeTx authorization has duplicate authority", "tx", tx.Hash(), "index", idx)
 			continue
 		}
 		marks[addr] = true
