@@ -52,15 +52,9 @@ func newLimbo(config *params.ChainConfig, datadir string) (*limbo, error) {
 		index: make(map[common.Hash]*limboBlob),
 	}
 
-	// The limbo won't store full blobs, just metadata, so use a fixed size 4KB is big enough.
+	// The limbo won't store full blobs, just store the metadata, so use a fixed size 1KB bytes is big enough.
 	slotter := func() (size uint32, done bool) {
-		return 4096, true
-	}
-
-	// See if we need to migrate the limbo after fusaka.
-	slotter, err := tryMigrate(config, slotter, datadir)
-	if err != nil {
-		return nil, err
+		return 1024, true
 	}
 
 	// Index all limboed blobs on disk and delete anything unprocessable
