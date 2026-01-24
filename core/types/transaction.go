@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
@@ -524,13 +525,17 @@ func (tx *Transaction) SetCodeAuthorities() []common.Address {
 		auths = make([]common.Address, 0, len(setcodetx.AuthList))
 	)
 	for _, auth := range setcodetx.AuthList {
-		if addr, err := auth.Authority(); err == nil {
-			if marks[addr] {
-				continue
-			}
-			marks[addr] = true
-			auths = append(auths, addr)
+		addr, err := auth.Authority()
+		if err != nil {
+			log.Error("SetCodeTx authorization has invalid signature", "tx", tx.Hash(), "address", addr, "err", err)
+			continue
 		}
+		if marks[addr] {
+			log.Warn("SetCodeTx authorization has duplicate authority", "tx", tx.Hash(), "address", addr)
+			continue
+		}
+		marks[addr] = true
+		auths = append(auths, addr)
 	}
 	return auths
 }
