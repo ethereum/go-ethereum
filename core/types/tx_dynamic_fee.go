@@ -101,11 +101,11 @@ func (tx *DynamicFeeTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.I
 	if baseFee == nil {
 		return dst.Set(tx.GasFeeCap)
 	}
-	tip := dst.Sub(tx.GasFeeCap, baseFee)
-	if tip.Cmp(tx.GasTipCap) > 0 {
-		tip.Set(tx.GasTipCap)
+	effectiveGasPrice := dst.Add(tx.GasTipCap, baseFee)
+	if effectiveGasPrice.Cmp(tx.GasFeeCap) > 0 {
+		effectiveGasPrice.Set(tx.GasFeeCap)
 	}
-	return tip.Add(tip, baseFee)
+	return effectiveGasPrice
 }
 
 func (tx *DynamicFeeTx) rawSignatureValues() (v, r, s *big.Int) {

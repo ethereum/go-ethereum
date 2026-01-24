@@ -202,11 +202,12 @@ func (tx *SetCodeTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int 
 	if baseFee == nil {
 		return dst.Set(tx.GasFeeCap.ToBig())
 	}
-	tip := dst.Sub(tx.GasFeeCap.ToBig(), baseFee)
-	if tip.Cmp(tx.GasTipCap.ToBig()) > 0 {
-		tip.Set(tx.GasTipCap.ToBig())
+	effectiveGasPrice := dst.Add(tx.GasTipCap.ToBig(), baseFee)
+	gasTipCap := tx.GasFeeCap.ToBig()
+	if effectiveGasPrice.Cmp(gasTipCap) > 0 {
+		effectiveGasPrice.Set(gasTipCap)
 	}
-	return tip.Add(tip, baseFee)
+	return effectiveGasPrice
 }
 
 func (tx *SetCodeTx) rawSignatureValues() (v, r, s *big.Int) {
