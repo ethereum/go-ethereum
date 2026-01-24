@@ -909,7 +909,7 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, sync bool) []error {
 	// Filter out known ones without obtaining the pool lock or recovering signatures
 	var (
 		errs = make([]error, len(txs))
-		news = make([]*types.Transaction, 0, len(txs))
+		news = make([]*types.Transaction, len(txs))
 	)
 	for i, tx := range txs {
 		// If the transaction is known, pre-set the error slot
@@ -928,25 +928,19 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, sync bool) []error {
 			continue
 		}
 		// Accumulate all unknown transactions for deeper processing
-		news = append(news, tx)
-	}
-	if len(news) == 0 {
-		return errs
+		news[i] = tx
 	}
 
 	// Process all the new transaction and merge any errors into the original slice
 	pool.mu.Lock()
-	newErrs, dirtyAddrs := pool.addTxsLocked(news)
+	valid, dirtyAddrs := pool.addTxsLocked(news, errs)
 	pool.mu.Unlock()
 
-	var nilSlot = 0
-	for _, err := range newErrs {
-		for errs[nilSlot] != nil {
-			nilSlot++
-		}
-		errs[nilSlot] = err
-		nilSlot++
+	// If no valid transactions, return the error slice.
+	if valid == 0 {
+		return errs
 	}
+
 	// Reorg the pool internals if needed and return
 	done := pool.requestPromoteExecutables(dirtyAddrs)
 	if sync {
@@ -957,25 +951,29 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, sync bool) []error {
 
 // addTxsLocked attempts to queue a batch of transactions if they are valid.
 // The transaction pool lock must be held.
-// Returns the error for each tx, and the set of accounts that might became promotable.
-func (pool *LegacyPool) addTxsLocked(txs []*types.Transaction) ([]error, *accountSet) {
+// Returns the error for each tx, and the set of accounts that might become promotable.
+func (pool *LegacyPool) addTxsLocked(txs []*types.Transaction, errs []error) (int64, *accountSet) {
+	// Short circuit if no transactions.
+	if len(txs) == 0 {
+		return 0, nil
+	}
+
 	var (
 		dirty = newAccountSet(pool.signer)
-		errs  = make([]error, len(txs))
 		valid int64
 	)
 	for i, tx := range txs {
-		replaced, err := pool.add(tx)
-		errs[i] = err
-		if err == nil {
+		if replaced, err := pool.add(tx); err == nil {
 			if !replaced {
 				dirty.addTx(tx)
 			}
 			valid++
+		} else if errs != nil {
+			errs[i] = err
 		}
 	}
 	validTxMeter.Mark(valid)
-	return errs, dirty
+	return valid, dirty
 }
 
 // Status returns the status (unknown/pending/queued) of a batch of transactions
@@ -1397,7 +1395,7 @@ func (pool *LegacyPool) reset(oldHead, newHead *types.Header) {
 	// Inject any transactions discarded due to reorgs
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
 	core.SenderCacher().Recover(pool.signer, reinject)
-	pool.addTxsLocked(reinject)
+	pool.addTxsLocked(reinject, nil)
 }
 
 // promoteExecutables moves transactions that have become processable from the
