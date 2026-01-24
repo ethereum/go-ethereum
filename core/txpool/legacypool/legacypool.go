@@ -953,16 +953,14 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, sync bool) []error {
 // The transaction pool lock must be held.
 // Returns the error for each tx, and the set of accounts that might become promotable.
 func (pool *LegacyPool) addTxsLocked(txs []*types.Transaction, errs []error) (int64, *accountSet) {
-	// Short circuit if no transactions.
-	if len(txs) == 0 {
-		return 0, nil
-	}
-
 	var (
 		dirty = newAccountSet(pool.signer)
 		valid int64
 	)
 	for i, tx := range txs {
+		if tx == nil {
+			continue
+		}
 		if replaced, err := pool.add(tx); err == nil {
 			if !replaced {
 				dirty.addTx(tx)
