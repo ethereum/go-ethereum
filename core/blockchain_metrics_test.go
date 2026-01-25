@@ -55,12 +55,12 @@ func TestAccountMetrics(t *testing.T) {
 	// Generate block with simple ETH transfer
 	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
 		tx, _ := types.SignTx(types.NewTransaction(
-			0,                                  // nonce
-			receiver,                           // to
-			big.NewInt(1000),                   // value
-			21000,                              // gas
+			0,                                       // nonce
+			receiver,                                // to
+			big.NewInt(1000),                        // value
+			21000,                                   // gas
 			uint256.MustFromBig(newGwei(5)).ToBig(), // gasPrice
-			nil,                                // data
+			nil,                                     // data
 		), signer, key)
 		b.AddTx(tx)
 	})
@@ -373,7 +373,7 @@ func TestCodeUpdatedMetricCREATE(t *testing.T) {
 		byte(vm.PUSH1), 0x00,
 		byte(vm.MSTORE),
 		byte(vm.PUSH1), byte(runtimeLen), // size
-		byte(vm.PUSH1), 0x1c,             // offset (32 - 4 = 28 = 0x1c)
+		byte(vm.PUSH1), 0x1c, // offset (32 - 4 = 28 = 0x1c)
 		byte(vm.RETURN),
 	}
 

@@ -193,7 +193,7 @@ func TestLogSlowBlockEIP7702(t *testing.T) {
 		AccountLoaded:             100,
 		StorageLoaded:             500,
 		CodeLoaded:                20,
-		CodeBytesRead:             4096,
+		CodeLoadBytes:             4096,
 		AccountUpdated:            50,
 		AccountDeleted:            2,
 		StorageUpdated:            200,
