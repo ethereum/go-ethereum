@@ -185,7 +185,7 @@ func TestLogSlowBlockEIP7702(t *testing.T) {
 	}
 	block := types.NewBlockWithHeader(header)
 
-	// Create test stats with EIP-7702 delegation data
+	// Create test stats with EIP-7702 delegation data and deletion metrics
 	stats := &ExecuteStats{
 		Execution:                 500 * time.Millisecond,
 		TotalTime:                 1200 * time.Millisecond,
@@ -195,7 +195,9 @@ func TestLogSlowBlockEIP7702(t *testing.T) {
 		CodeLoaded:                20,
 		CodeBytesRead:             4096,
 		AccountUpdated:            50,
+		AccountDeleted:            2,
 		StorageUpdated:            200,
+		StorageDeleted:            7,
 		CodeUpdated:               5,
 		CodeBytesWrite:            2048,
 		Eip7702DelegationsSet:     3,
@@ -240,6 +242,14 @@ func TestLogSlowBlockEIP7702(t *testing.T) {
 	}
 	if logEntry.StateWrites.Code != 5 {
 		t.Errorf("Expected code writes 5, got %d", logEntry.StateWrites.Code)
+	}
+
+	// Verify deletion metrics
+	if logEntry.StateWrites.AccountsDeleted != 2 {
+		t.Errorf("Expected accounts_deleted 2, got %d", logEntry.StateWrites.AccountsDeleted)
+	}
+	if logEntry.StateWrites.StorageSlotsDeleted != 7 {
+		t.Errorf("Expected storage_slots_deleted 7, got %d", logEntry.StateWrites.StorageSlotsDeleted)
 	}
 }
 
