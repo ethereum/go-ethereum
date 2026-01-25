@@ -162,9 +162,4 @@ var (
 			strings.Join(vm.ActivateableEips(), ", ")),
 		Value: "GrayGlacier",
 	}
-	VerbosityFlag = &cli.IntFlag{
-		Name:  "verbosity",
-		Usage: "sets the verbosity level",
-		Value: 3,
-	}
 )
