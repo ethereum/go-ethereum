@@ -214,7 +214,8 @@ type BlockChainConfig struct {
 	StateSizeTracking bool
 
 	// SlowBlockThreshold is the block execution time threshold beyond which
-	// detailed statistics will be logged.
+	// detailed statistics will be logged. Negative value means disabled (default),
+	// zero logs all blocks, positive value filters blocks by execution time.
 	SlowBlockThreshold time.Duration
 }
 

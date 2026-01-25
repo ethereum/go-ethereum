@@ -692,8 +692,8 @@ var (
 	}
 	LogSlowBlockFlag = &cli.DurationFlag{
 		Name:     "debug.logslowblock",
-		Usage:    "Block execution time threshold beyond which detailed statistics will be logged (0 means disable)",
-		Value:    ethconfig.Defaults.SlowBlockThreshold,
+		Usage:    "Block execution time threshold beyond which detailed statistics will be logged (0 logs all blocks)",
+		Value:    0,
 		Category: flags.LoggingCategory,
 	}
 
@@ -2351,8 +2351,12 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		// Enable state size tracking if enabled
 		StateSizeTracking: ctx.Bool(StateSizeTrackingFlag.Name),
 
-		// Configure the slow block statistic logger
-		SlowBlockThreshold: ctx.Duration(LogSlowBlockFlag.Name),
+		// Configure the slow block statistic logger (disabled by default)
+		SlowBlockThreshold: ethconfig.Defaults.SlowBlockThreshold,
+	}
+	// Only enable slow block logging if the flag was explicitly set
+	if ctx.IsSet(LogSlowBlockFlag.Name) {
+		options.SlowBlockThreshold = ctx.Duration(LogSlowBlockFlag.Name)
 	}
 	if options.ArchiveMode && !options.Preimages {
 		options.Preimages = true

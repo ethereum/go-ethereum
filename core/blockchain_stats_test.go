@@ -266,10 +266,20 @@ func TestLogSlowBlockThreshold(t *testing.T) {
 	// Reset buffer
 	buf.Reset()
 
-	// Test with zero threshold (disabled)
+	// Test with zero threshold (logs all blocks)
 	stats.logSlow(block, 0)
 
+	if buf.Len() == 0 {
+		t.Errorf("Expected output for zero threshold (logs all), got nothing")
+	}
+
+	// Reset buffer
+	buf.Reset()
+
+	// Test with negative threshold (disabled)
+	stats.logSlow(block, -1)
+
 	if buf.Len() > 0 {
-		t.Errorf("Expected no output for zero threshold, got: %s", buf.String())
+		t.Errorf("Expected no output for negative threshold (disabled), got: %s", buf.String())
 	}
 }
