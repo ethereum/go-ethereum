@@ -349,6 +349,17 @@ func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
 	return common.Hash{}
 }
 
+// TransitionComplete checks if the EIP-7612 transition is complete.
+func (s *StateDB) InTransition() bool {
+	completeKey := common.Hash{} // slot 0 for completion flag
+	completeValue := s.GetState(params.BinaryTransitionRegistryAddress, completeKey)
+	return completeValue != (common.Hash{})
+}
+
+func (s *StateDB) ProcessBinaryTreeTransition(maxSlot uint64) {
+
+}
+
 // TxIndex returns the current transaction index set by SetTxContext.
 func (s *StateDB) TxIndex() int {
 	return s.txIndex

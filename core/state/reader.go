@@ -330,7 +330,7 @@ func newTrieReader(root common.Hash, db *triedb.Database) (*trieReader, error) {
 		// Based on the transition status, determine if the overlay
 		// tree needs to be created, or if a single, target tree is
 		// to be picked.
-		ts := overlay.LoadTransitionState(db.Disk(), root, true)
+		ts := overlay.LoadTransitionState(db.Disk(), root)
 		if ts.InTransition() {
 			mpt, err := trie.NewStateTrie(trie.StateTrieID(ts.BaseRoot), db)
 			if err != nil {

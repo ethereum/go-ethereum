@@ -239,15 +239,24 @@ func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (ReaderWithSta
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	if db.triedb.IsVerkle() {
-		ts := overlay.LoadTransitionState(db.TrieDB().Disk(), root, db.triedb.IsVerkle())
-		if ts.InTransition() {
-			panic("state tree transition isn't supported yet")
+		// if the transition has started, it will be present in the overlay tree,
+		// so we open it regardless.
+		bt, err := bintrie.NewBinaryTrie(root, db.triedb)
+		if err != nil {
+			return nil, fmt.Errorf("could not open the overlay tree: %w", err)
 		}
-		if ts.Transitioned() {
+		ts := overlay.LoadTransitionState(db.TrieDB().Disk(), root)
+		if !ts.InTransition() {
 			// Use BinaryTrie instead of VerkleTrie when IsVerkle is set
 			// (IsVerkle actually means Binary Trie mode in this codebase)
-			return bintrie.NewBinaryTrie(root, db.triedb)
+			return bt, nil
 		}
+
+		base, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
+		if err != nil {
+			return nil, fmt.Errorf("could not create base trie in OpenTrie: %w", err)
+		}
+		return transitiontrie.NewTransitionTrie(base, bt, false), nil
 	}
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 	if err != nil {
