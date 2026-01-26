@@ -632,14 +632,14 @@ func TestDecodeSingleCorruptedData(t *testing.T) {
 	_, keySection, _, _ := h.encode()
 
 	// Test with empty key section
-	_, err := decodeSingle([]byte{}, nil)
+	err := decodeSingle([]byte{}, nil)
 	if err == nil {
 		t.Fatal("Expected error for empty key section")
 	}
 
 	// Test with key section too small for trailer
 	if len(keySection) > 0 {
-		_, err := decodeSingle(keySection[:3], nil) // Less than 4 bytes for trailer
+		err := decodeSingle(keySection[:3], nil) // Less than 4 bytes for trailer
 		if err == nil {
 			t.Fatal("Expected error for key section too small for trailer")
 		}
@@ -652,7 +652,7 @@ func TestDecodeSingleCorruptedData(t *testing.T) {
 	for i := range 10 {
 		corrupted[i] = 0xFF
 	}
-	_, err = decodeSingle(corrupted, nil)
+	err = decodeSingle(corrupted, nil)
 	if err == nil {
 		t.Fatal("Expected error for corrupted varint")
 	}
@@ -662,7 +662,7 @@ func TestDecodeSingleCorruptedData(t *testing.T) {
 	copy(corrupted, keySection)
 	// Set restart count to something too large
 	binary.BigEndian.PutUint32(corrupted[len(corrupted)-4:], 10000)
-	_, err = decodeSingle(corrupted, nil)
+	err = decodeSingle(corrupted, nil)
 	if err == nil {
 		t.Fatal("Expected error for invalid restart count")
 	}

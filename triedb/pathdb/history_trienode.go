@@ -46,7 +46,10 @@ import (
 //   - block number           (8 bytes)
 //
 //   - a lexicographically sorted list of trie IDs
-//   - the corresponding offsets into the key and value sections for each trie data chunk
+//   - the corresponding offsets into the key and value sections for each trie
+//     data chunk. The offsets refer to the end position of each chunk, with
+//     the assumption that the key and value sections for the first data chunk
+//     start at offset 0.
 //
 // Although some fields (e.g., parent state root, block number) are duplicated
 // between the state history and the trienode history, these two histories
@@ -55,19 +58,16 @@ import (
 //
 // # Key section
 // The key section stores trie node keys (paths) in a compressed format.
-// It also contains relative offsets into the value section for resolving
-// the corresponding trie node data. Note that these offsets are relative
-// to the data chunk for the trie; the chunk offset must be added to obtain
-// the absolute position.
+// It also contains relative offsets into the value section for locating
+// the corresponding trie node data. These offsets are relative to the
+// beginning of the trie data chunk, the chunk's base offset must be added
+// to obtain the absolute position in the value section.
 //
 // # Value section
 // The value section is a concatenated byte stream of all trie node data.
 // Each trie node can be retrieved using the offset and length specified
 // by its index entry.
 //
-// The header and key sections are sufficient for locating a trie node,
-// while a partial read of the value section is enough to retrieve its data.
-
 // Header section:
 //
 //    +----------+------------------+---------------------+---------------------+-------+------------------+---------------------+---------------------|
@@ -89,9 +89,9 @@ import (
 //
 //              +---- key len ----+
 //             /                   \
-//    +-------+---------+-----------+---------+-----------------------+-----------------+
-//    | shared (varint) | not shared (varint) | value length (varlen) | key (varlen)    |
-//    +-----------------+---------------------+-----------------------+-----------------+
+//    +-------+---------+-----------+---------+-----------------------+-----------------------+
+//    | shared (varint) | not shared (varint) | value length (varlen) | unshared key (varlen) |
+//    +-----------------+---------------------+-----------------------+-----------------------+
 //
 // trailer:
 //
@@ -101,9 +101,9 @@ import (
 //    | restart_1 key offset | restart_1 value offset | ... | restart number (4-bytes) |
 //    +----------------------+------------------------+-----+--------------------------+
 //
-// Note: Both the key offset and the value offset are relative to the start of
-// the trie data chunk. To obtain the absolute offset, add the offset of the
-// trie data chunk itself.
+// Note: Both the key offset and the value offset are relative to the beginning
+// of the trie data chunk. The chunk's base offset must be added to obtain the
+// absolute position in the value section.
 //
 // Value section:
 //
@@ -222,11 +222,16 @@ func (h *trienodeHistory) encode() ([]byte, []byte, []byte, error) {
 			restarts  []uint32
 			prefixLen int
 
-			internalKeyOffset uint32 // key offset for the trie internally
-			internalValOffset uint32 // value offset for the trie internally
+			internalKeyOffset uint32 // key offset within the trie data internally
+			internalValOffset uint32 // value offset within the trie data internally
 		)
 		for i, path := range h.nodeList[owner] {
 			key := []byte(path)
+
+			// Track the internal key and value offsets at the beginning of the
+			// restart section. The absolute offsets within the key and value
+			// sections should first include the offset of the trie chunk itself
+			// stored in the header section.
 			if i%trienodeDataBlockRestartLen == 0 {
 				restarts = append(restarts, internalKeyOffset)
 				restarts = append(restarts, internalValOffset)
@@ -271,18 +276,13 @@ func (h *trienodeHistory) encode() ([]byte, []byte, []byte, error) {
 		}
 
 		// Fill the header section with the offsets of the key and value sections.
-		// Note that the key/value offsets are intentionally tracked *after* encoding
-		// them into their respective sections, ensuring each offset refers to the end
-		// position. For n trie chunks, n offset pairs are sufficient to uniquely locate
-		// the corresponding data.
-		headerSection.Write(owner.Bytes())                                       // 32 bytes
-		binary.Write(&headerSection, binary.BigEndian, uint32(keySection.Len())) // 4 bytes
-
-		// The offset to the value section is theoretically unnecessary, since the
-		// individual value offset is already tracked in the key section. However,
-		// we still keep it here for two reasons:
-		// - It's cheap to store (only 4 bytes for each trie).
-		// - It can be useful for decoding the trie data when key is not required (e.g., in hash mode).
+		// Note that key/value offsets are intentionally recorded *after* encoding
+		// into their respective sections, so each offset refers to an end position.
+		// For n trie chunks, n offset pairs are sufficient to uniquely locate each
+		// chunk's data. For example, [0, offset_0] defines the range of trie chunk 0,
+		// while [offset_{n-2}, offset_{n-1}] defines the range of trie chunk n-1.
+		headerSection.Write(owner.Bytes())                                         // 32 bytes
+		binary.Write(&headerSection, binary.BigEndian, uint32(keySection.Len()))   // 4 bytes
 		binary.Write(&headerSection, binary.BigEndian, uint32(valueSection.Len())) // 4 bytes
 	}
 	return headerSection.Bytes(), keySection.Bytes(), valueSection.Bytes(), nil
@@ -345,32 +345,68 @@ func decodeHeader(data []byte) (*trienodeMetadata, []common.Hash, []uint32, []ui
 	}, owners, keyOffsets, valOffsets, nil
 }
 
-func decodeSingle(keySection []byte, onValue func([]byte, int, int) error) ([]string, error) {
+// decodeKeyEntry resolves a single entry from the key section starting from
+// the specified offset.
+func decodeKeyEntry(keySection []byte, offset int) (uint64, uint64, []byte, int, error) {
+	var byteRead int
+
+	// Resolve the length of shared key
+	nShared, nn := binary.Uvarint(keySection[offset:]) // key length shared (varint)
+	if nn <= 0 {
+		return 0, 0, nil, 0, fmt.Errorf("corrupted varint encoding for nShared at offset %d", offset)
+	}
+	byteRead += nn
+
+	// Resolve the length of unshared key
+	nUnshared, nn := binary.Uvarint(keySection[offset+byteRead:]) // key length not shared (varint)
+	if nn <= 0 {
+		return 0, 0, nil, 0, fmt.Errorf("corrupted varint encoding for nUnshared at offset %d", offset+byteRead)
+	}
+	byteRead += nn
+
+	// Resolve the length of value
+	nValue, nn := binary.Uvarint(keySection[offset+byteRead:]) // value length (varint)
+	if nn <= 0 {
+		return 0, 0, nil, 0, fmt.Errorf("corrupted varint encoding for nValue at offset %d", offset+byteRead)
+	}
+	byteRead += nn
+
+	// Validate that the values can fit in an int to prevent overflow on 32-bit systems
+	if nShared > uint64(math.MaxUint32) || nUnshared > uint64(math.MaxUint32) || nValue > uint64(math.MaxUint32) {
+		return 0, 0, nil, 0, errors.New("key/value size too large")
+	}
+
+	// Resolve the unshared key
+	if offset+byteRead+int(nUnshared) > len(keySection) {
+		return 0, 0, nil, 0, fmt.Errorf("key length too long, unshared key length: %d, off: %d, section size: %d", nUnshared, offset+byteRead, len(keySection))
+	}
+	unsharedKey := keySection[offset+byteRead : offset+byteRead+int(nUnshared)]
+	byteRead += int(nUnshared)
+
+	return nShared, nValue, unsharedKey, byteRead, nil
+}
+
+// decodeRestartTrailer resolves all the offsets recorded at the trailer.
+func decodeRestartTrailer(keySection []byte) ([]uint32, []uint32, int, error) {
 	var (
-		prevKey    []byte
-		items      int
 		keyOffsets []uint32
 		valOffsets []uint32
-
-		keyOff int // the key offset within the single trie data
-		valOff int // the value offset within the single trie data
-
-		keys []string
 	)
 	// Decode the number of restart section
 	if len(keySection) < 4 {
-		return nil, fmt.Errorf("key section too short, size: %d", len(keySection))
+		return nil, nil, 0, fmt.Errorf("key section too short, size: %d", len(keySection))
 	}
 	nRestarts := binary.BigEndian.Uint32(keySection[len(keySection)-4:])
 
+	// Decode the trailer
 	if len(keySection) < int(8*nRestarts)+4 {
-		return nil, fmt.Errorf("key section too short, restarts: %d, size: %d", nRestarts, len(keySection))
+		return nil, nil, 0, fmt.Errorf("key section too short, restarts: %d, size: %d", nRestarts, len(keySection))
 	}
 	for i := range int(nRestarts) {
 		o := len(keySection) - 4 - (int(nRestarts)-i)*8
 		keyOffset := binary.BigEndian.Uint32(keySection[o : o+4])
 		if i != 0 && keyOffset <= keyOffsets[i-1] {
-			return nil, fmt.Errorf("key offset is out of order, prev: %v, cur: %v", keyOffsets[i-1], keyOffset)
+			return nil, nil, 0, fmt.Errorf("key offset is out of order, prev: %v, cur: %v", keyOffsets[i-1], keyOffset)
 		}
 		keyOffsets = append(keyOffsets, keyOffset)
 
@@ -378,99 +414,117 @@ func decodeSingle(keySection []byte, onValue func([]byte, int, int) error) ([]st
 		// section have zero-size value.
 		valOffset := binary.BigEndian.Uint32(keySection[o+4 : o+8])
 		if i != 0 && valOffset < valOffsets[i-1] {
-			return nil, fmt.Errorf("value offset is out of order, prev: %v, cur: %v", valOffsets[i-1], valOffset)
+			return nil, nil, 0, fmt.Errorf("value offset is out of order, prev: %v, cur: %v", valOffsets[i-1], valOffset)
 		}
 		valOffsets = append(valOffsets, valOffset)
 	}
-	keyLimit := len(keySection) - 4 - int(nRestarts)*8
+	keyLimit := len(keySection) - 4 - int(nRestarts)*8 // End of key data
+	return keyOffsets, valOffsets, keyLimit, nil
+}
 
+// decodeRestartSection resolves all entries in a restart section. The keyData
+// contains the encoded keys for the section.
+//
+// onValue is the callback function being invoked for each resolved entry. The
+// start and limit are the offsets within the restart section, the base value
+// offset of the restart section itself should be added by the caller itself.
+// What's more, this function should return `aborted == true` if the entry
+// resolution should be terminated.
+func decodeRestartSection(keyData []byte, onValue func(key []byte, start int, limit int) (bool, error)) error {
+	var (
+		prevKey []byte
+		items   int
+
+		keyOff int // the key offset within the single trie data
+		valOff int // the value offset within the single trie data
+	)
 	// Decode data
-	for keyOff < keyLimit {
-		// Validate the key and value offsets within the single trie data chunk
-		if items%trienodeDataBlockRestartLen == 0 {
-			restartIndex := items / trienodeDataBlockRestartLen
-			if restartIndex >= len(keyOffsets) {
-				return nil, fmt.Errorf("restart index out of range: %d, available restarts: %d", restartIndex, len(keyOffsets))
-			}
-			if keyOff != int(keyOffsets[restartIndex]) {
-				return nil, fmt.Errorf("key offset is not matched, recorded: %d, want: %d", keyOffsets[restartIndex], keyOff)
-			}
-			if valOff != int(valOffsets[restartIndex]) {
-				return nil, fmt.Errorf("value offset is not matched, recorded: %d, want: %d", valOffsets[restartIndex], valOff)
-			}
-		}
-		// Resolve the entry from key section
-		nShared, nn := binary.Uvarint(keySection[keyOff:]) // key length shared (varint)
-		if nn <= 0 {
-			return nil, fmt.Errorf("corrupted varint encoding for nShared at offset %d", keyOff)
+	for keyOff < len(keyData) {
+		nShared, nValue, unsharedKey, nn, err := decodeKeyEntry(keyData, keyOff)
+		if err != nil {
+			return err
 		}
 		keyOff += nn
-		nUnshared, nn := binary.Uvarint(keySection[keyOff:]) // key length not shared (varint)
-		if nn <= 0 {
-			return nil, fmt.Errorf("corrupted varint encoding for nUnshared at offset %d", keyOff)
-		}
-		keyOff += nn
-		nValue, nn := binary.Uvarint(keySection[keyOff:]) // value length (varint)
-		if nn <= 0 {
-			return nil, fmt.Errorf("corrupted varint encoding for nValue at offset %d", keyOff)
-		}
-		keyOff += nn
-
-		// Validate that the values can fit in an int to prevent overflow on 32-bit systems
-		if nShared > uint64(math.MaxUint32) || nUnshared > uint64(math.MaxUint32) || nValue > uint64(math.MaxUint32) {
-			return nil, errors.New("key size too large")
-		}
-
-		// Resolve unshared key
-		if keyOff+int(nUnshared) > len(keySection) {
-			return nil, fmt.Errorf("key length too long, unshared key length: %d, off: %d, section size: %d", nUnshared, keyOff, len(keySection))
-		}
-		unsharedKey := keySection[keyOff : keyOff+int(nUnshared)]
-		keyOff += int(nUnshared)
 
 		// Assemble the full key
 		var key []byte
 		if items%trienodeDataBlockRestartLen == 0 {
 			if nShared != 0 {
-				return nil, fmt.Errorf("unexpected non-zero shared key prefix: %d", nShared)
+				return fmt.Errorf("unexpected non-zero shared key prefix: %d", nShared)
 			}
 			key = unsharedKey
 		} else {
-			// TODO(rjl493456442) mitigate the allocation pressure.
 			if int(nShared) > len(prevKey) {
-				return nil, fmt.Errorf("unexpected shared key prefix: %d, prefix key length: %d", nShared, len(prevKey))
+				return fmt.Errorf("unexpected shared key prefix: %d, prefix key length: %d", nShared, len(prevKey))
 			}
-			key = append([]byte{}, prevKey[:nShared]...)
-			key = append(key, unsharedKey...)
+			key = make([]byte, int(nShared)+len(unsharedKey))
+			copy(key[:nShared], prevKey[:nShared])
+			copy(key[nShared:], unsharedKey)
 		}
 		if items != 0 && bytes.Compare(prevKey, key) >= 0 {
-			return nil, fmt.Errorf("trienode paths are out of order, prev: %v, cur: %v", prevKey, key)
+			return fmt.Errorf("trienode paths are out of order, prev: %v, cur: %v", prevKey, key)
 		}
 		prevKey = key
 
-		// Resolve value
-		if onValue != nil {
-			if err := onValue(key, valOff, valOff+int(nValue)); err != nil {
-				return nil, err
-			}
+		valEnd := valOff + int(nValue)
+		abort, err := onValue(key, valOff, valEnd)
+		if err != nil {
+			return err
 		}
-		valOff += int(nValue)
-
+		if abort {
+			return nil
+		}
+		valOff = valEnd
 		items++
-		keys = append(keys, string(key))
 	}
-	if keyOff != keyLimit {
-		return nil, fmt.Errorf("excessive key data after decoding, offset: %d, size: %d", keyOff, keyLimit)
+	if keyOff != len(keyData) {
+		return fmt.Errorf("excessive key data after decoding, offset: %d, size: %d", keyOff, len(keyData))
 	}
-	return keys, nil
+	return nil
 }
 
-func decodeSingleWithValue(keySection []byte, valueSection []byte) ([]string, map[string][]byte, error) {
+// onValue is the callback function being invoked for each resolved entry. The
+// start and limit are the offsets within this trie chunk, the base value
+// offset of the trie chunk itself should be added by the caller itself.
+func decodeSingle(keySection []byte, onValue func([]byte, int, int) error) error {
+	keyOffsets, valOffsets, keyLimit, err := decodeRestartTrailer(keySection)
+	if err != nil {
+		return err
+	}
+	for i := 0; i < len(keyOffsets); i++ {
+		var keyData []byte
+		if i == len(keyOffsets)-1 {
+			keyData = keySection[keyOffsets[i]:keyLimit]
+		} else {
+			keyData = keySection[keyOffsets[i]:keyOffsets[i+1]]
+		}
+		err := decodeRestartSection(keyData, func(key []byte, start int, limit int) (bool, error) {
+			valStart := int(valOffsets[i]) + start
+			valLimit := int(valOffsets[i]) + limit
+
+			// Possible in tests
+			if onValue == nil {
+				return false, nil
+			}
+			if err := onValue(key, valStart, valLimit); err != nil {
+				return false, err
+			}
+			return false, nil // abort=false
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func decodeSingleWithValue(keySection []byte, valueSection []byte, valStart uint32) ([]string, map[string][]byte, error) {
 	var (
 		offset int
 		nodes  = make(map[string][]byte)
+		paths  []string
 	)
-	paths, err := decodeSingle(keySection, func(key []byte, start int, limit int) error {
+	err := decodeSingle(keySection, func(key []byte, start int, limit int) error {
 		if start != offset {
 			return fmt.Errorf("gapped value section offset: %d, want: %d", start, offset)
 		}
@@ -481,8 +535,11 @@ func decodeSingleWithValue(keySection []byte, valueSection []byte) ([]string, ma
 		if start > len(valueSection) || limit > len(valueSection) {
 			return fmt.Errorf("value section out of range: start: %d, limit: %d, size: %d", start, limit, len(valueSection))
 		}
-		nodes[string(key)] = valueSection[start:limit]
+		strkey := string(key)
+		paths = append(paths, strkey)
+		nodes[strkey] = valueSection[start:limit]
 
+		fmt.Println("key", key, "baseoff", valStart, "start in section", start, "limit in section", limit, "value", valueSection[start:limit])
 		offset = limit
 		return nil
 	})
@@ -507,7 +564,8 @@ func (h *trienodeHistory) decode(header []byte, keySection []byte, valueSection 
 	h.nodes = make(map[common.Hash]map[string][]byte)
 
 	for i := range len(owners) {
-		// Resolve the boundary of key section
+		// Resolve the boundary of the key section, each offset referring
+		// to the end position of this trie chunk.
 		var keyStart, keyLimit uint32
 		if i != 0 {
 			keyStart = keyOffsets[i-1]
@@ -517,7 +575,8 @@ func (h *trienodeHistory) decode(header []byte, keySection []byte, valueSection 
 			return fmt.Errorf("invalid key offsets: keyStart: %d, keyLimit: %d, size: %d", keyStart, keyLimit, len(keySection))
 		}
 
-		// Resolve the boundary of value section
+		// Resolve the boundary of the value section, each offset referring
+		// to the end position of this trie chunk.
 		var valStart, valLimit uint32
 		if i != 0 {
 			valStart = valueOffsets[i-1]
@@ -528,7 +587,7 @@ func (h *trienodeHistory) decode(header []byte, keySection []byte, valueSection 
 		}
 
 		// Decode the key and values for this specific trie
-		paths, nodes, err := decodeSingleWithValue(keySection[keyStart:keyLimit], valueSection[valStart:valLimit])
+		paths, nodes, err := decodeSingleWithValue(keySection[keyStart:keyLimit], valueSection[valStart:valLimit], valStart)
 		if err != nil {
 			return err
 		}
@@ -567,10 +626,10 @@ func newSingleTrienodeHistoryReader(id uint64, reader ethdb.AncientReader, keyRa
 		return nil, err
 	}
 	valueOffsets := make(map[string]iRange)
-	_, err = decodeSingle(keyData, func(key []byte, start int, limit int) error {
+	err = decodeSingle(keyData, func(key []byte, start int, limit int) error {
 		valueOffsets[string(key)] = iRange{
-			start: uint32(start),
-			limit: uint32(limit),
+			start: uint32(start) + valueRange.start,
+			limit: uint32(limit) + valueRange.start,
 		}
 		return nil
 	})
@@ -591,7 +650,7 @@ func (sr *singleTrienodeHistoryReader) read(path string) ([]byte, error) {
 	if !exists {
 		return nil, fmt.Errorf("trienode %v not found", []byte(path))
 	}
-	return rawdb.ReadTrienodeHistoryValueSection(sr.reader, sr.id, uint64(sr.valueRange.start+offset.start), uint64(offset.len()))
+	return rawdb.ReadTrienodeHistoryValueSection(sr.reader, sr.id, uint64(offset.start), uint64(offset.len()))
 }
 
 // trienodeHistoryReader provides read access to node data in the trie node history.
@@ -608,11 +667,9 @@ type trienodeHistoryReader struct {
 // newTrienodeHistoryReader constructs the reader for specific trienode history.
 func newTrienodeHistoryReader(id uint64, reader ethdb.AncientReader) (*trienodeHistoryReader, error) {
 	r := &trienodeHistoryReader{
-		id:        id,
-		reader:    reader,
-		keyRanges: make(map[common.Hash]iRange),
-		valRanges: make(map[common.Hash]iRange),
-		iReaders:  make(map[common.Hash]*singleTrienodeHistoryReader),
+		id:       id,
+		reader:   reader,
+		iReaders: make(map[common.Hash]*singleTrienodeHistoryReader),
 	}
 	if err := r.decodeHeader(); err != nil {
 		return nil, err
@@ -630,6 +687,9 @@ func (r *trienodeHistoryReader) decodeHeader() error {
 	if err != nil {
 		return err
 	}
+	r.keyRanges = make(map[common.Hash]iRange, len(owners))
+	r.valRanges = make(map[common.Hash]iRange, len(owners))
+
 	for i, owner := range owners {
 		// Decode the key range for this trie chunk
 		var keyStart uint32
@@ -640,7 +700,6 @@ func (r *trienodeHistoryReader) decodeHeader() error {
 			start: keyStart,
 			limit: keyOffsets[i],
 		}
-
 		// Decode the value range for this trie chunk
 		var valStart uint32
 		if i != 0 {
@@ -707,7 +766,6 @@ func writeTrienodeHistory(writer ethdb.AncientWriter, dl *diffLayer, rate uint32
 }
 
 // readTrienodeMetadata resolves the metadata of the specified trienode history.
-// nolint:unused
 func readTrienodeMetadata(reader ethdb.AncientReader, id uint64) (*trienodeMetadata, error) {
 	header, err := rawdb.ReadTrienodeHistoryHeader(reader, id)
 	if err != nil {
