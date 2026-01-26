@@ -201,8 +201,8 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(ctx context.Context, update engine.
 			return engine.STATUS_INVALID, attributesErr("missing withdrawals")
 		case params.BeaconRoot == nil:
 			return engine.STATUS_INVALID, attributesErr("missing beacon root")
-		case !api.checkFork(params.Timestamp, forks.Cancun, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2, forks.BPO3, forks.BPO4, forks.BPO5):
-			return engine.STATUS_INVALID, unsupportedForkErr("fcuV3 must only be called for cancun/prague/osaka payloads")
+		case !api.checkFork(params.Timestamp, forks.Cancun, forks.Prague, forks.Osaka, forks.BPO1, forks.Amsterdam, forks.BPO2, forks.BPO3, forks.BPO4, forks.BPO5):
+			return engine.STATUS_INVALID, unsupportedForkErr("fcuV3 must only be called for cancun/prague/osaka/amsterdam payloads")
 		}
 	}
 	// TODO(matt): the spec requires that fcu is applied when called on a valid
@@ -323,6 +323,12 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 	} else {
 		// If the head block is already in our canonical chain, the beacon client is
 		// probably resyncing. Ignore the update.
+		// TODO(MariusVanDerWijden): in epbs it can happen that we are reorging to a previous head
+		if api.eth.Synced() {
+			if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
+				return engine.ForkChoiceResponse{PayloadStatus: engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: &latestValid}}, err
+			}
+		}
 		log.Info("Ignoring beacon update to old head", "number", block.NumberU64(), "hash", update.HeadBlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)), "have", api.eth.BlockChain().CurrentBlock().Number)
 		return valid(nil), nil
 	}
@@ -479,19 +485,23 @@ func (api *ConsensusAPI) GetPayloadV5(payloadID engine.PayloadID) (*engine.Execu
 			forks.BPO3,
 			forks.BPO4,
 			forks.BPO5,
+			forks.Amsterdam, // TODO (MariusVanDerWijden) remove
+			// Amsterdam uses GetPayloadV6
 		})
 }
 
 // GetPayloadV6 returns a cached payload by id. This endpoint should only
 // be used after the Amsterdam fork.
+//
+// This method follows the same specification as engine_getPayloadV5 with
+// changes of returning ExecutionPayloadV4 with blockAccessList.
 func (api *ConsensusAPI) GetPayloadV6(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
 	return api.getPayload(
 		payloadID,
 		false,
 		[]engine.PayloadVersion{engine.PayloadV4},
-		[]forks.Fork{
-			forks.Amsterdam,
-		})
+		[]forks.Fork{forks.Amsterdam},
+	)
 }
 
 // getPayload will retrieve the specified payload and verify it conforms to the
@@ -726,7 +736,9 @@ func (api *ConsensusAPI) NewPayloadV4(ctx context.Context, params engine.Executa
 		return invalidStatus, paramsErr("nil beaconRoot post-cancun")
 	case executionRequests == nil:
 		return invalidStatus, paramsErr("nil executionRequests post-prague")
-	case !api.checkFork(params.Timestamp, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2, forks.BPO3, forks.BPO4, forks.BPO5):
+	case api.checkFork(params.Timestamp, forks.Amsterdam):
+		return invalidStatus, unsupportedForkErr("newPayloadV4 must not be called for amsterdam payloads, use newPayloadV5")
+	case !api.checkFork(params.Timestamp, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2, forks.BPO3, forks.BPO4, forks.BPO5, forks.Amsterdam): // TODO: remove Amsterdam once it is activated
 		return invalidStatus, unsupportedForkErr("newPayloadV4 must only be called for prague/osaka payloads")
 	}
 	requests := convertRequests(executionRequests)

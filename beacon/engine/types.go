@@ -55,7 +55,7 @@ var (
 	//
 	// https://github.com/ethereum/execution-apis/blob/main/src/engine/amsterdam.md#executionpayloadv4
 	// ExecutionPayloadV4 has the syntax of ExecutionPayloadV3 and appends the new
-	// field slotNumber.
+	// fields slotNumber and blockAccessList (EIP-7928).
 	PayloadV4 PayloadVersion = 0x4
 )
 
