@@ -140,9 +140,12 @@ type trienodeHistory struct {
 
 // newTrienodeHistory constructs a trienode history with the provided trie nodes.
 func newTrienodeHistory(root common.Hash, parent common.Hash, block uint64, nodes map[common.Hash]map[string][]byte) *trienodeHistory {
-	nodeList := make(map[common.Hash][]string)
+	nodeList := make(map[common.Hash][]string, len(nodes))
 	for owner, subset := range nodes {
-		keys := sort.StringSlice(slices.Collect(maps.Keys(subset)))
+		keys := make(sort.StringSlice, 0, len(subset))
+		for k := range subset {
+			keys = append(keys, k)
+		}
 		keys.Sort()
 		nodeList[owner] = keys
 	}
@@ -518,11 +521,12 @@ func decodeSingle(keySection []byte, onValue func([]byte, int, int) error) error
 	return nil
 }
 
-func decodeSingleWithValue(keySection []byte, valueSection []byte, valStart uint32) ([]string, map[string][]byte, error) {
+func decodeSingleWithValue(keySection []byte, valueSection []byte) ([]string, map[string][]byte, error) {
 	var (
-		offset int
-		nodes  = make(map[string][]byte)
-		paths  []string
+		offset    int
+		estimated = len(keySection) / 8
+		nodes     = make(map[string][]byte, estimated)
+		paths     = make([]string, 0, estimated)
 	)
 	err := decodeSingle(keySection, func(key []byte, start int, limit int) error {
 		if start != offset {
@@ -539,7 +543,6 @@ func decodeSingleWithValue(keySection []byte, valueSection []byte, valStart uint
 		paths = append(paths, strkey)
 		nodes[strkey] = valueSection[start:limit]
 
-		fmt.Println("key", key, "baseoff", valStart, "start in section", start, "limit in section", limit, "value", valueSection[start:limit])
 		offset = limit
 		return nil
 	})
@@ -587,7 +590,7 @@ func (h *trienodeHistory) decode(header []byte, keySection []byte, valueSection 
 		}
 
 		// Decode the key and values for this specific trie
-		paths, nodes, err := decodeSingleWithValue(keySection[keyStart:keyLimit], valueSection[valStart:valLimit], valStart)
+		paths, nodes, err := decodeSingleWithValue(keySection[keyStart:keyLimit], valueSection[valStart:valLimit])
 		if err != nil {
 			return err
 		}
