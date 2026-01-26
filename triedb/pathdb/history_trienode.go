@@ -606,51 +606,113 @@ func (ir iRange) len() uint32 {
 	return ir.limit - ir.start
 }
 
-// singleTrienodeHistoryReader provides read access to a single trie within the
-// trienode history. It stores an offset to the trie's position in the history,
-// along with a set of per-node offsets that can be resolved on demand.
 type singleTrienodeHistoryReader struct {
-	id                   uint64
-	reader               ethdb.AncientReader
-	valueRange           iRange            // value range within the global value section
-	valueInternalOffsets map[string]iRange // value offset within the single trie data
+	id         uint64
+	reader     ethdb.AncientReader
+	keyData    []byte
+	valueRange iRange
 }
 
-// TODO(rjl493456442): This function performs a large number of allocations.
-// Given the large data size, a byte pool could be used to mitigate this.
 func newSingleTrienodeHistoryReader(id uint64, reader ethdb.AncientReader, keyRange iRange, valueRange iRange) (*singleTrienodeHistoryReader, error) {
-	// TODO(rjl493456442) the data size is known in advance, allocating the
-	// dedicated byte slices from the pool.
 	keyData, err := rawdb.ReadTrienodeHistoryKeySection(reader, id, uint64(keyRange.start), uint64(keyRange.len()))
 	if err != nil {
 		return nil, err
 	}
-	valueOffsets := make(map[string]iRange)
-	err = decodeSingle(keyData, func(key []byte, start int, limit int) error {
-		valueOffsets[string(key)] = iRange{
-			start: uint32(start) + valueRange.start,
-			limit: uint32(limit) + valueRange.start,
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
 	return &singleTrienodeHistoryReader{
-		id:                   id,
-		reader:               reader,
-		valueRange:           valueRange,
-		valueInternalOffsets: valueOffsets,
+		id:         id,
+		reader:     reader,
+		keyData:    keyData,
+		valueRange: valueRange,
 	}, nil
 }
 
-// read retrieves the trie node data with the provided node path.
-func (sr *singleTrienodeHistoryReader) read(path string) ([]byte, error) {
-	offset, exists := sr.valueInternalOffsets[path]
-	if !exists {
-		return nil, fmt.Errorf("trienode %v not found", []byte(path))
+// searchSingle searches for a specific trie node identified by the provided
+// key within a single trie node chunk.
+//
+// It returns the node value's offset range (start and limit) within the
+// trie node data. An error is returned if the node cannot be found.
+func (sr *singleTrienodeHistoryReader) searchSingle(key []byte) (int, int, bool, error) {
+	keyOffsets, valOffsets, keyLimit, err := decodeRestartTrailer(sr.keyData)
+	if err != nil {
+		return 0, 0, false, err
 	}
-	return rawdb.ReadTrienodeHistoryValueSection(sr.reader, sr.id, uint64(offset.start), uint64(offset.len()))
+	// Binary search against the boundary keys for each restart section
+	var (
+		boundFind     bool
+		boundValueLen uint64
+	)
+	pos := sort.Search(len(keyOffsets), func(i int) bool {
+		_, nValue, dkey, _, derr := decodeKeyEntry(sr.keyData[keyOffsets[i]:], 0)
+		if derr != nil {
+			err = derr
+			return false
+		}
+		n := bytes.Compare(key, dkey)
+		if n == 0 {
+			boundFind = true
+			boundValueLen = nValue
+		}
+		return n <= 0
+	})
+	if err != nil {
+		return 0, 0, false, err
+	}
+	// The node is found as the boundary of restart section
+	if boundFind {
+		start := valOffsets[pos]
+		limit := valOffsets[pos] + uint32(boundValueLen)
+		return int(start), int(limit), true, nil
+	}
+	// The node is not found as all others have larger key than the target
+	if pos == 0 {
+		return 0, 0, false, nil
+	}
+	// Search the target node within the restart section
+	var keyData []byte
+	if pos == len(keyOffsets) {
+		keyData = sr.keyData[keyOffsets[pos-1]:keyLimit] // last section
+	} else {
+		keyData = sr.keyData[keyOffsets[pos-1]:keyOffsets[pos]] // non-last section
+	}
+	var (
+		nStart int
+		nLimit int
+		found  bool
+	)
+	err = decodeRestartSection(keyData, func(ikey []byte, start, limit int) (bool, error) {
+		if bytes.Equal(key, ikey) {
+			nStart = int(valOffsets[pos-1]) + start
+			nLimit = int(valOffsets[pos-1]) + limit
+			found = true
+			return true, nil // abort = true
+		}
+		return false, nil // abort = false
+	})
+	if err != nil {
+		return 0, 0, false, err
+	}
+	if !found {
+		return 0, 0, false, nil
+	}
+	return nStart, nLimit, true, nil
+}
+
+// read retrieves the trie node data with the provided node path.
+func (sr *singleTrienodeHistoryReader) read(key []byte) ([]byte, bool, error) {
+	start, limit, found, err := sr.searchSingle(key)
+	if err != nil {
+		return nil, false, err
+	}
+	if !found {
+		return nil, false, nil
+	}
+	valStart := uint64(start) + uint64(sr.valueRange.start)
+	valLen := uint64(limit - start)
+	value, err := rawdb.ReadTrienodeHistoryValueSection(sr.reader, sr.id, valStart, valLen)
+	if err != nil {
+		return nil, false, err
+	}
+	return value, true, nil
 }
 
 // trienodeHistoryReader provides read access to node data in the trie node history.
@@ -714,25 +776,25 @@ func (r *trienodeHistoryReader) decodeHeader() error {
 }
 
 // read retrieves the trie node data with the provided TrieID and node path.
-func (r *trienodeHistoryReader) read(owner common.Hash, path string) ([]byte, error) {
+func (r *trienodeHistoryReader) read(owner common.Hash, path string) ([]byte, bool, error) {
 	ir, ok := r.iReaders[owner]
 	if !ok {
 		keyRange, exists := r.keyRanges[owner]
 		if !exists {
-			return nil, fmt.Errorf("trie %x is unknown", owner)
+			return nil, false, nil // not found
 		}
 		valRange, exists := r.valRanges[owner]
 		if !exists {
-			return nil, fmt.Errorf("trie %x is unknown", owner)
+			return nil, false, nil // not found
 		}
 		var err error
 		ir, err = newSingleTrienodeHistoryReader(r.id, r.reader, keyRange, valRange)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		r.iReaders[owner] = ir
 	}
-	return ir.read(path)
+	return ir.read([]byte(path))
 }
 
 // writeTrienodeHistory persists the trienode history associated with the given diff layer.
