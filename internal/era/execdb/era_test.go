@@ -120,9 +120,10 @@ func TestEraE(t *testing.T) {
 					body:     mustEncode(&types.Body{}),
 					receipts: mustEncode([]types.ReceiptForStorage{}),
 					hash:     common.Hash{byte(idx)},
+					difficulty: big.NewInt(0),
 				}
 				blocks = append(blocks, blk)
-				if err := builder.AddRLP(blk.header, blk.body, blk.receipts, num, blk.hash, nil, nil); err != nil {
+				if err := builder.AddRLP(blk.header, blk.body, blk.receipts, num, blk.hash, nil, big.NewInt(0)); err != nil {
 					t.Fatalf("error adding post-merge block %d: %v", idx, err)
 				}
 			}
