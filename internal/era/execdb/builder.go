@@ -131,15 +131,24 @@ func (b *Builder) AddRLP(header, body, receipts []byte, number uint64, blockHash
 		*b.startNum = number
 	}
 
+	if difficulty == nil {
+		return fmt.Errorf("invalid block: difficulty is nil")
+	}
+	hasDifficulty := difficulty.Sign() > 0
+	// Expect td to be nil for post-merge blocks
+	// and non-nil for pre-merge blocks.
+	if hasDifficulty != (td != nil) {
+		return fmt.Errorf("TD and difficulty mismatch: expected both nil or both non-nil")
+	}
 	// After the merge, difficulty must be nil.
 	post := (b.tds == nil && len(b.headers) > 0) || b.ttd != nil
-	if post && difficulty != nil {
+	if post && hasDifficulty {
 		return fmt.Errorf("post-merge epoch: cannot accept total difficulty for block %d", number)
 	}
 
 	// If this marks the start of the transition, record final total
 	// difficulty value.
-	if len(b.tds) > 0 && difficulty == nil {
+	if b.ttd == nil && len(b.tds) > 0 && !hasDifficulty {
 		b.ttd = new(big.Int).Set(b.tds[len(b.tds)-1])
 	}
 
@@ -153,7 +162,7 @@ func (b *Builder) AddRLP(header, body, receipts []byte, number uint64, blockHash
 	//   - Pre-merge: store total difficulty and block hashes.
 	//   - Transition: only store total difficulty.
 	//   - Post-merge: store neither.
-	if difficulty != nil {
+	if hasDifficulty {
 		b.hashes = append(b.hashes, blockHash)
 		b.tds = append(b.tds, new(big.Int).Set(td))
 	} else if b.ttd != nil {
