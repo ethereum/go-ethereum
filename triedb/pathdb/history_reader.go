@@ -285,10 +285,7 @@ func newTrienodeReader(disk ethdb.KeyValueReader, freezer ethdb.AncientReader, r
 
 // readTrienode retrieves the trienode data from the specified trienode history.
 func (r *trienodeReader) readTrienode(addrHash common.Hash, path string, historyID uint64) ([]byte, bool, error) {
-	tr, err := newTrienodeHistoryReader(historyID, r.freezer)
-	if err != nil {
-		return nil, false, err
-	}
+	tr := newTrienodeHistoryReader(historyID, r.freezer)
 	return tr.read(addrHash, path)
 }
 

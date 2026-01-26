@@ -719,80 +719,60 @@ func (sr *singleTrienodeHistoryReader) read(key []byte) ([]byte, bool, error) {
 // It resolves data from the underlying ancient store only when needed, minimizing
 // I/O overhead.
 type trienodeHistoryReader struct {
-	id        uint64                                       // ID of the associated trienode history
-	reader    ethdb.AncientReader                          // Database reader of ancient store
-	keyRanges map[common.Hash]iRange                       // Key ranges identifying trie chunks
-	valRanges map[common.Hash]iRange                       // Value ranges identifying trie chunks
-	iReaders  map[common.Hash]*singleTrienodeHistoryReader // readers for each individual trie chunk
+	id     uint64              // ID of the associated trienode history
+	reader ethdb.AncientReader // Database reader of ancient store
 }
 
 // newTrienodeHistoryReader constructs the reader for specific trienode history.
-func newTrienodeHistoryReader(id uint64, reader ethdb.AncientReader) (*trienodeHistoryReader, error) {
-	r := &trienodeHistoryReader{
-		id:       id,
-		reader:   reader,
-		iReaders: make(map[common.Hash]*singleTrienodeHistoryReader),
+func newTrienodeHistoryReader(id uint64, reader ethdb.AncientReader) *trienodeHistoryReader {
+	return &trienodeHistoryReader{
+		id:     id,
+		reader: reader,
 	}
-	if err := r.decodeHeader(); err != nil {
-		return nil, err
-	}
-	return r, nil
 }
 
 // decodeHeader decodes the header section of trienode history.
-func (r *trienodeHistoryReader) decodeHeader() error {
+func (r *trienodeHistoryReader) decodeHeader(owner common.Hash) (iRange, iRange, bool, error) {
 	header, err := rawdb.ReadTrienodeHistoryHeader(r.reader, r.id)
 	if err != nil {
-		return err
+		return iRange{}, iRange{}, false, err
 	}
 	_, owners, keyOffsets, valOffsets, err := decodeHeader(header)
 	if err != nil {
-		return err
+		return iRange{}, iRange{}, false, err
 	}
-	r.keyRanges = make(map[common.Hash]iRange, len(owners))
-	r.valRanges = make(map[common.Hash]iRange, len(owners))
+	pos := sort.Search(len(owners), func(i int) bool {
+		return owner.Cmp(owners[i]) <= 0
+	})
+	if pos == len(owners) || owners[pos] != owner {
+		return iRange{}, iRange{}, false, nil
+	}
+	var keyRange iRange
+	if pos != 0 {
+		keyRange.start = keyOffsets[pos-1]
+	}
+	keyRange.limit = keyOffsets[pos]
 
-	for i, owner := range owners {
-		// Decode the key range for this trie chunk
-		var keyStart uint32
-		if i != 0 {
-			keyStart = keyOffsets[i-1]
-		}
-		r.keyRanges[owner] = iRange{
-			start: keyStart,
-			limit: keyOffsets[i],
-		}
-		// Decode the value range for this trie chunk
-		var valStart uint32
-		if i != 0 {
-			valStart = valOffsets[i-1]
-		}
-		r.valRanges[owner] = iRange{
-			start: valStart,
-			limit: valOffsets[i],
-		}
+	var valRange iRange
+	if pos != 0 {
+		valRange.start = valOffsets[pos-1]
 	}
-	return nil
+	valRange.limit = valOffsets[pos]
+	return keyRange, valRange, true, nil
 }
 
 // read retrieves the trie node data with the provided TrieID and node path.
 func (r *trienodeHistoryReader) read(owner common.Hash, path string) ([]byte, bool, error) {
-	ir, ok := r.iReaders[owner]
-	if !ok {
-		keyRange, exists := r.keyRanges[owner]
-		if !exists {
-			return nil, false, nil // not found
-		}
-		valRange, exists := r.valRanges[owner]
-		if !exists {
-			return nil, false, nil // not found
-		}
-		var err error
-		ir, err = newSingleTrienodeHistoryReader(r.id, r.reader, keyRange, valRange)
-		if err != nil {
-			return nil, false, err
-		}
-		r.iReaders[owner] = ir
+	keyRange, valRange, found, err := r.decodeHeader(owner)
+	if err != nil {
+		return nil, false, err
+	}
+	if !found {
+		return nil, false, nil
+	}
+	ir, err := newSingleTrienodeHistoryReader(r.id, r.reader, keyRange, valRange)
+	if err != nil {
+		return nil, false, err
 	}
 	return ir.read([]byte(path))
 }

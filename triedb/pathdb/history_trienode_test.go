@@ -138,10 +138,7 @@ func TestTrienodeHistoryReader(t *testing.T) {
 		}
 	}
 	for i, h := range hs {
-		tr, err := newTrienodeHistoryReader(uint64(i+1), freezer)
-		if err != nil {
-			t.Fatalf("Failed to construct the history reader: %v", err)
-		}
+		tr := newTrienodeHistoryReader(uint64(i+1), freezer)
 		for _, owner := range h.owners {
 			nodes := h.nodes[owner]
 			for key, value := range nodes {
@@ -418,14 +415,13 @@ func TestTrienodeHistoryReaderNonExistentPath(t *testing.T) {
 	if err := rawdb.WriteTrienodeHistory(freezer, 1, header, keySection, valueSection); err != nil {
 		t.Fatalf("Failed to write trienode history: %v", err)
 	}
-
-	tr, err := newTrienodeHistoryReader(1, freezer)
-	if err != nil {
-		t.Fatalf("Failed to construct history reader: %v", err)
-	}
+	tr := newTrienodeHistoryReader(1, freezer)
 
 	// Try to read a non-existent path
-	var found bool
+	var (
+		err   error
+		found bool
+	)
 	_, found, err = tr.read(testrand.Hash(), "nonexistent")
 	if found || err != nil {
 		t.Fatal("Expected not found for non-existent trie owner")
@@ -459,11 +455,7 @@ func TestTrienodeHistoryReaderNilValues(t *testing.T) {
 	if err := rawdb.WriteTrienodeHistory(freezer, 1, header, keySection, valueSection); err != nil {
 		t.Fatalf("Failed to write trienode history: %v", err)
 	}
-
-	tr, err := newTrienodeHistoryReader(1, freezer)
-	if err != nil {
-		t.Fatalf("Failed to construct history reader: %v", err)
-	}
+	tr := newTrienodeHistoryReader(1, freezer)
 
 	// Test reading nil values
 	data1, found, err := tr.read(owner, "nil1")
@@ -511,11 +503,7 @@ func TestTrienodeHistoryReaderNilKey(t *testing.T) {
 	if err := rawdb.WriteTrienodeHistory(freezer, 1, header, keySection, valueSection); err != nil {
 		t.Fatalf("Failed to write trienode history: %v", err)
 	}
-
-	tr, err := newTrienodeHistoryReader(1, freezer)
-	if err != nil {
-		t.Fatalf("Failed to construct history reader: %v", err)
-	}
+	tr := newTrienodeHistoryReader(1, freezer)
 
 	// Test reading nil values
 	data1, _, err := tr.read(owner, "")
@@ -713,11 +701,7 @@ func TestSearchSingle(t *testing.T) {
 	if err := rawdb.WriteTrienodeHistory(freezer, 1, header, keySection, valueSection); err != nil {
 		t.Fatalf("Failed to write trienode history: %v", err)
 	}
-
-	tr, err := newTrienodeHistoryReader(1, freezer)
-	if err != nil {
-		t.Fatalf("Failed to construct history reader: %v", err)
-	}
+	tr := newTrienodeHistoryReader(1, freezer)
 
 	// Test reading non-existent entry
 	keys := []string{
