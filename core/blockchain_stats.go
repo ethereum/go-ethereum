@@ -46,6 +46,7 @@ type ExecuteStats struct {
 	StorageUpdated int // Number of storage slots updated
 	StorageDeleted int // Number of storage slots deleted
 	CodeLoaded     int // Number of contract code loaded
+	CodeLoadBytes  int // Number of bytes read from contract code
 
 	Execution       time.Duration // Time spent on the EVM execution
 	Validation      time.Duration // Time spent on the block validation
@@ -74,6 +75,7 @@ func (s *ExecuteStats) reportMetrics() {
 	if s.CodeLoaded != 0 {
 		codeReadTimer.Update(s.CodeReads)
 		codeReadSingleTimer.Update(s.CodeReads / time.Duration(s.CodeLoaded))
+		codeReadBytesTimer.Update(time.Duration(s.CodeLoadBytes))
 	}
 	accountUpdateTimer.Update(s.AccountUpdates) // Account updates are complete(in validation)
 	storageUpdateTimer.Update(s.StorageUpdates) // Storage updates are complete(in validation)
@@ -123,7 +125,7 @@ Validation: %v
 State read: %v
     Account read: %v(%d)
     Storage read: %v(%d)
-    Code read: %v(%d)
+    Code read: %v(%d %v)
 
 State write: %v
     Trie commit: %v
@@ -145,7 +147,7 @@ State write: %v
 		common.PrettyDuration(s.AccountReads+s.StorageReads+s.CodeReads),
 		common.PrettyDuration(s.AccountReads), s.AccountLoaded,
 		common.PrettyDuration(s.StorageReads), s.StorageLoaded,
-		common.PrettyDuration(s.CodeReads), s.CodeLoaded,
+		common.PrettyDuration(s.CodeReads), s.CodeLoaded, common.StorageSize(s.CodeLoadBytes),
 
 		// State write
 		common.PrettyDuration(max(s.AccountCommits, s.StorageCommits)+s.TrieDBCommit+s.SnapshotCommit+s.BlockWrite),

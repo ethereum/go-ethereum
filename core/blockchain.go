@@ -76,6 +76,7 @@ var (
 	storageUpdateTimer = metrics.NewRegisteredResettingTimer("chain/storage/updates", nil)
 	storageCommitTimer = metrics.NewRegisteredResettingTimer("chain/storage/commits", nil)
 	codeReadTimer      = metrics.NewRegisteredResettingTimer("chain/code/reads", nil)
+	codeReadBytesTimer = metrics.NewRegisteredResettingTimer("chain/code/readbytes", nil)
 
 	accountCacheHitMeter  = metrics.NewRegisteredMeter("chain/account/reads/cache/process/hit", nil)
 	accountCacheMissMeter = metrics.NewRegisteredMeter("chain/account/reads/cache/process/miss", nil)
@@ -2238,6 +2239,7 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	stats.StorageUpdated = int(statedb.StorageUpdated.Load())
 	stats.StorageDeleted = int(statedb.StorageDeleted.Load())
 	stats.CodeLoaded = statedb.CodeLoaded
+	stats.CodeLoadBytes = statedb.CodeLoadBytes
 
 	stats.Execution = ptime - (statedb.AccountReads + statedb.StorageReads + statedb.CodeReads)          // The time spent on EVM processing
 	stats.Validation = vtime - (statedb.AccountHashes + statedb.AccountUpdates + statedb.StorageUpdates) // The time spent on block validation
