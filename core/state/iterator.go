@@ -131,26 +131,29 @@ func (it *nodeIterator) step() error {
 	address := common.BytesToAddress(preimage)
 
 	// Traverse the storage slots belong to the account
-	dataTrie, err := it.state.db.OpenStorageTrie(it.state.originalRoot, address, account.Root, it.tr)
-	if err != nil {
-		return err
+	if it.state.db.TrieDB().IsVerkle() || account.Root != types.EmptyRootHash {
+		dataTrie, err := it.state.db.OpenStorageTrie(it.state.originalRoot, address, account.Root, it.tr)
+		if err != nil {
+			return err
+		}
+		it.dataIt, err = dataTrie.NodeIterator(nil)
+		if err != nil {
+			return err
+		}
+		if !it.dataIt.Next(true) {
+			it.dataIt = nil
+		}
 	}
-	it.dataIt, err = dataTrie.NodeIterator(nil)
-	if err != nil {
-		return err
-	}
-	if !it.dataIt.Next(true) {
-		it.dataIt = nil
-	}
-	if !bytes.Equal(account.CodeHash, types.EmptyCodeHash.Bytes()) {
+	if !bytes.Equal(account.CodeHash, types.EmptyCodeHash[:]) {
 		it.codeHash = common.BytesToHash(account.CodeHash)
-		it.code, err = it.state.reader.Code(address, common.BytesToHash(account.CodeHash))
+		code, err := it.state.reader.Code(address, it.codeHash)
 		if err != nil {
 			return fmt.Errorf("code %x: %v", account.CodeHash, err)
 		}
-		if len(it.code) == 0 {
+		if len(code) == 0 {
 			return fmt.Errorf("code is not found: %x", account.CodeHash)
 		}
+		it.code = code
 	}
 	it.accountHash = it.stateIt.Parent()
 	return nil
