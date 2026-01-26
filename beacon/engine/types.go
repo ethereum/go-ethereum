@@ -50,6 +50,13 @@ var (
 	// ExecutionPayloadV3 has the syntax of ExecutionPayloadV2 and appends the new
 	// fields: blobGasUsed and excessBlobGas.
 	PayloadV3 PayloadVersion = 0x3
+
+	// PayloadV4 is the identifier of ExecutionPayloadV4 introduced in amsterdam fork.
+	//
+	// https://github.com/ethereum/execution-apis/blob/main/src/engine/amsterdam.md#executionpayloadv4
+	// ExecutionPayloadV4 has the syntax of ExecutionPayloadV3 and appends the new
+	// field: blockAccessList (EIP-7928).
+	PayloadV4 PayloadVersion = 0x4
 )
 
 //go:generate go run github.com/fjl/gencodec -type PayloadAttributes -field-override payloadAttributesMarshaling -out gen_blockparams.go
