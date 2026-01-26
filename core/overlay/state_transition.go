@@ -31,7 +31,11 @@ import (
 // has been rewritten.
 // * the conversion pointers should no longer be necessary,
 // remove them when it's been confirmed.
-// * we can't keep the preimage offset in the file
+// * we can't keep the preimage offset in the file, since
+// some clients might decide to record their preimages and
+// skip the use of the file altogether. Therefore, they can't
+// know what the offset it, unless they keep track of how many
+// bytes have been read since the start, which is a possibility.
 type TransitionState struct {
 	CurrentAccountAddress *common.Address // addresss of the last translated account
 	CurrentSlotHash       common.Hash     // hash of the last translated storage slot

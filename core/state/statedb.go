@@ -356,10 +356,6 @@ func (s *StateDB) InTransition() bool {
 	return completeValue != (common.Hash{})
 }
 
-func (s *StateDB) ProcessBinaryTreeTransition(maxSlot uint64) {
-
-}
-
 // TxIndex returns the current transaction index set by SetTxContext.
 func (s *StateDB) TxIndex() int {
 	return s.txIndex

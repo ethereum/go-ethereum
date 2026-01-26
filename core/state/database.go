@@ -239,8 +239,9 @@ func (db *CachingDB) ReadersWithCacheStats(stateRoot common.Hash) (ReaderWithSta
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	if db.triedb.IsVerkle() {
-		// if the transition has started, it will be present in the overlay tree,
-		// so we open it regardless.
+		// if the transition has started, the pointers will be present in the
+		// overlay tree, and the tree itself will be present, so the tree is
+		// opened and the pointers read, regardless of what comes afterwards.
 		bt, err := bintrie.NewBinaryTrie(root, db.triedb)
 		if err != nil {
 			return nil, fmt.Errorf("could not open the overlay tree: %w", err)
