@@ -90,7 +90,7 @@ type stateObject struct {
 
 // empty returns whether the account is considered empty.
 func (s *stateObject) empty() bool {
-	return s.data.Nonce == 0 && s.data.Balance.IsZero() && bytes.Equal(s.data.CodeHash, types.EmptyCodeHash.Bytes())
+	return s.data.Nonce == 0 && s.data.Balance.IsZero() && bytes.Equal(s.data.CodeHash, types.EmptyCodeHash[:])
 }
 
 // newObject creates a state object.
@@ -535,7 +535,7 @@ func (s *stateObject) Code() []byte {
 	if len(s.code) != 0 {
 		return s.code
 	}
-	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
+	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash[:]) {
 		return nil
 	}
 	defer func(start time.Time) {
@@ -562,7 +562,7 @@ func (s *stateObject) CodeSize() int {
 	if len(s.code) != 0 {
 		return len(s.code)
 	}
-	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
+	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash[:]) {
 		return 0
 	}
 	defer func(start time.Time) {
