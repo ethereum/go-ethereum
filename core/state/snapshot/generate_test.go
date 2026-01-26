@@ -67,6 +67,14 @@ func testGeneration(t *testing.T, scheme string) {
 	helper.makeStorageTrie("acc-3", []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 
 	root, snap := helper.CommitAndGenerate()
+	// Ensure the generator is properly torn down even if the test fails
+	defer func() {
+		if snap.genAbort != nil {
+			stop := make(chan *generatorStats)
+			snap.genAbort <- stop
+			<-stop
+		}
+	}()
 	if have, want := root, common.HexToHash("0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd"); have != want {
 		t.Fatalf("have %#x want %#x", have, want)
 	}
@@ -78,11 +86,6 @@ func testGeneration(t *testing.T, scheme string) {
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
-
-	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan *generatorStats)
-	snap.genAbort <- stop
-	<-stop
 }
 
 // Tests that snapshot generation with existent flat state.
