@@ -310,6 +310,8 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 		return fmt.Errorf("invalid blobGasUsed: have %d, expected nil", *header.BlobGasUsed)
 	case header.ParentBeaconRoot != nil:
 		return fmt.Errorf("invalid parentBeaconRoot, have %#x, expected nil", *header.ParentBeaconRoot)
+	case header.SlotNumber != nil:
+		return fmt.Errorf("invalid slotNumber, have %#x, expected nil", *header.SlotNumber)
 	}
 	// All basic checks passed, verify cascading fields
 	return c.verifyCascadingFields(chain, header, parents)
@@ -697,6 +699,9 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	}
 	if header.ParentBeaconRoot != nil {
 		panic("unexpected parent beacon root value in clique")
+	}
+	if header.SlotNumber != nil {
+		panic("unexpected slot number value in clique")
 	}
 	if err := rlp.Encode(w, enc); err != nil {
 		panic("can't encode: " + err.Error())
