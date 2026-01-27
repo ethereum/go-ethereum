@@ -42,9 +42,9 @@ type callLog struct {
 	Address common.Address `json:"address"`
 	Topics  []common.Hash  `json:"topics"`
 	Data    hexutil.Bytes  `json:"data"`
+	Index   hexutil.Uint   `json:"index"`
 	// Position of the log relative to subcalls within the same trace
 	// See https://github.com/ethereum/go-ethereum/pull/28389 for details
-	Index    hexutil.Uint `json:"index"`
 	Position hexutil.Uint `json:"position"`
 }
 
