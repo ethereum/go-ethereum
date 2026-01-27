@@ -397,13 +397,10 @@ const (
 	// execution (e.g. storage slot being cleared). this generates an increase in
 	// gas. There is at most one of such gas change per transaction.
 	GasChangeTxRefunds GasChangeReason = 3
-
-	// GasChangeTxLeftOverReturned is the amount of gas left over at the end of
-	// transaction's execution that will be returned to the chain. This change
-	// will always be a negative change as we "drain" left over gas towards 0.
-	// If there was no gas left at the end of execution, no such even will be
-	// emitted. The returned gas's value in Wei is returned to caller. There is
-	// at most one of such gas change per transaction.
+	// GasChangeTxLeftOverReturned is the amount of gas left over at the end of transaction's execution that will be returned
+	// to the account. This change will always be a negative change as we "drain" left over gas towards 0. If there was no gas
+	// left at the end of execution, no such even will be emitted. The returned gas's value in Wei is returned to caller.
+	// There is at most one of such gas change per transaction.
 	GasChangeTxLeftOverReturned GasChangeReason = 4
 
 	// GasChangeCallInitialBalance is the initial balance for the call which
