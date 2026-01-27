@@ -171,8 +171,8 @@ type StateDB struct {
 	Eip7702DelegationsCleared int // Number of EIP-7702 delegations cleared
 
 	// Code write tracking for cross-client execution metrics
-	CodeUpdated    int // Number of contracts deployed (CREATE/CREATE2)
-	CodeBytesWrite int // Total bytes of code written during deployments
+	CodeUpdated    int // Number of contracts with code changes that persisted
+	CodeBytesWrite int // Total bytes of persisted code written
 }
 
 // New creates a new state from a given trie.
@@ -481,14 +481,10 @@ func (s *StateDB) SetNonce(addr common.Address, nonce uint64, reason tracing.Non
 func (s *StateDB) SetCode(addr common.Address, code []byte, reason tracing.CodeChangeReason) (prev []byte) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
-		// Track code write and EIP-7702 delegation metrics
+		// EIP-7702 delegation counters are safe here: authorizations are applied
+		// at transaction level (applyAuthorization), outside revertable EVM frames.
 		switch reason {
-		case tracing.CodeChangeContractCreation:
-			s.CodeUpdated++
-			s.CodeBytesWrite += len(code)
 		case tracing.CodeChangeAuthorization:
-			s.CodeUpdated++
-			s.CodeBytesWrite += len(code)
 			s.Eip7702DelegationsSet++
 		case tracing.CodeChangeAuthorizationClear:
 			s.Eip7702DelegationsCleared++
@@ -961,8 +957,15 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		if op.isDelete() {
 			deletedAddrs = append(deletedAddrs, addr)
 		} else {
-			s.updateStateObject(s.stateObjects[addr])
+			obj := s.stateObjects[addr]
+			s.updateStateObject(obj)
 			s.AccountUpdated += 1
+			// Count code writes post-Finalise so reverted CREATEs are excluded.
+			// Only count non-empty code (clears like EIP-7702 revocations are not code writes).
+			if obj.dirtyCode && len(obj.code) > 0 {
+				s.CodeUpdated += 1
+				s.CodeBytesWrite += len(obj.code)
+			}
 		}
 		usedAddrs = append(usedAddrs, addr) // Copy needed for closure
 	}
