@@ -116,10 +116,10 @@ func TestEraE(t *testing.T) {
 				idx := tt.preMerge + i
 				num := tt.start + uint64(idx)
 				blk := blockData{
-					header:   mustEncode(&types.Header{Number: big.NewInt(int64(num)), Difficulty: big.NewInt(0)}),
-					body:     mustEncode(&types.Body{}),
-					receipts: mustEncode([]types.ReceiptForStorage{}),
-					hash:     common.Hash{byte(idx)},
+					header:     mustEncode(&types.Header{Number: big.NewInt(int64(num)), Difficulty: big.NewInt(0)}),
+					body:       mustEncode(&types.Body{}),
+					receipts:   mustEncode([]types.ReceiptForStorage{}),
+					hash:       common.Hash{byte(idx)},
 					difficulty: big.NewInt(0),
 				}
 				blocks = append(blocks, blk)
