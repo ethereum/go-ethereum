@@ -313,7 +313,7 @@ type trieReader struct {
 
 // newTrieReader constructs a trie reader of the specific state. An error will be
 // returned if the associated trie specified by root is not existent.
-func newTrieReader(root common.Hash, db *triedb.Database) (*trieReader, error) {
+func newTrieReader(root common.Hash, db *triedb.Database, ts *overlay.TransitionState) (*trieReader, error) {
 	var (
 		tr  Trie
 		err error
@@ -330,7 +330,6 @@ func newTrieReader(root common.Hash, db *triedb.Database) (*trieReader, error) {
 		// Based on the transition status, determine if the overlay
 		// tree needs to be created, or if a single, target tree is
 		// to be picked.
-		ts := overlay.LoadTransitionState(db.Disk(), root)
 		if ts.InTransition() {
 			mpt, err := trie.NewStateTrie(trie.StateTrieID(ts.BaseRoot), db)
 			if err != nil {

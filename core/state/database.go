@@ -190,6 +190,7 @@ func (db *CachingDB) StateReader(stateRoot common.Hash) (StateReader, error) {
 			readers = append(readers, newFlatReader(snap))
 		}
 	}
+	var ts *overlay.TransitionState
 	// Configure the state reader using the path database in path mode.
 	// This reader offers improved performance but is optional and only
 	// partially useful if the snapshot data in path database is not
@@ -198,11 +199,12 @@ func (db *CachingDB) StateReader(stateRoot common.Hash) (StateReader, error) {
 		reader, err := db.triedb.StateReader(stateRoot)
 		if err == nil {
 			readers = append(readers, newFlatReader(reader))
+			ts = overlay.LoadTransitionState(reader, stateRoot)
 		}
 	}
 	// Configure the trie reader, which is expected to be available as the
 	// gatekeeper unless the state is corrupted.
-	tr, err := newTrieReader(stateRoot, db.triedb)
+	tr, err := newTrieReader(stateRoot, db.triedb, ts)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +248,11 @@ func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 		if err != nil {
 			return nil, fmt.Errorf("could not open the overlay tree: %w", err)
 		}
-		ts := overlay.LoadTransitionState(db.TrieDB().Disk(), root)
+		reader, err := db.StateReader(root)
+		if err != nil {
+			return nil, fmt.Errorf("could not get reader for checking overlay status: %w", err)
+		}
+		ts := overlay.LoadTransitionState(reader, root)
 		if !ts.InTransition() {
 			// Use BinaryTrie instead of VerkleTrie when IsVerkle is set
 			// (IsVerkle actually means Binary Trie mode in this codebase)

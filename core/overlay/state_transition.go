@@ -17,11 +17,12 @@
 package overlay
 
 import (
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie/bintrie"
+	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
 // TransitionState is a structure that holds the progress markers of the
@@ -85,21 +86,26 @@ var (
 
 // LoadTransitionState retrieves the Verkle transition state associated with
 // the given state root hash from the database.
-func LoadTransitionState(db ethdb.KeyValueReader, root common.Hash) *TransitionState {
-	stem := bintrie.GetBinaryTreeKeyStorageSlot(params.BinaryTransitionRegistryAddress, conversionProgressAddressKey[:])
-	leaf := rawdb.ReadStorageTrieNode(db, common.Hash{}, stem[:bintrie.StemSize])
-	if len(leaf) == 0 {
-		return &TransitionState{}
-	}
-
-	node, err := bintrie.DeserializeNode(leaf, 0)
+func LoadTransitionState(reader database.StateReader, root common.Hash) *TransitionState {
+	addrHash := crypto.Keccak256Hash(params.BinaryTransitionRegistryAddress[:])
+	currentAccountBytes, err := reader.Storage(addrHash, conversionProgressAddressKey)
 	if err != nil {
-		panic("could not deserialize conversion pointers contract storage")
+		panic(fmt.Errorf("error reading conversion account pointer: %w", err))
 	}
-	leafNode := node.(*bintrie.StemNode)
-	currentAccount := common.BytesToAddress(leafNode.Values[65][12:])
-	currentSlotHash := common.BytesToHash(leafNode.Values[66])
-	storageProcessed := len(leafNode.Values[67]) > 0 && leafNode.Values[67][0] != 0
+	currentAccount := common.BytesToAddress(currentAccountBytes[12:])
+
+	currentSlotBytes, err := reader.Storage(addrHash, conversionProgressSlotKey)
+	if err != nil {
+		panic(fmt.Errorf("error reading conversion slot pointer: %w", err))
+	}
+	currentSlotHash := common.BytesToHash(currentSlotBytes)
+
+	storageProcessedBytes, err := reader.Storage(addrHash, conversionProgressStorageProcessed)
+	if err != nil {
+		panic(fmt.Errorf("error reading conversion storage processing completion status: %w", err))
+	}
+	storageProcessed := storageProcessedBytes[0] == 1
+
 	return &TransitionState{
 		CurrentAccountAddress: &currentAccount,
 		CurrentSlotHash:       currentSlotHash,
