@@ -70,6 +70,9 @@ type environment struct {
 	sidecars []*types.BlobTxSidecar
 	blobs    int
 
+	usedAddress []common.Address
+	usedAmount  []uint16
+
 	witness *stateless.Witness
 }
 
@@ -167,6 +170,8 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 			return &newPayloadResult{err: err}
 		}
 	}
+	core.ProcessTickets(work.usedAddress, work.usedAmount, work.evm)
+
 	if requests != nil {
 		reqHash := types.CalcRequestsHash(requests)
 		work.header.RequestsHash = &reqHash
@@ -335,6 +340,15 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 	env.size += txNoBlob.Size()
 	*env.header.BlobGasUsed += receipt.BlobGasUsed
 	env.tcount++
+
+	if receipt.Status == types.ReceiptStatusSuccessful {
+		sender, err := types.Sender(env.signer, tx)
+		if err != nil {
+			return err
+		}
+		env.usedAddress = append(env.usedAddress, sender)
+		env.usedAmount = append(env.usedAmount, uint16(len(tx.BlobHashes())))
+	}
 	return nil
 }
 

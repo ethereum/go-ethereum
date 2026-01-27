@@ -90,6 +90,8 @@ type testBlockChain struct {
 	blocks map[uint64]*types.Block
 
 	blockTime *uint64
+
+	tickets map[common.Address]uint16
 }
 
 func (bc *testBlockChain) Config() *params.ChainConfig {
@@ -182,6 +184,10 @@ func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block
 
 func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
 	return bc.statedb, nil
+}
+
+func (bc *testBlockChain) GetTicketBalance(common.Hash, *state.StateDB) map[common.Address]uint16 {
+	return bc.tickets
 }
 
 // reserver is a utility struct to sanity check that accounts are
@@ -478,7 +484,7 @@ func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
 //   - 4. All transactions after an already included nonce must be dropped
 //   - 5. All transactions after an underpriced one (including it) must be dropped
 //   - 6. All transactions after an overdrafting sequence must be dropped
-//   - 7. All transactions exceeding the per-account limit must be dropped
+//   - 7. All transactions exceeding the ticket limit must be dropped
 //
 // Furthermore, some strange corner-cases can also occur after a crash, as Billy's
 // simplicity also allows it to resurrect past deleted entities:
@@ -515,6 +521,7 @@ func TestOpenDrops(t *testing.T) {
 	blob, _ := rlp.EncodeToBytes(tx)
 	badsig, _ := store.Put(blob)
 
+	tickets := make(map[common.Address]uint16)
 	// Insert a sequence of transactions with a nonce gap in between to verify
 	// that anything gapped will get evicted (case 3).
 	var (
@@ -533,6 +540,7 @@ func TestOpenDrops(t *testing.T) {
 		} else {
 			gapped[id] = struct{}{}
 		}
+		tickets[crypto.PubkeyToAddress(gapper.PublicKey)] += 1
 	}
 	// Insert a sequence of transactions with a gapped starting nonce to verify
 	// that the entire set will get dropped (case 3).
@@ -546,6 +554,7 @@ func TestOpenDrops(t *testing.T) {
 
 		id, _ := store.Put(blob)
 		dangling[id] = struct{}{}
+		tickets[crypto.PubkeyToAddress(dangler.PublicKey)] += 1
 	}
 	// Insert a sequence of transactions with already passed nonces to veirfy
 	// that the entire set will get dropped (case 4).
@@ -559,6 +568,7 @@ func TestOpenDrops(t *testing.T) {
 
 		id, _ := store.Put(blob)
 		filled[id] = struct{}{}
+		tickets[crypto.PubkeyToAddress(filler.PublicKey)] += 1
 	}
 	// Insert a sequence of transactions with partially passed nonces to verify
 	// that the included part of the set will get dropped (case 4).
@@ -576,6 +586,7 @@ func TestOpenDrops(t *testing.T) {
 		} else {
 			overlapped[id] = struct{}{}
 		}
+		tickets[crypto.PubkeyToAddress(overlapper.PublicKey)] += 1
 	}
 	// Insert a sequence of transactions with an underpriced first to verify that
 	// the entire set will get dropped (case 5).
@@ -594,6 +605,7 @@ func TestOpenDrops(t *testing.T) {
 
 		id, _ := store.Put(blob)
 		underpaid[id] = struct{}{}
+		tickets[crypto.PubkeyToAddress(underpayer.PublicKey)] += 1
 	}
 
 	// Insert a sequence of transactions with an underpriced in between to verify
@@ -617,6 +629,7 @@ func TestOpenDrops(t *testing.T) {
 		} else {
 			outpriced[id] = struct{}{}
 		}
+		tickets[crypto.PubkeyToAddress(outpricer.PublicKey)] += 1
 	}
 	// Insert a sequence of transactions fully overdrafted to verify that the
 	// entire set will get invalidated (case 6).
@@ -635,6 +648,7 @@ func TestOpenDrops(t *testing.T) {
 
 		id, _ := store.Put(blob)
 		exceeded[id] = struct{}{}
+		tickets[crypto.PubkeyToAddress(exceeder.PublicKey)] += 1
 	}
 	// Insert a sequence of transactions partially overdrafted to verify that part
 	// of the set will get invalidated (case 6).
@@ -657,18 +671,24 @@ func TestOpenDrops(t *testing.T) {
 		} else {
 			overdrafted[id] = struct{}{}
 		}
+		tickets[crypto.PubkeyToAddress(overdrafter.PublicKey)] += 1
 	}
 	// Insert a sequence of transactions overflowing the account cap to verify
 	// that part of the set will get invalidated (case 7).
 	var (
 		overcapper, _ = crypto.GenerateKey()
 		overcapped    = make(map[uint64]struct{})
+
+		valid = uint16(10)
 	)
-	for nonce := uint64(0); nonce < maxTxsPerAccount+3; nonce++ {
+	// Initialise tickets to be used for validation
+	tickets[crypto.PubkeyToAddress(overcapper.PublicKey)] = valid
+
+	for nonce := uint64(0); nonce < uint64(valid)+3; nonce++ {
 		blob, _ := rlp.EncodeToBytes(makeTx(nonce, 1, 1, 1, overcapper))
 
 		id, _ := store.Put(blob)
-		if nonce < maxTxsPerAccount {
+		if nonce < uint64(valid) {
 			valids[id] = struct{}{}
 		} else {
 			overcapped[id] = struct{}{}
@@ -691,6 +711,7 @@ func TestOpenDrops(t *testing.T) {
 				duplicated[id] = struct{}{}
 			}
 		}
+		tickets[crypto.PubkeyToAddress(duplicater.PublicKey)] += 1
 	}
 	// Insert a batch of duplicated nonces to verify that only one of each will
 	// remain (case 9).
@@ -708,6 +729,7 @@ func TestOpenDrops(t *testing.T) {
 			} else {
 				repeated[id] = struct{}{}
 			}
+			tickets[crypto.PubkeyToAddress(repeater.PublicKey)] += 1
 		}
 	}
 	store.Close()
@@ -734,6 +756,7 @@ func TestOpenDrops(t *testing.T) {
 		basefee: uint256.NewInt(params.InitialBaseFee),
 		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
 		statedb: statedb,
+		tickets: tickets,
 	}
 	pool := New(Config{Datadir: storage}, chain, nil)
 	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
@@ -1310,6 +1333,7 @@ func TestBlobCountLimit(t *testing.T) {
 		basefee: uint256.NewInt(1050),
 		blobfee: uint256.NewInt(105),
 		statedb: statedb,
+		tickets: map[common.Address]uint16{addr1: 6, addr2: 7},
 	}
 	pool := New(Config{Datadir: t.TempDir()}, chain, nil)
 	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
@@ -1325,10 +1349,10 @@ func TestBlobCountLimit(t *testing.T) {
 
 	// Check that first succeeds second fails.
 	if errs[0] != nil {
-		t.Fatalf("expected tx with 7 blobs to succeed, got %v", errs[0])
+		t.Fatalf("expected tx with 6 blobs to succeed, got %v", errs[0])
 	}
 	if !errors.Is(errs[1], txpool.ErrTxBlobLimitExceeded) {
-		t.Fatalf("expected tx with 8 blobs to fail, got: %v", errs[1])
+		t.Fatalf("expected tx with 7 blobs to fail, got: %v", errs[1])
 	}
 
 	verifyPoolInternals(t, pool)
@@ -1587,11 +1611,6 @@ func TestAdd(t *testing.T) {
 					tx:   makeUnsignedTx(15, 10, 10, 10),
 					err:  nil,
 				},
-				{ // New account, 16 pooled tx, 0 slots left: reject nonce 16 with overcap
-					from: "alice",
-					tx:   makeUnsignedTx(16, 1, 1, 1),
-					err:  txpool.ErrAccountLimitExceeded,
-				},
 			},
 		},
 		// Previously existing transactions should be allowed to be replaced iff
@@ -1754,6 +1773,10 @@ func TestAdd(t *testing.T) {
 			basefee: uint256.NewInt(1050),
 			blobfee: uint256.NewInt(105),
 			statedb: statedb,
+			tickets: make(map[common.Address]uint16),
+		}
+		for _, add := range tt.adds {
+			chain.tickets[addrs[add.from]] += uint16(len(add.tx.BlobHashes))
 		}
 		pool := New(Config{Datadir: storage}, chain, nil)
 		if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
@@ -1851,6 +1874,8 @@ func TestGetBlobs(t *testing.T) {
 		blob1, _ = rlp.EncodeToBytes(tx1)
 		blob2, _ = rlp.EncodeToBytes(tx2)
 		blob3, _ = rlp.EncodeToBytes(tx3)
+
+		tickets = map[common.Address]uint16{addr1: 6, addr2: 6, addr3: 6}
 	)
 
 	// Write the two safely sized txs to store. note: although the store is
@@ -1889,6 +1914,7 @@ func TestGetBlobs(t *testing.T) {
 		basefee: uint256.NewInt(1050),
 		blobfee: uint256.NewInt(105),
 		statedb: statedb,
+		tickets: tickets,
 	}
 	pool := New(Config{Datadir: storage}, chain, nil)
 	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
@@ -2089,6 +2115,7 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 			basefee: uint256.NewInt(basefee),
 			blobfee: uint256.NewInt(blobfee),
 			statedb: statedb,
+			tickets: make(map[common.Address]uint16),
 		}
 		pool = New(Config{Datadir: ""}, chain, nil)
 	)
@@ -2112,6 +2139,7 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 			b.Fatal(err)
 		}
 		statedb.AddBalance(addr, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+		chain.tickets[addr] += 1
 		pool.add(tx)
 	}
 	statedb.Commit(0, true, false)

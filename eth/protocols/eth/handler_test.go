@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
@@ -67,6 +68,14 @@ type testBackend struct {
 // newTestBackend creates an empty chain and wraps it into a mock backend.
 func newTestBackend(blocks int) *testBackend {
 	return newTestBackendWithGenerator(blocks, false, false, nil)
+}
+
+type testChain struct {
+	*core.BlockChain
+}
+
+func (c *testChain) GetTicketBalance(hash common.Hash, statedb *state.StateDB) map[common.Address]uint16 {
+	return map[common.Address]uint16{testAddr: 1000}
 }
 
 // newTestBackendWithGenerator creates a chain with a number of explicitly defined blocks and
@@ -134,9 +143,9 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, cancun bool, generat
 	storage, _ := os.MkdirTemp("", "blobpool-")
 	defer os.RemoveAll(storage)
 
-	blobPool := blobpool.New(blobpool.Config{Datadir: storage}, chain, nil)
-	legacyPool := legacypool.New(txconfig, chain)
-	txpool, _ := txpool.New(txconfig.PriceLimit, chain, []txpool.SubPool{legacyPool, blobPool})
+	blobPool := blobpool.New(blobpool.Config{Datadir: storage}, &testChain{chain}, nil)
+	legacyPool := legacypool.New(txconfig, &testChain{chain})
+	txpool, _ := txpool.New(txconfig.PriceLimit, &testChain{chain}, []txpool.SubPool{legacyPool, blobPool})
 
 	return &testBackend{
 		db:     db,

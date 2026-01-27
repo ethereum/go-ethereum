@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
@@ -42,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/program"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
@@ -4185,6 +4187,128 @@ func TestEIP7702(t *testing.T) {
 	)
 	if actual.Cmp(fortyTwo) != 0 {
 		t.Fatalf("addr2 storage wrong: expected %d, got %d", fortyTwo, actual)
+	}
+}
+
+func TestBlobTickets(t *testing.T) {
+	var (
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		config  = *params.MergedTestChainConfig
+		signer  = types.LatestSigner(&config)
+		engine  = beacon.New(ethash.NewFaker())
+
+		ticketAmount = uint16(3)
+	)
+	gspec := &Genesis{
+		Config: &config,
+		Alloc: types.GenesisAlloc{
+			addr1:                              {Balance: big.NewInt(9999900000000000)},
+			params.BlobTicketAllocationAddress: {Code: params.BlobTicketAllocationCode},
+		},
+	}
+
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 4, func(i int, bg *BlockGen) {
+		switch i {
+		case 0: // create ticket request
+			selector := crypto.Keccak256([]byte("requestTickets(address,uint16)"))[:4]
+			uint16Type, _ := abi.NewType("uint16", "", nil)
+			addressType, _ := abi.NewType("address", "", nil)
+			args := abi.Arguments{{Type: addressType}, {Type: uint16Type}}
+			data, _ := args.Pack(addr1, ticketAmount)
+
+			data = append(selector, data...)
+
+			txdata := &types.DynamicFeeTx{
+				ChainID:   gspec.Config.ChainID,
+				Nonce:     0,
+				To:        &params.BlobTicketAllocationAddress,
+				Gas:       500000,
+				GasFeeCap: big.NewInt(875000000),
+				GasTipCap: big.NewInt(1),
+				Data:      data,
+			}
+			tx := types.MustSignNewTx(key1, signer, txdata)
+
+			bg.AddTx(tx)
+		case 1: // create ticket usage
+			var (
+				blobs       = make([]kzg4844.Blob, 1)
+				commitments []kzg4844.Commitment
+				proofs      []kzg4844.Proof
+			)
+			blobs[0][0] = 0x1
+			c, _ := kzg4844.BlobToCommitment(&blobs[0])
+			p, _ := kzg4844.ComputeBlobProof(&blobs[0], c)
+			commitments = append(commitments, c)
+			proofs = append(proofs, p)
+			sidecar := types.NewBlobTxSidecar(types.BlobSidecarVersion0, blobs, commitments, proofs)
+
+			txdata := &types.BlobTx{
+				ChainID:    uint256.MustFromBig(config.ChainID),
+				Nonce:      1,
+				Gas:        500000,
+				GasFeeCap:  uint256.NewInt(875000000),
+				GasTipCap:  uint256.NewInt(1),
+				BlobFeeCap: uint256.NewInt(1),
+				BlobHashes: sidecar.BlobHashes(),
+			}
+			tx := types.MustSignNewTx(key1, signer, txdata)
+			bg.AddTx(tx)
+		}
+	})
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), gspec, engine, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	defer chain.Stop()
+
+	// check the balance of requester
+	if n, err := chain.InsertChain(blocks[:1]); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	balance, _ := chain.tickets[blocks[0].Hash()]
+	amount := balance[addr1]
+	if amount != ticketAmount {
+		t.Fatalf("wrong ticket amount: expected %d, got %d", ticketAmount, amount)
+	}
+
+	// test ticket usage
+	if n, err := chain.InsertChain(blocks[1:2]); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	balance, _ = chain.tickets[blocks[1].Hash()]
+	amount = balance[addr1]
+	if amount != ticketAmount-1 {
+		t.Fatalf("wrong ticket amount: expected %d, got %d", ticketAmount-1, amount)
+	}
+
+	// test expiry
+	if n, err := chain.InsertChain(blocks[2:]); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	balance, _ = chain.tickets[blocks[3].Hash()]
+	amount = balance[addr1]
+	if amount != 0 {
+		t.Fatalf("wrong ticket amount: expected %d, got %d", 0, amount)
+	}
+
+	// previous block ticket balance
+	state, _ := chain.StateAt(blocks[0].Root())
+	balance = chain.GetTicketBalance(blocks[0].Hash(), state)
+	amount = balance[addr1]
+	if amount != ticketAmount {
+		t.Fatalf("wrong ticket amount: expected %d, got %d", ticketAmount, amount)
+	}
+
+	state, _ = chain.StateAt(blocks[1].Root())
+	balance = chain.GetTicketBalance(blocks[1].Hash(), state)
+	amount = balance[addr1]
+	if amount != ticketAmount-1 {
+		t.Fatalf("wrong ticket amount: expected %d, got %d", ticketAmount-1, amount)
 	}
 }
 

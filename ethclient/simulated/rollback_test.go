@@ -23,7 +23,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // TestTransactionRollbackBehavior tests that calling Rollback on the simulated backend doesn't prevent subsequent
@@ -31,14 +34,16 @@ import (
 func TestTransactionRollbackBehavior(t *testing.T) {
 	sim := NewBackend(
 		types.GenesisAlloc{
-			testAddr:  {Balance: big.NewInt(10000000000000000)},
-			testAddr2: {Balance: big.NewInt(10000000000000000)},
+			testAddr:                           {Balance: big.NewInt(10000000000000000)},
+			testAddr2:                          {Balance: big.NewInt(10000000000000000)},
+			params.BlobTicketAllocationAddress: {Code: params.BlobTicketAllocationCode},
 		},
 	)
 	defer sim.Close()
 	client := sim.Client()
 
-	btx0 := testSendSignedTx(t, testKey, sim, true, 0)
+	allocateTickets(t, testKey, sim, 0, 10)
+	btx0 := testSendSignedTx(t, testKey, sim, true, 1)
 	tx0 := testSendSignedTx(t, testKey2, sim, false, 0)
 	tx1 := testSendSignedTx(t, testKey2, sim, false, 1)
 
@@ -48,7 +53,7 @@ func TestTransactionRollbackBehavior(t *testing.T) {
 		t.Fatalf("all transactions were not rolled back")
 	}
 
-	btx2 := testSendSignedTx(t, testKey, sim, true, 0)
+	btx2 := testSendSignedTx(t, testKey, sim, true, 1)
 	tx2 := testSendSignedTx(t, testKey2, sim, false, 0)
 	tx3 := testSendSignedTx(t, testKey2, sim, false, 1)
 
@@ -84,6 +89,43 @@ func testSendSignedTx(t *testing.T, key *ecdsa.PrivateKey, sim *Backend, isBlobT
 	}
 
 	return signedTx
+}
+
+func allocateTickets(t *testing.T, key *ecdsa.PrivateKey, sim *Backend, nonce uint64, amount uint16) {
+	t.Helper()
+	client := sim.Client()
+	ctx := context.Background()
+
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	chainid, _ := client.ChainID(ctx)
+	signer := types.LatestSignerForChainID(chainid)
+
+	selector := crypto.Keccak256([]byte("requestTickets(address,uint16)"))[:4]
+	uint16Type, _ := abi.NewType("uint16", "", nil)
+	addressType, _ := abi.NewType("address", "", nil)
+	args := abi.Arguments{{Type: addressType}, {Type: uint16Type}}
+	data, _ := args.Pack(addr, amount)
+	data = append(selector, data...)
+
+	// Get current head
+	head, _ := client.HeaderByNumber(ctx, nil)
+
+	txdata := &types.DynamicFeeTx{
+		ChainID:   chainid,
+		Nonce:     nonce,
+		To:        &params.BlobTicketAllocationAddress,
+		Gas:       500000,
+		GasFeeCap: new(big.Int).Add(head.BaseFee, big.NewInt(params.GWei)),
+		GasTipCap: big.NewInt(params.GWei),
+		Data:      data,
+	}
+	tx := types.MustSignNewTx(key, signer, txdata)
+
+	if err := client.SendTransaction(ctx, tx); err != nil {
+		t.Fatalf("failed to request tickets: %v", err)
+	}
+
+	sim.Commit()
 }
 
 // pendingStateHasTx returns true if a given transaction was successfully included as of the latest pending state.

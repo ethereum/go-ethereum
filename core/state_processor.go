@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -94,6 +95,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
+	var usedAddress []common.Address
+	var usedAmount []uint16
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
@@ -108,9 +111,15 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
+
+		if tx.Type() == types.BlobTxType && receipt.Status == types.ReceiptStatusSuccessful {
+			usedAddress = append(usedAddress, msg.From)
+			usedAmount = append(usedAmount, uint16(len(msg.BlobHashes)))
+		}
 	}
 	// Read requests if Prague is enabled.
 	var requests [][]byte
+	var tickets map[common.Address]uint16
 	if config.IsPrague(block.Number(), block.Time()) {
 		requests = [][]byte{}
 		// EIP-6110
@@ -125,6 +134,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		if err := ProcessConsolidationQueue(&requests, evm); err != nil {
 			return nil, fmt.Errorf("failed to process consolidation queue: %w", err)
 		}
+
+		// This should be moved to after having fork
+		tickets = ProcessTickets(usedAddress, usedAmount, evm)
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
@@ -135,6 +147,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		Requests: requests,
 		Logs:     allLogs,
 		GasUsed:  *usedGas,
+		Tickets:  tickets,
 	}, nil
 }
 
@@ -335,6 +348,72 @@ func ParseDepositLogs(requests *[][]byte, logs []*types.Log, config *params.Chai
 		*requests = append(*requests, deposits)
 	}
 	return nil
+}
+
+// ProcessTickets updates ticket balances and return the balances
+func ProcessTickets(usedAddress []common.Address, usedAmount []uint16, evm *vm.EVM) map[common.Address]uint16 {
+	if tracer := evm.Config.Tracer; tracer != nil {
+		onSystemCallStart(tracer, evm.GetVMContext())
+		if tracer.OnSystemCallEnd != nil {
+			defer tracer.OnSystemCallEnd()
+		}
+	}
+
+	addressType, _ := abi.NewType("address[]", "", nil)
+	uint16Type, _ := abi.NewType("uint16[]", "", nil)
+
+	var data []byte
+	if len(usedAddress) > 0 {
+		// abi.encode(address[], uint16[])
+		arguments := abi.Arguments{
+			{Type: addressType},
+			{Type: uint16Type},
+		}
+
+		data, _ = arguments.Pack(usedAddress, usedAmount)
+	}
+
+	msg := &Message{
+		From:      params.SystemAddress,
+		GasLimit:  30_000_000,
+		GasPrice:  common.Big0,
+		GasFeeCap: common.Big0,
+		GasTipCap: common.Big0,
+		To:        &params.BlobTicketAllocationAddress,
+		Data:      data,
+	}
+	evm.SetTxContext(NewEVMTxContext(msg))
+
+	res, _, _ := evm.Call(msg.From, *msg.To, msg.Data, 30_000_000, common.U2560)
+
+	evm.StateDB.Finalise(true)
+
+	arguments := abi.Arguments{
+		{Type: addressType},
+		{Type: uint16Type},
+	}
+
+	values, err := arguments.Unpack(res)
+	if err != nil {
+		return nil
+	}
+
+	if len(values) < 2 {
+		return nil
+	}
+
+	senders, ok1 := values[0].([]common.Address)
+	amounts, ok2 := values[1].([]uint16)
+	if !ok1 || !ok2 || len(senders) != len(amounts) {
+		return nil
+	}
+
+	result := make(map[common.Address]uint16)
+	for i, sender := range senders {
+		result[sender] = amounts[i]
+	}
+
+	return result
 }
 
 func onSystemCallStart(tracer *tracing.Hooks, ctx *tracing.VMContext) {

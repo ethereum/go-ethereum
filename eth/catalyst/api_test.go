@@ -31,6 +31,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -1897,16 +1898,57 @@ func newGetBlobEnv(t testing.TB, version byte) (*node.Node, *ConsensusAPI) {
 			addr1:    {Balance: testBalance},
 			addr2:    {Balance: testBalance},
 			addr3:    {Balance: testBalance},
+
+			params.BlobTicketAllocationAddress: {Code: params.BlobTicketAllocationCode},
 		},
 		Difficulty: common.Big0,
 	}
-	n, ethServ := startEthService(t, gspec, nil)
+
+	// Generate ticket request blocks
+	engine := beacon.New(ethash.NewFaker())
+	_, ticketBlocks, _ := core.GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *core.BlockGen) {
+		signers := []struct {
+			addr common.Address
+			key  *ecdsa.PrivateKey
+		}{
+			{addr1, key1},
+			{addr2, key2},
+			{addr3, key3},
+		}
+		for _, signer := range signers {
+			selector := crypto.Keccak256([]byte("requestTickets(address,uint16)"))[:4]
+			uint16Type, _ := abi.NewType("uint16", "", nil)
+			addressType, _ := abi.NewType("address", "", nil)
+			args := abi.Arguments{{Type: addressType}, {Type: uint16Type}}
+			data, _ := args.Pack(signer.addr, uint16(2))
+			data = append(selector, data...)
+
+			txdata := &types.DynamicFeeTx{
+				ChainID:   config.ChainID,
+				Nonce:     b.TxNonce(signer.addr),
+				To:        &params.BlobTicketAllocationAddress,
+				Gas:       500000,
+				GasFeeCap: big.NewInt(params.InitialBaseFee * 2),
+				GasTipCap: big.NewInt(params.GWei),
+				Data:      data,
+			}
+			tx := types.MustSignNewTx(signer.key, types.LatestSigner(&config), txdata)
+			b.AddTx(tx)
+		}
+	})
+
+	n, ethServ := startEthService(t, gspec, ticketBlocks)
 
 	// fill blob txs into the pool
-	tx1 := makeMultiBlobTx(&config, 0, 2, 0, key1, version) // blob[0, 2)
-	tx2 := makeMultiBlobTx(&config, 0, 2, 2, key2, version) // blob[2, 4)
-	tx3 := makeMultiBlobTx(&config, 0, 2, 4, key3, version) // blob[4, 6)
-	ethServ.TxPool().Add([]*types.Transaction{tx1, tx2, tx3}, true)
+	tx1 := makeMultiBlobTx(&config, 1, 2, 0, key1, version) // blob[0, 2)
+	tx2 := makeMultiBlobTx(&config, 1, 2, 2, key2, version) // blob[2, 4)
+	tx3 := makeMultiBlobTx(&config, 1, 2, 4, key3, version) // blob[4, 6)
+	errs := ethServ.TxPool().Add([]*types.Transaction{tx1, tx2, tx3}, true)
+	for _, err := range errs {
+		if err != nil {
+			t.Fatal("GetBlob environment generation failed", err)
+		}
+	}
 
 	api := newConsensusAPIWithoutHeartbeat(ethServ)
 	return n, api

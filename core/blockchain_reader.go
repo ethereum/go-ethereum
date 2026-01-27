@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -351,6 +352,35 @@ func (bc *BlockChain) GetCanonicalTransaction(hash common.Hash) (*rawdb.LegacyTx
 		transaction: tx,
 	})
 	return lookup, tx
+}
+
+func (bc *BlockChain) GetTicketBalance(hash common.Hash, statedb *state.StateDB) map[common.Address]uint16 {
+	if bc.tickets[hash] != nil {
+		return bc.tickets[hash]
+	}
+
+	result := make(map[common.Address]uint16)
+
+	senders := statedb.GetState(params.BlobTicketAllocationAddress, common.BigToHash(params.BlobTicketSenderSlot)).Big().Int64()
+	base := crypto.Keccak256Hash(common.LeftPadBytes(params.BlobTicketSenderSlot.Bytes(), 32)).Big()
+
+	for i := range senders {
+		key := common.BigToHash(base.Add(base, big.NewInt(i)))
+		sender := common.BytesToAddress(statedb.GetState(params.BlobTicketAllocationAddress, key).Bytes())
+
+		key = crypto.Keccak256Hash(
+			append(
+				common.LeftPadBytes(sender.Bytes(), 32),
+				common.LeftPadBytes(params.BlobTicketBalanceSlot.Bytes(), 32)...,
+			),
+		)
+
+		balance := statedb.GetState(params.BlobTicketAllocationAddress, key).Big().Uint64()
+
+		result[sender] = uint16(balance)
+	}
+
+	return result
 }
 
 // TxIndexDone returns true if the transaction indexer has finished indexing.
