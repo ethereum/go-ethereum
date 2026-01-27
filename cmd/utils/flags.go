@@ -692,8 +692,8 @@ var (
 	}
 	LogSlowBlockFlag = &cli.DurationFlag{
 		Name:     "debug.logslowblock",
-		Usage:    "Block execution time threshold beyond which detailed statistics will be logged (0 logs all blocks)",
-		Value:    0,
+		Usage:    "Block execution time threshold beyond which detailed statistics will be logged (0 logs all blocks, negative means disable)",
+		Value:    ethconfig.Defaults.SlowBlockThreshold,
 		Category: flags.LoggingCategory,
 	}
 
