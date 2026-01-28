@@ -490,6 +490,7 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash             *EthashConfig       `json:"ethash,omitempty"`
 	Clique             *CliqueConfig       `json:"clique,omitempty"`
+	XDPoS              *XDPoSConfig        `json:"xdpos,omitempty"`
 	BlobScheduleConfig *BlobScheduleConfig `json:"blobSchedule,omitempty"`
 }
 
@@ -510,6 +511,21 @@ type CliqueConfig struct {
 // String implements the stringer interface, returning the consensus engine details.
 func (c CliqueConfig) String() string {
 	return fmt.Sprintf("clique(period: %d, epoch: %d)", c.Period, c.Epoch)
+}
+
+// XDPoSConfig is the consensus engine configs for XDC Network's delegated-proof-of-stake based sealing.
+type XDPoSConfig struct {
+	Period              uint64         `json:"period"`              // Number of seconds between blocks to enforce
+	Epoch               uint64         `json:"epoch"`               // Epoch length to reset votes and checkpoint
+	Reward              uint64         `json:"reward"`              // Block reward - unit Ether
+	RewardCheckpoint    uint64         `json:"rewardCheckpoint"`    // Checkpoint block for calculate rewards
+	Gap                 uint64         `json:"gap"`                 // Gap time preparing for the next epoch
+	FoudationWalletAddr common.Address `json:"foudationWalletAddr"` // Foundation Address Wallet
+}
+
+// String implements the stringer interface, returning the consensus engine details.
+func (c XDPoSConfig) String() string {
+	return fmt.Sprintf("xdpos(period: %d, epoch: %d, reward: %d)", c.Period, c.Epoch, c.Reward)
 }
 
 // String implements the fmt.Stringer interface, returning a string representation
