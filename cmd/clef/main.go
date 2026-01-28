@@ -387,7 +387,7 @@ func attestFile(ctx *cli.Context) error {
 		utils.Fatalf(err.Error())
 	}
 	configDir := ctx.String(configdirFlag.Name)
-	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
+	vaultLocation := vaultPath(configDir, stretchedKey)
 	confKey := crypto.Keccak256([]byte("config"), stretchedKey)
 
 	// Initialize the encrypted storages
@@ -434,7 +434,7 @@ func setCredential(ctx *cli.Context) error {
 		utils.Fatalf(err.Error())
 	}
 	configDir := ctx.String(configdirFlag.Name)
-	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
+	vaultLocation := vaultPath(configDir, stretchedKey)
 	pwkey := crypto.Keccak256([]byte("credentials"), stretchedKey)
 
 	pwStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
@@ -462,7 +462,7 @@ func removeCredential(ctx *cli.Context) error {
 		utils.Fatalf(err.Error())
 	}
 	configDir := ctx.String(configdirFlag.Name)
-	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
+	vaultLocation := vaultPath(configDir, stretchedKey)
 	pwkey := crypto.Keccak256([]byte("credentials"), stretchedKey)
 
 	pwStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
@@ -496,6 +496,10 @@ func initialize(c *cli.Context) error {
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(output, verbosity, usecolor)))
 
 	return nil
+}
+
+func vaultPath(configDir string, stretchedKey []byte) string {
+	return filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
 }
 
 func newAccount(c *cli.Context) error {
@@ -657,7 +661,7 @@ func signer(c *cli.Context) error {
 	if stretchedKey, err := readMasterKey(c, ui); err != nil {
 		log.Warn("Failed to open master, rules disabled", "err", err)
 	} else {
-		vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
+		vaultLocation := vaultPath(configDir, stretchedKey)
 
 		// Generate domain specific keys
 		pwkey := crypto.Keccak256([]byte("credentials"), stretchedKey)
