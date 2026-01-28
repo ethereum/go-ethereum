@@ -1,0 +1,24 @@
+FROM golang:1.23-alpine AS builder
+
+RUN apk add --no-cache make gcc musl-dev linux-headers
+
+ADD . /go-ethereum
+RUN cd /go-ethereum && make bootnode
+
+RUN chmod +x /go-ethereum/build/bin/bootnode
+
+FROM alpine:latest
+
+LABEL maintainer="xdc@xinfin.org"
+
+WORKDIR /xdc
+
+COPY --from=builder /go-ethereum/build/bin/bootnode /usr/local/bin/bootnode
+
+COPY docker/bootnode ./
+
+EXPOSE 30301
+
+ENTRYPOINT ["./entrypoint.sh"]
+
+CMD ["-verbosity", "6", "-nodekey", "bootnode.key", "--addr", ":30301"]
