@@ -45,10 +45,14 @@ type callLog struct {
 	// Position of the log relative to subcalls within the same trace
 	// See https://github.com/ethereum/go-ethereum/pull/28389 for details
 	Position hexutil.Uint `json:"position"`
+	// Program counter (bytecode offset) of the instruction that created the log
+	Pc hexutil.Uint64 `json:"pc"`
 }
 
 type callFrame struct {
-	Type         vm.OpCode       `json:"-"`
+	Type vm.OpCode `json:"-"`
+	// Program counter (bytecode offset) of the instruction that created the callframe
+	Pc           uint64          `json:"pc"`
 	From         common.Address  `json:"from"`
 	Gas          uint64          `json:"gas"`
 	GasUsed      uint64          `json:"gasUsed"`
@@ -103,6 +107,7 @@ func (f *callFrame) processOutput(output []byte, err error, reverted bool) {
 
 type callFrameMarshaling struct {
 	TypeString string `json:"type"`
+	Pc         hexutil.Uint64
 	Gas        hexutil.Uint64
 	GasUsed    hexutil.Uint64
 	Value      *hexutil.Big
@@ -117,6 +122,7 @@ type callTracer struct {
 	depth     int
 	interrupt atomic.Bool // Atomic flag to signal execution interruption
 	reason    error       // Textual reason for the interruption
+	lastPc    uint64      // Stores the program counter of the last executed command
 }
 
 type callTracerConfig struct {
@@ -138,6 +144,7 @@ func newCallTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *param
 			OnEnter:   t.OnEnter,
 			OnExit:    t.OnExit,
 			OnLog:     t.OnLog,
+			OnOpcode:  t.OnOpcode,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
@@ -173,6 +180,7 @@ func (t *callTracer) OnEnter(depth int, typ byte, from common.Address, to common
 		Input: common.CopyBytes(input),
 		Gas:   gas,
 		Value: value,
+		Pc:    t.lastPc,
 	}
 	if depth == 0 {
 		call.Gas = t.gasLimit
@@ -219,6 +227,10 @@ func (t *callTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, fr
 	t.gasLimit = tx.Gas()
 }
 
+func (t *callTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+	t.lastPc = pc
+}
+
 func (t *callTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	// Error happened during tx validation.
 	if err != nil {
@@ -251,6 +263,7 @@ func (t *callTracer) OnLog(log *types.Log) {
 		Topics:   log.Topics,
 		Data:     log.Data,
 		Position: hexutil.Uint(len(t.callstack[len(t.callstack)-1].Calls)),
+		Pc:       hexutil.Uint64(t.lastPc),
 	}
 	t.callstack[len(t.callstack)-1].Logs = append(t.callstack[len(t.callstack)-1].Logs, l)
 }

@@ -44,29 +44,138 @@ type callLog struct {
 	Topics   []common.Hash  `json:"topics"`
 	Data     hexutil.Bytes  `json:"data"`
 	Position hexutil.Uint   `json:"position"`
+	Pc       hexutil.Uint64 `json:"pc"`
 }
 
 // callTrace is the result of a callTracer run.
 type callTrace struct {
+	Type vm.OpCode `json:"-"`
+	// Program counter (bytecode offset) of the instruction that created the callframe
+	Pc           uint64          `json:"pc"`
 	From         common.Address  `json:"from"`
-	Gas          *hexutil.Uint64 `json:"gas"`
-	GasUsed      *hexutil.Uint64 `json:"gasUsed"`
-	To           *common.Address `json:"to,omitempty"`
-	Input        hexutil.Bytes   `json:"input"`
-	Output       hexutil.Bytes   `json:"output,omitempty"`
-	Error        string          `json:"error,omitempty"`
+	Gas          uint64          `json:"gas"`
+	GasUsed      uint64          `json:"gasUsed"`
+	To           *common.Address `json:"to,omitempty" rlp:"optional"`
+	Input        []byte          `json:"input" rlp:"optional"`
+	Output       []byte          `json:"output,omitempty" rlp:"optional"`
+	Error        string          `json:"error,omitempty" rlp:"optional"`
 	RevertReason string          `json:"revertReason,omitempty"`
-	Calls        []callTrace     `json:"calls,omitempty"`
-	Logs         []callLog       `json:"logs,omitempty"`
-	Value        *hexutil.Big    `json:"value,omitempty"`
-	// Gencodec adds overridden fields at the end
-	Type string `json:"type"`
+	Calls        []callTrace     `json:"calls,omitempty" rlp:"optional"`
+	Logs         []callLog       `json:"logs,omitempty" rlp:"optional"`
+	// Placed at end on purpose. The RLP will be decoded to 0 instead of
+	// nil if there are non-empty elements after in the struct.
+	Value *big.Int `json:"value,omitempty" rlp:"optional"`
 }
 
 // callTracerTest defines a single test to check the call tracer against.
 type callTracerTest struct {
 	tracerTestEnv
 	Result *callTrace `json:"result"`
+}
+
+func (c callTrace) MarshalJSON() ([]byte, error) {
+	type callFrame0 struct {
+		Type         vm.OpCode       `json:"-"`
+		Pc           hexutil.Uint64  `json:"pc"`
+		From         common.Address  `json:"from"`
+		Gas          hexutil.Uint64  `json:"gas"`
+		GasUsed      hexutil.Uint64  `json:"gasUsed"`
+		To           *common.Address `json:"to,omitempty" rlp:"optional"`
+		Input        hexutil.Bytes   `json:"input" rlp:"optional"`
+		Output       hexutil.Bytes   `json:"output,omitempty" rlp:"optional"`
+		Error        string          `json:"error,omitempty" rlp:"optional"`
+		RevertReason string          `json:"revertReason,omitempty"`
+		Calls        []callTrace     `json:"calls,omitempty" rlp:"optional"`
+		Logs         []callLog       `json:"logs,omitempty" rlp:"optional"`
+		Value        *hexutil.Big    `json:"value,omitempty" rlp:"optional"`
+		TypeString   string          `json:"type"`
+	}
+
+	var enc callFrame0
+	enc.Type = c.Type
+	enc.From = c.From
+	enc.Gas = hexutil.Uint64(c.Gas)
+	enc.GasUsed = hexutil.Uint64(c.GasUsed)
+	enc.To = c.To
+	enc.Input = c.Input
+	enc.Output = c.Output
+	enc.Error = c.Error
+	enc.RevertReason = c.RevertReason
+	enc.Calls = c.Calls
+	enc.Logs = c.Logs
+	enc.Value = (*hexutil.Big)(c.Value)
+	enc.TypeString = c.TypeString()
+	enc.Pc = hexutil.Uint64(c.Pc)
+	return json.Marshal(&enc)
+}
+
+// UnmarshalJSON unmarshals from JSON.
+func (c *callTrace) UnmarshalJSON(input []byte) error {
+	type callFrame0 struct {
+		Type         *string         `json:"type"`
+		Pc           *hexutil.Uint64 `json:"pc"`
+		From         *common.Address `json:"from"`
+		Gas          *hexutil.Uint64 `json:"gas"`
+		GasUsed      *hexutil.Uint64 `json:"gasUsed"`
+		To           *common.Address `json:"to,omitempty" rlp:"optional"`
+		Input        *hexutil.Bytes  `json:"input" rlp:"optional"`
+		Output       *hexutil.Bytes  `json:"output,omitempty" rlp:"optional"`
+		Error        *string         `json:"error,omitempty" rlp:"optional"`
+		RevertReason *string         `json:"revertReason,omitempty"`
+		Calls        []callTrace     `json:"calls,omitempty" rlp:"optional"`
+		Logs         []callLog       `json:"logs,omitempty" rlp:"optional"`
+		Value        *hexutil.Big    `json:"value,omitempty" rlp:"optional"`
+	}
+
+	var dec callFrame0
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	if dec.Pc != nil {
+		c.Pc = uint64(*dec.Pc)
+	}
+	if dec.From != nil {
+		c.From = *dec.From
+	}
+	if dec.Gas != nil {
+		c.Gas = uint64(*dec.Gas)
+	}
+	if dec.GasUsed != nil {
+		c.GasUsed = uint64(*dec.GasUsed)
+	}
+	if dec.To != nil {
+		c.To = dec.To
+	}
+	if dec.Input != nil {
+		c.Input = *dec.Input
+	}
+	if dec.Output != nil {
+		c.Output = *dec.Output
+	}
+	if dec.Error != nil {
+		c.Error = *dec.Error
+	}
+	if dec.RevertReason != nil {
+		c.RevertReason = *dec.RevertReason
+	}
+	if dec.Calls != nil {
+		c.Calls = dec.Calls
+	}
+	if dec.Logs != nil {
+		c.Logs = dec.Logs
+	}
+
+	if dec.Value != nil {
+		c.Value = (*big.Int)(dec.Value)
+	}
+	if dec.Type != nil {
+		c.Type = vm.StringToOp(*dec.Type)
+	}
+	return nil
+}
+
+func (c callTrace) TypeString() string {
+	return c.Type.String()
 }
 
 // Iterates over all the input-output datasets in the tracer test harness and
@@ -83,6 +192,30 @@ func TestCallTracerNativeWithLog(t *testing.T) {
 	testCallTracer("callTracer", "call_tracer_withLog", t)
 }
 
+func readTest(path string, t *testing.T) (*callTracerTest, *types.Transaction, bool) {
+	test := new(callTracerTest)
+	test2 := new(tracerTestEnv)
+	tx := new(types.Transaction)
+
+	isUpdatingTests := os.Getenv("UPDATE_TESTS") == "1"
+
+	if blob, err := os.ReadFile(path); err != nil {
+		t.Fatalf("failed to read testcase: %v", err)
+	} else if err := json.Unmarshal(blob, test); err != nil && !isUpdatingTests {
+		t.Fatalf("failed to parse testcase: %v", err)
+	} else if err := json.Unmarshal(blob, test2); err != nil {
+		test.tracerTestEnv = *test2
+		test.Result = nil
+		t.Fatalf("failed to parse testcase: %v", err)
+	}
+
+	if err := tx.UnmarshalBinary(common.FromHex(test.Input)); err != nil {
+		t.Fatalf("failed to parse testcase input: %v", err)
+	}
+
+	return test, tx, isUpdatingTests
+}
+
 func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 	isLegacy := strings.HasSuffix(dirPath, "_legacy")
 	files, err := os.ReadDir(filepath.Join("testdata", dirPath))
@@ -96,25 +229,15 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 		t.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(t *testing.T) {
 			t.Parallel()
 
-			var (
-				test = new(callTracerTest)
-				tx   = new(types.Transaction)
-			)
-			// Call tracer test found, read if from disk
-			if blob, err := os.ReadFile(filepath.Join("testdata", dirPath, file.Name())); err != nil {
-				t.Fatalf("failed to read testcase: %v", err)
-			} else if err := json.Unmarshal(blob, test); err != nil {
-				t.Fatalf("failed to parse testcase: %v", err)
-			}
-			if err := tx.UnmarshalBinary(common.FromHex(test.Input)); err != nil {
-				t.Fatalf("failed to parse testcase input: %v", err)
-			}
+			test, tx, isUpdatingTest := readTest(filepath.Join("testdata", dirPath, file.Name()), t)
+
 			// Configure a blockchain with the given prestate
 			var (
 				signer  = types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
 				context = test.Context.toBlockContext(test.Genesis)
 				st      = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
 			)
+
 			st.Close()
 
 			tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig, test.Genesis.Config)
@@ -154,6 +277,19 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to marshal test: %v", err)
 			}
+
+			if isUpdatingTest {
+				if err := json.Unmarshal(res, test.Result); err != nil {
+					t.Fatalf("failed to unmarshal result: %v", err)
+				}
+
+				newTest, _ := json.MarshalIndent(test, "", "  ")
+				if err := os.WriteFile(filepath.Join("testdata", dirPath, file.Name()), newTest, 0644); err != nil {
+					t.Fatalf("failed to write testcase: %v", err)
+				}
+				want = res
+			}
+
 			if string(want) != string(res) {
 				t.Fatalf("trace mismatch\n have: %v\n want: %v\n", string(res), string(want))
 			}
@@ -281,13 +417,13 @@ func TestInternals(t *testing.T) {
 				byte(vm.CALL),
 			},
 			tracer: mkTracer("callTracer", nil),
-			want:   fmt.Sprintf(`{"from":"%s","gas":"0x13880","gasUsed":"0x54d8","to":"0x00000000000000000000000000000000deadbeef","input":"0x","calls":[{"from":"0x00000000000000000000000000000000deadbeef","gas":"0xe01a","gasUsed":"0x0","to":"0x00000000000000000000000000000000000000ff","input":"0x","value":"0x0","type":"CALL"}],"value":"0x0","type":"CALL"}`, originHex),
+			want:   fmt.Sprintf(`{"pc":"0x0","from":"%s","gas":"0x13880","gasUsed":"0x54d8","to":"0x00000000000000000000000000000000deadbeef","input":"0x","calls":[{"pc":"0x9","from":"0x00000000000000000000000000000000deadbeef","gas":"0xe01a","gasUsed":"0x0","to":"0x00000000000000000000000000000000000000ff","input":"0x","value":"0x0","type":"CALL"}],"value":"0x0","type":"CALL"}`, originHex),
 		},
 		{
 			name:   "Stack depletion in LOG0",
 			code:   []byte{byte(vm.LOG3)},
 			tracer: mkTracer("callTracer", json.RawMessage(`{ "withLog": true }`)),
-			want:   fmt.Sprintf(`{"from":"%s","gas":"0x13880","gasUsed":"0x13880","to":"0x00000000000000000000000000000000deadbeef","input":"0x","error":"stack underflow (0 \u003c=\u003e 5)","value":"0x0","type":"CALL"}`, originHex),
+			want:   fmt.Sprintf(`{"pc":"0x0","from":"%s","gas":"0x13880","gasUsed":"0x13880","to":"0x00000000000000000000000000000000deadbeef","input":"0x","error":"stack underflow (0 \u003c=\u003e 5)","value":"0x0","type":"CALL"}`, originHex),
 		},
 		{
 			name: "Mem expansion in LOG0",
@@ -300,7 +436,7 @@ func TestInternals(t *testing.T) {
 				byte(vm.LOG0),
 			},
 			tracer: mkTracer("callTracer", json.RawMessage(`{ "withLog": true }`)),
-			want:   fmt.Sprintf(`{"from":"%s","gas":"0x13880","gasUsed":"0x5b9e","to":"0x00000000000000000000000000000000deadbeef","input":"0x","logs":[{"address":"0x00000000000000000000000000000000deadbeef","topics":[],"data":"0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","position":"0x0"}],"value":"0x0","type":"CALL"}`, originHex),
+			want:   fmt.Sprintf(`{"pc":"0x0","from":"%s","gas":"0x13880","gasUsed":"0x5b9e","to":"0x00000000000000000000000000000000deadbeef","input":"0x","logs":[{"address":"0x00000000000000000000000000000000deadbeef","topics":[],"data":"0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","position":"0x0","pc":"0x9"}],"value":"0x0","type":"CALL"}`, originHex),
 		},
 		{
 			// Leads to OOM on the prestate tracer
