@@ -93,7 +93,8 @@ func makeTestConstructionBAL() *AccessListBuilder {
 // TestBALEncoding tests that a populated access list can be encoded/decoded correctly.
 func TestBALEncoding(t *testing.T) {
 	var buf bytes.Buffer
-	bal := makeTestConstructionBAL()
+	balBuilder := makeTestConstructionBAL()
+	bal := balBuilder.FinalizedAccesses
 	err := bal.EncodeRLP(&buf)
 	if err != nil {
 		t.Fatalf("encoding failed: %v\n", err)
@@ -136,7 +137,7 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 	}
 	if sort {
 		slices.SortFunc(storageWrites, func(a, b encodingSlotWrites) int {
-			return bytes.Compare(a.Slot[:], b.Slot[:])
+			return bytes.Compare(a.Slot.inner.Bytes(), b.Slot.inner.Bytes())
 		})
 	}
 
@@ -173,7 +174,7 @@ func makeTestAccountAccess(sort bool) AccountAccess {
 		})
 	}
 
-	var encodedStorageReads []EncodedStorage
+	var encodedStorageReads []*EncodedStorage
 	for _, slot := range storageReads {
 		encodedStorageReads = append(encodedStorageReads, newEncodedStorageFromHash(slot))
 	}
@@ -220,7 +221,7 @@ func TestBlockAccessListCopy(t *testing.T) {
 	// Make sure the mutations on copy won't affect the origin
 	for _, aa := range cpyCpy {
 		for i := 0; i < len(aa.StorageReads); i++ {
-			aa.StorageReads[i] = testrand.Bytes(32)
+			aa.StorageReads[i] = &EncodedStorage{new(uint256.Int).SetBytes(testrand.Bytes(32))}
 		}
 	}
 	if !reflect.DeepEqual(list, cpy) {
@@ -230,8 +231,9 @@ func TestBlockAccessListCopy(t *testing.T) {
 
 func TestBlockAccessListValidation(t *testing.T) {
 	// Validate the block access list after RLP decoding
+	testBALMaxIndex := 8
 	enc := makeTestBAL(true)
-	if err := enc.Validate(); err != nil {
+	if err := enc.Validate(testBALMaxIndex); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 	var buf bytes.Buffer
@@ -243,14 +245,14 @@ func TestBlockAccessListValidation(t *testing.T) {
 	if err := dec.DecodeRLP(rlp.NewStream(bytes.NewReader(buf.Bytes()), 0)); err != nil {
 		t.Fatalf("Unexpected RLP-decode error: %v", err)
 	}
-	if err := dec.Validate(); err != nil {
+	if err := dec.Validate(testBALMaxIndex); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 
 	// Validate the derived block access list
-	cBAL := makeTestConstructionBAL()
+	cBAL := makeTestConstructionBAL().FinalizedAccesses
 	listB := cBAL.ToEncodingObj()
-	if err := listB.Validate(); err != nil {
+	if err := listB.Validate(testBALMaxIndex); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
 	}
 }

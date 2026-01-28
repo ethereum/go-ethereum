@@ -307,11 +307,7 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 
 	var blockAccessListHash *common.Hash
 	body := types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals}
-	if data.BlockAccessList != nil {
-		body.AccessList = data.BlockAccessList
-		balHash := data.BlockAccessList.Hash()
-		blockAccessListHash = &balHash
-	}
+
 	header := &types.Header{
 		ParentHash:          data.ParentHash,
 		UncleHash:           types.EmptyUncleHash,
@@ -336,7 +332,16 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 		BlockAccessListHash: blockAccessListHash,
 		SlotNumber:          data.SlotNumber,
 	}
+
+	if data.BlockAccessList != nil {
+		balHash := data.BlockAccessList.Hash()
+		header.BlockAccessListHash = &balHash
+		block := types.NewBlockWithHeader(header).WithBody(body).WithAccessList(data.BlockAccessList)
+		return block, nil
+	}
+
 	return types.NewBlockWithHeader(header).WithBody(body), nil
+
 }
 
 // BlockToExecutableData constructs the ExecutableData structure by filling the
@@ -360,6 +365,10 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		Withdrawals:     block.Withdrawals(),
 		BlobGasUsed:     block.BlobGasUsed(),
 		ExcessBlobGas:   block.ExcessBlobGas(),
+<<<<<<< HEAD
+=======
+		BlockAccessList: block.AccessList(),
+>>>>>>> 959ade7689 (a bunch of changes.  mostly bal persistence and removing bal from block body object.  wip...)
 		SlotNumber:      block.SlotNumber(),
 		BlockAccessList: block.Body().AccessList,
 	}

@@ -182,8 +182,7 @@ func (h *Header) EmptyReceipts() bool {
 type Body struct {
 	Transactions []*Transaction
 	Uncles       []*Header
-	Withdrawals  []*Withdrawal        `rlp:"optional"`
-	AccessList   *bal.BlockAccessList `rlp:"optional,nil"`
+	Withdrawals  []*Withdrawal `rlp:"optional"`
 }
 
 // Block represents an Ethereum block.
@@ -287,13 +286,15 @@ func NewBlock(header *Header, body *Body, receipts []*Receipt, hasher ListHasher
 		b.withdrawals = slices.Clone(withdrawals)
 	}
 
-	if body.AccessList != nil {
-		balHash := body.AccessList.Hash()
-		b.header.BlockAccessListHash = &balHash
-		b.accessList = body.AccessList
-	}
-
 	return b
+}
+
+func NewBlockWithAccessList(header *Header, body *Body, receipts []*Receipt, accessList *bal.BlockAccessList, hasher ListHasher) *Block {
+	block := NewBlock(header, body, receipts, hasher)
+	block.accessList = accessList
+	balHash := accessList.Hash()
+	block.header.BlockAccessListHash = &balHash
+	return block
 }
 
 // CopyHeader creates a deep copy of a block header.
@@ -367,15 +368,16 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 // Body returns the non-header content of the block.
 // Note the returned data is not an independent copy.
 func (b *Block) Body() *Body {
-	return &Body{b.transactions, b.uncles, b.withdrawals, b.accessList}
+	return &Body{b.transactions, b.uncles, b.withdrawals}
 }
 
 // Accessors for body data. These do not return a copy because the content
 // of the body slices does not affect the cached hash/size in block.
 
-func (b *Block) Uncles() []*Header          { return b.uncles }
-func (b *Block) Transactions() Transactions { return b.transactions }
-func (b *Block) Withdrawals() Withdrawals   { return b.withdrawals }
+func (b *Block) Uncles() []*Header                { return b.uncles }
+func (b *Block) Transactions() Transactions       { return b.transactions }
+func (b *Block) Withdrawals() Withdrawals         { return b.withdrawals }
+func (b *Block) AccessList() *bal.BlockAccessList { return b.accessList }
 
 func (b *Block) Transaction(hash common.Hash) *Transaction {
 	for _, transaction := range b.transactions {
@@ -522,12 +524,26 @@ func (b *Block) WithBody(body Body) *Block {
 		uncles:       make([]*Header, len(body.Uncles)),
 		withdrawals:  slices.Clone(body.Withdrawals),
 	}
-	if body.AccessList != nil {
-		balCopy := body.AccessList.Copy()
-		block.accessList = &balCopy
-	}
 	for i := range body.Uncles {
 		block.uncles[i] = CopyHeader(body.Uncles[i])
+	}
+	return block
+}
+
+// WithAccessList returns a copy of the block with the access list embedded.
+// It does not set the access list hash in the header of the returned block.
+// TODO: ^ when support for --experimental.bal is removed, this function should set the access list hash in the header
+func (b *Block) WithAccessList(accessList *bal.BlockAccessList) *Block {
+	alCopy := accessList.Copy()
+	block := &Block{
+		header:       b.header,
+		transactions: slices.Clone(b.transactions),
+		uncles:       make([]*Header, len(b.uncles)),
+		withdrawals:  slices.Clone(b.withdrawals),
+		accessList:   &alCopy,
+	}
+	for i := range b.uncles {
+		block.uncles[i] = CopyHeader(b.uncles[i])
 	}
 	return block
 }

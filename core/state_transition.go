@@ -462,6 +462,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
 		t.OnGasChange(st.gasRemaining, st.gasRemaining-gas, tracing.GasChangeTxIntrinsicGas)
 	}
+	fmt.Printf("gas used %d\n", gas)
 	st.gasRemaining -= gas
 
 	if rules.IsEIP4762 {
@@ -568,8 +569,10 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 	}
 
+	fmt.Printf("2 used gas is %d, %d\n", st.gasUsed(), peakGasUsed)
+
 	return &ExecutionResult{
-		UsedGas:    st.gasUsed(),
+		UsedGas:    peakGasUsed,
 		MaxUsedGas: peakGasUsed,
 		Err:        vmerr,
 		ReturnData: ret,
