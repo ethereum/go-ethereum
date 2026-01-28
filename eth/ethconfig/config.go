@@ -72,10 +72,10 @@ var Defaults = Config{
 	RPCGasCap:               50000000,
 	RPCEVMTimeout:           5 * time.Second,
 	GPO:                     FullNodeGPO,
-	RPCTxFeeCap:             1, // 1 ether
+	RPCTxFeeCap:             1,             // 1 ether
 	TxSyncDefaultTimeout:    uint64(20000), // 20 seconds in milliseconds
 	TxSyncMaxTimeout:        uint64(60000), // 1 minute in milliseconds
-	SlowBlockThreshold:      -1, // Disabled by default; set via --debug.logslowblock flag
+	SlowBlockThreshold:      -1,            // Disabled by default; set via --debug.logslowblock flag
 	RangeLimit:              0,
 }
 
