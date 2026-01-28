@@ -158,13 +158,15 @@ type StateDB struct {
 	StorageLoaded  int          // Number of storage slots retrieved from the database during the state transition
 	StorageUpdated atomic.Int64 // Number of storage slots updated during the state transition
 	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
-	CodeLoaded     int          // Number of contract code loaded during the state transition
 
 	// CodeLoadBytes is the total number of bytes read from contract code.
 	// This value may be smaller than the actual number of bytes read, since
 	// some APIs (e.g. CodeSize) may load the entire code from either the
 	// cache or the database when the size is not available in the cache.
-	CodeLoadBytes int
+	CodeLoaded      int // Number of contract code loaded during the state transition
+	CodeLoadBytes   int // Total bytes of resolved code
+	CodeUpdated     int // Number of contracts with code changes that persisted
+	CodeUpdateBytes int // Total bytes of persisted code written
 }
 
 // New creates a new state from a given trie.
@@ -941,8 +943,15 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		if op.isDelete() {
 			deletedAddrs = append(deletedAddrs, addr)
 		} else {
-			s.updateStateObject(s.stateObjects[addr])
+			obj := s.stateObjects[addr]
+			s.updateStateObject(obj)
 			s.AccountUpdated += 1
+
+			// Count code writes post-Finalise so reverted CREATEs are excluded.
+			if obj.dirtyCode {
+				s.CodeUpdated += 1
+				s.CodeUpdateBytes += len(obj.code)
+			}
 		}
 		usedAddrs = append(usedAddrs, addr) // Copy needed for closure
 	}
