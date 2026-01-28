@@ -214,7 +214,8 @@ type BlockChainConfig struct {
 	StateSizeTracking bool
 
 	// SlowBlockThreshold is the block execution time threshold beyond which
-	// detailed statistics will be logged.
+	// detailed statistics will be logged. Negative value means disabled (default),
+	// zero logs all blocks, positive value filters blocks by execution time.
 	SlowBlockThreshold time.Duration
 }
 
@@ -2106,24 +2107,11 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 		}
 		// Upload the statistics of reader at the end
 		defer func() {
-			pStat := prefetch.GetStats()
-			accountCacheHitPrefetchMeter.Mark(pStat.AccountCacheHit)
-			accountCacheMissPrefetchMeter.Mark(pStat.AccountCacheMiss)
-			storageCacheHitPrefetchMeter.Mark(pStat.StorageCacheHit)
-			storageCacheMissPrefetchMeter.Mark(pStat.StorageCacheMiss)
-
-			rStat := process.GetStats()
-			accountCacheHitMeter.Mark(rStat.AccountCacheHit)
-			accountCacheMissMeter.Mark(rStat.AccountCacheMiss)
-			storageCacheHitMeter.Mark(rStat.StorageCacheHit)
-			storageCacheMissMeter.Mark(rStat.StorageCacheMiss)
-
 			if result != nil {
-				result.stats.StatePrefetchCacheStats = pStat
-				result.stats.StateReadCacheStats = rStat
+				result.stats.StatePrefetchCacheStats = prefetch.GetStats()
+				result.stats.StateReadCacheStats = process.GetStats()
 			}
 		}()
-
 		go func(start time.Time, throwaway *state.StateDB, block *types.Block) {
 			// Disable tracing for prefetcher executions.
 			vmCfg := bc.cfg.VmConfig
@@ -2238,8 +2226,11 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	stats.StorageLoaded = statedb.StorageLoaded
 	stats.StorageUpdated = int(statedb.StorageUpdated.Load())
 	stats.StorageDeleted = int(statedb.StorageDeleted.Load())
+
 	stats.CodeLoaded = statedb.CodeLoaded
 	stats.CodeLoadBytes = statedb.CodeLoadBytes
+	stats.CodeUpdated = statedb.CodeUpdated
+	stats.CodeUpdateBytes = statedb.CodeUpdateBytes
 
 	stats.Execution = ptime - (statedb.AccountReads + statedb.StorageReads + statedb.CodeReads)          // The time spent on EVM processing
 	stats.Validation = vtime - (statedb.AccountHashes + statedb.AccountUpdates + statedb.StorageUpdates) // The time spent on block validation

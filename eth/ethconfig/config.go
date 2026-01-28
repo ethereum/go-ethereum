@@ -72,10 +72,10 @@ var Defaults = Config{
 	RPCGasCap:               50000000,
 	RPCEVMTimeout:           5 * time.Second,
 	GPO:                     FullNodeGPO,
-	RPCTxFeeCap:             1,             // 1 ether
+	RPCTxFeeCap:             1, // 1 ether
 	TxSyncDefaultTimeout:    uint64(20000), // 20 seconds in milliseconds
 	TxSyncMaxTimeout:        uint64(60000), // 1 minute in milliseconds
-	SlowBlockThreshold:      time.Second * 2,
+	SlowBlockThreshold:      -1, // Disabled by default; set via --debug.logslowblock flag
 	RangeLimit:              0,
 }
 
@@ -130,8 +130,9 @@ type Config struct {
 	// presence of these blocks for every new peer connection.
 	RequiredBlocks map[uint64]common.Hash `toml:"-"`
 
-	// SlowBlockThreshold is the block execution speed threshold (Mgas/s)
-	// below which detailed statistics are logged.
+	// SlowBlockThreshold is the block execution time threshold beyond which
+	// detailed statistics are logged. Negative means disabled (default), zero
+	// logs all blocks, positive filters by execution time.
 	SlowBlockThreshold time.Duration `toml:",omitempty"`
 
 	// Database options
