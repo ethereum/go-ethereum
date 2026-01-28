@@ -432,7 +432,9 @@ func (typedData *TypedData) EncodeType(primaryType string) hexutil.Bytes {
 			buffer.WriteString(obj.Name)
 			buffer.WriteString(",")
 		}
-		buffer.Truncate(buffer.Len() - 1)
+		if len(typedData.Types[dep]) > 0 {
+			buffer.Truncate(buffer.Len() - 1)
+		}
 		buffer.WriteString(")")
 	}
 	return buffer.Bytes()
