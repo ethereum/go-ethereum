@@ -293,7 +293,7 @@ func TestPrefixedChildRegistryGet(t *testing.T) {
 }
 
 func TestChildPrefixedRegistryRegister(t *testing.T) {
-	r := NewPrefixedChildRegistry(DefaultRegistry, "prefix.")
+	r := NewPrefixedChildRegistry(NewRegistry(), "prefix.")
 	err := r.Register("foo", NewCounter())
 	c := NewCounter()
 	Register("bar", c)
