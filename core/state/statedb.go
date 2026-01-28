@@ -948,7 +948,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			s.AccountUpdated += 1
 
 			// Count code writes post-Finalise so reverted CREATEs are excluded.
-			if obj.dirtyCode && len(obj.code) > 0 {
+			if obj.dirtyCode {
 				s.CodeUpdated += 1
 				s.CodeUpdateBytes += len(obj.code)
 			}
