@@ -81,6 +81,11 @@ type Header struct {
 	MixDigest   common.Hash    `json:"mixHash"`
 	Nonce       BlockNonce     `json:"nonce"`
 
+	// XDPoS fields for validator consensus
+	Validators []byte `json:"validators" rlp:"optional"`
+	Validator  []byte `json:"validator" rlp:"optional"`
+	Penalties  []byte `json:"penalties" rlp:"optional"`
+
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional"`
 
@@ -112,6 +117,10 @@ type headerMarshaling struct {
 	Hash          common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 	BlobGasUsed   *hexutil.Uint64
 	ExcessBlobGas *hexutil.Uint64
+	// XDPoS fields
+	Validators hexutil.Bytes
+	Validator  hexutil.Bytes
+	Penalties  hexutil.Bytes
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
@@ -129,7 +138,7 @@ func (h *Header) Size() common.StorageSize {
 	if h.BaseFee != nil {
 		baseFeeBits = h.BaseFee.BitLen()
 	}
-	return headerSize + common.StorageSize(len(h.Extra)+(h.Difficulty.BitLen()+h.Number.BitLen()+baseFeeBits)/8)
+	return headerSize + common.StorageSize(len(h.Extra)+len(h.Validators)+len(h.Validator)+len(h.Penalties)+(h.Difficulty.BitLen()+h.Number.BitLen()+baseFeeBits)/8)
 }
 
 // SanityCheck checks a few basic things -- these checks are way beyond what

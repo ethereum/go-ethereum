@@ -57,6 +57,11 @@ func (b *EthAPIBackend) ChainConfig() *params.ChainConfig {
 	return b.eth.blockchain.Config()
 }
 
+// BlockChain returns the underlying blockchain for XDPoS operations.
+func (b *EthAPIBackend) BlockChain() *core.BlockChain {
+	return b.eth.blockchain
+}
+
 func (b *EthAPIBackend) CurrentBlock() *types.Header {
 	return b.eth.blockchain.CurrentBlock()
 }
