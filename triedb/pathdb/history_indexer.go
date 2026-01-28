@@ -461,10 +461,18 @@ const (
 	// to be close enough to the tip to operate in real-time mode.
 	syncHistoryThreshold = 6 * time.Hour
 
-	// indexerIdleTimeout is the maximum duration of inactivity allowed
-	// before the indexer decides it has finished its current catch-up
-	// and exits the initial sync mode.
-	indexerIdleTimeout = 30 * time.Second
+	// indexerIdleTimeoutLive is the strict inactivity limit applied once the
+	// indexer is synchronized with the chain head.
+	indexerIdleTimeoutLive = 60 * time.Second
+
+	// indexerIdleTimeoutStartup is the period allowed when the indexer has
+	// little or no history, for Geth's initial sync procedures (e.g., beacon
+	// headers downloading or something else).
+	indexerIdleTimeoutStartup = 1 * time.Hour
+
+	// indexerIdleDecayWindow defines the progress threshold over which the
+	// idle timeout linearly scales from the startup period down to the live one.
+	indexerIdleDecayWindow = 10000
 
 	// indexerHeartbeatInterval is the frequency at which the indexer
 	// checks its status and schedules background indexing operations.
@@ -475,6 +483,28 @@ const (
 	// efficiency and reduces overhead.
 	indexerHeartbeatInterval = 15 * time.Second
 )
+
+// getTimeout calculates a dynamic inactivity threshold based on indexing
+// progress. For massive datasets, this accounts for the preparation phase
+// required before active chain synchronization begins (such as beacon
+// header downloading).
+//
+// Note: In private networks with no block, this may result in a long wait.
+// In such cases, the initial sync mode is expected to be terminated by
+// another condition verifying the chain head has been reached. This timeout
+// primarily serves as a heuristic for the network with massive datasets.
+func (i *indexIniter) getTimeout() time.Duration {
+	current := i.indexed.Load()
+	if current >= indexerIdleDecayWindow {
+		return indexerIdleTimeoutLive
+	}
+	progress := float64(current) / float64(indexerIdleDecayWindow)
+
+	diff := float64(indexerIdleTimeoutStartup - indexerIdleTimeoutLive)
+	decay := time.Duration(diff * progress)
+
+	return indexerIdleTimeoutStartup - decay
+}
 
 // checkExit reports whether the initial mode has completed. It assumes that
 // all local histories have been fully indexed when invoked, and determines
@@ -502,7 +532,7 @@ func (i *indexIniter) checkExit(lastEventTime time.Time) bool {
 	// may be syncing toward a historical block rather than the latest chain head.
 	// In this case, check whether the indexer has been idle for a while and exit
 	// the initial mode if so.
-	if time.Since(lastEventTime) > indexerIdleTimeout {
+	if time.Since(lastEventTime) > i.getTimeout() {
 		i.log.Info("Exit the initial mode due to inactivity", "last", i.indexed.Load(), "age", common.PrettyAge(blockTime))
 		return true
 	}
