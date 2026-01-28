@@ -28,10 +28,12 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetGenesisHash = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
-	HoleskyGenesisHash = common.HexToHash("0xb5f7f912443c940f21fd611f12828d75b534364ed9e95ca4e307729a4661bde4")
-	SepoliaGenesisHash = common.HexToHash("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9")
-	HoodiGenesisHash   = common.HexToHash("0xbbe312868b376a3001692a646dd2d7d1e4406380dfd86b98aa8a34d1557c971b")
+	MainnetGenesisHash    = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
+	HoleskyGenesisHash    = common.HexToHash("0xb5f7f912443c940f21fd611f12828d75b534364ed9e95ca4e307729a4661bde4")
+	SepoliaGenesisHash    = common.HexToHash("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9")
+	HoodiGenesisHash      = common.HexToHash("0xbbe312868b376a3001692a646dd2d7d1e4406380dfd86b98aa8a34d1557c971b")
+	XDCMainnetGenesisHash = common.HexToHash("0x81b02e6c24c0ed8383dd5f6c1e83e82b8f988af91f89f9b95c10dbd3e25cd025")
+	XDCApothemGenesisHash = common.HexToHash("0xcc97d2b9dcbce1b3d4a08c53c0f61c9c22c5c8c6c6f4eb4c5c5c5c5c5c5c5c5c5")
 )
 
 func newUint64(val uint64) *uint64 { return &val }
@@ -182,6 +184,61 @@ var (
 			BPO2:   DefaultBPO2BlobConfig,
 		},
 	}
+
+	// XDCMainnetChainConfig contains the chain parameters to run a node on the XDC mainnet.
+	// Chain ID: 50
+	XDCMainnetChainConfig = &ChainConfig{
+		ChainID:             big.NewInt(50),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      false,
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    nil,
+		BerlinBlock:         big.NewInt(0),
+		LondonBlock:         nil, // XDC doesn't use EIP-1559
+		XDPoS: &XDPoSConfig{
+			Period:              2,                                                                       // 2 second block time
+			Epoch:               900,                                                                     // 900 blocks per epoch (~30 minutes)
+			Reward:              5000,                                                                    // Block reward in XDC (before division)
+			RewardCheckpoint:    900,                                                                     // Checkpoint for rewards
+			Gap:                 450,                                                                     // Gap blocks before epoch end
+			FoudationWalletAddr: common.HexToAddress("0x746f746f726f0000000000000000000000000000"), // Foundation wallet
+		},
+	}
+
+	// XDCApothemChainConfig contains the chain parameters to run a node on the XDC Apothem testnet.
+	// Chain ID: 51
+	XDCApothemChainConfig = &ChainConfig{
+		ChainID:             big.NewInt(51),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      false,
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    nil,
+		BerlinBlock:         big.NewInt(0),
+		LondonBlock:         nil, // XDC doesn't use EIP-1559
+		XDPoS: &XDPoSConfig{
+			Period:              2,                                                                       // 2 second block time
+			Epoch:               900,                                                                     // 900 blocks per epoch (~30 minutes)
+			Reward:              5000,                                                                    // Block reward in XDC (before division)
+			RewardCheckpoint:    900,                                                                     // Checkpoint for rewards
+			Gap:                 450,                                                                     // Gap blocks before epoch end
+			FoudationWalletAddr: common.HexToAddress("0x746f746f726f0000000000000000000000000000"), // Foundation wallet
+		},
+	}
+
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Ethash consensus.
 	AllEthashProtocolChanges = &ChainConfig{
@@ -419,10 +476,12 @@ var (
 
 // NetworkNames are user friendly names to use in the chain spec banner.
 var NetworkNames = map[string]string{
-	MainnetChainConfig.ChainID.String(): "mainnet",
-	SepoliaChainConfig.ChainID.String(): "sepolia",
-	HoleskyChainConfig.ChainID.String(): "holesky",
-	HoodiChainConfig.ChainID.String():   "hoodi",
+	MainnetChainConfig.ChainID.String():     "mainnet",
+	SepoliaChainConfig.ChainID.String():     "sepolia",
+	HoleskyChainConfig.ChainID.String():     "holesky",
+	HoodiChainConfig.ChainID.String():       "hoodi",
+	XDCMainnetChainConfig.ChainID.String():  "xdc-mainnet",
+	XDCApothemChainConfig.ChainID.String():  "xdc-apothem",
 }
 
 // ChainConfig is the core config which determines the blockchain settings.

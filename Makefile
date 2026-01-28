@@ -2,7 +2,7 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth evm all test lint fmt clean devtools help
+.PHONY: geth XDC evm all test lint fmt clean devtools help
 
 GOBIN = ./build/bin
 GO ?= latest
@@ -13,6 +13,12 @@ geth:
 	$(GORUN) build/ci.go install ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
+
+#? XDC: Build XDC client for XDC Network.
+XDC:
+	$(GORUN) build/ci.go install ./cmd/XDC
+	@echo "Done building XDC client."
+	@echo "Run \"$(GOBIN)/XDC\" to launch XDC Network node."
 
 #? evm: Build evm.
 evm:
