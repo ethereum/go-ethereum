@@ -639,13 +639,13 @@ var (
 	RPCTxSyncDefaultTimeoutFlag = &cli.DurationFlag{
 		Name:     "rpc.txsync.defaulttimeout",
 		Usage:    "Default timeout for eth_sendRawTransactionSync (e.g. 2s, 500ms)",
-		Value:    ethconfig.Defaults.TxSyncDefaultTimeout,
+		Value:    time.Duration(ethconfig.Defaults.TxSyncDefaultTimeout) * time.Millisecond,
 		Category: flags.APICategory,
 	}
 	RPCTxSyncMaxTimeoutFlag = &cli.DurationFlag{
 		Name:     "rpc.txsync.maxtimeout",
 		Usage:    "Maximum allowed timeout for eth_sendRawTransactionSync (e.g. 5m)",
-		Value:    ethconfig.Defaults.TxSyncMaxTimeout,
+		Value:    time.Duration(ethconfig.Defaults.TxSyncMaxTimeout) * time.Millisecond,
 		Category: flags.APICategory,
 	}
 	RPCGlobalRangeLimitFlag = &cli.Uint64Flag{
@@ -1772,10 +1772,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.LogQueryLimit = ctx.Int(RPCGlobalLogQueryLimit.Name)
 	}
 	if ctx.IsSet(RPCTxSyncDefaultTimeoutFlag.Name) {
-		cfg.TxSyncDefaultTimeout = ctx.Duration(RPCTxSyncDefaultTimeoutFlag.Name)
+		cfg.TxSyncDefaultTimeout = uint64(ctx.Duration(RPCTxSyncDefaultTimeoutFlag.Name).Milliseconds())
 	}
 	if ctx.IsSet(RPCTxSyncMaxTimeoutFlag.Name) {
-		cfg.TxSyncMaxTimeout = ctx.Duration(RPCTxSyncMaxTimeoutFlag.Name)
+		cfg.TxSyncMaxTimeout = uint64(ctx.Duration(RPCTxSyncMaxTimeoutFlag.Name).Milliseconds())
 	}
 	if ctx.IsSet(RPCGlobalRangeLimitFlag.Name) {
 		cfg.RangeLimit = ctx.Uint64(RPCGlobalRangeLimitFlag.Name)

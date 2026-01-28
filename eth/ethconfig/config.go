@@ -72,9 +72,9 @@ var Defaults = Config{
 	RPCGasCap:               50000000,
 	RPCEVMTimeout:           5 * time.Second,
 	GPO:                     FullNodeGPO,
-	RPCTxFeeCap:             1, // 1 ether
-	TxSyncDefaultTimeout:    20 * time.Second,
-	TxSyncMaxTimeout:        1 * time.Minute,
+	RPCTxFeeCap:             1,             // 1 ether
+	TxSyncDefaultTimeout:    uint64(20000), // 20 seconds in milliseconds
+	TxSyncMaxTimeout:        uint64(60000), // 1 minute in milliseconds
 	SlowBlockThreshold:      time.Second * 2,
 	RangeLimit:              0,
 }
@@ -203,8 +203,8 @@ type Config struct {
 	OverrideVerkle *uint64 `toml:",omitempty"`
 
 	// EIP-7966: eth_sendRawTransactionSync timeouts
-	TxSyncDefaultTimeout time.Duration `toml:",omitempty"`
-	TxSyncMaxTimeout     time.Duration `toml:",omitempty"`
+	TxSyncDefaultTimeout uint64 `toml:",omitempty"`
+	TxSyncMaxTimeout     uint64 `toml:",omitempty"`
 
 	// RangeLimit restricts the maximum range (end - start) for range queries.
 	RangeLimit uint64 `toml:",omitempty"`

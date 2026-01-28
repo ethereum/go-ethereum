@@ -447,8 +447,8 @@ type testBackend struct {
 	sentTx     *types.Transaction
 	sentTxHash common.Hash
 
-	syncDefaultTimeout time.Duration
-	syncMaxTimeout     time.Duration
+	syncDefaultTimeout uint64 // in milliseconds
+	syncMaxTimeout     uint64 // in milliseconds
 }
 
 func fakeBlockHash(txh common.Hash) common.Hash {
@@ -3949,20 +3949,20 @@ func (b configTimeBackend) CurrentHeader() *types.Header {
 	return &types.Header{Time: b.time}
 }
 
-func (b *testBackend) RPCTxSyncDefaultTimeout() time.Duration {
+func (b *testBackend) RPCTxSyncDefaultTimeout() uint64 {
 	if b.syncDefaultTimeout != 0 {
 		return b.syncDefaultTimeout
 	}
-	return 2 * time.Second
+	return 2000 // 2 seconds in milliseconds
 }
-func (b *testBackend) RPCTxSyncMaxTimeout() time.Duration {
+func (b *testBackend) RPCTxSyncMaxTimeout() uint64 {
 	if b.syncMaxTimeout != 0 {
 		return b.syncMaxTimeout
 	}
-	return 5 * time.Minute
+	return 300000 // 5 minutes in milliseconds
 }
-func (b *backendMock) RPCTxSyncDefaultTimeout() time.Duration { return 2 * time.Second }
-func (b *backendMock) RPCTxSyncMaxTimeout() time.Duration     { return 5 * time.Minute }
+func (b *backendMock) RPCTxSyncDefaultTimeout() uint64 { return 2000 }   // 2 seconds
+func (b *backendMock) RPCTxSyncMaxTimeout() uint64     { return 300000 } // 5 minutes
 
 func makeSignedRaw(t *testing.T, api *TransactionAPI, from, to common.Address, value *big.Int) (hexutil.Bytes, *types.Transaction) {
 	t.Helper()

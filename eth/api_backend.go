@@ -492,10 +492,10 @@ func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Blo
 	return b.eth.stateAtTransaction(ctx, block, txIndex, reexec)
 }
 
-func (b *EthAPIBackend) RPCTxSyncDefaultTimeout() time.Duration {
+func (b *EthAPIBackend) RPCTxSyncDefaultTimeout() uint64 {
 	return b.eth.config.TxSyncDefaultTimeout
 }
 
-func (b *EthAPIBackend) RPCTxSyncMaxTimeout() time.Duration {
+func (b *EthAPIBackend) RPCTxSyncMaxTimeout() uint64 {
 	return b.eth.config.TxSyncMaxTimeout
 }

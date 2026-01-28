@@ -61,13 +61,13 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		RPCGasCap               uint64
 		RPCEVMTimeout           time.Duration
 		RPCTxFeeCap             float64
-		OverrideOsaka           *uint64       `toml:",omitempty"`
-		OverrideBPO1            *uint64       `toml:",omitempty"`
-		OverrideBPO2            *uint64       `toml:",omitempty"`
-		OverrideVerkle          *uint64       `toml:",omitempty"`
-		TxSyncDefaultTimeout    time.Duration `toml:",omitempty"`
-		TxSyncMaxTimeout        time.Duration `toml:",omitempty"`
-		RangeLimit              uint64        `toml:",omitempty"`
+		OverrideOsaka           *uint64 `toml:",omitempty"`
+		OverrideBPO1            *uint64 `toml:",omitempty"`
+		OverrideBPO2            *uint64 `toml:",omitempty"`
+		OverrideVerkle          *uint64 `toml:",omitempty"`
+		TxSyncDefaultTimeout    uint64  `toml:",omitempty"`
+		TxSyncMaxTimeout        uint64  `toml:",omitempty"`
+		RangeLimit              uint64  `toml:",omitempty"`
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -171,13 +171,13 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		RPCGasCap               *uint64
 		RPCEVMTimeout           *time.Duration
 		RPCTxFeeCap             *float64
-		OverrideOsaka           *uint64        `toml:",omitempty"`
-		OverrideBPO1            *uint64        `toml:",omitempty"`
-		OverrideBPO2            *uint64        `toml:",omitempty"`
-		OverrideVerkle          *uint64        `toml:",omitempty"`
-		TxSyncDefaultTimeout    *time.Duration `toml:",omitempty"`
-		TxSyncMaxTimeout        *time.Duration `toml:",omitempty"`
-		RangeLimit              *uint64        `toml:",omitempty"`
+		OverrideOsaka           *uint64 `toml:",omitempty"`
+		OverrideBPO1            *uint64 `toml:",omitempty"`
+		OverrideBPO2            *uint64 `toml:",omitempty"`
+		OverrideVerkle          *uint64 `toml:",omitempty"`
+		TxSyncDefaultTimeout    *uint64 `toml:",omitempty"`
+		TxSyncMaxTimeout        *uint64 `toml:",omitempty"`
+		RangeLimit              *uint64 `toml:",omitempty"`
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
