@@ -17,11 +17,9 @@
 package hookstest
 
 import (
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/slog"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core"
@@ -37,7 +35,7 @@ func TestSetupGenesisBlockWithStub(t *testing.T) {
 	// [log.Crit] being called.
 	l := log.Root()
 	t.Cleanup(func() { log.SetDefault(l) })
-	log.SetDefault(log.NewLogger(slog.NewTextHandler(os.Stderr, nil)))
+	log.SetDefault(log.NewLogger(ethtest.NewTBLogHandler(t, log.LevelDebug)))
 
 	stub := &Stub{}
 	extras := stub.Register(t)
