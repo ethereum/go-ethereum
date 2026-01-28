@@ -259,7 +259,9 @@ func (oracle *Oracle) getBlockValues(ctx context.Context, blockNum uint64, limit
 	copy(sortedTxs, txs)
 	baseFee := block.BaseFee()
 	baseFee256 := new(uint256.Int)
-	baseFee256.SetFromBig(baseFee)
+	if baseFee != nil {
+		baseFee256.SetFromBig(baseFee)
+	}
 	slices.SortFunc(sortedTxs, func(a, b *types.Transaction) int {
 		return a.EffectiveGasTipCmp(b, baseFee256)
 	})
