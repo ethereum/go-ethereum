@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"io"
 	"math/big"
 	"math/rand"
@@ -581,7 +582,7 @@ func (c *Clique) Finalize(chain consensus.ChainHeaderReader, header *types.Heade
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, and returns the final block.
-func (c *Clique) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt, onFinalize func()) (*types.Block, error) {
+func (c *Clique) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt, onFinalizeAccessList func() *bal.BlockAccessList) (*types.Block, error) {
 	if len(body.Withdrawals) > 0 {
 		return nil, errors.New("clique does not support withdrawals")
 	}
@@ -591,10 +592,9 @@ func (c *Clique) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *
 	// Assign the final state root to header.
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
-	if onFinalize != nil {
-		onFinalize()
+	if onFinalizeAccessList != nil {
+		panic("access list embedding not enabled for clique consensus")
 	}
-
 	// Assemble and return the final block for sealing.
 	return types.NewBlock(header, &types.Body{Transactions: body.Transactions}, receipts, trie.NewStackTrie(nil)), nil
 }

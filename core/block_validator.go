@@ -116,10 +116,10 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 			// TODO: verify that this check isn't also done elsewhere
 			return fmt.Errorf("block access list hash not set in header")
 		}
-		if block.Body().AccessList != nil {
-			if *block.Header().BlockAccessListHash != block.Body().AccessList.Hash() {
-				return fmt.Errorf("access list hash mismatch.  local: %x. remote: %x\n", block.Body().AccessList.Hash(), *block.Header().BlockAccessListHash)
-			} else if err := block.Body().AccessList.Validate(len(block.Transactions())); err != nil {
+		if block.AccessList() != nil {
+			if *block.Header().BlockAccessListHash != block.AccessList().Hash() {
+				return fmt.Errorf("access list hash mismatch.  local: %x. remote: %x\n", block.AccessList().Hash(), *block.Header().BlockAccessListHash)
+			} else if err := block.AccessList().Validate(len(block.Transactions())); err != nil {
 				return fmt.Errorf("invalid block access list: %v", err)
 			}
 		}
@@ -133,7 +133,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		}
 	} else {
 		// if experimental.bal is not enabled, block headers cannot have access list hash and bodies cannot have access lists.
-		if block.Body().AccessList != nil {
+		if block.AccessList() != nil {
 			return fmt.Errorf("access list not allowed in block body if not in amsterdam or experimental.bal is set")
 		} else if block.Header().BlockAccessListHash != nil {
 			return fmt.Errorf("access list hash in block header not allowed when experimental.bal is set")

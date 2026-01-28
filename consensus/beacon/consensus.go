@@ -19,6 +19,7 @@ package beacon
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -357,9 +358,9 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 
 // FinalizeAndAssemble implements consensus.Engine, setting the final state and
 // assembling the block.
-func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt, onFinalization func()) (*types.Block, error) {
+func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt, onFinalizeAccessList func() *bal.BlockAccessList) (*types.Block, error) {
 	if !beacon.IsPoSHeader(header) {
-		return beacon.ethone.FinalizeAndAssemble(chain, header, state, body, receipts, onFinalization)
+		return beacon.ethone.FinalizeAndAssemble(chain, header, state, body, receipts, nil)
 	}
 	shanghai := chain.Config().IsShanghai(header.Number, header.Time)
 	if shanghai {
@@ -379,12 +380,15 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	// Assign the final state root to header.
 	header.Root = state.IntermediateRoot(true)
 
-	if onFinalization != nil {
-		onFinalization()
-	}
-
 	// Assemble the final block.
-	return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)), nil
+	if onFinalizeAccessList != nil {
+		al := onFinalizeAccessList()
+		alHash := al.Hash()
+		header.BlockAccessListHash = &alHash
+		return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)).WithAccessList(al), nil
+	} else {
+		return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)), nil
+	}
 }
 
 // Seal generates a new sealing request for the given input block and pushes

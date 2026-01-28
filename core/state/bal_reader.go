@@ -126,7 +126,7 @@ type BALReader struct {
 // NewBALReader constructs a new reader from an access list. db is expected to have been instantiated with a reader.
 func NewBALReader(block *types.Block, reader Reader) *BALReader {
 	r := &BALReader{accesses: make(map[common.Address]*bal.AccountAccess), block: block}
-	for _, acctDiff := range *block.Body().AccessList {
+	for _, acctDiff := range *block.AccessList() {
 		r.accesses[acctDiff.Address] = &acctDiff
 	}
 	r.prestateReader.schedule(reader, r.ModifiedAccounts())

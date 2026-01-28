@@ -970,8 +970,8 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 	if block.Withdrawals() != nil {
 		fields["withdrawals"] = block.Withdrawals()
 	}
-	if block.Body().AccessList != nil {
-		fields["accessList"] = block.Body().AccessList
+	if block.AccessList() != nil {
+		fields["accessList"] = block.AccessList()
 	}
 	return fields
 }

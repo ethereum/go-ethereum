@@ -19,6 +19,7 @@ package ethash
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"math/big"
 	"time"
 
@@ -513,7 +514,7 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
 // uncle rewards, setting the final state and assembling the block.
-func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt, onFinalize func()) (*types.Block, error) {
+func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt, onFinalizeAccessList func() *bal.BlockAccessList) (*types.Block, error) {
 	if len(body.Withdrawals) > 0 {
 		return nil, errors.New("ethash does not support withdrawals")
 	}
@@ -523,8 +524,8 @@ func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	// Assign the final state root to header.
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
-	if onFinalize != nil {
-		onFinalize()
+	if onFinalizeAccessList != nil {
+		panic("access list embedding not supported for ethash consenus")
 	}
 	// Header seems complete, assemble into a block and return
 	return types.NewBlock(header, &types.Body{Transactions: body.Transactions, Uncles: body.Uncles}, receipts, trie.NewStackTrie(nil)), nil

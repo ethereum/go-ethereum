@@ -514,8 +514,8 @@ func (b *EthAPIBackend) BlockAccessListByNumberOrHash(number rpc.BlockNumberOrHa
 	if block == nil {
 		return nil, fmt.Errorf("block not found")
 	}
-	if block.Body().AccessList == nil {
+	if block.AccessList() == nil {
 		return nil, nil
 	}
-	return block.Body().AccessList.StringableRepresentation(), nil
+	return block.AccessList().StringableRepresentation(), nil
 }

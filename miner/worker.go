@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -147,9 +148,6 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 		}
 	}
 	body := types.Body{Transactions: work.txs, Withdrawals: genParam.withdrawals}
-	if work.alTracer != nil {
-		body.AccessList = work.alTracer.AccessList().ToEncodingObj()
-	}
 
 	allLogs := make([]*types.Log, 0)
 	for _, r := range work.receipts {
@@ -184,11 +182,12 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 	// I considered trying to instantiate the beacon consensus engine with a tracer.
 	// however, the BAL tracer instance is used once per block, while the engine object
 	// lives for the entire time the client is running.
-	onBlockFinalization := func() {
+	onBlockFinalization := func() *bal.BlockAccessList {
 		if miner.chainConfig.IsAmsterdam(work.header.Number, work.header.Time) {
 			work.alTracer.OnBlockFinalization()
-			body.AccessList = work.alTracer.AccessList().ToEncodingObj()
+			return work.alTracer.AccessList().ToEncodingObj()
 		}
+		return nil
 	}
 
 	block, err := miner.engine.FinalizeAndAssemble(miner.chain, work.header, work.state, &body, work.receipts, onBlockFinalization)

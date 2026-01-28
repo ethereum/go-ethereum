@@ -2201,7 +2201,7 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	}
 	// TODO: need to check that the block is also postcancun if it contained an access list?
 	// this should be checked during decoding (?)
-	blockHasAccessList := block.Body().AccessList != nil
+	blockHasAccessList := block.AccessList() != nil
 	// only construct and embed BALs in the block if:
 	// * it has been enabled for testing purposes (preAmsterdam/postCancun blocks with experimental.bal)
 	// * we are after Amsterdam and the block was provided with bal omitted
@@ -2276,7 +2276,7 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 			// Disable tracing for prefetcher executions.
 			vmCfg := bc.cfg.VmConfig
 			vmCfg.Tracer = nil
-			if block.Body().AccessList == nil {
+			if block.AccessList() == nil {
 				// only use the state prefetcher for non-BAL blocks.
 				bc.prefetcher.Prefetch(block, throwaway, vmCfg, &interrupt)
 			}
@@ -2369,13 +2369,7 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 			return nil, err
 
 		}
-		// very ugly... deepcopy the block body before setting the block access
-		// list on it to prevent mutating the block instance passed by the caller.
-		existingBody := block.Body()
-		block = block.WithBody(*existingBody)
-		existingBody = block.Body()
-		existingBody.AccessList = balTracer.AccessList().ToEncodingObj()
-		block = block.WithBody(*existingBody)
+		block = block.WithAccessList(balTracer.AccessList().ToEncodingObj())
 	} else if enableBALFork {
 
 		computedAccessList := balTracer.AccessList().ToEncodingObj()
@@ -2387,16 +2381,12 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 			bc.reportBadBlock(block, res, err)
 			return nil, err
 		}
-		if block.Body().AccessList == nil {
-			// very ugly... deep copy the block body before setting the block access
-			// list on it to prevent mutating the block instance passed by the caller.
-			existingBody := block.Body()
-			block = block.WithBody(*existingBody)
-			existingBody = block.Body()
-			existingBody.AccessList = computedAccessList
-			block = block.WithBody(*existingBody)
-		} else if block.Body().AccessList.Hash() != computedAccessListHash {
-			err := fmt.Errorf("block access list hash mismatch (remote=%x computed=%x)", block.Body().AccessList.Hash(), computedAccessListHash)
+		if block.AccessList() == nil {
+			// attach the computed access list to the block so it gets persisted
+			// when the block is written to disk
+			block = block.WithAccessList(computedAccessList)
+		} else if block.AccessList().Hash() != computedAccessListHash {
+			err := fmt.Errorf("block access list hash mismatch (remote=%x computed=%x)", block.AccessList().Hash(), computedAccessListHash)
 			bc.reportBadBlock(block, res, err)
 			return nil, err
 		}

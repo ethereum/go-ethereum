@@ -102,7 +102,6 @@ func (f *fetchResult) body() types.Body {
 		Transactions: f.Transactions,
 		Uncles:       f.Uncles,
 		Withdrawals:  f.Withdrawals,
-		AccessList:   f.AccessList,
 	}
 }
 
