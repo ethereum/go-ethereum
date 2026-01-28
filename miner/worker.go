@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/stateless"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -265,6 +266,11 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 	}
 	if miner.chainConfig.IsPrague(header.Number, header.Time) {
 		core.ProcessParentBlockHash(header.ParentHash, env.evm)
+	}
+	if miner.chainConfig.IsVerkle(header.Number, header.Time) {
+		env.state.SetCode(params.BinaryTransitionRegistryAddress, []byte{1, 2, 3}, tracing.CodeChangeUnspecified)
+		env.state.SetNonce(params.BinaryTransitionRegistryAddress, 1, tracing.NonceChangeUnspecified)
+		env.state.SetState(params.BinaryTransitionRegistryAddress, common.Hash{}, common.Hash{1})
 	}
 	return env, nil
 }
