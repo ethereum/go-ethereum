@@ -1,0 +1,52 @@
+{
+  "config": {
+    "chainId": 50,
+    "homesteadBlock": 1,
+    "eip150Block": 2,
+    "eip150Hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "eip155Block": 3,
+    "eip158Block": 3,
+    "byzantiumBlock": 4,
+    "XDPoS": {
+      "period": 2,
+      "epoch": 900,
+      "reward": 5000,
+      "rewardCheckpoint": 900,
+      "gap": 450,
+      "foudationWalletAddr": "0x92a289fe95a85c53b8d0d113cbaef0c1ec98ac65"
+    }
+  },
+  "nonce": "0x0",
+  "timestamp": "0x5cefae27",
+  "extraData": "0x000000000000000000000000000000000000000000000000000000000000000025c65b4b379ac37cf78357c4915f73677022eaffc7d49d0a2cf198deebd6ce581af465944ec8b2bbcfccdea1006a5cfa7d9484b5b293b46964c265c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+  "gasLimit": "0x47b760",
+  "difficulty": "0x1",
+  "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "coinbase": "0x0000000000000000000000000000000000000000",
+  "alloc": {
+    "0000000000000000000000000000000000000088": {
+      "comment": "XDPoS Validator Contract - manages masternodes, staking, and voting",
+      "balance": "0x18d0bf423c03d8de000000"
+    },
+    "0000000000000000000000000000000000000089": {
+      "comment": "Block Signer Contract - tracks block signers",
+      "balance": "0x0"
+    },
+    "0000000000000000000000000000000000000090": {
+      "comment": "Randomize Contract - VRF for masternode selection",
+      "balance": "0x0"
+    },
+    "25c65b4b379ac37cf78357c4915f73677022eaff": {
+      "comment": "Initial Masternode 1",
+      "balance": "0x84595161401484a000000"
+    },
+    "c7d49d0a2cf198deebd6ce581af465944ec8b2bb": {
+      "comment": "Initial Masternode 2",
+      "balance": "0x84595161401484a000000"
+    },
+    "cfccdea1006a5cfa7d9484b5b293b46964c265c0": {
+      "comment": "Initial Masternode 3",
+      "balance": "0x84595161401484a000000"
+    }
+  }
+}

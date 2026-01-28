@@ -1,0 +1,40 @@
+{
+  "config": {
+    "chainId": 51,
+    "homesteadBlock": 0,
+    "eip150Block": 0,
+    "eip150Hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "eip155Block": 0,
+    "eip158Block": 0,
+    "byzantiumBlock": 0,
+    "XDPoS": {
+      "period": 2,
+      "epoch": 900,
+      "reward": 5000,
+      "rewardCheckpoint": 900,
+      "gap": 450,
+      "foudationWalletAddr": "0x746f746f726f0000000000000000000000000000"
+    }
+  },
+  "nonce": "0x0",
+  "timestamp": "0x5e4c3000",
+  "extraData": "0x0000000000000000000000000000000000000000000000000000000000000000d64e5b8d8f33e2f86e78e0f52d088bff0af44ccb0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+  "gasLimit": "0x47b760",
+  "difficulty": "0x1",
+  "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "coinbase": "0x0000000000000000000000000000000000000000",
+  "alloc": {
+    "0000000000000000000000000000000000000088": {
+      "comment": "XDPoS Validator Contract",
+      "balance": "0x0"
+    },
+    "0000000000000000000000000000000000000089": {
+      "comment": "Block Signer Contract",
+      "balance": "0x0"
+    },
+    "d64e5b8d8f33e2f86e78e0f52d088bff0af44ccb": {
+      "comment": "Apothem testnet initial masternode",
+      "balance": "0x84595161401484a000000"
+    }
+  }
+}
