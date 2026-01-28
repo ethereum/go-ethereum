@@ -239,6 +239,14 @@ func (t *BinaryTrie) GetStorage(addr common.Address, key []byte) ([]byte, error)
 	return t.root.Get(GetBinaryTreeKey(addr, key), t.nodeResolver)
 }
 
+func (t *BinaryTrie) UpdateAccountBatch(addresses []common.Address, accounts []*types.StateAccount, _ []int) error {
+	panic("not implemented")
+}
+
+func (t *BinaryTrie) UpdateStorageBatch(_ common.Address, keys [][]byte, values [][]byte) error {
+	panic("not implemented")
+}
+
 // UpdateAccount updates the account information for the given address.
 func (t *BinaryTrie) UpdateAccount(addr common.Address, acc *types.StateAccount, codeLen int) error {
 	var (

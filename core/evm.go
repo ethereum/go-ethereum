@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
@@ -44,6 +45,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		baseFee     *big.Int
 		blobBaseFee *big.Int
 		random      *common.Hash
+		slotNum     uint64
 	)
 
 	// If we don't have an explicit author (i.e. not mining), extract from the header
@@ -61,6 +63,10 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	if header.Difficulty.Sign() == 0 {
 		random = &header.MixDigest
 	}
+	if header.SlotNumber != nil {
+		slotNum = *header.SlotNumber
+	}
+
 	return vm.BlockContext{
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
@@ -73,6 +79,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		BlobBaseFee: blobBaseFee,
 		GasLimit:    header.GasLimit,
 		Random:      random,
+		Slotnum:     slotNum,
 	}
 }
 
@@ -135,7 +142,10 @@ func CanTransfer(db vm.StateDB, addr common.Address, amount *uint256.Int) bool {
 }
 
 // Transfer subtracts amount from sender and adds amount to recipient using the given Db
-func Transfer(db vm.StateDB, sender, recipient common.Address, amount *uint256.Int) {
+func Transfer(db vm.StateDB, sender, recipient common.Address, amount *uint256.Int, blockNumber *big.Int, rules *params.Rules) {
 	db.SubBalance(sender, amount, tracing.BalanceChangeTransfer)
 	db.AddBalance(recipient, amount, tracing.BalanceChangeTransfer)
+	if rules.IsAmsterdam && !amount.IsZero() {
+		db.AddLog(types.EthTransferLog(blockNumber, sender, recipient, amount))
+	}
 }

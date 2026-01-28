@@ -932,6 +932,9 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	if head.RequestsHash != nil {
 		result["requestsHash"] = head.RequestsHash
 	}
+	if head.SlotNumber != nil {
+		result["slotNumber"] = head.SlotNumber
+	}
 	return result
 }
 
@@ -966,6 +969,9 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 	fields["uncles"] = uncleHashes
 	if block.Withdrawals() != nil {
 		fields["withdrawals"] = block.Withdrawals()
+	}
+	if block.Body().AccessList != nil {
+		fields["accessList"] = block.Body().AccessList
 	}
 	return fields
 }
@@ -1334,6 +1340,18 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		}
 		prevTracer = tracer
 	}
+}
+
+// BlockAccessListByBlockNumber returns a block access list for the given block number
+// or nil if one does not exist.
+func (api *BlockChainAPI) BlockAccessListByBlockNumber(number rpc.BlockNumber) (interface{}, error) {
+	return api.b.BlockAccessListByNumberOrHash(rpc.BlockNumberOrHash{BlockNumber: &number})
+}
+
+// BlockAccessListByBlockHash returns a block access list for the given block hash
+// or nil if one does not exist.
+func (api *BlockChainAPI) BlockAccessListByBlockHash(hash common.Hash) (interface{}, error) {
+	return api.b.BlockAccessListByNumberOrHash(rpc.BlockNumberOrHash{BlockHash: &hash})
 }
 
 // TransactionAPI exposes methods for reading and creating transaction data.

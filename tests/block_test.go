@@ -24,6 +24,65 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
+func TestBlockchainBAL(t *testing.T) {
+	bt := new(testMatcher)
+
+	// We are running most of GeneralStatetests to tests witness support, even
+	// though they are ran as state tests too. Still, the performance tests are
+	// less about state andmore about EVM number crunching, so skip those.
+	bt.skipLoad(`^GeneralStateTests/VMTests/vmPerformance`)
+
+	// Skip random failures due to selfish mining test
+	bt.skipLoad(`.*bcForgedTest/bcForkUncle\.json`)
+
+	// Slow tests
+	bt.slow(`.*bcExploitTest/DelegateCallSpam.json`)
+	bt.slow(`.*bcExploitTest/ShanghaiLove.json`)
+	bt.slow(`.*bcExploitTest/SuicideIssue.json`)
+	bt.slow(`.*/bcForkStressTest/`)
+	bt.slow(`.*/bcGasPricerTest/RPC_API_Test.json`)
+	bt.slow(`.*/bcWalletTest/`)
+
+	// Very slow test
+	bt.skipLoad(`.*/stTimeConsuming/.*`)
+	// test takes a lot for time and goes easily OOM because of sha3 calculation on a huge range,
+	// using 4.6 TGas
+	bt.skipLoad(`.*randomStatetest94.json.*`)
+
+	// After the merge we would accept side chains as canonical even if they have lower td
+	bt.skipLoad(`.*bcMultiChainTest/ChainAtoChainB_difficultyB.json`)
+	bt.skipLoad(`.*bcMultiChainTest/CallContractFromNotBestBlock.json`)
+	bt.skipLoad(`.*bcTotalDifficultyTest/uncleBlockAtBlock3afterBlock4.json`)
+	bt.skipLoad(`.*bcTotalDifficultyTest/lotsOfBranchesOverrideAtTheMiddle.json`)
+	bt.skipLoad(`.*bcTotalDifficultyTest/sideChainWithMoreTransactions.json`)
+	bt.skipLoad(`.*bcForkStressTest/ForkStressTest.json`)
+	bt.skipLoad(`.*bcMultiChainTest/lotsOfLeafs.json`)
+	bt.skipLoad(`.*bcFrontierToHomestead/blockChainFrontierWithLargerTDvsHomesteadBlockchain.json`)
+	bt.skipLoad(`.*bcFrontierToHomestead/blockChainFrontierWithLargerTDvsHomesteadBlockchain2.json`)
+
+	// With chain history removal, TDs become unavailable, this transition tests based on TTD are unrunnable
+	bt.skipLoad(`.*bcArrowGlacierToParis/powToPosBlockRejection.json`)
+
+	// This directory contains no test.
+	bt.skipLoad(`.*\.meta/.*`)
+
+	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
+		config, ok := Forks[test.json.Network]
+		if !ok {
+			t.Fatalf("unsupported fork: %s\n", test.json.Network)
+		}
+		gspec := test.genesis(config)
+		// skip any tests which are not past the cancun fork (selfdestruct removal)
+		if gspec.Config.CancunTime == nil || *gspec.Config.CancunTime != 0 {
+			return
+		}
+		execBlockTest(t, bt, test, true)
+	})
+	// There is also a LegacyTests folder, containing blockchain tests generated
+	// prior to Istanbul. However, they are all derived from GeneralStateTests,
+	// which run natively, so there's no reason to run them here.
+}
+
 func TestBlockchain(t *testing.T) {
 	bt := new(testMatcher)
 
@@ -67,17 +126,16 @@ func TestBlockchain(t *testing.T) {
 	bt.skipLoad(`.*\.meta/.*`)
 
 	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
-		execBlockTest(t, bt, test)
+		execBlockTest(t, bt, test, false)
 	})
 	// There is also a LegacyTests folder, containing blockchain tests generated
 	// prior to Istanbul. However, they are all derived from GeneralStateTests,
 	// which run natively, so there's no reason to run them here.
 }
 
-// TestExecutionSpecBlocktests runs the test fixtures from execution-spec-tests.
-func TestExecutionSpecBlocktests(t *testing.T) {
-	if !common.FileExist(executionSpecBlockchainTestDir) {
-		t.Skipf("directory %s does not exist", executionSpecBlockchainTestDir)
+func testExecutionSpecBlocktests(t *testing.T, testDir string) {
+	if !common.FileExist(testDir) {
+		t.Skipf("directory %s does not exist", testDir)
 	}
 	bt := new(testMatcher)
 
@@ -85,12 +143,22 @@ func TestExecutionSpecBlocktests(t *testing.T) {
 	bt.skipLoad(".*prague/eip7251_consolidations/test_system_contract_deployment.json")
 	bt.skipLoad(".*prague/eip7002_el_triggerable_withdrawals/test_system_contract_deployment.json")
 
-	bt.walk(t, executionSpecBlockchainTestDir, func(t *testing.T, name string, test *BlockTest) {
-		execBlockTest(t, bt, test)
+	bt.walk(t, testDir, func(t *testing.T, name string, test *BlockTest) {
+		execBlockTest(t, bt, test, false)
 	})
 }
 
-func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest) {
+// TestExecutionSpecBlocktests runs the test fixtures from execution-spec-tests.
+func TestExecutionSpecBlocktests(t *testing.T) {
+	testExecutionSpecBlocktests(t, executionSpecBlockchainTestDir)
+}
+
+// TestExecutionSpecBlocktestsBAL runs the BAL release test fixtures from execution-spec-tests.
+func TestExecutionSpecBlocktestsBAL(t *testing.T) {
+	testExecutionSpecBlocktests(t, executionSpecBALBlockchainTestDir)
+}
+
+func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest, buildAndVerifyBAL bool) {
 	// Define all the different flag combinations we should run the tests with,
 	// picking only one for short tests.
 	//
@@ -106,7 +174,7 @@ func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest) {
 	}
 	for _, snapshot := range snapshotConf {
 		for _, dbscheme := range dbschemeConf {
-			if err := bt.checkFailure(t, test.Run(snapshot, dbscheme, true, nil, nil)); err != nil {
+			if err := bt.checkFailure(t, test.Run(snapshot, dbscheme, true, buildAndVerifyBAL, nil, nil)); err != nil {
 				t.Errorf("test with config {snapshotter:%v, scheme:%v} failed: %v", snapshot, dbscheme, err)
 				return
 			}

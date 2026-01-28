@@ -19,9 +19,6 @@ package core
 import (
 	"bytes"
 	"fmt"
-	"math"
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -29,6 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+	"math"
+	"math/big"
 )
 
 // ExecutionResult includes all output after executing given evm
@@ -528,6 +527,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	peakGasUsed := st.gasUsed()
 
 	// Compute refund counter, capped to a refund quotient.
+	gasBeforeRefunds := peakGasUsed
 	st.gasRemaining += st.calcRefund()
 	if rules.IsPrague {
 		// After EIP-7623: Data-heavy transactions pay the floor gas.
@@ -542,7 +542,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 			peakGasUsed = floorDataGas
 		}
 	}
-	st.returnGas()
+	st.returnGas(rules, gasBeforeRefunds)
 
 	effectiveTip := msg.GasPrice
 	if rules.IsLondon {
@@ -557,6 +557,10 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	} else {
 		fee := new(uint256.Int).SetUint64(st.gasUsed())
 		fee.Mul(fee, effectiveTipU256)
+
+		// always read the coinbase account to include it in the BAL (TODO check this is actually part of the spec)
+		st.state.GetBalance(st.evm.Context.Coinbase)
+
 		st.state.AddBalance(st.evm.Context.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
 
 		// add the coinbase to the witness iff the fee is greater than 0
@@ -617,16 +621,22 @@ func (st *stateTransition) applyAuthorization(auth *types.SetCodeAuthorization) 
 		st.state.AddRefund(params.CallNewAccountGas - params.TxAuthTupleGas)
 	}
 
+	prevDelegation, isDelegated := types.ParseDelegation(st.state.GetCode(authority))
+
 	// Update nonce and account code.
 	st.state.SetNonce(authority, auth.Nonce+1, tracing.NonceChangeAuthorization)
 	if auth.Address == (common.Address{}) {
 		// Delegation to zero address means clear.
-		st.state.SetCode(authority, nil, tracing.CodeChangeAuthorizationClear)
+		if isDelegated {
+			st.state.SetCode(authority, nil, tracing.CodeChangeAuthorizationClear)
+		}
 		return nil
 	}
 
-	// Otherwise install delegation to auth.Address.
-	st.state.SetCode(authority, types.AddressToDelegation(auth.Address), tracing.CodeChangeAuthorization)
+	// install delegation to auth.Address if the delegation changed
+	if !isDelegated || auth.Address != prevDelegation {
+		st.state.SetCode(authority, types.AddressToDelegation(auth.Address), tracing.CodeChangeAuthorization)
+	}
 
 	return nil
 }
@@ -652,7 +662,7 @@ func (st *stateTransition) calcRefund() uint64 {
 
 // returnGas returns ETH for remaining gas,
 // exchanged at the original rate.
-func (st *stateTransition) returnGas() {
+func (st *stateTransition) returnGas(rules params.Rules, gasBeforeRefunds uint64) {
 	remaining := uint256.NewInt(st.gasRemaining)
 	remaining.Mul(remaining, uint256.MustFromBig(st.msg.GasPrice))
 	st.state.AddBalance(st.msg.From, remaining, tracing.BalanceIncreaseGasReturn)
@@ -661,9 +671,14 @@ func (st *stateTransition) returnGas() {
 		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, 0, tracing.GasChangeTxLeftOverReturned)
 	}
 
-	// Also return remaining gas to the block gas counter so it is
-	// available for the next transaction.
-	st.gp.AddGas(st.gasRemaining)
+	if !rules.IsAmsterdam {
+		// Pre-Amsterdam return remaining gas to the block gas counter so it is
+		// available for the next transaction.
+		st.gp.AddGas(st.gasRemaining)
+	} else {
+		// Post-Amsterdam only return the remaining gas minus the refunds.
+		st.gp.AddGas(gasBeforeRefunds)
+	}
 }
 
 // gasUsed returns the amount of gas used up by the state transition.
