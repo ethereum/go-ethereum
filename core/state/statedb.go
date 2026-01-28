@@ -158,21 +158,15 @@ type StateDB struct {
 	StorageLoaded  int          // Number of storage slots retrieved from the database during the state transition
 	StorageUpdated atomic.Int64 // Number of storage slots updated during the state transition
 	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
-	CodeLoaded     int          // Number of contract code loaded during the state transition
 
 	// CodeLoadBytes is the total number of bytes read from contract code.
 	// This value may be smaller than the actual number of bytes read, since
 	// some APIs (e.g. CodeSize) may load the entire code from either the
 	// cache or the database when the size is not available in the cache.
-	CodeLoadBytes int
-
-	// EIP-7702 delegation tracking for cross-client execution metrics
-	Eip7702DelegationsSet     int // Number of EIP-7702 delegations set
-	Eip7702DelegationsCleared int // Number of EIP-7702 delegations cleared
-
-	// Code write tracking for cross-client execution metrics
-	CodeUpdated    int // Number of contracts with code changes that persisted
-	CodeBytesWrite int // Total bytes of persisted code written
+	CodeLoaded      int // Number of contract code loaded during the state transition
+	CodeLoadBytes   int // Total bytes of resolved code
+	CodeUpdated     int // Number of contracts with code changes that persisted
+	CodeUpdateBytes int // Total bytes of persisted code written
 }
 
 // New creates a new state from a given trie.
@@ -481,14 +475,6 @@ func (s *StateDB) SetNonce(addr common.Address, nonce uint64, reason tracing.Non
 func (s *StateDB) SetCode(addr common.Address, code []byte, reason tracing.CodeChangeReason) (prev []byte) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
-		// EIP-7702 delegation counters are safe here: authorizations are applied
-		// at transaction level (applyAuthorization), outside revertable EVM frames.
-		switch reason {
-		case tracing.CodeChangeAuthorization:
-			s.Eip7702DelegationsSet++
-		case tracing.CodeChangeAuthorizationClear:
-			s.Eip7702DelegationsCleared++
-		}
 		return stateObject.SetCode(crypto.Keccak256Hash(code), code)
 	}
 	return nil
@@ -960,11 +946,11 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			obj := s.stateObjects[addr]
 			s.updateStateObject(obj)
 			s.AccountUpdated += 1
+
 			// Count code writes post-Finalise so reverted CREATEs are excluded.
-			// Only count non-empty code (clears like EIP-7702 revocations are not code writes).
 			if obj.dirtyCode && len(obj.code) > 0 {
 				s.CodeUpdated += 1
-				s.CodeBytesWrite += len(obj.code)
+				s.CodeUpdateBytes += len(obj.code)
 			}
 		}
 		usedAddrs = append(usedAddrs, addr) // Copy needed for closure

@@ -38,20 +38,16 @@ type ExecuteStats struct {
 	StorageCommits time.Duration // Time spent on the storage trie commit
 	CodeReads      time.Duration // Time spent on the contract code read
 
-	AccountLoaded  int // Number of accounts loaded
-	AccountUpdated int // Number of accounts updated
-	AccountDeleted int // Number of accounts deleted
-	StorageLoaded  int // Number of storage slots loaded
-	StorageUpdated int // Number of storage slots updated
-	StorageDeleted int // Number of storage slots deleted
-	CodeLoaded     int // Number of contract code loaded
-	CodeLoadBytes  int // Number of bytes read from contract code
-	CodeUpdated    int // Number of contract code written (CREATE/CREATE2 + EIP-7702)
-	CodeBytesWrite int // Total bytes of code written
-
-	// EIP-7702 delegation tracking
-	Eip7702DelegationsSet     int // Number of EIP-7702 delegations set
-	Eip7702DelegationsCleared int // Number of EIP-7702 delegations cleared
+	AccountLoaded   int // Number of accounts loaded
+	AccountUpdated  int // Number of accounts updated
+	AccountDeleted  int // Number of accounts deleted
+	StorageLoaded   int // Number of storage slots loaded
+	StorageUpdated  int // Number of storage slots updated
+	StorageDeleted  int // Number of storage slots deleted
+	CodeLoaded      int // Number of contract code loaded
+	CodeLoadBytes   int // Number of bytes read from contract code
+	CodeUpdated     int // Number of contract code written (CREATE/CREATE2 + EIP-7702)
+	CodeUpdateBytes int // Total bytes of code written
 
 	Execution       time.Duration // Time spent on the EVM execution
 	Validation      time.Duration // Time spent on the block validation
@@ -150,14 +146,12 @@ type slowBlockReads struct {
 }
 
 type slowBlockWrites struct {
-	Accounts                  int `json:"accounts"`
-	AccountsDeleted           int `json:"accounts_deleted"`
-	StorageSlots              int `json:"storage_slots"`
-	StorageSlotsDeleted       int `json:"storage_slots_deleted"`
-	Code                      int `json:"code"`
-	CodeBytes                 int `json:"code_bytes"`
-	Eip7702DelegationsSet     int `json:"eip7702_delegations_set"`
-	Eip7702DelegationsCleared int `json:"eip7702_delegations_cleared"`
+	Accounts            int `json:"accounts"`
+	AccountsDeleted     int `json:"accounts_deleted"`
+	StorageSlots        int `json:"storage_slots"`
+	StorageSlotsDeleted int `json:"storage_slots_deleted"`
+	Code                int `json:"code"`
+	CodeBytes           int `json:"code_bytes"`
 }
 
 // slowBlockCache represents cache hit/miss statistics for cross-client analysis.
@@ -209,7 +203,6 @@ func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold time.Durat
 	if slowBlockThreshold > 0 && s.TotalTime < slowBlockThreshold {
 		return
 	}
-
 	logEntry := slowBlockLog{
 		Level: "warn",
 		Msg:   "Slow block",
@@ -236,14 +229,12 @@ func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold time.Durat
 			CodeBytes:    s.CodeLoadBytes,
 		},
 		StateWrites: slowBlockWrites{
-			Accounts:                  s.AccountUpdated,
-			AccountsDeleted:           s.AccountDeleted,
-			StorageSlots:              s.StorageUpdated,
-			StorageSlotsDeleted:       s.StorageDeleted,
-			Code:                      s.CodeUpdated,
-			CodeBytes:                 s.CodeBytesWrite,
-			Eip7702DelegationsSet:     s.Eip7702DelegationsSet,
-			Eip7702DelegationsCleared: s.Eip7702DelegationsCleared,
+			Accounts:            s.AccountUpdated,
+			AccountsDeleted:     s.AccountDeleted,
+			StorageSlots:        s.StorageUpdated,
+			StorageSlotsDeleted: s.StorageDeleted,
+			Code:                s.CodeUpdated,
+			CodeBytes:           s.CodeUpdateBytes,
 		},
 		Cache: slowBlockCache{
 			Account: slowBlockCacheEntry{
@@ -265,7 +256,6 @@ func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold time.Durat
 			},
 		},
 	}
-
 	jsonBytes, err := json.Marshal(logEntry)
 	if err != nil {
 		log.Error("Failed to marshal slow block log", "error", err)
