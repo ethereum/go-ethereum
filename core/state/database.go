@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/transitiontrie"
@@ -177,6 +178,39 @@ func NewDatabaseForTesting() *CachingDB {
 	return NewDatabase(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil), nil)
 }
 
+var (
+	conversionProgressAddressKey       = common.Hash{1}
+	conversionProgressSlotKey          = common.Hash{2}
+	conversionProgressStorageProcessed = common.Hash{3}
+)
+
+// LoadTransitionState retrieves the Verkle transition state associated with
+// the given state root hash from the database.
+func LoadTransitionState(reader StateReader, root common.Hash) *overlay.TransitionState {
+	currentAccountBytes, err := reader.Storage(params.BinaryTransitionRegistryAddress, conversionProgressAddressKey)
+	if err != nil {
+		panic(fmt.Errorf("error reading conversion account pointer: %w", err))
+	}
+	currentAccount := common.BytesToAddress(currentAccountBytes[12:])
+
+	currentSlotHash, err := reader.Storage(params.BinaryTransitionRegistryAddress, conversionProgressSlotKey)
+	if err != nil {
+		panic(fmt.Errorf("error reading conversion slot pointer: %w", err))
+	}
+
+	storageProcessedBytes, err := reader.Storage(params.BinaryTransitionRegistryAddress, conversionProgressStorageProcessed)
+	if err != nil {
+		panic(fmt.Errorf("error reading conversion storage processing completion status: %w", err))
+	}
+	storageProcessed := storageProcessedBytes[0] == 1
+
+	return &overlay.TransitionState{
+		CurrentAccountAddress: &currentAccount,
+		CurrentSlotHash:       currentSlotHash,
+		StorageProcessed:      storageProcessed,
+	}
+}
+
 // StateReader returns a state reader associated with the specified state root.
 func (db *CachingDB) StateReader(stateRoot common.Hash) (StateReader, error) {
 	var readers []StateReader
@@ -199,7 +233,7 @@ func (db *CachingDB) StateReader(stateRoot common.Hash) (StateReader, error) {
 		reader, err := db.triedb.StateReader(stateRoot)
 		if err == nil {
 			readers = append(readers, newFlatReader(reader))
-			ts = overlay.LoadTransitionState(reader, stateRoot)
+			ts = LoadTransitionState(readers[len(readers)-1], stateRoot)
 		}
 	}
 	// Configure the trie reader, which is expected to be available as the
@@ -252,7 +286,7 @@ func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 		if err != nil {
 			return nil, fmt.Errorf("could not get reader for checking overlay status: %w", err)
 		}
-		ts := overlay.LoadTransitionState(reader, root)
+		ts := LoadTransitionState(reader, root)
 		if !ts.InTransition() {
 			// Use BinaryTrie instead of VerkleTrie when IsVerkle is set
 			// (IsVerkle actually means Binary Trie mode in this codebase)

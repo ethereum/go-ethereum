@@ -17,12 +17,7 @@
 package overlay
 
 import (
-	"fmt"
-
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
 // TransitionState is a structure that holds the progress markers of the
@@ -76,39 +71,4 @@ func (ts *TransitionState) Copy() *TransitionState {
 		ret.CurrentAccountAddress = &addr
 	}
 	return ret
-}
-
-var (
-	conversionProgressAddressKey       = common.Hash{1}
-	conversionProgressSlotKey          = common.Hash{2}
-	conversionProgressStorageProcessed = common.Hash{3}
-)
-
-// LoadTransitionState retrieves the Verkle transition state associated with
-// the given state root hash from the database.
-func LoadTransitionState(reader database.StateReader, root common.Hash) *TransitionState {
-	addrHash := crypto.Keccak256Hash(params.BinaryTransitionRegistryAddress[:])
-	currentAccountBytes, err := reader.Storage(addrHash, conversionProgressAddressKey)
-	if err != nil {
-		panic(fmt.Errorf("error reading conversion account pointer: %w", err))
-	}
-	currentAccount := common.BytesToAddress(currentAccountBytes[12:])
-
-	currentSlotBytes, err := reader.Storage(addrHash, conversionProgressSlotKey)
-	if err != nil {
-		panic(fmt.Errorf("error reading conversion slot pointer: %w", err))
-	}
-	currentSlotHash := common.BytesToHash(currentSlotBytes)
-
-	storageProcessedBytes, err := reader.Storage(addrHash, conversionProgressStorageProcessed)
-	if err != nil {
-		panic(fmt.Errorf("error reading conversion storage processing completion status: %w", err))
-	}
-	storageProcessed := storageProcessedBytes[0] == 1
-
-	return &TransitionState{
-		CurrentAccountAddress: &currentAccount,
-		CurrentSlotHash:       currentSlotHash,
-		StorageProcessed:      storageProcessed,
-	}
 }
