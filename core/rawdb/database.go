@@ -943,3 +943,93 @@ func InspectTrieDepth(db ethdb.Database) error {
 
 	return nil
 }
+
+// InspectContract inspects the on-disk footprint of a single contract:
+// snapshot account, snapshot storage slots, and path-based storage trie
+// nodes including depth distribution.
+func InspectContract(db ethdb.Database, address common.Address) error {
+	start := time.Now()
+	accountHash := crypto.Keccak256Hash(address.Bytes())
+
+	log.Info("Inspecting contract", "address", address, "hash", accountHash)
+
+	// 1. Account snapshot
+	accountData := ReadAccountSnapshot(db, accountHash)
+	accountSnapshotSize := len(accountSnapshotKey(accountHash)) + len(accountData)
+
+	// 2. Storage snapshot: iterate all storage slots for this account
+	var storageStat stat
+	storagePrefix := storageSnapshotsKey(accountHash)
+
+	it := db.NewIterator(storagePrefix, nil)
+	for it.Next() {
+		storageStat.add(common.StorageSize(len(it.Key()) + len(it.Value())))
+	}
+	it.Release()
+	if err := it.Error(); err != nil {
+		return err
+	}
+
+	// 3. Storage trie nodes: iterate and compute depth distribution
+	var (
+		trieStat   stat
+		trieDepths [65]stat
+		trieStack  = make([]string, 0, 65)
+	)
+
+	it = db.NewIterator(storageTrieNodeKey(accountHash, nil), nil)
+	for it.Next() {
+		ok, hash, path := ResolveStorageTrieNode(it.Key())
+		if !ok || hash != accountHash {
+			break
+		}
+
+		size := common.StorageSize(len(it.Key()) + len(it.Value()))
+		trieStat.add(size)
+
+		pathStr := string(path)
+
+		// Stack-based depth: pop until top is strict prefix of current
+		for len(trieStack) > 0 {
+			top := trieStack[len(trieStack)-1]
+			if len(top) < len(pathStr) && pathStr[:len(top)] == top {
+				break
+			}
+			trieStack = trieStack[:len(trieStack)-1]
+		}
+		trieDepths[len(trieStack)].add(size)
+		trieStack = append(trieStack, pathStr)
+	}
+	it.Release()
+	if err := it.Error(); err != nil {
+		return err
+	}
+
+	log.Info("Inspection complete", "elapsed", common.PrettyDuration(time.Since(start)))
+
+	// Print results
+	fmt.Printf("\n=== Contract Inspection: %s ===\n", address)
+	fmt.Printf("Account hash: %s\n\n", accountHash)
+
+	if len(accountData) == 0 {
+		fmt.Println("Account snapshot: not found")
+	} else {
+		fmt.Printf("Account snapshot: %s\n", common.StorageSize(accountSnapshotSize))
+	}
+
+	fmt.Printf("Snapshot storage: %s slots (%s)\n", storageStat.countString(), storageStat.sizeString())
+	fmt.Printf("Storage trie:     %s nodes (%s)\n", trieStat.countString(), trieStat.sizeString())
+
+	fmt.Println("\nStorage Trie Depth Distribution:")
+	fmt.Println("Depth | Nodes         | Size")
+	fmt.Println("------|---------------|---------------")
+	for i := 0; i < 65; i++ {
+		if !trieDepths[i].empty() {
+			fmt.Printf("%5d | %13s | %13s\n",
+				i, trieDepths[i].countString(), trieDepths[i].sizeString())
+		}
+	}
+	fmt.Println()
+
+	return nil
+}

@@ -71,6 +71,7 @@ Remove blockchain and state databases`,
 		Subcommands: []*cli.Command{
 			dbInspectCmd,
 			dbInspectTrieCmd,
+			dbInspectContractCmd,
 			dbStatCmd,
 			dbCompactCmd,
 			dbGetCmd,
@@ -100,6 +101,14 @@ Remove blockchain and state databases`,
 		ArgsUsage:   "<start> <end>",
 		Flags:       slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Description: "This command inspects the depth of the trie",
+	}
+	dbInspectContractCmd = &cli.Command{
+		Action:      inspectContract,
+		Name:        "inspect-contract",
+		Usage:       "Inspect the on-disk footprint of a contract",
+		ArgsUsage:   "<address>",
+		Flags:       slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
+		Description: "This command inspects the snapshot account, snapshot storage slots, and storage trie nodes for a given contract address.",
 	}
 	dbCheckStateContentCmd = &cli.Command{
 		Action:    checkStateContent,
@@ -348,6 +357,21 @@ func inspectTrieDepth(ctx *cli.Context) error {
 	defer db.Close()
 
 	return rawdb.InspectTrieDepth(db)
+}
+
+func inspectContract(ctx *cli.Context) error {
+	if ctx.NArg() != 1 {
+		return fmt.Errorf("required argument: <address>")
+	}
+	address := common.HexToAddress(ctx.Args().Get(0))
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	defer db.Close()
+
+	return rawdb.InspectContract(db, address)
 }
 
 func checkStateContent(ctx *cli.Context) error {
