@@ -255,9 +255,9 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash, sink chan *et
 // peer in the download tester. The returned function can be used to retrieve
 // batches of block receipts from the particularly requested peer.
 func (dlp *downloadTesterPeer) RequestReceipts(hashes []common.Hash, sink chan *eth.Response) (*eth.Request, error) {
-	blobs := eth.ServiceGetReceiptsQuery68(dlp.chain, hashes)
+	blobs := eth.ServiceGetReceiptsQuery(dlp.chain, hashes)
 
-	receipts := make([]types.Receipts, len(blobs))
+	receipts := make([]*eth.ReceiptList, len(blobs))
 	for i, blob := range blobs {
 		rlp.DecodeBytes(blob, &receipts[i])
 	}
@@ -269,7 +269,12 @@ func (dlp *downloadTesterPeer) RequestReceipts(hashes []common.Hash, sink chan *
 	req := &eth.Request{
 		Peer: dlp.id,
 	}
-	resp := eth.ReceiptsRLPResponse(types.EncodeBlockReceiptLists(receipts))
+
+	var resp eth.ReceiptsRLPResponse
+	for i := range receipts {
+		resp = append(resp, receipts[i].EncodeForStorage())
+	}
+
 	res := &eth.Response{
 		Req:  req,
 		Res:  &resp,
@@ -389,8 +394,8 @@ func assertOwnChain(t *testing.T, tester *downloadTester, length int) {
 	}
 }
 
-func TestCanonicalSynchronisation68Full(t *testing.T) { testCanonSync(t, eth.ETH68, FullSync) }
-func TestCanonicalSynchronisation68Snap(t *testing.T) { testCanonSync(t, eth.ETH68, SnapSync) }
+func TestCanonicalSynchronisation69Full(t *testing.T) { testCanonSync(t, eth.ETH69, FullSync) }
+func TestCanonicalSynchronisation69Snap(t *testing.T) { testCanonSync(t, eth.ETH69, SnapSync) }
 
 func testCanonSync(t *testing.T, protocol uint, mode SyncMode) {
 	success := make(chan struct{})
@@ -417,8 +422,8 @@ func testCanonSync(t *testing.T, protocol uint, mode SyncMode) {
 
 // Tests that if a large batch of blocks are being downloaded, it is throttled
 // until the cached blocks are retrieved.
-func TestThrottling68Full(t *testing.T) { testThrottling(t, eth.ETH68, FullSync) }
-func TestThrottling68Snap(t *testing.T) { testThrottling(t, eth.ETH68, SnapSync) }
+func TestThrottling69Full(t *testing.T) { testThrottling(t, eth.ETH69, FullSync) }
+func TestThrottling69Snap(t *testing.T) { testThrottling(t, eth.ETH69, SnapSync) }
 
 func testThrottling(t *testing.T, protocol uint, mode SyncMode) {
 	tester := newTester(t, mode)
@@ -495,8 +500,8 @@ func testThrottling(t *testing.T, protocol uint, mode SyncMode) {
 }
 
 // Tests that a canceled download wipes all previously accumulated state.
-func TestCancel68Full(t *testing.T) { testCancel(t, eth.ETH68, FullSync) }
-func TestCancel68Snap(t *testing.T) { testCancel(t, eth.ETH68, SnapSync) }
+func TestCancel69Full(t *testing.T) { testCancel(t, eth.ETH69, FullSync) }
+func TestCancel69Snap(t *testing.T) { testCancel(t, eth.ETH69, SnapSync) }
 
 func testCancel(t *testing.T, protocol uint, mode SyncMode) {
 	complete := make(chan struct{})
@@ -527,8 +532,8 @@ func testCancel(t *testing.T, protocol uint, mode SyncMode) {
 
 // Tests that synchronisations behave well in multi-version protocol environments
 // and not wreak havoc on other nodes in the network.
-func TestMultiProtoSynchronisation68Full(t *testing.T) { testMultiProtoSync(t, eth.ETH68, FullSync) }
-func TestMultiProtoSynchronisation68Snap(t *testing.T) { testMultiProtoSync(t, eth.ETH68, SnapSync) }
+func TestMultiProtoSynchronisation69Full(t *testing.T) { testMultiProtoSync(t, eth.ETH69, FullSync) }
+func TestMultiProtoSynchronisation69Snap(t *testing.T) { testMultiProtoSync(t, eth.ETH69, SnapSync) }
 
 func testMultiProtoSync(t *testing.T, protocol uint, mode SyncMode) {
 	complete := make(chan struct{})
@@ -542,7 +547,7 @@ func testMultiProtoSync(t *testing.T, protocol uint, mode SyncMode) {
 	chain := testChainBase.shorten(blockCacheMaxItems - 15)
 
 	// Create peers of every type
-	tester.newPeer("peer 68", eth.ETH68, chain.blocks[1:])
+	tester.newPeer("peer 69", eth.ETH69, chain.blocks[1:])
 
 	if err := tester.downloader.BeaconSync(chain.blocks[len(chain.blocks)-1].Header(), nil); err != nil {
 		t.Fatalf("failed to start beacon sync: %v", err)
@@ -556,7 +561,7 @@ func testMultiProtoSync(t *testing.T, protocol uint, mode SyncMode) {
 	assertOwnChain(t, tester, len(chain.blocks))
 
 	// Check that no peers have been dropped off
-	for _, version := range []int{68} {
+	for _, version := range []int{69} {
 		peer := fmt.Sprintf("peer %d", version)
 		if _, ok := tester.peers[peer]; !ok {
 			t.Errorf("%s dropped", peer)
@@ -566,8 +571,8 @@ func testMultiProtoSync(t *testing.T, protocol uint, mode SyncMode) {
 
 // Tests that if a block is empty (e.g. header only), no body request should be
 // made, and instead the header should be assembled into a whole block in itself.
-func TestEmptyShortCircuit68Full(t *testing.T) { testEmptyShortCircuit(t, eth.ETH68, FullSync) }
-func TestEmptyShortCircuit68Snap(t *testing.T) { testEmptyShortCircuit(t, eth.ETH68, SnapSync) }
+func TestEmptyShortCircuit69Full(t *testing.T) { testEmptyShortCircuit(t, eth.ETH69, FullSync) }
+func TestEmptyShortCircuit69Snap(t *testing.T) { testEmptyShortCircuit(t, eth.ETH69, SnapSync) }
 
 func testEmptyShortCircuit(t *testing.T, protocol uint, mode SyncMode) {
 	success := make(chan struct{})
@@ -635,8 +640,8 @@ func checkProgress(t *testing.T, d *Downloader, stage string, want ethereum.Sync
 
 // Tests that peers below a pre-configured checkpoint block are prevented from
 // being fast-synced from, avoiding potential cheap eclipse attacks.
-func TestBeaconSync68Full(t *testing.T) { testBeaconSync(t, eth.ETH68, FullSync) }
-func TestBeaconSync68Snap(t *testing.T) { testBeaconSync(t, eth.ETH68, SnapSync) }
+func TestBeaconSync69Full(t *testing.T) { testBeaconSync(t, eth.ETH69, FullSync) }
+func TestBeaconSync69Snap(t *testing.T) { testBeaconSync(t, eth.ETH69, SnapSync) }
 
 func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
 	var cases = []struct {
@@ -681,8 +686,8 @@ func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
 
 // Tests that synchronisation progress (origin block number, current block number
 // and highest block number) is tracked and updated correctly.
-func TestSyncProgress68Full(t *testing.T) { testSyncProgress(t, eth.ETH68, FullSync) }
-func TestSyncProgress68Snap(t *testing.T) { testSyncProgress(t, eth.ETH68, SnapSync) }
+func TestSyncProgress69Full(t *testing.T) { testSyncProgress(t, eth.ETH69, FullSync) }
+func TestSyncProgress69Snap(t *testing.T) { testSyncProgress(t, eth.ETH69, SnapSync) }
 
 func testSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	success := make(chan struct{})
