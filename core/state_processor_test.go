@@ -422,6 +422,9 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		beaconRoot := common.HexToHash("0xbeac00")
 		header.ParentBeaconRoot = &beaconRoot
 	}
+	if config.IsAmsterdam(header.Number, header.Time) {
+		header.SlotNumber = new(uint64)
+	}
 	// Assemble and return the final block for sealing
 	body := &types.Body{Transactions: txs}
 	if config.IsShanghai(header.Number, header.Time) {
