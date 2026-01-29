@@ -552,3 +552,55 @@ func handleBlockRangeUpdate(backend Backend, msg Decoder, peer *Peer) error {
 	peer.lastRange.Store(&update)
 	return nil
 }
+
+// handleGetNodeData handles eth/63 GetNodeData messages (state trie nodes)
+func handleGetNodeData(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the request
+	var hashes []common.Hash
+	if err := msg.Decode(&hashes); err != nil {
+		return fmt.Errorf("failed to decode GetNodeData: %v", err)
+	}
+	// For now, return empty response - full implementation needs state trie access
+	return peer.SendNodeData([][]byte{})
+}
+
+// handleNodeData handles eth/63 NodeData response messages
+func handleNodeData(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode the response
+	var data [][]byte
+	if err := msg.Decode(&data); err != nil {
+		return fmt.Errorf("failed to decode NodeData: %v", err)
+	}
+	// Process node data through the downloader
+	return backend.Handle(peer, &NodeDataPacket{Data: data})
+}
+
+// XDPoS2 consensus message handlers
+
+// handleVoteMsg handles XDPoS2 vote messages
+func handleVoteMsg(backend Backend, msg Decoder, peer *Peer) error {
+	// Decode and forward to consensus engine
+	var vote []byte
+	if err := msg.Decode(&vote); err != nil {
+		return fmt.Errorf("failed to decode VoteMsg: %v", err)
+	}
+	return backend.Handle(peer, &VotePacket{Vote: vote})
+}
+
+// handleTimeoutMsg handles XDPoS2 timeout messages
+func handleTimeoutMsg(backend Backend, msg Decoder, peer *Peer) error {
+	var timeout []byte
+	if err := msg.Decode(&timeout); err != nil {
+		return fmt.Errorf("failed to decode TimeoutMsg: %v", err)
+	}
+	return backend.Handle(peer, &TimeoutPacket{Timeout: timeout})
+}
+
+// handleSyncInfoMsg handles XDPoS2 sync info messages
+func handleSyncInfoMsg(backend Backend, msg Decoder, peer *Peer) error {
+	var syncInfo []byte
+	if err := msg.Decode(&syncInfo); err != nil {
+		return fmt.Errorf("failed to decode SyncInfoMsg: %v", err)
+	}
+	return backend.Handle(peer, &SyncInfoPacket{SyncInfo: syncInfo})
+}

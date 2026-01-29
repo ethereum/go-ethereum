@@ -359,6 +359,11 @@ func (p *Peer) SendBlockRangeUpdate(msg BlockRangeUpdatePacket) error {
 	return p2p.Send(p.rw, BlockRangeUpdateMsg, &msg)
 }
 
+// SendNodeData sends a batch of state trie nodes to the peer (eth/63).
+func (p *Peer) SendNodeData(data [][]byte) error {
+	return p2p.Send(p.rw, NodeDataMsg, data)
+}
+
 // knownCache is a cache for known hashes.
 type knownCache struct {
 	hashes mapset.Set[common.Hash]

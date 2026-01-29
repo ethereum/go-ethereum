@@ -166,6 +166,51 @@ type Decoder interface {
 	Time() time.Time
 }
 
+// eth62 handlers - XDC compatible (basic messages only)
+var eth62 = map[uint64]msgHandler{
+	NewBlockHashesMsg:  handleNewBlockhashes,
+	NewBlockMsg:        handleNewBlock,
+	TransactionsMsg:    handleTransactions,
+	GetBlockHeadersMsg: handleGetBlockHeaders,
+	BlockHeadersMsg:    handleBlockHeaders,
+	GetBlockBodiesMsg:  handleGetBlockBodies,
+	BlockBodiesMsg:     handleBlockBodies,
+}
+
+// eth63 handlers - XDC compatible (adds state sync)
+var eth63 = map[uint64]msgHandler{
+	NewBlockHashesMsg:  handleNewBlockhashes,
+	NewBlockMsg:        handleNewBlock,
+	TransactionsMsg:    handleTransactions,
+	GetBlockHeadersMsg: handleGetBlockHeaders,
+	BlockHeadersMsg:    handleBlockHeaders,
+	GetBlockBodiesMsg:  handleGetBlockBodies,
+	BlockBodiesMsg:     handleBlockBodies,
+	GetNodeDataMsg:     handleGetNodeData,
+	NodeDataMsg:        handleNodeData,
+	GetReceiptsMsg:     handleGetReceipts68,
+	ReceiptsMsg:        handleReceipts[*ReceiptList68],
+}
+
+// xdpos2 handlers - XDC consensus protocol
+var xdpos2 = map[uint64]msgHandler{
+	NewBlockHashesMsg:  handleNewBlockhashes,
+	NewBlockMsg:        handleNewBlock,
+	TransactionsMsg:    handleTransactions,
+	GetBlockHeadersMsg: handleGetBlockHeaders,
+	BlockHeadersMsg:    handleBlockHeaders,
+	GetBlockBodiesMsg:  handleGetBlockBodies,
+	BlockBodiesMsg:     handleBlockBodies,
+	GetNodeDataMsg:     handleGetNodeData,
+	NodeDataMsg:        handleNodeData,
+	GetReceiptsMsg:     handleGetReceipts68,
+	ReceiptsMsg:        handleReceipts[*ReceiptList68],
+	// XDPoS2 consensus messages - to be implemented
+	VoteMsg:     handleVoteMsg,
+	TimeoutMsg:  handleTimeoutMsg,
+	SyncInfoMsg: handleSyncInfoMsg,
+}
+
 var eth68 = map[uint64]msgHandler{
 	NewBlockHashesMsg:             handleNewBlockhashes,
 	NewBlockMsg:                   handleNewBlock,
@@ -209,11 +254,18 @@ func handleMessage(backend Backend, peer *Peer) error {
 	defer msg.Discard()
 
 	var handlers map[uint64]msgHandler
-	if peer.version == ETH68 {
+	switch peer.version {
+	case ETH62:
+		handlers = eth62
+	case ETH63:
+		handlers = eth63
+	case ETH68:
 		handlers = eth68
-	} else if peer.version == ETH69 {
+	case ETH69:
 		handlers = eth69
-	} else {
+	case XDPOS2:
+		handlers = xdpos2
+	default:
 		return fmt.Errorf("unknown eth protocol version: %v", peer.version)
 	}
 
