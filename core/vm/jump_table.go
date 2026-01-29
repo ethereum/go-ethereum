@@ -96,6 +96,7 @@ func newVerkleInstructionSet() JumpTable {
 func newAmsterdamInstructionSet() JumpTable {
 	instructionSet := newOsakaInstructionSet()
 	enable7843(&instructionSet) // EIP-7843 (SLOTNUM opcode)
+	enable8024(&instructionSet)
 	return validate(instructionSet)
 }
 
