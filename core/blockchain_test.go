@@ -4557,3 +4557,113 @@ func TestSetHeadBeyondRootFinalizedBug(t *testing.T) {
 			currentFinal.Number.Uint64())
 	}
 }
+
+// TestProcessBlockReadOnly tests that calling ProcessBlock with setHead=false and
+// makeWitness=true (as done by debug_executionWitness) on an already-processed non-tip
+// block does not corrupt the state database, allowing subsequent blocks to be processed.
+func TestProcessBlockReadOnly(t *testing.T) {
+	testProcessBlockReadOnly(t, rawdb.HashScheme)
+	testProcessBlockReadOnly(t, rawdb.PathScheme)
+}
+
+func testProcessBlockReadOnly(t *testing.T, scheme string) {
+	var (
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address = crypto.PubkeyToAddress(key.PublicKey)
+		funds   = big.NewInt(100000000000000000)
+		gspec   = &Genesis{
+			Config:  params.TestChainConfig,
+			Alloc:   types.GenesisAlloc{address: {Balance: funds}},
+			BaseFee: big.NewInt(params.InitialBaseFee),
+		}
+		signer = types.LatestSigner(gspec.Config)
+		engine = beacon.New(ethash.NewFaker())
+	)
+
+	// Generate a chain with 5 blocks, each containing a transaction from 'address'.
+	// This ensures the nonce increments with each block: 0, 1, 2, 3, 4.
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 5, func(i int, gen *BlockGen) {
+		tx, err := types.SignTx(
+			types.NewTransaction(
+				gen.TxNonce(address),
+				common.Address{0x00},
+				big.NewInt(1000),
+				params.TxGas,
+				gen.header.BaseFee,
+				nil),
+			signer,
+			key)
+		if err != nil {
+			panic(err)
+		}
+		gen.AddTx(tx)
+	})
+
+	// Create the blockchain and insert the first 4 blocks.
+	options := DefaultConfig().WithStateScheme(scheme)
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), gspec, engine, options)
+	if err != nil {
+		t.Fatalf("failed to create chain: %v", err)
+	}
+	defer chain.Stop()
+
+	if n, err := chain.InsertChain(blocks[:4]); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	// Verify we're at block 4 and the nonce is 4 (transactions in blocks 1-4).
+	if head := chain.CurrentBlock().Number.Uint64(); head != 4 {
+		t.Fatalf("expected head at block 4, got %d", head)
+	}
+	statedb, err := chain.State()
+	if err != nil {
+		t.Fatalf("failed to get state: %v", err)
+	}
+	if nonce := statedb.GetNonce(address); nonce != 4 {
+		t.Fatalf("expected nonce 4 before ProcessBlock, got %d", nonce)
+	}
+
+	// Now simulate debug_executionWitness: call ProcessBlock on block 2
+	// with setHead=false and makeWitness=true. This should NOT corrupt state.
+	block2 := blocks[1] // blocks[1] is block number 2
+	parent := chain.GetHeader(block2.ParentHash(), block2.NumberU64()-1)
+	if parent == nil {
+		t.Fatalf("parent of block 2 not found")
+	}
+
+	// This is the pattern used by debug_executionWitness
+	result, err := chain.ProcessBlock(parent.Root, block2, false, true)
+	if err != nil {
+		t.Fatalf("ProcessBlock failed: %v", err)
+	}
+	if result.Witness() == nil {
+		t.Fatalf("expected witness to be generated")
+	}
+
+	// Verify state is still intact after the read-only ProcessBlock call.
+	// The nonce should still be 4, not 2 (which would indicate corruption due to the ProcessBlock call).
+	statedb, err = chain.State()
+	if err != nil {
+		t.Fatalf("failed to get state after ProcessBlock: %v", err)
+	}
+	if nonce := statedb.GetNonce(address); nonce != 4 {
+		t.Fatalf("state corrupted after ProcessBlock: expected nonce 4, got %d", nonce)
+	}
+
+	// Now insert block 5. This should succeed because the state wasn't corrupted.
+	if n, err := chain.InsertChain(blocks[4:5]); err != nil {
+		t.Fatalf("block %d: failed to insert block 5 after ProcessBlock: %v (this indicates state corruption)", n, err)
+	}
+
+	// Verify final state.
+	if head := chain.CurrentBlock().Number.Uint64(); head != 5 {
+		t.Fatalf("expected head at block 5, got %d", head)
+	}
+	statedb, err = chain.State()
+	if err != nil {
+		t.Fatalf("failed to get final state: %v", err)
+	}
+	if nonce := statedb.GetNonce(address); nonce != 5 {
+		t.Fatalf("expected final nonce 5, got %d", nonce)
+	}
+}
