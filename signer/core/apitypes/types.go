@@ -246,13 +246,13 @@ func (args *SendTxArgs) validateTxSidecar() error {
 		// Generate commitment and proof.
 		commitments := make([]kzg4844.Commitment, n)
 		proofs := make([]kzg4844.Proof, n)
-		for i, b := range args.Blobs {
-			c, err := kzg4844.BlobToCommitment(&b)
+		for i := range args.Blobs {
+			c, err := kzg4844.BlobToCommitment(&args.Blobs[i])
 			if err != nil {
 				return fmt.Errorf("blobs[%d]: error computing commitment: %v", i, err)
 			}
 			commitments[i] = c
-			p, err := kzg4844.ComputeBlobProof(&b, c)
+			p, err := kzg4844.ComputeBlobProof(&args.Blobs[i], c)
 			if err != nil {
 				return fmt.Errorf("blobs[%d]: error computing proof: %v", i, err)
 			}
@@ -261,8 +261,8 @@ func (args *SendTxArgs) validateTxSidecar() error {
 		args.Commitments = commitments
 		args.Proofs = proofs
 	} else {
-		for i, b := range args.Blobs {
-			if err := kzg4844.VerifyBlobProof(&b, args.Commitments[i], args.Proofs[i]); err != nil {
+		for i := range args.Blobs {
+			if err := kzg4844.VerifyBlobProof(&args.Blobs[i], args.Commitments[i], args.Proofs[i]); err != nil {
 				return fmt.Errorf("failed to verify blob proof: %v", err)
 			}
 		}
