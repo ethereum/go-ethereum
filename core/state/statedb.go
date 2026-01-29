@@ -1507,3 +1507,17 @@ func (s *StateDB) Witness() *stateless.Witness {
 func (s *StateDB) AccessEvents() *AccessEvents {
 	return s.accessEvents
 }
+
+func (s *StateDB) GetAccumulatedIOMeasurements() *tracing.IOMeasurements {
+	return &tracing.IOMeasurements{
+		AccountReads:    s.AccountReads,
+		AccountHashes:   s.AccountHashes,
+		AccountUpdates:  s.AccountUpdates,
+		AccountCommits:  s.AccountCommits,
+		StorageReads:    s.StorageReads,
+		StorageUpdates:  s.StorageUpdates,
+		StorageCommits:  s.StorageCommits,
+		SnapshotCommits: s.SnapshotCommits,
+		TrieDBCommits:   s.TrieDBCommits,
+	}
+}
