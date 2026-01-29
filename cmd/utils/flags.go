@@ -639,13 +639,13 @@ var (
 	RPCTxSyncDefaultTimeoutFlag = &cli.DurationFlag{
 		Name:     "rpc.txsync.defaulttimeout",
 		Usage:    "Default timeout for eth_sendRawTransactionSync (e.g. 2s, 500ms)",
-		Value:    time.Duration(ethconfig.Defaults.TxSyncDefaultTimeout) * time.Millisecond,
+		Value:    20 * time.Second,
 		Category: flags.APICategory,
 	}
 	RPCTxSyncMaxTimeoutFlag = &cli.DurationFlag{
 		Name:     "rpc.txsync.maxtimeout",
 		Usage:    "Maximum allowed timeout for eth_sendRawTransactionSync (e.g. 5m)",
-		Value:    time.Duration(ethconfig.Defaults.TxSyncMaxTimeout) * time.Millisecond,
+		Value:    1 * time.Minute,
 		Category: flags.APICategory,
 	}
 	RPCGlobalRangeLimitFlag = &cli.Uint64Flag{
