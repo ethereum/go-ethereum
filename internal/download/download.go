@@ -274,6 +274,9 @@ func (w *downloadWriter) Write(buf []byte) (int, error) {
 
 	// Report progress.
 	w.written += int64(n)
+	if w.size <= 0 {
+		return n, err
+	}
 	pct := w.written * 10 / w.size * 10
 	if pct != w.lastpct {
 		if w.lastpct != 0 {
