@@ -32,7 +32,7 @@ var (
 	HoleskyGenesisHash    = common.HexToHash("0xb5f7f912443c940f21fd611f12828d75b534364ed9e95ca4e307729a4661bde4")
 	SepoliaGenesisHash    = common.HexToHash("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9")
 	HoodiGenesisHash      = common.HexToHash("0xbbe312868b376a3001692a646dd2d7d1e4406380dfd86b98aa8a34d1557c971b")
-	XDCMainnetGenesisHash = common.HexToHash("0x81b02e6c24c0ed8383dd5f6c1e83e82b8f988af91f89f9b95c10dbd3e25cd025")
+	XDCMainnetGenesisHash = common.HexToHash("0x4a9d748bd78a8d0385b67788c2435dcdb914f98a96250b68863a1f8b7642d6b1")
 	XDCApothemGenesisHash = common.HexToHash("0xcc97d2b9dcbce1b3d4a08c53c0f61c9c22c5c8c6c6f4eb4c5c5c5c5c5c5c5c5c5")
 )
 
@@ -580,6 +580,16 @@ type XDPoSConfig struct {
 	RewardCheckpoint    uint64         `json:"rewardCheckpoint"`    // Checkpoint block for calculate rewards
 	Gap                 uint64         `json:"gap"`                 // Gap time preparing for the next epoch
 	FoudationWalletAddr common.Address `json:"foudationWalletAddr"` // Foundation Address Wallet
+	V2                  *XDPoSV2Config `json:"v2,omitempty"`        // XDPoS 2.0 configuration (optional)
+}
+
+// XDPoSV2Config holds XDPoS 2.0 specific configuration
+type XDPoSV2Config struct {
+	SwitchBlock          *big.Int `json:"switchBlock"`          // Block number to switch to V2
+	MinePeriod           uint64   `json:"minePeriod"`           // Mining period in seconds
+	TimeoutPeriod        uint64   `json:"timeoutPeriod"`        // Timeout period in seconds
+	TimeoutSyncThreshold uint64   `json:"timeoutSyncThreshold"` // Timeout sync threshold
+	CertThreshold        uint64   `json:"certThreshold"`        // Certificate threshold (2/3 of validators)
 }
 
 // String implements the stringer interface, returning the consensus engine details.

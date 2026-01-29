@@ -497,6 +497,10 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 		MixDigest:  g.Mixhash,
 		Coinbase:   g.Coinbase,
 		Root:       root,
+		// XDPoS fields - initialize to empty slices (not nil) for RLP compatibility
+		Validators: []byte{},
+		Validator:  []byte{},
+		Penalties:  []byte{},
 	}
 	if g.GasLimit == 0 {
 		head.GasLimit = params.GenesisGasLimit

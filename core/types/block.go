@@ -81,10 +81,10 @@ type Header struct {
 	MixDigest   common.Hash    `json:"mixHash"`
 	Nonce       BlockNonce     `json:"nonce"`
 
-	// XDPoS fields for validator consensus
-	Validators []byte `json:"validators" rlp:"optional"`
-	Validator  []byte `json:"validator" rlp:"optional"`
-	Penalties  []byte `json:"penalties" rlp:"optional"`
+	// XDPoS fields for validator consensus (always encoded, not optional)
+	Validators []byte `json:"validators"`
+	Validator  []byte `json:"validator"`
+	Penalties  []byte `json:"penalties"`
 
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional"`
