@@ -93,6 +93,11 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if config.IsPrague(block.Number(), block.Time()) || config.IsVerkle(block.Number(), block.Time()) {
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
+	if config.IsVerkle(header.Number, header.Time) {
+		statedb.SetCode(params.BinaryTransitionRegistryAddress, []byte{1, 2, 3}, tracing.CodeChangeUnspecified)
+		statedb.SetNonce(params.BinaryTransitionRegistryAddress, 1, tracing.NonceChangeUnspecified)
+		statedb.SetState(params.BinaryTransitionRegistryAddress, common.Hash{}, common.Hash{1})
+	}
 
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
