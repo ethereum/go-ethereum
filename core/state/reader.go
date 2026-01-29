@@ -274,7 +274,7 @@ func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
 //
 // The returned storage slot might be empty if it's not existent.
 func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash, error) {
-	addrHash := crypto.Keccak256Hash(addr.Bytes())
+	addrHash := crypto.Keccak256AddressHash(addr)
 	slotHash := crypto.Keccak256Hash(key.Bytes())
 	ret, err := r.reader.Storage(addrHash, slotHash)
 	if err != nil {
@@ -422,7 +422,7 @@ func (r *trieReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 				root = r.subRoots[addr]
 			}
 			var err error
-			tr, err = trie.NewStateTrie(trie.StorageTrieID(r.root, crypto.Keccak256Hash(addr.Bytes()), root), r.db)
+			tr, err = trie.NewStateTrie(trie.StorageTrieID(r.root, crypto.Keccak256AddressHash(addr), root), r.db)
 			if err != nil {
 				return common.Hash{}, err
 			}

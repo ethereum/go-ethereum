@@ -1131,7 +1131,7 @@ func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*acco
 			continue
 		}
 		// The account was existent, it can be either case (c) or (d).
-		addrHash := crypto.Keccak256Hash(addr.Bytes())
+		addrHash := crypto.Keccak256AddressHash(addr)
 		op := &accountDelete{
 			address: addr,
 			origin:  types.SlimAccountRLP(*prev),

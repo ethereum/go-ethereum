@@ -241,7 +241,7 @@ func (sc *stateUpdate) ToTracingUpdate() (*tracing.StateUpdate, error) {
 	}
 	// Gather all account changes
 	for addr, oldData := range sc.accountsOrigin {
-		addrHash := crypto.Keccak256Hash(addr.Bytes())
+		addrHash := crypto.Keccak256AddressHash(addr)
 		newData, exists := sc.accounts[addrHash]
 		if !exists {
 			return nil, fmt.Errorf("account %x not found", addr)
@@ -277,7 +277,8 @@ func (sc *stateUpdate) ToTracingUpdate() (*tracing.StateUpdate, error) {
 
 	// Gather all storage slot changes
 	for addr, slots := range sc.storagesOrigin {
-		addrHash := crypto.Keccak256Hash(addr.Bytes())
+		addrHash := crypto.Keccak256AddressHash(addr)
+
 		subset, exists := sc.storages[addrHash]
 		if !exists {
 			return nil, fmt.Errorf("storage %x not found", addr)
