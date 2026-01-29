@@ -352,6 +352,9 @@ func decodeHeader(data []byte) (*trienodeMetadata, []common.Hash, []uint32, []ui
 // the specified offset.
 func decodeKeyEntry(keySection []byte, offset int) (uint64, uint64, []byte, int, error) {
 	var byteRead int
+	if offset < 0 || offset >= len(keySection) {
+		return 0, 0, nil, 0, fmt.Errorf("key offset out of bounds, offset: %d, section size: %d", offset, len(keySection))
+	}
 
 	// Resolve the length of shared key
 	nShared, nn := binary.Uvarint(keySection[offset:]) // key length shared (varint)
