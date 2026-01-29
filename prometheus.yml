@@ -1,0 +1,52 @@
+# Prometheus configuration for XDC Network monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files: []
+
+scrape_configs:
+  # XDC Mainnet Node
+  - job_name: 'xdc-mainnet'
+    static_configs:
+      - targets: ['xdc-mainnet:6060']
+    metrics_path: /debug/metrics/prometheus
+
+  # XDC Testnet Node
+  - job_name: 'xdc-testnet'
+    static_configs:
+      - targets: ['xdc-testnet:6060']
+    metrics_path: /debug/metrics/prometheus
+
+  # XDC Dev Node
+  - job_name: 'xdc-dev'
+    static_configs:
+      - targets: ['xdc-dev:6060']
+    metrics_path: /debug/metrics/prometheus
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+# Recording rules for XDC-specific metrics
+recording_rules:
+  - name: xdc_rules
+    rules:
+      # Block production rate
+      - record: xdc:block_production_rate
+        expr: rate(chain_head_block[5m])
+
+      # Peer count average
+      - record: xdc:peer_count_avg
+        expr: avg_over_time(p2p_peers[5m])
+
+      # Sync progress
+      - record: xdc:sync_progress
+        expr: (chain_head_block / chain_highest_block) * 100

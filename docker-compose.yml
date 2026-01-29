@@ -1,0 +1,124 @@
+version: '3.8'
+
+services:
+  xdc-mainnet:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: xdc-mainnet
+    restart: unless-stopped
+    ports:
+      - "30303:30303/tcp"
+      - "30303:30303/udp"
+      - "8545:8545"
+      - "8546:8546"
+    volumes:
+      - xdc-mainnet-data:/data/xdc
+    environment:
+      - NETWORK=mainnet
+    command: >
+      --datadir /data/xdc
+      --networkid 50
+      --http --http.addr 0.0.0.0 --http.port 8545
+      --http.api eth,net,web3,xdpos,xdcx
+      --http.corsdomain *
+      --ws --ws.addr 0.0.0.0 --ws.port 8546
+      --ws.api eth,net,web3
+      --syncmode fast
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8545", "-X", "POST", "-H", "Content-Type: application/json", "--data", '{"jsonrpc":"2.0","method":"eth_syncing","params":[],"id":1}']
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  xdc-testnet:
+    build:
+      context: .
+      dockerfile: Dockerfile.testnet
+    container_name: xdc-testnet
+    restart: unless-stopped
+    ports:
+      - "30304:30303/tcp"
+      - "30304:30303/udp"
+      - "8547:8545"
+      - "8548:8546"
+    volumes:
+      - xdc-testnet-data:/data/xdc
+    environment:
+      - NETWORK=testnet
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8545", "-X", "POST", "-H", "Content-Type: application/json", "--data", '{"jsonrpc":"2.0","method":"eth_syncing","params":[],"id":1}']
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  xdc-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: xdc-dev
+    restart: unless-stopped
+    ports:
+      - "30305:30303/tcp"
+      - "30305:30303/udp"
+      - "8549:8545"
+      - "8550:8546"
+      - "40000:40000"
+    volumes:
+      - xdc-dev-data:/data/xdc
+      - ./:/go/src/github.com/ethereum/go-ethereum:cached
+    environment:
+      - NETWORK=devnet
+
+  xdc-bootnode:
+    build:
+      context: .
+      dockerfile: Dockerfile.bootnode
+    container_name: xdc-bootnode
+    restart: unless-stopped
+    ports:
+      - "30301:30301/udp"
+    volumes:
+      - xdc-bootnode-data:/data/bootnode
+    command: >
+      --nodekey /data/bootnode/nodekey
+      --addr :30301
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: xdc-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: xdc-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+
+volumes:
+  xdc-mainnet-data:
+  xdc-testnet-data:
+  xdc-dev-data:
+  xdc-bootnode-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  default:
+    name: xdc-network

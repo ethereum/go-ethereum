@@ -1,0 +1,72 @@
+# Development Dockerfile for XDC Network
+FROM golang:1.21-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache \
+    build-base \
+    linux-headers \
+    git \
+    curl
+
+# Set working directory
+WORKDIR /go/src/github.com/ethereum/go-ethereum
+
+# Copy go mod files first for caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build with debugging symbols
+RUN go build -gcflags="all=-N -l" -o /usr/local/bin/XDC ./cmd/XDC
+
+# Development image
+FROM golang:1.21-alpine
+
+# Install runtime and development dependencies
+RUN apk add --no-cache \
+    ca-certificates \
+    curl \
+    bash \
+    jq \
+    vim \
+    delve
+
+# Copy binary
+COPY --from=builder /usr/local/bin/XDC /usr/local/bin/XDC
+
+# Create data directory
+RUN mkdir -p /data/xdc
+
+# Set environment variables
+ENV DATADIR=/data/xdc
+ENV NETWORK=mainnet
+
+# Expose ports
+# P2P
+EXPOSE 30303/tcp
+EXPOSE 30303/udp
+# RPC
+EXPOSE 8545
+# WebSocket
+EXPOSE 8546
+# Delve debugger
+EXPOSE 40000
+
+# Volume for data persistence
+VOLUME ["/data/xdc"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -sf http://localhost:8545 -X POST -H "Content-Type: application/json" \
+    --data '{"jsonrpc":"2.0","method":"eth_syncing","params":[],"id":1}' || exit 1
+
+# Default command for development with debugger
+CMD ["dlv", "exec", "/usr/local/bin/XDC", "--headless", "--listen=:40000", "--api-version=2", "--accept-multiclient", "--", \
+    "--datadir", "/data/xdc", \
+    "--networkid", "50", \
+    "--http", "--http.addr", "0.0.0.0", "--http.port", "8545", \
+    "--http.api", "eth,net,web3,debug,xdpos,xdcx", \
+    "--ws", "--ws.addr", "0.0.0.0", "--ws.port", "8546", \
+    "--syncmode", "full"]

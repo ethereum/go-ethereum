@@ -1,0 +1,70 @@
+# Testnet Dockerfile for XDC Network (Apothem)
+FROM golang:1.21-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache \
+    build-base \
+    linux-headers \
+    git
+
+# Set working directory
+WORKDIR /go/src/github.com/ethereum/go-ethereum
+
+# Copy go mod files first for caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build optimized binary
+RUN go build -ldflags "-s -w" -o /usr/local/bin/XDC ./cmd/XDC
+
+# Final lightweight image
+FROM alpine:3.19
+
+# Install runtime dependencies
+RUN apk add --no-cache ca-certificates curl
+
+# Copy binary
+COPY --from=builder /usr/local/bin/XDC /usr/local/bin/XDC
+
+# Copy testnet genesis
+COPY genesis/xdc_apothem.json /etc/xdc/genesis.json
+
+# Create data directory and user
+RUN addgroup -g 1000 xdc && \
+    adduser -u 1000 -G xdc -s /bin/sh -D xdc && \
+    mkdir -p /data/xdc && \
+    chown -R xdc:xdc /data/xdc
+
+USER xdc
+
+# Set environment variables
+ENV DATADIR=/data/xdc
+ENV NETWORK=testnet
+
+# Expose ports
+EXPOSE 30303/tcp 30303/udp 8545 8546
+
+# Volume for data persistence
+VOLUME ["/data/xdc"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -sf http://localhost:8545 -X POST -H "Content-Type: application/json" \
+    --data '{"jsonrpc":"2.0","method":"eth_syncing","params":[],"id":1}' || exit 1
+
+# Entrypoint
+ENTRYPOINT ["/usr/local/bin/XDC"]
+
+# Default command - testnet configuration
+CMD ["--datadir", "/data/xdc", \
+     "--networkid", "51", \
+     "--http", "--http.addr", "0.0.0.0", "--http.port", "8545", \
+     "--http.api", "eth,net,web3,xdpos", \
+     "--http.corsdomain", "*", \
+     "--ws", "--ws.addr", "0.0.0.0", "--ws.port", "8546", \
+     "--ws.api", "eth,net,web3", \
+     "--syncmode", "fast", \
+     "--bootnodes", "enode://testnet-bootnode-placeholder@apothem-bootnode:30303"]
