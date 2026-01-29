@@ -1689,18 +1689,19 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 	}
 
 	var (
-		maxTimeoutMs     = api.b.RPCTxSyncMaxTimeout()
-		defaultTimeoutMs = api.b.RPCTxSyncDefaultTimeout()
-		effectiveMs      = defaultTimeoutMs
+		maxTimeout     = api.b.RPCTxSyncMaxTimeout()
+		defaultTimeout = api.b.RPCTxSyncDefaultTimeout()
+		timeout        = defaultTimeout
 	)
 	if timeoutMs != nil && *timeoutMs > 0 {
-		if *timeoutMs > maxTimeoutMs {
-			effectiveMs = maxTimeoutMs
+		req := time.Duration(*timeoutMs) * time.Millisecond
+		if req > maxTimeout {
+			timeout = maxTimeout
 		} else {
-			effectiveMs = *timeoutMs
+			timeout = req
 		}
 	}
-	receiptCtx, cancel := context.WithTimeout(ctx, time.Duration(effectiveMs)*time.Millisecond)
+	receiptCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	// Fast path.
@@ -1715,10 +1716,7 @@ func (api *TransactionAPI) SendRawTransactionSync(ctx context.Context, input hex
 			// If server-side wait window elapsed, return the structured timeout.
 			if errors.Is(receiptCtx.Err(), context.DeadlineExceeded) {
 				return nil, &txSyncTimeoutError{
-					msg: fmt.Sprintf(
-						"The transaction was added to the transaction pool but wasn't processed in %v",
-						time.Duration(effectiveMs)*time.Millisecond,
-					),
+					msg:  fmt.Sprintf("The transaction was added to the transaction pool but wasn't processed in %v", timeout),
 					hash: hash,
 				}
 			}

@@ -1772,10 +1772,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.LogQueryLimit = ctx.Int(RPCGlobalLogQueryLimit.Name)
 	}
 	if ctx.IsSet(RPCTxSyncDefaultTimeoutFlag.Name) {
-		cfg.TxSyncDefaultTimeout = uint64(ctx.Duration(RPCTxSyncDefaultTimeoutFlag.Name).Milliseconds())
+		cfg.TxSyncDefaultTimeout = ctx.Duration(RPCTxSyncDefaultTimeoutFlag.Name)
 	}
 	if ctx.IsSet(RPCTxSyncMaxTimeoutFlag.Name) {
-		cfg.TxSyncMaxTimeout = uint64(ctx.Duration(RPCTxSyncMaxTimeoutFlag.Name).Milliseconds())
+		cfg.TxSyncMaxTimeout = ctx.Duration(RPCTxSyncMaxTimeoutFlag.Name)
 	}
 	if ctx.IsSet(RPCGlobalRangeLimitFlag.Name) {
 		cfg.RangeLimit = ctx.Uint64(RPCGlobalRangeLimitFlag.Name)
