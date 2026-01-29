@@ -59,7 +59,7 @@ func (e Empty) InsertValuesAtStem(key []byte, values [][]byte, _ NodeResolverFn,
 	}, nil
 }
 
-func (e Empty) CollectNodes(_ []byte, _ NodeFlushFn) error {
+func (e Empty) CollectNodes(_ []byte, _ NodeFlushFn, _ int) error {
 	return nil
 }
 

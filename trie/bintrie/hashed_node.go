@@ -80,7 +80,7 @@ func (h HashedNode) toDot(parent string, path string) string {
 	return ret
 }
 
-func (h HashedNode) CollectNodes([]byte, NodeFlushFn) error {
+func (h HashedNode) CollectNodes([]byte, NodeFlushFn, int) error {
 	// HashedNodes are already persisted in the database and don't need to be collected.
 	return nil
 }
