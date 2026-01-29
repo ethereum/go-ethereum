@@ -38,6 +38,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		NoDial           bool          `toml:",omitempty"`
 		EnableMsgEvents  bool
 		Logger           log.Logger `toml:"-"`
+		UseProxy         bool       `toml:",omitempty"`
 	}
 	var enc Config
 	enc.PrivateKey = c.PrivateKey
@@ -62,6 +63,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.NoDial = c.NoDial
 	enc.EnableMsgEvents = c.EnableMsgEvents
 	enc.Logger = c.Logger
+	enc.UseProxy = c.UseProxy
 	return &enc, nil
 }
 
@@ -90,6 +92,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		NoDial           *bool      `toml:",omitempty"`
 		EnableMsgEvents  *bool
 		Logger           log.Logger `toml:"-"`
+		UseProxy         *bool      `toml:",omitempty"`
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -160,6 +163,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.Logger != nil {
 		c.Logger = dec.Logger
+	}
+	if dec.UseProxy != nil {
+		c.UseProxy = *dec.UseProxy
 	}
 	return nil
 }
