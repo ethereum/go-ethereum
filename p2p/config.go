@@ -124,6 +124,10 @@ type Config struct {
 	// Logger is a custom logger to use with the p2p.Server.
 	Logger log.Logger `toml:"-"`
 
+	// NetworkID is the network identifier for chain-specific discovery.
+	// Used to enable XDC-specific discovery protocol when set to 50 (mainnet) or 51 (Apothem).
+	NetworkID uint64
+
 	clock mclock.Clock
 }
 

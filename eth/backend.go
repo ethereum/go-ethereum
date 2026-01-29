@@ -190,6 +190,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 
 	// Assemble the Ethereum object.
+	p2pServer := stack.Server()
+
+	// Set NetworkID on P2P server for chain-specific discovery (e.g., XDC uses pingXDC)
+	p2pServer.Config.NetworkID = networkID
+
 	eth := &Ethereum{
 		config:          config,
 		chainDb:         chainDb,
@@ -198,7 +203,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		engine:          engine,
 		networkID:       networkID,
 		gasPrice:        config.Miner.GasPrice,
-		p2pServer:       stack.Server(),
+		p2pServer:       p2pServer,
 		discmix:         enode.NewFairMix(discmixTimeout),
 		shutdownTracker: shutdowncheck.NewShutdownTracker(chainDb),
 	}

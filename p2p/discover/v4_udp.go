@@ -80,6 +80,19 @@ type UDPv4 struct {
 	gotreply        chan reply
 	closeCtx        context.Context
 	cancelCloseCtx  context.CancelFunc
+
+	// xdcMode enables XDC-specific discovery protocol (pingXDC).
+	// XDC nodes use packet type 5 instead of type 1 for ping.
+	xdcMode bool
+}
+
+// SetXDCMode enables XDC-specific discovery protocol.
+// When enabled, uses pingXDC (type 5) instead of standard ping (type 1).
+func (t *UDPv4) SetXDCMode(enabled bool) {
+	t.xdcMode = enabled
+	if enabled {
+		t.log.Info("XDC discovery mode enabled (using pingXDC)")
+	}
 }
 
 // replyMatcher represents a pending reply.
@@ -141,6 +154,12 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 		closeCtx:        closeCtx,
 		cancelCloseCtx:  cancel,
 		log:             cfg.Log,
+	}
+
+	// Enable XDC mode for XDC networks (chain ID 50 = mainnet, 51 = Apothem testnet)
+	if cfg.NetworkID == 50 || cfg.NetworkID == 51 {
+		t.xdcMode = true
+		cfg.Log.Info("XDC discovery mode enabled", "networkID", cfg.NetworkID)
 	}
 
 	tab, err := newTable(t, ln.Database(), cfg)
@@ -237,8 +256,13 @@ func (t *UDPv4) Ping(n *enode.Node) (pong *v4wire.Pong, err error) {
 }
 
 // sendPing sends a ping message to the given node and invokes the callback
-// when the reply arrives.
+// when the reply arrives. If XDC mode is enabled, sends pingXDC (type 5) instead.
 func (t *UDPv4) sendPing(toid enode.ID, toaddr netip.AddrPort, callback func()) *replyMatcher {
+	// Use pingXDC for XDC networks
+	if t.xdcMode {
+		return t.sendPingXDC(toid, toaddr, callback)
+	}
+
 	req := t.makePing(toaddr)
 	packet, hash, err := v4wire.Encode(t.priv, req)
 	if err != nil {
@@ -263,6 +287,41 @@ func (t *UDPv4) sendPing(toid enode.ID, toaddr netip.AddrPort, callback func()) 
 
 func (t *UDPv4) makePing(toaddr netip.AddrPort) *v4wire.Ping {
 	return &v4wire.Ping{
+		Version:    4,
+		From:       t.ourEndpoint(),
+		To:         v4wire.NewEndpoint(toaddr, 0),
+		Expiration: uint64(time.Now().Add(expiration).Unix()),
+		ENRSeq:     t.localNode.Node().Seq(),
+	}
+}
+
+// sendPingXDC sends an XDC-specific ping (type 5) to the given node.
+// XDC nodes use pingXDC instead of standard ping for discovery.
+func (t *UDPv4) sendPingXDC(toid enode.ID, toaddr netip.AddrPort, callback func()) *replyMatcher {
+	req := t.makePingXDC(toaddr)
+	packet, hash, err := v4wire.Encode(t.priv, req)
+	if err != nil {
+		errc := make(chan error, 1)
+		errc <- err
+		return &replyMatcher{errc: errc}
+	}
+	// Add a matcher for the reply to the pending reply queue. Pongs are matched if they
+	// reference the ping we're about to send.
+	rm := t.pending(toid, toaddr.Addr(), v4wire.PongPacket, func(p v4wire.Packet) (matched bool, requestDone bool) {
+		matched = bytes.Equal(p.(*v4wire.Pong).ReplyTok, hash)
+		if matched && callback != nil {
+			callback()
+		}
+		return matched, matched
+	})
+	// Send the packet.
+	t.localNode.UDPContact(toaddr)
+	t.write(toaddr, toid, req.Name(), packet)
+	return rm
+}
+
+func (t *UDPv4) makePingXDC(toaddr netip.AddrPort) *v4wire.PingXDC {
+	return &v4wire.PingXDC{
 		Version:    4,
 		From:       t.ourEndpoint(),
 		To:         v4wire.NewEndpoint(toaddr, 0),
@@ -640,6 +699,11 @@ func (t *UDPv4) wrapPacket(p v4wire.Packet) *packetHandlerV4 {
 	case *v4wire.Ping:
 		h.preverify = t.verifyPing
 		h.handle = t.handlePing
+	case *v4wire.PingXDC:
+		// XDC uses pingXDC (type 5) instead of standard ping.
+		// Handle it the same way as a regular ping.
+		h.preverify = t.verifyPingXDC
+		h.handle = t.handlePingXDC
 	case *v4wire.Pong:
 		h.preverify = t.verifyPong
 	case *v4wire.Findnode:
@@ -687,6 +751,50 @@ func (t *UDPv4) handlePing(h *packetHandlerV4, from netip.AddrPort, fromID enode
 	req := h.Packet.(*v4wire.Ping)
 
 	// Reply.
+	t.send(from, fromID, &v4wire.Pong{
+		To:         v4wire.NewEndpoint(from, req.From.TCP),
+		ReplyTok:   mac,
+		Expiration: uint64(time.Now().Add(expiration).Unix()),
+		ENRSeq:     t.localNode.Node().Seq(),
+	})
+
+	// Ping back if our last pong on file is too far in the past.
+	fromIP := from.Addr().AsSlice()
+	n := enode.NewV4(h.senderKey, fromIP, int(req.From.TCP), int(from.Port()))
+	if time.Since(t.db.LastPongReceived(n.ID(), from.Addr())) > bondExpiration {
+		t.sendPing(fromID, from, func() {
+			t.tab.addInboundNode(n)
+		})
+	} else {
+		t.tab.addInboundNode(n)
+	}
+
+	// Update node database and endpoint predictor.
+	t.db.UpdateLastPingReceived(n.ID(), from.Addr(), time.Now())
+	toaddr := netip.AddrPortFrom(netutil.IPToAddr(req.To.IP), req.To.UDP)
+	t.localNode.UDPEndpointStatement(from, toaddr)
+}
+
+// PINGXDC/v4 (XDC-specific ping, type 5)
+
+func (t *UDPv4) verifyPingXDC(h *packetHandlerV4, from netip.AddrPort, fromID enode.ID, fromKey v4wire.Pubkey) error {
+	req := h.Packet.(*v4wire.PingXDC)
+
+	if v4wire.Expired(req.Expiration) {
+		return errExpired
+	}
+	senderKey, err := v4wire.DecodePubkey(crypto.S256(), fromKey)
+	if err != nil {
+		return err
+	}
+	h.senderKey = senderKey
+	return nil
+}
+
+func (t *UDPv4) handlePingXDC(h *packetHandlerV4, from netip.AddrPort, fromID enode.ID, mac []byte) {
+	req := h.Packet.(*v4wire.PingXDC)
+
+	// Reply with standard Pong (XDC nodes expect Pong in reply to PingXDC).
 	t.send(from, fromID, &v4wire.Pong{
 		To:         v4wire.NewEndpoint(from, req.From.TCP),
 		ReplyTok:   mac,

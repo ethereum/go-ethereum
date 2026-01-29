@@ -59,6 +59,9 @@ type Config struct {
 	RefreshInterval         time.Duration // used in bucket refresh
 	NoFindnodeLivenessCheck bool          // turns off validation of table nodes in FINDNODE handler
 
+	// Network identification:
+	NetworkID uint64 // network ID for chain-specific discovery (50 = XDC mainnet)
+
 	// The options below are useful in very specific cases, like in unit tests.
 	V5ProtocolID *[6]byte
 	Log          log.Logger         // if set, log messages go here

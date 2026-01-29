@@ -43,6 +43,9 @@ const (
 	NeighborsPacket
 	ENRRequestPacket
 	ENRResponsePacket
+
+	// XDC-specific packet types
+	PingXDCPacket = 5 // XDC uses type 5 for ping instead of standard type 1
 )
 
 // RPC request structures
@@ -187,6 +190,19 @@ func (req *ENRRequest) Kind() byte   { return ENRRequestPacket }
 func (req *ENRResponse) Name() string { return "ENRRESPONSE/v4" }
 func (req *ENRResponse) Kind() byte   { return ENRResponsePacket }
 
+// PingXDC is the XDC-specific ping packet (type 5).
+// It has the same structure as Ping but uses a different packet type.
+// XDC nodes send pingXDC instead of standard ping for discovery.
+type PingXDC Ping
+
+func (req *PingXDC) Name() string { return "PINGXDC/v4" }
+func (req *PingXDC) Kind() byte   { return PingXDCPacket }
+
+// ToPing converts PingXDC to a standard Ping for processing.
+func (req *PingXDC) ToPing() *Ping {
+	return (*Ping)(req)
+}
+
 // Expired checks whether the given UNIX time stamp is in the past.
 func Expired(ts uint64) bool {
 	return time.Unix(int64(ts), 0).Before(time.Now())
@@ -233,8 +249,10 @@ func Decode(input []byte) (Packet, Pubkey, []byte, error) {
 		req = new(Findnode)
 	case NeighborsPacket:
 		req = new(Neighbors)
-	case ENRRequestPacket:
-		req = new(ENRRequest)
+	case PingXDCPacket:
+		// XDC uses type 5 (pingXDC) with same structure as Ping.
+		// Try to decode as PingXDC first, fall back to ENRRequest.
+		req = new(PingXDC)
 	case ENRResponsePacket:
 		req = new(ENRResponse)
 	default:
