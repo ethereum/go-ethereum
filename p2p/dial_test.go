@@ -423,6 +423,82 @@ func TestDialSchedDNSHostname(t *testing.T) {
 	})
 }
 
+// This test checks that nodes with pending inbound connections are not dialed.
+func TestDialSchedPendingInbound(t *testing.T) {
+	t.Parallel()
+
+	config := dialConfig{
+		maxActiveDials: 5,
+		maxDialPeers:   4,
+	}
+	runDialTest(t, config, []dialTestRound{
+		// 2 peers are connected, leaving 2 dial slots.
+		// Node 0x03 has a pending inbound connection.
+		// Discovered nodes 0x03, 0x04, 0x05 but only 0x04 and 0x05 should be dialed.
+		{
+			peersAdded: []*conn{
+				{flags: dynDialedConn, node: newNode(uintID(0x01), "127.0.0.1:30303")},
+				{flags: dynDialedConn, node: newNode(uintID(0x02), "127.0.0.2:30303")},
+			},
+			update: func(d *dialScheduler) {
+				d.inboundPending(uintID(0x03))
+			},
+			discovered: []*enode.Node{
+				newNode(uintID(0x03), "127.0.0.3:30303"), // not dialed because pending inbound
+				newNode(uintID(0x04), "127.0.0.4:30303"),
+				newNode(uintID(0x05), "127.0.0.5:30303"),
+			},
+			wantNewDials: []*enode.Node{
+				newNode(uintID(0x04), "127.0.0.4:30303"),
+				newNode(uintID(0x05), "127.0.0.5:30303"),
+			},
+		},
+		// Pending inbound connection for 0x03 completes successfully.
+		// Node 0x03 becomes a connected peer.
+		// One dial slot remains, node 0x06 is dialed.
+		{
+			update: func(d *dialScheduler) {
+				// Pending inbound completes
+				d.inboundCompleted(uintID(0x03))
+			},
+			peersAdded: []*conn{
+				{flags: inboundConn, node: newNode(uintID(0x03), "127.0.0.3:30303")},
+			},
+			succeeded: []enode.ID{
+				uintID(0x04),
+			},
+			failed: []enode.ID{
+				uintID(0x05),
+			},
+			discovered: []*enode.Node{
+				newNode(uintID(0x03), "127.0.0.3:30303"), // not dialed, now connected
+				newNode(uintID(0x06), "127.0.0.6:30303"),
+			},
+			wantNewDials: []*enode.Node{
+				newNode(uintID(0x06), "127.0.0.6:30303"),
+			},
+		},
+		// Inbound peer 0x03 disconnects.
+		// Another pending inbound starts for 0x07.
+		// Only 0x03 should be dialed, not 0x07.
+		{
+			peersRemoved: []enode.ID{
+				uintID(0x03),
+			},
+			update: func(d *dialScheduler) {
+				d.inboundPending(uintID(0x07))
+			},
+			discovered: []*enode.Node{
+				newNode(uintID(0x03), "127.0.0.3:30303"),
+				newNode(uintID(0x07), "127.0.0.7:30303"), // not dialed because pending inbound
+			},
+			wantNewDials: []*enode.Node{
+				newNode(uintID(0x03), "127.0.0.3:30303"),
+			},
+		},
+	})
+}
+
 // -------
 // Code below here is the framework for the tests above.
 
