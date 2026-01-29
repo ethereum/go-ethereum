@@ -727,6 +727,12 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 	}
 }
 
+// Close closes the batch and releases all associated resources. After it is
+// closed, any subsequent operations on this batch are undefined.
+func (b *batch) Close() {
+	b.b.Close()
+}
+
 // pebbleIterator is a wrapper of underlying iterator in storage engine.
 // The purpose of this structure is to implement the missing APIs.
 //
