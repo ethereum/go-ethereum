@@ -182,12 +182,12 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 	// I considered trying to instantiate the beacon consensus engine with a tracer.
 	// however, the BAL tracer instance is used once per block, while the engine object
 	// lives for the entire time the client is running.
-	onBlockFinalization := func() *bal.BlockAccessList {
-		if miner.chainConfig.IsAmsterdam(work.header.Number, work.header.Time) {
+	var onBlockFinalization func() *bal.BlockAccessList
+	if miner.chainConfig.IsAmsterdam(work.header.Number, work.header.Time) {
+		onBlockFinalization = func() *bal.BlockAccessList {
 			work.alTracer.OnBlockFinalization()
 			return work.alTracer.AccessList().ToEncodingObj()
 		}
-		return nil
 	}
 
 	block, err := miner.engine.FinalizeAndAssemble(miner.chain, work.header, work.state, &body, work.receipts, onBlockFinalization)

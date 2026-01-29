@@ -123,14 +123,6 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 				return fmt.Errorf("invalid block access list: %v", err)
 			}
 		}
-	} else if v.bc.cfg.EnableBALForTesting {
-		// If experimental.bal is enabled, the BAL hash is not allowed in the header
-		// but can optionally be in the body.
-		// This is in order that Geth can import preexisting chains augmented with BALs
-		// and not have a hash mismatch.
-		if block.Header().BlockAccessListHash != nil {
-			return fmt.Errorf("access list hash in block header not allowed preamsterdam")
-		}
 	} else {
 		// if experimental.bal is not enabled, block headers cannot have access list hash and bodies cannot have access lists.
 		if block.AccessList() != nil {
