@@ -305,32 +305,30 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 		requestsHash = &h
 	}
 
-	var blockAccessListHash *common.Hash
 	body := types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals}
 
 	header := &types.Header{
-		ParentHash:          data.ParentHash,
-		UncleHash:           types.EmptyUncleHash,
-		Coinbase:            data.FeeRecipient,
-		Root:                data.StateRoot,
-		TxHash:              types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash:         data.ReceiptsRoot,
-		Bloom:               types.BytesToBloom(data.LogsBloom),
-		Difficulty:          common.Big0,
-		Number:              new(big.Int).SetUint64(data.Number),
-		GasLimit:            data.GasLimit,
-		GasUsed:             data.GasUsed,
-		Time:                data.Timestamp,
-		BaseFee:             data.BaseFeePerGas,
-		Extra:               data.ExtraData,
-		MixDigest:           data.Random,
-		WithdrawalsHash:     withdrawalsRoot,
-		ExcessBlobGas:       data.ExcessBlobGas,
-		BlobGasUsed:         data.BlobGasUsed,
-		ParentBeaconRoot:    beaconRoot,
-		RequestsHash:        requestsHash,
-		BlockAccessListHash: blockAccessListHash,
-		SlotNumber:          data.SlotNumber,
+		ParentHash:       data.ParentHash,
+		UncleHash:        types.EmptyUncleHash,
+		Coinbase:         data.FeeRecipient,
+		Root:             data.StateRoot,
+		TxHash:           types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
+		ReceiptHash:      data.ReceiptsRoot,
+		Bloom:            types.BytesToBloom(data.LogsBloom),
+		Difficulty:       common.Big0,
+		Number:           new(big.Int).SetUint64(data.Number),
+		GasLimit:         data.GasLimit,
+		GasUsed:          data.GasUsed,
+		Time:             data.Timestamp,
+		BaseFee:          data.BaseFeePerGas,
+		Extra:            data.ExtraData,
+		MixDigest:        data.Random,
+		WithdrawalsHash:  withdrawalsRoot,
+		ExcessBlobGas:    data.ExcessBlobGas,
+		BlobGasUsed:      data.BlobGasUsed,
+		ParentBeaconRoot: beaconRoot,
+		RequestsHash:     requestsHash,
+		SlotNumber:       data.SlotNumber,
 	}
 
 	if data.BlockAccessList != nil {

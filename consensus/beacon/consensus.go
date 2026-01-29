@@ -384,8 +384,10 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	if onFinalizeAccessList != nil {
 		al := onFinalizeAccessList()
 		alHash := al.Hash()
+
 		header.BlockAccessListHash = &alHash
-		return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)).WithAccessList(al), nil
+		block := types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)).WithAccessList(al)
+		return block, nil
 	} else {
 		return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)), nil
 	}

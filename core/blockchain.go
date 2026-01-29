@@ -231,11 +231,6 @@ type BlockChainConfig struct {
 	// SlowBlockThreshold is the block execution time threshold beyond which
 	// detailed statistics will be logged.
 	SlowBlockThreshold time.Duration
-
-	// If EnableBALForTesting is enabled, block access lists will be created
-	// from block execution and embedded in the body.  The block access list
-	// hash will not be set in the header.
-	EnableBALForTesting bool
 }
 
 // DefaultConfig returns the default config.
