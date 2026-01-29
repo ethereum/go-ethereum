@@ -55,7 +55,7 @@ var (
 )
 
 // encodeBlockNumber encodes a block number as big endian uint64
-func encodeBlockNumber(number uint64) []byte {
+func encodeXDCBlockNumber(number uint64) []byte {
 	enc := make([]byte, 8)
 	binary.BigEndian.PutUint64(enc, number)
 	return enc
@@ -93,7 +93,7 @@ func PenalizedListKey(epoch uint64) []byte {
 
 // RewardKey returns the database key for reward at block number
 func RewardKey(number uint64) []byte {
-	return append(rewardPrefix, encodeBlockNumber(number)...)
+	return append(rewardPrefix, encodeXDCBlockNumber(number)...)
 }
 
 // RewardEpochKey returns the database key for epoch reward
@@ -103,7 +103,7 @@ func RewardEpochKey(epoch uint64) []byte {
 
 // BlockSignerKey returns the database key for block signer at block number
 func BlockSignerKey(number uint64) []byte {
-	return append(blockSignerPrefix, encodeBlockNumber(number)...)
+	return append(blockSignerPrefix, encodeXDCBlockNumber(number)...)
 }
 
 // VoteKey returns the database key for vote data
