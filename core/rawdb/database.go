@@ -799,125 +799,155 @@ func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashScheme bool,
 	return batch.Write()
 }
 
+// depthTracker computes the depth distribution of trie nodes using a
+// stack-based streaming algorithm. Nodes must be fed in lexicographic
+// path order. Not safe for concurrent use.
+type depthTracker struct {
+	depths [65]stat
+	stack  []string
+}
+
+// newDepthTracker creates a depth tracker pre-allocated for the maximum
+// trie depth (65 nibbles).
+func newDepthTracker() *depthTracker {
+	return &depthTracker{stack: make([]string, 0, 65)}
+}
+
+// add records a trie node at the given path with the given on-disk size.
+// Paths must be provided in lexicographic order.
+func (d *depthTracker) add(path string, size common.StorageSize) {
+	// Pop until the stack top is a strict prefix of the current path.
+	for len(d.stack) > 0 {
+		top := d.stack[len(d.stack)-1]
+		if len(top) < len(path) && path[:len(top)] == top {
+			break
+		}
+		d.stack = d.stack[:len(d.stack)-1]
+	}
+	d.depths[len(d.stack)].add(size)
+	d.stack = append(d.stack, path)
+}
+
+// reset clears the stack for reuse (e.g. when switching between tries)
+// without reallocating. The accumulated depth stats are preserved.
+func (d *depthTracker) reset() {
+	d.stack = d.stack[:0]
+}
+
+// total returns the aggregate count and size across all depths.
+func (d *depthTracker) total() (count uint64, size uint64) {
+	for i := range d.depths {
+		count += d.depths[i].count
+		size += d.depths[i].size
+	}
+	return
+}
+
 // InspectTrieDepth traverses all path-based trie nodes in the database
 // and calculates the depth distribution of nodes in the account trie
-// and storage tries. Uses a streaming algorithm that processes nodes
-// in lexicographic order without loading all paths into memory.
+// and storage tries. Account and storage iterations run in parallel.
 func InspectTrieDepth(db ethdb.Database) error {
 	var (
 		start = time.Now()
 
-		accountDepths   [65]stat
-		storageDepths   [65]stat
+		accountTracker  = newDepthTracker()
+		storageTracker  = newDepthTracker()
 		storageTriesCnt uint64
-		nodeCount       uint64
+		nodeCount       atomic.Uint64
 	)
 
 	log.Info("Calculating trie depth distribution...")
 
-	// Process account trie nodes (prefix "A")
-	// Keys are already in lexicographic order from the database iterator
-	accountStack := make([]string, 0, 65)
-
-	it := db.NewIterator(TrieNodeAccountPrefix, nil)
-	for it.Next() {
-		ok, path := ResolveAccountTrieNodeKey(it.Key())
-		if !ok {
-			continue
-		}
-		pathStr := string(path)
-
-		// Pop until stack top is a strict prefix of current path
-		for len(accountStack) > 0 {
-			top := accountStack[len(accountStack)-1]
-			if len(top) < len(pathStr) && pathStr[:len(top)] == top {
-				break
+	// Progress reporter
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(8 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				log.Info("Processing nodes", "count", nodeCount.Load(),
+					"elapsed", common.PrettyDuration(time.Since(start)))
+			case <-done:
+				return
 			}
-			accountStack = accountStack[:len(accountStack)-1]
 		}
+	}()
 
-		depth := len(accountStack)
-		accountDepths[depth].add(common.StorageSize(len(it.Key()) + len(it.Value())))
-		nodeCount++
+	eg, ctx := errgroup.WithContext(context.Background())
 
-		accountStack = append(accountStack, pathStr)
+	// Process account trie nodes
+	eg.Go(func() error {
+		it := db.NewIterator(TrieNodeAccountPrefix, nil)
+		defer it.Release()
 
-		if nodeCount%10000000 == 0 {
-			log.Info("Processing nodes", "count", nodeCount, "elapsed", common.PrettyDuration(time.Since(start)))
+		for it.Next() {
+			ok, path := ResolveAccountTrieNodeKey(it.Key())
+			if !ok {
+				continue
+			}
+			accountTracker.add(string(path),
+				common.StorageSize(len(it.Key())+len(it.Value())))
+			nodeCount.Add(1)
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
 		}
-	}
-	it.Release()
-	if err := it.Error(); err != nil {
+		return it.Error()
+	})
+
+	// Process storage trie nodes
+	eg.Go(func() error {
+		var (
+			currentAccountHash common.Hash
+			firstStorageTrie   = true
+		)
+
+		it := db.NewIterator(TrieNodeStoragePrefix, nil)
+		defer it.Release()
+
+		for it.Next() {
+			ok, accountHash, path := ResolveStorageTrieNode(it.Key())
+			if !ok {
+				continue
+			}
+			// When the account hash changes we're entering a new trie.
+			if accountHash != currentAccountHash {
+				if !firstStorageTrie {
+					storageTriesCnt++
+				}
+				firstStorageTrie = false
+				currentAccountHash = accountHash
+				storageTracker.reset()
+			}
+
+			storageTracker.add(string(path),
+				common.StorageSize(len(it.Key())+len(it.Value())))
+			nodeCount.Add(1)
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+		}
+		if !firstStorageTrie {
+			storageTriesCnt++
+		}
+		return it.Error()
+	})
+
+	if err := eg.Wait(); err != nil {
+		close(done)
 		return err
 	}
+	close(done)
 
-	var accountCount uint64
-	for i := range accountDepths {
-		accountCount += atomic.LoadUint64(&accountDepths[i].count)
-	}
-	log.Info("Finished account trie", "nodes", accountCount, "elapsed", common.PrettyDuration(time.Since(start)))
-
-	// Process storage trie nodes (prefix "O")
-	// Keys are ordered by (accountHash, path), so when accountHash changes,
-	// we're starting a new trie and need to reset the stack
-	var (
-		storageStack       = make([]string, 0, 65)
-		currentAccountHash common.Hash
-		firstStorageTrie   = true
-	)
-
-	it = db.NewIterator(TrieNodeStoragePrefix, nil)
-	for it.Next() {
-		ok, accountHash, path := ResolveStorageTrieNode(it.Key())
-		if !ok {
-			continue
-		}
-
-		// Check if we're starting a new storage trie
-		if accountHash != currentAccountHash {
-			if !firstStorageTrie {
-				storageTriesCnt++
-			}
-			firstStorageTrie = false
-			currentAccountHash = accountHash
-			storageStack = storageStack[:0] // Reset stack for new trie
-		}
-
-		pathStr := string(path)
-
-		// Pop until stack top is a strict prefix of current path
-		for len(storageStack) > 0 {
-			top := storageStack[len(storageStack)-1]
-			if len(top) < len(pathStr) && pathStr[:len(top)] == top {
-				break
-			}
-			storageStack = storageStack[:len(storageStack)-1]
-		}
-
-		depth := len(storageStack)
-		storageDepths[depth].add(common.StorageSize(len(it.Key()) + len(it.Value())))
-		nodeCount++
-
-		storageStack = append(storageStack, pathStr)
-
-		if nodeCount%10000000 == 0 {
-			log.Info("Processing nodes", "count", nodeCount, "elapsed", common.PrettyDuration(time.Since(start)))
-		}
-	}
-	it.Release()
-	if err := it.Error(); err != nil {
-		return err
-	}
-
-	// Count the last storage trie if we processed any
-	if !firstStorageTrie {
-		storageTriesCnt++
-	}
-
-	var storageCount uint64
-	for i := range storageDepths {
-		storageCount += atomic.LoadUint64(&storageDepths[i].count)
-	}
+	accountCount, _ := accountTracker.total()
+	storageCount, _ := storageTracker.total()
 
 	log.Info("Depth calculation complete",
 		"accountNodes", accountCount,
@@ -933,10 +963,10 @@ func InspectTrieDepth(db ethdb.Database) error {
 	fmt.Println("Depth | Account Nodes | Account Size  | Storage Nodes | Storage Size")
 	fmt.Println("------|---------------|---------------|---------------|---------------")
 	for i := 0; i < 65; i++ {
-		if !accountDepths[i].empty() || !storageDepths[i].empty() {
+		if !accountTracker.depths[i].empty() || !storageTracker.depths[i].empty() {
 			fmt.Printf("%5d | %13s | %13s | %13s | %13s\n",
-				i, accountDepths[i].countString(), accountDepths[i].sizeString(),
-				storageDepths[i].countString(), storageDepths[i].sizeString())
+				i, accountTracker.depths[i].countString(), accountTracker.depths[i].sizeString(),
+				storageTracker.depths[i].countString(), storageTracker.depths[i].sizeString())
 		}
 	}
 	fmt.Println()
@@ -946,64 +976,69 @@ func InspectTrieDepth(db ethdb.Database) error {
 
 // InspectContract inspects the on-disk footprint of a single contract:
 // snapshot account, snapshot storage slots, and path-based storage trie
-// nodes including depth distribution.
+// nodes including depth distribution. Storage snapshot and trie
+// iterations run in parallel.
 func InspectContract(db ethdb.Database, address common.Address) error {
 	start := time.Now()
 	accountHash := crypto.Keccak256Hash(address.Bytes())
 
 	log.Info("Inspecting contract", "address", address, "hash", accountHash)
 
-	// 1. Account snapshot
+	// 1. Account snapshot (fast single-key lookup, done inline)
 	accountData := ReadAccountSnapshot(db, accountHash)
 	accountSnapshotSize := len(accountSnapshotKey(accountHash)) + len(accountData)
 
-	// 2. Storage snapshot: iterate all storage slots for this account
-	var storageStat stat
-	storagePrefix := storageSnapshotsKey(accountHash)
-
-	it := db.NewIterator(storagePrefix, nil)
-	for it.Next() {
-		storageStat.add(common.StorageSize(len(it.Key()) + len(it.Value())))
-	}
-	it.Release()
-	if err := it.Error(); err != nil {
-		return err
-	}
-
-	// 3. Storage trie nodes: iterate and compute depth distribution
 	var (
-		trieStat   stat
-		trieDepths [65]stat
-		trieStack  = make([]string, 0, 65)
+		storageStat stat
+		trieTracker = newDepthTracker()
 	)
 
-	it = db.NewIterator(storageTrieNodeKey(accountHash, nil), nil)
-	for it.Next() {
-		ok, hash, path := ResolveStorageTrieNode(it.Key())
-		if !ok || hash != accountHash {
-			break
+	eg, ctx := errgroup.WithContext(context.Background())
+
+	// 2. Storage snapshot: iterate all storage slots for this account
+	eg.Go(func() error {
+		it := db.NewIterator(storageSnapshotsKey(accountHash), nil)
+		defer it.Release()
+
+		for it.Next() {
+			storageStat.add(common.StorageSize(len(it.Key()) + len(it.Value())))
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
 		}
+		return it.Error()
+	})
 
-		size := common.StorageSize(len(it.Key()) + len(it.Value()))
-		trieStat.add(size)
+	// 3. Storage trie nodes: iterate and compute depth distribution
+	eg.Go(func() error {
+		it := db.NewIterator(storageTrieNodeKey(accountHash, nil), nil)
+		defer it.Release()
 
-		pathStr := string(path)
-
-		// Stack-based depth: pop until top is strict prefix of current
-		for len(trieStack) > 0 {
-			top := trieStack[len(trieStack)-1]
-			if len(top) < len(pathStr) && pathStr[:len(top)] == top {
+		for it.Next() {
+			ok, hash, path := ResolveStorageTrieNode(it.Key())
+			if !ok || hash != accountHash {
 				break
 			}
-			trieStack = trieStack[:len(trieStack)-1]
+			trieTracker.add(string(path),
+				common.StorageSize(len(it.Key())+len(it.Value())))
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
 		}
-		trieDepths[len(trieStack)].add(size)
-		trieStack = append(trieStack, pathStr)
-	}
-	it.Release()
-	if err := it.Error(); err != nil {
+		return it.Error()
+	})
+
+	if err := eg.Wait(); err != nil {
 		return err
 	}
+
+	trieCount, trieSize := trieTracker.total()
 
 	log.Info("Inspection complete", "elapsed", common.PrettyDuration(time.Since(start)))
 
@@ -1018,15 +1053,15 @@ func InspectContract(db ethdb.Database, address common.Address) error {
 	}
 
 	fmt.Printf("Snapshot storage: %s slots (%s)\n", storageStat.countString(), storageStat.sizeString())
-	fmt.Printf("Storage trie:     %s nodes (%s)\n", trieStat.countString(), trieStat.sizeString())
+	fmt.Printf("Storage trie:     %d nodes (%s)\n", trieCount, common.StorageSize(trieSize))
 
 	fmt.Println("\nStorage Trie Depth Distribution:")
 	fmt.Println("Depth | Nodes         | Size")
 	fmt.Println("------|---------------|---------------")
 	for i := 0; i < 65; i++ {
-		if !trieDepths[i].empty() {
+		if !trieTracker.depths[i].empty() {
 			fmt.Printf("%5d | %13s | %13s\n",
-				i, trieDepths[i].countString(), trieDepths[i].sizeString())
+				i, trieTracker.depths[i].countString(), trieTracker.depths[i].sizeString())
 		}
 	}
 	fmt.Println()
