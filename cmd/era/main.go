@@ -321,7 +321,7 @@ func checkAccumulator(e era.Era) error {
 	if td, err = e.InitialTD(); err != nil {
 		return fmt.Errorf("error reading total difficulty: %w", err)
 	}
-	it, err := onedb.NewIterator(e)
+	it, err := e.Iterator()
 	if err != nil {
 		return fmt.Errorf("error making era iterator: %w", err)
 	}
@@ -354,9 +354,13 @@ func checkAccumulator(e era.Era) error {
 		if rr != block.ReceiptHash() {
 			return fmt.Errorf("receipt root in block %d mismatch: want %s, got %s", block.NumberU64(), block.ReceiptHash(), rr)
 		}
-		hashes = append(hashes, block.Hash())
-		td.Add(td, block.Difficulty())
-		tds = append(tds, new(big.Int).Set(td))
+		// Only include pre-merge blocks in accumulator calculation.
+		// Post-merge blocks have difficulty == 0.
+		if block.Difficulty().Sign() > 0 {
+			hashes = append(hashes, block.Hash())
+			td.Add(td, block.Difficulty())
+			tds = append(tds, new(big.Int).Set(td))
+		}
 	}
 	if it.Error() != nil {
 		return fmt.Errorf("error reading block %d: %w", it.Number(), it.Error())
