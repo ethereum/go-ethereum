@@ -111,6 +111,16 @@ type Packet interface {
 	Kind() byte   // Kind returns the message type.
 }
 
+// StatusPacket62 is the network packet for the status message in eth/62 and eth/63.
+// XDC uses this format without ForkID.
+type StatusPacket62 struct {
+	ProtocolVersion uint32
+	NetworkID       uint64
+	TD              *big.Int
+	Head            common.Hash
+	Genesis         common.Hash
+}
+
 // StatusPacket is the network packet for the status message.
 type StatusPacket68 struct {
 	ProtocolVersion uint32
@@ -360,6 +370,9 @@ type BlockRangeUpdatePacket struct {
 	LatestBlock     uint64
 	LatestBlockHash common.Hash
 }
+
+func (*StatusPacket62) Name() string { return "Status" }
+func (*StatusPacket62) Kind() byte   { return StatusMsg }
 
 func (*StatusPacket68) Name() string { return "Status" }
 func (*StatusPacket68) Kind() byte   { return StatusMsg }

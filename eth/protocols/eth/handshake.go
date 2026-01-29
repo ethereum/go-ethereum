@@ -19,6 +19,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -41,9 +42,57 @@ func (p *Peer) Handshake(networkID uint64, chain forkid.Blockchain, rangeMsg Blo
 		return p.handshake69(networkID, chain, rangeMsg)
 	case ETH68:
 		return p.handshake68(networkID, chain)
+	case ETH62, ETH63, XDPOS2:
+		// XDC uses eth/62, eth/63, and xdpos2 without ForkID
+		return p.handshake62(networkID, chain)
 	default:
 		return errors.New("unsupported protocol version")
 	}
+}
+
+// handshake62 performs the eth/62 handshake without ForkID (used by XDC)
+func (p *Peer) handshake62(networkID uint64, chain forkid.Blockchain) error {
+	var (
+		genesis = chain.Genesis()
+		latest  = chain.CurrentHeader()
+		// XDC is pre-merge, so TD is relevant. Use a placeholder TD based on block number.
+		// In a proper implementation, this should come from the chain's state.
+		td = new(big.Int).SetUint64(latest.Number.Uint64())
+	)
+	errc := make(chan error, 2)
+	go func() {
+		pkt := &StatusPacket62{
+			ProtocolVersion: uint32(p.version),
+			NetworkID:       networkID,
+			TD:              td,
+			Head:            latest.Hash(),
+			Genesis:         genesis.Hash(),
+		}
+		errc <- p2p.Send(p.rw, StatusMsg, pkt)
+	}()
+	var status StatusPacket62 // safe to read after two values have been received from errc
+	go func() {
+		errc <- p.readStatus62(networkID, &status, genesis.Hash())
+	}()
+
+	return waitForHandshake(errc, p)
+}
+
+func (p *Peer) readStatus62(networkID uint64, status *StatusPacket62, genesis common.Hash) error {
+	if err := p.readStatusMsg(status); err != nil {
+		return err
+	}
+	if status.NetworkID != networkID {
+		return fmt.Errorf("%w: %d (!= %d)", errNetworkIDMismatch, status.NetworkID, networkID)
+	}
+	if uint(status.ProtocolVersion) != p.version {
+		return fmt.Errorf("%w: %d (!= %d)", errProtocolVersionMismatch, status.ProtocolVersion, p.version)
+	}
+	if status.Genesis != genesis {
+		return fmt.Errorf("%w: %x (!= %x)", errGenesisMismatch, status.Genesis, genesis)
+	}
+	// No ForkID check for eth/62
+	return nil
 }
 
 func (p *Peer) handshake68(networkID uint64, chain forkid.Blockchain) error {
