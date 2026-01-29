@@ -391,15 +391,15 @@ func decodeKeyEntry(keySection []byte, offset int) (uint64, uint64, []byte, int,
 
 // decodeRestartTrailer resolves all the offsets recorded at the trailer.
 func decodeRestartTrailer(keySection []byte) ([]uint32, []uint32, int, error) {
-	var (
-		keyOffsets []uint32
-		valOffsets []uint32
-	)
 	// Decode the number of restart section
 	if len(keySection) < 4 {
 		return nil, nil, 0, fmt.Errorf("key section too short, size: %d", len(keySection))
 	}
 	nRestarts := binary.BigEndian.Uint32(keySection[len(keySection)-4:])
+	var (
+		keyOffsets = make([]uint32, 0, int(nRestarts))
+		valOffsets = make([]uint32, 0, int(nRestarts))
+	)
 
 	// Decode the trailer
 	if len(keySection) < int(8*nRestarts)+4 {
