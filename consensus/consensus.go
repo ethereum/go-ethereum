@@ -88,11 +88,13 @@ type Engine interface {
 	Finalize(chain ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body)
 
 	// FinalizeAndAssemble runs any post-transaction state modifications (e.g. block
-	// rewards or process withdrawals) and assembles the final block.
+	// rewards or process withdrawals) and assembles the final block. onFinalize is
+	// an optional callback that is called immediately before the block hash is
+	// computed and embedded in the block header.
 	//
 	// Note: The block header and state database might be updated to reflect any
 	// consensus rules that happen at finalization (e.g. block rewards).
-	FinalizeAndAssemble(chain ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt) (*types.Block, error)
+	FinalizeAndAssemble(chain ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt, onFinalization func()) (*types.Block, error)
 
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.

@@ -2162,6 +2162,17 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 		}()
 	}
 
+	// BAL Tracer used for creating BALs in ProcessBlock in testing path only
+	var balTracer *BlockAccessListTracer
+
+	isAmsterdam := bc.chainConfig.IsAmsterdam(block.Number(), block.Time())
+	// Process block using the parent state as reference point
+	if isAmsterdam {
+		balTracer, bc.cfg.VmConfig.Tracer = NewBlockAccessListTracer()
+		defer func() {
+			bc.cfg.VmConfig.Tracer = nil
+		}()
+	}
 	// Process block using the parent state as reference point
 	pstart := time.Now()
 	res, err := bc.processor.Process(block, statedb, bc.cfg.VmConfig)
@@ -2171,12 +2182,35 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 	}
 	ptime := time.Since(pstart)
 
+	if isAmsterdam {
+		balTracer.OnBlockFinalization()
+	}
+
+	// unset the BAL-creation tracer (dirty)
+	bc.cfg.VmConfig.Tracer = nil
+
 	vstart := time.Now()
 	if err := bc.validator.ValidateState(block, statedb, res, false); err != nil {
 		bc.reportBadBlock(block, res, err)
 		return nil, err
 	}
 	vtime := time.Since(vstart)
+
+	if isAmsterdam {
+		computedAccessList := balTracer.AccessList().ToEncodingObj()
+		computedAccessListHash := computedAccessList.Hash()
+
+		if *block.Header().BlockAccessListHash != computedAccessListHash {
+			err := fmt.Errorf("block header access list hash mismatch with computed (header=%x computed=%x)", *block.Header().BlockAccessListHash, computedAccessListHash)
+			bc.reportBadBlock(block, res, err)
+			return nil, err
+		}
+		if block.Body().AccessList != nil && block.Body().AccessList.Hash() != computedAccessListHash {
+			err := fmt.Errorf("block access list hash mismatch (remote=%x computed=%x)", block.Body().AccessList.Hash(), computedAccessListHash)
+			bc.reportBadBlock(block, res, err)
+			return nil, err
+		}
+	}
 
 	// If witnesses was generated and stateless self-validation requested, do
 	// that now. Self validation should *never* run in production, it's more of

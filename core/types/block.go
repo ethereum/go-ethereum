@@ -28,6 +28,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/core/types/bal"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -98,6 +100,9 @@ type Header struct {
 
 	// RequestsHash was added by EIP-7685 and is ignored in legacy headers.
 	RequestsHash *common.Hash `json:"requestsHash" rlp:"optional"`
+
+	// BlockAccessListHash was added by EIP-7928 and is ignored in legacy headers.
+	BlockAccessListHash *common.Hash `json:"balHash" rlp:"optional"`
 }
 
 // field type overrides for gencodec
@@ -175,7 +180,8 @@ func (h *Header) EmptyReceipts() bool {
 type Body struct {
 	Transactions []*Transaction
 	Uncles       []*Header
-	Withdrawals  []*Withdrawal `rlp:"optional"`
+	Withdrawals  []*Withdrawal        `rlp:"optional"`
+	AccessList   *bal.BlockAccessList `rlp:"-,nil"`
 }
 
 // Block represents an Ethereum block.
@@ -200,6 +206,7 @@ type Block struct {
 	uncles       []*Header
 	transactions Transactions
 	withdrawals  Withdrawals
+	accessList   *bal.BlockAccessList
 
 	// caches
 	hash atomic.Pointer[common.Hash]
@@ -277,6 +284,12 @@ func NewBlock(header *Header, body *Body, receipts []*Receipt, hasher ListHasher
 		b.withdrawals = slices.Clone(withdrawals)
 	}
 
+	if body.AccessList != nil {
+		balHash := body.AccessList.Hash()
+		b.header.BlockAccessListHash = &balHash
+		b.accessList = body.AccessList
+	}
+
 	return b
 }
 
@@ -344,7 +357,7 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 // Body returns the non-header content of the block.
 // Note the returned data is not an independent copy.
 func (b *Block) Body() *Body {
-	return &Body{b.transactions, b.uncles, b.withdrawals}
+	return &Body{b.transactions, b.uncles, b.withdrawals, b.accessList}
 }
 
 // Accessors for body data. These do not return a copy because the content
@@ -489,6 +502,10 @@ func (b *Block) WithBody(body Body) *Block {
 		transactions: slices.Clone(body.Transactions),
 		uncles:       make([]*Header, len(body.Uncles)),
 		withdrawals:  slices.Clone(body.Withdrawals),
+	}
+	if body.AccessList != nil {
+		balCopy := body.AccessList.Copy()
+		block.accessList = &balCopy
 	}
 	for i := range body.Uncles {
 		block.uncles[i] = CopyHeader(body.Uncles[i])

@@ -97,6 +97,7 @@ type btHeader struct {
 	BlobGasUsed           *uint64
 	ExcessBlobGas         *uint64
 	ParentBeaconBlockRoot *common.Hash
+	BlockAccessListHash   *common.Hash
 }
 
 type btHeaderMarshaling struct {
@@ -211,20 +212,21 @@ func (t *BlockTest) Network() string {
 
 func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 	return &core.Genesis{
-		Config:        config,
-		Nonce:         t.json.Genesis.Nonce.Uint64(),
-		Timestamp:     t.json.Genesis.Timestamp,
-		ParentHash:    t.json.Genesis.ParentHash,
-		ExtraData:     t.json.Genesis.ExtraData,
-		GasLimit:      t.json.Genesis.GasLimit,
-		GasUsed:       t.json.Genesis.GasUsed,
-		Difficulty:    t.json.Genesis.Difficulty,
-		Mixhash:       t.json.Genesis.MixHash,
-		Coinbase:      t.json.Genesis.Coinbase,
-		Alloc:         t.json.Pre,
-		BaseFee:       t.json.Genesis.BaseFeePerGas,
-		BlobGasUsed:   t.json.Genesis.BlobGasUsed,
-		ExcessBlobGas: t.json.Genesis.ExcessBlobGas,
+		Config:              config,
+		Nonce:               t.json.Genesis.Nonce.Uint64(),
+		Timestamp:           t.json.Genesis.Timestamp,
+		ParentHash:          t.json.Genesis.ParentHash,
+		ExtraData:           t.json.Genesis.ExtraData,
+		GasLimit:            t.json.Genesis.GasLimit,
+		GasUsed:             t.json.Genesis.GasUsed,
+		Difficulty:          t.json.Genesis.Difficulty,
+		Mixhash:             t.json.Genesis.MixHash,
+		Coinbase:            t.json.Genesis.Coinbase,
+		Alloc:               t.json.Pre,
+		BaseFee:             t.json.Genesis.BaseFeePerGas,
+		BlobGasUsed:         t.json.Genesis.BlobGasUsed,
+		ExcessBlobGas:       t.json.Genesis.ExcessBlobGas,
+		BlockAccessListHash: t.json.Genesis.BlockAccessListHash,
 	}
 }
 
