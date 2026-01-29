@@ -70,7 +70,7 @@ Remove blockchain and state databases`,
 		ArgsUsage: "",
 		Subcommands: []*cli.Command{
 			dbInspectCmd,
-			dbInspectTrieDepthCmd,
+			dbInspectTrieCmd,
 			dbStatCmd,
 			dbCompactCmd,
 			dbGetCmd,
@@ -93,9 +93,9 @@ Remove blockchain and state databases`,
 		Usage:       "Inspect the storage size for each type of data in the database",
 		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
 	}
-	dbInspectTrieDepthCmd = &cli.Command{
+	dbInspectTrieCmd = &cli.Command{
 		Action:      inspectTrieDepth,
-		Name:        "inspect-trie-depth",
+		Name:        "inspect-trie",
 		Usage:       "Inspect the depth of the trie",
 		ArgsUsage:   "<start> <end>",
 		Flags:       slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),

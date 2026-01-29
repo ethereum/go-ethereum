@@ -807,15 +807,13 @@ func InspectTrieDepth(db ethdb.Database) error {
 	var (
 		start = time.Now()
 
-		accountDepths   [65]int64
-		storageDepths   [65]int64
-		accountCount    int64
-		storageCount    int64
-		storageTriesCnt int64
-		nodeCount       int64
+		accountDepths   [65]stat
+		storageDepths   [65]stat
+		storageTriesCnt uint64
+		nodeCount       uint64
 	)
 
-	log.Info("Calculating trie depth distribution (streaming)...")
+	log.Info("Calculating trie depth distribution...")
 
 	// Process account trie nodes (prefix "A")
 	// Keys are already in lexicographic order from the database iterator
@@ -839,8 +837,7 @@ func InspectTrieDepth(db ethdb.Database) error {
 		}
 
 		depth := len(accountStack)
-		accountDepths[depth]++
-		accountCount++
+		accountDepths[depth].add(common.StorageSize(len(it.Key()) + len(it.Value())))
 		nodeCount++
 
 		accountStack = append(accountStack, pathStr)
@@ -854,6 +851,10 @@ func InspectTrieDepth(db ethdb.Database) error {
 		return err
 	}
 
+	var accountCount uint64
+	for i := range accountDepths {
+		accountCount += atomic.LoadUint64(&accountDepths[i].count)
+	}
 	log.Info("Finished account trie", "nodes", accountCount, "elapsed", common.PrettyDuration(time.Since(start)))
 
 	// Process storage trie nodes (prefix "O")
@@ -894,8 +895,7 @@ func InspectTrieDepth(db ethdb.Database) error {
 		}
 
 		depth := len(storageStack)
-		storageDepths[depth]++
-		storageCount++
+		storageDepths[depth].add(common.StorageSize(len(it.Key()) + len(it.Value())))
 		nodeCount++
 
 		storageStack = append(storageStack, pathStr)
@@ -914,6 +914,11 @@ func InspectTrieDepth(db ethdb.Database) error {
 		storageTriesCnt++
 	}
 
+	var storageCount uint64
+	for i := range storageDepths {
+		storageCount += atomic.LoadUint64(&storageDepths[i].count)
+	}
+
 	log.Info("Depth calculation complete",
 		"accountNodes", accountCount,
 		"storageNodes", storageCount,
@@ -925,11 +930,13 @@ func InspectTrieDepth(db ethdb.Database) error {
 	fmt.Printf("\nAccount Trie: %d nodes\n", accountCount)
 	fmt.Printf("Storage Tries: %d nodes across %d tries\n\n", storageCount, storageTriesCnt)
 
-	fmt.Println("Depth | Account Nodes | Storage Nodes")
-	fmt.Println("------|---------------|---------------")
+	fmt.Println("Depth | Account Nodes | Account Size  | Storage Nodes | Storage Size")
+	fmt.Println("------|---------------|---------------|---------------|---------------")
 	for i := 0; i < 65; i++ {
-		if accountDepths[i] > 0 || storageDepths[i] > 0 {
-			fmt.Printf("%5d | %13d | %13d\n", i, accountDepths[i], storageDepths[i])
+		if !accountDepths[i].empty() || !storageDepths[i].empty() {
+			fmt.Printf("%5d | %13s | %13s | %13s | %13s\n",
+				i, accountDepths[i].countString(), accountDepths[i].sizeString(),
+				storageDepths[i].countString(), storageDepths[i].sizeString())
 		}
 	}
 	fmt.Println()
