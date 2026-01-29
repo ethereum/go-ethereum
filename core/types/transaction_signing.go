@@ -330,7 +330,7 @@ func NewEIP2930Signer(chainId *big.Int) Signer {
 // are replay-protected as well as unprotected homestead transactions.
 // Deprecated: always use the Signer interface type
 type EIP155Signer struct {
-	chainId, chainIdMul *big.Int
+	chainId *big.Int
 }
 
 func NewEIP155Signer(chainId *big.Int) EIP155Signer {
@@ -338,8 +338,7 @@ func NewEIP155Signer(chainId *big.Int) EIP155Signer {
 		chainId = new(big.Int)
 	}
 	return EIP155Signer{
-		chainId:    chainId,
-		chainIdMul: new(big.Int).Mul(chainId, big.NewInt(2)),
+		chainId: chainId,
 	}
 }
 
@@ -365,7 +364,8 @@ func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
 		return common.Address{}, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, tx.ChainId(), s.chainId)
 	}
 	V, R, S := tx.RawSignatureValues()
-	V = new(big.Int).Sub(V, s.chainIdMul)
+	V = new(big.Int).Sub(V, s.chainId)
+	V = new(big.Int).Sub(V, s.chainId)
 	V.Sub(V, big8)
 	return recoverPlain(s.Hash(tx), R, S, V, true)
 }
@@ -382,7 +382,8 @@ func (s EIP155Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 	}
 	if s.chainId.Sign() != 0 {
 		V = big.NewInt(int64(sig[64] + 35))
-		V.Add(V, s.chainIdMul)
+		V.Add(V, s.chainId)
+		V.Add(V, s.chainId)
 	}
 	return R, S, V, nil
 }
