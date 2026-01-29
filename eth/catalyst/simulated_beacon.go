@@ -17,6 +17,7 @@
 package catalyst
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
@@ -256,7 +257,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	}
 
 	// Mark the payload as canon
-	_, err = c.engineAPI.newPayload(*payload, blobHashes, beaconRoot, requests, false)
+	_, err = c.engineAPI.newPayload(context.Background(), *payload, blobHashes, beaconRoot, requests, false)
 	if err != nil {
 		return err
 	}
