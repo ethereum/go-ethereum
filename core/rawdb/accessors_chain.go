@@ -709,7 +709,6 @@ func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64) *types.Block {
 func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 	WriteBody(db, block.Hash(), block.NumberU64(), block.Body())
 	WriteHeader(db, block.Header())
-	panic("TODO write access list if it exists")
 }
 
 // WriteAncientBlocks writes entire block data into ancient store and returns the total written size.
