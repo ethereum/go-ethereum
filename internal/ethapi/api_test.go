@@ -4026,7 +4026,7 @@ func TestSendRawTransactionSync_Timeout(t *testing.T) {
 
 	raw, _ := makeSelfSignedRaw(t, api, b.acc.Address)
 
-	timeout := hexutil.Uint64(200) // 200ms
+	timeout := uint64(200) // 200ms
 	receipt, err := api.SendRawTransactionSync(context.Background(), raw, &timeout)
 
 	if receipt != nil {
