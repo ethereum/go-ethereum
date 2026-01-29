@@ -151,7 +151,7 @@ type Config struct {
 	AccountQueue uint64 // Maximum number of non-executable transaction slots permitted per account
 	GlobalQueue  uint64 // Maximum number of non-executable transaction slots for all accounts
 
-	Lifetime time.Duration // Maximum amount of time non-executable transaction are queued
+	Lifetime time.Duration // Maximum amount of time an account can remain stale in the non-executable pool
 }
 
 // DefaultConfig contains the default configurations for the transaction pool.
@@ -778,7 +778,7 @@ func (pool *LegacyPool) add(tx *types.Transaction) (replaced bool, err error) {
 		pool.queueTxEvent(tx)
 		log.Trace("Pooled new executable transaction", "hash", hash, "from", from, "to", tx.To())
 
-		// Successful promotion, bump the heartbeat
+		// Successful replacement. If needed, bump the heartbeat giving more time to queued txs.
 		pool.queue.bump(from)
 		return old != nil, nil
 	}
@@ -871,7 +871,7 @@ func (pool *LegacyPool) promoteTx(addr common.Address, hash common.Hash, tx *typ
 	// Set the potentially new pending nonce and notify any subsystems of the new tx
 	pool.pendingNonces.set(addr, tx.Nonce()+1)
 
-	// Successful promotion, bump the heartbeat
+	// Successful promotion, bump the heartbeat, giving more time to queued txs.
 	pool.queue.bump(addr)
 	return true
 }
