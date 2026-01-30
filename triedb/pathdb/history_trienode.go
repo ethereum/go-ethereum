@@ -842,7 +842,7 @@ func readTrienodeHistories(reader ethdb.AncientReader, start uint64, count uint6
 	if err != nil {
 		return nil, err
 	}
-	var res []history
+	res := make([]history, 0, len(headers))
 	for i, header := range headers {
 		var h trienodeHistory
 		if err := h.decode(header, keySections[i], valueSections[i]); err != nil {

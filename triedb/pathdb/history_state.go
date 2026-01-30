@@ -568,11 +568,11 @@ func readStateHistory(reader ethdb.AncientReader, id uint64) (*stateHistory, err
 
 // readStateHistories reads a list of state history records within the specified range.
 func readStateHistories(freezer ethdb.AncientReader, start uint64, count uint64) ([]history, error) {
-	var histories []history
 	metaList, aIndexList, sIndexList, aDataList, sDataList, err := rawdb.ReadStateHistoryList(freezer, start, count)
 	if err != nil {
 		return nil, err
 	}
+	histories := make([]history, 0, len(metaList))
 	for i := 0; i < len(metaList); i++ {
 		var m meta
 		if err := m.decode(metaList[i]); err != nil {
