@@ -2108,8 +2108,12 @@ func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, s
 		// Upload the statistics of reader at the end
 		defer func() {
 			if result != nil {
-				result.stats.StatePrefetchCacheStats = prefetch.GetStats()
-				result.stats.StateReadCacheStats = process.GetStats()
+				if stater, ok := prefetch.(state.ReaderStater); ok {
+					result.stats.StatePrefetchCacheStats = stater.GetStats()
+				}
+				if stater, ok := process.(state.ReaderStater); ok {
+					result.stats.StateReadCacheStats = stater.GetStats()
+				}
 			}
 		}()
 		go func(start time.Time, throwaway *state.StateDB, block *types.Block) {
