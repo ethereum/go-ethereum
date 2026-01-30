@@ -833,6 +833,173 @@ mrenclave = [
 | 回滚可能 | 困难 | 恢复旧 MRENCLAVE 即可 |
 | 验证方式 | 区块验证规则 | SGX 远程证明 |
 
+#### 6.1.0.1 硬分叉数据迁移与保留
+
+硬分叉时必须保留分叉前的所有数据，包括区块链状态、账户余额、合约存储、以及加密分区中的私钥数据。
+
+**数据分类：**
+
+| 数据类型 | 存储位置 | 迁移策略 |
+|----------|----------|----------|
+| 区块链状态 | LevelDB | 直接继承，无需迁移 |
+| 账户余额 | StateDB | 直接继承，无需迁移 |
+| 合约存储 | StateDB | 直接继承，无需迁移 |
+| 私钥数据 | 加密分区 | 需要重新封装 (Re-sealing) |
+| 密钥元数据 | 加密分区 | 需要重新封装 |
+| 派生秘密 | 加密分区 | 需要重新封装 |
+
+**加密分区数据迁移机制：**
+
+由于 SGX sealing 使用 MRENCLAVE 作为密钥派生因子，新版本代码的 MRENCLAVE 不同，无法直接解密旧版本封装的数据。因此需要特殊的迁移机制：
+
+```
++------------------+                    +------------------+
+|   旧版本节点     |                    |   新版本节点     |
+| MRENCLAVE: ABC   |                    | MRENCLAVE: DEF   |
++------------------+                    +------------------+
+        |                                       |
+        |  1. 旧版本解封数据                    |
+        |  (使用 MRENCLAVE=ABC 的密钥)          |
+        |                                       |
+        |  2. 通过 RA-TLS 安全通道传输          |
+        |-------------------------------------->|
+        |                                       |
+        |                    3. 新版本重新封装  |
+        |                    (使用 MRENCLAVE=DEF 的密钥)
+        |                                       |
+```
+
+**迁移实现：**
+
+```go
+// internal/sgx/migration.go
+package sgx
+
+// DataMigrator 处理硬分叉时的数据迁移
+type DataMigrator struct {
+    oldEnclave *EnclaveConnection  // 连接到旧版本节点
+    newEnclave *EnclaveConnection  // 本地新版本 enclave
+    ratls      *RATLSTransport     // RA-TLS 安全通道
+}
+
+// MigrateEncryptedData 迁移加密分区数据
+func (m *DataMigrator) MigrateEncryptedData(ctx context.Context) error {
+    // 1. 建立 RA-TLS 连接到旧版本节点
+    conn, err := m.ratls.Connect(m.oldEnclave.Address)
+    if err != nil {
+        return fmt.Errorf("failed to connect to old enclave: %w", err)
+    }
+    defer conn.Close()
+    
+    // 2. 请求旧版本节点解封并传输数据
+    // 数据在 RA-TLS 通道中传输，保证安全性
+    keys, err := m.requestKeyMigration(conn)
+    if err != nil {
+        return fmt.Errorf("failed to migrate keys: %w", err)
+    }
+    
+    // 3. 在新版本 enclave 中重新封装
+    for _, key := range keys {
+        if err := m.newEnclave.SealKey(key); err != nil {
+            return fmt.Errorf("failed to seal key %s: %w", key.ID, err)
+        }
+    }
+    
+    return nil
+}
+
+// KeyMigrationRequest 密钥迁移请求
+type KeyMigrationRequest struct {
+    KeyIDs    []common.Hash  // 要迁移的密钥 ID 列表
+    Requester common.Address // 请求者地址（必须是密钥所有者）
+    Signature []byte         // 请求者签名
+}
+
+// KeyMigrationResponse 密钥迁移响应
+type KeyMigrationResponse struct {
+    Keys []MigrationKeyData  // 解封后的密钥数据
+}
+
+type MigrationKeyData struct {
+    ID         common.Hash
+    CurveType  uint8
+    PrivateKey []byte  // 明文私钥（仅在 RA-TLS 通道中传输）
+    PublicKey  []byte
+    Owner      common.Address
+    Metadata   KeyMetadata
+}
+```
+
+**迁移命令行工具：**
+
+```bash
+# 从旧版本节点迁移数据到新版本
+geth migrate \
+    --from "enode://old-node@192.168.1.100:30303" \
+    --datadir /app/wallet/chaindata \
+    --keys-only  # 仅迁移密钥数据，区块链数据自动继承
+```
+
+**迁移流程图：**
+
+```
+硬分叉数据迁移流程
+==================
+
+1. 准备阶段
+   ├── 新版本节点启动
+   ├── 检测到本地加密分区为空或版本不匹配
+   └── 进入迁移模式
+
+2. 连接阶段
+   ├── 扫描网络中的旧版本节点
+   ├── 建立 RA-TLS 连接
+   └── 验证对方 MRENCLAVE 在允许列表中
+
+3. 数据传输阶段
+   ├── 旧节点解封私钥数据
+   ├── 通过 RA-TLS 加密通道传输
+   └── 新节点接收并验证数据完整性
+
+4. 重新封装阶段
+   ├── 使用新 MRENCLAVE 派生的密钥封装
+   ├── 写入新版本加密分区
+   └── 验证封装成功
+
+5. 完成阶段
+   ├── 标记迁移完成
+   ├── 断开与旧节点连接
+   └── 开始正常运行
+```
+
+**使用 MRSIGNER 模式简化迁移：**
+
+如果使用 `--sgx.verify-mode mrsigner` 模式，且新旧版本使用相同的签名密钥，则可以使用 MRSIGNER 作为 sealing 密钥派生因子，避免数据迁移：
+
+```toml
+# manifest.template - 使用 MRSIGNER 作为 sealing 密钥
+[[fs.mounts]]
+type = "encrypted"
+path = "/app/wallet"
+uri = "file:/data/wallet"
+key_name = "_sgx_mrsigner"  # 使用 MRSIGNER 而非 MRENCLAVE
+```
+
+**MRENCLAVE vs MRSIGNER sealing 对比：**
+
+| 特性 | MRENCLAVE sealing | MRSIGNER sealing |
+|------|-------------------|------------------|
+| 安全性 | 更高（代码绑定） | 较低（签名者绑定） |
+| 升级便利性 | 需要数据迁移 | 无需迁移 |
+| 适用场景 | 高安全要求 | 频繁升级场景 |
+| 回滚风险 | 低 | 旧版本可访问新数据 |
+
+**推荐策略：**
+
+1. **生产环境**：使用 MRENCLAVE sealing + 数据迁移机制
+2. **测试环境**：使用 MRSIGNER sealing 简化升级流程
+3. **混合策略**：核心私钥使用 MRENCLAVE，临时数据使用 MRSIGNER
+
 #### 6.1.1 命令行参数
 
 ```bash
