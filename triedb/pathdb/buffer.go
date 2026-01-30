@@ -141,12 +141,7 @@ func (b *buffer) flush(root common.Hash, db ethdb.KeyValueStore, freezers []ethd
 	// Schedule the background thread to construct the batch, which usually
 	// take a few seconds.
 	go func() {
-		defer func() {
-			if postFlush != nil {
-				postFlush()
-			}
-			close(b.done)
-		}()
+		defer close(b.done)
 
 		// Ensure the target state id is aligned with the internal counter.
 		head := rawdb.ReadPersistentStateID(db)
@@ -193,6 +188,12 @@ func (b *buffer) flush(root common.Hash, db ethdb.KeyValueStore, freezers []ethd
 		// protection if try to reset the buffer here.
 		// b.reset()
 		log.Debug("Persisted buffer content", "nodes", nodes, "accounts", accounts, "slots", slots, "bytes", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
+
+		// Only invoke postFlush callback after successful flush to avoid
+		// resuming snapshot generator against non-persisted disk state.
+		if postFlush != nil {
+			postFlush()
+		}
 	}()
 }
 
