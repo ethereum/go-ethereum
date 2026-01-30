@@ -27,7 +27,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	// Removed import of internal/era to avoid import cycle and missing metadata error
 )
 
 // Type constants for the e2store entries in the Era1 and EraE formats.
