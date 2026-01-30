@@ -18,7 +18,6 @@ package state
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -38,6 +37,8 @@ import (
 )
 
 // ContractCodeReader defines the interface for accessing contract code.
+//
+// ContractCodeReader is supposed to be thread-safe.
 type ContractCodeReader interface {
 	// Has returns the flag indicating whether the contract code with
 	// specified address and hash exists or not.
@@ -58,35 +59,10 @@ type ContractCodeReader interface {
 	CodeSize(addr common.Address, codeHash common.Hash) (int, error)
 }
 
-// ContractCodeReaderStats aggregates statistics for the contract code reader.
-type ContractCodeReaderStats struct {
-	CacheHit       int64 // Number of cache hits
-	CacheMiss      int64 // Number of cache misses
-	CacheHitBytes  int64 // Total bytes served from cache
-	CacheMissBytes int64 // Total bytes read on cache misses
-}
-
-// HitRate returns the cache hit rate.
-func (s ContractCodeReaderStats) HitRate() float64 {
-	if s.CacheHit == 0 {
-		return 0
-	}
-	return float64(s.CacheHit) / float64(s.CacheHit+s.CacheMiss)
-}
-
-// ContractCodeReaderWithStats extends ContractCodeReader by adding GetStats to
-// expose statistics of code reader.
-type ContractCodeReaderWithStats interface {
-	ContractCodeReader
-
-	GetStats() ContractCodeReaderStats
-}
-
 // StateReader defines the interface for accessing accounts and storage slots
 // associated with a specific state.
 //
-// StateReader is assumed to be thread-safe and implementation must take care
-// of the concurrency issue by themselves.
+// StateReader is supposed to be thread-safe.
 type StateReader interface {
 	// Account retrieves the account associated with a particular address.
 	//
@@ -112,40 +88,6 @@ type StateReader interface {
 type Reader interface {
 	ContractCodeReader
 	StateReader
-}
-
-// ReaderStats wraps the statistics of reader.
-type ReaderStats struct {
-	AccountCacheHit  int64
-	AccountCacheMiss int64
-	StorageCacheHit  int64
-	StorageCacheMiss int64
-	CodeStats        ContractCodeReaderStats
-}
-
-// String implements fmt.Stringer, returning string format statistics.
-func (s ReaderStats) String() string {
-	var (
-		accountCacheHitRate float64
-		storageCacheHitRate float64
-	)
-	if s.AccountCacheHit > 0 {
-		accountCacheHitRate = float64(s.AccountCacheHit) / float64(s.AccountCacheHit+s.AccountCacheMiss) * 100
-	}
-	if s.StorageCacheHit > 0 {
-		storageCacheHitRate = float64(s.StorageCacheHit) / float64(s.StorageCacheHit+s.StorageCacheMiss) * 100
-	}
-	msg := fmt.Sprintf("Reader statistics\n")
-	msg += fmt.Sprintf("account: hit: %d, miss: %d, rate: %.2f\n", s.AccountCacheHit, s.AccountCacheMiss, accountCacheHitRate)
-	msg += fmt.Sprintf("storage: hit: %d, miss: %d, rate: %.2f\n", s.StorageCacheHit, s.StorageCacheMiss, storageCacheHitRate)
-	msg += fmt.Sprintf("code: hit: %d(%v), miss: %d(%v), rate: %.2f\n", s.CodeStats.CacheHit, common.StorageSize(s.CodeStats.CacheHitBytes), s.CodeStats.CacheMiss, common.StorageSize(s.CodeStats.CacheMissBytes), s.CodeStats.HitRate())
-	return msg
-}
-
-// ReaderWithStats wraps the additional method to retrieve the reader statistics from.
-type ReaderWithStats interface {
-	Reader
-	GetStats() ReaderStats
 }
 
 // cachingCodeReader implements ContractCodeReader, accessing contract code either in
@@ -210,15 +152,16 @@ func (r *cachingCodeReader) CodeSize(addr common.Address, codeHash common.Hash) 
 	return len(code), nil
 }
 
-// Has returns the flag indicating whether the contract code with
-// specified address and hash exists or not.
+// Has implements ContractCodeReader, returning the flag indicating whether
+// the contract code with specified address and hash exists or not.
 func (r *cachingCodeReader) Has(addr common.Address, codeHash common.Hash) bool {
 	code, _ := r.Code(addr, codeHash)
 	return len(code) > 0
 }
 
-// GetStats returns the statistics of the code reader.
-func (r *cachingCodeReader) GetStats() ContractCodeReaderStats {
+// GetCodeStats implements ContractCodeReaderStater, returning the statistics
+// of the code reader.
+func (r *cachingCodeReader) GetCodeStats() ContractCodeReaderStats {
 	return ContractCodeReaderStats{
 		CacheHit:       r.hit.Load(),
 		CacheMiss:      r.miss.Load(),
@@ -495,20 +438,6 @@ func (r *multiStateReader) Storage(addr common.Address, slot common.Hash) (commo
 	return common.Hash{}, errors.Join(errs...)
 }
 
-// reader is the wrapper of ContractCodeReader and StateReader interface.
-type reader struct {
-	ContractCodeReader
-	StateReader
-}
-
-// newReader constructs a reader with the supplied code reader and state reader.
-func newReader(codeReader ContractCodeReader, stateReader StateReader) *reader {
-	return &reader{
-		ContractCodeReader: codeReader,
-		StateReader:        stateReader,
-	}
-}
-
 // stateReaderWithCache is a wrapper around StateReader that maintains additional
 // state caches to support concurrent state access.
 type stateReaderWithCache struct {
@@ -619,9 +548,10 @@ func (r *stateReaderWithCache) Storage(addr common.Address, slot common.Hash) (c
 	return value, err
 }
 
-type readerWithStats struct {
+// stateReaderWithStats is a wrapper over the stateReaderWithCache, tracking
+// the cache hit statistics of the reader.
+type stateReaderWithStats struct {
 	*stateReaderWithCache
-	ContractCodeReaderWithStats
 
 	accountCacheHit  atomic.Int64
 	accountCacheMiss atomic.Int64
@@ -629,11 +559,10 @@ type readerWithStats struct {
 	storageCacheMiss atomic.Int64
 }
 
-// newReaderWithStats constructs the reader with additional statistics tracked.
-func newReaderWithStats(sr *stateReaderWithCache, cr ContractCodeReaderWithStats) *readerWithStats {
-	return &readerWithStats{
-		stateReaderWithCache:        sr,
-		ContractCodeReaderWithStats: cr,
+// newReaderWithStats constructs the state reader with additional statistics tracked.
+func newStateReaderWithStats(sr *stateReaderWithCache) *stateReaderWithStats {
+	return &stateReaderWithStats{
+		stateReaderWithCache: sr,
 	}
 }
 
@@ -641,7 +570,7 @@ func newReaderWithStats(sr *stateReaderWithCache, cr ContractCodeReaderWithStats
 // The returned account might be nil if it's not existent.
 //
 // An error will be returned if the state is corrupted in the underlying reader.
-func (r *readerWithStats) Account(addr common.Address) (*types.StateAccount, error) {
+func (r *stateReaderWithStats) Account(addr common.Address) (*types.StateAccount, error) {
 	account, incache, err := r.stateReaderWithCache.account(addr)
 	if err != nil {
 		return nil, err
@@ -659,7 +588,7 @@ func (r *readerWithStats) Account(addr common.Address) (*types.StateAccount, err
 // existent.
 //
 // An error will be returned if the state is corrupted in the underlying reader.
-func (r *readerWithStats) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
+func (r *stateReaderWithStats) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
 	value, incache, err := r.stateReaderWithCache.storage(addr, slot)
 	if err != nil {
 		return common.Hash{}, err
@@ -672,13 +601,51 @@ func (r *readerWithStats) Storage(addr common.Address, slot common.Hash) (common
 	return value, nil
 }
 
-// GetStats implements ReaderWithStats, returning the statistics of state reader.
-func (r *readerWithStats) GetStats() ReaderStats {
-	return ReaderStats{
+// GetStateStats implements StateReaderStater, returning the statistics of the
+// state reader.
+func (r *stateReaderWithStats) GetStateStats() StateReaderStats {
+	return StateReaderStats{
 		AccountCacheHit:  r.accountCacheHit.Load(),
 		AccountCacheMiss: r.accountCacheMiss.Load(),
 		StorageCacheHit:  r.storageCacheHit.Load(),
 		StorageCacheMiss: r.storageCacheMiss.Load(),
-		CodeStats:        r.ContractCodeReaderWithStats.GetStats(),
+	}
+}
+
+// reader aggregates a code reader and a state reader into a single object.
+type reader struct {
+	ContractCodeReader
+	StateReader
+}
+
+// newReader constructs a reader with the supplied code reader and state reader.
+func newReader(codeReader ContractCodeReader, stateReader StateReader) *reader {
+	return &reader{
+		ContractCodeReader: codeReader,
+		StateReader:        stateReader,
+	}
+}
+
+// GetCodeStats returns the statistics of code access.
+func (r *reader) GetCodeStats() ContractCodeReaderStats {
+	if stater, ok := r.ContractCodeReader.(ContractCodeReaderStater); ok {
+		return stater.GetCodeStats()
+	}
+	return ContractCodeReaderStats{}
+}
+
+// GetStateStats returns the statistics of state access.
+func (r *reader) GetStateStats() StateReaderStats {
+	if stater, ok := r.StateReader.(StateReaderStater); ok {
+		return stater.GetStateStats()
+	}
+	return StateReaderStats{}
+}
+
+// GetStats returns the aggregated statistics for both state and code access.
+func (r *reader) GetStats() ReaderStats {
+	return ReaderStats{
+		CodeStats:  r.GetCodeStats(),
+		StateStats: r.GetStateStats(),
 	}
 }
