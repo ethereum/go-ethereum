@@ -758,7 +758,173 @@ func (s *SGXConsensus) VerifyNetworkConsistency(peer *Peer) error {
 
 ## 6. P2P 网络层
 
-### 6.1 RA-TLS 集成
+### 6.1 节点连接准入控制
+
+节点是否接受其他节点的连接和数据同步，取决于命令行配置的参数。只有满足以下条件的节点才能建立连接：
+
+1. **度量值匹配**：对方节点的 MRENCLAVE/MRSIGNER 必须在允许列表中
+2. **Chain ID 匹配**：对方节点的 Chain ID 必须与本节点一致
+
+#### 6.1.1 命令行参数
+
+```bash
+# 启动 X Chain 节点
+geth \
+    --networkid 762385986 \
+    --sgx.mrenclave "abc123...,def456..." \
+    --sgx.mrsigner "789abc..." \
+    --sgx.verify-mode "mrenclave" \
+    --datadir /app/wallet/chaindata
+```
+
+| 参数 | 描述 | 默认值 |
+|------|------|--------|
+| `--networkid` | Chain ID，必须匹配才能连接 | 762385986 |
+| `--sgx.mrenclave` | 允许的 MRENCLAVE 列表（逗号分隔） | 本节点 MRENCLAVE |
+| `--sgx.mrsigner` | 允许的 MRSIGNER 列表（逗号分隔） | 本节点 MRSIGNER |
+| `--sgx.verify-mode` | 验证模式：`mrenclave`（严格）或 `mrsigner`（宽松） | `mrenclave` |
+| `--sgx.tcb-allow-outdated` | 是否允许 TCB 过期的节点连接 | `false` |
+
+#### 6.1.2 配置文件方式
+
+```toml
+# config.toml
+[sgx]
+# 允许的 MRENCLAVE 列表
+mrenclave = [
+    "abc123def456789...",  # v1.0.0 版本
+    "def456789abc123...",  # v1.0.1 版本
+]
+
+# 允许的 MRSIGNER 列表
+mrsigner = [
+    "789abc123def456...",  # 官方签名者
+]
+
+# 验证模式
+verify_mode = "mrenclave"  # 或 "mrsigner"
+
+# TCB 策略
+tcb_allow_outdated = false
+```
+
+#### 6.1.3 连接准入流程
+
+```
++-------------+                    +-------------+
+|   节点 A    |                    |   节点 B    |
++-------------+                    +-------------+
+      |                                  |
+      |  1. TCP 连接                     |
+      |--------------------------------->|
+      |                                  |
+      |  2. RA-TLS 握手开始              |
+      |<-------------------------------->|
+      |                                  |
+      |  3. 交换 SGX Quote               |
+      |  (包含 MRENCLAVE, MRSIGNER)      |
+      |<-------------------------------->|
+      |                                  |
+      |  4. 验证 Quote                   |
+      |  - 检查 MRENCLAVE 是否在白名单   |
+      |  - 检查 MRSIGNER 是否在白名单    |
+      |  - 检查 TCB 状态                 |
+      |                                  |
+      |  5. 交换 Chain ID                |
+      |<-------------------------------->|
+      |                                  |
+      |  6. 验证 Chain ID 匹配           |
+      |  if (peerChainId != localChainId)|
+      |      断开连接                    |
+      |                                  |
+      |  7. 连接建立成功                 |
+      |<-------------------------------->|
+      |                                  |
+```
+
+#### 6.1.4 准入控制实现
+
+```go
+// p2p/ratls/admission.go
+package ratls
+
+// AdmissionConfig 定义节点准入配置
+type AdmissionConfig struct {
+    ChainID          uint64    // Chain ID，必须匹配
+    AllowedMREnclave [][]byte  // 允许的 MRENCLAVE 列表
+    AllowedMRSigner  [][]byte  // 允许的 MRSIGNER 列表
+    VerifyMode       string    // "mrenclave" 或 "mrsigner"
+    AllowOutdatedTCB bool      // 是否允许 TCB 过期
+}
+
+// AdmissionController 控制节点连接准入
+type AdmissionController struct {
+    config *AdmissionConfig
+}
+
+func NewAdmissionController(config *AdmissionConfig) *AdmissionController {
+    return &AdmissionController{config: config}
+}
+
+// VerifyPeer 验证对方节点是否允许连接
+func (ac *AdmissionController) VerifyPeer(peerQuote []byte, peerChainID uint64) error {
+    // 1. 验证 Chain ID
+    if peerChainID != ac.config.ChainID {
+        return fmt.Errorf("chain ID mismatch: expected %d, got %d", 
+            ac.config.ChainID, peerChainID)
+    }
+    
+    // 2. 解析 Quote
+    mrenclave, mrsigner, tcbStatus, err := parseQuote(peerQuote)
+    if err != nil {
+        return fmt.Errorf("failed to parse quote: %w", err)
+    }
+    
+    // 3. 验证 TCB 状态
+    if !ac.config.AllowOutdatedTCB && tcbStatus != TCB_UP_TO_DATE {
+        return fmt.Errorf("TCB status not up to date: %d", tcbStatus)
+    }
+    
+    // 4. 根据验证模式检查度量值
+    switch ac.config.VerifyMode {
+    case "mrenclave":
+        if !ac.isAllowedMREnclave(mrenclave) {
+            return fmt.Errorf("MRENCLAVE not in allowed list: %x", mrenclave)
+        }
+    case "mrsigner":
+        if !ac.isAllowedMRSigner(mrsigner) {
+            return fmt.Errorf("MRSIGNER not in allowed list: %x", mrsigner)
+        }
+    default:
+        // 默认使用 mrenclave 模式
+        if !ac.isAllowedMREnclave(mrenclave) {
+            return fmt.Errorf("MRENCLAVE not in allowed list: %x", mrenclave)
+        }
+    }
+    
+    return nil
+}
+
+func (ac *AdmissionController) isAllowedMREnclave(mrenclave []byte) bool {
+    for _, allowed := range ac.config.AllowedMREnclave {
+        if bytes.Equal(mrenclave, allowed) {
+            return true
+        }
+    }
+    return false
+}
+
+func (ac *AdmissionController) isAllowedMRSigner(mrsigner []byte) bool {
+    for _, allowed := range ac.config.AllowedMRSigner {
+        if bytes.Equal(mrsigner, allowed) {
+            return true
+        }
+    }
+    return false
+}
+```
+
+### 6.2 RA-TLS 传输层
 
 所有节点间通信使用 RA-TLS 加密通道：
 
@@ -768,7 +934,7 @@ type RATLSTransport struct {
     localKey    *ecdsa.PrivateKey
     attestor    *SGXAttestor
     verifier    *SGXVerifier
-    allowedMR   [][]byte  // 允许的 MRENCLAVE 列表
+    admission   *AdmissionController  // 准入控制器
 }
 
 func (t *RATLSTransport) Handshake(conn net.Conn) (*RATLSConn, error) {
