@@ -583,7 +583,7 @@ func enable7702(jt *JumpTable) {
 
 // opSlotNum enables the SLOTNUM opcode
 func opSlotNum(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(uint256.NewInt(evm.Context.Slotnum))
+	scope.Stack.push(uint256.NewInt(evm.Context.SlotNum))
 	return nil, nil
 }
 

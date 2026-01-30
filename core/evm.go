@@ -78,7 +78,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		BlobBaseFee: blobBaseFee,
 		GasLimit:    header.GasLimit,
 		Random:      random,
-		Slotnum:     slotNum,
+		SlotNum:     slotNum,
 	}
 }
 
