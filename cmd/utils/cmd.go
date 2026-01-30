@@ -286,8 +286,8 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 			if err != nil {
 				return fmt.Errorf("open %s: %w", path, err)
 			}
+			defer f.Close()
 			if _, err := io.Copy(h, f); err != nil {
-				f.Close()
 				return fmt.Errorf("checksum %s: %w", path, err)
 			}
 			got := common.BytesToHash(h.Sum(scratch.Bytes()[:])).Hex()
@@ -296,7 +296,6 @@ func ImportHistory(chain *core.BlockChain, dir string, network string, from func
 			scratch.Reset()
 
 			if got != want {
-				f.Close()
 				return fmt.Errorf("%s checksum mismatch: have %s want %s", file, got, want)
 			}
 			// Import all block data from Era1.
