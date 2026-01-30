@@ -988,10 +988,34 @@ func InspectContract(db ethdb.Database, address common.Address) error {
 	accountData := ReadAccountSnapshot(db, accountHash)
 	accountSnapshotSize := len(accountSnapshotKey(accountHash)) + len(accountData)
 
+	if len(accountData) == 0 {
+		return fmt.Errorf("account snapshot not found for address %s", address)
+	}
+
 	var (
 		storageStat stat
 		trieTracker = newDepthTracker()
+		storageKeys atomic.Uint64
+		trieKeys    atomic.Uint64
 	)
+
+	// Progress reporter
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(8 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				log.Info("Inspecting contract",
+					"storageSlots", storageKeys.Load(),
+					"trieNodes", trieKeys.Load(),
+					"elapsed", common.PrettyDuration(time.Since(start)))
+			case <-done:
+				return
+			}
+		}
+	}()
 
 	eg, ctx := errgroup.WithContext(context.Background())
 
@@ -1002,6 +1026,7 @@ func InspectContract(db ethdb.Database, address common.Address) error {
 
 		for it.Next() {
 			storageStat.add(common.StorageSize(len(it.Key()) + len(it.Value())))
+			storageKeys.Add(1)
 
 			select {
 			case <-ctx.Done():
@@ -1024,6 +1049,7 @@ func InspectContract(db ethdb.Database, address common.Address) error {
 			}
 			trieTracker.add(string(path),
 				common.StorageSize(len(it.Key())+len(it.Value())))
+			trieKeys.Add(1)
 
 			select {
 			case <-ctx.Done():
@@ -1035,22 +1061,22 @@ func InspectContract(db ethdb.Database, address common.Address) error {
 	})
 
 	if err := eg.Wait(); err != nil {
+		close(done)
 		return err
 	}
+	close(done)
 
 	trieCount, trieSize := trieTracker.total()
 
-	log.Info("Inspection complete", "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Inspection complete",
+		"storageSlots", storageKeys.Load(),
+		"trieNodes", trieCount,
+		"elapsed", common.PrettyDuration(time.Since(start)))
 
 	// Print results
 	fmt.Printf("\n=== Contract Inspection: %s ===\n", address)
 	fmt.Printf("Account hash: %s\n\n", accountHash)
-
-	if len(accountData) == 0 {
-		fmt.Println("Account snapshot: not found")
-	} else {
-		fmt.Printf("Account snapshot: %s\n", common.StorageSize(accountSnapshotSize))
-	}
+	fmt.Printf("Account snapshot: %s\n", common.StorageSize(accountSnapshotSize))
 
 	fmt.Printf("Snapshot storage: %s slots (%s)\n", storageStat.countString(), storageStat.sizeString())
 	fmt.Printf("Storage trie:     %d nodes (%s)\n", trieCount, common.StorageSize(trieSize))
