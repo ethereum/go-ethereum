@@ -115,7 +115,7 @@ type CBadThing struct {
 	Arg4 bool
 }
 
-// ErrorID returns the hash of canonical representation of the error's signature.
+// CBadThingErrorID returns the hash of canonical representation of the error's signature.
 //
 // Solidity: error BadThing(uint256 arg1, uint256 arg2, uint256 arg3, bool arg4)
 func CBadThingErrorID() common.Hash {
@@ -142,7 +142,7 @@ type CBadThing2 struct {
 	Arg4 *big.Int
 }
 
-// ErrorID returns the hash of canonical representation of the error's signature.
+// CBadThing2ErrorID returns the hash of canonical representation of the error's signature.
 //
 // Solidity: error BadThing2(uint256 arg1, uint256 arg2, uint256 arg3, uint256 arg4)
 func CBadThing2ErrorID() common.Hash {
@@ -227,7 +227,7 @@ type C2BadThing struct {
 	Arg4 bool
 }
 
-// ErrorID returns the hash of canonical representation of the error's signature.
+// C2BadThingErrorID returns the hash of canonical representation of the error's signature.
 //
 // Solidity: error BadThing(uint256 arg1, uint256 arg2, uint256 arg3, bool arg4)
 func C2BadThingErrorID() common.Hash {

@@ -225,7 +225,7 @@ var (
 			{{capitalise .Name}} {{if .Indexed}}{{bindtopictype .Type $structs}}{{else}}{{bindtype .Type $structs}}{{end}}; {{end}}
 		}
 
-		// ErrorID returns the hash of canonical representation of the error's signature.
+		// {{$contract.Type}}{{.Normalized.Name}}ErrorID returns the hash of canonical representation of the error's signature.
 		//
 		// Solidity: {{.Original.String}}
 		func {{$contract.Type}}{{.Normalized.Name}}ErrorID() common.Hash {

@@ -31,7 +31,8 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 )
 
-// creates a Key and stores that in the given KeyStore by decrypting a presale key JSON
+// importPreSaleKey imports a Key and stores that in the given KeyStore
+// by decrypting a presale key JSON
 func importPreSaleKey(keyStore keyStore, keyJSON []byte, password string) (accounts.Account, *Key, error) {
 	key, err := decryptPreSaleKey(keyJSON, password)
 	if err != nil {
@@ -131,7 +132,7 @@ func aesCBCDecrypt(key, cipherText, iv []byte) ([]byte, error) {
 	return plaintext, err
 }
 
-// From https://leanpub.com/gocrypto/read#leanpub-auto-block-cipher-modes
+// pkcs7Unpad is from https://leanpub.com/gocrypto/read#leanpub-auto-block-cipher-modes
 func pkcs7Unpad(in []byte) []byte {
 	if len(in) == 0 {
 		return nil

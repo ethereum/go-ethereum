@@ -186,9 +186,9 @@ func (cb *contractBinder) bindMethod(original abi.Method) error {
 	return nil
 }
 
-// normalize a set of arguments by stripping underscores, giving a generic name
-// in the case where the arg name collides with a reserved Go keyword, and finally
-// converting to camel-case.
+// normalizeArgs normalizes a set of arguments by stripping underscores,
+// giving a generic name in the case where the arg name collides with
+// a reserved Go keyword, and finally converting to camel-case.
 func normalizeArgs(args abi.Arguments) abi.Arguments {
 	args = slices.Clone(args)
 	used := make(map[string]bool)

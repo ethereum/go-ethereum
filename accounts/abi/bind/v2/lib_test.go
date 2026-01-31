@@ -73,8 +73,8 @@ func makeTestDeployerWithNonceAssignment(backend simulated.Client) func(input, d
 	return bind.DeployerWithNonceAssignment(bind.NewKeyedTransactor(testKey, chainId), backend)
 }
 
-// test that deploying a contract with library dependencies works,
-// verifying by calling method on the deployed contract.
+// TestDeploymentLibraries tests that deploying a contract with library
+// dependencies works, verifying by calling method on the deployed contract.
 func TestDeploymentLibraries(t *testing.T) {
 	bindBackend, err := testSetup()
 	if err != nil {
@@ -117,8 +117,8 @@ func TestDeploymentLibraries(t *testing.T) {
 	}
 }
 
-// Same as TestDeployment.  However, stagger the deployments with overrides:
-// first deploy the library deps and then the contract.
+// TestDeploymentWithOverrides is same as TestDeployment. However, stagger the
+// deployments with overrides: first deploy the library deps and then the contract.
 func TestDeploymentWithOverrides(t *testing.T) {
 	bindBackend, err := testSetup()
 	if err != nil {
@@ -185,7 +185,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	}
 }
 
-// returns transaction auth to send a basic transaction from testAddr
+// defaultTxAuth returns transaction auth to send a basic tx from testAddr
 func defaultTxAuth() *bind.TransactOpts {
 	signer := types.LatestSigner(params.AllDevChainProtocolChanges)
 	opts := &bind.TransactOpts{

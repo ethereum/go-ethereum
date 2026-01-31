@@ -29,7 +29,7 @@ import (
 // the stringer interface to allow printing type details in the tests below.
 type typeWithoutStringer Type
 
-// Tests that all allowed types get recognized by the type parser.
+// TestTypeRegexp tests that all allowed types get recognized by the type parser.
 func TestTypeRegexp(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

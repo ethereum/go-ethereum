@@ -190,7 +190,7 @@ func TestOverrideUnlock(t *testing.T) {
 	}
 }
 
-// This test should fail under -race if signing races the expiration goroutine.
+// TestSignRace should fail under -race if signing races the expiration goroutine.
 func TestSignRace(t *testing.T) {
 	t.Parallel()
 	_, ks := tmpKeyStore(t)
@@ -233,8 +233,8 @@ func waitForKsUpdating(t *testing.T, ks *KeyStore, wantStatus bool, maxTime time
 	return false
 }
 
-// Tests that the wallet notifier loop starts and stops correctly based on the
-// addition and removal of wallet event subscriptions.
+// TestWalletNotifierLifecycle tests that the wallet notifier loop starts and stops correctly
+// based on the addition and removal of wallet event subscriptions.
 func TestWalletNotifierLifecycle(t *testing.T) {
 	t.Parallel()
 	// Create a temporary keystore to test with
@@ -280,8 +280,8 @@ type walletEvent struct {
 	a accounts.Account
 }
 
-// Tests that wallet notifications and correctly fired when accounts are added
-// or deleted from the keystore.
+// TestWalletNotifications tests that wallet notifications and correctly fired
+// when accounts are added or deleted from the keystore.
 func TestWalletNotifications(t *testing.T) {
 	t.Parallel()
 	_, ks := tmpKeyStore(t)

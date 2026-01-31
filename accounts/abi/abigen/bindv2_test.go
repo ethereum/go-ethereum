@@ -323,7 +323,8 @@ func TestNormalizeArgs(t *testing.T) {
 	}
 }
 
-// returns a "pretty diff" on two strings. Useful if the strings are large.
+// prettyDiff returns a "pretty diff" on two strings. Useful if the strings
+// are large.
 func prettyDiff(have, want string) string {
 	if have == want {
 		return ""

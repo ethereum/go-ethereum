@@ -45,7 +45,7 @@ func newWatcher(ac *accountCache) *watcher {
 // enabled returns false on systems not supported.
 func (*watcher) enabled() bool { return true }
 
-// starts the watcher loop in the background.
+// start starts the watcher loop in the background.
 // Start a watcher in the background if that's not already in progress.
 // The caller must hold w.ac.mu.
 func (w *watcher) start() {
