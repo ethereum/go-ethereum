@@ -205,9 +205,16 @@ func (am *Manager) Accounts() []common.Address {
 	am.lock.RLock()
 	defer am.lock.RUnlock()
 
-	addresses := make([]common.Address, 0) // return [] instead of nil if empty
+	walletAccounts := make([][]Account, 0, len(am.wallets))
+	total := 0
 	for _, wallet := range am.wallets {
-		for _, account := range wallet.Accounts() {
+		accounts := wallet.Accounts()
+		total += len(accounts)
+		walletAccounts = append(walletAccounts, accounts)
+	}
+	addresses := make([]common.Address, 0, total) // return [] instead of nil if empty
+	for _, accounts := range walletAccounts {
+		for _, account := range accounts {
 			addresses = append(addresses, account.Address)
 		}
 	}
