@@ -174,11 +174,12 @@ type AsyncFilterFunc func(context.Context, *Node) *Node
 // AsyncFilter creates an iterator which checks nodes in parallel.
 // The 'check' function is called on multiple goroutines to filter each node
 // from the upstream iterator. When check returns nil, the node will be skipped.
-// It can also return a new node to be returned by the iterator instead of the .
+// It can also return a new node to be returned by the iterator instead of the
+// original one.
 func AsyncFilter(it Iterator, check AsyncFilterFunc, workers int) Iterator {
 	f := &asyncFilterIter{
 		it:     ensureSourceIter(it),
-		slots:  make(chan struct{}, workers+1),
+		slots:  make(chan struct{}, workers+1), // extra 1 slot to make sure all the goroutines can be completed
 		passed: make(chan iteratorItem),
 	}
 	for range cap(f.slots) {
@@ -193,6 +194,9 @@ func AsyncFilter(it Iterator, check AsyncFilterFunc, workers int) Iterator {
 			return
 		case <-f.slots:
 		}
+		defer func() {
+			f.slots <- struct{}{} // the iterator has ended
+		}()
 		// read from the iterator and start checking nodes in parallel
 		// when a node is checked, it will be sent to the passed channel
 		// and the slot will be released
@@ -201,7 +205,11 @@ func AsyncFilter(it Iterator, check AsyncFilterFunc, workers int) Iterator {
 			nodeSource := f.it.NodeSource()
 
 			// check the node async, in a separate goroutine
-			<-f.slots
+			select {
+			case <-ctx.Done():
+				return
+			case <-f.slots:
+			}
 			go func() {
 				if nn := check(ctx, node); nn != nil {
 					item := iteratorItem{nn, nodeSource}
@@ -213,8 +221,6 @@ func AsyncFilter(it Iterator, check AsyncFilterFunc, workers int) Iterator {
 				f.slots <- struct{}{}
 			}()
 		}
-		// the iterator has ended
-		f.slots <- struct{}{}
 	}()
 
 	return f

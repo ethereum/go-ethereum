@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -68,9 +69,11 @@ var DefaultConfig = Config{
 	BatchResponseMaxSize: 25 * 1000 * 1000,
 	GraphQLVirtualHosts:  []string{"localhost"},
 	P2P: p2p.Config{
-		ListenAddr: ":30303",
-		MaxPeers:   50,
-		NAT:        nat.Any(),
+		ListenAddr:  ":30303",
+		MaxPeers:    50,
+		NAT:         nat.Any(),
+		DiscoveryV4: true,
+		DiscoveryV5: true,
 	},
 	DBEngine: "", // Use whatever exists, will default to Pebble if non-existent and supported
 }
@@ -90,7 +93,7 @@ func DefaultDataDir() string {
 			// is non-empty, use it, otherwise DTRT and check %LOCALAPPDATA%.
 			fallback := filepath.Join(home, "AppData", "Roaming", "Ethereum")
 			appdata := windowsAppData()
-			if appdata == "" || isNonEmptyDir(fallback) {
+			if appdata == "" || common.IsNonEmptyDir(fallback) {
 				return fallback
 			}
 			return filepath.Join(appdata, "Ethereum")
@@ -111,16 +114,6 @@ func windowsAppData() string {
 		panic("environment variable LocalAppData is undefined")
 	}
 	return v
-}
-
-func isNonEmptyDir(dir string) bool {
-	f, err := os.Open(dir)
-	if err != nil {
-		return false
-	}
-	names, _ := f.Readdir(1)
-	f.Close()
-	return len(names) > 0
 }
 
 func homeDir() string {

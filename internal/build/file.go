@@ -21,20 +21,21 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
+	"slices"
 )
 
 // HashFolder iterates all files under the given directory, computing the hash
 // of each.
-func HashFolder(folder string, exlude []string) (map[string][32]byte, error) {
+func HashFolder(folder string, excludes []string) (map[string][32]byte, error) {
 	res := make(map[string][32]byte)
 	err := filepath.WalkDir(folder, func(path string, d os.DirEntry, _ error) error {
 		// Skip anything that's exluded or not a regular file
-		for _, skip := range exlude {
-			if strings.HasPrefix(path, filepath.FromSlash(skip)) {
+		// Skip anything that's excluded or not a regular file
+		if slices.Contains(excludes, path) {
+			if d.IsDir() {
 				return filepath.SkipDir
 			}
+			return nil
 		}
 		if !d.Type().IsRegular() {
 			return nil
@@ -71,6 +72,6 @@ func DiffHashes(a map[string][32]byte, b map[string][32]byte) []string {
 			updates = append(updates, file)
 		}
 	}
-	sort.Strings(updates)
+	slices.Sort(updates)
 	return updates
 }

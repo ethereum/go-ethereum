@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/log"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const MetadataApi = "rpc"
@@ -55,15 +56,17 @@ type Server struct {
 	batchResponseLimit int
 	httpBodyLimit      int
 	wsReadLimit        int64
+	tracerProvider     trace.TracerProvider
 }
 
 // NewServer creates a new server instance with no registered handlers.
 func NewServer() *Server {
 	server := &Server{
-		idgen:         randomIDGenerator(),
-		codecs:        make(map[ServerCodec]struct{}),
-		httpBodyLimit: defaultBodyLimit,
-		wsReadLimit:   wsDefaultReadLimit,
+		idgen:          randomIDGenerator(),
+		codecs:         make(map[ServerCodec]struct{}),
+		httpBodyLimit:  defaultBodyLimit,
+		wsReadLimit:    wsDefaultReadLimit,
+		tracerProvider: nil,
 	}
 	server.run.Store(true)
 	// Register the default service providing meta information about the RPC service such
@@ -129,6 +132,15 @@ func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 	c.Close()
 }
 
+// setTracerProvider configures the OpenTelemetry TracerProvider for RPC call tracing.
+// Note: This method (and the TracerProvider field in the Server/Handler struct) is
+// primarily intended for testing. In particular, it allows tests to configure an
+// isolated TracerProvider without changing the global provider, avoiding
+// interference between tests running in parallel.
+func (s *Server) setTracerProvider(tp trace.TracerProvider) {
+	s.tracerProvider = tp
+}
+
 func (s *Server) trackCodec(codec ServerCodec) bool {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -156,7 +168,7 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 		return
 	}
 
-	h := newHandler(ctx, codec, s.idgen, &s.services, s.batchItemLimit, s.batchResponseLimit)
+	h := newHandler(ctx, codec, s.idgen, &s.services, s.batchItemLimit, s.batchResponseLimit, s.tracerProvider)
 	h.allowSubscribe = false
 	defer h.close(io.EOF, nil)
 

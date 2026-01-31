@@ -185,9 +185,10 @@ func (t *Tracker) Fulfil(peer string, version uint, code uint64, id uint64) {
 		return
 	}
 	// Everything matches, mark the request serviced and meter it
+	wasHead := req.expire.Prev() == nil
 	t.expire.Remove(req.expire)
 	delete(t.pending, id)
-	if req.expire.Prev() == nil {
+	if wasHead {
 		if t.wake.Stop() {
 			t.schedule()
 		}

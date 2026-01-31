@@ -38,7 +38,7 @@ import (
 // across signing different data structures.
 const syncCommitteeDomain = 7
 
-var knownForks = []string{"GENESIS", "ALTAIR", "BELLATRIX", "CAPELLA", "DENEB"}
+var knownForks = []string{"GENESIS", "ALTAIR", "BELLATRIX", "CAPELLA", "DENEB", "ELECTRA", "FULU"}
 
 // ClientConfig contains beacon light client configuration.
 type ClientConfig struct {
@@ -103,10 +103,15 @@ func (c *ChainConfig) LoadForks(file []byte) error {
 	epochs["GENESIS"] = 0
 
 	for key, value := range config {
+		if value == nil {
+			continue
+		}
 		if strings.HasSuffix(key, "_FORK_VERSION") {
 			name := key[:len(key)-len("_FORK_VERSION")]
 			switch version := value.(type) {
 			case int:
+				versions[name] = new(big.Int).SetUint64(uint64(version)).FillBytes(make([]byte, 4))
+			case int64:
 				versions[name] = new(big.Int).SetUint64(uint64(version)).FillBytes(make([]byte, 4))
 			case uint64:
 				versions[name] = new(big.Int).SetUint64(version).FillBytes(make([]byte, 4))
@@ -124,6 +129,8 @@ func (c *ChainConfig) LoadForks(file []byte) error {
 			name := key[:len(key)-len("_FORK_EPOCH")]
 			switch epoch := value.(type) {
 			case int:
+				epochs[name] = uint64(epoch)
+			case int64:
 				epochs[name] = uint64(epoch)
 			case uint64:
 				epochs[name] = epoch

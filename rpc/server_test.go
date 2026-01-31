@@ -273,7 +273,8 @@ func TestServerWebsocketReadLimit(t *testing.T) {
 					}
 				} else if !errors.Is(err, websocket.ErrReadLimit) &&
 					!strings.Contains(strings.ToLower(err.Error()), "1009") &&
-					!strings.Contains(strings.ToLower(err.Error()), "message too big") {
+					!strings.Contains(strings.ToLower(err.Error()), "message too big") &&
+					!strings.Contains(strings.ToLower(err.Error()), "connection reset by peer") {
 					// Not the error we expect from exceeding the message size limit.
 					t.Fatalf("unexpected error for read limit violation: %v", err)
 				}

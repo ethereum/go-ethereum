@@ -156,6 +156,14 @@ func (t *muxTracer) OnCodeChange(a common.Address, prevCodeHash common.Hash, pre
 	}
 }
 
+func (t *muxTracer) OnCodeChangeV2(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte, reason tracing.CodeChangeReason) {
+	for _, t := range t.tracers {
+		if t.OnCodeChangeV2 != nil {
+			t.OnCodeChangeV2(a, prevCodeHash, prev, codeHash, code, reason)
+		}
+	}
+}
+
 func (t *muxTracer) OnStorageChange(a common.Address, k, prev, new common.Hash) {
 	for _, t := range t.tracers {
 		if t.OnStorageChange != nil {

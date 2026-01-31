@@ -115,7 +115,7 @@ func VerifyEIP4844Header(config *params.ChainConfig, parent, header *types.Heade
 		return fmt.Errorf("blob gas used %d exceeds maximum allowance %d", *header.BlobGasUsed, bcfg.maxBlobGas())
 	}
 	if *header.BlobGasUsed%params.BlobTxBlobGasPerBlob != 0 {
-		return fmt.Errorf("blob gas used %d not a multiple of blob gas per blob %d", header.BlobGasUsed, params.BlobTxBlobGasPerBlob)
+		return fmt.Errorf("blob gas used %d not a multiple of blob gas per blob %d", *header.BlobGasUsed, params.BlobTxBlobGasPerBlob)
 	}
 
 	// Verify the excessBlobGas is correct based on the parent header
@@ -198,6 +198,15 @@ func LatestMaxBlobsPerBlock(cfg *params.ChainConfig) int {
 		return 0
 	}
 	return bcfg.Max
+}
+
+// TargetBlobsPerBlock returns the target blobs per block for a block at the given timestamp.
+func TargetBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
+	blobConfig := latestBlobConfig(cfg, time)
+	if blobConfig == nil {
+		return 0
+	}
+	return blobConfig.Target
 }
 
 // fakeExponential approximates factor * e ** (numerator / denominator) using
