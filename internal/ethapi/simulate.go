@@ -305,7 +305,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		receipts[i] = core.MakeReceipt(evm, result, sim.state, blockContext.BlockNumber, common.Hash{}, blockContext.Time, tx, gasUsed, root)
 		blobGasUsed += receipts[i].BlobGasUsed
 		logs := tracer.Logs()
-		callRes := simCallResult{ReturnValue: result.Return(), Logs: logs, GasUsed: hexutil.Uint64(result.UsedGas), MaxUsedGas: *call.Gas}
+		callRes := simCallResult{ReturnValue: result.Return(), Logs: logs, GasUsed: hexutil.Uint64(result.UsedGas), MaxUsedGas: hexutil.Uint64(result.MaxUsedGas)}
 		if result.Failed() {
 			callRes.Status = hexutil.Uint64(types.ReceiptStatusFailed)
 			if errors.Is(result.Err, vm.ErrExecutionReverted) {
