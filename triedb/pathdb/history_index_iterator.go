@@ -217,6 +217,10 @@ func (it *blockIterator) seekGT(id uint64) bool {
 	if it.err != nil {
 		return false
 	}
+	if len(it.data) == 0 || len(it.restarts) == 0 {
+		it.exhausted = true
+		return false
+	}
 	var err error
 	index := sort.Search(len(it.restarts), func(i int) bool {
 		item, n := binary.Uvarint(it.data[it.restarts[i]:])
