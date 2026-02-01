@@ -168,6 +168,9 @@ var (
 
 	// Verkle transition information
 	VerkleTransitionStatePrefix = []byte("verkle-transition-state-")
+
+	// Partial statefulness - BAL (Block Access List) history for reorg handling
+	balHistoryPrefix = []byte("p") // balHistoryPrefix + num (uint64 big endian) -> RLP(bal.BlockAccessList)
 )
 
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary
