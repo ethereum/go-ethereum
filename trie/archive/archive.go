@@ -71,18 +71,20 @@ func ArchivedNodeResolver(offset, size uint64) ([]*Record, error) {
 	}
 
 	var records []*Record
+	stream := rlp.NewStream(bytes.NewReader(data), uint64(len(data)))
 	for len(data) > 0 {
-		stream := rlp.NewStream(bytes.NewReader(data), uint64(len(data)))
 		_, size, err := stream.Kind()
+		if err == io.EOF {
+			break
+		}
 		if err != nil {
 			return nil, fmt.Errorf("error getting rlp kind from archive data: %w", err)
 		}
 		var record Record
-		err = rlp.DecodeBytes(data[:size], &record)
+		err = stream.Decode(&record)
 		if err != nil {
 			return nil, fmt.Errorf("error decoding rlp record from archive data: %w", err)
 		}
-		data = data[size:]
 		records = append(records, &record)
 	}
 	return records, nil
