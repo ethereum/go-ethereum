@@ -122,6 +122,10 @@ if one is set.  Otherwise it prints the genesis from the datadir.`,
 			utils.StateHistoryFlag,
 			utils.TrienodeHistoryFlag,
 			utils.TrienodeHistoryFullValueCheckpointFlag,
+			utils.PartialStateFlag,
+			utils.PartialStateContractsFlag,
+			utils.PartialStateContractsFileFlag,
+			utils.PartialStateBALRetentionFlag,
 		}, utils.DatabaseFlags, debug.Flags),
 		Before: func(ctx *cli.Context) error {
 			flags.MigrateGlobalFlags(ctx)

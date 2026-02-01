@@ -68,6 +68,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		TxSyncDefaultTimeout    time.Duration `toml:",omitempty"`
 		TxSyncMaxTimeout        time.Duration `toml:",omitempty"`
 		RangeLimit              uint64        `toml:",omitempty"`
+		PartialState            PartialStateConfig
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -121,6 +122,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.TxSyncDefaultTimeout = c.TxSyncDefaultTimeout
 	enc.TxSyncMaxTimeout = c.TxSyncMaxTimeout
 	enc.RangeLimit = c.RangeLimit
+	enc.PartialState = c.PartialState
 	return &enc, nil
 }
 
@@ -178,6 +180,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		TxSyncDefaultTimeout    *time.Duration `toml:",omitempty"`
 		TxSyncMaxTimeout        *time.Duration `toml:",omitempty"`
 		RangeLimit              *uint64        `toml:",omitempty"`
+		PartialState            *PartialStateConfig
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -335,6 +338,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.RangeLimit != nil {
 		c.RangeLimit = *dec.RangeLimit
+	}
+	if dec.PartialState != nil {
+		c.PartialState = *dec.PartialState
 	}
 	return nil
 }
