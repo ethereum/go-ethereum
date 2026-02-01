@@ -230,30 +230,33 @@ func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode no
 		value, newnode, _, err := t.get(child, key, pos)
 		return value, newnode, true, err
 	case *expiredNode:
-		if t.archiveResolver == nil {
-			return nil, n, false, archive.ErrNoResolver
-		}
-		records, err := t.archiveResolver(n.offset, n.size)
+		records, err := archive.ArchivedNodeResolver(n.offset, n.size)
 		if err != nil {
 			return nil, n, false, fmt.Errorf("failed to resolve expired node: %w", err)
 		}
 		newnode, err := archiveRecordsToNode(records)
-		for _, record := range records {
-			// make sure that the path up to the node matches
-			if bytes.HasPrefix(key[pos:], record.Path) {
-				resolved, err := decodeNodeUnsafe(nil, record.Value)
-				if err != nil {
-					return nil, n, false, fmt.Errorf("failed to deserialize RLP node: %w", err)
-				}
-				if leaf, ok := resolved.(*shortNode); ok {
-					// make sure that the key to the leaf also matches
-					if bytes.Equal(key[pos+len(record.Path):], leaf.Key) {
-						return leaf.Val.(valueNode), newnode, true, nil
-					}
-				}
-			}
+		// alternative: don't rebuild, just find the value
+		// for _, record := range records {
+		// 	// make sure that the path up to the node matches
+		// 	if bytes.HasPrefix(key[pos:], record.Path) {
+		// 		resolved, err := decodeNodeUnsafe(nil, record.Value)
+		// 		if err != nil {
+		// 			fmt.Printf("%v %x\n", record.Path, record.Value)
+		// 			return nil, n, false, fmt.Errorf("failed to deserialize RLP node: %w", err)
+		// 		}
+		// 		if leaf, ok := resolved.(*shortNode); ok {
+		// 			// make sure that the key to the leaf also matches
+		// 			if bytes.Equal(key[pos+len(record.Path):], leaf.Key) {
+		// 				return leaf.Val.(valueNode), newnode, true, nil
+		// 			}
+		// 		}
+		// 	}
+		// }
+		if err != nil {
+			return nil, n, false, err
 		}
-		return value, newnode, false, err
+		value, _, _, err = t.get(newnode, key, pos+1)
+		return value, newnode, true, err
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
 	}
@@ -389,10 +392,7 @@ func (t *Trie) getNode(origNode node, path []byte, pos int) (item []byte, newnod
 		return item, newnode, resolved + 1, err
 
 	case *expiredNode:
-		if t.archiveResolver == nil {
-			return nil, n, 0, archive.ErrNoResolver
-		}
-		records, err := t.archiveResolver(n.offset, n.size)
+		records, err := archive.ArchivedNodeResolver(n.offset, n.size)
 		if err != nil {
 			return nil, n, 0, fmt.Errorf("failed to resolve expired node: %w", err)
 		}
@@ -524,10 +524,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		return true, nn, nil
 
 	case *expiredNode:
-		if t.archiveResolver == nil {
-			return false, nil, archive.ErrNoResolver
-		}
-		records, err := t.archiveResolver(n.offset, n.size)
+		records, err := archive.ArchivedNodeResolver(n.offset, n.size)
 		if err != nil {
 			return false, nil, fmt.Errorf("failed to resolve expired node: %w", err)
 		}
@@ -700,10 +697,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		return true, nn, nil
 
 	case *expiredNode:
-		if t.archiveResolver == nil {
-			return false, nil, archive.ErrNoResolver
-		}
-		records, err := t.archiveResolver(n.offset, n.size)
+		records, err := archive.ArchivedNodeResolver(n.offset, n.size)
 		if err != nil {
 			return false, nil, fmt.Errorf("failed to resolve expired node: %w", err)
 		}
@@ -748,7 +742,7 @@ func copyNode(n node) node {
 		return &expiredNode{
 			offset:          n.offset,
 			size:            n.size,
-			archiveResolver: n.archiveResolver,
+			archiveResolver: archive.ArchivedNodeResolver,
 		}
 	default:
 		panic(fmt.Sprintf("%T: unknown node type", n))
