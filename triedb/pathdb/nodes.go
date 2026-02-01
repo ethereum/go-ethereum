@@ -218,7 +218,10 @@ func (s *nodeSet) encode(w io.Writer) error {
 
 	// Encode account nodes
 	if len(s.accountNodes) > 0 {
-		entry := journalNodes{Owner: common.Hash{}}
+		entry := journalNodes{
+			Owner: common.Hash{},
+			Nodes: make([]journalNode, 0, len(s.accountNodes)),
+		}
 		for path, node := range s.accountNodes {
 			entry.Nodes = append(entry.Nodes, journalNode{
 				Path: []byte(path),
@@ -229,7 +232,10 @@ func (s *nodeSet) encode(w io.Writer) error {
 	}
 	// Encode storage nodes
 	for owner, subset := range s.storageNodes {
-		entry := journalNodes{Owner: owner}
+		entry := journalNodes{
+			Owner: owner,
+			Nodes: make([]journalNode, 0, len(subset)),
+		}
 		for path, node := range subset {
 			entry.Nodes = append(entry.Nodes, journalNode{
 				Path: []byte(path),
