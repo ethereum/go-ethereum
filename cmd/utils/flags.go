@@ -307,6 +307,28 @@ var (
 		Value:    uint(ethconfig.Defaults.NodeFullValueCheckpoint),
 		Category: flags.StateCategory,
 	}
+	// Partial statefulness flags
+	PartialStateFlag = &cli.BoolFlag{
+		Name:     "partial-state",
+		Usage:    "Enable partial statefulness mode (reduced storage, requires BAL support)",
+		Category: flags.StateCategory,
+	}
+	PartialStateContractsFlag = &cli.StringSliceFlag{
+		Name:     "partial-state.contracts",
+		Usage:    "Contracts to track storage for in partial state mode (comma-separated addresses)",
+		Category: flags.StateCategory,
+	}
+	PartialStateContractsFileFlag = &cli.StringFlag{
+		Name:     "partial-state.contracts-file",
+		Usage:    "JSON file containing contracts to track in partial state mode",
+		Category: flags.StateCategory,
+	}
+	PartialStateBALRetentionFlag = &cli.Uint64Flag{
+		Name:     "partial-state.bal-retention",
+		Usage:    "Number of blocks to retain BAL history for reorg handling",
+		Value:    ethconfig.Defaults.PartialState.BALRetention,
+		Category: flags.StateCategory,
+	}
 	TransactionHistoryFlag = &cli.Uint64Flag{
 		Name:     "history.transactions",
 		Usage:    "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain)",
@@ -1744,6 +1766,21 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.IsSet(StateSchemeFlag.Name) {
 		cfg.StateScheme = ctx.String(StateSchemeFlag.Name)
+	}
+	// Partial state configuration
+	if ctx.IsSet(PartialStateFlag.Name) {
+		cfg.PartialState.Enabled = ctx.Bool(PartialStateFlag.Name)
+	}
+	if ctx.IsSet(PartialStateContractsFlag.Name) {
+		for _, addr := range ctx.StringSlice(PartialStateContractsFlag.Name) {
+			cfg.PartialState.Contracts = append(cfg.PartialState.Contracts, common.HexToAddress(addr))
+		}
+	}
+	if ctx.IsSet(PartialStateContractsFileFlag.Name) {
+		cfg.PartialState.ContractsFile = ctx.String(PartialStateContractsFileFlag.Name)
+	}
+	if ctx.IsSet(PartialStateBALRetentionFlag.Name) {
+		cfg.PartialState.BALRetention = ctx.Uint64(PartialStateBALRetentionFlag.Name)
 	}
 	// Parse transaction history flag, if user is still using legacy config
 	// file with 'TxLookupLimit' configured, copy the value to 'TransactionHistory'.
