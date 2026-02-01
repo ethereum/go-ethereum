@@ -83,18 +83,11 @@ func NewArchiver(db ethdb.Database, triedb database.NodeDatabase,
 func (a *Archiver) ProcessState(root common.Hash) error {
 	a.stateRoot = root
 
-	// Process account trie (owner = zero hash)
-	log.Info("Processing account trie", "root", root)
 	accountTrie, err := New(StateTrieID(root), a.triedb)
 	if err != nil {
 		return fmt.Errorf("failed to open account trie: %w", err)
 	}
 
-	if err := a.processTrie(common.Hash{}, accountTrie); err != nil {
-		return fmt.Errorf("failed to process account trie: %w", err)
-	}
-
-	// Process storage tries for accounts with storage
 	log.Info("Processing storage tries")
 	iter, err := accountTrie.NodeIterator(nil)
 	if err != nil {
@@ -129,6 +122,11 @@ func (a *Archiver) ProcessState(root common.Hash) error {
 
 	if kvIter.Err != nil {
 		return fmt.Errorf("account iteration error: %w", kvIter.Err)
+	}
+
+	log.Info("Processing account trie", "root", root)
+	if err := a.processTrie(common.Hash{}, accountTrie); err != nil {
+		return fmt.Errorf("failed to process account trie: %w", err)
 	}
 
 	return nil
