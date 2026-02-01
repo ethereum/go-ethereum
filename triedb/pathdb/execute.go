@@ -59,7 +59,7 @@ func apply(db database.NodeDatabase, prevRoot common.Hash, postRoot common.Hash,
 		rawStorageKey: rawStorageKey,
 		nodes:         trienode.NewMergedNodeSet(),
 	}
-	var deletes []common.Address
+	deletes := make([]common.Address, 0, len(accounts))
 	for addr, account := range accounts {
 		if len(account) == 0 {
 			deletes = append(deletes, addr)
@@ -114,7 +114,7 @@ func updateAccount(ctx *context, db database.NodeDatabase, addr common.Address) 
 	if err != nil {
 		return err
 	}
-	var deletes []common.Hash
+	deletes := make([]common.Hash, 0, len(ctx.storages[addr]))
 	for key, val := range ctx.storages[addr] {
 		tkey := key
 		if ctx.rawStorageKey {
