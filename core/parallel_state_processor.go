@@ -230,7 +230,7 @@ type stateRootCalculationResult struct {
 func (p *ParallelStateProcessor) calcAndVerifyRoot(preState *state.StateDB, block *types.Block, stateTransition *state.BALStateTransition, resCh chan stateRootCalculationResult) {
 	// calculate and apply the block state modifications
 	//root, prestateLoadTime, rootCalcTime := preState.BlockAccessList().StateRoot(preState)
-	root := stateTransition.IntermediateRoot(false)
+	root := stateTransition.IntermediateRoot(p.chainConfig().IsEIP158(block.Number()))
 
 	res := stateRootCalculationResult{
 		// TODO: I think we can remove the root from this struct
