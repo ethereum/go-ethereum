@@ -219,16 +219,18 @@ func (h *trienodeHistory) encode() ([]byte, []byte, []byte, error) {
 	binary.Write(&headerSection, binary.BigEndian, h.meta.block)   // 8 byte
 
 	for _, owner := range h.owners {
+		paths := h.nodeList[owner]
+		restartCount := (len(paths) + trienodeDataBlockRestartLen - 1) / trienodeDataBlockRestartLen
 		// Fill the key section with node index
 		var (
 			prevKey   []byte
-			restarts  []uint32
+			restarts  = make([]uint32, 0, restartCount*2)
 			prefixLen int
 
 			internalKeyOffset uint32 // key offset within the trie data internally
 			internalValOffset uint32 // value offset within the trie data internally
 		)
-		for i, path := range h.nodeList[owner] {
+		for i, path := range paths {
 			key := []byte(path)
 
 			// Track the internal key and value offsets at the beginning of the
@@ -269,11 +271,13 @@ func (h *trienodeHistory) encode() ([]byte, []byte, []byte, error) {
 
 		// Encode trailer, the number of restart sections is len(restarts))/2,
 		// as we track the offsets of both key and value sections.
-		var trailer []byte
-		for _, number := range append(restarts, uint32(len(restarts))/2) {
+		trailer := make([]byte, 0, 4*(len(restarts)+1))
+		for _, number := range restarts {
 			binary.BigEndian.PutUint32(buf[:4], number)
 			trailer = append(trailer, buf[:4]...)
 		}
+		binary.BigEndian.PutUint32(buf[:4], uint32(len(restarts))/2)
+		trailer = append(trailer, buf[:4]...)
 		if _, err := keySection.Write(trailer); err != nil {
 			return nil, nil, nil, err
 		}
