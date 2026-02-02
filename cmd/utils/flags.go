@@ -1553,9 +1553,7 @@ func setOpenTelemetry(ctx *cli.Context, cfg *node.Config) {
 	if ctx.IsSet(RPCTelemetryPasswordFlag.Name) {
 		tcfg.AuthPassword = ctx.String(RPCTelemetryPasswordFlag.Name)
 	}
-	if ctx.IsSet(RPCTelemetrySampleRatioFlag.Name) {
-		tcfg.SampleRatio = ctx.Float64(RPCTelemetrySampleRatioFlag.Name)
-	}
+	tcfg.SampleRatio = ctx.Float64(RPCTelemetrySampleRatioFlag.Name)
 	if ctx.IsSet(RPCTelemetryInstanceIDFlag.Name) {
 		tcfg.InstanceID = ctx.String(RPCTelemetryInstanceIDFlag.Name)
 	}
