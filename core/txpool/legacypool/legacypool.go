@@ -948,7 +948,9 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, sync bool) []error {
 
 // addTxsLocked attempts to queue a batch of transactions if they are valid.
 // The transaction pool lock must be held.
-// Returns the error for each tx, and the set of accounts that might became promotable.
+// Sets the error for each tx, and the set of accounts that might became promotable.
+// We only try to add txs that have no error set in the errs slice.
+// If adding the transaction returns an error, we set the error in the errs slice.
 // Requires len(txs) == len(errs).
 func (pool *LegacyPool) addTxsLocked(txs []*types.Transaction, errs []error) *accountSet {
 	var (
